@@ -1,0 +1,533 @@
+'use client'
+
+import { useState } from 'react'
+import type { ProjectType, PlanTask, PlanVersion, Level2PlanType } from '@/types'
+import { generateTaskNumber } from '@/lib/taskNumber'
+
+// 项目类型选项
+const PROJECT_TYPES: ProjectType[] = ['整机产品项目', '产品项目', '技术项目', '能力建设项目']
+
+// 二级计划固定类型
+const LEVEL2_PLAN_TYPES: Level2PlanType[] = [
+  '需求开发计划',
+  '在研版本火车计划',
+  '1+N MR版本火车计划',
+  '粉丝版本计划',
+  '基础体验计划',
+  'WBS计划',
+]
+
+export default function Level2PlanTemplatePage() {
+  const [projectType, setProjectType] = useState<ProjectType>('整机产品项目')
+  const [selectedPlanType, setSelectedPlanType] = useState<Level2PlanType>('需求开发计划')
+  const [showAddCustom, setShowAddCustom] = useState(false)
+  const [customTypeName, setCustomTypeName] = useState('')
+  const [customTypes, setCustomTypes] = useState<string[]>([])
+  
+  // 示例数据
+  const [versions, setVersions] = useState<PlanVersion[]>([
+    { id: 'v1', versionNo: 'V1', status: '已发布', tasks: [], createdAt: new Date('2026-01-01'), publishedAt: new Date('2026-01-15') },
+  ])
+  const [currentVersionIndex, setCurrentVersionIndex] = useState(0)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editedTasks, setEditedTasks] = useState<PlanTask[]>([])
+  const [showVersionCompare, setShowVersionCompare] = useState(false)
+
+  const currentVersion = versions[currentVersionIndex]
+  const hasDraftVersion = versions.some(v => v.status === '修订版')
+
+  const allPlanTypes = [...LEVEL2_PLAN_TYPES, ...customTypes.map(t => t as Level2PlanType)]
+
+  // 初始化编辑数据
+  const handleEdit = () => {
+    setEditedTasks(JSON.parse(JSON.stringify(currentVersion.tasks)))
+    setIsEditing(true)
+  }
+
+  // 保存修改
+  const handleSave = () => {
+    const newVersions = [...versions]
+    newVersions[currentVersionIndex] = {
+      ...currentVersion,
+      tasks: editedTasks,
+    }
+    setVersions(newVersions)
+    setIsEditing(false)
+  }
+
+  // 取消编辑
+  const handleCancel = () => {
+    setEditedTasks([])
+    setIsEditing(false)
+  }
+
+  // 创建修订版
+  const handleCreateDraft = () => {
+    const newVersionNo = `V${versions.length + 1}`
+    const latestPublished = versions.find(v => v.status === '已发布')
+    const newTasks = latestPublished ? JSON.parse(JSON.stringify(latestPublished.tasks)) : []
+    
+    const newVersion: PlanVersion = {
+      id: `v${versions.length + 1}`,
+      versionNo: newVersionNo,
+      status: '修订版',
+      tasks: newTasks,
+      createdAt: new Date(),
+    }
+    
+    setVersions([...versions, newVersion])
+    setCurrentVersionIndex(versions.length)
+  }
+
+  // 发布版本
+  const handlePublish = () => {
+    const newVersions = versions.map((v, i) => {
+      if (i === currentVersionIndex) {
+        return {
+          ...v,
+          status: '已发布' as const,
+          publishedAt: new Date(),
+        }
+      }
+      return v
+    })
+    setVersions(newVersions)
+  }
+
+  // 添加自定义类型
+  const handleAddCustomType = () => {
+    if (customTypeName && !customTypes.includes(customTypeName)) {
+      setCustomTypes([...customTypes, customTypeName])
+      setSelectedPlanType(customTypeName as Level2PlanType)
+      setCustomTypeName('')
+      setShowAddCustom(false)
+    }
+  }
+
+  // 添加新任务
+  const handleAddTask = (parentId?: string) => {
+    const siblings = parentId 
+      ? editedTasks.filter(t => t.parentId === parentId)
+      : editedTasks.filter(t => !t.parentId)
+    
+    const newTaskNumber = generateTaskNumber(siblings, parentId)
+    const newTask: PlanTask = {
+      id: newTaskNumber,
+      parentId,
+      order: siblings.length + 1,
+      taskName: '新任务',
+      status: '未开始',
+      progress: 0,
+    }
+    
+    setEditedTasks([...editedTasks, newTask])
+  }
+
+  // 删除任务
+  const handleDeleteTask = (taskId: string) => {
+    const taskIdsToDelete = new Set<string>()
+    const findChildren = (id: string) => {
+      taskIdsToDelete.add(id)
+      editedTasks.filter(t => t.parentId === id).forEach(t => findChildren(t.id))
+    }
+    findChildren(taskId)
+    
+    setEditedTasks(editedTasks.filter(t => !taskIdsToDelete.has(t.id)))
+  }
+
+  // 更新任务名称
+  const handleUpdateTaskName = (taskId: string, name: string) => {
+    setEditedTasks(editedTasks.map(t => 
+      t.id === taskId ? { ...t, taskName: name } : t
+    ))
+  }
+
+  // 渲染序号缩进
+  const renderTaskNumber = (taskId: string) => {
+    const level = taskId.split('.').length
+    const classes = {
+      1: 'font-bold',
+      2: 'pl-6',
+      3: 'pl-12',
+    }
+    return <span className={`task-number ${classes[level as keyof typeof classes]}`}>{taskId}</span>
+  }
+
+  // 获取当前版本的表格数据
+  const displayTasks = isEditing ? editedTasks : currentVersion.tasks
+  const rootTasks = displayTasks.filter(t => !t.parentId)
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* 顶部导航栏 */}
+      <header className="bg-white border-b border-gray-200 h-16">
+        <div className="h-full px-6 flex items-center justify-between">
+          <div className="flex items-center gap-8">
+            <h1 className="text-xl font-bold text-gray-800">项目管理系统</h1>
+            <nav className="flex gap-6">
+              <button className="text-sm font-medium text-gray-600 hover:text-gray-900">
+                工作台
+              </button>
+              <button className="text-sm font-medium text-blue-600 border-b-2 border-blue-600 h-16 flex items-center">
+                配置中心
+              </button>
+            </nav>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm">
+              用
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex">
+        {/* 侧边栏 */}
+        <aside className="w-60 bg-gray-50 border-r border-gray-200 min-h-[calc(100vh-64px)]">
+          <nav className="p-4">
+            <div className="mb-2">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2">
+                计划管理
+              </h3>
+            </div>
+            <a href="/config/level1-template" className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 rounded-md hover:bg-blue-50 hover:text-blue-600">
+              <span>一级计划模板</span>
+            </a>
+            <a href="/config/level2-template" className="flex items-center gap-3 px-3 py-2 text-sm text-blue-600 bg-blue-50 rounded-md">
+              <span>二级计划模板</span>
+            </a>
+          </nav>
+        </aside>
+
+        {/* 主内容区 */}
+        <main className="flex-1 p-6">
+          <div className="max-w-7xl mx-auto">
+            {/* 页面标题 */}
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold text-gray-800">二级计划模板管理</h2>
+              <p className="text-gray-500 mt-1">配置和管理项目二级计划模板</p>
+            </div>
+
+            {/* 筛选条件区 */}
+            <div className="card mb-6">
+              <div className="p-4 flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600">项目类型:</label>
+                  <select
+                    value={projectType}
+                    onChange={(e) => setProjectType(e.target.value as ProjectType)}
+                    className="select w-48"
+                  >
+                    {PROJECT_TYPES.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600">计划类型:</label>
+                  <select
+                    value={selectedPlanType}
+                    onChange={(e) => setSelectedPlanType(e.target.value as Level2PlanType)}
+                    className="select w-64"
+                  >
+                    {allPlanTypes.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => setShowAddCustom(true)}
+                    className="btn btn-secondary text-sm"
+                    title="添加自定义类型"
+                  >
+                    +
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600">版本:</label>
+                  <select
+                    value={currentVersionIndex}
+                    onChange={(e) => setCurrentVersionIndex(Number(e.target.value))}
+                    className="select w-48"
+                  >
+                    {versions.map((v, i) => (
+                      <option key={v.id} value={i}>
+                        {v.versionNo}({v.status})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* 编辑模式提示 */}
+            {isEditing && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 mb-6 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-yellow-800">当前版本: {currentVersion.versionNo}(修订版)</span>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={handleSave} className="btn btn-success">
+                    保存
+                  </button>
+                  <button onClick={handleCancel} className="btn btn-secondary">
+                    取消
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 操作按钮区 */}
+            <div className="card mb-6">
+              <div className="p-4 flex items-center justify-between">
+                <div className="flex gap-2">
+                  {!hasDraftVersion && !isEditing && (
+                    <button onClick={handleCreateDraft} className="btn btn-primary">
+                      创建修订
+                    </button>
+                  )}
+                  {currentVersion.status === '修订版' && !isEditing && (
+                    <>
+                      <button onClick={handleEdit} className="btn btn-secondary">
+                        编辑
+                      </button>
+                      <button onClick={handlePublish} className="btn btn-primary">
+                        发布
+                      </button>
+                    </>
+                  )}
+                  <button 
+                    onClick={() => setShowVersionCompare(true)} 
+                    className="btn btn-secondary"
+                  >
+                    历史版本对比
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-sm text-gray-500 self-center">视图:</span>
+                  <button className="btn btn-secondary text-sm">
+                    表格视图
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 计划表格 */}
+            <div className="card">
+              <div className="table-container">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th className="w-20">序号</th>
+                      <th>任务名称</th>
+                      <th className="w-32 text-center">责任人</th>
+                      <th className="w-24 text-center">前置任务</th>
+                      <th className="text-center">计划开始时间</th>
+                      <th className="text-center">计划完成时间</th>
+                      <th className="text-right">预估工期</th>
+                      <th className="text-center">状态</th>
+                      <th className="w-20 text-center">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rootTasks.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="text-center text-gray-500 py-8">
+                          暂无数据，请创建修订版本
+                        </td>
+                      </tr>
+                    ) : (
+                      rootTasks.map(rootTask => (
+                        <>
+                          <tr key={rootTask.id} className="hover:bg-gray-50">
+                            <td className="font-mono font-medium">
+                              {renderTaskNumber(rootTask.id)}
+                            </td>
+                            <td>
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={rootTask.taskName}
+                                  onChange={(e) => handleUpdateTaskName(rootTask.id, e.target.value)}
+                                  className="input"
+                                />
+                              ) : (
+                                rootTask.taskName
+                              )}
+                            </td>
+                            <td className="text-center">-</td>
+                            <td className="text-center">-</td>
+                            <td className="text-center">-</td>
+                            <td className="text-center">-</td>
+                            <td className="text-right">-</td>
+                            <td className="text-center">
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                rootTask.status === '已完成' ? 'bg-green-100 text-green-700' :
+                                rootTask.status === '进行中' ? 'bg-blue-100 text-blue-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {rootTask.status}
+                              </span>
+                            </td>
+                            <td className="text-center">
+                              {isEditing && (
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    onClick={() => handleAddTask(rootTask.id)}
+                                    className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                    title="添加子项"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteTask(rootTask.id)}
+                                    className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                    title="删除"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                          {/* 渲染子任务 */}
+                          {displayTasks
+                            .filter(t => t.parentId === rootTask.id)
+                            .map(childTask => (
+                              <tr key={childTask.id} className="bg-gray-30 hover:bg-gray-50">
+                                <td className="font-mono pl-6">
+                                  {renderTaskNumber(childTask.id)}
+                                </td>
+                                <td>
+                                  {isEditing ? (
+                                    <input
+                                      type="text"
+                                      value={childTask.taskName}
+                                      onChange={(e) => handleUpdateTaskName(childTask.id, e.target.value)}
+                                      className="input"
+                                    />
+                                  ) : (
+                                    childTask.taskName
+                                  )}
+                                </td>
+                                <td className="text-center">-</td>
+                                <td className="text-center">-</td>
+                                <td className="text-center">-</td>
+                                <td className="text-center">-</td>
+                                <td className="text-right">-</td>
+                                <td className="text-center">
+                                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                    childTask.status === '已完成' ? 'bg-green-100 text-green-700' :
+                                    childTask.status === '进行中' ? 'bg-blue-100 text-blue-700' :
+                                    'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {childTask.status}
+                                  </span>
+                                </td>
+                                <td className="text-center">
+                                  {isEditing && (
+                                    <button
+                                      onClick={() => handleDeleteTask(childTask.id)}
+                                      className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                      title="删除"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                        </>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 添加新活动按钮 */}
+            {isEditing && (
+              <div className="mt-4">
+                <button
+                  onClick={() => handleAddTask()}
+                  className="btn btn-secondary"
+                >
+                  + 添加新活动
+                </button>
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+
+      {/* 添加自定义类型弹窗 */}
+      {showAddCustom && (
+        <div className="modal-overlay" onClick={() => setShowAddCustom(false)}>
+          <div className="modal max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="text-lg font-semibold">添加自定义类型</h3>
+              <button onClick={() => setShowAddCustom(false)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  类型名称
+                </label>
+                <input
+                  type="text"
+                  value={customTypeName}
+                  onChange={(e) => setCustomTypeName(e.target.value)}
+                  placeholder="请输入自定义类型名称"
+                  className="input"
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button onClick={() => setShowAddCustom(false)} className="btn btn-secondary">
+                取消
+              </button>
+              <button onClick={handleAddCustomType} className="btn btn-primary">
+                添加
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 版本对比弹窗 */}
+      {showVersionCompare && (
+        <div className="modal-overlay" onClick={() => setShowVersionCompare(false)}>
+          <div className="modal max-w-3xl" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="text-lg font-semibold">版本对比</h3>
+              <button onClick={() => setShowVersionCompare(false)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="text-sm text-gray-500 text-center py-8">
+                请选择两个不同的版本进行对比
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button onClick={() => setShowVersionCompare(false)} className="btn btn-secondary">
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
