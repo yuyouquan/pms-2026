@@ -1,0 +1,173 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #3B82F6;
+  --primary-hover: #2563EB;
+  --primary-light: #DBEAFE;
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --border: #D1D5DB;
+  --text-primary: #1F2937;
+  --text-secondary: #6B7280;
+  --bg-primary: #F9FAFB;
+  --bg-secondary: #FFFFFF;
+}
+
+body {
+  @apply bg-gray-50 text-gray-800 font-sans;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400;
+}
+
+/* 表格样式 */
+.table-container {
+  @apply overflow-auto;
+}
+
+.table {
+  @apply w-full border-collapse;
+}
+
+.table th {
+  @apply px-4 py-3 text-left text-sm font-medium text-gray-600 bg-gray-50 border-b border-gray-200;
+}
+
+.table td {
+  @apply px-4 py-3 text-sm border-b border-gray-100;
+}
+
+.table tr:hover td {
+  @apply bg-gray-50;
+}
+
+/* 按钮样式 */
+.btn {
+  @apply px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200;
+}
+
+.btn-primary {
+  @apply bg-blue-500 text-white hover:bg-blue-600;
+}
+
+.btn-secondary {
+  @apply bg-gray-100 text-gray-700 hover:bg-gray-200;
+}
+
+.btn-danger {
+  @apply bg-red-500 text-white hover:bg-red-600;
+}
+
+.btn-success {
+  @apply bg-green-500 text-white hover:bg-green-600;
+}
+
+/* 输入框样式 */
+.input {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+}
+
+/* 下拉选择器样式 */
+.select {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500;
+}
+
+/* 卡片样式 */
+.card {
+  @apply bg-white rounded-lg shadow-sm border border-gray-200;
+}
+
+.card-header {
+  @apply px-6 py-4 border-b border-gray-200;
+}
+
+.card-body {
+  @apply p-6;
+}
+
+/* 弹窗样式 */
+.modal-overlay {
+  @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50;
+}
+
+.modal {
+  @apply bg-white rounded-lg shadow-xl max-w-lg w-full mx-4;
+}
+
+.modal-header {
+  @apply px-6 py-4 border-b border-gray-200 flex items-center justify-between;
+}
+
+.modal-body {
+  @apply px-6 py-4;
+}
+
+.modal-footer {
+  @apply px-6 py-4 border-t border-gray-200 flex justify-end gap-3;
+}
+
+/* 序号样式 */
+.task-number {
+  @apply font-mono font-medium;
+}
+
+.task-number-level-1 {
+  @apply font-bold;
+}
+
+.task-number-level-2 {
+  @apply pl-6;
+}
+
+.task-number-level-3 {
+  @apply pl-12;
+}
+
+/* 版本状态标签 */
+.version-tag {
+  @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium;
+}
+
+.version-tag-published {
+  @apply bg-green-100 text-green-800;
+}
+
+.version-tag-draft {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+/* 差异高亮 */
+.diff-added {
+  @apply bg-green-50 text-green-700;
+}
+
+.diff-deleted {
+  @apply bg-red-50 text-red-700;
+}
+
+.diff-modified {
+  @apply bg-blue-50 text-blue-700;
+}
+
+/* 加载状态 */
+.skeleton {
+  @apply animate-pulse bg-gray-200 rounded;
+}
