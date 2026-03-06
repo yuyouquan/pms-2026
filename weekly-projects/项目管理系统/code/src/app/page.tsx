@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { 
   Card, 
   Tabs, 
@@ -211,6 +212,7 @@ function SortableRow({ children, ...props }: any) {
 }
 
 export default function Home() {
+  const router = useRouter()
   const [activeModule, setActiveModule] = useState<string>('projects')
   const [projectView, setProjectView] = useState<string>('card')
   const [projects] = useState(initialProjects)
@@ -530,7 +532,7 @@ export default function Home() {
   const renderProjectCard = (project: typeof initialProjects[0]) => {
     const statusColor = project.status === '进行中' ? 'processing' : project.status === '已完成' ? 'success' : 'warning'
     return (
-      <Card hoverable style={{ marginBottom: 16 }} onClick={() => { setSelectedProject(project); setActiveModule('projectSpace') }}>
+      <Card hoverable style={{ marginBottom: 16 }} onClick={() => router.push(`/project/${project.id}`)}>
         <Card.Meta 
           title={<Space><span>{project.name}</span><Tag color={statusColor}>{project.status}</Tag></Space>} 
           description={
@@ -564,7 +566,7 @@ export default function Home() {
           <Card title={<Space><Badge color={col.color} />{col.title}</Space>} style={{ background: '#fafafa', minHeight: 300 }} bodyStyle={{ padding: 12 }}>
             <Space direction="vertical" style={{ width: '100%' }}>
               {projects.filter(p => { if (col.key === 'concept') return p.progress === 0; if (col.key === 'planning') return p.progress > 0 && p.progress < 30; if (col.key === 'developing') return p.progress >= 30 && p.progress < 100; return p.progress === 100 }).map(project => (
-                <Card key={project.id} size="small" hoverable onClick={() => { setSelectedProject(project); setActiveModule('projectSpace') }}>
+                <Card key={project.id} size="small" hoverable onClick={() => router.push(`/project/${project.id}`)}>
                   <Space direction="vertical" style={{ width: '100%' }}><div style={{ fontWeight: 500 }}>{project.name}</div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Tag>{project.type}</Tag><Progress percent={project.progress} size="small" style={{ width: 60 }} /></div></Space>
                 </Card>
               ))}
