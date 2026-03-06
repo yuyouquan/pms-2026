@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { 
   Card, 
   Tabs, 
@@ -26,8 +26,82 @@ import {
   Avatar,
   Empty,
   Slider,
-  Alert
+  Alert,
+  Statistic
 } from 'antd'
+import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
+import { gantt } from 'dhtmlx-gantt'
+
+// DHTMLX Gantt组件
+function DHTMLXGantt({ tasks, onTaskClick, readOnly = false }: { tasks: any[], onTaskClick?: (task: any) => void, readOnly?: boolean }) {
+  const ganttContainer = useRef<HTMLDivElement>(null)
+  
+  useEffect(() => {
+    if (!ganttContainer.current) return
+    
+    // 配置Gantt
+    gantt.config.date_format = '%Y-%m-%d'
+    gantt.config.columns = [
+      { name: 'text', label: '任务名称', width: 200, tree: true },
+      { name: 'start_date', label: '开始', align: 'center', width: 80 },
+      { name: 'duration', label: '天数', align: 'center', width: 50 },
+      { name: 'progress', label: '进度', align: 'center', width: 60, template: (task: any) => Math.round(task.progress * 100) + '%' }
+    ]
+    gantt.config.scale_unit = 'month'
+    gantt.config.date_scale = '%Y年%m月'
+    gantt.config.subscales = [{ unit: 'day', step: 1, date: '%d日' }]
+    gantt.config.row_height = 35
+    gantt.config.bar_height = 20
+    gantt.config.fit_tasks = true
+    gantt.config.auto_scheduling = true
+    gantt.config.auto_scheduling_strict = true
+    
+    if (readOnly) {
+      gantt.config.readonly = true
+    }
+    
+    // 初始化
+    gantt.init(ganttContainer.current)
+    
+    // 转换数据格式
+    const ganttData = {
+      data: tasks.map(t => ({
+        id: t.id,
+        text: t.taskName,
+        start_date: t.planStartDate || '',
+        end_date: t.planEndDate || '',
+        duration: t.estimatedDays || 1,
+        progress: (t.progress || 0) / 100,
+        parent: t.parentId || 0,
+        status: t.status,
+        responsible: t.responsible
+      })),
+      links: tasks.filter(t => t.predecessor).map((t, i) => ({
+        id: i + 1,
+        source: t.predecessor,
+        target: t.id,
+        type: '0'
+      }))
+    }
+    
+    gantt.parse(ganttData)
+    
+    // 点击事件
+    if (onTaskClick) {
+      gantt.attachEvent('onTaskClick', (id: number) => {
+        const task = gantt.getTask(id)
+        onTaskClick(task)
+        return true
+      })
+    }
+    
+    return () => {
+      gantt.clearAll()
+    }
+  }, [tasks, readOnly])
+  
+  return <div ref={ganttContainer} style={{ width: '100%', height: '500px' }} />
+}
 import { 
   PlusOutlined, 
   SaveOutlined,
@@ -51,9 +125,11 @@ import {
   TeamOutlined,
   WarningOutlined,
   BugOutlined,
-  FolderOutlined
+  FolderOutlined,
+  CheckCircleOutlined
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
+import { compareVersions } from '@/lib/versionCompare'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { ColumnsType } from 'antd/es/table'
@@ -121,20 +197,11 @@ const ALL_COLUMNS = [
   { key: 'progress', title: '进度', default: true },
 ]
 
-// IR需求Mock数据
-const IR_REQUIREMENTS = [
-  { id: '1', domain: '系统', irNo: 'IR-001', irTitle: '支持5G网络', priority: '高', irStatus: '已实现', testPlanStart: '2026-02-01', testPlanEnd: '2026-02-15', acceptPlanStart: '2026-02-16', acceptPlanEnd: '2026-02-28' },
-  { id: '2', domain: '相机', irNo: 'IR-002', irTitle: '提升夜景拍照效果', priority: '高', irStatus: '进行中', testPlanStart: '2026-02-10', testPlanEnd: '2026-02-25', acceptPlanStart: '2026-02-26', acceptPlanEnd: '2026-03-05' },
-  { id: '3', domain: '电池', irNo: 'IR-003', irTitle: '延长续航时间', priority: '中', irStatus: '待处理', testPlanStart: '2026-03-01', testPlanEnd: '2026-03-10', acceptPlanStart: '2026-03-11', acceptPlanEnd: '2026-03-15' },
-  { id: '4', domain: '显示', irNo: 'IR-004', irTitle: '120Hz高刷新率', priority: '中', irStatus: '已实现', testPlanStart: '2026-01-15', testPlanEnd: '2026-01-30', acceptPlanStart: '2026-01-31', acceptPlanEnd: '2026-02-05' },
-]
+// IR需求Mock数据（待定状态）
+const IR_REQUIREMENTS: any[] = []
 
-// SR需求Mock数据
-const SR_REQUIREMENTS = [
-  { id: '1', srNo: 'SR-001', srTitle: '微信双开', relatedIr: 'IR-001', dept: '应用部', srStatus: '已实现', planTestVersion: 'V1.0', actualTestVersion: 'V1.0', testPlanStart: '2026-02-01', testPlanEnd: '2026-02-10', acceptPlanStart: '2026-02-11', acceptPlanEnd: '2026-02-15' },
-  { id: '2', srNo: 'SR-002', srTitle: '指纹识别优化', relatedIr: 'IR-002', dept: '系统部', srStatus: '进行中', planTestVersion: 'V1.1', actualTestVersion: 'V1.0', testPlanStart: '2026-02-15', testPlanEnd: '2026-02-25', acceptPlanStart: '2026-02-26', acceptPlanEnd: '2026-03-01' },
-  { id: '3', srNo: 'SR-003', srTitle: '超级省电模式', relatedIr: 'IR-003', dept: '功耗部', srStatus: '待处理', planTestVersion: 'V1.2', actualTestVersion: '', testPlanStart: '2026-03-01', testPlanEnd: '2026-03-10', acceptPlanStart: '2026-03-11', acceptPlanEnd: '2026-03-15' },
-]
+// SR需求Mock数据（待定状态）
+const SR_REQUIREMENTS: any[] = []
 
 // 可排序行组件
 function SortableRow({ children, ...props }: any) {
@@ -169,6 +236,7 @@ export default function Home() {
   const [showVersionCompare, setShowVersionCompare] = useState(false)
   const [compareVersionA, setCompareVersionA] = useState('v1')
   const [compareVersionB, setCompareVersionB] = useState('v3')
+  const [compareResult, setCompareResult] = useState<any[]>([])
   
   // 项目空间
   const [projectSpaceModule, setProjectSpaceModule] = useState('basic')
@@ -177,6 +245,14 @@ export default function Home() {
   // 项目空间-计划
   const [projectPlanLevel, setProjectPlanLevel] = useState<string>('level1')
   const [projectPlanViewMode, setProjectPlanViewMode] = useState<'table' | 'gantt'>('table')
+  const [level2PlanTasks, setLevel2PlanTasks] = useState<any[]>([])
+  const [level2PlanMilestones, setLevel2PlanMilestones] = useState<string[]>([])
+  const [createdLevel2Plans, setCreatedLevel2Plans] = useState<{id: string, name: string, type: string}[]>([
+    { id: 'plan1', name: 'FR版本火车计划', type: 'FR版本火车计划' },
+    { id: 'plan2', name: 'MR1版本火车计划', type: 'MR版本火车计划' },
+    { id: 'plan3', name: 'MR2版本火车计划', type: 'MR版本火车计划' },
+  ])  // 已创建的二级计划列表
+  const [activeLevel2Plan, setActiveLevel2Plan] = useState<string>('')  // 当前查看的二级计划
   
   // 项目空间-市场Tab
   const [selectedMarketTab, setSelectedMarketTab] = useState<string>('OP')
@@ -184,7 +260,12 @@ export default function Home() {
   // 二级计划创建
   const [showCreateLevel2Plan, setShowCreateLevel2Plan] = useState(false)
   const [selectedLevel2PlanType, setSelectedLevel2PlanType] = useState('需求开发计划')
+  const [selectedMilestones, setSelectedMilestones] = useState<string[]>([])
+  const [selectedMRVersion, setSelectedMRVersion] = useState<string>('FR')  // MR版本类型
   const [irSrView, setIrSrView] = useState<'ir' | 'sr'>('ir')
+  
+  // 二级计划时间约束警告状态
+  const [milestoneTimeWarning, setMilestoneTimeWarning] = useState<{visible: boolean, violations: any[], message: string}>({visible: false, violations: [], message: ''})
   
   // 检查是否有一级计划已发布
   const hasPublishedLevel1Plan = versions.some(v => v.status === '已发布')
@@ -200,12 +281,25 @@ export default function Home() {
   const currentVersionData = versions.find(v => v.id === currentVersion)
   const isCurrentDraft = currentVersionData?.status === '修订中'
 
-  const filteredTasks = tasks.filter(task => 
-    task.taskName.toLowerCase().includes(searchText.toLowerCase()) ||
-    task.responsible.toLowerCase().includes(searchText.toLowerCase()) ||
-    task.id.toLowerCase().includes(searchText.toLowerCase()) ||
-    task.status.toLowerCase().includes(searchText.toLowerCase())
-  )
+  // 搜索所有字段
+  const filteredTasks = (tasks as any[]).filter((task: any) => {
+    if (!searchText) return true
+    const searchLower = searchText.toLowerCase()
+    return (
+      task.id.toLowerCase().includes(searchLower) ||
+      task.taskName.toLowerCase().includes(searchLower) ||
+      (task.responsible && task.responsible.toLowerCase().includes(searchLower)) ||
+      (task.predecessor && task.predecessor.toLowerCase().includes(searchLower)) ||
+      (task.planStartDate && task.planStartDate.toLowerCase().includes(searchLower)) ||
+      (task.planEndDate && task.planEndDate.toLowerCase().includes(searchLower)) ||
+      (task.estimatedDays && String(task.estimatedDays).includes(searchLower)) ||
+      (task.actualStartDate && task.actualStartDate.toLowerCase().includes(searchLower)) ||
+      (task.actualEndDate && task.actualEndDate.toLowerCase().includes(searchLower)) ||
+      (task.actualDays && String(task.actualDays).includes(searchLower)) ||
+      (task.status && task.status.toLowerCase().includes(searchLower)) ||
+      (task.progress && String(task.progress).includes(searchLower))
+    )
+  })
 
   const handleAddSubTask = (parentId: string) => {
     const parentTask = tasks.find(t => t.id === parentId)
@@ -304,6 +398,89 @@ export default function Home() {
     }))
     setProgressEditingTask(null)
     message.success('进度已更新')
+  }
+
+  // 子活动时间约束检查 - 子活动必须在父活动时间范围内
+  const [parentTimeWarning, setParentTimeWarning] = useState<{visible: boolean, tasks: any[], message: string}>({visible: false, tasks: [], message: ''})
+  
+  // 二级计划时间约束检查 - 二级计划时间必须在里程碑时间范围内
+  const checkMilestoneTimeConstraint = (level2Tasks: any[], milestoneIds: string[], level1Tasks: any[]): {valid: boolean, violations: any[]} => {
+    if (milestoneIds.length === 0) return { valid: true, violations: [] }
+    
+    const violations: any[] = []
+    
+    // 获取选中里程碑的时间范围
+    const milestoneTasks = level1Tasks.filter(t => milestoneIds.includes(t.id))
+    if (milestoneTasks.length === 0) return { valid: true, violations: [] }
+    
+    // 计算里程碑的总体时间范围
+    let earliestStart = Infinity
+    let latestEnd = -Infinity
+    
+    milestoneTasks.forEach(m => {
+      if (m.planStartDate) {
+        const start = new Date(m.planStartDate).getTime()
+        if (start < earliestStart) earliestStart = start
+      }
+      if (m.planEndDate) {
+        const end = new Date(m.planEndDate).getTime()
+        if (end > latestEnd) latestEnd = end
+      }
+    })
+    
+    if (earliestStart === Infinity || latestEnd === -Infinity) return { valid: true, violations: [] }
+    
+    const milestoneStartDate = new Date(earliestStart).toISOString().split('T')[0]
+    const milestoneEndDate = new Date(latestEnd).toISOString().split('T')[0]
+    
+    // 检查二级计划任务是否在里程碑时间范围内
+    level2Tasks.forEach(task => {
+      if (task.planStartDate && task.planEndDate) {
+        const taskStart = new Date(task.planStartDate).getTime()
+        const taskEnd = new Date(task.planEndDate).getTime()
+        
+        if (taskStart < earliestStart || taskEnd > latestEnd) {
+          violations.push({
+            id: task.id,
+            taskName: task.taskName,
+            taskTime: `${task.planStartDate} ~ ${task.planEndDate}`,
+            milestoneRange: `${milestoneStartDate} ~ ${milestoneEndDate}`,
+            milestones: milestoneIds.join(', ')
+          })
+        }
+      }
+    })
+    
+    return { valid: violations.length === 0, violations }
+  }
+  
+  const checkParentTimeConstraint = (): {valid: boolean, violations: any[]} => {
+    const violations: any[] = []
+    
+    tasks.forEach(task => {
+      if (task.parentId) {
+        const parentTask = tasks.find(t => t.id === task.parentId)
+        if (parentTask && parentTask.planStartDate && parentTask.planEndDate && task.planStartDate && task.planEndDate) {
+          const parentStart = new Date(parentTask.planStartDate).getTime()
+          const parentEnd = new Date(parentTask.planEndDate).getTime()
+          const childStart = new Date(task.planStartDate).getTime()
+          const childEnd = new Date(task.planEndDate).getTime()
+          
+          if (childStart < parentStart || childEnd > parentEnd) {
+            violations.push({
+              id: task.id,
+              taskName: task.taskName,
+              parentId: task.parentId,
+              parentName: parentTask.taskName,
+              childTime: `${task.planStartDate} ~ ${task.planEndDate}`,
+              parentTime: `${parentTask.planStartDate} ~ ${parentTask.planEndDate}`
+            })
+          }
+        }
+      }
+    })
+    
+    return { valid: violations.length === 0, violations }
   }
 
   // 前置任务检查
@@ -410,49 +587,16 @@ export default function Home() {
   }
 
   const renderGanttChart = () => {
-    const minDate = new Date('2026-01-01')
-    const maxDate = new Date('2026-04-30')
-    const totalDays = (maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)
-    const getPosition = (dateStr: string) => { if (!dateStr) return { left: 0, width: 0 }; const date = new Date(dateStr); const startDays = (date.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24); return { left: (startDays / totalDays) * 100, width: 5 } }
-    const getColor = (status: string, progress: number) => { if (status === '已完成' || progress === 100) return '#52c41a'; if (status === '进行中') return '#1890ff'; return '#d9d9d9' }
-
     return (
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-          <thead><tr><th style={{ width: 60, padding: 8, border: '#f0f0f0', background: '#fafafa' }}>序号</th><th style={{ width: 150, padding: 8, border: '#f0f0f0', background: '#fafafa' }}>任务名称</th><th style={{ width: 80, padding: 8, border: '#f0f0f0', background: '#fafafa' }}>责任人</th><th style={{ width: 100, padding: 8, border: '#f0f0f0', background: '#fafafa' }}>时间</th><th style={{ minWidth: 400, padding: 8, border: '#f0f0f0', background: '#fafafa' }}>甘特图</th></tr></thead>
-          <tbody>
-            {filteredTasks.filter(t => !t.parentId).map(task => {
-              const { left } = getPosition(task.planStartDate)
-              const endPos = getPosition(task.planEndDate)
-              const barWidth = endPos.left + endPos.width - left
-              const children = filteredTasks.filter(t => t.parentId === task.id)
-              return (
-                <>
-                  <tr key={task.id}>
-                    <td style={{ padding: 8, border: '#f0f0f0', fontWeight: 500 }}>{task.id}</td>
-                    <td style={{ padding: 8, border: '#f0f0f0' }}>{task.taskName}</td>
-                    <td style={{ padding: 8, border: '#f0f0f0' }}>{task.responsible}</td>
-                    <td style={{ padding: 8, border: '#f0f0f0' }}>{task.planStartDate} ~ {task.planEndDate}</td>
-                    <td style={{ padding: 8, border: '#f0f0f0', position: 'relative', height: 30, cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setGanttEditingTask(task) }}>
-                      <div style={{ position: 'absolute', left: `${left}%`, width: `${Math.max(barWidth, 2)}%`, height: 20, background: getColor(task.status, task.progress), borderRadius: 4, top: 5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span 
-                          style={{ color: '#fff', fontSize: 10, padding: '2px 4px', borderRadius: 2, background: 'rgba(0,0,0,0.2)', cursor: 'pointer' }}
-                          onClick={(e) => { e.stopPropagation(); setProgressEditingTask(task) }}
-                        >
-                          {task.progress}%
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                  {children.map(child => { const cLeft = getPosition(child.planStartDate); const cEndPos = getPosition(child.planEndDate); const cBarWidth = cEndPos.left + cEndPos.width - cLeft.left; return (
-                    <tr key={child.id}><td style={{ padding: '8px 8px 8px 24px', border: '#f0f0f0', color: '#666' }}>{child.id}</td><td style={{ padding: '8px 8px 8px 24px', border: '#f0f0f0', color: '#666' }}>└─ {child.taskName}</td><td style={{ padding: '8px 8px 8px 24px', border: '#f0f0f0', color: '#666' }}>{child.responsible}</td><td style={{ padding: '8px 8px 8px 24px', border: '#f0f0f0', color: '#666' }}>{child.planStartDate} ~ {child.planEndDate}</td><td style={{ padding: 8, border: '#f0f0f0', position: 'relative', height: 30, cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setGanttEditingTask(child) }}><div style={{ position: 'absolute', left: `${cLeft.left}%`, width: `${Math.max(cBarWidth, 2)}%`, height: 16, background: getColor(child.status, child.progress), borderRadius: 4, top: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ color: '#fff', fontSize: 9, padding: '1px 3px', borderRadius: 2, background: 'rgba(0,0,0,0.2)', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setProgressEditingTask(child) }}>{child.progress}%</span></div></td></tr>
-                  )})}
-                </>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      <Card>
+        <DHTMLXGantt 
+          tasks={filteredTasks} 
+          onTaskClick={(task) => {
+            message.info(`点击任务: ${task.text}`)
+          }}
+          readOnly={!isEditMode}
+        />
+      </Card>
     )
   }
 
@@ -524,49 +668,122 @@ export default function Home() {
   }
 
   const renderActionButtons = () => {
-    if (isEditMode) return (<Space><Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{currentVersionData?.versionNo}({currentVersionData?.status})</Tag><Button type="primary" icon={<SaveOutlined />} onClick={() => { setIsEditMode(false); message.success('保存成功') }}>保存</Button><Button onClick={() => { setIsEditMode(false); message.info('已取消编辑') }}>取消</Button></Space>)
+    const handleSave = () => {
+      // 1. 检查子活动时间约束
+      const parentCheck = checkParentTimeConstraint()
+      if (!parentCheck.valid) {
+        setParentTimeWarning({
+          visible: true,
+          tasks: parentCheck.violations,
+          message: `发现${parentCheck.violations.length}个子任务时间超出父任务范围，请修改后再保存`
+        })
+        return
+      }
+      // 2. 检查前置任务约束
+      const predViolations: any[] = []
+      tasks.forEach(task => {
+        if (task.predecessor && task.planStartDate) {
+          const predTask = tasks.find(t => t.id === task.predecessor)
+          if (predTask && predTask.planEndDate) {
+            const newDateTime = new Date(task.planStartDate).getTime()
+            const predEndTime = new Date(predTask.planEndDate).getTime()
+            if (newDateTime < predEndTime) {
+              predViolations.push({
+                id: task.id,
+                taskName: task.taskName,
+                predName: predTask.taskName,
+                predEnd: predTask.planEndDate
+              })
+            }
+          }
+        }
+      })
+      
+      if (predViolations.length > 0) {
+        Modal.warning({
+          title: '前置任务时间冲突',
+          content: (
+            <div>
+              <p>发现以下任务开始时间早于前置任务结束时间：</p>
+              <ul>
+                {predViolations.map(v => (
+                  <li key={v.id}>{v.taskName} 的开始时间早于前置任务 {v.predName} 的结束时间({v.predEnd})</li>
+                ))}
+              </ul>
+              <p>请修改后再保存</p>
+            </div>
+          ),
+          okText: '知道了'
+        })
+        return
+      }
+      
+      // 3. 检查二级计划时间是否在里程碑范围内（项目空间）
+      if (projectPlanLevel === 'level2' && level2PlanMilestones.length > 0 && level2PlanTasks.length > 0) {
+        const milestoneCheck = checkMilestoneTimeConstraint(level2PlanTasks, level2PlanMilestones, tasks)
+        if (!milestoneCheck.valid) {
+          setMilestoneTimeWarning({
+            visible: true,
+            violations: milestoneCheck.violations,
+            message: `发现${milestoneCheck.violations.length}个二级计划任务时间超出绑定里程碑的时间范围，请修改后再保存`
+          })
+          return
+        }
+      }
+      
+      setIsEditMode(false)
+      message.success('保存成功')
+    }
+    
+    if (isEditMode) return (<Space><Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{currentVersionData?.versionNo}({currentVersionData?.status})</Tag><Button type="primary" icon={<SaveOutlined />} onClick={handleSave}>保存</Button><Button onClick={() => { setIsEditMode(false); message.info('已取消编辑') }}>取消</Button></Space>)
     return (<Space>{!hasDraftVersion && <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateRevision}>创建修订</Button>}{isCurrentDraft && <Button icon={<EditOutlined />} onClick={() => setIsEditMode(true)}>编辑</Button>}{isCurrentDraft && <Button type="primary" icon={<SaveOutlined />} onClick={handlePublish}>发布</Button>}<Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
   }
 
   const renderVersionCompareResult = () => {
-    const diffs = [{ type: '新增', id: '3', name: '开发验证', color: '#52c41a' }, { type: '删除', id: '1.3', name: 'STR1A', color: '#ff4d4f' }, { type: '修改', id: '2', name: '计划', oldVal: '未开始', newVal: '进行中', color: '#1890ff' }]
-    return (<div style={{ marginTop: 16 }}><h4>对比结果：</h4><Timeline items={diffs.map(d => ({ color: d.color, children: <span>{d.type === '新增' && <span style={{ color: '#52c41a' }}>+ 新增: </span>}{d.type === '删除' && <span style={{ color: '#ff4d4f' }}>- 删除: </span>}{d.type === '修改' && <span style={{ color: '#1890ff' }}>~ 修改: </span>}{d.id} {d.name}{d.type === '修改' && <span style={{ color: '#999' }}> ({d.oldVal} → {d.newVal})</span>}</span> }))} /></div>)
-  }
-
-  // 项目空间 - 需求模块（IR/SR分类展示）
-  const renderProjectRequirements = () => {
-    const irColumns = [
-      { title: '领域', dataIndex: 'domain', key: 'domain', width: 100 },
-      { title: 'IR编号', dataIndex: 'irNo', key: 'irNo', width: 100 },
-      { title: 'IR标题', dataIndex: 'irTitle', key: 'irTitle' },
-      { title: '优先级', dataIndex: 'priority', key: 'priority', width: 80, render: (p: string) => <Tag color={p === '高' ? 'red' : p === '中' ? 'orange' : 'green'}>{p}</Tag> },
-      { title: '状态', dataIndex: 'irStatus', key: 'irStatus', width: 100, render: (s: string) => <Tag color={s === '已实现' ? 'green' : s === '进行中' ? 'blue' : 'default'}>{s}</Tag> },
-      { title: '测试计划', key: 'testPlan', render: (_: any, r: any) => `${r.testPlanStart} ~ ${r.testPlanEnd}` },
-      { title: '验收计划', key: 'acceptPlan', render: (_: any, r: any) => `${r.acceptPlanStart} ~ ${r.acceptPlanEnd}` },
-    ]
+    if (compareResult.length === 0) {
+      return <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>请选择两个版本点击"开始对比"</div>
+    }
     
-    const srColumns = [
-      { title: 'SR编号', dataIndex: 'srNo', key: 'srNo', width: 100 },
-      { title: 'SR标题', dataIndex: 'srTitle', key: 'srTitle' },
-      { title: '关联IR', dataIndex: 'relatedIr', key: 'relatedIr', width: 100 },
-      { title: '责任部门', dataIndex: 'dept', key: 'dept', width: 100 },
-      { title: '状态', dataIndex: 'srStatus', key: 'srStatus', width: 100, render: (s: string) => <Tag color={s === '已实现' ? 'green' : s === '进行中' ? 'blue' : 'default'}>{s}</Tag> },
-      { title: '计划测试版本', dataIndex: 'planTestVersion', key: 'planTestVersion', width: 130 },
-      { title: '实际测试版本', dataIndex: 'actualTestVersion', key: 'actualTestVersion', width: 130 },
-      { title: '测试计划', key: 'testPlan', render: (_: any, r: any) => `${r.testPlanStart} ~ ${r.testPlanEnd}` },
-      { title: '验收计划', key: 'acceptPlan', render: (_: any, r: any) => `${r.acceptPlanStart} ~ ${r.acceptPlanEnd}` },
-    ]
+    const getColor = (type: string) => {
+      if (type === '新增') return '#52c41a'
+      if (type === '删除') return '#ff4d4f'
+      return '#1890ff'
+    }
     
     return (
-      <Card>
-        <Tabs 
-          activeKey={irSrView}
-          onChange={(key) => setIrSrView(key as 'ir' | 'sr')}
-          items={[
-            { key: 'ir', label: 'IR需求', children: <Table dataSource={IR_REQUIREMENTS} columns={irColumns} rowKey="id" pagination={false} size="small" /> },
-            { key: 'sr', label: 'SR需求', children: <Table dataSource={SR_REQUIREMENTS} columns={srColumns} rowKey="id" pagination={false} size="small" /> },
-          ]}
+      <div style={{ marginTop: 16, maxHeight: 400, overflow: 'auto' }}>
+        <Alert 
+          message={`对比完成: 新增${compareResult.filter(d => d.changeType === '新增').length}项, 删除${compareResult.filter(d => d.changeType === '删除').length}项, 修改${compareResult.filter(d => d.changeType === '修改').length}项`} 
+          type="info" 
+          style={{ marginBottom: 16 }} 
         />
+        <Timeline items={compareResult.map((d: any) => ({
+          color: getColor(d.changeType),
+          children: (
+            <div>
+              {d.changeType === '新增' && <span style={{ color: '#52c41a', fontWeight: 'bold' }}>+ 新增: </span>}
+              {d.changeType === '删除' && <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>- 删除: </span>}
+              {d.changeType === '修改' && <span style={{ color: '#1890ff', fontWeight: 'bold' }}>~ 修改: </span>}
+              <span style={{ fontWeight: 500 }}>{d.taskId}</span> {d.changeType === '新增' ? d.newValue : d.oldValue?.split('\n')[0]}
+              {d.changeType === '修改' && (
+                <div style={{ marginTop: 4, marginLeft: 16, color: '#666', fontSize: 12 }}>
+                  {d.oldValue?.split('\n').map((line: string, i: number) => (
+                    <div key={i}>{line}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        }))} />
+      </div>
+    )
+  }
+
+  // 项目空间 - 需求模块
+  const renderProjectRequirements = () => {
+    return (
+      <Card>
+        <Empty description="该模块开发中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
       </Card>
     )
   }
@@ -657,20 +874,44 @@ export default function Home() {
           ]}
         />
         
+        {/* 二级计划Tab切换 - 在版本选择器上方 */}
+        {projectPlanLevel === 'level2' && (
+          <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+            <Col>
+              <Tabs 
+                activeKey={activeLevel2Plan} 
+                onChange={setActiveLevel2Plan}
+                items={[
+                  ...createdLevel2Plans.map(plan => ({
+                    key: plan.id,
+                    label: plan.name
+                  }))
+                ]}
+              />
+            </Col>
+            <Col>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowCreateLevel2Plan(true)}>创建二级计划</Button>
+            </Col>
+          </Row>
+        )}
+        
         <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
           <Col>
             <Space>
               <span style={{ color: '#666' }}>版本:</span>
-              <Select value={currentVersion} onChange={setCurrentVersion} style={{ width: 150 }}>
+              <Select value={currentVersion} onChange={(val) => { setCurrentVersion(val); setIsEditMode(false) }} style={{ width: 150 }}>
                 {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}
               </Select>
-              {projectPlanLevel === 'level2' && (
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowCreateLevel2Plan(true)} disabled={!hasPublishedLevel1Plan}>创建二级计划</Button>
-              )}
+              {/* 操作按钮：创建修订/编辑/发布/版本对比 */}
+              {!hasDraftVersion && <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateRevision}>创建修订</Button>}
+              {isCurrentDraft && <><Button icon={<EditOutlined />} onClick={() => setIsEditMode(true)}>编辑</Button><Button type="primary" icon={<SaveOutlined />} onClick={handlePublish}>发布</Button></>}
+              <Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>版本对比</Button>
             </Space>
           </Col>
           <Col>
             <Space>
+              <Input placeholder="搜索任务..." prefix={<SearchOutlined />} style={{ width: 200 }} onChange={(e) => setSearchText(e.target.value)} />
+              <Button icon={<AppstoreOutlined />} onClick={() => setShowColumnModal(true)}>自定义列</Button>
               <Button 
                 icon={projectPlanViewMode === 'table' ? <BarChartOutlined /> : <AppstoreOutlined />} 
                 onClick={() => setProjectPlanViewMode(projectPlanViewMode === 'table' ? 'gantt' : 'table')}
@@ -680,14 +921,25 @@ export default function Home() {
             </Space>
           </Col>
         </Row>
+        
+        {/* 表格或甘特图内容 */}
 
         {projectPlanViewMode === 'gantt' ? renderGanttChart() : renderTaskTable()}
       </div>
     )
   }
 
-  // 项目空间 - 计划总览（一二级融合）
+  // 项目空间 - 概况模块
   const renderProjectOverview = () => {
+    return (
+      <Card>
+        <Empty description="该模块开发中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      </Card>
+    )
+  }
+  
+  // 项目空间 - 计划总览（一二级融合）
+  const renderProjectPlanOverview = () => {
     return (
       <div>
         <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
@@ -749,7 +1001,7 @@ export default function Home() {
             {projectSpaceModule === 'plan' && renderProjectPlan()}
             {projectSpaceModule === 'overview' && renderProjectOverview()}
             {projectSpaceModule === 'requirements' && renderProjectRequirements()}
-            {projectSpaceModule !== 'basic' && projectSpaceModule !== 'plan' && projectSpaceModule !== 'overview' && <Card><Empty description={`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`} /></Card>}
+            {projectSpaceModule !== 'basic' && projectSpaceModule !== 'plan' && projectSpaceModule !== 'overview' && projectSpaceModule !== 'requirements' && <Card><Empty description={`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`} /></Card>}
           </div>
         </div>
       </div>
@@ -772,7 +1024,7 @@ export default function Home() {
               {projectView === 'kanban' && renderKanbanBoard()}
               {projectView === 'todo' && renderTodoList()}
             </Card>)}
-            {activeModule === 'config' && (
+            {(activeModule === 'config' || activeModule === 'projectSpace') && (
               <Row gutter={24}>
                 <Col span={sidebarCollapsed ? 1 : 4}><Card title={!sidebarCollapsed && "项目类型"} size="small" bodyStyle={{ padding: sidebarCollapsed ? '12px 8px' : '12px' }} extra={<Button type="text" size="small" icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} />}>
                   {!sidebarCollapsed && <Menu mode="inline" selectedKeys={[selectedProjectType]} style={{ border: 'none' }} items={PROJECT_TYPES.map(t => ({ key: t, label: t, onClick: () => setSelectedProjectType(t) }))} />}
@@ -788,7 +1040,80 @@ export default function Home() {
             )}
           </div>
           <Modal title="自定义列" open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(ALL_COLUMNS.filter(c => c.default).map(c => c.key))}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}><Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row><Col span={12}>{ALL_COLUMNS.slice(0, 6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col><Col span={12}>{ALL_COLUMNS.slice(6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col></Row></Checkbox.Group></Modal>
-          <Modal title="历史版本对比" open={showVersionCompare} onCancel={() => setShowVersionCompare(false)} footer={<Button type="primary" onClick={() => setShowVersionCompare(false)}>关闭</Button>} width={600}><Space direction="vertical" style={{ width: '100%' }}><div><span style={{ marginRight: 16 }}>版本A:</span><Select value={compareVersionA} onChange={setCompareVersionA} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><div><span style={{ marginRight: 16 }}>版本B:</span><Select value={compareVersionB} onChange={setCompareVersionB} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><Button type="primary" onClick={() => message.info('对比中...')}>开始对比</Button>{renderVersionCompareResult()}</Space></Modal>
+          <Modal title="历史版本对比" open={showVersionCompare} onCancel={() => setShowVersionCompare(false)} footer={<Button type="primary" onClick={() => setShowVersionCompare(false)}>关闭</Button>} width={600}><Space direction="vertical" style={{ width: '100%' }}><div><span style={{ marginRight: 16 }}>版本A:</span><Select value={compareVersionA} onChange={setCompareVersionA} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><div><span style={{ marginRight: 16 }}>版本B:</span><Select value={compareVersionB} onChange={setCompareVersionB} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><Button type="primary" onClick={() => {
+                const versionA = versions.find(v => v.id === compareVersionA)
+                const versionB = versions.find(v => v.id === compareVersionB)
+                if (versionA && versionB) {
+                  const oldTasks = versionA.status === '已发布' ? LEVEL1_TASKS : []
+                  const newTasks = versionB.status === '已发布' ? LEVEL1_TASKS : tasks
+                  // 使用类型断言绕过类型检查（数据实际是字符串日期）
+                  const result = compareVersions(oldTasks as any, newTasks as any)
+                  setCompareResult(result)
+                  message.success('对比完成')
+                }
+              }}>开始对比</Button>{renderVersionCompareResult()}</Space></Modal>
+          <Modal 
+            title="子任务时间超出父任务范围" 
+            open={parentTimeWarning.visible} 
+            onCancel={() => setParentTimeWarning({visible: false, tasks: [], message: ''})}
+            footer={[
+              <Button key="close" type="primary" onClick={() => setParentTimeWarning({visible: false, tasks: [], message: ''})}>
+                知道了，去修改
+              </Button>
+            ]}
+            width={600}
+          >
+            <Alert 
+              type="warning" 
+              message="以下子任务的计划时间超出了父任务的时间范围" 
+              description={parentTimeWarning.message}
+              style={{ marginBottom: 16 }}
+            />
+            <Table 
+              dataSource={parentTimeWarning.tasks} 
+              columns={[
+                { title: '子任务ID', dataIndex: 'id', key: 'id', width: 80 },
+                { title: '子任务名称', dataIndex: 'taskName', key: 'taskName' },
+                { title: '子任务时间', dataIndex: 'childTime', key: 'childTime' },
+                { title: '父任务名称', dataIndex: 'parentName', key: 'parentName' },
+                { title: '父任务时间', dataIndex: 'parentTime', key: 'parentTime' }
+              ]}
+              rowKey="id"
+              size="small"
+              pagination={false}
+            />
+          </Modal>
+          <Modal 
+            title="⚠️ 二级计划时间超出里程碑范围" 
+            open={milestoneTimeWarning.visible} 
+            onCancel={() => setMilestoneTimeWarning({visible: false, violations: [], message: ''})}
+            footer={[
+              <Button key="close" type="primary" onClick={() => setMilestoneTimeWarning({visible: false, violations: [], message: ''})}>
+                知道了，去修改
+              </Button>
+            ]}
+            width={700}
+          >
+            <Alert 
+              type="warning" 
+              message="二级计划时间必须在绑定里程碑的时间范围内" 
+              description={milestoneTimeWarning.message}
+              style={{ marginBottom: 16 }}
+            />
+            <Table 
+              dataSource={milestoneTimeWarning.violations} 
+              columns={[
+                { title: '任务ID', dataIndex: 'id', key: 'id', width: 80 },
+                { title: '任务名称', dataIndex: 'taskName', key: 'taskName' },
+                { title: '任务时间', dataIndex: 'taskTime', key: 'taskTime' },
+                { title: '里程碑范围', dataIndex: 'milestoneRange', key: 'milestoneRange' },
+                { title: '绑定里程碑', dataIndex: 'milestones', key: 'milestones', width: 100 }
+              ]}
+              rowKey="id"
+              size="small"
+              pagination={false}
+            />
+          </Modal>
           <Modal title={`编辑时间 - ${ganttEditingTask?.taskName}`} open={!!ganttEditingTask} onCancel={() => setGanttEditingTask(null)} onOk={() => setGanttEditingTask(null)}><Space direction="vertical" style={{ width: '100%' }}><div><span>开始时间:</span><DatePicker value={ganttEditingTask?.planStartDate ? { format: 'YYYY-MM-DD', value: ganttEditingTask.planStartDate } : undefined} onChange={(date, dateStr) => dateStr && handleGanttTimeChange(ganttEditingTask.id, 'planStartDate', dateStr)} style={{ marginLeft: 8 }} /></div><div><span>结束时间:</span><DatePicker value={ganttEditingTask?.planEndDate ? { format: 'YYYY-MM-DD', value: ganttEditingTask.planEndDate } : undefined} onChange={(date, dateStr) => dateStr && handleGanttTimeChange(ganttEditingTask.id, 'planEndDate', dateStr)} style={{ marginLeft: 8 }} /></div></Space></Modal>
           <Modal title={`编辑进度 - ${progressEditingTask?.taskName}`} open={!!progressEditingTask} onCancel={() => setProgressEditingTask(null)} onOk={() => setProgressEditingTask(null)} footer={null}>
             <div style={{ padding: '20px 0' }}>
@@ -894,8 +1219,28 @@ export default function Home() {
             footer={[
               <Button key="cancel" onClick={() => setShowCreateLevel2Plan(false)}>取消</Button>,
               <Button key="create" type="primary" onClick={() => { 
-                message.success(`已创建${selectedLevel2PlanType}，系统将自动创建V1修订版`)
+                // 保存选中的里程碑到状态
+                setLevel2PlanMilestones(selectedMilestones)
+                
+                // 生成二级计划名称
+                const planName = selectedLevel2PlanType === '1+N MR版本火车计划' 
+                  ? `${selectedMRVersion}版本火车计划`
+                  : selectedLevel2PlanType === '无' 
+                    ? '自定义计划' 
+                    : selectedLevel2PlanType
+                
+                // 添加到已创建的二级计划列表
+                const newPlan = {
+                  id: `plan_${Date.now()}`,
+                  name: planName,
+                  type: selectedLevel2PlanType
+                }
+                setCreatedLevel2Plans([...createdLevel2Plans, newPlan])
+                setActiveLevel2Plan(newPlan.id)
+                
+                message.success(`已创建${planName}`)
                 setShowCreateLevel2Plan(false)
+                
                 // 自动创建V1修订版（如果没有）
                 if (!versions.find(v => v.status === '修订中')) {
                   const newVersion = {
@@ -906,14 +1251,12 @@ export default function Home() {
                   setVersions([...versions, newVersion])
                   setCurrentVersion('v1')
                 }
-                // 跳转到二级计划详情（需求模块）
-                setProjectSpaceModule('requirements')
               }}>创建</Button>
             ]}
           >
             <Form layout="vertical">
               <Form.Item label="绑定里程碑（多选）">
-                <Checkbox.Group>
+                <Checkbox.Group value={selectedMilestones} onChange={(vals) => setSelectedMilestones(vals as string[])}>
                   <Row>
                     {LEVEL1_TASKS.filter(t => t.parentId).map(t => (
                       <Col span={8} key={t.id}><Checkbox value={t.id}>{t.id} {t.taskName}</Checkbox></Col>
@@ -936,83 +1279,106 @@ export default function Home() {
               </Form.Item>
               
               {/* 根据不同计划类型显示不同参数 */}
-              {selectedLevel2PlanType === '需求开发计划' && (
-                <>
-                  <Form.Item label="IR编号">
-                    <Input placeholder="请输入IR编号" />
-                  </Form.Item>
-                  <Form.Item label="SR编号">
-                    <Input placeholder="请输入SR编号" />
-                  </Form.Item>
-                  <Form.Item label="测试计划开始">
-                    <DatePicker style={{ width: '100%' }} />
-                  </Form.Item>
-                  <Form.Item label="测试计划结束">
-                    <DatePicker style={{ width: '100%' }} />
-                  </Form.Item>
-                </>
-              )}
+              {/* 需求开发计划 - 无额外参数 */}
               
-              {selectedLevel2PlanType === '在研版本火车计划' && (
-                <>
-                  <Form.Item label="版本号">
-                    <Input placeholder="如 V1.0" />
-                  </Form.Item>
-                  <Form.Item label="火车发车时间">
-                    <DatePicker showTime style={{ width: '100%' }} />
-                  </Form.Item>
-                  <Form.Item label="关键里程碑">
-                    <Input placeholder="请输入关键里程碑" />
-                  </Form.Item>
-                </>
-              )}
+              {/* 在研版本火车计划 - 无额外参数 */}
               
-              {selectedLevel2PlanType === '粉丝版本计划' && (
+              {selectedLevel2PlanType === '1+N MR版本火车计划' && (
                 <>
-                  <Form.Item label="目标粉丝数">
-                    <Input type="number" placeholder="请输入目标粉丝数" />
+                  <Form.Item label="MR版本类型">
+                    <Select 
+                      value={selectedMRVersion} 
+                      onChange={(val) => setSelectedMRVersion(val)}
+                      style={{ width: '100%' }}
+                    >
+                      <Option value="FR">FR</Option>
+                      {[...Array(99)].map((_, i) => (
+                        <Option key={`MR${i + 1}`} value={`MR${i + 1}`}>MR{i + 1}</Option>
+                      ))}
+                    </Select>
                   </Form.Item>
-                  <Form.Item label="发布时间">
-                    <DatePicker style={{ width: '100%' }} />
+                  <Form.Item label="产品线">
+                    <Input placeholder="自动获取项目基础信息" disabled defaultValue="NOTE" />
                   </Form.Item>
-                  <Form.Item label="宣传渠道">
-                    <Select placeholder="请选择宣传渠道" style={{ width: '100%' }}>
-                      <Option value="线上">线上</Option>
-                      <Option value="线下">线下</Option>
-                      <Option value="全渠道">全渠道</Option>
+                  <Form.Item label="市场名">
+                    <Input placeholder="自动获取该计划所属市场" disabled defaultValue="NOTE 50 Pro" />
+                  </Form.Item>
+                  <Form.Item label="项目名称">
+                    <Input placeholder="自动获取项目基础信息" disabled defaultValue="X6855" />
+                  </Form.Item>
+                  <Form.Item label="芯片厂商">
+                    <Input placeholder="自动获取项目基础信息" disabled defaultValue="MT6789J" />
+                  </Form.Item>
+                  <Form.Item label="tOS-市场版本号">
+                    <Input placeholder="请输入tOS-市场版本号" />
+                  </Form.Item>
+                  <Form.Item label="分支信息">
+                    <Input placeholder="请输入分支信息" />
+                  </Form.Item>
+                  <Form.Item label="是否MADA">
+                    <Select placeholder="请选择" style={{ width: '100%' }}>
+                      <Option value="是">是</Option>
+                      <Option value="否">否</Option>
+                    </Select>
+                  </Form.Item>
+                  <Form.Item label="MADA市场">
+                    <Input placeholder="请输入MADA市场" />
+                  </Form.Item>
+                  <Form.Item label="项目SPM">
+                    <Select placeholder="请选择SPM" style={{ width: '100%' }}>
+                      <Option value="李白">李白</Option>
+                      <Option value="张三">张三</Option>
+                      <Option value="李四">李四</Option>
+                    </Select>
+                  </Form.Item>
+                  <Form.Item label="项目TPM">
+                    <Select placeholder="请选择TPM" style={{ width: '100%' }}>
+                      <Option value="王五">王五</Option>
+                      <Option value="赵六">赵六</Option>
+                    </Select>
+                  </Form.Item>
+                  <Form.Item label="对接人">
+                    <Select placeholder="请选择对接人" style={{ width: '100%' }}>
+                      <Option value="孙七">孙七</Option>
+                      <Option value="周八">周八</Option>
+                    </Select>
+                  </Form.Item>
+                  <Form.Item label="项目版本号">
+                    <Input placeholder="请输入项目版本号" />
+                  </Form.Item>
+                  <Form.Item label="1+N转测类型">
+                    <Select placeholder="请选择转测类型" style={{ width: '100%' }}>
+                      {[...Array(99)].map((_, i) => (
+                        <Option key={i + 1} value={String(i + 1)}>{i + 1}</Option>
+                      ))}
                     </Select>
                   </Form.Item>
                 </>
               )}
               
+              {/* 粉丝版本计划 - 无额外参数 */}
+              
               {selectedLevel2PlanType === '基础体验计划' && (
                 <>
-                  <Form.Item label="体验目标">
-                    <Input.TextArea placeholder="请描述体验目标" rows={2} />
-                  </Form.Item>
-                  <Form.Item label="验收标准">
-                    <Input.TextArea placeholder="请描述验收标准" rows={2} />
-                  </Form.Item>
+                  {/* 基础体验计划 - 无额外参数 */}
                 </>
               )}
               
               {selectedLevel2PlanType === 'WBS计划' && (
                 <>
-                  <Form.Item label="WBS编号">
-                    <Input placeholder="请输入WBS编号" />
-                  </Form.Item>
-                  <Form.Item label="工作包描述">
-                    <Input.TextArea placeholder="请描述工作包" rows={2} />
-                  </Form.Item>
-                  <Form.Item label="负责人">
-                    <Input placeholder="请输入负责人" />
-                  </Form.Item>
+                  {/* WBS计划 - 无额外参数 */}
                 </>
               )}
               
               <Form.Item label="二级计划名称">
                 <Input 
-                  value={selectedLevel2PlanType === '1+N MR版本火车计划' ? `1+N MR版本火车计划-${versions.find(v => v.id === currentVersion)?.versionNo || 'V1'}` : selectedLevel2PlanType} 
+                  value={
+                    selectedLevel2PlanType === '1+N MR版本火车计划' 
+                      ? `${selectedMRVersion}版本火车计划`
+                      : selectedLevel2PlanType === '无' 
+                        ? '' 
+                        : selectedLevel2PlanType
+                  } 
                   disabled={selectedLevel2PlanType !== '无'} 
                 />
               </Form.Item>

@@ -2,6 +2,21 @@
 
 import { PlanTask, VersionDiff } from '@/types';
 
+// 辅助函数：转换为Date
+const toDate = (d: Date | string | undefined): Date | undefined => {
+  if (!d) return undefined;
+  if (d instanceof Date) return d;
+  return new Date(d);
+};
+
+// 格式化日期
+const formatDate = (date?: Date | string): string => {
+  if (!date) return '-';
+  const d = toDate(date);
+  if (!d) return '-';
+  return d.toLocaleDateString('zh-CN');
+};
+
 /**
  * 比较两个版本的差异
  * @param oldTasks 旧版本任务列表
@@ -47,10 +62,14 @@ export function compareVersions(oldTasks: PlanTask[], newTasks: PlanTask[]): Ver
       if (oldTask.responsibleUser !== newTask.responsibleUser) {
         changes.push(`责任人: ${oldTask.responsibleUser || '-'} → ${newTask.responsibleUser || '-'}`);
       }
-      if (oldTask.planStartDate?.getTime() !== newTask.planStartDate?.getTime()) {
+      const oldStart = toDate(oldTask.planStartDate)?.getTime();
+      const newStart = toDate(newTask.planStartDate)?.getTime();
+      if (oldStart !== newStart) {
         changes.push(`计划开始: ${formatDate(oldTask.planStartDate)} → ${formatDate(newTask.planStartDate)}`);
       }
-      if (oldTask.planEndDate?.getTime() !== newTask.planEndDate?.getTime()) {
+      const oldEnd = toDate(oldTask.planEndDate)?.getTime();
+      const newEnd = toDate(newTask.planEndDate)?.getTime();
+      if (oldEnd !== newEnd) {
         changes.push(`计划结束: ${formatDate(oldTask.planEndDate)} → ${formatDate(newTask.planEndDate)}`);
       }
       if (oldTask.status !== newTask.status) {
@@ -80,14 +99,6 @@ export function compareVersions(oldTasks: PlanTask[], newTasks: PlanTask[]): Ver
     }
     return 0;
   });
-}
-
-/**
- * 格式化日期
- */
-function formatDate(date?: Date): string {
-  if (!date) return '-';
-  return date.toLocaleDateString('zh-CN');
 }
 
 /**
