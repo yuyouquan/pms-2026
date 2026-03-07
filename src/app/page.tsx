@@ -246,7 +246,20 @@ export default function Home() {
   // 项目空间-计划
   const [projectPlanLevel, setProjectPlanLevel] = useState<string>('level1')
   const [projectPlanViewMode, setProjectPlanViewMode] = useState<'table' | 'gantt'>('table')
-  const [level2PlanTasks, setLevel2PlanTasks] = useState<any[]>([])
+  const [projectPlanOverviewTab, setProjectPlanOverviewTab] = useState<string>('overview')
+  const [level2PlanTasks, setLevel2PlanTasks] = useState<any[]>([
+    // Mock二级计划数据 - 用于演示跨里程碑拆分挂靠
+    { id: 'l2-1', parentId: 'plan1', order: 1, taskName: '16.3.030', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-02-01', type: '在研版本火车计划' },
+    { id: 'l2-2', parentId: 'plan1', order: 2, taskName: '16.3.031', status: '进行中', progress: 60, responsible: '李四', predecessor: 'l2-1', planStartDate: '2026-02-02', planEndDate: '2026-03-15', type: '在研版本火车计划' },
+    { id: 'l2-3', parentId: 'plan1', order: 3, taskName: '16.3.032', status: '未开始', progress: 0, responsible: '王五', predecessor: 'l2-2', planStartDate: '2026-03-16', planEndDate: '2026-05-01', type: '在研版本火车计划' },
+    { id: 'l2-4', parentId: 'plan2', order: 1, taskName: '版本规划', status: '已完成', progress: 100, responsible: '赵六', predecessor: '', planStartDate: '2026-01-02', planEndDate: '2026-02-02', type: 'FR版本火车计划' },
+    { id: 'l2-4-1', parentId: 'l2-4', order: 1, taskName: '修改点收集', status: '已完成', progress: 100, responsible: '赵六', predecessor: '', planStartDate: '2026-01-02', planEndDate: '2026-02-02', type: 'FR版本火车计划' },
+    { id: 'l2-5', parentId: 'plan2', order: 2, taskName: '版本开发', status: '进行中', progress: 50, responsible: '孙七', predecessor: 'l2-4', planStartDate: '2026-02-02', planEndDate: '2026-03-15', type: 'FR版本火车计划' },
+    { id: 'l2-5-1', parentId: 'l2-5', order: 1, taskName: 'MP分支入库', status: '进行中', progress: 60, responsible: '孙七', predecessor: '', planStartDate: '2026-02-02', planEndDate: '2026-03-01', type: 'FR版本火车计划' },
+    { id: 'l2-5-2', parentId: 'l2-5', order: 2, taskName: 'MR版本转测', status: '未开始', progress: 0, responsible: '周八', predecessor: 'l2-5-1', planStartDate: '2026-03-02', planEndDate: '2026-03-15', type: 'FR版本火车计划' },
+    { id: 'l2-6', parentId: 'plan3', order: 1, taskName: '版本测试', status: '未开始', progress: 0, responsible: '吴九', predecessor: 'l2-5', planStartDate: '2026-03-16', planEndDate: '2026-05-01', type: 'FR版本火车计划' },
+    { id: 'l2-6-1', parentId: 'l2-6', order: 1, taskName: 'MR版本测试', status: '未开始', progress: 0, responsible: '吴九', predecessor: '', planStartDate: '2026-03-16', planEndDate: '2026-05-01', type: 'FR版本火车计划' },
+  ])
   const [level2PlanMilestones, setLevel2PlanMilestones] = useState<string[]>([])
   const [createdLevel2Plans, setCreatedLevel2Plans] = useState<{id: string, name: string, type: string}[]>([
     { id: 'plan1', name: 'FR版本火车计划', type: 'FR版本火车计划' },
@@ -270,6 +283,112 @@ export default function Home() {
   
   // 检查是否有一级计划已发布
   const hasPublishedLevel1Plan = versions.some(v => v.status === '已发布')
+  
+  // 跨里程碑拆分挂靠 - 计划融合算法
+  // 功能：将跨里程碑的二级计划子活动拆分并挂靠到对应时间范围的里程碑下
+  const mergePlans = (level1Tasks: any[], level2Tasks: any[]) => {
+    if (!level1Tasks || !level2Tasks) return []
+    
+    // 1. 获取一级计划中的里程碑（二级活动，有parentId的）
+    const milestones = level1Tasks.filter(t => t.parentId)
+    
+    // 2. 构建里程碑时间范围映射
+    const milestoneRanges: Record<string, { start: Date, end: Date, parentId: string, parentName: string }> = {}
+    milestones.forEach(m => {
+      if (m.planStartDate && m.planEndDate) {
+        milestoneRanges[m.id] = {
+          start: new Date(m.planStartDate),
+          end: new Date(m.planEndDate),
+          parentId: m.parentId,
+          parentName: level1Tasks.find(t => t.id === m.parentId)?.taskName || ''
+        }
+      }
+    })
+    
+    // 3. 对二级计划任务进行拆分
+    const mergedTasks: any[] = []
+    const level2Plans = level2Tasks.filter(t => !t.parentId || !t.id.startsWith('l2-'))
+    
+    // 先添加一级计划
+    level1Tasks.forEach(task => {
+      mergedTasks.push({ ...task, source: 'level1', children: [] })
+    })
+    
+    // 4. 处理二级计划，挂靠到对应里程碑
+    level2Tasks.forEach(l2Task => {
+      // 跳过顶级计划类型，只处理子任务
+      if (!l2Task.parentId || !l2Task.parentId.startsWith('plan')) return
+      
+      const l2Start = new Date(l2Task.planStartDate)
+      const l2End = new Date(l2Task.planEndDate)
+      
+      // 查找所有与该任务时间重叠的里程碑
+      const overlappingMilestones = Object.entries(milestoneRanges).filter(([milestoneId, range]) => {
+        return l2Start <= range.end && l2End >= range.start
+      })
+      
+      if (overlappingMilestones.length === 0) {
+        // 没有重叠的里程碑，尝试挂靠到最近的里程碑
+        const allMilestoneStarts = Object.values(milestoneRanges).map(r => r.start.getTime())
+        const l2StartTime = l2Start.getTime()
+        const closest = allMilestoneStarts.reduce((prev, curr) => 
+          Math.abs(curr - l2StartTime) < Math.abs(prev - l2StartTime) ? curr : prev
+        , allMilestoneStarts[0])
+        
+        const closestMilestone = Object.entries(milestoneRanges).find(([_, r]) => r.start.getTime() === closest)
+        if (closestMilestone) {
+          mergedTasks.push({
+            ...l2Task,
+            source: 'level2',
+            milestoneId: closestMilestone[0],
+            milestoneName: milestoneRanges[closestMilestone[0]].parentName
+          })
+        }
+      } else if (overlappingMilestones.length === 1) {
+        // 只有一个重叠，直接挂靠
+        const [milestoneId, range] = overlappingMilestones[0]
+        mergedTasks.push({
+          ...l2Task,
+          source: 'level2',
+          milestoneId,
+          milestoneName: range.parentName
+        })
+      } else {
+        // 跨多个里程碑，需要拆分
+        overlappingMilestones.forEach(([milestoneId, range], index) => {
+          // 计算拆分后的时间范围
+          const splitStart = l2Start > range.start ? l2Start : range.start
+          const splitEnd = l2End < range.end ? l2End : range.end
+          
+          mergedTasks.push({
+            ...l2Task,
+            id: `${l2Task.id}-split-${index}`,
+            source: 'level2',
+            milestoneId,
+            milestoneName: range.parentName,
+            planStartDate: splitStart.toISOString().split('T')[0],
+            planEndDate: splitEnd.toISOString().split('T')[0],
+            isSplit: true,
+            splitInfo: `拆分${index + 1}/${overlappingMilestones.length}`
+          })
+        })
+      }
+    })
+    
+    return mergedTasks
+  }
+  
+  // 根据当前Tab获取展示的任务
+  const getOverviewTasks = () => {
+    if (projectPlanOverviewTab === 'level1') {
+      return tasks
+    } else if (projectPlanOverviewTab === 'level2') {
+      return level2PlanTasks
+    } else {
+      // 总览 - 融合模式
+      return mergePlans(tasks, level2PlanTasks)
+    }
+  }
   
   // 自定义类型管理
   const [showAddCustomType, setShowAddCustomType] = useState(false)
@@ -589,11 +708,12 @@ export default function Home() {
     return <Table dataSource={todos} columns={columns} rowKey="id" pagination={false} />
   }
 
-  const renderGanttChart = () => {
+  const renderGanttChart = (customTasks?: any[]) => {
+    const ganttTasks = customTasks || filteredTasks
     return (
       <Card>
         <DHTMLXGantt 
-          tasks={filteredTasks} 
+          tasks={ganttTasks} 
           onTaskClick={(task) => {
             message.info(`点击任务: ${task.text}`)
           }}
@@ -603,8 +723,9 @@ export default function Home() {
     )
   }
 
-  const renderTaskTable = () => {
-    const flatTasks = tasks.map(task => ({ ...task, indentLevel: task.parentId ? (task.parentId.split('.').length - 1) : 0 }))
+  const renderTaskTable = (customTasks?: any[]) => {
+    const tableTasks = customTasks || tasks
+    const flatTasks = tableTasks.map(task => ({ ...task, indentLevel: task.parentId ? (task.parentId.split('.').length - 1) : 0 }))
     const getColumns = (): ColumnsType<any> => {
       const cols: ColumnsType<any> = []
       if (visibleColumns.includes('id')) cols.push({ title: '序号', dataIndex: 'id', key: 'id', width: 80, fixed: 'left', render: (id: string, record: any) => (<Space>{isEditMode && !record.parentId && <HolderOutlined style={{ cursor: 'grab', color: '#999' }} />}<span style={{ fontWeight: record.parentId ? 400 : 500, paddingLeft: record.indentLevel * 16 }}>{id}</span>{isEditMode && !record.parentId && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} onClick={() => handleAddSubTask(record.id)} /></Tooltip>}</Space>) })
@@ -943,10 +1064,12 @@ export default function Home() {
   
   // 项目空间 - 计划总览（一二级融合）
   const renderProjectPlanOverview = () => {
+    const displayTasks = getOverviewTasks()
+    
     return (
       <div>
         <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-          <Col><h3 style={{ margin: 0 }}>计划总览</h3><p style={{ margin: '4px 0 0', color: '#666' }}>一级计划与二级计划融合展示</p></Col>
+          <Col><h3 style={{ margin: 0 }}>计划总览</h3><p style={{ margin: '4px 0 0', color: '#666' }}>一级计划与二级计划融合展示 {projectPlanOverviewTab === 'overview' && <Tag color="blue">融合模式</Tag>}</p></Col>
           <Col>
             <Space>
               <Button 
@@ -961,13 +1084,15 @@ export default function Home() {
         
         <Card>
           <Tabs 
+            activeKey={projectPlanOverviewTab}
+            onChange={setProjectPlanOverviewTab}
             items={[
               { key: 'overview', label: '总览' },
               { key: 'level1', label: '一级计划' },
               { key: 'level2', label: '二级计划' },
             ]}
           />
-          {projectPlanViewMode === 'gantt' ? renderGanttChart() : renderTaskTable()}
+          {projectPlanViewMode === 'gantt' ? renderGanttChart(displayTasks) : renderTaskTable(displayTasks)}
         </Card>
       </div>
     )
