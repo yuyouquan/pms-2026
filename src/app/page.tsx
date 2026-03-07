@@ -1,15 +1,15 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { 
-  Card, 
-  Tabs, 
-  Table, 
-  Button, 
-  Progress, 
-  Tag, 
-  Space, 
-  Row, 
+import {
+  Card,
+  Tabs,
+  Table,
+  Button,
+  Progress,
+  Tag,
+  Space,
+  Row,
   Col,
   Badge,
   Menu,
@@ -27,7 +27,8 @@ import {
   Empty,
   Slider,
   Alert,
-  Statistic
+  Statistic,
+  ConfigProvider
 } from 'antd'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
 import { gantt } from 'dhtmlx-gantt'
@@ -146,7 +147,7 @@ const LEVEL2_PLAN_TYPES = ['需求开发计划', '在研版本火车计划', '1+
 // 项目数据
 const initialProjects = [
   { id: '1', name: 'X6877-D8400_H991', type: '整机产品项目', status: '进行中', progress: 65, leader: '张三', markets: ['OP', 'TR', 'RU'], androidVersion: 'Android 16', chipPlatform: 'MTK', spm: '李白', updatedAt: '2小时前' },
-  { id: '2', name: 'X6801_TBD', type: '产品项目', status: '规划中', progress: 20, leader: '李四', markets: [], androidVersion: 'Android 16', chipPlatform: 'QCOM', spm: '张三', updatedAt: '1天前' },
+  { id: '2', name: 'X6801_TBD', type: '产品项目', status: '筹备中', progress: 20, leader: '李四', markets: [], androidVersion: 'Android 16', chipPlatform: 'QCOM', spm: '张三', updatedAt: '1天前' },
   { id: '3', name: 'X6855_H8917', type: '整机产品项目', status: '进行中', progress: 45, leader: '王五', markets: ['OP', 'TR'], androidVersion: 'Android 16', chipPlatform: 'MTK', spm: '赵六', updatedAt: '3天前' },
   { id: '4', name: 'X6876_H786', type: '技术项目', status: '已完成', progress: 100, leader: '孙七', markets: [], androidVersion: 'Android 15', chipPlatform: 'QCOM', spm: '李四', updatedAt: '5天前' },
   { id: '5', name: 'X6873_H972', type: '能力建设项目', status: '进行中', progress: 30, leader: '周八', markets: [], androidVersion: 'Android 16', chipPlatform: 'UNISOC', spm: '王五', updatedAt: '1周前' },
@@ -160,9 +161,9 @@ const kanbanColumns = [
 ]
 
 const initialTodos = [
-  { id: '1', title: '完成项目计划文档', priority: 'high', deadline: '2026-03-10', status: '进行中' },
-  { id: '2', title: '审核开发方案', priority: 'medium', deadline: '2026-03-15', status: '待处理' },
-  { id: '3', title: '准备产品演示', priority: 'low', deadline: '2026-03-20', status: '待处理' },
+  { id: '1', title: '[X6877-D8400_H991] V2(修订版) - 计划阶段任务待处理', priority: 'high', deadline: '2026-03-10', status: '进行中', projectId: '1', versionId: 'v2' },
+  { id: '2', title: '[X6855_H8917] V2(修订版) - STR2 任务审核', priority: 'medium', deadline: '2026-03-15', status: '待处理', projectId: '3', versionId: 'v2' },
+  { id: '3', title: '[X6877-D8400_H991] V2(修订版) - 开发验证阶段安排', priority: 'low', deadline: '2026-03-20', status: '待处理', projectId: '1', versionId: 'v2' },
 ]
 
 const VERSION_DATA = [
@@ -678,23 +679,68 @@ export default function Home() {
     )
   }
 
+  const [kanbanDimension, setKanbanDimension] = useState<'stage' | 'type' | 'status'>('stage')
+
+  const getKanbanColumns = () => {
+    if (kanbanDimension === 'type') {
+      return PROJECT_TYPES.map((t, i) => ({ title: t, key: t, color: ['#1890ff', '#52c41a', '#faad14', '#722ed1'][i] }))
+    }
+    if (kanbanDimension === 'status') {
+      return [
+        { title: '筹备中', key: '筹备中', color: '#faad14' },
+        { title: '进行中', key: '进行中', color: '#1890ff' },
+        { title: '已完成', key: '已完成', color: '#52c41a' },
+        { title: '上市', key: '上市', color: '#722ed1' },
+      ]
+    }
+    return kanbanColumns
+  }
+
+  const getKanbanFilter = (col: { key: string }) => {
+    if (kanbanDimension === 'type') {
+      return (p: typeof initialProjects[0]) => p.type === col.key
+    }
+    if (kanbanDimension === 'status') {
+      return (p: typeof initialProjects[0]) => p.status === col.key
+    }
+    return (p: typeof initialProjects[0]) => {
+      if (col.key === 'concept') return p.progress === 0
+      if (col.key === 'planning') return p.progress > 0 && p.progress < 30
+      if (col.key === 'developing') return p.progress >= 30 && p.progress < 100
+      return p.progress === 100
+    }
+  }
+
   const renderKanbanBoard = () => (
-    <Row gutter={16}>
-      {kanbanColumns.map(col => (
-        <Col span={6} key={col.key}>
-          <Card title={<Space><Badge color={col.color} />{col.title}</Space>} style={{ background: '#fafafa', minHeight: 300 }} bodyStyle={{ padding: 12 }}>
-            <Space direction="vertical" style={{ width: '100%' }}>
-              {projects.filter(p => { if (col.key === 'concept') return p.progress === 0; if (col.key === 'planning') return p.progress > 0 && p.progress < 30; if (col.key === 'developing') return p.progress >= 30 && p.progress < 100; return p.progress === 100 }).map(project => (
-                // <Card key={project.id} size="small" hoverable onClick={() => router.push(`/project/${project.id}`)}>
-                  <Card key={project.id} size="small" hoverable onClick={() => { setSelectedProject(project); setActiveModule('projectSpace') }}>
-                  <Space direction="vertical" style={{ width: '100%' }}><div style={{ fontWeight: 500 }}>{project.name}</div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Tag>{project.type}</Tag><Progress percent={project.progress} size="small" style={{ width: 60 }} /></div></Space>
-                </Card>
-              ))}
-            </Space>
-          </Card>
+    <div>
+      <Row justify="end" style={{ marginBottom: 16 }}>
+        <Col>
+          <Space>
+            <span style={{ color: '#666' }}>分组维度:</span>
+            <Select value={kanbanDimension} onChange={setKanbanDimension} style={{ width: 120 }}>
+              <Option value="stage">阶段</Option>
+              <Option value="type">项目类型</Option>
+              <Option value="status">项目状态</Option>
+            </Select>
+          </Space>
         </Col>
-      ))}
-    </Row>
+      </Row>
+      <Row gutter={16}>
+        {getKanbanColumns().map(col => (
+          <Col span={Math.floor(24 / getKanbanColumns().length)} key={col.key}>
+            <Card title={<Space><Badge color={col.color} />{col.title}</Space>} style={{ background: '#fafafa', minHeight: 300 }} bodyStyle={{ padding: 12 }}>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {projects.filter(getKanbanFilter(col)).map(project => (
+                    <Card key={project.id} size="small" hoverable onClick={() => { setSelectedProject(project); setActiveModule('projectSpace') }}>
+                    <Space direction="vertical" style={{ width: '100%' }}><div style={{ fontWeight: 500 }}>{project.name}</div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Tag>{project.type}</Tag><Progress percent={project.progress} size="small" style={{ width: 60 }} /></div></Space>
+                  </Card>
+                ))}
+              </Space>
+            </Card>
+          </Col>
+        ))}
+      </Row>
+    </div>
   )
 
   const renderTodoList = () => {
@@ -703,7 +749,7 @@ export default function Home() {
       { title: '优先级', dataIndex: 'priority', key: 'priority', render: (p: string) => <Tag color={p === 'high' ? 'red' : p === 'medium' ? 'orange' : 'blue'}>{p === 'high' ? '高' : p === 'medium' ? '中' : '低'}</Tag> },
       { title: '截止日期', dataIndex: 'deadline', key: 'deadline' },
       { title: '状态', dataIndex: 'status', key: 'status', render: (s: string) => <Tag color={s === '进行中' ? 'processing' : 'default'}>{s}</Tag> },
-      { title: '操作', key: 'action', render: () => <Button type="link" size="small">完成</Button> }
+      { title: '操作', key: 'action', render: (_: any, record: any) => <Button type="link" size="small" onClick={() => { const proj = projects.find(p => p.id === record.projectId); if (proj) { setSelectedProject(proj); setActiveModule('projectSpace'); setProjectSpaceModule('plan'); setCurrentVersion(record.versionId || 'v2') } }}>去处理</Button> }
     ]
     return <Table dataSource={todos} columns={columns} rowKey="id" pagination={false} />
   }
@@ -744,7 +790,23 @@ export default function Home() {
       return cols
     }
     const TableComponents = isEditMode ? { body: { row: SortableRow } } : undefined
-    return <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}><SortableContext items={filteredTasks.filter(t => !t.parentId).map(t => t.id)} strategy={verticalListSortingStrategy}><Table dataSource={flatTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} /></SortableContext></DndContext>
+    return (
+      <div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}><SortableContext items={filteredTasks.filter(t => !t.parentId).map(t => t.id)} strategy={verticalListSortingStrategy}><Table dataSource={flatTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} /></SortableContext></DndContext>
+        {isEditMode && (
+          <div style={{ marginTop: 16, textAlign: 'center' }}>
+            <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%' }} onClick={() => {
+              const parentTasks = tasks.filter(t => !t.parentId)
+              const maxOrder = parentTasks.length > 0 ? Math.max(...parentTasks.map(t => parseInt(t.id) || t.order)) : 0
+              const newId = String(maxOrder + 1)
+              const newTask = { id: newId, order: maxOrder + 1, taskName: '新活动', status: '未开始', progress: 0, responsible: '', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0, actualDays: 0 }
+              setTasks([...tasks, newTask])
+              message.success(`已添加一级活动: ${newId}`)
+            }}>添加新活动</Button>
+          </div>
+        )}
+      </div>
+    )
   }
 
   const handleCreateRevision = () => {
@@ -940,6 +1002,9 @@ export default function Home() {
               <Form layout="vertical">
                 <Form.Item label="安卓版本"><Input defaultValue="16 (W)" disabled /></Form.Item>
                 <Form.Item label="项目状态"><Input defaultValue="待立项" disabled /></Form.Item>
+                <Form.Item label="合作形式"><Input defaultValue="ODC" disabled /></Form.Item>
+                <Form.Item label="软件项目等级"><Input defaultValue="A" disabled /></Form.Item>
+                <Form.Item label="PPM"><Input defaultValue="李莲秋" disabled /></Form.Item>
                 <Form.Item label="SPM"><Input defaultValue="曾晓寅" disabled /></Form.Item>
               </Form>
             </Col>
@@ -967,11 +1032,36 @@ export default function Home() {
                         <Form.Item label="是否取消暂停"><Select defaultValue="否" style={{ width: '100%' }} disabled><Option value="否">否</Option><Option value="是">是</Option></Select></Form.Item>
                         <Form.Item label="SQA审计策略"><Select defaultValue="全审" style={{ width: '100%' }} disabled><Option value="全审">全审</Option><Option value="抽审">抽审</Option></Select></Form.Item>
                         <Form.Item label="是否锁卡"><Select defaultValue="否" style={{ width: '100%' }} disabled><Option value="否">否</Option><Option value="是">是</Option></Select></Form.Item>
+                        <Form.Item label="取消暂停时间"><Input defaultValue="-" disabled /></Form.Item>
+                        <Form.Item label="市场名称"><Input defaultValue={`${m} Market`} disabled /></Form.Item>
+                        <Form.Item label="编译市场"><Input defaultValue={m.toLowerCase()} disabled /></Form.Item>
                       </Col>
                       <Col span={8}>
                         <Form.Item label="内存"><Input defaultValue="8GB" disabled /></Form.Item>
+                        <Form.Item label="软件项目等级"><Input defaultValue="A" disabled /></Form.Item>
+                        <Form.Item label="是否支持VILTE"><Select defaultValue="否" style={{ width: '100%' }} disabled><Option value="否">否</Option><Option value="是">是</Option></Select></Form.Item>
+                        <Form.Item label="是否保密"><Select defaultValue="否" style={{ width: '100%' }} disabled><Option value="否">否</Option><Option value="是">是</Option></Select></Form.Item>
+                        <Form.Item label="运营商版本标识"><Input defaultValue="-" disabled /></Form.Item>
                         <Form.Item label="BOM"><Input defaultValue="BOM-001" disabled /></Form.Item>
                         <Form.Item label="软件版本号"><Input defaultValue="XOS16.2.0" disabled /></Form.Item>
+                        <Form.Item label="备注"><Input defaultValue="-" disabled /></Form.Item>
+                      </Col>
+                    </Row>
+                    <h4 style={{ margin: '16px 0 8px', borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>市场项目维护信息</h4>
+                    <Row gutter={24}>
+                      <Col span={8}>
+                        <Form.Item label="维护类型"><Input defaultValue="常规维护" disabled /></Form.Item>
+                        <Form.Item label="维护原因"><Input defaultValue="版本升级" disabled /></Form.Item>
+                        <Form.Item label="已触发MADA"><Select defaultValue="否" style={{ width: '100%' }} disabled><Option value="否">否</Option><Option value="是">是</Option></Select></Form.Item>
+                      </Col>
+                      <Col span={8}>
+                        <Form.Item label="维护周期"><Input defaultValue="6个月" disabled /></Form.Item>
+                        <Form.Item label="Launch Date"><Input defaultValue="2026-06-01" disabled /></Form.Item>
+                        <Form.Item label="EOS"><Input defaultValue="2028-06-01" disabled /></Form.Item>
+                      </Col>
+                      <Col span={8}>
+                        <Form.Item label="是否转维护组"><Select defaultValue="否" style={{ width: '100%' }} disabled><Option value="否">否</Option><Option value="是">是</Option></Select></Form.Item>
+                        <Form.Item label="是否MADA管控"><Select defaultValue="否" style={{ width: '100%' }} disabled><Option value="否">否</Option><Option value="是">是</Option></Select></Form.Item>
                       </Col>
                     </Row>
                   </Form>
@@ -995,9 +1085,13 @@ export default function Home() {
           items={[
             { key: 'level1', label: '一级计划' },
             { key: 'level2', label: '二级计划' },
+            { key: 'overview', label: '计划总览' },
           ]}
         />
-        
+
+        {/* 计划总览 */}
+        {projectPlanLevel === 'overview' && renderProjectPlanOverview()}
+
         {/* 二级计划Tab切换 - 在版本选择器上方 */}
         {projectPlanLevel === 'level2' && (
           <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
@@ -1014,11 +1108,12 @@ export default function Home() {
               />
             </Col>
             <Col>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowCreateLevel2Plan(true)}>创建二级计划</Button>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => { if (!hasPublishedLevel1Plan) { message.warning('请先发布一级计划后再创建二级计划'); return; } setShowCreateLevel2Plan(true) }}>创建二级计划</Button>
             </Col>
           </Row>
         )}
         
+        {projectPlanLevel !== 'overview' && (
         <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
           <Col>
             <Space>
@@ -1036,8 +1131,8 @@ export default function Home() {
             <Space>
               <Input placeholder="搜索任务..." prefix={<SearchOutlined />} style={{ width: 200 }} onChange={(e) => setSearchText(e.target.value)} />
               <Button icon={<AppstoreOutlined />} onClick={() => setShowColumnModal(true)}>自定义列</Button>
-              <Button 
-                icon={projectPlanViewMode === 'table' ? <BarChartOutlined /> : <AppstoreOutlined />} 
+              <Button
+                icon={projectPlanViewMode === 'table' ? <BarChartOutlined /> : <AppstoreOutlined />}
                 onClick={() => setProjectPlanViewMode(projectPlanViewMode === 'table' ? 'gantt' : 'table')}
               >
                 {projectPlanViewMode === 'table' ? '甘特图' : '表格'}
@@ -1045,10 +1140,11 @@ export default function Home() {
             </Space>
           </Col>
         </Row>
-        
+        )}
+
         {/* 表格或甘特图内容 */}
 
-        {projectPlanViewMode === 'gantt' ? renderGanttChart() : renderTaskTable()}
+        {projectPlanLevel !== 'overview' && (projectPlanViewMode === 'gantt' ? renderGanttChart() : renderTaskTable())}
       </div>
     )
   }
@@ -1132,11 +1228,110 @@ export default function Home() {
             {projectSpaceModule !== 'basic' && projectSpaceModule !== 'plan' && projectSpaceModule !== 'overview' && projectSpaceModule !== 'requirements' && <Card><Empty description={`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`} /></Card>}
           </div>
         </div>
+        {/* 版本对比Modal */}
+        <Modal title="历史版本对比" open={showVersionCompare} onCancel={() => setShowVersionCompare(false)} footer={<Button type="primary" onClick={() => setShowVersionCompare(false)}>关闭</Button>} width={600}><Space direction="vertical" style={{ width: '100%' }}><div><span style={{ marginRight: 16 }}>版本A:</span><Select value={compareVersionA} onChange={setCompareVersionA} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><div><span style={{ marginRight: 16 }}>版本B:</span><Select value={compareVersionB} onChange={setCompareVersionB} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><Button type="primary" onClick={() => {
+                const versionA = versions.find(v => v.id === compareVersionA)
+                const versionB = versions.find(v => v.id === compareVersionB)
+                if (versionA && versionB) {
+                  const vANum = parseInt(versionA.versionNo.replace('V', ''))
+                  const vBNum = parseInt(versionB.versionNo.replace('V', ''))
+                  const oldTasks = versionA.status === '已发布' ? LEVEL1_TASKS : tasks
+                  let newTasks = versionB.status === '已发布' ? LEVEL1_TASKS : tasks
+                  if (vANum !== vBNum) {
+                    newTasks = [
+                      ...tasks.map(t => {
+                        if (t.id === '2.1') return { ...t, taskName: 'STR2(更新)', status: '已完成', progress: 100 }
+                        if (t.id === '3') return { ...t, responsible: '李四', planStartDate: '2026-02-20' }
+                        return t
+                      }),
+                      { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualDays: 0 }
+                    ]
+                  }
+                  const result = compareVersions(oldTasks as any, newTasks as any)
+                  setCompareResult(result)
+                  message.success('对比完成')
+                }
+              }}>开始对比</Button>{renderVersionCompareResult()}</Space></Modal>
+        {/* 自定义列Modal */}
+        <Modal title="自定义列" open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(ALL_COLUMNS.filter(c => c.default).map(c => c.key))}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}><Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row><Col span={12}>{ALL_COLUMNS.slice(0, 6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col><Col span={12}>{ALL_COLUMNS.slice(6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col></Row></Checkbox.Group></Modal>
+        {/* 创建二级计划Modal */}
+        <Modal
+            title="创建二级计划"
+            open={showCreateLevel2Plan}
+            onCancel={() => setShowCreateLevel2Plan(false)}
+            width={600}
+            footer={[
+              <Button key="cancel" onClick={() => setShowCreateLevel2Plan(false)}>取消</Button>,
+              <Button key="create" type="primary" onClick={() => {
+                setLevel2PlanMilestones(selectedMilestones)
+                const planName = selectedLevel2PlanType === '1+N MR版本火车计划'
+                  ? `${selectedMRVersion}版本火车计划`
+                  : selectedLevel2PlanType === '无'
+                    ? '自定义计划'
+                    : selectedLevel2PlanType
+                const newPlan = { id: `plan_${Date.now()}`, name: planName, type: selectedLevel2PlanType }
+                setCreatedLevel2Plans([...createdLevel2Plans, newPlan])
+                setActiveLevel2Plan(newPlan.id)
+                message.success(`已创建${planName}`)
+                setShowCreateLevel2Plan(false)
+                if (!versions.find(v => v.status === '修订中')) {
+                  setVersions([...versions, { id: 'v1', versionNo: 'V1', status: '修订中' }])
+                  setCurrentVersion('v1')
+                }
+              }}>创建</Button>
+            ]}
+          >
+            <Form layout="vertical">
+              <Form.Item label="绑定里程碑（多选）">
+                <Checkbox.Group value={selectedMilestones} onChange={(vals) => setSelectedMilestones(vals as string[])}>
+                  <Row>
+                    {LEVEL1_TASKS.filter(t => t.parentId).map(t => (
+                      <Col span={8} key={t.id}><Checkbox value={t.id}>{t.id} {t.taskName}</Checkbox></Col>
+                    ))}
+                  </Row>
+                </Checkbox.Group>
+              </Form.Item>
+              <Form.Item label="计划模板类型">
+                <Select value={selectedLevel2PlanType} style={{ width: '100%' }} onChange={(val) => setSelectedLevel2PlanType(val)}>
+                  <Option value="无">无</Option>
+                  {LEVEL2_PLAN_TYPES.map(t => <Option key={t} value={t}>{t}</Option>)}
+                  {customTypes.map(t => <Option key={t} value={t}>{t}</Option>)}
+                </Select>
+              </Form.Item>
+              {selectedLevel2PlanType === '1+N MR版本火车计划' && (
+                <>
+                  <Form.Item label="MR版本类型">
+                    <Select value={selectedMRVersion} onChange={(val) => setSelectedMRVersion(val)} style={{ width: '100%' }}>
+                      <Option value="FR">FR</Option>
+                      {[...Array(99)].map((_, i) => (<Option key={`MR${i + 1}`} value={`MR${i + 1}`}>MR{i + 1}</Option>))}
+                    </Select>
+                  </Form.Item>
+                  <Form.Item label="产品线"><Input placeholder="自动获取" disabled defaultValue="NOTE" /></Form.Item>
+                  <Form.Item label="市场名"><Input placeholder="自动获取" disabled defaultValue="NOTE 50 Pro" /></Form.Item>
+                  <Form.Item label="项目名称"><Input placeholder="自动获取" disabled defaultValue="X6855" /></Form.Item>
+                  <Form.Item label="芯片厂商"><Input placeholder="自动获取" disabled defaultValue="MT6789J" /></Form.Item>
+                  <Form.Item label="tOS-市场版本号"><Input placeholder="请输入tOS-市场版本号" /></Form.Item>
+                  <Form.Item label="分支信息"><Input placeholder="请输入分支信息" /></Form.Item>
+                  <Form.Item label="是否MADA"><Select placeholder="请选择" style={{ width: '100%' }}><Option value="是">是</Option><Option value="否">否</Option></Select></Form.Item>
+                  <Form.Item label="MADA市场"><Input placeholder="请输入MADA市场" /></Form.Item>
+                  <Form.Item label="项目SPM"><Select placeholder="请选择SPM" style={{ width: '100%' }}><Option value="李白">李白</Option><Option value="张三">张三</Option></Select></Form.Item>
+                  <Form.Item label="项目TPM"><Select placeholder="请选择TPM" style={{ width: '100%' }}><Option value="王五">王五</Option><Option value="赵六">赵六</Option></Select></Form.Item>
+                  <Form.Item label="对接人"><Select placeholder="请选择对接人" style={{ width: '100%' }}><Option value="孙七">孙七</Option><Option value="周八">周八</Option></Select></Form.Item>
+                  <Form.Item label="项目版本号"><Input placeholder="请输入项目版本号" /></Form.Item>
+                  <Form.Item label="1+N转测类型"><Select placeholder="请选择转测类型" style={{ width: '100%' }}>{[...Array(99)].map((_, i) => (<Option key={i + 1} value={String(i + 1)}>{i + 1}</Option>))}</Select></Form.Item>
+                </>
+              )}
+              <Form.Item label="二级计划名称">
+                <Input value={selectedLevel2PlanType === '1+N MR版本火车计划' ? `${selectedMRVersion}版本火车计划` : selectedLevel2PlanType === '无' ? '' : selectedLevel2PlanType} disabled={selectedLevel2PlanType !== '无'} />
+              </Form.Item>
+            </Form>
+          </Modal>
       </div>
     )
   }
 
   return (
+    <ConfigProvider autoInsertSpaceInButton={false}>
     <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>
       {activeModule === 'projectSpace' && selectedProject ? renderProjectSpace() : (
         <>
@@ -1172,9 +1367,23 @@ export default function Home() {
                 const versionA = versions.find(v => v.id === compareVersionA)
                 const versionB = versions.find(v => v.id === compareVersionB)
                 if (versionA && versionB) {
-                  const oldTasks = versionA.status === '已发布' ? LEVEL1_TASKS : []
-                  const newTasks = versionB.status === '已发布' ? LEVEL1_TASKS : tasks
-                  // 使用类型断言绕过类型检查（数据实际是字符串日期）
+                  // 根据版本号模拟不同版本数据
+                  const vANum = parseInt(versionA.versionNo.replace('V', ''))
+                  const vBNum = parseInt(versionB.versionNo.replace('V', ''))
+                  const oldTasks = versionA.status === '已发布' ? LEVEL1_TASKS : tasks
+                  // 为不同版本生成差异化数据
+                  let newTasks = versionB.status === '已发布' ? LEVEL1_TASKS : tasks
+                  if (vANum !== vBNum) {
+                    // 模拟版本间差异：修改部分任务、新增/删除
+                    newTasks = [
+                      ...tasks.map(t => {
+                        if (t.id === '2.1') return { ...t, taskName: 'STR2(更新)', status: '已完成', progress: 100 }
+                        if (t.id === '3') return { ...t, responsible: '李四', planStartDate: '2026-02-20' }
+                        return t
+                      }),
+                      { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualDays: 0 }
+                    ]
+                  }
                   const result = compareVersions(oldTasks as any, newTasks as any)
                   setCompareResult(result)
                   message.success('对比完成')
@@ -1515,5 +1724,6 @@ export default function Home() {
         </>
       )}
     </div>
+    </ConfigProvider>
   )
 }

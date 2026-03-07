@@ -59,8 +59,10 @@ export function compareVersions(oldTasks: PlanTask[], newTasks: PlanTask[]): Ver
       if (oldTask.taskName !== newTask.taskName) {
         changes.push(`任务名称: ${oldTask.taskName} → ${newTask.taskName}`);
       }
-      if (oldTask.responsibleUser !== newTask.responsibleUser) {
-        changes.push(`责任人: ${oldTask.responsibleUser || '-'} → ${newTask.responsibleUser || '-'}`);
+      const oldResponsible = (oldTask as any).responsible || oldTask.responsibleUser || ''
+      const newResponsible = (newTask as any).responsible || newTask.responsibleUser || ''
+      if (oldResponsible !== newResponsible) {
+        changes.push(`责任人: ${oldResponsible || '-'} → ${newResponsible || '-'}`);
       }
       const oldStart = toDate(oldTask.planStartDate)?.getTime();
       const newStart = toDate(newTask.planStartDate)?.getTime();
