@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, createContext, useContext, type CSSProperties } from 'react'
 import {
   Card,
   Tabs,
@@ -28,7 +28,9 @@ import {
   Slider,
   Alert,
   Statistic,
-  ConfigProvider
+  ConfigProvider,
+  Descriptions,
+  Divider
 } from 'antd'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
 import { gantt } from 'dhtmlx-gantt'
@@ -219,23 +221,37 @@ const SR_REQUIREMENTS: any[] = [
   { id: '7', srNo: 'SR-2026-007', srTitle: 'AI降噪模型集成', relatedIR: 'IR-2026-006', devDept: '音频部', srStatus: '待开发', planTestVersion: '16.3.032', actualTestVersion: '', testPlanStart: '2026-03-05', testPlanEnd: '2026-03-20', acceptPlanStart: '2026-03-21', acceptPlanEnd: '2026-04-05' },
 ]
 
-// 可排序行组件
+// 拖拽上下文 - 将 listeners 传递给拖拽手柄而非整行
+const DragHandleContext = createContext<Record<string, any>>({})
+
+// 可排序行组件 - 不再将 listeners 绑定到整行
 function SortableRow({ children, ...props }: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props['data-row-key'] })
   const style = { ...props.style, transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
-  return <tr ref={setNodeRef} style={style} {...attributes} {...listeners}>{children}</tr>
+  return (
+    <DragHandleContext.Provider value={listeners || {}}>
+      <tr ref={setNodeRef} style={style} {...attributes}>{children}</tr>
+    </DragHandleContext.Provider>
+  )
+}
+
+// 拖拽手柄组件
+function DragHandle() {
+  const listeners = useContext(DragHandleContext)
+  return <HolderOutlined style={{ cursor: 'grab', color: '#999' }} {...listeners} />
 }
 
 export default function Home() {
   // const router = useRouter()
   const [activeModule, setActiveModule] = useState<string>('projects')
   const [projectView, setProjectView] = useState<string>('card')
+  const [todoCollapsed, setTodoCollapsed] = useState(false)
   const [projects] = useState(initialProjects)
   const [todos] = useState(initialTodos)
   const [selectedProject, setSelectedProject] = useState<typeof initialProjects[0] | null>(null)
   
   // 配置相关状态
-  // 配置相关状态
+  const [configCategory, setConfigCategory] = useState<string>('plan')
   const [selectedProjectType, setSelectedProjectType] = useState(PROJECT_TYPES[0])
   const [planLevel, setPlanLevel] = useState<string>('level1')
   const [selectedPlanType, setSelectedPlanType] = useState(LEVEL2_PLAN_TYPES[0])
@@ -769,31 +785,51 @@ export default function Home() {
   }
 
   const renderProjectCard = (project: typeof initialProjects[0]) => {
-    const statusColor = project.status === '进行中' ? 'processing' : project.status === '已完成' ? 'success' : 'warning'
+    const statusColor = project.status === '进行中' ? '#1890ff' : project.status === '已完成' ? '#52c41a' : '#faad14'
+    const statusTagColor = project.status === '进行中' ? 'processing' : project.status === '已完成' ? 'success' : 'warning'
     return (
-      <Card hoverable style={{ marginBottom: 16 }} onClick={() => { setSelectedProject(project); setActiveModule('projectSpace') }}>
-      {/*<Card hoverable style={{ marginBottom: 16 }} onClick={() => router.push(`/project/${project.id}`)}>*/}
-        <Card.Meta 
-          title={<Space><span>{project.name}</span><Tag color={statusColor}>{project.status}</Tag></Space>} 
-          description={
-            <Space direction="vertical" size={0}>
-              <span>{project.type}</span>
-              <Space size={4}>
-                <Tag>📱 {project.androidVersion}</Tag>
-                <Tag>🔧 {project.chipPlatform}</Tag>
-              </Space>
-              {project.type === '整机产品项目' && project.markets && project.markets.length > 0 && <Tag color="blue">🌍 市场: {project.markets.join(', ')}</Tag>}
+      <Card
+        hoverable
+        style={{ borderRadius: 8, border: '1px solid #f0f0f0', transition: 'all 0.2s' }}
+        styles={{ body: { padding: '16px 20px' } }}
+        onClick={() => { setSelectedProject(project); setActiveModule('projectSpace') }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#262626', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project.name}</div>
+            <Space size={4}>
+              <Tag color="default" style={{ fontSize: 11, borderRadius: 3, margin: 0 }}>{project.type}</Tag>
+              {project.type === '整机产品项目' && project.markets && project.markets.length > 0 && (
+                <Tag color="blue" style={{ fontSize: 11, borderRadius: 3, margin: 0 }}>{project.markets.join(' / ')}</Tag>
+              )}
             </Space>
-          } 
-        />
-        <div style={{ marginTop: 16 }}>
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <div><span style={{ color: '#888' }}>进度 </span><Progress percent={project.progress} size="small" status={project.progress === 100 ? 'success' : 'active'}/></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#888', fontSize: 12 }}>
-              <span>SPM: {project.spm}</span>
-              <span>更新于 {project.updatedAt}</span>
-            </div>
+          </div>
+          <Tag color={statusTagColor} style={{ margin: 0, borderRadius: 4, flexShrink: 0 }}>{project.status}</Tag>
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ color: '#bfbfbf' }}>Android</span> <span style={{ color: '#595959', fontWeight: 500 }}>{project.androidVersion.replace('Android ', '')}</span>
+          </div>
+          <div style={{ fontSize: 12, color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ color: '#bfbfbf' }}>芯片</span> <span style={{ color: '#595959', fontWeight: 500 }}>{project.chipPlatform}</span>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <span style={{ fontSize: 12, color: '#8c8c8c' }}>进度</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: statusColor }}>{project.progress}%</span>
+          </div>
+          <Progress percent={project.progress} size="small" showInfo={false} strokeColor={statusColor} trailColor="#f0f0f0" />
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Space size={6}>
+            <Avatar size={20} style={{ background: statusColor, fontSize: 10 }}>{project.spm[0]}</Avatar>
+            <span style={{ fontSize: 12, color: '#595959' }}>{project.spm}</span>
           </Space>
+          <span style={{ fontSize: 11, color: '#bfbfbf' }}>{project.updatedAt}</span>
         </div>
       </Card>
     )
@@ -864,14 +900,49 @@ export default function Home() {
   )
 
   const renderTodoList = () => {
-    const columns = [
-      { title: '待办事项', dataIndex: 'title', key: 'title' },
-      { title: '优先级', dataIndex: 'priority', key: 'priority', render: (p: string) => <Tag color={p === 'high' ? 'red' : p === 'medium' ? 'orange' : 'blue'}>{p === 'high' ? '高' : p === 'medium' ? '中' : '低'}</Tag> },
-      { title: '截止日期', dataIndex: 'deadline', key: 'deadline' },
-      { title: '状态', dataIndex: 'status', key: 'status', render: (s: string) => <Tag color={s === '进行中' ? 'processing' : 'default'}>{s}</Tag> },
-      { title: '操作', key: 'action', render: (_: any, record: any) => <Button type="link" size="small" onClick={() => { const proj = projects.find(p => p.id === record.projectId); if (proj) { setSelectedProject(proj); setActiveModule('projectSpace'); setProjectSpaceModule('plan'); setCurrentVersion(record.versionId || 'v2') } }}>去处理</Button> }
-    ]
-    return <Table dataSource={todos} columns={columns} rowKey="id" pagination={false} />
+    const priorityConfig: Record<string, { color: string; text: string; dotColor: string }> = {
+      high: { color: 'red', text: '高', dotColor: '#ff4d4f' },
+      medium: { color: 'orange', text: '中', dotColor: '#faad14' },
+      low: { color: 'blue', text: '低', dotColor: '#1890ff' },
+    }
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {todos.map(todo => {
+          const pc = priorityConfig[todo.priority] || priorityConfig.low
+          return (
+            <div
+              key={todo.id}
+              style={{
+                padding: '12px 14px',
+                background: '#fff',
+                borderRadius: 6,
+                border: '1px solid #f0f0f0',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#d9d9d9'; e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#f0f0f0'; e.currentTarget.style.boxShadow = 'none' }}
+              onClick={() => { const proj = projects.find(p => p.id === todo.projectId); if (proj) { setSelectedProject(proj); setActiveModule('projectSpace'); setProjectSpaceModule('plan'); setCurrentVersion(todo.versionId || 'v2') } }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: pc.dotColor, marginTop: 6, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: '#262626', lineHeight: 1.5, marginBottom: 6 }}>{todo.title}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Space size={4}>
+                      <Tag color={pc.color} style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>{pc.text}</Tag>
+                      <Tag color={todo.status === '进行中' ? 'processing' : 'default'} style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>{todo.status}</Tag>
+                    </Space>
+                    <span style={{ fontSize: 11, color: '#bfbfbf' }}>{todo.deadline}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
   }
 
   const renderGanttChart = (customTasks?: any[]) => {
@@ -912,22 +983,21 @@ export default function Home() {
       const cols: ColumnsType<any> = []
       if (visibleColumns.includes('id')) cols.push({ title: '序号', dataIndex: 'id', key: 'id', width: 120, fixed: 'left', render: (id: string, record: any) => {
         const depth = record.indentLevel || 0
-        // 判断当前是否在二级计划模式（配置中心或项目空间）
         const isLevel2Mode = (activeModule === 'config' && planLevel === 'level2') || (activeModule === 'projectSpace' && projectPlanLevel === 'level2')
         const maxDepth = isLevel2Mode ? 3 : 2
         const canAddChild = isEditMode && depth < maxDepth - 1
-        return (<Space style={{ paddingLeft: depth * 20 }}>{isEditMode && <HolderOutlined style={{ cursor: 'grab', color: '#999' }} />}{canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} onClick={() => handleAddSubTask(record.id)} /></Tooltip>}<span style={{ fontWeight: depth === 0 ? 600 : depth === 1 ? 500 : 400 }}>{id}</span></Space>)
+        return (<Space style={{ paddingLeft: depth * 20 }}>{isEditMode && <DragHandle />}{canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); handleAddSubTask(record.id) }} /></Tooltip>}<span style={{ fontWeight: depth === 0 ? 600 : depth === 1 ? 500 : 400 }}>{id}</span></Space>)
       } })
       if (visibleColumns.includes('taskName')) cols.push({ title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 200, render: (name: string, record: any) => {
         const depth = record.indentLevel || 0
-        if (isEditMode) return <Input defaultValue={name} style={{ fontWeight: depth === 0 ? 600 : 400, marginLeft: depth * 20 }} />
+        if (isEditMode) return <Input value={name} style={{ fontWeight: depth === 0 ? 600 : 400 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, taskName: e.target.value } : t); currentSetTasks(updated) }} />
         return <span style={{ paddingLeft: depth * 20, color: depth > 0 ? '#555' : '#000', fontWeight: depth === 0 ? 600 : depth === 1 ? 500 : 400 }}>{depth > 0 ? '├─ ' : ''}{name}</span>
       } })
-      if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string) => isEditMode ? <Input defaultValue={val} size="small" /> : val })
-      if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string) => isEditMode ? <Input defaultValue={val} size="small" placeholder="如: 1.1" /> : val })
-      if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 120 })
-      if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 120 })
-      if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number) => `${val}天` })
+      if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Input value={val} size="small" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : val })
+      if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : val })
+      if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 120, render: (val: string, record: any) => isEditMode ? <Input value={val} size="small" placeholder="YYYY-MM-DD" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planStartDate: e.target.value } : t); currentSetTasks(updated) }} /> : val })
+      if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 120, render: (val: string, record: any) => isEditMode ? <Input value={val} size="small" placeholder="YYYY-MM-DD" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planEndDate: e.target.value } : t); currentSetTasks(updated) }} /> : val })
+      if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isEditMode ? <Input value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : `${val}天` })
       if (visibleColumns.includes('actualStartDate')) cols.push({ title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 120 })
       if (visibleColumns.includes('actualEndDate')) cols.push({ title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 120 })
       if (visibleColumns.includes('actualDays')) cols.push({ title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (val: number) => val > 0 ? `${val}天` : '-' })
@@ -1218,95 +1288,197 @@ export default function Home() {
   const renderProjectBasicInfo = () => {
     const markets = selectedProject?.markets || ['OP', 'TR', 'RU']
     const isWholeMachine = selectedProject?.type === '整机产品项目'
-    
+
+    const sectionTitleStyle: CSSProperties = {
+      fontSize: 13,
+      fontWeight: 600,
+      color: '#8c8c8c',
+      textTransform: 'uppercase' as const,
+      letterSpacing: 1,
+      marginBottom: 12,
+      paddingBottom: 8,
+      borderBottom: '1px solid #f0f0f0',
+    }
+
+    const descLabelStyle: CSSProperties = {
+      fontWeight: 500,
+      color: '#8c8c8c',
+      fontSize: 13,
+      background: '#fafbfc',
+    }
+    const descContentStyle: CSSProperties = {
+      color: '#262626',
+      fontSize: 13,
+    }
+
     return (
-      <div>
-        {/* 项目基础信息 - 只读 */}
-        <Card title="项目基础信息" size="small" style={{ marginBottom: 16 }}>
-          <Row gutter={24}>
-            <Col span={8}>
-              <Form layout="vertical">
-                <Form.Item label="产品线"><Input defaultValue="NOTE" disabled /></Form.Item>
-                <Form.Item label="主板名"><Input defaultValue="H8917" disabled /></Form.Item>
-                <Form.Item label="芯片"><Input defaultValue="MT6789J (G100 Ultimate)" disabled /></Form.Item>
-              </Form>
-            </Col>
-            <Col span={8}>
-              <Form layout="vertical">
-                <Form.Item label="市场名"><Input defaultValue="NOTE 50 Pro" disabled /></Form.Item>
-                <Form.Item label="项目名"><Input defaultValue="X6855" disabled /></Form.Item>
-                <Form.Item label="OS版本"><Input defaultValue="XOS16.2.0" disabled /></Form.Item>
-              </Form>
-            </Col>
-            <Col span={8}>
-              <Form layout="vertical">
-                <Form.Item label="安卓版本"><Input defaultValue="16 (W)" disabled /></Form.Item>
-                <Form.Item label="项目状态"><Input defaultValue="待立项" disabled /></Form.Item>
-                <Form.Item label="合作形式"><Input defaultValue="ODC" disabled /></Form.Item>
-                <Form.Item label="软件项目等级"><Input defaultValue="A" disabled /></Form.Item>
-                <Form.Item label="PPM"><Input defaultValue="李莲秋" disabled /></Form.Item>
-                <Form.Item label="SPM"><Input defaultValue="曾晓寅" disabled /></Form.Item>
-              </Form>
-            </Col>
-          </Row>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        {/* 项目概要卡片 */}
+        <Card
+          style={{ marginBottom: 20, borderRadius: 8, overflow: 'hidden' }}
+          styles={{
+            header: { background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)', borderBottom: 'none', padding: '16px 24px' },
+            body: { padding: 0 },
+          }}
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ProjectOutlined style={{ color: '#fff', fontSize: 18 }} />
+              </div>
+              <div>
+                <div style={{ color: '#fff', fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}>NOTE 50 Pro</div>
+                <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>X6855 · MT6789J · XOS16.2.0</div>
+              </div>
+            </div>
+          }
+          extra={
+            <Space size={8}>
+              <Tag color="gold" style={{ margin: 0, borderRadius: 4, fontWeight: 500 }}>待立项</Tag>
+              <Tag style={{ margin: 0, borderRadius: 4, background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff' }}>等级 A</Tag>
+            </Space>
+          }
+        >
+          {/* 关键信息摘要行 */}
+          <div style={{ display: 'flex', background: '#f8fafc', borderBottom: '1px solid #f0f0f0' }}>
+            {[
+              { label: '产品线', value: 'NOTE' },
+              { label: '合作形式', value: 'ODC' },
+              { label: '安卓版本', value: '16 (W)' },
+              { label: '主板名', value: 'H8917' },
+            ].map((item, i) => (
+              <div key={i} style={{ flex: 1, padding: '14px 20px', borderRight: i < 3 ? '1px solid #f0f0f0' : 'none', textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4, fontWeight: 500, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>{item.label}</div>
+                <div style={{ fontSize: 14, color: '#262626', fontWeight: 600 }}>{item.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* 详细信息 */}
+          <div style={{ padding: '20px 24px' }}>
+            <Row gutter={[48, 16]}>
+              <Col span={12}>
+                <div style={sectionTitleStyle}>项目信息</div>
+                <Row gutter={[16, 10]}>
+                  {[
+                    { label: '项目名', value: 'X6855' },
+                    { label: '芯片', value: 'MT6789J (G100 Ultimate)' },
+                    { label: 'OS版本', value: 'XOS16.2.0' },
+                    { label: '市场名', value: 'NOTE 50 Pro' },
+                  ].map((item, i) => (
+                    <Col span={12} key={i}>
+                      <div style={{ display: 'flex', lineHeight: '28px' }}>
+                        <span style={{ color: '#8c8c8c', fontSize: 13, minWidth: 70, flexShrink: 0 }}>{item.label}</span>
+                        <span style={{ color: '#262626', fontSize: 13, fontWeight: 500 }}>{item.value}</span>
+                      </div>
+                    </Col>
+                  ))}
+                </Row>
+              </Col>
+              <Col span={12}>
+                <div style={sectionTitleStyle}>团队成员</div>
+                <Row gutter={[16, 12]}>
+                  {[
+                    { role: 'PPM', name: '李莲秋', color: '#87d068' },
+                    { role: 'SPM', name: '曾晓寅', color: '#1890ff' },
+                  ].map((member, i) => (
+                    <Col span={12} key={i}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f0f0f0' }}>
+                        <Avatar size={32} style={{ background: member.color, fontSize: 14, flexShrink: 0 }}>{member.name[0]}</Avatar>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', lineHeight: 1.3 }}>{member.name}</div>
+                          <div style={{ fontSize: 11, color: '#8c8c8c' }}>{member.role}</div>
+                        </div>
+                      </div>
+                    </Col>
+                  ))}
+                </Row>
+              </Col>
+            </Row>
+          </div>
         </Card>
-        
-        {/* 市场项目信息 - Tab切换 */}
+
+        {/* 市场项目信息 */}
         {isWholeMachine && (
-          <Card title="市场项目信息" size="small">
-            <Tabs 
+          <Card
+            style={{ borderRadius: 8 }}
+            styles={{
+              header: { background: '#fafbfc', borderBottom: '2px solid #52c41a', padding: '12px 24px' },
+              body: { padding: '4px 0 0 0' },
+            }}
+            title={
+              <Space size={8}>
+                <TeamOutlined style={{ color: '#52c41a', fontSize: 16 }} />
+                <span style={{ fontSize: 15, fontWeight: 600 }}>市场项目信息</span>
+                <Tag color="default" style={{ marginLeft: 4, fontSize: 11 }}>{markets.length} 个市场</Tag>
+              </Space>
+            }
+          >
+            <Tabs
               activeKey={selectedMarketTab}
               onChange={setSelectedMarketTab}
-              items={markets.map(m => ({
-                key: m,
-                label: m,
-                children: (
-                  <Form layout="vertical">
-                    <Row gutter={24}>
-                      <Col span={8}>
-                        <Form.Item label="市场项目名"><Input defaultValue={`X6855-${m}`} disabled /></Form.Item>
-                        <Form.Item label="编译选项"><Input defaultValue="x6855" disabled /></Form.Item>
-                        <Form.Item label="运营商定制"><Select defaultValue="否" style={{ width: '100%' }} disabled><Option value="否">否</Option><Option value="是">是</Option></Select></Form.Item>
-                      </Col>
-                      <Col span={8}>
-                        <Form.Item label="是否取消暂停"><Select defaultValue="否" style={{ width: '100%' }} disabled><Option value="否">否</Option><Option value="是">是</Option></Select></Form.Item>
-                        <Form.Item label="SQA审计策略"><Select defaultValue="全审" style={{ width: '100%' }} disabled><Option value="全审">全审</Option><Option value="抽审">抽审</Option></Select></Form.Item>
-                        <Form.Item label="是否锁卡"><Select defaultValue="否" style={{ width: '100%' }} disabled><Option value="否">否</Option><Option value="是">是</Option></Select></Form.Item>
-                        <Form.Item label="取消暂停时间"><Input defaultValue="-" disabled /></Form.Item>
-                        <Form.Item label="市场名称"><Input defaultValue={`${m} Market`} disabled /></Form.Item>
-                        <Form.Item label="编译市场"><Input defaultValue={m.toLowerCase()} disabled /></Form.Item>
-                      </Col>
-                      <Col span={8}>
-                        <Form.Item label="内存"><Input defaultValue="8GB" disabled /></Form.Item>
-                        <Form.Item label="软件项目等级"><Input defaultValue="A" disabled /></Form.Item>
-                        <Form.Item label="是否支持VILTE"><Select defaultValue="否" style={{ width: '100%' }} disabled><Option value="否">否</Option><Option value="是">是</Option></Select></Form.Item>
-                        <Form.Item label="是否保密"><Select defaultValue="否" style={{ width: '100%' }} disabled><Option value="否">否</Option><Option value="是">是</Option></Select></Form.Item>
-                        <Form.Item label="运营商版本标识"><Input defaultValue="-" disabled /></Form.Item>
-                        <Form.Item label="BOM"><Input defaultValue="BOM-001" disabled /></Form.Item>
-                        <Form.Item label="软件版本号"><Input defaultValue="XOS16.2.0" disabled /></Form.Item>
-                        <Form.Item label="备注"><Input defaultValue="-" disabled /></Form.Item>
-                      </Col>
-                    </Row>
-                    <h4 style={{ margin: '16px 0 8px', borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>市场项目维护信息</h4>
-                    <Row gutter={24}>
-                      <Col span={8}>
-                        <Form.Item label="维护类型"><Input defaultValue="常规维护" disabled /></Form.Item>
-                        <Form.Item label="维护原因"><Input defaultValue="版本升级" disabled /></Form.Item>
-                        <Form.Item label="已触发MADA"><Select defaultValue="否" style={{ width: '100%' }} disabled><Option value="否">否</Option><Option value="是">是</Option></Select></Form.Item>
-                      </Col>
-                      <Col span={8}>
-                        <Form.Item label="维护周期"><Input defaultValue="6个月" disabled /></Form.Item>
-                        <Form.Item label="Launch Date"><Input defaultValue="2026-06-01" disabled /></Form.Item>
-                        <Form.Item label="EOS"><Input defaultValue="2028-06-01" disabled /></Form.Item>
-                      </Col>
-                      <Col span={8}>
-                        <Form.Item label="是否转维护组"><Select defaultValue="否" style={{ width: '100%' }} disabled><Option value="否">否</Option><Option value="是">是</Option></Select></Form.Item>
-                        <Form.Item label="是否MADA管控"><Select defaultValue="否" style={{ width: '100%' }} disabled><Option value="否">否</Option><Option value="是">是</Option></Select></Form.Item>
-                      </Col>
-                    </Row>
-                  </Form>
-                )
-              }))}
+              type="card"
+              style={{ padding: '0 16px' }}
+              items={markets.map(m => {
+                const marketColor = m === 'OP' ? '#1890ff' : m === 'TR' ? '#52c41a' : '#faad14'
+                return {
+                  key: m,
+                  label: <Space size={6}><Badge color={marketColor} /><span style={{ fontWeight: 500 }}>{m}</span></Space>,
+                  children: (
+                    <div style={{ padding: '8px 8px 16px' }}>
+                      {/* 市场基础信息 */}
+                      <div style={{ marginBottom: 20 }}>
+                        <div style={{ ...sectionTitleStyle, color: '#1890ff', borderBottomColor: '#e6f4ff' }}>市场项目基础信息</div>
+                        <Descriptions
+                          bordered
+                          size="small"
+                          column={{ xs: 1, sm: 2, md: 3 }}
+                          labelStyle={descLabelStyle}
+                          contentStyle={descContentStyle}
+                        >
+                          <Descriptions.Item label="市场项目名"><span style={{ fontWeight: 500 }}>{`X6855-${m}`}</span></Descriptions.Item>
+                          <Descriptions.Item label="编译选项"><code style={{ padding: '1px 6px', background: '#f5f5f5', borderRadius: 3, fontSize: 12 }}>x6855</code></Descriptions.Item>
+                          <Descriptions.Item label="运营商定制"><Tag color="default">否</Tag></Descriptions.Item>
+                          <Descriptions.Item label="市场名称">{`${m} Market`}</Descriptions.Item>
+                          <Descriptions.Item label="编译市场"><code style={{ padding: '1px 6px', background: '#f5f5f5', borderRadius: 3, fontSize: 12 }}>{m.toLowerCase()}</code></Descriptions.Item>
+                          <Descriptions.Item label="是否锁卡"><Tag color="default">否</Tag></Descriptions.Item>
+                          <Descriptions.Item label="内存"><span style={{ fontWeight: 500 }}>8GB</span></Descriptions.Item>
+                          <Descriptions.Item label="软件项目等级"><Tag color="blue">A</Tag></Descriptions.Item>
+                          <Descriptions.Item label="是否保密"><Tag color="default">否</Tag></Descriptions.Item>
+                          <Descriptions.Item label="SQA审计策略"><Tag color="blue">全审</Tag></Descriptions.Item>
+                          <Descriptions.Item label="是否支持VILTE"><Tag color="default">否</Tag></Descriptions.Item>
+                          <Descriptions.Item label="运营商版本标识">-</Descriptions.Item>
+                          <Descriptions.Item label="BOM"><span style={{ fontWeight: 500 }}>BOM-001</span></Descriptions.Item>
+                          <Descriptions.Item label="软件版本号"><span style={{ fontWeight: 500 }}>XOS16.2.0</span></Descriptions.Item>
+                          <Descriptions.Item label="备注">-</Descriptions.Item>
+                          <Descriptions.Item label="是否取消暂停"><Tag color="default">否</Tag></Descriptions.Item>
+                          <Descriptions.Item label="取消暂停时间">-</Descriptions.Item>
+                        </Descriptions>
+                      </div>
+
+                      {/* 市场维护信息 */}
+                      <div>
+                        <div style={{ ...sectionTitleStyle, color: '#52c41a', borderBottomColor: '#f6ffed' }}>市场项目维护信息</div>
+                        <Descriptions
+                          bordered
+                          size="small"
+                          column={{ xs: 1, sm: 2, md: 3 }}
+                          labelStyle={descLabelStyle}
+                          contentStyle={descContentStyle}
+                        >
+                          <Descriptions.Item label="维护类型"><Tag color="processing">常规维护</Tag></Descriptions.Item>
+                          <Descriptions.Item label="维护原因">版本升级</Descriptions.Item>
+                          <Descriptions.Item label="已触发MADA"><Tag color="default">否</Tag></Descriptions.Item>
+                          <Descriptions.Item label="维护周期"><span style={{ fontWeight: 500 }}>6个月</span></Descriptions.Item>
+                          <Descriptions.Item label="Launch Date"><CalendarOutlined style={{ marginRight: 6, color: '#8c8c8c' }} />2026-06-01</Descriptions.Item>
+                          <Descriptions.Item label="EOS"><CalendarOutlined style={{ marginRight: 6, color: '#8c8c8c' }} />2028-06-01</Descriptions.Item>
+                          <Descriptions.Item label="是否转维护组"><Tag color="default">否</Tag></Descriptions.Item>
+                          <Descriptions.Item label="是否MADA管控"><Tag color="default">否</Tag></Descriptions.Item>
+                        </Descriptions>
+                      </div>
+                    </div>
+                  ),
+                }
+              })}
             />
           </Card>
         )}
@@ -1411,91 +1583,132 @@ export default function Home() {
 
   // 项目空间 - 计划模块
   const renderProjectPlan = () => {
+    const planTabItems = [
+      { key: 'level1', label: '一级计划' },
+      { key: 'level2', label: '二级计划' },
+      { key: 'overview', label: '计划总览' },
+    ]
+
     return (
       <div>
-        <Tabs 
-          activeKey={projectPlanLevel} 
-          onChange={(key) => setProjectPlanLevel(key as string)}
-          style={{ marginBottom: 16 }}
-          items={[
-            { key: 'level1', label: '一级计划' },
-            { key: 'level2', label: '二级计划' },
-            { key: 'overview', label: '计划总览' },
-          ]}
-        />
+        {/* 计划级别切换 */}
+        <Card
+          size="small"
+          style={{ marginBottom: 16, borderRadius: 8 }}
+          styles={{ body: { padding: '4px 16px' } }}
+        >
+          <Row align="middle" justify="space-between">
+            <Col>
+              <Tabs
+                activeKey={projectPlanLevel}
+                onChange={(key) => setProjectPlanLevel(key as string)}
+                style={{ marginBottom: 0 }}
+                items={planTabItems.map(item => ({
+                  ...item,
+                  label: <span style={{ fontWeight: 500, padding: '0 4px' }}>{item.label}</span>,
+                }))}
+              />
+            </Col>
+            <Col>
+              <Tag color={projectPlanLevel === 'overview' ? 'blue' : 'default'} style={{ fontSize: 11 }}>
+                {planTabItems.find(t => t.key === projectPlanLevel)?.label}
+              </Tag>
+            </Col>
+          </Row>
+        </Card>
 
         {/* 计划总览 */}
         {projectPlanLevel === 'overview' && renderProjectPlanOverview()}
 
         {/* 二级计划Tab切换 - 在版本选择器上方 */}
         {projectPlanLevel === 'level2' && (
-          <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-            <Col>
-              <Tabs 
-                activeKey={activeLevel2Plan} 
-                onChange={setActiveLevel2Plan}
-                items={[
-                  ...createdLevel2Plans.map(plan => ({
+          <Card
+            size="small"
+            style={{ marginBottom: 16, borderRadius: 8 }}
+            styles={{ body: { padding: '4px 16px 4px 16px' } }}
+          >
+            <Row justify="space-between" align="middle">
+              <Col>
+                <Tabs
+                  activeKey={activeLevel2Plan}
+                  onChange={setActiveLevel2Plan}
+                  style={{ marginBottom: 0 }}
+                  items={createdLevel2Plans.map(plan => ({
                     key: plan.id,
-                    label: plan.name
-                  }))
-                ]}
-              />
-            </Col>
-            <Col>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => { if (!hasPublishedLevel1Plan) { message.warning('请先发布一级计划后再创建二级计划'); return; } setShowCreateLevel2Plan(true) }}>创建二级计划</Button>
-            </Col>
-          </Row>
+                    label: <span style={{ fontWeight: 500 }}>{plan.name}</span>,
+                  }))}
+                />
+              </Col>
+              <Col>
+                <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} onClick={() => { if (!hasPublishedLevel1Plan) { message.warning('请先发布一级计划后再创建二级计划'); return; } setShowCreateLevel2Plan(true) }}>创建二级计划</Button>
+              </Col>
+            </Row>
+          </Card>
         )}
-        
+
         {/* 需求开发计划 - 特殊展示 */}
         {projectPlanLevel === 'level2' && activeLevel2Plan === 'plan0' && renderRequirementDevelopmentPlan()}
 
         {/* 非需求开发计划的二级计划 + 一级计划：版本管理 + 表格/甘特图 */}
         {projectPlanLevel !== 'overview' && !(projectPlanLevel === 'level2' && activeLevel2Plan === 'plan0') && (
-        <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-          <Col>
-            {isEditMode ? (
-              <Space>
-                <Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{currentVersionData?.versionNo}({currentVersionData?.status})</Tag>
-                <Button type="primary" icon={<SaveOutlined />} onClick={() => { setIsEditMode(false); message.success('保存成功') }}>保存</Button>
-                <Button onClick={() => { setIsEditMode(false); message.info('已取消编辑') }}>取消</Button>
-              </Space>
-            ) : (
-              <Space>
-                <span style={{ color: '#666' }}>版本:</span>
-                <Select value={currentVersion} onChange={(val) => { setCurrentVersion(val); setIsEditMode(false) }} style={{ width: 150 }}>
-                  {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}
-                </Select>
-                {!hasDraftVersion && <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateRevision}>创建修订</Button>}
-                {isCurrentDraft && <Button icon={<EditOutlined />} onClick={() => setIsEditMode(true)}>编辑</Button>}
-                {isCurrentDraft && <Button type="primary" icon={<SaveOutlined />} onClick={handlePublish}>发布</Button>}
-                <Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>版本对比</Button>
-              </Space>
-            )}
-          </Col>
-          <Col>
-            <Space>
-              <Input placeholder="搜索任务..." prefix={<SearchOutlined />} style={{ width: 200 }} onChange={(e) => setSearchText(e.target.value)} />
-              <Button icon={<AppstoreOutlined />} onClick={() => setShowColumnModal(true)}>自定义列</Button>
-              <Button
-                icon={projectPlanViewMode === 'table' ? <BarChartOutlined /> : <AppstoreOutlined />}
-                onClick={() => setProjectPlanViewMode(projectPlanViewMode === 'table' ? 'gantt' : 'table')}
-              >
-                {projectPlanViewMode === 'table' ? '甘特图' : '表格'}
-              </Button>
-            </Space>
-          </Col>
-        </Row>
+          <Card
+            size="small"
+            style={{ marginBottom: 16, borderRadius: 8 }}
+            styles={{ body: { padding: '12px 16px' } }}
+          >
+            <Row justify="space-between" align="middle">
+              <Col>
+                {isEditMode ? (
+                  <Space size={8}>
+                    <Tag color="blue" style={{ fontSize: 13, padding: '4px 12px', borderRadius: 4, fontWeight: 500 }}>{currentVersionData?.versionNo} ({currentVersionData?.status})</Tag>
+                    <Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} onClick={() => { setIsEditMode(false); message.success('保存成功') }}>保存</Button>
+                    <Button style={{ borderRadius: 6 }} onClick={() => { setIsEditMode(false); message.info('已取消编辑') }}>取消</Button>
+                  </Space>
+                ) : (
+                  <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
+                    <Space size={6}>
+                      <span style={{ color: '#8c8c8c', fontSize: 13 }}>版本</span>
+                      <Select value={currentVersion} onChange={(val) => { setCurrentVersion(val); setIsEditMode(false) }} style={{ width: 150 }} size="middle">
+                        {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
+                      </Select>
+                    </Space>
+                    <Space size={6}>
+                      {!hasDraftVersion && <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} onClick={handleCreateRevision}>创建修订</Button>}
+                      {isCurrentDraft && <Button icon={<EditOutlined />} style={{ borderRadius: 6 }} onClick={() => setIsEditMode(true)}>编辑</Button>}
+                      {isCurrentDraft && <Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} onClick={handlePublish}>发布</Button>}
+                      <Button icon={<HistoryOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowVersionCompare(true)}>版本对比</Button>
+                    </Space>
+                  </Space>
+                )}
+              </Col>
+              <Col>
+                <Space size={6}>
+                  <Input placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
+                  <Tooltip title="自定义列">
+                    <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
+                  </Tooltip>
+                  <Tooltip title={projectPlanViewMode === 'table' ? '切换甘特图' : '切换表格'}>
+                    <Button
+                      icon={projectPlanViewMode === 'table' ? <BarChartOutlined /> : <UnorderedListOutlined />}
+                      style={{ borderRadius: 6 }}
+                      onClick={() => setProjectPlanViewMode(projectPlanViewMode === 'table' ? 'gantt' : 'table')}
+                    />
+                  </Tooltip>
+                </Space>
+              </Col>
+            </Row>
+          </Card>
         )}
 
-        {/* 表格或甘特图内容 - 二级计划按planId过滤 */}
-        {projectPlanLevel === 'level1' && (projectPlanViewMode === 'gantt' ? renderGanttChart() : renderTaskTable())}
-        {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan && (
-          projectPlanViewMode === 'gantt'
-            ? renderGanttChart(level2PlanTasks.filter(t => t.planId === activeLevel2Plan))
-            : renderTaskTable(level2PlanTasks.filter(t => t.planId === activeLevel2Plan))
-        )}
+        {/* 表格或甘特图内容 */}
+        <Card style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
+          {projectPlanLevel === 'level1' && (projectPlanViewMode === 'gantt' ? renderGanttChart() : renderTaskTable())}
+          {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan && (
+            projectPlanViewMode === 'gantt'
+              ? renderGanttChart(level2PlanTasks.filter(t => t.planId === activeLevel2Plan))
+              : renderTaskTable(level2PlanTasks.filter(t => t.planId === activeLevel2Plan))
+          )}
+        </Card>
       </div>
     )
   }
@@ -1511,35 +1724,37 @@ export default function Home() {
   
   // 项目空间 - 计划总览（一二级融合）
   const renderProjectPlanOverview = () => {
-    const displayTasks = getOverviewTasks()
-    
+    const displayTasks = mergePlans(tasks, level2PlanTasks)
+
     return (
       <div>
-        <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-          <Col><h3 style={{ margin: 0 }}>计划总览</h3><p style={{ margin: '4px 0 0', color: '#666' }}>一级计划与二级计划融合展示 {projectPlanOverviewTab === 'overview' && <Tag color="blue">融合模式</Tag>}</p></Col>
-          <Col>
-            <Space>
-              <Button 
-                icon={projectPlanViewMode === 'table' ? <BarChartOutlined /> : <AppstoreOutlined />} 
+        <Card
+          style={{ borderRadius: 8 }}
+          styles={{ body: { padding: 0 } }}
+        >
+          {/* 总览头部 */}
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <Space size={8} align="center">
+                <BarChartOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+                <span style={{ fontSize: 15, fontWeight: 600, color: '#262626' }}>计划总览</span>
+                <Tag color="blue" style={{ fontSize: 11, borderRadius: 4 }}>融合模式</Tag>
+              </Space>
+              <div style={{ marginTop: 4, fontSize: 12, color: '#8c8c8c', paddingLeft: 24 }}>一级计划与二级计划融合展示</div>
+            </div>
+            <Tooltip title={projectPlanViewMode === 'table' ? '切换甘特图' : '切换表格'}>
+              <Button
+                icon={projectPlanViewMode === 'table' ? <BarChartOutlined /> : <UnorderedListOutlined />}
+                size="small"
+                style={{ borderRadius: 6 }}
                 onClick={() => setProjectPlanViewMode(projectPlanViewMode === 'table' ? 'gantt' : 'table')}
-              >
-                {projectPlanViewMode === 'table' ? '甘特图' : '表格'}
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-        
-        <Card>
-          <Tabs 
-            activeKey={projectPlanOverviewTab}
-            onChange={setProjectPlanOverviewTab}
-            items={[
-              { key: 'overview', label: '总览' },
-              { key: 'level1', label: '一级计划' },
-              { key: 'level2', label: '二级计划' },
-            ]}
-          />
-          {projectPlanViewMode === 'gantt' ? renderGanttChart(displayTasks) : renderTaskTable(displayTasks)}
+              />
+            </Tooltip>
+          </div>
+          {/* 表格/甘特图内容 */}
+          <div style={{ padding: 0 }}>
+            {projectPlanViewMode === 'gantt' ? renderGanttChart(displayTasks) : renderTaskTable(displayTasks)}
+          </div>
         </Card>
       </div>
     )
@@ -1559,24 +1774,48 @@ export default function Home() {
       { key: 'docs', icon: <FolderOutlined />, label: '项目文档' },
     ]
     return (
-      <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>
-        <div style={{ background: '#fff', padding: '0 24px', borderBottom: '1px solid #f0f0f0' }}>
-          <Row align="middle" style={{ height: 64 }}>
-            <Col flex="none"><Button icon={<LeftOutlined />} onClick={() => setActiveModule('projects')}>返回</Button></Col>
-            <Col flex="auto" style={{ textAlign: 'center' }}><h2 style={{ margin: 0 }}>{selectedProject?.name} - 项目空间</h2></Col>
-            <Col flex="none"><Button type="primary" icon={<SaveOutlined />}>保存</Button></Col>
+      <div style={{ minHeight: '100vh', background: '#f5f7fa' }}>
+        {/* 顶部导航栏 */}
+        <div style={{ background: '#fff', padding: '0 24px', borderBottom: '1px solid #e8e8e8', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+          <Row align="middle" style={{ height: 56 }}>
+            <Col flex="none">
+              <Button type="text" icon={<LeftOutlined />} onClick={() => setActiveModule('projects')} style={{ color: '#595959', fontWeight: 500 }}>返回工作台</Button>
+            </Col>
+            <Col flex="auto" style={{ textAlign: 'center' }}>
+              <Space size={8}>
+                <ProjectOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+                <span style={{ fontSize: 16, fontWeight: 600, color: '#262626' }}>{selectedProject?.name}</span>
+                <Tag color="blue" style={{ marginLeft: 4, fontSize: 11 }}>项目空间</Tag>
+              </Space>
+            </Col>
+            <Col flex="none" />
           </Row>
         </div>
-        <div style={{ display: 'flex', minHeight: 'calc(100vh - 64px)' }}>
-          <div style={{ width: 200, background: '#fff', borderRight: '1px solid #f0f0f0' }}>
-            <Menu mode="inline" selectedKeys={[projectSpaceModule]} style={{ border: 'none' }} items={menuItems} onClick={({ key }) => setProjectSpaceModule(key)} />
+        <div style={{ display: 'flex', minHeight: 'calc(100vh - 56px)' }}>
+          {/* 侧边导航 */}
+          <div style={{ width: 200, background: '#fff', borderRight: '1px solid #f0f0f0', paddingTop: 8 }}>
+            <Menu
+              mode="inline"
+              selectedKeys={[projectSpaceModule]}
+              style={{ border: 'none', fontSize: 13 }}
+              items={menuItems.map(item => ({
+                ...item,
+                label: <span style={{ fontWeight: projectSpaceModule === item.key ? 500 : 400 }}>{item.label}</span>,
+              }))}
+              onClick={({ key }) => setProjectSpaceModule(key)}
+            />
           </div>
-          <div style={{ flex: 1, padding: 24 }}>
+          {/* 内容区域 */}
+          <div style={{ flex: 1, padding: 24, overflow: 'auto' }}>
             {projectSpaceModule === 'basic' && renderProjectBasicInfo()}
             {projectSpaceModule === 'plan' && renderProjectPlan()}
             {projectSpaceModule === 'overview' && renderProjectOverview()}
             {projectSpaceModule === 'requirements' && renderProjectRequirements()}
-            {projectSpaceModule !== 'basic' && projectSpaceModule !== 'plan' && projectSpaceModule !== 'overview' && projectSpaceModule !== 'requirements' && <Card><Empty description={`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`} /></Card>}
+            {projectSpaceModule !== 'basic' && projectSpaceModule !== 'plan' && projectSpaceModule !== 'overview' && projectSpaceModule !== 'requirements' && (
+              <Card style={{ borderRadius: 8, textAlign: 'center', padding: '40px 0' }}>
+                <Empty description={<span style={{ color: '#8c8c8c' }}>{`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`}</span>} />
+              </Card>
+            )}
           </div>
         </div>
         {/* 版本对比Modal */}
@@ -1686,31 +1925,254 @@ export default function Home() {
     <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>
       {activeModule === 'projectSpace' && selectedProject ? renderProjectSpace() : (
         <>
-          <div style={{ background: '#fff', padding: '0 24px', borderBottom: '1px solid #f0f0f0' }}>
-            <Row align="middle" justify="space-between" style={{ height: 64 }}>
-              <Col><Space size={48}><h1 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>项目管理系统</h1><Tabs activeKey={activeModule} onChange={(key) => setActiveModule(key)} type="card" items={[{ key: 'projects', label: <span style={{ color: activeModule === 'projects' ? '#1890ff' : '#000', fontWeight: 500 }}>工作台</span> }, { key: 'config', label: <span style={{ color: activeModule === 'config' ? '#1890ff' : '#000', fontWeight: 500 }}>配置中心</span> }]} /></Space></Col>
-              <Col><div style={{ width: 32, height: 32, borderRadius: '50%', background: '#1890ff', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>用</div></Col>
+          <div style={{ background: '#fff', padding: '0 24px', borderBottom: '1px solid #e8e8e8', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+            <Row align="middle" justify="space-between" style={{ height: 56 }}>
+              <Col>
+                <Space size={32} align="center">
+                  <Space size={8}>
+                    <ProjectOutlined style={{ color: '#1890ff', fontSize: 18 }} />
+                    <span style={{ fontSize: 17, fontWeight: 700, color: '#262626', letterSpacing: -0.3 }}>项目管理系统</span>
+                  </Space>
+                  <Tabs
+                    activeKey={activeModule}
+                    onChange={(key) => setActiveModule(key)}
+                    style={{ marginBottom: 0 }}
+                    items={[
+                      { key: 'projects', label: <span style={{ fontWeight: 500, padding: '0 4px' }}>工作台</span> },
+                      { key: 'config', label: <span style={{ fontWeight: 500, padding: '0 4px' }}>配置中心</span> },
+                    ]}
+                  />
+                </Space>
+              </Col>
+              <Col>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #1890ff, #096dd9)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>用</div>
+              </Col>
             </Row>
           </div>
           <div style={{ padding: 24 }}>
-            {activeModule === 'projects' && (<Card><Tabs activeKey={projectView} onChange={(key) => setProjectView(key)} type="card" items={[{ key: 'card', label: <span style={{ color: projectView === 'card' ? '#1890ff' : '#000', fontWeight: 500 }}>项目卡片</span> }, { key: 'kanban', label: <span style={{ color: projectView === 'kanban' ? '#1890ff' : '#000', fontWeight: 500 }}>项目看板</span> }, { key: 'todo', label: <span style={{ color: projectView === 'todo' ? '#1890ff' : '#000', fontWeight: 500 }}>代办中心</span> }]} />
-              {projectView === 'card' && (<><Row justify="space-between" align="middle" style={{ marginBottom: 16 }}><Col><h3 style={{ margin: 0 }}>项目列表</h3></Col></Row><Row gutter={[16, 16]}>{projects.map(p => <Col xs={24} sm={12} lg={8} key={p.id}>{renderProjectCard(p)}</Col>)}</Row></>)}
-              {projectView === 'kanban' && renderKanbanBoard()}
-              {projectView === 'todo' && renderTodoList()}
-            </Card>)}
+            {activeModule === 'projects' && (
+              <div style={{ display: 'flex', gap: 20 }}>
+                {/* 左侧 - 项目列表 */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {/* 项目统计概览 */}
+                  <Row gutter={16} style={{ marginBottom: 20 }}>
+                    {[
+                      { label: '全部项目', value: projects.length, color: '#1890ff', bg: '#e6f7ff' },
+                      { label: '进行中', value: projects.filter(p => p.status === '进行中').length, color: '#1890ff', bg: '#e6f7ff' },
+                      { label: '筹备中', value: projects.filter(p => p.status === '筹备中').length, color: '#faad14', bg: '#fff7e6' },
+                      { label: '已完成', value: projects.filter(p => p.status === '已完成').length, color: '#52c41a', bg: '#f6ffed' },
+                    ].map((stat, i) => (
+                      <Col span={6} key={i}>
+                        <div style={{ background: '#fff', borderRadius: 8, padding: '14px 16px', border: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{ width: 40, height: 40, borderRadius: 8, background: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: 18, fontWeight: 700, color: stat.color }}>{stat.value}</span>
+                          </div>
+                          <span style={{ fontSize: 13, color: '#8c8c8c' }}>{stat.label}</span>
+                        </div>
+                      </Col>
+                    ))}
+                  </Row>
+
+                  {/* 项目卡片标题 */}
+                  <div style={{ marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Space size={8}>
+                      <span style={{ fontSize: 15, fontWeight: 600, color: '#262626' }}>项目列表</span>
+                      <Tag color="default" style={{ fontSize: 11, borderRadius: 4 }}>{projects.length} 个</Tag>
+                    </Space>
+                    <Input placeholder="搜索项目..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear />
+                  </div>
+
+                  {/* 项目卡片网格 */}
+                  <Row gutter={[16, 16]}>
+                    {projects.map(p => (
+                      <Col xs={24} sm={12} lg={todoCollapsed ? 6 : 8} key={p.id}>{renderProjectCard(p)}</Col>
+                    ))}
+                  </Row>
+                </div>
+
+                {/* 右侧 - 待办中心（可展开收起） */}
+                <div style={{
+                  width: todoCollapsed ? 40 : 320,
+                  flexShrink: 0,
+                  transition: 'width 0.25s ease',
+                  position: 'relative',
+                }}>
+                  {todoCollapsed ? (
+                    /* 收起状态 - 竖条 */
+                    <div
+                      style={{
+                        width: 40,
+                        background: '#fff',
+                        borderRadius: 8,
+                        border: '1px solid #f0f0f0',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        padding: '12px 0',
+                        cursor: 'pointer',
+                        position: 'sticky',
+                        top: 24,
+                      }}
+                      onClick={() => setTodoCollapsed(false)}
+                    >
+                      <MenuUnfoldOutlined style={{ color: '#8c8c8c', fontSize: 14, marginBottom: 8 }} />
+                      <Badge count={todos.length} size="small" style={{ marginBottom: 8 }} />
+                      <div style={{ writingMode: 'vertical-lr', fontSize: 12, color: '#8c8c8c', letterSpacing: 2 }}>待办中心</div>
+                    </div>
+                  ) : (
+                    /* 展开状态 */
+                    <div style={{
+                      background: '#fff',
+                      borderRadius: 8,
+                      border: '1px solid #f0f0f0',
+                      overflow: 'hidden',
+                      position: 'sticky',
+                      top: 24,
+                    }}>
+                      {/* 待办头部 */}
+                      <div style={{
+                        padding: '12px 16px',
+                        borderBottom: '1px solid #f0f0f0',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        background: '#fafbfc',
+                      }}>
+                        <Space size={6}>
+                          <CheckSquareOutlined style={{ color: '#1890ff', fontSize: 14 }} />
+                          <span style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>待办中心</span>
+                          <Badge count={todos.length} style={{ backgroundColor: '#1890ff' }} size="small" />
+                        </Space>
+                        <Button type="text" size="small" icon={<MenuFoldOutlined />} style={{ color: '#8c8c8c' }} onClick={() => setTodoCollapsed(true)} />
+                      </div>
+                      {/* 待办列表 */}
+                      <div style={{ padding: 12, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+                        {renderTodoList()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             {(activeModule === 'config' || activeModule === 'projectSpace') && (
-              <Row gutter={24}>
-                <Col span={sidebarCollapsed ? 1 : 4}><Card title={!sidebarCollapsed && "项目类型"} size="small" bodyStyle={{ padding: sidebarCollapsed ? '12px 8px' : '12px' }} extra={<Button type="text" size="small" icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} />}>
-                  {!sidebarCollapsed && <Menu mode="inline" selectedKeys={[selectedProjectType]} style={{ border: 'none' }} items={PROJECT_TYPES.map(t => ({ key: t, label: t, onClick: () => setSelectedProjectType(t) }))} />}
-                </Card></Col>
-                <Col span={sidebarCollapsed ? 23 : 20}><Card>
-                  <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}><Col><h2 style={{ margin: 0 }}>{selectedProjectType} - 计划配置</h2><p style={{ margin: '8px 0 0', color: '#666' }}>配置和管理项目计划模板</p></Col></Row>
-                  <Tabs activeKey={planLevel} onChange={setPlanLevel} style={{ marginBottom: 24 }} items={[{ key: 'level1', label: '一级计划' }, { key: 'level2', label: '二级计划' }]} />
-                  {planLevel === 'level2' && (<div style={{ marginBottom: 24, padding: '12px 16px', background: '#fafafa', borderRadius: 8 }}><Space wrap><span style={{ color: '#666' }}>模板类型:</span>{allPlanTypes.map(t => <Tag key={t} color={selectedPlanType === t ? 'blue' : 'default'} style={{ cursor: 'pointer' }} onClick={() => setSelectedPlanType(t)}>{t}</Tag>)}<Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => setShowAddCustomType(true)}>添加类型</Button></Space></div>)}
-                  <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}><Col><Space><span style={{ color: '#666' }}>版本:</span><Select value={currentVersion} onChange={(val) => { setCurrentVersion(val); setIsEditMode(false) }} style={{ width: 180 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select>{renderActionButtons()}</Space></Col><Col><Space><Input placeholder="搜索任务..." prefix={<SearchOutlined />} style={{ width: 200 }} onChange={(e) => setSearchText(e.target.value)} /><Button icon={<AppstoreOutlined />} onClick={() => setShowColumnModal(true)}>自定义列</Button></Space></Col></Row>
-                  {viewMode === 'gantt' ? renderGanttChart() : renderTaskTable()}
-                </Card></Col>
-              </Row>
+              <div>
+                {/* 配置分类导航 */}
+                <Card size="small" style={{ marginBottom: 20, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
+                  <Tabs
+                    activeKey={configCategory}
+                    onChange={setConfigCategory}
+                    style={{ marginBottom: 0 }}
+                    items={[
+                      { key: 'plan', label: <Space size={6}><CalendarOutlined />计划模板配置</Space> },
+                      { key: 'milestone', label: <Space size={6}><FolderOutlined />里程碑配置</Space>, disabled: true },
+                      { key: 'role', label: <Space size={6}><TeamOutlined />角色权限配置</Space>, disabled: true },
+                      { key: 'flow', label: <Space size={6}><BarChartOutlined />流程配置</Space>, disabled: true },
+                      { key: 'field', label: <Space size={6}><SettingOutlined />字段配置</Space>, disabled: true },
+                    ]}
+                  />
+                </Card>
+
+                {/* 计划模板配置 */}
+                {configCategory === 'plan' && (
+                  <Row gutter={20}>
+                    <Col span={sidebarCollapsed ? 1 : 4}>
+                      <Card
+                        size="small"
+                        style={{ borderRadius: 8, position: 'sticky', top: 24 }}
+                        styles={{
+                          header: { background: '#fafbfc', borderBottom: '1px solid #f0f0f0', padding: '8px 12px', minHeight: 40 },
+                          body: { padding: sidebarCollapsed ? '8px 4px' : '8px' },
+                        }}
+                        title={!sidebarCollapsed && <span style={{ fontSize: 13, fontWeight: 600, color: '#595959' }}>项目类型</span>}
+                        extra={<Button type="text" size="small" icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} />}
+                      >
+                        {!sidebarCollapsed && <Menu mode="inline" selectedKeys={[selectedProjectType]} style={{ border: 'none', fontSize: 13 }} items={PROJECT_TYPES.map(t => ({ key: t, label: <span style={{ fontWeight: selectedProjectType === t ? 500 : 400 }}>{t}</span>, onClick: () => setSelectedProjectType(t) }))} />}
+                      </Card>
+                    </Col>
+                    <Col span={sidebarCollapsed ? 23 : 20}>
+                      {/* 配置头部 */}
+                      <Card size="small" style={{ marginBottom: 16, borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
+                        <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%)', borderBottom: '1px solid #e8e8e8' }}>
+                          <Row justify="space-between" align="middle">
+                            <Col>
+                              <Space size={8} align="center">
+                                <CalendarOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+                                <span style={{ fontSize: 16, fontWeight: 600, color: '#262626' }}>{selectedProjectType}</span>
+                                <Divider type="vertical" style={{ height: 16, margin: '0 4px' }} />
+                                <span style={{ fontSize: 14, color: '#595959' }}>计划模板配置</span>
+                              </Space>
+                              <div style={{ marginTop: 4, fontSize: 12, color: '#8c8c8c', paddingLeft: 24 }}>配置和管理项目计划模板</div>
+                            </Col>
+                          </Row>
+                        </div>
+                        <div style={{ padding: '4px 16px' }}>
+                          <Tabs activeKey={planLevel} onChange={setPlanLevel} style={{ marginBottom: 0 }} items={[{ key: 'level1', label: <span style={{ fontWeight: 500 }}>一级计划</span> }, { key: 'level2', label: <span style={{ fontWeight: 500 }}>二级计划</span> }]} />
+                        </div>
+                      </Card>
+
+                      {/* 二级计划类型选择器 */}
+                      {planLevel === 'level2' && (
+                        <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '10px 16px' } }}>
+                          <Space wrap size={[8, 8]}>
+                            <span style={{ color: '#8c8c8c', fontSize: 13, fontWeight: 500 }}>模板类型</span>
+                            <Divider type="vertical" style={{ height: 16, margin: '0 4px' }} />
+                            {allPlanTypes.map(t => (
+                              <Tag
+                                key={t}
+                                color={selectedPlanType === t ? 'blue' : 'default'}
+                                style={{ cursor: 'pointer', borderRadius: 4, padding: '2px 10px', fontWeight: selectedPlanType === t ? 500 : 400 }}
+                                onClick={() => setSelectedPlanType(t)}
+                              >
+                                {t}
+                              </Tag>
+                            ))}
+                            <Button type="dashed" size="small" icon={<PlusOutlined />} style={{ borderRadius: 4 }} onClick={() => setShowAddCustomType(true)}>添加类型</Button>
+                          </Space>
+                        </Card>
+                      )}
+
+                      {/* 版本控制 + 工具栏 */}
+                      <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '10px 16px' } }}>
+                        <Row justify="space-between" align="middle">
+                          <Col>
+                            <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
+                              <Space size={6}>
+                                <span style={{ color: '#8c8c8c', fontSize: 13 }}>版本</span>
+                                <Select value={currentVersion} onChange={(val) => { setCurrentVersion(val); setIsEditMode(false) }} style={{ width: 180 }} size="middle">
+                                  {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
+                                </Select>
+                              </Space>
+                              {renderActionButtons()}
+                            </Space>
+                          </Col>
+                          <Col>
+                            <Space size={6}>
+                              <Input placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
+                              <Tooltip title="自定义列">
+                                <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
+                              </Tooltip>
+                            </Space>
+                          </Col>
+                        </Row>
+                      </Card>
+
+                      {/* 表格/甘特图内容 */}
+                      <Card style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
+                        {viewMode === 'gantt' ? renderGanttChart() : renderTaskTable()}
+                      </Card>
+                    </Col>
+                  </Row>
+                )}
+
+                {/* 其他配置占位 */}
+                {configCategory !== 'plan' && (
+                  <Card style={{ borderRadius: 8, textAlign: 'center', padding: '60px 0' }}>
+                    <Empty description={<span style={{ color: '#8c8c8c' }}>{
+                      { milestone: '里程碑配置', role: '角色权限配置', flow: '流程配置', field: '字段配置' }[configCategory] || '配置'
+                    }模块开发中...</span>} />
+                  </Card>
+                )}
+              </div>
             )}
           </div>
           <Modal title="自定义列" open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(ALL_COLUMNS.filter(c => c.default).map(c => c.key))}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}><Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row><Col span={12}>{ALL_COLUMNS.slice(0, 6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col><Col span={12}>{ALL_COLUMNS.slice(6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col></Row></Checkbox.Group></Modal>
