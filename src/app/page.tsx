@@ -198,11 +198,26 @@ const ALL_COLUMNS = [
   { key: 'progress', title: '进度', default: true },
 ]
 
-// IR需求Mock数据（待定状态）
-const IR_REQUIREMENTS: any[] = []
+// IR需求Mock数据
+const IR_REQUIREMENTS: any[] = [
+  { id: '1', domain: '相机', irNo: 'IR-2026-001', irTitle: '前置相机HDR增强', priority: '高', irStatus: '已验收', testPlanStart: '2026-01-10', testPlanEnd: '2026-01-25', acceptPlanStart: '2026-01-26', acceptPlanEnd: '2026-02-05' },
+  { id: '2', domain: '相机', irNo: 'IR-2026-002', irTitle: '后置超广角优化', priority: '中', irStatus: '测试中', testPlanStart: '2026-01-15', testPlanEnd: '2026-02-01', acceptPlanStart: '2026-02-02', acceptPlanEnd: '2026-02-15' },
+  { id: '3', domain: '显示', irNo: 'IR-2026-003', irTitle: '120Hz自适应刷新率', priority: '高', irStatus: '开发中', testPlanStart: '2026-02-01', testPlanEnd: '2026-02-20', acceptPlanStart: '2026-02-21', acceptPlanEnd: '2026-03-05' },
+  { id: '4', domain: '系统', irNo: 'IR-2026-004', irTitle: '内存管理优化', priority: '中', irStatus: '已验收', testPlanStart: '2026-01-05', testPlanEnd: '2026-01-20', acceptPlanStart: '2026-01-21', acceptPlanEnd: '2026-02-01' },
+  { id: '5', domain: '通信', irNo: 'IR-2026-005', irTitle: '5G SA模式稳定性', priority: '高', irStatus: '测试中', testPlanStart: '2026-02-10', testPlanEnd: '2026-03-01', acceptPlanStart: '2026-03-02', acceptPlanEnd: '2026-03-15' },
+  { id: '6', domain: '音频', irNo: 'IR-2026-006', irTitle: '通话降噪算法升级', priority: '低', irStatus: '待开发', testPlanStart: '2026-03-01', testPlanEnd: '2026-03-20', acceptPlanStart: '2026-03-21', acceptPlanEnd: '2026-04-05' },
+]
 
-// SR需求Mock数据（待定状态）
-const SR_REQUIREMENTS: any[] = []
+// SR需求Mock数据
+const SR_REQUIREMENTS: any[] = [
+  { id: '1', srNo: 'SR-2026-001', srTitle: 'HDR拍照模式实现', relatedIR: 'IR-2026-001', devDept: '相机部', srStatus: '已转测', planTestVersion: '16.3.030', actualTestVersion: '16.3.030', testPlanStart: '2026-01-10', testPlanEnd: '2026-01-20', acceptPlanStart: '2026-01-21', acceptPlanEnd: '2026-02-01' },
+  { id: '2', srNo: 'SR-2026-002', srTitle: 'HDR视频录制支持', relatedIR: 'IR-2026-001', devDept: '相机部', srStatus: '已转测', planTestVersion: '16.3.030', actualTestVersion: '16.3.031', testPlanStart: '2026-01-15', testPlanEnd: '2026-01-25', acceptPlanStart: '2026-01-26', acceptPlanEnd: '2026-02-05' },
+  { id: '3', srNo: 'SR-2026-003', srTitle: '超广角畸变矫正', relatedIR: 'IR-2026-002', devDept: '相机部', srStatus: '开发中', planTestVersion: '16.3.031', actualTestVersion: '', testPlanStart: '2026-02-01', testPlanEnd: '2026-02-15', acceptPlanStart: '2026-02-16', acceptPlanEnd: '2026-02-28' },
+  { id: '4', srNo: 'SR-2026-004', srTitle: 'LTPO自适应刷新', relatedIR: 'IR-2026-003', devDept: '显示部', srStatus: '开发中', planTestVersion: '16.3.031', actualTestVersion: '', testPlanStart: '2026-02-10', testPlanEnd: '2026-02-25', acceptPlanStart: '2026-02-26', acceptPlanEnd: '2026-03-10' },
+  { id: '5', srNo: 'SR-2026-005', srTitle: '后台进程回收优化', relatedIR: 'IR-2026-004', devDept: '系统部', srStatus: '已验收', planTestVersion: '16.3.030', actualTestVersion: '16.3.030', testPlanStart: '2026-01-08', testPlanEnd: '2026-01-18', acceptPlanStart: '2026-01-19', acceptPlanEnd: '2026-01-28' },
+  { id: '6', srNo: 'SR-2026-006', srTitle: 'SA模式频繁断连修复', relatedIR: 'IR-2026-005', devDept: '通信部', srStatus: '测试中', planTestVersion: '16.3.032', actualTestVersion: '', testPlanStart: '2026-02-15', testPlanEnd: '2026-03-01', acceptPlanStart: '2026-03-02', acceptPlanEnd: '2026-03-15' },
+  { id: '7', srNo: 'SR-2026-007', srTitle: 'AI降噪模型集成', relatedIR: 'IR-2026-006', devDept: '音频部', srStatus: '待开发', planTestVersion: '16.3.032', actualTestVersion: '', testPlanStart: '2026-03-05', testPlanEnd: '2026-03-20', acceptPlanStart: '2026-03-21', acceptPlanEnd: '2026-04-05' },
+]
 
 // 可排序行组件
 function SortableRow({ children, ...props }: any) {
@@ -249,25 +264,49 @@ export default function Home() {
   const [projectPlanViewMode, setProjectPlanViewMode] = useState<'table' | 'gantt'>('table')
   const [projectPlanOverviewTab, setProjectPlanOverviewTab] = useState<string>('overview')
   const [level2PlanTasks, setLevel2PlanTasks] = useState<any[]>([
-    // Mock二级计划数据 - 用于演示跨里程碑拆分挂靠
-    { id: 'l2-1', parentId: 'plan1', order: 1, taskName: '16.3.030', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-02-01', type: '在研版本火车计划' },
-    { id: 'l2-2', parentId: 'plan1', order: 2, taskName: '16.3.031', status: '进行中', progress: 60, responsible: '李四', predecessor: 'l2-1', planStartDate: '2026-02-02', planEndDate: '2026-03-15', type: '在研版本火车计划' },
-    { id: 'l2-3', parentId: 'plan1', order: 3, taskName: '16.3.032', status: '未开始', progress: 0, responsible: '王五', predecessor: 'l2-2', planStartDate: '2026-03-16', planEndDate: '2026-05-01', type: '在研版本火车计划' },
-    { id: 'l2-4', parentId: 'plan2', order: 1, taskName: '版本规划', status: '已完成', progress: 100, responsible: '赵六', predecessor: '', planStartDate: '2026-01-02', planEndDate: '2026-02-02', type: 'FR版本火车计划' },
-    { id: 'l2-4-1', parentId: 'l2-4', order: 1, taskName: '修改点收集', status: '已完成', progress: 100, responsible: '赵六', predecessor: '', planStartDate: '2026-01-02', planEndDate: '2026-02-02', type: 'FR版本火车计划' },
-    { id: 'l2-5', parentId: 'plan2', order: 2, taskName: '版本开发', status: '进行中', progress: 50, responsible: '孙七', predecessor: 'l2-4', planStartDate: '2026-02-02', planEndDate: '2026-03-15', type: 'FR版本火车计划' },
-    { id: 'l2-5-1', parentId: 'l2-5', order: 1, taskName: 'MP分支入库', status: '进行中', progress: 60, responsible: '孙七', predecessor: '', planStartDate: '2026-02-02', planEndDate: '2026-03-01', type: 'FR版本火车计划' },
-    { id: 'l2-5-2', parentId: 'l2-5', order: 2, taskName: 'MR版本转测', status: '未开始', progress: 0, responsible: '周八', predecessor: 'l2-5-1', planStartDate: '2026-03-02', planEndDate: '2026-03-15', type: 'FR版本火车计划' },
-    { id: 'l2-6', parentId: 'plan3', order: 1, taskName: '版本测试', status: '未开始', progress: 0, responsible: '吴九', predecessor: 'l2-5', planStartDate: '2026-03-16', planEndDate: '2026-05-01', type: 'FR版本火车计划' },
-    { id: 'l2-6-1', parentId: 'l2-6', order: 1, taskName: 'MR版本测试', status: '未开始', progress: 0, responsible: '吴九', predecessor: '', planStartDate: '2026-03-16', planEndDate: '2026-05-01', type: 'FR版本火车计划' },
+    // 在研版本火车计划 - 三层结构 (plan1)
+    { id: '1', order: 1, taskName: '16.3.030', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-02-01', planId: 'plan1' },
+    { id: '1.1', parentId: '1', order: 1, taskName: '需求分析', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-01-15', planId: 'plan1' },
+    { id: '1.1.1', parentId: '1.1', order: 1, taskName: 'IR需求梳理', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-01-07', planId: 'plan1' },
+    { id: '1.1.2', parentId: '1.1', order: 2, taskName: 'SR需求拆分', status: '已完成', progress: 100, responsible: '李四', predecessor: '1.1.1', planStartDate: '2026-01-08', planEndDate: '2026-01-15', planId: 'plan1' },
+    { id: '1.2', parentId: '1', order: 2, taskName: '开发集成', status: '已完成', progress: 100, responsible: '王五', predecessor: '1.1', planStartDate: '2026-01-16', planEndDate: '2026-02-01', planId: 'plan1' },
+    { id: '2', order: 2, taskName: '16.3.031', status: '进行中', progress: 60, responsible: '李四', predecessor: '1', planStartDate: '2026-02-02', planEndDate: '2026-03-15', planId: 'plan1' },
+    { id: '2.1', parentId: '2', order: 1, taskName: '功能开发', status: '进行中', progress: 70, responsible: '李四', predecessor: '', planStartDate: '2026-02-02', planEndDate: '2026-02-28', planId: 'plan1' },
+    { id: '2.1.1', parentId: '2.1', order: 1, taskName: 'Camera模块', status: '已完成', progress: 100, responsible: '李四', predecessor: '', planStartDate: '2026-02-02', planEndDate: '2026-02-15', planId: 'plan1' },
+    { id: '2.1.2', parentId: '2.1', order: 2, taskName: 'Display模块', status: '进行中', progress: 40, responsible: '赵六', predecessor: '2.1.1', planStartDate: '2026-02-16', planEndDate: '2026-02-28', planId: 'plan1' },
+    { id: '2.2', parentId: '2', order: 2, taskName: '集成测试', status: '未开始', progress: 0, responsible: '王五', predecessor: '2.1', planStartDate: '2026-03-01', planEndDate: '2026-03-15', planId: 'plan1' },
+    { id: '3', order: 3, taskName: '16.3.032', status: '未开始', progress: 0, responsible: '王五', predecessor: '2', planStartDate: '2026-03-16', planEndDate: '2026-05-01', planId: 'plan1' },
+    // FR版本火车计划 - 三层结构 (plan2)
+    { id: '1', order: 1, taskName: '版本规划', status: '已完成', progress: 100, responsible: '赵六', predecessor: '', planStartDate: '2026-01-02', planEndDate: '2026-02-02', planId: 'plan2' },
+    { id: '1.1', parentId: '1', order: 1, taskName: '修改点收集', status: '已完成', progress: 100, responsible: '赵六', predecessor: '', planStartDate: '2026-01-02', planEndDate: '2026-01-20', planId: 'plan2' },
+    { id: '1.1.1', parentId: '1.1', order: 1, taskName: '需求变更评审', status: '已完成', progress: 100, responsible: '赵六', predecessor: '', planStartDate: '2026-01-02', planEndDate: '2026-01-10', planId: 'plan2' },
+    { id: '1.1.2', parentId: '1.1', order: 2, taskName: '修改点确认', status: '已完成', progress: 100, responsible: '孙七', predecessor: '1.1.1', planStartDate: '2026-01-11', planEndDate: '2026-01-20', planId: 'plan2' },
+    { id: '1.2', parentId: '1', order: 2, taskName: '版本计划制定', status: '已完成', progress: 100, responsible: '孙七', predecessor: '1.1', planStartDate: '2026-01-21', planEndDate: '2026-02-02', planId: 'plan2' },
+    { id: '2', order: 2, taskName: '版本开发', status: '进行中', progress: 50, responsible: '孙七', predecessor: '1', planStartDate: '2026-02-02', planEndDate: '2026-03-15', planId: 'plan2' },
+    { id: '2.1', parentId: '2', order: 1, taskName: 'MP分支入库', status: '进行中', progress: 60, responsible: '孙七', predecessor: '', planStartDate: '2026-02-02', planEndDate: '2026-03-01', planId: 'plan2' },
+    { id: '2.1.1', parentId: '2.1', order: 1, taskName: '代码合入', status: '已完成', progress: 100, responsible: '孙七', predecessor: '', planStartDate: '2026-02-02', planEndDate: '2026-02-15', planId: 'plan2' },
+    { id: '2.1.2', parentId: '2.1', order: 2, taskName: '编译验证', status: '进行中', progress: 30, responsible: '周八', predecessor: '2.1.1', planStartDate: '2026-02-16', planEndDate: '2026-03-01', planId: 'plan2' },
+    { id: '2.2', parentId: '2', order: 2, taskName: 'MR版本转测', status: '未开始', progress: 0, responsible: '周八', predecessor: '2.1', planStartDate: '2026-03-02', planEndDate: '2026-03-15', planId: 'plan2' },
+    { id: '3', order: 3, taskName: '版本测试', status: '未开始', progress: 0, responsible: '吴九', predecessor: '2', planStartDate: '2026-03-16', planEndDate: '2026-05-01', planId: 'plan2' },
+    { id: '3.1', parentId: '3', order: 1, taskName: 'MR版本测试', status: '未开始', progress: 0, responsible: '吴九', predecessor: '', planStartDate: '2026-03-16', planEndDate: '2026-05-01', planId: 'plan2' },
+    { id: '3.1.1', parentId: '3.1', order: 1, taskName: '冒烟测试', status: '未开始', progress: 0, responsible: '吴九', predecessor: '', planStartDate: '2026-03-16', planEndDate: '2026-03-25', planId: 'plan2' },
+    { id: '3.1.2', parentId: '3.1', order: 2, taskName: '回归测试', status: '未开始', progress: 0, responsible: '吴九', predecessor: '3.1.1', planStartDate: '2026-03-26', planEndDate: '2026-05-01', planId: 'plan2' },
+    // MR版本火车计划 (plan3)
+    { id: '1', order: 1, taskName: 'MR版本规划', status: '未开始', progress: 0, responsible: '周八', predecessor: '', planStartDate: '2026-03-01', planEndDate: '2026-03-15', planId: 'plan3' },
+    { id: '1.1', parentId: '1', order: 1, taskName: '版本需求整理', status: '未开始', progress: 0, responsible: '周八', predecessor: '', planStartDate: '2026-03-01', planEndDate: '2026-03-10', planId: 'plan3' },
+    { id: '1.2', parentId: '1', order: 2, taskName: '版本计划评审', status: '未开始', progress: 0, responsible: '周八', predecessor: '1.1', planStartDate: '2026-03-11', planEndDate: '2026-03-15', planId: 'plan3' },
+    { id: '2', order: 2, taskName: 'MR版本开发', status: '未开始', progress: 0, responsible: '吴九', predecessor: '1', planStartDate: '2026-03-16', planEndDate: '2026-04-15', planId: 'plan3' },
+    { id: '2.1', parentId: '2', order: 1, taskName: '功能修复', status: '未开始', progress: 0, responsible: '吴九', predecessor: '', planStartDate: '2026-03-16', planEndDate: '2026-04-01', planId: 'plan3' },
+    { id: '2.2', parentId: '2', order: 2, taskName: '版本集成', status: '未开始', progress: 0, responsible: '吴九', predecessor: '2.1', planStartDate: '2026-04-02', planEndDate: '2026-04-15', planId: 'plan3' },
   ])
   const [level2PlanMilestones, setLevel2PlanMilestones] = useState<string[]>([])
   const [createdLevel2Plans, setCreatedLevel2Plans] = useState<{id: string, name: string, type: string}[]>([
-    { id: 'plan1', name: 'FR版本火车计划', type: 'FR版本火车计划' },
-    { id: 'plan2', name: 'MR1版本火车计划', type: 'MR版本火车计划' },
-    { id: 'plan3', name: 'MR2版本火车计划', type: 'MR版本火车计划' },
+    { id: 'plan0', name: '需求开发计划', type: '需求开发计划' },
+    { id: 'plan1', name: '在研版本火车计划', type: '在研版本火车计划' },
+    { id: 'plan2', name: 'FR版本火车计划', type: 'FR版本火车计划' },
+    { id: 'plan3', name: 'MR1版本火车计划', type: 'MR版本火车计划' },
   ])  // 已创建的二级计划列表
-  const [activeLevel2Plan, setActiveLevel2Plan] = useState<string>('')  // 当前查看的二级计划
+  const [activeLevel2Plan, setActiveLevel2Plan] = useState<string>('plan0')  // 当前查看的二级计划
   
   // 项目空间-市场Tab
   const [selectedMarketTab, setSelectedMarketTab] = useState<string>('OP')
@@ -423,84 +462,165 @@ export default function Home() {
   })
 
   const handleAddSubTask = (parentId: string) => {
-    const parentTask = tasks.find(t => t.id === parentId)
+    // 判断当前操作的任务列表上下文
+    const isLevel2Context = (activeModule === 'config' && planLevel === 'level2') || (activeModule === 'projectSpace' && projectPlanLevel === 'level2')
+    const isLevel2TaskContext = isLevel2Context && activeLevel2Plan
+    const currentTasks = isLevel2TaskContext ? level2PlanTasks.filter(t => t.planId === activeLevel2Plan) : tasks
+    const parentTask = currentTasks.find(t => t.id === parentId)
     if (!parentTask) return
-    const siblingTasks = tasks.filter(t => t.parentId === parentId)
+    // 检查层级限制：一级计划最多2层，二级计划最多3层
+    const depth = getTaskDepth(parentTask, currentTasks)
+    const maxDepth = isLevel2Context ? 3 : 2
+    if (depth + 1 >= maxDepth) {
+      message.warning(`${isLevel2Context ? '二级' : '一级'}计划最多支持${maxDepth}层活动`)
+      return
+    }
+    const siblingTasks = currentTasks.filter(t => t.parentId === parentId)
     const newOrder = siblingTasks.length + 1
     const newId = `${parentId}.${newOrder}`
-    const newTask = { id: newId, parentId, order: newOrder, taskName: '新子任务', status: '未开始', progress: 0, responsible: '', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0, actualDays: 0 }
-    setTasks([...tasks, newTask])
+    const newTask: any = { id: newId, parentId, order: newOrder, taskName: '新子任务', status: '未开始', progress: 0, responsible: '', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0, actualDays: 0 }
+    if (isLevel2TaskContext && parentTask.planId) newTask.planId = parentTask.planId
+    // 在父任务及其最后一个子任务之后插入
+    const parentIndex = currentTasks.findIndex(t => t.id === parentId)
+    let insertIndex = parentIndex + 1
+    for (let i = parentIndex + 1; i < currentTasks.length; i++) {
+      if (currentTasks[i].parentId === parentId || (currentTasks[i].parentId && currentTasks.find(t => t.id === currentTasks[i].parentId)?.parentId === parentId)) {
+        insertIndex = i + 1
+      } else {
+        break
+      }
+    }
+    if (isLevel2TaskContext) {
+      const updatedTasks = [...currentTasks]
+      updatedTasks.splice(insertIndex, 0, newTask)
+      setLevel2PlanTasks(prev => [...prev.filter(t => t.planId !== activeLevel2Plan), ...updatedTasks])
+    } else {
+      const newTasks = [...tasks]
+      const globalIndex = tasks.findIndex(t => t.id === parentId)
+      let globalInsertIndex = globalIndex + 1
+      for (let i = globalIndex + 1; i < tasks.length; i++) {
+        if (tasks[i].parentId === parentId || (tasks[i].parentId && tasks.find(t => t.id === tasks[i].parentId)?.parentId === parentId)) {
+          globalInsertIndex = i + 1
+        } else {
+          break
+        }
+      }
+      newTasks.splice(globalInsertIndex, 0, newTask)
+      setTasks(newTasks)
+    }
     message.success(`已添加子任务: ${newId}`)
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id) return
-    
-    const oldIndex = tasks.findIndex(t => t.id === active.id)
-    const newIndex = tasks.findIndex(t => t.id === over.id)
-    
-    if (oldIndex !== -1 && newIndex !== -1) {
-      // 获取移动的任务
-      const movedTask = tasks[oldIndex]
-      const isParentTask = !movedTask.parentId
-      
-      let newTasks = [...tasks]
-      
-      if (isParentTask) {
-        // 移动父任务时包括其所有子任务
-        const childTasks = tasks.filter(t => t.parentId === movedTask.id)
-        const parentAndChildren = [movedTask, ...childTasks]
-        
-        // 从原位置移除
-        newTasks = newTasks.filter(t => t.id !== movedTask.id && !childTasks.some(c => c.id === t.id))
-        
-        // 找到目标位置
-        const overTask = tasks[newIndex]
-        const overIsParent = !overTask.parentId
-        
-        if (overIsParent) {
-          const overParentChildren = newTasks.filter(t => t.parentId === overTask.id)
-          const insertIndex = newTasks.findIndex(t => t.id === overTask.id) + overParentChildren.length
-          newTasks.splice(insertIndex, 0, ...parentAndChildren)
-        } else {
-          // 插入到子任务之前
-          const insertIndex = newTasks.findIndex(t => t.id === overTask.id)
-          newTasks.splice(insertIndex, 0, ...parentAndChildren)
-        }
-      } else {
-        // 移动子任务
-        newTasks = arrayMove(tasks, oldIndex, newIndex)
+
+    const activeId = String(active.id)
+    const overId = String(over.id)
+    const activeTask = tasks.find(t => t.id === activeId)
+    const overTask = tasks.find(t => t.id === overId)
+    if (!activeTask || !overTask) return
+
+    // 收集某个任务及其所有后代（递归）
+    const collectDescendants = (parentId: string, allTasks: any[]): any[] => {
+      const children = allTasks.filter(t => t.parentId === parentId)
+      const result: any[] = []
+      for (const child of children) {
+        result.push(child)
+        result.push(...collectDescendants(child.id, allTasks))
       }
-      
-      // 重新生成序号 - 保持层级结构
-      let parentCounter = 0
-      newTasks = newTasks.map(t => {
-        if (!t.parentId) {
-          // 一级任务
-          parentCounter++
-          const newId = String(parentCounter)
-          return { ...t, id: newId, order: parentCounter }
-        } else {
-          // 子任务 - 保持父任务ID
-          return t
-        }
-      })
-      
-      // 更新子任务的ID和parentId
-      newTasks = newTasks.map(t => {
-        if (t.parentId) {
-          const parentTask = newTasks.find(p => p.id === t.parentId)
-          if (parentTask) {
-            return { ...t, id: `${parentTask.id}.${t.order || 1}` }
-          }
-        }
-        return t
-      })
-      
-      setTasks(newTasks)
-      message.success('任务顺序已更新，序号已重新生成')
+      return result
     }
+
+    // 收集移动的任务块（任务本身 + 所有后代）
+    const descendants = collectDescendants(activeId, tasks)
+    const movedBlock = [activeTask, ...descendants]
+    const movedIds = new Set(movedBlock.map(t => t.id))
+
+    // 只允许同级拖拽（同一个 parentId）
+    if (activeTask.parentId !== overTask.parentId) {
+      message.warning('只能在同级任务之间拖动')
+      return
+    }
+
+    // 从列表中移除被拖动的块
+    const remaining = tasks.filter(t => !movedIds.has(t.id))
+
+    // 找到目标任务在剩余列表中的位置
+    const overIndex = remaining.findIndex(t => t.id === overId)
+    if (overIndex === -1) return
+
+    // 目标任务也可能有后代，需要插入到目标块之后
+    const overDescendants = collectDescendants(overId, remaining)
+    const insertAfterIndex = overIndex + overDescendants.length
+
+    // 判断移动方向：向下则插在目标块之后，向上则插在目标位置之前
+    const originalActiveIndex = tasks.findIndex(t => t.id === activeId)
+    const originalOverIndex = tasks.findIndex(t => t.id === overId)
+    const movingDown = originalActiveIndex < originalOverIndex
+
+    const insertIndex = movingDown ? insertAfterIndex + 1 : overIndex
+
+    // 插入被拖动的块
+    const newTasks = [...remaining]
+    newTasks.splice(insertIndex, 0, ...movedBlock)
+
+    // 重新生成所有层级的序号
+    const renumberTasks = (allTasks: any[]): any[] => {
+      const result = allTasks.map(t => ({ ...t }))
+      // 按parentId分组计数
+      const counterMap = new Map<string, number>()
+      // 存储旧ID到新ID的映射
+      const idMapping = new Map<string, string>()
+
+      // 第一遍：分配新序号给顶级任务
+      for (const task of result) {
+        if (!task.parentId) {
+          const count = (counterMap.get('root') || 0) + 1
+          counterMap.set('root', count)
+          const newId = String(count)
+          idMapping.set(task.id, newId)
+          task.id = newId
+          task.order = count
+        }
+      }
+
+      // 第二遍：分配新序号给二级任务
+      for (const task of result) {
+        if (task.parentId && !result.find(t => t.id === task.parentId)?.parentId) {
+          // 这是二级任务，其父是顶级任务
+          const newParentId = idMapping.get(task.parentId) || task.parentId
+          const key = `child_${newParentId}`
+          const count = (counterMap.get(key) || 0) + 1
+          counterMap.set(key, count)
+          const newId = `${newParentId}.${count}`
+          idMapping.set(task.id, newId)
+          task.parentId = newParentId
+          task.id = newId
+          task.order = count
+        }
+      }
+
+      // 第三遍：分配新序号给三级任务
+      for (const task of result) {
+        if (task.parentId && idMapping.has(task.parentId) && !idMapping.has(task.id)) {
+          const newParentId = idMapping.get(task.parentId) || task.parentId
+          const key = `child_${newParentId}`
+          const count = (counterMap.get(key) || 0) + 1
+          counterMap.set(key, count)
+          const newId = `${newParentId}.${count}`
+          idMapping.set(task.id, newId)
+          task.parentId = newParentId
+          task.id = newId
+          task.order = count
+        }
+      }
+
+      return result
+    }
+
+    setTasks(renumberTasks(newTasks))
+    message.success('任务顺序已更新，序号已重新生成')
   }
 
   // 进度编辑
@@ -769,13 +889,40 @@ export default function Home() {
     )
   }
 
+  // 计算任务层级深度
+  const getTaskDepth = (task: any, allTasks: any[]): number => {
+    if (!task.parentId) return 0
+    const parent = allTasks.find(t => t.id === task.parentId)
+    if (!parent) return 1
+    return 1 + getTaskDepth(parent, allTasks)
+  }
+
   const renderTaskTable = (customTasks?: any[]) => {
+    const isLevel2Custom = !!customTasks
     const tableTasks = customTasks || tasks
-    const flatTasks = tableTasks.map(task => ({ ...task, indentLevel: task.parentId ? (task.parentId.split('.').length - 1) : 0 }))
+    const currentSetTasks = isLevel2Custom ? (newTasks: any[]) => {
+      // 更新level2PlanTasks中对应planId的任务
+      const planId = customTasks?.[0]?.planId
+      if (planId) {
+        setLevel2PlanTasks(prev => [...prev.filter(t => t.planId !== planId), ...newTasks])
+      }
+    } : setTasks
+    const flatTasks = tableTasks.map(task => ({ ...task, indentLevel: getTaskDepth(task, tableTasks) }))
     const getColumns = (): ColumnsType<any> => {
       const cols: ColumnsType<any> = []
-      if (visibleColumns.includes('id')) cols.push({ title: '序号', dataIndex: 'id', key: 'id', width: 80, fixed: 'left', render: (id: string, record: any) => (<Space>{isEditMode && !record.parentId && <HolderOutlined style={{ cursor: 'grab', color: '#999' }} />}<span style={{ fontWeight: record.parentId ? 400 : 500, paddingLeft: record.indentLevel * 16 }}>{id}</span>{isEditMode && !record.parentId && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} onClick={() => handleAddSubTask(record.id)} /></Tooltip>}</Space>) })
-      if (visibleColumns.includes('taskName')) cols.push({ title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 180, render: (name: string, record: any) => (isEditMode ? <Input defaultValue={name} style={{ fontWeight: record.parentId ? 400 : 500 }} /> : (record.parentId ? <span style={{ paddingLeft: record.indentLevel * 16, color: '#666' }}>└─ {name}</span> : name)) })
+      if (visibleColumns.includes('id')) cols.push({ title: '序号', dataIndex: 'id', key: 'id', width: 120, fixed: 'left', render: (id: string, record: any) => {
+        const depth = record.indentLevel || 0
+        // 判断当前是否在二级计划模式（配置中心或项目空间）
+        const isLevel2Mode = (activeModule === 'config' && planLevel === 'level2') || (activeModule === 'projectSpace' && projectPlanLevel === 'level2')
+        const maxDepth = isLevel2Mode ? 3 : 2
+        const canAddChild = isEditMode && depth < maxDepth - 1
+        return (<Space style={{ paddingLeft: depth * 20 }}>{isEditMode && <HolderOutlined style={{ cursor: 'grab', color: '#999' }} />}{canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} onClick={() => handleAddSubTask(record.id)} /></Tooltip>}<span style={{ fontWeight: depth === 0 ? 600 : depth === 1 ? 500 : 400 }}>{id}</span></Space>)
+      } })
+      if (visibleColumns.includes('taskName')) cols.push({ title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 200, render: (name: string, record: any) => {
+        const depth = record.indentLevel || 0
+        if (isEditMode) return <Input defaultValue={name} style={{ fontWeight: depth === 0 ? 600 : 400, marginLeft: depth * 20 }} />
+        return <span style={{ paddingLeft: depth * 20, color: depth > 0 ? '#555' : '#000', fontWeight: depth === 0 ? 600 : depth === 1 ? 500 : 400 }}>{depth > 0 ? '├─ ' : ''}{name}</span>
+      } })
       if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string) => isEditMode ? <Input defaultValue={val} size="small" /> : val })
       if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string) => isEditMode ? <Input defaultValue={val} size="small" placeholder="如: 1.1" /> : val })
       if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 120 })
@@ -786,21 +933,114 @@ export default function Home() {
       if (visibleColumns.includes('actualDays')) cols.push({ title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (val: number) => val > 0 ? `${val}天` : '-' })
       if (visibleColumns.includes('status')) cols.push({ title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={s === '已完成' ? 'success' : s === '进行中' ? 'processing' : 'default'}>{s}</Tag> })
       if (visibleColumns.includes('progress')) cols.push({ title: '进度', dataIndex: 'progress', key: 'progress', width: 120, render: (p: number) => <Progress percent={p} size="small" status={p === 100 ? 'success' : 'active'} /> })
-      cols.push({ title: '操作', key: 'action', width: 80, fixed: 'right', render: (_: any, record: any) => (<Popconfirm title="确认删除" description="是否确认删除？" onConfirm={() => message.success(`删除任务: ${record.id}`)} okText="确认" cancelText="取消"><Button type="text" icon={<DeleteOutlined />} size="small" danger /></Popconfirm>) })
+      if (isEditMode) cols.push({ title: '操作', key: 'action', width: 80, fixed: 'right', render: (_: any, record: any) => (<Popconfirm title="确认删除" description="是否确认删除？" onConfirm={() => { const filtered = tableTasks.filter(t => t.id !== record.id && t.parentId !== record.id && !(t.parentId && tableTasks.find((p: any) => p.id === t.parentId)?.parentId === record.id)); currentSetTasks(filtered); message.success(`已删除任务: ${record.id}`) }} okText="确认" cancelText="取消"><Button type="text" icon={<DeleteOutlined />} size="small" danger /></Popconfirm>) })
       return cols
     }
+
+    // 表格内拖拽处理器（使用当前上下文的任务列表）
+    const handleTableDragEnd = (event: DragEndEvent) => {
+      const { active, over } = event
+      if (!over || active.id === over.id) return
+
+      const activeId = String(active.id)
+      const overId = String(over.id)
+      const activeTask = tableTasks.find(t => t.id === activeId)
+      const overTask = tableTasks.find(t => t.id === overId)
+      if (!activeTask || !overTask) return
+
+      const collectDescendants = (parentId: string, allTasks: any[]): any[] => {
+        const children = allTasks.filter(t => t.parentId === parentId)
+        const result: any[] = []
+        for (const child of children) {
+          result.push(child)
+          result.push(...collectDescendants(child.id, allTasks))
+        }
+        return result
+      }
+
+      const descendants = collectDescendants(activeId, tableTasks)
+      const movedBlock = [activeTask, ...descendants]
+      const movedIds = new Set(movedBlock.map(t => t.id))
+
+      if (activeTask.parentId !== overTask.parentId) {
+        message.warning('只能在同级任务之间拖动')
+        return
+      }
+
+      const remaining = tableTasks.filter(t => !movedIds.has(t.id))
+      const overIndex = remaining.findIndex(t => t.id === overId)
+      if (overIndex === -1) return
+
+      const overDescendants = collectDescendants(overId, remaining)
+      const insertAfterIndex = overIndex + overDescendants.length
+
+      const originalActiveIndex = tableTasks.findIndex(t => t.id === activeId)
+      const originalOverIndex = tableTasks.findIndex(t => t.id === overId)
+      const movingDown = originalActiveIndex < originalOverIndex
+      const insertIndex = movingDown ? insertAfterIndex + 1 : overIndex
+
+      const newTasks = [...remaining]
+      newTasks.splice(insertIndex, 0, ...movedBlock)
+
+      // 重新生成所有层级的序号
+      const result = newTasks.map(t => ({ ...t }))
+      const counterMap = new Map<string, number>()
+      const idMapping = new Map<string, string>()
+
+      for (const task of result) {
+        if (!task.parentId) {
+          const count = (counterMap.get('root') || 0) + 1
+          counterMap.set('root', count)
+          const newId = String(count)
+          idMapping.set(task.id, newId)
+          task.id = newId
+          task.order = count
+        }
+      }
+      for (const task of result) {
+        if (task.parentId && idMapping.has(task.parentId)) {
+          const newParentId = idMapping.get(task.parentId)!
+          const key = `child_${newParentId}`
+          const count = (counterMap.get(key) || 0) + 1
+          counterMap.set(key, count)
+          const newId = `${newParentId}.${count}`
+          idMapping.set(task.id, newId)
+          task.parentId = newParentId
+          task.id = newId
+          task.order = count
+        }
+      }
+      for (const task of result) {
+        if (task.parentId && !idMapping.has(task.id) && idMapping.has(task.parentId)) {
+          const newParentId = idMapping.get(task.parentId)!
+          const key = `child_${newParentId}`
+          const count = (counterMap.get(key) || 0) + 1
+          counterMap.set(key, count)
+          const newId = `${newParentId}.${count}`
+          idMapping.set(task.id, newId)
+          task.parentId = newParentId
+          task.id = newId
+          task.order = count
+        }
+      }
+
+      currentSetTasks(result)
+      message.success('任务顺序已更新，序号已重新生成')
+    }
+
     const TableComponents = isEditMode ? { body: { row: SortableRow } } : undefined
     return (
       <div>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}><SortableContext items={filteredTasks.filter(t => !t.parentId).map(t => t.id)} strategy={verticalListSortingStrategy}><Table dataSource={flatTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} /></SortableContext></DndContext>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTableDragEnd}><SortableContext items={flatTasks.map(t => t.id)} strategy={verticalListSortingStrategy}><Table dataSource={flatTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} /></SortableContext></DndContext>
         {isEditMode && (
           <div style={{ marginTop: 16, textAlign: 'center' }}>
             <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%' }} onClick={() => {
-              const parentTasks = tasks.filter(t => !t.parentId)
+              const parentTasks = tableTasks.filter(t => !t.parentId)
               const maxOrder = parentTasks.length > 0 ? Math.max(...parentTasks.map(t => parseInt(t.id) || t.order)) : 0
               const newId = String(maxOrder + 1)
-              const newTask = { id: newId, order: maxOrder + 1, taskName: '新活动', status: '未开始', progress: 0, responsible: '', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0, actualDays: 0 }
-              setTasks([...tasks, newTask])
+              const newTask: any = { id: newId, order: maxOrder + 1, taskName: '新活动', status: '未开始', progress: 0, responsible: '', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0, actualDays: 0 }
+              if (isLevel2Custom && customTasks?.[0]?.planId) newTask.planId = customTasks[0].planId
+              currentSetTasks([...tableTasks, newTask])
               message.success(`已添加一级活动: ${newId}`)
             }}>添加新活动</Button>
           </div>
@@ -1074,6 +1314,101 @@ export default function Home() {
     )
   }
 
+  // 项目空间 - 需求开发计划（IR/SR视图）
+  const renderRequirementDevelopmentPlan = () => {
+    const filteredIR = IR_REQUIREMENTS.filter(r => {
+      if (!searchText) return true
+      const s = searchText.toLowerCase()
+      return r.domain?.toLowerCase().includes(s) || r.irNo?.toLowerCase().includes(s) || r.irTitle?.toLowerCase().includes(s) || r.irStatus?.toLowerCase().includes(s) || r.priority?.toLowerCase().includes(s)
+    })
+
+    const filteredSR = SR_REQUIREMENTS.filter(r => {
+      if (!searchText) return true
+      const s = searchText.toLowerCase()
+      return r.srNo?.toLowerCase().includes(s) || r.srTitle?.toLowerCase().includes(s) || r.relatedIR?.toLowerCase().includes(s) || r.devDept?.toLowerCase().includes(s) || r.srStatus?.toLowerCase().includes(s)
+    })
+
+    const irColumns = [
+      { title: '序号', dataIndex: 'id', key: 'id', width: 60 },
+      { title: '领域', dataIndex: 'domain', key: 'domain', width: 80 },
+      { title: 'IR编号', dataIndex: 'irNo', key: 'irNo', width: 120 },
+      { title: 'IR标题', dataIndex: 'irTitle', key: 'irTitle', width: 200 },
+      { title: '优先级', dataIndex: 'priority', key: 'priority', width: 80, render: (p: string) => <Tag color={p === '高' ? 'red' : p === '中' ? 'orange' : 'blue'}>{p}</Tag> },
+      { title: 'IR状态', dataIndex: 'irStatus', key: 'irStatus', width: 100, render: (s: string) => <Tag color={s === '已验收' ? 'success' : s === '测试中' ? 'processing' : s === '开发中' ? 'warning' : 'default'}>{s}</Tag> },
+      { title: '需求测试计划开始', dataIndex: 'testPlanStart', key: 'testPlanStart', width: 140 },
+      { title: '需求测试计划完成', dataIndex: 'testPlanEnd', key: 'testPlanEnd', width: 140 },
+      { title: '需求验收计划开始', dataIndex: 'acceptPlanStart', key: 'acceptPlanStart', width: 140 },
+      { title: '需求验收计划完成', dataIndex: 'acceptPlanEnd', key: 'acceptPlanEnd', width: 140 },
+    ]
+
+    const srColumns = [
+      { title: '序号', dataIndex: 'id', key: 'id', width: 60 },
+      { title: 'SR编号', dataIndex: 'srNo', key: 'srNo', width: 120 },
+      { title: 'SR标题', dataIndex: 'srTitle', key: 'srTitle', width: 200 },
+      { title: '关联IR', dataIndex: 'relatedIR', key: 'relatedIR', width: 120 },
+      { title: '开发部门', dataIndex: 'devDept', key: 'devDept', width: 100 },
+      { title: 'SR状态', dataIndex: 'srStatus', key: 'srStatus', width: 100, render: (s: string) => <Tag color={s === '已验收' ? 'success' : s === '已转测' ? 'processing' : s === '测试中' ? 'cyan' : s === '开发中' ? 'warning' : 'default'}>{s}</Tag> },
+      { title: '计划转测版本', dataIndex: 'planTestVersion', key: 'planTestVersion', width: 120 },
+      { title: '实际转测版本', dataIndex: 'actualTestVersion', key: 'actualTestVersion', width: 120, render: (v: string) => v || '-' },
+      { title: '需求测试计划开始', dataIndex: 'testPlanStart', key: 'testPlanStart', width: 140 },
+      { title: '需求测试计划完成', dataIndex: 'testPlanEnd', key: 'testPlanEnd', width: 140 },
+      { title: '需求验收计划开始', dataIndex: 'acceptPlanStart', key: 'acceptPlanStart', width: 140 },
+      { title: '需求验收计划完成', dataIndex: 'acceptPlanEnd', key: 'acceptPlanEnd', width: 140 },
+    ]
+
+    return (
+      <Card>
+        <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+          <Col>
+            <Tabs activeKey={irSrView} onChange={(k) => setIrSrView(k as 'ir' | 'sr')} items={[
+              { key: 'ir', label: 'IR需求' },
+              { key: 'sr', label: 'SR需求' },
+            ]} />
+          </Col>
+          <Col>
+            <Space>
+              <Input placeholder="搜索..." prefix={<SearchOutlined />} style={{ width: 200 }} onChange={(e) => setSearchText(e.target.value)} />
+              <Button icon={<AppstoreOutlined />} onClick={() => setShowColumnModal(true)}>自定义列</Button>
+              <Button
+                icon={projectPlanViewMode === 'table' ? <BarChartOutlined /> : <AppstoreOutlined />}
+                onClick={() => setProjectPlanViewMode(projectPlanViewMode === 'table' ? 'gantt' : 'table')}
+              >
+                {projectPlanViewMode === 'table' ? '甘特图' : '表格'}
+              </Button>
+            </Space>
+          </Col>
+        </Row>
+        {irSrView === 'ir' ? (
+          projectPlanViewMode === 'table' ? (
+            <Table dataSource={filteredIR} columns={irColumns} rowKey="id" pagination={false} scroll={{ x: 1200 }} />
+          ) : (
+            <DHTMLXGantt
+              tasks={filteredIR.map(r => ({
+                id: r.id, taskName: `${r.irNo} ${r.irTitle}`, planStartDate: r.testPlanStart, planEndDate: r.testPlanEnd,
+                estimatedDays: 10, progress: r.irStatus === '已验收' ? 100 : r.irStatus === '测试中' ? 60 : r.irStatus === '开发中' ? 30 : 0,
+                responsible: r.domain, status: r.irStatus
+              }))}
+              readOnly
+            />
+          )
+        ) : (
+          projectPlanViewMode === 'table' ? (
+            <Table dataSource={filteredSR} columns={srColumns} rowKey="id" pagination={false} scroll={{ x: 1500 }} />
+          ) : (
+            <DHTMLXGantt
+              tasks={filteredSR.map(r => ({
+                id: r.id, taskName: `${r.srNo} ${r.srTitle}`, planStartDate: r.testPlanStart, planEndDate: r.testPlanEnd,
+                estimatedDays: 10, progress: r.srStatus === '已验收' ? 100 : r.srStatus === '已转测' ? 80 : r.srStatus === '测试中' ? 50 : r.srStatus === '开发中' ? 30 : 0,
+                responsible: r.devDept, status: r.srStatus
+              }))}
+              readOnly
+            />
+          )
+        )}
+      </Card>
+    )
+  }
+
   // 项目空间 - 计划模块
   const renderProjectPlan = () => {
     return (
@@ -1113,19 +1448,31 @@ export default function Home() {
           </Row>
         )}
         
-        {projectPlanLevel !== 'overview' && (
+        {/* 需求开发计划 - 特殊展示 */}
+        {projectPlanLevel === 'level2' && activeLevel2Plan === 'plan0' && renderRequirementDevelopmentPlan()}
+
+        {/* 非需求开发计划的二级计划 + 一级计划：版本管理 + 表格/甘特图 */}
+        {projectPlanLevel !== 'overview' && !(projectPlanLevel === 'level2' && activeLevel2Plan === 'plan0') && (
         <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
           <Col>
-            <Space>
-              <span style={{ color: '#666' }}>版本:</span>
-              <Select value={currentVersion} onChange={(val) => { setCurrentVersion(val); setIsEditMode(false) }} style={{ width: 150 }}>
-                {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}
-              </Select>
-              {/* 操作按钮：创建修订/编辑/发布/版本对比 */}
-              {!hasDraftVersion && <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateRevision}>创建修订</Button>}
-              {isCurrentDraft && <><Button icon={<EditOutlined />} onClick={() => setIsEditMode(true)}>编辑</Button><Button type="primary" icon={<SaveOutlined />} onClick={handlePublish}>发布</Button></>}
-              <Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>版本对比</Button>
-            </Space>
+            {isEditMode ? (
+              <Space>
+                <Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{currentVersionData?.versionNo}({currentVersionData?.status})</Tag>
+                <Button type="primary" icon={<SaveOutlined />} onClick={() => { setIsEditMode(false); message.success('保存成功') }}>保存</Button>
+                <Button onClick={() => { setIsEditMode(false); message.info('已取消编辑') }}>取消</Button>
+              </Space>
+            ) : (
+              <Space>
+                <span style={{ color: '#666' }}>版本:</span>
+                <Select value={currentVersion} onChange={(val) => { setCurrentVersion(val); setIsEditMode(false) }} style={{ width: 150 }}>
+                  {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}
+                </Select>
+                {!hasDraftVersion && <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateRevision}>创建修订</Button>}
+                {isCurrentDraft && <Button icon={<EditOutlined />} onClick={() => setIsEditMode(true)}>编辑</Button>}
+                {isCurrentDraft && <Button type="primary" icon={<SaveOutlined />} onClick={handlePublish}>发布</Button>}
+                <Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>版本对比</Button>
+              </Space>
+            )}
           </Col>
           <Col>
             <Space>
@@ -1142,9 +1489,13 @@ export default function Home() {
         </Row>
         )}
 
-        {/* 表格或甘特图内容 */}
-
-        {projectPlanLevel !== 'overview' && (projectPlanViewMode === 'gantt' ? renderGanttChart() : renderTaskTable())}
+        {/* 表格或甘特图内容 - 二级计划按planId过滤 */}
+        {projectPlanLevel === 'level1' && (projectPlanViewMode === 'gantt' ? renderGanttChart() : renderTaskTable())}
+        {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan && (
+          projectPlanViewMode === 'gantt'
+            ? renderGanttChart(level2PlanTasks.filter(t => t.planId === activeLevel2Plan))
+            : renderTaskTable(level2PlanTasks.filter(t => t.planId === activeLevel2Plan))
+        )}
       </div>
     )
   }
