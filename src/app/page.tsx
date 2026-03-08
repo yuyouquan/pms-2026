@@ -35,6 +35,88 @@ import {
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
 import { gantt } from 'dhtmlx-gantt'
 
+// 全局表格和交互样式
+const globalStyles = `
+  .pms-table .ant-table-thead > tr > th {
+    background: #fafbfc !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    color: #595959 !important;
+    border-bottom: 2px solid #f0f0f0 !important;
+    padding: 10px 12px !important;
+  }
+  .pms-table .ant-table-tbody > tr > td {
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+    vertical-align: middle !important;
+    transition: background 0.15s !important;
+  }
+  .pms-table .ant-table-tbody > tr:hover > td {
+    background: #e6f4ff !important;
+  }
+  .pms-table .ant-table-tbody > tr:nth-child(even) > td {
+    background: #fafbfc;
+  }
+  .pms-table .ant-table-tbody > tr:nth-child(even):hover > td {
+    background: #e6f4ff !important;
+  }
+  .pms-table-edit .ant-table-tbody > tr > td {
+    background: #fffbe6 !important;
+  }
+  .pms-table-edit .ant-table-tbody > tr:hover > td {
+    background: #fff1b8 !important;
+  }
+  .pms-table-edit .ant-table-tbody > tr:nth-child(even) > td {
+    background: #fffef0 !important;
+  }
+  .pms-table-edit .ant-table-tbody > tr:nth-child(even):hover > td {
+    background: #fff1b8 !important;
+  }
+  .pms-edit-input {
+    border-color: #d9d9d9 !important;
+    border-radius: 4px !important;
+    transition: all 0.2s !important;
+  }
+  .pms-edit-input:focus, .pms-edit-input:hover {
+    border-color: #1890ff !important;
+    box-shadow: 0 0 0 2px rgba(24,144,255,0.1) !important;
+  }
+  .pms-card-hover {
+    transition: all 0.2s ease !important;
+  }
+  .pms-card-hover:hover {
+    border-color: #d9d9d9 !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
+    transform: translateY(-2px);
+  }
+  .pms-sidebar .ant-menu-item {
+    border-radius: 6px !important;
+    margin: 2px 8px !important;
+  }
+  .pms-sidebar .ant-menu-item-selected {
+    background: #e6f4ff !important;
+    font-weight: 500 !important;
+  }
+  .pms-modal .ant-modal-header {
+    padding: 16px 24px !important;
+    border-bottom: 1px solid #f0f0f0 !important;
+    background: #fafbfc !important;
+    border-radius: 8px 8px 0 0 !important;
+  }
+  .pms-modal .ant-modal-content {
+    border-radius: 8px !important;
+    overflow: hidden !important;
+  }
+  .pms-modal .ant-modal-footer {
+    padding: 12px 24px !important;
+    border-top: 1px solid #f0f0f0 !important;
+    background: #fafbfc !important;
+  }
+  .pms-modal .ant-modal-footer .ant-btn {
+    border-radius: 6px !important;
+  }
+`
+
 // DHTMLX Gantt组件
 function DHTMLXGantt({ tasks, onTaskClick, readOnly = false }: { tasks: any[], onTaskClick?: (task: any) => void, readOnly?: boolean }) {
   const ganttContainer = useRef<HTMLDivElement>(null)
@@ -790,7 +872,8 @@ export default function Home() {
     return (
       <Card
         hoverable
-        style={{ borderRadius: 8, border: '1px solid #f0f0f0', transition: 'all 0.2s' }}
+        className="pms-card-hover"
+        style={{ borderRadius: 8, border: '1px solid #f0f0f0' }}
         styles={{ body: { padding: '16px 20px' } }}
         onClick={() => { setSelectedProject(project); setActiveModule('projectSpace') }}
       >
@@ -948,15 +1031,21 @@ export default function Home() {
   const renderGanttChart = (customTasks?: any[]) => {
     const ganttTasks = customTasks || filteredTasks
     return (
-      <Card>
-        <DHTMLXGantt 
-          tasks={ganttTasks} 
+      <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
+        {!isEditMode && (
+          <div style={{ padding: '8px 16px', background: '#fafbfc', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <BarChartOutlined style={{ color: '#1890ff', fontSize: 13 }} />
+            <span style={{ fontSize: 12, color: '#8c8c8c' }}>甘特图视图 · 只读模式</span>
+          </div>
+        )}
+        <DHTMLXGantt
+          tasks={ganttTasks}
           onTaskClick={(task) => {
             message.info(`点击任务: ${task.text}`)
           }}
           readOnly={!isEditMode}
         />
-      </Card>
+      </div>
     )
   }
 
@@ -981,29 +1070,45 @@ export default function Home() {
     const flatTasks = tableTasks.map(task => ({ ...task, indentLevel: getTaskDepth(task, tableTasks) }))
     const getColumns = (): ColumnsType<any> => {
       const cols: ColumnsType<any> = []
-      if (visibleColumns.includes('id')) cols.push({ title: '序号', dataIndex: 'id', key: 'id', width: 120, fixed: 'left', render: (id: string, record: any) => {
+      if (visibleColumns.includes('id')) cols.push({ title: '序号', dataIndex: 'id', key: 'id', width: 130, fixed: 'left', render: (id: string, record: any) => {
         const depth = record.indentLevel || 0
         const isLevel2Mode = (activeModule === 'config' && planLevel === 'level2') || (activeModule === 'projectSpace' && projectPlanLevel === 'level2')
         const maxDepth = isLevel2Mode ? 3 : 2
         const canAddChild = isEditMode && depth < maxDepth - 1
-        return (<Space style={{ paddingLeft: depth * 20 }}>{isEditMode && <DragHandle />}{canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); handleAddSubTask(record.id) }} /></Tooltip>}<span style={{ fontWeight: depth === 0 ? 600 : depth === 1 ? 500 : 400 }}>{id}</span></Space>)
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: depth * 20 }}>
+            {isEditMode && <DragHandle />}
+            {canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} style={{ color: '#1890ff' }} onClick={(e) => { e.stopPropagation(); handleAddSubTask(record.id) }} /></Tooltip>}
+            <span style={{ fontWeight: depth === 0 ? 600 : 500, color: depth === 0 ? '#262626' : '#595959', fontSize: 13 }}>{id}</span>
+          </div>
+        )
       } })
-      if (visibleColumns.includes('taskName')) cols.push({ title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 200, render: (name: string, record: any) => {
+      if (visibleColumns.includes('taskName')) cols.push({ title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 220, render: (name: string, record: any) => {
         const depth = record.indentLevel || 0
-        if (isEditMode) return <Input value={name} style={{ fontWeight: depth === 0 ? 600 : 400 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, taskName: e.target.value } : t); currentSetTasks(updated) }} />
-        return <span style={{ paddingLeft: depth * 20, color: depth > 0 ? '#555' : '#000', fontWeight: depth === 0 ? 600 : depth === 1 ? 500 : 400 }}>{depth > 0 ? '├─ ' : ''}{name}</span>
+        if (isEditMode) return <Input className="pms-edit-input" value={name} size="small" style={{ fontWeight: depth === 0 ? 600 : 400 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, taskName: e.target.value } : t); currentSetTasks(updated) }} />
+        return (
+          <div style={{ paddingLeft: depth * 16, display: 'flex', alignItems: 'center', gap: 4 }}>
+            {depth > 0 && <span style={{ color: '#d9d9d9', fontSize: 11, flexShrink: 0 }}>{depth === 1 ? '├' : '└'}</span>}
+            <span style={{ color: depth === 0 ? '#262626' : depth === 1 ? '#595959' : '#8c8c8c', fontWeight: depth === 0 ? 600 : 400 }}>{name}</span>
+          </div>
+        )
       } })
-      if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Input value={val} size="small" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : val })
-      if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : val })
-      if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 120, render: (val: string, record: any) => isEditMode ? <Input value={val} size="small" placeholder="YYYY-MM-DD" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planStartDate: e.target.value } : t); currentSetTasks(updated) }} /> : val })
-      if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 120, render: (val: string, record: any) => isEditMode ? <Input value={val} size="small" placeholder="YYYY-MM-DD" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planEndDate: e.target.value } : t); currentSetTasks(updated) }} /> : val })
-      if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isEditMode ? <Input value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : `${val}天` })
-      if (visibleColumns.includes('actualStartDate')) cols.push({ title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 120 })
-      if (visibleColumns.includes('actualEndDate')) cols.push({ title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 120 })
-      if (visibleColumns.includes('actualDays')) cols.push({ title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (val: number) => val > 0 ? `${val}天` : '-' })
-      if (visibleColumns.includes('status')) cols.push({ title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={s === '已完成' ? 'success' : s === '进行中' ? 'processing' : 'default'}>{s}</Tag> })
-      if (visibleColumns.includes('progress')) cols.push({ title: '进度', dataIndex: 'progress', key: 'progress', width: 120, render: (p: number) => <Progress percent={p} size="small" status={p === 100 ? 'success' : 'active'} /> })
-      if (isEditMode) cols.push({ title: '操作', key: 'action', width: 80, fixed: 'right', render: (_: any, record: any) => (<Popconfirm title="确认删除" description="是否确认删除？" onConfirm={() => { const filtered = tableTasks.filter(t => t.id !== record.id && t.parentId !== record.id && !(t.parentId && tableTasks.find((p: any) => p.id === t.parentId)?.parentId === record.id)); currentSetTasks(filtered); message.success(`已删除任务: ${record.id}`) }} okText="确认" cancelText="取消"><Button type="text" icon={<DeleteOutlined />} size="small" danger /></Popconfirm>) })
+      if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Space size={4}><Avatar size={18} style={{ background: '#1890ff', fontSize: 10 }}>{val[0]}</Avatar><span style={{ fontSize: 13 }}>{val}</span></Space> : <span style={{ color: '#d9d9d9' }}>-</span>) })
+      if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#d9d9d9' }}>-</span>) })
+      if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 120, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="YYYY-MM-DD" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planStartDate: e.target.value } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
+      if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 120, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="YYYY-MM-DD" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planEndDate: e.target.value } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
+      if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val}天</span> })
+      if (visibleColumns.includes('actualStartDate')) cols.push({ title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 120, render: (val: string) => <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
+      if (visibleColumns.includes('actualEndDate')) cols.push({ title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 120, render: (val: string) => <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
+      if (visibleColumns.includes('actualDays')) cols.push({ title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (val: number) => <span style={{ fontSize: 12, color: '#595959' }}>{val > 0 ? `${val}天` : '-'}</span> })
+      if (visibleColumns.includes('status')) cols.push({ title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={s === '已完成' ? 'success' : s === '进行中' ? 'processing' : 'default'} style={{ borderRadius: 4, fontSize: 12 }}>{s}</Tag> })
+      if (visibleColumns.includes('progress')) cols.push({ title: '进度', dataIndex: 'progress', key: 'progress', width: 130, render: (p: number) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Progress percent={p} size="small" showInfo={false} strokeColor={p === 100 ? '#52c41a' : '#1890ff'} style={{ flex: 1, marginBottom: 0 }} />
+          <span style={{ fontSize: 11, color: p === 100 ? '#52c41a' : '#595959', fontWeight: 500, minWidth: 32 }}>{p}%</span>
+        </div>
+      ) })
+      if (isEditMode) cols.push({ title: '操作', key: 'action', width: 60, fixed: 'right', render: (_: any, record: any) => (<Popconfirm title="确认删除" description={`删除 "${record.taskName}" 及其子任务？`} onConfirm={() => { const filtered = tableTasks.filter(t => t.id !== record.id && t.parentId !== record.id && !(t.parentId && tableTasks.find((p: any) => p.id === t.parentId)?.parentId === record.id)); currentSetTasks(filtered); message.success(`已删除任务: ${record.id}`) }} okText="确认" cancelText="取消"><Button type="text" icon={<DeleteOutlined />} size="small" danger style={{ borderRadius: 4 }} /></Popconfirm>) })
       return cols
     }
 
@@ -1099,12 +1204,20 @@ export default function Home() {
     }
 
     const TableComponents = isEditMode ? { body: { row: SortableRow } } : undefined
+    const tableClassName = `pms-table ${isEditMode ? 'pms-table-edit' : ''}`
     return (
       <div>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTableDragEnd}><SortableContext items={flatTasks.map(t => t.id)} strategy={verticalListSortingStrategy}><Table dataSource={flatTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} /></SortableContext></DndContext>
         {isEditMode && (
-          <div style={{ marginTop: 16, textAlign: 'center' }}>
-            <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%' }} onClick={() => {
+          <div style={{ padding: '8px 16px', background: 'linear-gradient(90deg, #fffbe6, #fff7cc)', borderBottom: '1px solid #ffe58f', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <EditOutlined style={{ color: '#faad14', fontSize: 14 }} />
+            <span style={{ fontSize: 13, color: '#ad6800', fontWeight: 500 }}>编辑模式</span>
+            <span style={{ fontSize: 12, color: '#ad8b00' }}>- 拖拽手柄排序，点击单元格编辑，完成后点击保存</span>
+          </div>
+        )}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTableDragEnd}><SortableContext items={flatTasks.map(t => t.id)} strategy={verticalListSortingStrategy}><Table className={tableClassName} dataSource={flatTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} size="middle" /></SortableContext></DndContext>
+        {isEditMode && (
+          <div style={{ padding: '12px 16px', borderTop: '1px solid #f0f0f0', background: '#fafbfc' }}>
+            <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%', borderRadius: 6, height: 36 }} onClick={() => {
               const parentTasks = tableTasks.filter(t => !t.parentId)
               const maxOrder = parentTasks.length > 0 ? Math.max(...parentTasks.map(t => parseInt(t.id) || t.order)) : 0
               const newId = String(maxOrder + 1)
@@ -1237,7 +1350,7 @@ export default function Home() {
 
   const renderVersionCompareResult = () => {
     if (compareResult.length === 0) {
-      return <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>请选择两个版本点击"开始对比"</div>
+      return <div style={{ textAlign: 'center', padding: 32, color: '#bfbfbf' }}><HistoryOutlined style={{ fontSize: 24, display: 'block', marginBottom: 8 }} />请选择两个版本点击"开始对比"</div>
     }
     
     const getColor = (type: string) => {
@@ -1278,8 +1391,8 @@ export default function Home() {
   // 项目空间 - 需求模块
   const renderProjectRequirements = () => {
     return (
-      <Card>
-        <Empty description="该模块开发中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      <Card style={{ borderRadius: 8, textAlign: 'center', padding: '48px 0' }}>
+        <Empty description={<span style={{ color: '#8c8c8c' }}>需求模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
       </Card>
     )
   }
@@ -1716,8 +1829,8 @@ export default function Home() {
   // 项目空间 - 概况模块
   const renderProjectOverview = () => {
     return (
-      <Card>
-        <Empty description="该模块开发中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      <Card style={{ borderRadius: 8, textAlign: 'center', padding: '48px 0' }}>
+        <Empty description={<span style={{ color: '#8c8c8c' }}>概况模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
       </Card>
     )
   }
@@ -1793,7 +1906,7 @@ export default function Home() {
         </div>
         <div style={{ display: 'flex', minHeight: 'calc(100vh - 56px)' }}>
           {/* 侧边导航 */}
-          <div style={{ width: 200, background: '#fff', borderRight: '1px solid #f0f0f0', paddingTop: 8 }}>
+          <div className="pms-sidebar" style={{ width: 200, background: '#fff', borderRight: '1px solid #f0f0f0', paddingTop: 8 }}>
             <Menu
               mode="inline"
               selectedKeys={[projectSpaceModule]}
@@ -1819,7 +1932,7 @@ export default function Home() {
           </div>
         </div>
         {/* 版本对比Modal */}
-        <Modal title="历史版本对比" open={showVersionCompare} onCancel={() => setShowVersionCompare(false)} footer={<Button type="primary" onClick={() => setShowVersionCompare(false)}>关闭</Button>} width={600}><Space direction="vertical" style={{ width: '100%' }}><div><span style={{ marginRight: 16 }}>版本A:</span><Select value={compareVersionA} onChange={setCompareVersionA} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><div><span style={{ marginRight: 16 }}>版本B:</span><Select value={compareVersionB} onChange={setCompareVersionB} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><Button type="primary" onClick={() => {
+        <Modal className="pms-modal" title="历史版本对比" open={showVersionCompare} onCancel={() => setShowVersionCompare(false)} footer={<Button type="primary" onClick={() => setShowVersionCompare(false)}>关闭</Button>} width={600}><Space direction="vertical" style={{ width: '100%' }}><div><span style={{ marginRight: 16 }}>版本A:</span><Select value={compareVersionA} onChange={setCompareVersionA} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><div><span style={{ marginRight: 16 }}>版本B:</span><Select value={compareVersionB} onChange={setCompareVersionB} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><Button type="primary" onClick={() => {
                 const versionA = versions.find(v => v.id === compareVersionA)
                 const versionB = versions.find(v => v.id === compareVersionB)
                 if (versionA && versionB) {
@@ -1843,9 +1956,9 @@ export default function Home() {
                 }
               }}>开始对比</Button>{renderVersionCompareResult()}</Space></Modal>
         {/* 自定义列Modal */}
-        <Modal title="自定义列" open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(ALL_COLUMNS.filter(c => c.default).map(c => c.key))}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}><Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row><Col span={12}>{ALL_COLUMNS.slice(0, 6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col><Col span={12}>{ALL_COLUMNS.slice(6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col></Row></Checkbox.Group></Modal>
+        <Modal className="pms-modal" title="自定义列" open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(ALL_COLUMNS.filter(c => c.default).map(c => c.key))}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}><Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row><Col span={12}>{ALL_COLUMNS.slice(0, 6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col><Col span={12}>{ALL_COLUMNS.slice(6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col></Row></Checkbox.Group></Modal>
         {/* 创建二级计划Modal */}
-        <Modal
+        <Modal className="pms-modal"
             title="创建二级计划"
             open={showCreateLevel2Plan}
             onCancel={() => setShowCreateLevel2Plan(false)}
@@ -1922,7 +2035,8 @@ export default function Home() {
 
   return (
     <ConfigProvider autoInsertSpaceInButton={false}>
-    <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>
+    <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
+    <div style={{ minHeight: '100vh', background: '#f5f6fa' }}>
       {activeModule === 'projectSpace' && selectedProject ? renderProjectSpace() : (
         <>
           <div style={{ background: '#fff', padding: '0 24px', borderBottom: '1px solid #e8e8e8', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
@@ -2175,8 +2289,8 @@ export default function Home() {
               </div>
             )}
           </div>
-          <Modal title="自定义列" open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(ALL_COLUMNS.filter(c => c.default).map(c => c.key))}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}><Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row><Col span={12}>{ALL_COLUMNS.slice(0, 6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col><Col span={12}>{ALL_COLUMNS.slice(6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col></Row></Checkbox.Group></Modal>
-          <Modal title="历史版本对比" open={showVersionCompare} onCancel={() => setShowVersionCompare(false)} footer={<Button type="primary" onClick={() => setShowVersionCompare(false)}>关闭</Button>} width={600}><Space direction="vertical" style={{ width: '100%' }}><div><span style={{ marginRight: 16 }}>版本A:</span><Select value={compareVersionA} onChange={setCompareVersionA} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><div><span style={{ marginRight: 16 }}>版本B:</span><Select value={compareVersionB} onChange={setCompareVersionB} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><Button type="primary" onClick={() => {
+          <Modal className="pms-modal" title="自定义列" open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(ALL_COLUMNS.filter(c => c.default).map(c => c.key))}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}><Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row><Col span={12}>{ALL_COLUMNS.slice(0, 6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col><Col span={12}>{ALL_COLUMNS.slice(6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col></Row></Checkbox.Group></Modal>
+          <Modal className="pms-modal" title="历史版本对比" open={showVersionCompare} onCancel={() => setShowVersionCompare(false)} footer={<Button type="primary" onClick={() => setShowVersionCompare(false)}>关闭</Button>} width={600}><Space direction="vertical" style={{ width: '100%' }}><div><span style={{ marginRight: 16 }}>版本A:</span><Select value={compareVersionA} onChange={setCompareVersionA} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><div><span style={{ marginRight: 16 }}>版本B:</span><Select value={compareVersionB} onChange={setCompareVersionB} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><Button type="primary" onClick={() => {
                 const versionA = versions.find(v => v.id === compareVersionA)
                 const versionB = versions.find(v => v.id === compareVersionB)
                 if (versionA && versionB) {
@@ -2202,7 +2316,7 @@ export default function Home() {
                   message.success('对比完成')
                 }
               }}>开始对比</Button>{renderVersionCompareResult()}</Space></Modal>
-          <Modal 
+          <Modal className="pms-modal" 
             title="子任务时间超出父任务范围" 
             open={parentTimeWarning.visible} 
             onCancel={() => setParentTimeWarning({visible: false, tasks: [], message: ''})}
@@ -2233,7 +2347,7 @@ export default function Home() {
               pagination={false}
             />
           </Modal>
-          <Modal 
+          <Modal className="pms-modal" 
             title="⚠️ 二级计划时间超出里程碑范围" 
             open={milestoneTimeWarning.visible} 
             onCancel={() => setMilestoneTimeWarning({visible: false, violations: [], message: ''})}
@@ -2264,8 +2378,8 @@ export default function Home() {
               pagination={false}
             />
           </Modal>
-          <Modal title={`编辑时间 - ${ganttEditingTask?.taskName}`} open={!!ganttEditingTask} onCancel={() => setGanttEditingTask(null)} onOk={() => setGanttEditingTask(null)}><Space direction="vertical" style={{ width: '100%' }}><div><span>开始时间:</span><DatePicker value={ganttEditingTask?.planStartDate ? { format: 'YYYY-MM-DD', value: ganttEditingTask.planStartDate } : undefined} onChange={(date, dateStr) => dateStr && handleGanttTimeChange(ganttEditingTask.id, 'planStartDate', dateStr)} style={{ marginLeft: 8 }} /></div><div><span>结束时间:</span><DatePicker value={ganttEditingTask?.planEndDate ? { format: 'YYYY-MM-DD', value: ganttEditingTask.planEndDate } : undefined} onChange={(date, dateStr) => dateStr && handleGanttTimeChange(ganttEditingTask.id, 'planEndDate', dateStr)} style={{ marginLeft: 8 }} /></div></Space></Modal>
-          <Modal title={`编辑进度 - ${progressEditingTask?.taskName}`} open={!!progressEditingTask} onCancel={() => setProgressEditingTask(null)} onOk={() => setProgressEditingTask(null)} footer={null}>
+          <Modal className="pms-modal" title={`编辑时间 - ${ganttEditingTask?.taskName}`} open={!!ganttEditingTask} onCancel={() => setGanttEditingTask(null)} onOk={() => setGanttEditingTask(null)}><Space direction="vertical" style={{ width: '100%' }}><div><span>开始时间:</span><DatePicker value={ganttEditingTask?.planStartDate ? { format: 'YYYY-MM-DD', value: ganttEditingTask.planStartDate } : undefined} onChange={(date, dateStr) => dateStr && handleGanttTimeChange(ganttEditingTask.id, 'planStartDate', dateStr)} style={{ marginLeft: 8 }} /></div><div><span>结束时间:</span><DatePicker value={ganttEditingTask?.planEndDate ? { format: 'YYYY-MM-DD', value: ganttEditingTask.planEndDate } : undefined} onChange={(date, dateStr) => dateStr && handleGanttTimeChange(ganttEditingTask.id, 'planEndDate', dateStr)} style={{ marginLeft: 8 }} /></div></Space></Modal>
+          <Modal className="pms-modal" title={`编辑进度 - ${progressEditingTask?.taskName}`} open={!!progressEditingTask} onCancel={() => setProgressEditingTask(null)} onOk={() => setProgressEditingTask(null)} footer={null}>
             <div style={{ padding: '20px 0' }}>
               <div style={{ marginBottom: 16, textAlign: 'center' }}>
                 <Progress percent={progressEditingTask?.progress || 0} status="active" strokeColor={{ '0%': '#108ee9', '100%': '#52c41a' }} />
@@ -2285,7 +2399,7 @@ export default function Home() {
               </div>
             </div>
           </Modal>
-          <Modal 
+          <Modal className="pms-modal" 
             title="⚠️ 前置任务冲突警告" 
             open={predecessorWarning.visible} 
             onCancel={() => setPredecessorWarning({visible: false, task: null, message: ''})}
@@ -2308,7 +2422,7 @@ export default function Home() {
               <p>是否仍要修改？</p>
             </div>
           </Modal>
-          <Modal
+          <Modal className="pms-modal"
             title="添加自定义二级计划类型"
             open={showAddCustomType}
             onCancel={() => { setShowAddCustomType(false); setNewCustomTypeName('') }}
@@ -2361,7 +2475,7 @@ export default function Home() {
               </div>
             </Form>
           </Modal>
-          <Modal
+          <Modal className="pms-modal"
             title="创建二级计划"
             open={showCreateLevel2Plan}
             onCancel={() => setShowCreateLevel2Plan(false)}
