@@ -33,9 +33,35 @@ export default function Level1PlanTemplatePage() {
   const [editedTasks, setEditedTasks] = useState<PlanTask[]>([])
   const [showVersionCompare, setShowVersionCompare] = useState(false)
   const [compareVersions, setCompareVersions] = useState({ v1: '', v2: '' })
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
 
   const currentVersion = versions[currentVersionIndex]
   const hasDraftVersion = versions.some(v => v.status === '修订版')
+
+  const navigateWithEditGuard = (action: () => void) => {
+    if (isEditing) {
+      setPendingNavigation(() => action)
+      setShowLeaveConfirm(true)
+    } else {
+      action()
+    }
+  }
+
+  const handleConfirmLeave = () => {
+    setIsEditing(false)
+    setEditedTasks([])
+    setShowLeaveConfirm(false)
+    if (pendingNavigation) {
+      pendingNavigation()
+      setPendingNavigation(null)
+    }
+  }
+
+  const handleCancelLeave = () => {
+    setShowLeaveConfirm(false)
+    setPendingNavigation(null)
+  }
 
   // 初始化编辑数据
   const handleEdit = () => {
@@ -183,7 +209,8 @@ export default function Level1PlanTemplatePage() {
             <a href="/config/level1-template" className="flex items-center gap-3 px-3 py-2 text-sm text-blue-600 bg-blue-50 rounded-md">
               <span>一级计划模板</span>
             </a>
-            <a href="/config/level2-template" className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 rounded-md hover:bg-blue-50 hover:text-blue-600">
+            <a href="/config/level2-template" className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 rounded-md hover:bg-blue-50 hover:text-blue-600"
+              onClick={(e) => { if (isEditing) { e.preventDefault(); navigateWithEditGuard(() => { window.location.href = '/config/level2-template' }) } }}>
               <span>二级计划模板</span>
             </a>
           </nav>
@@ -205,7 +232,7 @@ export default function Level1PlanTemplatePage() {
                   <label className="text-sm text-gray-600">项目类型:</label>
                   <select
                     value={projectType}
-                    onChange={(e) => setProjectType(e.target.value as ProjectType)}
+                    onChange={(e) => navigateWithEditGuard(() => setProjectType(e.target.value as ProjectType))}
                     className="select w-48"
                   >
                     {PROJECT_TYPES.map(type => (
@@ -217,7 +244,7 @@ export default function Level1PlanTemplatePage() {
                   <label className="text-sm text-gray-600">版本:</label>
                   <select
                     value={currentVersionIndex}
-                    onChange={(e) => setCurrentVersionIndex(Number(e.target.value))}
+                    onChange={(e) => navigateWithEditGuard(() => setCurrentVersionIndex(Number(e.target.value)))}
                     className="select w-48"
                   >
                     {versions.map((v, i) => (
@@ -474,6 +501,29 @@ export default function Level1PlanTemplatePage() {
               <button onClick={() => setShowVersionCompare(false)} className="btn btn-secondary">
                 关闭
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 编辑离开确认弹窗 */}
+      {showLeaveConfirm && (
+        <div className="modal-overlay" onClick={handleCancelLeave}>
+          <div className="modal max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="text-lg font-semibold">离开确认</h3>
+              <button onClick={handleCancelLeave} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="text-gray-600">您还未提交现有编辑内容，是否要离开该界面？</p>
+            </div>
+            <div className="modal-footer">
+              <button onClick={handleCancelLeave} className="btn btn-secondary">取消</button>
+              <button onClick={handleConfirmLeave} className="btn btn-primary bg-red-500 hover:bg-red-600 border-red-500">确认离开</button>
             </div>
           </div>
         </div>

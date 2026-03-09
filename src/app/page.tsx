@@ -211,7 +211,9 @@ import {
   WarningOutlined,
   BugOutlined,
   FolderOutlined,
-  CheckCircleOutlined
+  CheckCircleOutlined,
+  DownOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { compareVersions } from '@/lib/versionCompare'
@@ -408,7 +410,23 @@ export default function Home() {
   
   // 项目空间-市场Tab
   const [selectedMarketTab, setSelectedMarketTab] = useState<string>('OP')
-  
+
+  // 市场维度的计划数据（整机产品项目按市场分别配置）
+  const [marketPlanData, setMarketPlanData] = useState<Record<string, { tasks: any[], level2Tasks: any[], createdLevel2Plans: {id: string, name: string, type: string}[] }>>({
+    'OP': { tasks: [...LEVEL1_TASKS], level2Tasks: [], createdLevel2Plans: [{ id: 'plan0', name: '需求开发计划', type: '需求开发计划' }] },
+    'TR': { tasks: [...LEVEL1_TASKS.map(t => ({...t}))], level2Tasks: [], createdLevel2Plans: [{ id: 'plan0', name: '需求开发计划', type: '需求开发计划' }] },
+    'RU': { tasks: [...LEVEL1_TASKS.map(t => ({...t}))], level2Tasks: [], createdLevel2Plans: [{ id: 'plan0', name: '需求开发计划', type: '需求开发计划' }] },
+  })
+
+  // 项目搜索下拉
+  const [showProjectSearch, setShowProjectSearch] = useState(false)
+  const [projectSearchText, setProjectSearchText] = useState('')
+  const projectSearchRef = useRef<HTMLDivElement>(null)
+
+  // 编辑离开确认
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
+
   // 二级计划创建
   const [showCreateLevel2Plan, setShowCreateLevel2Plan] = useState(false)
   const [selectedLevel2PlanType, setSelectedLevel2PlanType] = useState('需求开发计划')
@@ -419,6 +437,57 @@ export default function Home() {
   // 二级计划时间约束警告状态
   const [milestoneTimeWarning, setMilestoneTimeWarning] = useState<{visible: boolean, violations: any[], message: string}>({visible: false, violations: [], message: ''})
   
+  // 带编辑保护的导航函数 - 如果当前在编辑模式，弹出确认框
+  const navigateWithEditGuard = (action: () => void) => {
+    if (isEditMode) {
+      setPendingNavigation(() => action)
+      setShowLeaveConfirm(true)
+    } else {
+      action()
+    }
+  }
+
+  // 确认离开编辑
+  const handleConfirmLeave = () => {
+    setIsEditMode(false)
+    setShowLeaveConfirm(false)
+    if (pendingNavigation) {
+      pendingNavigation()
+      setPendingNavigation(null)
+    }
+  }
+
+  // 取消离开
+  const handleCancelLeave = () => {
+    setShowLeaveConfirm(false)
+    setPendingNavigation(null)
+  }
+
+  // 点击外部关闭项目搜索下拉
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (projectSearchRef.current && !projectSearchRef.current.contains(e.target as Node)) {
+        setShowProjectSearch(false)
+      }
+    }
+    if (showProjectSearch) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showProjectSearch])
+
+  // 项目模糊搜索过滤
+  const filteredProjects = projects.filter(p => {
+    if (!projectSearchText) return true
+    return p.name.toLowerCase().includes(projectSearchText.toLowerCase()) ||
+      p.type.includes(projectSearchText) ||
+      p.leader.includes(projectSearchText)
+  })
+
+  // 获取当前市场的计划数据（整机产品项目）
+  const isWholeMachineProject = selectedProject?.type === '整机产品项目'
+  const currentMarketData = isWholeMachineProject ? marketPlanData[selectedMarketTab] : null
+
   // 检查是否有一级计划已发布
   const hasPublishedLevel1Plan = versions.some(v => v.status === '已发布')
   
@@ -1694,8 +1763,14 @@ export default function Home() {
     )
   }
 
+  // 市场颜色映射
+  const marketColors: Record<string, string> = { 'OP': '#1890ff', 'TR': '#52c41a', 'RU': '#faad14', 'FR': '#722ed1', 'IN': '#eb2f96', 'BR': '#13c2c2' }
+
   // 项目空间 - 计划模块
   const renderProjectPlan = () => {
+    const markets = selectedProject?.markets || []
+    const showMarketTabs = selectedProject?.type === '整机产品项目' && markets.length > 0
+
     const planTabItems = [
       { key: 'level1', label: '一级计划' },
       { key: 'level2', label: '二级计划' },
@@ -1704,6 +1779,42 @@ export default function Home() {
 
     return (
       <div>
+        {/* 市场TAB切换 - 仅整机产品项目显示 */}
+        {showMarketTabs && (
+          <Card
+            size="small"
+            style={{ marginBottom: 16, borderRadius: 8 }}
+            styles={{ body: { padding: '4px 16px' } }}
+          >
+            <Row align="middle" justify="space-between">
+              <Col>
+                <Space size={4} align="center">
+                  <span style={{ fontSize: 13, fontWeight: 500, color: '#8c8c8c', marginRight: 8 }}>市场</span>
+                  {markets.map(market => (
+                    <Tag
+                      key={market}
+                      color={selectedMarketTab === market ? (marketColors[market] || '#1890ff') : 'default'}
+                      style={{
+                        cursor: 'pointer', borderRadius: 4, padding: '4px 16px', fontSize: 13,
+                        fontWeight: selectedMarketTab === market ? 600 : 400,
+                        borderColor: selectedMarketTab === market ? (marketColors[market] || '#1890ff') : '#d9d9d9',
+                      }}
+                      onClick={() => navigateWithEditGuard(() => setSelectedMarketTab(market))}
+                    >
+                      {market}
+                    </Tag>
+                  ))}
+                </Space>
+              </Col>
+              <Col>
+                <Tag style={{ fontSize: 11, borderRadius: 4 }}>
+                  当前市场: <span style={{ fontWeight: 600, color: marketColors[selectedMarketTab] || '#1890ff' }}>{selectedMarketTab}</span>
+                </Tag>
+              </Col>
+            </Row>
+          </Card>
+        )}
+
         {/* 计划级别切换 */}
         <Card
           size="small"
@@ -1714,7 +1825,7 @@ export default function Home() {
             <Col>
               <Tabs
                 activeKey={projectPlanLevel}
-                onChange={(key) => setProjectPlanLevel(key as string)}
+                onChange={(key) => navigateWithEditGuard(() => setProjectPlanLevel(key as string))}
                 style={{ marginBottom: 0 }}
                 items={planTabItems.map(item => ({
                   ...item,
@@ -1744,7 +1855,7 @@ export default function Home() {
               <Col>
                 <Tabs
                   activeKey={activeLevel2Plan}
-                  onChange={setActiveLevel2Plan}
+                  onChange={(key) => navigateWithEditGuard(() => setActiveLevel2Plan(key))}
                   style={{ marginBottom: 0 }}
                   items={createdLevel2Plans.map(plan => ({
                     key: plan.id,
@@ -1781,7 +1892,7 @@ export default function Home() {
                   <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
                     <Space size={6}>
                       <span style={{ color: '#8c8c8c', fontSize: 13 }}>版本</span>
-                      <Select value={currentVersion} onChange={(val) => { setCurrentVersion(val); setIsEditMode(false) }} style={{ width: 150 }} size="middle">
+                      <Select value={currentVersion} onChange={(val) => navigateWithEditGuard(() => { setCurrentVersion(val); setIsEditMode(false) })} style={{ width: 150 }} size="middle">
                         {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
                       </Select>
                     </Space>
@@ -1892,14 +2003,76 @@ export default function Home() {
         <div style={{ background: '#fff', padding: '0 24px', borderBottom: '1px solid #e8e8e8', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
           <Row align="middle" style={{ height: 56 }}>
             <Col flex="none">
-              <Button type="text" icon={<LeftOutlined />} onClick={() => setActiveModule('projects')} style={{ color: '#595959', fontWeight: 500 }}>返回工作台</Button>
+              <Button type="text" icon={<LeftOutlined />} onClick={() => navigateWithEditGuard(() => setActiveModule('projects'))} style={{ color: '#595959', fontWeight: 500 }}>返回工作台</Button>
             </Col>
             <Col flex="auto" style={{ textAlign: 'center' }}>
-              <Space size={8}>
-                <ProjectOutlined style={{ color: '#1890ff', fontSize: 16 }} />
-                <span style={{ fontSize: 16, fontWeight: 600, color: '#262626' }}>{selectedProject?.name}</span>
-                <Tag color="blue" style={{ marginLeft: 4, fontSize: 11 }}>项目空间</Tag>
-              </Space>
+              <div ref={projectSearchRef} style={{ display: 'inline-block', position: 'relative' }}>
+                <div
+                  style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, padding: '4px 12px', borderRadius: 6, transition: 'background 0.2s', background: showProjectSearch ? '#f0f5ff' : 'transparent' }}
+                  onClick={() => setShowProjectSearch(!showProjectSearch)}
+                >
+                  <ProjectOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+                  <span style={{ fontSize: 16, fontWeight: 600, color: '#262626' }}>{selectedProject?.name}</span>
+                  <DownOutlined style={{ fontSize: 10, color: '#8c8c8c', transition: 'transform 0.2s', transform: showProjectSearch ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+                  <Tag color="blue" style={{ marginLeft: 4, fontSize: 11 }}>项目空间</Tag>
+                </div>
+                {showProjectSearch && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+                    marginTop: 4, width: 360, background: '#fff', borderRadius: 8,
+                    boxShadow: '0 6px 16px rgba(0,0,0,0.12)', border: '1px solid #e8e8e8',
+                    zIndex: 1000, overflow: 'hidden',
+                  }}>
+                    <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}>
+                      <Input
+                        placeholder="搜索项目名称..."
+                        prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                        value={projectSearchText}
+                        onChange={(e) => setProjectSearchText(e.target.value)}
+                        allowClear
+                        autoFocus
+                        style={{ borderRadius: 6 }}
+                      />
+                    </div>
+                    <div style={{ maxHeight: 300, overflowY: 'auto', padding: '4px 0' }}>
+                      {filteredProjects.length === 0 ? (
+                        <div style={{ padding: '16px 0', textAlign: 'center', color: '#8c8c8c', fontSize: 13 }}>无匹配项目</div>
+                      ) : (
+                        filteredProjects.map(p => (
+                          <div
+                            key={p.id}
+                            style={{
+                              padding: '8px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                              background: selectedProject?.id === p.id ? '#e6f4ff' : 'transparent',
+                              transition: 'background 0.15s',
+                            }}
+                            onMouseEnter={(e) => { if (selectedProject?.id !== p.id) (e.currentTarget as HTMLElement).style.background = '#fafafa' }}
+                            onMouseLeave={(e) => { if (selectedProject?.id !== p.id) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                            onClick={() => {
+                              navigateWithEditGuard(() => {
+                                setSelectedProject(p)
+                                setProjectSpaceModule('basic')
+                                setShowProjectSearch(false)
+                                setProjectSearchText('')
+                                // 初始化市场Tab
+                                if (p.markets && p.markets.length > 0) {
+                                  setSelectedMarketTab(p.markets[0])
+                                }
+                              })
+                            }}
+                          >
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 500, color: '#262626' }}>{p.name}</div>
+                              <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 2 }}>{p.type} | {p.leader}</div>
+                            </div>
+                            <Tag color={p.status === '进行中' ? 'blue' : p.status === '已完成' ? 'green' : 'orange'} style={{ fontSize: 11 }}>{p.status}</Tag>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </Col>
             <Col flex="none" />
           </Row>
@@ -1915,7 +2088,7 @@ export default function Home() {
                 ...item,
                 label: <span style={{ fontWeight: projectSpaceModule === item.key ? 500 : 400 }}>{item.label}</span>,
               }))}
-              onClick={({ key }) => setProjectSpaceModule(key)}
+              onClick={({ key }) => navigateWithEditGuard(() => setProjectSpaceModule(key))}
             />
           </div>
           {/* 内容区域 */}
@@ -2049,7 +2222,7 @@ export default function Home() {
                   </Space>
                   <Tabs
                     activeKey={activeModule}
-                    onChange={(key) => setActiveModule(key)}
+                    onChange={(key) => navigateWithEditGuard(() => setActiveModule(key))}
                     style={{ marginBottom: 0 }}
                     items={[
                       { key: 'projects', label: <span style={{ fontWeight: 500, padding: '0 4px' }}>工作台</span> },
@@ -2174,7 +2347,7 @@ export default function Home() {
                 <Card size="small" style={{ marginBottom: 20, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
                   <Tabs
                     activeKey={configCategory}
-                    onChange={setConfigCategory}
+                    onChange={(key) => navigateWithEditGuard(() => setConfigCategory(key))}
                     style={{ marginBottom: 0 }}
                     items={[
                       { key: 'plan', label: <Space size={6}><CalendarOutlined />计划模板配置</Space> },
@@ -2200,7 +2373,7 @@ export default function Home() {
                         title={!sidebarCollapsed && <span style={{ fontSize: 13, fontWeight: 600, color: '#595959' }}>项目类型</span>}
                         extra={<Button type="text" size="small" icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} />}
                       >
-                        {!sidebarCollapsed && <Menu mode="inline" selectedKeys={[selectedProjectType]} style={{ border: 'none', fontSize: 13 }} items={PROJECT_TYPES.map(t => ({ key: t, label: <span style={{ fontWeight: selectedProjectType === t ? 500 : 400 }}>{t}</span>, onClick: () => setSelectedProjectType(t) }))} />}
+                        {!sidebarCollapsed && <Menu mode="inline" selectedKeys={[selectedProjectType]} style={{ border: 'none', fontSize: 13 }} items={PROJECT_TYPES.map(t => ({ key: t, label: <span style={{ fontWeight: selectedProjectType === t ? 500 : 400 }}>{t}</span>, onClick: () => navigateWithEditGuard(() => setSelectedProjectType(t)) }))} />}
                       </Card>
                     </Col>
                     <Col span={sidebarCollapsed ? 23 : 20}>
@@ -2220,7 +2393,7 @@ export default function Home() {
                           </Row>
                         </div>
                         <div style={{ padding: '4px 16px' }}>
-                          <Tabs activeKey={planLevel} onChange={setPlanLevel} style={{ marginBottom: 0 }} items={[{ key: 'level1', label: <span style={{ fontWeight: 500 }}>一级计划</span> }, { key: 'level2', label: <span style={{ fontWeight: 500 }}>二级计划</span> }]} />
+                          <Tabs activeKey={planLevel} onChange={(key) => navigateWithEditGuard(() => setPlanLevel(key))} style={{ marginBottom: 0 }} items={[{ key: 'level1', label: <span style={{ fontWeight: 500 }}>一级计划</span> }, { key: 'level2', label: <span style={{ fontWeight: 500 }}>二级计划</span> }]} />
                         </div>
                       </Card>
 
@@ -2235,7 +2408,7 @@ export default function Home() {
                                 key={t}
                                 color={selectedPlanType === t ? 'blue' : 'default'}
                                 style={{ cursor: 'pointer', borderRadius: 4, padding: '2px 10px', fontWeight: selectedPlanType === t ? 500 : 400 }}
-                                onClick={() => setSelectedPlanType(t)}
+                                onClick={() => navigateWithEditGuard(() => setSelectedPlanType(t))}
                               >
                                 {t}
                               </Tag>
@@ -2252,7 +2425,7 @@ export default function Home() {
                             <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
                               <Space size={6}>
                                 <span style={{ color: '#8c8c8c', fontSize: 13 }}>版本</span>
-                                <Select value={currentVersion} onChange={(val) => { setCurrentVersion(val); setIsEditMode(false) }} style={{ width: 180 }} size="middle">
+                                <Select value={currentVersion} onChange={(val) => navigateWithEditGuard(() => { setCurrentVersion(val); setIsEditMode(false) })} style={{ width: 180 }} size="middle">
                                   {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
                                 </Select>
                               </Space>
@@ -2651,6 +2824,22 @@ export default function Home() {
         </>
       )}
     </div>
+    {/* 编辑离开确认弹窗 */}
+    <Modal
+      className="pms-modal"
+      title={<Space><ExclamationCircleOutlined style={{ color: '#faad14', fontSize: 18 }} /><span>离开确认</span></Space>}
+      open={showLeaveConfirm}
+      onCancel={handleCancelLeave}
+      footer={[
+        <Button key="cancel" onClick={handleCancelLeave}>取消</Button>,
+        <Button key="confirm" type="primary" danger onClick={handleConfirmLeave}>确认离开</Button>,
+      ]}
+      width={420}
+    >
+      <div style={{ padding: '12px 0', fontSize: 14, color: '#595959' }}>
+        您还未提交现有编辑内容，是否要离开该界面？
+      </div>
+    </Modal>
     </ConfigProvider>
   )
 }
