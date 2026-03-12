@@ -202,3 +202,26 @@ export interface VersionTrainRecord {
 // 固定二级计划类型（不可在模板管理中配置）
 export const FIXED_LEVEL2_PLAN_TYPES = ['需求开发计划', '在研版本火车计划'] as const;
 export type FixedLevel2PlanType = typeof FIXED_LEVEL2_PLAN_TYPES[number];
+
+// 路标视图配置
+export interface RoadmapViewConfig {
+  id: string;
+  name: string;
+  projectType?: ProjectType;
+  filters: {
+    productLine?: string[];
+    chipPlatform?: string[];
+    status?: string[];
+    tosVersion?: string[];
+  };
+  visibleColumns: string[];
+  pageSize: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 里程碑信息
+export interface MilestoneInfo {
+  name: string;
+  order: number;
+}

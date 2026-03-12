@@ -223,6 +223,7 @@ import { CSS } from '@dnd-kit/utilities'
 import type { ColumnsType } from 'antd/es/table'
 import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
 import VersionTrainPlan from '@/components/plans/VersionTrainPlan'
+import RoadmapView from '@/components/roadmap/RoadmapView'
 
 const { TabPane } = Tabs
 const { Option } = Select
@@ -241,11 +242,11 @@ const FIXED_LEVEL2_PLANS = [
 
 // 项目数据
 const initialProjects = [
-  { id: '1', name: 'X6877-D8400_H991', type: '整机产品项目', status: '进行中', progress: 65, leader: '张三', markets: ['OP', 'TR', 'RU'], androidVersion: 'Android 16', chipPlatform: 'MTK', spm: '李白', updatedAt: '2小时前' },
-  { id: '2', name: 'X6801_TBD', type: '产品项目', status: '筹备中', progress: 20, leader: '李四', markets: [], androidVersion: 'Android 16', chipPlatform: 'QCOM', spm: '张三', updatedAt: '1天前' },
-  { id: '3', name: 'X6855_H8917', type: '整机产品项目', status: '进行中', progress: 45, leader: '王五', markets: ['OP', 'TR'], androidVersion: 'Android 16', chipPlatform: 'MTK', spm: '赵六', updatedAt: '3天前' },
-  { id: '4', name: 'X6876_H786', type: '技术项目', status: '已完成', progress: 100, leader: '孙七', markets: [], androidVersion: 'Android 15', chipPlatform: 'QCOM', spm: '李四', updatedAt: '5天前' },
-  { id: '5', name: 'X6873_H972', type: '能力建设项目', status: '进行中', progress: 30, leader: '周八', markets: [], androidVersion: 'Android 16', chipPlatform: 'UNISOC', spm: '王五', updatedAt: '1周前' },
+  { id: '1', name: 'X6877-D8400_H991', type: '整机产品项目', status: '进行中', progress: 65, leader: '张三', markets: ['OP', 'TR', 'RU'], androidVersion: 'Android 16', chipPlatform: 'MTK', spm: '李白', updatedAt: '2小时前', productLine: '高端系列', tosVersion: 'tOS 16.3' },
+  { id: '2', name: 'X6801_TBD', type: '产品项目', status: '筹备中', progress: 20, leader: '李四', markets: [], androidVersion: 'Android 16', chipPlatform: 'QCOM', spm: '张三', updatedAt: '1天前', productLine: '中端系列', tosVersion: 'tOS 16.2' },
+  { id: '3', name: 'X6855_H8917', type: '整机产品项目', status: '进行中', progress: 45, leader: '王五', markets: ['OP', 'TR'], androidVersion: 'Android 16', chipPlatform: 'MTK', spm: '赵六', updatedAt: '3天前', productLine: '高端系列', tosVersion: 'tOS 16.3' },
+  { id: '4', name: 'X6876_H786', type: '技术项目', status: '已完成', progress: 100, leader: '孙七', markets: [], androidVersion: 'Android 15', chipPlatform: 'QCOM', spm: '李四', updatedAt: '5天前', productLine: '平台技术', tosVersion: 'tOS 15.0' },
+  { id: '5', name: 'X6873_H972', type: '能力建设项目', status: '进行中', progress: 30, leader: '周八', markets: [], androidVersion: 'Android 16', chipPlatform: 'UNISOC', spm: '王五', updatedAt: '1周前', productLine: '基础能力', tosVersion: 'tOS 16.2' },
 ]
 
 const kanbanColumns = [
@@ -2368,18 +2369,22 @@ export default function Home() {
               </div>
             )}
             {activeModule === 'roadmap' && (
-              <Card style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
-                <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%)', borderBottom: '1px solid #e8e8e8' }}>
-                  <Space size={8} align="center">
-                    <FlagOutlined style={{ color: '#1890ff', fontSize: 16 }} />
-                    <span style={{ fontSize: 16, fontWeight: 600, color: '#262626' }}>项目路标视图</span>
-                  </Space>
-                  <div style={{ marginTop: 4, fontSize: 12, color: '#8c8c8c', paddingLeft: 24 }}>全局项目路标与里程碑规划视图</div>
-                </div>
-                <div style={{ padding: '48px 0', textAlign: 'center' }}>
-                  <Empty description={<span style={{ color: '#8c8c8c' }}>项目路标视图功能开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                </div>
-              </Card>
+              <RoadmapView
+                projects={projects}
+                marketPlanData={marketPlanData}
+                level1Tasks={LEVEL1_TASKS}
+                onViewProject={(projectId, market) => {
+                  const project = projects.find(p => p.id === projectId)
+                  if (!project) return
+                  setSelectedProject(project)
+                  setActiveModule('projectSpace')
+                  setProjectSpaceModule('plan')
+                  setProjectPlanLevel('level1')
+                  if (market && project.type === '整机产品项目') {
+                    setSelectedMarketTab(market)
+                  }
+                }}
+              />
             )}
             {(activeModule === 'config' || activeModule === 'projectSpace') && (
               <div>
