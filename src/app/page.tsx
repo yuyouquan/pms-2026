@@ -426,6 +426,25 @@ export default function Home() {
   
   // 二级计划时间约束警告状态
   const [milestoneTimeWarning, setMilestoneTimeWarning] = useState<{visible: boolean, violations: any[], message: string}>({visible: false, violations: [], message: ''})
+
+  // 二级计划元数据（保存创建时填写的表单信息）
+  const [level2PlanMeta, setLevel2PlanMeta] = useState<Record<string, any>>({
+    plan2: {
+      planType: '1+N MR版本火车计划', planName: 'FR版本火车计划', mrVersion: 'FR',
+      productLine: 'NOTE', marketName: 'OP', projectName: 'X6877-D8400_H991',
+      chipVendor: 'MTK', tosVersion: '16.3.050', branch: '16.3.050_main',
+      isMada: '否', madaMarket: '', spm: '李白', tpm: '王五', contact: '孙七',
+      projectVersion: 'V1.0.0', transferType: '1',
+    },
+    plan3: {
+      planType: '1+N MR版本火车计划', planName: 'MR1版本火车计划', mrVersion: 'MR1',
+      productLine: 'NOTE', marketName: 'OP', projectName: 'X6877-D8400_H991',
+      chipVendor: 'MTK', tosVersion: '16.3.051', branch: '16.3.050_MR1',
+      isMada: '是', madaMarket: 'EU', spm: '张三', tpm: '赵六', contact: '周八',
+      projectVersion: 'V1.1.0', transferType: '2',
+    },
+  })
+  const [createFormValues, setCreateFormValues] = useState<Record<string, string>>({})
   
   // 带编辑保护的导航函数 - 如果当前在编辑模式，弹出确认框
   const navigateWithEditGuard = (action: () => void) => {
@@ -1882,9 +1901,71 @@ export default function Home() {
                 />
               </Col>
               <Col>
-                <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} onClick={() => { if (!hasPublishedLevel1Plan) { message.warning('请先发布一级计划后再创建二级计划'); return; } setShowCreateLevel2Plan(true) }}>创建二级计划</Button>
+                <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} onClick={() => { if (!hasPublishedLevel1Plan) { message.warning('请先发布一级计划后再创建二级计划'); return; } setCreateFormValues({}); setShowCreateLevel2Plan(true) }}>创建二级计划</Button>
               </Col>
             </Row>
+          </Card>
+        )}
+
+        {/* 二级计划元数据展示 - 非固定计划显示创建时填写的信息 */}
+        {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1' && level2PlanMeta[activeLevel2Plan] && (
+          <Card
+            size="small"
+            style={{ marginBottom: 16, borderRadius: 8, border: '1px solid #e6f4ff' }}
+            styles={{ body: { padding: '16px 20px' } }}
+          >
+            <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 3, height: 16, background: '#1890ff', borderRadius: 2 }} />
+              <span style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>计划基本信息</span>
+              <Tag color="blue" style={{ marginLeft: 8, fontSize: 11 }}>{level2PlanMeta[activeLevel2Plan]?.planType}</Tag>
+            </div>
+            {level2PlanMeta[activeLevel2Plan]?.planType === '1+N MR版本火车计划' ? (
+              <Descriptions
+                size="small"
+                column={3}
+                labelStyle={{ color: '#8c8c8c', fontSize: 13, fontWeight: 500, padding: '6px 12px 6px 0' }}
+                contentStyle={{ color: '#262626', fontSize: 13, padding: '6px 0' }}
+                colon={false}
+              >
+                <Descriptions.Item label="MR版本类型">
+                  <Tag color="geekblue">{level2PlanMeta[activeLevel2Plan]?.mrVersion}</Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="产品线">{level2PlanMeta[activeLevel2Plan]?.productLine || '-'}</Descriptions.Item>
+                <Descriptions.Item label="市场名">{level2PlanMeta[activeLevel2Plan]?.marketName || '-'}</Descriptions.Item>
+                <Descriptions.Item label="项目名称">{level2PlanMeta[activeLevel2Plan]?.projectName || '-'}</Descriptions.Item>
+                <Descriptions.Item label="芯片厂商">{level2PlanMeta[activeLevel2Plan]?.chipVendor || '-'}</Descriptions.Item>
+                <Descriptions.Item label="tOS-市场版本号">
+                  {level2PlanMeta[activeLevel2Plan]?.tosVersion ? <Tag color="cyan">{level2PlanMeta[activeLevel2Plan].tosVersion}</Tag> : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="分支信息">
+                  {level2PlanMeta[activeLevel2Plan]?.branch ? <Tag color="purple">{level2PlanMeta[activeLevel2Plan].branch}</Tag> : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="是否MADA">
+                  {level2PlanMeta[activeLevel2Plan]?.isMada ? <Tag color={level2PlanMeta[activeLevel2Plan].isMada === '是' ? 'green' : 'default'}>{level2PlanMeta[activeLevel2Plan].isMada}</Tag> : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="MADA市场">{level2PlanMeta[activeLevel2Plan]?.madaMarket || '-'}</Descriptions.Item>
+                <Descriptions.Item label="项目SPM">{level2PlanMeta[activeLevel2Plan]?.spm || '-'}</Descriptions.Item>
+                <Descriptions.Item label="项目TPM">{level2PlanMeta[activeLevel2Plan]?.tpm || '-'}</Descriptions.Item>
+                <Descriptions.Item label="对接人">{level2PlanMeta[activeLevel2Plan]?.contact || '-'}</Descriptions.Item>
+                <Descriptions.Item label="项目版本号">
+                  {level2PlanMeta[activeLevel2Plan]?.projectVersion ? <Tag>{level2PlanMeta[activeLevel2Plan].projectVersion}</Tag> : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="1+N转测类型">
+                  {level2PlanMeta[activeLevel2Plan]?.transferType ? <Tag color="orange">{level2PlanMeta[activeLevel2Plan].transferType}</Tag> : '-'}
+                </Descriptions.Item>
+              </Descriptions>
+            ) : (
+              <Descriptions
+                size="small"
+                column={3}
+                labelStyle={{ color: '#8c8c8c', fontSize: 13, fontWeight: 500, padding: '6px 12px 6px 0' }}
+                contentStyle={{ color: '#262626', fontSize: 13, padding: '6px 0' }}
+                colon={false}
+              >
+                <Descriptions.Item label="计划类型">{level2PlanMeta[activeLevel2Plan]?.planType || '-'}</Descriptions.Item>
+                <Descriptions.Item label="计划名称">{level2PlanMeta[activeLevel2Plan]?.planName || '-'}</Descriptions.Item>
+              </Descriptions>
+            )}
           </Card>
         )}
 
@@ -2169,9 +2250,33 @@ export default function Home() {
                 const planName = selectedLevel2PlanType === '1+N MR版本火车计划'
                   ? `${selectedMRVersion}版本火车计划`
                   : selectedLevel2PlanType === '无'
-                    ? '自定义计划'
+                    ? (createFormValues.customPlanName || '自定义计划')
                     : selectedLevel2PlanType
                 const newPlan = { id: `plan_${Date.now()}`, name: planName, type: selectedLevel2PlanType }
+                // 保存创建时的元数据
+                const meta: Record<string, string> = {
+                  planType: selectedLevel2PlanType,
+                  planName,
+                }
+                if (selectedLevel2PlanType === '1+N MR版本火车计划') {
+                  Object.assign(meta, {
+                    mrVersion: selectedMRVersion,
+                    productLine: selectedProject?.productLine || 'NOTE',
+                    marketName: selectedProject?.type === '整机产品项目' ? selectedMarketTab : '-',
+                    projectName: selectedProject?.name || '',
+                    chipVendor: selectedProject?.chipPlatform || '',
+                    tosVersion: createFormValues.tosVersion || '',
+                    branch: createFormValues.branch || '',
+                    isMada: createFormValues.isMada || '',
+                    madaMarket: createFormValues.madaMarket || '',
+                    spm: createFormValues.spm || '',
+                    tpm: createFormValues.tpm || '',
+                    contact: createFormValues.contact || '',
+                    projectVersion: createFormValues.projectVersion || '',
+                    transferType: createFormValues.transferType || '',
+                  })
+                }
+                setLevel2PlanMeta(prev => ({ ...prev, [newPlan.id]: meta }))
                 setCreatedLevel2Plans([...createdLevel2Plans, newPlan])
                 setActiveLevel2Plan(newPlan.id)
                 message.success(`已创建${planName}`)
@@ -2208,23 +2313,23 @@ export default function Home() {
                       {[...Array(99)].map((_, i) => (<Option key={`MR${i + 1}`} value={`MR${i + 1}`}>MR{i + 1}</Option>))}
                     </Select>
                   </Form.Item>
-                  <Form.Item label="产品线"><Input placeholder="自动获取" disabled defaultValue="NOTE" /></Form.Item>
-                  <Form.Item label="市场名"><Input placeholder="自动获取" disabled defaultValue="NOTE 50 Pro" /></Form.Item>
-                  <Form.Item label="项目名称"><Input placeholder="自动获取" disabled defaultValue="X6855" /></Form.Item>
-                  <Form.Item label="芯片厂商"><Input placeholder="自动获取" disabled defaultValue="MT6789J" /></Form.Item>
-                  <Form.Item label="tOS-市场版本号"><Input placeholder="请输入tOS-市场版本号" /></Form.Item>
-                  <Form.Item label="分支信息"><Input placeholder="请输入分支信息" /></Form.Item>
-                  <Form.Item label="是否MADA"><Select placeholder="请选择" style={{ width: '100%' }}><Option value="是">是</Option><Option value="否">否</Option></Select></Form.Item>
-                  <Form.Item label="MADA市场"><Input placeholder="请输入MADA市场" /></Form.Item>
-                  <Form.Item label="项目SPM"><Select placeholder="请选择SPM" style={{ width: '100%' }}><Option value="李白">李白</Option><Option value="张三">张三</Option></Select></Form.Item>
-                  <Form.Item label="项目TPM"><Select placeholder="请选择TPM" style={{ width: '100%' }}><Option value="王五">王五</Option><Option value="赵六">赵六</Option></Select></Form.Item>
-                  <Form.Item label="对接人"><Select placeholder="请选择对接人" style={{ width: '100%' }}><Option value="孙七">孙七</Option><Option value="周八">周八</Option></Select></Form.Item>
-                  <Form.Item label="项目版本号"><Input placeholder="请输入项目版本号" /></Form.Item>
-                  <Form.Item label="1+N转测类型"><Select placeholder="请选择转测类型" style={{ width: '100%' }}>{[...Array(99)].map((_, i) => (<Option key={i + 1} value={String(i + 1)}>{i + 1}</Option>))}</Select></Form.Item>
+                  <Form.Item label="产品线"><Input placeholder="自动获取" disabled value={selectedProject?.productLine || 'NOTE'} /></Form.Item>
+                  <Form.Item label="市场名"><Input placeholder="自动获取" disabled value={selectedProject?.type === '整机产品项目' ? selectedMarketTab : '-'} /></Form.Item>
+                  <Form.Item label="项目名称"><Input placeholder="自动获取" disabled value={selectedProject?.name || ''} /></Form.Item>
+                  <Form.Item label="芯片厂商"><Input placeholder="自动获取" disabled value={selectedProject?.chipPlatform || ''} /></Form.Item>
+                  <Form.Item label="tOS-市场版本号"><Input placeholder="请输入tOS-市场版本号" value={createFormValues.tosVersion || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, tosVersion: e.target.value}))} /></Form.Item>
+                  <Form.Item label="分支信息"><Input placeholder="请输入分支信息" value={createFormValues.branch || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, branch: e.target.value}))} /></Form.Item>
+                  <Form.Item label="是否MADA"><Select placeholder="请选择" style={{ width: '100%' }} value={createFormValues.isMada} onChange={(val) => setCreateFormValues(prev => ({...prev, isMada: val}))}><Option value="是">是</Option><Option value="否">否</Option></Select></Form.Item>
+                  <Form.Item label="MADA市场"><Input placeholder="请输入MADA市场" value={createFormValues.madaMarket || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, madaMarket: e.target.value}))} /></Form.Item>
+                  <Form.Item label="项目SPM"><Select placeholder="请选择SPM" style={{ width: '100%' }} value={createFormValues.spm} onChange={(val) => setCreateFormValues(prev => ({...prev, spm: val}))}><Option value="李白">李白</Option><Option value="张三">张三</Option></Select></Form.Item>
+                  <Form.Item label="项目TPM"><Select placeholder="请选择TPM" style={{ width: '100%' }} value={createFormValues.tpm} onChange={(val) => setCreateFormValues(prev => ({...prev, tpm: val}))}><Option value="王五">王五</Option><Option value="赵六">赵六</Option></Select></Form.Item>
+                  <Form.Item label="对接人"><Select placeholder="请选择对接人" style={{ width: '100%' }} value={createFormValues.contact} onChange={(val) => setCreateFormValues(prev => ({...prev, contact: val}))}><Option value="孙七">孙七</Option><Option value="周八">周八</Option></Select></Form.Item>
+                  <Form.Item label="项目版本号"><Input placeholder="请输入项目版本号" value={createFormValues.projectVersion || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, projectVersion: e.target.value}))} /></Form.Item>
+                  <Form.Item label="1+N转测类型"><Select placeholder="请选择转测类型" style={{ width: '100%' }} value={createFormValues.transferType} onChange={(val) => setCreateFormValues(prev => ({...prev, transferType: val}))}>{[...Array(99)].map((_, i) => (<Option key={i + 1} value={String(i + 1)}>{i + 1}</Option>))}</Select></Form.Item>
                 </>
               )}
               <Form.Item label="二级计划名称">
-                <Input value={selectedLevel2PlanType === '1+N MR版本火车计划' ? `${selectedMRVersion}版本火车计划` : selectedLevel2PlanType === '无' ? '' : selectedLevel2PlanType} disabled={selectedLevel2PlanType !== '无'} />
+                <Input value={selectedLevel2PlanType === '1+N MR版本火车计划' ? `${selectedMRVersion}版本火车计划` : selectedLevel2PlanType === '无' ? (createFormValues.customPlanName || '') : selectedLevel2PlanType} disabled={selectedLevel2PlanType !== '无'} onChange={selectedLevel2PlanType === '无' ? (e) => setCreateFormValues(prev => ({...prev, customPlanName: e.target.value})) : undefined} />
               </Form.Item>
             </Form>
           </Modal>
@@ -2703,29 +2808,53 @@ export default function Home() {
             width={600}
             footer={[
               <Button key="cancel" onClick={() => setShowCreateLevel2Plan(false)}>取消</Button>,
-              <Button key="create" type="primary" onClick={() => { 
+              <Button key="create" type="primary" onClick={() => {
                 // 保存选中的里程碑到状态
                 setLevel2PlanMilestones(selectedMilestones)
-                
+
                 // 生成二级计划名称
-                const planName = selectedLevel2PlanType === '1+N MR版本火车计划' 
+                const planName = selectedLevel2PlanType === '1+N MR版本火车计划'
                   ? `${selectedMRVersion}版本火车计划`
-                  : selectedLevel2PlanType === '无' 
-                    ? '自定义计划' 
+                  : selectedLevel2PlanType === '无'
+                    ? (createFormValues.customPlanName || '自定义计划')
                     : selectedLevel2PlanType
-                
+
                 // 添加到已创建的二级计划列表
                 const newPlan = {
                   id: `plan_${Date.now()}`,
                   name: planName,
                   type: selectedLevel2PlanType
                 }
+                // 保存创建时的元数据
+                const meta: Record<string, string> = {
+                  planType: selectedLevel2PlanType,
+                  planName,
+                }
+                if (selectedLevel2PlanType === '1+N MR版本火车计划') {
+                  Object.assign(meta, {
+                    mrVersion: selectedMRVersion,
+                    productLine: selectedProject?.productLine || 'NOTE',
+                    marketName: selectedProject?.type === '整机产品项目' ? selectedMarketTab : '-',
+                    projectName: selectedProject?.name || '',
+                    chipVendor: selectedProject?.chipPlatform || '',
+                    tosVersion: createFormValues.tosVersion || '',
+                    branch: createFormValues.branch || '',
+                    isMada: createFormValues.isMada || '',
+                    madaMarket: createFormValues.madaMarket || '',
+                    spm: createFormValues.spm || '',
+                    tpm: createFormValues.tpm || '',
+                    contact: createFormValues.contact || '',
+                    projectVersion: createFormValues.projectVersion || '',
+                    transferType: createFormValues.transferType || '',
+                  })
+                }
+                setLevel2PlanMeta(prev => ({ ...prev, [newPlan.id]: meta }))
                 setCreatedLevel2Plans([...createdLevel2Plans, newPlan])
                 setActiveLevel2Plan(newPlan.id)
-                
+
                 message.success(`已创建${planName}`)
                 setShowCreateLevel2Plan(false)
-                
+
                 // 自动创建V1修订版（如果没有）
                 if (!versions.find(v => v.status === '修订中')) {
                   const newVersion = {
@@ -2779,56 +2908,56 @@ export default function Home() {
                     </Select>
                   </Form.Item>
                   <Form.Item label="产品线">
-                    <Input placeholder="自动获取项目基础信息" disabled defaultValue="NOTE" />
+                    <Input placeholder="自动获取项目基础信息" disabled value={selectedProject?.productLine || 'NOTE'} />
                   </Form.Item>
                   <Form.Item label="市场名">
-                    <Input placeholder="自动获取该计划所属市场" disabled defaultValue="NOTE 50 Pro" />
+                    <Input placeholder="自动获取该计划所属市场" disabled value={selectedProject?.type === '整机产品项目' ? selectedMarketTab : '-'} />
                   </Form.Item>
                   <Form.Item label="项目名称">
-                    <Input placeholder="自动获取项目基础信息" disabled defaultValue="X6855" />
+                    <Input placeholder="自动获取项目基础信息" disabled value={selectedProject?.name || ''} />
                   </Form.Item>
                   <Form.Item label="芯片厂商">
-                    <Input placeholder="自动获取项目基础信息" disabled defaultValue="MT6789J" />
+                    <Input placeholder="自动获取项目基础信息" disabled value={selectedProject?.chipPlatform || ''} />
                   </Form.Item>
                   <Form.Item label="tOS-市场版本号">
-                    <Input placeholder="请输入tOS-市场版本号" />
+                    <Input placeholder="请输入tOS-市场版本号" value={createFormValues.tosVersion || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, tosVersion: e.target.value}))} />
                   </Form.Item>
                   <Form.Item label="分支信息">
-                    <Input placeholder="请输入分支信息" />
+                    <Input placeholder="请输入分支信息" value={createFormValues.branch || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, branch: e.target.value}))} />
                   </Form.Item>
                   <Form.Item label="是否MADA">
-                    <Select placeholder="请选择" style={{ width: '100%' }}>
+                    <Select placeholder="请选择" style={{ width: '100%' }} value={createFormValues.isMada} onChange={(val) => setCreateFormValues(prev => ({...prev, isMada: val}))}>
                       <Option value="是">是</Option>
                       <Option value="否">否</Option>
                     </Select>
                   </Form.Item>
                   <Form.Item label="MADA市场">
-                    <Input placeholder="请输入MADA市场" />
+                    <Input placeholder="请输入MADA市场" value={createFormValues.madaMarket || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, madaMarket: e.target.value}))} />
                   </Form.Item>
                   <Form.Item label="项目SPM">
-                    <Select placeholder="请选择SPM" style={{ width: '100%' }}>
+                    <Select placeholder="请选择SPM" style={{ width: '100%' }} value={createFormValues.spm} onChange={(val) => setCreateFormValues(prev => ({...prev, spm: val}))}>
                       <Option value="李白">李白</Option>
                       <Option value="张三">张三</Option>
                       <Option value="李四">李四</Option>
                     </Select>
                   </Form.Item>
                   <Form.Item label="项目TPM">
-                    <Select placeholder="请选择TPM" style={{ width: '100%' }}>
+                    <Select placeholder="请选择TPM" style={{ width: '100%' }} value={createFormValues.tpm} onChange={(val) => setCreateFormValues(prev => ({...prev, tpm: val}))}>
                       <Option value="王五">王五</Option>
                       <Option value="赵六">赵六</Option>
                     </Select>
                   </Form.Item>
                   <Form.Item label="对接人">
-                    <Select placeholder="请选择对接人" style={{ width: '100%' }}>
+                    <Select placeholder="请选择对接人" style={{ width: '100%' }} value={createFormValues.contact} onChange={(val) => setCreateFormValues(prev => ({...prev, contact: val}))}>
                       <Option value="孙七">孙七</Option>
                       <Option value="周八">周八</Option>
                     </Select>
                   </Form.Item>
                   <Form.Item label="项目版本号">
-                    <Input placeholder="请输入项目版本号" />
+                    <Input placeholder="请输入项目版本号" value={createFormValues.projectVersion || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, projectVersion: e.target.value}))} />
                   </Form.Item>
                   <Form.Item label="1+N转测类型">
-                    <Select placeholder="请选择转测类型" style={{ width: '100%' }}>
+                    <Select placeholder="请选择转测类型" style={{ width: '100%' }} value={createFormValues.transferType} onChange={(val) => setCreateFormValues(prev => ({...prev, transferType: val}))}>
                       {[...Array(99)].map((_, i) => (
                         <Option key={i + 1} value={String(i + 1)}>{i + 1}</Option>
                       ))}
@@ -2852,15 +2981,16 @@ export default function Home() {
               )}
               
               <Form.Item label="二级计划名称">
-                <Input 
+                <Input
                   value={
-                    selectedLevel2PlanType === '1+N MR版本火车计划' 
+                    selectedLevel2PlanType === '1+N MR版本火车计划'
                       ? `${selectedMRVersion}版本火车计划`
-                      : selectedLevel2PlanType === '无' 
-                        ? '' 
+                      : selectedLevel2PlanType === '无'
+                        ? (createFormValues.customPlanName || '')
                         : selectedLevel2PlanType
-                  } 
-                  disabled={selectedLevel2PlanType !== '无'} 
+                  }
+                  disabled={selectedLevel2PlanType !== '无'}
+                  onChange={selectedLevel2PlanType === '无' ? (e) => setCreateFormValues(prev => ({...prev, customPlanName: e.target.value})) : undefined}
                 />
               </Form.Item>
             </Form>
