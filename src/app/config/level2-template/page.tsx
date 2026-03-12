@@ -7,10 +7,8 @@ import { generateTaskNumber } from '@/lib/taskNumber'
 // 项目类型选项
 const PROJECT_TYPES: ProjectType[] = ['整机产品项目', '产品项目', '技术项目', '能力建设项目']
 
-// 二级计划固定类型
+// 二级计划固定类型（需求开发计划和在研版本火车计划为系统内置，不在模板管理中配置）
 const LEVEL2_PLAN_TYPES: Level2PlanType[] = [
-  '需求开发计划',
-  '在研版本火车计划',
   '1+N MR版本火车计划',
   '粉丝版本计划',
   '基础体验计划',
@@ -19,7 +17,7 @@ const LEVEL2_PLAN_TYPES: Level2PlanType[] = [
 
 export default function Level2PlanTemplatePage() {
   const [projectType, setProjectType] = useState<ProjectType>('整机产品项目')
-  const [selectedPlanType, setSelectedPlanType] = useState<Level2PlanType>('需求开发计划')
+  const [selectedPlanType, setSelectedPlanType] = useState<Level2PlanType>('1+N MR版本火车计划')
   const [showAddCustom, setShowAddCustom] = useState(false)
   const [customTypeName, setCustomTypeName] = useState('')
   const [customTypes, setCustomTypes] = useState<string[]>([])
@@ -268,6 +266,20 @@ export default function Level2PlanTemplatePage() {
                   >
                     +
                   </button>
+                  {customTypes.includes(selectedPlanType) && (
+                    <button
+                      onClick={() => {
+                        if (confirm(`确认删除自定义类型"${selectedPlanType}"？`)) {
+                          setCustomTypes(customTypes.filter(t => t !== selectedPlanType))
+                          setSelectedPlanType(LEVEL2_PLAN_TYPES[0])
+                        }
+                      }}
+                      className="btn btn-secondary text-sm text-red-500 hover:text-red-700 hover:bg-red-50"
+                      title="删除该自定义类型"
+                    >
+                      删除
+                    </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="text-sm text-gray-600">版本:</label>
@@ -351,6 +363,9 @@ export default function Level2PlanTemplatePage() {
                       <th className="text-center">计划开始时间</th>
                       <th className="text-center">计划完成时间</th>
                       <th className="text-right">预估工期</th>
+                      <th className="text-center">实际开始时间</th>
+                      <th className="text-center">实际结束时间</th>
+                      <th className="text-right">实际工期</th>
                       <th className="text-center">状态</th>
                       <th className="w-20 text-center">操作</th>
                     </tr>
@@ -358,7 +373,7 @@ export default function Level2PlanTemplatePage() {
                   <tbody>
                     {rootTasks.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="text-center text-gray-500 py-8">
+                        <td colSpan={12} className="text-center text-gray-500 py-8">
                           暂无数据，请创建修订版本
                         </td>
                       </tr>
@@ -383,6 +398,9 @@ export default function Level2PlanTemplatePage() {
                             </td>
                             <td className="text-center">-</td>
                             <td className="text-center">-</td>
+                            <td className="text-center">-</td>
+                            <td className="text-center">-</td>
+                            <td className="text-right">-</td>
                             <td className="text-center">-</td>
                             <td className="text-center">-</td>
                             <td className="text-right">-</td>
@@ -442,6 +460,9 @@ export default function Level2PlanTemplatePage() {
                                 </td>
                                 <td className="text-center">-</td>
                                 <td className="text-center">-</td>
+                                <td className="text-center">-</td>
+                                <td className="text-center">-</td>
+                                <td className="text-right">-</td>
                                 <td className="text-center">-</td>
                                 <td className="text-center">-</td>
                                 <td className="text-right">-</td>

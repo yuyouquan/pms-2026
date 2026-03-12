@@ -322,6 +322,9 @@ export default function Level1PlanTemplatePage() {
                       <th className="text-center">计划开始时间</th>
                       <th className="text-center">计划完成时间</th>
                       <th className="text-right">预估工期</th>
+                      <th className="text-center">实际开始时间</th>
+                      <th className="text-center">实际结束时间</th>
+                      <th className="text-right">实际工期</th>
                       <th className="text-center">状态</th>
                       <th className="w-20 text-center">操作</th>
                     </tr>
@@ -347,6 +350,9 @@ export default function Level1PlanTemplatePage() {
                           </td>
                           <td className="text-center">-</td>
                           <td className="text-center">-</td>
+                          <td className="text-center">-</td>
+                          <td className="text-center">-</td>
+                          <td className="text-right">-</td>
                           <td className="text-center">-</td>
                           <td className="text-center">-</td>
                           <td className="text-right">-</td>
@@ -406,6 +412,9 @@ export default function Level1PlanTemplatePage() {
                               </td>
                               <td className="text-center">-</td>
                               <td className="text-center">-</td>
+                              <td className="text-center">-</td>
+                              <td className="text-center">-</td>
+                              <td className="text-right">-</td>
                               <td className="text-center">-</td>
                               <td className="text-center">-</td>
                               <td className="text-right">-</td>

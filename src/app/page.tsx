@@ -30,7 +30,8 @@ import {
   Statistic,
   ConfigProvider,
   Descriptions,
-  Divider
+  Divider,
+  Radio
 } from 'antd'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
 import { gantt } from 'dhtmlx-gantt'
@@ -140,10 +141,8 @@ function DHTMLXGantt({ tasks, onTaskClick, readOnly = false }: { tasks: any[], o
     gantt.config.fit_tasks = true
     gantt.config.auto_scheduling = true
     gantt.config.auto_scheduling_strict = true
-    
-    if (readOnly) {
-      gantt.config.readonly = true
-    }
+    gantt.config.open_tree_initial = true
+    gantt.config.readonly = readOnly
     
     // 初始化
     gantt.init(ganttContainer.current)
@@ -158,6 +157,7 @@ function DHTMLXGantt({ tasks, onTaskClick, readOnly = false }: { tasks: any[], o
         duration: t.estimatedDays || 1,
         progress: (t.progress || 0) / 100,
         parent: t.parentId || 0,
+        open: true,
         status: t.status,
         responsible: t.responsible
       })),
@@ -213,13 +213,16 @@ import {
   FolderOutlined,
   CheckCircleOutlined,
   DownOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  FlagOutlined
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { compareVersions } from '@/lib/versionCompare'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { ColumnsType } from 'antd/es/table'
+import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
+import VersionTrainPlan from '@/components/plans/VersionTrainPlan'
 
 const { TabPane } = Tabs
 const { Option } = Select
@@ -228,7 +231,13 @@ const { TextArea } = Input
 
 // 项目类型选项
 const PROJECT_TYPES = ['整机产品项目', '产品项目', '技术项目', '能力建设项目']
-const LEVEL2_PLAN_TYPES = ['需求开发计划', '在研版本火车计划', '1+N MR版本火车计划', '粉丝版本计划', '基础体验计划', 'WBS计划']
+// 可在创建二级计划时选择的类型（不含固定类型）
+const LEVEL2_PLAN_TYPES = ['1+N MR版本火车计划', '粉丝版本计划', '基础体验计划', 'WBS计划']
+// 固定二级计划（始终显示在前两位，不可删除）
+const FIXED_LEVEL2_PLANS = [
+  { id: 'plan0', name: '需求开发计划', type: '需求开发计划', fixed: true },
+  { id: 'plan1', name: '在研版本火车计划', type: '在研版本火车计划', fixed: true },
+]
 
 // 项目数据
 const initialProjects = [
@@ -259,14 +268,14 @@ const VERSION_DATA = [
 ]
 
 const LEVEL1_TASKS = [
-  { id: '1', order: 1, taskName: '概念', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-01-15', estimatedDays: 15, actualDays: 14 },
-  { id: '1.1', parentId: '1', order: 1, taskName: '概念启动', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-01-07', estimatedDays: 7, actualDays: 7 },
-  { id: '1.2', parentId: '1', order: 2, taskName: 'STR1', status: '已完成', progress: 100, responsible: '李四', predecessor: '1.1', planStartDate: '2026-01-08', planEndDate: '2026-01-15', estimatedDays: 8, actualDays: 7 },
-  { id: '2', order: 2, taskName: '计划', status: '进行中', progress: 60, responsible: '王五', predecessor: '1.2', planStartDate: '2026-01-16', planEndDate: '2026-02-15', estimatedDays: 30, actualDays: 18 },
-  { id: '2.1', parentId: '2', order: 1, taskName: 'STR2', status: '进行中', progress: 60, responsible: '王五', predecessor: '1.2', planStartDate: '2026-01-16', planEndDate: '2026-01-31', estimatedDays: 15, actualDays: 12 },
-  { id: '2.2', parentId: '2', order: 2, taskName: 'STR3', status: '未开始', progress: 0, responsible: '赵六', predecessor: '2.1', planStartDate: '2026-02-01', planEndDate: '2026-02-15', estimatedDays: 15, actualDays: 0 },
-  { id: '3', order: 3, taskName: '开发验证', status: '未开始', progress: 0, responsible: '', predecessor: '2.2', planStartDate: '2026-02-16', planEndDate: '2026-03-15', estimatedDays: 28, actualDays: 0 },
-  { id: '4', order: 4, taskName: '上市保障', status: '未开始', progress: 0, responsible: '', predecessor: '3', planStartDate: '2026-03-16', planEndDate: '2026-04-15', estimatedDays: 30, actualDays: 0 },
+  { id: '1', order: 1, taskName: '概念', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-01-15', estimatedDays: 15, actualStartDate: '2026-01-01', actualEndDate: '2026-01-14', actualDays: 14 },
+  { id: '1.1', parentId: '1', order: 1, taskName: '概念启动', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-01-07', estimatedDays: 7, actualStartDate: '2026-01-01', actualEndDate: '2026-01-07', actualDays: 7 },
+  { id: '1.2', parentId: '1', order: 2, taskName: 'STR1', status: '已完成', progress: 100, responsible: '李四', predecessor: '1.1', planStartDate: '2026-01-08', planEndDate: '2026-01-15', estimatedDays: 8, actualStartDate: '2026-01-08', actualEndDate: '2026-01-14', actualDays: 7 },
+  { id: '2', order: 2, taskName: '计划', status: '进行中', progress: 60, responsible: '王五', predecessor: '1.2', planStartDate: '2026-01-16', planEndDate: '2026-02-15', estimatedDays: 30, actualStartDate: '2026-01-16', actualEndDate: '', actualDays: 18 },
+  { id: '2.1', parentId: '2', order: 1, taskName: 'STR2', status: '进行中', progress: 60, responsible: '王五', predecessor: '1.2', planStartDate: '2026-01-16', planEndDate: '2026-01-31', estimatedDays: 15, actualStartDate: '2026-01-16', actualEndDate: '', actualDays: 12 },
+  { id: '2.2', parentId: '2', order: 2, taskName: 'STR3', status: '未开始', progress: 0, responsible: '赵六', predecessor: '2.1', planStartDate: '2026-02-01', planEndDate: '2026-02-15', estimatedDays: 15, actualStartDate: '', actualEndDate: '', actualDays: 0 },
+  { id: '3', order: 3, taskName: '开发验证', status: '未开始', progress: 0, responsible: '', predecessor: '2.2', planStartDate: '2026-02-16', planEndDate: '2026-03-15', estimatedDays: 28, actualStartDate: '', actualEndDate: '', actualDays: 0 },
+  { id: '4', order: 4, taskName: '上市保障', status: '未开始', progress: 0, responsible: '', predecessor: '3', planStartDate: '2026-03-16', planEndDate: '2026-04-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
 ]
 
 const ALL_COLUMNS = [
@@ -277,33 +286,15 @@ const ALL_COLUMNS = [
   { key: 'planStartDate', title: '计划开始', default: true },
   { key: 'planEndDate', title: '计划完成', default: true },
   { key: 'estimatedDays', title: '预估工期', default: true },
-  { key: 'actualStartDate', title: '实际开始', default: false },
-  { key: 'actualEndDate', title: '实际完成', default: false },
+  { key: 'actualStartDate', title: '实际开始', default: true },
+  { key: 'actualEndDate', title: '实际完成', default: true },
   { key: 'actualDays', title: '实际工期', default: true },
   { key: 'status', title: '状态', default: true },
   { key: 'progress', title: '进度', default: true },
 ]
 
 // IR需求Mock数据
-const IR_REQUIREMENTS: any[] = [
-  { id: '1', domain: '相机', irNo: 'IR-2026-001', irTitle: '前置相机HDR增强', priority: '高', irStatus: '已验收', testPlanStart: '2026-01-10', testPlanEnd: '2026-01-25', acceptPlanStart: '2026-01-26', acceptPlanEnd: '2026-02-05' },
-  { id: '2', domain: '相机', irNo: 'IR-2026-002', irTitle: '后置超广角优化', priority: '中', irStatus: '测试中', testPlanStart: '2026-01-15', testPlanEnd: '2026-02-01', acceptPlanStart: '2026-02-02', acceptPlanEnd: '2026-02-15' },
-  { id: '3', domain: '显示', irNo: 'IR-2026-003', irTitle: '120Hz自适应刷新率', priority: '高', irStatus: '开发中', testPlanStart: '2026-02-01', testPlanEnd: '2026-02-20', acceptPlanStart: '2026-02-21', acceptPlanEnd: '2026-03-05' },
-  { id: '4', domain: '系统', irNo: 'IR-2026-004', irTitle: '内存管理优化', priority: '中', irStatus: '已验收', testPlanStart: '2026-01-05', testPlanEnd: '2026-01-20', acceptPlanStart: '2026-01-21', acceptPlanEnd: '2026-02-01' },
-  { id: '5', domain: '通信', irNo: 'IR-2026-005', irTitle: '5G SA模式稳定性', priority: '高', irStatus: '测试中', testPlanStart: '2026-02-10', testPlanEnd: '2026-03-01', acceptPlanStart: '2026-03-02', acceptPlanEnd: '2026-03-15' },
-  { id: '6', domain: '音频', irNo: 'IR-2026-006', irTitle: '通话降噪算法升级', priority: '低', irStatus: '待开发', testPlanStart: '2026-03-01', testPlanEnd: '2026-03-20', acceptPlanStart: '2026-03-21', acceptPlanEnd: '2026-04-05' },
-]
-
-// SR需求Mock数据
-const SR_REQUIREMENTS: any[] = [
-  { id: '1', srNo: 'SR-2026-001', srTitle: 'HDR拍照模式实现', relatedIR: 'IR-2026-001', devDept: '相机部', srStatus: '已转测', planTestVersion: '16.3.030', actualTestVersion: '16.3.030', testPlanStart: '2026-01-10', testPlanEnd: '2026-01-20', acceptPlanStart: '2026-01-21', acceptPlanEnd: '2026-02-01' },
-  { id: '2', srNo: 'SR-2026-002', srTitle: 'HDR视频录制支持', relatedIR: 'IR-2026-001', devDept: '相机部', srStatus: '已转测', planTestVersion: '16.3.030', actualTestVersion: '16.3.031', testPlanStart: '2026-01-15', testPlanEnd: '2026-01-25', acceptPlanStart: '2026-01-26', acceptPlanEnd: '2026-02-05' },
-  { id: '3', srNo: 'SR-2026-003', srTitle: '超广角畸变矫正', relatedIR: 'IR-2026-002', devDept: '相机部', srStatus: '开发中', planTestVersion: '16.3.031', actualTestVersion: '', testPlanStart: '2026-02-01', testPlanEnd: '2026-02-15', acceptPlanStart: '2026-02-16', acceptPlanEnd: '2026-02-28' },
-  { id: '4', srNo: 'SR-2026-004', srTitle: 'LTPO自适应刷新', relatedIR: 'IR-2026-003', devDept: '显示部', srStatus: '开发中', planTestVersion: '16.3.031', actualTestVersion: '', testPlanStart: '2026-02-10', testPlanEnd: '2026-02-25', acceptPlanStart: '2026-02-26', acceptPlanEnd: '2026-03-10' },
-  { id: '5', srNo: 'SR-2026-005', srTitle: '后台进程回收优化', relatedIR: 'IR-2026-004', devDept: '系统部', srStatus: '已验收', planTestVersion: '16.3.030', actualTestVersion: '16.3.030', testPlanStart: '2026-01-08', testPlanEnd: '2026-01-18', acceptPlanStart: '2026-01-19', acceptPlanEnd: '2026-01-28' },
-  { id: '6', srNo: 'SR-2026-006', srTitle: 'SA模式频繁断连修复', relatedIR: 'IR-2026-005', devDept: '通信部', srStatus: '测试中', planTestVersion: '16.3.032', actualTestVersion: '', testPlanStart: '2026-02-15', testPlanEnd: '2026-03-01', acceptPlanStart: '2026-03-02', acceptPlanEnd: '2026-03-15' },
-  { id: '7', srNo: 'SR-2026-007', srTitle: 'AI降噪模型集成', relatedIR: 'IR-2026-006', devDept: '音频部', srStatus: '待开发', planTestVersion: '16.3.032', actualTestVersion: '', testPlanStart: '2026-03-05', testPlanEnd: '2026-03-20', acceptPlanStart: '2026-03-21', acceptPlanEnd: '2026-04-05' },
-]
+// IR/SR需求数据已移至 RequirementDevPlan 组件
 
 // 拖拽上下文 - 将 listeners 传递给拖拽手柄而非整行
 const DragHandleContext = createContext<Record<string, any>>({})
@@ -335,7 +326,6 @@ export default function Home() {
   const [selectedProject, setSelectedProject] = useState<typeof initialProjects[0] | null>(null)
   
   // 配置相关状态
-  const [configCategory, setConfigCategory] = useState<string>('plan')
   const [selectedProjectType, setSelectedProjectType] = useState(PROJECT_TYPES[0])
   const [planLevel, setPlanLevel] = useState<string>('level1')
   const [selectedPlanType, setSelectedPlanType] = useState(LEVEL2_PLAN_TYPES[0])
@@ -361,7 +351,7 @@ export default function Home() {
   
   // 项目空间-计划
   const [projectPlanLevel, setProjectPlanLevel] = useState<string>('level1')
-  const [projectPlanViewMode, setProjectPlanViewMode] = useState<'table' | 'gantt'>('table')
+  const [projectPlanViewMode, setProjectPlanViewMode] = useState<'table' | 'horizontal' | 'gantt'>('table')
   const [projectPlanOverviewTab, setProjectPlanOverviewTab] = useState<string>('overview')
   const [level2PlanTasks, setLevel2PlanTasks] = useState<any[]>([
     // 在研版本火车计划 - 三层结构 (plan1)
@@ -400,12 +390,11 @@ export default function Home() {
     { id: '2.2', parentId: '2', order: 2, taskName: '版本集成', status: '未开始', progress: 0, responsible: '吴九', predecessor: '2.1', planStartDate: '2026-04-02', planEndDate: '2026-04-15', planId: 'plan3' },
   ])
   const [level2PlanMilestones, setLevel2PlanMilestones] = useState<string[]>([])
-  const [createdLevel2Plans, setCreatedLevel2Plans] = useState<{id: string, name: string, type: string}[]>([
-    { id: 'plan0', name: '需求开发计划', type: '需求开发计划' },
-    { id: 'plan1', name: '在研版本火车计划', type: '在研版本火车计划' },
+  const [createdLevel2Plans, setCreatedLevel2Plans] = useState<{id: string, name: string, type: string, fixed?: boolean}[]>([
+    ...FIXED_LEVEL2_PLANS,
     { id: 'plan2', name: 'FR版本火车计划', type: 'FR版本火车计划' },
     { id: 'plan3', name: 'MR1版本火车计划', type: 'MR版本火车计划' },
-  ])  // 已创建的二级计划列表
+  ])  // 已创建的二级计划列表（前两项为固定计划，不可删除）
   const [activeLevel2Plan, setActiveLevel2Plan] = useState<string>('plan0')  // 当前查看的二级计划
   
   // 项目空间-市场Tab
@@ -413,9 +402,9 @@ export default function Home() {
 
   // 市场维度的计划数据（整机产品项目按市场分别配置）
   const [marketPlanData, setMarketPlanData] = useState<Record<string, { tasks: any[], level2Tasks: any[], createdLevel2Plans: {id: string, name: string, type: string}[] }>>({
-    'OP': { tasks: [...LEVEL1_TASKS], level2Tasks: [], createdLevel2Plans: [{ id: 'plan0', name: '需求开发计划', type: '需求开发计划' }] },
-    'TR': { tasks: [...LEVEL1_TASKS.map(t => ({...t}))], level2Tasks: [], createdLevel2Plans: [{ id: 'plan0', name: '需求开发计划', type: '需求开发计划' }] },
-    'RU': { tasks: [...LEVEL1_TASKS.map(t => ({...t}))], level2Tasks: [], createdLevel2Plans: [{ id: 'plan0', name: '需求开发计划', type: '需求开发计划' }] },
+    'OP': { tasks: [...LEVEL1_TASKS], level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] },
+    'TR': { tasks: [...LEVEL1_TASKS.map(t => ({...t}))], level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] },
+    'RU': { tasks: [...LEVEL1_TASKS.map(t => ({...t}))], level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] },
   })
 
   // 项目搜索下拉
@@ -429,10 +418,10 @@ export default function Home() {
 
   // 二级计划创建
   const [showCreateLevel2Plan, setShowCreateLevel2Plan] = useState(false)
-  const [selectedLevel2PlanType, setSelectedLevel2PlanType] = useState('需求开发计划')
+  const [selectedLevel2PlanType, setSelectedLevel2PlanType] = useState('1+N MR版本火车计划')
   const [selectedMilestones, setSelectedMilestones] = useState<string[]>([])
   const [selectedMRVersion, setSelectedMRVersion] = useState<string>('FR')  // MR版本类型
-  const [irSrView, setIrSrView] = useState<'ir' | 'sr'>('ir')
+  // irSrView 已移至 RequirementDevPlan 组件
   
   // 二级计划时间约束警告状态
   const [milestoneTimeWarning, setMilestoneTimeWarning] = useState<{visible: boolean, violations: any[], message: string}>({visible: false, violations: [], message: ''})
@@ -1101,12 +1090,6 @@ export default function Home() {
     const ganttTasks = customTasks || filteredTasks
     return (
       <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
-        {!isEditMode && (
-          <div style={{ padding: '8px 16px', background: '#fafbfc', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <BarChartOutlined style={{ color: '#1890ff', fontSize: 13 }} />
-            <span style={{ fontSize: 12, color: '#8c8c8c' }}>甘特图视图 · 只读模式</span>
-          </div>
-        )}
         <DHTMLXGantt
           tasks={ganttTasks}
           onTaskClick={(task) => {
@@ -1114,6 +1097,107 @@ export default function Home() {
           }}
           readOnly={!isEditMode}
         />
+      </div>
+    )
+  }
+
+  // 横版表格视图（一级计划专用）
+  const renderHorizontalTable = () => {
+    // 横版表格：表头在左侧第一列，阶段=父活动，里程碑=子活动，阶段按里程碑数量合并
+    const stages = tasks.filter((t: any) => !t.parentId).sort((a: any, b: any) => a.order - b.order)
+    const calcDays = (start: string, end: string) => {
+      if (!start || !end) return '-'
+      const s = new Date(start), e = new Date(end)
+      const diff = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24))
+      return diff > 0 ? `${diff}天` : '-'
+    }
+
+    // 构建列数据：每个阶段下的里程碑（子活动），无子活动则阶段自身占一列
+    const stageGroups = stages.map((stage: any) => {
+      const milestones = tasks.filter((t: any) => t.parentId === stage.id).sort((a: any, b: any) => a.order - b.order)
+      return { stage, milestones, colSpan: milestones.length || 1 }
+    })
+
+    const thStyle: CSSProperties = { background: '#fafbfc', fontWeight: 600, fontSize: 13, color: '#595959', padding: '10px 12px', borderBottom: '2px solid #f0f0f0', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 1, minWidth: 120 }
+    const tdStyle: CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'center', whiteSpace: 'nowrap', minWidth: 110 }
+    const stageTdStyle: CSSProperties = { ...tdStyle, fontWeight: 600, background: '#f5f7fa', borderBottom: '2px solid #f0f0f0' }
+
+    return (
+      <div style={{ overflow: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #f0f0f0' }}>
+          <tbody>
+            {/* 阶段行：按里程碑数量合并 */}
+            <tr>
+              <th style={thStyle}>阶段</th>
+              {stageGroups.map(({ stage, colSpan }) => (
+                <td key={stage.id} colSpan={colSpan} style={stageTdStyle}>{stage.taskName}</td>
+              ))}
+            </tr>
+            {/* 里程碑行 */}
+            <tr>
+              <th style={thStyle}>里程碑</th>
+              {stageGroups.flatMap(({ stage, milestones }) =>
+                milestones.length > 0
+                  ? milestones.map((m: any) => <td key={m.id} style={tdStyle}>{m.taskName}</td>)
+                  : [<td key={stage.id} style={{ ...tdStyle, color: '#bfbfbf' }}>-</td>]
+              )}
+            </tr>
+            {/* 计划开始时间 */}
+            <tr>
+              <th style={thStyle}>计划开始时间</th>
+              {stageGroups.flatMap(({ stage, milestones }) =>
+                milestones.length > 0
+                  ? milestones.map((m: any) => <td key={m.id} style={tdStyle}>{m.planStartDate || '-'}</td>)
+                  : [<td key={stage.id} style={tdStyle}>{stage.planStartDate || '-'}</td>]
+              )}
+            </tr>
+            {/* 计划完成时间 */}
+            <tr>
+              <th style={thStyle}>计划完成时间</th>
+              {stageGroups.flatMap(({ stage, milestones }) =>
+                milestones.length > 0
+                  ? milestones.map((m: any) => <td key={m.id} style={tdStyle}>{m.planEndDate || '-'}</td>)
+                  : [<td key={stage.id} style={tdStyle}>{stage.planEndDate || '-'}</td>]
+              )}
+            </tr>
+            {/* 计划时间周期 */}
+            <tr>
+              <th style={thStyle}>计划时间周期</th>
+              {stageGroups.flatMap(({ stage, milestones }) =>
+                milestones.length > 0
+                  ? milestones.map((m: any) => <td key={m.id} style={tdStyle}>{calcDays(m.planStartDate, m.planEndDate)}</td>)
+                  : [<td key={stage.id} style={tdStyle}>{calcDays(stage.planStartDate, stage.planEndDate)}</td>]
+              )}
+            </tr>
+            {/* 实际开始时间 */}
+            <tr>
+              <th style={thStyle}>实际开始时间</th>
+              {stageGroups.flatMap(({ stage, milestones }) =>
+                milestones.length > 0
+                  ? milestones.map((m: any) => <td key={m.id} style={tdStyle}>{m.actualStartDate || '-'}</td>)
+                  : [<td key={stage.id} style={tdStyle}>{stage.actualStartDate || '-'}</td>]
+              )}
+            </tr>
+            {/* 实际完成时间 */}
+            <tr>
+              <th style={thStyle}>实际完成时间</th>
+              {stageGroups.flatMap(({ stage, milestones }) =>
+                milestones.length > 0
+                  ? milestones.map((m: any) => <td key={m.id} style={tdStyle}>{m.actualEndDate || '-'}</td>)
+                  : [<td key={stage.id} style={tdStyle}>{stage.actualEndDate || '-'}</td>]
+              )}
+            </tr>
+            {/* 实际时间周期 */}
+            <tr>
+              <th style={thStyle}>实际时间周期</th>
+              {stageGroups.flatMap(({ stage, milestones }) =>
+                milestones.length > 0
+                  ? milestones.map((m: any) => <td key={m.id} style={tdStyle}>{calcDays(m.actualStartDate, m.actualEndDate)}</td>)
+                  : [<td key={stage.id} style={tdStyle}>{calcDays(stage.actualStartDate, stage.actualEndDate)}</td>]
+              )}
+            </tr>
+          </tbody>
+        </table>
       </div>
     )
   }
@@ -1167,8 +1251,8 @@ export default function Home() {
       if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 120, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="YYYY-MM-DD" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planStartDate: e.target.value } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
       if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 120, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="YYYY-MM-DD" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planEndDate: e.target.value } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
       if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val}天</span> })
-      if (visibleColumns.includes('actualStartDate')) cols.push({ title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 120, render: (val: string) => <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
-      if (visibleColumns.includes('actualEndDate')) cols.push({ title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 120, render: (val: string) => <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
+      if (visibleColumns.includes('actualStartDate')) cols.push({ title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 120, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="YYYY-MM-DD" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, actualStartDate: e.target.value } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
+      if (visibleColumns.includes('actualEndDate')) cols.push({ title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 120, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="YYYY-MM-DD" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, actualEndDate: e.target.value } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
       if (visibleColumns.includes('actualDays')) cols.push({ title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (val: number) => <span style={{ fontSize: 12, color: '#595959' }}>{val > 0 ? `${val}天` : '-'}</span> })
       if (visibleColumns.includes('status')) cols.push({ title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={s === '已完成' ? 'success' : s === '进行中' ? 'processing' : 'default'} style={{ borderRadius: 4, fontSize: 12 }}>{s}</Tag> })
       if (visibleColumns.includes('progress')) cols.push({ title: '进度', dataIndex: 'progress', key: 'progress', width: 130, render: (p: number) => (
@@ -1668,100 +1752,7 @@ export default function Home() {
     )
   }
 
-  // 项目空间 - 需求开发计划（IR/SR视图）
-  const renderRequirementDevelopmentPlan = () => {
-    const filteredIR = IR_REQUIREMENTS.filter(r => {
-      if (!searchText) return true
-      const s = searchText.toLowerCase()
-      return r.domain?.toLowerCase().includes(s) || r.irNo?.toLowerCase().includes(s) || r.irTitle?.toLowerCase().includes(s) || r.irStatus?.toLowerCase().includes(s) || r.priority?.toLowerCase().includes(s)
-    })
-
-    const filteredSR = SR_REQUIREMENTS.filter(r => {
-      if (!searchText) return true
-      const s = searchText.toLowerCase()
-      return r.srNo?.toLowerCase().includes(s) || r.srTitle?.toLowerCase().includes(s) || r.relatedIR?.toLowerCase().includes(s) || r.devDept?.toLowerCase().includes(s) || r.srStatus?.toLowerCase().includes(s)
-    })
-
-    const irColumns = [
-      { title: '序号', dataIndex: 'id', key: 'id', width: 60 },
-      { title: '领域', dataIndex: 'domain', key: 'domain', width: 80 },
-      { title: 'IR编号', dataIndex: 'irNo', key: 'irNo', width: 120 },
-      { title: 'IR标题', dataIndex: 'irTitle', key: 'irTitle', width: 200 },
-      { title: '优先级', dataIndex: 'priority', key: 'priority', width: 80, render: (p: string) => <Tag color={p === '高' ? 'red' : p === '中' ? 'orange' : 'blue'}>{p}</Tag> },
-      { title: 'IR状态', dataIndex: 'irStatus', key: 'irStatus', width: 100, render: (s: string) => <Tag color={s === '已验收' ? 'success' : s === '测试中' ? 'processing' : s === '开发中' ? 'warning' : 'default'}>{s}</Tag> },
-      { title: '需求测试计划开始', dataIndex: 'testPlanStart', key: 'testPlanStart', width: 140 },
-      { title: '需求测试计划完成', dataIndex: 'testPlanEnd', key: 'testPlanEnd', width: 140 },
-      { title: '需求验收计划开始', dataIndex: 'acceptPlanStart', key: 'acceptPlanStart', width: 140 },
-      { title: '需求验收计划完成', dataIndex: 'acceptPlanEnd', key: 'acceptPlanEnd', width: 140 },
-    ]
-
-    const srColumns = [
-      { title: '序号', dataIndex: 'id', key: 'id', width: 60 },
-      { title: 'SR编号', dataIndex: 'srNo', key: 'srNo', width: 120 },
-      { title: 'SR标题', dataIndex: 'srTitle', key: 'srTitle', width: 200 },
-      { title: '关联IR', dataIndex: 'relatedIR', key: 'relatedIR', width: 120 },
-      { title: '开发部门', dataIndex: 'devDept', key: 'devDept', width: 100 },
-      { title: 'SR状态', dataIndex: 'srStatus', key: 'srStatus', width: 100, render: (s: string) => <Tag color={s === '已验收' ? 'success' : s === '已转测' ? 'processing' : s === '测试中' ? 'cyan' : s === '开发中' ? 'warning' : 'default'}>{s}</Tag> },
-      { title: '计划转测版本', dataIndex: 'planTestVersion', key: 'planTestVersion', width: 120 },
-      { title: '实际转测版本', dataIndex: 'actualTestVersion', key: 'actualTestVersion', width: 120, render: (v: string) => v || '-' },
-      { title: '需求测试计划开始', dataIndex: 'testPlanStart', key: 'testPlanStart', width: 140 },
-      { title: '需求测试计划完成', dataIndex: 'testPlanEnd', key: 'testPlanEnd', width: 140 },
-      { title: '需求验收计划开始', dataIndex: 'acceptPlanStart', key: 'acceptPlanStart', width: 140 },
-      { title: '需求验收计划完成', dataIndex: 'acceptPlanEnd', key: 'acceptPlanEnd', width: 140 },
-    ]
-
-    return (
-      <Card>
-        <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-          <Col>
-            <Tabs activeKey={irSrView} onChange={(k) => setIrSrView(k as 'ir' | 'sr')} items={[
-              { key: 'ir', label: 'IR需求' },
-              { key: 'sr', label: 'SR需求' },
-            ]} />
-          </Col>
-          <Col>
-            <Space>
-              <Input placeholder="搜索..." prefix={<SearchOutlined />} style={{ width: 200 }} onChange={(e) => setSearchText(e.target.value)} />
-              <Button icon={<AppstoreOutlined />} onClick={() => setShowColumnModal(true)}>自定义列</Button>
-              <Button
-                icon={projectPlanViewMode === 'table' ? <BarChartOutlined /> : <AppstoreOutlined />}
-                onClick={() => setProjectPlanViewMode(projectPlanViewMode === 'table' ? 'gantt' : 'table')}
-              >
-                {projectPlanViewMode === 'table' ? '甘特图' : '表格'}
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-        {irSrView === 'ir' ? (
-          projectPlanViewMode === 'table' ? (
-            <Table dataSource={filteredIR} columns={irColumns} rowKey="id" pagination={false} scroll={{ x: 1200 }} />
-          ) : (
-            <DHTMLXGantt
-              tasks={filteredIR.map(r => ({
-                id: r.id, taskName: `${r.irNo} ${r.irTitle}`, planStartDate: r.testPlanStart, planEndDate: r.testPlanEnd,
-                estimatedDays: 10, progress: r.irStatus === '已验收' ? 100 : r.irStatus === '测试中' ? 60 : r.irStatus === '开发中' ? 30 : 0,
-                responsible: r.domain, status: r.irStatus
-              }))}
-              readOnly
-            />
-          )
-        ) : (
-          projectPlanViewMode === 'table' ? (
-            <Table dataSource={filteredSR} columns={srColumns} rowKey="id" pagination={false} scroll={{ x: 1500 }} />
-          ) : (
-            <DHTMLXGantt
-              tasks={filteredSR.map(r => ({
-                id: r.id, taskName: `${r.srNo} ${r.srTitle}`, planStartDate: r.testPlanStart, planEndDate: r.testPlanEnd,
-                estimatedDays: 10, progress: r.srStatus === '已验收' ? 100 : r.srStatus === '已转测' ? 80 : r.srStatus === '测试中' ? 50 : r.srStatus === '开发中' ? 30 : 0,
-                responsible: r.devDept, status: r.srStatus
-              }))}
-              readOnly
-            />
-          )
-        )}
-      </Card>
-    )
-  }
+  // renderRequirementDevelopmentPlan 已移至 RequirementDevPlan 独立组件
 
   // 市场颜色映射
   const marketColors: Record<string, string> = { 'OP': '#1890ff', 'TR': '#52c41a', 'RU': '#faad14', 'FR': '#722ed1', 'IN': '#eb2f96', 'BR': '#13c2c2' }
@@ -1859,7 +1850,33 @@ export default function Home() {
                   style={{ marginBottom: 0 }}
                   items={createdLevel2Plans.map(plan => ({
                     key: plan.id,
-                    label: <span style={{ fontWeight: 500 }}>{plan.name}</span>,
+                    label: (
+                      <span style={{ fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        {plan.name}
+                        {!plan.fixed && (
+                          <Popconfirm
+                            title={`确认删除"${plan.name}"？`}
+                            onConfirm={(e) => {
+                              e?.stopPropagation()
+                              const newPlans = createdLevel2Plans.filter(p => p.id !== plan.id)
+                              setCreatedLevel2Plans(newPlans)
+                              if (activeLevel2Plan === plan.id) setActiveLevel2Plan(newPlans[0]?.id || 'plan0')
+                              message.success(`已删除${plan.name}`)
+                            }}
+                            onCancel={(e) => e?.stopPropagation()}
+                            okText="确认"
+                            cancelText="取消"
+                          >
+                            <DeleteOutlined
+                              style={{ fontSize: 12, color: '#bfbfbf', marginLeft: 2 }}
+                              onClick={(e) => e.stopPropagation()}
+                              onMouseEnter={(e) => (e.currentTarget.style.color = '#ff4d4f')}
+                              onMouseLeave={(e) => (e.currentTarget.style.color = '#bfbfbf')}
+                            />
+                          </Popconfirm>
+                        )}
+                      </span>
+                    ),
                   }))}
                 />
               </Col>
@@ -1870,11 +1887,14 @@ export default function Home() {
           </Card>
         )}
 
-        {/* 需求开发计划 - 特殊展示 */}
-        {projectPlanLevel === 'level2' && activeLevel2Plan === 'plan0' && renderRequirementDevelopmentPlan()}
+        {/* 需求开发计划 - 专用组件 */}
+        {projectPlanLevel === 'level2' && activeLevel2Plan === 'plan0' && <RequirementDevPlan />}
 
-        {/* 非需求开发计划的二级计划 + 一级计划：版本管理 + 表格/甘特图 */}
-        {projectPlanLevel !== 'overview' && !(projectPlanLevel === 'level2' && activeLevel2Plan === 'plan0') && (
+        {/* 在研版本火车计划 - 专用组件 */}
+        {projectPlanLevel === 'level2' && activeLevel2Plan === 'plan1' && <VersionTrainPlan />}
+
+        {/* 非固定类型的二级计划 + 一级计划：版本管理 + 表格/甘特图 */}
+        {projectPlanLevel !== 'overview' && !(projectPlanLevel === 'level2' && (activeLevel2Plan === 'plan0' || activeLevel2Plan === 'plan1')) && (
           <Card
             size="small"
             style={{ marginBottom: 16, borderRadius: 8 }}
@@ -1911,13 +1931,18 @@ export default function Home() {
                   <Tooltip title="自定义列">
                     <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
                   </Tooltip>
-                  <Tooltip title={projectPlanViewMode === 'table' ? '切换甘特图' : '切换表格'}>
-                    <Button
-                      icon={projectPlanViewMode === 'table' ? <BarChartOutlined /> : <UnorderedListOutlined />}
-                      style={{ borderRadius: 6 }}
-                      onClick={() => setProjectPlanViewMode(projectPlanViewMode === 'table' ? 'gantt' : 'table')}
-                    />
-                  </Tooltip>
+                  <Radio.Group
+                    value={projectPlanViewMode}
+                    onChange={(e) => setProjectPlanViewMode(e.target.value)}
+                    optionType="button"
+                    buttonStyle="solid"
+                    size="small"
+                    options={[
+                      { label: '竖版表格', value: 'table' },
+                      { label: '横版表格', value: 'horizontal' },
+                      { label: '甘特图', value: 'gantt' },
+                    ]}
+                  />
                 </Space>
               </Col>
             </Row>
@@ -1926,8 +1951,8 @@ export default function Home() {
 
         {/* 表格或甘特图内容 */}
         <Card style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
-          {projectPlanLevel === 'level1' && (projectPlanViewMode === 'gantt' ? renderGanttChart() : renderTaskTable())}
-          {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan && (
+          {projectPlanLevel === 'level1' && (projectPlanViewMode === 'gantt' ? renderGanttChart() : projectPlanViewMode === 'horizontal' ? renderHorizontalTable() : renderTaskTable())}
+          {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1' && activeLevel2Plan && (
             projectPlanViewMode === 'gantt'
               ? renderGanttChart(level2PlanTasks.filter(t => t.planId === activeLevel2Plan))
               : renderTaskTable(level2PlanTasks.filter(t => t.planId === activeLevel2Plan))
@@ -1966,12 +1991,12 @@ export default function Home() {
               </Space>
               <div style={{ marginTop: 4, fontSize: 12, color: '#8c8c8c', paddingLeft: 24 }}>一级计划与二级计划融合展示</div>
             </div>
-            <Tooltip title={projectPlanViewMode === 'table' ? '切换甘特图' : '切换表格'}>
+            <Tooltip title={projectPlanViewMode === 'gantt' ? '切换表格' : '切换甘特图'}>
               <Button
-                icon={projectPlanViewMode === 'table' ? <BarChartOutlined /> : <UnorderedListOutlined />}
+                icon={projectPlanViewMode === 'gantt' ? <UnorderedListOutlined /> : <BarChartOutlined />}
                 size="small"
                 style={{ borderRadius: 6 }}
-                onClick={() => setProjectPlanViewMode(projectPlanViewMode === 'table' ? 'gantt' : 'table')}
+                onClick={() => setProjectPlanViewMode(projectPlanViewMode === 'gantt' ? 'table' : 'gantt')}
               />
             </Tooltip>
           </div>
@@ -2120,7 +2145,7 @@ export default function Home() {
                         if (t.id === '3') return { ...t, responsible: '李四', planStartDate: '2026-02-20' }
                         return t
                       }),
-                      { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualDays: 0 }
+                      { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 }
                     ]
                   }
                   const result = compareVersions(oldTasks as any, newTasks as any)
@@ -2226,6 +2251,7 @@ export default function Home() {
                     style={{ marginBottom: 0 }}
                     items={[
                       { key: 'projects', label: <span style={{ fontWeight: 500, padding: '0 4px' }}>工作台</span> },
+                      { key: 'roadmap', label: <span style={{ fontWeight: 500, padding: '0 4px' }}>项目路标视图</span> },
                       { key: 'config', label: <span style={{ fontWeight: 500, padding: '0 4px' }}>配置中心</span> },
                     ]}
                   />
@@ -2341,27 +2367,35 @@ export default function Home() {
                 </div>
               </div>
             )}
+            {activeModule === 'roadmap' && (
+              <Card style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
+                <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%)', borderBottom: '1px solid #e8e8e8' }}>
+                  <Space size={8} align="center">
+                    <FlagOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+                    <span style={{ fontSize: 16, fontWeight: 600, color: '#262626' }}>项目路标视图</span>
+                  </Space>
+                  <div style={{ marginTop: 4, fontSize: 12, color: '#8c8c8c', paddingLeft: 24 }}>全局项目路标与里程碑规划视图</div>
+                </div>
+                <div style={{ padding: '48px 0', textAlign: 'center' }}>
+                  <Empty description={<span style={{ color: '#8c8c8c' }}>项目路标视图功能开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                </div>
+              </Card>
+            )}
             {(activeModule === 'config' || activeModule === 'projectSpace') && (
               <div>
                 {/* 配置分类导航 */}
                 <Card size="small" style={{ marginBottom: 20, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
                   <Tabs
-                    activeKey={configCategory}
-                    onChange={(key) => navigateWithEditGuard(() => setConfigCategory(key))}
+                    activeKey="plan"
                     style={{ marginBottom: 0 }}
                     items={[
                       { key: 'plan', label: <Space size={6}><CalendarOutlined />计划模板配置</Space> },
-                      { key: 'milestone', label: <Space size={6}><FolderOutlined />里程碑配置</Space>, disabled: true },
-                      { key: 'role', label: <Space size={6}><TeamOutlined />角色权限配置</Space>, disabled: true },
-                      { key: 'flow', label: <Space size={6}><BarChartOutlined />流程配置</Space>, disabled: true },
-                      { key: 'field', label: <Space size={6}><SettingOutlined />字段配置</Space>, disabled: true },
                     ]}
                   />
                 </Card>
 
                 {/* 计划模板配置 */}
-                {configCategory === 'plan' && (
-                  <Row gutter={20}>
+                <Row gutter={20}>
                     <Col span={sidebarCollapsed ? 1 : 4}>
                       <Card
                         size="small"
@@ -2403,16 +2437,35 @@ export default function Home() {
                           <Space wrap size={[8, 8]}>
                             <span style={{ color: '#8c8c8c', fontSize: 13, fontWeight: 500 }}>模板类型</span>
                             <Divider type="vertical" style={{ height: 16, margin: '0 4px' }} />
-                            {allPlanTypes.map(t => (
-                              <Tag
-                                key={t}
-                                color={selectedPlanType === t ? 'blue' : 'default'}
-                                style={{ cursor: 'pointer', borderRadius: 4, padding: '2px 10px', fontWeight: selectedPlanType === t ? 500 : 400 }}
-                                onClick={() => navigateWithEditGuard(() => setSelectedPlanType(t))}
-                              >
-                                {t}
-                              </Tag>
-                            ))}
+                            {allPlanTypes.map(t => {
+                              const isCustom = customTypes.includes(t)
+                              return (
+                                <Tag
+                                  key={t}
+                                  color={selectedPlanType === t ? 'blue' : 'default'}
+                                  style={{ cursor: 'pointer', borderRadius: 4, padding: '2px 10px', fontWeight: selectedPlanType === t ? 500 : 400 }}
+                                  onClick={() => navigateWithEditGuard(() => setSelectedPlanType(t))}
+                                  closable={isCustom}
+                                  onClose={(e) => {
+                                    e.preventDefault()
+                                    Modal.confirm({
+                                      title: '删除计划类型',
+                                      content: `确认删除自定义类型"${t}"？`,
+                                      okText: '删除',
+                                      okType: 'danger',
+                                      cancelText: '取消',
+                                      onOk: () => {
+                                        setCustomTypes(prev => prev.filter(c => c !== t))
+                                        if (selectedPlanType === t) setSelectedPlanType(LEVEL2_PLAN_TYPES[0])
+                                        message.success('已删除')
+                                      },
+                                    })
+                                  }}
+                                >
+                                  {t}
+                                </Tag>
+                              )
+                            })}
                             <Button type="dashed" size="small" icon={<PlusOutlined />} style={{ borderRadius: 4 }} onClick={() => setShowAddCustomType(true)}>添加类型</Button>
                           </Space>
                         </Card>
@@ -2449,16 +2502,6 @@ export default function Home() {
                       </Card>
                     </Col>
                   </Row>
-                )}
-
-                {/* 其他配置占位 */}
-                {configCategory !== 'plan' && (
-                  <Card style={{ borderRadius: 8, textAlign: 'center', padding: '60px 0' }}>
-                    <Empty description={<span style={{ color: '#8c8c8c' }}>{
-                      { milestone: '里程碑配置', role: '角色权限配置', flow: '流程配置', field: '字段配置' }[configCategory] || '配置'
-                    }模块开发中...</span>} />
-                  </Card>
-                )}
               </div>
             )}
           </div>
@@ -2481,7 +2524,7 @@ export default function Home() {
                         if (t.id === '3') return { ...t, responsible: '李四', planStartDate: '2026-02-20' }
                         return t
                       }),
-                      { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualDays: 0 }
+                      { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 }
                     ]
                   }
                   const result = compareVersions(oldTasks as any, newTasks as any)
@@ -2716,10 +2759,6 @@ export default function Home() {
               </Form.Item>
               
               {/* 根据不同计划类型显示不同参数 */}
-              {/* 需求开发计划 - 无额外参数 */}
-              
-              {/* 在研版本火车计划 - 无额外参数 */}
-              
               {selectedLevel2PlanType === '1+N MR版本火车计划' && (
                 <>
                   <Form.Item label="MR版本类型">

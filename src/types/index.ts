@@ -141,3 +141,64 @@ export interface VersionCompareSelect {
   version1: string;
   version2: string;
 }
+
+// IR需求
+export interface IRRequirement {
+  id: string;
+  domain: string;
+  irNo: string;
+  irTitle: string;
+  priority: '高' | '中' | '低';
+  irStatus: string;
+  testPlanStart: string;
+  testPlanEnd: string;
+  acceptPlanStart: string;
+  acceptPlanEnd: string;
+}
+
+// SR需求
+export interface SRRequirement {
+  id: string;
+  srNo: string;
+  srTitle: string;
+  relatedIR: string;
+  devDept: string;
+  srStatus: string;
+  planTestVersion: string;
+  actualTestVersion: string;
+  testPlanStart: string;
+  testPlanEnd: string;
+  acceptPlanStart: string;
+  acceptPlanEnd: string;
+}
+
+// 版本分类
+export type VersionCategory = '主干版本' | '量产版本';
+
+// 在研版本火车状态
+export type VersionTrainStatus = '已完成' | '自检中' | '测试中' | '未开始';
+
+// 在研版本火车记录
+export interface VersionTrainRecord {
+  id: string;
+  versionNo: string;
+  versionCategory: VersionCategory;
+  status: VersionTrainStatus;
+  planCompileTime: string;
+  planTestTransferTime: string;
+  planTestStartTime: string;
+  planTestEndTime: string;
+  mainTestModel: string;
+  versionGoal: string;
+  actualCompileTime: string;
+  actualTestTransferTime: string;
+  actualTestStartTime: string;
+  actualTestEndTime: string;
+  relatedRequirements: { id: string; no: string; title: string; status: string }[];
+  relatedDefects: { id: string; no: string; title: string; severity: string; status: string }[];
+  attachments: { name: string; url: string }[];
+}
+
+// 固定二级计划类型（不可在模板管理中配置）
+export const FIXED_LEVEL2_PLAN_TYPES = ['需求开发计划', '在研版本火车计划'] as const;
+export type FixedLevel2PlanType = typeof FIXED_LEVEL2_PLAN_TYPES[number];
