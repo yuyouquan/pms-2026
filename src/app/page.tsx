@@ -256,10 +256,14 @@ const kanbanColumns = [
   { title: '发布阶段', key: 'released', color: '#722ed1' },
 ]
 
+const CURRENT_USER = '张三' // 当前登录用户（Mock）
+
 const initialTodos = [
-  { id: '1', title: '[X6877-D8400_H991] V2(修订版) - 计划阶段任务待处理', priority: 'high', deadline: '2026-03-10', status: '进行中', projectId: '1', versionId: 'v2' },
-  { id: '2', title: '[X6855_H8917] V2(修订版) - STR2 任务审核', priority: 'medium', deadline: '2026-03-15', status: '待处理', projectId: '3', versionId: 'v2' },
-  { id: '3', title: '[X6877-D8400_H991] V2(修订版) - 开发验证阶段安排', priority: 'low', deadline: '2026-03-20', status: '待处理', projectId: '1', versionId: 'v2' },
+  { id: '1', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V2', versionId: 'v2', market: 'OP', responsible: '张三', priority: 'high', deadline: '2026-03-10', status: '进行中', taskDesc: '计划阶段任务待处理' },
+  { id: '2', projectId: '3', projectName: 'X6855_H8917', planLevel: 'level2' as const, planType: '在研版本火车计划', planTabKey: 'plan1', versionNo: 'V2', versionId: 'v2', market: 'OP', responsible: '李四', priority: 'medium', deadline: '2026-03-15', status: '待处理', taskDesc: 'STR2 任务审核' },
+  { id: '3', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level2' as const, planType: '需求开发计划', planTabKey: 'plan0', versionNo: 'V2', versionId: 'v2', market: 'TR', responsible: '张三', priority: 'low', deadline: '2026-03-20', status: '待处理', taskDesc: '开发验证阶段安排' },
+  { id: '4', projectId: '2', projectName: 'tOS16.0', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V1', versionId: 'v1', market: '', responsible: '张三', priority: 'high', deadline: '2026-03-12', status: '进行中', taskDesc: '里程碑STR1待确认' },
+  { id: '5', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level2' as const, planType: '1+N MR版本火车计划', planTabKey: 'plan2', versionNo: 'V1', versionId: 'v1', market: 'OP', responsible: '李四', priority: 'medium', deadline: '2026-03-18', status: '待处理', taskDesc: 'FR版本转测安排' },
 ]
 
 const VERSION_DATA = [
@@ -1084,12 +1088,53 @@ export default function Home() {
               }}
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#d9d9d9'; e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)' }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#f0f0f0'; e.currentTarget.style.boxShadow = 'none' }}
-              onClick={() => { const proj = projects.find(p => p.id === todo.projectId); if (proj) { setSelectedProject(proj); setActiveModule('projectSpace'); setProjectSpaceModule('plan'); setCurrentVersion(todo.versionId || 'v2') } }}
+              onClick={() => {
+                const proj = projects.find(p => p.id === todo.projectId)
+                if (!proj) return
+                setSelectedProject(proj)
+                setActiveModule('projectSpace')
+                setProjectSpaceModule('plan')
+                setCurrentVersion(todo.versionId || 'v2')
+                setProjectPlanLevel(todo.planLevel)
+                setProjectPlanViewMode('table')
+                setIsEditMode(true)
+                if (todo.planLevel === 'level2' && todo.planTabKey) {
+                  setActiveLevel2Plan(todo.planTabKey)
+                }
+                if (proj.type === '整机产品项目' && todo.market) {
+                  setSelectedMarketTab(todo.market)
+                }
+                // 延迟滚动到责任人为当前用户的第一条任务
+                setTimeout(() => {
+                  const rows = document.querySelectorAll('.ant-table-tbody tr.ant-table-row')
+                  for (let i = 0; i < rows.length; i++) {
+                    const cells = rows[i].querySelectorAll('td')
+                    for (let j = 0; j < cells.length; j++) {
+                      if (cells[j].textContent?.trim() === CURRENT_USER) {
+                        rows[i].scrollIntoView({ behavior: 'smooth', block: 'center' })
+                        // 高亮闪烁效果
+                        const row = rows[i] as HTMLElement
+                        row.style.transition = 'background 0.3s'
+                        row.style.background = '#e6f7ff'
+                        setTimeout(() => { row.style.background = '' }, 2000)
+                        return
+                      }
+                    }
+                  }
+                }, 800)
+              }}
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: pc.dotColor, marginTop: 6, flexShrink: 0 }} />
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: pc.dotColor, marginTop: 7, flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, color: '#262626', lineHeight: 1.5, marginBottom: 6 }}>{todo.title}</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{todo.projectName}</div>
+                  <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {todo.planLevel === 'level1' ? '一级计划' : '二级计划'}
+                    {todo.planLevel === 'level2' && todo.planType && <> · {todo.planType}</>}
+                    {' · '}<span style={{ color: '#1890ff', fontWeight: 500 }}>{todo.versionNo}</span>
+                    {todo.market && <> · <span style={{ color: '#13c2c2' }}>{todo.market}</span></>}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#595959', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{todo.taskDesc}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Space size={4}>
                       <Tag color={pc.color} style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>{pc.text}</Tag>
