@@ -12,10 +12,21 @@ const ACTIVITY_STRUCTURE = [
 ]
 
 const MR_TRAIN_DATA = [
-  // tOS16.3.50 - 高通
+  // 产品项目 - tOS16.0（挂在 tOS16.3.50 版本组下）
+  {
+    key: 'p1', tosVersion: 'tOS16.3.50', chipPlatform: '-', productLine: '-', market: '-',
+    projectName: 'tOS16.0', projectId: '2', projectType: '产品项目', isMada: '-', madaMarket: '-',
+    spm: '张三', contact: '李四', tpm: '赵六', mrType: 'FR', projectVersion: '16.0.001', crossTestType: '标准',
+    branch: '16.0_main',
+    act_版本规划_需求收集_start: '2025-12-01', act_版本规划_需求收集_end: '2025-12-15',
+    act_版本规划_计划评审_start: '2025-12-16', act_版本规划_计划评审_end: '2025-12-25',
+    act_版本开发_代码开发_start: '2026-01-05', act_版本开发_代码开发_end: '2026-02-28',
+    act_版本开发_集成编译_start: '2026-03-01', act_版本开发_集成编译_end: '2026-03-15',
+  },
+  // tOS16.3.50 - 高通（整机产品项目）
   {
     key: '1', tosVersion: 'tOS16.3.50', chipPlatform: '高通', productLine: '高端系列', market: 'OP',
-    projectName: 'X6877-D8400_H991', projectId: '1', isMada: '是', madaMarket: 'GMS',
+    projectName: 'X6877-D8400_H991', projectId: '1', projectType: '整机产品项目', isMada: '是', madaMarket: 'GMS',
     spm: '李白', contact: '张三', tpm: '王五', mrType: 'FR', projectVersion: '16.3.050.01', crossTestType: '标准',
     branch: '16.3.050_main',
     act_版本规划_需求收集_start: '2026-01-02', act_版本规划_需求收集_end: '2026-01-10',
@@ -25,7 +36,7 @@ const MR_TRAIN_DATA = [
   },
   {
     key: '2', tosVersion: 'tOS16.3.50', chipPlatform: '高通', productLine: '高端系列', market: 'TR',
-    projectName: 'X6877-D8400_H991', projectId: '1', isMada: '否', madaMarket: '-',
+    projectName: 'X6877-D8400_H991', projectId: '1', projectType: '整机产品项目', isMada: '否', madaMarket: '-',
     spm: '李白', contact: '张三', tpm: '王五', mrType: 'MR1', projectVersion: '16.3.050.02', crossTestType: '标准',
     branch: '16.3.050_MR1',
     act_版本规划_需求收集_start: '2026-02-01', act_版本规划_需求收集_end: '2026-02-08',
@@ -35,7 +46,7 @@ const MR_TRAIN_DATA = [
   },
   {
     key: '3', tosVersion: 'tOS16.3.50', chipPlatform: '高通', productLine: '中端系列', market: 'RU',
-    projectName: 'X6801_TBD', projectId: '2', isMada: '否', madaMarket: '-',
+    projectName: 'X6801_TBD', projectId: '2', projectType: '整机产品项目', isMada: '否', madaMarket: '-',
     spm: '张三', contact: '李四', tpm: '赵六', mrType: 'MR4', projectVersion: '16.3.050.03', crossTestType: '跨测',
     branch: '16.3.050_MR4',
     act_版本规划_需求收集_start: '', act_版本规划_需求收集_end: '',
@@ -45,7 +56,7 @@ const MR_TRAIN_DATA = [
   },
   {
     key: '4', tosVersion: 'tOS16.3.50', chipPlatform: '高通', productLine: '中端系列', market: 'OP',
-    projectName: 'X6801_TBD', projectId: '2', isMada: '否', madaMarket: '-',
+    projectName: 'X6801_TBD', projectId: '2', projectType: '整机产品项目', isMada: '否', madaMarket: '-',
     spm: '张三', contact: '李四', tpm: '赵六', mrType: 'MR2', projectVersion: '16.3.050.04', crossTestType: '标准',
     branch: '16.3.050_MR2',
     act_版本规划_需求收集_start: '', act_版本规划_需求收集_end: '',
@@ -56,7 +67,7 @@ const MR_TRAIN_DATA = [
   // tOS16.3.50 - MTK
   {
     key: '5', tosVersion: 'tOS16.3.50', chipPlatform: 'MTK', productLine: '高端系列', market: 'OP',
-    projectName: 'X6855_H8917', projectId: '3', isMada: '是', madaMarket: 'GMS',
+    projectName: 'X6855_H8917', projectId: '3', projectType: '整机产品项目', isMada: '是', madaMarket: 'GMS',
     spm: '赵六', contact: '王五', tpm: '孙七', mrType: 'MR1', projectVersion: '16.3.050.05', crossTestType: '标准',
     branch: '16.3.050_main',
     act_版本规划_需求收集_start: '2026-01-05', act_版本规划_需求收集_end: '2026-01-12',
@@ -66,7 +77,7 @@ const MR_TRAIN_DATA = [
   },
   {
     key: '6', tosVersion: 'tOS16.3.50', chipPlatform: 'MTK', productLine: '高端系列', market: 'TR',
-    projectName: 'X6855_H8917', projectId: '3', isMada: '否', madaMarket: '-',
+    projectName: 'X6855_H8917', projectId: '3', projectType: '整机产品项目', isMada: '否', madaMarket: '-',
     spm: '赵六', contact: '王五', tpm: '孙七', mrType: 'MR1', projectVersion: '16.3.050.06', crossTestType: '跨测',
     branch: '16.3.050_MR1',
     act_版本规划_需求收集_start: '2026-02-05', act_版本规划_需求收集_end: '2026-02-12',
@@ -76,7 +87,7 @@ const MR_TRAIN_DATA = [
   },
   {
     key: '7', tosVersion: 'tOS16.3.50', chipPlatform: 'MTK', productLine: '中端系列', market: 'OP',
-    projectName: 'X6890_H100', projectId: '6', isMada: '否', madaMarket: '-',
+    projectName: 'X6890_H100', projectId: '6', projectType: '整机产品项目', isMada: '否', madaMarket: '-',
     spm: '李四', contact: '赵六', tpm: '周八', mrType: 'MR1', projectVersion: '16.3.050.07', crossTestType: '标准',
     branch: '16.3.050_MP',
     act_版本规划_需求收集_start: '', act_版本规划_需求收集_end: '',
@@ -86,7 +97,7 @@ const MR_TRAIN_DATA = [
   },
   {
     key: '8', tosVersion: 'tOS16.3.50', chipPlatform: 'MTK', productLine: '中端系列', market: 'IN',
-    projectName: 'X6890_H100', projectId: '6', isMada: '是', madaMarket: 'GMS',
+    projectName: 'X6890_H100', projectId: '6', projectType: '整机产品项目', isMada: '是', madaMarket: 'GMS',
     spm: '李四', contact: '赵六', tpm: '周八', mrType: 'MR1', projectVersion: '16.3.050.08', crossTestType: '标准',
     branch: '16.3.050_MP',
     act_版本规划_需求收集_start: '', act_版本规划_需求收集_end: '',
@@ -97,7 +108,7 @@ const MR_TRAIN_DATA = [
   // tOS16.3.50 - SPRD
   {
     key: '9', tosVersion: 'tOS16.3.50', chipPlatform: 'SPRD', productLine: '入门系列', market: 'OP',
-    projectName: 'X6873_H972', projectId: '5', isMada: '否', madaMarket: '-',
+    projectName: 'X6873_H972', projectId: '5', projectType: '整机产品项目', isMada: '否', madaMarket: '-',
     spm: '王五', contact: '周八', tpm: '吴九', mrType: 'MR1', projectVersion: '16.3.050.09', crossTestType: '标准',
     branch: '16.3.050_main',
     act_版本规划_需求收集_start: '', act_版本规划_需求收集_end: '',
@@ -107,7 +118,7 @@ const MR_TRAIN_DATA = [
   },
   {
     key: '10', tosVersion: 'tOS16.3.50', chipPlatform: 'SPRD', productLine: '入门系列', market: 'BR',
-    projectName: 'X6873_H972', projectId: '5', isMada: '否', madaMarket: '-',
+    projectName: 'X6873_H972', projectId: '5', projectType: '整机产品项目', isMada: '否', madaMarket: '-',
     spm: '王五', contact: '周八', tpm: '吴九', mrType: 'MR1', projectVersion: '16.3.050.10', crossTestType: '跨测',
     branch: '16.3.050_MR1',
     act_版本规划_需求收集_start: '', act_版本规划_需求收集_end: '',
@@ -117,7 +128,7 @@ const MR_TRAIN_DATA = [
   },
   {
     key: '11', tosVersion: 'tOS16.3.50', chipPlatform: 'SPRD', productLine: '入门系列', market: 'IN',
-    projectName: 'X6880_H200', projectId: '7', isMada: '否', madaMarket: '-',
+    projectName: 'X6880_H200', projectId: '7', projectType: '整机产品项目', isMada: '否', madaMarket: '-',
     spm: '孙七', contact: '吴九', tpm: '李四', mrType: 'MR1', projectVersion: '16.3.050.11', crossTestType: '标准',
     branch: '16.3.050_MR1',
     act_版本规划_需求收集_start: '', act_版本规划_需求收集_end: '',
@@ -133,8 +144,16 @@ function computeRowSpans(data: any[], key: string, groupKeys?: string[]) {
   const spans: number[] = new Array(data.length).fill(0)
   let i = 0
   while (i < data.length) {
+    // 产品项目行不参与合并，始终独占一行
+    if (data[i].projectType === '产品项目') {
+      spans[i] = 1
+      i++
+      continue
+    }
     let j = i + 1
     while (j < data.length) {
+      // 遇到产品项目行也中断合并
+      if (data[j].projectType === '产品项目') break
       let same = data[j][key] === data[i][key]
       if (groupKeys) {
         same = same && groupKeys.every(gk => data[j][gk] === data[i][gk])
@@ -202,13 +221,20 @@ export default function MRTrainView({ onViewProject }: MRTrainViewProps) {
 
   const dimConfig = DIMENSIONS[dimension] || DIMENSIONS.tosVersion
 
-  // 按当前维度排序
+  // 按当前维度排序（同组内产品项目排在整机产品项目前面）
   const sortedData = useMemo(() => {
+    const typeOrder: Record<string, number> = { '产品项目': 0, '整机产品项目': 1 }
     return [...MR_TRAIN_DATA].sort((a: any, b: any) => {
-      for (const k of dimConfig.sortKeys) {
-        const cmp = (a[k] || '').localeCompare(b[k] || '')
-        if (cmp !== 0) return cmp
-      }
+      // 先按主键排序（如 tosVersion）
+      const primaryCmp = (a[dimConfig.primaryKey] || '').localeCompare(b[dimConfig.primaryKey] || '')
+      if (primaryCmp !== 0) return primaryCmp
+      // 同主键组内，产品项目排最前
+      const ta = typeOrder[a.projectType] ?? 2
+      const tb = typeOrder[b.projectType] ?? 2
+      if (ta !== tb) return ta - tb
+      // 再按次级键排序（如 chipPlatform）
+      const secondaryCmp = (a[dimConfig.secondaryKey] || '').localeCompare(b[dimConfig.secondaryKey] || '')
+      if (secondaryCmp !== 0) return secondaryCmp
       return 0
     })
   }, [dimConfig])
@@ -250,6 +276,13 @@ export default function MRTrainView({ onViewProject }: MRTrainViewProps) {
 
     // 信息列
     const infoCols: any[] = [
+      {
+        title: '项目类型',
+        dataIndex: 'projectType',
+        key: 'projectType',
+        width: 110,
+        render: (val: string) => val === '产品项目' ? '-' : <Tag color="green" style={{ margin: 0 }}>{val}</Tag>,
+      },
       { title: '产品线', dataIndex: 'productLine', key: 'productLine', width: 90 },
       {
         title: '市场名',

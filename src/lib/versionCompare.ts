@@ -17,83 +17,150 @@ const formatDate = (date?: Date | string): string => {
   return d.toLocaleDateString('zh-CN');
 };
 
+// 字段级别差异
+export interface FieldDiff {
+  field: string;
+  oldValue: string;
+  newValue: string;
+}
+
+// 表格行级别对比结果
+export interface CompareTableRow {
+  key: string;
+  taskId: string;
+  changeType: '新增' | '删除' | '修改' | '未变更';
+  // 当前各字段值（新版本优先，删除时取旧版本）
+  taskName: string;
+  responsible: string;
+  planStartDate: string;
+  planEndDate: string;
+  actualStartDate: string;
+  actualEndDate: string;
+  status: string;
+  progress: number;
+  // 字段级差异明细（修改时有值）
+  fieldDiffs: FieldDiff[];
+  // 修改信息（Mock）
+  modifier: string;
+  modifyTime: string;
+}
+
 /**
- * 比较两个版本的差异
- * @param oldTasks 旧版本任务列表
- * @param newTasks 新版本任务列表
- * @returns 差异列表
+ * 比较两个版本，生成表格行数据
  */
-export function compareVersions(oldTasks: PlanTask[], newTasks: PlanTask[]): VersionDiff[] {
-  const diffs: VersionDiff[] = [];
+export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask[]): CompareTableRow[] {
+  const rows: CompareTableRow[] = [];
   const oldMap = new Map(oldTasks.map(t => [t.id, t]));
   const newMap = new Map(newTasks.map(t => [t.id, t]));
-  
-  // 找出新增的任务
-  for (const [id, task] of newMap) {
-    if (!oldMap.has(id)) {
-      diffs.push({
+  const allIds = new Set([...oldMap.keys(), ...newMap.keys()]);
+
+  const mockModifiers = ['张三', '李四', '王五', '赵六'];
+  const mockTimes = ['2026-03-10 14:30', '2026-03-11 09:15', '2026-03-11 16:42', '2026-03-12 10:08'];
+  let mockIdx = 0;
+
+  for (const id of allIds) {
+    const oldTask = oldMap.get(id);
+    const newTask = newMap.get(id);
+
+    if (newTask && !oldTask) {
+      // 新增
+      rows.push({
+        key: id,
         taskId: id,
         changeType: '新增',
-        newValue: task.taskName,
+        taskName: newTask.taskName,
+        responsible: (newTask as any).responsible || newTask.responsibleUser || '',
+        planStartDate: (newTask.planStartDate as any) || '',
+        planEndDate: (newTask.planEndDate as any) || '',
+        actualStartDate: (newTask.actualStartDate as any) || '',
+        actualEndDate: (newTask.actualEndDate as any) || '',
+        status: newTask.status,
+        progress: newTask.progress,
+        fieldDiffs: [],
+        modifier: mockModifiers[mockIdx % mockModifiers.length],
+        modifyTime: mockTimes[mockIdx % mockTimes.length],
       });
-    }
-  }
-  
-  // 找出力除的任务
-  for (const [id, task] of oldMap) {
-    if (!newMap.has(id)) {
-      diffs.push({
+      mockIdx++;
+    } else if (oldTask && !newTask) {
+      // 删除
+      rows.push({
+        key: id,
         taskId: id,
         changeType: '删除',
-        oldValue: task.taskName,
+        taskName: oldTask.taskName,
+        responsible: (oldTask as any).responsible || oldTask.responsibleUser || '',
+        planStartDate: (oldTask.planStartDate as any) || '',
+        planEndDate: (oldTask.planEndDate as any) || '',
+        actualStartDate: (oldTask.actualStartDate as any) || '',
+        actualEndDate: (oldTask.actualEndDate as any) || '',
+        status: oldTask.status,
+        progress: oldTask.progress,
+        fieldDiffs: [],
+        modifier: mockModifiers[mockIdx % mockModifiers.length],
+        modifyTime: mockTimes[mockIdx % mockTimes.length],
       });
-    }
-  }
-  
-  // 找出修改的任务
-  for (const [id, oldTask] of oldMap) {
-    const newTask = newMap.get(id);
-    if (newTask) {
-      const changes: string[] = [];
-      
+      mockIdx++;
+    } else if (oldTask && newTask) {
+      // 对比字段
+      const fieldDiffs: FieldDiff[] = [];
+
       if (oldTask.taskName !== newTask.taskName) {
-        changes.push(`任务名称: ${oldTask.taskName} → ${newTask.taskName}`);
+        fieldDiffs.push({ field: 'taskName', oldValue: oldTask.taskName, newValue: newTask.taskName });
       }
-      const oldResponsible = (oldTask as any).responsible || oldTask.responsibleUser || ''
-      const newResponsible = (newTask as any).responsible || newTask.responsibleUser || ''
-      if (oldResponsible !== newResponsible) {
-        changes.push(`责任人: ${oldResponsible || '-'} → ${newResponsible || '-'}`);
+      const oldResp = (oldTask as any).responsible || oldTask.responsibleUser || '';
+      const newResp = (newTask as any).responsible || newTask.responsibleUser || '';
+      if (oldResp !== newResp) {
+        fieldDiffs.push({ field: 'responsible', oldValue: oldResp || '-', newValue: newResp || '-' });
       }
-      const oldStart = toDate(oldTask.planStartDate)?.getTime();
-      const newStart = toDate(newTask.planStartDate)?.getTime();
+      const oldStart = (oldTask.planStartDate as any) || '';
+      const newStart = (newTask.planStartDate as any) || '';
       if (oldStart !== newStart) {
-        changes.push(`计划开始: ${formatDate(oldTask.planStartDate)} → ${formatDate(newTask.planStartDate)}`);
+        fieldDiffs.push({ field: 'planStartDate', oldValue: oldStart || '-', newValue: newStart || '-' });
       }
-      const oldEnd = toDate(oldTask.planEndDate)?.getTime();
-      const newEnd = toDate(newTask.planEndDate)?.getTime();
+      const oldEnd = (oldTask.planEndDate as any) || '';
+      const newEnd = (newTask.planEndDate as any) || '';
       if (oldEnd !== newEnd) {
-        changes.push(`计划结束: ${formatDate(oldTask.planEndDate)} → ${formatDate(newTask.planEndDate)}`);
+        fieldDiffs.push({ field: 'planEndDate', oldValue: oldEnd || '-', newValue: newEnd || '-' });
+      }
+      const oldActStart = (oldTask.actualStartDate as any) || '';
+      const newActStart = (newTask.actualStartDate as any) || '';
+      if (oldActStart !== newActStart) {
+        fieldDiffs.push({ field: 'actualStartDate', oldValue: oldActStart || '-', newValue: newActStart || '-' });
+      }
+      const oldActEnd = (oldTask.actualEndDate as any) || '';
+      const newActEnd = (newTask.actualEndDate as any) || '';
+      if (oldActEnd !== newActEnd) {
+        fieldDiffs.push({ field: 'actualEndDate', oldValue: oldActEnd || '-', newValue: newActEnd || '-' });
       }
       if (oldTask.status !== newTask.status) {
-        changes.push(`状态: ${oldTask.status} → ${newTask.status}`);
+        fieldDiffs.push({ field: 'status', oldValue: oldTask.status, newValue: newTask.status });
       }
       if (oldTask.progress !== newTask.progress) {
-        changes.push(`进度: ${oldTask.progress}% → ${newTask.progress}%`);
+        fieldDiffs.push({ field: 'progress', oldValue: `${oldTask.progress}%`, newValue: `${newTask.progress}%` });
       }
-      
-      if (changes.length > 0) {
-        diffs.push({
-          taskId: id,
-          changeType: '修改',
-          oldValue: changes.join('\n'),
-          newValue: undefined,
-        });
-      }
+
+      rows.push({
+        key: id,
+        taskId: id,
+        changeType: fieldDiffs.length > 0 ? '修改' : '未变更',
+        taskName: newTask.taskName,
+        responsible: newResp,
+        planStartDate: newStart,
+        planEndDate: newEnd,
+        actualStartDate: newActStart,
+        actualEndDate: newActEnd,
+        status: newTask.status,
+        progress: newTask.progress,
+        fieldDiffs,
+        modifier: fieldDiffs.length > 0 ? mockModifiers[mockIdx % mockModifiers.length] : '',
+        modifyTime: fieldDiffs.length > 0 ? mockTimes[mockIdx % mockTimes.length] : '',
+      });
+      if (fieldDiffs.length > 0) mockIdx++;
     }
   }
-  
+
   // 按序号排序
-  return diffs.sort((a, b) => {
+  return rows.sort((a, b) => {
     const aNum = a.taskId.split('.').map(n => parseInt(n) || 0);
     const bNum = b.taskId.split('.').map(n => parseInt(n) || 0);
     for (let i = 0; i < Math.max(aNum.length, bNum.length); i++) {
@@ -104,13 +171,47 @@ export function compareVersions(oldTasks: PlanTask[], newTasks: PlanTask[]): Ver
 }
 
 /**
- * 获取差异统计
+ * 比较两个版本的差异（旧接口保留兼容）
  */
-export function getDiffStats(diffs: VersionDiff[]): {
-  added: number;
-  deleted: number;
-  modified: number;
-} {
+export function compareVersions(oldTasks: PlanTask[], newTasks: PlanTask[]): VersionDiff[] {
+  const diffs: VersionDiff[] = [];
+  const oldMap = new Map(oldTasks.map(t => [t.id, t]));
+  const newMap = new Map(newTasks.map(t => [t.id, t]));
+
+  for (const [id, task] of newMap) {
+    if (!oldMap.has(id)) {
+      diffs.push({ taskId: id, changeType: '新增', newValue: task.taskName });
+    }
+  }
+  for (const [id, task] of oldMap) {
+    if (!newMap.has(id)) {
+      diffs.push({ taskId: id, changeType: '删除', oldValue: task.taskName });
+    }
+  }
+  for (const [id, oldTask] of oldMap) {
+    const newTask = newMap.get(id);
+    if (newTask) {
+      const changes: string[] = [];
+      if (oldTask.taskName !== newTask.taskName) changes.push(`任务名称: ${oldTask.taskName} → ${newTask.taskName}`);
+      const oldResponsible = (oldTask as any).responsible || oldTask.responsibleUser || '';
+      const newResponsible = (newTask as any).responsible || newTask.responsibleUser || '';
+      if (oldResponsible !== newResponsible) changes.push(`责任人: ${oldResponsible || '-'} → ${newResponsible || '-'}`);
+      if (changes.length > 0) {
+        diffs.push({ taskId: id, changeType: '修改', oldValue: changes.join('\n') });
+      }
+    }
+  }
+  return diffs.sort((a, b) => {
+    const aNum = a.taskId.split('.').map(n => parseInt(n) || 0);
+    const bNum = b.taskId.split('.').map(n => parseInt(n) || 0);
+    for (let i = 0; i < Math.max(aNum.length, bNum.length); i++) {
+      if (aNum[i] !== bNum[i]) return (aNum[i] || 0) - (bNum[i] || 0);
+    }
+    return 0;
+  });
+}
+
+export function getDiffStats(diffs: VersionDiff[]): { added: number; deleted: number; modified: number } {
   return {
     added: diffs.filter(d => d.changeType === '新增').length,
     deleted: diffs.filter(d => d.changeType === '删除').length,

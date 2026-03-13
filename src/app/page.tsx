@@ -21,7 +21,6 @@ import {
   Modal,
   Checkbox,
   DatePicker,
-  Timeline,
   Form,
   Avatar,
   Empty,
@@ -217,7 +216,7 @@ import {
   FlagOutlined
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
-import { compareVersions } from '@/lib/versionCompare'
+import { compareVersions, compareVersionsForTable, CompareTableRow, FieldDiff } from '@/lib/versionCompare'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { ColumnsType } from 'antd/es/table'
@@ -243,7 +242,8 @@ const FIXED_LEVEL2_PLANS = [
 // 项目数据
 const initialProjects = [
   { id: '1', name: 'X6877-D8400_H991', type: '整机产品项目', status: '进行中', progress: 65, leader: '张三', markets: ['OP', 'TR', 'RU'], androidVersion: 'Android 16', chipPlatform: 'MTK', spm: '李白', updatedAt: '2小时前', productLine: '高端系列', tosVersion: 'tOS 16.3' },
-  { id: '2', name: 'X6801_TBD', type: '产品项目', status: '筹备中', progress: 20, leader: '李四', markets: [], androidVersion: 'Android 16', chipPlatform: 'QCOM', spm: '张三', updatedAt: '1天前', productLine: '中端系列', tosVersion: 'tOS 16.2' },
+  { id: '2', name: 'tOS16.0', type: '产品项目', status: '进行中', progress: 55, leader: '李四', markets: [], androidVersion: 'Android 15', chipPlatform: 'MTK', spm: '张三', updatedAt: '1天前', productLine: 'tOS', tosVersion: 'tOS 16.0' },
+  { id: '6', name: 'tOS17.1', type: '产品项目', status: '筹备中', progress: 15, leader: '赵六', markets: [], androidVersion: 'Android 16', chipPlatform: 'QCOM', spm: '李四', updatedAt: '3小时前', productLine: 'tOS', tosVersion: 'tOS 17.1' },
   { id: '3', name: 'X6855_H8917', type: '整机产品项目', status: '进行中', progress: 45, leader: '王五', markets: ['OP', 'TR'], androidVersion: 'Android 16', chipPlatform: 'MTK', spm: '赵六', updatedAt: '3天前', productLine: '高端系列', tosVersion: 'tOS 16.3' },
   { id: '4', name: 'X6876_H786', type: '技术项目', status: '已完成', progress: 100, leader: '孙七', markets: [], androidVersion: 'Android 15', chipPlatform: 'QCOM', spm: '李四', updatedAt: '5天前', productLine: '平台技术', tosVersion: 'tOS 15.0' },
   { id: '5', name: 'X6873_H972', type: '能力建设项目', status: '进行中', progress: 30, leader: '周八', markets: [], androidVersion: 'Android 16', chipPlatform: 'UNISOC', spm: '王五', updatedAt: '1周前', productLine: '基础能力', tosVersion: 'tOS 16.2' },
@@ -344,7 +344,7 @@ export default function Home() {
   const [showVersionCompare, setShowVersionCompare] = useState(false)
   const [compareVersionA, setCompareVersionA] = useState('v1')
   const [compareVersionB, setCompareVersionB] = useState('v3')
-  const [compareResult, setCompareResult] = useState<any[]>([])
+  const [compareResult, setCompareResult] = useState<CompareTableRow[]>([])
   
   // 项目空间
   const [projectSpaceModule, setProjectSpaceModule] = useState('basic')
@@ -1138,13 +1138,13 @@ export default function Home() {
       return { stage, milestones, colSpan: milestones.length || 1 }
     })
 
-    const thStyle: CSSProperties = { background: '#fafbfc', fontWeight: 600, fontSize: 13, color: '#595959', padding: '10px 12px', borderBottom: '2px solid #f0f0f0', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 1, minWidth: 120 }
-    const tdStyle: CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'center', whiteSpace: 'nowrap', minWidth: 110 }
-    const stageTdStyle: CSSProperties = { ...tdStyle, fontWeight: 600, background: '#f5f7fa', borderBottom: '2px solid #f0f0f0' }
+    const thStyle: CSSProperties = { background: '#fafbfc', fontWeight: 600, fontSize: 13, color: '#595959', padding: '10px 12px', border: '1px solid #e8e8e8', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 1, minWidth: 120 }
+    const tdStyle: CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'center', whiteSpace: 'nowrap', minWidth: 110, border: '1px solid #e8e8e8' }
+    const stageTdStyle: CSSProperties = { ...tdStyle, fontWeight: 600, background: '#f5f7fa' }
 
     return (
       <div style={{ overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #f0f0f0' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <tbody>
             {/* 阶段行：按里程碑数量合并 */}
             <tr>
@@ -1525,38 +1525,91 @@ export default function Home() {
     if (compareResult.length === 0) {
       return <div style={{ textAlign: 'center', padding: 32, color: '#bfbfbf' }}><HistoryOutlined style={{ fontSize: 24, display: 'block', marginBottom: 8 }} />请选择两个版本点击"开始对比"</div>
     }
-    
-    const getColor = (type: string) => {
-      if (type === '新增') return '#52c41a'
-      if (type === '删除') return '#ff4d4f'
-      return '#1890ff'
+
+    const changedRows = compareResult.filter(r => r.changeType !== '未变更')
+    const stats = {
+      added: changedRows.filter(r => r.changeType === '新增').length,
+      deleted: changedRows.filter(r => r.changeType === '删除').length,
+      modified: changedRows.filter(r => r.changeType === '修改').length,
     }
-    
+
+    // 行背景色
+    const getRowBg = (type: string) => {
+      if (type === '新增') return '#f6ffed'
+      if (type === '删除') return '#fff2f0'
+      if (type === '修改') return '#e6f4ff'
+      return undefined
+    }
+
+    // 渲染单元格：修改的字段显示 旧值→新值
+    const renderDiffCell = (row: CompareTableRow, fieldKey: string, value: any) => {
+      const diff = row.fieldDiffs.find((d: FieldDiff) => d.field === fieldKey)
+      if (row.changeType === '修改' && diff) {
+        return (
+          <Tooltip title={<span>修改人: {row.modifier}<br/>修改时间: {row.modifyTime}</span>}>
+            <span style={{ color: '#1890ff' }}>
+              <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>{diff.oldValue}</span>
+              <span style={{ margin: '0 4px' }}>&rarr;</span>
+              <span style={{ fontWeight: 600 }}>{diff.newValue}</span>
+            </span>
+          </Tooltip>
+        )
+      }
+      if (row.changeType === '新增') {
+        return <Tooltip title={<span>修改人: {row.modifier}<br/>修改时间: {row.modifyTime}</span>}><span style={{ color: '#52c41a' }}>{value || '-'}</span></Tooltip>
+      }
+      if (row.changeType === '删除') {
+        return <Tooltip title={<span>修改人: {row.modifier}<br/>修改时间: {row.modifyTime}</span>}><span style={{ color: '#ff4d4f', textDecoration: 'line-through' }}>{value || '-'}</span></Tooltip>
+      }
+      return <span>{value || '-'}</span>
+    }
+
+    const compareColumns: any[] = [
+      {
+        title: '序号', dataIndex: 'taskId', key: 'taskId', width: 80, fixed: 'left',
+        render: (val: string, row: CompareTableRow) => (
+          <span style={{ fontWeight: 600, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? '#1890ff' : '#262626' }}>{val}</span>
+        ),
+      },
+      {
+        title: '变更', dataIndex: 'changeType', key: 'changeType', width: 70,
+        render: (val: string) => {
+          if (val === '新增') return <Tag color="success">新增</Tag>
+          if (val === '删除') return <Tag color="error">删除</Tag>
+          if (val === '修改') return <Tag color="processing">修改</Tag>
+          return null
+        },
+      },
+      { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 180, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
+      { title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 90, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) },
+      { title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 110, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'planStartDate', val) },
+      { title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 110, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'planEndDate', val) },
+      { title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 110, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'actualStartDate', val) },
+      { title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 110, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'actualEndDate', val) },
+      { title: '状态', dataIndex: 'status', key: 'status', width: 90, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'status', val) },
+      { title: '进度', dataIndex: 'progress', key: 'progress', width: 80, render: (val: number, row: CompareTableRow) => renderDiffCell(row, 'progress', `${val}%`) },
+    ]
+
     return (
-      <div style={{ marginTop: 16, maxHeight: 400, overflow: 'auto' }}>
-        <Alert 
-          message={`对比完成: 新增${compareResult.filter(d => d.changeType === '新增').length}项, 删除${compareResult.filter(d => d.changeType === '删除').length}项, 修改${compareResult.filter(d => d.changeType === '修改').length}项`} 
-          type="info" 
-          style={{ marginBottom: 16 }} 
+      <div style={{ marginTop: 16 }}>
+        <Alert
+          message={<span>对比完成: <Tag color="success">新增 {stats.added} 项</Tag><Tag color="error">删除 {stats.deleted} 项</Tag><Tag color="processing">修改 {stats.modified} 项</Tag></span>}
+          type="info"
+          style={{ marginBottom: 12 }}
         />
-        <Timeline items={compareResult.map((d: any) => ({
-          color: getColor(d.changeType),
-          children: (
-            <div>
-              {d.changeType === '新增' && <span style={{ color: '#52c41a', fontWeight: 'bold' }}>+ 新增: </span>}
-              {d.changeType === '删除' && <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>- 删除: </span>}
-              {d.changeType === '修改' && <span style={{ color: '#1890ff', fontWeight: 'bold' }}>~ 修改: </span>}
-              <span style={{ fontWeight: 500 }}>{d.taskId}</span> {d.changeType === '新增' ? d.newValue : d.oldValue?.split('\n')[0]}
-              {d.changeType === '修改' && (
-                <div style={{ marginTop: 4, marginLeft: 16, color: '#666', fontSize: 12 }}>
-                  {d.oldValue?.split('\n').map((line: string, i: number) => (
-                    <div key={i}>{line}</div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        }))} />
+        <Table
+          className="pms-table"
+          columns={compareColumns}
+          dataSource={compareResult.filter(r => r.changeType !== '未变更')}
+          size="small"
+          bordered
+          pagination={false}
+          scroll={{ x: 'max-content', y: 400 }}
+          rowKey="key"
+          onRow={(record: CompareTableRow) => ({
+            style: { background: getRowBg(record.changeType) },
+          })}
+        />
       </div>
     )
   }
@@ -1929,29 +1982,33 @@ export default function Home() {
               <Descriptions.Item label="MR版本类型">
                 <Tag color="geekblue">{level2PlanMeta[activeLevel2Plan]?.mrVersion}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="产品线">{level2PlanMeta[activeLevel2Plan]?.productLine || '-'}</Descriptions.Item>
-              <Descriptions.Item label="市场名">{level2PlanMeta[activeLevel2Plan]?.marketName || '-'}</Descriptions.Item>
-              <Descriptions.Item label="项目名称">{level2PlanMeta[activeLevel2Plan]?.projectName || '-'}</Descriptions.Item>
-              <Descriptions.Item label="芯片厂商">{level2PlanMeta[activeLevel2Plan]?.chipVendor || '-'}</Descriptions.Item>
-              <Descriptions.Item label="tOS-市场版本号">
-                {level2PlanMeta[activeLevel2Plan]?.tosVersion ? <Tag color="cyan">{level2PlanMeta[activeLevel2Plan].tosVersion}</Tag> : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="分支信息">
-                {level2PlanMeta[activeLevel2Plan]?.branch ? <Tag color="purple">{level2PlanMeta[activeLevel2Plan].branch}</Tag> : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="是否MADA">
-                {level2PlanMeta[activeLevel2Plan]?.isMada ? <Tag color={level2PlanMeta[activeLevel2Plan].isMada === '是' ? 'green' : 'default'}>{level2PlanMeta[activeLevel2Plan].isMada}</Tag> : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="MADA市场">{level2PlanMeta[activeLevel2Plan]?.madaMarket || '-'}</Descriptions.Item>
-              <Descriptions.Item label="项目SPM">{level2PlanMeta[activeLevel2Plan]?.spm || '-'}</Descriptions.Item>
-              <Descriptions.Item label="项目TPM">{level2PlanMeta[activeLevel2Plan]?.tpm || '-'}</Descriptions.Item>
-              <Descriptions.Item label="对接人">{level2PlanMeta[activeLevel2Plan]?.contact || '-'}</Descriptions.Item>
-              <Descriptions.Item label="项目版本号">
-                {level2PlanMeta[activeLevel2Plan]?.projectVersion ? <Tag>{level2PlanMeta[activeLevel2Plan].projectVersion}</Tag> : '-'}
-              </Descriptions.Item>
               <Descriptions.Item label="1+N转测类型">
                 {level2PlanMeta[activeLevel2Plan]?.transferType ? <Tag color="orange">{level2PlanMeta[activeLevel2Plan].transferType}</Tag> : '-'}
               </Descriptions.Item>
+              <Descriptions.Item label="tOS-市场版本号">
+                {level2PlanMeta[activeLevel2Plan]?.tosVersion ? <Tag color="cyan">{level2PlanMeta[activeLevel2Plan].tosVersion}</Tag> : '-'}
+              </Descriptions.Item>
+              {level2PlanMeta[activeLevel2Plan]?.productLine && (
+                <>
+                  <Descriptions.Item label="产品线">{level2PlanMeta[activeLevel2Plan]?.productLine || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="市场名">{level2PlanMeta[activeLevel2Plan]?.marketName || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="项目名称">{level2PlanMeta[activeLevel2Plan]?.projectName || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="芯片厂商">{level2PlanMeta[activeLevel2Plan]?.chipVendor || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="分支信息">
+                    {level2PlanMeta[activeLevel2Plan]?.branch ? <Tag color="purple">{level2PlanMeta[activeLevel2Plan].branch}</Tag> : '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="是否MADA">
+                    {level2PlanMeta[activeLevel2Plan]?.isMada ? <Tag color={level2PlanMeta[activeLevel2Plan].isMada === '是' ? 'green' : 'default'}>{level2PlanMeta[activeLevel2Plan].isMada}</Tag> : '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="MADA市场">{level2PlanMeta[activeLevel2Plan]?.madaMarket || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="项目SPM">{level2PlanMeta[activeLevel2Plan]?.spm || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="项目TPM">{level2PlanMeta[activeLevel2Plan]?.tpm || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="对接人">{level2PlanMeta[activeLevel2Plan]?.contact || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="项目版本号">
+                    {level2PlanMeta[activeLevel2Plan]?.projectVersion ? <Tag>{level2PlanMeta[activeLevel2Plan].projectVersion}</Tag> : '-'}
+                  </Descriptions.Item>
+                </>
+              )}
             </Descriptions>
           </Card>
         )}
@@ -2202,7 +2259,7 @@ export default function Home() {
           </div>
         </div>
         {/* 版本对比Modal */}
-        <Modal className="pms-modal" title="历史版本对比" open={showVersionCompare} onCancel={() => setShowVersionCompare(false)} footer={<Button type="primary" onClick={() => setShowVersionCompare(false)}>关闭</Button>} width={600}><Space direction="vertical" style={{ width: '100%' }}><div><span style={{ marginRight: 16 }}>版本A:</span><Select value={compareVersionA} onChange={setCompareVersionA} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><div><span style={{ marginRight: 16 }}>版本B:</span><Select value={compareVersionB} onChange={setCompareVersionB} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><Button type="primary" onClick={() => {
+        <Modal className="pms-modal" title="历史版本对比" open={showVersionCompare} onCancel={() => setShowVersionCompare(false)} footer={<Button type="primary" onClick={() => setShowVersionCompare(false)}>关闭</Button>} width={1100}><Space direction="vertical" style={{ width: '100%' }}><div><span style={{ marginRight: 16 }}>版本A:</span><Select value={compareVersionA} onChange={setCompareVersionA} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><div><span style={{ marginRight: 16 }}>版本B:</span><Select value={compareVersionB} onChange={setCompareVersionB} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><Button type="primary" onClick={() => {
                 const versionA = versions.find(v => v.id === compareVersionA)
                 const versionB = versions.find(v => v.id === compareVersionB)
                 if (versionA && versionB) {
@@ -2220,8 +2277,8 @@ export default function Home() {
                       { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 }
                     ]
                   }
-                  const result = compareVersions(oldTasks as any, newTasks as any)
-                  setCompareResult(result)
+                  const result = compareVersionsForTable(oldTasks as any, newTasks as any)
+                  setCompareResult(result as CompareTableRow[])
                   message.success('对比完成')
                 }
               }}>开始对比</Button>{renderVersionCompareResult()}</Space></Modal>
@@ -2249,22 +2306,24 @@ export default function Home() {
                   planName,
                 }
                 if (selectedLevel2PlanType === '1+N MR版本火车计划') {
-                  Object.assign(meta, {
-                    mrVersion: selectedMRVersion,
-                    productLine: selectedProject?.productLine || 'NOTE',
-                    marketName: selectedProject?.type === '整机产品项目' ? selectedMarketTab : '-',
-                    projectName: selectedProject?.name || '',
-                    chipVendor: selectedProject?.chipPlatform || '',
-                    tosVersion: createFormValues.tosVersion || '',
-                    branch: createFormValues.branch || '',
-                    isMada: createFormValues.isMada || '',
-                    madaMarket: createFormValues.madaMarket || '',
-                    spm: createFormValues.spm || '',
-                    tpm: createFormValues.tpm || '',
-                    contact: createFormValues.contact || '',
-                    projectVersion: createFormValues.projectVersion || '',
-                    transferType: createFormValues.transferType || '',
-                  })
+                  meta.mrVersion = selectedMRVersion
+                  meta.transferType = createFormValues.transferType || ''
+                  meta.tosVersion = createFormValues.tosVersion || ''
+                  if (selectedProject?.type === '整机产品项目') {
+                    Object.assign(meta, {
+                      productLine: selectedProject?.productLine || '',
+                      marketName: selectedMarketTab,
+                      projectName: selectedProject?.name || '',
+                      chipVendor: selectedProject?.chipPlatform || '',
+                      branch: createFormValues.branch || '',
+                      isMada: createFormValues.isMada || '',
+                      madaMarket: createFormValues.madaMarket || '',
+                      spm: createFormValues.spm || '',
+                      tpm: createFormValues.tpm || '',
+                      contact: createFormValues.contact || '',
+                      projectVersion: createFormValues.projectVersion || '',
+                    })
+                  }
                 }
                 setLevel2PlanMeta(prev => ({ ...prev, [newPlan.id]: meta }))
                 setCreatedLevel2Plans([...createdLevel2Plans, newPlan])
@@ -2303,18 +2362,22 @@ export default function Home() {
                       {[...Array(99)].map((_, i) => (<Option key={`MR${i + 1}`} value={`MR${i + 1}`}>MR{i + 1}</Option>))}
                     </Select>
                   </Form.Item>
-                  <Form.Item label="产品线"><Input placeholder="自动获取" disabled value={selectedProject?.productLine || 'NOTE'} /></Form.Item>
-                  <Form.Item label="市场名"><Input placeholder="自动获取" disabled value={selectedProject?.type === '整机产品项目' ? selectedMarketTab : '-'} /></Form.Item>
-                  <Form.Item label="项目名称"><Input placeholder="自动获取" disabled value={selectedProject?.name || ''} /></Form.Item>
-                  <Form.Item label="芯片厂商"><Input placeholder="自动获取" disabled value={selectedProject?.chipPlatform || ''} /></Form.Item>
                   <Form.Item label="tOS-市场版本号"><Input placeholder="请输入tOS-市场版本号" value={createFormValues.tosVersion || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, tosVersion: e.target.value}))} /></Form.Item>
-                  <Form.Item label="分支信息"><Input placeholder="请输入分支信息" value={createFormValues.branch || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, branch: e.target.value}))} /></Form.Item>
-                  <Form.Item label="是否MADA"><Select placeholder="请选择" style={{ width: '100%' }} value={createFormValues.isMada} onChange={(val) => setCreateFormValues(prev => ({...prev, isMada: val}))}><Option value="是">是</Option><Option value="否">否</Option></Select></Form.Item>
-                  <Form.Item label="MADA市场"><Input placeholder="请输入MADA市场" value={createFormValues.madaMarket || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, madaMarket: e.target.value}))} /></Form.Item>
-                  <Form.Item label="项目SPM"><Select placeholder="请选择SPM" style={{ width: '100%' }} value={createFormValues.spm} onChange={(val) => setCreateFormValues(prev => ({...prev, spm: val}))}><Option value="李白">李白</Option><Option value="张三">张三</Option></Select></Form.Item>
-                  <Form.Item label="项目TPM"><Select placeholder="请选择TPM" style={{ width: '100%' }} value={createFormValues.tpm} onChange={(val) => setCreateFormValues(prev => ({...prev, tpm: val}))}><Option value="王五">王五</Option><Option value="赵六">赵六</Option></Select></Form.Item>
-                  <Form.Item label="对接人"><Select placeholder="请选择对接人" style={{ width: '100%' }} value={createFormValues.contact} onChange={(val) => setCreateFormValues(prev => ({...prev, contact: val}))}><Option value="孙七">孙七</Option><Option value="周八">周八</Option></Select></Form.Item>
-                  <Form.Item label="项目版本号"><Input placeholder="请输入项目版本号" value={createFormValues.projectVersion || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, projectVersion: e.target.value}))} /></Form.Item>
+                  {selectedProject?.type === '整机产品项目' && (
+                    <>
+                      <Form.Item label="产品线"><Input placeholder="自动获取" disabled value={selectedProject?.productLine || ''} /></Form.Item>
+                      <Form.Item label="市场名"><Input placeholder="自动获取" disabled value={selectedMarketTab} /></Form.Item>
+                      <Form.Item label="项目名称"><Input placeholder="自动获取" disabled value={selectedProject?.name || ''} /></Form.Item>
+                      <Form.Item label="芯片厂商"><Input placeholder="自动获取" disabled value={selectedProject?.chipPlatform || ''} /></Form.Item>
+                      <Form.Item label="分支信息"><Input placeholder="请输入分支信息" value={createFormValues.branch || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, branch: e.target.value}))} /></Form.Item>
+                      <Form.Item label="是否MADA"><Select placeholder="请选择" style={{ width: '100%' }} value={createFormValues.isMada} onChange={(val) => setCreateFormValues(prev => ({...prev, isMada: val}))}><Option value="是">是</Option><Option value="否">否</Option></Select></Form.Item>
+                      <Form.Item label="MADA市场"><Input placeholder="请输入MADA市场" value={createFormValues.madaMarket || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, madaMarket: e.target.value}))} /></Form.Item>
+                      <Form.Item label="项目SPM"><Select placeholder="请选择SPM" style={{ width: '100%' }} value={createFormValues.spm} onChange={(val) => setCreateFormValues(prev => ({...prev, spm: val}))}><Option value="李白">李白</Option><Option value="张三">张三</Option></Select></Form.Item>
+                      <Form.Item label="项目TPM"><Select placeholder="请选择TPM" style={{ width: '100%' }} value={createFormValues.tpm} onChange={(val) => setCreateFormValues(prev => ({...prev, tpm: val}))}><Option value="王五">王五</Option><Option value="赵六">赵六</Option></Select></Form.Item>
+                      <Form.Item label="对接人"><Select placeholder="请选择对接人" style={{ width: '100%' }} value={createFormValues.contact} onChange={(val) => setCreateFormValues(prev => ({...prev, contact: val}))}><Option value="孙七">孙七</Option><Option value="周八">周八</Option></Select></Form.Item>
+                      <Form.Item label="项目版本号"><Input placeholder="请输入项目版本号" value={createFormValues.projectVersion || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, projectVersion: e.target.value}))} /></Form.Item>
+                    </>
+                  )}
                   <Form.Item label="1+N转测类型"><Select placeholder="请选择转测类型" style={{ width: '100%' }} value={createFormValues.transferType} onChange={(val) => setCreateFormValues(prev => ({...prev, transferType: val}))}>{[...Array(99)].map((_, i) => (<Option key={i + 1} value={String(i + 1)}>{i + 1}</Option>))}</Select></Form.Item>
                 </>
               )}
@@ -2606,7 +2669,7 @@ export default function Home() {
             )}
           </div>
           <Modal className="pms-modal" title="自定义列" open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(ALL_COLUMNS.filter(c => c.default).map(c => c.key))}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}><Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row><Col span={12}>{ALL_COLUMNS.slice(0, 6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col><Col span={12}>{ALL_COLUMNS.slice(6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col></Row></Checkbox.Group></Modal>
-          <Modal className="pms-modal" title="历史版本对比" open={showVersionCompare} onCancel={() => setShowVersionCompare(false)} footer={<Button type="primary" onClick={() => setShowVersionCompare(false)}>关闭</Button>} width={600}><Space direction="vertical" style={{ width: '100%' }}><div><span style={{ marginRight: 16 }}>版本A:</span><Select value={compareVersionA} onChange={setCompareVersionA} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><div><span style={{ marginRight: 16 }}>版本B:</span><Select value={compareVersionB} onChange={setCompareVersionB} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><Button type="primary" onClick={() => {
+          <Modal className="pms-modal" title="历史版本对比" open={showVersionCompare} onCancel={() => setShowVersionCompare(false)} footer={<Button type="primary" onClick={() => setShowVersionCompare(false)}>关闭</Button>} width={1100}><Space direction="vertical" style={{ width: '100%' }}><div><span style={{ marginRight: 16 }}>版本A:</span><Select value={compareVersionA} onChange={setCompareVersionA} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><div><span style={{ marginRight: 16 }}>版本B:</span><Select value={compareVersionB} onChange={setCompareVersionB} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><Button type="primary" onClick={() => {
                 const versionA = versions.find(v => v.id === compareVersionA)
                 const versionB = versions.find(v => v.id === compareVersionB)
                 if (versionA && versionB) {
@@ -2627,8 +2690,8 @@ export default function Home() {
                       { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 }
                     ]
                   }
-                  const result = compareVersions(oldTasks as any, newTasks as any)
-                  setCompareResult(result)
+                  const result = compareVersionsForTable(oldTasks as any, newTasks as any)
+                  setCompareResult(result as CompareTableRow[])
                   message.success('对比完成')
                 }
               }}>开始对比</Button>{renderVersionCompareResult()}</Space></Modal>
@@ -2821,22 +2884,24 @@ export default function Home() {
                   planName,
                 }
                 if (selectedLevel2PlanType === '1+N MR版本火车计划') {
-                  Object.assign(meta, {
-                    mrVersion: selectedMRVersion,
-                    productLine: selectedProject?.productLine || 'NOTE',
-                    marketName: selectedProject?.type === '整机产品项目' ? selectedMarketTab : '-',
-                    projectName: selectedProject?.name || '',
-                    chipVendor: selectedProject?.chipPlatform || '',
-                    tosVersion: createFormValues.tosVersion || '',
-                    branch: createFormValues.branch || '',
-                    isMada: createFormValues.isMada || '',
-                    madaMarket: createFormValues.madaMarket || '',
-                    spm: createFormValues.spm || '',
-                    tpm: createFormValues.tpm || '',
-                    contact: createFormValues.contact || '',
-                    projectVersion: createFormValues.projectVersion || '',
-                    transferType: createFormValues.transferType || '',
-                  })
+                  meta.mrVersion = selectedMRVersion
+                  meta.transferType = createFormValues.transferType || ''
+                  meta.tosVersion = createFormValues.tosVersion || ''
+                  if (selectedProject?.type === '整机产品项目') {
+                    Object.assign(meta, {
+                      productLine: selectedProject?.productLine || '',
+                      marketName: selectedMarketTab,
+                      projectName: selectedProject?.name || '',
+                      chipVendor: selectedProject?.chipPlatform || '',
+                      branch: createFormValues.branch || '',
+                      isMada: createFormValues.isMada || '',
+                      madaMarket: createFormValues.madaMarket || '',
+                      spm: createFormValues.spm || '',
+                      tpm: createFormValues.tpm || '',
+                      contact: createFormValues.contact || '',
+                      projectVersion: createFormValues.projectVersion || '',
+                    })
+                  }
                 }
                 setLevel2PlanMeta(prev => ({ ...prev, [newPlan.id]: meta }))
                 setCreatedLevel2Plans([...createdLevel2Plans, newPlan])
@@ -2886,8 +2951,8 @@ export default function Home() {
               {selectedLevel2PlanType === '1+N MR版本火车计划' && (
                 <>
                   <Form.Item label="MR版本类型">
-                    <Select 
-                      value={selectedMRVersion} 
+                    <Select
+                      value={selectedMRVersion}
                       onChange={(val) => setSelectedMRVersion(val)}
                       style={{ width: '100%' }}
                     >
@@ -2897,55 +2962,59 @@ export default function Home() {
                       ))}
                     </Select>
                   </Form.Item>
-                  <Form.Item label="产品线">
-                    <Input placeholder="自动获取项目基础信息" disabled value={selectedProject?.productLine || 'NOTE'} />
-                  </Form.Item>
-                  <Form.Item label="市场名">
-                    <Input placeholder="自动获取该计划所属市场" disabled value={selectedProject?.type === '整机产品项目' ? selectedMarketTab : '-'} />
-                  </Form.Item>
-                  <Form.Item label="项目名称">
-                    <Input placeholder="自动获取项目基础信息" disabled value={selectedProject?.name || ''} />
-                  </Form.Item>
-                  <Form.Item label="芯片厂商">
-                    <Input placeholder="自动获取项目基础信息" disabled value={selectedProject?.chipPlatform || ''} />
-                  </Form.Item>
                   <Form.Item label="tOS-市场版本号">
                     <Input placeholder="请输入tOS-市场版本号" value={createFormValues.tosVersion || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, tosVersion: e.target.value}))} />
                   </Form.Item>
-                  <Form.Item label="分支信息">
-                    <Input placeholder="请输入分支信息" value={createFormValues.branch || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, branch: e.target.value}))} />
-                  </Form.Item>
-                  <Form.Item label="是否MADA">
-                    <Select placeholder="请选择" style={{ width: '100%' }} value={createFormValues.isMada} onChange={(val) => setCreateFormValues(prev => ({...prev, isMada: val}))}>
-                      <Option value="是">是</Option>
-                      <Option value="否">否</Option>
-                    </Select>
-                  </Form.Item>
-                  <Form.Item label="MADA市场">
-                    <Input placeholder="请输入MADA市场" value={createFormValues.madaMarket || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, madaMarket: e.target.value}))} />
-                  </Form.Item>
-                  <Form.Item label="项目SPM">
-                    <Select placeholder="请选择SPM" style={{ width: '100%' }} value={createFormValues.spm} onChange={(val) => setCreateFormValues(prev => ({...prev, spm: val}))}>
-                      <Option value="李白">李白</Option>
-                      <Option value="张三">张三</Option>
-                      <Option value="李四">李四</Option>
-                    </Select>
-                  </Form.Item>
-                  <Form.Item label="项目TPM">
-                    <Select placeholder="请选择TPM" style={{ width: '100%' }} value={createFormValues.tpm} onChange={(val) => setCreateFormValues(prev => ({...prev, tpm: val}))}>
-                      <Option value="王五">王五</Option>
-                      <Option value="赵六">赵六</Option>
-                    </Select>
-                  </Form.Item>
-                  <Form.Item label="对接人">
-                    <Select placeholder="请选择对接人" style={{ width: '100%' }} value={createFormValues.contact} onChange={(val) => setCreateFormValues(prev => ({...prev, contact: val}))}>
-                      <Option value="孙七">孙七</Option>
-                      <Option value="周八">周八</Option>
-                    </Select>
-                  </Form.Item>
-                  <Form.Item label="项目版本号">
-                    <Input placeholder="请输入项目版本号" value={createFormValues.projectVersion || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, projectVersion: e.target.value}))} />
-                  </Form.Item>
+                  {selectedProject?.type === '整机产品项目' && (
+                    <>
+                      <Form.Item label="产品线">
+                        <Input placeholder="自动获取项目基础信息" disabled value={selectedProject?.productLine || ''} />
+                      </Form.Item>
+                      <Form.Item label="市场名">
+                        <Input placeholder="自动获取该计划所属市场" disabled value={selectedMarketTab} />
+                      </Form.Item>
+                      <Form.Item label="项目名称">
+                        <Input placeholder="自动获取项目基础信息" disabled value={selectedProject?.name || ''} />
+                      </Form.Item>
+                      <Form.Item label="芯片厂商">
+                        <Input placeholder="自动获取项目基础信息" disabled value={selectedProject?.chipPlatform || ''} />
+                      </Form.Item>
+                      <Form.Item label="分支信息">
+                        <Input placeholder="请输入分支信息" value={createFormValues.branch || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, branch: e.target.value}))} />
+                      </Form.Item>
+                      <Form.Item label="是否MADA">
+                        <Select placeholder="请选择" style={{ width: '100%' }} value={createFormValues.isMada} onChange={(val) => setCreateFormValues(prev => ({...prev, isMada: val}))}>
+                          <Option value="是">是</Option>
+                          <Option value="否">否</Option>
+                        </Select>
+                      </Form.Item>
+                      <Form.Item label="MADA市场">
+                        <Input placeholder="请输入MADA市场" value={createFormValues.madaMarket || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, madaMarket: e.target.value}))} />
+                      </Form.Item>
+                      <Form.Item label="项目SPM">
+                        <Select placeholder="请选择SPM" style={{ width: '100%' }} value={createFormValues.spm} onChange={(val) => setCreateFormValues(prev => ({...prev, spm: val}))}>
+                          <Option value="李白">李白</Option>
+                          <Option value="张三">张三</Option>
+                          <Option value="李四">李四</Option>
+                        </Select>
+                      </Form.Item>
+                      <Form.Item label="项目TPM">
+                        <Select placeholder="请选择TPM" style={{ width: '100%' }} value={createFormValues.tpm} onChange={(val) => setCreateFormValues(prev => ({...prev, tpm: val}))}>
+                          <Option value="王五">王五</Option>
+                          <Option value="赵六">赵六</Option>
+                        </Select>
+                      </Form.Item>
+                      <Form.Item label="对接人">
+                        <Select placeholder="请选择对接人" style={{ width: '100%' }} value={createFormValues.contact} onChange={(val) => setCreateFormValues(prev => ({...prev, contact: val}))}>
+                          <Option value="孙七">孙七</Option>
+                          <Option value="周八">周八</Option>
+                        </Select>
+                      </Form.Item>
+                      <Form.Item label="项目版本号">
+                        <Input placeholder="请输入项目版本号" value={createFormValues.projectVersion || ''} onChange={(e) => setCreateFormValues(prev => ({...prev, projectVersion: e.target.value}))} />
+                      </Form.Item>
+                    </>
+                  )}
                   <Form.Item label="1+N转测类型">
                     <Select placeholder="请选择转测类型" style={{ width: '100%' }} value={createFormValues.transferType} onChange={(val) => setCreateFormValues(prev => ({...prev, transferType: val}))}>
                       {[...Array(99)].map((_, i) => (

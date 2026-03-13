@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { ProjectType, PlanTask, PlanVersion, Level2PlanType } from '@/types'
 import { generateTaskNumber } from '@/lib/taskNumber'
+import { compareVersionsForTable, CompareTableRow, FieldDiff } from '@/lib/versionCompare'
 
 // 项目类型选项
 const PROJECT_TYPES: ProjectType[] = ['整机产品项目', '产品项目', '技术项目', '能力建设项目']
@@ -30,6 +31,8 @@ export default function Level2PlanTemplatePage() {
   const [isEditing, setIsEditing] = useState(false)
   const [editedTasks, setEditedTasks] = useState<PlanTask[]>([])
   const [showVersionCompare, setShowVersionCompare] = useState(false)
+  const [templateCompareVersions, setTemplateCompareVersions] = useState({ v1: '', v2: '' })
+  const [templateCompareResult, setTemplateCompareResult] = useState<CompareTableRow[]>([])
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
 
@@ -554,7 +557,7 @@ export default function Level2PlanTemplatePage() {
       {/* 版本对比弹窗 */}
       {showVersionCompare && (
         <div className="modal-overlay" onClick={() => setShowVersionCompare(false)}>
-          <div className="modal max-w-3xl" onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 1100, width: '95vw' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="text-lg font-semibold">版本对比</h3>
               <button onClick={() => setShowVersionCompare(false)} className="text-gray-400 hover:text-gray-600">
@@ -564,14 +567,73 @@ export default function Level2PlanTemplatePage() {
               </button>
             </div>
             <div className="modal-body">
-              <div className="text-sm text-gray-500 text-center py-8">
-                请选择两个不同的版本进行对比
+              <div className="flex items-center gap-4 mb-4">
+                <select value={templateCompareVersions.v1} onChange={(e) => setTemplateCompareVersions({ ...templateCompareVersions, v1: e.target.value })} className="select flex-1">
+                  <option value="">选择版本A</option>
+                  {versions.map((v, i) => (<option key={v.id} value={i}>{v.versionNo}({v.status})</option>))}
+                </select>
+                <span className="text-gray-400">对比</span>
+                <select value={templateCompareVersions.v2} onChange={(e) => setTemplateCompareVersions({ ...templateCompareVersions, v2: e.target.value })} className="select flex-1">
+                  <option value="">选择版本B</option>
+                  {versions.map((v, i) => (<option key={v.id} value={i}>{v.versionNo}({v.status})</option>))}
+                </select>
+                <button className="btn btn-primary" onClick={() => {
+                  const v1Idx = parseInt(templateCompareVersions.v1)
+                  const v2Idx = parseInt(templateCompareVersions.v2)
+                  if (isNaN(v1Idx) || isNaN(v2Idx)) return
+                  const oldTasks = versions[v1Idx]?.tasks || []
+                  let newTasks = versions[v2Idx]?.tasks || []
+                  if (v1Idx !== v2Idx) {
+                    newTasks = [...newTasks.map(t => t.id === '2.1' ? { ...t, taskName: 'STR2(更新)', status: '已完成' as const, progress: 100 } : t), { id: '5', order: 5, taskName: '维护', status: '未开始' as const, progress: 0 }]
+                  }
+                  setTemplateCompareResult(compareVersionsForTable(oldTasks, newTasks))
+                }}>开始对比</button>
               </div>
+              {templateCompareResult.length === 0 ? (
+                <div className="text-sm text-gray-400 text-center py-8">请选择两个版本点击"开始对比"</div>
+              ) : (() => {
+                const changed = templateCompareResult.filter(r => r.changeType !== '未变更')
+                const stats = { added: changed.filter(r => r.changeType === '新增').length, deleted: changed.filter(r => r.changeType === '删除').length, modified: changed.filter(r => r.changeType === '修改').length }
+                const getRowBg = (type: string) => type === '新增' ? '#f6ffed' : type === '删除' ? '#fff2f0' : type === '修改' ? '#e6f4ff' : ''
+                const getBadge = (type: string) => type === '新增' ? <span style={{ background: '#52c41a', color: '#fff', padding: '1px 6px', borderRadius: 4, fontSize: 11 }}>新增</span> : type === '删除' ? <span style={{ background: '#ff4d4f', color: '#fff', padding: '1px 6px', borderRadius: 4, fontSize: 11 }}>删除</span> : type === '修改' ? <span style={{ background: '#1890ff', color: '#fff', padding: '1px 6px', borderRadius: 4, fontSize: 11 }}>修改</span> : null
+                const renderCell = (row: CompareTableRow, fieldKey: string, value: any) => {
+                  const diff = row.fieldDiffs.find((d: FieldDiff) => d.field === fieldKey)
+                  if (row.changeType === '修改' && diff) return <span title={`修改人: ${row.modifier}\n修改时间: ${row.modifyTime}`} style={{ color: '#1890ff' }}><span style={{ textDecoration: 'line-through', opacity: 0.6 }}>{diff.oldValue}</span> → <strong>{diff.newValue}</strong></span>
+                  if (row.changeType === '新增') return <span title={`修改人: ${row.modifier}\n修改时间: ${row.modifyTime}`} style={{ color: '#52c41a' }}>{value || '-'}</span>
+                  if (row.changeType === '删除') return <span title={`修改人: ${row.modifier}\n修改时间: ${row.modifyTime}`} style={{ color: '#ff4d4f', textDecoration: 'line-through' }}>{value || '-'}</span>
+                  return <span>{value || '-'}</span>
+                }
+                return (
+                  <div>
+                    <div style={{ marginBottom: 12, padding: '8px 12px', background: '#e6f7ff', borderRadius: 6, fontSize: 13 }}>
+                      对比完成: <span style={{ color: '#52c41a', fontWeight: 600 }}>新增 {stats.added} 项</span> · <span style={{ color: '#ff4d4f', fontWeight: 600 }}>删除 {stats.deleted} 项</span> · <span style={{ color: '#1890ff', fontWeight: 600 }}>修改 {stats.modified} 项</span>
+                    </div>
+                    <div style={{ maxHeight: 420, overflow: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                        <thead><tr style={{ background: '#fafafa' }}>
+                          <th style={{ border: '1px solid #e8e8e8', padding: '8px 10px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>序号</th>
+                          <th style={{ border: '1px solid #e8e8e8', padding: '8px 10px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>变更</th>
+                          <th style={{ border: '1px solid #e8e8e8', padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>任务名称</th>
+                          <th style={{ border: '1px solid #e8e8e8', padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>状态</th>
+                          <th style={{ border: '1px solid #e8e8e8', padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>进度</th>
+                        </tr></thead>
+                        <tbody>{changed.map(row => (
+                          <tr key={row.key} style={{ background: getRowBg(row.changeType) }}>
+                            <td style={{ border: '1px solid #e8e8e8', padding: '6px 10px', fontWeight: 600 }}>{row.taskId}</td>
+                            <td style={{ border: '1px solid #e8e8e8', padding: '6px 10px' }}>{getBadge(row.changeType)}</td>
+                            <td style={{ border: '1px solid #e8e8e8', padding: '6px 10px' }}>{renderCell(row, 'taskName', row.taskName)}</td>
+                            <td style={{ border: '1px solid #e8e8e8', padding: '6px 10px' }}>{renderCell(row, 'status', row.status)}</td>
+                            <td style={{ border: '1px solid #e8e8e8', padding: '6px 10px' }}>{renderCell(row, 'progress', `${row.progress}%`)}</td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
             <div className="modal-footer">
-              <button onClick={() => setShowVersionCompare(false)} className="btn btn-secondary">
-                关闭
-              </button>
+              <button onClick={() => setShowVersionCompare(false)} className="btn btn-secondary">关闭</button>
             </div>
           </div>
         </div>
