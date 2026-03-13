@@ -1907,8 +1907,8 @@ export default function Home() {
           </Card>
         )}
 
-        {/* 二级计划元数据展示 - 非固定计划显示创建时填写的信息 */}
-        {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1' && level2PlanMeta[activeLevel2Plan] && (
+        {/* 二级计划元数据展示 - 仅1+N MR版本火车计划类型显示 */}
+        {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1' && level2PlanMeta[activeLevel2Plan]?.planType === '1+N MR版本火车计划' && (
           <Card
             size="small"
             style={{ marginBottom: 16, borderRadius: 8, border: '1px solid #e6f4ff' }}
@@ -1919,58 +1919,45 @@ export default function Home() {
               <span style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>计划基本信息</span>
               <Tag color="blue" style={{ marginLeft: 8, fontSize: 11 }}>{level2PlanMeta[activeLevel2Plan]?.planType}</Tag>
             </div>
-            {level2PlanMeta[activeLevel2Plan]?.planType === '1+N MR版本火车计划' ? (
-              <Descriptions
-                size="small"
-                column={3}
-                labelStyle={{ color: '#8c8c8c', fontSize: 13, fontWeight: 500, padding: '6px 12px 6px 0' }}
-                contentStyle={{ color: '#262626', fontSize: 13, padding: '6px 0' }}
-                colon={false}
-              >
-                <Descriptions.Item label="MR版本类型">
-                  <Tag color="geekblue">{level2PlanMeta[activeLevel2Plan]?.mrVersion}</Tag>
-                </Descriptions.Item>
-                <Descriptions.Item label="产品线">{level2PlanMeta[activeLevel2Plan]?.productLine || '-'}</Descriptions.Item>
-                <Descriptions.Item label="市场名">{level2PlanMeta[activeLevel2Plan]?.marketName || '-'}</Descriptions.Item>
-                <Descriptions.Item label="项目名称">{level2PlanMeta[activeLevel2Plan]?.projectName || '-'}</Descriptions.Item>
-                <Descriptions.Item label="芯片厂商">{level2PlanMeta[activeLevel2Plan]?.chipVendor || '-'}</Descriptions.Item>
-                <Descriptions.Item label="tOS-市场版本号">
-                  {level2PlanMeta[activeLevel2Plan]?.tosVersion ? <Tag color="cyan">{level2PlanMeta[activeLevel2Plan].tosVersion}</Tag> : '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="分支信息">
-                  {level2PlanMeta[activeLevel2Plan]?.branch ? <Tag color="purple">{level2PlanMeta[activeLevel2Plan].branch}</Tag> : '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="是否MADA">
-                  {level2PlanMeta[activeLevel2Plan]?.isMada ? <Tag color={level2PlanMeta[activeLevel2Plan].isMada === '是' ? 'green' : 'default'}>{level2PlanMeta[activeLevel2Plan].isMada}</Tag> : '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="MADA市场">{level2PlanMeta[activeLevel2Plan]?.madaMarket || '-'}</Descriptions.Item>
-                <Descriptions.Item label="项目SPM">{level2PlanMeta[activeLevel2Plan]?.spm || '-'}</Descriptions.Item>
-                <Descriptions.Item label="项目TPM">{level2PlanMeta[activeLevel2Plan]?.tpm || '-'}</Descriptions.Item>
-                <Descriptions.Item label="对接人">{level2PlanMeta[activeLevel2Plan]?.contact || '-'}</Descriptions.Item>
-                <Descriptions.Item label="项目版本号">
-                  {level2PlanMeta[activeLevel2Plan]?.projectVersion ? <Tag>{level2PlanMeta[activeLevel2Plan].projectVersion}</Tag> : '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="1+N转测类型">
-                  {level2PlanMeta[activeLevel2Plan]?.transferType ? <Tag color="orange">{level2PlanMeta[activeLevel2Plan].transferType}</Tag> : '-'}
-                </Descriptions.Item>
-              </Descriptions>
-            ) : (
-              <Descriptions
-                size="small"
-                column={3}
-                labelStyle={{ color: '#8c8c8c', fontSize: 13, fontWeight: 500, padding: '6px 12px 6px 0' }}
-                contentStyle={{ color: '#262626', fontSize: 13, padding: '6px 0' }}
-                colon={false}
-              >
-                <Descriptions.Item label="计划类型">{level2PlanMeta[activeLevel2Plan]?.planType || '-'}</Descriptions.Item>
-                <Descriptions.Item label="计划名称">{level2PlanMeta[activeLevel2Plan]?.planName || '-'}</Descriptions.Item>
-              </Descriptions>
-            )}
+            <Descriptions
+              size="small"
+              column={3}
+              labelStyle={{ color: '#8c8c8c', fontSize: 13, fontWeight: 500, padding: '6px 12px 6px 0' }}
+              contentStyle={{ color: '#262626', fontSize: 13, padding: '6px 0' }}
+              colon={false}
+            >
+              <Descriptions.Item label="MR版本类型">
+                <Tag color="geekblue">{level2PlanMeta[activeLevel2Plan]?.mrVersion}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="产品线">{level2PlanMeta[activeLevel2Plan]?.productLine || '-'}</Descriptions.Item>
+              <Descriptions.Item label="市场名">{level2PlanMeta[activeLevel2Plan]?.marketName || '-'}</Descriptions.Item>
+              <Descriptions.Item label="项目名称">{level2PlanMeta[activeLevel2Plan]?.projectName || '-'}</Descriptions.Item>
+              <Descriptions.Item label="芯片厂商">{level2PlanMeta[activeLevel2Plan]?.chipVendor || '-'}</Descriptions.Item>
+              <Descriptions.Item label="tOS-市场版本号">
+                {level2PlanMeta[activeLevel2Plan]?.tosVersion ? <Tag color="cyan">{level2PlanMeta[activeLevel2Plan].tosVersion}</Tag> : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="分支信息">
+                {level2PlanMeta[activeLevel2Plan]?.branch ? <Tag color="purple">{level2PlanMeta[activeLevel2Plan].branch}</Tag> : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="是否MADA">
+                {level2PlanMeta[activeLevel2Plan]?.isMada ? <Tag color={level2PlanMeta[activeLevel2Plan].isMada === '是' ? 'green' : 'default'}>{level2PlanMeta[activeLevel2Plan].isMada}</Tag> : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="MADA市场">{level2PlanMeta[activeLevel2Plan]?.madaMarket || '-'}</Descriptions.Item>
+              <Descriptions.Item label="项目SPM">{level2PlanMeta[activeLevel2Plan]?.spm || '-'}</Descriptions.Item>
+              <Descriptions.Item label="项目TPM">{level2PlanMeta[activeLevel2Plan]?.tpm || '-'}</Descriptions.Item>
+              <Descriptions.Item label="对接人">{level2PlanMeta[activeLevel2Plan]?.contact || '-'}</Descriptions.Item>
+              <Descriptions.Item label="项目版本号">
+                {level2PlanMeta[activeLevel2Plan]?.projectVersion ? <Tag>{level2PlanMeta[activeLevel2Plan].projectVersion}</Tag> : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="1+N转测类型">
+                {level2PlanMeta[activeLevel2Plan]?.transferType ? <Tag color="orange">{level2PlanMeta[activeLevel2Plan].transferType}</Tag> : '-'}
+              </Descriptions.Item>
+            </Descriptions>
           </Card>
         )}
 
         {/* 需求开发计划 - 专用组件 */}
-        {projectPlanLevel === 'level2' && activeLevel2Plan === 'plan0' && <RequirementDevPlan />}
+        {projectPlanLevel === 'level2' && activeLevel2Plan === 'plan0' && <RequirementDevPlan isEditMode={isEditMode} />}
 
         {/* 在研版本火车计划 - 专用组件 */}
         {projectPlanLevel === 'level2' && activeLevel2Plan === 'plan1' && <VersionTrainPlan />}
@@ -2014,14 +2001,17 @@ export default function Home() {
                     <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
                   </Tooltip>
                   <Radio.Group
-                    value={projectPlanViewMode}
+                    value={projectPlanViewMode === 'horizontal' && projectPlanLevel === 'level2' ? 'table' : projectPlanViewMode}
                     onChange={(e) => setProjectPlanViewMode(e.target.value)}
                     optionType="button"
                     buttonStyle="solid"
                     size="small"
-                    options={[
+                    options={projectPlanLevel === 'level1' ? [
                       { label: '竖版表格', value: 'table' },
                       { label: '横版表格', value: 'horizontal' },
+                      { label: '甘特图', value: 'gantt' },
+                    ] : [
+                      { label: '表格', value: 'table' },
                       { label: '甘特图', value: 'gantt' },
                     ]}
                   />

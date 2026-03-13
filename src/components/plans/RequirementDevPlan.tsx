@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, type CSSProperties } from 'react'
 import { Card, Tabs, Table, Tag, Space, Row, Col, Input, Button, Modal, Checkbox, Radio } from 'antd'
-import { SearchOutlined, AppstoreOutlined, BarChartOutlined, UnorderedListOutlined } from '@ant-design/icons'
+import { SearchOutlined, AppstoreOutlined } from '@ant-design/icons'
 import { gantt } from 'dhtmlx-gantt'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
 import type { IRRequirement, SRRequirement } from '@/types'
@@ -121,14 +121,21 @@ function RequirementGantt({ data, dimension }: { data: any[]; dimension: 'test' 
   return <div ref={ganttContainer} style={{ width: '100%', height: '500px' }} />
 }
 
-export default function RequirementDevPlan() {
+interface RequirementDevPlanProps {
+  isEditMode?: boolean
+}
+
+export default function RequirementDevPlan({ isEditMode = false }: RequirementDevPlanProps) {
   const [activeTab, setActiveTab] = useState<'ir' | 'sr' | 'fusion'>('ir')
-  const [viewMode, setViewMode] = useState<'table' | 'gantt'>('table')
+  const [viewMode, setViewMode] = useState<'table' | 'horizontal' | 'gantt'>('table')
   const [searchText, setSearchText] = useState('')
   const [showColumnModal, setShowColumnModal] = useState(false)
   const [irVisibleColumns, setIrVisibleColumns] = useState(IR_ALL_COLUMNS.filter(c => c.default).map(c => c.key))
   const [srVisibleColumns, setSrVisibleColumns] = useState(SR_ALL_COLUMNS.filter(c => c.default).map(c => c.key))
   const [ganttDimension, setGanttDimension] = useState<'test' | 'accept'>('test')
+
+  // 编辑模式下不支持横版表格，自动切回竖版表格
+  const effectiveViewMode = isEditMode && viewMode === 'horizontal' ? 'table' : viewMode
 
   // 搜索过滤
   const filteredIR = useMemo(() => {
@@ -209,6 +216,84 @@ export default function RequirementDevPlan() {
   const currentVisibleColumns = activeTab === 'ir' ? irVisibleColumns : srVisibleColumns
   const setCurrentVisibleColumns = activeTab === 'ir' ? setIrVisibleColumns : setSrVisibleColumns
 
+  // 横版表格渲染
+  const renderHorizontalTable = (type: 'ir' | 'sr') => {
+    const data = type === 'ir' ? filteredIR : filteredSR
+    const thStyle: CSSProperties = { background: '#fafbfc', fontWeight: 600, fontSize: 13, color: '#595959', padding: '10px 14px', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 1, minWidth: 160, textAlign: 'left' }
+    const tdStyle: CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'center', whiteSpace: 'nowrap', minWidth: 120, borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }
+
+    const irFields = [
+      { label: '序号', key: 'id' },
+      { label: '领域', key: 'domain' },
+      { label: 'IR编号', key: 'irNo' },
+      { label: 'IR标题', key: 'irTitle' },
+      { label: '优先级', key: 'priority' },
+      { label: 'IR状态', key: 'irStatus' },
+      { label: '需求测试计划开始时间', key: 'testPlanStart' },
+      { label: '需求测试计划完成时间', key: 'testPlanEnd' },
+      { label: '需求验收计划开始时间', key: 'acceptPlanStart' },
+      { label: '需求验收计划完成时间', key: 'acceptPlanEnd' },
+    ]
+    const srFields = [
+      { label: '序号', key: 'id' },
+      { label: 'SR编号', key: 'srNo' },
+      { label: 'SR标题', key: 'srTitle' },
+      { label: '关联IR', key: 'relatedIR' },
+      { label: '开发部门', key: 'devDept' },
+      { label: 'SR状态', key: 'srStatus' },
+      { label: '计划转测版本', key: 'planTestVersion' },
+      { label: '实际转测版本', key: 'actualTestVersion' },
+      { label: '需求测试计划开始时间', key: 'testPlanStart' },
+      { label: '需求测试计划完成时间', key: 'testPlanEnd' },
+      { label: '需求验收计划开始时间', key: 'acceptPlanStart' },
+      { label: '需求验收计划完成时间', key: 'acceptPlanEnd' },
+    ]
+    const fields = type === 'ir' ? irFields : srFields
+
+    const renderCellValue = (item: any, key: string) => {
+      const val = item[key]
+      if (key === 'priority') return <Tag color={priorityColor(val)}>{val}</Tag>
+      if (key === 'irStatus') return <Tag color={irStatusColor(val)}>{val}</Tag>
+      if (key === 'srStatus') return <Tag color={srStatusColor(val)}>{val}</Tag>
+      return val || <span style={{ color: '#bfbfbf' }}>-</span>
+    }
+
+    if (data.length === 0) {
+      return <div style={{ textAlign: 'center', padding: 40, color: '#8c8c8c' }}>暂无数据</div>
+    }
+
+    return (
+      <div style={{ overflow: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #f0f0f0' }}>
+          <tbody>
+            {fields.map((field) => (
+              <tr key={field.key}>
+                <th style={thStyle}>{field.label}</th>
+                {data.map((item: any) => (
+                  <td key={item.id} style={{ ...tdStyle, textAlign: field.key === 'irTitle' || field.key === 'srTitle' ? 'left' : 'center' }}>
+                    {renderCellValue(item, field.key)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  // 视图模式选项
+  const viewModeOptions = isEditMode
+    ? [
+        { label: '表格', value: 'table' },
+        { label: '甘特图', value: 'gantt' },
+      ]
+    : [
+        { label: '竖版表格', value: 'table' },
+        { label: '横版表格', value: 'horizontal' },
+        { label: '甘特图', value: 'gantt' },
+      ]
+
   return (
     <Card>
       {/* 顶部操作栏 */}
@@ -237,14 +322,17 @@ export default function RequirementDevPlan() {
             />
             {activeTab !== 'fusion' && (
               <>
-                <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)}>自定义列</Button>
-                <Button
-                  icon={viewMode === 'table' ? <BarChartOutlined /> : <UnorderedListOutlined />}
-                  style={{ borderRadius: 6 }}
-                  onClick={() => setViewMode(viewMode === 'table' ? 'gantt' : 'table')}
-                >
-                  {viewMode === 'table' ? '甘特图' : '表格'}
-                </Button>
+                {effectiveViewMode !== 'horizontal' && (
+                  <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)}>自定义列</Button>
+                )}
+                <Radio.Group
+                  value={effectiveViewMode}
+                  onChange={(e) => setViewMode(e.target.value)}
+                  optionType="button"
+                  buttonStyle="solid"
+                  size="small"
+                  options={viewModeOptions}
+                />
               </>
             )}
           </Space>
@@ -262,7 +350,9 @@ export default function RequirementDevPlan() {
 
       {/* IR需求 */}
       {activeTab === 'ir' && (
-        viewMode === 'table' ? (
+        effectiveViewMode === 'horizontal' ? (
+          renderHorizontalTable('ir')
+        ) : effectiveViewMode === 'table' ? (
           <Table
             className="pms-table"
             dataSource={filteredIR}
@@ -287,7 +377,9 @@ export default function RequirementDevPlan() {
 
       {/* SR需求 */}
       {activeTab === 'sr' && (
-        viewMode === 'table' ? (
+        effectiveViewMode === 'horizontal' ? (
+          renderHorizontalTable('sr')
+        ) : effectiveViewMode === 'table' ? (
           <Table
             className="pms-table"
             dataSource={filteredSR}

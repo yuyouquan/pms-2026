@@ -1,10 +1,8 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
-import { Card, Table, Tag, Space, Row, Col, Input, Button, Modal, Form, Select, DatePicker, Upload, Popconfirm, Checkbox, message, Tooltip } from 'antd'
-import { SearchOutlined, PlusOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined, DownloadOutlined, UploadOutlined, PaperClipOutlined, LinkOutlined, ExportOutlined, BarChartOutlined, UnorderedListOutlined } from '@ant-design/icons'
-import { gantt } from 'dhtmlx-gantt'
-import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
+import { useState, useMemo } from 'react'
+import { Card, Table, Tag, Space, Row, Col, Input, Button, Modal, Form, Select, DatePicker, Upload, Popconfirm, Checkbox, message } from 'antd'
+import { SearchOutlined, PlusOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined, DownloadOutlined, UploadOutlined, PaperClipOutlined, LinkOutlined, ExportOutlined } from '@ant-design/icons'
 import type { VersionTrainRecord, VersionTrainStatus, VersionCategory } from '@/types'
 import dayjs from 'dayjs'
 
@@ -103,67 +101,9 @@ const categoryColors: Record<string, string> = {
   '量产版本': 'purple',
 }
 
-// 甘特图子组件
-function VersionTrainGantt({ data }: { data: VersionTrainRecord[] }) {
-  const ganttContainer = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!ganttContainer.current || data.length === 0) return
-
-    gantt.config.date_format = '%Y-%m-%d'
-    gantt.config.columns = [
-      { name: 'text', label: '版本号', width: 120, tree: false },
-      { name: 'category', label: '分类', width: 80, align: 'center' as const },
-      { name: 'statusText', label: '状态', width: 70, align: 'center' as const },
-      { name: 'model', label: '主测机型', width: 100, align: 'center' as const },
-      { name: 'start_date', label: '计划开始', width: 90, align: 'center' as const },
-      { name: 'end_date_display', label: '计划完成', width: 90, align: 'center' as const },
-    ]
-    gantt.config.scale_unit = 'month'
-    gantt.config.date_scale = '%Y年%m月'
-    gantt.config.subscales = [{ unit: 'day', step: 1, date: '%d日' }]
-    gantt.config.row_height = 35
-    gantt.config.bar_height = 20
-    gantt.config.fit_tasks = true
-    gantt.config.readonly = true
-
-    gantt.init(ganttContainer.current)
-
-    const ganttData = {
-      data: data.map((item, index) => {
-        const startDate = item.planTestStartTime || item.planCompileTime
-        const endDate = item.planTestEndTime || item.planTestTransferTime
-        const start = new Date(startDate)
-        const end = new Date(endDate)
-        const duration = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)))
-        return {
-          id: index + 1,
-          text: item.versionNo,
-          category: item.versionCategory,
-          statusText: item.status,
-          model: item.mainTestModel,
-          start_date: startDate,
-          end_date_display: endDate,
-          duration,
-          progress: item.status === '已完成' ? 1 : item.status === '测试中' ? 0.5 : item.status === '自检中' ? 0.3 : 0,
-        }
-      }),
-      links: [],
-    }
-
-    gantt.parse(ganttData)
-
-    return () => { gantt.clearAll() }
-  }, [data])
-
-  if (data.length === 0) return <div style={{ textAlign: 'center', padding: 40, color: '#8c8c8c' }}>暂无数据</div>
-  return <div ref={ganttContainer} style={{ width: '100%', height: '500px' }} />
-}
-
 export default function VersionTrainPlan() {
   const [data, setData] = useState<VersionTrainRecord[]>(INITIAL_DATA)
   const [searchText, setSearchText] = useState('')
-  const [viewMode, setViewMode] = useState<'table' | 'gantt'>('table')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingRecord, setEditingRecord] = useState<VersionTrainRecord | null>(null)
@@ -448,38 +388,23 @@ export default function VersionTrainPlan() {
               onChange={(e) => setSearchText(e.target.value)}
               value={searchText}
             />
-            {viewMode === 'table' && (
-              <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)}>
-                自定义列
-              </Button>
-            )}
-            <Tooltip title={viewMode === 'table' ? '切换甘特图' : '切换表格'}>
-              <Button
-                icon={viewMode === 'table' ? <BarChartOutlined /> : <UnorderedListOutlined />}
-                style={{ borderRadius: 6 }}
-                onClick={() => setViewMode(viewMode === 'table' ? 'gantt' : 'table')}
-              >
-                {viewMode === 'table' ? '甘特图' : '表格'}
-              </Button>
-            </Tooltip>
+            <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)}>
+              自定义列
+            </Button>
           </Space>
         </Col>
       </Row>
 
       {/* 表格视图 */}
-      {viewMode === 'table' ? (
-        <Table
-          className="pms-table"
-          dataSource={filteredData}
-          columns={columns}
-          rowKey="id"
-          pagination={{ pageSize: 10, showSizeChanger: true, showQuickJumper: true, showTotal: (total) => `共 ${total} 条` }}
-          scroll={{ x: 2200 }}
-          size="middle"
-        />
-      ) : (
-        <VersionTrainGantt data={filteredData} />
-      )}
+      <Table
+        className="pms-table"
+        dataSource={filteredData}
+        columns={columns}
+        rowKey="id"
+        pagination={{ pageSize: 10, showSizeChanger: true, showQuickJumper: true, showTotal: (total) => `共 ${total} 条` }}
+        scroll={{ x: 2200 }}
+        size="middle"
+      />
 
       {/* 新建Modal */}
       <Modal
