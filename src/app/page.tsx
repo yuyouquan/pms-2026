@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef, createContext, useContext, type CSSProperties } from 'react'
+import { useState, useMemo, useEffect, useRef, createContext, useContext, Fragment, type CSSProperties } from 'react'
 import {
   Card,
   Tabs,
@@ -213,7 +213,9 @@ import {
   CheckCircleOutlined,
   DownOutlined,
   ExclamationCircleOutlined,
-  FlagOutlined
+  FlagOutlined,
+  LockOutlined,
+  SafetyCertificateOutlined
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { compareVersions, compareVersionsForTable, CompareTableRow, FieldDiff } from '@/lib/versionCompare'
@@ -449,7 +451,75 @@ export default function Home() {
     },
   })
   const [createFormValues, setCreateFormValues] = useState<Record<string, string>>({})
-  
+
+  // ========== 权限配置 ==========
+  const FIXED_ROLES = ['系统管理员', '产品经理', '项目经理', '开发代表', '软件SE', '设计师', '开发工程师', '测试工程师', '管理层']
+  const ALL_USERS = ['张三', '李四', '王五', '赵六', '孙七', '周八', '李白', '杜甫']
+  const PERMISSION_MODULES = [
+    { key: 'basicInfo', name: '基础信息', permissions: ['查看'] },
+    { key: 'requirements', name: '需求', permissions: ['查看'] },
+    { key: 'plan', name: '计划', permissions: ['一级计划-查看', '一级计划-编辑', '一级计划-审核', '二级计划-查看', '二级计划-编辑', '视图模式', '计划基线与变更', '导入/导出'] },
+    { key: 'resources', name: '资源', permissions: ['查看'] },
+    { key: 'tasks', name: '任务', permissions: ['查看'] },
+    { key: 'risks', name: '风险', permissions: ['查看'] },
+    { key: 'xxx', name: 'XXX', permissions: ['查看'] },
+  ]
+  const [roles, setRoles] = useState<{name: string; members: string[]; isFixed: boolean}[]>([
+    { name: '系统管理员', members: ['张三'], isFixed: true },
+    { name: '产品经理', members: ['李四', '王五'], isFixed: true },
+    { name: '项目经理', members: ['张三', '赵六'], isFixed: true },
+    { name: '开发代表', members: ['王五'], isFixed: true },
+    { name: '软件SE', members: ['孙七'], isFixed: true },
+    { name: '设计师', members: ['周八'], isFixed: true },
+    { name: '开发工程师', members: ['李白', '杜甫'], isFixed: true },
+    { name: '测试工程师', members: ['赵六', '孙七'], isFixed: true },
+    { name: '管理层', members: ['张三'], isFixed: true },
+  ])
+  const [rolePermissions, setRolePermissions] = useState<Record<string, Record<string, boolean>>>(() => {
+    const init: Record<string, Record<string, boolean>> = {}
+    const defaultPerms: Record<string, string[]> = {
+      '系统管理员': PERMISSION_MODULES.flatMap(m => m.permissions.map(p => `${m.key}:${p}`)),
+      '项目经理': ['basicInfo:查看', 'requirements:查看', 'plan:一级计划-查看', 'plan:一级计划-编辑', 'plan:二级计划-查看', 'plan:二级计划-编辑', 'plan:视图模式', 'plan:计划基线与变更', 'plan:导入/导出', 'resources:查看', 'tasks:查看', 'risks:查看', 'xxx:查看'],
+      '产品经理': ['basicInfo:查看', 'requirements:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'resources:查看', 'tasks:查看', 'risks:查看', 'xxx:查看'],
+      '开发代表': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看'],
+      '软件SE': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看'],
+      '设计师': ['basicInfo:查看', 'requirements:查看'],
+      '开发工程师': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看'],
+      '测试工程师': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看', 'risks:查看'],
+      '管理层': ['basicInfo:查看', 'requirements:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'resources:查看', 'tasks:查看', 'risks:查看', 'xxx:查看'],
+    }
+    FIXED_ROLES.forEach(r => { init[r] = {}; (defaultPerms[r] || []).forEach(p => { init[r][p] = true }) })
+    return init
+  })
+  const [showAddRoleModal, setShowAddRoleModal] = useState(false)
+  const [newRoleName, setNewRoleName] = useState('')
+  const [editingRoleName, setEditingRoleName] = useState<string | null>(null)
+  const [editRoleNameValue, setEditRoleNameValue] = useState('')
+  const [permissionActiveRole, setPermissionActiveRole] = useState('系统管理员')
+  const [permConfigTab, setPermConfigTab] = useState<'roles' | 'perms'>('roles')
+
+  // ========== 全局权限配置 ==========
+  const GLOBAL_PERM_OPTIONS = [
+    { key: 'roadmap:milestone:view', module: '项目路标视图', name: '里程碑视图查看' },
+    { key: 'roadmap:mrTrain:view', module: '项目路标视图', name: 'MR版本火车视图查看' },
+  ]
+  const [globalRoles, setGlobalRoles] = useState<{name: string; members: string[]}[]>([
+    { name: '管理组', members: ['张三', '李白'] },
+    { name: '编辑组', members: ['李四', '赵六', '王五'] },
+    { name: '查看组', members: ['孙七', '周八', '杜甫'] },
+  ])
+  const [globalRolePerms, setGlobalRolePerms] = useState<Record<string, Record<string, boolean>>>({
+    '管理组': { 'roadmap:milestone:view': true, 'roadmap:mrTrain:view': true },
+    '编辑组': { 'roadmap:milestone:view': true, 'roadmap:mrTrain:view': true },
+    '查看组': { 'roadmap:milestone:view': true, 'roadmap:mrTrain:view': false },
+  })
+  const [globalPermTab, setGlobalPermTab] = useState<'roles' | 'perms'>('roles')
+  const [showGlobalAddRole, setShowGlobalAddRole] = useState(false)
+  const [globalNewRoleName, setGlobalNewRoleName] = useState('')
+  const [globalEditingRole, setGlobalEditingRole] = useState<string | null>(null)
+  const [globalEditRoleValue, setGlobalEditRoleValue] = useState('')
+  const [globalPermActiveRole, setGlobalPermActiveRole] = useState('管理组')
+
   // 带编辑保护的导航函数 - 如果当前在编辑模式，弹出确认框
   const navigateWithEditGuard = (action: () => void) => {
     if (isEditMode) {
@@ -2183,6 +2253,348 @@ export default function Home() {
     )
   }
 
+  // ========== 全局权限配置渲染 ==========
+  const renderGlobalPermissionConfig = () => {
+    const handleAddRole = () => {
+      const name = globalNewRoleName.trim()
+      if (!name) { message.warning('请输入角色名称'); return }
+      if (globalRoles.some(r => r.name === name)) { message.warning('角色名称已存在'); return }
+      setGlobalRoles([...globalRoles, { name, members: [] }])
+      setGlobalRolePerms(prev => ({ ...prev, [name]: {} }))
+      setGlobalNewRoleName('')
+      setShowGlobalAddRole(false)
+      message.success('角色添加成功')
+    }
+    const handleDeleteRole = (roleName: string) => {
+      setGlobalRoles(globalRoles.filter(r => r.name !== roleName))
+      setGlobalRolePerms(prev => { const next = { ...prev }; delete next[roleName]; return next })
+      if (globalPermActiveRole === roleName) setGlobalPermActiveRole(globalRoles.filter(r => r.name !== roleName)[0]?.name || '')
+      message.success('角色已删除')
+    }
+    const handleRenameRole = (oldName: string) => {
+      const newName = globalEditRoleValue.trim()
+      if (!newName) { message.warning('角色名称不能为空'); return }
+      if (newName !== oldName && globalRoles.some(r => r.name === newName)) { message.warning('角色名称已存在'); return }
+      setGlobalRoles(globalRoles.map(r => r.name === oldName ? { ...r, name: newName } : r))
+      setGlobalRolePerms(prev => { const next = { ...prev }; next[newName] = next[oldName]; if (newName !== oldName) delete next[oldName]; return next })
+      if (globalPermActiveRole === oldName) setGlobalPermActiveRole(newName)
+      setGlobalEditingRole(null)
+      message.success('角色名称已修改')
+    }
+    const handleMembersChange = (roleName: string, members: string[]) => {
+      setGlobalRoles(globalRoles.map(r => r.name === roleName ? { ...r, members } : r))
+    }
+    const handlePermToggle = (roleName: string, permKey: string) => {
+      setGlobalRolePerms(prev => ({
+        ...prev,
+        [roleName]: { ...prev[roleName], [permKey]: !prev[roleName]?.[permKey] }
+      }))
+    }
+
+    return (
+      <Card style={{ borderRadius: 8 }}>
+        <Tabs activeKey={globalPermTab} onChange={(k) => setGlobalPermTab(k as any)} items={[
+          { key: 'roles', label: <Space><TeamOutlined />角色配置</Space> },
+          { key: 'perms', label: <Space><SafetyCertificateOutlined />权限配置</Space> },
+        ]} />
+
+        {globalPermTab === 'roles' && (
+          <div>
+            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 14, color: '#595959' }}>共 {globalRoles.length} 个角色</span>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowGlobalAddRole(true)}>新增角色</Button>
+            </div>
+            <Table
+              dataSource={globalRoles}
+              rowKey="name"
+              pagination={false}
+              size="middle"
+              columns={[
+                {
+                  title: '角色名称', dataIndex: 'name', width: 200,
+                  render: (name: string) => {
+                    if (globalEditingRole === name) {
+                      return (
+                        <Space>
+                          <Input size="small" value={globalEditRoleValue} onChange={e => setGlobalEditRoleValue(e.target.value)} onPressEnter={() => handleRenameRole(name)} style={{ width: 120 }} />
+                          <Button size="small" type="link" onClick={() => handleRenameRole(name)}>确定</Button>
+                          <Button size="small" type="link" onClick={() => setGlobalEditingRole(null)}>取消</Button>
+                        </Space>
+                      )
+                    }
+                    return <span style={{ fontWeight: 500 }}>{name}</span>
+                  }
+                },
+                {
+                  title: '人员配置', dataIndex: 'members',
+                  render: (_: any, record: any) => (
+                    <Select
+                      mode="multiple"
+                      value={record.members}
+                      onChange={(val: string[]) => handleMembersChange(record.name, val)}
+                      style={{ width: '100%', minWidth: 300 }}
+                      placeholder="请选择人员"
+                      maxTagCount={5}
+                      options={ALL_USERS.map(u => ({ label: u, value: u }))}
+                    />
+                  )
+                },
+                {
+                  title: '操作', width: 150,
+                  render: (_: any, record: any) => (
+                    <Space>
+                      <Button type="link" size="small" onClick={() => { setGlobalEditingRole(record.name); setGlobalEditRoleValue(record.name) }}>重命名</Button>
+                      <Popconfirm title="确定删除该角色？" onConfirm={() => handleDeleteRole(record.name)}>
+                        <Button type="link" size="small" danger>删除</Button>
+                      </Popconfirm>
+                    </Space>
+                  )
+                },
+              ]}
+            />
+            <Modal title="新增角色" open={showGlobalAddRole} onCancel={() => { setShowGlobalAddRole(false); setGlobalNewRoleName('') }} onOk={handleAddRole} okText="确定" cancelText="取消">
+              <Form layout="vertical">
+                <Form.Item label="角色名称" required>
+                  <Input placeholder="请输入角色名称" value={globalNewRoleName} onChange={e => setGlobalNewRoleName(e.target.value)} onPressEnter={handleAddRole} />
+                </Form.Item>
+              </Form>
+            </Modal>
+          </div>
+        )}
+
+        {globalPermTab === 'perms' && (
+          <div>
+            {globalRoles.length === 0 ? (
+              <Empty description="请先添加角色" style={{ padding: '40px 0' }} />
+            ) : (
+              <>
+                <Tabs
+                  activeKey={globalPermActiveRole}
+                  onChange={setGlobalPermActiveRole}
+                  type="card"
+                  size="small"
+                  style={{ marginBottom: 16 }}
+                  items={globalRoles.map(r => ({ key: r.name, label: r.name }))}
+                />
+                <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden' }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, padding: '12px 16px', background: '#fafbfc', borderBottom: '1px solid #f0f0f0' }}>
+                    角色权限配置 — {globalPermActiveRole}
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ padding: '12px 16px', fontWeight: 500, fontSize: 14, borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', width: 140, background: '#fafbfc', verticalAlign: 'middle' }}>项目路标视图</td>
+                        {GLOBAL_PERM_OPTIONS.map(opt => (
+                          <td key={opt.key} style={{ padding: '10px 16px', textAlign: 'center', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', minWidth: 140 }}>
+                            <div style={{ fontSize: 13, marginBottom: 6 }}>{opt.name}</div>
+                            <Checkbox checked={!!globalRolePerms[globalPermActiveRole]?.[opt.key]} onChange={() => handlePermToggle(globalPermActiveRole, opt.key)} />
+                          </td>
+                        ))}
+                        {Array.from({ length: 4 }).map((_, i) => (
+                          <td key={`empty-${i}`} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </Card>
+    )
+  }
+
+  // ========== 项目空间权限配置渲染 ==========
+  const renderPermissionConfig = () => {
+    const handleAddRole = () => {
+      const name = newRoleName.trim()
+      if (!name) { message.warning('请输入角色名称'); return }
+      if (roles.some(r => r.name === name)) { message.warning('角色名称已存在'); return }
+      setRoles([...roles, { name, members: [], isFixed: false }])
+      setRolePermissions(prev => ({ ...prev, [name]: {} }))
+      setNewRoleName('')
+      setShowAddRoleModal(false)
+      message.success('角色添加成功')
+    }
+    const handleDeleteRole = (roleName: string) => {
+      setRoles(roles.filter(r => r.name !== roleName))
+      setRolePermissions(prev => { const next = { ...prev }; delete next[roleName]; return next })
+      if (permissionActiveRole === roleName) setPermissionActiveRole(roles[0]?.name || '系统管理员')
+      message.success('角色已删除')
+    }
+    const handleRenameRole = (oldName: string) => {
+      const newName = editRoleNameValue.trim()
+      if (!newName) { message.warning('角色名称不能为空'); return }
+      if (newName !== oldName && roles.some(r => r.name === newName)) { message.warning('角色名称已存在'); return }
+      setRoles(roles.map(r => r.name === oldName ? { ...r, name: newName } : r))
+      setRolePermissions(prev => { const next = { ...prev }; next[newName] = next[oldName]; if (newName !== oldName) delete next[oldName]; return next })
+      if (permissionActiveRole === oldName) setPermissionActiveRole(newName)
+      setEditingRoleName(null)
+      message.success('角色名称已修改')
+    }
+    const handleMembersChange = (roleName: string, members: string[]) => {
+      setRoles(roles.map(r => r.name === roleName ? { ...r, members } : r))
+    }
+    const handlePermToggle = (roleName: string, permKey: string) => {
+      setRolePermissions(prev => ({
+        ...prev,
+        [roleName]: { ...prev[roleName], [permKey]: !prev[roleName]?.[permKey] }
+      }))
+    }
+
+    return (
+      <Card style={{ borderRadius: 8 }}>
+        <Tabs activeKey={permConfigTab} onChange={(k) => setPermConfigTab(k as any)} items={[
+          { key: 'roles', label: <Space><TeamOutlined />角色人员配置</Space> },
+          { key: 'perms', label: <Space><SafetyCertificateOutlined />权限配置</Space> },
+        ]} />
+
+        {permConfigTab === 'roles' && (
+          <div>
+            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 14, color: '#595959' }}>共 {roles.length} 个角色（{FIXED_ROLES.length} 个固定角色）</span>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowAddRoleModal(true)}>新增角色</Button>
+            </div>
+            <Table
+              dataSource={roles}
+              rowKey="name"
+              pagination={false}
+              size="middle"
+              columns={[
+                {
+                  title: '角色名称', dataIndex: 'name', width: 200,
+                  render: (name: string, record: any) => {
+                    if (editingRoleName === name) {
+                      return (
+                        <Space>
+                          <Input size="small" value={editRoleNameValue} onChange={e => setEditRoleNameValue(e.target.value)} onPressEnter={() => handleRenameRole(name)} style={{ width: 120 }} />
+                          <Button size="small" type="link" onClick={() => handleRenameRole(name)}>确定</Button>
+                          <Button size="small" type="link" onClick={() => setEditingRoleName(null)}>取消</Button>
+                        </Space>
+                      )
+                    }
+                    return (
+                      <Space>
+                        <span style={{ fontWeight: 500 }}>{name}</span>
+                        {record.isFixed && <Tag color="blue" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>固定</Tag>}
+                      </Space>
+                    )
+                  }
+                },
+                {
+                  title: '人员配置', dataIndex: 'members',
+                  render: (_: any, record: any) => (
+                    <Select
+                      mode="multiple"
+                      value={record.members}
+                      onChange={(val: string[]) => handleMembersChange(record.name, val)}
+                      style={{ width: '100%', minWidth: 300 }}
+                      placeholder="请选择人员"
+                      maxTagCount={5}
+                      options={ALL_USERS.map(u => ({ label: u, value: u }))}
+                    />
+                  )
+                },
+                {
+                  title: '操作', width: 120,
+                  render: (_: any, record: any) => record.isFixed ? (
+                    <span style={{ color: '#bfbfbf', fontSize: 12 }}>-</span>
+                  ) : (
+                    <Space>
+                      <Button type="link" size="small" onClick={() => { setEditingRoleName(record.name); setEditRoleNameValue(record.name) }}>重命名</Button>
+                      <Popconfirm title="确定删除该角色？" onConfirm={() => handleDeleteRole(record.name)}>
+                        <Button type="link" size="small" danger>删除</Button>
+                      </Popconfirm>
+                    </Space>
+                  )
+                },
+              ]}
+            />
+            <Modal title="新增角色" open={showAddRoleModal} onCancel={() => { setShowAddRoleModal(false); setNewRoleName('') }} onOk={handleAddRole} okText="确定" cancelText="取消">
+              <Form layout="vertical">
+                <Form.Item label="角色名称" required>
+                  <Input placeholder="请输入角色名称" value={newRoleName} onChange={e => setNewRoleName(e.target.value)} onPressEnter={handleAddRole} />
+                </Form.Item>
+              </Form>
+            </Modal>
+          </div>
+        )}
+
+        {permConfigTab === 'perms' && (
+          <div>
+            <Tabs
+              activeKey={permissionActiveRole}
+              onChange={setPermissionActiveRole}
+              type="card"
+              size="small"
+              style={{ marginBottom: 16 }}
+              items={roles.map(r => ({ key: r.name, label: r.name }))}
+            />
+            <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden' }}>
+              <div style={{ fontWeight: 600, fontSize: 14, padding: '12px 16px', background: '#fafbfc', borderBottom: '1px solid #f0f0f0' }}>
+                角色权限配置 — {permissionActiveRole}
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <tbody>
+                  {PERMISSION_MODULES.map((mod) => {
+                    const perms = mod.permissions
+                    // 计划模块分两行显示
+                    if (mod.key === 'plan') {
+                      const row1 = perms.filter(p => p.startsWith('一级') || p.startsWith('二级'))
+                      const row2 = perms.filter(p => !p.startsWith('一级') && !p.startsWith('二级'))
+                      return (
+                        <Fragment key={mod.key}>
+                          <tr>
+                            <td rowSpan={2} style={{ padding: '12px 16px', fontWeight: 500, fontSize: 14, borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', width: 100, verticalAlign: 'middle', background: '#fafbfc' }}>{mod.name}</td>
+                            {row1.map(p => (
+                              <td key={p} style={{ padding: '10px 12px', textAlign: 'center', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', minWidth: 110 }}>
+                                <div style={{ fontSize: 13, marginBottom: 6 }}>{p}</div>
+                                <Checkbox checked={!!rolePermissions[permissionActiveRole]?.[`${mod.key}:${p}`]} onChange={() => handlePermToggle(permissionActiveRole, `${mod.key}:${p}`)} />
+                              </td>
+                            ))}
+                            {row1.length < 6 && Array.from({ length: 6 - row1.length }).map((_, i) => (
+                              <td key={`empty1-${i}`} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
+                            ))}
+                          </tr>
+                          <tr>
+                            {row2.map(p => (
+                              <td key={p} style={{ padding: '10px 12px', textAlign: 'center', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', minWidth: 110 }}>
+                                <div style={{ fontSize: 13, marginBottom: 6 }}>{p}</div>
+                                <Checkbox checked={!!rolePermissions[permissionActiveRole]?.[`${mod.key}:${p}`]} onChange={() => handlePermToggle(permissionActiveRole, `${mod.key}:${p}`)} />
+                              </td>
+                            ))}
+                            {row2.length < 6 && Array.from({ length: 6 - row2.length }).map((_, i) => (
+                              <td key={`empty2-${i}`} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
+                            ))}
+                          </tr>
+                        </Fragment>
+                      )
+                    }
+                    return (
+                      <tr key={mod.key}>
+                        <td style={{ padding: '12px 16px', fontWeight: 500, fontSize: 14, borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', width: 100, background: '#fafbfc' }}>{mod.name}</td>
+                        {perms.map(p => (
+                          <td key={p} style={{ padding: '10px 12px', textAlign: 'center', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', minWidth: 110 }}>
+                            <div style={{ fontSize: 13, marginBottom: 6 }}>{p}</div>
+                            <Checkbox checked={!!rolePermissions[permissionActiveRole]?.[`${mod.key}:${p}`]} onChange={() => handlePermToggle(permissionActiveRole, `${mod.key}:${p}`)} />
+                          </td>
+                        ))}
+                        {perms.length < 6 && Array.from({ length: 6 - perms.length }).map((_, i) => (
+                          <td key={`empty-${i}`} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
+                        ))}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </Card>
+    )
+  }
+
   const renderProjectSpace = () => {
     const menuItems = [
       { key: 'basic', icon: <SettingOutlined />, label: '基础信息' },
@@ -2195,6 +2607,7 @@ export default function Home() {
       { key: 'bugs', icon: <BugOutlined />, label: '缺陷' },
       { key: 'team', icon: <TeamOutlined />, label: '团队' },
       { key: 'docs', icon: <FolderOutlined />, label: '项目文档' },
+      { key: 'permission', icon: <SafetyCertificateOutlined />, label: '权限配置' },
     ]
     return (
       <div style={{ minHeight: '100vh', background: '#f5f7fa' }}>
@@ -2296,7 +2709,8 @@ export default function Home() {
             {projectSpaceModule === 'plan' && renderProjectPlan()}
             {projectSpaceModule === 'overview' && renderProjectOverview()}
             {projectSpaceModule === 'requirements' && renderProjectRequirements()}
-            {projectSpaceModule !== 'basic' && projectSpaceModule !== 'plan' && projectSpaceModule !== 'overview' && projectSpaceModule !== 'requirements' && (
+            {projectSpaceModule === 'permission' && renderPermissionConfig()}
+            {projectSpaceModule !== 'basic' && projectSpaceModule !== 'plan' && projectSpaceModule !== 'overview' && projectSpaceModule !== 'requirements' && projectSpaceModule !== 'permission' && (
               <Card style={{ borderRadius: 8, textAlign: 'center', padding: '40px 0' }}>
                 <Empty description={<span style={{ color: '#8c8c8c' }}>{`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`}</span>} />
               </Card>
@@ -2457,6 +2871,7 @@ export default function Home() {
                       { key: 'projects', label: <span style={{ fontWeight: 500, padding: '0 4px' }}>工作台</span> },
                       { key: 'roadmap', label: <span style={{ fontWeight: 500, padding: '0 4px' }}>项目路标视图</span> },
                       { key: 'config', label: <span style={{ fontWeight: 500, padding: '0 4px' }}>配置中心</span> },
+                      { key: 'globalPermission', label: <span style={{ fontWeight: 500, padding: '0 4px' }}>权限配置</span> },
                     ]}
                   />
                 </Space>
@@ -2589,6 +3004,7 @@ export default function Home() {
                 }}
               />
             )}
+            {activeModule === 'globalPermission' && renderGlobalPermissionConfig()}
             {(activeModule === 'config' || activeModule === 'projectSpace') && (
               <div>
                 {/* 配置分类导航 */}
