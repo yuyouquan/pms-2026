@@ -2165,8 +2165,18 @@ export default function Home() {
 
   // 项目空间-基础信息
   const renderProjectBasicInfo = () => {
-    const markets = selectedProject?.markets || ['OP', 'TR', 'RU']
-    const isWholeMachine = selectedProject?.type === '整机产品项目'
+    const p = selectedProject
+    if (!p) return null
+    const markets = p.markets || []
+    const isWholeMachine = p.type === '整机产品项目'
+    const statusConf = PROJECT_STATUS_CONFIG[p.status] || { color: '#8c8c8c', tagColor: 'default' }
+    const healthMap = { normal: { label: '健康', color: '#52c41a' }, warning: { label: '关注', color: '#faad14' }, risk: { label: '风险', color: '#ff4d4f' } }
+    const hConf = healthMap[p.healthStatus] || healthMap.normal
+
+    const sourceTag = (source: 'IPM' | 'SCM' | '平台自定义') => {
+      const colors = { IPM: '#1890ff', SCM: '#52c41a', '平台自定义': '#faad14' }
+      return <Tag color={colors[source]} style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', margin: 0, marginLeft: 6 }}>{source}</Tag>
+    }
 
     const sectionTitleStyle: CSSProperties = {
       fontSize: 13,
@@ -2190,6 +2200,16 @@ export default function Home() {
       fontSize: 13,
     }
 
+    const headerTitle = isWholeMachine && p.marketName ? p.marketName : p.name
+    const headerSubtitle = [p.model || p.name, p.mainboard, p.tosVersion].filter(Boolean).join(' · ')
+
+    const summaryItems = [
+      { label: '产品线', value: p.productLine },
+      { label: isWholeMachine ? '开发模式' : '芯片平台', value: isWholeMachine ? (p.developMode || '-') : (p.chipPlatform || '-') },
+      { label: '安卓版本', value: p.androidVersion },
+      { label: '主板名', value: p.mainboard || '-' },
+    ]
+
     return (
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         {/* 项目概要卡片 */}
@@ -2205,27 +2225,22 @@ export default function Home() {
                 <ProjectOutlined style={{ color: '#fff', fontSize: 18 }} />
               </div>
               <div>
-                <div style={{ color: '#fff', fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}>NOTE 50 Pro</div>
-                <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>X6855 · MT6789J · XOS16.2.0</div>
+                <div style={{ color: '#fff', fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}>{headerTitle}</div>
+                <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>{headerSubtitle}</div>
               </div>
             </div>
           }
           extra={
             <Space size={8}>
-              <Tag color="gold" style={{ margin: 0, borderRadius: 4, fontWeight: 500 }}>待立项</Tag>
-              <Tag style={{ margin: 0, borderRadius: 4, background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff' }}>等级 A</Tag>
+              <Tag color={statusConf.tagColor} style={{ margin: 0, borderRadius: 4, fontWeight: 500 }}>{p.status}</Tag>
+              <Tag style={{ margin: 0, borderRadius: 4, background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag>
               <Button type="primary" icon={<SendOutlined />} style={{ background: '#4338ca', borderColor: '#4338ca' }} onClick={() => setTransferView('apply')}>申请转维</Button>
             </Space>
           }
         >
           {/* 关键信息摘要行 */}
           <div style={{ display: 'flex', background: '#f8fafc', borderBottom: '1px solid #f0f0f0' }}>
-            {[
-              { label: '产品线', value: 'NOTE' },
-              { label: '合作形式', value: 'ODC' },
-              { label: '安卓版本', value: '16 (W)' },
-              { label: '主板名', value: 'H8917' },
-            ].map((item, i) => (
+            {summaryItems.map((item, i) => (
               <div key={i} style={{ flex: 1, padding: '14px 20px', borderRight: i < 3 ? '1px solid #f0f0f0' : 'none', textAlign: 'center' }}>
                 <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4, fontWeight: 500, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>{item.label}</div>
                 <div style={{ fontSize: 14, color: '#262626', fontWeight: 600 }}>{item.value}</div>
@@ -2240,10 +2255,10 @@ export default function Home() {
                 <div style={sectionTitleStyle}>项目信息</div>
                 <Row gutter={[16, 10]}>
                   {[
-                    { label: '项目名', value: 'X6855' },
-                    { label: '芯片', value: 'MT6789J (G100 Ultimate)' },
-                    { label: 'OS版本', value: 'XOS16.2.0' },
-                    { label: '市场名', value: 'NOTE 50 Pro' },
+                    { label: '项目名', value: p.name },
+                    { label: '芯片', value: p.cpu || p.chipPlatform || '-' },
+                    { label: 'OS版本', value: p.tosVersion || '-' },
+                    { label: '市场名', value: p.marketName || '-' },
                   ].map((item, i) => (
                     <Col span={12} key={i}>
                       <div style={{ display: 'flex', lineHeight: '28px' }}>
@@ -2258,8 +2273,8 @@ export default function Home() {
                 <div style={sectionTitleStyle}>团队成员</div>
                 <Row gutter={[16, 12]}>
                   {[
-                    { role: 'PPM', name: '李莲秋', color: '#87d068' },
-                    { role: 'SPM', name: '曾晓寅', color: '#1890ff' },
+                    { role: 'SPM', name: p.spm || '-', color: '#1890ff' },
+                    { role: '负责人', name: p.leader || '-', color: '#87d068' },
                   ].map((member, i) => (
                     <Col span={12} key={i}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f0f0f0' }}>
@@ -2275,6 +2290,42 @@ export default function Home() {
               </Col>
             </Row>
           </div>
+        </Card>
+
+        {/* 项目基础信息 - IPM/SCM 数据源 */}
+        <Card
+          style={{ marginBottom: 20, borderRadius: 8 }}
+          title={
+            <Space size={8}>
+              <DatabaseOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+              <span style={{ fontSize: 15, fontWeight: 600 }}>项目基础信息</span>
+            </Space>
+          }
+        >
+          <Descriptions
+            bordered
+            size="small"
+            column={{ xs: 1, sm: 2, md: 3 }}
+            labelStyle={descLabelStyle}
+            contentStyle={descContentStyle}
+          >
+            <Descriptions.Item label={<span>型号名称{sourceTag('IPM')}</span>}><span style={{ fontWeight: 500 }}>{p.model || p.name}</span></Descriptions.Item>
+            <Descriptions.Item label={<span>主板名{sourceTag('IPM')}</span>}><span style={{ fontWeight: 500 }}>{p.mainboard || '-'}</span></Descriptions.Item>
+            <Descriptions.Item label={<span>Born{sourceTag('SCM')}</span>}><span style={{ fontWeight: 500 }}>{p.born || '-'}</span></Descriptions.Item>
+            <Descriptions.Item label={<span>市场名{sourceTag('IPM')}</span>}>{p.marketName || '-'}</Descriptions.Item>
+            <Descriptions.Item label={<span>公共型号{sourceTag('SCM')}</span>}>{p.model || '-'}</Descriptions.Item>
+            <Descriptions.Item label={<span>内存{sourceTag('SCM')}</span>}>{p.memory || '-'}</Descriptions.Item>
+            <Descriptions.Item label={<span>液晶{sourceTag('SCM')}</span>}>{p.lcd || '-'}</Descriptions.Item>
+            <Descriptions.Item label={<span>前摄像头{sourceTag('SCM')}</span>}>{p.frontCamera || '-'}</Descriptions.Item>
+            <Descriptions.Item label={<span>后摄像头{sourceTag('SCM')}</span>}>{p.primaryCamera || '-'}</Descriptions.Item>
+            <Descriptions.Item label={<span>安卓版本{sourceTag('IPM')}</span>}>{p.androidVersion || '-'}</Descriptions.Item>
+            <Descriptions.Item label={<span>品牌{sourceTag('IPM')}</span>}>{p.brand || '-'}</Descriptions.Item>
+            <Descriptions.Item label={<span>产品线{sourceTag('IPM')}</span>}>{p.productLine || '-'}</Descriptions.Item>
+            <Descriptions.Item label={<span>版本编号{sourceTag('SCM')}</span>}>{p.version || '-'}</Descriptions.Item>
+            <Descriptions.Item label={<span>版本构建地址{sourceTag('平台自定义')}</span>} span={2}>
+              {p.buildAddress ? <a href={p.buildAddress} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>{p.buildAddress}</a> : '-'}
+            </Descriptions.Item>
+          </Descriptions>
         </Card>
 
         {/* 转维信息模块 */}
@@ -2334,7 +2385,7 @@ export default function Home() {
         )}
 
         {/* 市场项目信息 */}
-        {isWholeMachine && (
+        {isWholeMachine && markets.length > 0 && (
           <Card
             style={{ borderRadius: 8 }}
             styles={{
@@ -2371,20 +2422,20 @@ export default function Home() {
                           labelStyle={descLabelStyle}
                           contentStyle={descContentStyle}
                         >
-                          <Descriptions.Item label="市场项目名"><span style={{ fontWeight: 500 }}>{`X6855-${m}`}</span></Descriptions.Item>
-                          <Descriptions.Item label="编译选项"><code style={{ padding: '1px 6px', background: '#f5f5f5', borderRadius: 3, fontSize: 12 }}>x6855</code></Descriptions.Item>
+                          <Descriptions.Item label="市场项目名"><span style={{ fontWeight: 500 }}>{`${p.model || p.name}-${m}`}</span></Descriptions.Item>
+                          <Descriptions.Item label="编译选项"><code style={{ padding: '1px 6px', background: '#f5f5f5', borderRadius: 3, fontSize: 12 }}>{(p.model || p.name).toLowerCase()}</code></Descriptions.Item>
                           <Descriptions.Item label="运营商定制"><Tag color="default">否</Tag></Descriptions.Item>
                           <Descriptions.Item label="市场名称">{`${m} Market`}</Descriptions.Item>
                           <Descriptions.Item label="编译市场"><code style={{ padding: '1px 6px', background: '#f5f5f5', borderRadius: 3, fontSize: 12 }}>{m.toLowerCase()}</code></Descriptions.Item>
                           <Descriptions.Item label="是否锁卡"><Tag color="default">否</Tag></Descriptions.Item>
-                          <Descriptions.Item label="内存"><span style={{ fontWeight: 500 }}>8GB</span></Descriptions.Item>
+                          <Descriptions.Item label="内存"><span style={{ fontWeight: 500 }}>{p.memory || '-'}</span></Descriptions.Item>
                           <Descriptions.Item label="软件项目等级"><Tag color="blue">A</Tag></Descriptions.Item>
                           <Descriptions.Item label="是否保密"><Tag color="default">否</Tag></Descriptions.Item>
                           <Descriptions.Item label="SQA审计策略"><Tag color="blue">全审</Tag></Descriptions.Item>
                           <Descriptions.Item label="是否支持VILTE"><Tag color="default">否</Tag></Descriptions.Item>
                           <Descriptions.Item label="运营商版本标识">-</Descriptions.Item>
                           <Descriptions.Item label="BOM"><span style={{ fontWeight: 500 }}>BOM-001</span></Descriptions.Item>
-                          <Descriptions.Item label="软件版本号"><span style={{ fontWeight: 500 }}>XOS16.2.0</span></Descriptions.Item>
+                          <Descriptions.Item label="软件版本号"><span style={{ fontWeight: 500 }}>{p.tosVersion || p.version || '-'}</span></Descriptions.Item>
                           <Descriptions.Item label="备注">-</Descriptions.Item>
                           <Descriptions.Item label="是否取消暂停"><Tag color="default">否</Tag></Descriptions.Item>
                           <Descriptions.Item label="取消暂停时间">-</Descriptions.Item>
