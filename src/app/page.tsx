@@ -240,7 +240,8 @@ import {
   InfoCircleOutlined,
   ClockCircleOutlined,
   StopOutlined,
-  DeploymentUnitOutlined
+  DeploymentUnitOutlined,
+  DatabaseOutlined
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { compareVersions, compareVersionsForTable, CompareTableRow, FieldDiff } from '@/lib/versionCompare'
@@ -1391,49 +1392,101 @@ export default function Home() {
   }
 
   const renderProjectCard = (project: typeof initialProjects[0]) => {
-    const statusColor = project.status === '进行中' ? '#1890ff' : project.status === '已完成' ? '#52c41a' : '#faad14'
-    const statusTagColor = project.status === '进行中' ? 'processing' : project.status === '已完成' ? 'success' : 'warning'
+    const statusConf = PROJECT_STATUS_CONFIG[project.status] || { color: '#8c8c8c', tagColor: 'default' }
+    const isWholeMachine = project.type === '整机产品项目'
+    const isTech = project.type === '技术项目'
+    const isSoftware = project.type === '产品项目'
+
     return (
       <Card
         hoverable
         className="pms-card-hover"
-        style={{ borderRadius: 8, border: '1px solid #f0f0f0' }}
+        style={{ borderRadius: 10, border: '1px solid #f0f0f0' }}
         styles={{ body: { padding: '16px 20px' } }}
         onClick={() => { setSelectedProject(project); setActiveModule('projectSpace') }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        {/* 头部: 项目名 + 状态 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#262626', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project.name}</div>
-            <Space size={4}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#262626', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {isWholeMachine && project.marketName ? project.marketName : project.name}
+            </div>
+            {isWholeMachine && project.marketName && (
+              <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project.name}</div>
+            )}
+            <Space size={4} wrap>
               <Tag color="default" style={{ fontSize: 11, borderRadius: 3, margin: 0 }}>{project.type}</Tag>
-              {project.type === '整机产品项目' && project.markets && project.markets.length > 0 && (
+              {isWholeMachine && project.markets && project.markets.length > 0 && (
                 <Tag color="blue" style={{ fontSize: 11, borderRadius: 3, margin: 0 }}>{project.markets.join(' / ')}</Tag>
               )}
             </Space>
           </div>
-          <Tag color={statusTagColor} style={{ margin: 0, borderRadius: 4, flexShrink: 0 }}>{project.status}</Tag>
+          <Tag color={statusConf.tagColor} style={{ margin: 0, borderRadius: 4, flexShrink: 0 }}>{project.status}</Tag>
         </div>
 
-        <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
-          <div style={{ fontSize: 12, color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ color: '#bfbfbf' }}>Android</span> <span style={{ color: '#595959', fontWeight: 500 }}>{project.androidVersion.replace('Android ', '')}</span>
-          </div>
-          <div style={{ fontSize: 12, color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ color: '#bfbfbf' }}>芯片</span> <span style={{ color: '#595959', fontWeight: 500 }}>{project.chipPlatform}</span>
-          </div>
+        {/* 中间: 类型差异化字段 */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          {isWholeMachine && (
+            <>
+              {project.brand && (
+                <div style={{ fontSize: 12, color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ color: '#bfbfbf' }}>品牌</span> <span style={{ color: '#595959', fontWeight: 500 }}>{project.brand}</span>
+                </div>
+              )}
+              {project.productLine && (
+                <div style={{ fontSize: 12, color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ color: '#bfbfbf' }}>产品线</span> <span style={{ color: '#595959', fontWeight: 500 }}>{project.productLine}</span>
+                </div>
+              )}
+              {project.developMode && (
+                <div style={{ fontSize: 12, color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ color: '#bfbfbf' }}>模式</span> <span style={{ color: '#595959', fontWeight: 500 }}>{project.developMode}</span>
+                </div>
+              )}
+            </>
+          )}
+          {(isSoftware || isTech) && (
+            <>
+              <div style={{ fontSize: 12, color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ color: '#bfbfbf' }}>Android</span> <span style={{ color: '#595959', fontWeight: 500 }}>{project.androidVersion.replace('Android ', '')}</span>
+              </div>
+              <div style={{ fontSize: 12, color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ color: '#bfbfbf' }}>芯片</span> <span style={{ color: '#595959', fontWeight: 500 }}>{project.chipPlatform}</span>
+              </div>
+            </>
+          )}
+          {project.type === '能力建设项目' && (
+            <div style={{ fontSize: 12, color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ color: '#bfbfbf' }}>方向</span> <span style={{ color: '#595959', fontWeight: 500 }}>{project.productLine}</span>
+            </div>
+          )}
         </div>
 
+        {/* 计划时间 */}
+        {(project.planStartDate || project.planEndDate) && (
+          <div style={{ display: 'flex', gap: 12, marginBottom: 10, fontSize: 12, color: '#8c8c8c' }}>
+            {project.planStartDate && (
+              <span><CalendarOutlined style={{ marginRight: 4, color: '#bfbfbf' }} />{project.planStartDate}</span>
+            )}
+            {project.planEndDate && (
+              <span>→ {project.planEndDate}</span>
+            )}
+          </div>
+        )}
+
+        {/* 进度条 */}
         <div style={{ marginBottom: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
             <span style={{ fontSize: 12, color: '#8c8c8c' }}>进度</span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: statusColor }}>{project.progress}%</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: statusConf.color }}>{project.progress}%</span>
           </div>
-          <Progress percent={project.progress} size="small" showInfo={false} strokeColor={statusColor} trailColor="#f0f0f0" />
+          <Progress percent={project.progress} size="small" showInfo={false} strokeColor={statusConf.color} trailColor="#f0f0f0" />
         </div>
 
+        {/* 底部: SPM + 更新时间 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Space size={6}>
-            <Avatar size={20} style={{ background: statusColor, fontSize: 10 }}>{project.spm[0]}</Avatar>
+            <Avatar size={20} style={{ background: statusConf.color, fontSize: 10 }}>{project.spm[0]}</Avatar>
             <span style={{ fontSize: 12, color: '#595959' }}>{project.spm}</span>
           </Space>
           <span style={{ fontSize: 11, color: '#bfbfbf' }}>{project.updatedAt}</span>
