@@ -644,6 +644,9 @@ export default function Home() {
   const [activeModule, setActiveModule] = useState<string>('projects')
   const [projectView, setProjectView] = useState<string>('card')
   const [todoCollapsed, setTodoCollapsed] = useState(false)
+  const [projectSearchText2, setProjectSearchText2] = useState('')
+  const [projectStatusFilter, setProjectStatusFilter] = useState<string>('all')
+  const [projectListView, setProjectListView] = useState<'card' | 'list'>('card')
   const [projects] = useState(initialProjects)
   const [todos] = useState(initialTodos)
   const [selectedProject, setSelectedProject] = useState<typeof initialProjects[0] | null>(null)
@@ -829,13 +832,16 @@ export default function Home() {
   const FIXED_ROLES = ['系统管理员', '产品经理', '项目经理', '开发代表', '软件SE', '设计师', '开发工程师', '测试工程师', '管理层']
   const ALL_USERS = ['张三', '李四', '王五', '赵六', '孙七', '周八', '李白', '杜甫']
   const PERMISSION_MODULES = [
-    { key: 'basicInfo', name: '基础信息', permissions: ['查看'] },
-    { key: 'requirements', name: '需求', permissions: ['查看'] },
+    { key: 'basicInfo', name: '基础信息', permissions: ['查看', '编辑'] },
+    { key: 'requirements', name: '需求', permissions: ['查看', '编辑', '导入/导出'] },
     { key: 'plan', name: '计划', permissions: ['一级计划-查看', '一级计划-编辑', '一级计划-审核', '二级计划-查看', '二级计划-编辑', '视图模式', '计划基线与变更', '导入/导出'] },
-    { key: 'resources', name: '资源', permissions: ['查看'] },
-    { key: 'tasks', name: '任务', permissions: ['查看'] },
-    { key: 'risks', name: '风险', permissions: ['查看'] },
-    { key: 'xxx', name: 'XXX', permissions: ['查看'] },
+    { key: 'resources', name: '资源', permissions: ['查看', '编辑'] },
+    { key: 'tasks', name: '任务', permissions: ['查看', '编辑', '分配'] },
+    { key: 'risks', name: '风险', permissions: ['查看', '编辑'] },
+    { key: 'bugs', name: '缺陷', permissions: ['查看', '编辑'] },
+    { key: 'docs', name: '项目文档', permissions: ['查看', '上传', '下载', '删除'] },
+    { key: 'team', name: '团队', permissions: ['查看', '编辑'] },
+    { key: 'transfer', name: '转维', permissions: ['查看', '申请', '录入', '评审'] },
   ]
   const [roles, setRoles] = useState<{name: string; members: string[]; isFixed: boolean}[]>([
     { name: '系统管理员', members: ['张三'], isFixed: true },
@@ -852,14 +858,14 @@ export default function Home() {
     const init: Record<string, Record<string, boolean>> = {}
     const defaultPerms: Record<string, string[]> = {
       '系统管理员': PERMISSION_MODULES.flatMap(m => m.permissions.map(p => `${m.key}:${p}`)),
-      '项目经理': ['basicInfo:查看', 'requirements:查看', 'plan:一级计划-查看', 'plan:一级计划-编辑', 'plan:二级计划-查看', 'plan:二级计划-编辑', 'plan:视图模式', 'plan:计划基线与变更', 'plan:导入/导出', 'resources:查看', 'tasks:查看', 'risks:查看', 'xxx:查看'],
-      '产品经理': ['basicInfo:查看', 'requirements:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'resources:查看', 'tasks:查看', 'risks:查看', 'xxx:查看'],
-      '开发代表': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看'],
-      '软件SE': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看'],
-      '设计师': ['basicInfo:查看', 'requirements:查看'],
-      '开发工程师': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看'],
-      '测试工程师': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看', 'risks:查看'],
-      '管理层': ['basicInfo:查看', 'requirements:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'resources:查看', 'tasks:查看', 'risks:查看', 'xxx:查看'],
+      '项目经理': ['basicInfo:查看', 'basicInfo:编辑', 'requirements:查看', 'requirements:编辑', 'requirements:导入/导出', 'plan:一级计划-查看', 'plan:一级计划-编辑', 'plan:二级计划-查看', 'plan:二级计划-编辑', 'plan:视图模式', 'plan:计划基线与变更', 'plan:导入/导出', 'resources:查看', 'resources:编辑', 'tasks:查看', 'tasks:编辑', 'tasks:分配', 'risks:查看', 'risks:编辑', 'bugs:查看', 'bugs:编辑', 'docs:查看', 'docs:上传', 'docs:下载', 'team:查看', 'team:编辑', 'transfer:查看', 'transfer:申请', 'transfer:录入', 'transfer:评审'],
+      '产品经理': ['basicInfo:查看', 'requirements:查看', 'requirements:编辑', 'plan:一级计划-查看', 'plan:二级计划-查看', 'resources:查看', 'tasks:查看', 'risks:查看', 'bugs:查看', 'docs:查看', 'team:查看', 'transfer:查看'],
+      '开发代表': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看', 'bugs:查看', 'docs:查看'],
+      '软件SE': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看', 'bugs:查看', 'docs:查看'],
+      '设计师': ['basicInfo:查看', 'requirements:查看', 'docs:查看'],
+      '开发工程师': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看', 'bugs:查看', 'docs:查看'],
+      '测试工程师': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看', 'risks:查看', 'bugs:查看', 'bugs:编辑', 'docs:查看'],
+      '管理层': ['basicInfo:查看', 'requirements:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'resources:查看', 'tasks:查看', 'risks:查看', 'bugs:查看', 'docs:查看', 'team:查看', 'transfer:查看'],
     }
     FIXED_ROLES.forEach(r => { init[r] = {}; (defaultPerms[r] || []).forEach(p => { init[r][p] = true }) })
     return init
@@ -873,6 +879,10 @@ export default function Home() {
 
   // ========== 全局权限配置 ==========
   const GLOBAL_PERM_OPTIONS = [
+    { key: 'roadmap:view', module: '项目路标', name: '查看' },
+    { key: 'roadmap:edit', module: '项目路标', name: '编辑' },
+    { key: 'roadmap:export', module: '项目路标', name: '导出' },
+    { key: 'roadmap:baseline', module: '项目路标', name: '打基线' },
     { key: 'roadmap:milestone:view', module: '项目路标视图', name: '里程碑视图查看' },
     { key: 'roadmap:mrTrain:view', module: '项目路标视图', name: 'MR版本火车视图查看' },
   ]
@@ -2291,6 +2301,9 @@ export default function Home() {
             </Row>
           </div>
         </Card>
+
+        {/* 计划信息 */}
+        {renderProjectPlanInfo()}
 
         {/* 项目基础信息 - IPM/SCM 数据源 */}
         <Card
