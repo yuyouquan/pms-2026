@@ -650,7 +650,19 @@ export default function Home() {
   const [projects] = useState(initialProjects)
   const [todos] = useState(initialTodos)
   const [selectedProject, setSelectedProject] = useState<typeof initialProjects[0] | null>(null)
-  
+
+  const workspaceFilteredProjects = useMemo(() => {
+    let result = projects
+    if (projectSearchText2) {
+      const keyword = projectSearchText2.toLowerCase()
+      result = result.filter(p => p.name.toLowerCase().includes(keyword) || (p.marketName && p.marketName.toLowerCase().includes(keyword)))
+    }
+    if (projectStatusFilter !== 'all') {
+      result = result.filter(p => p.status === projectStatusFilter)
+    }
+    return result
+  }, [projects, projectSearchText2, projectStatusFilter])
+
   // 配置相关状态
   const [selectedProjectType, setSelectedProjectType] = useState(PROJECT_TYPES[0])
   const [planLevel, setPlanLevel] = useState<string>('level1')
@@ -4281,21 +4293,83 @@ export default function Home() {
                     ))}
                   </Row>
 
-                  {/* 项目卡片标题 */}
+                  {/* 项目列表标题 + 筛选 */}
                   <div style={{ marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Space size={8}>
                       <span style={{ fontSize: 15, fontWeight: 600, color: '#262626' }}>项目列表</span>
-                      <Tag color="default" style={{ fontSize: 11, borderRadius: 4 }}>{projects.length} 个</Tag>
+                      <Tag color="default" style={{ fontSize: 11, borderRadius: 4 }}>{workspaceFilteredProjects.length} 个</Tag>
                     </Space>
-                    <Input placeholder="搜索项目..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear />
+                    <Space size={8}>
+                      <Select
+                        value={projectStatusFilter}
+                        onChange={setProjectStatusFilter}
+                        style={{ width: 120 }}
+                        size="small"
+                        options={[
+                          { label: '全部状态', value: 'all' },
+                          { label: '进行中', value: '进行中' },
+                          { label: '筹备中', value: '筹备中' },
+                          { label: '已完成', value: '已完成' },
+                        ]}
+                      />
+                      <Input
+                        placeholder="搜索项目..."
+                        prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                        style={{ width: 200, borderRadius: 6 }}
+                        allowClear
+                        value={projectSearchText2}
+                        onChange={e => setProjectSearchText2(e.target.value)}
+                      />
+                      <Segmented
+                        size="small"
+                        value={projectListView}
+                        onChange={(v) => setProjectListView(v as 'card' | 'list')}
+                        options={[
+                          { label: <AppstoreOutlined />, value: 'card' },
+                          { label: <UnorderedListOutlined />, value: 'list' },
+                        ]}
+                      />
+                    </Space>
                   </div>
 
-                  {/* 项目卡片网格 */}
-                  <Row gutter={[16, 16]}>
-                    {projects.map(p => (
-                      <Col xs={24} sm={12} lg={todoCollapsed ? 6 : 8} key={p.id}>{renderProjectCard(p)}</Col>
-                    ))}
-                  </Row>
+                  {/* 项目卡片/列表 */}
+                  {projectListView === 'card' ? (
+                    <Row gutter={[16, 16]}>
+                      {workspaceFilteredProjects.map(p => (
+                        <Col xs={24} sm={12} lg={todoCollapsed ? 6 : 8} key={p.id}>{renderProjectCard(p)}</Col>
+                      ))}
+                    </Row>
+                  ) : (
+                    <Table
+                      dataSource={workspaceFilteredProjects}
+                      rowKey="id"
+                      size="small"
+                      pagination={false}
+                      className="pms-table"
+                      onRow={(record) => ({
+                        style: { cursor: 'pointer' },
+                        onClick: () => { setSelectedProject(record); setActiveModule('projectSpace') },
+                      })}
+                      columns={[
+                        { title: '项目名称', dataIndex: 'name', width: 200, render: (name: string, r: typeof initialProjects[0]) => (
+                          <div>
+                            <div style={{ fontWeight: 500 }}>{r.type === '整机产品项目' && r.marketName ? r.marketName : name}</div>
+                            {r.type === '整机产品项目' && r.marketName && <div style={{ fontSize: 11, color: '#8c8c8c' }}>{name}</div>}
+                          </div>
+                        )},
+                        { title: '类型', dataIndex: 'type', width: 120, render: (t: string) => <Tag color="default" style={{ fontSize: 11 }}>{t}</Tag> },
+                        { title: '状态', dataIndex: 'status', width: 80, render: (s: string) => {
+                          const conf = PROJECT_STATUS_CONFIG[s] || { tagColor: 'default' }
+                          return <Tag color={conf.tagColor}>{s}</Tag>
+                        }},
+                        { title: '进度', dataIndex: 'progress', width: 120, render: (v: number) => <Progress percent={v} size="small" style={{ marginBottom: 0 }} /> },
+                        { title: '计划开始', dataIndex: 'planStartDate', width: 110 },
+                        { title: '计划结束', dataIndex: 'planEndDate', width: 110 },
+                        { title: 'SPM', dataIndex: 'spm', width: 80 },
+                        { title: '更新', dataIndex: 'updatedAt', width: 80, render: (t: string) => <span style={{ color: '#8c8c8c', fontSize: 12 }}>{t}</span> },
+                      ]}
+                    />
+                  )}
                 </div>
 
                 {/* 右侧 - 待办中心（可展开收起） */}
