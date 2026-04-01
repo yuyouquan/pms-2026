@@ -3,6 +3,24 @@
 // 项目类型
 export type ProjectType = '整机产品项目' | '产品项目' | '技术项目' | '能力建设项目';
 
+// 项目状态映射 - IPM原始状态 → PMS展示状态
+export const IPM_STATUS_MAP: Record<string, string> = {
+  '筹备中': '待立项',
+  '进行中': '进行中',
+  '已完成': '已完成',
+  '已取消': '已取消',
+  '维护期': '维护',
+}
+
+// 各项目类型的状态枚举
+export type SoftwareProjectStatus = '待立项' | '进行中' | '已完成' | '维护' | '暂停' | '已取消'
+export type HardwareProjectStatus = '待立项' | '进行中' | '已上市' | '维护' | '暂停' | '已取消'
+export type TechProjectStatus = '待立议' | '进行中' | '已完成' | '待验' | '已取消'
+export type CapabilityProjectStatus = '待立项' | '进行中' | '已完成' | '已取消'
+
+// 项目健康状态
+export type ProjectHealthStatus = 'normal' | 'risk' | 'warning'
+
 // 计划状态
 export type PlanStatus = '未开始' | '进行中' | '已完成' | '已取消';
 
@@ -60,6 +78,32 @@ export interface Project {
   markets?: string[];
   createdAt: Date;
   updatedAt: Date;
+  // 新增字段
+  projectCategory?: string;
+  marketName?: string;
+  brand?: string;
+  productLine?: string;
+  developMode?: string;
+  planStartDate?: string;
+  planEndDate?: string;
+  developCycle?: number;
+  projectManager?: string;
+  progress?: number;
+  healthStatus?: ProjectHealthStatus;
+  // 基本信息扩展 (IPM/SCM)
+  model?: string;
+  mainboard?: string;
+  born?: string;
+  cpu?: string;
+  memory?: string;
+  lcd?: string;
+  frontCamera?: string;
+  primaryCamera?: string;
+  operatingSystem?: string;
+  version?: string;
+  market?: string;
+  area?: string;
+  buildAddress?: string;
 }
 
 // 一级计划模板

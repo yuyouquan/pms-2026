@@ -465,14 +465,105 @@ const FIXED_LEVEL2_PLANS = [
   { id: 'plan1', name: '在研版本火车计划', type: '在研版本火车计划', fixed: true },
 ]
 
+// IPM状态 → PMS展示状态 映射
+const mapIpmStatus = (ipmStatus: string, projectType: string): string => {
+  const mapping: Record<string, string> = {
+    '筹备中': '待立项',
+    '进行中': '进行中',
+    '已完成': '已完成',
+    '已取消': '已取消',
+    '维护期': '维护',
+  }
+  if (projectType === '整机产品项目' && ipmStatus === '已上市') return '已上市'
+  if (projectType === '技术项目' && ipmStatus === '待立议') return '待立议'
+  if (projectType === '技术项目' && ipmStatus === '待验') return '待验'
+  return mapping[ipmStatus] || ipmStatus
+}
+
+// 项目状态颜色配置
+const PROJECT_STATUS_CONFIG: Record<string, { color: string; tagColor: string }> = {
+  '待立项': { color: '#faad14', tagColor: 'warning' },
+  '待立议': { color: '#faad14', tagColor: 'warning' },
+  '进行中': { color: '#1890ff', tagColor: 'processing' },
+  '已完成': { color: '#52c41a', tagColor: 'success' },
+  '已上市': { color: '#722ed1', tagColor: 'purple' },
+  '维护': { color: '#13c2c2', tagColor: 'cyan' },
+  '暂停': { color: '#d9d9d9', tagColor: 'default' },
+  '已取消': { color: '#ff4d4f', tagColor: 'error' },
+  '待验': { color: '#faad14', tagColor: 'warning' },
+  '筹备中': { color: '#faad14', tagColor: 'warning' },
+}
+
 // 项目数据
 const initialProjects = [
-  { id: '1', name: 'X6877-D8400_H991', type: '整机产品项目', status: '进行中', progress: 65, leader: '张三', markets: ['OP', 'TR', 'RU'], androidVersion: 'Android 16', chipPlatform: 'MTK', spm: '李白', updatedAt: '2小时前', productLine: '高端系列', tosVersion: 'tOS 16.3' },
-  { id: '2', name: 'tOS16.0', type: '产品项目', status: '进行中', progress: 55, leader: '李四', markets: [], androidVersion: 'Android 15', chipPlatform: 'MTK', spm: '张三', updatedAt: '1天前', productLine: 'tOS', tosVersion: 'tOS 16.0' },
-  { id: '6', name: 'tOS17.1', type: '产品项目', status: '筹备中', progress: 15, leader: '赵六', markets: [], androidVersion: 'Android 16', chipPlatform: 'QCOM', spm: '李四', updatedAt: '3小时前', productLine: 'tOS', tosVersion: 'tOS 17.1' },
-  { id: '3', name: 'X6855_H8917', type: '整机产品项目', status: '进行中', progress: 45, leader: '王五', markets: ['OP', 'TR'], androidVersion: 'Android 16', chipPlatform: 'MTK', spm: '赵六', updatedAt: '3天前', productLine: '高端系列', tosVersion: 'tOS 16.3' },
-  { id: '4', name: 'X6876_H786', type: '技术项目', status: '已完成', progress: 100, leader: '孙七', markets: [], androidVersion: 'Android 15', chipPlatform: 'QCOM', spm: '李四', updatedAt: '5天前', productLine: '平台技术', tosVersion: 'tOS 15.0' },
-  { id: '5', name: 'X6873_H972', type: '能力建设项目', status: '进行中', progress: 30, leader: '周八', markets: [], androidVersion: 'Android 16', chipPlatform: 'UNISOC', spm: '王五', updatedAt: '1周前', productLine: '基础能力', tosVersion: 'tOS 16.2' },
+  {
+    id: '1', name: 'X6877-D8400_H991', type: '整机产品项目' as const,
+    status: '进行中', progress: 65, leader: '张三',
+    markets: ['OP', 'TR', 'RU'], androidVersion: 'Android 16', chipPlatform: 'MTK',
+    spm: '李白', updatedAt: '2小时前', productLine: 'NOTE', tosVersion: 'tOS 16.3',
+    marketName: 'NOTE 50 Pro', brand: 'TECNO', developMode: 'ODC',
+    planStartDate: '2026-01-01', planEndDate: '2026-06-30',
+    developCycle: 120, healthStatus: 'normal' as const,
+    model: 'X6877', mainboard: 'H991', born: 'B2026Q1',
+    cpu: 'MT6877', memory: '8GB+256GB', lcd: '6.78" FHD+',
+    frontCamera: '32MP', primaryCamera: '108MP+8MP+2MP',
+    operatingSystem: 'Android 16', version: 'V1.0.0',
+    buildAddress: 'https://build.example.com/X6877',
+  },
+  {
+    id: '3', name: 'X6855_H8917', type: '整机产品项目' as const,
+    status: '进行中', progress: 45, leader: '王五',
+    markets: ['OP', 'TR'], androidVersion: 'Android 16', chipPlatform: 'MTK',
+    spm: '赵六', updatedAt: '3天前', productLine: 'SPARK', tosVersion: 'tOS 16.3',
+    marketName: 'SPARK 30 Pro', brand: 'TECNO', developMode: 'JDM',
+    planStartDate: '2026-02-01', planEndDate: '2026-08-31',
+    developCycle: 140, healthStatus: 'warning' as const,
+    model: 'X6855', mainboard: 'H8917', born: 'B2026Q1',
+    cpu: 'MT6855', memory: '6GB+128GB', lcd: '6.67" HD+',
+    frontCamera: '16MP', primaryCamera: '64MP+2MP+2MP',
+    operatingSystem: 'Android 16', version: 'V1.0.0',
+    buildAddress: 'https://build.example.com/X6855',
+  },
+  {
+    id: '2', name: 'tOS16.0', type: '产品项目' as const,
+    status: '进行中', progress: 55, leader: '李四',
+    markets: [], androidVersion: 'Android 15', chipPlatform: 'MTK',
+    spm: '张三', updatedAt: '1天前', productLine: 'tOS', tosVersion: 'tOS 16.0',
+    planStartDate: '2026-01-15', planEndDate: '2026-05-30',
+    developCycle: 95, healthStatus: 'normal' as const,
+    operatingSystem: 'Android 15', version: 'tOS16.0-V2',
+    buildAddress: 'https://build.example.com/tOS16',
+  },
+  {
+    id: '6', name: 'tOS17.1', type: '产品项目' as const,
+    status: '筹备中', progress: 15, leader: '赵六',
+    markets: [], androidVersion: 'Android 16', chipPlatform: 'QCOM',
+    spm: '李四', updatedAt: '3小时前', productLine: 'tOS', tosVersion: 'tOS 17.1',
+    planStartDate: '2026-03-01', planEndDate: '2026-09-30',
+    developCycle: 140, healthStatus: 'normal' as const,
+    operatingSystem: 'Android 16', version: 'tOS17.1-V1',
+    buildAddress: 'https://build.example.com/tOS17',
+  },
+  {
+    id: '4', name: 'X6876_H786', type: '技术项目' as const,
+    status: '已完成', progress: 100, leader: '孙七',
+    markets: [], androidVersion: 'Android 15', chipPlatform: 'QCOM',
+    spm: '李四', updatedAt: '5天前', productLine: '平台技术', tosVersion: 'tOS 15.0',
+    planStartDate: '2025-10-01', planEndDate: '2026-02-28',
+    developCycle: 100, healthStatus: 'normal' as const,
+    operatingSystem: 'Android 15',
+    buildAddress: 'https://build.example.com/X6876',
+  },
+  {
+    id: '5', name: 'X6873_H972', type: '能力建设项目' as const,
+    status: '进行中', progress: 30, leader: '周八',
+    markets: [], androidVersion: 'Android 16', chipPlatform: 'UNISOC',
+    spm: '王五', updatedAt: '1周前', productLine: '基础能力', tosVersion: 'tOS 16.2',
+    planStartDate: '2026-02-15', planEndDate: '2026-07-31',
+    developCycle: 110, healthStatus: 'risk' as const,
+    operatingSystem: 'Android 16',
+    buildAddress: 'https://build.example.com/X6873',
+  },
 ]
 
 const kanbanColumns = [
