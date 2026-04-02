@@ -511,7 +511,7 @@ const initialProjects = [
     frontCamera: '32MP', primaryCamera: '108MP+8MP+2MP',
     operatingSystem: 'Android 16', version: 'V1.0.0',
     buildAddress: 'https://build.example.com/X6877',
-    productType: '新品', tosVersionName: 'tOS 16.3', versionType: '量产版本',
+    productType: '新品', tosVersionName: 'tOS 16.3', versionType: 'Full',
     market: 'OP,TR,RU', ppm: '王明', tpm: '刘洋', projectLevel: 'A',
     currentNode: 'STR2', launchDate: '2026-06-15',
     screenShape: '直板', screenType: 'LCD', networkMode: '5G',
@@ -533,7 +533,7 @@ const initialProjects = [
     frontCamera: '16MP', primaryCamera: '64MP+2MP+2MP',
     operatingSystem: 'Android 16', version: 'V1.0.0',
     buildAddress: 'https://build.example.com/X6855',
-    productType: '新品', tosVersionName: 'tOS 16.3', versionType: '量产版本',
+    productType: '新品', tosVersionName: 'tOS 16.3', versionType: 'Slim',
     market: 'OP,TR,RU', ppm: '赵敏', tpm: '李刚', projectLevel: 'B',
     currentNode: 'STR1', launchDate: '2026-09-01',
     screenShape: '水滴屏', screenType: 'OLED', networkMode: '5G',
@@ -551,7 +551,7 @@ const initialProjects = [
     developCycle: 95, healthStatus: 'normal' as const,
     operatingSystem: 'Android 15', version: 'tOS16.0-V2',
     buildAddress: 'https://build.example.com/tOS16',
-    currentNode: 'STR3', versionType: '量产版本',
+    currentNode: 'STR3', versionType: 'Full',
     versionFiveRoles: { '版本规划代表': '张三', '版本经理': '李四', '版本SE': '王五', '版本测试代表': '赵六', '版本质量代表': '孙七' },
     branchInfo: 'main_dev_tos16', jenkinsUrl: 'https://jenkins.example.com/job/tOS16',
   },
@@ -564,7 +564,7 @@ const initialProjects = [
     developCycle: 140, healthStatus: 'normal' as const,
     operatingSystem: 'Android 16', version: 'tOS17.1-V1',
     buildAddress: 'https://build.example.com/tOS17',
-    currentNode: 'STR1', versionType: '开发版本',
+    currentNode: 'STR1', versionType: 'Slim',
     versionFiveRoles: { '版本规划代表': '赵六', '版本经理': '孙七', '版本SE': '李四', '版本测试代表': '王五', '版本质量代表': '张三' },
     branchInfo: 'main_dev_tos17', jenkinsUrl: 'https://jenkins.example.com/job/tOS17',
   },
@@ -607,7 +607,7 @@ const initialProjects = [
     frontCamera: '50MP', primaryCamera: '200MP+12MP+5MP',
     operatingSystem: 'Android 16', version: 'V0.1.0',
     buildAddress: 'https://build.example.com/X6890',
-    productType: '新品', versionType: '开发版本',
+    productType: '新品', versionType: 'Go',
     market: 'OP,TR,RU,IN', ppm: '王明', tpm: '刘洋', projectLevel: 'S',
     currentNode: '概念启动', launchDate: '2026-11-15',
     screenShape: '曲面屏', screenType: 'AMOLED', networkMode: '5G',
@@ -626,7 +626,7 @@ const initialProjects = [
     developCycle: 180, healthStatus: 'normal' as const,
     operatingSystem: 'Android 17', version: 'tOS18.0-V1',
     buildAddress: 'https://build.example.com/tOS18',
-    currentNode: '概念启动', versionType: '开发版本', brand: 'TECNO',
+    currentNode: '概念启动', versionType: 'Go', brand: 'TECNO',
     versionFiveRoles: { '版本规划代表': '杜甫', '版本经理': '李白', '版本SE': '张三', '版本测试代表': '李四', '版本质量代表': '王五' },
     branchInfo: 'main_dev_tos18', jenkinsUrl: 'https://jenkins.example.com/job/tOS18',
   },
@@ -666,7 +666,21 @@ const kanbanColumns = [
   { title: '发布阶段', key: 'released', color: '#722ed1' },
 ]
 
-const CURRENT_USER = '张三' // 当前登录用户（Mock）
+const DEFAULT_LOGIN_USER = '张三' // 默认登录用户（Mock）
+
+// 项目-人员分配（Mock：每个项目在权限配置中分配了哪些用户）
+const PROJECT_MEMBER_MAP: Record<string, string[]> = {
+  '1': ['张三', '李四', '王五', '赵六', '李白'],         // X6877
+  '3': ['王五', '赵六', '孙七'],                         // X6855
+  '2': ['张三', '李四', '王五', '赵六', '孙七'],         // tOS16.0
+  '6': ['赵六', '李四', '王五'],                         // tOS17.1
+  '4': ['孙七', '李四', '张三'],                         // X6876_H786
+  '5': ['周八', '王五', '李白'],                         // X6873_H972
+  '7': ['李白', '张三', '王五'],                         // X6890 CAMON
+  '8': ['杜甫', '李白', '张三', '李四', '王五'],         // tOS18.0
+  '9': ['李四', '张三', '赵六', '孙七'],                 // AI-Engine-V2
+  '10': ['孙七', '周八', '李白', '杜甫', '王五'],        // DevOps-Platform
+}
 
 const initialTodos = [
   { id: '1', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V2', versionId: 'v2', market: 'OP', responsible: '张三', priority: 'high', deadline: '2026-03-10', status: '进行中', taskDesc: '计划阶段任务待处理', category: 'overdue' as const },
@@ -749,18 +763,6 @@ export default function Home() {
   const [basicInfoEditMode, setBasicInfoEditMode] = useState(false)
   const [editingProjectFields, setEditingProjectFields] = useState<Record<string, any>>({})
 
-  const workspaceFilteredProjects = useMemo(() => {
-    let result = projects
-    if (projectSearchText2) {
-      const keyword = projectSearchText2.toLowerCase()
-      result = result.filter(p => p.name.toLowerCase().includes(keyword) || (p.marketName && p.marketName.toLowerCase().includes(keyword)))
-    }
-    if (projectStatusFilter !== 'all') {
-      result = result.filter(p => p.status === projectStatusFilter)
-    }
-    return result
-  }, [projects, projectSearchText2, projectStatusFilter])
-
   // 配置相关状态
   const [selectedProjectType, setSelectedProjectType] = useState(PROJECT_TYPES[0])
   const [planLevel, setPlanLevel] = useState<string>('level1')
@@ -787,6 +789,7 @@ export default function Home() {
 
   // ========== 转维系统状态 ==========
   const [currentUser, setCurrentUser] = useState(MOCK_TM_USERS[0]) // 张明辉 SPM
+  const [currentLoginUser, setCurrentLoginUser] = useState(DEFAULT_LOGIN_USER)
   const [configTab, setConfigTab] = useState('plan')
   const [transferConfigView, setTransferConfigView] = useState<'home' | 'checklist' | 'review'>('home')
   const [tmConfigSearchText, setTmConfigSearchText] = useState('')
@@ -1010,6 +1013,33 @@ export default function Home() {
   const [globalEditRoleValue, setGlobalEditRoleValue] = useState('')
   const [globalPermActiveRole, setGlobalPermActiveRole] = useState('管理组')
 
+  // 当前用户是否为管理组成员
+  const isAdminUser = useMemo(() => {
+    const adminGroup = globalRoles.find(r => r.name === '管理组')
+    return adminGroup ? adminGroup.members.includes(currentLoginUser) : false
+  }, [globalRoles, currentLoginUser])
+
+  // 当前用户可见的项目（管理组可看全部，其他用户只看自己被分配的项目）
+  const visibleProjects = useMemo(() => {
+    if (isAdminUser) return projects
+    return projects.filter(p => {
+      const members = PROJECT_MEMBER_MAP[p.id] || []
+      return members.includes(currentLoginUser)
+    })
+  }, [projects, isAdminUser, currentLoginUser])
+
+  const workspaceFilteredProjects = useMemo(() => {
+    let result = visibleProjects
+    if (projectSearchText2) {
+      const keyword = projectSearchText2.toLowerCase()
+      result = result.filter(p => p.name.toLowerCase().includes(keyword) || (p.marketName && p.marketName.toLowerCase().includes(keyword)))
+    }
+    if (projectStatusFilter !== 'all') {
+      result = result.filter(p => p.status === projectStatusFilter)
+    }
+    return result
+  }, [visibleProjects, projectSearchText2, projectStatusFilter])
+
   // 带编辑保护的导航函数 - 如果当前在编辑模式，弹出确认框
   const navigateWithEditGuard = (action: () => void) => {
     if (isEditMode && !isCurrentDraft) {
@@ -1050,7 +1080,7 @@ export default function Home() {
   }, [showProjectSearch])
 
   // 项目模糊搜索过滤
-  const filteredProjects = projects.filter(p => {
+  const filteredProjects = visibleProjects.filter(p => {
     if (!projectSearchText) return true
     return p.name.toLowerCase().includes(projectSearchText.toLowerCase()) ||
       p.type.includes(projectSearchText) ||
@@ -1642,7 +1672,7 @@ export default function Home() {
           <Col span={Math.floor(24 / getKanbanColumns().length)} key={col.key}>
             <Card title={<Space><Badge color={col.color} />{col.title}</Space>} style={{ background: '#fafafa', minHeight: 300 }} bodyStyle={{ padding: 12 }}>
               <Space direction="vertical" style={{ width: '100%' }}>
-                {projects.filter(getKanbanFilter(col)).map(project => (
+                {visibleProjects.filter(getKanbanFilter(col)).map(project => (
                     <Card key={project.id} size="small" hoverable onClick={() => { setSelectedProject(project); setActiveModule('projectSpace') }}>
                     <Space direction="vertical" style={{ width: '100%' }}><div style={{ fontWeight: 500 }}>{project.name}</div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Tag>{project.type}</Tag><Progress percent={project.progress} size="small" style={{ width: 60 }} /></div></Space>
                   </Card>
@@ -1662,20 +1692,40 @@ export default function Home() {
       low: { color: 'blue', text: '低', dotColor: '#1890ff' },
     }
 
-    const filteredTodos = todoFilter === 'all' ? todos : todos.filter(t => t.category === todoFilter)
-    const overdueCount = todos.filter(t => t.category === 'overdue').length
-    const upcomingCount = todos.filter(t => t.category === 'upcoming').length
+    // 按 项目+计划级别+计划类型+版本 去重合并
+    const mergeTodos = (list: typeof todos) => {
+      const groupMap = new Map<string, typeof todos>()
+      list.forEach(t => {
+        const key = `${t.projectId}|${t.planLevel}|${t.planType}|${t.versionNo}`
+        if (!groupMap.has(key)) groupMap.set(key, [])
+        groupMap.get(key)!.push(t)
+      })
+      const merged: (typeof todos[0] & { mergedCount?: number })[] = []
+      groupMap.forEach((group) => {
+        // 取优先级最高的（overdue > upcoming > pending > completed）和最早的截止日期
+        const priorityOrder = { overdue: 0, upcoming: 1, pending: 2, completed: 3 }
+        const sorted = [...group].sort((a, b) => (priorityOrder[a.category] ?? 9) - (priorityOrder[b.category] ?? 9))
+        const rep = { ...sorted[0], mergedCount: group.length }
+        merged.push(rep)
+      })
+      return merged
+    }
+
+    const allMerged = mergeTodos(todos)
+    const filteredTodos = todoFilter === 'all' ? allMerged : allMerged.filter(t => t.category === todoFilter)
+    const overdueCount = allMerged.filter(t => t.category === 'overdue').length
+    const upcomingCount = allMerged.filter(t => t.category === 'upcoming').length
 
     return (
       <div>
         {/* 分类筛选 */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 10, flexWrap: 'wrap' }}>
           {[
-            { key: 'all', label: '全部', count: todos.length },
+            { key: 'all', label: '全部', count: allMerged.length },
             { key: 'overdue', label: '逾期', count: overdueCount, color: '#ff4d4f' },
             { key: 'upcoming', label: '即将到期', count: upcomingCount, color: '#faad14' },
-            { key: 'pending', label: '待办', count: todos.filter(t => t.category === 'pending').length },
-            { key: 'completed', label: '已完成', count: todos.filter(t => t.category === 'completed').length },
+            { key: 'pending', label: '待办', count: allMerged.filter(t => t.category === 'pending').length },
+            { key: 'completed', label: '已完成', count: allMerged.filter(t => t.category === 'completed').length },
           ].map(f => (
             <Tag
               key={f.key}
@@ -1734,7 +1784,7 @@ export default function Home() {
                       for (let i = 0; i < rows.length; i++) {
                         const cells = rows[i].querySelectorAll('td')
                         for (let j = 0; j < cells.length; j++) {
-                          if (cells[j].textContent?.trim() === CURRENT_USER) {
+                          if (cells[j].textContent?.trim() === currentLoginUser) {
                             rows[i].scrollIntoView({ behavior: 'smooth', block: 'center' })
                             const row = rows[i] as HTMLElement
                             row.style.transition = 'background 0.3s'
@@ -1759,7 +1809,7 @@ export default function Home() {
                         {' · '}<span style={{ color: '#1890ff', fontWeight: 500 }}>{todo.versionNo}</span>
                         {todo.market && <> · <span style={{ color: '#13c2c2' }}>{todo.market}</span></>}
                       </div>
-                      <div style={{ fontSize: 12, color: '#595959', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{todo.taskDesc}</div>
+                      {(todo as any).mergedCount > 1 && <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4 }}>共 {(todo as any).mergedCount} 项待处理</div>}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Space size={4}>
                           <Tag color={pc.color} style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>{pc.text}</Tag>
@@ -4670,31 +4720,54 @@ export default function Home() {
                 <Dropdown
                   menu={{
                     items: [
-                      { key: 'label', label: <div style={{ padding: '4px 0', borderBottom: '1px solid #f0f0f0' }}><span style={{ color: '#999', fontSize: 11 }}>当前用户</span><div style={{ fontWeight: 600, marginTop: 2 }}>{currentUser.name} <Tag color="blue" style={{ fontSize: 11 }}>{currentUser.role}</Tag></div></div>, disabled: true },
+                      { key: 'label', label: <div style={{ padding: '4px 0', borderBottom: '1px solid #f0f0f0' }}>
+                        <span style={{ color: '#999', fontSize: 11 }}>当前登录用户</span>
+                        <div style={{ fontWeight: 600, marginTop: 2 }}>{currentLoginUser}
+                          {(() => {
+                            const adminGroup = globalRoles.find(r => r.name === '管理组')
+                            const isAdmin = adminGroup?.members.includes(currentLoginUser)
+                            const projectCount = isAdmin ? projects.length : projects.filter(p => (PROJECT_MEMBER_MAP[p.id] || []).includes(currentLoginUser)).length
+                            return <>
+                              {isAdmin && <Tag color="red" style={{ fontSize: 10, marginLeft: 6 }}>管理组</Tag>}
+                              <span style={{ fontSize: 11, color: '#8c8c8c', marginLeft: 6 }}>可见 {projectCount} 个项目</span>
+                            </>
+                          })()}
+                        </div>
+                      </div>, disabled: true },
                       { type: 'divider' as const },
-                      { key: 'switch-label', label: <span style={{ color: '#999', fontSize: 11 }}><SwapOutlined style={{ marginRight: 4 }} />切换用户</span>, disabled: true },
-                      ...MOCK_TM_USERS.map(u => ({
-                        key: u.id,
-                        label: <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: u.id === currentUser.id ? 600 : 400 }}>
-                          <Avatar size="small" style={{ background: u.id === currentUser.id ? '#4338ca' : '#e0e0e0', fontSize: 11 }}>{u.name.slice(-1)}</Avatar>
-                          <span>{u.name}</span><Tag style={{ fontSize: 11 }}>{u.role}</Tag><span style={{ color: '#999', fontSize: 11, marginLeft: 'auto' }}>{u.department}</span>
-                          {u.id === currentUser.id && <CheckCircleOutlined style={{ color: '#4338ca' }} />}
-                        </div>,
-                        onClick: () => setCurrentUser(u),
-                      })),
+                      { key: 'switch-label', label: <span style={{ color: '#999', fontSize: 11 }}><SwapOutlined style={{ marginRight: 4 }} />切换用户（测试权限）</span>, disabled: true },
+                      ...ALL_USERS.map(u => {
+                        const isActive = currentLoginUser === u
+                        const adminGroup = globalRoles.find(r => r.name === '管理组')
+                        const isAdmin = adminGroup?.members.includes(u)
+                        const projectCount = isAdmin ? projects.length : projects.filter(p => (PROJECT_MEMBER_MAP[p.id] || []).includes(u)).length
+                        // 获取该用户在项目空间中的角色
+                        const userRoles = roles.filter(r => r.members.includes(u)).map(r => r.name)
+                        return {
+                          key: u,
+                          label: <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: isActive ? 600 : 400 }}>
+                            <Avatar size="small" style={{ background: isActive ? '#4338ca' : '#e0e0e0', fontSize: 12 }}>{u.slice(-1)}</Avatar>
+                            <span>{u}</span>
+                            {isAdmin && <Tag color="red" style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>管理组</Tag>}
+                            <span style={{ color: '#8c8c8c', fontSize: 11, marginLeft: 'auto' }}>{projectCount}个项目</span>
+                            {isActive && <CheckCircleOutlined style={{ color: '#4338ca' }} />}
+                          </div>,
+                          onClick: () => { setCurrentLoginUser(u); setProjectCardPage(1) },
+                        }
+                      }),
                     ],
                   }}
                   placement="bottomRight"
                   trigger={['click']}
-                  overlayStyle={{ minWidth: 300 }}
+                  overlayStyle={{ minWidth: 340 }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '5px 14px', borderRadius: 24, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.15)', transition: 'background 0.2s' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.22)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
                   >
-                    <Avatar size={28} style={{ background: 'rgba(255,255,255,0.25)', fontSize: 13, fontWeight: 600 }}>{currentUser.name.slice(-1)}</Avatar>
-                    <span style={{ color: '#fff', fontSize: 13, fontWeight: 500 }}>{currentUser.name}</span>
-                    <Tag color="rgba(255,255,255,0.18)" style={{ color: '#fff', border: '1px solid rgba(255,255,255,0.25)', fontSize: 11, margin: 0 }}>{currentUser.role}</Tag>
+                    <Avatar size={28} style={{ background: 'rgba(255,255,255,0.25)', fontSize: 13, fontWeight: 600 }}>{currentLoginUser.slice(-1)}</Avatar>
+                    <span style={{ color: '#fff', fontSize: 13, fontWeight: 500 }}>{currentLoginUser}</span>
+                    {isAdminUser && <Tag color="rgba(255,100,100,0.35)" style={{ color: '#fff', border: '1px solid rgba(255,255,255,0.25)', fontSize: 10, margin: 0 }}>管理组</Tag>}
                   </div>
                 </Dropdown>
               </Col>
@@ -4714,10 +4787,10 @@ export default function Home() {
                     {/* 左侧: 状态标签筛选 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       {[
-                        { label: '全部', value: projects.length, filterValue: 'all', color: '#1890ff' },
-                        { label: '进行中', value: projects.filter(p => p.status === '进行中').length, filterValue: '进行中', color: '#1890ff' },
-                        { label: '待立项', value: projects.filter(p => p.status === '筹备中' || p.status === '待立项').length, filterValue: '筹备中', color: '#faad14' },
-                        { label: '已完成', value: projects.filter(p => p.status === '已完成').length, filterValue: '已完成', color: '#52c41a' },
+                        { label: '全部', value: visibleProjects.length, filterValue: 'all', color: '#1890ff' },
+                        { label: '进行中', value: visibleProjects.filter(p => p.status === '进行中').length, filterValue: '进行中', color: '#1890ff' },
+                        { label: '待立项', value: visibleProjects.filter(p => p.status === '筹备中' || p.status === '待立项').length, filterValue: '筹备中', color: '#faad14' },
+                        { label: '已完成', value: visibleProjects.filter(p => p.status === '已完成').length, filterValue: '已完成', color: '#52c41a' },
                       ].map((stat) => {
                         const isActive = projectStatusFilter === stat.filterValue
                         return (
