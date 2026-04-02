@@ -36,7 +36,8 @@ import {
   Segmented,
   Collapse,
   Timeline,
-  Typography
+  Typography,
+  Pagination
 } from 'antd'
 import type { MenuProps } from 'antd'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
@@ -678,7 +679,7 @@ const initialTodos = [
 
 const VERSION_DATA = [
   { id: 'v1', versionNo: 'V1', status: '已发布' },
-  { id: 'v2', versionNo: 'V2', status: '修订中' },
+  { id: 'v2', versionNo: 'V2', status: '已发布' },
   { id: 'v3', versionNo: 'V3', status: '已发布' },
 ]
 
@@ -739,6 +740,8 @@ export default function Home() {
   const [projectSearchText2, setProjectSearchText2] = useState('')
   const [projectStatusFilter, setProjectStatusFilter] = useState<string>('all')
   const [projectListView, setProjectListView] = useState<'card' | 'list'>('card')
+  const [projectCardPage, setProjectCardPage] = useState(1)
+  const projectCardPageSize = 9
   const [projects, setProjects] = useState(initialProjects)
   const [todos] = useState(initialTodos)
   const [todoFilter, setTodoFilter] = useState<'all' | 'overdue' | 'upcoming' | 'pending' | 'completed'>('all')
@@ -764,7 +767,7 @@ export default function Home() {
   const [selectedPlanType, setSelectedPlanType] = useState(LEVEL2_PLAN_TYPES[0])
   const [customTypes, setCustomTypes] = useState<string[]>([])
   const [versions, setVersions] = useState(VERSION_DATA)
-  const [currentVersion, setCurrentVersion] = useState('v2')
+  const [currentVersion, setCurrentVersion] = useState('v3')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   
   const [isEditMode, setIsEditMode] = useState(false)
@@ -940,15 +943,11 @@ export default function Home() {
   const ALL_USERS = ['张三', '李四', '王五', '赵六', '孙七', '周八', '李白', '杜甫']
   const PERMISSION_MODULES = [
     { key: 'basicInfo', name: '基础信息', permissions: ['查看', '编辑'] },
-    { key: 'requirements', name: '需求', permissions: ['查看', '编辑', '导入/导出'] },
-    { key: 'plan', name: '计划', permissions: ['一级计划-查看', '一级计划-编辑', '一级计划-审核', '二级计划-查看', '二级计划-编辑', '视图模式', '计划基线与变更', '导入/导出'] },
-    { key: 'resources', name: '资源', permissions: ['查看', '编辑'] },
-    { key: 'tasks', name: '任务', permissions: ['查看', '编辑', '分配'] },
-    { key: 'risks', name: '风险', permissions: ['查看', '编辑'] },
-    { key: 'bugs', name: '缺陷', permissions: ['查看', '编辑'] },
-    { key: 'docs', name: '项目文档', permissions: ['查看', '上传', '下载', '删除'] },
-    { key: 'team', name: '团队', permissions: ['查看', '编辑'] },
-    { key: 'transfer', name: '转维', permissions: ['查看', '申请', '录入', '评审'] },
+    { key: 'requirements', name: '需求', permissions: [] as string[] },
+    { key: 'plan', name: '计划', permissions: ['一级计划-查看', '一级计划-编辑', '一级计划-审核', '二级计划-查看', '二级计划-编辑', '导入/导出'] },
+    { key: 'resources', name: '资源', permissions: ['查看'] },
+    { key: 'tasks', name: '任务', permissions: ['查看'] },
+    { key: 'risks', name: '风险', permissions: ['查看'] },
   ]
   const [roles, setRoles] = useState<{name: string; members: string[]; isFixed: boolean}[]>([
     { name: '系统管理员', members: ['张三'], isFixed: true },
@@ -965,14 +964,14 @@ export default function Home() {
     const init: Record<string, Record<string, boolean>> = {}
     const defaultPerms: Record<string, string[]> = {
       '系统管理员': PERMISSION_MODULES.flatMap(m => m.permissions.map(p => `${m.key}:${p}`)),
-      '项目经理': ['basicInfo:查看', 'basicInfo:编辑', 'requirements:查看', 'requirements:编辑', 'requirements:导入/导出', 'plan:一级计划-查看', 'plan:一级计划-编辑', 'plan:二级计划-查看', 'plan:二级计划-编辑', 'plan:视图模式', 'plan:计划基线与变更', 'plan:导入/导出', 'resources:查看', 'resources:编辑', 'tasks:查看', 'tasks:编辑', 'tasks:分配', 'risks:查看', 'risks:编辑', 'bugs:查看', 'bugs:编辑', 'docs:查看', 'docs:上传', 'docs:下载', 'team:查看', 'team:编辑', 'transfer:查看', 'transfer:申请', 'transfer:录入', 'transfer:评审'],
-      '产品经理': ['basicInfo:查看', 'requirements:查看', 'requirements:编辑', 'plan:一级计划-查看', 'plan:二级计划-查看', 'resources:查看', 'tasks:查看', 'risks:查看', 'bugs:查看', 'docs:查看', 'team:查看', 'transfer:查看'],
-      '开发代表': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看', 'bugs:查看', 'docs:查看'],
-      '软件SE': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看', 'bugs:查看', 'docs:查看'],
-      '设计师': ['basicInfo:查看', 'requirements:查看', 'docs:查看'],
-      '开发工程师': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看', 'bugs:查看', 'docs:查看'],
-      '测试工程师': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看', 'risks:查看', 'bugs:查看', 'bugs:编辑', 'docs:查看'],
-      '管理层': ['basicInfo:查看', 'requirements:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'resources:查看', 'tasks:查看', 'risks:查看', 'bugs:查看', 'docs:查看', 'team:查看', 'transfer:查看'],
+      '项目经理': ['basicInfo:查看', 'basicInfo:编辑', 'plan:一级计划-查看', 'plan:一级计划-编辑', 'plan:二级计划-查看', 'plan:二级计划-编辑', 'plan:导入/导出', 'resources:查看', 'tasks:查看', 'risks:查看'],
+      '产品经理': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'resources:查看', 'tasks:查看', 'risks:查看'],
+      '开发代表': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看'],
+      '软件SE': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看'],
+      '设计师': ['basicInfo:查看'],
+      '开发工程师': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看'],
+      '测试工程师': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看', 'risks:查看'],
+      '管理层': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'resources:查看', 'tasks:查看', 'risks:查看'],
     }
     FIXED_ROLES.forEach(r => { init[r] = {}; (defaultPerms[r] || []).forEach(p => { init[r][p] = true }) })
     return init
@@ -988,10 +987,11 @@ export default function Home() {
   const GLOBAL_PERM_OPTIONS = [
     { key: 'roadmap:view', module: '项目路标', name: '查看' },
     { key: 'roadmap:edit', module: '项目路标', name: '编辑' },
+    { key: 'roadmap:baseline', module: '项目路标', name: '基线' },
     { key: 'roadmap:export', module: '项目路标', name: '导出' },
-    { key: 'roadmap:baseline', module: '项目路标', name: '打基线' },
-    { key: 'roadmap:milestone:view', module: '项目路标视图', name: '里程碑视图查看' },
-    { key: 'roadmap:mrTrain:view', module: '项目路标视图', name: 'MR版本火车视图查看' },
+    { key: 'viewBoard:placeholder', module: '视图看板', name: '' },
+    { key: 'resourceMgmt:placeholder', module: '资源管理', name: '' },
+    { key: 'configCenter:placeholder', module: '配置中心', name: '' },
   ]
   const [globalRoles, setGlobalRoles] = useState<{name: string; members: string[]}[]>([
     { name: '管理组', members: ['张三', '李白'] },
@@ -1012,7 +1012,7 @@ export default function Home() {
 
   // 带编辑保护的导航函数 - 如果当前在编辑模式，弹出确认框
   const navigateWithEditGuard = (action: () => void) => {
-    if (isEditMode) {
+    if (isEditMode && !isCurrentDraft) {
       setPendingNavigation(() => action)
       setShowLeaveConfirm(true)
     } else {
@@ -1180,6 +1180,19 @@ export default function Home() {
   const hasDraftVersion = versions.some(v => v.status === '修订中')
   const currentVersionData = versions.find(v => v.id === currentVersion)
   const isCurrentDraft = currentVersionData?.status === '修订中'
+
+  // 修订版本自动进入编辑状态，已发布版本退出编辑
+  useEffect(() => {
+    if (isCurrentDraft) {
+      setIsEditMode(true)
+      // 一级计划编辑时不支持横版表格，自动切换到竖版
+      if (projectPlanViewMode === 'horizontal') {
+        setProjectPlanViewMode('table')
+      }
+    } else {
+      setIsEditMode(false)
+    }
+  }, [currentVersion, isCurrentDraft])
 
   // 搜索所有字段
   const filteredTasks = (tasks as any[]).filter((task: any) => {
@@ -2178,20 +2191,36 @@ export default function Home() {
       message.success('保存成功')
     }
     
-    if (isEditMode) return (<Space><Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{currentVersionData?.versionNo}({currentVersionData?.status})</Tag><Button type="primary" icon={<SaveOutlined />} onClick={handleSave}>保存</Button><Button onClick={() => { setIsEditMode(false); message.info('已取消编辑') }}>取消</Button></Space>)
-    return (<Space>{!hasDraftVersion && <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateRevision}>创建修订</Button>}{isCurrentDraft && <Button icon={<EditOutlined />} onClick={() => setIsEditMode(true)}>编辑</Button>}{isCurrentDraft && <Button type="primary" icon={<SaveOutlined />} onClick={handlePublish}>发布</Button>}<Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
+    if (isCurrentDraft) return (<Space><Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{currentVersionData?.versionNo}({currentVersionData?.status})</Tag><Tag color="green" style={{ fontSize: 12 }}>自动保存</Tag><Button type="primary" icon={<SaveOutlined />} onClick={handlePublish}>发布</Button></Space>)
+    return (<Space>{!hasDraftVersion && <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateRevision}>创建修订</Button>}<Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
   }
+
+  const [compareShowUnchanged, setCompareShowUnchanged] = useState(false)
+  const [compareFilterType, setCompareFilterType] = useState<string>('all')
 
   const renderVersionCompareResult = () => {
     if (compareResult.length === 0) {
-      return <div style={{ textAlign: 'center', padding: 32, color: '#bfbfbf' }}><HistoryOutlined style={{ fontSize: 24, display: 'block', marginBottom: 8 }} />请选择两个版本点击"开始对比"</div>
+      return (
+        <div style={{ textAlign: 'center', padding: '48px 0', color: '#bfbfbf' }}>
+          <HistoryOutlined style={{ fontSize: 36, display: 'block', marginBottom: 12, color: '#d9d9d9' }} />
+          <div style={{ fontSize: 14, color: '#8c8c8c' }}>选择两个版本后点击"开始对比"查看差异</div>
+        </div>
+      )
     }
 
     const changedRows = compareResult.filter(r => r.changeType !== '未变更')
     const stats = {
+      total: compareResult.length,
       added: changedRows.filter(r => r.changeType === '新增').length,
       deleted: changedRows.filter(r => r.changeType === '删除').length,
       modified: changedRows.filter(r => r.changeType === '修改').length,
+      unchanged: compareResult.filter(r => r.changeType === '未变更').length,
+    }
+
+    // 筛选数据
+    let filteredData = compareShowUnchanged ? compareResult : changedRows
+    if (compareFilterType !== 'all') {
+      filteredData = filteredData.filter(r => r.changeType === compareFilterType)
     }
 
     // 行背景色
@@ -2207,65 +2236,99 @@ export default function Home() {
       const diff = row.fieldDiffs.find((d: FieldDiff) => d.field === fieldKey)
       if (row.changeType === '修改' && diff) {
         return (
-          <Tooltip title={<span>修改人: {row.modifier}<br/>修改时间: {row.modifyTime}</span>}>
-            <span style={{ color: '#1890ff' }}>
-              <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>{diff.oldValue}</span>
-              <span style={{ margin: '0 4px' }}>&rarr;</span>
-              <span style={{ fontWeight: 600 }}>{diff.newValue}</span>
-            </span>
+          <Tooltip title={<div style={{ fontSize: 12 }}><div>修改人: {row.modifier}</div><div>修改时间: {row.modifyTime}</div></div>}>
+            <div style={{ lineHeight: 1.6 }}>
+              <div style={{ color: '#ff4d4f', fontSize: 11, textDecoration: 'line-through', opacity: 0.7 }}>{diff.oldValue}</div>
+              <div style={{ color: '#1890ff', fontWeight: 600, fontSize: 12 }}>{diff.newValue}</div>
+            </div>
           </Tooltip>
         )
       }
       if (row.changeType === '新增') {
-        return <Tooltip title={<span>修改人: {row.modifier}<br/>修改时间: {row.modifyTime}</span>}><span style={{ color: '#52c41a' }}>{value || '-'}</span></Tooltip>
+        return <span style={{ color: '#52c41a', fontWeight: 500 }}>{value || '-'}</span>
       }
       if (row.changeType === '删除') {
-        return <Tooltip title={<span>修改人: {row.modifier}<br/>修改时间: {row.modifyTime}</span>}><span style={{ color: '#ff4d4f', textDecoration: 'line-through' }}>{value || '-'}</span></Tooltip>
+        return <span style={{ color: '#ff4d4f', textDecoration: 'line-through', opacity: 0.7 }}>{value || '-'}</span>
       }
-      return <span>{value || '-'}</span>
+      return <span style={{ color: '#595959' }}>{value || '-'}</span>
     }
 
     const compareColumns: any[] = [
       {
-        title: '序号', dataIndex: 'taskId', key: 'taskId', width: 80, fixed: 'left',
+        title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, fixed: 'left',
         render: (val: string, row: CompareTableRow) => (
-          <span style={{ fontWeight: 600, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? '#1890ff' : '#262626' }}>{val}</span>
+          <span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? '#1890ff' : '#8c8c8c' }}>{val}</span>
         ),
       },
       {
-        title: '变更', dataIndex: 'changeType', key: 'changeType', width: 70,
+        title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, fixed: 'left',
         render: (val: string) => {
-          if (val === '新增') return <Tag color="success">新增</Tag>
-          if (val === '删除') return <Tag color="error">删除</Tag>
-          if (val === '修改') return <Tag color="processing">修改</Tag>
-          return null
+          const conf: Record<string, { color: string; bg: string }> = {
+            '新增': { color: '#52c41a', bg: '#f6ffed' },
+            '删除': { color: '#ff4d4f', bg: '#fff2f0' },
+            '修改': { color: '#1890ff', bg: '#e6f4ff' },
+            '未变更': { color: '#8c8c8c', bg: '#fafafa' },
+          }
+          const c = conf[val]
+          return c ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: c.color, background: c.bg, border: `1px solid ${c.color}20` }}>{val}</span> : null
         },
       },
-      { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 180, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
-      { title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 90, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) },
-      { title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 110, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'planStartDate', val) },
-      { title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 110, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'planEndDate', val) },
-      { title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 110, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'actualStartDate', val) },
-      { title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 110, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'actualEndDate', val) },
-      { title: '状态', dataIndex: 'status', key: 'status', width: 90, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'status', val) },
-      { title: '进度', dataIndex: 'progress', key: 'progress', width: 80, render: (val: number, row: CompareTableRow) => renderDiffCell(row, 'progress', `${val}%`) },
+      { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, fixed: 'left', ellipsis: true, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
+      { title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) },
+      { title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'predecessor', val) },
+      { title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 105, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'planStartDate', val) },
+      { title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 105, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'planEndDate', val) },
+      { title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 80, render: (val: number, row: CompareTableRow) => renderDiffCell(row, 'estimatedDays', val ? `${val}天` : '-') },
+      { title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 105, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'actualStartDate', val) },
+      { title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 105, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'actualEndDate', val) },
+      { title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 80, render: (val: number, row: CompareTableRow) => renderDiffCell(row, 'actualDays', val ? `${val}天` : '-') },
+      { title: '状态', dataIndex: 'status', key: 'status', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'status', val) },
+      { title: '进度', dataIndex: 'progress', key: 'progress', width: 70, render: (val: number, row: CompareTableRow) => renderDiffCell(row, 'progress', `${val}%`) },
     ]
 
     return (
       <div style={{ marginTop: 16 }}>
-        <Alert
-          message={<span>对比完成: <Tag color="success">新增 {stats.added} 项</Tag><Tag color="error">删除 {stats.deleted} 项</Tag><Tag color="processing">修改 {stats.modified} 项</Tag></span>}
-          type="info"
-          style={{ marginBottom: 12 }}
-        />
+        {/* 统计概览 */}
+        <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+          {[
+            { label: '变更总计', value: changedRows.length, color: '#1890ff', filterVal: 'all' },
+            { label: '新增', value: stats.added, color: '#52c41a', filterVal: '新增' },
+            { label: '修改', value: stats.modified, color: '#1890ff', filterVal: '修改' },
+            { label: '删除', value: stats.deleted, color: '#ff4d4f', filterVal: '删除' },
+          ].map(item => {
+            const isActive = compareFilterType === item.filterVal
+            return (
+              <div
+                key={item.filterVal}
+                onClick={() => setCompareFilterType(item.filterVal)}
+                style={{
+                  flex: 1, padding: '10px 16px', borderRadius: 8, cursor: 'pointer',
+                  background: isActive ? `${item.color}10` : '#fafafa',
+                  border: isActive ? `1px solid ${item.color}` : '1px solid #f0f0f0',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <div style={{ fontSize: 20, fontWeight: 700, color: item.color }}>{item.value}</div>
+                <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>{item.label}</div>
+              </div>
+            )
+          })}
+        </div>
+        {/* 工具栏 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <span style={{ fontSize: 12, color: '#8c8c8c' }}>共 {filteredData.length} 条记录</span>
+          <Checkbox checked={compareShowUnchanged} onChange={e => setCompareShowUnchanged(e.target.checked)}>
+            <span style={{ fontSize: 12 }}>显示未变更项</span>
+          </Checkbox>
+        </div>
         <Table
           className="pms-table"
           columns={compareColumns}
-          dataSource={compareResult.filter(r => r.changeType !== '未变更')}
+          dataSource={filteredData}
           size="small"
           bordered
-          pagination={false}
-          scroll={{ x: 'max-content', y: 400 }}
+          pagination={filteredData.length > 15 ? { pageSize: 15, size: 'small', showTotal: (t) => `共 ${t} 条` } : false}
+          scroll={{ x: 1200, y: 420 }}
           rowKey="key"
           onRow={(record: CompareTableRow) => ({
             style: { background: getRowBg(record.changeType) },
@@ -2984,28 +3047,20 @@ export default function Home() {
           >
             <Row justify="space-between" align="middle">
               <Col>
-                {isEditMode ? (
-                  <Space size={8}>
-                    <Tag color="blue" style={{ fontSize: 13, padding: '4px 12px', borderRadius: 4, fontWeight: 500 }}>{currentVersionData?.versionNo} ({currentVersionData?.status})</Tag>
-                    <Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} onClick={() => { setIsEditMode(false); message.success('保存成功') }}>保存</Button>
-                    <Button style={{ borderRadius: 6 }} onClick={() => { setIsEditMode(false); message.info('已取消编辑') }}>取消</Button>
-                  </Space>
-                ) : (
-                  <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
+                <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
                     <Space size={6}>
                       <span style={{ color: '#8c8c8c', fontSize: 13 }}>版本</span>
                       <Select value={currentVersion} onChange={(val) => navigateWithEditGuard(() => { setCurrentVersion(val); setIsEditMode(false) })} style={{ width: 150 }} size="middle">
                         {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
                       </Select>
+                      {isCurrentDraft && <Tag color="green" style={{ fontSize: 12, margin: 0 }}>自动保存</Tag>}
                     </Space>
                     <Space size={6}>
                       {!hasDraftVersion && <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} onClick={handleCreateRevision}>创建修订</Button>}
-                      {isCurrentDraft && <Button icon={<EditOutlined />} style={{ borderRadius: 6 }} onClick={() => setIsEditMode(true)}>编辑</Button>}
                       {isCurrentDraft && <Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} onClick={handlePublish}>发布</Button>}
-                      <Button icon={<HistoryOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowVersionCompare(true)}>版本对比</Button>
+                      {!isCurrentDraft && <Button icon={<HistoryOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowVersionCompare(true)}>版本对比</Button>}
                     </Space>
                   </Space>
-                )}
               </Col>
               <Col>
                 <Space size={6}>
@@ -3019,11 +3074,14 @@ export default function Home() {
                     optionType="button"
                     buttonStyle="solid"
                     size="small"
-                    options={projectPlanLevel === 'level1' ? [
+                    options={projectPlanLevel === 'level1' ? (isEditMode ? [
+                      { label: '竖版表格', value: 'table' },
+                      { label: '甘特图', value: 'gantt' },
+                    ] : [
                       { label: '竖版表格', value: 'table' },
                       { label: '横版表格', value: 'horizontal' },
                       { label: '甘特图', value: 'gantt' },
-                    ] : [
+                    ]) : [
                       { label: '表格', value: 'table' },
                       { label: '甘特图', value: 'gantt' },
                     ]}
@@ -3223,18 +3281,36 @@ export default function Home() {
                   </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <tbody>
-                      <tr>
-                        <td style={{ padding: '12px 16px', fontWeight: 500, fontSize: 14, borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', width: 140, background: '#fafbfc', verticalAlign: 'middle' }}>项目路标视图</td>
-                        {GLOBAL_PERM_OPTIONS.map(opt => (
-                          <td key={opt.key} style={{ padding: '10px 16px', textAlign: 'center', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', minWidth: 140 }}>
-                            <div style={{ fontSize: 13, marginBottom: 6 }}>{opt.name}</div>
-                            <Checkbox checked={!!globalRolePerms[globalPermActiveRole]?.[opt.key]} onChange={() => handlePermToggle(globalPermActiveRole, opt.key)} />
-                          </td>
-                        ))}
-                        {Array.from({ length: 4 }).map((_, i) => (
-                          <td key={`empty-${i}`} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
-                        ))}
-                      </tr>
+                      {(() => {
+                        // 按 module 分组
+                        const modules: { module: string; perms: typeof GLOBAL_PERM_OPTIONS }[] = []
+                        GLOBAL_PERM_OPTIONS.forEach(opt => {
+                          const last = modules[modules.length - 1]
+                          if (last && last.module === opt.module) {
+                            last.perms.push(opt)
+                          } else {
+                            modules.push({ module: opt.module, perms: [opt] })
+                          }
+                        })
+                        const maxCols = Math.max(...modules.map(m => m.perms.filter(p => p.name).length), 4)
+                        return modules.map(mod => {
+                          const realPerms = mod.perms.filter(p => p.name)
+                          return (
+                            <tr key={mod.module}>
+                              <td style={{ padding: '12px 16px', fontWeight: 500, fontSize: 14, borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', width: 140, background: '#fafbfc', verticalAlign: 'middle' }}>{mod.module}</td>
+                              {realPerms.map(opt => (
+                                <td key={opt.key} style={{ padding: '10px 16px', textAlign: 'center', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', minWidth: 110 }}>
+                                  <div style={{ fontSize: 13, marginBottom: 6 }}>{opt.name}</div>
+                                  <Checkbox checked={!!globalRolePerms[globalPermActiveRole]?.[opt.key]} onChange={() => handlePermToggle(globalPermActiveRole, opt.key)} />
+                                </td>
+                              ))}
+                              {realPerms.length < maxCols && Array.from({ length: maxCols - realPerms.length }).map((_, i) => (
+                                <td key={`empty-${i}`} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
+                              ))}
+                            </tr>
+                          )
+                        })
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -3380,50 +3456,25 @@ export default function Home() {
                 <tbody>
                   {PERMISSION_MODULES.map((mod) => {
                     const perms = mod.permissions
-                    // 计划模块分两行显示
-                    if (mod.key === 'plan') {
-                      const row1 = perms.filter(p => p.startsWith('一级') || p.startsWith('二级'))
-                      const row2 = perms.filter(p => !p.startsWith('一级') && !p.startsWith('二级'))
-                      return (
-                        <Fragment key={mod.key}>
-                          <tr>
-                            <td rowSpan={2} style={{ padding: '12px 16px', fontWeight: 500, fontSize: 14, borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', width: 100, verticalAlign: 'middle', background: '#fafbfc' }}>{mod.name}</td>
-                            {row1.map(p => (
-                              <td key={p} style={{ padding: '10px 12px', textAlign: 'center', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', minWidth: 110 }}>
-                                <div style={{ fontSize: 13, marginBottom: 6 }}>{p}</div>
-                                <Checkbox checked={!!rolePermissions[permissionActiveRole]?.[`${mod.key}:${p}`]} onChange={() => handlePermToggle(permissionActiveRole, `${mod.key}:${p}`)} />
-                              </td>
-                            ))}
-                            {row1.length < 6 && Array.from({ length: 6 - row1.length }).map((_, i) => (
-                              <td key={`empty1-${i}`} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
-                            ))}
-                          </tr>
-                          <tr>
-                            {row2.map(p => (
-                              <td key={p} style={{ padding: '10px 12px', textAlign: 'center', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', minWidth: 110 }}>
-                                <div style={{ fontSize: 13, marginBottom: 6 }}>{p}</div>
-                                <Checkbox checked={!!rolePermissions[permissionActiveRole]?.[`${mod.key}:${p}`]} onChange={() => handlePermToggle(permissionActiveRole, `${mod.key}:${p}`)} />
-                              </td>
-                            ))}
-                            {row2.length < 6 && Array.from({ length: 6 - row2.length }).map((_, i) => (
-                              <td key={`empty2-${i}`} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
-                            ))}
-                          </tr>
-                        </Fragment>
-                      )
-                    }
+                    const maxCols = 6
                     return (
                       <tr key={mod.key}>
-                        <td style={{ padding: '12px 16px', fontWeight: 500, fontSize: 14, borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', width: 100, background: '#fafbfc' }}>{mod.name}</td>
-                        {perms.map(p => (
-                          <td key={p} style={{ padding: '10px 12px', textAlign: 'center', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', minWidth: 110 }}>
-                            <div style={{ fontSize: 13, marginBottom: 6 }}>{p}</div>
-                            <Checkbox checked={!!rolePermissions[permissionActiveRole]?.[`${mod.key}:${p}`]} onChange={() => handlePermToggle(permissionActiveRole, `${mod.key}:${p}`)} />
-                          </td>
-                        ))}
-                        {perms.length < 6 && Array.from({ length: 6 - perms.length }).map((_, i) => (
-                          <td key={`empty-${i}`} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
-                        ))}
+                        <td style={{ padding: '12px 16px', fontWeight: 500, fontSize: 14, borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', width: 100, background: '#fafbfc', verticalAlign: 'middle' }}>{mod.name}</td>
+                        {perms.length > 0 ? (
+                          <>
+                            {perms.map(p => (
+                              <td key={p} style={{ padding: '10px 12px', textAlign: 'center', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', minWidth: 110 }}>
+                                <div style={{ fontSize: 13, marginBottom: 6 }}>{p}</div>
+                                <Checkbox checked={!!rolePermissions[permissionActiveRole]?.[`${mod.key}:${p}`]} onChange={() => handlePermToggle(permissionActiveRole, `${mod.key}:${p}`)} />
+                              </td>
+                            ))}
+                            {perms.length < maxCols && Array.from({ length: maxCols - perms.length }).map((_, i) => (
+                              <td key={`empty-${i}`} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
+                            ))}
+                          </>
+                        ) : (
+                          <td colSpan={maxCols} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
+                        )}
                       </tr>
                     )
                   })}
@@ -4323,9 +4374,9 @@ export default function Home() {
             <Col flex="none" />
           </Row>
         </div>
-        <div style={{ display: 'flex', minHeight: 'calc(100vh - 56px)' }}>
-          {/* 侧边导航 */}
-          <div className="pms-sidebar" style={{ width: 200, background: '#fff', borderRight: '1px solid #f0f0f0', paddingTop: 8 }}>
+        <div style={{ display: 'flex', height: 'calc(100vh - 56px)' }}>
+          {/* 侧边导航 - 固定不滚动 */}
+          <div className="pms-sidebar" style={{ width: 200, background: '#fff', borderRight: '1px solid #f0f0f0', paddingTop: 8, overflowY: 'auto', flexShrink: 0 }}>
             <Menu
               mode="inline"
               selectedKeys={[projectSpaceModule]}
@@ -4337,7 +4388,7 @@ export default function Home() {
               onClick={({ key }) => navigateWithEditGuard(() => { setProjectSpaceModule(key); setTransferView(null); })}
             />
           </div>
-          {/* 内容区域 */}
+          {/* 内容区域 - 独立滚动 */}
           <div id="basic-info-scroll-container" style={{ flex: 1, padding: 24, overflow: 'auto' }}>
             {transferView === 'apply' && renderTransferApply()}
             {transferView === 'detail' && renderTransferDetail()}
@@ -4357,29 +4408,71 @@ export default function Home() {
           </div>
         </div>
         {/* 版本对比Modal */}
-        <Modal className="pms-modal" title="历史版本对比" open={showVersionCompare} onCancel={() => setShowVersionCompare(false)} footer={<Button type="primary" onClick={() => setShowVersionCompare(false)}>关闭</Button>} width={1100}><Space direction="vertical" style={{ width: '100%' }}><div><span style={{ marginRight: 16 }}>版本A:</span><Select value={compareVersionA} onChange={setCompareVersionA} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><div><span style={{ marginRight: 16 }}>版本B:</span><Select value={compareVersionB} onChange={setCompareVersionB} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><Button type="primary" onClick={() => {
-                const versionA = versions.find(v => v.id === compareVersionA)
-                const versionB = versions.find(v => v.id === compareVersionB)
-                if (versionA && versionB) {
-                  const vANum = parseInt(versionA.versionNo.replace('V', ''))
-                  const vBNum = parseInt(versionB.versionNo.replace('V', ''))
-                  const oldTasks = versionA.status === '已发布' ? LEVEL1_TASKS : tasks
-                  let newTasks = versionB.status === '已发布' ? LEVEL1_TASKS : tasks
-                  if (vANum !== vBNum) {
-                    newTasks = [
-                      ...tasks.map(t => {
-                        if (t.id === '2.1') return { ...t, taskName: 'STR2(更新)', status: '已完成', progress: 100 }
-                        if (t.id === '3') return { ...t, responsible: '李四', planStartDate: '2026-02-20' }
-                        return t
-                      }),
-                      { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 }
-                    ]
-                  }
-                  const result = compareVersionsForTable(oldTasks as any, newTasks as any)
-                  setCompareResult(result as CompareTableRow[])
-                  message.success('对比完成')
+        <Modal
+          className="pms-modal"
+          title={<Space><HistoryOutlined style={{ color: '#1890ff' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
+          open={showVersionCompare}
+          onCancel={() => { setShowVersionCompare(false); setCompareResult([]); setCompareFilterType('all'); setCompareShowUnchanged(false) }}
+          footer={null}
+          width={1200}
+          styles={{ body: { padding: '20px 24px' } }}
+        >
+          {/* 版本选择区域 */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px',
+            background: 'linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%)',
+            borderRadius: 10, marginBottom: 16, border: '1px solid #e8e8e8',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#262626', whiteSpace: 'nowrap' }}>基准版本</span>
+              <Select
+                value={compareVersionA}
+                onChange={setCompareVersionA}
+                style={{ width: 180 }}
+                size="middle"
+              >
+                {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
+              </Select>
+            </div>
+            <div style={{ fontSize: 18, color: '#bfbfbf' }}>→</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#262626', whiteSpace: 'nowrap' }}>对比版本</span>
+              <Select
+                value={compareVersionB}
+                onChange={setCompareVersionB}
+                style={{ width: 180 }}
+                size="middle"
+              >
+                {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
+              </Select>
+            </div>
+            <Button type="primary" icon={<SearchOutlined />} style={{ borderRadius: 6 }} onClick={() => {
+              const versionA = versions.find(v => v.id === compareVersionA)
+              const versionB = versions.find(v => v.id === compareVersionB)
+              if (versionA && versionB) {
+                const vANum = parseInt(versionA.versionNo.replace('V', ''))
+                const vBNum = parseInt(versionB.versionNo.replace('V', ''))
+                const oldTasks = versionA.status === '已发布' ? LEVEL1_TASKS : tasks
+                let newTasks = versionB.status === '已发布' ? LEVEL1_TASKS : tasks
+                if (vANum !== vBNum) {
+                  newTasks = [
+                    ...tasks.map(t => {
+                      if (t.id === '2.1') return { ...t, taskName: 'STR2(更新)', status: '已完成', progress: 100 }
+                      if (t.id === '3') return { ...t, responsible: '李四', planStartDate: '2026-02-20' }
+                      return t
+                    }),
+                    { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 }
+                  ]
                 }
-              }}>开始对比</Button>{renderVersionCompareResult()}</Space></Modal>
+                const result = compareVersionsForTable(oldTasks as any, newTasks as any)
+                setCompareResult(result as CompareTableRow[])
+                setCompareFilterType('all')
+                message.success('对比完成')
+              }
+            }}>开始对比</Button>
+          </div>
+          {renderVersionCompareResult()}
+        </Modal>
         {/* 自定义列Modal */}
         <Modal className="pms-modal" title="自定义列" open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(ALL_COLUMNS.filter(c => c.default).map(c => c.key))}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}><Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row><Col span={12}>{ALL_COLUMNS.slice(0, 6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col><Col span={12}>{ALL_COLUMNS.slice(6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col></Row></Checkbox.Group></Modal>
         {/* 创建二级计划Modal */}
@@ -4556,59 +4649,52 @@ export default function Home() {
               <div style={{ display: 'flex', gap: 20 }}>
                 {/* 左侧 - 项目列表 */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  {/* 项目统计概览 */}
-                  <Row gutter={16} style={{ marginBottom: 20 }}>
-                    {[
-                      { label: '全部项目', value: projects.length, color: '#1890ff', bg: '#e6f7ff', filterValue: 'all' },
-                      { label: '进行中', value: projects.filter(p => p.status === '进行中').length, color: '#1890ff', bg: '#e6f7ff', filterValue: '进行中' },
-                      { label: '待立项', value: projects.filter(p => p.status === '筹备中' || p.status === '待立项').length, color: '#faad14', bg: '#fff7e6', filterValue: '筹备中' },
-                      { label: '已完成', value: projects.filter(p => p.status === '已完成').length, color: '#52c41a', bg: '#f6ffed', filterValue: '已完成' },
-                    ].map((stat, i) => (
-                      <Col span={6} key={i}>
-                        <div
-                          style={{
-                            background: '#fff', borderRadius: 8, padding: '14px 16px',
-                            border: projectStatusFilter === stat.filterValue ? `1px solid ${stat.color}` : '1px solid #f0f0f0',
-                            display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', transition: 'all 0.2s',
-                          }}
-                          onClick={() => setProjectStatusFilter(stat.filterValue)}
-                        >
-                          <div style={{ width: 40, height: 40, borderRadius: 8, background: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <span style={{ fontSize: 18, fontWeight: 700, color: stat.color }}>{stat.value}</span>
+                  {/* 筛选工具栏 */}
+                  <div style={{
+                    background: '#fff', borderRadius: 10, padding: '12px 20px', marginBottom: 16,
+                    border: '1px solid #f0f0f0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+                  }}>
+                    {/* 左侧: 状态标签筛选 */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {[
+                        { label: '全部', value: projects.length, filterValue: 'all', color: '#1890ff' },
+                        { label: '进行中', value: projects.filter(p => p.status === '进行中').length, filterValue: '进行中', color: '#1890ff' },
+                        { label: '待立项', value: projects.filter(p => p.status === '筹备中' || p.status === '待立项').length, filterValue: '筹备中', color: '#faad14' },
+                        { label: '已完成', value: projects.filter(p => p.status === '已完成').length, filterValue: '已完成', color: '#52c41a' },
+                      ].map((stat) => {
+                        const isActive = projectStatusFilter === stat.filterValue
+                        return (
+                          <div
+                            key={stat.filterValue}
+                            onClick={() => { setProjectStatusFilter(stat.filterValue); setProjectCardPage(1); }}
+                            style={{
+                              padding: '4px 14px', borderRadius: 20, cursor: 'pointer',
+                              fontSize: 13, fontWeight: 500, transition: 'all 0.2s',
+                              background: isActive ? stat.color : 'transparent',
+                              color: isActive ? '#fff' : '#595959',
+                              border: isActive ? `1px solid ${stat.color}` : '1px solid transparent',
+                            }}
+                            onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.background = '#f5f5f5' } }}
+                            onMouseLeave={(e) => { if (!isActive) { e.currentTarget.style.background = 'transparent' } }}
+                          >
+                            {stat.label} <span style={{ fontSize: 12, opacity: 0.85, marginLeft: 2 }}>{stat.value}</span>
                           </div>
-                          <span style={{ fontSize: 13, color: '#8c8c8c' }}>{stat.label}</span>
-                        </div>
-                      </Col>
-                    ))}
-                  </Row>
-
-                  {/* 项目列表标题 + 筛选 */}
-                  <div style={{ marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Space size={8}>
-                      <span style={{ fontSize: 15, fontWeight: 600, color: '#262626' }}>项目列表</span>
-                      <Tag color="default" style={{ fontSize: 11, borderRadius: 4 }}>{workspaceFilteredProjects.length} 个</Tag>
-                    </Space>
-                    <Space size={8}>
-                      <Select
-                        value={projectStatusFilter}
-                        onChange={setProjectStatusFilter}
-                        style={{ width: 120 }}
-                        size="small"
-                        options={[
-                          { label: '全部状态', value: 'all' },
-                          { label: '进行中', value: '进行中' },
-                          { label: '筹备中', value: '筹备中' },
-                          { label: '已完成', value: '已完成' },
-                        ]}
-                      />
+                        )
+                      })}
+                    </div>
+                    {/* 右侧: 搜索 + 视图切换 */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <Input
-                        placeholder="搜索项目..."
+                        placeholder="搜索项目名称..."
                         prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-                        style={{ width: 200, borderRadius: 6 }}
+                        style={{ width: 220, borderRadius: 20, background: '#f7f8fa' }}
+                        variant="borderless"
                         allowClear
                         value={projectSearchText2}
-                        onChange={e => setProjectSearchText2(e.target.value)}
+                        onChange={e => { setProjectSearchText2(e.target.value); setProjectCardPage(1); }}
                       />
+                      <div style={{ width: 1, height: 20, background: '#e8e8e8' }} />
                       <Segmented
                         size="small"
                         value={projectListView}
@@ -4618,22 +4704,37 @@ export default function Home() {
                           { label: <UnorderedListOutlined />, value: 'list' },
                         ]}
                       />
-                    </Space>
+                    </div>
                   </div>
 
                   {/* 项目卡片/列表 */}
                   {projectListView === 'card' ? (
-                    <Row gutter={[16, 16]}>
-                      {workspaceFilteredProjects.map(p => (
-                        <Col xs={24} sm={12} lg={todoCollapsed ? 6 : 8} key={p.id}>{renderProjectCard(p)}</Col>
-                      ))}
-                    </Row>
+                    <>
+                      <Row gutter={[16, 16]}>
+                        {workspaceFilteredProjects.slice((projectCardPage - 1) * projectCardPageSize, projectCardPage * projectCardPageSize).map(p => (
+                          <Col xs={24} sm={12} lg={todoCollapsed ? 6 : 8} key={p.id}>{renderProjectCard(p)}</Col>
+                        ))}
+                      </Row>
+                      {workspaceFilteredProjects.length > projectCardPageSize && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+                          <Pagination
+                            current={projectCardPage}
+                            pageSize={projectCardPageSize}
+                            total={workspaceFilteredProjects.length}
+                            onChange={(page) => setProjectCardPage(page)}
+                            showTotal={(total) => `共 ${total} 个项目`}
+                            showSizeChanger={false}
+                            size="small"
+                          />
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <Table
                       dataSource={workspaceFilteredProjects}
                       rowKey="id"
                       size="small"
-                      pagination={false}
+                      pagination={{ pageSize: projectCardPageSize, size: 'small', showTotal: (total) => `共 ${total} 个项目` }}
                       className="pms-table"
                       onRow={(record) => ({
                         style: { cursor: 'pointer' },
@@ -4876,18 +4977,43 @@ export default function Home() {
             )}
           </div>
           <Modal className="pms-modal" title="自定义列" open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(ALL_COLUMNS.filter(c => c.default).map(c => c.key))}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}><Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row><Col span={12}>{ALL_COLUMNS.slice(0, 6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col><Col span={12}>{ALL_COLUMNS.slice(6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col></Row></Checkbox.Group></Modal>
-          <Modal className="pms-modal" title="历史版本对比" open={showVersionCompare} onCancel={() => setShowVersionCompare(false)} footer={<Button type="primary" onClick={() => setShowVersionCompare(false)}>关闭</Button>} width={1100}><Space direction="vertical" style={{ width: '100%' }}><div><span style={{ marginRight: 16 }}>版本A:</span><Select value={compareVersionA} onChange={setCompareVersionA} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><div><span style={{ marginRight: 16 }}>版本B:</span><Select value={compareVersionB} onChange={setCompareVersionB} style={{ width: 200 }}>{versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo}({v.status})</Option>)}</Select></div><Button type="primary" onClick={() => {
+          <Modal
+            className="pms-modal"
+            title={<Space><HistoryOutlined style={{ color: '#1890ff' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
+            open={showVersionCompare}
+            onCancel={() => { setShowVersionCompare(false); setCompareResult([]); setCompareFilterType('all'); setCompareShowUnchanged(false) }}
+            footer={null}
+            width={1200}
+            styles={{ body: { padding: '20px 24px' } }}
+          >
+            {/* 版本选择区域 */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px',
+              background: 'linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%)',
+              borderRadius: 10, marginBottom: 16, border: '1px solid #e8e8e8',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#262626', whiteSpace: 'nowrap' }}>基准版本</span>
+                <Select value={compareVersionA} onChange={setCompareVersionA} style={{ width: 180 }} size="middle">
+                  {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
+                </Select>
+              </div>
+              <div style={{ fontSize: 18, color: '#bfbfbf' }}>→</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#262626', whiteSpace: 'nowrap' }}>对比版本</span>
+                <Select value={compareVersionB} onChange={setCompareVersionB} style={{ width: 180 }} size="middle">
+                  {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
+                </Select>
+              </div>
+              <Button type="primary" icon={<SearchOutlined />} style={{ borderRadius: 6 }} onClick={() => {
                 const versionA = versions.find(v => v.id === compareVersionA)
                 const versionB = versions.find(v => v.id === compareVersionB)
                 if (versionA && versionB) {
-                  // 根据版本号模拟不同版本数据
                   const vANum = parseInt(versionA.versionNo.replace('V', ''))
                   const vBNum = parseInt(versionB.versionNo.replace('V', ''))
                   const oldTasks = versionA.status === '已发布' ? LEVEL1_TASKS : tasks
-                  // 为不同版本生成差异化数据
                   let newTasks = versionB.status === '已发布' ? LEVEL1_TASKS : tasks
                   if (vANum !== vBNum) {
-                    // 模拟版本间差异：修改部分任务、新增/删除
                     newTasks = [
                       ...tasks.map(t => {
                         if (t.id === '2.1') return { ...t, taskName: 'STR2(更新)', status: '已完成', progress: 100 }
@@ -4899,9 +5025,13 @@ export default function Home() {
                   }
                   const result = compareVersionsForTable(oldTasks as any, newTasks as any)
                   setCompareResult(result as CompareTableRow[])
+                  setCompareFilterType('all')
                   message.success('对比完成')
                 }
-              }}>开始对比</Button>{renderVersionCompareResult()}</Space></Modal>
+              }}>开始对比</Button>
+            </div>
+            {renderVersionCompareResult()}
+          </Modal>
           <Modal className="pms-modal" 
             title="子任务时间超出父任务范围" 
             open={parentTimeWarning.visible} 
