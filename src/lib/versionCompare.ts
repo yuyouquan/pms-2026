@@ -32,10 +32,13 @@ export interface CompareTableRow {
   // 当前各字段值（新版本优先，删除时取旧版本）
   taskName: string;
   responsible: string;
+  predecessor: string;
   planStartDate: string;
   planEndDate: string;
+  estimatedDays: number;
   actualStartDate: string;
   actualEndDate: string;
+  actualDays: number;
   status: string;
   progress: number;
   // 字段级差异明细（修改时有值）
@@ -70,10 +73,13 @@ export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask
         changeType: '新增',
         taskName: newTask.taskName,
         responsible: (newTask as any).responsible || newTask.responsibleUser || '',
+        predecessor: (newTask as any).predecessor || '',
         planStartDate: (newTask.planStartDate as any) || '',
         planEndDate: (newTask.planEndDate as any) || '',
+        estimatedDays: (newTask as any).estimatedDays || 0,
         actualStartDate: (newTask.actualStartDate as any) || '',
         actualEndDate: (newTask.actualEndDate as any) || '',
+        actualDays: (newTask as any).actualDays || 0,
         status: newTask.status,
         progress: newTask.progress,
         fieldDiffs: [],
@@ -89,10 +95,13 @@ export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask
         changeType: '删除',
         taskName: oldTask.taskName,
         responsible: (oldTask as any).responsible || oldTask.responsibleUser || '',
+        predecessor: (oldTask as any).predecessor || '',
         planStartDate: (oldTask.planStartDate as any) || '',
         planEndDate: (oldTask.planEndDate as any) || '',
+        estimatedDays: (oldTask as any).estimatedDays || 0,
         actualStartDate: (oldTask.actualStartDate as any) || '',
         actualEndDate: (oldTask.actualEndDate as any) || '',
+        actualDays: (oldTask as any).actualDays || 0,
         status: oldTask.status,
         progress: oldTask.progress,
         fieldDiffs: [],
@@ -112,6 +121,11 @@ export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask
       if (oldResp !== newResp) {
         fieldDiffs.push({ field: 'responsible', oldValue: oldResp || '-', newValue: newResp || '-' });
       }
+      const oldPred = (oldTask as any).predecessor || '';
+      const newPred = (newTask as any).predecessor || '';
+      if (oldPred !== newPred) {
+        fieldDiffs.push({ field: 'predecessor', oldValue: oldPred || '-', newValue: newPred || '-' });
+      }
       const oldStart = (oldTask.planStartDate as any) || '';
       const newStart = (newTask.planStartDate as any) || '';
       if (oldStart !== newStart) {
@@ -122,6 +136,11 @@ export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask
       if (oldEnd !== newEnd) {
         fieldDiffs.push({ field: 'planEndDate', oldValue: oldEnd || '-', newValue: newEnd || '-' });
       }
+      const oldEstDays = (oldTask as any).estimatedDays || 0;
+      const newEstDays = (newTask as any).estimatedDays || 0;
+      if (oldEstDays !== newEstDays) {
+        fieldDiffs.push({ field: 'estimatedDays', oldValue: `${oldEstDays}天`, newValue: `${newEstDays}天` });
+      }
       const oldActStart = (oldTask.actualStartDate as any) || '';
       const newActStart = (newTask.actualStartDate as any) || '';
       if (oldActStart !== newActStart) {
@@ -131,6 +150,11 @@ export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask
       const newActEnd = (newTask.actualEndDate as any) || '';
       if (oldActEnd !== newActEnd) {
         fieldDiffs.push({ field: 'actualEndDate', oldValue: oldActEnd || '-', newValue: newActEnd || '-' });
+      }
+      const oldActDays = (oldTask as any).actualDays || 0;
+      const newActDays = (newTask as any).actualDays || 0;
+      if (oldActDays !== newActDays) {
+        fieldDiffs.push({ field: 'actualDays', oldValue: `${oldActDays}天`, newValue: `${newActDays}天` });
       }
       if (oldTask.status !== newTask.status) {
         fieldDiffs.push({ field: 'status', oldValue: oldTask.status, newValue: newTask.status });
@@ -145,10 +169,13 @@ export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask
         changeType: fieldDiffs.length > 0 ? '修改' : '未变更',
         taskName: newTask.taskName,
         responsible: newResp,
+        predecessor: newPred,
         planStartDate: newStart,
         planEndDate: newEnd,
+        estimatedDays: newEstDays,
         actualStartDate: newActStart,
         actualEndDate: newActEnd,
+        actualDays: newActDays,
         status: newTask.status,
         progress: newTask.progress,
         fieldDiffs,
