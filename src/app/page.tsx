@@ -577,11 +577,12 @@ const kanbanColumns = [
 const CURRENT_USER = '张三' // 当前登录用户（Mock）
 
 const initialTodos = [
-  { id: '1', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V2', versionId: 'v2', market: 'OP', responsible: '张三', priority: 'high', deadline: '2026-03-10', status: '进行中', taskDesc: '计划阶段任务待处理' },
-  { id: '2', projectId: '3', projectName: 'X6855_H8917', planLevel: 'level2' as const, planType: '在研版本火车计划', planTabKey: 'plan1', versionNo: 'V2', versionId: 'v2', market: 'OP', responsible: '李四', priority: 'medium', deadline: '2026-03-15', status: '待处理', taskDesc: 'STR2 任务审核' },
-  { id: '3', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level2' as const, planType: '需求开发计划', planTabKey: 'plan0', versionNo: 'V2', versionId: 'v2', market: 'TR', responsible: '张三', priority: 'low', deadline: '2026-03-20', status: '待处理', taskDesc: '开发验证阶段安排' },
-  { id: '4', projectId: '2', projectName: 'tOS16.0', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V1', versionId: 'v1', market: '', responsible: '张三', priority: 'high', deadline: '2026-03-12', status: '进行中', taskDesc: '里程碑STR1待确认' },
-  { id: '5', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level2' as const, planType: '1+N MR版本火车计划', planTabKey: 'plan2', versionNo: 'V1', versionId: 'v1', market: 'OP', responsible: '李四', priority: 'medium', deadline: '2026-03-18', status: '待处理', taskDesc: 'FR版本转测安排' },
+  { id: '1', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V2', versionId: 'v2', market: 'OP', responsible: '张三', priority: 'high', deadline: '2026-03-10', status: '进行中', taskDesc: '计划阶段任务待处理', category: 'overdue' as const },
+  { id: '2', projectId: '3', projectName: 'X6855_H8917', planLevel: 'level2' as const, planType: '在研版本火车计划', planTabKey: 'plan1', versionNo: 'V2', versionId: 'v2', market: 'OP', responsible: '李四', priority: 'medium', deadline: '2026-04-05', status: '待处理', taskDesc: 'STR2 任务审核', category: 'pending' as const },
+  { id: '3', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level2' as const, planType: '需求开发计划', planTabKey: 'plan0', versionNo: 'V2', versionId: 'v2', market: 'TR', responsible: '张三', priority: 'low', deadline: '2026-04-03', status: '待处理', taskDesc: '开发验证阶段安排', category: 'upcoming' as const },
+  { id: '4', projectId: '2', projectName: 'tOS16.0', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V1', versionId: 'v1', market: '', responsible: '张三', priority: 'high', deadline: '2026-03-12', status: '进行中', taskDesc: '里程碑STR1待确认', category: 'overdue' as const },
+  { id: '5', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level2' as const, planType: '1+N MR版本火车计划', planTabKey: 'plan2', versionNo: 'V1', versionId: 'v1', market: 'OP', responsible: '李四', priority: 'medium', deadline: '2026-04-18', status: '待处理', taskDesc: 'FR版本转测安排', category: 'pending' as const },
+  { id: '6', projectId: '3', projectName: 'X6855_H8917', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V1', versionId: 'v1', market: 'OP', responsible: '张三', priority: 'low', deadline: '2026-02-28', status: '已完成', taskDesc: '概念阶段已完成', category: 'completed' as const },
 ]
 
 const VERSION_DATA = [
@@ -649,6 +650,7 @@ export default function Home() {
   const [projectListView, setProjectListView] = useState<'card' | 'list'>('card')
   const [projects] = useState(initialProjects)
   const [todos] = useState(initialTodos)
+  const [todoFilter, setTodoFilter] = useState<'all' | 'overdue' | 'upcoming' | 'pending' | 'completed'>('all')
   const [selectedProject, setSelectedProject] = useState<typeof initialProjects[0] | null>(null)
 
   const workspaceFilteredProjects = useMemo(() => {
@@ -1588,82 +1590,120 @@ export default function Home() {
       low: { color: 'blue', text: '低', dotColor: '#1890ff' },
     }
 
+    const filteredTodos = todoFilter === 'all' ? todos : todos.filter(t => t.category === todoFilter)
+    const overdueCount = todos.filter(t => t.category === 'overdue').length
+    const upcomingCount = todos.filter(t => t.category === 'upcoming').length
+
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {todos.map(todo => {
-          const pc = priorityConfig[todo.priority] || priorityConfig.low
-          return (
-            <div
-              key={todo.id}
-              style={{
-                padding: '12px 14px',
-                background: '#fff',
-                borderRadius: 6,
-                border: '1px solid #f0f0f0',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#d9d9d9'; e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#f0f0f0'; e.currentTarget.style.boxShadow = 'none' }}
-              onClick={() => {
-                const proj = projects.find(p => p.id === todo.projectId)
-                if (!proj) return
-                setSelectedProject(proj)
-                setActiveModule('projectSpace')
-                setProjectSpaceModule('plan')
-                setCurrentVersion(todo.versionId || 'v2')
-                setProjectPlanLevel(todo.planLevel)
-                setProjectPlanViewMode('table')
-                setIsEditMode(true)
-                if (todo.planLevel === 'level2' && todo.planTabKey) {
-                  setActiveLevel2Plan(todo.planTabKey)
-                }
-                if (proj.type === '整机产品项目' && todo.market) {
-                  setSelectedMarketTab(todo.market)
-                }
-                // 延迟滚动到责任人为当前用户的第一条任务
-                setTimeout(() => {
-                  const rows = document.querySelectorAll('.ant-table-tbody tr.ant-table-row')
-                  for (let i = 0; i < rows.length; i++) {
-                    const cells = rows[i].querySelectorAll('td')
-                    for (let j = 0; j < cells.length; j++) {
-                      if (cells[j].textContent?.trim() === CURRENT_USER) {
-                        rows[i].scrollIntoView({ behavior: 'smooth', block: 'center' })
-                        // 高亮闪烁效果
-                        const row = rows[i] as HTMLElement
-                        row.style.transition = 'background 0.3s'
-                        row.style.background = '#e6f7ff'
-                        setTimeout(() => { row.style.background = '' }, 2000)
-                        return
-                      }
-                    }
-                  }
-                }, 800)
-              }}
+      <div>
+        {/* 分类筛选 */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 10, flexWrap: 'wrap' }}>
+          {[
+            { key: 'all', label: '全部', count: todos.length },
+            { key: 'overdue', label: '逾期', count: overdueCount, color: '#ff4d4f' },
+            { key: 'upcoming', label: '即将到期', count: upcomingCount, color: '#faad14' },
+            { key: 'pending', label: '待办', count: todos.filter(t => t.category === 'pending').length },
+            { key: 'completed', label: '已完成', count: todos.filter(t => t.category === 'completed').length },
+          ].map(f => (
+            <Tag
+              key={f.key}
+              color={todoFilter === f.key ? (f.color ? f.color : 'blue') : 'default'}
+              style={{ cursor: 'pointer', borderRadius: 4, fontSize: 11, margin: 0 }}
+              onClick={() => setTodoFilter(f.key as any)}
             >
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: pc.dotColor, marginTop: 7, flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{todo.projectName}</div>
-                  <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {todo.planLevel === 'level1' ? '一级计划' : '二级计划'}
-                    {todo.planLevel === 'level2' && todo.planType && <> · {todo.planType}</>}
-                    {' · '}<span style={{ color: '#1890ff', fontWeight: 500 }}>{todo.versionNo}</span>
-                    {todo.market && <> · <span style={{ color: '#13c2c2' }}>{todo.market}</span></>}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#595959', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{todo.taskDesc}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Space size={4}>
-                      <Tag color={pc.color} style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>{pc.text}</Tag>
-                      <Tag color={todo.status === '进行中' ? 'processing' : 'default'} style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>{todo.status}</Tag>
-                    </Space>
-                    <span style={{ fontSize: 11, color: '#bfbfbf' }}>{todo.deadline}</span>
+              {f.label} {f.count > 0 && <span style={{ fontWeight: 600 }}>{f.count}</span>}
+            </Tag>
+          ))}
+        </div>
+
+        {/* 待办列表 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {filteredTodos.length === 0 ? (
+            <Empty description="暂无待办" style={{ padding: '20px 0' }} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          ) : (
+            filteredTodos.map(todo => {
+              const pc = priorityConfig[todo.priority] || priorityConfig.low
+              const isOverdue = todo.category === 'overdue'
+              const isUpcoming = todo.category === 'upcoming'
+              const borderColor = isOverdue ? '#ff4d4f' : isUpcoming ? '#faad14' : '#f0f0f0'
+              const bgColor = isOverdue ? '#fff2f0' : isUpcoming ? '#fffbe6' : '#fff'
+
+              return (
+                <div
+                  key={todo.id}
+                  style={{
+                    padding: '12px 14px',
+                    background: bgColor,
+                    borderRadius: 6,
+                    border: `1px solid ${borderColor}`,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none' }}
+                  onClick={() => {
+                    const proj = projects.find(p => p.id === todo.projectId)
+                    if (!proj) return
+                    setSelectedProject(proj)
+                    setActiveModule('projectSpace')
+                    setProjectSpaceModule('plan')
+                    setCurrentVersion(todo.versionId || 'v2')
+                    setProjectPlanLevel(todo.planLevel)
+                    setProjectPlanViewMode('table')
+                    setIsEditMode(true)
+                    if (todo.planLevel === 'level2' && todo.planTabKey) {
+                      setActiveLevel2Plan(todo.planTabKey)
+                    }
+                    if (proj.type === '整机产品项目' && todo.market) {
+                      setSelectedMarketTab(todo.market)
+                    }
+                    setTimeout(() => {
+                      const rows = document.querySelectorAll('.ant-table-tbody tr.ant-table-row')
+                      for (let i = 0; i < rows.length; i++) {
+                        const cells = rows[i].querySelectorAll('td')
+                        for (let j = 0; j < cells.length; j++) {
+                          if (cells[j].textContent?.trim() === CURRENT_USER) {
+                            rows[i].scrollIntoView({ behavior: 'smooth', block: 'center' })
+                            const row = rows[i] as HTMLElement
+                            row.style.transition = 'background 0.3s'
+                            row.style.background = '#e6f7ff'
+                            setTimeout(() => { row.style.background = '' }, 2000)
+                            return
+                          }
+                        }
+                      }
+                    }, 800)
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    {isOverdue && <WarningOutlined style={{ color: '#ff4d4f', fontSize: 14, marginTop: 2, flexShrink: 0 }} />}
+                    {isUpcoming && <ClockCircleOutlined style={{ color: '#faad14', fontSize: 14, marginTop: 2, flexShrink: 0 }} />}
+                    {!isOverdue && !isUpcoming && <div style={{ width: 6, height: 6, borderRadius: '50%', background: pc.dotColor, marginTop: 7, flexShrink: 0 }} />}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: isOverdue ? '#ff4d4f' : '#262626', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{todo.projectName}</div>
+                      <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {todo.planLevel === 'level1' ? '一级计划' : '二级计划'}
+                        {todo.planLevel === 'level2' && todo.planType && <> · {todo.planType}</>}
+                        {' · '}<span style={{ color: '#1890ff', fontWeight: 500 }}>{todo.versionNo}</span>
+                        {todo.market && <> · <span style={{ color: '#13c2c2' }}>{todo.market}</span></>}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#595959', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{todo.taskDesc}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Space size={4}>
+                          <Tag color={pc.color} style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>{pc.text}</Tag>
+                          <Tag color={todo.status === '进行中' ? 'processing' : todo.status === '已完成' ? 'success' : 'default'} style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>{todo.status}</Tag>
+                          {isOverdue && <Tag color="error" style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>已逾期</Tag>}
+                          {isUpcoming && <Tag color="warning" style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>即将到期</Tag>}
+                        </Space>
+                        <span style={{ fontSize: 11, color: isOverdue ? '#ff4d4f' : '#bfbfbf', fontWeight: isOverdue ? 500 : 400 }}>{todo.deadline}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          )
-        })}
+              )
+            })
+          )}
+        </div>
       </div>
     )
   }
@@ -4483,7 +4523,7 @@ export default function Home() {
                       onClick={() => setTodoCollapsed(false)}
                     >
                       <MenuUnfoldOutlined style={{ color: '#8c8c8c', fontSize: 14, marginBottom: 8 }} />
-                      <Badge count={todos.length} size="small" style={{ marginBottom: 8 }} />
+                      <Badge count={todos.filter(t => t.category === 'overdue').length} size="small" style={{ marginBottom: 8, backgroundColor: '#ff4d4f' }} />
                       <div style={{ writingMode: 'vertical-lr', fontSize: 12, color: '#8c8c8c', letterSpacing: 2 }}>待办中心</div>
                     </div>
                   ) : (
@@ -4508,7 +4548,7 @@ export default function Home() {
                         <Space size={6}>
                           <CheckSquareOutlined style={{ color: '#1890ff', fontSize: 14 }} />
                           <span style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>待办中心</span>
-                          <Badge count={todos.length} style={{ backgroundColor: '#1890ff' }} size="small" />
+                          <Badge count={todos.filter(t => t.category === 'overdue').length} style={{ backgroundColor: '#ff4d4f' }} size="small" />
                         </Space>
                         <Button type="text" size="small" icon={<MenuFoldOutlined />} style={{ color: '#8c8c8c' }} onClick={() => setTodoCollapsed(true)} />
                       </div>
