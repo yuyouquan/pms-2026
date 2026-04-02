@@ -1797,98 +1797,154 @@ export default function Home() {
 
   // 横版表格视图（一级计划专用）
   const renderHorizontalTable = () => {
-    // 横版表格：表头在左侧第一列，阶段=父活动，里程碑=子活动，阶段按里程碑数量合并
+    // 横版表格：按已发布版本倒序显示计划数据 + 实际数据行
     const stages = tasks.filter((t: any) => !t.parentId).sort((a: any, b: any) => a.order - b.order)
-    const calcDays = (start: string, end: string) => {
-      if (!start || !end) return '-'
-      const s = new Date(start), e = new Date(end)
-      const diff = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24))
-      return diff > 0 ? `${diff}天` : '-'
-    }
 
-    // 构建列数据：每个阶段下的里程碑（子活动），无子活动则阶段自身占一列
+    // 构建阶段-里程碑列结构
     const stageGroups = stages.map((stage: any) => {
       const milestones = tasks.filter((t: any) => t.parentId === stage.id).sort((a: any, b: any) => a.order - b.order)
       return { stage, milestones, colSpan: milestones.length || 1 }
     })
 
-    const thStyle: CSSProperties = { background: '#fafbfc', fontWeight: 600, fontSize: 13, color: '#595959', padding: '10px 12px', border: '1px solid #e8e8e8', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 1, minWidth: 120 }
-    const tdStyle: CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'center', whiteSpace: 'nowrap', minWidth: 110, border: '1px solid #e8e8e8' }
-    const stageTdStyle: CSSProperties = { ...tdStyle, fontWeight: 600, background: '#f5f7fa' }
+    // 所有里程碑（子活动）扁平列表
+    const allMilestones = stageGroups.flatMap(({ stage, milestones }) =>
+      milestones.length > 0 ? milestones : [stage]
+    )
+
+    // 计算开发周期（最早计划开始到最晚计划结束的天数）
+    const calcDevCycle = (taskList: any[]) => {
+      const starts = taskList.map((t: any) => t.planStartDate).filter(Boolean).map((d: string) => new Date(d).getTime())
+      const ends = taskList.map((t: any) => t.planEndDate).filter(Boolean).map((d: string) => new Date(d).getTime())
+      if (starts.length === 0 || ends.length === 0) return '-'
+      const earliest = Math.min(...starts)
+      const latest = Math.max(...ends)
+      const days = Math.ceil((latest - earliest) / (1000 * 60 * 60 * 24))
+      return days > 0 ? days : '-'
+    }
+
+    // 为每个已发布版本模拟不同的计划数据（Mock: 各版本计划完成时间有偏移）
+    const publishedVersions = versions.filter(v => v.status === '已发布').sort((a, b) => {
+      const aNum = parseInt(a.versionNo.replace('V', ''))
+      const bNum = parseInt(b.versionNo.replace('V', ''))
+      return bNum - aNum // 倒序
+    })
+
+    const getVersionTasks = (versionId: string) => {
+      const vNum = parseInt(versions.find(v => v.id === versionId)?.versionNo.replace('V', '') || '1')
+      const latestNum = Math.max(...publishedVersions.map(v => parseInt(v.versionNo.replace('V', ''))))
+      if (vNum === latestNum) return tasks // 最新版本使用当前数据
+      // 旧版本模拟：计划日期往前偏移
+      const offsetDays = (latestNum - vNum) * 3
+      return (tasks as any[]).map((t: any) => ({
+        ...t,
+        planEndDate: t.planEndDate ? (() => {
+          const d = new Date(t.planEndDate)
+          d.setDate(d.getDate() - offsetDays)
+          return d.toISOString().split('T')[0]
+        })() : '',
+        planStartDate: t.planStartDate ? (() => {
+          const d = new Date(t.planStartDate)
+          d.setDate(d.getDate() - offsetDays)
+          return d.toISOString().split('T')[0]
+        })() : '',
+      }))
+    }
+
+    const thStyle: CSSProperties = { background: '#fafbfc', fontWeight: 600, fontSize: 13, color: '#595959', padding: '10px 12px', border: '1px solid #e8e8e8', whiteSpace: 'nowrap', textAlign: 'center' }
+    const tdStyle: CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'center', whiteSpace: 'nowrap', minWidth: 100, border: '1px solid #e8e8e8' }
+    const versionThStyle: CSSProperties = { ...thStyle, position: 'sticky', left: 0, zIndex: 2, minWidth: 80, background: '#fafbfc' }
+    const cycleThStyle: CSSProperties = { ...thStyle, position: 'sticky', left: 80, zIndex: 2, minWidth: 80, background: '#fafbfc' }
+    const versionTdStyle: CSSProperties = { ...tdStyle, position: 'sticky', left: 0, zIndex: 1, fontWeight: 600, background: '#fff', minWidth: 80 }
+    const cycleTdStyle: CSSProperties = { ...tdStyle, position: 'sticky', left: 80, zIndex: 1, background: '#fff', minWidth: 80 }
+
+    // 阶段表头颜色
+    const stageColors = ['#1890ff', '#52c41a', '#722ed1', '#faad14', '#eb2f96', '#13c2c2']
 
     return (
       <div style={{ overflow: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <tbody>
-            {/* 阶段行：按里程碑数量合并 */}
+          <thead>
+            {/* 阶段分组行 */}
             <tr>
-              <th style={thStyle}>阶段</th>
-              {stageGroups.map(({ stage, colSpan }) => (
-                <td key={stage.id} colSpan={colSpan} style={stageTdStyle}>{stage.taskName}</td>
+              <th style={{ ...versionThStyle, borderBottom: 'none' }} rowSpan={2}>版本</th>
+              <th style={{ ...cycleThStyle, borderBottom: 'none' }} rowSpan={2}>开发周期</th>
+              {stageGroups.map(({ stage, colSpan }, i) => (
+                <th
+                  key={stage.id}
+                  colSpan={colSpan}
+                  style={{
+                    ...thStyle,
+                    background: `${stageColors[i % stageColors.length]}10`,
+                    color: stageColors[i % stageColors.length],
+                    borderBottom: `2px solid ${stageColors[i % stageColors.length]}`,
+                  }}
+                >
+                  {stage.taskName}
+                </th>
               ))}
             </tr>
             {/* 里程碑行 */}
             <tr>
-              <th style={thStyle}>里程碑</th>
               {stageGroups.flatMap(({ stage, milestones }) =>
                 milestones.length > 0
-                  ? milestones.map((m: any) => <td key={m.id} style={tdStyle}>{m.taskName}</td>)
-                  : [<td key={stage.id} style={{ ...tdStyle, color: '#bfbfbf' }}>-</td>]
+                  ? milestones.map((m: any) => <th key={m.id} style={thStyle}>{m.taskName}</th>)
+                  : [<th key={stage.id} style={{ ...thStyle, color: '#bfbfbf' }}>-</th>]
               )}
             </tr>
-            {/* 计划开始时间 */}
-            <tr>
-              <th style={thStyle}>计划开始时间</th>
-              {stageGroups.flatMap(({ stage, milestones }) =>
-                milestones.length > 0
-                  ? milestones.map((m: any) => <td key={m.id} style={tdStyle}>{m.planStartDate || '-'}</td>)
-                  : [<td key={stage.id} style={tdStyle}>{stage.planStartDate || '-'}</td>]
-              )}
-            </tr>
-            {/* 计划完成时间 */}
-            <tr>
-              <th style={thStyle}>计划完成时间</th>
-              {stageGroups.flatMap(({ stage, milestones }) =>
-                milestones.length > 0
-                  ? milestones.map((m: any) => <td key={m.id} style={tdStyle}>{m.planEndDate || '-'}</td>)
-                  : [<td key={stage.id} style={tdStyle}>{stage.planEndDate || '-'}</td>]
-              )}
-            </tr>
-            {/* 计划时间周期 */}
-            <tr>
-              <th style={thStyle}>计划时间周期</th>
-              {stageGroups.flatMap(({ stage, milestones }) =>
-                milestones.length > 0
-                  ? milestones.map((m: any) => <td key={m.id} style={tdStyle}>{calcDays(m.planStartDate, m.planEndDate)}</td>)
-                  : [<td key={stage.id} style={tdStyle}>{calcDays(stage.planStartDate, stage.planEndDate)}</td>]
-              )}
-            </tr>
-            {/* 实际开始时间 */}
-            <tr>
-              <th style={thStyle}>实际开始时间</th>
-              {stageGroups.flatMap(({ stage, milestones }) =>
-                milestones.length > 0
-                  ? milestones.map((m: any) => <td key={m.id} style={tdStyle}>{m.actualStartDate || '-'}</td>)
-                  : [<td key={stage.id} style={tdStyle}>{stage.actualStartDate || '-'}</td>]
-              )}
-            </tr>
-            {/* 实际完成时间 */}
-            <tr>
-              <th style={thStyle}>实际完成时间</th>
-              {stageGroups.flatMap(({ stage, milestones }) =>
-                milestones.length > 0
-                  ? milestones.map((m: any) => <td key={m.id} style={tdStyle}>{m.actualEndDate || '-'}</td>)
-                  : [<td key={stage.id} style={tdStyle}>{stage.actualEndDate || '-'}</td>]
-              )}
-            </tr>
-            {/* 实际时间周期 */}
-            <tr>
-              <th style={thStyle}>实际时间周期</th>
-              {stageGroups.flatMap(({ stage, milestones }) =>
-                milestones.length > 0
-                  ? milestones.map((m: any) => <td key={m.id} style={tdStyle}>{calcDays(m.actualStartDate, m.actualEndDate)}</td>)
-                  : [<td key={stage.id} style={tdStyle}>{calcDays(stage.actualStartDate, stage.actualEndDate)}</td>]
-              )}
+          </thead>
+          <tbody>
+            {/* 已发布版本行（倒序） */}
+            {publishedVersions.map((version, idx) => {
+              const vTasks = getVersionTasks(version.id)
+              const vMilestones = stageGroups.flatMap(({ stage, milestones: ms }) => {
+                if (ms.length > 0) {
+                  return ms.map((m: any) => {
+                    const vt = vTasks.find((t: any) => t.id === m.id)
+                    return vt || m
+                  })
+                }
+                const vt = vTasks.find((t: any) => t.id === stage.id)
+                return [vt || stage]
+              })
+              const devCycle = calcDevCycle(vTasks)
+              const isLatest = idx === 0
+              return (
+                <tr key={version.id} style={isLatest ? { background: '#fafffe' } : undefined}>
+                  <td style={{ ...versionTdStyle, color: isLatest ? '#1890ff' : '#262626', background: isLatest ? '#f0f9ff' : '#fff' }}>
+                    {version.versionNo}
+                  </td>
+                  <td style={{ ...cycleTdStyle, background: isLatest ? '#f0f9ff' : '#fff' }}>
+                    <Tooltip title="最早计划开始到最晚计划完成的天数">
+                      <span>{devCycle}</span>
+                    </Tooltip>
+                  </td>
+                  {vMilestones.map((m: any, mi: number) => (
+                    <td key={mi} style={tdStyle}>{m.planEndDate || '-'}</td>
+                  ))}
+                </tr>
+              )
+            })}
+            {/* 实际数据行（最新已发布版本的实际数据） */}
+            <tr style={{ background: '#fffbe6' }}>
+              <td style={{ ...versionTdStyle, color: '#d48806', background: '#fffbe6', fontSize: 12 }}>
+                <Tooltip title="最近已发布版本的实际完成数据">
+                  <span>实际</span>
+                </Tooltip>
+              </td>
+              <td style={{ ...cycleTdStyle, background: '#fffbe6' }}>
+                <Tooltip title="最早实际开始到最晚实际完成的天数">
+                  <span>{(() => {
+                    const starts = (tasks as any[]).map((t: any) => t.actualStartDate).filter(Boolean).map((d: string) => new Date(d).getTime())
+                    const ends = (tasks as any[]).map((t: any) => t.actualEndDate).filter(Boolean).map((d: string) => new Date(d).getTime())
+                    if (starts.length === 0 || ends.length === 0) return '-'
+                    const days = Math.ceil((Math.max(...ends) - Math.min(...starts)) / (1000 * 60 * 60 * 24))
+                    return days > 0 ? days : '-'
+                  })()}</span>
+                </Tooltip>
+              </td>
+              {allMilestones.map((m: any, mi: number) => (
+                <td key={mi} style={{ ...tdStyle, color: '#d48806' }}>{m.actualEndDate || '-'}</td>
+              ))}
             </tr>
           </tbody>
         </table>
