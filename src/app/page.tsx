@@ -510,6 +510,14 @@ const initialProjects = [
     frontCamera: '32MP', primaryCamera: '108MP+8MP+2MP',
     operatingSystem: 'Android 16', version: 'V1.0.0',
     buildAddress: 'https://build.example.com/X6877',
+    productType: '新品', tosVersionName: 'tOS 16.3', versionType: '量产版本',
+    market: 'OP,TR,RU', ppm: '王明', tpm: '刘洋', projectLevel: 'A',
+    currentNode: 'STR2', launchDate: '2026-06-15',
+    screenShape: '直板', screenType: 'LCD', networkMode: '5G',
+    kernelVersion: '5.15', lightEffect: '有', faceRecognition: '3D结构光',
+    soundEffect: 'DTS', simCard: '双卡双待', motor: '线性马达',
+    fingerprint: '侧边指纹', infrared: '有',
+    branchInfo: 'main_dev_x6877', jenkinsUrl: 'https://jenkins.example.com/job/X6877',
   },
   {
     id: '3', name: 'X6855_H8917', type: '整机产品项目' as const,
@@ -524,6 +532,14 @@ const initialProjects = [
     frontCamera: '16MP', primaryCamera: '64MP+2MP+2MP',
     operatingSystem: 'Android 16', version: 'V1.0.0',
     buildAddress: 'https://build.example.com/X6855',
+    productType: '新品', tosVersionName: 'tOS 16.3', versionType: '量产版本',
+    market: 'OP,TR,RU', ppm: '赵敏', tpm: '李刚', projectLevel: 'B',
+    currentNode: 'STR1', launchDate: '2026-09-01',
+    screenShape: '水滴屏', screenType: 'OLED', networkMode: '5G',
+    kernelVersion: '5.15', lightEffect: '有', faceRecognition: '2D',
+    soundEffect: 'DTS', simCard: '双卡双待', motor: '转子马达',
+    fingerprint: '屏下指纹', infrared: '无',
+    branchInfo: 'main_dev_x6855', jenkinsUrl: 'https://jenkins.example.com/job/X6855',
   },
   {
     id: '2', name: 'tOS16.0', type: '产品项目' as const,
@@ -534,6 +550,9 @@ const initialProjects = [
     developCycle: 95, healthStatus: 'normal' as const,
     operatingSystem: 'Android 15', version: 'tOS16.0-V2',
     buildAddress: 'https://build.example.com/tOS16',
+    currentNode: 'STR3', versionType: '量产版本',
+    versionFiveRoles: '张三/李四/王五/赵六/孙七',
+    branchInfo: 'main_dev_tos16', jenkinsUrl: 'https://jenkins.example.com/job/tOS16',
   },
   {
     id: '6', name: 'tOS17.1', type: '产品项目' as const,
@@ -544,6 +563,9 @@ const initialProjects = [
     developCycle: 140, healthStatus: 'normal' as const,
     operatingSystem: 'Android 16', version: 'tOS17.1-V1',
     buildAddress: 'https://build.example.com/tOS17',
+    currentNode: 'STR1', versionType: '开发版本',
+    versionFiveRoles: '赵六/孙七/李四/王五/张三',
+    branchInfo: 'main_dev_tos17', jenkinsUrl: 'https://jenkins.example.com/job/tOS17',
   },
   {
     id: '4', name: 'X6876_H786', type: '技术项目' as const,
@@ -554,6 +576,9 @@ const initialProjects = [
     developCycle: 100, healthStatus: 'normal' as const,
     operatingSystem: 'Android 15',
     buildAddress: 'https://build.example.com/X6876',
+    currentNode: 'STR5', projectDescription: '平台技术预研项目，探索新一代芯片平台的适配与优化方案',
+    branchInfo: 'main_dev_x6876', jenkinsUrl: 'https://jenkins.example.com/job/X6876',
+    teamMembers: '孙七,李四,张三',
   },
   {
     id: '5', name: 'X6873_H972', type: '能力建设项目' as const,
@@ -564,6 +589,8 @@ const initialProjects = [
     developCycle: 110, healthStatus: 'risk' as const,
     operatingSystem: 'Android 16',
     buildAddress: 'https://build.example.com/X6873',
+    projectDescription: '基础能力建设项目，提升团队自动化测试与CI/CD能力',
+    teamMembers: '周八,王五,李白',
   },
 ]
 
@@ -1418,32 +1445,34 @@ export default function Home() {
   const renderProjectCard = (project: typeof initialProjects[0]) => {
     const statusConf = PROJECT_STATUS_CONFIG[project.status] || { color: '#8c8c8c', tagColor: 'default' }
     const isWholeMachine = project.type === '整机产品项目'
-    const isTech = project.type === '技术项目'
     const isSoftware = project.type === '产品项目'
+    const isTech = project.type === '技术项目'
+    const isCapability = project.type === '能力建设项目'
+
+    const fieldItem = (label: string, value: string | undefined) => value ? (
+      <div style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ color: '#bfbfbf' }}>{label}</span> <span style={{ color: '#595959', fontWeight: 500 }}>{value}</span>
+      </div>
+    ) : null
 
     return (
       <Card
         hoverable
         className="pms-card-hover"
-        style={{ borderRadius: 10, border: '1px solid #f0f0f0' }}
-        styles={{ body: { padding: '16px 20px' } }}
+        style={{ borderRadius: 10, border: '1px solid #f0f0f0', height: '100%' }}
+        styles={{ body: { padding: '16px 20px', height: '100%', display: 'flex', flexDirection: 'column' as const } }}
         onClick={() => { setSelectedProject(project); setActiveModule('projectSpace') }}
       >
         {/* 头部: 项目名 + 状态 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 600, color: '#262626', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {isWholeMachine && project.marketName ? project.marketName : project.name}
+              {project.name}
             </div>
             {isWholeMachine && project.marketName && (
-              <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project.name}</div>
+              <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>市场名: {project.marketName}</div>
             )}
-            <Space size={4} wrap>
-              <Tag color="default" style={{ fontSize: 11, borderRadius: 3, margin: 0 }}>{project.type}</Tag>
-              {isWholeMachine && project.markets && project.markets.length > 0 && (
-                <Tag color="blue" style={{ fontSize: 11, borderRadius: 3, margin: 0 }}>{project.markets.join(' / ')}</Tag>
-              )}
-            </Space>
+            <Tag color="default" style={{ fontSize: 11, borderRadius: 3, margin: 0 }}>{project.type}</Tag>
           </div>
           <Tag color={statusConf.tagColor} style={{ margin: 0, borderRadius: 4, flexShrink: 0 }}>{project.status}</Tag>
         </div>
@@ -1452,42 +1481,15 @@ export default function Home() {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
           {isWholeMachine && (
             <>
-              {project.brand && (
-                <div style={{ fontSize: 12, color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ color: '#bfbfbf' }}>品牌</span> <span style={{ color: '#595959', fontWeight: 500 }}>{project.brand}</span>
-                </div>
-              )}
-              {project.productLine && (
-                <div style={{ fontSize: 12, color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ color: '#bfbfbf' }}>产品线</span> <span style={{ color: '#595959', fontWeight: 500 }}>{project.productLine}</span>
-                </div>
-              )}
-              {project.developMode && (
-                <div style={{ fontSize: 12, color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ color: '#bfbfbf' }}>模式</span> <span style={{ color: '#595959', fontWeight: 500 }}>{project.developMode}</span>
-                </div>
-              )}
+              {fieldItem('品牌', project.brand)}
+              {fieldItem('产品线', project.productLine)}
+              {fieldItem('开发模式', project.developMode)}
             </>
-          )}
-          {(isSoftware || isTech) && (
-            <>
-              <div style={{ fontSize: 12, color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ color: '#bfbfbf' }}>Android</span> <span style={{ color: '#595959', fontWeight: 500 }}>{project.androidVersion.replace('Android ', '')}</span>
-              </div>
-              <div style={{ fontSize: 12, color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ color: '#bfbfbf' }}>芯片</span> <span style={{ color: '#595959', fontWeight: 500 }}>{project.chipPlatform}</span>
-              </div>
-            </>
-          )}
-          {project.type === '能力建设项目' && (
-            <div style={{ fontSize: 12, color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ color: '#bfbfbf' }}>方向</span> <span style={{ color: '#595959', fontWeight: 500 }}>{project.productLine}</span>
-            </div>
           )}
         </div>
 
-        {/* 计划时间 */}
-        {(project.planStartDate || project.planEndDate) && (
+        {/* 计划时间 - 软件产品/整机产品/技术项目显示 */}
+        {!isCapability && (project.planStartDate || project.planEndDate) && (
           <div style={{ display: 'flex', gap: 12, marginBottom: 10, fontSize: 12, color: '#8c8c8c' }}>
             {project.planStartDate && (
               <span><CalendarOutlined style={{ marginRight: 4, color: '#bfbfbf' }} />{project.planStartDate}</span>
@@ -1498,17 +1500,8 @@ export default function Home() {
           </div>
         )}
 
-        {/* 进度条 */}
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ fontSize: 12, color: '#8c8c8c' }}>进度</span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: statusConf.color }}>{project.progress}%</span>
-          </div>
-          <Progress percent={project.progress} size="small" showInfo={false} strokeColor={statusConf.color} trailColor="#f0f0f0" />
-        </div>
-
-        {/* 底部: SPM + 更新时间 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {/* 底部: 项目经理 + 更新时间 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
           <Space size={6}>
             <Avatar size={20} style={{ background: statusConf.color, fontSize: 10 }}>{project.spm[0]}</Avatar>
             <span style={{ fontSize: 12, color: '#595959' }}>{project.spm}</span>
@@ -2229,66 +2222,39 @@ export default function Home() {
   const renderProjectBasicInfo = () => {
     const p = selectedProject
     if (!p) return null
-    const markets = p.markets || []
     const isWholeMachine = p.type === '整机产品项目'
+    const isSoftware = p.type === '产品项目'
+    const isTech = p.type === '技术项目'
+    const isCapability = p.type === '能力建设项目'
     const statusConf = PROJECT_STATUS_CONFIG[p.status] || { color: '#8c8c8c', tagColor: 'default' }
-    const healthMap = { normal: { label: '健康', color: '#52c41a' }, warning: { label: '关注', color: '#faad14' }, risk: { label: '风险', color: '#ff4d4f' } }
-    const hConf = healthMap[p.healthStatus] || healthMap.normal
+    const healthMap: Record<string, { label: string; color: string }> = { normal: { label: '正常', color: '#52c41a' }, warning: { label: '关注', color: '#faad14' }, risk: { label: '风险', color: '#ff4d4f' } }
+    const hConf = healthMap[p.healthStatus || 'normal'] || healthMap.normal
+    const markets = p.markets || []
 
-    const sourceTag = (source: 'IPM' | 'SCM' | '平台自定义') => {
-      const colors = { IPM: '#1890ff', SCM: '#52c41a', '平台自定义': '#faad14' }
-      return <Tag color={colors[source]} style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', margin: 0, marginLeft: 6 }}>{source}</Tag>
-    }
+    const descLabelStyle: CSSProperties = { fontWeight: 500, color: '#8c8c8c', fontSize: 13, background: '#fafbfc' }
+    const descContentStyle: CSSProperties = { color: '#262626', fontSize: 13 }
+    const sectionTitle = (icon: React.ReactNode, title: string, color: string) => (
+      <Space size={8}>{icon}<span style={{ fontSize: 15, fontWeight: 600 }}>{title}</span></Space>
+    )
 
-    const sectionTitleStyle: CSSProperties = {
-      fontSize: 13,
-      fontWeight: 600,
-      color: '#8c8c8c',
-      textTransform: 'uppercase' as const,
-      letterSpacing: 1,
-      marginBottom: 12,
-      paddingBottom: 8,
-      borderBottom: '1px solid #f0f0f0',
-    }
-
-    const descLabelStyle: CSSProperties = {
-      fontWeight: 500,
-      color: '#8c8c8c',
-      fontSize: 13,
-      background: '#fafbfc',
-    }
-    const descContentStyle: CSSProperties = {
-      color: '#262626',
-      fontSize: 13,
-    }
-
-    const headerTitle = isWholeMachine && p.marketName ? p.marketName : p.name
-    const headerSubtitle = [p.model || p.name, p.mainboard, p.tosVersion].filter(Boolean).join(' · ')
-
-    const summaryItems = [
-      { label: '产品线', value: p.productLine },
-      { label: isWholeMachine ? '开发模式' : '芯片平台', value: isWholeMachine ? (p.developMode || '-') : (p.chipPlatform || '-') },
-      { label: '安卓版本', value: p.androidVersion },
-      { label: '主板名', value: p.mainboard || '-' },
-    ]
+    // 表头 - 不同项目类型表头不同
+    const headerExtra = isWholeMachine
+      ? [p.name, p.projectLevel ? `${p.projectLevel}级` : null, p.currentNode].filter(Boolean).join(' · ')
+      : (isSoftware ? [p.name, p.currentNode].filter(Boolean).join(' · ') : p.name)
 
     return (
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-        {/* 项目概要卡片 */}
+        {/* 表头卡片 */}
         <Card
           style={{ marginBottom: 20, borderRadius: 8, overflow: 'hidden' }}
-          styles={{
-            header: { background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)', borderBottom: 'none', padding: '16px 24px' },
-            body: { padding: 0 },
-          }}
+          styles={{ header: { background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)', borderBottom: 'none', padding: '16px 24px' }, body: { padding: 0 } }}
           title={
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <ProjectOutlined style={{ color: '#fff', fontSize: 18 }} />
               </div>
               <div>
-                <div style={{ color: '#fff', fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}>{headerTitle}</div>
-                <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>{headerSubtitle}</div>
+                <div style={{ color: '#fff', fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}>{headerExtra}</div>
               </div>
             </div>
           }
@@ -2296,106 +2262,96 @@ export default function Home() {
             <Space size={8}>
               <Tag color={statusConf.tagColor} style={{ margin: 0, borderRadius: 4, fontWeight: 500 }}>{p.status}</Tag>
               <Tag style={{ margin: 0, borderRadius: 4, background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag>
-              <Button type="primary" icon={<SendOutlined />} style={{ background: '#4338ca', borderColor: '#4338ca' }} onClick={() => setTransferView('apply')}>申请转维</Button>
+              {isWholeMachine && <Button type="primary" icon={<SendOutlined />} style={{ background: '#4338ca', borderColor: '#4338ca' }} onClick={() => setTransferView('apply')}>申请转维</Button>}
             </Space>
           }
         >
-          {/* 关键信息摘要行 */}
+          {/* 摘要行: 项目分类 | 项目状态 | 健康状态 | 当前节点 */}
           <div style={{ display: 'flex', background: '#f8fafc', borderBottom: '1px solid #f0f0f0' }}>
-            {summaryItems.map((item, i) => (
-              <div key={i} style={{ flex: 1, padding: '14px 20px', borderRight: i < 3 ? '1px solid #f0f0f0' : 'none', textAlign: 'center' }}>
-                <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4, fontWeight: 500, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>{item.label}</div>
+            {[
+              { label: '项目分类', value: p.type },
+              { label: '项目状态', value: p.status },
+              { label: '健康状态', value: hConf.label },
+              ...((isSoftware || isWholeMachine || isTech) ? [{ label: '当前节点', value: p.currentNode || '-' }] : []),
+            ].map((item, i, arr) => (
+              <div key={i} style={{ flex: 1, padding: '14px 20px', borderRight: i < arr.length - 1 ? '1px solid #f0f0f0' : 'none', textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4, fontWeight: 500 }}>{item.label}</div>
                 <div style={{ fontSize: 14, color: '#262626', fontWeight: 600 }}>{item.value}</div>
               </div>
             ))}
           </div>
-
-          {/* 详细信息 */}
-          <div style={{ padding: '20px 24px' }}>
-            <Row gutter={[48, 16]}>
-              <Col span={12}>
-                <div style={sectionTitleStyle}>项目信息</div>
-                <Row gutter={[16, 10]}>
-                  {[
-                    { label: '项目名', value: p.name },
-                    { label: '芯片', value: p.cpu || p.chipPlatform || '-' },
-                    { label: 'OS版本', value: p.tosVersion || '-' },
-                    { label: '市场名', value: p.marketName || '-' },
-                  ].map((item, i) => (
-                    <Col span={12} key={i}>
-                      <div style={{ display: 'flex', lineHeight: '28px' }}>
-                        <span style={{ color: '#8c8c8c', fontSize: 13, minWidth: 70, flexShrink: 0 }}>{item.label}</span>
-                        <span style={{ color: '#262626', fontSize: 13, fontWeight: 500 }}>{item.value}</span>
-                      </div>
-                    </Col>
-                  ))}
-                </Row>
-              </Col>
-              <Col span={12}>
-                <div style={sectionTitleStyle}>团队成员</div>
-                <Row gutter={[16, 12]}>
-                  {[
-                    { role: 'SPM', name: p.spm || '-', color: '#1890ff' },
-                    { role: '负责人', name: p.leader || '-', color: '#87d068' },
-                  ].map((member, i) => (
-                    <Col span={12} key={i}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f0f0f0' }}>
-                        <Avatar size={32} style={{ background: member.color, fontSize: 14, flexShrink: 0 }}>{member.name[0]}</Avatar>
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', lineHeight: 1.3 }}>{member.name}</div>
-                          <div style={{ fontSize: 11, color: '#8c8c8c' }}>{member.role}</div>
-                        </div>
-                      </div>
-                    </Col>
-                  ))}
-                </Row>
-              </Col>
-            </Row>
-          </div>
         </Card>
 
-        {/* 计划信息 */}
-        {renderProjectPlanInfo()}
+        {/* 一、基本信息 */}
+        <Card style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#1890ff' }} />, '基本信息', '#1890ff')}>
+          {/* 软件产品项目 */}
+          {isSoftware && (
+            <div>
+              <Descriptions bordered size="small" column={4} labelStyle={descLabelStyle} contentStyle={descContentStyle}>
+                <Descriptions.Item label="项目名称">{p.name}</Descriptions.Item>
+                <Descriptions.Item label="品牌">{p.brand || '-'}</Descriptions.Item>
+                <Descriptions.Item label="版本五大员" span={2}>{p.versionFiveRoles || '-'}</Descriptions.Item>
+                <Descriptions.Item label="产品线">{p.productLine || '-'}</Descriptions.Item>
+                <Descriptions.Item label="版本类型">{p.versionType || '-'}</Descriptions.Item>
+                <Descriptions.Item label="芯片平台">{p.chipPlatform || '-'}</Descriptions.Item>
+                <Descriptions.Item label="开发模式">{p.developMode || '-'}</Descriptions.Item>
+              </Descriptions>
+            </div>
+          )}
 
-        {/* 项目基础信息 - IPM/SCM 数据源 */}
-        <Card
-          style={{ marginBottom: 20, borderRadius: 8 }}
-          title={
-            <Space size={8}>
-              <DatabaseOutlined style={{ color: '#1890ff', fontSize: 16 }} />
-              <span style={{ fontSize: 15, fontWeight: 600 }}>项目基础信息</span>
-            </Space>
-          }
-        >
-          <Descriptions
-            bordered
-            size="small"
-            column={{ xs: 1, sm: 2, md: 3 }}
-            labelStyle={descLabelStyle}
-            contentStyle={descContentStyle}
-          >
-            <Descriptions.Item label={<span>型号名称{sourceTag('IPM')}</span>}><span style={{ fontWeight: 500 }}>{p.model || p.name}</span></Descriptions.Item>
-            <Descriptions.Item label={<span>主板名{sourceTag('IPM')}</span>}><span style={{ fontWeight: 500 }}>{p.mainboard || '-'}</span></Descriptions.Item>
-            <Descriptions.Item label={<span>Born{sourceTag('SCM')}</span>}><span style={{ fontWeight: 500 }}>{p.born || '-'}</span></Descriptions.Item>
-            <Descriptions.Item label={<span>市场名{sourceTag('IPM')}</span>}>{p.marketName || '-'}</Descriptions.Item>
-            <Descriptions.Item label={<span>公共型号{sourceTag('SCM')}</span>}>{p.model || '-'}</Descriptions.Item>
-            <Descriptions.Item label={<span>内存{sourceTag('SCM')}</span>}>{p.memory || '-'}</Descriptions.Item>
-            <Descriptions.Item label={<span>液晶{sourceTag('SCM')}</span>}>{p.lcd || '-'}</Descriptions.Item>
-            <Descriptions.Item label={<span>前摄像头{sourceTag('SCM')}</span>}>{p.frontCamera || '-'}</Descriptions.Item>
-            <Descriptions.Item label={<span>后摄像头{sourceTag('SCM')}</span>}>{p.primaryCamera || '-'}</Descriptions.Item>
-            <Descriptions.Item label={<span>安卓版本{sourceTag('IPM')}</span>}>{p.androidVersion || '-'}</Descriptions.Item>
-            <Descriptions.Item label={<span>品牌{sourceTag('IPM')}</span>}>{p.brand || '-'}</Descriptions.Item>
-            <Descriptions.Item label={<span>产品线{sourceTag('IPM')}</span>}>{p.productLine || '-'}</Descriptions.Item>
-            <Descriptions.Item label={<span>版本编号{sourceTag('SCM')}</span>}>{p.version || '-'}</Descriptions.Item>
-            <Descriptions.Item label={<span>版本构建地址{sourceTag('平台自定义')}</span>} span={2}>
-              {p.buildAddress ? <a href={p.buildAddress} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>{p.buildAddress}</a> : '-'}
-            </Descriptions.Item>
-          </Descriptions>
+          {/* 整机产品项目 */}
+          {isWholeMachine && (
+            <div>
+              <Descriptions bordered size="small" column={4} labelStyle={descLabelStyle} contentStyle={descContentStyle}>
+                <Descriptions.Item label="项目名称">{p.name}</Descriptions.Item>
+                <Descriptions.Item label="市场名">{p.marketName || '-'}</Descriptions.Item>
+                <Descriptions.Item label="产品类型">{p.productType || '-'}</Descriptions.Item>
+                <Descriptions.Item label="tOS版本">{p.tosVersion || '-'}</Descriptions.Item>
+                <Descriptions.Item label="开发模式">{p.developMode || '-'}</Descriptions.Item>
+                <Descriptions.Item label="品牌">{p.brand || '-'}</Descriptions.Item>
+                <Descriptions.Item label="产品线">{p.productLine || '-'}</Descriptions.Item>
+                <Descriptions.Item label="版本类型">{p.versionType || '-'}</Descriptions.Item>
+                <Descriptions.Item label="市场">{p.market || (p.markets || []).join(', ') || '-'}</Descriptions.Item>
+                <Descriptions.Item label="PPM">{p.ppm || '-'}</Descriptions.Item>
+                <Descriptions.Item label="SPM">{p.spm || '-'}</Descriptions.Item>
+                <Descriptions.Item label="TPM">{p.tpm || '-'}</Descriptions.Item>
+              </Descriptions>
+            </div>
+          )}
+
+          {/* 技术项目 / 能力建设项目 */}
+          {(isTech || isCapability) && (
+            <div>
+              <Descriptions bordered size="small" column={4} labelStyle={descLabelStyle} contentStyle={descContentStyle}>
+                <Descriptions.Item label="项目名称">{p.name}</Descriptions.Item>
+                <Descriptions.Item label="项目分类">{p.type}</Descriptions.Item>
+                <Descriptions.Item label="项目状态"><Tag color={statusConf.tagColor}>{p.status}</Tag></Descriptions.Item>
+                <Descriptions.Item label="健康状态"><Tag style={{ background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag></Descriptions.Item>
+              </Descriptions>
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 500, color: '#8c8c8c', marginBottom: 8 }}>团队成员</div>
+                <Space wrap>
+                  {(p.teamMembers || p.spm || '').split(',').filter(Boolean).map((name: string, i: number) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f0f0f0' }}>
+                      <Avatar size={24} style={{ background: '#1890ff', fontSize: 11 }}>{name.trim()[0]}</Avatar>
+                      <span style={{ fontSize: 13 }}>{name.trim()}</span>
+                    </div>
+                  ))}
+                </Space>
+              </div>
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 500, color: '#8c8c8c', marginBottom: 8 }}>项目描述</div>
+                <div style={{ padding: '10px 14px', background: '#fafbfc', borderRadius: 6, border: '1px solid #f0f0f0', fontSize: 13, color: '#595959', lineHeight: 1.8 }}>
+                  {p.projectDescription || '暂无描述'}
+                </div>
+              </div>
+            </div>
+          )}
         </Card>
 
-        {/* 转维信息模块 */}
-        {currentProjectTransferApps.length > 0 && (
-          <Card style={{ marginBottom: 20, borderRadius: 8 }} title={<Space><DeploymentUnitOutlined style={{ color: '#4338ca' }} /><span style={{ fontWeight: 600 }}>转维信息</span></Space>}>
+        {/* 整机: 转维信息 */}
+        {isWholeMachine && currentProjectTransferApps.length > 0 && (
+          <Card style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<DeploymentUnitOutlined style={{ color: '#4338ca' }} />, '转维信息', '#4338ca')}>
             <Table
               dataSource={currentProjectTransferApps}
               rowKey="id"
@@ -2416,10 +2372,7 @@ export default function Home() {
                     </div>
                   ),
                 },
-                {
-                  title: '流水线进度', width: 180,
-                  render: (_: unknown, r: TransferApplication) => <MiniPipeline app={r} />,
-                },
+                { title: '流水线进度', width: 180, render: (_: unknown, r: TransferApplication) => <MiniPipeline app={r} /> },
                 { title: '计划评审日期', dataIndex: 'plannedReviewDate', width: 110 },
                 {
                   title: '角色进度', width: 180,
@@ -2449,89 +2402,61 @@ export default function Home() {
           </Card>
         )}
 
-        {/* 市场项目信息 */}
-        {isWholeMachine && markets.length > 0 && (
-          <Card
-            style={{ borderRadius: 8 }}
-            styles={{
-              header: { background: '#fafbfc', borderBottom: '2px solid #52c41a', padding: '12px 24px' },
-              body: { padding: '4px 0 0 0' },
-            }}
-            title={
-              <Space size={8}>
-                <TeamOutlined style={{ color: '#52c41a', fontSize: 16 }} />
-                <span style={{ fontSize: 15, fontWeight: 600 }}>市场项目信息</span>
-                <Tag color="default" style={{ marginLeft: 4, fontSize: 11 }}>{markets.length} 个市场</Tag>
-              </Space>
-            }
-          >
-            <Tabs
-              activeKey={selectedMarketTab}
-              onChange={setSelectedMarketTab}
-              type="card"
-              style={{ padding: '0 16px' }}
-              items={markets.map(m => {
-                const marketColor = m === 'OP' ? '#1890ff' : m === 'TR' ? '#52c41a' : '#faad14'
-                return {
-                  key: m,
-                  label: <Space size={6}><Badge color={marketColor} /><span style={{ fontWeight: 500 }}>{m}</span></Space>,
-                  children: (
-                    <div style={{ padding: '8px 8px 16px' }}>
-                      {/* 市场基础信息 */}
-                      <div style={{ marginBottom: 20 }}>
-                        <div style={{ ...sectionTitleStyle, color: '#1890ff', borderBottomColor: '#e6f4ff' }}>市场项目基础信息</div>
-                        <Descriptions
-                          bordered
-                          size="small"
-                          column={{ xs: 1, sm: 2, md: 3 }}
-                          labelStyle={descLabelStyle}
-                          contentStyle={descContentStyle}
-                        >
-                          <Descriptions.Item label="市场项目名"><span style={{ fontWeight: 500 }}>{`${p.model || p.name}-${m}`}</span></Descriptions.Item>
-                          <Descriptions.Item label="编译选项"><code style={{ padding: '1px 6px', background: '#f5f5f5', borderRadius: 3, fontSize: 12 }}>{(p.model || p.name).toLowerCase()}</code></Descriptions.Item>
-                          <Descriptions.Item label="运营商定制"><Tag color="default">否</Tag></Descriptions.Item>
-                          <Descriptions.Item label="市场名称">{`${m} Market`}</Descriptions.Item>
-                          <Descriptions.Item label="编译市场"><code style={{ padding: '1px 6px', background: '#f5f5f5', borderRadius: 3, fontSize: 12 }}>{m.toLowerCase()}</code></Descriptions.Item>
-                          <Descriptions.Item label="是否锁卡"><Tag color="default">否</Tag></Descriptions.Item>
-                          <Descriptions.Item label="内存"><span style={{ fontWeight: 500 }}>{p.memory || '-'}</span></Descriptions.Item>
-                          <Descriptions.Item label="软件项目等级"><Tag color="blue">A</Tag></Descriptions.Item>
-                          <Descriptions.Item label="是否保密"><Tag color="default">否</Tag></Descriptions.Item>
-                          <Descriptions.Item label="SQA审计策略"><Tag color="blue">全审</Tag></Descriptions.Item>
-                          <Descriptions.Item label="是否支持VILTE"><Tag color="default">否</Tag></Descriptions.Item>
-                          <Descriptions.Item label="运营商版本标识">-</Descriptions.Item>
-                          <Descriptions.Item label="BOM"><span style={{ fontWeight: 500 }}>BOM-001</span></Descriptions.Item>
-                          <Descriptions.Item label="软件版本号"><span style={{ fontWeight: 500 }}>{p.tosVersion || p.version || '-'}</span></Descriptions.Item>
-                          <Descriptions.Item label="备注">-</Descriptions.Item>
-                          <Descriptions.Item label="是否取消暂停"><Tag color="default">否</Tag></Descriptions.Item>
-                          <Descriptions.Item label="取消暂停时间">-</Descriptions.Item>
-                        </Descriptions>
-                      </div>
+        {/* 二、计划信息 */}
+        {renderProjectPlanInfo()}
 
-                      {/* 市场维护信息 */}
-                      <div>
-                        <div style={{ ...sectionTitleStyle, color: '#52c41a', borderBottomColor: '#f6ffed' }}>市场项目维护信息</div>
-                        <Descriptions
-                          bordered
-                          size="small"
-                          column={{ xs: 1, sm: 2, md: 3 }}
-                          labelStyle={descLabelStyle}
-                          contentStyle={descContentStyle}
-                        >
-                          <Descriptions.Item label="维护类型"><Tag color="processing">常规维护</Tag></Descriptions.Item>
-                          <Descriptions.Item label="维护原因">版本升级</Descriptions.Item>
-                          <Descriptions.Item label="已触发MADA"><Tag color="default">否</Tag></Descriptions.Item>
-                          <Descriptions.Item label="维护周期"><span style={{ fontWeight: 500 }}>6个月</span></Descriptions.Item>
-                          <Descriptions.Item label="Launch Date"><CalendarOutlined style={{ marginRight: 6, color: '#8c8c8c' }} />2026-06-01</Descriptions.Item>
-                          <Descriptions.Item label="EOS"><CalendarOutlined style={{ marginRight: 6, color: '#8c8c8c' }} />2028-06-01</Descriptions.Item>
-                          <Descriptions.Item label="是否转维护组"><Tag color="default">否</Tag></Descriptions.Item>
-                          <Descriptions.Item label="是否MADA管控"><Tag color="default">否</Tag></Descriptions.Item>
-                        </Descriptions>
-                      </div>
-                    </div>
-                  ),
-                }
-              })}
-            />
+        {/* 整机: 上市时间补充在计划信息后 */}
+        {isWholeMachine && p.launchDate && (
+          <Card size="small" style={{ marginBottom: 20, borderRadius: 8, marginTop: -12 }} styles={{ body: { padding: '10px 20px' } }}>
+            <Space size={16}>
+              <span style={{ fontSize: 13, color: '#8c8c8c' }}>上市时间</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: '#722ed1' }}><CalendarOutlined style={{ marginRight: 6 }} />{p.launchDate}</span>
+            </Space>
+          </Card>
+        )}
+
+        {/* 三、配置信息 */}
+        {(isSoftware || isWholeMachine || isTech) && (
+          <Card style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#52c41a' }} />, '配置信息', '#52c41a')}>
+            {/* 整机产品项目: 硬件配置表 */}
+            {isWholeMachine && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#8c8c8c', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f0f0f0' }}>硬件配置</div>
+                <Descriptions bordered size="small" column={4} labelStyle={descLabelStyle} contentStyle={descContentStyle}>
+                  <Descriptions.Item label="主板名">{p.mainboard || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="芯片平台">{p.chipPlatform || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="芯片型号">{p.cpu || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="安卓版本">{p.operatingSystem || p.androidVersion || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="内存">{p.memory || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="屏幕">{p.lcd || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="网络模式">{p.networkMode || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="kernel版本">{p.kernelVersion || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="前摄像头">{p.frontCamera || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="后摄像头">{p.primaryCamera || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="屏幕形态">{p.screenShape || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="屏幕类型">{p.screenType || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="灯效">{p.lightEffect || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="人脸">{p.faceRecognition || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="音效">{p.soundEffect || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="SIM卡">{p.simCard || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="马达">{p.motor || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="指纹">{p.fingerprint || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="红外">{p.infrared || '-'}</Descriptions.Item>
+                </Descriptions>
+              </div>
+            )}
+
+            {/* 软件构建信息 */}
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#8c8c8c', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f0f0f0' }}>构建信息</div>
+            <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>
+              <Descriptions.Item label="分支信息">{p.branchInfo || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Jenkins构建">
+                {p.jenkinsUrl ? <a href={p.jenkinsUrl} target="_blank" rel="noopener noreferrer">{p.jenkinsUrl}</a> : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="版本地址">
+                {p.buildAddress ? <a href={p.buildAddress} target="_blank" rel="noopener noreferrer">{p.buildAddress}</a> : '-'}
+              </Descriptions.Item>
+            </Descriptions>
           </Card>
         )}
       </div>
