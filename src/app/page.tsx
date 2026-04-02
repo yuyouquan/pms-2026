@@ -2358,10 +2358,73 @@ export default function Home() {
     // 表头 - 只显示项目名称
     const headerExtra = p.name
 
+    // 锚点导航配置
+    const anchorSections = [
+      { id: 'section-header', label: '项目概览', icon: <ProjectOutlined /> },
+      { id: 'section-basic', label: '基本信息', icon: <SettingOutlined /> },
+      ...(isWholeMachine && currentProjectTransferApps.length > 0 ? [{ id: 'section-transfer', label: '转维信息', icon: <DeploymentUnitOutlined /> }] : []),
+      { id: 'section-plan', label: isWholeMachine ? '计划与配置' : '计划信息', icon: <CalendarOutlined /> },
+      ...(!isWholeMachine && (isSoftware || isTech) ? [{ id: 'section-config', label: '配置信息', icon: <SettingOutlined /> }] : []),
+    ]
+
+    const scrollToSection = (id: string) => {
+      const container = document.getElementById('basic-info-scroll-container')
+      const target = document.getElementById(id)
+      if (container && target) {
+        const containerRect = container.getBoundingClientRect()
+        const targetRect = target.getBoundingClientRect()
+        const offset = targetRect.top - containerRect.top + container.scrollTop - 16
+        container.scrollTo({ top: offset, behavior: 'smooth' })
+      }
+    }
+
     return (
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', paddingRight: 170 }}>
+        {/* 右侧锚点导航 - fixed定位 */}
+        <div style={{
+          position: 'fixed', right: 32, top: 130, zIndex: 50, width: 150,
+        }}>
+          <div style={{
+            background: 'linear-gradient(180deg, #fff 0%, #fafbfc 100%)',
+            borderRadius: 10,
+            border: '1px solid #e8e8e8',
+            padding: '16px 0 12px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          }}>
+            <div style={{ padding: '0 16px 10px', fontSize: 11, fontWeight: 600, color: '#bfbfbf', letterSpacing: 2, textTransform: 'uppercase' as const }}>导航</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {anchorSections.map((section) => (
+                <div
+                  key={section.id}
+                  onClick={() => scrollToSection(section.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '8px 16px', cursor: 'pointer',
+                    fontSize: 12, color: '#595959',
+                    transition: 'all 0.2s',
+                    borderLeft: '2px solid transparent',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#e6f4ff'
+                    e.currentTarget.style.color = '#1890ff'
+                    e.currentTarget.style.borderLeftColor = '#1890ff'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent'
+                    e.currentTarget.style.color = '#595959'
+                    e.currentTarget.style.borderLeftColor = 'transparent'
+                  }}
+                >
+                  <span style={{ fontSize: 13, opacity: 0.7 }}>{section.icon}</span>
+                  <span style={{ fontWeight: 500 }}>{section.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
         {/* 表头卡片 */}
         <Card
+          id="section-header"
           style={{ marginBottom: 20, borderRadius: 8, overflow: 'hidden' }}
           styles={{ header: { background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)', borderBottom: 'none', padding: '16px 24px' }, body: { padding: 0 } }}
           title={
@@ -2399,7 +2462,7 @@ export default function Home() {
         </Card>
 
         {/* 一、基本信息 */}
-        <Card style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#1890ff' }} />, '基本信息', '#1890ff')} extra={
+        <Card id="section-basic" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#1890ff' }} />, '基本信息', '#1890ff')} extra={
           basicInfoEditMode ? (
             <Space>
               <Button size="small" onClick={() => setBasicInfoEditMode(false)}>取消</Button>
@@ -2515,7 +2578,7 @@ export default function Home() {
 
         {/* 整机: 转维信息 */}
         {isWholeMachine && currentProjectTransferApps.length > 0 && (
-          <Card style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<DeploymentUnitOutlined style={{ color: '#4338ca' }} />, '转维信息', '#4338ca')}>
+          <Card id="section-transfer" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<DeploymentUnitOutlined style={{ color: '#4338ca' }} />, '转维信息', '#4338ca')}>
             <Table
               dataSource={currentProjectTransferApps}
               rowKey="id"
@@ -2569,7 +2632,7 @@ export default function Home() {
         {/* 二、计划信息 + 三、配置信息 */}
         {isWholeMachine && markets.length > 0 ? (
           /* 整机产品项目: 按市场TAB切换计划信息和配置信息 */
-          <Card style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#1890ff' }} />, '计划信息与配置信息', '#1890ff')}>
+          <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#1890ff' }} />, '计划信息与配置信息', '#1890ff')}>
             <Tabs
               activeKey={selectedMarketTab}
               onChange={setSelectedMarketTab}
@@ -2647,7 +2710,7 @@ export default function Home() {
 
             {/* 非整机: 配置信息 */}
             {(isSoftware || isTech) && (
-              <Card style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#52c41a' }} />, '配置信息', '#52c41a')}>
+              <Card id="section-config" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#52c41a' }} />, '配置信息', '#52c41a')}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#8c8c8c', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f0f0f0' }}>构建信息</div>
                 <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>
                   <Descriptions.Item label="分支信息">{editableField('branchInfo', p.branchInfo)}</Descriptions.Item>
@@ -2669,6 +2732,7 @@ export default function Home() {
 
     return (
       <Card
+        id="section-plan"
         style={{ marginBottom: 20, borderRadius: 8 }}
         title={<Space><CalendarOutlined style={{ color: '#1890ff' }} /><span style={{ fontWeight: 600 }}>计划信息</span></Space>}
       >
@@ -4274,7 +4338,7 @@ export default function Home() {
             />
           </div>
           {/* 内容区域 */}
-          <div style={{ flex: 1, padding: 24, overflow: 'auto' }}>
+          <div id="basic-info-scroll-container" style={{ flex: 1, padding: 24, overflow: 'auto' }}>
             {transferView === 'apply' && renderTransferApply()}
             {transferView === 'detail' && renderTransferDetail()}
             {transferView === 'entry' && renderTransferEntry()}
