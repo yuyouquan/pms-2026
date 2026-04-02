@@ -6,7 +6,7 @@ import {
 } from 'antd'
 import {
   FilterOutlined, SettingOutlined, SaveOutlined, FullscreenOutlined, FullscreenExitOutlined,
-  EyeOutlined, PlusOutlined,
+  EyeOutlined, PlusOutlined, CameraOutlined, HistoryOutlined, DeleteOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { RoadmapViewConfig } from '@/types'
@@ -64,6 +64,17 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
   const [showColumnModal, setShowColumnModal] = useState(false)
   const [showSaveViewModal, setShowSaveViewModal] = useState(false)
   const [viewName, setViewName] = useState('')
+
+  // Baseline snapshot state
+  const [baselineSnapshots, setBaselineSnapshots] = useState<{
+    id: string
+    version: string
+    createdAt: string
+    projectType: string
+    data: any[]
+    milestones: { name: string; order: number }[]
+  }[]>([])
+  const [activeSnapshotId, setActiveSnapshotId] = useState<string | null>(null)
 
   // Temp filter state for modal
   const [tempFilters, setTempFilters] = useState(filters)
@@ -288,6 +299,78 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     }
   }
 
+  // Create baseline snapshot
+  const handleCreateSnapshot = () => {
+    const now = new Date()
+    const pad = (n: number) => n.toString().padStart(2, '0')
+    const version = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+    const snapshot = {
+      id: version,
+      version,
+      createdAt: now.toLocaleString('zh-CN'),
+      projectType,
+      data: JSON.parse(JSON.stringify(allTableData)),
+      milestones: milestones.map(m => ({ name: m.name, order: m.order })),
+    }
+    setBaselineSnapshots(prev => [snapshot, ...prev])
+    message.success(`基线快照 ${version} 已创建`)
+  }
+
+  // Delete baseline snapshot
+  const handleDeleteSnapshot = (id: string) => {
+    setBaselineSnapshots(prev => prev.filter(s => s.id !== id))
+    if (activeSnapshotId === id) setActiveSnapshotId(null)
+    message.success('快照已删除')
+  }
+
+  // Get current display data (snapshot or live)
+  const activeSnapshot = activeSnapshotId ? baselineSnapshots.find(s => s.id === activeSnapshotId) : null
+  const displayData = activeSnapshot ? activeSnapshot.data : tableData
+  const displayMilestones = activeSnapshot ? activeSnapshot.milestones : milestones
+
+  // Rebuild columns for snapshot milestones
+  const displayColumns = useMemo((): ColumnsType<any> => {
+    if (!activeSnapshot) return columns
+    // Rebuild with snapshot milestones
+    const cols: ColumnsType<any> = []
+    cols.push({
+      title: '项目名称', dataIndex: 'projectName', key: 'projectName', fixed: 'left' as const, width: 200,
+      render: (text: string) => <span style={{ fontWeight: 500, fontSize: 13 }}>{text}</span>,
+    })
+    if (activeSnapshot.projectType === '整机产品项目' && visibleColumns.includes('market')) {
+      cols.push({
+        title: '市场', dataIndex: 'market', key: 'market', width: 80,
+        render: (val: string) => val ? <Tag color={marketColors[val] || 'default'} style={{ margin: 0 }}>{val}</Tag> : '-',
+      })
+    }
+    if (visibleColumns.includes('productLine')) cols.push({ title: '产品线', dataIndex: 'productLine', key: 'productLine', width: 100 })
+    if (visibleColumns.includes('chipPlatform')) cols.push({ title: '平台厂商', dataIndex: 'chipPlatform', key: 'chipPlatform', width: 100 })
+    if (visibleColumns.includes('tosVersion')) cols.push({ title: 'tOS版本', dataIndex: 'tosVersion', key: 'tosVersion', width: 100 })
+    if (visibleColumns.includes('status')) {
+      cols.push({
+        title: '状态', dataIndex: 'status', key: 'status', width: 90,
+        render: (val: string) => {
+          const colorMap: Record<string, string> = { '进行中': 'processing', '已完成': 'success', '筹备中': 'warning', '暂停': 'default', '未开始': 'default' }
+          return <Tag color={colorMap[val] || 'default'}>{val}</Tag>
+        },
+      })
+    }
+    if (visibleColumns.includes('spm')) cols.push({ title: 'SPM', dataIndex: 'spm', key: 'spm', width: 80 })
+    for (const ms of displayMilestones) {
+      cols.push({
+        title: ms.name, dataIndex: `ms_${ms.name}`, key: `ms_${ms.name}`, width: 200, align: 'center' as const,
+        render: (val: string) => <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#595959' }}>{val}</span>,
+      })
+    }
+    cols.push({
+      title: '操作', key: 'action', fixed: 'right' as const, width: 70,
+      render: (_: any, record: any) => (
+        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => onViewProject(record.projectId, record.market)}>查看</Button>
+      ),
+    })
+    return cols
+  }, [activeSnapshot, visibleColumns, displayMilestones, onViewProject])
+
   const hasActiveFilters = Object.values(filters).some(v => v && v.length > 0)
 
   // Columns available for column settings (context-aware)
@@ -316,14 +399,14 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
   const tableComponent = (
     <Table
       className="pms-table"
-      columns={columns}
-      dataSource={tableData}
+      columns={displayColumns}
+      dataSource={displayData}
       scroll={{ x: 'max-content' }}
       size="small"
       pagination={{
         current: currentPage,
         pageSize,
-        total: tableData.length,
+        total: displayData.length,
         showSizeChanger: true,
         pageSizeOptions: ['10', '20', '50', '100'],
         showTotal: (total) => `共 ${total} 条`,
@@ -336,20 +419,12 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     />
   )
 
+  // Filter snapshots for current project type
+  const currentSnapshots = baselineSnapshots.filter(s => s.projectType === projectType)
+
   // Toolbar (right side buttons)
   const toolbarActions = (
     <Space wrap>
-      <Select
-        value={projectType}
-        onChange={(val) => {
-          setProjectType(val)
-          setActiveViewId(DEFAULT_VIEW_ID)
-          setFilters({})
-          setCurrentPage(1)
-        }}
-        style={{ width: 160 }}
-        options={PROJECT_TYPES.map(t => ({ label: t, value: t }))}
-      />
       <Tooltip title="筛选">
         <Button
           icon={<FilterOutlined />}
@@ -366,6 +441,46 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       <Tooltip title="列设置">
         <Button icon={<SettingOutlined />} onClick={() => setShowColumnModal(true)}>列设置</Button>
       </Tooltip>
+      <div style={{ width: 1, height: 20, background: '#e8e8e8', margin: '0 2px' }} />
+      <Tooltip title="将当前数据创建基线快照">
+        <Button
+          icon={<CameraOutlined />}
+          onClick={handleCreateSnapshot}
+          disabled={!!activeSnapshotId}
+        >
+          基线快照
+        </Button>
+      </Tooltip>
+      {currentSnapshots.length > 0 && (
+        <Select
+          value={activeSnapshotId || 'live'}
+          onChange={(val) => setActiveSnapshotId(val === 'live' ? null : val)}
+          style={{ width: 220 }}
+          popupMatchSelectWidth={280}
+          optionLabelProp="label"
+        >
+          <Select.Option value="live" label={<span><span style={{ color: '#52c41a', marginRight: 4 }}>●</span> 实时数据</span>}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: '#52c41a' }}>●</span>
+              <span style={{ fontWeight: 500 }}>实时数据</span>
+            </div>
+          </Select.Option>
+          {currentSnapshots.map(s => (
+            <Select.Option key={s.id} value={s.id} label={<span><HistoryOutlined style={{ marginRight: 4, color: '#1890ff' }} /> {s.version}</span>}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{s.version}</div>
+                  <div style={{ fontSize: 11, color: '#8c8c8c' }}>{s.createdAt}</div>
+                </div>
+                <DeleteOutlined
+                  style={{ color: '#ff4d4f', fontSize: 12 }}
+                  onClick={(e) => { e.stopPropagation(); handleDeleteSnapshot(s.id) }}
+                />
+              </div>
+            </Select.Option>
+          ))}
+        </Select>
+      )}
       <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
         <Button
           icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
@@ -377,6 +492,24 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
 
   return (
     <div>
+      {/* Project Type Tabs */}
+      <Tabs
+        activeKey={projectType}
+        onChange={(val) => {
+          setProjectType(val)
+          setActiveViewId(DEFAULT_VIEW_ID)
+          setFilters({})
+          setCurrentPage(1)
+          setActiveSnapshotId(null)
+        }}
+        size="small"
+        style={{ marginBottom: 8 }}
+        items={PROJECT_TYPES.map(t => ({
+          key: t,
+          label: <span style={{ fontWeight: projectType === t ? 600 : 400, padding: '0 4px' }}>{t}</span>,
+        }))}
+      />
+
       {/* View Tabs + Toolbar */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
         <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
@@ -395,6 +528,25 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
           {toolbarActions}
         </div>
       </div>
+
+      {/* Snapshot banner */}
+      {activeSnapshot && (
+        <div style={{
+          padding: '8px 16px', marginBottom: 8, borderRadius: 6,
+          background: 'linear-gradient(135deg, #e6f4ff 0%, #f0f5ff 100%)',
+          border: '1px solid #91caff',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <Space size={8}>
+            <HistoryOutlined style={{ color: '#1890ff' }} />
+            <span style={{ fontSize: 13, color: '#1890ff', fontWeight: 500 }}>
+              正在查看基线快照: {activeSnapshot.version}
+            </span>
+            <Tag color="blue" style={{ fontSize: 11 }}>{activeSnapshot.createdAt}</Tag>
+          </Space>
+          <Button type="link" size="small" onClick={() => setActiveSnapshotId(null)}>返回实时数据</Button>
+        </div>
+      )}
 
       {tableComponent}
 
