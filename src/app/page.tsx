@@ -739,10 +739,12 @@ export default function Home() {
   const [projectSearchText2, setProjectSearchText2] = useState('')
   const [projectStatusFilter, setProjectStatusFilter] = useState<string>('all')
   const [projectListView, setProjectListView] = useState<'card' | 'list'>('card')
-  const [projects] = useState(initialProjects)
+  const [projects, setProjects] = useState(initialProjects)
   const [todos] = useState(initialTodos)
   const [todoFilter, setTodoFilter] = useState<'all' | 'overdue' | 'upcoming' | 'pending' | 'completed'>('all')
   const [selectedProject, setSelectedProject] = useState<typeof initialProjects[0] | null>(null)
+  const [basicInfoEditMode, setBasicInfoEditMode] = useState(false)
+  const [editingProjectFields, setEditingProjectFields] = useState<Record<string, any>>({})
 
   const workspaceFilteredProjects = useMemo(() => {
     let result = projects
@@ -2282,6 +2284,37 @@ export default function Home() {
     )
   }
 
+  // 基本信息编辑相关
+  const startBasicInfoEdit = () => {
+    if (!selectedProject) return
+    const p = selectedProject
+    setEditingProjectFields({
+      productType: p.productType || '',
+      developMode: p.developMode || '',
+      currentNode: p.currentNode || '',
+      healthStatus: p.healthStatus || 'normal',
+      branchInfo: p.branchInfo || '',
+      jenkinsUrl: p.jenkinsUrl || '',
+      buildAddress: p.buildAddress || '',
+      ppm: p.ppm || '',
+      spm: p.spm || '',
+      tpm: p.tpm || '',
+      teamMembers: p.teamMembers || '',
+      versionFiveRoles: p.versionFiveRoles || {},
+      projectDescription: p.projectDescription || '',
+    })
+    setBasicInfoEditMode(true)
+  }
+
+  const saveBasicInfoEdit = () => {
+    if (!selectedProject) return
+    const updated = { ...selectedProject, ...editingProjectFields }
+    setSelectedProject(updated)
+    setProjects(prev => prev.map(p => p.id === updated.id ? updated : p))
+    setBasicInfoEditMode(false)
+    message.success('基本信息已保存')
+  }
+
   // 项目空间-基础信息
   const renderProjectBasicInfo = () => {
     const p = selectedProject
@@ -2294,6 +2327,27 @@ export default function Home() {
     const healthMap: Record<string, { label: string; color: string }> = { normal: { label: '正常', color: '#52c41a' }, warning: { label: '关注', color: '#faad14' }, risk: { label: '风险', color: '#ff4d4f' } }
     const hConf = healthMap[p.healthStatus || 'normal'] || healthMap.normal
     const markets = p.markets || []
+
+    // 编辑模式辅助
+    const ef = editingProjectFields
+    const setEf = (key: string, value: any) => setEditingProjectFields(prev => ({ ...prev, [key]: value }))
+    const editableField = (key: string, value: any, options?: { type?: 'input' | 'select' | 'select-multiple' | 'textarea'; choices?: { label: string; value: string }[] }) => {
+      if (!basicInfoEditMode) return <span>{value || '-'}</span>
+      if (options?.type === 'select') {
+        return <Select size="small" value={ef[key]} onChange={(v: string) => setEf(key, v)} style={{ width: '100%' }} options={options.choices} />
+      }
+      if (options?.type === 'select-multiple') {
+        return <Select size="small" mode="multiple" value={(ef[key] || '').split(',').filter(Boolean)} onChange={(v: string[]) => setEf(key, v.join(','))} style={{ width: '100%' }} options={options.choices} />
+      }
+      if (options?.type === 'textarea') {
+        return <Input.TextArea size="small" value={ef[key]} onChange={e => setEf(key, e.target.value)} autoSize={{ minRows: 2, maxRows: 6 }} />
+      }
+      return <Input size="small" value={ef[key]} onChange={e => setEf(key, e.target.value)} />
+    }
+    const nodeChoices = [{ label: '概念启动', value: '概念启动' }, { label: 'STR1', value: 'STR1' }, { label: 'STR2', value: 'STR2' }, { label: 'STR3', value: 'STR3' }, { label: 'STR4', value: 'STR4' }, { label: 'STR5', value: 'STR5' }, { label: 'STR6', value: 'STR6' }]
+    const healthChoices = [{ label: '正常', value: 'normal' }, { label: '关注', value: 'warning' }, { label: '风险', value: 'risk' }]
+    const developModeChoices = [{ label: 'ODC', value: 'ODC' }, { label: 'JDM', value: 'JDM' }, { label: '自研', value: '自研' }]
+    const userChoices = ALL_USERS.map(u => ({ label: u, value: u }))
 
     const descLabelStyle: CSSProperties = { fontWeight: 500, color: '#8c8c8c', fontSize: 13, background: '#fafbfc' }
     const descContentStyle: CSSProperties = { color: '#262626', fontSize: 13 }
@@ -2331,21 +2385,30 @@ export default function Home() {
           {/* 摘要行: 项目分类 | 项目状态 | 健康状态 | 当前节点 */}
           <div style={{ display: 'flex', background: '#f8fafc', borderBottom: '1px solid #f0f0f0' }}>
             {[
-              { label: '项目分类', value: p.type },
-              { label: '项目状态', value: p.status },
-              { label: '健康状态', value: hConf.label },
-              ...((isSoftware || isWholeMachine || isTech) ? [{ label: '当前节点', value: p.currentNode || '-' }] : []),
+              { label: '项目分类', value: p.type, editable: false },
+              { label: '项目状态', value: p.status, editable: false },
+              { label: '健康状态', value: hConf.label, editable: true, key: 'healthStatus', editNode: <Select size="small" value={ef.healthStatus} onChange={(v: string) => setEf('healthStatus', v)} style={{ width: 100 }} options={healthChoices} /> },
+              ...((isSoftware || isWholeMachine || isTech) ? [{ label: '当前节点', value: p.currentNode || '-', editable: true, key: 'currentNode', editNode: <Select size="small" value={ef.currentNode} onChange={(v: string) => setEf('currentNode', v)} style={{ width: 120 }} options={nodeChoices} /> }] : []),
             ].map((item, i, arr) => (
               <div key={i} style={{ flex: 1, padding: '14px 20px', borderRight: i < arr.length - 1 ? '1px solid #f0f0f0' : 'none', textAlign: 'center' }}>
                 <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4, fontWeight: 500 }}>{item.label}</div>
-                <div style={{ fontSize: 14, color: '#262626', fontWeight: 600 }}>{item.value}</div>
+                <div style={{ fontSize: 14, color: '#262626', fontWeight: 600 }}>{basicInfoEditMode && item.editable ? item.editNode : item.value}</div>
               </div>
             ))}
           </div>
         </Card>
 
         {/* 一、基本信息 */}
-        <Card style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#1890ff' }} />, '基本信息', '#1890ff')}>
+        <Card style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#1890ff' }} />, '基本信息', '#1890ff')} extra={
+          basicInfoEditMode ? (
+            <Space>
+              <Button size="small" onClick={() => setBasicInfoEditMode(false)}>取消</Button>
+              <Button size="small" type="primary" onClick={saveBasicInfoEdit}>保存</Button>
+            </Space>
+          ) : (
+            <Button size="small" icon={<EditOutlined />} onClick={startBasicInfoEdit}>编辑</Button>
+          )
+        }>
           {/* 软件产品项目 */}
           {isSoftware && (
             <div>
@@ -2355,26 +2418,37 @@ export default function Home() {
                 <Descriptions.Item label="产品线">{p.productLine || '-'}</Descriptions.Item>
                 <Descriptions.Item label="版本类型">{p.versionType || '-'}</Descriptions.Item>
                 <Descriptions.Item label="芯片平台">{p.chipPlatform || '-'}</Descriptions.Item>
-                <Descriptions.Item label="开发模式">{p.developMode || '-'}</Descriptions.Item>
+                <Descriptions.Item label="开发模式">{editableField('developMode', p.developMode, { type: 'select', choices: developModeChoices })}</Descriptions.Item>
               </Descriptions>
               {/* 版本五大员 */}
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 500, color: '#8c8c8c', marginBottom: 10 }}>版本五大员</div>
                 <Row gutter={[12, 12]}>
-                  {p.versionFiveRoles && typeof p.versionFiveRoles === 'object' ? (
-                    Object.entries(p.versionFiveRoles).map(([role, name]: [string, any]) => (
+                  {basicInfoEditMode ? (
+                    Object.entries(ef.versionFiveRoles || {}).map(([role, name]: [string, any]) => (
                       <Col key={role} span={Math.floor(24 / 5)}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f0f0f0' }}>
-                          <Avatar size={28} style={{ background: '#1890ff', fontSize: 12, flexShrink: 0 }}>{String(name)[0]}</Avatar>
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', lineHeight: 1.3 }}>{String(name)}</div>
-                            <div style={{ fontSize: 11, color: '#8c8c8c' }}>{role}</div>
-                          </div>
+                        <div style={{ padding: '8px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f0f0f0' }}>
+                          <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4 }}>{role}</div>
+                          <Select size="small" value={String(name)} onChange={(v: string) => setEf('versionFiveRoles', { ...ef.versionFiveRoles, [role]: v })} style={{ width: '100%' }} options={userChoices} />
                         </div>
                       </Col>
                     ))
                   ) : (
-                    <Col><span style={{ color: '#8c8c8c', fontSize: 13 }}>-</span></Col>
+                    p.versionFiveRoles && typeof p.versionFiveRoles === 'object' ? (
+                      Object.entries(p.versionFiveRoles).map(([role, name]: [string, any]) => (
+                        <Col key={role} span={Math.floor(24 / 5)}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f0f0f0' }}>
+                            <Avatar size={28} style={{ background: '#1890ff', fontSize: 12, flexShrink: 0 }}>{String(name)[0]}</Avatar>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', lineHeight: 1.3 }}>{String(name)}</div>
+                              <div style={{ fontSize: 11, color: '#8c8c8c' }}>{role}</div>
+                            </div>
+                          </div>
+                        </Col>
+                      ))
+                    ) : (
+                      <Col><span style={{ color: '#8c8c8c', fontSize: 13 }}>-</span></Col>
+                    )
                   )}
                 </Row>
               </div>
@@ -2387,16 +2461,16 @@ export default function Home() {
               <Descriptions bordered size="small" column={4} labelStyle={descLabelStyle} contentStyle={descContentStyle}>
                 <Descriptions.Item label="项目名称">{p.name}</Descriptions.Item>
                 <Descriptions.Item label="市场名">{p.marketName || '-'}</Descriptions.Item>
-                <Descriptions.Item label="产品类型">{p.productType || '-'}</Descriptions.Item>
+                <Descriptions.Item label="产品类型">{editableField('productType', p.productType, { type: 'select', choices: [{ label: '新品', value: '新品' }, { label: '换代', value: '换代' }] })}</Descriptions.Item>
                 <Descriptions.Item label="tOS版本">{p.tosVersion || '-'}</Descriptions.Item>
-                <Descriptions.Item label="开发模式">{p.developMode || '-'}</Descriptions.Item>
+                <Descriptions.Item label="开发模式">{editableField('developMode', p.developMode, { type: 'select', choices: developModeChoices })}</Descriptions.Item>
                 <Descriptions.Item label="品牌">{p.brand || '-'}</Descriptions.Item>
                 <Descriptions.Item label="产品线">{p.productLine || '-'}</Descriptions.Item>
                 <Descriptions.Item label="版本类型">{p.versionType || '-'}</Descriptions.Item>
                 <Descriptions.Item label="市场">{p.market || (p.markets || []).join(', ') || '-'}</Descriptions.Item>
-                <Descriptions.Item label="PPM">{p.ppm || '-'}</Descriptions.Item>
-                <Descriptions.Item label="SPM">{p.spm || '-'}</Descriptions.Item>
-                <Descriptions.Item label="TPM">{p.tpm || '-'}</Descriptions.Item>
+                <Descriptions.Item label="PPM">{editableField('ppm', p.ppm, { type: 'select', choices: userChoices })}</Descriptions.Item>
+                <Descriptions.Item label="SPM">{editableField('spm', p.spm, { type: 'select', choices: userChoices })}</Descriptions.Item>
+                <Descriptions.Item label="TPM">{editableField('tpm', p.tpm, { type: 'select', choices: userChoices })}</Descriptions.Item>
               </Descriptions>
             </div>
           )}
@@ -2408,24 +2482,32 @@ export default function Home() {
                 <Descriptions.Item label="项目名称">{p.name}</Descriptions.Item>
                 <Descriptions.Item label="项目分类">{p.type}</Descriptions.Item>
                 <Descriptions.Item label="项目状态"><Tag color={statusConf.tagColor}>{p.status}</Tag></Descriptions.Item>
-                <Descriptions.Item label="健康状态"><Tag style={{ background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag></Descriptions.Item>
+                <Descriptions.Item label="健康状态">{basicInfoEditMode ? <Select size="small" value={ef.healthStatus} onChange={(v: string) => setEf('healthStatus', v)} style={{ width: '100%' }} options={healthChoices} /> : <Tag style={{ background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag>}</Descriptions.Item>
               </Descriptions>
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 500, color: '#8c8c8c', marginBottom: 8 }}>团队成员</div>
-                <Space wrap>
-                  {(p.teamMembers || p.spm || '').split(',').filter(Boolean).map((name: string, i: number) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f0f0f0' }}>
-                      <Avatar size={24} style={{ background: '#1890ff', fontSize: 11 }}>{name.trim()[0]}</Avatar>
-                      <span style={{ fontSize: 13 }}>{name.trim()}</span>
-                    </div>
-                  ))}
-                </Space>
+                {basicInfoEditMode ? (
+                  <Select size="small" mode="multiple" value={(ef.teamMembers || '').split(',').filter(Boolean)} onChange={(v: string[]) => setEf('teamMembers', v.join(','))} style={{ width: '100%' }} options={userChoices} />
+                ) : (
+                  <Space wrap>
+                    {(p.teamMembers || p.spm || '').split(',').filter(Boolean).map((name: string, i: number) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f0f0f0' }}>
+                        <Avatar size={24} style={{ background: '#1890ff', fontSize: 11 }}>{name.trim()[0]}</Avatar>
+                        <span style={{ fontSize: 13 }}>{name.trim()}</span>
+                      </div>
+                    ))}
+                  </Space>
+                )}
               </div>
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 500, color: '#8c8c8c', marginBottom: 8 }}>项目描述</div>
-                <div style={{ padding: '10px 14px', background: '#fafbfc', borderRadius: 6, border: '1px solid #f0f0f0', fontSize: 13, color: '#595959', lineHeight: 1.8 }}>
-                  {p.projectDescription || '暂无描述'}
-                </div>
+                {basicInfoEditMode ? (
+                  <Input.TextArea size="small" value={ef.projectDescription} onChange={e => setEf('projectDescription', e.target.value)} autoSize={{ minRows: 2, maxRows: 6 }} />
+                ) : (
+                  <div style={{ padding: '10px 14px', background: '#fafbfc', borderRadius: 6, border: '1px solid #f0f0f0', fontSize: 13, color: '#595959', lineHeight: 1.8 }}>
+                    {p.projectDescription || '暂无描述'}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -2548,9 +2630,9 @@ export default function Home() {
                       </div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#8c8c8c', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f0f0f0' }}>构建信息</div>
                       <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>
-                        <Descriptions.Item label="分支信息">{p.branchInfo || '-'}</Descriptions.Item>
-                        <Descriptions.Item label="Jenkins构建">{p.jenkinsUrl ? <a href={p.jenkinsUrl} target="_blank" rel="noopener noreferrer">{p.jenkinsUrl}</a> : '-'}</Descriptions.Item>
-                        <Descriptions.Item label="版本地址">{p.buildAddress ? <a href={p.buildAddress} target="_blank" rel="noopener noreferrer">{p.buildAddress}</a> : '-'}</Descriptions.Item>
+                        <Descriptions.Item label="分支信息">{editableField('branchInfo', p.branchInfo)}</Descriptions.Item>
+                        <Descriptions.Item label="Jenkins构建">{basicInfoEditMode ? editableField('jenkinsUrl', p.jenkinsUrl) : (p.jenkinsUrl ? <a href={p.jenkinsUrl} target="_blank" rel="noopener noreferrer">{p.jenkinsUrl}</a> : '-')}</Descriptions.Item>
+                        <Descriptions.Item label="版本地址">{basicInfoEditMode ? editableField('buildAddress', p.buildAddress) : (p.buildAddress ? <a href={p.buildAddress} target="_blank" rel="noopener noreferrer">{p.buildAddress}</a> : '-')}</Descriptions.Item>
                       </Descriptions>
                     </div>
                   ),
@@ -2568,9 +2650,9 @@ export default function Home() {
               <Card style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#52c41a' }} />, '配置信息', '#52c41a')}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#8c8c8c', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f0f0f0' }}>构建信息</div>
                 <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>
-                  <Descriptions.Item label="分支信息">{p.branchInfo || '-'}</Descriptions.Item>
-                  <Descriptions.Item label="Jenkins构建">{p.jenkinsUrl ? <a href={p.jenkinsUrl} target="_blank" rel="noopener noreferrer">{p.jenkinsUrl}</a> : '-'}</Descriptions.Item>
-                  <Descriptions.Item label="版本地址">{p.buildAddress ? <a href={p.buildAddress} target="_blank" rel="noopener noreferrer">{p.buildAddress}</a> : '-'}</Descriptions.Item>
+                  <Descriptions.Item label="分支信息">{editableField('branchInfo', p.branchInfo)}</Descriptions.Item>
+                  <Descriptions.Item label="Jenkins构建">{basicInfoEditMode ? editableField('jenkinsUrl', p.jenkinsUrl) : (p.jenkinsUrl ? <a href={p.jenkinsUrl} target="_blank" rel="noopener noreferrer">{p.jenkinsUrl}</a> : '-')}</Descriptions.Item>
+                  <Descriptions.Item label="版本地址">{basicInfoEditMode ? editableField('buildAddress', p.buildAddress) : (p.buildAddress ? <a href={p.buildAddress} target="_blank" rel="noopener noreferrer">{p.buildAddress}</a> : '-')}</Descriptions.Item>
                 </Descriptions>
               </Card>
             )}
