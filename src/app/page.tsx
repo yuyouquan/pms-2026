@@ -2499,6 +2499,84 @@ export default function Home() {
   }
 
   // renderRequirementDevelopmentPlan 已移至 RequirementDevPlan 独立组件
+  const renderProjectPlanInfo = () => {
+    const p = selectedProject!
+    const planTasks = LEVEL1_TASKS
+
+    return (
+      <Card
+        style={{ marginBottom: 20, borderRadius: 8 }}
+        title={<Space><CalendarOutlined style={{ color: '#1890ff' }} /><span style={{ fontWeight: 600 }}>计划信息</span></Space>}
+      >
+        <Row gutter={[24, 16]}>
+          <Col span={6}>
+            <Statistic
+              title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>计划开始时间</span>}
+              value={p.planStartDate || '-'}
+              valueStyle={{ fontSize: 16, fontWeight: 600 }}
+              prefix={<CalendarOutlined style={{ color: '#1890ff', fontSize: 14 }} />}
+            />
+          </Col>
+          <Col span={6}>
+            <Statistic
+              title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>计划结束时间</span>}
+              value={p.planEndDate || '-'}
+              valueStyle={{ fontSize: 16, fontWeight: 600 }}
+              prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />}
+            />
+          </Col>
+          <Col span={6}>
+            <Statistic
+              title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>开发周期（工作日）</span>}
+              value={p.developCycle || '-'}
+              valueStyle={{ fontSize: 16, fontWeight: 600 }}
+              suffix={p.developCycle ? <span style={{ fontSize: 12, color: '#8c8c8c' }}>天</span> : undefined}
+            />
+          </Col>
+          <Col span={6}>
+            <Statistic
+              title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>健康状态</span>}
+              value={p.healthStatus === 'normal' ? '健康' : p.healthStatus === 'warning' ? '关注' : p.healthStatus === 'risk' ? '风险' : '-'}
+              valueStyle={{
+                fontSize: 16, fontWeight: 600,
+                color: p.healthStatus === 'normal' ? '#52c41a' : p.healthStatus === 'warning' ? '#faad14' : p.healthStatus === 'risk' ? '#ff4d4f' : '#8c8c8c',
+              }}
+            />
+          </Col>
+        </Row>
+
+        <Divider style={{ margin: '16px 0' }} />
+
+        {/* 里程碑摘要 */}
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#8c8c8c', marginBottom: 12, textTransform: 'uppercase' as const, letterSpacing: 1 }}>里程碑计划</div>
+        <div style={{ display: 'flex', gap: 0, position: 'relative' }}>
+          {planTasks.filter(t => !t.parentId).map((task, i, arr) => {
+            const statusColor = task.status === '已完成' ? '#52c41a' : task.status === '进行中' ? '#1890ff' : '#d9d9d9'
+            return (
+              <div key={task.id} style={{ flex: 1, textAlign: 'center', position: 'relative' }}>
+                {i < arr.length - 1 && (
+                  <div style={{ position: 'absolute', top: 12, left: '50%', right: '-50%', height: 2, background: task.status === '已完成' ? '#52c41a' : '#e8e8e8', zIndex: 0 }} />
+                )}
+                <div style={{ position: 'relative', zIndex: 1 }}>
+                  <div style={{ width: 24, height: 24, borderRadius: '50%', background: statusColor, margin: '0 auto 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {task.status === '已完成' ? (
+                      <CheckOutlined style={{ color: '#fff', fontSize: 12 }} />
+                    ) : (
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff', display: 'inline-block' }} />
+                    )}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', marginBottom: 2 }}>{task.taskName}</div>
+                  <div style={{ fontSize: 11, color: '#8c8c8c' }}>{task.planStartDate} → {task.planEndDate}</div>
+                  <Tag color={task.status === '已完成' ? 'success' : task.status === '进行中' ? 'processing' : 'default'} style={{ marginTop: 4, fontSize: 10 }}>{task.status}</Tag>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </Card>
+    )
+  }
+
 
   // 市场颜色映射
   const marketColors: Record<string, string> = { 'OP': '#1890ff', 'TR': '#52c41a', 'RU': '#faad14', 'FR': '#722ed1', 'IN': '#eb2f96', 'BR': '#13c2c2' }
