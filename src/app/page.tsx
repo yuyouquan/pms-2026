@@ -4355,13 +4355,20 @@ export default function Home() {
                   {/* 项目统计概览 */}
                   <Row gutter={16} style={{ marginBottom: 20 }}>
                     {[
-                      { label: '全部项目', value: projects.length, color: '#1890ff', bg: '#e6f7ff' },
-                      { label: '进行中', value: projects.filter(p => p.status === '进行中').length, color: '#1890ff', bg: '#e6f7ff' },
-                      { label: '筹备中', value: projects.filter(p => p.status === '筹备中').length, color: '#faad14', bg: '#fff7e6' },
-                      { label: '已完成', value: projects.filter(p => p.status === '已完成').length, color: '#52c41a', bg: '#f6ffed' },
+                      { label: '全部项目', value: projects.length, color: '#1890ff', bg: '#e6f7ff', filterValue: 'all' },
+                      { label: '进行中', value: projects.filter(p => p.status === '进行中').length, color: '#1890ff', bg: '#e6f7ff', filterValue: '进行中' },
+                      { label: '待立项', value: projects.filter(p => p.status === '筹备中' || p.status === '待立项').length, color: '#faad14', bg: '#fff7e6', filterValue: '筹备中' },
+                      { label: '已完成', value: projects.filter(p => p.status === '已完成').length, color: '#52c41a', bg: '#f6ffed', filterValue: '已完成' },
                     ].map((stat, i) => (
                       <Col span={6} key={i}>
-                        <div style={{ background: '#fff', borderRadius: 8, padding: '14px 16px', border: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div
+                          style={{
+                            background: '#fff', borderRadius: 8, padding: '14px 16px',
+                            border: projectStatusFilter === stat.filterValue ? `1px solid ${stat.color}` : '1px solid #f0f0f0',
+                            display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', transition: 'all 0.2s',
+                          }}
+                          onClick={() => setProjectStatusFilter(stat.filterValue)}
+                        >
                           <div style={{ width: 40, height: 40, borderRadius: 8, background: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <span style={{ fontSize: 18, fontWeight: 700, color: stat.color }}>{stat.value}</span>
                           </div>
