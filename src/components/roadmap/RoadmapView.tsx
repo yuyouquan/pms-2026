@@ -25,7 +25,7 @@ export default function RoadmapView({ projects, marketPlanData, level1Tasks, onV
     <div>
       {/* 顶部标题栏 + 视图切换 */}
       <div style={{
-        background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
+        background: 'linear-gradient(135deg, #312e81 0%, #4338ca 100%)',
         borderRadius: '12px 12px 0 0', padding: '16px 24px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
@@ -52,7 +52,7 @@ export default function RoadmapView({ projects, marketPlanData, level1Tasks, onV
                   fontSize: 13, fontWeight: 600, transition: 'all 0.25s',
                   display: 'flex', alignItems: 'center', gap: 6,
                   background: isActive ? '#fff' : 'transparent',
-                  color: isActive ? '#1890ff' : 'rgba(255,255,255,0.85)',
+                  color: isActive ? '#4338ca' : 'rgba(255,255,255,0.85)',
                   boxShadow: isActive ? '0 2px 6px rgba(0,0,0,0.1)' : 'none',
                 }}
               >

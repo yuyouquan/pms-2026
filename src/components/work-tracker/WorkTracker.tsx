@@ -49,7 +49,7 @@ const MOCK_WORK_ITEMS: WorkItem[] = [
 ]
 
 const TYPE_COLORS: Record<WorkItemType, string> = {
-  '需求': '#1890ff',
+  '需求': '#6366f1',
   '任务': '#52c41a',
   '风险': '#faad14',
   '问题': '#ff4d4f',
@@ -227,11 +227,11 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
   ]
 
   const statItems = [
-    { label: '全部', value: stats.total, color: '#1890ff', bg: 'linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%)', icon: '📋' },
-    { label: '待办', value: stats.pending, color: '#faad14', bg: 'linear-gradient(135deg, #fffbe6 0%, #fff1b8 100%)', icon: '⏳' },
-    { label: '逾期', value: stats.overdue, color: '#ff4d4f', bg: 'linear-gradient(135deg, #fff2f0 0%, #ffccc7 100%)', icon: '🔥' },
-    { label: '已完成', value: stats.completed, color: '#52c41a', bg: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)', icon: '✅' },
-    { label: '其他', value: stats.other, color: '#8c8c8c', bg: 'linear-gradient(135deg, #fafafa 0%, #f0f0f0 100%)', icon: '📁' },
+    { label: '全部', value: stats.total, color: '#6366f1', bg: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', borderColor: 'rgba(99,102,241,0.15)', iconBg: 'linear-gradient(135deg, #6366f1, #818cf8)', iconText: '全' },
+    { label: '待办', value: stats.pending, color: '#f59e0b', bg: 'linear-gradient(135deg, #fffbeb, #fef3c7)', borderColor: 'rgba(245,158,11,0.15)', iconBg: 'linear-gradient(135deg, #f59e0b, #fbbf24)', iconText: '办' },
+    { label: '逾期', value: stats.overdue, color: '#ef4444', bg: 'linear-gradient(135deg, #fef2f2, #fecaca)', borderColor: 'rgba(239,68,68,0.15)', iconBg: 'linear-gradient(135deg, #ef4444, #f87171)', iconText: '期' },
+    { label: '已完成', value: stats.completed, color: '#10b981', bg: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', borderColor: 'rgba(16,185,129,0.15)', iconBg: 'linear-gradient(135deg, #10b981, #34d399)', iconText: '完' },
+    { label: '其他', value: stats.other, color: '#6b7280', bg: 'linear-gradient(135deg, #f9fafb, #f3f4f6)', borderColor: 'rgba(107,114,128,0.15)', iconBg: 'linear-gradient(135deg, #6b7280, #9ca3af)', iconText: '他' },
   ]
 
   return (
@@ -243,14 +243,34 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
             key={item.label}
             style={{
               flex: 1, padding: '18px 20px', borderRadius: 12,
-              background: item.bg, border: '1px solid rgba(0,0,0,0.04)',
+              background: item.bg, border: `1px solid ${item.borderColor}`,
+              backdropFilter: 'blur(6px)',
               display: 'flex', alignItems: 'center', gap: 14,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+              transition: 'all 0.25s ease',
+              cursor: 'default',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.02)'
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.08)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)'
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)'
             }}
           >
-            <span style={{ fontSize: 28 }}>{item.icon}</span>
+            <div style={{
+              width: 40, height: 40, borderRadius: 10,
+              background: item.iconBg,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 16, fontWeight: 700,
+              boxShadow: `0 3px 8px ${item.borderColor}`,
+              flexShrink: 0,
+            }}>
+              {item.iconText}
+            </div>
             <div>
-              <div style={{ fontSize: 26, fontWeight: 700, color: item.color, lineHeight: 1 }}>{item.value}</div>
+              <div style={{ fontSize: 26, fontWeight: 700, color: item.color, lineHeight: 1, textShadow: `0 1px 2px ${item.borderColor}` }}>{item.value}</div>
               <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>{item.label}</div>
             </div>
           </div>
@@ -260,7 +280,7 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
       {/* 筛选工具栏 */}
       <Card
         size="small"
-        style={{ borderRadius: 10, marginBottom: 16 }}
+        style={{ borderRadius: 10, marginBottom: 16, border: '1px solid rgba(99,102,241,0.08)', background: 'rgba(249,250,255,0.6)' }}
         styles={{ body: { padding: '12px 20px' } }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
@@ -280,10 +300,11 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
                   onClick={() => setListFilter(f.key)}
                   style={{
                     padding: '4px 14px', borderRadius: 20, cursor: 'pointer',
-                    fontSize: 13, fontWeight: 500, transition: 'all 0.2s',
-                    background: isActive ? (f.color || '#1890ff') : 'transparent',
+                    fontSize: 13, fontWeight: 500, transition: 'all 0.25s ease',
+                    background: isActive ? (f.color ? f.color : 'linear-gradient(135deg, #4338ca, #6366f1)') : 'transparent',
                     color: isActive ? '#fff' : '#595959',
-                    border: isActive ? `1px solid ${f.color || '#1890ff'}` : '1px solid transparent',
+                    border: isActive ? '1px solid transparent' : '1px solid transparent',
+                    boxShadow: isActive ? (f.color ? `0 4px 12px ${f.color}40` : '0 4px 12px rgba(67,56,202,0.3)') : 'none',
                   }}
                   onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = '#f5f5f5' }}
                   onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
@@ -342,7 +363,7 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
       </Card>
 
       {/* 数据表格 */}
-      <Card style={{ borderRadius: 10 }} styles={{ body: { padding: 0 } }}>
+      <Card style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(99,102,241,0.08)', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }} styles={{ body: { padding: 0 } }}>
         <Table
           className="pms-table"
           columns={columns}
@@ -354,11 +375,11 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
           onRow={(record) => ({
             style: {
               background: record.status === '逾期' ? '#fff2f0' : isNearDeadline(record) ? '#fffbe6' : undefined,
-              transition: 'background 0.2s',
+              transition: 'all 0.3s ease',
             },
             onMouseEnter: (e) => {
               if (record.status !== '逾期' && !isNearDeadline(record)) {
-                (e.currentTarget as HTMLElement).style.background = '#fafafa'
+                (e.currentTarget as HTMLElement).style.background = 'rgba(99,102,241,0.04)'
               }
             },
             onMouseLeave: (e) => {
@@ -372,7 +393,7 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
 
       {/* 实际时间修改弹窗 */}
       <Modal
-        title={<Space><FieldTimeOutlined style={{ color: '#1890ff' }} /><span>修改实际时间</span></Space>}
+        title={<Space><FieldTimeOutlined style={{ color: '#6366f1' }} /><span>修改实际时间</span></Space>}
         open={actualTimeModal.visible}
         onCancel={() => setActualTimeModal({ visible: false, item: null, startDate: '', endDate: '' })}
         onOk={() => {

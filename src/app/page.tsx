@@ -97,29 +97,30 @@ const globalStyles = `
     box-shadow: 0 0 0 2px rgba(24,144,255,0.1) !important;
   }
   .pms-card-hover {
-    transition: all 0.2s ease !important;
+    transition: all 0.25s ease !important;
   }
   .pms-card-hover:hover {
-    border-color: #d9d9d9 !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
-    transform: translateY(-2px);
+    border-color: rgba(99,102,241,0.2) !important;
+    box-shadow: 0 8px 24px rgba(99,102,241,0.12) !important;
+    transform: translateY(-3px);
   }
   .pms-sidebar .ant-menu-item {
-    border-radius: 6px !important;
+    border-radius: 8px !important;
     margin: 2px 8px !important;
   }
   .pms-sidebar .ant-menu-item-selected {
-    background: #e6f4ff !important;
-    font-weight: 500 !important;
+    background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%) !important;
+    font-weight: 600 !important;
+    color: #4338ca !important;
   }
   .pms-modal .ant-modal-header {
     padding: 16px 24px !important;
     border-bottom: 1px solid #f0f0f0 !important;
-    background: #fafbfc !important;
-    border-radius: 8px 8px 0 0 !important;
+    background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%) !important;
+    border-radius: 16px 16px 0 0 !important;
   }
   .pms-modal .ant-modal-content {
-    border-radius: 8px !important;
+    border-radius: 16px !important;
     overflow: hidden !important;
   }
   .pms-modal .ant-modal-footer {
@@ -2308,13 +2309,14 @@ export default function Home() {
           position: 'fixed', right: 32, top: 130, zIndex: 50, width: 150,
         }}>
           <div style={{
-            background: 'linear-gradient(180deg, #fff 0%, #fafbfc 100%)',
-            borderRadius: 10,
-            border: '1px solid #e8e8e8',
+            background: 'rgba(255,255,255,0.75)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: 14,
+            border: '1px solid rgba(99,102,241,0.1)',
             padding: '16px 0 12px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+            boxShadow: '0 4px 16px rgba(99,102,241,0.08)',
           }}>
-            <div style={{ padding: '0 16px 10px', fontSize: 11, fontWeight: 600, color: '#bfbfbf', letterSpacing: 2, textTransform: 'uppercase' as const }}>导航</div>
+            <div style={{ padding: '0 16px 10px', fontSize: 10, fontWeight: 700, color: '#a5b4fc', letterSpacing: 3, textTransform: 'uppercase' as const }}>导航</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {anchorSections.map((section) => (
                 <div
@@ -2323,18 +2325,18 @@ export default function Home() {
                   style={{
                     display: 'flex', alignItems: 'center', gap: 8,
                     padding: '8px 16px', cursor: 'pointer',
-                    fontSize: 12, color: '#595959',
-                    transition: 'all 0.2s',
+                    fontSize: 12, color: '#64748b',
+                    transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
                     borderLeft: '2px solid transparent',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#e6f4ff'
-                    e.currentTarget.style.color = '#1890ff'
-                    e.currentTarget.style.borderLeftColor = '#1890ff'
+                    e.currentTarget.style.background = 'linear-gradient(90deg, rgba(99,102,241,0.08) 0%, transparent 100%)'
+                    e.currentTarget.style.color = '#6366f1'
+                    e.currentTarget.style.borderLeftColor = '#6366f1'
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = 'transparent'
-                    e.currentTarget.style.color = '#595959'
+                    e.currentTarget.style.color = '#64748b'
                     e.currentTarget.style.borderLeftColor = 'transparent'
                   }}
                 >
@@ -2349,10 +2351,10 @@ export default function Home() {
         <Card
           id="section-header"
           style={{ marginBottom: 20, borderRadius: 8, overflow: 'hidden' }}
-          styles={{ header: { background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)', borderBottom: 'none', padding: '16px 24px' }, body: { padding: 0 } }}
+          styles={{ header: { background: 'linear-gradient(135deg, #312e81 0%, #4338ca 100%)', borderBottom: 'none', padding: '16px 24px' }, body: { padding: 0 } }}
           title={
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, rgba(129,140,248,0.3) 0%, rgba(99,102,241,0.4) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 16px rgba(99,102,241,0.3)' }}>
                 <ProjectOutlined style={{ color: '#fff', fontSize: 18 }} />
               </div>
               <div>
@@ -2369,7 +2371,7 @@ export default function Home() {
           }
         >
           {/* 摘要行: 项目分类 | 项目状态 | 健康状态 | 当前节点 */}
-          <div style={{ display: 'flex', background: '#f8fafc', borderBottom: '1px solid #f0f0f0' }}>
+          <div style={{ display: 'flex', background: 'linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)', borderBottom: '1px solid rgba(99,102,241,0.08)' }}>
             {[
               { label: '项目分类', value: p.type, editable: false },
               { label: '项目状态', value: p.status, editable: false },
@@ -2385,7 +2387,7 @@ export default function Home() {
         </Card>
 
         {/* 一、基本信息 */}
-        <Card id="section-basic" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#1890ff' }} />, '基本信息', '#1890ff')} extra={
+        <Card id="section-basic" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#6366f1' }} />, '基本信息', '#6366f1')} extra={
           basicInfoEditMode ? (
             <Space>
               <Button size="small" onClick={() => setBasicInfoEditMode(false)}>取消</Button>
@@ -2501,7 +2503,7 @@ export default function Home() {
 
         {/* 整机: 转维信息 */}
         {isWholeMachine && currentProjectTransferApps.length > 0 && (
-          <Card id="section-transfer" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<DeploymentUnitOutlined style={{ color: '#4338ca' }} />, '转维信息', '#4338ca')}>
+          <Card id="section-transfer" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<DeploymentUnitOutlined style={{ color: '#6366f1' }} />, '转维信息', '#6366f1')}>
             <Table
               dataSource={currentProjectTransferApps}
               rowKey="id"
@@ -2555,7 +2557,7 @@ export default function Home() {
         {/* 二、计划信息 + 三、配置信息 */}
         {isWholeMachine && markets.length > 0 ? (
           /* 整机产品项目: 按市场TAB切换计划信息和配置信息 */
-          <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#1890ff' }} />, '计划信息与配置信息', '#1890ff')}>
+          <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#6366f1' }} />, '计划信息与配置信息', '#6366f1')}>
             <Tabs
               activeKey={selectedMarketTab}
               onChange={setSelectedMarketTab}
@@ -2571,7 +2573,7 @@ export default function Home() {
                       <div style={{ fontSize: 14, fontWeight: 600, color: '#262626', marginBottom: 16 }}>计划信息</div>
                       <Row gutter={[24, 16]} style={{ marginBottom: 16 }}>
                         <Col span={6}>
-                          <Statistic title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>计划开始时间</span>} value={p.planStartDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#1890ff', fontSize: 14 }} />} />
+                          <Statistic title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>计划开始时间</span>} value={p.planStartDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />} />
                         </Col>
                         <Col span={6}>
                           <Statistic title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>计划结束时间</span>} value={p.planEndDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />} />
@@ -2657,7 +2659,7 @@ export default function Home() {
       <Card
         id="section-plan"
         style={{ marginBottom: 20, borderRadius: 8 }}
-        title={<Space><CalendarOutlined style={{ color: '#1890ff' }} /><span style={{ fontWeight: 600 }}>计划信息</span></Space>}
+        title={<Space><CalendarOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>计划信息</span></Space>}
       >
         <Row gutter={[24, 16]}>
           <Col span={6}>
@@ -2665,7 +2667,7 @@ export default function Home() {
               title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>计划开始时间</span>}
               value={p.planStartDate || '-'}
               valueStyle={{ fontSize: 16, fontWeight: 600 }}
-              prefix={<CalendarOutlined style={{ color: '#1890ff', fontSize: 14 }} />}
+              prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />}
             />
           </Col>
           <Col span={6}>
@@ -3086,9 +3088,9 @@ export default function Home() {
       // 转维菜单已移除，转维信息在基础信息中展示
     ]
     return (
-      <div style={{ minHeight: '100vh', background: '#f5f7fa' }}>
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #f0f2f8 0%, #e8ecf4 100%)' }}>
         {/* 顶部导航栏 */}
-        <div style={{ background: 'linear-gradient(135deg, #4338ca 0%, #3730a3 100%)', padding: '0 24px', boxShadow: '0 2px 12px rgba(67,56,202,0.35)', position: 'sticky', top: 0, zIndex: 100 }}>
+        <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)', padding: '0 24px', boxShadow: '0 4px 20px rgba(30,27,75,0.4)', position: 'sticky', top: 0, zIndex: 100, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <Row align="middle" style={{ height: 56 }}>
             <Col flex="none">
               <Button type="text" icon={<LeftOutlined style={{ color: '#fff' }} />} onClick={() => { setTransferView(null); navigateWithEditGuard(() => setActiveModule('projects')); }} style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 500 }}>返回工作台</Button>
@@ -3167,7 +3169,7 @@ export default function Home() {
         </div>
         <div style={{ display: 'flex', height: 'calc(100vh - 56px)' }}>
           {/* 侧边导航 - 固定不滚动 */}
-          <div className="pms-sidebar" style={{ width: 200, background: '#fff', borderRight: '1px solid #f0f0f0', paddingTop: 8, overflowY: 'auto', flexShrink: 0 }}>
+          <div className="pms-sidebar" style={{ width: 200, background: 'linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.9) 100%)', borderRight: '1px solid rgba(99,102,241,0.06)', paddingTop: 12, overflowY: 'auto', flexShrink: 0 }}>
             <Menu
               mode="inline"
               selectedKeys={[projectSpaceModule]}
@@ -3378,13 +3380,15 @@ export default function Home() {
     <div style={{ minHeight: '100vh', background: '#f5f6fa' }}>
       {activeModule === 'projectSpace' && selectedProject ? renderProjectSpace() : (
         <>
-          <div style={{ background: 'linear-gradient(135deg, #4338ca 0%, #3730a3 100%)', padding: '0 32px', boxShadow: '0 2px 12px rgba(67,56,202,0.35)', position: 'sticky', top: 0, zIndex: 100 }}>
+          <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)', padding: '0 32px', boxShadow: '0 4px 20px rgba(30,27,75,0.4)', position: 'sticky', top: 0, zIndex: 100, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
             <Row align="middle" justify="space-between" style={{ height: 56 }}>
               <Col>
                 <Space size={32} align="center">
-                  <Space size={8}>
-                    <ProjectOutlined style={{ color: '#fff', fontSize: 18 }} />
-                    <span style={{ fontSize: 17, fontWeight: 700, color: '#fff', letterSpacing: 1 }}>项目管理系统</span>
+                  <Space size={10}>
+                    <div style={{ width: 30, height: 30, borderRadius: 8, background: 'linear-gradient(135deg, #818cf8 0%, #6366f1 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(129,140,248,0.4)' }}>
+                      <ProjectOutlined style={{ color: '#fff', fontSize: 16 }} />
+                    </div>
+                    <span style={{ fontSize: 17, fontWeight: 700, color: '#fff', letterSpacing: 1.5, textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>项目管理系统</span>
                   </Space>
                   <Menu
                     theme="dark"
@@ -3448,7 +3452,7 @@ export default function Home() {
                   trigger={['click']}
                   overlayStyle={{ minWidth: 340 }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '5px 14px', borderRadius: 24, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.15)', transition: 'background 0.2s' }}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '5px 14px', borderRadius: 24, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', transition: 'all 0.25s', backdropFilter: 'blur(8px)' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.22)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
                   >
@@ -3467,8 +3471,8 @@ export default function Home() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {/* 筛选工具栏 */}
                   <div style={{
-                    background: '#fff', borderRadius: 10, padding: '12px 20px', marginBottom: 16,
-                    border: '1px solid #f0f0f0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                    background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(8px)', borderRadius: 14, padding: '12px 20px', marginBottom: 16,
+                    border: '1px solid rgba(99,102,241,0.08)', boxShadow: '0 2px 8px rgba(99,102,241,0.04)',
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
                   }}>
                     {/* 左侧: 状态标签筛选 */}
@@ -3491,7 +3495,7 @@ export default function Home() {
                               color: isActive ? '#fff' : '#595959',
                               border: isActive ? `1px solid ${stat.color}` : '1px solid transparent',
                             }}
-                            onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.background = '#f5f5f5' } }}
+                            onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.background = 'rgba(99,102,241,0.06)' } }}
                             onMouseLeave={(e) => { if (!isActive) { e.currentTarget.style.background = 'transparent' } }}
                           >
                             {stat.label} <span style={{ fontSize: 12, opacity: 0.85, marginLeft: 2 }}>{stat.value}</span>
@@ -3501,7 +3505,7 @@ export default function Home() {
                     </div>
                     {/* 右侧: 类型筛选 + 搜索 + 视图切换 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 4px', background: '#f5f5f5', borderRadius: 20 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 4px', background: 'rgba(99,102,241,0.04)', borderRadius: 20, border: '1px solid rgba(99,102,241,0.06)' }}>
                         {[
                           { label: '全部', value: 'all' },
                           { label: '整机', value: '整机产品项目' },
@@ -3518,8 +3522,8 @@ export default function Home() {
                                 padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
                                 fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
                                 background: isActive ? '#fff' : 'transparent',
-                                color: isActive ? '#1890ff' : '#8c8c8c',
-                                boxShadow: isActive ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                color: isActive ? '#6366f1' : '#8c8c8c',
+                                boxShadow: isActive ? '0 2px 6px rgba(99,102,241,0.15)' : 'none',
                               }}
                             >
                               {item.label}
@@ -3754,7 +3758,7 @@ export default function Home() {
                           <Row justify="space-between" align="middle">
                             <Col>
                               <Space size={8} align="center">
-                                <CalendarOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+                                <CalendarOutlined style={{ color: '#6366f1', fontSize: 16 }} />
                                 <span style={{ fontSize: 16, fontWeight: 600, color: '#262626' }}>{selectedProjectType}</span>
                                 <Divider type="vertical" style={{ height: 16, margin: '0 4px' }} />
                                 <span style={{ fontSize: 14, color: '#595959' }}>计划模板配置</span>

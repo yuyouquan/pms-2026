@@ -49,7 +49,7 @@ const MACHINE_FIXED_COLUMNS = [
 const FIXED_COLUMNS = SOFTWARE_FIXED_COLUMNS
 
 const marketColors: Record<string, string> = {
-  'OP': '#1890ff', 'TR': '#52c41a', 'RU': '#faad14',
+  'OP': '#6366f1', 'TR': '#52c41a', 'RU': '#faad14',
   'FR': '#722ed1', 'IN': '#eb2f96', 'BR': '#13c2c2',
 }
 
@@ -473,7 +473,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
             </div>
           </Select.Option>
           {currentSnapshots.map(s => (
-            <Select.Option key={s.id} value={s.id} label={<span style={{ fontSize: 12 }}><HistoryOutlined style={{ marginRight: 4, color: '#1890ff' }} />{s.version}</span>}>
+            <Select.Option key={s.id} value={s.id} label={<span style={{ fontSize: 12 }}><HistoryOutlined style={{ marginRight: 4, color: '#6366f1' }} />{s.version}</span>}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 500 }}>{s.version}</div>
@@ -513,10 +513,10 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
                 }}
                 style={{
                   padding: '6px 20px', borderRadius: 18, cursor: 'pointer',
-                  fontSize: 13, fontWeight: 600, transition: 'all 0.25s',
+                  fontSize: 13, fontWeight: 600, transition: 'all 0.25s ease',
                   background: isActive ? '#fff' : 'transparent',
-                  color: isActive ? '#1890ff' : '#8c8c8c',
-                  boxShadow: isActive ? '0 2px 6px rgba(24,144,255,0.15)' : 'none',
+                  color: isActive ? '#6366f1' : '#8c8c8c',
+                  boxShadow: isActive ? '0 2px 8px rgba(99,102,241,0.2)' : 'none',
                 }}
               >
                 {t}
@@ -530,8 +530,9 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         padding: '10px 16px', marginBottom: 12,
-        background: '#fff', borderRadius: 10, border: '1px solid #f0f0f0',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+        background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(6px)',
+        borderRadius: 10, border: '1px solid rgba(99,102,241,0.08)',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
       }}>
         {/* 左侧: 视图切换 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
@@ -545,11 +546,11 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
                   onClick={() => handleViewTabChange(tab.key)}
                   style={{
                     padding: '3px 12px', borderRadius: 14, cursor: 'pointer',
-                    fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
+                    fontSize: 12, fontWeight: 500, transition: 'all 0.3s ease',
                     display: 'flex', alignItems: 'center', gap: 4,
                     background: isActive ? '#fff' : 'transparent',
-                    color: isActive ? '#1890ff' : '#595959',
-                    boxShadow: isActive ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                    color: isActive ? '#6366f1' : '#595959',
+                    boxShadow: isActive ? '0 2px 6px rgba(99,102,241,0.12)' : 'none',
                   }}
                 >
                   <span>{tab.label}</span>
@@ -571,11 +572,11 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
             onClick={() => handleViewTabEdit('', 'add')}
             style={{
               padding: '3px 10px', borderRadius: 14, cursor: 'pointer',
-              fontSize: 11, color: '#1890ff', border: '1px dashed #91caff',
+              fontSize: 11, color: '#6366f1', border: '1px dashed #a5b4fc',
               display: 'flex', alignItems: 'center', gap: 3,
               transition: 'all 0.2s',
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#e6f4ff' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#eef2ff' }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
           >
             <PlusOutlined style={{ fontSize: 10 }} /> 保存
@@ -591,13 +592,14 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       {activeSnapshot && (
         <div style={{
           padding: '8px 16px', marginBottom: 12, borderRadius: 8,
-          background: 'linear-gradient(135deg, #e6f4ff 0%, #f0f5ff 100%)',
-          border: '1px solid #91caff',
+          background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
+          border: '1px solid rgba(99,102,241,0.2)',
+          boxShadow: '0 2px 8px rgba(99,102,241,0.08)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <Space size={8}>
-            <HistoryOutlined style={{ color: '#1890ff' }} />
-            <span style={{ fontSize: 13, color: '#1890ff', fontWeight: 500 }}>
+            <HistoryOutlined style={{ color: '#6366f1' }} />
+            <span style={{ fontSize: 13, color: '#6366f1', fontWeight: 500 }}>
               基线快照: {activeSnapshot.version}
             </span>
             <Tag color="blue" style={{ fontSize: 11 }}>{activeSnapshot.createdAt}</Tag>
@@ -607,7 +609,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       )}
 
       {/* 数据表格 */}
-      <div style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid #f0f0f0' }}>
+      <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(99,102,241,0.08)', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
         {tableComponent}
       </div>
 
