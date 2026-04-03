@@ -142,10 +142,12 @@ function DHTMLXGantt({ tasks, onTaskClick, readOnly = false }: { tasks: any[], o
     // 配置Gantt
     gantt.config.date_format = '%Y-%m-%d'
     gantt.config.columns = [
-      { name: 'text', label: '任务名称', width: 200, tree: true },
-      { name: 'start_date', label: '开始', align: 'center', width: 80 },
-      { name: 'duration', label: '天数', align: 'center', width: 50 },
-      { name: 'progress', label: '进度', align: 'center', width: 60, template: (task: any) => Math.round(task.progress * 100) + '%' }
+      { name: 'text', label: '任务名称', width: 180, tree: true },
+      { name: 'predecessor', label: '前置任务', align: 'center', width: 70 },
+      { name: 'start_date', label: '计划开始', align: 'center', width: 90 },
+      { name: 'end_date', label: '计划完成', align: 'center', width: 90 },
+      { name: 'duration', label: '计划周期', align: 'center', width: 60, template: (task: any) => task.duration + '天' },
+      { name: 'progress', label: '进度', align: 'center', width: 60, template: (task: any) => Math.round(task.progress * 100) + '%' },
     ]
     gantt.config.scale_unit = 'month'
     gantt.config.date_scale = '%Y年%m月'
@@ -173,7 +175,8 @@ function DHTMLXGantt({ tasks, onTaskClick, readOnly = false }: { tasks: any[], o
         parent: t.parentId || 0,
         open: true,
         status: t.status,
-        responsible: t.responsible
+        responsible: t.responsible,
+        predecessor: t.predecessor || '',
       })),
       links: tasks.filter(t => t.predecessor).map((t, i) => ({
         id: i + 1,
@@ -631,6 +634,28 @@ const ALL_COLUMNS = [
   { key: 'progress', title: '进度', default: true },
 ]
 
+// 竖版表格可配置列
+const TABLE_COLUMNS = ALL_COLUMNS
+
+// 甘特图可配置列
+const GANTT_COLUMNS = [
+  { key: 'taskName', title: '任务名称', default: true },
+  { key: 'predecessor', title: '前置任务', default: true },
+  { key: 'planStartDate', title: '计划开始', default: true },
+  { key: 'planEndDate', title: '计划完成', default: true },
+  { key: 'estimatedDays', title: '计划周期', default: true },
+  { key: 'progress', title: '进度', default: true },
+]
+
+// 横版表格无自定义列（固定结构）
+
+// 根据视图类型获取可配置列
+const getColumnsForView = (viewMode: string) => {
+  if (viewMode === 'gantt') return GANTT_COLUMNS
+  if (viewMode === 'horizontal') return [] // 横版无自定义列
+  return TABLE_COLUMNS
+}
+
 // IR需求Mock数据
 // IR/SR需求数据已移至 RequirementDevPlan 组件
 
@@ -685,7 +710,6 @@ export default function Home() {
   const [tasks, setTasks] = useState(LEVEL1_TASKS)
   const [searchText, setSearchText] = useState('')
   const [viewMode, setViewMode] = useState<'table' | 'gantt'>('table')
-  const [visibleColumns, setVisibleColumns] = useState(ALL_COLUMNS.filter(c => c.default).map(c => c.key))
   const [showColumnModal, setShowColumnModal] = useState(false)
   const [showVersionCompare, setShowVersionCompare] = useState(false)
   const [compareVersionA, setCompareVersionA] = useState('v1')
@@ -758,6 +782,28 @@ export default function Home() {
   const [projectPlanLevel, setProjectPlanLevel] = useState<string>('level1')
   const [projectPlanViewMode, setProjectPlanViewMode] = useState<'table' | 'horizontal' | 'gantt'>('table')
   const [projectPlanOverviewTab, setProjectPlanOverviewTab] = useState<string>('overview')
+  const [planMetaCollapsed, setPlanMetaCollapsed] = useState(false)
+
+  // 每个视图独立的自定义列配置
+  const defaultCols = ALL_COLUMNS.filter(c => c.default).map(c => c.key)
+  const [columnsByView, setColumnsByView] = useState<Record<string, string[]>>({
+    'config-table': [...defaultCols],
+    'config-gantt': [...defaultCols],
+    'project-table': [...defaultCols],
+    'project-gantt': [...defaultCols],
+    'project-horizontal': [...defaultCols],
+  })
+  const getViewKey = () => {
+    if (activeModule === 'config') return `config-${planLevel}-${viewMode}`
+    return `project-${projectPlanLevel}-${projectPlanViewMode}`
+  }
+  const currentViewMode = activeModule === 'config' ? viewMode : projectPlanViewMode
+  const currentViewColumns = getColumnsForView(currentViewMode)
+  const currentViewDefaultCols = currentViewColumns.filter(c => c.default).map(c => c.key)
+  const visibleColumns = columnsByView[getViewKey()] || currentViewDefaultCols
+  const setVisibleColumns = (cols: string[]) => {
+    setColumnsByView(prev => ({ ...prev, [getViewKey()]: cols }))
+  }
   const [level2PlanTasks, setLevel2PlanTasks] = useState<any[]>([
     // 在研版本火车计划 - 三层结构 (plan1)
     { id: '1', order: 1, taskName: '16.3.030', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-02-01', planId: 'plan1' },
@@ -2798,51 +2844,61 @@ export default function Home() {
           <Card
             size="small"
             style={{ marginBottom: 16, borderRadius: 8, border: '1px solid #e6f4ff' }}
-            styles={{ body: { padding: '16px 20px' } }}
+            styles={{ body: { padding: 0 } }}
           >
-            <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 3, height: 16, background: '#1890ff', borderRadius: 2 }} />
-              <span style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>计划基本信息</span>
-              <Tag color="blue" style={{ marginLeft: 8, fontSize: 11 }}>{level2PlanMeta[activeLevel2Plan]?.planType}</Tag>
-            </div>
-            <Descriptions
-              size="small"
-              column={3}
-              labelStyle={{ color: '#8c8c8c', fontSize: 13, fontWeight: 500, padding: '6px 12px 6px 0' }}
-              contentStyle={{ color: '#262626', fontSize: 13, padding: '6px 0' }}
-              colon={false}
+            <div
+              style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+              onClick={() => setPlanMetaCollapsed(!planMetaCollapsed)}
             >
-              <Descriptions.Item label="MR版本类型">
-                <Tag color="geekblue">{level2PlanMeta[activeLevel2Plan]?.mrVersion}</Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="1+N转测类型">
-                {level2PlanMeta[activeLevel2Plan]?.transferType ? <Tag color="orange">{level2PlanMeta[activeLevel2Plan].transferType}</Tag> : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="tOS-市场版本号">
-                {level2PlanMeta[activeLevel2Plan]?.tosVersion ? <Tag color="cyan">{level2PlanMeta[activeLevel2Plan].tosVersion}</Tag> : '-'}
-              </Descriptions.Item>
-              {level2PlanMeta[activeLevel2Plan]?.productLine && (
-                <>
-                  <Descriptions.Item label="产品线">{level2PlanMeta[activeLevel2Plan]?.productLine || '-'}</Descriptions.Item>
-                  <Descriptions.Item label="市场名">{level2PlanMeta[activeLevel2Plan]?.marketName || '-'}</Descriptions.Item>
-                  <Descriptions.Item label="项目名称">{level2PlanMeta[activeLevel2Plan]?.projectName || '-'}</Descriptions.Item>
-                  <Descriptions.Item label="芯片厂商">{level2PlanMeta[activeLevel2Plan]?.chipVendor || '-'}</Descriptions.Item>
-                  <Descriptions.Item label="分支信息">
-                    {level2PlanMeta[activeLevel2Plan]?.branch ? <Tag color="purple">{level2PlanMeta[activeLevel2Plan].branch}</Tag> : '-'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 3, height: 16, background: '#1890ff', borderRadius: 2 }} />
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>计划基本信息</span>
+                <Tag color="blue" style={{ marginLeft: 4, fontSize: 11 }}>{level2PlanMeta[activeLevel2Plan]?.planType}</Tag>
+              </div>
+              <DownOutlined style={{ fontSize: 11, color: '#8c8c8c', transition: 'transform 0.25s', transform: planMetaCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }} />
+            </div>
+            {!planMetaCollapsed && (
+              <div style={{ padding: '0 20px 16px' }}>
+                <Descriptions
+                  size="small"
+                  column={3}
+                  labelStyle={{ color: '#8c8c8c', fontSize: 13, fontWeight: 500, padding: '6px 12px 6px 0' }}
+                  contentStyle={{ color: '#262626', fontSize: 13, padding: '6px 0' }}
+                  colon={false}
+                >
+                  <Descriptions.Item label="MR版本类型">
+                    <Tag color="geekblue">{level2PlanMeta[activeLevel2Plan]?.mrVersion}</Tag>
                   </Descriptions.Item>
-                  <Descriptions.Item label="是否MADA">
-                    {level2PlanMeta[activeLevel2Plan]?.isMada ? <Tag color={level2PlanMeta[activeLevel2Plan].isMada === '是' ? 'green' : 'default'}>{level2PlanMeta[activeLevel2Plan].isMada}</Tag> : '-'}
+                  <Descriptions.Item label="1+N转测类型">
+                    {level2PlanMeta[activeLevel2Plan]?.transferType ? <Tag color="orange">{level2PlanMeta[activeLevel2Plan].transferType}</Tag> : '-'}
                   </Descriptions.Item>
-                  <Descriptions.Item label="MADA市场">{level2PlanMeta[activeLevel2Plan]?.madaMarket || '-'}</Descriptions.Item>
-                  <Descriptions.Item label="项目SPM">{level2PlanMeta[activeLevel2Plan]?.spm || '-'}</Descriptions.Item>
-                  <Descriptions.Item label="项目TPM">{level2PlanMeta[activeLevel2Plan]?.tpm || '-'}</Descriptions.Item>
-                  <Descriptions.Item label="对接人">{level2PlanMeta[activeLevel2Plan]?.contact || '-'}</Descriptions.Item>
-                  <Descriptions.Item label="项目版本号">
-                    {level2PlanMeta[activeLevel2Plan]?.projectVersion ? <Tag>{level2PlanMeta[activeLevel2Plan].projectVersion}</Tag> : '-'}
+                  <Descriptions.Item label="tOS-市场版本号">
+                    {level2PlanMeta[activeLevel2Plan]?.tosVersion ? <Tag color="cyan">{level2PlanMeta[activeLevel2Plan].tosVersion}</Tag> : '-'}
                   </Descriptions.Item>
-                </>
-              )}
-            </Descriptions>
+                  {level2PlanMeta[activeLevel2Plan]?.productLine && (
+                    <>
+                      <Descriptions.Item label="产品线">{level2PlanMeta[activeLevel2Plan]?.productLine || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="市场名">{level2PlanMeta[activeLevel2Plan]?.marketName || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="项目名称">{level2PlanMeta[activeLevel2Plan]?.projectName || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="芯片厂商">{level2PlanMeta[activeLevel2Plan]?.chipVendor || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="分支信息">
+                        {level2PlanMeta[activeLevel2Plan]?.branch ? <Tag color="purple">{level2PlanMeta[activeLevel2Plan].branch}</Tag> : '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="是否MADA">
+                        {level2PlanMeta[activeLevel2Plan]?.isMada ? <Tag color={level2PlanMeta[activeLevel2Plan].isMada === '是' ? 'green' : 'default'}>{level2PlanMeta[activeLevel2Plan].isMada}</Tag> : '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="MADA市场">{level2PlanMeta[activeLevel2Plan]?.madaMarket || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="项目SPM">{level2PlanMeta[activeLevel2Plan]?.spm || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="项目TPM">{level2PlanMeta[activeLevel2Plan]?.tpm || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="对接人">{level2PlanMeta[activeLevel2Plan]?.contact || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="项目版本号">
+                        {level2PlanMeta[activeLevel2Plan]?.projectVersion ? <Tag>{level2PlanMeta[activeLevel2Plan].projectVersion}</Tag> : '-'}
+                      </Descriptions.Item>
+                    </>
+                  )}
+                </Descriptions>
+              </div>
+            )}
           </Card>
         )}
 
@@ -2879,9 +2935,11 @@ export default function Home() {
               <Col>
                 <Space size={6}>
                   <Input placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
-                  <Tooltip title="自定义列">
-                    <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
-                  </Tooltip>
+                  {projectPlanViewMode !== 'horizontal' && (
+                    <Tooltip title="自定义列">
+                      <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
+                    </Tooltip>
+                  )}
                   <Radio.Group
                     value={projectPlanViewMode === 'horizontal' && projectPlanLevel === 'level2' ? 'table' : projectPlanViewMode}
                     onChange={(e) => setProjectPlanViewMode(e.target.value)}
@@ -3207,7 +3265,7 @@ export default function Home() {
           {renderVersionCompareResult()}
         </Modal>
         {/* 自定义列Modal */}
-        <Modal className="pms-modal" title="自定义列" open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(ALL_COLUMNS.filter(c => c.default).map(c => c.key))}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}><Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row><Col span={12}>{ALL_COLUMNS.slice(0, 6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col><Col span={12}>{ALL_COLUMNS.slice(6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col></Row></Checkbox.Group></Modal>
+        <Modal className="pms-modal" title={`自定义列 - ${currentViewMode === 'gantt' ? '甘特图' : '竖版表格'}`} open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(currentViewDefaultCols)}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}><Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row>{currentViewColumns.map(c => <Col span={12} key={c.key}><Checkbox value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox></Col>)}</Row></Checkbox.Group></Modal>
         {/* 创建二级计划Modal */}
         <Modal className="pms-modal"
             title="创建二级计划"
@@ -3785,7 +3843,7 @@ export default function Home() {
               </div>
             )}
           </div>
-          <Modal className="pms-modal" title="自定义列" open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(ALL_COLUMNS.filter(c => c.default).map(c => c.key))}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}><Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row><Col span={12}>{ALL_COLUMNS.slice(0, 6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col><Col span={12}>{ALL_COLUMNS.slice(6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col></Row></Checkbox.Group></Modal>
+          <Modal className="pms-modal" title={`自定义列 - ${currentViewMode === 'gantt' ? '甘特图' : '竖版表格'}`} open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(currentViewDefaultCols)}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}><Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row>{currentViewColumns.map(c => <Col span={12} key={c.key}><Checkbox value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox></Col>)}</Row></Checkbox.Group></Modal>
           <Modal
             className="pms-modal"
             title={<Space><HistoryOutlined style={{ color: '#1890ff' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
