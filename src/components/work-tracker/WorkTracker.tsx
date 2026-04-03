@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Card, Table, Tag, Space, Input, Select, Button, Badge, Tooltip, Modal, message } from 'antd'
+import { Card, Table, Tag, Space, Input, Select, Button, Badge, Tooltip, Modal, DatePicker, message } from 'antd'
+import dayjs from 'dayjs'
 import {
   SearchOutlined, ClockCircleOutlined,
-  EyeOutlined, WarningOutlined,
+  EyeOutlined, WarningOutlined, FieldTimeOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 
@@ -70,6 +71,7 @@ interface WorkTrackerProps {
 
 export default function WorkTracker({ currentLoginUser, projects, onNavigateToProject }: WorkTrackerProps) {
   const [searchText, setSearchText] = useState('')
+  const [actualTimeModal, setActualTimeModal] = useState<{ visible: boolean; item: WorkItem | null; startDate: string; endDate: string }>({ visible: false, item: null, startDate: '', endDate: '' })
   const [filterProject, setFilterProject] = useState<string>('all')
   const [filterType, setFilterType] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
@@ -204,15 +206,22 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
       render: (val: string) => <span style={{ fontSize: 12 }}>{val}</span>,
     },
     {
-      title: '操作', key: 'action', width: 80, fixed: 'right',
+      title: '操作', key: 'action', width: 140, fixed: 'right',
       render: (_: any, record: WorkItem) => (
-        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => {
-          if (record.type === '任务' && record.planLevel) {
-            onNavigateToProject(record.projectId, 'plan', record.planLevel, record.planType)
-          } else {
-            onNavigateToProject(record.projectId, 'basic')
-          }
-        }}>详情</Button>
+        <Space size={2}>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => {
+            if (record.type === '任务' && record.planLevel) {
+              onNavigateToProject(record.projectId, 'plan', record.planLevel, record.planType)
+            } else {
+              onNavigateToProject(record.projectId, 'basic')
+            }
+          }}>详情</Button>
+          {record.type === '任务' && record.planLevel && (
+            <Button type="link" size="small" icon={<FieldTimeOutlined />} onClick={() => {
+              setActualTimeModal({ visible: true, item: record, startDate: record.planStartDate, endDate: record.planEndDate })
+            }}>实际时间</Button>
+          )}
+        </Space>
       ),
     },
   ]
@@ -360,6 +369,51 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
           })}
         />
       </Card>
+
+      {/* 实际时间修改弹窗 */}
+      <Modal
+        title={<Space><FieldTimeOutlined style={{ color: '#1890ff' }} /><span>修改实际时间</span></Space>}
+        open={actualTimeModal.visible}
+        onCancel={() => setActualTimeModal({ visible: false, item: null, startDate: '', endDate: '' })}
+        onOk={() => {
+          message.success('实际时间已保存')
+          setActualTimeModal({ visible: false, item: null, startDate: '', endDate: '' })
+        }}
+        okText="保存"
+        cancelText="取消"
+        width={480}
+      >
+        {actualTimeModal.item && (
+          <div style={{ padding: '12px 0' }}>
+            <div style={{ marginBottom: 16, padding: '10px 14px', background: '#f6f8fa', borderRadius: 8 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>{actualTimeModal.item.name}</div>
+              <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>
+                {actualTimeModal.item.project} · {actualTimeModal.item.planLevel === 'level1' ? '一级计划' : `二级计划-${actualTimeModal.item.planType}`}
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', marginBottom: 6 }}>实际开始时间</div>
+                <DatePicker
+                  style={{ width: '100%' }}
+                  value={actualTimeModal.startDate ? dayjs(actualTimeModal.startDate) : null}
+                  onChange={(date) => setActualTimeModal(prev => ({ ...prev, startDate: date ? date.format('YYYY-MM-DD') : '' }))}
+                  placeholder="请选择实际开始时间"
+                />
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', marginBottom: 6 }}>实际完成时间</div>
+                <DatePicker
+                  style={{ width: '100%' }}
+                  value={actualTimeModal.endDate ? dayjs(actualTimeModal.endDate) : null}
+                  onChange={(date) => setActualTimeModal(prev => ({ ...prev, endDate: date ? date.format('YYYY-MM-DD') : '' }))}
+                  placeholder="请选择实际完成时间"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
