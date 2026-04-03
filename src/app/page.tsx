@@ -1722,46 +1722,22 @@ export default function Home() {
 
     return (
       <div>
-        {/* 分类筛选 */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 10, flexWrap: 'wrap' }}>
-          {[
-            { key: 'all', label: '全部', count: allMerged.length },
-            { key: 'overdue', label: '逾期', count: overdueCount, color: '#ff4d4f' },
-            { key: 'upcoming', label: '即将到期', count: upcomingCount, color: '#faad14' },
-            { key: 'pending', label: '待办', count: allMerged.filter(t => t.category === 'pending').length },
-            { key: 'completed', label: '已完成', count: allMerged.filter(t => t.category === 'completed').length },
-          ].map(f => (
-            <Tag
-              key={f.key}
-              color={todoFilter === f.key ? (f.color ? f.color : 'blue') : 'default'}
-              style={{ cursor: 'pointer', borderRadius: 4, fontSize: 11, margin: 0 }}
-              onClick={() => setTodoFilter(f.key as any)}
-            >
-              {f.label} {f.count > 0 && <span style={{ fontWeight: 600 }}>{f.count}</span>}
-            </Tag>
-          ))}
-        </div>
-
         {/* 待办列表 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {filteredTodos.length === 0 ? (
+          {allMerged.length === 0 ? (
             <Empty description="暂无待办" style={{ padding: '20px 0' }} image={Empty.PRESENTED_IMAGE_SIMPLE} />
           ) : (
-            filteredTodos.map(todo => {
+            allMerged.map(todo => {
               const pc = priorityConfig[todo.priority] || priorityConfig.low
-              const isOverdue = todo.category === 'overdue'
-              const isUpcoming = todo.category === 'upcoming'
-              const borderColor = isOverdue ? '#ff4d4f' : isUpcoming ? '#faad14' : '#f0f0f0'
-              const bgColor = isOverdue ? '#fff2f0' : isUpcoming ? '#fffbe6' : '#fff'
 
               return (
                 <div
                   key={todo.id}
                   style={{
                     padding: '12px 14px',
-                    background: bgColor,
+                    background: '#fff',
                     borderRadius: 6,
-                    border: `1px solid ${borderColor}`,
+                    border: '1px solid #f0f0f0',
                     cursor: 'pointer',
                     transition: 'all 0.2s',
                   }}
@@ -1802,11 +1778,9 @@ export default function Home() {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                    {isOverdue && <WarningOutlined style={{ color: '#ff4d4f', fontSize: 14, marginTop: 2, flexShrink: 0 }} />}
-                    {isUpcoming && <ClockCircleOutlined style={{ color: '#faad14', fontSize: 14, marginTop: 2, flexShrink: 0 }} />}
-                    {!isOverdue && !isUpcoming && <div style={{ width: 6, height: 6, borderRadius: '50%', background: pc.dotColor, marginTop: 7, flexShrink: 0 }} />}
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: pc.dotColor, marginTop: 7, flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: isOverdue ? '#ff4d4f' : '#262626', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{todo.projectName}</div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{todo.projectName}</div>
                       <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {todo.planLevel === 'level1' ? '一级计划' : '二级计划'}
                         {todo.planLevel === 'level2' && todo.planType && <> · {todo.planType}</>}
@@ -1814,15 +1788,10 @@ export default function Home() {
                         {todo.market && <> · <span style={{ color: '#13c2c2' }}>{todo.market}</span></>}
                       </div>
                       {(todo as any).mergedCount > 1 && <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4 }}>共 {(todo as any).mergedCount} 项待处理</div>}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Space size={4}>
-                          <Tag color={pc.color} style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>{pc.text}</Tag>
-                          <Tag color={todo.status === '进行中' ? 'processing' : todo.status === '已完成' ? 'success' : 'default'} style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>{todo.status}</Tag>
-                          {isOverdue && <Tag color="error" style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>已逾期</Tag>}
-                          {isUpcoming && <Tag color="warning" style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>即将到期</Tag>}
-                        </Space>
-                        <span style={{ fontSize: 11, color: isOverdue ? '#ff4d4f' : '#bfbfbf', fontWeight: isOverdue ? 500 : 400 }}>{todo.deadline}</span>
-                      </div>
+                      <Space size={4}>
+                        <Tag color={pc.color} style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>{pc.text}</Tag>
+                        <Tag color={todo.status === '进行中' ? 'processing' : todo.status === '已完成' ? 'success' : 'default'} style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>{todo.status}</Tag>
+                      </Space>
                     </div>
                   </div>
                 </div>
