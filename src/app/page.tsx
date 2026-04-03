@@ -47,6 +47,7 @@ import { ProjectCard, TodoList, KanbanBoard } from '@/components/workspace/Works
 import type { ProjectType, TodoType } from '@/components/workspace/WorkspaceModule'
 import { HorizontalTable, TaskTable, ActionButtons, VersionCompareResult, PlanInfo, PlanOverview, ProjectPlan, GanttChart } from '@/components/plan/PlanModule'
 import { TransferConfig, TransferWorkbench, TransferApply, TransferDetail, TransferEntry, TransferReview, TransferSqaReview } from '@/components/transfer/TransferModule'
+import WorkTracker from '@/components/work-tracker/WorkTracker'
 
 // 全局表格和交互样式
 const globalStyles = `
@@ -3285,6 +3286,7 @@ export default function Home() {
                       { key: 'projects', label: '工作台' },
                       { key: 'roadmap', label: '项目路标视图' },
                       { key: 'hrPipeline', label: '人力资源管道' },
+                      { key: 'workTracker', label: '工作跟踪' },
                       { key: 'config', label: '配置中心' },
                       { key: 'globalPermission', label: '权限中心' },
                     ]}
@@ -3579,6 +3581,26 @@ export default function Home() {
               <Card style={{ borderRadius: 8, textAlign: 'center', padding: '80px 0' }}>
                 <Empty description={<span style={{ color: '#8c8c8c', fontSize: 14 }}>人力资源管道模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
               </Card>
+            )}
+            {activeModule === 'workTracker' && (
+              <WorkTracker
+                currentLoginUser={currentLoginUser}
+                projects={projects}
+                onNavigateToProject={(projectId, module, planLevel, planType) => {
+                  const proj = projects.find(p => p.id === projectId)
+                  if (!proj) return
+                  setSelectedProject(proj)
+                  setProjectSpaceModule(module)
+                  setActiveModule('projectSpace')
+                  if (module === 'plan' && planLevel) {
+                    setProjectPlanLevel(planLevel)
+                    if (planLevel === 'level2' && planType) {
+                      const plan = createdLevel2Plans.find(p => p.name === planType)
+                      if (plan) setActiveLevel2Plan(plan.id)
+                    }
+                  }
+                }}
+              />
             )}
             {(activeModule === 'config' || activeModule === 'projectSpace') && (
               <div>

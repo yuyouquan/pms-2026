@@ -58,6 +58,9 @@ interface MilestoneViewProps {
   marketPlanData: Record<string, { tasks: any[], level2Tasks: any[], createdLevel2Plans: any[] }>
   level1Tasks: any[]
   onViewProject: (projectId: string, market?: string) => void
+  initialProjectType?: string
+  onProjectTypeChange?: (type: string) => void
+  hideProjectTypeTabs?: boolean
 }
 
 function getFixedColumnsForType(projectType: string) {
@@ -68,8 +71,12 @@ function getDefaultVisibleColumns(projectType: string) {
   return getFixedColumnsForType(projectType).map(c => c.key)
 }
 
-export default function MilestoneView({ projects, marketPlanData, level1Tasks, onViewProject }: MilestoneViewProps) {
-  const [projectType, setProjectType] = useState(PROJECT_TYPES[0])
+export default function MilestoneView({ projects, marketPlanData, level1Tasks, onViewProject, initialProjectType, onProjectTypeChange, hideProjectTypeTabs }: MilestoneViewProps) {
+  const [projectType, setProjectTypeLocal] = useState(initialProjectType || PROJECT_TYPES[0])
+  const setProjectType = (val: string) => {
+    setProjectTypeLocal(val)
+    onProjectTypeChange?.(val)
+  }
   const [filters, setFilters] = useState<{
     productLine?: string[]
     chipPlatform?: string[]
@@ -102,6 +109,17 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
 
   // Temp filter state for modal
   const [tempFilters, setTempFilters] = useState(filters)
+
+  // Sync projectType from parent
+  useEffect(() => {
+    if (initialProjectType && initialProjectType !== projectType && PROJECT_TYPES.includes(initialProjectType)) {
+      setProjectTypeLocal(initialProjectType)
+      setActiveViewId(DEFAULT_VIEW_ID)
+      setFilters({})
+      setCurrentPage(1)
+      setActiveSnapshotId(null)
+    }
+  }, [initialProjectType])
 
   // Load saved views
   useEffect(() => {
@@ -417,115 +435,162 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
 
   // Toolbar (right side buttons)
   const toolbarActions = (
-    <Space wrap>
+    <Space size={6}>
       <Tooltip title="筛选">
         <Button
           icon={<FilterOutlined />}
-          onClick={() => {
-            setTempFilters({ ...filters })
-            setShowFilterModal(true)
-          }}
+          onClick={() => { setTempFilters({ ...filters }); setShowFilterModal(true) }}
           type={hasActiveFilters ? 'primary' : 'default'}
           ghost={hasActiveFilters}
+          size="small"
+          style={{ borderRadius: 6 }}
         >
-          筛选{hasActiveFilters ? ' (已启用)' : ''}
+          筛选{hasActiveFilters ? ' ●' : ''}
         </Button>
       </Tooltip>
       <Tooltip title="列设置">
-        <Button icon={<SettingOutlined />} onClick={() => setShowColumnModal(true)}>列设置</Button>
+        <Button icon={<SettingOutlined />} size="small" style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
       </Tooltip>
-      <div style={{ width: 1, height: 20, background: '#e8e8e8', margin: '0 2px' }} />
+      <div style={{ width: 1, height: 18, background: '#e0e0e0' }} />
       <Tooltip title="将当前数据创建基线快照">
-        <Button
-          icon={<CameraOutlined />}
-          onClick={handleCreateSnapshot}
-          disabled={!!activeSnapshotId}
-        >
-          基线快照
+        <Button icon={<CameraOutlined />} size="small" style={{ borderRadius: 6 }} onClick={handleCreateSnapshot} disabled={!!activeSnapshotId}>
+          快照
         </Button>
       </Tooltip>
       {currentSnapshots.length > 0 && (
         <Select
           value={activeSnapshotId || 'live'}
           onChange={(val) => setActiveSnapshotId(val === 'live' ? null : val)}
-          style={{ width: 220 }}
-          popupMatchSelectWidth={280}
+          style={{ width: 180 }}
+          size="small"
+          popupMatchSelectWidth={240}
           optionLabelProp="label"
         >
-          <Select.Option value="live" label={<span><span style={{ color: '#52c41a', marginRight: 4 }}>●</span> 实时数据</span>}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Select.Option value="live" label={<span style={{ fontSize: 12 }}><span style={{ color: '#52c41a', marginRight: 4 }}>●</span>实时数据</span>}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ color: '#52c41a' }}>●</span>
               <span style={{ fontWeight: 500 }}>实时数据</span>
             </div>
           </Select.Option>
           {currentSnapshots.map(s => (
-            <Select.Option key={s.id} value={s.id} label={<span><HistoryOutlined style={{ marginRight: 4, color: '#1890ff' }} /> {s.version}</span>}>
+            <Select.Option key={s.id} value={s.id} label={<span style={{ fontSize: 12 }}><HistoryOutlined style={{ marginRight: 4, color: '#1890ff' }} />{s.version}</span>}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{s.version}</div>
+                  <div style={{ fontSize: 12, fontWeight: 500 }}>{s.version}</div>
                   <div style={{ fontSize: 11, color: '#8c8c8c' }}>{s.createdAt}</div>
                 </div>
-                <DeleteOutlined
-                  style={{ color: '#ff4d4f', fontSize: 12 }}
-                  onClick={(e) => { e.stopPropagation(); handleDeleteSnapshot(s.id) }}
-                />
+                <DeleteOutlined style={{ color: '#ff4d4f', fontSize: 11 }} onClick={(e) => { e.stopPropagation(); handleDeleteSnapshot(s.id) }} />
               </div>
             </Select.Option>
           ))}
         </Select>
       )}
       <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
-        <Button
-          icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
-          onClick={() => setIsFullscreen(!isFullscreen)}
-        />
+        <Button icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />} size="small" style={{ borderRadius: 6 }} onClick={() => setIsFullscreen(!isFullscreen)} />
       </Tooltip>
     </Space>
   )
 
   return (
     <div>
-      {/* Project Type Tabs */}
-      <Tabs
-        activeKey={projectType}
-        onChange={(val) => {
-          setProjectType(val)
-          setActiveViewId(DEFAULT_VIEW_ID)
-          setFilters({})
-          setCurrentPage(1)
-          setActiveSnapshotId(null)
-        }}
-        size="small"
-        style={{ marginBottom: 8 }}
-        items={PROJECT_TYPES.map(t => ({
-          key: t,
-          label: <span style={{ fontWeight: projectType === t ? 600 : 400, padding: '0 4px' }}>{t}</span>,
-        }))}
-      />
-
-      {/* View Tabs + Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
-        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-          <Tabs
-            type="editable-card"
-            activeKey={activeViewId}
-            onChange={handleViewTabChange}
-            onEdit={handleViewTabEdit}
-            size="small"
-            addIcon={<span style={{ fontSize: 12 }}><PlusOutlined /> 保存当前视图</span>}
-            items={viewTabs}
-            style={{ marginBottom: 0 }}
-          />
+      {/* 项目类型切换 - 当外层已处理时隐藏 */}
+      {!hideProjectTypeTabs && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14,
+          padding: '3px 4px', background: '#f5f5f5', borderRadius: 22, width: 'fit-content',
+        }}>
+          {PROJECT_TYPES.map(t => {
+            const isActive = projectType === t
+            return (
+              <div
+                key={t}
+                onClick={() => {
+                  setProjectType(t)
+                  setActiveViewId(DEFAULT_VIEW_ID)
+                  setFilters({})
+                  setCurrentPage(1)
+                  setActiveSnapshotId(null)
+                }}
+                style={{
+                  padding: '6px 20px', borderRadius: 18, cursor: 'pointer',
+                  fontSize: 13, fontWeight: 600, transition: 'all 0.25s',
+                  background: isActive ? '#fff' : 'transparent',
+                  color: isActive ? '#1890ff' : '#8c8c8c',
+                  boxShadow: isActive ? '0 2px 6px rgba(24,144,255,0.15)' : 'none',
+                }}
+              >
+                {t}
+              </div>
+            )
+          })}
         </div>
-        <div style={{ flexShrink: 0, paddingTop: 4 }}>
+      )}
+
+      {/* 工具栏 */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        padding: '10px 16px', marginBottom: 12,
+        background: '#fff', borderRadius: 10, border: '1px solid #f0f0f0',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+      }}>
+        {/* 左侧: 视图切换 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: '#8c8c8c', marginRight: 2 }}>视图</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 3px', background: '#f5f5f5', borderRadius: 16 }}>
+            {viewTabs.map(tab => {
+              const isActive = activeViewId === tab.key
+              return (
+                <div
+                  key={tab.key}
+                  onClick={() => handleViewTabChange(tab.key)}
+                  style={{
+                    padding: '3px 12px', borderRadius: 14, cursor: 'pointer',
+                    fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    background: isActive ? '#fff' : 'transparent',
+                    color: isActive ? '#1890ff' : '#595959',
+                    boxShadow: isActive ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  }}
+                >
+                  <span>{tab.label}</span>
+                  {tab.closable && (
+                    <span
+                      onClick={(e) => { e.stopPropagation(); handleViewTabEdit(tab.key, 'remove') }}
+                      style={{ fontSize: 10, color: '#bfbfbf', marginLeft: 2, cursor: 'pointer', lineHeight: 1 }}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#ff4d4f')}
+                      onMouseLeave={e => (e.currentTarget.style.color = '#bfbfbf')}
+                    >
+                      ✕
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <div
+            onClick={() => handleViewTabEdit('', 'add')}
+            style={{
+              padding: '3px 10px', borderRadius: 14, cursor: 'pointer',
+              fontSize: 11, color: '#1890ff', border: '1px dashed #91caff',
+              display: 'flex', alignItems: 'center', gap: 3,
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#e6f4ff' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+          >
+            <PlusOutlined style={{ fontSize: 10 }} /> 保存
+          </div>
+        </div>
+        {/* 右侧: 操作按钮 */}
+        <div style={{ flexShrink: 0 }}>
           {toolbarActions}
         </div>
       </div>
 
-      {/* Snapshot banner */}
+      {/* 快照提示条 */}
       {activeSnapshot && (
         <div style={{
-          padding: '8px 16px', marginBottom: 8, borderRadius: 6,
+          padding: '8px 16px', marginBottom: 12, borderRadius: 8,
           background: 'linear-gradient(135deg, #e6f4ff 0%, #f0f5ff 100%)',
           border: '1px solid #91caff',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -533,7 +598,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
           <Space size={8}>
             <HistoryOutlined style={{ color: '#1890ff' }} />
             <span style={{ fontSize: 13, color: '#1890ff', fontWeight: 500 }}>
-              正在查看基线快照: {activeSnapshot.version}
+              基线快照: {activeSnapshot.version}
             </span>
             <Tag color="blue" style={{ fontSize: 11 }}>{activeSnapshot.createdAt}</Tag>
           </Space>
@@ -541,7 +606,10 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         </div>
       )}
 
-      {tableComponent}
+      {/* 数据表格 */}
+      <div style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid #f0f0f0' }}>
+        {tableComponent}
+      </div>
 
       {/* Filter Modal */}
       <Modal
