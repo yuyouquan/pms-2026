@@ -33,14 +33,13 @@ export function aggregateMilestones(
 
   for (const project of filtered) {
     if (project.type === '整机产品项目' && project.markets?.length > 0) {
-      // 整机产品项目：遍历每个市场的 tasks
-      for (const market of project.markets) {
-        const data = marketPlanData[market]
-        if (data?.tasks) {
-          for (const task of data.tasks) {
-            if (task.parentId) {
-              milestoneSet.add(task.taskName)
-            }
+      // 整机产品项目：使用第一个市场的 tasks
+      const firstMarket = project.markets[0]
+      const data = marketPlanData[firstMarket]
+      if (data?.tasks) {
+        for (const task of data.tasks) {
+          if (task.parentId) {
+            milestoneSet.add(task.taskName)
           }
         }
       }
@@ -79,34 +78,34 @@ export function generateTableData(
   const rows: any[] = []
 
   for (const project of filtered) {
-    if (project.type === '整机产品项目' && project.markets?.length > 0) {
-      for (const market of project.markets) {
-        const row: any = {
-          key: `${project.id}-${market}`,
-          projectId: project.id,
-          projectName: project.name,
-          market,
-          productLine: project.productLine || '-',
-          chipPlatform: project.chipPlatform || '-',
-          androidVersion: project.androidVersion || '-',
-          tosVersion: project.tosVersion || '-',
-          status: project.status,
-          spm: project.spm || '-',
-          leader: project.leader || '-',
-        }
-
-        const data = marketPlanData[market]
-        for (const ms of milestones) {
-          const task = data?.tasks?.find((t: any) => t.parentId && t.taskName === ms.name)
-          if (task) {
-            row[`ms_${ms.name}`] = `${task.planStartDate} ~ ${task.planEndDate}`
-          } else {
-            row[`ms_${ms.name}`] = '-'
-          }
-        }
-
-        rows.push(row)
+    if (project.type === '整机产品项目') {
+      const row: any = {
+        key: project.id,
+        projectId: project.id,
+        projectName: project.name,
+        productLine: project.productLine || '-',
+        chipPlatform: project.chipPlatform || '-',
+        tosVersion: project.tosVersion || '-',
+        status: project.status,
+        spm: project.spm || '-',
+        brand: project.brand || '-',
+        productType: project.productType || '-',
+        memory: project.memory || '-',
+        versionType: project.versionType || '-',
+        developMode: project.developMode || '-',
+        launchDate: project.launchDate || '-',
+        currentNode: project.currentNode || '-',
       }
+
+      // Use first market's tasks for milestone data
+      const firstMarket = project.markets?.[0]
+      const data = firstMarket ? marketPlanData[firstMarket] : null
+      for (const ms of milestones) {
+        const task = data?.tasks?.find((t: any) => t.parentId && t.taskName === ms.name)
+        row[`ms_${ms.name}`] = task?.planEndDate || '-'
+      }
+
+      rows.push(row)
     } else {
       const row: any = {
         key: project.id,
@@ -115,20 +114,16 @@ export function generateTableData(
         market: undefined,
         productLine: project.productLine || '-',
         chipPlatform: project.chipPlatform || '-',
-        androidVersion: project.androidVersion || '-',
         tosVersion: project.tosVersion || '-',
         status: project.status,
         spm: project.spm || '-',
-        leader: project.leader || '-',
+        versionType: project.versionType || '-',
+        currentNode: project.currentNode || '-',
       }
 
       for (const ms of milestones) {
         const task = level1Tasks.find((t: any) => t.parentId && t.taskName === ms.name)
-        if (task) {
-          row[`ms_${ms.name}`] = `${task.planStartDate} ~ ${task.planEndDate}`
-        } else {
-          row[`ms_${ms.name}`] = '-'
-        }
+        row[`ms_${ms.name}`] = task?.planEndDate || '-'
       }
 
       rows.push(row)
