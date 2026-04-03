@@ -42,6 +42,11 @@ import {
 import type { MenuProps } from 'antd'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
 import { gantt } from 'dhtmlx-gantt'
+import { PermissionConfig, GlobalPermissionConfig, PERMISSION_MODULES, FIXED_ROLES, ALL_USERS, GLOBAL_PERM_OPTIONS } from '@/components/permission/PermissionModule'
+import { ProjectCard, TodoList, KanbanBoard } from '@/components/workspace/WorkspaceModule'
+import type { ProjectType, TodoType } from '@/components/workspace/WorkspaceModule'
+import { HorizontalTable, TaskTable, ActionButtons, VersionCompareResult, PlanInfo, PlanOverview, ProjectPlan, GanttChart } from '@/components/plan/PlanModule'
+import { TransferConfig, TransferWorkbench, TransferApply, TransferDetail, TransferEntry, TransferReview, TransferSqaReview } from '@/components/transfer/TransferModule'
 
 // 全局表格和交互样式
 const globalStyles = `
@@ -256,37 +261,17 @@ import {
   MOCK_REVIEW_ELEMENTS,
   MOCK_BLOCK_TASKS,
   MOCK_LEGACY_TASKS,
-  MOCK_HISTORY,
-  MOCK_CHECKLIST_TEMPLATES,
-  MOCK_REVIEW_ELEMENT_TEMPLATES,
-  MOCK_CHECKLIST_VERSIONS,
-  MOCK_CHECKLIST_VERSION_DIFF,
-  MOCK_RE_VERSIONS,
-  MOCK_RE_VERSION_DIFF,
   ROLE_COLORS,
-  PIPELINE_NODES,
-  PIPELINE_KEYS,
   getCurrentNodeIndex,
   getCurrentNodeLabel,
   getCurrentNodeStatus,
   getPipelinePercent,
-  hasAnyRoleEnteredReview,
-  buildCloseReviewRows,
   type TransferApplication,
   type CheckListItem,
   type ReviewElement,
   type BlockTask,
   type LegacyTask,
-  type HistoryRecord,
-  type CloseReviewRow,
-  type PipelineState,
-  type PipelineNodeStatus,
-  type RoleNodeStatus,
-  type PipelineRole,
   type TMTeamMember,
-  type EntryStatus,
-  type AICheckStatus,
-  type ReviewStatus,
 } from '@/mock/transfer-maintenance'
 import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
 import VersionTrainPlan from '@/components/plans/VersionTrainPlan'
@@ -297,85 +282,6 @@ const { Option } = Select
 const { RangePicker } = DatePicker
 const { TextArea } = Input
 const { Text } = Typography
-
-// ========== 转维状态配置 ==========
-const PIPELINE_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  'in_progress': { color: 'blue', label: '进行中' },
-  'completed': { color: 'green', label: '已完成' },
-  'cancelled': { color: 'red', label: '已取消' },
-}
-const ENTRY_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  'not_entered': { color: 'default', label: '未录入' },
-  'draft': { color: 'orange', label: '草稿' },
-  'entered': { color: 'green', label: '已录入' },
-}
-const AI_CHECK_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  'not_started': { color: 'default', label: '-' },
-  'in_progress': { color: 'processing', label: '检查中' },
-  'passed': { color: 'success', label: '通过' },
-  'failed': { color: 'error', label: '未通过' },
-}
-const REVIEW_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  'not_reviewed': { color: 'default', label: '未审核' },
-  'reviewing': { color: 'processing', label: '审核中' },
-  'passed': { color: 'success', label: '通过' },
-  'rejected': { color: 'error', label: '未通过' },
-}
-const ROLE_STATUS_COLORS: Record<string, string> = {
-  not_started: '#d9d9d9', in_progress: '#1677ff', completed: '#52c41a', rejected: '#ff4d4f',
-}
-const STATUS_COLORS: Record<string, string> = {
-  not_started: '#d9d9d9', in_progress: '#1677ff', success: '#52c41a', failed: '#ff4d4f',
-}
-const NODE_LABELS = ['项目发起', '资料录入与AI检查', '维护审核', 'SQA审核', '信息变更']
-const ROLE_STATUS_LABELS: Record<string, string> = {
-  not_started: '未开始', in_progress: '进行中', completed: '已完成', rejected: '被拒绝',
-}
-const BLOCK_TASK_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  'open': { color: 'red', label: '未解决' }, 'resolved': { color: 'green', label: '已解决' }, 'cancelled': { color: 'default', label: '已取消' },
-}
-const LEGACY_TASK_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  'open': { color: 'orange', label: '待处理' }, 'resolved': { color: 'green', label: '已完成' }, 'cancelled': { color: 'default', label: '已取消' },
-}
-
-// ========== PipelineProgress 内联组件 ==========
-function PipelineProgress({ pipeline, showRoleDots = true }: { pipeline: PipelineState; showRoleDots?: boolean }) {
-  const nodeStatuses: PipelineNodeStatus[] = [
-    pipeline.projectInit, pipeline.dataEntry, pipeline.maintenanceReview, pipeline.sqaReview, pipeline.infoChange,
-  ]
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, padding: '20px 0' }}>
-      {NODE_LABELS.map((label, index) => {
-        const status = nodeStatuses[index]
-        const color = STATUS_COLORS[status]
-        const isLast = index === NODE_LABELS.length - 1
-        const showDots = showRoleDots && (index === 1 || index === 2)
-        return (
-          <Fragment key={label}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 100 }}>
-              <div style={{ width: 32, height: 32, borderRadius: '50%', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
-              <div style={{ marginTop: 8, fontSize: 13, color: '#333', textAlign: 'center', whiteSpace: 'nowrap' }}>{label}</div>
-              {showDots && (
-                <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
-                  {pipeline.roleProgress.map((rp) => {
-                    const roleStatus = index === 1 ? rp.entryStatus : rp.reviewStatus
-                    const dotColor = ROLE_STATUS_COLORS[roleStatus]
-                    return (
-                      <Tooltip key={rp.role} title={`${rp.role}: ${ROLE_STATUS_LABELS[roleStatus]}`}>
-                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: dotColor, cursor: 'pointer', border: '1px solid rgba(0,0,0,0.1)' }} />
-                      </Tooltip>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-            {!isLast && <div style={{ flex: 1, height: 2, background: '#e0e0e0', marginTop: 15, minWidth: 60 }} />}
-          </Fragment>
-        )
-      })}
-    </div>
-  )
-}
 
 // ========== MiniPipeline 内联组件 ==========
 const NODE_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
@@ -942,17 +848,7 @@ export default function Home() {
   })
   const [createFormValues, setCreateFormValues] = useState<Record<string, string>>({})
 
-  // ========== 权限配置 ==========
-  const FIXED_ROLES = ['系统管理员', '产品经理', '项目经理', '开发代表', '软件SE', '设计师', '开发工程师', '测试工程师', '管理层']
-  const ALL_USERS = ['张三', '李四', '王五', '赵六', '孙七', '周八', '李白', '杜甫']
-  const PERMISSION_MODULES = [
-    { key: 'basicInfo', name: '基础信息', permissions: ['查看', '编辑'] },
-    { key: 'requirements', name: '需求', permissions: [] as string[] },
-    { key: 'plan', name: '计划', permissions: ['一级计划-查看', '一级计划-编辑', '一级计划-审核', '二级计划-查看', '二级计划-编辑', '导入/导出'] },
-    { key: 'resources', name: '资源', permissions: ['查看'] },
-    { key: 'tasks', name: '任务', permissions: ['查看'] },
-    { key: 'risks', name: '风险', permissions: ['查看'] },
-  ]
+  // ========== 权限配置 (constants imported from @/components/permission/PermissionModule) ==========
   const [roles, setRoles] = useState<{name: string; members: string[]; isFixed: boolean}[]>([
     { name: '系统管理员', members: ['张三'], isFixed: true },
     { name: '产品经理', members: ['李四', '王五'], isFixed: true },
@@ -987,16 +883,7 @@ export default function Home() {
   const [permissionActiveRole, setPermissionActiveRole] = useState('系统管理员')
   const [permConfigTab, setPermConfigTab] = useState<'roles' | 'perms'>('roles')
 
-  // ========== 全局权限配置 ==========
-  const GLOBAL_PERM_OPTIONS = [
-    { key: 'roadmap:view', module: '项目路标', name: '查看' },
-    { key: 'roadmap:edit', module: '项目路标', name: '编辑' },
-    { key: 'roadmap:baseline', module: '项目路标', name: '基线' },
-    { key: 'roadmap:export', module: '项目路标', name: '导出' },
-    { key: 'viewBoard:placeholder', module: '视图看板', name: '' },
-    { key: 'resourceMgmt:placeholder', module: '资源管理', name: '' },
-    { key: 'configCenter:placeholder', module: '配置中心', name: '' },
-  ]
+  // ========== 全局权限配置 (constants imported from @/components/permission/PermissionModule) ==========
   const [globalRoles, setGlobalRoles] = useState<{name: string; members: string[]}[]>([
     { name: '管理组', members: ['张三', '李白'] },
     { name: '编辑组', members: ['李四', '赵六', '王五'] },
@@ -1555,253 +1442,48 @@ export default function Home() {
     message.success('时间已更新（已确认前置任务冲突）')
   }
 
-  const renderProjectCard = (project: typeof initialProjects[0]) => {
-    const statusConf = PROJECT_STATUS_CONFIG[project.status] || { color: '#8c8c8c', tagColor: 'default' }
-    const isWholeMachine = project.type === '整机产品项目'
-    const isSoftware = project.type === '产品项目'
-    const isTech = project.type === '技术项目'
-    const isCapability = project.type === '能力建设项目'
-
-    const fieldItem = (label: string, value: string | undefined) => value ? (
-      <div style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ color: '#bfbfbf' }}>{label}</span> <span style={{ color: '#595959', fontWeight: 500 }}>{value}</span>
-      </div>
-    ) : null
-
-    return (
-      <Card
-        hoverable
-        className="pms-card-hover"
-        style={{ borderRadius: 10, border: '1px solid #f0f0f0', height: '100%' }}
-        styles={{ body: { padding: '16px 20px', height: '100%', display: 'flex', flexDirection: 'column' as const } }}
-        onClick={() => { setSelectedProject(project); setProjectSpaceModule('basic'); setActiveModule('projectSpace') }}
-      >
-        {/* 头部: 项目名 + 状态 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#262626', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {project.name}
-            </div>
-            {isWholeMachine && project.marketName && (
-              <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>市场名: {project.marketName}</div>
-            )}
-            <Tag color="default" style={{ fontSize: 11, borderRadius: 3, margin: 0 }}>{project.type}</Tag>
-          </div>
-          <Tag color={statusConf.tagColor} style={{ margin: 0, borderRadius: 4, flexShrink: 0 }}>{project.status}</Tag>
-        </div>
-
-        {/* 中间: 类型差异化字段 */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-          {isWholeMachine && (
-            <>
-              {fieldItem('品牌', project.brand)}
-              {fieldItem('产品线', project.productLine)}
-              {fieldItem('开发模式', project.developMode)}
-            </>
-          )}
-        </div>
-
-        {/* 计划时间 - 软件产品/整机产品/技术项目显示 */}
-        {!isCapability && (project.planStartDate || project.planEndDate) && (
-          <div style={{ display: 'flex', gap: 12, marginBottom: 10, fontSize: 12, color: '#8c8c8c' }}>
-            {project.planStartDate && (
-              <span><CalendarOutlined style={{ marginRight: 4, color: '#bfbfbf' }} />{project.planStartDate}</span>
-            )}
-            {project.planEndDate && (
-              <span>→ {project.planEndDate}</span>
-            )}
-          </div>
-        )}
-
-        {/* 底部: 项目经理 + 更新时间 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-          <Space size={6}>
-            <Avatar size={20} style={{ background: statusConf.color, fontSize: 10 }}>{project.spm[0]}</Avatar>
-            <span style={{ fontSize: 12, color: '#595959' }}>{project.spm}</span>
-          </Space>
-          <span style={{ fontSize: 11, color: '#bfbfbf' }}>{project.updatedAt}</span>
-        </div>
-      </Card>
-    )
-  }
+  const renderProjectCard = (project: typeof initialProjects[0]) => (
+    <ProjectCard
+      project={project as ProjectType}
+      setSelectedProject={(p) => setSelectedProject(p as typeof initialProjects[0])}
+      setProjectSpaceModule={setProjectSpaceModule}
+      setActiveModule={setActiveModule}
+      PROJECT_STATUS_CONFIG={PROJECT_STATUS_CONFIG}
+    />
+  )
 
   const [kanbanDimension, setKanbanDimension] = useState<'stage' | 'type' | 'status'>('stage')
 
-  const getKanbanColumns = () => {
-    if (kanbanDimension === 'type') {
-      return PROJECT_TYPES.map((t, i) => ({ title: t, key: t, color: ['#1890ff', '#52c41a', '#faad14', '#722ed1'][i] }))
-    }
-    if (kanbanDimension === 'status') {
-      return [
-        { title: '筹备中', key: '筹备中', color: '#faad14' },
-        { title: '进行中', key: '进行中', color: '#1890ff' },
-        { title: '已完成', key: '已完成', color: '#52c41a' },
-        { title: '上市', key: '上市', color: '#722ed1' },
-      ]
-    }
-    return kanbanColumns
-  }
-
-  const getKanbanFilter = (col: { key: string }) => {
-    if (kanbanDimension === 'type') {
-      return (p: typeof initialProjects[0]) => p.type === col.key
-    }
-    if (kanbanDimension === 'status') {
-      return (p: typeof initialProjects[0]) => p.status === col.key
-    }
-    return (p: typeof initialProjects[0]) => {
-      if (col.key === 'concept') return p.progress === 0
-      if (col.key === 'planning') return p.progress > 0 && p.progress < 30
-      if (col.key === 'developing') return p.progress >= 30 && p.progress < 100
-      return p.progress === 100
-    }
-  }
-
   const renderKanbanBoard = () => (
-    <div>
-      <Row justify="end" style={{ marginBottom: 16 }}>
-        <Col>
-          <Space>
-            <span style={{ color: '#666' }}>分组维度:</span>
-            <Select value={kanbanDimension} onChange={setKanbanDimension} style={{ width: 120 }}>
-              <Option value="stage">阶段</Option>
-              <Option value="type">项目类型</Option>
-              <Option value="status">项目状态</Option>
-            </Select>
-          </Space>
-        </Col>
-      </Row>
-      <Row gutter={16}>
-        {getKanbanColumns().map(col => (
-          <Col span={Math.floor(24 / getKanbanColumns().length)} key={col.key}>
-            <Card title={<Space><Badge color={col.color} />{col.title}</Space>} style={{ background: '#fafafa', minHeight: 300 }} bodyStyle={{ padding: 12 }}>
-              <Space direction="vertical" style={{ width: '100%' }}>
-                {visibleProjects.filter(getKanbanFilter(col)).map(project => (
-                    <Card key={project.id} size="small" hoverable onClick={() => { setSelectedProject(project); setProjectSpaceModule('basic'); setActiveModule('projectSpace') }}>
-                    <Space direction="vertical" style={{ width: '100%' }}><div style={{ fontWeight: 500 }}>{project.name}</div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Tag>{project.type}</Tag><Progress percent={project.progress} size="small" style={{ width: 60 }} /></div></Space>
-                  </Card>
-                ))}
-              </Space>
-            </Card>
-          </Col>
-        ))}
-      </Row>
-    </div>
+    <KanbanBoard
+      visibleProjects={visibleProjects as ProjectType[]}
+      kanbanDimension={kanbanDimension}
+      setKanbanDimension={setKanbanDimension}
+      kanbanColumns={kanbanColumns}
+      PROJECT_TYPES={PROJECT_TYPES}
+      setSelectedProject={(p) => setSelectedProject(p as typeof initialProjects[0])}
+      setProjectSpaceModule={setProjectSpaceModule}
+      setActiveModule={setActiveModule}
+    />
   )
 
-  const renderTodoList = () => {
-    const priorityConfig: Record<string, { color: string; text: string; dotColor: string }> = {
-      high: { color: 'red', text: '高', dotColor: '#ff4d4f' },
-      medium: { color: 'orange', text: '中', dotColor: '#faad14' },
-      low: { color: 'blue', text: '低', dotColor: '#1890ff' },
-    }
-
-    // 按 项目+计划级别+计划类型+版本 去重合并
-    const mergeTodos = (list: typeof todos) => {
-      const groupMap = new Map<string, typeof todos>()
-      list.forEach(t => {
-        const key = `${t.projectId}|${t.planLevel}|${t.planType}|${t.versionNo}`
-        if (!groupMap.has(key)) groupMap.set(key, [])
-        groupMap.get(key)!.push(t)
-      })
-      const merged: (typeof todos[0] & { mergedCount?: number })[] = []
-      groupMap.forEach((group) => {
-        // 取优先级最高的（overdue > upcoming > pending > completed）和最早的截止日期
-        const priorityOrder = { overdue: 0, upcoming: 1, pending: 2, completed: 3 }
-        const sorted = [...group].sort((a, b) => (priorityOrder[a.category] ?? 9) - (priorityOrder[b.category] ?? 9))
-        const rep = { ...sorted[0], mergedCount: group.length }
-        merged.push(rep)
-      })
-      return merged
-    }
-
-    const allMerged = mergeTodos(todos)
-    const filteredTodos = todoFilter === 'all' ? allMerged : allMerged.filter(t => t.category === todoFilter)
-    const overdueCount = allMerged.filter(t => t.category === 'overdue').length
-    const upcomingCount = allMerged.filter(t => t.category === 'upcoming').length
-
-    return (
-      <div>
-        {/* 待办列表 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {allMerged.length === 0 ? (
-            <Empty description="暂无待办" style={{ padding: '20px 0' }} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-          ) : (
-            allMerged.map(todo => {
-              const pc = priorityConfig[todo.priority] || priorityConfig.low
-
-              return (
-                <div
-                  key={todo.id}
-                  style={{
-                    padding: '12px 14px',
-                    background: '#fff',
-                    borderRadius: 6,
-                    border: '1px solid #f0f0f0',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none' }}
-                  onClick={() => {
-                    const proj = projects.find(p => p.id === todo.projectId)
-                    if (!proj) return
-                    setSelectedProject(proj)
-                    setActiveModule('projectSpace')
-                    setProjectSpaceModule('plan')
-                    setCurrentVersion(todo.versionId || 'v2')
-                    setProjectPlanLevel(todo.planLevel)
-                    setProjectPlanViewMode('table')
-                    setIsEditMode(true)
-                    if (todo.planLevel === 'level2' && todo.planTabKey) {
-                      setActiveLevel2Plan(todo.planTabKey)
-                    }
-                    if (proj.type === '整机产品项目' && todo.market) {
-                      setSelectedMarketTab(todo.market)
-                    }
-                    setTimeout(() => {
-                      const rows = document.querySelectorAll('.ant-table-tbody tr.ant-table-row')
-                      for (let i = 0; i < rows.length; i++) {
-                        const cells = rows[i].querySelectorAll('td')
-                        for (let j = 0; j < cells.length; j++) {
-                          if (cells[j].textContent?.trim() === currentLoginUser) {
-                            rows[i].scrollIntoView({ behavior: 'smooth', block: 'center' })
-                            const row = rows[i] as HTMLElement
-                            row.style.transition = 'background 0.3s'
-                            row.style.background = '#e6f7ff'
-                            setTimeout(() => { row.style.background = '' }, 2000)
-                            return
-                          }
-                        }
-                      }
-                    }, 800)
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: pc.dotColor, marginTop: 7, flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{todo.projectName}</div>
-                      <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {todo.planLevel === 'level1' ? '一级计划' : '二级计划'}
-                        {todo.planLevel === 'level2' && todo.planType && <> · {todo.planType}</>}
-                        {' · '}<span style={{ color: '#1890ff', fontWeight: 500 }}>{todo.versionNo}</span>
-                        {todo.market && <> · <span style={{ color: '#13c2c2' }}>{todo.market}</span></>}
-                      </div>
-                      {(todo as any).mergedCount > 1 && <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4 }}>共 {(todo as any).mergedCount} 项待处理</div>}
-                      <Space size={4}>
-                        <Tag color={pc.color} style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>{pc.text}</Tag>
-                        <Tag color={todo.status === '进行中' ? 'processing' : todo.status === '已完成' ? 'success' : 'default'} style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>{todo.status}</Tag>
-                      </Space>
-                    </div>
-                  </div>
-                </div>
-              )
-            })
-          )}
-        </div>
-      </div>
-    )
-  }
+  const renderTodoList = () => (
+    <TodoList
+      todos={todos as TodoType[]}
+      projects={projects as ProjectType[]}
+      todoFilter={todoFilter}
+      currentLoginUser={currentLoginUser}
+      setSelectedProject={(p) => setSelectedProject(p as typeof initialProjects[0])}
+      setActiveModule={setActiveModule}
+      setProjectSpaceModule={setProjectSpaceModule}
+      setCurrentVersion={setCurrentVersion}
+      setProjectPlanLevel={setProjectPlanLevel}
+      setProjectPlanViewMode={setProjectPlanViewMode}
+      setIsEditMode={setIsEditMode}
+      setActiveLevel2Plan={setActiveLevel2Plan}
+      setSelectedMarketTab={setSelectedMarketTab}
+    />
+  )
 
   const renderGanttChart = (customTasks?: any[]) => {
     const ganttTasks = customTasks || filteredTasks
@@ -3231,1132 +2913,51 @@ export default function Home() {
     )
   }
 
-  // ========== 全局权限配置渲染 ==========
-  const renderGlobalPermissionConfig = () => {
-    const handleAddRole = () => {
-      const name = globalNewRoleName.trim()
-      if (!name) { message.warning('请输入角色名称'); return }
-      if (globalRoles.some(r => r.name === name)) { message.warning('角色名称已存在'); return }
-      setGlobalRoles([...globalRoles, { name, members: [] }])
-      setGlobalRolePerms(prev => ({ ...prev, [name]: {} }))
-      setGlobalNewRoleName('')
-      setShowGlobalAddRole(false)
-      message.success('角色添加成功')
-    }
-    const handleDeleteRole = (roleName: string) => {
-      setGlobalRoles(globalRoles.filter(r => r.name !== roleName))
-      setGlobalRolePerms(prev => { const next = { ...prev }; delete next[roleName]; return next })
-      if (globalPermActiveRole === roleName) setGlobalPermActiveRole(globalRoles.filter(r => r.name !== roleName)[0]?.name || '')
-      message.success('角色已删除')
-    }
-    const handleRenameRole = (oldName: string) => {
-      const newName = globalEditRoleValue.trim()
-      if (!newName) { message.warning('角色名称不能为空'); return }
-      if (newName !== oldName && globalRoles.some(r => r.name === newName)) { message.warning('角色名称已存在'); return }
-      setGlobalRoles(globalRoles.map(r => r.name === oldName ? { ...r, name: newName } : r))
-      setGlobalRolePerms(prev => { const next = { ...prev }; next[newName] = next[oldName]; if (newName !== oldName) delete next[oldName]; return next })
-      if (globalPermActiveRole === oldName) setGlobalPermActiveRole(newName)
-      setGlobalEditingRole(null)
-      message.success('角色名称已修改')
-    }
-    const handleMembersChange = (roleName: string, members: string[]) => {
-      setGlobalRoles(globalRoles.map(r => r.name === roleName ? { ...r, members } : r))
-    }
-    const handlePermToggle = (roleName: string, permKey: string) => {
-      setGlobalRolePerms(prev => ({
-        ...prev,
-        [roleName]: { ...prev[roleName], [permKey]: !prev[roleName]?.[permKey] }
-      }))
-    }
+  // ========== 全局权限配置渲染 (extracted to PermissionModule) ==========
+  // ========== 项目空间权限配置渲染 (extracted to PermissionModule) ==========
 
-    return (
-      <Card style={{ borderRadius: 8 }}>
-        <Tabs activeKey={globalPermTab} onChange={(k) => setGlobalPermTab(k as any)} items={[
-          { key: 'roles', label: <Space><TeamOutlined />角色配置</Space> },
-          { key: 'perms', label: <Space><SafetyCertificateOutlined />权限配置</Space> },
-        ]} />
-
-        {globalPermTab === 'roles' && (
-          <div>
-            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 14, color: '#595959' }}>共 {globalRoles.length} 个角色</span>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowGlobalAddRole(true)}>新增角色</Button>
-            </div>
-            <Table
-              dataSource={globalRoles}
-              rowKey="name"
-              pagination={false}
-              size="middle"
-              columns={[
-                {
-                  title: '角色名称', dataIndex: 'name', width: 200,
-                  render: (name: string) => {
-                    if (globalEditingRole === name) {
-                      return (
-                        <Space>
-                          <Input size="small" value={globalEditRoleValue} onChange={e => setGlobalEditRoleValue(e.target.value)} onPressEnter={() => handleRenameRole(name)} style={{ width: 120 }} />
-                          <Button size="small" type="link" onClick={() => handleRenameRole(name)}>确定</Button>
-                          <Button size="small" type="link" onClick={() => setGlobalEditingRole(null)}>取消</Button>
-                        </Space>
-                      )
-                    }
-                    return <span style={{ fontWeight: 500 }}>{name}</span>
-                  }
-                },
-                {
-                  title: '人员配置', dataIndex: 'members',
-                  render: (_: any, record: any) => (
-                    <Select
-                      mode="multiple"
-                      value={record.members}
-                      onChange={(val: string[]) => handleMembersChange(record.name, val)}
-                      style={{ width: '100%', minWidth: 300 }}
-                      placeholder="请选择人员"
-                      maxTagCount={5}
-                      options={ALL_USERS.map(u => ({ label: u, value: u }))}
-                    />
-                  )
-                },
-                {
-                  title: '操作', width: 150,
-                  render: (_: any, record: any) => (
-                    <Space>
-                      <Button type="link" size="small" onClick={() => { setGlobalEditingRole(record.name); setGlobalEditRoleValue(record.name) }}>重命名</Button>
-                      <Popconfirm title="确定删除该角色？" onConfirm={() => handleDeleteRole(record.name)}>
-                        <Button type="link" size="small" danger>删除</Button>
-                      </Popconfirm>
-                    </Space>
-                  )
-                },
-              ]}
-            />
-            <Modal title="新增角色" open={showGlobalAddRole} onCancel={() => { setShowGlobalAddRole(false); setGlobalNewRoleName('') }} onOk={handleAddRole} okText="确定" cancelText="取消">
-              <Form layout="vertical">
-                <Form.Item label="角色名称" required>
-                  <Input placeholder="请输入角色名称" value={globalNewRoleName} onChange={e => setGlobalNewRoleName(e.target.value)} onPressEnter={handleAddRole} />
-                </Form.Item>
-              </Form>
-            </Modal>
-          </div>
-        )}
-
-        {globalPermTab === 'perms' && (
-          <div>
-            {globalRoles.length === 0 ? (
-              <Empty description="请先添加角色" style={{ padding: '40px 0' }} />
-            ) : (
-              <>
-                <Tabs
-                  activeKey={globalPermActiveRole}
-                  onChange={setGlobalPermActiveRole}
-                  type="card"
-                  size="small"
-                  style={{ marginBottom: 16 }}
-                  items={globalRoles.map(r => ({ key: r.name, label: r.name }))}
-                />
-                <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden' }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, padding: '12px 16px', background: '#fafbfc', borderBottom: '1px solid #f0f0f0' }}>
-                    角色权限配置 — {globalPermActiveRole}
-                  </div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <tbody>
-                      {(() => {
-                        // 按 module 分组
-                        const modules: { module: string; perms: typeof GLOBAL_PERM_OPTIONS }[] = []
-                        GLOBAL_PERM_OPTIONS.forEach(opt => {
-                          const last = modules[modules.length - 1]
-                          if (last && last.module === opt.module) {
-                            last.perms.push(opt)
-                          } else {
-                            modules.push({ module: opt.module, perms: [opt] })
-                          }
-                        })
-                        const maxCols = Math.max(...modules.map(m => m.perms.filter(p => p.name).length), 4)
-                        return modules.map(mod => {
-                          const realPerms = mod.perms.filter(p => p.name)
-                          return (
-                            <tr key={mod.module}>
-                              <td style={{ padding: '12px 16px', fontWeight: 500, fontSize: 14, borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', width: 140, background: '#fafbfc', verticalAlign: 'middle' }}>{mod.module}</td>
-                              {realPerms.map(opt => (
-                                <td key={opt.key} style={{ padding: '10px 16px', textAlign: 'center', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', minWidth: 110 }}>
-                                  <div style={{ fontSize: 13, marginBottom: 6 }}>{opt.name}</div>
-                                  <Checkbox checked={!!globalRolePerms[globalPermActiveRole]?.[opt.key]} onChange={() => handlePermToggle(globalPermActiveRole, opt.key)} />
-                                </td>
-                              ))}
-                              {realPerms.length < maxCols && Array.from({ length: maxCols - realPerms.length }).map((_, i) => (
-                                <td key={`empty-${i}`} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
-                              ))}
-                            </tr>
-                          )
-                        })
-                      })()}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </Card>
-    )
+  // ========== 转维模块 (extracted to TransferModule) ==========
+  const transferProps = {
+    selectedProject, currentUser,
+    transferView, setTransferView,
+    transferConfigView, setTransferConfigView,
+    tmConfigSearchText, setTmConfigSearchText,
+    tmConfigSelectedVersion, setTmConfigSelectedVersion,
+    tmConfigDiffOpen, setTmConfigDiffOpen,
+    tmConfigDiffFrom, setTmConfigDiffFrom,
+    tmConfigDiffTo, setTmConfigDiffTo,
+    selectedTransferAppId, setSelectedTransferAppId,
+    transferApplications, setTransferApplications,
+    tmChecklistItems, setTmChecklistItems,
+    tmReviewElements, setTmReviewElements,
+    tmBlockTasks, tmLegacyTasks,
+    tmApplyDate, setTmApplyDate,
+    tmApplyRemark, setTmApplyRemark,
+    tmApplyTeam, setTmApplyTeam,
+    tmDetailModalVisible, setTmDetailModalVisible,
+    tmDetailModalTitle, setTmDetailModalTitle,
+    tmDetailModalContent, setTmDetailModalContent,
+    tmCloseModalVisible, setTmCloseModalVisible,
+    tmCloseAppId, setTmCloseAppId,
+    tmCloseReason, setTmCloseReason,
+    tmEntryTab, setTmEntryTab,
+    tmEntryModalOpen, setTmEntryModalOpen,
+    tmEntryModalRecord, setTmEntryModalRecord,
+    tmEntryContent, setTmEntryContent,
+    tmEntryActiveRole, setTmEntryActiveRole,
+    tmReviewTab, setTmReviewTab,
+    tmReviewModalOpen, setTmReviewModalOpen,
+    tmReviewAction, setTmReviewAction,
+    tmReviewRecord, setTmReviewRecord,
+    tmReviewComment, setTmReviewComment,
+    tmReviewActiveRole, setTmReviewActiveRole,
+    tmSqaComment, setTmSqaComment,
+    tmSqaModalOpen, setTmSqaModalOpen,
+    tmSqaAction, setTmSqaAction,
+    setProjectSpaceModule,
   }
 
-  // ========== 项目空间权限配置渲染 ==========
-  const renderPermissionConfig = () => {
-    const handleAddRole = () => {
-      const name = newRoleName.trim()
-      if (!name) { message.warning('请输入角色名称'); return }
-      if (roles.some(r => r.name === name)) { message.warning('角色名称已存在'); return }
-      setRoles([...roles, { name, members: [], isFixed: false }])
-      setRolePermissions(prev => ({ ...prev, [name]: {} }))
-      setNewRoleName('')
-      setShowAddRoleModal(false)
-      message.success('角色添加成功')
-    }
-    const handleDeleteRole = (roleName: string) => {
-      setRoles(roles.filter(r => r.name !== roleName))
-      setRolePermissions(prev => { const next = { ...prev }; delete next[roleName]; return next })
-      if (permissionActiveRole === roleName) setPermissionActiveRole(roles[0]?.name || '系统管理员')
-      message.success('角色已删除')
-    }
-    const handleRenameRole = (oldName: string) => {
-      const newName = editRoleNameValue.trim()
-      if (!newName) { message.warning('角色名称不能为空'); return }
-      if (newName !== oldName && roles.some(r => r.name === newName)) { message.warning('角色名称已存在'); return }
-      setRoles(roles.map(r => r.name === oldName ? { ...r, name: newName } : r))
-      setRolePermissions(prev => { const next = { ...prev }; next[newName] = next[oldName]; if (newName !== oldName) delete next[oldName]; return next })
-      if (permissionActiveRole === oldName) setPermissionActiveRole(newName)
-      setEditingRoleName(null)
-      message.success('角色名称已修改')
-    }
-    const handleMembersChange = (roleName: string, members: string[]) => {
-      setRoles(roles.map(r => r.name === roleName ? { ...r, members } : r))
-    }
-    const handlePermToggle = (roleName: string, permKey: string) => {
-      setRolePermissions(prev => ({
-        ...prev,
-        [roleName]: { ...prev[roleName], [permKey]: !prev[roleName]?.[permKey] }
-      }))
-    }
-
-    return (
-      <Card style={{ borderRadius: 8 }}>
-        <Tabs activeKey={permConfigTab} onChange={(k) => setPermConfigTab(k as any)} items={[
-          { key: 'roles', label: <Space><TeamOutlined />角色人员配置</Space> },
-          { key: 'perms', label: <Space><SafetyCertificateOutlined />权限配置</Space> },
-        ]} />
-
-        {permConfigTab === 'roles' && (
-          <div>
-            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 14, color: '#595959' }}>共 {roles.length} 个角色（{FIXED_ROLES.length} 个固定角色）</span>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowAddRoleModal(true)}>新增角色</Button>
-            </div>
-            <Table
-              dataSource={roles}
-              rowKey="name"
-              pagination={false}
-              size="middle"
-              columns={[
-                {
-                  title: '角色名称', dataIndex: 'name', width: 200,
-                  render: (name: string, record: any) => {
-                    if (editingRoleName === name) {
-                      return (
-                        <Space>
-                          <Input size="small" value={editRoleNameValue} onChange={e => setEditRoleNameValue(e.target.value)} onPressEnter={() => handleRenameRole(name)} style={{ width: 120 }} />
-                          <Button size="small" type="link" onClick={() => handleRenameRole(name)}>确定</Button>
-                          <Button size="small" type="link" onClick={() => setEditingRoleName(null)}>取消</Button>
-                        </Space>
-                      )
-                    }
-                    return (
-                      <Space>
-                        <span style={{ fontWeight: 500 }}>{name}</span>
-                        {record.isFixed && <Tag color="blue" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>固定</Tag>}
-                      </Space>
-                    )
-                  }
-                },
-                {
-                  title: '人员配置', dataIndex: 'members',
-                  render: (_: any, record: any) => (
-                    <Select
-                      mode="multiple"
-                      value={record.members}
-                      onChange={(val: string[]) => handleMembersChange(record.name, val)}
-                      style={{ width: '100%', minWidth: 300 }}
-                      placeholder="请选择人员"
-                      maxTagCount={5}
-                      options={ALL_USERS.map(u => ({ label: u, value: u }))}
-                    />
-                  )
-                },
-                {
-                  title: '操作', width: 120,
-                  render: (_: any, record: any) => record.isFixed ? (
-                    <span style={{ color: '#bfbfbf', fontSize: 12 }}>-</span>
-                  ) : (
-                    <Space>
-                      <Button type="link" size="small" onClick={() => { setEditingRoleName(record.name); setEditRoleNameValue(record.name) }}>重命名</Button>
-                      <Popconfirm title="确定删除该角色？" onConfirm={() => handleDeleteRole(record.name)}>
-                        <Button type="link" size="small" danger>删除</Button>
-                      </Popconfirm>
-                    </Space>
-                  )
-                },
-              ]}
-            />
-            <Modal title="新增角色" open={showAddRoleModal} onCancel={() => { setShowAddRoleModal(false); setNewRoleName('') }} onOk={handleAddRole} okText="确定" cancelText="取消">
-              <Form layout="vertical">
-                <Form.Item label="角色名称" required>
-                  <Input placeholder="请输入角色名称" value={newRoleName} onChange={e => setNewRoleName(e.target.value)} onPressEnter={handleAddRole} />
-                </Form.Item>
-              </Form>
-            </Modal>
-          </div>
-        )}
-
-        {permConfigTab === 'perms' && (
-          <div>
-            <Tabs
-              activeKey={permissionActiveRole}
-              onChange={setPermissionActiveRole}
-              type="card"
-              size="small"
-              style={{ marginBottom: 16 }}
-              items={roles.map(r => ({ key: r.name, label: r.name }))}
-            />
-            <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden' }}>
-              <div style={{ fontWeight: 600, fontSize: 14, padding: '12px 16px', background: '#fafbfc', borderBottom: '1px solid #f0f0f0' }}>
-                角色权限配置 — {permissionActiveRole}
-              </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <tbody>
-                  {PERMISSION_MODULES.map((mod) => {
-                    const perms = mod.permissions
-                    const maxCols = 6
-                    return (
-                      <tr key={mod.key}>
-                        <td style={{ padding: '12px 16px', fontWeight: 500, fontSize: 14, borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', width: 100, background: '#fafbfc', verticalAlign: 'middle' }}>{mod.name}</td>
-                        {perms.length > 0 ? (
-                          <>
-                            {perms.map(p => (
-                              <td key={p} style={{ padding: '10px 12px', textAlign: 'center', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', minWidth: 110 }}>
-                                <div style={{ fontSize: 13, marginBottom: 6 }}>{p}</div>
-                                <Checkbox checked={!!rolePermissions[permissionActiveRole]?.[`${mod.key}:${p}`]} onChange={() => handlePermToggle(permissionActiveRole, `${mod.key}:${p}`)} />
-                              </td>
-                            ))}
-                            {perms.length < maxCols && Array.from({ length: maxCols - perms.length }).map((_, i) => (
-                              <td key={`empty-${i}`} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
-                            ))}
-                          </>
-                        ) : (
-                          <td colSpan={maxCols} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
-                        )}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </Card>
-    )
-  }
-
-  // ========== 转维配置中心 ==========
-  const renderTransferMaterialConfig = () => {
-    if (transferConfigView === 'home') {
-      const cards = [
-        { key: 'checklist', icon: <FileTextOutlined style={{ fontSize: 28, color: '#4338ca' }} />, title: '转维材料配置', count: MOCK_CHECKLIST_TEMPLATES.length, desc: '管理转维CheckList模板，包括检查项、交接资料等' },
-        { key: 'review', icon: <AuditOutlined style={{ fontSize: 28, color: '#4338ca' }} />, title: '评审要素配置', count: MOCK_REVIEW_ELEMENT_TEMPLATES.length, desc: '管理评审要素模板，包括各角色评审标准' },
-      ]
-      return (
-        <div>
-          <Breadcrumb items={[{ title: '配置中心' }]} style={{ marginBottom: 16 }} />
-          <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 24, color: '#262626' }}>配置中心</div>
-          <Row gutter={24}>
-            {cards.map(c => (
-              <Col span={12} key={c.key}>
-                <Card hoverable style={{ borderRadius: 10 }} styles={{ body: { padding: 24 } }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 16 }}>
-                    <div style={{ width: 56, height: 56, borderRadius: 12, background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{c.icon}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <span style={{ fontSize: 16, fontWeight: 600 }}>{c.title}</span>
-                        <Tag color="blue" style={{ borderRadius: 4 }}>{c.count} 条</Tag>
-                      </div>
-                      <div style={{ fontSize: 13, color: '#8c8c8c' }}>{c.desc}</div>
-                    </div>
-                  </div>
-                  <Button type="primary" style={{ background: '#4338ca', borderColor: '#4338ca' }} onClick={() => setTransferConfigView(c.key as 'checklist' | 'review')}>管理</Button>
-                </Card>
-              </Col>
-            ))}
-          </Row>
-        </div>
-      )
-    }
-
-    const isChecklist = transferConfigView === 'checklist'
-    const title = isChecklist ? '转维材料配置' : '评审要素配置'
-    const templates = isChecklist ? MOCK_CHECKLIST_TEMPLATES : MOCK_REVIEW_ELEMENT_TEMPLATES
-    const versions = isChecklist ? MOCK_CHECKLIST_VERSIONS : MOCK_RE_VERSIONS
-    const diffData = isChecklist ? MOCK_CHECKLIST_VERSION_DIFF : MOCK_RE_VERSION_DIFF
-    const filtered = templates.filter((t: any) => {
-      if (!tmConfigSearchText) return true
-      const s = tmConfigSearchText.toLowerCase()
-      return (t.checkItem || t.description || '').toLowerCase().includes(s) || (t.responsibleRole || '').toLowerCase().includes(s)
-    })
-
-    const CONFIG_ROLE_TAG: Record<string, string> = { SPM: 'blue', '测试': 'cyan', '底软': 'orange', '系统': 'red', '影像': 'purple' }
-    const columns: any[] = isChecklist ? [
-      { title: '序号', dataIndex: 'seq', width: 70, render: (_: unknown, __: unknown, i: number) => i + 1 },
-      { title: '类型', dataIndex: 'type', width: 100, render: (v: string) => <Tag color={v === '检查项' ? 'blue' : 'orange'}>{v}</Tag> },
-      { title: '评审要素', dataIndex: 'checkItem', ellipsis: true },
-      { title: '责任角色', dataIndex: 'responsibleRole', width: 90, align: 'center' as const, render: (v: string) => <Tag color={CONFIG_ROLE_TAG[v] || 'default'}>{v}</Tag> },
-      { title: '资料录入-责任人', dataIndex: 'entryRole', width: 160 },
-      { title: '人工审核-责任人', dataIndex: 'reviewRole', width: 160 },
-      { title: '智能检查规则', dataIndex: 'aiCheckRule', width: 200, ellipsis: true, render: (v: string) => <Tooltip title={v}><span>{v}</span></Tooltip> },
-    ] : [
-      { title: '序号', dataIndex: 'seq', width: 70, render: (_: unknown, __: unknown, i: number) => i + 1 },
-      { title: '标准', dataIndex: 'standard', width: 200, ellipsis: true, render: (v: string) => <Tooltip title={v}><span>{v}</span></Tooltip> },
-      { title: '说明', dataIndex: 'description', ellipsis: true },
-      { title: '备注', dataIndex: 'remark', width: 160, ellipsis: true },
-      { title: '责任角色', dataIndex: 'responsibleRole', width: 90, align: 'center' as const, render: (v: string) => <Tag color={CONFIG_ROLE_TAG[v] || 'default'}>{v}</Tag> },
-      { title: '资料录入-责任人', dataIndex: 'entryRole', width: 140 },
-      { title: '人工审核-责任人', dataIndex: 'reviewRole', width: 140 },
-      { title: '智能检查规则', dataIndex: 'aiCheckRule', width: 200, ellipsis: true, render: (v: string) => <Tooltip title={v}><span>{v}</span></Tooltip> },
-    ]
-
-    return (
-      <div>
-        <Breadcrumb items={[{ title: <a onClick={() => setTransferConfigView('home')}>配置中心</a> }, { title }]} style={{ marginBottom: 16 }} />
-        <Card
-          title={<span style={{ fontWeight: 600 }}>{title}</span>}
-          extra={
-            <Space size={8}>
-              <Button icon={<UploadOutlined />}>导入</Button>
-              <Button icon={<DownloadOutlined />}>导出</Button>
-              <Select value={tmConfigSelectedVersion} onChange={setTmConfigSelectedVersion} style={{ width: 100 }}>
-                {versions.map((v: any) => <Option key={v.version} value={v.version}>{v.version}</Option>)}
-              </Select>
-              <Tooltip title="版本对比"><Button icon={<DiffOutlined />} onClick={() => setTmConfigDiffOpen(true)} /></Tooltip>
-            </Space>
-          }
-          style={{ borderRadius: 10 }}
-        >
-          <div style={{ marginBottom: 16 }}>
-            <Input placeholder="搜索..." prefix={<SearchOutlined />} allowClear value={tmConfigSearchText} onChange={e => setTmConfigSearchText(e.target.value)} style={{ width: 300 }} />
-          </div>
-          <Table dataSource={filtered as any[]} columns={columns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
-        </Card>
-        <Modal title="版本对比" open={tmConfigDiffOpen} onCancel={() => setTmConfigDiffOpen(false)} width={800} footer={<Button onClick={() => setTmConfigDiffOpen(false)}>关闭</Button>}>
-          <Space style={{ marginBottom: 16 }}>
-            <span>从</span>
-            <Select value={tmConfigDiffFrom} onChange={setTmConfigDiffFrom} style={{ width: 100 }}>{versions.map((v: any) => <Option key={v.version} value={v.version}>{v.version}</Option>)}</Select>
-            <span>到</span>
-            <Select value={tmConfigDiffTo} onChange={setTmConfigDiffTo} style={{ width: 100 }}>{versions.map((v: any) => <Option key={v.version} value={v.version}>{v.version}</Option>)}</Select>
-          </Space>
-          <Table dataSource={diffData as any[]} rowKey="id" size="small" pagination={false} columns={[
-            { title: '序号', dataIndex: 'seq', width: 60 },
-            { title: '状态', dataIndex: 'status', width: 80, render: (v: string) => <Tag color={v === '新增' ? 'green' : v === '修改' ? 'blue' : 'red'}>{v}</Tag> },
-            { title: isChecklist ? '评审要素' : '说明', dataIndex: isChecklist ? 'checkItem' : 'description', ellipsis: true },
-            { title: '变更内容', dataIndex: 'change', ellipsis: true },
-          ]} />
-        </Modal>
-      </div>
-    )
-  }
-
-  // ========== 转维工作台 ==========
-  const renderTransferWorkbench = () => {
-    const apps = transferApplications.filter(a => a.projectName === selectedProject?.name)
-    const stats = [
-      { label: '总计', value: apps.length, color: '#4338ca' },
-      { label: '进行中', value: apps.filter(a => a.status === 'in_progress').length, color: '#1677ff' },
-      { label: '已完成', value: apps.filter(a => a.status === 'completed').length, color: '#52c41a' },
-      { label: '已关闭', value: apps.filter(a => a.status === 'cancelled').length, color: '#d9d9d9' },
-    ]
-    return (
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-        <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 18, fontWeight: 600 }}>转维管理</span>
-          <Button type="primary" icon={<PlusOutlined />} style={{ background: '#4338ca' }} onClick={() => setTransferView('apply')}>申请转维</Button>
-        </div>
-        <Row gutter={16} style={{ marginBottom: 20 }}>
-          {stats.map(s => (
-            <Col span={6} key={s.label}>
-              <Card size="small" style={{ borderRadius: 8 }}>
-                <Statistic title={s.label} value={s.value} valueStyle={{ color: s.color, fontWeight: 700 }} />
-              </Card>
-            </Col>
-          ))}
-        </Row>
-        <Card style={{ borderRadius: 8 }}>
-          <Table dataSource={apps} rowKey="id" size="small" pagination={false} rowClassName={(r) => r.status === 'cancelled' ? 'tm-row-cancelled' : ''}
-            columns={[
-              { title: '项目名称', dataIndex: 'projectName', width: 240, render: (_: unknown, r: TransferApplication) => (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <Avatar size={32} style={{ background: `linear-gradient(135deg, ${ROLE_COLORS[r.team.research[0]?.role] || '#4338ca'} 0%, #6366f1 100%)`, fontSize: 12 }}>{r.applicant.slice(-1)}</Avatar>
-                  <div><div style={{ fontSize: 13, fontWeight: 500 }}>{r.projectName}</div><div style={{ fontSize: 11, color: '#8c8c8c' }}>{r.applicant} · {r.createdAt.slice(0, 10)}</div></div>
-                </div>
-              )},
-              { title: '流水线进度', width: 200, render: (_: unknown, r: TransferApplication) => <MiniPipeline app={r} /> },
-              { title: '计划评审', dataIndex: 'plannedReviewDate', width: 110 },
-              { title: '备注', dataIndex: 'remark', width: 160, ellipsis: true, render: (v: string) => v ? <Tooltip title={v}><span>{v}</span></Tooltip> : '-' },
-              { title: '角色进度', width: 200, render: (_: unknown, r: TransferApplication) => (
-                <Space size={4} wrap>{r.pipeline.roleProgress.map(rp => {
-                  const color = rp.entryStatus === 'completed' && rp.reviewStatus === 'completed' ? 'success' : rp.reviewStatus === 'rejected' ? 'error' : rp.entryStatus === 'in_progress' || rp.reviewStatus === 'in_progress' ? 'processing' : 'default'
-                  return <Tag key={rp.role} color={color} style={{ margin: 0, fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{rp.role}</Tag>
-                })}</Space>
-              )},
-              { title: '操作', width: 260, fixed: 'right' as const, render: (_: unknown, r: TransferApplication) => (
-                <Space size={4}>
-                  <Button size="small" type="text" icon={<FileTextOutlined />} style={{ color: '#666' }} onClick={() => { setSelectedTransferAppId(r.id); setTransferView('detail'); }}>详情</Button>
-                  {r.status === 'in_progress' && r.pipeline.dataEntry !== 'success' && <Button size="small" type="text" icon={<EditOutlined />} style={{ color: '#1677ff' }} onClick={() => { setSelectedTransferAppId(r.id); setTransferView('entry'); }}>录入</Button>}
-                  {r.status === 'in_progress' && r.pipeline.maintenanceReview === 'in_progress' && <Button size="small" type="text" icon={<AuditOutlined />} style={{ color: '#52c41a' }} onClick={() => { setSelectedTransferAppId(r.id); setTransferView('review'); }}>评审</Button>}
-                  {r.status === 'in_progress' && r.pipeline.sqaReview === 'in_progress' && <Button size="small" type="text" icon={<SafetyOutlined />} style={{ color: '#faad14' }} onClick={() => { setSelectedTransferAppId(r.id); setTransferView('sqa-review'); }}>SQA审核</Button>}
-                  {r.status === 'in_progress' && <Button size="small" type="text" danger icon={<CloseCircleOutlined />} onClick={() => { setTmCloseAppId(r.id); setTmCloseReason(''); setTmCloseModalVisible(true); }}>关闭</Button>}
-                </Space>
-              )},
-            ]}
-          />
-        </Card>
-        {/* 关闭Modal */}
-        <Modal title="关闭转维流水线" open={tmCloseModalVisible} onCancel={() => setTmCloseModalVisible(false)} onOk={() => {
-          if (!tmCloseReason.trim()) { message.warning('请输入关闭原因'); return; }
-          setTransferApplications(prev => prev.map(a => a.id === tmCloseAppId ? { ...a, status: 'cancelled' as const, cancelReason: tmCloseReason } : a));
-          setTmCloseModalVisible(false); message.success('已关闭');
-        }}>
-          <div style={{ marginBottom: 12, fontSize: 13, color: '#8c8c8c' }}>关闭后该转维申请将不可恢复，请确认。</div>
-          <TextArea rows={3} placeholder="请输入关闭原因..." value={tmCloseReason} onChange={e => setTmCloseReason(e.target.value)} />
-        </Modal>
-      </div>
-    )
-  }
-
-  // ========== 转维申请 ==========
-  const renderTransferApply = () => {
-    const roleOrder: string[] = ['SPM', 'TPM', 'SQA', '底软', '系统', '影像']
-    return (
-      <div style={{ maxWidth: 900, margin: '0 auto' }}>
-        <div style={{ marginBottom: 20 }}>
-          <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => setTransferView(null)} style={{ color: '#4338ca', fontWeight: 500, padding: 0 }}>返回</Button>
-        </div>
-        <Card style={{ borderRadius: 10 }} title={<Space><SwapOutlined style={{ color: '#4338ca' }} /><span style={{ fontWeight: 600 }}>申请转维</span></Space>}>
-          <Form layout="vertical">
-            <Form.Item label="项目名称" required>
-              <Select value={selectedProject?.name || ''} disabled style={{ width: '100%' }}>
-                <Option value={selectedProject?.name || ''}>{selectedProject?.name}</Option>
-              </Select>
-            </Form.Item>
-            <Form.Item label="计划评审日期">
-              <Input type="date" value={tmApplyDate} onChange={e => setTmApplyDate(e.target.value)} />
-            </Form.Item>
-            <Form.Item label="备注">
-              <TextArea rows={3} placeholder="请输入备注信息..." value={tmApplyRemark} onChange={e => setTmApplyRemark(e.target.value)} />
-            </Form.Item>
-          </Form>
-
-          {/* 团队配置 */}
-          <div style={{ marginTop: 24 }}>
-            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>团队配置</div>
-            <Row gutter={24}>
-              {(['research', 'maintenance'] as const).map(side => (
-                <Col span={12} key={side}>
-                  <Card size="small" title={<Tag color={side === 'research' ? 'blue' : 'green'}>{side === 'research' ? '在研团队' : '维护团队'}</Tag>} style={{ borderRadius: 8 }}>
-                    {roleOrder.map(role => {
-                      const members = tmApplyTeam[side].filter(m => m.role === role)
-                      return (
-                        <div key={role} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid #f5f5f5' }}>
-                          <Tag color={ROLE_COLORS[role] || '#999'} style={{ color: '#fff', minWidth: 40, textAlign: 'center', borderRadius: 4 }}>{role}</Tag>
-                          <Select mode="multiple" placeholder={`选择${role}成员`} value={members.map(m => m.id)} style={{ flex: 1 }}
-                            onChange={(vals: string[]) => {
-                              const newMembers = tmApplyTeam[side].filter(m => m.role !== role)
-                              vals.forEach(uid => {
-                                const u = MOCK_TM_USERS.find(u => u.id === uid)
-                                if (u) newMembers.push({ ...u, role: role as any })
-                              })
-                              setTmApplyTeam(prev => ({ ...prev, [side]: newMembers }))
-                            }}
-                          >
-                            {MOCK_TM_USERS.filter(u => u.role === role || (role === 'TPM' && u.role === 'TPM')).map(u => <Option key={u.id} value={u.id}>{u.name}</Option>)}
-                          </Select>
-                        </div>
-                      )
-                    })}
-                  </Card>
-                </Col>
-              ))}
-            </Row>
-          </div>
-
-          {/* 转维指南 */}
-          <div style={{ marginTop: 24 }}>
-            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>转维指南</div>
-            <Row gutter={16}>
-              {[
-                { icon: <RocketOutlined />, title: '转维流程概览', desc: '了解完整的转维流程步骤和各阶段要求' },
-                { icon: <FileProtectOutlined />, title: 'CheckList', desc: `共 ${MOCK_CHECKLIST_TEMPLATES.length} 条检查项，覆盖所有角色` },
-                { icon: <SafetyOutlined />, title: '评审要素', desc: `共 ${MOCK_REVIEW_ELEMENT_TEMPLATES.length} 条评审标准` },
-              ].map((g, i) => (
-                <Col span={8} key={i}>
-                  <Card size="small" hoverable style={{ borderRadius: 8, textAlign: 'center' }}>
-                    <div style={{ fontSize: 24, color: '#4338ca', marginBottom: 8 }}>{g.icon}</div>
-                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{g.title}</div>
-                    <div style={{ fontSize: 12, color: '#8c8c8c' }}>{g.desc}</div>
-                  </Card>
-                </Col>
-              ))}
-            </Row>
-          </div>
-
-          <div style={{ marginTop: 24, textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setTransferView(null)}>取消</Button>
-              <Button type="primary" style={{ background: '#4338ca' }} onClick={() => {
-                if (!tmApplyDate) { message.warning('请选择计划评审日期'); return; }
-                const newApp: TransferApplication = {
-                  id: `app-new-${Date.now()}`,
-                  projectId: selectedProject?.id || '',
-                  projectName: selectedProject?.name || '',
-                  applicant: currentUser.name,
-                  applicantId: currentUser.id,
-                  team: { research: tmApplyTeam.research, maintenance: tmApplyTeam.maintenance },
-                  plannedReviewDate: tmApplyDate,
-                  remark: tmApplyRemark,
-                  status: 'in_progress',
-                  pipeline: {
-                    projectInit: 'success', dataEntry: 'in_progress', maintenanceReview: 'not_started', sqaReview: 'not_started', infoChange: 'not_started',
-                    roleProgress: [
-                      { role: 'SPM', entryStatus: 'not_started', reviewStatus: 'not_started' },
-                      { role: '测试', entryStatus: 'not_started', reviewStatus: 'not_started' },
-                      { role: '底软', entryStatus: 'not_started', reviewStatus: 'not_started' },
-                      { role: '系统', entryStatus: 'not_started', reviewStatus: 'not_started' },
-                      { role: '影像', entryStatus: 'not_started', reviewStatus: 'not_started' },
-                    ],
-                  },
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                }
-                setTransferApplications(prev => [newApp, ...prev])
-                setTmApplyDate(''); setTmApplyRemark(''); setTmApplyTeam({ research: [], maintenance: [] })
-                setTransferView(null); setProjectSpaceModule('basic')
-                message.success('转维申请已提交')
-              }}>提交申请</Button>
-            </Space>
-          </div>
-        </Card>
-      </div>
-    )
-  }
-
-  // ========== 转维详情 ==========
-  const renderTransferDetail = () => {
-    const app = transferApplications.find(a => a.id === selectedTransferAppId)
-    if (!app) return <Empty description="未找到该转维申请" />
-    const appChecklist = tmChecklistItems.filter(c => c.applicationId === app.id)
-    const appReviewEls = tmReviewElements.filter(r => r.applicationId === app.id)
-    const appBlockTasks = tmBlockTasks.filter(b => b.applicationId === app.id)
-    const appLegacyTasks = tmLegacyTasks.filter(l => l.applicationId === app.id)
-    const appHistory = MOCK_HISTORY.filter(h => h.applicationId === app.id)
-    const statusConfig = PIPELINE_STATUS_CONFIG[app.status] ?? { color: 'default', label: app.status }
-
-    const ANCHOR_SECTIONS = [
-      { id: 'section-pipeline', label: '流水线', icon: '🔄' },
-      { id: 'section-info', label: '项目信息', icon: '📋' },
-      { id: 'section-team', label: '团队信息', icon: '👥' },
-      { id: 'section-checklist', label: 'CheckList', icon: '✅' },
-      { id: 'section-review', label: '评审要素', icon: '📝' },
-      { id: 'section-block', label: 'Block任务', icon: '🚫' },
-      { id: 'section-legacy', label: '遗留任务', icon: '📌' },
-      { id: 'section-history', label: '历史记录', icon: '🕐' },
-    ]
-
-    const getTimelineIcon = (action: string) => {
-      if (action.includes('创建')) return <ExclamationCircleOutlined style={{ color: '#1677ff' }} />
-      if (action.includes('通过')) return <CheckCircleOutlined style={{ color: '#52c41a' }} />
-      if (action.includes('Block') || action.includes('不通过')) return <CloseCircleOutlined style={{ color: '#ff4d4f' }} />
-      if (action.includes('录入')) return <ClockCircleOutlined style={{ color: '#faad14' }} />
-      return <ClockCircleOutlined style={{ color: '#1677ff' }} />
-    }
-
-    const renderEntryStatusTag = (status: string) => {
-      const config = ENTRY_STATUS_CONFIG[status]
-      return <Tag color={config?.color}>{config?.label}</Tag>
-    }
-    const renderAICheckStatusTag = (status: string, result?: string) => {
-      const config = AI_CHECK_STATUS_CONFIG[status]
-      if (status === 'failed' && result) {
-        return <Tag color={config?.color} style={{ cursor: 'pointer' }} onClick={() => { setTmDetailModalTitle('AI检查结果'); setTmDetailModalContent(result); setTmDetailModalVisible(true) }}>{config?.label}</Tag>
-      }
-      return <Tag color={config?.color}>{config?.label}</Tag>
-    }
-    const renderReviewStatusTag = (status: string, comment?: string) => {
-      const config = REVIEW_STATUS_CONFIG[status]
-      if (status === 'rejected' && comment) {
-        return <Tag color={config?.color} style={{ cursor: 'pointer' }} onClick={() => { setTmDetailModalTitle('审核意见'); setTmDetailModalContent(comment); setTmDetailModalVisible(true) }}>{config?.label}</Tag>
-      }
-      return <Tag color={config?.color}>{config?.label}</Tag>
-    }
-
-    return (
-      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-        {/* 顶部返回按钮 + 标题 */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => setTransferView(null)}>返回</Button>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>项目转维进展详情页</h2>
-          </div>
-        </div>
-
-        {/* 取消提示横幅 */}
-        {app.status === 'cancelled' && app.cancelReason && (
-          <Alert message="该转维申请已取消" description={`取消原因：${app.cancelReason}`} type="error" showIcon style={{ marginBottom: 20 }} />
-        )}
-
-        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
-          {/* 左侧主内容 */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {/* 流水线进度 */}
-            <Card id="section-pipeline" style={{ marginBottom: 20 }}>
-              <PipelineProgress pipeline={app.pipeline} showRoleDots />
-            </Card>
-
-            {/* 项目信息 */}
-            <Card id="section-info" title="项目信息" style={{ marginBottom: 20 }}>
-              <Descriptions column={4} size="small" styles={{ label: { fontWeight: 500, color: '#666' } }}>
-                <Descriptions.Item label="项目名">{app.projectName}</Descriptions.Item>
-                <Descriptions.Item label="项目编号">{app.projectId || '-'}</Descriptions.Item>
-                <Descriptions.Item label="项目负责人">{app.applicant}</Descriptions.Item>
-                <Descriptions.Item label="转维负责人">{app.team.maintenance.find(m => m.role === 'SPM')?.name ?? '-'}</Descriptions.Item>
-                <Descriptions.Item label="转维启动时间">{app.createdAt.slice(0, 10)}</Descriptions.Item>
-                <Descriptions.Item label="转维截止时间">{app.plannedReviewDate}</Descriptions.Item>
-                <Descriptions.Item label="项目状态"><Tag color={statusConfig.color}>{statusConfig.label}</Tag></Descriptions.Item>
-                <Descriptions.Item label="备注">{app.remark || '-'}</Descriptions.Item>
-              </Descriptions>
-            </Card>
-
-            {/* 团队信息：在研团队 + 维护团队 左右布局 */}
-            <div id="section-team" style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
-              <Card title="在研团队" size="small" style={{ flex: 1 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  {sortTeamMembers(app.team.research).map(m => <TeamMemberCard key={m.id} member={m} />)}
-                </div>
-              </Card>
-              <Card title="维护团队" size="small" style={{ flex: 1 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  {sortTeamMembers(app.team.maintenance).map(m => <TeamMemberCard key={m.id} member={m} />)}
-                </div>
-              </Card>
-            </div>
-
-            {/* 转维CheckList */}
-            <Card id="section-checklist" title="转维CheckList" style={{ marginBottom: 20 }}>
-              <Table dataSource={appChecklist} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} locale={{ emptyText: '暂无检查项' }}
-                columns={[
-                  { title: '序号', dataIndex: 'seq', width: 60, align: 'center' as const },
-                  { title: '检查项目名称', dataIndex: 'checkItem', width: 280, ellipsis: true },
-                  { title: '所属角色', dataIndex: 'responsibleRole', width: 80, align: 'center' as const },
-                  { title: '责任人', dataIndex: 'entryPerson', width: 80, align: 'center' as const },
-                  { title: '交付件', width: 180, render: (_: unknown, record: any) => renderEntryContent(record) },
-                  { title: '录入状态', dataIndex: 'entryStatus', width: 90, align: 'center' as const, render: (_: unknown, record: any) => renderEntryStatusTag(record.entryStatus) },
-                  { title: 'AI检查状态', dataIndex: 'aiCheckStatus', width: 100, align: 'center' as const, render: (_: unknown, record: any) => renderAICheckStatusTag(record.aiCheckStatus, record.aiCheckResult) },
-                  { title: '维护审核状态', dataIndex: 'reviewStatus', width: 100, align: 'center' as const, render: (_: unknown, record: any) => renderReviewStatusTag(record.reviewStatus, record.reviewComment) },
-                ]}
-              />
-            </Card>
-
-            {/* 转维要素评审列表 */}
-            <Card id="section-review" title="转维要素评审列表" style={{ marginBottom: 20 }}>
-              <Table dataSource={appReviewEls} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} locale={{ emptyText: '暂无评审要素' }}
-                columns={[
-                  { title: '序号', dataIndex: 'seq', width: 60, align: 'center' as const },
-                  { title: '类型', dataIndex: 'standard', width: 100 },
-                  { title: '评审要素', dataIndex: 'description', width: 280, ellipsis: true },
-                  { title: '责任人', dataIndex: 'entryPerson', width: 80, align: 'center' as const },
-                  { title: '交付件', width: 180, render: (_: unknown, record: any) => renderEntryContent(record) },
-                  { title: '录入状态', dataIndex: 'entryStatus', width: 90, align: 'center' as const, render: (_: unknown, record: any) => renderEntryStatusTag(record.entryStatus) },
-                  { title: 'AI检查状态', dataIndex: 'aiCheckStatus', width: 100, align: 'center' as const, render: (_: unknown, record: any) => renderAICheckStatusTag(record.aiCheckStatus, record.aiCheckResult) },
-                  { title: '维护审核状态', dataIndex: 'reviewStatus', width: 100, align: 'center' as const, render: (_: unknown, record: any) => renderReviewStatusTag(record.reviewStatus, record.reviewComment) },
-                ]}
-              />
-            </Card>
-
-            {/* Block任务列表 */}
-            <Card id="section-block" title="Block任务列表" style={{ marginBottom: 20 }}>
-              <Table dataSource={appBlockTasks} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} locale={{ emptyText: '暂无Block任务' }}
-                columns={[
-                  { title: '序号', key: 'index', width: 60, align: 'center' as const, render: (_: unknown, __: any, index: number) => index + 1 },
-                  { title: '问题描述', dataIndex: 'description', width: 280, ellipsis: true },
-                  { title: '解决方案', dataIndex: 'resolution', width: 280, ellipsis: true },
-                  { title: '责任人', dataIndex: 'responsiblePerson', width: 80, align: 'center' as const },
-                  { title: '部门', dataIndex: 'department', width: 100, align: 'center' as const },
-                  { title: '截止日期', dataIndex: 'deadline', width: 110, align: 'center' as const },
-                  { title: '状态', dataIndex: 'status', width: 90, align: 'center' as const, render: (v: string) => <Tag color={BLOCK_TASK_STATUS_CONFIG[v]?.color}>{BLOCK_TASK_STATUS_CONFIG[v]?.label}</Tag> },
-                  { title: '创建时间', dataIndex: 'createdAt', width: 110, align: 'center' as const, render: (val: string) => val?.slice(0, 10) },
-                ]}
-              />
-            </Card>
-
-            {/* 遗留任务列表 */}
-            <Card id="section-legacy" title="遗留任务列表" style={{ marginBottom: 20 }}>
-              <Table dataSource={appLegacyTasks} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} locale={{ emptyText: '暂无遗留任务' }}
-                columns={[
-                  { title: '序号', key: 'index', width: 60, align: 'center' as const, render: (_: unknown, __: any, index: number) => index + 1 },
-                  { title: '任务描述', dataIndex: 'description', width: 300, ellipsis: true },
-                  { title: '责任人', dataIndex: 'responsiblePerson', width: 80, align: 'center' as const },
-                  { title: '部门', dataIndex: 'department', width: 100, align: 'center' as const },
-                  { title: '截止日期', dataIndex: 'deadline', width: 110, align: 'center' as const },
-                  { title: '状态', dataIndex: 'status', width: 90, align: 'center' as const, render: (v: string) => <Tag color={LEGACY_TASK_STATUS_CONFIG[v]?.color}>{LEGACY_TASK_STATUS_CONFIG[v]?.label}</Tag> },
-                  { title: '创建时间', dataIndex: 'createdAt', width: 110, align: 'center' as const, render: (val: string) => val?.slice(0, 10) },
-                ]}
-              />
-            </Card>
-
-            {/* 历史记录 */}
-            <Card id="section-history" title="历史记录" style={{ marginBottom: 20 }}>
-              {appHistory.length === 0 ? (
-                <Empty description="暂无历史记录" />
-              ) : (
-                <Timeline items={appHistory.map(h => ({
-                  dot: getTimelineIcon(h.action),
-                  children: (
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontWeight: 500 }}>{h.action}</span>
-                        <span style={{ color: '#888', fontSize: 12 }}>{h.operator} - {new Date(h.timestamp).toLocaleString('zh-CN')}</span>
-                      </div>
-                      <div style={{ color: '#555', fontSize: 13, marginTop: 4 }}>{h.detail}</div>
-                    </div>
-                  ),
-                }))} />
-              )}
-            </Card>
-          </div>
-
-          {/* 右侧悬浮锚点导航 */}
-          <div style={{ position: 'sticky', top: 80, width: 140, flexShrink: 0 }}>
-            <div style={{ background: '#fff', borderRadius: 12, padding: '12px 0', boxShadow: '0 2px 12px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0' }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#999', padding: '0 16px 8px', borderBottom: '1px solid #f5f5f5', marginBottom: 4, letterSpacing: 1 }}>页面导航</div>
-              {ANCHOR_SECTIONS.map(section => (
-                <div key={section.id} onClick={() => { const el = document.getElementById(section.id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 16px', cursor: 'pointer', fontSize: 13, color: '#666', borderLeft: '3px solid transparent', transition: 'all 0.2s ease' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = '#f0edff'; e.currentTarget.style.color = '#4338ca'; e.currentTarget.style.borderLeftColor = '#4338ca' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#666'; e.currentTarget.style.borderLeftColor = 'transparent' }}
-                >
-                  <span style={{ fontSize: 14, lineHeight: 1 }}>{section.icon}</span>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{section.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* 结果详情弹窗 */}
-        <Modal title={tmDetailModalTitle} open={tmDetailModalVisible} onCancel={() => setTmDetailModalVisible(false)} footer={[<Button key="close" onClick={() => setTmDetailModalVisible(false)}>关闭</Button>]}>
-          <p style={{ whiteSpace: 'pre-wrap' }}>{tmDetailModalContent}</p>
-        </Modal>
-      </div>
-    )
-  }
-
-  // ========== 转维资料录入 ==========
-  const renderTransferEntry = () => {
-    const app = transferApplications.find(a => a.id === selectedTransferAppId)
-    if (!app) return <Empty description="未找到申请" />
-
-    const appChecklist = tmChecklistItems.filter(c => c.applicationId === app.id)
-    const appReviewEls = tmReviewElements.filter(r => r.applicationId === app.id)
-    const roles = Array.from(new Set([...appChecklist.map(c => c.responsibleRole), ...appReviewEls.map(r => r.responsibleRole)]))
-    const filteredCL = tmEntryActiveRole === 'all' ? appChecklist : appChecklist.filter(c => c.responsibleRole === tmEntryActiveRole)
-    const filteredRE = tmEntryActiveRole === 'all' ? appReviewEls : appReviewEls.filter(r => r.responsibleRole === tmEntryActiveRole)
-
-    const openEntry = (record: any, tab: 'checklist' | 'review') => {
-      setTmEntryModalRecord({ ...record, _tab: tab })
-      setTmEntryContent(record.entryContent || '')
-      setTmEntryModalOpen(true)
-    }
-
-    const saveEntry = (mode: 'draft' | 'confirm') => {
-      if (!tmEntryModalRecord) return
-      const status: EntryStatus = mode === 'draft' ? 'draft' : 'entered'
-      if (tmEntryModalRecord._tab === 'checklist') {
-        setTmChecklistItems(prev => prev.map(c => c.id === tmEntryModalRecord.id ? { ...c, entryContent: tmEntryContent, entryStatus: status, aiCheckStatus: mode === 'confirm' ? 'passed' as const : 'not_started' as const } : c))
-      } else {
-        setTmReviewElements(prev => prev.map(r => r.id === tmEntryModalRecord.id ? { ...r, entryContent: tmEntryContent, entryStatus: status, aiCheckStatus: mode === 'confirm' ? 'passed' as const : 'not_started' as const } : r))
-      }
-      setTmEntryModalOpen(false)
-      message.success(mode === 'draft' ? '已暂存' : '已确认并提交AI检查')
-    }
-
-    const clColumns: any[] = [
-      { title: '序号', dataIndex: 'seq', width: 60 },
-      { title: '类型', dataIndex: 'type', width: 80, render: (v: string) => <Tag color={v === '检查项' ? 'processing' : 'warning'}>{v}</Tag> },
-      { title: '评审要素', dataIndex: 'checkItem', ellipsis: true },
-      { title: '角色', dataIndex: 'responsibleRole', width: 70, render: (v: string) => <Tag color={ROLE_COLORS[v]} style={{ color: '#fff', borderRadius: 4 }}>{v}</Tag> },
-      { title: '录入人', dataIndex: 'entryPerson', width: 80 },
-      { title: '录入状态', dataIndex: 'entryStatus', width: 90, render: (v: string) => <Tag color={ENTRY_STATUS_CONFIG[v]?.color}>{ENTRY_STATUS_CONFIG[v]?.label}</Tag> },
-      { title: 'AI检查', dataIndex: 'aiCheckStatus', width: 90, render: (v: string) => <Tag color={AI_CHECK_STATUS_CONFIG[v]?.color}>{AI_CHECK_STATUS_CONFIG[v]?.label}</Tag> },
-      { title: '内容', dataIndex: 'entryContent', width: 160, ellipsis: true, render: (v: string) => v ? <Tooltip title={v}><span>{v}</span></Tooltip> : '-' },
-      { title: '操作', width: 100, render: (_: unknown, r: any) => <Button size="small" type="link" onClick={() => openEntry(r, 'checklist')}>录入</Button> },
-    ]
-    const reColumns: any[] = [
-      { title: '序号', dataIndex: 'seq', width: 60 },
-      { title: '标准', dataIndex: 'standard', width: 100, render: (v: string) => <Tag color="purple">{v}</Tag> },
-      { title: '说明', dataIndex: 'description', ellipsis: true },
-      { title: '角色', dataIndex: 'responsibleRole', width: 70, render: (v: string) => <Tag color={ROLE_COLORS[v]} style={{ color: '#fff', borderRadius: 4 }}>{v}</Tag> },
-      { title: '录入人', dataIndex: 'entryPerson', width: 80 },
-      { title: '录入状态', dataIndex: 'entryStatus', width: 90, render: (v: string) => <Tag color={ENTRY_STATUS_CONFIG[v]?.color}>{ENTRY_STATUS_CONFIG[v]?.label}</Tag> },
-      { title: 'AI检查', dataIndex: 'aiCheckStatus', width: 90, render: (v: string) => <Tag color={AI_CHECK_STATUS_CONFIG[v]?.color}>{AI_CHECK_STATUS_CONFIG[v]?.label}</Tag> },
-      { title: '内容', dataIndex: 'entryContent', width: 160, ellipsis: true, render: (v: string) => v ? <Tooltip title={v}><span>{v}</span></Tooltip> : '-' },
-      { title: '操作', width: 100, render: (_: unknown, r: any) => <Button size="small" type="link" onClick={() => openEntry(r, 'review')}>录入</Button> },
-    ]
-
-    return (
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-        <div style={{ marginBottom: 20 }}><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => setTransferView(null)} style={{ color: '#4338ca', fontWeight: 500, padding: 0 }}>返回</Button></div>
-        <Card style={{ marginBottom: 20, borderRadius: 10 }} title={<Space><SwapOutlined style={{ color: '#4338ca' }} /><span style={{ fontWeight: 600 }}>{app.projectName} - 资料录入</span></Space>}>
-          <PipelineProgress pipeline={app.pipeline} />
-        </Card>
-
-        <Card style={{ borderRadius: 10 }}>
-          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Space>
-              <Segmented options={[{ label: '全部', value: 'all' }, ...roles.map(r => ({ label: r, value: r }))]} value={tmEntryActiveRole} onChange={v => setTmEntryActiveRole(v as string)} />
-            </Space>
-            <Tabs activeKey={tmEntryTab} onChange={k => setTmEntryTab(k as any)} items={[{ key: 'checklist', label: `转维材料 (${filteredCL.length})` }, { key: 'review', label: `评审要素 (${filteredRE.length})` }]} style={{ marginBottom: 0 }} />
-          </div>
-          {tmEntryTab === 'checklist' && <Table dataSource={filteredCL} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} columns={clColumns} />}
-          {tmEntryTab === 'review' && <Table dataSource={filteredRE} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} columns={reColumns} />}
-        </Card>
-
-        <Modal title="资料录入" open={tmEntryModalOpen} onCancel={() => setTmEntryModalOpen(false)} width={600}
-          footer={[
-            <Button key="cancel" onClick={() => setTmEntryModalOpen(false)}>取消</Button>,
-            <Button key="draft" onClick={() => saveEntry('draft')}>暂存</Button>,
-            <Button key="confirm" type="primary" style={{ background: '#4338ca' }} onClick={() => saveEntry('confirm')}>确认提交</Button>,
-          ]}>
-          {tmEntryModalRecord && (
-            <div>
-              <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
-                <Descriptions.Item label="评审要素">{tmEntryModalRecord.checkItem || tmEntryModalRecord.description}</Descriptions.Item>
-                <Descriptions.Item label="角色"><Tag color={ROLE_COLORS[tmEntryModalRecord.responsibleRole]} style={{ color: '#fff' }}>{tmEntryModalRecord.responsibleRole}</Tag></Descriptions.Item>
-                <Descriptions.Item label="AI检查规则"><span style={{ fontSize: 12, color: '#8c8c8c' }}>{tmEntryModalRecord.aiCheckRule}</span></Descriptions.Item>
-              </Descriptions>
-              <div style={{ fontWeight: 500, marginBottom: 8 }}>录入内容</div>
-              <TextArea rows={6} placeholder="请输入资料内容，支持文本描述、链接、飞书文档地址等..." value={tmEntryContent} onChange={e => setTmEntryContent(e.target.value)} />
-            </div>
-          )}
-        </Modal>
-      </div>
-    )
-  }
-
-  // ========== 转维审核 ==========
-  const renderTransferReview = () => {
-    const app = transferApplications.find(a => a.id === selectedTransferAppId)
-    if (!app) return <Empty description="未找到申请" />
-
-    const appChecklist = tmChecklistItems.filter(c => c.applicationId === app.id)
-    const appReviewEls = tmReviewElements.filter(r => r.applicationId === app.id)
-    const roles = Array.from(new Set([...appChecklist.map(c => c.responsibleRole), ...appReviewEls.map(r => r.responsibleRole)]))
-    const filteredCL = tmReviewActiveRole === 'all' ? appChecklist : appChecklist.filter(c => c.responsibleRole === tmReviewActiveRole)
-    const filteredRE = tmReviewActiveRole === 'all' ? appReviewEls : appReviewEls.filter(r => r.responsibleRole === tmReviewActiveRole)
-
-    const openReview = (record: any, action: 'pass' | 'reject', tab: 'checklist' | 'review') => {
-      setTmReviewRecord({ ...record, _tab: tab }); setTmReviewAction(action); setTmReviewComment(''); setTmReviewModalOpen(true)
-    }
-
-    const submitReview = () => {
-      if (!tmReviewRecord) return
-      const status: ReviewStatus = tmReviewAction === 'pass' ? 'passed' : 'rejected'
-      if (tmReviewRecord._tab === 'checklist') {
-        setTmChecklistItems(prev => prev.map(c => c.id === tmReviewRecord.id ? { ...c, reviewStatus: status, reviewComment: tmReviewAction === 'reject' ? tmReviewComment : undefined } : c))
-      } else {
-        setTmReviewElements(prev => prev.map(r => r.id === tmReviewRecord.id ? { ...r, reviewStatus: status, reviewComment: tmReviewAction === 'reject' ? tmReviewComment : undefined } : r))
-      }
-      setTmReviewModalOpen(false)
-      message.success(tmReviewAction === 'pass' ? '已通过' : '已拒绝')
-    }
-
-    const reviewColumns = (tab: 'checklist' | 'review'): any[] => {
-      const base = tab === 'checklist' ? [
-        { title: '序号', dataIndex: 'seq', width: 60 },
-        { title: '类型', dataIndex: 'type', width: 80, render: (v: string) => <Tag color={v === '检查项' ? 'processing' : 'warning'}>{v}</Tag> },
-        { title: '评审要素', dataIndex: 'checkItem', ellipsis: true },
-      ] : [
-        { title: '序号', dataIndex: 'seq', width: 60 },
-        { title: '标准', dataIndex: 'standard', width: 100, render: (v: string) => <Tag color="purple">{v}</Tag> },
-        { title: '说明', dataIndex: 'description', ellipsis: true },
-      ]
-      return [
-        ...base,
-        { title: '角色', dataIndex: 'responsibleRole', width: 70, render: (v: string) => <Tag color={ROLE_COLORS[v]} style={{ color: '#fff', borderRadius: 4 }}>{v}</Tag> },
-        { title: '内容', dataIndex: 'entryContent', width: 160, ellipsis: true, render: (v: string) => v ? <Tooltip title={v}><span>{v}</span></Tooltip> : '-' },
-        { title: 'AI检查', dataIndex: 'aiCheckStatus', width: 80, render: (v: string) => <Tag color={AI_CHECK_STATUS_CONFIG[v]?.color}>{AI_CHECK_STATUS_CONFIG[v]?.label}</Tag> },
-        { title: '审核状态', dataIndex: 'reviewStatus', width: 90, render: (v: string) => <Tag color={REVIEW_STATUS_CONFIG[v]?.color}>{REVIEW_STATUS_CONFIG[v]?.label}</Tag> },
-        { title: '操作', width: 140, render: (_: unknown, r: any) => r.entryStatus === 'entered' && r.aiCheckStatus === 'passed' && r.reviewStatus !== 'passed' ? (
-          <Space size={4}>
-            <Button size="small" type="link" style={{ color: '#52c41a' }} onClick={() => openReview(r, 'pass', tab)}>通过</Button>
-            <Button size="small" type="link" danger onClick={() => openReview(r, 'reject', tab)}>拒绝</Button>
-          </Space>
-        ) : '-' },
-      ]
-    }
-
-    return (
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-        <div style={{ marginBottom: 20 }}><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => setTransferView(null)} style={{ color: '#4338ca', fontWeight: 500, padding: 0 }}>返回</Button></div>
-        <Card style={{ marginBottom: 20, borderRadius: 10 }} title={<Space><SwapOutlined style={{ color: '#4338ca' }} /><span style={{ fontWeight: 600 }}>{app.projectName} - 维护审核</span></Space>}>
-          <PipelineProgress pipeline={app.pipeline} />
-        </Card>
-        <Card style={{ borderRadius: 10 }}>
-          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Segmented options={[{ label: '全部', value: 'all' }, ...roles.map(r => ({ label: r, value: r }))]} value={tmReviewActiveRole} onChange={v => setTmReviewActiveRole(v as string)} />
-            <Tabs activeKey={tmReviewTab} onChange={k => setTmReviewTab(k as any)} items={[{ key: 'checklist', label: `转维材料 (${filteredCL.length})` }, { key: 'review', label: `评审要素 (${filteredRE.length})` }]} style={{ marginBottom: 0 }} />
-          </div>
-          {tmReviewTab === 'checklist' && <Table dataSource={filteredCL} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} columns={reviewColumns('checklist')} />}
-          {tmReviewTab === 'review' && <Table dataSource={filteredRE} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} columns={reviewColumns('review')} />}
-        </Card>
-        <Modal title={tmReviewAction === 'pass' ? '审核通过' : '审核拒绝'} open={tmReviewModalOpen} onCancel={() => setTmReviewModalOpen(false)} onOk={submitReview} okButtonProps={{ danger: tmReviewAction === 'reject', style: tmReviewAction === 'pass' ? { background: '#52c41a', borderColor: '#52c41a' } : {} }} okText={tmReviewAction === 'pass' ? '确认通过' : '确认拒绝'}>
-          {tmReviewRecord && (
-            <div>
-              <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
-                <Descriptions.Item label="评审要素">{tmReviewRecord.checkItem || tmReviewRecord.description}</Descriptions.Item>
-                <Descriptions.Item label="录入内容">{tmReviewRecord.entryContent || '-'}</Descriptions.Item>
-              </Descriptions>
-              {tmReviewAction === 'reject' && <TextArea rows={3} placeholder="请输入拒绝原因..." value={tmReviewComment} onChange={e => setTmReviewComment(e.target.value)} />}
-            </div>
-          )}
-        </Modal>
-      </div>
-    )
-  }
-
-  // ========== SQA审核 ==========
-  const renderTransferSqaReview = () => {
-    const app = transferApplications.find(a => a.id === selectedTransferAppId)
-    if (!app) return <Empty description="未找到申请" />
-    const sqaComment = tmSqaComment
-    const setSqaComment = setTmSqaComment
-    const sqaModalOpen = tmSqaModalOpen
-    const setSqaModalOpen = setTmSqaModalOpen
-    const sqaAction = tmSqaAction
-    const setSqaAction = setTmSqaAction
-
-    const appChecklist = tmChecklistItems.filter(c => c.applicationId === app.id)
-    const appReviewEls = tmReviewElements.filter(r => r.applicationId === app.id)
-    const appBlockTasks = tmBlockTasks.filter(b => b.applicationId === app.id)
-    const appLegacyTasks = tmLegacyTasks.filter(l => l.applicationId === app.id)
-    const closeRows = buildCloseReviewRows(app, tmChecklistItems, tmReviewElements)
-
-    return (
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <div style={{ marginBottom: 20 }}><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => setTransferView(null)} style={{ color: '#4338ca', fontWeight: 500, padding: 0 }}>返回</Button></div>
-        <Card style={{ marginBottom: 20, borderRadius: 10 }} title={<Space><SafetyOutlined style={{ color: '#4338ca' }} /><span style={{ fontWeight: 600 }}>{app.projectName} - SQA审核</span></Space>}>
-          <PipelineProgress pipeline={app.pipeline} />
-        </Card>
-
-        {/* 评审状态汇总 */}
-        <Card style={{ marginBottom: 20, borderRadius: 10 }} title="评审状态汇总" size="small">
-          <Table dataSource={closeRows} rowKey="role" size="small" pagination={false}
-            columns={[
-              { title: '角色', dataIndex: 'role', width: 100, render: (v: string) => <Tag color={ROLE_COLORS[v] || '#999'} style={{ color: '#fff' }}>{v}</Tag> },
-              { title: '责任人', dataIndex: 'responsiblePerson', width: 120 },
-              { title: '审核结论', dataIndex: 'conclusion', width: 100, render: (v: string) => <Tag color={v === 'PASS' ? 'success' : v === 'Fail' ? 'error' : 'default'}>{v}</Tag> },
-              { title: '备注', dataIndex: 'comment' },
-            ]}
-          />
-        </Card>
-
-        {/* CheckList概览 */}
-        <Card style={{ marginBottom: 20, borderRadius: 10 }} title={<Space>转维材料 CheckList<Tag>{appChecklist.length}</Tag></Space>} size="small">
-          <Table dataSource={appChecklist} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
-            columns={[
-              { title: '序号', dataIndex: 'seq', width: 60 },
-              { title: '评审要素', dataIndex: 'checkItem', ellipsis: true },
-              { title: '角色', dataIndex: 'responsibleRole', width: 70, render: (v: string) => <Tag color={ROLE_COLORS[v]} style={{ color: '#fff', borderRadius: 4 }}>{v}</Tag> },
-              { title: '录入状态', dataIndex: 'entryStatus', width: 80, render: (v: string) => <Tag color={ENTRY_STATUS_CONFIG[v]?.color}>{ENTRY_STATUS_CONFIG[v]?.label}</Tag> },
-              { title: 'AI检查', dataIndex: 'aiCheckStatus', width: 80, render: (v: string) => <Tag color={AI_CHECK_STATUS_CONFIG[v]?.color}>{AI_CHECK_STATUS_CONFIG[v]?.label}</Tag> },
-              { title: '审核', dataIndex: 'reviewStatus', width: 80, render: (v: string) => <Tag color={REVIEW_STATUS_CONFIG[v]?.color}>{REVIEW_STATUS_CONFIG[v]?.label}</Tag> },
-            ]}
-          />
-        </Card>
-
-        {/* 评审要素概览 */}
-        <Card style={{ marginBottom: 20, borderRadius: 10 }} title={<Space>评审要素<Tag>{appReviewEls.length}</Tag></Space>} size="small">
-          <Table dataSource={appReviewEls} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
-            columns={[
-              { title: '序号', dataIndex: 'seq', width: 60 },
-              { title: '说明', dataIndex: 'description', ellipsis: true },
-              { title: '角色', dataIndex: 'responsibleRole', width: 70, render: (v: string) => <Tag color={ROLE_COLORS[v]} style={{ color: '#fff', borderRadius: 4 }}>{v}</Tag> },
-              { title: '录入状态', dataIndex: 'entryStatus', width: 80, render: (v: string) => <Tag color={ENTRY_STATUS_CONFIG[v]?.color}>{ENTRY_STATUS_CONFIG[v]?.label}</Tag> },
-              { title: 'AI检查', dataIndex: 'aiCheckStatus', width: 80, render: (v: string) => <Tag color={AI_CHECK_STATUS_CONFIG[v]?.color}>{AI_CHECK_STATUS_CONFIG[v]?.label}</Tag> },
-              { title: '审核', dataIndex: 'reviewStatus', width: 80, render: (v: string) => <Tag color={REVIEW_STATUS_CONFIG[v]?.color}>{REVIEW_STATUS_CONFIG[v]?.label}</Tag> },
-            ]}
-          />
-        </Card>
-
-        {/* Block任务 */}
-        {appBlockTasks.length > 0 && (
-          <Card style={{ marginBottom: 20, borderRadius: 10 }} title={<Space>Block任务<Tag color="error">{appBlockTasks.length}</Tag></Space>} size="small">
-            <Table dataSource={appBlockTasks} rowKey="id" size="small" pagination={false}
-              columns={[
-                { title: '问题描述', dataIndex: 'description', ellipsis: true },
-                { title: '解决方案', dataIndex: 'resolution', ellipsis: true },
-                { title: '责任人', dataIndex: 'responsiblePerson', width: 80 },
-                { title: '截止日期', dataIndex: 'deadline', width: 110 },
-                { title: '状态', dataIndex: 'status', width: 80, render: (v: string) => <Tag color={BLOCK_TASK_STATUS_CONFIG[v]?.color}>{BLOCK_TASK_STATUS_CONFIG[v]?.label}</Tag> },
-              ]}
-            />
-          </Card>
-        )}
-
-        {/* 遗留任务 */}
-        {appLegacyTasks.length > 0 && (
-          <Card style={{ marginBottom: 20, borderRadius: 10 }} title={<Space>遗留任务<Tag>{appLegacyTasks.length}</Tag></Space>} size="small">
-            <Table dataSource={appLegacyTasks} rowKey="id" size="small" pagination={false}
-              columns={[
-                { title: '描述', dataIndex: 'description', ellipsis: true },
-                { title: '责任人', dataIndex: 'responsiblePerson', width: 80 },
-                { title: '部门', dataIndex: 'department', width: 120 },
-                { title: '截止日期', dataIndex: 'deadline', width: 110 },
-                { title: '状态', dataIndex: 'status', width: 80, render: (v: string) => <Tag color={LEGACY_TASK_STATUS_CONFIG[v]?.color}>{LEGACY_TASK_STATUS_CONFIG[v]?.label}</Tag> },
-              ]}
-            />
-          </Card>
-        )}
-
-        {/* SQA审核操作 */}
-        <Card style={{ borderRadius: 10 }} title="SQA审核决定" size="small">
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontWeight: 500, marginBottom: 8 }}>SQA意见</div>
-            <TextArea rows={3} placeholder="请输入SQA审核意见..." value={sqaComment} onChange={e => setSqaComment(e.target.value)} />
-          </div>
-          <Space>
-            <Button type="primary" style={{ background: '#52c41a', borderColor: '#52c41a' }} onClick={() => { setSqaAction('approve'); setSqaModalOpen(true); }}>审核通过</Button>
-            <Button danger onClick={() => { if (!sqaComment.trim()) { message.warning('拒绝时请填写SQA意见'); return; } setSqaAction('reject'); setSqaModalOpen(true); }}>审核拒绝</Button>
-          </Space>
-        </Card>
-
-        <Modal title={sqaAction === 'approve' ? 'SQA审核通过确认' : 'SQA审核拒绝确认'} open={sqaModalOpen} onCancel={() => setSqaModalOpen(false)}
-          onOk={() => {
-            message.success(sqaAction === 'approve' ? 'SQA审核已通过，流水线进入信息变更阶段' : 'SQA审核已拒绝，流水线回退至维护审核')
-            setSqaModalOpen(false); setTransferView(null)
-          }}
-          okButtonProps={{ danger: sqaAction === 'reject', style: sqaAction === 'approve' ? { background: '#52c41a', borderColor: '#52c41a' } : {} }}
-          okText="确认"
-        >
-          <p>{sqaAction === 'approve' ? '确认通过SQA审核？流水线将进入信息变更阶段。' : '确认拒绝SQA审核？流水线将回退至维护审核阶段。'}</p>
-          {sqaComment && <div style={{ background: '#f5f5f5', padding: 12, borderRadius: 6, marginTop: 8 }}><div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>SQA意见：</div><div>{sqaComment}</div></div>}
-        </Modal>
-      </div>
-    )
-  }
+  // Transfer render functions extracted to TransferModule.tsx
 
   const renderProjectSpace = () => {
     const menuItems = [
@@ -4469,16 +3070,16 @@ export default function Home() {
           </div>
           {/* 内容区域 - 独立滚动 */}
           <div id="basic-info-scroll-container" style={{ flex: 1, padding: 24, overflow: 'auto' }}>
-            {transferView === 'apply' && renderTransferApply()}
-            {transferView === 'detail' && renderTransferDetail()}
-            {transferView === 'entry' && renderTransferEntry()}
-            {transferView === 'review' && renderTransferReview()}
-            {transferView === 'sqa-review' && renderTransferSqaReview()}
+            {transferView === 'apply' && <TransferApply {...transferProps} />}
+            {transferView === 'detail' && <TransferDetail {...transferProps} />}
+            {transferView === 'entry' && <TransferEntry {...transferProps} />}
+            {transferView === 'review' && <TransferReview {...transferProps} />}
+            {transferView === 'sqa-review' && <TransferSqaReview {...transferProps} />}
             {transferView === null && projectSpaceModule === 'basic' && renderProjectBasicInfo()}
             {transferView === null && projectSpaceModule === 'plan' && renderProjectPlan()}
             {transferView === null && projectSpaceModule === 'overview' && renderProjectOverview()}
             {transferView === null && projectSpaceModule === 'requirements' && renderProjectRequirements()}
-            {transferView === null && projectSpaceModule === 'permission' && renderPermissionConfig()}
+            {transferView === null && projectSpaceModule === 'permission' && <PermissionConfig roles={roles} setRoles={setRoles} rolePermissions={rolePermissions} setRolePermissions={setRolePermissions} permConfigTab={permConfigTab} setPermConfigTab={setPermConfigTab} permissionActiveRole={permissionActiveRole} setPermissionActiveRole={setPermissionActiveRole} showAddRoleModal={showAddRoleModal} setShowAddRoleModal={setShowAddRoleModal} newRoleName={newRoleName} setNewRoleName={setNewRoleName} editingRoleName={editingRoleName} setEditingRoleName={setEditingRoleName} editRoleNameValue={editRoleNameValue} setEditRoleNameValue={setEditRoleNameValue} />}
             {transferView === null && projectSpaceModule !== 'basic' && projectSpaceModule !== 'plan' && projectSpaceModule !== 'overview' && projectSpaceModule !== 'requirements' && projectSpaceModule !== 'permission' && (
               <Card style={{ borderRadius: 8, textAlign: 'center', padding: '40px 0' }}>
                 <Empty description={<span style={{ color: '#8c8c8c' }}>{`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`}</span>} />
@@ -4973,7 +3574,7 @@ export default function Home() {
                 }}
               />
             )}
-            {activeModule === 'globalPermission' && renderGlobalPermissionConfig()}
+            {activeModule === 'globalPermission' && <GlobalPermissionConfig globalRoles={globalRoles} setGlobalRoles={setGlobalRoles} globalRolePerms={globalRolePerms} setGlobalRolePerms={setGlobalRolePerms} globalPermTab={globalPermTab} setGlobalPermTab={setGlobalPermTab} showGlobalAddRole={showGlobalAddRole} setShowGlobalAddRole={setShowGlobalAddRole} globalNewRoleName={globalNewRoleName} setGlobalNewRoleName={setGlobalNewRoleName} globalEditingRole={globalEditingRole} setGlobalEditingRole={setGlobalEditingRole} globalEditRoleValue={globalEditRoleValue} setGlobalEditRoleValue={setGlobalEditRoleValue} globalPermActiveRole={globalPermActiveRole} setGlobalPermActiveRole={setGlobalPermActiveRole} />}
             {activeModule === 'hrPipeline' && (
               <Card style={{ borderRadius: 8, textAlign: 'center', padding: '80px 0' }}>
                 <Empty description={<span style={{ color: '#8c8c8c', fontSize: 14 }}>人力资源管道模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
@@ -4995,7 +3596,7 @@ export default function Home() {
                 </Card>
 
                 {/* 转维材料模板配置 */}
-                {configTab === 'transfer' && renderTransferMaterialConfig()}
+                {configTab === 'transfer' && <TransferConfig {...transferProps} />}
 
                 {/* 计划模板配置 */}
                 {configTab === 'plan' && (
