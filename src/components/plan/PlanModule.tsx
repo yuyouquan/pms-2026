@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, createContext, useContext, Fragment, type CSSProperties } from 'react'
+import dayjs from 'dayjs'
 import {
   Card,
   Tabs,
@@ -24,6 +25,7 @@ import {
   Statistic,
   Descriptions,
   Alert,
+  DatePicker,
 } from 'antd'
 import {
   PlusOutlined,
@@ -200,6 +202,8 @@ export interface TaskTableProps {
   tasks: any[]
   setTasks: (tasks: any[]) => void
   isEditMode: boolean
+  isCurrentDraft?: boolean
+  currentLoginUser?: string
   visibleColumns: string[]
   searchText: string
   activeModule: string
@@ -501,12 +505,54 @@ export function GanttChart({ tasks, isEditMode, onTaskClick }: { tasks: any[]; i
   )
 }
 
+// ========== ActualDateCell - 点击切换编辑的日期单元格 ==========
+function ActualDateCell({ value, onChange }: { value: string; onChange: (val: string) => void }) {
+  const [editing, setEditing] = useState(false)
+
+  if (editing) {
+    return (
+      <DatePicker
+        size="small"
+        autoFocus
+        open
+        value={value ? dayjs(value) : null}
+        style={{ width: 120 }}
+        onChange={(date) => {
+          const newVal = date ? date.format('YYYY-MM-DD') : ''
+          onChange(newVal)
+          setEditing(false)
+          message.success('已保存')
+        }}
+        onBlur={() => setEditing(false)}
+        onOpenChange={(open) => { if (!open) setEditing(false) }}
+      />
+    )
+  }
+
+  return (
+    <div
+      onClick={() => setEditing(true)}
+      style={{
+        fontSize: 12, color: value ? '#595959' : '#bfbfbf',
+        cursor: 'pointer', padding: '4px 8px', borderRadius: 4,
+        border: '1px dashed transparent', transition: 'all 0.2s',
+        minHeight: 28, display: 'flex', alignItems: 'center',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = '#91caff'; e.currentTarget.style.background = '#f0f7ff' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = 'transparent' }}
+    >
+      {value || '点击填写'}
+    </div>
+  )
+}
+
 // ========== TaskTable Component ==========
 
 export function TaskTable({
   tasks: tableTasks,
   setTasks: currentSetTasks,
   isEditMode,
+  isCurrentDraft,
   visibleColumns,
   searchText,
   activeModule,
@@ -595,11 +641,20 @@ export function TaskTable({
     } })
     if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <span style={{ fontSize: 13 }}>{val}</span> : <span style={{ color: '#d9d9d9' }}>-</span>) })
     if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#d9d9d9' }}>-</span>) })
-    if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 120, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="YYYY-MM-DD" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planStartDate: e.target.value } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
-    if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 120, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="YYYY-MM-DD" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planEndDate: e.target.value } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
+    if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planStartDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
+    if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planEndDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
     if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val}天</span> })
-    if (visibleColumns.includes('actualStartDate')) cols.push({ title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 120, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="YYYY-MM-DD" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, actualStartDate: e.target.value } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
-    if (visibleColumns.includes('actualEndDate')) cols.push({ title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 120, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="YYYY-MM-DD" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, actualEndDate: e.target.value } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
+    // 实际时间：修订版本中不可编辑，已发布版本中点击切换编辑
+    const renderActualDateCell = (field: 'actualStartDate' | 'actualEndDate') => (val: string, record: any) => {
+      if (isCurrentDraft) {
+        // 修订版本：只读
+        return <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span>
+      }
+      // 已发布版本：点击编辑
+      return <ActualDateCell value={val} onChange={(newVal) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, [field]: newVal } : t); currentSetTasks(updated) }} />
+    }
+    if (visibleColumns.includes('actualStartDate')) cols.push({ title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 130, render: renderActualDateCell('actualStartDate') })
+    if (visibleColumns.includes('actualEndDate')) cols.push({ title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 130, render: renderActualDateCell('actualEndDate') })
     if (visibleColumns.includes('actualDays')) cols.push({ title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (val: number) => <span style={{ fontSize: 12, color: '#595959' }}>{val > 0 ? `${val}天` : '-'}</span> })
     if (visibleColumns.includes('status')) cols.push({ title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={s === '已完成' ? 'success' : s === '进行中' ? 'processing' : 'default'} style={{ borderRadius: 4, fontSize: 12 }}>{s}</Tag> })
     if (visibleColumns.includes('progress')) cols.push({ title: '进度', dataIndex: 'progress', key: 'progress', width: 130, render: (p: number) => (
@@ -1204,6 +1259,7 @@ export function PlanOverview({
               tasks={displayTasks}
               setTasks={setTasks}
               isEditMode={isEditMode}
+              isCurrentDraft={false}
               visibleColumns={visibleColumns}
               searchText={searchText}
               activeModule={activeModule}
@@ -1603,6 +1659,7 @@ export function ProjectPlan({
               tasks={tasks}
               setTasks={setTasks}
               isEditMode={isEditMode}
+              isCurrentDraft={isCurrentDraft}
               visibleColumns={visibleColumns}
               searchText={searchText}
               activeModule={activeModule}
@@ -1627,6 +1684,7 @@ export function ProjectPlan({
                 }
               }}
               isEditMode={isEditMode}
+              isCurrentDraft={isCurrentDraft}
               visibleColumns={visibleColumns}
               searchText={searchText}
               activeModule={activeModule}

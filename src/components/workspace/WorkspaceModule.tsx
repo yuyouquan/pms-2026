@@ -210,7 +210,8 @@ export const TodoList: React.FC<TodoListProps> = ({
     return merged
   }
 
-  const allMerged = mergeTodos(todos)
+  const userTodos = todos.filter(t => t.responsible === currentLoginUser)
+  const allMerged = mergeTodos(userTodos)
   const filteredTodos = todoFilter === 'all' ? allMerged : allMerged.filter(t => t.category === todoFilter)
 
   return (
