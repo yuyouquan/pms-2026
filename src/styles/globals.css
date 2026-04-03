@@ -2,44 +2,769 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ================================================================
+   PMS-2026 Design System — Purple Tech Glassmorphism
+   ================================================================ */
+
 :root {
+  /* ── Primary palette ── */
   --primary: #4338ca;
   --primary-hover: #3730a3;
+  --primary-deep: #312e81;
   --primary-light: #eef2ff;
-  --success: #22C55E;
-  --warning: #F59E0B;
-  --danger: #EF4444;
-  --border: #D1D5DB;
-  --text-primary: #1F2937;
-  --text-secondary: #6B7280;
-  --bg-primary: #F9FAFB;
-  --bg-secondary: #FFFFFF;
-  --border-radius: 10px;
+  --accent: #6366f1;
+  --accent-light: #818cf8;
+  --accent-muted: rgba(99, 102, 241, 0.08);
+
+  /* ── Semantic colors ── */
+  --success: #22c55e;
+  --success-light: #dcfce7;
+  --warning: #f59e0b;
+  --warning-light: #fef9c3;
+  --danger: #ef4444;
+  --danger-light: #fee2e2;
+  --info: #3b82f6;
+  --info-light: #dbeafe;
+
+  /* ── Neutral palette ── */
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --text-inverse: #ffffff;
+
+  --border: #e5e7eb;
+  --border-light: #f3f4f6;
+  --border-purple: rgba(99, 102, 241, 0.15);
+
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-glass: rgba(255, 255, 255, 0.72);
+  --bg-glass-heavy: rgba(255, 255, 255, 0.85);
+  --bg-purple-tint: rgba(99, 102, 241, 0.03);
+  --bg-hover: rgba(99, 102, 241, 0.06);
+
+  /* ── Glassmorphism ── */
+  --glass-blur: blur(12px);
+  --glass-blur-heavy: blur(20px);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.45);
+
+  /* ── Shadows ── */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.05);
+  --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.15);
+  --shadow-glow-md: 0 4px 20px rgba(99, 102, 241, 0.2);
+  --shadow-glow-lg: 0 8px 32px rgba(99, 102, 241, 0.25);
+  --shadow-glow-btn: 0 4px 14px rgba(67, 56, 202, 0.4);
+  --shadow-glow-btn-hover: 0 6px 20px rgba(67, 56, 202, 0.5);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04), 0 0 40px rgba(99, 102, 241, 0.08);
+
+  /* ── Spacing ── */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* ── Border radius ── */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
+
+  /* ── Typography ── */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+  --text-3xl: 28px;
+  --line-height-tight: 1.35;
+  --line-height-normal: 1.55;
+  --line-height-relaxed: 1.7;
+
+  /* ── Transitions ── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 0.15s;
+  --duration-normal: 0.25s;
+  --duration-slow: 0.4s;
 }
+
+
+/* ================================================================
+   Base & Reset
+   ================================================================ */
 
 body {
-  @apply bg-gray-50 text-gray-800 font-sans;
+  @apply text-gray-800;
+  font-family: var(--font-sans);
+  background: linear-gradient(135deg, #f0f2f8 0%, #e8ecf4 50%, #f5f7fc 100%) !important;
+  background-attachment: fixed !important;
+  font-feature-settings: 'cv11', 'ss01';
+  line-height: var(--line-height-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* 自定义滚动条 */
+/* Global smooth transitions */
+* {
+  transition-timing-function: var(--ease-out);
+}
+
+::selection {
+  background: rgba(99, 102, 241, 0.2);
+  color: var(--text-primary);
+}
+
+
+/* ================================================================
+   Scrollbar — Slim Purple
+   ================================================================ */
+
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 5px;
+  height: 5px;
 }
-
 ::-webkit-scrollbar-track {
-  @apply bg-gray-100;
+  background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-300 rounded;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-full);
+  transition: background 0.2s;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-400;
+  background: rgba(99, 102, 241, 0.35);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
-/* 表格样式 */
+
+/* ================================================================
+   Keyframe Animations
+   ================================================================ */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.12);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(99, 102, 241, 0.28);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.25);
+  }
+}
+
+
+/* ================================================================
+   Ant Design Overrides — Cards (Glassmorphism)
+   ================================================================ */
+
+.ant-card {
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow: var(--shadow-sm), 0 0 0 1px rgba(0, 0, 0, 0.03) !important;
+  backdrop-filter: var(--glass-blur) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  background: var(--bg-glass) !important;
+  transition: box-shadow var(--duration-normal) var(--ease-out),
+              transform var(--duration-normal) var(--ease-out),
+              border-color var(--duration-normal) var(--ease-out) !important;
+  animation: fadeIn 0.35s var(--ease-out) both;
+}
+
+.ant-card:hover {
+  box-shadow: var(--shadow-md), var(--shadow-glow) !important;
+  border-color: var(--border-purple) !important;
+}
+
+
+/* ================================================================
+   Ant Design Overrides — Tables
+   ================================================================ */
+
+.ant-table-wrapper .ant-table {
+  border-radius: var(--radius-lg) !important;
+  overflow: hidden !important;
+  animation: fadeIn 0.35s var(--ease-out) both;
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th {
+  background: linear-gradient(180deg, #fafaff 0%, #f1f3fb 100%) !important;
+  font-weight: 600 !important;
+  font-size: var(--text-base) !important;
+  color: #3f3f76 !important;
+  border-bottom: none !important;
+  padding: 11px 14px !important;
+  position: relative !important;
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.15), transparent);
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td {
+  transition: background var(--duration-fast) !important;
+  border-bottom: 1px solid var(--border-light) !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr:hover > td {
+  background: rgba(99, 102, 241, 0.06) !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr:nth-child(even) > td {
+  background: rgba(99, 102, 241, 0.015);
+}
+
+.ant-table-wrapper .ant-table-tbody > tr:nth-child(even):hover > td {
+  background: rgba(99, 102, 241, 0.06) !important;
+}
+
+
+/* ================================================================
+   Ant Design Overrides — Buttons
+   ================================================================ */
+
+.ant-btn {
+  border-radius: var(--radius-md) !important;
+  font-weight: 500 !important;
+  transition: all var(--duration-normal) var(--ease-out) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.ant-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity var(--duration-fast);
+  pointer-events: none;
+}
+
+.ant-btn:hover::after {
+  opacity: 1;
+}
+
+.ant-btn-primary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%) !important;
+  border-color: transparent !important;
+  box-shadow: var(--shadow-glow-btn) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.ant-btn-primary:hover {
+  background: linear-gradient(135deg, var(--primary-hover) 0%, #5b5cf6 100%) !important;
+  box-shadow: var(--shadow-glow-btn-hover) !important;
+  transform: translateY(-1px);
+}
+
+.ant-btn-primary:active {
+  transform: translateY(0.5px) !important;
+  box-shadow: 0 2px 8px rgba(67, 56, 202, 0.3) !important;
+}
+
+.ant-btn-default:hover {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+  background: rgba(99, 102, 241, 0.04) !important;
+}
+
+
+/* ================================================================
+   Ant Design Overrides — Tags / Badges
+   ================================================================ */
+
+.ant-tag {
+  border-radius: var(--radius-sm) !important;
+  font-size: var(--text-sm) !important;
+  font-weight: 500 !important;
+  border: 1px solid currentColor !important;
+  border-opacity: 0.3;
+  padding: 1px 8px !important;
+  line-height: 1.6 !important;
+}
+
+.ant-tag-blue {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+.ant-tag-green {
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7) !important;
+  border-color: rgba(34, 197, 94, 0.3) !important;
+}
+
+.ant-tag-red {
+  background: linear-gradient(135deg, #fef2f2, #fee2e2) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+.ant-tag-orange {
+  background: linear-gradient(135deg, #fffbeb, #fef3c7) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+.ant-tag-purple {
+  background: linear-gradient(135deg, #faf5ff, #f3e8ff) !important;
+  border-color: rgba(168, 85, 247, 0.3) !important;
+}
+
+
+/* ================================================================
+   Ant Design Overrides — Modals (Glassmorphism + Animation)
+   ================================================================ */
+
+.ant-modal-content {
+  border-radius: var(--radius-xl) !important;
+  box-shadow: var(--shadow-modal) !important;
+  overflow: hidden !important;
+  backdrop-filter: var(--glass-blur-heavy) !important;
+  -webkit-backdrop-filter: var(--glass-blur-heavy) !important;
+  background: var(--bg-glass-heavy) !important;
+  animation: scaleIn 0.3s var(--ease-out) both;
+}
+
+.ant-modal-header {
+  border-bottom: 1px solid rgba(99, 102, 241, 0.08) !important;
+  background: linear-gradient(180deg, rgba(250, 251, 255, 0.95) 0%, rgba(241, 243, 251, 0.9) 100%) !important;
+  padding: 16px 24px !important;
+}
+
+.ant-modal-header .ant-modal-title {
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
+}
+
+.ant-modal-footer {
+  border-top: 1px solid rgba(99, 102, 241, 0.06) !important;
+  background: rgba(250, 251, 255, 0.6) !important;
+  padding: 12px 24px !important;
+}
+
+.ant-modal-mask {
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+
+/* ================================================================
+   Ant Design Overrides — Inputs / Selects
+   ================================================================ */
+
+.ant-input,
+.ant-select-selector,
+.ant-picker,
+.ant-input-number {
+  border-radius: var(--radius-md) !important;
+  border-color: var(--border) !important;
+  transition: all var(--duration-normal) var(--ease-out) !important;
+}
+
+.ant-input:hover,
+.ant-select:not(.ant-select-disabled):hover .ant-select-selector,
+.ant-picker:hover,
+.ant-input-number:hover {
+  border-color: var(--accent-light) !important;
+  background: rgba(99, 102, 241, 0.02) !important;
+}
+
+.ant-input:focus,
+.ant-input-focused,
+.ant-select-focused .ant-select-selector,
+.ant-picker-focused,
+.ant-input-number-focused {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1), var(--shadow-glow) !important;
+}
+
+
+/* ================================================================
+   Ant Design Overrides — Menu
+   ================================================================ */
+
+.ant-menu-item {
+  border-radius: var(--radius-md) !important;
+  transition: all var(--duration-normal) var(--ease-out) !important;
+}
+
+.ant-menu-item:hover {
+  background: rgba(99, 102, 241, 0.05) !important;
+}
+
+.ant-menu-item-selected {
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 4px rgba(99, 102, 241, 0.1) !important;
+}
+
+
+/* ================================================================
+   Ant Design Overrides — Tabs
+   ================================================================ */
+
+.ant-tabs-tab {
+  transition: all var(--duration-normal) var(--ease-out) !important;
+  border-radius: var(--radius-md) var(--radius-md) 0 0 !important;
+}
+
+.ant-tabs-tab:hover {
+  color: var(--accent) !important;
+}
+
+.ant-tabs-tab-active .ant-tabs-tab-btn {
+  font-weight: 600 !important;
+  color: var(--primary) !important;
+}
+
+.ant-tabs-ink-bar {
+  background: linear-gradient(90deg, var(--primary), var(--accent)) !important;
+  height: 2.5px !important;
+  border-radius: 2px !important;
+}
+
+
+/* ================================================================
+   Ant Design Overrides — Dark Menu (Header Navigation)
+   ================================================================ */
+
+.ant-menu-dark.ant-menu-horizontal {
+  border-bottom: none !important;
+}
+
+.ant-menu-dark.ant-menu-horizontal > .ant-menu-item {
+  color: rgba(255, 255, 255, 0.72) !important;
+  border-radius: var(--radius-md) !important;
+  transition: all var(--duration-normal) var(--ease-out) !important;
+  margin: 0 2px !important;
+}
+
+.ant-menu-dark.ant-menu-horizontal > .ant-menu-item:hover {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.ant-menu-dark.ant-menu-horizontal > .ant-menu-item-selected {
+  background: rgba(255, 255, 255, 0.18) !important;
+  color: #fff !important;
+  border-radius: var(--radius-md) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+.ant-menu-dark .ant-menu-item-selected::after,
+.ant-menu-dark.ant-menu-horizontal > .ant-menu-item-selected::after {
+  display: none !important;
+}
+
+
+/* ================================================================
+   Ant Design Overrides — Progress
+   ================================================================ */
+
+.ant-progress-bg {
+  background: linear-gradient(90deg, var(--primary), var(--accent)) !important;
+}
+
+.ant-progress-circle .ant-progress-circle-path {
+  stroke: url(#purpleGradient) !important;
+}
+
+.ant-progress-success-bg {
+  background: linear-gradient(90deg, #16a34a, #22c55e) !important;
+}
+
+
+/* ================================================================
+   Ant Design Overrides — Tooltip / Popover
+   ================================================================ */
+
+.ant-tooltip-inner {
+  border-radius: var(--radius-md) !important;
+  font-size: var(--text-sm) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.ant-popover-inner {
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+
+/* ================================================================
+   Ant Design Overrides — Dropdown
+   ================================================================ */
+
+.ant-dropdown-menu {
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(0, 0, 0, 0.03) !important;
+  padding: 4px !important;
+  backdrop-filter: var(--glass-blur) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  background: var(--bg-glass-heavy) !important;
+}
+
+.ant-dropdown-menu-item {
+  border-radius: var(--radius-sm) !important;
+  transition: all var(--duration-fast) !important;
+}
+
+.ant-dropdown-menu-item:hover {
+  background: rgba(99, 102, 241, 0.06) !important;
+}
+
+
+/* ================================================================
+   Ant Design Overrides — Badge
+   ================================================================ */
+
+.ant-badge-count {
+  box-shadow: 0 0 0 2px #fff, 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  font-weight: 600 !important;
+}
+
+
+/* ================================================================
+   PMS Custom — Table (.pms-table)
+   ================================================================ */
+
+.pms-table .ant-table-thead > tr > th {
+  background: linear-gradient(180deg, #fafaff 0%, #f0f2fb 100%) !important;
+  font-weight: 600 !important;
+  font-size: var(--text-base) !important;
+  color: #3f3f76 !important;
+  border-bottom: none !important;
+  padding: 11px 14px !important;
+  position: relative !important;
+}
+
+.pms-table .ant-table-thead > tr > th::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, rgba(99, 102, 241, 0.2) 30%, rgba(99, 102, 241, 0.2) 70%, transparent 100%);
+}
+
+.pms-table .ant-table-tbody > tr > td {
+  padding: 9px 14px !important;
+  font-size: var(--text-base) !important;
+  vertical-align: middle !important;
+  transition: background var(--duration-fast) !important;
+  border-bottom: 1px solid var(--border-light) !important;
+}
+
+.pms-table .ant-table-tbody > tr:hover > td {
+  background: rgba(99, 102, 241, 0.06) !important;
+}
+
+.pms-table .ant-table-tbody > tr:nth-child(even) > td {
+  background: rgba(99, 102, 241, 0.018);
+}
+
+.pms-table .ant-table-tbody > tr:nth-child(even):hover > td {
+  background: rgba(99, 102, 241, 0.06) !important;
+}
+
+
+/* ================================================================
+   PMS Custom — Editable Table (.pms-table-edit)
+   ================================================================ */
+
+.pms-table-edit .ant-table-tbody > tr > td {
+  background: #fffce8 !important;
+  border-bottom: 1px solid rgba(250, 204, 21, 0.15) !important;
+}
+
+.pms-table-edit .ant-table-tbody > tr:hover > td {
+  background: #fff4cc !important;
+}
+
+
+/* ================================================================
+   PMS Custom — Edit Input (.pms-edit-input)
+   ================================================================ */
+
+.pms-edit-input {
+  border-color: var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  transition: all var(--duration-normal) var(--ease-out) !important;
+}
+
+.pms-edit-input:focus,
+.pms-edit-input:hover {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08), 0 0 12px rgba(99, 102, 241, 0.06) !important;
+}
+
+
+/* ================================================================
+   PMS Custom — Card Hover (.pms-card-hover)
+   ================================================================ */
+
+.pms-card-hover {
+  transition: all var(--duration-normal) var(--ease-out) !important;
+  position: relative;
+}
+
+.pms-card-hover::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.04) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity var(--duration-normal);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.pms-card-hover:hover {
+  border-color: rgba(99, 102, 241, 0.2) !important;
+  box-shadow: var(--shadow-md), var(--shadow-glow-md) !important;
+  transform: translateY(-3px);
+}
+
+.pms-card-hover:hover::before {
+  opacity: 1;
+}
+
+
+/* ================================================================
+   PMS Custom — Sidebar (.pms-sidebar)
+   ================================================================ */
+
+.pms-sidebar .ant-menu-item {
+  border-radius: var(--radius-md) !important;
+  margin: 2px 8px !important;
+  transition: all var(--duration-normal) var(--ease-out) !important;
+}
+
+.pms-sidebar .ant-menu-item:hover {
+  background: rgba(99, 102, 241, 0.05) !important;
+}
+
+.pms-sidebar .ant-menu-item-selected {
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%) !important;
+  font-weight: 600 !important;
+  color: var(--primary) !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.12) !important;
+  position: relative;
+}
+
+.pms-sidebar .ant-menu-item-selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 25%;
+  bottom: 25%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, var(--primary), var(--accent));
+}
+
+
+/* ================================================================
+   PMS Custom — Modal (.pms-modal)
+   ================================================================ */
+
+.pms-modal .ant-modal-content {
+  border-radius: var(--radius-xl) !important;
+  overflow: hidden !important;
+  backdrop-filter: var(--glass-blur-heavy) !important;
+  -webkit-backdrop-filter: var(--glass-blur-heavy) !important;
+  background: var(--bg-glass-heavy) !important;
+  animation: scaleIn 0.3s var(--ease-out) both;
+}
+
+.pms-modal .ant-modal-header {
+  padding: 18px 24px !important;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.08) !important;
+  background: linear-gradient(180deg, rgba(250, 251, 255, 0.95) 0%, rgba(241, 243, 251, 0.9) 100%) !important;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0 !important;
+}
+
+.pms-modal .ant-modal-footer {
+  padding: 14px 24px !important;
+  border-top: 1px solid rgba(99, 102, 241, 0.06) !important;
+  background: rgba(250, 251, 255, 0.6) !important;
+}
+
+
+/* ================================================================
+   Utility Classes — Table
+   ================================================================ */
+
 .table-container {
   @apply overflow-auto;
 }
@@ -49,7 +774,8 @@ body {
 }
 
 .table th {
-  @apply px-4 py-3 text-left text-sm font-medium text-gray-600 bg-gray-50 border-b border-gray-200;
+  @apply px-4 py-3 text-left text-sm font-semibold text-gray-600 border-b border-gray-200;
+  background: linear-gradient(180deg, #fafaff, #f1f3fb);
 }
 
 .table td {
@@ -57,171 +783,240 @@ body {
 }
 
 .table tr:hover td {
-  @apply bg-gray-50;
+  background: rgba(99, 102, 241, 0.05);
 }
 
-/* 按钮样式 */
+.table tr:nth-child(even) td {
+  background: rgba(99, 102, 241, 0.015);
+}
+
+.table tr:nth-child(even):hover td {
+  background: rgba(99, 102, 241, 0.05);
+}
+
+
+/* ================================================================
+   Utility Classes — Buttons
+   ================================================================ */
+
 .btn {
-  @apply px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200;
+  @apply px-4 py-2 rounded-lg font-medium text-sm;
+  transition: all var(--duration-normal) var(--ease-out);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn:active {
+  transform: translateY(0.5px);
 }
 
 .btn-primary {
-  @apply bg-blue-500 text-white hover:bg-blue-600;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  @apply text-white;
+  box-shadow: var(--shadow-glow-btn);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--primary-hover) 0%, #5b5cf6 100%);
+  box-shadow: var(--shadow-glow-btn-hover);
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
-  @apply bg-gray-100 text-gray-700 hover:bg-gray-200;
+  @apply bg-gray-100 text-gray-700;
+}
+
+.btn-secondary:hover {
+  @apply bg-gray-200;
+  transform: translateY(-1px);
 }
 
 .btn-danger {
-  @apply bg-red-500 text-white hover:bg-red-600;
+  background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+  @apply text-white;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.3);
+}
+
+.btn-danger:hover {
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+  transform: translateY(-1px);
 }
 
 .btn-success {
-  @apply bg-green-500 text-white hover:bg-green-600;
+  background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+  @apply text-white;
+  box-shadow: 0 4px 14px rgba(34, 197, 94, 0.3);
 }
 
-/* 输入框样式 */
+.btn-success:hover {
+  box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4);
+  transform: translateY(-1px);
+}
+
+
+/* ================================================================
+   Utility Classes — Inputs
+   ================================================================ */
+
 .input {
-  @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  @apply w-full px-3 py-2 border border-gray-300 rounded-lg;
+  transition: all var(--duration-normal) var(--ease-out);
 }
 
-/* 下拉选择器样式 */
+.input:focus {
+  @apply outline-none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1), var(--shadow-glow);
+}
+
+.input:hover {
+  border-color: var(--accent-light);
+  background: rgba(99, 102, 241, 0.02);
+}
+
 .select {
-  @apply w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500;
+  @apply w-full px-3 py-2 border border-gray-300 rounded-lg bg-white;
+  transition: all var(--duration-normal) var(--ease-out);
 }
 
-/* 卡片样式 */
+.select:focus {
+  @apply outline-none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1), var(--shadow-glow);
+}
+
+.select:hover {
+  border-color: var(--accent-light);
+  background: rgba(99, 102, 241, 0.02);
+}
+
+
+/* ================================================================
+   Utility Classes — Cards
+   ================================================================ */
+
 .card {
-  @apply bg-white rounded-lg shadow-sm border border-gray-200;
+  @apply rounded-xl border border-gray-100;
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--duration-normal) var(--ease-out);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md), var(--shadow-glow);
+  border-color: var(--border-purple);
 }
 
 .card-header {
-  @apply px-6 py-4 border-b border-gray-200;
+  @apply px-6 py-4;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.06);
 }
 
 .card-body {
   @apply p-6;
 }
 
-/* 弹窗样式 */
+
+/* ================================================================
+   Utility Classes — Modal
+   ================================================================ */
+
 .modal-overlay {
-  @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50;
+  @apply fixed inset-0 flex items-center justify-center z-50;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
 .modal {
-  @apply bg-white rounded-lg shadow-xl max-w-lg w-full mx-4;
+  @apply max-w-lg w-full mx-4;
+  background: var(--bg-glass-heavy);
+  backdrop-filter: var(--glass-blur-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-modal);
+  animation: scaleIn 0.3s var(--ease-out) both;
 }
 
-.modal-header {
-  @apply px-6 py-4 border-b border-gray-200 flex items-center justify-between;
-}
 
-.modal-body {
-  @apply px-6 py-4;
-}
+/* ================================================================
+   Utility Classes — Version Tags
+   ================================================================ */
 
-.modal-footer {
-  @apply px-6 py-4 border-t border-gray-200 flex justify-end gap-3;
-}
-
-/* 序号样式 */
-.task-number {
-  @apply font-mono font-medium;
-}
-
-.task-number-level-1 {
-  @apply font-bold;
-}
-
-.task-number-level-2 {
-  @apply pl-6;
-}
-
-.task-number-level-3 {
-  @apply pl-12;
-}
-
-/* 版本状态标签 */
 .version-tag {
-  @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium;
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium;
+  border: 1px solid transparent;
 }
 
 .version-tag-published {
-  @apply bg-green-100 text-green-800;
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  @apply text-green-800;
+  border-color: rgba(34, 197, 94, 0.3);
 }
 
 .version-tag-draft {
-  @apply bg-yellow-100 text-yellow-800;
+  background: linear-gradient(135deg, #fffbeb, #fef3c7);
+  @apply text-yellow-800;
+  border-color: rgba(245, 158, 11, 0.3);
 }
 
-/* 差异高亮 */
+
+/* ================================================================
+   Utility Classes — Diff Highlighting
+   ================================================================ */
+
 .diff-added {
-  @apply bg-green-50 text-green-700;
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  @apply text-green-700;
+  border-left: 3px solid rgba(34, 197, 94, 0.5);
 }
 
 .diff-deleted {
-  @apply bg-red-50 text-red-700;
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+  @apply text-red-700;
+  border-left: 3px solid rgba(239, 68, 68, 0.5);
 }
 
 .diff-modified {
-  @apply bg-blue-50 text-blue-700;
+  background: linear-gradient(135deg, #eef2ff, #dbeafe);
+  @apply text-blue-700;
+  border-left: 3px solid rgba(59, 130, 246, 0.5);
 }
 
-/* 加载状态 */
+
+/* ================================================================
+   Utility Classes — Skeleton Loading
+   ================================================================ */
+
 .skeleton {
-  @apply animate-pulse bg-gray-200 rounded;
+  @apply rounded;
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 37%, #e5e7eb 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }
 
-/* ========== 融合转维系统的 Ant Design 全局优化 ========== */
-.ant-card {
-  border-radius: 10px !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
-  transition: box-shadow 0.3s ease, transform 0.2s ease !important;
-}
-.ant-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
-}
 
-.ant-table-wrapper .ant-table-thead > tr > th {
-  background: #fafbfc !important;
-  font-weight: 600 !important;
-}
-.ant-table-wrapper .ant-table-tbody > tr:hover > td {
-  background: #f8f9ff !important;
-}
+/* ================================================================
+   Transfer Maintenance — Cancelled Row
+   ================================================================ */
 
-.ant-btn {
-  border-radius: 6px !important;
-}
-.ant-btn-primary {
-  box-shadow: 0 2px 6px rgba(67,56,202,0.3) !important;
-}
-.ant-btn-primary:hover {
-  transform: translateY(-1px);
-}
-
-.ant-tag {
-  border-radius: 4px !important;
-  font-size: 12px !important;
-}
-
-.ant-modal-content {
-  border-radius: 12px !important;
-}
-
-/* 平滑过渡 */
-* {
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* 淡入动画 */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* 转维表格取消行变暗 */
 .tm-row-cancelled td {
-  opacity: 0.5;
+  opacity: 0.45;
+  filter: grayscale(0.3);
+}
+
+.tm-row-cancelled:hover td {
+  opacity: 0.6;
+}
+
+
+/* ================================================================
+   Page-Level Animations
+   ================================================================ */
+
+.ant-card,
+.ant-table-wrapper {
+  animation: fadeIn 0.35s var(--ease-out) both;
 }

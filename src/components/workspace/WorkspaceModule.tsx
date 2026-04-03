@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import {
   Card,
   Tag,
@@ -85,9 +85,17 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   setActiveModule,
   PROJECT_STATUS_CONFIG,
 }) => {
+  const [hovered, setHovered] = useState(false)
   const statusConf = PROJECT_STATUS_CONFIG[project.status] || { color: '#8c8c8c', tagColor: 'default' }
   const isWholeMachine = project.type === '整机产品项目'
   const isCapability = project.type === '能力建设项目'
+
+  // Status tag gradient styles
+  const statusTagStyle: Record<string, React.CSSProperties> = {
+    '进行中': { background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', color: '#4338ca', border: 'none' },
+    '已完成': { background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', color: '#065f46', border: 'none' },
+    '筹备中': { background: 'linear-gradient(135deg, #fffbeb, #fef3c7)', color: '#92400e', border: 'none' },
+  }
 
   const fieldItem = (label: string, value: string | undefined) => value ? (
     <div style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -99,22 +107,35 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
     <Card
       hoverable
       className="pms-card-hover"
-      style={{ borderRadius: 10, border: '1px solid #f0f0f0', height: '100%' }}
+      style={{
+        borderRadius: 10,
+        border: '1px solid #f0f0f0',
+        height: '100%',
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.9) 100%)',
+        borderLeft: hovered ? '3px solid #6366f1' : '1px solid #f0f0f0',
+        boxShadow: hovered ? '0 12px 28px rgba(99,102,241,0.12)' : '0 2px 8px rgba(0,0,0,0.04)',
+        transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
+      }}
       styles={{ body: { padding: '16px 20px', height: '100%', display: 'flex', flexDirection: 'column' as const } }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       onClick={() => { setSelectedProject(project); setProjectSpaceModule('basic'); setActiveModule('projectSpace') }}
     >
       {/* 头部: 项目名 + 状态 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#262626', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#262626', letterSpacing: 0.3, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {project.name}
           </div>
           {isWholeMachine && project.marketName && (
             <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>市场名: {project.marketName}</div>
           )}
-          <Tag color="default" style={{ fontSize: 11, borderRadius: 3, margin: 0 }}>{project.type}</Tag>
+          <Tag color="default" style={{ fontSize: 11, borderRadius: 3, margin: 0, background: 'rgba(99,102,241,0.08)', color: '#6366f1', border: 'none' }}>{project.type}</Tag>
         </div>
-        <Tag color={statusConf.tagColor} style={{ margin: 0, borderRadius: 4, flexShrink: 0 }}>{project.status}</Tag>
+        <Tag
+          color={statusConf.tagColor}
+          style={{ margin: 0, borderRadius: 4, flexShrink: 0, ...(statusTagStyle[project.status] || {}) }}
+        >{project.status}</Tag>
       </div>
 
       {/* 中间: 类型差异化字段 */}
@@ -132,7 +153,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       {!isCapability && (project.planStartDate || project.planEndDate) && (
         <div style={{ display: 'flex', gap: 12, marginBottom: 10, fontSize: 12, color: '#8c8c8c' }}>
           {project.planStartDate && (
-            <span><CalendarOutlined style={{ marginRight: 4, color: '#bfbfbf' }} />{project.planStartDate}</span>
+            <span><CalendarOutlined style={{ marginRight: 4, color: '#6366f1' }} />{project.planStartDate}</span>
           )}
           {project.planEndDate && (
             <span>→ {project.planEndDate}</span>
@@ -143,7 +164,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       {/* 底部: 项目经理 + 更新时间 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
         <Space size={6}>
-          <Avatar size={20} style={{ background: statusConf.color, fontSize: 10 }}>{project.spm[0]}</Avatar>
+          <Avatar size={20} style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)', fontSize: 10 }}>{project.spm[0]}</Avatar>
           <span style={{ fontSize: 12, color: '#595959' }}>{project.spm}</span>
         </Space>
         <span style={{ fontSize: 11, color: '#bfbfbf' }}>{project.updatedAt}</span>
@@ -185,10 +206,10 @@ export const TodoList: React.FC<TodoListProps> = ({
   setActiveLevel2Plan,
   setSelectedMarketTab,
 }) => {
-  const priorityConfig: Record<string, { color: string; text: string; dotColor: string }> = {
-    high: { color: 'red', text: '高', dotColor: '#ff4d4f' },
-    medium: { color: 'orange', text: '中', dotColor: '#faad14' },
-    low: { color: 'blue', text: '低', dotColor: '#1890ff' },
+  const priorityConfig: Record<string, { color: string; text: string; dotColor: string; gradientBg: string }> = {
+    high: { color: 'red', text: '高', dotColor: '#ff4d4f', gradientBg: 'linear-gradient(135deg, #fff1f0, #ffccc7)' },
+    medium: { color: 'orange', text: '中', dotColor: '#faad14', gradientBg: 'linear-gradient(135deg, #fffbe6, #ffe58f)' },
+    low: { color: 'blue', text: '低', dotColor: '#6366f1', gradientBg: 'linear-gradient(135deg, #eef2ff, #e0e7ff)' },
   }
 
   // 按 项目+计划级别+计划类型+版本 去重合并
@@ -229,14 +250,14 @@ export const TodoList: React.FC<TodoListProps> = ({
                 key={todo.id}
                 style={{
                   padding: '12px 14px',
-                  background: '#fff',
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.85) 100%)',
                   borderRadius: 6,
                   border: '1px solid #f0f0f0',
                   cursor: 'pointer',
-                  transition: 'all 0.2s',
+                  transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none' }}
+                onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(99,102,241,0.08)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.15)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = '#f0f0f0' }}
                 onClick={() => {
                   const proj = projects.find(p => p.id === todo.projectId)
                   if (!proj) return
@@ -272,19 +293,24 @@ export const TodoList: React.FC<TodoListProps> = ({
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: pc.dotColor, marginTop: 7, flexShrink: 0 }} />
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: pc.dotColor, boxShadow: `0 0 6px ${pc.dotColor}66`, marginTop: 7, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{todo.projectName}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', letterSpacing: 0.3, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{todo.projectName}</div>
                     <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {todo.planLevel === 'level1' ? '一级计划' : '二级计划'}
                       {todo.planLevel === 'level2' && todo.planType && <> · {todo.planType}</>}
-                      {' · '}<span style={{ color: '#1890ff', fontWeight: 500 }}>{todo.versionNo}</span>
+                      {' · '}<span style={{ color: '#6366f1', fontWeight: 500 }}>{todo.versionNo}</span>
                       {todo.market && <> · <span style={{ color: '#13c2c2' }}>{todo.market}</span></>}
                     </div>
                     {(todo as any).mergedCount > 1 && <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4 }}>共 {(todo as any).mergedCount} 项待处理</div>}
                     <Space size={4}>
-                      <Tag color={pc.color} style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>{pc.text}</Tag>
-                      <Tag color={todo.status === '进行中' ? 'processing' : todo.status === '已完成' ? 'success' : 'default'} style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px' }}>{todo.status}</Tag>
+                      <Tag style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px', background: pc.gradientBg, color: pc.dotColor, border: 'none' }}>{pc.text}</Tag>
+                      <Tag style={{
+                        fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px', border: 'none',
+                        ...(todo.status === '进行中' ? { background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', color: '#4338ca' } :
+                           todo.status === '已完成' ? { background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', color: '#065f46' } :
+                           { background: 'linear-gradient(135deg, #f5f5f5, #e8e8e8)', color: '#595959' })
+                      }}>{todo.status}</Tag>
                     </Space>
                   </div>
                 </div>
