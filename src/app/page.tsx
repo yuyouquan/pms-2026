@@ -753,6 +753,7 @@ export default function Home() {
   const [todoCollapsed, setTodoCollapsed] = useState(false)
   const [projectSearchText2, setProjectSearchText2] = useState('')
   const [projectStatusFilter, setProjectStatusFilter] = useState<string>('all')
+  const [projectTypeFilter, setProjectTypeFilter] = useState<string>('all')
   const [projectListView, setProjectListView] = useState<'card' | 'list'>('card')
   const [projectCardPage, setProjectCardPage] = useState(1)
   const projectCardPageSize = 9
@@ -1037,8 +1038,11 @@ export default function Home() {
     if (projectStatusFilter !== 'all') {
       result = result.filter(p => p.status === projectStatusFilter)
     }
+    if (projectTypeFilter !== 'all') {
+      result = result.filter(p => p.type === projectTypeFilter)
+    }
     return result
-  }, [visibleProjects, projectSearchText2, projectStatusFilter])
+  }, [visibleProjects, projectSearchText2, projectStatusFilter, projectTypeFilter])
 
   // 带编辑保护的导航函数 - 如果当前在编辑模式，弹出确认框
   const navigateWithEditGuard = (action: () => void) => {
@@ -1570,7 +1574,7 @@ export default function Home() {
         className="pms-card-hover"
         style={{ borderRadius: 10, border: '1px solid #f0f0f0', height: '100%' }}
         styles={{ body: { padding: '16px 20px', height: '100%', display: 'flex', flexDirection: 'column' as const } }}
-        onClick={() => { setSelectedProject(project); setActiveModule('projectSpace') }}
+        onClick={() => { setSelectedProject(project); setProjectSpaceModule('basic'); setActiveModule('projectSpace') }}
       >
         {/* 头部: 项目名 + 状态 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
@@ -1673,7 +1677,7 @@ export default function Home() {
             <Card title={<Space><Badge color={col.color} />{col.title}</Space>} style={{ background: '#fafafa', minHeight: 300 }} bodyStyle={{ padding: 12 }}>
               <Space direction="vertical" style={{ width: '100%' }}>
                 {visibleProjects.filter(getKanbanFilter(col)).map(project => (
-                    <Card key={project.id} size="small" hoverable onClick={() => { setSelectedProject(project); setActiveModule('projectSpace') }}>
+                    <Card key={project.id} size="small" hoverable onClick={() => { setSelectedProject(project); setProjectSpaceModule('basic'); setActiveModule('projectSpace') }}>
                     <Space direction="vertical" style={{ width: '100%' }}><div style={{ fontWeight: 500 }}>{project.name}</div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Tag>{project.type}</Tag><Progress percent={project.progress} size="small" style={{ width: 60 }} /></div></Space>
                   </Card>
                 ))}
@@ -4710,8 +4714,9 @@ export default function Home() {
                     items={[
                       { key: 'projects', label: '工作台' },
                       { key: 'roadmap', label: '项目路标视图' },
+                      { key: 'hrPipeline', label: '人力资源管道' },
                       { key: 'config', label: '配置中心' },
-                      { key: 'globalPermission', label: '权限配置' },
+                      { key: 'globalPermission', label: '权限中心' },
                     ]}
                   />
                 </Space>
@@ -4812,8 +4817,21 @@ export default function Home() {
                         )
                       })}
                     </div>
-                    {/* 右侧: 搜索 + 视图切换 */}
+                    {/* 右侧: 类型筛选 + 搜索 + 视图切换 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Select
+                        value={projectTypeFilter}
+                        onChange={(v) => { setProjectTypeFilter(v); setProjectCardPage(1); }}
+                        style={{ width: 140 }}
+                        size="small"
+                        options={[
+                          { label: '全部类型', value: 'all' },
+                          { label: '整机产品项目', value: '整机产品项目' },
+                          { label: '产品项目', value: '产品项目' },
+                          { label: '技术项目', value: '技术项目' },
+                          { label: '能力建设项目', value: '能力建设项目' },
+                        ]}
+                      />
                       <Input
                         placeholder="搜索项目名称..."
                         prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
@@ -4867,7 +4885,7 @@ export default function Home() {
                       className="pms-table"
                       onRow={(record) => ({
                         style: { cursor: 'pointer' },
-                        onClick: () => { setSelectedProject(record); setActiveModule('projectSpace') },
+                        onClick: () => { setSelectedProject(record); setProjectSpaceModule('basic'); setActiveModule('projectSpace') },
                       })}
                       columns={[
                         { title: '项目名称', dataIndex: 'name', width: 200, render: (name: string, r: typeof initialProjects[0]) => (
@@ -4974,6 +4992,11 @@ export default function Home() {
               />
             )}
             {activeModule === 'globalPermission' && renderGlobalPermissionConfig()}
+            {activeModule === 'hrPipeline' && (
+              <Card style={{ borderRadius: 8, textAlign: 'center', padding: '80px 0' }}>
+                <Empty description={<span style={{ color: '#8c8c8c', fontSize: 14 }}>人力资源管道模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              </Card>
+            )}
             {(activeModule === 'config' || activeModule === 'projectSpace') && (
               <div>
                 {/* 配置分类导航 */}

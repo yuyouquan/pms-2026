@@ -12,19 +12,41 @@ import type { ColumnsType } from 'antd/es/table'
 import type { RoadmapViewConfig } from '@/types'
 import { aggregateMilestones, generateTableData, saveView, loadAllViews, deleteView } from './utils'
 
-const PROJECT_TYPES = ['整机产品项目', '产品项目', '技术项目', '能力建设项目']
+const PROJECT_TYPES = ['软件产品项目', '整机产品项目']
+
+const PROJECT_TYPE_MAP: Record<string, string> = {
+  '软件产品项目': '产品项目',
+  '整机产品项目': '整机产品项目',
+}
 
 const DEFAULT_VIEW_ID = '__default__'
 
-const FIXED_COLUMNS = [
+// 软件产品项目固定列
+const SOFTWARE_FIXED_COLUMNS = [
   { key: 'projectName', title: '项目名称' },
-  { key: 'market', title: '市场', onlyForType: '整机产品项目' },
-  { key: 'productLine', title: '产品线' },
-  { key: 'chipPlatform', title: '平台厂商' },
-  { key: 'tosVersion', title: 'tOS版本' },
+  { key: 'versionType', title: '版本类型' },
+  { key: 'currentNode', title: '当前节点' },
+  { key: 'chipPlatform', title: '芯片平台' },
   { key: 'status', title: '状态' },
   { key: 'spm', title: 'SPM' },
 ]
+
+// 整机产品项目固定列
+const MACHINE_FIXED_COLUMNS = [
+  { key: 'tosVersion', title: 'tOS版本' },
+  { key: 'brand', title: '品牌' },
+  { key: 'productType', title: '产品类型' },
+  { key: 'productLine', title: '产品线' },
+  { key: 'projectName', title: '项目名称' },
+  { key: 'chipPlatform', title: '芯片平台' },
+  { key: 'memory', title: '内存' },
+  { key: 'versionType', title: '版本类型' },
+  { key: 'developMode', title: '开发模式' },
+  { key: 'status', title: '状态' },
+  { key: 'spm', title: 'SPM' },
+]
+
+const FIXED_COLUMNS = SOFTWARE_FIXED_COLUMNS
 
 const marketColors: Record<string, string> = {
   'OP': '#1890ff', 'TR': '#52c41a', 'RU': '#faad14',
@@ -38,10 +60,12 @@ interface MilestoneViewProps {
   onViewProject: (projectId: string, market?: string) => void
 }
 
+function getFixedColumnsForType(projectType: string) {
+  return projectType === '整机产品项目' ? MACHINE_FIXED_COLUMNS : SOFTWARE_FIXED_COLUMNS
+}
+
 function getDefaultVisibleColumns(projectType: string) {
-  return FIXED_COLUMNS
-    .filter(c => !c.onlyForType || c.onlyForType === projectType)
-    .map(c => c.key)
+  return getFixedColumnsForType(projectType).map(c => c.key)
 }
 
 export default function MilestoneView({ projects, marketPlanData, level1Tasks, onViewProject }: MilestoneViewProps) {
@@ -96,15 +120,18 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     }
   }, [projectType, activeViewId])
 
+  // Map display type to data type
+  const dataType = PROJECT_TYPE_MAP[projectType] || projectType
+
   // Aggregate milestones
   const milestones = useMemo(() => {
-    return aggregateMilestones(projects, projectType, marketPlanData, level1Tasks)
-  }, [projects, projectType, marketPlanData, level1Tasks])
+    return aggregateMilestones(projects, dataType, marketPlanData, level1Tasks)
+  }, [projects, dataType, marketPlanData, level1Tasks])
 
   // Generate table data
   const allTableData = useMemo(() => {
-    return generateTableData(projects, milestones, projectType, marketPlanData, level1Tasks)
-  }, [projects, milestones, projectType, marketPlanData, level1Tasks])
+    return generateTableData(projects, milestones, dataType, marketPlanData, level1Tasks)
+  }, [projects, milestones, dataType, marketPlanData, level1Tasks])
 
   // Apply filters
   const tableData = useMemo(() => {
@@ -126,7 +153,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
 
   // Extract unique filter options from current project type
   const filterOptions = useMemo(() => {
-    const filteredProjects = projects.filter(p => p.type === projectType)
+    const filteredProjects = projects.filter(p => p.type === dataType)
     return {
       productLine: [...new Set(filteredProjects.map(p => p.productLine).filter(Boolean))] as string[],
       chipPlatform: [...new Set(filteredProjects.map(p => p.chipPlatform).filter(Boolean))] as string[],
@@ -138,62 +165,27 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
   // Build columns
   const columns = useMemo((): ColumnsType<any> => {
     const cols: ColumnsType<any> = []
+    const typeColumns = getFixedColumnsForType(projectType)
 
-    // Fixed left - project name (always visible)
-    cols.push({
-      title: '项目名称',
-      dataIndex: 'projectName',
-      key: 'projectName',
-      fixed: 'left' as const,
-      width: 200,
-      render: (text: string) => (
-        <span style={{ fontWeight: 500, fontSize: 13 }}>{text}</span>
-      ),
-    })
-
-    // Market column - only for 整机产品项目
-    if (projectType === '整机产品项目' && visibleColumns.includes('market')) {
-      cols.push({
-        title: '市场',
-        dataIndex: 'market',
-        key: 'market',
-        width: 80,
-        render: (val: string) => val ? (
-          <Tag color={marketColors[val] || 'default'} style={{ margin: 0 }}>{val}</Tag>
-        ) : '-',
-      })
-    }
-
-    // Optional fixed columns
-    if (visibleColumns.includes('productLine')) {
-      cols.push({ title: '产品线', dataIndex: 'productLine', key: 'productLine', width: 100 })
-    }
-    if (visibleColumns.includes('chipPlatform')) {
-      cols.push({ title: '平台厂商', dataIndex: 'chipPlatform', key: 'chipPlatform', width: 100 })
-    }
-    if (visibleColumns.includes('tosVersion')) {
-      cols.push({ title: 'tOS版本', dataIndex: 'tosVersion', key: 'tosVersion', width: 100 })
-    }
-    if (visibleColumns.includes('status')) {
-      cols.push({
-        title: '状态',
-        dataIndex: 'status',
-        key: 'status',
-        width: 90,
-        render: (val: string) => {
-          const colorMap: Record<string, string> = {
-            '进行中': 'processing',
-            '已完成': 'success',
-            '筹备中': 'warning',
-            '暂停': 'default',
-            '未开始': 'default',
-          }
-          return <Tag color={colorMap[val] || 'default'}>{val}</Tag>
-        },
-      })
-    }
-    if (visibleColumns.includes('spm')) {
-      cols.push({ title: 'SPM', dataIndex: 'spm', key: 'spm', width: 80 })
+    // Build fixed columns dynamically based on type
+    for (const col of typeColumns) {
+      if (!visibleColumns.includes(col.key)) continue
+      if (col.key === 'status') {
+        cols.push({
+          title: col.title, dataIndex: col.key, key: col.key, width: 90,
+          render: (val: string) => {
+            const colorMap: Record<string, string> = { '进行中': 'processing', '已完成': 'success', '筹备中': 'warning', '暂停': 'default', '未开始': 'default' }
+            return <Tag color={colorMap[val] || 'default'}>{val}</Tag>
+          },
+        })
+      } else if (col.key === 'projectName') {
+        cols.push({
+          title: col.title, dataIndex: col.key, key: col.key, width: 160,
+          render: (text: string) => <span style={{ fontWeight: 500, fontSize: 13 }}>{text}</span>,
+        })
+      } else {
+        cols.push({ title: col.title, dataIndex: col.key, key: col.key, width: 100 })
+      }
     }
 
     // Dynamic milestone columns
@@ -202,11 +194,19 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         title: ms.name,
         dataIndex: `ms_${ms.name}`,
         key: `ms_${ms.name}`,
-        width: 200,
+        width: 120,
         align: 'center' as const,
         render: (val: string) => (
           <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#595959' }}>{val}</span>
         ),
+      })
+    }
+
+    // 整机产品项目：产品上市列
+    if (projectType === '整机产品项目') {
+      cols.push({
+        title: '产品上市', dataIndex: 'launchDate', key: 'launchDate', width: 120, align: 'center' as const,
+        render: (val: string) => <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#595959' }}>{val}</span>,
       })
     }
 
@@ -215,7 +215,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       title: '操作',
       key: 'action',
       fixed: 'right' as const,
-      width: 70,
+      width: 90,
       render: (_: any, record: any) => (
         <Button
           type="link"
@@ -223,7 +223,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
           icon={<EyeOutlined />}
           onClick={() => onViewProject(record.projectId, record.market)}
         >
-          查看
+          查看/记录
         </Button>
       ),
     })
@@ -331,41 +331,36 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
   // Rebuild columns for snapshot milestones
   const displayColumns = useMemo((): ColumnsType<any> => {
     if (!activeSnapshot) return columns
-    // Rebuild with snapshot milestones
+    // Rebuild with snapshot milestones using same type-aware logic
     const cols: ColumnsType<any> = []
-    cols.push({
-      title: '项目名称', dataIndex: 'projectName', key: 'projectName', fixed: 'left' as const, width: 200,
-      render: (text: string) => <span style={{ fontWeight: 500, fontSize: 13 }}>{text}</span>,
-    })
-    if (activeSnapshot.projectType === '整机产品项目' && visibleColumns.includes('market')) {
-      cols.push({
-        title: '市场', dataIndex: 'market', key: 'market', width: 80,
-        render: (val: string) => val ? <Tag color={marketColors[val] || 'default'} style={{ margin: 0 }}>{val}</Tag> : '-',
-      })
+    const snapshotType = activeSnapshot.projectType
+    const typeColumns = getFixedColumnsForType(snapshotType)
+    for (const col of typeColumns) {
+      if (!visibleColumns.includes(col.key)) continue
+      if (col.key === 'status') {
+        cols.push({
+          title: col.title, dataIndex: col.key, key: col.key, width: 90,
+          render: (val: string) => {
+            const colorMap: Record<string, string> = { '进行中': 'processing', '已完成': 'success', '筹备中': 'warning', '暂停': 'default', '未开始': 'default' }
+            return <Tag color={colorMap[val] || 'default'}>{val}</Tag>
+          },
+        })
+      } else if (col.key === 'projectName') {
+        cols.push({ title: col.title, dataIndex: col.key, key: col.key, width: 160, render: (text: string) => <span style={{ fontWeight: 500, fontSize: 13 }}>{text}</span> })
+      } else {
+        cols.push({ title: col.title, dataIndex: col.key, key: col.key, width: 100 })
+      }
     }
-    if (visibleColumns.includes('productLine')) cols.push({ title: '产品线', dataIndex: 'productLine', key: 'productLine', width: 100 })
-    if (visibleColumns.includes('chipPlatform')) cols.push({ title: '平台厂商', dataIndex: 'chipPlatform', key: 'chipPlatform', width: 100 })
-    if (visibleColumns.includes('tosVersion')) cols.push({ title: 'tOS版本', dataIndex: 'tosVersion', key: 'tosVersion', width: 100 })
-    if (visibleColumns.includes('status')) {
-      cols.push({
-        title: '状态', dataIndex: 'status', key: 'status', width: 90,
-        render: (val: string) => {
-          const colorMap: Record<string, string> = { '进行中': 'processing', '已完成': 'success', '筹备中': 'warning', '暂停': 'default', '未开始': 'default' }
-          return <Tag color={colorMap[val] || 'default'}>{val}</Tag>
-        },
-      })
-    }
-    if (visibleColumns.includes('spm')) cols.push({ title: 'SPM', dataIndex: 'spm', key: 'spm', width: 80 })
     for (const ms of displayMilestones) {
       cols.push({
-        title: ms.name, dataIndex: `ms_${ms.name}`, key: `ms_${ms.name}`, width: 200, align: 'center' as const,
+        title: ms.name, dataIndex: `ms_${ms.name}`, key: `ms_${ms.name}`, width: 120, align: 'center' as const,
         render: (val: string) => <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#595959' }}>{val}</span>,
       })
     }
     cols.push({
-      title: '操作', key: 'action', fixed: 'right' as const, width: 70,
+      title: '操作', key: 'action', fixed: 'right' as const, width: 80,
       render: (_: any, record: any) => (
-        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => onViewProject(record.projectId, record.market)}>查看</Button>
+        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => onViewProject(record.projectId, record.market)}>查看/记录</Button>
       ),
     })
     return cols
@@ -374,10 +369,8 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
   const hasActiveFilters = Object.values(filters).some(v => v && v.length > 0)
 
   // Columns available for column settings (context-aware)
-  const settableColumns = FIXED_COLUMNS.filter(c => {
-    if (c.key === 'projectName') return false // always visible
-    if (c.onlyForType && c.onlyForType !== projectType) return false
-    return true
+  const settableColumns = getFixedColumnsForType(projectType).filter(c => {
+    return true // all columns configurable
   })
 
   // View tabs
