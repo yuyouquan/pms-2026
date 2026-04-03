@@ -4819,19 +4819,32 @@ export default function Home() {
                     </div>
                     {/* 右侧: 类型筛选 + 搜索 + 视图切换 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <Select
-                        value={projectTypeFilter}
-                        onChange={(v) => { setProjectTypeFilter(v); setProjectCardPage(1); }}
-                        style={{ width: 140 }}
-                        size="small"
-                        options={[
-                          { label: '全部类型', value: 'all' },
-                          { label: '整机产品项目', value: '整机产品项目' },
-                          { label: '产品项目', value: '产品项目' },
-                          { label: '技术项目', value: '技术项目' },
-                          { label: '能力建设项目', value: '能力建设项目' },
-                        ]}
-                      />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 4px', background: '#f5f5f5', borderRadius: 20 }}>
+                        {[
+                          { label: '全部', value: 'all' },
+                          { label: '整机', value: '整机产品项目' },
+                          { label: '产品', value: '产品项目' },
+                          { label: '技术', value: '技术项目' },
+                          { label: '能力', value: '能力建设项目' },
+                        ].map(item => {
+                          const isActive = projectTypeFilter === item.value
+                          return (
+                            <div
+                              key={item.value}
+                              onClick={() => { setProjectTypeFilter(item.value); setProjectCardPage(1); }}
+                              style={{
+                                padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
+                                fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
+                                background: isActive ? '#fff' : 'transparent',
+                                color: isActive ? '#1890ff' : '#8c8c8c',
+                                boxShadow: isActive ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                              }}
+                            >
+                              {item.label}
+                            </div>
+                          )
+                        })}
+                      </div>
                       <Input
                         placeholder="搜索项目名称..."
                         prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
