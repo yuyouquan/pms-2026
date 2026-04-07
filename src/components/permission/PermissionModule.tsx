@@ -135,7 +135,7 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
       {permConfigTab === 'roles' && (
         <div>
           <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 14, color: '#595959' }}>共 {roles.length} 个角色（{FIXED_ROLES.length} 个固定角色）</span>
+            <span style={{ fontSize: 14, color: '#4b5563' }}>共 {roles.length} 个角色（{FIXED_ROLES.length} 个固定角色）</span>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowAddRoleModal(true)}>新增角色</Button>
           </div>
           <Table
@@ -213,8 +213,8 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
             style={{ marginBottom: 16 }}
             items={roles.map(r => ({ key: r.name, label: r.name }))}
           />
-          <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden' }}>
-            <div style={{ fontWeight: 600, fontSize: 14, padding: '12px 16px', background: '#fafbfc', borderBottom: '1px solid #f0f0f0' }}>
+          <div style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ fontWeight: 600, fontSize: 14, padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #f3f4f6' }}>
               角色权限配置 — {permissionActiveRole}
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -224,21 +224,21 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
                   const maxCols = 6
                   return (
                     <tr key={mod.key}>
-                      <td style={{ padding: '12px 16px', fontWeight: 500, fontSize: 14, borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', width: 100, background: '#fafbfc', verticalAlign: 'middle' }}>{mod.name}</td>
+                      <td style={{ padding: '12px 16px', fontWeight: 500, fontSize: 14, borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #f3f4f6', width: 100, background: '#f8fafc', verticalAlign: 'middle' }}>{mod.name}</td>
                       {perms.length > 0 ? (
                         <>
                           {perms.map(p => (
-                            <td key={p} style={{ padding: '10px 12px', textAlign: 'center', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', minWidth: 110 }}>
+                            <td key={p} style={{ padding: '10px 12px', textAlign: 'center', borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #f3f4f6', minWidth: 110 }}>
                               <div style={{ fontSize: 13, marginBottom: 6 }}>{p}</div>
                               <Checkbox checked={!!rolePermissions[permissionActiveRole]?.[`${mod.key}:${p}`]} onChange={() => handlePermToggle(permissionActiveRole, `${mod.key}:${p}`)} />
                             </td>
                           ))}
                           {perms.length < maxCols && Array.from({ length: maxCols - perms.length }).map((_, i) => (
-                            <td key={`empty-${i}`} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
+                            <td key={`empty-${i}`} style={{ borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #f3f4f6' }} />
                           ))}
                         </>
                       ) : (
-                        <td colSpan={maxCols} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
+                        <td colSpan={maxCols} style={{ borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #f3f4f6' }} />
                       )}
                     </tr>
                   )
@@ -318,7 +318,7 @@ export const GlobalPermissionConfig: React.FC<GlobalPermissionConfigProps> = ({
       {globalPermTab === 'roles' && (
         <div>
           <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 14, color: '#595959' }}>共 {globalRoles.length} 个角色</span>
+            <span style={{ fontSize: 14, color: '#4b5563' }}>共 {globalRoles.length} 个角色</span>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowGlobalAddRole(true)}>新增角色</Button>
           </div>
           <Table
@@ -393,8 +393,8 @@ export const GlobalPermissionConfig: React.FC<GlobalPermissionConfigProps> = ({
                 style={{ marginBottom: 16 }}
                 items={globalRoles.map(r => ({ key: r.name, label: r.name }))}
               />
-              <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden' }}>
-                <div style={{ fontWeight: 600, fontSize: 14, padding: '12px 16px', background: '#fafbfc', borderBottom: '1px solid #f0f0f0' }}>
+              <div style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden' }}>
+                <div style={{ fontWeight: 600, fontSize: 14, padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #f3f4f6' }}>
                   角色权限配置 — {globalPermActiveRole}
                 </div>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -415,15 +415,15 @@ export const GlobalPermissionConfig: React.FC<GlobalPermissionConfigProps> = ({
                         const realPerms = mod.perms.filter(p => p.name)
                         return (
                           <tr key={mod.module}>
-                            <td style={{ padding: '12px 16px', fontWeight: 500, fontSize: 14, borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', width: 140, background: '#fafbfc', verticalAlign: 'middle' }}>{mod.module}</td>
+                            <td style={{ padding: '12px 16px', fontWeight: 500, fontSize: 14, borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #f3f4f6', width: 140, background: '#f8fafc', verticalAlign: 'middle' }}>{mod.module}</td>
                             {realPerms.map(opt => (
-                              <td key={opt.key} style={{ padding: '10px 16px', textAlign: 'center', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', minWidth: 110 }}>
+                              <td key={opt.key} style={{ padding: '10px 16px', textAlign: 'center', borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #f3f4f6', minWidth: 110 }}>
                                 <div style={{ fontSize: 13, marginBottom: 6 }}>{opt.name}</div>
                                 <Checkbox checked={!!globalRolePerms[globalPermActiveRole]?.[opt.key]} onChange={() => handlePermToggle(globalPermActiveRole, opt.key)} />
                               </td>
                             ))}
                             {realPerms.length < maxCols && Array.from({ length: maxCols - realPerms.length }).map((_, i) => (
-                              <td key={`empty-${i}`} style={{ borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }} />
+                              <td key={`empty-${i}`} style={{ borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #f3f4f6' }} />
                             ))}
                           </tr>
                         )
