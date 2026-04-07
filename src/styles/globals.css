@@ -54,12 +54,19 @@
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
   --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.05);
+  --shadow-2xl: 0 24px 64px rgba(0, 0, 0, 0.14), 0 8px 20px rgba(0, 0, 0, 0.06);
+  --shadow-card-hover: 0 6px 24px rgba(0, 0, 0, 0.07), 0 2px 8px rgba(0, 0, 0, 0.03), 0 0 16px rgba(99, 102, 241, 0.1);
+  --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.04), inset 0 0 0 1px rgba(0, 0, 0, 0.02);
+  --shadow-inset-focus: inset 0 1px 2px rgba(99, 102, 241, 0.06);
   --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.15);
   --shadow-glow-md: 0 4px 20px rgba(99, 102, 241, 0.2);
   --shadow-glow-lg: 0 8px 32px rgba(99, 102, 241, 0.25);
   --shadow-glow-btn: 0 4px 14px rgba(67, 56, 202, 0.4);
   --shadow-glow-btn-hover: 0 6px 20px rgba(67, 56, 202, 0.5);
   --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04), 0 0 40px rgba(99, 102, 241, 0.08);
+
+  /* ── Gradients ── */
+  --bg-gradient-subtle: linear-gradient(135deg, #f0f2f8 0%, #eaecf8 25%, #e8ecf4 50%, #eef0fa 75%, #f5f7fc 100%);
 
   /* ── Spacing ── */
   --space-xs: 4px;
@@ -108,7 +115,7 @@
 body {
   @apply text-gray-800;
   font-family: var(--font-sans);
-  background: linear-gradient(135deg, #f0f2f8 0%, #e8ecf4 50%, #f5f7fc 100%) !important;
+  background: var(--bg-gradient-subtle) !important;
   background-attachment: fixed !important;
   font-feature-settings: 'cv11', 'ss01';
   line-height: var(--line-height-normal);
@@ -140,15 +147,34 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.07);
   border-radius: var(--radius-full);
-  transition: background 0.2s;
+  transition: background 0.3s var(--ease-out);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.35);
+  background: rgba(99, 102, 241, 0.3);
 }
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* Show scrollbar only on container hover */
+.pms-scroll-fade {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s var(--ease-out);
+}
+.pms-scroll-fade:hover {
+  scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+}
+.pms-scroll-fade::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+.pms-scroll-fade:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+.pms-scroll-fade:hover::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.3);
 }
 
 
@@ -159,7 +185,18 @@ body {
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes floatUp {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -170,11 +207,31 @@ body {
 @keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes breathe {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
   }
 }
 
@@ -232,11 +289,41 @@ body {
               transform var(--duration-normal) var(--ease-out),
               border-color var(--duration-normal) var(--ease-out) !important;
   animation: fadeIn 0.35s var(--ease-out) both;
+  position: relative;
+  overflow: hidden;
+}
+
+.ant-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--primary), var(--accent), var(--accent-light));
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-out);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .ant-card:hover {
-  box-shadow: var(--shadow-md), var(--shadow-glow) !important;
+  box-shadow: var(--shadow-card-hover) !important;
   border-color: var(--border-purple) !important;
+  transform: translateY(-2px);
+}
+
+.ant-card:hover::after {
+  opacity: 1;
+}
+
+.ant-card-hoverable {
+  cursor: pointer !important;
+}
+
+.ant-card-hoverable:hover {
+  box-shadow: var(--shadow-card-hover), var(--shadow-glow) !important;
+  transform: translateY(-2px);
 }
 
 
@@ -251,7 +338,7 @@ body {
 }
 
 .ant-table-wrapper .ant-table-thead > tr > th {
-  background: linear-gradient(180deg, #fafaff 0%, #f1f3fb 100%) !important;
+  background: linear-gradient(180deg, #fbfbff 0%, #f4f5fc 100%) !important;
   font-weight: 600 !important;
   font-size: var(--text-base) !important;
   color: #3f3f76 !important;
@@ -287,6 +374,15 @@ body {
   background: rgba(99, 102, 241, 0.06) !important;
 }
 
+.ant-table-wrapper .ant-table-tbody > tr.ant-table-row-selected > td {
+  background: rgba(99, 102, 241, 0.08) !important;
+  border-bottom-color: rgba(99, 102, 241, 0.1) !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr.ant-table-row-selected:hover > td {
+  background: rgba(99, 102, 241, 0.12) !important;
+}
+
 
 /* ================================================================
    Ant Design Overrides — Buttons
@@ -315,14 +411,14 @@ body {
 }
 
 .ant-btn-primary {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%) !important;
+  background: linear-gradient(135deg, var(--primary) 0%, #5558e6 50%, var(--accent) 100%) !important;
   border-color: transparent !important;
   box-shadow: var(--shadow-glow-btn) !important;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .ant-btn-primary:hover {
-  background: linear-gradient(135deg, var(--primary-hover) 0%, #5b5cf6 100%) !important;
+  background: linear-gradient(135deg, var(--primary-hover) 0%, #4e50e0 50%, #5b5cf6 100%) !important;
   box-shadow: var(--shadow-glow-btn-hover) !important;
   transform: translateY(-1px);
 }
@@ -332,10 +428,19 @@ body {
   box-shadow: 0 2px 8px rgba(67, 56, 202, 0.3) !important;
 }
 
+.ant-btn-default {
+  border-color: rgba(209, 213, 219, 0.8) !important;
+}
+
 .ant-btn-default:hover {
-  border-color: var(--accent) !important;
+  border-color: var(--accent-light) !important;
   color: var(--accent) !important;
   background: rgba(99, 102, 241, 0.04) !important;
+}
+
+.ant-btn-text:hover {
+  background: rgba(99, 102, 241, 0.05) !important;
+  color: var(--accent) !important;
 }
 
 
@@ -391,6 +496,18 @@ body {
   -webkit-backdrop-filter: var(--glass-blur-heavy) !important;
   background: var(--bg-glass-heavy) !important;
   animation: scaleIn 0.3s var(--ease-out) both;
+  position: relative;
+}
+
+.ant-modal-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--primary), var(--accent), var(--accent-light));
+  z-index: 1;
 }
 
 .ant-modal-header {
@@ -411,8 +528,19 @@ body {
 }
 
 .ant-modal-mask {
-  backdrop-filter: blur(4px) !important;
-  -webkit-backdrop-filter: blur(4px) !important;
+  backdrop-filter: blur(6px) !important;
+  -webkit-backdrop-filter: blur(6px) !important;
+}
+
+.ant-modal-close {
+  transition: all var(--duration-normal) var(--ease-out) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.ant-modal-close:hover {
+  background: rgba(99, 102, 241, 0.08) !important;
+  color: var(--accent) !important;
+  transform: scale(1.05);
 }
 
 
@@ -443,7 +571,7 @@ body {
 .ant-picker-focused,
 .ant-input-number-focused {
   border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1), var(--shadow-glow) !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1), var(--shadow-inset-focus) !important;
 }
 
 
@@ -531,7 +659,18 @@ body {
    ================================================================ */
 
 .ant-progress-bg {
-  background: linear-gradient(90deg, var(--primary), var(--accent)) !important;
+  background: linear-gradient(90deg, var(--primary), #5558e6, var(--accent)) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.ant-progress-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
 }
 
 .ant-progress-circle .ant-progress-circle-path {
@@ -539,7 +678,7 @@ body {
 }
 
 .ant-progress-success-bg {
-  background: linear-gradient(90deg, #16a34a, #22c55e) !important;
+  background: linear-gradient(90deg, #16a34a, #1db954, #22c55e) !important;
 }
 
 
@@ -551,11 +690,20 @@ body {
   border-radius: var(--radius-md) !important;
   font-size: var(--text-sm) !important;
   box-shadow: var(--shadow-lg) !important;
+  animation: floatUp 0.2s var(--ease-out) both;
+}
+
+.ant-tooltip-arrow::before {
+  background: inherit !important;
 }
 
 .ant-popover-inner {
   border-radius: var(--radius-lg) !important;
-  box-shadow: var(--shadow-lg) !important;
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(0, 0, 0, 0.03) !important;
+  backdrop-filter: var(--glass-blur) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  background: var(--bg-glass-heavy) !important;
+  animation: floatUp 0.2s var(--ease-out) both;
 }
 
 
@@ -587,8 +735,12 @@ body {
    ================================================================ */
 
 .ant-badge-count {
-  box-shadow: 0 0 0 2px #fff, 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0, 0, 0, 0.12) !important;
   font-weight: 600 !important;
+}
+
+.ant-badge-count-pulse {
+  animation: glowPulse 2s ease-in-out infinite;
 }
 
 
@@ -597,7 +749,7 @@ body {
    ================================================================ */
 
 .pms-table .ant-table-thead > tr > th {
-  background: linear-gradient(180deg, #fafaff 0%, #f0f2fb 100%) !important;
+  background: linear-gradient(180deg, #fbfbff 0%, #f3f4fc 100%) !important;
   font-weight: 600 !important;
   font-size: var(--text-base) !important;
   color: #3f3f76 !important;
@@ -636,6 +788,15 @@ body {
   background: rgba(99, 102, 241, 0.06) !important;
 }
 
+.pms-table .ant-table-tbody > tr.ant-table-row-selected > td {
+  background: rgba(99, 102, 241, 0.08) !important;
+  border-bottom-color: rgba(99, 102, 241, 0.1) !important;
+}
+
+.pms-table .ant-table-tbody > tr.ant-table-row-selected:hover > td {
+  background: rgba(99, 102, 241, 0.12) !important;
+}
+
 
 /* ================================================================
    PMS Custom — Editable Table (.pms-table-edit)
@@ -664,7 +825,7 @@ body {
 .pms-edit-input:focus,
 .pms-edit-input:hover {
   border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08), 0 0 12px rgba(99, 102, 241, 0.06) !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.08), var(--shadow-inset-focus) !important;
 }
 
 
@@ -691,8 +852,8 @@ body {
 
 .pms-card-hover:hover {
   border-color: rgba(99, 102, 241, 0.2) !important;
-  box-shadow: var(--shadow-md), var(--shadow-glow-md) !important;
-  transform: translateY(-3px);
+  box-shadow: var(--shadow-card-hover), var(--shadow-glow) !important;
+  transform: translateY(-2px);
 }
 
 .pms-card-hover:hover::before {
@@ -745,6 +906,18 @@ body {
   -webkit-backdrop-filter: var(--glass-blur-heavy) !important;
   background: var(--bg-glass-heavy) !important;
   animation: scaleIn 0.3s var(--ease-out) both;
+  position: relative;
+}
+
+.pms-modal .ant-modal-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--primary), var(--accent), var(--accent-light));
+  z-index: 1;
 }
 
 .pms-modal .ant-modal-header {
@@ -866,7 +1039,7 @@ body {
 .input:focus {
   @apply outline-none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1), var(--shadow-glow);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1), var(--shadow-inset-focus);
 }
 
 .input:hover {
@@ -882,7 +1055,7 @@ body {
 .select:focus {
   @apply outline-none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1), var(--shadow-glow);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1), var(--shadow-inset-focus);
 }
 
 .select:hover {
@@ -926,8 +1099,8 @@ body {
 .modal-overlay {
   @apply fixed inset-0 flex items-center justify-center z-50;
   background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .modal {
@@ -1009,6 +1182,162 @@ body {
 
 .tm-row-cancelled:hover td {
   opacity: 0.6;
+}
+
+
+/* ================================================================
+   PMS Utility Classes — UI Components
+   ================================================================ */
+
+/* Section headers with decorative line */
+.pms-section-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  position: relative;
+}
+
+.pms-section-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--border-purple), transparent);
+}
+
+/* Glass panel — lighter than card */
+.pms-glass-panel {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  padding: var(--space-md);
+  transition: all var(--duration-normal) var(--ease-out);
+}
+
+.pms-glass-panel:hover {
+  box-shadow: var(--shadow-sm);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+/* Stat card with number emphasis */
+.pms-stat-card {
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg) var(--space-xl);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--duration-normal) var(--ease-out);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.pms-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  opacity: 0;
+  transition: opacity var(--duration-normal);
+}
+
+.pms-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.pms-stat-card:hover::before {
+  opacity: 1;
+}
+
+/* Smooth list item transitions */
+.pms-list-item {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  transition: all var(--duration-fast) var(--ease-out);
+  cursor: pointer;
+  position: relative;
+}
+
+.pms-list-item:hover {
+  background: var(--bg-hover);
+}
+
+.pms-list-item:active {
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.pms-list-item + .pms-list-item {
+  margin-top: 1px;
+}
+
+/* Status dot indicator */
+.pms-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  position: relative;
+}
+
+.pms-status-dot--active {
+  background: var(--success);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+}
+
+.pms-status-dot--warning {
+  background: var(--warning);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+.pms-status-dot--danger {
+  background: var(--danger);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.pms-status-dot--pulse {
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+/* Gradient text */
+.pms-gradient-text {
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+
+/* ================================================================
+   Responsive Spacing
+   ================================================================ */
+
+.pms-section + .pms-section {
+  margin-top: var(--space-xl);
+}
+
+@media (max-width: 768px) {
+  .pms-section + .pms-section {
+    margin-top: var(--space-lg);
+  }
+}
+
+@media (min-width: 1440px) {
+  .pms-section + .pms-section {
+    margin-top: var(--space-2xl);
+  }
 }
 
 

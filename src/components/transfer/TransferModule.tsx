@@ -134,9 +134,9 @@ function PipelineProgress({ pipeline, showRoleDots = true }: { pipeline: Pipelin
           <Fragment key={label}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 100 }}>
               <div style={{ width: 32, height: 32, borderRadius: '50%', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
-              <div style={{ marginTop: 8, fontSize: 13, color: '#333', textAlign: 'center', whiteSpace: 'nowrap' }}>{label}</div>
+              <div style={{ marginTop: 8, fontSize: 13, color: '#4b5563', textAlign: 'center', whiteSpace: 'nowrap' }}>{label}</div>
             </div>
-            {!isLast && <div style={{ flex: 1, height: 2, background: '#e8e8e8', alignSelf: 'center', marginTop: -16 }} />}
+            {!isLast && <div style={{ flex: 1, height: 2, background: '#e5e7eb', alignSelf: 'center', marginTop: -16 }} />}
           </Fragment>
         )
       })}
@@ -149,7 +149,7 @@ function MiniPipeline({ app }: { app: TransferApplication }) {
   const label = getCurrentNodeLabel(app)
   const pct = getPipelinePercent(app)
   const nodeStatus = getCurrentNodeStatus(app)
-  const strokeColor = nodeStatus === 'success' ? '#52c41a' : nodeStatus === 'failed' ? '#ff4d4f' : '#1677ff'
+  const strokeColor = nodeStatus === 'success' ? '#52c41a' : nodeStatus === 'failed' ? '#ff4d4f' : '#6366f1'
   const tagConfig = NODE_STATUS_CONFIG[nodeStatus] || NODE_STATUS_CONFIG['not_started']
   if (app.status === 'cancelled') {
     return <Tag color="default" icon={<StopOutlined />}>已关闭</Tag>
@@ -164,11 +164,11 @@ function MiniPipeline({ app }: { app: TransferApplication }) {
 
 function TeamMemberCard({ member }: { member: TMTeamMember }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 6, border: '1px solid #f0f0f0', background: '#fafbfc' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#f8fafc' }}>
       <Avatar size={28} style={{ background: ROLE_COLORS[member.role] || '#999', fontSize: 12, flexShrink: 0 }}>{member.name.slice(-1)}</Avatar>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</div>
-        <div style={{ fontSize: 11, color: '#8c8c8c' }}>{member.role} · {member.department}</div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: '#111827', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</div>
+        <div style={{ fontSize: 11, color: '#9ca3af' }}>{member.role} · {member.department}</div>
       </div>
     </div>
   )
@@ -199,7 +199,7 @@ function renderEntryContent(record: { entryContent?: string; deliverables?: { id
     <div style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden', fontSize: 12 }}>
       {segments.map((seg, i) => {
         if (seg.type === 'feishu') return <a key={i} href={seg.url} target="_blank" rel="noopener noreferrer" style={{ color: '#4338ca', display: 'inline-flex', alignItems: 'center', gap: 2 }}><FileTextOutlined style={{ fontSize: 11 }} />飞书文档</a>
-        if (seg.type === 'link') return <a key={i} href={seg.url} target="_blank" rel="noopener noreferrer" style={{ color: '#1677ff', display: 'inline-flex', alignItems: 'center', gap: 2 }}><LinkOutlined style={{ fontSize: 11 }} />{seg.text}</a>
+        if (seg.type === 'link') return <a key={i} href={seg.url} target="_blank" rel="noopener noreferrer" style={{ color: '#6366f1', display: 'inline-flex', alignItems: 'center', gap: 2 }}><LinkOutlined style={{ fontSize: 11 }} />{seg.text}</a>
         if (seg.type === 'samba') return <span key={i} style={{ color: '#d97706', display: 'inline-flex', alignItems: 'center', gap: 2 }}><FolderOpenOutlined style={{ fontSize: 11 }} />{seg.text}</span>
         return <span key={i}>{seg.text} </span>
       })}
@@ -325,7 +325,7 @@ export function TransferConfig(props: TransferModuleProps) {
     return (
       <div>
         <Breadcrumb items={[{ title: '配置中心' }]} style={{ marginBottom: 16 }} />
-        <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 24, color: '#262626' }}>配置中心</div>
+        <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 24, color: '#111827' }}>配置中心</div>
         <Row gutter={24}>
           {cards.map(c => (
             <Col span={12} key={c.key}>
@@ -337,7 +337,7 @@ export function TransferConfig(props: TransferModuleProps) {
                       <span style={{ fontSize: 16, fontWeight: 600 }}>{c.title}</span>
                       <Tag color="blue" style={{ borderRadius: 4 }}>{c.count} 条</Tag>
                     </div>
-                    <div style={{ fontSize: 13, color: '#8c8c8c' }}>{c.desc}</div>
+                    <div style={{ fontSize: 13, color: '#9ca3af' }}>{c.desc}</div>
                   </div>
                 </div>
                 <Button type="primary" style={{ background: '#4338ca', borderColor: '#4338ca' }} onClick={() => props.setTransferConfigView(c.key as 'checklist' | 'review')}>管理</Button>
@@ -425,9 +425,9 @@ export function TransferWorkbench(props: TransferModuleProps) {
   const apps = props.transferApplications.filter(a => a.projectName === props.selectedProject?.name)
   const stats = [
     { label: '总计', value: apps.length, color: '#4338ca' },
-    { label: '进行中', value: apps.filter(a => a.status === 'in_progress').length, color: '#1677ff' },
+    { label: '进行中', value: apps.filter(a => a.status === 'in_progress').length, color: '#6366f1' },
     { label: '已完成', value: apps.filter(a => a.status === 'completed').length, color: '#52c41a' },
-    { label: '已关闭', value: apps.filter(a => a.status === 'cancelled').length, color: '#d9d9d9' },
+    { label: '已关闭', value: apps.filter(a => a.status === 'cancelled').length, color: '#e5e7eb' },
   ]
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
@@ -450,7 +450,7 @@ export function TransferWorkbench(props: TransferModuleProps) {
             { title: '项目名称', dataIndex: 'projectName', width: 240, render: (_: unknown, r: TransferApplication) => (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Avatar size={32} style={{ background: `linear-gradient(135deg, ${ROLE_COLORS[r.team.research[0]?.role] || '#4338ca'} 0%, #6366f1 100%)`, fontSize: 12 }}>{r.applicant.slice(-1)}</Avatar>
-                <div><div style={{ fontSize: 13, fontWeight: 500 }}>{r.projectName}</div><div style={{ fontSize: 11, color: '#8c8c8c' }}>{r.applicant} · {r.createdAt.slice(0, 10)}</div></div>
+                <div><div style={{ fontSize: 13, fontWeight: 500 }}>{r.projectName}</div><div style={{ fontSize: 11, color: '#9ca3af' }}>{r.applicant} · {r.createdAt.slice(0, 10)}</div></div>
               </div>
             )},
             { title: '流水线进度', width: 200, render: (_: unknown, r: TransferApplication) => <MiniPipeline app={r} /> },
@@ -465,7 +465,7 @@ export function TransferWorkbench(props: TransferModuleProps) {
             { title: '操作', width: 260, fixed: 'right' as const, render: (_: unknown, r: TransferApplication) => (
               <Space size={4}>
                 <Button size="small" type="text" icon={<FileTextOutlined />} style={{ color: '#666' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('detail'); }}>详情</Button>
-                {r.status === 'in_progress' && r.pipeline.dataEntry !== 'success' && <Button size="small" type="text" icon={<EditOutlined />} style={{ color: '#1677ff' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('entry'); }}>录入</Button>}
+                {r.status === 'in_progress' && r.pipeline.dataEntry !== 'success' && <Button size="small" type="text" icon={<EditOutlined />} style={{ color: '#6366f1' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('entry'); }}>录入</Button>}
                 {r.status === 'in_progress' && r.pipeline.maintenanceReview === 'in_progress' && <Button size="small" type="text" icon={<AuditOutlined />} style={{ color: '#52c41a' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('review'); }}>评审</Button>}
                 {r.status === 'in_progress' && r.pipeline.sqaReview === 'in_progress' && <Button size="small" type="text" icon={<SafetyOutlined />} style={{ color: '#faad14' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('sqa-review'); }}>SQA审核</Button>}
                 {r.status === 'in_progress' && <Button size="small" type="text" danger icon={<CloseCircleOutlined />} onClick={() => { props.setTmCloseAppId(r.id); props.setTmCloseReason(''); props.setTmCloseModalVisible(true); }}>关闭</Button>}
@@ -480,7 +480,7 @@ export function TransferWorkbench(props: TransferModuleProps) {
         props.setTransferApplications(prev => prev.map(a => a.id === props.tmCloseAppId ? { ...a, status: 'cancelled' as const, cancelReason: props.tmCloseReason } : a));
         props.setTmCloseModalVisible(false); message.success('已关闭');
       }}>
-        <div style={{ marginBottom: 12, fontSize: 13, color: '#8c8c8c' }}>关闭后该转维申请将不可恢复，请确认。</div>
+        <div style={{ marginBottom: 12, fontSize: 13, color: '#9ca3af' }}>关闭后该转维申请将不可恢复，请确认。</div>
         <TextArea rows={3} placeholder="请输入关闭原因..." value={props.tmCloseReason} onChange={e => props.setTmCloseReason(e.target.value)} />
       </Modal>
     </div>
@@ -520,7 +520,7 @@ export function TransferApply(props: TransferModuleProps) {
                   {roleOrder.map(role => {
                     const members = props.tmApplyTeam[side].filter(m => m.role === role)
                     return (
-                      <div key={role} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid #f5f5f5' }}>
+                      <div key={role} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
                         <Tag color={ROLE_COLORS[role] || '#999'} style={{ color: '#fff', minWidth: 40, textAlign: 'center', borderRadius: 4 }}>{role}</Tag>
                         <Select mode="multiple" placeholder={`选择${role}成员`} value={members.map(m => m.id)} style={{ flex: 1 }}
                           onChange={(vals: string[]) => {
@@ -556,7 +556,7 @@ export function TransferApply(props: TransferModuleProps) {
                 <Card size="small" hoverable style={{ borderRadius: 8, textAlign: 'center' }}>
                   <div style={{ fontSize: 24, color: '#4338ca', marginBottom: 8 }}>{g.icon}</div>
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{g.title}</div>
-                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>{g.desc}</div>
+                  <div style={{ fontSize: 12, color: '#9ca3af' }}>{g.desc}</div>
                 </Card>
               </Col>
             ))}
@@ -626,11 +626,11 @@ export function TransferDetail(props: TransferModuleProps) {
   ]
 
   const getTimelineIcon = (action: string) => {
-    if (action.includes('创建')) return <ExclamationCircleOutlined style={{ color: '#1677ff' }} />
+    if (action.includes('创建')) return <ExclamationCircleOutlined style={{ color: '#6366f1' }} />
     if (action.includes('通过')) return <CheckCircleOutlined style={{ color: '#52c41a' }} />
     if (action.includes('Block') || action.includes('不通过')) return <CloseCircleOutlined style={{ color: '#ff4d4f' }} />
     if (action.includes('录入')) return <ClockCircleOutlined style={{ color: '#faad14' }} />
-    return <ClockCircleOutlined style={{ color: '#1677ff' }} />
+    return <ClockCircleOutlined style={{ color: '#6366f1' }} />
   }
 
   const renderEntryStatusTag = (status: string) => {
@@ -789,8 +789,8 @@ export function TransferDetail(props: TransferModuleProps) {
 
         {/* 右侧悬浮锚点导航 */}
         <div style={{ position: 'sticky', top: 80, width: 140, flexShrink: 0 }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: '12px 0', boxShadow: '0 2px 12px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0' }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#999', padding: '0 16px 8px', borderBottom: '1px solid #f5f5f5', marginBottom: 4, letterSpacing: 1 }}>页面导航</div>
+          <div style={{ background: '#fff', borderRadius: 12, padding: '12px 0', boxShadow: '0 2px 12px rgba(0,0,0,0.08)', border: '1px solid #e5e7eb' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#999', padding: '0 16px 8px', borderBottom: '1px solid #f3f4f6', marginBottom: 4, letterSpacing: 1 }}>页面导航</div>
             {ANCHOR_SECTIONS.map(section => (
               <div key={section.id} onClick={() => { const el = document.getElementById(section.id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 16px', cursor: 'pointer', fontSize: 13, color: '#666', borderLeft: '3px solid transparent', transition: 'all 0.2s ease' }}
@@ -894,7 +894,7 @@ export function TransferEntry(props: TransferModuleProps) {
             <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
               <Descriptions.Item label="评审要素">{props.tmEntryModalRecord.checkItem || props.tmEntryModalRecord.description}</Descriptions.Item>
               <Descriptions.Item label="角色"><Tag color={ROLE_COLORS[props.tmEntryModalRecord.responsibleRole]} style={{ color: '#fff' }}>{props.tmEntryModalRecord.responsibleRole}</Tag></Descriptions.Item>
-              <Descriptions.Item label="AI检查规则"><span style={{ fontSize: 12, color: '#8c8c8c' }}>{props.tmEntryModalRecord.aiCheckRule}</span></Descriptions.Item>
+              <Descriptions.Item label="AI检查规则"><span style={{ fontSize: 12, color: '#9ca3af' }}>{props.tmEntryModalRecord.aiCheckRule}</span></Descriptions.Item>
             </Descriptions>
             <div style={{ fontWeight: 500, marginBottom: 8 }}>录入内容</div>
             <TextArea rows={6} placeholder="请输入资料内容，支持文本描述、链接、飞书文档地址等..." value={props.tmEntryContent} onChange={e => props.setTmEntryContent(e.target.value)} />
@@ -1101,7 +1101,7 @@ export function TransferSqaReview(props: TransferModuleProps) {
         okText="确认"
       >
         <p>{sqaAction === 'approve' ? '确认通过SQA审核？流水线将进入信息变更阶段。' : '确认拒绝SQA审核？流水线将回退至维护审核阶段。'}</p>
-        {sqaComment && <div style={{ background: '#f5f5f5', padding: 12, borderRadius: 6, marginTop: 8 }}><div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>SQA意见：</div><div>{sqaComment}</div></div>}
+        {sqaComment && <div style={{ background: '#f3f4f6', padding: 12, borderRadius: 6, marginTop: 8 }}><div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>SQA意见：</div><div>{sqaComment}</div></div>}
       </Modal>
     </div>
   )

@@ -219,8 +219,8 @@ export default function RequirementDevPlan({ isEditMode = false }: RequirementDe
   // 横版表格渲染
   const renderHorizontalTable = (type: 'ir' | 'sr') => {
     const data = type === 'ir' ? filteredIR : filteredSR
-    const thStyle: CSSProperties = { background: '#fafbfc', fontWeight: 600, fontSize: 13, color: '#595959', padding: '10px 14px', borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 1, minWidth: 160, textAlign: 'left' }
-    const tdStyle: CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'center', whiteSpace: 'nowrap', minWidth: 120, borderBottom: '1px solid #f0f0f0', borderRight: '1px solid #f0f0f0' }
+    const thStyle: CSSProperties = { background: '#f8fafc', fontWeight: 600, fontSize: 13, color: '#4b5563', padding: '10px 14px', borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #f3f4f6', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 1, minWidth: 160, textAlign: 'left' }
+    const tdStyle: CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'center', whiteSpace: 'nowrap', minWidth: 120, borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #f3f4f6' }
 
     const irFields = [
       { label: '序号', key: 'id' },
@@ -259,12 +259,12 @@ export default function RequirementDevPlan({ isEditMode = false }: RequirementDe
     }
 
     if (data.length === 0) {
-      return <div style={{ textAlign: 'center', padding: 40, color: '#8c8c8c' }}>暂无数据</div>
+      return <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>暂无数据</div>
     }
 
     return (
       <div style={{ overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #f0f0f0' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #f3f4f6' }}>
           <tbody>
             {fields.map((field) => (
               <tr key={field.key}>
@@ -341,7 +341,7 @@ export default function RequirementDevPlan({ isEditMode = false }: RequirementDe
 
       {/* 融合版 - 待定 */}
       {activeTab === 'fusion' && (
-        <div style={{ textAlign: 'center', padding: '80px 0', color: '#8c8c8c' }}>
+        <div style={{ textAlign: 'center', padding: '80px 0', color: '#9ca3af' }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>🚧</div>
           <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 8 }}>融合版 - 敬请期待</div>
           <div style={{ fontSize: 13 }}>该功能正在规划中，即将上线</div>

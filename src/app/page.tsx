@@ -52,85 +52,10 @@ import WorkTracker from '@/components/work-tracker/WorkTracker'
 
 // 全局表格和交互样式
 const globalStyles = `
-  .pms-table .ant-table-thead > tr > th {
-    background: #fafbfc !important;
-    font-weight: 600 !important;
-    font-size: 13px !important;
-    color: #595959 !important;
-    border-bottom: 2px solid #f0f0f0 !important;
-    padding: 10px 12px !important;
-  }
-  .pms-table .ant-table-tbody > tr > td {
-    padding: 8px 12px !important;
-    font-size: 13px !important;
-    vertical-align: middle !important;
-    transition: background 0.15s !important;
-  }
-  .pms-table .ant-table-tbody > tr:hover > td {
-    background: #e6f4ff !important;
-  }
-  .pms-table .ant-table-tbody > tr:nth-child(even) > td {
-    background: #fafbfc;
-  }
-  .pms-table .ant-table-tbody > tr:nth-child(even):hover > td {
-    background: #e6f4ff !important;
-  }
-  .pms-table-edit .ant-table-tbody > tr > td {
-    background: #fffbe6 !important;
-  }
-  .pms-table-edit .ant-table-tbody > tr:hover > td {
-    background: #fff1b8 !important;
-  }
-  .pms-table-edit .ant-table-tbody > tr:nth-child(even) > td {
-    background: #fffef0 !important;
-  }
-  .pms-table-edit .ant-table-tbody > tr:nth-child(even):hover > td {
-    background: #fff1b8 !important;
-  }
-  .pms-edit-input {
-    border-color: #d9d9d9 !important;
-    border-radius: 4px !important;
-    transition: all 0.2s !important;
-  }
-  .pms-edit-input:focus, .pms-edit-input:hover {
-    border-color: #1890ff !important;
-    box-shadow: 0 0 0 2px rgba(24,144,255,0.1) !important;
-  }
-  .pms-card-hover {
-    transition: all 0.25s ease !important;
-  }
-  .pms-card-hover:hover {
-    border-color: rgba(99,102,241,0.2) !important;
-    box-shadow: 0 8px 24px rgba(99,102,241,0.12) !important;
-    transform: translateY(-3px);
-  }
-  .pms-sidebar .ant-menu-item {
-    border-radius: 8px !important;
-    margin: 2px 8px !important;
-  }
-  .pms-sidebar .ant-menu-item-selected {
-    background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%) !important;
-    font-weight: 600 !important;
-    color: #4338ca !important;
-  }
-  .pms-modal .ant-modal-header {
-    padding: 16px 24px !important;
-    border-bottom: 1px solid #f0f0f0 !important;
-    background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%) !important;
-    border-radius: 16px 16px 0 0 !important;
-  }
-  .pms-modal .ant-modal-content {
-    border-radius: 16px !important;
-    overflow: hidden !important;
-  }
-  .pms-modal .ant-modal-footer {
-    padding: 12px 24px !important;
-    border-top: 1px solid #f0f0f0 !important;
-    background: #fafbfc !important;
-  }
-  .pms-modal .ant-modal-footer .ant-btn {
-    border-radius: 6px !important;
-  }
+  /* All pms-table, pms-modal, pms-card-hover, pms-sidebar, pms-edit-input
+     styles are now in globals.css with the purple glassmorphism theme.
+     This block is intentionally minimal — only page-specific overrides go here. */
+
 `
 
 // DHTMLX Gantt组件
@@ -301,7 +226,7 @@ function MiniPipeline({ app }: { app: TransferApplication }) {
   const label = getCurrentNodeLabel(app)
   const pct = getPipelinePercent(app)
   const nodeStatus = getCurrentNodeStatus(app)
-  const strokeColor = nodeStatus === 'success' ? '#52c41a' : nodeStatus === 'failed' ? '#ff4d4f' : '#1677ff'
+  const strokeColor = nodeStatus === 'success' ? '#52c41a' : nodeStatus === 'failed' ? '#ff4d4f' : '#6366f1'
   const tagConfig = NODE_STATUS_CONFIG[nodeStatus] || NODE_STATUS_CONFIG['not_started']
   if (app.status === 'cancelled') {
     return <Tag color="default" icon={<StopOutlined />}>已关闭</Tag>
@@ -317,11 +242,11 @@ function MiniPipeline({ app }: { app: TransferApplication }) {
 // ========== TeamMemberCard 内联组件 ==========
 function TeamMemberCard({ member }: { member: TMTeamMember }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 6, border: '1px solid #f0f0f0', background: '#fafbfc' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 6, border: '1px solid #f3f4f6', background: '#f8fafc' }}>
       <Avatar size={28} style={{ background: ROLE_COLORS[member.role] || '#999', fontSize: 12, flexShrink: 0 }}>{member.name.slice(-1)}</Avatar>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</div>
-        <div style={{ fontSize: 11, color: '#8c8c8c' }}>{member.role} · {member.department}</div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: '#111827', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</div>
+        <div style={{ fontSize: 11, color: '#9ca3af' }}>{member.role} · {member.department}</div>
       </div>
     </div>
   )
@@ -353,7 +278,7 @@ function renderEntryContent(record: { entryContent?: string; deliverables?: { id
     <div style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden', fontSize: 12 }}>
       {segments.map((seg, i) => {
         if (seg.type === 'feishu') return <a key={i} href={seg.url} target="_blank" rel="noopener noreferrer" style={{ color: '#4338ca', display: 'inline-flex', alignItems: 'center', gap: 2 }}><FileTextOutlined style={{ fontSize: 11 }} />飞书文档</a>
-        if (seg.type === 'link') return <a key={i} href={seg.url} target="_blank" rel="noopener noreferrer" style={{ color: '#1677ff', display: 'inline-flex', alignItems: 'center', gap: 2 }}><LinkOutlined style={{ fontSize: 11 }} />{seg.text}</a>
+        if (seg.type === 'link') return <a key={i} href={seg.url} target="_blank" rel="noopener noreferrer" style={{ color: '#6366f1', display: 'inline-flex', alignItems: 'center', gap: 2 }}><LinkOutlined style={{ fontSize: 11 }} />{seg.text}</a>
         if (seg.type === 'samba') return <span key={i} style={{ color: '#d97706', display: 'inline-flex', alignItems: 'center', gap: 2 }}><FolderOpenOutlined style={{ fontSize: 11 }} />{seg.text}</span>
         return <span key={i}>{seg.text} </span>
       })}
@@ -1544,7 +1469,7 @@ export default function Home() {
   const renderGanttChart = (customTasks?: any[]) => {
     const ganttTasks = customTasks || filteredTasks
     return (
-      <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
+      <div style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
         <DHTMLXGantt
           tasks={ganttTasks}
           onTaskClick={(task) => {
@@ -1611,10 +1536,10 @@ export default function Home() {
       }))
     }
 
-    const thStyle: CSSProperties = { background: '#fafbfc', fontWeight: 600, fontSize: 13, color: '#595959', padding: '10px 12px', border: '1px solid #e8e8e8', whiteSpace: 'nowrap', textAlign: 'center' }
-    const tdStyle: CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'center', whiteSpace: 'nowrap', minWidth: 100, border: '1px solid #e8e8e8' }
-    const versionThStyle: CSSProperties = { ...thStyle, position: 'sticky', left: 0, zIndex: 2, minWidth: 80, background: '#fafbfc' }
-    const cycleThStyle: CSSProperties = { ...thStyle, position: 'sticky', left: 80, zIndex: 2, minWidth: 80, background: '#fafbfc' }
+    const thStyle: CSSProperties = { background: '#f8fafc', fontWeight: 600, fontSize: 13, color: '#4b5563', padding: '10px 12px', border: '1px solid #e5e7eb', whiteSpace: 'nowrap', textAlign: 'center' }
+    const tdStyle: CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'center', whiteSpace: 'nowrap', minWidth: 100, border: '1px solid #e5e7eb' }
+    const versionThStyle: CSSProperties = { ...thStyle, position: 'sticky', left: 0, zIndex: 2, minWidth: 80, background: '#f8fafc' }
+    const cycleThStyle: CSSProperties = { ...thStyle, position: 'sticky', left: 80, zIndex: 2, minWidth: 80, background: '#f8fafc' }
     const versionTdStyle: CSSProperties = { ...tdStyle, position: 'sticky', left: 0, zIndex: 1, fontWeight: 600, background: '#fff', minWidth: 80 }
     const cycleTdStyle: CSSProperties = { ...tdStyle, position: 'sticky', left: 80, zIndex: 1, background: '#fff', minWidth: 80 }
 
@@ -1671,7 +1596,7 @@ export default function Home() {
               const isLatest = idx === 0
               return (
                 <tr key={version.id} style={isLatest ? { background: '#fafffe' } : undefined}>
-                  <td style={{ ...versionTdStyle, color: isLatest ? '#1890ff' : '#262626', background: isLatest ? '#f0f9ff' : '#fff' }}>
+                  <td style={{ ...versionTdStyle, color: isLatest ? '#6366f1' : '#111827', background: isLatest ? '#f0f9ff' : '#fff' }}>
                     {version.versionNo}
                   </td>
                   <td style={{ ...cycleTdStyle, background: isLatest ? '#f0f9ff' : '#fff' }}>
@@ -1746,7 +1671,7 @@ export default function Home() {
       <div
         onClick={() => setEditing(true)}
         style={{
-          fontSize: 12, color: value ? '#595959' : '#bfbfbf',
+          fontSize: 12, color: value ? '#4b5563' : '#bfbfbf',
           cursor: 'pointer', padding: '4px 8px', borderRadius: 4,
           border: '1px dashed transparent', transition: 'all 0.2s',
           minHeight: 28, display: 'flex', alignItems: 'center',
@@ -1780,8 +1705,8 @@ export default function Home() {
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: depth * 20 }}>
             {isEditMode && <DragHandle />}
-            {canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} style={{ color: '#1890ff' }} onClick={(e) => { e.stopPropagation(); handleAddSubTask(record.id) }} /></Tooltip>}
-            <span style={{ fontWeight: depth === 0 ? 600 : 500, color: depth === 0 ? '#262626' : '#595959', fontSize: 13 }}>{id}</span>
+            {canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} style={{ color: '#6366f1' }} onClick={(e) => { e.stopPropagation(); handleAddSubTask(record.id) }} /></Tooltip>}
+            <span style={{ fontWeight: depth === 0 ? 600 : 500, color: depth === 0 ? '#111827' : '#4b5563', fontSize: 13 }}>{id}</span>
           </div>
         )
       } })
@@ -1790,30 +1715,30 @@ export default function Home() {
         if (isEditMode) return <Input className="pms-edit-input" value={name} size="small" style={{ fontWeight: depth === 0 ? 600 : 400 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, taskName: e.target.value } : t); currentSetTasks(updated) }} />
         return (
           <div style={{ paddingLeft: depth * 16, display: 'flex', alignItems: 'center', gap: 4 }}>
-            {depth > 0 && <span style={{ color: '#d9d9d9', fontSize: 11, flexShrink: 0 }}>{depth === 1 ? '├' : '└'}</span>}
-            <span style={{ color: depth === 0 ? '#262626' : depth === 1 ? '#595959' : '#8c8c8c', fontWeight: depth === 0 ? 600 : 400 }}>{name}</span>
+            {depth > 0 && <span style={{ color: '#e5e7eb', fontSize: 11, flexShrink: 0 }}>{depth === 1 ? '├' : '└'}</span>}
+            <span style={{ color: depth === 0 ? '#111827' : depth === 1 ? '#4b5563' : '#9ca3af', fontWeight: depth === 0 ? 600 : 400 }}>{name}</span>
           </div>
         )
       } })
-      if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Space size={4}><Avatar size={18} style={{ background: '#1890ff', fontSize: 10 }}>{val[0]}</Avatar><span style={{ fontSize: 13 }}>{val}</span></Space> : <span style={{ color: '#d9d9d9' }}>-</span>) })
-      if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#d9d9d9' }}>-</span>) })
-      if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planStartDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
-      if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planEndDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
-      if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val}天</span> })
+      if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Space size={4}><Avatar size={18} style={{ background: 'linear-gradient(135deg, #4338ca, #6366f1)', fontSize: 10 }}>{val[0]}</Avatar><span style={{ fontSize: 13 }}>{val}</span></Space> : <span style={{ color: '#e5e7eb' }}>-</span>) })
+      if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>) })
+      if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planStartDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span> })
+      if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planEndDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span> })
+      if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val}天</span> })
       if (visibleColumns.includes('actualStartDate')) cols.push({ title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 130, render: (val: string, record: any) => {
         if (isLatestPublished && !isEditMode) return <ClickToEditDate value={val} onChange={(newVal) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, actualStartDate: newVal } : t); currentSetTasks(updated) }} disabledDate={(current) => record.actualEndDate ? current.isAfter(dayjs(record.actualEndDate), 'day') : false} />
-        return <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span>
+        return <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span>
       } })
       if (visibleColumns.includes('actualEndDate')) cols.push({ title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 130, render: (val: string, record: any) => {
         if (isLatestPublished && !isEditMode) return <ClickToEditDate value={val} onChange={(newVal) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, actualEndDate: newVal } : t); currentSetTasks(updated) }} disabledDate={(current) => record.actualStartDate ? current.isBefore(dayjs(record.actualStartDate), 'day') : false} />
-        return <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span>
+        return <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span>
       } })
-      if (visibleColumns.includes('actualDays')) cols.push({ title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (val: number) => <span style={{ fontSize: 12, color: '#595959' }}>{val > 0 ? `${val}天` : '-'}</span> })
+      if (visibleColumns.includes('actualDays')) cols.push({ title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (val: number) => <span style={{ fontSize: 12, color: '#4b5563' }}>{val > 0 ? `${val}天` : '-'}</span> })
       if (visibleColumns.includes('status')) cols.push({ title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={s === '已完成' ? 'success' : s === '进行中' ? 'processing' : 'default'} style={{ borderRadius: 4, fontSize: 12 }}>{s}</Tag> })
       if (visibleColumns.includes('progress')) cols.push({ title: '进度', dataIndex: 'progress', key: 'progress', width: 130, render: (p: number) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Progress percent={p} size="small" showInfo={false} strokeColor={p === 100 ? '#52c41a' : '#1890ff'} style={{ flex: 1, marginBottom: 0 }} />
-          <span style={{ fontSize: 11, color: p === 100 ? '#52c41a' : '#595959', fontWeight: 500, minWidth: 32 }}>{p}%</span>
+          <Progress percent={p} size="small" showInfo={false} strokeColor={p === 100 ? '#52c41a' : '#6366f1'} style={{ flex: 1, marginBottom: 0 }} />
+          <span style={{ fontSize: 11, color: p === 100 ? '#52c41a' : '#4b5563', fontWeight: 500, minWidth: 32 }}>{p}%</span>
         </div>
       ) })
       if (isEditMode) cols.push({ title: '操作', key: 'action', width: 60, fixed: 'right', render: (_: any, record: any) => (<Popconfirm title="确认删除" description={`删除 "${record.taskName}" 及其子任务？`} onConfirm={() => { const filtered = tableTasks.filter(t => t.id !== record.id && t.parentId !== record.id && !(t.parentId && tableTasks.find((p: any) => p.id === t.parentId)?.parentId === record.id)); currentSetTasks(filtered); message.success(`已删除任务: ${record.id}`) }} okText="确认" cancelText="取消"><Button type="text" icon={<DeleteOutlined />} size="small" danger style={{ borderRadius: 4 }} /></Popconfirm>) })
@@ -1924,7 +1849,7 @@ export default function Home() {
         )}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTableDragEnd}><SortableContext items={flatTasks.map(t => t.id)} strategy={verticalListSortingStrategy}><Table className={tableClassName} dataSource={flatTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} size="middle" /></SortableContext></DndContext>
         {isEditMode && (
-          <div style={{ padding: '12px 16px', borderTop: '1px solid #f0f0f0', background: '#fafbfc' }}>
+          <div style={{ padding: '12px 16px', borderTop: '1px solid #f3f4f6', background: '#f8fafc' }}>
             <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%', borderRadius: 6, height: 36 }} onClick={() => {
               const parentTasks = tableTasks.filter(t => !t.parentId)
               const maxOrder = parentTasks.length > 0 ? Math.max(...parentTasks.map(t => parseInt(t.id) || t.order)) : 0
@@ -2063,8 +1988,8 @@ export default function Home() {
     if (compareResult.length === 0) {
       return (
         <div style={{ textAlign: 'center', padding: '48px 0', color: '#bfbfbf' }}>
-          <HistoryOutlined style={{ fontSize: 36, display: 'block', marginBottom: 12, color: '#d9d9d9' }} />
-          <div style={{ fontSize: 14, color: '#8c8c8c' }}>选择两个版本后点击"开始对比"查看差异</div>
+          <HistoryOutlined style={{ fontSize: 36, display: 'block', marginBottom: 12, color: '#e5e7eb' }} />
+          <div style={{ fontSize: 14, color: '#9ca3af' }}>选择两个版本后点击"开始对比"查看差异</div>
         </div>
       )
     }
@@ -2088,7 +2013,7 @@ export default function Home() {
     const getRowBg = (type: string) => {
       if (type === '新增') return '#f6ffed'
       if (type === '删除') return '#fff2f0'
-      if (type === '修改') return '#e6f4ff'
+      if (type === '修改') return 'rgba(99,102,241,0.06)'
       return undefined
     }
 
@@ -2100,7 +2025,7 @@ export default function Home() {
           <Tooltip title={<div style={{ fontSize: 12 }}><div>修改人: {row.modifier}</div><div>修改时间: {row.modifyTime}</div></div>}>
             <div style={{ lineHeight: 1.6 }}>
               <div style={{ color: '#ff4d4f', fontSize: 11, textDecoration: 'line-through', opacity: 0.7 }}>{diff.oldValue}</div>
-              <div style={{ color: '#1890ff', fontWeight: 600, fontSize: 12 }}>{diff.newValue}</div>
+              <div style={{ color: '#6366f1', fontWeight: 600, fontSize: 12 }}>{diff.newValue}</div>
             </div>
           </Tooltip>
         )
@@ -2111,14 +2036,14 @@ export default function Home() {
       if (row.changeType === '删除') {
         return <span style={{ color: '#ff4d4f', textDecoration: 'line-through', opacity: 0.7 }}>{value || '-'}</span>
       }
-      return <span style={{ color: '#595959' }}>{value || '-'}</span>
+      return <span style={{ color: '#4b5563' }}>{value || '-'}</span>
     }
 
     const compareColumns: any[] = [
       {
         title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, fixed: 'left',
         render: (val: string, row: CompareTableRow) => (
-          <span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? '#1890ff' : '#8c8c8c' }}>{val}</span>
+          <span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? '#6366f1' : '#9ca3af' }}>{val}</span>
         ),
       },
       {
@@ -2127,8 +2052,8 @@ export default function Home() {
           const conf: Record<string, { color: string; bg: string }> = {
             '新增': { color: '#52c41a', bg: '#f6ffed' },
             '删除': { color: '#ff4d4f', bg: '#fff2f0' },
-            '修改': { color: '#1890ff', bg: '#e6f4ff' },
-            '未变更': { color: '#8c8c8c', bg: '#fafafa' },
+            '修改': { color: '#6366f1', bg: 'rgba(99,102,241,0.06)' },
+            '未变更': { color: '#9ca3af', bg: '#fafafa' },
           }
           const c = conf[val]
           return c ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: c.color, background: c.bg, border: `1px solid ${c.color}20` }}>{val}</span> : null
@@ -2152,9 +2077,9 @@ export default function Home() {
         {/* 统计概览 */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
           {[
-            { label: '变更总计', value: changedRows.length, color: '#1890ff', filterVal: 'all' },
+            { label: '变更总计', value: changedRows.length, color: '#6366f1', filterVal: 'all' },
             { label: '新增', value: stats.added, color: '#52c41a', filterVal: '新增' },
-            { label: '修改', value: stats.modified, color: '#1890ff', filterVal: '修改' },
+            { label: '修改', value: stats.modified, color: '#6366f1', filterVal: '修改' },
             { label: '删除', value: stats.deleted, color: '#ff4d4f', filterVal: '删除' },
           ].map(item => {
             const isActive = compareFilterType === item.filterVal
@@ -2165,19 +2090,19 @@ export default function Home() {
                 style={{
                   flex: 1, padding: '10px 16px', borderRadius: 8, cursor: 'pointer',
                   background: isActive ? `${item.color}10` : '#fafafa',
-                  border: isActive ? `1px solid ${item.color}` : '1px solid #f0f0f0',
+                  border: isActive ? `1px solid ${item.color}` : '1px solid #f3f4f6',
                   transition: 'all 0.2s',
                 }}
               >
                 <div style={{ fontSize: 20, fontWeight: 700, color: item.color }}>{item.value}</div>
-                <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>{item.label}</div>
+                <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{item.label}</div>
               </div>
             )
           })}
         </div>
         {/* 工具栏 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <span style={{ fontSize: 12, color: '#8c8c8c' }}>共 {filteredData.length} 条记录</span>
+          <span style={{ fontSize: 12, color: '#9ca3af' }}>共 {filteredData.length} 条记录</span>
           <Checkbox checked={compareShowUnchanged} onChange={e => setCompareShowUnchanged(e.target.checked)}>
             <span style={{ fontSize: 12 }}>显示未变更项</span>
           </Checkbox>
@@ -2203,7 +2128,7 @@ export default function Home() {
   const renderProjectRequirements = () => {
     return (
       <Card style={{ borderRadius: 8, textAlign: 'center', padding: '48px 0' }}>
-        <Empty description={<span style={{ color: '#8c8c8c' }}>需求模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <Empty description={<span style={{ color: '#9ca3af' }}>需求模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
       </Card>
     )
   }
@@ -2273,8 +2198,8 @@ export default function Home() {
     const developModeChoices = [{ label: 'ODC', value: 'ODC' }, { label: 'JDM', value: 'JDM' }, { label: '自研', value: '自研' }]
     const userChoices = ALL_USERS.map(u => ({ label: u, value: u }))
 
-    const descLabelStyle: CSSProperties = { fontWeight: 500, color: '#8c8c8c', fontSize: 13, background: '#fafbfc' }
-    const descContentStyle: CSSProperties = { color: '#262626', fontSize: 13 }
+    const descLabelStyle: CSSProperties = { fontWeight: 500, color: '#9ca3af', fontSize: 13, background: '#f8fafc' }
+    const descContentStyle: CSSProperties = { color: '#111827', fontSize: 13 }
     const sectionTitle = (icon: React.ReactNode, title: string, color: string) => (
       <Space size={8}>{icon}<span style={{ fontSize: 15, fontWeight: 600 }}>{title}</span></Space>
     )
@@ -2378,9 +2303,9 @@ export default function Home() {
               { label: '健康状态', value: hConf.label, editable: true, key: 'healthStatus', editNode: <Select size="small" value={ef.healthStatus} onChange={(v: string) => setEf('healthStatus', v)} style={{ width: 100 }} options={healthChoices} /> },
               ...((isSoftware || isWholeMachine || isTech) ? [{ label: '当前节点', value: p.currentNode || '-', editable: true, key: 'currentNode', editNode: <Select size="small" value={ef.currentNode} onChange={(v: string) => setEf('currentNode', v)} style={{ width: 120 }} options={nodeChoices} /> }] : []),
             ].map((item, i, arr) => (
-              <div key={i} style={{ flex: 1, padding: '14px 20px', borderRight: i < arr.length - 1 ? '1px solid #f0f0f0' : 'none', textAlign: 'center' }}>
-                <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4, fontWeight: 500 }}>{item.label}</div>
-                <div style={{ fontSize: 14, color: '#262626', fontWeight: 600 }}>{basicInfoEditMode && item.editable ? item.editNode : item.value}</div>
+              <div key={i} style={{ flex: 1, padding: '14px 20px', borderRight: i < arr.length - 1 ? '1px solid #f3f4f6' : 'none', textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4, fontWeight: 500 }}>{item.label}</div>
+                <div style={{ fontSize: 14, color: '#111827', fontWeight: 600 }}>{basicInfoEditMode && item.editable ? item.editNode : item.value}</div>
               </div>
             ))}
           </div>
@@ -2410,13 +2335,13 @@ export default function Home() {
               </Descriptions>
               {/* 版本五大员 */}
               <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: '#8c8c8c', marginBottom: 10 }}>版本五大员</div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: '#9ca3af', marginBottom: 10 }}>版本五大员</div>
                 <Row gutter={[12, 12]}>
                   {basicInfoEditMode ? (
                     Object.entries(ef.versionFiveRoles || {}).map(([role, name]: [string, any]) => (
                       <Col key={role} span={Math.floor(24 / 5)}>
-                        <div style={{ padding: '8px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f0f0f0' }}>
-                          <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4 }}>{role}</div>
+                        <div style={{ padding: '8px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f3f4f6' }}>
+                          <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>{role}</div>
                           <Select size="small" value={String(name)} onChange={(v: string) => setEf('versionFiveRoles', { ...ef.versionFiveRoles, [role]: v })} style={{ width: '100%' }} options={userChoices} />
                         </div>
                       </Col>
@@ -2425,17 +2350,17 @@ export default function Home() {
                     p.versionFiveRoles && typeof p.versionFiveRoles === 'object' ? (
                       Object.entries(p.versionFiveRoles).map(([role, name]: [string, any]) => (
                         <Col key={role} span={Math.floor(24 / 5)}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f0f0f0' }}>
-                            <Avatar size={28} style={{ background: '#1890ff', fontSize: 12, flexShrink: 0 }}>{String(name)[0]}</Avatar>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f3f4f6' }}>
+                            <Avatar size={28} style={{ background: 'linear-gradient(135deg, #4338ca, #6366f1)', fontSize: 12, flexShrink: 0 }}>{String(name)[0]}</Avatar>
                             <div>
-                              <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', lineHeight: 1.3 }}>{String(name)}</div>
-                              <div style={{ fontSize: 11, color: '#8c8c8c' }}>{role}</div>
+                              <div style={{ fontSize: 13, fontWeight: 500, color: '#111827', lineHeight: 1.3 }}>{String(name)}</div>
+                              <div style={{ fontSize: 11, color: '#9ca3af' }}>{role}</div>
                             </div>
                           </div>
                         </Col>
                       ))
                     ) : (
-                      <Col><span style={{ color: '#8c8c8c', fontSize: 13 }}>-</span></Col>
+                      <Col><span style={{ color: '#9ca3af', fontSize: 13 }}>-</span></Col>
                     )
                   )}
                 </Row>
@@ -2473,14 +2398,14 @@ export default function Home() {
                 <Descriptions.Item label="健康状态">{basicInfoEditMode ? <Select size="small" value={ef.healthStatus} onChange={(v: string) => setEf('healthStatus', v)} style={{ width: '100%' }} options={healthChoices} /> : <Tag style={{ background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag>}</Descriptions.Item>
               </Descriptions>
               <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: '#8c8c8c', marginBottom: 8 }}>团队成员</div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: '#9ca3af', marginBottom: 8 }}>团队成员</div>
                 {basicInfoEditMode ? (
                   <Select size="small" mode="multiple" value={(ef.teamMembers || '').split(',').filter(Boolean)} onChange={(v: string[]) => setEf('teamMembers', v.join(','))} style={{ width: '100%' }} options={userChoices} />
                 ) : (
                   <Space wrap>
                     {(p.teamMembers || p.spm || '').split(',').filter(Boolean).map((name: string, i: number) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f0f0f0' }}>
-                        <Avatar size={24} style={{ background: '#1890ff', fontSize: 11 }}>{name.trim()[0]}</Avatar>
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f3f4f6' }}>
+                        <Avatar size={24} style={{ background: 'linear-gradient(135deg, #4338ca, #6366f1)', fontSize: 11 }}>{name.trim()[0]}</Avatar>
                         <span style={{ fontSize: 13 }}>{name.trim()}</span>
                       </div>
                     ))}
@@ -2488,11 +2413,11 @@ export default function Home() {
                 )}
               </div>
               <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: '#8c8c8c', marginBottom: 8 }}>项目描述</div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: '#9ca3af', marginBottom: 8 }}>项目描述</div>
                 {basicInfoEditMode ? (
                   <Input.TextArea size="small" value={ef.projectDescription} onChange={e => setEf('projectDescription', e.target.value)} autoSize={{ minRows: 2, maxRows: 6 }} />
                 ) : (
-                  <div style={{ padding: '10px 14px', background: '#fafbfc', borderRadius: 6, border: '1px solid #f0f0f0', fontSize: 13, color: '#595959', lineHeight: 1.8 }}>
+                  <div style={{ padding: '10px 14px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f3f4f6', fontSize: 13, color: '#4b5563', lineHeight: 1.8 }}>
                     {p.projectDescription || '暂无描述'}
                   </div>
                 )}
@@ -2519,7 +2444,7 @@ export default function Home() {
                       <Avatar size={32} style={{ background: `linear-gradient(135deg, ${ROLE_COLORS[r.team.research[0]?.role] || '#4338ca'} 0%, #6366f1 100%)`, fontSize: 12, flexShrink: 0 }}>{r.applicant.slice(-1)}</Avatar>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 500 }}>{r.projectName}</div>
-                        <div style={{ fontSize: 11, color: '#8c8c8c' }}>{r.applicant} · {r.createdAt.slice(0, 10)}</div>
+                        <div style={{ fontSize: 11, color: '#9ca3af' }}>{r.applicant} · {r.createdAt.slice(0, 10)}</div>
                       </div>
                     </div>
                   ),
@@ -2542,7 +2467,7 @@ export default function Home() {
                   render: (_: unknown, r: TransferApplication) => (
                     <Space size={4}>
                       <Button size="small" type="text" icon={<FileTextOutlined />} style={{ color: '#666' }} onClick={() => { setSelectedTransferAppId(r.id); setTransferView('detail'); }}>详情</Button>
-                      {r.status === 'in_progress' && r.pipeline.dataEntry !== 'success' && <Button size="small" type="text" icon={<EditOutlined />} style={{ color: '#1677ff' }} onClick={() => { setSelectedTransferAppId(r.id); setTransferView('entry'); }}>录入</Button>}
+                      {r.status === 'in_progress' && r.pipeline.dataEntry !== 'success' && <Button size="small" type="text" icon={<EditOutlined />} style={{ color: '#6366f1' }} onClick={() => { setSelectedTransferAppId(r.id); setTransferView('entry'); }}>录入</Button>}
                       {r.status === 'in_progress' && r.pipeline.maintenanceReview === 'in_progress' && <Button size="small" type="text" icon={<AuditOutlined />} style={{ color: '#52c41a' }} onClick={() => { setSelectedTransferAppId(r.id); setTransferView('review'); }}>评审</Button>}
                       {r.status === 'in_progress' && r.pipeline.sqaReview === 'in_progress' && <Button size="small" type="text" icon={<SafetyOutlined />} style={{ color: '#faad14' }} onClick={() => { setSelectedTransferAppId(r.id); setTransferView('sqa-review'); }}>SQA审核</Button>}
                       {r.status === 'in_progress' && <Button size="small" type="text" danger icon={<CloseCircleOutlined />} onClick={() => { setTmCloseAppId(r.id); setTmCloseReason(''); setTmCloseModalVisible(true); }}>关闭</Button>}
@@ -2570,30 +2495,30 @@ export default function Home() {
                   children: (
                     <div style={{ padding: '8px 0' }}>
                       {/* 计划信息 */}
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#262626', marginBottom: 16 }}>计划信息</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 16 }}>计划信息</div>
                       <Row gutter={[24, 16]} style={{ marginBottom: 16 }}>
                         <Col span={6}>
-                          <Statistic title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>计划开始时间</span>} value={p.planStartDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />} />
+                          <Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划开始时间</span>} value={p.planStartDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />} />
                         </Col>
                         <Col span={6}>
-                          <Statistic title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>计划结束时间</span>} value={p.planEndDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />} />
+                          <Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划结束时间</span>} value={p.planEndDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />} />
                         </Col>
                         <Col span={6}>
-                          <Statistic title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>开发周期（工作日）</span>} value={p.developCycle || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} suffix={p.developCycle ? <span style={{ fontSize: 12, color: '#8c8c8c' }}>天</span> : undefined} />
+                          <Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>开发周期（工作日）</span>} value={p.developCycle || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} suffix={p.developCycle ? <span style={{ fontSize: 12, color: '#9ca3af' }}>天</span> : undefined} />
                         </Col>
                         <Col span={6}>
-                          <Statistic title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>上市时间</span>} value={p.launchDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600, color: '#722ed1' }} prefix={<CalendarOutlined style={{ color: '#722ed1', fontSize: 14 }} />} />
+                          <Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>上市时间</span>} value={p.launchDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600, color: '#722ed1' }} prefix={<CalendarOutlined style={{ color: '#722ed1', fontSize: 14 }} />} />
                         </Col>
                       </Row>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#8c8c8c', marginBottom: 12 }}>里程碑计划（横排视图）</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12 }}>里程碑计划（横排视图）</div>
                       {renderHorizontalTable()}
 
                       <Divider />
 
                       {/* 配置信息 */}
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#262626', marginBottom: 16 }}>配置信息</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 16 }}>配置信息</div>
                       <div style={{ marginBottom: 20 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#8c8c8c', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f0f0f0' }}>硬件配置</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>硬件配置</div>
                         <Descriptions bordered size="small" column={4} labelStyle={descLabelStyle} contentStyle={descContentStyle}>
                           <Descriptions.Item label="主板名">{p.mainboard || '-'}</Descriptions.Item>
                           <Descriptions.Item label="芯片平台">{p.chipPlatform || '-'}</Descriptions.Item>
@@ -2616,7 +2541,7 @@ export default function Home() {
                           <Descriptions.Item label="红外">{p.infrared || '-'}</Descriptions.Item>
                         </Descriptions>
                       </div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#8c8c8c', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f0f0f0' }}>构建信息</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>构建信息</div>
                       <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>
                         <Descriptions.Item label="分支信息">{editableField('branchInfo', p.branchInfo)}</Descriptions.Item>
                         <Descriptions.Item label="Jenkins构建">{basicInfoEditMode ? editableField('jenkinsUrl', p.jenkinsUrl) : (p.jenkinsUrl ? <a href={p.jenkinsUrl} target="_blank" rel="noopener noreferrer">{p.jenkinsUrl}</a> : '-')}</Descriptions.Item>
@@ -2636,7 +2561,7 @@ export default function Home() {
             {/* 非整机: 配置信息 */}
             {(isSoftware || isTech) && (
               <Card id="section-config" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#52c41a' }} />, '配置信息', '#52c41a')}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#8c8c8c', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f0f0f0' }}>构建信息</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>构建信息</div>
                 <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>
                   <Descriptions.Item label="分支信息">{editableField('branchInfo', p.branchInfo)}</Descriptions.Item>
                   <Descriptions.Item label="Jenkins构建">{basicInfoEditMode ? editableField('jenkinsUrl', p.jenkinsUrl) : (p.jenkinsUrl ? <a href={p.jenkinsUrl} target="_blank" rel="noopener noreferrer">{p.jenkinsUrl}</a> : '-')}</Descriptions.Item>
@@ -2664,7 +2589,7 @@ export default function Home() {
         <Row gutter={[24, 16]}>
           <Col span={6}>
             <Statistic
-              title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>计划开始时间</span>}
+              title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划开始时间</span>}
               value={p.planStartDate || '-'}
               valueStyle={{ fontSize: 16, fontWeight: 600 }}
               prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />}
@@ -2672,7 +2597,7 @@ export default function Home() {
           </Col>
           <Col span={6}>
             <Statistic
-              title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>计划结束时间</span>}
+              title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划结束时间</span>}
               value={p.planEndDate || '-'}
               valueStyle={{ fontSize: 16, fontWeight: 600 }}
               prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />}
@@ -2680,19 +2605,19 @@ export default function Home() {
           </Col>
           <Col span={6}>
             <Statistic
-              title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>开发周期（工作日）</span>}
+              title={<span style={{ fontSize: 12, color: '#9ca3af' }}>开发周期（工作日）</span>}
               value={p.developCycle || '-'}
               valueStyle={{ fontSize: 16, fontWeight: 600 }}
-              suffix={p.developCycle ? <span style={{ fontSize: 12, color: '#8c8c8c' }}>天</span> : undefined}
+              suffix={p.developCycle ? <span style={{ fontSize: 12, color: '#9ca3af' }}>天</span> : undefined}
             />
           </Col>
           <Col span={6}>
             <Statistic
-              title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>健康状态</span>}
+              title={<span style={{ fontSize: 12, color: '#9ca3af' }}>健康状态</span>}
               value={p.healthStatus === 'normal' ? '健康' : p.healthStatus === 'warning' ? '关注' : p.healthStatus === 'risk' ? '风险' : '-'}
               valueStyle={{
                 fontSize: 16, fontWeight: 600,
-                color: p.healthStatus === 'normal' ? '#52c41a' : p.healthStatus === 'warning' ? '#faad14' : p.healthStatus === 'risk' ? '#ff4d4f' : '#8c8c8c',
+                color: p.healthStatus === 'normal' ? '#52c41a' : p.healthStatus === 'warning' ? '#faad14' : p.healthStatus === 'risk' ? '#ff4d4f' : '#9ca3af',
               }}
             />
           </Col>
@@ -2701,7 +2626,7 @@ export default function Home() {
         <Divider style={{ margin: '16px 0' }} />
 
         {/* 里程碑计划 - 横排视图 */}
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#8c8c8c', marginBottom: 12, textTransform: 'uppercase' as const, letterSpacing: 1 }}>里程碑计划（横排视图）</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, textTransform: 'uppercase' as const, letterSpacing: 1 }}>里程碑计划（横排视图）</div>
         {renderHorizontalTable()}
       </Card>
     )
@@ -2734,7 +2659,7 @@ export default function Home() {
             <Row align="middle" justify="space-between">
               <Col>
                 <Space size={4} align="center">
-                  <span style={{ fontSize: 13, fontWeight: 500, color: '#8c8c8c', marginRight: 8 }}>市场</span>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: '#9ca3af', marginRight: 8 }}>市场</span>
                   {markets.map(market => (
                     <Tag
                       key={market}
@@ -2845,7 +2770,7 @@ export default function Home() {
         {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1' && level2PlanMeta[activeLevel2Plan]?.planType === '1+N MR版本火车计划' && (
           <Card
             size="small"
-            style={{ marginBottom: 16, borderRadius: 8, border: '1px solid #e6f4ff' }}
+            style={{ marginBottom: 16, borderRadius: 8, border: '1px solid rgba(99,102,241,0.06)' }}
             styles={{ body: { padding: 0 } }}
           >
             <div
@@ -2853,19 +2778,19 @@ export default function Home() {
               onClick={() => setPlanMetaCollapsed(!planMetaCollapsed)}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 3, height: 16, background: '#1890ff', borderRadius: 2 }} />
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>计划基本信息</span>
+                <div style={{ width: 3, height: 16, background: '#6366f1', borderRadius: 2 }} />
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>计划基本信息</span>
                 <Tag color="blue" style={{ marginLeft: 4, fontSize: 11 }}>{level2PlanMeta[activeLevel2Plan]?.planType}</Tag>
               </div>
-              <DownOutlined style={{ fontSize: 11, color: '#8c8c8c', transition: 'transform 0.25s', transform: planMetaCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }} />
+              <DownOutlined style={{ fontSize: 11, color: '#9ca3af', transition: 'transform 0.25s', transform: planMetaCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }} />
             </div>
             {!planMetaCollapsed && (
               <div style={{ padding: '0 20px 16px' }}>
                 <Descriptions
                   size="small"
                   column={3}
-                  labelStyle={{ color: '#8c8c8c', fontSize: 13, fontWeight: 500, padding: '6px 12px 6px 0' }}
-                  contentStyle={{ color: '#262626', fontSize: 13, padding: '6px 0' }}
+                  labelStyle={{ color: '#9ca3af', fontSize: 13, fontWeight: 500, padding: '6px 12px 6px 0' }}
+                  contentStyle={{ color: '#111827', fontSize: 13, padding: '6px 0' }}
                   colon={false}
                 >
                   <Descriptions.Item label="MR版本类型">
@@ -2921,7 +2846,7 @@ export default function Home() {
               <Col>
                 <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
                     <Space size={6}>
-                      <span style={{ color: '#8c8c8c', fontSize: 13 }}>版本</span>
+                      <span style={{ color: '#9ca3af', fontSize: 13 }}>版本</span>
                       <Select value={currentVersion} onChange={(val) => navigateWithEditGuard(() => { setCurrentVersion(val); setIsEditMode(false) })} style={{ width: 150 }} size="middle">
                         {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
                       </Select>
@@ -2983,7 +2908,7 @@ export default function Home() {
   const renderProjectOverview = () => {
     return (
       <Card style={{ borderRadius: 8, textAlign: 'center', padding: '48px 0' }}>
-        <Empty description={<span style={{ color: '#8c8c8c' }}>概况模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <Empty description={<span style={{ color: '#9ca3af' }}>概况模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
       </Card>
     )
   }
@@ -2999,14 +2924,14 @@ export default function Home() {
           styles={{ body: { padding: 0 } }}
         >
           {/* 总览头部 */}
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <Space size={8} align="center">
-                <BarChartOutlined style={{ color: '#1890ff', fontSize: 16 }} />
-                <span style={{ fontSize: 15, fontWeight: 600, color: '#262626' }}>计划总览</span>
+                <BarChartOutlined style={{ color: '#6366f1', fontSize: 16 }} />
+                <span style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>计划总览</span>
                 <Tag color="blue" style={{ fontSize: 11, borderRadius: 4 }}>融合模式</Tag>
               </Space>
-              <div style={{ marginTop: 4, fontSize: 12, color: '#8c8c8c', paddingLeft: 24 }}>一级计划与二级计划融合展示</div>
+              <div style={{ marginTop: 4, fontSize: 12, color: '#9ca3af', paddingLeft: 24 }}>一级计划与二级计划融合展示</div>
             </div>
             <Tooltip title={projectPlanViewMode === 'gantt' ? '切换表格' : '切换甘特图'}>
               <Button
@@ -3110,10 +3035,10 @@ export default function Home() {
                   <div style={{
                     position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
                     marginTop: 4, width: 360, background: '#fff', borderRadius: 8,
-                    boxShadow: '0 6px 16px rgba(0,0,0,0.12)', border: '1px solid #e8e8e8',
+                    boxShadow: '0 6px 16px rgba(0,0,0,0.12)', border: '1px solid #e5e7eb',
                     zIndex: 1000, overflow: 'hidden',
                   }}>
-                    <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}>
+                    <div style={{ padding: '8px 12px', borderBottom: '1px solid #f3f4f6' }}>
                       <Input
                         placeholder="搜索项目名称..."
                         prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
@@ -3126,14 +3051,14 @@ export default function Home() {
                     </div>
                     <div style={{ maxHeight: 300, overflowY: 'auto', padding: '4px 0' }}>
                       {filteredProjects.length === 0 ? (
-                        <div style={{ padding: '16px 0', textAlign: 'center', color: '#8c8c8c', fontSize: 13 }}>无匹配项目</div>
+                        <div style={{ padding: '16px 0', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>无匹配项目</div>
                       ) : (
                         filteredProjects.map(p => (
                           <div
                             key={p.id}
                             style={{
                               padding: '8px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                              background: selectedProject?.id === p.id ? '#e6f4ff' : 'transparent',
+                              background: selectedProject?.id === p.id ? 'rgba(99,102,241,0.06)' : 'transparent',
                               transition: 'background 0.15s',
                             }}
                             onMouseEnter={(e) => { if (selectedProject?.id !== p.id) (e.currentTarget as HTMLElement).style.background = '#fafafa' }}
@@ -3152,8 +3077,8 @@ export default function Home() {
                             }}
                           >
                             <div>
-                              <div style={{ fontSize: 13, fontWeight: 500, color: '#262626' }}>{p.name}</div>
-                              <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 2 }}>{p.type} | {p.leader}</div>
+                              <div style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{p.name}</div>
+                              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{p.type} | {p.leader}</div>
                             </div>
                             <Tag color={p.status === '进行中' ? 'blue' : p.status === '已完成' ? 'green' : 'orange'} style={{ fontSize: 11 }}>{p.status}</Tag>
                           </div>
@@ -3195,7 +3120,7 @@ export default function Home() {
             {transferView === null && projectSpaceModule === 'permission' && <PermissionConfig roles={roles} setRoles={setRoles} rolePermissions={rolePermissions} setRolePermissions={setRolePermissions} permConfigTab={permConfigTab} setPermConfigTab={setPermConfigTab} permissionActiveRole={permissionActiveRole} setPermissionActiveRole={setPermissionActiveRole} showAddRoleModal={showAddRoleModal} setShowAddRoleModal={setShowAddRoleModal} newRoleName={newRoleName} setNewRoleName={setNewRoleName} editingRoleName={editingRoleName} setEditingRoleName={setEditingRoleName} editRoleNameValue={editRoleNameValue} setEditRoleNameValue={setEditRoleNameValue} />}
             {transferView === null && projectSpaceModule !== 'basic' && projectSpaceModule !== 'plan' && projectSpaceModule !== 'overview' && projectSpaceModule !== 'requirements' && projectSpaceModule !== 'permission' && (
               <Card style={{ borderRadius: 8, textAlign: 'center', padding: '40px 0' }}>
-                <Empty description={<span style={{ color: '#8c8c8c' }}>{`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`}</span>} />
+                <Empty description={<span style={{ color: '#9ca3af' }}>{`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`}</span>} />
               </Card>
             )}
           </div>
@@ -3203,7 +3128,7 @@ export default function Home() {
         {/* 版本对比Modal */}
         <Modal
           className="pms-modal"
-          title={<Space><HistoryOutlined style={{ color: '#1890ff' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
+          title={<Space><HistoryOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
           open={showVersionCompare}
           onCancel={() => { setShowVersionCompare(false); setCompareResult([]); setCompareFilterType('all'); setCompareShowUnchanged(false) }}
           footer={null}
@@ -3214,10 +3139,10 @@ export default function Home() {
           <div style={{
             display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px',
             background: 'linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%)',
-            borderRadius: 10, marginBottom: 16, border: '1px solid #e8e8e8',
+            borderRadius: 10, marginBottom: 16, border: '1px solid #e5e7eb',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#262626', whiteSpace: 'nowrap' }}>基准版本</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>基准版本</span>
               <Select
                 value={compareVersionA}
                 onChange={setCompareVersionA}
@@ -3229,7 +3154,7 @@ export default function Home() {
             </div>
             <div style={{ fontSize: 18, color: '#bfbfbf' }}>→</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#262626', whiteSpace: 'nowrap' }}>对比版本</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>对比版本</span>
               <Select
                 value={compareVersionB}
                 onChange={setCompareVersionB}
@@ -3386,7 +3311,7 @@ export default function Home() {
                 <Space size={32} align="center">
                   <Space size={10}>
                     <div style={{ width: 30, height: 30, borderRadius: 8, background: 'linear-gradient(135deg, #818cf8 0%, #6366f1 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(129,140,248,0.4)' }}>
-                      <ProjectOutlined style={{ color: '#fff', fontSize: 16 }} />
+                      <AppstoreOutlined style={{ color: '#fff', fontSize: 16 }} />
                     </div>
                     <span style={{ fontSize: 17, fontWeight: 700, color: '#fff', letterSpacing: 1.5, textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>项目管理系统</span>
                   </Space>
@@ -3411,7 +3336,7 @@ export default function Home() {
                 <Dropdown
                   menu={{
                     items: [
-                      { key: 'label', label: <div style={{ padding: '4px 0', borderBottom: '1px solid #f0f0f0' }}>
+                      { key: 'label', label: <div style={{ padding: '4px 0', borderBottom: '1px solid #f3f4f6' }}>
                         <span style={{ color: '#999', fontSize: 11 }}>当前登录用户</span>
                         <div style={{ fontWeight: 600, marginTop: 2 }}>{currentLoginUser}
                           {(() => {
@@ -3420,7 +3345,7 @@ export default function Home() {
                             const projectCount = isAdmin ? projects.length : projects.filter(p => (PROJECT_MEMBER_MAP[p.id] || []).includes(currentLoginUser)).length
                             return <>
                               {isAdmin && <Tag color="red" style={{ fontSize: 10, marginLeft: 6 }}>管理组</Tag>}
-                              <span style={{ fontSize: 11, color: '#8c8c8c', marginLeft: 6 }}>可见 {projectCount} 个项目</span>
+                              <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 6 }}>可见 {projectCount} 个项目</span>
                             </>
                           })()}
                         </div>
@@ -3440,7 +3365,7 @@ export default function Home() {
                             <Avatar size="small" style={{ background: isActive ? '#4338ca' : '#e0e0e0', fontSize: 12 }}>{u.slice(-1)}</Avatar>
                             <span>{u}</span>
                             {isAdmin && <Tag color="red" style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>管理组</Tag>}
-                            <span style={{ color: '#8c8c8c', fontSize: 11, marginLeft: 'auto' }}>{projectCount}个项目</span>
+                            <span style={{ color: '#9ca3af', fontSize: 11, marginLeft: 'auto' }}>{projectCount}个项目</span>
                             {isActive && <CheckCircleOutlined style={{ color: '#4338ca' }} />}
                           </div>,
                           onClick: () => { setCurrentLoginUser(u); setProjectCardPage(1) },
@@ -3478,8 +3403,8 @@ export default function Home() {
                     {/* 左侧: 状态标签筛选 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       {[
-                        { label: '全部', value: visibleProjects.length, filterValue: 'all', color: '#1890ff' },
-                        { label: '进行中', value: visibleProjects.filter(p => p.status === '进行中').length, filterValue: '进行中', color: '#1890ff' },
+                        { label: '全部', value: visibleProjects.length, filterValue: 'all', color: '#6366f1' },
+                        { label: '进行中', value: visibleProjects.filter(p => p.status === '进行中').length, filterValue: '进行中', color: '#6366f1' },
                         { label: '待立项', value: visibleProjects.filter(p => p.status === '筹备中' || p.status === '待立项').length, filterValue: '筹备中', color: '#faad14' },
                         { label: '已完成', value: visibleProjects.filter(p => p.status === '已完成').length, filterValue: '已完成', color: '#52c41a' },
                       ].map((stat) => {
@@ -3492,7 +3417,7 @@ export default function Home() {
                               padding: '4px 14px', borderRadius: 20, cursor: 'pointer',
                               fontSize: 13, fontWeight: 500, transition: 'all 0.2s',
                               background: isActive ? stat.color : 'transparent',
-                              color: isActive ? '#fff' : '#595959',
+                              color: isActive ? '#fff' : '#4b5563',
                               border: isActive ? `1px solid ${stat.color}` : '1px solid transparent',
                             }}
                             onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.background = 'rgba(99,102,241,0.06)' } }}
@@ -3522,7 +3447,7 @@ export default function Home() {
                                 padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
                                 fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
                                 background: isActive ? '#fff' : 'transparent',
-                                color: isActive ? '#6366f1' : '#8c8c8c',
+                                color: isActive ? '#6366f1' : '#9ca3af',
                                 boxShadow: isActive ? '0 2px 6px rgba(99,102,241,0.15)' : 'none',
                               }}
                             >
@@ -3540,7 +3465,7 @@ export default function Home() {
                         value={projectSearchText2}
                         onChange={e => { setProjectSearchText2(e.target.value); setProjectCardPage(1); }}
                       />
-                      <div style={{ width: 1, height: 20, background: '#e8e8e8' }} />
+                      <div style={{ width: 1, height: 20, background: '#e5e7eb' }} />
                       <Segmented
                         size="small"
                         value={projectListView}
@@ -3590,7 +3515,7 @@ export default function Home() {
                         { title: '项目名称', dataIndex: 'name', width: 200, render: (name: string, r: typeof initialProjects[0]) => (
                           <div>
                             <div style={{ fontWeight: 500 }}>{r.type === '整机产品项目' && r.marketName ? r.marketName : name}</div>
-                            {r.type === '整机产品项目' && r.marketName && <div style={{ fontSize: 11, color: '#8c8c8c' }}>{name}</div>}
+                            {r.type === '整机产品项目' && r.marketName && <div style={{ fontSize: 11, color: '#9ca3af' }}>{name}</div>}
                           </div>
                         )},
                         { title: '类型', dataIndex: 'type', width: 120, render: (t: string) => {
@@ -3605,7 +3530,7 @@ export default function Home() {
                         { title: '计划开始', dataIndex: 'planStartDate', width: 110 },
                         { title: '计划结束', dataIndex: 'planEndDate', width: 110 },
                         { title: 'SPM', dataIndex: 'spm', width: 80 },
-                        { title: '更新', dataIndex: 'updatedAt', width: 80, render: (t: string) => <span style={{ color: '#8c8c8c', fontSize: 12 }}>{t}</span> },
+                        { title: '更新', dataIndex: 'updatedAt', width: 80, render: (t: string) => <span style={{ color: '#9ca3af', fontSize: 12 }}>{t}</span> },
                       ]}
                     />
                   )}
@@ -3625,7 +3550,7 @@ export default function Home() {
                         width: 40,
                         background: '#fff',
                         borderRadius: 8,
-                        border: '1px solid #f0f0f0',
+                        border: '1px solid #f3f4f6',
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
@@ -3636,16 +3561,16 @@ export default function Home() {
                       }}
                       onClick={() => setTodoCollapsed(false)}
                     >
-                      <MenuUnfoldOutlined style={{ color: '#8c8c8c', fontSize: 14, marginBottom: 8 }} />
+                      <MenuUnfoldOutlined style={{ color: '#9ca3af', fontSize: 14, marginBottom: 8 }} />
                       <Badge count={todos.filter(t => t.category === 'overdue').length} size="small" style={{ marginBottom: 8, backgroundColor: '#ff4d4f' }} />
-                      <div style={{ writingMode: 'vertical-lr', fontSize: 12, color: '#8c8c8c', letterSpacing: 2 }}>待办中心</div>
+                      <div style={{ writingMode: 'vertical-lr', fontSize: 12, color: '#9ca3af', letterSpacing: 2 }}>待办中心</div>
                     </div>
                   ) : (
                     /* 展开状态 */
                     <div style={{
                       background: '#fff',
                       borderRadius: 8,
-                      border: '1px solid #f0f0f0',
+                      border: '1px solid #f3f4f6',
                       overflow: 'hidden',
                       position: 'sticky',
                       top: 24,
@@ -3653,18 +3578,18 @@ export default function Home() {
                       {/* 待办头部 */}
                       <div style={{
                         padding: '12px 16px',
-                        borderBottom: '1px solid #f0f0f0',
+                        borderBottom: '1px solid #f3f4f6',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        background: '#fafbfc',
+                        background: '#f8fafc',
                       }}>
                         <Space size={6}>
-                          <CheckSquareOutlined style={{ color: '#1890ff', fontSize: 14 }} />
-                          <span style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>待办中心</span>
+                          <CheckSquareOutlined style={{ color: '#6366f1', fontSize: 14 }} />
+                          <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>待办中心</span>
                           <Badge count={todos.filter(t => t.category === 'overdue').length} style={{ backgroundColor: '#ff4d4f' }} size="small" />
                         </Space>
-                        <Button type="text" size="small" icon={<MenuFoldOutlined />} style={{ color: '#8c8c8c' }} onClick={() => setTodoCollapsed(true)} />
+                        <Button type="text" size="small" icon={<MenuFoldOutlined />} style={{ color: '#9ca3af' }} onClick={() => setTodoCollapsed(true)} />
                       </div>
                       {/* 待办列表 */}
                       <div style={{ padding: 12, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
@@ -3696,7 +3621,7 @@ export default function Home() {
             {activeModule === 'globalPermission' && <GlobalPermissionConfig globalRoles={globalRoles} setGlobalRoles={setGlobalRoles} globalRolePerms={globalRolePerms} setGlobalRolePerms={setGlobalRolePerms} globalPermTab={globalPermTab} setGlobalPermTab={setGlobalPermTab} showGlobalAddRole={showGlobalAddRole} setShowGlobalAddRole={setShowGlobalAddRole} globalNewRoleName={globalNewRoleName} setGlobalNewRoleName={setGlobalNewRoleName} globalEditingRole={globalEditingRole} setGlobalEditingRole={setGlobalEditingRole} globalEditRoleValue={globalEditRoleValue} setGlobalEditRoleValue={setGlobalEditRoleValue} globalPermActiveRole={globalPermActiveRole} setGlobalPermActiveRole={setGlobalPermActiveRole} />}
             {activeModule === 'hrPipeline' && (
               <Card style={{ borderRadius: 8, textAlign: 'center', padding: '80px 0' }}>
-                <Empty description={<span style={{ color: '#8c8c8c', fontSize: 14 }}>人力资源管道模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                <Empty description={<span style={{ color: '#9ca3af', fontSize: 14 }}>人力资源管道模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
               </Card>
             )}
             {activeModule === 'workTracker' && (
@@ -3745,10 +3670,10 @@ export default function Home() {
                         size="small"
                         style={{ borderRadius: 8, position: 'sticky', top: 24 }}
                         styles={{
-                          header: { background: '#fafbfc', borderBottom: '1px solid #f0f0f0', padding: '8px 12px', minHeight: 40 },
+                          header: { background: '#f8fafc', borderBottom: '1px solid #f3f4f6', padding: '8px 12px', minHeight: 40 },
                           body: { padding: sidebarCollapsed ? '8px 4px' : '8px' },
                         }}
-                        title={!sidebarCollapsed && <span style={{ fontSize: 13, fontWeight: 600, color: '#595959' }}>项目类型</span>}
+                        title={!sidebarCollapsed && <span style={{ fontSize: 13, fontWeight: 600, color: '#4b5563' }}>项目类型</span>}
                         extra={<Button type="text" size="small" icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} />}
                       >
                         {!sidebarCollapsed && <Menu mode="inline" selectedKeys={[selectedProjectType]} style={{ border: 'none', fontSize: 13 }} items={PROJECT_TYPES.map(t => ({ key: t, label: <span style={{ fontWeight: selectedProjectType === t ? 500 : 400 }}>{t}</span>, onClick: () => navigateWithEditGuard(() => setSelectedProjectType(t)) }))} />}
@@ -3757,16 +3682,16 @@ export default function Home() {
                     <Col span={sidebarCollapsed ? 23 : 20}>
                       {/* 配置头部 */}
                       <Card size="small" style={{ marginBottom: 16, borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
-                        <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%)', borderBottom: '1px solid #e8e8e8' }}>
+                        <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%)', borderBottom: '1px solid #e5e7eb' }}>
                           <Row justify="space-between" align="middle">
                             <Col>
                               <Space size={8} align="center">
                                 <CalendarOutlined style={{ color: '#6366f1', fontSize: 16 }} />
-                                <span style={{ fontSize: 16, fontWeight: 600, color: '#262626' }}>{selectedProjectType}</span>
+                                <span style={{ fontSize: 16, fontWeight: 600, color: '#111827' }}>{selectedProjectType}</span>
                                 <Divider type="vertical" style={{ height: 16, margin: '0 4px' }} />
-                                <span style={{ fontSize: 14, color: '#595959' }}>计划模板配置</span>
+                                <span style={{ fontSize: 14, color: '#4b5563' }}>计划模板配置</span>
                               </Space>
-                              <div style={{ marginTop: 4, fontSize: 12, color: '#8c8c8c', paddingLeft: 24 }}>配置和管理项目计划模板</div>
+                              <div style={{ marginTop: 4, fontSize: 12, color: '#9ca3af', paddingLeft: 24 }}>配置和管理项目计划模板</div>
                             </Col>
                           </Row>
                         </div>
@@ -3779,7 +3704,7 @@ export default function Home() {
                       {planLevel === 'level2' && (
                         <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '10px 16px' } }}>
                           <Space wrap size={[8, 8]}>
-                            <span style={{ color: '#8c8c8c', fontSize: 13, fontWeight: 500 }}>模板类型</span>
+                            <span style={{ color: '#9ca3af', fontSize: 13, fontWeight: 500 }}>模板类型</span>
                             <Divider type="vertical" style={{ height: 16, margin: '0 4px' }} />
                             {allPlanTypes.map(t => {
                               const isCustom = customTypes.includes(t)
@@ -3821,7 +3746,7 @@ export default function Home() {
                           <Col>
                             <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
                               <Space size={6}>
-                                <span style={{ color: '#8c8c8c', fontSize: 13 }}>版本</span>
+                                <span style={{ color: '#9ca3af', fontSize: 13 }}>版本</span>
                                 <Select value={currentVersion} onChange={(val) => navigateWithEditGuard(() => { setCurrentVersion(val); setIsEditMode(false) })} style={{ width: 180 }} size="middle">
                                   {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
                                 </Select>
@@ -3853,7 +3778,7 @@ export default function Home() {
           <Modal className="pms-modal" title={`自定义列 - ${currentViewMode === 'gantt' ? '甘特图' : '竖版表格'}`} open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(currentViewDefaultCols)}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}><Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row>{currentViewColumns.map(c => <Col span={12} key={c.key}><Checkbox value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox></Col>)}</Row></Checkbox.Group></Modal>
           <Modal
             className="pms-modal"
-            title={<Space><HistoryOutlined style={{ color: '#1890ff' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
+            title={<Space><HistoryOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
             open={showVersionCompare}
             onCancel={() => { setShowVersionCompare(false); setCompareResult([]); setCompareFilterType('all'); setCompareShowUnchanged(false) }}
             footer={null}
@@ -3864,17 +3789,17 @@ export default function Home() {
             <div style={{
               display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px',
               background: 'linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%)',
-              borderRadius: 10, marginBottom: 16, border: '1px solid #e8e8e8',
+              borderRadius: 10, marginBottom: 16, border: '1px solid #e5e7eb',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#262626', whiteSpace: 'nowrap' }}>基准版本</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>基准版本</span>
                 <Select value={compareVersionA} onChange={setCompareVersionA} style={{ width: 180 }} size="middle">
                   {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
                 </Select>
               </div>
               <div style={{ fontSize: 18, color: '#bfbfbf' }}>→</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#262626', whiteSpace: 'nowrap' }}>对比版本</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>对比版本</span>
                 <Select value={compareVersionB} onChange={setCompareVersionB} style={{ width: 180 }} size="middle">
                   {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
                 </Select>
@@ -4280,7 +4205,7 @@ export default function Home() {
       ]}
       width={420}
     >
-      <div style={{ padding: '12px 0', fontSize: 14, color: '#595959' }}>
+      <div style={{ padding: '12px 0', fontSize: 14, color: '#4b5563' }}>
         您还未提交现有编辑内容，是否要离开该界面？
       </div>
     </Modal>
