@@ -108,7 +108,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
 
   const fieldItem = (label: string, value: string | undefined) => value ? (
     <div style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-      <span style={{ color: '#bfbfbf' }}>{label}</span> <span style={{ color: '#595959', fontWeight: 500 }}>{value}</span>
+      <span style={{ color: '#bfbfbf' }}>{label}</span> <span style={{ color: '#4b5563', fontWeight: 500 }}>{value}</span>
     </div>
   ) : null
 
@@ -118,10 +118,10 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       className="pms-card-hover"
       style={{
         borderRadius: 10,
-        border: '1px solid #f0f0f0',
+        border: '1px solid #e5e7eb',
         height: '100%',
         background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.9) 100%)',
-        borderLeft: hovered ? '3px solid #6366f1' : '1px solid #f0f0f0',
+        borderLeft: hovered ? '3px solid #6366f1' : '1px solid #e5e7eb',
         boxShadow: hovered ? '0 12px 28px rgba(99,102,241,0.12)' : '0 2px 8px rgba(0,0,0,0.04)',
         transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
       }}
@@ -133,11 +133,11 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       {/* 头部: 项目名 + 状态 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#262626', letterSpacing: 0.3, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#111827', letterSpacing: 0.3, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {project.name}
           </div>
           {isWholeMachine && project.marketName && (
-            <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>市场名: {project.marketName}</div>
+            <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>市场名: {project.marketName}</div>
           )}
           <Tag color="default" style={{ fontSize: 11, borderRadius: 3, margin: 0, background: typeColor.bg, color: typeColor.color, border: 'none' }}>{project.type}</Tag>
         </div>
@@ -160,7 +160,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
 
       {/* 计划时间 - 软件产品/整机产品/技术项目显示 */}
       {!isCapability && (project.planStartDate || project.planEndDate) && (
-        <div style={{ display: 'flex', gap: 12, marginBottom: 10, fontSize: 12, color: '#8c8c8c' }}>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 10, fontSize: 12, color: '#9ca3af' }}>
           {project.planStartDate && (
             <span><CalendarOutlined style={{ marginRight: 4, color: '#6366f1' }} />{project.planStartDate}</span>
           )}
@@ -174,7 +174,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
         <Space size={6}>
           <Avatar size={20} style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)', fontSize: 10 }}>{project.spm[0]}</Avatar>
-          <span style={{ fontSize: 12, color: '#595959' }}>{project.spm}</span>
+          <span style={{ fontSize: 12, color: '#4b5563' }}>{project.spm}</span>
         </Space>
         <span style={{ fontSize: 11, color: '#bfbfbf' }}>{project.updatedAt}</span>
       </div>
@@ -261,12 +261,12 @@ export const TodoList: React.FC<TodoListProps> = ({
                   padding: '12px 14px',
                   background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.85) 100%)',
                   borderRadius: 6,
-                  border: '1px solid #f0f0f0',
+                  border: '1px solid #e5e7eb',
                   cursor: 'pointer',
                   transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(99,102,241,0.08)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.15)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = '#f0f0f0' }}
+                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = '#e5e7eb' }}
                 onClick={() => {
                   const proj = projects.find(p => p.id === todo.projectId)
                   if (!proj) return
@@ -292,7 +292,7 @@ export const TodoList: React.FC<TodoListProps> = ({
                           rows[i].scrollIntoView({ behavior: 'smooth', block: 'center' })
                           const row = rows[i] as HTMLElement
                           row.style.transition = 'background 0.3s'
-                          row.style.background = '#e6f7ff'
+                          row.style.background = 'rgba(99,102,241,0.06)'
                           setTimeout(() => { row.style.background = '' }, 2000)
                           return
                         }
@@ -304,8 +304,8 @@ export const TodoList: React.FC<TodoListProps> = ({
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                   <div style={{ width: 6, height: 6, borderRadius: '50%', background: pc.dotColor, boxShadow: `0 0 6px ${pc.dotColor}66`, marginTop: 7, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', letterSpacing: 0.3, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{todo.projectName}</div>
-                    <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', letterSpacing: 0.3, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{todo.projectName}</div>
+                    <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {todo.planLevel === 'level1' ? '一级计划' : '二级计划'}
                       {todo.planLevel === 'level2' && todo.planType && <> · {todo.planType}</>}
                       {' · '}<span style={{ color: '#6366f1', fontWeight: 500 }}>{todo.versionNo}</span>
@@ -313,7 +313,7 @@ export const TodoList: React.FC<TodoListProps> = ({
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                       <Tag style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 5px', background: pc.gradientBg, color: pc.dotColor, border: 'none', fontWeight: 500 }}>{pc.text}优先级</Tag>
-                      {(todo as any).mergedCount > 1 && <span style={{ fontSize: 11, color: '#8c8c8c' }}>共 {(todo as any).mergedCount} 项待处理</span>}
+                      {(todo as any).mergedCount > 1 && <span style={{ fontSize: 11, color: '#9ca3af' }}>共 {(todo as any).mergedCount} 项待处理</span>}
                     </div>
                   </div>
                 </div>
@@ -384,7 +384,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       <Row justify="end" style={{ marginBottom: 16 }}>
         <Col>
           <Space>
-            <span style={{ color: '#666' }}>分组维度:</span>
+            <span style={{ color: '#4b5563' }}>分组维度:</span>
             <Select value={kanbanDimension} onChange={setKanbanDimension} style={{ width: 120 }}>
               <Option value="stage">阶段</Option>
               <Option value="type">项目类型</Option>
@@ -396,7 +396,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       <Row gutter={16}>
         {getKanbanColumns().map(col => (
           <Col span={Math.floor(24 / getKanbanColumns().length)} key={col.key}>
-            <Card title={<Space><Badge color={col.color} />{col.title}</Space>} style={{ background: '#fafafa', minHeight: 300 }} bodyStyle={{ padding: 12 }}>
+            <Card title={<Space><Badge color={col.color} />{col.title}</Space>} style={{ background: '#f8fafc', minHeight: 300 }} bodyStyle={{ padding: 12 }}>
               <Space direction="vertical" style={{ width: '100%' }}>
                 {visibleProjects.filter(getKanbanFilter(col)).map(project => (
                     <Card key={project.id} size="small" hoverable onClick={() => { setSelectedProject(project); setProjectSpaceModule('basic'); setActiveModule('projectSpace') }}>
