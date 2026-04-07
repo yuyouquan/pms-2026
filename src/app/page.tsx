@@ -3593,7 +3593,10 @@ export default function Home() {
                             {r.type === '整机产品项目' && r.marketName && <div style={{ fontSize: 11, color: '#8c8c8c' }}>{name}</div>}
                           </div>
                         )},
-                        { title: '类型', dataIndex: 'type', width: 120, render: (t: string) => <Tag color="default" style={{ fontSize: 11 }}>{t}</Tag> },
+                        { title: '类型', dataIndex: 'type', width: 120, render: (t: string) => {
+                          const tc = { '整机产品项目': { bg: 'rgba(99,102,241,0.08)', color: '#6366f1' }, '产品项目': { bg: 'rgba(22,119,255,0.08)', color: '#1677ff' }, '技术项目': { bg: 'rgba(250,173,20,0.08)', color: '#d48806' }, '能力建设项目': { bg: 'rgba(82,196,26,0.08)', color: '#389e0d' } }[t] || { bg: 'rgba(140,140,140,0.08)', color: '#8c8c8c' }
+                          return <Tag color="default" style={{ fontSize: 11, borderRadius: 3, background: tc.bg, color: tc.color, border: 'none' }}>{t}</Tag>
+                        }},
                         { title: '状态', dataIndex: 'status', width: 80, render: (s: string) => {
                           const conf = PROJECT_STATUS_CONFIG[s] || { tagColor: 'default' }
                           return <Tag color={conf.tagColor}>{s}</Tag>
