@@ -342,7 +342,7 @@ export default function MRTrainView({ onViewProject }: MRTrainViewProps) {
           align: 'center' as const,
           className: 'mr-train-activity-cell',
           render: (val: string) => (
-            <span style={{ fontSize: 12, color: val ? '#595959' : '#bfbfbf' }}>{val || '-'}</span>
+            <span style={{ fontSize: 12, color: val ? '#4b5563' : '#bfbfbf' }}>{val || '-'}</span>
           ),
         },
         {
@@ -353,7 +353,7 @@ export default function MRTrainView({ onViewProject }: MRTrainViewProps) {
           align: 'center' as const,
           className: 'mr-train-activity-cell',
           render: (val: string) => (
-            <span style={{ fontSize: 12, color: val ? '#595959' : '#bfbfbf' }}>{val || '-'}</span>
+            <span style={{ fontSize: 12, color: val ? '#4b5563' : '#bfbfbf' }}>{val || '-'}</span>
           ),
         },
       ]),

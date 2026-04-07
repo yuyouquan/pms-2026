@@ -169,7 +169,7 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
           <Space size={4}>
             {record.status === '逾期' && <WarningOutlined style={{ color: '#ff4d4f', fontSize: 12 }} />}
             {isNearDeadline(record) && <ClockCircleOutlined style={{ color: '#faad14', fontSize: 12 }} />}
-            <span style={{ fontWeight: 500, color: record.status === '逾期' ? '#ff4d4f' : '#262626' }}>{displayName}</span>
+            <span style={{ fontWeight: 500, color: record.status === '逾期' ? '#ff4d4f' : '#111827' }}>{displayName}</span>
           </Space>
         )
       },
@@ -182,7 +182,7 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
       title: '停留时长', dataIndex: 'stayDuration', key: 'stayDuration', width: 100, align: 'center',
       render: (val: number, record: WorkItem) => {
         if (record.status === '已完成' || record.status === '已关闭') return <span style={{ color: '#bfbfbf' }}>-</span>
-        const color = val > 7 ? '#ff4d4f' : val > 3 ? '#faad14' : '#595959'
+        const color = val > 7 ? '#ff4d4f' : val > 3 ? '#faad14' : '#4b5563'
         return <span style={{ color, fontWeight: val > 7 ? 600 : 400 }}>{val}天</span>
       },
     },
@@ -191,14 +191,14 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
     },
     {
       title: '计划开始时间', dataIndex: 'planStartDate', key: 'planStartDate', width: 120,
-      render: (val: string) => <span style={{ fontSize: 12, color: '#595959' }}>{val}</span>,
+      render: (val: string) => <span style={{ fontSize: 12, color: '#4b5563' }}>{val}</span>,
     },
     {
       title: '计划完成时间', dataIndex: 'planEndDate', key: 'planEndDate', width: 120,
       render: (val: string, record: WorkItem) => {
         const isOverdue = record.status === '逾期'
         const near = isNearDeadline(record)
-        return <span style={{ fontSize: 12, color: isOverdue ? '#ff4d4f' : near ? '#faad14' : '#595959', fontWeight: isOverdue || near ? 600 : 400 }}>{val}</span>
+        return <span style={{ fontSize: 12, color: isOverdue ? '#ff4d4f' : near ? '#faad14' : '#4b5563', fontWeight: isOverdue || near ? 600 : 400 }}>{val}</span>
       },
     },
     {
@@ -271,7 +271,7 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
             </div>
             <div>
               <div style={{ fontSize: 26, fontWeight: 700, color: item.color, lineHeight: 1, textShadow: `0 1px 2px ${item.borderColor}` }}>{item.value}</div>
-              <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>{item.label}</div>
+              <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>{item.label}</div>
             </div>
           </div>
         ))}
@@ -302,11 +302,11 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
                     padding: '4px 14px', borderRadius: 20, cursor: 'pointer',
                     fontSize: 13, fontWeight: 500, transition: 'all 0.25s ease',
                     background: isActive ? (f.color ? f.color : 'linear-gradient(135deg, #4338ca, #6366f1)') : 'transparent',
-                    color: isActive ? '#fff' : '#595959',
+                    color: isActive ? '#fff' : '#4b5563',
                     border: isActive ? '1px solid transparent' : '1px solid transparent',
                     boxShadow: isActive ? (f.color ? `0 4px 12px ${f.color}40` : '0 4px 12px rgba(67,56,202,0.3)') : 'none',
                   }}
-                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = '#f5f5f5' }}
+                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = '#f3f4f6' }}
                   onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
                 >
                   {f.label} <span style={{ fontSize: 11, opacity: 0.85, marginLeft: 2 }}>{f.count}</span>
@@ -407,14 +407,14 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
         {actualTimeModal.item && (
           <div style={{ padding: '12px 0' }}>
             <div style={{ marginBottom: 16, padding: '10px 14px', background: '#f6f8fa', borderRadius: 8 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>{actualTimeModal.item.name}</div>
-              <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{actualTimeModal.item.name}</div>
+              <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
                 {actualTimeModal.item.project} · {actualTimeModal.item.planLevel === 'level1' ? '一级计划' : `二级计划-${actualTimeModal.item.planType}`}
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', marginBottom: 6 }}>实际开始时间</div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: '#111827', marginBottom: 6 }}>实际开始时间</div>
                 <DatePicker
                   style={{ width: '100%' }}
                   value={actualTimeModal.startDate ? dayjs(actualTimeModal.startDate) : null}
@@ -423,7 +423,7 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
                 />
               </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 500, color: '#262626', marginBottom: 6 }}>实际完成时间</div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: '#111827', marginBottom: 6 }}>实际完成时间</div>
                 <DatePicker
                   style={{ width: '100%' }}
                   value={actualTimeModal.endDate ? dayjs(actualTimeModal.endDate) : null}
