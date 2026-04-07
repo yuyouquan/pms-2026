@@ -608,6 +608,7 @@ function DragHandle() {
 export default function Home() {
   // const router = useRouter()
   const [activeModule, setActiveModule] = useState<string>('projects')
+  const [workspaceTab, setWorkspaceTab] = useState<'projects' | 'workTracker'>('projects')
   const [projectView, setProjectView] = useState<string>('card')
   const [todoCollapsed, setTodoCollapsed] = useState(false)
   const [projectSearchText2, setProjectSearchText2] = useState('')
@@ -3325,7 +3326,6 @@ export default function Home() {
                       { key: 'projects', label: '工作台' },
                       { key: 'roadmap', label: '项目路标视图' },
                       { key: 'hrPipeline', label: '人力资源管道' },
-                      { key: 'workTracker', label: '工作跟踪' },
                       { key: 'config', label: '配置中心' },
                       { key: 'globalPermission', label: '权限中心' },
                     ]}
@@ -3391,17 +3391,46 @@ export default function Home() {
           </div>
           <div style={{ padding: 24 }}>
             {activeModule === 'projects' && (
-              <div style={{ display: 'flex', gap: 20 }}>
-                {/* 左侧 - 项目列表 */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  {/* 筛选工具栏 */}
-                  <div style={{
-                    background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(8px)', borderRadius: 14, padding: '12px 20px', marginBottom: 16,
-                    border: '1px solid rgba(99,102,241,0.08)', boxShadow: '0 2px 8px rgba(99,102,241,0.04)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
-                  }}>
-                    {/* 左侧: 状态标签筛选 */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div>
+                {/* 统一工具栏：Tab切换 + 筛选 */}
+                <div style={{
+                  background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(8px)', borderRadius: 14, padding: '8px 20px', marginBottom: 16,
+                  border: '1px solid rgba(99,102,241,0.08)', boxShadow: '0 2px 8px rgba(99,102,241,0.04)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+                }}>
+                  {/* 左侧: Tab切换 + 分隔线 + 状态筛选 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                    {/* Tab 切换 */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '2px 3px', background: 'rgba(99,102,241,0.05)', borderRadius: 8 }}>
+                      {([
+                        { key: 'projects' as const, label: '项目列表', icon: <AppstoreOutlined /> },
+                        { key: 'workTracker' as const, label: '工作跟踪', icon: <ClockCircleOutlined /> },
+                      ]).map(tab => {
+                        const isActive = workspaceTab === tab.key
+                        return (
+                          <div
+                            key={tab.key}
+                            onClick={() => setWorkspaceTab(tab.key)}
+                            style={{
+                              padding: '4px 14px', borderRadius: 6, cursor: 'pointer',
+                              fontSize: 13, fontWeight: isActive ? 600 : 400,
+                              display: 'flex', alignItems: 'center', gap: 5,
+                              transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                              background: isActive ? '#fff' : 'transparent',
+                              color: isActive ? '#4338ca' : '#9ca3af',
+                              boxShadow: isActive ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                            }}
+                          >
+                            {tab.icon} {tab.label}
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {/* 分隔线 — 仅在项目列表时显示后续筛选 */}
+                    {workspaceTab === 'projects' && (
+                      <>
+                        <div style={{ width: 1, height: 20, background: 'rgba(99,102,241,0.12)', margin: '0 14px' }} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       {[
                         { label: '全部', value: visibleProjects.length, filterValue: 'all', color: '#6366f1' },
                         { label: '进行中', value: visibleProjects.filter(p => p.status === '进行中').length, filterValue: '进行中', color: '#6366f1' },
@@ -3427,8 +3456,12 @@ export default function Home() {
                           </div>
                         )
                       })}
-                    </div>
-                    {/* 右侧: 类型筛选 + 搜索 + 视图切换 */}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {/* 右侧: 类型筛选 + 搜索 + 视图切换 (仅项目列表时显示) */}
+                  {workspaceTab === 'projects' && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 4px', background: 'rgba(99,102,241,0.04)', borderRadius: 20, border: '1px solid rgba(99,102,241,0.06)' }}>
                         {[
@@ -3476,8 +3509,13 @@ export default function Home() {
                         ]}
                       />
                     </div>
-                  </div>
+                  )}
+                </div>
 
+                {/* 项目列表内容 */}
+                {workspaceTab === 'projects' && (
+              <div style={{ display: 'flex', gap: 20 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   {/* 项目卡片/列表 */}
                   {projectListView === 'card' ? (
                     <>
@@ -3599,6 +3637,29 @@ export default function Home() {
                   )}
                 </div>
               </div>
+                )}
+                {/* 工作跟踪内容 */}
+                {workspaceTab === 'workTracker' && (
+                  <WorkTracker
+                    currentLoginUser={currentLoginUser}
+                    projects={projects}
+                    onNavigateToProject={(projectId, module, planLevel, planType) => {
+                      const proj = projects.find(p => p.id === projectId)
+                      if (!proj) return
+                      setSelectedProject(proj)
+                      setProjectSpaceModule(module)
+                      setActiveModule('projectSpace')
+                      if (module === 'plan' && planLevel) {
+                        setProjectPlanLevel(planLevel)
+                        if (planLevel === 'level2' && planType) {
+                          const plan = createdLevel2Plans.find(p => p.name === planType)
+                          if (plan) setActiveLevel2Plan(plan.id)
+                        }
+                      }
+                    }}
+                  />
+                )}
+              </div>
             )}
             {activeModule === 'roadmap' && (
               <RoadmapView
@@ -3623,26 +3684,6 @@ export default function Home() {
               <Card style={{ borderRadius: 8, textAlign: 'center', padding: '80px 0' }}>
                 <Empty description={<span style={{ color: '#9ca3af', fontSize: 14 }}>人力资源管道模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
               </Card>
-            )}
-            {activeModule === 'workTracker' && (
-              <WorkTracker
-                currentLoginUser={currentLoginUser}
-                projects={projects}
-                onNavigateToProject={(projectId, module, planLevel, planType) => {
-                  const proj = projects.find(p => p.id === projectId)
-                  if (!proj) return
-                  setSelectedProject(proj)
-                  setProjectSpaceModule(module)
-                  setActiveModule('projectSpace')
-                  if (module === 'plan' && planLevel) {
-                    setProjectPlanLevel(planLevel)
-                    if (planLevel === 'level2' && planType) {
-                      const plan = createdLevel2Plans.find(p => p.name === planType)
-                      if (plan) setActiveLevel2Plan(plan.id)
-                    }
-                  }
-                }}
-              />
             )}
             {(activeModule === 'config' || activeModule === 'projectSpace') && (
               <div>
