@@ -90,6 +90,15 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   const isWholeMachine = project.type === '整机产品项目'
   const isCapability = project.type === '能力建设项目'
 
+  // Project type color mapping
+  const typeColorMap: Record<string, { bg: string; color: string }> = {
+    '整机产品项目': { bg: 'rgba(99,102,241,0.08)', color: '#6366f1' },
+    '产品项目': { bg: 'rgba(22,119,255,0.08)', color: '#1677ff' },
+    '技术项目': { bg: 'rgba(250,173,20,0.08)', color: '#d48806' },
+    '能力建设项目': { bg: 'rgba(82,196,26,0.08)', color: '#389e0d' },
+  }
+  const typeColor = typeColorMap[project.type] || { bg: 'rgba(140,140,140,0.08)', color: '#8c8c8c' }
+
   // Status tag gradient styles
   const statusTagStyle: Record<string, React.CSSProperties> = {
     '进行中': { background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', color: '#4338ca', border: 'none' },
@@ -130,7 +139,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
           {isWholeMachine && project.marketName && (
             <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>市场名: {project.marketName}</div>
           )}
-          <Tag color="default" style={{ fontSize: 11, borderRadius: 3, margin: 0, background: 'rgba(99,102,241,0.08)', color: '#6366f1', border: 'none' }}>{project.type}</Tag>
+          <Tag color="default" style={{ fontSize: 11, borderRadius: 3, margin: 0, background: typeColor.bg, color: typeColor.color, border: 'none' }}>{project.type}</Tag>
         </div>
         <Tag
           color={statusConf.tagColor}
@@ -302,16 +311,10 @@ export const TodoList: React.FC<TodoListProps> = ({
                       {' · '}<span style={{ color: '#6366f1', fontWeight: 500 }}>{todo.versionNo}</span>
                       {todo.market && <> · <span style={{ color: '#13c2c2' }}>{todo.market}</span></>}
                     </div>
-                    {(todo as any).mergedCount > 1 && <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4 }}>共 {(todo as any).mergedCount} 项待处理</div>}
-                    <Space size={4}>
-                      <Tag style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px', background: pc.gradientBg, color: pc.dotColor, border: 'none' }}>{pc.text}</Tag>
-                      <Tag style={{
-                        fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 4px', border: 'none',
-                        ...(todo.status === '进行中' ? { background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', color: '#4338ca' } :
-                           todo.status === '已完成' ? { background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', color: '#065f46' } :
-                           { background: 'linear-gradient(135deg, #f5f5f5, #e8e8e8)', color: '#595959' })
-                      }}>{todo.status}</Tag>
-                    </Space>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                      <Tag style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 5px', background: pc.gradientBg, color: pc.dotColor, border: 'none', fontWeight: 500 }}>{pc.text}优先级</Tag>
+                      {(todo as any).mergedCount > 1 && <span style={{ fontSize: 11, color: '#8c8c8c' }}>共 {(todo as any).mergedCount} 项待处理</span>}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -397,7 +400,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               <Space direction="vertical" style={{ width: '100%' }}>
                 {visibleProjects.filter(getKanbanFilter(col)).map(project => (
                     <Card key={project.id} size="small" hoverable onClick={() => { setSelectedProject(project); setProjectSpaceModule('basic'); setActiveModule('projectSpace') }}>
-                    <Space direction="vertical" style={{ width: '100%' }}><div style={{ fontWeight: 500 }}>{project.name}</div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Tag>{project.type}</Tag><Progress percent={project.progress} size="small" style={{ width: 60 }} /></div></Space>
+                    <Space direction="vertical" style={{ width: '100%' }}><div style={{ fontWeight: 500 }}>{project.name}</div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Tag style={{ fontSize: 11, borderRadius: 3, margin: 0, background: ({ '整机产品项目': 'rgba(99,102,241,0.08)', '产品项目': 'rgba(22,119,255,0.08)', '技术项目': 'rgba(250,173,20,0.08)', '能力建设项目': 'rgba(82,196,26,0.08)' } as Record<string,string>)[project.type] || 'rgba(140,140,140,0.08)', color: ({ '整机产品项目': '#6366f1', '产品项目': '#1677ff', '技术项目': '#d48806', '能力建设项目': '#389e0d' } as Record<string,string>)[project.type] || '#8c8c8c', border: 'none' }}>{project.type}</Tag><Progress percent={project.progress} size="small" style={{ width: 60 }} /></div></Space>
                   </Card>
                 ))}
               </Space>
