@@ -215,7 +215,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         width: 120,
         align: 'center' as const,
         render: (val: string) => (
-          <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#595959' }}>{val}</span>
+          <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#4b5563' }}>{val}</span>
         ),
       })
     }
@@ -224,7 +224,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     if (projectType === '整机产品项目') {
       cols.push({
         title: '产品上市', dataIndex: 'launchDate', key: 'launchDate', width: 120, align: 'center' as const,
-        render: (val: string) => <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#595959' }}>{val}</span>,
+        render: (val: string) => <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#4b5563' }}>{val}</span>,
       })
     }
 
@@ -372,7 +372,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     for (const ms of displayMilestones) {
       cols.push({
         title: ms.name, dataIndex: `ms_${ms.name}`, key: `ms_${ms.name}`, width: 120, align: 'center' as const,
-        render: (val: string) => <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#595959' }}>{val}</span>,
+        render: (val: string) => <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#4b5563' }}>{val}</span>,
       })
     }
     cols.push({
@@ -477,7 +477,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 500 }}>{s.version}</div>
-                  <div style={{ fontSize: 11, color: '#8c8c8c' }}>{s.createdAt}</div>
+                  <div style={{ fontSize: 11, color: '#9ca3af' }}>{s.createdAt}</div>
                 </div>
                 <DeleteOutlined style={{ color: '#ff4d4f', fontSize: 11 }} onClick={(e) => { e.stopPropagation(); handleDeleteSnapshot(s.id) }} />
               </div>
@@ -497,7 +497,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       {!hideProjectTypeTabs && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14,
-          padding: '3px 4px', background: '#f5f5f5', borderRadius: 22, width: 'fit-content',
+          padding: '3px 4px', background: '#f3f4f6', borderRadius: 22, width: 'fit-content',
         }}>
           {PROJECT_TYPES.map(t => {
             const isActive = projectType === t
@@ -515,7 +515,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
                   padding: '6px 20px', borderRadius: 18, cursor: 'pointer',
                   fontSize: 13, fontWeight: 600, transition: 'all 0.25s ease',
                   background: isActive ? '#fff' : 'transparent',
-                  color: isActive ? '#6366f1' : '#8c8c8c',
+                  color: isActive ? '#6366f1' : '#9ca3af',
                   boxShadow: isActive ? '0 2px 8px rgba(99,102,241,0.2)' : 'none',
                 }}
               >
@@ -536,8 +536,8 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       }}>
         {/* 左侧: 视图切换 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <span style={{ fontSize: 12, color: '#8c8c8c', marginRight: 2 }}>视图</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 3px', background: '#f5f5f5', borderRadius: 16 }}>
+          <span style={{ fontSize: 12, color: '#9ca3af', marginRight: 2 }}>视图</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 3px', background: '#f3f4f6', borderRadius: 16 }}>
             {viewTabs.map(tab => {
               const isActive = activeViewId === tab.key
               return (
@@ -549,7 +549,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
                     fontSize: 12, fontWeight: 500, transition: 'all 0.3s ease',
                     display: 'flex', alignItems: 'center', gap: 4,
                     background: isActive ? '#fff' : 'transparent',
-                    color: isActive ? '#6366f1' : '#595959',
+                    color: isActive ? '#6366f1' : '#4b5563',
                     boxShadow: isActive ? '0 2px 6px rgba(99,102,241,0.12)' : 'none',
                   }}
                 >
@@ -645,7 +645,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {filterOptions.productLine.length > 0 && (
             <div>
-              <div style={{ marginBottom: 8, fontWeight: 500, color: '#262626' }}>产品线</div>
+              <div style={{ marginBottom: 8, fontWeight: 500, color: '#111827' }}>产品线</div>
               <Checkbox.Group
                 options={filterOptions.productLine}
                 value={tempFilters.productLine || []}
@@ -655,7 +655,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
           )}
           {filterOptions.chipPlatform.length > 0 && (
             <div>
-              <div style={{ marginBottom: 8, fontWeight: 500, color: '#262626' }}>平台厂商</div>
+              <div style={{ marginBottom: 8, fontWeight: 500, color: '#111827' }}>平台厂商</div>
               <Checkbox.Group
                 options={filterOptions.chipPlatform}
                 value={tempFilters.chipPlatform || []}
@@ -665,7 +665,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
           )}
           {filterOptions.status.length > 0 && (
             <div>
-              <div style={{ marginBottom: 8, fontWeight: 500, color: '#262626' }}>状态</div>
+              <div style={{ marginBottom: 8, fontWeight: 500, color: '#111827' }}>状态</div>
               <Checkbox.Group
                 options={filterOptions.status}
                 value={tempFilters.status || []}
@@ -675,7 +675,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
           )}
           {filterOptions.tosVersion.length > 0 && (
             <div>
-              <div style={{ marginBottom: 8, fontWeight: 500, color: '#262626' }}>tOS版本</div>
+              <div style={{ marginBottom: 8, fontWeight: 500, color: '#111827' }}>tOS版本</div>
               <Checkbox.Group
                 options={filterOptions.tosVersion}
                 value={tempFilters.tosVersion || []}
@@ -696,7 +696,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         cancelText="取消"
         width={400}
       >
-        <div style={{ marginBottom: 8, fontSize: 12, color: '#8c8c8c' }}>
+        <div style={{ marginBottom: 8, fontSize: 12, color: '#9ca3af' }}>
           &quot;项目名称&quot;和&quot;操作&quot;列始终显示，以下为可选列：
         </div>
         <Checkbox.Group
@@ -723,7 +723,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         cancelText="取消"
         width={400}
       >
-        <div style={{ marginBottom: 8, color: '#595959', fontSize: 13 }}>
+        <div style={{ marginBottom: 8, color: '#4b5563', fontSize: 13 }}>
           将当前的项目类型、筛选条件、列配置和分页设置保存为视图，便于下次快速切换。
         </div>
         <Input

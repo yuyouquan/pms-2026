@@ -383,10 +383,10 @@ export function HorizontalTable({ tasks, versions }: HorizontalTableProps) {
     }))
   }
 
-  const thStyle: CSSProperties = { background: '#fafbfc', fontWeight: 600, fontSize: 13, color: '#595959', padding: '10px 12px', border: '1px solid #e8e8e8', whiteSpace: 'nowrap', textAlign: 'center' }
-  const tdStyle: CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'center', whiteSpace: 'nowrap', minWidth: 100, border: '1px solid #e8e8e8' }
-  const versionThStyle: CSSProperties = { ...thStyle, position: 'sticky', left: 0, zIndex: 2, minWidth: 80, background: '#fafbfc' }
-  const cycleThStyle: CSSProperties = { ...thStyle, position: 'sticky', left: 80, zIndex: 2, minWidth: 80, background: '#fafbfc' }
+  const thStyle: CSSProperties = { background: '#f8fafc', fontWeight: 600, fontSize: 13, color: '#4b5563', padding: '10px 12px', border: '1px solid #e5e7eb', whiteSpace: 'nowrap', textAlign: 'center' }
+  const tdStyle: CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'center', whiteSpace: 'nowrap', minWidth: 100, border: '1px solid #e5e7eb' }
+  const versionThStyle: CSSProperties = { ...thStyle, position: 'sticky', left: 0, zIndex: 2, minWidth: 80, background: '#f8fafc' }
+  const cycleThStyle: CSSProperties = { ...thStyle, position: 'sticky', left: 80, zIndex: 2, minWidth: 80, background: '#f8fafc' }
   const versionTdStyle: CSSProperties = { ...tdStyle, position: 'sticky', left: 0, zIndex: 1, fontWeight: 600, background: '#fff', minWidth: 80 }
   const cycleTdStyle: CSSProperties = { ...tdStyle, position: 'sticky', left: 80, zIndex: 1, background: '#fff', minWidth: 80 }
 
@@ -442,11 +442,11 @@ export function HorizontalTable({ tasks, versions }: HorizontalTableProps) {
             const devCycle = calcDevCycle(vTasks)
             const isLatest = idx === 0
             return (
-              <tr key={version.id} style={isLatest ? { background: '#fafffe' } : undefined}>
-                <td style={{ ...versionTdStyle, color: isLatest ? '#1890ff' : '#262626', background: isLatest ? '#f0f9ff' : '#fff' }}>
+              <tr key={version.id} style={isLatest ? { background: 'rgba(99,102,241,0.03)' } : undefined}>
+                <td style={{ ...versionTdStyle, color: isLatest ? '#6366f1' : '#111827', background: isLatest ? 'rgba(99,102,241,0.06)' : '#fff' }}>
                   {version.versionNo}
                 </td>
-                <td style={{ ...cycleTdStyle, background: isLatest ? '#f0f9ff' : '#fff' }}>
+                <td style={{ ...cycleTdStyle, background: isLatest ? 'rgba(99,102,241,0.06)' : '#fff' }}>
                   <Tooltip title="最早计划开始到最晚计划完成的天数">
                     <span>{devCycle}</span>
                   </Tooltip>
@@ -489,7 +489,7 @@ export function HorizontalTable({ tasks, versions }: HorizontalTableProps) {
 
 export function GanttChart({ tasks, isEditMode, onTaskClick }: { tasks: any[]; isEditMode: boolean; onTaskClick?: (task: any) => void }) {
   return (
-    <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
+    <div style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
       <DHTMLXGantt
         tasks={tasks}
         onTaskClick={(task) => {
@@ -533,12 +533,12 @@ function ActualDateCell({ value, onChange }: { value: string; onChange: (val: st
     <div
       onClick={() => setEditing(true)}
       style={{
-        fontSize: 12, color: value ? '#595959' : '#bfbfbf',
+        fontSize: 12, color: value ? '#4b5563' : '#bfbfbf',
         cursor: 'pointer', padding: '4px 8px', borderRadius: 4,
         border: '1px dashed transparent', transition: 'all 0.2s',
         minHeight: 28, display: 'flex', alignItems: 'center',
       }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = '#91caff'; e.currentTarget.style.background = '#f0f7ff' }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'; e.currentTarget.style.background = 'rgba(99,102,241,0.06)' }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = 'transparent' }}
     >
       {value || '点击填写'}
@@ -624,8 +624,8 @@ export function TaskTable({
       return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: depth * 20 }}>
           {isEditMode && <DragHandle />}
-          {canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} style={{ color: '#1890ff' }} onClick={(e) => { e.stopPropagation(); handleAddSubTask(record.id) }} /></Tooltip>}
-          <span style={{ fontWeight: depth === 0 ? 600 : 500, color: depth === 0 ? '#262626' : '#595959', fontSize: 13 }}>{id}</span>
+          {canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} style={{ color: '#6366f1' }} onClick={(e) => { e.stopPropagation(); handleAddSubTask(record.id) }} /></Tooltip>}
+          <span style={{ fontWeight: depth === 0 ? 600 : 500, color: depth === 0 ? '#111827' : '#4b5563', fontSize: 13 }}>{id}</span>
         </div>
       )
     } })
@@ -634,33 +634,33 @@ export function TaskTable({
       if (isEditMode) return <Input className="pms-edit-input" value={name} size="small" style={{ fontWeight: depth === 0 ? 600 : 400 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, taskName: e.target.value } : t); currentSetTasks(updated) }} />
       return (
         <div style={{ paddingLeft: depth * 16, display: 'flex', alignItems: 'center', gap: 4 }}>
-          {depth > 0 && <span style={{ color: '#d9d9d9', fontSize: 11, flexShrink: 0 }}>{depth === 1 ? '├' : '└'}</span>}
-          <span style={{ color: depth === 0 ? '#262626' : depth === 1 ? '#595959' : '#8c8c8c', fontWeight: depth === 0 ? 600 : 400 }}>{name}</span>
+          {depth > 0 && <span style={{ color: '#e5e7eb', fontSize: 11, flexShrink: 0 }}>{depth === 1 ? '├' : '└'}</span>}
+          <span style={{ color: depth === 0 ? '#111827' : depth === 1 ? '#4b5563' : '#9ca3af', fontWeight: depth === 0 ? 600 : 400 }}>{name}</span>
         </div>
       )
     } })
-    if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <span style={{ fontSize: 13 }}>{val}</span> : <span style={{ color: '#d9d9d9' }}>-</span>) })
-    if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#d9d9d9' }}>-</span>) })
-    if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planStartDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
-    if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planEndDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span> })
-    if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#595959' }}>{val}天</span> })
+    if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <span style={{ fontSize: 13 }}>{val}</span> : <span style={{ color: '#e5e7eb' }}>-</span>) })
+    if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>) })
+    if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planStartDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span> })
+    if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planEndDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span> })
+    if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val}天</span> })
     // 实际时间：修订版本中不可编辑，已发布版本中点击切换编辑
     const renderActualDateCell = (field: 'actualStartDate' | 'actualEndDate') => (val: string, record: any) => {
       if (isCurrentDraft) {
         // 修订版本：只读
-        return <span style={{ fontSize: 12, color: '#595959' }}>{val || '-'}</span>
+        return <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span>
       }
       // 已发布版本：点击编辑
       return <ActualDateCell value={val} onChange={(newVal) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, [field]: newVal } : t); currentSetTasks(updated) }} />
     }
     if (visibleColumns.includes('actualStartDate')) cols.push({ title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 130, render: renderActualDateCell('actualStartDate') })
     if (visibleColumns.includes('actualEndDate')) cols.push({ title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 130, render: renderActualDateCell('actualEndDate') })
-    if (visibleColumns.includes('actualDays')) cols.push({ title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (val: number) => <span style={{ fontSize: 12, color: '#595959' }}>{val > 0 ? `${val}天` : '-'}</span> })
+    if (visibleColumns.includes('actualDays')) cols.push({ title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (val: number) => <span style={{ fontSize: 12, color: '#4b5563' }}>{val > 0 ? `${val}天` : '-'}</span> })
     if (visibleColumns.includes('status')) cols.push({ title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={s === '已完成' ? 'success' : s === '进行中' ? 'processing' : 'default'} style={{ borderRadius: 4, fontSize: 12 }}>{s}</Tag> })
     if (visibleColumns.includes('progress')) cols.push({ title: '进度', dataIndex: 'progress', key: 'progress', width: 130, render: (p: number) => (
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <Progress percent={p} size="small" showInfo={false} strokeColor={p === 100 ? '#52c41a' : '#1890ff'} style={{ flex: 1, marginBottom: 0 }} />
-        <span style={{ fontSize: 11, color: p === 100 ? '#52c41a' : '#595959', fontWeight: 500, minWidth: 32 }}>{p}%</span>
+        <span style={{ fontSize: 11, color: p === 100 ? '#52c41a' : '#4b5563', fontWeight: 500, minWidth: 32 }}>{p}%</span>
       </div>
     ) })
     if (isEditMode) cols.push({ title: '操作', key: 'action', width: 60, fixed: 'right', render: (_: any, record: any) => (<Popconfirm title="确认删除" description={`删除 "${record.taskName}" 及其子任务？`} onConfirm={() => { const filtered = tableTasks.filter(t => t.id !== record.id && t.parentId !== record.id && !(t.parentId && tableTasks.find((p: any) => p.id === t.parentId)?.parentId === record.id)); currentSetTasks(filtered); message.success(`已删除任务: ${record.id}`) }} okText="确认" cancelText="取消"><Button type="text" icon={<DeleteOutlined />} size="small" danger style={{ borderRadius: 4 }} /></Popconfirm>) })
@@ -771,7 +771,7 @@ export function TaskTable({
       )}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTableDragEnd}><SortableContext items={flatTasks.map(t => t.id)} strategy={verticalListSortingStrategy}><Table className={tableClassName} dataSource={flatTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} size="middle" /></SortableContext></DndContext>
       {isEditMode && (
-        <div style={{ padding: '12px 16px', borderTop: '1px solid #f0f0f0', background: '#fafbfc' }}>
+        <div style={{ padding: '12px 16px', borderTop: '1px solid #f3f4f6', background: '#f8fafc' }}>
           <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%', borderRadius: 6, height: 36 }} onClick={() => {
             const parentTasks = tableTasks.filter(t => !t.parentId)
             const maxOrder = parentTasks.length > 0 ? Math.max(...parentTasks.map(t => parseInt(t.id) || t.order)) : 0
@@ -933,8 +933,8 @@ export function VersionCompareResult({
   if (compareResult.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '48px 0', color: '#bfbfbf' }}>
-        <HistoryOutlined style={{ fontSize: 36, display: 'block', marginBottom: 12, color: '#d9d9d9' }} />
-        <div style={{ fontSize: 14, color: '#8c8c8c' }}>选择两个版本后点击"开始对比"查看差异</div>
+        <HistoryOutlined style={{ fontSize: 36, display: 'block', marginBottom: 12, color: '#e5e7eb' }} />
+        <div style={{ fontSize: 14, color: '#9ca3af' }}>选择两个版本后点击"开始对比"查看差异</div>
       </div>
     )
   }
@@ -981,7 +981,7 @@ export function VersionCompareResult({
     if (row.changeType === '删除') {
       return <span style={{ color: '#ff4d4f', textDecoration: 'line-through', opacity: 0.7 }}>{value || '-'}</span>
     }
-    return <span style={{ color: '#595959' }}>{value || '-'}</span>
+    return <span style={{ color: '#4b5563' }}>{value || '-'}</span>
   }
 
   const compareColumns: any[] = [
@@ -1035,19 +1035,19 @@ export function VersionCompareResult({
               style={{
                 flex: 1, padding: '10px 16px', borderRadius: 8, cursor: 'pointer',
                 background: isActive ? `${item.color}10` : '#fafafa',
-                border: isActive ? `1px solid ${item.color}` : '1px solid #f0f0f0',
+                border: isActive ? `1px solid ${item.color}` : '1px solid #f3f4f6',
                 transition: 'all 0.2s',
               }}
             >
               <div style={{ fontSize: 20, fontWeight: 700, color: item.color }}>{item.value}</div>
-              <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>{item.label}</div>
+              <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{item.label}</div>
             </div>
           )
         })}
       </div>
       {/* 工具栏 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ fontSize: 12, color: '#8c8c8c' }}>共 {filteredData.length} 条记录</span>
+        <span style={{ fontSize: 12, color: '#9ca3af' }}>共 {filteredData.length} 条记录</span>
         <Checkbox checked={compareShowUnchanged} onChange={e => setCompareShowUnchanged(e.target.checked)}>
           <span style={{ fontSize: 12 }}>显示未变更项</span>
         </Checkbox>
@@ -1078,20 +1078,20 @@ export function PlanInfo({ selectedProject }: { selectedProject: any }) {
     <Card
       id="section-plan"
       style={{ marginBottom: 20, borderRadius: 8 }}
-      title={<Space><CalendarOutlined style={{ color: '#1890ff' }} /><span style={{ fontWeight: 600 }}>计划信息</span></Space>}
+      title={<Space><CalendarOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>计划信息</span></Space>}
     >
       <Row gutter={[24, 16]}>
         <Col span={6}>
           <Statistic
-            title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>计划开始时间</span>}
+            title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划开始时间</span>}
             value={p.planStartDate || '-'}
             valueStyle={{ fontSize: 16, fontWeight: 600 }}
-            prefix={<CalendarOutlined style={{ color: '#1890ff', fontSize: 14 }} />}
+            prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />}
           />
         </Col>
         <Col span={6}>
           <Statistic
-            title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>计划结束时间</span>}
+            title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划结束时间</span>}
             value={p.planEndDate || '-'}
             valueStyle={{ fontSize: 16, fontWeight: 600 }}
             prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />}
@@ -1099,15 +1099,15 @@ export function PlanInfo({ selectedProject }: { selectedProject: any }) {
         </Col>
         <Col span={6}>
           <Statistic
-            title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>开发周期（工作日）</span>}
+            title={<span style={{ fontSize: 12, color: '#9ca3af' }}>开发周期（工作日）</span>}
             value={p.developCycle || '-'}
             valueStyle={{ fontSize: 16, fontWeight: 600 }}
-            suffix={p.developCycle ? <span style={{ fontSize: 12, color: '#8c8c8c' }}>天</span> : undefined}
+            suffix={p.developCycle ? <span style={{ fontSize: 12, color: '#9ca3af' }}>天</span> : undefined}
           />
         </Col>
         <Col span={6}>
           <Statistic
-            title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>健康状态</span>}
+            title={<span style={{ fontSize: 12, color: '#9ca3af' }}>健康状态</span>}
             value={p.healthStatus === 'normal' ? '健康' : p.healthStatus === 'warning' ? '关注' : p.healthStatus === 'risk' ? '风险' : '-'}
             valueStyle={{
               fontSize: 16, fontWeight: 600,
@@ -1120,7 +1120,7 @@ export function PlanInfo({ selectedProject }: { selectedProject: any }) {
       <Divider style={{ margin: '16px 0' }} />
 
       {/* 里程碑计划 - 横排视图 */}
-      <div style={{ fontSize: 13, fontWeight: 600, color: '#8c8c8c', marginBottom: 12, textTransform: 'uppercase' as const, letterSpacing: 1 }}>里程碑计划（横排视图）</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, textTransform: 'uppercase' as const, letterSpacing: 1 }}>里程碑计划（横排视图）</div>
       <HorizontalTable tasks={LEVEL1_TASKS} versions={VERSION_DATA} />
     </Card>
   )
@@ -1232,14 +1232,14 @@ export function PlanOverview({
         styles={{ body: { padding: 0 } }}
       >
         {/* 总览头部 */}
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <Space size={8} align="center">
-              <BarChartOutlined style={{ color: '#1890ff', fontSize: 16 }} />
-              <span style={{ fontSize: 15, fontWeight: 600, color: '#262626' }}>计划总览</span>
+              <BarChartOutlined style={{ color: '#6366f1', fontSize: 16 }} />
+              <span style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>计划总览</span>
               <Tag color="blue" style={{ fontSize: 11, borderRadius: 4 }}>融合模式</Tag>
             </Space>
-            <div style={{ marginTop: 4, fontSize: 12, color: '#8c8c8c', paddingLeft: 24 }}>一级计划与二级计划融合展示</div>
+            <div style={{ marginTop: 4, fontSize: 12, color: '#9ca3af', paddingLeft: 24 }}>一级计划与二级计划融合展示</div>
           </div>
           <Tooltip title={projectPlanViewMode === 'gantt' ? '切换表格' : '切换甘特图'}>
             <Button
@@ -1411,7 +1411,7 @@ export function ProjectPlan({
           <Row align="middle" justify="space-between">
             <Col>
               <Space size={4} align="center">
-                <span style={{ fontSize: 13, fontWeight: 500, color: '#8c8c8c', marginRight: 8 }}>市场</span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: '#9ca3af', marginRight: 8 }}>市场</span>
                 {markets.map((market: string) => (
                   <Tag
                     key={market}
@@ -1419,7 +1419,7 @@ export function ProjectPlan({
                     style={{
                       cursor: 'pointer', borderRadius: 4, padding: '4px 16px', fontSize: 13,
                       fontWeight: selectedMarketTab === market ? 600 : 400,
-                      borderColor: selectedMarketTab === market ? (marketColors[market] || '#1890ff') : '#d9d9d9',
+                      borderColor: selectedMarketTab === market ? (marketColors[market] || '#1890ff') : '#e5e7eb',
                     }}
                     onClick={() => navigateWithEditGuard(() => setSelectedMarketTab(market))}
                   >
@@ -1538,19 +1538,19 @@ export function ProjectPlan({
       {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1' && level2PlanMeta[activeLevel2Plan]?.planType === '1+N MR版本火车计划' && (
         <Card
           size="small"
-          style={{ marginBottom: 16, borderRadius: 8, border: '1px solid #e6f4ff' }}
+          style={{ marginBottom: 16, borderRadius: 8, border: '1px solid rgba(99,102,241,0.15)' }}
           styles={{ body: { padding: '16px 20px' } }}
         >
           <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 3, height: 16, background: '#1890ff', borderRadius: 2 }} />
-            <span style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>计划基本信息</span>
+            <div style={{ width: 3, height: 16, background: '#6366f1', borderRadius: 2 }} />
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>计划基本信息</span>
             <Tag color="blue" style={{ marginLeft: 8, fontSize: 11 }}>{level2PlanMeta[activeLevel2Plan]?.planType}</Tag>
           </div>
           <Descriptions
             size="small"
             column={3}
-            labelStyle={{ color: '#8c8c8c', fontSize: 13, fontWeight: 500, padding: '6px 12px 6px 0' }}
-            contentStyle={{ color: '#262626', fontSize: 13, padding: '6px 0' }}
+            labelStyle={{ color: '#9ca3af', fontSize: 13, fontWeight: 500, padding: '6px 12px 6px 0' }}
+            contentStyle={{ color: '#111827', fontSize: 13, padding: '6px 0' }}
             colon={false}
           >
             <Descriptions.Item label="MR版本类型">
@@ -1604,7 +1604,7 @@ export function ProjectPlan({
             <Col>
               <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
                   <Space size={6}>
-                    <span style={{ color: '#8c8c8c', fontSize: 13 }}>版本</span>
+                    <span style={{ color: '#9ca3af', fontSize: 13 }}>版本</span>
                     <Select value={currentVersion} onChange={(val) => navigateWithEditGuard(() => { setCurrentVersion(val); setIsEditMode(false) })} style={{ width: 150 }} size="middle">
                       {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
                     </Select>
@@ -1701,7 +1701,7 @@ export function ProjectPlan({
       {/* 版本对比Modal */}
       <Modal
         className="pms-modal"
-        title={<Space><HistoryOutlined style={{ color: '#1890ff' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
+        title={<Space><HistoryOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
         open={showVersionCompare}
         onCancel={() => { setShowVersionCompare(false); setCompareResult([]); setCompareFilterType('all'); setCompareShowUnchanged(false) }}
         footer={null}
@@ -1712,10 +1712,10 @@ export function ProjectPlan({
         <div style={{
           display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px',
           background: 'linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%)',
-          borderRadius: 10, marginBottom: 16, border: '1px solid #e8e8e8',
+          borderRadius: 10, marginBottom: 16, border: '1px solid #e5e7eb',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#262626', whiteSpace: 'nowrap' }}>基准版本</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>基准版本</span>
             <Select
               value={compareVersionA}
               onChange={setCompareVersionA}
@@ -1727,7 +1727,7 @@ export function ProjectPlan({
           </div>
           <div style={{ fontSize: 18, color: '#bfbfbf' }}>→</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#262626', whiteSpace: 'nowrap' }}>对比版本</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>对比版本</span>
             <Select
               value={compareVersionB}
               onChange={setCompareVersionB}
