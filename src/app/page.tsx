@@ -49,6 +49,7 @@ import type { ProjectType, TodoType } from '@/components/workspace/WorkspaceModu
 import { HorizontalTable, TaskTable, ActionButtons, VersionCompareResult, PlanInfo, PlanOverview, ProjectPlan, GanttChart } from '@/components/plan/PlanModule'
 import { TransferConfig, TransferWorkbench, TransferApply, TransferDetail, TransferEntry, TransferReview, TransferSqaReview } from '@/components/transfer/TransferModule'
 import WorkTracker from '@/components/work-tracker/WorkTracker'
+import { initialProjects, PROJECT_TYPES, PROJECT_STATUS_CONFIG, mapIpmStatus, PROJECT_TYPE_COLORS } from '@/data/projects'
 
 // 全局表格和交互样式
 const globalStyles = `
@@ -294,8 +295,7 @@ function sortTeamMembers(members: TMTeamMember[]): TMTeamMember[] {
   return [...members].sort((a, b) => (order[a.role] ?? 99) - (order[b.role] ?? 99))
 }
 
-// 项目类型选项
-const PROJECT_TYPES = ['整机产品项目', '产品项目', '技术项目', '能力建设项目']
+// 项目类型选项 — imported from @/data/projects
 // 可在创建二级计划时选择的类型（不含固定类型）
 const LEVEL2_PLAN_TYPES = ['1+N MR版本火车计划', '粉丝版本计划', '基础体验计划', 'WBS计划']
 // 固定二级计划（始终显示在前两位，不可删除）
@@ -304,37 +304,10 @@ const FIXED_LEVEL2_PLANS = [
   { id: 'plan1', name: '在研版本火车计划', type: '在研版本火车计划', fixed: true },
 ]
 
-// IPM状态 → PMS展示状态 映射
-const mapIpmStatus = (ipmStatus: string, projectType: string): string => {
-  const mapping: Record<string, string> = {
-    '筹备中': '待立项',
-    '进行中': '进行中',
-    '已完成': '已完成',
-    '已取消': '已取消',
-    '维护期': '维护',
-  }
-  if (projectType === '整机产品项目' && ipmStatus === '已上市') return '已上市'
-  if (projectType === '技术项目' && ipmStatus === '待立议') return '待立议'
-  if (projectType === '技术项目' && ipmStatus === '待验') return '待验'
-  return mapping[ipmStatus] || ipmStatus
-}
+// IPM状态映射, 项目状态颜色, 项目数据 — all imported from @/data/projects
 
-// 项目状态颜色配置
-const PROJECT_STATUS_CONFIG: Record<string, { color: string; tagColor: string }> = {
-  '待立项': { color: '#faad14', tagColor: 'warning' },
-  '待立议': { color: '#faad14', tagColor: 'warning' },
-  '进行中': { color: '#1890ff', tagColor: 'processing' },
-  '已完成': { color: '#52c41a', tagColor: 'success' },
-  '已上市': { color: '#722ed1', tagColor: 'purple' },
-  '维护': { color: '#13c2c2', tagColor: 'cyan' },
-  '暂停': { color: '#d9d9d9', tagColor: 'default' },
-  '已取消': { color: '#ff4d4f', tagColor: 'error' },
-  '待验': { color: '#faad14', tagColor: 'warning' },
-  '筹备中': { color: '#faad14', tagColor: 'warning' },
-}
-
-// 项目数据
-const initialProjects = [
+// [项目数据已迁移到 src/data/projects.ts, 下面的数据不再使用]
+const _legacyProjects = [
   {
     id: '1', name: 'X6877-D8400_H991', type: '整机产品项目' as const,
     status: '进行中', progress: 65, leader: '张三',
