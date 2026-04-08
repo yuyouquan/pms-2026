@@ -179,7 +179,8 @@ import {
   ClockCircleOutlined,
   StopOutlined,
   DeploymentUnitOutlined,
-  DatabaseOutlined
+  DatabaseOutlined,
+  ShareAltOutlined
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { compareVersions, compareVersionsForTable, CompareTableRow, FieldDiff } from '@/lib/versionCompare'
@@ -3766,6 +3767,21 @@ export default function Home() {
                                 </Select>
                               </Space>
                               {renderActionButtons()}
+                              {projectPlanLevel === 'level1' && versions.some(v => v.status === '已发布') && (
+                                <Tooltip title="复制分享链接，无需权限即可查看">
+                                  <Button
+                                    icon={<ShareAltOutlined />}
+                                    onClick={() => {
+                                      const url = `${window.location.origin}/share/plan?projectId=${selectedProject?.id}&level=level1`
+                                      navigator.clipboard.writeText(url).then(() => {
+                                        message.success('分享链接已复制到剪贴板')
+                                      })
+                                    }}
+                                  >
+                                    分享
+                                  </Button>
+                                </Tooltip>
+                              )}
                             </Space>
                           </Col>
                           <Col>
