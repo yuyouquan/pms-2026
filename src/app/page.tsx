@@ -2831,6 +2831,22 @@ export default function Home() {
                       {!hasDraftVersion && <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} onClick={handleCreateRevision}>创建修订</Button>}
                       {isCurrentDraft && <Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} onClick={handlePublish}>发布</Button>}
                       {!isCurrentDraft && <Button icon={<HistoryOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowVersionCompare(true)}>版本对比</Button>}
+                      {projectPlanLevel === 'level1' && versions.some(v => v.status === '已发布') && (
+                        <Tooltip title="复制分享链接，无需权限即可查看">
+                          <Button
+                            icon={<ShareAltOutlined />}
+                            style={{ borderRadius: 6 }}
+                            onClick={() => {
+                              const url = `${window.location.origin}/share/plan?projectId=${selectedProject?.id}&level=level1`
+                              navigator.clipboard.writeText(url).then(() => {
+                                message.success('分享链接已复制到剪贴板')
+                              })
+                            }}
+                          >
+                            分享
+                          </Button>
+                        </Tooltip>
+                      )}
                     </Space>
                   </Space>
               </Col>
@@ -3767,21 +3783,6 @@ export default function Home() {
                                 </Select>
                               </Space>
                               {renderActionButtons()}
-                              {projectPlanLevel === 'level1' && versions.some(v => v.status === '已发布') && (
-                                <Tooltip title="复制分享链接，无需权限即可查看">
-                                  <Button
-                                    icon={<ShareAltOutlined />}
-                                    onClick={() => {
-                                      const url = `${window.location.origin}/share/plan?projectId=${selectedProject?.id}&level=level1`
-                                      navigator.clipboard.writeText(url).then(() => {
-                                        message.success('分享链接已复制到剪贴板')
-                                      })
-                                    }}
-                                  >
-                                    分享
-                                  </Button>
-                                </Tooltip>
-                              )}
                             </Space>
                           </Col>
                           <Col>
