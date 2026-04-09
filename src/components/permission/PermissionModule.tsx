@@ -51,8 +51,8 @@ export interface PermissionConfigProps {
 }
 
 export interface GlobalPermissionConfigProps {
-  globalRoles: { name: string; members: string[] }[]
-  setGlobalRoles: React.Dispatch<React.SetStateAction<{ name: string; members: string[] }[]>>
+  globalRoles: { name: string; members: string[]; isFixed?: boolean }[]
+  setGlobalRoles: React.Dispatch<React.SetStateAction<{ name: string; members: string[]; isFixed?: boolean }[]>>
   globalRolePerms: Record<string, Record<string, boolean>>
   setGlobalRolePerms: React.Dispatch<React.SetStateAction<Record<string, Record<string, boolean>>>>
   globalPermTab: 'roles' | 'perms'
@@ -359,12 +359,16 @@ export const GlobalPermissionConfig: React.FC<GlobalPermissionConfigProps> = ({
               {
                 title: '操作', width: 150,
                 render: (_: any, record: any) => (
-                  <Space>
-                    <Button type="link" size="small" onClick={() => { setGlobalEditingRole(record.name); setGlobalEditRoleValue(record.name) }}>重命名</Button>
-                    <Popconfirm title="确定删除该角色？" onConfirm={() => handleDeleteRole(record.name)}>
-                      <Button type="link" size="small" danger>删除</Button>
-                    </Popconfirm>
-                  </Space>
+                  record.isFixed ? (
+                    <span style={{ color: '#9ca3af', fontSize: 12 }}>固定角色</span>
+                  ) : (
+                    <Space>
+                      <Button type="link" size="small" onClick={() => { setGlobalEditingRole(record.name); setGlobalEditRoleValue(record.name) }}>重命名</Button>
+                      <Popconfirm title="确定删除该角色？" onConfirm={() => handleDeleteRole(record.name)}>
+                        <Button type="link" size="small" danger>删除</Button>
+                      </Popconfirm>
+                    </Space>
+                  )
                 )
               },
             ]}

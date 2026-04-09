@@ -833,10 +833,10 @@ export default function Home() {
   const [permConfigTab, setPermConfigTab] = useState<'roles' | 'perms'>('roles')
 
   // ========== 全局权限配置 (constants imported from @/components/permission/PermissionModule) ==========
-  const [globalRoles, setGlobalRoles] = useState<{name: string; members: string[]}[]>([
-    { name: '管理组', members: ['张三', '李白'] },
-    { name: '编辑组', members: ['李四', '赵六', '王五'] },
-    { name: '查看组', members: ['孙七', '周八', '杜甫'] },
+  const [globalRoles, setGlobalRoles] = useState<{name: string; members: string[]; isFixed?: boolean}[]>([
+    { name: '管理组', members: ['张三', '李白'], isFixed: true },
+    { name: '编辑组', members: ['李四', '赵六', '王五'], isFixed: true },
+    { name: '查看组', members: ['孙七', '周八', '杜甫'], isFixed: true },
   ])
   const [globalRolePerms, setGlobalRolePerms] = useState<Record<string, Record<string, boolean>>>({
     '管理组': { 'roadmap:milestone:view': true, 'roadmap:mrTrain:view': true },
