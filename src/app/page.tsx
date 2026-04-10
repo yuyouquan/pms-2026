@@ -2945,6 +2945,26 @@ export default function Home() {
                       <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
                     </Tooltip>
                   )}
+                  {getScopeKey() !== null && (
+                    <>
+                      <Tooltip title="全部展开">
+                        <Button
+                          icon={<PlusSquareOutlined />}
+                          size="small"
+                          style={{ borderRadius: 6 }}
+                          onClick={expandAll}
+                        />
+                      </Tooltip>
+                      <Tooltip title="全部收起">
+                        <Button
+                          icon={<MinusSquareOutlined />}
+                          size="small"
+                          style={{ borderRadius: 6 }}
+                          onClick={collapseAll}
+                        />
+                      </Tooltip>
+                    </>
+                  )}
                   <Radio.Group
                     value={projectPlanViewMode === 'horizontal' && projectPlanLevel === 'level2' ? 'table' : projectPlanViewMode}
                     onChange={(e) => setProjectPlanViewMode(e.target.value)}
