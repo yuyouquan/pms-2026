@@ -53,6 +53,7 @@ import WorkTracker from '@/components/work-tracker/WorkTracker'
 import { initialProjects, PROJECT_TYPES, PROJECT_STATUS_CONFIG, mapIpmStatus, PROJECT_TYPE_COLORS } from '@/data/projects'
 import { notifyPublishChanges, notifyDueTasks } from '@/lib/feishu-notify'
 import type { TaskChange, PlanDueNotice, FeishuRecipient } from '@/types/plan-notify'
+import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 
 // 全局表格和交互样式
 const globalStyles = `
@@ -2898,6 +2899,41 @@ export default function Home() {
   // 市场颜色映射
   const marketColors: Record<string, string> = { 'OP': '#1890ff', 'TR': '#52c41a', 'RU': '#faad14', 'FR': '#722ed1', 'IN': '#eb2f96', 'BR': '#13c2c2' }
 
+  // ========== 导出：竖版表格 ==========
+  const handleExportVerticalPlan = (scope: 'current' | 'all') => {
+    // 列：scope='current' 取当前 visibleColumns 的子集，scope='all' 取 TABLE_COLUMNS 全集
+    const cols = scope === 'current'
+      ? TABLE_COLUMNS.filter(c => visibleColumns.includes(c.key))
+      : TABLE_COLUMNS
+
+    const exportCols: ExportColumn[] = cols.map(c => ({ key: c.key, title: c.title }))
+
+    // 数据源：
+    // - level1: 组件状态 tasks（搜索时按 taskName 过滤）
+    // - level2: level2PlanTasks 中 planId 匹配 activeLevel2Plan 的子集（同样支持搜索）
+    let rows: any[] = []
+    if (projectPlanLevel === 'level1') {
+      rows = scope === 'current' && searchText
+        ? tasks.filter((t: any) => (t.taskName || '').toLowerCase().includes(searchText.toLowerCase()))
+        : tasks
+    } else if (projectPlanLevel === 'level2' && activeLevel2Plan && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1') {
+      const l2 = level2PlanTasks.filter((t: any) => t.planId === activeLevel2Plan)
+      rows = scope === 'current' && searchText
+        ? l2.filter((t: any) => (t.taskName || '').toLowerCase().includes(searchText.toLowerCase()))
+        : l2
+    }
+
+    const levelLabel = projectPlanLevel === 'level1' ? '一级计划' : '二级计划'
+    const projectName = selectedProject?.name || '项目'
+    const filename = `项目空间计划_${projectName}_${levelLabel}_竖版_${exportTimestamp()}.xlsx`
+    exportSheet(rows, exportCols, filename, `${levelLabel}竖版`)
+  }
+
+  // ========== 导出：横版表格（Task 6 将替换为真实实现）==========
+  const handleExportHorizontalPlan = (_scope: 'current' | 'all') => {
+    message.info('横版导出将在后续任务中实现')
+  }
+
   // 项目空间 - 计划模块
   const renderProjectPlan = () => {
     const markets = selectedProject?.markets || []
@@ -3140,6 +3176,27 @@ export default function Home() {
               <Col>
                 <Space size={6}>
                   <Input placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
+                  {projectPlanViewMode !== 'gantt' && (
+                    <Dropdown
+                      menu={{
+                        items: [
+                          { key: 'current', label: '导出当前视图' },
+                          { key: 'all', label: '导出全部' },
+                        ],
+                        onClick: ({ key }) => {
+                          if (projectPlanViewMode === 'horizontal') {
+                            handleExportHorizontalPlan(key as 'current' | 'all')
+                          } else {
+                            handleExportVerticalPlan(key as 'current' | 'all')
+                          }
+                        },
+                      }}
+                    >
+                      <Tooltip title="导出为 Excel">
+                        <Button icon={<DownloadOutlined />} style={{ borderRadius: 6 }} />
+                      </Tooltip>
+                    </Dropdown>
+                  )}
                   {projectPlanViewMode !== 'horizontal' && (
                     <Tooltip title="自定义列">
                       <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
