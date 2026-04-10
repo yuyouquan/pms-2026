@@ -60,8 +60,21 @@ const globalStyles = `
 `
 
 // DHTMLX Gantt组件
-function DHTMLXGantt({ tasks, onTaskClick, readOnly = false }: { tasks: any[], onTaskClick?: (task: any) => void, readOnly?: boolean }) {
+function DHTMLXGantt({
+  tasks,
+  onTaskClick,
+  readOnly = false,
+  collapsedIds,
+  onCollapsedChange,
+}: {
+  tasks: any[]
+  onTaskClick?: (task: any) => void
+  readOnly?: boolean
+  collapsedIds?: Set<string>
+  onCollapsedChange?: (updater: (prev: Set<string>) => Set<string>) => void
+}) {
   const ganttContainer = useRef<HTMLDivElement>(null)
+  const suppressFeedback = useRef(false)
   
   useEffect(() => {
     if (!ganttContainer.current) return
@@ -113,8 +126,19 @@ function DHTMLXGantt({ tasks, onTaskClick, readOnly = false }: { tasks: any[], o
       }))
     }
     
+    suppressFeedback.current = true
     gantt.parse(ganttData)
-    
+    queueMicrotask(() => { suppressFeedback.current = false })
+
+    const openHandler = gantt.attachEvent('onTaskOpened', (id: any) => {
+      if (suppressFeedback.current) return
+      onCollapsedChange?.((prev) => { const s = new Set(prev); s.delete(String(id)); return s })
+    })
+    const closeHandler = gantt.attachEvent('onTaskClosed', (id: any) => {
+      if (suppressFeedback.current) return
+      onCollapsedChange?.((prev) => { const s = new Set(prev); s.add(String(id)); return s })
+    })
+
     // 点击事件
     if (onTaskClick) {
       gantt.attachEvent('onTaskClick', (id: number) => {
@@ -125,10 +149,27 @@ function DHTMLXGantt({ tasks, onTaskClick, readOnly = false }: { tasks: any[], o
     }
     
     return () => {
+      gantt.detachEvent(openHandler)
+      gantt.detachEvent(closeHandler)
       gantt.clearAll()
     }
   }, [tasks, readOnly])
-  
+
+  useEffect(() => {
+    if (!ganttContainer.current) return
+    if (!(gantt as any).$container) return
+    suppressFeedback.current = true
+    gantt.eachTask((task: any) => {
+      const id = String(task.id)
+      const shouldOpen = !(collapsedIds && collapsedIds.has(id))
+      if (task.$open !== shouldOpen) {
+        if (shouldOpen) gantt.open(id)
+        else gantt.close(id)
+      }
+    })
+    queueMicrotask(() => { suppressFeedback.current = false })
+  }, [collapsedIds])
+
   return <div ref={ganttContainer} style={{ width: '100%', height: '500px' }} />
 }
 import { 
