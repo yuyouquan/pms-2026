@@ -2056,6 +2056,43 @@ export default function Home() {
     )
   }
 
+  // Plan task due-soon/overdue scan (added 2026-04-10)
+  // 生产环境说明：真实场景由后端每日定时任务触发对所有项目的扫描 + 通知；
+  // 前端仅在用户进入项目空间 L1 页面时即时扫描一次，作为 mock 演示。
+  useEffect(() => {
+    if (activeModule !== 'projectSpace') return
+    if (!selectedProject) return
+    if (projectPlanLevel !== 'level1') return
+
+    // Session-level 去重：同一项目只扫描一次
+    const key = selectedProject.id
+    if (lastDueCheckedProjectRef.current === key) return
+    lastDueCheckedProjectRef.current = key
+
+    // 取最新已发布版本的任务快照；若未存在（mock 启动态），fallback 到当前 tasks
+    const latestPub = versions
+      .filter(v => v.status === '已发布')
+      .sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
+    const scanTarget = latestPub && publishedSnapshots[latestPub.id]
+      ? publishedSnapshots[latestPub.id]
+      : tasks
+
+    const notices = scanDueTasks(scanTarget)
+    if (notices.length === 0) return
+
+    notifyDueTasks(notices, MOCK_USER_MAP).then(notified => {
+      if (notified > 0) {
+        notification.warning({
+          message: '任务到期提醒已推送',
+          description: `项目 ${selectedProject.name} 发现 ${notices.length} 条到期/逾期任务，已通知 ${notified} 位责任人`,
+          placement: 'topRight',
+          duration: 5,
+        })
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProject?.id, projectPlanLevel, activeModule])
+
   const handleCreateRevision = () => {
     // 找到最新版本号
     const maxVersionNum = versions.reduce((max, v) => {
