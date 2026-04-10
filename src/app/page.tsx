@@ -180,7 +180,10 @@ import {
   StopOutlined,
   DeploymentUnitOutlined,
   DatabaseOutlined,
-  ShareAltOutlined
+  ShareAltOutlined,
+  PlusSquareOutlined,
+  MinusSquareOutlined,
+  CaretDownOutlined
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { compareVersions, compareVersionsForTable, CompareTableRow, FieldDiff } from '@/lib/versionCompare'
@@ -682,6 +685,9 @@ export default function Home() {
   // 项目空间-计划
   const [projectPlanLevel, setProjectPlanLevel] = useState<string>('level1')
   const [projectPlanViewMode, setProjectPlanViewMode] = useState<'table' | 'horizontal' | 'gantt'>('table')
+  // Collapsed tree nodes per scope (project + level + optional plan)
+  // Empty Set = fully expanded (default). Presence in Set = that node is collapsed.
+  const [collapsedNodes, setCollapsedNodes] = useState<Record<string, Set<string>>>({})
   const [projectPlanOverviewTab, setProjectPlanOverviewTab] = useState<string>('overview')
   const [planMetaCollapsed, setPlanMetaCollapsed] = useState(false)
 
@@ -1139,6 +1145,68 @@ export default function Home() {
       setTasks(newTasks)
     }
     message.success(`已添加子任务: ${newId}`)
+  }
+
+  // ============================================================
+  // Plan tree expand/collapse helpers (added 2026-04-10)
+  // ============================================================
+
+  const getScopeKey = (): string | null => {
+    if (activeModule !== 'projectSpace') return null
+    if (!selectedProject) return null
+    if (projectPlanLevel === 'level1') return `${selectedProject.id}::level1`
+    if (projectPlanLevel === 'level2' && activeLevel2Plan) return `${selectedProject.id}::level2::${activeLevel2Plan}`
+    return null
+  }
+
+  const hasChildren = (id: string, allTasks: any[]): boolean =>
+    allTasks.some(t => t.parentId === id)
+
+  const filterByCollapsed = (flatTasks: any[], collapsedSet: Set<string>): any[] => {
+    if (collapsedSet.size === 0) return flatTasks
+    const byId = new Map(flatTasks.map(t => [t.id, t]))
+    const isHidden = (task: any): boolean => {
+      let cur = task
+      while (cur.parentId) {
+        if (collapsedSet.has(cur.parentId)) return true
+        cur = byId.get(cur.parentId)
+        if (!cur) return false
+      }
+      return false
+    }
+    return flatTasks.filter(t => !isHidden(t))
+  }
+
+  const getAllExpandableIds = (tasksArg: any[]): string[] => {
+    const parentIds = new Set<string>()
+    for (const t of tasksArg) if (t.parentId) parentIds.add(t.parentId)
+    return Array.from(parentIds)
+  }
+
+  const toggleNode = (nodeId: string) => {
+    const key = getScopeKey()
+    if (!key) return
+    setCollapsedNodes(prev => {
+      const cur = new Set(prev[key] || [])
+      if (cur.has(nodeId)) cur.delete(nodeId); else cur.add(nodeId)
+      return { ...prev, [key]: cur }
+    })
+  }
+
+  const expandAll = () => {
+    const key = getScopeKey()
+    if (!key) return
+    setCollapsedNodes(prev => ({ ...prev, [key]: new Set<string>() }))
+  }
+
+  const collapseAll = () => {
+    const key = getScopeKey()
+    if (!key) return
+    const scopeTasks = projectPlanLevel === 'level1'
+      ? tasks
+      : level2PlanTasks.filter(t => t.planId === activeLevel2Plan)
+    const allParents = getAllExpandableIds(scopeTasks)
+    setCollapsedNodes(prev => ({ ...prev, [key]: new Set(allParents) }))
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
