@@ -6,7 +6,7 @@ import {
 } from 'antd'
 import {
   FilterOutlined, SettingOutlined, SaveOutlined, FullscreenOutlined, FullscreenExitOutlined,
-  EyeOutlined, PlusOutlined, CameraOutlined, HistoryOutlined, DeleteOutlined, SwapOutlined,
+  EyeOutlined, PlusOutlined, CameraOutlined, HistoryOutlined, DeleteOutlined, SwapOutlined, ArrowRightOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { RoadmapViewConfig } from '@/types'
@@ -317,6 +317,12 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     setBaselineSnapshots(prev => prev.filter(s => s.id !== id))
     if (activeSnapshotId === id) setActiveSnapshotId(null)
     message.success('快照已删除')
+  }
+
+  const formatCompareSrcLabel = (src: CompareSource): string => {
+    if (src === 'live') return '实时数据'
+    const snap = baselineSnapshots.find(s => s.id === src)
+    return snap ? snap.version : src
   }
 
   // Compare mode: resolve sources and compute diff
@@ -655,8 +661,8 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         </div>
       </div>
 
-      {/* 快照提示条 */}
-      {activeSnapshot && (
+      {/* 快照提示条（单快照查看时） */}
+      {activeSnapshot && !compareMode && (
         <div style={{
           padding: '8px 16px', marginBottom: 12, borderRadius: 8,
           background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
@@ -672,6 +678,36 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
             <Tag color="blue" style={{ fontSize: 11 }}>{activeSnapshot.createdAt}</Tag>
           </Space>
           <Button type="link" size="small" onClick={() => setActiveSnapshotId(null)}>返回实时数据</Button>
+        </div>
+      )}
+
+      {/* 对比摘要条（对比模式时） */}
+      {compareMode && diffResult && (
+        <div style={{
+          padding: '10px 16px', marginBottom: 12, borderRadius: 8,
+          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+          border: '1px solid rgba(217,119,6,0.25)',
+          boxShadow: '0 2px 8px rgba(217,119,6,0.1)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          flexWrap: 'wrap', gap: 8,
+        }}>
+          <Space size={10} wrap>
+            <SwapOutlined style={{ color: '#b45309', fontSize: 16 }} />
+            <span style={{ fontSize: 13, color: '#92400e', fontWeight: 600 }}>对比模式</span>
+            <Tag color="default" style={{ fontSize: 11 }}>基准: {formatCompareSrcLabel(compareBase)}</Tag>
+            <ArrowRightOutlined style={{ color: '#9ca3af', fontSize: 11 }} />
+            <Tag color="gold" style={{ fontSize: 11 }}>对比: {formatCompareSrcLabel(compareTarget)}</Tag>
+            <span style={{ color: '#22c55e', fontSize: 12 }}>🟢 新增 {diffResult.summary.added} 行</span>
+            <span style={{ color: '#ef4444', fontSize: 12 }}>🔴 删除 {diffResult.summary.removed} 行</span>
+            <span style={{ color: '#d97706', fontSize: 12 }}>🟠 修改 {diffResult.summary.modified} 行（共 {diffResult.summary.cellChanges} 处字段变化）</span>
+          </Space>
+          <Space size={6}>
+            <Checkbox checked={onlyDiffRows} onChange={e => { setOnlyDiffRows(e.target.checked); setCurrentPage(1) }}>
+              <span style={{ fontSize: 12 }}>只看有差异的行</span>
+            </Checkbox>
+            <Button size="small" onClick={() => setShowCompareModal(true)}>切换版本</Button>
+            <Button size="small" danger onClick={() => setCompareMode(false)}>退出对比</Button>
+          </Space>
         </div>
       )}
 
