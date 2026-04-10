@@ -29,6 +29,10 @@ export function exportSheet(
     message.warning('暂无可导出数据')
     return
   }
+  if (!columns || columns.length === 0) {
+    message.warning('暂无可导出数据')
+    return
+  }
   try {
     const header = columns.map(c => c.title)
     const body = rows.map(row =>
@@ -68,11 +72,11 @@ export function exportTimestamp(): string {
   return dayjs().format('YYYYMMDD_HHmm')
 }
 
-/** 估算字符显示宽度（中文算 2，其他算 1） */
+/** 估算字符显示宽度（CJK / 全角字符算 2，其他算 1） */
 function strWidth(s: string): number {
   let n = 0
   for (const ch of s) {
-    n += /[\u4e00-\u9fff\uff00-\uffef]/.test(ch) ? 2 : 1
+    n += /[\u1100-\u115f\u2e80-\u303e\u3041-\u33bf\u3400-\u4dbf\u4e00-\ua4cf\ua960-\ua97f\uac00-\ud7ff\uf900-\ufaff\ufe10-\ufe1f\ufe30-\ufe4f\uff00-\uffef]/.test(ch) ? 2 : 1
   }
   return n
 }
