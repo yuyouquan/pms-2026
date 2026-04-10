@@ -820,6 +820,68 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         <div style={{ marginBottom: 12 }}>{toolbarActions}</div>
         {tableComponent}
       </Modal>
+
+      {/* Compare Entry Modal */}
+      <Modal
+        title="选择要对比的两个版本"
+        open={showCompareModal}
+        onCancel={() => setShowCompareModal(false)}
+        onOk={() => {
+          if (compareBase === compareTarget) {
+            message.warning('请选择两个不同的版本')
+            return
+          }
+          setCompareMode(true)
+          setActiveSnapshotId(null)
+          setShowCompareModal(false)
+          setCurrentPage(1)
+        }}
+        okText="开始对比"
+        cancelText="取消"
+        width={480}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '8px 0' }}>
+          <div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>基准版本（旧）</div>
+            <Select
+              value={compareBase}
+              onChange={setCompareBase}
+              style={{ width: '100%' }}
+            >
+              <Select.Option value="live">
+                <span style={{ color: '#52c41a', marginRight: 4 }}>●</span>实时数据
+              </Select.Option>
+              {currentSnapshots.map(s => (
+                <Select.Option key={s.id} value={s.id}>
+                  <HistoryOutlined style={{ marginRight: 4, color: '#6366f1' }} />
+                  {s.version}
+                  <span style={{ color: '#9ca3af', marginLeft: 8, fontSize: 11 }}>{s.createdAt}</span>
+                </Select.Option>
+              ))}
+            </Select>
+          </div>
+          <div style={{ textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>↓ 对比到 ↓</div>
+          <div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>对比版本（新）</div>
+            <Select
+              value={compareTarget}
+              onChange={setCompareTarget}
+              style={{ width: '100%' }}
+            >
+              <Select.Option value="live">
+                <span style={{ color: '#52c41a', marginRight: 4 }}>●</span>实时数据
+              </Select.Option>
+              {currentSnapshots.map(s => (
+                <Select.Option key={s.id} value={s.id}>
+                  <HistoryOutlined style={{ marginRight: 4, color: '#6366f1' }} />
+                  {s.version}
+                  <span style={{ color: '#9ca3af', marginLeft: 8, fontSize: 11 }}>{s.createdAt}</span>
+                </Select.Option>
+              ))}
+            </Select>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
