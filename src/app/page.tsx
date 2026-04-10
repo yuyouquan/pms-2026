@@ -2091,12 +2091,45 @@ export default function Home() {
   }
 
   const handlePublish = () => {
-    // 将当前修订版改为已发布
-    setVersions(versions.map(v => 
-      v.id === currentVersion 
+    // 1. Baseline = 上一个已发布版本的任务快照
+    const prevPublished = versions
+      .filter(v => v.status === '已发布' && v.id !== currentVersion)
+      .sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
+    const baselineTasks: any[] = prevPublished ? (publishedSnapshots[prevPublished.id] || []) : []
+
+    // 2. 计算变更
+    const changes = diffTasksForNotify(baselineTasks, tasks)
+
+    // 3. 将当前修订版改为已发布
+    const publishedVersionId = currentVersion
+    const publishedVersion = versions.find(v => v.id === publishedVersionId)
+    setVersions(versions.map(v =>
+      v.id === publishedVersionId
         ? { ...v, status: '已发布' }
         : v
     ))
+
+    // 4. 保存本次发布的任务快照
+    setPublishedSnapshots(prev => ({
+      ...prev,
+      [publishedVersionId]: JSON.parse(JSON.stringify(tasks)),
+    }))
+
+    // 5. 发送飞书通知（stub），并弹出 UI 汇总提示
+    const versionNo = publishedVersion?.versionNo || publishedVersionId
+    if (changes.length > 0) {
+      notifyPublishChanges(versionNo, changes, MOCK_USER_MAP).then(notified => {
+        if (notified > 0) {
+          notification.info({
+            message: '已通过飞书通知责任人',
+            description: `一级计划 ${versionNo} 发布，共 ${changes.length} 条变更，已通知 ${notified} 位责任人（详情见浏览器控制台）`,
+            placement: 'topRight',
+            duration: 5,
+          })
+        }
+      })
+    }
+
     message.success('发布成功')
   }
 
