@@ -1349,3 +1349,18 @@ body {
 .ant-table-wrapper {
   animation: fadeIn 0.35s var(--ease-out) both;
 }
+
+/* Roadmap snapshot compare mode row backgrounds (added 2026-04-10) */
+.pms-table .row-diff-added > td {
+  background: #f0fdf4 !important;
+  box-shadow: inset 3px 0 0 #22c55e;
+}
+.pms-table .row-diff-removed > td {
+  background: #fef2f2 !important;
+  box-shadow: inset 3px 0 0 #ef4444;
+  color: #9ca3af;
+  text-decoration: line-through;
+}
+.pms-table .row-diff-modified > td {
+  background: #ffffff;
+}
