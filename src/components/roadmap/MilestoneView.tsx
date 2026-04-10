@@ -77,6 +77,14 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
   }[]>([])
   const [activeSnapshotId, setActiveSnapshotId] = useState<string | null>(null)
 
+  // Compare mode state (added 2026-04-10)
+  type CompareSource = 'live' | string
+  const [compareMode, setCompareMode] = useState(false)
+  const [compareBase, setCompareBase] = useState<CompareSource>('live')
+  const [compareTarget, setCompareTarget] = useState<CompareSource>('live')
+  const [onlyDiffRows, setOnlyDiffRows] = useState(true)
+  const [showCompareModal, setShowCompareModal] = useState(false)
+
   // Temp filter state for modal
   const [tempFilters, setTempFilters] = useState(filters)
 
@@ -310,6 +318,26 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     if (activeSnapshotId === id) setActiveSnapshotId(null)
     message.success('快照已删除')
   }
+
+  // Compare mode: resolve sources and compute diff
+  const resolveCompareSource = (src: CompareSource): SnapshotLike => {
+    if (src === 'live') {
+      return { data: tableData, milestones: milestones.map(m => ({ name: m.name, order: m.order })) }
+    }
+    const snap = baselineSnapshots.find(s => s.id === src)
+    if (!snap) {
+      return { data: [], milestones: [] }
+    }
+    return { data: snap.data, milestones: snap.milestones }
+  }
+
+  const diffResult = useMemo(() => {
+    if (!compareMode) return null
+    const baseSrc = resolveCompareSource(compareBase)
+    const targetSrc = resolveCompareSource(compareTarget)
+    return diffSnapshots(baseSrc, targetSrc, projectType)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compareMode, compareBase, compareTarget, tableData, milestones, baselineSnapshots, projectType])
 
   // Get current display data (snapshot or live)
   const activeSnapshot = activeSnapshotId ? baselineSnapshots.find(s => s.id === activeSnapshotId) : null
