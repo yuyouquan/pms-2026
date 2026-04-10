@@ -96,6 +96,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       setFilters({})
       setCurrentPage(1)
       setActiveSnapshotId(null)
+      setCompareMode(false)
     }
   }, [initialProjectType])
 
@@ -345,6 +346,17 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [compareMode, compareBase, compareTarget, tableData, milestones, baselineSnapshots, projectType])
 
+  // Auto-exit compare mode if a selected snapshot is deleted
+  useEffect(() => {
+    if (!compareMode) return
+    const baseOk = compareBase === 'live' || baselineSnapshots.some(s => s.id === compareBase)
+    const targetOk = compareTarget === 'live' || baselineSnapshots.some(s => s.id === compareTarget)
+    if (!baseOk || !targetOk) {
+      setCompareMode(false)
+      message.info('所选快照已被删除，已退出对比')
+    }
+  }, [baselineSnapshots, compareMode, compareBase, compareTarget])
+
   // Get current display data (compare / snapshot / live)
   const activeSnapshot = activeSnapshotId ? baselineSnapshots.find(s => s.id === activeSnapshotId) : null
 
@@ -583,6 +595,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
                   setFilters({})
                   setCurrentPage(1)
                   setActiveSnapshotId(null)
+                  setCompareMode(false)
                 }}
                 style={{
                   padding: '6px 20px', borderRadius: 18, cursor: 'pointer',
