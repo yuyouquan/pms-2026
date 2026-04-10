@@ -227,6 +227,19 @@ function dayDiff(a: Date, b: Date): number {
   return Math.round((a.getTime() - b.getTime()) / 86400000)
 }
 
+/** Compare two date-field values, returning the appropriate CellDiff. */
+function compareDateField(oldVal: any, newVal: any): CellDiff {
+  if (oldVal === newVal) return { kind: 'same' }
+  const od = tryParseDate(oldVal)
+  const nd = tryParseDate(newVal)
+  if (od && nd) {
+    if (nd.getTime() === od.getTime()) return { kind: 'same' }
+    if (nd.getTime() < od.getTime()) return { kind: 'dateEarlier', oldVal, newVal, days: dayDiff(od, nd) }
+    return { kind: 'dateLater', oldVal, newVal, days: dayDiff(nd, od) }
+  }
+  return { kind: 'changed', oldVal, newVal }
+}
+
 /** Which fields to compare on a row. Milestones are added dynamically per-call. */
 function getCompareFields(projectType: string): string[] {
   const base = [
@@ -306,25 +319,9 @@ export function diffSnapshots(
       if (oldVal === newVal) {
         cellDiffs[f] = { kind: 'same' }
       } else if (f === 'launchDate') {
-        const od = tryParseDate(oldVal)
-        const nd = tryParseDate(newVal)
-        if (od && nd) {
-          if (nd.getTime() === od.getTime()) {
-            cellDiffs[f] = { kind: 'same' }
-          } else if (nd.getTime() < od.getTime()) {
-            cellDiffs[f] = { kind: 'dateEarlier', oldVal, newVal, days: dayDiff(od, nd) }
-            hasChange = true
-            summary.cellChanges++
-          } else {
-            cellDiffs[f] = { kind: 'dateLater', oldVal, newVal, days: dayDiff(nd, od) }
-            hasChange = true
-            summary.cellChanges++
-          }
-        } else {
-          cellDiffs[f] = { kind: 'changed', oldVal, newVal }
-          hasChange = true
-          summary.cellChanges++
-        }
+        const result = compareDateField(oldVal, newVal)
+        cellDiffs[f] = result
+        if (result.kind !== 'same') { hasChange = true; summary.cellChanges++ }
       } else {
         cellDiffs[f] = { kind: 'changed', oldVal, newVal }
         hasChange = true
@@ -342,31 +339,9 @@ export function diffSnapshots(
         cellDiffs[mf] = { kind: 'colAddedOnly' }
         continue
       }
-      const oldVal = b[mf]
-      const newVal = t[mf]
-      if (oldVal === newVal) {
-        cellDiffs[mf] = { kind: 'same' }
-        continue
-      }
-      const od = tryParseDate(oldVal)
-      const nd = tryParseDate(newVal)
-      if (od && nd) {
-        if (nd.getTime() === od.getTime()) {
-          cellDiffs[mf] = { kind: 'same' }
-        } else if (nd.getTime() < od.getTime()) {
-          cellDiffs[mf] = { kind: 'dateEarlier', oldVal, newVal, days: dayDiff(od, nd) }
-          hasChange = true
-          summary.cellChanges++
-        } else {
-          cellDiffs[mf] = { kind: 'dateLater', oldVal, newVal, days: dayDiff(nd, od) }
-          hasChange = true
-          summary.cellChanges++
-        }
-      } else {
-        cellDiffs[mf] = { kind: 'changed', oldVal, newVal }
-        hasChange = true
-        summary.cellChanges++
-      }
+      const result = compareDateField(b[mf], t[mf])
+      cellDiffs[mf] = result
+      if (result.kind !== 'same') { hasChange = true; summary.cellChanges++ }
     }
 
     rows.push({
