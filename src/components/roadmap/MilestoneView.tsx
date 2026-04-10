@@ -2,11 +2,12 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import {
-  Table, Button, Space, Select, Tag, Modal, Checkbox, Input, Tabs, message, Tooltip, Popconfirm, Empty,
+  Table, Button, Space, Select, Tag, Modal, Checkbox, Input, Tabs, message, Tooltip, Popconfirm, Empty, Dropdown,
 } from 'antd'
 import {
   FilterOutlined, SettingOutlined, SaveOutlined, FullscreenOutlined, FullscreenExitOutlined,
   EyeOutlined, PlusOutlined, CameraOutlined, HistoryOutlined, DeleteOutlined, SwapOutlined, ArrowRightOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { RoadmapViewConfig } from '@/types'
@@ -16,6 +17,7 @@ import {
   diffSnapshots, buildCompareColumns,
   type DiffResult, type SnapshotLike,
 } from './utils'
+import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 
 const PROJECT_TYPES = ['软件产品项目', '整机产品项目']
 
@@ -239,6 +241,33 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     setVisibleColumns(getDefaultVisibleColumns(projectType))
     setPageSize(10)
     setCurrentPage(1)
+  }
+
+  // ========== 导出 Excel ==========
+  const handleExport = (scope: 'current' | 'all') => {
+    // 列集合：scope='current' 用当前可见列，scope='all' 用全部固定列 + 全部里程碑
+    const fixedCols = getFixedColumnsForType(projectType)
+    const visibleFixedKeys = scope === 'current'
+      ? fixedCols.filter(c => visibleColumns.includes(c.key)).map(c => c.key)
+      : fixedCols.map(c => c.key)
+
+    const exportCols: ExportColumn[] = []
+    for (const col of fixedCols) {
+      if (!visibleFixedKeys.includes(col.key)) continue
+      exportCols.push({ key: col.key, title: col.title })
+    }
+    for (const ms of milestones) {
+      exportCols.push({ key: `ms_${ms.name}`, title: ms.name })
+    }
+    if (projectType === '整机产品项目') {
+      exportCols.push({ key: 'launchDate', title: '产品上市' })
+    }
+
+    // 数据源：scope='current' 用筛选后的 tableData，scope='all' 用 allTableData
+    const rows = scope === 'current' ? tableData : allTableData
+
+    const filename = `里程碑视图_${projectType}_${exportTimestamp()}.xlsx`
+    exportSheet(rows, exportCols, filename, '里程碑视图')
   }
 
   // Handle save view
@@ -575,6 +604,19 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
           {compareMode ? '对比中' : '对比'}
         </Button>
       </Tooltip>
+      <Dropdown
+        menu={{
+          items: [
+            { key: 'current', label: '导出当前视图' },
+            { key: 'all', label: `导出全部（${projectType}）` },
+          ],
+          onClick: ({ key }) => handleExport(key as 'current' | 'all'),
+        }}
+      >
+        <Tooltip title="导出为 Excel">
+          <Button icon={<DownloadOutlined />} size="small" style={{ borderRadius: 6 }} />
+        </Tooltip>
+      </Dropdown>
       <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
         <Button icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />} size="small" style={{ borderRadius: 6 }} onClick={() => setIsFullscreen(!isFullscreen)} />
       </Tooltip>
