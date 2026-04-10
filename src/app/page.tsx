@@ -1282,6 +1282,51 @@ export default function Home() {
     setCollapsedNodes(prev => ({ ...prev, [key]: new Set(allParents) }))
   }
 
+  // ============================================================
+  // Plan task notification helpers (added 2026-04-10)
+  // ============================================================
+
+  const diffTasksForNotify = (baseline: any[], current: any[]): TaskChange[] => {
+    const baselineMap = new Map<string, any>(baseline.map(t => [t.id, t]))
+    const changes: TaskChange[] = []
+    for (const curr of current) {
+      const prev = baselineMap.get(curr.id)
+      if (!prev) {
+        changes.push({ kind: 'created', task: curr })
+        continue
+      }
+      const changedFields: string[] = []
+      for (const f of NOTIFY_DIFF_FIELDS) {
+        if ((prev[f] ?? '') !== (curr[f] ?? '')) {
+          changedFields.push(f)
+        }
+      }
+      if (changedFields.length > 0) {
+        changes.push({ kind: 'modified', task: curr, previous: prev, changedFields })
+      }
+    }
+    return changes
+  }
+
+  const scanDueTasks = (taskList: any[]): PlanDueNotice[] => {
+    const today = dayjs().startOf('day')
+    const notices: PlanDueNotice[] = []
+    for (const t of taskList) {
+      if (!t.parentId) continue
+      if (t.actualEndDate) continue
+      if (!t.planEndDate || t.planEndDate === '-') continue
+      const due = dayjs(t.planEndDate)
+      if (!due.isValid()) continue
+      const days = due.startOf('day').diff(today, 'day')
+      if (days < 0) {
+        notices.push({ kind: 'overdue', task: t, daysUntilDue: days })
+      } else if (days <= 2) {
+        notices.push({ kind: 'due_soon', task: t, daysUntilDue: days })
+      }
+    }
+    return notices
+  }
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id) return
