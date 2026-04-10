@@ -14,6 +14,7 @@ import {
   Badge,
   Menu,
   message,
+  notification,
   Select,
   Input,
   Popconfirm,
@@ -50,6 +51,8 @@ import { HorizontalTable, TaskTable, ActionButtons, VersionCompareResult, PlanIn
 import { TransferConfig, TransferWorkbench, TransferApply, TransferDetail, TransferEntry, TransferReview, TransferSqaReview } from '@/components/transfer/TransferModule'
 import WorkTracker from '@/components/work-tracker/WorkTracker'
 import { initialProjects, PROJECT_TYPES, PROJECT_STATUS_CONFIG, mapIpmStatus, PROJECT_TYPE_COLORS } from '@/data/projects'
+import { notifyPublishChanges, notifyDueTasks } from '@/lib/feishu-notify'
+import type { TaskChange, PlanDueNotice, FeishuRecipient } from '@/types/plan-notify'
 
 // 全局表格和交互样式
 const globalStyles = `
@@ -623,6 +626,20 @@ function DragHandle() {
   return <HolderOutlined style={{ cursor: 'grab', color: '#999' }} {...listeners} />
 }
 
+const NOTIFY_DIFF_FIELDS = ['taskName', 'planStartDate', 'planEndDate', 'responsible', 'predecessor'] as const
+
+// Mock 责任人 → 飞书用户映射
+// TODO[feishu]: 生产环境从组织通讯录查询真实 open_id / email，并按需扩展覆盖范围
+const MOCK_USER_MAP: Record<string, FeishuRecipient> = {
+  '张三': { openId: 'ou_mock_zhangsan', email: 'zhangsan@transsion.com', name: '张三' },
+  '李四': { openId: 'ou_mock_lisi',     email: 'lisi@transsion.com',     name: '李四' },
+  '王五': { openId: 'ou_mock_wangwu',   email: 'wangwu@transsion.com',   name: '王五' },
+  '赵六': { openId: 'ou_mock_zhaoliu',  email: 'zhaoliu@transsion.com',  name: '赵六' },
+  '孙七': { openId: 'ou_mock_sunqi',    email: 'sunqi@transsion.com',    name: '孙七' },
+  '周八': { openId: 'ou_mock_zhouba',   email: 'zhouba@transsion.com',   name: '周八' },
+  '吴九': { openId: 'ou_mock_wujiu',    email: 'wujiu@transsion.com',    name: '吴九' },
+}
+
 export default function Home() {
   // const router = useRouter()
   const [activeModule, setActiveModule] = useState<string>('projects')
@@ -726,6 +743,10 @@ export default function Home() {
   // 项目空间-计划
   const [projectPlanLevel, setProjectPlanLevel] = useState<string>('level1')
   const [projectPlanViewMode, setProjectPlanViewMode] = useState<'table' | 'horizontal' | 'gantt'>('table')
+  // 已发布版本的任务快照（供发布变更 diff 的 baseline，和到期扫描的数据源）
+  const [publishedSnapshots, setPublishedSnapshots] = useState<Record<string, any[]>>({})
+  // Session-level 去重：同一项目在 session 内到期扫描只跑一次
+  const lastDueCheckedProjectRef = useRef<string | null>(null)
   // Collapsed tree nodes per scope (project + level + optional plan)
   // Empty Set = fully expanded (default). Presence in Set = that node is collapsed.
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, Set<string>>>({})
