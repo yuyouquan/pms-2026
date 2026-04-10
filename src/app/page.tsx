@@ -1552,6 +1552,8 @@ export default function Home() {
 
   const renderGanttChart = (customTasks?: any[]) => {
     const ganttTasks = customTasks || filteredTasks
+    const key = getScopeKey()
+    const collapsedSet = key ? (collapsedNodes[key] || new Set<string>()) : new Set<string>()
     return (
       <div style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
         <DHTMLXGantt
@@ -1560,6 +1562,15 @@ export default function Home() {
             message.info(`点击任务: ${task.text}`)
           }}
           readOnly={!isEditMode}
+          collapsedIds={collapsedSet}
+          onCollapsedChange={(updater) => {
+            if (!key) return
+            setCollapsedNodes(prev => {
+              const current = prev[key] || new Set<string>()
+              const next = updater(current)
+              return { ...prev, [key]: next }
+            })
+          }}
         />
       </div>
     )
