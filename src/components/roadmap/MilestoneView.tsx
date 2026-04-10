@@ -10,7 +10,12 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { RoadmapViewConfig } from '@/types'
-import { aggregateMilestones, generateTableData, saveView, loadAllViews, deleteView } from './utils'
+import {
+  aggregateMilestones, generateTableData, saveView, loadAllViews, deleteView,
+  SOFTWARE_FIXED_COLUMNS, MACHINE_FIXED_COLUMNS, getFixedColumnsForType, getDefaultVisibleColumns,
+  diffSnapshots, buildCompareColumns,
+  type DiffResult, type SnapshotLike,
+} from './utils'
 
 const PROJECT_TYPES = ['软件产品项目', '整机产品项目']
 
@@ -20,33 +25,6 @@ const PROJECT_TYPE_MAP: Record<string, string> = {
 }
 
 const DEFAULT_VIEW_ID = '__default__'
-
-// 软件产品项目固定列
-const SOFTWARE_FIXED_COLUMNS = [
-  { key: 'projectName', title: '项目名称' },
-  { key: 'versionType', title: '版本类型' },
-  { key: 'currentNode', title: '当前节点' },
-  { key: 'chipPlatform', title: '芯片平台' },
-  { key: 'status', title: '状态' },
-  { key: 'spm', title: 'SPM' },
-]
-
-// 整机产品项目固定列
-const MACHINE_FIXED_COLUMNS = [
-  { key: 'tosVersion', title: 'tOS版本' },
-  { key: 'brand', title: '品牌' },
-  { key: 'productType', title: '产品类型' },
-  { key: 'productLine', title: '产品线' },
-  { key: 'projectName', title: '项目名称' },
-  { key: 'chipPlatform', title: '芯片平台' },
-  { key: 'memory', title: '内存' },
-  { key: 'versionType', title: '版本类型' },
-  { key: 'developMode', title: '开发模式' },
-  { key: 'status', title: '状态' },
-  { key: 'spm', title: 'SPM' },
-]
-
-const FIXED_COLUMNS = SOFTWARE_FIXED_COLUMNS
 
 const marketColors: Record<string, string> = {
   'OP': '#6366f1', 'TR': '#52c41a', 'RU': '#faad14',
@@ -61,14 +39,6 @@ interface MilestoneViewProps {
   initialProjectType?: string
   onProjectTypeChange?: (type: string) => void
   hideProjectTypeTabs?: boolean
-}
-
-function getFixedColumnsForType(projectType: string) {
-  return projectType === '整机产品项目' ? MACHINE_FIXED_COLUMNS : SOFTWARE_FIXED_COLUMNS
-}
-
-function getDefaultVisibleColumns(projectType: string) {
-  return getFixedColumnsForType(projectType).map(c => c.key)
 }
 
 export default function MilestoneView({ projects, marketPlanData, level1Tasks, onViewProject, initialProjectType, onProjectTypeChange, hideProjectTypeTabs }: MilestoneViewProps) {

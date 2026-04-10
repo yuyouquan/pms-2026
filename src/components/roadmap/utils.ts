@@ -1,6 +1,42 @@
 import type { MilestoneInfo, RoadmapViewConfig } from '@/types'
+import React from 'react'
+import type { ColumnsType } from 'antd/es/table'
+import { Tag, Tooltip, Button } from 'antd'
+import { EyeOutlined, ArrowRightOutlined } from '@ant-design/icons'
 
 const STORAGE_KEY = 'pms_roadmap_milestone_views'
+
+// Shared column configs (moved from MilestoneView.tsx 2026-04-10)
+export const SOFTWARE_FIXED_COLUMNS = [
+  { key: 'projectName', title: '项目名称' },
+  { key: 'versionType', title: '版本类型' },
+  { key: 'currentNode', title: '当前节点' },
+  { key: 'chipPlatform', title: '芯片平台' },
+  { key: 'status', title: '状态' },
+  { key: 'spm', title: 'SPM' },
+]
+
+export const MACHINE_FIXED_COLUMNS = [
+  { key: 'tosVersion', title: 'tOS版本' },
+  { key: 'brand', title: '品牌' },
+  { key: 'productType', title: '产品类型' },
+  { key: 'productLine', title: '产品线' },
+  { key: 'projectName', title: '项目名称' },
+  { key: 'chipPlatform', title: '芯片平台' },
+  { key: 'memory', title: '内存' },
+  { key: 'versionType', title: '版本类型' },
+  { key: 'developMode', title: '开发模式' },
+  { key: 'status', title: '状态' },
+  { key: 'spm', title: 'SPM' },
+]
+
+export function getFixedColumnsForType(projectType: string) {
+  return projectType === '整机产品项目' ? MACHINE_FIXED_COLUMNS : SOFTWARE_FIXED_COLUMNS
+}
+
+export function getDefaultVisibleColumns(projectType: string) {
+  return getFixedColumnsForType(projectType).map(c => c.key)
+}
 
 /** 推断里程碑排序权重 */
 export function inferMilestoneOrder(name: string): number {
@@ -355,4 +391,127 @@ export function diffSnapshots(
   }
 
   return { rows, mergedMilestones, summary }
+}
+
+/** Render a single diff cell. Returns a React node. */
+function renderDiffCell(field: string, row: DiffRow): React.ReactNode {
+  const diff = row.cellDiffs[field]
+  const baseVal = row.base?.[field]
+  const targetVal = row.target?.[field]
+
+  // Added/removed rows: just show the one side's value, no cell coloring
+  if (row.rowStatus === 'added') {
+    return React.createElement('span', { style: { fontSize: 11 } }, String(targetVal ?? '-'))
+  }
+  if (row.rowStatus === 'removed') {
+    return React.createElement('span', { style: { fontSize: 11 } }, String(baseVal ?? '-'))
+  }
+
+  if (!diff || diff.kind === 'same') {
+    return React.createElement('span', { style: { fontSize: 11, color: '#4b5563' } }, String(targetVal ?? '-'))
+  }
+
+  if (diff.kind === 'colAddedOnly') {
+    return React.createElement('span', { style: { fontSize: 11, color: '#22c55e' } }, String(targetVal ?? '-'))
+  }
+  if (diff.kind === 'colRemovedOnly') {
+    return React.createElement('span', { style: { fontSize: 11, color: '#9ca3af', textDecoration: 'line-through' } }, String(baseVal ?? '-'))
+  }
+
+  // At this point diff.kind is one of: 'changed' | 'dateEarlier' | 'dateLater' | 'added' | 'removed'
+  // 'added'/'removed' on a row-level diff shouldn't reach here but guard anyway
+  if (diff.kind === 'added' || diff.kind === 'removed') {
+    return React.createElement('span', { style: { fontSize: 11 } }, String(targetVal ?? baseVal ?? '-'))
+  }
+
+  const arrow = React.createElement(ArrowRightOutlined, { style: { fontSize: 10, margin: '0 4px', color: '#9ca3af' } })
+  const oldNode = React.createElement('del', { style: { color: '#9ca3af' } }, String(diff.oldVal ?? '-'))
+  const newNode = React.createElement('strong', null, String(diff.newVal ?? '-'))
+
+  let bg = '#fffbeb' // changed
+  let tooltip: string | null = null
+  if (diff.kind === 'dateEarlier') {
+    bg = '#eff6ff'
+    tooltip = `提前 ${diff.days} 天`
+  } else if (diff.kind === 'dateLater') {
+    bg = '#fef2f2'
+    tooltip = `延后 ${diff.days} 天`
+  }
+
+  const content = React.createElement(
+    'span',
+    { style: { fontSize: 11, display: 'inline-block', padding: '2px 6px', borderRadius: 4, background: bg } },
+    oldNode, arrow, newNode,
+  )
+
+  return tooltip ? React.createElement(Tooltip, { title: tooltip }, content) : content
+}
+
+export function buildCompareColumns(
+  diffResult: DiffResult,
+  visibleColumns: string[],
+  projectType: string,
+  onViewProject: (projectId: string, market?: string) => void,
+): ColumnsType<DiffRow> {
+  const cols: ColumnsType<DiffRow> = []
+  const typeColumns = getFixedColumnsForType(projectType)
+
+  for (const col of typeColumns) {
+    if (!visibleColumns.includes(col.key)) continue
+    cols.push({
+      title: col.title,
+      key: col.key,
+      width: col.key === 'projectName' ? 160 : 100,
+      render: (_: any, row: DiffRow) => renderDiffCell(col.key, row),
+    })
+  }
+
+  for (const ms of diffResult.mergedMilestones) {
+    const field = `ms_${ms.name}`
+    const titleNode = ms.onlyIn === 'target'
+      ? React.createElement('span', null, ms.name, ' ', React.createElement(Tag, { color: 'green', style: { fontSize: 10, marginLeft: 4 } }, '新增'))
+      : ms.onlyIn === 'base'
+      ? React.createElement('span', { style: { color: '#9ca3af' } }, ms.name, ' ', React.createElement(Tag, { style: { fontSize: 10, marginLeft: 4 } }, '已删'))
+      : ms.name
+    cols.push({
+      title: titleNode,
+      key: field,
+      width: 150,
+      align: 'center' as const,
+      render: (_: any, row: DiffRow) => renderDiffCell(field, row),
+    })
+  }
+
+  if (projectType === '整机产品项目' && visibleColumns.includes('launchDate')) {
+    cols.push({
+      title: '产品上市',
+      key: 'launchDate',
+      width: 150,
+      align: 'center' as const,
+      render: (_: any, row: DiffRow) => renderDiffCell('launchDate', row),
+    })
+  }
+
+  cols.push({
+    title: '操作',
+    key: 'action',
+    fixed: 'right' as const,
+    width: 90,
+    render: (_: any, row: DiffRow) => {
+      const src = row.target ?? row.base
+      if (!src) return null
+      return React.createElement(
+        Button,
+        {
+          type: 'link',
+          size: 'small',
+          icon: React.createElement(EyeOutlined),
+          onClick: () => onViewProject(src.projectId, src.market),
+        },
+        '查看/记录',
+      )
+    },
+  })
+
+  return cols
 }
