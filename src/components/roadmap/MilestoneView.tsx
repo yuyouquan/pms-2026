@@ -339,15 +339,57 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [compareMode, compareBase, compareTarget, tableData, milestones, baselineSnapshots, projectType])
 
-  // Get current display data (snapshot or live)
+  // Get current display data (compare / snapshot / live)
   const activeSnapshot = activeSnapshotId ? baselineSnapshots.find(s => s.id === activeSnapshotId) : null
-  const displayData = activeSnapshot ? activeSnapshot.data : tableData
-  const displayMilestones = activeSnapshot ? activeSnapshot.milestones : milestones
 
-  // Rebuild columns for snapshot milestones
+  const displayData: any[] = useMemo(() => {
+    if (compareMode && diffResult) {
+      let rows = diffResult.rows
+      // Apply existing filters to diff rows (using target ?? base for field lookup)
+      if (filters.productLine?.length) {
+        rows = rows.filter(r => {
+          const src = r.target ?? r.base
+          return src && filters.productLine!.includes(src.productLine)
+        })
+      }
+      if (filters.chipPlatform?.length) {
+        rows = rows.filter(r => {
+          const src = r.target ?? r.base
+          return src && filters.chipPlatform!.includes(src.chipPlatform)
+        })
+      }
+      if (filters.status?.length) {
+        rows = rows.filter(r => {
+          const src = r.target ?? r.base
+          return src && filters.status!.includes(src.status)
+        })
+      }
+      if (filters.tosVersion?.length) {
+        rows = rows.filter(r => {
+          const src = r.target ?? r.base
+          return src && filters.tosVersion!.includes(src.tosVersion)
+        })
+      }
+      if (onlyDiffRows) {
+        rows = rows.filter(r => r.rowStatus !== 'same')
+      }
+      return rows
+    }
+    return activeSnapshot ? activeSnapshot.data : tableData
+  }, [compareMode, diffResult, onlyDiffRows, filters, activeSnapshot, tableData])
+
+  const displayMilestones = compareMode && diffResult
+    ? diffResult.mergedMilestones
+    : (activeSnapshot ? activeSnapshot.milestones : milestones)
+
+  // Rebuild columns (compare / snapshot / live)
   const displayColumns = useMemo((): ColumnsType<any> => {
+    if (compareMode && diffResult) {
+      return buildCompareColumns(diffResult, visibleColumns, projectType, onViewProject)
+    }
     if (!activeSnapshot) return columns
-    // Rebuild with snapshot milestones using same type-aware logic
+
+    // Existing snapshot column logic (unchanged)
     const cols: ColumnsType<any> = []
     const snapshotType = activeSnapshot.projectType
     const typeColumns = getFixedColumnsForType(snapshotType)
@@ -380,7 +422,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       ),
     })
     return cols
-  }, [activeSnapshot, visibleColumns, displayMilestones, onViewProject])
+  }, [compareMode, diffResult, activeSnapshot, visibleColumns, displayMilestones, onViewProject, projectType, columns])
 
   const hasActiveFilters = Object.values(filters).some(v => v && v.length > 0)
 
@@ -410,6 +452,14 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       className="pms-table"
       columns={displayColumns}
       dataSource={displayData}
+      rowKey={(r: any) => compareMode ? r.rowKey : r.key}
+      rowClassName={(r: any) => {
+        if (!compareMode) return ''
+        if (r.rowStatus === 'added') return 'row-diff-added'
+        if (r.rowStatus === 'removed') return 'row-diff-removed'
+        if (r.rowStatus === 'modified') return 'row-diff-modified'
+        return ''
+      }}
       scroll={{ x: 'max-content' }}
       size="small"
       pagination={{
@@ -424,7 +474,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
           setPageSize(size)
         },
       }}
-      locale={{ emptyText: <Empty description="暂无数据" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+      locale={{ emptyText: <Empty description={compareMode && onlyDiffRows ? '两个版本无差异' : '暂无数据'} image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
     />
   )
 
