@@ -110,6 +110,11 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     setCurrentPage(1)
   }, [projectType])
 
+  // Reset page on compare mode toggle
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [compareMode])
+
   // Update visible columns when projectType changes (add/remove market column)
   useEffect(() => {
     if (activeViewId === DEFAULT_VIEW_ID) {
@@ -329,7 +334,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
   // Compare mode: resolve sources and compute diff
   const resolveCompareSource = (src: CompareSource): SnapshotLike => {
     if (src === 'live') {
-      return { data: tableData, milestones: milestones.map(m => ({ name: m.name, order: m.order })) }
+      return { data: allTableData, milestones: milestones.map(m => ({ name: m.name, order: m.order })) }
     }
     const snap = baselineSnapshots.find(s => s.id === src)
     if (!snap) {
@@ -344,7 +349,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     const targetSrc = resolveCompareSource(compareTarget)
     return diffSnapshots(baseSrc, targetSrc, projectType)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [compareMode, compareBase, compareTarget, tableData, milestones, baselineSnapshots, projectType])
+  }, [compareMode, compareBase, compareTarget, allTableData, milestones, baselineSnapshots, projectType])
 
   // Auto-exit compare mode if a selected snapshot is deleted
   useEffect(() => {
