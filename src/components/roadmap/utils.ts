@@ -482,7 +482,7 @@ export function buildCompareColumns(
     })
   }
 
-  if (projectType === '整机产品项目' && visibleColumns.includes('launchDate')) {
+  if (projectType === '整机产品项目') {
     cols.push({
       title: '产品上市',
       key: 'launchDate',
