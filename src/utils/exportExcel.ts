@@ -67,6 +67,47 @@ export function exportSheet(
   }
 }
 
+/**
+ * 导出带合并单元格（分组表头）的 xlsx 文件。
+ * 用于横版表格：第 1 行阶段分组 colSpan，第 2 行里程碑；
+ * "版本"、"开发周期"列跨两行 rowSpan。
+ *
+ * @param headerMatrix 二维表头：null 表示被合并单元格覆盖的格子
+ * @param merges SheetJS merges 列表
+ * @param dataMatrix 二维数据区
+ * @param colWidths 每列宽度（字符数）
+ */
+export function exportMergedSheet(
+  headerMatrix: (string | null)[][],
+  merges: XLSX.Range[],
+  dataMatrix: (string | number)[][],
+  colWidths: number[],
+  filename: string,
+  sheetName: string = 'Sheet1',
+): void {
+  if (!dataMatrix || dataMatrix.length === 0) {
+    message.warning('暂无可导出数据')
+    return
+  }
+  try {
+    const aoa = [
+      ...headerMatrix.map(row => row.map(c => c ?? '')),
+      ...dataMatrix,
+    ]
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    ws['!merges'] = merges
+    ws['!cols'] = colWidths.map(w => ({ wch: Math.min(40, w) }))
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, sheetName)
+    XLSX.writeFile(wb, filename)
+    message.success(`已导出 ${filename}`)
+  } catch (err) {
+    console.error('[exportMergedSheet] failed', err)
+    message.error('导出失败，请重试')
+  }
+}
+
 /** 生成带时间戳的文件名后缀 */
 export function exportTimestamp(): string {
   return dayjs().format('YYYYMMDD_HHmm')
