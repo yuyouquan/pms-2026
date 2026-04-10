@@ -2062,6 +2062,7 @@ export default function Home() {
   useEffect(() => {
     if (activeModule !== 'projectSpace') return
     if (!selectedProject) return
+    if (projectSpaceModule !== 'plan') return
     if (projectPlanLevel !== 'level1') return
 
     // Session-level 去重：同一项目只扫描一次
@@ -2091,7 +2092,7 @@ export default function Home() {
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProject?.id, projectPlanLevel, activeModule])
+  }, [selectedProject?.id, projectPlanLevel, activeModule, projectSpaceModule])
 
   const handleCreateRevision = () => {
     // 找到最新版本号
