@@ -14,6 +14,7 @@ import {
   Badge,
   Menu,
   message,
+  notification,
   Select,
   Input,
   Popconfirm,
@@ -50,6 +51,9 @@ import { HorizontalTable, TaskTable, ActionButtons, VersionCompareResult, PlanIn
 import { TransferConfig, TransferWorkbench, TransferApply, TransferDetail, TransferEntry, TransferReview, TransferSqaReview } from '@/components/transfer/TransferModule'
 import WorkTracker from '@/components/work-tracker/WorkTracker'
 import { initialProjects, PROJECT_TYPES, PROJECT_STATUS_CONFIG, mapIpmStatus, PROJECT_TYPE_COLORS } from '@/data/projects'
+import { notifyPublishChanges, notifyDueTasks } from '@/lib/feishu-notify'
+import type { TaskChange, PlanDueNotice, FeishuRecipient } from '@/types/plan-notify'
+import { exportSheet, exportMergedSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 
 // 全局表格和交互样式
 const globalStyles = `
@@ -623,6 +627,20 @@ function DragHandle() {
   return <HolderOutlined style={{ cursor: 'grab', color: '#999' }} {...listeners} />
 }
 
+const NOTIFY_DIFF_FIELDS = ['taskName', 'planStartDate', 'planEndDate', 'responsible', 'predecessor'] as const
+
+// Mock 责任人 → 飞书用户映射
+// TODO[feishu]: 生产环境从组织通讯录查询真实 open_id / email，并按需扩展覆盖范围
+const MOCK_USER_MAP: Record<string, FeishuRecipient> = {
+  '张三': { openId: 'ou_mock_zhangsan', email: 'zhangsan@transsion.com', name: '张三' },
+  '李四': { openId: 'ou_mock_lisi',     email: 'lisi@transsion.com',     name: '李四' },
+  '王五': { openId: 'ou_mock_wangwu',   email: 'wangwu@transsion.com',   name: '王五' },
+  '赵六': { openId: 'ou_mock_zhaoliu',  email: 'zhaoliu@transsion.com',  name: '赵六' },
+  '孙七': { openId: 'ou_mock_sunqi',    email: 'sunqi@transsion.com',    name: '孙七' },
+  '周八': { openId: 'ou_mock_zhouba',   email: 'zhouba@transsion.com',   name: '周八' },
+  '吴九': { openId: 'ou_mock_wujiu',    email: 'wujiu@transsion.com',    name: '吴九' },
+}
+
 export default function Home() {
   // const router = useRouter()
   const [activeModule, setActiveModule] = useState<string>('projects')
@@ -726,6 +744,10 @@ export default function Home() {
   // 项目空间-计划
   const [projectPlanLevel, setProjectPlanLevel] = useState<string>('level1')
   const [projectPlanViewMode, setProjectPlanViewMode] = useState<'table' | 'horizontal' | 'gantt'>('table')
+  // 已发布版本的任务快照（供发布变更 diff 的 baseline，和到期扫描的数据源）
+  const [publishedSnapshots, setPublishedSnapshots] = useState<Record<string, any[]>>({})
+  // Session-level 去重：同一项目在 session 内到期扫描只跑一次
+  const lastDueCheckedProjectRef = useRef<string | null>(null)
   // Collapsed tree nodes per scope (project + level + optional plan)
   // Empty Set = fully expanded (default). Presence in Set = that node is collapsed.
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, Set<string>>>({})
@@ -1259,6 +1281,51 @@ export default function Home() {
     }
     const allParents = getAllExpandableIds(scopeTasks)
     setCollapsedNodes(prev => ({ ...prev, [key]: new Set(allParents) }))
+  }
+
+  // ============================================================
+  // Plan task notification helpers (added 2026-04-10)
+  // ============================================================
+
+  const diffTasksForNotify = (baseline: any[], current: any[]): TaskChange[] => {
+    const baselineMap = new Map<string, any>(baseline.map(t => [t.id, t]))
+    const changes: TaskChange[] = []
+    for (const curr of current) {
+      const prev = baselineMap.get(curr.id)
+      if (!prev) {
+        changes.push({ kind: 'created', task: curr })
+        continue
+      }
+      const changedFields: string[] = []
+      for (const f of NOTIFY_DIFF_FIELDS) {
+        if ((prev[f] ?? '') !== (curr[f] ?? '')) {
+          changedFields.push(f)
+        }
+      }
+      if (changedFields.length > 0) {
+        changes.push({ kind: 'modified', task: curr, previous: prev, changedFields })
+      }
+    }
+    return changes
+  }
+
+  const scanDueTasks = (taskList: any[]): PlanDueNotice[] => {
+    const today = dayjs().startOf('day')
+    const notices: PlanDueNotice[] = []
+    for (const t of taskList) {
+      if (!t.parentId) continue
+      if (t.actualEndDate) continue
+      if (!t.planEndDate || t.planEndDate === '-') continue
+      const due = dayjs(t.planEndDate)
+      if (!due.isValid()) continue
+      const days = due.startOf('day').diff(today, 'day')
+      if (days < 0) {
+        notices.push({ kind: 'overdue', task: t, daysUntilDue: days })
+      } else if (days <= 2) {
+        notices.push({ kind: 'due_soon', task: t, daysUntilDue: days })
+      }
+    }
+    return notices
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -1990,6 +2057,44 @@ export default function Home() {
     )
   }
 
+  // Plan task due-soon/overdue scan (added 2026-04-10)
+  // 生产环境说明：真实场景由后端每日定时任务触发对所有项目的扫描 + 通知；
+  // 前端仅在用户进入项目空间 L1 页面时即时扫描一次，作为 mock 演示。
+  useEffect(() => {
+    if (activeModule !== 'projectSpace') return
+    if (!selectedProject) return
+    if (projectSpaceModule !== 'plan') return
+    if (projectPlanLevel !== 'level1') return
+
+    // Session-level 去重：同一项目只扫描一次
+    const key = selectedProject.id
+    if (lastDueCheckedProjectRef.current === key) return
+    lastDueCheckedProjectRef.current = key
+
+    // 取最新已发布版本的任务快照；若未存在（mock 启动态），fallback 到当前 tasks
+    const latestPub = versions
+      .filter(v => v.status === '已发布')
+      .sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
+    const scanTarget = latestPub && publishedSnapshots[latestPub.id]
+      ? publishedSnapshots[latestPub.id]
+      : tasks
+
+    const notices = scanDueTasks(scanTarget)
+    if (notices.length === 0) return
+
+    notifyDueTasks(notices, MOCK_USER_MAP).then(notified => {
+      if (notified > 0) {
+        notification.warning({
+          message: '任务到期提醒已推送',
+          description: `项目 ${selectedProject.name} 发现 ${notices.length} 条到期/逾期任务，已通知 ${notified} 位责任人`,
+          placement: 'topRight',
+          duration: 5,
+        })
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProject?.id, projectPlanLevel, activeModule, projectSpaceModule])
+
   const handleCreateRevision = () => {
     // 找到最新版本号
     const maxVersionNum = versions.reduce((max, v) => {
@@ -2025,12 +2130,45 @@ export default function Home() {
   }
 
   const handlePublish = () => {
-    // 将当前修订版改为已发布
-    setVersions(versions.map(v => 
-      v.id === currentVersion 
+    // 1. Baseline = 上一个已发布版本的任务快照
+    const prevPublished = versions
+      .filter(v => v.status === '已发布' && v.id !== currentVersion)
+      .sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
+    const baselineTasks: any[] = prevPublished ? (publishedSnapshots[prevPublished.id] || []) : []
+
+    // 2. 计算变更
+    const changes = diffTasksForNotify(baselineTasks, tasks)
+
+    // 3. 将当前修订版改为已发布
+    const publishedVersionId = currentVersion
+    const publishedVersion = versions.find(v => v.id === publishedVersionId)
+    setVersions(versions.map(v =>
+      v.id === publishedVersionId
         ? { ...v, status: '已发布' }
         : v
     ))
+
+    // 4. 保存本次发布的任务快照
+    setPublishedSnapshots(prev => ({
+      ...prev,
+      [publishedVersionId]: JSON.parse(JSON.stringify(tasks)),
+    }))
+
+    // 5. 发送飞书通知（stub），并弹出 UI 汇总提示
+    const versionNo = publishedVersion?.versionNo || publishedVersionId
+    if (changes.length > 0) {
+      notifyPublishChanges(versionNo, changes, MOCK_USER_MAP).then(notified => {
+        if (notified > 0) {
+          notification.info({
+            message: '已通过飞书通知责任人',
+            description: `一级计划 ${versionNo} 发布，共 ${changes.length} 条变更，已通知 ${notified} 位责任人（详情见浏览器控制台）`,
+            placement: 'topRight',
+            duration: 5,
+          })
+        }
+      })
+    }
+
     message.success('发布成功')
   }
 
@@ -2761,6 +2899,142 @@ export default function Home() {
   // 市场颜色映射
   const marketColors: Record<string, string> = { 'OP': '#1890ff', 'TR': '#52c41a', 'RU': '#faad14', 'FR': '#722ed1', 'IN': '#eb2f96', 'BR': '#13c2c2' }
 
+  // ========== 导出：竖版表格 ==========
+  const handleExportVerticalPlan = (scope: 'current' | 'all') => {
+    // 列：scope='current' 取当前 visibleColumns 的子集，scope='all' 取 TABLE_COLUMNS 全集
+    const cols = scope === 'current'
+      ? TABLE_COLUMNS.filter(c => visibleColumns.includes(c.key))
+      : TABLE_COLUMNS
+
+    const exportCols: ExportColumn[] = cols.map(c => ({ key: c.key, title: c.title }))
+
+    // 数据源：
+    // - level1: 组件状态 tasks（搜索时按 taskName 过滤）
+    // - level2: level2PlanTasks 中 planId 匹配 activeLevel2Plan 的子集（同样支持搜索）
+    let rows: any[] = []
+    if (projectPlanLevel === 'level1') {
+      rows = scope === 'current' && searchText
+        ? tasks.filter((t: any) => (t.taskName || '').toLowerCase().includes(searchText.toLowerCase()))
+        : tasks
+    } else if (projectPlanLevel === 'level2' && activeLevel2Plan && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1') {
+      const l2 = level2PlanTasks.filter((t: any) => t.planId === activeLevel2Plan)
+      rows = scope === 'current' && searchText
+        ? l2.filter((t: any) => (t.taskName || '').toLowerCase().includes(searchText.toLowerCase()))
+        : l2
+    }
+
+    const levelLabel = projectPlanLevel === 'level1' ? '一级计划' : '二级计划'
+    const projectName = selectedProject?.name || '项目'
+    const filename = `项目空间计划_${projectName}_${levelLabel}_竖版_${exportTimestamp()}.xlsx`
+    exportSheet(rows, exportCols, filename, `${levelLabel}竖版`)
+  }
+
+  // ========== 导出：横版表格 ==========
+  const handleExportHorizontalPlan = (_scope: 'current' | 'all') => {
+    // 横版表格仅用于 level1。列结构：版本 | 开发周期 | 阶段A(colSpan=n) | 阶段B(colSpan=m) | ...
+    // 行：按版本号倒序的已发布版本 + 末行"实际"数据。
+    // 注：spec 中说明横版的 current/all 行为一致，_scope 参数保留以维持交互统一。
+
+    const stages = (tasks as any[]).filter((t: any) => !t.parentId).sort((a: any, b: any) => a.order - b.order)
+    const stageGroups = stages.map((stage: any) => {
+      const ms = (tasks as any[]).filter((t: any) => t.parentId === stage.id).sort((a: any, b: any) => a.order - b.order)
+      return { stage, milestones: ms, colSpan: ms.length || 1 }
+    })
+    const allMilestones = stageGroups.flatMap(({ stage, milestones }) =>
+      milestones.length > 0 ? milestones : [stage],
+    )
+
+    if (allMilestones.length === 0) {
+      message.warning('暂无可导出数据')
+      return
+    }
+
+    // 构建 headerMatrix（2 行）与 merges
+    const headerRow0: (string | null)[] = ['版本', '开发周期']
+    const headerRow1: (string | null)[] = [null, null]
+    const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [
+      { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, // 版本 rowSpan=2
+      { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } }, // 开发周期 rowSpan=2
+    ]
+    let colCursor = 2
+    for (const { stage, milestones, colSpan } of stageGroups) {
+      headerRow0.push(stage.taskName)
+      for (let i = 1; i < colSpan; i++) headerRow0.push(null)
+      if (milestones.length > 0) {
+        for (const m of milestones) headerRow1.push(m.taskName)
+      } else {
+        headerRow1.push('-')
+      }
+      merges.push({ s: { r: 0, c: colCursor }, e: { r: 0, c: colCursor + colSpan - 1 } })
+      colCursor += colSpan
+    }
+    const headerMatrix: (string | null)[][] = [headerRow0, headerRow1]
+
+    // 计算各版本的任务（复用 renderHorizontalTable 里的 offset 模拟逻辑）
+    const publishedVersions = versions
+      .filter(v => v.status === '已发布')
+      .sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))
+    const latestNum = publishedVersions.length > 0
+      ? Math.max(...publishedVersions.map(v => parseInt(v.versionNo.replace('V', ''))))
+      : 0
+    const getVersionTasks = (versionNo: string) => {
+      const vNum = parseInt(versionNo.replace('V', ''))
+      if (vNum === latestNum) return tasks as any[]
+      const offsetDays = (latestNum - vNum) * 3
+      return (tasks as any[]).map((t: any) => ({
+        ...t,
+        planStartDate: t.planStartDate ? shiftDateStrForExport(t.planStartDate, -offsetDays) : '',
+        planEndDate: t.planEndDate ? shiftDateStrForExport(t.planEndDate, -offsetDays) : '',
+      }))
+    }
+
+    const calcCycleDays = (list: any[], startKey: string, endKey: string): string | number => {
+      const starts = list.map((t: any) => t[startKey]).filter(Boolean).map((d: string) => new Date(d).getTime())
+      const ends = list.map((t: any) => t[endKey]).filter(Boolean).map((d: string) => new Date(d).getTime())
+      if (starts.length === 0 || ends.length === 0) return '-'
+      const days = Math.ceil((Math.max(...ends) - Math.min(...starts)) / (1000 * 60 * 60 * 24))
+      return days > 0 ? days : '-'
+    }
+
+    // 构建数据矩阵
+    const dataMatrix: (string | number)[][] = []
+
+    // 已发布版本行
+    for (const v of publishedVersions) {
+      const vt = getVersionTasks(v.versionNo)
+      const devCycle = calcCycleDays(vt, 'planStartDate', 'planEndDate')
+      const row: (string | number)[] = [v.versionNo, devCycle]
+      for (const m of allMilestones) {
+        const match = vt.find((t: any) => t.id === m.id)
+        row.push(match?.planEndDate || '-')
+      }
+      dataMatrix.push(row)
+    }
+
+    // 实际数据行
+    const actualCycle = calcCycleDays(tasks as any[], 'actualStartDate', 'actualEndDate')
+    const actualRow: (string | number)[] = ['实际', actualCycle]
+    for (const m of allMilestones) {
+      const t = (tasks as any[]).find((x: any) => x.id === m.id)
+      actualRow.push(t?.actualEndDate || '-')
+    }
+    dataMatrix.push(actualRow)
+
+    // 列宽：版本 10、开发周期 10、各里程碑 14
+    const colWidths = [10, 10, ...allMilestones.map(() => 14)]
+
+    const projectName = selectedProject?.name || '项目'
+    const filename = `项目空间计划_${projectName}_一级计划_横版_${exportTimestamp()}.xlsx`
+    exportMergedSheet(headerMatrix, merges, dataMatrix, colWidths, filename, '一级计划横版')
+  }
+
+  // 横版导出辅助：将日期字符串偏移 N 天
+  const shiftDateStrForExport = (dateStr: string, deltaDays: number): string => {
+    const d = new Date(dateStr)
+    d.setDate(d.getDate() + deltaDays)
+    return d.toISOString().split('T')[0]
+  }
+
   // 项目空间 - 计划模块
   const renderProjectPlan = () => {
     const markets = selectedProject?.markets || []
@@ -3003,6 +3277,27 @@ export default function Home() {
               <Col>
                 <Space size={6}>
                   <Input placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
+                  {projectPlanViewMode !== 'gantt' && (
+                    <Dropdown
+                      menu={{
+                        items: [
+                          { key: 'current', label: '导出当前视图' },
+                          { key: 'all', label: '导出全部' },
+                        ],
+                        onClick: ({ key }) => {
+                          if (projectPlanViewMode === 'horizontal') {
+                            handleExportHorizontalPlan(key as 'current' | 'all')
+                          } else {
+                            handleExportVerticalPlan(key as 'current' | 'all')
+                          }
+                        },
+                      }}
+                    >
+                      <Tooltip title="导出为 Excel">
+                        <Button icon={<DownloadOutlined />} style={{ borderRadius: 6 }} />
+                      </Tooltip>
+                    </Dropdown>
+                  )}
                   {projectPlanViewMode !== 'horizontal' && (
                     <Tooltip title="自定义列">
                       <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
