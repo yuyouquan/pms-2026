@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Table, Tag, Tabs, Button, Empty } from 'antd'
-import { EyeOutlined } from '@ant-design/icons'
+import { Table, Tag, Tabs, Button, Empty, Dropdown, Tooltip } from 'antd'
+import { EyeOutlined, DownloadOutlined } from '@ant-design/icons'
+import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 
 // ======================== Mock Data ========================
 
@@ -380,6 +381,47 @@ export default function MRTrainView({ onViewProject }: MRTrainViewProps) {
     return [...groupCols, ...infoCols, ...activityCols, actionCol]
   }, [dimConfig, primarySpans, secondarySpans, onViewProject])
 
+  // ========== 导出 Excel ==========
+  const handleExport = (scope: 'current' | 'all') => {
+    // 构建扁平列：主分组 + 次分组 + 信息列 + 活动日期列
+    const exportCols: ExportColumn[] = [
+      { key: dimConfig.primaryKey, title: dimConfig.primaryTitle },
+      { key: dimConfig.secondaryKey, title: dimConfig.secondaryTitle },
+    ]
+    if (dimConfig.primaryKey === 'branch') {
+      exportCols.push({ key: 'tosVersion', title: 'tOS版本号' })
+    }
+    exportCols.push(
+      { key: 'projectType', title: '项目类型' },
+      { key: 'productLine', title: '产品线' },
+      { key: 'market', title: '市场名' },
+      { key: 'projectName', title: '项目名称' },
+      { key: 'isMada', title: '是否MADA' },
+      { key: 'madaMarket', title: 'MADA市场' },
+      { key: 'spm', title: '项目SPM' },
+      { key: 'contact', title: '对接人' },
+      { key: 'tpm', title: '项目TPM' },
+      { key: 'mrType', title: 'MR版本类型' },
+      { key: 'projectVersion', title: '项目版本号' },
+      { key: 'crossTestType', title: '1+N跨测类型' },
+    )
+    for (const act of ACTIVITY_STRUCTURE) {
+      for (const sub of act.children) {
+        exportCols.push(
+          { key: `act_${act.name}_${sub}_start`, title: `${act.name}-${sub}-计划开始` },
+          { key: `act_${act.name}_${sub}_end`, title: `${act.name}-${sub}-计划结束` },
+        )
+      }
+    }
+
+    // 数据源：本视图当前无筛选 UI，scope current/all 等价于 sortedData；
+    // 保留下拉交互一致性。未来若新增筛选，此处 scope='all' 应切回 MR_TRAIN_DATA。
+    const rows = scope === 'current' ? sortedData : MR_TRAIN_DATA
+
+    const filename = `MR版本火车视图_${dimConfig.primaryTitle}_${exportTimestamp()}.xlsx`
+    exportSheet(rows, exportCols, filename, 'MR版本火车视图')
+  }
+
   return (
     <div>
       <style>{`
@@ -398,16 +440,31 @@ export default function MRTrainView({ onViewProject }: MRTrainViewProps) {
         }
       `}</style>
 
-      <Tabs
-        activeKey={dimension}
-        onChange={setDimension}
-        size="small"
-        style={{ marginBottom: 12 }}
-        items={[
-          { key: 'tosVersion', label: 'tOS版本号维度' },
-          { key: 'branch', label: '分支信息维度' },
-        ]}
-      />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <Tabs
+          activeKey={dimension}
+          onChange={setDimension}
+          size="small"
+          style={{ marginBottom: 0 }}
+          items={[
+            { key: 'tosVersion', label: 'tOS版本号维度' },
+            { key: 'branch', label: '分支信息维度' },
+          ]}
+        />
+        <Dropdown
+          menu={{
+            items: [
+              { key: 'current', label: '导出当前视图' },
+              { key: 'all', label: '导出全部' },
+            ],
+            onClick: ({ key }) => handleExport(key as 'current' | 'all'),
+          }}
+        >
+          <Tooltip title="导出为 Excel">
+            <Button icon={<DownloadOutlined />} size="small" style={{ borderRadius: 6 }}>导出</Button>
+          </Tooltip>
+        </Dropdown>
+      </div>
 
       <Table
         className="pms-table mr-train-table"
