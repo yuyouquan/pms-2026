@@ -170,3 +170,214 @@ export function deleteView(id: string): void {
     // graceful fail
   }
 }
+
+// ============================================================
+// Snapshot comparison (added 2026-04-10)
+// ============================================================
+
+export type CellDiff =
+  | { kind: 'same' }
+  | { kind: 'added' }
+  | { kind: 'removed' }
+  | { kind: 'changed'; oldVal: any; newVal: any }
+  | { kind: 'dateEarlier'; oldVal: string; newVal: string; days: number }
+  | { kind: 'dateLater'; oldVal: string; newVal: string; days: number }
+  | { kind: 'colAddedOnly' }
+  | { kind: 'colRemovedOnly' }
+
+export interface DiffRow {
+  rowKey: string
+  rowStatus: 'added' | 'removed' | 'modified' | 'same'
+  base?: any
+  target?: any
+  cellDiffs: Record<string, CellDiff>
+}
+
+export interface MergedMilestone {
+  name: string
+  order: number
+  onlyIn?: 'base' | 'target'
+}
+
+export interface DiffResult {
+  rows: DiffRow[]
+  mergedMilestones: MergedMilestone[]
+  summary: { added: number; removed: number; modified: number; cellChanges: number }
+}
+
+export interface SnapshotLike {
+  data: any[]
+  milestones: { name: string; order: number }[]
+}
+
+function buildRowKey(row: any): string {
+  return `${row.projectId}::${row.market ?? ''}`
+}
+
+/** Try to parse a value as a date. Returns null on failure or '-'. */
+function tryParseDate(val: any): Date | null {
+  if (val == null || val === '-' || val === '') return null
+  const t = new Date(val)
+  if (isNaN(t.getTime())) return null
+  return t
+}
+
+/** Days between two dates (rounded). */
+function dayDiff(a: Date, b: Date): number {
+  return Math.round((a.getTime() - b.getTime()) / 86400000)
+}
+
+/** Which fields to compare on a row. Milestones are added dynamically per-call. */
+function getCompareFields(projectType: string): string[] {
+  const base = [
+    'projectName', 'productLine', 'chipPlatform', 'tosVersion',
+    'status', 'spm', 'versionType', 'currentNode',
+  ]
+  if (projectType === '整机产品项目') {
+    return [...base, 'brand', 'productType', 'memory', 'developMode', 'launchDate']
+  }
+  return base
+}
+
+export function diffSnapshots(
+  base: SnapshotLike,
+  target: SnapshotLike,
+  projectType: string,
+): DiffResult {
+  // 1. Build row maps
+  const baseMap = new Map<string, any>()
+  const targetMap = new Map<string, any>()
+  for (const r of base.data) baseMap.set(buildRowKey(r), r)
+  for (const r of target.data) targetMap.set(buildRowKey(r), r)
+
+  // 2. Merge milestones (union, target order preferred)
+  const mergedMap = new Map<string, MergedMilestone>()
+  for (const m of target.milestones) {
+    mergedMap.set(m.name, { name: m.name, order: m.order })
+  }
+  for (const m of base.milestones) {
+    if (!mergedMap.has(m.name)) {
+      mergedMap.set(m.name, { name: m.name, order: m.order, onlyIn: 'base' })
+    }
+  }
+  // Mark target-only columns
+  const baseMilestoneNames = new Set(base.milestones.map(m => m.name))
+  for (const m of target.milestones) {
+    if (!baseMilestoneNames.has(m.name)) {
+      const existing = mergedMap.get(m.name)!
+      existing.onlyIn = 'target'
+    }
+  }
+  const mergedMilestones: MergedMilestone[] = Array.from(mergedMap.values()).sort((a, b) => {
+    if (a.order !== b.order) return a.order - b.order
+    return a.name.localeCompare(b.name, 'zh-CN')
+  })
+
+  // 3. Walk union of rowKeys
+  const allKeys = new Set<string>([...baseMap.keys(), ...targetMap.keys()])
+  const fields = getCompareFields(projectType)
+  const milestoneFields = mergedMilestones.map(m => `ms_${m.name}`)
+
+  const rows: DiffRow[] = []
+  const summary = { added: 0, removed: 0, modified: 0, cellChanges: 0 }
+
+  for (const key of allKeys) {
+    const b = baseMap.get(key)
+    const t = targetMap.get(key)
+    const cellDiffs: Record<string, CellDiff> = {}
+
+    if (b && !t) {
+      rows.push({ rowKey: key, rowStatus: 'removed', base: b, cellDiffs: {} })
+      summary.removed++
+      continue
+    }
+    if (!b && t) {
+      rows.push({ rowKey: key, rowStatus: 'added', target: t, cellDiffs: {} })
+      summary.added++
+      continue
+    }
+
+    // Both exist: compare fields
+    let hasChange = false
+
+    for (const f of fields) {
+      const oldVal = b[f]
+      const newVal = t[f]
+      if (oldVal === newVal) {
+        cellDiffs[f] = { kind: 'same' }
+      } else if (f === 'launchDate') {
+        const od = tryParseDate(oldVal)
+        const nd = tryParseDate(newVal)
+        if (od && nd) {
+          if (nd.getTime() === od.getTime()) {
+            cellDiffs[f] = { kind: 'same' }
+          } else if (nd.getTime() < od.getTime()) {
+            cellDiffs[f] = { kind: 'dateEarlier', oldVal, newVal, days: dayDiff(od, nd) }
+            hasChange = true
+            summary.cellChanges++
+          } else {
+            cellDiffs[f] = { kind: 'dateLater', oldVal, newVal, days: dayDiff(nd, od) }
+            hasChange = true
+            summary.cellChanges++
+          }
+        } else {
+          cellDiffs[f] = { kind: 'changed', oldVal, newVal }
+          hasChange = true
+          summary.cellChanges++
+        }
+      } else {
+        cellDiffs[f] = { kind: 'changed', oldVal, newVal }
+        hasChange = true
+        summary.cellChanges++
+      }
+    }
+
+    for (const mf of milestoneFields) {
+      const merged = mergedMilestones.find(m => `ms_${m.name}` === mf)!
+      if (merged.onlyIn === 'base') {
+        cellDiffs[mf] = { kind: 'colRemovedOnly' }
+        continue
+      }
+      if (merged.onlyIn === 'target') {
+        cellDiffs[mf] = { kind: 'colAddedOnly' }
+        continue
+      }
+      const oldVal = b[mf]
+      const newVal = t[mf]
+      if (oldVal === newVal) {
+        cellDiffs[mf] = { kind: 'same' }
+        continue
+      }
+      const od = tryParseDate(oldVal)
+      const nd = tryParseDate(newVal)
+      if (od && nd) {
+        if (nd.getTime() === od.getTime()) {
+          cellDiffs[mf] = { kind: 'same' }
+        } else if (nd.getTime() < od.getTime()) {
+          cellDiffs[mf] = { kind: 'dateEarlier', oldVal, newVal, days: dayDiff(od, nd) }
+          hasChange = true
+          summary.cellChanges++
+        } else {
+          cellDiffs[mf] = { kind: 'dateLater', oldVal, newVal, days: dayDiff(nd, od) }
+          hasChange = true
+          summary.cellChanges++
+        }
+      } else {
+        cellDiffs[mf] = { kind: 'changed', oldVal, newVal }
+        hasChange = true
+        summary.cellChanges++
+      }
+    }
+
+    rows.push({
+      rowKey: key,
+      rowStatus: hasChange ? 'modified' : 'same',
+      base: b,
+      target: t,
+      cellDiffs,
+    })
+    if (hasChange) summary.modified++
+  }
+
+  return { rows, mergedMilestones, summary }
+}
