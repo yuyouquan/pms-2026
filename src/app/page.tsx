@@ -1738,6 +1738,10 @@ export default function Home() {
       }
     } : setTasks
     const flatTasks = tableTasks.map(task => ({ ...task, indentLevel: getTaskDepth(task, tableTasks) }))
+    const scopeKey = getScopeKey()
+    const collapsedSet = scopeKey ? (collapsedNodes[scopeKey] || new Set<string>()) : new Set<string>()
+    const expandEnabled = scopeKey !== null
+    const visibleTasks = expandEnabled ? filterByCollapsed(flatTasks, collapsedSet) : flatTasks
     const getColumns = (): ColumnsType<any> => {
       const cols: ColumnsType<any> = []
       if (visibleColumns.includes('id')) cols.push({ title: '序号', dataIndex: 'id', key: 'id', width: 130, fixed: 'left', render: (id: string, record: any) => {
@@ -1748,6 +1752,21 @@ export default function Home() {
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: depth * 20 }}>
             {isEditMode && <DragHandle />}
+            {expandEnabled && hasChildren(record.id, tableTasks) && (
+              <span
+                onClick={(e) => { e.stopPropagation(); toggleNode(record.id) }}
+                style={{
+                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
+                  width: 14, height: 14, color: '#9ca3af', transition: 'transform 0.15s',
+                  transform: collapsedSet.has(record.id) ? 'rotate(-90deg)' : 'rotate(0deg)',
+                }}
+              >
+                <CaretDownOutlined style={{ fontSize: 10 }} />
+              </span>
+            )}
+            {expandEnabled && !hasChildren(record.id, tableTasks) && (
+              <span style={{ display: 'inline-block', width: 14 }} />
+            )}
             {canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} style={{ color: '#6366f1' }} onClick={(e) => { e.stopPropagation(); handleAddSubTask(record.id) }} /></Tooltip>}
             <span style={{ fontWeight: depth === 0 ? 600 : 500, color: depth === 0 ? '#111827' : '#4b5563', fontSize: 13 }}>{id}</span>
           </div>
@@ -1890,7 +1909,7 @@ export default function Home() {
             <span style={{ fontSize: 12, color: '#ad8b00' }}>- 拖拽手柄排序，点击单元格编辑，完成后点击保存</span>
           </div>
         )}
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTableDragEnd}><SortableContext items={flatTasks.map(t => t.id)} strategy={verticalListSortingStrategy}><Table className={tableClassName} dataSource={flatTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} size="middle" /></SortableContext></DndContext>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTableDragEnd}><SortableContext items={visibleTasks.map(t => t.id)} strategy={verticalListSortingStrategy}><Table className={tableClassName} dataSource={visibleTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} size="middle" /></SortableContext></DndContext>
         {isEditMode && (
           <div style={{ padding: '12px 16px', borderTop: '1px solid #f3f4f6', background: '#f8fafc' }}>
             <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%', borderRadius: 6, height: 36 }} onClick={() => {
