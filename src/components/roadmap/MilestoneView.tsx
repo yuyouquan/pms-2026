@@ -6,11 +6,16 @@ import {
 } from 'antd'
 import {
   FilterOutlined, SettingOutlined, SaveOutlined, FullscreenOutlined, FullscreenExitOutlined,
-  EyeOutlined, PlusOutlined, CameraOutlined, HistoryOutlined, DeleteOutlined,
+  EyeOutlined, PlusOutlined, CameraOutlined, HistoryOutlined, DeleteOutlined, SwapOutlined, ArrowRightOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { RoadmapViewConfig } from '@/types'
-import { aggregateMilestones, generateTableData, saveView, loadAllViews, deleteView } from './utils'
+import {
+  aggregateMilestones, generateTableData, saveView, loadAllViews, deleteView,
+  SOFTWARE_FIXED_COLUMNS, MACHINE_FIXED_COLUMNS, getFixedColumnsForType, getDefaultVisibleColumns,
+  diffSnapshots, buildCompareColumns,
+  type DiffResult, type SnapshotLike,
+} from './utils'
 
 const PROJECT_TYPES = ['软件产品项目', '整机产品项目']
 
@@ -20,33 +25,6 @@ const PROJECT_TYPE_MAP: Record<string, string> = {
 }
 
 const DEFAULT_VIEW_ID = '__default__'
-
-// 软件产品项目固定列
-const SOFTWARE_FIXED_COLUMNS = [
-  { key: 'projectName', title: '项目名称' },
-  { key: 'versionType', title: '版本类型' },
-  { key: 'currentNode', title: '当前节点' },
-  { key: 'chipPlatform', title: '芯片平台' },
-  { key: 'status', title: '状态' },
-  { key: 'spm', title: 'SPM' },
-]
-
-// 整机产品项目固定列
-const MACHINE_FIXED_COLUMNS = [
-  { key: 'tosVersion', title: 'tOS版本' },
-  { key: 'brand', title: '品牌' },
-  { key: 'productType', title: '产品类型' },
-  { key: 'productLine', title: '产品线' },
-  { key: 'projectName', title: '项目名称' },
-  { key: 'chipPlatform', title: '芯片平台' },
-  { key: 'memory', title: '内存' },
-  { key: 'versionType', title: '版本类型' },
-  { key: 'developMode', title: '开发模式' },
-  { key: 'status', title: '状态' },
-  { key: 'spm', title: 'SPM' },
-]
-
-const FIXED_COLUMNS = SOFTWARE_FIXED_COLUMNS
 
 const marketColors: Record<string, string> = {
   'OP': '#6366f1', 'TR': '#52c41a', 'RU': '#faad14',
@@ -61,14 +39,6 @@ interface MilestoneViewProps {
   initialProjectType?: string
   onProjectTypeChange?: (type: string) => void
   hideProjectTypeTabs?: boolean
-}
-
-function getFixedColumnsForType(projectType: string) {
-  return projectType === '整机产品项目' ? MACHINE_FIXED_COLUMNS : SOFTWARE_FIXED_COLUMNS
-}
-
-function getDefaultVisibleColumns(projectType: string) {
-  return getFixedColumnsForType(projectType).map(c => c.key)
 }
 
 export default function MilestoneView({ projects, marketPlanData, level1Tasks, onViewProject, initialProjectType, onProjectTypeChange, hideProjectTypeTabs }: MilestoneViewProps) {
@@ -107,6 +77,14 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
   }[]>([])
   const [activeSnapshotId, setActiveSnapshotId] = useState<string | null>(null)
 
+  // Compare mode state (added 2026-04-10)
+  type CompareSource = 'live' | string
+  const [compareMode, setCompareMode] = useState(false)
+  const [compareBase, setCompareBase] = useState<CompareSource>('live')
+  const [compareTarget, setCompareTarget] = useState<CompareSource>('live')
+  const [onlyDiffRows, setOnlyDiffRows] = useState(true)
+  const [showCompareModal, setShowCompareModal] = useState(false)
+
   // Temp filter state for modal
   const [tempFilters, setTempFilters] = useState(filters)
 
@@ -118,6 +96,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       setFilters({})
       setCurrentPage(1)
       setActiveSnapshotId(null)
+      setCompareMode(false)
     }
   }, [initialProjectType])
 
@@ -130,6 +109,11 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
   useEffect(() => {
     setCurrentPage(1)
   }, [projectType])
+
+  // Reset page on compare mode toggle
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [compareMode])
 
   // Update visible columns when projectType changes (add/remove market column)
   useEffect(() => {
@@ -341,15 +325,94 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     message.success('快照已删除')
   }
 
-  // Get current display data (snapshot or live)
-  const activeSnapshot = activeSnapshotId ? baselineSnapshots.find(s => s.id === activeSnapshotId) : null
-  const displayData = activeSnapshot ? activeSnapshot.data : tableData
-  const displayMilestones = activeSnapshot ? activeSnapshot.milestones : milestones
+  const formatCompareSrcLabel = (src: CompareSource): string => {
+    if (src === 'live') return '实时数据'
+    const snap = baselineSnapshots.find(s => s.id === src)
+    return snap ? snap.version : src
+  }
 
-  // Rebuild columns for snapshot milestones
+  // Compare mode: resolve sources and compute diff
+  const resolveCompareSource = (src: CompareSource): SnapshotLike => {
+    if (src === 'live') {
+      return { data: allTableData, milestones: milestones.map(m => ({ name: m.name, order: m.order })) }
+    }
+    const snap = baselineSnapshots.find(s => s.id === src)
+    if (!snap) {
+      return { data: [], milestones: [] }
+    }
+    return { data: snap.data, milestones: snap.milestones }
+  }
+
+  const diffResult = useMemo(() => {
+    if (!compareMode) return null
+    const baseSrc = resolveCompareSource(compareBase)
+    const targetSrc = resolveCompareSource(compareTarget)
+    return diffSnapshots(baseSrc, targetSrc, projectType)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compareMode, compareBase, compareTarget, allTableData, milestones, baselineSnapshots, projectType])
+
+  // Auto-exit compare mode if a selected snapshot is deleted
+  useEffect(() => {
+    if (!compareMode) return
+    const baseOk = compareBase === 'live' || baselineSnapshots.some(s => s.id === compareBase)
+    const targetOk = compareTarget === 'live' || baselineSnapshots.some(s => s.id === compareTarget)
+    if (!baseOk || !targetOk) {
+      setCompareMode(false)
+      message.info('所选快照已被删除，已退出对比')
+    }
+  }, [baselineSnapshots, compareMode, compareBase, compareTarget])
+
+  // Get current display data (compare / snapshot / live)
+  const activeSnapshot = activeSnapshotId ? baselineSnapshots.find(s => s.id === activeSnapshotId) : null
+
+  const displayData: any[] = useMemo(() => {
+    if (compareMode && diffResult) {
+      let rows = diffResult.rows
+      // Apply existing filters to diff rows (using target ?? base for field lookup)
+      if (filters.productLine?.length) {
+        rows = rows.filter(r => {
+          const src = r.target ?? r.base
+          return src && filters.productLine!.includes(src.productLine)
+        })
+      }
+      if (filters.chipPlatform?.length) {
+        rows = rows.filter(r => {
+          const src = r.target ?? r.base
+          return src && filters.chipPlatform!.includes(src.chipPlatform)
+        })
+      }
+      if (filters.status?.length) {
+        rows = rows.filter(r => {
+          const src = r.target ?? r.base
+          return src && filters.status!.includes(src.status)
+        })
+      }
+      if (filters.tosVersion?.length) {
+        rows = rows.filter(r => {
+          const src = r.target ?? r.base
+          return src && filters.tosVersion!.includes(src.tosVersion)
+        })
+      }
+      if (onlyDiffRows) {
+        rows = rows.filter(r => r.rowStatus !== 'same')
+      }
+      return rows
+    }
+    return activeSnapshot ? activeSnapshot.data : tableData
+  }, [compareMode, diffResult, onlyDiffRows, filters, activeSnapshot, tableData])
+
+  const displayMilestones = compareMode && diffResult
+    ? diffResult.mergedMilestones
+    : (activeSnapshot ? activeSnapshot.milestones : milestones)
+
+  // Rebuild columns (compare / snapshot / live)
   const displayColumns = useMemo((): ColumnsType<any> => {
+    if (compareMode && diffResult) {
+      return buildCompareColumns(diffResult, visibleColumns, projectType, onViewProject)
+    }
     if (!activeSnapshot) return columns
-    // Rebuild with snapshot milestones using same type-aware logic
+
+    // Existing snapshot column logic (unchanged)
     const cols: ColumnsType<any> = []
     const snapshotType = activeSnapshot.projectType
     const typeColumns = getFixedColumnsForType(snapshotType)
@@ -382,7 +445,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       ),
     })
     return cols
-  }, [activeSnapshot, visibleColumns, displayMilestones, onViewProject])
+  }, [compareMode, diffResult, activeSnapshot, visibleColumns, displayMilestones, onViewProject, projectType, columns])
 
   const hasActiveFilters = Object.values(filters).some(v => v && v.length > 0)
 
@@ -412,6 +475,14 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       className="pms-table"
       columns={displayColumns}
       dataSource={displayData}
+      rowKey={(r: any) => compareMode ? r.rowKey : r.key}
+      rowClassName={(r: any) => {
+        if (!compareMode) return ''
+        if (r.rowStatus === 'added') return 'row-diff-added'
+        if (r.rowStatus === 'removed') return 'row-diff-removed'
+        if (r.rowStatus === 'modified') return 'row-diff-modified'
+        return ''
+      }}
       scroll={{ x: 'max-content' }}
       size="small"
       pagination={{
@@ -426,7 +497,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
           setPageSize(size)
         },
       }}
-      locale={{ emptyText: <Empty description="暂无数据" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+      locale={{ emptyText: <Empty description={compareMode && onlyDiffRows ? '两个版本无差异' : '暂无数据'} image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
     />
   )
 
@@ -452,12 +523,18 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         <Button icon={<SettingOutlined />} size="small" style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
       </Tooltip>
       <div style={{ width: 1, height: 18, background: '#e0e0e0' }} />
-      <Tooltip title="将当前数据创建基线快照">
-        <Button icon={<CameraOutlined />} size="small" style={{ borderRadius: 6 }} onClick={handleCreateSnapshot} disabled={!!activeSnapshotId}>
+      <Tooltip title={compareMode ? '对比模式下不可创建快照' : '将当前数据创建基线快照'}>
+        <Button
+          icon={<CameraOutlined />}
+          size="small"
+          style={{ borderRadius: 6 }}
+          onClick={handleCreateSnapshot}
+          disabled={!!activeSnapshotId || compareMode}
+        >
           快照
         </Button>
       </Tooltip>
-      {currentSnapshots.length > 0 && (
+      {!compareMode && currentSnapshots.length > 0 && (
         <Select
           value={activeSnapshotId || 'live'}
           onChange={(val) => setActiveSnapshotId(val === 'live' ? null : val)}
@@ -485,6 +562,19 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
           ))}
         </Select>
       )}
+      <Tooltip title={currentSnapshots.length === 0 ? '请先至少创建一个快照' : '对比两个版本'}>
+        <Button
+          icon={<SwapOutlined />}
+          size="small"
+          style={{ borderRadius: 6 }}
+          onClick={() => setShowCompareModal(true)}
+          disabled={currentSnapshots.length === 0}
+          type={compareMode ? 'primary' : 'default'}
+          ghost={compareMode}
+        >
+          {compareMode ? '对比中' : '对比'}
+        </Button>
+      </Tooltip>
       <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
         <Button icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />} size="small" style={{ borderRadius: 6 }} onClick={() => setIsFullscreen(!isFullscreen)} />
       </Tooltip>
@@ -510,6 +600,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
                   setFilters({})
                   setCurrentPage(1)
                   setActiveSnapshotId(null)
+                  setCompareMode(false)
                 }}
                 style={{
                   padding: '6px 20px', borderRadius: 18, cursor: 'pointer',
@@ -588,8 +679,8 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         </div>
       </div>
 
-      {/* 快照提示条 */}
-      {activeSnapshot && (
+      {/* 快照提示条（单快照查看时） */}
+      {activeSnapshot && !compareMode && (
         <div style={{
           padding: '8px 16px', marginBottom: 12, borderRadius: 8,
           background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
@@ -605,6 +696,36 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
             <Tag color="blue" style={{ fontSize: 11 }}>{activeSnapshot.createdAt}</Tag>
           </Space>
           <Button type="link" size="small" onClick={() => setActiveSnapshotId(null)}>返回实时数据</Button>
+        </div>
+      )}
+
+      {/* 对比摘要条（对比模式时） */}
+      {compareMode && diffResult && (
+        <div style={{
+          padding: '10px 16px', marginBottom: 12, borderRadius: 8,
+          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+          border: '1px solid rgba(217,119,6,0.25)',
+          boxShadow: '0 2px 8px rgba(217,119,6,0.1)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          flexWrap: 'wrap', gap: 8,
+        }}>
+          <Space size={10} wrap>
+            <SwapOutlined style={{ color: '#b45309', fontSize: 16 }} />
+            <span style={{ fontSize: 13, color: '#92400e', fontWeight: 600 }}>对比模式</span>
+            <Tag color="default" style={{ fontSize: 11 }}>基准: {formatCompareSrcLabel(compareBase)}</Tag>
+            <ArrowRightOutlined style={{ color: '#9ca3af', fontSize: 11 }} />
+            <Tag color="gold" style={{ fontSize: 11 }}>对比: {formatCompareSrcLabel(compareTarget)}</Tag>
+            <span style={{ color: '#22c55e', fontSize: 12 }}>🟢 新增 {diffResult.summary.added} 行</span>
+            <span style={{ color: '#ef4444', fontSize: 12 }}>🔴 删除 {diffResult.summary.removed} 行</span>
+            <span style={{ color: '#d97706', fontSize: 12 }}>🟠 修改 {diffResult.summary.modified} 行（共 {diffResult.summary.cellChanges} 处字段变化）</span>
+          </Space>
+          <Space size={6}>
+            <Checkbox checked={onlyDiffRows} onChange={e => { setOnlyDiffRows(e.target.checked); setCurrentPage(1) }}>
+              <span style={{ fontSize: 12 }}>只看有差异的行</span>
+            </Checkbox>
+            <Button size="small" onClick={() => setShowCompareModal(true)}>切换版本</Button>
+            <Button size="small" danger onClick={() => setCompareMode(false)}>退出对比</Button>
+          </Space>
         </div>
       )}
 
@@ -752,6 +873,68 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       >
         <div style={{ marginBottom: 12 }}>{toolbarActions}</div>
         {tableComponent}
+      </Modal>
+
+      {/* Compare Entry Modal */}
+      <Modal
+        title="选择要对比的两个版本"
+        open={showCompareModal}
+        onCancel={() => setShowCompareModal(false)}
+        onOk={() => {
+          if (compareBase === compareTarget) {
+            message.warning('请选择两个不同的版本')
+            return
+          }
+          setCompareMode(true)
+          setActiveSnapshotId(null)
+          setShowCompareModal(false)
+          setCurrentPage(1)
+        }}
+        okText="开始对比"
+        cancelText="取消"
+        width={480}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '8px 0' }}>
+          <div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>基准版本（旧）</div>
+            <Select
+              value={compareBase}
+              onChange={setCompareBase}
+              style={{ width: '100%' }}
+            >
+              <Select.Option value="live">
+                <span style={{ color: '#52c41a', marginRight: 4 }}>●</span>实时数据
+              </Select.Option>
+              {currentSnapshots.map(s => (
+                <Select.Option key={s.id} value={s.id}>
+                  <HistoryOutlined style={{ marginRight: 4, color: '#6366f1' }} />
+                  {s.version}
+                  <span style={{ color: '#9ca3af', marginLeft: 8, fontSize: 11 }}>{s.createdAt}</span>
+                </Select.Option>
+              ))}
+            </Select>
+          </div>
+          <div style={{ textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>↓ 对比到 ↓</div>
+          <div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>对比版本（新）</div>
+            <Select
+              value={compareTarget}
+              onChange={setCompareTarget}
+              style={{ width: '100%' }}
+            >
+              <Select.Option value="live">
+                <span style={{ color: '#52c41a', marginRight: 4 }}>●</span>实时数据
+              </Select.Option>
+              {currentSnapshots.map(s => (
+                <Select.Option key={s.id} value={s.id}>
+                  <HistoryOutlined style={{ marginRight: 4, color: '#6366f1' }} />
+                  {s.version}
+                  <span style={{ color: '#9ca3af', marginLeft: 8, fontSize: 11 }}>{s.createdAt}</span>
+                </Select.Option>
+              ))}
+            </Select>
+          </div>
+        </div>
       </Modal>
     </div>
   )
