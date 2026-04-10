@@ -60,8 +60,21 @@ const globalStyles = `
 `
 
 // DHTMLX Gantt组件
-function DHTMLXGantt({ tasks, onTaskClick, readOnly = false }: { tasks: any[], onTaskClick?: (task: any) => void, readOnly?: boolean }) {
+function DHTMLXGantt({
+  tasks,
+  onTaskClick,
+  readOnly = false,
+  collapsedIds,
+  onCollapsedChange,
+}: {
+  tasks: any[]
+  onTaskClick?: (task: any) => void
+  readOnly?: boolean
+  collapsedIds?: Set<string>
+  onCollapsedChange?: (updater: (prev: Set<string>) => Set<string>) => void
+}) {
   const ganttContainer = useRef<HTMLDivElement>(null)
+  const suppressFeedback = useRef(false)
   
   useEffect(() => {
     if (!ganttContainer.current) return
@@ -113,8 +126,19 @@ function DHTMLXGantt({ tasks, onTaskClick, readOnly = false }: { tasks: any[], o
       }))
     }
     
+    suppressFeedback.current = true
     gantt.parse(ganttData)
-    
+    queueMicrotask(() => { suppressFeedback.current = false })
+
+    const openHandler = gantt.attachEvent('onTaskOpened', (id: any) => {
+      if (suppressFeedback.current) return
+      onCollapsedChange?.((prev) => { const s = new Set(prev); s.delete(String(id)); return s })
+    })
+    const closeHandler = gantt.attachEvent('onTaskClosed', (id: any) => {
+      if (suppressFeedback.current) return
+      onCollapsedChange?.((prev) => { const s = new Set(prev); s.add(String(id)); return s })
+    })
+
     // 点击事件
     if (onTaskClick) {
       gantt.attachEvent('onTaskClick', (id: number) => {
@@ -125,10 +149,27 @@ function DHTMLXGantt({ tasks, onTaskClick, readOnly = false }: { tasks: any[], o
     }
     
     return () => {
+      gantt.detachEvent(openHandler)
+      gantt.detachEvent(closeHandler)
       gantt.clearAll()
     }
   }, [tasks, readOnly])
-  
+
+  useEffect(() => {
+    if (!ganttContainer.current) return
+    if (!(gantt as any).$container) return
+    suppressFeedback.current = true
+    gantt.eachTask((task: any) => {
+      const id = String(task.id)
+      const shouldOpen = !(collapsedIds && collapsedIds.has(id))
+      if (task.$open !== shouldOpen) {
+        if (shouldOpen) gantt.open(id)
+        else gantt.close(id)
+      }
+    })
+    queueMicrotask(() => { suppressFeedback.current = false })
+  }, [collapsedIds])
+
   return <div ref={ganttContainer} style={{ width: '100%', height: '500px' }} />
 }
 import { 
@@ -180,7 +221,10 @@ import {
   StopOutlined,
   DeploymentUnitOutlined,
   DatabaseOutlined,
-  ShareAltOutlined
+  ShareAltOutlined,
+  PlusSquareOutlined,
+  MinusSquareOutlined,
+  CaretDownOutlined
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { compareVersions, compareVersionsForTable, CompareTableRow, FieldDiff } from '@/lib/versionCompare'
@@ -682,6 +726,9 @@ export default function Home() {
   // 项目空间-计划
   const [projectPlanLevel, setProjectPlanLevel] = useState<string>('level1')
   const [projectPlanViewMode, setProjectPlanViewMode] = useState<'table' | 'horizontal' | 'gantt'>('table')
+  // Collapsed tree nodes per scope (project + level + optional plan)
+  // Empty Set = fully expanded (default). Presence in Set = that node is collapsed.
+  const [collapsedNodes, setCollapsedNodes] = useState<Record<string, Set<string>>>({})
   const [projectPlanOverviewTab, setProjectPlanOverviewTab] = useState<string>('overview')
   const [planMetaCollapsed, setPlanMetaCollapsed] = useState(false)
 
@@ -1141,6 +1188,68 @@ export default function Home() {
     message.success(`已添加子任务: ${newId}`)
   }
 
+  // ============================================================
+  // Plan tree expand/collapse helpers (added 2026-04-10)
+  // ============================================================
+
+  const getScopeKey = (): string | null => {
+    if (activeModule !== 'projectSpace') return null
+    if (!selectedProject) return null
+    if (projectPlanLevel === 'level1') return `${selectedProject.id}::level1`
+    if (projectPlanLevel === 'level2' && activeLevel2Plan) return `${selectedProject.id}::level2::${activeLevel2Plan}`
+    return null
+  }
+
+  const hasChildren = (id: string, allTasks: any[]): boolean =>
+    allTasks.some(t => t.parentId === id)
+
+  const filterByCollapsed = (flatTasks: any[], collapsedSet: Set<string>): any[] => {
+    if (collapsedSet.size === 0) return flatTasks
+    const byId = new Map(flatTasks.map(t => [t.id, t]))
+    const isHidden = (task: any): boolean => {
+      let cur = task
+      while (cur.parentId) {
+        if (collapsedSet.has(cur.parentId)) return true
+        cur = byId.get(cur.parentId)
+        if (!cur) return false
+      }
+      return false
+    }
+    return flatTasks.filter(t => !isHidden(t))
+  }
+
+  const getAllExpandableIds = (tasksArg: any[]): string[] => {
+    const parentIds = new Set<string>()
+    for (const t of tasksArg) if (t.parentId) parentIds.add(t.parentId)
+    return Array.from(parentIds)
+  }
+
+  const toggleNode = (nodeId: string) => {
+    const key = getScopeKey()
+    if (!key) return
+    setCollapsedNodes(prev => {
+      const cur = new Set(prev[key] || [])
+      if (cur.has(nodeId)) cur.delete(nodeId); else cur.add(nodeId)
+      return { ...prev, [key]: cur }
+    })
+  }
+
+  const expandAll = () => {
+    const key = getScopeKey()
+    if (!key) return
+    setCollapsedNodes(prev => ({ ...prev, [key]: new Set<string>() }))
+  }
+
+  const collapseAll = () => {
+    const key = getScopeKey()
+    if (!key) return
+    const scopeTasks = projectPlanLevel === 'level1'
+      ? tasks
+      : level2PlanTasks.filter(t => t.planId === activeLevel2Plan)
+    const allParents = getAllExpandableIds(scopeTasks)
+    setCollapsedNodes(prev => ({ ...prev, [key]: new Set(allParents) }))
+  }
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id) return
@@ -1443,6 +1552,8 @@ export default function Home() {
 
   const renderGanttChart = (customTasks?: any[]) => {
     const ganttTasks = customTasks || filteredTasks
+    const key = getScopeKey()
+    const collapsedSet = key ? (collapsedNodes[key] || new Set<string>()) : new Set<string>()
     return (
       <div style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
         <DHTMLXGantt
@@ -1451,6 +1562,15 @@ export default function Home() {
             message.info(`点击任务: ${task.text}`)
           }}
           readOnly={!isEditMode}
+          collapsedIds={collapsedSet}
+          onCollapsedChange={(updater) => {
+            if (!key) return
+            setCollapsedNodes(prev => {
+              const current = prev[key] || new Set<string>()
+              const next = updater(current)
+              return { ...prev, [key]: next }
+            })
+          }}
         />
       </div>
     )
@@ -1670,6 +1790,10 @@ export default function Home() {
       }
     } : setTasks
     const flatTasks = tableTasks.map(task => ({ ...task, indentLevel: getTaskDepth(task, tableTasks) }))
+    const scopeKey = getScopeKey()
+    const collapsedSet = scopeKey ? (collapsedNodes[scopeKey] || new Set<string>()) : new Set<string>()
+    const expandEnabled = scopeKey !== null
+    const visibleTasks = expandEnabled ? filterByCollapsed(flatTasks, collapsedSet) : flatTasks
     const getColumns = (): ColumnsType<any> => {
       const cols: ColumnsType<any> = []
       if (visibleColumns.includes('id')) cols.push({ title: '序号', dataIndex: 'id', key: 'id', width: 130, fixed: 'left', render: (id: string, record: any) => {
@@ -1680,6 +1804,21 @@ export default function Home() {
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: depth * 20 }}>
             {isEditMode && <DragHandle />}
+            {expandEnabled && hasChildren(record.id, tableTasks) && (
+              <span
+                onClick={(e) => { e.stopPropagation(); toggleNode(record.id) }}
+                style={{
+                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
+                  width: 14, height: 14, color: '#9ca3af', transition: 'transform 0.15s',
+                  transform: collapsedSet.has(record.id) ? 'rotate(-90deg)' : 'rotate(0deg)',
+                }}
+              >
+                <CaretDownOutlined style={{ fontSize: 10 }} />
+              </span>
+            )}
+            {expandEnabled && !hasChildren(record.id, tableTasks) && (
+              <span style={{ display: 'inline-block', width: 14 }} />
+            )}
             {canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} style={{ color: '#6366f1' }} onClick={(e) => { e.stopPropagation(); handleAddSubTask(record.id) }} /></Tooltip>}
             <span style={{ fontWeight: depth === 0 ? 600 : 500, color: depth === 0 ? '#111827' : '#4b5563', fontSize: 13 }}>{id}</span>
           </div>
@@ -1822,7 +1961,7 @@ export default function Home() {
             <span style={{ fontSize: 12, color: '#ad8b00' }}>- 拖拽手柄排序，点击单元格编辑，完成后点击保存</span>
           </div>
         )}
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTableDragEnd}><SortableContext items={flatTasks.map(t => t.id)} strategy={verticalListSortingStrategy}><Table className={tableClassName} dataSource={flatTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} size="middle" /></SortableContext></DndContext>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTableDragEnd}><SortableContext items={visibleTasks.map(t => t.id)} strategy={verticalListSortingStrategy}><Table className={tableClassName} dataSource={visibleTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} size="middle" /></SortableContext></DndContext>
         {isEditMode && (
           <div style={{ padding: '12px 16px', borderTop: '1px solid #f3f4f6', background: '#f8fafc' }}>
             <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%', borderRadius: 6, height: 36 }} onClick={() => {
@@ -2857,6 +2996,26 @@ export default function Home() {
                     <Tooltip title="自定义列">
                       <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
                     </Tooltip>
+                  )}
+                  {getScopeKey() !== null && (
+                    <>
+                      <Tooltip title="全部展开">
+                        <Button
+                          icon={<PlusSquareOutlined />}
+                          size="small"
+                          style={{ borderRadius: 6 }}
+                          onClick={expandAll}
+                        />
+                      </Tooltip>
+                      <Tooltip title="全部收起">
+                        <Button
+                          icon={<MinusSquareOutlined />}
+                          size="small"
+                          style={{ borderRadius: 6 }}
+                          onClick={collapseAll}
+                        />
+                      </Tooltip>
+                    </>
                   )}
                   <Radio.Group
                     value={projectPlanViewMode === 'horizontal' && projectPlanLevel === 'level2' ? 'table' : projectPlanViewMode}
