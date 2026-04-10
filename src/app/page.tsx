@@ -53,7 +53,7 @@ import WorkTracker from '@/components/work-tracker/WorkTracker'
 import { initialProjects, PROJECT_TYPES, PROJECT_STATUS_CONFIG, mapIpmStatus, PROJECT_TYPE_COLORS } from '@/data/projects'
 import { notifyPublishChanges, notifyDueTasks } from '@/lib/feishu-notify'
 import type { TaskChange, PlanDueNotice, FeishuRecipient } from '@/types/plan-notify'
-import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
+import { exportSheet, exportMergedSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 
 // 全局表格和交互样式
 const globalStyles = `
@@ -2929,9 +2929,110 @@ export default function Home() {
     exportSheet(rows, exportCols, filename, `${levelLabel}竖版`)
   }
 
-  // ========== 导出：横版表格（Task 6 将替换为真实实现）==========
+  // ========== 导出：横版表格 ==========
   const handleExportHorizontalPlan = (_scope: 'current' | 'all') => {
-    message.info('横版导出将在后续任务中实现')
+    // 横版表格仅用于 level1。列结构：版本 | 开发周期 | 阶段A(colSpan=n) | 阶段B(colSpan=m) | ...
+    // 行：按版本号倒序的已发布版本 + 末行"实际"数据。
+    // 注：spec 中说明横版的 current/all 行为一致，_scope 参数保留以维持交互统一。
+
+    const stages = (tasks as any[]).filter((t: any) => !t.parentId).sort((a: any, b: any) => a.order - b.order)
+    const stageGroups = stages.map((stage: any) => {
+      const ms = (tasks as any[]).filter((t: any) => t.parentId === stage.id).sort((a: any, b: any) => a.order - b.order)
+      return { stage, milestones: ms, colSpan: ms.length || 1 }
+    })
+    const allMilestones = stageGroups.flatMap(({ stage, milestones }) =>
+      milestones.length > 0 ? milestones : [stage],
+    )
+
+    if (allMilestones.length === 0) {
+      message.warning('暂无可导出数据')
+      return
+    }
+
+    // 构建 headerMatrix（2 行）与 merges
+    const headerRow0: (string | null)[] = ['版本', '开发周期']
+    const headerRow1: (string | null)[] = [null, null]
+    const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [
+      { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, // 版本 rowSpan=2
+      { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } }, // 开发周期 rowSpan=2
+    ]
+    let colCursor = 2
+    for (const { stage, milestones, colSpan } of stageGroups) {
+      headerRow0.push(stage.taskName)
+      for (let i = 1; i < colSpan; i++) headerRow0.push(null)
+      if (milestones.length > 0) {
+        for (const m of milestones) headerRow1.push(m.taskName)
+      } else {
+        headerRow1.push('-')
+      }
+      merges.push({ s: { r: 0, c: colCursor }, e: { r: 0, c: colCursor + colSpan - 1 } })
+      colCursor += colSpan
+    }
+    const headerMatrix: (string | null)[][] = [headerRow0, headerRow1]
+
+    // 计算各版本的任务（复用 renderHorizontalTable 里的 offset 模拟逻辑）
+    const publishedVersions = versions
+      .filter(v => v.status === '已发布')
+      .sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))
+    const latestNum = publishedVersions.length > 0
+      ? Math.max(...publishedVersions.map(v => parseInt(v.versionNo.replace('V', ''))))
+      : 0
+    const getVersionTasks = (versionNo: string) => {
+      const vNum = parseInt(versionNo.replace('V', ''))
+      if (vNum === latestNum) return tasks as any[]
+      const offsetDays = (latestNum - vNum) * 3
+      return (tasks as any[]).map((t: any) => ({
+        ...t,
+        planStartDate: t.planStartDate ? shiftDateStrForExport(t.planStartDate, -offsetDays) : '',
+        planEndDate: t.planEndDate ? shiftDateStrForExport(t.planEndDate, -offsetDays) : '',
+      }))
+    }
+
+    const calcCycleDays = (list: any[], startKey: string, endKey: string): string | number => {
+      const starts = list.map((t: any) => t[startKey]).filter(Boolean).map((d: string) => new Date(d).getTime())
+      const ends = list.map((t: any) => t[endKey]).filter(Boolean).map((d: string) => new Date(d).getTime())
+      if (starts.length === 0 || ends.length === 0) return '-'
+      const days = Math.ceil((Math.max(...ends) - Math.min(...starts)) / (1000 * 60 * 60 * 24))
+      return days > 0 ? days : '-'
+    }
+
+    // 构建数据矩阵
+    const dataMatrix: (string | number)[][] = []
+
+    // 已发布版本行
+    for (const v of publishedVersions) {
+      const vt = getVersionTasks(v.versionNo)
+      const devCycle = calcCycleDays(vt, 'planStartDate', 'planEndDate')
+      const row: (string | number)[] = [v.versionNo, devCycle]
+      for (const m of allMilestones) {
+        const match = vt.find((t: any) => t.id === m.id)
+        row.push(match?.planEndDate || '-')
+      }
+      dataMatrix.push(row)
+    }
+
+    // 实际数据行
+    const actualCycle = calcCycleDays(tasks as any[], 'actualStartDate', 'actualEndDate')
+    const actualRow: (string | number)[] = ['实际', actualCycle]
+    for (const m of allMilestones) {
+      const t = (tasks as any[]).find((x: any) => x.id === m.id)
+      actualRow.push(t?.actualEndDate || '-')
+    }
+    dataMatrix.push(actualRow)
+
+    // 列宽：版本 10、开发周期 10、各里程碑 14
+    const colWidths = [10, 10, ...allMilestones.map(() => 14)]
+
+    const projectName = selectedProject?.name || '项目'
+    const filename = `项目空间计划_${projectName}_一级计划_横版_${exportTimestamp()}.xlsx`
+    exportMergedSheet(headerMatrix, merges, dataMatrix, colWidths, filename, '一级计划横版')
+  }
+
+  // 横版导出辅助：将日期字符串偏移 N 天
+  const shiftDateStrForExport = (dateStr: string, deltaDays: number): string => {
+    const d = new Date(dateStr)
+    d.setDate(d.getDate() + deltaDays)
+    return d.toISOString().split('T')[0]
   }
 
   // 项目空间 - 计划模块
