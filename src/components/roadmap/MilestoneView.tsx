@@ -6,7 +6,7 @@ import {
 } from 'antd'
 import {
   FilterOutlined, SettingOutlined, SaveOutlined, FullscreenOutlined, FullscreenExitOutlined,
-  EyeOutlined, PlusOutlined, CameraOutlined, HistoryOutlined, DeleteOutlined,
+  EyeOutlined, PlusOutlined, CameraOutlined, HistoryOutlined, DeleteOutlined, SwapOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { RoadmapViewConfig } from '@/types'
@@ -500,12 +500,18 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         <Button icon={<SettingOutlined />} size="small" style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
       </Tooltip>
       <div style={{ width: 1, height: 18, background: '#e0e0e0' }} />
-      <Tooltip title="将当前数据创建基线快照">
-        <Button icon={<CameraOutlined />} size="small" style={{ borderRadius: 6 }} onClick={handleCreateSnapshot} disabled={!!activeSnapshotId}>
+      <Tooltip title={compareMode ? '对比模式下不可创建快照' : '将当前数据创建基线快照'}>
+        <Button
+          icon={<CameraOutlined />}
+          size="small"
+          style={{ borderRadius: 6 }}
+          onClick={handleCreateSnapshot}
+          disabled={!!activeSnapshotId || compareMode}
+        >
           快照
         </Button>
       </Tooltip>
-      {currentSnapshots.length > 0 && (
+      {!compareMode && currentSnapshots.length > 0 && (
         <Select
           value={activeSnapshotId || 'live'}
           onChange={(val) => setActiveSnapshotId(val === 'live' ? null : val)}
@@ -533,6 +539,19 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
           ))}
         </Select>
       )}
+      <Tooltip title={currentSnapshots.length === 0 ? '请先至少创建一个快照' : '对比两个版本'}>
+        <Button
+          icon={<SwapOutlined />}
+          size="small"
+          style={{ borderRadius: 6 }}
+          onClick={() => setShowCompareModal(true)}
+          disabled={currentSnapshots.length === 0}
+          type={compareMode ? 'primary' : 'default'}
+          ghost={compareMode}
+        >
+          {compareMode ? '对比中' : '对比'}
+        </Button>
+      </Tooltip>
       <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
         <Button icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />} size="small" style={{ borderRadius: 6 }} onClick={() => setIsFullscreen(!isFullscreen)} />
       </Tooltip>
