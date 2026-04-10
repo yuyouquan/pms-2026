@@ -1193,6 +1193,11 @@ export default function Home() {
   // ============================================================
 
   const getScopeKey = (): string | null => {
+    if (activeModule === 'config') {
+      if (planLevel === 'level1') return `config::${selectedProjectType}::level1`
+      if (planLevel === 'level2') return `config::${selectedProjectType}::level2::${selectedPlanType}`
+      return null
+    }
     if (activeModule !== 'projectSpace') return null
     if (!selectedProject) return null
     if (projectPlanLevel === 'level1') return `${selectedProject.id}::level1`
@@ -1243,9 +1248,15 @@ export default function Home() {
   const collapseAll = () => {
     const key = getScopeKey()
     if (!key) return
-    const scopeTasks = projectPlanLevel === 'level1'
-      ? tasks
-      : level2PlanTasks.filter(t => t.planId === activeLevel2Plan)
+    let scopeTasks: any[]
+    if (activeModule === 'config') {
+      // Config center's renderTaskTable uses the shared `tasks` state for both L1 and L2
+      scopeTasks = tasks
+    } else if (projectPlanLevel === 'level1') {
+      scopeTasks = tasks
+    } else {
+      scopeTasks = level2PlanTasks.filter(t => t.planId === activeLevel2Plan)
+    }
     const allParents = getAllExpandableIds(scopeTasks)
     setCollapsedNodes(prev => ({ ...prev, [key]: new Set(allParents) }))
   }
@@ -3950,6 +3961,16 @@ export default function Home() {
                               <Tooltip title="自定义列">
                                 <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
                               </Tooltip>
+                              {getScopeKey() !== null && (
+                                <>
+                                  <Tooltip title="全部展开">
+                                    <Button icon={<PlusSquareOutlined />} style={{ borderRadius: 6 }} onClick={expandAll} />
+                                  </Tooltip>
+                                  <Tooltip title="全部收起">
+                                    <Button icon={<MinusSquareOutlined />} style={{ borderRadius: 6 }} onClick={collapseAll} />
+                                  </Tooltip>
+                                </>
+                              )}
                             </Space>
                           </Col>
                         </Row>
