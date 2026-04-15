@@ -2,13 +2,15 @@
 
 import { useState, useMemo } from 'react'
 import {
-  Card, Tabs, Row, Col, Space, Divider, Tag, Menu, Button, Select,
-  Input, Tooltip, Modal, Form, Checkbox, message,
+  Card, Tabs, Table, Row, Col, Space, Divider, Tag, Menu, Button, Select,
+  Input, Tooltip, Modal, Form, Checkbox, message, Progress, Popconfirm,
+  DatePicker, Avatar,
 } from 'antd'
 import {
   CalendarOutlined, SwapOutlined, PlusOutlined, SaveOutlined,
-  HistoryOutlined, SearchOutlined, AppstoreOutlined,
+  HistoryOutlined, SearchOutlined, AppstoreOutlined, EditOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, PlusSquareOutlined, MinusSquareOutlined,
+  DeleteOutlined, CaretDownOutlined,
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -150,7 +152,6 @@ export default function ConfigContainer() {
 
     const getColumns = (): ColumnsType<any> => {
       const cols: ColumnsType<any> = []
-      // Simplified columns for config context - same structure as page.tsx
       if (visibleColumns.includes('id')) cols.push({ title: '序号', dataIndex: 'id', key: 'id', width: 130, fixed: 'left', render: (id: string, record: any) => {
         const depth = record.indentLevel || 0
         const isLevel2Mode = planLevel === 'level2'
@@ -161,7 +162,7 @@ export default function ConfigContainer() {
             {isEditMode && <DragHandle />}
             {expandEnabled && hasChildren(record.id, tableTasks) && (
               <span onClick={(e) => { e.stopPropagation(); toggleNode(record.id) }} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', width: 14, height: 14, color: '#9ca3af', transition: 'transform 0.15s', transform: collapsedSet.has(record.id) ? 'rotate(-90deg)' : 'rotate(0deg)' }}>
-                <span style={{ fontSize: 10 }}>&#9660;</span>
+                <CaretDownOutlined style={{ fontSize: 10 }} />
               </span>
             )}
             {expandEnabled && !hasChildren(record.id, tableTasks) && <span style={{ display: 'inline-block', width: 14 }} />}
@@ -173,25 +174,88 @@ export default function ConfigContainer() {
       if (visibleColumns.includes('taskName')) cols.push({ title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 220, render: (name: string, record: any) => {
         const depth = record.indentLevel || 0
         if (isEditMode) return <Input className="pms-edit-input" value={name} size="small" style={{ fontWeight: depth === 0 ? 600 : 400 }} onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, taskName: e.target.value } : t); currentSetTasks(updated) }} />
-        return <span style={{ color: depth === 0 ? '#111827' : '#4b5563', fontWeight: depth === 0 ? 600 : 400 }}>{name}</span>
+        return (
+          <div style={{ paddingLeft: depth * 16, display: 'flex', alignItems: 'center', gap: 4 }}>
+            {depth > 0 && <span style={{ color: '#e5e7eb', fontSize: 11, flexShrink: 0 }}>{depth === 1 ? '├' : '└'}</span>}
+            <span style={{ color: depth === 0 ? '#111827' : depth === 1 ? '#4b5563' : '#9ca3af', fontWeight: depth === 0 ? 600 : 400 }}>{name}</span>
+          </div>
+        )
       } })
-      if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 13 }}>{val || '-'}</span> })
+      if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Space size={4}><Avatar size={18} style={{ background: 'linear-gradient(135deg, #4338ca, #6366f1)', fontSize: 10 }}>{val[0]}</Avatar><span style={{ fontSize: 13 }}>{val}</span></Space> : <span style={{ color: '#e5e7eb' }}>-</span>) })
+      if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>) })
+      if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, planStartDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span> })
+      if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, planEndDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span> })
+      if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val}天</span> })
       if (visibleColumns.includes('status')) cols.push({ title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={s === '已完成' ? 'success' : s === '进行中' ? 'processing' : 'default'} style={{ borderRadius: 4, fontSize: 12 }}>{s}</Tag> })
-      if (visibleColumns.includes('progress')) cols.push({ title: '进度', dataIndex: 'progress', key: 'progress', width: 100, render: (p: number) => <span>{p}%</span> })
+      if (visibleColumns.includes('progress')) cols.push({ title: '进度', dataIndex: 'progress', key: 'progress', width: 130, render: (p: number) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Progress percent={p} size="small" showInfo={false} strokeColor={p === 100 ? '#52c41a' : '#6366f1'} style={{ flex: 1, marginBottom: 0 }} />
+          <span style={{ fontSize: 11, color: p === 100 ? '#52c41a' : '#4b5563', fontWeight: 500, minWidth: 32 }}>{p}%</span>
+        </div>
+      ) })
+      if (isEditMode) cols.push({ title: '操作', key: 'action', width: 60, fixed: 'right', render: (_: any, record: any) => (<Popconfirm title="确认删除" description={`删除 "${record.taskName}" 及其子任务？`} onConfirm={() => { const filtered = tableTasks.filter((t: any) => t.id !== record.id && t.parentId !== record.id && !(t.parentId && tableTasks.find((p2: any) => p2.id === t.parentId)?.parentId === record.id)); currentSetTasks(filtered); message.success(`已删除任务: ${record.id}`) }} okText="确认" cancelText="取消"><Button type="text" icon={<DeleteOutlined />} size="small" danger style={{ borderRadius: 4 }} /></Popconfirm>) })
       return cols
     }
 
+    const handleTableDragEnd = (event: DragEndEvent) => {
+      const { active, over } = event
+      if (!over || active.id === over.id) return
+      const activeId = String(active.id)
+      const overId = String(over.id)
+      const activeTask = tableTasks.find((t: any) => t.id === activeId)
+      const overTask = tableTasks.find((t: any) => t.id === overId)
+      if (!activeTask || !overTask) return
+      if (activeTask.parentId !== overTask.parentId) { message.warning('只能在同级任务之间拖动'); return }
+      const collectDescendants = (parentId: string, allTasks: any[]): any[] => {
+        const children = allTasks.filter((t: any) => t.parentId === parentId); const result: any[] = []
+        for (const child of children) { result.push(child); result.push(...collectDescendants(child.id, allTasks)) }
+        return result
+      }
+      const descendants = collectDescendants(activeId, tableTasks)
+      const movedBlock = [activeTask, ...descendants]
+      const movedIds = new Set(movedBlock.map((t: any) => t.id))
+      const remaining = tableTasks.filter((t: any) => !movedIds.has(t.id))
+      const overIndex = remaining.findIndex((t: any) => t.id === overId)
+      if (overIndex === -1) return
+      const overDescendants = collectDescendants(overId, remaining)
+      const insertAfterIndex = overIndex + overDescendants.length
+      const originalActiveIndex = tableTasks.findIndex((t: any) => t.id === activeId)
+      const originalOverIndex = tableTasks.findIndex((t: any) => t.id === overId)
+      const movingDown = originalActiveIndex < originalOverIndex
+      const insertIndex = movingDown ? insertAfterIndex + 1 : overIndex
+      const newTasks = [...remaining]; newTasks.splice(insertIndex, 0, ...movedBlock)
+      const result = newTasks.map((t: any) => ({ ...t }))
+      const counterMap = new Map<string, number>(); const idMapping = new Map<string, string>()
+      for (const task of result) { if (!task.parentId) { const count = (counterMap.get('root') || 0) + 1; counterMap.set('root', count); const newId = String(count); idMapping.set(task.id, newId); task.id = newId; task.order = count } }
+      for (const task of result) { if (task.parentId && idMapping.has(task.parentId)) { const np = idMapping.get(task.parentId)!; const k = `child_${np}`; const c = (counterMap.get(k) || 0) + 1; counterMap.set(k, c); const ni = `${np}.${c}`; idMapping.set(task.id, ni); task.parentId = np; task.id = ni; task.order = c } }
+      for (const task of result) { if (task.parentId && !idMapping.has(task.id) && idMapping.has(task.parentId)) { const np = idMapping.get(task.parentId)!; const k = `child_${np}`; const c = (counterMap.get(k) || 0) + 1; counterMap.set(k, c); const ni = `${np}.${c}`; idMapping.set(task.id, ni); task.parentId = np; task.id = ni; task.order = c } }
+      currentSetTasks(result); message.success('任务顺序已更新，序号已重新生成')
+    }
+
     const TableComponents = isEditMode ? { body: { row: SortableRow } } : undefined
+    const tableClassName = `pms-table ${isEditMode ? 'pms-table-edit' : ''}`
     return (
       <div>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={() => {}}><SortableContext items={visibleTasks.map((t: any) => t.id)} strategy={verticalListSortingStrategy}><table className={`pms-table ${isEditMode ? 'pms-table-edit' : ''}`}></table></SortableContext></DndContext>
-        {/* For simplicity, use the same Ant Design Table */}
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={() => {}}>
-          <SortableContext items={visibleTasks.map((t: any) => t.id)} strategy={verticalListSortingStrategy}>
-            <table style={{ display: 'none' }} />
-          </SortableContext>
-        </DndContext>
-        {/* Actual table rendering placeholder — relies on Ant Design Table from PlanModule */}
+        {isEditMode && (
+          <div style={{ padding: '8px 16px', background: 'linear-gradient(90deg, #fffbe6, #fff7cc)', borderBottom: '1px solid #ffe58f', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <EditOutlined style={{ color: '#faad14', fontSize: 14 }} />
+            <span style={{ fontSize: 13, color: '#ad6800', fontWeight: 500 }}>编辑模式</span>
+            <span style={{ fontSize: 12, color: '#ad8b00' }}>- 拖拽手柄排序，点击单元格编辑，完成后点击保存</span>
+          </div>
+        )}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTableDragEnd}><SortableContext items={visibleTasks.map((t: any) => t.id)} strategy={verticalListSortingStrategy}><Table className={tableClassName} dataSource={visibleTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} size="middle" /></SortableContext></DndContext>
+        {isEditMode && (
+          <div style={{ padding: '12px 16px', borderTop: '1px solid #f3f4f6', background: '#f8fafc' }}>
+            <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%', borderRadius: 6, height: 36 }} onClick={() => {
+              const parentTasks = tableTasks.filter((t: any) => !t.parentId)
+              const maxOrder = parentTasks.length > 0 ? Math.max(...parentTasks.map((t: any) => parseInt(t.id) || t.order)) : 0
+              const newId = String(maxOrder + 1)
+              const newTask: any = { id: newId, order: maxOrder + 1, taskName: '新活动', status: '未开始', progress: 0, responsible: '', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0, actualDays: 0 }
+              if (isLevel2Custom && customTasks?.[0]?.planId) newTask.planId = customTasks[0].planId
+              currentSetTasks([...tableTasks, newTask]); message.success(`已添加一级活动: ${newId}`)
+            }}>添加新活动</Button>
+          </div>
+        )}
       </div>
     )
   }
@@ -364,11 +428,51 @@ export default function ConfigContainer() {
       )
     }
     const changedRows = compareResult.filter(r => r.changeType !== '未变更')
+    const stats = { total: compareResult.length, added: changedRows.filter(r => r.changeType === '新增').length, deleted: changedRows.filter(r => r.changeType === '删除').length, modified: changedRows.filter(r => r.changeType === '修改').length, unchanged: compareResult.filter(r => r.changeType === '未变更').length }
     let filteredData = compareShowUnchanged ? compareResult : changedRows
-    if (compareFilterType !== 'all') {
-      filteredData = filteredData.filter(r => r.changeType === compareFilterType)
+    if (compareFilterType !== 'all') filteredData = filteredData.filter(r => r.changeType === compareFilterType)
+    const getRowBg = (type: string) => { if (type === '新增') return '#f6ffed'; if (type === '删除') return '#fff2f0'; if (type === '修改') return 'rgba(99,102,241,0.06)'; return undefined }
+    const renderDiffCell = (row: CompareTableRow, fieldKey: string, value: any) => {
+      const diff = row.fieldDiffs.find((d: FieldDiff) => d.field === fieldKey)
+      if (row.changeType === '修改' && diff) {
+        return (<Tooltip title={<div style={{ fontSize: 12 }}><div>修改人: {row.modifier}</div><div>修改时间: {row.modifyTime}</div></div>}><div style={{ lineHeight: 1.6 }}><div style={{ color: '#ff4d4f', fontSize: 11, textDecoration: 'line-through', opacity: 0.7 }}>{diff.oldValue}</div><div style={{ color: '#6366f1', fontWeight: 600, fontSize: 12 }}>{diff.newValue}</div></div></Tooltip>)
+      }
+      if (row.changeType === '新增') return <span style={{ color: '#52c41a', fontWeight: 500 }}>{value || '-'}</span>
+      if (row.changeType === '删除') return <span style={{ color: '#ff4d4f', textDecoration: 'line-through', opacity: 0.7 }}>{value || '-'}</span>
+      return <span style={{ color: '#4b5563' }}>{value || '-'}</span>
     }
-    return <div style={{ marginTop: 16 }}><div style={{ fontSize: 12, color: '#9ca3af' }}>共 {filteredData.length} 条记录</div></div>
+    const compareColumns: any[] = [
+      { title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, fixed: 'left', render: (val: string, row: CompareTableRow) => (<span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? '#6366f1' : '#9ca3af' }}>{val}</span>) },
+      { title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, fixed: 'left', render: (val: string) => { const conf: Record<string, { color: string; bg: string }> = { '新增': { color: '#52c41a', bg: '#f6ffed' }, '删除': { color: '#ff4d4f', bg: '#fff2f0' }, '修改': { color: '#6366f1', bg: 'rgba(99,102,241,0.06)' }, '未变更': { color: '#9ca3af', bg: '#fafafa' } }; const c = conf[val]; return c ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: c.color, background: c.bg, border: `1px solid ${c.color}20` }}>{val}</span> : null } },
+      { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, fixed: 'left', ellipsis: true, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
+      { title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) },
+      { title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'predecessor', val) },
+      { title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 105, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'planStartDate', val) },
+      { title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 105, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'planEndDate', val) },
+      { title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 80, render: (val: number, row: CompareTableRow) => renderDiffCell(row, 'estimatedDays', val ? `${val}天` : '-') },
+      { title: '状态', dataIndex: 'status', key: 'status', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'status', val) },
+      { title: '进度', dataIndex: 'progress', key: 'progress', width: 70, render: (val: number, row: CompareTableRow) => renderDiffCell(row, 'progress', `${val}%`) },
+    ]
+    return (
+      <div style={{ marginTop: 16 }}>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+          {[
+            { label: '变更总计', value: changedRows.length, color: '#6366f1', filterVal: 'all' },
+            { label: '新增', value: stats.added, color: '#52c41a', filterVal: '新增' },
+            { label: '修改', value: stats.modified, color: '#6366f1', filterVal: '修改' },
+            { label: '删除', value: stats.deleted, color: '#ff4d4f', filterVal: '删除' },
+          ].map(item => {
+            const isActive = compareFilterType === item.filterVal
+            return (<div key={item.filterVal} onClick={() => setCompareFilterType(item.filterVal)} style={{ flex: 1, padding: '10px 16px', borderRadius: 8, cursor: 'pointer', background: isActive ? `${item.color}10` : '#fafafa', border: isActive ? `1px solid ${item.color}` : '1px solid #f3f4f6', transition: 'all 0.2s' }}><div style={{ fontSize: 20, fontWeight: 700, color: item.color }}>{item.value}</div><div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{item.label}</div></div>)
+          })}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <span style={{ fontSize: 12, color: '#9ca3af' }}>共 {filteredData.length} 条记录</span>
+          <Checkbox checked={compareShowUnchanged} onChange={e => setCompareShowUnchanged(e.target.checked)}><span style={{ fontSize: 12 }}>显示未变更项</span></Checkbox>
+        </div>
+        <Table className="pms-table" columns={compareColumns} dataSource={filteredData} size="small" bordered pagination={filteredData.length > 15 ? { pageSize: 15, size: 'small', showTotal: (t) => `共 ${t} 条` } : false} scroll={{ x: 1200, y: 420 }} rowKey="key" onRow={(record: CompareTableRow) => ({ style: { background: getRowBg(record.changeType) } })} />
+      </div>
+    )
   }
 
   return (
