@@ -33,40 +33,40 @@ export const GLOBAL_PERM_OPTIONS = [
 
 export interface PermissionConfigProps {
   roles: { name: string; members: string[]; isFixed: boolean }[]
-  setRoles: React.Dispatch<React.SetStateAction<{ name: string; members: string[]; isFixed: boolean }[]>>
+  setRoles: (v: { name: string; members: string[]; isFixed: boolean }[] | ((prev: { name: string; members: string[]; isFixed: boolean }[]) => { name: string; members: string[]; isFixed: boolean }[])) => void
   rolePermissions: Record<string, Record<string, boolean>>
-  setRolePermissions: React.Dispatch<React.SetStateAction<Record<string, Record<string, boolean>>>>
+  setRolePermissions: (v: Record<string, Record<string, boolean>> | ((prev: Record<string, Record<string, boolean>>) => Record<string, Record<string, boolean>>)) => void
   permConfigTab: 'roles' | 'perms'
-  setPermConfigTab: React.Dispatch<React.SetStateAction<'roles' | 'perms'>>
+  setPermConfigTab: (v: 'roles' | 'perms') => void
   permissionActiveRole: string
-  setPermissionActiveRole: React.Dispatch<React.SetStateAction<string>>
+  setPermissionActiveRole: (v: string) => void
   showAddRoleModal: boolean
-  setShowAddRoleModal: React.Dispatch<React.SetStateAction<boolean>>
+  setShowAddRoleModal: (v: boolean) => void
   newRoleName: string
-  setNewRoleName: React.Dispatch<React.SetStateAction<string>>
+  setNewRoleName: (v: string) => void
   editingRoleName: string | null
-  setEditingRoleName: React.Dispatch<React.SetStateAction<string | null>>
+  setEditingRoleName: (v: string | null) => void
   editRoleNameValue: string
-  setEditRoleNameValue: React.Dispatch<React.SetStateAction<string>>
+  setEditRoleNameValue: (v: string) => void
 }
 
 export interface GlobalPermissionConfigProps {
   globalRoles: { name: string; members: string[]; isFixed?: boolean }[]
-  setGlobalRoles: React.Dispatch<React.SetStateAction<{ name: string; members: string[]; isFixed?: boolean }[]>>
+  setGlobalRoles: (v: { name: string; members: string[]; isFixed?: boolean }[] | ((prev: { name: string; members: string[]; isFixed?: boolean }[]) => { name: string; members: string[]; isFixed?: boolean }[])) => void
   globalRolePerms: Record<string, Record<string, boolean>>
-  setGlobalRolePerms: React.Dispatch<React.SetStateAction<Record<string, Record<string, boolean>>>>
+  setGlobalRolePerms: (v: Record<string, Record<string, boolean>> | ((prev: Record<string, Record<string, boolean>>) => Record<string, Record<string, boolean>>)) => void
   globalPermTab: 'roles' | 'perms'
-  setGlobalPermTab: React.Dispatch<React.SetStateAction<'roles' | 'perms'>>
+  setGlobalPermTab: (v: 'roles' | 'perms') => void
   showGlobalAddRole: boolean
-  setShowGlobalAddRole: React.Dispatch<React.SetStateAction<boolean>>
+  setShowGlobalAddRole: (v: boolean) => void
   globalNewRoleName: string
-  setGlobalNewRoleName: React.Dispatch<React.SetStateAction<string>>
+  setGlobalNewRoleName: (v: string) => void
   globalEditingRole: string | null
-  setGlobalEditingRole: React.Dispatch<React.SetStateAction<string | null>>
+  setGlobalEditingRole: (v: string | null) => void
   globalEditRoleValue: string
-  setGlobalEditRoleValue: React.Dispatch<React.SetStateAction<string>>
+  setGlobalEditRoleValue: (v: string) => void
   globalPermActiveRole: string
-  setGlobalPermActiveRole: React.Dispatch<React.SetStateAction<string>>
+  setGlobalPermActiveRole: (v: string) => void
 }
 
 // ========== PermissionConfig Component (项目空间权限配置) ==========

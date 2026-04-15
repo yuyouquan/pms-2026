@@ -54,6 +54,11 @@ import { initialProjects, PROJECT_TYPES, PROJECT_STATUS_CONFIG, mapIpmStatus, PR
 import { notifyPublishChanges, notifyDueTasks } from '@/lib/feishu-notify'
 import type { TaskChange, PlanDueNotice, FeishuRecipient } from '@/types/plan-notify'
 import { exportSheet, exportMergedSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
+import { useUiStore } from '@/stores/ui'
+import { useProjectStore, DEFAULT_LOGIN_USER, PROJECT_MEMBER_MAP, kanbanColumns } from '@/stores/project'
+import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView } from '@/stores/plan'
+import { useTransferStore } from '@/stores/transfer'
+import { usePermissionStore } from '@/stores/permission'
 
 // 全局表格和交互样式
 const globalStyles = `
@@ -345,13 +350,7 @@ function sortTeamMembers(members: TMTeamMember[]): TMTeamMember[] {
 }
 
 // 项目类型选项 — imported from @/data/projects
-// 可在创建二级计划时选择的类型（不含固定类型）
-const LEVEL2_PLAN_TYPES = ['1+N MR版本火车计划', '粉丝版本计划', '基础体验计划', 'WBS计划']
-// 固定二级计划（始终显示在前两位，不可删除）
-const FIXED_LEVEL2_PLANS = [
-  { id: 'plan0', name: '需求开发计划', type: '需求开发计划', fixed: true },
-  { id: 'plan1', name: '在研版本火车计划', type: '在研版本火车计划', fixed: true },
-]
+// LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS → imported from @/stores/plan
 
 // IPM状态映射, 项目状态颜色, 项目数据 — all imported from @/data/projects
 
@@ -518,28 +517,7 @@ const _legacyProjects = [
   },
 ]
 
-const kanbanColumns = [
-  { title: '概念阶段', key: 'concept', color: '#1890ff' },
-  { title: '计划阶段', key: 'planning', color: '#52c41a' },
-  { title: '开发阶段', key: 'developing', color: '#faad14' },
-  { title: '发布阶段', key: 'released', color: '#722ed1' },
-]
-
-const DEFAULT_LOGIN_USER = '张三' // 默认登录用户（Mock）
-
-// 项目-人员分配（Mock：每个项目在权限配置中分配了哪些用户）
-const PROJECT_MEMBER_MAP: Record<string, string[]> = {
-  '1': ['张三', '李四', '王五', '赵六', '李白'],         // X6877
-  '3': ['王五', '赵六', '孙七'],                         // X6855
-  '2': ['张三', '李四', '王五', '赵六', '孙七'],         // tOS16.0
-  '6': ['赵六', '李四', '王五'],                         // tOS17.1
-  '4': ['孙七', '李四', '张三'],                         // X6876_H786
-  '5': ['周八', '王五', '李白'],                         // X6873_H972
-  '7': ['李白', '张三', '王五'],                         // X6890 CAMON
-  '8': ['杜甫', '李白', '张三', '李四', '王五'],         // tOS18.0
-  '9': ['李四', '张三', '赵六', '孙七'],                 // AI-Engine-V2
-  '10': ['孙七', '周八', '李白', '杜甫', '王五'],        // DevOps-Platform
-}
+// kanbanColumns, DEFAULT_LOGIN_USER, PROJECT_MEMBER_MAP → imported from @/stores/project
 
 const initialTodos = [
   { id: '1', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V2', versionId: 'v2', market: 'OP', responsible: '张三', priority: 'high', deadline: '2026-03-10', status: '进行中', taskDesc: '计划阶段任务待处理', category: 'overdue' as const },
@@ -550,59 +528,7 @@ const initialTodos = [
   { id: '6', projectId: '3', projectName: 'X6855_H8917', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V1', versionId: 'v1', market: 'OP', responsible: '张三', priority: 'low', deadline: '2026-02-28', status: '已完成', taskDesc: '概念阶段已完成', category: 'completed' as const },
 ]
 
-const VERSION_DATA = [
-  { id: 'v1', versionNo: 'V1', status: '已发布' },
-  { id: 'v2', versionNo: 'V2', status: '已发布' },
-  { id: 'v3', versionNo: 'V3', status: '已发布' },
-]
-
-const LEVEL1_TASKS = [
-  { id: '1', order: 1, taskName: '概念', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-01-15', estimatedDays: 15, actualStartDate: '2026-01-01', actualEndDate: '2026-01-14', actualDays: 14 },
-  { id: '1.1', parentId: '1', order: 1, taskName: '概念启动', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-01-07', estimatedDays: 7, actualStartDate: '2026-01-01', actualEndDate: '2026-01-07', actualDays: 7 },
-  { id: '1.2', parentId: '1', order: 2, taskName: 'STR1', status: '已完成', progress: 100, responsible: '李四', predecessor: '1.1', planStartDate: '2026-01-08', planEndDate: '2026-01-15', estimatedDays: 8, actualStartDate: '2026-01-08', actualEndDate: '2026-01-14', actualDays: 7 },
-  { id: '2', order: 2, taskName: '计划', status: '进行中', progress: 60, responsible: '王五', predecessor: '1.2', planStartDate: '2026-01-16', planEndDate: '2026-02-15', estimatedDays: 30, actualStartDate: '2026-01-16', actualEndDate: '', actualDays: 18 },
-  { id: '2.1', parentId: '2', order: 1, taskName: 'STR2', status: '进行中', progress: 60, responsible: '王五', predecessor: '1.2', planStartDate: '2026-01-16', planEndDate: '2026-01-31', estimatedDays: 15, actualStartDate: '2026-01-16', actualEndDate: '', actualDays: 12 },
-  { id: '2.2', parentId: '2', order: 2, taskName: 'STR3', status: '未开始', progress: 0, responsible: '赵六', predecessor: '2.1', planStartDate: '2026-02-01', planEndDate: '2026-02-15', estimatedDays: 15, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-  { id: '3', order: 3, taskName: '开发验证', status: '未开始', progress: 0, responsible: '', predecessor: '2.2', planStartDate: '2026-02-16', planEndDate: '2026-03-15', estimatedDays: 28, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-  { id: '4', order: 4, taskName: '上市保障', status: '未开始', progress: 0, responsible: '', predecessor: '3', planStartDate: '2026-03-16', planEndDate: '2026-04-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-]
-
-const ALL_COLUMNS = [
-  { key: 'id', title: '序号', default: true },
-  { key: 'taskName', title: '任务名称', default: true },
-  { key: 'responsible', title: '责任人', default: true },
-  { key: 'predecessor', title: '前置任务', default: true },
-  { key: 'planStartDate', title: '计划开始', default: true },
-  { key: 'planEndDate', title: '计划完成', default: true },
-  { key: 'estimatedDays', title: '预估工期', default: true },
-  { key: 'actualStartDate', title: '实际开始', default: true },
-  { key: 'actualEndDate', title: '实际完成', default: true },
-  { key: 'actualDays', title: '实际工期', default: true },
-  { key: 'status', title: '状态', default: true },
-  { key: 'progress', title: '进度', default: true },
-]
-
-// 竖版表格可配置列
-const TABLE_COLUMNS = ALL_COLUMNS
-
-// 甘特图可配置列
-const GANTT_COLUMNS = [
-  { key: 'taskName', title: '任务名称', default: true },
-  { key: 'predecessor', title: '前置任务', default: true },
-  { key: 'planStartDate', title: '计划开始', default: true },
-  { key: 'planEndDate', title: '计划完成', default: true },
-  { key: 'estimatedDays', title: '计划周期', default: true },
-  { key: 'progress', title: '进度', default: true },
-]
-
-// 横版表格无自定义列（固定结构）
-
-// 根据视图类型获取可配置列
-const getColumnsForView = (viewMode: string) => {
-  if (viewMode === 'gantt') return GANTT_COLUMNS
-  if (viewMode === 'horizontal') return [] // 横版无自定义列
-  return TABLE_COLUMNS
-}
+// VERSION_DATA, LEVEL1_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView → imported from @/stores/plan
 
 // IR需求Mock数据
 // IR/SR需求数据已移至 RequirementDevPlan 组件
@@ -642,282 +568,113 @@ const MOCK_USER_MAP: Record<string, FeishuRecipient> = {
 }
 
 export default function Home() {
-  // const router = useRouter()
-  const [activeModule, setActiveModule] = useState<string>('projects')
-  const [workspaceTab, setWorkspaceTab] = useState<'projects' | 'workTracker'>('projects')
+  // ========== Zustand stores ==========
+  const {
+    activeModule, setActiveModule, workspaceTab, setWorkspaceTab,
+    configTab, setConfigTab, sidebarCollapsed, setSidebarCollapsed,
+    selectedProjectType, setSelectedProjectType, projectSpaceModule, setProjectSpaceModule,
+    isEditMode, setIsEditMode, showLeaveConfirm, setShowLeaveConfirm,
+    pendingNavigation, setPendingNavigation,
+    showVersionCompare, setShowVersionCompare, showColumnModal, setShowColumnModal,
+    showCreateLevel2Plan, setShowCreateLevel2Plan, showAddCustomType, setShowAddCustomType,
+    showProjectSearch, setShowProjectSearch, projectSearchText, setProjectSearchText,
+    handleConfirmLeave, handleCancelLeave,
+  } = useUiStore()
+
+  const {
+    projects, setProjects, selectedProject, setSelectedProject,
+    currentLoginUser, setCurrentLoginUser,
+    projectSearchText2, setProjectSearchText2, projectStatusFilter, setProjectStatusFilter,
+    projectTypeFilter, setProjectTypeFilter, projectListView, setProjectListView,
+    projectCardPage, setProjectCardPage,
+    basicInfoEditMode, setBasicInfoEditMode, editingProjectFields, setEditingProjectFields,
+    selectedMarketTab, setSelectedMarketTab, kanbanDimension, setKanbanDimension,
+    todoFilter, setTodoFilter, todoCollapsed, setTodoCollapsed,
+  } = useProjectStore()
+
+  const {
+    planLevel, setPlanLevel, selectedPlanType, setSelectedPlanType,
+    customTypes, setCustomTypes, viewMode, setViewMode,
+    projectPlanLevel, setProjectPlanLevel, projectPlanViewMode, setProjectPlanViewMode,
+    projectPlanOverviewTab, setProjectPlanOverviewTab, planMetaCollapsed, setPlanMetaCollapsed,
+    versions, setVersions, currentVersion, setCurrentVersion,
+    tasks, setTasks, searchText, setSearchText,
+    level2PlanTasks, setLevel2PlanTasks, level2PlanMilestones, setLevel2PlanMilestones,
+    createdLevel2Plans, setCreatedLevel2Plans, activeLevel2Plan, setActiveLevel2Plan,
+    level2PlanMeta, setLevel2PlanMeta, createFormValues, setCreateFormValues,
+    selectedLevel2PlanType, setSelectedLevel2PlanType,
+    selectedMilestones, setSelectedMilestones, selectedMRVersion, setSelectedMRVersion,
+    columnsByView, setColumnsByView, collapsedNodes, setCollapsedNodes,
+    publishedSnapshots, setPublishedSnapshots,
+    compareVersionA, setCompareVersionA, compareVersionB, setCompareVersionB,
+    compareResult, setCompareResult, compareShowUnchanged, setCompareShowUnchanged,
+    compareFilterType, setCompareFilterType,
+    marketPlanData, setMarketPlanData,
+    ganttEditingTask, setGanttEditingTask, progressEditingTask, setProgressEditingTask,
+    parentTimeWarning, setParentTimeWarning,
+    milestoneTimeWarning, setMilestoneTimeWarning,
+    predecessorWarning, setPredecessorWarning,
+  } = usePlanStore()
+
+  const {
+    currentUser, setCurrentUser,
+    transferView, setTransferView, selectedTransferAppId, setSelectedTransferAppId,
+    transferConfigView, setTransferConfigView,
+    tmConfigSearchText, setTmConfigSearchText, tmConfigSelectedVersion, setTmConfigSelectedVersion,
+    tmConfigDiffOpen, setTmConfigDiffOpen, tmConfigDiffFrom, setTmConfigDiffFrom, tmConfigDiffTo, setTmConfigDiffTo,
+    transferApplications, setTransferApplications,
+    tmChecklistItems, setTmChecklistItems, tmReviewElements, setTmReviewElements,
+    tmBlockTasks, setTmBlockTasks, tmLegacyTasks, setTmLegacyTasks,
+    tmApplyProject, setTmApplyProject, tmApplyDate, setTmApplyDate,
+    tmApplyRemark, setTmApplyRemark, tmApplyTeam, setTmApplyTeam,
+    tmModalVisible, setTmModalVisible, tmModalTitle, setTmModalTitle, tmModalContent, setTmModalContent,
+    tmDetailModalVisible, setTmDetailModalVisible, tmDetailModalTitle, setTmDetailModalTitle, tmDetailModalContent, setTmDetailModalContent,
+    tmCloseModalVisible, setTmCloseModalVisible, tmCloseAppId, setTmCloseAppId, tmCloseReason, setTmCloseReason,
+    tmEntryTab, setTmEntryTab, tmEntryModalOpen, setTmEntryModalOpen,
+    tmEntryModalRecord, setTmEntryModalRecord, tmEntryContent, setTmEntryContent, tmEntryActiveRole, setTmEntryActiveRole,
+    tmReviewTab, setTmReviewTab, tmReviewModalOpen, setTmReviewModalOpen,
+    tmReviewAction, setTmReviewAction, tmReviewRecord, setTmReviewRecord,
+    tmReviewComment, setTmReviewComment, tmReviewActiveRole, setTmReviewActiveRole,
+    tmSqaComment, setTmSqaComment, tmSqaModalOpen, setTmSqaModalOpen, tmSqaAction, setTmSqaAction,
+  } = useTransferStore()
+
+  const {
+    roles, setRoles, rolePermissions, setRolePermissions,
+    showAddRoleModal, setShowAddRoleModal, newRoleName, setNewRoleName,
+    editingRoleName, setEditingRoleName, editRoleNameValue, setEditRoleNameValue,
+    permissionActiveRole, setPermissionActiveRole, permConfigTab, setPermConfigTab,
+    globalRoles, setGlobalRoles, globalRolePerms, setGlobalRolePerms,
+    globalPermTab, setGlobalPermTab, showGlobalAddRole, setShowGlobalAddRole,
+    globalNewRoleName, setGlobalNewRoleName, globalEditingRole, setGlobalEditingRole,
+    globalEditRoleValue, setGlobalEditRoleValue, globalPermActiveRole, setGlobalPermActiveRole,
+  } = usePermissionStore()
+
+  // ========== Local state (not in stores) ==========
   const [projectView, setProjectView] = useState<string>('card')
-  const [todoCollapsed, setTodoCollapsed] = useState(false)
-  const [projectSearchText2, setProjectSearchText2] = useState('')
-  const [projectStatusFilter, setProjectStatusFilter] = useState<string>('all')
-  const [projectTypeFilter, setProjectTypeFilter] = useState<string>('all')
-  const [projectListView, setProjectListView] = useState<'card' | 'list'>('card')
-  const [projectCardPage, setProjectCardPage] = useState(1)
   const projectCardPageSize = 9
-  const [projects, setProjects] = useState(initialProjects)
   const [todos] = useState(initialTodos)
-  const [todoFilter, setTodoFilter] = useState<'all' | 'overdue' | 'upcoming' | 'pending' | 'completed'>('all')
-  const [selectedProject, setSelectedProject] = useState<typeof initialProjects[0] | null>(null)
-  const [basicInfoEditMode, setBasicInfoEditMode] = useState(false)
-  const [editingProjectFields, setEditingProjectFields] = useState<Record<string, any>>({})
-
-  // 配置相关状态
-  const [selectedProjectType, setSelectedProjectType] = useState(PROJECT_TYPES[0])
-  const [planLevel, setPlanLevel] = useState<string>('level1')
-  const [selectedPlanType, setSelectedPlanType] = useState(LEVEL2_PLAN_TYPES[0])
-  const [customTypes, setCustomTypes] = useState<string[]>([])
-  const [versions, setVersions] = useState(VERSION_DATA)
-  const [currentVersion, setCurrentVersion] = useState('v3')
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  
-  const [isEditMode, setIsEditMode] = useState(false)
-  const [tasks, setTasks] = useState(LEVEL1_TASKS)
-  const [searchText, setSearchText] = useState('')
-  const [viewMode, setViewMode] = useState<'table' | 'gantt'>('table')
-  const [showColumnModal, setShowColumnModal] = useState(false)
-  const [showVersionCompare, setShowVersionCompare] = useState(false)
-  const [compareVersionA, setCompareVersionA] = useState('v1')
-  const [compareVersionB, setCompareVersionB] = useState('v3')
-  const [compareResult, setCompareResult] = useState<CompareTableRow[]>([])
-  
-  // 项目空间
-  const [projectSpaceModule, setProjectSpaceModule] = useState('basic')
-  const [ganttEditingTask, setGanttEditingTask] = useState<any>(null)
-
-  // ========== 转维系统状态 ==========
-  const [currentUser, setCurrentUser] = useState(MOCK_TM_USERS[0]) // 张明辉 SPM
-  const [currentLoginUser, setCurrentLoginUser] = useState(DEFAULT_LOGIN_USER)
-  const [configTab, setConfigTab] = useState('plan')
-  const [transferConfigView, setTransferConfigView] = useState<'home' | 'checklist' | 'review'>('home')
-  const [tmConfigSearchText, setTmConfigSearchText] = useState('')
-  const [tmConfigSelectedVersion, setTmConfigSelectedVersion] = useState('v3.0')
-  const [tmConfigDiffOpen, setTmConfigDiffOpen] = useState(false)
-  const [tmConfigDiffFrom, setTmConfigDiffFrom] = useState('v2.0')
-  const [tmConfigDiffTo, setTmConfigDiffTo] = useState('v3.0')
-  const [transferView, setTransferView] = useState<null | 'apply' | 'detail' | 'entry' | 'review' | 'sqa-review'>(null)
-  const [selectedTransferAppId, setSelectedTransferAppId] = useState<string | null>(null)
-  const [transferApplications, setTransferApplications] = useState(MOCK_TRANSFER_APPLICATIONS)
-  const [tmChecklistItems, setTmChecklistItems] = useState(MOCK_CHECKLIST_ITEMS)
-  const [tmReviewElements, setTmReviewElements] = useState(MOCK_REVIEW_ELEMENTS)
-  const [tmBlockTasks, setTmBlockTasks] = useState(MOCK_BLOCK_TASKS)
-  const [tmLegacyTasks, setTmLegacyTasks] = useState(MOCK_LEGACY_TASKS)
-  // 转维申请表单
-  const [tmApplyProject, setTmApplyProject] = useState('')
-  const [tmApplyDate, setTmApplyDate] = useState('')
-  const [tmApplyRemark, setTmApplyRemark] = useState('')
-  const [tmApplyTeam, setTmApplyTeam] = useState<{ research: TMTeamMember[]; maintenance: TMTeamMember[] }>({ research: [], maintenance: [] })
-  // 转维详情/评审 modal
-  const [tmModalVisible, setTmModalVisible] = useState(false)
-  const [tmModalTitle, setTmModalTitle] = useState('')
-  const [tmModalContent, setTmModalContent] = useState('')
-  // 详情结果弹窗（AI检查/审核意见）
-  const [tmDetailModalVisible, setTmDetailModalVisible] = useState(false)
-  const [tmDetailModalTitle, setTmDetailModalTitle] = useState('')
-  const [tmDetailModalContent, setTmDetailModalContent] = useState('')
-  // 关闭流水线
-  const [tmCloseModalVisible, setTmCloseModalVisible] = useState(false)
-  const [tmCloseAppId, setTmCloseAppId] = useState<string | null>(null)
-  const [tmCloseReason, setTmCloseReason] = useState('')
-  // 转维资料录入
-  const [tmEntryTab, setTmEntryTab] = useState<'checklist' | 'review'>('checklist')
-  const [tmEntryModalOpen, setTmEntryModalOpen] = useState(false)
-  const [tmEntryModalRecord, setTmEntryModalRecord] = useState<any>(null)
-  const [tmEntryContent, setTmEntryContent] = useState('')
-  const [tmEntryActiveRole, setTmEntryActiveRole] = useState<string>('all')
-  // 转维审核
-  const [tmReviewTab, setTmReviewTab] = useState<'checklist' | 'review'>('checklist')
-  const [tmReviewModalOpen, setTmReviewModalOpen] = useState(false)
-  const [tmReviewAction, setTmReviewAction] = useState<'pass' | 'reject'>('pass')
-  const [tmReviewRecord, setTmReviewRecord] = useState<any>(null)
-  const [tmReviewComment, setTmReviewComment] = useState('')
-  const [tmReviewActiveRole, setTmReviewActiveRole] = useState<string>('all')
-  // SQA审核
-  const [tmSqaComment, setTmSqaComment] = useState('')
-  const [tmSqaModalOpen, setTmSqaModalOpen] = useState(false)
-  const [tmSqaAction, setTmSqaAction] = useState<'approve' | 'reject'>('approve')
+  const projectSearchRef = useRef<HTMLDivElement>(null)
+  // Session-level 去重：同一项目在 session 内到期扫描只跑一次
+  const lastDueCheckedProjectRef = useRef<string | null>(null)
 
   // 当前项目的转维申请
   const currentProjectTransferApps = useMemo(() =>
     transferApplications.filter(a => a.projectName === selectedProject?.name),
     [transferApplications, selectedProject]
   )
-  
-  // 项目空间-计划
-  const [projectPlanLevel, setProjectPlanLevel] = useState<string>('level1')
-  const [projectPlanViewMode, setProjectPlanViewMode] = useState<'table' | 'horizontal' | 'gantt'>('table')
-  // 已发布版本的任务快照（供发布变更 diff 的 baseline，和到期扫描的数据源）
-  const [publishedSnapshots, setPublishedSnapshots] = useState<Record<string, any[]>>({})
-  // Session-level 去重：同一项目在 session 内到期扫描只跑一次
-  const lastDueCheckedProjectRef = useRef<string | null>(null)
-  // Collapsed tree nodes per scope (project + level + optional plan)
-  // Empty Set = fully expanded (default). Presence in Set = that node is collapsed.
-  const [collapsedNodes, setCollapsedNodes] = useState<Record<string, Set<string>>>({})
-  const [projectPlanOverviewTab, setProjectPlanOverviewTab] = useState<string>('overview')
-  const [planMetaCollapsed, setPlanMetaCollapsed] = useState(false)
 
-  // 每个视图独立的自定义列配置
-  const defaultCols = ALL_COLUMNS.filter(c => c.default).map(c => c.key)
-  const [columnsByView, setColumnsByView] = useState<Record<string, string[]>>({
-    'config-table': [...defaultCols],
-    'config-gantt': [...defaultCols],
-    'project-table': [...defaultCols],
-    'project-gantt': [...defaultCols],
-    'project-horizontal': [...defaultCols],
-  })
+  // 每个视图独立的自定义列配置 (derived from store)
   const getViewKey = () => {
     if (activeModule === 'config') return `config-${planLevel}-${viewMode}`
     return `project-${projectPlanLevel}-${projectPlanViewMode}`
   }
   const currentViewMode = activeModule === 'config' ? viewMode : projectPlanViewMode
   const currentViewColumns = getColumnsForView(currentViewMode)
-  const currentViewDefaultCols = currentViewColumns.filter(c => c.default).map(c => c.key)
+  const currentViewDefaultCols = currentViewColumns.filter((c: any) => c.default).map((c: any) => c.key)
   const visibleColumns = columnsByView[getViewKey()] || currentViewDefaultCols
   const setVisibleColumns = (cols: string[]) => {
-    setColumnsByView(prev => ({ ...prev, [getViewKey()]: cols }))
+    setColumnsByView((prev: Record<string, string[]>) => ({ ...prev, [getViewKey()]: cols }))
   }
-  const [level2PlanTasks, setLevel2PlanTasks] = useState<any[]>([
-    // 在研版本火车计划 - 三层结构 (plan1)
-    { id: '1', order: 1, taskName: '16.3.030', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-02-01', planId: 'plan1' },
-    { id: '1.1', parentId: '1', order: 1, taskName: '需求分析', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-01-15', planId: 'plan1' },
-    { id: '1.1.1', parentId: '1.1', order: 1, taskName: 'IR需求梳理', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-01-07', planId: 'plan1' },
-    { id: '1.1.2', parentId: '1.1', order: 2, taskName: 'SR需求拆分', status: '已完成', progress: 100, responsible: '李四', predecessor: '1.1.1', planStartDate: '2026-01-08', planEndDate: '2026-01-15', planId: 'plan1' },
-    { id: '1.2', parentId: '1', order: 2, taskName: '开发集成', status: '已完成', progress: 100, responsible: '王五', predecessor: '1.1', planStartDate: '2026-01-16', planEndDate: '2026-02-01', planId: 'plan1' },
-    { id: '2', order: 2, taskName: '16.3.031', status: '进行中', progress: 60, responsible: '李四', predecessor: '1', planStartDate: '2026-02-02', planEndDate: '2026-03-15', planId: 'plan1' },
-    { id: '2.1', parentId: '2', order: 1, taskName: '功能开发', status: '进行中', progress: 70, responsible: '李四', predecessor: '', planStartDate: '2026-02-02', planEndDate: '2026-02-28', planId: 'plan1' },
-    { id: '2.1.1', parentId: '2.1', order: 1, taskName: 'Camera模块', status: '已完成', progress: 100, responsible: '李四', predecessor: '', planStartDate: '2026-02-02', planEndDate: '2026-02-15', planId: 'plan1' },
-    { id: '2.1.2', parentId: '2.1', order: 2, taskName: 'Display模块', status: '进行中', progress: 40, responsible: '赵六', predecessor: '2.1.1', planStartDate: '2026-02-16', planEndDate: '2026-02-28', planId: 'plan1' },
-    { id: '2.2', parentId: '2', order: 2, taskName: '集成测试', status: '未开始', progress: 0, responsible: '王五', predecessor: '2.1', planStartDate: '2026-03-01', planEndDate: '2026-03-15', planId: 'plan1' },
-    { id: '3', order: 3, taskName: '16.3.032', status: '未开始', progress: 0, responsible: '王五', predecessor: '2', planStartDate: '2026-03-16', planEndDate: '2026-05-01', planId: 'plan1' },
-    // FR版本火车计划 - 三层结构 (plan2)
-    { id: '1', order: 1, taskName: '版本规划', status: '已完成', progress: 100, responsible: '赵六', predecessor: '', planStartDate: '2026-01-02', planEndDate: '2026-02-02', planId: 'plan2' },
-    { id: '1.1', parentId: '1', order: 1, taskName: '修改点收集', status: '已完成', progress: 100, responsible: '赵六', predecessor: '', planStartDate: '2026-01-02', planEndDate: '2026-01-20', planId: 'plan2' },
-    { id: '1.1.1', parentId: '1.1', order: 1, taskName: '需求变更评审', status: '已完成', progress: 100, responsible: '赵六', predecessor: '', planStartDate: '2026-01-02', planEndDate: '2026-01-10', planId: 'plan2' },
-    { id: '1.1.2', parentId: '1.1', order: 2, taskName: '修改点确认', status: '已完成', progress: 100, responsible: '孙七', predecessor: '1.1.1', planStartDate: '2026-01-11', planEndDate: '2026-01-20', planId: 'plan2' },
-    { id: '1.2', parentId: '1', order: 2, taskName: '版本计划制定', status: '已完成', progress: 100, responsible: '孙七', predecessor: '1.1', planStartDate: '2026-01-21', planEndDate: '2026-02-02', planId: 'plan2' },
-    { id: '2', order: 2, taskName: '版本开发', status: '进行中', progress: 50, responsible: '孙七', predecessor: '1', planStartDate: '2026-02-02', planEndDate: '2026-03-15', planId: 'plan2' },
-    { id: '2.1', parentId: '2', order: 1, taskName: 'MP分支入库', status: '进行中', progress: 60, responsible: '孙七', predecessor: '', planStartDate: '2026-02-02', planEndDate: '2026-03-01', planId: 'plan2' },
-    { id: '2.1.1', parentId: '2.1', order: 1, taskName: '代码合入', status: '已完成', progress: 100, responsible: '孙七', predecessor: '', planStartDate: '2026-02-02', planEndDate: '2026-02-15', planId: 'plan2' },
-    { id: '2.1.2', parentId: '2.1', order: 2, taskName: '编译验证', status: '进行中', progress: 30, responsible: '周八', predecessor: '2.1.1', planStartDate: '2026-02-16', planEndDate: '2026-03-01', planId: 'plan2' },
-    { id: '2.2', parentId: '2', order: 2, taskName: 'MR版本转测', status: '未开始', progress: 0, responsible: '周八', predecessor: '2.1', planStartDate: '2026-03-02', planEndDate: '2026-03-15', planId: 'plan2' },
-    { id: '3', order: 3, taskName: '版本测试', status: '未开始', progress: 0, responsible: '吴九', predecessor: '2', planStartDate: '2026-03-16', planEndDate: '2026-05-01', planId: 'plan2' },
-    { id: '3.1', parentId: '3', order: 1, taskName: 'MR版本测试', status: '未开始', progress: 0, responsible: '吴九', predecessor: '', planStartDate: '2026-03-16', planEndDate: '2026-05-01', planId: 'plan2' },
-    { id: '3.1.1', parentId: '3.1', order: 1, taskName: '冒烟测试', status: '未开始', progress: 0, responsible: '吴九', predecessor: '', planStartDate: '2026-03-16', planEndDate: '2026-03-25', planId: 'plan2' },
-    { id: '3.1.2', parentId: '3.1', order: 2, taskName: '回归测试', status: '未开始', progress: 0, responsible: '吴九', predecessor: '3.1.1', planStartDate: '2026-03-26', planEndDate: '2026-05-01', planId: 'plan2' },
-    // MR版本火车计划 (plan3)
-    { id: '1', order: 1, taskName: 'MR版本规划', status: '未开始', progress: 0, responsible: '周八', predecessor: '', planStartDate: '2026-03-01', planEndDate: '2026-03-15', planId: 'plan3' },
-    { id: '1.1', parentId: '1', order: 1, taskName: '版本需求整理', status: '未开始', progress: 0, responsible: '周八', predecessor: '', planStartDate: '2026-03-01', planEndDate: '2026-03-10', planId: 'plan3' },
-    { id: '1.2', parentId: '1', order: 2, taskName: '版本计划评审', status: '未开始', progress: 0, responsible: '周八', predecessor: '1.1', planStartDate: '2026-03-11', planEndDate: '2026-03-15', planId: 'plan3' },
-    { id: '2', order: 2, taskName: 'MR版本开发', status: '未开始', progress: 0, responsible: '吴九', predecessor: '1', planStartDate: '2026-03-16', planEndDate: '2026-04-15', planId: 'plan3' },
-    { id: '2.1', parentId: '2', order: 1, taskName: '功能修复', status: '未开始', progress: 0, responsible: '吴九', predecessor: '', planStartDate: '2026-03-16', planEndDate: '2026-04-01', planId: 'plan3' },
-    { id: '2.2', parentId: '2', order: 2, taskName: '版本集成', status: '未开始', progress: 0, responsible: '吴九', predecessor: '2.1', planStartDate: '2026-04-02', planEndDate: '2026-04-15', planId: 'plan3' },
-  ])
-  const [level2PlanMilestones, setLevel2PlanMilestones] = useState<string[]>([])
-  const [createdLevel2Plans, setCreatedLevel2Plans] = useState<{id: string, name: string, type: string, fixed?: boolean}[]>([
-    ...FIXED_LEVEL2_PLANS,
-    { id: 'plan2', name: 'FR版本火车计划', type: 'FR版本火车计划' },
-    { id: 'plan3', name: 'MR1版本火车计划', type: 'MR版本火车计划' },
-  ])  // 已创建的二级计划列表（前两项为固定计划，不可删除）
-  const [activeLevel2Plan, setActiveLevel2Plan] = useState<string>('plan0')  // 当前查看的二级计划
-  
-  // 项目空间-市场Tab
-  const [selectedMarketTab, setSelectedMarketTab] = useState<string>('OP')
-
-  // 市场维度的计划数据（整机产品项目按市场分别配置）
-  const [marketPlanData, setMarketPlanData] = useState<Record<string, { tasks: any[], level2Tasks: any[], createdLevel2Plans: {id: string, name: string, type: string}[] }>>({
-    'OP': { tasks: [...LEVEL1_TASKS], level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] },
-    'TR': { tasks: [...LEVEL1_TASKS.map(t => ({...t}))], level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] },
-    'RU': { tasks: [...LEVEL1_TASKS.map(t => ({...t}))], level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] },
-  })
-
-  // 项目搜索下拉
-  const [showProjectSearch, setShowProjectSearch] = useState(false)
-  const [projectSearchText, setProjectSearchText] = useState('')
-  const projectSearchRef = useRef<HTMLDivElement>(null)
-
-  // 编辑离开确认
-  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
-  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
-
-  // 二级计划创建
-  const [showCreateLevel2Plan, setShowCreateLevel2Plan] = useState(false)
-  const [selectedLevel2PlanType, setSelectedLevel2PlanType] = useState('1+N MR版本火车计划')
-  const [selectedMilestones, setSelectedMilestones] = useState<string[]>([])
-  const [selectedMRVersion, setSelectedMRVersion] = useState<string>('FR')  // MR版本类型
-  // irSrView 已移至 RequirementDevPlan 组件
-  
-  // 二级计划时间约束警告状态
-  const [milestoneTimeWarning, setMilestoneTimeWarning] = useState<{visible: boolean, violations: any[], message: string}>({visible: false, violations: [], message: ''})
-
-  // 二级计划元数据（保存创建时填写的表单信息）
-  const [level2PlanMeta, setLevel2PlanMeta] = useState<Record<string, any>>({
-    plan2: {
-      planType: '1+N MR版本火车计划', planName: 'FR版本火车计划', mrVersion: 'FR',
-      productLine: 'NOTE', marketName: 'OP', projectName: 'X6877-D8400_H991',
-      chipVendor: 'MTK', tosVersion: '16.3.050', branch: '16.3.050_main',
-      isMada: '否', madaMarket: '', spm: '李白', tpm: '王五', contact: '孙七',
-      projectVersion: 'V1.0.0', transferType: '1',
-    },
-    plan3: {
-      planType: '1+N MR版本火车计划', planName: 'MR1版本火车计划', mrVersion: 'MR1',
-      productLine: 'NOTE', marketName: 'OP', projectName: 'X6877-D8400_H991',
-      chipVendor: 'MTK', tosVersion: '16.3.051', branch: '16.3.050_MR1',
-      isMada: '是', madaMarket: 'EU', spm: '张三', tpm: '赵六', contact: '周八',
-      projectVersion: 'V1.1.0', transferType: '2',
-    },
-  })
-  const [createFormValues, setCreateFormValues] = useState<Record<string, string>>({})
-
-  // ========== 权限配置 (constants imported from @/components/permission/PermissionModule) ==========
-  const [roles, setRoles] = useState<{name: string; members: string[]; isFixed: boolean}[]>([
-    { name: '系统管理员', members: ['张三'], isFixed: true },
-    { name: '产品经理', members: ['李四', '王五'], isFixed: true },
-    { name: '项目经理', members: ['张三', '赵六'], isFixed: true },
-    { name: '开发代表', members: ['王五'], isFixed: true },
-    { name: '软件SE', members: ['孙七'], isFixed: true },
-    { name: '设计师', members: ['周八'], isFixed: true },
-    { name: '开发工程师', members: ['李白', '杜甫'], isFixed: true },
-    { name: '测试工程师', members: ['赵六', '孙七'], isFixed: true },
-    { name: '管理层', members: ['张三'], isFixed: true },
-  ])
-  const [rolePermissions, setRolePermissions] = useState<Record<string, Record<string, boolean>>>(() => {
-    const init: Record<string, Record<string, boolean>> = {}
-    const defaultPerms: Record<string, string[]> = {
-      '系统管理员': PERMISSION_MODULES.flatMap(m => m.permissions.map(p => `${m.key}:${p}`)),
-      '项目经理': ['basicInfo:查看', 'basicInfo:编辑', 'plan:一级计划-查看', 'plan:一级计划-编辑', 'plan:二级计划-查看', 'plan:二级计划-编辑', 'plan:导入/导出', 'resources:查看', 'tasks:查看', 'risks:查看'],
-      '产品经理': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'resources:查看', 'tasks:查看', 'risks:查看'],
-      '开发代表': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看'],
-      '软件SE': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看'],
-      '设计师': ['basicInfo:查看'],
-      '开发工程师': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看'],
-      '测试工程师': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看', 'risks:查看'],
-      '管理层': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'resources:查看', 'tasks:查看', 'risks:查看'],
-    }
-    FIXED_ROLES.forEach(r => { init[r] = {}; (defaultPerms[r] || []).forEach(p => { init[r][p] = true }) })
-    return init
-  })
-  const [showAddRoleModal, setShowAddRoleModal] = useState(false)
-  const [newRoleName, setNewRoleName] = useState('')
-  const [editingRoleName, setEditingRoleName] = useState<string | null>(null)
-  const [editRoleNameValue, setEditRoleNameValue] = useState('')
-  const [permissionActiveRole, setPermissionActiveRole] = useState('系统管理员')
-  const [permConfigTab, setPermConfigTab] = useState<'roles' | 'perms'>('roles')
-
-  // ========== 全局权限配置 (constants imported from @/components/permission/PermissionModule) ==========
-  const [globalRoles, setGlobalRoles] = useState<{name: string; members: string[]; isFixed?: boolean}[]>([
-    { name: '管理组', members: ['张三', '李白'], isFixed: true },
-    { name: '编辑组', members: ['李四', '赵六', '王五'], isFixed: true },
-    { name: '查看组', members: ['孙七', '周八', '杜甫'], isFixed: true },
-  ])
-  const [globalRolePerms, setGlobalRolePerms] = useState<Record<string, Record<string, boolean>>>({
-    '管理组': { 'roadmap:milestone:view': true, 'roadmap:mrTrain:view': true },
-    '编辑组': { 'roadmap:milestone:view': true, 'roadmap:mrTrain:view': true },
-    '查看组': { 'roadmap:milestone:view': true, 'roadmap:mrTrain:view': false },
-  })
-  const [globalPermTab, setGlobalPermTab] = useState<'roles' | 'perms'>('roles')
-  const [showGlobalAddRole, setShowGlobalAddRole] = useState(false)
-  const [globalNewRoleName, setGlobalNewRoleName] = useState('')
-  const [globalEditingRole, setGlobalEditingRole] = useState<string | null>(null)
-  const [globalEditRoleValue, setGlobalEditRoleValue] = useState('')
-  const [globalPermActiveRole, setGlobalPermActiveRole] = useState('管理组')
 
   // 当前用户是否为管理组成员
   const isAdminUser = useMemo(() => {
@@ -949,7 +706,7 @@ export default function Home() {
     return result
   }, [visibleProjects, projectSearchText2, projectStatusFilter, projectTypeFilter])
 
-  // 带编辑保护的导航函数 - 如果当前在编辑模式，弹出确认框
+  // Override store's navigateWithEditGuard to include isCurrentDraft check
   const navigateWithEditGuard = (action: () => void) => {
     if (isEditMode && !isCurrentDraft) {
       setPendingNavigation(() => action)
@@ -957,22 +714,6 @@ export default function Home() {
     } else {
       action()
     }
-  }
-
-  // 确认离开编辑
-  const handleConfirmLeave = () => {
-    setIsEditMode(false)
-    setShowLeaveConfirm(false)
-    if (pendingNavigation) {
-      pendingNavigation()
-      setPendingNavigation(null)
-    }
-  }
-
-  // 取消离开
-  const handleCancelLeave = () => {
-    setShowLeaveConfirm(false)
-    setPendingNavigation(null)
   }
 
   // 点击外部关闭项目搜索下拉
@@ -1109,8 +850,7 @@ export default function Home() {
     }
   }
   
-  // 自定义类型管理
-  const [showAddCustomType, setShowAddCustomType] = useState(false)
+  // 自定义类型管理 (showAddCustomType from UI store)
   const [newCustomTypeName, setNewCustomTypeName] = useState('')
 
   const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
@@ -1440,8 +1180,7 @@ export default function Home() {
     message.success('任务顺序已更新，序号已重新生成')
   }
 
-  // 进度编辑
-  const [progressEditingTask, setProgressEditingTask] = useState<any>(null)
+  // 进度编辑 (progressEditingTask from plan store)
   
   const handleProgressChange = (taskId: string, newProgress: number) => {
     setTasks(tasks.map(t => {
@@ -1459,7 +1198,7 @@ export default function Home() {
   }
 
   // 子活动时间约束检查 - 子活动必须在父活动时间范围内
-  const [parentTimeWarning, setParentTimeWarning] = useState<{visible: boolean, tasks: any[], message: string}>({visible: false, tasks: [], message: ''})
+  // parentTimeWarning from plan store
   
   // 二级计划时间约束检查 - 二级计划时间必须在里程碑时间范围内
   const checkMilestoneTimeConstraint = (level2Tasks: any[], milestoneIds: string[], level1Tasks: any[]): {valid: boolean, violations: any[]} => {
@@ -1542,7 +1281,7 @@ export default function Home() {
   }
 
   // 前置任务检查
-  const [predecessorWarning, setPredecessorWarning] = useState<{visible: boolean, task: any, message: string}>({visible: false, task: null, message: ''})
+  // predecessorWarning from plan store
   
   const checkPredecessor = (task: any, field: 'planStartDate' | 'planEndDate', newDate: string): boolean => {
     if (!task.predecessor) return true
@@ -1595,7 +1334,7 @@ export default function Home() {
     />
   )
 
-  const [kanbanDimension, setKanbanDimension] = useState<'stage' | 'type' | 'status'>('stage')
+  // kanbanDimension from project store
 
   const renderKanbanBoard = () => (
     <KanbanBoard
@@ -2244,8 +1983,7 @@ export default function Home() {
     return (<Space>{!hasDraftVersion && <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateRevision}>创建修订</Button>}<Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
   }
 
-  const [compareShowUnchanged, setCompareShowUnchanged] = useState(false)
-  const [compareFilterType, setCompareFilterType] = useState<string>('all')
+  // compareShowUnchanged, compareFilterType from plan store
 
   const renderVersionCompareResult = () => {
     if (compareResult.length === 0) {
