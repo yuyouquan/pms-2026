@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore, PROJECT_MEMBER_MAP } from '@/stores/project'
+import { usePlanStore } from '@/stores/plan'
 import { usePermissionStore } from '@/stores/permission'
 import { useTransferStore } from '@/stores/transfer'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
@@ -19,7 +20,7 @@ import { useRef, useEffect, useMemo } from 'react'
 export function MainHeader() {
   const {
     activeModule, setActiveModule, configTab, setConfigTab,
-    isEditMode, setShowLeaveConfirm, setPendingNavigation,
+    isEditMode, setIsEditMode, setShowLeaveConfirm, setPendingNavigation,
   } = useUiStore()
 
   const {
@@ -29,10 +30,12 @@ export function MainHeader() {
 
   const { roles, globalRoles } = usePermissionStore()
 
-  const isCurrentDraft = false // determined at parent — not needed here for nav guard
+  const { versions, currentVersion } = usePlanStore()
+  const currentVersionData = versions.find(v => v.id === currentVersion)
+  const isCurrentDraft = currentVersionData?.status === '修订中'
 
   const navigateWithEditGuard = (action: () => void) => {
-    if (isEditMode) {
+    if (isEditMode && !isCurrentDraft) {
       setPendingNavigation(() => action)
       setShowLeaveConfirm(true)
     } else {
@@ -60,7 +63,7 @@ export function MainHeader() {
               theme="dark"
               mode="horizontal"
               selectedKeys={[activeModule]}
-              onClick={({ key }) => navigateWithEditGuard(() => { setActiveModule(key); if (key === 'config') setConfigTab('plan') })}
+              onClick={({ key }) => navigateWithEditGuard(() => { setIsEditMode(false); setActiveModule(key); if (key === 'config') setConfigTab('plan') })}
               style={{ background: 'transparent', borderBottom: 'none', fontSize: 14 }}
               items={[
                 { key: 'projects', label: '工作台' },
@@ -190,7 +193,7 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
     <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)', padding: '0 24px', boxShadow: '0 4px 20px rgba(30,27,75,0.4)', position: 'sticky', top: 0, zIndex: 100, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
       <Row align="middle" style={{ height: 56 }}>
         <Col flex="none">
-          <Button type="text" icon={<LeftOutlined style={{ color: '#fff' }} />} onClick={() => { setTransferView(null); navigateWithEditGuard(() => setActiveModule('projects')); }} style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 500 }}>返回工作台</Button>
+          <Button type="text" icon={<LeftOutlined style={{ color: '#fff' }} />} onClick={() => { setTransferView(null); navigateWithEditGuard(() => { useUiStore.getState().setIsEditMode(false); setActiveModule('projects'); }); }} style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 500 }}>返回工作台</Button>
         </Col>
         <Col flex="auto" style={{ textAlign: 'center' }}>
           <div ref={projectSearchRef} style={{ display: 'inline-block', position: 'relative' }}>
