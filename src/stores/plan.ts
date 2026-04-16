@@ -29,6 +29,14 @@ export const LEVEL1_TASKS = [
   { id: '4', order: 4, taskName: '上市保障', status: '未开始', progress: 0, responsible: '', predecessor: '3', planStartDate: '2026-03-16', planEndDate: '2026-04-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
 ]
 
+// 配置中心模板专用：只保留结构字段，清空日期/工期/实际/状态/进度
+export const LEVEL1_TEMPLATE_TASKS = LEVEL1_TASKS.map(t => ({
+  ...t,
+  planStartDate: '', planEndDate: '', estimatedDays: 0,
+  actualStartDate: '', actualEndDate: '', actualDays: 0,
+  status: '未开始', progress: 0,
+}))
+
 export const ALL_COLUMNS = [
   { key: 'id', title: '序号', default: true },
   { key: 'taskName', title: '任务名称', default: true },

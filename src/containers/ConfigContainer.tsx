@@ -16,7 +16,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { ColumnsType } from 'antd/es/table'
 import { useUiStore } from '@/stores/ui'
-import { usePlanStore, LEVEL2_PLAN_TYPES, LEVEL1_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView } from '@/stores/plan'
+import { usePlanStore, LEVEL2_PLAN_TYPES, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
 import { useProjectStore } from '@/stores/project'
 import { usePermissionStore } from '@/stores/permission'
@@ -80,6 +80,9 @@ export default function ConfigContainer() {
     }
   }
 
+  // 配置中心使用模板数据（无日期/工期）
+  const [configTasks, setConfigTasks] = useState(() => LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t })))
+
   // 修订版本自动进入编辑状态，已发布版本退出编辑
   useEffect(() => {
     if (isCurrentDraft) {
@@ -125,11 +128,11 @@ export default function ConfigContainer() {
   const collapseAll = () => {
     const key = getScopeKey()
     if (!key) return
-    const allParents = getAllExpandableIds(tasks)
+    const allParents = getAllExpandableIds(configTasks)
     setCollapsedNodes(prev => ({ ...prev, [key]: new Set(allParents) }))
   }
 
-  const filteredTasks = (tasks as any[]).filter((task: any) => {
+  const filteredTasks = (configTasks as any[]).filter((task: any) => {
     if (!searchText) return true
     const searchLower = searchText.toLowerCase()
     return (
@@ -145,13 +148,13 @@ export default function ConfigContainer() {
   // Task table for config
   const renderTaskTable = (customTasks?: any[]) => {
     const isLevel2Custom = !!customTasks
-    const tableTasks = customTasks || tasks
+    const tableTasks = customTasks || configTasks
     const currentSetTasks = isLevel2Custom ? (newTasks: any[]) => {
       const planId = customTasks?.[0]?.planId
       if (planId) {
         setLevel2PlanTasks(prev => [...prev.filter(t => t.planId !== planId), ...newTasks])
       }
-    } : setTasks
+    } : setConfigTasks
 
     const flatTasks = tableTasks.map((task: any) => ({ ...task, indentLevel: getTaskDepth(task, tableTasks) }))
     const scopeKey = getScopeKey()
@@ -272,7 +275,7 @@ export default function ConfigContainer() {
   const handleAddSubTask = (parentId: string) => {
     const isLevel2Context = planLevel === 'level2'
     const isLevel2TaskContext = isLevel2Context && activeLevel2Plan
-    const currentTasks = isLevel2TaskContext ? level2PlanTasks.filter((t: any) => t.planId === activeLevel2Plan) : tasks
+    const currentTasks = isLevel2TaskContext ? level2PlanTasks.filter((t: any) => t.planId === activeLevel2Plan) : configTasks
     const parentTask = currentTasks.find((t: any) => t.id === parentId)
     if (!parentTask) return
     const depth = getTaskDepth(parentTask, currentTasks)
@@ -298,15 +301,15 @@ export default function ConfigContainer() {
       updatedTasks.splice(insertIndex, 0, newTask)
       setLevel2PlanTasks(prev => [...prev.filter((t: any) => t.planId !== activeLevel2Plan), ...updatedTasks])
     } else {
-      const newTasks = [...tasks]
-      const globalIndex = tasks.findIndex((t: any) => t.id === parentId)
+      const newTasks = [...configTasks]
+      const globalIndex = configTasks.findIndex((t: any) => t.id === parentId)
       let globalInsertIndex = globalIndex + 1
-      for (let i = globalIndex + 1; i < tasks.length; i++) {
-        if (tasks[i].parentId === parentId) globalInsertIndex = i + 1
+      for (let i = globalIndex + 1; i < configTasks.length; i++) {
+        if (configTasks[i].parentId === parentId) globalInsertIndex = i + 1
         else break
       }
       newTasks.splice(globalInsertIndex, 0, newTask)
-      setTasks(newTasks)
+      setConfigTasks(newTasks)
     }
     message.success(`已添加子任务: ${newId}`)
   }
@@ -319,11 +322,11 @@ export default function ConfigContainer() {
     }, 0)
     const newVersionNum = maxVersionNum + 1
     const newVersionId = `v${newVersionNum}`
-    const clonedTasks = LEVEL1_TASKS.map(t => ({ ...t }))
+    const clonedTasks = LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
     const newVersion = { id: newVersionId, versionNo: `V${newVersionNum}`, status: '修订中' }
     setVersions([...versions, newVersion])
     setCurrentVersion(newVersionId)
-    setTasks(clonedTasks)
+    setConfigTasks(clonedTasks)
     message.success(`已创建修订版本 V${newVersionNum}`)
   }
 
@@ -334,7 +337,7 @@ export default function ConfigContainer() {
     const baselineTasks: any[] = prevPublished ? (publishedSnapshots[prevPublished.id] || []) : []
     const changes: TaskChange[] = []
     const baselineMap = new Map<string, any>(baselineTasks.map(t => [t.id, t]))
-    for (const curr of tasks) {
+    for (const curr of configTasks) {
       const prev = baselineMap.get(curr.id)
       if (!prev) { changes.push({ kind: 'created', task: curr }); continue }
       const changedFields: string[] = []
@@ -347,7 +350,7 @@ export default function ConfigContainer() {
     const publishedVersionId = currentVersion
     const publishedVersion = versions.find(v => v.id === publishedVersionId)
     setVersions(versions.map(v => v.id === publishedVersionId ? { ...v, status: '已发布' } : v))
-    setPublishedSnapshots(prev => ({ ...prev, [publishedVersionId]: JSON.parse(JSON.stringify(tasks)) }))
+    setPublishedSnapshots(prev => ({ ...prev, [publishedVersionId]: JSON.parse(JSON.stringify(configTasks)) }))
 
     const versionNo = publishedVersion?.versionNo || publishedVersionId
     if (changes.length > 0) {
@@ -673,11 +676,11 @@ export default function ConfigContainer() {
             if (versionA && versionB) {
               const vANum = parseInt(versionA.versionNo.replace('V', ''))
               const vBNum = parseInt(versionB.versionNo.replace('V', ''))
-              const oldTasks = versionA.status === '已发布' ? LEVEL1_TASKS : tasks
-              let newTasks = versionB.status === '已发布' ? LEVEL1_TASKS : tasks
+              const oldTasks = versionA.status === '已发布' ? LEVEL1_TEMPLATE_TASKS : configTasks
+              let newTasks = versionB.status === '已发布' ? LEVEL1_TEMPLATE_TASKS : configTasks
               if (vANum !== vBNum) {
                 newTasks = [
-                  ...tasks.map(t => {
+                  ...configTasks.map(t => {
                     if (t.id === '2.1') return { ...t, taskName: 'STR2(更新)', status: '已完成', progress: 100 }
                     if (t.id === '3') return { ...t, responsible: '李四', planStartDate: '2026-02-20' }
                     return t
