@@ -108,7 +108,7 @@ export default function ProjectSpaceContainer() {
     compareVersionA, setCompareVersionA, compareVersionB, setCompareVersionB,
     compareResult, setCompareResult, compareShowUnchanged, setCompareShowUnchanged,
     compareFilterType, setCompareFilterType,
-    marketPlanData,
+    marketPlanData, setMarketPlanData,
     ganttEditingTask, setGanttEditingTask, progressEditingTask, setProgressEditingTask,
     parentTimeWarning, setParentTimeWarning,
     milestoneTimeWarning, setMilestoneTimeWarning,
@@ -138,6 +138,20 @@ export default function ProjectSpaceContainer() {
   const allPlanTypes = [...LEVEL2_PLAN_TYPES, ...customTypes]
 
   const isWholeMachineProject = selectedProject?.type === '整机产品项目'
+  const currentMarketData = isWholeMachineProject ? marketPlanData[selectedMarketTab] : null
+  // 整机产品项目使用市场维度数据，其他项目使用全局 tasks
+  const effectiveTasks = currentMarketData ? currentMarketData.tasks : tasks
+  const setEffectiveTasks = currentMarketData
+    ? (newTasks: any[] | ((prev: any[]) => any[])) => {
+        setMarketPlanData((prev: any) => ({
+          ...prev,
+          [selectedMarketTab]: {
+            ...prev[selectedMarketTab],
+            tasks: typeof newTasks === 'function' ? newTasks(prev[selectedMarketTab].tasks) : newTasks,
+          },
+        }))
+      }
+    : setTasks
 
   const currentProjectTransferApps = useMemo(() =>
     transfer.transferApplications.filter(a => a.projectName === selectedProject?.name),
@@ -194,7 +208,7 @@ export default function ProjectSpaceContainer() {
     const latestPub = versions
       .filter(v => v.status === '已发布')
       .sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
-    const scanTarget = latestPub && publishedSnapshots[latestPub.id] ? publishedSnapshots[latestPub.id] : tasks
+    const scanTarget = latestPub && publishedSnapshots[latestPub.id] ? publishedSnapshots[latestPub.id] : effectiveTasks
     const notices = scanDueTasks(scanTarget)
     if (notices.length === 0) return
     notifyDueTasks(notices, MOCK_USER_MAP).then(notified => {
@@ -217,11 +231,11 @@ export default function ProjectSpaceContainer() {
   const expandAll = () => { const key = getScopeKey(); if (!key) return; setCollapsedNodes(prev => ({ ...prev, [key]: new Set<string>() })) }
   const collapseAll = () => {
     const key = getScopeKey(); if (!key) return
-    const scopeTasks = projectPlanLevel === 'level1' ? tasks : level2PlanTasks.filter(t => t.planId === activeLevel2Plan)
+    const scopeTasks = projectPlanLevel === 'level1' ? effectiveTasks : level2PlanTasks.filter(t => t.planId === activeLevel2Plan)
     setCollapsedNodes(prev => ({ ...prev, [key]: new Set(getAllExpandableIds(scopeTasks)) }))
   }
 
-  const filteredTasks = (tasks as any[]).filter((task: any) => {
+  const filteredTasks = (effectiveTasks as any[]).filter((task: any) => {
     if (!searchText) return true
     const s = searchText.toLowerCase()
     return task.id.toLowerCase().includes(s) || task.taskName.toLowerCase().includes(s) || (task.responsible && task.responsible.toLowerCase().includes(s)) || (task.status && task.status.toLowerCase().includes(s))
@@ -259,7 +273,7 @@ export default function ProjectSpaceContainer() {
   const handleAddSubTask = (parentId: string) => {
     const isLevel2Context = projectPlanLevel === 'level2'
     const isLevel2TaskContext = isLevel2Context && activeLevel2Plan
-    const currentTasks = isLevel2TaskContext ? level2PlanTasks.filter(t => t.planId === activeLevel2Plan) : tasks
+    const currentTasks = isLevel2TaskContext ? level2PlanTasks.filter(t => t.planId === activeLevel2Plan) : effectiveTasks
     const parentTask = currentTasks.find((t: any) => t.id === parentId)
     if (!parentTask) return
     const depth = getTaskDepth(parentTask, currentTasks)
@@ -280,13 +294,13 @@ export default function ProjectSpaceContainer() {
       const updatedTasks = [...currentTasks]; updatedTasks.splice(insertIndex, 0, newTask)
       setLevel2PlanTasks(prev => [...prev.filter(t => t.planId !== activeLevel2Plan), ...updatedTasks])
     } else {
-      const newTasks = [...tasks]; newTasks.splice(insertIndex, 0, newTask); setTasks(newTasks)
+      const newTasks = [...effectiveTasks]; newTasks.splice(insertIndex, 0, newTask); setEffectiveTasks(newTasks)
     }
     message.success(`已添加子任务: ${newId}`)
   }
 
   const handleProgressChange = (taskId: string, newProgress: number) => {
-    setTasks(tasks.map(t => {
+    setEffectiveTasks(effectiveTasks.map(t => {
       if (t.id === taskId) { let s = t.status; if (newProgress === 100) s = '已完成'; else if (newProgress > 0) s = '进行中'; else s = '未开始'; return { ...t, progress: newProgress, status: s } }
       return t
     }))
@@ -295,9 +309,9 @@ export default function ProjectSpaceContainer() {
 
   const checkParentTimeConstraint = (): { valid: boolean; violations: any[] } => {
     const violations: any[] = []
-    tasks.forEach(task => {
+    effectiveTasks.forEach(task => {
       if (task.parentId) {
-        const parentTask = tasks.find(t => t.id === task.parentId)
+        const parentTask = effectiveTasks.find(t => t.id === task.parentId)
         if (parentTask && parentTask.planStartDate && parentTask.planEndDate && task.planStartDate && task.planEndDate) {
           const ps = new Date(parentTask.planStartDate).getTime(); const pe = new Date(parentTask.planEndDate).getTime()
           const cs = new Date(task.planStartDate).getTime(); const ce = new Date(task.planEndDate).getTime()
@@ -323,7 +337,7 @@ export default function ProjectSpaceContainer() {
 
   const checkPredecessor = (task: any, field: 'planStartDate' | 'planEndDate', newDate: string): boolean => {
     if (!task.predecessor) return true
-    const predTask = tasks.find(t => t.id === task.predecessor)
+    const predTask = effectiveTasks.find(t => t.id === task.predecessor)
     if (!predTask || !predTask.planEndDate) return true
     if (field === 'planStartDate' && new Date(newDate).getTime() < new Date(predTask.planEndDate).getTime()) {
       setPredecessorWarning({ visible: true, task: { ...task, [field]: newDate }, message: `任务"${task.taskName}"的开始时间(${newDate})早于前置任务"${predTask.taskName}"的结束时间(${predTask.planEndDate})` })
@@ -333,14 +347,14 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleGanttTimeChange = (taskId: string, field: 'planStartDate' | 'planEndDate', date: string) => {
-    const task = tasks.find(t => t.id === taskId); if (!task) return
+    const task = effectiveTasks.find(t => t.id === taskId); if (!task) return
     if (!checkPredecessor(task, field, date)) return
-    setTasks(tasks.map(t => t.id === taskId ? { ...t, [field]: date } : t)); setGanttEditingTask(null); message.success('时间已更新')
+    setEffectiveTasks(effectiveTasks.map(t => t.id === taskId ? { ...t, [field]: date } : t)); setGanttEditingTask(null); message.success('时间已更新')
   }
 
   const confirmPredecessorChange = () => {
     if (!predecessorWarning.task) return
-    setTasks(tasks.map(t => t.id === predecessorWarning.task.id ? predecessorWarning.task : t))
+    setEffectiveTasks(effectiveTasks.map(t => t.id === predecessorWarning.task.id ? predecessorWarning.task : t))
     setPredecessorWarning({ visible: false, task: null, message: '' }); setGanttEditingTask(null); message.success('时间已更新（已确认前置任务冲突）')
   }
 
@@ -349,16 +363,16 @@ export default function ProjectSpaceContainer() {
     const nn = maxNum + 1; const nid = `v${nn}`
     const clonedTasks = LEVEL1_TASKS.map(t => ({ ...t }))
     setVersions([...versions, { id: nid, versionNo: `V${nn}`, status: '修订中' }])
-    setCurrentVersion(nid); setTasks(clonedTasks); message.success(`已创建修订版本 V${nn}`)
+    setCurrentVersion(nid); setEffectiveTasks(clonedTasks); message.success(`已创建修订版本 V${nn}`)
   }
 
   const handlePublish = () => {
     const prevPublished = versions.filter(v => v.status === '已发布' && v.id !== currentVersion).sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
     const baselineTasks: any[] = prevPublished ? (publishedSnapshots[prevPublished.id] || []) : []
-    const changes = diffTasksForNotify(baselineTasks, tasks)
+    const changes = diffTasksForNotify(baselineTasks, effectiveTasks)
     const publishedVersionId = currentVersion; const publishedVersion = versions.find(v => v.id === publishedVersionId)
     setVersions(versions.map(v => v.id === publishedVersionId ? { ...v, status: '已发布' } : v))
-    setPublishedSnapshots(prev => ({ ...prev, [publishedVersionId]: JSON.parse(JSON.stringify(tasks)) }))
+    setPublishedSnapshots(prev => ({ ...prev, [publishedVersionId]: JSON.parse(JSON.stringify(effectiveTasks)) }))
     const versionNo = publishedVersion?.versionNo || publishedVersionId
     if (changes.length > 0) notifyPublishChanges(versionNo, changes, MOCK_USER_MAP).then(notified => {
       if (notified > 0) notification.info({ message: '已通过飞书通知责任人', description: `一级计划 ${versionNo} 发布，共 ${changes.length} 条变更，已通知 ${notified} 位责任人`, placement: 'topRight', duration: 5 })
@@ -382,7 +396,7 @@ export default function ProjectSpaceContainer() {
     const cols = scope === 'current' ? TABLE_COLUMNS.filter(c => visibleColumns.includes(c.key)) : TABLE_COLUMNS
     const exportCols: ExportColumn[] = cols.map(c => ({ key: c.key, title: c.title }))
     let rows: any[] = []
-    if (projectPlanLevel === 'level1') { rows = scope === 'current' && searchText ? tasks.filter((t: any) => (t.taskName || '').toLowerCase().includes(searchText.toLowerCase())) : tasks }
+    if (projectPlanLevel === 'level1') { rows = scope === 'current' && searchText ? effectiveTasks.filter((t: any) => (t.taskName || '').toLowerCase().includes(searchText.toLowerCase())) : effectiveTasks }
     else if (projectPlanLevel === 'level2' && activeLevel2Plan && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1') {
       const l2 = level2PlanTasks.filter((t: any) => t.planId === activeLevel2Plan); rows = scope === 'current' && searchText ? l2.filter((t: any) => (t.taskName || '').toLowerCase().includes(searchText.toLowerCase())) : l2
     }
@@ -391,8 +405,8 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleExportHorizontalPlan = (_scope: 'current' | 'all') => {
-    const stages = (tasks as any[]).filter(t => !t.parentId).sort((a, b) => a.order - b.order)
-    const stageGroups = stages.map(stage => { const ms = (tasks as any[]).filter(t => t.parentId === stage.id).sort((a, b) => a.order - b.order); return { stage, milestones: ms, colSpan: ms.length || 1 } })
+    const stages = (effectiveTasks as any[]).filter(t => !t.parentId).sort((a, b) => a.order - b.order)
+    const stageGroups = stages.map(stage => { const ms = (effectiveTasks as any[]).filter(t => t.parentId === stage.id).sort((a, b) => a.order - b.order); return { stage, milestones: ms, colSpan: ms.length || 1 } })
     const allMilestones = stageGroups.flatMap(({ stage, milestones }) => milestones.length > 0 ? milestones : [stage])
     if (allMilestones.length === 0) { message.warning('暂无可导出数据'); return }
     const headerRow0: (string | null)[] = ['版本', '开发周期']; const headerRow1: (string | null)[] = [null, null]
@@ -401,11 +415,11 @@ export default function ProjectSpaceContainer() {
     for (const { stage, milestones, colSpan } of stageGroups) { headerRow0.push(stage.taskName); for (let i = 1; i < colSpan; i++) headerRow0.push(null); if (milestones.length > 0) { for (const m of milestones) headerRow1.push(m.taskName) } else headerRow1.push('-'); merges.push({ s: { r: 0, c: colCursor }, e: { r: 0, c: colCursor + colSpan - 1 } }); colCursor += colSpan }
     const publishedVersions = versions.filter(v => v.status === '已发布').sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))
     const latestNum = publishedVersions.length > 0 ? Math.max(...publishedVersions.map(v => parseInt(v.versionNo.replace('V', '')))) : 0
-    const getVersionTasks = (versionNo: string) => { const vNum = parseInt(versionNo.replace('V', '')); if (vNum === latestNum) return tasks as any[]; const offsetDays = (latestNum - vNum) * 3; return (tasks as any[]).map(t => ({ ...t, planStartDate: t.planStartDate ? shiftDateStrForExport(t.planStartDate, -offsetDays) : '', planEndDate: t.planEndDate ? shiftDateStrForExport(t.planEndDate, -offsetDays) : '' })) }
+    const getVersionTasks = (versionNo: string) => { const vNum = parseInt(versionNo.replace('V', '')); if (vNum === latestNum) return effectiveTasks as any[]; const offsetDays = (latestNum - vNum) * 3; return (effectiveTasks as any[]).map(t => ({ ...t, planStartDate: t.planStartDate ? shiftDateStrForExport(t.planStartDate, -offsetDays) : '', planEndDate: t.planEndDate ? shiftDateStrForExport(t.planEndDate, -offsetDays) : '' })) }
     const calcCycleDays = (list: any[], sk: string, ek: string) => { const starts = list.map(t => t[sk]).filter(Boolean).map((d: string) => new Date(d).getTime()); const ends = list.map(t => t[ek]).filter(Boolean).map((d: string) => new Date(d).getTime()); if (starts.length === 0 || ends.length === 0) return '-'; const days = Math.ceil((Math.max(...ends) - Math.min(...starts)) / (1000 * 60 * 60 * 24)); return days > 0 ? days : '-' }
     const dataMatrix: (string | number)[][] = []
     for (const v of publishedVersions) { const vt = getVersionTasks(v.versionNo); const row: (string | number)[] = [v.versionNo, calcCycleDays(vt, 'planStartDate', 'planEndDate')]; for (const m of allMilestones) { const match = vt.find((t: any) => t.id === m.id); row.push(match?.planEndDate || '-') }; dataMatrix.push(row) }
-    const actualRow: (string | number)[] = ['实际', calcCycleDays(tasks as any[], 'actualStartDate', 'actualEndDate')]; for (const m of allMilestones) { const t = (tasks as any[]).find((x: any) => x.id === m.id); actualRow.push(t?.actualEndDate || '-') }; dataMatrix.push(actualRow)
+    const actualRow: (string | number)[] = ['实际', calcCycleDays(effectiveTasks as any[], 'actualStartDate', 'actualEndDate')]; for (const m of allMilestones) { const t = (effectiveTasks as any[]).find((x: any) => x.id === m.id); actualRow.push(t?.actualEndDate || '-') }; dataMatrix.push(actualRow)
     const colWidths = [10, 10, ...allMilestones.map(() => 14)]
     exportMergedSheet([headerRow0, headerRow1], merges, dataMatrix, colWidths, `项目空间计划_${selectedProject?.name || '项目'}_一级计划_横版_${exportTimestamp()}.xlsx`, '一级计划横版')
   }
@@ -468,13 +482,13 @@ export default function ProjectSpaceContainer() {
   // ═══════ renderTaskTable ═══════
   const renderTaskTable = (customTasks?: any[]) => {
     const isLevel2Custom = !!customTasks
-    const tableTasks = customTasks || tasks
+    const tableTasks = customTasks || effectiveTasks
     const currentSetTasks = isLevel2Custom ? (newTasks: any[]) => {
       const planId = customTasks?.[0]?.planId
       if (planId) {
         setLevel2PlanTasks(prev => [...prev.filter(t => t.planId !== planId), ...newTasks])
       }
-    } : setTasks
+    } : setEffectiveTasks
     const flatTasks = tableTasks.map((task: any) => ({ ...task, indentLevel: getTaskDepth(task, tableTasks) }))
     const scopeKey = getScopeKey()
     const collapsedSet = scopeKey ? (collapsedNodes[scopeKey] || new Set<string>()) : new Set<string>()
@@ -626,9 +640,9 @@ export default function ProjectSpaceContainer() {
 
   // ═══════ renderHorizontalTable ═══════
   const renderHorizontalTable = () => {
-    const stages = tasks.filter((t: any) => !t.parentId).sort((a: any, b: any) => a.order - b.order)
+    const stages = effectiveTasks.filter((t: any) => !t.parentId).sort((a: any, b: any) => a.order - b.order)
     const stageGroups = stages.map((stage: any) => {
-      const milestones = tasks.filter((t: any) => t.parentId === stage.id).sort((a: any, b: any) => a.order - b.order)
+      const milestones = effectiveTasks.filter((t: any) => t.parentId === stage.id).sort((a: any, b: any) => a.order - b.order)
       return { stage, milestones, colSpan: milestones.length || 1 }
     })
     const allMilestones = stageGroups.flatMap(({ stage, milestones }) => milestones.length > 0 ? milestones : [stage])
@@ -644,9 +658,9 @@ export default function ProjectSpaceContainer() {
     const getVersionTasks = (versionId: string) => {
       const vNum = parseInt(versions.find(v => v.id === versionId)?.versionNo.replace('V', '') || '1')
       const latestNum = Math.max(...publishedVersions.map(v => parseInt(v.versionNo.replace('V', ''))))
-      if (vNum === latestNum) return tasks
+      if (vNum === latestNum) return effectiveTasks
       const offsetDays = (latestNum - vNum) * 3
-      return (tasks as any[]).map((t: any) => ({
+      return (effectiveTasks as any[]).map((t: any) => ({
         ...t,
         planEndDate: t.planEndDate ? (() => { const d = new Date(t.planEndDate); d.setDate(d.getDate() - offsetDays); return d.toISOString().split('T')[0] })() : '',
         planStartDate: t.planStartDate ? (() => { const d = new Date(t.planStartDate); d.setDate(d.getDate() - offsetDays); return d.toISOString().split('T')[0] })() : '',
@@ -698,8 +712,8 @@ export default function ProjectSpaceContainer() {
             <tr style={{ background: '#fffbe6' }}>
               <td style={{ ...versionTdStyle, color: '#d48806', background: '#fffbe6', fontSize: 12 }}><Tooltip title="最近已发布版本的实际完成数据"><span>实际</span></Tooltip></td>
               <td style={{ ...cycleTdStyle, background: '#fffbe6' }}><Tooltip title="最早实际开始到最晚实际完成的天数"><span>{(() => {
-                const starts = (tasks as any[]).map((t: any) => t.actualStartDate).filter(Boolean).map((d: string) => new Date(d).getTime())
-                const ends = (tasks as any[]).map((t: any) => t.actualEndDate).filter(Boolean).map((d: string) => new Date(d).getTime())
+                const starts = (effectiveTasks as any[]).map((t: any) => t.actualStartDate).filter(Boolean).map((d: string) => new Date(d).getTime())
+                const ends = (effectiveTasks as any[]).map((t: any) => t.actualEndDate).filter(Boolean).map((d: string) => new Date(d).getTime())
                 if (starts.length === 0 || ends.length === 0) return '-'
                 const days = Math.ceil((Math.max(...ends) - Math.min(...starts)) / (1000 * 60 * 60 * 24))
                 return days > 0 ? days : '-'
@@ -721,9 +735,9 @@ export default function ProjectSpaceContainer() {
         return
       }
       const predViolations: any[] = []
-      tasks.forEach(task => {
+      effectiveTasks.forEach(task => {
         if (task.predecessor && task.planStartDate) {
-          const predTask = tasks.find(t => t.id === task.predecessor)
+          const predTask = effectiveTasks.find(t => t.id === task.predecessor)
           if (predTask && predTask.planEndDate) {
             if (new Date(task.planStartDate).getTime() < new Date(predTask.planEndDate).getTime()) {
               predViolations.push({ id: task.id, taskName: task.taskName, predName: predTask.taskName, predEnd: predTask.planEndDate })
@@ -740,7 +754,7 @@ export default function ProjectSpaceContainer() {
         return
       }
       if (projectPlanLevel === 'level2' && level2PlanMilestones.length > 0 && level2PlanTasks.length > 0) {
-        const milestoneCheck = checkMilestoneTimeConstraint(level2PlanTasks, level2PlanMilestones, tasks)
+        const milestoneCheck = checkMilestoneTimeConstraint(level2PlanTasks, level2PlanMilestones, effectiveTasks)
         if (!milestoneCheck.valid) {
           setMilestoneTimeWarning({ visible: true, violations: milestoneCheck.violations, message: `发现${milestoneCheck.violations.length}个二级计划任务时间超出绑定里程碑的时间范围，请修改后再保存` })
           return
@@ -1114,7 +1128,7 @@ export default function ProjectSpaceContainer() {
 
   // ═══════ renderProjectPlanOverview ═══════
   const renderProjectPlanOverview = () => {
-    const displayTasks = mergePlans(tasks, level2PlanTasks)
+    const displayTasks = mergePlans(effectiveTasks, level2PlanTasks)
     return (
       <div>
         <Card style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
@@ -1421,11 +1435,11 @@ export default function ProjectSpaceContainer() {
             if (versionA && versionB) {
               const vANum = parseInt(versionA.versionNo.replace('V', ''))
               const vBNum = parseInt(versionB.versionNo.replace('V', ''))
-              const oldTasks = versionA.status === '已发布' ? LEVEL1_TASKS : tasks
-              let newTasks = versionB.status === '已发布' ? LEVEL1_TASKS : tasks
+              const oldTasks = versionA.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
+              let newTasks = versionB.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
               if (vANum !== vBNum) {
                 newTasks = [
-                  ...tasks.map(t => {
+                  ...effectiveTasks.map(t => {
                     if (t.id === '2.1') return { ...t, taskName: 'STR2(更新)', status: '已完成', progress: 100 }
                     if (t.id === '3') return { ...t, responsible: '李四', planStartDate: '2026-02-20' }
                     return t
