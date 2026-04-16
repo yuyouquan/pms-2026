@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Card, Tabs, Table, Row, Col, Space, Divider, Tag, Menu, Button, Select,
   Input, Tooltip, Modal, Form, Checkbox, message, Progress, Popconfirm,
@@ -66,8 +66,13 @@ export default function ConfigContainer() {
 
   const [newCustomTypeName, setNewCustomTypeName] = useState('')
 
+  const allPlanTypes = [...LEVEL2_PLAN_TYPES, ...customTypes]
+  const hasDraftVersion = versions.some(v => v.status === '修订中')
+  const currentVersionData = versions.find(v => v.id === currentVersion)
+  const isCurrentDraft = currentVersionData?.status === '修订中'
+
   const navigateWithEditGuard = (action: () => void) => {
-    if (isEditMode) {
+    if (isEditMode && !isCurrentDraft) {
       setPendingNavigation(() => action)
       setShowLeaveConfirm(true)
     } else {
@@ -75,10 +80,14 @@ export default function ConfigContainer() {
     }
   }
 
-  const allPlanTypes = [...LEVEL2_PLAN_TYPES, ...customTypes]
-  const hasDraftVersion = versions.some(v => v.status === '修订中')
-  const currentVersionData = versions.find(v => v.id === currentVersion)
-  const isCurrentDraft = currentVersionData?.status === '修订中'
+  // 修订版本自动进入编辑状态，已发布版本退出编辑
+  useEffect(() => {
+    if (isCurrentDraft) {
+      setIsEditMode(true)
+    } else {
+      setIsEditMode(false)
+    }
+  }, [currentVersion, isCurrentDraft])
 
   // View columns
   const getViewKey = () => `config-${planLevel}-${viewMode}`
