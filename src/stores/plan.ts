@@ -16,6 +16,7 @@ export const VERSION_DATA = [
   { id: 'v1', versionNo: 'V1', status: '已发布' },
   { id: 'v2', versionNo: 'V2', status: '已发布' },
   { id: 'v3', versionNo: 'V3', status: '已发布' },
+  { id: 'v4', versionNo: 'V4', status: '修订中' },
 ]
 
 export const LEVEL1_TASKS = [
@@ -299,11 +300,35 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
   compareShowUnchanged: false,
   compareFilterType: 'all',
 
-  // Market plan data
+  // Market plan data — 整机产品项目按市场维度维护独立的计划数据
   marketPlanData: {
     'OP': { tasks: [...LEVEL1_TASKS], level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] },
-    'TR': { tasks: [...LEVEL1_TASKS.map(t => ({ ...t }))], level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] },
-    'RU': { tasks: [...LEVEL1_TASKS.map(t => ({ ...t }))], level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] },
+    'TR': {
+      tasks: [
+        { id: '1', order: 1, taskName: '概念', status: '已完成', progress: 100, responsible: '赵六', predecessor: '', planStartDate: '2026-02-01', planEndDate: '2026-02-20', estimatedDays: 20, actualStartDate: '2026-02-01', actualEndDate: '2026-02-19', actualDays: 19 },
+        { id: '1.1', parentId: '1', order: 1, taskName: '概念启动', status: '已完成', progress: 100, responsible: '赵六', predecessor: '', planStartDate: '2026-02-01', planEndDate: '2026-02-10', estimatedDays: 10, actualStartDate: '2026-02-01', actualEndDate: '2026-02-10', actualDays: 10 },
+        { id: '1.2', parentId: '1', order: 2, taskName: 'STR1', status: '已完成', progress: 100, responsible: '孙七', predecessor: '1.1', planStartDate: '2026-02-11', planEndDate: '2026-02-20', estimatedDays: 10, actualStartDate: '2026-02-11', actualEndDate: '2026-02-19', actualDays: 9 },
+        { id: '2', order: 2, taskName: '计划', status: '进行中', progress: 40, responsible: '赵六', predecessor: '1.2', planStartDate: '2026-02-21', planEndDate: '2026-03-20', estimatedDays: 28, actualStartDate: '2026-02-21', actualEndDate: '', actualDays: 0 },
+        { id: '2.1', parentId: '2', order: 1, taskName: 'STR2', status: '进行中', progress: 40, responsible: '孙七', predecessor: '1.2', planStartDate: '2026-02-21', planEndDate: '2026-03-05', estimatedDays: 13, actualStartDate: '2026-02-21', actualEndDate: '', actualDays: 0 },
+        { id: '2.2', parentId: '2', order: 2, taskName: 'STR3', status: '未开始', progress: 0, responsible: '周八', predecessor: '2.1', planStartDate: '2026-03-06', planEndDate: '2026-03-20', estimatedDays: 15, actualStartDate: '', actualEndDate: '', actualDays: 0 },
+        { id: '3', order: 3, taskName: '开发验证', status: '未开始', progress: 0, responsible: '', predecessor: '2.2', planStartDate: '2026-03-21', planEndDate: '2026-04-20', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
+        { id: '4', order: 4, taskName: '上市保障', status: '未开始', progress: 0, responsible: '', predecessor: '3', planStartDate: '2026-04-21', planEndDate: '2026-05-20', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
+      ],
+      level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS],
+    },
+    'RU': {
+      tasks: [
+        { id: '1', order: 1, taskName: '概念', status: '已完成', progress: 100, responsible: '周八', predecessor: '', planStartDate: '2026-03-01', planEndDate: '2026-03-15', estimatedDays: 15, actualStartDate: '2026-03-01', actualEndDate: '2026-03-14', actualDays: 14 },
+        { id: '1.1', parentId: '1', order: 1, taskName: '概念启动', status: '已完成', progress: 100, responsible: '周八', predecessor: '', planStartDate: '2026-03-01', planEndDate: '2026-03-08', estimatedDays: 8, actualStartDate: '2026-03-01', actualEndDate: '2026-03-07', actualDays: 7 },
+        { id: '1.2', parentId: '1', order: 2, taskName: 'STR1', status: '已完成', progress: 100, responsible: '吴九', predecessor: '1.1', planStartDate: '2026-03-09', planEndDate: '2026-03-15', estimatedDays: 7, actualStartDate: '2026-03-08', actualEndDate: '2026-03-14', actualDays: 7 },
+        { id: '2', order: 2, taskName: '计划', status: '未开始', progress: 0, responsible: '周八', predecessor: '1.2', planStartDate: '2026-03-16', planEndDate: '2026-04-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
+        { id: '2.1', parentId: '2', order: 1, taskName: 'STR2', status: '未开始', progress: 0, responsible: '周八', predecessor: '1.2', planStartDate: '2026-03-16', planEndDate: '2026-03-31', estimatedDays: 16, actualStartDate: '', actualEndDate: '', actualDays: 0 },
+        { id: '2.2', parentId: '2', order: 2, taskName: 'STR3', status: '未开始', progress: 0, responsible: '吴九', predecessor: '2.1', planStartDate: '2026-04-01', planEndDate: '2026-04-15', estimatedDays: 15, actualStartDate: '', actualEndDate: '', actualDays: 0 },
+        { id: '3', order: 3, taskName: '开发验证', status: '未开始', progress: 0, responsible: '', predecessor: '2.2', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
+        { id: '4', order: 4, taskName: '上市保障', status: '未开始', progress: 0, responsible: '', predecessor: '3', planStartDate: '2026-05-16', planEndDate: '2026-06-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
+      ],
+      level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS],
+    },
   },
 
   // Editing helpers
