@@ -326,20 +326,18 @@ export function shiftDateStrForExport(dateStr: string, deltaDays: number): strin
 }
 
 // ─── initialTodos (data used by WorkspaceContainer) ─────────────────
+// 待办数据：仅修订中(未发布)的版本才会产生待办，已发布版本不产生待办
 export const initialTodos = [
-  // 逾期：deadline 已过
-  { id: '1', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V3', versionId: 'v3', market: 'OP', responsible: '张三', priority: 'high', deadline: '2026-04-12', status: '进行中', taskDesc: 'STR2里程碑已逾期，需确认延期方案', category: 'overdue' as const },
-  { id: '2', projectId: '2', projectName: 'tOS16.0', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V3', versionId: 'v3', market: '', responsible: '张三', priority: 'high', deadline: '2026-04-10', status: '进行中', taskDesc: 'STR3节点逾期3天，请更新计划', category: 'overdue' as const },
-  // 即将到期：2天内
-  { id: '3', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level2' as const, planType: '1+N MR版本火车计划', planTabKey: 'plan2', versionNo: 'V1', versionId: 'v1', market: 'OP', responsible: '张三', priority: 'medium', deadline: '2026-04-17', status: '进行中', taskDesc: 'FR版本编译验证明天到期', category: 'upcoming' as const },
-  { id: '4', projectId: '9', projectName: 'AI-Engine-V2', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V3', versionId: 'v3', market: '', responsible: '李四', priority: 'medium', deadline: '2026-04-18', status: '进行中', taskDesc: '推理引擎性能测试即将到期', category: 'upcoming' as const },
-  // 待处理
-  { id: '5', projectId: '3', projectName: 'X6855_H8917', planLevel: 'level2' as const, planType: '在研版本火车计划', planTabKey: 'plan1', versionNo: 'V2', versionId: 'v2', market: 'OP', responsible: '李四', priority: 'medium', deadline: '2026-04-25', status: '待处理', taskDesc: 'Display模块开发任务待启动', category: 'pending' as const },
-  { id: '6', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level2' as const, planType: '需求开发计划', planTabKey: 'plan0', versionNo: 'V2', versionId: 'v2', market: 'TR', responsible: '张三', priority: 'low', deadline: '2026-04-30', status: '待处理', taskDesc: 'TR市场需求评审安排', category: 'pending' as const },
-  { id: '7', projectId: '7', projectName: 'X6890-D8500_H1001', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V1', versionId: 'v1', market: 'OP', responsible: '张三', priority: 'low', deadline: '2026-05-10', status: '待处理', taskDesc: 'CAMON 40 Pro概念启动材料准备', category: 'pending' as const },
-  // 已完成
-  { id: '8', projectId: '3', projectName: 'X6855_H8917', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V2', versionId: 'v2', market: 'OP', responsible: '张三', priority: 'low', deadline: '2026-04-08', status: '已完成', taskDesc: '概念阶段评审已通过', category: 'completed' as const },
-  { id: '9', projectId: '10', projectName: 'DevOps-Platform', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V1', versionId: 'v1', market: '', responsible: '李四', priority: 'medium', deadline: '2026-04-05', status: '已完成', taskDesc: 'CI/CD流水线集成测试通过', category: 'completed' as const },
+  // 逾期：修订版中的任务已过截止日
+  { id: '1', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V4', versionId: 'v4', market: 'OP', responsible: '张三', priority: 'high', deadline: '2026-04-12', status: '进行中', taskDesc: 'V4修订版：STR2里程碑已逾期，需确认延期方案', category: 'overdue' as const },
+  { id: '2', projectId: '2', projectName: 'tOS16.0', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V4', versionId: 'v4', market: '', responsible: '张三', priority: 'high', deadline: '2026-04-10', status: '进行中', taskDesc: 'V4修订版：STR3节点逾期，请更新计划', category: 'overdue' as const },
+  // 即将到期：修订版中2天内到期的任务
+  { id: '3', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level2' as const, planType: '1+N MR版本火车计划', planTabKey: 'plan2', versionNo: 'V1', versionId: 'v1', market: 'OP', responsible: '张三', priority: 'medium', deadline: '2026-04-17', status: '进行中', taskDesc: 'V1修订版：FR版本编译验证明天到期', category: 'upcoming' as const },
+  { id: '4', projectId: '9', projectName: 'AI-Engine-V2', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V1', versionId: 'v1', market: '', responsible: '李四', priority: 'medium', deadline: '2026-04-18', status: '进行中', taskDesc: 'V1修订版：推理引擎性能测试即将到期', category: 'upcoming' as const },
+  // 待处理：修订版中未开始的任务
+  { id: '5', projectId: '3', projectName: 'X6855_H8917', planLevel: 'level2' as const, planType: '在研版本火车计划', planTabKey: 'plan1', versionNo: 'V1', versionId: 'v1', market: 'OP', responsible: '李四', priority: 'medium', deadline: '2026-04-25', status: '待处理', taskDesc: 'V1修订版：Display模块开发任务待启动', category: 'pending' as const },
+  { id: '6', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level2' as const, planType: '需求开发计划', planTabKey: 'plan0', versionNo: 'V1', versionId: 'v1', market: 'TR', responsible: '张三', priority: 'low', deadline: '2026-04-30', status: '待处理', taskDesc: 'V1修订版：TR市场需求评审安排', category: 'pending' as const },
+  { id: '7', projectId: '7', projectName: 'X6890-D8500_H1001', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V1', versionId: 'v1', market: 'OP', responsible: '张三', priority: 'low', deadline: '2026-05-10', status: '待处理', taskDesc: 'V1修订版：CAMON 40 Pro概念启动材料准备', category: 'pending' as const },
 ]
 
 /** Merge L1 and L2 plans for the overview tab */
