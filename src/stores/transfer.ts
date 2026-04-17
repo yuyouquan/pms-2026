@@ -133,6 +133,37 @@ export interface TransferActions {
   setTmSqaAction: (v: 'approve' | 'reject') => void
 }
 
+// View-scoped transient state — reset whenever transferView changes to prevent
+// stale data leaking between apply / detail / entry / review / sqa-review.
+const VIEW_TRANSIENT_DEFAULTS = {
+  // Apply
+  tmApplyProject: '',
+  tmApplyDate: '',
+  tmApplyRemark: '',
+  tmApplyTeam: { research: [] as TMTeamMember[], maintenance: [] as TMTeamMember[] },
+  // Detail
+  tmDetailModalVisible: false,
+  tmDetailModalTitle: '',
+  tmDetailModalContent: '',
+  // Entry
+  tmEntryTab: 'checklist' as const,
+  tmEntryModalOpen: false,
+  tmEntryModalRecord: null as any,
+  tmEntryContent: '',
+  tmEntryActiveRole: 'all',
+  // Review
+  tmReviewTab: 'checklist' as const,
+  tmReviewModalOpen: false,
+  tmReviewAction: 'pass' as const,
+  tmReviewRecord: null as any,
+  tmReviewComment: '',
+  tmReviewActiveRole: 'all',
+  // SQA
+  tmSqaComment: '',
+  tmSqaModalOpen: false,
+  tmSqaAction: 'approve' as const,
+}
+
 export const useTransferStore = create<TransferState & TransferActions>()((set) => ({
   // Current user
   currentUser: MOCK_TM_USERS[0],
@@ -200,7 +231,7 @@ export const useTransferStore = create<TransferState & TransferActions>()((set) 
   // ─── Setters ─────────────────────────────────────────────────────
   setCurrentUser: (v) => set({ currentUser: v }),
 
-  setTransferView: (v) => set({ transferView: v }),
+  setTransferView: (v) => set((s) => s.transferView === v ? { transferView: v } : { transferView: v, ...VIEW_TRANSIENT_DEFAULTS }),
   setSelectedTransferAppId: (v) => set({ selectedTransferAppId: v }),
 
   setTransferConfigView: (v) => set({ transferConfigView: v }),

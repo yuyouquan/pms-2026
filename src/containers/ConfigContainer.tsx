@@ -62,7 +62,16 @@ export default function ConfigContainer() {
   const transferStore = useTransferStore()
   const { transferConfigView, setTransferConfigView } = transferStore
 
-  const { selectedProject } = useProjectStore()
+  const { selectedProject, currentLoginUser } = useProjectStore()
+
+  // Derive the transfer-module current user from the logged-in user so it
+  // tracks the user switcher instead of being pinned to MOCK_TM_USERS[0].
+  const transferCurrentUser = useMemo(() => ({
+    id: `login-${currentLoginUser}`,
+    name: currentLoginUser,
+    role: 'SPM' as const,
+    department: '-',
+  }), [currentLoginUser])
 
   const [newCustomTypeName, setNewCustomTypeName] = useState('')
 
@@ -366,7 +375,7 @@ export default function ConfigContainer() {
 
   // Build transferProps for TransferConfig
   const transferProps = {
-    selectedProject, currentUser: transferStore.currentUser,
+    selectedProject, currentUser: transferCurrentUser,
     transferView: transferStore.transferView, setTransferView: transferStore.setTransferView,
     transferConfigView, setTransferConfigView,
     tmConfigSearchText: transferStore.tmConfigSearchText, setTmConfigSearchText: transferStore.setTmConfigSearchText,

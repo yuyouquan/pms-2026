@@ -15,6 +15,73 @@ import { useTransferStore } from '@/stores/transfer'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import { useRef, useEffect, useMemo } from 'react'
 
+// ─── Shared user switcher (head avatar + dropdown) ──────────────────
+
+function UserSwitcher() {
+  const { projects, currentLoginUser, setCurrentLoginUser, setProjectCardPage } = useProjectStore()
+  const { roles, globalRoles } = usePermissionStore()
+
+  const isAdminUser = useMemo(() => {
+    const adminGroup = globalRoles.find(r => r.name === '管理组')
+    return adminGroup ? adminGroup.members.includes(currentLoginUser) : false
+  }, [globalRoles, currentLoginUser])
+
+  return (
+    <Dropdown
+      menu={{
+        items: [
+          { key: 'label', label: <div style={{ padding: '4px 0', borderBottom: '1px solid #f3f4f6' }}>
+            <span style={{ color: '#999', fontSize: 11 }}>当前登录用户</span>
+            <div style={{ fontWeight: 600, marginTop: 2 }}>{currentLoginUser}
+              {(() => {
+                const adminGroup = globalRoles.find(r => r.name === '管理组')
+                const isAdmin = adminGroup?.members.includes(currentLoginUser)
+                const projectCount = isAdmin ? projects.length : projects.filter(p => (PROJECT_MEMBER_MAP[p.id] || []).includes(currentLoginUser)).length
+                return <>
+                  {isAdmin && <Tag color="red" style={{ fontSize: 10, marginLeft: 6 }}>管理组</Tag>}
+                  <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 6 }}>可见 {projectCount} 个项目</span>
+                </>
+              })()}
+            </div>
+          </div>, disabled: true },
+          { type: 'divider' as const },
+          { key: 'switch-label', label: <span style={{ color: '#999', fontSize: 11 }}><SwapOutlined style={{ marginRight: 4 }} />切换用户（测试权限）</span>, disabled: true },
+          ...ALL_USERS.map(u => {
+            const isActive = currentLoginUser === u
+            const adminGroup = globalRoles.find(r => r.name === '管理组')
+            const isAdmin = adminGroup?.members.includes(u)
+            const projectCount = isAdmin ? projects.length : projects.filter(p => (PROJECT_MEMBER_MAP[p.id] || []).includes(u)).length
+            const userRoles = roles.filter(r => r.members.includes(u)).map(r => r.name)
+            return {
+              key: u,
+              label: <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: isActive ? 600 : 400 }}>
+                <Avatar size="small" style={{ background: isActive ? '#4338ca' : '#e0e0e0', fontSize: 12 }}>{u.slice(-1)}</Avatar>
+                <span>{u}</span>
+                {isAdmin && <Tag color="red" style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>管理组</Tag>}
+                <span style={{ color: '#9ca3af', fontSize: 11, marginLeft: 'auto' }}>{projectCount}个项目</span>
+                {isActive && <CheckCircleOutlined style={{ color: '#4338ca' }} />}
+              </div>,
+              onClick: () => { setCurrentLoginUser(u); setProjectCardPage(1) },
+            }
+          }),
+        ],
+      }}
+      placement="bottomRight"
+      trigger={['click']}
+      overlayStyle={{ minWidth: 340 }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '5px 14px', borderRadius: 24, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', transition: 'all 0.25s', backdropFilter: 'blur(8px)' }}
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.22)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
+      >
+        <Avatar size={28} style={{ background: 'rgba(255,255,255,0.25)', fontSize: 13, fontWeight: 600 }}>{currentLoginUser.slice(-1)}</Avatar>
+        <span style={{ color: '#fff', fontSize: 13, fontWeight: 500 }}>{currentLoginUser}</span>
+        {isAdminUser && <Tag color="rgba(255,100,100,0.35)" style={{ color: '#fff', border: '1px solid rgba(255,255,255,0.25)', fontSize: 10, margin: 0 }}>管理组</Tag>}
+      </div>
+    </Dropdown>
+  )
+}
+
 // ─── Main mode header (工作台, 路标, 配置, 权限) ─────────────────────
 
 export function MainHeader() {
@@ -22,13 +89,6 @@ export function MainHeader() {
     activeModule, setActiveModule, configTab, setConfigTab,
     isEditMode, setIsEditMode, setShowLeaveConfirm, setPendingNavigation,
   } = useUiStore()
-
-  const {
-    projects, currentLoginUser, setCurrentLoginUser,
-    setProjectCardPage,
-  } = useProjectStore()
-
-  const { roles, globalRoles } = usePermissionStore()
 
   const { versions, currentVersion } = usePlanStore()
   const currentVersionData = versions.find(v => v.id === currentVersion)
@@ -42,11 +102,6 @@ export function MainHeader() {
       action()
     }
   }
-
-  const isAdminUser = useMemo(() => {
-    const adminGroup = globalRoles.find(r => r.name === '管理组')
-    return adminGroup ? adminGroup.members.includes(currentLoginUser) : false
-  }, [globalRoles, currentLoginUser])
 
   return (
     <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)', padding: '0 32px', boxShadow: '0 4px 20px rgba(30,27,75,0.4)', position: 'sticky', top: 0, zIndex: 100, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
@@ -76,58 +131,7 @@ export function MainHeader() {
           </Space>
         </Col>
         <Col>
-          <Dropdown
-            menu={{
-              items: [
-                { key: 'label', label: <div style={{ padding: '4px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <span style={{ color: '#999', fontSize: 11 }}>当前登录用户</span>
-                  <div style={{ fontWeight: 600, marginTop: 2 }}>{currentLoginUser}
-                    {(() => {
-                      const adminGroup = globalRoles.find(r => r.name === '管理组')
-                      const isAdmin = adminGroup?.members.includes(currentLoginUser)
-                      const projectCount = isAdmin ? projects.length : projects.filter(p => (PROJECT_MEMBER_MAP[p.id] || []).includes(currentLoginUser)).length
-                      return <>
-                        {isAdmin && <Tag color="red" style={{ fontSize: 10, marginLeft: 6 }}>管理组</Tag>}
-                        <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 6 }}>可见 {projectCount} 个项目</span>
-                      </>
-                    })()}
-                  </div>
-                </div>, disabled: true },
-                { type: 'divider' as const },
-                { key: 'switch-label', label: <span style={{ color: '#999', fontSize: 11 }}><SwapOutlined style={{ marginRight: 4 }} />切换用户（测试权限）</span>, disabled: true },
-                ...ALL_USERS.map(u => {
-                  const isActive = currentLoginUser === u
-                  const adminGroup = globalRoles.find(r => r.name === '管理组')
-                  const isAdmin = adminGroup?.members.includes(u)
-                  const projectCount = isAdmin ? projects.length : projects.filter(p => (PROJECT_MEMBER_MAP[p.id] || []).includes(u)).length
-                  const userRoles = roles.filter(r => r.members.includes(u)).map(r => r.name)
-                  return {
-                    key: u,
-                    label: <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: isActive ? 600 : 400 }}>
-                      <Avatar size="small" style={{ background: isActive ? '#4338ca' : '#e0e0e0', fontSize: 12 }}>{u.slice(-1)}</Avatar>
-                      <span>{u}</span>
-                      {isAdmin && <Tag color="red" style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>管理组</Tag>}
-                      <span style={{ color: '#9ca3af', fontSize: 11, marginLeft: 'auto' }}>{projectCount}个项目</span>
-                      {isActive && <CheckCircleOutlined style={{ color: '#4338ca' }} />}
-                    </div>,
-                    onClick: () => { setCurrentLoginUser(u); setProjectCardPage(1) },
-                  }
-                }),
-              ],
-            }}
-            placement="bottomRight"
-            trigger={['click']}
-            overlayStyle={{ minWidth: 340 }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '5px 14px', borderRadius: 24, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', transition: 'all 0.25s', backdropFilter: 'blur(8px)' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.22)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
-            >
-              <Avatar size={28} style={{ background: 'rgba(255,255,255,0.25)', fontSize: 13, fontWeight: 600 }}>{currentLoginUser.slice(-1)}</Avatar>
-              <span style={{ color: '#fff', fontSize: 13, fontWeight: 500 }}>{currentLoginUser}</span>
-              {isAdminUser && <Tag color="rgba(255,100,100,0.35)" style={{ color: '#fff', border: '1px solid rgba(255,255,255,0.25)', fontSize: 10, margin: 0 }}>管理组</Tag>}
-            </div>
-          </Dropdown>
+          <UserSwitcher />
         </Col>
       </Row>
     </div>
@@ -263,7 +267,9 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
             )}
           </div>
         </Col>
-        <Col flex="none" />
+        <Col flex="none">
+          <UserSwitcher />
+        </Col>
       </Row>
     </div>
   )
