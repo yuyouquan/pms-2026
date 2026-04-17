@@ -46,7 +46,7 @@ import { useUiStore } from '@/stores/ui'
 import { useProjectStore, PROJECT_MEMBER_MAP } from '@/stores/project'
 import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
-import { usePermissionStore } from '@/stores/permission'
+import { usePermissionStore, useHasPermission } from '@/stores/permission'
 import { PermissionConfig } from '@/components/permission/PermissionModule'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import { TransferApply, TransferDetail, TransferEntry, TransferReview, TransferSqaReview } from '@/components/transfer/TransferModule'
@@ -123,6 +123,13 @@ export default function ProjectSpaceContainer() {
     editingRoleName, setEditingRoleName, editRoleNameValue, setEditRoleNameValue,
     permissionActiveRole, setPermissionActiveRole, permConfigTab, setPermConfigTab,
   } = perm
+
+  // ═══════ Permissions ═══════
+  // RBAC check tied to the currently logged-in user. Global "管理组" bypasses.
+  const canDo = useHasPermission(currentLoginUser)
+  const canEditBasicInfo = canDo('basicInfo:编辑')
+  const canEditLevel1Plan = canDo('plan:一级计划-编辑')
+  const canEditLevel2Plan = canDo('plan:二级计划-编辑')
 
   // ═══════ Local state ═══════
   const lastDueCheckedProjectRef = useRef<string | null>(null)
@@ -425,8 +432,16 @@ export default function ProjectSpaceContainer() {
   }
 
   // ═══════ Build transferProps ═══════
+  // Derive the transfer-module current user from the logged-in user so it
+  // tracks the user switcher instead of being pinned to MOCK_TM_USERS[0].
+  const transferCurrentUser = useMemo(() => ({
+    id: `login-${currentLoginUser}`,
+    name: currentLoginUser,
+    role: 'SPM' as const,
+    department: '-',
+  }), [currentLoginUser])
   const transferProps = {
-    selectedProject, currentUser: transfer.currentUser,
+    selectedProject, currentUser: transferCurrentUser,
     transferView: transfer.transferView, setTransferView: transfer.setTransferView,
     transferConfigView: transfer.transferConfigView, setTransferConfigView: transfer.setTransferConfigView,
     tmConfigSearchText: transfer.tmConfigSearchText, setTmConfigSearchText: transfer.setTmConfigSearchText,
@@ -914,7 +929,11 @@ export default function ProjectSpaceContainer() {
         </Card>
         {/* Section: Basic info */}
         <Card id="section-basic" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#6366f1' }} />, '基本信息', '#6366f1')} extra={
-          basicInfoEditMode ? (<Space><Button size="small" onClick={() => setBasicInfoEditMode(false)}>取消</Button><Button size="small" type="primary" onClick={saveBasicInfoEdit}>保存</Button></Space>) : (<Button size="small" icon={<EditOutlined />} onClick={startBasicInfoEdit}>编辑</Button>)
+          basicInfoEditMode ? (<Space><Button size="small" onClick={() => setBasicInfoEditMode(false)}>取消</Button><Button size="small" type="primary" onClick={saveBasicInfoEdit}>保存</Button></Space>) : (
+            canEditBasicInfo
+              ? <Button size="small" icon={<EditOutlined />} onClick={startBasicInfoEdit}>编辑</Button>
+              : <Tooltip title="无基本信息编辑权限"><Button size="small" icon={<EditOutlined />} disabled>编辑</Button></Tooltip>
+          )
         }>
           {isSoftware && (
             <div>
@@ -1215,7 +1234,9 @@ export default function ProjectSpaceContainer() {
                 />
               </Col>
               <Col>
-                <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} onClick={() => { if (!hasPublishedLevel1Plan) { message.warning('请先发布一级计划后再创建二级计划'); return; } setCreateFormValues({}); setShowCreateLevel2Plan(true) }}>创建二级计划</Button>
+                {canEditLevel2Plan
+                  ? <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} onClick={() => { if (!hasPublishedLevel1Plan) { message.warning('请先发布一级计划后再创建二级计划'); return; } setCreateFormValues({}); setShowCreateLevel2Plan(true) }}>创建二级计划</Button>
+                  : <Tooltip title="无二级计划编辑权限"><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled>创建二级计划</Button></Tooltip>}
               </Col>
             </Row>
           </Card>
@@ -1273,8 +1294,12 @@ export default function ProjectSpaceContainer() {
                     {isCurrentDraft && <Tag color="green" style={{ fontSize: 12, margin: 0 }}>自动保存</Tag>}
                   </Space>
                   <Space size={6}>
-                    {!hasDraftVersion && <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} onClick={handleCreateRevision}>创建修订</Button>}
-                    {isCurrentDraft && <Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} onClick={handlePublish}>发布</Button>}
+                    {!hasDraftVersion && (canEditLevel1Plan
+                      ? <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} onClick={handleCreateRevision}>创建修订</Button>
+                      : <Tooltip title="无一级计划编辑权限"><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled>创建修订</Button></Tooltip>)}
+                    {isCurrentDraft && (canEditLevel1Plan
+                      ? <Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} onClick={handlePublish}>发布</Button>
+                      : <Tooltip title="无一级计划编辑权限"><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} disabled>发布</Button></Tooltip>)}
                     {!isCurrentDraft && <Button icon={<HistoryOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowVersionCompare(true)}>版本对比</Button>}
                     {projectPlanLevel === 'level1' && versions.some(v => v.status === '已发布') && (
                       <Tooltip title="复制分享链接，无需权限即可查看">

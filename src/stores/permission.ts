@@ -137,3 +137,35 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
   setGlobalEditRoleValue: (v) => set({ globalEditRoleValue: v }),
   setGlobalPermActiveRole: (v) => set({ globalPermActiveRole: v }),
 }))
+
+// ─── Permission helpers ─────────────────────────────────────────────
+// Admin group (global "管理组") bypasses all project-level permission checks.
+export function isGlobalAdmin(userName: string): boolean {
+  const s = usePermissionStore.getState()
+  const admin = s.globalRoles.find(r => r.name === '管理组')
+  return !!admin?.members.includes(userName)
+}
+
+// Check if a user has a specific project-level permission.
+// permKey format: "moduleKey:permissionName", e.g. "basicInfo:编辑", "plan:一级计划-编辑".
+export function hasPermission(userName: string, permKey: string): boolean {
+  if (!userName) return false
+  if (isGlobalAdmin(userName)) return true
+  const s = usePermissionStore.getState()
+  const userRoles = s.roles.filter(r => r.members.includes(userName)).map(r => r.name)
+  return userRoles.some(role => s.rolePermissions[role]?.[permKey] === true)
+}
+
+// React hook version — subscribes to permission store so UI re-renders on change.
+export function useHasPermission(userName: string): (permKey: string) => boolean {
+  const roles = usePermissionStore(s => s.roles)
+  const rolePermissions = usePermissionStore(s => s.rolePermissions)
+  const globalRoles = usePermissionStore(s => s.globalRoles)
+  return (permKey: string) => {
+    if (!userName) return false
+    const admin = globalRoles.find(r => r.name === '管理组')
+    if (admin?.members.includes(userName)) return true
+    const userRoles = roles.filter(r => r.members.includes(userName)).map(r => r.name)
+    return userRoles.some(role => rolePermissions[role]?.[permKey] === true)
+  }
+}
