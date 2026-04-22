@@ -5,13 +5,14 @@ import {
 } from 'antd'
 import {
   AppstoreOutlined, LeftOutlined, ProjectOutlined, DownOutlined,
-  SearchOutlined, SwapOutlined, CheckCircleOutlined,
+  SearchOutlined, SwapOutlined, CheckCircleOutlined, RobotOutlined,
 } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore, PROJECT_MEMBER_MAP } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
 import { usePermissionStore } from '@/stores/permission'
 import { useTransferStore } from '@/stores/transfer'
+import { useAIChatStore } from '@/stores/ai-chat'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import { useRef, useEffect, useMemo } from 'react'
 
@@ -132,7 +133,22 @@ export function MainHeader() {
           </Space>
         </Col>
         <Col>
-          <UserSwitcher />
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <Button
+              type="text"
+              size="small"
+              icon={<RobotOutlined />}
+              onClick={() => {
+                const proj = useProjectStore.getState().selectedProject
+                useUiStore.getState().setActiveModule('aiAssistant')
+                if (proj) useAIChatStore.getState().bindProject(proj.name)
+              }}
+              style={{ color: '#fff', marginRight: 12 }}
+            >
+              问 AI
+            </Button>
+            <UserSwitcher />
+          </div>
         </Col>
       </Row>
     </div>
