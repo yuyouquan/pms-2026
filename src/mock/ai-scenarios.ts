@@ -106,6 +106,114 @@ const SCENARIO_PROJECT_BASIC_INFO: ScenarioConfig = {
   },
 }
 
+// ─── Scenario ② 项目计划查询 ──────────────────────────────
+
+const MOCK_PLAN_ROWS: Record<string, Array<{
+  id: string; type: '版本' | '需求' | '开发' | '测试' | '其他';
+  name: string; owner: string; progress: number;
+  deadline: string; status: string; isRisk: boolean;
+}>> = {
+  'X6877-D8400_H991': [
+    { id: 'pl-1', type: '版本', name: 'V2.3 发布', owner: '王五', progress: 60, deadline: '2026-04-25', status: '进行中', isRisk: true },
+    { id: 'pl-2', type: '版本', name: 'V2.4 规划', owner: '王五', progress: 20, deadline: '2026-06-30', status: '规划中', isRisk: false },
+    { id: 'pl-3', type: '需求', name: '支付流程重构', owner: '张三', progress: 70, deadline: '2026-04-20', status: '延期', isRisk: true },
+    { id: 'pl-4', type: '需求', name: '首页信息流改版', owner: '李四', progress: 45, deadline: '2026-05-10', status: '进行中', isRisk: false },
+    { id: 'pl-5', type: '需求', name: 'AI 助手接入', owner: '李白', progress: 30, deadline: '2026-05-15', status: '进行中', isRisk: false },
+    { id: 'pl-6', type: '开发', name: 'UI 组件升级', owner: '李四', progress: 50, deadline: '2026-05-05', status: '阻塞', isRisk: true },
+    { id: 'pl-7', type: '开发', name: 'Gradle 插件升级', owner: '李四', progress: 90, deadline: '2026-04-30', status: '进行中', isRisk: false },
+    { id: 'pl-8', type: '测试', name: 'E2E 自动化扩充', owner: '赵六', progress: 40, deadline: '2026-05-10', status: '进行中', isRisk: false },
+  ],
+  'tOS16.0': [
+    { id: 'pl-20', type: '版本', name: 'tOS 16.0 终版', owner: '张三', progress: 85, deadline: '2026-04-28', status: '进行中', isRisk: false },
+    { id: 'pl-21', type: '测试', name: '回归测试全量', owner: '孙七', progress: 60, deadline: '2026-04-23', status: '阻塞', isRisk: true },
+    { id: 'pl-22', type: '需求', name: '通知中心优化', owner: '李四', progress: 50, deadline: '2026-05-08', status: '进行中', isRisk: false },
+  ],
+  'X6855': [
+    { id: 'pl-30', type: '版本', name: 'X6855 V1 发布', owner: '赵六', progress: 55, deadline: '2026-05-20', status: '进行中', isRisk: false },
+    { id: 'pl-31', type: '需求', name: '相机算法升级', owner: '孙七', progress: 40, deadline: '2026-05-15', status: '进行中', isRisk: false },
+  ],
+  'X6876_H786': [
+    { id: 'pl-40', type: '版本', name: 'X6876 V1', owner: '孙七', progress: 30, deadline: '2026-06-01', status: '进行中', isRisk: false },
+  ],
+  'X6873_H972': [
+    { id: 'pl-50', type: '开发', name: 'Camera HAL 适配', owner: '周八', progress: 30, deadline: '2026-04-24', status: '延期', isRisk: true },
+    { id: 'pl-51', type: '需求', name: 'AOD 界面', owner: '李白', progress: 20, deadline: '2026-04-23', status: '进行中', isRisk: true },
+  ],
+  'tOS17.1': [
+    { id: 'pl-60', type: '版本', name: 'tOS 17.1 里程碑', owner: '赵六', progress: 40, deadline: '2026-06-15', status: '进行中', isRisk: false },
+  ],
+  'X6890 CAMON': [
+    { id: 'pl-70', type: '需求', name: 'CAMON 影像模式', owner: '李白', progress: 60, deadline: '2026-05-30', status: '进行中', isRisk: false },
+    { id: 'pl-71', type: '开发', name: '定制相机 UI', owner: '张三', progress: 55, deadline: '2026-05-28', status: '进行中', isRisk: false },
+  ],
+  'tOS18.0': [
+    { id: 'pl-80', type: '需求', name: 'tOS 18.0 架构设计', owner: '杜甫', progress: 30, deadline: '2026-07-01', status: '进行中', isRisk: false },
+  ],
+  'AI-Engine-V2': [
+    { id: 'pl-90', type: '需求', name: '推理引擎升级', owner: '李四', progress: 45, deadline: '2026-06-10', status: '进行中', isRisk: false },
+    { id: 'pl-91', type: '开发', name: '模型量化', owner: '赵六', progress: 50, deadline: '2026-06-05', status: '进行中', isRisk: false },
+  ],
+  'DevOps-Platform': [
+    { id: 'pl-100', type: '需求', name: 'CI 流水线改造', owner: '孙七', progress: 60, deadline: '2026-05-25', status: '进行中', isRisk: false },
+  ],
+}
+
+const SCENARIO_PROJECT_PLANS: ScenarioConfig = {
+  id: 'project-plans',
+  name: '项目计划查询',
+  keywords: [['计划'], ['任务'], ['排期']],
+  requiresProject: true,
+  modifiers: {
+    ownership: ['我', '我的', '我负责', '自己'],
+    planType: ['版本', '需求', '开发', '测试'],
+  },
+  priority: 6,
+  buildThinking: (_vars) => [
+    kb('待办与计划 · 查询项目计划', 500),
+    reasoning('按筛选条件过滤', 400),
+  ],
+  buildResponse: (vars) => {
+    const name = vars.projectName!
+    const allRows = MOCK_PLAN_ROWS[name] ?? []
+    const currentUser = useProjectStore.getState().currentLoginUser
+    const ownership = vars.ownership ?? 'all'
+    const planType = vars.planType
+
+    let rows = allRows
+    if (ownership === 'mine') rows = rows.filter(r => r.owner === currentUser)
+    if (planType) rows = rows.filter(r => r.type === planType)
+
+    const total = allRows.length
+    const mineCount = allRows.filter(r => r.owner === currentUser).length
+    const typeCount = (t: string) => allRows.filter(r => r.type === t).length
+
+    const filters = [
+      { key: 'all', label: '全部', count: total },
+      { key: 'mine', label: '我负责', count: mineCount },
+      { key: '版本', label: '版本', count: typeCount('版本') },
+      { key: '需求', label: '需求', count: typeCount('需求') },
+      { key: '开发', label: '开发', count: typeCount('开发') },
+      { key: '测试', label: '测试', count: typeCount('测试') },
+    ]
+
+    const activeFilter = planType ?? (ownership === 'mine' ? 'mine' : 'all')
+    const descr = activeFilter === 'all' ? '所有计划'
+      : activeFilter === 'mine' ? '我负责的计划'
+      : `${activeFilter}计划`
+
+    return {
+      markdown: `📅 **${name}** 的 ${descr}，共 **${rows.length}** 项`,
+      cards: [
+        {
+          type: 'plans-table',
+          data: { projectName: name, filters, activeFilter, rows },
+        },
+      ],
+      references: [{ label: '待办与计划', index: 1 }],
+    }
+  },
+}
+
 // ─── Fallback ──────────────────────────────────────────────────
 
 const FALLBACK: ScenarioConfig = {
@@ -126,6 +234,7 @@ const FALLBACK: ScenarioConfig = {
 // They will be added to SCENARIOS array below once implemented.
 export const SCENARIOS: ScenarioConfig[] = [
   SCENARIO_PROJECT_BASIC_INFO,
+  SCENARIO_PROJECT_PLANS,
   FALLBACK,
 ]
 
