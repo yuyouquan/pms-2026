@@ -1,5 +1,5 @@
 'use client'
-import { Button, Dropdown, Empty } from 'antd'
+import { Button, Dropdown, Empty, Modal, Input } from 'antd'
 import {
   PlusOutlined, PushpinOutlined, EditOutlined, DeleteOutlined,
   MoreOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
@@ -29,6 +29,8 @@ export function ConversationSidebar() {
     createConversation, renameConversation, pinConversation, deleteConversation,
   } = useAIChatStore()
   const [collapsed, setCollapsed] = useState(false)
+  const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null)
+  const [renameValue, setRenameValue] = useState('')
 
   if (collapsed) {
     return (
@@ -58,8 +60,8 @@ export function ConversationSidebar() {
           items: [
             { key: 'rename', label: '重命名', icon: <EditOutlined />,
               onClick: () => {
-                const name = window.prompt('重命名会话', c.title)
-                if (name) renameConversation(c.id, name)
+                setRenameTarget({ id: c.id, title: c.title })
+                setRenameValue(c.title)
               } },
             { key: 'pin', label: c.pinned ? '取消置顶' : '置顶', icon: <PushpinOutlined />,
               onClick: () => pinConversation(c.id) },
@@ -102,6 +104,21 @@ export function ConversationSidebar() {
           {groups.earlier.map(renderItem)}
         </>)}
       </div>
+      <Modal
+        open={!!renameTarget}
+        title="重命名会话"
+        onCancel={() => setRenameTarget(null)}
+        onOk={() => {
+          if (renameTarget && renameValue.trim()) {
+            renameConversation(renameTarget.id, renameValue.trim())
+          }
+          setRenameTarget(null)
+        }}
+        okText="确认"
+        cancelText="取消"
+      >
+        <Input value={renameValue} onChange={e => setRenameValue(e.target.value)} autoFocus />
+      </Modal>
     </div>
   )
 }

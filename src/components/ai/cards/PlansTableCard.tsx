@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { Card, Segmented, Table, Tag, Progress } from 'antd'
 import type { PlansTableData, PlanRow } from '@/types/ai'
+import { useProjectStore } from '@/stores/project'
 
 const TYPE_COLOR: Record<string, string> = {
   '版本': 'purple',
@@ -13,10 +14,11 @@ const TYPE_COLOR: Record<string, string> = {
 
 export function PlansTableCard({ data }: { data: PlansTableData }) {
   const [activeFilter, setActiveFilter] = useState(data.activeFilter)
+  const currentUser = useProjectStore(s => s.currentLoginUser)
 
   const visibleRows = data.rows.filter(r => {
     if (activeFilter === 'all') return true
-    if (activeFilter === 'mine') return true
+    if (activeFilter === 'mine') return r.owner === currentUser
     return r.type === activeFilter
   })
 
