@@ -169,3 +169,22 @@ export function useHasPermission(userName: string): (permKey: string) => boolean
     return userRoles.some(role => rolePermissions[role]?.[permKey] === true)
   }
 }
+
+// Check if user can view a project. Admin group bypasses; otherwise must be
+// listed in PROJECT_MEMBER_MAP for that project.
+import { PROJECT_MEMBER_MAP, useProjectStore } from '@/stores/project'
+
+export function hasProjectAccess(userName: string, projectNameOrId: string): boolean {
+  if (!userName || !projectNameOrId) return false
+  if (isGlobalAdmin(userName)) return true
+
+  // Resolve project name → id (if not already id)
+  let projectId = projectNameOrId
+  const byName = useProjectStore.getState().projects.find(
+    p => p.name === projectNameOrId || p.id === projectNameOrId
+  )
+  if (byName) projectId = byName.id
+
+  const members = PROJECT_MEMBER_MAP[projectId] || []
+  return members.includes(userName)
+}
