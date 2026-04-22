@@ -11,6 +11,7 @@ import WorkspaceContainer from '@/containers/WorkspaceContainer'
 import ProjectSpaceContainer from '@/containers/ProjectSpaceContainer'
 import ConfigContainer from '@/containers/ConfigContainer'
 import GlobalPermissionContainer from '@/containers/GlobalPermissionContainer'
+import AIAssistantContainer from '@/containers/AIAssistantContainer'
 
 // Minimal page-specific style overrides (bulk styles live in globals.css)
 const globalStyles = `
@@ -100,6 +101,9 @@ export default function Home() {
 
               {/* Config Center */}
               {activeModule === 'config' && <ConfigContainer />}
+
+              {/* AI Assistant */}
+              {activeModule === 'aiAssistant' && <AIAssistantContainer />}
             </div>
           </>
         )}
