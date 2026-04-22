@@ -214,6 +214,76 @@ const SCENARIO_PROJECT_PLANS: ScenarioConfig = {
   },
 }
 
+// ─── Scenario ③ 项目需求状态汇总 ──────────────────────────────
+
+const STATUS_COLORS: Record<string, string> = {
+  '待开始': '#9ca3af',
+  '开发中': '#1677ff',
+  '测试中': '#faad14',
+  '已完成': '#52c41a',
+  '阻塞': '#ff4d4f',
+}
+
+function buildRequirementDist(projectName: string) {
+  // Derive requirements from plans of type "需求" for this project
+  const plans = MOCK_PLAN_ROWS[projectName] ?? []
+  const reqs = plans.filter(p => p.type === '需求')
+
+  // Classify plan.status → distribution status buckets (demo heuristic)
+  const classify = (row: typeof reqs[0]) => {
+    if (row.status === '延期' || row.status === '阻塞') return '阻塞'
+    if (row.progress >= 100) return '已完成'
+    if (row.progress >= 60) return '测试中'
+    if (row.progress >= 10) return '开发中'
+    return '待开始'
+  }
+
+  const requirements = reqs.map(r => ({
+    id: r.id,
+    name: r.name,
+    owner: r.owner,
+    status: classify(r),
+    priority: r.isRisk ? '高' : '中',
+    blockReason: (r.status === '延期' || r.status === '阻塞') ? r.status : undefined,
+  }))
+
+  const counts: Record<string, number> = { '待开始': 0, '开发中': 0, '测试中': 0, '已完成': 0, '阻塞': 0 }
+  requirements.forEach(r => { counts[r.status] = (counts[r.status] ?? 0) + 1 })
+
+  const distribution = Object.entries(counts).map(([status, count]) => ({
+    status, count, color: STATUS_COLORS[status] ?? '#9ca3af',
+  }))
+
+  return { totalCount: requirements.length, distribution, requirements }
+}
+
+const SCENARIO_REQUIREMENT_STATUS: ScenarioConfig = {
+  id: 'requirement-status',
+  name: '项目需求状态汇总',
+  keywords: [['需求', '进展'], ['需求', '状态'], ['需求', '分布'], ['需求', '阻塞']],
+  requiresProject: true,
+  priority: 7,
+  buildThinking: (vars) => [
+    kb(`项目主表 · 确认 ${vars.projectName}`, 400),
+    kb('待办与计划 · 筛选需求类计划', 500),
+    reasoning('按状态分组统计', 400),
+  ],
+  buildResponse: (vars) => {
+    const name = vars.projectName!
+    const dist = buildRequirementDist(name)
+    return {
+      markdown: `🧩 **${name}** 共有 **${dist.totalCount}** 个需求，当前状态分布如下`,
+      cards: [
+        { type: 'requirement-dist', data: { projectName: name, ...dist } },
+      ],
+      references: [
+        { label: '项目主表', index: 1 },
+        { label: '待办与计划', index: 2 },
+      ],
+    }
+  },
+}
+
 // ─── Fallback ──────────────────────────────────────────────────
 
 const FALLBACK: ScenarioConfig = {
@@ -235,6 +305,7 @@ const FALLBACK: ScenarioConfig = {
 export const SCENARIOS: ScenarioConfig[] = [
   SCENARIO_PROJECT_BASIC_INFO,
   SCENARIO_PROJECT_PLANS,
+  SCENARIO_REQUIREMENT_STATUS,
   FALLBACK,
 ]
 
