@@ -226,20 +226,21 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 function buildRequirementDist(projectName: string) {
-  // Derive requirements from plans of type "需求" for this project
-  const plans = MOCK_PLAN_ROWS[projectName] ?? []
-  const reqs = plans.filter(p => p.type === '需求')
+  // Read L2 plans with category '需求开发' — these are the project's requirement-development plans
+  const l2Reqs = MOCK_LEVELED_PLANS.filter(
+    p => p.projectName === projectName && p.level === 'L2' && p.category === '需求开发'
+  )
 
   // Classify plan.status → distribution status buckets (demo heuristic)
-  const classify = (row: typeof reqs[0]) => {
+  const classify = (row: typeof l2Reqs[0]) => {
     if (row.status === '延期' || row.status === '阻塞') return '阻塞'
-    if (row.progress >= 100) return '已完成'
+    if (row.progress >= 100 || row.status === '已完成') return '已完成'
     if (row.progress >= 60) return '测试中'
     if (row.progress >= 10) return '开发中'
     return '待开始'
   }
 
-  const requirements = reqs.map(r => ({
+  const requirements = l2Reqs.map(r => ({
     id: r.id,
     name: r.name,
     owner: r.owner,
