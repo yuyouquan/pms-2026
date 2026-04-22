@@ -11,11 +11,16 @@ export default function AIAssistantDrawer() {
       open={drawerOpen}
       onClose={() => setDrawerOpen(false)}
       placement="right"
-      width={720}
+      width={960}
       closable
       destroyOnClose={false}
       styles={{ body: { padding: 0 } }}
-      title={null}
+      title={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>🤖</span>
+          <span style={{ fontWeight: 600 }}>智能助手</span>
+        </div>
+      }
     >
       <AIAssistantContainer />
     </Drawer>

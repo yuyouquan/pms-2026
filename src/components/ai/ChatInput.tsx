@@ -27,7 +27,7 @@ export function ChatInput() {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 8, padding: 16, borderTop: '1px solid #f0f0f0', alignItems: 'flex-end' }}>
+    <div style={{ display: 'flex', gap: 8, padding: '12px 16px', borderTop: '1px solid #f0f0f0', alignItems: 'flex-end' }}>
       <Button type="text" icon={<PaperClipOutlined />} disabled title="附件（即将上线）" />
       <Input.TextArea
         ref={textareaRef}

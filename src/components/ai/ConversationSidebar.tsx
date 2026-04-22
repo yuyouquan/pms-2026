@@ -28,14 +28,18 @@ export function ConversationSidebar() {
     conversations, activeConversationId, setActiveConversation,
     createConversation, renameConversation, pinConversation, deleteConversation,
   } = useAIChatStore()
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(true)
   const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null)
   const [renameValue, setRenameValue] = useState('')
 
   if (collapsed) {
     return (
-      <div style={{ width: 40, borderRight: '1px solid #f0f0f0', padding: 8 }}>
+      <div style={{ width: 48, borderRight: '1px solid #f0f0f0', padding: '8px 4px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+        background: '#fafbfc' }}>
         <Button type="text" icon={<MenuUnfoldOutlined />} onClick={() => setCollapsed(false)} />
+        <Button type="primary" shape="circle" icon={<PlusOutlined />}
+          onClick={createConversation} size="small" title="新对话" />
       </div>
     )
   }

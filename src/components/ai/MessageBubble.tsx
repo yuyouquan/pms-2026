@@ -40,7 +40,7 @@ export function MessageBubble({ msg }: { msg: ChatMessage }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 16 }}>
       <Avatar icon={<RobotFilled />} style={{ marginRight: 8, background: '#722ed1', flexShrink: 0 }} />
-      <div style={{ maxWidth: '85%', flex: 1 }}>
+      <div style={{ maxWidth: '92%', flex: 1 }}>
         {msg.thinkingSteps && msg.thinkingSteps.length > 0 && (
           <ThinkingProcess steps={msg.thinkingSteps} revealedCount={revealedThinking}
             collapsed={s?.thinkingCollapsed ?? true} />
@@ -51,9 +51,11 @@ export function MessageBubble({ msg }: { msg: ChatMessage }) {
             dangerouslySetInnerHTML={{ __html: simpleMarkdown(textToShow) }} />
         )}
         {cardsToShow.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 8 }}>
             {cardsToShow.map((card, idx) => (
-              <div key={idx} style={{ animation: 'fadeInUp 0.3s ease-out' }}>
+              <div key={idx} style={{
+                animation: `fadeInUp 0.4s ease-out ${idx * 0.08}s both`,
+              }}>
                 <ResponseCard card={card} />
               </div>
             ))}
@@ -72,9 +74,9 @@ export function MessageBubble({ msg }: { msg: ChatMessage }) {
             <Tooltip title="复制"><Button size="small" type="text" icon={<CopyOutlined />} onClick={copyText} /></Tooltip>
           </div>
         )}
-        <style jsx>{`
+        <style jsx global>{`
           @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(10px); }
+            from { opacity: 0; transform: translateY(12px); }
             to { opacity: 1; transform: translateY(0); }
           }
         `}</style>

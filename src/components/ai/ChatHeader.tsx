@@ -11,9 +11,8 @@ export function ChatHeader() {
   const modelLabel = defaultProvider?.defaultModel ?? '未配置'
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', padding: '10px 24px',
-      borderBottom: '1px solid #f0f0f0', gap: 12, background: '#fff' }}>
-      <div style={{ fontWeight: 600, fontSize: 16 }}>🤖 智能助手</div>
+    <div style={{ display: 'flex', alignItems: 'center', padding: '8px 20px',
+      borderBottom: '1px solid #f0f0f0', gap: 10, background: '#fff', minHeight: 44 }}>
       {currentProjectContext && (
         <Tag
           icon={<FolderOutlined />}
@@ -27,7 +26,9 @@ export function ChatHeader() {
       )}
       <div style={{ flex: 1 }} />
       <span style={{ fontSize: 11, color: '#8c8c8c' }}>默认模型：{modelLabel}</span>
-      <Button icon={<PlusOutlined />} onClick={createConversation} size="small">新对话</Button>
+      <Button icon={<PlusOutlined />} onClick={createConversation} size="small" type="text">
+        新对话
+      </Button>
     </div>
   )
 }

@@ -284,7 +284,22 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
           </div>
         </Col>
         <Col flex="none">
-          <UserSwitcher />
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <Button
+              type="text"
+              size="small"
+              icon={<RobotOutlined />}
+              onClick={() => {
+                const proj = useProjectStore.getState().selectedProject
+                if (proj) useAIChatStore.getState().bindProject(proj.name)
+                useAIChatStore.getState().setDrawerOpen(true)
+              }}
+              style={{ color: '#fff', marginRight: 12 }}
+            >
+              问 AI
+            </Button>
+            <UserSwitcher />
+          </div>
         </Col>
       </Row>
     </div>
