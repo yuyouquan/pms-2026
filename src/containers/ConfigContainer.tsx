@@ -21,7 +21,6 @@ import { useTransferStore } from '@/stores/transfer'
 import { useProjectStore } from '@/stores/project'
 import { usePermissionStore } from '@/stores/permission'
 import { TransferConfig } from '@/components/transfer/TransferModule'
-import AIConfigPanel from '@/components/ai/config/AIConfigPanel'
 import { PROJECT_TYPES } from '@/data/projects'
 import { DHTMLXGantt, DragHandle, SortableRow, DragHandleContext, ClickToEditDate, getTaskDepth, hasChildren, filterByCollapsed, getAllExpandableIds } from '@/components/shared/PlanHelpers'
 import { compareVersionsForTable, type CompareTableRow, type FieldDiff } from '@/lib/versionCompare'
@@ -508,7 +507,6 @@ export default function ConfigContainer() {
           items={[
             { key: 'plan', label: <Space size={6}><CalendarOutlined />计划模板配置</Space> },
             { key: 'transfer', label: <Space size={6}><SwapOutlined />转维材料模板配置</Space> },
-            { key: 'ai', label: 'AI 配置', children: <AIConfigPanel /> },
           ]}
         />
       </Card>

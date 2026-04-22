@@ -127,7 +127,6 @@ export function MainHeader() {
                 { key: 'hrPipeline', label: '人力资源管道' },
                 { key: 'config', label: '配置中心' },
                 { key: 'globalPermission', label: '权限中心' },
-                { key: 'aiAssistant', label: <span>🤖 智能助手</span> },
               ]}
             />
           </Space>
