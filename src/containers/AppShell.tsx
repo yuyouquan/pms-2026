@@ -139,8 +139,8 @@ export function MainHeader() {
               icon={<RobotOutlined />}
               onClick={() => {
                 const proj = useProjectStore.getState().selectedProject
-                useUiStore.getState().setActiveModule('aiAssistant')
                 if (proj) useAIChatStore.getState().bindProject(proj.name)
+                useAIChatStore.getState().setDrawerOpen(true)
               }}
               style={{ color: '#fff', marginRight: 12 }}
             >

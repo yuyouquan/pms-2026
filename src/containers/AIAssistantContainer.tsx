@@ -20,8 +20,7 @@ export default function AIAssistantContainer() {
   const emptyMode = messages.length === 0
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 48px)', background: '#fff',
-      border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', height: '100vh', background: '#fff', overflow: 'hidden' }}>
       <ConversationSidebar />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <ChatHeader />

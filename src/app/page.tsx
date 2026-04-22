@@ -11,6 +11,7 @@ import WorkspaceContainer from '@/containers/WorkspaceContainer'
 import ProjectSpaceContainer from '@/containers/ProjectSpaceContainer'
 import ConfigContainer from '@/containers/ConfigContainer'
 import GlobalPermissionContainer from '@/containers/GlobalPermissionContainer'
+import AIAssistantDrawer from '@/containers/AIAssistantDrawer'
 
 // Minimal page-specific style overrides (bulk styles live in globals.css)
 const globalStyles = `
@@ -128,6 +129,8 @@ export default function Home() {
           您还未提交现有编辑内容，是否要离开该界面？
         </div>
       </Modal>
+      {/* AI Assistant Drawer — always mounted, opened from any page */}
+      <AIAssistantDrawer />
     </ConfigProvider>
   )
 }
