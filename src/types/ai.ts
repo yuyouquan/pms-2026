@@ -146,6 +146,12 @@ export type ResponseCard =
   | { type: 'next-action'; data: NextActionData }
   | { type: 'link'; data: { text: string; href: string; module?: string; projectId?: string } }
   | { type: 'permission-notice'; data: { projectName: string; spm: string } }
+  | { type: 'version-list'; data: VersionListCardData }
+  | { type: 'version-compare'; data: VersionCompareCardData }
+  | { type: 'product-info-v2'; data: ProductInfoCardData2 }
+  | { type: 'milestones'; data: MilestonesCardData }
+  | { type: 'plans-by-category'; data: PlansByCategoryCardData }
+  | { type: 'plans-by-department'; data: PlansByDepartmentCardData }
 
 export type ReferenceItem = {
   label: string
@@ -213,4 +219,103 @@ export type Conversation = {
   boundProject: string | null
   createdAt: number
   updatedAt: number
+}
+
+// ─── Extended data (Phase 2) ──────────────────────────────────
+
+export type VersionRelease = {
+  id: string
+  projectName: string
+  versionNumber: string        // e.g. 'V2.3.0'
+  releaseDate: string          // 'YYYY-MM-DD'
+  releaseType: 'FR' | 'MR1' | 'MR2' | 'MR3' | 'Hotfix'
+  status: 'success' | 'failed' | 'in-progress'
+  buildUrl: string
+  stabilityScore: number       // 0-100
+  perfScore: number            // 0-100
+  defectCount: number
+  notes?: string
+}
+
+export type ProductSpec = {
+  projectName: string
+  codename: string             // 'X6877'
+  marketName: string           // 'NOTE 50 Pro'
+  brand: string                // 'TECNO'
+  cpu: string
+  memory: string
+  lcd: string
+  frontCamera: string
+  primaryCamera: string
+  os: string                   // 'Android 16'
+  tosVersion: string           // 'tOS 16.3'
+  markets: string[]            // ['OP','TR','RU']
+  launchDate: string
+  productType: string          // '新品'
+  chipPlatform: string         // 'MTK'
+  projectLevel: string         // 'A'
+  currentStage: string         // 'STR2'
+  spm: string
+  tpm: string
+  ppm: string
+}
+
+export type PlanLevel = 'L1' | 'L2' | 'L3'
+export type PlanCategoryL2 = '需求开发' | '版本火车' | '独立应用' | '测试' | '其他'
+
+export type LeveledPlan = {
+  id: string
+  projectName: string
+  level: PlanLevel
+  name: string
+  owner: string
+  department?: string          // L3 only
+  parentId?: string            // L2 parent = L1 id; L3 parent = L2 id
+  category?: PlanCategoryL2    // L2 only
+  planDate: string             // 'YYYY-MM-DD' (expected)
+  actualDate?: string          // 'YYYY-MM-DD' (if done)
+  progress: number             // 0-100
+  status: '未开始' | '进行中' | '已完成' | '延期' | '阻塞'
+  isRisk: boolean
+  description?: string
+}
+
+// Card data types for new scenarios
+
+export type VersionListCardData = {
+  projectName?: string         // undefined when cross-project
+  timeRange: string            // '本周' | '本月' | '近 7 天' | etc
+  items: VersionRelease[]
+  successRate: number          // 0-100
+}
+
+export type VersionCompareCardData = {
+  a: VersionRelease
+  b: VersionRelease
+  stabilityDelta: number       // b - a
+  perfDelta: number
+  defectDelta: number
+}
+
+export type ProductInfoCardData2 = {
+  spec: ProductSpec
+}
+
+export type MilestonesCardData = {
+  projectName: string
+  milestones: LeveledPlan[]    // all L1
+}
+
+export type PlansByCategoryCardData = {
+  projectName: string
+  category: PlanCategoryL2 | 'ALL'
+  l2Plans: LeveledPlan[]
+  l1Parent?: LeveledPlan
+}
+
+export type PlansByDepartmentCardData = {
+  projectName: string
+  department?: string
+  l3Plans: LeveledPlan[]
+  l2Parent?: LeveledPlan
 }
