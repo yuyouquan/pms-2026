@@ -199,6 +199,20 @@ export const initialProjects = [
   },
 ]
 
+// 项目成员映射（project id → member names）— used by MCP server RBAC helper
+export const PROJECT_MEMBER_MAP: Record<string, string[]> = {
+  '1': ['张三', '李白', '王明', '刘洋', '赵六', '孙七', '周八'],
+  '2': ['李四', '张三', '王五', '赵六', '孙七'],
+  '3': ['王五', '赵六', '赵敏', '李刚', '张三'],
+  '4': ['孙七', '李四', '张三'],
+  '5': ['周八', '王五', '李白'],
+  '6': ['赵六', '孙七', '李四', '王五', '张三'],
+  '7': ['李白', '张三', '王明', '刘洋'],
+  '8': ['杜甫', '李白', '张三', '李四', '王五', '赵六'],
+  '9': ['李四', '张三', '赵六', '孙七'],
+  '10': ['孙七', '周八', '李白', '杜甫', '王五'],
+}
+
 // 构建市场计划数据
 export function buildMarketPlanData(markets: string[]) {
   const data: Record<string, { tasks: any[], level2Tasks: any[], createdLevel2Plans: { id: string, name: string, type: string }[] }> = {}

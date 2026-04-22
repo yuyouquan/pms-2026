@@ -124,36 +124,43 @@ export const MOCK_MCP_SERVERS: MCPServer[] = [
 ]
 
 export const MOCK_PROMPT_TEMPLATES: PromptTemplate[] = [
-  { id: 'pt-1', name: '项目基本情况', category: 'query',
-    description: '查询项目的基础信息',
-    content: '{项目名} 的基本情况', placeholders: ['项目名'], showInQuickChips: true },
-  { id: 'pt-2', name: '项目负责人是谁', category: 'query',
-    description: '查询项目负责人',
-    content: '{项目名} 是谁负责的', placeholders: ['项目名'], showInQuickChips: true },
-  { id: 'pt-3', name: '项目所有计划', category: 'query',
-    description: '列出项目全部计划',
-    content: '{项目名} 的所有计划', placeholders: ['项目名'], showInQuickChips: true },
-  { id: 'pt-4', name: '我负责的计划', category: 'query',
-    description: '过滤当前用户负责的计划',
-    content: '我在 {项目名} 负责的计划', placeholders: ['项目名'], showInQuickChips: true },
-  { id: 'pt-5', name: '版本计划', category: 'query',
-    description: '查询版本类计划',
-    content: '{项目名} 的版本计划', placeholders: ['项目名'], showInQuickChips: false },
-  { id: 'pt-6', name: '需求状态汇总', category: 'analysis',
-    description: '分析需求状态分布',
-    content: '{项目名} 的需求进展', placeholders: ['项目名'], showInQuickChips: true },
-  { id: 'pt-7', name: '需求阻塞情况', category: 'analysis',
-    description: '查询阻塞的需求',
-    content: '{项目名} 有哪些阻塞的需求', placeholders: ['项目名'], showInQuickChips: false },
-  { id: 'pt-8', name: '转维进度', category: 'flow',
-    description: '查询转维当前进度',
-    content: '{项目名} 转维到哪一步了', placeholders: ['项目名'], showInQuickChips: true },
-  { id: 'pt-9', name: '转维下一步', category: 'flow',
-    description: '查询转维下一步动作',
-    content: '{项目名} 转维下一步该做什么', placeholders: ['项目名'], showInQuickChips: false },
-  { id: 'pt-10', name: '转维负责人', category: 'flow',
-    description: '查询当前转维处理人',
-    content: '{项目名} 当前转维是谁在处理', placeholders: ['项目名'], showInQuickChips: false },
+  // Version (highest priority per boss)
+  { id: 'pt-v1', name: '本周发了几个版本', category: 'query',
+    description: '查询本周发布版本统计',
+    content: '本周发了几个版本', placeholders: [], showInQuickChips: true },
+  { id: 'pt-v2', name: '项目最新版本', category: 'query',
+    description: '查询项目最新发布版本',
+    content: '{项目名} 最新版本', placeholders: ['项目名'], showInQuickChips: true },
+  { id: 'pt-v3', name: '版本对比', category: 'analysis',
+    description: '最近两个版本对比',
+    content: '{项目名} 最近两个版本对比', placeholders: ['项目名'], showInQuickChips: true },
+
+  // Product
+  { id: 'pt-p1', name: '这是啥产品', category: 'query',
+    description: '查询产品基础规格',
+    content: '{项目名} 是啥产品', placeholders: ['项目名'], showInQuickChips: true },
+
+  // Plans by level
+  { id: 'pt-l1', name: '里程碑计划', category: 'query',
+    description: '查询一级计划 / 里程碑',
+    content: '{项目名} 的里程碑', placeholders: ['项目名'], showInQuickChips: true },
+  { id: 'pt-l2', name: '二级计划', category: 'query',
+    description: '查询二级计划',
+    content: '{项目名} 的二级计划', placeholders: ['项目名'], showInQuickChips: true },
+  { id: 'pt-l3', name: '三级计划（按部门）', category: 'query',
+    description: '按责任部门查看三级计划',
+    content: '{项目名} 的三级计划', placeholders: ['项目名'], showInQuickChips: false },
+
+  // Existing
+  { id: 'pt-b1', name: '项目基本情况', category: 'query',
+    description: '项目基础信息',
+    content: '{项目名} 的基本情况', placeholders: ['项目名'], showInQuickChips: false },
+  { id: 'pt-r1', name: '需求状态', category: 'analysis',
+    description: '需求状态分布',
+    content: '{项目名} 的需求进展', placeholders: ['项目名'], showInQuickChips: false },
+  { id: 'pt-t1', name: '转维进度', category: 'flow',
+    description: '转维流程状态',
+    content: '{项目名} 转维到哪一步了', placeholders: ['项目名'], showInQuickChips: false },
 ]
 
 export const DEFAULT_PROVIDER_ID = 'anthropic'
