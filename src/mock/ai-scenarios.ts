@@ -1,5 +1,6 @@
 import type { ScenarioConfig, ThinkingStep, ScenarioVars } from '@/types/ai'
 import { useProjectStore } from '@/stores/project'
+import { MOCK_VERSIONS, MOCK_PRODUCT_SPECS, MOCK_LEVELED_PLANS, L1_MILESTONE_ORDER } from '@/mock/ai-extended'
 
 // ─── Shared helpers ─────────────────────────────────────────────────
 
@@ -369,6 +370,267 @@ const SCENARIO_TRANSFER_STATUS: ScenarioConfig = {
   },
 }
 
+// ─── Scenario ⑤ 版本查询 (new Phase 2) ───────────────────────
+
+const SCENARIO_VERSION_QUERY: ScenarioConfig = {
+  id: 'version-query',
+  name: '版本查询',
+  keywords: [
+    ['版本'],
+    ['发布'],
+    ['release'],
+  ],
+  requiresProject: false,   // can be cross-project for "本周发了几个版本"
+  priority: 10,             // higher than basic-info to catch version-centric queries first
+  buildThinking: (vars) => [
+    kb('版本主表 · 查询最近版本发布', 400),
+    kb('构建系统 · 读取构建状态与指标', 500),
+    reasoning('计算成功率与稳定性指标', 400),
+  ],
+  buildResponse: (vars) => {
+    const input = (vars.rawInput ?? '').toLowerCase()
+    const project = vars.projectName
+    // Determine time range by keyword
+    let timeRange = '近期'
+    let daysBack = 14
+    if (input.includes('本周') || input.includes('这周')) { timeRange = '本周'; daysBack = 7 }
+    else if (input.includes('本月') || input.includes('这个月')) { timeRange = '本月'; daysBack = 30 }
+    else if (input.includes('昨天')) { timeRange = '昨天'; daysBack = 1 }
+
+    const now = new Date('2026-04-22').getTime()
+    const cutoff = now - daysBack * 24 * 60 * 60 * 1000
+    let items = MOCK_VERSIONS.filter(v => new Date(v.releaseDate).getTime() >= cutoff)
+    if (project) items = items.filter(v => v.projectName === project)
+
+    const successCount = items.filter(v => v.status === 'success').length
+    const failedCount = items.filter(v => v.status === 'failed').length
+    const total = items.length
+    const successRate = total > 0 ? Math.round((successCount / total) * 100) : 0
+
+    const scope = project ? `**${project}** ` : '全部项目 '
+    const summary = total === 0
+      ? `📦 ${scope}${timeRange}没有版本发布。`
+      : `📦 ${scope}${timeRange}共发布 **${total}** 个版本，成功率 **${successRate}%**（成功 ${successCount} / 失败 ${failedCount}）`
+
+    return {
+      markdown: summary,
+      cards: total === 0 ? [] : [
+        { type: 'version-list', data: { projectName: project, timeRange, items, successRate } },
+      ],
+      references: [
+        { label: '版本主表', index: 1 },
+        { label: '构建系统', index: 2 },
+      ],
+    }
+  },
+}
+
+// ─── Scenario ⑥ 版本对比 (new Phase 2) ──────────────────────
+
+const SCENARIO_VERSION_COMPARE: ScenarioConfig = {
+  id: 'version-compare',
+  name: '版本对比',
+  keywords: [
+    ['版本', '对比'],
+    ['版本', '比'],
+    ['vs'],
+    ['v', '相比'],
+  ],
+  requiresProject: true,
+  priority: 12,   // higher than version-query so specific comparison wins
+  buildThinking: (vars) => [
+    kb('版本主表 · 加载对比候选版本', 400),
+    kb('构建系统 · 拉取稳定性与性能指标', 500),
+    reasoning('计算 delta 与变化趋势', 400),
+  ],
+  buildResponse: (vars) => {
+    const project = vars.projectName!
+    // Find two most recent successful versions for this project
+    const versions = MOCK_VERSIONS
+      .filter(v => v.projectName === project && v.status === 'success')
+      .sort((a, b) => b.releaseDate.localeCompare(a.releaseDate))
+
+    if (versions.length < 2) {
+      return {
+        markdown: `📊 **${project}** 可对比的成功版本不足 2 个，暂无法生成对比。`,
+        cards: [],
+        references: [{ label: '版本主表', index: 1 }],
+      }
+    }
+
+    const [b, a] = [versions[0], versions[1]]    // b = newer, a = older
+    return {
+      markdown: `📊 **${project}** 版本对比：**${a.versionNumber}** → **${b.versionNumber}**`,
+      cards: [
+        {
+          type: 'version-compare', data: {
+            a, b,
+            stabilityDelta: b.stabilityScore - a.stabilityScore,
+            perfDelta: b.perfScore - a.perfScore,
+            defectDelta: b.defectCount - a.defectCount,
+          },
+        },
+      ],
+      references: [
+        { label: '版本主表', index: 1 },
+        { label: '构建系统', index: 2 },
+      ],
+    }
+  },
+}
+
+// ─── Scenario ⑦ 产品信息 (new Phase 2) ──────────────────────
+
+const SCENARIO_PRODUCT_INFO: ScenarioConfig = {
+  id: 'product-info',
+  name: '产品信息查询',
+  keywords: [
+    ['产品'],
+    ['规格'],
+    ['配置'],
+    ['是啥'],
+    ['啥产品'],
+  ],
+  requiresProject: true,
+  priority: 9,
+  buildThinking: (vars) => [
+    kb(`产品规格库 · 查询 ${vars.projectName}`, 500),
+    kb('项目主表 · 加载关联项目信息', 400),
+  ],
+  buildResponse: (vars) => {
+    const project = vars.projectName!
+    const spec = MOCK_PRODUCT_SPECS[project]
+    if (!spec) {
+      return {
+        markdown: `📱 **${project}** 暂无产品规格信息。`,
+        cards: [],
+        references: [{ label: '产品规格库', index: 1 }],
+      }
+    }
+    return {
+      markdown: `📱 **${spec.codename}**（${spec.marketName}）是一款由 **${spec.brand}** 推出的 **${spec.productType}** 产品，面向 **${spec.markets.join(' / ')}** 市场，搭载 ${spec.os} + ${spec.tosVersion}。`,
+      cards: [
+        { type: 'product-info-v2', data: { spec } },
+      ],
+      references: [
+        { label: '产品规格库', index: 1 },
+        { label: '项目主表', index: 2 },
+      ],
+    }
+  },
+}
+
+// ─── Scenario ⑧ 一级计划 / 里程碑 (new Phase 2) ──────────────
+
+const SCENARIO_PLANS_L1: ScenarioConfig = {
+  id: 'plans-l1',
+  name: '一级计划 / 里程碑',
+  keywords: [
+    ['一级计划'],
+    ['里程碑'],
+    ['里程', '计划'],
+    ['l1'],
+  ],
+  requiresProject: true,
+  priority: 11,
+  buildThinking: (vars) => [
+    kb(`计划管理 · 加载 ${vars.projectName} 一级计划`, 500),
+    reasoning('按里程碑顺序排序', 400),
+  ],
+  buildResponse: (vars) => {
+    const project = vars.projectName!
+    const milestones = MOCK_LEVELED_PLANS
+      .filter(p => p.projectName === project && p.level === 'L1')
+      .sort((a, b) => {
+        const ia = L1_MILESTONE_ORDER.indexOf(a.name)
+        const ib = L1_MILESTONE_ORDER.indexOf(b.name)
+        if (ia !== -1 && ib !== -1) return ia - ib
+        return a.planDate.localeCompare(b.planDate)
+      })
+    const riskCount = milestones.filter(m => m.isRisk).length
+    return {
+      markdown: `🏁 **${project}** 的一级计划（里程碑）共 **${milestones.length}** 个${riskCount > 0 ? `，其中 **${riskCount}** 个存在风险` : ''}`,
+      cards: milestones.length === 0 ? [] : [
+        { type: 'milestones', data: { projectName: project, milestones } },
+      ],
+      references: [{ label: '计划管理', index: 1 }],
+    }
+  },
+}
+
+// ─── Scenario ⑨ 二级计划 (new Phase 2) ─────────────────────
+
+const SCENARIO_PLANS_L2: ScenarioConfig = {
+  id: 'plans-l2',
+  name: '二级计划 / 主计划',
+  keywords: [
+    ['二级计划'],
+    ['主计划'],
+    ['需求开发', '计划'],
+    ['版本火车'],
+    ['独立应用', '计划'],
+    ['l2'],
+  ],
+  requiresProject: true,
+  priority: 11,
+  buildThinking: (vars) => [
+    kb(`计划管理 · 加载 ${vars.projectName} 二级计划`, 500),
+    reasoning('按分类分组', 400),
+  ],
+  buildResponse: (vars) => {
+    const project = vars.projectName!
+    const input = (vars.rawInput ?? '').toLowerCase()
+    let category: any = 'ALL'
+    if (input.includes('需求开发') || input.includes('需求')) category = '需求开发'
+    else if (input.includes('版本火车') || input.includes('火车')) category = '版本火车'
+    else if (input.includes('独立应用')) category = '独立应用'
+    else if (input.includes('测试', 0)) category = '测试'
+
+    let l2Plans = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L2')
+    if (category !== 'ALL') l2Plans = l2Plans.filter(p => p.category === category)
+
+    return {
+      markdown: `📋 **${project}** 的二级计划${category !== 'ALL' ? `（${category}）` : ''}共 **${l2Plans.length}** 项`,
+      cards: l2Plans.length === 0 ? [] : [
+        { type: 'plans-by-category', data: { projectName: project, category, l2Plans } },
+      ],
+      references: [{ label: '计划管理', index: 1 }],
+    }
+  },
+}
+
+// ─── Scenario ⑩ 三级计划 / 部门拆分 (new Phase 2) ─────────
+
+const SCENARIO_PLANS_L3: ScenarioConfig = {
+  id: 'plans-l3',
+  name: '三级计划 / 部门拆分',
+  keywords: [
+    ['三级计划'],
+    ['部门', '计划'],
+    ['拆分', '计划'],
+    ['l3'],
+    ['责任部门'],
+  ],
+  requiresProject: true,
+  priority: 11,
+  buildThinking: (vars) => [
+    kb(`计划管理 · 加载 ${vars.projectName} 三级计划`, 500),
+    reasoning('按责任部门分组', 400),
+  ],
+  buildResponse: (vars) => {
+    const project = vars.projectName!
+    const l3Plans = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L3')
+    const departments = new Set(l3Plans.map(p => p.department).filter(Boolean) as string[])
+    return {
+      markdown: `🏗️ **${project}** 的三级计划共 **${l3Plans.length}** 项，分布在 **${departments.size}** 个责任部门`,
+      cards: l3Plans.length === 0 ? [] : [
+        { type: 'plans-by-department', data: { projectName: project, l3Plans } },
+      ],
+      references: [{ label: '计划管理', index: 1 }],
+    }
+  },
+}
+
 // ─── Fallback ──────────────────────────────────────────────────
 
 const FALLBACK: ScenarioConfig = {
@@ -385,13 +647,17 @@ const FALLBACK: ScenarioConfig = {
   }),
 }
 
-// Individual scenarios are exported as placeholders here, filled in later tasks.
-// They will be added to SCENARIOS array below once implemented.
 export const SCENARIOS: ScenarioConfig[] = [
-  SCENARIO_PROJECT_BASIC_INFO,
-  SCENARIO_PROJECT_PLANS,
-  SCENARIO_REQUIREMENT_STATUS,
-  SCENARIO_TRANSFER_STATUS,
+  SCENARIO_VERSION_COMPARE,        // priority 12
+  SCENARIO_PLANS_L1,               // priority 11
+  SCENARIO_PLANS_L2,               // priority 11
+  SCENARIO_PLANS_L3,               // priority 11
+  SCENARIO_VERSION_QUERY,          // priority 10
+  SCENARIO_PRODUCT_INFO,           // priority 9
+  SCENARIO_TRANSFER_STATUS,        // priority 8
+  SCENARIO_REQUIREMENT_STATUS,     // priority 7
+  SCENARIO_PROJECT_PLANS,          // priority 6
+  SCENARIO_PROJECT_BASIC_INFO,     // priority 5
   FALLBACK,
 ]
 

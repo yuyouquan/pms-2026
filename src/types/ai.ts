@@ -62,6 +62,12 @@ export type ScenarioId =
   | 'project-plans'
   | 'requirement-status'
   | 'transfer-status'
+  | 'version-query'
+  | 'version-compare'
+  | 'product-info'
+  | 'plans-l1'
+  | 'plans-l2'
+  | 'plans-l3'
   | 'fallback'
   | 'permission-denied'
 
