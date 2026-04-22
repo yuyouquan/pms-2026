@@ -284,6 +284,91 @@ const SCENARIO_REQUIREMENT_STATUS: ScenarioConfig = {
   },
 }
 
+// ─── Scenario ④ 项目转维流程状态 ──────────────────────────────
+
+type StageMock = {
+  stages: Array<{ name: string; status: 'done' | 'current' | 'pending'; owner?: string; dueDate?: string; pendingItems?: string[] }>
+  currentIndex: number
+  nextActions: string[]
+}
+
+const MOCK_TRANSFER_STATE: Record<string, StageMock> = {
+  'X6877-D8400_H991': {
+    stages: [
+      { name: '申请提交', status: 'done' },
+      { name: '材料填报', status: 'current', owner: '张三', dueDate: '2026-04-25',
+        pendingItems: ['完善部署清单', '补充验证报告', '上传变更说明'] },
+      { name: '研发转维', status: 'pending' },
+      { name: '转维评审', status: 'pending' },
+      { name: 'SQA 评审', status: 'pending' },
+      { name: '转维完成', status: 'pending' },
+    ],
+    currentIndex: 1,
+    nextActions: [
+      '补齐部署清单中缺失的配置项',
+      '把单元测试覆盖率报告上传到附件区',
+      '联系软件 SE 确认变更说明文档',
+    ],
+  },
+  'tOS16.0': {
+    stages: [
+      { name: '申请提交', status: 'done' },
+      { name: '材料填报', status: 'done' },
+      { name: '研发转维', status: 'current', owner: '李四', dueDate: '2026-04-24',
+        pendingItems: ['代码 freeze', '最终打包验证'] },
+      { name: '转维评审', status: 'pending' },
+      { name: 'SQA 评审', status: 'pending' },
+      { name: '转维完成', status: 'pending' },
+    ],
+    currentIndex: 2,
+    nextActions: [
+      '完成代码 freeze 并通知测试',
+      '执行最终打包验证',
+      '准备转维评审材料',
+    ],
+  },
+  // default for projects without transfer: show "未进入转维"
+}
+
+const SCENARIO_TRANSFER_STATUS: ScenarioConfig = {
+  id: 'transfer-status',
+  name: '项目转维流程状态',
+  keywords: [['转维'], ['转维', '进度'], ['转维', '流程'], ['转维', '下一步']],
+  requiresProject: true,
+  priority: 8,
+  buildThinking: (vars) => [
+    kb(`项目主表 · 确认 ${vars.projectName}`, 400),
+    kb('转维申请表 · 查询当前转维状态', 500),
+    kb('转维操作手册 · 加载流程定义', 500),
+  ],
+  buildResponse: (vars) => {
+    const name = vars.projectName!
+    const state = MOCK_TRANSFER_STATE[name]
+    if (!state) {
+      return {
+        markdown: `🚚 **${name}** 尚未进入转维流程。`,
+        cards: [],
+        references: [{ label: '转维申请表', index: 1 }],
+      }
+    }
+    const currentStage = state.stages[state.currentIndex]
+    const doneCount = state.stages.filter(s => s.status === 'done').length
+
+    return {
+      markdown: `🚚 **${name}** 当前转维进度：已完成 **${doneCount}** 个阶段，当前处于 **【${currentStage.name}】** 阶段`,
+      cards: [
+        { type: 'transfer-flow', data: { projectName: name, stages: state.stages, currentStageIndex: state.currentIndex } },
+        { type: 'next-action', data: { stageName: currentStage.name, actions: state.nextActions } },
+        { type: 'link', data: { text: '跳转转维详情页 →', href: '#', module: 'transfer' } },
+      ],
+      references: [
+        { label: '转维申请表', index: 1 },
+        { label: '转维操作手册', index: 2 },
+      ],
+    }
+  },
+}
+
 // ─── Fallback ──────────────────────────────────────────────────
 
 const FALLBACK: ScenarioConfig = {
@@ -306,6 +391,7 @@ export const SCENARIOS: ScenarioConfig[] = [
   SCENARIO_PROJECT_BASIC_INFO,
   SCENARIO_PROJECT_PLANS,
   SCENARIO_REQUIREMENT_STATUS,
+  SCENARIO_TRANSFER_STATUS,
   FALLBACK,
 ]
 
