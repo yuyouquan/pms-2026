@@ -150,9 +150,9 @@ export const MOCK_PROMPT_TEMPLATES: PromptTemplate[] = [
   { id: 'pt-l2', name: '二级计划', category: 'query',
     description: '查询二级计划',
     content: '{项目名} 的二级计划', placeholders: ['项目名'], showInQuickChips: true },
-  { id: 'pt-l3', name: '三级计划（按部门）', category: 'query',
-    description: '按责任部门查看三级计划',
-    content: '{项目名} 的三级计划', placeholders: ['项目名'], showInQuickChips: false },
+  { id: 'pt-ld', name: '某计划的内部拆解', category: 'query',
+    description: '查看某个二级计划的内部拆解（后续扩展）',
+    content: '{项目名} {二级计划名} 的内部拆解', placeholders: ['项目名', '二级计划名'], showInQuickChips: false },
 
   // Existing
   { id: 'pt-b1', name: '项目基本情况', category: 'query',

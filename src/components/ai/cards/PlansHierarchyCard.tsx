@@ -30,32 +30,47 @@ export function PlansHierarchyCard({ data }: { data: PlansHierarchyCardData }) {
       key: l1.id,
       title: renderPlanLabel(l1, '🏁'),
       children: l2Children.map(l2 => {
-        const l3Children = data.l3.filter(x => x.parentId === l2.id)
+        const internalBreakdown = data.l3.filter(x => x.parentId === l2.id)
         const catBadge = l2.category ? <Tag color={L2_CATEGORY_COLOR[l2.category] ?? 'default'} style={{ margin: 0 }}>{l2.category}</Tag> : null
+        const breakdownBadge = internalBreakdown.length > 0
+          ? <Tag color="geekblue" style={{ margin: 0 }}>含 {internalBreakdown.length} 项拆解</Tag>
+          : null
         return {
           key: l2.id,
-          title: renderPlanLabel(l2, '📋', catBadge),
-          children: l3Children.map(l3 => {
-            const deptBadge = l3.department ? <Tag color="cyan" style={{ margin: 0 }}>{l3.department}</Tag> : null
-            return {
-              key: l3.id,
-              title: renderPlanLabel(l3, '🏗️', deptBadge),
-            }
-          }),
+          title: renderPlanLabel(l2, '📋', <>{catBadge}{breakdownBadge}</>),
+          children: internalBreakdown.length > 0
+            ? internalBreakdown.map(item => {
+                const deptBadge = item.department ? <Tag color="cyan" style={{ margin: 0 }}>{item.department}</Tag> : null
+                return {
+                  key: item.id,
+                  title: (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 11, color: '#8c8c8c' }}>内部拆解</span>
+                      <span>🔹</span>
+                      <span style={{ fontWeight: 500, color: item.isRisk ? '#ff4d4f' : undefined }}>{item.name}</span>
+                      {deptBadge}
+                      {item.owner && <span style={{ color: '#8c8c8c', fontSize: 12 }}>· {item.owner}</span>}
+                      <Tag color={item.status === '已完成' ? 'green' : item.status === '延期' || item.status === '阻塞' ? 'red' : 'default'} style={{ margin: 0 }}>{item.status}</Tag>
+                    </span>
+                  ),
+                }
+              })
+            : undefined,
         }
       }),
     }
   })
 
-  // Expand all L1 nodes by default; collapse L2's children
+  // Expand only L1 nodes by default (L2 children collapsed)
   const defaultExpandedKeys = data.l1.map(l1 => l1.id)
+  const totalInternal = data.l3.length
 
   return (
     <Card size="small" style={{ borderRadius: 8 }}>
       <div style={{ fontWeight: 500, marginBottom: 12, fontSize: 14 }}>
-        🌳 {data.projectName} · 计划层级总览
+        🌳 {data.projectName} · 计划层级
         <span style={{ fontSize: 12, color: '#8c8c8c', marginLeft: 8, fontWeight: 400 }}>
-          L1 {data.l1.length} · L2 {data.l2.length} · L3 {data.l3.length}
+          L1 {data.l1.length} · L2 {data.l2.length}{totalInternal > 0 ? ` · 内部拆解 ${totalInternal}` : ''}
         </span>
       </div>
       <Tree

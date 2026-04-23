@@ -545,8 +545,9 @@ const SCENARIO_PLANS_HIERARCHY: ScenarioConfig = {
     const l1 = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L1')
     const l2 = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L2')
     const l3 = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L3')
+    const totalInternal = l3.length  // Internal breakdown items across all L2 plans
     return {
-      markdown: `🌳 **${project}** 的计划层级：**${l1.length}** 个里程碑，**${l2.length}** 个二级计划，**${l3.length}** 个三级计划`,
+      markdown: `🌳 **${project}** 的计划层级：**${l1.length}** 个里程碑，**${l2.length}** 个二级计划${totalInternal > 0 ? `（${totalInternal} 项内部拆解）` : ''}`,
       cards: [
         { type: 'plans-hierarchy', data: { projectName: project, l1, l2, l3 } },
       ],
@@ -687,7 +688,7 @@ export const SCENARIOS: ScenarioConfig[] = [
   SCENARIO_VERSION_COMPARE,        // priority 12
   SCENARIO_PLANS_L1,               // priority 11
   SCENARIO_PLANS_L2,               // priority 11
-  SCENARIO_PLANS_L3,               // priority 11
+  // SCENARIO_PLANS_L3 removed — project has only L1+L2; L3 is per-L2-plan internal breakdown
   SCENARIO_VERSION_QUERY,          // priority 10
   SCENARIO_PRODUCT_INFO,           // priority 9
   SCENARIO_TRANSFER_STATUS,        // priority 8

@@ -97,7 +97,7 @@ const TOOLS = [
   },
   {
     name: 'query_plans_l3',
-    description: '查询三级计划（部门拆分）。可按部门过滤。',
+    description: '查询某个二级计划的内部拆解项（可按责任部门过滤）。注：项目只有 L1/L2 两级，L3 是单个 L2 计划内部的任务分解。',
     inputSchema: {
       type: 'object',
       properties: {
