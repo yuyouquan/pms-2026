@@ -63,8 +63,12 @@ const SCENARIO_PROJECT_BASIC_INFO: ScenarioConfig = {
   requiresProject: true,
   priority: 5,
   buildThinking: (vars) => [
-    kb(`项目主表 · 查询 ${vars.projectName}`, 400),
-    kb('待办与计划 · 扫描风险计划项', 500),
+    reasoning(`解析意图：查询「${vars.projectName}」基础信息`, 350),
+    { icon: '🔒', type: 'permission', target: `权限校验...${vars.projectName} 通过`, delay: 350 },
+    kb(`项目主表 · 加载 ${vars.projectName} 元数据`, 500),
+    kb('计划管理 · 扫描风险计划项', 500),
+    mcp('Jira MCP Server · 拉取关联缺陷概况', 600),
+    reasoning('综合判断风险等级与展示重点', 400),
   ],
   buildResponse: (vars) => {
     const name = vars.projectName!
@@ -169,9 +173,12 @@ const SCENARIO_PROJECT_PLANS: ScenarioConfig = {
     planType: ['版本', '需求', '开发', '测试'],
   },
   priority: 6,
-  buildThinking: (_vars) => [
-    kb('待办与计划 · 查询项目计划', 500),
-    reasoning('按筛选条件过滤', 400),
+  buildThinking: (vars) => [
+    reasoning(`解析意图：查询「${vars.projectName}」计划${vars.ownership === 'mine' ? '（我负责）' : ''}${vars.planType ? `（${vars.planType}）` : ''}`, 400),
+    { icon: '🔒', type: 'permission', target: `权限校验...${vars.projectName} 通过`, delay: 300 },
+    kb('计划管理 · 加载所有计划数据', 500),
+    reasoning('按筛选条件过滤（所有/我负责/类型）', 400),
+    reasoning('整理为表格视图', 300),
   ],
   buildResponse: (vars) => {
     const name = vars.projectName!
@@ -267,9 +274,12 @@ const SCENARIO_REQUIREMENT_STATUS: ScenarioConfig = {
   requiresProject: true,
   priority: 7,
   buildThinking: (vars) => [
-    kb(`项目主表 · 确认 ${vars.projectName}`, 400),
-    kb('待办与计划 · 筛选需求类计划', 500),
-    reasoning('按状态分组统计', 400),
+    reasoning(`解析意图：分析「${vars.projectName}」需求状态`, 400),
+    { icon: '🔒', type: 'permission', target: `权限校验...${vars.projectName} 通过`, delay: 300 },
+    kb(`项目主表 · 确认项目 ${vars.projectName}`, 400),
+    kb('计划管理 · 筛选「需求开发」分类', 500),
+    reasoning('按进度与状态分类到 5 个状态桶', 400),
+    reasoning('识别风险项并标记优先级', 350),
   ],
   buildResponse: (vars) => {
     const name = vars.projectName!
@@ -340,9 +350,13 @@ const SCENARIO_TRANSFER_STATUS: ScenarioConfig = {
   requiresProject: true,
   priority: 8,
   buildThinking: (vars) => [
+    reasoning(`解析意图：查询「${vars.projectName}」转维进度`, 400),
+    { icon: '🔒', type: 'permission', target: `权限校验...${vars.projectName} 通过`, delay: 300 },
     kb(`项目主表 · 确认 ${vars.projectName}`, 400),
-    kb('转维申请表 · 查询当前转维状态', 500),
+    kb('转维申请表 · 加载当前转维状态', 500),
     kb('转维操作手册 · 加载流程定义', 500),
+    mcp('SQA MCP Server · 拉取审核状态', 500),
+    reasoning('定位当前阶段 + 推算下一步行动清单', 400),
   ],
   buildResponse: (vars) => {
     const name = vars.projectName!
@@ -385,9 +399,12 @@ const SCENARIO_VERSION_QUERY: ScenarioConfig = {
   requiresProject: false,   // can be cross-project for "本周发了几个版本"
   priority: 10,             // higher than basic-info to catch version-centric queries first
   buildThinking: (vars) => [
-    kb('版本主表 · 查询最近版本发布', 400),
-    kb('构建系统 · 读取构建状态与指标', 500),
-    reasoning('计算成功率与稳定性指标', 400),
+    reasoning(`解析意图：${vars.projectName ? `「${vars.projectName}」` : '全项目'}版本发布查询`, 400),
+    kb('版本主表 · 筛选时间窗版本', 500),
+    tool('构建系统 API · 拉取每个版本的构建状态', 600),
+    tool('质量看板 · 获取稳定性 / 性能指标', 500),
+    reasoning('计算成功率与失败率', 350),
+    reasoning('按发布日期排序并组装清单', 300),
   ],
   buildResponse: (vars) => {
     const input = (vars.rawInput ?? '').toLowerCase()
@@ -441,9 +458,12 @@ const SCENARIO_VERSION_COMPARE: ScenarioConfig = {
   requiresProject: true,
   priority: 12,   // higher than version-query so specific comparison wins
   buildThinking: (vars) => [
-    kb('版本主表 · 加载对比候选版本', 400),
-    kb('构建系统 · 拉取稳定性与性能指标', 500),
-    reasoning('计算 delta 与变化趋势', 400),
+    reasoning(`解析意图：对比「${vars.projectName}」近两个成功版本`, 400),
+    kb('版本主表 · 加载候选成功版本列表', 500),
+    tool('构建系统 API · 拉取较旧版本指标', 500),
+    tool('构建系统 API · 拉取较新版本指标', 500),
+    reasoning('计算 delta（稳定性 / 性能 / 缺陷数）', 400),
+    reasoning('生成对比结论', 350),
   ],
   buildResponse: (vars) => {
     const project = vars.projectName!
@@ -496,8 +516,12 @@ const SCENARIO_PRODUCT_INFO: ScenarioConfig = {
   requiresProject: true,
   priority: 9,
   buildThinking: (vars) => [
-    kb(`产品规格库 · 查询 ${vars.projectName}`, 500),
-    kb('项目主表 · 加载关联项目信息', 400),
+    reasoning(`解析意图：查询「${vars.projectName}」产品规格`, 400),
+    { icon: '🔒', type: 'permission', target: `权限校验...${vars.projectName} 通过`, delay: 300 },
+    kb(`产品规格库 · 加载 ${vars.projectName} 完整规格`, 500),
+    kb('项目主表 · 关联项目元数据', 400),
+    tool('上市排期系统 · 获取首发与量产计划', 500),
+    reasoning('综合规格 + 商业信息组装产品全貌', 350),
   ],
   buildResponse: (vars) => {
     const project = vars.projectName!
@@ -538,8 +562,13 @@ const SCENARIO_PLANS_HIERARCHY: ScenarioConfig = {
   requiresProject: true,
   priority: 13,                  // higher than L1/L2/L3 (all at 11) and version-compare (12)
   buildThinking: (vars) => [
-    kb(`计划管理 · 加载 ${vars.projectName} 全部层级计划`, 500),
-    reasoning('按 L1 → L2 → L3 层级组装', 400),
+    reasoning(`解析意图：查询「${vars.projectName}」完整计划层级`, 400),
+    { icon: '🔒', type: 'permission', target: `权限校验...${vars.projectName} 通过`, delay: 300 },
+    kb(`计划管理 · 加载 ${vars.projectName} 全部 L1 节点`, 500),
+    kb(`计划管理 · 加载 ${vars.projectName} 全部 L2 节点`, 500),
+    kb(`计划管理 · 加载所有 L2 内部拆解`, 500),
+    reasoning('分别构建里程碑树（L1）+ 分类树（L2）', 450),
+    reasoning('计算总节点数与汇总指标', 350),
   ],
   buildResponse: (vars) => {
     const project = vars.projectName!
@@ -571,8 +600,11 @@ const SCENARIO_PLANS_L1: ScenarioConfig = {
   requiresProject: true,
   priority: 11,
   buildThinking: (vars) => [
-    kb(`计划管理 · 加载 ${vars.projectName} 一级计划`, 500),
-    reasoning('按里程碑顺序排序', 400),
+    reasoning(`解析意图：查询「${vars.projectName}」一级计划（里程碑）`, 400),
+    { icon: '🔒', type: 'permission', target: `权限校验...${vars.projectName} 通过`, delay: 300 },
+    kb(`计划管理 · 加载 ${vars.projectName} L1 节点`, 500),
+    reasoning('按 parent-child 重建里程碑树（最多 2 层）', 400),
+    reasoning('扫描风险节点并标记', 300),
   ],
   buildResponse: (vars) => {
     const project = vars.projectName!
@@ -611,8 +643,12 @@ const SCENARIO_PLANS_L2: ScenarioConfig = {
   requiresProject: true,
   priority: 11,
   buildThinking: (vars) => [
-    kb(`计划管理 · 加载 ${vars.projectName} 二级计划`, 500),
-    reasoning('按分类分组', 400),
+    reasoning(`解析意图：查询「${vars.projectName}」二级计划`, 400),
+    { icon: '🔒', type: 'permission', target: `权限校验...${vars.projectName} 通过`, delay: 300 },
+    kb(`计划管理 · 加载 ${vars.projectName} L2 节点`, 500),
+    kb('计划管理 · 加载 L2 内部拆解节点', 500),
+    reasoning('按分类（需求开发 / 版本火车 / 独立应用 / 测试）分组', 400),
+    reasoning('按 parent-child 重建分类内的 3 层树', 400),
   ],
   buildResponse: (vars) => {
     const project = vars.projectName!
@@ -679,7 +715,11 @@ const FALLBACK: ScenarioConfig = {
   keywords: [],
   requiresProject: false,
   priority: 0,
-  buildThinking: () => [],
+  buildThinking: () => [
+    reasoning('解析用户意图...', 400),
+    reasoning('检索可匹配场景...未命中', 400),
+    reasoning('准备引导提示', 300),
+  ],
   buildResponse: () => ({
     markdown: '这个问题超出了我当前的能力范围 😅 试试这些我能回答的：',
     cards: [],
