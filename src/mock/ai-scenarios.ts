@@ -63,12 +63,14 @@ const SCENARIO_PROJECT_BASIC_INFO: ScenarioConfig = {
   requiresProject: true,
   priority: 5,
   buildThinking: (vars) => [
-    reasoning(`解析意图：查询「${vars.projectName}」基础信息`, 350),
+    reasoning(`解析意图：查询「${vars.projectName}」基础信息（含计划 + 配置）`, 400),
     { icon: '🔒', type: 'permission', target: `权限校验...${vars.projectName} 通过`, delay: 350 },
     kb(`项目主表 · 加载 ${vars.projectName} 元数据`, 500),
-    kb('计划管理 · 扫描风险计划项', 500),
-    mcp('Jira MCP Server · 拉取关联缺陷概况', 600),
-    reasoning('综合判断风险等级与展示重点', 400),
+    kb('计划管理 · 加载一级计划（里程碑）', 500),
+    kb('计划管理 · 扫描风险计划项', 450),
+    kb('产品规格库 · 加载硬件配置 / tOS / 市场', 500),
+    mcp('Jira MCP Server · 拉取关联缺陷概况', 550),
+    reasoning('综合三部分组装展示', 400),
   ],
   buildResponse: (vars) => {
     const name = vars.projectName!
@@ -76,14 +78,27 @@ const SCENARIO_PROJECT_BASIC_INFO: ScenarioConfig = {
     const risks = MOCK_RISK_PLANS[name] ?? []
     const hasRisk = risks.length > 0
 
-    const headerLine = hasRisk
-      ? `📋 **${name}** 基本信息如下。⚠️ 注意：该项目有 **${risks.length} 项计划处于风险状态**，建议优先关注 ↓`
-      : `📋 **${name}** 基本信息如下。`
+    // Plan summary: all L1 milestones for this project
+    const milestones = MOCK_LEVELED_PLANS.filter(
+      lp => lp.projectName === name && lp.level === 'L1'
+    )
+
+    // Config/spec: product spec if available
+    const spec = MOCK_PRODUCT_SPECS[name]
+
+    const headerParts: string[] = [`📋 **${name}** 基础信息如下（含 基础信息 / 计划信息 / 配置信息 三部分）`]
+    if (hasRisk) {
+      headerParts.push(`⚠️ 注意：该项目有 **${risks.length} 项计划处于风险状态**，建议优先关注 ↓`)
+    }
 
     const cards: any[] = []
+
+    // 1. Risk plans (if any)
     if (hasRisk) {
       cards.push({ type: 'risk-plans', data: { items: risks } })
     }
+
+    // 2. Basic info card
     cards.push({
       type: 'project-info',
       data: {
@@ -95,6 +110,24 @@ const SCENARIO_PROJECT_BASIC_INFO: ScenarioConfig = {
         description: MOCK_PROJECT_DESC[name] ?? '（暂无描述）',
       },
     })
+
+    // 3. Plan summary (L1 milestone tree)
+    if (milestones.length > 0) {
+      cards.push({
+        type: 'milestones',
+        data: { projectName: name, milestones },
+      })
+    }
+
+    // 4. Config / product spec
+    if (spec) {
+      cards.push({
+        type: 'product-info-v2',
+        data: { spec },
+      })
+    }
+
+    // 5. Jump link
     if (p) {
       cards.push({
         type: 'link',
@@ -104,10 +137,12 @@ const SCENARIO_PROJECT_BASIC_INFO: ScenarioConfig = {
 
     const references = [
       { label: '项目主表', index: 1 },
-      { label: '待办与计划', index: 2 },
+      { label: '计划管理', index: 2 },
+      { label: '产品规格库', index: 3 },
+      { label: '待办与计划', index: 4 },
     ]
 
-    return { markdown: headerLine, cards, references }
+    return { markdown: headerParts.join('\n\n'), cards, references }
   },
 }
 
