@@ -1,61 +1,48 @@
 'use client'
-import { Card, Timeline, Tag, Progress } from 'antd'
-import { CheckCircleFilled, ClockCircleFilled, WarningFilled } from '@ant-design/icons'
-import type { MilestonesCardData } from '@/types/ai'
-import { MOCK_LEVELED_PLANS } from '@/mock/ai-extended'
+import { Card, Tree, Tag, Progress } from 'antd'
+import type { DataNode } from 'antd/es/tree'
+import type { MilestonesCardData, LeveledPlan } from '@/types/ai'
 
-const STATUS_ICON = {
-  '已完成': <CheckCircleFilled style={{ color: '#52c41a' }} />,
-  '进行中': <ClockCircleFilled style={{ color: '#1677ff' }} />,
-  '未开始': <ClockCircleFilled style={{ color: '#d9d9d9' }} />,
-  '延期': <WarningFilled style={{ color: '#ff4d4f' }} />,
-  '阻塞': <WarningFilled style={{ color: '#ff4d4f' }} />,
+function statusColor(p: LeveledPlan) {
+  if (p.status === '已完成') return 'green'
+  if (p.status === '延期' || p.status === '阻塞') return 'red'
+  if (p.isRisk) return 'orange'
+  return 'default'
+}
+
+function buildTree(plans: LeveledPlan[]): DataNode[] {
+  const idsInSlice = new Set(plans.map(p => p.id))
+  const roots = plans.filter(p => !p.parentId || !idsInSlice.has(p.parentId))
+  const childrenOf = (id: string) => plans.filter(p => p.parentId === id)
+
+  const toNode = (p: LeveledPlan): DataNode => ({
+    key: p.id,
+    title: (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span>{p.depth === 1 ? '🏁' : '🎯'}</span>
+        <span style={{ fontWeight: 500, color: p.isRisk ? '#ff4d4f' : undefined }}>{p.name}</span>
+        {p.owner && <span style={{ color: '#8c8c8c', fontSize: 12 }}>· {p.owner}</span>}
+        <span style={{ color: '#8c8c8c', fontSize: 12 }}>· 计划 {p.planDate}</span>
+        {p.actualDate && <span style={{ color: '#8c8c8c', fontSize: 12 }}>· 实际 {p.actualDate}</span>}
+        <Tag color={statusColor(p)} style={{ margin: 0 }}>{p.status}</Tag>
+        {p.isRisk && <Tag color="red" style={{ margin: 0 }}>⚠️ 风险</Tag>}
+        {p.progress > 0 && p.progress < 100 && (
+          <Progress percent={p.progress} size="small" showInfo={false} style={{ width: 100, marginLeft: 4 }} />
+        )}
+      </span>
+    ),
+    children: childrenOf(p.id).map(toNode),
+  })
+
+  return roots.map(toNode)
 }
 
 export function MilestonesCard({ data }: { data: MilestonesCardData }) {
+  const tree = buildTree(data.milestones)
   return (
     <Card size="small" style={{ borderRadius: 8 }}>
-      <div style={{ fontWeight: 500, marginBottom: 12, fontSize: 14 }}>🏁 里程碑（一级计划）</div>
-      <Timeline
-        items={data.milestones.map(m => {
-          const childCount = MOCK_LEVELED_PLANS.filter(
-            p => p.level === 'L2' && p.parentId === m.id
-          ).length
-          return {
-          dot: STATUS_ICON[m.status as keyof typeof STATUS_ICON],
-          children: (
-            <div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ fontWeight: 500, fontSize: 13,
-                  color: m.isRisk ? '#ff4d4f' : undefined }}>{m.name}</span>
-                <Tag style={{ margin: 0 }} color={m.status === '已完成' ? 'green' : m.status === '延期' ? 'red' : 'blue'}>
-                  {m.status}
-                </Tag>
-                {m.isRisk && <Tag color="red" style={{ margin: 0 }}>⚠️ 风险</Tag>}
-                {childCount > 0 && (
-                  <Tag color="geekblue" style={{ margin: 0 }}>
-                    含 {childCount} 个二级计划
-                  </Tag>
-                )}
-              </div>
-              <div style={{ fontSize: 12, color: '#8c8c8c' }}>
-                负责人: {m.owner} · 计划: {m.planDate}
-                {m.actualDate ? ` · 实际: ${m.actualDate}` : ''}
-              </div>
-              {m.progress > 0 && m.progress < 100 && (
-                <Progress percent={m.progress} size="small" showInfo={false}
-                  style={{ width: 200, marginTop: 4 }} />
-              )}
-              {m.description && (
-                <div style={{ fontSize: 11, color: '#8c8c8c', fontStyle: 'italic', marginTop: 4 }}>
-                  {m.description}
-                </div>
-              )}
-            </div>
-          ),
-        }
-        })}
-      />
+      <div style={{ fontWeight: 500, marginBottom: 12, fontSize: 14 }}>🏁 一级计划 / 里程碑</div>
+      <Tree treeData={tree} defaultExpandAll selectable={false} blockNode />
     </Card>
   )
 }

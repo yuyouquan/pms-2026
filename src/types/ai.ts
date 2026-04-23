@@ -277,12 +277,13 @@ export type LeveledPlan = {
   level: PlanLevel
   name: string
   owner: string
-  department?: string          // L3 only
-  parentId?: string            // L2 parent = L1 id; L3 parent = L2 id
-  category?: PlanCategoryL2    // L2 only
-  planDate: string             // 'YYYY-MM-DD' (expected)
-  actualDate?: string          // 'YYYY-MM-DD' (if done)
-  progress: number             // 0-100
+  department?: string
+  parentId?: string            // Can point to a node of same level (sub-milestones / sub-plans)
+  category?: PlanCategoryL2
+  depth: 1 | 2 | 3
+  planDate: string
+  actualDate?: string
+  progress: number
   status: '未开始' | '进行中' | '已完成' | '延期' | '阻塞'
   isRisk: boolean
   description?: string

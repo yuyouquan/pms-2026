@@ -226,9 +226,10 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 function buildRequirementDist(projectName: string) {
-  // Read L2 plans with category '需求开发' — these are the project's requirement-development plans
+  // Only include actual L2 plans (depth >= 2 within 需求开发 category) — not the domain groupers
   const l2Reqs = MOCK_LEVELED_PLANS.filter(
-    p => p.projectName === projectName && p.level === 'L2' && p.category === '需求开发'
+    p => p.projectName === projectName && (p.level === 'L2' || p.level === 'L3')
+      && p.category === '需求开发' && p.depth >= 2
   )
 
   // Classify plan.status → distribution status buckets (demo heuristic)
@@ -545,9 +546,9 @@ const SCENARIO_PLANS_HIERARCHY: ScenarioConfig = {
     const l1 = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L1')
     const l2 = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L2')
     const l3 = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L3')
-    const totalInternal = l3.length  // Internal breakdown items across all L2 plans
+    const totalL2Tree = l2.length + l3.length
     return {
-      markdown: `🌳 **${project}** 的计划层级：**${l1.length}** 个里程碑，**${l2.length}** 个二级计划${totalInternal > 0 ? `（${totalInternal} 项内部拆解）` : ''}`,
+      markdown: `🌳 **${project}** 的计划层级：**${l1.length}** 个里程碑节点，**${totalL2Tree}** 个二级计划节点`,
       cards: [
         { type: 'plans-hierarchy', data: { projectName: project, l1, l2, l3 } },
       ],
@@ -622,7 +623,10 @@ const SCENARIO_PLANS_L2: ScenarioConfig = {
     else if (input.includes('独立应用')) category = '独立应用'
     else if (input.includes('测试', 0)) category = '测试'
 
-    let l2Plans = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L2')
+    // Include both L2 and L3 nodes — together they form the L2 tree structure
+    let l2Plans = MOCK_LEVELED_PLANS.filter(
+      p => p.projectName === project && (p.level === 'L2' || p.level === 'L3')
+    )
     if (category !== 'ALL') l2Plans = l2Plans.filter(p => p.category === category)
 
     return {
