@@ -30,6 +30,7 @@ function buildTree(plans: LeveledPlan[]): DataNode[] {
         <span>{nodeIcon(p.depth)}</span>
         <span style={{ fontWeight: 500, color: p.isRisk ? '#ff4d4f' : undefined }}>{p.name}</span>
         {p.department && <Tag color="cyan" style={{ margin: 0 }}>{p.department}</Tag>}
+        {p.market && <Tag color="blue" style={{ margin: 0 }}>{p.market}</Tag>}
         {p.owner && <span style={{ color: '#8c8c8c', fontSize: 12 }}>· {p.owner}</span>}
         <span style={{ color: '#8c8c8c', fontSize: 12 }}>· {p.planDate}</span>
         <Tag color={statusColor(p)} style={{ margin: 0 }}>{p.status}</Tag>

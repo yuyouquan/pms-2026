@@ -251,6 +251,14 @@ export type VersionRelease = {
   notes?: string
 }
 
+export type MarketSpecificInfo = {
+  launchDate: string
+  keyFeatures: string[]
+  notes?: string
+  tosPatch?: string         // market-specific tOS patch version
+  preinstalledApps?: string[]
+}
+
 export type ProductSpec = {
   projectName: string
   codename: string             // 'X6877'
@@ -272,6 +280,7 @@ export type ProductSpec = {
   spm: string
   tpm: string
   ppm: string
+  perMarket?: Record<string, MarketSpecificInfo>   // market-specific info
 }
 
 export type PlanLevel = 'L1' | 'L2' | 'L3'
@@ -287,6 +296,7 @@ export type LeveledPlan = {
   parentId?: string            // Can point to a node of same level (sub-milestones / sub-plans)
   category?: PlanCategoryL2
   depth: 1 | 2 | 3
+  market?: string              // 'OP' | 'TR' | 'RU' | 'Base' | 'COCL' — undefined means shared across markets
   planDate: string
   actualDate?: string
   progress: number

@@ -154,6 +154,29 @@ export const MOCK_PRODUCT_SPECS: Record<string, ProductSpec> = {
     os: 'Android 16', tosVersion: 'tOS 16.3', markets: ['OP', 'TR', 'RU'],
     launchDate: '2026-06-15', productType: '新品', chipPlatform: 'MTK', projectLevel: 'A',
     currentStage: 'STR2', spm: '李白', tpm: '刘洋', ppm: '王明',
+    perMarket: {
+      OP: {
+        launchDate: '2026-06-15',
+        keyFeatures: ['TECNO 定制相机', 'AI 助手中文优化', '本地支付集成'],
+        tosPatch: 'tOS 16.3-OP',
+        preinstalledApps: ['TECNO 相机', 'Boomplay', 'Palmstore'],
+        notes: '主力市场，首发在此',
+      },
+      TR: {
+        launchDate: '2026-06-22',
+        keyFeatures: ['土耳其语键盘', '清真认证', '本地化时区'],
+        tosPatch: 'tOS 16.3-TR',
+        preinstalledApps: ['Trendyol', 'Getir'],
+        notes: '本地化优化重点市场',
+      },
+      RU: {
+        launchDate: '2026-07-01',
+        keyFeatures: ['俄语键盘', 'YandexPay 集成', 'Mir 卡支付'],
+        tosPatch: 'tOS 16.3-RU',
+        preinstalledApps: ['Yandex Browser', 'VK'],
+        notes: '进入新兴市场',
+      },
+    },
   },
   'X6873_H972': {
     projectName: 'X6873_H972', codename: 'X6873', marketName: 'CAMON 30 Lite', brand: 'TECNO',
@@ -225,8 +248,17 @@ export const MOCK_LEVELED_PLANS: LeveledPlan[] = [
   { id: 'l1-l-1', projectName: 'X6877-D8400_H991', level: 'L1', depth: 2, parentId: 'l1-l',
     name: '量产', owner: '李白', planDate: '2026-05-28',
     progress: 20, status: '进行中', isRisk: false },
-  { id: 'l1-l-2', projectName: 'X6877-D8400_H991', level: 'L1', depth: 2, parentId: 'l1-l',
-    name: '首发上市', owner: '李白', planDate: '2026-06-15',
+  { id: 'l1-l-2-op', projectName: 'X6877-D8400_H991', level: 'L1', depth: 2, parentId: 'l1-l',
+    name: 'OP 市场首发', owner: '李白', market: 'OP',
+    planDate: '2026-06-15',
+    progress: 0, status: '未开始', isRisk: false },
+  { id: 'l1-l-2-tr', projectName: 'X6877-D8400_H991', level: 'L1', depth: 2, parentId: 'l1-l',
+    name: 'TR 市场首发', owner: '李白', market: 'TR',
+    planDate: '2026-06-22',
+    progress: 0, status: '未开始', isRisk: false },
+  { id: 'l1-l-2-ru', projectName: 'X6877-D8400_H991', level: 'L1', depth: 2, parentId: 'l1-l',
+    name: 'RU 市场首发', owner: '李白', market: 'RU',
+    planDate: '2026-07-01',
     progress: 0, status: '未开始', isRisk: false },
 
   // L2 tree — 需求开发: 3 domain roots (depth 1) → plans (depth 2) → breakdowns (depth 3)
@@ -279,6 +311,19 @@ export const MOCK_LEVELED_PLANS: LeveledPlan[] = [
   { id: 'l2v-mr2-test', projectName: 'X6877-D8400_H991', level: 'L3', depth: 3, parentId: 'l2v-mr2', category: '版本火车',
     name: 'MR2 构建验证', owner: '赵六', department: '测试部', planDate: '2026-04-25',
     progress: 50, status: '进行中', isRisk: false },
+  // Market-specific L3 under MR2
+  { id: 'l2v-mr2-op-release', projectName: 'X6877-D8400_H991', level: 'L3', depth: 3, parentId: 'l2v-mr2', category: '版本火车',
+    name: 'MR2 · OP 市场发布', owner: '王五', department: '软件部', market: 'OP',
+    planDate: '2026-04-28',
+    progress: 30, status: '进行中', isRisk: false },
+  { id: 'l2v-mr2-tr-release', projectName: 'X6877-D8400_H991', level: 'L3', depth: 3, parentId: 'l2v-mr2', category: '版本火车',
+    name: 'MR2 · TR 市场发布', owner: '王五', department: '软件部', market: 'TR',
+    planDate: '2026-05-02',
+    progress: 20, status: '进行中', isRisk: false },
+  { id: 'l2v-mr2-ru-release', projectName: 'X6877-D8400_H991', level: 'L3', depth: 3, parentId: 'l2v-mr2', category: '版本火车',
+    name: 'MR2 · RU 市场发布', owner: '王五', department: '软件部', market: 'RU',
+    planDate: '2026-05-05',
+    progress: 15, status: '进行中', isRisk: false },
   { id: 'l2v-mr3', projectName: 'X6877-D8400_H991', level: 'L2', depth: 2, parentId: 'l2v-train', category: '版本火车',
     name: 'MR3 - V2.4.0', owner: '王五', planDate: '2026-05-20',
     progress: 10, status: '进行中', isRisk: false },
@@ -339,4 +384,4 @@ export const MOCK_LEVELED_PLANS: LeveledPlan[] = [
     progress: 30, status: '延期', isRisk: true },
 ]
 
-export const L1_MILESTONE_ORDER = ['概念阶段', '概念评审', '立项阶段', '立项评审', 'DV 完成', 'PV 完成', '量产', '首发上市', '发布阶段', 'tOS 16.0 RC', 'tOS 16.0 正式发布', '开发阶段']
+export const L1_MILESTONE_ORDER = ['概念阶段', '概念评审', '立项阶段', '立项评审', 'DV 完成', 'PV 完成', '量产', 'OP 市场首发', 'TR 市场首发', 'RU 市场首发', '发布阶段', 'tOS 16.0 RC', 'tOS 16.0 正式发布', '开发阶段']
