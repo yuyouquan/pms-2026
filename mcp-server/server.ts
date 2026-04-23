@@ -47,7 +47,7 @@ const server = new Server(
 const TOOLS = [
   {
     name: 'query_versions',
-    description: '查询版本发布列表。支持按项目名和时间范围过滤。老板可直接问"本周发了几个版本"、"6877 最新版本"。',
+    description: '查询版本发布列表。支持按项目名和时间范围过滤。返回 TONES SCM 样式数据（版本号、Fingerprint、市场、版本类型、SMR、SCM 项目码等）。老板可直接问"本周发了几个版本"、"6877 最新版本"。',
     inputSchema: {
       type: 'object',
       properties: {

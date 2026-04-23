@@ -233,14 +233,20 @@ export type Conversation = {
 
 export type VersionRelease = {
   id: string
-  projectName: string
-  versionNumber: string        // e.g. 'V2.3.0'
-  releaseDate: string          // 'YYYY-MM-DD'
-  releaseType: 'FR' | 'MR1' | 'MR2' | 'MR3' | 'Hotfix'
+  projectName: string              // PMS project (e.g. 'X6877-D8400_H991')
+  scmProjectCode: string           // SCM identifier (e.g. 'CM8_H991(Android 16)')
+  versionNumber: string            // e.g. 'CM8-16.2.0.230SP04(BASE006PF001AZ)'
+  fingerprint: string              // e.g. 'TECNO/CM8-OP/TECNO-CM8:16/BP2A.250...'
+  purpose: '转测版本' | 'OTATEST版本' | 'Release版本' | 'Hotfix版本'
+  market: 'Base' | 'OP' | 'COCL' | 'TR' | 'RU'
+  buildType: 'userdebug' | 'user'
+  isSmr: boolean
+  smrResult: '-' | 'PASS' | 'FAIL'
+  releaseDate: string
   status: 'success' | 'failed' | 'in-progress'
   buildUrl: string
-  stabilityScore: number       // 0-100
-  perfScore: number            // 0-100
+  stabilityScore: number
+  perfScore: number
   defectCount: number
   notes?: string
 }

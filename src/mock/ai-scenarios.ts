@@ -467,22 +467,31 @@ const SCENARIO_VERSION_COMPARE: ScenarioConfig = {
   ],
   buildResponse: (vars) => {
     const project = vars.projectName!
-    // Find two most recent successful versions for this project
-    const versions = MOCK_VERSIONS
+    // Pick the newest market+buildType combo with at least 2 success versions
+    const successes = MOCK_VERSIONS
       .filter(v => v.projectName === project && v.status === 'success')
       .sort((a, b) => b.releaseDate.localeCompare(a.releaseDate))
 
-    if (versions.length < 2) {
+    // Group by market+buildType and find a pair within the same group
+    const groups: Record<string, typeof successes> = {}
+    for (const v of successes) {
+      const key = `${v.market}|${v.buildType}`
+      if (!groups[key]) groups[key] = []
+      groups[key].push(v)
+    }
+
+    const pair = Object.values(groups).find(g => g.length >= 2)
+    if (!pair) {
       return {
-        markdown: `📊 **${project}** 可对比的成功版本不足 2 个，暂无法生成对比。`,
+        markdown: `📊 **${project}** 可对比的同市场+构建类型成功版本不足 2 个，暂无法生成对比。`,
         cards: [],
         references: [{ label: '版本主表', index: 1 }],
       }
     }
 
-    const [b, a] = [versions[0], versions[1]]    // b = newer, a = older
+    const [b, a] = [pair[0], pair[1]]    // b = newer, a = older
     return {
-      markdown: `📊 **${project}** 版本对比：**${a.versionNumber}** → **${b.versionNumber}**`,
+      markdown: `📊 **${project}** 版本对比（${b.market} · ${b.buildType}）：**${a.versionNumber.split('(')[0]}** → **${b.versionNumber.split('(')[0]}**`,
       cards: [
         {
           type: 'version-compare', data: {

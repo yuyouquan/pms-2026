@@ -134,6 +134,9 @@ export const MOCK_PROMPT_TEMPLATES: PromptTemplate[] = [
   { id: 'pt-v3', name: '版本对比', category: 'analysis',
     description: '最近两个版本对比',
     content: '{项目名} 最近两个版本对比', placeholders: ['项目名'], showInQuickChips: true },
+  { id: 'pt-v4', name: '版本构建状态', category: 'query',
+    description: '查看项目的版本发布状态（多市场 / buildType）',
+    content: '{项目名} 最近版本构建', placeholders: ['项目名'], showInQuickChips: false },
 
   // Product
   { id: 'pt-p1', name: '这是啥产品', category: 'query',
