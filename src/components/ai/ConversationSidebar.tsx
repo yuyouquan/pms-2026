@@ -27,19 +27,30 @@ export function ConversationSidebar() {
   const {
     conversations, activeConversationId, setActiveConversation,
     createConversation, renameConversation, pinConversation, deleteConversation,
+    sidebarCollapsed, setSidebarCollapsed,
   } = useAIChatStore()
-  const [collapsed, setCollapsed] = useState(true)
   const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null)
   const [renameValue, setRenameValue] = useState('')
 
-  if (collapsed) {
+  if (sidebarCollapsed) {
     return (
       <div style={{ width: 48, borderRight: '1px solid #f0f0f0', padding: '8px 4px',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
         background: '#fafbfc' }}>
-        <Button type="text" icon={<MenuUnfoldOutlined />} onClick={() => setCollapsed(false)} />
+        <Button type="text" icon={<MenuUnfoldOutlined />} onClick={() => setSidebarCollapsed(false)} title="展开会话列表" />
         <Button type="primary" shape="circle" icon={<PlusOutlined />}
-          onClick={createConversation} size="small" title="新对话" />
+          onClick={() => {
+            createConversation()
+            setSidebarCollapsed(false)     // auto-expand so user sees both old + new conversations
+          }}
+          size="small" title="新对话" />
+        {conversations.length > 0 && (
+          <div style={{ fontSize: 10, color: '#8c8c8c', writingMode: 'vertical-rl',
+            marginTop: 8, cursor: 'pointer' }}
+            onClick={() => setSidebarCollapsed(false)}>
+            {conversations.length} 个会话
+          </div>
+        )}
       </div>
     )
   }
@@ -85,7 +96,7 @@ export function ConversationSidebar() {
       background: '#fafbfc' }}>
       <div style={{ padding: 12, display: 'flex', gap: 6 }}>
         <Button type="primary" icon={<PlusOutlined />} onClick={createConversation} style={{ flex: 1 }}>新对话</Button>
-        <Button type="text" icon={<MenuFoldOutlined />} onClick={() => setCollapsed(true)} />
+        <Button type="text" icon={<MenuFoldOutlined />} onClick={() => setSidebarCollapsed(true)} />
       </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px 12px' }}>
         {conversations.length === 0 && (

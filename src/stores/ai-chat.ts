@@ -40,6 +40,7 @@ export interface AIChatState {
   currentProjectContext: string | null
   isStreaming: boolean
   drawerOpen: boolean
+  sidebarCollapsed: boolean
 }
 
 export interface AIChatActions {
@@ -53,6 +54,7 @@ export interface AIChatActions {
   appendMessageToActive: (msg: ChatMessage) => void
   patchMessageInActive: (messageId: string, patch: Partial<ChatMessage>) => void
   setDrawerOpen: (open: boolean) => void
+  setSidebarCollapsed: (v: boolean) => void
 }
 
 const initial = loadFromStorage()
@@ -63,6 +65,7 @@ export const useAIChatStore = create<AIChatState & AIChatActions>()((set, get) =
   currentProjectContext: null,
   isStreaming: false,
   drawerOpen: false,
+  sidebarCollapsed: false,
 
   sendMessage: async (text: string) => {
     const api = get()
@@ -175,6 +178,7 @@ export const useAIChatStore = create<AIChatState & AIChatActions>()((set, get) =
 
   bindProject: (projectName) => set({ currentProjectContext: projectName }),
   setDrawerOpen: (open) => set({ drawerOpen: open }),
+  setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
 
   appendMessageToActive: (msg) => set((s) => {
     if (!s.activeConversationId) return s

@@ -5,7 +5,7 @@ import { useAIChatStore } from '@/stores/ai-chat'
 import { useAIConfigStore } from '@/stores/ai-config'
 
 export function ChatHeader() {
-  const { currentProjectContext, bindProject, createConversation } = useAIChatStore()
+  const { currentProjectContext, bindProject, createConversation, setSidebarCollapsed } = useAIChatStore()
   const { providers, defaultProviderId } = useAIConfigStore()
   const defaultProvider = providers.find(p => p.id === defaultProviderId)
   const modelLabel = defaultProvider?.defaultModel ?? '未配置'
@@ -26,7 +26,15 @@ export function ChatHeader() {
       )}
       <div style={{ flex: 1 }} />
       <span style={{ fontSize: 11, color: '#8c8c8c' }}>默认模型：{modelLabel}</span>
-      <Button icon={<PlusOutlined />} onClick={createConversation} size="small" type="text">
+      <Button
+        icon={<PlusOutlined />}
+        size="small"
+        type="text"
+        onClick={() => {
+          createConversation()
+          setSidebarCollapsed(false)   // reveal sidebar so user sees the new + old conversations
+        }}
+      >
         新对话
       </Button>
     </div>
