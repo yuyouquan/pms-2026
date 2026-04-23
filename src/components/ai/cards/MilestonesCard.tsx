@@ -2,6 +2,7 @@
 import { Card, Timeline, Tag, Progress } from 'antd'
 import { CheckCircleFilled, ClockCircleFilled, WarningFilled } from '@ant-design/icons'
 import type { MilestonesCardData } from '@/types/ai'
+import { MOCK_LEVELED_PLANS } from '@/mock/ai-extended'
 
 const STATUS_ICON = {
   '已完成': <CheckCircleFilled style={{ color: '#52c41a' }} />,
@@ -16,7 +17,11 @@ export function MilestonesCard({ data }: { data: MilestonesCardData }) {
     <Card size="small" style={{ borderRadius: 8 }}>
       <div style={{ fontWeight: 500, marginBottom: 12, fontSize: 14 }}>🏁 里程碑（一级计划）</div>
       <Timeline
-        items={data.milestones.map(m => ({
+        items={data.milestones.map(m => {
+          const childCount = MOCK_LEVELED_PLANS.filter(
+            p => p.level === 'L2' && p.parentId === m.id
+          ).length
+          return {
           dot: STATUS_ICON[m.status as keyof typeof STATUS_ICON],
           children: (
             <div>
@@ -27,6 +32,11 @@ export function MilestonesCard({ data }: { data: MilestonesCardData }) {
                   {m.status}
                 </Tag>
                 {m.isRisk && <Tag color="red" style={{ margin: 0 }}>⚠️ 风险</Tag>}
+                {childCount > 0 && (
+                  <Tag color="geekblue" style={{ margin: 0 }}>
+                    含 {childCount} 个二级计划
+                  </Tag>
+                )}
               </div>
               <div style={{ fontSize: 12, color: '#8c8c8c' }}>
                 负责人: {m.owner} · 计划: {m.planDate}
@@ -43,7 +53,8 @@ export function MilestonesCard({ data }: { data: MilestonesCardData }) {
               )}
             </div>
           ),
-        }))}
+        }
+        })}
       />
     </Card>
   )

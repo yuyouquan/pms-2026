@@ -141,6 +141,9 @@ export const MOCK_PROMPT_TEMPLATES: PromptTemplate[] = [
     content: '{项目名} 是啥产品', placeholders: ['项目名'], showInQuickChips: true },
 
   // Plans by level
+  { id: 'pt-lh', name: '计划层级总览', category: 'query',
+    description: '查看项目 L1/L2/L3 层级树',
+    content: '{项目名} 的计划层级', placeholders: ['项目名'], showInQuickChips: true },
   { id: 'pt-l1', name: '里程碑计划', category: 'query',
     description: '查询一级计划 / 里程碑',
     content: '{项目名} 的里程碑', placeholders: ['项目名'], showInQuickChips: true },

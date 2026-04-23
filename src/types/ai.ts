@@ -68,6 +68,7 @@ export type ScenarioId =
   | 'plans-l1'
   | 'plans-l2'
   | 'plans-l3'
+  | 'plans-hierarchy'
   | 'fallback'
   | 'permission-denied'
 
@@ -158,6 +159,7 @@ export type ResponseCard =
   | { type: 'milestones'; data: MilestonesCardData }
   | { type: 'plans-by-category'; data: PlansByCategoryCardData }
   | { type: 'plans-by-department'; data: PlansByDepartmentCardData }
+  | { type: 'plans-hierarchy'; data: PlansHierarchyCardData }
 
 export type ReferenceItem = {
   label: string
@@ -324,4 +326,11 @@ export type PlansByDepartmentCardData = {
   department?: string
   l3Plans: LeveledPlan[]
   l2Parent?: LeveledPlan
+}
+
+export type PlansHierarchyCardData = {
+  projectName: string
+  l1: LeveledPlan[]
+  l2: LeveledPlan[]
+  l3: LeveledPlan[]
 }

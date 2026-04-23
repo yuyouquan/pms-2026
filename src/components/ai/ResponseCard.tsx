@@ -14,6 +14,7 @@ import { ProductInfoCardV2 } from './cards/ProductInfoCardV2'
 import { MilestonesCard } from './cards/MilestonesCard'
 import { PlansByCategoryCard } from './cards/PlansByCategoryCard'
 import { PlansByDepartmentCard } from './cards/PlansByDepartmentCard'
+import { PlansHierarchyCard } from './cards/PlansHierarchyCard'
 
 export function ResponseCard({ card }: { card: ResponseCardType }) {
   switch (card.type) {
@@ -31,5 +32,6 @@ export function ResponseCard({ card }: { card: ResponseCardType }) {
     case 'milestones':             return <MilestonesCard data={card.data} />
     case 'plans-by-category':      return <PlansByCategoryCard data={card.data} />
     case 'plans-by-department':    return <PlansByDepartmentCard data={card.data} />
+    case 'plans-hierarchy':        return <PlansHierarchyCard data={card.data} />
   }
 }

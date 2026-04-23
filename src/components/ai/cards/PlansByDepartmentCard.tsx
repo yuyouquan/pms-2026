@@ -1,6 +1,7 @@
 'use client'
 import { Card, Collapse, Tag, Table, Progress } from 'antd'
 import type { PlansByDepartmentCardData, LeveledPlan } from '@/types/ai'
+import { MOCK_LEVELED_PLANS } from '@/mock/ai-extended'
 
 function PlanTable({ plans }: { plans: LeveledPlan[] }) {
   const cols = [
@@ -8,6 +9,11 @@ function PlanTable({ plans }: { plans: LeveledPlan[] }) {
       render: (n: string, r: LeveledPlan) =>
         r.isRisk ? <span style={{ color: '#ff4d4f', fontWeight: 500 }}>{n}</span> : n },
     { title: '负责人', dataIndex: 'owner', width: 90 },
+    { title: '所属二级计划', width: 150,
+      render: (_: any, r: LeveledPlan) => {
+        const parent = MOCK_LEVELED_PLANS.find(p => p.id === r.parentId && p.level === 'L2')
+        return parent ? <Tag color="purple" style={{ margin: 0 }}>{parent.name}</Tag> : '-'
+      } },
     { title: '计划日期', dataIndex: 'planDate', width: 110 },
     { title: '进度', dataIndex: 'progress', width: 120,
       render: (p: number) => <Progress percent={p} size="small" showInfo={false} /> },

@@ -521,6 +521,40 @@ const SCENARIO_PRODUCT_INFO: ScenarioConfig = {
   },
 }
 
+// ─── Scenario: 计划层级总览 (tree view) ───────────────
+
+const SCENARIO_PLANS_HIERARCHY: ScenarioConfig = {
+  id: 'plans-hierarchy',
+  name: '计划层级总览',
+  keywords: [
+    ['计划', '层级'],
+    ['计划', '树'],
+    ['计划', '总览'],
+    ['所有', '计划'],
+    ['完整', '计划'],
+    ['层级', '关系'],
+  ],
+  requiresProject: true,
+  priority: 13,                  // higher than L1/L2/L3 (all at 11) and version-compare (12)
+  buildThinking: (vars) => [
+    kb(`计划管理 · 加载 ${vars.projectName} 全部层级计划`, 500),
+    reasoning('按 L1 → L2 → L3 层级组装', 400),
+  ],
+  buildResponse: (vars) => {
+    const project = vars.projectName!
+    const l1 = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L1')
+    const l2 = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L2')
+    const l3 = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L3')
+    return {
+      markdown: `🌳 **${project}** 的计划层级：**${l1.length}** 个里程碑，**${l2.length}** 个二级计划，**${l3.length}** 个三级计划`,
+      cards: [
+        { type: 'plans-hierarchy', data: { projectName: project, l1, l2, l3 } },
+      ],
+      references: [{ label: '计划管理', index: 1 }],
+    }
+  },
+}
+
 // ─── Scenario ⑧ 一级计划 / 里程碑 (new Phase 2) ──────────────
 
 const SCENARIO_PLANS_L1: ScenarioConfig = {
@@ -649,6 +683,7 @@ const FALLBACK: ScenarioConfig = {
 }
 
 export const SCENARIOS: ScenarioConfig[] = [
+  SCENARIO_PLANS_HIERARCHY,        // priority 13 (new)
   SCENARIO_VERSION_COMPARE,        // priority 12
   SCENARIO_PLANS_L1,               // priority 11
   SCENARIO_PLANS_L2,               // priority 11
