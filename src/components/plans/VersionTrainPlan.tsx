@@ -13,7 +13,7 @@ const { Option } = Select
 const TEST_MODEL_OPTIONS = ['Model A Pro', 'Model A', 'Model B Pro', 'Model B', 'Model C', 'Model D']
 
 // Mock数据
-const INITIAL_DATA: VersionTrainRecord[] = [
+export const INITIAL_DATA: VersionTrainRecord[] = [
   {
     id: '1', versionNo: '16.3.030', versionCategory: '主干版本', status: '已完成',
     planCompileTime: '2026-01-05', planTestTransferTime: '2026-01-08', planTestStartTime: '2026-01-09', planTestEndTime: '2026-01-20',

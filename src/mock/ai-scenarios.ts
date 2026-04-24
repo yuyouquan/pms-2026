@@ -1,8 +1,10 @@
 import type { ScenarioConfig, ThinkingStep, ScenarioVars, LeveledPlan } from '@/types/ai'
 import { useProjectStore } from '@/stores/project'
-import { usePlanStore } from '@/stores/plan'
+import { usePlanStore, INITIAL_LEVEL2_PLAN_META } from '@/stores/plan'
 import { LEVEL1_TASKS } from '@/components/plan/PlanModule'
 import { MOCK_VERSIONS, MOCK_PRODUCT_SPECS, MOCK_LEVELED_PLANS, L1_MILESTONE_ORDER } from '@/mock/ai-extended'
+import { IR_MOCK_DATA, SR_MOCK_DATA } from '@/components/plans/RequirementDevPlan'
+import { INITIAL_DATA as VERSION_TRAIN_RECORDS } from '@/components/plans/VersionTrainPlan'
 
 // ─── Shared helpers ─────────────────────────────────────────────────
 
@@ -105,8 +107,170 @@ function deriveL1Plans(projectName: string): LeveledPlan[] {
   return convert((LEVEL1_TASKS as unknown) as PlanTask[])
 }
 
+/**
+ * Derive L2 LeveledPlan[] for a given project from plan store data.
+ * Includes categories: 需求开发 (from createdLevel2Plans + level2PlanTasks), 版本火车 (same).
+ * Returns empty array if project has no L2 plans in store.
+ */
+export function deriveL2Plans(projectName: string): LeveledPlan[] {
+  const planStore = usePlanStore.getState()
+  const plans = planStore.createdLevel2Plans
+  const allTasks = planStore.level2PlanTasks as any[]
+  const result: LeveledPlan[] = []
+
+  for (const plan of plans) {
+    // Check if this plan belongs to this project (via INITIAL_LEVEL2_PLAN_META or fixed plans which are shared)
+    const meta = INITIAL_LEVEL2_PLAN_META[plan.id]
+    const isForThisProject = meta ? meta.projectName === projectName : plan.fixed
+    if (!isForThisProject) continue
+
+    // Determine category
+    const isRequirementDev = plan.name.includes('需求开发')
+    const isVersionTrain = plan.name.includes('版本火车') || plan.name.includes('MR') || plan.name.includes('FR')
+    const category: '需求开发' | '版本火车' | '独立应用' | '测试' | '其他' =
+      isRequirementDev ? '需求开发'
+      : isVersionTrain ? '版本火车'
+      : '其他'
+
+    // Root = the plan itself (depth 1)
+    const rootId = `l2-${projectName}-${plan.id}`
+    const meta_any = meta as any
+    result.push({
+      id: rootId,
+      projectName,
+      level: 'L2',
+      depth: 1,
+      category,
+      name: plan.name,
+      owner: meta_any?.spm ?? '未指派',
+      market: meta_any?.marketName,
+      planDate: '',
+      progress: 0,
+      status: '进行中',
+      isRisk: false,
+      description: meta_any ? `MR: ${meta_any.mrVersion ?? '-'} · tOS: ${meta_any.tosVersion ?? '-'}` : undefined,
+    })
+
+    // Tasks for this plan (planId matches)
+    const planTasks = allTasks.filter(t => t.planId === plan.id)
+    for (const t of planTasks) {
+      const depthFromId = (String(t.id).match(/\./g) ?? []).length + 1
+      // Map dotted id (1 / 1.1 / 1.1.1) to depth 1/2/3 — but L2 root is at depth 1, so these become depth 2/3/4.
+      // Since user said L2 tree max depth 3, cap plan-task depth at 3.
+      const ownDepth = Math.min(1 + depthFromId, 3) as 1 | 2 | 3
+      const level: 'L2' | 'L3' = ownDepth === 3 ? 'L3' : 'L2'
+      const taskParentId = t.parentId
+        ? `l2-${projectName}-${plan.id}-${t.parentId}`
+        : rootId
+      result.push({
+        id: `l2-${projectName}-${plan.id}-${t.id}`,
+        projectName,
+        level,
+        depth: ownDepth,
+        category,
+        parentId: taskParentId,
+        name: t.taskName,
+        owner: t.responsible || '未指派',
+        planDate: t.planEndDate || t.planStartDate || '',
+        actualDate: t.actualEndDate || undefined,
+        progress: t.progress ?? 0,
+        status: mapStatus(t.status),
+        isRisk: detectRisk(t),
+      })
+    }
+  }
+
+  return result
+}
+
+/**
+ * Derive project info card data from real project store.
+ * Includes a computed description + computed "基础信息 + 计划概要 + 配置概要".
+ */
+export function deriveProjectDescription(projectName: string): string {
+  const project = useProjectStore.getState().projects.find(p => p.name === projectName)
+  if (!project) return '（暂无描述）'
+  const parts: string[] = []
+  if ((project as any).brand && (project as any).marketName) parts.push(`${(project as any).brand} ${(project as any).marketName}`)
+  parts.push(`${(project as any).type}`)
+  if ((project as any).chipPlatform && (project as any).cpu) parts.push(`搭载 ${(project as any).chipPlatform} ${(project as any).cpu}`)
+  if ((project as any).markets && (project as any).markets.length > 0) parts.push(`面向 ${(project as any).markets.join('/')} 市场`)
+  if ((project as any).tosVersion) parts.push(`基于 ${(project as any).tosVersion}`)
+  return parts.join('，') + '。'
+}
+
+/**
+ * Derive a ProductSpec-shape object from real project data (replacing MOCK_PRODUCT_SPECS lookup).
+ * Returns undefined if no real spec data available.
+ */
+export function deriveProductSpec(projectName: string): import('@/types/ai').ProductSpec | undefined {
+  const project = useProjectStore.getState().projects.find(p => p.name === projectName) as any
+  if (!project) return undefined
+  // Build per-market from marketPlanData (use last milestone end date as launch date per market)
+  const perMarket: Record<string, import('@/types/ai').MarketSpecificInfo> = {}
+  if (project.type === '整机产品项目') {
+    const markets = (project.markets ?? []) as string[]
+    const planStore = usePlanStore.getState()
+    for (const m of markets) {
+      const marketTasks = planStore.marketPlanData[m]?.tasks as any[] | undefined
+      let launchDate = project.launchDate ?? ''
+      if (marketTasks && marketTasks.length > 0) {
+        // Find '上市保障' phase or last phase
+        const shangshi = marketTasks.find((t: any) => t.taskName === '上市保障')
+        if (shangshi) launchDate = shangshi.planEndDate || launchDate
+      }
+      perMarket[m] = {
+        launchDate,
+        keyFeatures: [],   // unknown from real data; leave empty
+        tosPatch: `${project.tosVersion}-${m}`,
+        notes: `${m} 市场变体`,
+      }
+    }
+  }
+
+  return {
+    projectName,
+    codename: project.model ?? project.name,
+    marketName: project.marketName ?? project.name,
+    brand: project.brand ?? 'TECNO',
+    cpu: project.cpu ?? '（未填）',
+    memory: project.memory ?? '（未填）',
+    lcd: project.lcd ?? '（未填）',
+    frontCamera: project.frontCamera ?? '（未填）',
+    primaryCamera: project.primaryCamera ?? '（未填）',
+    os: project.operatingSystem ?? project.androidVersion ?? '（未填）',
+    tosVersion: project.tosVersion ?? '（未填）',
+    markets: project.markets ?? [],
+    launchDate: project.launchDate ?? '',
+    productType: project.productType ?? '',
+    chipPlatform: project.chipPlatform ?? '',
+    projectLevel: project.projectLevel ?? '',
+    currentStage: project.currentNode ?? project.status,
+    spm: project.spm ?? '',
+    tpm: project.tpm ?? '',
+    ppm: project.ppm ?? '',
+    perMarket: Object.keys(perMarket).length > 0 ? perMarket : undefined,
+  }
+}
+
+/**
+ * Derive risk plans for a project from L1 data (plans marked as at-risk).
+ * Replaces the MOCK_RISK_PLANS lookup.
+ */
+export function deriveRiskPlans(projectName: string): Array<{ planType: string; planName: string; owner: string; reason: string }> {
+  const l1 = deriveL1Plans(projectName)
+  const risky = l1.filter(p => p.isRisk)
+  return risky.map(p => ({
+    planType: '里程碑',
+    planName: p.market ? `${p.name}（${p.market}）` : p.name,
+    owner: p.owner,
+    reason: p.status === '延期' ? '延期' : p.status === '阻塞' ? '阻塞' : '计划期已过仍未完成',
+  }))
+}
+
 // ─── Scenario ① 项目基础信息查询 ──────────────────────────────
 
+// DEPRECATED: risks now computed from real L1 via deriveRiskPlans()
 const MOCK_RISK_PLANS: Record<string, { planType: string; planName: string; owner: string; reason: string }[]> = {
   // keyed by project name — each project gets 0-3 risk items
   'X6877-D8400_H991': [
@@ -124,6 +288,7 @@ const MOCK_RISK_PLANS: Record<string, { planType: string; planName: string; owne
   // others: empty (no risks)
 }
 
+// DEPRECATED: description now computed from real project fields via deriveProjectDescription()
 const MOCK_PROJECT_DESC: Record<string, string> = {
   'X6877-D8400_H991': '面向 OP/TR/RU 市场的整机产品项目，搭载 Android 16 + tOS 16.3。',
   'tOS16.0': 'tOS 16.0 系列产品项目。',
@@ -159,14 +324,16 @@ const SCENARIO_PROJECT_BASIC_INFO: ScenarioConfig = {
   buildResponse: (vars) => {
     const name = vars.projectName!
     const p = useProjectStore.getState().projects.find(x => x.name === name)
-    const risks = MOCK_RISK_PLANS[name] ?? []
+
+    // Real risks from L1 data
+    const risks = deriveRiskPlans(name)
     const hasRisk = risks.length > 0
 
-    // Plan summary: all L1 milestones for this project (from real plan store)
+    // Real milestones (L1)
     const milestones = deriveL1Plans(name)
 
-    // Config/spec: product spec if available
-    const spec = MOCK_PRODUCT_SPECS[name]
+    // Real config / spec
+    const spec = deriveProductSpec(name)
 
     const headerParts: string[] = [`📋 **${name}** 基础信息如下（含 基础信息 / 计划信息 / 配置信息 三部分）`]
     if (hasRisk) {
@@ -175,41 +342,28 @@ const SCENARIO_PROJECT_BASIC_INFO: ScenarioConfig = {
 
     const cards: any[] = []
 
-    // 1. Risk plans (if any)
-    if (hasRisk) {
-      cards.push({ type: 'risk-plans', data: { items: risks } })
-    }
+    if (hasRisk) cards.push({ type: 'risk-plans', data: { items: risks } })
 
-    // 2. Basic info card
     cards.push({
       type: 'project-info',
       data: {
         name,
         spm: p?.spm ?? '未知',
-        schedule: p ? `${p.planStartDate} ~ ${p.planEndDate}` : '未知',
-        currentVersion: p?.tosVersion ?? p?.androidVersion ?? '未知',
+        schedule: p ? `${(p as any).planStartDate} ~ ${(p as any).planEndDate}` : '未知',
+        currentVersion: (p as any)?.tosVersion ?? (p as any)?.androidVersion ?? '未知',
         status: p?.status ?? '未知',
-        description: MOCK_PROJECT_DESC[name] ?? '（暂无描述）',
+        description: deriveProjectDescription(name),
       },
     })
 
-    // 3. Plan summary (L1 milestone tree)
     if (milestones.length > 0) {
-      cards.push({
-        type: 'milestones',
-        data: { projectName: name, milestones },
-      })
+      cards.push({ type: 'milestones', data: { projectName: name, milestones } })
     }
 
-    // 4. Config / product spec
     if (spec) {
-      cards.push({
-        type: 'product-info-v2',
-        data: { spec },
-      })
+      cards.push({ type: 'product-info-v2', data: { spec } })
     }
 
-    // 5. Jump link
     if (p) {
       cards.push({
         type: 'link',
@@ -221,7 +375,6 @@ const SCENARIO_PROJECT_BASIC_INFO: ScenarioConfig = {
       { label: '项目主表', index: 1 },
       { label: '计划管理', index: 2 },
       { label: '产品规格库', index: 3 },
-      { label: '待办与计划', index: 4 },
     ]
 
     return { markdown: headerParts.join('\n\n'), cards, references }
@@ -351,9 +504,8 @@ const STATUS_COLORS: Record<string, string> = {
 
 function buildRequirementDist(projectName: string) {
   // Only include actual L2 plans (depth >= 2 within 需求开发 category) — not the domain groupers
-  const l2Reqs = MOCK_LEVELED_PLANS.filter(
-    p => p.projectName === projectName && (p.level === 'L2' || p.level === 'L3')
-      && p.category === '需求开发' && p.depth >= 2
+  const l2Reqs = deriveL2Plans(projectName).filter(
+    p => p.category === '需求开发' && p.depth >= 2
   )
 
   // Classify plan.status → distribution status buckets (demo heuristic)
@@ -699,8 +851,9 @@ const SCENARIO_PLANS_HIERARCHY: ScenarioConfig = {
   buildResponse: (vars) => {
     const project = vars.projectName!
     const l1 = deriveL1Plans(project)
-    const l2 = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L2')
-    const l3 = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L3')
+    const l2Derived = deriveL2Plans(project)
+    const l2 = l2Derived.filter(p => p.level === 'L2')
+    const l3 = l2Derived.filter(p => p.level === 'L3')
     const totalL2Tree = l2.length + l3.length
     return {
       markdown: `🌳 **${project}** 的计划层级：**${l1.length}** 个里程碑节点，**${totalL2Tree}** 个二级计划节点`,
@@ -785,14 +938,20 @@ const SCENARIO_PLANS_L2: ScenarioConfig = {
     else if (input.includes('测试', 0)) category = '测试'
 
     // Include both L2 and L3 nodes — together they form the L2 tree structure
-    let l2Plans = MOCK_LEVELED_PLANS.filter(
-      p => p.projectName === project && (p.level === 'L2' || p.level === 'L3')
-    )
+    let l2Plans = deriveL2Plans(project)
     if (category !== 'ALL') l2Plans = l2Plans.filter(p => p.category === category)
+
+    if (l2Plans.length === 0) {
+      return {
+        markdown: `📋 **${project}** 当前没有维护二级计划数据。`,
+        cards: [],
+        references: [{ label: '计划管理', index: 1 }],
+      }
+    }
 
     return {
       markdown: `📋 **${project}** 的二级计划${category !== 'ALL' ? `（${category}）` : ''}共 **${l2Plans.length}** 项`,
-      cards: l2Plans.length === 0 ? [] : [
+      cards: [
         { type: 'plans-by-category', data: { projectName: project, category, l2Plans } },
       ],
       references: [{ label: '计划管理', index: 1 }],

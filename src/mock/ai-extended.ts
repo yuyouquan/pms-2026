@@ -146,6 +146,7 @@ export const MOCK_VERSIONS: VersionRelease[] = [
 
 // ─── Products — detailed spec sheets ────────────────────────────
 
+// DEPRECATED: product spec now derived from real project data via deriveProductSpec()
 export const MOCK_PRODUCT_SPECS: Record<string, ProductSpec> = {
   'X6877-D8400_H991': {
     projectName: 'X6877-D8400_H991', codename: 'X6877', marketName: 'NOTE 50 Pro', brand: 'TECNO',
@@ -214,6 +215,7 @@ export const MOCK_PRODUCT_SPECS: Record<string, ProductSpec> = {
 
 // ─── Plans at L1/L2/L3 ────────────────────────────────────────
 
+// DEPRECATED: L1 via deriveL1Plans, L2 via deriveL2Plans. Kept only for legacy paths.
 export const MOCK_LEVELED_PLANS: LeveledPlan[] = [
   // === X6877-D8400_H991 — full hierarchy ===
 

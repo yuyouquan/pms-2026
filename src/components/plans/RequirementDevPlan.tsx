@@ -8,7 +8,7 @@ import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
 import type { IRRequirement, SRRequirement } from '@/types'
 
 // IR需求Mock数据
-const IR_MOCK_DATA: IRRequirement[] = [
+export const IR_MOCK_DATA: IRRequirement[] = [
   { id: '1', domain: '相机', irNo: 'IR-2026-001', irTitle: '前置相机HDR增强', priority: '高', irStatus: '已验收', testPlanStart: '2026-01-10', testPlanEnd: '2026-01-25', acceptPlanStart: '2026-01-26', acceptPlanEnd: '2026-02-05' },
   { id: '2', domain: '相机', irNo: 'IR-2026-002', irTitle: '后置超广角优化', priority: '中', irStatus: '测试中', testPlanStart: '2026-01-15', testPlanEnd: '2026-02-01', acceptPlanStart: '2026-02-02', acceptPlanEnd: '2026-02-15' },
   { id: '3', domain: '显示', irNo: 'IR-2026-003', irTitle: '120Hz自适应刷新率', priority: '高', irStatus: '开发中', testPlanStart: '2026-02-01', testPlanEnd: '2026-02-20', acceptPlanStart: '2026-02-21', acceptPlanEnd: '2026-03-05' },
@@ -20,7 +20,7 @@ const IR_MOCK_DATA: IRRequirement[] = [
 ]
 
 // SR需求Mock数据
-const SR_MOCK_DATA: SRRequirement[] = [
+export const SR_MOCK_DATA: SRRequirement[] = [
   { id: '1', srNo: 'SR-2026-001', srTitle: 'HDR拍照模式实现', relatedIR: 'IR-2026-001', devDept: '相机部', srStatus: '已转测', planTestVersion: '16.3.030', actualTestVersion: '16.3.030', testPlanStart: '2026-01-10', testPlanEnd: '2026-01-20', acceptPlanStart: '2026-01-21', acceptPlanEnd: '2026-02-01' },
   { id: '2', srNo: 'SR-2026-002', srTitle: 'HDR视频录制支持', relatedIR: 'IR-2026-001', devDept: '相机部', srStatus: '已转测', planTestVersion: '16.3.030', actualTestVersion: '16.3.031', testPlanStart: '2026-01-15', testPlanEnd: '2026-01-25', acceptPlanStart: '2026-01-26', acceptPlanEnd: '2026-02-05' },
   { id: '3', srNo: 'SR-2026-003', srTitle: '超广角畸变矫正', relatedIR: 'IR-2026-002', devDept: '相机部', srStatus: '开发中', planTestVersion: '16.3.031', actualTestVersion: '', testPlanStart: '2026-02-01', testPlanEnd: '2026-02-15', acceptPlanStart: '2026-02-16', acceptPlanEnd: '2026-02-28' },
