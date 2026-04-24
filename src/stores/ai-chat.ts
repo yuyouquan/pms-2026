@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Conversation, ChatMessage } from '@/types/ai'
-import { matchScenario } from '@/lib/ai-matcher'
+import { matchScenario, extractProjectName } from '@/lib/ai-matcher'
 import { SCENARIOS } from '@/mock/ai-scenarios'
 import { useProjectStore } from '@/stores/project'
 import { hasProjectAccess } from '@/stores/permission'
@@ -83,11 +83,25 @@ export const useAIChatStore = create<AIChatState & AIChatActions>()((set, get) =
 
     set({ isStreaming: true })
 
-    // 2) Match scenario
+    // 2) Derive project from conversation history (last 5 user messages, most recent first)
     const { projects } = useProjectStore.getState()
+    const activeConv = get().conversations.find(c => c.id === get().activeConversationId)
+    let historicalProject: string | null = null
+    if (activeConv) {
+      const userMsgs = activeConv.messages
+        .filter(m => m.role === 'user' && m.text && m.id !== userMsgId) // exclude the just-appended message
+        .slice(-5)
+        .reverse()
+      for (const m of userMsgs) {
+        const p = extractProjectName(m.text!, projects)
+        if (p) { historicalProject = p; break }
+      }
+    }
+
+    // 3) Match scenario with history-derived project as fallback context
     const match = matchScenario(text, {
       projects,
-      currentProject: get().currentProjectContext,
+      currentProject: historicalProject,
       scenarios: SCENARIOS,
     })
     const scenario = SCENARIOS.find(s => s.id === match.scenarioId) as ScenarioConfig

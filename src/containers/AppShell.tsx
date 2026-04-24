@@ -138,8 +138,6 @@ export function MainHeader() {
               size="small"
               icon={<RobotOutlined />}
               onClick={() => {
-                const proj = useProjectStore.getState().selectedProject
-                if (proj) useAIChatStore.getState().bindProject(proj.name)
                 useAIChatStore.getState().setDrawerOpen(true)
               }}
               style={{ color: '#fff', marginRight: 12 }}
@@ -290,8 +288,6 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
               size="small"
               icon={<RobotOutlined />}
               onClick={() => {
-                const proj = useProjectStore.getState().selectedProject
-                if (proj) useAIChatStore.getState().bindProject(proj.name)
                 useAIChatStore.getState().setDrawerOpen(true)
               }}
               style={{ color: '#fff', marginRight: 12 }}

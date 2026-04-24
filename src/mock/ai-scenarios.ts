@@ -751,6 +751,27 @@ const SCENARIO_PLANS_L3: ScenarioConfig = {
   },
 }
 
+// ─── Ask for project ───────────────────────────────────────────
+
+const ASK_FOR_PROJECT: ScenarioConfig = {
+  id: 'ask-for-project',
+  name: '询问项目',
+  keywords: [],
+  requiresProject: false,
+  priority: 0,
+  buildThinking: () => [
+    reasoning('解析意图：识别到是项目相关查询', 350),
+    reasoning('扫描当前问题...未提取到项目名', 350),
+    reasoning('检索对话上下文...最近 5 条历史也未命中', 400),
+    reasoning('准备引导用户明确项目', 300),
+  ],
+  buildResponse: () => ({
+    markdown: `🤔 你的问题涉及某个项目，但我从你的问题或上文里都没识别到项目名。\n\n请告诉我你想查询哪个项目？例如 **X6877-D8400_H991 的里程碑** 或直接写项目代号。`,
+    cards: [],
+    references: [],
+  }),
+}
+
 // ─── Fallback ──────────────────────────────────────────────────
 
 const FALLBACK: ScenarioConfig = {
@@ -783,6 +804,7 @@ export const SCENARIOS: ScenarioConfig[] = [
   SCENARIO_REQUIREMENT_STATUS,     // priority 7
   SCENARIO_PROJECT_PLANS,          // priority 6
   SCENARIO_PROJECT_BASIC_INFO,     // priority 5
+  ASK_FOR_PROJECT,
   FALLBACK,
 ]
 

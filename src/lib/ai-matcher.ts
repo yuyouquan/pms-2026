@@ -49,21 +49,26 @@ export function matchScenario(rawInput: string, ctx: MatchCtx): MatchResult {
   const normInput = normalize(rawInput)
   const projectName = extractProjectName(rawInput, ctx.projects) ?? ctx.currentProject ?? undefined
 
-  // Score each scenario
-  const nonFallback = ctx.scenarios.filter(s => s.id !== 'fallback')
-  const matched = nonFallback
-    .filter(s => {
-      if (s.requiresProject && !projectName) return false
-      // keywords is OR of AND-groups
-      return s.keywords.some(group => group.every(kw => normInput.includes(kw.toLowerCase())))
-    })
+  // Find keyword matches across ALL non-terminal scenarios (ignoring requiresProject for now)
+  const keywordMatched = ctx.scenarios
+    .filter(s => s.id !== 'fallback' && s.id !== 'ask-for-project')
+    .filter(s => s.keywords.some(group => group.every(kw => normInput.includes(kw.toLowerCase()))))
     .sort((a, b) => b.priority - a.priority)
 
-  if (matched.length === 0) {
+  if (keywordMatched.length === 0) {
     return { scenarioId: 'fallback', variables: { rawInput } }
   }
 
-  const chosen = matched[0]
+  const chosen = keywordMatched[0]
+
+  // If chosen scenario requires project but none available → ask user
+  if (chosen.requiresProject && !projectName) {
+    return {
+      scenarioId: 'ask-for-project',
+      variables: { rawInput, intendedScenarioId: chosen.id },
+    }
+  }
+
   const variables: ScenarioVars = { projectName, rawInput }
 
   // Scenario #2 (project-plans) modifier extraction

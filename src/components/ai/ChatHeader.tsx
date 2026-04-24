@@ -1,11 +1,11 @@
 'use client'
-import { Button, Tag } from 'antd'
-import { PlusOutlined, FolderOutlined } from '@ant-design/icons'
+import { Button } from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
 import { useAIChatStore } from '@/stores/ai-chat'
 import { useAIConfigStore } from '@/stores/ai-config'
 
 export function ChatHeader() {
-  const { currentProjectContext, bindProject, createConversation, setSidebarCollapsed } = useAIChatStore()
+  const { createConversation, setSidebarCollapsed } = useAIChatStore()
   const { providers, defaultProviderId } = useAIConfigStore()
   const defaultProvider = providers.find(p => p.id === defaultProviderId)
   const modelLabel = defaultProvider?.defaultModel ?? '未配置'
@@ -13,17 +13,6 @@ export function ChatHeader() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', padding: '8px 20px',
       borderBottom: '1px solid #f0f0f0', gap: 10, background: '#fff', minHeight: 44 }}>
-      {currentProjectContext && (
-        <Tag
-          icon={<FolderOutlined />}
-          closable
-          onClose={() => bindProject(null)}
-          style={{ margin: 0, padding: '2px 8px' }}
-          color="blue"
-        >
-          讨论中：{currentProjectContext}
-        </Tag>
-      )}
       <div style={{ flex: 1 }} />
       <span style={{ fontSize: 11, color: '#8c8c8c' }}>默认模型：{modelLabel}</span>
       <Button

@@ -71,6 +71,7 @@ export type ScenarioId =
   | 'plans-hierarchy'
   | 'fallback'
   | 'permission-denied'
+  | 'ask-for-project'
 
 export type ThinkingStep = {
   icon: '🔍' | '🔧' | '🌐' | '💭' | '🔒'
@@ -177,6 +178,7 @@ export type ScenarioVars = {
   ownership?: 'all' | 'mine'
   planType?: '版本' | '需求' | '开发' | '测试'
   rawInput?: string
+  intendedScenarioId?: ScenarioId    // set when ask-for-project is returned
 }
 
 export type ScenarioConfig = {

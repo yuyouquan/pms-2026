@@ -33,6 +33,11 @@ const SCENARIOS: ScenarioConfig[] = [
     buildThinking: () => [], buildResponse: () => ({ markdown: '', cards: [], references: [] }),
   },
   {
+    id: 'ask-for-project', name: '询问项目',
+    keywords: [], requiresProject: false, priority: 0,
+    buildThinking: () => [], buildResponse: () => ({ markdown: '', cards: [], references: [] }),
+  },
+  {
     id: 'fallback', name: '兜底',
     keywords: [], requiresProject: false, priority: 0,
     buildThinking: () => [], buildResponse: () => ({ markdown: '', cards: [], references: [] }),
@@ -117,8 +122,9 @@ describe('matchScenario', () => {
     expect(r.scenarioId).toBe('fallback')
   })
 
-  it('returns fallback when scenario matches but no project identified', () => {
+  it('returns ask-for-project when scenario matches but no project identified', () => {
     const r = matchScenario('基本情况是什么', ctx)
-    expect(r.scenarioId).toBe('fallback')
+    expect(r.scenarioId).toBe('ask-for-project')
+    expect(r.variables.intendedScenarioId).toBe('project-basic-info')
   })
 })
