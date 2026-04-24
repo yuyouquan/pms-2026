@@ -384,4 +384,9 @@ export const MOCK_LEVELED_PLANS: LeveledPlan[] = [
     progress: 30, status: '延期', isRisk: true },
 ]
 
-export const L1_MILESTONE_ORDER = ['概念阶段', '概念评审', '立项阶段', '立项评审', 'DV 完成', 'PV 完成', '量产', 'OP 市场首发', 'TR 市场首发', 'RU 市场首发', '发布阶段', 'tOS 16.0 RC', 'tOS 16.0 正式发布', '开发阶段']
+export const L1_MILESTONE_ORDER = [
+  '概念', '概念启动', 'STR1',
+  '计划', 'STR2', 'STR3',
+  '开发验证',
+  '上市保障',
+]

@@ -1,5 +1,7 @@
-import type { ScenarioConfig, ThinkingStep, ScenarioVars } from '@/types/ai'
+import type { ScenarioConfig, ThinkingStep, ScenarioVars, LeveledPlan } from '@/types/ai'
 import { useProjectStore } from '@/stores/project'
+import { usePlanStore } from '@/stores/plan'
+import { LEVEL1_TASKS } from '@/components/plan/PlanModule'
 import { MOCK_VERSIONS, MOCK_PRODUCT_SPECS, MOCK_LEVELED_PLANS, L1_MILESTONE_ORDER } from '@/mock/ai-extended'
 
 // ─── Shared helpers ─────────────────────────────────────────────────
@@ -19,6 +21,88 @@ function mcp(target: string, delay = 500): ThinkingStep {
 }
 function reasoning(target: string, delay = 400): ThinkingStep {
   return { icon: '💭', type: 'reasoning', target, delay }
+}
+
+// ─── L1 Plan derivation helper ──────────────────────────────────────
+
+type PlanTask = {
+  id: string
+  parentId?: string
+  taskName: string
+  status: string
+  progress: number
+  responsible?: string
+  planStartDate?: string
+  planEndDate?: string
+  actualStartDate?: string
+  actualEndDate?: string
+}
+
+function mapStatus(raw: string): LeveledPlan['status'] {
+  const s = raw ?? ''
+  if (s.includes('已完成') || s === 'done') return '已完成'
+  if (s.includes('延期')) return '延期'
+  if (s.includes('阻塞')) return '阻塞'
+  if (s.includes('进行中')) return '进行中'
+  return '未开始'
+}
+
+function detectRisk(task: PlanTask): boolean {
+  if (mapStatus(task.status) === '延期' || mapStatus(task.status) === '阻塞') return true
+  // Heuristic: if planEndDate has passed and progress < 100, flag risk
+  if (task.planEndDate && task.progress < 100) {
+    const planEnd = new Date(task.planEndDate).getTime()
+    const now = new Date('2026-04-22').getTime()   // demo current date
+    if (planEnd < now && task.progress < 100) return true
+  }
+  return false
+}
+
+/**
+ * Derive L1 LeveledPlan[] for a given project, reading from the real plan store.
+ * 整机产品项目 (whole-machine products) with markets OP/TR/RU produce 3 sets tagged by market.
+ * Other project types produce a single set from LEVEL1_TASKS template.
+ */
+function deriveL1Plans(projectName: string): LeveledPlan[] {
+  const project = useProjectStore.getState().projects.find(p => p.name === projectName)
+  const isWholeMachine = (project as any)?.type === '整机产品项目'
+  const planStore = usePlanStore.getState()
+
+  const convert = (tasks: PlanTask[], market?: string): LeveledPlan[] =>
+    tasks.map(t => ({
+      id: `l1-${projectName}-${market ?? 'default'}-${t.id}`,
+      projectName,
+      level: 'L1' as const,
+      name: t.taskName,
+      owner: t.responsible || '未分配',
+      parentId: t.parentId ? `l1-${projectName}-${market ?? 'default'}-${t.parentId}` : undefined,
+      depth: (t.parentId ? 2 : 1) as 1 | 2,
+      market,
+      planDate: t.planEndDate || t.planStartDate || '',
+      actualDate: t.actualEndDate || undefined,
+      progress: t.progress ?? 0,
+      status: mapStatus(t.status),
+      isRisk: detectRisk(t),
+    }))
+
+  if (isWholeMachine) {
+    const projectMarkets = ((project as any)?.markets ?? []) as string[]
+    const allMarkets: Array<'OP' | 'TR' | 'RU'> = ['OP', 'TR', 'RU']
+    const marketsToUse = (projectMarkets.length > 0
+      ? allMarkets.filter(m => projectMarkets.includes(m))
+      : allMarkets) as Array<'OP' | 'TR' | 'RU'>
+
+    const all: LeveledPlan[] = []
+    for (const market of marketsToUse) {
+      const marketData = planStore.marketPlanData[market]
+      const tasks = ((marketData?.tasks ?? LEVEL1_TASKS) as unknown) as PlanTask[]
+      all.push(...convert(tasks, market))
+    }
+    return all
+  }
+
+  // Non-whole-machine: use the LEVEL1_TASKS template
+  return convert((LEVEL1_TASKS as unknown) as PlanTask[])
 }
 
 // ─── Scenario ① 项目基础信息查询 ──────────────────────────────
@@ -78,10 +162,8 @@ const SCENARIO_PROJECT_BASIC_INFO: ScenarioConfig = {
     const risks = MOCK_RISK_PLANS[name] ?? []
     const hasRisk = risks.length > 0
 
-    // Plan summary: all L1 milestones for this project
-    const milestones = MOCK_LEVELED_PLANS.filter(
-      lp => lp.projectName === name && lp.level === 'L1'
-    )
+    // Plan summary: all L1 milestones for this project (from real plan store)
+    const milestones = deriveL1Plans(name)
 
     // Config/spec: product spec if available
     const spec = MOCK_PRODUCT_SPECS[name]
@@ -616,7 +698,7 @@ const SCENARIO_PLANS_HIERARCHY: ScenarioConfig = {
   ],
   buildResponse: (vars) => {
     const project = vars.projectName!
-    const l1 = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L1')
+    const l1 = deriveL1Plans(project)
     const l2 = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L2')
     const l3 = MOCK_LEVELED_PLANS.filter(p => p.projectName === project && p.level === 'L3')
     const totalL2Tree = l2.length + l3.length
@@ -652,8 +734,7 @@ const SCENARIO_PLANS_L1: ScenarioConfig = {
   ],
   buildResponse: (vars) => {
     const project = vars.projectName!
-    const milestones = MOCK_LEVELED_PLANS
-      .filter(p => p.projectName === project && p.level === 'L1')
+    const milestones = deriveL1Plans(project)
       .sort((a, b) => {
         const ia = L1_MILESTONE_ORDER.indexOf(a.name)
         const ib = L1_MILESTONE_ORDER.indexOf(b.name)
