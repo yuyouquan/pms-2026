@@ -1,0 +1,131 @@
+{
+  "version": 2,
+  "nodes": [
+    {
+      "type": "frame", "id": "root", "x": 0, "y": 0, "width": 1200, "height": "fit-content",
+      "layout": "vertical", "gap": 16, "padding": 24,
+      "children": [
+        { "type": "text", "id": "title", "width": "fill-container", "height": "fit-content", "text": "PMS 项目管理系统 V1.0 — 业务全景图", "fontSize": 22, "fontWeight": "bold", "textAlign": "center", "verticalAlign": "middle" },
+        { "type": "text", "id": "subtitle", "width": "fill-container", "height": "fit-content", "text": "■ V1.0 范围    □ 后续版本规划", "fontSize": 12, "textAlign": "center", "verticalAlign": "middle", "textColor": "#8C8C8C" },
+
+        {
+          "type": "frame", "id": "row-1", "width": "fill-container", "height": "fit-content",
+          "layout": "horizontal", "gap": 20, "padding": 0, "alignItems": "center",
+          "children": [
+            { "type": "text", "id": "label-1", "width": 72, "height": "fit-content", "text": "系统入口", "fontSize": 14, "fontWeight": "bold", "textAlign": "right", "textColor": "#5178C6" },
+            {
+              "type": "frame", "id": "layer-1", "width": "fill-container", "height": "fit-content",
+              "fillColor": "#F0F4FC", "borderWidth": 2, "borderColor": "#5178C6", "borderRadius": 8,
+              "layout": "horizontal", "gap": 12, "padding": 20, "alignItems": "stretch",
+              "children": [
+                { "type": "rect", "id": "n-header", "width": "fill-container", "height": "fit-content", "text": "Header 导航栏\n工作台 | 路标视图 | 配置中心 | 权限中心", "fillColor": "#FFFFFF", "borderColor": "#5178C6", "borderWidth": 2, "borderRadius": 8, "fontSize": 13, "textAlign": "center", "verticalAlign": "middle", "padding": 12 },
+                { "type": "rect", "id": "n-user", "width": 200, "height": "fit-content", "text": "用户身份\n登录切换·权限控制", "fillColor": "#FFFFFF", "borderColor": "#5178C6", "borderWidth": 2, "borderRadius": 8, "fontSize": 13, "textAlign": "center", "verticalAlign": "middle", "padding": 12 }
+              ]
+            }
+          ]
+        },
+
+        {
+          "type": "frame", "id": "row-2", "width": "fill-container", "height": "fit-content",
+          "layout": "horizontal", "gap": 20, "padding": 0, "alignItems": "center",
+          "children": [
+            { "type": "text", "id": "label-2", "width": 72, "height": "fit-content", "text": "工作台", "fontSize": 14, "fontWeight": "bold", "textAlign": "right", "textColor": "#8569CB" },
+            {
+              "type": "frame", "id": "layer-2", "width": "fill-container", "height": "fit-content",
+              "fillColor": "#EAE2FE", "borderWidth": 2, "borderColor": "#8569CB", "borderRadius": 8,
+              "layout": "horizontal", "gap": 12, "padding": 20, "alignItems": "stretch",
+              "children": [
+                { "type": "rect", "id": "n-projlist", "width": "fill-container", "height": "fit-content", "text": "📋 项目列表\n卡片视图·列表视图\n状态筛选·类型筛选·搜索", "fillColor": "#FFFFFF", "borderColor": "#8569CB", "borderWidth": 2, "borderRadius": 8, "fontSize": 13, "textAlign": "center", "verticalAlign": "middle", "padding": 12 },
+                { "type": "rect", "id": "n-tracker", "width": "fill-container", "height": "fit-content", "text": "⏱️ 工作跟踪\n跨项目任务汇总\n状态筛选·跳转计划", "fillColor": "#FFFFFF", "borderColor": "#8569CB", "borderWidth": 2, "borderRadius": 8, "fontSize": 13, "textAlign": "center", "verticalAlign": "middle", "padding": 12 },
+                { "type": "rect", "id": "n-todo", "width": 180, "height": "fit-content", "text": "📌 待办中心\n可展开收起\n分类筛选", "fillColor": "#FFFFFF", "borderColor": "#8569CB", "borderWidth": 2, "borderRadius": 8, "fontSize": 13, "textAlign": "center", "verticalAlign": "middle", "padding": 12 }
+              ]
+            }
+          ]
+        },
+
+        {
+          "type": "frame", "id": "row-3", "width": "fill-container", "height": "fit-content",
+          "layout": "horizontal", "gap": 20, "padding": 0, "alignItems": "center",
+          "children": [
+            { "type": "text", "id": "label-3", "width": 72, "height": "fit-content", "text": "项目空间", "fontSize": 14, "fontWeight": "bold", "textAlign": "right", "textColor": "#509863" },
+            {
+              "type": "frame", "id": "layer-3", "width": "fill-container", "height": "fit-content",
+              "fillColor": "#DFF5E5", "borderWidth": 2, "borderColor": "#509863", "borderRadius": 8,
+              "layout": "vertical", "gap": 12, "padding": 20,
+              "children": [
+                {
+                  "type": "frame", "id": "row-3-v1", "width": "fill-container", "height": "fit-content",
+                  "layout": "horizontal", "gap": 12, "padding": 0, "alignItems": "stretch",
+                  "children": [
+                    { "type": "rect", "id": "n-basic", "width": "fill-container", "height": "fit-content", "text": "📝 基本信息\n概览·基本信息·计划信息\n硬件配置·构建信息", "fillColor": "#FFFFFF", "borderColor": "#509863", "borderWidth": 2, "borderRadius": 8, "fontSize": 13, "textAlign": "center", "verticalAlign": "middle", "padding": 12 },
+                    { "type": "rect", "id": "n-l1plan", "width": "fill-container", "height": "fit-content", "text": "📅 一级计划\n竖版表格·横版表格·甘特图\n版本管理·版本对比·分享", "fillColor": "#FFFFFF", "borderColor": "#509863", "borderWidth": 2, "borderRadius": 8, "fontSize": 13, "textAlign": "center", "verticalAlign": "middle", "padding": 12 },
+                    { "type": "rect", "id": "n-perm", "width": 180, "height": "fit-content", "text": "🔒 权限配置\n角色管理\n权限矩阵", "fillColor": "#FFFFFF", "borderColor": "#509863", "borderWidth": 2, "borderRadius": 8, "fontSize": 13, "textAlign": "center", "verticalAlign": "middle", "padding": 12 }
+                  ]
+                },
+                {
+                  "type": "frame", "id": "row-3-later", "width": "fill-container", "height": "fit-content",
+                  "layout": "horizontal", "gap": 12, "padding": 0, "alignItems": "stretch",
+                  "children": [
+                    { "type": "rect", "id": "n-l2plan", "width": "fill-container", "height": "fit-content", "text": "二级计划 (V1.1+)", "fillColor": "#F3F4F6", "borderColor": "#D1D5DB", "borderWidth": 2, "borderRadius": 8, "fontSize": 12, "textAlign": "center", "verticalAlign": "middle", "textColor": "#9CA3AF", "padding": 8 },
+                    { "type": "rect", "id": "n-overview", "width": "fill-container", "height": "fit-content", "text": "计划总览 (V1.1+)", "fillColor": "#F3F4F6", "borderColor": "#D1D5DB", "borderWidth": 2, "borderRadius": 8, "fontSize": 12, "textAlign": "center", "verticalAlign": "middle", "textColor": "#9CA3AF", "padding": 8 },
+                    { "type": "rect", "id": "n-transfer", "width": "fill-container", "height": "fit-content", "text": "转维模块 (V1.2+)", "fillColor": "#F3F4F6", "borderColor": "#D1D5DB", "borderWidth": 2, "borderRadius": 8, "fontSize": 12, "textAlign": "center", "verticalAlign": "middle", "textColor": "#9CA3AF", "padding": 8 },
+                    { "type": "rect", "id": "n-others", "width": "fill-container", "height": "fit-content", "text": "需求·资源·任务·风险\n缺陷·团队·文档 (V1.2+)", "fillColor": "#F3F4F6", "borderColor": "#D1D5DB", "borderWidth": 2, "borderRadius": 8, "fontSize": 11, "textAlign": "center", "verticalAlign": "middle", "textColor": "#9CA3AF", "padding": 8 }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+
+        {
+          "type": "frame", "id": "row-4", "width": "fill-container", "height": "fit-content",
+          "layout": "horizontal", "gap": 20, "padding": 0, "alignItems": "center",
+          "children": [
+            { "type": "text", "id": "label-4", "width": 72, "height": "fit-content", "text": "全局功能", "fontSize": 14, "fontWeight": "bold", "textAlign": "right", "textColor": "#D4B45B" },
+            {
+              "type": "frame", "id": "layer-4", "width": "fill-container", "height": "fit-content",
+              "fillColor": "#FEF1CE", "borderWidth": 2, "borderColor": "#D4B45B", "borderRadius": 8,
+              "layout": "horizontal", "gap": 12, "padding": 20, "alignItems": "stretch",
+              "children": [
+                { "type": "rect", "id": "n-roadmap", "width": "fill-container", "height": "fit-content", "text": "🗺️ 项目路标视图\n里程碑全景矩阵·筛选\n视图管理·基线快照", "fillColor": "#FFFFFF", "borderColor": "#D4B45B", "borderWidth": 2, "borderRadius": 8, "fontSize": 13, "textAlign": "center", "verticalAlign": "middle", "padding": 12 },
+                { "type": "rect", "id": "n-config", "width": "fill-container", "height": "fit-content", "text": "⚙️ 配置中心\n一级计划模板配置\n按项目类型管理", "fillColor": "#FFFFFF", "borderColor": "#D4B45B", "borderWidth": 2, "borderRadius": 8, "fontSize": 13, "textAlign": "center", "verticalAlign": "middle", "padding": 12 },
+                { "type": "rect", "id": "n-gperm", "width": "fill-container", "height": "fit-content", "text": "🛡️ 权限中心\n全局角色管理\n权限矩阵配置", "fillColor": "#FFFFFF", "borderColor": "#D4B45B", "borderWidth": 2, "borderRadius": 8, "fontSize": 13, "textAlign": "center", "verticalAlign": "middle", "padding": 12 }
+              ]
+            }
+          ]
+        },
+
+        {
+          "type": "frame", "id": "row-5", "width": "fill-container", "height": "fit-content",
+          "layout": "horizontal", "gap": 20, "padding": 0, "alignItems": "center",
+          "children": [
+            { "type": "text", "id": "label-5", "width": 72, "height": "fit-content", "text": "外部访问", "fontSize": 14, "fontWeight": "bold", "textAlign": "right", "textColor": "#D25D5A" },
+            {
+              "type": "frame", "id": "layer-5", "width": "fill-container", "height": "fit-content",
+              "fillColor": "#FEE3E2", "borderWidth": 2, "borderColor": "#D25D5A", "borderRadius": 8,
+              "layout": "horizontal", "gap": 12, "padding": 20, "alignItems": "stretch",
+              "children": [
+                { "type": "rect", "id": "n-share", "width": "fill-container", "height": "fit-content", "text": "🔗 一级计划分享页\n公开只读·无需登录·市场切换\n竖版表格·横版表格·甘特图", "fillColor": "#FFFFFF", "borderColor": "#D25D5A", "borderWidth": 2, "borderRadius": 8, "fontSize": 13, "textAlign": "center", "verticalAlign": "middle", "padding": 12 }
+              ]
+            }
+          ]
+        },
+
+        {
+          "type": "frame", "id": "row-data", "width": "fill-container", "height": "fit-content",
+          "layout": "horizontal", "gap": 12, "padding": 0, "alignItems": "stretch",
+          "children": [
+            { "type": "text", "id": "label-data", "width": 72, "height": "fit-content", "text": "数据来源", "fontSize": 14, "fontWeight": "bold", "textAlign": "right", "textColor": "#8C8C8C" },
+            { "type": "rect", "id": "n-ipm", "width": "fill-container", "height": "fit-content", "text": "📡 IPM\n项目基础数据", "fillColor": "#F9FAFB", "borderColor": "#BBBFC4", "borderWidth": 2, "borderRadius": 8, "fontSize": 12, "textAlign": "center", "verticalAlign": "middle", "padding": 10 },
+            { "type": "rect", "id": "n-scm", "width": "fill-container", "height": "fit-content", "text": "🔧 SCM\n硬件配置数据", "fillColor": "#F9FAFB", "borderColor": "#BBBFC4", "borderWidth": 2, "borderRadius": 8, "fontSize": 12, "textAlign": "center", "verticalAlign": "middle", "padding": 10 },
+            { "type": "rect", "id": "n-custom", "width": "fill-container", "height": "fit-content", "text": "✏️ 自定义\n手动填写数据", "fillColor": "#F9FAFB", "borderColor": "#BBBFC4", "borderWidth": 2, "borderRadius": 8, "fontSize": 12, "textAlign": "center", "verticalAlign": "middle", "padding": 10 },
+            { "type": "rect", "id": "n-local", "width": "fill-container", "height": "fit-content", "text": "💾 本地存储\n视图配置·基线", "fillColor": "#F9FAFB", "borderColor": "#BBBFC4", "borderWidth": 2, "borderRadius": 8, "fontSize": 12, "textAlign": "center", "verticalAlign": "middle", "padding": 10 }
+          ]
+        }
+      ]
+    },
+    { "type": "connector", "connector": { "from": "layer-1", "to": "layer-2", "fromAnchor": "bottom", "toAnchor": "top", "lineShape": "straight", "lineWidth": 2, "lineColor": "#BBBFC4", "endArrow": "arrow" } },
+    { "type": "connector", "connector": { "from": "n-projlist", "to": "layer-3", "fromAnchor": "bottom", "toAnchor": "top", "lineShape": "straight", "lineWidth": 2, "lineColor": "#BBBFC4", "endArrow": "arrow", "label": "点击项目卡片" } },
+    { "type": "connector", "connector": { "from": "n-l1plan", "to": "n-share", "fromAnchor": "bottom", "toAnchor": "top", "lineShape": "rightAngle", "lineWidth": 2, "lineColor": "#BBBFC4", "endArrow": "arrow", "label": "分享链接" } }
+  ]
+}

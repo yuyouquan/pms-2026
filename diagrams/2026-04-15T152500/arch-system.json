@@ -1,0 +1,454 @@
+{
+  "version": 2,
+  "nodes": [
+    {
+      "type": "frame",
+      "id": "root",
+      "x": 0, "y": 0,
+      "width": 1200,
+      "height": "fit-content",
+      "layout": "vertical",
+      "gap": 20,
+      "padding": 24,
+      "children": [
+        {
+          "type": "text",
+          "id": "title",
+          "width": "fill-container",
+          "height": "fit-content",
+          "text": "PMS 系统整体架构",
+          "fontSize": 24,
+          "textAlign": "center",
+          "textColor": "#1F2329"
+        },
+        {
+          "type": "frame",
+          "id": "main-container",
+          "width": "fill-container",
+          "height": "fit-content",
+          "layout": "horizontal",
+          "alignItems": "stretch",
+          "gap": 16,
+          "padding": 0,
+          "children": [
+            {
+              "type": "frame",
+              "id": "layers-container",
+              "width": "fill-container",
+              "height": "fit-content",
+              "layout": "vertical",
+              "alignItems": "stretch",
+              "gap": 16,
+              "padding": 0,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "row-client",
+                  "width": "fill-container",
+                  "height": "fit-content",
+                  "layout": "horizontal",
+                  "gap": 24,
+                  "padding": 0,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "label-client",
+                      "width": 80,
+                      "height": "fit-content",
+                      "text": "客户端",
+                      "fontSize": 18,
+                      "textAlign": "right",
+                      "textColor": "#1F2329"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "layer-client",
+                      "width": "fill-container",
+                      "height": "fit-content",
+                      "borderWidth": 2,
+                      "borderRadius": 8,
+                      "borderColor": "#5178C6",
+                      "fillColor": "#F0F4FC",
+                      "layout": "vertical",
+                      "gap": 12,
+                      "padding": 20,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "client-row1",
+                          "width": "fill-container",
+                          "height": "fit-content",
+                          "layout": "horizontal",
+                          "gap": 12,
+                          "padding": 0,
+                          "children": [
+                            {
+                              "type": "frame", "id": "client-browser", "width": "fill-container", "height": "fit-content",
+                              "layout": "vertical", "gap": 4, "padding": 12, "alignItems": "center",
+                              "fillColor": "#FFFFFF", "borderColor": "#5178C6", "borderWidth": 2, "borderRadius": 8,
+                              "children": [
+                                { "type": "icon", "name": "display", "width": 32, "height": 32, "color": "#5178C6" },
+                                { "type": "text", "width": "fit-content", "height": "fit-content", "text": "用户浏览器\n(Chrome/Edge)", "fontSize": 13, "textAlign": "center", "textColor": "#1F2329" }
+                              ]
+                            },
+                            {
+                              "type": "frame", "id": "client-qiankun", "width": "fill-container", "height": "fit-content",
+                              "layout": "vertical", "gap": 4, "padding": 12, "alignItems": "center",
+                              "fillColor": "#FFFFFF", "borderColor": "#5178C6", "borderWidth": 2, "borderRadius": 8,
+                              "children": [
+                                { "type": "icon", "name": "component", "width": 32, "height": 32, "color": "#5178C6" },
+                                { "type": "text", "width": "fit-content", "height": "fit-content", "text": "qiankun 主平台\n(微前端框架)", "fontSize": 13, "textAlign": "center", "textColor": "#1F2329" }
+                              ]
+                            },
+                            {
+                              "type": "frame", "id": "client-pms", "width": "fill-container", "height": "fit-content",
+                              "layout": "vertical", "gap": 4, "padding": 12, "alignItems": "center",
+                              "fillColor": "#FFFFFF", "borderColor": "#5178C6", "borderWidth": 2, "borderRadius": 8,
+                              "children": [
+                                { "type": "icon", "name": "ud-app", "width": 32, "height": 32, "color": "#5178C6" },
+                                { "type": "text", "width": "fit-content", "height": "fit-content", "text": "PMS 子应用\n(React 18 SPA)", "fontSize": 13, "textAlign": "center", "textColor": "#1F2329" }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "client-modules",
+                          "width": "fill-container",
+                          "height": "fit-content",
+                          "layout": "horizontal",
+                          "gap": 8,
+                          "padding": 0,
+                          "children": [
+                            { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "工作台", "borderRadius": 8, "borderWidth": 2, "borderColor": "#5178C6", "fillColor": "#FFFFFF", "fontSize": 12, "textAlign": "center", "textColor": "#1F2329" },
+                            { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "路标", "borderRadius": 8, "borderWidth": 2, "borderColor": "#5178C6", "fillColor": "#FFFFFF", "fontSize": 12, "textAlign": "center", "textColor": "#1F2329" },
+                            { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "人力管道", "borderRadius": 8, "borderWidth": 2, "borderColor": "#5178C6", "fillColor": "#FFFFFF", "fontSize": 12, "textAlign": "center", "textColor": "#1F2329" },
+                            { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "工作跟踪", "borderRadius": 8, "borderWidth": 2, "borderColor": "#5178C6", "fillColor": "#FFFFFF", "fontSize": 12, "textAlign": "center", "textColor": "#1F2329" },
+                            { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "配置", "borderRadius": 8, "borderWidth": 2, "borderColor": "#5178C6", "fillColor": "#FFFFFF", "fontSize": 12, "textAlign": "center", "textColor": "#1F2329" },
+                            { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "权限", "borderRadius": 8, "borderWidth": 2, "borderColor": "#5178C6", "fillColor": "#FFFFFF", "fontSize": 12, "textAlign": "center", "textColor": "#1F2329" }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "client-core",
+                          "width": "fill-container",
+                          "height": "fit-content",
+                          "layout": "horizontal",
+                          "gap": 8,
+                          "padding": 0,
+                          "children": [
+                            { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "GanttChart", "borderRadius": 8, "borderWidth": 2, "borderColor": "#5178C6", "fillColor": "#FFFFFF", "fontSize": 12, "textAlign": "center", "textColor": "#646A73" },
+                            { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "PlanTable", "borderRadius": 8, "borderWidth": 2, "borderColor": "#5178C6", "fillColor": "#FFFFFF", "fontSize": 12, "textAlign": "center", "textColor": "#646A73" },
+                            { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "VersionDiff", "borderRadius": 8, "borderWidth": 2, "borderColor": "#5178C6", "fillColor": "#FFFFFF", "fontSize": 12, "textAlign": "center", "textColor": "#646A73" },
+                            { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "WorkTracker", "borderRadius": 8, "borderWidth": 2, "borderColor": "#5178C6", "fillColor": "#FFFFFF", "fontSize": 12, "textAlign": "center", "textColor": "#646A73" },
+                            { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "ColumnConfig", "borderRadius": 8, "borderWidth": 2, "borderColor": "#5178C6", "fillColor": "#FFFFFF", "fontSize": 12, "textAlign": "center", "textColor": "#646A73" }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "width": "fill-container",
+                          "height": "fit-content",
+                          "text": "状态: MobX 6  |  服务: Axios  |  路由: React Router v6",
+                          "fontSize": 12,
+                          "textAlign": "center",
+                          "textColor": "#646A73"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "row-protocol",
+                  "width": "fill-container",
+                  "height": "fit-content",
+                  "layout": "horizontal",
+                  "gap": 24,
+                  "padding": 0,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "width": 80,
+                      "height": "fit-content",
+                      "text": "",
+                      "fontSize": 18,
+                      "textAlign": "right"
+                    },
+                    {
+                      "type": "rect",
+                      "id": "protocol",
+                      "width": "fill-container",
+                      "height": "fit-content",
+                      "text": "HTTPS / JSON  (Bearer Token)",
+                      "borderRadius": 8,
+                      "borderWidth": 2,
+                      "borderColor": "#DEE0E3",
+                      "fillColor": "#FFFFFF",
+                      "fontSize": 14,
+                      "textAlign": "center",
+                      "textColor": "#646A73"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "row-backend",
+                  "width": "fill-container",
+                  "height": "fit-content",
+                  "layout": "horizontal",
+                  "gap": 24,
+                  "padding": 0,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "label-backend",
+                      "width": 80,
+                      "height": "fit-content",
+                      "text": "后端",
+                      "fontSize": 18,
+                      "textAlign": "right",
+                      "textColor": "#1F2329"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "layer-backend",
+                      "width": "fill-container",
+                      "height": "fit-content",
+                      "borderWidth": 2,
+                      "borderRadius": 8,
+                      "borderColor": "#8569CB",
+                      "fillColor": "#EAE2FE",
+                      "layout": "vertical",
+                      "gap": 12,
+                      "padding": 20,
+                      "children": [
+                        {
+                          "type": "text",
+                          "width": "fill-container",
+                          "height": "fit-content",
+                          "text": "COLA 5.x  (Spring Boot 3.x + JDK 17)",
+                          "fontSize": 14,
+                          "textAlign": "center",
+                          "textColor": "#1F2329"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "cola-layers",
+                          "width": "fill-container",
+                          "height": "fit-content",
+                          "layout": "horizontal",
+                          "gap": 8,
+                          "padding": 0,
+                          "children": [
+                            { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "Adapter\n(REST API)", "borderRadius": 8, "borderWidth": 2, "borderColor": "#8569CB", "fillColor": "#FFFFFF", "fontSize": 13, "textAlign": "center", "textColor": "#1F2329" },
+                            { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "App\n(应用服务)", "borderRadius": 8, "borderWidth": 2, "borderColor": "#8569CB", "fillColor": "#FFFFFF", "fontSize": 13, "textAlign": "center", "textColor": "#1F2329" },
+                            { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "Domain\n(领域模型)", "borderRadius": 8, "borderWidth": 2, "borderColor": "#8569CB", "fillColor": "#FFFFFF", "fontSize": 13, "textAlign": "center", "textColor": "#1F2329" },
+                            { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "Infrastructure\n(基础设施)", "borderRadius": 8, "borderWidth": 2, "borderColor": "#8569CB", "fillColor": "#FFFFFF", "fontSize": 13, "textAlign": "center", "textColor": "#1F2329" }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "row-infra",
+                  "width": "fill-container",
+                  "height": "fit-content",
+                  "layout": "horizontal",
+                  "gap": 24,
+                  "padding": 0,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "label-infra",
+                      "width": 80,
+                      "height": "fit-content",
+                      "text": "基础设施",
+                      "fontSize": 18,
+                      "textAlign": "right",
+                      "textColor": "#1F2329"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "layer-infra",
+                      "width": "fill-container",
+                      "height": "fit-content",
+                      "borderWidth": 2,
+                      "borderRadius": 8,
+                      "borderColor": "#509863",
+                      "fillColor": "#DFF5E5",
+                      "layout": "horizontal",
+                      "gap": 0,
+                      "padding": 20,
+                      "justifyContent": "space-around",
+                      "children": [
+                        {
+                          "type": "frame", "width": "fit-content", "height": "fit-content",
+                          "layout": "vertical", "gap": 4, "padding": 8, "alignItems": "center",
+                          "fillColor": "#FFFFFF", "borderColor": "#509863", "borderWidth": 2, "borderRadius": 8,
+                          "children": [
+                            { "type": "icon", "name": "database", "width": 28, "height": 28, "color": "#509863" },
+                            { "type": "text", "width": "fit-content", "height": "fit-content", "text": "MySQL 主从", "fontSize": 12, "textAlign": "center", "textColor": "#1F2329" }
+                          ]
+                        },
+                        {
+                          "type": "frame", "width": "fit-content", "height": "fit-content",
+                          "layout": "vertical", "gap": 4, "padding": 8, "alignItems": "center",
+                          "fillColor": "#FFFFFF", "borderColor": "#509863", "borderWidth": 2, "borderRadius": 8,
+                          "children": [
+                            { "type": "icon", "name": "cloud-storage", "width": 28, "height": 28, "color": "#509863" },
+                            { "type": "text", "width": "fit-content", "height": "fit-content", "text": "Redis Cluster", "fontSize": 12, "textAlign": "center", "textColor": "#1F2329" }
+                          ]
+                        },
+                        {
+                          "type": "frame", "width": "fit-content", "height": "fit-content",
+                          "layout": "vertical", "gap": 4, "padding": 8, "alignItems": "center",
+                          "fillColor": "#FFFFFF", "borderColor": "#509863", "borderWidth": 2, "borderRadius": 8,
+                          "children": [
+                            { "type": "icon", "name": "configuration", "width": 28, "height": 28, "color": "#509863" },
+                            { "type": "text", "width": "fit-content", "height": "fit-content", "text": "Nacos", "fontSize": 12, "textAlign": "center", "textColor": "#1F2329" }
+                          ]
+                        },
+                        {
+                          "type": "frame", "width": "fit-content", "height": "fit-content",
+                          "layout": "vertical", "gap": 4, "padding": 8, "alignItems": "center",
+                          "fillColor": "#FFFFFF", "borderColor": "#509863", "borderWidth": 2, "borderRadius": 8,
+                          "children": [
+                            { "type": "icon", "name": "ud-flowchart", "width": 28, "height": 28, "color": "#509863" },
+                            { "type": "text", "width": "fit-content", "height": "fit-content", "text": "Flowable 7.x", "fontSize": 12, "textAlign": "center", "textColor": "#1F2329" }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "row-external",
+                  "width": "fill-container",
+                  "height": "fit-content",
+                  "layout": "horizontal",
+                  "gap": 24,
+                  "padding": 0,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "label-external",
+                      "width": 80,
+                      "height": "fit-content",
+                      "text": "外部系统",
+                      "fontSize": 18,
+                      "textAlign": "right",
+                      "textColor": "#1F2329"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "layer-external",
+                      "width": "fill-container",
+                      "height": "fit-content",
+                      "borderWidth": 2,
+                      "borderRadius": 8,
+                      "borderColor": "#D4B45B",
+                      "fillColor": "#FEF1CE",
+                      "layout": "horizontal",
+                      "gap": 8,
+                      "padding": 20,
+                      "children": [
+                        { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "IPM", "borderRadius": 8, "borderWidth": 2, "borderColor": "#D4B45B", "fillColor": "#FFFFFF", "fontSize": 13, "textAlign": "center", "textColor": "#1F2329" },
+                        { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "SCM", "borderRadius": 8, "borderWidth": 2, "borderColor": "#D4B45B", "fillColor": "#FFFFFF", "fontSize": 13, "textAlign": "center", "textColor": "#1F2329" },
+                        { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "Jira", "borderRadius": 8, "borderWidth": 2, "borderColor": "#D4B45B", "fillColor": "#FFFFFF", "fontSize": 13, "textAlign": "center", "textColor": "#1F2329" },
+                        { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "Gerrit", "borderRadius": 8, "borderWidth": 2, "borderColor": "#D4B45B", "fillColor": "#FFFFFF", "fontSize": 13, "textAlign": "center", "textColor": "#1F2329" },
+                        { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "SPUG", "borderRadius": 8, "borderWidth": 2, "borderColor": "#D4B45B", "fillColor": "#FFFFFF", "fontSize": 13, "textAlign": "center", "textColor": "#1F2329" },
+                        { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "OTA", "borderRadius": 8, "borderWidth": 2, "borderColor": "#D4B45B", "fillColor": "#FFFFFF", "fontSize": 13, "textAlign": "center", "textColor": "#1F2329" },
+                        { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "飞书", "borderRadius": 8, "borderWidth": 2, "borderColor": "#D4B45B", "fillColor": "#FFFFFF", "fontSize": 13, "textAlign": "center", "textColor": "#1F2329" }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "right-sidebar-wrapper",
+              "width": 160,
+              "height": "fill-container",
+              "layout": "vertical",
+              "alignItems": "stretch",
+              "justifyContent": "space-between",
+              "gap": 16,
+              "padding": 0,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "side-obs",
+                  "width": "fill-container",
+                  "height": "fill-container",
+                  "layout": "vertical",
+                  "alignItems": "stretch",
+                  "justifyContent": "center",
+                  "gap": 12,
+                  "padding": 16,
+                  "borderRadius": 8,
+                  "borderWidth": 2,
+                  "borderColor": "#D25D5A",
+                  "fillColor": "#FEE3E2",
+                  "children": [
+                    { "type": "text", "width": "fill-container", "height": "fit-content", "text": "可观测性", "fontSize": 14, "textAlign": "center", "textColor": "#1F2329" },
+                    {
+                      "type": "frame",
+                      "width": "fill-container",
+                      "height": "fit-content",
+                      "layout": "vertical",
+                      "gap": 8,
+                      "padding": 0,
+                      "children": [
+                        { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "CAT\n链路追踪", "borderRadius": 8, "borderWidth": 2, "borderColor": "#D25D5A", "fillColor": "#FFFFFF", "fontSize": 12, "textAlign": "center", "textColor": "#1F2329" },
+                        { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "ELK\n日志分析", "borderRadius": 8, "borderWidth": 2, "borderColor": "#D25D5A", "fillColor": "#FFFFFF", "fontSize": 12, "textAlign": "center", "textColor": "#1F2329" }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "side-deploy",
+                  "width": "fill-container",
+                  "height": "fill-container",
+                  "layout": "vertical",
+                  "alignItems": "stretch",
+                  "justifyContent": "center",
+                  "gap": 12,
+                  "padding": 16,
+                  "borderRadius": 8,
+                  "borderWidth": 2,
+                  "borderColor": "#D25D5A",
+                  "fillColor": "#FEE3E2",
+                  "children": [
+                    { "type": "text", "width": "fill-container", "height": "fit-content", "text": "部署", "fontSize": 14, "textAlign": "center", "textColor": "#1F2329" },
+                    {
+                      "type": "frame",
+                      "width": "fill-container",
+                      "height": "fit-content",
+                      "layout": "vertical",
+                      "gap": 8,
+                      "padding": 0,
+                      "children": [
+                        { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "CDN/Nginx", "borderRadius": 8, "borderWidth": 2, "borderColor": "#D25D5A", "fillColor": "#FFFFFF", "fontSize": 12, "textAlign": "center", "textColor": "#1F2329" },
+                        { "type": "rect", "width": "fill-container", "height": "fit-content", "text": "SLB/Ingress", "borderRadius": 8, "borderWidth": 2, "borderColor": "#D25D5A", "fillColor": "#FFFFFF", "fontSize": 12, "textAlign": "center", "textColor": "#1F2329" }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

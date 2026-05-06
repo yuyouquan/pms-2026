@@ -27,7 +27,9 @@ export function SortableRow({ children, ...props }: any) {
   const style = { ...props.style, transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
   return (
     <DragHandleContext.Provider value={listeners || {}}>
-      <tr ref={setNodeRef} style={style} {...attributes}>{children}</tr>
+      {/* Spread Antd's props (className, data-row-key, etc.) so rowClassName takes effect.
+          Override style + attributes after to keep dnd-kit transforms / a11y. */}
+      <tr {...props} ref={setNodeRef} style={style} {...attributes}>{children}</tr>
     </DragHandleContext.Provider>
   )
 }

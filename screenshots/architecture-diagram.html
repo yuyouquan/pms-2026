@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; background: #f8fafc; padding: 40px; }
+  .container { width: 1360px; margin: 0 auto; }
+  .title { text-align: center; font-size: 22px; font-weight: 700; color: #111827; margin-bottom: 8px; }
+  .subtitle { text-align: center; font-size: 13px; color: #9ca3af; margin-bottom: 32px; }
+
+  /* Layer styles */
+  .layer { margin-bottom: 16px; border-radius: 12px; overflow: hidden; }
+  .layer-header { padding: 10px 20px; font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 2px; }
+  .layer-body { padding: 16px 20px; display: flex; gap: 12px; flex-wrap: wrap; }
+
+  /* Color schemes per layer */
+  .layer-entry .layer-header { background: linear-gradient(135deg, #4338ca, #6366f1); }
+  .layer-entry .layer-body { background: linear-gradient(180deg, #eef2ff, #f5f7ff); border: 1px solid rgba(99,102,241,0.15); border-top: none; border-radius: 0 0 12px 12px; }
+
+  .layer-workspace .layer-header { background: linear-gradient(135deg, #0369a1, #0ea5e9); }
+  .layer-workspace .layer-body { background: linear-gradient(180deg, #e0f2fe, #f0f9ff); border: 1px solid rgba(14,165,233,0.15); border-top: none; border-radius: 0 0 12px 12px; }
+
+  .layer-project .layer-header { background: linear-gradient(135deg, #7c3aed, #a78bfa); }
+  .layer-project .layer-body { background: linear-gradient(180deg, #ede9fe, #f5f3ff); border: 1px solid rgba(124,58,237,0.15); border-top: none; border-radius: 0 0 12px 12px; }
+
+  .layer-plan .layer-header { background: linear-gradient(135deg, #059669, #34d399); }
+  .layer-plan .layer-body { background: linear-gradient(180deg, #d1fae5, #ecfdf5); border: 1px solid rgba(5,150,105,0.15); border-top: none; border-radius: 0 0 12px 12px; }
+
+  .layer-global .layer-header { background: linear-gradient(135deg, #d97706, #fbbf24); }
+  .layer-global .layer-body { background: linear-gradient(180deg, #fef3c7, #fffbeb); border: 1px solid rgba(217,119,6,0.15); border-top: none; border-radius: 0 0 12px 12px; }
+
+  .layer-share .layer-header { background: linear-gradient(135deg, #be185d, #f472b6); }
+  .layer-share .layer-body { background: linear-gradient(180deg, #fce7f3, #fdf2f8); border: 1px solid rgba(190,24,93,0.15); border-top: none; border-radius: 0 0 12px 12px; }
+
+  .layer-future .layer-header { background: linear-gradient(135deg, #6b7280, #9ca3af); }
+  .layer-future .layer-body { background: linear-gradient(180deg, #f3f4f6, #f9fafb); border: 1px solid rgba(107,114,128,0.15); border-top: none; border-radius: 0 0 12px 12px; }
+
+  /* Module cards */
+  .module { background: #fff; border-radius: 8px; padding: 12px 16px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 1px 3px rgba(0,0,0,0.04); min-width: 140px; position: relative; }
+  .module-name { font-size: 13px; font-weight: 600; color: #111827; margin-bottom: 4px; }
+  .module-desc { font-size: 11px; color: #6b7280; line-height: 1.5; }
+  .module-badge { position: absolute; top: -6px; right: 8px; font-size: 9px; padding: 1px 6px; border-radius: 8px; font-weight: 600; }
+  .badge-v1 { background: #dcfce7; color: #16a34a; border: 1px solid #86efac; }
+  .badge-later { background: #f3f4f6; color: #9ca3af; border: 1px solid #d1d5db; }
+
+  /* Wide modules */
+  .module-wide { flex: 1; min-width: 280px; }
+  .module-medium { min-width: 200px; flex: 1; }
+  .module-small { min-width: 140px; }
+
+  /* Sub items */
+  .sub-items { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .sub-item { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: rgba(99,102,241,0.06); color: #4338ca; border: 1px solid rgba(99,102,241,0.12); }
+  .sub-item.green { background: rgba(5,150,105,0.06); color: #059669; border-color: rgba(5,150,105,0.12); }
+  .sub-item.orange { background: rgba(217,119,6,0.06); color: #d97706; border-color: rgba(217,119,6,0.12); }
+  .sub-item.gray { background: #f3f4f6; color: #9ca3af; border-color: #e5e7eb; text-decoration: line-through; }
+
+  /* Arrows */
+  .arrow-row { display: flex; justify-content: center; padding: 4px 0; }
+  .arrow { color: #9ca3af; font-size: 18px; }
+
+  /* Data sources row */
+  .data-row { display: flex; gap: 12px; margin-top: 16px; }
+  .data-source { flex: 1; background: #fff; border-radius: 8px; padding: 10px 16px; border: 1px solid #e5e7eb; text-align: center; }
+  .data-source-name { font-size: 12px; font-weight: 600; color: #374151; }
+  .data-source-desc { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="title">PMS 项目管理系统 V1.0 — 业务全景图</div>
+  <div class="subtitle">紫色模块为 V1.0 范围 · 灰色模块为后续版本规划</div>
+
+  <!-- Layer 1: 系统入口 -->
+  <div class="layer layer-entry">
+    <div class="layer-header">系统入口</div>
+    <div class="layer-body">
+      <div class="module module-wide">
+        <span class="module-badge badge-v1">V1.0</span>
+        <div class="module-name">🏠 Header 导航栏</div>
+        <div class="module-desc">系统顶部导航，角色切换，模块快速跳转</div>
+        <div class="sub-items">
+          <span class="sub-item">工作台</span>
+          <span class="sub-item green">项目路标视图</span>
+          <span class="sub-item gray">人力资源管道</span>
+          <span class="sub-item orange">配置中心</span>
+          <span class="sub-item">权限中心</span>
+        </div>
+      </div>
+      <div class="module module-medium">
+        <span class="module-badge badge-v1">V1.0</span>
+        <div class="module-name">👤 用户身份</div>
+        <div class="module-desc">登录用户切换，管理组标识，项目可见性控制</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-row"><span class="arrow">▼</span></div>
+
+  <!-- Layer 2: 工作台 -->
+  <div class="layer layer-workspace">
+    <div class="layer-header">工作台</div>
+    <div class="layer-body">
+      <div class="module module-medium">
+        <span class="module-badge badge-v1">V1.0</span>
+        <div class="module-name">📋 项目列表</div>
+        <div class="module-desc">项目卡片/列表视图，状态筛选，类型筛选，搜索</div>
+        <div class="sub-items">
+          <span class="sub-item">卡片视图</span>
+          <span class="sub-item">列表视图</span>
+          <span class="sub-item">状态/类型筛选</span>
+        </div>
+      </div>
+      <div class="module module-medium">
+        <span class="module-badge badge-v1">V1.0</span>
+        <div class="module-name">⏱️ 工作跟踪</div>
+        <div class="module-desc">当前用户跨项目任务汇总，状态筛选，跳转计划</div>
+      </div>
+      <div class="module module-small">
+        <span class="module-badge badge-v1">V1.0</span>
+        <div class="module-name">📌 待办中心</div>
+        <div class="module-desc">可展开收起侧边栏，逾期/待处理/已完成分类</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-row"><span class="arrow">▼ 点击项目卡片进入</span></div>
+
+  <!-- Layer 3: 项目空间 -->
+  <div class="layer layer-project">
+    <div class="layer-header">项目空间（单项目维度）</div>
+    <div class="layer-body">
+      <div class="module module-medium">
+        <span class="module-badge badge-v1">V1.0</span>
+        <div class="module-name">📝 基本信息</div>
+        <div class="module-desc">项目元数据，按4种项目类型差异化展示</div>
+        <div class="sub-items">
+          <span class="sub-item">概览卡片</span>
+          <span class="sub-item">基本信息</span>
+          <span class="sub-item">计划信息</span>
+          <span class="sub-item">硬件配置</span>
+          <span class="sub-item">构建信息</span>
+        </div>
+      </div>
+      <div class="module module-medium">
+        <span class="module-badge badge-v1">V1.0</span>
+        <div class="module-name">📅 一级计划</div>
+        <div class="module-desc">版本管理，三种视图，编辑/发布/对比/分享</div>
+        <div class="sub-items">
+          <span class="sub-item green">竖版表格</span>
+          <span class="sub-item green">横版表格</span>
+          <span class="sub-item green">甘特图</span>
+          <span class="sub-item green">版本对比</span>
+        </div>
+      </div>
+      <div class="module module-small">
+        <span class="module-badge badge-v1">V1.0</span>
+        <div class="module-name">🔒 权限配置</div>
+        <div class="module-desc">项目级角色权限矩阵</div>
+      </div>
+      <div class="module module-small" style="opacity: 0.5;">
+        <span class="module-badge badge-later">V1.1+</span>
+        <div class="module-name" style="color:#9ca3af">📊 二级计划</div>
+        <div class="module-desc">需求开发/版本火车/自定义计划</div>
+      </div>
+      <div class="module module-small" style="opacity: 0.5;">
+        <span class="module-badge badge-later">V1.1+</span>
+        <div class="module-name" style="color:#9ca3af">📈 计划总览</div>
+        <div class="module-desc">一级+二级计划融合视图</div>
+      </div>
+      <div class="module module-small" style="opacity: 0.5;">
+        <span class="module-badge badge-later">V1.2+</span>
+        <div class="module-name" style="color:#9ca3af">🔄 转维模块</div>
+        <div class="module-desc">申请/录入/评审/SQA审核</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-row"><span class="arrow">▼</span></div>
+
+  <!-- Layer 4: 一级计划核心能力 -->
+  <div class="layer layer-plan">
+    <div class="layer-header">一级计划核心能力</div>
+    <div class="layer-body">
+      <div class="module module-small">
+        <div class="module-name">📊 竖版表格</div>
+        <div class="module-desc">传统表格，搜索，列设置，拖拽排序，增删子任务</div>
+      </div>
+      <div class="module module-small">
+        <div class="module-name">📋 横版表格</div>
+        <div class="module-desc">版本×里程碑矩阵，跨版本日期对比</div>
+      </div>
+      <div class="module module-small">
+        <div class="module-name">📈 甘特图</div>
+        <div class="module-desc">DHTMLX Gantt，依赖箭头，拖拽调整时间</div>
+      </div>
+      <div class="module module-small">
+        <div class="module-name">🔄 版本管理</div>
+        <div class="module-desc">创建修订，发布，版本切换</div>
+      </div>
+      <div class="module module-small">
+        <div class="module-name">📝 版本对比</div>
+        <div class="module-desc">新增/删除/修改差异，颜色标记，统计卡片</div>
+      </div>
+      <div class="module module-small">
+        <div class="module-name">⚠️ 约束校验</div>
+        <div class="module-desc">父子时间约束，前置任务约束，实时甘特图校验</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-row"><span class="arrow">▼</span></div>
+
+  <!-- Layer 5: 全局功能 -->
+  <div class="layer layer-global">
+    <div class="layer-header">全局功能</div>
+    <div class="layer-body">
+      <div class="module module-medium">
+        <span class="module-badge badge-v1">V1.0</span>
+        <div class="module-name">🗺️ 项目路标视图</div>
+        <div class="module-desc">里程碑全景矩阵，视图管理，基线快照，筛选</div>
+        <div class="sub-items">
+          <span class="sub-item">软件产品项目视图</span>
+          <span class="sub-item">整机产品项目视图</span>
+          <span class="sub-item gray">MR版本火车视图</span>
+        </div>
+      </div>
+      <div class="module module-medium">
+        <span class="module-badge badge-v1">V1.0</span>
+        <div class="module-name">⚙️ 配置中心</div>
+        <div class="module-desc">一级计划模板配置，按项目类型管理模板</div>
+        <div class="sub-items">
+          <span class="sub-item orange">一级计划模板</span>
+          <span class="sub-item gray">二级计划配置</span>
+          <span class="sub-item gray">转维材料配置</span>
+        </div>
+      </div>
+      <div class="module module-small">
+        <span class="module-badge badge-v1">V1.0</span>
+        <div class="module-name">🛡️ 权限中心</div>
+        <div class="module-desc">全局角色管理，权限矩阵配置</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-row"><span class="arrow">▼</span></div>
+
+  <!-- Layer 6: 分享与外部访问 -->
+  <div class="layer layer-share">
+    <div class="layer-header">分享与外部访问</div>
+    <div class="layer-body">
+      <div class="module module-wide">
+        <span class="module-badge badge-v1">V1.0</span>
+        <div class="module-name">🔗 一级计划分享页</div>
+        <div class="module-desc">公开只读页面，无需登录。展示最新已发布版本，支持市场切换（整机项目）、搜索、列设置、三种视图</div>
+        <div class="sub-items">
+          <span class="sub-item">URL: /share/plan?projectId=X&level=level1</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data Sources -->
+  <div style="margin-top: 24px;">
+    <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px; letter-spacing: 2px;">数据来源</div>
+    <div class="data-row">
+      <div class="data-source">
+        <div class="data-source-name">📡 IPM</div>
+        <div class="data-source-desc">项目基础数据（项目名、品牌、产品线、状态）</div>
+      </div>
+      <div class="data-source">
+        <div class="data-source-name">🔧 SCM</div>
+        <div class="data-source-desc">硬件配置数据（芯片、内存、屏幕、摄像头）</div>
+      </div>
+      <div class="data-source">
+        <div class="data-source-name">✏️ 自定义</div>
+        <div class="data-source-desc">手动填写数据（角色分配、计划、构建信息）</div>
+      </div>
+      <div class="data-source">
+        <div class="data-source-name">💾 本地存储</div>
+        <div class="data-source-desc">视图配置、基线快照（localStorage）</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
