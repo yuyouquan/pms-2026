@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)",
+      "Bash(npx next:*)",
+      "Bash(git push:*)",
+      "Bash(lsof -ti:3004 -sTCP:LISTEN)",
+      "Bash(xargs kill:*)"
+    ]
+  }
+}
