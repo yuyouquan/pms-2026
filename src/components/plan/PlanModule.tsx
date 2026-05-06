@@ -986,13 +986,13 @@ export function VersionCompareResult({
 
   const compareColumns: any[] = [
     {
-      title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, fixed: 'left',
+      title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70,
       render: (val: string, row: CompareTableRow) => (
         <span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? '#1890ff' : '#8c8c8c' }}>{val}</span>
       ),
     },
     {
-      title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, fixed: 'left',
+      title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80,
       render: (val: string) => {
         const conf: Record<string, { color: string; bg: string }> = {
           '新增': { color: '#52c41a', bg: '#f6ffed' },
@@ -1004,7 +1004,7 @@ export function VersionCompareResult({
         return c ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: c.color, background: c.bg, border: `1px solid ${c.color}20` }}>{val}</span> : null
       },
     },
-    { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, fixed: 'left', ellipsis: true, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
+    { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, ellipsis: true, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
     { title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) },
     { title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'predecessor', val) },
     { title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 105, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'planStartDate', val) },
