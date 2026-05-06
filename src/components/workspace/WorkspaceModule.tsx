@@ -311,10 +311,11 @@ export const TodoList: React.FC<TodoListProps> = ({
                       {' · '}<span style={{ color: '#6366f1', fontWeight: 500 }}>{todo.versionNo}</span>
                       {todo.market && <> · <span style={{ color: '#13c2c2' }}>{todo.market}</span></>}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                      <Tag style={{ fontSize: 10, borderRadius: 3, margin: 0, lineHeight: '16px', padding: '0 5px', background: pc.gradientBg, color: pc.dotColor, border: 'none', fontWeight: 500 }}>{pc.text}优先级</Tag>
-                      {(todo as any).mergedCount > 1 && <span style={{ fontSize: 11, color: '#9ca3af' }}>共 {(todo as any).mergedCount} 项待处理</span>}
-                    </div>
+                    {(todo as any).mergedCount > 1 && (
+                      <div style={{ marginTop: 2 }}>
+                        <span style={{ fontSize: 11, color: '#9ca3af' }}>共 {(todo as any).mergedCount} 项待处理</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
