@@ -11,5 +11,9 @@ node_modules/
 # Build artifacts
 *.tsbuildinfo
 
+# Claude Code transient worktrees (the .claude/ dir itself is tracked
+# for shared settings.local.json, but worktrees/ is local-only)
+.claude/worktrees/
+
 # Local debug output (root only — diagrams/ may contain its own output.png)
 /output.png
