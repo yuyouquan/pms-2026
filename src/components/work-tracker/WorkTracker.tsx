@@ -21,6 +21,8 @@ interface WorkItem {
   responsible: string
   planStartDate: string
   planEndDate: string
+  actualStartDate?: string // 实际开始时间（已开工后填充）
+  actualEndDate?: string   // 实际完成时间（完成后填充）
   project: string
   projectId: string
   priority: 'high' | 'medium' | 'low'
@@ -33,19 +35,22 @@ interface WorkItem {
 }
 
 // Mock 数据
+// 已完成行：actualStartDate + actualEndDate 都填
+// 进行中 / 逾期行：仅 actualStartDate 填（已开工但未完成）
+// 待办行：两个 actual 字段均空
 const MOCK_WORK_ITEMS: WorkItem[] = [
-  { id: 'w1', type: '任务', name: 'STR2阶段功能开发', status: '进行中', stayDuration: 5, responsible: '张三', planStartDate: '2026-03-20', planEndDate: '2026-04-05', project: 'X6877-D8400_H991', projectId: '1', priority: 'high', createdBy: '李四', createdAt: '2026-03-18', planLevel: 'level1', taskName: 'STR2' },
+  { id: 'w1', type: '任务', name: 'STR2阶段功能开发', status: '进行中', stayDuration: 5, responsible: '张三', planStartDate: '2026-03-20', planEndDate: '2026-04-05', actualStartDate: '2026-03-20', project: 'X6877-D8400_H991', projectId: '1', priority: 'high', createdBy: '李四', createdAt: '2026-03-18', planLevel: 'level1', taskName: 'STR2' },
   { id: 'w2', type: '任务', name: '性能优化方案评审', status: '待办', stayDuration: 3, responsible: '张三', planStartDate: '2026-04-01', planEndDate: '2026-04-10', project: 'X6877-D8400_H991', projectId: '1', priority: 'medium', createdBy: '王五', createdAt: '2026-03-25', planLevel: 'level2', planType: '需求开发计划', taskName: '性能优化方案评审' },
-  { id: 'w3', type: '需求', name: 'AI相机功能需求分析', status: '已完成', stayDuration: 0, responsible: '张三', planStartDate: '2026-03-01', planEndDate: '2026-03-15', project: 'X6877-D8400_H991', projectId: '1', priority: 'medium', createdBy: '张三', createdAt: '2026-02-28' },
-  { id: 'w4', type: '风险', name: '芯片供应链交期风险', status: '进行中', stayDuration: 12, responsible: '张三', planStartDate: '2026-03-10', planEndDate: '2026-04-15', project: 'X6855_H8917', projectId: '3', priority: 'high', createdBy: '赵六', createdAt: '2026-03-08' },
-  { id: 'w5', type: '任务', name: 'tOS16内核适配', status: '逾期', stayDuration: 8, responsible: '张三', planStartDate: '2026-03-15', planEndDate: '2026-03-28', project: 'tOS16.0', projectId: '2', priority: 'high', createdBy: '李四', createdAt: '2026-03-10', planLevel: 'level1', taskName: 'STR3' },
+  { id: 'w3', type: '需求', name: 'AI相机功能需求分析', status: '已完成', stayDuration: 0, responsible: '张三', planStartDate: '2026-03-01', planEndDate: '2026-03-15', actualStartDate: '2026-03-02', actualEndDate: '2026-03-14', project: 'X6877-D8400_H991', projectId: '1', priority: 'medium', createdBy: '张三', createdAt: '2026-02-28' },
+  { id: 'w4', type: '风险', name: '芯片供应链交期风险', status: '进行中', stayDuration: 12, responsible: '张三', planStartDate: '2026-03-10', planEndDate: '2026-04-15', actualStartDate: '2026-03-10', project: 'X6855_H8917', projectId: '3', priority: 'high', createdBy: '赵六', createdAt: '2026-03-08' },
+  { id: 'w5', type: '任务', name: 'tOS16内核适配', status: '逾期', stayDuration: 8, responsible: '张三', planStartDate: '2026-03-15', planEndDate: '2026-03-28', actualStartDate: '2026-03-15', project: 'tOS16.0', projectId: '2', priority: 'high', createdBy: '李四', createdAt: '2026-03-10', planLevel: 'level1', taskName: 'STR3' },
   { id: 'w6', type: '问题', name: '蓝牙模块兼容性问题', status: '待办', stayDuration: 2, responsible: '张三', planStartDate: '2026-04-02', planEndDate: '2026-04-08', project: 'X6877-D8400_H991', projectId: '1', priority: 'high', createdBy: '孙七', createdAt: '2026-04-01' },
-  { id: 'w7', type: '任务', name: '测试用例编写', status: '已完成', stayDuration: 0, responsible: '张三', planStartDate: '2026-03-05', planEndDate: '2026-03-20', project: 'tOS16.0', projectId: '2', priority: 'low', createdBy: '张三', createdAt: '2026-03-03', planLevel: 'level2', planType: '在研版本火车计划', taskName: '测试用例编写' },
+  { id: 'w7', type: '任务', name: '测试用例编写', status: '已完成', stayDuration: 0, responsible: '张三', planStartDate: '2026-03-05', planEndDate: '2026-03-20', actualStartDate: '2026-03-06', actualEndDate: '2026-03-19', project: 'tOS16.0', projectId: '2', priority: 'low', createdBy: '张三', createdAt: '2026-03-03', planLevel: 'level2', planType: '在研版本火车计划', taskName: '测试用例编写' },
   { id: 'w8', type: '需求', name: 'NFC功能适配需求', status: '待办', stayDuration: 1, responsible: '张三', planStartDate: '2026-04-05', planEndDate: '2026-04-20', project: 'X6890-D8500_H1001', projectId: '7', priority: 'medium', createdBy: '李白', createdAt: '2026-04-02' },
-  { id: 'w9', type: '任务', name: '版本集成测试', status: '逾期', stayDuration: 15, responsible: '张三', planStartDate: '2026-03-01', planEndDate: '2026-03-25', project: 'AI-Engine-V2', projectId: '9', priority: 'high', createdBy: '李四', createdAt: '2026-02-25', planLevel: 'level1', taskName: 'STR5' },
-  { id: 'w10', type: '风险', name: '人力资源不足风险', status: '进行中', stayDuration: 6, responsible: '张三', planStartDate: '2026-03-20', planEndDate: '2026-04-30', project: 'DevOps-Platform', projectId: '10', priority: 'medium', createdBy: '孙七', createdAt: '2026-03-18' },
-  { id: 'w11', type: '任务', name: '代码评审流程优化', status: '已完成', stayDuration: 0, responsible: '李四', planStartDate: '2026-03-10', planEndDate: '2026-03-30', project: 'DevOps-Platform', projectId: '10', priority: 'low', createdBy: '李四', createdAt: '2026-03-08', planLevel: 'level2', planType: '1+N MR版本火车计划', taskName: '代码评审流程优化' },
-  { id: 'w12', type: '任务', name: 'CI/CD流水线搭建', status: '进行中', stayDuration: 4, responsible: '李四', planStartDate: '2026-03-25', planEndDate: '2026-04-15', project: 'DevOps-Platform', projectId: '10', priority: 'high', createdBy: '孙七', createdAt: '2026-03-22', planLevel: 'level1', taskName: 'STR2' },
+  { id: 'w9', type: '任务', name: '版本集成测试', status: '逾期', stayDuration: 15, responsible: '张三', planStartDate: '2026-03-01', planEndDate: '2026-03-25', actualStartDate: '2026-03-02', project: 'AI-Engine-V2', projectId: '9', priority: 'high', createdBy: '李四', createdAt: '2026-02-25', planLevel: 'level1', taskName: 'STR5' },
+  { id: 'w10', type: '风险', name: '人力资源不足风险', status: '进行中', stayDuration: 6, responsible: '张三', planStartDate: '2026-03-20', planEndDate: '2026-04-30', actualStartDate: '2026-03-22', project: 'DevOps-Platform', projectId: '10', priority: 'medium', createdBy: '孙七', createdAt: '2026-03-18' },
+  { id: 'w11', type: '任务', name: '代码评审流程优化', status: '已完成', stayDuration: 0, responsible: '李四', planStartDate: '2026-03-10', planEndDate: '2026-03-30', actualStartDate: '2026-03-11', actualEndDate: '2026-03-28', project: 'DevOps-Platform', projectId: '10', priority: 'low', createdBy: '李四', createdAt: '2026-03-08', planLevel: 'level2', planType: '1+N MR版本火车计划', taskName: '代码评审流程优化' },
+  { id: 'w12', type: '任务', name: 'CI/CD流水线搭建', status: '进行中', stayDuration: 4, responsible: '李四', planStartDate: '2026-03-25', planEndDate: '2026-04-15', actualStartDate: '2026-03-26', project: 'DevOps-Platform', projectId: '10', priority: 'high', createdBy: '孙七', createdAt: '2026-03-22', planLevel: 'level1', taskName: 'STR2' },
 ]
 
 const TYPE_COLORS: Record<WorkItemType, string> = {
@@ -76,13 +81,15 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
   const [filterType, setFilterType] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [listFilter, setListFilter] = useState<'all' | 'pending' | 'overdue' | 'completed' | 'created'>('all')
+  // 工作项列表状态：modal 保存实际时间会就地更新这里
+  const [workItems, setWorkItems] = useState<WorkItem[]>(MOCK_WORK_ITEMS)
 
   // 当前用户的工作项
   const userItems = useMemo(() => {
-    return MOCK_WORK_ITEMS.filter(item =>
+    return workItems.filter(item =>
       item.responsible === currentLoginUser || item.createdBy === currentLoginUser
     )
-  }, [currentLoginUser])
+  }, [workItems, currentLoginUser])
 
   // 统计
   const stats = useMemo(() => {
@@ -202,6 +209,18 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
       },
     },
     {
+      title: '实际开始时间', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 120,
+      render: (val: string | undefined) => val
+        ? <span style={{ fontSize: 12, color: '#4b5563' }}>{val}</span>
+        : <span style={{ fontSize: 12, color: '#d1d5db' }}>-</span>,
+    },
+    {
+      title: '实际完成时间', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 120,
+      render: (val: string | undefined) => val
+        ? <span style={{ fontSize: 12, color: '#10b981', fontWeight: 500 }}>{val}</span>
+        : <span style={{ fontSize: 12, color: '#d1d5db' }}>-</span>,
+    },
+    {
       title: '归属项目', dataIndex: 'project', key: 'project', width: 180, ellipsis: true,
       render: (val: string) => <span style={{ fontSize: 12 }}>{val}</span>,
     },
@@ -218,7 +237,8 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
           }}>详情</Button>
           {record.type === '任务' && record.planLevel && (
             <Button type="link" size="small" icon={<FieldTimeOutlined />} onClick={() => {
-              setActualTimeModal({ visible: true, item: record, startDate: record.planStartDate, endDate: record.planEndDate })
+              // 打开 modal 时读取该行已有的实际时间（首次填写时为空，由用户输入）
+              setActualTimeModal({ visible: true, item: record, startDate: record.actualStartDate || '', endDate: record.actualEndDate || '' })
             }}>实际时间</Button>
           )}
         </Space>
@@ -397,6 +417,12 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
         open={actualTimeModal.visible}
         onCancel={() => setActualTimeModal({ visible: false, item: null, startDate: '', endDate: '' })}
         onOk={() => {
+          if (actualTimeModal.item) {
+            const id = actualTimeModal.item.id
+            const newStart = actualTimeModal.startDate || undefined
+            const newEnd = actualTimeModal.endDate || undefined
+            setWorkItems(prev => prev.map(it => it.id === id ? { ...it, actualStartDate: newStart, actualEndDate: newEnd } : it))
+          }
           message.success('实际时间已保存')
           setActualTimeModal({ visible: false, item: null, startDate: '', endDate: '' })
         }}
