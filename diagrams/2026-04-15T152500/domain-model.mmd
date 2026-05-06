@@ -1,0 +1,80 @@
+classDiagram
+    class Project {
+        +Long id
+        +String name
+        +ProjectType type
+        +String status
+        +String healthDegree
+    }
+    class Level1Plan {
+        +Long id
+        +Long projectId
+        +String name
+    }
+    class Level2Plan {
+        +Long id
+        +Long projectId
+        +String planType
+    }
+    class PlanVersion {
+        +Long id
+        +String status
+        +Integer versionNo
+    }
+    class PlanTask {
+        +Long id
+        +Date planStartDate
+        +Date planEndDate
+        +Date actualStartDate
+        +Date actualEndDate
+        +String predecessor
+        +Integer progress
+        +Integer sortOrder
+    }
+    class IRRequirement {
+        +Long id
+        +String name
+        +String status
+    }
+    class SRRequirement {
+        +Long id
+        +Long irId
+        +String name
+    }
+    class VersionTrainRecord {
+        +Long id
+        +String trainType
+        +String tosVersion
+    }
+    class ResourceBudget {
+        +Long id
+        +String phase
+        +BigDecimal budget
+    }
+    class WorkItem {
+        +Long id
+        +WorkItemType type
+        +WorkItemStatus status
+        +String responsiblePerson
+        +Date planStartDate
+        +Date planEndDate
+        +String planSource
+    }
+    class ColumnConfig {
+        +Long id
+        +String scope
+        +String viewType
+        +String[] columns
+    }
+
+    Project "1" --> "*" Level1Plan : 包含
+    Project "1" --> "*" Level2Plan : 包含
+    Project "1" --> "*" IRRequirement : 包含
+    Project "1" --> "*" VersionTrainRecord : 包含
+    Project "1" --> "*" ResourceBudget : 包含
+    Level1Plan "1" --> "*" PlanVersion : 版本管理
+    Level1Plan "1" --> "*" PlanTask : 2层任务
+    Level2Plan "1" --> "*" PlanVersion : 版本管理
+    Level2Plan "1" --> "*" PlanTask : 3层任务
+    Level2Plan "*" --> "*" PlanTask : 里程碑绑定
+    IRRequirement "1" --> "*" SRRequirement : 分解

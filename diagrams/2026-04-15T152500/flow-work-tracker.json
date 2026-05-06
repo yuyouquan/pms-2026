@@ -1,0 +1,120 @@
+{
+  "version": 2,
+  "nodes": [
+    {
+      "type": "frame",
+      "id": "root",
+      "x": 20, "y": 20,
+      "layout": "dagre",
+      "width": "fit-content", "height": "fit-content",
+      "padding": 60,
+      "fillColor": "#F8FAFC",
+      "borderColor": "#DEE0E3",
+      "borderWidth": 1,
+      "borderRadius": 16,
+      "layoutOptions": {
+        "rankdir": "TB",
+        "nodesep": 50,
+        "ranksep": 60,
+        "edges": [
+          ["start", "request", "进入工作跟踪"],
+          ["request", "aggregate", "GET /api/v1/work-items"],
+          ["aggregate", "filter", "聚合数据"],
+          ["filter", "stats", "过滤当前用户"],
+          ["stats", "render", "计算统计"],
+          ["render", "action_check", "用户操作"],
+          ["action_check", "edit_actual", "点击实际时间"],
+          ["action_check", "nav_detail", "点击详情"],
+          ["edit_actual", "save_actual", "选择日期"],
+          ["save_actual", "render", "刷新页面"],
+          ["nav_detail", "end", "跳转项目计划"]
+        ]
+      },
+      "children": [
+        {
+          "type": "text", "id": "flow-title",
+          "text": "工作跟踪核心流程",
+          "fontSize": 22, "textColor": "#1F2329",
+          "width": "fit-content", "height": "fit-content"
+        },
+        {
+          "type": "ellipse", "id": "start",
+          "text": "用户登录",
+          "width": 120, "height": 56,
+          "fillColor": "#F0F4FC", "borderColor": "#5178C6", "borderWidth": 2,
+          "fontSize": 14, "textColor": "#1F2329"
+        },
+        {
+          "type": "rect", "id": "request",
+          "text": "进入工作跟踪页面",
+          "width": 180, "height": 48,
+          "fillColor": "#FFFFFF", "borderColor": "#5178C6", "borderWidth": 2,
+          "borderRadius": 8, "fontSize": 14, "textColor": "#1F2329"
+        },
+        {
+          "type": "rect", "id": "aggregate",
+          "text": "后端聚合所有项目\nIR/SR/任务/风险/问题",
+          "width": 200, "height": "fit-content",
+          "fillColor": "#EAE2FE", "borderColor": "#8569CB", "borderWidth": 2,
+          "borderRadius": 8, "fontSize": 14, "textColor": "#1F2329"
+        },
+        {
+          "type": "rect", "id": "filter",
+          "text": "过滤当前用户\n负责人或创建者",
+          "width": 180, "height": "fit-content",
+          "fillColor": "#EAE2FE", "borderColor": "#8569CB", "borderWidth": 2,
+          "borderRadius": 8, "fontSize": 14, "textColor": "#1F2329"
+        },
+        {
+          "type": "rect", "id": "stats",
+          "text": "计算统计数据\n总数/待办/逾期/完成",
+          "width": 200, "height": "fit-content",
+          "fillColor": "#EAE2FE", "borderColor": "#8569CB", "borderWidth": 2,
+          "borderRadius": 8, "fontSize": 14, "textColor": "#1F2329"
+        },
+        {
+          "type": "rect", "id": "render",
+          "text": "前端渲染\n统计卡片 + 筛选器 + 表格",
+          "width": 220, "height": "fit-content",
+          "fillColor": "#FFFFFF", "borderColor": "#5178C6", "borderWidth": 2,
+          "borderRadius": 8, "fontSize": 14, "textColor": "#1F2329"
+        },
+        {
+          "type": "diamond", "id": "action_check",
+          "text": "用户操作",
+          "width": 130, "height": 70,
+          "fillColor": "#FEF1CE", "borderColor": "#D4B45B", "borderWidth": 2,
+          "fontSize": 14, "textColor": "#1F2329"
+        },
+        {
+          "type": "rect", "id": "edit_actual",
+          "text": "弹窗编辑实际日期",
+          "width": 180, "height": 48,
+          "fillColor": "#DFF5E5", "borderColor": "#509863", "borderWidth": 2,
+          "borderRadius": 8, "fontSize": 14, "textColor": "#1F2329"
+        },
+        {
+          "type": "rect", "id": "save_actual",
+          "text": "PUT /api/v1/tasks/{id}\n/actual-dates",
+          "width": 200, "height": "fit-content",
+          "fillColor": "#DFF5E5", "borderColor": "#509863", "borderWidth": 2,
+          "borderRadius": 8, "fontSize": 13, "textColor": "#1F2329"
+        },
+        {
+          "type": "rect", "id": "nav_detail",
+          "text": "路由跳转至\n对应项目计划页面",
+          "width": 180, "height": "fit-content",
+          "fillColor": "#FFFFFF", "borderColor": "#5178C6", "borderWidth": 2,
+          "borderRadius": 8, "fontSize": 14, "textColor": "#1F2329"
+        },
+        {
+          "type": "ellipse", "id": "end",
+          "text": "项目空间",
+          "width": 120, "height": 56,
+          "fillColor": "#F0F4FC", "borderColor": "#5178C6", "borderWidth": 2,
+          "fontSize": 14, "textColor": "#1F2329"
+        }
+      ]
+    }
+  ]
+}
