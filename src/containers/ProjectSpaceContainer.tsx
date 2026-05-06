@@ -67,6 +67,42 @@ import { ProjectSpaceHeader } from '@/containers/AppShell'
 
 const { Option } = Select
 
+// 计划时间合法性校验：每个违规任务对应字段返回具体原因列表（用于 Tooltip 展示）
+// 规则：
+//   1. 同一行：planStartDate <= planEndDate
+//   2. 父子关系：子.planStartDate >= 父.planStartDate 且 子.planEndDate <= 父.planEndDate
+// 任一方日期为空跳过（空值不算违规，避免编辑过程中误报）
+type InvalidFields = { start: string[]; end: string[] }
+function getInvalidTaskFields(tasks: any[]): Map<string, InvalidFields> {
+  const taskMap = new Map<string, any>()
+  tasks.forEach((t: any) => taskMap.set(t.id, t))
+  const result = new Map<string, InvalidFields>()
+  const add = (id: string, key: keyof InvalidFields, reason: string) => {
+    if (!result.has(id)) result.set(id, { start: [], end: [] })
+    result.get(id)![key].push(reason)
+  }
+  tasks.forEach((t: any) => {
+    // 1. 同一行 start > end → 两个格子都标，提示彼此互斥
+    if (t.planStartDate && t.planEndDate && t.planStartDate > t.planEndDate) {
+      add(t.id, 'start', `计划开始（${t.planStartDate}）不能晚于计划完成（${t.planEndDate}）`)
+      add(t.id, 'end', `计划完成（${t.planEndDate}）不能早于计划开始（${t.planStartDate}）`)
+    }
+    // 2. 父子时间区间约束
+    if (t.parentId) {
+      const parent = taskMap.get(t.parentId)
+      if (parent) {
+        if (t.planStartDate && parent.planStartDate && t.planStartDate < parent.planStartDate) {
+          add(t.id, 'start', `计划开始（${t.planStartDate}）不能早于父任务「${parent.taskName}」的计划开始（${parent.planStartDate}）`)
+        }
+        if (t.planEndDate && parent.planEndDate && t.planEndDate > parent.planEndDate) {
+          add(t.id, 'end', `计划完成（${t.planEndDate}）不能晚于父任务「${parent.taskName}」的计划完成（${parent.planEndDate}）`)
+        }
+      }
+    }
+  })
+  return result
+}
+
 export default function ProjectSpaceContainer() {
   // ═══════ Store hooks ═══════
   const ui = useUiStore()
@@ -218,15 +254,8 @@ export default function ProjectSpaceContainer() {
     const scanTarget = latestPub && publishedSnapshots[latestPub.id] ? publishedSnapshots[latestPub.id] : effectiveTasks
     const notices = scanDueTasks(scanTarget)
     if (notices.length === 0) return
-    notifyDueTasks(notices, MOCK_USER_MAP).then(notified => {
-      if (notified > 0) {
-        notification.warning({
-          message: '任务到期提醒已推送',
-          description: `项目 ${selectedProject.name} 发现 ${notices.length} 条到期/逾期任务，已通知 ${notified} 位责任人`,
-          placement: 'topRight', duration: 5,
-        })
-      }
-    })
+    // 后台仍触发飞书 mock 推送，但不再弹 notification 干扰用户进入计划视图的体验
+    notifyDueTasks(notices, MOCK_USER_MAP)
   }, [selectedProject?.id, projectPlanLevel, activeModule, projectSpaceModule])
 
   // ═══════ Helper functions ═══════
@@ -374,6 +403,27 @@ export default function ProjectSpaceContainer() {
   }
 
   const handlePublish = () => {
+    // 父子时间区间校验：违规则阻止发布并滚动到首条违规行
+    const tasksToValidate = projectPlanLevel === 'level2' && activeLevel2Plan && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1'
+      ? level2PlanTasks.filter((t: any) => t.planId === activeLevel2Plan)
+      : effectiveTasks
+    const invalidFields = getInvalidTaskFields(tasksToValidate as any[])
+    if (invalidFields.size > 0) {
+      message.error('任务校验不通过，无法发布')
+      const firstInvalid = (tasksToValidate as any[]).find((t: any) => invalidFields.has(t.id))
+      if (firstInvalid) {
+        setTimeout(() => {
+          const rows = document.querySelectorAll('.pms-table .ant-table-tbody tr.ant-table-row')
+          for (let i = 0; i < rows.length; i++) {
+            if (rows[i].getAttribute('data-row-key') === firstInvalid.id) {
+              rows[i].scrollIntoView({ behavior: 'smooth', block: 'center' })
+              break
+            }
+          }
+        }, 0)
+      }
+      return
+    }
     const prevPublished = versions.filter(v => v.status === '已发布' && v.id !== currentVersion).sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
     const baselineTasks: any[] = prevPublished ? (publishedSnapshots[prevPublished.id] || []) : []
     const changes = diffTasksForNotify(baselineTasks, effectiveTasks)
@@ -509,6 +559,8 @@ export default function ProjectSpaceContainer() {
     const collapsedSet = scopeKey ? (collapsedNodes[scopeKey] || new Set<string>()) : new Set<string>()
     const expandEnabled = scopeKey !== null
     const visibleTasks = expandEnabled ? filterByCollapsed(flatTasks, collapsedSet) : flatTasks
+    // 修订版本下扫描父子时间约束，违规字段在对应单元格上加 pms-cell-invalid 类
+    const invalidFields = isCurrentDraft ? getInvalidTaskFields(tableTasks as any[]) : new Map<string, InvalidFields>()
     const getColumns = (): ColumnsType<any> => {
       const cols: ColumnsType<any> = []
       if (visibleColumns.includes('id')) cols.push({ title: '序号', dataIndex: 'id', key: 'id', width: 130, fixed: 'left', render: (id: string, record: any) => {
@@ -545,8 +597,24 @@ export default function ProjectSpaceContainer() {
       } })
       if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Space size={4}><Avatar size={18} style={{ background: 'linear-gradient(135deg, #4338ca, #6366f1)', fontSize: 10 }}>{val[0]}</Avatar><span style={{ fontSize: 13 }}>{val}</span></Space> : <span style={{ color: '#e5e7eb' }}>-</span>) })
       if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>) })
-      if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, planStartDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span> })
-      if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, planEndDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span> })
+      if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 170, onCell: (record: any) => ({ className: (invalidFields.get(record.id)?.start.length ?? 0) > 0 ? 'pms-cell-invalid' : '' }), render: (val: string, record: any) => {
+        const reasons = invalidFields.get(record.id)?.start || []
+        const isInvalid = reasons.length > 0
+        const tip = isInvalid ? <div style={{ fontSize: 12, lineHeight: 1.6 }}>{reasons.map((r, i) => <div key={i}>· {r}</div>)}</div> : null
+        const node = isEditMode
+          ? <DatePicker size="small" status={isInvalid ? 'error' : undefined} value={val ? dayjs(val) : null} style={{ width: 150 }} onChange={(date) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, planStartDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} />
+          : <span style={{ fontSize: 12, color: isInvalid ? '#ef4444' : '#4b5563', fontWeight: isInvalid ? 600 : 400 }}>{val || '-'}</span>
+        return isInvalid ? <Tooltip title={tip} color="#ef4444"><span style={{ display: 'inline-block' }}>{node}</span></Tooltip> : node
+      } })
+      if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 170, onCell: (record: any) => ({ className: (invalidFields.get(record.id)?.end.length ?? 0) > 0 ? 'pms-cell-invalid' : '' }), render: (val: string, record: any) => {
+        const reasons = invalidFields.get(record.id)?.end || []
+        const isInvalid = reasons.length > 0
+        const tip = isInvalid ? <div style={{ fontSize: 12, lineHeight: 1.6 }}>{reasons.map((r, i) => <div key={i}>· {r}</div>)}</div> : null
+        const node = isEditMode
+          ? <DatePicker size="small" status={isInvalid ? 'error' : undefined} value={val ? dayjs(val) : null} style={{ width: 150 }} onChange={(date) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, planEndDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} />
+          : <span style={{ fontSize: 12, color: isInvalid ? '#ef4444' : '#4b5563', fontWeight: isInvalid ? 600 : 400 }}>{val || '-'}</span>
+        return isInvalid ? <Tooltip title={tip} color="#ef4444"><span style={{ display: 'inline-block' }}>{node}</span></Tooltip> : node
+      } })
       if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val}天</span> })
       if (visibleColumns.includes('actualStartDate')) cols.push({ title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 130, render: (val: string, record: any) => {
         if (isLatestPublished && !isEditMode) return <ClickToEditDate value={val} onChange={(newVal) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, actualStartDate: newVal } : t); currentSetTasks(updated) }} disabledDate={(current) => record.actualEndDate ? current.isAfter(dayjs(record.actualEndDate), 'day') : false} />
@@ -807,9 +875,9 @@ export default function ProjectSpaceContainer() {
       return <span style={{ color: '#4b5563' }}>{value || '-'}</span>
     }
     const compareColumns: any[] = [
-      { title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, fixed: 'left', render: (val: string, row: CompareTableRow) => (<span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? '#6366f1' : '#9ca3af' }}>{val}</span>) },
-      { title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, fixed: 'left', render: (val: string) => { const conf: Record<string, { color: string; bg: string }> = { '新增': { color: '#52c41a', bg: '#f6ffed' }, '删除': { color: '#ff4d4f', bg: '#fff2f0' }, '修改': { color: '#6366f1', bg: 'rgba(99,102,241,0.06)' }, '未变更': { color: '#9ca3af', bg: '#fafafa' } }; const c = conf[val]; return c ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: c.color, background: c.bg, border: `1px solid ${c.color}20` }}>{val}</span> : null } },
-      { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, fixed: 'left', ellipsis: true, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
+      { title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, render: (val: string, row: CompareTableRow) => (<span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? '#6366f1' : '#9ca3af' }}>{val}</span>) },
+      { title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, render: (val: string) => { const conf: Record<string, { color: string; bg: string }> = { '新增': { color: '#52c41a', bg: '#f6ffed' }, '删除': { color: '#ff4d4f', bg: '#fff2f0' }, '修改': { color: '#6366f1', bg: 'rgba(99,102,241,0.06)' }, '未变更': { color: '#9ca3af', bg: '#fafafa' } }; const c = conf[val]; return c ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: c.color, background: c.bg, border: `1px solid ${c.color}20` }}>{val}</span> : null } },
+      { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, ellipsis: true, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
       { title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) },
       { title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'predecessor', val) },
       { title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 105, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'planStartDate', val) },

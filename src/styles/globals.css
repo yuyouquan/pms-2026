@@ -1364,3 +1364,16 @@ body {
 .pms-table .row-diff-modified > td {
   background: #ffffff;
 }
+
+/* 修订版本中违规字段单元格高亮：DatePicker 用 Antd 原生 status="error" 出红色边框，
+   单元格底色加深 + 左侧红条增强辨识度，hover Tooltip 给具体原因 */
+.pms-table .ant-table-tbody > tr > td.pms-cell-invalid,
+.pms-table-edit .ant-table-tbody > tr > td.pms-cell-invalid {
+  background: rgba(239, 68, 68, 0.10) !important;
+  box-shadow: inset 3px 0 0 #ef4444;
+  position: relative;
+}
+.pms-table .ant-table-tbody > tr:hover > td.pms-cell-invalid,
+.pms-table-edit .ant-table-tbody > tr:hover > td.pms-cell-invalid {
+  background: rgba(239, 68, 68, 0.18) !important;
+}
