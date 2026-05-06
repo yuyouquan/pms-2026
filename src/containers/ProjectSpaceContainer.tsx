@@ -201,6 +201,16 @@ export default function ProjectSpaceContainer() {
     [transfer.transferApplications, selectedProject]
   )
 
+  // ═══════ Plan view access matrix (per spec) ═══════
+  // 是否当前 plan 视图下任意任务的责任人（L1 或 L2 任一）
+  const isResponsibleForAnyTask = useMemo(() => {
+    if (!currentLoginUser) return false
+    return (effectiveTasks as any[]).some(t => t.responsible === currentLoginUser) ||
+           level2PlanTasks.some(t => t.responsible === currentLoginUser)
+  }, [effectiveTasks, level2PlanTasks, currentLoginUser])
+  // 用户能否查看修订版：有任一计划编辑权 OR 是某条任务的责任人
+  const canViewDraft = canEditLevel1Plan || canEditLevel2Plan || isResponsibleForAnyTask
+
   // View columns
   const getViewKey = () => `project-${projectPlanLevel}-${projectPlanViewMode}`
   const currentViewMode = projectPlanViewMode
@@ -238,6 +248,30 @@ export default function ProjectSpaceContainer() {
       setIsEditMode(false)
     }
   }, [currentVersion, isCurrentDraft])
+
+  // 进入项目空间「计划」时按权限+责任人矩阵选择默认版本
+  // - 有编辑权 / 是责任人：有修订版 → 默认修订版；无修订版 → 最新已发布
+  // - 无编辑权 + 非责任人：无论有无修订版，都默认最新已发布（且下拉里也不展示修订版选项）
+  // 用 ref 锁定到 project+market+level，防止用户手动切换版本后被覆盖
+  const lastVersionInitKeyRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (activeModule !== 'projectSpace') return
+    if (projectSpaceModule !== 'plan') return
+    if (!selectedProject) return
+    if (versions.length === 0) return
+    const key = `${selectedProject.id}::${selectedMarketTab || ''}::${projectPlanLevel}::${currentLoginUser}`
+    if (lastVersionInitKeyRef.current === key) return
+    lastVersionInitKeyRef.current = key
+    const draft = versions.find(v => v.status === '修订中')
+    const latestPub = versions
+      .filter(v => v.status === '已发布')
+      .sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
+    if (draft && canViewDraft) {
+      if (currentVersion !== draft.id) setCurrentVersion(draft.id)
+    } else if (latestPub) {
+      if (currentVersion !== latestPub.id) setCurrentVersion(latestPub.id)
+    }
+  }, [activeModule, projectSpaceModule, selectedProject?.id, selectedMarketTab, projectPlanLevel, canViewDraft, versions, currentLoginUser])
 
   // Due task scanning
   useEffect(() => {
@@ -561,16 +595,22 @@ export default function ProjectSpaceContainer() {
     const visibleTasks = expandEnabled ? filterByCollapsed(flatTasks, collapsedSet) : flatTasks
     // 修订版本下扫描父子时间约束，违规字段在对应单元格上加 pms-cell-invalid 类
     const invalidFields = isCurrentDraft ? getInvalidTaskFields(tableTasks as any[]) : new Map<string, InvalidFields>()
+    // 编辑权限分级：
+    //   canFullyEdit  — 编辑模式下且用户有相应级别的计划编辑权 → 拖拽/新增/删除/改任意单元格
+    //   isRowEditable — 编辑模式下用户有编辑权 OR 是该行责任人 → 只能改自己负责的行的单元格
+    const editPerm = isLevel2Custom ? canEditLevel2Plan : canEditLevel1Plan
+    const canFullyEdit = isEditMode && editPerm
+    const isRowEditable = (record: any) => isEditMode && (editPerm || record.responsible === currentLoginUser)
     const getColumns = (): ColumnsType<any> => {
       const cols: ColumnsType<any> = []
       if (visibleColumns.includes('id')) cols.push({ title: '序号', dataIndex: 'id', key: 'id', width: 130, fixed: 'left', render: (id: string, record: any) => {
         const depth = record.indentLevel || 0
         const isLevel2Mode = projectPlanLevel === 'level2'
         const maxDepth = isLevel2Mode ? 3 : 2
-        const canAddChild = isEditMode && depth < maxDepth - 1
+        const canAddChild = canFullyEdit && depth < maxDepth - 1
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: depth * 20 }}>
-            {isEditMode && <DragHandle />}
+            {canFullyEdit && <DragHandle />}
             {expandEnabled && hasChildren(record.id, tableTasks) && (
               <span
                 onClick={(e) => { e.stopPropagation(); toggleNode(record.id) }}
@@ -587,7 +627,7 @@ export default function ProjectSpaceContainer() {
       } })
       if (visibleColumns.includes('taskName')) cols.push({ title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 220, render: (name: string, record: any) => {
         const depth = record.indentLevel || 0
-        if (isEditMode) return <Input className="pms-edit-input" value={name} size="small" style={{ fontWeight: depth === 0 ? 600 : 400 }} onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, taskName: e.target.value } : t); currentSetTasks(updated) }} />
+        if (isRowEditable(record)) return <Input className="pms-edit-input" value={name} size="small" style={{ fontWeight: depth === 0 ? 600 : 400 }} onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, taskName: e.target.value } : t); currentSetTasks(updated) }} />
         return (
           <div style={{ paddingLeft: depth * 16, display: 'flex', alignItems: 'center', gap: 4 }}>
             {depth > 0 && <span style={{ color: '#e5e7eb', fontSize: 11, flexShrink: 0 }}>{depth === 1 ? '├' : '└'}</span>}
@@ -595,13 +635,14 @@ export default function ProjectSpaceContainer() {
           </div>
         )
       } })
-      if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Space size={4}><Avatar size={18} style={{ background: 'linear-gradient(135deg, #4338ca, #6366f1)', fontSize: 10 }}>{val[0]}</Avatar><span style={{ fontSize: 13 }}>{val}</span></Space> : <span style={{ color: '#e5e7eb' }}>-</span>) })
-      if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>) })
+      // 责任人/前置任务是结构性字段，仅 canFullyEdit 可改（避免责任人改完自己丢权限的循环）
+      if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => canFullyEdit ? <Input className="pms-edit-input" value={val} size="small" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Space size={4}><Avatar size={18} style={{ background: 'linear-gradient(135deg, #4338ca, #6366f1)', fontSize: 10 }}>{val[0]}</Avatar><span style={{ fontSize: 13 }}>{val}</span></Space> : <span style={{ color: '#e5e7eb' }}>-</span>) })
+      if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => canFullyEdit ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>) })
       if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 170, onCell: (record: any) => ({ className: (invalidFields.get(record.id)?.start.length ?? 0) > 0 ? 'pms-cell-invalid' : '' }), render: (val: string, record: any) => {
         const reasons = invalidFields.get(record.id)?.start || []
         const isInvalid = reasons.length > 0
         const tip = isInvalid ? <div style={{ fontSize: 12, lineHeight: 1.6 }}>{reasons.map((r, i) => <div key={i}>· {r}</div>)}</div> : null
-        const node = isEditMode
+        const node = isRowEditable(record)
           ? <DatePicker size="small" status={isInvalid ? 'error' : undefined} value={val ? dayjs(val) : null} style={{ width: 150 }} onChange={(date) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, planStartDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} />
           : <span style={{ fontSize: 12, color: isInvalid ? '#ef4444' : '#4b5563', fontWeight: isInvalid ? 600 : 400 }}>{val || '-'}</span>
         return isInvalid ? <Tooltip title={tip} color="#ef4444"><span style={{ display: 'inline-block' }}>{node}</span></Tooltip> : node
@@ -610,12 +651,12 @@ export default function ProjectSpaceContainer() {
         const reasons = invalidFields.get(record.id)?.end || []
         const isInvalid = reasons.length > 0
         const tip = isInvalid ? <div style={{ fontSize: 12, lineHeight: 1.6 }}>{reasons.map((r, i) => <div key={i}>· {r}</div>)}</div> : null
-        const node = isEditMode
+        const node = isRowEditable(record)
           ? <DatePicker size="small" status={isInvalid ? 'error' : undefined} value={val ? dayjs(val) : null} style={{ width: 150 }} onChange={(date) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, planEndDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} />
           : <span style={{ fontSize: 12, color: isInvalid ? '#ef4444' : '#4b5563', fontWeight: isInvalid ? 600 : 400 }}>{val || '-'}</span>
         return isInvalid ? <Tooltip title={tip} color="#ef4444"><span style={{ display: 'inline-block' }}>{node}</span></Tooltip> : node
       } })
-      if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val}天</span> })
+      if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isRowEditable(record) ? <Input className="pms-edit-input" value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val}天</span> })
       if (visibleColumns.includes('actualStartDate')) cols.push({ title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 130, render: (val: string, record: any) => {
         if (isLatestPublished && !isEditMode) return <ClickToEditDate value={val} onChange={(newVal) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, actualStartDate: newVal } : t); currentSetTasks(updated) }} disabledDate={(current) => record.actualEndDate ? current.isAfter(dayjs(record.actualEndDate), 'day') : false} />
         return <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span>
@@ -632,7 +673,7 @@ export default function ProjectSpaceContainer() {
           <span style={{ fontSize: 11, color: p === 100 ? '#52c41a' : '#4b5563', fontWeight: 500, minWidth: 32 }}>{p}%</span>
         </div>
       ) })
-      if (isEditMode) cols.push({ title: '操作', key: 'action', width: 60, fixed: 'right', render: (_: any, record: any) => (<Popconfirm title="确认删除" description={`删除 "${record.taskName}" 及其子任务？`} onConfirm={() => { const filtered = tableTasks.filter((t: any) => t.id !== record.id && t.parentId !== record.id && !(t.parentId && tableTasks.find((p: any) => p.id === t.parentId)?.parentId === record.id)); currentSetTasks(filtered); message.success(`已删除任务: ${record.id}`) }} okText="确认" cancelText="取消"><Button type="text" icon={<DeleteOutlined />} size="small" danger style={{ borderRadius: 4 }} /></Popconfirm>) })
+      if (canFullyEdit) cols.push({ title: '操作', key: 'action', width: 60, fixed: 'right', render: (_: any, record: any) => (<Popconfirm title="确认删除" description={`删除 "${record.taskName}" 及其子任务？`} onConfirm={() => { const filtered = tableTasks.filter((t: any) => t.id !== record.id && t.parentId !== record.id && !(t.parentId && tableTasks.find((p: any) => p.id === t.parentId)?.parentId === record.id)); currentSetTasks(filtered); message.success(`已删除任务: ${record.id}`) }} okText="确认" cancelText="取消"><Button type="text" icon={<DeleteOutlined />} size="small" danger style={{ borderRadius: 4 }} /></Popconfirm>) })
       return cols
     }
 
@@ -692,7 +733,8 @@ export default function ProjectSpaceContainer() {
       message.success('任务顺序已更新，序号已重新生成')
     }
 
-    const TableComponents = isEditMode ? { body: { row: SortableRow } } : undefined
+    // 仅在 canFullyEdit 时启用 SortableRow（拖拽）；否则用普通 <tr>
+    const TableComponents = canFullyEdit ? { body: { row: SortableRow } } : undefined
     const tableClassName = `pms-table ${isEditMode ? 'pms-table-edit' : ''}`
     return (
       <div>
@@ -700,11 +742,15 @@ export default function ProjectSpaceContainer() {
           <div style={{ padding: '8px 16px', background: 'linear-gradient(90deg, #fffbe6, #fff7cc)', borderBottom: '1px solid #ffe58f', display: 'flex', alignItems: 'center', gap: 8 }}>
             <EditOutlined style={{ color: '#faad14', fontSize: 14 }} />
             <span style={{ fontSize: 13, color: '#ad6800', fontWeight: 500 }}>编辑模式</span>
-            <span style={{ fontSize: 12, color: '#ad8b00' }}>- 拖拽手柄排序，点击单元格编辑，完成后点击保存</span>
+            <span style={{ fontSize: 12, color: '#ad8b00' }}>
+              {canFullyEdit
+                ? '- 拖拽手柄排序，点击单元格编辑，完成后点击保存'
+                : '- 你只能编辑负责人为自己的行，其他任务为只读'}
+            </span>
           </div>
         )}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTableDragEnd}><SortableContext items={visibleTasks.map((t: any) => t.id)} strategy={verticalListSortingStrategy}><Table className={tableClassName} dataSource={visibleTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} size="middle" /></SortableContext></DndContext>
-        {isEditMode && (
+        {canFullyEdit && (
           <div style={{ padding: '12px 16px', borderTop: '1px solid #f3f4f6', background: '#f8fafc' }}>
             <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%', borderRadius: 6, height: 36 }} onClick={() => {
               const parentTasks = tableTasks.filter((t: any) => !t.parentId)
@@ -1357,7 +1403,9 @@ export default function ProjectSpaceContainer() {
                   <Space size={6}>
                     <span style={{ color: '#9ca3af', fontSize: 13 }}>版本</span>
                     <Select value={currentVersion} onChange={(val) => navigateWithEditGuard(() => { setCurrentVersion(val); setIsEditMode(false) })} style={{ width: 150 }} size="middle">
-                      {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
+                      {versions
+                        .filter(v => v.status !== '修订中' || canViewDraft)
+                        .map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
                     </Select>
                     {isCurrentDraft && <Tag color="green" style={{ fontSize: 12, margin: 0 }}>自动保存</Tag>}
                   </Space>
@@ -1368,7 +1416,7 @@ export default function ProjectSpaceContainer() {
                     {isCurrentDraft && (canEditLevel1Plan
                       ? <Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} onClick={handlePublish}>发布</Button>
                       : <Tooltip title="无一级计划编辑权限"><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} disabled>发布</Button></Tooltip>)}
-                    {!isCurrentDraft && <Button icon={<HistoryOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowVersionCompare(true)}>版本对比</Button>}
+                    <Button icon={<HistoryOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowVersionCompare(true)}>版本对比</Button>
                     {projectPlanLevel === 'level1' && versions.some(v => v.status === '已发布') && (
                       <Tooltip title="复制分享链接，无需权限即可查看">
                         <Button icon={<ShareAltOutlined />} style={{ borderRadius: 6 }} onClick={() => {

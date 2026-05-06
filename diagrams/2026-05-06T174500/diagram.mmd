@@ -1,0 +1,31 @@
+flowchart TD
+    A[进入项目空间 计划]
+    B{有 plan 编辑权 一级或二级}
+    C{有修订版}
+    D{是任一任务责任人}
+    G{有修订版}
+    E[默认显示 修订版<br/>提供 发布 入口]
+    F[默认显示 最新已发布<br/>提供 创建修订 入口]
+    I[默认显示 修订版<br/>仅自己负责的行可改]
+    J[默认显示 最新已发布]
+    H[默认显示 最新已发布<br/>修订版被下拉过滤]
+
+    A --> B
+    B -- 是 --> C
+    B -- 否 --> D
+    C -- 是 --> E
+    C -- 否 --> F
+    D -- 是 --> G
+    D -- 否 --> H
+    G -- 是 --> I
+    G -- 否 --> J
+
+    classDef draft fill:#e0e7ff,stroke:#4338ca,color:#312e81
+    classDef pub fill:#f0fdf4,stroke:#22c55e,color:#166534
+    classDef block fill:#fef2f2,stroke:#ef4444,color:#991b1b
+    classDef start fill:#fef3c7,stroke:#f59e0b,color:#78350f
+
+    class A start
+    class E,I draft
+    class F,J pub
+    class H block
