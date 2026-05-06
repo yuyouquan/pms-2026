@@ -14,5 +14,5 @@ node_modules/
 # Local Claude Code config
 .claude/
 
-# Local debug output
-output.png
+# Local debug output (root only — diagrams/ may contain its own output.png)
+/output.png
