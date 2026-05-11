@@ -50,38 +50,49 @@ try {
   await sleep(500)
 
   log('3. Open 项目名 Select and pick tOS19.0')
-  // Debug: dump all classes that look like select in the modal
-  const debug = await page.evaluate(() => {
-    const modal = document.querySelector('.ant-modal')
-    if (!modal) return { error: 'no modal' }
-    const allEls = modal.querySelectorAll('*')
-    const selectClasses = new Set()
-    allEls.forEach(el => {
-      const c = el.className
-      if (typeof c === 'string' && c.toLowerCase().includes('select')) {
-        c.split(/\s+/).forEach(cls => { if (cls.toLowerCase().includes('select')) selectClasses.add(cls) })
-      }
-    })
-    return { selectClasses: Array.from(selectClasses) }
-  })
-  console.log('   debug:', debug)
   await pickInSelect(page, 0, 'tOS19.0')
 
-  log('4. Verify 项目责任人 was auto-filled with SPM (李四 for tOS19.0)')
-  // In Antd v6 multi-select, selected tags appear as .ant-select-content-item inside the select.
-  const responsibleTags = await page.evaluate(() => {
+  log('4. Verify 项目责任人 is EMPTY (no SPM auto-fill — feature removed per PM)')
+  const responsibleTagsBefore = await page.evaluate(() => {
     const formItems = Array.from(document.querySelectorAll('.ant-modal .ant-form-item'))
     const item = formItems.find(it => (it.querySelector('.ant-form-item-label label')?.textContent || '').includes('项目责任人'))
     if (!item) return []
-    return Array.from(item.querySelectorAll('.ant-select-content-item, .ant-select-selection-item')).map(t => (t.textContent || '').trim()).filter(Boolean)
+    // Selected tags in Antd v6 multi-select have an explicit close icon (suffix
+    // contains the × button). Placeholder elements have class ant-select-placeholder.
+    // Filter to tags only: must NOT be the placeholder and must contain a suffix child.
+    return Array.from(item.querySelectorAll('.ant-select-content-item'))
+      .filter(el => !el.classList.contains('ant-select-placeholder'))
+      .map(t => (t.querySelector('.ant-select-content-item-prefix')?.textContent || '').trim())
+      .filter(Boolean)
   })
-  console.log('   responsible tags:', responsibleTags)
-  if (!responsibleTags.some(t => t.includes('李四'))) throw new Error('Expected 李四 auto-filled in 项目责任人 after picking tOS19.0')
+  console.log('   responsible tags after picking 项目名:', responsibleTagsBefore)
+  if (responsibleTagsBefore.length > 0) throw new Error(`Expected 项目责任人 to be empty (no SPM auto-fill); got ${JSON.stringify(responsibleTagsBefore)}`)
 
   log('5. Pick 项目类型 = 产品项目')
   await pickInSelect(page, 1, '产品项目')
 
-  log('6. Click 创建')
+  log('6. Manually pick 项目责任人 = 李四 + 张三')
+  // Open the responsible-persons multi-select and click both options.
+  const selects = await page.$$('.ant-modal .ant-select')
+  if (!selects[2]) throw new Error('No .ant-select at modal index 2')
+  await selects[2].click()
+  await sleep(400)
+  for (const name of ['李四', '张三']) {
+    const clicked = await page.evaluate((n) => {
+      const items = Array.from(document.querySelectorAll('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option'))
+      const t = items.find(el => (el.textContent || '').trim() === n)
+      if (!t) return false
+      t.scrollIntoView({ block: 'center' })
+      t.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      return true
+    }, name)
+    if (!clicked) throw new Error(`Option ${name} not found in 项目责任人 dropdown`)
+    await sleep(200)
+  }
+  await page.keyboard.press('Escape')
+  await sleep(400)
+
+  log('7. Click 创建')
   await page.evaluate(() => {
     const btns = Array.from(document.querySelectorAll('.ant-modal-footer button'))
     const ok = btns.find(b => (b.textContent || '').trim() === '创建')
@@ -89,7 +100,7 @@ try {
   })
   await sleep(2000)
 
-  log('7. After create, expect to be inside project space with tOS19.0 as title')
+  log('8. After create, expect to be inside project space with tOS19.0 as title')
   const pageState = await page.evaluate(() => {
     const backBtn = Array.from(document.querySelectorAll('button')).find(b => (b.textContent || '').includes('返回工作台'))
     const titleEl = Array.from(document.querySelectorAll('span')).find(s => (s.textContent || '').trim() === 'tOS19.0')
@@ -102,7 +113,7 @@ try {
   if (!pageState.backBtnVisible) throw new Error('Expected to be in project space (返回工作台 button missing)')
   if (!pageState.titleHasNewProject) throw new Error('Expected tOS19.0 as the project space title')
 
-  log('8. Navigate to 权限配置 in project space, verify 系统管理员 row has 李四')
+  log('9. Navigate to 权限配置 in project space, verify 系统管理员 row has 李四')
   await page.evaluate(() => {
     const items = Array.from(document.querySelectorAll('.ant-menu-item, [role="menuitem"], .ant-menu-title-content'))
     // Find clickable parent containing the text
@@ -117,7 +128,15 @@ try {
     const rows = Array.from(document.querySelectorAll('tr'))
     const row = rows.find(r => (r.querySelector('td')?.textContent || '').includes('系统管理员'))
     if (!row) return null
-    return Array.from(row.querySelectorAll('.ant-select-content-item, .ant-select-selection-item')).map(t => (t.textContent || '').trim()).filter(Boolean)
+    // Selected tag text is in .ant-select-content-item-prefix; if the multi-select
+    // is empty, only .ant-select-placeholder children exist.
+    const prefixes = row.querySelectorAll('.ant-select-content-item-prefix')
+    if (prefixes.length > 0) {
+      return Array.from(prefixes).map(t => (t.textContent || '').trim()).filter(Boolean)
+    }
+    // Fallback (older Antd or different layout): use .ant-select-selection-item.
+    return Array.from(row.querySelectorAll('.ant-select-selection-item'))
+      .map(t => (t.textContent || '').trim()).filter(Boolean)
   })
   console.log('   系统管理员 row members:', sysAdminMembers)
   if (!sysAdminMembers || !sysAdminMembers.some(m => m.includes('李四'))) {
