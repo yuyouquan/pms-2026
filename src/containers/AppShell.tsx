@@ -8,7 +8,7 @@ import {
   SearchOutlined, SwapOutlined, CheckCircleOutlined,
 } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
-import { useProjectStore, PROJECT_MEMBER_MAP } from '@/stores/project'
+import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
 import { usePermissionStore } from '@/stores/permission'
 import { useTransferStore } from '@/stores/transfer'
@@ -18,8 +18,8 @@ import { useRef, useEffect, useMemo } from 'react'
 // ─── Shared user switcher (head avatar + dropdown) ──────────────────
 
 function UserSwitcher() {
-  const { projects, currentLoginUser, setCurrentLoginUser, setProjectCardPage } = useProjectStore()
-  const { roles, globalRoles } = usePermissionStore()
+  const { projects, currentLoginUser, setCurrentLoginUser, setProjectCardPage, projectMemberMap } = useProjectStore()
+  const { globalRoles } = usePermissionStore()
 
   const isAdminUser = useMemo(() => {
     const adminGroup = globalRoles.find(r => r.name === '管理组')
@@ -36,7 +36,7 @@ function UserSwitcher() {
               {(() => {
                 const adminGroup = globalRoles.find(r => r.name === '管理组')
                 const isAdmin = adminGroup?.members.includes(currentLoginUser)
-                const projectCount = isAdmin ? projects.length : projects.filter(p => (PROJECT_MEMBER_MAP[p.id] || []).includes(currentLoginUser)).length
+                const projectCount = isAdmin ? projects.length : projects.filter(p => (projectMemberMap[p.id] || []).includes(currentLoginUser)).length
                 return <>
                   {isAdmin && <Tag color="red" style={{ fontSize: 10, marginLeft: 6 }}>管理组</Tag>}
                   <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 6 }}>可见 {projectCount} 个项目</span>
@@ -50,8 +50,7 @@ function UserSwitcher() {
             const isActive = currentLoginUser === u
             const adminGroup = globalRoles.find(r => r.name === '管理组')
             const isAdmin = adminGroup?.members.includes(u)
-            const projectCount = isAdmin ? projects.length : projects.filter(p => (PROJECT_MEMBER_MAP[p.id] || []).includes(u)).length
-            const userRoles = roles.filter(r => r.members.includes(u)).map(r => r.name)
+            const projectCount = isAdmin ? projects.length : projects.filter(p => (projectMemberMap[p.id] || []).includes(u)).length
             return {
               key: u,
               label: <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: isActive ? 600 : 400 }}>
@@ -152,7 +151,7 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
 
   const {
     projects, selectedProject, setSelectedProject,
-    currentLoginUser, setSelectedMarketTab,
+    currentLoginUser, setSelectedMarketTab, projectMemberMap,
   } = useProjectStore()
 
   const { globalRoles } = usePermissionStore()
@@ -168,10 +167,10 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
   const visibleProjects = useMemo(() => {
     if (isAdminUser) return projects
     return projects.filter(p => {
-      const members = PROJECT_MEMBER_MAP[p.id] || []
+      const members = projectMemberMap[p.id] || []
       return members.includes(currentLoginUser)
     })
-  }, [projects, isAdminUser, currentLoginUser])
+  }, [projects, isAdminUser, currentLoginUser, projectMemberMap])
 
   const filteredProjects = visibleProjects.filter(p => {
     if (!projectSearchText) return true

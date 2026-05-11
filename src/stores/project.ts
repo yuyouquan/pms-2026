@@ -4,8 +4,8 @@ import { initialProjects } from '@/data/projects'
 // Default login user (mock)
 export const DEFAULT_LOGIN_USER = '张三'
 
-// Project-member assignment (mock: which users are assigned per project in permission config)
-export const PROJECT_MEMBER_MAP: Record<string, string[]> = {
+// Initial project-member assignment (mock seed; runtime value lives in store state below).
+export const INITIAL_PROJECT_MEMBER_MAP: Record<string, string[]> = {
   '1': ['张三', '李四', '王五', '赵六', '李白'],         // X6877
   '3': ['王五', '赵六', '孙七'],                         // X6855
   '2': ['张三', '李四', '王五', '赵六', '孙七'],         // tOS16.0
@@ -51,6 +51,8 @@ export interface ProjectState {
   // Todos
   todoFilter: 'all' | 'overdue' | 'upcoming' | 'pending' | 'completed'
   todoCollapsed: boolean
+
+  projectMemberMap: Record<string, string[]>
 }
 
 export interface ProjectActions {
@@ -72,6 +74,9 @@ export interface ProjectActions {
 
   setTodoFilter: (v: 'all' | 'overdue' | 'upcoming' | 'pending' | 'completed') => void
   setTodoCollapsed: (v: boolean) => void
+
+  setProjectMember: (projectId: string, members: string[]) => void
+  addProject: (newProject: Project) => void
 }
 
 export const useProjectStore = create<ProjectState & ProjectActions>()((set) => ({
@@ -94,6 +99,8 @@ export const useProjectStore = create<ProjectState & ProjectActions>()((set) => 
   todoFilter: 'all',
   todoCollapsed: false,
 
+  projectMemberMap: { ...INITIAL_PROJECT_MEMBER_MAP },
+
   // Setters
   setProjects: (v) => set((s) => ({ projects: typeof v === 'function' ? v(s.projects) : v })),
   setSelectedProject: (v) => set({ selectedProject: v }),
@@ -113,4 +120,11 @@ export const useProjectStore = create<ProjectState & ProjectActions>()((set) => 
 
   setTodoFilter: (v) => set({ todoFilter: v }),
   setTodoCollapsed: (v) => set({ todoCollapsed: v }),
+
+  setProjectMember: (projectId, members) => set((s) => ({
+    projectMemberMap: { ...s.projectMemberMap, [projectId]: members },
+  })),
+  addProject: (newProject) => set((s) => ({
+    projects: [...s.projects, newProject],
+  })),
 }))

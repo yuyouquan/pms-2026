@@ -10,7 +10,7 @@ import {
   SearchOutlined, MenuFoldOutlined, MenuUnfoldOutlined, CheckSquareOutlined,
 } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
-import { useProjectStore, PROJECT_MEMBER_MAP } from '@/stores/project'
+import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
 import { usePermissionStore } from '@/stores/permission'
 import { ProjectCard, TodoList, KanbanBoard } from '@/components/workspace/WorkspaceModule'
@@ -29,6 +29,7 @@ export default function WorkspaceContainer() {
   const {
     projects, setSelectedProject,
     currentLoginUser,
+    projectMemberMap,
     projectSearchText2, setProjectSearchText2,
     projectStatusFilter, setProjectStatusFilter,
     projectTypeFilter, setProjectTypeFilter,
@@ -61,10 +62,10 @@ export default function WorkspaceContainer() {
   const visibleProjects = useMemo(() => {
     if (isAdminUser) return projects
     return projects.filter(p => {
-      const members = PROJECT_MEMBER_MAP[p.id] || []
+      const members = projectMemberMap[p.id] || []
       return members.includes(currentLoginUser)
     })
-  }, [projects, isAdminUser, currentLoginUser])
+  }, [projects, isAdminUser, currentLoginUser, projectMemberMap])
 
   const workspaceFilteredProjects = useMemo(() => {
     let result = visibleProjects
