@@ -165,9 +165,15 @@ export default function ProjectSpaceContainer() {
   // unchanged.
   const _permProjectId = selectedProject?.id ?? ''
   const roles = perm.rolesByProject[_permProjectId] ?? []
-  const setRoles = (v: Parameters<typeof perm.setRolesForProject>[1]) => perm.setRolesForProject(_permProjectId, v)
+  const setRoles = (v: Parameters<typeof perm.setRolesForProject>[1]) => {
+    if (!_permProjectId) return
+    perm.setRolesForProject(_permProjectId, v)
+  }
   const rolePermissions = perm.rolePermissionsByProject[_permProjectId] ?? {}
-  const setRolePermissions = (v: Parameters<typeof perm.setRolePermissionsForProject>[1]) => perm.setRolePermissionsForProject(_permProjectId, v)
+  const setRolePermissions = (v: Parameters<typeof perm.setRolePermissionsForProject>[1]) => {
+    if (!_permProjectId) return
+    perm.setRolePermissionsForProject(_permProjectId, v)
+  }
 
   // ═══════ Permissions ═══════
   // RBAC check tied to the currently logged-in user. Global "管理组" bypasses.
