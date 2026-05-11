@@ -8,14 +8,16 @@ import {
 import {
   AppstoreOutlined, UnorderedListOutlined, ClockCircleOutlined,
   SearchOutlined, MenuFoldOutlined, MenuUnfoldOutlined, CheckSquareOutlined,
+  PlusOutlined,
 } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
-import { useProjectStore, PROJECT_MEMBER_MAP } from '@/stores/project'
+import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
 import { usePermissionStore } from '@/stores/permission'
 import { ProjectCard, TodoList, KanbanBoard } from '@/components/workspace/WorkspaceModule'
 import type { ProjectType, TodoType } from '@/components/workspace/WorkspaceModule'
 import WorkTracker from '@/components/work-tracker/WorkTracker'
+import AddProjectModal from '@/components/workspace/AddProjectModal'
 import { initialProjects, PROJECT_TYPES, PROJECT_STATUS_CONFIG } from '@/data/projects'
 import { initialTodos } from '@/components/shared/PlanHelpers'
 import { kanbanColumns } from '@/stores/project'
@@ -29,6 +31,7 @@ export default function WorkspaceContainer() {
   const {
     projects, setSelectedProject,
     currentLoginUser,
+    projectMemberMap,
     projectSearchText2, setProjectSearchText2,
     projectStatusFilter, setProjectStatusFilter,
     projectTypeFilter, setProjectTypeFilter,
@@ -52,6 +55,7 @@ export default function WorkspaceContainer() {
 
   const projectCardPageSize = 9
   const [todos] = useState(initialTodos)
+  const [addProjectOpen, setAddProjectOpen] = useState(false)
 
   const isAdminUser = useMemo(() => {
     const adminGroup = globalRoles.find(r => r.name === '管理组')
@@ -61,10 +65,10 @@ export default function WorkspaceContainer() {
   const visibleProjects = useMemo(() => {
     if (isAdminUser) return projects
     return projects.filter(p => {
-      const members = PROJECT_MEMBER_MAP[p.id] || []
+      const members = projectMemberMap[p.id] || []
       return members.includes(currentLoginUser)
     })
-  }, [projects, isAdminUser, currentLoginUser])
+  }, [projects, isAdminUser, currentLoginUser, projectMemberMap])
 
   const workspaceFilteredProjects = useMemo(() => {
     let result = visibleProjects
@@ -236,6 +240,14 @@ export default function WorkspaceContainer() {
                 { label: <UnorderedListOutlined />, value: 'list' },
               ]}
             />
+            {isAdminUser && (
+              <>
+                <div style={{ width: 1, height: 20, background: '#e5e7eb' }} />
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddProjectOpen(true)} style={{ borderRadius: 6 }}>
+                  新增项目
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -383,6 +395,7 @@ export default function WorkspaceContainer() {
           }}
         />
       )}
+      <AddProjectModal open={addProjectOpen} onCancel={() => setAddProjectOpen(false)} />
     </div>
   )
 }

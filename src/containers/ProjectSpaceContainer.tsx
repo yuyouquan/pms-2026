@@ -43,7 +43,7 @@ import type { TaskChange, PlanDueNotice } from '@/types/plan-notify'
 import { exportSheet, exportMergedSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 
 import { useUiStore } from '@/stores/ui'
-import { useProjectStore, PROJECT_MEMBER_MAP } from '@/stores/project'
+import { useProjectStore } from '@/stores/project'
 import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
 import { usePermissionStore, useHasPermission } from '@/stores/permission'
@@ -154,15 +154,30 @@ export default function ProjectSpaceContainer() {
   } = plan
 
   const {
-    roles, setRoles, rolePermissions, setRolePermissions,
     showAddRoleModal, setShowAddRoleModal, newRoleName, setNewRoleName,
     editingRoleName, setEditingRoleName, editRoleNameValue, setEditRoleNameValue,
     permissionActiveRole, setPermissionActiveRole, permConfigTab, setPermConfigTab,
   } = perm
 
+  // Per-project roles/permissions are looked up by selectedProject.id and
+  // proxied through setRolesForProject/setRolePermissionsForProject so the
+  // existing PermissionConfig signature (which takes roles/setRoles/etc.) is
+  // unchanged.
+  const _permProjectId = selectedProject?.id ?? ''
+  const roles = perm.rolesByProject[_permProjectId] ?? []
+  const setRoles = (v: Parameters<typeof perm.setRolesForProject>[1]) => {
+    if (!_permProjectId) return
+    perm.setRolesForProject(_permProjectId, v)
+  }
+  const rolePermissions = perm.rolePermissionsByProject[_permProjectId] ?? {}
+  const setRolePermissions = (v: Parameters<typeof perm.setRolePermissionsForProject>[1]) => {
+    if (!_permProjectId) return
+    perm.setRolePermissionsForProject(_permProjectId, v)
+  }
+
   // ═══════ Permissions ═══════
   // RBAC check tied to the currently logged-in user. Global "管理组" bypasses.
-  const canDo = useHasPermission(currentLoginUser)
+  const canDo = useHasPermission(currentLoginUser, selectedProject?.id)
   const canEditBasicInfo = canDo('basicInfo:编辑')
   const canEditLevel1Plan = canDo('plan:一级计划-编辑')
   const canEditLevel2Plan = canDo('plan:二级计划-编辑')
