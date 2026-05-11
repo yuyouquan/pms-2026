@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import { Modal, Form, Select, message } from 'antd'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import { PROJECT_TYPES } from '@/data/projects'
@@ -22,7 +22,6 @@ interface FormShape {
 
 export default function AddProjectModal({ open, onCancel }: AddProjectModalProps) {
   const [form] = Form.useForm<FormShape>()
-  const [responsibleTouched, setResponsibleTouched] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   const { projects, addProject, setSelectedProject, setProjectMember, setSelectedMarketTab } = useProjectStore()
@@ -37,20 +36,8 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
 
   // Reset form when modal opens.
   useEffect(() => {
-    if (open) {
-      form.resetFields()
-      setResponsibleTouched(false)
-    }
+    if (open) form.resetFields()
   }, [open, form])
-
-  const handleBidChange = (bid: string) => {
-    const entry = candidatePool.find(e => e.bid === bid)
-    if (!entry) return
-    // Auto-fill responsible persons with SPM, only if user hasn't touched it.
-    if (!responsibleTouched) {
-      form.setFieldValue('responsiblePersons', [entry.spm])
-    }
-  }
 
   const handleSubmit = async () => {
     let values: FormShape
@@ -124,7 +111,6 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
             optionFilterProp="label"
             filterOption={(input, option) => (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())}
             options={candidatePool.map(e => ({ label: e.name, value: e.bid }))}
-            onChange={handleBidChange}
             notFoundContent="无匹配项目"
           />
         </Form.Item>
@@ -142,13 +128,12 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
           label="项目责任人"
           name="responsiblePersons"
           rules={[{ required: true, message: '请选择项目责任人', type: 'array', min: 1 }]}
-          extra="默认回填该项目的 SPM；创建后将成为权限中心的「系统管理员」"
+          extra="创建后将成为权限中心的「系统管理员」"
         >
           <Select
             mode="multiple"
             placeholder="请选择项目责任人"
             options={ALL_USERS.map(u => ({ label: u, value: u }))}
-            onChange={() => setResponsibleTouched(true)}
           />
         </Form.Item>
       </Form>
