@@ -1,7 +1,9 @@
 import { create } from 'zustand'
 import { PERMISSION_MODULES, FIXED_ROLES } from '@/components/permission/PermissionModule'
+import { initialProjects } from '@/data/projects'
 
-// ─── Compute default role permissions ───────────────────────────────
+// ─── Defaults shared by every project's initial role-permission slot ─
+
 const defaultPermsByRole: Record<string, string[]> = {
   '系统管理员': PERMISSION_MODULES.flatMap(m => m.permissions.map(p => `${m.key}:${p}`)),
   '项目经理': ['basicInfo:查看', 'basicInfo:编辑', 'plan:一级计划-查看', 'plan:一级计划-编辑', 'plan:二级计划-查看', 'plan:二级计划-编辑', 'plan:导入/导出', 'resources:查看', 'tasks:查看', 'risks:查看'],
@@ -14,16 +16,19 @@ const defaultPermsByRole: Record<string, string[]> = {
   '管理层': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'resources:查看', 'tasks:查看', 'risks:查看'],
 }
 
-function buildInitialRolePermissions(): Record<string, Record<string, boolean>> {
-  const init: Record<string, Record<string, boolean>> = {}
-  FIXED_ROLES.forEach(r => {
-    init[r] = {}
-    ;(defaultPermsByRole[r] || []).forEach(p => { init[r][p] = true })
-  })
-  return init
+// Default members per fixed role — matches the prior global `roles` initial values
+// so existing 10 mock projects retain the same user-→-role mapping.
+const DEFAULT_ROLE_MEMBERS: Record<string, string[]> = {
+  '系统管理员': ['张三'],
+  '产品经理': ['李四', '王五'],
+  '项目经理': ['张三', '赵六'],
+  '开发代表': ['王五'],
+  '软件SE': ['孙七'],
+  '设计师': ['周八'],
+  '开发工程师': ['李白', '杜甫'],
+  '测试工程师': ['赵六', '孙七'],
+  '管理层': ['张三'],
 }
-
-// ─── Types ──────────────────────────────────────────────────────────
 
 interface Role {
   name: string
@@ -37,10 +42,42 @@ interface GlobalRole {
   isFixed?: boolean
 }
 
+function buildDefaultRoles(): Role[] {
+  return FIXED_ROLES.map(name => ({ name, members: [...(DEFAULT_ROLE_MEMBERS[name] || [])], isFixed: true }))
+}
+
+function buildDefaultRolePermissions(): Record<string, Record<string, boolean>> {
+  const init: Record<string, Record<string, boolean>> = {}
+  FIXED_ROLES.forEach(r => {
+    init[r] = {}
+    ;(defaultPermsByRole[r] || []).forEach(p => { init[r][p] = true })
+  })
+  return init
+}
+
+function buildInitialPerProject(): {
+  rolesByProject: Record<string, Role[]>,
+  rolePermissionsByProject: Record<string, Record<string, Record<string, boolean>>>,
+} {
+  const rolesByProject: Record<string, Role[]> = {}
+  const rolePermissionsByProject: Record<string, Record<string, Record<string, boolean>>> = {}
+  initialProjects.forEach(p => {
+    rolesByProject[p.id] = buildDefaultRoles()
+    rolePermissionsByProject[p.id] = buildDefaultRolePermissions()
+  })
+  return { rolesByProject, rolePermissionsByProject }
+}
+
+const __INITIAL = buildInitialPerProject()
+
+// ─── Store types ────────────────────────────────────────────────────
+
 export interface PermissionState {
-  // Project-level roles & permissions
-  roles: Role[]
-  rolePermissions: Record<string, Record<string, boolean>>
+  // Per-project roles & permissions
+  rolesByProject: Record<string, Role[]>
+  rolePermissionsByProject: Record<string, Record<string, Record<string, boolean>>>
+
+  // Shared UI state for PermissionConfig
   showAddRoleModal: boolean
   newRoleName: string
   editingRoleName: string | null
@@ -60,8 +97,12 @@ export interface PermissionState {
 }
 
 export interface PermissionActions {
-  setRoles: (v: Role[] | ((prev: Role[]) => Role[])) => void
-  setRolePermissions: (v: Record<string, Record<string, boolean>> | ((prev: Record<string, Record<string, boolean>>) => Record<string, Record<string, boolean>>)) => void
+  // Per-project actions
+  setRolesForProject: (projectId: string, v: Role[] | ((prev: Role[]) => Role[])) => void
+  setRolePermissionsForProject: (projectId: string, v: Record<string, Record<string, boolean>> | ((prev: Record<string, Record<string, boolean>>) => Record<string, Record<string, boolean>>)) => void
+  initProjectPermissions: (projectId: string, overrides?: Partial<Record<string, string[]>>) => void
+
+  // UI state setters
   setShowAddRoleModal: (v: boolean) => void
   setNewRoleName: (v: string) => void
   setEditingRoleName: (v: string | null) => void
@@ -69,6 +110,7 @@ export interface PermissionActions {
   setPermissionActiveRole: (v: string) => void
   setPermConfigTab: (v: 'roles' | 'perms') => void
 
+  // Global role setters
   setGlobalRoles: (v: GlobalRole[] | ((prev: GlobalRole[]) => GlobalRole[])) => void
   setGlobalRolePerms: (v: Record<string, Record<string, boolean>> | ((prev: Record<string, Record<string, boolean>>) => Record<string, Record<string, boolean>>)) => void
   setGlobalPermTab: (v: 'roles' | 'perms') => void
@@ -79,20 +121,10 @@ export interface PermissionActions {
   setGlobalPermActiveRole: (v: string) => void
 }
 
-export const usePermissionStore = create<PermissionState & PermissionActions>()((set) => ({
-  // Project-level roles
-  roles: [
-    { name: '系统管理员', members: ['张三'], isFixed: true },
-    { name: '产品经理', members: ['李四', '王五'], isFixed: true },
-    { name: '项目经理', members: ['张三', '赵六'], isFixed: true },
-    { name: '开发代表', members: ['王五'], isFixed: true },
-    { name: '软件SE', members: ['孙七'], isFixed: true },
-    { name: '设计师', members: ['周八'], isFixed: true },
-    { name: '开发工程师', members: ['李白', '杜甫'], isFixed: true },
-    { name: '测试工程师', members: ['赵六', '孙七'], isFixed: true },
-    { name: '管理层', members: ['张三'], isFixed: true },
-  ],
-  rolePermissions: buildInitialRolePermissions(),
+export const usePermissionStore = create<PermissionState & PermissionActions>()((set, get) => ({
+  rolesByProject: __INITIAL.rolesByProject,
+  rolePermissionsByProject: __INITIAL.rolePermissionsByProject,
+
   showAddRoleModal: false,
   newRoleName: '',
   editingRoleName: null,
@@ -118,9 +150,27 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
   globalEditRoleValue: '',
   globalPermActiveRole: '管理组',
 
-  // ─── Setters ─────────────────────────────────────────────────────
-  setRoles: (v) => set((s) => ({ roles: typeof v === 'function' ? v(s.roles) : v })),
-  setRolePermissions: (v) => set((s) => ({ rolePermissions: typeof v === 'function' ? v(s.rolePermissions) : v })),
+  // Per-project setters
+  setRolesForProject: (projectId, v) => set((s) => {
+    const prev = s.rolesByProject[projectId] ?? buildDefaultRoles()
+    const next = typeof v === 'function' ? v(prev) : v
+    return { rolesByProject: { ...s.rolesByProject, [projectId]: next } }
+  }),
+  setRolePermissionsForProject: (projectId, v) => set((s) => {
+    const prev = s.rolePermissionsByProject[projectId] ?? buildDefaultRolePermissions()
+    const next = typeof v === 'function' ? v(prev) : v
+    return { rolePermissionsByProject: { ...s.rolePermissionsByProject, [projectId]: next } }
+  }),
+  initProjectPermissions: (projectId, overrides) => set((s) => {
+    const roles = buildDefaultRoles().map(r => overrides && overrides[r.name] ? { ...r, members: [...overrides[r.name]!] } : r)
+    const perms = buildDefaultRolePermissions()
+    return {
+      rolesByProject: { ...s.rolesByProject, [projectId]: roles },
+      rolePermissionsByProject: { ...s.rolePermissionsByProject, [projectId]: perms },
+    }
+  }),
+
+  // UI state setters
   setShowAddRoleModal: (v) => set({ showAddRoleModal: v }),
   setNewRoleName: (v) => set({ newRoleName: v }),
   setEditingRoleName: (v) => set({ editingRoleName: v }),
@@ -128,6 +178,7 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
   setPermissionActiveRole: (v) => set({ permissionActiveRole: v }),
   setPermConfigTab: (v) => set({ permConfigTab: v }),
 
+  // Global setters
   setGlobalRoles: (v) => set((s) => ({ globalRoles: typeof v === 'function' ? v(s.globalRoles) : v })),
   setGlobalRolePerms: (v) => set((s) => ({ globalRolePerms: typeof v === 'function' ? v(s.globalRolePerms) : v })),
   setGlobalPermTab: (v) => set({ globalPermTab: v }),
@@ -139,33 +190,37 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
 }))
 
 // ─── Permission helpers ─────────────────────────────────────────────
-// Admin group (global "管理组") bypasses all project-level permission checks.
+// Global "管理组" bypasses every project-level check.
 export function isGlobalAdmin(userName: string): boolean {
   const s = usePermissionStore.getState()
   const admin = s.globalRoles.find(r => r.name === '管理组')
   return !!admin?.members.includes(userName)
 }
 
-// Check if a user has a specific project-level permission.
-// permKey format: "moduleKey:permissionName", e.g. "basicInfo:编辑", "plan:一级计划-编辑".
-export function hasPermission(userName: string, permKey: string): boolean {
+// Project-scoped permission check.
+// projectId may be undefined during navigation transitions — returns global-admin result only.
+export function hasPermission(userName: string, projectId: string | undefined, permKey: string): boolean {
   if (!userName) return false
   if (isGlobalAdmin(userName)) return true
+  if (!projectId) return false
   const s = usePermissionStore.getState()
-  const userRoles = s.roles.filter(r => r.members.includes(userName)).map(r => r.name)
-  return userRoles.some(role => s.rolePermissions[role]?.[permKey] === true)
+  const projectRoles = s.rolesByProject[projectId] ?? []
+  const projectPerms = s.rolePermissionsByProject[projectId] ?? {}
+  const userRoles = projectRoles.filter(r => r.members.includes(userName)).map(r => r.name)
+  return userRoles.some(role => projectPerms[role]?.[permKey] === true)
 }
 
-// React hook version — subscribes to permission store so UI re-renders on change.
-export function useHasPermission(userName: string): (permKey: string) => boolean {
-  const roles = usePermissionStore(s => s.roles)
-  const rolePermissions = usePermissionStore(s => s.rolePermissions)
+// React hook variant — subscribes to per-project slot so UI re-renders on change.
+export function useHasPermission(userName: string, projectId: string | undefined): (permKey: string) => boolean {
   const globalRoles = usePermissionStore(s => s.globalRoles)
+  const projectRoles = usePermissionStore(s => (projectId ? s.rolesByProject[projectId] : undefined))
+  const projectPerms = usePermissionStore(s => (projectId ? s.rolePermissionsByProject[projectId] : undefined))
   return (permKey: string) => {
     if (!userName) return false
     const admin = globalRoles.find(r => r.name === '管理组')
     if (admin?.members.includes(userName)) return true
-    const userRoles = roles.filter(r => r.members.includes(userName)).map(r => r.name)
-    return userRoles.some(role => rolePermissions[role]?.[permKey] === true)
+    if (!projectId || !projectRoles || !projectPerms) return false
+    const userRoles = projectRoles.filter(r => r.members.includes(userName)).map(r => r.name)
+    return userRoles.some(role => projectPerms[role]?.[permKey] === true)
   }
 }

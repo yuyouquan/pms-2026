@@ -154,15 +154,24 @@ export default function ProjectSpaceContainer() {
   } = plan
 
   const {
-    roles, setRoles, rolePermissions, setRolePermissions,
     showAddRoleModal, setShowAddRoleModal, newRoleName, setNewRoleName,
     editingRoleName, setEditingRoleName, editRoleNameValue, setEditRoleNameValue,
     permissionActiveRole, setPermissionActiveRole, permConfigTab, setPermConfigTab,
   } = perm
 
+  // Per-project roles/permissions are looked up by selectedProject.id and
+  // proxied through setRolesForProject/setRolePermissionsForProject so the
+  // existing PermissionConfig signature (which takes roles/setRoles/etc.) is
+  // unchanged.
+  const _permProjectId = selectedProject?.id ?? ''
+  const roles = perm.rolesByProject[_permProjectId] ?? []
+  const setRoles = (v: Parameters<typeof perm.setRolesForProject>[1]) => perm.setRolesForProject(_permProjectId, v)
+  const rolePermissions = perm.rolePermissionsByProject[_permProjectId] ?? {}
+  const setRolePermissions = (v: Parameters<typeof perm.setRolePermissionsForProject>[1]) => perm.setRolePermissionsForProject(_permProjectId, v)
+
   // ═══════ Permissions ═══════
   // RBAC check tied to the currently logged-in user. Global "管理组" bypasses.
-  const canDo = useHasPermission(currentLoginUser)
+  const canDo = useHasPermission(currentLoginUser, selectedProject?.id)
   const canEditBasicInfo = canDo('basicInfo:编辑')
   const canEditLevel1Plan = canDo('plan:一级计划-编辑')
   const canEditLevel2Plan = canDo('plan:二级计划-编辑')
