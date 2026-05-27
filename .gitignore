@@ -15,5 +15,9 @@ node_modules/
 # for shared settings.local.json, but worktrees/ is local-only)
 .claude/worktrees/
 
+# Local agent skill cache
+.agents/
+skills-lock.json
+
 # Local debug output (root only — diagrams/ may contain its own output.png)
 /output.png
