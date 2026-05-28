@@ -53,6 +53,7 @@ import { TransferApply, TransferDetail, TransferEntry, TransferReview, TransferS
 import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
 import VersionTrainPlan from '@/components/plans/VersionTrainPlan'
 import { PROJECT_STATUS_CONFIG } from '@/data/projects'
+import { WHOLE_MACHINE_BASIC_INFO_FIELDS, WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS } from '@/constants/projectBasicFields'
 import {
   DHTMLXGantt, DragHandle, SortableRow, ClickToEditDate, MiniPipeline,
   getTaskDepth, hasChildren, filterByCollapsed, getAllExpandableIds,
@@ -489,7 +490,7 @@ export default function ProjectSpaceContainer() {
   // Basic info
   const startBasicInfoEdit = () => {
     if (!selectedProject) return; const p = selectedProject
-    setEditingProjectFields({ productType: p.productType || '', developMode: p.developMode || '', currentNode: p.currentNode || '', healthStatus: p.healthStatus || 'normal', branchInfo: p.branchInfo || '', jenkinsUrl: p.jenkinsUrl || '', buildAddress: p.buildAddress || '', ppm: p.ppm || '', spm: p.spm || '', tpm: p.tpm || '', teamMembers: p.teamMembers || '', versionFiveRoles: p.versionFiveRoles || {}, projectDescription: p.projectDescription || '' })
+    setEditingProjectFields({ productType: p.productType || '', developMode: p.developMode || '', cooperationForm: p.cooperationForm || '', projectLevel: p.projectLevel || '', currentNode: p.currentNode || '', healthStatus: p.healthStatus || 'normal', branchInfo: p.branchInfo || '', jenkinsUrl: p.jenkinsUrl || '', buildAddress: p.buildAddress || '', ppm: p.ppm || '', spm: p.spm || '', tpm: p.tpm || '', teamMembers: p.teamMembers || '', versionFiveRoles: p.versionFiveRoles || {}, projectDescription: p.projectDescription || '' })
     setBasicInfoEditMode(true)
   }
   const saveBasicInfoEdit = () => {
@@ -996,7 +997,29 @@ export default function ProjectSpaceContainer() {
     const nodeChoices = [{ label: '概念启动', value: '概念启动' }, { label: 'STR1', value: 'STR1' }, { label: 'STR2', value: 'STR2' }, { label: 'STR3', value: 'STR3' }, { label: 'STR4', value: 'STR4' }, { label: 'STR5', value: 'STR5' }, { label: 'STR6', value: 'STR6' }]
     const healthChoices = [{ label: '正常', value: 'normal' }, { label: '关注', value: 'warning' }, { label: '风险', value: 'risk' }]
     const developModeChoices = [{ label: 'ODC', value: 'ODC' }, { label: 'JDM', value: 'JDM' }, { label: '自研', value: '自研' }]
+    const projectLevelChoices = [{ label: 'S', value: 'S' }, { label: 'A', value: 'A' }, { label: 'B', value: 'B' }, { label: 'C', value: 'C' }]
     const userChoices = ALL_USERS.map(u => ({ label: u, value: u }))
+    const getProjectFieldValue = (field: { key: string; fallbackKeys?: readonly string[] }) => {
+      const source = p as Record<string, any>
+      const keys = [field.key, ...(field.fallbackKeys || [])]
+      for (const key of keys) {
+        const value = source[key]
+        if (Array.isArray(value) && value.length > 0) return value.join(', ')
+        if (value !== undefined && value !== null && value !== '') return value
+      }
+      return '-'
+    }
+    const renderWholeMachineBasicInfoField = (field: (typeof WHOLE_MACHINE_BASIC_INFO_FIELDS)[number]) => {
+      let content: React.ReactNode = getProjectFieldValue(field)
+      if (field.key === 'productType') content = editableField('productType', p.productType, { type: 'select', choices: [{ label: '新品', value: '新品' }, { label: '换代', value: '换代' }] })
+      if (field.key === 'developMode') content = editableField('developMode', p.developMode, { type: 'select', choices: developModeChoices })
+      if (field.key === 'cooperationForm') content = editableField('cooperationForm', p.cooperationForm)
+      if (field.key === 'projectLevel') content = editableField('projectLevel', p.projectLevel, { type: 'select', choices: projectLevelChoices })
+      return <Descriptions.Item key={field.key} label={field.label}>{content}</Descriptions.Item>
+    }
+    const renderWholeMachineHardwareConfigField = (field: (typeof WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS)[number]) => (
+      <Descriptions.Item key={field.key} label={field.label}>{getProjectFieldValue(field)}</Descriptions.Item>
+    )
     const descLabelStyle: CSSProperties = { fontWeight: 500, color: '#9ca3af', fontSize: 13, background: '#f8fafc' }
     const descContentStyle: CSSProperties = { color: '#111827', fontSize: 13 }
     const sectionTitle = (icon: React.ReactNode, title: string, _color: string) => (<Space size={8}>{icon}<span style={{ fontSize: 15, fontWeight: 600 }}>{title}</span></Space>)
@@ -1095,18 +1118,7 @@ export default function ProjectSpaceContainer() {
           {isWholeMachine && (
             <div>
               <Descriptions bordered size="small" column={4} labelStyle={descLabelStyle} contentStyle={descContentStyle}>
-                <Descriptions.Item label="项目名称">{p.name}</Descriptions.Item>
-                <Descriptions.Item label="市场名">{p.marketName || '-'}</Descriptions.Item>
-                <Descriptions.Item label="产品类型">{editableField('productType', p.productType, { type: 'select', choices: [{ label: '新品', value: '新品' }, { label: '换代', value: '换代' }] })}</Descriptions.Item>
-                <Descriptions.Item label="tOS版本">{p.tosVersion || '-'}</Descriptions.Item>
-                <Descriptions.Item label="开发模式">{editableField('developMode', p.developMode, { type: 'select', choices: developModeChoices })}</Descriptions.Item>
-                <Descriptions.Item label="品牌">{p.brand || '-'}</Descriptions.Item>
-                <Descriptions.Item label="产品线">{p.productLine || '-'}</Descriptions.Item>
-                <Descriptions.Item label="版本类型">{p.versionType || '-'}</Descriptions.Item>
-                <Descriptions.Item label="市场">{p.market || (p.markets || []).join(', ') || '-'}</Descriptions.Item>
-                <Descriptions.Item label="PPM">{editableField('ppm', p.ppm, { type: 'select', choices: userChoices })}</Descriptions.Item>
-                <Descriptions.Item label="SPM">{editableField('spm', p.spm, { type: 'select', choices: userChoices })}</Descriptions.Item>
-                <Descriptions.Item label="TPM">{editableField('tpm', p.tpm, { type: 'select', choices: userChoices })}</Descriptions.Item>
+                {WHOLE_MACHINE_BASIC_INFO_FIELDS.map(renderWholeMachineBasicInfoField)}
               </Descriptions>
             </div>
           )}
@@ -1204,25 +1216,7 @@ export default function ProjectSpaceContainer() {
                       <div style={{ marginBottom: 20 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>硬件配置</div>
                         <Descriptions bordered size="small" column={4} labelStyle={descLabelStyle} contentStyle={descContentStyle}>
-                          <Descriptions.Item label="主板名">{p.mainboard || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="芯片平台">{p.chipPlatform || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="芯片型号">{p.cpu || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="安卓版本">{p.operatingSystem || p.androidVersion || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="内存">{p.memory || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="屏幕">{p.lcd || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="网络模式">{p.networkMode || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="kernel版本">{p.kernelVersion || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="前摄像头">{p.frontCamera || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="后摄像头">{p.primaryCamera || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="屏幕形态">{p.screenShape || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="屏幕类型">{p.screenType || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="灯效">{p.lightEffect || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="人脸">{p.faceRecognition || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="音效">{p.soundEffect || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="SIM卡">{p.simCard || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="马达">{p.motor || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="指纹">{p.fingerprint || '-'}</Descriptions.Item>
-                          <Descriptions.Item label="红外">{p.infrared || '-'}</Descriptions.Item>
+                          {WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS.map(renderWholeMachineHardwareConfigField)}
                         </Descriptions>
                       </div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>构建信息</div>
