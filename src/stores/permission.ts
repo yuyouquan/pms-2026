@@ -1,33 +1,103 @@
 import { create } from 'zustand'
-import { PERMISSION_MODULES, FIXED_ROLES } from '@/components/permission/PermissionModule'
+import { PROJECT_PERMISSION_ITEMS, FIXED_ROLES, getProjectPermissionKeys } from '@/constants/permissions'
 import { initialProjects } from '@/data/projects'
 
 // ─── Defaults shared by every project's initial role-permission slot ─
 
+const expandProjectPermissionKeys = (keys: string[]): string[] => {
+  const expanded = keys.flatMap(key => {
+    const permission = PROJECT_PERMISSION_ITEMS.find(item => item.key === key)
+    return permission ? getProjectPermissionKeys(permission) : [key]
+  })
+  return Array.from(new Set(expanded))
+}
+
+const PROJECT_PERMISSION_PRESETS: Record<string, string[]> = {
+  '系统管理员': [
+    'basicInfo:查看',
+    'basicInfo:transferView',
+    'basicInfo:planConfigView',
+    'basicInfo:编辑',
+    'basicInfo:applyTransfer',
+    'plan:一级计划-编辑',
+    'plan:一级计划-查看',
+    'plan:一级计划-分享',
+    'plan:导入',
+    'plan:导出',
+    'projectPermission:manageRoles',
+  ],
+  '项目经理': [
+    'basicInfo:查看',
+    'basicInfo:transferView',
+    'basicInfo:planConfigView',
+    'basicInfo:编辑',
+    'basicInfo:applyTransfer',
+    'plan:一级计划-编辑',
+    'plan:一级计划-查看',
+    'plan:一级计划-分享',
+    'plan:导入',
+    'plan:导出',
+    'projectPermission:manageRoles',
+  ],
+  '产品经理': ['basicInfo:查看', 'basicInfo:transferView'],
+  '软件SE': ['basicInfo:查看', 'basicInfo:transferView'],
+  '开发代表': [
+    'basicInfo:查看',
+    'basicInfo:transferView',
+    'basicInfo:planConfigView',
+    'plan:一级计划-查看',
+    'plan:一级计划-分享',
+    'plan:导出',
+  ],
+  '设计师': ['basicInfo:查看', 'basicInfo:transferView'],
+  '测试TPM': [
+    'basicInfo:查看',
+    'basicInfo:transferView',
+    'basicInfo:planConfigView',
+    'plan:一级计划-查看',
+    'plan:一级计划-分享',
+    'plan:导出',
+  ],
+  'SQA': [
+    'basicInfo:查看',
+    'basicInfo:transferView',
+    'basicInfo:planConfigView',
+    'plan:一级计划-查看',
+    'plan:一级计划-分享',
+    'plan:导出',
+  ],
+  '开发工程师': ['basicInfo:查看', 'basicInfo:transferView'],
+  '测试工程师': ['basicInfo:查看', 'basicInfo:transferView'],
+  '管理层': [
+    'basicInfo:查看',
+    'basicInfo:transferView',
+    'basicInfo:planConfigView',
+    'plan:一级计划-查看',
+    'plan:一级计划-分享',
+    'plan:导出',
+  ],
+  '其他': ['basicInfo:查看', 'basicInfo:transferView'],
+}
+
 const defaultPermsByRole: Record<string, string[]> = {
-  '系统管理员': PERMISSION_MODULES.flatMap(m => m.permissions.map(p => `${m.key}:${p}`)),
-  '项目经理': ['basicInfo:查看', 'basicInfo:编辑', 'plan:一级计划-查看', 'plan:一级计划-编辑', 'plan:二级计划-查看', 'plan:二级计划-编辑', 'plan:导入/导出', 'resources:查看', 'tasks:查看', 'risks:查看'],
-  '产品经理': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'resources:查看', 'tasks:查看', 'risks:查看'],
-  '开发代表': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看'],
-  '软件SE': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看'],
-  '设计师': ['basicInfo:查看'],
-  '开发工程师': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看'],
-  '测试工程师': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'tasks:查看', 'risks:查看'],
-  '管理层': ['basicInfo:查看', 'plan:一级计划-查看', 'plan:二级计划-查看', 'resources:查看', 'tasks:查看', 'risks:查看'],
+  ...Object.fromEntries(FIXED_ROLES.map(role => [role, expandProjectPermissionKeys(PROJECT_PERMISSION_PRESETS[role] || [])])),
 }
 
 // Default members per fixed role — matches the prior global `roles` initial values
 // so existing 10 mock projects retain the same user-→-role mapping.
 const DEFAULT_ROLE_MEMBERS: Record<string, string[]> = {
   '系统管理员': ['张三'],
-  '产品经理': ['李四', '王五'],
   '项目经理': ['张三', '赵六'],
-  '开发代表': ['王五'],
+  '产品经理': ['李四', '王五'],
   '软件SE': ['孙七'],
+  '开发代表': ['王五'],
   '设计师': ['周八'],
+  '测试TPM': [],
+  'SQA': [],
   '开发工程师': ['李白', '杜甫'],
   '测试工程师': ['赵六', '孙七'],
   '管理层': ['张三'],
+  '其他': [],
 }
 
 interface Role {
@@ -139,9 +209,9 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
     { name: '查看组', members: ['孙七', '周八', '杜甫'], isFixed: true },
   ],
   globalRolePerms: {
-    '管理组': { 'roadmap:milestone:view': true, 'roadmap:mrTrain:view': true },
-    '编辑组': { 'roadmap:milestone:view': true, 'roadmap:mrTrain:view': true },
-    '查看组': { 'roadmap:milestone:view': true, 'roadmap:mrTrain:view': false },
+    '管理组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': true, 'roadmap:export': true, 'configCenter:planEdit': true, 'configCenter:planPublish': true, 'configCenter:transferEdit': true, 'permissionCenter:manageRoles': true },
+    '编辑组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'permissionCenter:manageRoles': false },
+    '查看组': { 'roadmap:view': true, 'roadmap:edit': false, 'roadmap:baseline': false, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'permissionCenter:manageRoles': false },
   },
   globalPermTab: 'roles',
   showGlobalAddRole: false,

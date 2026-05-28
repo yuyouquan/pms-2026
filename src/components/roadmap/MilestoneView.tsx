@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import {
-  Table, Button, Space, Select, Tag, Modal, Checkbox, Input, Tabs, message, Tooltip, Popconfirm, Empty, Dropdown,
+  Table, Button, Space, Select, Tag, Modal, Checkbox, Input, Tabs, message, Tooltip, Popconfirm, Empty, Dropdown, Drawer,
 } from 'antd'
 import {
   FilterOutlined, SettingOutlined, SaveOutlined, FullscreenOutlined, FullscreenExitOutlined,
@@ -10,14 +10,15 @@ import {
   DownloadOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
-import type { RoadmapViewConfig } from '@/types'
+import type { RoadmapFilterCondition, RoadmapViewConfig } from '@/types'
 import {
   aggregateMilestones, generateTableData, saveView, loadAllViews, deleteView,
-  SOFTWARE_FIXED_COLUMNS, MACHINE_FIXED_COLUMNS, getFixedColumnsForType, getDefaultVisibleColumns,
+  getFixedColumnsForType, getDefaultVisibleColumns, getMilestoneColumnKey, isRoadmapColumnVisible,
   diffSnapshots, buildCompareColumns,
   type DiffResult, type SnapshotLike,
 } from './utils'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
+import { usePlanStore, LEVEL1_TEMPLATE_TASKS, getTemplateSnapshotKey } from '@/stores/plan'
 
 const PROJECT_TYPES = ['软件产品项目', '整机产品项目']
 
@@ -33,6 +34,32 @@ const marketColors: Record<string, string> = {
   'FR': '#722ed1', 'IN': '#eb2f96', 'BR': '#13c2c2',
 }
 
+const FILTER_OPERATORS = [
+  { value: 'contains', label: '包含' },
+  { value: 'notContains', label: '不包含' },
+  { value: 'equals', label: '等于' },
+] as const
+
+const createFilterCondition = (): RoadmapFilterCondition => ({
+  id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  field: '',
+  operator: 'contains',
+  value: '',
+})
+
+function applyFilterConditions<T extends Record<string, any>>(rows: T[], conditions: RoadmapFilterCondition[]): T[] {
+  const activeConditions = conditions.filter(c => c.field && c.value.trim())
+  if (activeConditions.length === 0) return rows
+
+  return rows.filter(row => activeConditions.every(condition => {
+    const actual = String(row[condition.field] ?? '').toLowerCase()
+    const expected = condition.value.trim().toLowerCase()
+    if (condition.operator === 'equals') return actual === expected
+    if (condition.operator === 'notContains') return !actual.includes(expected)
+    return actual.includes(expected)
+  }))
+}
+
 interface MilestoneViewProps {
   projects: any[]
   marketPlanData: Record<string, { tasks: any[], level2Tasks: any[], createdLevel2Plans: any[] }>
@@ -44,18 +71,14 @@ interface MilestoneViewProps {
 }
 
 export default function MilestoneView({ projects, marketPlanData, level1Tasks, onViewProject, initialProjectType, onProjectTypeChange, hideProjectTypeTabs }: MilestoneViewProps) {
+  const { versions, publishedSnapshots } = usePlanStore()
   const [projectType, setProjectTypeLocal] = useState(initialProjectType || PROJECT_TYPES[0])
   const setProjectType = (val: string) => {
     setProjectTypeLocal(val)
     onProjectTypeChange?.(val)
   }
-  const [filters, setFilters] = useState<{
-    productLine?: string[]
-    chipPlatform?: string[]
-    status?: string[]
-    tosVersion?: string[]
-  }>({})
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(getDefaultVisibleColumns(PROJECT_TYPES[0]))
+  const [filters, setFilters] = useState<RoadmapFilterCondition[]>([])
+  const [visibleColumns, setVisibleColumns] = useState<string[]>([])
   const [pageSize, setPageSize] = useState(10)
   const [currentPage, setCurrentPage] = useState(1)
   const [savedViews, setSavedViews] = useState<RoadmapViewConfig[]>([])
@@ -87,7 +110,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
   const [onlyDiffRows, setOnlyDiffRows] = useState(true)
   const [showCompareModal, setShowCompareModal] = useState(false)
 
-  // Temp filter state for modal
+  // Temp filter state for drawer
   const [tempFilters, setTempFilters] = useState(filters)
 
   // Sync projectType from parent
@@ -95,7 +118,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     if (initialProjectType && initialProjectType !== projectType && PROJECT_TYPES.includes(initialProjectType)) {
       setProjectTypeLocal(initialProjectType)
       setActiveViewId(DEFAULT_VIEW_ID)
-      setFilters({})
+      setFilters([])
       setCurrentPage(1)
       setActiveSnapshotId(null)
       setCompareMode(false)
@@ -117,20 +140,38 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     setCurrentPage(1)
   }, [compareMode])
 
-  // Update visible columns when projectType changes (add/remove market column)
-  useEffect(() => {
-    if (activeViewId === DEFAULT_VIEW_ID) {
-      setVisibleColumns(getDefaultVisibleColumns(projectType))
-    }
-  }, [projectType, activeViewId])
-
   // Map display type to data type
   const dataType = PROJECT_TYPE_MAP[projectType] || projectType
 
+  const latestPublishedVersion = useMemo(() => {
+    return [...versions]
+      .filter(v => v.status === '已发布')
+      .sort((a, b) => parseInt(b.versionNo.replace('V', ''), 10) - parseInt(a.versionNo.replace('V', ''), 10))[0]
+  }, [versions])
+
+  const templateTasks = useMemo(() => {
+    if (!latestPublishedVersion) return LEVEL1_TEMPLATE_TASKS
+    const projectTypeSnapshot = publishedSnapshots[getTemplateSnapshotKey(dataType, latestPublishedVersion.id)]
+    const fallbackSnapshot = publishedSnapshots[latestPublishedVersion.id]
+    const snapshot = projectTypeSnapshot?.length ? projectTypeSnapshot : fallbackSnapshot
+    return snapshot?.length ? snapshot : LEVEL1_TEMPLATE_TASKS
+  }, [dataType, latestPublishedVersion, publishedSnapshots])
+
   // Aggregate milestones
   const milestones = useMemo(() => {
-    return aggregateMilestones(projects, dataType, marketPlanData, level1Tasks)
-  }, [projects, dataType, marketPlanData, level1Tasks])
+    return aggregateMilestones(templateTasks)
+  }, [templateTasks])
+
+  const defaultVisibleColumns = useMemo(() => {
+    return getDefaultVisibleColumns(projectType, milestones)
+  }, [projectType, milestones])
+
+  // Update visible columns when projectType or template milestones change.
+  useEffect(() => {
+    if (activeViewId === DEFAULT_VIEW_ID) {
+      setVisibleColumns(defaultVisibleColumns)
+    }
+  }, [activeViewId, defaultVisibleColumns])
 
   // Generate table data
   const allTableData = useMemo(() => {
@@ -139,82 +180,70 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
 
   // Apply filters
   const tableData = useMemo(() => {
-    let data = allTableData
-    if (filters.productLine?.length) {
-      data = data.filter(r => filters.productLine!.includes(r.productLine))
-    }
-    if (filters.chipPlatform?.length) {
-      data = data.filter(r => filters.chipPlatform!.includes(r.chipPlatform))
-    }
-    if (filters.status?.length) {
-      data = data.filter(r => filters.status!.includes(r.status))
-    }
-    if (filters.tosVersion?.length) {
-      data = data.filter(r => filters.tosVersion!.includes(r.tosVersion))
-    }
-    return data
+    return applyFilterConditions(allTableData, filters)
   }, [allTableData, filters])
 
-  // Extract unique filter options from current project type
-  const filterOptions = useMemo(() => {
-    const filteredProjects = projects.filter(p => p.type === dataType)
-    return {
-      productLine: [...new Set(filteredProjects.map(p => p.productLine).filter(Boolean))] as string[],
-      chipPlatform: [...new Set(filteredProjects.map(p => p.chipPlatform).filter(Boolean))] as string[],
-      status: [...new Set(filteredProjects.map(p => p.status).filter(Boolean))] as string[],
-      tosVersion: [...new Set(filteredProjects.map(p => p.tosVersion).filter(Boolean))] as string[],
+  const renderProjectCell = (key: string, val: any) => {
+    if (key === 'status') {
+      const colorMap: Record<string, string> = { '进行中': 'processing', '已完成': 'success', '筹备中': 'warning', '待立项': 'warning', '暂停': 'default', '已上市': 'purple', '维护': 'cyan', '已取消': 'error' }
+      return <Tag color={colorMap[val] || 'default'}>{val || '-'}</Tag>
     }
-  }, [projects, projectType])
-
-  // Build columns
-  const columns = useMemo((): ColumnsType<any> => {
-    const cols: ColumnsType<any> = []
-    const typeColumns = getFixedColumnsForType(projectType)
-
-    // Build fixed columns dynamically based on type
-    for (const col of typeColumns) {
-      if (!visibleColumns.includes(col.key)) continue
-      if (col.key === 'status') {
-        cols.push({
-          title: col.title, dataIndex: col.key, key: col.key, width: 90,
-          render: (val: string) => {
-            const colorMap: Record<string, string> = { '进行中': 'processing', '已完成': 'success', '筹备中': 'warning', '暂停': 'default', '未开始': 'default' }
-            return <Tag color={colorMap[val] || 'default'}>{val}</Tag>
-          },
-        })
-      } else if (col.key === 'projectName') {
-        cols.push({
-          title: col.title, dataIndex: col.key, key: col.key, width: 160,
-          render: (text: string) => <span style={{ fontWeight: 500, fontSize: 13 }}>{text}</span>,
-        })
-      } else {
-        cols.push({ title: col.title, dataIndex: col.key, key: col.key, width: 100 })
+    if (key === 'healthStatus') {
+      const config: Record<string, { label: string; color: string }> = {
+        normal: { label: '正常', color: 'success' },
+        warning: { label: '预警', color: 'warning' },
+        risk: { label: '风险', color: 'error' },
       }
+      const item = config[val] || { label: val || '-', color: 'default' }
+      return <Tag color={item.color}>{item.label}</Tag>
+    }
+    if (key === 'projectName') {
+      return <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{val || '-'}</span>
+    }
+    if (key === 'market') {
+      return <Tag color={marketColors[val] || 'default'} style={{ fontWeight: 600 }}>{val || '-'}</Tag>
+    }
+    if (key === 'projectDescription') {
+      return (
+        <Tooltip title={val === '-' ? '' : val}>
+          <span style={{ display: 'inline-block', maxWidth: 210, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: val === '-' ? '#bfbfbf' : '#4b5563' }}>{val || '-'}</span>
+        </Tooltip>
+      )
+    }
+    return <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#4b5563' }}>{val || '-'}</span>
+  }
+
+  const buildStandardColumns = (sourceMilestones: { name: string; order: number }[], sourceProjectType = projectType): ColumnsType<any> => {
+    const cols: ColumnsType<any> = []
+    const typeColumns = getFixedColumnsForType(sourceProjectType)
+
+    for (const col of typeColumns) {
+      if (!isRoadmapColumnVisible(sourceProjectType, visibleColumns, col.key)) continue
+      cols.push({
+        title: col.title,
+        dataIndex: col.key,
+        key: col.key,
+        width: col.width || 100,
+        fixed: col.locked ? 'left' as const : undefined,
+        render: (val: any) => renderProjectCell(col.key, val),
+      })
     }
 
-    // Dynamic milestone columns
-    for (const ms of milestones) {
+    for (const ms of sourceMilestones) {
+      const field = getMilestoneColumnKey(ms.name)
+      if (!visibleColumns.includes(field)) continue
       cols.push({
         title: ms.name,
-        dataIndex: `ms_${ms.name}`,
-        key: `ms_${ms.name}`,
+        dataIndex: field,
+        key: field,
         width: 120,
         align: 'center' as const,
         render: (val: string) => (
-          <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#4b5563' }}>{val}</span>
+          <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#4b5563' }}>{val || '-'}</span>
         ),
       })
     }
 
-    // 整机产品项目：产品上市列
-    if (projectType === '整机产品项目') {
-      cols.push({
-        title: '产品上市', dataIndex: 'launchDate', key: 'launchDate', width: 120, align: 'center' as const,
-        render: (val: string) => <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#4b5563' }}>{val}</span>,
-      })
-    }
-
-    // Fixed right - actions
     cols.push({
       title: '操作',
       key: 'action',
@@ -233,12 +262,17 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     })
 
     return cols
+  }
+
+  // Build columns
+  const columns = useMemo((): ColumnsType<any> => {
+    return buildStandardColumns(milestones)
   }, [visibleColumns, milestones, onViewProject, projectType])
 
   // Reset to default view state
   const resetToDefault = () => {
-    setFilters({})
-    setVisibleColumns(getDefaultVisibleColumns(projectType))
+    setFilters([])
+    setVisibleColumns(defaultVisibleColumns)
     setPageSize(10)
     setCurrentPage(1)
   }
@@ -248,19 +282,19 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     // 列集合：scope='current' 用当前可见列，scope='all' 用全部固定列 + 全部里程碑
     const fixedCols = getFixedColumnsForType(projectType)
     const visibleFixedKeys = scope === 'current'
-      ? fixedCols.filter(c => visibleColumns.includes(c.key)).map(c => c.key)
+      ? fixedCols.filter(c => isRoadmapColumnVisible(projectType, visibleColumns, c.key)).map(c => c.key)
       : fixedCols.map(c => c.key)
+    const exportMilestones = scope === 'current'
+      ? milestones.filter(ms => visibleColumns.includes(getMilestoneColumnKey(ms.name)))
+      : milestones
 
     const exportCols: ExportColumn[] = []
     for (const col of fixedCols) {
       if (!visibleFixedKeys.includes(col.key)) continue
       exportCols.push({ key: col.key, title: col.title })
     }
-    for (const ms of milestones) {
-      exportCols.push({ key: `ms_${ms.name}`, title: ms.name })
-    }
-    if (projectType === '整机产品项目') {
-      exportCols.push({ key: 'launchDate', title: '产品上市' })
+    for (const ms of exportMilestones) {
+      exportCols.push({ key: getMilestoneColumnKey(ms.name), title: ms.name })
     }
 
     // 数据源：scope='current' 用筛选后的 tableData，scope='all' 用 allTableData
@@ -280,7 +314,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       id: Date.now().toString(),
       name: viewName.trim(),
       projectType: projectType as any,
-      filters: { ...filters },
+      filters: [...filters],
       visibleColumns: [...visibleColumns],
       pageSize,
       createdAt: new Date().toISOString(),
@@ -305,8 +339,8 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     const view = savedViews.find(v => v.id === viewId)
     if (!view) return
     if (view.projectType) setProjectType(view.projectType)
-    setFilters(view.filters || {})
-    setVisibleColumns(view.visibleColumns || getDefaultVisibleColumns(view.projectType || projectType))
+    setFilters(Array.isArray(view.filters) ? view.filters : [])
+    setVisibleColumns(view.visibleColumns || getDefaultVisibleColumns(view.projectType || projectType, milestones))
     setPageSize(view.pageSize || 10)
     setCurrentPage(1)
   }
@@ -397,31 +431,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
   const displayData: any[] = useMemo(() => {
     if (compareMode && diffResult) {
       let rows = diffResult.rows
-      // Apply existing filters to diff rows (using target ?? base for field lookup)
-      if (filters.productLine?.length) {
-        rows = rows.filter(r => {
-          const src = r.target ?? r.base
-          return src && filters.productLine!.includes(src.productLine)
-        })
-      }
-      if (filters.chipPlatform?.length) {
-        rows = rows.filter(r => {
-          const src = r.target ?? r.base
-          return src && filters.chipPlatform!.includes(src.chipPlatform)
-        })
-      }
-      if (filters.status?.length) {
-        rows = rows.filter(r => {
-          const src = r.target ?? r.base
-          return src && filters.status!.includes(src.status)
-        })
-      }
-      if (filters.tosVersion?.length) {
-        rows = rows.filter(r => {
-          const src = r.target ?? r.base
-          return src && filters.tosVersion!.includes(src.tosVersion)
-        })
-      }
+      rows = rows.filter(r => applyFilterConditions([r.target ?? r.base].filter(Boolean), filters).length > 0)
       if (onlyDiffRows) {
         rows = rows.filter(r => r.rowStatus !== 'same')
       }
@@ -440,48 +450,22 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       return buildCompareColumns(diffResult, visibleColumns, projectType, onViewProject)
     }
     if (!activeSnapshot) return columns
-
-    // Existing snapshot column logic (unchanged)
-    const cols: ColumnsType<any> = []
-    const snapshotType = activeSnapshot.projectType
-    const typeColumns = getFixedColumnsForType(snapshotType)
-    for (const col of typeColumns) {
-      if (!visibleColumns.includes(col.key)) continue
-      if (col.key === 'status') {
-        cols.push({
-          title: col.title, dataIndex: col.key, key: col.key, width: 90,
-          render: (val: string) => {
-            const colorMap: Record<string, string> = { '进行中': 'processing', '已完成': 'success', '筹备中': 'warning', '暂停': 'default', '未开始': 'default' }
-            return <Tag color={colorMap[val] || 'default'}>{val}</Tag>
-          },
-        })
-      } else if (col.key === 'projectName') {
-        cols.push({ title: col.title, dataIndex: col.key, key: col.key, width: 160, render: (text: string) => <span style={{ fontWeight: 500, fontSize: 13 }}>{text}</span> })
-      } else {
-        cols.push({ title: col.title, dataIndex: col.key, key: col.key, width: 100 })
-      }
-    }
-    for (const ms of displayMilestones) {
-      cols.push({
-        title: ms.name, dataIndex: `ms_${ms.name}`, key: `ms_${ms.name}`, width: 120, align: 'center' as const,
-        render: (val: string) => <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#4b5563' }}>{val}</span>,
-      })
-    }
-    cols.push({
-      title: '操作', key: 'action', fixed: 'right' as const, width: 80,
-      render: (_: any, record: any) => (
-        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => onViewProject(record.projectId, record.market)}>查看/记录</Button>
-      ),
-    })
-    return cols
+    return buildStandardColumns(displayMilestones, activeSnapshot.projectType)
   }, [compareMode, diffResult, activeSnapshot, visibleColumns, displayMilestones, onViewProject, projectType, columns])
 
-  const hasActiveFilters = Object.values(filters).some(v => v && v.length > 0)
+  const hasActiveFilters = filters.some(f => f.field && f.value.trim())
 
   // Columns available for column settings (context-aware)
-  const settableColumns = getFixedColumnsForType(projectType).filter(c => {
-    return true // all columns configurable
-  })
+  const projectInfoSettableColumns = getFixedColumnsForType(projectType).filter(c => !c.locked)
+  const milestoneSettableColumns = milestones.map(ms => ({
+    key: getMilestoneColumnKey(ms.name),
+    title: ms.name,
+    defaultRoadmap: !!ms.defaultRoadmap,
+  }))
+  const filterFieldOptions = [
+    ...getFixedColumnsForType(projectType).map(c => ({ value: c.key, label: c.title })),
+    ...milestones.map(ms => ({ value: getMilestoneColumnKey(ms.name), label: ms.name })),
+  ]
 
   // View tabs
   const viewTabs = useMemo(() => {
@@ -539,7 +523,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
       <Tooltip title="筛选">
         <Button
           icon={<FilterOutlined />}
-          onClick={() => { setTempFilters({ ...filters }); setShowFilterModal(true) }}
+          onClick={() => { setTempFilters(filters.length ? filters.map(f => ({ ...f })) : [createFilterCondition()]); setShowFilterModal(true) }}
           type={hasActiveFilters ? 'primary' : 'default'}
           ghost={hasActiveFilters}
           size="small"
@@ -549,7 +533,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         </Button>
       </Tooltip>
       <Tooltip title="列设置">
-        <Button icon={<SettingOutlined />} size="small" style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
+        <Button icon={<SettingOutlined />} size="small" style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)}>列设置</Button>
       </Tooltip>
       <div style={{ width: 1, height: 18, background: '#e0e0e0' }} />
       <Tooltip title={compareMode ? '对比模式下不可创建快照' : '将当前数据创建基线快照'}>
@@ -639,7 +623,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
                 onClick={() => {
                   setProjectType(t)
                   setActiveViewId(DEFAULT_VIEW_ID)
-                  setFilters({})
+                  setFilters([])
                   setCurrentPage(1)
                   setActiveSnapshotId(null)
                   setCompareMode(false)
@@ -776,102 +760,114 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         {tableComponent}
       </div>
 
-      {/* Filter Modal */}
-      <Modal
+      {/* Filter Drawer */}
+      <Drawer
         title="筛选条件"
         open={showFilterModal}
-        onCancel={() => setShowFilterModal(false)}
-        onOk={() => {
-          setFilters(tempFilters)
-          setCurrentPage(1)
-          setShowFilterModal(false)
-        }}
-        okText="应用"
-        cancelText="取消"
+        onClose={() => setShowFilterModal(false)}
         width={520}
-        footer={[
-          <Button key="clear" onClick={() => setTempFilters({})}>
-            清除全部
-          </Button>,
-          <Button key="cancel" onClick={() => setShowFilterModal(false)}>
-            取消
-          </Button>,
-          <Button key="ok" type="primary" onClick={() => {
-            setFilters(tempFilters)
-            setCurrentPage(1)
-            setShowFilterModal(false)
-          }}>
-            应用
-          </Button>,
-        ]}
+        placement="right"
+        footer={(
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Button key="clear" onClick={() => setTempFilters([createFilterCondition()])}>
+              清除全部
+            </Button>
+            <Space>
+              <Button key="cancel" onClick={() => setShowFilterModal(false)}>
+                取消
+              </Button>
+              <Button key="ok" type="primary" onClick={() => {
+                setFilters(tempFilters.filter(item => item.field && item.value.trim()))
+                setCurrentPage(1)
+                setShowFilterModal(false)
+              }}>
+                应用
+              </Button>
+            </Space>
+          </div>
+        )}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {filterOptions.productLine.length > 0 && (
-            <div>
-              <div style={{ marginBottom: 8, fontWeight: 500, color: '#111827' }}>产品线</div>
-              <Checkbox.Group
-                options={filterOptions.productLine}
-                value={tempFilters.productLine || []}
-                onChange={(vals) => setTempFilters(prev => ({ ...prev, productLine: vals as string[] }))}
-              />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {tempFilters.map((condition) => (
+            <div key={condition.id} style={{ padding: 12, border: '1px solid #eef2ff', borderRadius: 8, background: '#fafbff' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 116px', gap: 8, marginBottom: 8 }}>
+                <Select
+                  aria-label="筛选字段"
+                  placeholder="筛选字段"
+                  value={condition.field || undefined}
+                  options={filterFieldOptions}
+                  onChange={(value) => setTempFilters(prev => prev.map(item => item.id === condition.id ? { ...item, field: value } : item))}
+                />
+                <Select
+                  value={condition.operator}
+                  options={FILTER_OPERATORS as any}
+                  onChange={(value) => setTempFilters(prev => prev.map(item => item.id === condition.id ? { ...item, operator: value } : item))}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Input
+                  placeholder="输入筛选值"
+                  value={condition.value}
+                  onChange={(e) => setTempFilters(prev => prev.map(item => item.id === condition.id ? { ...item, value: e.target.value } : item))}
+                />
+                <Button
+                  icon={<DeleteOutlined />}
+                  danger
+                  onClick={() => setTempFilters(prev => prev.length > 1 ? prev.filter(item => item.id !== condition.id) : [createFilterCondition()])}
+                />
+              </div>
             </div>
-          )}
-          {filterOptions.chipPlatform.length > 0 && (
-            <div>
-              <div style={{ marginBottom: 8, fontWeight: 500, color: '#111827' }}>平台厂商</div>
-              <Checkbox.Group
-                options={filterOptions.chipPlatform}
-                value={tempFilters.chipPlatform || []}
-                onChange={(vals) => setTempFilters(prev => ({ ...prev, chipPlatform: vals as string[] }))}
-              />
-            </div>
-          )}
-          {filterOptions.status.length > 0 && (
-            <div>
-              <div style={{ marginBottom: 8, fontWeight: 500, color: '#111827' }}>状态</div>
-              <Checkbox.Group
-                options={filterOptions.status}
-                value={tempFilters.status || []}
-                onChange={(vals) => setTempFilters(prev => ({ ...prev, status: vals as string[] }))}
-              />
-            </div>
-          )}
-          {filterOptions.tosVersion.length > 0 && (
-            <div>
-              <div style={{ marginBottom: 8, fontWeight: 500, color: '#111827' }}>tOS版本</div>
-              <Checkbox.Group
-                options={filterOptions.tosVersion}
-                value={tempFilters.tosVersion || []}
-                onChange={(vals) => setTempFilters(prev => ({ ...prev, tosVersion: vals as string[] }))}
-              />
-            </div>
-          )}
+          ))}
+          <Button
+            type="dashed"
+            icon={<PlusOutlined />}
+            onClick={() => setTempFilters(prev => [...prev, createFilterCondition()])}
+          >
+            添加条件
+          </Button>
         </div>
-      </Modal>
+      </Drawer>
 
-      {/* Column Settings Modal */}
-      <Modal
+      {/* Column Settings Drawer */}
+      <Drawer
         title="列设置"
         open={showColumnModal}
-        onCancel={() => setShowColumnModal(false)}
-        onOk={() => setShowColumnModal(false)}
-        okText="确定"
-        cancelText="取消"
-        width={400}
+        onClose={() => setShowColumnModal(false)}
+        width={420}
+        placement="right"
+        footer={(
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Button onClick={() => setVisibleColumns(defaultVisibleColumns)}>重置默认</Button>
+            <Space>
+              <Button onClick={() => setShowColumnModal(false)}>取消</Button>
+              <Button type="primary" onClick={() => setShowColumnModal(false)}>确定</Button>
+            </Space>
+          </div>
+        )}
       >
         <div style={{ marginBottom: 8, fontSize: 12, color: '#9ca3af' }}>
-          &quot;项目名称&quot;和&quot;操作&quot;列始终显示，以下为可选列：
+          {projectType === '整机产品项目' ? '项目名、市场' : '项目名称'}为固定列，始终显示。
         </div>
         <Checkbox.Group
           value={visibleColumns}
           onChange={(vals) => setVisibleColumns(vals as string[])}
           style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
         >
-          {settableColumns.map(col => (
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', margin: '8px 0 2px' }}>项目信息字段</div>
+          {projectInfoSettableColumns.map(col => (
             <Checkbox key={col.key} value={col.key}>{col.title}</Checkbox>
           ))}
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', margin: '14px 0 2px' }}>里程碑信息字段</div>
+          {milestoneSettableColumns.map(col => (
+            <Checkbox key={col.key} value={col.key}>
+              <Space size={6}>
+                <span>{col.title}</span>
+                {col.defaultRoadmap && <Tag color="green" style={{ marginInlineEnd: 0 }}>默认</Tag>}
+              </Space>
+            </Checkbox>
+          ))}
         </Checkbox.Group>
-      </Modal>
+      </Drawer>
 
       {/* Save View Modal */}
       <Modal

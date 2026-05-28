@@ -33,10 +33,19 @@ export const LEVEL1_TASKS = [
 // 配置中心模板专用：只保留结构字段，清空日期/工期/实际/状态/进度
 export const LEVEL1_TEMPLATE_TASKS = LEVEL1_TASKS.map(t => ({
   ...t,
+  defaultRoadmap: !!t.parentId,
   planStartDate: '', planEndDate: '', estimatedDays: 0,
   actualStartDate: '', actualEndDate: '', actualDays: 0,
   status: '未开始', progress: 0,
 }))
+
+export const TEMPLATE_PROJECT_TYPES = ['整机产品项目', '产品项目', '技术项目', '能力建设项目']
+
+export const getTemplateSnapshotKey = (projectType: string, versionId: string, planLevel = 'level1') => (
+  `template::${projectType}::${planLevel}::${versionId}`
+)
+
+const cloneLevel1TemplateTasks = () => LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
 
 export const ALL_COLUMNS = [
   { key: 'id', title: '序号', default: true },
@@ -173,6 +182,7 @@ export interface PlanState {
 
   // Published snapshots
   publishedSnapshots: Record<string, any[]>
+  configTemplateTasksByType: Record<string, any[]>
 
   // Version compare
   compareVersionA: string
@@ -225,6 +235,7 @@ export interface PlanActions {
   setCollapsedNodes: (v: Record<string, Set<string>> | ((prev: Record<string, Set<string>>) => Record<string, Set<string>>)) => void
 
   setPublishedSnapshots: (v: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void
+  setConfigTemplateTasksByType: (v: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void
 
   setCompareVersionA: (v: string) => void
   setCompareVersionB: (v: string) => void
@@ -292,6 +303,10 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
 
   // Published snapshots
   publishedSnapshots: {},
+  configTemplateTasksByType: TEMPLATE_PROJECT_TYPES.reduce((acc, type) => {
+    acc[type] = cloneLevel1TemplateTasks()
+    return acc
+  }, {} as Record<string, any[]>),
 
   // Version compare
   compareVersionA: 'v1',
@@ -371,6 +386,7 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
   setCollapsedNodes: (v) => set((s) => ({ collapsedNodes: typeof v === 'function' ? v(s.collapsedNodes) : v })),
 
   setPublishedSnapshots: (v) => set((s) => ({ publishedSnapshots: typeof v === 'function' ? v(s.publishedSnapshots) : v })),
+  setConfigTemplateTasksByType: (v) => set((s) => ({ configTemplateTasksByType: typeof v === 'function' ? v(s.configTemplateTasksByType) : v })),
 
   setCompareVersionA: (v) => set({ compareVersionA: v }),
   setCompareVersionB: (v) => set({ compareVersionB: v }),

@@ -6,36 +6,89 @@ import { EyeOutlined, ArrowRightOutlined } from '@ant-design/icons'
 
 const STORAGE_KEY = 'pms_roadmap_milestone_views'
 
-// Shared column configs (moved from MilestoneView.tsx 2026-04-10)
-export const SOFTWARE_FIXED_COLUMNS = [
-  { key: 'projectName', title: '项目名称' },
-  { key: 'versionType', title: '版本类型' },
-  { key: 'currentNode', title: '当前节点' },
-  { key: 'chipPlatform', title: '芯片平台' },
-  { key: 'status', title: '状态' },
-  { key: 'spm', title: 'SPM' },
-]
-
-export const MACHINE_FIXED_COLUMNS = [
-  { key: 'tosVersion', title: 'tOS版本' },
-  { key: 'brand', title: '品牌' },
-  { key: 'productType', title: '产品类型' },
-  { key: 'productLine', title: '产品线' },
-  { key: 'projectName', title: '项目名称' },
-  { key: 'chipPlatform', title: '芯片平台' },
-  { key: 'memory', title: '内存' },
-  { key: 'versionType', title: '版本类型' },
-  { key: 'developMode', title: '开发模式' },
-  { key: 'status', title: '状态' },
-  { key: 'spm', title: 'SPM' },
-]
-
-export function getFixedColumnsForType(projectType: string) {
-  return projectType === '整机产品项目' ? MACHINE_FIXED_COLUMNS : SOFTWARE_FIXED_COLUMNS
+export interface RoadmapColumnConfig {
+  key: string
+  title: string
+  width?: number
+  defaultVisible?: boolean
+  locked?: boolean
 }
 
-export function getDefaultVisibleColumns(projectType: string) {
-  return getFixedColumnsForType(projectType).map(c => c.key)
+// Shared project-info column configs.
+export const SOFTWARE_PROJECT_INFO_COLUMNS: RoadmapColumnConfig[] = [
+  { key: 'projectName', title: '项目名称', width: 170, defaultVisible: true, locked: true },
+  { key: 'status', title: '项目状态', width: 100, defaultVisible: true },
+  { key: 'healthStatus', title: '健康状态', width: 100 },
+  { key: 'currentNode', title: '当前节点', width: 110, defaultVisible: true },
+  { key: 'brand', title: '品牌', width: 100 },
+  { key: 'productLine', title: '产品线', width: 110 },
+  { key: 'versionType', title: '版本类型', width: 100, defaultVisible: true },
+  { key: 'chipPlatform', title: '芯片平台', width: 110, defaultVisible: true },
+  { key: 'developMode', title: '开发模式', width: 100, defaultVisible: true },
+  { key: 'spm', title: 'SPM', width: 90, defaultVisible: true },
+  { key: 'projectDescription', title: '项目描述', width: 220 },
+]
+
+export const MACHINE_PROJECT_INFO_COLUMNS: RoadmapColumnConfig[] = [
+  { key: 'tosVersion', title: 'tOS版本', width: 110, defaultVisible: true },
+  { key: 'brand', title: '品牌', width: 100, defaultVisible: true },
+  { key: 'productLine', title: '产品线', width: 110, defaultVisible: true },
+  { key: 'projectName', title: '项目名', width: 170, defaultVisible: true, locked: true },
+  { key: 'market', title: '市场', width: 80, defaultVisible: true, locked: true },
+  { key: 'chipPlatform', title: '芯片平台', width: 110, defaultVisible: true },
+  { key: 'memory', title: '内存', width: 110, defaultVisible: true },
+  { key: 'versionType', title: '版本类型', width: 100, defaultVisible: true },
+  { key: 'cooperationForm', title: '合作形式', width: 110, defaultVisible: true },
+  { key: 'healthStatus', title: '健康状态', width: 100 },
+  { key: 'spm', title: 'SPM', width: 90, defaultVisible: true },
+  { key: 'mainboard', title: '主板名', width: 110 },
+  { key: 'marketName', title: '市场名', width: 120 },
+  { key: 'currentNode', title: '当前节点', width: 110 },
+  { key: 'productType', title: '产品类型', width: 100, defaultVisible: true },
+  { key: 'androidVersion', title: '安卓版本', width: 110 },
+  { key: 'developMode', title: '研发模式', width: 100 },
+  { key: 'projectLevel', title: '项目等级', width: 100 },
+  { key: 'projectDescription', title: '项目描述', width: 220 },
+  { key: 'cpu', title: '芯片型号', width: 110 },
+  { key: 'bom', title: 'Bom', width: 130 },
+  { key: 'lcd', title: '屏幕', width: 120 },
+  { key: 'screenShape', title: '屏幕形态', width: 100 },
+  { key: 'screenType', title: '屏幕类型', width: 100 },
+  { key: 'frontCamera', title: '前摄像头', width: 120 },
+  { key: 'primaryCamera', title: '后摄像头', width: 140 },
+  { key: 'networkMode', title: '网络模式', width: 100 },
+  { key: 'kernelVersion', title: 'kernel版本', width: 110 },
+  { key: 'lightEffect', title: '灯效', width: 90 },
+  { key: 'faceRecognition', title: '人脸', width: 120 },
+  { key: 'soundEffect', title: '音效', width: 110 },
+  { key: 'simCard', title: 'SIM卡', width: 110 },
+  { key: 'motor', title: '马达', width: 110 },
+  { key: 'fingerprint', title: '指纹', width: 130 },
+  { key: 'infrared', title: '红外', width: 90 },
+]
+
+// Backwards-compatible aliases used by older callers.
+export const SOFTWARE_FIXED_COLUMNS = SOFTWARE_PROJECT_INFO_COLUMNS
+export const MACHINE_FIXED_COLUMNS = MACHINE_PROJECT_INFO_COLUMNS
+
+export function getFixedColumnsForType(projectType: string): RoadmapColumnConfig[] {
+  return projectType === '整机产品项目' ? MACHINE_PROJECT_INFO_COLUMNS : SOFTWARE_PROJECT_INFO_COLUMNS
+}
+
+export function getMilestoneColumnKey(name: string) {
+  return `ms_${name}`
+}
+
+export function isRoadmapColumnVisible(projectType: string, visibleColumns: string[], key: string) {
+  const infoCol = getFixedColumnsForType(projectType).find(c => c.key === key)
+  return !!infoCol?.locked || visibleColumns.includes(key)
+}
+
+export function getDefaultVisibleColumns(projectType: string, milestones: MilestoneInfo[] = []) {
+  return [
+    ...getFixedColumnsForType(projectType).filter(c => c.defaultVisible && !c.locked).map(c => c.key),
+    ...milestones.filter(m => m.defaultRoadmap).map(m => getMilestoneColumnKey(m.name)),
+  ]
 }
 
 /** 推断里程碑排序权重 */
@@ -57,49 +110,79 @@ export function inferMilestoneOrder(name: string): number {
   return 1000
 }
 
-/** 从项目列表中聚合里程碑（去重并排序） */
-export function aggregateMilestones(
-  projects: any[],
-  projectType: string,
-  marketPlanData: Record<string, { tasks: any[], level2Tasks: any[], createdLevel2Plans: any[] }>,
-  level1Tasks: any[]
-): MilestoneInfo[] {
-  const milestoneSet = new Set<string>()
-  const filtered = projects.filter(p => p.type === projectType)
+function getTaskDepth(task: any, allTasks: any[]): number {
+  if (!task.parentId) return 0
+  const parent = allTasks.find(t => t.id === task.parentId)
+  if (!parent) return 1
+  return 1 + getTaskDepth(parent, allTasks)
+}
 
-  for (const project of filtered) {
-    if (project.type === '整机产品项目' && project.markets?.length > 0) {
-      // 整机产品项目：使用第一个市场的 tasks
-      const firstMarket = project.markets[0]
-      const data = marketPlanData[firstMarket]
-      if (data?.tasks) {
-        for (const task of data.tasks) {
-          if (task.parentId) {
-            milestoneSet.add(task.taskName)
-          }
-        }
-      }
-    } else {
-      // 其他项目类型：使用 level1Tasks
-      for (const task of level1Tasks) {
-        if (task.parentId) {
-          milestoneSet.add(task.taskName)
-        }
-      }
-    }
-  }
-
-  const milestones: MilestoneInfo[] = Array.from(milestoneSet).map(name => ({
-    name,
-    order: inferMilestoneOrder(name),
-  }))
-
-  milestones.sort((a, b) => {
-    if (a.order !== b.order) return a.order - b.order
-    return a.name.localeCompare(b.name, 'zh-CN')
+/** 从配置中心最新已发布模板中聚合二级任务为里程碑列 */
+export function aggregateMilestones(templateTasks: any[]): MilestoneInfo[] {
+  const milestoneMap = new Map<string, MilestoneInfo>()
+  templateTasks.forEach((task, index) => {
+    if (!task.parentId || getTaskDepth(task, templateTasks) !== 1) return
+    if (milestoneMap.has(task.taskName)) return
+    milestoneMap.set(task.taskName, {
+      name: task.taskName,
+      order: index,
+      defaultRoadmap: !!task.defaultRoadmap,
+    })
   })
 
-  return milestones
+  return Array.from(milestoneMap.values()).sort((a, b) => {
+    if (a.order !== b.order) return a.order - b.order
+    return inferMilestoneOrder(a.name) - inferMilestoneOrder(b.name)
+  })
+}
+
+function normalizeValue(value: any): string {
+  if (Array.isArray(value)) return value.join(',')
+  if (value === undefined || value === null || value === '') return '-'
+  return String(value)
+}
+
+function buildProjectInfo(project: any, projectType: string, market?: string): any {
+  const isMachine = projectType === '整机产品项目'
+  return {
+    projectId: project.id,
+    projectName: project.name,
+    market: isMachine ? normalizeValue(market) : undefined,
+    tosVersion: normalizeValue(project.tosVersion),
+    brand: normalizeValue(project.brand),
+    productLine: normalizeValue(project.productLine),
+    chipPlatform: normalizeValue(project.chipPlatform),
+    memory: normalizeValue(project.memory),
+    versionType: normalizeValue(project.versionType),
+    cooperationForm: normalizeValue(project.cooperationForm),
+    healthStatus: normalizeValue(project.healthStatus),
+    status: normalizeValue(project.status),
+    spm: normalizeValue(project.spm),
+    mainboard: normalizeValue(project.mainboard),
+    marketName: normalizeValue(project.marketName),
+    currentNode: normalizeValue(project.currentNode),
+    productType: normalizeValue(project.productType),
+    androidVersion: normalizeValue(project.androidVersion || project.operatingSystem),
+    developMode: normalizeValue(project.developMode),
+    projectLevel: normalizeValue(project.projectLevel),
+    projectDescription: normalizeValue(project.projectDescription || project.description),
+    cpu: normalizeValue(project.cpu),
+    bom: normalizeValue(project.bom),
+    lcd: normalizeValue(project.lcd),
+    screenShape: normalizeValue(project.screenShape),
+    screenType: normalizeValue(project.screenType),
+    frontCamera: normalizeValue(project.frontCamera),
+    primaryCamera: normalizeValue(project.primaryCamera),
+    networkMode: normalizeValue(project.networkMode),
+    kernelVersion: normalizeValue(project.kernelVersion),
+    lightEffect: normalizeValue(project.lightEffect),
+    faceRecognition: normalizeValue(project.faceRecognition),
+    soundEffect: normalizeValue(project.soundEffect),
+    simCard: normalizeValue(project.simCard),
+    motor: normalizeValue(project.motor),
+    fingerprint: normalizeValue(project.fingerprint),
+    infrared: normalizeValue(project.infrared),
+  }
 }
 
 /** 生成表格数据行 */
@@ -115,51 +198,28 @@ export function generateTableData(
 
   for (const project of filtered) {
     if (project.type === '整机产品项目') {
-      const row: any = {
-        key: project.id,
-        projectId: project.id,
-        projectName: project.name,
-        productLine: project.productLine || '-',
-        chipPlatform: project.chipPlatform || '-',
-        tosVersion: project.tosVersion || '-',
-        status: project.status,
-        spm: project.spm || '-',
-        brand: project.brand || '-',
-        productType: project.productType || '-',
-        memory: project.memory || '-',
-        versionType: project.versionType || '-',
-        developMode: project.developMode || '-',
-        launchDate: project.launchDate || '-',
-        currentNode: project.currentNode || '-',
+      const markets = project.markets?.length ? project.markets : [project.market || '-']
+      for (const market of markets) {
+        const row: any = {
+          key: `${project.id}::${market}`,
+          ...buildProjectInfo(project, projectType, market),
+        }
+        const data = market ? marketPlanData[market] : null
+        for (const ms of milestones) {
+          const task = data?.tasks?.find((t: any) => t.parentId && t.taskName === ms.name)
+          row[getMilestoneColumnKey(ms.name)] = task?.planEndDate || '-'
+        }
+        rows.push(row)
       }
-
-      // Use first market's tasks for milestone data
-      const firstMarket = project.markets?.[0]
-      const data = firstMarket ? marketPlanData[firstMarket] : null
-      for (const ms of milestones) {
-        const task = data?.tasks?.find((t: any) => t.parentId && t.taskName === ms.name)
-        row[`ms_${ms.name}`] = task?.planEndDate || '-'
-      }
-
-      rows.push(row)
     } else {
       const row: any = {
         key: project.id,
-        projectId: project.id,
-        projectName: project.name,
-        market: undefined,
-        productLine: project.productLine || '-',
-        chipPlatform: project.chipPlatform || '-',
-        tosVersion: project.tosVersion || '-',
-        status: project.status,
-        spm: project.spm || '-',
-        versionType: project.versionType || '-',
-        currentNode: project.currentNode || '-',
+        ...buildProjectInfo(project, projectType),
       }
 
       for (const ms of milestones) {
         const task = level1Tasks.find((t: any) => t.parentId && t.taskName === ms.name)
-        row[`ms_${ms.name}`] = task?.planEndDate || '-'
+        row[getMilestoneColumnKey(ms.name)] = task?.planEndDate || '-'
       }
 
       rows.push(row)
@@ -278,14 +338,7 @@ function compareDateField(oldVal: any, newVal: any): CellDiff {
 
 /** Which fields to compare on a row. Milestones are added dynamically per-call. */
 function getCompareFields(projectType: string): string[] {
-  const base = [
-    'projectName', 'productLine', 'chipPlatform', 'tosVersion',
-    'status', 'spm', 'versionType', 'currentNode',
-  ]
-  if (projectType === '整机产品项目') {
-    return [...base, 'brand', 'productType', 'memory', 'developMode', 'launchDate']
-  }
-  return base
+  return getFixedColumnsForType(projectType).map(c => c.key)
 }
 
 export function diffSnapshots(
@@ -325,7 +378,7 @@ export function diffSnapshots(
   // 3. Walk union of rowKeys
   const allKeys = new Set<string>([...baseMap.keys(), ...targetMap.keys()])
   const fields = getCompareFields(projectType)
-  const milestoneFields = mergedMilestones.map(m => `ms_${m.name}`)
+  const milestoneFields = mergedMilestones.map(m => getMilestoneColumnKey(m.name))
 
   const rows: DiffRow[] = []
   const summary = { added: 0, removed: 0, modified: 0, cellChanges: 0 }
@@ -457,17 +510,19 @@ export function buildCompareColumns(
   const typeColumns = getFixedColumnsForType(projectType)
 
   for (const col of typeColumns) {
-    if (!visibleColumns.includes(col.key)) continue
+    if (!isRoadmapColumnVisible(projectType, visibleColumns, col.key)) continue
     cols.push({
       title: col.title,
       key: col.key,
-      width: col.key === 'projectName' ? 160 : 100,
+      width: col.width || (col.key === 'projectName' ? 160 : 100),
+      fixed: col.locked ? 'left' as const : undefined,
       render: (_: any, row: DiffRow) => renderDiffCell(col.key, row),
     })
   }
 
   for (const ms of diffResult.mergedMilestones) {
-    const field = `ms_${ms.name}`
+    const field = getMilestoneColumnKey(ms.name)
+    if (!visibleColumns.includes(field)) continue
     const titleNode = ms.onlyIn === 'target'
       ? React.createElement('span', null, ms.name, ' ', React.createElement(Tag, { color: 'green', style: { fontSize: 10, marginLeft: 4 } }, '新增'))
       : ms.onlyIn === 'base'
@@ -479,16 +534,6 @@ export function buildCompareColumns(
       width: 150,
       align: 'center' as const,
       render: (_: any, row: DiffRow) => renderDiffCell(field, row),
-    })
-  }
-
-  if (projectType === '整机产品项目') {
-    cols.push({
-      title: '产品上市',
-      key: 'launchDate',
-      width: 150,
-      align: 'center' as const,
-      render: (_: any, row: DiffRow) => renderDiffCell('launchDate', row),
     })
   }
 
