@@ -43,6 +43,7 @@ export interface PlanTask {
   parentId?: string;
   order: number;
   taskName: string;
+  defaultRoadmap?: boolean;
   responsibleUser?: string;
   predecessorTask?: string;
   planStartDate?: Date;
@@ -269,20 +270,23 @@ export interface RoadmapViewConfig {
   id: string;
   name: string;
   projectType?: ProjectType;
-  filters: {
-    productLine?: string[];
-    chipPlatform?: string[];
-    status?: string[];
-    tosVersion?: string[];
-  };
+  filters: RoadmapFilterCondition[];
   visibleColumns: string[];
   pageSize: number;
   createdAt: string;
   updatedAt: string;
 }
 
+export interface RoadmapFilterCondition {
+  id: string;
+  field: string;
+  operator: 'contains' | 'notContains' | 'equals';
+  value: string;
+}
+
 // 里程碑信息
 export interface MilestoneInfo {
   name: string;
   order: number;
+  defaultRoadmap?: boolean;
 }

@@ -1,33 +1,28 @@
 'use client'
 
 import React from 'react'
-import { Card, Tabs, Table, Button, Space, Input, Select, Tag, Modal, Form, Popconfirm, Checkbox, Empty, message } from 'antd'
-import { TeamOutlined, SafetyCertificateOutlined, PlusOutlined } from '@ant-design/icons'
+import { Card, Tabs, Table, Button, Space, Input, Select, Tag, Modal, Form, Popconfirm, Empty, message } from 'antd'
+import { TeamOutlined, SafetyCertificateOutlined, PlusOutlined, CheckSquareFilled, CloseOutlined } from '@ant-design/icons'
+import {
+  ALL_USERS,
+  FIXED_ROLES,
+  GLOBAL_PERMISSION_GROUPS,
+  GLOBAL_PERM_OPTIONS,
+  PROJECT_PERMISSION_GROUPS,
+  PROJECT_PERMISSION_ITEMS,
+  getProjectPermissionKeys,
+} from '@/constants/permissions'
 
 // ========== Constants ==========
-
-export const FIXED_ROLES = ['系统管理员', '产品经理', '项目经理', '开发代表', '软件SE', '设计师', '开发工程师', '测试工程师', '管理层']
-
-export const ALL_USERS = ['张三', '李四', '王五', '赵六', '孙七', '周八', '李白', '杜甫']
-
-export const PERMISSION_MODULES = [
-  { key: 'basicInfo', name: '基础信息', permissions: ['查看', '编辑'] },
-  { key: 'requirements', name: '需求', permissions: [] as string[] },
-  { key: 'plan', name: '计划', permissions: ['一级计划-查看', '一级计划-编辑', '一级计划-审核', '二级计划-查看', '二级计划-编辑', '导入/导出'] },
-  { key: 'resources', name: '资源', permissions: ['查看'] },
-  { key: 'tasks', name: '任务', permissions: ['查看'] },
-  { key: 'risks', name: '风险', permissions: ['查看'] },
-]
-
-export const GLOBAL_PERM_OPTIONS = [
-  { key: 'roadmap:view', module: '项目路标', name: '查看' },
-  { key: 'roadmap:edit', module: '项目路标', name: '编辑' },
-  { key: 'roadmap:baseline', module: '项目路标', name: '基线' },
-  { key: 'roadmap:export', module: '项目路标', name: '导出' },
-  { key: 'viewBoard:placeholder', module: '视图看板', name: '' },
-  { key: 'resourceMgmt:placeholder', module: '资源管理', name: '' },
-  { key: 'configCenter:placeholder', module: '配置中心', name: '' },
-]
+export {
+  ALL_USERS,
+  FIXED_ROLES,
+  GLOBAL_PERMISSION_GROUPS,
+  GLOBAL_PERM_OPTIONS,
+  PROJECT_PERMISSION_GROUPS,
+  PROJECT_PERMISSION_ITEMS,
+  getProjectPermissionKeys,
+} from '@/constants/permissions'
 
 // ========== Types ==========
 
@@ -119,11 +114,18 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
     setRoles(roles.map(r => r.name === roleName ? { ...r, members } : r))
   }
   const handlePermToggle = (roleName: string, permKey: string) => {
+    const permission = PROJECT_PERMISSION_ITEMS.find(item => item.key === permKey)
+    const permissionKeys = permission ? getProjectPermissionKeys(permission) : [permKey]
     setRolePermissions(prev => ({
       ...prev,
-      [roleName]: { ...prev[roleName], [permKey]: !prev[roleName]?.[permKey] }
+      [roleName]: {
+        ...prev[roleName],
+        ...Object.fromEntries(permissionKeys.map(key => [key, !prev[roleName]?.[permKey]])),
+      },
     }))
   }
+  const selectedPermissionRole = roles.some(role => role.name === permissionActiveRole) ? permissionActiveRole : roles[0]?.name
+  const maxProjectPermissionColumns = Math.max(...PROJECT_PERMISSION_GROUPS.map(group => group.permissions.length))
 
   return (
     <Card style={{ borderRadius: 8 }}>
@@ -205,47 +207,82 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
 
       {permConfigTab === 'perms' && (
         <div>
-          <Tabs
-            activeKey={permissionActiveRole}
-            onChange={setPermissionActiveRole}
-            type="card"
-            size="small"
-            style={{ marginBottom: 16 }}
-            items={roles.map(r => ({ key: r.name, label: r.name }))}
-          />
-          <div style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden' }}>
-            <div style={{ fontWeight: 600, fontSize: 14, padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #f3f4f6' }}>
-              角色权限配置 — {permissionActiveRole}
-            </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <tbody>
-                {PERMISSION_MODULES.map((mod) => {
-                  const perms = mod.permissions
-                  const maxCols = 6
-                  return (
-                    <tr key={mod.key}>
-                      <td style={{ padding: '12px 16px', fontWeight: 500, fontSize: 14, borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #f3f4f6', width: 100, background: '#f8fafc', verticalAlign: 'middle' }}>{mod.name}</td>
-                      {perms.length > 0 ? (
-                        <>
-                          {perms.map(p => (
-                            <td key={p} style={{ padding: '10px 12px', textAlign: 'center', borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #f3f4f6', minWidth: 110 }}>
-                              <div style={{ fontSize: 13, marginBottom: 6 }}>{p}</div>
-                              <Checkbox checked={!!rolePermissions[permissionActiveRole]?.[`${mod.key}:${p}`]} onChange={() => handlePermToggle(permissionActiveRole, `${mod.key}:${p}`)} />
+          {roles.length === 0 ? (
+            <Empty description="请先添加角色" style={{ padding: '40px 0' }} />
+          ) : (
+            <div>
+              <Tabs
+                activeKey={selectedPermissionRole}
+                onChange={setPermissionActiveRole}
+                type="card"
+                size="small"
+                style={{ marginBottom: 16 }}
+                items={roles.map(role => ({ key: role.name, label: role.name }))}
+              />
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'auto' }}>
+                <div style={{ fontWeight: 600, fontSize: 14, padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
+                  角色权限配置 — {selectedPermissionRole}
+                </div>
+                <table style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                  <tbody>
+                    {PROJECT_PERMISSION_GROUPS.map(group => (
+                      <tr key={group.module}>
+                        <td style={{ width: 130, padding: '18px 16px', fontWeight: 600, fontSize: 14, color: '#1f2937', borderRight: '1px solid #edf0f5', borderBottom: '1px solid #edf0f5', background: '#fbfcff', verticalAlign: 'middle' }}>
+                          {group.module}
+                        </td>
+                        {group.permissions.map(permission => {
+                          const enabled = !!rolePermissions[selectedPermissionRole]?.[permission.key]
+                          return (
+                            <td
+                              key={`${selectedPermissionRole}-${permission.key}`}
+                              style={{
+                                padding: '16px 14px',
+                                textAlign: 'center',
+                                borderRight: '1px solid #edf0f5',
+                                borderBottom: '1px solid #edf0f5',
+                                background: '#fff',
+                                minWidth: 120,
+                              }}
+                            >
+                              <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.4, minHeight: 20, marginBottom: 8 }}>{permission.name}</div>
+                              <button
+                                type="button"
+                                aria-label={`${selectedPermissionRole}-${group.module}-${permission.name}-${enabled ? '已启用' : '未启用'}`}
+                                onClick={() => handlePermToggle(selectedPermissionRole, permission.key)}
+                                style={{
+                                  border: 'none',
+                                  background: 'transparent',
+                                  padding: 0,
+                                  cursor: 'pointer',
+                                  lineHeight: 1,
+                                }}
+                              >
+                                {enabled ? (
+                                  <CheckSquareFilled style={{ color: '#1677ff', fontSize: 17 }} />
+                                ) : (
+                                  <CloseOutlined style={{ color: '#ff0000', fontSize: 16, fontWeight: 700 }} />
+                                )}
+                              </button>
                             </td>
-                          ))}
-                          {perms.length < maxCols && Array.from({ length: maxCols - perms.length }).map((_, i) => (
-                            <td key={`empty-${i}`} style={{ borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #f3f4f6' }} />
-                          ))}
-                        </>
-                      ) : (
-                        <td colSpan={maxCols} style={{ borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #f3f4f6' }} />
-                      )}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                          )
+                        })}
+                        {group.permissions.length < maxProjectPermissionColumns && (
+                          <td
+                            colSpan={maxProjectPermissionColumns - group.permissions.length + 1}
+                            style={{
+                              borderRight: '1px solid #edf0f5',
+                              borderBottom: '1px solid #edf0f5',
+                              background: '#fff',
+                            }}
+                          />
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </Card>
@@ -307,6 +344,8 @@ export const GlobalPermissionConfig: React.FC<GlobalPermissionConfigProps> = ({
       [roleName]: { ...prev[roleName], [permKey]: !prev[roleName]?.[permKey] }
     }))
   }
+  const selectedGlobalPermissionRole = globalRoles.some(role => role.name === globalPermActiveRole) ? globalPermActiveRole : globalRoles[0]?.name
+  const maxGlobalPermissionColumns = Math.max(...GLOBAL_PERMISSION_GROUPS.map(group => group.permissions.length))
 
   return (
     <Card style={{ borderRadius: 8 }}>
@@ -388,55 +427,78 @@ export const GlobalPermissionConfig: React.FC<GlobalPermissionConfigProps> = ({
           {globalRoles.length === 0 ? (
             <Empty description="请先添加角色" style={{ padding: '40px 0' }} />
           ) : (
-            <>
+            <div>
               <Tabs
-                activeKey={globalPermActiveRole}
+                activeKey={selectedGlobalPermissionRole}
                 onChange={setGlobalPermActiveRole}
                 type="card"
                 size="small"
                 style={{ marginBottom: 16 }}
-                items={globalRoles.map(r => ({ key: r.name, label: r.name }))}
+                items={globalRoles.map(role => ({ key: role.name, label: role.name }))}
               />
-              <div style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden' }}>
-                <div style={{ fontWeight: 600, fontSize: 14, padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #f3f4f6' }}>
-                  角色权限配置 — {globalPermActiveRole}
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'auto' }}>
+                <div style={{ fontWeight: 600, fontSize: 14, padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
+                  角色权限配置 — {selectedGlobalPermissionRole}
                 </div>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <table style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                   <tbody>
-                    {(() => {
-                      // 按 module 分组
-                      const modules: { module: string; perms: typeof GLOBAL_PERM_OPTIONS }[] = []
-                      GLOBAL_PERM_OPTIONS.forEach(opt => {
-                        const last = modules[modules.length - 1]
-                        if (last && last.module === opt.module) {
-                          last.perms.push(opt)
-                        } else {
-                          modules.push({ module: opt.module, perms: [opt] })
-                        }
-                      })
-                      const maxCols = Math.max(...modules.map(m => m.perms.filter(p => p.name).length), 4)
-                      return modules.map(mod => {
-                        const realPerms = mod.perms.filter(p => p.name)
-                        return (
-                          <tr key={mod.module}>
-                            <td style={{ padding: '12px 16px', fontWeight: 500, fontSize: 14, borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #f3f4f6', width: 140, background: '#f8fafc', verticalAlign: 'middle' }}>{mod.module}</td>
-                            {realPerms.map(opt => (
-                              <td key={opt.key} style={{ padding: '10px 16px', textAlign: 'center', borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #f3f4f6', minWidth: 110 }}>
-                                <div style={{ fontSize: 13, marginBottom: 6 }}>{opt.name}</div>
-                                <Checkbox checked={!!globalRolePerms[globalPermActiveRole]?.[opt.key]} onChange={() => handlePermToggle(globalPermActiveRole, opt.key)} />
-                              </td>
-                            ))}
-                            {realPerms.length < maxCols && Array.from({ length: maxCols - realPerms.length }).map((_, i) => (
-                              <td key={`empty-${i}`} style={{ borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #f3f4f6' }} />
-                            ))}
-                          </tr>
-                        )
-                      })
-                    })()}
+                    {GLOBAL_PERMISSION_GROUPS.map(group => (
+                      <tr key={group.module}>
+                        <td style={{ width: 130, padding: '18px 16px', fontWeight: 600, fontSize: 14, color: '#1f2937', borderRight: '1px solid #edf0f5', borderBottom: '1px solid #edf0f5', background: '#fbfcff', verticalAlign: 'middle' }}>
+                          {group.module}
+                        </td>
+                        {group.permissions.map(permission => {
+                          const enabled = !!globalRolePerms[selectedGlobalPermissionRole]?.[permission.key]
+                          return (
+                            <td
+                              key={`${selectedGlobalPermissionRole}-${permission.key}`}
+                              style={{
+                                padding: '16px 14px',
+                                textAlign: 'center',
+                                borderRight: '1px solid #edf0f5',
+                                borderBottom: '1px solid #edf0f5',
+                                background: '#fff',
+                                minWidth: 120,
+                              }}
+                            >
+                              <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.4, minHeight: 20, marginBottom: 8 }}>{permission.name}</div>
+                              <button
+                                type="button"
+                                aria-label={`${selectedGlobalPermissionRole}-${group.module}-${permission.name}-${enabled ? '已启用' : '未启用'}`}
+                                onClick={() => handlePermToggle(selectedGlobalPermissionRole, permission.key)}
+                                style={{
+                                  border: 'none',
+                                  background: 'transparent',
+                                  padding: 0,
+                                  cursor: 'pointer',
+                                  lineHeight: 1,
+                                }}
+                              >
+                                {enabled ? (
+                                  <CheckSquareFilled style={{ color: '#1677ff', fontSize: 17 }} />
+                                ) : (
+                                  <CloseOutlined style={{ color: '#ff0000', fontSize: 16, fontWeight: 700 }} />
+                                )}
+                              </button>
+                            </td>
+                          )
+                        })}
+                        {group.permissions.length < maxGlobalPermissionColumns && (
+                          <td
+                            colSpan={maxGlobalPermissionColumns - group.permissions.length}
+                            style={{
+                              borderRight: '1px solid #edf0f5',
+                              borderBottom: '1px solid #edf0f5',
+                              background: '#fff',
+                            }}
+                          />
+                        )}
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
-            </>
+            </div>
           )}
         </div>
       )}

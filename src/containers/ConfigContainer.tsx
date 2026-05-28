@@ -10,13 +10,13 @@ import {
   CalendarOutlined, SwapOutlined, PlusOutlined, SaveOutlined,
   HistoryOutlined, SearchOutlined, AppstoreOutlined, EditOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, PlusSquareOutlined, MinusSquareOutlined,
-  DeleteOutlined, CaretDownOutlined,
+  DeleteOutlined, CaretDownOutlined, CheckCircleFilled,
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { ColumnsType } from 'antd/es/table'
 import { useUiStore } from '@/stores/ui'
-import { usePlanStore, LEVEL2_PLAN_TYPES, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView } from '@/stores/plan'
+import { usePlanStore, LEVEL2_PLAN_TYPES, LEVEL1_TEMPLATE_TASKS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
 import { useProjectStore } from '@/stores/project'
 import { usePermissionStore } from '@/stores/permission'
@@ -57,6 +57,7 @@ export default function ConfigContainer() {
     predecessorWarning, setPredecessorWarning,
     level2PlanTasks, setLevel2PlanTasks,
     activeLevel2Plan,
+    configTemplateTasksByType, setConfigTemplateTasksByType,
   } = usePlanStore()
 
   const transferStore = useTransferStore()
@@ -89,8 +90,15 @@ export default function ConfigContainer() {
     }
   }
 
-  // 配置中心使用模板数据（无日期/工期）
-  const [configTasks, setConfigTasks] = useState(() => LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t })))
+  // 配置中心使用模板数据（按项目类型隔离，无日期/工期）
+  const configTasks = configTemplateTasksByType[selectedProjectType] || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
+  const setConfigTasks = (next: any[] | ((prev: any[]) => any[])) => {
+    setConfigTemplateTasksByType(prev => {
+      const current = prev[selectedProjectType] || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
+      const resolved = typeof next === 'function' ? next(current) : next
+      return { ...prev, [selectedProjectType]: resolved }
+    })
+  }
 
   // 修订版本自动进入编辑状态，已发布版本退出编辑
   useEffect(() => {
@@ -104,7 +112,14 @@ export default function ConfigContainer() {
   // View columns
   const getViewKey = () => `config-${planLevel}-${viewMode}`
   const currentViewMode = viewMode
-  const currentViewColumns = getColumnsForView(currentViewMode)
+  const baseViewColumns = getColumnsForView(currentViewMode)
+  const currentViewColumns = currentViewMode === 'table'
+    ? [
+      baseViewColumns.find((c: any) => c.key === 'id'),
+      { key: 'defaultRoadmap', title: '默认路标', default: true },
+      ...baseViewColumns.filter((c: any) => c.key !== 'id'),
+    ].filter(Boolean)
+    : baseViewColumns
   const currentViewDefaultCols = currentViewColumns.filter((c: any) => c.default).map((c: any) => c.key)
   const visibleColumns = columnsByView[getViewKey()] || currentViewDefaultCols
   const setVisibleColumns = (cols: string[]) => {
@@ -192,6 +207,22 @@ export default function ConfigContainer() {
           </div>
         )
       } })
+      if (visibleColumns.includes('defaultRoadmap')) cols.push({ title: '默认路标', dataIndex: 'defaultRoadmap', key: 'defaultRoadmap', width: 90, align: 'center', render: (val: boolean, record: any) => {
+        const depth = record.indentLevel || 0
+        if (depth !== 1) return null
+        if (isEditMode) {
+          return (
+            <Checkbox
+              checked={!!val}
+              onChange={(e) => {
+                const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, defaultRoadmap: e.target.checked } : t)
+                currentSetTasks(updated)
+              }}
+            />
+          )
+        }
+        return val ? <CheckCircleFilled style={{ color: '#16a34a', fontSize: 16 }} /> : null
+      } })
       if (visibleColumns.includes('taskName')) cols.push({ title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 220, render: (name: string, record: any) => {
         const depth = record.indentLevel || 0
         if (isEditMode) return <Input className="pms-edit-input" value={name} size="small" style={{ fontWeight: depth === 0 ? 600 : 400 }} onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, taskName: e.target.value } : t); currentSetTasks(updated) }} />
@@ -271,7 +302,7 @@ export default function ConfigContainer() {
               const parentTasks = tableTasks.filter((t: any) => !t.parentId)
               const maxOrder = parentTasks.length > 0 ? Math.max(...parentTasks.map((t: any) => parseInt(t.id) || t.order)) : 0
               const newId = String(maxOrder + 1)
-              const newTask: any = { id: newId, order: maxOrder + 1, taskName: '新活动', status: '未开始', progress: 0, responsible: '', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0, actualDays: 0 }
+              const newTask: any = { id: newId, order: maxOrder + 1, taskName: '新活动', defaultRoadmap: false, status: '未开始', progress: 0, responsible: '', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0, actualDays: 0 }
               if (isLevel2Custom && customTasks?.[0]?.planId) newTask.planId = customTasks[0].planId
               currentSetTasks([...tableTasks, newTask]); message.success(`已添加一级活动: ${newId}`)
             }}>添加新活动</Button>
@@ -296,7 +327,7 @@ export default function ConfigContainer() {
     const siblingTasks = currentTasks.filter((t: any) => t.parentId === parentId)
     const newOrder = siblingTasks.length + 1
     const newId = `${parentId}.${newOrder}`
-    const newTask: any = { id: newId, parentId, order: newOrder, taskName: '新子任务', status: '未开始', progress: 0, responsible: '', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0, actualDays: 0 }
+    const newTask: any = { id: newId, parentId, order: newOrder, taskName: '新子任务', defaultRoadmap: false, status: '未开始', progress: 0, responsible: '', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0, actualDays: 0 }
     if (isLevel2TaskContext && parentTask.planId) newTask.planId = parentTask.planId
     const parentIndex = currentTasks.findIndex((t: any) => t.id === parentId)
     let insertIndex = parentIndex + 1
@@ -343,7 +374,10 @@ export default function ConfigContainer() {
     const prevPublished = versions
       .filter(v => v.status === '已发布' && v.id !== currentVersion)
       .sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
-    const baselineTasks: any[] = prevPublished ? (publishedSnapshots[prevPublished.id] || []) : []
+    const getSnapshot = (versionId: string) => {
+      return publishedSnapshots[getTemplateSnapshotKey(selectedProjectType, versionId)] || publishedSnapshots[versionId] || []
+    }
+    const baselineTasks: any[] = prevPublished ? getSnapshot(prevPublished.id) : []
     const changes: TaskChange[] = []
     const baselineMap = new Map<string, any>(baselineTasks.map(t => [t.id, t]))
     for (const curr of configTasks) {
@@ -359,7 +393,12 @@ export default function ConfigContainer() {
     const publishedVersionId = currentVersion
     const publishedVersion = versions.find(v => v.id === publishedVersionId)
     setVersions(versions.map(v => v.id === publishedVersionId ? { ...v, status: '已发布' } : v))
-    setPublishedSnapshots(prev => ({ ...prev, [publishedVersionId]: JSON.parse(JSON.stringify(configTasks)) }))
+    const snapshot = JSON.parse(JSON.stringify(configTasks))
+    setPublishedSnapshots(prev => ({
+      ...prev,
+      [publishedVersionId]: snapshot,
+      [getTemplateSnapshotKey(selectedProjectType, publishedVersionId)]: snapshot,
+    }))
 
     const versionNo = publishedVersion?.versionNo || publishedVersionId
     if (changes.length > 0) {
