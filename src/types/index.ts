@@ -81,9 +81,14 @@ export interface Project {
   // 新增字段
   projectCategory?: string;
   marketName?: string;
+  productType?: string;
   brand?: string;
   productLine?: string;
   developMode?: string;
+  cooperationForm?: string;
+  tosVersion?: string;
+  versionType?: string;
+  projectLevel?: string;
   planStartDate?: string;
   planEndDate?: string;
   developCycle?: number;
@@ -95,10 +100,22 @@ export interface Project {
   mainboard?: string;
   born?: string;
   cpu?: string;
+  bom?: string;
   memory?: string;
   lcd?: string;
+  screenShape?: string;
+  screenType?: string;
   frontCamera?: string;
   primaryCamera?: string;
+  networkMode?: string;
+  kernelVersion?: string;
+  lightEffect?: string;
+  faceRecognition?: string;
+  soundEffect?: string;
+  simCard?: string;
+  motor?: string;
+  fingerprint?: string;
+  infrared?: string;
   operatingSystem?: string;
   version?: string;
   market?: string;
