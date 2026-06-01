@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { GanttScaleMode } from '@/lib/ganttScale'
 import type { CompareTableRow } from '@/lib/versionCompare'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -152,6 +153,7 @@ export interface PlanState {
   // Project-space plan
   projectPlanLevel: string
   projectPlanViewMode: 'table' | 'horizontal' | 'gantt'
+  projectPlanGanttScaleMode: GanttScaleMode
   projectPlanOverviewTab: string
   planMetaCollapsed: boolean
 
@@ -212,6 +214,7 @@ export interface PlanActions {
 
   setProjectPlanLevel: (v: string) => void
   setProjectPlanViewMode: (v: 'table' | 'horizontal' | 'gantt') => void
+  setProjectPlanGanttScaleMode: (v: GanttScaleMode) => void
   setProjectPlanOverviewTab: (v: string) => void
   setPlanMetaCollapsed: (v: boolean) => void
 
@@ -263,6 +266,7 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
   // Project-space plan
   projectPlanLevel: 'level1',
   projectPlanViewMode: 'table',
+  projectPlanGanttScaleMode: 'month',
   projectPlanOverviewTab: 'overview',
   planMetaCollapsed: false,
 
@@ -363,6 +367,7 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
 
   setProjectPlanLevel: (v) => set({ projectPlanLevel: v }),
   setProjectPlanViewMode: (v) => set({ projectPlanViewMode: v }),
+  setProjectPlanGanttScaleMode: (v) => set({ projectPlanGanttScaleMode: v }),
   setProjectPlanOverviewTab: (v) => set({ projectPlanOverviewTab: v }),
   setPlanMetaCollapsed: (v) => set({ planMetaCollapsed: v }),
 

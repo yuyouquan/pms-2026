@@ -19,7 +19,7 @@ import {
   Menu, message, notification, Select, Input, Popconfirm, Tooltip, Modal,
   Checkbox, DatePicker, Form, Avatar, Empty, Slider, Alert, Statistic,
   Descriptions, Divider, Radio, Dropdown, Breadcrumb, Collapse,
-  Typography, Pagination
+  Typography, Pagination, Drawer
 } from 'antd'
 import dayjs from 'dayjs'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
@@ -33,11 +33,13 @@ import {
   SwapOutlined, AuditOutlined, DownloadOutlined, CloseCircleOutlined,
   SafetyOutlined, SendOutlined, DeploymentUnitOutlined, ShareAltOutlined,
   PlusSquareOutlined, MinusSquareOutlined, CaretDownOutlined, StopOutlined,
+  FilterOutlined,
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { ColumnsType } from 'antd/es/table'
 import { compareVersionsForTable, type CompareTableRow, type FieldDiff } from '@/lib/versionCompare'
+import { GANTT_SCALE_OPTIONS } from '@/lib/ganttScale'
 import { notifyPublishChanges, notifyDueTasks } from '@/lib/feishu-notify'
 import type { TaskChange, PlanDueNotice } from '@/types/plan-notify'
 import { exportSheet, exportMergedSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
@@ -67,6 +69,42 @@ import {
 import { ProjectSpaceHeader } from '@/containers/AppShell'
 
 const { Option } = Select
+const PLAN_DRAWER_Z_INDEX = 1200
+
+const PLAN_FILTER_OPERATORS = [
+  { value: 'contains', label: '包含' },
+  { value: 'notContains', label: '不包含' },
+  { value: 'equals', label: '等于' },
+] as const
+
+type PlanFilterCondition = {
+  id: string
+  field: string
+  operator: typeof PLAN_FILTER_OPERATORS[number]['value']
+  value: string
+}
+
+const createPlanFilterCondition = (): PlanFilterCondition => ({
+  id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  field: '',
+  operator: 'contains',
+  value: '',
+})
+
+const isPlanFilterActive = (condition: PlanFilterCondition) => Boolean(condition.field && condition.value.trim())
+
+function applyPlanFilterConditions<T extends Record<string, any>>(rows: T[], conditions: PlanFilterCondition[]): T[] {
+  const activeConditions = conditions.filter(isPlanFilterActive)
+  if (activeConditions.length === 0) return rows
+
+  return rows.filter(row => activeConditions.every(condition => {
+    const actual = String(row[condition.field] ?? '').toLowerCase()
+    const expected = condition.value.trim().toLowerCase()
+    if (condition.operator === 'equals') return actual === expected
+    if (condition.operator === 'notContains') return !actual.includes(expected)
+    return actual.includes(expected)
+  }))
+}
 
 // 计划时间合法性校验：每个违规任务对应字段返回具体原因列表（用于 Tooltip 展示）
 // 规则：
@@ -132,6 +170,7 @@ export default function ProjectSpaceContainer() {
 
   const {
     projectPlanLevel, setProjectPlanLevel, projectPlanViewMode, setProjectPlanViewMode,
+    projectPlanGanttScaleMode, setProjectPlanGanttScaleMode,
     projectPlanOverviewTab, setProjectPlanOverviewTab, planMetaCollapsed, setPlanMetaCollapsed,
     versions, setVersions, currentVersion, setCurrentVersion,
     tasks, setTasks, searchText, setSearchText,
@@ -186,6 +225,9 @@ export default function ProjectSpaceContainer() {
   // ═══════ Local state ═══════
   const lastDueCheckedProjectRef = useRef<string | null>(null)
   const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
+  const [level1PlanFilters, setLevel1PlanFilters] = useState<PlanFilterCondition[]>([])
+  const [tempLevel1PlanFilters, setTempLevel1PlanFilters] = useState<PlanFilterCondition[]>([createPlanFilterCondition()])
+  const [showLevel1PlanFilterDrawer, setShowLevel1PlanFilterDrawer] = useState(false)
 
   // ═══════ Derived ═══════
   const hasDraftVersion = versions.some(v => v.status === '修订中')
@@ -321,11 +363,17 @@ export default function ProjectSpaceContainer() {
     setCollapsedNodes(prev => ({ ...prev, [key]: new Set(getAllExpandableIds(scopeTasks)) }))
   }
 
-  const filteredTasks = (effectiveTasks as any[]).filter((task: any) => {
+  const planFilterFieldOptions = TABLE_COLUMNS.map(c => ({ label: c.title, value: c.key }))
+  const hasActiveLevel1PlanFilters = level1PlanFilters.some(isPlanFilterActive)
+  const filteredLevel1PlanTasks = applyPlanFilterConditions(effectiveTasks as any[], level1PlanFilters)
+  const filterBySearchText = (taskList: any[]) => taskList.filter((task: any) => {
     if (!searchText) return true
     const s = searchText.toLowerCase()
     return task.id.toLowerCase().includes(s) || task.taskName.toLowerCase().includes(s) || (task.responsible && task.responsible.toLowerCase().includes(s)) || (task.status && task.status.toLowerCase().includes(s))
   })
+  const filteredTasks = projectPlanLevel === 'level1'
+    ? filteredLevel1PlanTasks
+    : filterBySearchText(effectiveTasks as any[])
 
   const scanDueTasks = (taskList: any[]): PlanDueNotice[] => {
     const today = dayjs().startOf('day')
@@ -503,7 +551,7 @@ export default function ProjectSpaceContainer() {
     const cols = scope === 'current' ? TABLE_COLUMNS.filter(c => visibleColumns.includes(c.key)) : TABLE_COLUMNS
     const exportCols: ExportColumn[] = cols.map(c => ({ key: c.key, title: c.title }))
     let rows: any[] = []
-    if (projectPlanLevel === 'level1') { rows = scope === 'current' && searchText ? effectiveTasks.filter((t: any) => (t.taskName || '').toLowerCase().includes(searchText.toLowerCase())) : effectiveTasks }
+    if (projectPlanLevel === 'level1') { rows = scope === 'current' ? filteredLevel1PlanTasks : effectiveTasks }
     else if (projectPlanLevel === 'level2' && activeLevel2Plan && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1') {
       const l2 = level2PlanTasks.filter((t: any) => t.planId === activeLevel2Plan); rows = scope === 'current' && searchText ? l2.filter((t: any) => (t.taskName || '').toLowerCase().includes(searchText.toLowerCase())) : l2
     }
@@ -588,6 +636,7 @@ export default function ProjectSpaceContainer() {
     return (
       <div style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
         <DHTMLXGantt tasks={ganttTasks} onTaskClick={(task) => message.info(`点击任务: ${task.text}`)} readOnly={!isEditMode} collapsedIds={collapsedSet}
+          scaleMode={!customTasks && projectPlanLevel === 'level1' ? projectPlanGanttScaleMode : 'month'}
           onCollapsedChange={(updater) => { if (!key) return; setCollapsedNodes(prev => { const c = prev[key] || new Set<string>(); return { ...prev, [key]: updater(c) } }) }}
         />
       </div>
@@ -604,7 +653,12 @@ export default function ProjectSpaceContainer() {
         setLevel2PlanTasks(prev => [...prev.filter(t => t.planId !== planId), ...newTasks])
       }
     } : setEffectiveTasks
-    const flatTasks = tableTasks.map((task: any) => ({ ...task, indentLevel: getTaskDepth(task, tableTasks) }))
+    const displayTasks = isLevel2Custom
+      ? filterBySearchText(tableTasks)
+      : projectPlanLevel === 'level1'
+        ? applyPlanFilterConditions(tableTasks, level1PlanFilters)
+        : filterBySearchText(tableTasks)
+    const flatTasks = displayTasks.map((task: any) => ({ ...task, indentLevel: getTaskDepth(task, tableTasks) }))
     const scopeKey = getScopeKey()
     const collapsedSet = scopeKey ? (collapsedNodes[scopeKey] || new Set<string>()) : new Set<string>()
     const expandEnabled = scopeKey !== null
@@ -1439,20 +1493,56 @@ export default function ProjectSpaceContainer() {
               </Col>
               <Col>
                 <Space size={6}>
-                  <Input placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
+                  {projectPlanLevel === 'level1' && projectPlanViewMode !== 'horizontal' ? (
+                    <Tooltip title="筛选">
+                      <Button
+                        icon={<FilterOutlined />}
+                        style={{ borderRadius: 6 }}
+                        onClick={() => {
+                          setTempLevel1PlanFilters(level1PlanFilters.length ? level1PlanFilters.map(item => ({ ...item })) : [createPlanFilterCondition()])
+                          setShowLevel1PlanFilterDrawer(true)
+                        }}
+                      >
+                        筛选{hasActiveLevel1PlanFilters ? ' ●' : ''}
+                      </Button>
+                    </Tooltip>
+                  ) : projectPlanLevel !== 'level1' ? (
+                    <Input placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
+                  ) : null}
                   {projectPlanViewMode !== 'gantt' && (
                     <Dropdown menu={{ items: [{ key: 'current', label: '导出当前视图' }, { key: 'all', label: '导出全部' }], onClick: ({ key }) => { if (projectPlanViewMode === 'horizontal') handleExportHorizontalPlan(key as 'current' | 'all'); else handleExportVerticalPlan(key as 'current' | 'all') } }}>
                       <Tooltip title="导出为 Excel"><Button icon={<DownloadOutlined />} style={{ borderRadius: 6 }} /></Tooltip>
                     </Dropdown>
                   )}
-                  {projectPlanViewMode !== 'horizontal' && (
-                    <Tooltip title="自定义列"><Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} /></Tooltip>
+                  {(projectPlanLevel === 'level1' ? projectPlanViewMode === 'table' : projectPlanViewMode !== 'horizontal') && (
+                    <Tooltip title="列设置">
+                      <Button
+                        icon={projectPlanLevel === 'level1' ? <SettingOutlined /> : <AppstoreOutlined />}
+                        style={{ borderRadius: 6 }}
+                        onClick={() => setShowColumnModal(true)}
+                      >
+                        {projectPlanLevel === 'level1' ? '列设置' : null}
+                      </Button>
+                    </Tooltip>
                   )}
                   {getScopeKey() !== null && (
                     <>
                       <Tooltip title="全部展开"><Button icon={<PlusSquareOutlined />} size="small" style={{ borderRadius: 6 }} onClick={expandAll} /></Tooltip>
                       <Tooltip title="全部收起"><Button icon={<MinusSquareOutlined />} size="small" style={{ borderRadius: 6 }} onClick={collapseAll} /></Tooltip>
                     </>
+                  )}
+                  {projectPlanLevel === 'level1' && projectPlanViewMode === 'gantt' && (
+                    <Space size={4}>
+                      <span style={{ color: '#9ca3af', fontSize: 13 }}>刻度</span>
+                      <Radio.Group
+                        value={projectPlanGanttScaleMode}
+                        onChange={(e) => setProjectPlanGanttScaleMode(e.target.value)}
+                        optionType="button"
+                        buttonStyle="solid"
+                        size="small"
+                        options={GANTT_SCALE_OPTIONS}
+                      />
+                    </Space>
                   )}
                   <Radio.Group
                     value={projectPlanViewMode === 'horizontal' && projectPlanLevel === 'level2' ? 'table' : projectPlanViewMode}
@@ -1606,10 +1696,112 @@ export default function ProjectSpaceContainer() {
         </div>
         {renderVersionCompareResult()}
       </Modal>
-      {/* Custom column modal */}
-      <Modal className="pms-modal" title={`自定义列 - ${currentViewMode === 'gantt' ? '甘特图' : '竖版表格'}`} open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(currentViewDefaultCols)}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}>
-        <Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row>{currentViewColumns.map((c: any) => <Col span={12} key={c.key}><Checkbox value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox></Col>)}</Row></Checkbox.Group>
-      </Modal>
+      {/* Level 1 plan filter drawer */}
+      <Drawer
+        title="筛选条件"
+        open={showLevel1PlanFilterDrawer && projectPlanLevel === 'level1'}
+        onClose={() => setShowLevel1PlanFilterDrawer(false)}
+        width={520}
+        placement="right"
+        zIndex={PLAN_DRAWER_Z_INDEX}
+        footer={(
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Button onClick={() => setTempLevel1PlanFilters([createPlanFilterCondition()])}>
+              清除全部
+            </Button>
+            <Space>
+              <Button onClick={() => setShowLevel1PlanFilterDrawer(false)}>
+                取消
+              </Button>
+              <Button type="primary" onClick={() => {
+                setLevel1PlanFilters(tempLevel1PlanFilters.filter(isPlanFilterActive))
+                setShowLevel1PlanFilterDrawer(false)
+              }}>
+                应用
+              </Button>
+            </Space>
+          </div>
+        )}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {tempLevel1PlanFilters.map((condition) => (
+            <div key={condition.id} style={{ padding: 12, border: '1px solid #eef2ff', borderRadius: 8, background: '#fafbff' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 116px', gap: 8, marginBottom: 8 }}>
+                <Select
+                  aria-label="筛选字段"
+                  placeholder="筛选字段"
+                  value={condition.field || undefined}
+                  options={planFilterFieldOptions}
+                  onChange={(value) => setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? { ...item, field: value } : item))}
+                />
+                <Select
+                  value={condition.operator}
+                  options={PLAN_FILTER_OPERATORS as any}
+                  onChange={(value) => setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? { ...item, operator: value } : item))}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Input
+                  placeholder="输入筛选值"
+                  value={condition.value}
+                  onChange={(e) => setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? { ...item, value: e.target.value } : item))}
+                />
+                <Button
+                  icon={<DeleteOutlined />}
+                  danger
+                  onClick={() => setTempLevel1PlanFilters(prev => prev.length > 1 ? prev.filter(item => item.id !== condition.id) : [createPlanFilterCondition()])}
+                />
+              </div>
+            </div>
+          ))}
+          <Button
+            type="dashed"
+            icon={<PlusOutlined />}
+            onClick={() => setTempLevel1PlanFilters(prev => [...prev, createPlanFilterCondition()])}
+          >
+            添加条件
+          </Button>
+        </div>
+      </Drawer>
+
+      {/* Custom column settings */}
+      {projectPlanLevel === 'level1' ? (
+        <Drawer
+          title="列设置"
+          open={showColumnModal}
+          onClose={() => setShowColumnModal(false)}
+          width={420}
+          placement="right"
+          zIndex={PLAN_DRAWER_Z_INDEX}
+          footer={(
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Button onClick={() => setVisibleColumns(currentViewDefaultCols)}>重置默认</Button>
+              <Space>
+                <Button onClick={() => setShowColumnModal(false)}>取消</Button>
+                <Button type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>
+              </Space>
+            </div>
+          )}
+        >
+          <div style={{ marginBottom: 8, fontSize: 12, color: '#9ca3af' }}>
+            字段纵向排列，勾选后立即更新当前一级计划表格列。
+          </div>
+          <Checkbox.Group
+            value={visibleColumns}
+            onChange={(vals) => setVisibleColumns(vals as string[])}
+            style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', margin: '8px 0 2px' }}>一级计划字段</div>
+            {currentViewColumns.map((c: any) => (
+              <Checkbox key={c.key} value={c.key}>{c.title}</Checkbox>
+            ))}
+          </Checkbox.Group>
+        </Drawer>
+      ) : (
+        <Modal className="pms-modal" title={`自定义列 - ${currentViewMode === 'gantt' ? '甘特图' : '竖版表格'}`} open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(currentViewDefaultCols)}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}>
+          <Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row>{currentViewColumns.map((c: any) => <Col span={12} key={c.key}><Checkbox value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox></Col>)}</Row></Checkbox.Group>
+        </Modal>
+      )}
       {/* Create L2 plan modal */}
       <Modal className="pms-modal"
         title="创建二级计划"
