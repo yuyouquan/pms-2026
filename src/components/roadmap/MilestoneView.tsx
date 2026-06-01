@@ -28,6 +28,7 @@ const PROJECT_TYPE_MAP: Record<string, string> = {
 }
 
 const DEFAULT_VIEW_ID = '__default__'
+const ROADMAP_DRAWER_Z_INDEX = 1200
 
 const marketColors: Record<string, string> = {
   'OP': '#6366f1', 'TR': '#52c41a', 'RU': '#faad14',
@@ -767,6 +768,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         onClose={() => setShowFilterModal(false)}
         width={520}
         placement="right"
+        zIndex={ROADMAP_DRAWER_Z_INDEX}
         footer={(
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <Button key="clear" onClick={() => setTempFilters([createFilterCondition()])}>
@@ -835,6 +837,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         onClose={() => setShowColumnModal(false)}
         width={420}
         placement="right"
+        zIndex={ROADMAP_DRAWER_Z_INDEX}
         footer={(
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <Button onClick={() => setVisibleColumns(defaultVisibleColumns)}>重置默认</Button>

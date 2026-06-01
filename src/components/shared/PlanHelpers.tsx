@@ -7,6 +7,7 @@ import { HolderOutlined, StopOutlined, FileTextOutlined, LinkOutlined, FolderOpe
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { gantt } from 'dhtmlx-gantt'
+import { getGanttScaleConfig, type GanttScaleMode } from '@/lib/ganttScale'
 import {
   getCurrentNodeIndex,
   getCurrentNodeLabel,
@@ -45,17 +46,24 @@ export function DHTMLXGantt({
   tasks,
   onTaskClick,
   readOnly = false,
+  scaleMode = 'month',
   collapsedIds,
   onCollapsedChange,
 }: {
   tasks: any[]
   onTaskClick?: (task: any) => void
   readOnly?: boolean
+  scaleMode?: GanttScaleMode
   collapsedIds?: Set<string>
   onCollapsedChange?: (updater: (prev: Set<string>) => Set<string>) => void
 }) {
   const ganttContainer = useRef<HTMLDivElement>(null)
   const suppressFeedback = useRef(false)
+  const onTaskClickRef = useRef(onTaskClick)
+
+  useEffect(() => {
+    onTaskClickRef.current = onTaskClick
+  }, [onTaskClick])
 
   useEffect(() => {
     if (!ganttContainer.current) return
@@ -69,9 +77,11 @@ export function DHTMLXGantt({
       { name: 'duration', label: '计划周期', align: 'center', width: 60, template: (task: any) => task.duration + '天' },
       { name: 'progress', label: '进度', align: 'center', width: 60, template: (task: any) => Math.round(task.progress * 100) + '%' },
     ]
-    gantt.config.scale_unit = 'month'
-    gantt.config.date_scale = '%Y年%m月'
-    gantt.config.subscales = [{ unit: 'day', step: 1, date: '%d日' }]
+    const scaleConfig = getGanttScaleConfig(scaleMode)
+    const ganttConfig = gantt.config as any
+    ganttConfig.scales = scaleConfig.scales
+    gantt.config.scale_height = scaleConfig.scaleHeight
+    gantt.config.min_column_width = scaleConfig.minColumnWidth
     gantt.config.row_height = 35
     gantt.config.bar_height = 20
     gantt.config.fit_tasks = true
@@ -117,20 +127,21 @@ export function DHTMLXGantt({
       onCollapsedChange?.((prev) => { const s = new Set(prev); s.add(String(id)); return s })
     })
 
-    if (onTaskClick) {
-      gantt.attachEvent('onTaskClick', (id: number) => {
+    const clickHandler = onTaskClickRef.current
+      ? gantt.attachEvent('onTaskClick', (id: number) => {
         const task = gantt.getTask(id)
-        onTaskClick(task)
+        onTaskClickRef.current?.(task)
         return true
       })
-    }
+      : null
 
     return () => {
       gantt.detachEvent(openHandler)
       gantt.detachEvent(closeHandler)
+      if (clickHandler) gantt.detachEvent(clickHandler)
       gantt.clearAll()
     }
-  }, [tasks, readOnly])
+  }, [tasks, readOnly, scaleMode])
 
   useEffect(() => {
     if (!ganttContainer.current) return
