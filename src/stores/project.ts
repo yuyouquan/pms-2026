@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { initialProjects } from '@/data/projects'
+import { buildMarketRowsFromMarkets, type MarketConfigRow } from '@/lib/marketRules'
 
 // Default login user (mock)
 export const DEFAULT_LOGIN_USER = '张三'
@@ -28,6 +29,13 @@ export const kanbanColumns = [
 
 type Project = typeof initialProjects[0]
 
+const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) => {
+  if (project.type === '整机产品项目' && project.markets?.length) {
+    acc[project.id] = buildMarketRowsFromMarkets(project.markets)
+  }
+  return acc
+}, {} as Record<string, MarketConfigRow[]>)
+
 export interface ProjectState {
   projects: Project[]
   selectedProject: Project | null
@@ -46,6 +54,7 @@ export interface ProjectState {
 
   // Market & kanban
   selectedMarketTab: string
+  marketConfigsByProjectId: Record<string, MarketConfigRow[]>
   kanbanDimension: 'stage' | 'type' | 'status'
 
   // Todos
@@ -70,6 +79,7 @@ export interface ProjectActions {
   setEditingProjectFields: (v: Record<string, any> | ((prev: Record<string, any>) => Record<string, any>)) => void
 
   setSelectedMarketTab: (v: string) => void
+  setMarketConfigForProject: (projectId: string, rows: MarketConfigRow[]) => void
   setKanbanDimension: (v: 'stage' | 'type' | 'status') => void
 
   setTodoFilter: (v: 'all' | 'overdue' | 'upcoming' | 'pending' | 'completed') => void
@@ -94,6 +104,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()((set) => 
   editingProjectFields: {},
 
   selectedMarketTab: 'OP',
+  marketConfigsByProjectId: initialMarketConfigsByProjectId,
   kanbanDimension: 'stage',
 
   todoFilter: 'all',
@@ -116,6 +127,9 @@ export const useProjectStore = create<ProjectState & ProjectActions>()((set) => 
   setEditingProjectFields: (v) => set((s) => ({ editingProjectFields: typeof v === 'function' ? v(s.editingProjectFields) : v })),
 
   setSelectedMarketTab: (v) => set({ selectedMarketTab: v }),
+  setMarketConfigForProject: (projectId, rows) => set((s) => ({
+    marketConfigsByProjectId: { ...s.marketConfigsByProjectId, [projectId]: rows },
+  })),
   setKanbanDimension: (v) => set({ kanbanDimension: v }),
 
   setTodoFilter: (v) => set({ todoFilter: v }),

@@ -10,7 +10,7 @@ import {
   CalendarOutlined, SwapOutlined, PlusOutlined, SaveOutlined,
   HistoryOutlined, SearchOutlined, AppstoreOutlined, EditOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, PlusSquareOutlined, MinusSquareOutlined,
-  DeleteOutlined, CaretDownOutlined, CheckCircleFilled,
+  DeleteOutlined, CaretDownOutlined, CheckCircleFilled, StopOutlined,
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -27,6 +27,7 @@ import { compareVersionsForTable, type CompareTableRow, type FieldDiff } from '@
 import type { TaskChange } from '@/types/plan-notify'
 import { NOTIFY_DIFF_FIELDS, MOCK_USER_MAP } from '@/components/shared/PlanHelpers'
 import { notifyPublishChanges } from '@/lib/feishu-notify'
+import { cancelDraftRevision } from '@/lib/marketRules'
 import dayjs from 'dayjs'
 
 const { Option } = Select
@@ -407,8 +408,26 @@ export default function ConfigContainer() {
     message.success('发布成功')
   }
 
+  const handleCancelRevision = () => {
+    if (!isCurrentDraft || !currentVersionData) return
+    Modal.confirm({
+      title: '取消修订版本',
+      content: `确认取消 ${currentVersionData.versionNo} 修订版本？取消后该版本将显示为已取消，可重新创建新的修订版本。`,
+      okText: '确认取消',
+      okType: 'danger',
+      cancelText: '保留修订',
+      onOk: () => {
+        const result = cancelDraftRevision(versions, currentVersion)
+        setVersions(result.versions as typeof versions)
+        setCurrentVersion(result.currentVersion)
+        setIsEditMode(false)
+        message.success(`${currentVersionData.versionNo} 已取消`)
+      },
+    })
+  }
+
   const renderActionButtons = () => {
-    if (isCurrentDraft) return (<Space><Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{currentVersionData?.versionNo}({currentVersionData?.status})</Tag><Tag color="green" style={{ fontSize: 12 }}>自动保存</Tag><Button type="primary" icon={<SaveOutlined />} onClick={handlePublish}>发布</Button><Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
+    if (isCurrentDraft) return (<Space><Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{currentVersionData?.versionNo}({currentVersionData?.status})</Tag><Tag color="green" style={{ fontSize: 12 }}>自动保存</Tag><Button type="primary" icon={<SaveOutlined />} onClick={handlePublish}>发布</Button><Button danger icon={<StopOutlined />} onClick={handleCancelRevision}>取消修订</Button><Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
     return (<Space>{!hasDraftVersion && <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateRevision}>创建修订</Button>}<Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
   }
 
