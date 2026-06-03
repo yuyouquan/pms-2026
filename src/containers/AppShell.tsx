@@ -81,7 +81,7 @@ function UserSwitcher() {
   )
 }
 
-// ─── Main mode header (工作台, 路标, 配置, 权限) ─────────────────────
+// ─── Main mode header (工作台, 路标, 配置) ───────────────────────────
 
 export function MainHeader() {
   const {
@@ -124,7 +124,6 @@ export function MainHeader() {
                 { key: 'roadmap', label: '项目路标视图' },
                 { key: 'hrPipeline', label: '人力资源管道' },
                 { key: 'config', label: '配置中心' },
-                { key: 'globalPermission', label: '权限中心' },
               ]}
             />
           </Space>

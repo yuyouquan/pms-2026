@@ -12,6 +12,15 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import type { RoadmapFilterCondition, RoadmapViewConfig } from '@/types'
 import {
+  FILTER_OPERATORS,
+  applyFilterConditions,
+  createFilterCondition,
+  getFieldOptionsWithDuplicateDisabled,
+  isFilterConditionActive,
+  isValuelessFilterOperator,
+  normalizeFilterConditions,
+} from '@/lib/filterConditions'
+import {
   aggregateMilestones, generateTableData, saveView, loadAllViews, deleteView,
   getFixedColumnsForType, getDefaultVisibleColumns, getMilestoneColumnKey, isRoadmapColumnVisible,
   diffSnapshots, buildCompareColumns,
@@ -33,32 +42,6 @@ const ROADMAP_DRAWER_Z_INDEX = 1200
 const marketColors: Record<string, string> = {
   'OP': '#6366f1', 'TR': '#52c41a', 'RU': '#faad14',
   'FR': '#722ed1', 'IN': '#eb2f96', 'BR': '#13c2c2',
-}
-
-const FILTER_OPERATORS = [
-  { value: 'contains', label: '包含' },
-  { value: 'notContains', label: '不包含' },
-  { value: 'equals', label: '等于' },
-] as const
-
-const createFilterCondition = (): RoadmapFilterCondition => ({
-  id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-  field: '',
-  operator: 'contains',
-  value: '',
-})
-
-function applyFilterConditions<T extends Record<string, any>>(rows: T[], conditions: RoadmapFilterCondition[]): T[] {
-  const activeConditions = conditions.filter(c => c.field && c.value.trim())
-  if (activeConditions.length === 0) return rows
-
-  return rows.filter(row => activeConditions.every(condition => {
-    const actual = String(row[condition.field] ?? '').toLowerCase()
-    const expected = condition.value.trim().toLowerCase()
-    if (condition.operator === 'equals') return actual === expected
-    if (condition.operator === 'notContains') return !actual.includes(expected)
-    return actual.includes(expected)
-  }))
 }
 
 interface MilestoneViewProps {
@@ -454,7 +437,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
     return buildStandardColumns(displayMilestones, activeSnapshot.projectType)
   }, [compareMode, diffResult, activeSnapshot, visibleColumns, displayMilestones, onViewProject, projectType, columns])
 
-  const hasActiveFilters = filters.some(f => f.field && f.value.trim())
+  const hasActiveFilters = filters.some(isFilterConditionActive)
 
   // Columns available for column settings (context-aware)
   const projectInfoSettableColumns = getFixedColumnsForType(projectType).filter(c => !c.locked)
@@ -779,7 +762,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
                 取消
               </Button>
               <Button key="ok" type="primary" onClick={() => {
-                setFilters(tempFilters.filter(item => item.field && item.value.trim()))
+                setFilters(normalizeFilterConditions(tempFilters))
                 setCurrentPage(1)
                 setShowFilterModal(false)
               }}>
@@ -792,25 +775,25 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {tempFilters.map((condition) => (
             <div key={condition.id} style={{ padding: 12, border: '1px solid #eef2ff', borderRadius: 8, background: '#fafbff' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 116px', gap: 8, marginBottom: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 116px 40px', gap: 8, marginBottom: isValuelessFilterOperator(condition.operator) ? 0 : 8 }}>
                 <Select
                   aria-label="筛选字段"
                   placeholder="筛选字段"
                   value={condition.field || undefined}
-                  options={filterFieldOptions}
+                  options={getFieldOptionsWithDuplicateDisabled(filterFieldOptions, tempFilters, condition.id)}
                   onChange={(value) => setTempFilters(prev => prev.map(item => item.id === condition.id ? { ...item, field: value } : item))}
                 />
                 <Select
                   value={condition.operator}
                   options={FILTER_OPERATORS as any}
-                  onChange={(value) => setTempFilters(prev => prev.map(item => item.id === condition.id ? { ...item, operator: value } : item))}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <Input
-                  placeholder="输入筛选值"
-                  value={condition.value}
-                  onChange={(e) => setTempFilters(prev => prev.map(item => item.id === condition.id ? { ...item, value: e.target.value } : item))}
+                  onChange={(value) => {
+                    const operator = value as RoadmapFilterCondition['operator']
+                    setTempFilters(prev => prev.map(item => item.id === condition.id ? {
+                      ...item,
+                      operator,
+                      value: isValuelessFilterOperator(operator) ? '' : item.value,
+                    } : item))
+                  }}
                 />
                 <Button
                   icon={<DeleteOutlined />}
@@ -818,6 +801,15 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
                   onClick={() => setTempFilters(prev => prev.length > 1 ? prev.filter(item => item.id !== condition.id) : [createFilterCondition()])}
                 />
               </div>
+              {!isValuelessFilterOperator(condition.operator) && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Input
+                    placeholder="输入筛选值"
+                    value={condition.value}
+                    onChange={(e) => setTempFilters(prev => prev.map(item => item.id === condition.id ? { ...item, value: e.target.value } : item))}
+                  />
+                </div>
+              )}
             </div>
           ))}
           <Button
