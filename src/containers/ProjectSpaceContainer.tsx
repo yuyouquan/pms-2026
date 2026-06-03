@@ -39,6 +39,16 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { ColumnsType } from 'antd/es/table'
 import { compareVersionsForTable, type CompareTableRow, type FieldDiff } from '@/lib/versionCompare'
+import {
+  FILTER_OPERATORS,
+  applyFilterConditions,
+  createFilterCondition,
+  getFieldOptionsWithDuplicateDisabled,
+  isFilterConditionActive,
+  isValuelessFilterOperator,
+  normalizeFilterConditions,
+  type FilterCondition,
+} from '@/lib/filterConditions'
 import { GANTT_SCALE_OPTIONS } from '@/lib/ganttScale'
 import { notifyPublishChanges, notifyDueTasks } from '@/lib/feishu-notify'
 import type { TaskChange, PlanDueNotice } from '@/types/plan-notify'
@@ -71,40 +81,7 @@ import { ProjectSpaceHeader } from '@/containers/AppShell'
 const { Option } = Select
 const PLAN_DRAWER_Z_INDEX = 1200
 
-const PLAN_FILTER_OPERATORS = [
-  { value: 'contains', label: '包含' },
-  { value: 'notContains', label: '不包含' },
-  { value: 'equals', label: '等于' },
-] as const
-
-type PlanFilterCondition = {
-  id: string
-  field: string
-  operator: typeof PLAN_FILTER_OPERATORS[number]['value']
-  value: string
-}
-
-const createPlanFilterCondition = (): PlanFilterCondition => ({
-  id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-  field: '',
-  operator: 'contains',
-  value: '',
-})
-
-const isPlanFilterActive = (condition: PlanFilterCondition) => Boolean(condition.field && condition.value.trim())
-
-function applyPlanFilterConditions<T extends Record<string, any>>(rows: T[], conditions: PlanFilterCondition[]): T[] {
-  const activeConditions = conditions.filter(isPlanFilterActive)
-  if (activeConditions.length === 0) return rows
-
-  return rows.filter(row => activeConditions.every(condition => {
-    const actual = String(row[condition.field] ?? '').toLowerCase()
-    const expected = condition.value.trim().toLowerCase()
-    if (condition.operator === 'equals') return actual === expected
-    if (condition.operator === 'notContains') return !actual.includes(expected)
-    return actual.includes(expected)
-  }))
-}
+type PlanFilterCondition = FilterCondition
 
 // 计划时间合法性校验：每个违规任务对应字段返回具体原因列表（用于 Tooltip 展示）
 // 规则：
@@ -226,7 +203,7 @@ export default function ProjectSpaceContainer() {
   const lastDueCheckedProjectRef = useRef<string | null>(null)
   const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
   const [level1PlanFilters, setLevel1PlanFilters] = useState<PlanFilterCondition[]>([])
-  const [tempLevel1PlanFilters, setTempLevel1PlanFilters] = useState<PlanFilterCondition[]>([createPlanFilterCondition()])
+  const [tempLevel1PlanFilters, setTempLevel1PlanFilters] = useState<PlanFilterCondition[]>([createFilterCondition()])
   const [showLevel1PlanFilterDrawer, setShowLevel1PlanFilterDrawer] = useState(false)
 
   // ═══════ Derived ═══════
@@ -364,8 +341,8 @@ export default function ProjectSpaceContainer() {
   }
 
   const planFilterFieldOptions = TABLE_COLUMNS.map(c => ({ label: c.title, value: c.key }))
-  const hasActiveLevel1PlanFilters = level1PlanFilters.some(isPlanFilterActive)
-  const filteredLevel1PlanTasks = applyPlanFilterConditions(effectiveTasks as any[], level1PlanFilters)
+  const hasActiveLevel1PlanFilters = level1PlanFilters.some(isFilterConditionActive)
+  const filteredLevel1PlanTasks = applyFilterConditions(effectiveTasks as any[], level1PlanFilters)
   const filterBySearchText = (taskList: any[]) => taskList.filter((task: any) => {
     if (!searchText) return true
     const s = searchText.toLowerCase()
@@ -656,7 +633,7 @@ export default function ProjectSpaceContainer() {
     const displayTasks = isLevel2Custom
       ? filterBySearchText(tableTasks)
       : projectPlanLevel === 'level1'
-        ? applyPlanFilterConditions(tableTasks, level1PlanFilters)
+        ? applyFilterConditions(tableTasks, level1PlanFilters)
         : filterBySearchText(tableTasks)
     const flatTasks = displayTasks.map((task: any) => ({ ...task, indentLevel: getTaskDepth(task, tableTasks) }))
     const scopeKey = getScopeKey()
@@ -1499,7 +1476,7 @@ export default function ProjectSpaceContainer() {
                         icon={<FilterOutlined />}
                         style={{ borderRadius: 6 }}
                         onClick={() => {
-                          setTempLevel1PlanFilters(level1PlanFilters.length ? level1PlanFilters.map(item => ({ ...item })) : [createPlanFilterCondition()])
+                          setTempLevel1PlanFilters(level1PlanFilters.length ? level1PlanFilters.map(item => ({ ...item })) : [createFilterCondition()])
                           setShowLevel1PlanFilterDrawer(true)
                         }}
                       >
@@ -1706,7 +1683,7 @@ export default function ProjectSpaceContainer() {
         zIndex={PLAN_DRAWER_Z_INDEX}
         footer={(
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button onClick={() => setTempLevel1PlanFilters([createPlanFilterCondition()])}>
+            <Button onClick={() => setTempLevel1PlanFilters([createFilterCondition()])}>
               清除全部
             </Button>
             <Space>
@@ -1714,7 +1691,7 @@ export default function ProjectSpaceContainer() {
                 取消
               </Button>
               <Button type="primary" onClick={() => {
-                setLevel1PlanFilters(tempLevel1PlanFilters.filter(isPlanFilterActive))
+                setLevel1PlanFilters(normalizeFilterConditions(tempLevel1PlanFilters))
                 setShowLevel1PlanFilterDrawer(false)
               }}>
                 应用
@@ -1726,38 +1703,47 @@ export default function ProjectSpaceContainer() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {tempLevel1PlanFilters.map((condition) => (
             <div key={condition.id} style={{ padding: 12, border: '1px solid #eef2ff', borderRadius: 8, background: '#fafbff' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 116px', gap: 8, marginBottom: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 116px 40px', gap: 8, marginBottom: isValuelessFilterOperator(condition.operator) ? 0 : 8 }}>
                 <Select
                   aria-label="筛选字段"
                   placeholder="筛选字段"
                   value={condition.field || undefined}
-                  options={planFilterFieldOptions}
+                  options={getFieldOptionsWithDuplicateDisabled(planFilterFieldOptions, tempLevel1PlanFilters, condition.id)}
                   onChange={(value) => setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? { ...item, field: value } : item))}
                 />
                 <Select
                   value={condition.operator}
-                  options={PLAN_FILTER_OPERATORS as any}
-                  onChange={(value) => setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? { ...item, operator: value } : item))}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <Input
-                  placeholder="输入筛选值"
-                  value={condition.value}
-                  onChange={(e) => setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? { ...item, value: e.target.value } : item))}
+                  options={FILTER_OPERATORS as any}
+                  onChange={(value) => {
+                    const operator = value as PlanFilterCondition['operator']
+                    setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? {
+                      ...item,
+                      operator,
+                      value: isValuelessFilterOperator(operator) ? '' : item.value,
+                    } : item))
+                  }}
                 />
                 <Button
                   icon={<DeleteOutlined />}
                   danger
-                  onClick={() => setTempLevel1PlanFilters(prev => prev.length > 1 ? prev.filter(item => item.id !== condition.id) : [createPlanFilterCondition()])}
+                  onClick={() => setTempLevel1PlanFilters(prev => prev.length > 1 ? prev.filter(item => item.id !== condition.id) : [createFilterCondition()])}
                 />
               </div>
+              {!isValuelessFilterOperator(condition.operator) && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Input
+                    placeholder="输入筛选值"
+                    value={condition.value}
+                    onChange={(e) => setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? { ...item, value: e.target.value } : item))}
+                  />
+                </div>
+              )}
             </div>
           ))}
           <Button
             type="dashed"
             icon={<PlusOutlined />}
-            onClick={() => setTempLevel1PlanFilters(prev => [...prev, createPlanFilterCondition()])}
+            onClick={() => setTempLevel1PlanFilters(prev => [...prev, createFilterCondition()])}
           >
             添加条件
           </Button>

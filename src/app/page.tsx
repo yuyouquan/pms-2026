@@ -10,7 +10,6 @@ import { MainHeader } from '@/containers/AppShell'
 import WorkspaceContainer from '@/containers/WorkspaceContainer'
 import ProjectSpaceContainer from '@/containers/ProjectSpaceContainer'
 import ConfigContainer from '@/containers/ConfigContainer'
-import GlobalPermissionContainer from '@/containers/GlobalPermissionContainer'
 
 // Minimal page-specific style overrides (bulk styles live in globals.css)
 const globalStyles = `
@@ -84,9 +83,6 @@ export default function Home() {
                   onViewProject={handleViewProjectFromRoadmap}
                 />
               )}
-
-              {/* Global Permission */}
-              {activeModule === 'globalPermission' && <GlobalPermissionContainer />}
 
               {/* HR Pipeline placeholder */}
               {activeModule === 'hrPipeline' && (

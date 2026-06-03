@@ -1,0 +1,100 @@
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
+import vm from 'node:vm'
+import ts from 'typescript'
+
+const modulePath = path.resolve('src/lib/filterConditions.ts')
+
+if (!fs.existsSync(modulePath)) {
+  throw new Error(`Missing shared filter module: ${modulePath}`)
+}
+
+const source = fs.readFileSync(modulePath, 'utf8')
+const { outputText } = ts.transpileModule(source, {
+  compilerOptions: {
+    module: ts.ModuleKind.CommonJS,
+    target: ts.ScriptTarget.ES2020,
+  },
+})
+
+const sandbox = {
+  exports: {},
+  module: { exports: {} },
+}
+sandbox.module.exports = sandbox.exports
+vm.runInNewContext(outputText, sandbox, { filename: modulePath })
+
+const {
+  FILTER_OPERATORS,
+  applyFilterConditions,
+  getFieldOptionsWithDuplicateDisabled,
+  isFilterConditionActive,
+  isValuelessFilterOperator,
+  normalizeFilterConditions,
+} = sandbox.module.exports
+
+const plain = (value) => JSON.parse(JSON.stringify(value))
+
+assert.deepEqual(
+  plain(FILTER_OPERATORS.map((item) => item.label)),
+  ['等于', '不等于', '包含', '不包含', '为空', '不为空'],
+)
+
+assert.equal(isValuelessFilterOperator('isEmpty'), true)
+assert.equal(isValuelessFilterOperator('isNotEmpty'), true)
+assert.equal(isValuelessFilterOperator('contains'), false)
+
+assert.equal(isFilterConditionActive({ id: 'a', field: 'owner', operator: 'isEmpty', value: '' }), true)
+assert.equal(isFilterConditionActive({ id: 'a', field: 'owner', operator: 'contains', value: '' }), false)
+
+const rows = [
+  { name: 'Alpha', owner: '张三', status: '进行中', note: '' },
+  { name: 'Beta', owner: '李四', status: '已完成', note: null },
+  { name: 'Gamma', owner: '', status: '未开始', note: 'ready' },
+]
+
+assert.deepEqual(
+  plain(applyFilterConditions(rows, [{ id: '1', field: 'owner', operator: 'notEquals', value: '张三' }]).map((row) => row.name)),
+  ['Beta', 'Gamma'],
+)
+assert.deepEqual(
+  plain(applyFilterConditions(rows, [{ id: '1', field: 'note', operator: 'isEmpty', value: '' }]).map((row) => row.name)),
+  ['Alpha', 'Beta'],
+)
+assert.deepEqual(
+  plain(applyFilterConditions(rows, [{ id: '1', field: 'note', operator: 'isNotEmpty', value: '' }]).map((row) => row.name)),
+  ['Gamma'],
+)
+
+assert.deepEqual(
+  plain(normalizeFilterConditions([
+    { id: '1', field: 'owner', operator: 'contains', value: '张' },
+    { id: '2', field: 'owner', operator: 'equals', value: '李四' },
+    { id: '3', field: 'note', operator: 'isEmpty', value: 'will-clear' },
+  ])),
+  [
+    { id: '1', field: 'owner', operator: 'contains', value: '张' },
+    { id: '3', field: 'note', operator: 'isEmpty', value: '' },
+  ],
+)
+
+assert.deepEqual(
+  plain(getFieldOptionsWithDuplicateDisabled(
+    [
+      { value: 'owner', label: '责任人' },
+      { value: 'status', label: '状态' },
+    ],
+    [
+      { id: '1', field: 'owner', operator: 'equals', value: '张三' },
+      { id: '2', field: '', operator: 'equals', value: '' },
+    ],
+    '2',
+  )),
+  [
+    { value: 'owner', label: '责任人', disabled: true },
+    { value: 'status', label: '状态', disabled: false },
+  ],
+)
+
+console.log('filter condition checks passed')

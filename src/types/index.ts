@@ -280,7 +280,7 @@ export interface RoadmapViewConfig {
 export interface RoadmapFilterCondition {
   id: string;
   field: string;
-  operator: 'contains' | 'notContains' | 'equals';
+  operator: 'equals' | 'notEquals' | 'contains' | 'notContains' | 'isEmpty' | 'isNotEmpty';
   value: string;
 }
 
