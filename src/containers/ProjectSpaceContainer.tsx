@@ -68,12 +68,15 @@ import type { TaskChange, PlanDueNotice } from '@/types/plan-notify'
 import { exportSheet, exportMergedSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 import {
   MARKET_OPTIONS,
+  buildFollowVersionMetaForPublish,
   buildMarketRowsFromMarkets,
   canChangeMainMarket,
   canCreateRevisionForMarket,
   cancelDraftRevision,
+  formatFollowVersionSource,
   ensureMarketPlanDataForRows,
   getMainMarket,
+  getMarketFollowVersionKey,
   getProjectMarketSnapshotKey,
   isFollowMarket,
   normalizeMarketRows,
@@ -190,6 +193,7 @@ export default function ProjectSpaceContainer() {
     compareResult, setCompareResult, compareShowUnchanged, setCompareShowUnchanged,
     compareFilterType, setCompareFilterType,
     marketPlanData, setMarketPlanData,
+    marketFollowVersionMeta, setMarketFollowVersionMeta,
     ganttEditingTask, setGanttEditingTask, progressEditingTask, setProgressEditingTask,
     parentTimeWarning, setParentTimeWarning,
     milestoneTimeWarning, setMilestoneTimeWarning,
@@ -252,6 +256,22 @@ export default function ProjectSpaceContainer() {
   const currentMarketIsFollow = isWholeMachineProject && isFollowMarket(marketConfigRows, selectedMarketTab)
   const canCreateCurrentMarketRevision = !isWholeMachineProject || canCreateRevisionForMarket(marketConfigRows, selectedMarketTab, projectPlanLevel)
   const currentMarketData = isWholeMachineProject ? marketPlanData[selectedMarketTab] : null
+  const getCurrentMarketFollowVersionSource = (versionId: string) => {
+    if (!selectedProject || !isWholeMachineProject || projectPlanLevel !== 'level1') return undefined
+    return marketFollowVersionMeta[getMarketFollowVersionKey(selectedProject.id, selectedMarketTab, versionId)]
+  }
+  const renderVersionLabel = (version: typeof versions[number]) => {
+    const base = `${version.versionNo} (${version.status})`
+    const followLabel = formatFollowVersionSource(getCurrentMarketFollowVersionSource(version.id))
+    if (!followLabel) return base
+    return (
+      <Space size={4}>
+        <span>{base}</span>
+        <Tag color="green" style={{ margin: 0, fontSize: 11, lineHeight: '18px', borderRadius: 4 }}>{followLabel}</Tag>
+      </Space>
+    )
+  }
+  const versionSelectWidth = isWholeMachineProject && projectPlanLevel === 'level1' ? 250 : 150
   // 整机产品项目使用市场维度数据，其他项目使用全局 tasks
   const effectiveTasks = currentMarketData ? currentMarketData.tasks : tasks
   const setEffectiveTasks = currentMarketData
@@ -703,8 +723,26 @@ export default function ProjectSpaceContainer() {
     const mainMarket = getMainMarket(marketConfigRows)
     const shouldSyncFollowMarkets = isWholeMachineProject && projectPlanLevel === 'level1' && selectedMarketTab === mainMarket
     const nextMarketPlanData = shouldSyncFollowMarkets ? syncFollowMarketPlans(marketPlanData, marketConfigRows) : marketPlanData
+    const versionNo = publishedVersion?.versionNo || publishedVersionId
     setVersions(versions.map(v => v.id === publishedVersionId ? { ...v, status: '已发布' } : v))
     if (shouldSyncFollowMarkets) setMarketPlanData(nextMarketPlanData)
+    if (selectedProject && isWholeMachineProject && projectPlanLevel === 'level1') {
+      setMarketFollowVersionMeta(prev => {
+        const currentMarketKey = getMarketFollowVersionKey(selectedProject.id, selectedMarketTab, publishedVersionId)
+        const nextMeta = { ...prev }
+        delete nextMeta[currentMarketKey]
+        return {
+          ...nextMeta,
+          ...buildFollowVersionMetaForPublish({
+            projectId: selectedProject.id,
+            rows: marketConfigRows,
+            sourceMarket: selectedMarketTab,
+            sourceVersionId: publishedVersionId,
+            sourceVersionNo: versionNo,
+          }),
+        }
+      })
+    }
     setPublishedSnapshots(prev => {
       const snapshot = JSON.parse(JSON.stringify(effectiveTasks))
       const nextSnapshots = { ...prev, [publishedVersionId]: snapshot }
@@ -719,7 +757,6 @@ export default function ProjectSpaceContainer() {
       }
       return nextSnapshots
     })
-    const versionNo = publishedVersion?.versionNo || publishedVersionId
     if (changes.length > 0) notifyPublishChanges(versionNo, changes, MOCK_USER_MAP).then(notified => {
       if (notified > 0) notification.info({ message: '已通过飞书通知责任人', description: `一级计划 ${versionNo} 发布，共 ${changes.length} 条变更，已通知 ${notified} 位责任人`, placement: 'topRight', duration: 5 })
     })
@@ -1849,10 +1886,10 @@ export default function ProjectSpaceContainer() {
                 <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
                   <Space size={6}>
                     <span style={{ color: '#9ca3af', fontSize: 13 }}>版本</span>
-                    <Select value={currentVersion} onChange={(val) => navigateWithEditGuard(() => { setCurrentVersion(val); setIsEditMode(false) })} style={{ width: 150 }} size="middle">
+                    <Select value={currentVersion} onChange={(val) => navigateWithEditGuard(() => { setCurrentVersion(val); setIsEditMode(false) })} style={{ width: versionSelectWidth }} size="middle">
                       {versions
                         .filter(v => v.status !== '修订中' || canViewDraft)
-                        .map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
+                        .map(v => <Option key={v.id} value={v.id}>{renderVersionLabel(v)}</Option>)}
                     </Select>
                     {isCurrentDraft && <Tag color="green" style={{ fontSize: 12, margin: 0 }}>自动保存</Tag>}
                   </Space>

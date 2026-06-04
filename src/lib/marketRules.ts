@@ -13,6 +13,14 @@ export type PlanVersionLike = {
   status: string
 }
 
+export type FollowVersionSource = {
+  sourceMarket: string
+  sourceVersionId: string
+  sourceVersionNo: string
+}
+
+export type FollowVersionMeta = Record<string, FollowVersionSource>
+
 export type MarketPlanEntry = {
   tasks: any[]
   level2Tasks: any[]
@@ -133,6 +141,44 @@ export const syncFollowMarketPlans = (
   })
 
   return nextData
+}
+
+export const getMarketFollowVersionKey = (
+  projectId: string,
+  market: string,
+  versionId: string,
+) => `project::${projectId}::${market}::level1::${versionId}::follow-source`
+
+export const formatFollowVersionSource = (source?: FollowVersionSource) => (
+  source ? `跟随 ${source.sourceMarket} ${source.sourceVersionNo}` : ''
+)
+
+export const buildFollowVersionMetaForPublish = ({
+  projectId,
+  rows,
+  sourceMarket,
+  sourceVersionId,
+  sourceVersionNo,
+}: {
+  projectId: string
+  rows: MarketConfigRow[]
+  sourceMarket: string
+  sourceVersionId: string
+  sourceVersionNo: string
+}): FollowVersionMeta => {
+  const normalizedRows = normalizeMarketRows(rows)
+  const mainMarket = getMainMarket(normalizedRows)
+  if (!projectId || !mainMarket || sourceMarket !== mainMarket) return {}
+
+  return normalizedRows.reduce<FollowVersionMeta>((acc, row) => {
+    if (!row.market || row.isMain || !row.followsMain) return acc
+    acc[getMarketFollowVersionKey(projectId, row.market, sourceVersionId)] = {
+      sourceMarket,
+      sourceVersionId,
+      sourceVersionNo,
+    }
+    return acc
+  }, {})
 }
 
 export const ensureMarketPlanDataForRows = (

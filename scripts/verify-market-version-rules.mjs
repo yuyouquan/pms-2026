@@ -31,9 +31,12 @@ sandbox.exports = sandbox.module.exports
 vm.runInNewContext(compiled, sandbox, { filename: sourcePath })
 
 const {
+  buildFollowVersionMetaForPublish,
   canChangeMainMarket,
   canCreateRevisionForMarket,
   cancelDraftRevision,
+  formatFollowVersionSource,
+  getMarketFollowVersionKey,
   normalizeMarketRows,
   syncFollowMarketPlans,
 } = sandbox.module.exports
@@ -105,5 +108,38 @@ const synced = syncFollowMarketPlans(
 assert.deepEqual(JSON.parse(JSON.stringify(synced.RU.tasks)), mainTasks)
 assert.notEqual(synced.RU.tasks, mainTasks, 'follow market should receive a cloned main-market task list')
 assert.deepEqual(JSON.parse(JSON.stringify(synced.TR.tasks)), untouchedTasks, 'non-follow market should not be changed')
+
+const followVersionMeta = buildFollowVersionMetaForPublish({
+  projectId: 'project-1',
+  rows: normalized,
+  sourceMarket: 'OP',
+  sourceVersionId: 'v4',
+  sourceVersionNo: 'V4',
+})
+const ruFollowKey = getMarketFollowVersionKey('project-1', 'RU', 'v4')
+
+assert.deepEqual(
+  JSON.parse(JSON.stringify(followVersionMeta)),
+  {
+    [ruFollowKey]: {
+      sourceMarket: 'OP',
+      sourceVersionId: 'v4',
+      sourceVersionNo: 'V4',
+    },
+  },
+  'follow-published version metadata should record the source market and source version for follow markets only',
+)
+assert.equal(formatFollowVersionSource(followVersionMeta[ruFollowKey]), '跟随 OP V4')
+assert.deepEqual(
+  JSON.parse(JSON.stringify(buildFollowVersionMetaForPublish({
+    projectId: 'project-1',
+    rows: normalized,
+    sourceMarket: 'RU',
+    sourceVersionId: 'v4',
+    sourceVersionNo: 'V4',
+  }))),
+  {},
+  'non-main market publish should not create follow-published metadata',
+)
 
 console.log('market/version rule checks passed')
