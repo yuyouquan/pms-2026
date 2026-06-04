@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { GanttScaleMode } from '@/lib/ganttScale'
+import type { FollowVersionSource } from '@/lib/marketRules'
 import type { CompareTableRow } from '@/lib/versionCompare'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -195,6 +196,7 @@ export interface PlanState {
 
   // Market plan data (whole-machine projects)
   marketPlanData: Record<string, { tasks: any[]; level2Tasks: any[]; createdLevel2Plans: Level2Plan[] }>
+  marketFollowVersionMeta: Record<string, FollowVersionSource>
 
   // Editing helpers
   ganttEditingTask: any
@@ -247,6 +249,7 @@ export interface PlanActions {
   setCompareFilterType: (v: string) => void
 
   setMarketPlanData: (v: Record<string, { tasks: any[]; level2Tasks: any[]; createdLevel2Plans: Level2Plan[] }> | ((prev: Record<string, { tasks: any[]; level2Tasks: any[]; createdLevel2Plans: Level2Plan[] }>) => Record<string, { tasks: any[]; level2Tasks: any[]; createdLevel2Plans: Level2Plan[] }>)) => void
+  setMarketFollowVersionMeta: (v: Record<string, FollowVersionSource> | ((prev: Record<string, FollowVersionSource>) => Record<string, FollowVersionSource>)) => void
 
   setGanttEditingTask: (v: any) => void
   setProgressEditingTask: (v: any) => void
@@ -349,6 +352,7 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
       level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS],
     },
   },
+  marketFollowVersionMeta: {},
 
   // Editing helpers
   ganttEditingTask: null,
@@ -400,6 +404,7 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
   setCompareFilterType: (v) => set({ compareFilterType: v }),
 
   setMarketPlanData: (v) => set((s) => ({ marketPlanData: typeof v === 'function' ? v(s.marketPlanData) : v })),
+  setMarketFollowVersionMeta: (v) => set((s) => ({ marketFollowVersionMeta: typeof v === 'function' ? v(s.marketFollowVersionMeta) : v })),
 
   setGanttEditingTask: (v) => set({ ganttEditingTask: v }),
   setProgressEditingTask: (v) => set({ progressEditingTask: v }),
