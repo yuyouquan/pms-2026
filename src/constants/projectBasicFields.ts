@@ -11,9 +11,18 @@ export const WHOLE_MACHINE_BASIC_INFO_FIELDS = [
   { label: '产品线', key: 'productLine' },
   { label: '市场', key: 'market', fallbackKeys: ['markets'] },
   { label: '项目定级', key: 'projectLevel' },
+  { label: '安卓大版本升级', key: 'androidMajorUpgrade' },
+  { label: '系统类型', key: 'systemType' },
+  { label: '是否为GO', key: 'isGo' },
+  { label: '是否二段式', key: 'isTwoStage' },
+  { label: '是否为Slim版本', key: 'isSlimVersion' },
+  { label: '是否外研mini版本', key: 'isOutsourcedMini' },
+  { label: '项目描述', key: 'projectDescription' },
+  { label: 'Jira项目', key: 'jiraProjects' },
 ] as const
 
 export const WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS = [
+  { label: '市场项目名', key: 'marketProjectName' },
   { label: '芯片平台', key: 'chipPlatform' },
   { label: '芯片型号', key: 'cpu' },
   { label: '版本类型', key: 'versionType' },
@@ -33,4 +42,6 @@ export const WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS = [
   { label: '马达', key: 'motor' },
   { label: '指纹', key: 'fingerprint' },
   { label: '红外', key: 'infrared' },
+  { label: '编译选项', key: 'buildOption' },
+  { label: '编译市场', key: 'buildMarket' },
 ] as const
