@@ -2,6 +2,7 @@ export const WHOLE_MACHINE_BASIC_INFO_FIELDS = [
   { label: '项目名', key: 'name' },
   { label: '主板名', key: 'mainboard' },
   { label: '市场名', key: 'marketName' },
+  { label: '产品系列', key: 'productSeries' },
   { label: '产品类型', key: 'productType' },
   { label: '安卓版本', key: 'androidVersion', fallbackKeys: ['operatingSystem'] },
   { label: 'tOS版本', key: 'tosVersion' },
@@ -45,3 +46,51 @@ export const WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS = [
   { label: '编译选项', key: 'buildOption' },
   { label: '编译市场', key: 'buildMarket' },
 ] as const
+
+export const PRODUCT_SERIES_OPTIONS = [
+  { label: 'CAMON 50', value: 'CAMON 50' },
+  { label: 'P', value: 'P' },
+  { label: 'A', value: 'A' },
+  { label: 'SPARK 30', value: 'SPARK 30' },
+  { label: 'NOTE 50', value: 'NOTE 50' },
+]
+
+export const TECH_DOMAIN_OPTIONS = [
+  { label: '基础架构', value: '基础架构' },
+  { label: '影像', value: '影像' },
+  { label: '测试', value: '测试' },
+  { label: '性能', value: '性能' },
+  { label: '工程效率', value: '工程效率' },
+]
+
+export const TOS_VERSION_OPTIONS = [
+  { label: '15.0', value: '15.0' },
+  { label: '15.1', value: '15.1' },
+  { label: '15.2', value: '15.2' },
+  { label: '15.3', value: '15.3' },
+  { label: '16.0', value: '16.0' },
+  { label: '16.1', value: '16.1' },
+  { label: '16.2', value: '16.2' },
+  { label: '16.3', value: '16.3' },
+  { label: '17.0', value: '17.0' },
+  { label: '17.1', value: '17.1' },
+  { label: '18.0', value: '18.0' },
+]
+
+export const OS_SERIES_OPTIONS = [
+  { label: '15.X', value: '15.X' },
+  { label: '16.X', value: '16.X' },
+  { label: '17.X', value: '17.X' },
+  { label: '18.X', value: '18.X' },
+]
+
+export function inferTosVersionFromProjectName(projectName: string) {
+  const match = projectName.match(/(\d{2}\.\d)/)
+  return match?.[1] || ''
+}
+
+export function inferOsSeriesFromProjectName(projectName: string) {
+  const version = inferTosVersionFromProjectName(projectName)
+  if (!version) return ''
+  return `${version.split('.')[0]}.X`
+}
