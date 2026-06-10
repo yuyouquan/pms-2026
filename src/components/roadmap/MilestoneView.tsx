@@ -1,16 +1,30 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Button, Checkbox, Drawer, Dropdown, Empty, Input, Modal, Select, Space, Table, Tabs, Tag, Tooltip } from 'antd'
 import {
-  Table, Button, Space, Select, Tag, Modal, Checkbox, Input, Tabs, message, Tooltip, Popconfirm, Empty, Dropdown, Drawer,
-} from 'antd'
-import {
-  FilterOutlined, SettingOutlined, SaveOutlined, FullscreenOutlined, FullscreenExitOutlined,
-  EyeOutlined, PlusOutlined, CameraOutlined, HistoryOutlined, DeleteOutlined, SwapOutlined, ArrowRightOutlined,
+  ArrowRightOutlined,
+  CameraOutlined,
+  CaretDownOutlined,
+  CaretRightOutlined,
+  DeleteOutlined,
   DownloadOutlined,
+  EyeOutlined,
+  FilterOutlined,
+  FullscreenExitOutlined,
+  FullscreenOutlined,
+  HistoryOutlined,
+  PlusOutlined,
+  SettingOutlined,
+  SwapOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
-import type { RoadmapFilterCondition, RoadmapViewConfig } from '@/types'
+import dayjs from 'dayjs'
+import {
+  inferOsSeriesFromProjectName,
+  inferTosVersionFromProjectName,
+} from '@/constants/projectBasicFields'
+import type { FilterCondition } from '@/lib/filterConditions'
 import {
   FILTER_OPERATORS,
   applyFilterConditions,
@@ -20,29 +34,12 @@ import {
   isValuelessFilterOperator,
   normalizeFilterConditions,
 } from '@/lib/filterConditions'
-import {
-  aggregateMilestones, generateTableData, saveView, loadAllViews, deleteView,
-  getFixedColumnsForType, getDefaultVisibleColumns, getMilestoneColumnKey, isRoadmapColumnVisible,
-  diffSnapshots, buildCompareColumns,
-  type DiffResult, type SnapshotLike,
-} from './utils'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
-import { usePlanStore, LEVEL1_TEMPLATE_TASKS, getTemplateSnapshotKey } from '@/stores/plan'
+import { getFixedColumnsForType } from './utils'
 
-const PROJECT_TYPES = ['软件产品项目', '整机产品项目']
-
-const PROJECT_TYPE_MAP: Record<string, string> = {
-  '软件产品项目': '产品项目',
-  '整机产品项目': '整机产品项目',
-}
-
-const DEFAULT_VIEW_ID = '__default__'
-const ROADMAP_DRAWER_Z_INDEX = 1200
-
-const marketColors: Record<string, string> = {
-  'OP': '#6366f1', 'TR': '#52c41a', 'RU': '#faad14',
-  'FR': '#722ed1', 'IN': '#eb2f96', 'BR': '#13c2c2',
-}
+type RoadmapScope = 'overall' | 'machine' | 'software' | 'tech'
+type RoadmapStatus = '待立项' | '进行中' | '已完成' | '暂停' | '已取消' | '已上市' | '维护期'
+type StatusFilter = 'all' | RoadmapStatus
 
 interface MilestoneViewProps {
   projects: any[]
@@ -52,720 +49,1541 @@ interface MilestoneViewProps {
   initialProjectType?: string
   onProjectTypeChange?: (type: string) => void
   hideProjectTypeTabs?: boolean
+  scopeExtra?: ReactNode
 }
 
-export default function MilestoneView({ projects, marketPlanData, level1Tasks, onViewProject, initialProjectType, onProjectTypeChange, hideProjectTypeTabs }: MilestoneViewProps) {
-  const { versions, publishedSnapshots } = usePlanStore()
-  const [projectType, setProjectTypeLocal] = useState(initialProjectType || PROJECT_TYPES[0])
-  const setProjectType = (val: string) => {
-    setProjectTypeLocal(val)
-    onProjectTypeChange?.(val)
+interface RoadmapMilestone {
+  name: string
+  date: string
+}
+
+interface RoadmapMilestoneRow {
+  [key: string]: any
+  key: string
+  projectId: string
+  projectType: string
+  tosVersionGroup: string
+  productCategory: string
+  productSeries: string
+  projectName: string
+  status: RoadmapStatus
+  spm: string
+  department: string
+  market?: string
+  milestones: RoadmapMilestone[]
+  milestonesText: string
+  isCollapsedPreview?: boolean
+  hiddenProjectCount?: number
+}
+
+interface RoadmapSnapshot {
+  id: string
+  version: string
+  createdAt: string
+  scope: RoadmapScope
+  rows: RoadmapMilestoneRow[]
+}
+
+type CompareSource = 'live' | string
+type CompareRowStatus = 'added' | 'removed' | 'modified' | 'same'
+
+interface RoadmapCompareRow extends RoadmapMilestoneRow {
+  rowStatus: CompareRowStatus
+  changeSummary?: string
+}
+
+const ROADMAP_SCOPES: { key: RoadmapScope; label: string; projectType: string }[] = [
+  { key: 'overall', label: '整体', projectType: '整体' },
+  { key: 'machine', label: '整机产品项目', projectType: '整机产品项目' },
+  { key: 'software', label: '软件产品项目', projectType: '软件产品项目' },
+  { key: 'tech', label: '技术项目', projectType: '技术项目' },
+]
+
+const SCOPE_BY_PROJECT_TYPE: Record<string, RoadmapScope> = {
+  整体: 'overall',
+  整机产品项目: 'machine',
+  软件产品项目: 'software',
+  技术项目: 'tech',
+}
+
+const PROJECT_TYPE_BY_SCOPE: Record<RoadmapScope, string> = {
+  overall: '整体',
+  machine: '整机产品项目',
+  software: '软件产品项目',
+  tech: '技术项目',
+}
+
+const SUMMARY_VISIBLE_STATUSES: RoadmapStatus[] = ['待立项', '进行中', '已完成', '暂停', '已取消', '已上市', '维护期']
+
+const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: 'all', label: '全部' },
+  { key: '待立项', label: '待立项' },
+  { key: '进行中', label: '进行中' },
+  { key: '已完成', label: '已完成' },
+  { key: '暂停', label: '暂停' },
+  { key: '已取消', label: '已取消' },
+  { key: '已上市', label: '已上市' },
+  { key: '维护期', label: '维护期' },
+]
+
+const CATEGORY_ORDER = ['tOS版本', 'CAMON', 'Note', 'NOTE', 'SPARK', 'POVA', '技术项目']
+
+const CATEGORY_THEME: Record<string, { key: string; label?: string; color: string; accent: string }> = {
+  tOS版本: { key: 'tos', color: '#0891b2', accent: '#06b6d4' },
+  CAMON: { key: 'camon', color: '#2563eb', accent: '#3b82f6' },
+  Note: { key: 'note', label: 'NOTE', color: '#7c3aed', accent: '#8b5cf6' },
+  NOTE: { key: 'note', label: 'NOTE', color: '#7c3aed', accent: '#8b5cf6' },
+  SPARK: { key: 'spark', color: '#059669', accent: '#10b981' },
+  POVA: { key: 'pova', color: '#d97706', accent: '#f59e0b' },
+  技术项目: { key: 'tech', color: '#0f766e', accent: '#14b8a6' },
+}
+
+const DEFAULT_CATEGORY_THEME = { key: 'default', color: '#475569', accent: '#94a3b8' }
+const getCategoryTheme = (category: string) => CATEGORY_THEME[category] || DEFAULT_CATEGORY_THEME
+
+const STATUS_COLORS: Record<string, string> = {
+  待立项: 'blue',
+  已上市: 'gold',
+  进行中: 'orange',
+  维护期: 'purple',
+  已完成: 'cyan',
+  暂停: 'default',
+  已取消: 'red',
+}
+
+const STATUS_DOT_COLORS: Record<RoadmapStatus, string> = {
+  待立项: '#64748b',
+  进行中: '#10b981',
+  已完成: '#06b6d4',
+  暂停: '#94a3b8',
+  已取消: '#ef4444',
+  已上市: '#3b82f6',
+  维护期: '#8b5cf6',
+}
+
+const DEPARTMENT_BY_PROJECT: Record<string, string> = {
+  '1': '软件项目一部',
+  '2': '软件项目一部',
+  '3': '集成维护部',
+  '4': '集成维护部',
+  '6': '软件项目一部',
+  '7': '软件项目二部',
+  '8': '软件项目二部',
+  '9': '软件项目二部',
+}
+
+const FALLBACK_MILESTONES: Record<string, string[]> = {
+  整机产品项目: ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'STR6'],
+  产品项目: ['概念启动', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5', 'MR6', 'MR7'],
+  技术项目: ['概念启动', 'TDR1', 'TDR2', 'TDR3', 'TDR4'],
+}
+
+const BASE_COLUMN_OPTIONS = [
+  ...getFixedColumnsForType('整体').map(col => ({
+    ...col,
+    title: col.key === 'status' ? '状态' : col.title,
+  })),
+  { key: 'milestones', title: '里程碑节点', width: 760, defaultVisible: true },
+]
+
+const BASE_COLUMN_KEYS = new Set(BASE_COLUMN_OPTIONS.map(col => col.key))
+const ROADMAP_DRAWER_Z_INDEX = 1200
+
+const splitValues = (value: any) => String(value || '').split(',').map(item => item.trim()).filter(Boolean)
+
+const normalizeValue = (value: any) => {
+  if (Array.isArray(value)) return value.join(',')
+  if (value === undefined || value === null || value === '') return '-'
+  return String(value)
+}
+
+const normalizeStatus = (status: any): RoadmapStatus | null => {
+  const value = String(status || '').trim()
+  if (value === '维护') return '维护期'
+  if (value === '筹备中') return '待立项'
+  if (SUMMARY_VISIBLE_STATUSES.includes(value as RoadmapStatus)) return value as RoadmapStatus
+  return null
+}
+
+const normalizeTosVersion = (value: any) => {
+  const raw = String(value || '').trim()
+  if (!raw || raw === '-') return '未归属'
+  const compact = raw.replace(/\s+/g, '')
+  if (/^tOS/i.test(compact)) return compact.replace(/^tos/i, 'tOS')
+  const match = compact.match(/\d+(?:\.\d+)?/)
+  return match ? `tOS${match[0]}` : compact
+}
+
+const getMainMarket = (project: any) => {
+  const markets = Array.isArray(project.markets) ? project.markets : splitValues(project.market)
+  return project.mainMarket || markets[0] || project.buildMarket?.toUpperCase?.() || '-'
+}
+
+const getProjectSortName = (project: any) => String(project.name || project.projectName || '')
+const getMachineCategory = (project: any) => project.productCategory || (project.productLine === 'NOTE' ? 'Note' : project.productLine || 'CAMON')
+const getMachineSeries = (project: any) => project.productSeries || project.productLine || '未分系列'
+const getSoftwareSeries = (project: any) => project.osSeries || inferOsSeriesFromProjectName(project.name) || `${inferTosVersionFromProjectName(project.name).split('.')[0] || '16'}.X`
+const getTechSeries = (project: any) => splitValues(project.domain)[0] || project.productLine || '基础架构'
+
+const getProductCategory = (project: any) => {
+  if (project.type === '产品项目') return 'tOS版本'
+  if (project.type === '技术项目') return '技术项目'
+  return getMachineCategory(project)
+}
+
+const getProductSeries = (project: any) => {
+  if (project.type === '产品项目') return getSoftwareSeries(project)
+  if (project.type === '技术项目') return getTechSeries(project)
+  return getMachineSeries(project)
+}
+
+const getOverallTosVersion = (project: any) => {
+  if (project.type === '产品项目') return normalizeTosVersion(project.tosVersion || project.tosVersionName || project.name)
+  if (project.type === '技术项目') return normalizeTosVersion(splitValues(project.tosVersions)[0] || project.tosVersion)
+  return normalizeTosVersion(project.tosVersion || project.tosVersionName)
+}
+
+const toFallbackDate = (baseDate: string | undefined, index: number, rowOffset: number) => {
+  const base = baseDate && dayjs(baseDate).isValid() ? dayjs(baseDate) : dayjs('2026-01-01')
+  return base.add(index * 30 + rowOffset * 5, 'day').format('YYYY/M/D')
+}
+
+const formatTaskDate = (value: any) => {
+  if (!value) return ''
+  const date = dayjs(value)
+  return date.isValid() ? date.format('YYYY/M/D') : String(value)
+}
+
+const buildMilestoneNodes = (project: any, sourceTasks: any[], rowIndex: number): RoadmapMilestone[] => {
+  const fallbackNames = FALLBACK_MILESTONES[project.type] || FALLBACK_MILESTONES['整机产品项目']
+  const taskMilestones = sourceTasks
+    .filter(task => task?.parentId && task?.taskName)
+    .map(task => ({
+      name: task.taskName,
+      date: formatTaskDate(task.planEndDate || task.planStartDate) || toFallbackDate(project.planStartDate, Number(task.order || 0), rowIndex % 3),
+    }))
+
+  if (taskMilestones.length) {
+    const taskByName = new Map(taskMilestones.map(item => [item.name, item]))
+    return fallbackNames.map((name, index) => (
+      taskByName.get(name) || {
+        name,
+        date: toFallbackDate(project.planStartDate, index, rowIndex % 3),
+      }
+    ))
   }
-  const [filters, setFilters] = useState<RoadmapFilterCondition[]>([])
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([])
-  const [pageSize, setPageSize] = useState(10)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [savedViews, setSavedViews] = useState<RoadmapViewConfig[]>([])
-  const [activeViewId, setActiveViewId] = useState<string>(DEFAULT_VIEW_ID)
+
+  return fallbackNames.map((name, index) => ({
+    name,
+    date: toFallbackDate(project.planStartDate, index, rowIndex % 3),
+  }))
+}
+
+const buildProjectFields = (project: any) => ({
+  tosVersionGroup: getOverallTosVersion(project),
+  productCategory: getProductCategory(project),
+  productSeries: getProductSeries(project),
+  projectName: project.name,
+  status: normalizeStatus(project.status),
+  spm: project.spm || project.leader || '-',
+  department: DEPARTMENT_BY_PROJECT[project.id] || '软件项目一部',
+})
+
+const buildRoadmapMilestoneRow = (
+  project: any,
+  milestones: RoadmapMilestone[],
+  options: { keyPrefix: string; tosVersionGroup?: string; market?: string },
+): RoadmapMilestoneRow | null => {
+  const status = normalizeStatus(project.status)
+  if (!status) return null
+
+  const row: RoadmapMilestoneRow = {
+    key: `${options.keyPrefix}-${project.id}`,
+    projectId: project.id,
+    projectType: project.type,
+    ...buildProjectFields(project),
+    status,
+    market: options.market,
+    milestones,
+    milestonesText: milestones.map(item => `${item.date} ${item.name}`).join(' '),
+  }
+
+  if (options.tosVersionGroup) {
+    row.tosVersionGroup = options.tosVersionGroup
+  }
+
+  return row
+}
+
+const sortProjectsByRoadmapDimension = (projects: any[]) => [...projects].sort((a, b) => {
+  const categoryA = CATEGORY_ORDER.indexOf(getProductCategory(a))
+  const categoryB = CATEGORY_ORDER.indexOf(getProductCategory(b))
+  const safeCategoryA = categoryA === -1 ? 50 : categoryA
+  const safeCategoryB = categoryB === -1 ? 50 : categoryB
+  if (safeCategoryA !== safeCategoryB) return safeCategoryA - safeCategoryB
+  const seriesA = getProductSeries(a)
+  const seriesB = getProductSeries(b)
+  if (seriesA !== seriesB) return seriesA.localeCompare(seriesB, 'zh-CN', { numeric: true })
+  return getProjectSortName(a).localeCompare(getProjectSortName(b), 'zh-CN', { numeric: true })
+})
+
+const getTosGroups = (projects: any[]) => {
+  const groups = new Map<string, any[]>()
+  projects
+    .filter(project => project.type === '产品项目' && normalizeStatus(project.status))
+    .forEach(project => {
+      const version = normalizeTosVersion(project.tosVersion || project.tosVersionName || project.name)
+      groups.set(version, [...(groups.get(version) || []), project])
+    })
+
+  if (!groups.size) {
+    projects
+      .filter(project => ['产品项目', '整机产品项目', '技术项目'].includes(project.type) && normalizeStatus(project.status))
+      .forEach(project => {
+        const version = getOverallTosVersion(project)
+        groups.set(version, groups.get(version) || [])
+      })
+  }
+
+  return Array.from(groups.entries())
+    .map(([version, softwareProjects]) => ({
+      version,
+      softwareProjects: sortProjectsByRoadmapDimension(softwareProjects),
+    }))
+    .sort((a, b) => a.version.localeCompare(b.version, 'zh-CN', { numeric: true }))
+}
+
+function buildRoadmapMilestoneRows(
+  projects: any[],
+  marketPlanData: Record<string, { tasks: any[], level2Tasks: any[], createdLevel2Plans: any[] }>,
+  level1Tasks: any[],
+) {
+  const rows: RoadmapMilestoneRow[] = []
+  let rowIndex = 0
+  const tosGroups = getTosGroups(projects)
+  const machineProjects = sortProjectsByRoadmapDimension(projects.filter(project => project.type === '整机产品项目' && normalizeStatus(project.status)))
+  const techProjects = sortProjectsByRoadmapDimension(projects.filter(project => project.type === '技术项目' && normalizeStatus(project.status)))
+
+  for (const tosGroup of tosGroups) {
+    for (const project of tosGroup.softwareProjects) {
+      const row = buildRoadmapMilestoneRow(project, buildMilestoneNodes(project, level1Tasks, rowIndex), {
+        keyPrefix: `overall-${tosGroup.version}`,
+        tosVersionGroup: tosGroup.version,
+      })
+      if (row) rows.push(row)
+      rowIndex++
+    }
+
+    for (const project of machineProjects) {
+      const mainMarket = getMainMarket(project)
+      const row = buildRoadmapMilestoneRow(project, buildMilestoneNodes(project, marketPlanData[mainMarket || '']?.tasks || [], rowIndex), {
+        keyPrefix: `overall-${tosGroup.version}-${mainMarket}`,
+        tosVersionGroup: tosGroup.version,
+        market: mainMarket,
+      })
+      if (row) rows.push(row)
+      rowIndex++
+    }
+
+    for (const project of techProjects) {
+      const row = buildRoadmapMilestoneRow(project, buildMilestoneNodes(project, level1Tasks, rowIndex), {
+        keyPrefix: `overall-${tosGroup.version}`,
+        tosVersionGroup: tosGroup.version,
+      })
+      if (row) rows.push(row)
+      rowIndex++
+    }
+  }
+
+  return rows
+}
+
+function buildScopedMilestoneRows(
+  projects: any[],
+  scope: RoadmapScope,
+  marketPlanData: Record<string, { tasks: any[], level2Tasks: any[], createdLevel2Plans: any[] }>,
+  level1Tasks: any[],
+) {
+  if (scope === 'overall') return buildRoadmapMilestoneRows(projects, marketPlanData, level1Tasks)
+
+  const typeMap: Record<RoadmapScope, string> = {
+    overall: '',
+    machine: '整机产品项目',
+    software: '产品项目',
+    tech: '技术项目',
+  }
+
+  let rowIndex = 0
+  return sortProjectsByRoadmapDimension(projects.filter(project => project.type === typeMap[scope] && normalizeStatus(project.status)))
+    .map(project => {
+      const mainMarket = project.type === '整机产品项目' ? getMainMarket(project) : undefined
+      const sourceTasks = project.type === '整机产品项目'
+        ? marketPlanData[mainMarket || '']?.tasks || []
+        : level1Tasks
+      const row = buildRoadmapMilestoneRow(project, buildMilestoneNodes(project, sourceTasks, rowIndex), {
+        keyPrefix: scope,
+        market: mainMarket,
+      })
+      rowIndex++
+      return row
+    })
+    .filter(Boolean) as RoadmapMilestoneRow[]
+}
+
+function computeMilestoneRowSpans(rows: RoadmapMilestoneRow[], key: keyof RoadmapMilestoneRow, groupKeys: (keyof RoadmapMilestoneRow)[] = []) {
+  const spans = new Array(rows.length).fill(0)
+  let i = 0
+  while (i < rows.length) {
+    let j = i + 1
+    while (j < rows.length) {
+      const sameKey = rows[j][key] === rows[i][key]
+      const sameGroup = groupKeys.every(groupKey => rows[j][groupKey] === rows[i][groupKey])
+      if (!sameKey || !sameGroup) break
+      j++
+    }
+    spans[i] = j - i
+    for (let k = i + 1; k < j; k++) spans[k] = 0
+    i = j
+  }
+  return spans
+}
+
+function countBy(rows: RoadmapMilestoneRow[], key: keyof RoadmapMilestoneRow) {
+  return rows.reduce((acc, row) => {
+    const value = String(row[key])
+    acc[value] = (acc[value] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+}
+
+function scopeRows(rows: RoadmapMilestoneRow[], scope: RoadmapScope) {
+  if (scope === 'overall') return rows
+  if (scope === 'machine') return rows.filter(row => row.projectType === '整机产品项目')
+  if (scope === 'software') return rows.filter(row => row.projectType === '产品项目')
+  return rows.filter(row => row.projectType === '技术项目')
+}
+
+function applyStatusFilter(rows: RoadmapMilestoneRow[], statusFilter: StatusFilter) {
+  if (statusFilter === 'all') return rows
+  return rows.filter(row => row.status === statusFilter)
+}
+
+function applyCollapsedTosGroups(rows: RoadmapMilestoneRow[], collapsedTosGroups: Set<string>) {
+  if (!collapsedTosGroups.size) return rows
+  const visible: RoadmapMilestoneRow[] = []
+  let i = 0
+  while (i < rows.length) {
+    const tosGroup = rows[i].tosVersionGroup
+    const group: RoadmapMilestoneRow[] = []
+    while (i < rows.length && rows[i].tosVersionGroup === tosGroup) {
+      group.push(rows[i])
+      i++
+    }
+    if (collapsedTosGroups.has(tosGroup) && group.length > 1) {
+      visible.push({ ...group[0], key: `${group[0].key}-collapsed`, isCollapsedPreview: true, hiddenProjectCount: group.length - 1 })
+    } else {
+      visible.push(...group)
+    }
+  }
+  return visible
+}
+
+function buildCompareRows(baseRows: RoadmapMilestoneRow[], targetRows: RoadmapMilestoneRow[]): RoadmapCompareRow[] {
+  const compareFields = ['tosVersionGroup', 'productCategory', 'productSeries', 'projectName', 'status', 'spm', 'department', 'milestonesText']
+  const baseMap = new Map(baseRows.map(row => [row.key, row]))
+  const targetMap = new Map(targetRows.map(row => [row.key, row]))
+  const keys = Array.from(new Set([...baseMap.keys(), ...targetMap.keys()]))
+
+  return keys.map(key => {
+    const base = baseMap.get(key)
+    const target = targetMap.get(key)
+    if (!base && target) {
+      return { ...target, rowStatus: 'added', changeSummary: '新增' }
+    }
+    if (base && !target) {
+      return { ...base, rowStatus: 'removed', changeSummary: '删除' }
+    }
+    if (!base || !target) {
+      return null
+    }
+
+    const changedFields = compareFields.filter(field => base[field] !== target[field])
+    return {
+      ...target,
+      rowStatus: changedFields.length ? 'modified' : 'same',
+      changeSummary: changedFields.length ? `变更 ${changedFields.length} 项` : '无变化',
+    }
+  }).filter(Boolean) as RoadmapCompareRow[]
+}
+
+function getAvailableColumnsForScope(scope: RoadmapScope) {
+  return BASE_COLUMN_OPTIONS.filter(col => scope === 'overall' || col.key !== 'tosVersionGroup')
+}
+
+function getDefaultVisibleColumnsForScope(scope: RoadmapScope) {
+  return getAvailableColumnsForScope(scope)
+    .filter(col => col.locked || col.defaultVisible)
+    .map(col => col.key)
+}
+
+export default function MilestoneView({
+  projects,
+  marketPlanData,
+  level1Tasks,
+  onViewProject,
+	initialProjectType,
+	onProjectTypeChange,
+	hideProjectTypeTabs,
+	scopeExtra,
+}: MilestoneViewProps) {
+  const initialScope = initialProjectType ? SCOPE_BY_PROJECT_TYPE[initialProjectType] || 'overall' : 'overall'
+  const [scope, setScope] = useState<RoadmapScope>(initialScope)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [collapsedTosGroups, setCollapsedTosGroups] = useState<Set<string>>(new Set())
+  const [motionVersion, setMotionVersion] = useState(0)
+  const [filters, setFilters] = useState<FilterCondition[]>([])
+  const [tempFilters, setTempFilters] = useState<FilterCondition[]>([])
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(() => getDefaultVisibleColumnsForScope(initialScope))
+  const [showFilterDrawer, setShowFilterDrawer] = useState(false)
+  const [showColumnDrawer, setShowColumnDrawer] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
-
-  // Modal states
-  const [showFilterModal, setShowFilterModal] = useState(false)
-  const [showColumnModal, setShowColumnModal] = useState(false)
-  const [showSaveViewModal, setShowSaveViewModal] = useState(false)
-  const [viewName, setViewName] = useState('')
-
-  // Baseline snapshot state
-  const [baselineSnapshots, setBaselineSnapshots] = useState<{
-    id: string
-    version: string
-    createdAt: string
-    projectType: string
-    data: any[]
-    milestones: { name: string; order: number }[]
-  }[]>([])
+  const [baselineSnapshots, setBaselineSnapshots] = useState<RoadmapSnapshot[]>([])
   const [activeSnapshotId, setActiveSnapshotId] = useState<string | null>(null)
-
-  // Compare mode state (added 2026-04-10)
-  type CompareSource = 'live' | string
   const [compareMode, setCompareMode] = useState(false)
   const [compareBase, setCompareBase] = useState<CompareSource>('live')
   const [compareTarget, setCompareTarget] = useState<CompareSource>('live')
   const [onlyDiffRows, setOnlyDiffRows] = useState(true)
   const [showCompareModal, setShowCompareModal] = useState(false)
+  const rowsSignatureRef = useRef('')
 
-  // Temp filter state for drawer
-  const [tempFilters, setTempFilters] = useState(filters)
-
-  // Sync projectType from parent
   useEffect(() => {
-    if (initialProjectType && initialProjectType !== projectType && PROJECT_TYPES.includes(initialProjectType)) {
-      setProjectTypeLocal(initialProjectType)
-      setActiveViewId(DEFAULT_VIEW_ID)
-      setFilters([])
-      setCurrentPage(1)
-      setActiveSnapshotId(null)
-      setCompareMode(false)
-    }
-  }, [initialProjectType])
+    if (!initialProjectType) return
+    const nextScope = SCOPE_BY_PROJECT_TYPE[initialProjectType]
+    if (!nextScope || nextScope === scope) return
+    setScope(nextScope)
+    setStatusFilter('all')
+    setFilters([])
+    setTempFilters([])
+    setCollapsedTosGroups(new Set())
+    setVisibleColumns(getDefaultVisibleColumnsForScope(nextScope))
+    setActiveSnapshotId(null)
+    setCompareMode(false)
+  }, [initialProjectType, scope])
 
-  // Load saved views
+  const allRows = useMemo(() => buildRoadmapMilestoneRows(projects, marketPlanData, level1Tasks), [projects, marketPlanData, level1Tasks])
+  const scopedRows = useMemo(() => scopeRows(allRows, scope), [allRows, scope])
+  const filteredRows = useMemo(() => applyFilterConditions(scopedRows, filters), [scopedRows, filters])
+  const statusRows = useMemo(() => applyStatusFilter(filteredRows, statusFilter), [filteredRows, statusFilter])
+  const activeSnapshot = activeSnapshotId ? baselineSnapshots.find(snapshot => snapshot.id === activeSnapshotId) : null
+  const currentSnapshots = baselineSnapshots.filter(snapshot => snapshot.scope === scope)
+  const resolveCompareSource = (source: CompareSource) => {
+    if (source === 'live') return statusRows
+    return baselineSnapshots.find(snapshot => snapshot.id === source)?.rows || []
+  }
+  const compareRows = useMemo(() => {
+    if (!compareMode) return []
+    const baseRows = resolveCompareSource(compareBase)
+    const targetRows = resolveCompareSource(compareTarget)
+    const rows = buildCompareRows(baseRows, targetRows)
+    return onlyDiffRows ? rows.filter(row => row.rowStatus !== 'same') : rows
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compareMode, compareBase, compareTarget, baselineSnapshots, statusRows, onlyDiffRows])
+  const sourceRows = compareMode ? compareRows : (activeSnapshot ? activeSnapshot.rows : statusRows)
+  const rows = useMemo(() => (
+    scope === 'overall' && !compareMode ? applyCollapsedTosGroups(sourceRows, collapsedTosGroups) : sourceRows
+  ), [sourceRows, scope, compareMode, collapsedTosGroups])
+  const availableColumns = useMemo(() => getAvailableColumnsForScope(scope), [scope])
+  const defaultVisibleColumns = useMemo(() => getDefaultVisibleColumnsForScope(scope), [scope])
+  const hasActiveFilters = filters.some(isFilterConditionActive)
+  const filterFieldOptions = useMemo(() => (
+    availableColumns.map(col => ({
+      value: col.key === 'milestones' ? 'milestonesText' : col.key,
+      label: col.title,
+    }))
+  ), [availableColumns])
+	  const statusStats = useMemo(() => {
+	    const stats = SUMMARY_VISIBLE_STATUSES.reduce((acc, status) => {
+	      acc[status] = 0
+	      return acc
+	    }, {} as Record<RoadmapStatus, number>)
+    filteredRows.forEach(row => {
+      stats[row.status] += 1
+	    })
+	    return stats
+	  }, [filteredRows])
+	  const compareSourceOptions = useMemo(() => [
+	    { value: 'live', label: '实时数据' },
+	    ...currentSnapshots.map(snapshot => ({
+	      value: snapshot.id,
+	      label: `快照 ${snapshot.version}`,
+	    })),
+	  ], [currentSnapshots])
+	  const compareStats = useMemo(() => {
+	    const stats: Record<CompareRowStatus, number> = {
+	      added: 0,
+	      removed: 0,
+	      modified: 0,
+	      same: 0,
+	    }
+	    compareRows.forEach(row => {
+	      stats[row.rowStatus] += 1
+	    })
+	    return stats
+	  }, [compareRows])
+	  const tosSpans = useMemo(() => computeMilestoneRowSpans(rows, 'tosVersionGroup'), [rows])
+  const categorySpans = useMemo(() => computeMilestoneRowSpans(rows, 'productCategory', scope === 'overall' ? ['tosVersionGroup'] : []), [rows, scope])
+  const seriesSpans = useMemo(() => computeMilestoneRowSpans(rows, 'productSeries', scope === 'overall' ? ['tosVersionGroup', 'productCategory'] : ['productCategory']), [rows, scope])
+  const tosCounts = useMemo(() => countBy(statusRows, 'tosVersionGroup'), [statusRows])
+  const categoryCounts = useMemo(() => countBy(statusRows, 'productCategory'), [statusRows])
+  const seriesCounts = useMemo(() => countBy(statusRows, 'productSeries'), [statusRows])
+  const rowsSignature = useMemo(() => (
+    rows.map(row => `${row.key}:${row.isCollapsedPreview ? 'closed' : 'open'}:${row.hiddenProjectCount || 0}`).join('|')
+  ), [rows])
+
   useEffect(() => {
-    setSavedViews(loadAllViews())
-  }, [])
-
-  // Reset page on type change
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [projectType])
-
-  // Reset page on compare mode toggle
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [compareMode])
-
-  // Map display type to data type
-  const dataType = PROJECT_TYPE_MAP[projectType] || projectType
-
-  const latestPublishedVersion = useMemo(() => {
-    return [...versions]
-      .filter(v => v.status === '已发布')
-      .sort((a, b) => parseInt(b.versionNo.replace('V', ''), 10) - parseInt(a.versionNo.replace('V', ''), 10))[0]
-  }, [versions])
-
-  const templateTasks = useMemo(() => {
-    if (!latestPublishedVersion) return LEVEL1_TEMPLATE_TASKS
-    const projectTypeSnapshot = publishedSnapshots[getTemplateSnapshotKey(dataType, latestPublishedVersion.id)]
-    const fallbackSnapshot = publishedSnapshots[latestPublishedVersion.id]
-    const snapshot = projectTypeSnapshot?.length ? projectTypeSnapshot : fallbackSnapshot
-    return snapshot?.length ? snapshot : LEVEL1_TEMPLATE_TASKS
-  }, [dataType, latestPublishedVersion, publishedSnapshots])
-
-  // Aggregate milestones
-  const milestones = useMemo(() => {
-    return aggregateMilestones(templateTasks)
-  }, [templateTasks])
-
-  const defaultVisibleColumns = useMemo(() => {
-    return getDefaultVisibleColumns(projectType, milestones)
-  }, [projectType, milestones])
-
-  // Update visible columns when projectType or template milestones change.
-  useEffect(() => {
-    if (activeViewId === DEFAULT_VIEW_ID) {
-      setVisibleColumns(defaultVisibleColumns)
+    if (!rowsSignatureRef.current) {
+      rowsSignatureRef.current = rowsSignature
+      return
     }
-  }, [activeViewId, defaultVisibleColumns])
+    if (rowsSignatureRef.current !== rowsSignature) {
+      rowsSignatureRef.current = rowsSignature
+      setMotionVersion(prev => prev + 1)
+    }
+  }, [rowsSignature])
 
-  // Generate table data
-  const allTableData = useMemo(() => {
-    return generateTableData(projects, milestones, dataType, marketPlanData, level1Tasks)
-  }, [projects, milestones, dataType, marketPlanData, level1Tasks])
-
-  // Apply filters
-  const tableData = useMemo(() => {
-    return applyFilterConditions(allTableData, filters)
-  }, [allTableData, filters])
-
-  const renderProjectCell = (key: string, val: any) => {
-    if (key === 'status') {
-      const colorMap: Record<string, string> = { '进行中': 'processing', '已完成': 'success', '筹备中': 'warning', '待立项': 'warning', '暂停': 'default', '已上市': 'purple', '维护': 'cyan', '已取消': 'error' }
-      return <Tag color={colorMap[val] || 'default'}>{val || '-'}</Tag>
-    }
-    if (key === 'healthStatus') {
-      const config: Record<string, { label: string; color: string }> = {
-        normal: { label: '正常', color: 'success' },
-        warning: { label: '预警', color: 'warning' },
-        risk: { label: '风险', color: 'error' },
-      }
-      const item = config[val] || { label: val || '-', color: 'default' }
-      return <Tag color={item.color}>{item.label}</Tag>
-    }
-    if (key === 'projectName') {
-      return <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{val || '-'}</span>
-    }
-    if (key === 'market') {
-      return <Tag color={marketColors[val] || 'default'} style={{ fontWeight: 600 }}>{val || '-'}</Tag>
-    }
-    if (key === 'projectDescription') {
-      return (
-        <Tooltip title={val === '-' ? '' : val}>
-          <span style={{ display: 'inline-block', maxWidth: 210, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: val === '-' ? '#bfbfbf' : '#4b5563' }}>{val || '-'}</span>
-        </Tooltip>
-      )
-    }
-    return <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#4b5563' }}>{val || '-'}</span>
+  const handleScopeChange = (key: string) => {
+    const nextScope = key as RoadmapScope
+    setScope(nextScope)
+    onProjectTypeChange?.(PROJECT_TYPE_BY_SCOPE[nextScope])
+    setStatusFilter('all')
+    setFilters([])
+    setTempFilters([])
+    setCollapsedTosGroups(new Set())
+    setVisibleColumns(getDefaultVisibleColumnsForScope(nextScope))
+    setActiveSnapshotId(null)
+    setCompareMode(false)
   }
 
-  const buildStandardColumns = (sourceMilestones: { name: string; order: number }[], sourceProjectType = projectType): ColumnsType<any> => {
-    const cols: ColumnsType<any> = []
-    const typeColumns = getFixedColumnsForType(sourceProjectType)
+  const toggleTosGroup = (tosGroup: string) => {
+    setCollapsedTosGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(tosGroup)) next.delete(tosGroup)
+      else next.add(tosGroup)
+      return next
+    })
+  }
 
-    for (const col of typeColumns) {
-      if (!isRoadmapColumnVisible(sourceProjectType, visibleColumns, col.key)) continue
-      cols.push({
+  const expandAllTosGroups = () => setCollapsedTosGroups(new Set())
+  const collapseAllTosGroups = () => setCollapsedTosGroups(new Set(Object.keys(tosCounts).filter(tosGroup => tosCounts[tosGroup] > 1)))
+
+  const handleCreateSnapshot = () => {
+    const now = new Date()
+    const pad = (value: number) => value.toString().padStart(2, '0')
+    const version = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+    const snapshot: RoadmapSnapshot = {
+      id: version,
+      version,
+      createdAt: now.toLocaleString('zh-CN'),
+      scope,
+      rows: JSON.parse(JSON.stringify(statusRows)),
+    }
+    setBaselineSnapshots(prev => [snapshot, ...prev])
+    setActiveSnapshotId(snapshot.id)
+  }
+
+  const handleDeleteSnapshot = (id: string) => {
+    setBaselineSnapshots(prev => prev.filter(snapshot => snapshot.id !== id))
+    if (activeSnapshotId === id) setActiveSnapshotId(null)
+    if (compareBase === id) setCompareBase('live')
+    if (compareTarget === id) setCompareTarget('live')
+  }
+
+	  const formatCompareSourceLabel = (source: CompareSource) => {
+	    if (source === 'live') return '实时数据'
+	    return baselineSnapshots.find(snapshot => snapshot.id === source)?.version || source
+	  }
+
+	  const handleOpenCompare = () => {
+	    setCompareBase(currentSnapshots[0]?.id || 'live')
+	    setCompareTarget('live')
+	    setOnlyDiffRows(true)
+	    setShowCompareModal(true)
+	  }
+
+	  const handleApplyCompare = () => {
+	    if (compareBase === compareTarget) return
+	    setCompareMode(true)
+	    setActiveSnapshotId(null)
+	    setShowCompareModal(false)
+	  }
+
+	  const buildExportColumns = () => (
+    availableColumns
+      .filter(col => col.locked || visibleColumns.includes(col.key))
+      .map<ExportColumn>(col => ({
+        key: col.key === 'milestones' ? 'milestonesText' : col.key,
         title: col.title,
-        dataIndex: col.key,
-        key: col.key,
-        width: col.width || 100,
-        fixed: col.locked ? 'left' as const : undefined,
-        render: (val: any) => renderProjectCell(col.key, val),
+      }))
+  )
+
+  const handleExport = (exportScope: 'current' | 'all') => {
+    const sourceRows = exportScope === 'current' ? statusRows : scopedRows
+    const filename = `项目路标里程碑_${ROADMAP_SCOPES.find(item => item.key === scope)?.label || '整体'}_${exportTimestamp()}.xlsx`
+    exportSheet(sourceRows, buildExportColumns(), filename, '里程碑视图')
+  }
+
+  const columns = useMemo<ColumnsType<RoadmapMilestoneRow>>(() => {
+    const isVisible = (key: string) => {
+      const column = availableColumns.find(item => item.key === key)
+      return Boolean(column?.locked || visibleColumns.includes(key))
+    }
+    const cols: ColumnsType<RoadmapMilestoneRow> = []
+
+	    if (scope === 'overall' && isVisible('tosVersionGroup')) {
+	      cols.push({
+	        title: 'tOS版本',
+	        dataIndex: 'tosVersionGroup',
+	        key: 'tosVersionGroup',
+	        width: 128,
+	        align: 'left',
+	        fixed: 'left' as const,
+	        onCell: (_row, index) => ({
+	          rowSpan: tosSpans[index ?? 0],
+	          className: 'pms-summary-category-cell pms-summary-category-tos',
+	        }),
+        render: (value: string, row) => {
+          const collapsed = collapsedTosGroups.has(value)
+          return (
+            <div className="pms-summary-category-content">
+              <Button
+                type="text"
+                size="small"
+                className="pms-summary-collapse-button"
+                icon={collapsed ? <CaretRightOutlined /> : <CaretDownOutlined />}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  toggleTosGroup(value)
+                }}
+              />
+              <span className="pms-summary-category-dot" style={{ background: '#06b6d4' }} />
+              <div>
+                <div className="pms-summary-category-name" style={{ color: '#0891b2' }}>{value}</div>
+                <div className="pms-summary-category-meta">
+                  {row.isCollapsedPreview ? `已收起 ${row.hiddenProjectCount || 0} 个项目` : `${tosCounts[value] || 0} 个项目`}
+                </div>
+              </div>
+            </div>
+          )
+        },
       })
     }
 
-    for (const ms of sourceMilestones) {
-      const field = getMilestoneColumnKey(ms.name)
-      if (!visibleColumns.includes(field)) continue
-      cols.push({
-        title: ms.name,
-        dataIndex: field,
-        key: field,
-        width: 120,
-        align: 'center' as const,
-        render: (val: string) => (
-          <span style={{ fontSize: 12, color: val === '-' ? '#bfbfbf' : '#4b5563' }}>{val || '-'}</span>
+	    if (isVisible('productCategory')) {
+	      cols.push({
+	        title: '产品分类',
+	        dataIndex: 'productCategory',
+	        key: 'productCategory',
+	        width: 150,
+	        align: 'left',
+	        fixed: 'left' as const,
+	        onCell: (row, index) => ({
+	          rowSpan: categorySpans[index ?? 0],
+	          className: `pms-summary-category-cell pms-summary-category-${getCategoryTheme(row.productCategory).key}`,
+	        }),
+        render: (value: string) => {
+          const theme = getCategoryTheme(value)
+          return (
+            <div className="pms-summary-category-content">
+              <span className="pms-summary-category-dot" style={{ background: theme.accent }} />
+              <div>
+                <div className="pms-summary-category-name" style={{ color: theme.color }}>{theme.label || value}</div>
+                <div className="pms-summary-category-meta">{categoryCounts[value] || 0} 个项目</div>
+              </div>
+            </div>
+          )
+        },
+      })
+    }
+
+	    if (isVisible('productSeries')) {
+	      cols.push({
+	        title: '产品系列',
+	        dataIndex: 'productSeries',
+	        key: 'productSeries',
+	        width: 146,
+	        align: 'left',
+	        fixed: 'left' as const,
+	        onCell: (row, index) => ({
+	          rowSpan: seriesSpans[index ?? 0],
+	          className: `pms-summary-series-cell pms-summary-series-${getCategoryTheme(row.productCategory).key}`,
+	        }),
+        render: (value: string, row) => {
+          const theme = getCategoryTheme(row.productCategory)
+          return (
+            <div className="pms-summary-series-content">
+              <span className="pms-summary-series-dot" style={{ background: theme.accent }} />
+              <div>
+                <div className="pms-summary-series-name">{value}</div>
+                <div className="pms-summary-series-meta">{seriesCounts[value] || 0}个项目</div>
+              </div>
+            </div>
+          )
+        },
+      })
+    }
+
+	    if (isVisible('projectName')) {
+	      cols.push({
+	        title: '项目名',
+	        dataIndex: 'projectName',
+	        key: 'projectName',
+	        width: 176,
+	        fixed: 'left' as const,
+	        className: 'pms-summary-project-cell',
+	        render: (value: string, row) => (
+	          <div className="pms-summary-project-content">
+            <Tooltip title={row.projectType}>
+              <span className="pms-summary-project-name">{value}</span>
+            </Tooltip>
+            {row.isCollapsedPreview && !!row.hiddenProjectCount && (
+              <Tag color="blue" style={{ margin: 0, borderRadius: 10 }}>+{row.hiddenProjectCount}</Tag>
+            )}
+          </div>
         ),
       })
     }
 
-    cols.push({
-      title: '操作',
-      key: 'action',
-      fixed: 'right' as const,
-      width: 90,
-      render: (_: any, record: any) => (
-        <Button
-          type="link"
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={() => onViewProject(record.projectId, record.market)}
-        >
-          查看/记录
+    if (isVisible('status')) {
+      cols.push({
+        title: '状态',
+        dataIndex: 'status',
+        key: 'status',
+        width: 104,
+        align: 'center',
+        render: (value: string) => <Tag color={STATUS_COLORS[value] || 'processing'} style={{ margin: 0 }}>{value}</Tag>,
+      })
+    }
+
+    if (isVisible('spm')) {
+      cols.push({ title: 'SPM', dataIndex: 'spm', key: 'spm', width: 90, align: 'center' })
+    }
+
+    if (isVisible('department')) {
+      cols.push({ title: '部门', dataIndex: 'department', key: 'department', width: 128, align: 'center' })
+    }
+
+    if (compareMode) {
+      cols.push({
+        title: '变更',
+        key: 'changeSummary',
+        width: 100,
+        align: 'center',
+        render: (_: unknown, row: any) => {
+          const colorMap: Record<CompareRowStatus, string> = {
+            added: 'green',
+            removed: 'red',
+            modified: 'gold',
+            same: 'default',
+          }
+          return <Tag color={colorMap[row.rowStatus as CompareRowStatus] || 'default'} style={{ margin: 0 }}>{row.changeSummary || '-'}</Tag>
+        },
+      })
+    }
+
+    if (isVisible('milestones')) {
+      cols.push({
+        title: '里程碑节点',
+        dataIndex: 'milestones',
+        key: 'milestones',
+        width: 760,
+        className: 'pms-summary-milestones-cell',
+        onHeaderCell: () => ({ className: 'pms-summary-milestones-header' }),
+        render: (milestones: RoadmapMilestone[]) => (
+          <div className="pms-roadmap-milestone-chain pms-summary-milestone-chain">
+            {milestones.map((milestone, index) => (
+              <div className="pms-roadmap-milestone-node pms-summary-milestone-node" key={`${milestone.name}-${index}`}>
+                <div className="pms-roadmap-milestone-dot-wrap pms-summary-milestone-dot-wrap">
+                  <span className="pms-roadmap-milestone-dot pms-summary-milestone-dot" />
+                  {index < milestones.length - 1 && <span className="pms-roadmap-milestone-line pms-summary-milestone-line" />}
+                </div>
+                <div className="pms-roadmap-milestone-card pms-summary-milestone-card">
+                  <div className="pms-roadmap-milestone-date pms-summary-milestone-date">{milestone.date}</div>
+                  <div className="pms-roadmap-milestone-name pms-summary-milestone-name">{milestone.name}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ),
+      })
+    }
+
+	    cols.push({
+	      title: '操作',
+	      key: 'action',
+	      width: 92,
+	      align: 'center',
+	      fixed: 'right' as const,
+	      render: (_: unknown, row) => (
+	        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => onViewProject(row.projectId, row.market)}>
+	          查看
         </Button>
       ),
     })
 
     return cols
-  }
+  }, [availableColumns, visibleColumns, scope, tosSpans, categorySpans, seriesSpans, collapsedTosGroups, tosCounts, categoryCounts, seriesCounts, compareMode, onViewProject])
 
-  // Build columns
-  const columns = useMemo((): ColumnsType<any> => {
-    return buildStandardColumns(milestones)
-  }, [visibleColumns, milestones, onViewProject, projectType])
-
-  // Reset to default view state
-  const resetToDefault = () => {
-    setFilters([])
-    setVisibleColumns(defaultVisibleColumns)
-    setPageSize(10)
-    setCurrentPage(1)
-  }
-
-  // ========== 导出 Excel ==========
-  const handleExport = (scope: 'current' | 'all') => {
-    // 列集合：scope='current' 用当前可见列，scope='all' 用全部固定列 + 全部里程碑
-    const fixedCols = getFixedColumnsForType(projectType)
-    const visibleFixedKeys = scope === 'current'
-      ? fixedCols.filter(c => isRoadmapColumnVisible(projectType, visibleColumns, c.key)).map(c => c.key)
-      : fixedCols.map(c => c.key)
-    const exportMilestones = scope === 'current'
-      ? milestones.filter(ms => visibleColumns.includes(getMilestoneColumnKey(ms.name)))
-      : milestones
-
-    const exportCols: ExportColumn[] = []
-    for (const col of fixedCols) {
-      if (!visibleFixedKeys.includes(col.key)) continue
-      exportCols.push({ key: col.key, title: col.title })
-    }
-    for (const ms of exportMilestones) {
-      exportCols.push({ key: getMilestoneColumnKey(ms.name), title: ms.name })
-    }
-
-    // 数据源：scope='current' 用筛选后的 tableData，scope='all' 用 allTableData
-    const rows = scope === 'current' ? tableData : allTableData
-
-    const filename = `里程碑视图_${projectType}_${exportTimestamp()}.xlsx`
-    exportSheet(rows, exportCols, filename, '里程碑视图')
-  }
-
-  // Handle save view
-  const handleSaveView = () => {
-    if (!viewName.trim()) {
-      message.warning('请输入视图名称')
-      return
-    }
-    const config: RoadmapViewConfig = {
-      id: Date.now().toString(),
-      name: viewName.trim(),
-      projectType: projectType as any,
-      filters: [...filters],
-      visibleColumns: [...visibleColumns],
-      pageSize,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-    saveView(config)
-    const updated = loadAllViews()
-    setSavedViews(updated)
-    setActiveViewId(config.id)
-    setShowSaveViewModal(false)
-    setViewName('')
-    message.success('视图保存成功')
-  }
-
-  // Handle switch view tab
-  const handleViewTabChange = (viewId: string) => {
-    setActiveViewId(viewId)
-    if (viewId === DEFAULT_VIEW_ID) {
-      resetToDefault()
-      return
-    }
-    const view = savedViews.find(v => v.id === viewId)
-    if (!view) return
-    if (view.projectType) setProjectType(view.projectType)
-    setFilters(Array.isArray(view.filters) ? view.filters : [])
-    setVisibleColumns(view.visibleColumns || getDefaultVisibleColumns(view.projectType || projectType, milestones))
-    setPageSize(view.pageSize || 10)
-    setCurrentPage(1)
-  }
-
-  // Handle delete view tab
-  const handleViewTabEdit = (targetKey: React.MouseEvent | React.KeyboardEvent | string, action: 'add' | 'remove') => {
-    if (action === 'remove') {
-      const viewId = targetKey as string
-      if (viewId === DEFAULT_VIEW_ID) return
-      deleteView(viewId)
-      const updated = loadAllViews()
-      setSavedViews(updated)
-      if (activeViewId === viewId) {
-        setActiveViewId(DEFAULT_VIEW_ID)
-        resetToDefault()
-      }
-      message.success('视图已删除')
-    }
-    if (action === 'add') {
-      setShowSaveViewModal(true)
-    }
-  }
-
-  // Create baseline snapshot
-  const handleCreateSnapshot = () => {
-    const now = new Date()
-    const pad = (n: number) => n.toString().padStart(2, '0')
-    const version = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
-    const snapshot = {
-      id: version,
-      version,
-      createdAt: now.toLocaleString('zh-CN'),
-      projectType,
-      data: JSON.parse(JSON.stringify(allTableData)),
-      milestones: milestones.map(m => ({ name: m.name, order: m.order })),
-    }
-    setBaselineSnapshots(prev => [snapshot, ...prev])
-    message.success(`基线快照 ${version} 已创建`)
-  }
-
-  // Delete baseline snapshot
-  const handleDeleteSnapshot = (id: string) => {
-    setBaselineSnapshots(prev => prev.filter(s => s.id !== id))
-    if (activeSnapshotId === id) setActiveSnapshotId(null)
-    message.success('快照已删除')
-  }
-
-  const formatCompareSrcLabel = (src: CompareSource): string => {
-    if (src === 'live') return '实时数据'
-    const snap = baselineSnapshots.find(s => s.id === src)
-    return snap ? snap.version : src
-  }
-
-  // Compare mode: resolve sources and compute diff
-  const resolveCompareSource = (src: CompareSource): SnapshotLike => {
-    if (src === 'live') {
-      return { data: allTableData, milestones: milestones.map(m => ({ name: m.name, order: m.order })) }
-    }
-    const snap = baselineSnapshots.find(s => s.id === src)
-    if (!snap) {
-      return { data: [], milestones: [] }
-    }
-    return { data: snap.data, milestones: snap.milestones }
-  }
-
-  const diffResult = useMemo(() => {
-    if (!compareMode) return null
-    const baseSrc = resolveCompareSource(compareBase)
-    const targetSrc = resolveCompareSource(compareTarget)
-    return diffSnapshots(baseSrc, targetSrc, projectType)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [compareMode, compareBase, compareTarget, allTableData, milestones, baselineSnapshots, projectType])
-
-  // Auto-exit compare mode if a selected snapshot is deleted
-  useEffect(() => {
-    if (!compareMode) return
-    const baseOk = compareBase === 'live' || baselineSnapshots.some(s => s.id === compareBase)
-    const targetOk = compareTarget === 'live' || baselineSnapshots.some(s => s.id === compareTarget)
-    if (!baseOk || !targetOk) {
-      setCompareMode(false)
-      message.info('所选快照已被删除，已退出对比')
-    }
-  }, [baselineSnapshots, compareMode, compareBase, compareTarget])
-
-  // Get current display data (compare / snapshot / live)
-  const activeSnapshot = activeSnapshotId ? baselineSnapshots.find(s => s.id === activeSnapshotId) : null
-
-  const displayData: any[] = useMemo(() => {
-    if (compareMode && diffResult) {
-      let rows = diffResult.rows
-      rows = rows.filter(r => applyFilterConditions([r.target ?? r.base].filter(Boolean), filters).length > 0)
-      if (onlyDiffRows) {
-        rows = rows.filter(r => r.rowStatus !== 'same')
-      }
-      return rows
-    }
-    return activeSnapshot ? activeSnapshot.data : tableData
-  }, [compareMode, diffResult, onlyDiffRows, filters, activeSnapshot, tableData])
-
-  const displayMilestones = compareMode && diffResult
-    ? diffResult.mergedMilestones
-    : (activeSnapshot ? activeSnapshot.milestones : milestones)
-
-  // Rebuild columns (compare / snapshot / live)
-  const displayColumns = useMemo((): ColumnsType<any> => {
-    if (compareMode && diffResult) {
-      return buildCompareColumns(diffResult, visibleColumns, projectType, onViewProject)
-    }
-    if (!activeSnapshot) return columns
-    return buildStandardColumns(displayMilestones, activeSnapshot.projectType)
-  }, [compareMode, diffResult, activeSnapshot, visibleColumns, displayMilestones, onViewProject, projectType, columns])
-
-  const hasActiveFilters = filters.some(isFilterConditionActive)
-
-  // Columns available for column settings (context-aware)
-  const projectInfoSettableColumns = getFixedColumnsForType(projectType).filter(c => !c.locked)
-  const milestoneSettableColumns = milestones.map(ms => ({
-    key: getMilestoneColumnKey(ms.name),
-    title: ms.name,
-    defaultRoadmap: !!ms.defaultRoadmap,
-  }))
-  const filterFieldOptions = [
-    ...getFixedColumnsForType(projectType).map(c => ({ value: c.key, label: c.title })),
-    ...milestones.map(ms => ({ value: getMilestoneColumnKey(ms.name), label: ms.name })),
-  ]
-
-  // View tabs
-  const viewTabs = useMemo(() => {
-    const items: { key: string; label: React.ReactNode; closable: boolean }[] = [
-      { key: DEFAULT_VIEW_ID, label: '默认视图', closable: false },
-    ]
-    for (const v of savedViews) {
-      items.push({
-        key: v.id,
-        label: v.name,
-        closable: true,
-      })
-    }
-    return items
-  }, [savedViews])
-
-  // Table component
-  const tableComponent = (
+  const renderMilestoneTable = () => (
     <Table
-      className="pms-table"
-      columns={displayColumns}
-      dataSource={displayData}
-      rowKey={(r: any) => compareMode ? r.rowKey : r.key}
-      rowClassName={(r: any) => {
-        if (!compareMode) return ''
-        if (r.rowStatus === 'added') return 'row-diff-added'
-        if (r.rowStatus === 'removed') return 'row-diff-removed'
-        if (r.rowStatus === 'modified') return 'row-diff-modified'
-        return ''
+      className="pms-table pms-summary-board pms-roadmap-milestone-table"
+      columns={columns}
+      dataSource={rows}
+      rowKey="key"
+	      rowClassName={(row) => {
+	        const theme = getCategoryTheme(row.productCategory)
+	        const compareStatus = compareMode ? (row as RoadmapCompareRow).rowStatus : undefined
+	        return [
+	          `pms-summary-row-${theme.key}`,
+	          row.isCollapsedPreview ? 'pms-summary-row-collapsed' : '',
+	          compareStatus ? `pms-roadmap-compare-row-${compareStatus}` : '',
+	          motionVersion > 0 ? 'pms-summary-row-motion' : '',
+	          motionVersion > 0 ? `pms-summary-row-motion-${motionVersion % 2 === 0 ? 'even' : 'odd'}` : '',
+	        ].filter(Boolean).join(' ')
       }}
-      scroll={{ x: 'max-content' }}
+      bordered
       size="small"
-      pagination={{
-        current: currentPage,
-        pageSize,
-        total: displayData.length,
-        showSizeChanger: true,
-        pageSizeOptions: ['10', '20', '50', '100'],
-        showTotal: (total) => `共 ${total} 条`,
-        onChange: (page, size) => {
-          setCurrentPage(page)
-          setPageSize(size)
-        },
-      }}
-      locale={{ emptyText: <Empty description={compareMode && onlyDiffRows ? '两个版本无差异' : '暂无数据'} image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+      tableLayout="fixed"
+      scroll={{ x: 'max-content' }}
+      pagination={false}
+      locale={{ emptyText: <Empty description="暂无项目路标里程碑数据" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
     />
-  )
-
-  // Filter snapshots for current project type
-  const currentSnapshots = baselineSnapshots.filter(s => s.projectType === projectType)
-
-  // Toolbar (right side buttons)
-  const toolbarActions = (
-    <Space size={6}>
-      <Tooltip title="筛选">
-        <Button
-          icon={<FilterOutlined />}
-          onClick={() => { setTempFilters(filters.length ? filters.map(f => ({ ...f })) : [createFilterCondition()]); setShowFilterModal(true) }}
-          type={hasActiveFilters ? 'primary' : 'default'}
-          ghost={hasActiveFilters}
-          size="small"
-          style={{ borderRadius: 6 }}
-        >
-          筛选{hasActiveFilters ? ' ●' : ''}
-        </Button>
-      </Tooltip>
-      <Tooltip title="列设置">
-        <Button icon={<SettingOutlined />} size="small" style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)}>列设置</Button>
-      </Tooltip>
-      <div style={{ width: 1, height: 18, background: '#e0e0e0' }} />
-      <Tooltip title={compareMode ? '对比模式下不可创建快照' : '将当前数据创建基线快照'}>
-        <Button
-          icon={<CameraOutlined />}
-          size="small"
-          style={{ borderRadius: 6 }}
-          onClick={handleCreateSnapshot}
-          disabled={!!activeSnapshotId || compareMode}
-        >
-          快照
-        </Button>
-      </Tooltip>
-      {!compareMode && currentSnapshots.length > 0 && (
-        <Select
-          value={activeSnapshotId || 'live'}
-          onChange={(val) => setActiveSnapshotId(val === 'live' ? null : val)}
-          style={{ width: 180 }}
-          size="small"
-          popupMatchSelectWidth={240}
-          optionLabelProp="label"
-        >
-          <Select.Option value="live" label={<span style={{ fontSize: 12 }}><span style={{ color: '#52c41a', marginRight: 4 }}>●</span>实时数据</span>}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ color: '#52c41a' }}>●</span>
-              <span style={{ fontWeight: 500 }}>实时数据</span>
-            </div>
-          </Select.Option>
-          {currentSnapshots.map(s => (
-            <Select.Option key={s.id} value={s.id} label={<span style={{ fontSize: 12 }}><HistoryOutlined style={{ marginRight: 4, color: '#6366f1' }} />{s.version}</span>}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 500 }}>{s.version}</div>
-                  <div style={{ fontSize: 11, color: '#9ca3af' }}>{s.createdAt}</div>
-                </div>
-                <DeleteOutlined style={{ color: '#ff4d4f', fontSize: 11 }} onClick={(e) => { e.stopPropagation(); handleDeleteSnapshot(s.id) }} />
-              </div>
-            </Select.Option>
-          ))}
-        </Select>
-      )}
-      <Tooltip title={currentSnapshots.length === 0 ? '请先至少创建一个快照' : '对比两个版本'}>
-        <Button
-          icon={<SwapOutlined />}
-          size="small"
-          style={{ borderRadius: 6 }}
-          onClick={() => setShowCompareModal(true)}
-          disabled={currentSnapshots.length === 0}
-          type={compareMode ? 'primary' : 'default'}
-          ghost={compareMode}
-        >
-          {compareMode ? '对比中' : '对比'}
-        </Button>
-      </Tooltip>
-      <Dropdown
-        menu={{
-          items: [
-            { key: 'current', label: '导出当前视图' },
-            { key: 'all', label: `导出全部（${projectType}）` },
-          ],
-          onClick: ({ key }) => handleExport(key as 'current' | 'all'),
-        }}
-      >
-        <Tooltip title="导出为 Excel">
-          <Button icon={<DownloadOutlined />} size="small" style={{ borderRadius: 6 }} />
-        </Tooltip>
-      </Dropdown>
-      <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
-        <Button icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />} size="small" style={{ borderRadius: 6 }} onClick={() => setIsFullscreen(!isFullscreen)} />
-      </Tooltip>
-    </Space>
   )
 
   return (
     <div>
-      {/* 项目类型切换 - 当外层已处理时隐藏 */}
-      {!hideProjectTypeTabs && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14,
-          padding: '3px 4px', background: '#f3f4f6', borderRadius: 22, width: 'fit-content',
-        }}>
-          {PROJECT_TYPES.map(t => {
-            const isActive = projectType === t
-            return (
-              <div
-                key={t}
-                onClick={() => {
-                  setProjectType(t)
-                  setActiveViewId(DEFAULT_VIEW_ID)
-                  setFilters([])
-                  setCurrentPage(1)
-                  setActiveSnapshotId(null)
-                  setCompareMode(false)
-                }}
-                style={{
-                  padding: '6px 20px', borderRadius: 18, cursor: 'pointer',
-                  fontSize: 13, fontWeight: 600, transition: 'all 0.25s ease',
-                  background: isActive ? '#fff' : 'transparent',
-                  color: isActive ? '#6366f1' : '#9ca3af',
-                  boxShadow: isActive ? '0 2px 8px rgba(99,102,241,0.2)' : 'none',
-                }}
-              >
-                {t}
-              </div>
-            )
-          })}
-        </div>
-      )}
+      <style>{`
+	        .pms-summary-control-shell {
+	          margin-bottom: 14px;
+	          padding: 12px 14px 10px;
+	          border: 1px solid #e2e8f0;
+	          border-radius: 12px;
+	          background: #fff;
+	          box-shadow: 0 8px 22px rgba(15,23,42,0.05);
+	        }
+	        .pms-summary-toolbar {
+	          margin-bottom: 0;
+	          padding: 0;
+	          display: flex;
+	          align-items: center;
+	          justify-content: space-between;
+	          gap: 12px;
+	          flex-wrap: wrap;
+	        }
+	        .pms-summary-status-group {
+	          display: flex;
+	          align-items: center;
+	          justify-content: flex-start;
+	          gap: 8px;
+	          flex-wrap: wrap;
+	          flex: 1 1 620px;
+	          min-width: 360px;
+	        }
+	        .pms-summary-toolbar-actions {
+	          flex: 0 0 auto;
+	          justify-content: flex-end;
+	          margin-left: auto;
+	        }
+	        .pms-summary-toolbar-actions .ant-btn {
+	          font-weight: 600;
+	        }
+	        .pms-summary-scope-tabs {
+	          flex: 1 1 auto;
+	          min-width: 0;
+	        }
+	        .pms-summary-scope-tabs .ant-tabs-nav {
+	          margin: 0 !important;
+	        }
+	        .pms-summary-scope-row {
+	          margin-bottom: 10px;
+	          padding-bottom: 8px;
+	          border-bottom: 1px solid #eef2f7;
+	          display: flex;
+	          align-items: center;
+	          justify-content: space-between;
+	          gap: 12px;
+	        }
+	        .pms-summary-scope-extra {
+	          flex: 0 0 auto;
+	          display: flex;
+	          align-items: center;
+	          justify-content: flex-end;
+	        }
+	        .pms-roadmap-snapshot-select {
+	          width: 146px;
+	        }
+	        .pms-roadmap-info-bar {
+	          margin-bottom: 12px;
+	          padding: 9px 12px;
+	          border: 1px solid #dbeafe;
+	          border-radius: 10px;
+	          background: #eff6ff;
+	          color: #1e3a8a;
+	          display: flex;
+	          align-items: center;
+	          justify-content: space-between;
+	          gap: 12px;
+	          flex-wrap: wrap;
+	        }
+	        .pms-roadmap-compare-bar {
+	          border-color: #fde68a;
+	          background: #fffbeb;
+	          color: #854d0e;
+	        }
+	        .pms-roadmap-compare-stat {
+	          font-size: 12px;
+	          font-weight: 700;
+	        }
+	        .pms-roadmap-compare-stat-added {
+	          color: #15803d;
+	        }
+	        .pms-roadmap-compare-stat-removed {
+	          color: #b91c1c;
+	        }
+	        .pms-roadmap-compare-stat-modified {
+	          color: #a16207;
+	        }
+        .pms-summary-status-label {
+          color: #64748b;
+          font-size: 12px;
+        }
+        .pms-summary-status-pill {
+          border: 1px solid #dbe5f1;
+          background: #fff;
+          color: #334155;
+          border-radius: 16px;
+          padding: 4px 14px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.18s ease;
+        }
+        .pms-summary-status-pill:hover {
+          border-color: #93c5fd;
+          color: #2563eb;
+        }
+        .pms-summary-status-pill-active {
+          background: #4f6df5;
+          border-color: #4f6df5;
+          color: #fff;
+          box-shadow: 0 4px 10px rgba(79,109,245,0.22);
+        }
+        .pms-summary-status-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          display: inline-block;
+          margin-right: 6px;
+          vertical-align: 1px;
+        }
+        .pms-summary-status-count {
+          margin-left: 6px;
+          font-weight: 800;
+        }
+        .pms-summary-board .ant-table-thead > tr:first-child > th {
+          background: #f8fafc !important;
+          color: #334155 !important;
+          font-weight: 700 !important;
+          border-color: #dbe5f1 !important;
+          padding: 10px 16px !important;
+          line-height: 18px !important;
+          white-space: nowrap;
+          overflow: visible;
+          text-overflow: clip;
+        }
+        .pms-summary-board .ant-table-thead > tr:first-child > th.pms-summary-milestones-header {
+          background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%) !important;
+          color: #9f1239 !important;
+        }
+        .pms-summary-board .ant-table-tbody > tr > td {
+          border-color: #e2e8f0 !important;
+          background: #fff !important;
+          padding: 0 16px !important;
+          transition: background-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
+        }
+	        .pms-summary-board .ant-table-tbody > tr:hover > td {
+	          background: #f8fafc !important;
+	        }
+	        .pms-summary-board .ant-table-cell-fix,
+	        .pms-summary-board .ant-table-cell-fix-start,
+	        .pms-summary-board .ant-table-cell-fix-end {
+	          position: sticky !important;
+	        }
+	        .pms-table.pms-summary-board .ant-table-thead > tr > th.ant-table-cell-fix,
+	        .pms-table.pms-summary-board .ant-table-thead > tr > th.ant-table-cell-fix-start,
+	        .pms-table.pms-summary-board .ant-table-thead > tr > th.ant-table-cell-fix-end,
+	        .pms-table.pms-summary-board .ant-table-tbody > tr > td.ant-table-cell-fix,
+	        .pms-table.pms-summary-board .ant-table-tbody > tr > td.ant-table-cell-fix-start,
+	        .pms-table.pms-summary-board .ant-table-tbody > tr > td.ant-table-cell-fix-end {
+	          position: sticky !important;
+	        }
+	        .pms-summary-board .ant-table-cell-fix-left,
+	        .pms-summary-board .ant-table-cell-fix-right,
+	        .pms-summary-board .ant-table-cell-fix-start,
+	        .pms-summary-board .ant-table-cell-fix-end {
+	          background-clip: padding-box;
+	        }
+	        .pms-summary-board .ant-table-cell-fix-left-last,
+	        .pms-summary-board .ant-table-cell-fix-start-shadow {
+	          box-shadow: 8px 0 14px -12px rgba(15,23,42,0.28);
+	        }
+	        .pms-summary-board .ant-table-cell-fix-right-first,
+	        .pms-summary-board .ant-table-cell-fix-end-shadow {
+	          box-shadow: -8px 0 14px -12px rgba(15,23,42,0.28);
+	        }
+        .pms-summary-category-content,
+        .pms-summary-series-content,
+        .pms-summary-project-content {
+          min-height: 58px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          transition: transform 0.22s ease, opacity 0.22s ease;
+        }
+        .pms-summary-category-cell {
+          vertical-align: top;
+          padding: 14px 12px !important;
+          border-right-color: #cfe0f4 !important;
+        }
+        .pms-summary-series-cell {
+          vertical-align: top;
+          padding: 14px 16px !important;
+          border-right: 1px solid #fde68a !important;
+        }
+        .pms-summary-project-cell {
+          padding: 0 16px !important;
+          background: #fff !important;
+        }
+        .pms-summary-category-camon,
+        .pms-summary-row-camon > td.pms-summary-category-cell {
+          background: #eff6ff !important;
+        }
+        .pms-summary-series-camon,
+        .pms-summary-row-camon > td.pms-summary-series-cell {
+          background: #f8fbff !important;
+        }
+        .pms-summary-category-note,
+        .pms-summary-row-note > td.pms-summary-category-cell {
+          background: #f5f3ff !important;
+        }
+        .pms-summary-series-note,
+        .pms-summary-row-note > td.pms-summary-series-cell {
+          background: #faf7ff !important;
+        }
+        .pms-summary-category-spark,
+        .pms-summary-row-spark > td.pms-summary-category-cell {
+          background: #ecfdf5 !important;
+        }
+        .pms-summary-series-spark,
+        .pms-summary-row-spark > td.pms-summary-series-cell {
+          background: #f4fff9 !important;
+        }
+        .pms-summary-category-pova,
+        .pms-summary-row-pova > td.pms-summary-category-cell {
+          background: #fffbeb !important;
+        }
+        .pms-summary-series-pova,
+        .pms-summary-row-pova > td.pms-summary-series-cell {
+          background: #fffdf2 !important;
+        }
+        .pms-summary-category-tos,
+        .pms-summary-row-tos > td.pms-summary-category-cell {
+          background: #ecfeff !important;
+        }
+        .pms-summary-series-tos,
+        .pms-summary-row-tos > td.pms-summary-series-cell {
+          background: #f0fdfa !important;
+        }
+        .pms-summary-category-tech,
+        .pms-summary-row-tech > td.pms-summary-category-cell {
+          background: #ecfdf5 !important;
+        }
+        .pms-summary-series-tech,
+        .pms-summary-row-tech > td.pms-summary-series-cell {
+          background: #f0fdf4 !important;
+        }
+        .pms-summary-collapse-button {
+          color: #64748b !important;
+          width: 18px !important;
+          height: 18px !important;
+          min-width: 18px !important;
+          padding: 0 !important;
+          border-radius: 5px !important;
+          transition: background-color 0.18s ease, transform 0.22s cubic-bezier(0.2, 0, 0, 1) !important;
+        }
+        .pms-summary-collapse-button .anticon {
+          transition: transform 0.24s cubic-bezier(0.2, 0, 0, 1);
+        }
+        .pms-summary-collapse-button:hover {
+          background: rgba(255,255,255,0.7) !important;
+        }
+        .pms-summary-category-dot,
+        .pms-summary-series-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          flex-shrink: 0;
+          box-shadow: 0 0 0 3px rgba(255,255,255,0.72);
+        }
+        .pms-summary-category-name {
+          font-size: 13px;
+          font-weight: 800;
+          letter-spacing: 0;
+        }
+        .pms-summary-category-meta,
+        .pms-summary-series-meta {
+          color: #64748b;
+          font-size: 11px;
+          margin-top: 3px;
+        }
+        .pms-summary-series-name {
+          color: #9a3412;
+          font-size: 13px;
+          font-weight: 800;
+        }
+        .pms-summary-project-name {
+          color: #111827;
+          font-weight: 700;
+          letter-spacing: 0;
+        }
+        .pms-summary-text-cell {
+          color: #4b5563;
+          font-size: 12px;
+          white-space: nowrap;
+        }
+        .pms-summary-row-collapsed > td {
+          box-shadow: inset 0 -1px 0 #cbd5e1;
+        }
+        .pms-summary-row-motion-even > td,
+        .pms-summary-row-motion-odd > td {
+          animation: pmsSummaryRowReveal 220ms ease-out both;
+        }
+	        .pms-summary-row-collapsed > td {
+	          animation: pmsSummaryCollapseSettle 220ms ease-out both;
+	        }
+	        .pms-roadmap-compare-row-added > td {
+	          background: #f0fdf4 !important;
+	        }
+	        .pms-roadmap-compare-row-removed > td {
+	          background: #fff1f2 !important;
+	        }
+	        .pms-roadmap-compare-row-modified > td {
+	          background: #fffbeb !important;
+	        }
+        @keyframes pmsSummaryRowReveal {
+          from {
+            opacity: 0.72;
+            filter: brightness(0.98);
+          }
+          to {
+            opacity: 1;
+            filter: brightness(1);
+          }
+        }
+        @keyframes pmsSummaryCollapseSettle {
+          0% {
+            filter: brightness(0.98);
+          }
+          100% {
+            filter: brightness(1);
+          }
+        }
+        .pms-summary-milestones-cell {
+          padding: 8px 12px !important;
+        }
+        .pms-roadmap-milestone-chain {
+          min-height: 58px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          overflow-x: auto;
+          padding: 7px 2px;
+          scrollbar-width: thin;
+        }
+        .pms-roadmap-milestone-node {
+          position: relative;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex: 0 0 auto;
+        }
+        .pms-roadmap-milestone-dot-wrap {
+          position: relative;
+          width: 16px;
+          height: 34px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 16px;
+        }
+        .pms-roadmap-milestone-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #f97316;
+          box-shadow: 0 0 0 4px #ffedd5;
+          z-index: 1;
+        }
+        .pms-roadmap-milestone-line {
+          position: absolute;
+          left: 14px;
+          width: 72px;
+          height: 1px;
+          background: linear-gradient(90deg, #fdba74 0%, rgba(253,186,116,0.25) 100%);
+        }
+        .pms-roadmap-milestone-card {
+          min-width: 72px;
+          padding: 4px 7px;
+          border-radius: 6px;
+          background: #fff7ed;
+          border: 1px solid #fed7aa;
+          line-height: 1.28;
+          box-shadow: 0 1px 2px rgba(154,52,18,0.06);
+        }
+        .pms-roadmap-milestone-date {
+          color: #374151;
+          font-size: 11px;
+          font-weight: 600;
+          white-space: nowrap;
+        }
+        .pms-roadmap-milestone-name {
+          color: #9a3412;
+          font-size: 11px;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .pms-summary-row-motion-even > td,
+          .pms-summary-row-motion-odd > td,
+          .pms-summary-row-collapsed > td {
+            animation: none;
+          }
+          .pms-summary-board .ant-table-tbody > tr > td,
+          .pms-summary-category-content,
+          .pms-summary-series-content,
+          .pms-summary-project-content,
+          .pms-summary-collapse-button,
+          .pms-summary-collapse-button .anticon {
+            transition: none !important;
+          }
+        }
+      `}</style>
 
-      {/* 工具栏 */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-        padding: '10px 16px', marginBottom: 12,
-        background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(6px)',
-        borderRadius: 10, border: '1px solid rgba(99,102,241,0.08)',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
-      }}>
-        {/* 左侧: 视图切换 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <span style={{ fontSize: 12, color: '#9ca3af', marginRight: 2 }}>视图</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 3px', background: '#f3f4f6', borderRadius: 16 }}>
-            {viewTabs.map(tab => {
-              const isActive = activeViewId === tab.key
-              return (
-                <div
-                  key={tab.key}
-                  onClick={() => handleViewTabChange(tab.key)}
-                  style={{
-                    padding: '3px 12px', borderRadius: 14, cursor: 'pointer',
-                    fontSize: 12, fontWeight: 500, transition: 'all 0.3s ease',
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    background: isActive ? '#fff' : 'transparent',
-                    color: isActive ? '#6366f1' : '#4b5563',
-                    boxShadow: isActive ? '0 2px 6px rgba(99,102,241,0.12)' : 'none',
-                  }}
-                >
-                  <span>{tab.label}</span>
-                  {tab.closable && (
-                    <span
-                      onClick={(e) => { e.stopPropagation(); handleViewTabEdit(tab.key, 'remove') }}
-                      style={{ fontSize: 10, color: '#bfbfbf', marginLeft: 2, cursor: 'pointer', lineHeight: 1 }}
-                      onMouseEnter={e => (e.currentTarget.style.color = '#ff4d4f')}
-                      onMouseLeave={e => (e.currentTarget.style.color = '#bfbfbf')}
-                    >
-                      ✕
-                    </span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-          <div
-            onClick={() => handleViewTabEdit('', 'add')}
-            style={{
-              padding: '3px 10px', borderRadius: 14, cursor: 'pointer',
-              fontSize: 11, color: '#6366f1', border: '1px dashed #a5b4fc',
-              display: 'flex', alignItems: 'center', gap: 3,
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#eef2ff' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-          >
-            <PlusOutlined style={{ fontSize: 10 }} /> 保存
-          </div>
-        </div>
-        {/* 右侧: 操作按钮 */}
-        <div style={{ flexShrink: 0 }}>
-          {toolbarActions}
-        </div>
-      </div>
+	      <div className="pms-summary-control-shell">
+	        {!hideProjectTypeTabs && (
+	          <div className="pms-summary-scope-row">
+	            <Tabs
+	              className="pms-summary-scope-tabs"
+	              activeKey={scope}
+	              onChange={handleScopeChange}
+	              items={ROADMAP_SCOPES.map(item => ({ key: item.key, label: item.label }))}
+	            />
+	            {scopeExtra && <div className="pms-summary-scope-extra">{scopeExtra}</div>}
+	          </div>
+	        )}
 
-      {/* 快照提示条（单快照查看时） */}
-      {activeSnapshot && !compareMode && (
-        <div style={{
-          padding: '8px 16px', marginBottom: 12, borderRadius: 8,
-          background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
-          border: '1px solid rgba(99,102,241,0.2)',
-          boxShadow: '0 2px 8px rgba(99,102,241,0.08)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}>
-          <Space size={8}>
-            <HistoryOutlined style={{ color: '#6366f1' }} />
-            <span style={{ fontSize: 13, color: '#6366f1', fontWeight: 500 }}>
-              基线快照: {activeSnapshot.version}
-            </span>
-            <Tag color="blue" style={{ fontSize: 11 }}>{activeSnapshot.createdAt}</Tag>
+	        <div className="pms-summary-toolbar">
+	          <div className="pms-summary-status-group">
+	            <span className="pms-summary-status-label">状态筛选:</span>
+	            {STATUS_FILTERS.map(item => {
+	              const count = item.key === 'all' ? filteredRows.length : statusStats[item.key]
+	              return (
+	                <button
+	                  key={item.key}
+	                  type="button"
+	                  className={`pms-summary-status-pill${statusFilter === item.key ? ' pms-summary-status-pill-active' : ''}`}
+	                  onClick={() => setStatusFilter(item.key)}
+	                >
+	                  {item.key !== 'all' && <span className="pms-summary-status-dot" style={{ background: STATUS_DOT_COLORS[item.key] }} />}
+	                  {item.label}
+	                  <span className="pms-summary-status-count">{count || 0}</span>
+	                </button>
+	              )
+	            })}
+	          </div>
+	          <Space size={8} className="pms-summary-toolbar-actions">
+	            {scope === 'overall' && (
+	              <>
+	                <Button size="small" onClick={expandAllTosGroups}>展开全部</Button>
+	                <Button size="small" onClick={collapseAllTosGroups}>折叠全部</Button>
+	              </>
+	            )}
+	            <Button
+	              size="small"
+	              icon={<FilterOutlined />}
+	              type={hasActiveFilters ? 'primary' : 'default'}
+	              onClick={() => {
+	                setTempFilters(filters.length ? filters.map(item => ({ ...item })) : [createFilterCondition()])
+	                setShowFilterDrawer(true)
+	              }}
+	            >
+	              筛选{hasActiveFilters ? ' ●' : ''}
+	            </Button>
+	            <Button size="small" icon={<SettingOutlined />} onClick={() => setShowColumnDrawer(true)}>
+	              列设置
+	            </Button>
+	            <Button size="small" icon={<CameraOutlined />} onClick={handleCreateSnapshot}>
+	              快照
+	            </Button>
+	            {currentSnapshots.length > 0 && (
+	              <>
+	                <Select
+	                  size="small"
+	                  className="pms-roadmap-snapshot-select"
+	                  value={activeSnapshotId || 'live'}
+	                  options={compareSourceOptions}
+	                  disabled={compareMode}
+	                  suffixIcon={<HistoryOutlined />}
+	                  onChange={(value) => {
+	                    setCompareMode(false)
+	                    setActiveSnapshotId(value === 'live' ? null : value)
+	                  }}
+	                />
+	                {activeSnapshotId && (
+	                  <Button
+	                    size="small"
+	                    icon={<DeleteOutlined />}
+	                    disabled={compareMode}
+	                    onClick={() => handleDeleteSnapshot(activeSnapshotId)}
+	                  />
+	                )}
+	              </>
+	            )}
+	            <Button
+	              size="small"
+	              icon={<SwapOutlined />}
+	              type={compareMode ? 'primary' : 'default'}
+	              disabled={!currentSnapshots.length}
+	              onClick={handleOpenCompare}
+	            >
+	              {compareMode ? '对比中' : '对比'}
+	            </Button>
+	            <Dropdown
+	              menu={{
+	                items: [
+	                  { key: 'current', label: '导出当前视图' },
+	                  { key: 'all', label: '导出当前分类全部' },
+	                ],
+	                onClick: ({ key }) => handleExport(key as 'current' | 'all'),
+	              }}
+	            >
+	              <Button size="small" icon={<DownloadOutlined />}>导出</Button>
+	            </Dropdown>
+	            <Button
+	              size="small"
+	              icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+	              onClick={() => setIsFullscreen(true)}
+	            >
+	              全屏
+	            </Button>
+	          </Space>
+	        </div>
+	      </div>
+
+	      {activeSnapshot && !compareMode && (
+	        <div className="pms-roadmap-info-bar">
+	          <Space size={8}>
+	            <HistoryOutlined />
+	            <span>当前查看快照 {activeSnapshot.version}</span>
+	            <Tag color="blue">{activeSnapshot.createdAt}</Tag>
+	          </Space>
+	          <Button size="small" onClick={() => setActiveSnapshotId(null)}>返回实时数据</Button>
+	        </div>
+	      )}
+
+	      {compareMode && (
+	        <div className="pms-roadmap-info-bar pms-roadmap-compare-bar">
+	          <Space size={8} wrap>
+	            <SwapOutlined />
+	            <span>{formatCompareSourceLabel(compareBase)}</span>
+	            <ArrowRightOutlined />
+	            <span>{formatCompareSourceLabel(compareTarget)}</span>
+	            <span className="pms-roadmap-compare-stat pms-roadmap-compare-stat-added">新增 {compareStats.added}</span>
+	            <span className="pms-roadmap-compare-stat pms-roadmap-compare-stat-removed">删除 {compareStats.removed}</span>
+	            <span className="pms-roadmap-compare-stat pms-roadmap-compare-stat-modified">变更 {compareStats.modified}</span>
+	          </Space>
+	          <Space size={10}>
+	            <Checkbox checked={onlyDiffRows} onChange={(event) => setOnlyDiffRows(event.target.checked)}>仅看差异</Checkbox>
+	            <Button size="small" onClick={() => setShowCompareModal(true)}>切换对比</Button>
+	            <Button size="small" onClick={() => setCompareMode(false)}>退出对比</Button>
+	          </Space>
+	        </div>
+	      )}
+
+	      {renderMilestoneTable()}
+
+	      <Modal
+	        title={(
+	          <Space>
+	            <span>项目路标里程碑视图</span>
+	            <Tag>{ROADMAP_SCOPES.find(item => item.key === scope)?.label || '整体'}</Tag>
           </Space>
-          <Button type="link" size="small" onClick={() => setActiveSnapshotId(null)}>返回实时数据</Button>
-        </div>
-      )}
+        )}
+        open={isFullscreen}
+        onCancel={() => setIsFullscreen(false)}
+        footer={null}
+        width="100vw"
+        style={{ top: 0, maxWidth: '100vw', paddingBottom: 0 }}
+        styles={{ body: { height: 'calc(100vh - 110px)', overflow: 'auto' } }}
+	      >
+	        {renderMilestoneTable()}
+	      </Modal>
 
-      {/* 对比摘要条（对比模式时） */}
-      {compareMode && diffResult && (
-        <div style={{
-          padding: '10px 16px', marginBottom: 12, borderRadius: 8,
-          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-          border: '1px solid rgba(217,119,6,0.25)',
-          boxShadow: '0 2px 8px rgba(217,119,6,0.1)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          flexWrap: 'wrap', gap: 8,
-        }}>
-          <Space size={10} wrap>
-            <SwapOutlined style={{ color: '#b45309', fontSize: 16 }} />
-            <span style={{ fontSize: 13, color: '#92400e', fontWeight: 600 }}>对比模式</span>
-            <Tag color="default" style={{ fontSize: 11 }}>基准: {formatCompareSrcLabel(compareBase)}</Tag>
-            <ArrowRightOutlined style={{ color: '#9ca3af', fontSize: 11 }} />
-            <Tag color="gold" style={{ fontSize: 11 }}>对比: {formatCompareSrcLabel(compareTarget)}</Tag>
-            <span style={{ color: '#22c55e', fontSize: 12 }}>🟢 新增 {diffResult.summary.added} 行</span>
-            <span style={{ color: '#ef4444', fontSize: 12 }}>🔴 删除 {diffResult.summary.removed} 行</span>
-            <span style={{ color: '#d97706', fontSize: 12 }}>🟠 修改 {diffResult.summary.modified} 行（共 {diffResult.summary.cellChanges} 处字段变化）</span>
-          </Space>
-          <Space size={6}>
-            <Checkbox checked={onlyDiffRows} onChange={e => { setOnlyDiffRows(e.target.checked); setCurrentPage(1) }}>
-              <span style={{ fontSize: 12 }}>只看有差异的行</span>
-            </Checkbox>
-            <Button size="small" onClick={() => setShowCompareModal(true)}>切换版本</Button>
-            <Button size="small" danger onClick={() => setCompareMode(false)}>退出对比</Button>
-          </Space>
-        </div>
-      )}
+	      <Modal
+	        title="快照对比"
+	        open={showCompareModal}
+	        onCancel={() => setShowCompareModal(false)}
+	        onOk={handleApplyCompare}
+	        okButtonProps={{ disabled: compareBase === compareTarget }}
+	        okText="开始对比"
+	        cancelText="取消"
+	      >
+	        <div style={{ display: 'grid', gridTemplateColumns: '1fr 24px 1fr', gap: 10, alignItems: 'center' }}>
+	          <Select
+	            value={compareBase}
+	            options={compareSourceOptions}
+	            onChange={(value) => setCompareBase(value)}
+	          />
+	          <ArrowRightOutlined style={{ color: '#94a3b8', textAlign: 'center' }} />
+	          <Select
+	            value={compareTarget}
+	            options={compareSourceOptions}
+	            onChange={(value) => setCompareTarget(value)}
+	          />
+	        </div>
+	        <div style={{ marginTop: 10, color: '#64748b', fontSize: 12 }}>
+	          对比会按当前视图维度展示新增、删除和字段变更；里程碑节点按完整节点链参与比较。
+	        </div>
+	      </Modal>
 
-      {/* 数据表格 */}
-      <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(99,102,241,0.08)', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
-        {tableComponent}
-      </div>
-
-      {/* Filter Drawer */}
-      <Drawer
+	      <Drawer
         title="筛选条件"
-        open={showFilterModal}
-        onClose={() => setShowFilterModal(false)}
+        open={showFilterDrawer}
+        onClose={() => setShowFilterDrawer(false)}
         width={520}
         placement="right"
         zIndex={ROADMAP_DRAWER_Z_INDEX}
         footer={(
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button key="clear" onClick={() => setTempFilters([createFilterCondition()])}>
-              清除全部
-            </Button>
+            <Button onClick={() => setTempFilters([createFilterCondition()])}>清除全部</Button>
             <Space>
-              <Button key="cancel" onClick={() => setShowFilterModal(false)}>
-                取消
-              </Button>
-              <Button key="ok" type="primary" onClick={() => {
-                setFilters(normalizeFilterConditions(tempFilters))
-                setCurrentPage(1)
-                setShowFilterModal(false)
-              }}>
+              <Button onClick={() => setShowFilterDrawer(false)}>取消</Button>
+              <Button
+                type="primary"
+                onClick={() => {
+                  setFilters(normalizeFilterConditions(tempFilters))
+                  setShowFilterDrawer(false)
+                }}
+              >
                 应用
               </Button>
             </Space>
@@ -787,7 +1605,7 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
                   value={condition.operator}
                   options={FILTER_OPERATORS as any}
                   onChange={(value) => {
-                    const operator = value as RoadmapFilterCondition['operator']
+                    const operator = value as FilterCondition['operator']
                     setTempFilters(prev => prev.map(item => item.id === condition.id ? {
                       ...item,
                       operator,
@@ -802,13 +1620,11 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
                 />
               </div>
               {!isValuelessFilterOperator(condition.operator) && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <Input
-                    placeholder="输入筛选值"
-                    value={condition.value}
-                    onChange={(e) => setTempFilters(prev => prev.map(item => item.id === condition.id ? { ...item, value: e.target.value } : item))}
-                  />
-                </div>
+                <Input
+                  placeholder="输入筛选值"
+                  value={condition.value}
+                  onChange={(event) => setTempFilters(prev => prev.map(item => item.id === condition.id ? { ...item, value: event.target.value } : item))}
+                />
               )}
             </div>
           ))}
@@ -822,11 +1638,10 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
         </div>
       </Drawer>
 
-      {/* Column Settings Drawer */}
       <Drawer
         title="列设置"
-        open={showColumnModal}
-        onClose={() => setShowColumnModal(false)}
+        open={showColumnDrawer}
+        onClose={() => setShowColumnDrawer(false)}
         width={420}
         placement="right"
         zIndex={ROADMAP_DRAWER_Z_INDEX}
@@ -834,141 +1649,30 @@ export default function MilestoneView({ projects, marketPlanData, level1Tasks, o
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <Button onClick={() => setVisibleColumns(defaultVisibleColumns)}>重置默认</Button>
             <Space>
-              <Button onClick={() => setShowColumnModal(false)}>取消</Button>
-              <Button type="primary" onClick={() => setShowColumnModal(false)}>确定</Button>
+              <Button onClick={() => setShowColumnDrawer(false)}>取消</Button>
+              <Button type="primary" onClick={() => setShowColumnDrawer(false)}>确定</Button>
             </Space>
           </div>
         )}
       >
         <div style={{ marginBottom: 8, fontSize: 12, color: '#9ca3af' }}>
-          {projectType === '整机产品项目' ? '项目名、市场' : '项目名称'}为固定列，始终显示。
+          {scope === 'overall' ? '整体视图保留 tOS版本 维度；' : '当前视图不显示 tOS版本；'}固定列始终显示。
         </div>
         <Checkbox.Group
           value={visibleColumns}
           onChange={(vals) => setVisibleColumns(vals as string[])}
           style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
         >
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', margin: '8px 0 2px' }}>项目信息字段</div>
-          {projectInfoSettableColumns.map(col => (
-            <Checkbox key={col.key} value={col.key}>{col.title}</Checkbox>
-          ))}
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', margin: '14px 0 2px' }}>里程碑信息字段</div>
-          {milestoneSettableColumns.map(col => (
-            <Checkbox key={col.key} value={col.key}>
+          {availableColumns.map(col => (
+            <Checkbox key={col.key} value={col.key} disabled={!!col.locked}>
               <Space size={6}>
                 <span>{col.title}</span>
-                {col.defaultRoadmap && <Tag color="green" style={{ marginInlineEnd: 0 }}>默认</Tag>}
+                {col.locked && <Tag color="blue" style={{ marginInlineEnd: 0 }}>固定</Tag>}
               </Space>
             </Checkbox>
           ))}
         </Checkbox.Group>
       </Drawer>
-
-      {/* Save View Modal */}
-      <Modal
-        title="保存视图"
-        open={showSaveViewModal}
-        onCancel={() => {
-          setShowSaveViewModal(false)
-          setViewName('')
-        }}
-        onOk={handleSaveView}
-        okText="保存"
-        cancelText="取消"
-        width={400}
-      >
-        <div style={{ marginBottom: 8, color: '#4b5563', fontSize: 13 }}>
-          将当前的项目类型、筛选条件、列配置和分页设置保存为视图，便于下次快速切换。
-        </div>
-        <Input
-          placeholder="请输入视图名称"
-          value={viewName}
-          onChange={(e) => setViewName(e.target.value)}
-          maxLength={30}
-          onPressEnter={handleSaveView}
-        />
-      </Modal>
-
-      {/* Fullscreen Modal */}
-      <Modal
-        open={isFullscreen}
-        onCancel={() => setIsFullscreen(false)}
-        footer={null}
-        width="100vw"
-        style={{ top: 0, maxWidth: '100vw', paddingBottom: 0 }}
-        styles={{ body: { height: 'calc(100vh - 110px)', overflow: 'auto' } }}
-        title={
-          <Space>
-            <span style={{ fontSize: 16, fontWeight: 600 }}>里程碑视图 - 全屏模式</span>
-            <Tag>{projectType}</Tag>
-          </Space>
-        }
-      >
-        <div style={{ marginBottom: 12 }}>{toolbarActions}</div>
-        {tableComponent}
-      </Modal>
-
-      {/* Compare Entry Modal */}
-      <Modal
-        title="选择要对比的两个版本"
-        open={showCompareModal}
-        onCancel={() => setShowCompareModal(false)}
-        onOk={() => {
-          if (compareBase === compareTarget) {
-            message.warning('请选择两个不同的版本')
-            return
-          }
-          setCompareMode(true)
-          setActiveSnapshotId(null)
-          setShowCompareModal(false)
-          setCurrentPage(1)
-        }}
-        okText="开始对比"
-        cancelText="取消"
-        width={480}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '8px 0' }}>
-          <div>
-            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>基准版本（旧）</div>
-            <Select
-              value={compareBase}
-              onChange={setCompareBase}
-              style={{ width: '100%' }}
-            >
-              <Select.Option value="live">
-                <span style={{ color: '#52c41a', marginRight: 4 }}>●</span>实时数据
-              </Select.Option>
-              {currentSnapshots.map(s => (
-                <Select.Option key={s.id} value={s.id}>
-                  <HistoryOutlined style={{ marginRight: 4, color: '#6366f1' }} />
-                  {s.version}
-                  <span style={{ color: '#9ca3af', marginLeft: 8, fontSize: 11 }}>{s.createdAt}</span>
-                </Select.Option>
-              ))}
-            </Select>
-          </div>
-          <div style={{ textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>↓ 对比到 ↓</div>
-          <div>
-            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>对比版本（新）</div>
-            <Select
-              value={compareTarget}
-              onChange={setCompareTarget}
-              style={{ width: '100%' }}
-            >
-              <Select.Option value="live">
-                <span style={{ color: '#52c41a', marginRight: 4 }}>●</span>实时数据
-              </Select.Option>
-              {currentSnapshots.map(s => (
-                <Select.Option key={s.id} value={s.id}>
-                  <HistoryOutlined style={{ marginRight: 4, color: '#6366f1' }} />
-                  {s.version}
-                  <span style={{ color: '#9ca3af', marginLeft: 8, fontSize: 11 }}>{s.createdAt}</span>
-                </Select.Option>
-              ))}
-            </Select>
-          </div>
-        </div>
-      </Modal>
     </div>
   )
 }

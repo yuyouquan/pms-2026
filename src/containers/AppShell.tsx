@@ -121,7 +121,7 @@ export function MainHeader() {
               style={{ background: 'transparent', borderBottom: 'none', fontSize: 14 }}
               items={[
                 { key: 'projects', label: '工作台' },
-                { key: 'roadmap', label: '项目路标视图' },
+                { key: 'roadmap', label: '项目视图' },
                 { key: 'hrPipeline', label: '人力资源管道' },
                 { key: 'config', label: '配置中心' },
               ]}

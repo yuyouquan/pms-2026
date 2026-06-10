@@ -67,12 +67,37 @@ export const MACHINE_PROJECT_INFO_COLUMNS: RoadmapColumnConfig[] = [
   { key: 'infrared', title: '红外', width: 90 },
 ]
 
+export const OVERALL_PROJECT_INFO_COLUMNS: RoadmapColumnConfig[] = [
+  { key: 'tosVersionGroup', title: 'tOS版本', width: 120, defaultVisible: true, locked: true },
+  { key: 'productCategory', title: '产品分类', width: 130, defaultVisible: true, locked: true },
+  { key: 'productSeries', title: '产品系列', width: 140, defaultVisible: true, locked: true },
+  { key: 'projectName', title: '项目名', width: 170, defaultVisible: true, locked: true },
+  { key: 'status', title: '项目状态', width: 100, defaultVisible: true },
+  { key: 'spm', title: 'SPM', width: 90, defaultVisible: true },
+  { key: 'department', title: '部门', width: 120, defaultVisible: true },
+]
+
+export const TECH_PROJECT_INFO_COLUMNS: RoadmapColumnConfig[] = [
+  { key: 'productSeries', title: '领域', width: 130, defaultVisible: true },
+  { key: 'projectName', title: '项目名', width: 170, defaultVisible: true, locked: true },
+  { key: 'status', title: '项目状态', width: 100, defaultVisible: true },
+  { key: 'healthStatus', title: '健康状态', width: 100 },
+  { key: 'currentNode', title: '当前节点', width: 110, defaultVisible: true },
+  { key: 'tosVersions', title: 'tOS版本', width: 120, defaultVisible: true },
+  { key: 'chipPlatform', title: '芯片平台', width: 110, defaultVisible: true },
+  { key: 'spm', title: 'SPM', width: 90, defaultVisible: true },
+  { key: 'projectDescription', title: '项目描述', width: 220 },
+]
+
 // Backwards-compatible aliases used by older callers.
 export const SOFTWARE_FIXED_COLUMNS = SOFTWARE_PROJECT_INFO_COLUMNS
 export const MACHINE_FIXED_COLUMNS = MACHINE_PROJECT_INFO_COLUMNS
 
 export function getFixedColumnsForType(projectType: string): RoadmapColumnConfig[] {
-  return projectType === '整机产品项目' ? MACHINE_PROJECT_INFO_COLUMNS : SOFTWARE_PROJECT_INFO_COLUMNS
+  if (projectType === '整体') return OVERALL_PROJECT_INFO_COLUMNS
+  if (projectType === '整机产品项目') return MACHINE_PROJECT_INFO_COLUMNS
+  if (projectType === '技术项目') return TECH_PROJECT_INFO_COLUMNS
+  return SOFTWARE_PROJECT_INFO_COLUMNS
 }
 
 export function getMilestoneColumnKey(name: string) {

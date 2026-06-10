@@ -95,7 +95,16 @@ import { TransferApply, TransferDetail, TransferEntry, TransferReview, TransferS
 import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
 import VersionTrainPlan from '@/components/plans/VersionTrainPlan'
 import { PROJECT_STATUS_CONFIG } from '@/data/projects'
-import { WHOLE_MACHINE_BASIC_INFO_FIELDS, WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS } from '@/constants/projectBasicFields'
+import {
+  OS_SERIES_OPTIONS,
+  PRODUCT_SERIES_OPTIONS,
+  TECH_DOMAIN_OPTIONS,
+  TOS_VERSION_OPTIONS,
+  WHOLE_MACHINE_BASIC_INFO_FIELDS,
+  WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS,
+  inferOsSeriesFromProjectName,
+  inferTosVersionFromProjectName,
+} from '@/constants/projectBasicFields'
 import {
   DHTMLXGantt, DragHandle, SortableRow, ClickToEditDate, MiniPipeline,
   getTaskDepth, hasChildren, filterByCollapsed, getAllExpandableIds,
@@ -807,6 +816,11 @@ export default function ProjectSpaceContainer() {
       ppm: p.ppm || '',
       spm: p.spm || '',
       tpm: p.tpm || '',
+      productSeries: (p as any).productSeries || '',
+      osSeries: (p as any).osSeries || inferOsSeriesFromProjectName(p.name),
+      tosVersion: (p as any).tosVersion || inferTosVersionFromProjectName(p.name),
+      domain: Array.isArray((p as any).domain) ? (p as any).domain.join(',') : ((p as any).domain || ''),
+      tosVersions: Array.isArray((p as any).tosVersions) ? (p as any).tosVersions.join(',') : ((p as any).tosVersions || ''),
       teamMembers: p.teamMembers || '',
       versionFiveRoles: p.versionFiveRoles || {},
       projectDescription: p.projectDescription || '',
@@ -1333,6 +1347,13 @@ export default function ProjectSpaceContainer() {
     const systemTypeChoices = [{ label: '32bit', value: '32bit' }, { label: '64bit', value: '64bit' }, { label: '64only', value: '64only' }]
     const yesNoChoices = [{ label: '是', value: '是' }, { label: '否', value: '否' }]
     const userChoices = ALL_USERS.map(u => ({ label: u, value: u }))
+    const renderMultiTags = (value: any, color = 'blue') => {
+      const values = Array.isArray(value) ? value : String(value || '').split(',')
+      const cleaned = values.map(v => String(v).trim()).filter(Boolean)
+      if (cleaned.length === 0) return <span>-</span>
+      return <Space size={4} wrap>{cleaned.map(v => <Tag key={v} color={color} style={{ margin: 0 }}>{v}</Tag>)}</Space>
+    }
+    const renderSingleTag = (value: any, color = 'geekblue') => value ? <Tag color={color} style={{ margin: 0 }}>{String(value)}</Tag> : <span>-</span>
     const affectProjectChoices = Array.from(new Map([
       ...JIRA_AFFECT_PROJECT_OPTIONS,
       ...projects.map((project: any) => {
@@ -1449,6 +1470,7 @@ export default function ProjectSpaceContainer() {
       if (field.key === 'isOutsourcedMini' && visibleDevelopMode !== '外研') return null
       let content: React.ReactNode = getProjectFieldValue(field)
       if (field.key === 'productType') content = editableField('productType', p.productType, { type: 'select', choices: [{ label: '新品', value: '新品' }, { label: '换代', value: '换代' }] })
+      if (field.key === 'productSeries') content = editableField('productSeries', (p as any).productSeries, { type: 'select', choices: PRODUCT_SERIES_OPTIONS })
       if (field.key === 'developMode') content = editableField('developMode', p.developMode, { type: 'select', choices: developModeChoices })
       if (field.key === 'cooperationForm') content = editableField('cooperationForm', p.cooperationForm)
       if (field.key === 'projectLevel') content = editableField('projectLevel', p.projectLevel, { type: 'select', choices: projectLevelChoices })
@@ -1552,6 +1574,16 @@ export default function ProjectSpaceContainer() {
                 <Descriptions.Item label="项目名称">{p.name}</Descriptions.Item>
                 <Descriptions.Item label="品牌">{p.brand || '-'}</Descriptions.Item>
                 <Descriptions.Item label="产品线">{p.productLine || '-'}</Descriptions.Item>
+                <Descriptions.Item label="OS系列">
+                  {basicInfoEditMode
+                    ? <Select size="small" value={ef.osSeries} onChange={(v: string) => setEf('osSeries', v)} style={{ width: '100%' }} options={OS_SERIES_OPTIONS} />
+                    : renderSingleTag((p as any).osSeries || inferOsSeriesFromProjectName(p.name), 'cyan')}
+                </Descriptions.Item>
+                <Descriptions.Item label="tOS版本">
+                  {basicInfoEditMode
+                    ? <Select size="small" value={ef.tosVersion} onChange={(v: string) => setEf('tosVersion', v)} style={{ width: '100%' }} options={TOS_VERSION_OPTIONS} />
+                    : renderSingleTag((p as any).tosVersion || inferTosVersionFromProjectName(p.name), 'blue')}
+                </Descriptions.Item>
                 <Descriptions.Item label="版本类型">{p.versionType || '-'}</Descriptions.Item>
                 <Descriptions.Item label="芯片平台">{p.chipPlatform || '-'}</Descriptions.Item>
                 <Descriptions.Item label="开发模式">{editableField('developMode', p.developMode, { type: 'select', choices: developModeChoices })}</Descriptions.Item>
@@ -1591,6 +1623,20 @@ export default function ProjectSpaceContainer() {
                 <Descriptions.Item label="项目分类">{p.type}</Descriptions.Item>
                 <Descriptions.Item label="项目状态"><Tag color={statusConf.tagColor}>{p.status}</Tag></Descriptions.Item>
                 <Descriptions.Item label="健康状态">{basicInfoEditMode ? <Select size="small" value={ef.healthStatus} onChange={(v: string) => setEf('healthStatus', v)} style={{ width: '100%' }} options={healthChoices} /> : <Tag style={{ background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag>}</Descriptions.Item>
+                {isTech && (
+                  <>
+                    <Descriptions.Item label="领域">
+                      {basicInfoEditMode
+                        ? <Select size="small" mode="multiple" value={(ef.domain || '').split(',').filter(Boolean)} onChange={(v: string[]) => setEf('domain', v.join(','))} style={{ width: '100%' }} options={TECH_DOMAIN_OPTIONS} />
+                        : renderMultiTags((p as any).domain, 'purple')}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="tOS版本">
+                      {basicInfoEditMode
+                        ? <Select size="small" mode="multiple" value={(ef.tosVersions || '').split(',').filter(Boolean)} onChange={(v: string[]) => setEf('tosVersions', v.join(','))} style={{ width: '100%' }} options={TOS_VERSION_OPTIONS} />
+                        : renderMultiTags((p as any).tosVersions, 'cyan')}
+                    </Descriptions.Item>
+                  </>
+                )}
               </Descriptions>
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 500, color: '#9ca3af', marginBottom: 8 }}>团队成员</div>
