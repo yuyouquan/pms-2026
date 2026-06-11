@@ -5,6 +5,128 @@ import { Tag, Tooltip, Button } from 'antd'
 import { EyeOutlined, ArrowRightOutlined } from '@ant-design/icons'
 
 const STORAGE_KEY = 'pms_roadmap_milestone_views'
+const PROJECT_VIEW_STORAGE_KEY = 'pms_project_custom_views'
+const PROJECT_VIEW_SHARE_PARAM = 'pmsProjectViewShare'
+
+export const PROJECT_VIEW_KINDS = {
+  summaryBoard: 'summary-board',
+  roadmapMilestone: 'roadmap-milestone',
+} as const
+
+export type ProjectViewKind = typeof PROJECT_VIEW_KINDS[keyof typeof PROJECT_VIEW_KINDS]
+
+export interface ProjectViewState {
+  scope: string
+  statusFilter: string
+  visibleColumns: string[]
+  filters: any[]
+  collapsedKeys: string[]
+}
+
+export interface SavedProjectView {
+  id: string
+  kind: ProjectViewKind
+  name: string
+  state: ProjectViewState
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProjectViewSharePayload {
+  kind: ProjectViewKind
+  name?: string
+  state: ProjectViewState
+  sharedAt: string
+}
+
+function canUseBrowserStorage() {
+  return typeof window !== 'undefined' && !!window.localStorage
+}
+
+function normalizeSavedViews(raw: unknown): SavedProjectView[] {
+  if (!Array.isArray(raw)) return []
+  return raw.filter((item): item is SavedProjectView => (
+    !!item
+    && typeof item === 'object'
+    && typeof (item as SavedProjectView).id === 'string'
+    && typeof (item as SavedProjectView).kind === 'string'
+    && typeof (item as SavedProjectView).name === 'string'
+    && !!(item as SavedProjectView).state
+  ))
+}
+
+/** 保存项目视图配置到 localStorage，供汇总看板和路标里程碑共用。 */
+export function saveProjectView(config: SavedProjectView): void {
+  if (!canUseBrowserStorage()) return
+  try {
+    const views = loadProjectViews()
+    const nextConfig = {
+      ...config,
+      updatedAt: config.updatedAt || new Date().toISOString(),
+    }
+    const existIdx = views.findIndex(view => view.id === nextConfig.id)
+    if (existIdx >= 0) {
+      views[existIdx] = nextConfig
+    } else {
+      views.unshift(nextConfig)
+    }
+    window.localStorage.setItem(PROJECT_VIEW_STORAGE_KEY, JSON.stringify(views))
+  } catch {
+    // graceful fail
+  }
+}
+
+/** 加载保存的项目视图；传入 kind 时只返回对应视图。 */
+export function loadProjectViews(kind?: ProjectViewKind): SavedProjectView[] {
+  if (!canUseBrowserStorage()) return []
+  try {
+    const raw = window.localStorage.getItem(PROJECT_VIEW_STORAGE_KEY)
+    const views = normalizeSavedViews(raw ? JSON.parse(raw) : [])
+    return kind ? views.filter(view => view.kind === kind) : views
+  } catch {
+    return []
+  }
+}
+
+/** 删除保存的项目视图。 */
+export function deleteProjectView(id: string): void {
+  if (!canUseBrowserStorage()) return
+  try {
+    const views = loadProjectViews().filter(view => view.id !== id)
+    window.localStorage.setItem(PROJECT_VIEW_STORAGE_KEY, JSON.stringify(views))
+  } catch {
+    // graceful fail
+  }
+}
+
+/** 生成可分享的当前视图链接。分享内容是前端视图配置快照，不依赖后端。 */
+export function createProjectViewShareUrl(kind: ProjectViewKind, state: ProjectViewState, name?: string): string {
+  if (typeof window === 'undefined') return ''
+  const payload: ProjectViewSharePayload = {
+    kind,
+    name,
+    state,
+    sharedAt: new Date().toISOString(),
+  }
+  const url = new URL(window.location.href)
+  url.searchParams.set(PROJECT_VIEW_SHARE_PARAM, JSON.stringify(payload))
+  return url.toString()
+}
+
+/** 解析分享链接中的项目视图配置。 */
+export function parseProjectViewShare(expectedKind?: ProjectViewKind): ProjectViewSharePayload | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = new URL(window.location.href).searchParams.get(PROJECT_VIEW_SHARE_PARAM)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as ProjectViewSharePayload
+    if (!parsed?.kind || !parsed?.state) return null
+    if (expectedKind && parsed.kind !== expectedKind) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
 
 export interface RoadmapColumnConfig {
   key: string

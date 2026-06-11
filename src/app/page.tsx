@@ -1,11 +1,13 @@
 'use client'
 
+import { useEffect } from 'react'
 import { ConfigProvider, Modal, Button, Space, Card, Empty } from 'antd'
 import { ExclamationCircleOutlined } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore, LEVEL1_TASKS } from '@/stores/plan'
 import RoadmapView from '@/components/roadmap/RoadmapView'
+import { parseProjectViewShare } from '@/components/roadmap/utils'
 import { MainHeader } from '@/containers/AppShell'
 import WorkspaceContainer from '@/containers/WorkspaceContainer'
 import ProjectSpaceContainer from '@/containers/ProjectSpaceContainer'
@@ -43,6 +45,12 @@ export default function Home() {
     setActiveModule,
     setProjectSpaceModule,
   } = useUiStore()
+
+  useEffect(() => {
+    if (parseProjectViewShare()) {
+      setActiveModule('roadmap')
+    }
+  }, [setActiveModule])
 
   // ═══════ Roadmap callback (needs cross-store wiring) ═══════
   const handleViewProjectFromRoadmap = (projectId: string, market?: string) => {
