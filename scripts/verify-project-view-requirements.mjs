@@ -201,6 +201,111 @@ const checks = [
     file: 'src/components/roadmap/MilestoneView.tsx',
     includes: "getFixedColumnsForType('整体')",
   },
+  {
+    name: 'Project views share one saved-view persistence helper',
+    file: 'src/components/roadmap/utils.ts',
+    includes: 'saveProjectView',
+  },
+  {
+    name: 'Project views can load saved custom views',
+    file: 'src/components/roadmap/utils.ts',
+    includes: 'loadProjectViews',
+  },
+  {
+    name: 'Project views can create share URLs',
+    file: 'src/components/roadmap/utils.ts',
+    includes: 'createProjectViewShareUrl',
+  },
+  {
+    name: 'Project views can parse shared view URLs',
+    file: 'src/components/roadmap/utils.ts',
+    includes: 'parseProjectViewShare',
+  },
+  {
+    name: 'Project view parent switches to shared roadmap view kind',
+    file: 'src/components/roadmap/RoadmapView.tsx',
+    includes: 'PROJECT_VIEW_KINDS.roadmapMilestone',
+  },
+  {
+    name: 'Project view parent reads shared view URLs',
+    file: 'src/components/roadmap/RoadmapView.tsx',
+    includes: 'parseProjectViewShare',
+  },
+  {
+    name: 'Home page opens project view from shared view URLs',
+    file: 'src/app/page.tsx',
+    includes: 'parseProjectViewShare',
+  },
+  {
+    name: 'Summary board supports custom saved views',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: 'handleSaveProjectView',
+  },
+  {
+    name: 'Summary board renders saved views on a standalone row',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: 'pms-project-view-row',
+  },
+  {
+    name: 'Summary board switches saved views with tabs',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: 'pms-project-view-tabs',
+  },
+  {
+    name: 'Summary board has create view action beside saved-view tabs',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: '新建视图',
+  },
+  {
+    name: 'Summary board prevents duplicate saved-view names',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: 'isProjectViewNameDuplicate',
+  },
+  {
+    name: 'Summary board confirms deleting a custom saved-view tab',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: '确认删除视图',
+  },
+  {
+    name: 'Summary board supports view sharing',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: 'handleShareProjectView',
+  },
+  {
+    name: 'Roadmap milestone view supports custom saved views',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: 'handleSaveProjectView',
+  },
+  {
+    name: 'Roadmap milestone renders saved views on a standalone row',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: 'pms-project-view-row',
+  },
+  {
+    name: 'Roadmap milestone switches saved views with tabs',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: 'pms-project-view-tabs',
+  },
+  {
+    name: 'Roadmap milestone has create view action beside saved-view tabs',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: '新建视图',
+  },
+  {
+    name: 'Roadmap milestone prevents duplicate saved-view names',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: 'isProjectViewNameDuplicate',
+  },
+  {
+    name: 'Roadmap milestone confirms deleting a custom saved-view tab',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: '确认删除视图',
+  },
+  {
+    name: 'Roadmap milestone view supports view sharing',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: 'handleShareProjectView',
+  },
 ]
 
 const failures = []
@@ -243,9 +348,12 @@ if (!summaryBoard.includes("scope === 'overall' ? '整体视图保留产品分�
 if (!summaryBoard.includes("fixed: scope === 'overall' ? 'left' as const : undefined") || !summaryBoard.includes("fixed: 'left' as const") || !summaryBoard.includes("fixed: 'right' as const")) {
   failures.push('Summary board should fix overall product category plus product series, project name, and action columns in every tab')
 }
+if (summaryBoard.includes('pms-project-view-select')) {
+  failures.push('Summary board saved-view switching should use tabs, not the old select control')
+}
 
 const milestoneView = read('src/components/roadmap/MilestoneView.tsx')
-for (const removedFeature of ['handleSaveView', 'showSaveViewModal', 'saveView', 'loadAllViews', 'deleteView', '保存视图', '默认视图', 'buildCompareColumns', 'diffSnapshots']) {
+for (const removedFeature of ['handleSaveView', 'showSaveViewModal', 'buildCompareColumns', 'diffSnapshots']) {
   if (milestoneView.includes(removedFeature)) {
     failures.push(`Roadmap milestone view should remove old view/snapshot implementation: found ${removedFeature}`)
   }
@@ -269,6 +377,9 @@ for (const oldColumnPattern of ['for (const ms of sourceMilestones)', 'title: ms
 }
 if (!milestoneView.includes('pms-summary-toolbar') || !milestoneView.includes('STATUS_FILTERS')) {
   failures.push('Roadmap milestone view should reuse the summary board toolbar pattern')
+}
+if (milestoneView.includes('pms-project-view-select')) {
+  failures.push('Roadmap milestone saved-view switching should use tabs, not the old select control')
 }
 for (const status of ['待立项', '进行中', '已完成', '暂停', '已取消', '已上市', '维护期']) {
   if (!milestoneView.includes(status)) {

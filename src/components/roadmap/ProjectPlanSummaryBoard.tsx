@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Checkbox, Drawer, Dropdown, Empty, Input, Modal, Select, Space, Table, Tabs, Tag, Tooltip } from 'antd'
-import { CaretDownOutlined, CaretRightOutlined, DeleteOutlined, DownloadOutlined, EyeOutlined, FilterOutlined, FullscreenExitOutlined, FullscreenOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons'
+import { Button, Checkbox, Drawer, Dropdown, Empty, Input, Modal, Select, Space, Table, Tabs, Tag, Tooltip, message } from 'antd'
+import { CaretDownOutlined, CaretRightOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, EyeOutlined, FilterOutlined, FullscreenExitOutlined, FullscreenOutlined, PlusOutlined, SettingOutlined, ShareAltOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import {
@@ -19,7 +19,18 @@ import {
   isValuelessFilterOperator,
   normalizeFilterConditions,
 } from '@/lib/filterConditions'
-import { getFixedColumnsForType, type RoadmapColumnConfig } from './utils'
+import {
+  PROJECT_VIEW_KINDS,
+  createProjectViewShareUrl,
+  deleteProjectView,
+  getFixedColumnsForType,
+  loadProjectViews,
+  parseProjectViewShare,
+  saveProjectView,
+  type ProjectViewState,
+  type RoadmapColumnConfig,
+  type SavedProjectView,
+} from './utils'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 
 type SummaryScope = 'overall' | 'machine' | 'software' | 'tech'
@@ -69,6 +80,7 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: '已上市', label: '已上市' },
   { key: '维护期', label: '维护期' },
 ]
+const SUMMARY_VIEW_KIND = PROJECT_VIEW_KINDS.summaryBoard
 
 const CATEGORY_ORDER = ['CAMON', 'Note', 'SPARK', 'POVA', 'tOS版本', '技术项目']
 
@@ -377,6 +389,12 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   const [showFilterDrawer, setShowFilterDrawer] = useState(false)
   const [showColumnDrawer, setShowColumnDrawer] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [savedProjectViews, setSavedProjectViews] = useState<SavedProjectView[]>([])
+  const [activeSavedViewId, setActiveSavedViewId] = useState<string | null>(null)
+  const [showSaveProjectViewModal, setShowSaveProjectViewModal] = useState(false)
+  const [projectViewName, setProjectViewName] = useState('')
+  const [showProjectViewShareModal, setShowProjectViewShareModal] = useState(false)
+  const [projectViewShareUrl, setProjectViewShareUrl] = useState('')
   const rowsSignatureRef = useRef('')
   const allRows = useMemo(() => makeSummaryRows(projects), [projects])
   const scopedRows = useMemo(() => scopeRows(allRows, scope), [allRows, scope])
@@ -410,6 +428,48 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     rows.map(row => `${row.key}:${row.isCollapsedPreview ? 'closed' : 'open'}:${row.hiddenProjectCount || 0}`).join('|')
   ), [rows])
 
+  const getSafeVisibleColumns = (nextScope: SummaryScope, nextVisibleColumns: string[]) => {
+    const available = getAvailableColumnsForScope(nextScope)
+    const availableKeys = new Set(available.map(col => col.key))
+    const lockedKeys = available.filter(col => col.locked).map(col => col.key)
+    const safeColumns = nextVisibleColumns.filter(key => availableKeys.has(key))
+    return Array.from(new Set([...lockedKeys, ...safeColumns]))
+  }
+
+  const normalizeScope = (value: string | undefined): SummaryScope => (
+    SUMMARY_SCOPES.some(item => item.key === value) ? value as SummaryScope : 'overall'
+  )
+
+  const normalizeStatusFilter = (value: string | undefined): StatusFilter => (
+    STATUS_FILTERS.some(item => item.key === value) ? value as StatusFilter : 'all'
+  )
+
+  const buildCurrentProjectViewState = (): ProjectViewState => ({
+    scope,
+    statusFilter,
+    visibleColumns,
+    filters: normalizeFilterConditions(filters),
+    collapsedKeys: Array.from(collapsedCategories),
+  })
+
+  const applyProjectViewState = (state: ProjectViewState) => {
+    const nextScope = normalizeScope(state.scope)
+    const nextVisibleColumns = Array.isArray(state.visibleColumns) && state.visibleColumns.length
+      ? state.visibleColumns
+      : getDefaultVisibleColumnsForScope(nextScope)
+
+    setScope(nextScope)
+    setStatusFilter(normalizeStatusFilter(state.statusFilter))
+    setFilters(normalizeFilterConditions((state.filters || []) as FilterCondition[]))
+    setTempFilters([])
+    setCollapsedCategories(new Set(Array.isArray(state.collapsedKeys) ? state.collapsedKeys : []))
+    setVisibleColumns(getSafeVisibleColumns(nextScope, nextVisibleColumns))
+  }
+
+  const refreshSavedProjectViews = () => {
+    setSavedProjectViews(loadProjectViews(SUMMARY_VIEW_KIND))
+  }
+
   useEffect(() => {
     if (!rowsSignatureRef.current) {
       rowsSignatureRef.current = rowsSignature
@@ -421,6 +481,18 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     }
   }, [rowsSignature])
 
+  useEffect(() => {
+    refreshSavedProjectViews()
+    const sharedView = parseProjectViewShare(SUMMARY_VIEW_KIND)
+    if (sharedView) {
+      applyProjectViewState(sharedView.state)
+      setActiveSavedViewId(null)
+      if (sharedView.name) setProjectViewName(sharedView.name)
+      message.success('已应用分享视图')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const handleScopeChange = (key: string) => {
     const nextScope = key as SummaryScope
     setScope(nextScope)
@@ -429,9 +501,11 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     setTempFilters([])
     setCollapsedCategories(new Set())
     setVisibleColumns(getDefaultVisibleColumnsForScope(nextScope))
+    setActiveSavedViewId(null)
   }
 
   const toggleCategory = (category: string) => {
+    setActiveSavedViewId(null)
     setCollapsedCategories(prev => {
       const next = new Set(prev)
       if (next.has(category)) next.delete(category)
@@ -439,8 +513,14 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       return next
     })
   }
-  const expandAllCategories = () => setCollapsedCategories(new Set())
-  const collapseAllCategories = () => setCollapsedCategories(new Set(Object.keys(categoryCounts).filter(category => categoryCounts[category] > 1)))
+  const expandAllCategories = () => {
+    setActiveSavedViewId(null)
+    setCollapsedCategories(new Set())
+  }
+  const collapseAllCategories = () => {
+    setActiveSavedViewId(null)
+    setCollapsedCategories(new Set(Object.keys(categoryCounts).filter(category => categoryCounts[category] > 1)))
+  }
 
   const buildExportColumns = () => (
     availableColumns
@@ -459,6 +539,127 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     const filename = `项目计划汇总看板_${SUMMARY_SCOPES.find(item => item.key === scope)?.label || '整体'}_${exportTimestamp()}.xlsx`
     exportSheet(sourceRows, buildExportColumns(), filename, '项目计划汇总')
   }
+
+  const handleSavedProjectViewChange = (value: string) => {
+    if (value === 'default') {
+      applyProjectViewState({
+        scope: 'overall',
+        statusFilter: 'all',
+        visibleColumns: getDefaultVisibleColumnsForScope('overall'),
+        filters: [],
+        collapsedKeys: [],
+      })
+      setActiveSavedViewId(null)
+      return
+    }
+
+    const view = savedProjectViews.find(item => item.id === value)
+    if (!view) return
+    applyProjectViewState(view.state)
+    setActiveSavedViewId(view.id)
+    setProjectViewName(view.name)
+    message.success(`已切换视图：${view.name}`)
+  }
+
+  const isProjectViewNameDuplicate = (name: string) => {
+    const normalizedName = name.trim().toLowerCase()
+    return savedProjectViews.some(view => view.name.trim().toLowerCase() === normalizedName)
+  }
+
+  const handleOpenSaveProjectView = () => {
+    setProjectViewName('')
+    setShowSaveProjectViewModal(true)
+  }
+
+  const handleSaveProjectView = () => {
+    const name = projectViewName.trim()
+    if (!name) {
+      message.warning('请输入视图名称')
+      return
+    }
+    if (isProjectViewNameDuplicate(name)) {
+      message.warning('视图名称不可重复')
+      return
+    }
+
+    const now = new Date().toISOString()
+    const view: SavedProjectView = {
+      id: `summary-${Date.now()}`,
+      kind: SUMMARY_VIEW_KIND,
+      name,
+      state: buildCurrentProjectViewState(),
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    saveProjectView(view)
+    refreshSavedProjectViews()
+    setActiveSavedViewId(view.id)
+    setShowSaveProjectViewModal(false)
+    message.success('视图已保存')
+  }
+
+  const handleDeleteProjectView = (viewId: string) => {
+    const view = savedProjectViews.find(item => item.id === viewId)
+    if (!view) return
+
+    Modal.confirm({
+      title: '确认删除视图',
+      content: `删除「${view.name}」后无法恢复。`,
+      okText: '删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: () => {
+        deleteProjectView(viewId)
+        refreshSavedProjectViews()
+        if (activeSavedViewId === viewId) setActiveSavedViewId(null)
+        message.success('视图已删除')
+      },
+    })
+  }
+
+  const copyProjectViewShareUrl = async (url = projectViewShareUrl) => {
+    if (!url) return
+    try {
+      if (!navigator?.clipboard?.writeText) throw new Error('Clipboard unavailable')
+      await navigator.clipboard.writeText(url)
+      message.success('分享链接已复制')
+    } catch {
+      message.info('已生成分享链接，可手动复制')
+    }
+  }
+
+  const handleShareProjectView = () => {
+    const activeView = activeSavedViewId ? savedProjectViews.find(item => item.id === activeSavedViewId) : null
+    const url = createProjectViewShareUrl(SUMMARY_VIEW_KIND, buildCurrentProjectViewState(), activeView?.name || projectViewName || '项目计划汇总看板视图')
+    setProjectViewShareUrl(url)
+    setShowProjectViewShareModal(true)
+    void copyProjectViewShareUrl(url)
+  }
+
+  const savedProjectViewTabs = [
+    { key: 'default', label: '默认视图' },
+    ...savedProjectViews.map(view => ({
+      key: view.id,
+      label: (
+        <span className="pms-project-view-tab-label">
+          <span>{view.name}</span>
+          <Button
+            type="text"
+            size="small"
+            className="pms-project-view-tab-close"
+            icon={<DeleteOutlined />}
+            aria-label={`删除视图 ${view.name}`}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation()
+              handleDeleteProjectView(view.id)
+            }}
+          />
+        </span>
+      ),
+    })),
+  ]
 
   const columns = useMemo<ColumnsType<SummaryRow>>(() => {
     const isVisible = (key: string) => {
@@ -689,6 +890,60 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         }
         .pms-summary-toolbar-actions .ant-btn {
           font-weight: 600;
+        }
+        .pms-project-view-row {
+          margin-bottom: 12px;
+          padding-bottom: 10px;
+          border-bottom: 1px solid #eef2f7;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .pms-project-view-left {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex: 1 1 520px;
+          min-width: 0;
+        }
+        .pms-project-view-tabs {
+          flex: 1 1 auto;
+          min-width: 0;
+        }
+        .pms-project-view-tabs .ant-tabs-nav {
+          margin: 0 !important;
+        }
+        .pms-project-view-tabs .ant-tabs-tab {
+          padding: 4px 10px !important;
+          border-radius: 16px;
+          transition: background-color 0.18s ease, color 0.18s ease;
+        }
+        .pms-project-view-tabs .ant-tabs-tab-active {
+          background: #eef2ff;
+        }
+        .pms-project-view-tab-label {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          max-width: 170px;
+        }
+        .pms-project-view-tab-label > span:first-child {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .pms-project-view-tab-close {
+          width: 18px !important;
+          height: 18px !important;
+          min-width: 18px !important;
+          padding: 0 !important;
+          color: #94a3b8 !important;
+        }
+        .pms-project-view-tab-close:hover {
+          color: #ef4444 !important;
+          background: #fee2e2 !important;
         }
         .pms-summary-scope-tabs {
           margin-bottom: 10px;
@@ -1030,33 +1285,53 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
           activeKey={scope}
           onChange={handleScopeChange}
           items={SUMMARY_SCOPES.map(item => ({ key: item.key, label: item.label }))}
-        />
+	        />
 
-        <div className="pms-summary-toolbar">
-          <div className="pms-summary-status-group">
-            <span className="pms-summary-status-label">状态筛选:</span>
-            {STATUS_FILTERS.map(item => {
-              const count = item.key === 'all' ? filteredRows.length : statusStats[item.key]
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={`pms-summary-status-pill${statusFilter === item.key ? ' pms-summary-status-pill-active' : ''}`}
-                  onClick={() => setStatusFilter(item.key)}
-                >
-                  {item.key !== 'all' && <span className="pms-summary-status-dot" style={{ background: STATUS_DOT_COLORS[item.key] }} />}
-                  {item.label}
-                  <span className="pms-summary-status-count">{count || 0}</span>
-                </button>
-              )
-            })}
-          </div>
-          <Space size={8} className="pms-summary-toolbar-actions">
-            {scope === 'overall' && (
-              <>
-                <Button size="small" onClick={expandAllCategories}>展开全部</Button>
-                <Button size="small" onClick={collapseAllCategories}>折叠全部</Button>
-              </>
+	        <div className="pms-project-view-row">
+	          <div className="pms-project-view-left">
+	            <Tabs
+	              className="pms-project-view-tabs"
+	              activeKey={activeSavedViewId || 'default'}
+	              onChange={handleSavedProjectViewChange}
+	              items={savedProjectViewTabs}
+	            />
+	            <Button size="small" icon={<PlusOutlined />} onClick={handleOpenSaveProjectView}>
+	              新建视图
+	            </Button>
+	          </div>
+	          <Button size="small" icon={<ShareAltOutlined />} onClick={handleShareProjectView}>
+	            分享视图
+	          </Button>
+	        </div>
+
+	        <div className="pms-summary-toolbar">
+	          <div className="pms-summary-status-group">
+	            <span className="pms-summary-status-label">状态筛选:</span>
+	            {STATUS_FILTERS.map(item => {
+	              const count = item.key === 'all' ? filteredRows.length : statusStats[item.key]
+	              return (
+	                <button
+	                  key={item.key}
+	                  type="button"
+	                  className={`pms-summary-status-pill${statusFilter === item.key ? ' pms-summary-status-pill-active' : ''}`}
+	                  onClick={() => {
+	                    setStatusFilter(item.key)
+	                    setActiveSavedViewId(null)
+	                  }}
+	                >
+	                  {item.key !== 'all' && <span className="pms-summary-status-dot" style={{ background: STATUS_DOT_COLORS[item.key] }} />}
+	                  {item.label}
+	                  <span className="pms-summary-status-count">{count || 0}</span>
+	                </button>
+	              )
+	            })}
+	          </div>
+	          <Space size={8} className="pms-summary-toolbar-actions">
+	            {scope === 'overall' && (
+	              <>
+	                <Button size="small" onClick={expandAllCategories}>展开全部</Button>
+	                <Button size="small" onClick={collapseAllCategories}>折叠全部</Button>
+	              </>
             )}
             <Button
               size="small"
@@ -1109,12 +1384,58 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         width="100vw"
         style={{ top: 0, maxWidth: '100vw', paddingBottom: 0 }}
         styles={{ body: { height: 'calc(100vh - 110px)', overflow: 'auto' } }}
-      >
-        {renderSummaryTable()}
-      </Modal>
+	      >
+	        {renderSummaryTable()}
+	      </Modal>
 
-      <Drawer
-        title="筛选条件"
+	      <Modal
+	        title="新建视图"
+	        open={showSaveProjectViewModal}
+	        onCancel={() => setShowSaveProjectViewModal(false)}
+	        onOk={handleSaveProjectView}
+	        okText="新建"
+	        cancelText="取消"
+	        okButtonProps={{ disabled: !projectViewName.trim() }}
+	      >
+	        <Space direction="vertical" size={10} style={{ width: '100%' }}>
+	          <Input
+	            autoFocus
+	            placeholder="请输入视图名称"
+	            value={projectViewName}
+	            onChange={(event) => setProjectViewName(event.target.value)}
+	            onPressEnter={handleSaveProjectView}
+	          />
+	          <div style={{ color: '#64748b', fontSize: 12 }}>
+	            将以当前分类、状态筛选、筛选条件、列设置和折叠状态创建视图，名称不可重复。
+	          </div>
+	        </Space>
+	      </Modal>
+
+	      <Modal
+	        title="分享视图"
+	        open={showProjectViewShareModal}
+	        onCancel={() => setShowProjectViewShareModal(false)}
+	        footer={(
+	          <Space>
+	            <Button icon={<CopyOutlined />} onClick={() => void copyProjectViewShareUrl()}>
+	              复制链接
+	            </Button>
+	            <Button type="primary" onClick={() => setShowProjectViewShareModal(false)}>
+	              完成
+	            </Button>
+	          </Space>
+	        )}
+	      >
+	        <Space direction="vertical" size={10} style={{ width: '100%' }}>
+	          <Input.TextArea value={projectViewShareUrl} readOnly autoSize={{ minRows: 3, maxRows: 6 }} />
+	          <div style={{ color: '#64748b', fontSize: 12 }}>
+	            分享链接会携带当前视图配置，打开后自动应用到项目计划汇总看板。
+	          </div>
+	        </Space>
+	      </Modal>
+
+	      <Drawer
+	        title="筛选条件"
         open={showFilterDrawer}
         onClose={() => setShowFilterDrawer(false)}
         width={520}
@@ -1126,11 +1447,12 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
             <Space>
               <Button onClick={() => setShowFilterDrawer(false)}>取消</Button>
               <Button
-                type="primary"
-                onClick={() => {
-                  setFilters(normalizeFilterConditions(tempFilters))
-                  setShowFilterDrawer(false)
-                }}
+	                type="primary"
+	                onClick={() => {
+	                  setFilters(normalizeFilterConditions(tempFilters))
+	                  setShowFilterDrawer(false)
+	                  setActiveSavedViewId(null)
+	                }}
               >
                 应用
               </Button>
@@ -1195,7 +1517,10 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         zIndex={SUMMARY_DRAWER_Z_INDEX}
         footer={(
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button onClick={() => setVisibleColumns(defaultVisibleColumns)}>重置默认</Button>
+	            <Button onClick={() => {
+	              setVisibleColumns(defaultVisibleColumns)
+	              setActiveSavedViewId(null)
+	            }}>重置默认</Button>
             <Space>
               <Button onClick={() => setShowColumnDrawer(false)}>取消</Button>
               <Button type="primary" onClick={() => setShowColumnDrawer(false)}>确定</Button>
@@ -1208,10 +1533,11 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         </div>
         <Checkbox.Group
           value={visibleColumns}
-          onChange={(values) => {
-            const lockedKeys = availableColumns.filter(col => col.locked).map(col => col.key)
-            setVisibleColumns(Array.from(new Set([...lockedKeys, ...(values as string[])])))
-          }}
+	          onChange={(values) => {
+	            const lockedKeys = availableColumns.filter(col => col.locked).map(col => col.key)
+	            setVisibleColumns(Array.from(new Set([...lockedKeys, ...(values as string[])])))
+	            setActiveSavedViewId(null)
+	          }}
           style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
         >
           <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', margin: '8px 0 2px' }}>当前视图字段</div>

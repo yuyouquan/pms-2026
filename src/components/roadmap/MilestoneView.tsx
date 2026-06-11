@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Button, Checkbox, Drawer, Dropdown, Empty, Input, Modal, Select, Space, Table, Tabs, Tag, Tooltip } from 'antd'
+import { Button, Checkbox, Drawer, Dropdown, Empty, Input, Modal, Select, Space, Table, Tabs, Tag, Tooltip, message } from 'antd'
 import {
   ArrowRightOutlined,
   CameraOutlined,
   CaretDownOutlined,
   CaretRightOutlined,
+  CopyOutlined,
   DeleteOutlined,
   DownloadOutlined,
   EyeOutlined,
@@ -16,6 +17,7 @@ import {
   HistoryOutlined,
   PlusOutlined,
   SettingOutlined,
+  ShareAltOutlined,
   SwapOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
@@ -35,7 +37,17 @@ import {
   normalizeFilterConditions,
 } from '@/lib/filterConditions'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
-import { getFixedColumnsForType } from './utils'
+import {
+  PROJECT_VIEW_KINDS,
+  createProjectViewShareUrl,
+  deleteProjectView,
+  getFixedColumnsForType,
+  loadProjectViews,
+  parseProjectViewShare,
+  saveProjectView,
+  type ProjectViewState,
+  type SavedProjectView,
+} from './utils'
 
 type RoadmapScope = 'overall' | 'machine' | 'software' | 'tech'
 type RoadmapStatus = '待立项' | '进行中' | '已完成' | '暂停' | '已取消' | '已上市' | '维护期'
@@ -125,6 +137,7 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: '已上市', label: '已上市' },
   { key: '维护期', label: '维护期' },
 ]
+const ROADMAP_MILESTONE_VIEW_KIND = PROJECT_VIEW_KINDS.roadmapMilestone
 
 const CATEGORY_ORDER = ['tOS版本', 'CAMON', 'Note', 'NOTE', 'SPARK', 'POVA', '技术项目']
 
@@ -547,6 +560,12 @@ export default function MilestoneView({
   const [showFilterDrawer, setShowFilterDrawer] = useState(false)
   const [showColumnDrawer, setShowColumnDrawer] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [savedProjectViews, setSavedProjectViews] = useState<SavedProjectView[]>([])
+  const [activeSavedViewId, setActiveSavedViewId] = useState<string | null>(null)
+  const [showSaveProjectViewModal, setShowSaveProjectViewModal] = useState(false)
+  const [projectViewName, setProjectViewName] = useState('')
+  const [showProjectViewShareModal, setShowProjectViewShareModal] = useState(false)
+  const [projectViewShareUrl, setProjectViewShareUrl] = useState('')
   const [baselineSnapshots, setBaselineSnapshots] = useState<RoadmapSnapshot[]>([])
   const [activeSnapshotId, setActiveSnapshotId] = useState<string | null>(null)
   const [compareMode, setCompareMode] = useState(false)
@@ -568,6 +587,7 @@ export default function MilestoneView({
     setVisibleColumns(getDefaultVisibleColumnsForScope(nextScope))
     setActiveSnapshotId(null)
     setCompareMode(false)
+    setActiveSavedViewId(null)
   }, [initialProjectType, scope])
 
   const allRows = useMemo(() => buildRoadmapMilestoneRows(projects, marketPlanData, level1Tasks), [projects, marketPlanData, level1Tasks])
@@ -640,6 +660,51 @@ export default function MilestoneView({
     rows.map(row => `${row.key}:${row.isCollapsedPreview ? 'closed' : 'open'}:${row.hiddenProjectCount || 0}`).join('|')
   ), [rows])
 
+  const getSafeVisibleColumns = (nextScope: RoadmapScope, nextVisibleColumns: string[]) => {
+    const available = getAvailableColumnsForScope(nextScope)
+    const availableKeys = new Set(available.map(col => col.key))
+    const lockedKeys = available.filter(col => col.locked).map(col => col.key)
+    const safeColumns = nextVisibleColumns.filter(key => availableKeys.has(key))
+    return Array.from(new Set([...lockedKeys, ...safeColumns]))
+  }
+
+  const normalizeScope = (value: string | undefined): RoadmapScope => (
+    ROADMAP_SCOPES.some(item => item.key === value) ? value as RoadmapScope : 'overall'
+  )
+
+  const normalizeStatusFilter = (value: string | undefined): StatusFilter => (
+    STATUS_FILTERS.some(item => item.key === value) ? value as StatusFilter : 'all'
+  )
+
+  const buildCurrentProjectViewState = (): ProjectViewState => ({
+    scope,
+    statusFilter,
+    visibleColumns,
+    filters: normalizeFilterConditions(filters),
+    collapsedKeys: Array.from(collapsedTosGroups),
+  })
+
+  const applyProjectViewState = (state: ProjectViewState) => {
+    const nextScope = normalizeScope(state.scope)
+    const nextVisibleColumns = Array.isArray(state.visibleColumns) && state.visibleColumns.length
+      ? state.visibleColumns
+      : getDefaultVisibleColumnsForScope(nextScope)
+
+    setScope(nextScope)
+    onProjectTypeChange?.(PROJECT_TYPE_BY_SCOPE[nextScope])
+    setStatusFilter(normalizeStatusFilter(state.statusFilter))
+    setFilters(normalizeFilterConditions((state.filters || []) as FilterCondition[]))
+    setTempFilters([])
+    setCollapsedTosGroups(new Set(Array.isArray(state.collapsedKeys) ? state.collapsedKeys : []))
+    setVisibleColumns(getSafeVisibleColumns(nextScope, nextVisibleColumns))
+    setActiveSnapshotId(null)
+    setCompareMode(false)
+  }
+
+  const refreshSavedProjectViews = () => {
+    setSavedProjectViews(loadProjectViews(ROADMAP_MILESTONE_VIEW_KIND))
+  }
+
   useEffect(() => {
     if (!rowsSignatureRef.current) {
       rowsSignatureRef.current = rowsSignature
@@ -650,6 +715,18 @@ export default function MilestoneView({
       setMotionVersion(prev => prev + 1)
     }
   }, [rowsSignature])
+
+  useEffect(() => {
+    refreshSavedProjectViews()
+    const sharedView = parseProjectViewShare(ROADMAP_MILESTONE_VIEW_KIND)
+    if (sharedView) {
+      applyProjectViewState(sharedView.state)
+      setActiveSavedViewId(null)
+      if (sharedView.name) setProjectViewName(sharedView.name)
+      message.success('已应用分享视图')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleScopeChange = (key: string) => {
     const nextScope = key as RoadmapScope
@@ -662,9 +739,11 @@ export default function MilestoneView({
     setVisibleColumns(getDefaultVisibleColumnsForScope(nextScope))
     setActiveSnapshotId(null)
     setCompareMode(false)
+    setActiveSavedViewId(null)
   }
 
   const toggleTosGroup = (tosGroup: string) => {
+    setActiveSavedViewId(null)
     setCollapsedTosGroups(prev => {
       const next = new Set(prev)
       if (next.has(tosGroup)) next.delete(tosGroup)
@@ -673,8 +752,14 @@ export default function MilestoneView({
     })
   }
 
-  const expandAllTosGroups = () => setCollapsedTosGroups(new Set())
-  const collapseAllTosGroups = () => setCollapsedTosGroups(new Set(Object.keys(tosCounts).filter(tosGroup => tosCounts[tosGroup] > 1)))
+  const expandAllTosGroups = () => {
+    setActiveSavedViewId(null)
+    setCollapsedTosGroups(new Set())
+  }
+  const collapseAllTosGroups = () => {
+    setActiveSavedViewId(null)
+    setCollapsedTosGroups(new Set(Object.keys(tosCounts).filter(tosGroup => tosCounts[tosGroup] > 1)))
+  }
 
   const handleCreateSnapshot = () => {
     const now = new Date()
@@ -717,7 +802,7 @@ export default function MilestoneView({
 	    setShowCompareModal(false)
 	  }
 
-	  const buildExportColumns = () => (
+  const buildExportColumns = () => (
     availableColumns
       .filter(col => col.locked || visibleColumns.includes(col.key))
       .map<ExportColumn>(col => ({
@@ -731,6 +816,131 @@ export default function MilestoneView({
     const filename = `项目路标里程碑_${ROADMAP_SCOPES.find(item => item.key === scope)?.label || '整体'}_${exportTimestamp()}.xlsx`
     exportSheet(sourceRows, buildExportColumns(), filename, '里程碑视图')
   }
+
+  const handleSavedProjectViewChange = (value: string) => {
+    if (value === 'default') {
+      applyProjectViewState({
+        scope: 'overall',
+        statusFilter: 'all',
+        visibleColumns: getDefaultVisibleColumnsForScope('overall'),
+        filters: [],
+        collapsedKeys: [],
+      })
+      setActiveSavedViewId(null)
+      return
+    }
+
+    const view = savedProjectViews.find(item => item.id === value)
+    if (!view) return
+    applyProjectViewState(view.state)
+    setActiveSavedViewId(view.id)
+    setProjectViewName(view.name)
+    message.success(`已切换视图：${view.name}`)
+  }
+
+  const isProjectViewNameDuplicate = (name: string) => {
+    const normalizedName = name.trim().toLowerCase()
+    return savedProjectViews.some(view => view.name.trim().toLowerCase() === normalizedName)
+  }
+
+  const handleOpenSaveProjectView = () => {
+    setProjectViewName('')
+    setShowSaveProjectViewModal(true)
+  }
+
+  const handleSaveProjectView = () => {
+    const name = projectViewName.trim()
+    if (!name) {
+      message.warning('请输入视图名称')
+      return
+    }
+    if (isProjectViewNameDuplicate(name)) {
+      message.warning('视图名称不可重复')
+      return
+    }
+
+    const now = new Date().toISOString()
+    const view: SavedProjectView = {
+      id: `roadmap-milestone-${Date.now()}`,
+      kind: ROADMAP_MILESTONE_VIEW_KIND,
+      name,
+      state: buildCurrentProjectViewState(),
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    saveProjectView(view)
+    refreshSavedProjectViews()
+    setActiveSavedViewId(view.id)
+    setShowSaveProjectViewModal(false)
+    message.success('视图已保存')
+  }
+
+  const handleDeleteProjectView = (viewId: string) => {
+    const view = savedProjectViews.find(item => item.id === viewId)
+    if (!view) return
+
+    Modal.confirm({
+      title: '确认删除视图',
+      content: `删除「${view.name}」后无法恢复。`,
+      okText: '删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: () => {
+        deleteProjectView(viewId)
+        refreshSavedProjectViews()
+        if (activeSavedViewId === viewId) setActiveSavedViewId(null)
+        message.success('视图已删除')
+      },
+    })
+  }
+
+  const copyProjectViewShareUrl = async (url = projectViewShareUrl) => {
+    if (!url) return
+    try {
+      if (!navigator?.clipboard?.writeText) throw new Error('Clipboard unavailable')
+      await navigator.clipboard.writeText(url)
+      message.success('分享链接已复制')
+    } catch {
+      message.info('已生成分享链接，可手动复制')
+    }
+  }
+
+  const handleShareProjectView = () => {
+    const activeView = activeSavedViewId ? savedProjectViews.find(item => item.id === activeSavedViewId) : null
+    const url = createProjectViewShareUrl(
+      ROADMAP_MILESTONE_VIEW_KIND,
+      buildCurrentProjectViewState(),
+      activeView?.name || projectViewName || '项目路标里程碑视图',
+    )
+    setProjectViewShareUrl(url)
+    setShowProjectViewShareModal(true)
+    void copyProjectViewShareUrl(url)
+  }
+
+  const savedProjectViewTabs = [
+    { key: 'default', label: '默认视图' },
+    ...savedProjectViews.map(view => ({
+      key: view.id,
+      label: (
+        <span className="pms-project-view-tab-label">
+          <span>{view.name}</span>
+          <Button
+            type="text"
+            size="small"
+            className="pms-project-view-tab-close"
+            icon={<DeleteOutlined />}
+            aria-label={`删除视图 ${view.name}`}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation()
+              handleDeleteProjectView(view.id)
+            }}
+          />
+        </span>
+      ),
+    })),
+  ]
 
   const columns = useMemo<ColumnsType<RoadmapMilestoneRow>>(() => {
     const isVisible = (key: string) => {
@@ -995,6 +1205,60 @@ export default function MilestoneView({
 	        }
 	        .pms-summary-toolbar-actions .ant-btn {
 	          font-weight: 600;
+	        }
+	        .pms-project-view-row {
+	          margin-bottom: 12px;
+	          padding-bottom: 10px;
+	          border-bottom: 1px solid #eef2f7;
+	          display: flex;
+	          align-items: center;
+	          justify-content: space-between;
+	          gap: 12px;
+	          flex-wrap: wrap;
+	        }
+	        .pms-project-view-left {
+	          display: flex;
+	          align-items: center;
+	          gap: 8px;
+	          flex: 1 1 520px;
+	          min-width: 0;
+	        }
+	        .pms-project-view-tabs {
+	          flex: 1 1 auto;
+	          min-width: 0;
+	        }
+	        .pms-project-view-tabs .ant-tabs-nav {
+	          margin: 0 !important;
+	        }
+	        .pms-project-view-tabs .ant-tabs-tab {
+	          padding: 4px 10px !important;
+	          border-radius: 16px;
+	          transition: background-color 0.18s ease, color 0.18s ease;
+	        }
+	        .pms-project-view-tabs .ant-tabs-tab-active {
+	          background: #eef2ff;
+	        }
+	        .pms-project-view-tab-label {
+	          display: inline-flex;
+	          align-items: center;
+	          gap: 4px;
+	          max-width: 170px;
+	        }
+	        .pms-project-view-tab-label > span:first-child {
+	          overflow: hidden;
+	          text-overflow: ellipsis;
+	          white-space: nowrap;
+	        }
+	        .pms-project-view-tab-close {
+	          width: 18px !important;
+	          height: 18px !important;
+	          min-width: 18px !important;
+	          padding: 0 !important;
+	          color: #94a3b8 !important;
+	        }
+	        .pms-project-view-tab-close:hover {
+	          color: #ef4444 !important;
+	          background: #fee2e2 !important;
 	        }
 	        .pms-summary-scope-tabs {
 	          flex: 1 1 auto;
@@ -1388,34 +1652,54 @@ export default function MilestoneView({
 	              items={ROADMAP_SCOPES.map(item => ({ key: item.key, label: item.label }))}
 	            />
 	            {scopeExtra && <div className="pms-summary-scope-extra">{scopeExtra}</div>}
-	          </div>
-	        )}
+		          </div>
+		        )}
 
-	        <div className="pms-summary-toolbar">
-	          <div className="pms-summary-status-group">
-	            <span className="pms-summary-status-label">状态筛选:</span>
-	            {STATUS_FILTERS.map(item => {
-	              const count = item.key === 'all' ? filteredRows.length : statusStats[item.key]
-	              return (
-	                <button
-	                  key={item.key}
-	                  type="button"
-	                  className={`pms-summary-status-pill${statusFilter === item.key ? ' pms-summary-status-pill-active' : ''}`}
-	                  onClick={() => setStatusFilter(item.key)}
-	                >
-	                  {item.key !== 'all' && <span className="pms-summary-status-dot" style={{ background: STATUS_DOT_COLORS[item.key] }} />}
-	                  {item.label}
-	                  <span className="pms-summary-status-count">{count || 0}</span>
-	                </button>
-	              )
-	            })}
-	          </div>
-	          <Space size={8} className="pms-summary-toolbar-actions">
-	            {scope === 'overall' && (
-	              <>
-	                <Button size="small" onClick={expandAllTosGroups}>展开全部</Button>
-	                <Button size="small" onClick={collapseAllTosGroups}>折叠全部</Button>
-	              </>
+		        <div className="pms-project-view-row">
+		          <div className="pms-project-view-left">
+		            <Tabs
+		              className="pms-project-view-tabs"
+		              activeKey={activeSavedViewId || 'default'}
+		              onChange={handleSavedProjectViewChange}
+		              items={savedProjectViewTabs}
+		            />
+		            <Button size="small" icon={<PlusOutlined />} onClick={handleOpenSaveProjectView}>
+		              新建视图
+		            </Button>
+		          </div>
+		          <Button size="small" icon={<ShareAltOutlined />} onClick={handleShareProjectView}>
+		            分享视图
+		          </Button>
+		        </div>
+
+		        <div className="pms-summary-toolbar">
+		          <div className="pms-summary-status-group">
+		            <span className="pms-summary-status-label">状态筛选:</span>
+		            {STATUS_FILTERS.map(item => {
+		              const count = item.key === 'all' ? filteredRows.length : statusStats[item.key]
+		              return (
+		                <button
+		                  key={item.key}
+		                  type="button"
+		                  className={`pms-summary-status-pill${statusFilter === item.key ? ' pms-summary-status-pill-active' : ''}`}
+		                  onClick={() => {
+		                    setStatusFilter(item.key)
+		                    setActiveSavedViewId(null)
+		                  }}
+		                >
+		                  {item.key !== 'all' && <span className="pms-summary-status-dot" style={{ background: STATUS_DOT_COLORS[item.key] }} />}
+		                  {item.label}
+		                  <span className="pms-summary-status-count">{count || 0}</span>
+		                </button>
+		              )
+		            })}
+		          </div>
+		          <Space size={8} className="pms-summary-toolbar-actions">
+		            {scope === 'overall' && (
+		              <>
+		                <Button size="small" onClick={expandAllTosGroups}>展开全部</Button>
+		                <Button size="small" onClick={collapseAllTosGroups}>折叠全部</Button>
+		              </>
 	            )}
 	            <Button
 	              size="small"
@@ -1534,8 +1818,54 @@ export default function MilestoneView({
         width="100vw"
         style={{ top: 0, maxWidth: '100vw', paddingBottom: 0 }}
         styles={{ body: { height: 'calc(100vh - 110px)', overflow: 'auto' } }}
+      >
+        {renderMilestoneTable()}
+      </Modal>
+
+	      <Modal
+	        title="新建视图"
+	        open={showSaveProjectViewModal}
+	        onCancel={() => setShowSaveProjectViewModal(false)}
+	        onOk={handleSaveProjectView}
+	        okText="新建"
+	        cancelText="取消"
+	        okButtonProps={{ disabled: !projectViewName.trim() }}
 	      >
-	        {renderMilestoneTable()}
+	        <Space direction="vertical" size={10} style={{ width: '100%' }}>
+	          <Input
+	            autoFocus
+	            placeholder="请输入视图名称"
+	            value={projectViewName}
+	            onChange={(event) => setProjectViewName(event.target.value)}
+	            onPressEnter={handleSaveProjectView}
+	          />
+	          <div style={{ color: '#64748b', fontSize: 12 }}>
+	            将以当前分类、状态筛选、筛选条件、列设置和 tOS 折叠状态创建视图；快照和对比状态不会写入视图配置，名称不可重复。
+	          </div>
+	        </Space>
+	      </Modal>
+
+	      <Modal
+	        title="分享视图"
+	        open={showProjectViewShareModal}
+	        onCancel={() => setShowProjectViewShareModal(false)}
+	        footer={(
+	          <Space>
+	            <Button icon={<CopyOutlined />} onClick={() => void copyProjectViewShareUrl()}>
+	              复制链接
+	            </Button>
+	            <Button type="primary" onClick={() => setShowProjectViewShareModal(false)}>
+	              完成
+	            </Button>
+	          </Space>
+	        )}
+	      >
+	        <Space direction="vertical" size={10} style={{ width: '100%' }}>
+	          <Input.TextArea value={projectViewShareUrl} readOnly autoSize={{ minRows: 3, maxRows: 6 }} />
+	          <div style={{ color: '#64748b', fontSize: 12 }}>
+	            分享链接会携带当前视图配置，打开后自动应用到项目路标里程碑视图。
+	          </div>
+	        </Space>
 	      </Modal>
 
 	      <Modal
@@ -1578,11 +1908,12 @@ export default function MilestoneView({
             <Space>
               <Button onClick={() => setShowFilterDrawer(false)}>取消</Button>
               <Button
-                type="primary"
-                onClick={() => {
-                  setFilters(normalizeFilterConditions(tempFilters))
-                  setShowFilterDrawer(false)
-                }}
+	                type="primary"
+	                onClick={() => {
+	                  setFilters(normalizeFilterConditions(tempFilters))
+	                  setShowFilterDrawer(false)
+	                  setActiveSavedViewId(null)
+	                }}
               >
                 应用
               </Button>
@@ -1647,7 +1978,10 @@ export default function MilestoneView({
         zIndex={ROADMAP_DRAWER_Z_INDEX}
         footer={(
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button onClick={() => setVisibleColumns(defaultVisibleColumns)}>重置默认</Button>
+	            <Button onClick={() => {
+	              setVisibleColumns(defaultVisibleColumns)
+	              setActiveSavedViewId(null)
+	            }}>重置默认</Button>
             <Space>
               <Button onClick={() => setShowColumnDrawer(false)}>取消</Button>
               <Button type="primary" onClick={() => setShowColumnDrawer(false)}>确定</Button>
@@ -1660,7 +1994,10 @@ export default function MilestoneView({
         </div>
         <Checkbox.Group
           value={visibleColumns}
-          onChange={(vals) => setVisibleColumns(vals as string[])}
+	          onChange={(vals) => {
+	            setVisibleColumns(vals as string[])
+	            setActiveSavedViewId(null)
+	          }}
           style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
         >
           {availableColumns.map(col => (

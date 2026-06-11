@@ -6,6 +6,7 @@ import { AppstoreOutlined, GlobalOutlined, FlagOutlined, RocketOutlined, TableOu
 import MilestoneView from './MilestoneView'
 import MRTrainView from './MRTrainView'
 import ProjectPlanSummaryBoard from './ProjectPlanSummaryBoard'
+import { PROJECT_VIEW_KINDS, parseProjectViewShare } from './utils'
 
 interface RoadmapViewProps {
   projects: any[]
@@ -18,6 +19,18 @@ export default function RoadmapView({ projects, marketPlanData, level1Tasks, onV
   const [activeProjectView, setActiveProjectView] = useState<'summary' | 'roadmap'>('summary')
   const [activeView, setActiveView] = useState<'milestone' | 'mr-train'>('milestone')
   const mrTrainDisabled = true
+
+  useEffect(() => {
+    const sharedView = parseProjectViewShare()
+    if (sharedView?.kind === PROJECT_VIEW_KINDS.roadmapMilestone) {
+      setActiveProjectView('roadmap')
+      setActiveView('milestone')
+    }
+    if (sharedView?.kind === PROJECT_VIEW_KINDS.summaryBoard) {
+      setActiveProjectView('summary')
+      setActiveView('milestone')
+    }
+  }, [])
 
   useEffect(() => {
     if (mrTrainDisabled && activeView === 'mr-train') {
