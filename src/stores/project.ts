@@ -17,6 +17,7 @@ export const INITIAL_PROJECT_MEMBER_MAP: Record<string, string[]> = {
   '8': ['杜甫', '李白', '张三', '李四', '王五'],         // tOS18.0
   '9': ['李四', '张三', '赵六', '孙七'],                 // AI-Engine-V2
   '10': ['孙七', '周八', '李白', '杜甫', '王五'],        // DevOps-Platform
+  '11': ['王五', '李白', '张三', '赵六'],                // HiOS-Launcher
 }
 
 // Kanban stage columns

@@ -6,7 +6,8 @@ import { generateTaskNumber } from '@/lib/taskNumber'
 import { compareVersionsForTable, CompareTableRow, FieldDiff } from '@/lib/versionCompare'
 
 // 项目类型选项
-const PROJECT_TYPES: ProjectType[] = ['整机产品项目', '产品项目', '技术项目', '能力建设项目']
+const PROJECT_TYPES: ProjectType[] = ['整机产品项目', 'tOS版本项目', '独立软件产品项目', '技术项目', '能力建设项目']
+const PLAN_TEMPLATE_ROLE_OPTIONS = ['SPM']
 
 // 二级计划固定类型（需求开发计划和在研版本火车计划为系统内置，不在模板管理中配置）
 const LEVEL2_PLAN_TYPES: Level2PlanType[] = [
@@ -145,6 +146,7 @@ export default function Level2PlanTemplatePage() {
       taskName: '新任务',
       status: '未开始',
       progress: 0,
+      responsible: 'SPM',
     }
     
     setEditedTasks([...editedTasks, newTask])
@@ -167,6 +169,34 @@ export default function Level2PlanTemplatePage() {
     setEditedTasks(editedTasks.map(t => 
       t.id === taskId ? { ...t, taskName: name } : t
     ))
+  }
+
+  const handleUpdateTaskRole = (taskId: string, role: string) => {
+    setEditedTasks(editedTasks.map(t =>
+      t.id === taskId ? { ...t, responsible: role } : t
+    ))
+  }
+
+  const renderRoleCell = (task: PlanTask) => {
+    if (isEditing) {
+      return (
+        <select
+          value={task.responsible || 'SPM'}
+          onChange={(e) => handleUpdateTaskRole(task.id, e.target.value)}
+          className="select w-full text-sm"
+        >
+          {PLAN_TEMPLATE_ROLE_OPTIONS.map(role => (
+            <option key={role} value={role}>{role}</option>
+          ))}
+        </select>
+      )
+    }
+
+    return (
+      <span className="inline-flex rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+        {task.responsible || 'SPM'}
+      </span>
+    )
   }
 
   // 渲染序号缩进
@@ -361,7 +391,7 @@ export default function Level2PlanTemplatePage() {
                     <tr>
                       <th className="w-20">序号</th>
                       <th>任务名称</th>
-                      <th className="w-32 text-center">责任人</th>
+                      <th className="w-32 text-center">角色</th>
                       <th className="w-24 text-center">前置任务</th>
                       <th className="text-center">计划开始时间</th>
                       <th className="text-center">计划完成时间</th>
@@ -399,7 +429,7 @@ export default function Level2PlanTemplatePage() {
                                 rootTask.taskName
                               )}
                             </td>
-                            <td className="text-center">-</td>
+                            <td className="text-center">{renderRoleCell(rootTask)}</td>
                             <td className="text-center">-</td>
                             <td className="text-center">-</td>
                             <td className="text-center">-</td>
@@ -461,7 +491,7 @@ export default function Level2PlanTemplatePage() {
                                     childTask.taskName
                                   )}
                                 </td>
-                                <td className="text-center">-</td>
+                                <td className="text-center">{renderRoleCell(childTask)}</td>
                                 <td className="text-center">-</td>
                                 <td className="text-center">-</td>
                                 <td className="text-center">-</td>

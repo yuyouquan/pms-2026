@@ -37,6 +37,7 @@ import {
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import type { MenuProps } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { compareVersionsForTable, type CompareTableRow, type FieldDiff } from '@/lib/versionCompare'
 import {
@@ -50,6 +51,14 @@ import {
   type FilterCondition,
 } from '@/lib/filterConditions'
 import { GANTT_SCALE_OPTIONS } from '@/lib/ganttScale'
+import {
+  comparePlanVersions,
+  getDisplayPlanVersionsForHorizontalPlan,
+  getNextPlanRevisionVersionNo,
+  getPlanVersionId,
+  getRevisionKindForLatestPublishedVersion,
+  type PlanRevisionKind,
+} from '@/lib/planVersioning'
 import {
   JIRA_AFFECT_PROJECT_OPTIONS,
   JIRA_PROJECT_NAME_OPTIONS,
@@ -66,6 +75,7 @@ import {
 import { notifyPublishChanges, notifyDueTasks } from '@/lib/feishu-notify'
 import type { TaskChange, PlanDueNotice } from '@/types/plan-notify'
 import { exportSheet, exportMergedSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
+import { isSoftwareProjectType } from '@/constants/projectTypes'
 import {
   MARKET_OPTIONS,
   buildFollowVersionMetaForPublish,
@@ -86,7 +96,7 @@ import {
 
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
-import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView } from '@/stores/plan'
+import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
 import { usePermissionStore, useHasPermission } from '@/stores/permission'
 import { PermissionConfig } from '@/components/permission/PermissionModule'
@@ -119,8 +129,39 @@ import { ProjectSpaceHeader } from '@/containers/AppShell'
 
 const { Option } = Select
 const PLAN_DRAWER_Z_INDEX = 1200
+const PROJECT_SPACE_STATUS_OPTIONS = [
+  { label: '待立项', value: '待立项' },
+  { label: '在研', value: '在研' },
+  { label: '上市', value: '上市' },
+  { label: '转维', value: '转维' },
+  { label: 'EOS', value: 'EOS' },
+  { label: '暂停', value: '暂停' },
+  { label: '已取消', value: '已取消' },
+]
+const PROJECT_PLAN_CLONE_TEMPLATE_VERSIONS = ['V2', 'V1'] as const
+const PROJECT_PLAN_CLONE_MARKET_VERSION_MAP = {
+  OP: ['V3', 'V2', 'V1'],
+  TR: ['V2', 'V1'],
+} as const
+const PROJECT_PLAN_CLONE_MARKET_GROUPS = [
+  { label: 'OP', market: 'OP', versions: PROJECT_PLAN_CLONE_MARKET_VERSION_MAP.OP },
+  { label: 'TR', market: 'TR', versions: PROJECT_PLAN_CLONE_MARKET_VERSION_MAP.TR },
+] as const
+const PLAN_TEMPLATE_ROLE_TO_PROJECT_PERMISSION_ROLE = {
+  SPM: '项目经理',
+} as const
+const PLAN_REVISION_KIND_OPTIONS: Array<{ key: PlanRevisionKind; label: string }> = [
+  { key: 'gray', label: '创建灰度版本' },
+  { key: 'formal', label: '创建正式版本' },
+]
 
 type PlanFilterCondition = FilterCondition
+type PlanCloneSource = {
+  type: 'template' | 'market'
+  label: string
+  versionNo: string
+  market?: string
+}
 
 // 计划时间合法性校验：每个违规任务对应字段返回具体原因列表（用于 Tooltip 展示）
 // 规则：
@@ -197,7 +238,7 @@ export default function ProjectSpaceContainer() {
     selectedLevel2PlanType, setSelectedLevel2PlanType,
     selectedMilestones, setSelectedMilestones, selectedMRVersion, setSelectedMRVersion,
     columnsByView, setColumnsByView, collapsedNodes, setCollapsedNodes,
-    publishedSnapshots, setPublishedSnapshots,
+    publishedSnapshots, setPublishedSnapshots, configTemplateTasksByType,
     compareVersionA, setCompareVersionA, compareVersionB, setCompareVersionB,
     compareResult, setCompareResult, compareShowUnchanged, setCompareShowUnchanged,
     compareFilterType, setCompareFilterType,
@@ -253,7 +294,7 @@ export default function ProjectSpaceContainer() {
   const hasDraftVersion = versions.some(v => v.status === '修订中')
   const currentVersionData = versions.find(v => v.id === currentVersion)
   const isCurrentDraft = currentVersionData?.status === '修订中'
-  const latestPublishedVersion = versions.filter(v => v.status === '已发布').sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
+  const latestPublishedVersion = versions.filter(v => v.status === '已发布').sort((a, b) => comparePlanVersions(b, a))[0]
   const isLatestPublished = !isCurrentDraft && currentVersion === latestPublishedVersion?.id
   const hasPublishedLevel1Plan = versions.some(v => v.status === '已发布')
   const allPlanTypes = [...LEVEL2_PLAN_TYPES, ...customTypes]
@@ -294,6 +335,179 @@ export default function ProjectSpaceContainer() {
         }))
       }
     : setTasks
+
+  const getResponsibleNames = (responsible?: string) => (
+    (responsible || '')
+      .split(/[,，、;；/]/)
+      .map(name => name.trim())
+      .filter(Boolean)
+  )
+
+  const isResponsibleNameMatched = (responsible: string | undefined, userName: string) => (
+    !!userName && getResponsibleNames(responsible).includes(userName)
+  )
+
+  const getProjectRoleMembers = (templateRole: string) => {
+    const projectRole = PLAN_TEMPLATE_ROLE_TO_PROJECT_PERMISSION_ROLE[templateRole as keyof typeof PLAN_TEMPLATE_ROLE_TO_PROJECT_PERMISSION_ROLE]
+    if (!projectRole) return []
+    return (roles.find(role => role.name === projectRole)?.members || []).filter(Boolean)
+  }
+
+  const initializeProjectPlanTasksFromTemplate = (templateTasks: any[]) => (
+    JSON.parse(JSON.stringify(templateTasks || [])).map((task: any) => {
+      const templateRole = task.responsibleRole || task.responsible || ''
+      const projectRole = PLAN_TEMPLATE_ROLE_TO_PROJECT_PERMISSION_ROLE[templateRole as keyof typeof PLAN_TEMPLATE_ROLE_TO_PROJECT_PERMISSION_ROLE]
+      const roleMembers = getProjectRoleMembers(templateRole)
+      return {
+        ...task,
+        responsibleRole: templateRole,
+        responsible: projectRole ? roleMembers.join(',') : templateRole,
+      }
+    })
+  )
+
+  const versionNoToVersionId = getPlanVersionId
+
+  const cloneTasksWithoutActualDates = (sourceTasks: any[]) => (
+    JSON.parse(JSON.stringify(sourceTasks || [])).map((task: any) => ({
+      ...task,
+      actualStartDate: '',
+      actualEndDate: '',
+    }))
+  )
+
+  const getCloneSourceTasks = (source: PlanCloneSource) => {
+    const versionId = versionNoToVersionId(source.versionNo)
+
+    if (source.type === 'template') {
+      const projectType = selectedProject?.type || selectedPlanType
+      const templateSnapshotKey = getTemplateSnapshotKey(projectType, versionId, 'level1')
+      return (
+        publishedSnapshots[templateSnapshotKey]
+        || publishedSnapshots[getTemplateSnapshotKey(projectType, versionId)]
+        || configTemplateTasksByType[projectType]
+        || LEVEL1_TEMPLATE_TASKS
+      )
+    }
+
+    if (!source.market) return []
+    const marketSnapshotKey = selectedProject
+      ? getProjectMarketSnapshotKey(selectedProject.id, source.market, versionId)
+      : ''
+    return (
+      (marketSnapshotKey ? publishedSnapshots[marketSnapshotKey] : undefined)
+      || marketPlanData[source.market]?.tasks
+      || []
+    )
+  }
+
+  const handleClonePlanSource = (source: PlanCloneSource) => {
+    const sourceTasks = getCloneSourceTasks(source)
+    if (!sourceTasks.length) {
+      message.warning(`未找到 ${source.label} 的计划数据`)
+      return
+    }
+    const resolvedTasks = source.type === 'template'
+      ? initializeProjectPlanTasksFromTemplate(sourceTasks)
+      : sourceTasks
+    setEffectiveTasks(cloneTasksWithoutActualDates(resolvedTasks))
+    setIsEditMode(true)
+    message.success(`已克隆 ${source.label}，实际开始和实际完成时间已清空`)
+  }
+
+  const confirmClonePlanSource = (source: PlanCloneSource) => {
+    Modal.confirm({
+      title: '确认克隆计划',
+      content: `确认将 ${source.label} 的计划信息克隆到当前修订版本？实际开始和实际完成时间不会被克隆。`,
+      okText: '确认克隆',
+      cancelText: '取消',
+      onOk: () => handleClonePlanSource(source),
+    })
+  }
+
+  const buildPlanCloneMenuItems = (): MenuProps['items'] => [
+    {
+      key: 'template',
+      label: '模板',
+      children: PROJECT_PLAN_CLONE_TEMPLATE_VERSIONS.map(versionNo => ({
+        key: `template::${versionNo}`,
+        label: versionNo,
+      })),
+    },
+    ...PROJECT_PLAN_CLONE_MARKET_GROUPS.map(group => ({
+      key: `market::${group.market}`,
+      label: group.label,
+      children: group.versions.map(versionNo => ({
+        key: `market::${group.market}::${versionNo}`,
+        label: versionNo,
+      })),
+    })),
+  ]
+
+  const handlePlanCloneMenuClick: MenuProps['onClick'] = ({ key }) => {
+    const parts = String(key).split('::')
+    if (parts[0] === 'template' && parts[1]) {
+      confirmClonePlanSource({ type: 'template', label: `模板 ${parts[1]}`, versionNo: parts[1] })
+      return
+    }
+    if (parts[0] === 'market' && parts[1] && parts[2]) {
+      confirmClonePlanSource({ type: 'market', label: `${parts[1]} ${parts[2]}`, market: parts[1], versionNo: parts[2] })
+    }
+  }
+
+  const renderPlanCloneButton = (style?: CSSProperties) => {
+    if (!isCurrentDraft || projectPlanLevel !== 'level1') return null
+    const buttonStyle = style || { borderRadius: 6 }
+    if (!canEditLevel1Plan) {
+      return (
+        <Tooltip title="无一级计划编辑权限">
+          <Button icon={<CopyOutlined />} style={buttonStyle} disabled>克隆</Button>
+        </Tooltip>
+      )
+    }
+    if (currentMarketIsFollow) {
+      return (
+        <Tooltip title="该市场跟随主市场，一级计划由主市场发布后自动同步">
+          <Button icon={<CopyOutlined />} style={buttonStyle} disabled>克隆</Button>
+        </Tooltip>
+      )
+    }
+    return (
+      <Dropdown
+        menu={{ items: buildPlanCloneMenuItems(), onClick: handlePlanCloneMenuClick }}
+        trigger={['click']}
+        placement="bottomLeft"
+      >
+        <Button icon={<CopyOutlined />} style={buttonStyle}>克隆</Button>
+      </Dropdown>
+    )
+  }
+
+  const buildCreateRevisionMenuItems = (): MenuProps['items'] => (
+    PLAN_REVISION_KIND_OPTIONS.map(option => ({
+      key: option.key,
+      label: option.label,
+    }))
+  )
+
+  const handleCreateRevisionMenuClick: MenuProps['onClick'] = ({ key }) => {
+    handleCreateRevision(key as PlanRevisionKind)
+  }
+
+  const renderCreateRevisionButton = (style?: CSSProperties) => {
+    const buttonStyle = style || { borderRadius: 6 }
+    return (
+      <Dropdown
+        menu={{ items: buildCreateRevisionMenuItems(), onClick: handleCreateRevisionMenuClick }}
+        trigger={['click']}
+        placement="bottomLeft"
+      >
+        <Button type="primary" icon={<PlusOutlined />} style={buttonStyle}>
+          创建修订 <DownOutlined />
+        </Button>
+      </Dropdown>
+    )
+  }
 
   const getCurrentMarketRows = () => (
     selectedProject
@@ -377,7 +591,8 @@ export default function ProjectSpaceContainer() {
 
   const saveMarketConfig = () => {
     if (!selectedProject || selectedProject.type !== '整机产品项目') return
-    const previousMainMarket = getMainMarket(getCurrentMarketRows())
+    const previousRows = getCurrentMarketRows()
+    const previousMainMarket = getMainMarket(previousRows)
     const normalizedRows = normalizeMarketRows(marketDraftRows, previousMainMarket)
     if (normalizedRows.length === 0) {
       message.error('请至少配置一个市场')
@@ -386,6 +601,16 @@ export default function ProjectSpaceContainer() {
 
     const nextMarkets = normalizedRows.map(row => row.market)
     const mainMarket = getMainMarket(normalizedRows)
+    const previousFollowMarkets = new Set(
+      previousRows
+        .filter(row => !row.isMain && row.followsMain)
+        .map(row => row.market),
+    )
+    const newlyFollowedMarkets = normalizedRows
+      .filter(row => !row.isMain && row.followsMain && !previousFollowMarkets.has(row.market))
+      .map(row => row.market)
+    const followRevisionKind = getRevisionKindForLatestPublishedVersion(versions)
+    const shouldCreateFollowRevision = newlyFollowedMarkets.length > 0 && !hasDraftVersion && !!followRevisionKind
     const updatedProject = {
       ...selectedProject,
       markets: nextMarkets,
@@ -395,10 +620,32 @@ export default function ProjectSpaceContainer() {
     setMarketConfigForProject(selectedProject.id, normalizedRows)
     setSelectedProject(updatedProject)
     setProjects(prev => prev.map(project => project.id === updatedProject.id ? updatedProject : project) as typeof prev)
-    setMarketPlanData(prev => ensureMarketPlanDataForRows(prev, normalizedRows, LEVEL1_TASKS, FIXED_LEVEL2_PLANS))
-    if (!nextMarkets.includes(selectedMarketTab)) setSelectedMarketTab(mainMarket || nextMarkets[0])
+    setMarketPlanData(prev => {
+      const ensuredData = ensureMarketPlanDataForRows(prev, normalizedRows, LEVEL1_TASKS, FIXED_LEVEL2_PLANS)
+      if (!shouldCreateFollowRevision || !mainMarket) return ensuredData
+      const mainTasks = ensuredData[mainMarket]?.tasks || LEVEL1_TASKS
+      return newlyFollowedMarkets.reduce((acc, market) => ({
+        ...acc,
+        [market]: {
+          ...(acc[market] || { level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] }),
+          tasks: JSON.parse(JSON.stringify(mainTasks)),
+        },
+      }), ensuredData)
+    })
+    if (shouldCreateFollowRevision && followRevisionKind) {
+      const versionNo = getNextPlanRevisionVersionNo(versions, followRevisionKind)
+      const versionId = getPlanVersionId(versionNo)
+      const kindLabel = followRevisionKind === 'gray' ? '灰度' : '正式'
+      setVersions([...versions, { id: versionId, versionNo, status: '修订中' }])
+      setCurrentVersion(versionId)
+      setSelectedMarketTab(newlyFollowedMarkets[0])
+      setIsEditMode(true)
+      message.success(`市场配置已保存，已为跟随市场创建${kindLabel}修订版本 ${versionNo}`)
+    } else {
+      if (!nextMarkets.includes(selectedMarketTab)) setSelectedMarketTab(mainMarket || nextMarkets[0])
+      message.success('市场配置已保存')
+    }
     setShowMarketEditor(false)
-    message.success('市场配置已保存')
   }
 
   const getCurrentJiraProjects = (): JiraProjectConfig[] => {
@@ -455,8 +702,8 @@ export default function ProjectSpaceContainer() {
   // 是否当前 plan 视图下任意任务的责任人（L1 或 L2 任一）
   const isResponsibleForAnyTask = useMemo(() => {
     if (!currentLoginUser) return false
-    return (effectiveTasks as any[]).some(t => t.responsible === currentLoginUser) ||
-           level2PlanTasks.some(t => t.responsible === currentLoginUser)
+    return (effectiveTasks as any[]).some(t => isResponsibleNameMatched(t.responsible, currentLoginUser)) ||
+           level2PlanTasks.some(t => isResponsibleNameMatched(t.responsible, currentLoginUser))
   }, [effectiveTasks, level2PlanTasks, currentLoginUser])
   // 用户能否查看修订版：有任一计划编辑权 OR 是某条任务的责任人
   const canViewDraft = canEditLevel1Plan || canEditLevel2Plan || isResponsibleForAnyTask
@@ -515,7 +762,7 @@ export default function ProjectSpaceContainer() {
     const draft = versions.find(v => v.status === '修订中')
     const latestPub = versions
       .filter(v => v.status === '已发布')
-      .sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
+      .sort((a, b) => comparePlanVersions(b, a))[0]
     if (draft && canViewDraft) {
       if (currentVersion !== draft.id) setCurrentVersion(draft.id)
     } else if (latestPub) {
@@ -534,7 +781,7 @@ export default function ProjectSpaceContainer() {
     lastDueCheckedProjectRef.current = key
     const latestPub = versions
       .filter(v => v.status === '已发布')
-      .sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
+      .sort((a, b) => comparePlanVersions(b, a))[0]
     const scanTarget = latestPub && publishedSnapshots[latestPub.id] ? publishedSnapshots[latestPub.id] : effectiveTasks
     const notices = scanDueTasks(scanTarget)
     if (notices.length === 0) return
@@ -684,16 +931,19 @@ export default function ProjectSpaceContainer() {
     setPredecessorWarning({ visible: false, task: null, message: '' }); setGanttEditingTask(null); message.success('时间已更新（已确认前置任务冲突）')
   }
 
-  const handleCreateRevision = () => {
+  const handleCreateRevision = (revisionKind: PlanRevisionKind) => {
     if (!canCreateRevisionForMarket(marketConfigRows, selectedMarketTab, projectPlanLevel)) {
       message.warning('该市场跟随主市场，一级计划修订由主市场发布同步生成')
       return
     }
-    const maxNum = versions.reduce((max, v) => { const n = parseInt(v.versionNo.replace('V', '')); return n > max ? n : max }, 0)
-    const nn = maxNum + 1; const nid = `v${nn}`
-    const clonedTasks = LEVEL1_TASKS.map(t => ({ ...t }))
-    setVersions([...versions, { id: nid, versionNo: `V${nn}`, status: '修订中' }])
-    setCurrentVersion(nid); setEffectiveTasks(clonedTasks); message.success(`已创建修订版本 V${nn}`)
+    const versionNo = getNextPlanRevisionVersionNo(versions, revisionKind)
+    const nid = getPlanVersionId(versionNo)
+    const projectType = selectedProject?.type || selectedPlanType
+    const templateTasks = configTemplateTasksByType[projectType] || LEVEL1_TEMPLATE_TASKS
+    const clonedTasks = initializeProjectPlanTasksFromTemplate(templateTasks)
+    const kindLabel = revisionKind === 'gray' ? '灰度' : '正式'
+    setVersions([...versions, { id: nid, versionNo, status: '修订中' }])
+    setCurrentVersion(nid); setEffectiveTasks(clonedTasks); message.success(`已创建${kindLabel}修订版本 ${versionNo}`)
   }
 
   const handlePublish = () => {
@@ -722,7 +972,7 @@ export default function ProjectSpaceContainer() {
       }
       return
     }
-    const prevPublished = versions.filter(v => v.status === '已发布' && v.id !== currentVersion).sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
+    const prevPublished = versions.filter(v => v.status === '已发布' && v.id !== currentVersion).sort((a, b) => comparePlanVersions(b, a))[0]
     const previousSnapshotKey = selectedProject && isWholeMachineProject && projectPlanLevel === 'level1' && prevPublished
       ? getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, prevPublished.id)
       : ''
@@ -800,6 +1050,7 @@ export default function ProjectSpaceContainer() {
       developMode: p.developMode || '',
       cooperationForm: p.cooperationForm || '',
       projectLevel: p.projectLevel || '',
+      status: p.status || '待立项',
       currentNode: p.currentNode || '',
       healthStatus: p.healthStatus || 'normal',
       systemType: (p as any).systemType || '',
@@ -859,12 +1110,13 @@ export default function ProjectSpaceContainer() {
     const merges: any[] = [{ s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } }]
     let colCursor = 2
     for (const { stage, milestones, colSpan } of stageGroups) { headerRow0.push(stage.taskName); for (let i = 1; i < colSpan; i++) headerRow0.push(null); if (milestones.length > 0) { for (const m of milestones) headerRow1.push(m.taskName) } else headerRow1.push('-'); merges.push({ s: { r: 0, c: colCursor }, e: { r: 0, c: colCursor + colSpan - 1 } }); colCursor += colSpan }
-    const publishedVersions = versions.filter(v => v.status === '已发布').sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))
-    const latestNum = publishedVersions.length > 0 ? Math.max(...publishedVersions.map(v => parseInt(v.versionNo.replace('V', '')))) : 0
-    const getVersionTasks = (versionNo: string) => { const vNum = parseInt(versionNo.replace('V', '')); if (vNum === latestNum) return effectiveTasks as any[]; const offsetDays = (latestNum - vNum) * 3; return (effectiveTasks as any[]).map(t => ({ ...t, planStartDate: t.planStartDate ? shiftDateStrForExport(t.planStartDate, -offsetDays) : '', planEndDate: t.planEndDate ? shiftDateStrForExport(t.planEndDate, -offsetDays) : '' })) }
+    const displayVersions = getDisplayPlanVersionsForHorizontalPlan(versions)
+    const recencyVersions = [...displayVersions].sort((a, b) => comparePlanVersions(b, a))
+    const versionOffsetIndex = new Map(recencyVersions.map((version, index) => [version.versionNo, index]))
+    const getVersionTasks = (versionNo: string) => { const offsetIndex = versionOffsetIndex.get(versionNo) || 0; if (offsetIndex === 0) return effectiveTasks as any[]; const offsetDays = offsetIndex * 3; return (effectiveTasks as any[]).map(t => ({ ...t, planStartDate: t.planStartDate ? shiftDateStrForExport(t.planStartDate, -offsetDays) : '', planEndDate: t.planEndDate ? shiftDateStrForExport(t.planEndDate, -offsetDays) : '' })) }
     const calcCycleDays = (list: any[], sk: string, ek: string) => { const starts = list.map(t => t[sk]).filter(Boolean).map((d: string) => new Date(d).getTime()); const ends = list.map(t => t[ek]).filter(Boolean).map((d: string) => new Date(d).getTime()); if (starts.length === 0 || ends.length === 0) return '-'; const days = Math.ceil((Math.max(...ends) - Math.min(...starts)) / (1000 * 60 * 60 * 24)); return days > 0 ? days : '-' }
     const dataMatrix: (string | number)[][] = []
-    for (const v of publishedVersions) { const vt = getVersionTasks(v.versionNo); const row: (string | number)[] = [v.versionNo, calcCycleDays(vt, 'planStartDate', 'planEndDate')]; for (const m of allMilestones) { const match = vt.find((t: any) => t.id === m.id); row.push(match?.planEndDate || '-') }; dataMatrix.push(row) }
+    for (const v of displayVersions) { const vt = getVersionTasks(v.versionNo); const row: (string | number)[] = [v.versionNo, calcCycleDays(vt, 'planStartDate', 'planEndDate')]; for (const m of allMilestones) { const match = vt.find((t: any) => t.id === m.id); row.push(match?.planEndDate || '-') }; dataMatrix.push(row) }
     const actualRow: (string | number)[] = ['实际', calcCycleDays(effectiveTasks as any[], 'actualStartDate', 'actualEndDate')]; for (const m of allMilestones) { const t = (effectiveTasks as any[]).find((x: any) => x.id === m.id); actualRow.push(t?.actualEndDate || '-') }; dataMatrix.push(actualRow)
     const colWidths = [10, 10, ...allMilestones.map(() => 14)]
     exportMergedSheet([headerRow0, headerRow1], merges, dataMatrix, colWidths, `项目空间计划_${selectedProject?.name || '项目'}_一级计划_横版_${exportTimestamp()}.xlsx`, '一级计划横版')
@@ -961,7 +1213,7 @@ export default function ProjectSpaceContainer() {
     //   isRowEditable — 编辑模式下用户有编辑权 OR 是该行责任人 → 只能改自己负责的行的单元格
     const editPerm = isLevel2Custom ? canEditLevel2Plan : canEditLevel1Plan
     const canFullyEdit = isEditMode && editPerm
-    const isRowEditable = (record: any) => isEditMode && (editPerm || record.responsible === currentLoginUser)
+    const isRowEditable = (record: any) => isEditMode && (editPerm || isResponsibleNameMatched(record.responsible, currentLoginUser))
     const getColumns = (): ColumnsType<any> => {
       const cols: ColumnsType<any> = []
       if (visibleColumns.includes('id')) cols.push({ title: '序号', dataIndex: 'id', key: 'id', width: 130, fixed: 'left', render: (id: string, record: any) => {
@@ -1144,12 +1396,14 @@ export default function ProjectSpaceContainer() {
       const days = Math.ceil((latest - earliest) / (1000 * 60 * 60 * 24))
       return days > 0 ? days : '-'
     }
-    const publishedVersions = versions.filter(v => v.status === '已发布').sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))
+    const displayVersions = getDisplayPlanVersionsForHorizontalPlan(versions)
+    const recencyVersions = [...displayVersions].sort((a, b) => comparePlanVersions(b, a))
+    const latestDisplayVersionId = recencyVersions[0]?.id
+    const versionOffsetIndex = new Map(recencyVersions.map((version, index) => [version.id, index]))
     const getVersionTasks = (versionId: string) => {
-      const vNum = parseInt(versions.find(v => v.id === versionId)?.versionNo.replace('V', '') || '1')
-      const latestNum = Math.max(...publishedVersions.map(v => parseInt(v.versionNo.replace('V', ''))))
-      if (vNum === latestNum) return effectiveTasks
-      const offsetDays = (latestNum - vNum) * 3
+      const offsetIndex = versionOffsetIndex.get(versionId) || 0
+      if (offsetIndex === 0) return effectiveTasks
+      const offsetDays = offsetIndex * 3
       return (effectiveTasks as any[]).map((t: any) => ({
         ...t,
         planEndDate: t.planEndDate ? (() => { const d = new Date(t.planEndDate); d.setDate(d.getDate() - offsetDays); return d.toISOString().split('T')[0] })() : '',
@@ -1183,14 +1437,14 @@ export default function ProjectSpaceContainer() {
             </tr>
           </thead>
           <tbody>
-            {publishedVersions.map((version, idx) => {
+            {displayVersions.map((version) => {
               const vTasks = getVersionTasks(version.id)
               const vMilestones = stageGroups.flatMap(({ stage, milestones: ms }) => {
                 if (ms.length > 0) return ms.map((m: any) => { const vt = (vTasks as any[]).find((t: any) => t.id === m.id); return vt || m })
                 const vt = (vTasks as any[]).find((t: any) => t.id === stage.id); return [vt || stage]
               })
               const devCycle = calcDevCycle(vTasks as any[])
-              const isLatest = idx === 0
+              const isLatest = version.id === latestDisplayVersionId
               return (
                 <tr key={version.id} style={isLatest ? { background: '#fafffe' } : undefined}>
                   <td style={{ ...versionTdStyle, color: isLatest ? '#6366f1' : '#111827', background: isLatest ? '#f0f9ff' : '#fff' }}>{version.versionNo}</td>
@@ -1253,8 +1507,18 @@ export default function ProjectSpaceContainer() {
       setIsEditMode(false)
       message.success('保存成功')
     }
-    if (isCurrentDraft) return (<Space><Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{currentVersionData?.versionNo}({currentVersionData?.status})</Tag><Tag color="green" style={{ fontSize: 12 }}>自动保存</Tag>{currentMarketIsFollow && projectPlanLevel === 'level1' ? <Tooltip title="该市场跟随主市场，一级计划由主市场发布后自动同步"><Button type="primary" icon={<SaveOutlined />} disabled>发布</Button></Tooltip> : <Button type="primary" icon={<SaveOutlined />} onClick={handlePublish}>发布</Button>}<Button danger icon={<StopOutlined />} onClick={handleCancelRevision}>取消修订</Button></Space>)
-    return (<Space>{!hasDraftVersion && (canCreateCurrentMarketRevision ? <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateRevision}>创建修订</Button> : <Tooltip title="该市场跟随主市场，一级计划修订由主市场发布同步生成"><Button type="primary" icon={<PlusOutlined />} disabled>创建修订</Button></Tooltip>)}<Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
+    if (isCurrentDraft) return (
+      <Space>
+        <Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{currentVersionData?.versionNo}({currentVersionData?.status})</Tag>
+        <Tag color="green" style={{ fontSize: 12 }}>自动保存</Tag>
+        {renderPlanCloneButton()}
+        {currentMarketIsFollow && projectPlanLevel === 'level1'
+          ? <Tooltip title="该市场跟随主市场，一级计划由主市场发布后自动同步"><Button type="primary" icon={<SaveOutlined />} disabled>发布</Button></Tooltip>
+          : <Button type="primary" icon={<SaveOutlined />} onClick={handlePublish}>发布</Button>}
+        <Button danger icon={<StopOutlined />} onClick={handleCancelRevision}>取消修订</Button>
+      </Space>
+    )
+    return (<Space>{!hasDraftVersion && (canCreateCurrentMarketRevision ? renderCreateRevisionButton() : <Tooltip title="该市场跟随主市场，一级计划修订由主市场发布同步生成"><Button type="primary" icon={<PlusOutlined />} disabled>创建修订</Button></Tooltip>)}<Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
   }
 
   // ═══════ renderVersionCompareResult ═══════
@@ -1323,7 +1587,7 @@ export default function ProjectSpaceContainer() {
     const p = selectedProject
     if (!p) return null
     const isWholeMachine = p.type === '整机产品项目'
-    const isSoftware = p.type === '产品项目'
+    const isSoftware = isSoftwareProjectType(p.type)
     const isTech = p.type === '技术项目'
     const isCapability = p.type === '能力建设项目'
     const statusConf = PROJECT_STATUS_CONFIG[p.status] || { color: '#8c8c8c', tagColor: 'default' }
@@ -1549,7 +1813,7 @@ export default function ProjectSpaceContainer() {
           <div style={{ display: 'flex', background: 'linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)', borderBottom: '1px solid rgba(99,102,241,0.08)' }}>
             {[
               { label: '项目分类', value: p.type, editable: false },
-              { label: '项目状态', value: p.status, editable: false },
+              { label: '项目状态', value: p.status, editable: true, key: 'status', editNode: <Select size="small" value={ef.status} onChange={(v: string) => setEf('status', v)} style={{ width: 110 }} options={PROJECT_SPACE_STATUS_OPTIONS} /> },
               { label: '健康状态', value: hConf.label, editable: true, key: 'healthStatus', editNode: <Select size="small" value={ef.healthStatus} onChange={(v: string) => setEf('healthStatus', v)} style={{ width: 100 }} options={healthChoices} /> },
               ...((isSoftware || isWholeMachine || isTech) ? [{ label: '当前节点', value: p.currentNode || '-', editable: true, key: 'currentNode', editNode: <Select size="small" value={ef.currentNode} onChange={(v: string) => setEf('currentNode', v)} style={{ width: 120 }} options={nodeChoices} /> }] : []),
             ].map((item, i, arr) => (
@@ -1574,7 +1838,7 @@ export default function ProjectSpaceContainer() {
                 <Descriptions.Item label="项目名称">{p.name}</Descriptions.Item>
                 <Descriptions.Item label="品牌">{p.brand || '-'}</Descriptions.Item>
                 <Descriptions.Item label="产品线">{p.productLine || '-'}</Descriptions.Item>
-                <Descriptions.Item label="OS系列">
+                <Descriptions.Item label="产品系列">
                   {basicInfoEditMode
                     ? <Select size="small" value={ef.osSeries} onChange={(v: string) => setEf('osSeries', v)} style={{ width: '100%' }} options={OS_SERIES_OPTIONS} />
                     : renderSingleTag((p as any).osSeries || inferOsSeriesFromProjectName(p.name), 'cyan')}
@@ -1621,7 +1885,11 @@ export default function ProjectSpaceContainer() {
               <Descriptions bordered size="small" column={4} labelStyle={descLabelStyle} contentStyle={descContentStyle}>
                 <Descriptions.Item label="项目名称">{p.name}</Descriptions.Item>
                 <Descriptions.Item label="项目分类">{p.type}</Descriptions.Item>
-                <Descriptions.Item label="项目状态"><Tag color={statusConf.tagColor}>{p.status}</Tag></Descriptions.Item>
+                <Descriptions.Item label="项目状态">
+                  {basicInfoEditMode
+                    ? <Select size="small" value={ef.status} onChange={(v: string) => setEf('status', v)} style={{ width: '100%' }} options={PROJECT_SPACE_STATUS_OPTIONS} />
+                    : <Tag color={statusConf.tagColor}>{p.status}</Tag>}
+                </Descriptions.Item>
                 <Descriptions.Item label="健康状态">{basicInfoEditMode ? <Select size="small" value={ef.healthStatus} onChange={(v: string) => setEf('healthStatus', v)} style={{ width: '100%' }} options={healthChoices} /> : <Tag style={{ background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag>}</Descriptions.Item>
                 {isTech && (
                   <>
@@ -1942,9 +2210,10 @@ export default function ProjectSpaceContainer() {
                   <Space size={6}>
                     {!hasDraftVersion && (canEditLevel1Plan
                       ? (canCreateCurrentMarketRevision
-                        ? <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} onClick={handleCreateRevision}>创建修订</Button>
+                        ? renderCreateRevisionButton({ borderRadius: 6 })
                         : <Tooltip title="该市场跟随主市场，一级计划修订由主市场发布同步生成"><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled>创建修订</Button></Tooltip>)
                       : <Tooltip title="无一级计划编辑权限"><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled>创建修订</Button></Tooltip>)}
+                    {renderPlanCloneButton({ borderRadius: 6 })}
                     {isCurrentDraft && (canEditLevel1Plan
                       ? (currentMarketIsFollow && projectPlanLevel === 'level1'
                         ? <Tooltip title="该市场跟随主市场，一级计划由主市场发布后自动同步"><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} disabled>发布</Button></Tooltip>
@@ -2146,11 +2415,9 @@ export default function ProjectSpaceContainer() {
             const versionA = versions.find(v => v.id === compareVersionA)
             const versionB = versions.find(v => v.id === compareVersionB)
             if (versionA && versionB) {
-              const vANum = parseInt(versionA.versionNo.replace('V', ''))
-              const vBNum = parseInt(versionB.versionNo.replace('V', ''))
               const oldTasks = versionA.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
               let newTasks = versionB.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
-              if (vANum !== vBNum) {
+              if (comparePlanVersions(versionA, versionB) !== 0) {
                 newTasks = [
                   ...effectiveTasks.map(t => {
                     if (t.id === '2.1') return { ...t, taskName: 'STR2(更新)', status: '已完成', progress: 100 }

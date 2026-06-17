@@ -1,7 +1,7 @@
 // 项目管理系统类型定义
 
 // 项目类型
-export type ProjectType = '整机产品项目' | '产品项目' | '技术项目' | '能力建设项目';
+export type ProjectType = '整机产品项目' | 'tOS版本项目' | '独立软件产品项目' | '技术项目' | '能力建设项目';
 
 // 项目状态映射 - IPM原始状态 → PMS展示状态
 export const IPM_STATUS_MAP: Record<string, string> = {
@@ -44,8 +44,11 @@ export interface PlanTask {
   order: number;
   taskName: string;
   defaultRoadmap?: boolean;
+  responsible?: string;
+  responsibleRole?: string;
   responsibleUser?: string;
   predecessorTask?: string;
+  predecessor?: string;
   planStartDate?: Date;
   planEndDate?: Date;
   estimatedDays?: number;

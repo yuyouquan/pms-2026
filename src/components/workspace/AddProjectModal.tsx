@@ -8,6 +8,8 @@ import { EXTERNAL_PROJECT_POOL, fetchByBid, type ExternalProjectEntry } from '@/
 import { useProjectStore } from '@/stores/project'
 import { useUiStore } from '@/stores/ui'
 import { usePermissionStore } from '@/stores/permission'
+import { inferOsSeriesFromProjectName, inferTosVersionFromProjectName } from '@/constants/projectBasicFields'
+import { inferSoftwareProjectTypeFromName, isSoftwareProjectType } from '@/constants/projectTypes'
 
 interface AddProjectModalProps {
   open: boolean
@@ -55,11 +57,15 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
     try {
       const extra = fetchByBid(entry.bid)
       const newId = `${Date.now()}`
+      const projectType = values.type || inferSoftwareProjectTypeFromName(entry.name)
+      const isSoftwareProject = isSoftwareProjectType(projectType)
+      const inferredTosVersion = inferTosVersionFromProjectName(entry.name)
+      const inferredOsSeries = inferOsSeriesFromProjectName(entry.name)
       const newProject: any = {
         id: newId,
         name: entry.name,
-        type: values.type,
-        status: '筹备中',
+        type: projectType,
+        status: '待立项',
         progress: 0,
         leader: values.responsiblePersons[0],
         markets: [],
@@ -68,7 +74,8 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
         spm: entry.spm,
         updatedAt: '刚刚',
         productLine: extra.productLine ?? '',
-        tosVersion: extra.tosVersion ?? '',
+        osSeries: isSoftwareProject ? inferredOsSeries : undefined,
+        tosVersion: isSoftwareProject ? (inferredTosVersion || extra.tosVersion || '') : (extra.tosVersion ?? ''),
         brand: extra.brand ?? undefined,
         planStartDate: extra.planStartDate ?? '',
         planEndDate: extra.planEndDate ?? '',
@@ -112,6 +119,14 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
             filterOption={(input, option) => (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())}
             options={candidatePool.map(e => ({ label: e.name, value: e.bid }))}
             notFoundContent="无匹配项目"
+            onChange={(bid) => {
+              const selectedEntry = candidatePool.find(item => item.bid === bid)
+              if (!selectedEntry) return
+              const inferredType = inferSoftwareProjectTypeFromName(selectedEntry.name)
+              if (inferredType === 'tOS版本项目') {
+                form.setFieldValue('type', inferredType)
+              }
+            }}
           />
         </Form.Item>
         <Form.Item

@@ -3,6 +3,14 @@ import React from 'react'
 import type { ColumnsType } from 'antd/es/table'
 import { Tag, Tooltip, Button } from 'antd'
 import { EyeOutlined, ArrowRightOutlined } from '@ant-design/icons'
+import {
+  isSoftwareProjectType,
+  normalizeSoftwareProjectType,
+  PROJECT_TYPE_INDEPENDENT_SOFTWARE,
+  PROJECT_TYPE_MACHINE,
+  PROJECT_TYPE_TECH,
+  PROJECT_TYPE_TOS_VERSION,
+} from '@/constants/projectTypes'
 
 const STORAGE_KEY = 'pms_roadmap_milestone_views'
 const PROJECT_VIEW_STORAGE_KEY = 'pms_project_custom_views'
@@ -21,6 +29,9 @@ export interface ProjectViewState {
   visibleColumns: string[]
   filters: any[]
   collapsedKeys: string[]
+  viewMode?: 'table' | 'calendar'
+  milestoneDateRange?: [string, string] | null
+  sharedRows?: any[]
 }
 
 export interface SavedProjectView {
@@ -194,6 +205,7 @@ export const OVERALL_PROJECT_INFO_COLUMNS: RoadmapColumnConfig[] = [
   { key: 'productCategory', title: '产品分类', width: 130, defaultVisible: true, locked: true },
   { key: 'productSeries', title: '产品系列', width: 140, defaultVisible: true, locked: true },
   { key: 'projectName', title: '项目名', width: 170, defaultVisible: true, locked: true },
+  { key: 'tosVersion', title: 'tOS版本', width: 110, defaultVisible: true },
   { key: 'status', title: '项目状态', width: 100, defaultVisible: true },
   { key: 'spm', title: 'SPM', width: 90, defaultVisible: true },
   { key: 'department', title: '部门', width: 120, defaultVisible: true },
@@ -217,8 +229,8 @@ export const MACHINE_FIXED_COLUMNS = MACHINE_PROJECT_INFO_COLUMNS
 
 export function getFixedColumnsForType(projectType: string): RoadmapColumnConfig[] {
   if (projectType === '整体') return OVERALL_PROJECT_INFO_COLUMNS
-  if (projectType === '整机产品项目') return MACHINE_PROJECT_INFO_COLUMNS
-  if (projectType === '技术项目') return TECH_PROJECT_INFO_COLUMNS
+  if (projectType === PROJECT_TYPE_MACHINE) return MACHINE_PROJECT_INFO_COLUMNS
+  if (projectType === PROJECT_TYPE_TECH) return TECH_PROJECT_INFO_COLUMNS
   return SOFTWARE_PROJECT_INFO_COLUMNS
 }
 
@@ -290,7 +302,7 @@ function normalizeValue(value: any): string {
 }
 
 function buildProjectInfo(project: any, projectType: string, market?: string): any {
-  const isMachine = projectType === '整机产品项目'
+  const isMachine = projectType === PROJECT_TYPE_MACHINE
   return {
     projectId: project.id,
     projectName: project.name,
@@ -340,11 +352,17 @@ export function generateTableData(
   marketPlanData: Record<string, { tasks: any[], level2Tasks: any[], createdLevel2Plans: any[] }>,
   level1Tasks: any[]
 ): any[] {
-  const filtered = projects.filter(p => p.type === projectType)
+  const filtered = projects.filter(p => (
+    projectType === PROJECT_TYPE_TOS_VERSION || projectType === PROJECT_TYPE_INDEPENDENT_SOFTWARE
+      ? normalizeSoftwareProjectType(p.type, p.name) === projectType
+      : isSoftwareProjectType(projectType)
+        ? isSoftwareProjectType(p.type)
+        : p.type === projectType
+  ))
   const rows: any[] = []
 
   for (const project of filtered) {
-    if (project.type === '整机产品项目') {
+    if (project.type === PROJECT_TYPE_MACHINE) {
       const markets = project.markets?.length ? project.markets : [project.market || '-']
       for (const market of markets) {
         const row: any = {

@@ -14,6 +14,14 @@ import {
   Progress,
 } from 'antd'
 import { CalendarOutlined } from '@ant-design/icons'
+import {
+  PROJECT_TYPE_CAPABILITY,
+  PROJECT_TYPE_COLORS,
+  PROJECT_TYPE_INDEPENDENT_SOFTWARE,
+  PROJECT_TYPE_MACHINE,
+  PROJECT_TYPE_TECH,
+  PROJECT_TYPE_TOS_VERSION,
+} from '@/constants/projectTypes'
 
 const { Option } = Select
 
@@ -23,7 +31,7 @@ const { Option } = Select
 export type ProjectType = {
   id: string
   name: string
-  type: '整机产品项目' | '产品项目' | '技术项目' | '能力建设项目'
+  type: typeof PROJECT_TYPE_MACHINE | typeof PROJECT_TYPE_TOS_VERSION | typeof PROJECT_TYPE_INDEPENDENT_SOFTWARE | typeof PROJECT_TYPE_TECH | typeof PROJECT_TYPE_CAPABILITY
   status: string
   progress: number
   leader: string
@@ -91,13 +99,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   const isCapability = project.type === '能力建设项目'
 
   // Project type color mapping
-  const typeColorMap: Record<string, { bg: string; color: string }> = {
-    '整机产品项目': { bg: 'rgba(99,102,241,0.08)', color: '#6366f1' },
-    '产品项目': { bg: 'rgba(22,119,255,0.08)', color: '#1677ff' },
-    '技术项目': { bg: 'rgba(250,173,20,0.08)', color: '#d48806' },
-    '能力建设项目': { bg: 'rgba(82,196,26,0.08)', color: '#389e0d' },
-  }
-  const typeColor = typeColorMap[project.type] || { bg: 'rgba(140,140,140,0.08)', color: '#8c8c8c' }
+  const typeColor = PROJECT_TYPE_COLORS[project.type] || { bg: 'rgba(140,140,140,0.08)', color: '#8c8c8c' }
 
   // Status tag gradient styles
   const statusTagStyle: Record<string, React.CSSProperties> = {
@@ -334,7 +336,7 @@ export interface KanbanBoardProps {
   kanbanDimension: 'stage' | 'type' | 'status'
   setKanbanDimension: (dimension: 'stage' | 'type' | 'status') => void
   kanbanColumns: KanbanColumn[]
-  PROJECT_TYPES: string[]
+  PROJECT_TYPES: readonly string[]
   setSelectedProject: (project: ProjectType) => void
   setProjectSpaceModule: (module: string) => void
   setActiveModule: (module: string) => void
@@ -352,7 +354,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 }) => {
   const getKanbanColumns = () => {
     if (kanbanDimension === 'type') {
-      return PROJECT_TYPES.map((t, i) => ({ title: t, key: t, color: ['#1890ff', '#52c41a', '#faad14', '#722ed1'][i] }))
+      return PROJECT_TYPES.map((t) => ({ title: t, key: t, color: PROJECT_TYPE_COLORS[t]?.color || '#94a3b8' }))
     }
     if (kanbanDimension === 'status') {
       return [
@@ -401,7 +403,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               <Space direction="vertical" style={{ width: '100%' }}>
                 {visibleProjects.filter(getKanbanFilter(col)).map(project => (
                     <Card key={project.id} size="small" hoverable onClick={() => { setSelectedProject(project); setProjectSpaceModule('basic'); setActiveModule('projectSpace') }}>
-                    <Space direction="vertical" style={{ width: '100%' }}><div style={{ fontWeight: 500 }}>{project.name}</div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Tag style={{ fontSize: 11, borderRadius: 3, margin: 0, background: ({ '整机产品项目': 'rgba(99,102,241,0.08)', '产品项目': 'rgba(22,119,255,0.08)', '技术项目': 'rgba(250,173,20,0.08)', '能力建设项目': 'rgba(82,196,26,0.08)' } as Record<string,string>)[project.type] || 'rgba(140,140,140,0.08)', color: ({ '整机产品项目': '#6366f1', '产品项目': '#1677ff', '技术项目': '#d48806', '能力建设项目': '#389e0d' } as Record<string,string>)[project.type] || '#8c8c8c', border: 'none' }}>{project.type}</Tag><Progress percent={project.progress} size="small" style={{ width: 60 }} /></div></Space>
+                    <Space direction="vertical" style={{ width: '100%' }}><div style={{ fontWeight: 500 }}>{project.name}</div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Tag style={{ fontSize: 11, borderRadius: 3, margin: 0, background: PROJECT_TYPE_COLORS[project.type]?.bg || 'rgba(140,140,140,0.08)', color: PROJECT_TYPE_COLORS[project.type]?.color || '#8c8c8c', border: 'none' }}>{project.type}</Tag><Progress percent={project.progress} size="small" style={{ width: 60 }} /></div></Space>
                   </Card>
                 ))}
               </Space>

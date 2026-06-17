@@ -6,7 +6,8 @@ import { generateTaskNumber } from '@/lib/taskNumber'
 import { compareVersionsForTable, CompareTableRow, FieldDiff } from '@/lib/versionCompare'
 
 // 项目类型选项
-const PROJECT_TYPES: ProjectType[] = ['整机产品项目', '产品项目', '技术项目', '能力建设项目']
+const PROJECT_TYPES: ProjectType[] = ['整机产品项目', 'tOS版本项目', '独立软件产品项目', '技术项目', '能力建设项目']
+const PLAN_TEMPLATE_ROLE_OPTIONS = ['SPM']
 
 // 示例数据
 const SAMPLE_TASKS: PlanTask[] = [
@@ -21,7 +22,7 @@ const SAMPLE_TASKS: PlanTask[] = [
   { id: '3.2', parentId: '3', order: 2, taskName: 'STR4A', status: '未开始', progress: 0 },
   { id: '4', order: 4, taskName: '上市保障', status: '未开始', progress: 0 },
   { id: '4.1', parentId: '4', order: 1, taskName: 'STR5', status: '未开始', progress: 0 },
-]
+].map(task => ({ ...task, responsible: 'SPM' })) as PlanTask[]
 
 export default function Level1PlanTemplatePage() {
   const [projectType, setProjectType] = useState<ProjectType>('整机产品项目')
@@ -134,6 +135,7 @@ export default function Level1PlanTemplatePage() {
       taskName: '新任务',
       status: '未开始',
       progress: 0,
+      responsible: 'SPM',
     }
     
     setEditedTasks([...editedTasks, newTask])
@@ -157,6 +159,34 @@ export default function Level1PlanTemplatePage() {
     setEditedTasks(editedTasks.map(t => 
       t.id === taskId ? { ...t, taskName: name } : t
     ))
+  }
+
+  const handleUpdateTaskRole = (taskId: string, role: string) => {
+    setEditedTasks(editedTasks.map(t =>
+      t.id === taskId ? { ...t, responsible: role } : t
+    ))
+  }
+
+  const renderRoleCell = (task: PlanTask) => {
+    if (isEditing) {
+      return (
+        <select
+          value={task.responsible || 'SPM'}
+          onChange={(e) => handleUpdateTaskRole(task.id, e.target.value)}
+          className="select w-full text-sm"
+        >
+          {PLAN_TEMPLATE_ROLE_OPTIONS.map(role => (
+            <option key={role} value={role}>{role}</option>
+          ))}
+        </select>
+      )
+    }
+
+    return (
+      <span className="inline-flex rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+        {task.responsible || 'SPM'}
+      </span>
+    )
   }
 
   // 渲染序号缩进
@@ -318,7 +348,7 @@ export default function Level1PlanTemplatePage() {
                     <tr>
                       <th className="w-20">序号</th>
                       <th>任务名称</th>
-                      <th className="w-32 text-center">责任人</th>
+                      <th className="w-32 text-center">角色</th>
                       <th className="w-24 text-center">前置任务</th>
                       <th className="text-center">计划开始时间</th>
                       <th className="text-center">计划完成时间</th>
@@ -349,7 +379,7 @@ export default function Level1PlanTemplatePage() {
                               rootTask.taskName
                             )}
                           </td>
-                          <td className="text-center">-</td>
+                          <td className="text-center">{renderRoleCell(rootTask)}</td>
                           <td className="text-center">-</td>
                           <td className="text-center">-</td>
                           <td className="text-center">-</td>
@@ -411,7 +441,7 @@ export default function Level1PlanTemplatePage() {
                                   childTask.taskName
                                 )}
                               </td>
-                              <td className="text-center">-</td>
+                              <td className="text-center">{renderRoleCell(childTask)}</td>
                               <td className="text-center">-</td>
                               <td className="text-center">-</td>
                               <td className="text-center">-</td>
