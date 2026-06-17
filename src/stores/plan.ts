@@ -1,4 +1,11 @@
 import { create } from 'zustand'
+import {
+  PROJECT_TYPE_CAPABILITY,
+  PROJECT_TYPE_INDEPENDENT_SOFTWARE,
+  PROJECT_TYPE_MACHINE,
+  PROJECT_TYPE_TECH,
+  PROJECT_TYPE_TOS_VERSION,
+} from '@/constants/projectTypes'
 import type { GanttScaleMode } from '@/lib/ganttScale'
 import type { FollowVersionSource } from '@/lib/marketRules'
 import type { CompareTableRow } from '@/lib/versionCompare'
@@ -36,12 +43,19 @@ export const LEVEL1_TASKS = [
 export const LEVEL1_TEMPLATE_TASKS = LEVEL1_TASKS.map(t => ({
   ...t,
   defaultRoadmap: !!t.parentId,
+  responsible: 'SPM',
   planStartDate: '', planEndDate: '', estimatedDays: 0,
   actualStartDate: '', actualEndDate: '', actualDays: 0,
   status: '未开始', progress: 0,
 }))
 
-export const TEMPLATE_PROJECT_TYPES = ['整机产品项目', '产品项目', '技术项目', '能力建设项目']
+export const TEMPLATE_PROJECT_TYPES = [
+  PROJECT_TYPE_MACHINE,
+  PROJECT_TYPE_TOS_VERSION,
+  PROJECT_TYPE_INDEPENDENT_SOFTWARE,
+  PROJECT_TYPE_TECH,
+  PROJECT_TYPE_CAPABILITY,
+]
 
 export const getTemplateSnapshotKey = (projectType: string, versionId: string, planLevel = 'level1') => (
   `template::${projectType}::${planLevel}::${versionId}`

@@ -7,6 +7,26 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 
 const checks = [
   {
+    name: 'Project type helpers define tOS version projects',
+    file: 'src/constants/projectTypes.ts',
+    includes: 'tOS版本项目',
+  },
+  {
+    name: 'Project type helpers define independent software projects',
+    file: 'src/constants/projectTypes.ts',
+    includes: '独立软件产品项目',
+  },
+  {
+    name: 'Project type helpers keep software-project behavior shared',
+    file: 'src/constants/projectTypes.ts',
+    includes: 'isSoftwareProjectType',
+  },
+  {
+    name: 'Project type helpers infer tOS version projects by name',
+    file: 'src/constants/projectTypes.ts',
+    includes: 'inferSoftwareProjectTypeFromName',
+  },
+  {
     name: 'Header uses 项目视图 label',
     file: 'src/containers/AppShell.tsx',
     includes: '项目视图',
@@ -22,6 +42,16 @@ const checks = [
     includes: '项目路标视图',
   },
   {
+    name: 'Project view card allows sticky controls to escape card clipping',
+    file: 'src/components/roadmap/RoadmapView.tsx',
+    includes: 'pms-roadmap-view-card',
+  },
+  {
+    name: 'Project view card body keeps overflow visible for sticky controls',
+    file: 'src/components/roadmap/RoadmapView.tsx',
+    includes: "overflow: 'visible'",
+  },
+  {
     name: 'Whole-machine basic info has product series',
     file: 'src/constants/projectBasicFields.ts',
     includes: '产品系列',
@@ -32,9 +62,29 @@ const checks = [
     includes: '领域',
   },
   {
-    name: 'Project basic info supports OS series',
+    name: 'Software project basic info labels OS series as product series',
     file: 'src/containers/ProjectSpaceContainer.tsx',
-    includes: 'OS系列',
+    includes: '<Descriptions.Item label="产品系列">',
+  },
+  {
+    name: 'Project space status is editable with custom enum options',
+    file: 'src/containers/ProjectSpaceContainer.tsx',
+    includes: 'PROJECT_SPACE_STATUS_OPTIONS',
+  },
+  {
+    name: 'Project space status options include EOS',
+    file: 'src/containers/ProjectSpaceContainer.tsx',
+    includes: "{ label: 'EOS', value: 'EOS' }",
+  },
+  {
+    name: 'Project space status uses single-select editing',
+    file: 'src/containers/ProjectSpaceContainer.tsx',
+    includes: "setEf('status'",
+  },
+  {
+    name: 'Add project defaults to pending approval status',
+    file: 'src/components/workspace/AddProjectModal.tsx',
+    includes: "status: '待立项'",
   },
   {
     name: 'Summary board component exists',
@@ -272,6 +322,51 @@ const checks = [
     includes: 'handleShareProjectView',
   },
   {
+    name: 'Summary board supports milestone date range filtering',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: 'milestoneDateRange',
+  },
+  {
+    name: 'Summary board has recent three-month milestone shortcut',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: '最近3个月',
+  },
+  {
+    name: 'Summary board has future three-month milestone shortcut',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: '未来三个月',
+  },
+  {
+    name: 'Summary board supports calendar view mode',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: 'pms-project-calendar-grid',
+  },
+  {
+    name: 'Summary board adds tOS version after project name',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: "key: 'tosVersion'",
+  },
+  {
+    name: 'Summary board share payload includes filtered row snapshot',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: 'sharedRows',
+  },
+  {
+    name: 'Summary board toolbar actions are compact icon buttons',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: 'pms-summary-icon-button',
+  },
+  {
+    name: 'Summary board status toolbar uses compact scrollable rail',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: 'pms-summary-status-group::-webkit-scrollbar',
+  },
+  {
+    name: 'Summary board calendar events use one-line milestone project text',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: 'pms-project-calendar-event-single',
+  },
+  {
     name: 'Roadmap milestone view supports custom saved views',
     file: 'src/components/roadmap/MilestoneView.tsx',
     includes: 'handleSaveProjectView',
@@ -306,6 +401,116 @@ const checks = [
     file: 'src/components/roadmap/MilestoneView.tsx',
     includes: 'handleShareProjectView',
   },
+  {
+    name: 'Roadmap milestone supports milestone date range filtering',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: 'milestoneDateRange',
+  },
+  {
+    name: 'Roadmap milestone has recent three-month milestone shortcut',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: '最近3个月',
+  },
+  {
+    name: 'Roadmap milestone has future three-month milestone shortcut',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: '未来三个月',
+  },
+  {
+    name: 'Roadmap milestone supports calendar view mode',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: 'pms-project-calendar-grid',
+  },
+  {
+    name: 'Roadmap milestone adds row tOS version after project name',
+    file: 'src/components/roadmap/utils.ts',
+    includes: "{ key: 'tosVersion', title: 'tOS版本'",
+  },
+  {
+    name: 'Roadmap milestone share payload includes filtered row snapshot',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: 'sharedRows',
+  },
+  {
+    name: 'Roadmap milestone toolbar actions are compact icon buttons',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: 'pms-summary-icon-button',
+  },
+  {
+    name: 'Roadmap milestone status toolbar uses compact scrollable rail',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: 'pms-summary-status-group::-webkit-scrollbar',
+  },
+  {
+    name: 'Roadmap milestone calendar events use one-line milestone project text',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: 'pms-project-calendar-event-single',
+  },
+  {
+    name: 'Shared project view state carries calendar and date range',
+    file: 'src/components/roadmap/utils.ts',
+    includes: 'milestoneDateRange',
+  },
+  {
+    name: 'Shared project view state carries filtered row snapshot',
+    file: 'src/components/roadmap/utils.ts',
+    includes: 'sharedRows',
+  },
+  {
+    name: 'Project type options include tOS version projects',
+    file: 'src/data/projects.ts',
+    includes: 'PROJECT_TYPE_TOS_VERSION',
+  },
+  {
+    name: 'Project type options include independent software projects',
+    file: 'src/data/projects.ts',
+    includes: 'PROJECT_TYPE_INDEPENDENT_SOFTWARE',
+  },
+  {
+    name: 'Add project modal can infer tOS version project names',
+    file: 'src/components/workspace/AddProjectModal.tsx',
+    includes: 'inferSoftwareProjectTypeFromName',
+  },
+  {
+    name: 'Workspace filters include tOS version project type',
+    file: 'src/containers/WorkspaceContainer.tsx',
+    includes: "value: 'tOS版本项目'",
+  },
+  {
+    name: 'Workspace filters include independent software project type',
+    file: 'src/containers/WorkspaceContainer.tsx',
+    includes: "value: '独立软件产品项目'",
+  },
+  {
+    name: 'Project space treats split software projects as old software projects',
+    file: 'src/containers/ProjectSpaceContainer.tsx',
+    includes: 'isSoftwareProjectType',
+  },
+  {
+    name: 'Plan template project types include split software project categories',
+    file: 'src/stores/plan.ts',
+    includes: 'PROJECT_TYPE_TOS_VERSION',
+  },
+  {
+    name: 'Summary board has tOS version project tab',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: 'tOS版本项目',
+  },
+  {
+    name: 'Summary board has independent software project tab',
+    file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    includes: '独立软件产品项目',
+  },
+  {
+    name: 'Roadmap milestone has tOS version project tab',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: 'tOS版本项目',
+  },
+  {
+    name: 'Roadmap milestone has independent software project tab',
+    file: 'src/components/roadmap/MilestoneView.tsx',
+    includes: '独立软件产品项目',
+  },
 ]
 
 const failures = []
@@ -324,6 +529,20 @@ for (const check of checks) {
 }
 
 const summaryBoard = read('src/components/roadmap/ProjectPlanSummaryBoard.tsx')
+const projectData = read('src/data/projects.ts')
+if (projectData.includes("type: '产品项目'")) {
+  failures.push('Mock project data should migrate software products away from legacy 产品项目 type')
+}
+for (const name of ['tOS16.1', 'tOS16.2', 'tOS17.1']) {
+  const escapedName = name.replace('.', '\\.')
+  const pattern = new RegExp(`name: '${escapedName}'[\\s\\S]{0,220}type: (?:'tOS版本项目'|PROJECT_TYPE_TOS_VERSION)`)
+  if (!pattern.test(projectData)) {
+    failures.push(`Mock tOS project ${name} should use tOS版本项目 type`)
+  }
+}
+if (!/name: '((?!tOS)\w|HiOS|AI|Launcher|Weather)[\s\S]{0,260}type: (?:'独立软件产品项目'|PROJECT_TYPE_INDEPENDENT_SOFTWARE)/.test(projectData)) {
+  failures.push('Mock data should include at least one non-tOS independent software project')
+}
 const statusFilterBlock = summaryBoard.match(/const STATUS_FILTERS[\s\S]*?\n\]/)?.[0] || ''
 const forbiddenStatusFilters = ['筹备中', 'EOL', "key: '维护'"]
 for (const status of forbiddenStatusFilters) {
@@ -350,6 +569,49 @@ if (!summaryBoard.includes("fixed: scope === 'overall' ? 'left' as const : undef
 }
 if (summaryBoard.includes('pms-project-view-select')) {
   failures.push('Summary board saved-view switching should use tabs, not the old select control')
+}
+if (summaryBoard.includes('已收起 ${row.hiddenProjectCount || 0} 个项目') || summaryBoard.includes('${total} 个项目')) {
+  failures.push('Summary board product category column should not show project-count copy')
+}
+const summaryProductCategoryColumn = summaryBoard.match(/dataIndex: 'productCategory'[\s\S]*?if \(isVisible\('productSeries'\)/)?.[0] || ''
+if (summaryProductCategoryColumn.includes('pms-summary-category-dot')) {
+  failures.push('Summary board product category column should not show the leading dot')
+}
+if (!summaryBoard.includes("dataIndex: 'tosVersion'") || summaryBoard.indexOf("dataIndex: 'projectName'") > summaryBoard.indexOf("dataIndex: 'tosVersion'")) {
+  failures.push('Summary board should render tOS版本 immediately after project name')
+}
+if (!summaryBoard.includes('filterMilestonesByDateRange') || !summaryBoard.includes('DatePicker.RangePicker')) {
+  failures.push('Summary board should filter milestone nodes with a date range picker')
+}
+if (!summaryBoard.includes('viewMode') || !summaryBoard.includes("value: 'calendar'")) {
+  failures.push('Summary board should switch between table and calendar views')
+}
+if (!summaryBoard.includes('getDepartmentByFirstSpm')) {
+  failures.push('Summary board department should derive from the first SPM person')
+}
+if (summaryBoard.includes('09:00') || summaryBoard.includes('pms-project-calendar-event-sub')) {
+  failures.push('Summary board calendar event should be one compact line without time or second-line metadata')
+}
+if (!summaryBoard.includes('pms-summary-sticky-region') || !summaryBoard.includes('pms-summary-sticky-offset')) {
+  failures.push('Summary board toolbar and filters should be wrapped in a sticky region')
+}
+if (!summaryBoard.includes('pms-summary-toolbar-shell') || !summaryBoard.includes('pms-summary-control-shell-static')) {
+  failures.push('Summary board should only keep the status/action toolbar sticky, with view tabs scrolling normally')
+}
+if (!summaryBoard.includes('top: 0 !important') || !summaryBoard.includes('margin-bottom: 23px')) {
+  failures.push('Summary board real table header should sit immediately below the sticky toolbar without a page-level offset')
+}
+if (!summaryBoard.includes('TABLE_BODY_SCROLL_Y') || !summaryBoard.includes("scroll={{ x: 'max-content', y: TABLE_BODY_SCROLL_Y }}")) {
+  failures.push('Summary board table body should scroll inside the table so the header stays above body rows')
+}
+if (!summaryBoard.includes('const SUMMARY_STICKY_TOP = 47')) {
+  failures.push('Summary board sticky toolbar should sit high enough that its visible bottom meets the table header')
+}
+if (summaryBoard.includes('sticky={{ offsetHeader: stickyTableOffset }}')) {
+  failures.push('Summary board should not use Ant Design sticky holder because it can float below body rows')
+}
+if (summaryBoard.includes('--pms-summary-table-header-offset')) {
+  failures.push('Summary board should not use a page-level table header offset that pushes the header into the table body')
 }
 
 const milestoneView = read('src/components/roadmap/MilestoneView.tsx')
@@ -378,13 +640,172 @@ for (const oldColumnPattern of ['for (const ms of sourceMilestones)', 'title: ms
 if (!milestoneView.includes('pms-summary-toolbar') || !milestoneView.includes('STATUS_FILTERS')) {
   failures.push('Roadmap milestone view should reuse the summary board toolbar pattern')
 }
+if (!milestoneView.includes('snapshotPopoverContent') || !milestoneView.includes('title="快照"')) {
+  failures.push('Roadmap milestone snapshot controls should live in a compact hover popover')
+}
+if (!milestoneView.includes('SnapshotDateRange') || !milestoneView.includes('SNAPSHOT_DATE_RANGE_PRESETS') || !milestoneView.includes('pms-roadmap-snapshot-range')) {
+  failures.push('Roadmap milestone snapshot popover should support snapshot time range search')
+}
+if (!milestoneView.includes('createdAtMs') || !milestoneView.includes('Math.random().toString(36)')) {
+  failures.push('Roadmap milestone snapshots should use unique ids so selection only highlights one snapshot')
+}
+if (milestoneView.includes('pms-roadmap-snapshot-select')) {
+  failures.push('Roadmap milestone snapshot switching should not occupy toolbar space with a select control')
+}
 if (milestoneView.includes('pms-project-view-select')) {
   failures.push('Roadmap milestone saved-view switching should use tabs, not the old select control')
+}
+if (milestoneView.includes('已收起 ${row.hiddenProjectCount || 0} 个项目') || milestoneView.includes('${tosCounts[value] || 0} 个项目')) {
+  failures.push('Roadmap milestone tOS version column should not show project-count copy')
+}
+const roadmapTosVersionColumn = milestoneView.match(/dataIndex: 'tosVersionGroup'[\s\S]*?if \(isVisible\('productCategory'\)/)?.[0] || ''
+if (roadmapTosVersionColumn.includes('pms-summary-category-dot')) {
+  failures.push('Roadmap milestone tOS version column should not show the leading dot')
+}
+if (!milestoneView.includes("dataIndex: 'tosVersion'") || milestoneView.indexOf("dataIndex: 'projectName'") > milestoneView.indexOf("dataIndex: 'tosVersion'")) {
+  failures.push('Roadmap milestone should render row tOS版本 immediately after project name')
+}
+if (!milestoneView.includes('filterMilestonesByDateRange') || !milestoneView.includes('DatePicker.RangePicker')) {
+  failures.push('Roadmap milestone should filter milestone nodes with a date range picker')
+}
+if (!milestoneView.includes('viewMode') || !milestoneView.includes("value: 'calendar'")) {
+  failures.push('Roadmap milestone should switch between table and calendar views')
+}
+if (!milestoneView.includes('getDepartmentByFirstSpm')) {
+  failures.push('Roadmap milestone department should derive from the first SPM person')
+}
+if (milestoneView.includes('09:00') || milestoneView.includes('pms-project-calendar-event-sub')) {
+  failures.push('Roadmap milestone calendar event should be one compact line without time or second-line metadata')
+}
+if (!milestoneView.includes('pms-summary-sticky-region') || !milestoneView.includes('pms-summary-sticky-offset')) {
+  failures.push('Roadmap milestone toolbar and filters should be wrapped in a sticky region')
+}
+if (!milestoneView.includes('pms-summary-toolbar-shell') || !milestoneView.includes('pms-summary-control-shell-static')) {
+  failures.push('Roadmap milestone should only keep the status/action toolbar sticky, with view tabs scrolling normally')
+}
+if (!milestoneView.includes('top: 0 !important') || !milestoneView.includes('margin-bottom: 23px')) {
+  failures.push('Roadmap milestone real table header should sit immediately below the sticky toolbar without a page-level offset')
+}
+if (!milestoneView.includes('TABLE_BODY_SCROLL_Y') || !milestoneView.includes("scroll={{ x: 'max-content', y: TABLE_BODY_SCROLL_Y }}")) {
+  failures.push('Roadmap milestone table body should scroll inside the table so the header stays above body rows')
+}
+if (!milestoneView.includes('const SUMMARY_STICKY_TOP = 47')) {
+  failures.push('Roadmap milestone sticky toolbar should sit high enough that its visible bottom meets the table header')
+}
+if (milestoneView.includes('sticky={{ offsetHeader: stickyTableOffset }}')) {
+  failures.push('Roadmap milestone should not use Ant Design sticky holder because it can float below body rows')
+}
+if (milestoneView.includes('--pms-summary-table-header-offset')) {
+  failures.push('Roadmap milestone should not use a page-level table header offset that pushes the header into the table body')
 }
 for (const status of ['待立项', '进行中', '已完成', '暂停', '已取消', '已上市', '维护期']) {
   if (!milestoneView.includes(status)) {
     failures.push(`Roadmap milestone view status scope missing ${status}`)
   }
+}
+
+const projectSpaceContainer = read('src/containers/ProjectSpaceContainer.tsx')
+for (const required of [
+  'PROJECT_PLAN_CLONE_TEMPLATE_VERSIONS',
+  'PROJECT_PLAN_CLONE_MARKET_VERSION_MAP',
+  'buildPlanCloneMenuItems',
+  'handleClonePlanSource',
+  'cloneTasksWithoutActualDates',
+  "title: '确认克隆计划'",
+  "label: '模板'",
+  "label: 'OP'",
+  "label: 'TR'",
+  "actualStartDate: ''",
+  "actualEndDate: ''",
+  '克隆',
+]) {
+  if (!projectSpaceContainer.includes(required)) {
+    failures.push(`Project space revision clone feature missing ${required}`)
+  }
+}
+for (const required of [
+  'PLAN_REVISION_KIND_OPTIONS',
+  '创建灰度版本',
+  '创建正式版本',
+  'getNextPlanRevisionVersionNo',
+  'getPlanVersionId',
+  'getRevisionKindForLatestPublishedVersion',
+  'comparePlanVersions',
+  'renderCreateRevisionButton',
+]) {
+  if (!projectSpaceContainer.includes(required)) {
+    failures.push(`Project space revision kind selection missing ${required}`)
+  }
+}
+for (const required of [
+  'newlyFollowedMarkets',
+  'shouldCreateFollowRevision',
+  '市场配置已保存，已为跟随市场创建',
+  'setSelectedMarketTab(newlyFollowedMarkets[0])',
+]) {
+  if (!projectSpaceContainer.includes(required)) {
+    failures.push(`Project space follow-market auto revision missing ${required}`)
+  }
+}
+
+const configContainer = read('src/containers/ConfigContainer.tsx')
+const planStore = read('src/stores/plan.ts')
+const level1TemplatePage = read('src/app/config/level1-template/page.tsx')
+const level2TemplatePage = read('src/app/config/level2-template/page.tsx')
+for (const required of [
+  'PLAN_TEMPLATE_ROLE_OPTIONS',
+  "{ label: 'SPM', value: 'SPM' }",
+  "title: '角色'",
+  'options={PLAN_TEMPLATE_ROLE_OPTIONS}',
+]) {
+  if (!configContainer.includes(required)) {
+    failures.push(`Config plan template role editing missing ${required}`)
+  }
+}
+if (configContainer.includes("title: '责任人'")) {
+  failures.push('Config plan template should rename the old responsible column to 角色')
+}
+if (
+  configContainer.includes('默认路标')
+  || configContainer.includes("{ key: 'defaultRoadmap'")
+  || configContainer.includes("visibleColumns.includes('defaultRoadmap')")
+) {
+  failures.push('Config plan template should not display or edit 默认路标')
+}
+if (!planStore.includes("responsible: 'SPM'")) {
+  failures.push('Level1 template tasks should store SPM as the default template role')
+}
+for (const [pageName, pageSource] of [
+  ['level1 template page', level1TemplatePage],
+  ['level2 template page', level2TemplatePage],
+]) {
+  for (const required of [
+    'PLAN_TEMPLATE_ROLE_OPTIONS',
+    '>角色</th>',
+    '<option key={role} value={role}>{role}</option>',
+    "responsible: 'SPM'",
+  ]) {
+    if (!pageSource.includes(required)) {
+      failures.push(`${pageName} should support role-based template editing: missing ${required}`)
+    }
+  }
+  if (pageSource.includes('>责任人</th>')) {
+    failures.push(`${pageName} should rename the old responsible column to 角色`)
+  }
+}
+for (const required of [
+  'PLAN_TEMPLATE_ROLE_TO_PROJECT_PERMISSION_ROLE',
+  "SPM: '项目经理'",
+  'initializeProjectPlanTasksFromTemplate',
+  'getProjectRoleMembers',
+  'getResponsibleNames',
+]) {
+  if (!projectSpaceContainer.includes(required)) {
+    failures.push(`Project-space plan initialization should map template roles to project permission members: missing ${required}`)
+  }
+}
+if (!/handleCreateRevision[\s\S]*initializeProjectPlanTasksFromTemplate/.test(projectSpaceContainer)) {
+  failures.push('Project-space revision initialization should resolve template roles into project responsible people')
 }
 
 if (failures.length) {

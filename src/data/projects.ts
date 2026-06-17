@@ -1,15 +1,16 @@
 import { LEVEL1_TASKS, FIXED_LEVEL2_PLANS } from '@/components/plan/PlanModule'
+import {
+  PROJECT_TYPE_CAPABILITY,
+  PROJECT_TYPE_COLORS,
+  PROJECT_TYPE_INDEPENDENT_SOFTWARE,
+  PROJECT_TYPE_MACHINE,
+  PROJECT_TYPE_TECH,
+  PROJECT_TYPE_TOS_VERSION,
+  PROJECT_TYPES,
+} from '@/constants/projectTypes'
 
 // 项目类型选项
-export const PROJECT_TYPES = ['整机产品项目', '产品项目', '技术项目', '能力建设项目']
-
-// 项目类型标签颜色
-export const PROJECT_TYPE_COLORS: Record<string, { bg: string; color: string }> = {
-  '整机产品项目': { bg: 'rgba(99,102,241,0.08)', color: '#6366f1' },
-  '产品项目': { bg: 'rgba(22,119,255,0.08)', color: '#1677ff' },
-  '技术项目': { bg: 'rgba(250,173,20,0.08)', color: '#d48806' },
-  '能力建设项目': { bg: 'rgba(82,196,26,0.08)', color: '#389e0d' },
-}
+export { PROJECT_TYPES, PROJECT_TYPE_COLORS }
 
 // IPM状态 → PMS展示状态 映射
 export const mapIpmStatus = (ipmStatus: string, projectType: string): string => {
@@ -30,10 +31,14 @@ export const mapIpmStatus = (ipmStatus: string, projectType: string): string => 
 export const PROJECT_STATUS_CONFIG: Record<string, { color: string; tagColor: string }> = {
   '待立项': { color: '#faad14', tagColor: 'warning' },
   '待立议': { color: '#faad14', tagColor: 'warning' },
+  '在研': { color: '#1890ff', tagColor: 'processing' },
   '进行中': { color: '#1890ff', tagColor: 'processing' },
   '已完成': { color: '#52c41a', tagColor: 'success' },
+  '上市': { color: '#722ed1', tagColor: 'purple' },
   '已上市': { color: '#722ed1', tagColor: 'purple' },
+  '转维': { color: '#13c2c2', tagColor: 'cyan' },
   '维护': { color: '#13c2c2', tagColor: 'cyan' },
+  'EOS': { color: '#64748b', tagColor: 'default' },
   '暂停': { color: '#d9d9d9', tagColor: 'default' },
   '已取消': { color: '#ff4d4f', tagColor: 'error' },
   '待验': { color: '#faad14', tagColor: 'warning' },
@@ -43,7 +48,7 @@ export const PROJECT_STATUS_CONFIG: Record<string, { color: string; tagColor: st
 // 项目数据
 export const initialProjects = [
   {
-    id: '1', name: 'X6877-D8400_H991', type: '整机产品项目' as const,
+    id: '1', name: 'X6877-D8400_H991', type: PROJECT_TYPE_MACHINE,
     status: '进行中', progress: 65, leader: '张三',
     markets: ['OP', 'TR', 'RU'], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '李白', updatedAt: '2小时前', productLine: 'NOTE', productCategory: 'CAMON', productSeries: 'CAMON 50', tosVersion: 'tOS 16.3',
@@ -74,7 +79,7 @@ export const initialProjects = [
     branchInfo: 'main_dev_x6877', jenkinsUrl: 'https://jenkins.example.com/job/X6877',
   },
   {
-    id: '3', name: 'X6855_H8917', type: '整机产品项目' as const,
+    id: '3', name: 'X6855_H8917', type: PROJECT_TYPE_MACHINE,
     status: '进行中', progress: 45, leader: '王五',
     markets: ['OP', 'TR'], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '赵六', updatedAt: '3天前', productLine: 'SPARK', productCategory: 'CAMON', productSeries: 'P', tosVersion: 'tOS 16.3',
@@ -104,7 +109,7 @@ export const initialProjects = [
     branchInfo: 'main_dev_x6855', jenkinsUrl: 'https://jenkins.example.com/job/X6855',
   },
   {
-    id: '2', name: 'tOS16.1', type: '产品项目' as const,
+    id: '2', name: 'tOS16.1', type: PROJECT_TYPE_TOS_VERSION,
     status: '进行中', progress: 55, leader: '李四',
     markets: [], androidVersion: 'Android 15', chipPlatform: 'MTK',
     spm: '张三', updatedAt: '1天前', productLine: 'tOS', osSeries: '16.X', tosVersion: '16.1',
@@ -117,7 +122,7 @@ export const initialProjects = [
     branchInfo: 'main_dev_tos16', jenkinsUrl: 'https://jenkins.example.com/job/tOS16',
   },
   {
-    id: '6', name: 'tOS17.1', type: '产品项目' as const,
+    id: '6', name: 'tOS17.1', type: PROJECT_TYPE_TOS_VERSION,
     status: '维护期', progress: 82, leader: '赵六',
     markets: [], androidVersion: 'Android 16', chipPlatform: 'QCOM',
     spm: '李四', updatedAt: '3小时前', productLine: 'tOS', osSeries: '17.X', tosVersion: '17.1',
@@ -130,7 +135,21 @@ export const initialProjects = [
     branchInfo: 'main_dev_tos17', jenkinsUrl: 'https://jenkins.example.com/job/tOS17',
   },
   {
-    id: '4', name: 'X6876_H786', type: '技术项目' as const,
+    id: '11', name: 'HiOS-Launcher', type: PROJECT_TYPE_INDEPENDENT_SOFTWARE,
+    status: '进行中', progress: 48, leader: '王五',
+    markets: [], androidVersion: 'Android 16', chipPlatform: 'MTK',
+    spm: '王五,李白', updatedAt: '5小时前', productLine: '系统应用', osSeries: '16.X', tosVersion: '16.2',
+    planStartDate: '2026-03-10', planEndDate: '2026-08-20',
+    developCycle: 112, healthStatus: 'warning' as const,
+    operatingSystem: 'Android 16', version: 'Launcher-16.2-V1',
+    buildAddress: 'https://build.example.com/hios-launcher',
+    currentNode: 'MR2', versionType: 'Full', brand: 'TECNO',
+    versionFiveRoles: { '版本规划代表': '王五', '版本经理': '李白', '版本SE': '张三', '版本测试代表': '赵六', '版本质量代表': '孙七' },
+    branchInfo: 'main_dev_hios_launcher', jenkinsUrl: 'https://jenkins.example.com/job/hios-launcher',
+    projectDescription: '独立软件产品项目，面向多机型复用的桌面启动器能力迭代。',
+  },
+  {
+    id: '4', name: 'X6876_H786', type: PROJECT_TYPE_TECH,
     status: '已完成', progress: 100, leader: '孙七',
     markets: [], androidVersion: 'Android 15', chipPlatform: 'QCOM',
     spm: '李四', updatedAt: '5天前', productLine: '平台技术', domain: '基础架构,测试', tosVersions: '15.0,16.0', tosVersion: 'tOS 15.0',
@@ -143,7 +162,7 @@ export const initialProjects = [
     teamMembers: '孙七,李四,张三',
   },
   {
-    id: '5', name: 'X6873_H972', type: '能力建设项目' as const,
+    id: '5', name: 'X6873_H972', type: PROJECT_TYPE_CAPABILITY,
     status: '进行中', progress: 30, leader: '周八',
     markets: [], androidVersion: 'Android 16', chipPlatform: 'UNISOC',
     spm: '王五', updatedAt: '1周前', productLine: '基础能力', tosVersion: 'tOS 16.2',
@@ -155,7 +174,7 @@ export const initialProjects = [
     teamMembers: '周八,王五,李白',
   },
   {
-    id: '7', name: 'X6890-D8500_H1001', type: '整机产品项目' as const,
+    id: '7', name: 'X6890-D8500_H1001', type: PROJECT_TYPE_MACHINE,
     status: '已上市', progress: 100, leader: '李白',
     markets: ['OP', 'TR', 'RU', 'IN'], androidVersion: 'Android 16', chipPlatform: 'QCOM',
     spm: '张三', updatedAt: '1天前', productLine: 'CAMON', productCategory: 'Note', productSeries: 'A', tosVersion: 'tOS 16.5',
@@ -185,7 +204,7 @@ export const initialProjects = [
     branchInfo: 'main_dev_x6890', jenkinsUrl: 'https://jenkins.example.com/job/X6890',
   },
   {
-    id: '8', name: 'tOS16.2', type: '产品项目' as const,
+    id: '8', name: 'tOS16.2', type: PROJECT_TYPE_TOS_VERSION,
     status: '维护期', progress: 76, leader: '杜甫',
     markets: [], androidVersion: 'Android 17', chipPlatform: 'MTK',
     spm: '赵六', updatedAt: '2天前', productLine: 'tOS', osSeries: '16.X', tosVersion: '16.2',
@@ -198,7 +217,7 @@ export const initialProjects = [
     branchInfo: 'main_dev_tos18', jenkinsUrl: 'https://jenkins.example.com/job/tOS18',
   },
   {
-    id: '9', name: 'AI-Engine-V2', type: '技术项目' as const,
+    id: '9', name: 'AI-Engine-V2', type: PROJECT_TYPE_TECH,
     status: '进行中', progress: 40, leader: '李四',
     markets: [], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '张三', updatedAt: '4小时前', productLine: 'AI引擎', domain: '影像,基础架构', tosVersions: '16.0,16.1', tosVersion: '',
@@ -211,7 +230,7 @@ export const initialProjects = [
     teamMembers: '李四,张三,赵六,孙七',
   },
   {
-    id: '10', name: 'DevOps-Platform', type: '能力建设项目' as const,
+    id: '10', name: 'DevOps-Platform', type: PROJECT_TYPE_CAPABILITY,
     status: '进行中', progress: 55, leader: '孙七',
     markets: [], androidVersion: '', chipPlatform: '',
     spm: '李四', updatedAt: '6小时前', productLine: '工程效率', tosVersion: '',

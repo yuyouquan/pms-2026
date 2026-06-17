@@ -13,10 +13,10 @@ const ACTIVITY_STRUCTURE = [
 ]
 
 const MR_TRAIN_DATA = [
-  // 产品项目 - tOS16.0（挂在 tOS16.3.50 版本组下）
+  // tOS版本项目 - tOS16.0（挂在 tOS16.3.50 版本组下）
   {
     key: 'p1', tosVersion: 'tOS16.3.50', chipPlatform: '-', productLine: '-', market: '-',
-    projectName: 'tOS16.0', projectId: '2', projectType: '产品项目', isMada: '-', madaMarket: '-',
+    projectName: 'tOS16.0', projectId: '2', projectType: 'tOS版本项目', isMada: '-', madaMarket: '-',
     spm: '张三', contact: '李四', tpm: '赵六', mrType: 'FR', projectVersion: '16.0.001', crossTestType: '标准',
     branch: '16.0_main',
     act_版本规划_需求收集_start: '2025-12-01', act_版本规划_需求收集_end: '2025-12-15',
@@ -139,22 +139,24 @@ const MR_TRAIN_DATA = [
   },
 ]
 
+const isSoftwareTrainProject = (projectType: string) => ['tOS版本项目', '独立软件产品项目', '产品项目'].includes(projectType)
+
 // ======================== RowSpan 计算 ========================
 
 function computeRowSpans(data: any[], key: string, groupKeys?: string[]) {
   const spans: number[] = new Array(data.length).fill(0)
   let i = 0
   while (i < data.length) {
-    // 产品项目行不参与合并，始终独占一行
-    if (data[i].projectType === '产品项目') {
+    // 软件项目行不参与合并，始终独占一行
+    if (isSoftwareTrainProject(data[i].projectType)) {
       spans[i] = 1
       i++
       continue
     }
     let j = i + 1
     while (j < data.length) {
-      // 遇到产品项目行也中断合并
-      if (data[j].projectType === '产品项目') break
+      // 遇到软件项目行也中断合并
+      if (isSoftwareTrainProject(data[j].projectType)) break
       let same = data[j][key] === data[i][key]
       if (groupKeys) {
         same = same && groupKeys.every(gk => data[j][gk] === data[i][gk])
@@ -222,14 +224,14 @@ export default function MRTrainView({ onViewProject }: MRTrainViewProps) {
 
   const dimConfig = DIMENSIONS[dimension] || DIMENSIONS.tosVersion
 
-  // 按当前维度排序（同组内产品项目排在整机产品项目前面）
+  // 按当前维度排序（同组内软件项目排在整机产品项目前面）
   const sortedData = useMemo(() => {
-    const typeOrder: Record<string, number> = { '产品项目': 0, '整机产品项目': 1 }
+    const typeOrder: Record<string, number> = { 'tOS版本项目': 0, '独立软件产品项目': 0, '产品项目': 0, '整机产品项目': 1 }
     return [...MR_TRAIN_DATA].sort((a: any, b: any) => {
       // 先按主键排序（如 tosVersion）
       const primaryCmp = (a[dimConfig.primaryKey] || '').localeCompare(b[dimConfig.primaryKey] || '')
       if (primaryCmp !== 0) return primaryCmp
-      // 同主键组内，产品项目排最前
+      // 同主键组内，软件项目排最前
       const ta = typeOrder[a.projectType] ?? 2
       const tb = typeOrder[b.projectType] ?? 2
       if (ta !== tb) return ta - tb
@@ -282,7 +284,7 @@ export default function MRTrainView({ onViewProject }: MRTrainViewProps) {
         dataIndex: 'projectType',
         key: 'projectType',
         width: 110,
-        render: (val: string) => val === '产品项目' ? '-' : <Tag color="green" style={{ margin: 0 }}>{val}</Tag>,
+        render: (val: string) => isSoftwareTrainProject(val) ? '-' : <Tag color="green" style={{ margin: 0 }}>{val}</Tag>,
       },
       { title: '产品线', dataIndex: 'productLine', key: 'productLine', width: 90 },
       {

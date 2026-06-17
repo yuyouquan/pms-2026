@@ -1,14 +1,22 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Checkbox, Drawer, Dropdown, Empty, Input, Modal, Select, Space, Table, Tabs, Tag, Tooltip, message } from 'antd'
-import { CaretDownOutlined, CaretRightOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, EyeOutlined, FilterOutlined, FullscreenExitOutlined, FullscreenOutlined, PlusOutlined, SettingOutlined, ShareAltOutlined } from '@ant-design/icons'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { Button, Checkbox, DatePicker, Drawer, Dropdown, Empty, Input, Modal, Segmented, Select, Space, Table, Tabs, Tag, Tooltip, message } from 'antd'
+import { CalendarOutlined, CaretDownOutlined, CaretRightOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, EyeOutlined, FilterOutlined, FullscreenExitOutlined, FullscreenOutlined, PlusOutlined, SettingOutlined, ShareAltOutlined, TableOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import {
   inferOsSeriesFromProjectName,
   inferTosVersionFromProjectName,
 } from '@/constants/projectBasicFields'
+import {
+  isSoftwareProjectType,
+  normalizeSoftwareProjectType,
+  PROJECT_TYPE_INDEPENDENT_SOFTWARE,
+  PROJECT_TYPE_MACHINE,
+  PROJECT_TYPE_TECH,
+  PROJECT_TYPE_TOS_VERSION,
+} from '@/constants/projectTypes'
 import type { FilterCondition } from '@/lib/filterConditions'
 import {
   FILTER_OPERATORS,
@@ -33,9 +41,11 @@ import {
 } from './utils'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 
-type SummaryScope = 'overall' | 'machine' | 'software' | 'tech'
+type SummaryScope = 'overall' | 'machine' | 'tosVersion' | 'independentSoftware' | 'tech'
 type SummaryStatus = '进行中' | '已完成' | '已上市' | '维护期'
 type StatusFilter = 'all' | SummaryStatus
+type ProjectViewMode = 'table' | 'calendar'
+type MilestoneDateRange = [string, string] | null
 
 interface ProjectPlanSummaryBoardProps {
   projects: any[]
@@ -67,7 +77,8 @@ interface SummaryRow {
 const SUMMARY_SCOPES: { key: SummaryScope; label: string }[] = [
   { key: 'overall', label: '整体' },
   { key: 'machine', label: '整机产品项目' },
-  { key: 'software', label: '软件产品项目' },
+  { key: 'tosVersion', label: 'tOS版本项目' },
+  { key: 'independentSoftware', label: '独立软件产品项目' },
   { key: 'tech', label: '技术项目' },
 ]
 
@@ -81,8 +92,10 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: '维护期', label: '维护期' },
 ]
 const SUMMARY_VIEW_KIND = PROJECT_VIEW_KINDS.summaryBoard
+const SUMMARY_STICKY_TOP = 47
+const TABLE_BODY_SCROLL_Y = 'calc(100vh - 180px)'
 
-const CATEGORY_ORDER = ['CAMON', 'Note', 'SPARK', 'POVA', 'tOS版本', '技术项目']
+const CATEGORY_ORDER = ['CAMON', 'Note', 'SPARK', 'POVA', 'tOS版本', '独立软件产品', '技术项目']
 
 const CATEGORY_THEME: Record<string, { key: string; label?: string; color: string; bg: string; seriesBg: string; accent: string }> = {
   CAMON: { key: 'camon', color: '#2563eb', bg: '#eff6ff', seriesBg: '#f8fbff', accent: '#3b82f6' },
@@ -90,6 +103,7 @@ const CATEGORY_THEME: Record<string, { key: string; label?: string; color: strin
   SPARK: { key: 'spark', color: '#059669', bg: '#ecfdf5', seriesBg: '#f4fff9', accent: '#10b981' },
   POVA: { key: 'pova', color: '#d97706', bg: '#fffbeb', seriesBg: '#fffdf2', accent: '#f59e0b' },
   tOS版本: { key: 'tos', color: '#0891b2', bg: '#ecfeff', seriesBg: '#f0fdfa', accent: '#06b6d4' },
+  独立软件产品: { key: 'independent', color: '#0f766e', bg: '#ecfdf5', seriesBg: '#f0fdfa', accent: '#14b8a6' },
   技术项目: { key: 'tech', color: '#0f766e', bg: '#ecfdf5', seriesBg: '#f0fdf4', accent: '#14b8a6' },
 }
 
@@ -128,10 +142,22 @@ const DEPARTMENT_BY_PROJECT: Record<string, string> = {
 const MACHINE_MILESTONE_NAMES = ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'STR6']
 const SOFTWARE_MILESTONE_NAMES = ['概念启动', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5', 'MR6', 'MR7']
 const TECH_MILESTONE_NAMES = ['概念启动', 'TDR1', 'TDR2', 'TDR3', 'TDR4']
+const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+const MILESTONE_DATE_RANGE_PRESETS = [
+  {
+    label: '最近3个月',
+    value: [dayjs().startOf('month'), dayjs().add(2, 'month').endOf('month')],
+  },
+  {
+    label: '未来三个月',
+    value: [dayjs().add(1, 'month').startOf('month'), dayjs().add(3, 'month').endOf('month')],
+  },
+]
 const BASE_COLUMN_OPTIONS: RoadmapColumnConfig[] = [
   { key: 'productCategory', title: '产品分类', width: 150, defaultVisible: true, locked: true },
   { key: 'productSeries', title: '产品系列', width: 146, defaultVisible: true },
   { key: 'projectName', title: '项目名', width: 176, defaultVisible: true, locked: true },
+  { key: 'tosVersion', title: 'tOS版本', width: 110, defaultVisible: true },
   { key: 'status', title: '状态', width: 104, defaultVisible: true },
   { key: 'spm', title: 'SPM', width: 90, defaultVisible: true },
   { key: 'department', title: '部门', width: 128, defaultVisible: true },
@@ -145,7 +171,24 @@ const toDate = (baseDate: string | undefined, index: number, rowOffset: number) 
   return base.add(index * 30 + rowOffset * 5, 'day').format('YYYY/M/D')
 }
 
-const splitValues = (value: any) => String(value || '').split(',').map(item => item.trim()).filter(Boolean)
+const splitValues = (value: any) => String(value || '').split(/[,\uff0c、/]/).map(item => item.trim()).filter(Boolean)
+const getFirstSpm = (value: any) => splitValues(value)[0] || ''
+
+const SPM_DEPARTMENT_MAP: Record<string, string> = {
+  张三: '软件项目一部',
+  李白: '软件项目一部',
+  李四: '软件项目二部',
+  王五: '系统平台部',
+  赵六: '集成维护部',
+  孙七: '质量保障部',
+  周八: '项目管理部',
+  杜甫: '系统平台部',
+}
+
+const getDepartmentByFirstSpm = (project: any, fallback: string) => {
+  const firstSpm = getFirstSpm(project.spm || project.leader)
+  return SPM_DEPARTMENT_MAP[firstSpm] || DEPARTMENT_BY_PROJECT[project.id] || fallback
+}
 
 const buildMilestones = (project: any, names: string[], rowIndex: number): SummaryMilestone[] => (
   names.map((name, index) => ({
@@ -157,6 +200,11 @@ const buildMilestones = (project: any, names: string[], rowIndex: number): Summa
 const getMachineCategory = (project: any) => project.productCategory || (project.productLine === 'NOTE' ? 'Note' : project.productLine || 'CAMON')
 const getMachineSeries = (project: any) => project.productSeries || project.productLine || '未分系列'
 const getSoftwareSeries = (project: any) => project.osSeries || inferOsSeriesFromProjectName(project.name) || `${inferTosVersionFromProjectName(project.name).split('.')[0] || '16'}.X`
+const getSoftwareCategory = (project: any) => (
+  normalizeSoftwareProjectType(project.type, project.name) === PROJECT_TYPE_TOS_VERSION
+    ? 'tOS版本'
+    : '独立软件产品'
+)
 const getTechSeries = (project: any) => splitValues(project.domain)[0] || project.productLine || '基础架构'
 const normalizeSummaryStatus = (status: any): SummaryStatus | null => {
   const value = String(status || '').trim()
@@ -170,8 +218,15 @@ const normalizeValue = (value: any) => {
   return String(value)
 }
 
+const getProjectTosVersion = (project: any) => normalizeValue(
+  project.tosVersion
+  || project.tosVersionName
+  || splitValues(project.tosVersions)[0]
+  || inferTosVersionFromProjectName(project.name),
+)
+
 const buildProjectFields = (project: any) => ({
-  tosVersion: normalizeValue(project.tosVersion),
+  tosVersion: getProjectTosVersion(project),
   brand: normalizeValue(project.brand),
   productLine: normalizeValue(project.productLine),
   market: normalizeValue(project.market || project.markets),
@@ -207,8 +262,8 @@ const buildProjectFields = (project: any) => ({
 })
 
 function getExtraColumnsForScope(scope: SummaryScope): RoadmapColumnConfig[] {
-  if (scope === 'machine') return getFixedColumnsForType('整机产品项目').filter(col => !BASE_COLUMN_KEYS.has(col.key))
-  if (scope === 'software') return getFixedColumnsForType('软件产品项目').filter(col => !BASE_COLUMN_KEYS.has(col.key))
+  if (scope === 'machine') return getFixedColumnsForType(PROJECT_TYPE_MACHINE).filter(col => !BASE_COLUMN_KEYS.has(col.key))
+  if (scope === 'tosVersion' || scope === 'independentSoftware') return getFixedColumnsForType(PROJECT_TYPE_TOS_VERSION).filter(col => !BASE_COLUMN_KEYS.has(col.key))
   return []
 }
 
@@ -231,7 +286,7 @@ const makeSummaryRows = (projects: any[]): SummaryRow[] => {
     const status = normalizeSummaryStatus(project.status)
     if (!status) continue
 
-    if (project.type === '整机产品项目') {
+    if (project.type === PROJECT_TYPE_MACHINE) {
       const milestones = buildMilestones(project, MACHINE_MILESTONE_NAMES, rowIndex)
       rows.push({
         key: `machine-${project.id}`,
@@ -243,33 +298,34 @@ const makeSummaryRows = (projects: any[]): SummaryRow[] => {
         projectName: project.name,
         status,
         spm: project.spm || project.leader || '-',
-        department: DEPARTMENT_BY_PROJECT[project.id] || '软件项目一部',
+        department: getDepartmentByFirstSpm(project, '软件项目一部'),
         milestones,
         milestonesText: milestones.map(item => `${item.date} ${item.name}`).join(' '),
       })
       rowIndex++
     }
 
-    if (project.type === '产品项目') {
+    if (isSoftwareProjectType(project.type)) {
+      const normalizedProjectType = normalizeSoftwareProjectType(project.type, project.name)
       const milestones = buildMilestones(project, SOFTWARE_MILESTONE_NAMES, rowIndex)
       rows.push({
-        key: `software-${project.id}`,
+        key: `${normalizedProjectType}-${project.id}`,
         projectId: project.id,
-        projectType: project.type,
+        projectType: normalizedProjectType,
         ...buildProjectFields(project),
-        productCategory: 'tOS版本',
+        productCategory: getSoftwareCategory(project),
         productSeries: getSoftwareSeries(project),
         projectName: project.name,
         status,
         spm: project.spm || project.leader || '-',
-        department: DEPARTMENT_BY_PROJECT[project.id] || '软件项目一部',
+        department: getDepartmentByFirstSpm(project, '软件项目一部'),
         milestones,
         milestonesText: milestones.map(item => `${item.date} ${item.name}`).join(' '),
       })
       rowIndex++
     }
 
-    if (project.type === '技术项目') {
+    if (project.type === PROJECT_TYPE_TECH) {
       const milestones = buildMilestones(project, TECH_MILESTONE_NAMES, rowIndex)
       rows.push({
         key: `tech-${project.id}`,
@@ -281,7 +337,7 @@ const makeSummaryRows = (projects: any[]): SummaryRow[] => {
         projectName: project.name,
         status,
         spm: project.spm || project.leader || '-',
-        department: DEPARTMENT_BY_PROJECT[project.id] || '集成维护部',
+        department: getDepartmentByFirstSpm(project, '集成维护部'),
         milestones,
         milestonesText: milestones.map(item => `${item.date} ${item.name}`).join(' '),
       })
@@ -325,15 +381,70 @@ function countBy(rows: SummaryRow[], key: keyof SummaryRow) {
 }
 
 function scopeRows(rows: SummaryRow[], scope: SummaryScope) {
-  if (scope === 'machine') return rows.filter(row => row.projectType === '整机产品项目')
-  if (scope === 'software') return rows.filter(row => row.projectType === '产品项目')
-  if (scope === 'tech') return rows.filter(row => row.projectType === '技术项目')
+  if (scope === 'machine') return rows.filter(row => row.projectType === PROJECT_TYPE_MACHINE)
+  if (scope === 'tosVersion') return rows.filter(row => row.projectType === PROJECT_TYPE_TOS_VERSION)
+  if (scope === 'independentSoftware') return rows.filter(row => row.projectType === PROJECT_TYPE_INDEPENDENT_SOFTWARE)
+  if (scope === 'tech') return rows.filter(row => row.projectType === PROJECT_TYPE_TECH)
   return rows
 }
 
 function applyStatusFilter(rows: SummaryRow[], statusFilter: StatusFilter) {
   if (statusFilter === 'all') return rows
   return rows.filter(row => row.status === statusFilter)
+}
+
+function parseMilestoneDate(value: string) {
+  const match = String(value || '').match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/)
+  if (match) {
+    const [, year, month, day] = match
+    return dayjs(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`)
+  }
+  return dayjs(value)
+}
+
+function filterMilestonesByDateRange(milestones: SummaryMilestone[], range: MilestoneDateRange) {
+  if (!range) return milestones
+  const [start, end] = range
+  const startDate = dayjs(start).startOf('day')
+  const endDate = dayjs(end).endOf('day')
+  return milestones.filter(milestone => {
+    const date = parseMilestoneDate(milestone.date)
+    if (!date.isValid()) return false
+    return !date.isBefore(startDate) && !date.isAfter(endDate)
+  })
+}
+
+function applyMilestoneDateRange(rows: SummaryRow[], range: MilestoneDateRange) {
+  if (!range) return rows
+  return rows
+    .map(row => {
+      const milestones = filterMilestonesByDateRange(row.milestones, range)
+      return {
+        ...row,
+        milestones,
+        milestonesText: milestones.map(item => `${item.date} ${item.name}`).join(' '),
+      }
+    })
+    .filter(row => row.milestones.length > 0)
+}
+
+function normalizeDateRange(value: unknown): MilestoneDateRange {
+  if (!Array.isArray(value) || value.length !== 2) return null
+  const [start, end] = value
+  if (!start || !end || !dayjs(start).isValid() || !dayjs(end).isValid()) return null
+  return [dayjs(start).format('YYYY-MM-DD'), dayjs(end).format('YYYY-MM-DD')]
+}
+
+function getCalendarDays(month: dayjs.Dayjs) {
+  const start = month.startOf('month').startOf('week')
+  return Array.from({ length: 42 }, (_, index) => start.add(index, 'day'))
+}
+
+function cloneRowsForShare(rows: SummaryRow[]) {
+  return rows.map(row => ({
+    ...row,
+    milestones: row.milestones.map(milestone => ({ ...milestone })),
+  }))
 }
 
 function applyCollapsedCategories(rows: SummaryRow[], collapsedCategories: Set<string>) {
@@ -395,17 +506,27 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   const [projectViewName, setProjectViewName] = useState('')
   const [showProjectViewShareModal, setShowProjectViewShareModal] = useState(false)
   const [projectViewShareUrl, setProjectViewShareUrl] = useState('')
+  const [viewMode, setViewMode] = useState<ProjectViewMode>('table')
+  const [milestoneDateRange, setMilestoneDateRange] = useState<MilestoneDateRange>(null)
+  const [calendarMonth, setCalendarMonth] = useState(() => dayjs().startOf('month'))
+  const [sharedRowsOverride, setSharedRowsOverride] = useState<SummaryRow[] | null>(null)
   const rowsSignatureRef = useRef('')
+  const stickyRegionStyle = {
+    '--pms-summary-sticky-offset': `${SUMMARY_STICKY_TOP}px`,
+  } as CSSProperties
   const allRows = useMemo(() => makeSummaryRows(projects), [projects])
   const scopedRows = useMemo(() => scopeRows(allRows, scope), [allRows, scope])
   const filteredRows = useMemo(() => applyFilterConditions(scopedRows, filters), [scopedRows, filters])
-  const statusRows = useMemo(() => applyStatusFilter(filteredRows, statusFilter), [filteredRows, statusFilter])
+  const dateFilteredRows = useMemo(() => applyMilestoneDateRange(filteredRows, milestoneDateRange), [filteredRows, milestoneDateRange])
+  const statusRows = useMemo(() => (
+    sharedRowsOverride || applyStatusFilter(dateFilteredRows, statusFilter)
+  ), [dateFilteredRows, statusFilter, sharedRowsOverride])
   const rows = useMemo(() => applyCollapsedCategories(statusRows, collapsedCategories), [statusRows, collapsedCategories])
   const categoryCounts = useMemo(() => countBy(statusRows, 'productCategory'), [statusRows])
   const seriesCounts = useMemo(() => countBy(statusRows, 'productSeries'), [statusRows])
   const availableColumns = useMemo(() => getAvailableColumnsForScope(scope), [scope])
   const defaultVisibleColumns = useMemo(() => getDefaultVisibleColumnsForScope(scope), [scope])
-  const hasActiveFilters = filters.some(isFilterConditionActive)
+  const hasActiveFilters = filters.some(isFilterConditionActive) || Boolean(milestoneDateRange)
   const filterFieldOptions = useMemo(() => (
     availableColumns.map(col => ({
       value: col.key === 'milestones' ? 'milestonesText' : col.key,
@@ -417,11 +538,12 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       acc[status] = 0
       return acc
     }, {} as Record<SummaryStatus, number>)
-    filteredRows.forEach(row => {
+    const sourceRows = sharedRowsOverride || dateFilteredRows
+    sourceRows.forEach(row => {
       stats[row.status] += 1
     })
     return stats
-  }, [filteredRows])
+  }, [dateFilteredRows, sharedRowsOverride])
   const categorySpans = useMemo(() => computeRowSpans(rows, 'productCategory'), [rows])
   const seriesSpans = useMemo(() => computeRowSpans(rows, 'productSeries', ['productCategory']), [rows])
   const rowsSignature = useMemo(() => (
@@ -436,20 +558,28 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     return Array.from(new Set([...lockedKeys, ...safeColumns]))
   }
 
-  const normalizeScope = (value: string | undefined): SummaryScope => (
-    SUMMARY_SCOPES.some(item => item.key === value) ? value as SummaryScope : 'overall'
-  )
+  const normalizeScope = (value: string | undefined): SummaryScope => {
+    if (value === 'software') return 'tosVersion'
+    return SUMMARY_SCOPES.some(item => item.key === value) ? value as SummaryScope : 'overall'
+  }
 
   const normalizeStatusFilter = (value: string | undefined): StatusFilter => (
     STATUS_FILTERS.some(item => item.key === value) ? value as StatusFilter : 'all'
   )
 
-  const buildCurrentProjectViewState = (): ProjectViewState => ({
+  const normalizeViewMode = (value: string | undefined): ProjectViewMode => (
+    value === 'calendar' ? 'calendar' : 'table'
+  )
+
+  const buildCurrentProjectViewState = (includeSharedRows = false): ProjectViewState => ({
     scope,
     statusFilter,
     visibleColumns,
     filters: normalizeFilterConditions(filters),
     collapsedKeys: Array.from(collapsedCategories),
+    viewMode,
+    milestoneDateRange,
+    ...(includeSharedRows ? { sharedRows: cloneRowsForShare(statusRows) } : {}),
   })
 
   const applyProjectViewState = (state: ProjectViewState) => {
@@ -464,6 +594,11 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     setTempFilters([])
     setCollapsedCategories(new Set(Array.isArray(state.collapsedKeys) ? state.collapsedKeys : []))
     setVisibleColumns(getSafeVisibleColumns(nextScope, nextVisibleColumns))
+    setViewMode(normalizeViewMode(state.viewMode))
+    const nextDateRange = normalizeDateRange(state.milestoneDateRange)
+    setMilestoneDateRange(nextDateRange)
+    if (nextDateRange) setCalendarMonth(dayjs(nextDateRange[0]).startOf('month'))
+    setSharedRowsOverride(Array.isArray(state.sharedRows) ? state.sharedRows as SummaryRow[] : null)
   }
 
   const refreshSavedProjectViews = () => {
@@ -502,10 +637,22 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     setCollapsedCategories(new Set())
     setVisibleColumns(getDefaultVisibleColumnsForScope(nextScope))
     setActiveSavedViewId(null)
+    setSharedRowsOverride(null)
+  }
+
+  const handleMilestoneDateRangeChange = (dates: any) => {
+    const nextRange = dates?.[0] && dates?.[1]
+      ? [dates[0].format('YYYY-MM-DD'), dates[1].format('YYYY-MM-DD')] as [string, string]
+      : null
+    setMilestoneDateRange(nextRange)
+    if (nextRange) setCalendarMonth(dayjs(nextRange[0]).startOf('month'))
+    setActiveSavedViewId(null)
+    setSharedRowsOverride(null)
   }
 
   const toggleCategory = (category: string) => {
     setActiveSavedViewId(null)
+    setSharedRowsOverride(null)
     setCollapsedCategories(prev => {
       const next = new Set(prev)
       if (next.has(category)) next.delete(category)
@@ -515,10 +662,12 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   }
   const expandAllCategories = () => {
     setActiveSavedViewId(null)
+    setSharedRowsOverride(null)
     setCollapsedCategories(new Set())
   }
   const collapseAllCategories = () => {
     setActiveSavedViewId(null)
+    setSharedRowsOverride(null)
     setCollapsedCategories(new Set(Object.keys(categoryCounts).filter(category => categoryCounts[category] > 1)))
   }
 
@@ -548,6 +697,8 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         visibleColumns: getDefaultVisibleColumnsForScope('overall'),
         filters: [],
         collapsedKeys: [],
+        viewMode: 'table',
+        milestoneDateRange: null,
       })
       setActiveSavedViewId(null)
       return
@@ -631,7 +782,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
 
   const handleShareProjectView = () => {
     const activeView = activeSavedViewId ? savedProjectViews.find(item => item.id === activeSavedViewId) : null
-    const url = createProjectViewShareUrl(SUMMARY_VIEW_KIND, buildCurrentProjectViewState(), activeView?.name || projectViewName || '项目计划汇总看板视图')
+    const url = createProjectViewShareUrl(SUMMARY_VIEW_KIND, buildCurrentProjectViewState(true), activeView?.name || projectViewName || '项目计划汇总看板视图')
     setProjectViewShareUrl(url)
     setShowProjectViewShareModal(true)
     void copyProjectViewShareUrl(url)
@@ -680,28 +831,22 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
           rowSpan: categorySpans[index ?? 0],
           className: `pms-summary-category-cell pms-summary-category-${getCategoryTheme(row.productCategory).key}`,
         }),
-        render: (value: string, row) => {
+        render: (value: string) => {
           const theme = getCategoryTheme(value)
-          const collapsed = collapsedCategories.has(value)
-          const total = categoryCounts[value] || 0
           return (
             <div className="pms-summary-category-content">
               <Button
                 type="text"
                 size="small"
                 className="pms-summary-collapse-button"
-                icon={collapsed ? <CaretRightOutlined /> : <CaretDownOutlined />}
+                icon={collapsedCategories.has(value) ? <CaretRightOutlined /> : <CaretDownOutlined />}
                 onClick={(event) => {
                   event.stopPropagation()
                   toggleCategory(value)
                 }}
               />
-              <span className="pms-summary-category-dot" style={{ background: theme.accent }} />
               <div>
                 <div className="pms-summary-category-name" style={{ color: theme.color }}>{theme.label || value}</div>
-                <div className="pms-summary-category-meta">
-                  {row.isCollapsedPreview ? `已收起 ${row.hiddenProjectCount || 0} 个项目` : `${total} 个项目`}
-                </div>
               </div>
             </div>
           )
@@ -736,10 +881,10 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       })
     }
 
-	    if (isVisible('projectName')) {
-	      cols.push({
-	        title: '项目名',
-	        dataIndex: 'projectName',
+    if (isVisible('projectName')) {
+      cols.push({
+        title: '项目名',
+        dataIndex: 'projectName',
 	        key: 'projectName',
 	        width: 176,
 	        fixed: 'left' as const,
@@ -754,6 +899,17 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
             )}
           </div>
         ),
+      })
+    }
+
+    if (isVisible('tosVersion')) {
+      cols.push({
+        title: 'tOS版本',
+        dataIndex: 'tosVersion',
+        key: 'tosVersion',
+        width: 110,
+        align: 'center',
+        render: (value: any) => <span className="pms-summary-text-cell">{value || '-'}</span>,
       })
     }
 
@@ -830,6 +986,72 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     return cols
   }, [availableColumns, visibleColumns, scope, categoryCounts, categorySpans, collapsedCategories, onViewProject, seriesCounts, seriesSpans])
 
+  const calendarDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth])
+  const calendarEvents = useMemo(() => {
+    const eventMap = new Map<string, { row: SummaryRow; milestone: SummaryMilestone }[]>()
+    statusRows.forEach(row => {
+      row.milestones.forEach(milestone => {
+        const date = parseMilestoneDate(milestone.date)
+        if (!date.isValid()) return
+        const key = date.format('YYYY-MM-DD')
+        eventMap.set(key, [...(eventMap.get(key) || []), { row, milestone }])
+      })
+    })
+    return eventMap
+  }, [statusRows])
+
+  const renderCalendarView = () => (
+    <div className="pms-project-calendar">
+      <div className="pms-project-calendar-header">
+        <div className="pms-project-calendar-title">{calendarMonth.format('YYYY年M月')}</div>
+        <Space size={6}>
+          <Button size="small" shape="circle" onClick={() => setCalendarMonth(prev => prev.subtract(1, 'month'))}>‹</Button>
+          <Button size="small" onClick={() => setCalendarMonth(dayjs().startOf('month'))}>今天</Button>
+          <Button size="small" shape="circle" onClick={() => setCalendarMonth(prev => prev.add(1, 'month'))}>›</Button>
+        </Space>
+      </div>
+      <div className="pms-project-calendar-weekdays">
+        {WEEKDAYS.map(day => <div key={day}>{day}</div>)}
+      </div>
+      <div className="pms-project-calendar-grid">
+        {calendarDays.map(day => {
+          const dayKey = day.format('YYYY-MM-DD')
+          const events = calendarEvents.get(dayKey) || []
+          return (
+            <div
+              key={dayKey}
+              className={`pms-project-calendar-cell${day.month() !== calendarMonth.month() ? ' pms-project-calendar-cell-muted' : ''}`}
+            >
+              <div className="pms-project-calendar-dayline">
+                <span>{day.format('D日')}</span>
+              </div>
+              <div className="pms-project-calendar-events">
+                {events.slice(0, 4).map(({ row, milestone }) => {
+                  const theme = getCategoryTheme(row.productCategory)
+                  const calendarEventTitle = `${milestone.name}  ${row.projectName}`
+                  return (
+                    <div className="pms-project-calendar-event" key={`${row.key}-${milestone.name}-${milestone.date}`}>
+                      <Tooltip title={calendarEventTitle}>
+                        <div className="pms-project-calendar-event-single" style={{ background: theme.accent }}>
+                          {calendarEventTitle}
+                        </div>
+                      </Tooltip>
+                    </div>
+                  )
+                })}
+                {events.length > 4 && <div className="pms-project-calendar-more">+{events.length - 4} 个节点</div>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+
+  const renderCurrentView = () => (
+    viewMode === 'calendar' ? renderCalendarView() : renderSummaryTable()
+  )
+
   const renderSummaryTable = () => (
     <Table
       className="pms-table pms-summary-board"
@@ -848,7 +1070,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       bordered
       size="small"
       tableLayout="fixed"
-      scroll={{ x: 'max-content' }}
+      scroll={{ x: 'max-content', y: TABLE_BODY_SCROLL_Y }}
       pagination={false}
       locale={{ emptyText: <Empty description="暂无项目计划汇总数据" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
     />
@@ -858,12 +1080,39 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     <div>
       <style>{`
         .pms-summary-control-shell {
-          margin-bottom: 14px;
           padding: 12px 14px 10px;
           border: 1px solid #e2e8f0;
           border-radius: 12px;
-          background: #fff;
-          box-shadow: 0 8px 22px rgba(15,23,42,0.05);
+          background: rgba(255,255,255,0.96);
+          box-shadow: 0 10px 24px rgba(15,23,42,0.08);
+          backdrop-filter: blur(12px);
+        }
+        .pms-summary-control-shell-static {
+          margin-bottom: 10px;
+        }
+        .pms-summary-sticky-region {
+          position: sticky;
+          top: var(--pms-summary-sticky-offset);
+          z-index: 30;
+          margin-bottom: 23px;
+        }
+        .pms-summary-sticky-region::after {
+          content: '';
+          position: absolute;
+          left: 12px;
+          right: 12px;
+          bottom: -12px;
+          height: 12px;
+          pointer-events: none;
+          background: linear-gradient(180deg, rgba(245,246,250,0.92) 0%, rgba(245,246,250,0) 100%);
+        }
+        .pms-summary-toolbar-shell {
+          padding: 6px 8px;
+          border: 1px solid #dbe5f1;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.96);
+          box-shadow: 0 8px 20px rgba(15,23,42,0.08);
+          backdrop-filter: blur(12px);
         }
         .pms-summary-toolbar {
           margin-bottom: 0;
@@ -871,25 +1120,64 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
-          flex-wrap: wrap;
+          gap: 8px;
+          flex-wrap: nowrap;
         }
         .pms-summary-status-group {
           display: flex;
           align-items: center;
           justify-content: flex-start;
-          gap: 8px;
-          flex-wrap: wrap;
-          flex: 1 1 520px;
-          min-width: 320px;
+          gap: 3px;
+          flex: 1 1 auto;
+          min-width: 0;
+          overflow-x: auto;
+          overflow-y: hidden;
+          padding: 3px;
+          border: 1px solid #dbe5f1;
+          border-radius: 999px;
+          background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+          scrollbar-width: none;
+        }
+        .pms-summary-status-group::-webkit-scrollbar {
+          display: none;
         }
         .pms-summary-toolbar-actions {
           flex: 0 0 auto;
           justify-content: flex-end;
           margin-left: auto;
+          padding: 3px;
+          border: 1px solid #dbe5f1;
+          border-radius: 999px;
+          background: #fff;
+          box-shadow: 0 3px 10px rgba(15,23,42,0.04);
         }
         .pms-summary-toolbar-actions .ant-btn {
           font-weight: 600;
+        }
+        .pms-summary-toolbar-actions .ant-segmented {
+          padding: 2px;
+          border-radius: 999px;
+          background: #f1f5f9;
+        }
+        .pms-summary-toolbar-actions .ant-segmented-item {
+          border-radius: 999px;
+        }
+        .pms-summary-icon-button {
+          width: 28px !important;
+          min-width: 28px !important;
+          height: 28px !important;
+          padding: 0 !important;
+          display: inline-flex !important;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50% !important;
+        }
+        .pms-summary-view-mode-icon {
+          width: 22px;
+          height: 20px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
         }
         .pms-project-view-row {
           margin-bottom: 12px;
@@ -956,25 +1244,33 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         .pms-summary-status-label {
           color: #64748b;
           font-size: 12px;
+          font-weight: 700;
+          line-height: 22px;
+          padding: 0 7px;
+          flex: 0 0 auto;
         }
         .pms-summary-status-pill {
-          border: 1px solid #dbe5f1;
-          background: #fff;
+          border: 0;
+          background: transparent;
           color: #334155;
-          border-radius: 16px;
-          padding: 4px 14px;
+          border-radius: 999px;
+          height: 24px;
+          padding: 0 9px;
           font-size: 12px;
           font-weight: 600;
           cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          flex: 0 0 auto;
+          white-space: nowrap;
           transition: all 0.18s ease;
         }
         .pms-summary-status-pill:hover {
-          border-color: #93c5fd;
+          background: #eaf1ff;
           color: #2563eb;
         }
         .pms-summary-status-pill-active {
           background: #4f6df5;
-          border-color: #4f6df5;
           color: #fff;
           box-shadow: 0 4px 10px rgba(79,109,245,0.22);
         }
@@ -987,10 +1283,114 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
           vertical-align: 1px;
         }
         .pms-summary-status-count {
-          margin-left: 6px;
+          margin-left: 4px;
           font-weight: 800;
         }
+        @media (max-width: 980px) {
+          .pms-summary-toolbar {
+            flex-wrap: wrap;
+          }
+          .pms-summary-status-group {
+            flex-basis: 100%;
+          }
+          .pms-summary-toolbar-actions {
+            margin-left: 0;
+          }
+        }
+        .pms-project-calendar {
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          background: #fff;
+          overflow-x: auto;
+          overflow-y: hidden;
+        }
+        .pms-project-calendar-header {
+          padding: 14px 16px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          border-bottom: 1px solid #e2e8f0;
+          background: #f8fafc;
+        }
+        .pms-project-calendar-title {
+          color: #111827;
+          font-size: 24px;
+          font-weight: 800;
+          letter-spacing: 0;
+        }
+        .pms-project-calendar-weekdays {
+          display: grid;
+          grid-template-columns: repeat(7, minmax(150px, 1fr));
+          border-bottom: 1px solid #e5e7eb;
+          background: #fff;
+        }
+        .pms-project-calendar-weekdays > div {
+          padding: 9px 12px;
+          color: #475569;
+          font-size: 13px;
+          font-weight: 700;
+          text-align: center;
+        }
+        .pms-project-calendar-grid {
+          display: grid;
+          grid-template-columns: repeat(7, minmax(150px, 1fr));
+          min-width: 1050px;
+        }
+        .pms-project-calendar-cell {
+          min-height: 132px;
+          padding: 8px 8px 10px;
+          border-right: 1px solid #e5e7eb;
+          border-bottom: 1px solid #e5e7eb;
+          background: #fff;
+        }
+        .pms-project-calendar-cell:nth-child(7n) {
+          border-right: none;
+        }
+        .pms-project-calendar-cell-muted {
+          background: #fafafa;
+        }
+        .pms-project-calendar-dayline {
+          margin-bottom: 8px;
+          color: #111827;
+          display: flex;
+          justify-content: flex-end;
+          font-size: 13px;
+          font-weight: 700;
+        }
+        .pms-project-calendar-cell-muted .pms-project-calendar-dayline {
+          color: #94a3b8;
+        }
+        .pms-project-calendar-events {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .pms-project-calendar-event {
+          min-width: 0;
+        }
+        .pms-project-calendar-event-single {
+          height: 22px;
+          padding: 0 7px;
+          border-radius: 5px;
+          color: #fff;
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 22px;
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .pms-project-calendar-more {
+          color: #64748b;
+          font-size: 12px;
+          font-weight: 700;
+        }
         .pms-summary-board .ant-table-thead > tr:first-child > th {
+          position: sticky !important;
+          top: 0 !important;
+          z-index: 18;
           background: #f8fafc !important;
           color: #334155 !important;
           font-weight: 700 !important;
@@ -1004,6 +1404,11 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         .pms-summary-board .ant-table-thead > tr:first-child > th.pms-summary-milestones-header {
           background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%) !important;
           color: #9f1239 !important;
+        }
+        .pms-summary-board .ant-table-thead > tr:first-child > th.ant-table-cell-fix,
+        .pms-summary-board .ant-table-thead > tr:first-child > th.ant-table-cell-fix-start,
+        .pms-summary-board .ant-table-thead > tr:first-child > th.ant-table-cell-fix-end {
+          z-index: 24 !important;
         }
         .pms-summary-board .ant-table-tbody > tr > td {
           border-color: #e2e8f0 !important;
@@ -1102,6 +1507,14 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         }
         .pms-summary-series-tos,
         .pms-summary-row-tos > td.pms-summary-series-cell {
+          background: #f0fdfa !important;
+        }
+        .pms-summary-category-independent,
+        .pms-summary-row-independent > td.pms-summary-category-cell {
+          background: #ecfdf5 !important;
+        }
+        .pms-summary-series-independent,
+        .pms-summary-row-independent > td.pms-summary-series-cell {
           background: #f0fdfa !important;
         }
         .pms-summary-category-tech,
@@ -1279,7 +1692,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         }
       `}</style>
 
-      <div className="pms-summary-control-shell">
+      <div className="pms-summary-control-shell pms-summary-control-shell-static">
         <Tabs
           className="pms-summary-scope-tabs"
           activeKey={scope}
@@ -1303,13 +1716,16 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
 	            分享视图
 	          </Button>
 	        </div>
+      </div>
 
+      <div className="pms-summary-sticky-region pms-summary-sticky-offset" style={stickyRegionStyle}>
+        <div className="pms-summary-toolbar-shell">
 	        <div className="pms-summary-toolbar">
 	          <div className="pms-summary-status-group">
-	            <span className="pms-summary-status-label">状态筛选:</span>
+	            <span className="pms-summary-status-label">状态</span>
 	            {STATUS_FILTERS.map(item => {
-	              const count = item.key === 'all' ? filteredRows.length : statusStats[item.key]
-	              return (
+              const count = item.key === 'all' ? (sharedRowsOverride || dateFilteredRows).length : statusStats[item.key]
+              return (
 	                <button
 	                  key={item.key}
 	                  type="button"
@@ -1317,6 +1733,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
 	                  onClick={() => {
 	                    setStatusFilter(item.key)
 	                    setActiveSavedViewId(null)
+                      setSharedRowsOverride(null)
 	                  }}
 	                >
 	                  {item.key !== 'all' && <span className="pms-summary-status-dot" style={{ background: STATUS_DOT_COLORS[item.key] }} />}
@@ -1326,27 +1743,77 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
 	              )
 	            })}
 	          </div>
-	          <Space size={8} className="pms-summary-toolbar-actions">
+	          <Space size={4} className="pms-summary-toolbar-actions">
+              <Segmented
+                size="small"
+                value={viewMode}
+                options={[
+                  {
+                    label: (
+                      <Tooltip title="表格视图">
+                        <span className="pms-summary-view-mode-icon"><TableOutlined /></span>
+                      </Tooltip>
+                    ),
+                    value: 'table',
+                  },
+                  {
+                    label: (
+                      <Tooltip title="日历视图">
+                        <span className="pms-summary-view-mode-icon"><CalendarOutlined /></span>
+                      </Tooltip>
+                    ),
+                    value: 'calendar',
+                  },
+                ]}
+                onChange={(value) => {
+                  setViewMode(value as ProjectViewMode)
+                  setActiveSavedViewId(null)
+                }}
+              />
 	            {scope === 'overall' && (
 	              <>
-	                <Button size="small" onClick={expandAllCategories}>展开全部</Button>
-	                <Button size="small" onClick={collapseAllCategories}>折叠全部</Button>
+                  <Tooltip title="展开全部">
+                    <Button
+                      aria-label="展开全部"
+                      className="pms-summary-icon-button"
+                      size="small"
+                      icon={<CaretDownOutlined />}
+                      onClick={expandAllCategories}
+                    />
+                  </Tooltip>
+                  <Tooltip title="折叠全部">
+                    <Button
+                      aria-label="折叠全部"
+                      className="pms-summary-icon-button"
+                      size="small"
+                      icon={<CaretRightOutlined />}
+                      onClick={collapseAllCategories}
+                    />
+                  </Tooltip>
 	              </>
             )}
-            <Button
-              size="small"
-              icon={<FilterOutlined />}
-              type={hasActiveFilters ? 'primary' : 'default'}
-              onClick={() => {
-                setTempFilters(filters.length ? filters.map(item => ({ ...item })) : [createFilterCondition()])
-                setShowFilterDrawer(true)
-              }}
-            >
-              筛选{hasActiveFilters ? ' ●' : ''}
-            </Button>
-            <Button size="small" icon={<SettingOutlined />} onClick={() => setShowColumnDrawer(true)}>
-              列设置
-            </Button>
+            <Tooltip title={hasActiveFilters ? '筛选（已启用）' : '筛选'}>
+              <Button
+                aria-label="筛选"
+                className="pms-summary-icon-button"
+                size="small"
+                icon={<FilterOutlined />}
+                type={hasActiveFilters ? 'primary' : 'default'}
+                onClick={() => {
+                  setTempFilters(filters.length ? filters.map(item => ({ ...item })) : [createFilterCondition()])
+                  setShowFilterDrawer(true)
+                }}
+              />
+            </Tooltip>
+            <Tooltip title="列设置">
+              <Button
+                aria-label="列设置"
+                className="pms-summary-icon-button"
+                size="small"
+                icon={<SettingOutlined />}
+                onClick={() => setShowColumnDrawer(true)}
+              />
+            </Tooltip>
             <Dropdown
               menu={{
                 items: [
@@ -1356,20 +1823,30 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
                 onClick: ({ key }) => handleExport(key as 'current' | 'all'),
               }}
             >
-              <Button size="small" icon={<DownloadOutlined />}>导出</Button>
+              <Tooltip title="导出">
+                <Button
+                  aria-label="导出"
+                  className="pms-summary-icon-button"
+                  size="small"
+                  icon={<DownloadOutlined />}
+                />
+              </Tooltip>
             </Dropdown>
-            <Button
-              size="small"
-              icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
-              onClick={() => setIsFullscreen(true)}
-            >
-              全屏
-            </Button>
+            <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
+              <Button
+                aria-label={isFullscreen ? '退出全屏' : '全屏'}
+                className="pms-summary-icon-button"
+                size="small"
+                icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+                onClick={() => setIsFullscreen(true)}
+              />
+            </Tooltip>
           </Space>
         </div>
       </div>
+      </div>
 
-      {renderSummaryTable()}
+      {renderCurrentView()}
 
       <Modal
         title={(
@@ -1385,7 +1862,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         style={{ top: 0, maxWidth: '100vw', paddingBottom: 0 }}
         styles={{ body: { height: 'calc(100vh - 110px)', overflow: 'auto' } }}
 	      >
-	        {renderSummaryTable()}
+	        {renderCurrentView()}
 	      </Modal>
 
 	      <Modal
@@ -1406,7 +1883,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
 	            onPressEnter={handleSaveProjectView}
 	          />
 	          <div style={{ color: '#64748b', fontSize: 12 }}>
-	            将以当前分类、状态筛选、筛选条件、列设置和折叠状态创建视图，名称不可重复。
+	            将以当前分类、视图模式、状态筛选、日期范围、筛选条件、列设置和折叠状态创建视图，名称不可重复。
 	          </div>
 	        </Space>
 	      </Modal>
@@ -1429,7 +1906,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
 	        <Space direction="vertical" size={10} style={{ width: '100%' }}>
 	          <Input.TextArea value={projectViewShareUrl} readOnly autoSize={{ minRows: 3, maxRows: 6 }} />
 	          <div style={{ color: '#64748b', fontSize: 12 }}>
-	            分享链接会携带当前视图配置，打开后自动应用到项目计划汇总看板。
+	            分享链接会携带当前筛选条件和筛选后的数据快照，打开后自动应用到项目计划汇总看板。
 	          </div>
 	        </Space>
 	      </Modal>
@@ -1443,7 +1920,11 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         zIndex={SUMMARY_DRAWER_Z_INDEX}
         footer={(
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button onClick={() => setTempFilters([createFilterCondition()])}>清除全部</Button>
+            <Button onClick={() => {
+              setTempFilters([createFilterCondition()])
+              setMilestoneDateRange(null)
+              setSharedRowsOverride(null)
+            }}>清除全部</Button>
             <Space>
               <Button onClick={() => setShowFilterDrawer(false)}>取消</Button>
               <Button
@@ -1452,6 +1933,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
 	                  setFilters(normalizeFilterConditions(tempFilters))
 	                  setShowFilterDrawer(false)
 	                  setActiveSavedViewId(null)
+                    setSharedRowsOverride(null)
 	                }}
               >
                 应用
@@ -1461,6 +1943,19 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         )}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ padding: 12, border: '1px solid #e0f2fe', borderRadius: 8, background: '#f0f9ff' }}>
+            <div style={{ marginBottom: 8, color: '#0f172a', fontSize: 13, fontWeight: 700 }}>里程碑日期范围</div>
+            <DatePicker.RangePicker
+              style={{ width: '100%' }}
+              value={milestoneDateRange ? [dayjs(milestoneDateRange[0]), dayjs(milestoneDateRange[1])] : null}
+              presets={MILESTONE_DATE_RANGE_PRESETS as any}
+              format="YYYY-MM-DD"
+              onChange={handleMilestoneDateRangeChange}
+            />
+            <div style={{ marginTop: 8, color: '#64748b', fontSize: 12 }}>
+              选择后，里程碑节点列仅保留范围内的节点。
+            </div>
+          </div>
           {tempFilters.map((condition) => (
             <div key={condition.id} style={{ padding: 12, border: '1px solid #eef2ff', borderRadius: 8, background: '#fafbff' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 116px 40px', gap: 8, marginBottom: isValuelessFilterOperator(condition.operator) ? 0 : 8 }}>
@@ -1517,9 +2012,10 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         zIndex={SUMMARY_DRAWER_Z_INDEX}
         footer={(
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-	            <Button onClick={() => {
+            <Button onClick={() => {
 	              setVisibleColumns(defaultVisibleColumns)
 	              setActiveSavedViewId(null)
+              setSharedRowsOverride(null)
 	            }}>重置默认</Button>
             <Space>
               <Button onClick={() => setShowColumnDrawer(false)}>取消</Button>
@@ -1537,6 +2033,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
 	            const lockedKeys = availableColumns.filter(col => col.locked).map(col => col.key)
 	            setVisibleColumns(Array.from(new Set([...lockedKeys, ...(values as string[])])))
 	            setActiveSavedViewId(null)
+              setSharedRowsOverride(null)
 	          }}
           style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
         >

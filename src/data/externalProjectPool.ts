@@ -17,6 +17,7 @@ export const EXTERNAL_PROJECT_POOL: ExternalProjectEntry[] = [
   { bid: 'EXT-006', name: 'AI-Engine-V3', spm: '张三' },
   { bid: 'EXT-007', name: 'X6920-D8800_H1300', spm: '李白' },
   { bid: 'EXT-008', name: 'CI-Platform-V2', spm: '孙七' },
+  { bid: 'EXT-009', name: 'HiOS-Launcher-V2', spm: '王五' },
 ]
 
 export interface FetchByBidResult {
@@ -40,6 +41,7 @@ export function fetchByBid(bid: string): FetchByBidResult {
     'EXT-006': { productLine: 'AI引擎', androidVersion: 'Android 17', chipPlatform: 'MTK', planStartDate: '2026-05-15', planEndDate: '2026-10-31' },
     'EXT-007': { productLine: 'CAMON', brand: 'TECNO', androidVersion: 'Android 17', chipPlatform: 'QCOM', planStartDate: '2026-07-15', planEndDate: '2027-03-31' },
     'EXT-008': { productLine: '工程效率', planStartDate: '2026-06-01', planEndDate: '2026-12-31' },
+    'EXT-009': { productLine: '系统应用', tosVersion: '16.2', androidVersion: 'Android 16', chipPlatform: 'MTK', planStartDate: '2026-06-10', planEndDate: '2026-12-10' },
   }
   return map[bid] ?? {}
 }

@@ -2,12 +2,12 @@
 // Derived from the mock data structures in src/app/page.tsx
 
 /** Project type literals used in initialProjects */
-export type ProjectCategory = '整机产品项目' | '产品项目' | '技术项目' | '能力建设项目';
+export type ProjectCategory = '整机产品项目' | 'tOS版本项目' | '独立软件产品项目' | '技术项目' | '能力建设项目';
 
 /** Health status for project cards */
 export type HealthStatus = 'normal' | 'warning' | 'risk';
 
-/** Version five roles (版本五大员) - used in 产品项目 */
+/** Version five roles (版本五大员) - used in software projects */
 export interface VersionFiveRoles {
   版本规划代表: string;
   版本经理: string;
@@ -72,7 +72,7 @@ export interface ProjectItem {
   motor?: string;
   fingerprint?: string;
   infrared?: string;
-  // 产品项目 specific
+  // Software project specific
   versionFiveRoles?: VersionFiveRoles;
   // 技术项目 / 能力建设项目 specific
   projectDescription?: string;

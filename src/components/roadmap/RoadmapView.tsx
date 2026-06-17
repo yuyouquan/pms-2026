@@ -125,8 +125,9 @@ export default function RoadmapView({ projects, marketPlanData, level1Tasks, onV
       </div>
 
       <Card
-        style={{ borderRadius: '0 0 12px 12px', borderTop: 'none' }}
-        styles={{ body: { padding: '16px 20px 20px' } }}
+        className="pms-roadmap-view-card"
+        style={{ borderRadius: '0 0 12px 12px', borderTop: 'none', overflow: 'visible' }}
+        styles={{ body: { padding: '16px 20px 20px', overflow: 'visible' } }}
       >
         {activeProjectView === 'summary' ? (
           <ProjectPlanSummaryBoard projects={projects} onViewProject={onViewProject} />

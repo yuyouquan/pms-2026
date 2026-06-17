@@ -10,7 +10,7 @@ import {
   CalendarOutlined, SwapOutlined, PlusOutlined, SaveOutlined,
   HistoryOutlined, SearchOutlined, AppstoreOutlined, EditOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, PlusSquareOutlined, MinusSquareOutlined,
-  DeleteOutlined, CaretDownOutlined, CheckCircleFilled, StopOutlined,
+  DeleteOutlined, CaretDownOutlined, StopOutlined,
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -31,6 +31,9 @@ import { cancelDraftRevision } from '@/lib/marketRules'
 import dayjs from 'dayjs'
 
 const { Option } = Select
+const PLAN_TEMPLATE_ROLE_OPTIONS = [
+  { label: 'SPM', value: 'SPM' },
+]
 
 export default function ConfigContainer() {
   const {
@@ -113,16 +116,9 @@ export default function ConfigContainer() {
   // View columns
   const getViewKey = () => `config-${planLevel}-${viewMode}`
   const currentViewMode = viewMode
-  const baseViewColumns = getColumnsForView(currentViewMode)
-  const currentViewColumns = currentViewMode === 'table'
-    ? [
-      baseViewColumns.find((c: any) => c.key === 'id'),
-      { key: 'defaultRoadmap', title: '默认路标', default: true },
-      ...baseViewColumns.filter((c: any) => c.key !== 'id'),
-    ].filter(Boolean)
-    : baseViewColumns
+  const currentViewColumns = getColumnsForView(currentViewMode)
   const currentViewDefaultCols = currentViewColumns.filter((c: any) => c.default).map((c: any) => c.key)
-  const visibleColumns = columnsByView[getViewKey()] || currentViewDefaultCols
+  const visibleColumns = (columnsByView[getViewKey()] || currentViewDefaultCols).filter((key: string) => key !== 'defaultRoadmap')
   const setVisibleColumns = (cols: string[]) => {
     setColumnsByView((prev: Record<string, string[]>) => ({ ...prev, [getViewKey()]: cols }))
   }
@@ -208,22 +204,6 @@ export default function ConfigContainer() {
           </div>
         )
       } })
-      if (visibleColumns.includes('defaultRoadmap')) cols.push({ title: '默认路标', dataIndex: 'defaultRoadmap', key: 'defaultRoadmap', width: 90, align: 'center', render: (val: boolean, record: any) => {
-        const depth = record.indentLevel || 0
-        if (depth !== 1) return null
-        if (isEditMode) {
-          return (
-            <Checkbox
-              checked={!!val}
-              onChange={(e) => {
-                const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, defaultRoadmap: e.target.checked } : t)
-                currentSetTasks(updated)
-              }}
-            />
-          )
-        }
-        return val ? <CheckCircleFilled style={{ color: '#16a34a', fontSize: 16 }} /> : null
-      } })
       if (visibleColumns.includes('taskName')) cols.push({ title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 220, render: (name: string, record: any) => {
         const depth = record.indentLevel || 0
         if (isEditMode) return <Input className="pms-edit-input" value={name} size="small" style={{ fontWeight: depth === 0 ? 600 : 400 }} onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, taskName: e.target.value } : t); currentSetTasks(updated) }} />
@@ -234,7 +214,7 @@ export default function ConfigContainer() {
           </div>
         )
       } })
-      if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Space size={4}><Avatar size={18} style={{ background: 'linear-gradient(135deg, #4338ca, #6366f1)', fontSize: 10 }}>{val[0]}</Avatar><span style={{ fontSize: 13 }}>{val}</span></Space> : <span style={{ color: '#e5e7eb' }}>-</span>) })
+      if (visibleColumns.includes('responsible')) cols.push({ title: '角色', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Select className="pms-edit-input" value={val || 'SPM'} size="small" style={{ width: '100%' }} options={PLAN_TEMPLATE_ROLE_OPTIONS} onChange={(value) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, responsible: value } : t); currentSetTasks(updated) }} /> : (val ? <Tag color="processing" style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>) })
       if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>) })
       if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 130, render: (val: string) => <span style={{ fontSize: 12, color: '#e5e7eb' }}>{val || '-'}</span> })
       if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 130, render: (val: string) => <span style={{ fontSize: 12, color: '#e5e7eb' }}>{val || '-'}</span> })
@@ -303,7 +283,7 @@ export default function ConfigContainer() {
               const parentTasks = tableTasks.filter((t: any) => !t.parentId)
               const maxOrder = parentTasks.length > 0 ? Math.max(...parentTasks.map((t: any) => parseInt(t.id) || t.order)) : 0
               const newId = String(maxOrder + 1)
-              const newTask: any = { id: newId, order: maxOrder + 1, taskName: '新活动', defaultRoadmap: false, status: '未开始', progress: 0, responsible: '', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0, actualDays: 0 }
+              const newTask: any = { id: newId, order: maxOrder + 1, taskName: '新活动', status: '未开始', progress: 0, responsible: 'SPM', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0, actualDays: 0 }
               if (isLevel2Custom && customTasks?.[0]?.planId) newTask.planId = customTasks[0].planId
               currentSetTasks([...tableTasks, newTask]); message.success(`已添加一级活动: ${newId}`)
             }}>添加新活动</Button>
@@ -328,7 +308,7 @@ export default function ConfigContainer() {
     const siblingTasks = currentTasks.filter((t: any) => t.parentId === parentId)
     const newOrder = siblingTasks.length + 1
     const newId = `${parentId}.${newOrder}`
-    const newTask: any = { id: newId, parentId, order: newOrder, taskName: '新子任务', defaultRoadmap: false, status: '未开始', progress: 0, responsible: '', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0, actualDays: 0 }
+    const newTask: any = { id: newId, parentId, order: newOrder, taskName: '新子任务', status: '未开始', progress: 0, responsible: 'SPM', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0, actualDays: 0 }
     if (isLevel2TaskContext && parentTask.planId) newTask.planId = parentTask.planId
     const parentIndex = currentTasks.findIndex((t: any) => t.id === parentId)
     let insertIndex = parentIndex + 1
@@ -524,7 +504,7 @@ export default function ConfigContainer() {
       { title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, render: (val: string, row: CompareTableRow) => (<span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? '#6366f1' : '#9ca3af' }}>{val}</span>) },
       { title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, render: (val: string) => { const conf: Record<string, { color: string; bg: string }> = { '新增': { color: '#52c41a', bg: '#f6ffed' }, '删除': { color: '#ff4d4f', bg: '#fff2f0' }, '修改': { color: '#6366f1', bg: 'rgba(99,102,241,0.06)' }, '未变更': { color: '#9ca3af', bg: '#fafafa' } }; const c = conf[val]; return c ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: c.color, background: c.bg, border: `1px solid ${c.color}20` }}>{val}</span> : null } },
       { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, ellipsis: true, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
-      { title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) },
+      { title: '角色', dataIndex: 'responsible', key: 'responsible', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) },
       { title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'predecessor', val) },
       { title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 105, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'planStartDate', val) },
       { title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 105, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'planEndDate', val) },
@@ -749,10 +729,10 @@ export default function ConfigContainer() {
                 newTasks = [
                   ...configTasks.map(t => {
                     if (t.id === '2.1') return { ...t, taskName: 'STR2(更新)', status: '已完成', progress: 100 }
-                    if (t.id === '3') return { ...t, responsible: '李四', planStartDate: '2026-02-20' }
+                    if (t.id === '3') return { ...t, responsible: 'SPM', planStartDate: '2026-02-20' }
                     return t
                   }),
-                  { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 }
+                  { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: 'SPM', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 }
                 ]
               }
               const result = compareVersionsForTable(oldTasks as any, newTasks as any)
