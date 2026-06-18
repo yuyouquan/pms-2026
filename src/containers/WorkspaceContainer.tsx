@@ -167,9 +167,10 @@ export default function WorkspaceContainer() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 {[
                   { label: '全部', value: visibleProjects.length, filterValue: 'all', color: '#6366f1' },
-                  { label: '进行中', value: visibleProjects.filter(p => p.status === '进行中').length, filterValue: '进行中', color: '#6366f1' },
-                  { label: '待立项', value: visibleProjects.filter(p => p.status === '筹备中' || p.status === '待立项').length, filterValue: '筹备中', color: '#faad14' },
-                  { label: '已完成', value: visibleProjects.filter(p => p.status === '已完成').length, filterValue: '已完成', color: '#52c41a' },
+                  { label: '待立项', value: visibleProjects.filter(p => p.status === '待立项').length, filterValue: '待立项', color: '#faad14' },
+                  { label: '在研', value: visibleProjects.filter(p => p.status === '在研').length, filterValue: '在研', color: '#6366f1' },
+                  { label: '上市', value: visibleProjects.filter(p => p.status === '上市').length, filterValue: '上市', color: '#722ed1' },
+                  { label: '转维', value: visibleProjects.filter(p => p.status === '转维').length, filterValue: '转维', color: '#13c2c2' },
                 ].map((stat) => {
                   const isActive = projectStatusFilter === stat.filterValue
                   return (

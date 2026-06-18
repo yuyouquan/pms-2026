@@ -9,7 +9,11 @@ import { useProjectStore } from '@/stores/project'
 import { useUiStore } from '@/stores/ui'
 import { usePermissionStore } from '@/stores/permission'
 import { inferOsSeriesFromProjectName, inferTosVersionFromProjectName } from '@/constants/projectBasicFields'
-import { inferSoftwareProjectTypeFromName, isSoftwareProjectType } from '@/constants/projectTypes'
+import {
+  PROJECT_TYPE_TOS_VERSION,
+  inferSoftwareProjectTypeFromName,
+  isSoftwareProjectType,
+} from '@/constants/projectTypes'
 
 interface AddProjectModalProps {
   open: boolean
@@ -74,7 +78,8 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
         spm: entry.spm,
         updatedAt: '刚刚',
         productLine: extra.productLine ?? '',
-        osSeries: isSoftwareProject ? inferredOsSeries : undefined,
+        productSeries: projectType === PROJECT_TYPE_TOS_VERSION ? inferredOsSeries : '',
+        osSeries: projectType === PROJECT_TYPE_TOS_VERSION ? inferredOsSeries : (isSoftwareProject ? '' : undefined),
         tosVersion: isSoftwareProject ? (inferredTosVersion || extra.tosVersion || '') : (extra.tosVersion ?? ''),
         brand: extra.brand ?? undefined,
         planStartDate: extra.planStartDate ?? '',

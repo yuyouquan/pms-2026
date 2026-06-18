@@ -16,12 +16,15 @@ export { PROJECT_TYPES, PROJECT_TYPE_COLORS }
 export const mapIpmStatus = (ipmStatus: string, projectType: string): string => {
   const mapping: Record<string, string> = {
     '筹备中': '待立项',
-    '进行中': '进行中',
-    '已完成': '已完成',
+    '进行中': '在研',
+    '已完成': '转维',
     '已取消': '已取消',
-    '维护期': '维护',
+    '维护期': '转维',
+    '已上市': '上市',
+    '维护': '转维',
   }
-  if (projectType === '整机产品项目' && ipmStatus === '已上市') return '已上市'
+  if (projectType === '整机产品项目' && ipmStatus === '已上市') return '上市'
+  if (projectType === '技术项目' && ipmStatus === '已迁移') return '已迁移'
   if (projectType === '技术项目' && ipmStatus === '待立议') return '待立议'
   if (projectType === '技术项目' && ipmStatus === '待验') return '待验'
   return mapping[ipmStatus] || ipmStatus
@@ -41,6 +44,7 @@ export const PROJECT_STATUS_CONFIG: Record<string, { color: string; tagColor: st
   'EOS': { color: '#64748b', tagColor: 'default' },
   '暂停': { color: '#d9d9d9', tagColor: 'default' },
   '已取消': { color: '#ff4d4f', tagColor: 'error' },
+  '已迁移': { color: '#06b6d4', tagColor: 'cyan' },
   '待验': { color: '#faad14', tagColor: 'warning' },
   '筹备中': { color: '#faad14', tagColor: 'warning' },
 }
@@ -49,7 +53,7 @@ export const PROJECT_STATUS_CONFIG: Record<string, { color: string; tagColor: st
 export const initialProjects = [
   {
     id: '1', name: 'X6877-D8400_H991', type: PROJECT_TYPE_MACHINE,
-    status: '进行中', progress: 65, leader: '张三',
+    status: '在研', progress: 65, leader: '张三',
     markets: ['OP', 'TR', 'RU'], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '李白', updatedAt: '2小时前', productLine: 'NOTE', productCategory: 'CAMON', productSeries: 'CAMON 50', tosVersion: 'tOS 16.3',
     marketName: 'NOTE 50 Pro', brand: 'TECNO', developMode: 'ODC',
@@ -80,7 +84,7 @@ export const initialProjects = [
   },
   {
     id: '3', name: 'X6855_H8917', type: PROJECT_TYPE_MACHINE,
-    status: '进行中', progress: 45, leader: '王五',
+    status: '暂停', progress: 45, leader: '王五',
     markets: ['OP', 'TR'], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '赵六', updatedAt: '3天前', productLine: 'SPARK', productCategory: 'CAMON', productSeries: 'P', tosVersion: 'tOS 16.3',
     marketName: 'SPARK 30 Pro', brand: 'TECNO', developMode: '外研',
@@ -110,9 +114,9 @@ export const initialProjects = [
   },
   {
     id: '2', name: 'tOS16.1', type: PROJECT_TYPE_TOS_VERSION,
-    status: '进行中', progress: 55, leader: '李四',
+    status: '待立项', progress: 55, leader: '李四',
     markets: [], androidVersion: 'Android 15', chipPlatform: 'MTK',
-    spm: '张三', updatedAt: '1天前', productLine: 'tOS', osSeries: '16.X', tosVersion: '16.1',
+    spm: '张三', updatedAt: '1天前', productLine: 'tOS', productSeries: '16.X', osSeries: '16.X', tosVersion: '16.1',
     planStartDate: '2026-01-15', planEndDate: '2026-05-30',
     developCycle: 95, healthStatus: 'normal' as const,
     operatingSystem: 'Android 15', version: 'tOS16.1-V2',
@@ -123,9 +127,9 @@ export const initialProjects = [
   },
   {
     id: '6', name: 'tOS17.1', type: PROJECT_TYPE_TOS_VERSION,
-    status: '维护期', progress: 82, leader: '赵六',
+    status: '转维', progress: 82, leader: '赵六',
     markets: [], androidVersion: 'Android 16', chipPlatform: 'QCOM',
-    spm: '李四', updatedAt: '3小时前', productLine: 'tOS', osSeries: '17.X', tosVersion: '17.1',
+    spm: '李四', updatedAt: '3小时前', productLine: 'tOS', productSeries: '17.X', osSeries: '17.X', tosVersion: '17.1',
     planStartDate: '2026-03-01', planEndDate: '2026-09-30',
     developCycle: 140, healthStatus: 'normal' as const,
     operatingSystem: 'Android 16', version: 'tOS17.1-V1',
@@ -136,9 +140,9 @@ export const initialProjects = [
   },
   {
     id: '11', name: 'HiOS-Launcher', type: PROJECT_TYPE_INDEPENDENT_SOFTWARE,
-    status: '进行中', progress: 48, leader: '王五',
+    status: '已取消', progress: 48, leader: '王五',
     markets: [], androidVersion: 'Android 16', chipPlatform: 'MTK',
-    spm: '王五,李白', updatedAt: '5小时前', productLine: '系统应用', osSeries: '16.X', tosVersion: '16.2',
+    spm: '王五,李白', updatedAt: '5小时前', productLine: '系统应用', productSeries: '', osSeries: '', tosVersion: '16.2',
     planStartDate: '2026-03-10', planEndDate: '2026-08-20',
     developCycle: 112, healthStatus: 'warning' as const,
     operatingSystem: 'Android 16', version: 'Launcher-16.2-V1',
@@ -150,7 +154,7 @@ export const initialProjects = [
   },
   {
     id: '4', name: 'X6876_H786', type: PROJECT_TYPE_TECH,
-    status: '已完成', progress: 100, leader: '孙七',
+    status: '已迁移', progress: 100, leader: '孙七',
     markets: [], androidVersion: 'Android 15', chipPlatform: 'QCOM',
     spm: '李四', updatedAt: '5天前', productLine: '平台技术', domain: '基础架构,测试', tosVersions: '15.0,16.0', tosVersion: 'tOS 15.0',
     planStartDate: '2025-10-01', planEndDate: '2026-02-28',
@@ -163,7 +167,7 @@ export const initialProjects = [
   },
   {
     id: '5', name: 'X6873_H972', type: PROJECT_TYPE_CAPABILITY,
-    status: '进行中', progress: 30, leader: '周八',
+    status: '暂停', progress: 30, leader: '周八',
     markets: [], androidVersion: 'Android 16', chipPlatform: 'UNISOC',
     spm: '王五', updatedAt: '1周前', productLine: '基础能力', tosVersion: 'tOS 16.2',
     planStartDate: '2026-02-15', planEndDate: '2026-07-31',
@@ -175,7 +179,7 @@ export const initialProjects = [
   },
   {
     id: '7', name: 'X6890-D8500_H1001', type: PROJECT_TYPE_MACHINE,
-    status: '已上市', progress: 100, leader: '李白',
+    status: '上市', progress: 100, leader: '李白',
     markets: ['OP', 'TR', 'RU', 'IN'], androidVersion: 'Android 16', chipPlatform: 'QCOM',
     spm: '张三', updatedAt: '1天前', productLine: 'CAMON', productCategory: 'Note', productSeries: 'A', tosVersion: 'tOS 16.5',
     marketName: 'CAMON 40 Pro', brand: 'TECNO', developMode: 'ODC',
@@ -205,9 +209,9 @@ export const initialProjects = [
   },
   {
     id: '8', name: 'tOS16.2', type: PROJECT_TYPE_TOS_VERSION,
-    status: '维护期', progress: 76, leader: '杜甫',
+    status: '已取消', progress: 76, leader: '杜甫',
     markets: [], androidVersion: 'Android 17', chipPlatform: 'MTK',
-    spm: '赵六', updatedAt: '2天前', productLine: 'tOS', osSeries: '16.X', tosVersion: '16.2',
+    spm: '赵六', updatedAt: '2天前', productLine: 'tOS', productSeries: '16.X', osSeries: '16.X', tosVersion: '16.2',
     planStartDate: '2026-04-01', planEndDate: '2026-12-31',
     developCycle: 180, healthStatus: 'normal' as const,
     operatingSystem: 'Android 17', version: 'tOS16.2-V1',
@@ -218,7 +222,7 @@ export const initialProjects = [
   },
   {
     id: '9', name: 'AI-Engine-V2', type: PROJECT_TYPE_TECH,
-    status: '进行中', progress: 40, leader: '李四',
+    status: 'EOS', progress: 40, leader: '李四',
     markets: [], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '张三', updatedAt: '4小时前', productLine: 'AI引擎', domain: '影像,基础架构', tosVersions: '16.0,16.1', tosVersion: '',
     planStartDate: '2026-02-01', planEndDate: '2026-07-15',
@@ -231,7 +235,7 @@ export const initialProjects = [
   },
   {
     id: '10', name: 'DevOps-Platform', type: PROJECT_TYPE_CAPABILITY,
-    status: '进行中', progress: 55, leader: '孙七',
+    status: '暂停', progress: 55, leader: '孙七',
     markets: [], androidVersion: '', chipPlatform: '',
     spm: '李四', updatedAt: '6小时前', productLine: '工程效率', tosVersion: '',
     planStartDate: '2026-01-10', planEndDate: '2026-06-30',

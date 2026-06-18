@@ -497,9 +497,9 @@ const checks = [
     includes: 'tOS版本项目',
   },
   {
-    name: 'Summary board has independent software project tab',
+    name: 'Summary board still understands independent software project type for exclusion',
     file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
-    includes: '独立软件产品项目',
+    includes: 'PROJECT_TYPE_INDEPENDENT_SOFTWARE',
   },
   {
     name: 'Roadmap milestone has tOS version project tab',
@@ -507,9 +507,9 @@ const checks = [
     includes: 'tOS版本项目',
   },
   {
-    name: 'Roadmap milestone has independent software project tab',
+    name: 'Roadmap milestone still understands independent software project type for exclusion',
     file: 'src/components/roadmap/MilestoneView.tsx',
-    includes: '独立软件产品项目',
+    includes: 'PROJECT_TYPE_INDEPENDENT_SOFTWARE',
   },
 ]
 
@@ -544,16 +544,25 @@ if (!/name: '((?!tOS)\w|HiOS|AI|Launcher|Weather)[\s\S]{0,260}type: (?:'独立�
   failures.push('Mock data should include at least one non-tOS independent software project')
 }
 const statusFilterBlock = summaryBoard.match(/const STATUS_FILTERS[\s\S]*?\n\]/)?.[0] || ''
-const forbiddenStatusFilters = ['筹备中', 'EOL', "key: '维护'"]
+const forbiddenStatusFilters = ['筹备中', 'EOL', "key: '维护'", '进行中', '已完成', '已上市', '维护期']
 for (const status of forbiddenStatusFilters) {
   if (statusFilterBlock.includes(status)) {
     failures.push(`Summary board status filter should not include ${status.replace('\\\\', '')}`)
   }
 }
-for (const status of ['进行中', '已完成', '已上市', '维护期']) {
+for (const status of ['在研', '上市', '转维']) {
   if (!statusFilterBlock.includes(status)) {
     failures.push(`Summary board status filter missing ${status}`)
   }
+}
+if (!summaryBoard.includes("const SUMMARY_VISIBLE_STATUSES: SummaryStatus[] = ['在研', '上市', '转维']")) {
+  failures.push('Summary board should only include 在研、上市、转维 statuses')
+}
+if (!summaryBoard.includes("type SummaryScope = 'overall' | 'machine' | 'tosVersion' | 'tech'")) {
+  failures.push('Summary board tabs should exclude 独立软件产品项目')
+}
+if (!summaryBoard.includes("normalizedProjectType === PROJECT_TYPE_INDEPENDENT_SOFTWARE") || !summaryBoard.includes('continue')) {
+  failures.push('Summary board row builder should skip independent software product projects')
 }
 if (summaryBoard.includes('children: milestoneColumns')) {
   failures.push('Summary board should not render nested milestone table headers')
@@ -615,6 +624,7 @@ if (summaryBoard.includes('--pms-summary-table-header-offset')) {
 }
 
 const milestoneView = read('src/components/roadmap/MilestoneView.tsx')
+const projectSpaceContainer = read('src/containers/ProjectSpaceContainer.tsx')
 for (const removedFeature of ['handleSaveView', 'showSaveViewModal', 'buildCompareColumns', 'diffSnapshots']) {
   if (milestoneView.includes(removedFeature)) {
     failures.push(`Roadmap milestone view should remove old view/snapshot implementation: found ${removedFeature}`)
@@ -626,8 +636,8 @@ if (milestoneView.includes('translateY')) {
 if (!milestoneView.includes("fixed: 'left' as const") || !milestoneView.includes("fixed: 'right' as const")) {
   failures.push('Roadmap milestone view should fix tOS version, product category, product series, project name, and action columns')
 }
-if (!milestoneView.includes("scope === 'overall'") || !milestoneView.includes("col.key !== 'tosVersionGroup'")) {
-  failures.push('Roadmap milestone scoped tabs should use overall fields with tOS version removed')
+if (!milestoneView.includes("scope === 'overall'") || !milestoneView.includes("col.key !== 'tosVersion'") || !milestoneView.includes("col.key !== 'tosVersionGroup'")) {
+  failures.push('Roadmap milestone overall view should hide row tOS version while scoped tabs remove the tOS version group column')
 }
 if (!milestoneView.includes('pms-summary-collapse-button') || !milestoneView.includes('pms-summary-row-motion')) {
   failures.push('Roadmap milestone overall collapse should use summary board collapse styling')
@@ -662,8 +672,8 @@ const roadmapTosVersionColumn = milestoneView.match(/dataIndex: 'tosVersionGroup
 if (roadmapTosVersionColumn.includes('pms-summary-category-dot')) {
   failures.push('Roadmap milestone tOS version column should not show the leading dot')
 }
-if (!milestoneView.includes("dataIndex: 'tosVersion'") || milestoneView.indexOf("dataIndex: 'projectName'") > milestoneView.indexOf("dataIndex: 'tosVersion'")) {
-  failures.push('Roadmap milestone should render row tOS版本 immediately after project name')
+if (!milestoneView.includes("if (scope === 'overall') return col.key !== 'tosVersion'")) {
+  failures.push('Roadmap milestone overall view should not show duplicated row tOS version after project name')
 }
 if (!milestoneView.includes('filterMilestonesByDateRange') || !milestoneView.includes('DatePicker.RangePicker')) {
   failures.push('Roadmap milestone should filter milestone nodes with a date range picker')
@@ -698,13 +708,45 @@ if (milestoneView.includes('sticky={{ offsetHeader: stickyTableOffset }}')) {
 if (milestoneView.includes('--pms-summary-table-header-offset')) {
   failures.push('Roadmap milestone should not use a page-level table header offset that pushes the header into the table body')
 }
-for (const status of ['待立项', '进行中', '已完成', '暂停', '已取消', '已上市', '维护期']) {
+if (!milestoneView.includes("type RoadmapScope = 'overall' | 'machine' | 'tosVersion' | 'tech'")) {
+  failures.push('Roadmap milestone tabs should exclude 独立软件产品项目')
+}
+if (!milestoneView.includes('const isIndependentSoftwareProject') || !milestoneView.includes('!isIndependentSoftwareProject(project)')) {
+  failures.push('Roadmap milestone row builders should skip independent software product projects')
+}
+for (const status of ['待立项', '在研', '上市', '转维', 'EOS', '暂停', '已取消', '已迁移']) {
   if (!milestoneView.includes(status)) {
     failures.push(`Roadmap milestone view status scope missing ${status}`)
   }
 }
+for (const oldStatus of ['进行中', '已完成', '已上市', '维护期']) {
+  const roadmapStatusBlock = milestoneView.match(/const STATUS_FILTERS[\s\S]*?\n\]/)?.[0] || ''
+  if (roadmapStatusBlock.includes(oldStatus)) {
+    failures.push(`Roadmap milestone status filter should not include old status ${oldStatus}`)
+  }
+}
 
-const projectSpaceContainer = read('src/containers/ProjectSpaceContainer.tsx')
+const projectStatusAssignments = Array.from(projectData.matchAll(/status: '([^']+)'/g)).map(match => match[1])
+for (const oldStatus of ['进行中', '已完成', '已上市', '维护期', '维护']) {
+  if (projectStatusAssignments.includes(oldStatus)) {
+    failures.push(`Mock project data should use new project status enum, found ${oldStatus}`)
+  }
+}
+for (const status of ['待立项', '在研', '上市', '转维', 'EOS', '暂停', '已取消', '已迁移']) {
+  if (!projectData.includes(`status: '${status}'`)) {
+    failures.push(`Mock project data should include ${status} status`)
+  }
+}
+if (!/type: PROJECT_TYPE_TECH,[\s\S]{0,260}status: '已迁移'/.test(projectData)) {
+  failures.push('Mock project data should include a technical project with 已迁移 status')
+}
+if (!projectSpaceContainer.includes("const PROJECT_SPACE_STATUS_OPTIONS") || !projectSpaceContainer.includes("{ label: '已迁移', value: '已迁移' }")) {
+  failures.push('Project space should expose 已迁移 in technical-project status options')
+}
+if (!projectSpaceContainer.includes('getProjectStatusOptions') || !projectSpaceContainer.includes("p.type === PROJECT_TYPE_TECH")) {
+  failures.push('Project space status selector should add 已迁移 only for 技术项目')
+}
+
 for (const required of [
   'PROJECT_PLAN_CLONE_TEMPLATE_VERSIONS',
   'PROJECT_PLAN_CLONE_MARKET_VERSION_MAP',
