@@ -75,7 +75,12 @@ import {
 import { notifyPublishChanges, notifyDueTasks } from '@/lib/feishu-notify'
 import type { TaskChange, PlanDueNotice } from '@/types/plan-notify'
 import { exportSheet, exportMergedSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
-import { isSoftwareProjectType } from '@/constants/projectTypes'
+import {
+  PROJECT_TYPE_INDEPENDENT_SOFTWARE,
+  PROJECT_TYPE_TECH,
+  PROJECT_TYPE_TOS_VERSION,
+  isSoftwareProjectType,
+} from '@/constants/projectTypes'
 import {
   MARKET_OPTIONS,
   buildFollowVersionMetaForPublish,
@@ -106,8 +111,6 @@ import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
 import VersionTrainPlan from '@/components/plans/VersionTrainPlan'
 import { PROJECT_STATUS_CONFIG } from '@/data/projects'
 import {
-  OS_SERIES_OPTIONS,
-  PRODUCT_SERIES_OPTIONS,
   TECH_DOMAIN_OPTIONS,
   TOS_VERSION_OPTIONS,
   WHOLE_MACHINE_BASIC_INFO_FIELDS,
@@ -138,6 +141,24 @@ const PROJECT_SPACE_STATUS_OPTIONS = [
   { label: '暂停', value: '暂停' },
   { label: '已取消', value: '已取消' },
 ]
+const PROJECT_SPACE_TECH_STATUS_OPTIONS = [
+  ...PROJECT_SPACE_STATUS_OPTIONS,
+  { label: '已迁移', value: '已迁移' },
+]
+const getProjectStatusOptions = (p: any) => (
+  p.type === PROJECT_TYPE_TECH ? PROJECT_SPACE_TECH_STATUS_OPTIONS : PROJECT_SPACE_STATUS_OPTIONS
+)
+
+const getSoftwareProductSeriesValue = (project: any) => {
+  if (!project) return ''
+  if (project.type === PROJECT_TYPE_TOS_VERSION) {
+    return project.productSeries || project.osSeries || inferOsSeriesFromProjectName(project.name)
+  }
+  if (project.type === PROJECT_TYPE_INDEPENDENT_SOFTWARE) {
+    return project.productSeries || ''
+  }
+  return project.productSeries || project.osSeries || inferOsSeriesFromProjectName(project.name)
+}
 const PROJECT_PLAN_CLONE_TEMPLATE_VERSIONS = ['V2', 'V1'] as const
 const PROJECT_PLAN_CLONE_MARKET_VERSION_MAP = {
   OP: ['V3', 'V2', 'V1'],
@@ -1067,8 +1088,8 @@ export default function ProjectSpaceContainer() {
       ppm: p.ppm || '',
       spm: p.spm || '',
       tpm: p.tpm || '',
-      productSeries: (p as any).productSeries || '',
-      osSeries: (p as any).osSeries || inferOsSeriesFromProjectName(p.name),
+      productSeries: isSoftwareProjectType(p.type) ? getSoftwareProductSeriesValue(p) : ((p as any).productSeries || ''),
+      osSeries: isSoftwareProjectType(p.type) ? getSoftwareProductSeriesValue(p) : ((p as any).osSeries || inferOsSeriesFromProjectName(p.name)),
       tosVersion: (p as any).tosVersion || inferTosVersionFromProjectName(p.name),
       domain: Array.isArray((p as any).domain) ? (p as any).domain.join(',') : ((p as any).domain || ''),
       tosVersions: Array.isArray((p as any).tosVersions) ? (p as any).tosVersions.join(',') : ((p as any).tosVersions || ''),
@@ -1084,7 +1105,14 @@ export default function ProjectSpaceContainer() {
       ...editingProjectFields,
       jiraProjects: normalizeJiraProjectRows(Array.isArray(editingProjectFields.jiraProjects) ? editingProjectFields.jiraProjects : []),
     }
-    const updated = { ...selectedProject, ...updatedFields } as typeof selectedProject
+    const mergedProject = { ...selectedProject, ...updatedFields } as typeof selectedProject
+    const updated = isSoftwareProjectType(mergedProject.type)
+      ? {
+          ...mergedProject,
+          productSeries: getSoftwareProductSeriesValue(mergedProject),
+          osSeries: getSoftwareProductSeriesValue(mergedProject),
+        } as typeof selectedProject
+      : mergedProject
     setSelectedProject(updated); setProjects(prev => prev.map(p => p.id === updated.id ? updated : p) as typeof prev); setBasicInfoEditMode(false); message.success('基本信息已保存')
   }
 
@@ -1734,7 +1762,7 @@ export default function ProjectSpaceContainer() {
       if (field.key === 'isOutsourcedMini' && visibleDevelopMode !== '外研') return null
       let content: React.ReactNode = getProjectFieldValue(field)
       if (field.key === 'productType') content = editableField('productType', p.productType, { type: 'select', choices: [{ label: '新品', value: '新品' }, { label: '换代', value: '换代' }] })
-      if (field.key === 'productSeries') content = editableField('productSeries', (p as any).productSeries, { type: 'select', choices: PRODUCT_SERIES_OPTIONS })
+      if (field.key === 'productSeries') content = editableField('productSeries', (p as any).productSeries)
       if (field.key === 'developMode') content = editableField('developMode', p.developMode, { type: 'select', choices: developModeChoices })
       if (field.key === 'cooperationForm') content = editableField('cooperationForm', p.cooperationForm)
       if (field.key === 'projectLevel') content = editableField('projectLevel', p.projectLevel, { type: 'select', choices: projectLevelChoices })
@@ -1813,7 +1841,7 @@ export default function ProjectSpaceContainer() {
           <div style={{ display: 'flex', background: 'linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)', borderBottom: '1px solid rgba(99,102,241,0.08)' }}>
             {[
               { label: '项目分类', value: p.type, editable: false },
-              { label: '项目状态', value: p.status, editable: true, key: 'status', editNode: <Select size="small" value={ef.status} onChange={(v: string) => setEf('status', v)} style={{ width: 110 }} options={PROJECT_SPACE_STATUS_OPTIONS} /> },
+              { label: '项目状态', value: p.status, editable: true, key: 'status', editNode: <Select size="small" value={ef.status} onChange={(v: string) => setEf('status', v)} style={{ width: 110 }} options={getProjectStatusOptions(p)} /> },
               { label: '健康状态', value: hConf.label, editable: true, key: 'healthStatus', editNode: <Select size="small" value={ef.healthStatus} onChange={(v: string) => setEf('healthStatus', v)} style={{ width: 100 }} options={healthChoices} /> },
               ...((isSoftware || isWholeMachine || isTech) ? [{ label: '当前节点', value: p.currentNode || '-', editable: true, key: 'currentNode', editNode: <Select size="small" value={ef.currentNode} onChange={(v: string) => setEf('currentNode', v)} style={{ width: 120 }} options={nodeChoices} /> }] : []),
             ].map((item, i, arr) => (
@@ -1839,9 +1867,7 @@ export default function ProjectSpaceContainer() {
                 <Descriptions.Item label="品牌">{p.brand || '-'}</Descriptions.Item>
                 <Descriptions.Item label="产品线">{p.productLine || '-'}</Descriptions.Item>
                 <Descriptions.Item label="产品系列">
-                  {basicInfoEditMode
-                    ? <Select size="small" value={ef.osSeries} onChange={(v: string) => setEf('osSeries', v)} style={{ width: '100%' }} options={OS_SERIES_OPTIONS} />
-                    : renderSingleTag((p as any).osSeries || inferOsSeriesFromProjectName(p.name), 'cyan')}
+                  {renderSingleTag(getSoftwareProductSeriesValue(basicInfoEditMode ? { ...p, ...ef } : p), 'cyan')}
                 </Descriptions.Item>
                 <Descriptions.Item label="tOS版本">
                   {basicInfoEditMode
@@ -1887,7 +1913,7 @@ export default function ProjectSpaceContainer() {
                 <Descriptions.Item label="项目分类">{p.type}</Descriptions.Item>
                 <Descriptions.Item label="项目状态">
                   {basicInfoEditMode
-                    ? <Select size="small" value={ef.status} onChange={(v: string) => setEf('status', v)} style={{ width: '100%' }} options={PROJECT_SPACE_STATUS_OPTIONS} />
+                    ? <Select size="small" value={ef.status} onChange={(v: string) => setEf('status', v)} style={{ width: '100%' }} options={getProjectStatusOptions(p)} />
                     : <Tag color={statusConf.tagColor}>{p.status}</Tag>}
                 </Descriptions.Item>
                 <Descriptions.Item label="健康状态">{basicInfoEditMode ? <Select size="small" value={ef.healthStatus} onChange={(v: string) => setEf('healthStatus', v)} style={{ width: '100%' }} options={healthChoices} /> : <Tag style={{ background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag>}</Descriptions.Item>

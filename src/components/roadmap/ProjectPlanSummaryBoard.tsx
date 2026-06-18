@@ -41,8 +41,8 @@ import {
 } from './utils'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 
-type SummaryScope = 'overall' | 'machine' | 'tosVersion' | 'independentSoftware' | 'tech'
-type SummaryStatus = '进行中' | '已完成' | '已上市' | '维护期'
+type SummaryScope = 'overall' | 'machine' | 'tosVersion' | 'tech'
+type SummaryStatus = '在研' | '上市' | '转维'
 type StatusFilter = 'all' | SummaryStatus
 type ProjectViewMode = 'table' | 'calendar'
 type MilestoneDateRange = [string, string] | null
@@ -78,24 +78,22 @@ const SUMMARY_SCOPES: { key: SummaryScope; label: string }[] = [
   { key: 'overall', label: '整体' },
   { key: 'machine', label: '整机产品项目' },
   { key: 'tosVersion', label: 'tOS版本项目' },
-  { key: 'independentSoftware', label: '独立软件产品项目' },
   { key: 'tech', label: '技术项目' },
 ]
 
-const SUMMARY_VISIBLE_STATUSES: SummaryStatus[] = ['进行中', '已完成', '已上市', '维护期']
+const SUMMARY_VISIBLE_STATUSES: SummaryStatus[] = ['在研', '上市', '转维']
 
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: 'all', label: '全部' },
-  { key: '进行中', label: '进行中' },
-  { key: '已完成', label: '已完成' },
-  { key: '已上市', label: '已上市' },
-  { key: '维护期', label: '维护期' },
+  { key: '在研', label: '在研' },
+  { key: '上市', label: '上市' },
+  { key: '转维', label: '转维' },
 ]
 const SUMMARY_VIEW_KIND = PROJECT_VIEW_KINDS.summaryBoard
 const SUMMARY_STICKY_TOP = 47
 const TABLE_BODY_SCROLL_Y = 'calc(100vh - 180px)'
 
-const CATEGORY_ORDER = ['CAMON', 'Note', 'SPARK', 'POVA', 'tOS版本', '独立软件产品', '技术项目']
+const CATEGORY_ORDER = ['CAMON', 'Note', 'SPARK', 'POVA', 'tOS版本', '技术项目']
 
 const CATEGORY_THEME: Record<string, { key: string; label?: string; color: string; bg: string; seriesBg: string; accent: string }> = {
   CAMON: { key: 'camon', color: '#2563eb', bg: '#eff6ff', seriesBg: '#f8fbff', accent: '#3b82f6' },
@@ -112,6 +110,9 @@ const DEFAULT_CATEGORY_THEME = { key: 'default', color: '#475569', bg: '#f8fafc'
 const getCategoryTheme = (category: string) => CATEGORY_THEME[category] || DEFAULT_CATEGORY_THEME
 
 const STATUS_COLORS: Record<string, string> = {
+  在研: 'processing',
+  上市: 'gold',
+  转维: 'purple',
   已上市: 'gold',
   进行中: 'orange',
   维护: 'purple',
@@ -122,10 +123,9 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 const STATUS_DOT_COLORS: Record<SummaryStatus, string> = {
-  进行中: '#10b981',
-  已完成: '#06b6d4',
-  已上市: '#3b82f6',
-  维护期: '#ef4444',
+  在研: '#10b981',
+  上市: '#3b82f6',
+  转维: '#8b5cf6',
 }
 
 const DEPARTMENT_BY_PROJECT: Record<string, string> = {
@@ -153,6 +153,8 @@ const MILESTONE_DATE_RANGE_PRESETS = [
     value: [dayjs().add(1, 'month').startOf('month'), dayjs().add(3, 'month').endOf('month')],
   },
 ]
+const MILESTONE_FILTER_FIELD = 'milestonesText'
+const MILESTONE_RANGE_SEPARATOR = '~'
 const BASE_COLUMN_OPTIONS: RoadmapColumnConfig[] = [
   { key: 'productCategory', title: '产品分类', width: 150, defaultVisible: true, locked: true },
   { key: 'productSeries', title: '产品系列', width: 146, defaultVisible: true },
@@ -199,7 +201,15 @@ const buildMilestones = (project: any, names: string[], rowIndex: number): Summa
 
 const getMachineCategory = (project: any) => project.productCategory || (project.productLine === 'NOTE' ? 'Note' : project.productLine || 'CAMON')
 const getMachineSeries = (project: any) => project.productSeries || project.productLine || '未分系列'
-const getSoftwareSeries = (project: any) => project.osSeries || inferOsSeriesFromProjectName(project.name) || `${inferTosVersionFromProjectName(project.name).split('.')[0] || '16'}.X`
+const getSoftwareSeries = (project: any) => {
+  if (normalizeSoftwareProjectType(project.type, project.name) === PROJECT_TYPE_TOS_VERSION) {
+    return project.productSeries || project.osSeries || inferOsSeriesFromProjectName(project.name) || `${inferTosVersionFromProjectName(project.name).split('.')[0] || '16'}.X`
+  }
+  if (normalizeSoftwareProjectType(project.type, project.name) === PROJECT_TYPE_INDEPENDENT_SOFTWARE) {
+    return project.productSeries || '未填产品系列'
+  }
+  return project.productSeries || project.osSeries || inferOsSeriesFromProjectName(project.name) || '未填产品系列'
+}
 const getSoftwareCategory = (project: any) => (
   normalizeSoftwareProjectType(project.type, project.name) === PROJECT_TYPE_TOS_VERSION
     ? 'tOS版本'
@@ -208,7 +218,9 @@ const getSoftwareCategory = (project: any) => (
 const getTechSeries = (project: any) => splitValues(project.domain)[0] || project.productLine || '基础架构'
 const normalizeSummaryStatus = (status: any): SummaryStatus | null => {
   const value = String(status || '').trim()
-  if (value === '维护') return '维护期'
+  if (value === '进行中') return '在研'
+  if (value === '已上市') return '上市'
+  if (value === '维护' || value === '维护期') return '转维'
   if (SUMMARY_VISIBLE_STATUSES.includes(value as SummaryStatus)) return value as SummaryStatus
   return null
 }
@@ -263,7 +275,7 @@ const buildProjectFields = (project: any) => ({
 
 function getExtraColumnsForScope(scope: SummaryScope): RoadmapColumnConfig[] {
   if (scope === 'machine') return getFixedColumnsForType(PROJECT_TYPE_MACHINE).filter(col => !BASE_COLUMN_KEYS.has(col.key))
-  if (scope === 'tosVersion' || scope === 'independentSoftware') return getFixedColumnsForType(PROJECT_TYPE_TOS_VERSION).filter(col => !BASE_COLUMN_KEYS.has(col.key))
+  if (scope === 'tosVersion') return getFixedColumnsForType(PROJECT_TYPE_TOS_VERSION).filter(col => !BASE_COLUMN_KEYS.has(col.key))
   return []
 }
 
@@ -307,6 +319,7 @@ const makeSummaryRows = (projects: any[]): SummaryRow[] => {
 
     if (isSoftwareProjectType(project.type)) {
       const normalizedProjectType = normalizeSoftwareProjectType(project.type, project.name)
+      if (normalizedProjectType === PROJECT_TYPE_INDEPENDENT_SOFTWARE) continue
       const milestones = buildMilestones(project, SOFTWARE_MILESTONE_NAMES, rowIndex)
       rows.push({
         key: `${normalizedProjectType}-${project.id}`,
@@ -383,7 +396,6 @@ function countBy(rows: SummaryRow[], key: keyof SummaryRow) {
 function scopeRows(rows: SummaryRow[], scope: SummaryScope) {
   if (scope === 'machine') return rows.filter(row => row.projectType === PROJECT_TYPE_MACHINE)
   if (scope === 'tosVersion') return rows.filter(row => row.projectType === PROJECT_TYPE_TOS_VERSION)
-  if (scope === 'independentSoftware') return rows.filter(row => row.projectType === PROJECT_TYPE_INDEPENDENT_SOFTWARE)
   if (scope === 'tech') return rows.filter(row => row.projectType === PROJECT_TYPE_TECH)
   return rows
 }
@@ -433,6 +445,49 @@ function normalizeDateRange(value: unknown): MilestoneDateRange {
   const [start, end] = value
   if (!start || !end || !dayjs(start).isValid() || !dayjs(end).isValid()) return null
   return [dayjs(start).format('YYYY-MM-DD'), dayjs(end).format('YYYY-MM-DD')]
+}
+
+function formatMilestoneDateRangeValue(range: MilestoneDateRange) {
+  return range ? `${range[0]}${MILESTONE_RANGE_SEPARATOR}${range[1]}` : ''
+}
+
+function parseMilestoneDateRangeValue(value: unknown): MilestoneDateRange {
+  if (Array.isArray(value)) return normalizeDateRange(value)
+  const text = String(value || '').trim()
+  if (!text) return null
+  const [start, end] = text.split(MILESTONE_RANGE_SEPARATOR).map(item => item.trim())
+  return normalizeDateRange([start, end])
+}
+
+function isMilestoneDateFilter(condition: FilterCondition) {
+  return condition.field === MILESTONE_FILTER_FIELD
+}
+
+function createMilestoneDateFilter(range: MilestoneDateRange, id?: string): FilterCondition {
+  return {
+    id: id || createFilterCondition().id,
+    field: MILESTONE_FILTER_FIELD,
+    operator: 'contains',
+    value: formatMilestoneDateRangeValue(range),
+  }
+}
+
+function getMilestoneDateRangeFromFilters(conditions: FilterCondition[]) {
+  const condition = conditions.find(isMilestoneDateFilter)
+  return condition ? parseMilestoneDateRangeValue(condition.value) : null
+}
+
+function getStandardFilterConditions(conditions: FilterCondition[]) {
+  return conditions.filter(condition => !isMilestoneDateFilter(condition))
+}
+
+function normalizeProjectFilterConditions(conditions: FilterCondition[], fallbackRange?: MilestoneDateRange) {
+  const normalized = normalizeFilterConditions(getStandardFilterConditions(conditions))
+  const milestoneCondition = conditions.find(isMilestoneDateFilter)
+  const range = getMilestoneDateRangeFromFilters(conditions) || fallbackRange || null
+  return range
+    ? [...normalized, createMilestoneDateFilter(range, milestoneCondition?.id)]
+    : normalized
 }
 
 function getCalendarDays(month: dayjs.Dayjs) {
@@ -516,8 +571,11 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   } as CSSProperties
   const allRows = useMemo(() => makeSummaryRows(projects), [projects])
   const scopedRows = useMemo(() => scopeRows(allRows, scope), [allRows, scope])
-  const filteredRows = useMemo(() => applyFilterConditions(scopedRows, filters), [scopedRows, filters])
-  const dateFilteredRows = useMemo(() => applyMilestoneDateRange(filteredRows, milestoneDateRange), [filteredRows, milestoneDateRange])
+  const normalizedFilters = useMemo(() => normalizeProjectFilterConditions(filters, milestoneDateRange), [filters, milestoneDateRange])
+  const activeMilestoneDateRange = useMemo(() => getMilestoneDateRangeFromFilters(normalizedFilters), [normalizedFilters])
+  const standardFilters = useMemo(() => getStandardFilterConditions(normalizedFilters), [normalizedFilters])
+  const filteredRows = useMemo(() => applyFilterConditions(scopedRows, standardFilters), [scopedRows, standardFilters])
+  const dateFilteredRows = useMemo(() => applyMilestoneDateRange(filteredRows, activeMilestoneDateRange), [filteredRows, activeMilestoneDateRange])
   const statusRows = useMemo(() => (
     sharedRowsOverride || applyStatusFilter(dateFilteredRows, statusFilter)
   ), [dateFilteredRows, statusFilter, sharedRowsOverride])
@@ -526,7 +584,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   const seriesCounts = useMemo(() => countBy(statusRows, 'productSeries'), [statusRows])
   const availableColumns = useMemo(() => getAvailableColumnsForScope(scope), [scope])
   const defaultVisibleColumns = useMemo(() => getDefaultVisibleColumnsForScope(scope), [scope])
-  const hasActiveFilters = filters.some(isFilterConditionActive) || Boolean(milestoneDateRange)
+  const hasActiveFilters = normalizedFilters.some(isFilterConditionActive)
   const filterFieldOptions = useMemo(() => (
     availableColumns.map(col => ({
       value: col.key === 'milestones' ? 'milestonesText' : col.key,
@@ -575,10 +633,10 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     scope,
     statusFilter,
     visibleColumns,
-    filters: normalizeFilterConditions(filters),
+    filters: normalizedFilters,
     collapsedKeys: Array.from(collapsedCategories),
     viewMode,
-    milestoneDateRange,
+    milestoneDateRange: activeMilestoneDateRange,
     ...(includeSharedRows ? { sharedRows: cloneRowsForShare(statusRows) } : {}),
   })
 
@@ -590,14 +648,16 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
 
     setScope(nextScope)
     setStatusFilter(normalizeStatusFilter(state.statusFilter))
-    setFilters(normalizeFilterConditions((state.filters || []) as FilterCondition[]))
+    const nextDateRange = normalizeDateRange(state.milestoneDateRange)
+    const nextFilters = normalizeProjectFilterConditions((state.filters || []) as FilterCondition[], nextDateRange)
+    setFilters(nextFilters)
     setTempFilters([])
     setCollapsedCategories(new Set(Array.isArray(state.collapsedKeys) ? state.collapsedKeys : []))
     setVisibleColumns(getSafeVisibleColumns(nextScope, nextVisibleColumns))
     setViewMode(normalizeViewMode(state.viewMode))
-    const nextDateRange = normalizeDateRange(state.milestoneDateRange)
-    setMilestoneDateRange(nextDateRange)
-    if (nextDateRange) setCalendarMonth(dayjs(nextDateRange[0]).startOf('month'))
+    const appliedDateRange = getMilestoneDateRangeFromFilters(nextFilters)
+    setMilestoneDateRange(appliedDateRange)
+    if (appliedDateRange) setCalendarMonth(dayjs(appliedDateRange[0]).startOf('month'))
     setSharedRowsOverride(Array.isArray(state.sharedRows) ? state.sharedRows as SummaryRow[] : null)
   }
 
@@ -634,18 +694,9 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     setStatusFilter('all')
     setFilters([])
     setTempFilters([])
+    setMilestoneDateRange(null)
     setCollapsedCategories(new Set())
     setVisibleColumns(getDefaultVisibleColumnsForScope(nextScope))
-    setActiveSavedViewId(null)
-    setSharedRowsOverride(null)
-  }
-
-  const handleMilestoneDateRangeChange = (dates: any) => {
-    const nextRange = dates?.[0] && dates?.[1]
-      ? [dates[0].format('YYYY-MM-DD'), dates[1].format('YYYY-MM-DD')] as [string, string]
-      : null
-    setMilestoneDateRange(nextRange)
-    if (nextRange) setCalendarMonth(dayjs(nextRange[0]).startOf('month'))
     setActiveSavedViewId(null)
     setSharedRowsOverride(null)
   }
@@ -786,6 +837,74 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     setProjectViewShareUrl(url)
     setShowProjectViewShareModal(true)
     void copyProjectViewShareUrl(url)
+  }
+
+  const getFilterDrawerInitialConditions = () => (
+    normalizedFilters.length ? normalizedFilters.map(item => ({ ...item })) : [createFilterCondition()]
+  )
+
+  const updateTempFilter = (conditionId: string, patch: Partial<FilterCondition>) => {
+    setTempFilters(prev => prev.map(item => item.id === conditionId ? { ...item, ...patch } : item))
+  }
+
+  const handleTempFilterFieldChange = (condition: FilterCondition, field: string) => {
+    updateTempFilter(condition.id, {
+      field,
+      operator: field === MILESTONE_FILTER_FIELD ? 'contains' : condition.operator,
+      value: '',
+    })
+  }
+
+  const handleTempFilterDateRangeChange = (condition: FilterCondition, dates: any) => {
+    const nextRange = dates?.[0] && dates?.[1]
+      ? [dates[0].format('YYYY-MM-DD'), dates[1].format('YYYY-MM-DD')] as [string, string]
+      : null
+    updateTempFilter(condition.id, {
+      operator: 'contains',
+      value: formatMilestoneDateRangeValue(nextRange),
+    })
+  }
+
+  const applyTempFilters = () => {
+    const nextFilters = normalizeProjectFilterConditions(tempFilters)
+    const nextDateRange = getMilestoneDateRangeFromFilters(nextFilters)
+    setFilters(nextFilters)
+    setMilestoneDateRange(nextDateRange)
+    if (nextDateRange) setCalendarMonth(dayjs(nextDateRange[0]).startOf('month'))
+    setShowFilterDrawer(false)
+    setActiveSavedViewId(null)
+    setSharedRowsOverride(null)
+  }
+
+  const renderFilterValueControl = (condition: FilterCondition) => {
+    if (isMilestoneDateFilter(condition)) {
+      const range = parseMilestoneDateRangeValue(condition.value)
+      return (
+        <div>
+          <DatePicker.RangePicker
+            style={{ width: '100%' }}
+            value={range ? [dayjs(range[0]), dayjs(range[1])] : null}
+            presets={MILESTONE_DATE_RANGE_PRESETS as any}
+            format="YYYY-MM-DD"
+            placeholder={['开始日期', '结束日期']}
+            onChange={(dates) => handleTempFilterDateRangeChange(condition, dates)}
+          />
+          <div style={{ marginTop: 6, color: '#64748b', fontSize: 12 }}>
+            选择后，里程碑节点列仅保留范围内的节点。
+          </div>
+        </div>
+      )
+    }
+
+    if (isValuelessFilterOperator(condition.operator)) return null
+
+    return (
+      <Input
+        placeholder="输入筛选值"
+        value={condition.value}
+        onChange={(event) => updateTempFilter(condition.id, { value: event.target.value })}
+      />
+    )
   }
 
   const savedProjectViewTabs = [
@@ -1800,7 +1919,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
                 icon={<FilterOutlined />}
                 type={hasActiveFilters ? 'primary' : 'default'}
                 onClick={() => {
-                  setTempFilters(filters.length ? filters.map(item => ({ ...item })) : [createFilterCondition()])
+                  setTempFilters(getFilterDrawerInitialConditions())
                   setShowFilterDrawer(true)
                 }}
               />
@@ -1883,7 +2002,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
 	            onPressEnter={handleSaveProjectView}
 	          />
 	          <div style={{ color: '#64748b', fontSize: 12 }}>
-	            将以当前分类、视图模式、状态筛选、日期范围、筛选条件、列设置和折叠状态创建视图，名称不可重复。
+	            将以当前分类、视图模式、状态筛选、字段筛选条件、列设置和折叠状态创建视图，名称不可重复。
 	          </div>
 	        </Space>
 	      </Modal>
@@ -1929,12 +2048,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
               <Button onClick={() => setShowFilterDrawer(false)}>取消</Button>
               <Button
 	                type="primary"
-	                onClick={() => {
-	                  setFilters(normalizeFilterConditions(tempFilters))
-	                  setShowFilterDrawer(false)
-	                  setActiveSavedViewId(null)
-                    setSharedRowsOverride(null)
-	                }}
+	                onClick={applyTempFilters}
               >
                 应用
               </Button>
@@ -1943,54 +2057,36 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         )}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ padding: 12, border: '1px solid #e0f2fe', borderRadius: 8, background: '#f0f9ff' }}>
-            <div style={{ marginBottom: 8, color: '#0f172a', fontSize: 13, fontWeight: 700 }}>里程碑日期范围</div>
-            <DatePicker.RangePicker
-              style={{ width: '100%' }}
-              value={milestoneDateRange ? [dayjs(milestoneDateRange[0]), dayjs(milestoneDateRange[1])] : null}
-              presets={MILESTONE_DATE_RANGE_PRESETS as any}
-              format="YYYY-MM-DD"
-              onChange={handleMilestoneDateRangeChange}
-            />
-            <div style={{ marginTop: 8, color: '#64748b', fontSize: 12 }}>
-              选择后，里程碑节点列仅保留范围内的节点。
-            </div>
-          </div>
           {tempFilters.map((condition) => (
             <div key={condition.id} style={{ padding: 12, border: '1px solid #eef2ff', borderRadius: 8, background: '#fafbff' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 116px 40px', gap: 8, marginBottom: isValuelessFilterOperator(condition.operator) ? 0 : 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMilestoneDateFilter(condition) ? 'minmax(0, 1fr) 40px' : 'minmax(0, 1fr) 116px 40px', gap: 8, marginBottom: isValuelessFilterOperator(condition.operator) && !isMilestoneDateFilter(condition) ? 0 : 8 }}>
                 <Select
                   aria-label="筛选字段"
                   placeholder="筛选字段"
                   value={condition.field || undefined}
                   options={getFieldOptionsWithDuplicateDisabled(filterFieldOptions, tempFilters, condition.id)}
-                  onChange={(value) => setTempFilters(prev => prev.map(item => item.id === condition.id ? { ...item, field: value } : item))}
+                  onChange={(value) => handleTempFilterFieldChange(condition, value)}
                 />
-                <Select
-                  value={condition.operator}
-                  options={FILTER_OPERATORS as any}
-                  onChange={(value) => {
-                    const operator = value as FilterCondition['operator']
-                    setTempFilters(prev => prev.map(item => item.id === condition.id ? {
-                      ...item,
-                      operator,
-                      value: isValuelessFilterOperator(operator) ? '' : item.value,
-                    } : item))
-                  }}
-                />
+                {!isMilestoneDateFilter(condition) && (
+                  <Select
+                    value={condition.operator}
+                    options={FILTER_OPERATORS as any}
+                    onChange={(value) => {
+                      const operator = value as FilterCondition['operator']
+                      updateTempFilter(condition.id, {
+                        operator,
+                        value: isValuelessFilterOperator(operator) ? '' : condition.value,
+                      })
+                    }}
+                  />
+                )}
                 <Button
                   icon={<DeleteOutlined />}
                   danger
                   onClick={() => setTempFilters(prev => prev.length > 1 ? prev.filter(item => item.id !== condition.id) : [createFilterCondition()])}
                 />
               </div>
-              {!isValuelessFilterOperator(condition.operator) && (
-                <Input
-                  placeholder="输入筛选值"
-                  value={condition.value}
-                  onChange={(event) => setTempFilters(prev => prev.map(item => item.id === condition.id ? { ...item, value: event.target.value } : item))}
-                />
-              )}
+              {renderFilterValueControl(condition)}
             </div>
           ))}
           <Button

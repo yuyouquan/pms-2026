@@ -61,8 +61,8 @@ import {
   type SavedProjectView,
 } from './utils'
 
-type RoadmapScope = 'overall' | 'machine' | 'tosVersion' | 'independentSoftware' | 'tech'
-type RoadmapStatus = '待立项' | '进行中' | '已完成' | '暂停' | '已取消' | '已上市' | '维护期'
+type RoadmapScope = 'overall' | 'machine' | 'tosVersion' | 'tech'
+type RoadmapStatus = '待立项' | '在研' | '上市' | '转维' | 'EOS' | '暂停' | '已取消' | '已迁移'
 type StatusFilter = 'all' | RoadmapStatus
 type ProjectViewMode = 'table' | 'calendar'
 type MilestoneDateRange = [string, string] | null
@@ -125,7 +125,6 @@ const ROADMAP_SCOPES: { key: RoadmapScope; label: string; projectType: string }[
   { key: 'overall', label: '整体', projectType: '整体' },
   { key: 'machine', label: '整机产品项目', projectType: PROJECT_TYPE_MACHINE },
   { key: 'tosVersion', label: 'tOS版本项目', projectType: PROJECT_TYPE_TOS_VERSION },
-  { key: 'independentSoftware', label: '独立软件产品项目', projectType: PROJECT_TYPE_INDEPENDENT_SOFTWARE },
   { key: 'tech', label: '技术项目', projectType: PROJECT_TYPE_TECH },
 ]
 
@@ -133,7 +132,6 @@ const SCOPE_BY_PROJECT_TYPE: Record<string, RoadmapScope> = {
   整体: 'overall',
   [PROJECT_TYPE_MACHINE]: 'machine',
   [PROJECT_TYPE_TOS_VERSION]: 'tosVersion',
-  [PROJECT_TYPE_INDEPENDENT_SOFTWARE]: 'independentSoftware',
   [SOFTWARE_PROJECT_DISPLAY_TYPE]: 'tosVersion',
   [LEGACY_SOFTWARE_PROJECT_TYPE]: 'tosVersion',
   [PROJECT_TYPE_TECH]: 'tech',
@@ -143,27 +141,27 @@ const PROJECT_TYPE_BY_SCOPE: Record<RoadmapScope, string> = {
   overall: '整体',
   machine: PROJECT_TYPE_MACHINE,
   tosVersion: PROJECT_TYPE_TOS_VERSION,
-  independentSoftware: PROJECT_TYPE_INDEPENDENT_SOFTWARE,
   tech: PROJECT_TYPE_TECH,
 }
 
-const SUMMARY_VISIBLE_STATUSES: RoadmapStatus[] = ['待立项', '进行中', '已完成', '暂停', '已取消', '已上市', '维护期']
+const SUMMARY_VISIBLE_STATUSES: RoadmapStatus[] = ['待立项', '在研', '上市', '转维', 'EOS', '暂停', '已取消', '已迁移']
 
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: 'all', label: '全部' },
   { key: '待立项', label: '待立项' },
-  { key: '进行中', label: '进行中' },
-  { key: '已完成', label: '已完成' },
+  { key: '在研', label: '在研' },
+  { key: '上市', label: '上市' },
+  { key: '转维', label: '转维' },
+  { key: 'EOS', label: 'EOS' },
   { key: '暂停', label: '暂停' },
   { key: '已取消', label: '已取消' },
-  { key: '已上市', label: '已上市' },
-  { key: '维护期', label: '维护期' },
+  { key: '已迁移', label: '已迁移' },
 ]
 const ROADMAP_MILESTONE_VIEW_KIND = PROJECT_VIEW_KINDS.roadmapMilestone
 const SUMMARY_STICKY_TOP = 47
 const TABLE_BODY_SCROLL_Y = 'calc(100vh - 180px)'
 
-const CATEGORY_ORDER = ['tOS版本', '独立软件产品', 'CAMON', 'Note', 'NOTE', 'SPARK', 'POVA', '技术项目']
+const CATEGORY_ORDER = ['tOS版本', 'CAMON', 'Note', 'NOTE', 'SPARK', 'POVA', '技术项目']
 
 const CATEGORY_THEME: Record<string, { key: string; label?: string; color: string; accent: string }> = {
   tOS版本: { key: 'tos', color: '#0891b2', accent: '#06b6d4' },
@@ -181,6 +179,11 @@ const getCategoryTheme = (category: string) => CATEGORY_THEME[category] || DEFAU
 
 const STATUS_COLORS: Record<string, string> = {
   待立项: 'blue',
+  在研: 'processing',
+  上市: 'gold',
+  转维: 'purple',
+  EOS: 'default',
+  已迁移: 'cyan',
   已上市: 'gold',
   进行中: 'orange',
   维护期: 'purple',
@@ -191,12 +194,13 @@ const STATUS_COLORS: Record<string, string> = {
 
 const STATUS_DOT_COLORS: Record<RoadmapStatus, string> = {
   待立项: '#64748b',
-  进行中: '#10b981',
-  已完成: '#06b6d4',
+  在研: '#10b981',
+  上市: '#3b82f6',
+  转维: '#8b5cf6',
+  EOS: '#64748b',
   暂停: '#94a3b8',
   已取消: '#ef4444',
-  已上市: '#3b82f6',
-  维护期: '#8b5cf6',
+  已迁移: '#06b6d4',
 }
 
 const DEPARTMENT_BY_PROJECT: Record<string, string> = {
@@ -228,6 +232,8 @@ const MILESTONE_DATE_RANGE_PRESETS = [
     value: [dayjs().add(1, 'month').startOf('month'), dayjs().add(3, 'month').endOf('month')],
   },
 ]
+const MILESTONE_FILTER_FIELD = 'milestonesText'
+const MILESTONE_RANGE_SEPARATOR = '~'
 const SNAPSHOT_DATE_RANGE_PRESETS = [
   {
     label: '今天',
@@ -277,6 +283,10 @@ const getDepartmentByFirstSpm = (project: any, fallback: string) => {
   return SPM_DEPARTMENT_MAP[firstSpm] || DEPARTMENT_BY_PROJECT[project.id] || fallback
 }
 
+const isIndependentSoftwareProject = (project: any) => (
+  normalizeSoftwareProjectType(project.type, project.name) === PROJECT_TYPE_INDEPENDENT_SOFTWARE
+)
+
 const normalizeValue = (value: any) => {
   if (Array.isArray(value)) return value.join(',')
   if (value === undefined || value === null || value === '') return '-'
@@ -285,7 +295,9 @@ const normalizeValue = (value: any) => {
 
 const normalizeStatus = (status: any): RoadmapStatus | null => {
   const value = String(status || '').trim()
-  if (value === '维护') return '维护期'
+  if (value === '进行中') return '在研'
+  if (value === '已上市') return '上市'
+  if (value === '维护' || value === '维护期') return '转维'
   if (value === '筹备中') return '待立项'
   if (SUMMARY_VISIBLE_STATUSES.includes(value as RoadmapStatus)) return value as RoadmapStatus
   return null
@@ -308,7 +320,15 @@ const getMainMarket = (project: any) => {
 const getProjectSortName = (project: any) => String(project.name || project.projectName || '')
 const getMachineCategory = (project: any) => project.productCategory || (project.productLine === 'NOTE' ? 'Note' : project.productLine || 'CAMON')
 const getMachineSeries = (project: any) => project.productSeries || project.productLine || '未分系列'
-const getSoftwareSeries = (project: any) => project.osSeries || inferOsSeriesFromProjectName(project.name) || `${inferTosVersionFromProjectName(project.name).split('.')[0] || '16'}.X`
+const getSoftwareSeries = (project: any) => {
+  if (normalizeSoftwareProjectType(project.type, project.name) === PROJECT_TYPE_TOS_VERSION) {
+    return project.productSeries || project.osSeries || inferOsSeriesFromProjectName(project.name) || `${inferTosVersionFromProjectName(project.name).split('.')[0] || '16'}.X`
+  }
+  if (normalizeSoftwareProjectType(project.type, project.name) === PROJECT_TYPE_INDEPENDENT_SOFTWARE) {
+    return project.productSeries || '未填产品系列'
+  }
+  return project.productSeries || project.osSeries || inferOsSeriesFromProjectName(project.name) || '未填产品系列'
+}
 const getSoftwareCategory = (project: any) => (
   normalizeSoftwareProjectType(project.type, project.name) === PROJECT_TYPE_TOS_VERSION
     ? 'tOS版本'
@@ -429,7 +449,7 @@ const sortProjectsByRoadmapDimension = (projects: any[]) => [...projects].sort((
 const getTosGroups = (projects: any[]) => {
   const groups = new Map<string, any[]>()
   projects
-    .filter(project => isSoftwareProjectType(project.type) && normalizeStatus(project.status))
+    .filter(project => isSoftwareProjectType(project.type) && !isIndependentSoftwareProject(project) && normalizeStatus(project.status))
     .forEach(project => {
       const version = normalizeTosVersion(project.tosVersion || project.tosVersionName || project.name)
       groups.set(version, [...(groups.get(version) || []), project])
@@ -437,7 +457,7 @@ const getTosGroups = (projects: any[]) => {
 
   if (!groups.size) {
     projects
-      .filter(project => (isSoftwareProjectType(project.type) || [PROJECT_TYPE_MACHINE, PROJECT_TYPE_TECH].includes(project.type)) && normalizeStatus(project.status))
+      .filter(project => (isSoftwareProjectType(project.type) || [PROJECT_TYPE_MACHINE, PROJECT_TYPE_TECH].includes(project.type)) && !isIndependentSoftwareProject(project) && normalizeStatus(project.status))
       .forEach(project => {
         const version = getOverallTosVersion(project)
         groups.set(version, groups.get(version) || [])
@@ -509,12 +529,11 @@ function buildScopedMilestoneRows(
     overall: '',
     machine: PROJECT_TYPE_MACHINE,
     tosVersion: PROJECT_TYPE_TOS_VERSION,
-    independentSoftware: PROJECT_TYPE_INDEPENDENT_SOFTWARE,
     tech: PROJECT_TYPE_TECH,
   }
 
   let rowIndex = 0
-  return sortProjectsByRoadmapDimension(projects.filter(project => project.type === typeMap[scope] && normalizeStatus(project.status)))
+  return sortProjectsByRoadmapDimension(projects.filter(project => project.type === typeMap[scope] && !isIndependentSoftwareProject(project) && normalizeStatus(project.status)))
     .map(project => {
       const mainMarket = project.type === PROJECT_TYPE_MACHINE ? getMainMarket(project) : undefined
       const sourceTasks = project.type === PROJECT_TYPE_MACHINE
@@ -560,7 +579,6 @@ function scopeRows(rows: RoadmapMilestoneRow[], scope: RoadmapScope) {
   if (scope === 'overall') return rows
   if (scope === 'machine') return rows.filter(row => row.projectType === PROJECT_TYPE_MACHINE)
   if (scope === 'tosVersion') return rows.filter(row => row.projectType === PROJECT_TYPE_TOS_VERSION)
-  if (scope === 'independentSoftware') return rows.filter(row => row.projectType === PROJECT_TYPE_INDEPENDENT_SOFTWARE)
   return rows.filter(row => row.projectType === PROJECT_TYPE_TECH)
 }
 
@@ -609,6 +627,49 @@ function normalizeDateRange(value: unknown): MilestoneDateRange {
   const [start, end] = value
   if (!start || !end || !dayjs(start).isValid() || !dayjs(end).isValid()) return null
   return [dayjs(start).format('YYYY-MM-DD'), dayjs(end).format('YYYY-MM-DD')]
+}
+
+function formatMilestoneDateRangeValue(range: MilestoneDateRange) {
+  return range ? `${range[0]}${MILESTONE_RANGE_SEPARATOR}${range[1]}` : ''
+}
+
+function parseMilestoneDateRangeValue(value: unknown): MilestoneDateRange {
+  if (Array.isArray(value)) return normalizeDateRange(value)
+  const text = String(value || '').trim()
+  if (!text) return null
+  const [start, end] = text.split(MILESTONE_RANGE_SEPARATOR).map(item => item.trim())
+  return normalizeDateRange([start, end])
+}
+
+function isMilestoneDateFilter(condition: FilterCondition) {
+  return condition.field === MILESTONE_FILTER_FIELD
+}
+
+function createMilestoneDateFilter(range: MilestoneDateRange, id?: string): FilterCondition {
+  return {
+    id: id || createFilterCondition().id,
+    field: MILESTONE_FILTER_FIELD,
+    operator: 'contains',
+    value: formatMilestoneDateRangeValue(range),
+  }
+}
+
+function getMilestoneDateRangeFromFilters(conditions: FilterCondition[]) {
+  const condition = conditions.find(isMilestoneDateFilter)
+  return condition ? parseMilestoneDateRangeValue(condition.value) : null
+}
+
+function getStandardFilterConditions(conditions: FilterCondition[]) {
+  return conditions.filter(condition => !isMilestoneDateFilter(condition))
+}
+
+function normalizeProjectFilterConditions(conditions: FilterCondition[], fallbackRange?: MilestoneDateRange) {
+  const normalized = normalizeFilterConditions(getStandardFilterConditions(conditions))
+  const milestoneCondition = conditions.find(isMilestoneDateFilter)
+  const range = getMilestoneDateRangeFromFilters(conditions) || fallbackRange || null
+  return range
+    ? [...normalized, createMilestoneDateFilter(range, milestoneCondition?.id)]
+    : normalized
 }
 
 function normalizeSnapshotDateRange(value: unknown): SnapshotDateRange {
@@ -696,7 +757,10 @@ function buildCompareRows(baseRows: RoadmapMilestoneRow[], targetRows: RoadmapMi
 }
 
 function getAvailableColumnsForScope(scope: RoadmapScope) {
-  return BASE_COLUMN_OPTIONS.filter(col => scope === 'overall' || col.key !== 'tosVersionGroup')
+  return BASE_COLUMN_OPTIONS.filter(col => {
+    if (scope === 'overall') return col.key !== 'tosVersion'
+    return col.key !== 'tosVersionGroup'
+  })
 }
 
 function getDefaultVisibleColumnsForScope(scope: RoadmapScope) {
@@ -757,6 +821,7 @@ export default function MilestoneView({
     setStatusFilter('all')
     setFilters([])
     setTempFilters([])
+    setMilestoneDateRange(null)
     setCollapsedTosGroups(new Set())
     setVisibleColumns(getDefaultVisibleColumnsForScope(nextScope))
     setActiveSnapshotId(null)
@@ -768,8 +833,11 @@ export default function MilestoneView({
 
   const allRows = useMemo(() => buildRoadmapMilestoneRows(projects, marketPlanData, level1Tasks), [projects, marketPlanData, level1Tasks])
   const scopedRows = useMemo(() => scopeRows(allRows, scope), [allRows, scope])
-  const filteredRows = useMemo(() => applyFilterConditions(scopedRows, filters), [scopedRows, filters])
-  const dateFilteredRows = useMemo(() => applyMilestoneDateRange(filteredRows, milestoneDateRange), [filteredRows, milestoneDateRange])
+  const normalizedFilters = useMemo(() => normalizeProjectFilterConditions(filters, milestoneDateRange), [filters, milestoneDateRange])
+  const activeMilestoneDateRange = useMemo(() => getMilestoneDateRangeFromFilters(normalizedFilters), [normalizedFilters])
+  const standardFilters = useMemo(() => getStandardFilterConditions(normalizedFilters), [normalizedFilters])
+  const filteredRows = useMemo(() => applyFilterConditions(scopedRows, standardFilters), [scopedRows, standardFilters])
+  const dateFilteredRows = useMemo(() => applyMilestoneDateRange(filteredRows, activeMilestoneDateRange), [filteredRows, activeMilestoneDateRange])
   const statusRows = useMemo(() => (
     sharedRowsOverride || applyStatusFilter(dateFilteredRows, statusFilter)
   ), [dateFilteredRows, statusFilter, sharedRowsOverride])
@@ -800,7 +868,7 @@ export default function MilestoneView({
   ), [sourceRows, scope, compareMode, collapsedTosGroups])
   const availableColumns = useMemo(() => getAvailableColumnsForScope(scope), [scope])
   const defaultVisibleColumns = useMemo(() => getDefaultVisibleColumnsForScope(scope), [scope])
-  const hasActiveFilters = filters.some(isFilterConditionActive) || Boolean(milestoneDateRange)
+  const hasActiveFilters = normalizedFilters.some(isFilterConditionActive)
   const filterFieldOptions = useMemo(() => (
     availableColumns.map(col => ({
       value: col.key === 'milestones' ? 'milestonesText' : col.key,
@@ -872,10 +940,10 @@ export default function MilestoneView({
     scope,
     statusFilter,
     visibleColumns,
-    filters: normalizeFilterConditions(filters),
+    filters: normalizedFilters,
     collapsedKeys: Array.from(collapsedTosGroups),
     viewMode,
-    milestoneDateRange,
+    milestoneDateRange: activeMilestoneDateRange,
     ...(includeSharedRows ? { sharedRows: cloneRowsForShare(statusRows) } : {}),
   })
 
@@ -888,14 +956,16 @@ export default function MilestoneView({
     setScope(nextScope)
     onProjectTypeChange?.(PROJECT_TYPE_BY_SCOPE[nextScope])
     setStatusFilter(normalizeStatusFilter(state.statusFilter))
-    setFilters(normalizeFilterConditions((state.filters || []) as FilterCondition[]))
+    const nextDateRange = normalizeDateRange(state.milestoneDateRange)
+    const nextFilters = normalizeProjectFilterConditions((state.filters || []) as FilterCondition[], nextDateRange)
+    setFilters(nextFilters)
     setTempFilters([])
     setCollapsedTosGroups(new Set(Array.isArray(state.collapsedKeys) ? state.collapsedKeys : []))
     setVisibleColumns(getSafeVisibleColumns(nextScope, nextVisibleColumns))
     setViewMode(normalizeViewMode(state.viewMode))
-    const nextDateRange = normalizeDateRange(state.milestoneDateRange)
-    setMilestoneDateRange(nextDateRange)
-    if (nextDateRange) setCalendarMonth(dayjs(nextDateRange[0]).startOf('month'))
+    const appliedDateRange = getMilestoneDateRangeFromFilters(nextFilters)
+    setMilestoneDateRange(appliedDateRange)
+    if (appliedDateRange) setCalendarMonth(dayjs(appliedDateRange[0]).startOf('month'))
     setSharedRowsOverride(Array.isArray(state.sharedRows) ? state.sharedRows as RoadmapMilestoneRow[] : null)
     setActiveSnapshotId(null)
     setCompareMode(false)
@@ -935,21 +1005,12 @@ export default function MilestoneView({
     setStatusFilter('all')
     setFilters([])
     setTempFilters([])
+    setMilestoneDateRange(null)
     setCollapsedTosGroups(new Set())
     setVisibleColumns(getDefaultVisibleColumnsForScope(nextScope))
     setActiveSnapshotId(null)
     setSnapshotDateRange(null)
     setCompareMode(false)
-    setActiveSavedViewId(null)
-    setSharedRowsOverride(null)
-  }
-
-  const handleMilestoneDateRangeChange = (dates: any) => {
-    const nextRange = dates?.[0] && dates?.[1]
-      ? [dates[0].format('YYYY-MM-DD'), dates[1].format('YYYY-MM-DD')] as [string, string]
-      : null
-    setMilestoneDateRange(nextRange)
-    if (nextRange) setCalendarMonth(dayjs(nextRange[0]).startOf('month'))
     setActiveSavedViewId(null)
     setSharedRowsOverride(null)
   }
@@ -1134,6 +1195,74 @@ export default function MilestoneView({
     setProjectViewShareUrl(url)
     setShowProjectViewShareModal(true)
     void copyProjectViewShareUrl(url)
+  }
+
+  const getFilterDrawerInitialConditions = () => (
+    normalizedFilters.length ? normalizedFilters.map(item => ({ ...item })) : [createFilterCondition()]
+  )
+
+  const updateTempFilter = (conditionId: string, patch: Partial<FilterCondition>) => {
+    setTempFilters(prev => prev.map(item => item.id === conditionId ? { ...item, ...patch } : item))
+  }
+
+  const handleTempFilterFieldChange = (condition: FilterCondition, field: string) => {
+    updateTempFilter(condition.id, {
+      field,
+      operator: field === MILESTONE_FILTER_FIELD ? 'contains' : condition.operator,
+      value: '',
+    })
+  }
+
+  const handleTempFilterDateRangeChange = (condition: FilterCondition, dates: any) => {
+    const nextRange = dates?.[0] && dates?.[1]
+      ? [dates[0].format('YYYY-MM-DD'), dates[1].format('YYYY-MM-DD')] as [string, string]
+      : null
+    updateTempFilter(condition.id, {
+      operator: 'contains',
+      value: formatMilestoneDateRangeValue(nextRange),
+    })
+  }
+
+  const applyTempFilters = () => {
+    const nextFilters = normalizeProjectFilterConditions(tempFilters)
+    const nextDateRange = getMilestoneDateRangeFromFilters(nextFilters)
+    setFilters(nextFilters)
+    setMilestoneDateRange(nextDateRange)
+    if (nextDateRange) setCalendarMonth(dayjs(nextDateRange[0]).startOf('month'))
+    setShowFilterDrawer(false)
+    setActiveSavedViewId(null)
+    setSharedRowsOverride(null)
+  }
+
+  const renderFilterValueControl = (condition: FilterCondition) => {
+    if (isMilestoneDateFilter(condition)) {
+      const range = parseMilestoneDateRangeValue(condition.value)
+      return (
+        <div>
+          <DatePicker.RangePicker
+            style={{ width: '100%' }}
+            value={range ? [dayjs(range[0]), dayjs(range[1])] : null}
+            presets={MILESTONE_DATE_RANGE_PRESETS as any}
+            format="YYYY-MM-DD"
+            placeholder={['开始日期', '结束日期']}
+            onChange={(dates) => handleTempFilterDateRangeChange(condition, dates)}
+          />
+          <div style={{ marginTop: 6, color: '#64748b', fontSize: 12 }}>
+            选择后，里程碑节点列仅保留范围内的节点。
+          </div>
+        </div>
+      )
+    }
+
+    if (isValuelessFilterOperator(condition.operator)) return null
+
+    return (
+      <Input
+        placeholder="输入筛选值"
+        value={condition.value}
+        onChange={(event) => updateTempFilter(condition.id, { value: event.target.value })}
+      />
+    )
   }
 
   const savedProjectViewTabs = [
@@ -2395,7 +2524,7 @@ export default function MilestoneView({
 	                icon={<FilterOutlined />}
 	                type={hasActiveFilters ? 'primary' : 'default'}
 	                onClick={() => {
-	                  setTempFilters(filters.length ? filters.map(item => ({ ...item })) : [createFilterCondition()])
+	                  setTempFilters(getFilterDrawerInitialConditions())
 	                  setShowFilterDrawer(true)
 	                }}
 	              />
@@ -2536,7 +2665,7 @@ export default function MilestoneView({
 	            onPressEnter={handleSaveProjectView}
 	          />
 	          <div style={{ color: '#64748b', fontSize: 12 }}>
-	            将以当前分类、视图模式、状态筛选、日期范围、筛选条件、列设置和 tOS 折叠状态创建视图；快照和对比状态不会写入视图配置，名称不可重复。
+	            将以当前分类、视图模式、状态筛选、字段筛选条件、列设置和 tOS 折叠状态创建视图；快照和对比状态不会写入视图配置，名称不可重复。
 	          </div>
 	        </Space>
 	      </Modal>
@@ -2609,12 +2738,7 @@ export default function MilestoneView({
               <Button onClick={() => setShowFilterDrawer(false)}>取消</Button>
               <Button
 	                type="primary"
-	                onClick={() => {
-	                  setFilters(normalizeFilterConditions(tempFilters))
-	                  setShowFilterDrawer(false)
-	                  setActiveSavedViewId(null)
-                    setSharedRowsOverride(null)
-	                }}
+	                onClick={applyTempFilters}
               >
                 应用
               </Button>
@@ -2623,54 +2747,36 @@ export default function MilestoneView({
         )}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ padding: 12, border: '1px solid #e0f2fe', borderRadius: 8, background: '#f0f9ff' }}>
-            <div style={{ marginBottom: 8, color: '#0f172a', fontSize: 13, fontWeight: 700 }}>里程碑日期范围</div>
-            <DatePicker.RangePicker
-              style={{ width: '100%' }}
-              value={milestoneDateRange ? [dayjs(milestoneDateRange[0]), dayjs(milestoneDateRange[1])] : null}
-              presets={MILESTONE_DATE_RANGE_PRESETS as any}
-              format="YYYY-MM-DD"
-              onChange={handleMilestoneDateRangeChange}
-            />
-            <div style={{ marginTop: 8, color: '#64748b', fontSize: 12 }}>
-              选择后，里程碑节点列仅保留范围内的节点。
-            </div>
-          </div>
           {tempFilters.map((condition) => (
             <div key={condition.id} style={{ padding: 12, border: '1px solid #eef2ff', borderRadius: 8, background: '#fafbff' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 116px 40px', gap: 8, marginBottom: isValuelessFilterOperator(condition.operator) ? 0 : 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMilestoneDateFilter(condition) ? 'minmax(0, 1fr) 40px' : 'minmax(0, 1fr) 116px 40px', gap: 8, marginBottom: isValuelessFilterOperator(condition.operator) && !isMilestoneDateFilter(condition) ? 0 : 8 }}>
                 <Select
                   aria-label="筛选字段"
                   placeholder="筛选字段"
                   value={condition.field || undefined}
                   options={getFieldOptionsWithDuplicateDisabled(filterFieldOptions, tempFilters, condition.id)}
-                  onChange={(value) => setTempFilters(prev => prev.map(item => item.id === condition.id ? { ...item, field: value } : item))}
+                  onChange={(value) => handleTempFilterFieldChange(condition, value)}
                 />
-                <Select
-                  value={condition.operator}
-                  options={FILTER_OPERATORS as any}
-                  onChange={(value) => {
-                    const operator = value as FilterCondition['operator']
-                    setTempFilters(prev => prev.map(item => item.id === condition.id ? {
-                      ...item,
-                      operator,
-                      value: isValuelessFilterOperator(operator) ? '' : item.value,
-                    } : item))
-                  }}
-                />
+                {!isMilestoneDateFilter(condition) && (
+                  <Select
+                    value={condition.operator}
+                    options={FILTER_OPERATORS as any}
+                    onChange={(value) => {
+                      const operator = value as FilterCondition['operator']
+                      updateTempFilter(condition.id, {
+                        operator,
+                        value: isValuelessFilterOperator(operator) ? '' : condition.value,
+                      })
+                    }}
+                  />
+                )}
                 <Button
                   icon={<DeleteOutlined />}
                   danger
                   onClick={() => setTempFilters(prev => prev.length > 1 ? prev.filter(item => item.id !== condition.id) : [createFilterCondition()])}
                 />
               </div>
-              {!isValuelessFilterOperator(condition.operator) && (
-                <Input
-                  placeholder="输入筛选值"
-                  value={condition.value}
-                  onChange={(event) => setTempFilters(prev => prev.map(item => item.id === condition.id ? { ...item, value: event.target.value } : item))}
-                />
-              )}
+              {renderFilterValueControl(condition)}
             </div>
           ))}
           <Button
@@ -2705,7 +2811,7 @@ export default function MilestoneView({
         )}
       >
         <div style={{ marginBottom: 8, fontSize: 12, color: '#9ca3af' }}>
-          {scope === 'overall' ? '整体视图保留 tOS版本 维度；' : '当前视图不显示 tOS版本；'}固定列始终显示。
+          {scope === 'overall' ? '整体视图保留首列 tOS版本维度，不显示项目名后的重复 tOS版本；' : '当前视图不显示首列 tOS版本维度；'}固定列始终显示。
         </div>
         <Checkbox.Group
           value={visibleColumns}
