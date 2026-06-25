@@ -56,7 +56,7 @@ import {
   getDisplayPlanVersionsForHorizontalPlan,
   getNextPlanRevisionVersionNo,
   getPlanVersionId,
-  getRevisionKindForLatestPublishedVersion,
+  parsePlanVersionNo,
   type PlanRevisionKind,
 } from '@/lib/planVersioning'
 import {
@@ -83,20 +83,26 @@ import {
 } from '@/constants/projectTypes'
 import {
   MARKET_OPTIONS,
-  buildFollowVersionMetaForPublish,
   buildMarketRowsFromMarkets,
   canChangeMainMarket,
-  canCreateRevisionForMarket,
   cancelDraftRevision,
   formatFollowVersionSource,
   ensureMarketPlanDataForRows,
   getMainMarket,
+  getMarketCurrentVersion,
   getMarketFollowVersionKey,
+  getMarketVersions,
   getProjectMarketSnapshotKey,
   isFollowMarket,
+  markTaskActualTimeDetachedFromMain,
+  mergeFollowMarketActualDates,
   normalizeMarketRows,
+  removeFollowVersionMetaForMarkets,
+  setMarketCurrentVersion,
+  setMarketVersions,
   syncFollowMarketPlans,
   type MarketConfigRow,
+  type PlanVersionLike,
 } from '@/lib/marketRules'
 
 import { useUiStore } from '@/stores/ui'
@@ -172,9 +178,32 @@ const PLAN_TEMPLATE_ROLE_TO_PROJECT_PERMISSION_ROLE = {
   SPM: '项目经理',
 } as const
 const PLAN_REVISION_KIND_OPTIONS: Array<{ key: PlanRevisionKind; label: string }> = [
-  { key: 'gray', label: '创建灰度版本' },
+  { key: 'gray', label: '创建非正式版本' },
   { key: 'formal', label: '创建正式版本' },
 ]
+
+const getPlanRevisionKindLabel = (kind: PlanRevisionKind) => (kind === 'gray' ? '非正式' : '正式')
+
+const getLatestActivePlanVersion = (versions: PlanVersionLike[]) => (
+  versions
+    .filter(version => version.status !== '已取消')
+    .filter(version => parsePlanVersionNo(version.versionNo))
+    .sort((a, b) => comparePlanVersions(b, a))[0]
+)
+
+const getLatestPublishedPlanVersion = (versions: PlanVersionLike[]) => (
+  versions
+    .filter(version => version.status === '已发布')
+    .filter(version => parsePlanVersionNo(version.versionNo))
+    .sort((a, b) => comparePlanVersions(b, a))[0]
+)
+
+const getPlanRevisionKindFromVersion = (version?: PlanVersionLike): PlanRevisionKind | null => {
+  if (!version) return null
+  const parsed = parsePlanVersionNo(version.versionNo)
+  if (!parsed) return null
+  return parsed.minor === null ? 'formal' : 'gray'
+}
 
 type PlanFilterCondition = FilterCondition
 type PlanCloneSource = {
@@ -251,7 +280,7 @@ export default function ProjectSpaceContainer() {
     projectPlanLevel, setProjectPlanLevel, projectPlanViewMode, setProjectPlanViewMode,
     projectPlanGanttScaleMode, setProjectPlanGanttScaleMode,
     projectPlanOverviewTab, setProjectPlanOverviewTab, planMetaCollapsed, setPlanMetaCollapsed,
-    versions, setVersions, currentVersion, setCurrentVersion,
+    versions: baseVersions, setVersions: setBaseVersions, currentVersion: baseCurrentVersion, setCurrentVersion: setBaseCurrentVersion,
     tasks, setTasks, searchText, setSearchText,
     level2PlanTasks, setLevel2PlanTasks, level2PlanMilestones, setLevel2PlanMilestones,
     createdLevel2Plans, setCreatedLevel2Plans, activeLevel2Plan, setActiveLevel2Plan,
@@ -265,6 +294,8 @@ export default function ProjectSpaceContainer() {
     compareFilterType, setCompareFilterType,
     marketPlanData, setMarketPlanData,
     marketFollowVersionMeta, setMarketFollowVersionMeta,
+    marketVersionsByKey, setMarketVersionsByKey,
+    marketCurrentVersionByKey, setMarketCurrentVersionByKey,
     ganttEditingTask, setGanttEditingTask, progressEditingTask, setProgressEditingTask,
     parentTimeWarning, setParentTimeWarning,
     milestoneTimeWarning, setMilestoneTimeWarning,
@@ -312,6 +343,53 @@ export default function ProjectSpaceContainer() {
   const [marketDraftRows, setMarketDraftRows] = useState<MarketConfigRow[]>([])
 
   // ═══════ Derived ═══════
+  const isWholeMachineProject = selectedProject?.type === '整机产品项目'
+  const marketConfigRows = selectedProject && isWholeMachineProject
+    ? buildMarketRowsFromMarkets(selectedProject.markets || [], marketConfigsByProjectId[selectedProject.id])
+    : []
+  const primaryMarket = getMainMarket(marketConfigRows)
+  const isMarketScopedLevel1 = !!selectedProject && isWholeMachineProject && projectPlanLevel === 'level1' && !!selectedMarketTab
+  const versions = useMemo(
+    () => (
+      isMarketScopedLevel1 && selectedProject
+        ? getMarketVersions(marketVersionsByKey, selectedProject.id, selectedMarketTab, baseVersions)
+        : baseVersions
+    ),
+    [baseVersions, isMarketScopedLevel1, marketVersionsByKey, selectedMarketTab, selectedProject?.id],
+  )
+  const currentVersion = isMarketScopedLevel1 && selectedProject
+    ? getMarketCurrentVersion(marketCurrentVersionByKey, selectedProject.id, selectedMarketTab, versions, baseCurrentVersion)
+    : baseCurrentVersion
+  const setVersions = (nextVersions: PlanVersionLike[] | ((prev: PlanVersionLike[]) => PlanVersionLike[])) => {
+    if (isMarketScopedLevel1 && selectedProject) {
+      setMarketVersionsByKey(prev => setMarketVersions(prev, selectedProject.id, selectedMarketTab, baseVersions, nextVersions))
+      return
+    }
+    setBaseVersions(nextVersions as typeof baseVersions)
+  }
+  const setCurrentVersion = (versionId: string) => {
+    if (isMarketScopedLevel1 && selectedProject) {
+      setMarketCurrentVersionByKey(prev => setMarketCurrentVersion(prev, selectedProject.id, selectedMarketTab, versionId))
+      return
+    }
+    setBaseCurrentVersion(versionId)
+  }
+  const getVersionsForMarket = (market: string) => (
+    selectedProject
+      ? getMarketVersions(marketVersionsByKey, selectedProject.id, market, baseVersions)
+      : baseVersions
+  )
+  const setVersionsForMarket = (
+    market: string,
+    nextVersions: PlanVersionLike[] | ((prev: PlanVersionLike[]) => PlanVersionLike[]),
+  ) => {
+    if (!selectedProject) return
+    setMarketVersionsByKey(prev => setMarketVersions(prev, selectedProject.id, market, baseVersions, nextVersions))
+  }
+  const setCurrentVersionForMarket = (market: string, versionId: string) => {
+    if (!selectedProject) return
+    setMarketCurrentVersionByKey(prev => setMarketCurrentVersion(prev, selectedProject.id, market, versionId))
+  }
   const hasDraftVersion = versions.some(v => v.status === '修订中')
   const currentVersionData = versions.find(v => v.id === currentVersion)
   const isCurrentDraft = currentVersionData?.status === '修订中'
@@ -320,18 +398,13 @@ export default function ProjectSpaceContainer() {
   const hasPublishedLevel1Plan = versions.some(v => v.status === '已发布')
   const allPlanTypes = [...LEVEL2_PLAN_TYPES, ...customTypes]
 
-  const isWholeMachineProject = selectedProject?.type === '整机产品项目'
-  const marketConfigRows = selectedProject && isWholeMachineProject
-    ? buildMarketRowsFromMarkets(selectedProject.markets || [], marketConfigsByProjectId[selectedProject.id])
-    : []
   const currentMarketIsFollow = isWholeMachineProject && isFollowMarket(marketConfigRows, selectedMarketTab)
-  const canCreateCurrentMarketRevision = !isWholeMachineProject || canCreateRevisionForMarket(marketConfigRows, selectedMarketTab, projectPlanLevel)
   const currentMarketData = isWholeMachineProject ? marketPlanData[selectedMarketTab] : null
   const getCurrentMarketFollowVersionSource = (versionId: string) => {
     if (!selectedProject || !isWholeMachineProject || projectPlanLevel !== 'level1') return undefined
     return marketFollowVersionMeta[getMarketFollowVersionKey(selectedProject.id, selectedMarketTab, versionId)]
   }
-  const renderVersionLabel = (version: typeof versions[number]) => {
+  const renderVersionLabel = (version: PlanVersionLike) => {
     const base = `${version.versionNo} (${version.status})`
     const followLabel = formatFollowVersionSource(getCurrentMarketFollowVersionSource(version.id))
     if (!followLabel) return base
@@ -482,14 +555,7 @@ export default function ProjectSpaceContainer() {
     if (!canEditLevel1Plan) {
       return (
         <Tooltip title="无一级计划编辑权限">
-          <Button icon={<CopyOutlined />} style={buttonStyle} disabled>克隆</Button>
-        </Tooltip>
-      )
-    }
-    if (currentMarketIsFollow) {
-      return (
-        <Tooltip title="该市场跟随主市场，一级计划由主市场发布后自动同步">
-          <Button icon={<CopyOutlined />} style={buttonStyle} disabled>克隆</Button>
+          <Button icon={<CopyOutlined />} style={buttonStyle} disabled aria-label="克隆计划" />
         </Tooltip>
       )
     }
@@ -499,7 +565,7 @@ export default function ProjectSpaceContainer() {
         trigger={['click']}
         placement="bottomLeft"
       >
-        <Button icon={<CopyOutlined />} style={buttonStyle}>克隆</Button>
+        <Button icon={<CopyOutlined />} style={buttonStyle} aria-label="克隆计划" title="克隆计划" />
       </Dropdown>
     )
   }
@@ -523,8 +589,8 @@ export default function ProjectSpaceContainer() {
         trigger={['click']}
         placement="bottomLeft"
       >
-        <Button type="primary" icon={<PlusOutlined />} style={buttonStyle}>
-          创建修订 <DownOutlined />
+        <Button type="primary" icon={<PlusOutlined />} style={buttonStyle} aria-label="创建修订" title="创建修订">
+          创建修订
         </Button>
       </Dropdown>
     )
@@ -630,8 +696,41 @@ export default function ProjectSpaceContainer() {
     const newlyFollowedMarkets = normalizedRows
       .filter(row => !row.isMain && row.followsMain && !previousFollowMarkets.has(row.market))
       .map(row => row.market)
-    const followRevisionKind = getRevisionKindForLatestPublishedVersion(versions)
-    const shouldCreateFollowRevision = newlyFollowedMarkets.length > 0 && !hasDraftVersion && !!followRevisionKind
+    const currentFollowMarkets = new Set(
+      normalizedRows
+        .filter(row => !row.isMain && row.followsMain)
+        .map(row => row.market),
+    )
+    const unfollowedMarkets = [...previousFollowMarkets].filter(market => !currentFollowMarkets.has(market))
+    const mainMarketVersions = mainMarket ? getVersionsForMarket(mainMarket) : versions
+    const mainSourceVersion = getLatestActivePlanVersion(mainMarketVersions)
+    const followRevisionKind = getPlanRevisionKindFromVersion(mainSourceVersion)
+    const ensuredMarketPlanData = ensureMarketPlanDataForRows(marketPlanData, normalizedRows, LEVEL1_TASKS, FIXED_LEVEL2_PLANS)
+    const mainTasksForFollow = mainMarket ? (ensuredMarketPlanData[mainMarket]?.tasks || LEVEL1_TASKS) : LEVEL1_TASKS
+    const syncedMarketPlanData = newlyFollowedMarkets.reduce((acc, market) => ({
+      ...acc,
+      [market]: {
+        ...(acc[market] || { level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] }),
+        tasks: mergeFollowMarketActualDates(mainTasksForFollow, acc[market]?.tasks || []),
+      },
+    }), ensuredMarketPlanData)
+    const followPublishPlans = selectedProject && mainMarket && mainSourceVersion && followRevisionKind
+      ? newlyFollowedMarkets.map(market => {
+          const followMarketVersions = getVersionsForMarket(market)
+          const versionsWithoutDraft = followMarketVersions.map(version => (
+            version.status === '修订中' ? { ...version, status: '已取消' } : version
+          ))
+          const versionNo = getNextPlanRevisionVersionNo(versionsWithoutDraft, followRevisionKind)
+          const versionId = getPlanVersionId(versionNo)
+          return {
+            market,
+            versionId,
+            versionNo,
+            versions: [...versionsWithoutDraft, { id: versionId, versionNo, status: '已发布' }],
+            tasks: syncedMarketPlanData[market]?.tasks || [],
+          }
+        })
+      : []
     const updatedProject = {
       ...selectedProject,
       markets: nextMarkets,
@@ -641,30 +740,51 @@ export default function ProjectSpaceContainer() {
     setMarketConfigForProject(selectedProject.id, normalizedRows)
     setSelectedProject(updatedProject)
     setProjects(prev => prev.map(project => project.id === updatedProject.id ? updatedProject : project) as typeof prev)
-    setMarketPlanData(prev => {
-      const ensuredData = ensureMarketPlanDataForRows(prev, normalizedRows, LEVEL1_TASKS, FIXED_LEVEL2_PLANS)
-      if (!shouldCreateFollowRevision || !mainMarket) return ensuredData
-      const mainTasks = ensuredData[mainMarket]?.tasks || LEVEL1_TASKS
-      return newlyFollowedMarkets.reduce((acc, market) => ({
-        ...acc,
-        [market]: {
-          ...(acc[market] || { level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] }),
-          tasks: JSON.parse(JSON.stringify(mainTasks)),
-        },
-      }), ensuredData)
-    })
-    if (shouldCreateFollowRevision && followRevisionKind) {
-      const versionNo = getNextPlanRevisionVersionNo(versions, followRevisionKind)
-      const versionId = getPlanVersionId(versionNo)
-      const kindLabel = followRevisionKind === 'gray' ? '灰度' : '正式'
-      setVersions([...versions, { id: versionId, versionNo, status: '修订中' }])
-      setCurrentVersion(versionId)
-      setSelectedMarketTab(newlyFollowedMarkets[0])
-      setIsEditMode(true)
-      message.success(`市场配置已保存，已为跟随市场创建${kindLabel}修订版本 ${versionNo}`)
+    setMarketPlanData(syncedMarketPlanData)
+    if (unfollowedMarkets.length > 0) {
+      setMarketFollowVersionMeta(prev => removeFollowVersionMetaForMarkets(prev, {
+        projectId: selectedProject.id,
+        markets: unfollowedMarkets,
+        versionIds: unfollowedMarkets
+          .map(market => getLatestPublishedPlanVersion(getVersionsForMarket(market))?.id)
+          .filter((versionId): versionId is string => !!versionId),
+      }))
+    }
+    if (followPublishPlans.length > 0 && mainSourceVersion && followRevisionKind) {
+      followPublishPlans.forEach(plan => {
+        setVersionsForMarket(plan.market, plan.versions)
+        setCurrentVersionForMarket(plan.market, plan.versionId)
+      })
+      setPublishedSnapshots(prev => {
+        const nextSnapshots = { ...prev }
+        followPublishPlans.forEach(plan => {
+          nextSnapshots[getProjectMarketSnapshotKey(selectedProject.id, plan.market, plan.versionId)] = JSON.parse(JSON.stringify(plan.tasks))
+        })
+        return nextSnapshots
+      })
+      setMarketFollowVersionMeta(prev => {
+        const nextMeta = { ...prev }
+        followPublishPlans.forEach(plan => {
+          nextMeta[getMarketFollowVersionKey(selectedProject.id, plan.market, plan.versionId)] = {
+            sourceMarket: mainMarket,
+            sourceVersionId: mainSourceVersion.id,
+            sourceVersionNo: mainSourceVersion.versionNo,
+          }
+        })
+        return nextMeta
+      })
+      setSelectedMarketTab(followPublishPlans[0].market)
+      setIsEditMode(false)
+      const kindLabel = getPlanRevisionKindLabel(followRevisionKind)
+      const versionText = followPublishPlans.map(plan => `${plan.market} ${plan.versionNo}`).join('、')
+      message.success(`市场配置已保存，已为跟随市场发布${kindLabel}版本：${versionText}`)
     } else {
       if (!nextMarkets.includes(selectedMarketTab)) setSelectedMarketTab(mainMarket || nextMarkets[0])
-      message.success('市场配置已保存')
+      if (newlyFollowedMarkets.length > 0) {
+        message.warning('市场配置已保存，主市场暂无可跟随版本，未自动创建跟随版本')
+      } else {
+        message.success('市场配置已保存')
+      }
     }
     setShowMarketEditor(false)
   }
@@ -803,7 +923,14 @@ export default function ProjectSpaceContainer() {
     const latestPub = versions
       .filter(v => v.status === '已发布')
       .sort((a, b) => comparePlanVersions(b, a))[0]
-    const scanTarget = latestPub && publishedSnapshots[latestPub.id] ? publishedSnapshots[latestPub.id] : effectiveTasks
+    const scanSnapshotKey = latestPub && selectedProject && isWholeMachineProject && projectPlanLevel === 'level1'
+      ? getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, latestPub.id)
+      : latestPub?.id
+    const scanTarget = latestPub && scanSnapshotKey && publishedSnapshots[scanSnapshotKey]
+      ? publishedSnapshots[scanSnapshotKey]
+      : latestPub && publishedSnapshots[latestPub.id]
+        ? publishedSnapshots[latestPub.id]
+        : effectiveTasks
     const notices = scanDueTasks(scanTarget)
     if (notices.length === 0) return
     // 后台仍触发飞书 mock 推送，但不再弹 notification 干扰用户进入计划视图的体验
@@ -953,25 +1080,17 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleCreateRevision = (revisionKind: PlanRevisionKind) => {
-    if (!canCreateRevisionForMarket(marketConfigRows, selectedMarketTab, projectPlanLevel)) {
-      message.warning('该市场跟随主市场，一级计划修订由主市场发布同步生成')
-      return
-    }
     const versionNo = getNextPlanRevisionVersionNo(versions, revisionKind)
     const nid = getPlanVersionId(versionNo)
     const projectType = selectedProject?.type || selectedPlanType
     const templateTasks = configTemplateTasksByType[projectType] || LEVEL1_TEMPLATE_TASKS
     const clonedTasks = initializeProjectPlanTasksFromTemplate(templateTasks)
-    const kindLabel = revisionKind === 'gray' ? '灰度' : '正式'
+    const kindLabel = getPlanRevisionKindLabel(revisionKind)
     setVersions([...versions, { id: nid, versionNo, status: '修订中' }])
     setCurrentVersion(nid); setEffectiveTasks(clonedTasks); message.success(`已创建${kindLabel}修订版本 ${versionNo}`)
   }
 
   const handlePublish = () => {
-    if (currentMarketIsFollow && projectPlanLevel === 'level1') {
-      message.warning('该市场跟随主市场，一级计划由主市场发布后自动同步')
-      return
-    }
     // 父子时间区间校验：违规则阻止发布并滚动到首条违规行
     const tasksToValidate = projectPlanLevel === 'level2' && activeLevel2Plan && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1'
       ? level2PlanTasks.filter((t: any) => t.planId === activeLevel2Plan)
@@ -1011,29 +1130,16 @@ export default function ProjectSpaceContainer() {
         const currentMarketKey = getMarketFollowVersionKey(selectedProject.id, selectedMarketTab, publishedVersionId)
         const nextMeta = { ...prev }
         delete nextMeta[currentMarketKey]
-        return {
-          ...nextMeta,
-          ...buildFollowVersionMetaForPublish({
-            projectId: selectedProject.id,
-            rows: marketConfigRows,
-            sourceMarket: selectedMarketTab,
-            sourceVersionId: publishedVersionId,
-            sourceVersionNo: versionNo,
-          }),
-        }
+        return nextMeta
       })
     }
     setPublishedSnapshots(prev => {
       const snapshot = JSON.parse(JSON.stringify(effectiveTasks))
-      const nextSnapshots = { ...prev, [publishedVersionId]: snapshot }
+      const nextSnapshots = { ...prev }
       if (selectedProject && isWholeMachineProject && projectPlanLevel === 'level1') {
-        const marketsToSnapshot = shouldSyncFollowMarkets
-          ? marketConfigRows.filter(row => row.market === selectedMarketTab || row.followsMain).map(row => row.market)
-          : [selectedMarketTab]
-        marketsToSnapshot.forEach(market => {
-          const marketTasks = market === selectedMarketTab ? effectiveTasks : (nextMarketPlanData[market]?.tasks || [])
-          nextSnapshots[getProjectMarketSnapshotKey(selectedProject.id, market, publishedVersionId)] = JSON.parse(JSON.stringify(marketTasks))
-        })
+        nextSnapshots[getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, publishedVersionId)] = snapshot
+      } else {
+        nextSnapshots[publishedVersionId] = snapshot
       }
       return nextSnapshots
     })
@@ -1042,6 +1148,82 @@ export default function ProjectSpaceContainer() {
     })
     const syncedCount = shouldSyncFollowMarkets ? marketConfigRows.filter(row => row.followsMain).length : 0
     message.success(syncedCount > 0 ? `发布成功，已同步 ${syncedCount} 个跟随市场` : '发布成功')
+  }
+
+  const updateActualDateForTask = (
+    tableTasks: any[],
+    currentSetTasks: (newTasks: any[]) => void,
+    record: any,
+    field: 'actualStartDate' | 'actualEndDate',
+    value: string,
+    isLevel2Custom: boolean,
+  ) => {
+    const patch = { [field]: value }
+    const isLevel1MarketTable = !isLevel2Custom && isWholeMachineProject && projectPlanLevel === 'level1'
+
+    if (isLevel1MarketTable && currentMarketIsFollow) {
+      currentSetTasks(markTaskActualTimeDetachedFromMain(tableTasks, record.id, patch))
+      return
+    }
+
+    const updatedTasks = tableTasks.map((task: any) => (
+      task.id === record.id ? { ...task, [field]: value } : task
+    ))
+
+    if (isLevel1MarketTable && selectedMarketTab === primaryMarket) {
+      setMarketPlanData((prev: any) => {
+        const nextMarketPlanData = {
+          ...prev,
+          [selectedMarketTab]: {
+            ...(prev[selectedMarketTab] || { level2Tasks: [], createdLevel2Plans: [] }),
+            tasks: updatedTasks,
+          },
+        }
+        return syncFollowMarketPlans(nextMarketPlanData, marketConfigRows)
+      })
+      return
+    }
+
+    currentSetTasks(updatedTasks)
+  }
+
+  const renderProjectPlanViewModeSwitcher = () => {
+    const currentValue = projectPlanViewMode === 'horizontal' && projectPlanLevel === 'level2'
+      ? 'table'
+      : projectPlanViewMode
+    const options = projectPlanLevel === 'level1'
+      ? (isEditMode
+        ? [
+            { label: '竖版表格', value: 'table', icon: <UnorderedListOutlined /> },
+            { label: '甘特图', value: 'gantt', icon: <BarChartOutlined /> },
+          ]
+        : [
+            { label: '竖版表格', value: 'table', icon: <UnorderedListOutlined /> },
+            { label: '横版表格', value: 'horizontal', icon: <SwapOutlined /> },
+            { label: '甘特图', value: 'gantt', icon: <BarChartOutlined /> },
+          ])
+      : [
+          { label: '表格', value: 'table', icon: <UnorderedListOutlined /> },
+          { label: '甘特图', value: 'gantt', icon: <BarChartOutlined /> },
+        ]
+
+    return (
+      <Radio.Group
+        value={currentValue}
+        onChange={(event) => setProjectPlanViewMode(event.target.value as 'table' | 'horizontal' | 'gantt')}
+        buttonStyle="solid"
+        size="middle"
+        className="pms-plan-view-mode-switcher"
+      >
+        {options.map(option => (
+          <Tooltip title={option.label} key={option.value}>
+            <Radio.Button value={option.value} aria-label={option.label}>
+              {option.icon}
+            </Radio.Button>
+          </Tooltip>
+        ))}
+      </Radio.Group>
+    )
   }
 
   const handleCancelRevision = () => {
@@ -1299,11 +1481,11 @@ export default function ProjectSpaceContainer() {
       } })
       if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isRowEditable(record) ? <Input className="pms-edit-input" value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val}天</span> })
       if (visibleColumns.includes('actualStartDate')) cols.push({ title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 130, render: (val: string, record: any) => {
-        if (isLatestPublished && !isEditMode) return <ClickToEditDate value={val} onChange={(newVal) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, actualStartDate: newVal } : t); currentSetTasks(updated) }} disabledDate={(current) => record.actualEndDate ? current.isAfter(dayjs(record.actualEndDate), 'day') : false} />
+        if (isLatestPublished && !isEditMode) return <ClickToEditDate value={val} onChange={(newVal) => updateActualDateForTask(tableTasks, currentSetTasks, record, 'actualStartDate', newVal, isLevel2Custom)} disabledDate={(current) => record.actualEndDate ? current.isAfter(dayjs(record.actualEndDate), 'day') : false} />
         return <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span>
       } })
       if (visibleColumns.includes('actualEndDate')) cols.push({ title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 130, render: (val: string, record: any) => {
-        if (isLatestPublished && !isEditMode) return <ClickToEditDate value={val} onChange={(newVal) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, actualEndDate: newVal } : t); currentSetTasks(updated) }} disabledDate={(current) => record.actualStartDate ? current.isBefore(dayjs(record.actualStartDate), 'day') : false} />
+        if (isLatestPublished && !isEditMode) return <ClickToEditDate value={val} onChange={(newVal) => updateActualDateForTask(tableTasks, currentSetTasks, record, 'actualEndDate', newVal, isLevel2Custom)} disabledDate={(current) => record.actualStartDate ? current.isBefore(dayjs(record.actualStartDate), 'day') : false} />
         return <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span>
       } })
       if (visibleColumns.includes('actualDays')) cols.push({ title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (val: number) => <span style={{ fontSize: 12, color: '#4b5563' }}>{val > 0 ? `${val}天` : '-'}</span> })
@@ -1540,13 +1722,16 @@ export default function ProjectSpaceContainer() {
         <Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{currentVersionData?.versionNo}({currentVersionData?.status})</Tag>
         <Tag color="green" style={{ fontSize: 12 }}>自动保存</Tag>
         {renderPlanCloneButton()}
-        {currentMarketIsFollow && projectPlanLevel === 'level1'
-          ? <Tooltip title="该市场跟随主市场，一级计划由主市场发布后自动同步"><Button type="primary" icon={<SaveOutlined />} disabled>发布</Button></Tooltip>
-          : <Button type="primary" icon={<SaveOutlined />} onClick={handlePublish}>发布</Button>}
-        <Button danger icon={<StopOutlined />} onClick={handleCancelRevision}>取消修订</Button>
+        <Tooltip title="发布"><Button type="primary" icon={<SaveOutlined />} onClick={handlePublish} aria-label="发布" /></Tooltip>
+        <Tooltip title="取消修订"><Button danger icon={<StopOutlined />} onClick={handleCancelRevision} aria-label="取消修订" /></Tooltip>
       </Space>
     )
-    return (<Space>{!hasDraftVersion && (canCreateCurrentMarketRevision ? renderCreateRevisionButton() : <Tooltip title="该市场跟随主市场，一级计划修订由主市场发布同步生成"><Button type="primary" icon={<PlusOutlined />} disabled>创建修订</Button></Tooltip>)}<Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
+    return (
+      <Space>
+        {!hasDraftVersion && renderCreateRevisionButton()}
+        <Tooltip title="历史版本对比"><Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)} aria-label="历史版本对比" /></Tooltip>
+      </Space>
+    )
   }
 
   // ═══════ renderVersionCompareResult ═══════
@@ -2130,12 +2315,13 @@ export default function ProjectSpaceContainer() {
                       <Space size={4}>{row.market}{row.isMain && <span style={{ fontSize: 11 }}>主</span>}{row.followsMain && <span style={{ fontSize: 11 }}>跟随</span>}</Space>
                     </Tag>
                   ))}
-                  <Tooltip title="编辑市场">
-                    <Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6, marginLeft: 4 }} onClick={openMarketEditor}>市场编辑</Button>
-                  </Tooltip>
                 </Space>
               </Col>
-              <Col><Tag style={{ fontSize: 11, borderRadius: 4 }}>当前市场: <span style={{ fontWeight: 600, color: marketColors[selectedMarketTab] || '#1890ff' }}>{selectedMarketTab}</span></Tag></Col>
+              <Col>
+                <Tooltip title="编辑市场">
+                  <Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6 }} onClick={openMarketEditor}>市场编辑</Button>
+                </Tooltip>
+              </Col>
             </Row>
           </Card>
         )}
@@ -2235,45 +2421,46 @@ export default function ProjectSpaceContainer() {
                   </Space>
                   <Space size={6}>
                     {!hasDraftVersion && (canEditLevel1Plan
-                      ? (canCreateCurrentMarketRevision
-                        ? renderCreateRevisionButton({ borderRadius: 6 })
-                        : <Tooltip title="该市场跟随主市场，一级计划修订由主市场发布同步生成"><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled>创建修订</Button></Tooltip>)
-                      : <Tooltip title="无一级计划编辑权限"><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled>创建修订</Button></Tooltip>)}
+                      ? renderCreateRevisionButton({ borderRadius: 6 })
+                      : <Tooltip title="无一级计划编辑权限"><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled aria-label="创建修订">创建修订</Button></Tooltip>)}
                     {renderPlanCloneButton({ borderRadius: 6 })}
                     {isCurrentDraft && (canEditLevel1Plan
-                      ? (currentMarketIsFollow && projectPlanLevel === 'level1'
-                        ? <Tooltip title="该市场跟随主市场，一级计划由主市场发布后自动同步"><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} disabled>发布</Button></Tooltip>
-                        : <Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} onClick={handlePublish}>发布</Button>)
-                      : <Tooltip title="无一级计划编辑权限"><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} disabled>发布</Button></Tooltip>)}
+                      ? <Tooltip title="发布"><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} onClick={handlePublish} aria-label="发布" /></Tooltip>
+                      : <Tooltip title="无一级计划编辑权限"><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} disabled aria-label="发布" /></Tooltip>)}
                     {isCurrentDraft && canEditLevel1Plan && (
-                      <Button danger icon={<StopOutlined />} style={{ borderRadius: 6 }} onClick={handleCancelRevision}>取消修订</Button>
-                    )}
-                    <Button icon={<HistoryOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowVersionCompare(true)}>版本对比</Button>
-                    {projectPlanLevel === 'level1' && versions.some(v => v.status === '已发布') && (
-                      <Tooltip title="复制分享链接，无需权限即可查看">
-                        <Button icon={<ShareAltOutlined />} style={{ borderRadius: 6 }} onClick={() => {
-                          const url = `${window.location.origin}/share/plan?projectId=${selectedProject?.id}&level=level1`
-                          navigator.clipboard.writeText(url).then(() => { message.success('分享链接已复制到剪贴板') })
-                        }}>分享</Button>
-                      </Tooltip>
+                      <Tooltip title="取消修订"><Button danger icon={<StopOutlined />} style={{ borderRadius: 6 }} onClick={handleCancelRevision} aria-label="取消修订" /></Tooltip>
                     )}
                   </Space>
                 </Space>
               </Col>
               <Col>
                 <Space size={6}>
+                  {projectPlanLevel === 'level1' && projectPlanViewMode === 'gantt' && (
+                    <Space size={4}>
+                      <span style={{ color: '#9ca3af', fontSize: 13 }}>刻度</span>
+                      <Radio.Group
+                        value={projectPlanGanttScaleMode}
+                        onChange={(e) => setProjectPlanGanttScaleMode(e.target.value)}
+                        optionType="button"
+                        buttonStyle="solid"
+                        size="small"
+                        options={GANTT_SCALE_OPTIONS}
+                      />
+                    </Space>
+                  )}
                   {projectPlanLevel === 'level1' && projectPlanViewMode !== 'horizontal' ? (
                     <Tooltip title="筛选">
-                      <Button
-                        icon={<FilterOutlined />}
-                        style={{ borderRadius: 6 }}
-                        onClick={() => {
-                          setTempLevel1PlanFilters(level1PlanFilters.length ? level1PlanFilters.map(item => ({ ...item })) : [createFilterCondition()])
-                          setShowLevel1PlanFilterDrawer(true)
-                        }}
-                      >
-                        筛选{hasActiveLevel1PlanFilters ? ' ●' : ''}
-                      </Button>
+                      <Badge dot={hasActiveLevel1PlanFilters} offset={[-2, 2]}>
+                        <Button
+                          icon={<FilterOutlined />}
+                          style={{ borderRadius: 6 }}
+                          onClick={() => {
+                            setTempLevel1PlanFilters(level1PlanFilters.length ? level1PlanFilters.map(item => ({ ...item })) : [createFilterCondition()])
+                            setShowLevel1PlanFilterDrawer(true)
+                          }}
+                          aria-label="筛选"
+                        />
+                      </Badge>
                     </Tooltip>
                   ) : projectPlanLevel !== 'level1' ? (
                     <Input placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
@@ -2289,9 +2476,8 @@ export default function ProjectSpaceContainer() {
                         icon={projectPlanLevel === 'level1' ? <SettingOutlined /> : <AppstoreOutlined />}
                         style={{ borderRadius: 6 }}
                         onClick={() => setShowColumnModal(true)}
-                      >
-                        {projectPlanLevel === 'level1' ? '列设置' : null}
-                      </Button>
+                        aria-label="列设置"
+                      />
                     </Tooltip>
                   )}
                   {getScopeKey() !== null && (
@@ -2300,25 +2486,19 @@ export default function ProjectSpaceContainer() {
                       <Tooltip title="全部收起"><Button icon={<MinusSquareOutlined />} size="small" style={{ borderRadius: 6 }} onClick={collapseAll} /></Tooltip>
                     </>
                   )}
-                  {projectPlanLevel === 'level1' && projectPlanViewMode === 'gantt' && (
-                    <Space size={4}>
-                      <span style={{ color: '#9ca3af', fontSize: 13 }}>刻度</span>
-                      <Radio.Group
-                        value={projectPlanGanttScaleMode}
-                        onChange={(e) => setProjectPlanGanttScaleMode(e.target.value)}
-                        optionType="button"
-                        buttonStyle="solid"
-                        size="small"
-                        options={GANTT_SCALE_OPTIONS}
-                      />
-                    </Space>
+                  <Tooltip title="版本对比">
+                    <Button icon={<HistoryOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowVersionCompare(true)} aria-label="版本对比" />
+                  </Tooltip>
+                  {projectPlanLevel === 'level1' && versions.some(v => v.status === '已发布') && (
+                    <Tooltip title="复制分享链接，无需权限即可查看">
+                      <Button icon={<ShareAltOutlined />} style={{ borderRadius: 6 }} onClick={() => {
+                        const url = `${window.location.origin}/share/plan?projectId=${selectedProject?.id}&level=level1`
+                        navigator.clipboard.writeText(url).then(() => { message.success('分享链接已复制到剪贴板') })
+                      }} aria-label="分享计划" />
+                    </Tooltip>
                   )}
-                  <Radio.Group
-                    value={projectPlanViewMode === 'horizontal' && projectPlanLevel === 'level2' ? 'table' : projectPlanViewMode}
-                    onChange={(e) => setProjectPlanViewMode(e.target.value)}
-                    optionType="button" buttonStyle="solid" size="small"
-                    options={projectPlanLevel === 'level1' ? (isEditMode ? [{ label: '竖版表格', value: 'table' }, { label: '甘特图', value: 'gantt' }] : [{ label: '竖版表格', value: 'table' }, { label: '横版表格', value: 'horizontal' }, { label: '甘特图', value: 'gantt' }]) : [{ label: '表格', value: 'table' }, { label: '甘特图', value: 'gantt' }]}
-                  />
+                  <Divider type="vertical" style={{ margin: '0 2px' }} />
+                  {renderProjectPlanViewModeSwitcher()}
                 </Space>
               </Col>
             </Row>

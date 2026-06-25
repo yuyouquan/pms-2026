@@ -21,3 +21,7 @@ skills-lock.json
 
 # Local debug output (root only — diagrams/ may contain its own output.png)
 /output.png
+
+# Local agent/tooling artifacts
+.codegraph/
+.playwright-cli/
