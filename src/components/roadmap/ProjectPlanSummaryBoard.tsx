@@ -71,7 +71,9 @@ interface SummaryRow {
   milestones: SummaryMilestone[]
   milestonesText: string
   isCollapsedPreview?: boolean
+  collapsePreviewType?: 'category' | 'series'
   hiddenProjectCount?: number
+  hiddenSeriesCount?: number
 }
 
 const SUMMARY_SCOPES: { key: SummaryScope; label: string }[] = [
@@ -385,12 +387,36 @@ function computeRowSpans(rows: SummaryRow[], key: keyof SummaryRow, groupKeys: (
   return spans
 }
 
-function countBy(rows: SummaryRow[], key: keyof SummaryRow) {
-  return rows.reduce((acc, row) => {
-    const value = String(row[key])
-    acc[value] = (acc[value] || 0) + 1
+const getSeriesGroupKey = (category: string, series: string) => `series::${category}::${series}`
+
+function countUniqueProjects(rows: SummaryRow[]) {
+  return new Set(rows.map(row => row.projectId)).size
+}
+
+function countSeriesByCategory(rows: SummaryRow[]) {
+  const categorySeriesMap = rows.reduce((acc, row) => {
+    const category = row.productCategory
+    if (!acc[category]) acc[category] = new Set<string>()
+    acc[category].add(row.productSeries)
     return acc
-  }, {} as Record<string, number>)
+  }, {} as Record<string, Set<string>>)
+
+  return Object.fromEntries(
+    Object.entries(categorySeriesMap).map(([category, series]) => [category, series.size]),
+  ) as Record<string, number>
+}
+
+function countProjectsBySeriesGroup(rows: SummaryRow[]) {
+  const seriesProjectMap = rows.reduce((acc, row) => {
+    const key = getSeriesGroupKey(row.productCategory, row.productSeries)
+    if (!acc[key]) acc[key] = new Set<string>()
+    acc[key].add(row.projectId)
+    return acc
+  }, {} as Record<string, Set<string>>)
+
+  return Object.fromEntries(
+    Object.entries(seriesProjectMap).map(([key, projects]) => [key, projects.size]),
+  ) as Record<string, number>
 }
 
 function scopeRows(rows: SummaryRow[], scope: SummaryScope) {
@@ -502,7 +528,11 @@ function cloneRowsForShare(rows: SummaryRow[]) {
   }))
 }
 
-function applyCollapsedCategories(rows: SummaryRow[], collapsedCategories: Set<string>) {
+function applyCollapsedGroups(
+  rows: SummaryRow[],
+  collapsedCategories: Set<string>,
+  collapsedSeries: Set<string>,
+) {
   const visible: SummaryRow[] = []
   let i = 0
   while (i < rows.length) {
@@ -512,10 +542,39 @@ function applyCollapsedCategories(rows: SummaryRow[], collapsedCategories: Set<s
       group.push(rows[i])
       i++
     }
-    if (collapsedCategories.has(category) && group.length > 1) {
-      visible.push({ ...group[0], isCollapsedPreview: true, hiddenProjectCount: group.length - 1 })
-    } else {
-      visible.push(...group)
+    const seriesCount = new Set(group.map(row => row.productSeries)).size
+    if (collapsedCategories.has(category) && seriesCount > 1) {
+      visible.push({
+        ...group[0],
+        key: `${group[0].key}-category-collapsed`,
+        isCollapsedPreview: true,
+        collapsePreviewType: 'category',
+        hiddenProjectCount: countUniqueProjects(group) - 1,
+        hiddenSeriesCount: seriesCount - 1,
+      })
+      continue
+    }
+
+    let seriesIndex = 0
+    while (seriesIndex < group.length) {
+      const series = group[seriesIndex].productSeries
+      const seriesGroup: SummaryRow[] = []
+      while (seriesIndex < group.length && group[seriesIndex].productSeries === series) {
+        seriesGroup.push(group[seriesIndex])
+        seriesIndex++
+      }
+      const seriesKey = getSeriesGroupKey(category, series)
+      if (collapsedSeries.has(seriesKey) && seriesGroup.length > 1) {
+        visible.push({
+          ...seriesGroup[0],
+          key: `${seriesGroup[0].key}-series-collapsed`,
+          isCollapsedPreview: true,
+          collapsePreviewType: 'series',
+          hiddenProjectCount: countUniqueProjects(seriesGroup) - 1,
+        })
+      } else {
+        visible.push(...seriesGroup)
+      }
     }
   }
   return visible
@@ -548,6 +607,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   const [scope, setScope] = useState<SummaryScope>('overall')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
+  const [collapsedSeries, setCollapsedSeries] = useState<Set<string>>(new Set())
   const [motionVersion, setMotionVersion] = useState(0)
   const [filters, setFilters] = useState<FilterCondition[]>([])
   const [tempFilters, setTempFilters] = useState<FilterCondition[]>([])
@@ -579,9 +639,9 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   const statusRows = useMemo(() => (
     sharedRowsOverride || applyStatusFilter(dateFilteredRows, statusFilter)
   ), [dateFilteredRows, statusFilter, sharedRowsOverride])
-  const rows = useMemo(() => applyCollapsedCategories(statusRows, collapsedCategories), [statusRows, collapsedCategories])
-  const categoryCounts = useMemo(() => countBy(statusRows, 'productCategory'), [statusRows])
-  const seriesCounts = useMemo(() => countBy(statusRows, 'productSeries'), [statusRows])
+  const rows = useMemo(() => applyCollapsedGroups(statusRows, collapsedCategories, collapsedSeries), [statusRows, collapsedCategories, collapsedSeries])
+  const categorySeriesCounts = useMemo(() => countSeriesByCategory(statusRows), [statusRows])
+  const seriesProjectCounts = useMemo(() => countProjectsBySeriesGroup(statusRows), [statusRows])
   const availableColumns = useMemo(() => getAvailableColumnsForScope(scope), [scope])
   const defaultVisibleColumns = useMemo(() => getDefaultVisibleColumnsForScope(scope), [scope])
   const hasActiveFilters = normalizedFilters.some(isFilterConditionActive)
@@ -634,7 +694,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     statusFilter,
     visibleColumns,
     filters: normalizedFilters,
-    collapsedKeys: Array.from(collapsedCategories),
+    collapsedKeys: [...Array.from(collapsedCategories), ...Array.from(collapsedSeries)],
     viewMode,
     milestoneDateRange: activeMilestoneDateRange,
     ...(includeSharedRows ? { sharedRows: cloneRowsForShare(statusRows) } : {}),
@@ -650,9 +710,11 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     setStatusFilter(normalizeStatusFilter(state.statusFilter))
     const nextDateRange = normalizeDateRange(state.milestoneDateRange)
     const nextFilters = normalizeProjectFilterConditions((state.filters || []) as FilterCondition[], nextDateRange)
+    const collapsedKeys = Array.isArray(state.collapsedKeys) ? state.collapsedKeys.map(String) : []
     setFilters(nextFilters)
     setTempFilters([])
-    setCollapsedCategories(new Set(Array.isArray(state.collapsedKeys) ? state.collapsedKeys : []))
+    setCollapsedCategories(new Set(collapsedKeys.filter(key => !key.startsWith('series::')).map(key => key.replace(/^category::/, ''))))
+    setCollapsedSeries(new Set(collapsedKeys.filter(key => key.startsWith('series::'))))
     setVisibleColumns(getSafeVisibleColumns(nextScope, nextVisibleColumns))
     setViewMode(normalizeViewMode(state.viewMode))
     const appliedDateRange = getMilestoneDateRangeFromFilters(nextFilters)
@@ -696,6 +758,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     setTempFilters([])
     setMilestoneDateRange(null)
     setCollapsedCategories(new Set())
+    setCollapsedSeries(new Set())
     setVisibleColumns(getDefaultVisibleColumnsForScope(nextScope))
     setActiveSavedViewId(null)
     setSharedRowsOverride(null)
@@ -711,15 +774,28 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       return next
     })
   }
+  const toggleSeries = (category: string, series: string) => {
+    const seriesKey = getSeriesGroupKey(category, series)
+    setActiveSavedViewId(null)
+    setSharedRowsOverride(null)
+    setCollapsedSeries(prev => {
+      const next = new Set(prev)
+      if (next.has(seriesKey)) next.delete(seriesKey)
+      else next.add(seriesKey)
+      return next
+    })
+  }
   const expandAllCategories = () => {
     setActiveSavedViewId(null)
     setSharedRowsOverride(null)
     setCollapsedCategories(new Set())
+    setCollapsedSeries(new Set())
   }
   const collapseAllCategories = () => {
     setActiveSavedViewId(null)
     setSharedRowsOverride(null)
-    setCollapsedCategories(new Set(Object.keys(categoryCounts).filter(category => categoryCounts[category] > 1)))
+    setCollapsedCategories(new Set(Object.keys(categorySeriesCounts).filter(category => categorySeriesCounts[category] > 1)))
+    setCollapsedSeries(new Set(Object.keys(seriesProjectCounts).filter(key => seriesProjectCounts[key] > 1)))
   }
 
   const buildExportColumns = () => (
@@ -952,18 +1028,21 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         }),
         render: (value: string) => {
           const theme = getCategoryTheme(value)
+          const canCollapse = (categorySeriesCounts[value] || 0) > 1
           return (
             <div className="pms-summary-category-content">
-              <Button
-                type="text"
-                size="small"
-                className="pms-summary-collapse-button"
-                icon={collapsedCategories.has(value) ? <CaretRightOutlined /> : <CaretDownOutlined />}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  toggleCategory(value)
-                }}
-              />
+              {canCollapse ? (
+                <Button
+                  type="text"
+                  size="small"
+                  className="pms-summary-collapse-button"
+                  icon={collapsedCategories.has(value) ? <CaretRightOutlined /> : <CaretDownOutlined />}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    toggleCategory(value)
+                  }}
+                />
+              ) : <span className="pms-summary-collapse-placeholder" />}
               <div>
                 <div className="pms-summary-category-name" style={{ color: theme.color }}>{theme.label || value}</div>
               </div>
@@ -984,15 +1063,35 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
 	        onCell: (row, index) => ({
 	          rowSpan: seriesSpans[index ?? 0],
 	          className: `pms-summary-series-cell pms-summary-series-${getCategoryTheme(row.productCategory).key}`,
-	        }),
+        }),
         render: (value: string, row) => {
           const theme = getCategoryTheme(row.productCategory)
+          const seriesKey = getSeriesGroupKey(row.productCategory, value)
+          const projectCount = seriesProjectCounts[seriesKey] || 0
+          const isCategoryCollapsedPreview = row.collapsePreviewType === 'category'
+          const canCollapse = row.collapsePreviewType !== 'category' && projectCount > 1
           return (
             <div className="pms-summary-series-content">
-              <span className="pms-summary-series-dot" style={{ background: theme.accent }} />
+              {canCollapse ? (
+                <Button
+                  type="text"
+                  size="small"
+                  className="pms-summary-collapse-button"
+                  icon={collapsedSeries.has(seriesKey) ? <CaretRightOutlined /> : <CaretDownOutlined />}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    toggleSeries(row.productCategory, value)
+                  }}
+                />
+              ) : (
+                <span className="pms-summary-series-dot" style={{ background: theme.accent }} />
+              )}
               <div>
                 <div className="pms-summary-series-name">{value}</div>
-                <div className="pms-summary-series-meta">{seriesCounts[value] || 0}个项目</div>
+                <div className="pms-summary-series-meta">{projectCount}个项目</div>
+                {isCategoryCollapsedPreview && !!row.hiddenSeriesCount && (
+                  <div className="pms-summary-series-hidden">另收起 {row.hiddenSeriesCount} 个系列</div>
+                )}
               </div>
             </div>
           )
@@ -1010,12 +1109,14 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
 	        className: 'pms-summary-project-cell',
 	        render: (value: string, row) => (
 	          <div className="pms-summary-project-content">
-            <Tooltip title={row.projectType}>
-              <span className="pms-summary-project-name">{value}</span>
-            </Tooltip>
-            {row.isCollapsedPreview && !!row.hiddenProjectCount && (
-              <Tag color="blue" style={{ margin: 0, borderRadius: 10 }}>+{row.hiddenProjectCount}</Tag>
-            )}
+            <div>
+              <Tooltip title={row.projectType}>
+                <span className="pms-summary-project-name">{value}</span>
+              </Tooltip>
+              {row.isCollapsedPreview && !!row.hiddenProjectCount && (
+                <div className="pms-summary-project-hidden">另收起 {row.hiddenProjectCount} 个项目</div>
+              )}
+            </div>
           </div>
         ),
       })
@@ -1103,7 +1204,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     })
 
     return cols
-  }, [availableColumns, visibleColumns, scope, categoryCounts, categorySpans, collapsedCategories, onViewProject, seriesCounts, seriesSpans])
+  }, [availableColumns, visibleColumns, scope, categorySeriesCounts, categorySpans, collapsedCategories, collapsedSeries, onViewProject, seriesProjectCounts, seriesSpans])
 
   const calendarDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth])
   const calendarEvents = useMemo(() => {
@@ -1659,6 +1760,11 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         .pms-summary-collapse-button:hover {
           background: rgba(255,255,255,0.7) !important;
         }
+        .pms-summary-collapse-placeholder {
+          width: 18px;
+          height: 18px;
+          flex-shrink: 0;
+        }
         .pms-summary-category-dot,
         .pms-summary-series-dot {
           width: 7px;
@@ -1677,6 +1783,22 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
           color: #64748b;
           font-size: 11px;
           margin-top: 3px;
+        }
+        .pms-summary-series-hidden {
+          color: #2563eb;
+          font-size: 11px;
+          font-weight: 700;
+          line-height: 1.2;
+          margin-top: 4px;
+          white-space: nowrap;
+        }
+        .pms-summary-project-hidden {
+          color: #2563eb;
+          font-size: 11px;
+          font-weight: 700;
+          line-height: 1.2;
+          margin-top: 4px;
+          white-space: nowrap;
         }
         .pms-summary-series-name {
           color: #9a3412;

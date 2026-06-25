@@ -7,7 +7,7 @@ import {
   PROJECT_TYPE_TOS_VERSION,
 } from '@/constants/projectTypes'
 import type { GanttScaleMode } from '@/lib/ganttScale'
-import type { FollowVersionSource } from '@/lib/marketRules'
+import type { FollowVersionSource, MarketCurrentVersionState, MarketVersionsState } from '@/lib/marketRules'
 import type { CompareTableRow } from '@/lib/versionCompare'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -211,6 +211,8 @@ export interface PlanState {
   // Market plan data (whole-machine projects)
   marketPlanData: Record<string, { tasks: any[]; level2Tasks: any[]; createdLevel2Plans: Level2Plan[] }>
   marketFollowVersionMeta: Record<string, FollowVersionSource>
+  marketVersionsByKey: MarketVersionsState
+  marketCurrentVersionByKey: MarketCurrentVersionState
 
   // Editing helpers
   ganttEditingTask: any
@@ -264,6 +266,8 @@ export interface PlanActions {
 
   setMarketPlanData: (v: Record<string, { tasks: any[]; level2Tasks: any[]; createdLevel2Plans: Level2Plan[] }> | ((prev: Record<string, { tasks: any[]; level2Tasks: any[]; createdLevel2Plans: Level2Plan[] }>) => Record<string, { tasks: any[]; level2Tasks: any[]; createdLevel2Plans: Level2Plan[] }>)) => void
   setMarketFollowVersionMeta: (v: Record<string, FollowVersionSource> | ((prev: Record<string, FollowVersionSource>) => Record<string, FollowVersionSource>)) => void
+  setMarketVersionsByKey: (v: MarketVersionsState | ((prev: MarketVersionsState) => MarketVersionsState)) => void
+  setMarketCurrentVersionByKey: (v: MarketCurrentVersionState | ((prev: MarketCurrentVersionState) => MarketCurrentVersionState)) => void
 
   setGanttEditingTask: (v: any) => void
   setProgressEditingTask: (v: any) => void
@@ -367,6 +371,8 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
     },
   },
   marketFollowVersionMeta: {},
+  marketVersionsByKey: {},
+  marketCurrentVersionByKey: {},
 
   // Editing helpers
   ganttEditingTask: null,
@@ -419,6 +425,8 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
 
   setMarketPlanData: (v) => set((s) => ({ marketPlanData: typeof v === 'function' ? v(s.marketPlanData) : v })),
   setMarketFollowVersionMeta: (v) => set((s) => ({ marketFollowVersionMeta: typeof v === 'function' ? v(s.marketFollowVersionMeta) : v })),
+  setMarketVersionsByKey: (v) => set((s) => ({ marketVersionsByKey: typeof v === 'function' ? v(s.marketVersionsByKey) : v })),
+  setMarketCurrentVersionByKey: (v) => set((s) => ({ marketCurrentVersionByKey: typeof v === 'function' ? v(s.marketCurrentVersionByKey) : v })),
 
   setGanttEditingTask: (v) => set({ ganttEditingTask: v }),
   setProgressEditingTask: (v) => set({ progressEditingTask: v }),

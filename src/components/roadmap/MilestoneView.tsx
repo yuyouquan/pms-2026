@@ -575,6 +575,25 @@ function countBy(rows: RoadmapMilestoneRow[], key: keyof RoadmapMilestoneRow) {
   }, {} as Record<string, number>)
 }
 
+const getSeriesCountKey = (row: RoadmapMilestoneRow, scope: RoadmapScope) => (
+  scope === 'overall'
+    ? `${row.tosVersionGroup}::${row.productCategory}::${row.productSeries}`
+    : `${row.productCategory}::${row.productSeries}`
+)
+
+function countProjectsBySeriesGroup(rows: RoadmapMilestoneRow[], scope: RoadmapScope) {
+  const seriesProjectMap = rows.reduce((acc, row) => {
+    const key = getSeriesCountKey(row, scope)
+    if (!acc[key]) acc[key] = new Set<string>()
+    acc[key].add(row.projectId)
+    return acc
+  }, {} as Record<string, Set<string>>)
+
+  return Object.fromEntries(
+    Object.entries(seriesProjectMap).map(([key, projects]) => [key, projects.size]),
+  ) as Record<string, number>
+}
+
 function scopeRows(rows: RoadmapMilestoneRow[], scope: RoadmapScope) {
   if (scope === 'overall') return rows
   if (scope === 'machine') return rows.filter(row => row.projectType === PROJECT_TYPE_MACHINE)
@@ -905,12 +924,11 @@ export default function MilestoneView({
 	    })
 	    return stats
 	  }, [compareRows])
-	  const tosSpans = useMemo(() => computeMilestoneRowSpans(rows, 'tosVersionGroup'), [rows])
+  const tosSpans = useMemo(() => computeMilestoneRowSpans(rows, 'tosVersionGroup'), [rows])
   const categorySpans = useMemo(() => computeMilestoneRowSpans(rows, 'productCategory', scope === 'overall' ? ['tosVersionGroup'] : []), [rows, scope])
   const seriesSpans = useMemo(() => computeMilestoneRowSpans(rows, 'productSeries', scope === 'overall' ? ['tosVersionGroup', 'productCategory'] : ['productCategory']), [rows, scope])
   const tosCounts = useMemo(() => countBy(statusRows, 'tosVersionGroup'), [statusRows])
-  const categoryCounts = useMemo(() => countBy(statusRows, 'productCategory'), [statusRows])
-  const seriesCounts = useMemo(() => countBy(statusRows, 'productSeries'), [statusRows])
+  const seriesProjectCounts = useMemo(() => countProjectsBySeriesGroup(sourceRows, scope), [sourceRows, scope])
   const rowsSignature = useMemo(() => (
     rows.map(row => `${row.key}:${row.isCollapsedPreview ? 'closed' : 'open'}:${row.hiddenProjectCount || 0}`).join('|')
   ), [rows])
@@ -1371,12 +1389,13 @@ export default function MilestoneView({
 	        }),
         render: (value: string, row) => {
           const theme = getCategoryTheme(row.productCategory)
+          const projectCount = seriesProjectCounts[getSeriesCountKey(row, scope)] || 0
           return (
             <div className="pms-summary-series-content">
               <span className="pms-summary-series-dot" style={{ background: theme.accent }} />
               <div>
                 <div className="pms-summary-series-name">{value}</div>
-                <div className="pms-summary-series-meta">{seriesCounts[value] || 0}个项目</div>
+                <div className="pms-summary-series-meta">{projectCount}个项目</div>
               </div>
             </div>
           )
@@ -1494,7 +1513,7 @@ export default function MilestoneView({
     })
 
     return cols
-  }, [availableColumns, visibleColumns, scope, tosSpans, categorySpans, seriesSpans, collapsedTosGroups, tosCounts, categoryCounts, seriesCounts, compareMode, onViewProject])
+  }, [availableColumns, visibleColumns, scope, tosSpans, categorySpans, seriesSpans, collapsedTosGroups, tosCounts, seriesProjectCounts, compareMode, onViewProject])
 
   const calendarDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth])
   const calendarEvents = useMemo(() => {

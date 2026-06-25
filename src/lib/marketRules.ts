@@ -20,6 +20,8 @@ export type FollowVersionSource = {
 }
 
 export type FollowVersionMeta = Record<string, FollowVersionSource>
+export type MarketVersionsState = Record<string, PlanVersionLike[]>
+export type MarketCurrentVersionState = Record<string, string>
 
 export type MarketPlanEntry = {
   tasks: any[]
@@ -31,7 +33,121 @@ export type MarketPlanDataLike = Record<string, MarketPlanEntry>
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value))
 
+const getTaskActualDateKey = (task: any) => String(task?.taskName || '').trim()
+
+const buildTaskMapByActualDateKey = (tasks: any[]) => {
+  const taskMap = new Map<string, any>()
+  ;(tasks || []).forEach(task => {
+    const key = getTaskActualDateKey(task)
+    if (!key || taskMap.has(key)) return
+    taskMap.set(key, task)
+  })
+  return taskMap
+}
+
+const clearActualTimeDetachedFlag = (task: any) => {
+  const nextTask = { ...task }
+  delete nextTask.actualTimeDetachedFromMain
+  return nextTask
+}
+
+export const mergeFollowMarketActualDates = (
+  mainTasks: any[],
+  historicalFollowTasks: any[] = [],
+) => {
+  const historicalTasks = buildTaskMapByActualDateKey(historicalFollowTasks)
+  return clone(mainTasks || []).map((task: any) => {
+    const key = getTaskActualDateKey(task)
+    const historicalTask = key ? historicalTasks.get(key) : undefined
+    if (historicalTask?.actualTimeDetachedFromMain) {
+      return {
+        ...clearActualTimeDetachedFlag(task),
+        actualStartDate: historicalTask.actualStartDate || '',
+        actualEndDate: historicalTask.actualEndDate || '',
+        actualTimeDetachedFromMain: true,
+      }
+    }
+    return clearActualTimeDetachedFlag({
+      ...task,
+      actualStartDate: task.actualStartDate || '',
+      actualEndDate: task.actualEndDate || '',
+    })
+  })
+}
+
+export const markTaskActualTimeDetachedFromMain = (
+  tasks: any[],
+  taskId: string,
+  patch: { actualStartDate?: string; actualEndDate?: string },
+) => {
+  return clone(tasks || []).map((task: any) => {
+    if (String(task.id) !== String(taskId)) return task
+    return {
+      ...task,
+      ...patch,
+      actualTimeDetachedFromMain: true,
+    }
+  })
+}
+
 export const isValidMarket = (market: string) => MARKET_OPTIONS.includes(market)
+
+export const getMarketPlanVersionKey = (
+  projectId: string,
+  market: string,
+) => `project::${projectId}::${market}::level1::versions`
+
+export const getMarketVersions = (
+  state: MarketVersionsState,
+  projectId: string,
+  market: string,
+  fallbackVersions: PlanVersionLike[],
+) => {
+  const key = getMarketPlanVersionKey(projectId, market)
+  return clone(state[key] || fallbackVersions || [])
+}
+
+export const setMarketVersions = (
+  state: MarketVersionsState,
+  projectId: string,
+  market: string,
+  fallbackVersions: PlanVersionLike[],
+  versions: PlanVersionLike[] | ((prev: PlanVersionLike[]) => PlanVersionLike[]),
+): MarketVersionsState => {
+  const key = getMarketPlanVersionKey(projectId, market)
+  const prevVersions = getMarketVersions(state, projectId, market, fallbackVersions)
+  const nextVersions = typeof versions === 'function' ? versions(prevVersions) : versions
+  return {
+    ...state,
+    [key]: clone(nextVersions || []),
+  }
+}
+
+export const getMarketCurrentVersion = (
+  state: MarketCurrentVersionState,
+  projectId: string,
+  market: string,
+  versions: PlanVersionLike[],
+  fallbackCurrentVersion: string,
+) => {
+  const key = getMarketPlanVersionKey(projectId, market)
+  const currentVersion = state[key] || fallbackCurrentVersion
+  if (versions.some(version => version.id === currentVersion)) return currentVersion
+  const latestPublished = versions
+    .filter(version => version.status === '已发布')
+    .sort((a, b) => parseInt(b.versionNo.replace('V', ''), 10) - parseInt(a.versionNo.replace('V', ''), 10))[0]
+  return latestPublished?.id || versions[0]?.id || currentVersion
+}
+
+export const setMarketCurrentVersion = (
+  state: MarketCurrentVersionState,
+  projectId: string,
+  market: string,
+  currentVersion: string,
+): MarketCurrentVersionState => ({
+  ...state,
+  [getMarketPlanVersionKey(projectId, market)]: currentVersion,
+})
 
 export const getMainMarket = (rows: MarketConfigRow[]) => (
   rows.find(row => row.isMain)?.market || rows[0]?.market || ''
@@ -85,12 +201,11 @@ export const isFollowMarket = (rows: MarketConfigRow[], market: string) => {
 }
 
 export const canCreateRevisionForMarket = (
-  rows: MarketConfigRow[],
-  market: string,
-  planLevel: string,
+  _rows: MarketConfigRow[],
+  _market: string,
+  _planLevel: string,
 ) => {
-  if (planLevel !== 'level1') return true
-  return !isFollowMarket(rows, market)
+  return true
 }
 
 export const canChangeMainMarket = (versions: PlanVersionLike[]) => (
@@ -134,7 +249,7 @@ export const syncFollowMarketPlans = (
     const existing = marketPlanData[row.market] || { level2Tasks: [], createdLevel2Plans: [] }
     nextData[row.market] = {
       ...existing,
-      tasks: clone(mainMarketData.tasks || []),
+      tasks: mergeFollowMarketActualDates(mainMarketData.tasks || [], existing.tasks || []),
       level2Tasks: existing.level2Tasks || [],
       createdLevel2Plans: existing.createdLevel2Plans || [],
     }
@@ -179,6 +294,27 @@ export const buildFollowVersionMetaForPublish = ({
     }
     return acc
   }, {})
+}
+
+export const removeFollowVersionMetaForMarkets = (
+  meta: FollowVersionMeta,
+  {
+    projectId,
+    markets,
+    versionIds,
+  }: {
+    projectId: string
+    markets: string[]
+    versionIds: string[]
+  },
+): FollowVersionMeta => {
+  const nextMeta = { ...meta }
+  markets.forEach(market => {
+    versionIds.forEach(versionId => {
+      delete nextMeta[getMarketFollowVersionKey(projectId, market, versionId)]
+    })
+  })
+  return nextMeta
 }
 
 export const ensureMarketPlanDataForRows = (

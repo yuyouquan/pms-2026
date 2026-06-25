@@ -767,11 +767,11 @@ for (const required of [
 }
 for (const required of [
   'PLAN_REVISION_KIND_OPTIONS',
-  '创建灰度版本',
+  '创建非正式版本',
   '创建正式版本',
   'getNextPlanRevisionVersionNo',
   'getPlanVersionId',
-  'getRevisionKindForLatestPublishedVersion',
+  'getPlanRevisionKindFromVersion',
   'comparePlanVersions',
   'renderCreateRevisionButton',
 ]) {
@@ -781,12 +781,15 @@ for (const required of [
 }
 for (const required of [
   'newlyFollowedMarkets',
-  'shouldCreateFollowRevision',
-  '市场配置已保存，已为跟随市场创建',
-  'setSelectedMarketTab(newlyFollowedMarkets[0])',
+  "status === '修订中' ? { ...version, status: '已取消' } : version",
+  "status: '已发布'",
+  'setPublishedSnapshots',
+  'getMarketFollowVersionKey',
+  '市场配置已保存，已为跟随市场发布',
+  'setSelectedMarketTab(followPublishPlans[0].market)',
 ]) {
   if (!projectSpaceContainer.includes(required)) {
-    failures.push(`Project space follow-market auto revision missing ${required}`)
+    failures.push(`Project space follow-market auto publish missing ${required}`)
   }
 }
 
