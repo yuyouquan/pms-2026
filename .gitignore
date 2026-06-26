@@ -25,3 +25,4 @@ skills-lock.json
 # Local agent/tooling artifacts
 .codegraph/
 .playwright-cli/
+.vercel

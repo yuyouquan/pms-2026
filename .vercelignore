@@ -1,0 +1,5 @@
+.codegraph/
+.playwright-cli/
+.next/
+node_modules/
+*.log
