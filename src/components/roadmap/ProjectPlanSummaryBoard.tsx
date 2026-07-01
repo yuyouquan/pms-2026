@@ -141,8 +141,8 @@ const DEPARTMENT_BY_PROJECT: Record<string, string> = {
   '9': '软件项目二部',
 }
 
-const MACHINE_MILESTONE_NAMES = ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'STR6']
-const SOFTWARE_MILESTONE_NAMES = ['概念启动', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5', 'MR6', 'MR7']
+const MACHINE_MILESTONE_NAMES = ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5']
+const TOS_VERSION_MILESTONE_NAMES = ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'tOS16.1.101', 'tOS16.1.102', 'tOS16.1.103', 'tOS16.1.104']
 const TECH_MILESTONE_NAMES = ['概念启动', 'TDR1', 'TDR2', 'TDR3', 'TDR4']
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 const MILESTONE_DATE_RANGE_PRESETS = [
@@ -322,7 +322,7 @@ const makeSummaryRows = (projects: any[]): SummaryRow[] => {
     if (isSoftwareProjectType(project.type)) {
       const normalizedProjectType = normalizeSoftwareProjectType(project.type, project.name)
       if (normalizedProjectType === PROJECT_TYPE_INDEPENDENT_SOFTWARE) continue
-      const milestones = buildMilestones(project, SOFTWARE_MILESTONE_NAMES, rowIndex)
+      const milestones = buildMilestones(project, TOS_VERSION_MILESTONE_NAMES, rowIndex)
       rows.push({
         key: `${normalizedProjectType}-${project.id}`,
         projectId: project.id,
