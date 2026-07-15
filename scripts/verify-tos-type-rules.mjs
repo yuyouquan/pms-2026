@@ -56,6 +56,15 @@ assert.deepEqual(
 )
 
 assert.deepEqual(
+  plain(buildTosTypeRows(['Full', 'Slim'], 'Slim')),
+  [
+    { id: 'tos-type-Full', type: 'Full', isMain: false },
+    { id: 'tos-type-Slim', type: 'Slim', isMain: true },
+  ],
+  'the scalar compatibility field should remain the main type when reconstructing rows',
+)
+
+assert.deepEqual(
   plain(buildTosTypeRows([], 'invalid')),
   [{ id: 'tos-type-Full', type: 'Full', isMain: true }],
   'missing or invalid project data should default to Full',

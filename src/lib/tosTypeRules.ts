@@ -80,10 +80,11 @@ export const buildTosTypeRows = (
   const sourceTypes = versionTypes.filter(isValidTosType)
   const fallbackType: TosPlanType = isValidTosType(versionType) ? versionType : 'Full'
   const types = sourceTypes.length > 0 ? sourceTypes : [fallbackType]
+  const mainType = sourceTypes.includes(fallbackType) ? fallbackType : types[0]
   return normalizeTosTypeRows(types.map((type, index) => ({
     id: `tos-type-${type}`,
     type,
-    isMain: index === 0,
+    isMain: type === mainType,
   })))
 }
 
