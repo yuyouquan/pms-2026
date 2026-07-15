@@ -56,6 +56,7 @@ export interface ProjectItem {
   productType?: string;
   tosVersionName?: string;
   versionType?: string;
+  versionTypes?: string[];
   market?: string;
   ppm?: string;
   tpm?: string;
