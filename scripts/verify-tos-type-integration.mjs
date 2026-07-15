@@ -13,6 +13,13 @@ const required = [
   ['src/stores/plan.ts', 'tosTypeCurrentVersionByKey'],
   ['src/types/index.ts', 'versionTypes?'],
   ['src/types/app.ts', 'versionTypes'],
+  ['src/containers/ProjectSpaceContainer.tsx', 'isTosTypeScoped'],
+  ['src/containers/ProjectSpaceContainer.tsx', 'currentTosTypeData'],
+  ['src/containers/ProjectSpaceContainer.tsx', 'getTosTypeVersions'],
+  ['src/containers/ProjectSpaceContainer.tsx', 'getTosTypeSnapshotKey'],
+  ['src/containers/ProjectSpaceContainer.tsx', 'effectiveLevel2PlanTasks'],
+  ['src/containers/ProjectSpaceContainer.tsx', 'effectiveCreatedLevel2Plans'],
+  ['src/containers/ProjectSpaceContainer.tsx', 'effectiveLevel2PlanMeta'],
 ]
 
 const failures = required.flatMap(([file, token]) => (

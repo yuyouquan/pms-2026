@@ -104,10 +104,22 @@ import {
   type MarketConfigRow,
   type PlanVersionLike,
 } from '@/lib/marketRules'
+import {
+  buildTosTypeRows,
+  createTosTypePlanEntry,
+  ensureTosTypePlanDataForRows,
+  getMainTosType,
+  getTosTypeCurrentVersion,
+  getTosTypeSnapshotKey,
+  getTosTypeVersions,
+  setTosTypeCurrentVersion,
+  setTosTypeVersions,
+  type TosTypePlanEntry,
+} from '@/lib/tosTypeRules'
 
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
-import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
+import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, INITIAL_LEVEL2_PLAN_TASKS, INITIAL_LEVEL2_PLAN_META, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
 import { usePermissionStore, useHasPermission } from '@/stores/permission'
 import { PermissionConfig } from '@/components/permission/PermissionModule'
@@ -198,6 +210,17 @@ const getLatestPublishedPlanVersion = (versions: PlanVersionLike[]) => (
     .sort((a, b) => comparePlanVersions(b, a))[0]
 )
 
+const clearTosTypeExecutionFields = (task: any) => ({
+  ...task,
+  planStartDate: '',
+  planEndDate: '',
+  actualStartDate: '',
+  actualEndDate: '',
+  actualDays: 0,
+  status: '未开始',
+  progress: 0,
+})
+
 const getPlanRevisionKindFromVersion = (version?: PlanVersionLike): PlanRevisionKind | null => {
   if (!version) return null
   const parsed = parsePlanVersionNo(version.versionNo)
@@ -274,6 +297,8 @@ export default function ProjectSpaceContainer() {
     basicInfoEditMode, setBasicInfoEditMode, editingProjectFields, setEditingProjectFields,
     selectedMarketTab, setSelectedMarketTab,
     marketConfigsByProjectId, setMarketConfigForProject,
+    selectedTosTypeTab, setSelectedTosTypeTab,
+    tosTypeConfigsByProjectId, setTosTypeConfigForProject,
   } = proj
 
   const {
@@ -282,9 +307,12 @@ export default function ProjectSpaceContainer() {
     projectPlanOverviewTab, setProjectPlanOverviewTab, planMetaCollapsed, setPlanMetaCollapsed,
     versions: baseVersions, setVersions: setBaseVersions, currentVersion: baseCurrentVersion, setCurrentVersion: setBaseCurrentVersion,
     tasks, setTasks, searchText, setSearchText,
-    level2PlanTasks, setLevel2PlanTasks, level2PlanMilestones, setLevel2PlanMilestones,
-    createdLevel2Plans, setCreatedLevel2Plans, activeLevel2Plan, setActiveLevel2Plan,
-    level2PlanMeta, setLevel2PlanMeta, createFormValues, setCreateFormValues,
+    level2PlanTasks: baseLevel2PlanTasks, setLevel2PlanTasks: setBaseLevel2PlanTasks,
+    level2PlanMilestones: baseLevel2PlanMilestones, setLevel2PlanMilestones: setBaseLevel2PlanMilestones,
+    createdLevel2Plans: baseCreatedLevel2Plans, setCreatedLevel2Plans: setBaseCreatedLevel2Plans,
+    activeLevel2Plan: baseActiveLevel2Plan, setActiveLevel2Plan: setBaseActiveLevel2Plan,
+    level2PlanMeta: baseLevel2PlanMeta, setLevel2PlanMeta: setBaseLevel2PlanMeta,
+    createFormValues, setCreateFormValues,
     selectedLevel2PlanType, setSelectedLevel2PlanType,
     selectedMilestones, setSelectedMilestones, selectedMRVersion, setSelectedMRVersion,
     columnsByView, setColumnsByView, collapsedNodes, setCollapsedNodes,
@@ -296,6 +324,9 @@ export default function ProjectSpaceContainer() {
     marketFollowVersionMeta, setMarketFollowVersionMeta,
     marketVersionsByKey, setMarketVersionsByKey,
     marketCurrentVersionByKey, setMarketCurrentVersionByKey,
+    tosTypePlanDataByProjectId, setTosTypePlanDataByProjectId,
+    tosTypeVersionsByKey, setTosTypeVersionsByKey,
+    tosTypeCurrentVersionByKey, setTosTypeCurrentVersionByKey,
     ganttEditingTask, setGanttEditingTask, progressEditingTask, setProgressEditingTask,
     parentTimeWarning, setParentTimeWarning,
     milestoneTimeWarning, setMilestoneTimeWarning,
@@ -344,23 +375,102 @@ export default function ProjectSpaceContainer() {
 
   // ═══════ Derived ═══════
   const isWholeMachineProject = selectedProject?.type === '整机产品项目'
+  const isTosVersionProject = selectedProject?.type === PROJECT_TYPE_TOS_VERSION
   const marketConfigRows = selectedProject && isWholeMachineProject
     ? buildMarketRowsFromMarkets(selectedProject.markets || [], marketConfigsByProjectId[selectedProject.id])
     : []
   const primaryMarket = getMainMarket(marketConfigRows)
+  const tosTypeConfigRows = selectedProject && isTosVersionProject
+    ? buildTosTypeRows(
+        selectedProject.versionTypes || [],
+        selectedProject.versionType || '',
+        tosTypeConfigsByProjectId[selectedProject.id],
+      )
+    : []
+  const primaryTosType = getMainTosType(tosTypeConfigRows)
+  const scopedPlanLevel = projectPlanLevel === 'level2' ? 'level2' : 'level1'
   const isMarketScopedLevel1 = !!selectedProject && isWholeMachineProject && projectPlanLevel === 'level1' && !!selectedMarketTab
+  const isTosTypeScoped = !!selectedProject && isTosVersionProject && !!selectedTosTypeTab
+  const latestTemplateVersion = useMemo(
+    () => baseVersions.filter(version => version.status === '已发布').sort((left, right) => comparePlanVersions(right, left))[0],
+    [baseVersions],
+  )
+  const tosTypeSeedEntry = useMemo<TosTypePlanEntry>(() => {
+    const templateSnapshot = latestTemplateVersion
+      ? (
+          publishedSnapshots[getTemplateSnapshotKey(PROJECT_TYPE_TOS_VERSION, latestTemplateVersion.id, 'level1')]
+          || publishedSnapshots[getTemplateSnapshotKey(PROJECT_TYPE_TOS_VERSION, latestTemplateVersion.id)]
+        )
+      : undefined
+    const templateTasks = templateSnapshot
+      || configTemplateTasksByType[PROJECT_TYPE_TOS_VERSION]
+      || LEVEL1_TEMPLATE_TASKS
+    return createTosTypePlanEntry({
+      level1Tasks: templateTasks.map(clearTosTypeExecutionFields),
+      level2PlanTasks: INITIAL_LEVEL2_PLAN_TASKS.map(clearTosTypeExecutionFields),
+      level2PlanMilestones: [],
+      createdLevel2Plans: baseCreatedLevel2Plans,
+      activeLevel2Plan: baseActiveLevel2Plan,
+      level2PlanMeta: Object.keys(baseLevel2PlanMeta).length > 0 ? baseLevel2PlanMeta : INITIAL_LEVEL2_PLAN_META,
+    })
+  }, [baseActiveLevel2Plan, baseCreatedLevel2Plans, baseLevel2PlanMeta, configTemplateTasksByType, latestTemplateVersion, publishedSnapshots])
+  const currentTosTypeData = isTosTypeScoped && selectedProject
+    ? (
+        tosTypePlanDataByProjectId[selectedProject.id]?.[selectedTosTypeTab]
+        || createTosTypePlanEntry(tosTypeSeedEntry)
+      )
+    : null
+
   const versions = useMemo(
     () => (
-      isMarketScopedLevel1 && selectedProject
+      isTosTypeScoped && selectedProject
+        ? getTosTypeVersions(
+            tosTypeVersionsByKey,
+            selectedProject.id,
+            selectedTosTypeTab,
+            scopedPlanLevel,
+            baseVersions,
+          )
+        : isMarketScopedLevel1 && selectedProject
         ? getMarketVersions(marketVersionsByKey, selectedProject.id, selectedMarketTab, baseVersions)
         : baseVersions
     ),
-    [baseVersions, isMarketScopedLevel1, marketVersionsByKey, selectedMarketTab, selectedProject?.id],
+    [
+      baseVersions,
+      isMarketScopedLevel1,
+      isTosTypeScoped,
+      marketVersionsByKey,
+      scopedPlanLevel,
+      selectedMarketTab,
+      selectedProject?.id,
+      selectedTosTypeTab,
+      tosTypeVersionsByKey,
+    ],
   )
-  const currentVersion = isMarketScopedLevel1 && selectedProject
-    ? getMarketCurrentVersion(marketCurrentVersionByKey, selectedProject.id, selectedMarketTab, versions, baseCurrentVersion)
-    : baseCurrentVersion
+  const currentVersion = isTosTypeScoped && selectedProject
+    ? getTosTypeCurrentVersion(
+        tosTypeCurrentVersionByKey,
+        selectedProject.id,
+        selectedTosTypeTab,
+        scopedPlanLevel,
+        versions,
+        baseCurrentVersion,
+      )
+    : isMarketScopedLevel1 && selectedProject
+      ? getMarketCurrentVersion(marketCurrentVersionByKey, selectedProject.id, selectedMarketTab, versions, baseCurrentVersion)
+      : baseCurrentVersion
   const setVersions = (nextVersions: PlanVersionLike[] | ((prev: PlanVersionLike[]) => PlanVersionLike[])) => {
+    if (isTosTypeScoped && selectedProject) {
+      setTosTypeVersionsByKey(prev => setTosTypeVersions(
+        prev,
+        selectedProject.id,
+        selectedTosTypeTab,
+        scopedPlanLevel,
+        baseVersions,
+        nextVersions,
+      ))
+      return
+    }
     if (isMarketScopedLevel1 && selectedProject) {
       setMarketVersionsByKey(prev => setMarketVersions(prev, selectedProject.id, selectedMarketTab, baseVersions, nextVersions))
       return
@@ -368,6 +478,16 @@ export default function ProjectSpaceContainer() {
     setBaseVersions(nextVersions as typeof baseVersions)
   }
   const setCurrentVersion = (versionId: string) => {
+    if (isTosTypeScoped && selectedProject) {
+      setTosTypeCurrentVersionByKey(prev => setTosTypeCurrentVersion(
+        prev,
+        selectedProject.id,
+        selectedTosTypeTab,
+        scopedPlanLevel,
+        versionId,
+      ))
+      return
+    }
     if (isMarketScopedLevel1 && selectedProject) {
       setMarketCurrentVersionByKey(prev => setMarketCurrentVersion(prev, selectedProject.id, selectedMarketTab, versionId))
       return
@@ -416,10 +536,33 @@ export default function ProjectSpaceContainer() {
     )
   }
   const versionSelectWidth = isWholeMachineProject && projectPlanLevel === 'level1' ? 250 : 150
-  // 整机产品项目使用市场维度数据，其他项目使用全局 tasks
-  const effectiveTasks = currentMarketData ? currentMarketData.tasks : tasks
-  const setEffectiveTasks = currentMarketData
+  const updateCurrentTosTypeData = (updater: (previous: TosTypePlanEntry) => TosTypePlanEntry) => {
+    if (!selectedProject || !isTosTypeScoped) return
+    setTosTypePlanDataByProjectId(previous => {
+      const ensured = ensureTosTypePlanDataForRows(previous, selectedProject.id, tosTypeConfigRows, tosTypeSeedEntry)
+      const projectData = ensured[selectedProject.id] || {}
+      const current = projectData[selectedTosTypeTab] || createTosTypePlanEntry(tosTypeSeedEntry)
+      return {
+        ...ensured,
+        [selectedProject.id]: {
+          ...projectData,
+          [selectedTosTypeTab]: updater(current),
+        },
+      }
+    })
+  }
+
+  // 整机项目按市场隔离；tOS 版本项目按类型隔离；其他项目沿用全局数据。
+  const effectiveTasks = currentTosTypeData?.level1Tasks || currentMarketData?.tasks || tasks
+  const setEffectiveTasks = currentTosTypeData
     ? (newTasks: any[] | ((prev: any[]) => any[])) => {
+        updateCurrentTosTypeData(previous => ({
+          ...previous,
+          level1Tasks: typeof newTasks === 'function' ? newTasks(previous.level1Tasks) : newTasks,
+        }))
+      }
+    : currentMarketData
+      ? (newTasks: any[] | ((prev: any[]) => any[])) => {
         setMarketPlanData((prev: any) => ({
           ...prev,
           [selectedMarketTab]: {
@@ -428,7 +571,71 @@ export default function ProjectSpaceContainer() {
           },
         }))
       }
-    : setTasks
+      : setTasks
+
+  const effectiveLevel2PlanTasks = currentTosTypeData?.level2PlanTasks || baseLevel2PlanTasks
+  const level2PlanTasks = effectiveLevel2PlanTasks
+  const setLevel2PlanTasks = currentTosTypeData
+    ? (value: any[] | ((previous: any[]) => any[])) => updateCurrentTosTypeData(previous => ({
+        ...previous,
+        level2PlanTasks: typeof value === 'function' ? value(previous.level2PlanTasks) : value,
+      }))
+    : setBaseLevel2PlanTasks
+  const level2PlanMilestones = currentTosTypeData?.level2PlanMilestones || baseLevel2PlanMilestones
+  const setLevel2PlanMilestones = currentTosTypeData
+    ? (value: string[] | ((previous: string[]) => string[])) => updateCurrentTosTypeData(previous => ({
+        ...previous,
+        level2PlanMilestones: typeof value === 'function' ? value(previous.level2PlanMilestones) : value,
+      }))
+    : setBaseLevel2PlanMilestones
+  const effectiveCreatedLevel2Plans = currentTosTypeData?.createdLevel2Plans || baseCreatedLevel2Plans
+  const createdLevel2Plans = effectiveCreatedLevel2Plans
+  const setCreatedLevel2Plans = currentTosTypeData
+    ? (value: typeof baseCreatedLevel2Plans | ((previous: typeof baseCreatedLevel2Plans) => typeof baseCreatedLevel2Plans)) => updateCurrentTosTypeData(previous => ({
+        ...previous,
+        createdLevel2Plans: typeof value === 'function' ? value(previous.createdLevel2Plans) : value,
+      }))
+    : setBaseCreatedLevel2Plans
+  const activeLevel2Plan = currentTosTypeData?.activeLevel2Plan || baseActiveLevel2Plan
+  const setActiveLevel2Plan = currentTosTypeData
+    ? (value: string) => updateCurrentTosTypeData(previous => ({ ...previous, activeLevel2Plan: value }))
+    : setBaseActiveLevel2Plan
+  const effectiveLevel2PlanMeta = currentTosTypeData?.level2PlanMeta || baseLevel2PlanMeta
+  const level2PlanMeta = effectiveLevel2PlanMeta
+  const setLevel2PlanMeta = currentTosTypeData
+    ? (value: Record<string, any> | ((previous: Record<string, any>) => Record<string, any>)) => updateCurrentTosTypeData(previous => ({
+        ...previous,
+        level2PlanMeta: typeof value === 'function' ? value(previous.level2PlanMeta) : value,
+      }))
+    : setBaseLevel2PlanMeta
+
+  useEffect(() => {
+    if (!selectedProject || !isTosVersionProject || tosTypeConfigRows.length === 0) return
+
+    if (!tosTypeConfigRows.some(row => row.type === selectedTosTypeTab)) {
+      setSelectedTosTypeTab(primaryTosType || tosTypeConfigRows[0].type)
+    }
+
+    const existingProjectData = tosTypePlanDataByProjectId[selectedProject.id] || {}
+    if (tosTypeConfigRows.some(row => !existingProjectData[row.type])) {
+      setTosTypePlanDataByProjectId(previous => ensureTosTypePlanDataForRows(
+        previous,
+        selectedProject.id,
+        tosTypeConfigRows,
+        tosTypeSeedEntry,
+      ))
+    }
+  }, [
+    isTosVersionProject,
+    primaryTosType,
+    selectedProject,
+    selectedTosTypeTab,
+    setSelectedTosTypeTab,
+    setTosTypePlanDataByProjectId,
+    tosTypeConfigRows,
+    tosTypePlanDataByProjectId,
+    tosTypeSeedEntry,
+  ])
 
   const getResponsibleNames = (responsible?: string) => (
     (responsible || '')
@@ -862,8 +1069,13 @@ export default function ProjectSpaceContainer() {
   // Scope key for collapse
   const getScopeKey = (): string | null => {
     if (!selectedProject) return null
-    if (projectPlanLevel === 'level1') return `${selectedProject.id}::level1`
-    if (projectPlanLevel === 'level2' && activeLevel2Plan) return `${selectedProject.id}::level2::${activeLevel2Plan}`
+    const planDimension = isTosVersionProject
+      ? `type::${selectedTosTypeTab}`
+      : isWholeMachineProject
+        ? `market::${selectedMarketTab}`
+        : 'default'
+    if (projectPlanLevel === 'level1') return `${selectedProject.id}::${planDimension}::level1`
+    if (projectPlanLevel === 'level2' && activeLevel2Plan) return `${selectedProject.id}::${planDimension}::level2::${activeLevel2Plan}`
     return null
   }
 
@@ -890,14 +1102,14 @@ export default function ProjectSpaceContainer() {
   // 进入项目空间「计划」时按权限+责任人矩阵选择默认版本
   // - 有编辑权 / 是责任人：有修订版 → 默认修订版；无修订版 → 最新已发布
   // - 无编辑权 + 非责任人：无论有无修订版，都默认最新已发布（且下拉里也不展示修订版选项）
-  // 用 ref 锁定到 project+market+level，防止用户手动切换版本后被覆盖
+  // 用 ref 锁定到 project+市场/类型+level，防止用户手动切换版本后被覆盖
   const lastVersionInitKeyRef = useRef<string | null>(null)
   useEffect(() => {
     if (activeModule !== 'projectSpace') return
     if (projectSpaceModule !== 'plan') return
     if (!selectedProject) return
     if (versions.length === 0) return
-    const key = `${selectedProject.id}::${selectedMarketTab || ''}::${projectPlanLevel}::${currentLoginUser}`
+    const key = `${selectedProject.id}::${selectedMarketTab || ''}::${selectedTosTypeTab || ''}::${projectPlanLevel}::${currentLoginUser}`
     if (lastVersionInitKeyRef.current === key) return
     lastVersionInitKeyRef.current = key
     const draft = versions.find(v => v.status === '修订中')
@@ -909,7 +1121,7 @@ export default function ProjectSpaceContainer() {
     } else if (latestPub) {
       if (currentVersion !== latestPub.id) setCurrentVersion(latestPub.id)
     }
-  }, [activeModule, projectSpaceModule, selectedProject?.id, selectedMarketTab, projectPlanLevel, canViewDraft, versions, currentLoginUser])
+  }, [activeModule, projectSpaceModule, selectedProject?.id, selectedMarketTab, selectedTosTypeTab, projectPlanLevel, canViewDraft, versions, currentLoginUser])
 
   // Due task scanning
   useEffect(() => {
@@ -917,15 +1129,17 @@ export default function ProjectSpaceContainer() {
     if (!selectedProject) return
     if (projectSpaceModule !== 'plan') return
     if (projectPlanLevel !== 'level1') return
-    const key = selectedProject.id
+    const key = `${selectedProject.id}::${selectedTosTypeTab || selectedMarketTab || ''}`
     if (lastDueCheckedProjectRef.current === key) return
     lastDueCheckedProjectRef.current = key
     const latestPub = versions
       .filter(v => v.status === '已发布')
       .sort((a, b) => comparePlanVersions(b, a))[0]
-    const scanSnapshotKey = latestPub && selectedProject && isWholeMachineProject && projectPlanLevel === 'level1'
-      ? getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, latestPub.id)
-      : latestPub?.id
+    const scanSnapshotKey = latestPub && isTosTypeScoped
+      ? getTosTypeSnapshotKey(selectedProject.id, selectedTosTypeTab, 'level1', latestPub.id)
+      : latestPub && isWholeMachineProject
+        ? getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, latestPub.id)
+        : latestPub?.id
     const scanTarget = latestPub && scanSnapshotKey && publishedSnapshots[scanSnapshotKey]
       ? publishedSnapshots[scanSnapshotKey]
       : latestPub && publishedSnapshots[latestPub.id]
@@ -935,7 +1149,7 @@ export default function ProjectSpaceContainer() {
     if (notices.length === 0) return
     // 后台仍触发飞书 mock 推送，但不再弹 notification 干扰用户进入计划视图的体验
     notifyDueTasks(notices, MOCK_USER_MAP)
-  }, [selectedProject?.id, projectPlanLevel, activeModule, projectSpaceModule])
+  }, [selectedProject?.id, selectedMarketTab, selectedTosTypeTab, projectPlanLevel, activeModule, projectSpaceModule])
 
   // ═══════ Helper functions ═══════
   const toggleNode = (nodeId: string) => {
@@ -1087,7 +1301,9 @@ export default function ProjectSpaceContainer() {
     const clonedTasks = initializeProjectPlanTasksFromTemplate(templateTasks)
     const kindLabel = getPlanRevisionKindLabel(revisionKind)
     setVersions([...versions, { id: nid, versionNo, status: '修订中' }])
-    setCurrentVersion(nid); setEffectiveTasks(clonedTasks); message.success(`已创建${kindLabel}修订版本 ${versionNo}`)
+    setCurrentVersion(nid)
+    if (projectPlanLevel === 'level1') setEffectiveTasks(clonedTasks)
+    message.success(`已创建${kindLabel}修订版本 ${versionNo}`)
   }
 
   const handlePublish = () => {
@@ -1113,11 +1329,14 @@ export default function ProjectSpaceContainer() {
       return
     }
     const prevPublished = versions.filter(v => v.status === '已发布' && v.id !== currentVersion).sort((a, b) => comparePlanVersions(b, a))[0]
-    const previousSnapshotKey = selectedProject && isWholeMachineProject && projectPlanLevel === 'level1' && prevPublished
-      ? getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, prevPublished.id)
-      : ''
+    const planTasksForVersion = projectPlanLevel === 'level2' ? level2PlanTasks : effectiveTasks
+    const previousSnapshotKey = selectedProject && isTosTypeScoped && prevPublished
+      ? getTosTypeSnapshotKey(selectedProject.id, selectedTosTypeTab, scopedPlanLevel, prevPublished.id)
+      : selectedProject && isWholeMachineProject && projectPlanLevel === 'level1' && prevPublished
+        ? getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, prevPublished.id)
+        : ''
     const baselineTasks: any[] = prevPublished ? (publishedSnapshots[previousSnapshotKey] || publishedSnapshots[prevPublished.id] || []) : []
-    const changes = diffTasksForNotify(baselineTasks, effectiveTasks)
+    const changes = diffTasksForNotify(baselineTasks, planTasksForVersion)
     const publishedVersionId = currentVersion; const publishedVersion = versions.find(v => v.id === publishedVersionId)
     const mainMarket = getMainMarket(marketConfigRows)
     const shouldSyncFollowMarkets = isWholeMachineProject && projectPlanLevel === 'level1' && selectedMarketTab === mainMarket
@@ -1134,9 +1353,11 @@ export default function ProjectSpaceContainer() {
       })
     }
     setPublishedSnapshots(prev => {
-      const snapshot = JSON.parse(JSON.stringify(effectiveTasks))
+      const snapshot = JSON.parse(JSON.stringify(planTasksForVersion))
       const nextSnapshots = { ...prev }
-      if (selectedProject && isWholeMachineProject && projectPlanLevel === 'level1') {
+      if (selectedProject && isTosTypeScoped) {
+        nextSnapshots[getTosTypeSnapshotKey(selectedProject.id, selectedTosTypeTab, scopedPlanLevel, publishedVersionId)] = snapshot
+      } else if (selectedProject && isWholeMachineProject && projectPlanLevel === 'level1') {
         nextSnapshots[getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, publishedVersionId)] = snapshot
       } else {
         nextSnapshots[publishedVersionId] = snapshot
@@ -1144,7 +1365,7 @@ export default function ProjectSpaceContainer() {
       return nextSnapshots
     })
     if (changes.length > 0) notifyPublishChanges(versionNo, changes, MOCK_USER_MAP).then(notified => {
-      if (notified > 0) notification.info({ message: '已通过飞书通知责任人', description: `一级计划 ${versionNo} 发布，共 ${changes.length} 条变更，已通知 ${notified} 位责任人`, placement: 'topRight', duration: 5 })
+      if (notified > 0) notification.info({ message: '已通过飞书通知责任人', description: `${projectPlanLevel === 'level2' ? '二级' : '一级'}计划 ${versionNo} 发布，共 ${changes.length} 条变更，已通知 ${notified} 位责任人`, placement: 'topRight', duration: 5 })
     })
     const syncedCount = shouldSyncFollowMarkets ? marketConfigRows.filter(row => row.followsMain).length : 0
     message.success(syncedCount > 0 ? `发布成功，已同步 ${syncedCount} 个跟随市场` : '发布成功')
