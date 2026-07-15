@@ -3002,9 +3002,24 @@ export default function ProjectSpaceContainer() {
             const versionA = versions.find(v => v.id === compareVersionA)
             const versionB = versions.find(v => v.id === compareVersionB)
             if (versionA && versionB) {
-              const oldTasks = versionA.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
-              let newTasks = versionB.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
-              if (comparePlanVersions(versionA, versionB) !== 0) {
+              const currentScopedTasks = projectPlanLevel === 'level2' ? level2PlanTasks : effectiveTasks
+              const getTosVersionTasks = (versionId: string) => (
+                selectedProject && isTosTypeScoped
+                  ? publishedSnapshots[getTosTypeSnapshotKey(
+                      selectedProject.id,
+                      selectedTosTypeTab,
+                      scopedPlanLevel,
+                      versionId,
+                    )] || currentScopedTasks
+                  : currentScopedTasks
+              )
+              const oldTasks = isTosTypeScoped
+                ? getTosVersionTasks(versionA.id)
+                : versionA.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
+              let newTasks = isTosTypeScoped
+                ? getTosVersionTasks(versionB.id)
+                : versionB.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
+              if (!isTosTypeScoped && comparePlanVersions(versionA, versionB) !== 0) {
                 newTasks = [
                   ...effectiveTasks.map(t => {
                     if (t.id === '2.1') return { ...t, taskName: 'STR2(更新)', status: '已完成', progress: 100 }
