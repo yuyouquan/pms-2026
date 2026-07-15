@@ -3620,7 +3620,7 @@ export default function ProjectSpaceContainer() {
         title={<Space><EditOutlined style={{ color: '#6366f1' }} /><span>类型编辑</span></Space>}
         open={showTosTypeEditor}
         onCancel={() => setShowTosTypeEditor(false)}
-        width={640}
+        width={780}
         footer={[
           <Button key="cancel" onClick={() => setShowTosTypeEditor(false)}>取消</Button>,
           <Tooltip key="save-tooltip" title={canEditBasicInfo ? undefined : '无基本信息编辑权限'}>

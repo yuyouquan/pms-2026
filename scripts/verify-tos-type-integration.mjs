@@ -33,6 +33,8 @@ const required = [
   ['src/data/projects.ts', 'versionTypes:'],
   ['src/lib/tosTypeRules.ts', 'versionTrainRecords'],
   ['src/components/plans/VersionTrainPlan.tsx', 'onDataChange'],
+  ['src/components/workspace/AddProjectModal.tsx', "versionTypes: projectType === PROJECT_TYPE_TOS_VERSION ? ['Full']"],
+  ['screenshots/smoke-tos-type-plan.mjs', 'tOS type plan smoke passed.'],
 ]
 
 const failures = required.flatMap(([file, token]) => (
