@@ -15,6 +15,7 @@ export type TosTypePlanEntry = {
   createdLevel2Plans: any[]
   activeLevel2Plan: string
   level2PlanMeta: Record<string, any>
+  versionTrainRecords: any[]
 }
 
 export type TosTypePlanData = Record<string, Record<string, TosTypePlanEntry>>

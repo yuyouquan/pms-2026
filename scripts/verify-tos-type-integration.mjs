@@ -28,6 +28,8 @@ const required = [
   ['src/containers/AppShell.tsx', 'setSelectedTosTypeTab'],
   ['src/containers/WorkspaceContainer.tsx', 'setSelectedTosTypeTab'],
   ['src/data/projects.ts', 'versionTypes:'],
+  ['src/lib/tosTypeRules.ts', 'versionTrainRecords'],
+  ['src/components/plans/VersionTrainPlan.tsx', 'onDataChange'],
 ]
 
 const failures = required.flatMap(([file, token]) => (

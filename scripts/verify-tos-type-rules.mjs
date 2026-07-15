@@ -84,12 +84,16 @@ const seed = createTosTypePlanEntry({
   createdLevel2Plans: [{ id: 'plan0', name: '需求开发计划', type: '需求开发计划', fixed: true }],
   activeLevel2Plan: 'plan0',
   level2PlanMeta: {},
+  versionTrainRecords: [{ id: 'train-1', versionNo: '16.3.030' }],
 })
 const data = ensureTosTypePlanDataForRows({}, 'project-1', normalized, seed)
 assert.notEqual(data['project-1'].Full, data['project-1'].Slim)
 assert.notEqual(data['project-1'].Full.level1Tasks, data['project-1'].Slim.level1Tasks)
+assert.notEqual(data['project-1'].Full.versionTrainRecords, data['project-1'].Slim.versionTrainRecords)
 data['project-1'].Full.level1Tasks[0].taskName = 'Full STR1'
+data['project-1'].Full.versionTrainRecords[0].versionNo = 'Full-16.3.030'
 assert.equal(data['project-1'].Slim.level1Tasks[0].taskName, 'STR1')
+assert.equal(data['project-1'].Slim.versionTrainRecords[0].versionNo, '16.3.030')
 
 const historical = ensureTosTypePlanDataForRows(data, 'project-1', normalized, seed)
 assert.equal(historical['project-1'].Full.level1Tasks[0].taskName, 'Full STR1', 'existing hidden data should be preserved when a type is re-added')

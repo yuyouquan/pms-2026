@@ -13,7 +13,7 @@ const { Option } = Select
 const TEST_MODEL_OPTIONS = ['Model A Pro', 'Model A', 'Model B Pro', 'Model B', 'Model C', 'Model D']
 
 // Mock数据
-const INITIAL_DATA: VersionTrainRecord[] = [
+export const INITIAL_VERSION_TRAIN_DATA: VersionTrainRecord[] = [
   {
     id: '1', versionNo: '16.3.030', versionCategory: '主干版本', status: '已完成',
     planCompileTime: '2026-01-05', planTestTransferTime: '2026-01-08', planTestStartTime: '2026-01-09', planTestEndTime: '2026-01-20',
@@ -101,8 +101,21 @@ const categoryColors: Record<string, string> = {
   '量产版本': 'purple',
 }
 
-export default function VersionTrainPlan() {
-  const [data, setData] = useState<VersionTrainRecord[]>(INITIAL_DATA)
+interface VersionTrainPlanProps {
+  data?: VersionTrainRecord[]
+  onDataChange?: (data: VersionTrainRecord[]) => void
+}
+
+export default function VersionTrainPlan({ data: controlledData, onDataChange }: VersionTrainPlanProps = {}) {
+  const [localData, setLocalData] = useState<VersionTrainRecord[]>(INITIAL_VERSION_TRAIN_DATA)
+  const data = controlledData ?? localData
+  const setData = (nextData: VersionTrainRecord[]) => {
+    if (controlledData !== undefined && onDataChange) {
+      onDataChange(nextData)
+      return
+    }
+    setLocalData(nextData)
+  }
   const [searchText, setSearchText] = useState('')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)

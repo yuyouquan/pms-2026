@@ -130,7 +130,7 @@ import { PermissionConfig } from '@/components/permission/PermissionModule'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import { TransferApply, TransferDetail, TransferEntry, TransferReview, TransferSqaReview } from '@/components/transfer/TransferModule'
 import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
-import VersionTrainPlan from '@/components/plans/VersionTrainPlan'
+import VersionTrainPlan, { INITIAL_VERSION_TRAIN_DATA } from '@/components/plans/VersionTrainPlan'
 import { PROJECT_STATUS_CONFIG } from '@/data/projects'
 import {
   TECH_DOMAIN_OPTIONS,
@@ -418,6 +418,7 @@ export default function ProjectSpaceContainer() {
       createdLevel2Plans: baseCreatedLevel2Plans,
       activeLevel2Plan: baseActiveLevel2Plan,
       level2PlanMeta: Object.keys(baseLevel2PlanMeta).length > 0 ? baseLevel2PlanMeta : INITIAL_LEVEL2_PLAN_META,
+      versionTrainRecords: INITIAL_VERSION_TRAIN_DATA,
     })
   }, [baseActiveLevel2Plan, baseCreatedLevel2Plans, baseLevel2PlanMeta, configTemplateTasksByType, latestTemplateVersion, publishedSnapshots])
   const currentTosTypeData = isTosTypeScoped && selectedProject
@@ -614,6 +615,12 @@ export default function ProjectSpaceContainer() {
         level2PlanMeta: typeof value === 'function' ? value(previous.level2PlanMeta) : value,
       }))
     : setBaseLevel2PlanMeta
+  const setVersionTrainRecords = currentTosTypeData
+    ? (records: typeof INITIAL_VERSION_TRAIN_DATA) => updateCurrentTosTypeData(previous => ({
+        ...previous,
+        versionTrainRecords: records,
+      }))
+    : undefined
 
   useEffect(() => {
     if (!selectedProject || !isTosVersionProject || tosTypeConfigRows.length === 0) return
@@ -2772,7 +2779,12 @@ export default function ProjectSpaceContainer() {
           </Card>
         )}
         {projectPlanLevel === 'level2' && activeLevel2Plan === 'plan0' && <RequirementDevPlan isEditMode={isEditMode} />}
-        {projectPlanLevel === 'level2' && activeLevel2Plan === 'plan1' && <VersionTrainPlan />}
+        {projectPlanLevel === 'level2' && activeLevel2Plan === 'plan1' && (
+          <VersionTrainPlan
+            data={currentTosTypeData?.versionTrainRecords}
+            onDataChange={setVersionTrainRecords}
+          />
+        )}
         {/* Version management + table/gantt for L1 and non-fixed L2 */}
         {projectPlanLevel !== 'overview' && !(projectPlanLevel === 'level2' && (activeLevel2Plan === 'plan0' || activeLevel2Plan === 'plan1')) && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '12px 16px' } }}>
