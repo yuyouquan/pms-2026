@@ -20,6 +20,14 @@ const required = [
   ['src/containers/ProjectSpaceContainer.tsx', 'effectiveLevel2PlanTasks'],
   ['src/containers/ProjectSpaceContainer.tsx', 'effectiveCreatedLevel2Plans'],
   ['src/containers/ProjectSpaceContainer.tsx', 'effectiveLevel2PlanMeta'],
+  ['src/containers/ProjectSpaceContainer.tsx', 'showTosTypeEditor'],
+  ['src/containers/ProjectSpaceContainer.tsx', 'saveTosTypeConfig'],
+  ['src/containers/ProjectSpaceContainer.tsx', 'TOS_TYPE_OPTIONS'],
+  ['src/containers/ProjectSpaceContainer.tsx', '类型编辑'],
+  ['src/containers/ProjectSpaceContainer.tsx', '是否主类型'],
+  ['src/containers/AppShell.tsx', 'setSelectedTosTypeTab'],
+  ['src/containers/WorkspaceContainer.tsx', 'setSelectedTosTypeTab'],
+  ['src/data/projects.ts', 'versionTypes:'],
 ]
 
 const failures = required.flatMap(([file, token]) => (

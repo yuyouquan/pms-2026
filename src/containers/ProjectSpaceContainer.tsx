@@ -105,6 +105,7 @@ import {
   type PlanVersionLike,
 } from '@/lib/marketRules'
 import {
+  TOS_TYPE_OPTIONS,
   buildTosTypeRows,
   createTosTypePlanEntry,
   ensureTosTypePlanDataForRows,
@@ -112,8 +113,11 @@ import {
   getTosTypeCurrentVersion,
   getTosTypeSnapshotKey,
   getTosTypeVersions,
+  normalizeTosTypeRows,
   setTosTypeCurrentVersion,
   setTosTypeVersions,
+  type TosPlanType,
+  type TosTypeConfigRow,
   type TosTypePlanEntry,
 } from '@/lib/tosTypeRules'
 
@@ -372,6 +376,8 @@ export default function ProjectSpaceContainer() {
   const [showLevel1PlanFilterDrawer, setShowLevel1PlanFilterDrawer] = useState(false)
   const [showMarketEditor, setShowMarketEditor] = useState(false)
   const [marketDraftRows, setMarketDraftRows] = useState<MarketConfigRow[]>([])
+  const [showTosTypeEditor, setShowTosTypeEditor] = useState(false)
+  const [tosTypeDraftRows, setTosTypeDraftRows] = useState<TosTypeConfigRow[]>([])
 
   // ═══════ Derived ═══════
   const isWholeMachineProject = selectedProject?.type === '整机产品项目'
@@ -801,6 +807,99 @@ export default function ProjectSpaceContainer() {
         </Button>
       </Dropdown>
     )
+  }
+
+  const getCurrentTosTypeRows = () => (
+    selectedProject
+      ? buildTosTypeRows(
+          selectedProject.versionTypes || [],
+          selectedProject.versionType || '',
+          tosTypeConfigsByProjectId[selectedProject.id],
+        )
+      : []
+  )
+
+  const openTosTypeEditor = () => {
+    if (!canEditBasicInfo) {
+      message.warning('无基本信息编辑权限')
+      return
+    }
+    const rows = getCurrentTosTypeRows()
+    setTosTypeDraftRows(rows.length > 0 ? rows.map(row => ({ ...row })) : [{
+      id: `tos-type-${Date.now()}`,
+      type: 'Full',
+      isMain: true,
+    }])
+    setShowTosTypeEditor(true)
+  }
+
+  const updateTosTypeDraftRow = (rowId: string, patch: Partial<TosTypeConfigRow>) => {
+    setTosTypeDraftRows(previous => {
+      const nextRows = previous.map(row => ({ ...row }))
+      const targetRow = nextRows.find(row => row.id === rowId)
+      if (!targetRow) return previous
+
+      if (patch.type !== undefined) targetRow.type = patch.type
+      if (patch.isMain) {
+        nextRows.forEach(row => { row.isMain = row.id === rowId })
+      }
+      return normalizeTosTypeRows(nextRows)
+    })
+  }
+
+  const addTosTypeDraftRow = () => {
+    const selectedTypes = new Set(tosTypeDraftRows.map(row => row.type))
+    const nextType = TOS_TYPE_OPTIONS.find(type => !selectedTypes.has(type))
+    if (!nextType) {
+      message.warning('可选类型已全部添加')
+      return
+    }
+    setTosTypeDraftRows(previous => normalizeTosTypeRows([
+      ...previous,
+      {
+        id: `tos-type-${Date.now()}`,
+        type: nextType,
+        isMain: previous.length === 0,
+      },
+    ]))
+  }
+
+  const removeTosTypeDraftRow = (rowId: string) => {
+    if (tosTypeDraftRows.length <= 1) {
+      message.warning('至少保留一个类型')
+      return
+    }
+    setTosTypeDraftRows(previous => normalizeTosTypeRows(previous.filter(row => row.id !== rowId)))
+  }
+
+  const saveTosTypeConfig = () => {
+    if (!selectedProject || selectedProject.type !== PROJECT_TYPE_TOS_VERSION) return
+    const normalizedRows = normalizeTosTypeRows(tosTypeDraftRows)
+    if (normalizedRows.length === 0) {
+      message.error('请至少配置一个类型')
+      return
+    }
+
+    const nextTypes = normalizedRows.map(row => row.type)
+    const mainType = getMainTosType(normalizedRows) as TosPlanType
+    const updatedProject = {
+      ...selectedProject,
+      versionTypes: nextTypes,
+      versionType: mainType,
+    } as typeof selectedProject
+
+    setTosTypeConfigForProject(selectedProject.id, normalizedRows)
+    setTosTypePlanDataByProjectId(previous => ensureTosTypePlanDataForRows(
+      previous,
+      selectedProject.id,
+      normalizedRows,
+      tosTypeSeedEntry,
+    ))
+    setSelectedProject(updatedProject)
+    setProjects(previous => previous.map(project => project.id === updatedProject.id ? updatedProject : project))
+    if (!nextTypes.includes(selectedTosTypeTab as TosPlanType)) setSelectedTosTypeTab(mainType || nextTypes[0])
+    setShowTosTypeEditor(false)
+    message.success('类型配置已保存')
   }
 
   const getCurrentMarketRows = () => (
@@ -2469,8 +2568,8 @@ export default function ProjectSpaceContainer() {
   // ═══════ renderProjectPlanInfo ═══════
   const renderProjectPlanInfo = () => {
     const p = selectedProject!
-    return (
-      <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={<Space><CalendarOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>计划信息</span></Space>}>
+    const planInfoContent = (
+      <>
         <Row gutter={[24, 16]}>
           <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划开始时间</span>} value={p.planStartDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />} /></Col>
           <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划结束时间</span>} value={p.planEndDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />} /></Col>
@@ -2480,6 +2579,27 @@ export default function ProjectSpaceContainer() {
         <Divider style={{ margin: '16px 0' }} />
         <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, textTransform: 'uppercase' as const, letterSpacing: 1 }}>里程碑计划（横排视图）</div>
         {renderHorizontalTable()}
+      </>
+    )
+    return (
+      <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={<Space><CalendarOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>计划信息</span></Space>}>
+        {isTosVersionProject ? (
+          <Tabs
+            activeKey={selectedTosTypeTab}
+            onChange={(type) => navigateWithEditGuard(() => setSelectedTosTypeTab(type))}
+            type="card"
+            tabBarExtraContent={{
+              right: canEditBasicInfo
+                ? <Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6, marginLeft: 8 }} onClick={openTosTypeEditor}>类型编辑</Button>
+                : <Tooltip title="无基本信息编辑权限"><Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6, marginLeft: 8 }} disabled>类型编辑</Button></Tooltip>,
+            }}
+            items={tosTypeConfigRows.map(row => ({
+              key: row.type,
+              label: <Space size={6}><span style={{ fontWeight: 500 }}>{row.type}</span>{row.isMain && <Tag color="blue" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>主</Tag>}</Space>,
+              children: <div style={{ paddingTop: 8 }}>{planInfoContent}</div>,
+            }))}
+          />
+        ) : planInfoContent}
       </Card>
     )
   }
@@ -2513,11 +2633,13 @@ export default function ProjectSpaceContainer() {
 
   // Market color mapping
   const marketColors: Record<string, string> = { 'OP': '#1890ff', 'TR': '#52c41a', 'RU': '#faad14', 'FR': '#722ed1', 'IN': '#eb2f96', 'BR': '#13c2c2' }
+  const tosTypeColors: Record<string, string> = { Full: '#6366f1', Slim: '#13c2c2', PAD: '#722ed1', GO: '#fa8c16' }
 
   // ═══════ renderProjectPlan ═══════
   const renderProjectPlan = () => {
     const markets = marketConfigRows.map(row => row.market)
     const showMarketTabs = selectedProject?.type === '整机产品项目' && markets.length > 0
+    const showTosTypeTabs = selectedProject?.type === PROJECT_TYPE_TOS_VERSION && tosTypeConfigRows.length > 0
     const planTabItems = [
       { key: 'level1', label: '一级计划' },
       { key: 'level2', label: '二级计划' },
@@ -2525,6 +2647,32 @@ export default function ProjectSpaceContainer() {
     ]
     return (
       <div>
+        {showTosTypeTabs && (
+          <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
+            <Row align="middle" justify="space-between">
+              <Col>
+                <Space size={4} align="center">
+                  <span style={{ fontSize: 13, fontWeight: 500, color: '#9ca3af', marginRight: 8 }}>类型</span>
+                  {tosTypeConfigRows.map(row => (
+                    <Tag
+                      key={row.type}
+                      color={selectedTosTypeTab === row.type ? tosTypeColors[row.type] : 'default'}
+                      style={{ cursor: 'pointer', borderRadius: 4, padding: '4px 12px', fontSize: 13, fontWeight: selectedTosTypeTab === row.type ? 600 : 400, borderColor: selectedTosTypeTab === row.type ? tosTypeColors[row.type] : '#d9d9d9' }}
+                      onClick={() => navigateWithEditGuard(() => setSelectedTosTypeTab(row.type))}
+                    >
+                      <Space size={4}>{row.type}{row.isMain && <span style={{ fontSize: 11 }}>主</span>}</Space>
+                    </Tag>
+                  ))}
+                </Space>
+              </Col>
+              <Col>
+                {canEditBasicInfo
+                  ? <Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6 }} onClick={openTosTypeEditor}>类型编辑</Button>
+                  : <Tooltip title="无基本信息编辑权限"><Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6 }} disabled>类型编辑</Button></Tooltip>}
+              </Col>
+            </Row>
+          </Card>
+        )}
         {showMarketTabs && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
             <Row align="middle" justify="space-between">
@@ -3069,6 +3217,80 @@ export default function ProjectSpaceContainer() {
           onClick={addMarketDraftRow}
         >
           添加市场
+        </Button>
+      </Modal>
+      {/* tOS type editor modal */}
+      <Modal
+        className="pms-modal"
+        title={<Space><EditOutlined style={{ color: '#6366f1' }} /><span>类型编辑</span></Space>}
+        open={showTosTypeEditor}
+        onCancel={() => setShowTosTypeEditor(false)}
+        width={640}
+        footer={[
+          <Button key="cancel" onClick={() => setShowTosTypeEditor(false)}>取消</Button>,
+          <Button key="save" type="primary" onClick={saveTosTypeConfig}>保存</Button>,
+        ]}
+      >
+        <Table
+          className="pms-table"
+          rowKey="id"
+          size="small"
+          pagination={false}
+          dataSource={tosTypeDraftRows}
+          columns={[
+            {
+              title: '类型',
+              dataIndex: 'type',
+              width: 300,
+              render: (value: TosPlanType, record: TosTypeConfigRow) => (
+                <Select
+                  value={value || undefined}
+                  placeholder="请选择类型"
+                  style={{ width: '100%' }}
+                  onChange={(type) => updateTosTypeDraftRow(record.id, { type })}
+                  options={TOS_TYPE_OPTIONS.map(type => ({
+                    label: type,
+                    value: type,
+                    disabled: tosTypeDraftRows.some(row => row.id !== record.id && row.type === type),
+                  }))}
+                />
+              ),
+            },
+            {
+              title: '是否主类型',
+              dataIndex: 'isMain',
+              width: 160,
+              align: 'center',
+              render: (_: boolean, record: TosTypeConfigRow) => (
+                <Radio
+                  checked={record.isMain}
+                  onChange={() => updateTosTypeDraftRow(record.id, { isMain: true })}
+                />
+              ),
+            },
+            {
+              title: '操作',
+              width: 100,
+              align: 'center',
+              render: (_: unknown, record: TosTypeConfigRow) => (
+                <Button
+                  type="text"
+                  danger
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  onClick={() => removeTosTypeDraftRow(record.id)}
+                />
+              ),
+            },
+          ]}
+        />
+        <Button
+          type="dashed"
+          icon={<PlusOutlined />}
+          style={{ width: '100%', marginTop: 12, borderRadius: 6 }}
+          onClick={addTosTypeDraftRow}
+        >
+          添加类型
         </Button>
       </Modal>
       {/* Create L2 plan modal */}

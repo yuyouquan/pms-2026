@@ -13,6 +13,8 @@ import { usePlanStore } from '@/stores/plan'
 import { usePermissionStore } from '@/stores/permission'
 import { useTransferStore } from '@/stores/transfer'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
+import { PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
+import { buildTosTypeRows, getMainTosType } from '@/lib/tosTypeRules'
 import { useRef, useEffect, useMemo } from 'react'
 
 // ─── Shared user switcher (head avatar + dropdown) ──────────────────
@@ -151,6 +153,7 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
   const {
     projects, selectedProject, setSelectedProject,
     currentLoginUser, setSelectedMarketTab, projectMemberMap,
+    setSelectedTosTypeTab, tosTypeConfigsByProjectId,
   } = useProjectStore()
 
   const { globalRoles } = usePermissionStore()
@@ -248,6 +251,14 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
                             setProjectSearchText('')
                             if (p.markets && p.markets.length > 0) {
                               setSelectedMarketTab(p.markets[0])
+                            }
+                            if (p.type === PROJECT_TYPE_TOS_VERSION) {
+                              const typeRows = buildTosTypeRows(
+                                p.versionTypes || [],
+                                p.versionType || '',
+                                tosTypeConfigsByProjectId[p.id],
+                              )
+                              setSelectedTosTypeTab(getMainTosType(typeRows) || typeRows[0]?.type || 'Full')
                             }
                           })
                         }}

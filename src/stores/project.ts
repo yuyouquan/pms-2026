@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { initialProjects } from '@/data/projects'
 import { PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { buildMarketRowsFromMarkets, type MarketConfigRow } from '@/lib/marketRules'
-import { buildTosTypeRows, type TosPlanType, type TosTypeConfigRow } from '@/lib/tosTypeRules'
+import { buildTosTypeRows, type TosTypeConfigRow } from '@/lib/tosTypeRules'
 
 // Default login user (mock)
 export const DEFAULT_LOGIN_USER = '张三'
@@ -30,7 +30,7 @@ export const kanbanColumns = [
   { title: '发布阶段', key: 'released', color: '#722ed1' },
 ]
 
-type Project = typeof initialProjects[number] & { versionTypes?: TosPlanType[] }
+type Project = typeof initialProjects[number] & { versionTypes?: string[] }
 
 const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) => {
   if (project.type === '整机产品项目' && project.markets?.length) {
