@@ -8,6 +8,11 @@ import {
 } from '@/constants/projectTypes'
 import type { GanttScaleMode } from '@/lib/ganttScale'
 import type { FollowVersionSource, MarketCurrentVersionState, MarketVersionsState } from '@/lib/marketRules'
+import type {
+  TosTypeCurrentVersionState,
+  TosTypePlanData,
+  TosTypeVersionsState,
+} from '@/lib/tosTypeRules'
 import type { CompareTableRow } from '@/lib/versionCompare'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -214,6 +219,11 @@ export interface PlanState {
   marketVersionsByKey: MarketVersionsState
   marketCurrentVersionByKey: MarketCurrentVersionState
 
+  // tOS version projects: all plan data is isolated by project and type
+  tosTypePlanDataByProjectId: TosTypePlanData
+  tosTypeVersionsByKey: TosTypeVersionsState
+  tosTypeCurrentVersionByKey: TosTypeCurrentVersionState
+
   // Editing helpers
   ganttEditingTask: any
   progressEditingTask: any
@@ -268,6 +278,9 @@ export interface PlanActions {
   setMarketFollowVersionMeta: (v: Record<string, FollowVersionSource> | ((prev: Record<string, FollowVersionSource>) => Record<string, FollowVersionSource>)) => void
   setMarketVersionsByKey: (v: MarketVersionsState | ((prev: MarketVersionsState) => MarketVersionsState)) => void
   setMarketCurrentVersionByKey: (v: MarketCurrentVersionState | ((prev: MarketCurrentVersionState) => MarketCurrentVersionState)) => void
+  setTosTypePlanDataByProjectId: (v: TosTypePlanData | ((prev: TosTypePlanData) => TosTypePlanData)) => void
+  setTosTypeVersionsByKey: (v: TosTypeVersionsState | ((prev: TosTypeVersionsState) => TosTypeVersionsState)) => void
+  setTosTypeCurrentVersionByKey: (v: TosTypeCurrentVersionState | ((prev: TosTypeCurrentVersionState) => TosTypeCurrentVersionState)) => void
 
   setGanttEditingTask: (v: any) => void
   setProgressEditingTask: (v: any) => void
@@ -373,6 +386,9 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
   marketFollowVersionMeta: {},
   marketVersionsByKey: {},
   marketCurrentVersionByKey: {},
+  tosTypePlanDataByProjectId: {},
+  tosTypeVersionsByKey: {},
+  tosTypeCurrentVersionByKey: {},
 
   // Editing helpers
   ganttEditingTask: null,
@@ -427,6 +443,9 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
   setMarketFollowVersionMeta: (v) => set((s) => ({ marketFollowVersionMeta: typeof v === 'function' ? v(s.marketFollowVersionMeta) : v })),
   setMarketVersionsByKey: (v) => set((s) => ({ marketVersionsByKey: typeof v === 'function' ? v(s.marketVersionsByKey) : v })),
   setMarketCurrentVersionByKey: (v) => set((s) => ({ marketCurrentVersionByKey: typeof v === 'function' ? v(s.marketCurrentVersionByKey) : v })),
+  setTosTypePlanDataByProjectId: (v) => set((s) => ({ tosTypePlanDataByProjectId: typeof v === 'function' ? v(s.tosTypePlanDataByProjectId) : v })),
+  setTosTypeVersionsByKey: (v) => set((s) => ({ tosTypeVersionsByKey: typeof v === 'function' ? v(s.tosTypeVersionsByKey) : v })),
+  setTosTypeCurrentVersionByKey: (v) => set((s) => ({ tosTypeCurrentVersionByKey: typeof v === 'function' ? v(s.tosTypeCurrentVersionByKey) : v })),
 
   setGanttEditingTask: (v) => set({ ganttEditingTask: v }),
   setProgressEditingTask: (v) => set({ progressEditingTask: v }),

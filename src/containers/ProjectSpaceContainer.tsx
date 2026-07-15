@@ -74,6 +74,7 @@ import {
 } from '@/lib/jiraProject'
 import { notifyPublishChanges, notifyDueTasks } from '@/lib/feishu-notify'
 import type { TaskChange, PlanDueNotice } from '@/types/plan-notify'
+import type { VersionTrainRecord } from '@/types'
 import { exportSheet, exportMergedSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 import {
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
@@ -104,17 +105,34 @@ import {
   type MarketConfigRow,
   type PlanVersionLike,
 } from '@/lib/marketRules'
+import {
+  TOS_TYPE_OPTIONS,
+  buildTosTypeRows,
+  createTosTypePlanEntry,
+  ensureTosTypePlanDataForRows,
+  getMainTosType,
+  getTosTypeCurrentVersion,
+  getTosTypeSnapshotKey,
+  getTosTypeVersionKey,
+  getTosTypeVersions,
+  normalizeTosTypeRows,
+  setTosTypeCurrentVersion,
+  setTosTypeVersions,
+  type TosPlanType,
+  type TosTypeConfigRow,
+  type TosTypePlanEntry,
+} from '@/lib/tosTypeRules'
 
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
-import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
+import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, INITIAL_LEVEL2_PLAN_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
 import { usePermissionStore, useHasPermission } from '@/stores/permission'
 import { PermissionConfig } from '@/components/permission/PermissionModule'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import { TransferApply, TransferDetail, TransferEntry, TransferReview, TransferSqaReview } from '@/components/transfer/TransferModule'
 import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
-import VersionTrainPlan from '@/components/plans/VersionTrainPlan'
+import VersionTrainPlan, { INITIAL_VERSION_TRAIN_DATA } from '@/components/plans/VersionTrainPlan'
 import { PROJECT_STATUS_CONFIG } from '@/data/projects'
 import {
   TECH_DOMAIN_OPTIONS,
@@ -138,6 +156,7 @@ import { ProjectSpaceHeader } from '@/containers/AppShell'
 
 const { Option } = Select
 const PLAN_DRAWER_Z_INDEX = 1200
+const TOS_VERSION_TRAIN_SNAPSHOT_LEVEL = 'level2-version-train'
 const PROJECT_SPACE_STATUS_OPTIONS = [
   { label: '待立项', value: '待立项' },
   { label: '在研', value: '在研' },
@@ -197,6 +216,36 @@ const getLatestPublishedPlanVersion = (versions: PlanVersionLike[]) => (
     .filter(version => parsePlanVersionNo(version.versionNo))
     .sort((a, b) => comparePlanVersions(b, a))[0]
 )
+
+const clearTosTypeExecutionFields = (task: any) => ({
+  ...task,
+  planStartDate: '',
+  planEndDate: '',
+  actualStartDate: '',
+  actualEndDate: '',
+  actualDays: 0,
+  status: '未开始',
+  progress: 0,
+})
+
+const versionTrainRecordsToCompareTasks = (records: VersionTrainRecord[]) => records.map(record => ({
+  id: record.id,
+  taskName: `${record.versionNo}${record.versionGoal ? ` · ${record.versionGoal}` : ''}`,
+  responsible: record.mainTestModel,
+  predecessor: record.versionCategory,
+  planStartDate: record.planCompileTime,
+  planEndDate: record.planTestEndTime,
+  estimatedDays: 0,
+  actualStartDate: record.actualCompileTime,
+  actualEndDate: record.actualTestEndTime,
+  actualDays: 0,
+  status: record.status,
+  progress: record.status === '已完成' ? 100 : record.status === '测试中' ? 60 : record.status === '自检中' ? 30 : 0,
+}))
+
+const INITIAL_TOS_CURRENT_VERSION = VERSION_DATA
+  .filter(version => version.status === '已发布')
+  .sort((left, right) => comparePlanVersions(right, left))[0]?.id || VERSION_DATA[0]?.id || ''
 
 const getPlanRevisionKindFromVersion = (version?: PlanVersionLike): PlanRevisionKind | null => {
   if (!version) return null
@@ -274,6 +323,8 @@ export default function ProjectSpaceContainer() {
     basicInfoEditMode, setBasicInfoEditMode, editingProjectFields, setEditingProjectFields,
     selectedMarketTab, setSelectedMarketTab,
     marketConfigsByProjectId, setMarketConfigForProject,
+    selectedTosTypeTab, setSelectedTosTypeTab,
+    tosTypeConfigsByProjectId, setTosTypeConfigForProject,
   } = proj
 
   const {
@@ -282,9 +333,12 @@ export default function ProjectSpaceContainer() {
     projectPlanOverviewTab, setProjectPlanOverviewTab, planMetaCollapsed, setPlanMetaCollapsed,
     versions: baseVersions, setVersions: setBaseVersions, currentVersion: baseCurrentVersion, setCurrentVersion: setBaseCurrentVersion,
     tasks, setTasks, searchText, setSearchText,
-    level2PlanTasks, setLevel2PlanTasks, level2PlanMilestones, setLevel2PlanMilestones,
-    createdLevel2Plans, setCreatedLevel2Plans, activeLevel2Plan, setActiveLevel2Plan,
-    level2PlanMeta, setLevel2PlanMeta, createFormValues, setCreateFormValues,
+    level2PlanTasks: baseLevel2PlanTasks, setLevel2PlanTasks: setBaseLevel2PlanTasks,
+    level2PlanMilestones: baseLevel2PlanMilestones, setLevel2PlanMilestones: setBaseLevel2PlanMilestones,
+    createdLevel2Plans: baseCreatedLevel2Plans, setCreatedLevel2Plans: setBaseCreatedLevel2Plans,
+    activeLevel2Plan: baseActiveLevel2Plan, setActiveLevel2Plan: setBaseActiveLevel2Plan,
+    level2PlanMeta: baseLevel2PlanMeta, setLevel2PlanMeta: setBaseLevel2PlanMeta,
+    createFormValues, setCreateFormValues,
     selectedLevel2PlanType, setSelectedLevel2PlanType,
     selectedMilestones, setSelectedMilestones, selectedMRVersion, setSelectedMRVersion,
     columnsByView, setColumnsByView, collapsedNodes, setCollapsedNodes,
@@ -296,6 +350,9 @@ export default function ProjectSpaceContainer() {
     marketFollowVersionMeta, setMarketFollowVersionMeta,
     marketVersionsByKey, setMarketVersionsByKey,
     marketCurrentVersionByKey, setMarketCurrentVersionByKey,
+    tosTypePlanDataByProjectId, setTosTypePlanDataByProjectId,
+    tosTypeVersionsByKey, setTosTypeVersionsByKey,
+    tosTypeCurrentVersionByKey, setTosTypeCurrentVersionByKey,
     ganttEditingTask, setGanttEditingTask, progressEditingTask, setProgressEditingTask,
     parentTimeWarning, setParentTimeWarning,
     milestoneTimeWarning, setMilestoneTimeWarning,
@@ -332,6 +389,8 @@ export default function ProjectSpaceContainer() {
   const canEditBasicInfo = canDo('basicInfo:编辑')
   const canEditLevel1Plan = canDo('plan:一级计划-编辑')
   const canEditLevel2Plan = canDo('plan:二级计划-编辑')
+  const canEditCurrentPlan = projectPlanLevel === 'level2' ? canEditLevel2Plan : canEditLevel1Plan
+  const currentPlanPermissionLabel = projectPlanLevel === 'level2' ? '二级计划' : '一级计划'
 
   // ═══════ Local state ═══════
   const lastDueCheckedProjectRef = useRef<string | null>(null)
@@ -341,26 +400,122 @@ export default function ProjectSpaceContainer() {
   const [showLevel1PlanFilterDrawer, setShowLevel1PlanFilterDrawer] = useState(false)
   const [showMarketEditor, setShowMarketEditor] = useState(false)
   const [marketDraftRows, setMarketDraftRows] = useState<MarketConfigRow[]>([])
+  const [showTosTypeEditor, setShowTosTypeEditor] = useState(false)
+  const [tosTypeDraftRows, setTosTypeDraftRows] = useState<TosTypeConfigRow[]>([])
 
   // ═══════ Derived ═══════
   const isWholeMachineProject = selectedProject?.type === '整机产品项目'
+  const isTosVersionProject = selectedProject?.type === PROJECT_TYPE_TOS_VERSION
   const marketConfigRows = selectedProject && isWholeMachineProject
     ? buildMarketRowsFromMarkets(selectedProject.markets || [], marketConfigsByProjectId[selectedProject.id])
     : []
   const primaryMarket = getMainMarket(marketConfigRows)
+  const tosTypeConfigRows = selectedProject && isTosVersionProject
+    ? buildTosTypeRows(
+        selectedProject.versionTypes || [],
+        selectedProject.versionType || '',
+        tosTypeConfigsByProjectId[selectedProject.id],
+      )
+    : []
+  const primaryTosType = getMainTosType(tosTypeConfigRows)
+  const tosTypeScopeSignature = tosTypeConfigRows.map(row => `${row.type}:${row.isMain ? 'main' : 'secondary'}`).join('|')
+  const scopedPlanLevel = projectPlanLevel === 'level2' ? 'level2' : 'level1'
   const isMarketScopedLevel1 = !!selectedProject && isWholeMachineProject && projectPlanLevel === 'level1' && !!selectedMarketTab
+  const isTosTypeScoped = !!selectedProject && isTosVersionProject && !!selectedTosTypeTab
+  const latestTemplateVersion = useMemo(
+    () => baseVersions.filter(version => version.status === '已发布').sort((left, right) => comparePlanVersions(right, left))[0],
+    [baseVersions],
+  )
+  const tosTypeSeedEntry = useMemo<TosTypePlanEntry>(() => {
+    const templateSnapshot = latestTemplateVersion
+      ? (
+          publishedSnapshots[getTemplateSnapshotKey(PROJECT_TYPE_TOS_VERSION, latestTemplateVersion.id, 'level1')]
+          || publishedSnapshots[getTemplateSnapshotKey(PROJECT_TYPE_TOS_VERSION, latestTemplateVersion.id)]
+        )
+      : undefined
+    const templateTasks = templateSnapshot
+      || configTemplateTasksByType[PROJECT_TYPE_TOS_VERSION]
+      || LEVEL1_TEMPLATE_TASKS
+    return createTosTypePlanEntry({
+      level1Tasks: templateTasks.map(task => {
+        const templateRole = task.responsibleRole || task.responsible || ''
+        const projectRole = PLAN_TEMPLATE_ROLE_TO_PROJECT_PERMISSION_ROLE[templateRole as keyof typeof PLAN_TEMPLATE_ROLE_TO_PROJECT_PERMISSION_ROLE]
+        const roleMembers = projectRole
+          ? (roles.find(role => role.name === projectRole)?.members || []).filter(Boolean)
+          : []
+        return clearTosTypeExecutionFields({
+          ...task,
+          responsibleRole: templateRole,
+          responsible: projectRole ? roleMembers.join(',') : templateRole,
+        })
+      }),
+      level2PlanTasks: INITIAL_LEVEL2_PLAN_TASKS
+        .filter(task => FIXED_LEVEL2_PLANS.some(planItem => planItem.id === task.planId))
+        .map(clearTosTypeExecutionFields),
+      level2PlanMilestones: [],
+      createdLevel2Plans: FIXED_LEVEL2_PLANS,
+      activeLevel2Plan: FIXED_LEVEL2_PLANS[0].id,
+      level2PlanMeta: {},
+      versionTrainRecords: INITIAL_VERSION_TRAIN_DATA,
+    })
+  }, [configTemplateTasksByType, latestTemplateVersion, publishedSnapshots, roles])
+  const currentTosTypeData = isTosTypeScoped && selectedProject
+    ? (
+        tosTypePlanDataByProjectId[selectedProject.id]?.[selectedTosTypeTab]
+        || createTosTypePlanEntry(tosTypeSeedEntry)
+      )
+    : null
+
   const versions = useMemo(
     () => (
-      isMarketScopedLevel1 && selectedProject
+      isTosTypeScoped && selectedProject
+        ? getTosTypeVersions(
+            tosTypeVersionsByKey,
+            selectedProject.id,
+            selectedTosTypeTab,
+            scopedPlanLevel,
+            VERSION_DATA,
+          )
+        : isMarketScopedLevel1 && selectedProject
         ? getMarketVersions(marketVersionsByKey, selectedProject.id, selectedMarketTab, baseVersions)
         : baseVersions
     ),
-    [baseVersions, isMarketScopedLevel1, marketVersionsByKey, selectedMarketTab, selectedProject?.id],
+    [
+      baseVersions,
+      isMarketScopedLevel1,
+      isTosTypeScoped,
+      marketVersionsByKey,
+      scopedPlanLevel,
+      selectedMarketTab,
+      selectedProject?.id,
+      selectedTosTypeTab,
+      tosTypeVersionsByKey,
+    ],
   )
-  const currentVersion = isMarketScopedLevel1 && selectedProject
-    ? getMarketCurrentVersion(marketCurrentVersionByKey, selectedProject.id, selectedMarketTab, versions, baseCurrentVersion)
-    : baseCurrentVersion
+  const currentVersion = isTosTypeScoped && selectedProject
+    ? getTosTypeCurrentVersion(
+        tosTypeCurrentVersionByKey,
+        selectedProject.id,
+        selectedTosTypeTab,
+        scopedPlanLevel,
+        versions,
+        INITIAL_TOS_CURRENT_VERSION,
+      )
+    : isMarketScopedLevel1 && selectedProject
+      ? getMarketCurrentVersion(marketCurrentVersionByKey, selectedProject.id, selectedMarketTab, versions, baseCurrentVersion)
+      : baseCurrentVersion
   const setVersions = (nextVersions: PlanVersionLike[] | ((prev: PlanVersionLike[]) => PlanVersionLike[])) => {
+    if (isTosTypeScoped && selectedProject) {
+      setTosTypeVersionsByKey(prev => setTosTypeVersions(
+        prev,
+        selectedProject.id,
+        selectedTosTypeTab,
+        scopedPlanLevel,
+        VERSION_DATA,
+        nextVersions,
+      ))
+      return
+    }
     if (isMarketScopedLevel1 && selectedProject) {
       setMarketVersionsByKey(prev => setMarketVersions(prev, selectedProject.id, selectedMarketTab, baseVersions, nextVersions))
       return
@@ -368,6 +523,16 @@ export default function ProjectSpaceContainer() {
     setBaseVersions(nextVersions as typeof baseVersions)
   }
   const setCurrentVersion = (versionId: string) => {
+    if (isTosTypeScoped && selectedProject) {
+      setTosTypeCurrentVersionByKey(prev => setTosTypeCurrentVersion(
+        prev,
+        selectedProject.id,
+        selectedTosTypeTab,
+        scopedPlanLevel,
+        versionId,
+      ))
+      return
+    }
     if (isMarketScopedLevel1 && selectedProject) {
       setMarketCurrentVersionByKey(prev => setMarketCurrentVersion(prev, selectedProject.id, selectedMarketTab, versionId))
       return
@@ -395,7 +560,49 @@ export default function ProjectSpaceContainer() {
   const isCurrentDraft = currentVersionData?.status === '修订中'
   const latestPublishedVersion = versions.filter(v => v.status === '已发布').sort((a, b) => comparePlanVersions(b, a))[0]
   const isLatestPublished = !isCurrentDraft && currentVersion === latestPublishedVersion?.id
-  const hasPublishedLevel1Plan = versions.some(v => v.status === '已发布')
+  const tosLevel1Versions = selectedProject && isTosTypeScoped
+    ? getTosTypeVersions(tosTypeVersionsByKey, selectedProject.id, selectedTosTypeTab, 'level1', VERSION_DATA)
+    : []
+  const tosLevel1CurrentVersion = selectedProject && isTosTypeScoped
+    ? getTosTypeCurrentVersion(
+        tosTypeCurrentVersionByKey,
+        selectedProject.id,
+        selectedTosTypeTab,
+        'level1',
+        tosLevel1Versions,
+        INITIAL_TOS_CURRENT_VERSION,
+      )
+    : ''
+  const tosLevel1CurrentVersionData = tosLevel1Versions.find(version => version.id === tosLevel1CurrentVersion)
+  const tosLevel1PublishedSnapshot = selectedProject && isTosTypeScoped && tosLevel1CurrentVersionData?.status === '已发布'
+    ? publishedSnapshots[getTosTypeSnapshotKey(selectedProject.id, selectedTosTypeTab, 'level1', tosLevel1CurrentVersion)]
+    : undefined
+  const tosLevel2Versions = selectedProject && isTosTypeScoped
+    ? getTosTypeVersions(tosTypeVersionsByKey, selectedProject.id, selectedTosTypeTab, 'level2', VERSION_DATA)
+    : []
+  const tosLevel2CurrentVersion = selectedProject && isTosTypeScoped
+    ? getTosTypeCurrentVersion(
+        tosTypeCurrentVersionByKey,
+        selectedProject.id,
+        selectedTosTypeTab,
+        'level2',
+        tosLevel2Versions,
+        INITIAL_TOS_CURRENT_VERSION,
+      )
+    : ''
+  const tosLevel2CurrentVersionData = tosLevel2Versions.find(version => version.id === tosLevel2CurrentVersion)
+  const tosLevel2PublishedSnapshot = selectedProject && isTosTypeScoped && tosLevel2CurrentVersionData?.status === '已发布'
+    ? publishedSnapshots[getTosTypeSnapshotKey(selectedProject.id, selectedTosTypeTab, 'level2', tosLevel2CurrentVersion)]
+    : undefined
+  const hasPublishedLevel1Plan = isTosTypeScoped && selectedProject
+    ? getTosTypeVersions(
+        tosTypeVersionsByKey,
+        selectedProject.id,
+        selectedTosTypeTab,
+        'level1',
+        VERSION_DATA,
+      ).some(version => version.status === '已发布')
+    : versions.some(version => version.status === '已发布')
   const allPlanTypes = [...LEVEL2_PLAN_TYPES, ...customTypes]
 
   const currentMarketIsFollow = isWholeMachineProject && isFollowMarket(marketConfigRows, selectedMarketTab)
@@ -416,10 +623,35 @@ export default function ProjectSpaceContainer() {
     )
   }
   const versionSelectWidth = isWholeMachineProject && projectPlanLevel === 'level1' ? 250 : 150
-  // 整机产品项目使用市场维度数据，其他项目使用全局 tasks
-  const effectiveTasks = currentMarketData ? currentMarketData.tasks : tasks
-  const setEffectiveTasks = currentMarketData
+  const updateCurrentTosTypeData = (updater: (previous: TosTypePlanEntry) => TosTypePlanEntry) => {
+    if (!selectedProject || !isTosTypeScoped) return
+    setTosTypePlanDataByProjectId(previous => {
+      const ensured = ensureTosTypePlanDataForRows(previous, selectedProject.id, tosTypeConfigRows, tosTypeSeedEntry)
+      const projectData = ensured[selectedProject.id] || {}
+      const current = projectData[selectedTosTypeTab] || createTosTypePlanEntry(tosTypeSeedEntry)
+      return {
+        ...ensured,
+        [selectedProject.id]: {
+          ...projectData,
+          [selectedTosTypeTab]: updater(current),
+        },
+      }
+    })
+  }
+
+  // 整机项目按市场隔离；tOS 版本项目按类型隔离；其他项目沿用全局数据。
+  const effectiveTasks = currentTosTypeData
+    ? (tosLevel1PublishedSnapshot ?? currentTosTypeData.level1Tasks)
+    : currentMarketData?.tasks || tasks
+  const setEffectiveTasks = currentTosTypeData
     ? (newTasks: any[] | ((prev: any[]) => any[])) => {
+        updateCurrentTosTypeData(previous => ({
+          ...previous,
+          level1Tasks: typeof newTasks === 'function' ? newTasks(previous.level1Tasks) : newTasks,
+        }))
+      }
+    : currentMarketData
+      ? (newTasks: any[] | ((prev: any[]) => any[])) => {
         setMarketPlanData((prev: any) => ({
           ...prev,
           [selectedMarketTab]: {
@@ -428,7 +660,174 @@ export default function ProjectSpaceContainer() {
           },
         }))
       }
-    : setTasks
+      : setTasks
+
+  const effectiveLevel2PlanTasks = currentTosTypeData
+    ? (tosLevel2PublishedSnapshot ?? currentTosTypeData.level2PlanTasks)
+    : baseLevel2PlanTasks
+  const level2PlanTasks = effectiveLevel2PlanTasks
+  const setLevel2PlanTasks = currentTosTypeData
+    ? (value: any[] | ((previous: any[]) => any[])) => updateCurrentTosTypeData(previous => ({
+        ...previous,
+        level2PlanTasks: typeof value === 'function' ? value(previous.level2PlanTasks) : value,
+      }))
+    : setBaseLevel2PlanTasks
+  const level2PlanMilestones = currentTosTypeData?.level2PlanMilestones || baseLevel2PlanMilestones
+  const setLevel2PlanMilestones = currentTosTypeData
+    ? (value: string[] | ((previous: string[]) => string[])) => updateCurrentTosTypeData(previous => ({
+        ...previous,
+        level2PlanMilestones: typeof value === 'function' ? value(previous.level2PlanMilestones) : value,
+      }))
+    : setBaseLevel2PlanMilestones
+  const effectiveCreatedLevel2Plans = currentTosTypeData?.createdLevel2Plans || baseCreatedLevel2Plans
+  const createdLevel2Plans = effectiveCreatedLevel2Plans
+  const setCreatedLevel2Plans = currentTosTypeData
+    ? (value: typeof baseCreatedLevel2Plans | ((previous: typeof baseCreatedLevel2Plans) => typeof baseCreatedLevel2Plans)) => updateCurrentTosTypeData(previous => ({
+        ...previous,
+        createdLevel2Plans: typeof value === 'function' ? value(previous.createdLevel2Plans) : value,
+      }))
+    : setBaseCreatedLevel2Plans
+  const activeLevel2Plan = currentTosTypeData?.activeLevel2Plan || baseActiveLevel2Plan
+  const setActiveLevel2Plan = currentTosTypeData
+    ? (value: string) => updateCurrentTosTypeData(previous => ({ ...previous, activeLevel2Plan: value }))
+    : setBaseActiveLevel2Plan
+  const effectiveLevel2PlanMeta = currentTosTypeData?.level2PlanMeta || baseLevel2PlanMeta
+  const level2PlanMeta = effectiveLevel2PlanMeta
+  const setLevel2PlanMeta = currentTosTypeData
+    ? (value: Record<string, any> | ((previous: Record<string, any>) => Record<string, any>)) => updateCurrentTosTypeData(previous => ({
+        ...previous,
+        level2PlanMeta: typeof value === 'function' ? value(previous.level2PlanMeta) : value,
+      }))
+    : setBaseLevel2PlanMeta
+  const setVersionTrainRecords = currentTosTypeData
+    ? (records: typeof INITIAL_VERSION_TRAIN_DATA) => updateCurrentTosTypeData(previous => ({
+        ...previous,
+        versionTrainRecords: records,
+      }))
+    : undefined
+  const isTosVersionTrainPlan = isTosTypeScoped
+    && projectPlanLevel === 'level2'
+    && activeLevel2Plan === 'plan1'
+  const getVersionTrainSnapshot = (versionId: string): VersionTrainRecord[] | undefined => (
+    selectedProject && isTosTypeScoped
+      ? publishedSnapshots[getTosTypeSnapshotKey(
+          selectedProject.id,
+          selectedTosTypeTab,
+          TOS_VERSION_TRAIN_SNAPSHOT_LEVEL,
+          versionId,
+        )] as VersionTrainRecord[] | undefined
+      : undefined
+  )
+  const versionTrainRecordsForCurrentVersion: VersionTrainRecord[] | undefined = isTosVersionTrainPlan
+    && tosLevel2CurrentVersionData?.status === '已发布'
+    ? (getVersionTrainSnapshot(tosLevel2CurrentVersion) ?? currentTosTypeData?.versionTrainRecords)
+    : currentTosTypeData?.versionTrainRecords
+
+  useEffect(() => {
+    if (!selectedProject || !isTosVersionProject || tosTypeConfigRows.length === 0) return
+
+    if (!tosTypeConfigRows.some(row => row.type === selectedTosTypeTab)) {
+      setSelectedTosTypeTab(primaryTosType || tosTypeConfigRows[0].type)
+    }
+
+    const existingProjectData = tosTypePlanDataByProjectId[selectedProject.id] || {}
+    if (tosTypeConfigRows.some(row => !existingProjectData[row.type])) {
+      setTosTypePlanDataByProjectId(previous => ensureTosTypePlanDataForRows(
+        previous,
+        selectedProject.id,
+        tosTypeConfigRows,
+        tosTypeSeedEntry,
+      ))
+    }
+  }, [
+    isTosVersionProject,
+    primaryTosType,
+    selectedProject,
+    selectedTosTypeTab,
+    setSelectedTosTypeTab,
+    setTosTypePlanDataByProjectId,
+    tosTypeConfigRows,
+    tosTypePlanDataByProjectId,
+    tosTypeSeedEntry,
+  ])
+
+  useEffect(() => {
+    if (!selectedProject || !isTosVersionProject || tosTypeConfigRows.length === 0) return
+    const projectId = selectedProject.id
+    const planLevels = ['level1', 'level2'] as const
+
+    setTosTypeVersionsByKey(previous => {
+      let next = previous
+      tosTypeConfigRows.forEach(row => {
+        planLevels.forEach(level => {
+          const key = getTosTypeVersionKey(projectId, row.type, level)
+          if (next[key]) return
+          if (next === previous) next = { ...previous }
+          next[key] = VERSION_DATA.map(version => ({ ...version }))
+        })
+      })
+      return next
+    })
+    setTosTypeCurrentVersionByKey(previous => {
+      let next = previous
+      tosTypeConfigRows.forEach(row => {
+        planLevels.forEach(level => {
+          const key = getTosTypeVersionKey(projectId, row.type, level)
+          if (next[key]) return
+          if (next === previous) next = { ...previous }
+          next[key] = INITIAL_TOS_CURRENT_VERSION
+        })
+      })
+      return next
+    })
+  }, [
+    isTosVersionProject,
+    selectedProject?.id,
+    setTosTypeCurrentVersionByKey,
+    setTosTypeVersionsByKey,
+    tosTypeScopeSignature,
+  ])
+
+  useEffect(() => {
+    if (!selectedProject || !isTosVersionProject || tosTypeConfigRows.length === 0) return
+    const projectId = selectedProject.id
+    const projectPlanData = tosTypePlanDataByProjectId[projectId] || {}
+    const publishedVersions = VERSION_DATA.filter(version => version.status === '已发布')
+
+    setPublishedSnapshots(previous => {
+      let next = previous
+      const ensureSnapshot = (key: string, value: unknown[]) => {
+        if (next[key] !== undefined) return
+        if (next === previous) next = { ...previous }
+        next[key] = JSON.parse(JSON.stringify(value))
+      }
+
+      tosTypeConfigRows.forEach(row => {
+        const entry = projectPlanData[row.type] || tosTypeSeedEntry
+        publishedVersions.forEach(version => {
+          ensureSnapshot(
+            getTosTypeSnapshotKey(projectId, row.type, 'level1', version.id),
+            entry.level1Tasks,
+          )
+          ensureSnapshot(
+            getTosTypeSnapshotKey(projectId, row.type, 'level2', version.id),
+            entry.level2PlanTasks,
+          )
+          ensureSnapshot(
+            getTosTypeSnapshotKey(projectId, row.type, TOS_VERSION_TRAIN_SNAPSHOT_LEVEL, version.id),
+            entry.versionTrainRecords,
+          )
+        })
+      })
+      return next
+    })
+  }, [
+    isTosVersionProject,
+    selectedProject?.id,
+    setPublishedSnapshots,
+    tosTypeScopeSignature,
+    tosTypeSeedEntry,
+  ])
 
   const getResponsibleNames = (responsible?: string) => (
     (responsible || '')
@@ -594,6 +993,103 @@ export default function ProjectSpaceContainer() {
         </Button>
       </Dropdown>
     )
+  }
+
+  const getCurrentTosTypeRows = () => (
+    selectedProject
+      ? buildTosTypeRows(
+          selectedProject.versionTypes || [],
+          selectedProject.versionType || '',
+          tosTypeConfigsByProjectId[selectedProject.id],
+        )
+      : []
+  )
+
+  const openTosTypeEditor = () => {
+    if (!canEditBasicInfo) {
+      message.warning('无基本信息编辑权限')
+      return
+    }
+    const rows = getCurrentTosTypeRows()
+    setTosTypeDraftRows(rows.length > 0 ? rows.map(row => ({ ...row })) : [{
+      id: `tos-type-${Date.now()}`,
+      type: 'Full',
+      isMain: true,
+    }])
+    setShowTosTypeEditor(true)
+  }
+
+  const updateTosTypeDraftRow = (rowId: string, patch: Partial<TosTypeConfigRow>) => {
+    setTosTypeDraftRows(previous => {
+      const nextRows = previous.map(row => ({ ...row }))
+      const targetRow = nextRows.find(row => row.id === rowId)
+      if (!targetRow) return previous
+
+      if (patch.type !== undefined) targetRow.type = patch.type
+      if (patch.isMain) {
+        nextRows.forEach(row => { row.isMain = row.id === rowId })
+      }
+      return normalizeTosTypeRows(nextRows)
+    })
+  }
+
+  const addTosTypeDraftRow = () => {
+    const selectedTypes = new Set(tosTypeDraftRows.map(row => row.type))
+    const nextType = TOS_TYPE_OPTIONS.find(type => !selectedTypes.has(type))
+    if (!nextType) {
+      message.warning('可选类型已全部添加')
+      return
+    }
+    setTosTypeDraftRows(previous => normalizeTosTypeRows([
+      ...previous,
+      {
+        id: `tos-type-${Date.now()}`,
+        type: nextType,
+        isMain: previous.length === 0,
+      },
+    ]))
+  }
+
+  const removeTosTypeDraftRow = (rowId: string) => {
+    if (tosTypeDraftRows.length <= 1) {
+      message.warning('至少保留一个类型')
+      return
+    }
+    setTosTypeDraftRows(previous => normalizeTosTypeRows(previous.filter(row => row.id !== rowId)))
+  }
+
+  const saveTosTypeConfig = () => {
+    if (!canEditBasicInfo) {
+      message.error('无基本信息编辑权限')
+      return
+    }
+    if (!selectedProject || selectedProject.type !== PROJECT_TYPE_TOS_VERSION) return
+    const normalizedRows = normalizeTosTypeRows(tosTypeDraftRows)
+    if (normalizedRows.length === 0) {
+      message.error('请至少配置一个类型')
+      return
+    }
+
+    const nextTypes = normalizedRows.map(row => row.type)
+    const mainType = getMainTosType(normalizedRows) as TosPlanType
+    const updatedProject = {
+      ...selectedProject,
+      versionTypes: nextTypes,
+      versionType: mainType,
+    } as typeof selectedProject
+
+    setTosTypeConfigForProject(selectedProject.id, normalizedRows)
+    setTosTypePlanDataByProjectId(previous => ensureTosTypePlanDataForRows(
+      previous,
+      selectedProject.id,
+      normalizedRows,
+      tosTypeSeedEntry,
+    ))
+    setSelectedProject(updatedProject)
+    setProjects(previous => previous.map(project => project.id === updatedProject.id ? updatedProject : project))
+    if (!nextTypes.includes(selectedTosTypeTab as TosPlanType)) setSelectedTosTypeTab(mainType || nextTypes[0])
+    setShowTosTypeEditor(false)
+    message.success('类型配置已保存')
   }
 
   const getCurrentMarketRows = () => (
@@ -862,8 +1358,13 @@ export default function ProjectSpaceContainer() {
   // Scope key for collapse
   const getScopeKey = (): string | null => {
     if (!selectedProject) return null
-    if (projectPlanLevel === 'level1') return `${selectedProject.id}::level1`
-    if (projectPlanLevel === 'level2' && activeLevel2Plan) return `${selectedProject.id}::level2::${activeLevel2Plan}`
+    const planDimension = isTosVersionProject
+      ? `type::${selectedTosTypeTab}`
+      : isWholeMachineProject
+        ? `market::${selectedMarketTab}`
+        : 'default'
+    if (projectPlanLevel === 'level1') return `${selectedProject.id}::${planDimension}::level1`
+    if (projectPlanLevel === 'level2' && activeLevel2Plan) return `${selectedProject.id}::${planDimension}::level2::${activeLevel2Plan}`
     return null
   }
 
@@ -890,14 +1391,14 @@ export default function ProjectSpaceContainer() {
   // 进入项目空间「计划」时按权限+责任人矩阵选择默认版本
   // - 有编辑权 / 是责任人：有修订版 → 默认修订版；无修订版 → 最新已发布
   // - 无编辑权 + 非责任人：无论有无修订版，都默认最新已发布（且下拉里也不展示修订版选项）
-  // 用 ref 锁定到 project+market+level，防止用户手动切换版本后被覆盖
+  // 用 ref 锁定到 project+市场/类型+level，防止用户手动切换版本后被覆盖
   const lastVersionInitKeyRef = useRef<string | null>(null)
   useEffect(() => {
     if (activeModule !== 'projectSpace') return
     if (projectSpaceModule !== 'plan') return
     if (!selectedProject) return
     if (versions.length === 0) return
-    const key = `${selectedProject.id}::${selectedMarketTab || ''}::${projectPlanLevel}::${currentLoginUser}`
+    const key = `${selectedProject.id}::${selectedMarketTab || ''}::${selectedTosTypeTab || ''}::${projectPlanLevel}::${currentLoginUser}`
     if (lastVersionInitKeyRef.current === key) return
     lastVersionInitKeyRef.current = key
     const draft = versions.find(v => v.status === '修订中')
@@ -909,7 +1410,7 @@ export default function ProjectSpaceContainer() {
     } else if (latestPub) {
       if (currentVersion !== latestPub.id) setCurrentVersion(latestPub.id)
     }
-  }, [activeModule, projectSpaceModule, selectedProject?.id, selectedMarketTab, projectPlanLevel, canViewDraft, versions, currentLoginUser])
+  }, [activeModule, projectSpaceModule, selectedProject?.id, selectedMarketTab, selectedTosTypeTab, projectPlanLevel, canViewDraft, versions, currentLoginUser])
 
   // Due task scanning
   useEffect(() => {
@@ -917,25 +1418,34 @@ export default function ProjectSpaceContainer() {
     if (!selectedProject) return
     if (projectSpaceModule !== 'plan') return
     if (projectPlanLevel !== 'level1') return
-    const key = selectedProject.id
+    const dueScanDimension = isTosTypeScoped
+      ? selectedTosTypeTab
+      : isWholeMachineProject
+        ? selectedMarketTab
+        : ''
+    const key = `${selectedProject.id}::${dueScanDimension}`
     if (lastDueCheckedProjectRef.current === key) return
     lastDueCheckedProjectRef.current = key
     const latestPub = versions
       .filter(v => v.status === '已发布')
       .sort((a, b) => comparePlanVersions(b, a))[0]
-    const scanSnapshotKey = latestPub && selectedProject && isWholeMachineProject && projectPlanLevel === 'level1'
-      ? getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, latestPub.id)
-      : latestPub?.id
-    const scanTarget = latestPub && scanSnapshotKey && publishedSnapshots[scanSnapshotKey]
-      ? publishedSnapshots[scanSnapshotKey]
-      : latestPub && publishedSnapshots[latestPub.id]
-        ? publishedSnapshots[latestPub.id]
-        : effectiveTasks
+    const scanSnapshotKey = latestPub && isTosTypeScoped
+      ? getTosTypeSnapshotKey(selectedProject.id, selectedTosTypeTab, 'level1', latestPub.id)
+      : latestPub && isWholeMachineProject
+        ? getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, latestPub.id)
+        : latestPub?.id
+    const scanTarget = isTosTypeScoped
+      ? (scanSnapshotKey ? publishedSnapshots[scanSnapshotKey] : undefined) || effectiveTasks
+      : latestPub && scanSnapshotKey && publishedSnapshots[scanSnapshotKey]
+        ? publishedSnapshots[scanSnapshotKey]
+        : latestPub && publishedSnapshots[latestPub.id]
+          ? publishedSnapshots[latestPub.id]
+          : effectiveTasks
     const notices = scanDueTasks(scanTarget)
     if (notices.length === 0) return
     // 后台仍触发飞书 mock 推送，但不再弹 notification 干扰用户进入计划视图的体验
     notifyDueTasks(notices, MOCK_USER_MAP)
-  }, [selectedProject?.id, projectPlanLevel, activeModule, projectSpaceModule])
+  }, [selectedProject?.id, selectedMarketTab, selectedTosTypeTab, projectPlanLevel, activeModule, projectSpaceModule])
 
   // ═══════ Helper functions ═══════
   const toggleNode = (nodeId: string) => {
@@ -1087,12 +1597,24 @@ export default function ProjectSpaceContainer() {
     const clonedTasks = initializeProjectPlanTasksFromTemplate(templateTasks)
     const kindLabel = getPlanRevisionKindLabel(revisionKind)
     setVersions([...versions, { id: nid, versionNo, status: '修订中' }])
-    setCurrentVersion(nid); setEffectiveTasks(clonedTasks); message.success(`已创建${kindLabel}修订版本 ${versionNo}`)
+    setCurrentVersion(nid)
+    if (projectPlanLevel === 'level1') setEffectiveTasks(clonedTasks)
+    if (isTosTypeScoped && projectPlanLevel === 'level2') {
+      setLevel2PlanTasks(JSON.parse(JSON.stringify(effectiveLevel2PlanTasks)))
+      const sourceTrainRecords = getVersionTrainSnapshot(tosLevel2CurrentVersion)
+        ?? currentTosTypeData?.versionTrainRecords
+      if (sourceTrainRecords && setVersionTrainRecords) {
+        setVersionTrainRecords(JSON.parse(JSON.stringify(sourceTrainRecords)))
+      }
+    }
+    message.success(`已创建${kindLabel}修订版本 ${versionNo}`)
   }
 
   const handlePublish = () => {
     // 父子时间区间校验：违规则阻止发布并滚动到首条违规行
-    const tasksToValidate = projectPlanLevel === 'level2' && activeLevel2Plan && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1'
+    const tasksToValidate = isTosVersionTrainPlan
+      ? []
+      : projectPlanLevel === 'level2' && activeLevel2Plan && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1'
       ? level2PlanTasks.filter((t: any) => t.planId === activeLevel2Plan)
       : effectiveTasks
     const invalidFields = getInvalidTaskFields(tasksToValidate as any[])
@@ -1113,11 +1635,26 @@ export default function ProjectSpaceContainer() {
       return
     }
     const prevPublished = versions.filter(v => v.status === '已发布' && v.id !== currentVersion).sort((a, b) => comparePlanVersions(b, a))[0]
-    const previousSnapshotKey = selectedProject && isWholeMachineProject && projectPlanLevel === 'level1' && prevPublished
-      ? getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, prevPublished.id)
-      : ''
-    const baselineTasks: any[] = prevPublished ? (publishedSnapshots[previousSnapshotKey] || publishedSnapshots[prevPublished.id] || []) : []
-    const changes = diffTasksForNotify(baselineTasks, effectiveTasks)
+    const versionTrainRecordsForSnapshot = currentTosTypeData?.versionTrainRecords || []
+    const planTasksForVersion = isTosVersionTrainPlan
+      ? versionTrainRecordsForSnapshot
+      : projectPlanLevel === 'level2' ? level2PlanTasks : effectiveTasks
+    const previousSnapshotKey = selectedProject && isTosTypeScoped && prevPublished
+      ? getTosTypeSnapshotKey(
+          selectedProject.id,
+          selectedTosTypeTab,
+          isTosVersionTrainPlan ? TOS_VERSION_TRAIN_SNAPSHOT_LEVEL : scopedPlanLevel,
+          prevPublished.id,
+        )
+      : selectedProject && isWholeMachineProject && projectPlanLevel === 'level1' && prevPublished
+        ? getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, prevPublished.id)
+        : ''
+    const baselineTasks: any[] = prevPublished
+      ? isTosTypeScoped
+        ? publishedSnapshots[previousSnapshotKey] || []
+        : publishedSnapshots[previousSnapshotKey] || publishedSnapshots[prevPublished.id] || []
+      : []
+    const changes = isTosVersionTrainPlan ? [] : diffTasksForNotify(baselineTasks, planTasksForVersion)
     const publishedVersionId = currentVersion; const publishedVersion = versions.find(v => v.id === publishedVersionId)
     const mainMarket = getMainMarket(marketConfigRows)
     const shouldSyncFollowMarkets = isWholeMachineProject && projectPlanLevel === 'level1' && selectedMarketTab === mainMarket
@@ -1134,9 +1671,18 @@ export default function ProjectSpaceContainer() {
       })
     }
     setPublishedSnapshots(prev => {
-      const snapshot = JSON.parse(JSON.stringify(effectiveTasks))
+      const snapshot = JSON.parse(JSON.stringify(planTasksForVersion))
       const nextSnapshots = { ...prev }
-      if (selectedProject && isWholeMachineProject && projectPlanLevel === 'level1') {
+      if (selectedProject && isTosTypeScoped) {
+        if (scopedPlanLevel === 'level2') {
+          // tOS 二级版本是组合快照：任务型二级计划与固定版本火车分别保存，
+          // 任一二级计划发布时都会冻结两部分，避免相互覆盖。
+          nextSnapshots[getTosTypeSnapshotKey(selectedProject.id, selectedTosTypeTab, 'level2', publishedVersionId)] = JSON.parse(JSON.stringify(level2PlanTasks))
+          nextSnapshots[getTosTypeSnapshotKey(selectedProject.id, selectedTosTypeTab, TOS_VERSION_TRAIN_SNAPSHOT_LEVEL, publishedVersionId)] = JSON.parse(JSON.stringify(versionTrainRecordsForSnapshot))
+        } else {
+          nextSnapshots[getTosTypeSnapshotKey(selectedProject.id, selectedTosTypeTab, scopedPlanLevel, publishedVersionId)] = snapshot
+        }
+      } else if (selectedProject && isWholeMachineProject && projectPlanLevel === 'level1') {
         nextSnapshots[getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, publishedVersionId)] = snapshot
       } else {
         nextSnapshots[publishedVersionId] = snapshot
@@ -1144,7 +1690,7 @@ export default function ProjectSpaceContainer() {
       return nextSnapshots
     })
     if (changes.length > 0) notifyPublishChanges(versionNo, changes, MOCK_USER_MAP).then(notified => {
-      if (notified > 0) notification.info({ message: '已通过飞书通知责任人', description: `一级计划 ${versionNo} 发布，共 ${changes.length} 条变更，已通知 ${notified} 位责任人`, placement: 'topRight', duration: 5 })
+      if (notified > 0) notification.info({ message: '已通过飞书通知责任人', description: `${projectPlanLevel === 'level2' ? '二级' : '一级'}计划 ${versionNo} 发布，共 ${changes.length} 条变更，已通知 ${notified} 位责任人`, placement: 'topRight', duration: 5 })
     })
     const syncedCount = shouldSyncFollowMarkets ? marketConfigRows.filter(row => row.followsMain).length : 0
     message.success(syncedCount > 0 ? `发布成功，已同步 ${syncedCount} 个跟随市场` : '发布成功')
@@ -1238,6 +1784,33 @@ export default function ProjectSpaceContainer() {
         const result = cancelDraftRevision(versions, currentVersion)
         setVersions(result.versions as typeof versions)
         setCurrentVersion(result.currentVersion)
+        if (selectedProject && isTosTypeScoped) {
+          if (scopedPlanLevel === 'level1') {
+            const restoredTasks = publishedSnapshots[getTosTypeSnapshotKey(
+              selectedProject.id,
+              selectedTosTypeTab,
+              'level1',
+              result.currentVersion,
+            )]
+            if (restoredTasks !== undefined) {
+              setEffectiveTasks(JSON.parse(JSON.stringify(restoredTasks)))
+            }
+          } else {
+            const restoredLevel2Tasks = publishedSnapshots[getTosTypeSnapshotKey(
+              selectedProject.id,
+              selectedTosTypeTab,
+              'level2',
+              result.currentVersion,
+            )]
+            if (restoredLevel2Tasks !== undefined) {
+              setLevel2PlanTasks(JSON.parse(JSON.stringify(restoredLevel2Tasks)))
+            }
+            const restoredRecords = getVersionTrainSnapshot(result.currentVersion)
+            if (restoredRecords !== undefined && setVersionTrainRecords) {
+              setVersionTrainRecords(JSON.parse(JSON.stringify(restoredRecords)))
+            }
+          }
+        }
         setIsEditMode(false)
         message.success(`${currentVersionData.versionNo} 已取消`)
       },
@@ -1592,6 +2165,36 @@ export default function ProjectSpaceContainer() {
 
   // ═══════ renderHorizontalTable ═══════
   const renderHorizontalTable = () => {
+    // 基础信息里的横版计划始终展示一级计划版本，不能受用户上次停留的计划层级影响。
+    const horizontalVersions = selectedProject && isTosVersionProject && selectedTosTypeTab
+      ? getTosTypeVersions(
+          tosTypeVersionsByKey,
+          selectedProject.id,
+          selectedTosTypeTab,
+          'level1',
+          VERSION_DATA,
+        )
+      : selectedProject && isWholeMachineProject && selectedMarketTab
+        ? getMarketVersions(marketVersionsByKey, selectedProject.id, selectedMarketTab, baseVersions)
+        : versions
+    const horizontalCurrentVersion = selectedProject && isTosVersionProject && selectedTosTypeTab
+      ? getTosTypeCurrentVersion(
+          tosTypeCurrentVersionByKey,
+          selectedProject.id,
+          selectedTosTypeTab,
+          'level1',
+          horizontalVersions,
+          INITIAL_TOS_CURRENT_VERSION,
+        )
+      : selectedProject && isWholeMachineProject && selectedMarketTab
+        ? getMarketCurrentVersion(
+            marketCurrentVersionByKey,
+            selectedProject.id,
+            selectedMarketTab,
+            horizontalVersions,
+            baseCurrentVersion,
+          )
+        : currentVersion
     const stages = effectiveTasks.filter((t: any) => !t.parentId).sort((a: any, b: any) => a.order - b.order)
     const stageGroups = stages.map((stage: any) => {
       const milestones = effectiveTasks.filter((t: any) => t.parentId === stage.id).sort((a: any, b: any) => a.order - b.order)
@@ -1606,11 +2209,18 @@ export default function ProjectSpaceContainer() {
       const days = Math.ceil((latest - earliest) / (1000 * 60 * 60 * 24))
       return days > 0 ? days : '-'
     }
-    const displayVersions = getDisplayPlanVersionsForHorizontalPlan(versions)
+    const displayVersions = getDisplayPlanVersionsForHorizontalPlan(horizontalVersions)
     const recencyVersions = [...displayVersions].sort((a, b) => comparePlanVersions(b, a))
     const latestDisplayVersionId = recencyVersions[0]?.id
     const versionOffsetIndex = new Map(recencyVersions.map((version, index) => [version.id, index]))
     const getVersionTasks = (versionId: string) => {
+      const scopedSnapshot = selectedProject && isTosVersionProject && selectedTosTypeTab
+        ? publishedSnapshots[getTosTypeSnapshotKey(selectedProject.id, selectedTosTypeTab, 'level1', versionId)]
+        : selectedProject && isWholeMachineProject && selectedMarketTab
+          ? publishedSnapshots[getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, versionId)]
+          : publishedSnapshots[versionId]
+      if (scopedSnapshot !== undefined) return scopedSnapshot
+      if (versionId === horizontalCurrentVersion) return effectiveTasks
       const offsetIndex = versionOffsetIndex.get(versionId) || 0
       if (offsetIndex === 0) return effectiveTasks
       const offsetDays = offsetIndex * 3
@@ -2248,17 +2858,73 @@ export default function ProjectSpaceContainer() {
   // ═══════ renderProjectPlanInfo ═══════
   const renderProjectPlanInfo = () => {
     const p = selectedProject!
-    return (
-      <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={<Space><CalendarOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>计划信息</span></Space>}>
+    const tosPlanStartDate = isTosVersionProject
+      ? (effectiveTasks.map(task => task.planStartDate).filter(Boolean).sort()[0] || '')
+      : ''
+    const tosPlanEndDate = isTosVersionProject
+      ? (effectiveTasks.map(task => task.planEndDate).filter(Boolean).sort().at(-1) || '')
+      : ''
+    const getWorkingDaySpan = (startDate: string, endDate: string) => {
+      if (!startDate || !endDate) return 0
+      let cursor = dayjs(startDate).startOf('day')
+      const end = dayjs(endDate).startOf('day')
+      if (!cursor.isValid() || !end.isValid() || cursor.isAfter(end)) return 0
+      let days = 0
+      while (!cursor.isAfter(end)) {
+        if (cursor.day() !== 0 && cursor.day() !== 6) days += 1
+        cursor = cursor.add(1, 'day')
+      }
+      return days
+    }
+    const tosPlanHealth = (() => {
+      if (!isTosVersionProject) return p.healthStatus
+      const today = dayjs().startOf('day')
+      const openTaskEndDates = effectiveTasks
+        .filter(task => task.status !== '已完成' && task.planEndDate)
+        .map(task => dayjs(task.planEndDate).startOf('day'))
+        .filter(date => date.isValid())
+      if (openTaskEndDates.some(date => date.isBefore(today))) return 'risk'
+      if (openTaskEndDates.some(date => date.diff(today, 'day') <= 7)) return 'warning'
+      return 'normal'
+    })()
+    const displayedPlanStartDate = isTosVersionProject ? tosPlanStartDate : p.planStartDate
+    const displayedPlanEndDate = isTosVersionProject ? tosPlanEndDate : p.planEndDate
+    const displayedDevelopCycle = isTosVersionProject
+      ? getWorkingDaySpan(tosPlanStartDate, tosPlanEndDate)
+      : p.developCycle
+    const displayedHealthLabel = tosPlanHealth === 'normal' ? '健康' : tosPlanHealth === 'warning' ? '关注' : tosPlanHealth === 'risk' ? '风险' : '-'
+    const planInfoContent = (
+      <>
         <Row gutter={[24, 16]}>
-          <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划开始时间</span>} value={p.planStartDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />} /></Col>
-          <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划结束时间</span>} value={p.planEndDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />} /></Col>
-          <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>开发周期（工作日）</span>} value={p.developCycle || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} suffix={p.developCycle ? <span style={{ fontSize: 12, color: '#9ca3af' }}>天</span> : undefined} /></Col>
-          <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>健康状态</span>} value={p.healthStatus === 'normal' ? '健康' : p.healthStatus === 'warning' ? '关注' : p.healthStatus === 'risk' ? '风险' : '-'} valueStyle={{ fontSize: 16, fontWeight: 600, color: p.healthStatus === 'normal' ? '#52c41a' : p.healthStatus === 'warning' ? '#faad14' : p.healthStatus === 'risk' ? '#ff4d4f' : '#9ca3af' }} /></Col>
+          <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划开始时间</span>} value={displayedPlanStartDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />} /></Col>
+          <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划结束时间</span>} value={displayedPlanEndDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />} /></Col>
+          <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>开发周期（工作日）</span>} value={displayedDevelopCycle || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} suffix={displayedDevelopCycle ? <span style={{ fontSize: 12, color: '#9ca3af' }}>天</span> : undefined} /></Col>
+          <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>健康状态</span>} value={displayedHealthLabel} valueStyle={{ fontSize: 16, fontWeight: 600, color: tosPlanHealth === 'normal' ? '#52c41a' : tosPlanHealth === 'warning' ? '#faad14' : tosPlanHealth === 'risk' ? '#ff4d4f' : '#9ca3af' }} /></Col>
         </Row>
         <Divider style={{ margin: '16px 0' }} />
         <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, textTransform: 'uppercase' as const, letterSpacing: 1 }}>里程碑计划（横排视图）</div>
         {renderHorizontalTable()}
+      </>
+    )
+    return (
+      <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={<Space><CalendarOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>计划信息</span></Space>}>
+        {isTosVersionProject ? (
+          <Tabs
+            activeKey={selectedTosTypeTab}
+            onChange={(type) => navigateWithEditGuard(() => setSelectedTosTypeTab(type))}
+            type="card"
+            tabBarExtraContent={{
+              right: canEditBasicInfo
+                ? <Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6, marginLeft: 8 }} onClick={openTosTypeEditor}>类型编辑</Button>
+                : <Tooltip title="无基本信息编辑权限"><Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6, marginLeft: 8 }} disabled>类型编辑</Button></Tooltip>,
+            }}
+            items={tosTypeConfigRows.map(row => ({
+              key: row.type,
+              label: <Space size={6}><span style={{ fontWeight: 500 }}>{row.type}</span>{row.isMain && <Tag color="blue" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>主</Tag>}</Space>,
+              children: <div style={{ paddingTop: 8 }}>{planInfoContent}</div>,
+            }))}
+          />
+        ) : planInfoContent}
       </Card>
     )
   }
@@ -2292,11 +2958,13 @@ export default function ProjectSpaceContainer() {
 
   // Market color mapping
   const marketColors: Record<string, string> = { 'OP': '#1890ff', 'TR': '#52c41a', 'RU': '#faad14', 'FR': '#722ed1', 'IN': '#eb2f96', 'BR': '#13c2c2' }
+  const tosTypeColors: Record<string, string> = { Full: '#6366f1', Slim: '#13c2c2', PAD: '#722ed1', GO: '#fa8c16' }
 
   // ═══════ renderProjectPlan ═══════
   const renderProjectPlan = () => {
     const markets = marketConfigRows.map(row => row.market)
     const showMarketTabs = selectedProject?.type === '整机产品项目' && markets.length > 0
+    const showTosTypeTabs = selectedProject?.type === PROJECT_TYPE_TOS_VERSION && tosTypeConfigRows.length > 0
     const planTabItems = [
       { key: 'level1', label: '一级计划' },
       { key: 'level2', label: '二级计划' },
@@ -2304,6 +2972,32 @@ export default function ProjectSpaceContainer() {
     ]
     return (
       <div>
+        {showTosTypeTabs && (
+          <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
+            <Row align="middle" justify="space-between">
+              <Col>
+                <Space size={4} align="center">
+                  <span style={{ fontSize: 13, fontWeight: 500, color: '#9ca3af', marginRight: 8 }}>类型</span>
+                  {tosTypeConfigRows.map(row => (
+                    <Tag
+                      key={row.type}
+                      color={selectedTosTypeTab === row.type ? tosTypeColors[row.type] : 'default'}
+                      style={{ cursor: 'pointer', borderRadius: 4, padding: '4px 12px', fontSize: 13, fontWeight: selectedTosTypeTab === row.type ? 600 : 400, borderColor: selectedTosTypeTab === row.type ? tosTypeColors[row.type] : '#d9d9d9' }}
+                      onClick={() => navigateWithEditGuard(() => setSelectedTosTypeTab(row.type))}
+                    >
+                      <Space size={4}>{row.type}{row.isMain && <span style={{ fontSize: 11 }}>主</span>}</Space>
+                    </Tag>
+                  ))}
+                </Space>
+              </Col>
+              <Col>
+                {canEditBasicInfo
+                  ? <Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6 }} onClick={openTosTypeEditor}>类型编辑</Button>
+                  : <Tooltip title="无基本信息编辑权限"><Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6 }} disabled>类型编辑</Button></Tooltip>}
+              </Col>
+            </Row>
+          </Card>
+        )}
         {showMarketTabs && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
             <Row align="middle" justify="space-between">
@@ -2403,7 +3097,55 @@ export default function ProjectSpaceContainer() {
           </Card>
         )}
         {projectPlanLevel === 'level2' && activeLevel2Plan === 'plan0' && <RequirementDevPlan isEditMode={isEditMode} />}
-        {projectPlanLevel === 'level2' && activeLevel2Plan === 'plan1' && <VersionTrainPlan />}
+        {isTosVersionTrainPlan && (
+          <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '12px 16px' } }}>
+            <Row justify="space-between" align="middle">
+              <Col>
+                <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
+                  <Space size={6}>
+                    <span style={{ color: '#9ca3af', fontSize: 13 }}>版本</span>
+                    <Select
+                      value={currentVersion}
+                      onChange={(value) => navigateWithEditGuard(() => {
+                        setCurrentVersion(value)
+                        setIsEditMode(false)
+                      })}
+                      style={{ width: 150 }}
+                    >
+                      {versions
+                        .filter(version => version.status !== '修订中' || canViewDraft)
+                        .map(version => <Option key={version.id} value={version.id}>{renderVersionLabel(version)}</Option>)}
+                    </Select>
+                    {isCurrentDraft && <Tag color="green" style={{ fontSize: 12, margin: 0 }}>自动保存</Tag>}
+                  </Space>
+                  <Space size={6}>
+                    {!hasDraftVersion && (canEditLevel2Plan
+                      ? renderCreateRevisionButton({ borderRadius: 6 })
+                      : <Tooltip title="无二级计划编辑权限"><Button type="primary" icon={<PlusOutlined />} disabled>创建修订</Button></Tooltip>)}
+                    {isCurrentDraft && (canEditLevel2Plan
+                      ? <Tooltip title="发布"><Button type="primary" icon={<SaveOutlined />} onClick={handlePublish} aria-label="发布" /></Tooltip>
+                      : <Tooltip title="无二级计划编辑权限"><Button type="primary" icon={<SaveOutlined />} disabled aria-label="发布" /></Tooltip>)}
+                    {isCurrentDraft && (canEditLevel2Plan
+                      ? <Tooltip title="取消修订"><Button danger icon={<StopOutlined />} onClick={handleCancelRevision} aria-label="取消修订" /></Tooltip>
+                      : <Tooltip title="无二级计划编辑权限"><Button danger icon={<StopOutlined />} disabled aria-label="取消修订" /></Tooltip>)}
+                  </Space>
+                </Space>
+              </Col>
+              <Col>
+                <Tooltip title="版本对比">
+                  <Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)} aria-label="版本对比" />
+                </Tooltip>
+              </Col>
+            </Row>
+          </Card>
+        )}
+        {projectPlanLevel === 'level2' && activeLevel2Plan === 'plan1' && (
+          <VersionTrainPlan
+            data={versionTrainRecordsForCurrentVersion}
+            onDataChange={setVersionTrainRecords}
+            canEdit={canEditLevel2Plan && isCurrentDraft}
+          />
+        )}
         {/* Version management + table/gantt for L1 and non-fixed L2 */}
         {projectPlanLevel !== 'overview' && !(projectPlanLevel === 'level2' && (activeLevel2Plan === 'plan0' || activeLevel2Plan === 'plan1')) && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '12px 16px' } }}>
@@ -2420,16 +3162,16 @@ export default function ProjectSpaceContainer() {
                     {isCurrentDraft && <Tag color="green" style={{ fontSize: 12, margin: 0 }}>自动保存</Tag>}
                   </Space>
                   <Space size={6}>
-                    {!hasDraftVersion && (canEditLevel1Plan
+                    {!hasDraftVersion && (canEditCurrentPlan
                       ? renderCreateRevisionButton({ borderRadius: 6 })
-                      : <Tooltip title="无一级计划编辑权限"><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled aria-label="创建修订">创建修订</Button></Tooltip>)}
+                      : <Tooltip title={`无${currentPlanPermissionLabel}编辑权限`}><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled aria-label="创建修订">创建修订</Button></Tooltip>)}
                     {renderPlanCloneButton({ borderRadius: 6 })}
-                    {isCurrentDraft && (canEditLevel1Plan
+                    {isCurrentDraft && (canEditCurrentPlan
                       ? <Tooltip title="发布"><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} onClick={handlePublish} aria-label="发布" /></Tooltip>
-                      : <Tooltip title="无一级计划编辑权限"><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} disabled aria-label="发布" /></Tooltip>)}
-                    {isCurrentDraft && canEditLevel1Plan && (
-                      <Tooltip title="取消修订"><Button danger icon={<StopOutlined />} style={{ borderRadius: 6 }} onClick={handleCancelRevision} aria-label="取消修订" /></Tooltip>
-                    )}
+                      : <Tooltip title={`无${currentPlanPermissionLabel}编辑权限`}><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} disabled aria-label="发布" /></Tooltip>)}
+                    {isCurrentDraft && (canEditCurrentPlan
+                      ? <Tooltip title="取消修订"><Button danger icon={<StopOutlined />} style={{ borderRadius: 6 }} onClick={handleCancelRevision} aria-label="取消修订" /></Tooltip>
+                      : <Tooltip title={`无${currentPlanPermissionLabel}编辑权限`}><Button danger icon={<StopOutlined />} style={{ borderRadius: 6 }} disabled aria-label="取消修订" /></Tooltip>)}
                   </Space>
                 </Space>
               </Col>
@@ -2504,14 +3246,16 @@ export default function ProjectSpaceContainer() {
             </Row>
           </Card>
         )}
-        <Card style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
-          {projectPlanLevel === 'level1' && (projectPlanViewMode === 'gantt' ? renderGanttChart() : projectPlanViewMode === 'horizontal' ? renderHorizontalTable() : renderTaskTable())}
-          {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1' && activeLevel2Plan && (
-            projectPlanViewMode === 'gantt'
-              ? renderGanttChart(level2PlanTasks.filter(t => t.planId === activeLevel2Plan))
-              : renderTaskTable(level2PlanTasks.filter(t => t.planId === activeLevel2Plan))
-          )}
-        </Card>
+        {!(projectPlanLevel === 'level2' && (activeLevel2Plan === 'plan0' || activeLevel2Plan === 'plan1')) && (
+          <Card style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
+            {projectPlanLevel === 'level1' && (projectPlanViewMode === 'gantt' ? renderGanttChart() : projectPlanViewMode === 'horizontal' ? renderHorizontalTable() : renderTaskTable())}
+            {projectPlanLevel === 'level2' && activeLevel2Plan && (
+              projectPlanViewMode === 'gantt'
+                ? renderGanttChart(level2PlanTasks.filter(t => t.planId === activeLevel2Plan))
+                : renderTaskTable(level2PlanTasks.filter(t => t.planId === activeLevel2Plan))
+            )}
+          </Card>
+        )}
       </div>
     )
   }
@@ -2621,9 +3365,29 @@ export default function ProjectSpaceContainer() {
             const versionA = versions.find(v => v.id === compareVersionA)
             const versionB = versions.find(v => v.id === compareVersionB)
             if (versionA && versionB) {
-              const oldTasks = versionA.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
-              let newTasks = versionB.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
-              if (comparePlanVersions(versionA, versionB) !== 0) {
+              const currentScopedTasks = isTosVersionTrainPlan
+                ? versionTrainRecordsToCompareTasks(versionTrainRecordsForCurrentVersion || [])
+                : projectPlanLevel === 'level2' ? level2PlanTasks : effectiveTasks
+              const getTosVersionTasks = (versionId: string) => {
+                if (!selectedProject || !isTosTypeScoped) return currentScopedTasks
+                const snapshot = publishedSnapshots[getTosTypeSnapshotKey(
+                  selectedProject.id,
+                  selectedTosTypeTab,
+                  isTosVersionTrainPlan ? TOS_VERSION_TRAIN_SNAPSHOT_LEVEL : scopedPlanLevel,
+                  versionId,
+                )]
+                if (snapshot === undefined) return currentScopedTasks
+                return isTosVersionTrainPlan
+                  ? versionTrainRecordsToCompareTasks(snapshot as VersionTrainRecord[])
+                  : snapshot
+              }
+              const oldTasks = isTosTypeScoped
+                ? getTosVersionTasks(versionA.id)
+                : versionA.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
+              let newTasks = isTosTypeScoped
+                ? getTosVersionTasks(versionB.id)
+                : versionB.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
+              if (!isTosTypeScoped && comparePlanVersions(versionA, versionB) !== 0) {
                 newTasks = [
                   ...effectiveTasks.map(t => {
                     if (t.id === '2.1') return { ...t, taskName: 'STR2(更新)', status: '已完成', progress: 100 }
@@ -2848,6 +3612,82 @@ export default function ProjectSpaceContainer() {
           onClick={addMarketDraftRow}
         >
           添加市场
+        </Button>
+      </Modal>
+      {/* tOS type editor modal */}
+      <Modal
+        className="pms-modal"
+        title={<Space><EditOutlined style={{ color: '#6366f1' }} /><span>类型编辑</span></Space>}
+        open={showTosTypeEditor}
+        onCancel={() => setShowTosTypeEditor(false)}
+        width={780}
+        footer={[
+          <Button key="cancel" onClick={() => setShowTosTypeEditor(false)}>取消</Button>,
+          <Tooltip key="save-tooltip" title={canEditBasicInfo ? undefined : '无基本信息编辑权限'}>
+            <Button key="save" type="primary" disabled={!canEditBasicInfo} onClick={saveTosTypeConfig}>保存</Button>
+          </Tooltip>,
+        ]}
+      >
+        <Table
+          className="pms-table"
+          rowKey="id"
+          size="small"
+          pagination={false}
+          dataSource={tosTypeDraftRows}
+          columns={[
+            {
+              title: '类型',
+              dataIndex: 'type',
+              width: 300,
+              render: (value: TosPlanType, record: TosTypeConfigRow) => (
+                <Select
+                  value={value || undefined}
+                  placeholder="请选择类型"
+                  style={{ width: '100%' }}
+                  onChange={(type) => updateTosTypeDraftRow(record.id, { type })}
+                  options={TOS_TYPE_OPTIONS.map(type => ({
+                    label: type,
+                    value: type,
+                    disabled: tosTypeDraftRows.some(row => row.id !== record.id && row.type === type),
+                  }))}
+                />
+              ),
+            },
+            {
+              title: '是否主类型',
+              dataIndex: 'isMain',
+              width: 160,
+              align: 'center',
+              render: (_: boolean, record: TosTypeConfigRow) => (
+                <Radio
+                  checked={record.isMain}
+                  onChange={() => updateTosTypeDraftRow(record.id, { isMain: true })}
+                />
+              ),
+            },
+            {
+              title: '操作',
+              width: 100,
+              align: 'center',
+              render: (_: unknown, record: TosTypeConfigRow) => (
+                <Button
+                  type="text"
+                  danger
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  onClick={() => removeTosTypeDraftRow(record.id)}
+                />
+              ),
+            },
+          ]}
+        />
+        <Button
+          type="dashed"
+          icon={<PlusOutlined />}
+          style={{ width: '100%', marginTop: 12, borderRadius: 6 }}
+          onClick={addTosTypeDraftRow}
+        >
+          添加类型
         </Button>
       </Modal>
       {/* Create L2 plan modal */}

@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { initialProjects } from '@/data/projects'
+import { PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { buildMarketRowsFromMarkets, type MarketConfigRow } from '@/lib/marketRules'
+import { buildTosTypeRows, type TosTypeConfigRow } from '@/lib/tosTypeRules'
 
 // Default login user (mock)
 export const DEFAULT_LOGIN_USER = '张三'
@@ -28,7 +30,7 @@ export const kanbanColumns = [
   { title: '发布阶段', key: 'released', color: '#722ed1' },
 ]
 
-type Project = typeof initialProjects[0]
+type Project = typeof initialProjects[number] & { versionTypes?: string[] }
 
 const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) => {
   if (project.type === '整机产品项目' && project.markets?.length) {
@@ -36,6 +38,14 @@ const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) =>
   }
   return acc
 }, {} as Record<string, MarketConfigRow[]>)
+
+const initialTosTypeConfigsByProjectId = initialProjects.reduce((acc, project) => {
+  if (project.type === PROJECT_TYPE_TOS_VERSION) {
+    const versionTypes = (project as typeof project & { versionTypes?: string[] }).versionTypes || []
+    acc[project.id] = buildTosTypeRows(versionTypes, project.versionType || '')
+  }
+  return acc
+}, {} as Record<string, TosTypeConfigRow[]>)
 
 export interface ProjectState {
   projects: Project[]
@@ -56,6 +66,8 @@ export interface ProjectState {
   // Market & kanban
   selectedMarketTab: string
   marketConfigsByProjectId: Record<string, MarketConfigRow[]>
+  selectedTosTypeTab: string
+  tosTypeConfigsByProjectId: Record<string, TosTypeConfigRow[]>
   kanbanDimension: 'stage' | 'type' | 'status'
 
   // Todos
@@ -81,6 +93,8 @@ export interface ProjectActions {
 
   setSelectedMarketTab: (v: string) => void
   setMarketConfigForProject: (projectId: string, rows: MarketConfigRow[]) => void
+  setSelectedTosTypeTab: (v: string) => void
+  setTosTypeConfigForProject: (projectId: string, rows: TosTypeConfigRow[]) => void
   setKanbanDimension: (v: 'stage' | 'type' | 'status') => void
 
   setTodoFilter: (v: 'all' | 'overdue' | 'upcoming' | 'pending' | 'completed') => void
@@ -106,6 +120,8 @@ export const useProjectStore = create<ProjectState & ProjectActions>()((set) => 
 
   selectedMarketTab: 'OP',
   marketConfigsByProjectId: initialMarketConfigsByProjectId,
+  selectedTosTypeTab: 'Full',
+  tosTypeConfigsByProjectId: initialTosTypeConfigsByProjectId,
   kanbanDimension: 'stage',
 
   todoFilter: 'all',
@@ -130,6 +146,10 @@ export const useProjectStore = create<ProjectState & ProjectActions>()((set) => 
   setSelectedMarketTab: (v) => set({ selectedMarketTab: v }),
   setMarketConfigForProject: (projectId, rows) => set((s) => ({
     marketConfigsByProjectId: { ...s.marketConfigsByProjectId, [projectId]: rows },
+  })),
+  setSelectedTosTypeTab: (v) => set({ selectedTosTypeTab: v }),
+  setTosTypeConfigForProject: (projectId, rows) => set((s) => ({
+    tosTypeConfigsByProjectId: { ...s.tosTypeConfigsByProjectId, [projectId]: rows },
   })),
   setKanbanDimension: (v) => set({ kanbanDimension: v }),
 

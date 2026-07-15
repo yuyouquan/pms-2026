@@ -30,7 +30,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
   const [form] = Form.useForm<FormShape>()
   const [submitting, setSubmitting] = useState(false)
 
-  const { projects, addProject, setSelectedProject, setProjectMember, setSelectedMarketTab } = useProjectStore()
+  const { projects, addProject, setSelectedProject, setProjectMember, setSelectedMarketTab, setSelectedTosTypeTab } = useProjectStore()
   const { setActiveModule, setProjectSpaceModule } = useUiStore()
   const initProjectPermissions = usePermissionStore(s => s.initProjectPermissions)
 
@@ -80,6 +80,8 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
         productLine: extra.productLine ?? '',
         productSeries: projectType === PROJECT_TYPE_TOS_VERSION ? inferredOsSeries : '',
         osSeries: projectType === PROJECT_TYPE_TOS_VERSION ? inferredOsSeries : (isSoftwareProject ? '' : undefined),
+        versionType: projectType === PROJECT_TYPE_TOS_VERSION ? 'Full' : undefined,
+        versionTypes: projectType === PROJECT_TYPE_TOS_VERSION ? ['Full'] : undefined,
         tosVersion: isSoftwareProject ? (inferredTosVersion || extra.tosVersion || '') : (extra.tosVersion ?? ''),
         brand: extra.brand ?? undefined,
         planStartDate: extra.planStartDate ?? '',
@@ -91,6 +93,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       initProjectPermissions(newId, { '系统管理员': values.responsiblePersons })
       setSelectedProject(newProject)
       setSelectedMarketTab('OP')
+      if (projectType === PROJECT_TYPE_TOS_VERSION) setSelectedTosTypeTab('Full')
       setProjectSpaceModule('basic')
       setActiveModule('projectSpace')
       message.success('项目创建成功')

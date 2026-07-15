@@ -21,7 +21,8 @@ import AddProjectModal from '@/components/workspace/AddProjectModal'
 import { initialProjects, PROJECT_TYPES, PROJECT_STATUS_CONFIG } from '@/data/projects'
 import { initialTodos } from '@/components/shared/PlanHelpers'
 import { kanbanColumns } from '@/stores/project'
-import { PROJECT_TYPE_COLORS } from '@/constants/projectTypes'
+import { PROJECT_TYPE_COLORS, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
+import { buildTosTypeRows, getMainTosType } from '@/lib/tosTypeRules'
 
 export default function WorkspaceContainer() {
   const {
@@ -42,6 +43,7 @@ export default function WorkspaceContainer() {
     todoFilter, setTodoFilter,
     todoCollapsed, setTodoCollapsed,
     setSelectedMarketTab,
+    setSelectedTosTypeTab, tosTypeConfigsByProjectId,
   } = useProjectStore()
 
   const {
@@ -57,6 +59,19 @@ export default function WorkspaceContainer() {
   const projectCardPageSize = 9
   const [todos] = useState(initialTodos)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
+
+  const activateProject = (project: typeof projects[number]) => {
+    setSelectedProject(project)
+    if (project.markets?.length) setSelectedMarketTab(project.markets[0])
+    if (project.type === PROJECT_TYPE_TOS_VERSION) {
+      const typeRows = buildTosTypeRows(
+        project.versionTypes || [],
+        project.versionType || '',
+        tosTypeConfigsByProjectId[project.id],
+      )
+      setSelectedTosTypeTab(getMainTosType(typeRows) || typeRows[0]?.type || 'Full')
+    }
+  }
 
   const isAdminUser = useMemo(() => {
     const adminGroup = globalRoles.find(r => r.name === '管理组')
@@ -89,7 +104,7 @@ export default function WorkspaceContainer() {
   const renderProjectCard = (project: typeof initialProjects[0]) => (
     <ProjectCard
       project={project as ProjectType}
-      setSelectedProject={(p) => setSelectedProject(p as typeof initialProjects[0])}
+      setSelectedProject={(p) => activateProject(p as typeof projects[number])}
       setProjectSpaceModule={setProjectSpaceModule}
       setActiveModule={setActiveModule}
       PROJECT_STATUS_CONFIG={PROJECT_STATUS_CONFIG}
@@ -103,7 +118,7 @@ export default function WorkspaceContainer() {
       setKanbanDimension={setKanbanDimension}
       kanbanColumns={kanbanColumns}
       PROJECT_TYPES={PROJECT_TYPES}
-      setSelectedProject={(p) => setSelectedProject(p as typeof initialProjects[0])}
+      setSelectedProject={(p) => activateProject(p as typeof projects[number])}
       setProjectSpaceModule={setProjectSpaceModule}
       setActiveModule={setActiveModule}
     />
@@ -115,7 +130,7 @@ export default function WorkspaceContainer() {
       projects={projects as ProjectType[]}
       todoFilter={todoFilter}
       currentLoginUser={currentLoginUser}
-      setSelectedProject={(p) => setSelectedProject(p as typeof initialProjects[0])}
+      setSelectedProject={(p) => activateProject(p as typeof projects[number])}
       setActiveModule={setActiveModule}
       setProjectSpaceModule={setProjectSpaceModule}
       setCurrentVersion={setCurrentVersion}
@@ -289,7 +304,7 @@ export default function WorkspaceContainer() {
                 className="pms-table"
                 onRow={(record) => ({
                   style: { cursor: 'pointer' },
-                  onClick: () => { setSelectedProject(record); setProjectSpaceModule('basic'); setActiveModule('projectSpace') },
+                  onClick: () => { activateProject(record); setProjectSpaceModule('basic'); setActiveModule('projectSpace') },
                 })}
                 columns={[
                   { title: '项目名称', dataIndex: 'name', width: 200, render: (name: string, r: any) => (
@@ -385,7 +400,7 @@ export default function WorkspaceContainer() {
           onNavigateToProject={(projectId, module, planLevel, planType) => {
             const proj = projects.find(p => p.id === projectId)
             if (!proj) return
-            setSelectedProject(proj)
+            activateProject(proj)
             setProjectSpaceModule(module)
             setActiveModule('projectSpace')
             if (module === 'plan' && planLevel) {

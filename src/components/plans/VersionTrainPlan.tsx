@@ -13,7 +13,7 @@ const { Option } = Select
 const TEST_MODEL_OPTIONS = ['Model A Pro', 'Model A', 'Model B Pro', 'Model B', 'Model C', 'Model D']
 
 // Mock数据
-const INITIAL_DATA: VersionTrainRecord[] = [
+export const INITIAL_VERSION_TRAIN_DATA: VersionTrainRecord[] = [
   {
     id: '1', versionNo: '16.3.030', versionCategory: '主干版本', status: '已完成',
     planCompileTime: '2026-01-05', planTestTransferTime: '2026-01-08', planTestStartTime: '2026-01-09', planTestEndTime: '2026-01-20',
@@ -101,8 +101,22 @@ const categoryColors: Record<string, string> = {
   '量产版本': 'purple',
 }
 
-export default function VersionTrainPlan() {
-  const [data, setData] = useState<VersionTrainRecord[]>(INITIAL_DATA)
+interface VersionTrainPlanProps {
+  data?: VersionTrainRecord[]
+  onDataChange?: (data: VersionTrainRecord[]) => void
+  canEdit?: boolean
+}
+
+export default function VersionTrainPlan({ data: controlledData, onDataChange, canEdit = true }: VersionTrainPlanProps = {}) {
+  const [localData, setLocalData] = useState<VersionTrainRecord[]>(INITIAL_VERSION_TRAIN_DATA)
+  const data = controlledData ?? localData
+  const setData = (nextData: VersionTrainRecord[]) => {
+    if (controlledData !== undefined && onDataChange) {
+      onDataChange(nextData)
+      return
+    }
+    setLocalData(nextData)
+  }
   const [searchText, setSearchText] = useState('')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -138,6 +152,7 @@ export default function VersionTrainPlan() {
 
   // 创建记录
   const handleCreate = (values: any) => {
+    if (!canEdit) return
     const newRecord: VersionTrainRecord = {
       id: `${Date.now()}`,
       versionNo: values.versionNo,
@@ -165,6 +180,7 @@ export default function VersionTrainPlan() {
 
   // 编辑记录
   const handleEdit = (record: VersionTrainRecord) => {
+    if (!canEdit) return
     setEditingRecord(record)
     form.setFieldsValue({
       versionNo: record.versionNo,
@@ -181,7 +197,7 @@ export default function VersionTrainPlan() {
   }
 
   const handleEditSave = (values: any) => {
-    if (!editingRecord) return
+    if (!canEdit || !editingRecord) return
     const updated = data.map(r => {
       if (r.id !== editingRecord.id) return r
       return {
@@ -209,6 +225,7 @@ export default function VersionTrainPlan() {
 
   // 删除记录
   const handleDelete = (id: string) => {
+    if (!canEdit) return
     setData(data.filter(r => r.id !== id))
     message.success('删除成功')
   }
@@ -293,16 +310,16 @@ export default function VersionTrainPlan() {
         title: '操作', key: 'action', width: 120, align: 'center' as const, fixed: 'right' as const,
         render: (_: any, record: VersionTrainRecord) => (
           <Space size={4}>
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>修改</Button>
-            <Popconfirm title="确认删除该版本记录？" onConfirm={() => handleDelete(record.id)} okText="确认" cancelText="取消">
-              <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
+            <Button type="link" size="small" icon={<EditOutlined />} disabled={!canEdit} onClick={() => handleEdit(record)}>修改</Button>
+            <Popconfirm disabled={!canEdit} title="确认删除该版本记录？" onConfirm={() => handleDelete(record.id)} okText="确认" cancelText="取消">
+              <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={!canEdit}>删除</Button>
             </Popconfirm>
           </Space>
         ),
       },
     ]
     return allCols.filter(c => visibleColumns.includes(c.key))
-  }, [visibleColumns, data])
+  }, [visibleColumns, data, canEdit])
 
   // Modal表单内容
   const renderFormContent = () => (
@@ -370,7 +387,7 @@ export default function VersionTrainPlan() {
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
           <Space>
-            <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} onClick={() => { form.resetFields(); setShowCreateModal(true) }}>
+            <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled={!canEdit} onClick={() => { form.resetFields(); setShowCreateModal(true) }}>
               添加版本
             </Button>
             <Button icon={<ExportOutlined />} style={{ borderRadius: 6 }} onClick={handleExport}>
