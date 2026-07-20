@@ -132,6 +132,7 @@ import VersionTrainPlan, { INITIAL_VERSION_TRAIN_DATA } from '@/components/plans
 import ProjectInfoModal, { type ProjectInfoSubmitPayload } from '@/components/project-info/ProjectInfoModal'
 import TargetProjectInformationView from '@/components/project-info/TargetProjectInformationView'
 import MarketEditorModal from '@/components/project-info/MarketEditorModal'
+import ProjectPlanInfoGrid from '@/components/project-info/ProjectPlanInfoGrid'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import { PROJECT_STATUS_CONFIG } from '@/data/projects'
 import {
@@ -2785,19 +2786,17 @@ export default function ProjectSpaceContainer() {
                   children: (
                     <div style={{ padding: '8px 0' }}>
                       <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 16 }}>计划信息</div>
-                      <Row gutter={[24, 16]} style={{ marginBottom: 16 }}>
-                        <Col span={8}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划开始时间</span>} value={p.planStartDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />} /></Col>
-                        <Col span={8}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划结束时间</span>} value={p.planEndDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />} /></Col>
-                        <Col span={8}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>开发周期（工作日）</span>} value={p.developCycle || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} suffix={p.developCycle ? <span style={{ fontSize: 12, color: '#9ca3af' }}>天</span> : undefined} /></Col>
-                      </Row>
-                      <Descriptions bordered size="small" column={3} labelStyle={descLabelStyle} contentStyle={descContentStyle} style={{ marginBottom: 16 }}>
-                        <Descriptions.Item label="Google Launch Date">{row.googleLaunchDate || '-'}</Descriptions.Item>
-                        <Descriptions.Item label="是否运营商定制">{row.isCarrierCustomized || '-'}</Descriptions.Item>
-                        <Descriptions.Item label="是否锁卡">{row.isSimLocked || '-'}</Descriptions.Item>
-                        <Descriptions.Item label="是否取消暂停">{row.isCancelPaused || '-'}</Descriptions.Item>
-                        <Descriptions.Item label="取消暂停时间">{row.isCancelPaused === '是' ? (row.cancelPauseDate || '-') : '-'}</Descriptions.Item>
-                        <Descriptions.Item label="是否MADA管控">{row.isMadaControlled || '-'}</Descriptions.Item>
-                      </Descriptions>
+                      <ProjectPlanInfoGrid
+                        planStartDate={p.planStartDate}
+                        planEndDate={p.planEndDate}
+                        developCycle={p.developCycle}
+                        googleLaunchDate={row.googleLaunchDate}
+                        isCarrierCustomized={row.isCarrierCustomized}
+                        isSimLocked={row.isSimLocked}
+                        isCancelPaused={row.isCancelPaused}
+                        cancelPauseDate={row.isCancelPaused === '是' ? row.cancelPauseDate : undefined}
+                        isMadaControlled={row.isMadaControlled}
+                      />
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12 }}>里程碑计划（横排视图）</div>
                       {renderHorizontalTable()}
                       <Divider />
