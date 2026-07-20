@@ -104,6 +104,9 @@ export default function ProjectInfoModal({
     if (!open) return
     setAggregateWarnings([])
     if (mode === 'edit' && project) {
+      // The Form instance survives modal close/reopen. Clear the previous project's
+      // unmentioned fields before applying the next project's values.
+      form.resetFields()
       const projectFields = getProjectInfoFields(project.type)
       const infoValues = buildProjectInfoValues(project, projectFields.map(field => field.key))
       const initialValues: ProjectInfoFormState = {
@@ -157,9 +160,11 @@ export default function ProjectInfoModal({
     if (!entry) return
     const inferredType = inferSoftwareProjectTypeFromName(entry.name)
     const shouldInferTos = inferredType === 'tOS版本项目'
+    const previousType = String(form.getFieldValue('type') || '')
+    // Candidate-specific fields must never leak from the previously selected
+    // external project. Source-derived values are reapplied immediately below.
+    if (previousType) clearTypeFields(previousType)
     if (shouldInferTos) {
-      const previousType = String(form.getFieldValue('type') || '')
-      if (previousType && previousType !== inferredType) clearTypeFields(previousType)
       form.setFieldValue('type', inferredType)
       previousTypeRef.current = inferredType
       setActiveGroups(getProjectInfoGroups(inferredType).map(group => group.key))

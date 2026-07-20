@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import { Avatar, Collapse, Space, Tag } from 'antd'
 import { InfoCircleOutlined, LinkOutlined, TeamOutlined, ToolOutlined } from '@ant-design/icons'
 import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
@@ -61,7 +62,10 @@ function ProjectInfoGroupPanel({
   currentUser,
   canConfigure,
 }: ProjectInfoSectionsProps & { group: ProjectInfoGroupDefinition }) {
-  const fields = getFieldsForGroup(project.type, group.key)
+  const fields = useMemo(
+    () => getFieldsForGroup(project.type, group.key),
+    [group.key, project.type],
+  )
   const { visibleFieldKeys, setVisibleFieldKeys } = useProjectFieldVisibility({
     userId: currentUser,
     projectId: project.id,

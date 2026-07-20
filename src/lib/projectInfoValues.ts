@@ -166,14 +166,19 @@ export const mergeProjectInfoValues = <T extends ProjectInfoProject>(
   rawValues: ProjectInfoValues,
 ): T => {
   const values = sanitizeInactiveProjectInfoValues(project.type, rawValues)
+  const nextFieldValues: ProjectInfoValues = {
+    ...(project.fieldValues || {}),
+    ...values,
+    machineTeamRoles: buildMachineTeamRoles(values),
+    tosTeamRoles: buildTosTeamRoles(values),
+  }
+  if (project.type === '整机产品项目' && !isExternalMachineDevelopment(values)) {
+    delete nextFieldValues.isTwoStage
+    delete nextFieldValues.isOutsourcedMini
+  }
   const next = {
     ...project,
-    fieldValues: {
-      ...(project.fieldValues || {}),
-      ...values,
-      machineTeamRoles: buildMachineTeamRoles(values),
-      tosTeamRoles: buildTosTeamRoles(values),
-    },
+    fieldValues: nextFieldValues,
   } as T
 
   Object.entries(LEGACY_ROOT_KEYS).forEach(([key, rootKey]) => {
@@ -184,6 +189,10 @@ export const mergeProjectInfoValues = <T extends ProjectInfoProject>(
     const value = values[key]
     if (value !== undefined) (next as Record<string, unknown>)[key] = value
   })
+  if (project.type === '整机产品项目' && !isExternalMachineDevelopment(values)) {
+    delete (next as Record<string, unknown>).isTwoStage
+    delete (next as Record<string, unknown>).isOutsourcedMini
+  }
 
   if (typeof values.targetMarkets === 'string') {
     const markets = values.targetMarkets.split(',').map(value => value.trim()).filter(Boolean)
