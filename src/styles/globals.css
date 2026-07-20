@@ -1653,10 +1653,17 @@ body {
   border: 1px solid rgba(99, 102, 241, 0.14);
   border-radius: 12px;
   overflow: hidden;
+  transition: border-color 220ms ease, box-shadow 220ms ease;
+}
+
+.pms-project-info-core-card:hover {
+  border-color: rgba(99, 102, 241, 0.26);
+  box-shadow: 0 10px 28px rgba(79, 70, 229, 0.07);
 }
 
 .pms-project-info-core-card .ant-card-head {
   background: linear-gradient(135deg, rgba(238, 242, 255, 0.95), rgba(236, 254, 255, 0.72));
+  transition: background-color 220ms ease;
 }
 
 .pms-project-info-core-title {
@@ -1674,6 +1681,11 @@ body {
   color: #fff;
   background: linear-gradient(135deg, #4f46e5, #06b6d4);
   border-radius: 9px;
+  transition: box-shadow 220ms ease, background-color 220ms ease;
+}
+
+.pms-project-info-core-card:hover .pms-project-info-core-title > .anticon {
+  box-shadow: 0 6px 14px rgba(79, 70, 229, 0.2);
 }
 
 .pms-project-info-core-title span {
@@ -1692,8 +1704,18 @@ body {
 
 .pms-project-info-core-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-columns: minmax(128px, 1fr);
+  grid-auto-flow: column;
   gap: 10px;
+  min-width: 0;
+  padding-bottom: 3px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.pms-project-info-core-grid:focus-visible {
+  outline: 2px solid rgba(79, 70, 229, 0.55);
+  outline-offset: 3px;
 }
 
 .pms-project-info-core-item {
@@ -1703,6 +1725,13 @@ body {
   border-top: 2px solid;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.9);
+  transition: border-color 200ms ease, box-shadow 200ms ease, background-color 200ms ease;
+}
+
+.pms-project-info-core-item:hover {
+  border-color: #dfe6ef;
+  background: #fff;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.06);
 }
 
 .pms-project-info-core-label {
@@ -1738,40 +1767,186 @@ body {
 .pms-project-info-collapse {
   overflow: hidden;
   border: 1px solid #e8edf5;
-  border-radius: 10px;
+  border-radius: 12px;
   background: #fff;
+  transition: border-color 220ms ease, box-shadow 220ms ease;
+}
+
+.pms-project-info-collapse:hover {
+  border-color: #d7deea;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.055);
+}
+
+.pms-project-info-collapse > .ant-collapse-item {
+  border-bottom: 0;
 }
 
 .pms-project-info-collapse .ant-collapse-header {
   align-items: center !important;
-  padding: 13px 16px !important;
+  min-height: 62px;
+  padding: 12px 16px !important;
+  background: #fbfcfe;
+  transition: background-color 200ms ease;
+}
+
+.pms-project-info-collapse .ant-collapse-header:hover,
+.pms-project-info-collapse > .ant-collapse-item-active > .ant-collapse-header {
+  background: #f7f9fc;
+}
+
+.pms-project-info-collapse .ant-collapse-header-text {
+  min-width: 0;
+}
+
+.pms-project-info-collapse .ant-collapse-extra {
+  margin-inline-start: auto;
+}
+
+.pms-project-info-collapse .pms-project-info-picker-trigger .ant-btn {
+  height: 32px;
+  padding-inline: 10px;
+  color: #475569;
+  border-radius: 7px;
+}
+
+.pms-project-info-collapse .pms-project-info-picker-trigger .ant-btn:not(:disabled):hover {
+  color: #4338ca;
+  background: #eef2ff;
+}
+
+.pms-project-info-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pms-project-info-group-icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  font-size: 17px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  transition: color 200ms ease, background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.pms-project-info-collapse--basic .pms-project-info-group-icon {
+  color: #4f46e5;
+  border-color: #e0e7ff;
+  background: #eef2ff;
+}
+
+.pms-project-info-collapse--extended .pms-project-info-group-icon {
+  color: #b45309;
+  border-color: #ffedd5;
+  background: #fff7ed;
+}
+
+.pms-project-info-collapse--team .pms-project-info-group-icon {
+  color: #0f766e;
+  border-color: #ccfbf1;
+  background: #ecfdf5;
+}
+
+.pms-project-info-collapse--basic:hover .pms-project-info-group-icon {
+  border-color: #c7d2fe;
+  background: #e0e7ff;
+  box-shadow: 0 5px 12px rgba(79, 70, 229, 0.12);
+}
+
+.pms-project-info-collapse--extended:hover .pms-project-info-group-icon {
+  border-color: #fed7aa;
+  background: #ffedd5;
+  box-shadow: 0 5px 12px rgba(180, 83, 9, 0.1);
+}
+
+.pms-project-info-collapse--team:hover .pms-project-info-group-icon {
+  border-color: #99f6e4;
+  background: #ccfbf1;
+  box-shadow: 0 5px 12px rgba(15, 118, 110, 0.1);
+}
+
+.pms-project-info-group-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.pms-project-info-group-title strong {
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.pms-project-info-group-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f1f5f9;
+}
+
+.pms-project-info-collapse .ant-collapse-content {
+  border-top: 1px solid #e8edf4;
+  background: #fff;
+}
+
+.pms-project-info-collapse .ant-collapse-content-box {
+  padding: 0 !important;
+}
+
+.pms-project-info-collapse .ant-collapse-content-active > .ant-collapse-content-box {
+  animation: pms-project-info-content-enter 220ms ease-out both;
+}
+
+@keyframes pms-project-info-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .pms-project-info-display-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-top: 1px solid #eef2f7;
-  border-left: 1px solid #eef2f7;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1px;
+  background: #e9eef5;
 }
 
 .pms-project-info-display-item {
-  min-height: 76px;
-  padding: 12px 14px;
-  border-right: 1px solid #eef2f7;
-  border-bottom: 1px solid #eef2f7;
+  min-width: 0;
+  min-height: 78px;
+  padding: 13px 14px;
+  background: #fff;
 }
 
 .pms-project-info-display-label,
 .pms-project-info-role-label {
-  color: #94a3b8;
-  font-size: 11px;
+  color: #7c8798;
+  font-size: 12px;
 }
 
 .pms-project-info-display-value {
-  margin-top: 7px;
-  color: #1f2937;
-  font-size: 13px;
-  font-weight: 500;
+  margin-top: 8px;
+  color: #172033;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.55;
   word-break: break-word;
 }
 
@@ -1779,6 +1954,7 @@ body {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+  padding: 16px;
 }
 
 .pms-project-info-role-card {
@@ -1790,11 +1966,23 @@ body {
   border: 1px solid #e8edf5;
   border-radius: 8px;
   background: #fbfdff;
+  transition: border-color 200ms ease, box-shadow 200ms ease, background-color 200ms ease;
+}
+
+.pms-project-info-role-card:hover {
+  border-color: #d5ddea;
+  background: #fff;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.055);
 }
 
 .pms-project-info-role-avatar {
   flex: none;
   background: linear-gradient(135deg, #14b8a6, #6366f1);
+  transition: box-shadow 200ms ease;
+}
+
+.pms-project-info-role-card:hover .pms-project-info-role-avatar {
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.18);
 }
 
 .pms-project-info-role-name {
@@ -1911,10 +2099,59 @@ body {
   gap: 16px;
 }
 
+@media (max-width: 1500px) {
+  .pms-project-info-display-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 1100px) {
-  .pms-project-info-core-grid,
   .pms-project-info-display-grid,
   .pms-project-info-role-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .pms-project-info-core-card .ant-card-head-wrapper {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding-block: 10px;
+  }
+
+  .pms-project-info-core-actions {
+    flex-wrap: wrap;
+  }
+
+  .pms-project-info-display-grid,
+  .pms-project-info-role-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pms-project-info-collapse .ant-collapse-header {
+    padding-inline: 12px !important;
+  }
+
+  .pms-project-info-role-grid {
+    padding: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pms-project-info-core-card,
+  .pms-project-info-core-card .ant-card-head,
+  .pms-project-info-core-title > .anticon,
+  .pms-project-info-core-item,
+  .pms-project-info-collapse,
+  .pms-project-info-collapse .ant-collapse-header,
+  .pms-project-info-group-icon,
+  .pms-project-info-role-card,
+  .pms-project-info-role-avatar {
+    transition: none !important;
+  }
+
+  .pms-project-info-collapse .ant-collapse-content-active > .ant-collapse-content-box {
+    animation: none !important;
+    transform: none !important;
   }
 }

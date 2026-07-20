@@ -26,9 +26,9 @@ interface ProjectInfoSectionsProps {
 }
 
 const GROUP_ICON: Record<ProjectInfoGroupKey, React.ReactNode> = {
-  basic: <InfoCircleOutlined style={{ color: '#6366f1' }} />,
-  extended: <ToolOutlined style={{ color: '#f59e0b' }} />,
-  team: <TeamOutlined style={{ color: '#14b8a6' }} />,
+  basic: <InfoCircleOutlined />,
+  extended: <ToolOutlined />,
+  team: <TeamOutlined />,
 }
 
 const isJiraArray = (value: unknown): value is JiraProjectConfig[] => (
@@ -80,16 +80,20 @@ function ProjectInfoGroupPanel({
 
   return (
     <Collapse
-      className="pms-project-info-collapse"
+      className={`pms-project-info-collapse pms-project-info-collapse--${group.key}`}
       defaultActiveKey={[]}
       items={[{
         key: group.key,
         label: (
-          <Space size={8}>
-            {GROUP_ICON[group.key]}
-            <strong>{group.label}</strong>
-            <Tag bordered={false}>{visibleFields.length} 项</Tag>
-          </Space>
+          <div className="pms-project-info-group-heading">
+            <span className="pms-project-info-group-icon" aria-hidden="true">
+              {GROUP_ICON[group.key]}
+            </span>
+            <span className="pms-project-info-group-title">
+              <strong>{group.label}</strong>
+              <span className="pms-project-info-group-count">{visibleFields.length} 项</span>
+            </span>
+          </div>
         ),
         extra: (
           <FieldVisibilityPicker

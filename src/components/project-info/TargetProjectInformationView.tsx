@@ -60,7 +60,7 @@ export default function TargetProjectInformationView({
           <div className="pms-project-info-core-title">
             <ProjectOutlined />
             <div>
-              <div>核心板块</div>
+              <div>项目名称</div>
               <span>{project.name}</span>
             </div>
           </div>
@@ -76,7 +76,7 @@ export default function TargetProjectInformationView({
           </div>
         )}
       >
-        <div className="pms-project-info-core-grid">
+        <div className="pms-project-info-core-grid" role="region" aria-label="项目核心字段" tabIndex={0}>
           {coreFields.map(field => (
             <div key={field.label} className="pms-project-info-core-item" style={{ borderTopColor: field.accent }}>
               <div className="pms-project-info-core-label"><span style={{ background: field.accent }} />{field.label}</div>
