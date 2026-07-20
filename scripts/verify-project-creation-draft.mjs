@@ -47,14 +47,22 @@ const draft = {
   activeGroups: ['basic'],
   updatedAt: '2026-07-20T00:00:00.000Z',
 }
+const liSiDraft = {
+  schemaVersion: PROJECT_CREATION_DRAFT_SCHEMA_VERSION,
+  ownerId: '李四',
+  values: { bid: 'BID-2', type: '技术项目', responsiblePersons: ['李四'] },
+  activeGroups: ['extended'],
+  updatedAt: '2026-07-20T01:00:00.000Z',
+}
 
 await repository.save(draft)
-assert.deepEqual(await repository.get('张三'), draft, 'saved draft should round-trip')
-assert.equal(await repository.get('李四'), null, 'drafts should be isolated by owner')
-assert.equal(storage.keys().length, 1)
-assert.match(storage.keys()[0], new RegExp(encodeURIComponent('张三')), 'storage key should encode the owner ID')
+await repository.save(liSiDraft)
+assert.deepEqual(await repository.get('张三'), draft, '张三 should round-trip only their own draft')
+assert.deepEqual(await repository.get('李四'), liSiDraft, '李四 should round-trip only their own draft')
+assert.equal(storage.keys().length, 2)
 
-const storedKey = storage.keys()[0]
+const storedKey = storage.keys().find((key) => key.includes(encodeURIComponent('张三')))
+assert.ok(storedKey, 'storage key should encode the owner ID')
 storage.setItem(storedKey, '{malformed')
 assert.equal(await repository.get('张三'), null, 'malformed JSON should be ignored')
 
@@ -71,7 +79,8 @@ assert.equal(await repository.get('张三'), null, 'updatedAt must be a string')
 
 await repository.save(draft)
 await repository.clear('张三')
-assert.equal(await repository.get('张三'), null, 'clear should remove only the owner draft')
+assert.equal(await repository.get('张三'), null, 'clear should remove the selected owner draft')
+assert.deepEqual(await repository.get('李四'), liSiDraft, 'clearing 张三 must preserve 李四 draft')
 
 assert.equal(isProjectCreationDraftEmpty({}), true)
 assert.equal(isProjectCreationDraftEmpty({ healthStatus: 'normal', status: '待立项' }), true)
