@@ -27,6 +27,8 @@ import {
   defaultProjectCreationDraftRepository,
   isProjectCreationDraftEmpty,
   PROJECT_CREATION_DRAFT_SCHEMA_VERSION,
+  shouldClearSubmittedProjectCreationDraft,
+  type ProjectCreationDraftSession,
   type ProjectCreationDraftRepository,
 } from '@/lib/projectCreationDraft'
 import { inferSoftwareProjectTypeFromName } from '@/constants/projectTypes'
@@ -80,11 +82,6 @@ const CREATE_FORM_DEFAULTS: ProjectInfoFormState = {
 
 type DraftReadStatus = 'idle' | 'loading' | 'ready' | 'failed'
 
-interface CreateDraftSession {
-  generation: number
-  ownerId: string
-}
-
 const HEALTH_OPTIONS = [
   { label: '正常', value: 'normal' },
   { label: '预警', value: 'warning' },
@@ -130,7 +127,7 @@ export default function ProjectInfoModal({
   const componentMountedRef = useRef(true)
   const draftReadStatusRef = useRef<DraftReadStatus>('idle')
   const createDraftSessionGenerationRef = useRef(0)
-  const currentCreateDraftSessionRef = useRef<CreateDraftSession | null>(null)
+  const currentCreateDraftSessionRef = useRef<ProjectCreationDraftSession | null>(null)
   const createDraftContextRef = useRef({ open, mode, ownerId: draftOwnerId || '' })
   createDraftContextRef.current = { open, mode, ownerId: draftOwnerId || '' }
   const watchedValues = (Form.useWatch([], { form, preserve: true }) || {}) as ProjectInfoFormState
@@ -155,7 +152,7 @@ export default function ProjectInfoModal({
     draftSaveTimerRef.current = null
   }, [])
 
-  const startCreateDraftSession = useCallback((ownerId: string): CreateDraftSession => {
+  const startCreateDraftSession = useCallback((ownerId: string): ProjectCreationDraftSession => {
     cancelDraftSave()
     const session = {
       generation: createDraftSessionGenerationRef.current + 1,
@@ -172,7 +169,7 @@ export default function ProjectInfoModal({
     currentCreateDraftSessionRef.current = null
   }, [cancelDraftSave])
 
-  const isCurrentCreateDraftSession = useCallback((session: CreateDraftSession) => {
+  const isCurrentCreateDraftSession = useCallback((session: ProjectCreationDraftSession) => {
     const currentSession = currentCreateDraftSessionRef.current
     const currentContext = createDraftContextRef.current
     return componentMountedRef.current
@@ -452,7 +449,7 @@ export default function ProjectInfoModal({
     setAggregateWarnings(result.missingSources)
   }, [candidateProjects, existingProjects, firstLaunchSignature, form, mode, open, project, projectType, watchedBid])
 
-  const persistCreateDraft = useCallback(async (session: CreateDraftSession) => {
+  const persistCreateDraft = useCallback(async (session: ProjectCreationDraftSession) => {
     if (draftReadStatusRef.current !== 'ready' || !isCurrentCreateDraftSession(session)) return
 
     const values = form.getFieldsValue(true) as ProjectInfoFormState
@@ -554,10 +551,10 @@ export default function ProjectInfoModal({
     })
   }
 
-  const clearSubmittedCreateDraft = useCallback(async (session: CreateDraftSession) => {
+  const clearSubmittedCreateDraft = useCallback(async (session: ProjectCreationDraftSession) => {
     await enqueueDraftMutation(() => {
       const currentSession = currentCreateDraftSessionRef.current
-      if (currentSession && currentSession.generation !== session.generation) {
+      if (!shouldClearSubmittedProjectCreationDraft(session, currentSession)) {
         return Promise.resolve()
       }
       return draftRepository.clear(session.ownerId)

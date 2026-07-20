@@ -24,6 +24,7 @@ const {
   LocalStorageProjectCreationDraftRepository,
   defaultProjectCreationDraftRepository,
   isProjectCreationDraftEmpty,
+  shouldClearSubmittedProjectCreationDraft,
 } = loadedModule.exports
 
 const createMemoryStorage = () => {
@@ -89,6 +90,18 @@ assert.equal(isProjectCreationDraftEmpty({ healthStatus: 'normal', status: '待�
 assert.equal(isProjectCreationDraftEmpty({ healthStatus: 'risk', status: '待立项' }), false)
 assert.equal(isProjectCreationDraftEmpty({ healthStatus: 'normal', status: '进行中' }), false)
 assert.equal(isProjectCreationDraftEmpty({ healthStatus: 'normal', status: '待立项', name: '项目 A' }), false)
+
+const submittedSession = { generation: 4, ownerId: '张三' }
+assert.equal(
+  shouldClearSubmittedProjectCreationDraft(submittedSession, { generation: 5, ownerId: '张三' }),
+  false,
+  'a newer session for the same owner must preserve the new same-key draft',
+)
+assert.equal(
+  shouldClearSubmittedProjectCreationDraft(submittedSession, { generation: 5, ownerId: '李四' }),
+  true,
+  'a newer session for another owner must still clear the submitted owner key',
+)
 
 const writeError = new Error('storage write failed')
 const failingRepository = new LocalStorageProjectCreationDraftRepository(() => ({
@@ -185,9 +198,9 @@ assertOrdered(clearAndResetBlock, [
 ], 'reset must invalidate hydration before clearing and resetting')
 assertOrdered(clearSubmittedDraftBlock, [
   'currentCreateDraftSessionRef.current',
-  'currentSession.generation !== session.generation',
+  'shouldClearSubmittedProjectCreationDraft(session, currentSession)',
   'draftRepository.clear(session.ownerId)',
-], 'submit clear must skip a newer session and remain owner scoped')
+], 'submit clear must skip only a newer same-owner session and remain owner scoped')
 assertOrdered(handleSubmitBlock, [
   'const submitSession =',
   'await onSubmit(',

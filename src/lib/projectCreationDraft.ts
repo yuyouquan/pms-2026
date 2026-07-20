@@ -14,6 +14,18 @@ export interface ProjectCreationDraftRepository {
   clear(ownerId: string): Promise<void>
 }
 
+export interface ProjectCreationDraftSession {
+  generation: number
+  ownerId: string
+}
+
+export const shouldClearSubmittedProjectCreationDraft = (
+  submittedSession: ProjectCreationDraftSession,
+  currentSession: ProjectCreationDraftSession | null,
+) => !currentSession
+  || currentSession.ownerId !== submittedSession.ownerId
+  || currentSession.generation <= submittedSession.generation
+
 interface ProjectCreationDraftStorage {
   getItem(key: string): string | null
   setItem(key: string, value: string): void
