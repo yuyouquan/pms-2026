@@ -1663,7 +1663,6 @@ body {
 
 .pms-project-info-core-card .ant-card-head {
   background: linear-gradient(135deg, rgba(238, 242, 255, 0.95), rgba(236, 254, 255, 0.72));
-  transition: background-color 220ms ease;
 }
 
 .pms-project-info-core-title {
@@ -1681,7 +1680,7 @@ body {
   color: #fff;
   background: linear-gradient(135deg, #4f46e5, #06b6d4);
   border-radius: 9px;
-  transition: box-shadow 220ms ease, background-color 220ms ease;
+  transition: box-shadow 220ms ease;
 }
 
 .pms-project-info-core-card:hover .pms-project-info-core-title > .anticon {
@@ -1794,7 +1793,7 @@ body {
   background: #f7f9fc;
 }
 
-.pms-project-info-collapse .ant-collapse-header-text {
+.pms-project-info-collapse .ant-collapse-title {
   min-width: 0;
 }
 
