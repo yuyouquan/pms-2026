@@ -24,6 +24,25 @@ const LEGACY_ROOT_KEYS: Record<string, string> = {
   machineSpm: 'spm',
 }
 
+const DIRECT_ROOT_KEYS = [
+  'researchMode',
+  'androidMajorUpgrade',
+  'productType',
+  'systemType',
+  'kernelVersion',
+  'productSeries',
+  'launchDate',
+  'productionForbiddenDate',
+  'chipPlatform',
+  'startingRam',
+  'wholeMachinePd',
+  'pcbaSheet',
+  'shippingCountrySheet',
+  'keyComponentsSheet',
+  'isTwoStage',
+  'isOutsourcedMini',
+] as const
+
 const TOS_FIVE_ROLE_KEYS: Record<string, keyof VersionFiveRoles> = {
   tosPlanningRepresentative: '版本规划代表',
   tosVersionProjectManager: '版本经理',
@@ -160,6 +179,10 @@ export const mergeProjectInfoValues = <T extends ProjectInfoProject>(
   Object.entries(LEGACY_ROOT_KEYS).forEach(([key, rootKey]) => {
     const value = values[key]
     if (value !== undefined) (next as Record<string, unknown>)[rootKey] = value
+  })
+  DIRECT_ROOT_KEYS.forEach(key => {
+    const value = values[key]
+    if (value !== undefined) (next as Record<string, unknown>)[key] = value
   })
 
   if (typeof values.targetMarkets === 'string') {

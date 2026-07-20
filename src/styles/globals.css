@@ -1423,3 +1423,62 @@ body {
 .pms-plan-view-mode-switcher .ant-radio-button-wrapper .anticon {
   font-size: 15px;
 }
+
+/* ─── Project information schema-driven surfaces ─── */
+.pms-project-info-modal .ant-modal-content {
+  overflow: hidden;
+}
+
+.pms-project-info-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 20px;
+}
+
+.pms-project-info-universal {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.pms-project-info-core-form {
+  margin: 2px 0 16px;
+  padding: 16px 16px 0;
+  border: 1px solid rgba(99, 102, 241, 0.16);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(6, 182, 212, 0.03));
+}
+
+.pms-project-info-section-heading {
+  margin-bottom: 12px;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.pms-project-info-group-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.pms-project-info-form-span {
+  grid-column: 1 / -1;
+}
+
+.pms-project-info-jira-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1.2fr 0.7fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .pms-project-info-universal,
+  .pms-project-info-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pms-project-info-jira-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -102,6 +102,7 @@ export interface ProjectActions {
 
   setProjectMember: (projectId: string, members: string[]) => void
   addProject: (newProject: Project) => void
+  updateProject: (projectId: string, updater: (project: Project) => Project) => void
 }
 
 export const useProjectStore = create<ProjectState & ProjectActions>()((set) => ({
@@ -162,4 +163,14 @@ export const useProjectStore = create<ProjectState & ProjectActions>()((set) => 
   addProject: (newProject) => set((s) => ({
     projects: [...s.projects, newProject],
   })),
+  updateProject: (projectId, updater) => set((s) => {
+    let updatedSelected = s.selectedProject
+    const projects = s.projects.map(project => {
+      if (project.id !== projectId) return project
+      const updated = updater(project)
+      if (s.selectedProject?.id === projectId) updatedSelected = updated
+      return updated
+    })
+    return { projects, selectedProject: updatedSelected }
+  }),
 }))
