@@ -118,6 +118,7 @@ export default function ProjectInfoModal({
   const [activeGroups, setActiveGroups] = useState<string[]>([])
   const [aggregateWarnings, setAggregateWarnings] = useState<string[]>([])
   const [draftReadStatus, setDraftReadStatusState] = useState<DraftReadStatus>('idle')
+  const [draftHydrationAttempt, setDraftHydrationAttempt] = useState(0)
   const previousTypeRef = useRef<string>('')
   const lastAppliedSourceRef = useRef<string>('')
   const activeGroupsRef = useRef<string[]>([])
@@ -145,6 +146,8 @@ export default function ProjectInfoModal({
       || draftReadStatus === 'loading'
       || currentCreateDraftSessionRef.current?.ownerId !== (draftOwnerId || '')
     )
+  const isCreateDraftReadFailed = mode === 'create' && open && draftReadStatus === 'failed'
+  const isCreateDraftInteractionBlocked = isDraftHydrating || isCreateDraftReadFailed
 
   const cancelDraftSave = useCallback(() => {
     if (draftSaveTimerRef.current === null) return
@@ -210,6 +213,11 @@ export default function ProjectInfoModal({
     previousTypeRef.current = ''
     lastAppliedSourceRef.current = ''
   }, [form])
+
+  const retryCreateDraftHydration = useCallback(() => {
+    if (mode !== 'create' || !open || draftReadStatusRef.current !== 'failed') return
+    setDraftHydrationAttempt(attempt => attempt + 1)
+  }, [mode, open])
 
   useEffect(() => {
     candidateProjectsRef.current = candidateProjects
@@ -317,7 +325,7 @@ export default function ProjectInfoModal({
         invalidateCreateDraftSession()
       }
     }
-  }, [draftOwnerId, draftRepository, enqueueDraftMutation, form, invalidateCreateDraftSession, isCurrentCreateDraftSession, mode, open, resetCreateForm, setDraftReadStatus, startCreateDraftSession])
+  }, [draftHydrationAttempt, draftOwnerId, draftRepository, enqueueDraftMutation, form, invalidateCreateDraftSession, isCurrentCreateDraftSession, mode, open, resetCreateForm, setDraftReadStatus, startCreateDraftSession])
 
   const clearTypeFields = (type: string) => {
     const fieldNames = getProjectInfoFields(type).map(field => field.key)
@@ -562,7 +570,7 @@ export default function ProjectInfoModal({
   }, [draftRepository, enqueueDraftMutation])
 
   const handleSubmit = async () => {
-    if (isDraftHydrating) return
+    if (isCreateDraftInteractionBlocked) return
     let values: ProjectInfoFormState
     try {
       await form.validateFields()
@@ -669,16 +677,26 @@ export default function ProjectInfoModal({
       cancelText="取消"
       confirmLoading={submitting || isDraftHydrating}
       cancelButtonProps={{ disabled: isDraftHydrating }}
-      okButtonProps={{ disabled: isDraftHydrating }}
+      okButtonProps={{ disabled: isCreateDraftInteractionBlocked }}
       destroyOnHidden
       className="pms-modal pms-project-info-modal"
       styles={{ body: { maxHeight: '72vh', overflowY: 'auto', paddingRight: 24 } }}
     >
+      {isCreateDraftReadFailed && (
+        <Alert
+          type="error"
+          showIcon
+          message="项目草稿读取失败"
+          description="已保存的内容暂时无法恢复，当前填写和自动保存已暂停。"
+          action={<Button size="small" onClick={retryCreateDraftHydration}>重新读取</Button>}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <Spin spinning={isDraftHydrating} tip="正在恢复项目草稿">
       <Form
         form={form}
         layout="vertical"
-        disabled={isDraftHydrating}
+        disabled={isCreateDraftInteractionBlocked}
         onValuesChange={(changedValues) => {
           if (typeof changedValues.bid === 'string') handleCandidateChange(changedValues.bid)
           if (typeof changedValues.type === 'string') handleTypeChange(changedValues.type)
