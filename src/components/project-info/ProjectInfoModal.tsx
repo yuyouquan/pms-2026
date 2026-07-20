@@ -310,6 +310,7 @@ export default function ProjectInfoModal({
       } else if (draft) {
         form.setFieldsValue(draft.values as ProjectInfoFormState)
         const restoredType = typeof draft.values.type === 'string' ? draft.values.type : ''
+        lastAppliedSourceRef.current = `${restoredBid}::${restoredType}`
         previousTypeRef.current = restoredType
         activeGroupsRef.current = draft.activeGroups
         setActiveGroups(draft.activeGroups)

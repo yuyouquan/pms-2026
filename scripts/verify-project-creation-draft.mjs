@@ -173,6 +173,11 @@ assertOrdered(hydrateDraftBlock, [
   'form.setFieldsValue',
   "setDraftReadStatus('ready')",
 ], 'hydration must gate restored values by the current session')
+assert.match(
+  hydrateDraftBlock,
+  /lastAppliedSourceRef\.current = `\$\{restoredBid\}::\$\{restoredType\}`/,
+  'hydration must prevent source synchronization from overwriting restored draft values',
+)
 assert.match(readFailureBlock, /项目草稿读取失败/)
 assert.match(readFailureBlock, /setDraftReadStatus\('failed'\)/)
 assert.doesNotMatch(readFailureBlock, /setDraftReadStatus\('ready'\)|draftRepository\.(save|clear)/)
