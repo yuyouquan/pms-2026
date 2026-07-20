@@ -17,6 +17,7 @@
 - Modify `src/components/project-info/ProjectInfoModal.tsx`: hydrate, debounce-save, close flush, successful-submit clear, Header reset confirmation.
 - Modify `src/components/workspace/AddProjectModal.tsx`: pass `currentLoginUser` as `draftOwnerId`.
 - Modify `src/styles/globals.css`: Header title/button layout and responsive treatment.
+- Modify `src/lib/projectCreationDraft.ts` in Task 2 only if async submit hardening needs a pure, executable owner-scoped cleanup policy; the policy must remain UI-independent and covered by the repository verification script.
 
 ### Task 1: Draft repository and contract
 
@@ -106,6 +107,7 @@ git commit -m "feat: add create project draft repository"
 - Modify: `src/components/project-info/ProjectInfoModal.tsx`
 - Modify: `src/components/workspace/AddProjectModal.tsx`
 - Modify: `src/styles/globals.css`
+- Modify: `src/lib/projectCreationDraft.ts` (owner-scoped submit cleanup policy discovered during async race review)
 
 - [ ] **Step 1: Add a failing static interaction check**
 
