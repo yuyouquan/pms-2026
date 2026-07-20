@@ -134,6 +134,12 @@ import TargetProjectInformationView from '@/components/project-info/TargetProjec
 import MarketEditorModal from '@/components/project-info/MarketEditorModal'
 import ProjectPlanInfoGrid from '@/components/project-info/ProjectPlanInfoGrid'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
+import {
+  getProjectResponsiblePersons,
+  haveProjectResponsiblePersonsChanged,
+  mergeResponsiblePersonsIntoVisibleMembers,
+  replaceProjectSystemAdministrators,
+} from '@/lib/projectResponsibility'
 import { PROJECT_STATUS_CONFIG } from '@/data/projects'
 import {
   TECH_DOMAIN_OPTIONS,
@@ -1130,8 +1136,26 @@ export default function ProjectSpaceContainer() {
       return
     }
 
+    const nextMainMarket = getMainMarket(normalizedRows)
+    if (
+      previousMainMarket
+      && nextMainMarket !== previousMainMarket
+      && !canChangeMainMarket(getVersionsForMarket(previousMainMarket))
+    ) {
+      message.error('现有主市场存在修订版本，不可变更主市场')
+      return
+    }
+
+    const missingCancelPauseDateRow = normalizedRows.find(row => (
+      row.isCancelPaused === '是' && !row.cancelPauseDate?.trim()
+    ))
+    if (missingCancelPauseDateRow) {
+      message.error(`请填写 ${missingCancelPauseDateRow.market} 市场的取消暂停时间`)
+      return
+    }
+
     const nextMarkets = normalizedRows.map(row => row.market)
-    const mainMarket = getMainMarket(normalizedRows)
+    const mainMarket = nextMainMarket
     const previousFollowMarkets = new Set(
       previousRows
         .filter(row => !row.isMain && row.followsMain)
@@ -1821,9 +1845,15 @@ export default function ProjectSpaceContainer() {
 
   const saveTargetProjectInfo = async (payload: ProjectInfoSubmitPayload) => {
     if (!selectedProject || !canEditBasicInfo) return
+    const previousResponsiblePersons = getProjectResponsiblePersons(selectedProject)
+    const responsiblePersonsChanged = haveProjectResponsiblePersonsChanged(
+      previousResponsiblePersons,
+      payload.responsiblePersons,
+    )
     const updatedBase = {
       ...selectedProject,
       leader: payload.responsiblePersons[0] || selectedProject.leader,
+      responsiblePersons: payload.responsiblePersons,
       healthStatus: payload.healthStatus,
       updatedAt: '刚刚',
     }
@@ -1832,12 +1862,16 @@ export default function ProjectSpaceContainer() {
       payload.infoValues,
     )
     updateProject(selectedProject.id, () => updated as unknown as typeof selectedProject)
-    setProjectMember(selectedProject.id, payload.responsiblePersons)
-    setRoles(previous => previous.map(role => (
-      role.name === '系统管理员'
-        ? { ...role, members: [...payload.responsiblePersons] }
-        : role
-    )))
+    if (responsiblePersonsChanged) {
+      setProjectMember(
+        selectedProject.id,
+        mergeResponsiblePersonsIntoVisibleMembers(
+          projectMemberMap[selectedProject.id] || [],
+          payload.responsiblePersons,
+        ),
+      )
+      setRoles(previous => replaceProjectSystemAdministrators(previous, payload.responsiblePersons))
+    }
     setShowProjectInfoEditor(false)
     message.success('项目信息已保存')
   }
@@ -2835,7 +2869,7 @@ export default function ProjectSpaceContainer() {
             candidateProjects={[]}
             project={p as unknown as ProjectInfoProject}
             existingProjects={projects as unknown as ProjectInfoProject[]}
-            responsiblePersons={projectMemberMap[p.id] || (p.leader ? [p.leader] : [])}
+            responsiblePersons={getProjectResponsiblePersons(p)}
             onCancel={() => setShowProjectInfoEditor(false)}
             onSubmit={saveTargetProjectInfo}
           />
@@ -3514,7 +3548,9 @@ export default function ProjectSpaceContainer() {
       <MarketEditorModal
         open={showMarketEditor}
         rows={marketDraftRows}
-        canChangeMainMarket={canChangeMainMarket(versions)}
+        canChangeMainMarket={canChangeMainMarket(
+          primaryMarket ? getVersionsForMarket(primaryMarket) : versions,
+        )}
         onChange={setMarketDraftRows}
         onSave={saveMarketConfig}
         onCancel={() => setShowMarketEditor(false)}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Button, Checkbox, Drawer, Space, Tooltip } from 'antd'
 import { SettingOutlined } from '@ant-design/icons'
 import type { ProjectInfoFieldDefinition } from '@/constants/projectInfoSchema'
@@ -9,7 +9,7 @@ interface FieldVisibilityPickerProps {
   groupLabel: string
   fields: ProjectInfoFieldDefinition[]
   visibleFieldKeys: string[]
-  onChange: (keys: string[]) => void
+  onChange: (keys: string[]) => void | Promise<void>
   disabled?: boolean
 }
 
@@ -22,6 +22,15 @@ export default function FieldVisibilityPicker({
 }: FieldVisibilityPickerProps) {
   const [open, setOpen] = useState(false)
   const [draftKeys, setDraftKeys] = useState<string[]>(visibleFieldKeys)
+  const [confirming, setConfirming] = useState(false)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const openDrawer = (event: MouseEvent<HTMLElement>) => {
     event.stopPropagation()
@@ -33,6 +42,22 @@ export default function FieldVisibilityPicker({
     setDraftKeys(fields
       .filter(field => !field.hideable || field.defaultVisible)
       .map(field => field.key))
+  }
+
+  const closeDrawer = () => {
+    if (!confirming) setOpen(false)
+  }
+
+  const confirmSelection = async () => {
+    setConfirming(true)
+    try {
+      await onChange(draftKeys)
+      if (mountedRef.current) setOpen(false)
+    } catch {
+      // The owner reports the persistence error; keep the Drawer open for retry.
+    } finally {
+      if (mountedRef.current) setConfirming(false)
+    }
   }
 
   const button = (
@@ -58,20 +83,20 @@ export default function FieldVisibilityPicker({
         rootClassName="pms-project-info-field-drawer"
         title={`配置字段 · ${groupLabel}`}
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={closeDrawer}
+        closable={!confirming}
+        maskClosable={!confirming}
         width={420}
         placement="right"
         footer={(
           <div className="pms-project-info-picker-footer">
-            <Button onClick={resetToDefault}>重置默认</Button>
+            <Button disabled={confirming} onClick={resetToDefault}>重置默认</Button>
             <Space>
-              <Button onClick={() => setOpen(false)}>取消</Button>
+              <Button disabled={confirming} onClick={closeDrawer}>取消</Button>
               <Button
                 type="primary"
-                onClick={() => {
-                  onChange(draftKeys)
-                  setOpen(false)
-                }}
+                loading={confirming}
+                onClick={confirmSelection}
               >
                 确定
               </Button>
@@ -87,7 +112,7 @@ export default function FieldVisibilityPicker({
                 key={field.key}
                 className="pms-project-info-picker-row"
                 checked={!field.hideable || draftKeys.includes(field.key)}
-                disabled={!field.hideable}
+                disabled={!field.hideable || confirming}
                 onChange={event => {
                   const checked = event.target.checked
                   setDraftKeys(currentKeys => checked

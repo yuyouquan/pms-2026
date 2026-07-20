@@ -25,6 +25,7 @@ const LEGACY_ROOT_KEYS: Record<string, string> = {
 }
 
 const DIRECT_ROOT_KEYS = [
+  'versionType',
   'researchMode',
   'androidMajorUpgrade',
   'productType',

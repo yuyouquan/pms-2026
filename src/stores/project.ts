@@ -30,7 +30,10 @@ export const kanbanColumns = [
   { title: '发布阶段', key: 'released', color: '#722ed1' },
 ]
 
-type Project = typeof initialProjects[number] & { versionTypes?: string[] }
+type Project = typeof initialProjects[number] & {
+  versionTypes?: string[]
+  responsiblePersons?: string[]
+}
 
 const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) => {
   if (project.type === '整机产品项目' && project.markets?.length) {

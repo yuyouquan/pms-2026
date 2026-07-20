@@ -1,11 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type {
-  ProjectInfoFieldDefinition,
-  ProjectInfoGroupKey,
+import {
+  PROJECT_INFO_SCHEMA_VERSION,
+  type ProjectInfoFieldDefinition,
+  type ProjectInfoGroupKey,
 } from '@/constants/projectInfoSchema'
 import {
+  createCurrentFieldVisibilityPreference,
   defaultProjectFieldPreferenceRepository,
   getDefaultVisibleFieldKeys,
   reconcileVisibleFieldKeys,
@@ -18,6 +20,7 @@ interface UseProjectFieldVisibilityOptions {
   groupKey: ProjectInfoGroupKey
   fields: ProjectInfoFieldDefinition[]
   repository?: ProjectFieldPreferenceRepository
+  onSaveError?: () => void
 }
 
 export const useProjectFieldVisibility = ({
@@ -26,29 +29,53 @@ export const useProjectFieldVisibility = ({
   groupKey,
   fields,
   repository = defaultProjectFieldPreferenceRepository,
+  onSaveError,
 }: UseProjectFieldVisibilityOptions) => {
   const defaultKeys = useMemo(() => getDefaultVisibleFieldKeys(fields), [fields])
   const [visibleFieldKeys, setVisibleFieldKeysState] = useState<string[]>(defaultKeys)
   const scopeKey = `${userId}::${projectId}::${groupKey}`
-  const activeScopeRef = useRef(scopeKey)
+  const activeScopeRef = useRef<string | null>(scopeKey)
+  const visibleFieldKeysRef = useRef<string[]>(defaultKeys)
+  const saveRequestRef = useRef(0)
 
   useEffect(() => {
     activeScopeRef.current = scopeKey
     const stored = repository.get({ userId, projectId, groupKey })
-    setVisibleFieldKeysState(reconcileVisibleFieldKeys(fields, stored?.visibleFieldKeys))
+    const reconciled = reconcileVisibleFieldKeys(fields, stored)
+    visibleFieldKeysRef.current = reconciled
+    setVisibleFieldKeysState(reconciled)
+
+    return () => {
+      if (activeScopeRef.current === scopeKey) activeScopeRef.current = null
+    }
   }, [fields, groupKey, projectId, repository, scopeKey, userId])
 
-  const setVisibleFieldKeys = useCallback((nextKeys: string[]) => {
-    const reconciled = reconcileVisibleFieldKeys(fields, nextKeys)
-    setVisibleFieldKeysState(reconciled)
-    repository.save({
-      userId,
-      projectId,
-      groupKey,
-      visibleFieldKeys: reconciled,
-      updatedAt: new Date().toISOString(),
+  const setVisibleFieldKeys = useCallback(async (nextKeys: string[]) => {
+    const previousKeys = visibleFieldKeysRef.current
+    const reconciled = reconcileVisibleFieldKeys(fields, {
+      visibleFieldKeys: nextKeys,
+      schemaVersion: PROJECT_INFO_SCHEMA_VERSION,
     })
-  }, [fields, groupKey, projectId, repository, userId])
+    const requestId = ++saveRequestRef.current
+
+    visibleFieldKeysRef.current = reconciled
+    setVisibleFieldKeysState(reconciled)
+
+    try {
+      const result = await repository.save(createCurrentFieldVisibilityPreference(
+        { userId, projectId, groupKey },
+        reconciled,
+      ))
+      if (result === false) throw new Error('Project field preference repository returned failure')
+    } catch (error) {
+      if (activeScopeRef.current === scopeKey && saveRequestRef.current === requestId) {
+        visibleFieldKeysRef.current = previousKeys
+        setVisibleFieldKeysState(previousKeys)
+        onSaveError?.()
+      }
+      throw error instanceof Error ? error : new Error('Project field preference save failed')
+    }
+  }, [fields, groupKey, onSaveError, projectId, repository, scopeKey, userId])
 
   return {
     visibleFieldKeys,

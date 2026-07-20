@@ -13,6 +13,7 @@ import {
   Row,
   Select,
   Space,
+  Tooltip,
   Typography,
 } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
@@ -98,7 +99,9 @@ export default function MarketEditorModal({
   const removeRow = (rowId: string) => {
     if (rows.length <= 1) return
     const targetRow = rows.find(row => row.id === rowId)
-    if (targetRow?.isMain && !canChangeMainMarket) return
+    // A main market must be explicitly handed over before it can be deleted.
+    // Otherwise normalizeMarketRows would silently promote the first remaining row.
+    if (targetRow?.isMain) return
     const previousMainMarket = getMainMarket(rows)
     onChange(normalizeMarketRows(rows.filter(row => row.id !== rowId), previousMainMarket))
   }
@@ -141,15 +144,19 @@ export default function MarketEditorModal({
               </Space>
             )}
             extra={(
-              <Button
-                type="text"
-                danger
-                size="small"
-                icon={<DeleteOutlined />}
-                aria-label={`删除${row.market || '当前'}市场`}
-                disabled={rows.length <= 1 || (row.isMain && !canChangeMainMarket)}
-                onClick={() => removeRow(row.id)}
-              />
+              <Tooltip title={row.isMain ? '请先指定其他主市场后再删除' : undefined}>
+                <span>
+                  <Button
+                    type="text"
+                    danger
+                    size="small"
+                    icon={<DeleteOutlined />}
+                    aria-label={`删除${row.market || '当前'}市场`}
+                    disabled={rows.length <= 1 || row.isMain}
+                    onClick={() => removeRow(row.id)}
+                  />
+                </span>
+              </Tooltip>
             )}
           >
             <Form layout="vertical" component={false}>
@@ -248,7 +255,12 @@ export default function MarketEditorModal({
                 </Col>
                 {row.isCancelPaused === '是' && (
                   <Col xs={24} md={8}>
-                    <Form.Item label="取消暂停时间">
+                    <Form.Item
+                      label="取消暂停时间"
+                      required
+                      validateStatus={row.cancelPauseDate ? undefined : 'error'}
+                      help={row.cancelPauseDate ? undefined : '请选择取消暂停时间'}
+                    >
                       <DatePicker
                         value={row.cancelPauseDate ? dayjs(row.cancelPauseDate) : null}
                         format="YYYY-MM-DD"

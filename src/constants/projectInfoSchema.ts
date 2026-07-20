@@ -31,12 +31,17 @@ export interface ProjectInfoFieldDefinition {
   placeholder?: string
   visibleWhen?: (values: ProjectInfoValues) => boolean
   conditionalHint?: string
+  /** Omitted fields belong to the original, unversioned schema. */
+  introducedInSchemaVersion?: number
 }
 
 export interface ProjectInfoGroupDefinition {
   key: ProjectInfoGroupKey
   label: string
 }
+
+export const PROJECT_INFO_SCHEMA_VERSION = 1
+export const LEGACY_PROJECT_INFO_SCHEMA_VERSION = 0
 
 const yesNo = ['是', '否'] as const
 

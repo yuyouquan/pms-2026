@@ -55,6 +55,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       status: '待立项',
       progress: 0,
       leader: payload.responsiblePersons[0],
+      responsiblePersons: payload.responsiblePersons,
       markets: [],
       androidVersion: extra.androidVersion ?? '',
       chipPlatform: extra.chipPlatform ?? '',
