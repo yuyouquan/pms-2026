@@ -64,12 +64,9 @@ import {
   JIRA_PROJECT_NAME_OPTIONS,
   JIRA_PROJECT_TYPE_OPTIONS,
   JIRA_SERVER_OPTIONS,
-  SPUG_BUILD_MARKET_OPTIONS,
-  SPUG_BUILD_OPTION_OPTIONS,
   createJiraProjectConfig,
   formatJiraProjectTag,
   getJiraProjectUrl,
-  getMarketProjectName,
   type JiraProjectConfig,
 } from '@/lib/jiraProject'
 import { notifyPublishChanges, notifyDueTasks } from '@/lib/feishu-notify'
@@ -83,7 +80,6 @@ import {
   isSoftwareProjectType,
 } from '@/constants/projectTypes'
 import {
-  MARKET_OPTIONS,
   buildMarketRowsFromMarkets,
   canChangeMainMarket,
   cancelDraftRevision,
@@ -135,13 +131,13 @@ import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
 import VersionTrainPlan, { INITIAL_VERSION_TRAIN_DATA } from '@/components/plans/VersionTrainPlan'
 import ProjectInfoModal, { type ProjectInfoSubmitPayload } from '@/components/project-info/ProjectInfoModal'
 import TargetProjectInformationView from '@/components/project-info/TargetProjectInformationView'
+import MarketEditorModal from '@/components/project-info/MarketEditorModal'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import { PROJECT_STATUS_CONFIG } from '@/data/projects'
 import {
   TECH_DOMAIN_OPTIONS,
   TOS_VERSION_OPTIONS,
   WHOLE_MACHINE_BASIC_INFO_FIELDS,
-  WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS,
   inferOsSeriesFromProjectName,
   inferTosVersionFromProjectName,
 } from '@/constants/projectBasicFields'
@@ -1105,6 +1101,10 @@ export default function ProjectSpaceContainer() {
   )
 
   const openMarketEditor = () => {
+    if (!canEditBasicInfo) {
+      message.warning('无基础信息编辑权限')
+      return
+    }
     const rows = getCurrentMarketRows()
     setMarketDraftRows(rows.length > 0 ? rows.map(row => ({ ...row })) : [{
       id: `market-${Date.now()}`,
@@ -1115,70 +1115,11 @@ export default function ProjectSpaceContainer() {
     setShowMarketEditor(true)
   }
 
-  const updateMarketDraftRow = (rowId: string, patch: Partial<MarketConfigRow>) => {
-    const previousMainMarket = getMainMarket(marketDraftRows)
-    const mainChangeBlocked = !canChangeMainMarket(versions)
-    setMarketDraftRows(prev => {
-      let nextRows = prev.map(row => ({ ...row }))
-      const targetRow = nextRows.find(row => row.id === rowId)
-      if (!targetRow) return prev
-
-      if (patch.market !== undefined) {
-        if (targetRow.isMain && mainChangeBlocked && patch.market !== previousMainMarket) {
-          message.warning('现有主市场存在修订版本，不可变更主市场')
-          return prev
-        }
-        targetRow.market = patch.market
-      }
-      if (patch.followsMain !== undefined) targetRow.followsMain = patch.followsMain
-      if (patch.isMain !== undefined) {
-        if (mainChangeBlocked && patch.isMain && targetRow.market !== previousMainMarket) {
-          message.warning('现有主市场存在修订版本，不可变更主市场')
-          return prev
-        }
-        if (patch.isMain) {
-          nextRows = nextRows.map(row => ({
-            ...row,
-            isMain: row.id === rowId,
-            followsMain: false,
-          }))
-        } else {
-          targetRow.isMain = false
-        }
-      }
-
-      return normalizeMarketRows(nextRows, previousMainMarket)
-    })
-  }
-
-  const addMarketDraftRow = () => {
-    const selectedMarkets = new Set(marketDraftRows.map(row => row.market).filter(Boolean))
-    const nextMarket = MARKET_OPTIONS.find(market => !selectedMarkets.has(market))
-    if (!nextMarket) {
-      message.warning('可选市场已全部添加')
-      return
-    }
-    setMarketDraftRows(prev => normalizeMarketRows([
-      ...prev,
-      {
-        id: `market-${Date.now()}`,
-        market: nextMarket,
-        isMain: prev.length === 0,
-        followsMain: false,
-      },
-    ]))
-  }
-
-  const removeMarketDraftRow = (rowId: string) => {
-    if (marketDraftRows.length <= 1) {
-      message.warning('至少保留一个市场')
-      return
-    }
-    const previousMainMarket = getMainMarket(marketDraftRows)
-    setMarketDraftRows(prev => normalizeMarketRows(prev.filter(row => row.id !== rowId), previousMainMarket))
-  }
-
   const saveMarketConfig = () => {
+    if (!canEditBasicInfo) {
+      message.error('无基础信息编辑权限')
+      return
+    }
     if (!selectedProject || selectedProject.type !== '整机产品项目') return
     const previousRows = getCurrentMarketRows()
     const previousMainMarket = getMainMarket(previousRows)
@@ -2609,13 +2550,6 @@ export default function ProjectSpaceContainer() {
       }
       return <Descriptions.Item key={field.key} label={field.label}>{content}</Descriptions.Item>
     }
-    const renderWholeMachineHardwareConfigField = (field: (typeof WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS)[number]) => {
-      let content: React.ReactNode = getProjectFieldValue(field)
-      if (field.key === 'marketProjectName') content = getMarketProjectName(p.name, selectedMarketTab)
-      if (field.key === 'buildOption') content = editableField('buildOption', (p as any).buildOption, { type: 'select', choices: SPUG_BUILD_OPTION_OPTIONS })
-      if (field.key === 'buildMarket') content = editableField('buildMarket', (p as any).buildMarket, { type: 'select', choices: SPUG_BUILD_MARKET_OPTIONS })
-      return <Descriptions.Item key={field.key} label={field.label}>{content}</Descriptions.Item>
-    }
     const descLabelStyle: CSSProperties = { fontWeight: 500, color: '#9ca3af', fontSize: 13, background: '#f8fafc' }
     const descContentStyle: CSSProperties = { color: '#111827', fontSize: 13 }
     const sectionTitle = (icon: React.ReactNode, title: string, _color: string) => (<Space size={8}>{icon}<span style={{ fontSize: 15, fontWeight: 600 }}>{title}</span></Space>)
@@ -2852,21 +2786,22 @@ export default function ProjectSpaceContainer() {
                     <div style={{ padding: '8px 0' }}>
                       <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 16 }}>计划信息</div>
                       <Row gutter={[24, 16]} style={{ marginBottom: 16 }}>
-                        <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划开始时间</span>} value={p.planStartDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />} /></Col>
-                        <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划结束时间</span>} value={p.planEndDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />} /></Col>
-                        <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>开发周期（工作日）</span>} value={p.developCycle || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} suffix={p.developCycle ? <span style={{ fontSize: 12, color: '#9ca3af' }}>天</span> : undefined} /></Col>
-                        <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>上市时间</span>} value={p.launchDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600, color: '#722ed1' }} prefix={<CalendarOutlined style={{ color: '#722ed1', fontSize: 14 }} />} /></Col>
+                        <Col span={8}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划开始时间</span>} value={p.planStartDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />} /></Col>
+                        <Col span={8}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划结束时间</span>} value={p.planEndDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />} /></Col>
+                        <Col span={8}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>开发周期（工作日）</span>} value={p.developCycle || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} suffix={p.developCycle ? <span style={{ fontSize: 12, color: '#9ca3af' }}>天</span> : undefined} /></Col>
                       </Row>
+                      <Descriptions bordered size="small" column={3} labelStyle={descLabelStyle} contentStyle={descContentStyle} style={{ marginBottom: 16 }}>
+                        <Descriptions.Item label="Google Launch Date">{row.googleLaunchDate || '-'}</Descriptions.Item>
+                        <Descriptions.Item label="是否运营商定制">{row.isCarrierCustomized || '-'}</Descriptions.Item>
+                        <Descriptions.Item label="是否锁卡">{row.isSimLocked || '-'}</Descriptions.Item>
+                        <Descriptions.Item label="是否取消暂停">{row.isCancelPaused || '-'}</Descriptions.Item>
+                        <Descriptions.Item label="取消暂停时间">{row.isCancelPaused === '是' ? (row.cancelPauseDate || '-') : '-'}</Descriptions.Item>
+                        <Descriptions.Item label="是否MADA管控">{row.isMadaControlled || '-'}</Descriptions.Item>
+                      </Descriptions>
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12 }}>里程碑计划（横排视图）</div>
                       {renderHorizontalTable()}
                       <Divider />
                       <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 16 }}>配置信息</div>
-                      <div style={{ marginBottom: 20 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>硬件配置</div>
-                        <Descriptions bordered size="small" column={4} labelStyle={descLabelStyle} contentStyle={descContentStyle}>
-                          {WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS.map(renderWholeMachineHardwareConfigField)}
-                        </Descriptions>
-                      </div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>构建信息</div>
                       <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>
                         <Descriptions.Item label="分支信息">{editableField('branchInfo', p.branchInfo)}</Descriptions.Item>
@@ -3577,98 +3512,14 @@ export default function ProjectSpaceContainer() {
         </Modal>
       )}
       {/* Market editor modal */}
-      <Modal
-        className="pms-modal"
-        title={<Space><EditOutlined style={{ color: '#6366f1' }} /><span>市场编辑</span></Space>}
+      <MarketEditorModal
         open={showMarketEditor}
+        rows={marketDraftRows}
+        canChangeMainMarket={canChangeMainMarket(versions)}
+        onChange={setMarketDraftRows}
+        onSave={saveMarketConfig}
         onCancel={() => setShowMarketEditor(false)}
-        width={780}
-        footer={[
-          <Button key="cancel" onClick={() => setShowMarketEditor(false)}>取消</Button>,
-          <Button key="save" type="primary" onClick={saveMarketConfig}>保存</Button>,
-        ]}
-      >
-        {!canChangeMainMarket(versions) && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 12 }}
-            title="现有主市场存在修订版本，不可变更主市场"
-            description="可以继续新增、删除非主市场或调整跟随主市场；如需变更主市场，请先发布或取消当前修订版本。"
-          />
-        )}
-        <Table
-          className="pms-table"
-          rowKey="id"
-          size="small"
-          pagination={false}
-          dataSource={marketDraftRows}
-          columns={[
-            {
-              title: '市场',
-              dataIndex: 'market',
-              width: 240,
-              render: (value: string, record: MarketConfigRow) => (
-                <Select
-                  value={value || undefined}
-                  placeholder="请选择市场"
-                  style={{ width: '100%' }}
-                  disabled={record.isMain && !canChangeMainMarket(versions)}
-                  onChange={(market) => updateMarketDraftRow(record.id, { market })}
-                  options={MARKET_OPTIONS.map(market => ({
-                    label: market,
-                    value: market,
-                    disabled: marketDraftRows.some(row => row.id !== record.id && row.market === market),
-                  }))}
-                />
-              ),
-            },
-            {
-              title: '是否主市场',
-              dataIndex: 'isMain',
-              width: 180,
-              align: 'center',
-              render: (_: boolean, record: MarketConfigRow) => (
-                <Radio
-                  checked={record.isMain}
-                  disabled={!canChangeMainMarket(versions)}
-                  onChange={() => updateMarketDraftRow(record.id, { isMain: true })}
-                />
-              ),
-            },
-            {
-              title: '是否跟随主市场',
-              dataIndex: 'followsMain',
-              render: (_: boolean, record: MarketConfigRow) => (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                  <Checkbox
-                    checked={!record.isMain && record.followsMain}
-                    disabled={record.isMain}
-                    onChange={(e) => updateMarketDraftRow(record.id, { followsMain: e.target.checked })}
-                  >
-                    跟随主市场
-                  </Checkbox>
-                  <Button
-                    type="text"
-                    danger
-                    size="small"
-                    icon={<DeleteOutlined />}
-                    onClick={() => removeMarketDraftRow(record.id)}
-                  />
-                </div>
-              ),
-            },
-          ]}
-        />
-        <Button
-          type="dashed"
-          icon={<PlusOutlined />}
-          style={{ width: '100%', marginTop: 12, borderRadius: 6 }}
-          onClick={addMarketDraftRow}
-        >
-          添加市场
-        </Button>
-      </Modal>
+      />
       {/* tOS type editor modal */}
       <Modal
         className="pms-modal"
