@@ -153,7 +153,7 @@ if (draft?.values.bid && !candidateProjects.some(item => item.bid === draft.valu
 setDraftHydrated(true)
 ```
 
-Guard async completion against modal close/unmount. Hydration must finish before autosave starts so default values cannot overwrite an existing draft.
+Guard async completion against modal close/unmount. Hydration must finish before autosave starts so default values cannot overwrite an existing draft. A read failure must keep form/create interaction disabled and show a persistent retry action; Header reset remains the explicit clear/start-new recovery.
 
 - [ ] **Step 4: Debounce every form/group change and flush on close**
 
