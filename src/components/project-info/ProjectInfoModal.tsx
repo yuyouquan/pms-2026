@@ -78,6 +78,13 @@ const CREATE_FORM_DEFAULTS: ProjectInfoFormState = {
   status: '待立项',
 }
 
+type DraftReadStatus = 'idle' | 'loading' | 'ready' | 'failed'
+
+interface CreateDraftSession {
+  generation: number
+  ownerId: string
+}
+
 const HEALTH_OPTIONS = [
   { label: '正常', value: 'normal' },
   { label: '预警', value: 'warning' },
@@ -113,15 +120,19 @@ export default function ProjectInfoModal({
   const [submitting, setSubmitting] = useState(false)
   const [activeGroups, setActiveGroups] = useState<string[]>([])
   const [aggregateWarnings, setAggregateWarnings] = useState<string[]>([])
-  const [draftHydrated, setDraftHydrated] = useState(false)
+  const [draftReadStatus, setDraftReadStatusState] = useState<DraftReadStatus>('idle')
   const previousTypeRef = useRef<string>('')
   const lastAppliedSourceRef = useRef<string>('')
   const activeGroupsRef = useRef<string[]>([])
   const candidateProjectsRef = useRef(candidateProjects)
   const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const draftHydrationPromiseRef = useRef<Promise<void> | null>(null)
   const draftMutationQueueRef = useRef<Promise<void>>(Promise.resolve())
   const componentMountedRef = useRef(true)
+  const draftReadStatusRef = useRef<DraftReadStatus>('idle')
+  const createDraftSessionGenerationRef = useRef(0)
+  const currentCreateDraftSessionRef = useRef<CreateDraftSession | null>(null)
+  const createDraftContextRef = useRef({ open, mode, ownerId: draftOwnerId || '' })
+  createDraftContextRef.current = { open, mode, ownerId: draftOwnerId || '' }
   const watchedValues = (Form.useWatch([], { form, preserve: true }) || {}) as ProjectInfoFormState
   const projectType = String(watchedValues.type || project?.type || '')
   const fields = useMemo(() => getProjectInfoFields(projectType), [projectType])
@@ -137,13 +148,46 @@ export default function ProjectInfoModal({
     draftSaveTimerRef.current = null
   }, [])
 
+  const startCreateDraftSession = useCallback((ownerId: string): CreateDraftSession => {
+    cancelDraftSave()
+    const session = {
+      generation: createDraftSessionGenerationRef.current + 1,
+      ownerId,
+    }
+    createDraftSessionGenerationRef.current = session.generation
+    currentCreateDraftSessionRef.current = session
+    return session
+  }, [cancelDraftSave])
+
+  const invalidateCreateDraftSession = useCallback(() => {
+    cancelDraftSave()
+    createDraftSessionGenerationRef.current += 1
+    currentCreateDraftSessionRef.current = null
+  }, [cancelDraftSave])
+
+  const isCurrentCreateDraftSession = useCallback((session: CreateDraftSession) => {
+    const currentSession = currentCreateDraftSessionRef.current
+    const currentContext = createDraftContextRef.current
+    return componentMountedRef.current
+      && currentContext.open
+      && currentContext.mode === 'create'
+      && currentContext.ownerId === session.ownerId
+      && currentSession?.generation === session.generation
+      && currentSession.ownerId === session.ownerId
+  }, [])
+
+  const setDraftReadStatus = useCallback((status: DraftReadStatus) => {
+    draftReadStatusRef.current = status
+    if (componentMountedRef.current) setDraftReadStatusState(status)
+  }, [])
+
   useEffect(() => {
     componentMountedRef.current = true
     return () => {
       componentMountedRef.current = false
-      cancelDraftSave()
+      invalidateCreateDraftSession()
     }
-  }, [cancelDraftSave])
+  }, [invalidateCreateDraftSession])
 
   const enqueueDraftMutation = useCallback((operation: () => Promise<void>) => {
     const result = draftMutationQueueRef.current
@@ -173,7 +217,6 @@ export default function ProjectInfoModal({
 
   useEffect(() => {
     if (!open || mode !== 'edit' || !project) return
-    setDraftHydrated(false)
     lastAppliedSourceRef.current = ''
     setAggregateWarnings([])
     // The Form instance survives modal close/reopen. Clear the previous project's
@@ -214,57 +257,63 @@ export default function ProjectInfoModal({
 
   useEffect(() => {
     if (!open || mode !== 'create') {
-      setDraftHydrated(false)
-      draftHydrationPromiseRef.current = null
-      cancelDraftSave()
+      invalidateCreateDraftSession()
+      setDraftReadStatus('idle')
       return
     }
 
-    let stale = false
-    setDraftHydrated(false)
-    cancelDraftSave()
+    const session = startCreateDraftSession(draftOwnerId || '')
+    setDraftReadStatus('loading')
     resetCreateForm()
 
     const hydrateDraft = async () => {
       if (!draftOwnerId) {
-        if (!stale) setDraftHydrated(true)
+        if (isCurrentCreateDraftSession(session)) setDraftReadStatus('ready')
         return
       }
 
+      let draft
       try {
-        const draft = await draftRepository.get(draftOwnerId)
-        if (stale) return
-
-        const restoredBid = typeof draft?.values.bid === 'string' ? draft.values.bid : ''
-        if (restoredBid && !candidateProjectsRef.current.some(item => item.bid === restoredBid)) {
-          try {
-            await enqueueDraftMutation(() => draftRepository.clear(draftOwnerId))
-          } catch {
-            if (!stale) message.error('项目草稿清空失败')
-          }
-          if (stale) return
-        } else if (draft) {
-          form.setFieldsValue(draft.values as ProjectInfoFormState)
-          const restoredType = typeof draft.values.type === 'string' ? draft.values.type : ''
-          previousTypeRef.current = restoredType
-          activeGroupsRef.current = draft.activeGroups
-          setActiveGroups(draft.activeGroups)
-        }
+        draft = await draftRepository.get(session.ownerId)
       } catch {
-        if (!stale) message.error('项目草稿读取失败')
-      } finally {
-        if (!stale) setDraftHydrated(true)
+        if (!isCurrentCreateDraftSession(session)) return
+        message.error('项目草稿读取失败')
+        setDraftReadStatus('failed')
+        return
       }
+
+      if (!isCurrentCreateDraftSession(session)) return
+      const restoredBid = typeof draft?.values.bid === 'string' ? draft.values.bid : ''
+      if (restoredBid && !candidateProjectsRef.current.some(item => item.bid === restoredBid)) {
+        try {
+          await enqueueDraftMutation(() => (
+            isCurrentCreateDraftSession(session)
+              ? draftRepository.clear(session.ownerId)
+              : Promise.resolve()
+          ))
+        } catch {
+          if (isCurrentCreateDraftSession(session)) message.error('项目草稿清空失败')
+        }
+        if (!isCurrentCreateDraftSession(session)) return
+      } else if (draft) {
+        form.setFieldsValue(draft.values as ProjectInfoFormState)
+        const restoredType = typeof draft.values.type === 'string' ? draft.values.type : ''
+        previousTypeRef.current = restoredType
+        activeGroupsRef.current = draft.activeGroups
+        setActiveGroups(draft.activeGroups)
+      }
+
+      if (isCurrentCreateDraftSession(session)) setDraftReadStatus('ready')
     }
 
-    const hydrationPromise = hydrateDraft()
-    draftHydrationPromiseRef.current = hydrationPromise
+    void hydrateDraft()
 
     return () => {
-      stale = true
-      cancelDraftSave()
+      if (currentCreateDraftSessionRef.current?.generation === session.generation) {
+        invalidateCreateDraftSession()
+      }
     }
-  }, [cancelDraftSave, draftOwnerId, draftRepository, enqueueDraftMutation, form, mode, open, resetCreateForm])
+  }, [draftOwnerId, draftRepository, enqueueDraftMutation, form, invalidateCreateDraftSession, isCurrentCreateDraftSession, mode, open, resetCreateForm, setDraftReadStatus, startCreateDraftSession])
 
   const clearTypeFields = (type: string) => {
     const fieldNames = getProjectInfoFields(type).map(field => field.key)
@@ -396,51 +445,54 @@ export default function ProjectInfoModal({
     setAggregateWarnings(result.missingSources)
   }, [candidateProjects, existingProjects, firstLaunchSignature, form, mode, open, project, projectType, watchedBid])
 
-  const persistCreateDraft = useCallback(async () => {
-    if (mode !== 'create' || !draftOwnerId) return
+  const persistCreateDraft = useCallback(async (session: CreateDraftSession) => {
+    if (draftReadStatusRef.current !== 'ready' || !isCurrentCreateDraftSession(session)) return
 
     const values = form.getFieldsValue(true) as ProjectInfoFormState
-    if (isProjectCreationDraftEmpty(values)) {
-      await enqueueDraftMutation(() => draftRepository.clear(draftOwnerId))
-      return
-    }
-
-    await enqueueDraftMutation(() => draftRepository.save({
-      schemaVersion: PROJECT_CREATION_DRAFT_SCHEMA_VERSION,
-      ownerId: draftOwnerId,
-      values,
-      activeGroups: activeGroupsRef.current,
-      updatedAt: new Date().toISOString(),
-    }))
-  }, [draftOwnerId, draftRepository, enqueueDraftMutation, form, mode])
+    const activeGroupsSnapshot = activeGroupsRef.current
+    await enqueueDraftMutation(() => {
+      if (draftReadStatusRef.current !== 'ready' || !isCurrentCreateDraftSession(session)) {
+        return Promise.resolve()
+      }
+      if (isProjectCreationDraftEmpty(values)) return draftRepository.clear(session.ownerId)
+      return draftRepository.save({
+        schemaVersion: PROJECT_CREATION_DRAFT_SCHEMA_VERSION,
+        ownerId: session.ownerId,
+        values,
+        activeGroups: activeGroupsSnapshot,
+        updatedAt: new Date().toISOString(),
+      })
+    })
+  }, [draftRepository, enqueueDraftMutation, form, isCurrentCreateDraftSession])
 
   useEffect(() => {
-    if (!open || mode !== 'create' || !draftOwnerId || !draftHydrated) return
+    if (!open || mode !== 'create' || !draftOwnerId || draftReadStatus !== 'ready') return
 
-    let stale = false
+    const session = currentCreateDraftSessionRef.current
+    if (!session) return
     cancelDraftSave()
     draftSaveTimerRef.current = setTimeout(() => {
       draftSaveTimerRef.current = null
-      void persistCreateDraft().catch(() => {
-        if (!stale) message.error('项目草稿自动保存失败')
+      void persistCreateDraft(session).catch(() => {
+        if (isCurrentCreateDraftSession(session)) message.error('项目草稿自动保存失败')
       })
     }, PROJECT_CREATION_DRAFT_SAVE_DELAY_MS)
 
-    return () => {
-      stale = true
-      cancelDraftSave()
-    }
-  }, [activeGroups, cancelDraftSave, draftHydrated, draftOwnerId, mode, open, persistCreateDraft, watchedValues])
+    return cancelDraftSave
+  }, [activeGroups, cancelDraftSave, draftOwnerId, draftReadStatus, isCurrentCreateDraftSession, mode, open, persistCreateDraft, watchedValues])
 
   const requestClose = async () => {
     if (mode === 'create') {
-      cancelDraftSave()
+      const session = startCreateDraftSession(draftOwnerId || '')
+      if (draftReadStatusRef.current !== 'ready' || !draftOwnerId) {
+        if (isCurrentCreateDraftSession(session)) onCancel()
+        return
+      }
       try {
-        await draftHydrationPromiseRef.current
-        await persistCreateDraft()
-        if (componentMountedRef.current) onCancel()
+        await persistCreateDraft(session)
+        if (isCurrentCreateDraftSession(session)) onCancel()
       } catch {
-        message.error('项目草稿自动保存失败')
+        if (isCurrentCreateDraftSession(session)) message.error('项目草稿自动保存失败')
       }
       return
     }
@@ -459,6 +511,25 @@ export default function ProjectInfoModal({
     })
   }
 
+  const clearAndResetCreateDraft = useCallback(async () => {
+    if (mode !== 'create' || !draftOwnerId) return
+
+    const previousReadStatus = draftReadStatusRef.current
+    const session = startCreateDraftSession(draftOwnerId)
+    setDraftReadStatus('loading')
+    try {
+      await enqueueDraftMutation(() => draftRepository.clear(session.ownerId))
+    } catch (error) {
+      if (!isCurrentCreateDraftSession(session)) return
+      setDraftReadStatus(previousReadStatus)
+      message.error('项目草稿清空失败')
+      throw error
+    }
+    if (!isCurrentCreateDraftSession(session)) return
+    resetCreateForm()
+    setDraftReadStatus('ready')
+  }, [draftOwnerId, draftRepository, enqueueDraftMutation, isCurrentCreateDraftSession, mode, resetCreateForm, setDraftReadStatus, startCreateDraftSession])
+
   const requestResetCreateDraft = () => {
     if (mode !== 'create' || !draftOwnerId) return
 
@@ -468,18 +539,7 @@ export default function ProjectInfoModal({
       okText: '确认清空',
       cancelText: '继续填写',
       okButtonProps: { danger: true },
-      onOk: async () => {
-        cancelDraftSave()
-        try {
-          await enqueueDraftMutation(() => draftRepository.clear(draftOwnerId))
-        } catch (error) {
-          message.error('项目草稿清空失败')
-          throw error
-        }
-        if (!componentMountedRef.current) return
-        resetCreateForm()
-        setDraftHydrated(true)
-      },
+      onOk: clearAndResetCreateDraft,
     })
   }
 
@@ -542,13 +602,21 @@ export default function ProjectInfoModal({
         sourceValues: values.bid ? fetchByBid(values.bid) : {},
       })
       if (mode === 'create' && draftOwnerId) {
-        cancelDraftSave()
+        const session = startCreateDraftSession(draftOwnerId)
+        setDraftReadStatus('loading')
         try {
-          await enqueueDraftMutation(() => draftRepository.clear(draftOwnerId))
+          await enqueueDraftMutation(() => draftRepository.clear(session.ownerId))
         } catch {
-          message.error('项目草稿清空失败')
+          if (isCurrentCreateDraftSession(session)) {
+            setDraftReadStatus('ready')
+            message.error('项目草稿清空失败')
+          }
           return
         }
+        if (!isCurrentCreateDraftSession(session)) return
+        resetCreateForm()
+        setDraftReadStatus('ready')
+        return
       }
       if (componentMountedRef.current) {
         if (mode === 'create') resetCreateForm()
