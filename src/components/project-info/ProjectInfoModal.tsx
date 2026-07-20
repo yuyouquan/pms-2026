@@ -10,7 +10,7 @@ import {
   isTargetProjectInfoType,
   type ProjectInfoGroupKey,
 } from '@/constants/projectInfoSchema'
-import { PROJECT_TYPES } from '@/constants/projectTypes'
+import { PROJECT_TYPES, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { fetchByBid, type ExternalProjectEntry } from '@/data/externalProjectPool'
 import {
   deriveMachineProjectInfoValues,
@@ -31,6 +31,8 @@ type ProjectInfoFormState = ProjectInfoValues & {
   responsiblePersons?: string[]
   healthStatus?: string
   status?: string
+  currentNode?: string
+  cancelPauseDate?: string
   marketName?: string
   brand?: string
   productLine?: string
@@ -108,7 +110,16 @@ export default function ProjectInfoModal({
       // unmentioned fields before applying the next project's values.
       form.resetFields()
       const projectFields = getProjectInfoFields(project.type)
-      const infoValues = buildProjectInfoValues(project, projectFields.map(field => field.key))
+      const storedInfoValues = buildProjectInfoValues(project, projectFields.map(field => field.key))
+      let infoValues = storedInfoValues
+      if (project.type === PROJECT_TYPE_TOS_VERSION) {
+        const selectedIds = Array.isArray(storedInfoValues.firstLaunchProjects)
+          ? storedInfoValues.firstLaunchProjects.filter((item): item is string => typeof item === 'string')
+          : []
+        const aggregateResult = deriveTosProjectAggregates(selectedIds, existingProjects, project.name)
+        infoValues = { ...storedInfoValues, ...aggregateResult.values }
+        setAggregateWarnings(aggregateResult.missingSources)
+      }
       const initialValues: ProjectInfoFormState = {
         ...infoValues,
         projectName: project.name,
@@ -116,6 +127,8 @@ export default function ProjectInfoModal({
         responsiblePersons,
         healthStatus: typeof project.healthStatus === 'string' ? project.healthStatus : 'normal',
         status: typeof project.status === 'string' ? project.status : '',
+        currentNode: typeof project.currentNode === 'string' ? project.currentNode : '',
+        cancelPauseDate: typeof project.cancelPauseDate === 'string' ? project.cancelPauseDate : '',
         marketName: typeof project.marketName === 'string' ? project.marketName : '',
         brand: typeof project.brand === 'string' ? project.brand : '',
         productLine: typeof project.productLine === 'string' ? project.productLine : '',
@@ -129,7 +142,7 @@ export default function ProjectInfoModal({
     form.setFieldsValue({ responsiblePersons: [], healthStatus: 'normal', status: '待立项' })
     previousTypeRef.current = ''
     setActiveGroups([])
-  }, [form, mode, open, project, responsiblePersons])
+  }, [existingProjects, form, mode, open, project, responsiblePersons])
 
   const clearTypeFields = (type: string) => {
     const fieldNames = getProjectInfoFields(type).map(field => field.key)
@@ -159,8 +172,12 @@ export default function ProjectInfoModal({
     const entry = candidateProjects.find(item => item.bid === bid)
     if (!entry) return
     const inferredType = inferSoftwareProjectTypeFromName(entry.name)
-    const shouldInferTos = inferredType === 'tOS版本项目'
+    const shouldInferTos = inferredType === PROJECT_TYPE_TOS_VERSION
     const previousType = String(form.getFieldValue('type') || '')
+    const previousFirstLaunchProjectIds = previousType === PROJECT_TYPE_TOS_VERSION
+      && Array.isArray(form.getFieldValue('firstLaunchProjects'))
+      ? (form.getFieldValue('firstLaunchProjects') as unknown[]).filter((item): item is string => typeof item === 'string')
+      : []
     // Candidate-specific fields must never leak from the previously selected
     // external project. Source-derived values are reapplied immediately below.
     if (previousType) clearTypeFields(previousType)
@@ -170,6 +187,13 @@ export default function ProjectInfoModal({
       setActiveGroups(getProjectInfoGroups(inferredType).map(group => group.key))
     }
     applySourceValues(bid, shouldInferTos ? inferredType : undefined)
+    if (shouldInferTos && previousFirstLaunchProjectIds.length > 0) {
+      const aggregateResult = deriveTosProjectAggregates(previousFirstLaunchProjectIds, existingProjects, entry.name)
+      form.setFieldsValue(aggregateResult.values)
+      setAggregateWarnings(aggregateResult.missingSources)
+    } else {
+      setAggregateWarnings([])
+    }
   }
 
   const commitTypeChange = (nextType: string, previousType: string) => {
@@ -300,6 +324,10 @@ export default function ProjectInfoModal({
         <Form.Item label="健康状态" name="healthStatus" rules={[{ required: true, message: '请选择健康状态' }]}>
           <Select options={HEALTH_OPTIONS} />
         </Form.Item>
+        <Form.Item label="下一个节点" name="currentNode"><Input disabled placeholder="自动计算" /></Form.Item>
+        {['暂停', '已暂停', '已取消'].includes(String(watchedValues.status || '')) && (
+          <Form.Item label="取消暂停时间" name="cancelPauseDate"><Input disabled placeholder="-" /></Form.Item>
+        )}
       </div>
     </div>
   ) : null

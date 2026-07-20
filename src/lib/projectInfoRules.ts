@@ -120,7 +120,8 @@ export const deriveTosProjectAggregates = (
 
   selectedProjects.forEach(project => {
     const missing = [
-      ['芯片编码/芯片型号', getProjectString(project, 'chipCode') || getProjectString(project, 'chipModel')],
+      ['芯片编码', getProjectString(project, 'chipCode')],
+      ['芯片型号', getProjectString(project, 'chipModel')],
       ['品牌', String(project.brand || '')],
       ['产品线', String(project.productLine || '')],
       ['芯片平台', String(project.chipPlatform || '')],
@@ -141,7 +142,7 @@ export const deriveTosProjectAggregates = (
       firstLaunchProjectChips: uniqueText(selectedProjects.map(project => {
         const code = getProjectString(project, 'chipCode')
         const model = getProjectString(project, 'chipModel')
-        return code && model ? `${code}（${model}）` : code || model
+        return code && model ? `${code}（${model}）` : ''
       })),
       applicableBrands: uniqueText(selectedProjects.map(project => project.brand)),
       applicableProductLines: uniqueText(selectedProjects.map(project => project.productLine)),
