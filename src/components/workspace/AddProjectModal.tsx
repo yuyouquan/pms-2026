@@ -22,6 +22,7 @@ interface AddProjectModalProps {
 export default function AddProjectModal({ open, onCancel }: AddProjectModalProps) {
   const {
     projects,
+    currentLoginUser,
     addProject,
     setSelectedProject,
     setProjectMember,
@@ -91,6 +92,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
     <ProjectInfoModal
       mode="create"
       open={open}
+      draftOwnerId={currentLoginUser}
       candidateProjects={candidatePool}
       existingProjects={projects as unknown as ProjectInfoProject[]}
       responsiblePersons={[]}

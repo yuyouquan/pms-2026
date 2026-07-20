@@ -5,6 +5,8 @@ import ts from 'typescript'
 
 const root = process.cwd()
 const repositoryPath = path.join(root, 'src/lib/projectCreationDraft.ts')
+const modalPath = path.join(root, 'src/components/project-info/ProjectInfoModal.tsx')
+const addProjectModalPath = path.join(root, 'src/components/workspace/AddProjectModal.tsx')
 
 if (!fs.existsSync(repositoryPath)) {
   throw new Error('Missing src/lib/projectCreationDraft.ts')
@@ -97,4 +99,22 @@ const failingRepository = new LocalStorageProjectCreationDraftRepository(() => (
 await assert.rejects(failingRepository.save(draft), writeError)
 await assert.rejects(failingRepository.clear('张三'), writeError)
 
-console.log('Project creation draft repository verification passed.')
+const modalSource = fs.readFileSync(modalPath, 'utf8')
+const addProjectModalSource = fs.readFileSync(addProjectModalPath, 'utf8')
+
+assert.match(modalSource, /export const PROJECT_CREATION_DRAFT_SAVE_DELAY_MS = 300/)
+assert.match(modalSource, /mode !== 'create'[\s\S]*draftRepository\.get\(draftOwnerId\)/)
+assert.match(modalSource, /draftHydrated[\s\S]*persistCreateDraft/)
+assert.match(modalSource, /setTimeout\([\s\S]*PROJECT_CREATION_DRAFT_SAVE_DELAY_MS/)
+assert.match(modalSource, /await onSubmit\([\s\S]*draftRepository\.clear\(draftOwnerId\)[\s\S]*resetCreateForm\(\)/)
+assert.match(modalSource, /重新填写？/)
+assert.match(modalSource, /将清空当前已填写并自动保存的全部内容，此操作不可撤销。/)
+assert.match(modalSource, /确认清空/)
+assert.match(modalSource, /继续填写/)
+assert.match(modalSource, /项目草稿读取失败/)
+assert.match(modalSource, /项目草稿自动保存失败/)
+assert.match(modalSource, /项目草稿清空失败/)
+assert.match(addProjectModalSource, /currentLoginUser/)
+assert.match(addProjectModalSource, /draftOwnerId=\{currentLoginUser\}/)
+
+console.log('Project creation draft repository and UI integration verification passed.')

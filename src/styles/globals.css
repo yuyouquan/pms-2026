@@ -1533,6 +1533,27 @@ body {
   letter-spacing: -0.01em;
 }
 
+.pms-project-info-modal-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 12px;
+  padding-inline-end: 42px;
+}
+
+.pms-project-info-modal-title-row > span {
+  min-width: 0;
+}
+
+.pms-project-info-modal-title-row .ant-btn {
+  flex: none;
+  height: 28px;
+  padding-inline: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .pms-project-info-modal .ant-modal-close {
   top: 16px;
   inset-inline-end: 18px;
@@ -1713,6 +1734,15 @@ body {
 }
 
 @media (max-width: 768px) {
+  .pms-project-info-modal-title-row {
+    gap: 6px;
+    padding-inline-end: 34px;
+  }
+
+  .pms-project-info-modal-title-row .ant-btn {
+    padding-inline: 5px;
+  }
+
   .pms-project-info-form-grid {
     grid-template-columns: 1fr;
   }

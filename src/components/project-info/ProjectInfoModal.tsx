@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Collapse, Form, Input, Modal, Select, Space, Tag, message } from 'antd'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ReloadOutlined } from '@ant-design/icons'
+import { Alert, Button, Collapse, Form, Input, Modal, Select, Space, Tag, message } from 'antd'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import ProjectInfoFieldInput from '@/components/project-info/ProjectInfoFieldInput'
 import {
@@ -22,6 +23,12 @@ import {
   buildProjectInfoValues,
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
+import {
+  defaultProjectCreationDraftRepository,
+  isProjectCreationDraftEmpty,
+  PROJECT_CREATION_DRAFT_SCHEMA_VERSION,
+  type ProjectCreationDraftRepository,
+} from '@/lib/projectCreationDraft'
 import { inferSoftwareProjectTypeFromName } from '@/constants/projectTypes'
 import type { ProjectInfoValues } from '@/types/app'
 
@@ -57,8 +64,18 @@ interface ProjectInfoModalProps {
   project?: ProjectInfoProject
   existingProjects: ProjectInfoProject[]
   responsiblePersons: string[]
+  draftOwnerId?: string
+  draftRepository?: ProjectCreationDraftRepository
   onCancel: () => void
   onSubmit: (payload: ProjectInfoSubmitPayload) => Promise<void> | void
+}
+
+export const PROJECT_CREATION_DRAFT_SAVE_DELAY_MS = 300
+
+const CREATE_FORM_DEFAULTS: ProjectInfoFormState = {
+  responsiblePersons: [],
+  healthStatus: 'normal',
+  status: '待立项',
 }
 
 const HEALTH_OPTIONS = [
@@ -87,6 +104,8 @@ export default function ProjectInfoModal({
   project,
   existingProjects,
   responsiblePersons,
+  draftOwnerId,
+  draftRepository = defaultProjectCreationDraftRepository,
   onCancel,
   onSubmit,
 }: ProjectInfoModalProps) {
@@ -94,8 +113,15 @@ export default function ProjectInfoModal({
   const [submitting, setSubmitting] = useState(false)
   const [activeGroups, setActiveGroups] = useState<string[]>([])
   const [aggregateWarnings, setAggregateWarnings] = useState<string[]>([])
+  const [draftHydrated, setDraftHydrated] = useState(false)
   const previousTypeRef = useRef<string>('')
   const lastAppliedSourceRef = useRef<string>('')
+  const activeGroupsRef = useRef<string[]>([])
+  const candidateProjectsRef = useRef(candidateProjects)
+  const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const draftHydrationPromiseRef = useRef<Promise<void> | null>(null)
+  const draftMutationQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const componentMountedRef = useRef(true)
   const watchedValues = (Form.useWatch([], { form, preserve: true }) || {}) as ProjectInfoFormState
   const projectType = String(watchedValues.type || project?.type || '')
   const fields = useMemo(() => getProjectInfoFields(projectType), [projectType])
@@ -105,48 +131,140 @@ export default function ProjectInfoModal({
     .filter(item => item.type === '整机产品项目')
     .map(item => ({ label: item.name, value: item.id })), [existingProjects])
 
+  const cancelDraftSave = useCallback(() => {
+    if (draftSaveTimerRef.current === null) return
+    clearTimeout(draftSaveTimerRef.current)
+    draftSaveTimerRef.current = null
+  }, [])
+
   useEffect(() => {
-    if (!open) return
+    componentMountedRef.current = true
+    return () => {
+      componentMountedRef.current = false
+      cancelDraftSave()
+    }
+  }, [cancelDraftSave])
+
+  const enqueueDraftMutation = useCallback((operation: () => Promise<void>) => {
+    const result = draftMutationQueueRef.current
+      .catch(() => undefined)
+      .then(operation)
+    draftMutationQueueRef.current = result.catch(() => undefined)
+    return result
+  }, [])
+
+  const resetCreateForm = useCallback(() => {
+    form.resetFields()
+    form.setFieldsValue(CREATE_FORM_DEFAULTS)
+    setAggregateWarnings([])
+    activeGroupsRef.current = []
+    setActiveGroups([])
+    previousTypeRef.current = ''
+    lastAppliedSourceRef.current = ''
+  }, [form])
+
+  useEffect(() => {
+    candidateProjectsRef.current = candidateProjects
+  }, [candidateProjects])
+
+  useEffect(() => {
+    activeGroupsRef.current = activeGroups
+  }, [activeGroups])
+
+  useEffect(() => {
+    if (!open || mode !== 'edit' || !project) return
+    setDraftHydrated(false)
     lastAppliedSourceRef.current = ''
     setAggregateWarnings([])
-    if (mode === 'edit' && project) {
-      // The Form instance survives modal close/reopen. Clear the previous project's
-      // unmentioned fields before applying the next project's values.
-      form.resetFields()
-      const projectFields = getProjectInfoFields(project.type)
-      const storedInfoValues = buildProjectInfoValues(project, projectFields.map(field => field.key))
-      let infoValues = storedInfoValues
-      if (project.type === PROJECT_TYPE_TOS_VERSION) {
-        const selectedIds = Array.isArray(storedInfoValues.firstLaunchProjects)
-          ? storedInfoValues.firstLaunchProjects.filter((item): item is string => typeof item === 'string')
-          : []
-        const aggregateResult = deriveTosProjectAggregates(selectedIds, existingProjects, project.name)
-        infoValues = { ...storedInfoValues, ...aggregateResult.values }
-        setAggregateWarnings(aggregateResult.missingSources)
-      }
-      const initialValues: ProjectInfoFormState = {
-        ...infoValues,
-        projectName: project.name,
-        type: project.type,
-        responsiblePersons,
-        healthStatus: typeof project.healthStatus === 'string' ? project.healthStatus : 'normal',
-        status: typeof project.status === 'string' ? project.status : '',
-        currentNode: typeof project.currentNode === 'string' ? project.currentNode : '',
-        cancelPauseDate: typeof project.cancelPauseDate === 'string' ? project.cancelPauseDate : '',
-        marketName: typeof project.marketName === 'string' ? project.marketName : '',
-        brand: typeof project.brand === 'string' ? project.brand : '',
-        productLine: typeof project.productLine === 'string' ? project.productLine : '',
-      }
-      form.setFieldsValue(initialValues)
-      previousTypeRef.current = project.type
-      setActiveGroups(projectFields.length ? getProjectInfoGroups(project.type).map(group => group.key) : [])
+    // The Form instance survives modal close/reopen. Clear the previous project's
+    // unmentioned fields before applying the next project's values.
+    form.resetFields()
+    const projectFields = getProjectInfoFields(project.type)
+    const storedInfoValues = buildProjectInfoValues(project, projectFields.map(field => field.key))
+    let infoValues = storedInfoValues
+    if (project.type === PROJECT_TYPE_TOS_VERSION) {
+      const selectedIds = Array.isArray(storedInfoValues.firstLaunchProjects)
+        ? storedInfoValues.firstLaunchProjects.filter((item): item is string => typeof item === 'string')
+        : []
+      const aggregateResult = deriveTosProjectAggregates(selectedIds, existingProjects, project.name)
+      infoValues = { ...storedInfoValues, ...aggregateResult.values }
+      setAggregateWarnings(aggregateResult.missingSources)
+    }
+    const initialValues: ProjectInfoFormState = {
+      ...infoValues,
+      projectName: project.name,
+      type: project.type,
+      responsiblePersons,
+      healthStatus: typeof project.healthStatus === 'string' ? project.healthStatus : 'normal',
+      status: typeof project.status === 'string' ? project.status : '',
+      currentNode: typeof project.currentNode === 'string' ? project.currentNode : '',
+      cancelPauseDate: typeof project.cancelPauseDate === 'string' ? project.cancelPauseDate : '',
+      marketName: typeof project.marketName === 'string' ? project.marketName : '',
+      brand: typeof project.brand === 'string' ? project.brand : '',
+      productLine: typeof project.productLine === 'string' ? project.productLine : '',
+    }
+    form.setFieldsValue(initialValues)
+    previousTypeRef.current = project.type
+    const nextActiveGroups = projectFields.length
+      ? getProjectInfoGroups(project.type).map(group => group.key)
+      : []
+    activeGroupsRef.current = nextActiveGroups
+    setActiveGroups(nextActiveGroups)
+  }, [existingProjects, form, mode, open, project, responsiblePersons])
+
+  useEffect(() => {
+    if (!open || mode !== 'create') {
+      setDraftHydrated(false)
+      draftHydrationPromiseRef.current = null
+      cancelDraftSave()
       return
     }
-    form.resetFields()
-    form.setFieldsValue({ responsiblePersons: [], healthStatus: 'normal', status: '待立项' })
-    previousTypeRef.current = ''
-    setActiveGroups([])
-  }, [existingProjects, form, mode, open, project, responsiblePersons])
+
+    let stale = false
+    setDraftHydrated(false)
+    cancelDraftSave()
+    resetCreateForm()
+
+    const hydrateDraft = async () => {
+      if (!draftOwnerId) {
+        if (!stale) setDraftHydrated(true)
+        return
+      }
+
+      try {
+        const draft = await draftRepository.get(draftOwnerId)
+        if (stale) return
+
+        const restoredBid = typeof draft?.values.bid === 'string' ? draft.values.bid : ''
+        if (restoredBid && !candidateProjectsRef.current.some(item => item.bid === restoredBid)) {
+          try {
+            await enqueueDraftMutation(() => draftRepository.clear(draftOwnerId))
+          } catch {
+            if (!stale) message.error('项目草稿清空失败')
+          }
+          if (stale) return
+        } else if (draft) {
+          form.setFieldsValue(draft.values as ProjectInfoFormState)
+          const restoredType = typeof draft.values.type === 'string' ? draft.values.type : ''
+          previousTypeRef.current = restoredType
+          activeGroupsRef.current = draft.activeGroups
+          setActiveGroups(draft.activeGroups)
+        }
+      } catch {
+        if (!stale) message.error('项目草稿读取失败')
+      } finally {
+        if (!stale) setDraftHydrated(true)
+      }
+    }
+
+    const hydrationPromise = hydrateDraft()
+    draftHydrationPromiseRef.current = hydrationPromise
+
+    return () => {
+      stale = true
+      cancelDraftSave()
+    }
+  }, [cancelDraftSave, draftOwnerId, draftRepository, enqueueDraftMutation, form, mode, open, resetCreateForm])
 
   const clearTypeFields = (type: string) => {
     const fieldNames = getProjectInfoFields(type).map(field => field.key)
@@ -278,7 +396,55 @@ export default function ProjectInfoModal({
     setAggregateWarnings(result.missingSources)
   }, [candidateProjects, existingProjects, firstLaunchSignature, form, mode, open, project, projectType, watchedBid])
 
-  const requestClose = () => {
+  const persistCreateDraft = useCallback(async () => {
+    if (mode !== 'create' || !draftOwnerId) return
+
+    const values = form.getFieldsValue(true) as ProjectInfoFormState
+    if (isProjectCreationDraftEmpty(values)) {
+      await enqueueDraftMutation(() => draftRepository.clear(draftOwnerId))
+      return
+    }
+
+    await enqueueDraftMutation(() => draftRepository.save({
+      schemaVersion: PROJECT_CREATION_DRAFT_SCHEMA_VERSION,
+      ownerId: draftOwnerId,
+      values,
+      activeGroups: activeGroupsRef.current,
+      updatedAt: new Date().toISOString(),
+    }))
+  }, [draftOwnerId, draftRepository, enqueueDraftMutation, form, mode])
+
+  useEffect(() => {
+    if (!open || mode !== 'create' || !draftOwnerId || !draftHydrated) return
+
+    let stale = false
+    cancelDraftSave()
+    draftSaveTimerRef.current = setTimeout(() => {
+      draftSaveTimerRef.current = null
+      void persistCreateDraft().catch(() => {
+        if (!stale) message.error('项目草稿自动保存失败')
+      })
+    }, PROJECT_CREATION_DRAFT_SAVE_DELAY_MS)
+
+    return () => {
+      stale = true
+      cancelDraftSave()
+    }
+  }, [activeGroups, cancelDraftSave, draftHydrated, draftOwnerId, mode, open, persistCreateDraft, watchedValues])
+
+  const requestClose = async () => {
+    if (mode === 'create') {
+      cancelDraftSave()
+      try {
+        await draftHydrationPromiseRef.current
+        await persistCreateDraft()
+        if (componentMountedRef.current) onCancel()
+      } catch {
+        message.error('项目草稿自动保存失败')
+      }
+      return
+    }
+
     if (!form.isFieldsTouched()) {
       onCancel()
       return
@@ -290,6 +456,30 @@ export default function ProjectInfoModal({
       cancelText: '继续填写',
       okButtonProps: { danger: true },
       onOk: onCancel,
+    })
+  }
+
+  const requestResetCreateDraft = () => {
+    if (mode !== 'create' || !draftOwnerId) return
+
+    Modal.confirm({
+      title: '重新填写？',
+      content: '将清空当前已填写并自动保存的全部内容，此操作不可撤销。',
+      okText: '确认清空',
+      cancelText: '继续填写',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        cancelDraftSave()
+        try {
+          await enqueueDraftMutation(() => draftRepository.clear(draftOwnerId))
+        } catch (error) {
+          message.error('项目草稿清空失败')
+          throw error
+        }
+        if (!componentMountedRef.current) return
+        resetCreateForm()
+        setDraftHydrated(true)
+      },
     })
   }
 
@@ -351,15 +541,34 @@ export default function ProjectInfoModal({
         sourceEntry,
         sourceValues: values.bid ? fetchByBid(values.bid) : {},
       })
-      form.resetFields()
+      if (mode === 'create' && draftOwnerId) {
+        cancelDraftSave()
+        try {
+          await enqueueDraftMutation(() => draftRepository.clear(draftOwnerId))
+        } catch {
+          message.error('项目草稿清空失败')
+          return
+        }
+      }
+      if (componentMountedRef.current) {
+        if (mode === 'create') resetCreateForm()
+        else form.resetFields()
+      }
     } finally {
-      setSubmitting(false)
+      if (componentMountedRef.current) setSubmitting(false)
     }
   }
 
   return (
     <Modal
-      title={mode === 'create' ? '新增项目' : '编辑项目信息'}
+      title={mode === 'create' ? (
+        <div className="pms-project-info-modal-title-row">
+          <span>新增项目</span>
+          <Button type="text" danger size="small" icon={<ReloadOutlined />} onClick={requestResetCreateDraft}>
+            重新填写
+          </Button>
+        </div>
+      ) : '编辑项目信息'}
       open={open}
       width={1240}
       onCancel={requestClose}
@@ -416,7 +625,11 @@ export default function ProjectInfoModal({
           <Collapse
             className="pms-project-info-form-groups"
             activeKey={activeGroups}
-            onChange={keys => setActiveGroups(keys as string[])}
+            onChange={(keys) => {
+              const nextActiveGroups = keys as string[]
+              activeGroupsRef.current = nextActiveGroups
+              setActiveGroups(nextActiveGroups)
+            }}
             items={groups.map(group => {
               const groupFields = editableFields.filter(field => field.group === group.key)
               return {
