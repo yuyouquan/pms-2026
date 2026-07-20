@@ -2558,7 +2558,7 @@ export default function ProjectSpaceContainer() {
     const wideWholeMachineBasicInfoFields = WHOLE_MACHINE_BASIC_INFO_FIELDS.filter(field => ['projectDescription', 'jiraProjects'].includes(field.key))
     const compactWholeMachineBasicInfoFields = WHOLE_MACHINE_BASIC_INFO_FIELDS.filter(field => !['projectDescription', 'jiraProjects'].includes(field.key))
     const anchorSections = [
-      { id: 'section-header', label: isTargetProject ? '核心板块' : '项目概览', icon: <ProjectOutlined /> },
+      { id: 'section-header', label: isTargetProject ? '项目名称' : '项目概览', icon: <ProjectOutlined /> },
       { id: 'section-basic', label: isTargetProject ? '项目信息' : '基本信息', icon: <SettingOutlined /> },
       ...(isWholeMachine && currentProjectTransferApps.length > 0 ? [{ id: 'section-transfer', label: '转维信息', icon: <DeploymentUnitOutlined /> }] : []),
       { id: 'section-plan', label: isWholeMachine ? '计划与配置' : '计划信息', icon: <CalendarOutlined /> },
