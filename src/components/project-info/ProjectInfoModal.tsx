@@ -5,6 +5,7 @@ import { Alert, Collapse, Form, Input, Modal, Select, Space, Tag, message } from
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import ProjectInfoFieldInput from '@/components/project-info/ProjectInfoFieldInput'
 import {
+  getEffectiveProjectInfoFields,
   getProjectInfoFields,
   getProjectInfoGroups,
   isTargetProjectInfoType,
@@ -94,6 +95,7 @@ export default function ProjectInfoModal({
   const [activeGroups, setActiveGroups] = useState<string[]>([])
   const [aggregateWarnings, setAggregateWarnings] = useState<string[]>([])
   const previousTypeRef = useRef<string>('')
+  const lastAppliedSourceRef = useRef<string>('')
   const watchedValues = (Form.useWatch([], form) || {}) as ProjectInfoFormState
   const projectType = String(watchedValues.type || project?.type || '')
   const fields = useMemo(() => getProjectInfoFields(projectType), [projectType])
@@ -104,6 +106,7 @@ export default function ProjectInfoModal({
 
   useEffect(() => {
     if (!open) return
+    lastAppliedSourceRef.current = ''
     setAggregateWarnings([])
     if (mode === 'edit' && project) {
       // The Form instance survives modal close/reopen. Clear the previous project's
@@ -240,6 +243,40 @@ export default function ProjectInfoModal({
     setAggregateWarnings(result.missingSources)
   }
 
+  const watchedBid = String(watchedValues.bid || '')
+  const firstLaunchSignature = Array.isArray(watchedValues.firstLaunchProjects)
+    ? watchedValues.firstLaunchProjects.join('|')
+    : ''
+
+  useEffect(() => {
+    if (!open || mode !== 'create' || !watchedBid) return
+    const sourceKey = `${watchedBid}::${projectType}`
+    if (lastAppliedSourceRef.current === sourceKey) return
+    const previousBid = lastAppliedSourceRef.current.split('::')[0]
+    const selectedFirstLaunchIds = Array.isArray(form.getFieldValue('firstLaunchProjects'))
+      ? (form.getFieldValue('firstLaunchProjects') as unknown[]).filter((item): item is string => typeof item === 'string')
+      : []
+    if (previousBid && previousBid !== watchedBid && projectType) clearTypeFields(projectType)
+    applySourceValues(watchedBid, projectType)
+    if (projectType === PROJECT_TYPE_TOS_VERSION && selectedFirstLaunchIds.length > 0) {
+      const entry = candidateProjects.find(item => item.bid === watchedBid)
+      const aggregateResult = deriveTosProjectAggregates(selectedFirstLaunchIds, existingProjects, entry?.name || '')
+      form.setFieldsValue(aggregateResult.values)
+      setAggregateWarnings(aggregateResult.missingSources)
+    }
+    lastAppliedSourceRef.current = sourceKey
+  }, [candidateProjects, existingProjects, form, mode, open, projectType, watchedBid])
+
+  useEffect(() => {
+    if (!open || projectType !== PROJECT_TYPE_TOS_VERSION) return
+    const selectedIds = firstLaunchSignature.split('|').filter(Boolean)
+    const selectedEntry = candidateProjects.find(item => item.bid === watchedBid)
+    const projectName = mode === 'edit' ? project?.name || '' : selectedEntry?.name || ''
+    const result = deriveTosProjectAggregates(selectedIds, existingProjects, projectName)
+    form.setFieldsValue(result.values)
+    setAggregateWarnings(result.missingSources)
+  }, [candidateProjects, existingProjects, firstLaunchSignature, form, mode, open, project, projectType, watchedBid])
+
   const requestClose = () => {
     if (!form.isFieldsTouched()) {
       onCancel()
@@ -268,7 +305,8 @@ export default function ProjectInfoModal({
       return
     }
 
-    const infoValues = fields.reduce<ProjectInfoValues>((result, field) => {
+    const effectiveFields = getEffectiveProjectInfoFields(projectType, values)
+    const infoValues = effectiveFields.reduce<ProjectInfoValues>((result, field) => {
       const value = values[field.key]
       if (value !== undefined) result[field.key] = value
       return result
@@ -321,7 +359,7 @@ export default function ProjectInfoModal({
           </>
         )}
         <Form.Item label="项目状态" name="status"><Input disabled /></Form.Item>
-        <Form.Item label="健康状态" name="healthStatus" rules={[{ required: true, message: '请选择健康状态' }]}>
+        <Form.Item label="健康状态" name="healthStatus" initialValue="normal" rules={[{ required: true, message: '请选择健康状态' }]}>
           <Select options={HEALTH_OPTIONS} />
         </Form.Item>
         <Form.Item label="下一个节点" name="currentNode"><Input disabled placeholder="自动计算" /></Form.Item>
@@ -346,7 +384,17 @@ export default function ProjectInfoModal({
       className="pms-modal pms-project-info-modal"
       styles={{ body: { maxHeight: '72vh', overflowY: 'auto', paddingRight: 8 } }}
     >
-      <Form form={form} layout="vertical" preserve={false}>
+      <Form
+        form={form}
+        layout="vertical"
+        onValuesChange={(changedValues) => {
+          if (typeof changedValues.bid === 'string') handleCandidateChange(changedValues.bid)
+          if (typeof changedValues.type === 'string') handleTypeChange(changedValues.type)
+          if (changedValues.firstLaunchProjects !== undefined) {
+            handleInfoFieldChange('firstLaunchProjects', changedValues.firstLaunchProjects)
+          }
+        }}
+      >
         <div className="pms-project-info-form-grid pms-project-info-universal">
           {mode === 'create' ? (
             <Form.Item label="项目名" name="bid" rules={[{ required: true, message: '请选择项目名' }]}>
@@ -355,14 +403,13 @@ export default function ProjectInfoModal({
                 optionFilterProp="label"
                 placeholder="搜索并选择项目"
                 options={candidateProjects.map(item => ({ label: item.name, value: item.bid }))}
-                onChange={handleCandidateChange}
               />
             </Form.Item>
           ) : (
             <Form.Item label="项目名" name="projectName"><Input disabled /></Form.Item>
           )}
           <Form.Item label="项目类型" name="type" rules={[{ required: true, message: '请选择项目类型' }]}>
-            <Select disabled={mode === 'edit'} options={PROJECT_TYPES.map(type => ({ label: type, value: type }))} onChange={handleTypeChange} />
+            <Select disabled={mode === 'edit'} options={PROJECT_TYPES.map(type => ({ label: type, value: type }))} />
           </Form.Item>
           <Form.Item label="项目责任人" name="responsiblePersons" extra="负责项目可见范围，并作为权限中心的系统管理员" rules={[{ required: true, type: 'array', min: 1, message: '请选择项目责任人' }]}>
             <Select mode="multiple" showSearch optionFilterProp="label" options={ALL_USERS.map(user => ({ label: user, value: user }))} />
@@ -401,7 +448,6 @@ export default function ProjectInfoModal({
                           <ProjectInfoFieldInput
                             field={field}
                             firstLaunchProjectOptions={firstLaunchOptions}
-                            onChange={value => handleInfoFieldChange(field.key, value)}
                           />
                         </Form.Item>
                       )
