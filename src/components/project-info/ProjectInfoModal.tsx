@@ -317,7 +317,10 @@ export default function ProjectInfoModal({
     const editableErrors = validateProjectInfoValues(
       projectType,
       infoValues,
-      { tosAggregateMissingSources: aggregateWarnings },
+      {
+        tosAggregateMissingSources: aggregateWarnings,
+        validateRequiredOnCreate: mode === 'create',
+      },
     ).filter(error => editableFieldKeys.has(error.fieldKey))
     if (editableErrors.length) {
       const first = editableErrors[0]
@@ -431,7 +434,9 @@ export default function ProjectInfoModal({
                           name={field.key}
                           extra={field.conditionalHint}
                           className={field.inputType === 'jira' ? 'pms-project-info-form-span' : undefined}
-                          rules={field.requiredOnCreate ? [{ required: true, message: `请填写${field.label}` }] : undefined}
+                          rules={mode === 'create' && field.requiredOnCreate
+                            ? [{ required: true, message: `请填写${field.label}` }]
+                            : undefined}
                         >
                           <ProjectInfoFieldInput
                             field={field}

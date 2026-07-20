@@ -164,16 +164,21 @@ const isEmptyValue = (value: unknown) => (
 export const validateProjectInfoValues = (
   type: string,
   values: ProjectInfoValues,
-  options?: { tosAggregateMissingSources?: string[] },
+  options?: {
+    tosAggregateMissingSources?: string[]
+    validateRequiredOnCreate?: boolean
+  },
 ): ProjectInfoValidationError[] => {
   const effectiveKeys = new Set(getEffectiveProjectInfoFields(type, values).map(field => field.key))
-  const errors = getProjectInfoFields(type)
-    .filter(field => field.requiredOnCreate && effectiveKeys.has(field.key) && isEmptyValue(values[field.key]))
-    .map(field => ({
-      fieldKey: field.key,
-      groupKey: field.group,
-      message: `请填写${field.label}`,
-    }))
+  const errors = options?.validateRequiredOnCreate === false
+    ? []
+    : getProjectInfoFields(type)
+      .filter(field => field.requiredOnCreate && effectiveKeys.has(field.key) && isEmptyValue(values[field.key]))
+      .map(field => ({
+        fieldKey: field.key,
+        groupKey: field.group,
+        message: `请填写${field.label}`,
+      }))
 
   if (type === PROJECT_TYPE_TOS_VERSION && options?.tosAggregateMissingSources?.length) {
     errors.push({
