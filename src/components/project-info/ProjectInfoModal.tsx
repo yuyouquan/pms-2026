@@ -70,6 +70,7 @@ interface ProjectInfoModalProps {
   draftRepository?: ProjectCreationDraftRepository
   onCancel: () => void
   onSubmit: (payload: ProjectInfoSubmitPayload) => Promise<void> | void
+  onAfterCreate?: () => void
 }
 
 export const PROJECT_CREATION_DRAFT_SAVE_DELAY_MS = 300
@@ -112,6 +113,7 @@ export default function ProjectInfoModal({
   draftRepository = defaultProjectCreationDraftRepository,
   onCancel,
   onSubmit,
+  onAfterCreate,
 }: ProjectInfoModalProps) {
   const [form] = Form.useForm<ProjectInfoFormState>()
   const [submitting, setSubmitting] = useState(false)
@@ -150,6 +152,11 @@ export default function ProjectInfoModal({
   const isCreateDraftSubmitting = mode === 'create' && open && submitting
   const isDraftInteractionLocked = isDraftHydrating || isCreateDraftSubmitting
   const isCreateDraftInteractionBlocked = isDraftInteractionLocked || isCreateDraftReadFailed
+  const draftInteractionDescription = isDraftHydrating
+    ? '正在恢复项目草稿'
+    : isCreateDraftSubmitting
+      ? '正在创建项目'
+      : undefined
 
   const cancelDraftSave = useCallback(() => {
     if (draftSaveTimerRef.current === null) return
@@ -654,6 +661,7 @@ export default function ProjectInfoModal({
           setDraftReadStatus('ready')
         }
         onCancel()
+        onAfterCreate?.()
         return
       }
       if (componentMountedRef.current) {
@@ -701,7 +709,7 @@ export default function ProjectInfoModal({
           style={{ marginBottom: 16 }}
         />
       )}
-      <Spin spinning={isDraftInteractionLocked} description="正在恢复项目草稿">
+      <Spin spinning={isDraftInteractionLocked} description={draftInteractionDescription}>
       <Form
         form={form}
         layout="vertical"

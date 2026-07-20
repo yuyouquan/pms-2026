@@ -148,6 +148,7 @@ const retryHydrationBlock = extractBlock(modalSource, 'const retryCreateDraftHyd
 const handleSubmitBlock = extractBlock(modalSource, 'const handleSubmit = async () =>')
 const requestResetBlock = extractBlock(modalSource, 'const requestResetCreateDraft = () =>')
 const addProjectSubmitBlock = extractBlock(addProjectModalSource, 'const handleSubmit = async')
+const addProjectAfterCreateBlock = extractBlock(addProjectModalSource, 'const handleAfterCreate = () =>')
 const startSessionBlock = extractBlock(modalSource, 'const startCreateDraftSession = useCallback(')
 const sessionGuardBlock = extractBlock(modalSource, 'const isCurrentCreateDraftSession = useCallback(')
 const readFailureBlock = extractBlock(hydrateDraftBlock, 'catch')
@@ -221,6 +222,7 @@ assertOrdered(handleSubmitBlock, [
   'isCurrentCreateDraftSession(submitSession)',
   'resetCreateForm()',
   'onCancel()',
+  'onAfterCreate?.()',
 ], 'submit must capture its session before submit and gate post-clear UI changes')
 const postSubmitBlock = handleSubmitBlock.slice(handleSubmitBlock.indexOf('await onSubmit('))
 assert.doesNotMatch(postSubmitBlock, /startCreateDraftSession/)
@@ -228,12 +230,23 @@ assert.match(postSubmitBlock, /catch\s*{\s*message\.error\('项目草稿清空�
 assert.match(postSubmitBlock, /if \(!isCurrentCreateDraftSession\(submitSession\)\) return[\s\S]*if \(!draftClearFailed\) \{[\s\S]*resetCreateForm\(\)[\s\S]*onCancel\(\)/)
 assert.match(handleSubmitBlock, /finally \{[\s\S]*setSubmitting\(false\)/)
 assert.doesNotMatch(addProjectSubmitBlock, /onCancel\(\)/)
+assert.doesNotMatch(addProjectSubmitBlock, /setActiveModule|setProjectSpaceModule|项目创建成功/)
+assertOrdered(addProjectAfterCreateBlock, [
+  "setProjectSpaceModule('basic')",
+  "setActiveModule('projectSpace')",
+  "message.success('项目创建成功')",
+], 'post-create callback must own navigation and success feedback')
+assert.match(addProjectModalSource, /onAfterCreate={handleAfterCreate}/)
+assert.match(modalSource, /onAfterCreate\?: \(\) => void/)
 assert.match(modalSource, /closable={!isDraftInteractionLocked}/)
 assert.match(modalSource, /mask={{ closable: !isDraftInteractionLocked }}/)
 assert.match(modalSource, /keyboard={!isDraftInteractionLocked}/)
 assert.match(modalSource, /cancelButtonProps={{ disabled: isDraftInteractionLocked }}/)
 assert.match(modalSource, /okButtonProps={{ disabled: isCreateDraftInteractionBlocked }}/)
-assert.match(modalSource, /<Spin spinning={isDraftInteractionLocked} description="正在恢复项目草稿">/)
+assert.match(modalSource, /const draftInteractionDescription = isDraftHydrating/)
+assert.match(modalSource, /正在恢复项目草稿/)
+assert.match(modalSource, /正在创建项目/)
+assert.match(modalSource, /<Spin spinning={isDraftInteractionLocked} description={draftInteractionDescription}>/)
 assert.match(modalSource, /<Form[\s\S]*disabled={isCreateDraftInteractionBlocked}/)
 assert.match(modalSource, /disabled={isDraftInteractionLocked}[\s\S]*重新填写/)
 assert.match(requestCloseBlock, /if \(submitting\) return/)

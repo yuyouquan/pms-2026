@@ -82,6 +82,9 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
     setSelectedProject(newProject as unknown as Parameters<typeof setSelectedProject>[0])
     setSelectedMarketTab('OP')
     if (projectType === PROJECT_TYPE_TOS_VERSION) setSelectedTosTypeTab('Full')
+  }
+
+  const handleAfterCreate = () => {
     setProjectSpaceModule('basic')
     setActiveModule('projectSpace')
     message.success('项目创建成功')
@@ -97,6 +100,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       responsiblePersons={[]}
       onCancel={onCancel}
       onSubmit={handleSubmit}
+      onAfterCreate={handleAfterCreate}
     />
   )
 }
