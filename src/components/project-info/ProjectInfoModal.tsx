@@ -96,7 +96,7 @@ export default function ProjectInfoModal({
   const [aggregateWarnings, setAggregateWarnings] = useState<string[]>([])
   const previousTypeRef = useRef<string>('')
   const lastAppliedSourceRef = useRef<string>('')
-  const watchedValues = (Form.useWatch([], form) || {}) as ProjectInfoFormState
+  const watchedValues = (Form.useWatch([], { form, preserve: true }) || {}) as ProjectInfoFormState
   const projectType = String(watchedValues.type || project?.type || '')
   const fields = useMemo(() => getProjectInfoFields(projectType), [projectType])
   const editableFields = useMemo(() => fields.filter(field => !field.readOnly), [fields])
