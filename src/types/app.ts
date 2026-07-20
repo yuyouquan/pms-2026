@@ -1,6 +1,8 @@
 // Common prop types for extracted components
 // Derived from the mock data structures in src/app/page.tsx
 
+import type { JiraProjectConfig } from '@/lib/jiraProject'
+
 /** Project type literals used in initialProjects */
 export type ProjectCategory = '整机产品项目' | 'tOS版本项目' | '独立软件产品项目' | '技术项目' | '能力建设项目';
 
@@ -15,6 +17,9 @@ export interface VersionFiveRoles {
   版本测试代表: string;
   版本质量代表: string;
 }
+
+export type ProjectInfoValue = string | boolean | null | string[] | JiraProjectConfig[] | Record<string, string>
+export type ProjectInfoValues = Record<string, ProjectInfoValue>
 
 /** Project record - matches initialProjects structure in page.tsx */
 export interface ProjectItem {
@@ -78,6 +83,7 @@ export interface ProjectItem {
   // 技术项目 / 能力建设项目 specific
   projectDescription?: string;
   teamMembers?: string;
+  fieldValues?: ProjectInfoValues;
 }
 
 /** Todo item - matches initialTodos structure */
