@@ -48,7 +48,11 @@ export default function FieldVisibilityPicker({
   )
 
   return (
-    <span className="pms-project-info-picker-trigger" onClick={event => event.stopPropagation()}>
+    <span
+      className="pms-project-info-picker-trigger"
+      onClick={event => event.stopPropagation()}
+      onKeyDown={event => event.stopPropagation()}
+    >
       {disabled ? <Tooltip title="无基础信息查看权限">{button}</Tooltip> : button}
       <Drawer
         rootClassName="pms-project-info-field-drawer"
@@ -98,7 +102,7 @@ export default function FieldVisibilityPicker({
                   </span>
                   {field.conditionalHint && (
                     <span className="pms-project-info-picker-hint">
-                      满足条件时显示 · {field.conditionalHint}
+                      满足条件时显示 · {field.conditionalHint.replace(/时显示$/, '')}
                     </span>
                   )}
                 </span>
