@@ -133,6 +133,9 @@ import { ALL_USERS } from '@/components/permission/PermissionModule'
 import { TransferApply, TransferDetail, TransferEntry, TransferReview, TransferSqaReview } from '@/components/transfer/TransferModule'
 import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
 import VersionTrainPlan, { INITIAL_VERSION_TRAIN_DATA } from '@/components/plans/VersionTrainPlan'
+import ProjectInfoModal, { type ProjectInfoSubmitPayload } from '@/components/project-info/ProjectInfoModal'
+import TargetProjectInformationView from '@/components/project-info/TargetProjectInformationView'
+import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import { PROJECT_STATUS_CONFIG } from '@/data/projects'
 import {
   TECH_DOMAIN_OPTIONS,
@@ -325,6 +328,7 @@ export default function ProjectSpaceContainer() {
     marketConfigsByProjectId, setMarketConfigForProject,
     selectedTosTypeTab, setSelectedTosTypeTab,
     tosTypeConfigsByProjectId, setTosTypeConfigForProject,
+    projectMemberMap, setProjectMember, updateProject,
   } = proj
 
   const {
@@ -387,6 +391,7 @@ export default function ProjectSpaceContainer() {
   // RBAC check tied to the currently logged-in user. Global "管理组" bypasses.
   const canDo = useHasPermission(currentLoginUser, selectedProject?.id)
   const canEditBasicInfo = canDo('basicInfo:编辑')
+  const canViewBasicInfo = canDo('basicInfo:查看')
   const canEditLevel1Plan = canDo('plan:一级计划-编辑')
   const canEditLevel2Plan = canDo('plan:二级计划-编辑')
   const canEditCurrentPlan = projectPlanLevel === 'level2' ? canEditLevel2Plan : canEditLevel1Plan
@@ -402,6 +407,7 @@ export default function ProjectSpaceContainer() {
   const [marketDraftRows, setMarketDraftRows] = useState<MarketConfigRow[]>([])
   const [showTosTypeEditor, setShowTosTypeEditor] = useState(false)
   const [tosTypeDraftRows, setTosTypeDraftRows] = useState<TosTypeConfigRow[]>([])
+  const [showProjectInfoEditor, setShowProjectInfoEditor] = useState(false)
 
   // ═══════ Derived ═══════
   const isWholeMachineProject = selectedProject?.type === '整机产品项目'
@@ -1871,6 +1877,29 @@ export default function ProjectSpaceContainer() {
     setSelectedProject(updated); setProjects(prev => prev.map(p => p.id === updated.id ? updated : p) as typeof prev); setBasicInfoEditMode(false); message.success('基本信息已保存')
   }
 
+  const saveTargetProjectInfo = async (payload: ProjectInfoSubmitPayload) => {
+    if (!selectedProject || !canEditBasicInfo) return
+    const updatedBase = {
+      ...selectedProject,
+      leader: payload.responsiblePersons[0] || selectedProject.leader,
+      healthStatus: payload.healthStatus,
+      updatedAt: '刚刚',
+    }
+    const updated = mergeProjectInfoValues(
+      updatedBase as unknown as ProjectInfoProject,
+      payload.infoValues,
+    )
+    updateProject(selectedProject.id, () => updated as unknown as typeof selectedProject)
+    setProjectMember(selectedProject.id, payload.responsiblePersons)
+    setRoles(previous => previous.map(role => (
+      role.name === '系统管理员'
+        ? { ...role, members: [...payload.responsiblePersons] }
+        : role
+    )))
+    setShowProjectInfoEditor(false)
+    message.success('项目信息已保存')
+  }
+
   // Export functions
   const handleExportVerticalPlan = (scope: 'current' | 'all') => {
     const cols = scope === 'current' ? TABLE_COLUMNS.filter(c => visibleColumns.includes(c.key)) : TABLE_COLUMNS
@@ -2410,6 +2439,7 @@ export default function ProjectSpaceContainer() {
     const p = selectedProject
     if (!p) return null
     const isWholeMachine = p.type === '整机产品项目'
+    const isTargetProject = isWholeMachine || p.type === PROJECT_TYPE_TOS_VERSION
     const isSoftware = isSoftwareProjectType(p.type)
     const isTech = p.type === '技术项目'
     const isCapability = p.type === '能力建设项目'
@@ -2593,8 +2623,8 @@ export default function ProjectSpaceContainer() {
     const wideWholeMachineBasicInfoFields = WHOLE_MACHINE_BASIC_INFO_FIELDS.filter(field => ['projectDescription', 'jiraProjects'].includes(field.key))
     const compactWholeMachineBasicInfoFields = WHOLE_MACHINE_BASIC_INFO_FIELDS.filter(field => !['projectDescription', 'jiraProjects'].includes(field.key))
     const anchorSections = [
-      { id: 'section-header', label: '项目概览', icon: <ProjectOutlined /> },
-      { id: 'section-basic', label: '基本信息', icon: <SettingOutlined /> },
+      { id: 'section-header', label: isTargetProject ? '核心板块' : '项目概览', icon: <ProjectOutlined /> },
+      { id: 'section-basic', label: isTargetProject ? '项目信息' : '基本信息', icon: <SettingOutlined /> },
       ...(isWholeMachine && currentProjectTransferApps.length > 0 ? [{ id: 'section-transfer', label: '转维信息', icon: <DeploymentUnitOutlined /> }] : []),
       { id: 'section-plan', label: isWholeMachine ? '计划与配置' : '计划信息', icon: <CalendarOutlined /> },
       ...(!isWholeMachine && (isSoftware || isTech) ? [{ id: 'section-config', label: '配置信息', icon: <SettingOutlined /> }] : []),
@@ -2628,6 +2658,17 @@ export default function ProjectSpaceContainer() {
             </div>
           </div>
         </div>
+        {isTargetProject ? (
+          <TargetProjectInformationView
+            project={p as unknown as ProjectInfoProject}
+            currentUser={currentLoginUser}
+            canEdit={canEditBasicInfo}
+            canConfigure={canViewBasicInfo}
+            onEdit={() => setShowProjectInfoEditor(true)}
+            onApplyTransfer={isWholeMachine ? () => transfer.setTransferView('apply') : undefined}
+          />
+        ) : (
+          <>
         {/* Header card */}
         <Card id="section-header" style={{ marginBottom: 20, borderRadius: 8, overflow: 'hidden' }} styles={{ header: { background: 'linear-gradient(135deg, #312e81 0%, #4338ca 100%)', borderBottom: 'none', padding: '16px 24px' }, body: { padding: 0 } }}
           title={<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, rgba(129,140,248,0.3) 0%, rgba(99,102,241,0.4) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 16px rgba(99,102,241,0.3)' }}><ProjectOutlined style={{ color: '#fff', fontSize: 18 }} /></div><div><div style={{ color: '#fff', fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}>{headerExtra}</div></div></div>}
@@ -2753,6 +2794,8 @@ export default function ProjectSpaceContainer() {
             </div>
           )}
         </Card>
+          </>
+        )}
         {/* Transfer info */}
         {isWholeMachine && currentProjectTransferApps.length > 0 && (
           <Card id="section-transfer" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<DeploymentUnitOutlined style={{ color: '#6366f1' }} />, '转维信息', '#6366f1')}>
@@ -2850,6 +2893,18 @@ export default function ProjectSpaceContainer() {
               </Card>
             )}
           </>
+        )}
+        {isTargetProject && (
+          <ProjectInfoModal
+            mode="edit"
+            open={showProjectInfoEditor}
+            candidateProjects={[]}
+            project={p as unknown as ProjectInfoProject}
+            existingProjects={projects as unknown as ProjectInfoProject[]}
+            responsiblePersons={projectMemberMap[p.id] || (p.leader ? [p.leader] : [])}
+            onCancel={() => setShowProjectInfoEditor(false)}
+            onSubmit={saveTargetProjectInfo}
+          />
         )}
       </div>
     )
