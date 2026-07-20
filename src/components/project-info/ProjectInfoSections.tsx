@@ -93,6 +93,7 @@ function ProjectInfoGroupPanel({
         ),
         extra: (
           <FieldVisibilityPicker
+            groupLabel={group.label}
             fields={fields}
             visibleFieldKeys={visibleFieldKeys}
             onChange={setVisibleFieldKeys}

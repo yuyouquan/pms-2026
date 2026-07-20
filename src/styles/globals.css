@@ -1810,22 +1810,105 @@ body {
   color: #c0c7d1;
 }
 
+.pms-project-info-picker-trigger {
+  display: inline-flex;
+}
+
+.pms-project-info-field-drawer .ant-drawer-body {
+  padding: 16px;
+}
+
 .pms-project-info-picker {
-  width: 260px;
-  max-height: 390px;
-  overflow-y: auto;
+  width: 100%;
 }
 
 .pms-project-info-picker-title {
-  margin-bottom: 12px;
+  margin: 0 4px 12px;
   color: #64748b;
   font-size: 12px;
   font-weight: 600;
 }
 
-.pms-project-info-picker-hint {
-  color: #a3aab5;
+.pms-project-info-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pms-project-info-field-drawer .pms-project-info-picker-row.ant-checkbox-wrapper {
+  display: flex;
+  align-items: flex-start;
+  min-height: 44px;
+  width: 100%;
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid #e8edf5;
+  border-radius: 8px;
+  background: #fff;
+  transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.pms-project-info-field-drawer .pms-project-info-picker-row.ant-checkbox-wrapper:not(.ant-checkbox-wrapper-disabled):hover {
+  border-color: rgba(99, 102, 241, 0.35);
+  background: #f8faff;
+}
+
+.pms-project-info-field-drawer .pms-project-info-picker-row.ant-checkbox-wrapper:has(.ant-checkbox-input:focus-visible) {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
+  outline: none;
+}
+
+.pms-project-info-field-drawer .pms-project-info-picker-row .ant-checkbox {
+  margin-top: 2px;
+}
+
+.pms-project-info-picker-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pms-project-info-picker-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.pms-project-info-field-drawer .ant-checkbox-wrapper-disabled .pms-project-info-picker-label {
+  color: #64748b;
+}
+
+.pms-project-info-picker-required {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 7px;
+  color: #475569;
   font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  border: 1px solid #dbe2ea;
+  border-radius: 999px;
+  background: #f1f5f9;
+}
+
+.pms-project-info-picker-hint {
+  color: #7c8798;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.pms-project-info-picker-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 @media (max-width: 1100px) {
