@@ -146,6 +146,8 @@ const clearAndResetBlock = extractBlock(modalSource, 'const clearAndResetCreateD
 const clearSubmittedDraftBlock = extractBlock(modalSource, 'const clearSubmittedCreateDraft = useCallback(async')
 const retryHydrationBlock = extractBlock(modalSource, 'const retryCreateDraftHydration = useCallback(')
 const handleSubmitBlock = extractBlock(modalSource, 'const handleSubmit = async () =>')
+const requestResetBlock = extractBlock(modalSource, 'const requestResetCreateDraft = () =>')
+const addProjectSubmitBlock = extractBlock(addProjectModalSource, 'const handleSubmit = async')
 const startSessionBlock = extractBlock(modalSource, 'const startCreateDraftSession = useCallback(')
 const sessionGuardBlock = extractBlock(modalSource, 'const isCurrentCreateDraftSession = useCallback(')
 const readFailureBlock = extractBlock(hydrateDraftBlock, 'catch')
@@ -159,6 +161,8 @@ assert.match(modalSource, /draftReadStatusRef\.current !== 'ready'/)
 assert.match(modalSource, /const isDraftHydrating =/)
 assert.match(modalSource, /const isCreateDraftReadFailed =/)
 assert.match(modalSource, /const isCreateDraftInteractionBlocked =/)
+assert.match(modalSource, /const isCreateDraftSubmitting =/)
+assert.match(modalSource, /const isDraftInteractionLocked = isDraftHydrating \|\| isCreateDraftSubmitting/)
 assert.match(modalSource, /setTimeout\([\s\S]*PROJECT_CREATION_DRAFT_SAVE_DELAY_MS/)
 assertOrdered(startSessionBlock, [
   'createDraftSessionGenerationRef.current + 1',
@@ -211,22 +215,33 @@ assertOrdered(clearSubmittedDraftBlock, [
 ], 'submit clear must skip only a newer same-owner session and remain owner scoped')
 assertOrdered(handleSubmitBlock, [
   'const submitSession =',
+  'setSubmitting(true)',
   'await onSubmit(',
   'await clearSubmittedCreateDraft(submitSession)',
   'isCurrentCreateDraftSession(submitSession)',
   'resetCreateForm()',
+  'onCancel()',
 ], 'submit must capture its session before submit and gate post-clear UI changes')
 const postSubmitBlock = handleSubmitBlock.slice(handleSubmitBlock.indexOf('await onSubmit('))
 assert.doesNotMatch(postSubmitBlock, /startCreateDraftSession/)
 assert.match(postSubmitBlock, /catch\s*{\s*message\.error\('项目草稿清空失败'\)/)
-assert.match(modalSource, /closable={!isDraftHydrating}/)
-assert.match(modalSource, /maskClosable={!isDraftHydrating}/)
-assert.match(modalSource, /keyboard={!isDraftHydrating}/)
-assert.match(modalSource, /cancelButtonProps={{ disabled: isDraftHydrating }}/)
+assert.match(postSubmitBlock, /if \(!isCurrentCreateDraftSession\(submitSession\)\) return[\s\S]*if \(!draftClearFailed\) \{[\s\S]*resetCreateForm\(\)[\s\S]*onCancel\(\)/)
+assert.match(handleSubmitBlock, /finally \{[\s\S]*setSubmitting\(false\)/)
+assert.doesNotMatch(addProjectSubmitBlock, /onCancel\(\)/)
+assert.match(modalSource, /closable={!isDraftInteractionLocked}/)
+assert.match(modalSource, /mask={{ closable: !isDraftInteractionLocked }}/)
+assert.match(modalSource, /keyboard={!isDraftInteractionLocked}/)
+assert.match(modalSource, /cancelButtonProps={{ disabled: isDraftInteractionLocked }}/)
 assert.match(modalSource, /okButtonProps={{ disabled: isCreateDraftInteractionBlocked }}/)
-assert.match(modalSource, /<Spin spinning={isDraftHydrating}/)
+assert.match(modalSource, /<Spin spinning={isDraftInteractionLocked} description="正在恢复项目草稿">/)
 assert.match(modalSource, /<Form[\s\S]*disabled={isCreateDraftInteractionBlocked}/)
-assert.match(modalSource, /disabled={isDraftHydrating}[\s\S]*重新填写/)
+assert.match(modalSource, /disabled={isDraftInteractionLocked}[\s\S]*重新填写/)
+assert.match(requestCloseBlock, /if \(submitting\) return/)
+assert.match(requestResetBlock, /isDraftInteractionLocked/)
+assert.match(modalSource, /draftReadStatus !== 'ready' \|\| submitting/)
+assert.match(modalSource, /if \(isCreateDraftInteractionBlocked\) return[\s\S]*setActiveGroups/)
+assert.doesNotMatch(modalSource, /maskClosable=/)
+assert.doesNotMatch(modalSource, /\btip=/)
 assert.match(modalSource, /message="项目草稿读取失败"/)
 assert.match(modalSource, /description="已保存的内容暂时无法恢复，当前填写和自动保存已暂停。"/)
 assert.match(modalSource, /重新读取/)

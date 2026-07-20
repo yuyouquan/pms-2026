@@ -147,7 +147,9 @@ export default function ProjectInfoModal({
       || currentCreateDraftSessionRef.current?.ownerId !== (draftOwnerId || '')
     )
   const isCreateDraftReadFailed = mode === 'create' && open && draftReadStatus === 'failed'
-  const isCreateDraftInteractionBlocked = isDraftHydrating || isCreateDraftReadFailed
+  const isCreateDraftSubmitting = mode === 'create' && open && submitting
+  const isDraftInteractionLocked = isDraftHydrating || isCreateDraftSubmitting
+  const isCreateDraftInteractionBlocked = isDraftInteractionLocked || isCreateDraftReadFailed
 
   const cancelDraftSave = useCallback(() => {
     if (draftSaveTimerRef.current === null) return
@@ -479,7 +481,7 @@ export default function ProjectInfoModal({
   }, [draftRepository, enqueueDraftMutation, form, isCurrentCreateDraftSession])
 
   useEffect(() => {
-    if (!open || mode !== 'create' || !draftOwnerId || draftReadStatus !== 'ready') return
+    if (!open || mode !== 'create' || !draftOwnerId || draftReadStatus !== 'ready' || submitting) return
 
     const session = currentCreateDraftSessionRef.current
     if (!session) return
@@ -492,10 +494,11 @@ export default function ProjectInfoModal({
     }, PROJECT_CREATION_DRAFT_SAVE_DELAY_MS)
 
     return cancelDraftSave
-  }, [activeGroups, cancelDraftSave, draftOwnerId, draftReadStatus, isCurrentCreateDraftSession, mode, open, persistCreateDraft, watchedValues])
+  }, [activeGroups, cancelDraftSave, draftOwnerId, draftReadStatus, isCurrentCreateDraftSession, mode, open, persistCreateDraft, submitting, watchedValues])
 
   const requestClose = async () => {
     if (mode === 'create') {
+      if (submitting) return
       if (draftReadStatusRef.current === 'loading' || draftReadStatusRef.current === 'idle') {
         return
       }
@@ -548,7 +551,7 @@ export default function ProjectInfoModal({
   }, [draftOwnerId, draftRepository, enqueueDraftMutation, isCurrentCreateDraftSession, mode, resetCreateForm, setDraftReadStatus, startCreateDraftSession])
 
   const requestResetCreateDraft = () => {
-    if (mode !== 'create' || !draftOwnerId || isDraftHydrating) return
+    if (mode !== 'create' || !draftOwnerId || isDraftInteractionLocked) return
 
     Modal.confirm({
       title: '重新填写？',
@@ -624,6 +627,7 @@ export default function ProjectInfoModal({
       || !isCurrentCreateDraftSession(submitSession)
     )) return
 
+    cancelDraftSave()
     setSubmitting(true)
     try {
       await onSubmit({
@@ -637,15 +641,19 @@ export default function ProjectInfoModal({
         sourceValues: values.bid ? fetchByBid(values.bid) : {},
       })
       if (mode === 'create' && submitSession) {
+        let draftClearFailed = false
         try {
           await clearSubmittedCreateDraft(submitSession)
         } catch {
           message.error('项目草稿清空失败')
-          return
+          draftClearFailed = true
         }
         if (!isCurrentCreateDraftSession(submitSession)) return
-        resetCreateForm()
-        setDraftReadStatus('ready')
+        if (!draftClearFailed) {
+          resetCreateForm()
+          setDraftReadStatus('ready')
+        }
+        onCancel()
         return
       }
       if (componentMountedRef.current) {
@@ -662,7 +670,7 @@ export default function ProjectInfoModal({
       title={mode === 'create' ? (
         <div className="pms-project-info-modal-title-row">
           <span>新增项目</span>
-          <Button type="text" danger size="small" icon={<ReloadOutlined />} disabled={isDraftHydrating} onClick={requestResetCreateDraft}>
+          <Button type="text" danger size="small" icon={<ReloadOutlined />} disabled={isDraftInteractionLocked} onClick={requestResetCreateDraft}>
             重新填写
           </Button>
         </div>
@@ -671,13 +679,13 @@ export default function ProjectInfoModal({
       width={1240}
       onCancel={requestClose}
       onOk={handleSubmit}
-      closable={!isDraftHydrating}
-      maskClosable={!isDraftHydrating}
-      keyboard={!isDraftHydrating}
+      closable={!isDraftInteractionLocked}
+      mask={{ closable: !isDraftInteractionLocked }}
+      keyboard={!isDraftInteractionLocked}
       okText={mode === 'create' ? '创建' : '保存'}
       cancelText="取消"
       confirmLoading={submitting || isDraftHydrating}
-      cancelButtonProps={{ disabled: isDraftHydrating }}
+      cancelButtonProps={{ disabled: isDraftInteractionLocked }}
       okButtonProps={{ disabled: isCreateDraftInteractionBlocked }}
       destroyOnHidden
       className="pms-modal pms-project-info-modal"
@@ -693,7 +701,7 @@ export default function ProjectInfoModal({
           style={{ marginBottom: 16 }}
         />
       )}
-      <Spin spinning={isDraftHydrating} tip="正在恢复项目草稿">
+      <Spin spinning={isDraftInteractionLocked} description="正在恢复项目草稿">
       <Form
         form={form}
         layout="vertical"
@@ -741,6 +749,7 @@ export default function ProjectInfoModal({
             className="pms-project-info-form-groups"
             activeKey={activeGroups}
             onChange={(keys) => {
+              if (isCreateDraftInteractionBlocked) return
               const nextActiveGroups = keys as string[]
               activeGroupsRef.current = nextActiveGroups
               setActiveGroups(nextActiveGroups)

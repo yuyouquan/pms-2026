@@ -85,7 +85,6 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
     setProjectSpaceModule('basic')
     setActiveModule('projectSpace')
     message.success('项目创建成功')
-    onCancel()
   }
 
   return (
