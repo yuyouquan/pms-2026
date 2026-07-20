@@ -1427,37 +1427,64 @@ body {
 /* ─── Project information schema-driven surfaces ─── */
 .pms-project-info-modal .ant-modal-content {
   overflow: hidden;
+  padding: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.16);
+}
+
+.pms-project-info-modal .ant-modal-header {
+  margin: 0;
+  padding: 20px 24px 18px;
+  border-bottom: 1px solid #e8edf4;
+  background: #fff;
+}
+
+.pms-project-info-modal .ant-modal-title {
+  color: #172033;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.pms-project-info-modal .ant-modal-close {
+  top: 16px;
+  inset-inline-end: 18px;
+  color: #64748b;
+  transition: color 200ms ease, background-color 200ms ease;
+}
+
+.pms-project-info-modal .ant-modal-close:hover {
+  color: #1e293b;
+  background: #f1f5f9;
+}
+
+.pms-project-info-modal .ant-modal-body {
+  padding: 22px 24px 10px;
+  background: #f8fafc;
+}
+
+.pms-project-info-modal .ant-modal-footer {
+  margin: 0;
+  padding: 16px 24px;
+  border-top: 1px solid #e8edf4;
+  background: #fff;
 }
 
 .pms-project-info-form-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 20px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 18px;
 }
 
 .pms-project-info-universal {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.pms-project-info-core-form {
-  margin: 2px 0 16px;
-  padding: 16px 16px 0;
-  border: 1px solid rgba(99, 102, 241, 0.16);
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(6, 182, 212, 0.03));
-}
-
-.pms-project-info-section-heading {
-  margin-bottom: 12px;
-  color: #111827;
-  font-size: 15px;
-  font-weight: 600;
+  margin-bottom: 2px;
 }
 
 .pms-project-info-group-dot {
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
 }
 
@@ -1472,14 +1499,152 @@ body {
   align-items: center;
 }
 
-@media (max-width: 900px) {
-  .pms-project-info-universal,
+.pms-project-info-modal .ant-form-item {
+  margin-bottom: 20px;
+}
+
+.pms-project-info-modal .ant-form-item-label > label {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pms-project-info-modal .ant-form-item-label > label.ant-form-item-required::before {
+  color: #dc2626 !important;
+}
+
+.pms-project-info-modal .ant-form-item-extra {
+  min-height: 18px;
+  margin-top: 5px;
+  color: #7c8799;
+  font-size: 12px;
+}
+
+.pms-project-info-modal .ant-input,
+.pms-project-info-modal .ant-select-selector,
+.pms-project-info-modal .ant-btn {
+  transition: border-color 200ms ease, box-shadow 200ms ease, color 200ms ease, background-color 200ms ease;
+}
+
+.pms-project-info-modal .ant-input:not([disabled]):hover,
+.pms-project-info-modal .ant-select:not(.ant-select-disabled):hover .ant-select-selector {
+  border-color: #818cf8;
+}
+
+.pms-project-info-modal .ant-input:not([disabled]):focus,
+.pms-project-info-modal .ant-input-focused,
+.pms-project-info-modal .ant-select-focused:not(.ant-select-disabled) .ant-select-selector {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12) !important;
+}
+
+.pms-project-info-modal .ant-form-item-has-error .ant-input,
+.pms-project-info-modal .ant-form-item-has-error .ant-select-selector {
+  border-color: #dc2626 !important;
+  background: #fff;
+}
+
+.pms-project-info-modal .ant-form-item-has-error .ant-input:focus,
+.pms-project-info-modal .ant-form-item-has-error .ant-select-focused .ant-select-selector {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
+}
+
+.pms-project-info-modal .ant-form-item-explain-error {
+  margin-top: 4px;
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+.pms-project-info-form-groups.ant-collapse {
+  border: 0;
+  background: transparent;
+}
+
+.pms-project-info-form-groups > .ant-collapse-item {
+  margin-bottom: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  background: #fff;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.pms-project-info-form-groups > .ant-collapse-item:hover {
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+}
+
+.pms-project-info-form-groups > .ant-collapse-item > .ant-collapse-header {
+  align-items: center;
+  padding: 14px 16px;
+  background: #f8fafc;
+  transition: background-color 200ms ease;
+}
+
+.pms-project-info-form-groups > .ant-collapse-item > .ant-collapse-header:hover {
+  background: #f1f5f9;
+}
+
+.pms-project-info-form-groups .ant-collapse-header-text .ant-space {
+  gap: 8px !important;
+}
+
+.pms-project-info-form-groups .ant-collapse-header-text strong {
+  color: #273449;
+  font-size: 14px;
+}
+
+.pms-project-info-form-groups .ant-collapse-header-text .ant-tag {
+  margin-inline-end: 0;
+  color: #64748b;
+  border-color: #dbe3ee;
+  background: #fff;
+}
+
+.pms-project-info-form-groups .ant-collapse-content {
+  border-top-color: #e8edf4;
+}
+
+.pms-project-info-form-groups .ant-collapse-content-box {
+  padding: 18px 16px 0 !important;
+}
+
+.pms-project-info-jira-row.ant-card {
+  border-color: #e2e8f0;
+  background: #fbfcfe;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.pms-project-info-jira-row.ant-card:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
+}
+
+@media (max-width: 1100px) {
+  .pms-project-info-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
   .pms-project-info-form-grid {
     grid-template-columns: 1fr;
   }
 
   .pms-project-info-jira-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pms-project-info-modal .ant-modal-close,
+  .pms-project-info-modal .ant-input,
+  .pms-project-info-modal .ant-select-selector,
+  .pms-project-info-modal .ant-btn,
+  .pms-project-info-form-groups > .ant-collapse-item,
+  .pms-project-info-form-groups > .ant-collapse-item > .ant-collapse-header,
+  .pms-project-info-jira-row.ant-card {
+    transition: none !important;
   }
 }
 

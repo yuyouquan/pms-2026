@@ -99,6 +99,7 @@ export default function ProjectInfoModal({
   const watchedValues = (Form.useWatch([], form) || {}) as ProjectInfoFormState
   const projectType = String(watchedValues.type || project?.type || '')
   const fields = useMemo(() => getProjectInfoFields(projectType), [projectType])
+  const editableFields = useMemo(() => fields.filter(field => !field.readOnly), [fields])
   const groups = useMemo(() => getProjectInfoGroups(projectType), [projectType])
   const firstLaunchOptions = useMemo(() => existingProjects
     .filter(item => item.type === '整机产品项目')
@@ -295,7 +296,8 @@ export default function ProjectInfoModal({
   const handleSubmit = async () => {
     let values: ProjectInfoFormState
     try {
-      values = await form.validateFields()
+      await form.validateFields()
+      values = form.getFieldsValue(true) as ProjectInfoFormState
     } catch (error) {
       const failed = error as { errorFields?: Array<{ name: Array<string | number> }> }
       const firstName = String(failed.errorFields?.[0]?.name?.[0] || '')
@@ -311,10 +313,15 @@ export default function ProjectInfoModal({
       if (value !== undefined) result[field.key] = value
       return result
     }, {})
-    const pureErrors = validateProjectInfoValues(projectType, infoValues, { tosAggregateMissingSources: aggregateWarnings })
-    if (pureErrors.length) {
-      const first = pureErrors[0]
-      form.setFields(pureErrors.map(error => ({ name: error.fieldKey, errors: [error.message] })))
+    const editableFieldKeys = new Set(editableFields.map(field => field.key))
+    const editableErrors = validateProjectInfoValues(
+      projectType,
+      infoValues,
+      { tosAggregateMissingSources: aggregateWarnings },
+    ).filter(error => editableFieldKeys.has(error.fieldKey))
+    if (editableErrors.length) {
+      const first = editableErrors[0]
+      form.setFields(editableErrors.map(error => ({ name: error.fieldKey, errors: [error.message] })))
       setActiveGroups(previous => [...new Set([...previous, first.groupKey])])
       setTimeout(() => form.scrollToField(first.fieldKey, { block: 'center' }), 0)
       message.error(first.message)
@@ -347,42 +354,19 @@ export default function ProjectInfoModal({
     }
   }
 
-  const coreItems = isTargetProjectInfoType(projectType) ? (
-    <div className="pms-project-info-core-form">
-      <div className="pms-project-info-section-heading">核心板块</div>
-      <div className="pms-project-info-form-grid">
-        {projectType === '整机产品项目' && (
-          <>
-            <Form.Item label="市场名" name="marketName"><Input disabled placeholder="自动获取" /></Form.Item>
-            <Form.Item label="品牌" name="brand"><Input disabled placeholder="自动获取" /></Form.Item>
-            <Form.Item label="产品线" name="productLine"><Input disabled placeholder="自动获取" /></Form.Item>
-          </>
-        )}
-        <Form.Item label="项目状态" name="status"><Input disabled /></Form.Item>
-        <Form.Item label="健康状态" name="healthStatus" initialValue="normal" rules={[{ required: true, message: '请选择健康状态' }]}>
-          <Select options={HEALTH_OPTIONS} />
-        </Form.Item>
-        <Form.Item label="下一个节点" name="currentNode"><Input disabled placeholder="自动计算" /></Form.Item>
-        {['暂停', '已暂停', '已取消'].includes(String(watchedValues.status || '')) && (
-          <Form.Item label="取消暂停时间" name="cancelPauseDate"><Input disabled placeholder="-" /></Form.Item>
-        )}
-      </div>
-    </div>
-  ) : null
-
   return (
     <Modal
       title={mode === 'create' ? '新增项目' : '编辑项目信息'}
       open={open}
-      width={1080}
+      width={1240}
       onCancel={requestClose}
       onOk={handleSubmit}
       okText={mode === 'create' ? '创建' : '保存'}
       cancelText="取消"
       confirmLoading={submitting}
-      destroyOnClose
+      destroyOnHidden
       className="pms-modal pms-project-info-modal"
-      styles={{ body: { maxHeight: '72vh', overflowY: 'auto', paddingRight: 8 } }}
+      styles={{ body: { maxHeight: '72vh', overflowY: 'auto', paddingRight: 24 } }}
     >
       <Form
         form={form}
@@ -414,9 +398,12 @@ export default function ProjectInfoModal({
           <Form.Item label="项目责任人" name="responsiblePersons" extra="负责项目可见范围，并作为权限中心的系统管理员" rules={[{ required: true, type: 'array', min: 1, message: '请选择项目责任人' }]}>
             <Select mode="multiple" showSearch optionFilterProp="label" options={ALL_USERS.map(user => ({ label: user, value: user }))} />
           </Form.Item>
+          {isTargetProjectInfoType(projectType) && (
+            <Form.Item label="健康状态" name="healthStatus" initialValue="normal" rules={[{ required: true, message: '请选择健康状态' }]}>
+              <Select options={HEALTH_OPTIONS} />
+            </Form.Item>
+          )}
         </div>
-
-        {coreItems}
 
         {aggregateWarnings.length > 0 && (
           <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="首发项目来源字段不完整" description={aggregateWarnings.join('；')} />
@@ -424,10 +411,11 @@ export default function ProjectInfoModal({
 
         {groups.length > 0 && (
           <Collapse
+            className="pms-project-info-form-groups"
             activeKey={activeGroups}
             onChange={keys => setActiveGroups(keys as string[])}
             items={groups.map(group => {
-              const groupFields = fields.filter(field => field.group === group.key)
+              const groupFields = editableFields.filter(field => field.group === group.key)
               return {
                 key: group.key,
                 label: <Space><span className="pms-project-info-group-dot" style={{ background: GROUP_COLORS[group.key] }} /><strong>{group.label}</strong><Tag>{groupFields.length} 项</Tag></Space>,
