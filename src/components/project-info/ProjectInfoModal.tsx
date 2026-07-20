@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReloadOutlined } from '@ant-design/icons'
-import { Alert, Button, Collapse, Form, Input, Modal, Select, Space, Tag, message } from 'antd'
+import { Alert, Button, Collapse, Form, Input, Modal, Select, Space, Spin, Tag, message } from 'antd'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import ProjectInfoFieldInput from '@/components/project-info/ProjectInfoFieldInput'
 import {
@@ -141,6 +141,13 @@ export default function ProjectInfoModal({
   const firstLaunchOptions = useMemo(() => existingProjects
     .filter(item => item.type === '整机产品项目')
     .map(item => ({ label: item.name, value: item.id })), [existingProjects])
+  const isDraftHydrating = mode === 'create'
+    && open
+    && (
+      draftReadStatus === 'idle'
+      || draftReadStatus === 'loading'
+      || currentCreateDraftSessionRef.current?.ownerId !== (draftOwnerId || '')
+    )
 
   const cancelDraftSave = useCallback(() => {
     if (draftSaveTimerRef.current === null) return
@@ -483,6 +490,10 @@ export default function ProjectInfoModal({
 
   const requestClose = async () => {
     if (mode === 'create') {
+      if (draftReadStatusRef.current === 'loading' || draftReadStatusRef.current === 'idle') {
+        return
+      }
+      if (currentCreateDraftSessionRef.current?.ownerId !== (draftOwnerId || '')) return
       const session = startCreateDraftSession(draftOwnerId || '')
       if (draftReadStatusRef.current !== 'ready' || !draftOwnerId) {
         if (isCurrentCreateDraftSession(session)) onCancel()
@@ -531,7 +542,7 @@ export default function ProjectInfoModal({
   }, [draftOwnerId, draftRepository, enqueueDraftMutation, isCurrentCreateDraftSession, mode, resetCreateForm, setDraftReadStatus, startCreateDraftSession])
 
   const requestResetCreateDraft = () => {
-    if (mode !== 'create' || !draftOwnerId) return
+    if (mode !== 'create' || !draftOwnerId || isDraftHydrating) return
 
     Modal.confirm({
       title: '重新填写？',
@@ -543,7 +554,18 @@ export default function ProjectInfoModal({
     })
   }
 
+  const clearSubmittedCreateDraft = useCallback(async (session: CreateDraftSession) => {
+    await enqueueDraftMutation(() => {
+      const currentSession = currentCreateDraftSessionRef.current
+      if (currentSession && currentSession.generation !== session.generation) {
+        return Promise.resolve()
+      }
+      return draftRepository.clear(session.ownerId)
+    })
+  }, [draftRepository, enqueueDraftMutation])
+
   const handleSubmit = async () => {
+    if (isDraftHydrating) return
     let values: ProjectInfoFormState
     try {
       await form.validateFields()
@@ -589,6 +611,13 @@ export default function ProjectInfoModal({
       message.error('未找到项目名称')
       return
     }
+    const submitSession = mode === 'create' ? currentCreateDraftSessionRef.current : null
+    if (mode === 'create' && (
+      !submitSession
+      || draftReadStatusRef.current !== 'ready'
+      || !isCurrentCreateDraftSession(submitSession)
+    )) return
+
     setSubmitting(true)
     try {
       await onSubmit({
@@ -601,19 +630,14 @@ export default function ProjectInfoModal({
         sourceEntry,
         sourceValues: values.bid ? fetchByBid(values.bid) : {},
       })
-      if (mode === 'create' && draftOwnerId) {
-        const session = startCreateDraftSession(draftOwnerId)
-        setDraftReadStatus('loading')
+      if (mode === 'create' && submitSession) {
         try {
-          await enqueueDraftMutation(() => draftRepository.clear(session.ownerId))
+          await clearSubmittedCreateDraft(submitSession)
         } catch {
-          if (isCurrentCreateDraftSession(session)) {
-            setDraftReadStatus('ready')
-            message.error('项目草稿清空失败')
-          }
+          message.error('项目草稿清空失败')
           return
         }
-        if (!isCurrentCreateDraftSession(session)) return
+        if (!isCurrentCreateDraftSession(submitSession)) return
         resetCreateForm()
         setDraftReadStatus('ready')
         return
@@ -632,7 +656,7 @@ export default function ProjectInfoModal({
       title={mode === 'create' ? (
         <div className="pms-project-info-modal-title-row">
           <span>新增项目</span>
-          <Button type="text" danger size="small" icon={<ReloadOutlined />} onClick={requestResetCreateDraft}>
+          <Button type="text" danger size="small" icon={<ReloadOutlined />} disabled={isDraftHydrating} onClick={requestResetCreateDraft}>
             重新填写
           </Button>
         </div>
@@ -641,16 +665,23 @@ export default function ProjectInfoModal({
       width={1240}
       onCancel={requestClose}
       onOk={handleSubmit}
+      closable={!isDraftHydrating}
+      maskClosable={!isDraftHydrating}
+      keyboard={!isDraftHydrating}
       okText={mode === 'create' ? '创建' : '保存'}
       cancelText="取消"
-      confirmLoading={submitting}
+      confirmLoading={submitting || isDraftHydrating}
+      cancelButtonProps={{ disabled: isDraftHydrating }}
+      okButtonProps={{ disabled: isDraftHydrating }}
       destroyOnHidden
       className="pms-modal pms-project-info-modal"
       styles={{ body: { maxHeight: '72vh', overflowY: 'auto', paddingRight: 24 } }}
     >
+      <Spin spinning={isDraftHydrating} tip="正在恢复项目草稿">
       <Form
         form={form}
         layout="vertical"
+        disabled={isDraftHydrating}
         onValuesChange={(changedValues) => {
           if (typeof changedValues.bid === 'string') handleCandidateChange(changedValues.bid)
           if (typeof changedValues.type === 'string') handleTypeChange(changedValues.type)
@@ -733,6 +764,7 @@ export default function ProjectInfoModal({
           />
         )}
       </Form>
+      </Spin>
     </Modal>
   )
 }

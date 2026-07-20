@@ -130,6 +130,7 @@ const hydrateDraftBlock = extractBlock(modalSource, 'const hydrateDraft = async 
 const persistCreateDraftBlock = extractBlock(modalSource, 'const persistCreateDraft = useCallback(async')
 const requestCloseBlock = extractBlock(modalSource, 'const requestClose = async () =>')
 const clearAndResetBlock = extractBlock(modalSource, 'const clearAndResetCreateDraft = useCallback(async')
+const clearSubmittedDraftBlock = extractBlock(modalSource, 'const clearSubmittedCreateDraft = useCallback(async')
 const handleSubmitBlock = extractBlock(modalSource, 'const handleSubmit = async () =>')
 const startSessionBlock = extractBlock(modalSource, 'const startCreateDraftSession = useCallback(')
 const sessionGuardBlock = extractBlock(modalSource, 'const isCurrentCreateDraftSession = useCallback(')
@@ -141,6 +142,7 @@ assert.match(modalSource, /createDraftSessionGenerationRef/)
 assert.match(modalSource, /currentCreateDraftSessionRef/)
 assert.match(modalSource, /draftReadStatus !== 'ready'/)
 assert.match(modalSource, /draftReadStatusRef\.current !== 'ready'/)
+assert.match(modalSource, /const isDraftHydrating =/)
 assert.match(modalSource, /setTimeout\([\s\S]*PROJECT_CREATION_DRAFT_SAVE_DELAY_MS/)
 assertOrdered(startSessionBlock, [
   'createDraftSessionGenerationRef.current + 1',
@@ -167,10 +169,12 @@ assertOrdered(persistCreateDraftBlock, [
 assert.equal((persistCreateDraftBlock.match(/draftReadStatusRef\.current !== 'ready'/g) || []).length, 2)
 assert.equal((persistCreateDraftBlock.match(/isCurrentCreateDraftSession\(session\)/g) || []).length, 2)
 assertOrdered(requestCloseBlock, [
+  "draftReadStatusRef.current === 'loading'",
   "startCreateDraftSession(draftOwnerId || '')",
   "draftReadStatusRef.current !== 'ready'",
   'onCancel()',
 ], 'close must invalidate the prior session and bypass persistence after read failure')
+assert.match(requestCloseBlock, /if \(draftReadStatusRef\.current === 'loading' \|\| draftReadStatusRef\.current === 'idle'\) \{\s*return\s*\}/)
 assert.match(unreadCloseBlock, /onCancel\(\)/)
 assert.doesNotMatch(unreadCloseBlock, /persistCreateDraft|draftRepository\.(save|clear)/)
 assertOrdered(clearAndResetBlock, [
@@ -179,13 +183,29 @@ assertOrdered(clearAndResetBlock, [
   'isCurrentCreateDraftSession(session)',
   'resetCreateForm()',
 ], 'reset must invalidate hydration before clearing and resetting')
-assertOrdered(handleSubmitBlock, [
-  'await onSubmit(',
-  'startCreateDraftSession(draftOwnerId)',
+assertOrdered(clearSubmittedDraftBlock, [
+  'currentCreateDraftSessionRef.current',
+  'currentSession.generation !== session.generation',
   'draftRepository.clear(session.ownerId)',
-  'isCurrentCreateDraftSession(session)',
+], 'submit clear must skip a newer session and remain owner scoped')
+assertOrdered(handleSubmitBlock, [
+  'const submitSession =',
+  'await onSubmit(',
+  'await clearSubmittedCreateDraft(submitSession)',
+  'isCurrentCreateDraftSession(submitSession)',
   'resetCreateForm()',
-], 'submit cleanup must gate post-clear UI changes by its session')
+], 'submit must capture its session before submit and gate post-clear UI changes')
+const postSubmitBlock = handleSubmitBlock.slice(handleSubmitBlock.indexOf('await onSubmit('))
+assert.doesNotMatch(postSubmitBlock, /startCreateDraftSession/)
+assert.match(postSubmitBlock, /catch\s*{\s*message\.error\('项目草稿清空失败'\)/)
+assert.match(modalSource, /closable={!isDraftHydrating}/)
+assert.match(modalSource, /maskClosable={!isDraftHydrating}/)
+assert.match(modalSource, /keyboard={!isDraftHydrating}/)
+assert.match(modalSource, /cancelButtonProps={{ disabled: isDraftHydrating }}/)
+assert.match(modalSource, /okButtonProps={{ disabled: isDraftHydrating }}/)
+assert.match(modalSource, /<Spin spinning={isDraftHydrating}/)
+assert.match(modalSource, /<Form[\s\S]*disabled={isDraftHydrating}/)
+assert.match(modalSource, /disabled={isDraftHydrating}[\s\S]*重新填写/)
 assert.match(modalSource, /重新填写？/)
 assert.match(modalSource, /将清空当前已填写并自动保存的全部内容，此操作不可撤销。/)
 assert.match(modalSource, /确认清空/)
