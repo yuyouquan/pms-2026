@@ -17,6 +17,7 @@ import { CalendarOutlined } from '@ant-design/icons'
 import {
   PROJECT_TYPE_COLORS,
   isMachineProjectType,
+  matchesProjectTypeColumn,
   type PersistedProjectTypeName,
 } from '@/constants/projectTypes'
 
@@ -366,7 +367,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
   const getKanbanFilter = (col: { key: string }) => {
     if (kanbanDimension === 'type') {
-      return (p: ProjectType) => p.type === col.key
+      return (p: ProjectType) => matchesProjectTypeColumn(p.type, col.key)
     }
     if (kanbanDimension === 'status') {
       return (p: ProjectType) => p.status === col.key

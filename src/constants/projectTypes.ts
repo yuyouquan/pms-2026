@@ -62,6 +62,13 @@ export function normalizeMachineProjectType(type: string | undefined | null) {
   return type === LEGACY_PROJECT_TYPE_MACHINE ? PROJECT_TYPE_MACHINE_PHONE : type || ''
 }
 
+export function matchesProjectTypeColumn(
+  projectType: string | undefined | null,
+  columnType: string | undefined | null,
+) {
+  return normalizeMachineProjectType(projectType) === columnType
+}
+
 export function getProjectTypeFamilyKey(type: string | undefined | null) {
   return isMachineProjectType(type) ? PROJECT_TYPE_MACHINE : type || ''
 }

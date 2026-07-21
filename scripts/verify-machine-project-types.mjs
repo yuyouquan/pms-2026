@@ -22,6 +22,7 @@ const {
   PROJECT_TYPE_MACHINE_PHONE,
   getProjectTypeFamilyKey,
   isMachineProjectType,
+  matchesProjectTypeColumn,
   normalizeMachineProjectType,
 } = module.exports
 const plain = value => JSON.parse(JSON.stringify(value))
@@ -42,6 +43,9 @@ assert.equal(isMachineProjectType('tOS版本项目'), false)
 assert.equal(normalizeMachineProjectType(LEGACY_PROJECT_TYPE_MACHINE), PROJECT_TYPE_MACHINE_PHONE)
 assert.equal(normalizeMachineProjectType(PROJECT_TYPE_MACHINE_PAD), PROJECT_TYPE_MACHINE_PAD)
 assert.equal(normalizeMachineProjectType('tOS版本项目'), 'tOS版本项目')
+assert.equal(matchesProjectTypeColumn(LEGACY_PROJECT_TYPE_MACHINE, PROJECT_TYPE_MACHINE_PHONE), true)
+assert.equal(matchesProjectTypeColumn(PROJECT_TYPE_MACHINE_PAD, PROJECT_TYPE_MACHINE_PAD), true)
+assert.equal(matchesProjectTypeColumn(PROJECT_TYPE_MACHINE_LAPTOP, PROJECT_TYPE_MACHINE_PHONE), false)
 assert.equal(getProjectTypeFamilyKey(PROJECT_TYPE_MACHINE_PAD), PROJECT_TYPE_MACHINE_PHONE)
 assert.equal(getProjectTypeFamilyKey(PROJECT_TYPE_MACHINE_LAPTOP), PROJECT_TYPE_MACHINE_PHONE)
 assert.equal(PROJECT_TYPES.includes(LEGACY_PROJECT_TYPE_MACHINE), false)

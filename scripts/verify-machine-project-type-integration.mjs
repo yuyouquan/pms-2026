@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import vm from 'node:vm'
+import ts from 'typescript'
 
 const read = file => readFileSync(file, 'utf8')
 const required = [
@@ -15,7 +17,7 @@ const required = [
   ['src/stores/project.ts', 'isMachineProjectType(project.type)'],
   ['src/app/share/plan/page.tsx', 'isMachineProjectType(project?.type)'],
   ['src/components/plan/PlanModule.tsx', 'isMachineProjectType(selectedProject?.type)'],
-  ['src/components/workspace/WorkspaceModule.tsx', 'isMachineProjectType(project.type)'],
+  ['src/components/workspace/WorkspaceModule.tsx', 'matchesProjectTypeColumn(p.type, col.key)'],
   ['src/containers/WorkspaceContainer.tsx', 'PROJECT_TYPE_MACHINE_LAPTOP'],
   ['src/components/roadmap/utils.ts', 'isMachineProjectType'],
   ['src/components/roadmap/MilestoneView.tsx', 'isMachineProjectType'],
@@ -30,6 +32,32 @@ const required = [
 for (const [file, token] of required) {
   assert.equal(read(file).includes(token), true, `${file} must use ${token}`)
 }
+
+const projectTypesFilename = 'src/constants/projectTypes.ts'
+const projectTypesOutput = ts.transpileModule(read(projectTypesFilename), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText
+const projectTypesModule = { exports: {} }
+vm.runInNewContext(
+  projectTypesOutput,
+  { module: projectTypesModule, exports: projectTypesModule.exports },
+  { filename: projectTypesFilename },
+)
+const {
+  LEGACY_PROJECT_TYPE_MACHINE,
+  PROJECT_TYPE_MACHINE_LAPTOP,
+  PROJECT_TYPE_MACHINE_PAD,
+  PROJECT_TYPE_MACHINE_PHONE,
+  matchesProjectTypeColumn,
+} = projectTypesModule.exports
+
+assert.equal(typeof matchesProjectTypeColumn, 'function', 'workspace project-type matching helper must be exported')
+assert.equal(matchesProjectTypeColumn(LEGACY_PROJECT_TYPE_MACHINE, PROJECT_TYPE_MACHINE_PHONE), true)
+assert.equal(matchesProjectTypeColumn(PROJECT_TYPE_MACHINE_PHONE, PROJECT_TYPE_MACHINE_PHONE), true)
+assert.equal(matchesProjectTypeColumn(PROJECT_TYPE_MACHINE_PAD, PROJECT_TYPE_MACHINE_PAD), true)
+assert.equal(matchesProjectTypeColumn(PROJECT_TYPE_MACHINE_LAPTOP, PROJECT_TYPE_MACHINE_LAPTOP), true)
+assert.equal(matchesProjectTypeColumn(PROJECT_TYPE_MACHINE_PAD, PROJECT_TYPE_MACHINE_PHONE), false)
+assert.equal(matchesProjectTypeColumn('tOS版本项目', PROJECT_TYPE_MACHINE_PHONE), false)
 
 const directComparisonFiles = [
   'src/app/page.tsx',
