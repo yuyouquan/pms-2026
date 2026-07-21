@@ -89,6 +89,7 @@ import {
   cancelDraftRevision,
   formatFollowVersionSource,
   ensureMarketPlanDataForRows,
+  getConfiguredMarketMetadataValue,
   getConfiguredMarketSelection,
   getMainMarket,
   getMarketCurrentVersion,
@@ -460,6 +461,7 @@ export default function ProjectSpaceContainer() {
     : []
   const primaryMarket = getMainMarket(marketConfigRows)
   const selectedMarketIsConfigured = isConfiguredMarket(marketConfigRows, selectedMarketTab)
+  const configuredMarketName = getConfiguredMarketMetadataValue(marketConfigRows, selectedMarketTab)
   const tosTypeConfigRows = selectedProject && isTosVersionProject
     ? buildTosTypeRows(
         selectedProject.versionTypes || [],
@@ -1467,7 +1469,9 @@ export default function ProjectSpaceContainer() {
     const planDimension = isTosVersionProject
       ? `type::${projectPlanLevel === 'level1' ? effectiveTosLevel1Type : selectedTosTypeTab}`
       : isWholeMachineProject
-        ? `market::${selectedMarketTab}`
+        ? projectPlanLevel === 'level1'
+          ? `market::${configuredMarketName}`
+          : 'machine'
         : 'default'
     if (projectPlanLevel === 'level1') return `${selectedProject.id}::${planDimension}::level1`
     if (projectPlanLevel === 'level2' && activeLevel2Plan) return `${selectedProject.id}::${planDimension}::level2::${activeLevel2Plan}`
@@ -1505,7 +1509,13 @@ export default function ProjectSpaceContainer() {
     if (!selectedProject) return
     if (machineMarketPlanUnavailable) return
     if (versions.length === 0) return
-    const draftDimension = isTosTypeScoped ? scopedTosPlanType : selectedMarketTab || ''
+    const draftDimension = isTosTypeScoped
+      ? scopedTosPlanType
+      : isMarketScopedLevel1
+        ? `market::${configuredMarketName}`
+        : isWholeMachineProject
+          ? 'machine'
+          : ''
     const key = `${selectedProject.id}::${draftDimension}::${projectPlanLevel}::${currentLoginUser}`
     if (lastVersionInitKeyRef.current === key) return
     lastVersionInitKeyRef.current = key
@@ -3909,7 +3919,7 @@ export default function ProjectSpaceContainer() {
               meta.tosVersion = createFormValues.tosVersion || ''
               if (isMachineProjectType(selectedProject?.type)) {
                 Object.assign(meta, {
-                  productLine: selectedProject?.productLine || '', marketName: selectedMarketTab, projectName: selectedProject?.name || '', chipVendor: selectedProject?.chipPlatform || '',
+                  productLine: selectedProject?.productLine || '', marketName: configuredMarketName, projectName: selectedProject?.name || '', chipVendor: selectedProject?.chipPlatform || '',
                   branch: createFormValues.branch || '', isMada: createFormValues.isMada || '', madaMarket: createFormValues.madaMarket || '',
                   spm: createFormValues.spm || '', tpm: createFormValues.tpm || '', contact: createFormValues.contact || '', projectVersion: createFormValues.projectVersion || '',
                 })
@@ -3952,7 +3962,7 @@ export default function ProjectSpaceContainer() {
               {isMachineProjectType(selectedProject?.type) && (
                 <>
                   <Form.Item label="产品线"><Input placeholder="自动获取" disabled value={selectedProject?.productLine || ''} /></Form.Item>
-                  <Form.Item label="市场名"><Input placeholder="自动获取" disabled value={selectedMarketTab} /></Form.Item>
+                  <Form.Item label="市场名"><Input placeholder="自动获取" disabled value={configuredMarketName} /></Form.Item>
                   <Form.Item label="项目名称"><Input placeholder="自动获取" disabled value={selectedProject?.name || ''} /></Form.Item>
                   <Form.Item label="芯片厂商"><Input placeholder="自动获取" disabled value={selectedProject?.chipPlatform || ''} /></Form.Item>
                   <Form.Item label="分支信息"><Input placeholder="请输入分支信息" value={createFormValues.branch || ''} onChange={(e) => setCreateFormValues((prev: any) => ({...prev, branch: e.target.value}))} /></Form.Item>

@@ -141,6 +141,11 @@ export const getConfiguredMarketSelection = (
   return mainRow?.market || mainRow?.marketName || ''
 }
 
+export const getConfiguredMarketMetadataValue = (
+  rows: Array<{ market?: string; marketName?: string }>,
+  selectedMarket: string,
+) => isConfiguredMarket(rows, selectedMarket) ? selectedMarket : ''
+
 export const getMarketPlanVersionKey = (
   projectId: string,
   market: string,

@@ -410,13 +410,21 @@ async function assertGoLevel2PlanIsIndependent(page) {
 }
 
 const browser = await puppeteer.launch({
-  headless: 'new',
+  headless: 'shell',
   defaultViewport: { width: 1600, height: 1000 },
-  args: ['--no-sandbox', '--window-size=1600,1000'],
+  args: [
+    '--no-sandbox',
+    '--window-size=1600,1000',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-features=CalculateNativeWinOcclusion',
+  ],
 })
 
 try {
   const page = await browser.newPage()
+  await page.bringToFront()
   const runtimeErrors = []
   const consoleErrors = []
   page.on('pageerror', error => runtimeErrors.push(error.message))

@@ -38,6 +38,7 @@ const {
   formatFollowVersionSource,
   getMarketCurrentVersion,
   getConfiguredMarketSelection,
+  getConfiguredMarketMetadataValue,
   getMarketFollowVersionKey,
   getMarketPlanVersionKey,
   getMarketVersions,
@@ -82,6 +83,25 @@ assert.equal(
   ], 'RU'),
   'RU',
   'saving market configuration must preserve a still-valid selected market',
+)
+assert.equal(
+  getConfiguredMarketMetadataValue([], 'OP'),
+  '',
+  'an empty machine project must not persist the default OP tab as level-two metadata',
+)
+assert.equal(
+  getConfiguredMarketMetadataValue([
+    { id: '1', market: 'TR', isMain: true, followsMain: false },
+  ], 'TR'),
+  'TR',
+  'a configured selected market may be persisted as level-two metadata',
+)
+assert.equal(
+  getConfiguredMarketMetadataValue([
+    { id: '1', market: 'TR', isMain: true, followsMain: false },
+  ], 'OP'),
+  '',
+  'an invalid default tab must not be replaced with a different market in metadata',
 )
 
 const normalized = normalizeMarketRows([
