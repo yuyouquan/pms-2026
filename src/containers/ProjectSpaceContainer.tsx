@@ -109,7 +109,6 @@ import {
   type PlanVersionLike,
 } from '@/lib/marketRules'
 import {
-  TOS_TYPE_OPTIONS,
   buildTosTypeRows,
   createTosTypePlanEntry,
   ensureTosTypePlanDataForRows,
@@ -143,6 +142,7 @@ import VersionTrainPlan, { INITIAL_VERSION_TRAIN_DATA } from '@/components/plans
 import ProjectInfoModal, { type ProjectInfoSubmitPayload } from '@/components/project-info/ProjectInfoModal'
 import TargetProjectInformationView from '@/components/project-info/TargetProjectInformationView'
 import MarketEditorModal from '@/components/project-info/MarketEditorModal'
+import TosTypeEditorModal from '@/components/project-info/TosTypeEditorModal'
 import ProjectPlanInfoGrid from '@/components/project-info/ProjectPlanInfoGrid'
 import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
 import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
@@ -1148,57 +1148,6 @@ export default function ProjectSpaceContainer() {
       followsMain: false,
     }])
     setShowTosTypeEditor(true)
-  }
-
-  const updateTosTypeDraftRow = (rowId: string, patch: Partial<TosTypeConfigRow>) => {
-    setTosTypeDraftRows(previous => {
-      const previousMainType = getMainTosType(previous)
-      const nextRows = previous.map(row => ({ ...row }))
-      const targetRow = nextRows.find(row => row.id === rowId)
-      if (!targetRow) return previous
-
-      if (patch.type !== undefined) targetRow.type = patch.type
-      if (patch.followsMain !== undefined && !targetRow.isMain) targetRow.followsMain = patch.followsMain
-      if (patch.isMain) {
-        nextRows.forEach(row => { row.isMain = row.id === rowId })
-        targetRow.followsMain = false
-      }
-      return normalizeTosTypeRows(nextRows, previousMainType)
-    })
-  }
-
-  const addTosTypeDraftRow = () => {
-    const selectedTypes = new Set(tosTypeDraftRows.map(row => row.type))
-    const nextType = TOS_TYPE_OPTIONS.find(type => !selectedTypes.has(type))
-    if (!nextType) {
-      message.warning('可选类型已全部添加')
-      return
-    }
-    setTosTypeDraftRows(previous => {
-      const previousMainType = getMainTosType(previous)
-      const nextRows = [
-        ...previous,
-        {
-          id: `tos-type-${Date.now()}`,
-          type: nextType,
-          isMain: previous.length === 0,
-          followsMain: false,
-        },
-      ]
-      return normalizeTosTypeRows(nextRows, previousMainType)
-    })
-  }
-
-  const removeTosTypeDraftRow = (rowId: string) => {
-    if (tosTypeDraftRows.length <= 1) {
-      message.warning('至少保留一个类型')
-      return
-    }
-    setTosTypeDraftRows(previous => {
-      const previousMainType = getMainTosType(previous)
-      const filtered = previous.filter(row => row.id !== rowId)
-      return normalizeTosTypeRows(filtered, previousMainType)
-    })
   }
 
   const saveTosTypeConfig = () => {
@@ -3818,97 +3767,14 @@ export default function ProjectSpaceContainer() {
         onSave={saveMarketConfig}
         onCancel={() => setShowMarketEditor(false)}
       />
-      {/* tOS type editor modal */}
-      <Modal
-        className="pms-modal"
-        title={<Space><EditOutlined style={{ color: '#6366f1' }} /><span>类型编辑</span></Space>}
+      <TosTypeEditorModal
         open={showTosTypeEditor}
+        rows={tosTypeDraftRows}
+        canEdit={canEditBasicInfo}
+        onChange={setTosTypeDraftRows}
+        onSave={saveTosTypeConfig}
         onCancel={() => setShowTosTypeEditor(false)}
-        width={780}
-        footer={[
-          <Button key="cancel" onClick={() => setShowTosTypeEditor(false)}>取消</Button>,
-          <Tooltip key="save-tooltip" title={canEditBasicInfo ? undefined : '无基本信息编辑权限'}>
-            <Button key="save" type="primary" disabled={!canEditBasicInfo} onClick={saveTosTypeConfig}>保存</Button>
-          </Tooltip>,
-        ]}
-      >
-        <Table
-          className="pms-table"
-          rowKey="id"
-          size="small"
-          pagination={false}
-          dataSource={tosTypeDraftRows}
-          columns={[
-            {
-              title: '类型',
-              dataIndex: 'type',
-              width: 300,
-              render: (value: TosPlanType, record: TosTypeConfigRow) => (
-                <Select
-                  value={value || undefined}
-                  placeholder="请选择类型"
-                  style={{ width: '100%' }}
-                  onChange={(type) => updateTosTypeDraftRow(record.id, { type })}
-                  options={TOS_TYPE_OPTIONS.map(type => ({
-                    label: type,
-                    value: type,
-                    disabled: tosTypeDraftRows.some(row => row.id !== record.id && row.type === type),
-                  }))}
-                />
-              ),
-            },
-            {
-              title: '是否主类型',
-              dataIndex: 'isMain',
-              width: 160,
-              align: 'center',
-              render: (_: boolean, record: TosTypeConfigRow) => (
-                <Radio
-                  checked={record.isMain}
-                  onChange={() => updateTosTypeDraftRow(record.id, { isMain: true })}
-                />
-              ),
-            },
-            {
-              title: '跟随主类型',
-              dataIndex: 'followsMain',
-              width: 180,
-              align: 'center',
-              render: (_: boolean, record: TosTypeConfigRow) => (
-                <Checkbox
-                  checked={!record.isMain && record.followsMain}
-                  disabled={record.isMain}
-                  onChange={(event) => updateTosTypeDraftRow(record.id, { followsMain: event.target.checked })}
-                >
-                  跟随主类型计划
-                </Checkbox>
-              ),
-            },
-            {
-              title: '操作',
-              width: 100,
-              align: 'center',
-              render: (_: unknown, record: TosTypeConfigRow) => (
-                <Button
-                  type="text"
-                  danger
-                  size="small"
-                  icon={<DeleteOutlined />}
-                  onClick={() => removeTosTypeDraftRow(record.id)}
-                />
-              ),
-            },
-          ]}
-        />
-        <Button
-          type="dashed"
-          icon={<PlusOutlined />}
-          style={{ width: '100%', marginTop: 12, borderRadius: 6 }}
-          onClick={addTosTypeDraftRow}
-        >
-          添加类型
-        </Button>
-      </Modal>
+      />
       {/* Create L2 plan modal */}
       <Modal className="pms-modal"
         title="创建二级计划"

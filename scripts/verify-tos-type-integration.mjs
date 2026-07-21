@@ -2,7 +2,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const root = process.cwd()
-const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8')
+const read = relativePath => {
+  const absolutePath = path.join(root, relativePath)
+  return fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, 'utf8') : ''
+}
 
 const required = [
   ['src/stores/project.ts', 'selectedTosTypeTab'],
@@ -41,13 +44,27 @@ const required = [
   ['src/containers/ProjectSpaceContainer.tsx', 'effectiveLevel2PlanMeta'],
   ['src/containers/ProjectSpaceContainer.tsx', 'showTosTypeEditor'],
   ['src/containers/ProjectSpaceContainer.tsx', 'saveTosTypeConfig'],
-  ['src/containers/ProjectSpaceContainer.tsx', 'TOS_TYPE_OPTIONS'],
-  ['src/containers/ProjectSpaceContainer.tsx', '类型编辑'],
-  ['src/containers/ProjectSpaceContainer.tsx', '是否主类型'],
-  ['src/containers/ProjectSpaceContainer.tsx', '跟随主类型计划'],
-  ['src/containers/ProjectSpaceContainer.tsx', 'checked={!record.isMain && record.followsMain}'],
-  ['src/containers/ProjectSpaceContainer.tsx', 'normalizeTosTypeRows(nextRows, previousMainType)'],
-  ['src/containers/ProjectSpaceContainer.tsx', 'normalizeTosTypeRows(filtered, previousMainType)'],
+  ['src/containers/ProjectSpaceContainer.tsx', '<TosTypeEditorModal'],
+  ['src/containers/ProjectSpaceContainer.tsx', 'rows={tosTypeDraftRows}'],
+  ['src/containers/ProjectSpaceContainer.tsx', 'canEdit={canEditBasicInfo}'],
+  ['src/containers/ProjectSpaceContainer.tsx', 'onChange={setTosTypeDraftRows}'],
+  ['src/containers/ProjectSpaceContainer.tsx', 'onSave={saveTosTypeConfig}'],
+  ['src/containers/ProjectSpaceContainer.tsx', 'onCancel={() => setShowTosTypeEditor(false)}'],
+  ['src/components/project-info/TosTypeEditorModal.tsx', "import DimensionMatrixEditor from '@/components/project-info/DimensionMatrixEditor'"],
+  ['src/components/project-info/TosTypeEditorModal.tsx', '<DimensionMatrixEditor'],
+  ['src/components/project-info/TosTypeEditorModal.tsx', "{ key: 'isMain', label: '主类型' },\n  { key: 'followsMain', label: '跟随主类型' }"],
+  ['src/components/project-info/TosTypeEditorModal.tsx', 'targetRow?.isMain'],
+  ['src/components/project-info/TosTypeEditorModal.tsx', '请先指定其他主类型后再删除'],
+  ['src/components/project-info/TosTypeEditorModal.tsx', 'normalizeTosTypeRows(nextRows, previousMainType)'],
+  ['src/components/project-info/TosTypeEditorModal.tsx', 'TOS_TYPE_OPTIONS.filter(type => !rows.some(row => row.type === type))'],
+  ['src/components/project-info/TosTypeEditorModal.tsx', '<Radio'],
+  ['src/components/project-info/TosTypeEditorModal.tsx', "case 'isMain':"],
+  ['src/components/project-info/TosTypeEditorModal.tsx', '<Checkbox'],
+  ['src/components/project-info/TosTypeEditorModal.tsx', "case 'followsMain':"],
+  ['src/components/project-info/TosTypeEditorModal.tsx', 'checked={!row.isMain && row.followsMain}'],
+  ['src/components/project-info/TosTypeEditorModal.tsx', 'disabled={row.isMain}'],
+  ['src/components/project-info/TosTypeEditorModal.tsx', '跟随主类型计划'],
+  ['src/components/project-info/TosTypeEditorModal.tsx', 'saveDisabled={!canEdit || rows.length === 0}'],
   ['src/containers/AppShell.tsx', 'setSelectedTosTypeTab'],
   ['src/containers/WorkspaceContainer.tsx', 'setSelectedTosTypeTab'],
   ['src/data/projects.ts', 'versionTypes:'],
@@ -60,6 +77,19 @@ const required = [
 const failures = required.flatMap(([file, token]) => (
   read(file).includes(token) ? [] : [`${file} is missing ${token}`]
 ))
+
+const removedInlineContainerTokens = [
+  'updateTosTypeDraftRow',
+  'addTosTypeDraftRow',
+  'removeTosTypeDraftRow',
+  'checked={!record.isMain && record.followsMain}',
+]
+
+removedInlineContainerTokens.forEach(token => {
+  if (read('src/containers/ProjectSpaceContainer.tsx').includes(token)) {
+    failures.push(`src/containers/ProjectSpaceContainer.tsx still contains inline tOS editor token ${token}`)
+  }
+})
 
 if (failures.length > 0) {
   console.error('tOS type integration verification failed:')
