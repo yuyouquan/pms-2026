@@ -11,15 +11,16 @@ import {
   SafetyCertificateOutlined,
 } from '@ant-design/icons'
 import { getBalancedRows } from '@/lib/balancedRows'
+import type { MarketYesNoValue } from '@/lib/marketRules'
 
 export interface ProjectPlanInfoGridProps {
   visibleFieldKeys: string[]
   buildOption?: string
   buildMarket?: string
   googleLaunchDate?: string
-  isMadaControlled?: string
-  isSimLocked?: string
-  isCancelPaused?: string
+  isMadaControlled?: MarketYesNoValue | undefined
+  isSimLocked?: MarketYesNoValue | undefined
+  isCancelPaused?: MarketYesNoValue | undefined
   cancelPauseDate?: string
 }
 
@@ -39,7 +40,7 @@ const displayValue = (value: string | number | null | undefined) => (
   hasValue(value) ? String(value) : '-'
 )
 
-const displayBoolean = (value: string | undefined) => (
+const displayBoolean = (value: MarketYesNoValue | undefined) => (
   hasValue(value)
     ? <Tag className="pms-project-plan-info-tag" color={value === '是' ? 'geekblue' : undefined}>{value}</Tag>
     : '-'

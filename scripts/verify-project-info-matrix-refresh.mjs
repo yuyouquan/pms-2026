@@ -222,6 +222,20 @@ assert.deepEqual(
 )
 assert.doesNotMatch(plan, /planStartDate|planEndDate|developCycle|isCarrierCustomized/, 'plan grid must not retain removed metrics')
 assert.match(plan, /key:\s*'buildOption'[\s\S]*key:\s*'buildMarket'[\s\S]*key:\s*'googleLaunchDate'[\s\S]*key:\s*'isMadaControlled'[\s\S]*key:\s*'isSimLocked'[\s\S]*key:\s*'isCancelPaused'[\s\S]*key:\s*'cancelPauseDate'/, 'plan display metrics must match schema order')
+assert.match(plan, /import type \{ MarketYesNoValue \} from '@\/lib\/marketRules'/, 'plan grid must use the market yes-no value type')
+assert.match(plan, /isMadaControlled\?: MarketYesNoValue \| undefined[\s\S]*isSimLocked\?: MarketYesNoValue \| undefined[\s\S]*isCancelPaused\?: MarketYesNoValue \| undefined/, 'plan grid boolean props must use the market yes-no value type')
+assert.match(plan, /const displayBoolean = \(value: MarketYesNoValue \| undefined\)/, 'plan grid boolean display helper must use the market yes-no value type')
+
+const wholeMachinePlanInfoStart = projectSpace.indexOf('const renderWholeMachinePlanInfo = () => {')
+const wholeMachinePlanInfoEnd = projectSpace.indexOf('\n    const anchorSections', wholeMachinePlanInfoStart)
+assert.notEqual(wholeMachinePlanInfoStart, -1, 'whole-machine plan information renderer must exist')
+assert.notEqual(wholeMachinePlanInfoEnd, -1, 'whole-machine plan information renderer must have a bounded source section')
+const wholeMachinePlanInfo = projectSpace.slice(wholeMachinePlanInfoStart, wholeMachinePlanInfoEnd)
+assert.match(
+  wholeMachinePlanInfo,
+  /<ProjectPlanInfoGrid\s+visibleFieldKeys=\{visiblePlanInfoFieldKeys\}\s+buildOption=\{row\.buildOption\}\s+buildMarket=\{row\.buildMarket\}\s+googleLaunchDate=\{row\.googleLaunchDate\}\s+isMadaControlled=\{row\.isMadaControlled\}\s+isSimLocked=\{row\.isSimLocked\}\s+isCancelPaused=\{row\.isCancelPaused\}\s+cancelPauseDate=\{row\.isCancelPaused === '是' \? row\.cancelPauseDate : undefined\}\s+\/>/,
+  'whole-machine plan information must pass every grid field from the selected market row',
+)
 
 assert.match(projectSpace, /afterCore=\{isWholeMachine \? renderWholeMachinePlanInfo\(\) : renderProjectPlanInfo\(\)\}/, 'target project plan information must remain directly below the core card')
 assert.match(projectSpace, /const anchorSections = \[[\s\S]*id: 'section-plan', label: '计划信息'/, 'the target project anchor must use the unified plan-information label')
