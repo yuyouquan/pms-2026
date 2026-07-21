@@ -1050,6 +1050,7 @@ export default function ProjectSpaceContainer() {
       id: `tos-type-${Date.now()}`,
       type: 'Full',
       isMain: true,
+      followsMain: false,
     }])
     setShowTosTypeEditor(true)
   }
