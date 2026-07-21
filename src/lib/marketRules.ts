@@ -233,11 +233,11 @@ export const isFollowMarket = (rows: MarketConfigRow[], market: string) => {
 }
 
 export const canCreateRevisionForMarket = (
-  _rows: MarketConfigRow[],
-  _market: string,
-  _planLevel: string,
+  rows: MarketConfigRow[],
+  market: string,
+  planLevel: string,
 ) => {
-  return true
+  return planLevel !== 'level1' || !isFollowMarket(rows, market)
 }
 
 export const canChangeMainMarket = (versions: PlanVersionLike[]) => (

@@ -82,7 +82,7 @@ assert.deepEqual(
 )
 
 assert.equal(canCreateRevisionForMarket(changedMain, 'RU', 'level1'), true)
-assert.equal(canCreateRevisionForMarket(normalized, 'RU', 'level1'), true)
+assert.equal(canCreateRevisionForMarket(normalized, 'RU', 'level1'), false)
 assert.equal(canCreateRevisionForMarket(normalized, 'RU', 'level2'), true)
 
 const seedVersions = [
