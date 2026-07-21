@@ -1425,15 +1425,33 @@ body {
 }
 
 /* ─── Project information schema-driven surfaces ─── */
+.pms-project-plan-info-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin: 0 0 16px;
+}
+
+.pms-project-plan-info-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .pms-project-plan-info-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
   grid-auto-rows: 1fr;
   gap: 12px;
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  margin: 0 0 16px;
+  margin: 0;
 }
 
 .pms-project-plan-info-metric {
@@ -1580,7 +1598,7 @@ body {
 
 .pms-project-info-form-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   column-gap: 18px;
 }
 
@@ -1727,13 +1745,19 @@ body {
   box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1199px) {
+  .pms-project-info-form-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 899px) {
   .pms-project-info-form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 639px) {
   .pms-project-info-modal-title-row {
     gap: 6px;
     padding-inline-end: 34px;
@@ -2040,22 +2064,32 @@ body {
   }
 }
 
+.pms-project-info-display-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: #e9eef5;
+}
+
 .pms-project-info-display-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 1px;
   background: #e9eef5;
 }
 
 .pms-project-info-display-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   min-width: 0;
   min-height: 78px;
   padding: 13px 14px;
+  text-align: center;
   background: #fff;
 }
 
-.pms-project-info-display-label,
-.pms-project-info-role-label {
+.pms-project-info-display-label {
   color: #7c8798;
   font-size: 12px;
 }
@@ -2067,31 +2101,48 @@ body {
   font-weight: 600;
   line-height: 1.55;
   word-break: break-word;
+  text-align: center;
 }
 
-.pms-project-info-role-grid {
+.pms-project-info-team-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  padding: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+  padding: 4px 18px 12px;
 }
 
-.pms-project-info-role-card {
-  display: flex;
-  align-items: center;
-  gap: 9px;
+.pms-project-info-team-role {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.32fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
   min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid #e8edf5;
-  border-radius: 8px;
-  background: #fbfdff;
-  transition: border-color 200ms ease, box-shadow 200ms ease, background-color 200ms ease;
+  padding: 12px 4px;
+  border-bottom: 1px solid #edf1f6;
 }
 
-.pms-project-info-role-card:hover {
-  border-color: #d5ddea;
-  background: #fff;
-  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.055);
+.pms-project-info-team-role-name {
+  padding-top: 5px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pms-project-info-team-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  min-width: 0;
+}
+
+.pms-project-info-team-member {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: #172033;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .pms-project-info-role-avatar {
@@ -2100,21 +2151,86 @@ body {
   transition: box-shadow 200ms ease;
 }
 
-.pms-project-info-role-card:hover .pms-project-info-role-avatar {
-  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.18);
-}
-
-.pms-project-info-role-name {
-  overflow: hidden;
-  color: #111827;
-  font-size: 13px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .pms-project-info-empty {
   color: #c0c7d1;
+}
+
+.pms-market-matrix-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.pms-market-matrix-toolbar .ant-select {
+  width: 180px;
+}
+
+.pms-market-matrix .ant-table {
+  border-radius: 10px;
+}
+
+.pms-market-matrix .ant-table-cell {
+  padding: 10px 12px !important;
+  vertical-align: middle;
+}
+
+.pms-market-matrix .ant-table-thead > tr > th {
+  text-align: center;
+  background: #f6f8fc;
+}
+
+.pms-market-matrix .ant-table-tbody > tr > td:not(:first-child) {
+  text-align: center;
+}
+
+.pms-market-matrix .ant-input,
+.pms-market-matrix .ant-picker,
+.pms-market-matrix .ant-select {
+  width: 100%;
+}
+
+.pms-market-matrix-field-label {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pms-market-matrix-market-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 28px;
+}
+
+.pms-market-matrix-market-header > span:first-child {
+  color: #1e293b;
+  font-weight: 700;
+}
+
+.pms-market-matrix-market-header .ant-tag {
+  margin-inline-end: 0;
+}
+
+.pms-market-matrix-date > span {
+  display: block;
+  margin-top: 4px;
+  color: #dc2626;
+  font-size: 11px;
+}
+
+@media (max-width: 640px) {
+  .pms-market-matrix-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pms-market-matrix-toolbar .ant-select,
+  .pms-market-matrix-toolbar .ant-btn {
+    width: 100%;
+  }
 }
 
 .pms-project-info-picker-trigger {
@@ -2218,27 +2334,8 @@ body {
   gap: 16px;
 }
 
-@media (max-width: 1500px) {
-  .pms-project-info-display-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 1280px) {
-  .pms-project-plan-info-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 900px) {
-  .pms-project-plan-info-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 1100px) {
-  .pms-project-info-display-grid,
-  .pms-project-info-role-grid {
+  .pms-project-info-team-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -2254,8 +2351,7 @@ body {
     flex-wrap: wrap;
   }
 
-  .pms-project-info-display-grid,
-  .pms-project-info-role-grid {
+  .pms-project-info-team-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2263,14 +2359,8 @@ body {
     padding-inline: 12px !important;
   }
 
-  .pms-project-info-role-grid {
+  .pms-project-info-team-grid {
     padding: 12px;
-  }
-}
-
-@media (max-width: 560px) {
-  .pms-project-plan-info-grid {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -2283,7 +2373,7 @@ body {
   .pms-project-info-collapse,
   .pms-project-info-collapse .ant-collapse-header,
   .pms-project-info-group-icon,
-  .pms-project-info-role-card,
+  .pms-project-info-team-role,
   .pms-project-info-role-avatar {
     transition: none !important;
   }

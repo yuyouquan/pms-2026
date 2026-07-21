@@ -133,6 +133,9 @@ import ProjectInfoModal, { type ProjectInfoSubmitPayload } from '@/components/pr
 import TargetProjectInformationView from '@/components/project-info/TargetProjectInformationView'
 import MarketEditorModal from '@/components/project-info/MarketEditorModal'
 import ProjectPlanInfoGrid from '@/components/project-info/ProjectPlanInfoGrid'
+import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
+import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
+import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import {
   getProjectResponsiblePersons,
@@ -399,6 +402,18 @@ export default function ProjectSpaceContainer() {
   const canEditLevel2Plan = canDo('plan:二级计划-编辑')
   const canEditCurrentPlan = projectPlanLevel === 'level2' ? canEditLevel2Plan : canEditLevel1Plan
   const currentPlanPermissionLabel = projectPlanLevel === 'level2' ? '二级计划' : '一级计划'
+  const {
+    visibleFieldKeys: visiblePlanInfoFieldKeys,
+    setVisibleFieldKeys: setVisiblePlanInfoFieldKeys,
+  } = useProjectFieldVisibility({
+    userId: currentLoginUser,
+    projectId: selectedProject?.id || '__no-project__',
+    groupKey: 'plan',
+    fields: PROJECT_PLAN_INFO_FIELDS,
+    onSaveError: () => {
+      void message.error('计划字段显示配置保存失败')
+    },
+  })
 
   // ═══════ Local state ═══════
   const lastDueCheckedProjectRef = useRef<string | null>(null)
@@ -2841,8 +2856,18 @@ export default function ProjectSpaceContainer() {
                   label: <Space size={6}><Badge color={marketColor} /><span style={{ fontWeight: 500 }}>{m}</span>{row.isMain && <Tag color="blue" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>主</Tag>}{row.followsMain && <Tag color="green" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>跟随</Tag>}</Space>,
                   children: (
                     <div style={{ padding: '8px 0' }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 16 }}>计划信息</div>
+                      <div className="pms-project-plan-info-heading">
+                        <span>计划信息</span>
+                        <FieldVisibilityPicker
+                          groupLabel="计划信息"
+                          fields={PROJECT_PLAN_INFO_FIELDS}
+                          visibleFieldKeys={visiblePlanInfoFieldKeys}
+                          onChange={setVisiblePlanInfoFieldKeys}
+                          disabled={!canViewBasicInfo}
+                        />
+                      </div>
                       <ProjectPlanInfoGrid
+                        visibleFieldKeys={visiblePlanInfoFieldKeys}
                         planStartDate={p.planStartDate}
                         planEndDate={p.planEndDate}
                         developCycle={p.developCycle}

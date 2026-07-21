@@ -62,6 +62,20 @@ assert.deepEqual(
   'current schema must not re-add a default the user explicitly hid',
 )
 
+const planFields = [
+  { key: 'planStartDate', label: '计划开始时间', defaultVisible: true, hideable: true },
+  { key: 'isCarrierCustomized', label: '是否运营商定制', defaultVisible: true, hideable: false },
+  { key: 'isSimLocked', label: '是否锁卡', defaultVisible: true, hideable: true },
+]
+assert.deepEqual(
+  Array.from(preferences.reconcileVisibleFieldKeys(planFields, {
+    visibleFieldKeys: [],
+    schemaVersion: 1,
+  })),
+  ['isCarrierCustomized'],
+  'plan preferences must keep the non-hideable carrier field visible',
+)
+
 const hookStateUpdates = []
 let hookStateIndex = 0
 const hookReact = {

@@ -1,22 +1,21 @@
 'use client'
 
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   Alert,
   Button,
-  Card,
   Checkbox,
-  Col,
   DatePicker,
-  Form,
   Input,
   Modal,
   Radio,
-  Row,
   Select,
   Space,
+  Table,
+  Tag,
   Tooltip,
-  Typography,
 } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import {
@@ -31,6 +30,23 @@ const YES_NO_OPTIONS: Array<{ label: MarketYesNoValue; value: MarketYesNoValue }
   { label: '是', value: '是' },
   { label: '否', value: '否' },
 ]
+
+const MARKET_MATRIX_FIELDS = [
+  { key: 'isMain', label: '主市场' },
+  { key: 'followsMain', label: '跟随主市场' },
+  { key: 'googleLaunchDate', label: 'Google Launch Date' },
+  { key: 'isCarrierCustomized', label: '是否运营商定制' },
+  { key: 'isSimLocked', label: '是否锁卡' },
+  { key: 'isCancelPaused', label: '是否取消暂停' },
+  { key: 'cancelPauseDate', label: '取消暂停时间' },
+  { key: 'isMadaControlled', label: '是否 MADA 管控' },
+  { key: 'branchInfo', label: '分支信息' },
+  { key: 'jenkinsUrl', label: 'Jenkins 构建' },
+  { key: 'buildAddress', label: '版本地址' },
+] as const
+
+type MarketMatrixFieldKey = typeof MARKET_MATRIX_FIELDS[number]['key']
+type MarketMatrixField = typeof MARKET_MATRIX_FIELDS[number]
 
 export interface MarketEditorModalProps {
   open: boolean
@@ -58,6 +74,10 @@ const createMarketRow = (market: string, isMain: boolean): MarketConfigRow => ({
   buildAddress: '',
 })
 
+const normalizeDateString = (value: string | string[] | null) => (
+  Array.isArray(value) ? (value[0] || '') : (value || '')
+)
+
 export default function MarketEditorModal({
   open,
   rows,
@@ -67,6 +87,21 @@ export default function MarketEditorModal({
   onCancel,
   saving = false,
 }: MarketEditorModalProps) {
+  const [selectedMarket, setSelectedMarket] = useState<string>()
+  const availableMarkets = useMemo(() => MARKET_OPTIONS.filter(market => (
+    !rows.some(row => row.market === market)
+  )), [rows])
+
+  useEffect(() => {
+    if (!availableMarkets.length) {
+      setSelectedMarket(undefined)
+      return
+    }
+    if (!selectedMarket || !availableMarkets.includes(selectedMarket)) {
+      setSelectedMarket(availableMarkets[0])
+    }
+  }, [availableMarkets, selectedMarket])
+
   const updateRow = (rowId: string, patch: Partial<MarketConfigRow>) => {
     const previousMainMarket = getMainMarket(rows)
     let nextRows = rows.map(row => (
@@ -74,7 +109,9 @@ export default function MarketEditorModal({
         ? {
             ...row,
             ...patch,
-            ...(patch.isCancelPaused === '否' ? { cancelPauseDate: '' } : {}),
+            ...(patch.isCancelPaused !== undefined && patch.isCancelPaused !== '是'
+              ? { cancelPauseDate: '' }
+              : {}),
           }
         : { ...row }
     ))
@@ -90,35 +127,160 @@ export default function MarketEditorModal({
     onChange(normalizeMarketRows(nextRows, previousMainMarket))
   }
 
-  const addRow = () => {
-    const selectedMarkets = new Set(rows.map(row => row.market).filter(Boolean))
-    const nextMarket = MARKET_OPTIONS.find(market => !selectedMarkets.has(market))
-    if (!nextMarket) return
+  const addMarket = () => {
+    if (!selectedMarket) return
     onChange(normalizeMarketRows([
       ...rows,
-      createMarketRow(nextMarket, rows.length === 0),
+      createMarketRow(selectedMarket, rows.length === 0),
     ]))
   }
 
   const removeRow = (rowId: string) => {
     if (rows.length <= 1) return
     const targetRow = rows.find(row => row.id === rowId)
-    // A main market must be explicitly handed over before it can be deleted.
-    // Otherwise normalizeMarketRows would silently promote the first remaining row.
     if (targetRow?.isMain) return
     const previousMainMarket = getMainMarket(rows)
     onChange(normalizeMarketRows(rows.filter(row => row.id !== rowId), previousMainMarket))
   }
 
-  const allMarketsSelected = MARKET_OPTIONS.every(market => rows.some(row => row.market === market))
+  const renderYesNo = (
+    value: MarketYesNoValue | undefined,
+    onValueChange: (nextValue: MarketYesNoValue | undefined) => void,
+  ) => (
+    <Select<MarketYesNoValue>
+      allowClear
+      value={value}
+      placeholder="请选择"
+      options={YES_NO_OPTIONS}
+      onChange={onValueChange}
+    />
+  )
+
+  const renderMarketControl = (fieldKey: MarketMatrixFieldKey, row: MarketConfigRow): ReactNode => {
+    switch (fieldKey) {
+      case 'isMain':
+        return (
+          <Radio
+            checked={row.isMain}
+            disabled={!canChangeMainMarket}
+            onChange={() => updateRow(row.id, { isMain: true })}
+          >
+            {row.isMain ? '当前主市场' : '设为主市场'}
+          </Radio>
+        )
+      case 'followsMain':
+        return (
+          <Checkbox
+            checked={!row.isMain && row.followsMain}
+            disabled={row.isMain}
+            onChange={event => updateRow(row.id, { followsMain: event.target.checked })}
+          >
+            跟随主市场计划
+          </Checkbox>
+        )
+      case 'googleLaunchDate':
+        return (
+          <DatePicker
+            value={row.googleLaunchDate ? dayjs(row.googleLaunchDate) : null}
+            format="YYYY-MM-DD"
+            onChange={(_, value) => updateRow(row.id, { googleLaunchDate: normalizeDateString(value) })}
+          />
+        )
+      case 'isCarrierCustomized':
+        return renderYesNo(row.isCarrierCustomized, value => updateRow(row.id, { isCarrierCustomized: value }))
+      case 'isSimLocked':
+        return renderYesNo(row.isSimLocked, value => updateRow(row.id, { isSimLocked: value }))
+      case 'isCancelPaused':
+        return renderYesNo(row.isCancelPaused, value => updateRow(row.id, { isCancelPaused: value }))
+      case 'cancelPauseDate': {
+        const enabled = row.isCancelPaused === '是'
+        return (
+          <div className="pms-market-matrix-date">
+            <DatePicker
+              disabled={!enabled}
+              status={enabled && !row.cancelPauseDate ? 'error' : undefined}
+              value={enabled && row.cancelPauseDate ? dayjs(row.cancelPauseDate) : null}
+              format="YYYY-MM-DD"
+              onChange={(_, value) => updateRow(row.id, { cancelPauseDate: normalizeDateString(value) })}
+            />
+            {enabled && !row.cancelPauseDate && <span>请选择取消暂停时间</span>}
+          </div>
+        )
+      }
+      case 'isMadaControlled':
+        return renderYesNo(row.isMadaControlled, value => updateRow(row.id, { isMadaControlled: value }))
+      case 'branchInfo':
+        return (
+          <Input
+            value={row.branchInfo || ''}
+            placeholder="请输入分支信息"
+            onChange={event => updateRow(row.id, { branchInfo: event.target.value })}
+          />
+        )
+      case 'jenkinsUrl':
+        return (
+          <Input
+            value={row.jenkinsUrl || ''}
+            placeholder="请输入 Jenkins 构建地址"
+            onChange={event => updateRow(row.id, { jenkinsUrl: event.target.value })}
+          />
+        )
+      case 'buildAddress':
+        return (
+          <Input
+            value={row.buildAddress || ''}
+            placeholder="请输入版本地址"
+            onChange={event => updateRow(row.id, { buildAddress: event.target.value })}
+          />
+        )
+      default:
+        return null
+    }
+  }
+
+  const columns: ColumnsType<MarketMatrixField> = [
+    {
+      title: '字段',
+      dataIndex: 'label',
+      key: 'label',
+      fixed: 'left',
+      width: 168,
+      render: label => <strong className="pms-market-matrix-field-label">{label}</strong>,
+    },
+    ...rows.map(row => ({
+      title: (
+        <div className="pms-market-matrix-market-header">
+          <span>{row.market}</span>
+          {row.isMain && <Tag color="blue">主市场</Tag>}
+          <Tooltip title={row.isMain ? '请先指定其他主市场后再删除' : '删除市场'}>
+            <span>
+              <Button
+                type="text"
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+                aria-label={`删除${row.market}市场`}
+                disabled={rows.length <= 1 || row.isMain}
+                onClick={() => removeRow(row.id)}
+              />
+            </span>
+          </Tooltip>
+        </div>
+      ),
+      dataIndex: row.id,
+      key: row.id,
+      width: 228,
+      render: (_value: unknown, field: MarketMatrixField) => renderMarketControl(field.key, row),
+    })),
+  ]
 
   return (
     <Modal
-      className="pms-modal"
+      className="pms-modal pms-market-matrix-modal"
       title={<Space><EditOutlined style={{ color: '#6366f1' }} /><span>市场编辑</span></Space>}
       open={open}
       onCancel={onCancel}
-      width={820}
+      width={1200}
       footer={[
         <Button key="cancel" onClick={onCancel} disabled={saving}>取消</Button>,
         <Button key="save" type="primary" onClick={onSave} loading={saving} disabled={rows.length === 0}>
@@ -136,209 +298,34 @@ export default function MarketEditorModal({
         />
       )}
 
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
-        {rows.map((row, index) => (
-          <Card
-            key={row.id}
-            size="small"
-            title={(
-              <Space size={8}>
-                <Typography.Text strong>{row.market || `市场 ${index + 1}`}</Typography.Text>
-                {row.isMain && <Typography.Text type="secondary">主市场</Typography.Text>}
-              </Space>
-            )}
-            extra={(
-              <Tooltip title={row.isMain ? '请先指定其他主市场后再删除' : undefined}>
-                <span>
-                  <Button
-                    type="text"
-                    danger
-                    size="small"
-                    icon={<DeleteOutlined />}
-                    aria-label={`删除${row.market || '当前'}市场`}
-                    disabled={rows.length <= 1 || row.isMain}
-                    onClick={() => removeRow(row.id)}
-                  />
-                </span>
-              </Tooltip>
-            )}
-          >
-            <Form layout="vertical" component={false}>
-              <Row gutter={[16, 0]}>
-                <Col xs={24} md={8}>
-                  <Form.Item label="市场" required>
-                    <Select
-                      value={row.market || undefined}
-                      placeholder="请选择市场"
-                      style={{ width: '100%' }}
-                      disabled={row.isMain && !canChangeMainMarket}
-                      onChange={(market) => updateRow(row.id, { market })}
-                      options={MARKET_OPTIONS.map(market => ({
-                        label: market,
-                        value: market,
-                        disabled: rows.some(item => item.id !== row.id && item.market === market),
-                      }))}
-                    />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} md={8}>
-                  <Form.Item label="主市场">
-                    <Radio
-                      checked={row.isMain}
-                      disabled={!canChangeMainMarket}
-                      onChange={() => updateRow(row.id, { isMain: true })}
-                    >
-                      设为主市场
-                    </Radio>
-                  </Form.Item>
-                </Col>
-                <Col xs={24} md={8}>
-                  <Form.Item label="跟随主市场">
-                    <Checkbox
-                      checked={!row.isMain && row.followsMain}
-                      disabled={row.isMain}
-                      onChange={(event) => updateRow(row.id, { followsMain: event.target.checked })}
-                    >
-                      跟随主市场计划
-                    </Checkbox>
-                  </Form.Item>
-                </Col>
-              </Row>
+      <div className="pms-market-matrix-toolbar">
+        <Select
+          value={selectedMarket}
+          placeholder="请选择新增市场"
+          options={availableMarkets.map(market => ({ label: market, value: market }))}
+          onChange={setSelectedMarket}
+          disabled={!availableMarkets.length}
+        />
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          disabled={!selectedMarket}
+          onClick={addMarket}
+        >
+          {availableMarkets.length ? '增加市场' : '已添加全部市场'}
+        </Button>
+      </div>
 
-              <Row gutter={[16, 0]}>
-                <Col xs={24} md={8}>
-                  <Form.Item label="Google Launch Date">
-                    <DatePicker
-                      value={row.googleLaunchDate ? dayjs(row.googleLaunchDate) : null}
-                      format="YYYY-MM-DD"
-                      style={{ width: '100%' }}
-                      onChange={(_, dateString) => updateRow(row.id, {
-                        googleLaunchDate: Array.isArray(dateString) ? (dateString[0] || '') : dateString,
-                      })}
-                    />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} md={8}>
-                  <Form.Item label="是否运营商定制">
-                    <Select<MarketYesNoValue>
-                      allowClear
-                      value={row.isCarrierCustomized}
-                      placeholder="请选择"
-                      style={{ width: '100%' }}
-                      options={YES_NO_OPTIONS}
-                      onChange={(value) => updateRow(row.id, { isCarrierCustomized: value })}
-                    />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} md={8}>
-                  <Form.Item label="是否锁卡">
-                    <Select<MarketYesNoValue>
-                      allowClear
-                      value={row.isSimLocked}
-                      placeholder="请选择"
-                      style={{ width: '100%' }}
-                      options={YES_NO_OPTIONS}
-                      onChange={(value) => updateRow(row.id, { isSimLocked: value })}
-                    />
-                  </Form.Item>
-                </Col>
-              </Row>
-
-              <Row gutter={[16, 0]}>
-                <Col xs={24} md={8}>
-                  <Form.Item label="是否取消暂停">
-                    <Select<MarketYesNoValue>
-                      allowClear
-                      value={row.isCancelPaused}
-                      placeholder="请选择"
-                      style={{ width: '100%' }}
-                      options={YES_NO_OPTIONS}
-                      onChange={(value) => updateRow(row.id, { isCancelPaused: value })}
-                    />
-                  </Form.Item>
-                </Col>
-                {row.isCancelPaused === '是' && (
-                  <Col xs={24} md={8}>
-                    <Form.Item
-                      label="取消暂停时间"
-                      required
-                      validateStatus={row.cancelPauseDate ? undefined : 'error'}
-                      help={row.cancelPauseDate ? undefined : '请选择取消暂停时间'}
-                    >
-                      <DatePicker
-                        value={row.cancelPauseDate ? dayjs(row.cancelPauseDate) : null}
-                        format="YYYY-MM-DD"
-                        style={{ width: '100%' }}
-                        onChange={(_, dateString) => updateRow(row.id, {
-                          cancelPauseDate: Array.isArray(dateString) ? (dateString[0] || '') : dateString,
-                        })}
-                      />
-                    </Form.Item>
-                  </Col>
-                )}
-                <Col xs={24} md={8}>
-                  <Form.Item label="是否 MADA 管控">
-                    <Select<MarketYesNoValue>
-                      allowClear
-                      value={row.isMadaControlled}
-                      placeholder="请选择"
-                      style={{ width: '100%' }}
-                      options={YES_NO_OPTIONS}
-                      onChange={(value) => updateRow(row.id, { isMadaControlled: value })}
-                    />
-                  </Form.Item>
-                </Col>
-              </Row>
-
-              <div style={{ paddingTop: 12, marginBottom: 12, borderTop: '1px solid #eef2ff' }}>
-                <Typography.Text strong style={{ color: '#374151' }}>构建配置</Typography.Text>
-                <Typography.Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
-                  每个市场独立维护
-                </Typography.Text>
-              </div>
-              <Row gutter={[16, 0]}>
-                <Col xs={24} md={8}>
-                  <Form.Item label="分支信息">
-                    <Input
-                      value={row.branchInfo || ''}
-                      placeholder="请输入分支信息"
-                      onChange={event => updateRow(row.id, { branchInfo: event.target.value })}
-                    />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} md={8}>
-                  <Form.Item label="Jenkins 构建">
-                    <Input
-                      value={row.jenkinsUrl || ''}
-                      placeholder="请输入 Jenkins 构建地址"
-                      onChange={event => updateRow(row.id, { jenkinsUrl: event.target.value })}
-                    />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} md={8}>
-                  <Form.Item label="版本地址">
-                    <Input
-                      value={row.buildAddress || ''}
-                      placeholder="请输入版本地址"
-                      onChange={event => updateRow(row.id, { buildAddress: event.target.value })}
-                    />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </Form>
-          </Card>
-        ))}
-      </Space>
-
-      <Button
-        type="dashed"
-        icon={<PlusOutlined />}
-        style={{ width: '100%', marginTop: 12 }}
-        disabled={allMarketsSelected}
-        onClick={addRow}
-      >
-        {allMarketsSelected ? '已添加全部可选市场' : '添加市场'}
-      </Button>
+      <Table<MarketMatrixField>
+        className="pms-market-matrix"
+        rowKey="key"
+        bordered
+        size="small"
+        pagination={false}
+        dataSource={[...MARKET_MATRIX_FIELDS]}
+        columns={columns}
+        scroll={{ x: 168 + rows.length * 228 }}
+      />
     </Modal>
   )
 }

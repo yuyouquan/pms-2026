@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Avatar, Collapse, Space, Tag, message } from 'antd'
+import { Avatar, Collapse, Grid, Space, Tag, message } from 'antd'
 import { InfoCircleOutlined, LinkOutlined, TeamOutlined, ToolOutlined } from '@ant-design/icons'
 import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
 import {
@@ -12,10 +12,12 @@ import {
 } from '@/constants/projectInfoSchema'
 import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
 import { formatJiraProjectTag, getJiraProjectUrl, type JiraProjectConfig } from '@/lib/jiraProject'
+import { getBalancedRows } from '@/lib/balancedRows'
 import {
   buildProjectInfoValues,
   formatProjectInfoValue,
   getProjectInfoValue,
+  normalizeTeamMembers,
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
 
@@ -63,6 +65,7 @@ function ProjectInfoGroupPanel({
   canConfigure,
 }: ProjectInfoSectionsProps & { group: ProjectInfoGroupDefinition }) {
   const [messageApi, messageContextHolder] = message.useMessage()
+  const screens = Grid.useBreakpoint()
   const fields = useMemo(
     () => getFieldsForGroup(project.type, group.key),
     [group.key, project.type],
@@ -81,6 +84,8 @@ function ProjectInfoGroupPanel({
     visibleFieldKeys.includes(field.key)
     && (!field.visibleWhen || field.visibleWhen(values))
   ))
+  const maxColumns = screens.xl ? 6 : screens.lg ? 4 : screens.sm ? 2 : 1
+  const displayRows = getBalancedRows(visibleFields, maxColumns)
 
   return (
     <>
@@ -111,26 +116,38 @@ function ProjectInfoGroupPanel({
             />
           ),
           children: group.key === 'team' ? (
-            <div className="pms-project-info-role-grid">
+            <div className="pms-project-info-team-grid">
               {visibleFields.map(field => {
-                const value = formatProjectInfoValue(getProjectInfoValue(project, field.key))
+                const members = normalizeTeamMembers(getProjectInfoValue(project, field.key))
                 return (
-                  <div key={field.key} className="pms-project-info-role-card">
-                    <Avatar size={30} className="pms-project-info-role-avatar">{value === '-' ? '?' : value.slice(0, 1)}</Avatar>
-                    <div>
-                      <div className={value === '-' ? 'pms-project-info-empty' : 'pms-project-info-role-name'}>{value}</div>
-                      <div className="pms-project-info-role-label">{field.label}</div>
+                  <article key={field.key} className="pms-project-info-team-role">
+                    <div className="pms-project-info-team-role-name">{field.label}</div>
+                    <div className="pms-project-info-team-members">
+                      {members.length ? members.map(name => (
+                        <span key={name} className="pms-project-info-team-member">
+                          <Avatar size={28} className="pms-project-info-role-avatar">{name.slice(0, 1)}</Avatar>
+                          <span>{name}</span>
+                        </span>
+                      )) : <span className="pms-project-info-empty">未配置</span>}
                     </div>
-                  </div>
+                  </article>
                 )
               })}
             </div>
           ) : (
-            <div className="pms-project-info-display-grid">
-              {visibleFields.map(field => (
-                <div key={field.key} className="pms-project-info-display-item">
-                  <div className="pms-project-info-display-label">{field.label}</div>
-                  <div className="pms-project-info-display-value">{renderNormalValue(getProjectInfoValue(project, field.key), field.inputType)}</div>
+            <div className="pms-project-info-display-rows">
+              {displayRows.map((row, rowIndex) => (
+                <div
+                  key={`${group.key}-${rowIndex}`}
+                  className="pms-project-info-display-grid"
+                  style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}
+                >
+                  {row.map(field => (
+                    <div key={field.key} className="pms-project-info-display-item">
+                      <div className="pms-project-info-display-label">{field.label}</div>
+                      <div className="pms-project-info-display-value">{renderNormalValue(getProjectInfoValue(project, field.key), field.inputType)}</div>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>

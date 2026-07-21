@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Button, Checkbox, Drawer, Space, Tooltip } from 'antd'
 import { SettingOutlined } from '@ant-design/icons'
-import type { ProjectInfoFieldDefinition } from '@/constants/projectInfoSchema'
+import type { ProjectVisibilityFieldDefinition } from '@/lib/projectFieldPreferences'
 
 interface FieldVisibilityPickerProps {
   groupLabel: string
-  fields: ProjectInfoFieldDefinition[]
+  fields: ProjectVisibilityFieldDefinition[]
   visibleFieldKeys: string[]
   onChange: (keys: string[]) => void | Promise<void>
   disabled?: boolean
