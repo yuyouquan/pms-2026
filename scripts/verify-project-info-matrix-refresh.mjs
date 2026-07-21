@@ -70,6 +70,10 @@ for (const type of ['整机产品-手机', '整机产品-PAD', '整机产品-笔
   assert.equal(schemaModule.getProjectInfoFields(type), schemaModule.MACHINE_PROJECT_INFO_FIELDS, `${type} must reuse the machine field schema`)
   assert.equal(schemaModule.getProjectInfoGroups(type), schemaModule.MACHINE_PROJECT_INFO_GROUPS, `${type} must reuse the machine group schema`)
 }
+assert.equal(schemaModule.isTargetProjectInfoType('tOS版本项目'), true, 'tOS must use target project information')
+assert.equal(schemaModule.isTargetProjectInfoType('技术项目'), false, 'technical projects must not satisfy the target project information predicate')
+assert.match(schema, /export type TargetProjectInfoType\s*=/, 'target project information must expose an exact project-type union')
+assert.match(schema, /type is TargetProjectInfoType/, 'target project information predicate must narrow to its exact union')
 
 assert.equal(JSON.stringify(keysFor(machineFields, 'basic')), JSON.stringify([
   'researchMode', 'developmentMode', 'firstSaleTosVersion', 'isFirstLaunchProject',

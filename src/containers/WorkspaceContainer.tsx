@@ -18,7 +18,7 @@ import { ProjectCard, TodoList, KanbanBoard } from '@/components/workspace/Works
 import type { ProjectType, TodoType } from '@/components/workspace/WorkspaceModule'
 import WorkTracker from '@/components/work-tracker/WorkTracker'
 import AddProjectModal from '@/components/workspace/AddProjectModal'
-import { initialProjects, PROJECT_TYPES, PROJECT_STATUS_CONFIG } from '@/data/projects'
+import { PROJECT_TYPES, PROJECT_STATUS_CONFIG } from '@/data/projects'
 import { initialTodos } from '@/components/shared/PlanHelpers'
 import { kanbanColumns } from '@/stores/project'
 import { PROJECT_TYPE_COLORS, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
@@ -101,7 +101,7 @@ export default function WorkspaceContainer() {
     return result
   }, [visibleProjects, projectSearchText2, projectStatusFilter, projectTypeFilter])
 
-  const renderProjectCard = (project: typeof initialProjects[0]) => (
+  const renderProjectCard = (project: typeof projects[number]) => (
     <ProjectCard
       project={project as ProjectType}
       setSelectedProject={(p) => activateProject(p as typeof projects[number])}

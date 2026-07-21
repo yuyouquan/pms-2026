@@ -15,12 +15,8 @@ import {
 } from 'antd'
 import { CalendarOutlined } from '@ant-design/icons'
 import {
-  PROJECT_TYPE_CAPABILITY,
   PROJECT_TYPE_COLORS,
-  PROJECT_TYPE_INDEPENDENT_SOFTWARE,
-  PROJECT_TYPE_MACHINE,
-  PROJECT_TYPE_TECH,
-  PROJECT_TYPE_TOS_VERSION,
+  type PersistedProjectTypeName,
 } from '@/constants/projectTypes'
 
 const { Option } = Select
@@ -31,7 +27,7 @@ const { Option } = Select
 export type ProjectType = {
   id: string
   name: string
-  type: typeof PROJECT_TYPE_MACHINE | typeof PROJECT_TYPE_TOS_VERSION | typeof PROJECT_TYPE_INDEPENDENT_SOFTWARE | typeof PROJECT_TYPE_TECH | typeof PROJECT_TYPE_CAPABILITY
+  type: PersistedProjectTypeName
   status: string
   progress: number
   leader: string

@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons'
 import { initialProjects, PROJECT_TYPE_COLORS } from '@/data/projects'
 import { TaskTable, HorizontalTable, GanttChart, ALL_COLUMNS, VERSION_DATA, LEVEL1_TASKS } from '@/components/plan/PlanModule'
+import { isMachineProjectType } from '@/constants/projectTypes'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
 
 function SharePlanContent() {
@@ -29,7 +30,7 @@ function SharePlanContent() {
   })[0]
 
   // Is 整机产品项目 with markets?
-  const isWholeMachine = project?.type === '整机产品项目' && project?.markets && project.markets.length > 0
+  const isWholeMachine = isMachineProjectType(project?.type) && project?.markets && project.markets.length > 0
   const markets = isWholeMachine ? (project.markets as string[]) : []
 
   // Build market plan data — each market gets its own copy of L1 tasks
@@ -103,7 +104,7 @@ function SharePlanContent() {
               {project.type}
             </Tag>
             <span style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>
-              {project.type === '整机产品项目' && (project as any).marketName ? (project as any).marketName : project.name}
+              {isMachineProjectType(project.type) && project.marketName ? project.marketName : project.name}
               <span style={{ color: '#9ca3af', fontWeight: 400, marginLeft: 8 }}>·</span>
               <span style={{ color: '#6366f1', marginLeft: 8 }}>{planTitle}</span>
             </span>

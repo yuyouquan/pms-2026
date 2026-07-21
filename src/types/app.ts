@@ -2,10 +2,10 @@
 // Derived from the mock data structures in src/app/page.tsx
 
 import type { JiraProjectConfig } from '@/lib/jiraProject'
-import type { ProjectTypeName } from '@/constants/projectTypes'
+import type { PersistedProjectTypeName } from '@/constants/projectTypes'
 
 /** Project type literals used in initialProjects */
-export type ProjectCategory = ProjectTypeName;
+export type ProjectCategory = PersistedProjectTypeName;
 
 /** Health status for project cards */
 export type HealthStatus = 'normal' | 'warning' | 'risk';

@@ -2,9 +2,7 @@ export const PROJECT_TYPE_MACHINE_PHONE = '整机产品-手机' as const
 export const PROJECT_TYPE_MACHINE_PAD = '整机产品-PAD' as const
 export const PROJECT_TYPE_MACHINE_LAPTOP = '整机产品-笔电' as const
 export const LEGACY_PROJECT_TYPE_MACHINE = '整机产品项目' as const
-// Keep the legacy literal in this alias's static type until every consumer has
-// moved to `isMachineProjectType`; its runtime value is the canonical phone type.
-export const PROJECT_TYPE_MACHINE: typeof PROJECT_TYPE_MACHINE_PHONE | typeof LEGACY_PROJECT_TYPE_MACHINE = PROJECT_TYPE_MACHINE_PHONE
+export const PROJECT_TYPE_MACHINE = PROJECT_TYPE_MACHINE_PHONE
 export const PROJECT_TYPE_TOS_VERSION = 'tOS版本项目' as const
 export const PROJECT_TYPE_INDEPENDENT_SOFTWARE = '独立软件产品项目' as const
 export const PROJECT_TYPE_TECH = '技术项目' as const
@@ -39,7 +37,9 @@ export const PROJECT_TEMPLATE_TYPES = [
   PROJECT_TYPE_CAPABILITY,
 ] as const
 
-export type ProjectTypeName = typeof PROJECT_TYPES[number] | typeof LEGACY_PROJECT_TYPE_MACHINE
+export type CurrentProjectTypeName = typeof PROJECT_TYPES[number]
+export type ProjectTypeName = CurrentProjectTypeName
+export type PersistedProjectTypeName = CurrentProjectTypeName | typeof LEGACY_PROJECT_TYPE_MACHINE
 
 export const PROJECT_TYPE_COLORS: Record<string, { bg: string; color: string }> = {
   [PROJECT_TYPE_MACHINE]: { bg: 'rgba(99,102,241,0.08)', color: '#6366f1' },

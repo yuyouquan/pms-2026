@@ -1,5 +1,6 @@
 import {
   MACHINE_PROJECT_TYPES,
+  LEGACY_PROJECT_TYPE_MACHINE,
   PROJECT_TYPE_TOS_VERSION,
   isMachineProjectType,
   type ProjectTypeName,
@@ -181,7 +182,11 @@ export const TOS_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineField
 
 export const TARGET_PROJECT_TYPES = [...MACHINE_PROJECT_TYPES, PROJECT_TYPE_TOS_VERSION] as const
 
-export const isTargetProjectInfoType = (type: string | undefined): type is ProjectTypeName => (
+export type TargetProjectInfoType = typeof MACHINE_PROJECT_TYPES[number]
+  | typeof LEGACY_PROJECT_TYPE_MACHINE
+  | typeof PROJECT_TYPE_TOS_VERSION
+
+export const isTargetProjectInfoType = (type: string | undefined): type is TargetProjectInfoType => (
   isMachineProjectType(type) || type === PROJECT_TYPE_TOS_VERSION
 )
 

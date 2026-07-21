@@ -4,7 +4,8 @@ import vm from 'node:vm'
 import ts from 'typescript'
 
 const filename = 'src/constants/projectTypes.ts'
-const output = ts.transpileModule(readFileSync(filename, 'utf8'), {
+const source = readFileSync(filename, 'utf8')
+const output = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText
 const module = { exports: {} }
@@ -49,5 +50,8 @@ assert.equal(PROJECT_TYPES.includes(PROJECT_TYPE_MACHINE_PAD), true)
 assert.equal(PROJECT_TYPES.includes(PROJECT_TYPE_MACHINE_LAPTOP), true)
 assert.equal(PROJECT_TEMPLATE_TYPES.filter(isMachineProjectType).length, 1)
 assert.equal(PROJECT_TEMPLATE_TYPES.includes(PROJECT_TYPE_MACHINE), true)
+assert.match(source, /export const PROJECT_TYPE_MACHINE = PROJECT_TYPE_MACHINE_PHONE/)
+assert.match(source, /export type CurrentProjectTypeName = typeof PROJECT_TYPES\[number\]/)
+assert.match(source, /export type PersistedProjectTypeName = CurrentProjectTypeName \| typeof LEGACY_PROJECT_TYPE_MACHINE/)
 
 console.log('Machine project type verification passed.')

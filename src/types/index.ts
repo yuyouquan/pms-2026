@@ -1,10 +1,10 @@
 // 项目管理系统类型定义
 
 import type { TosPlanType } from '@/lib/tosTypeRules'
-import type { ProjectTypeName } from '@/constants/projectTypes'
+import type { PersistedProjectTypeName } from '@/constants/projectTypes'
 
 // 项目类型
-export type ProjectType = ProjectTypeName;
+export type ProjectType = PersistedProjectTypeName;
 
 // 项目状态映射 - IPM原始状态 → PMS展示状态
 export const IPM_STATUS_MAP: Record<string, string> = {

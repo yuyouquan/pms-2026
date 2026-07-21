@@ -1,6 +1,10 @@
 import { create } from 'zustand'
 import { initialProjects } from '@/data/projects'
-import { PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
+import {
+  PROJECT_TYPE_TOS_VERSION,
+  isMachineProjectType,
+  type PersistedProjectTypeName,
+} from '@/constants/projectTypes'
 import { buildMarketRowsFromMarkets, type MarketConfigRow } from '@/lib/marketRules'
 import { buildTosTypeRows, type TosTypeConfigRow } from '@/lib/tosTypeRules'
 
@@ -30,13 +34,14 @@ export const kanbanColumns = [
   { title: '发布阶段', key: 'released', color: '#722ed1' },
 ]
 
-type Project = typeof initialProjects[number] & {
+type Project = Omit<typeof initialProjects[number], 'type'> & {
+  type: PersistedProjectTypeName
   versionTypes?: string[]
   responsiblePersons?: string[]
 }
 
 const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) => {
-  if (project.type === '整机产品项目' && project.markets?.length) {
+  if (isMachineProjectType(project.type) && project.markets?.length) {
     acc[project.id] = buildMarketRowsFromMarkets(project.markets)
   }
   return acc
