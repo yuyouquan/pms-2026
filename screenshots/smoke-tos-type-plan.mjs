@@ -602,8 +602,15 @@ try {
   for (const hiddenStatistic of ['计划开始时间', '计划结束时间', '开发周期（工作日）', '健康状态']) {
     await assertNoVisibleText(page, hiddenStatistic, '#section-plan')
   }
-  await assertVisibleText(page, '里程碑计划（横排视图）', '#section-plan')
+  await assertNoVisibleText(page, '里程碑计划（横排视图）', '#section-plan')
   await assertVisibleText(page, '版本', '#section-plan table')
+
+  await clickVisibleText(page, 'button', '编辑')
+  await waitForVisibleText(page, '编辑项目信息', '.pms-project-info-modal')
+  await assertNoVisibleText(page, '基础信息', '.pms-project-info-modal')
+  await assertNoVisibleText(page, '首发项目', '.pms-project-info-modal')
+  await assertVisibleText(page, '团队信息', '.pms-project-info-modal')
+  await clickVisibleText(page, '.pms-project-info-modal button', '取消')
 
   await openTypeEditor(page, '#section-plan')
   await assertMainTypeDeleteDisabled(page, 'Full')
@@ -638,6 +645,7 @@ try {
   await assertVisibleText(page, '计划信息', '#section-plan')
   await assertNoVisibleText(page, '计划信息与配置信息', '#section-plan')
   await assertNoVisibleText(page, '配置信息', '#section-plan')
+  await assertNoVisibleText(page, '里程碑计划（横排视图）', '#section-plan')
   await assertNoElement(page, '#section-config')
   await new Promise(resolve => setTimeout(resolve, 3500))
   const planSection = await page.$('#section-plan')

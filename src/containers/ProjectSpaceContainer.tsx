@@ -441,6 +441,11 @@ export default function ProjectSpaceContainer() {
   const [showTosTypeEditor, setShowTosTypeEditor] = useState(false)
   const [tosTypeDraftRows, setTosTypeDraftRows] = useState<TosTypeConfigRow[]>([])
   const [showProjectInfoEditor, setShowProjectInfoEditor] = useState(false)
+  const [transferInfoCollapsed, setTransferInfoCollapsed] = useState(false)
+
+  useEffect(() => {
+    setTransferInfoCollapsed(false)
+  }, [selectedProject?.id])
 
   // ═══════ Derived ═══════
   const isWholeMachineProject = isMachineProjectType(selectedProject?.type)
@@ -2808,7 +2813,6 @@ export default function ProjectSpaceContainer() {
                       isCancelPaused={row.isCancelPaused}
                       cancelPauseDate={row.isCancelPaused === '是' ? row.cancelPauseDate : undefined}
                     />
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12 }}>里程碑计划（横排视图）</div>
                     {renderHorizontalTable()}
                   </div>
                 ),
@@ -2996,8 +3000,25 @@ export default function ProjectSpaceContainer() {
         )}
         {/* Transfer info */}
         {isWholeMachine && currentProjectTransferApps.length > 0 && (
-          <Card id="section-transfer" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<DeploymentUnitOutlined style={{ color: '#6366f1' }} />, '转维信息', '#6366f1')}>
-            <Table dataSource={currentProjectTransferApps} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
+          <Card
+            id="section-transfer"
+            style={{ marginBottom: 20, borderRadius: 8 }}
+            title={sectionTitle(<DeploymentUnitOutlined style={{ color: '#6366f1' }} />, '转维信息', '#6366f1')}
+            extra={(
+              <Button
+                type="text"
+                size="small"
+                aria-expanded={!transferInfoCollapsed}
+                aria-controls="section-transfer-content"
+                icon={<DownOutlined style={{ transition: 'transform 0.2s', transform: transferInfoCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }} />}
+                onClick={() => setTransferInfoCollapsed(collapsed => !collapsed)}
+              >
+                {transferInfoCollapsed ? '展开' : '折叠'}
+              </Button>
+            )}
+          >
+            {!transferInfoCollapsed && <div id="section-transfer-content">
+              <Table dataSource={currentProjectTransferApps} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
               rowClassName={(r: any) => r.status === 'cancelled' ? 'tm-row-cancelled' : ''}
               columns={[
                 { title: '项目名称', dataIndex: 'projectName', width: 200, render: (_: unknown, r: TransferApplication) => (
@@ -3026,7 +3047,8 @@ export default function ProjectSpaceContainer() {
                   </Space>
                 ) },
               ]}
-            />
+              />
+            </div>}
           </Card>
         )}
         {/* Target-project plan information is rendered directly after the core card. */}
@@ -3114,7 +3136,9 @@ export default function ProjectSpaceContainer() {
             <Divider style={{ margin: '16px 0' }} />
           </>
         )}
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, textTransform: 'uppercase' as const, letterSpacing: 1 }}>里程碑计划（横排视图）</div>
+        {!isTosVersionProject && (
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, textTransform: 'uppercase' as const, letterSpacing: 1 }}>里程碑计划（横排视图）</div>
+        )}
         {renderHorizontalTable()}
       </>
     )

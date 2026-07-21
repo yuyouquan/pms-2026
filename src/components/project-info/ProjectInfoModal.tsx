@@ -8,7 +8,6 @@ import ProjectInfoFieldInput from '@/components/project-info/ProjectInfoFieldInp
 import {
   getEffectiveProjectInfoFields,
   getProjectInfoFields,
-  getProjectInfoGroups,
   isTargetProjectInfoType,
   type ProjectInfoGroupKey,
 } from '@/constants/projectInfoSchema'
@@ -22,6 +21,8 @@ import { fetchByBid, type ExternalProjectEntry } from '@/data/externalProjectPoo
 import {
   deriveMachineProjectInfoValues,
   deriveTosProjectAggregates,
+  getProjectInfoModalFields,
+  getProjectInfoModalGroups,
   validateProjectInfoValues,
 } from '@/lib/projectInfoRules'
 import {
@@ -140,9 +141,9 @@ export default function ProjectInfoModal({
   createDraftContextRef.current = { open, mode, ownerId: draftOwnerId || '' }
   const watchedValues = (Form.useWatch([], { form, preserve: true }) || {}) as ProjectInfoFormState
   const projectType = String(watchedValues.type || project?.type || '')
-  const fields = useMemo(() => getProjectInfoFields(projectType), [projectType])
+  const fields = useMemo(() => getProjectInfoModalFields(projectType), [projectType])
   const editableFields = useMemo(() => fields.filter(field => !field.readOnly), [fields])
-  const groups = useMemo(() => getProjectInfoGroups(projectType), [projectType])
+  const groups = useMemo(() => getProjectInfoModalGroups(projectType), [projectType])
   const firstLaunchOptions = useMemo(() => existingProjects
     .filter(item => isMachineProjectType(item.type))
     .map(item => ({ label: item.name, value: item.id })), [existingProjects])
@@ -276,7 +277,7 @@ export default function ProjectInfoModal({
     form.setFieldsValue(initialValues)
     previousTypeRef.current = normalizedProjectType
     const nextActiveGroups = projectFields.length
-      ? getProjectInfoGroups(normalizedProjectType).map(group => group.key)
+      ? getProjectInfoModalGroups(normalizedProjectType).map(group => group.key)
       : []
     activeGroupsRef.current = nextActiveGroups
     setActiveGroups(nextActiveGroups)
@@ -329,8 +330,10 @@ export default function ProjectInfoModal({
         form.setFieldsValue({ ...draft.values, type: restoredType } as ProjectInfoFormState)
         lastAppliedSourceRef.current = `${restoredBid}::${restoredType}`
         previousTypeRef.current = restoredType
-        activeGroupsRef.current = draft.activeGroups
-        setActiveGroups(draft.activeGroups)
+        const modalGroupKeys = new Set<string>(getProjectInfoModalGroups(restoredType).map(group => group.key))
+        const restoredActiveGroups = draft.activeGroups.filter(groupKey => modalGroupKeys.has(groupKey))
+        activeGroupsRef.current = restoredActiveGroups
+        setActiveGroups(restoredActiveGroups)
       }
 
       if (isCurrentCreateDraftSession(session)) setDraftReadStatus('ready')
@@ -385,7 +388,7 @@ export default function ProjectInfoModal({
     if (shouldInferTos) {
       form.setFieldValue('type', inferredType)
       previousTypeRef.current = inferredType
-      setActiveGroups(getProjectInfoGroups(inferredType).map(group => group.key))
+      setActiveGroups(getProjectInfoModalGroups(inferredType).map(group => group.key))
     }
     applySourceValues(bid, shouldInferTos ? inferredType : undefined)
     if (shouldInferTos && previousFirstLaunchProjectIds.length > 0) {
@@ -402,7 +405,7 @@ export default function ProjectInfoModal({
     form.setFieldValue('type', nextType)
     previousTypeRef.current = nextType
     setAggregateWarnings([])
-    setActiveGroups(getProjectInfoGroups(nextType).map(group => group.key))
+    setActiveGroups(getProjectInfoModalGroups(nextType).map(group => group.key))
     const bid = String(form.getFieldValue('bid') || '')
     if (bid) applySourceValues(bid, nextType)
   }
@@ -411,7 +414,7 @@ export default function ProjectInfoModal({
     const previousType = previousTypeRef.current
     if (!previousType || previousType === nextType) {
       previousTypeRef.current = nextType
-      setActiveGroups(getProjectInfoGroups(nextType).map(group => group.key))
+      setActiveGroups(getProjectInfoModalGroups(nextType).map(group => group.key))
       const bid = String(form.getFieldValue('bid') || '')
       if (bid) applySourceValues(bid, nextType)
       return
@@ -615,10 +618,11 @@ export default function ProjectInfoModal({
       normalizedProjectType,
       infoValues,
       {
+        fieldKeys: editableFieldKeys,
         tosAggregateMissingSources: aggregateWarnings,
         validateRequiredOnCreate: mode === 'create',
       },
-    ).filter(error => editableFieldKeys.has(error.fieldKey))
+    )
     if (editableErrors.length) {
       const first = editableErrors[0]
       form.setFields(editableErrors.map(error => ({ name: error.fieldKey, errors: [error.message] })))
@@ -757,7 +761,7 @@ export default function ProjectInfoModal({
           )}
         </div>
 
-        {aggregateWarnings.length > 0 && (
+        {projectType !== PROJECT_TYPE_TOS_VERSION && aggregateWarnings.length > 0 && (
           <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="首发项目来源字段不完整" description={aggregateWarnings.join('；')} />
         )}
 

@@ -1,6 +1,7 @@
 import {
   getEffectiveProjectInfoFields,
   getProjectInfoFields,
+  getProjectInfoGroups,
 } from '@/constants/projectInfoSchema'
 import { isMachineProjectType, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { deriveStartingRam, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
@@ -11,6 +12,22 @@ export interface ProjectInfoValidationError {
   fieldKey: string
   groupKey: 'basic' | 'extended' | 'team'
   message: string
+}
+
+/**
+ * tOS basic information is still part of the display/storage schema, but it is
+ * no longer maintained in the create/edit modal. Keeping this as a modal-only
+ * projection prevents the UI change from deleting historical aggregate data.
+ */
+export const getProjectInfoModalFields = (type: string) => (
+  getProjectInfoFields(type).filter(field => (
+    type !== PROJECT_TYPE_TOS_VERSION || field.group !== 'basic'
+  ))
+)
+
+export const getProjectInfoModalGroups = (type: string) => {
+  const visibleGroupKeys = new Set(getProjectInfoModalFields(type).map(field => field.group))
+  return getProjectInfoGroups(type).filter(group => visibleGroupKeys.has(group.key))
 }
 
 export interface ExternalProjectInfoSource {
@@ -161,15 +178,18 @@ export const validateProjectInfoValues = (
   type: string,
   values: ProjectInfoValues,
   options?: {
+    fieldKeys?: ReadonlySet<string>
     tosAggregateMissingSources?: string[]
     validateRequiredOnCreate?: boolean
   },
 ): ProjectInfoValidationError[] => {
   const effectiveKeys = new Set(getEffectiveProjectInfoFields(type, values).map(field => field.key))
+  const validationFieldKeys = options?.fieldKeys
   const errors = getProjectInfoFields(type)
     .filter(field => (
       (options?.validateRequiredOnCreate ? field.requiredOnCreate : field.required)
       && effectiveKeys.has(field.key)
+      && (!validationFieldKeys || validationFieldKeys.has(field.key))
       && isEmptyValue(values[field.key])
     ))
     .map(field => ({
@@ -178,7 +198,11 @@ export const validateProjectInfoValues = (
       message: `请填写${field.label}`,
     }))
 
-  if (type === PROJECT_TYPE_TOS_VERSION && options?.tosAggregateMissingSources?.length) {
+  if (
+    type === PROJECT_TYPE_TOS_VERSION
+    && (!validationFieldKeys || validationFieldKeys.has('firstLaunchProjects'))
+    && options?.tosAggregateMissingSources?.length
+  ) {
     errors.push({
       fieldKey: 'firstLaunchProjects',
       groupKey: 'basic',
