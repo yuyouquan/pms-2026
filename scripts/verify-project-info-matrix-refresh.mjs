@@ -15,7 +15,9 @@ const plan = read('src/components/project-info/ProjectPlanInfoGrid.tsx')
 const planSchema = read('src/constants/projectPlanInfoSchema.ts')
 const styles = read('src/styles/globals.css')
 
-const evaluateTypeScriptModule = filename => {
+const evaluateTypeScriptModule = (filename, requireModule = id => {
+  throw new Error(`Unexpected module: ${id}`)
+}) => {
   const output = ts.transpileModule(read(filename), {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
@@ -23,7 +25,7 @@ const evaluateTypeScriptModule = filename => {
     },
   }).outputText
   const module = { exports: {} }
-  vm.runInNewContext(output, { module, exports: module.exports }, { filename })
+  vm.runInNewContext(output, { module, exports: module.exports, require: requireModule }, { filename })
   return module.exports
 }
 
@@ -33,6 +35,67 @@ assert.equal(
   JSON.stringify([[1, 2, 3, 4], [5, 6, 7]]),
   'seven fields must balance as 4 + 3',
 )
+
+const schemaModule = evaluateTypeScriptModule(
+  'src/constants/projectInfoSchema.ts',
+  id => {
+    if (id === '@/constants/projectTypes') {
+      return {
+        PROJECT_TYPE_MACHINE: '整机产品项目',
+        PROJECT_TYPE_TOS_VERSION: 'tOS版本项目',
+      }
+    }
+    throw new Error(`Unexpected schema module: ${id}`)
+  },
+)
+const machineFields = Array.from(schemaModule.MACHINE_PROJECT_INFO_FIELDS)
+const tosFields = Array.from(schemaModule.TOS_PROJECT_INFO_FIELDS)
+const keysFor = (fields, group) => fields.filter(field => field.group === group).map(field => field.key)
+const keysWhere = (fields, predicate) => fields.filter(predicate).map(field => field.key)
+
+assert.equal(JSON.stringify(keysFor(machineFields, 'basic')), JSON.stringify([
+  'researchMode', 'developmentMode', 'firstSaleTosVersion', 'isFirstLaunchProject',
+  'softwareProjectLevel', 'versionType', 'dimensionUpgradeStrategy', 'projectModel',
+  'mainboardName', 'androidMajorUpgrade', 'productType', 'targetMarkets', 'systemType',
+  'kernelVersion', 'confidentialityLevel', 'androidVersion', 'productSeries',
+  'modelCategory', 'currentTosVersion', 'launchDate', 'productionForbiddenDate',
+]), 'machine basic field order must match the reference document')
+assert.equal(JSON.stringify(keysFor(machineFields, 'extended')), JSON.stringify([
+  'chipCode', 'chipModel', 'chipPlatform', 'memorySize', 'startingRam', 'wholeMachinePd',
+  'pcbaSheet', 'shippingCountrySheet', 'keyComponentsSheet', 'isTwoStage',
+  'isOutsourcedMini', 'baselineName', 'jiraProjects',
+]), 'machine extended field order must match the reference document')
+assert.equal(JSON.stringify(keysFor(machineFields, 'team')), JSON.stringify([
+  'machineSpm', 'machineSpp', 'machineCmo', 'machineSoftwareSe', 'machineUx',
+  'machineDevelopmentRepresentative', 'machineTestRepresentative',
+]), 'machine team field order must match the reference document')
+assert.equal(JSON.stringify(keysWhere(machineFields, field => field.required)), JSON.stringify([
+  'developmentMode', 'firstSaleTosVersion', 'isFirstLaunchProject', 'softwareProjectLevel',
+  'versionType', 'dimensionUpgradeStrategy', 'systemType', 'kernelVersion', 'productSeries',
+  'chipModel', 'chipPlatform', 'wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet',
+  'keyComponentsSheet', 'isTwoStage', 'isOutsourcedMini', 'machineSpm',
+]), 'machine overall required fields must match the reference document')
+assert.equal(JSON.stringify(keysWhere(machineFields, field => field.requiredOnCreate)), JSON.stringify([
+  'developmentMode', 'firstSaleTosVersion', 'isFirstLaunchProject', 'softwareProjectLevel',
+  'versionType', 'dimensionUpgradeStrategy', 'systemType', 'kernelVersion', 'productSeries',
+  'chipModel', 'chipPlatform', 'wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet',
+  'keyComponentsSheet', 'isTwoStage', 'isOutsourcedMini',
+]), 'machine create-required fields must match the reference document')
+assert.equal(JSON.stringify(keysWhere(machineFields, field => field.defaultVisible)), JSON.stringify([
+  'researchMode', 'developmentMode', 'firstSaleTosVersion', 'isFirstLaunchProject',
+  'softwareProjectLevel', 'versionType', 'dimensionUpgradeStrategy', 'androidMajorUpgrade',
+  'modelCategory', 'chipCode', 'chipModel', 'chipPlatform', 'memorySize', 'startingRam',
+  'wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet', 'keyComponentsSheet',
+  'machineSpm', 'machineSpp', 'machineCmo', 'machineSoftwareSe', 'machineUx',
+  'machineDevelopmentRepresentative', 'machineTestRepresentative',
+]), 'machine default-visible fields must match the reference document')
+assert.equal(JSON.stringify(keysWhere(tosFields, field => field.requiredOnCreate)), JSON.stringify([
+  'firstLaunchProjects', 'firstLaunchProjectChips', 'applicableBrands',
+  'applicableProductLines', 'applicableChipPlatforms', 'tosVersionProjectManager',
+  'tosPlanningRepresentative', 'tosSe', 'tosTestRepresentative', 'tosSqa', 'tosCmo', 'tosUx',
+]), 'tOS create-required fields must match the reference document')
+assert.equal(tosFields.every(field => field.required), true, 'every tOS category field must be overall required')
+assert.equal(tosFields.filter(field => field.group === 'team').every(field => field.inputType === 'people'), true, 'all tOS roles must allow multiple members')
 assert.equal(
   JSON.stringify(getBalancedRows([1, 2, 3, 4, 5, 6, 7, 8], 6)),
   JSON.stringify([[1, 2, 3, 4], [5, 6, 7, 8]]),
