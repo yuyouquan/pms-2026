@@ -6,6 +6,7 @@ import {
   Button,
   Checkbox,
   DatePicker,
+  message,
   Radio,
   Select,
   Space,
@@ -23,6 +24,9 @@ import {
   type MarketYesNoValue,
 } from '@/lib/marketRules'
 import {
+  findMarketBuildSelectionIssue,
+  formatMarketBuildSelectionIssue,
+  loadSpugBuildOptions,
   mockSpugBuildOptionsProvider,
   type SpugBuildOptions,
   type SpugBuildOptionsProvider,
@@ -94,27 +98,35 @@ export default function MarketEditorModal({
   })
   const [spugLoading, setSpugLoading] = useState(false)
   const [spugError, setSpugError] = useState<string>()
+  const [spugLoaded, setSpugLoaded] = useState(false)
   const [spugRetryKey, setSpugRetryKey] = useState(0)
   const availableMarkets = useMemo(() => MARKET_OPTIONS.filter(market => (
     !rows.some(row => row.market === market)
   )), [rows])
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      setSpugLoaded(false)
+      setSpugLoading(false)
+      return
+    }
     let active = true
     setSpugLoading(true)
     setSpugError(undefined)
+    setSpugLoaded(false)
 
-    spugProvider.load()
-      .then(options => {
-        if (active) setSpugOptions(options)
-      })
-      .catch(() => {
-        if (active) setSpugError('SPUG 枚举获取失败，请重新获取')
-      })
-      .finally(() => {
-        if (active) setSpugLoading(false)
-      })
+    void loadSpugBuildOptions(spugProvider, {
+      isActive: () => active,
+      onSuccess: options => {
+        setSpugOptions(options)
+        setSpugLoaded(true)
+      },
+      onError: () => {
+        setSpugError('SPUG 枚举获取失败，请重新获取')
+        setSpugLoaded(false)
+      },
+      onSettled: () => setSpugLoading(false),
+    })
 
     return () => {
       active = false
@@ -130,6 +142,13 @@ export default function MarketEditorModal({
       setSelectedMarket(availableMarkets[0])
     }
   }, [availableMarkets, selectedMarket])
+
+  const buildSelectionIssue = useMemo(() => (
+    spugLoaded ? findMarketBuildSelectionIssue(rows, spugOptions) : undefined
+  ), [rows, spugLoaded, spugOptions])
+  const unsupportedBuildSelectionIssue = buildSelectionIssue?.reason === 'unsupported'
+    ? buildSelectionIssue
+    : undefined
 
   const updateRow = (rowId: string, patch: Partial<MarketConfigRow>) => {
     const previousMainMarket = getMainMarket(rows)
@@ -207,28 +226,38 @@ export default function MarketEditorModal({
             跟随主市场计划
           </Checkbox>
         )
-      case 'buildOption':
+      case 'buildOption': {
+        const buildOptionUnsupported = spugLoaded
+          && Boolean(row.buildOption?.trim())
+          && !spugOptions.buildOptions.includes(row.buildOption || '')
         return (
           <Select
             value={row.buildOption || undefined}
             placeholder="请选择编译选项"
             options={spugOptions.buildOptions.map(value => ({ label: value, value }))}
             loading={spugLoading}
-            disabled={spugLoading || Boolean(spugError)}
+            disabled={spugLoading || Boolean(spugError) || !spugLoaded}
+            status={buildOptionUnsupported ? 'error' : undefined}
             onChange={value => updateRow(row.id, { buildOption: value })}
           />
         )
-      case 'buildMarket':
+      }
+      case 'buildMarket': {
+        const buildMarketUnsupported = spugLoaded
+          && Boolean(row.buildMarket?.trim())
+          && !spugOptions.buildMarkets.includes(row.buildMarket || '')
         return (
           <Select
             value={row.buildMarket || undefined}
             placeholder="请选择编译市场"
             options={spugOptions.buildMarkets.map(value => ({ label: value, value }))}
             loading={spugLoading}
-            disabled={spugLoading || Boolean(spugError)}
+            disabled={spugLoading || Boolean(spugError) || !spugLoaded}
+            status={buildMarketUnsupported ? 'error' : undefined}
             onChange={value => updateRow(row.id, { buildMarket: value })}
           />
         )
+      }
       case 'googleLaunchDate':
         return (
           <DatePicker
@@ -283,6 +312,14 @@ export default function MarketEditorModal({
           action={<Button size="small" onClick={() => setSpugRetryKey(key => key + 1)}>重新获取</Button>}
         />
       )}
+      {unsupportedBuildSelectionIssue && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={formatMarketBuildSelectionIssue(unsupportedBuildSelectionIssue)}
+        />
+      )}
     </>
   )
 
@@ -306,6 +343,15 @@ export default function MarketEditorModal({
     </>
   )
 
+  const handleSave = () => {
+    if (spugLoading || spugError || !spugLoaded) return
+    if (buildSelectionIssue) {
+      message.error(formatMarketBuildSelectionIssue(buildSelectionIssue))
+      return
+    }
+    onSave()
+  }
+
   return (
     <DimensionMatrixEditor<MarketMatrixField, MarketConfigRow>
       open={open}
@@ -315,8 +361,14 @@ export default function MarketEditorModal({
       notice={notice}
       toolbar={toolbar}
       saving={saving}
-      saveDisabled={rows.length === 0}
-      onSave={onSave}
+      saveDisabled={
+        rows.length === 0
+        || spugLoading
+        || Boolean(spugError)
+        || !spugLoaded
+        || buildSelectionIssue?.reason === 'unsupported'
+      }
+      onSave={handleSave}
       onCancel={onCancel}
       renderDimensionHeader={row => (
         <div className="pms-dimension-matrix-header">

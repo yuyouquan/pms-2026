@@ -28,7 +28,12 @@ const projectSpacePath = 'src/containers/ProjectSpaceContainer.tsx'
 const spugProviderPath = 'src/lib/spugBuildOptions.ts'
 
 const { buildMarketRowsFromMarkets, normalizeMarketRows, normalizeTargetMarkets } = evaluateTypeScriptModule(marketRulesPath)
-const { mockSpugBuildOptionsProvider } = evaluateTypeScriptModule(spugProviderPath)
+const {
+  findMarketBuildSelectionIssue,
+  formatMarketBuildSelectionIssue,
+  loadSpugBuildOptions,
+  mockSpugBuildOptionsProvider,
+} = evaluateTypeScriptModule(spugProviderPath)
 const fallback = {
   buildOption: 'ko2_sl303',
   buildMarket: 'op',
@@ -71,6 +76,113 @@ assert.deepEqual(
   ['op', 'tr'],
   'mutating one SPUG response must not affect a later response build markets',
 )
+
+assert.equal(typeof loadSpugBuildOptions, 'function', 'SPUG loading must expose a testable stale-request guard')
+assert.equal(typeof findMarketBuildSelectionIssue, 'function', 'SPUG selections must expose pure ordered validation')
+assert.equal(typeof formatMarketBuildSelectionIssue, 'function', 'SPUG selection issues must expose exact user messages')
+
+let resolveStaleRequest
+let staleRequestActive = true
+const staleRequestEvents = []
+const staleRequest = loadSpugBuildOptions({
+  load: () => new Promise(resolve => {
+    resolveStaleRequest = resolve
+  }),
+}, {
+  isActive: () => staleRequestActive,
+  onSuccess: () => staleRequestEvents.push('success'),
+  onError: () => staleRequestEvents.push('error'),
+  onSettled: () => staleRequestEvents.push('settled'),
+})
+staleRequestActive = false
+resolveStaleRequest(secondSpugBuildOptions)
+await staleRequest
+assert.deepEqual(staleRequestEvents, [], 'a request resolved after cleanup must not update success, error, or settled state')
+
+const retryState = { error: false, options: undefined, events: [] }
+await loadSpugBuildOptions({
+  load: async () => { throw new Error('SPUG unavailable') },
+}, {
+  isActive: () => true,
+  onSuccess: options => {
+    retryState.options = options
+    retryState.error = false
+    retryState.events.push('success')
+  },
+  onError: () => {
+    retryState.error = true
+    retryState.events.push('error')
+  },
+  onSettled: () => retryState.events.push('settled'),
+})
+assert.deepEqual(retryState.events, ['error', 'settled'], 'an active rejected request must publish error and settled callbacks')
+retryState.events = []
+await loadSpugBuildOptions({
+  load: async () => secondSpugBuildOptions,
+}, {
+  isActive: () => true,
+  onSuccess: options => {
+    retryState.options = options
+    retryState.error = false
+    retryState.events.push('success')
+  },
+  onError: () => {
+    retryState.error = true
+    retryState.events.push('error')
+  },
+  onSettled: () => retryState.events.push('settled'),
+})
+assert.deepEqual(retryState.events, ['success', 'settled'], 'a later active retry must publish success and settled callbacks')
+assert.equal(retryState.error, false, 'a successful retry must not retain the earlier failure state')
+assert.deepEqual(
+  JSON.parse(JSON.stringify(retryState.options)),
+  JSON.parse(JSON.stringify(secondSpugBuildOptions)),
+  'a successful retry must publish the current provider values',
+)
+
+const selectionOptions = {
+  buildOptions: ['ko2', 'x1103b'],
+  buildMarkets: ['op', 'tr'],
+}
+assert.equal(findMarketBuildSelectionIssue([{
+  market: 'OP', buildOption: 'ko2', buildMarket: 'op',
+}, {
+  market: 'TR', buildOption: 'x1103b', buildMarket: 'tr',
+}], selectionOptions), undefined, 'independent valid market build selections must pass')
+
+const missingBuildOptionIssue = findMarketBuildSelectionIssue([{
+  market: 'OP', buildOption: '', buildMarket: 'op',
+}], selectionOptions)
+assert.deepEqual(JSON.parse(JSON.stringify(missingBuildOptionIssue)), {
+  field: 'buildOption', reason: 'required', market: 'OP', value: '',
+}, 'a missing build option must return the first exact issue')
+assert.equal(formatMarketBuildSelectionIssue(missingBuildOptionIssue), '请填写 OP 市场的编译选项', 'missing build option message must identify its market')
+
+const missingBuildMarketIssue = findMarketBuildSelectionIssue([{
+  market: 'TR', buildOption: 'x1103b', buildMarket: '  ',
+}], selectionOptions)
+assert.deepEqual(JSON.parse(JSON.stringify(missingBuildMarketIssue)), {
+  field: 'buildMarket', reason: 'required', market: 'TR', value: '  ',
+}, 'a missing build market must return the first exact issue')
+assert.equal(formatMarketBuildSelectionIssue(missingBuildMarketIssue), '请填写 TR 市场的编译市场', 'missing build market message must identify its market')
+
+const unsupportedBuildOptionIssue = findMarketBuildSelectionIssue([{
+  market: 'OP', buildOption: 'legacy-option', buildMarket: 'legacy-market',
+}], selectionOptions)
+assert.deepEqual(JSON.parse(JSON.stringify(unsupportedBuildOptionIssue)), {
+  field: 'buildOption', reason: 'unsupported', market: 'OP', value: 'legacy-option',
+}, 'unsupported values must check build option before build market within a row')
+assert.equal(formatMarketBuildSelectionIssue(unsupportedBuildOptionIssue), 'OP 市场的编译选项不在当前 SPUG 枚举中，请重新选择', 'unsupported build option message must be exact')
+
+const unsupportedBuildMarketIssue = findMarketBuildSelectionIssue([{
+  market: 'OP', buildOption: 'ko2', buildMarket: 'legacy-market',
+}, {
+  market: 'TR', buildOption: 'legacy-option', buildMarket: 'tr',
+}], selectionOptions)
+assert.deepEqual(JSON.parse(JSON.stringify(unsupportedBuildMarketIssue)), {
+  field: 'buildMarket', reason: 'unsupported', market: 'OP', value: 'legacy-market',
+}, 'unsupported values must scan markets in row order before later field issues')
+assert.equal(formatMarketBuildSelectionIssue(unsupportedBuildMarketIssue), 'OP 市场的编译市场不在当前 SPUG 枚举中，请重新选择', 'unsupported build market message must be exact')
 
 const initialized = buildMarketRowsFromMarkets(['OP', 'TR'], undefined, fallback)
 assert.equal(initialized[0].buildOption, fallback.buildOption, 'existing OP must initialize the historical build option')
@@ -164,6 +276,12 @@ for (const hiddenField of ['isCarrierCustomized', 'branchInfo', 'jenkinsUrl', 'b
 assert.match(marketEditorSource, /mockSpugBuildOptionsProvider/, 'the market editor must use the default mock SPUG provider')
 assert.match(marketEditorSource, /spugLoading/, 'the market editor must track SPUG loading state')
 assert.match(marketEditorSource, /spugError/, 'the market editor must track SPUG failure state')
+assert.match(marketEditorSource, /loadSpugBuildOptions/, 'the market editor effect must use the tested SPUG loader')
+assert.match(marketEditorSource, /spugLoaded/, 'the market editor must track whether the current SPUG request loaded successfully')
+assert.match(marketEditorSource, /status=\{[^\n]*Unsupported[^\n]*\? 'error' : undefined\}/, 'unsupported legacy selections must remain visible with error status')
+assert.match(marketEditorSource, /type="warning"[\s\S]*formatMarketBuildSelectionIssue/, 'the market editor must visibly warn about unsupported loaded values')
+assert.match(marketEditorSource, /const handleSave =[\s\S]*spugLoading[\s\S]*spugError[\s\S]*spugLoaded[\s\S]*message\.error\(formatMarketBuildSelectionIssue\(buildSelectionIssue\)\)[\s\S]*onSave\(\)/, 'market save must reject unavailable SPUG state and exact selection issues before persistence')
+assert.match(marketEditorSource, /saveDisabled=\{[\s\S]{0,240}spugLoading[\s\S]{0,240}spugError[\s\S]{0,240}!spugLoaded[\s\S]{0,240}reason === 'unsupported'/, 'market save must disable while SPUG is unavailable or loaded values are unsupported')
 assert.match(marketEditorSource, />重新获取</, 'the market editor must expose a visible SPUG retry action')
 
 const projectSpaceSource = fs.readFileSync(projectSpacePath, 'utf8')
