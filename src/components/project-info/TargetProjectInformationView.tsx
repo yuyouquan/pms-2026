@@ -57,12 +57,9 @@ export default function TargetProjectInformationView({
         id="section-header"
         className="pms-project-info-core-card"
         title={(
-          <div className="pms-project-info-core-title">
+          <div className="pms-project-info-core-title" title={project.name}>
             <ProjectOutlined />
-            <div>
-              <div>项目名称</div>
-              <span>{project.name}</span>
-            </div>
+            <div className="pms-project-info-core-name">{project.name}</div>
           </div>
         )}
         extra={(
@@ -76,11 +73,17 @@ export default function TargetProjectInformationView({
           </div>
         )}
       >
-        <div className="pms-project-info-core-grid" role="region" aria-label="项目核心字段" tabIndex={0}>
+        <div
+          className="pms-project-info-core-grid"
+          role="region"
+          aria-label="项目核心字段"
+          tabIndex={0}
+          style={{ gridTemplateColumns: `repeat(${coreFields.length}, minmax(0, 1fr))` }}
+        >
           {coreFields.map(field => (
             <div key={field.label} className="pms-project-info-core-item" style={{ borderTopColor: field.accent }}>
               <div className="pms-project-info-core-label"><span style={{ background: field.accent }} />{field.label}</div>
-              <div className="pms-project-info-core-value" style={{ color: field.accent }}>{field.value}</div>
+              <div className="pms-project-info-core-value" style={{ color: field.accent }} title={String(field.value)}>{field.value}</div>
             </div>
           ))}
         </div>
