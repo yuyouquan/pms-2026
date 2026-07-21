@@ -115,6 +115,57 @@ async function assertNoVisibleText(page, text, selector = 'body') {
   if (found) fail(`Unexpected visible text "${text}" in ${selector}`)
 }
 
+async function assertNoElement(page, selector) {
+  const count = await page.$$eval(selector, nodes => nodes.length)
+  if (count !== 0) fail(`Unexpected element ${selector}; count: ${count}`)
+}
+
+async function expandInformationGroup(page, groupKey) {
+  const selector = `.pms-project-info-collapse--${groupKey}`
+  const active = await page.$eval(selector, node => node.querySelector('.ant-collapse-item')?.classList.contains('ant-collapse-item-active'))
+  if (!active) {
+    await page.click(`${selector} .ant-collapse-header`)
+    await page.waitForFunction((target) => (
+      document.querySelector(target)?.querySelector('.ant-collapse-item')?.classList.contains('ant-collapse-item-active')
+    ), { timeout: 3000 }, selector)
+  }
+  await page.waitForFunction((target) => {
+    const grid = document.querySelector(`${target} .pms-project-info-display-grid`)
+    const firstItem = grid?.querySelector('.pms-project-info-display-item')
+    const panel = grid?.closest('.ant-collapse-panel')
+    const rect = firstItem?.getBoundingClientRect()
+    const panelRect = panel?.getBoundingClientRect()
+    return !!grid && !!firstItem && !!panel
+      && getComputedStyle(panel).display !== 'none'
+      && !!rect && rect.width > 0 && rect.height > 0
+      && !!panelRect && panelRect.height >= rect.height
+  }, { timeout: 3000 }, selector)
+}
+
+async function assertFixedFiveColumnInformationGrid(page, groupKey) {
+  const selector = `.pms-project-info-collapse--${groupKey} .pms-project-info-display-grid`
+  const layout = await page.$eval(selector, grid => {
+    const items = Array.from(grid.querySelectorAll('.pms-project-info-display-item'))
+    const style = getComputedStyle(grid)
+    const widths = items.map(item => item.getBoundingClientRect().width)
+    return {
+      columns: style.gridTemplateColumns.split(' ').filter(Boolean),
+      gridBackground: style.backgroundColor,
+      itemBackgrounds: items.map(item => getComputedStyle(item).backgroundColor),
+      itemCount: items.length,
+      firstWidth: widths[0],
+      lastWidth: widths.at(-1),
+    }
+  })
+  if (layout.columns.length !== 5) fail(`${groupKey} must use five fixed columns: ${JSON.stringify(layout)}`)
+  if (layout.firstWidth <= 0 || layout.lastWidth <= 0) fail(`${groupKey} grid items must be visible: ${JSON.stringify(layout)}`)
+  if (layout.gridBackground !== 'rgb(255, 255, 255)') fail(`${groupKey} grid must be white: ${JSON.stringify(layout)}`)
+  if (layout.itemBackgrounds.some(color => color !== 'rgb(255, 255, 255)')) fail(`${groupKey} cells must be white: ${JSON.stringify(layout)}`)
+  if (layout.itemCount > 5 && Math.abs(layout.firstWidth - layout.lastWidth) > 0.5) {
+    fail(`${groupKey} final-row cells must not stretch: ${JSON.stringify(layout)}`)
+  }
+}
+
 async function assertProjectInformationOrder(page) {
   const order = await page.evaluate(() => ({
     core: document.querySelector('#section-header')?.getBoundingClientRect().top,
@@ -446,6 +497,8 @@ try {
   await assertProjectInformationOrder(page)
   await assertNoVisibleText(page, '基础信息', '#section-basic')
   await assertVisibleText(page, '团队信息', '#section-basic')
+  await assertNoElement(page, '#section-config')
+  await assertNoVisibleText(page, '配置信息')
   for (const hiddenStatistic of ['计划开始时间', '计划结束时间', '开发周期（工作日）', '健康状态']) {
     await assertNoVisibleText(page, hiddenStatistic, '#section-plan')
   }
@@ -476,6 +529,30 @@ try {
   await assertActivePlanType(page, 'GO')
   await assertNoVisibleText(page, '当前类型跟随 Full', '.ant-alert')
   await assertGoLevel2PlanIsIndependent(page)
+
+  await clickVisibleText(page, 'button', '返回工作台')
+  await waitForVisibleText(page, '新增项目', 'button')
+  await clickProject(page, 'X6877-D8400_H991')
+  await assertVisibleText(page, '计划信息', '#section-plan')
+  await assertNoVisibleText(page, '计划信息与配置信息', '#section-plan')
+  await assertNoVisibleText(page, '配置信息', '#section-plan')
+  await assertNoElement(page, '#section-config')
+  await new Promise(resolve => setTimeout(resolve, 3500))
+  const planSection = await page.$('#section-plan')
+  if (!planSection) fail('Whole-machine plan section must exist for the PRD screenshot')
+  await planSection.screenshot({ path: 'screenshots/smoke-project-plan-information.png' })
+  await expandInformationGroup(page, 'basic')
+  await expandInformationGroup(page, 'extended')
+  await assertFixedFiveColumnInformationGrid(page, 'basic')
+  await assertFixedFiveColumnInformationGrid(page, 'extended')
+  await page.$eval('#section-basic', node => node.scrollIntoView({ block: 'start' }))
+  await page.waitForFunction(() => {
+    const section = document.querySelector('#section-basic')?.getBoundingClientRect()
+    return !!section && section.top >= 0 && section.top < innerHeight
+  }, { timeout: 3000 })
+  const informationSection = await page.$('#section-basic')
+  if (!informationSection) fail('Whole-machine information section must exist for the PRD screenshot')
+  await informationSection.screenshot({ path: 'screenshots/smoke-project-info-five-columns.png' })
 
   await clickVisibleText(page, 'button', '返回工作台')
   await waitForVisibleText(page, '新增项目', 'button')

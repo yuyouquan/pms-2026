@@ -2792,7 +2792,7 @@ export default function ProjectSpaceContainer() {
     const renderWholeMachinePlanInfo = () => {
       if (markets.length === 0) {
         return (
-          <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#6366f1' }} />, '计划信息与配置信息', '#6366f1')}>
+          <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#6366f1' }} />, '计划信息', '#6366f1')}>
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description="尚未配置市场"
@@ -2803,7 +2803,7 @@ export default function ProjectSpaceContainer() {
         )
       }
       return (
-        <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#6366f1' }} />, '计划信息与配置信息', '#6366f1')}>
+        <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#6366f1' }} />, '计划信息', '#6366f1')}>
           <Tabs activeKey={selectedMarketTab} onChange={setSelectedMarketTab} type="card"
             tabBarExtraContent={{
               right: (
@@ -2844,14 +2844,6 @@ export default function ProjectSpaceContainer() {
                     />
                     <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12 }}>里程碑计划（横排视图）</div>
                     {renderHorizontalTable()}
-                    <Divider />
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 16 }}>配置信息</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>构建信息</div>
-                    <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>
-                      <Descriptions.Item label="分支信息">{row.branchInfo || '-'}</Descriptions.Item>
-                      <Descriptions.Item label="Jenkins构建">{row.jenkinsUrl ? <a href={row.jenkinsUrl} target="_blank" rel="noopener noreferrer">{row.jenkinsUrl}</a> : '-'}</Descriptions.Item>
-                      <Descriptions.Item label="版本地址">{row.buildAddress ? <a href={row.buildAddress} target="_blank" rel="noopener noreferrer">{row.buildAddress}</a> : '-'}</Descriptions.Item>
-                    </Descriptions>
                   </div>
                 ),
               }
@@ -2862,10 +2854,10 @@ export default function ProjectSpaceContainer() {
     }
     const anchorSections = [
       { id: 'section-header', label: isTargetProject ? '项目名称' : '项目概览', icon: <ProjectOutlined /> },
-      { id: 'section-plan', label: isWholeMachine ? '计划与配置' : '计划信息', icon: <CalendarOutlined /> },
+      { id: 'section-plan', label: '计划信息', icon: <CalendarOutlined /> },
       { id: 'section-basic', label: isTargetProject ? '项目信息' : '基本信息', icon: <SettingOutlined /> },
       ...(isWholeMachine && currentProjectTransferApps.length > 0 ? [{ id: 'section-transfer', label: '转维信息', icon: <DeploymentUnitOutlined /> }] : []),
-      ...(!isWholeMachine && (isSoftware || isTech) ? [{ id: 'section-config', label: '配置信息', icon: <SettingOutlined /> }] : []),
+      ...(!isTargetProject && (isSoftware || isTech) ? [{ id: 'section-config', label: '配置信息', icon: <SettingOutlined /> }] : []),
     ]
     const scrollToSection = (id: string) => {
       const container = document.getElementById('basic-info-scroll-container')
@@ -3073,7 +3065,7 @@ export default function ProjectSpaceContainer() {
         )}
         {/* Target-project plan information is rendered directly after the core card. */}
         {!isTargetProject && renderProjectPlanInfo()}
-        {(isSoftware || isTech) && (
+        {!isTargetProject && (isSoftware || isTech) && (
           <Card id="section-config" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#52c41a' }} />, '配置信息', '#52c41a')}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>构建信息</div>
             <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>

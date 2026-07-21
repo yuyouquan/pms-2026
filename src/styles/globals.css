@@ -2065,16 +2065,13 @@ body {
 }
 
 .pms-project-info-display-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  background: #e9eef5;
+  background: #fff;
 }
 
 .pms-project-info-display-grid {
   display: grid;
-  gap: 1px;
-  background: #e9eef5;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  background: #fff;
 }
 
 .pms-project-info-display-item {
@@ -2086,6 +2083,8 @@ body {
   min-height: 78px;
   padding: 13px 14px;
   text-align: center;
+  border-right: 1px solid #e9eef5;
+  border-bottom: 1px solid #e9eef5;
   background: #fff;
 }
 

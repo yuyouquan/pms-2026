@@ -90,12 +90,6 @@ export default function ProjectPlanInfoGrid({
       tabular: true,
     },
     {
-      key: 'isMadaControlled',
-      label: '是否MADA管控',
-      value: displayBoolean(isMadaControlled),
-      icon: <SafetyCertificateOutlined />,
-    },
-    {
       key: 'isCarrierCustomized',
       label: '是否运营商定制',
       value: displayBoolean(isCarrierCustomized),
@@ -119,6 +113,12 @@ export default function ProjectPlanInfoGrid({
       value: displayValue(isCancelPaused === '是' ? cancelPauseDate : undefined),
       icon: <CalendarOutlined />,
       tabular: true,
+    },
+    {
+      key: 'isMadaControlled',
+      label: '是否MADA管控',
+      value: displayBoolean(isMadaControlled),
+      icon: <SafetyCertificateOutlined />,
     },
   ].filter(metric => visibleFieldKeys.includes(metric.key))
   const metricRows = getBalancedRows(metrics, 5, 2)

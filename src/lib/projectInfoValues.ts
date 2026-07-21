@@ -105,9 +105,25 @@ export const normalizeTeamMembers = (value: unknown): string[] => {
   return typeof value === 'string' && value.trim() ? [value] : []
 }
 
+export const deriveStartingRam = (memorySize: unknown) => {
+  const text = String(memorySize || '')
+  const configuredRams = Array.from(text.matchAll(/(\d+)\s*(?:GB)?\s*\+/gi))
+    .map(match => Number(match[1]))
+    .filter(Number.isFinite)
+  if (configuredRams.length > 0) return `${Math.min(...configuredRams)}GB`
+  const fallback = text.match(/(\d+)\s*GB/i)
+  return fallback ? `${fallback[1]}GB` : ''
+}
+
 export const getProjectInfoValue = (project: ProjectInfoProject, key: string): ProjectInfoValue | undefined => {
+  if (key === 'startingRam') {
+    const derivedStartingRam = deriveStartingRam(getProjectInfoValue(project, 'memorySize'))
+    if (derivedStartingRam) return derivedStartingRam
+  }
+
   const stored = project.fieldValues?.[key]
   if (stored !== undefined) {
+    if (key === 'versionType' && typeof stored === 'string' && stored.toUpperCase() === 'GO') return 'GO'
     return MACHINE_TEAM_KEYS[key] || TOS_TEAM_KEYS[key]
       ? normalizeTeamMembers(stored)
       : stored
@@ -140,9 +156,9 @@ export const getProjectInfoValue = (project: ProjectInfoProject, key: string): P
     const rootValue = project.researchMode
     if (typeof rootValue === 'string') return rootValue
   }
-
   const rootKey = LEGACY_ROOT_KEYS[key] || key
   const rootValue = project[rootKey]
+  if (key === 'versionType' && typeof rootValue === 'string' && rootValue.toUpperCase() === 'GO') return 'GO'
   if (
     typeof rootValue === 'string'
     || typeof rootValue === 'boolean'

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Avatar, Collapse, Grid, Space, Tag, message } from 'antd'
+import { Avatar, Collapse, Space, Tag, message } from 'antd'
 import { InfoCircleOutlined, LinkOutlined, TeamOutlined, ToolOutlined } from '@ant-design/icons'
 import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
 import {
@@ -12,7 +12,6 @@ import {
 } from '@/constants/projectInfoSchema'
 import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
 import { formatJiraProjectTag, getJiraProjectUrl, type JiraProjectConfig } from '@/lib/jiraProject'
-import { getBalancedRows } from '@/lib/balancedRows'
 import {
   buildProjectInfoValues,
   formatProjectInfoValue,
@@ -66,7 +65,6 @@ function ProjectInfoGroupPanel({
   canConfigure,
 }: ProjectInfoSectionsProps & { group: ProjectInfoGroupDefinition }) {
   const [messageApi, messageContextHolder] = message.useMessage()
-  const screens = Grid.useBreakpoint()
   const fields = useMemo(
     () => getFieldsForGroup(project.type, group.key),
     [group.key, project.type],
@@ -85,9 +83,6 @@ function ProjectInfoGroupPanel({
     visibleFieldKeys.includes(field.key)
     && (!field.visibleWhen || field.visibleWhen(values))
   ))
-  const maxColumns = screens.xl ? 6 : screens.lg ? 4 : screens.sm ? 2 : 1
-  const displayRows = getBalancedRows(visibleFields, maxColumns)
-
   return (
     <>
       {messageContextHolder}
@@ -137,20 +132,14 @@ function ProjectInfoGroupPanel({
             </div>
           ) : (
             <div className="pms-project-info-display-rows">
-              {displayRows.map((row, rowIndex) => (
-                <div
-                  key={`${group.key}-${rowIndex}`}
-                  className="pms-project-info-display-grid"
-                  style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}
-                >
-                  {row.map(field => (
-                    <div key={field.key} className="pms-project-info-display-item">
-                      <div className="pms-project-info-display-label">{field.label}</div>
-                      <div className="pms-project-info-display-value">{renderNormalValue(getProjectInfoValue(project, field.key), field.inputType)}</div>
-                    </div>
-                  ))}
-                </div>
-              ))}
+              <div className="pms-project-info-display-grid">
+                {visibleFields.map(field => (
+                  <div key={field.key} className="pms-project-info-display-item">
+                    <div className="pms-project-info-display-label">{field.label}</div>
+                    <div className="pms-project-info-display-value">{renderNormalValue(getProjectInfoValue(project, field.key), field.inputType)}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           ),
         }]}

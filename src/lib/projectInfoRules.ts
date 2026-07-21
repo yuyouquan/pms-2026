@@ -3,7 +3,8 @@ import {
   getProjectInfoFields,
 } from '@/constants/projectInfoSchema'
 import { isMachineProjectType, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
-import { getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
+import { deriveStartingRam, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
+export { deriveStartingRam } from '@/lib/projectInfoValues'
 import type { ProjectInfoValues } from '@/types/app'
 
 export interface ProjectInfoValidationError {
@@ -35,7 +36,7 @@ export interface ExternalProjectInfoSource {
 }
 
 const uniqueText = (values: Array<unknown>) => (
-  [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))].join('、')
+  [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))].join(',')
 )
 
 const parseMachineProjectName = (name: string) => {
@@ -51,11 +52,6 @@ const parseMachineProjectName = (name: string) => {
 export const deriveProductType = (androidMajorUpgrade: unknown) => (
   String(androidMajorUpgrade || '') === '是' ? '老品' : '新品'
 )
-
-export const deriveStartingRam = (memorySize: unknown) => {
-  const match = String(memorySize || '').match(/(\d+)\s*GB/i)
-  return match ? `${match[1]}GB` : ''
-}
 
 export const deriveMachineProjectInfoValues = (source: ExternalProjectInfoSource): ProjectInfoValues => {
   const parsedName = parseMachineProjectName(source.name)

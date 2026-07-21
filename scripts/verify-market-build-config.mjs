@@ -25,7 +25,7 @@ const marketRulesPath = 'src/lib/marketRules.ts'
 const marketEditorPath = 'src/components/project-info/MarketEditorModal.tsx'
 const projectSpacePath = 'src/containers/ProjectSpaceContainer.tsx'
 
-const { buildMarketRowsFromMarkets, normalizeTargetMarkets } = evaluateTypeScriptModule(marketRulesPath)
+const { buildMarketRowsFromMarkets, normalizeMarketRows, normalizeTargetMarkets } = evaluateTypeScriptModule(marketRulesPath)
 const fallback = {
   branchInfo: 'feature/global',
   jenkinsUrl: 'https://jenkins.example/job/global',
@@ -53,6 +53,19 @@ assert.equal(preserved.buildAddress, 'https://build.example/op', 'a market-speci
 const untouchedWithoutFallback = buildMarketRowsFromMarkets(['OP'])[0]
 assert.equal(untouchedWithoutFallback.branchInfo, undefined, 'store bootstrap must leave legacy rows detectable until the project fallback is available')
 
+const normalizedBuildConfig = normalizeMarketRows([{
+  id: 'market-OP',
+  market: 'OP',
+  isMain: true,
+  followsMain: false,
+  branchInfo: 'feature/op',
+  jenkinsUrl: 'https://jenkins.example/job/op',
+  buildAddress: 'https://build.example/op',
+}])[0]
+assert.equal(normalizedBuildConfig.branchInfo, 'feature/op', 'normalizing markets must preserve branch values')
+assert.equal(normalizedBuildConfig.jenkinsUrl, 'https://jenkins.example/job/op', 'normalizing markets must preserve Jenkins values')
+assert.equal(normalizedBuildConfig.buildAddress, 'https://build.example/op', 'normalizing markets must preserve build values')
+
 assert.deepEqual(
   JSON.parse(JSON.stringify(normalizeTargetMarkets(' OP,TR, OP , ,RU '))),
   ['OP', 'TR', 'RU'],
@@ -76,9 +89,13 @@ assert.match(marketEditorSource, /case 'buildAddress':[\s\S]*value=\{row\.buildA
 const projectSpaceSource = fs.readFileSync(projectSpacePath, 'utf8')
 assert.match(projectSpaceSource, /const legacyMarketBuildConfig =/, 'the project space must define the historical project-level fallback')
 assert.match(projectSpaceSource, /buildMarketRowsFromMarkets\([\s\S]*legacyMarketBuildConfig[\s\S]*\)/, 'market rows must be hydrated with the historical project values')
-assert.match(projectSpaceSource, /label="分支信息">\{row\.branchInfo \|\| '-'\}/, 'whole-machine configuration must display the selected market branch')
-assert.match(projectSpaceSource, /row\.jenkinsUrl \? <a href=\{row\.jenkinsUrl\}/, 'whole-machine configuration must display the selected market Jenkins URL')
-assert.match(projectSpaceSource, /row\.buildAddress \? <a href=\{row\.buildAddress\}/, 'whole-machine configuration must display the selected market build URL')
+const wholeMachinePlanStart = projectSpaceSource.indexOf('const renderWholeMachinePlanInfo = () =>')
+const wholeMachinePlanEnd = projectSpaceSource.indexOf('const anchorSections = [', wholeMachinePlanStart)
+const wholeMachinePlanSource = projectSpaceSource.slice(wholeMachinePlanStart, wholeMachinePlanEnd)
+assert.match(wholeMachinePlanSource, /title=\{sectionTitle\([^\n]*'计划信息'/, 'whole-machine plan card must use the plan-information title')
+assert.doesNotMatch(wholeMachinePlanSource, /配置信息|构建信息|label="分支信息"|label="Jenkins构建"|label="版本地址"/, 'whole-machine plan view must not display build configuration')
+assert.match(projectSpaceSource, /<MarketEditorModal[\s\S]*rows=\{marketDraftRows\}/, 'market configuration editing must remain available')
+assert.match(projectSpaceSource, /setMarketConfigForProject\(selectedProject\.id, normalizedRows\)/, 'saving the market editor must persist the full normalized rows')
 assert.match(projectSpaceSource, /showMarketControls\s*=\s*isMachineProjectType/, 'machine plan controls must remain visible before the first market exists')
 assert.match(projectSpaceSource, /尚未配置市场[\s\S]*onClick=\{openMarketEditor\}/, 'machine basic information must expose the first-market editor from an empty state')
 assert.match(projectSpaceSource, /selectedMarketIsConfigured\s*=\s*isConfiguredMarket\(marketConfigRows, selectedMarketTab\)/, 'market plan scope must derive membership from the current project configuration')
