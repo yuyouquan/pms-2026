@@ -23,8 +23,9 @@ const required = [
   ['src/components/roadmap/MilestoneView.tsx', 'isMachineProjectType'],
   ['src/components/roadmap/ProjectPlanSummaryBoard.tsx', 'isMachineProjectType'],
   ['src/components/roadmap/MRTrainView.tsx', 'isMachineProjectType'],
+  ['src/components/roadmap/MRTrainView.tsx', 'normalizeMachineProjectType(row.projectType)'],
   ['src/stores/plan.ts', 'PROJECT_TEMPLATE_TYPES'],
-  ['src/stores/plan.ts', 'getProjectTypeFamilyKey'],
+  ['src/stores/plan.ts', 'projectTemplateCompatibility'],
   ['src/containers/ConfigContainer.tsx', 'PROJECT_TEMPLATE_TYPES'],
   ['src/containers/ProjectSpaceContainer.tsx', 'getProjectTypeFamilyKey(selectedProject?.type || selectedPlanType)'],
 ]

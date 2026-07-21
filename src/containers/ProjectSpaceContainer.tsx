@@ -145,6 +145,10 @@ import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
 import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import {
+  getTemplateSnapshotForProjectType,
+  getTemplateTasksForProjectType,
+} from '@/lib/projectTemplateCompatibility'
+import {
   getProjectResponsiblePersons,
   haveProjectResponsiblePersonsChanged,
   mergeResponsiblePersonsIntoVisibleMembers,
@@ -485,13 +489,15 @@ export default function ProjectSpaceContainer() {
   )
   const tosTypeSeedEntry = useMemo<TosTypePlanEntry>(() => {
     const templateSnapshot = latestTemplateVersion
-      ? (
-          publishedSnapshots[getTemplateSnapshotKey(PROJECT_TYPE_TOS_VERSION, latestTemplateVersion.id, 'level1')]
-          || publishedSnapshots[getTemplateSnapshotKey(PROJECT_TYPE_TOS_VERSION, latestTemplateVersion.id)]
+      ? getTemplateSnapshotForProjectType(
+          publishedSnapshots,
+          PROJECT_TYPE_TOS_VERSION,
+          latestTemplateVersion.id,
+          'level1',
         )
       : undefined
     const templateTasks = templateSnapshot
-      || configTemplateTasksByType[PROJECT_TYPE_TOS_VERSION]
+      || getTemplateTasksForProjectType(configTemplateTasksByType, PROJECT_TYPE_TOS_VERSION)
       || LEVEL1_TEMPLATE_TASKS
     return createTosTypePlanEntry({
       level1Tasks: templateTasks.map(task => {
@@ -941,11 +947,9 @@ export default function ProjectSpaceContainer() {
 
     if (source.type === 'template') {
       const projectType = getProjectTypeFamilyKey(selectedProject?.type || selectedPlanType)
-      const templateSnapshotKey = getTemplateSnapshotKey(projectType, versionId, 'level1')
       return (
-        publishedSnapshots[templateSnapshotKey]
-        || publishedSnapshots[getTemplateSnapshotKey(projectType, versionId)]
-        || configTemplateTasksByType[projectType]
+        getTemplateSnapshotForProjectType(publishedSnapshots, projectType, versionId, 'level1')
+        || getTemplateTasksForProjectType(configTemplateTasksByType, projectType)
         || LEVEL1_TEMPLATE_TASKS
       )
     }
@@ -1684,7 +1688,7 @@ export default function ProjectSpaceContainer() {
     const versionNo = getNextPlanRevisionVersionNo(versions, revisionKind)
     const nid = getPlanVersionId(versionNo)
     const projectType = getProjectTypeFamilyKey(selectedProject?.type || selectedPlanType)
-    const templateTasks = configTemplateTasksByType[projectType] || LEVEL1_TEMPLATE_TASKS
+    const templateTasks = getTemplateTasksForProjectType(configTemplateTasksByType, projectType) || LEVEL1_TEMPLATE_TASKS
     const clonedTasks = initializeProjectPlanTasksFromTemplate(templateTasks)
     const kindLabel = getPlanRevisionKindLabel(revisionKind)
     setVersions([...versions, { id: nid, versionNo, status: '修订中' }])
@@ -2740,7 +2744,18 @@ export default function ProjectSpaceContainer() {
     const wideWholeMachineBasicInfoFields = WHOLE_MACHINE_BASIC_INFO_FIELDS.filter(field => ['projectDescription', 'jiraProjects'].includes(field.key))
     const compactWholeMachineBasicInfoFields = WHOLE_MACHINE_BASIC_INFO_FIELDS.filter(field => !['projectDescription', 'jiraProjects'].includes(field.key))
     const renderWholeMachinePlanInfo = () => {
-      if (markets.length === 0) return renderProjectPlanInfo()
+      if (markets.length === 0) {
+        return (
+          <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#6366f1' }} />, '计划信息与配置信息', '#6366f1')}>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="尚未配置市场"
+            >
+              <Button type="primary" icon={<PlusOutlined />} onClick={openMarketEditor}>市场编辑</Button>
+            </Empty>
+          </Card>
+        )
+      }
       return (
         <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#6366f1' }} />, '计划信息与配置信息', '#6366f1')}>
           <Tabs activeKey={selectedMarketTab} onChange={setSelectedMarketTab} type="card"
@@ -3155,8 +3170,7 @@ export default function ProjectSpaceContainer() {
 
   // ═══════ renderProjectPlan ═══════
   const renderProjectPlan = () => {
-    const markets = marketConfigRows.map(row => row.market)
-    const showMarketTabs = isMachineProjectType(selectedProject?.type) && markets.length > 0
+    const showMarketControls = isMachineProjectType(selectedProject?.type)
     const showTosTypeTabs = selectedProject?.type === PROJECT_TYPE_TOS_VERSION && tosTypeConfigRows.length > 0
     const planTabItems = [
       { key: 'level1', label: '一级计划' },
@@ -3191,7 +3205,7 @@ export default function ProjectSpaceContainer() {
             </Row>
           </Card>
         )}
-        {showMarketTabs && (
+        {showMarketControls && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
             <Row align="middle" justify="space-between">
               <Col>

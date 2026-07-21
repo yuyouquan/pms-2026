@@ -140,6 +140,16 @@ assert.deepEqual(
   ],
   'summary groups should preserve configured type order',
 )
+assert.deepEqual(
+  plain(getTosTypeSummaryGroups(normalizeTosTypeRows([
+    { id: 'full', type: 'Full', isMain: false, followsMain: true },
+    { id: 'go', type: 'GO', isMain: true, followsMain: false },
+  ]))),
+  [
+    { key: 'GO', label: 'Full&GO', sourceType: 'GO', memberTypes: ['Full', 'GO'] },
+  ],
+  'the merged label must preserve configured order even when the main type is not first',
+)
 
 const changedMainRows = normalizeTosTypeRows([
   { id: 'full', type: 'Full', isMain: false, followsMain: true },

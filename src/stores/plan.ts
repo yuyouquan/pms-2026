@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import {
   PROJECT_TEMPLATE_TYPES,
-  getProjectTypeFamilyKey,
 } from '@/constants/projectTypes'
 import type { GanttScaleMode } from '@/lib/ganttScale'
 import type { FollowVersionSource, MarketCurrentVersionState, MarketVersionsState } from '@/lib/marketRules'
@@ -11,6 +10,9 @@ import type {
   TosTypeVersionsState,
 } from '@/lib/tosTypeRules'
 import type { CompareTableRow } from '@/lib/versionCompare'
+import { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
+
+export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
 // ─── Exported constants ───────────────────────────────────────────────
 
@@ -52,10 +54,6 @@ export const LEVEL1_TEMPLATE_TASKS = LEVEL1_TASKS.map(t => ({
 }))
 
 export const TEMPLATE_PROJECT_TYPES = PROJECT_TEMPLATE_TYPES
-
-export const getTemplateSnapshotKey = (projectType: string, versionId: string, planLevel = 'level1') => (
-  `template::${getProjectTypeFamilyKey(projectType)}::${planLevel}::${versionId}`
-)
 
 const cloneLevel1TemplateTasks = () => LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
 

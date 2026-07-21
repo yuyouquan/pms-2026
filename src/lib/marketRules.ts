@@ -108,6 +108,18 @@ export const markTaskActualTimeDetachedFromMain = (
 
 export const isValidMarket = (market: string) => MARKET_OPTIONS.includes(market)
 
+export const normalizeTargetMarkets = (value: unknown): string[] => {
+  const source = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : []
+  const seen = new Set<string>()
+  return source.reduce<string[]>((markets, item) => {
+    const market = typeof item === 'string' ? item.trim() : ''
+    if (!market || !isValidMarket(market) || seen.has(market)) return markets
+    seen.add(market)
+    markets.push(market)
+    return markets
+  }, [])
+}
+
 export const getMarketPlanVersionKey = (
   projectId: string,
   market: string,

@@ -28,6 +28,10 @@ import type { TaskChange } from '@/types/plan-notify'
 import { NOTIFY_DIFF_FIELDS, MOCK_USER_MAP } from '@/components/shared/PlanHelpers'
 import { notifyPublishChanges } from '@/lib/feishu-notify'
 import { cancelDraftRevision } from '@/lib/marketRules'
+import {
+  getTemplateSnapshotForProjectType,
+  getTemplateTasksForProjectType,
+} from '@/lib/projectTemplateCompatibility'
 import dayjs from 'dayjs'
 
 const { Option } = Select
@@ -96,10 +100,12 @@ export default function ConfigContainer() {
 
   // 配置中心使用模板数据（按项目类型隔离，无日期/工期）
   const selectedTemplateType = getProjectTypeFamilyKey(selectedProjectType)
-  const configTasks = configTemplateTasksByType[selectedTemplateType] || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
+  const configTasks = getTemplateTasksForProjectType(configTemplateTasksByType, selectedTemplateType)
+    || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
   const setConfigTasks = (next: any[] | ((prev: any[]) => any[])) => {
     setConfigTemplateTasksByType(prev => {
-      const current = prev[selectedTemplateType] || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
+      const current = getTemplateTasksForProjectType(prev, selectedTemplateType)
+        || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
       const resolved = typeof next === 'function' ? next(current) : next
       return { ...prev, [selectedTemplateType]: resolved }
     })
@@ -357,7 +363,9 @@ export default function ConfigContainer() {
       .filter(v => v.status === '已发布' && v.id !== currentVersion)
       .sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
     const getSnapshot = (versionId: string) => {
-      return publishedSnapshots[getTemplateSnapshotKey(selectedProjectType, versionId)] || publishedSnapshots[versionId] || []
+      return getTemplateSnapshotForProjectType(publishedSnapshots, selectedProjectType, versionId)
+        || publishedSnapshots[versionId]
+        || []
     }
     const baselineTasks: any[] = prevPublished ? getSnapshot(prevPublished.id) : []
     const changes: TaskChange[] = []

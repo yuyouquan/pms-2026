@@ -25,7 +25,7 @@ const marketRulesPath = 'src/lib/marketRules.ts'
 const marketEditorPath = 'src/components/project-info/MarketEditorModal.tsx'
 const projectSpacePath = 'src/containers/ProjectSpaceContainer.tsx'
 
-const { buildMarketRowsFromMarkets } = evaluateTypeScriptModule(marketRulesPath)
+const { buildMarketRowsFromMarkets, normalizeTargetMarkets } = evaluateTypeScriptModule(marketRulesPath)
 const fallback = {
   branchInfo: 'feature/global',
   jenkinsUrl: 'https://jenkins.example/job/global',
@@ -53,6 +53,17 @@ assert.equal(preserved.buildAddress, 'https://build.example/op', 'a market-speci
 const untouchedWithoutFallback = buildMarketRowsFromMarkets(['OP'])[0]
 assert.equal(untouchedWithoutFallback.branchInfo, undefined, 'store bootstrap must leave legacy rows detectable until the project fallback is available')
 
+assert.deepEqual(
+  JSON.parse(JSON.stringify(normalizeTargetMarkets(' OP,TR, OP , ,RU '))),
+  ['OP', 'TR', 'RU'],
+  'machine creation must normalize, de-duplicate, and preserve target-market order',
+)
+assert.deepEqual(
+  JSON.parse(JSON.stringify(normalizeTargetMarkets(['TR', ' OP ', 'TR', '', 'RU']))),
+  ['TR', 'OP', 'RU'],
+  'machine creation must accept array-shaped target-market values',
+)
+
 const marketEditorSource = fs.readFileSync(marketEditorPath, 'utf8')
 assert.match(marketEditorSource, /branchInfo:\s*''/, 'a newly added market must start with an empty branch')
 assert.match(marketEditorSource, /jenkinsUrl:\s*''/, 'a newly added market must start with an empty Jenkins URL')
@@ -68,5 +79,10 @@ assert.match(projectSpaceSource, /buildMarketRowsFromMarkets\([\s\S]*legacyMarke
 assert.match(projectSpaceSource, /label="分支信息">\{row\.branchInfo \|\| '-'\}/, 'whole-machine configuration must display the selected market branch')
 assert.match(projectSpaceSource, /row\.jenkinsUrl \? <a href=\{row\.jenkinsUrl\}/, 'whole-machine configuration must display the selected market Jenkins URL')
 assert.match(projectSpaceSource, /row\.buildAddress \? <a href=\{row\.buildAddress\}/, 'whole-machine configuration must display the selected market build URL')
+assert.match(projectSpaceSource, /showMarketControls\s*=\s*isMachineProjectType/, 'machine plan controls must remain visible before the first market exists')
+assert.match(projectSpaceSource, /尚未配置市场[\s\S]*onClick=\{openMarketEditor\}/, 'machine basic information must expose the first-market editor from an empty state')
 
-console.log('market-specific build configuration verification passed (18 assertions)')
+const addProjectSource = fs.readFileSync('src/components/workspace/AddProjectModal.tsx', 'utf8')
+assert.match(addProjectSource, /isMachineProjectType\(projectType\)[\s\S]*normalizeTargetMarkets\(payload\.infoValues\.targetMarkets \?\? extra\.targetMarkets\)/, 'machine creation must bootstrap markets from targetMarkets')
+
+console.log('market-specific build configuration verification passed (24 assertions)')

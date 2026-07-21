@@ -134,8 +134,9 @@ export const getTosTypeSummaryGroups = (rows: TosTypeConfigRow[]): TosTypeSummar
   const main = normalizedRows.find(row => row.isMain)
   if (!main) return []
 
-  const followers = normalizedRows.filter(row => !row.isMain && row.followsMain)
-  const mainMemberTypes = [main.type, ...followers.map(row => row.type)]
+  const mainMemberTypes = normalizedRows
+    .filter(row => row.isMain || row.followsMain)
+    .map(row => row.type)
   const mainGroup: TosTypeSummaryGroup = {
     key: main.type,
     label: mainMemberTypes.join('&'),

@@ -10,9 +10,11 @@ import { usePermissionStore } from '@/stores/permission'
 import { inferOsSeriesFromProjectName, inferTosVersionFromProjectName } from '@/constants/projectBasicFields'
 import {
   PROJECT_TYPE_TOS_VERSION,
+  isMachineProjectType,
   isSoftwareProjectType,
 } from '@/constants/projectTypes'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
+import { normalizeTargetMarkets } from '@/lib/marketRules'
 
 interface AddProjectModalProps {
   open: boolean
@@ -47,6 +49,9 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
     const newId = `${Date.now()}`
     const projectType = payload.projectType
     const isSoftwareProject = isSoftwareProjectType(projectType)
+    const initialMarkets = isMachineProjectType(projectType)
+      ? normalizeTargetMarkets(payload.infoValues.targetMarkets ?? extra.targetMarkets)
+      : []
     const inferredTosVersion = inferTosVersionFromProjectName(entry.name)
     const inferredOsSeries = inferOsSeriesFromProjectName(entry.name)
     const baseProject = {
@@ -57,7 +62,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       progress: 0,
       leader: payload.responsiblePersons[0],
       responsiblePersons: payload.responsiblePersons,
-      markets: [],
+      markets: initialMarkets,
       androidVersion: extra.androidVersion ?? '',
       chipPlatform: extra.chipPlatform ?? '',
       spm: entry.spm,
@@ -74,13 +79,16 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       planEndDate: extra.planEndDate ?? '',
       healthStatus: payload.healthStatus as 'normal' | 'warning' | 'risk',
     }
-    const newProject = mergeProjectInfoValues(baseProject as ProjectInfoProject, payload.infoValues) as typeof baseProject
+    const mergedProject = mergeProjectInfoValues(baseProject as ProjectInfoProject, payload.infoValues) as typeof baseProject
+    const newProject = isMachineProjectType(projectType)
+      ? { ...mergedProject, market: initialMarkets.join(','), markets: initialMarkets }
+      : mergedProject
 
     addProject(newProject as unknown as Parameters<typeof addProject>[0])
     setProjectMember(newId, payload.responsiblePersons)
     initProjectPermissions(newId, { '系统管理员': payload.responsiblePersons })
     setSelectedProject(newProject as unknown as Parameters<typeof setSelectedProject>[0])
-    setSelectedMarketTab('OP')
+    setSelectedMarketTab(initialMarkets[0] || 'OP')
     if (projectType === PROJECT_TYPE_TOS_VERSION) setSelectedTosTypeTab('Full')
   }
 
