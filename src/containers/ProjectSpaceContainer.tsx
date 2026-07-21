@@ -465,8 +465,9 @@ export default function ProjectSpaceContainer() {
   const scopedTosPlanType = scopedPlanLevel === 'level1' ? effectiveTosLevel1Type : selectedTosTypeTab
   const currentTosTypeIsFollow = isTosTypeScoped && isFollowTosType(tosTypeConfigRows, selectedTosTypeTab)
   const followedTosLevel1ReadOnly = isTosTypeScoped
-    && projectPlanLevel === 'level1'
+    && scopedPlanLevel === 'level1'
     && isTosTypeLevel1ReadOnly(tosTypeConfigRows, selectedTosTypeTab, 'level1')
+  const isFollowReadOnlyOverview = followedTosLevel1ReadOnly && projectPlanLevel === 'overview'
   const tosLevel1FollowSourceText = `当前类型跟随 ${effectiveTosLevel1Type}，请切换到 ${effectiveTosLevel1Type} 维护一级计划`
   const canMaintainCurrentPlan = canEditCurrentPlan && !followedTosLevel1ReadOnly
   const currentPlanMaintenanceDisabledReason = followedTosLevel1ReadOnly
@@ -1795,7 +1796,7 @@ export default function ProjectSpaceContainer() {
     value: string,
     isLevel2Custom: boolean,
   ) => {
-    if (followedTosLevel1ReadOnly && !isLevel2Custom) {
+    if (followedTosLevel1ReadOnly && (!isLevel2Custom || isFollowReadOnlyOverview)) {
       void message.warning(tosLevel1FollowSourceText)
       return
     }
@@ -2093,7 +2094,7 @@ export default function ProjectSpaceContainer() {
     const collapsedSet = key ? (collapsedNodes[key] || new Set<string>()) : new Set<string>()
     return (
       <div style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
-        <DHTMLXGantt tasks={ganttTasks} onTaskClick={(task) => message.info(`点击任务: ${task.text}`)} readOnly={!isEditMode || (!customTasks && followedTosLevel1ReadOnly)} collapsedIds={collapsedSet}
+        <DHTMLXGantt tasks={ganttTasks} onTaskClick={(task) => message.info(`点击任务: ${task.text}`)} readOnly={!isEditMode || followedTosLevel1ReadOnly || isFollowReadOnlyOverview} collapsedIds={collapsedSet}
           scaleMode={!customTasks && projectPlanLevel === 'level1' ? projectPlanGanttScaleMode : 'month'}
           onCollapsedChange={(updater) => { if (!key) return; setCollapsedNodes(prev => { const c = prev[key] || new Set<string>(); return { ...prev, [key]: updater(c) } }) }}
         />
@@ -2105,12 +2106,20 @@ export default function ProjectSpaceContainer() {
   const renderTaskTable = (customTasks?: any[]) => {
     const isLevel2Custom = !!customTasks
     const tableTasks = customTasks || effectiveTasks
-    const currentSetTasks = isLevel2Custom ? (newTasks: any[]) => {
+    const isFollowReadOnlyTable = followedTosLevel1ReadOnly && (!isLevel2Custom || isFollowReadOnlyOverview)
+    const writeTableTasks = isLevel2Custom ? (newTasks: any[]) => {
       const planId = customTasks?.[0]?.planId
       if (planId) {
         setLevel2PlanTasks(prev => [...prev.filter(t => t.planId !== planId), ...newTasks])
       }
     } : setEffectiveTasks
+    const currentSetTasks = (newTasks: any[]) => {
+      if (isFollowReadOnlyTable) {
+        void message.warning(tosLevel1FollowSourceText)
+        return
+      }
+      writeTableTasks(newTasks)
+    }
     const displayTasks = isLevel2Custom
       ? filterBySearchText(tableTasks)
       : projectPlanLevel === 'level1'
@@ -2127,7 +2136,6 @@ export default function ProjectSpaceContainer() {
     //   canFullyEdit  — 编辑模式下且用户有相应级别的计划编辑权 → 拖拽/新增/删除/改任意单元格
     //   isRowEditable — 编辑模式下用户有编辑权 OR 是该行责任人 → 只能改自己负责的行的单元格
     const editPerm = isLevel2Custom ? canEditLevel2Plan : canEditLevel1Plan
-    const isFollowReadOnlyTable = !isLevel2Custom && followedTosLevel1ReadOnly
     const canFullyEdit = isEditMode && editPerm && !isFollowReadOnlyTable
     const isRowEditable = (record: any) => isEditMode && !isFollowReadOnlyTable && (editPerm || isResponsibleNameMatched(record.responsible, currentLoginUser))
     const getColumns = (): ColumnsType<any> => {
