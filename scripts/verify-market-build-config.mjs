@@ -68,4 +68,4 @@ assert.match(projectSpaceSource, /label="分支信息">\{row\.branchInfo \|\| '-
 assert.match(projectSpaceSource, /row\.jenkinsUrl \? <a href=\{row\.jenkinsUrl\}/, 'whole-machine configuration must display the selected market Jenkins URL')
 assert.match(projectSpaceSource, /row\.buildAddress \? <a href=\{row\.buildAddress\}/, 'whole-machine configuration must display the selected market build URL')
 
-console.log('market-specific build configuration verification passed (16 assertions)')
+console.log('market-specific build configuration verification passed (18 assertions)')
