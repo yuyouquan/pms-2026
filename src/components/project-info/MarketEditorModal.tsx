@@ -8,6 +8,7 @@ import {
   Col,
   DatePicker,
   Form,
+  Input,
   Modal,
   Radio,
   Row,
@@ -52,6 +53,9 @@ const createMarketRow = (market: string, isMain: boolean): MarketConfigRow => ({
   isCancelPaused: undefined,
   cancelPauseDate: '',
   isMadaControlled: undefined,
+  branchInfo: '',
+  jenkinsUrl: '',
+  buildAddress: '',
 })
 
 export default function MarketEditorModal({
@@ -281,6 +285,42 @@ export default function MarketEditorModal({
                       style={{ width: '100%' }}
                       options={YES_NO_OPTIONS}
                       onChange={(value) => updateRow(row.id, { isMadaControlled: value })}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              <div style={{ paddingTop: 12, marginBottom: 12, borderTop: '1px solid #eef2ff' }}>
+                <Typography.Text strong style={{ color: '#374151' }}>构建配置</Typography.Text>
+                <Typography.Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
+                  每个市场独立维护
+                </Typography.Text>
+              </div>
+              <Row gutter={[16, 0]}>
+                <Col xs={24} md={8}>
+                  <Form.Item label="分支信息">
+                    <Input
+                      value={row.branchInfo || ''}
+                      placeholder="请输入分支信息"
+                      onChange={event => updateRow(row.id, { branchInfo: event.target.value })}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Form.Item label="Jenkins 构建">
+                    <Input
+                      value={row.jenkinsUrl || ''}
+                      placeholder="请输入 Jenkins 构建地址"
+                      onChange={event => updateRow(row.id, { jenkinsUrl: event.target.value })}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Form.Item label="版本地址">
+                    <Input
+                      value={row.buildAddress || ''}
+                      placeholder="请输入版本地址"
+                      onChange={event => updateRow(row.id, { buildAddress: event.target.value })}
                     />
                   </Form.Item>
                 </Col>

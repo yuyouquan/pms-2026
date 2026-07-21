@@ -13,7 +13,15 @@ export type MarketConfigRow = {
   isCancelPaused?: MarketYesNoValue
   cancelPauseDate?: string
   isMadaControlled?: MarketYesNoValue
+  branchInfo?: string
+  jenkinsUrl?: string
+  buildAddress?: string
 }
+
+export type LegacyMarketBuildConfig = Pick<
+  MarketConfigRow,
+  'branchInfo' | 'jenkinsUrl' | 'buildAddress'
+>
 
 export type PlanVersionLike = {
   id: string
@@ -190,8 +198,9 @@ export const normalizeMarketRows = (
 export const buildMarketRowsFromMarkets = (
   markets: string[],
   existingRows?: MarketConfigRow[],
+  legacyBuildConfig?: LegacyMarketBuildConfig,
 ): MarketConfigRow[] => {
-  const sourceRows = existingRows?.length
+  const sourceRows: MarketConfigRow[] = existingRows?.length
     ? existingRows
     : markets.map((market, index) => ({
         id: `market-${market}`,
@@ -206,7 +215,16 @@ export const buildMarketRowsFromMarkets = (
         isMadaControlled: undefined,
       }))
 
-  return normalizeMarketRows(sourceRows)
+  const hydratedRows = legacyBuildConfig
+    ? sourceRows.map(row => ({
+        ...row,
+        branchInfo: row.branchInfo === undefined ? (legacyBuildConfig.branchInfo || '') : row.branchInfo,
+        jenkinsUrl: row.jenkinsUrl === undefined ? (legacyBuildConfig.jenkinsUrl || '') : row.jenkinsUrl,
+        buildAddress: row.buildAddress === undefined ? (legacyBuildConfig.buildAddress || '') : row.buildAddress,
+      }))
+    : sourceRows
+
+  return normalizeMarketRows(hydratedRows)
 }
 
 export const isFollowMarket = (rows: MarketConfigRow[], market: string) => {

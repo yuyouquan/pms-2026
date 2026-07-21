@@ -415,8 +415,19 @@ export default function ProjectSpaceContainer() {
   // ═══════ Derived ═══════
   const isWholeMachineProject = selectedProject?.type === '整机产品项目'
   const isTosVersionProject = selectedProject?.type === PROJECT_TYPE_TOS_VERSION
+  const legacyMarketBuildConfig = selectedProject
+    ? {
+        branchInfo: selectedProject.branchInfo,
+        jenkinsUrl: selectedProject.jenkinsUrl,
+        buildAddress: selectedProject.buildAddress,
+      }
+    : undefined
   const marketConfigRows = selectedProject && isWholeMachineProject
-    ? buildMarketRowsFromMarkets(selectedProject.markets || [], marketConfigsByProjectId[selectedProject.id])
+    ? buildMarketRowsFromMarkets(
+        selectedProject.markets || [],
+        marketConfigsByProjectId[selectedProject.id],
+        legacyMarketBuildConfig,
+      )
     : []
   const primaryMarket = getMainMarket(marketConfigRows)
   const tosTypeConfigRows = selectedProject && isTosVersionProject
@@ -1103,7 +1114,11 @@ export default function ProjectSpaceContainer() {
 
   const getCurrentMarketRows = () => (
     selectedProject
-      ? buildMarketRowsFromMarkets(selectedProject.markets || [], marketConfigsByProjectId[selectedProject.id])
+      ? buildMarketRowsFromMarkets(
+          selectedProject.markets || [],
+          marketConfigsByProjectId[selectedProject.id],
+          legacyMarketBuildConfig,
+        )
       : []
   )
 
@@ -1118,6 +1133,9 @@ export default function ProjectSpaceContainer() {
       market: 'OP',
       isMain: true,
       followsMain: false,
+      branchInfo: '',
+      jenkinsUrl: '',
+      buildAddress: '',
     }])
     setShowMarketEditor(true)
   }
@@ -2422,7 +2440,11 @@ export default function ProjectSpaceContainer() {
     const statusConf = PROJECT_STATUS_CONFIG[p.status] || { color: '#8c8c8c', tagColor: 'default' }
     const healthMap: Record<string, { label: string; color: string }> = { normal: { label: '正常', color: '#52c41a' }, warning: { label: '关注', color: '#faad14' }, risk: { label: '风险', color: '#ff4d4f' } }
     const hConf = healthMap[p.healthStatus || 'normal'] || healthMap.normal
-    const marketRows = buildMarketRowsFromMarkets(p.markets || [], marketConfigsByProjectId[p.id])
+    const marketRows = buildMarketRowsFromMarkets(
+      p.markets || [],
+      marketConfigsByProjectId[p.id],
+      legacyMarketBuildConfig,
+    )
     const markets = marketRows.map(row => row.market)
     const ef = editingProjectFields
     const setEf = (key: string, value: any) => setEditingProjectFields((prev: any) => ({ ...prev, [key]: value }))
@@ -2837,9 +2859,9 @@ export default function ProjectSpaceContainer() {
                       <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 16 }}>配置信息</div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>构建信息</div>
                       <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>
-                        <Descriptions.Item label="分支信息">{editableField('branchInfo', p.branchInfo)}</Descriptions.Item>
-                        <Descriptions.Item label="Jenkins构建">{basicInfoEditMode ? editableField('jenkinsUrl', p.jenkinsUrl) : (p.jenkinsUrl ? <a href={p.jenkinsUrl} target="_blank" rel="noopener noreferrer">{p.jenkinsUrl}</a> : '-')}</Descriptions.Item>
-                        <Descriptions.Item label="版本地址">{basicInfoEditMode ? editableField('buildAddress', p.buildAddress) : (p.buildAddress ? <a href={p.buildAddress} target="_blank" rel="noopener noreferrer">{p.buildAddress}</a> : '-')}</Descriptions.Item>
+                        <Descriptions.Item label="分支信息">{row.branchInfo || '-'}</Descriptions.Item>
+                        <Descriptions.Item label="Jenkins构建">{row.jenkinsUrl ? <a href={row.jenkinsUrl} target="_blank" rel="noopener noreferrer">{row.jenkinsUrl}</a> : '-'}</Descriptions.Item>
+                        <Descriptions.Item label="版本地址">{row.buildAddress ? <a href={row.buildAddress} target="_blank" rel="noopener noreferrer">{row.buildAddress}</a> : '-'}</Descriptions.Item>
                       </Descriptions>
                     </div>
                   ),
