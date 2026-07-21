@@ -14,6 +14,8 @@ const market = read('src/components/project-info/MarketEditorModal.tsx')
 const plan = read('src/components/project-info/ProjectPlanInfoGrid.tsx')
 const planSchema = read('src/constants/projectPlanInfoSchema.ts')
 const styles = read('src/styles/globals.css')
+const projectSpace = read('src/containers/ProjectSpaceContainer.tsx')
+const projectMocks = read('src/data/projects.ts')
 
 const evaluateTypeScriptModule = (filename, requireModule = id => {
   throw new Error(`Unexpected module: ${id}`)
@@ -29,20 +31,19 @@ const evaluateTypeScriptModule = (filename, requireModule = id => {
   return module.exports
 }
 
-const { getBalancedRows } = evaluateTypeScriptModule('src/lib/balancedRows.ts')
-assert.equal(
-  JSON.stringify(getBalancedRows([1, 2, 3, 4, 5, 6, 7], 6)),
-  JSON.stringify([[1, 2, 3, 4], [5, 6, 7]]),
-  'seven fields must balance as 4 + 3',
-)
-
 const schemaModule = evaluateTypeScriptModule(
   'src/constants/projectInfoSchema.ts',
   id => {
     if (id === '@/constants/projectTypes') {
       return {
-        PROJECT_TYPE_MACHINE: '整机产品项目',
+        MACHINE_PROJECT_TYPES: ['整机产品-手机', '整机产品-PAD', '整机产品-笔电'],
         PROJECT_TYPE_TOS_VERSION: 'tOS版本项目',
+        isMachineProjectType: type => [
+          '整机产品-手机',
+          '整机产品-PAD',
+          '整机产品-笔电',
+          '整机产品项目',
+        ].includes(type),
       }
     }
     throw new Error(`Unexpected schema module: ${id}`)
@@ -52,6 +53,22 @@ const machineFields = Array.from(schemaModule.MACHINE_PROJECT_INFO_FIELDS)
 const tosFields = Array.from(schemaModule.TOS_PROJECT_INFO_FIELDS)
 const keysFor = (fields, group) => fields.filter(field => field.group === group).map(field => field.key)
 const keysWhere = (fields, predicate) => fields.filter(predicate).map(field => field.key)
+
+assert.deepEqual(Array.from(schemaModule.TARGET_PROJECT_TYPES), [
+  '整机产品-手机',
+  '整机产品-PAD',
+  '整机产品-笔电',
+  'tOS版本项目',
+], 'new project choices must expose the three machine categories without the legacy value')
+for (const type of ['整机产品-手机', '整机产品-PAD', '整机产品-笔电', '整机产品项目']) {
+  assert.equal(schemaModule.isTargetProjectInfoType(type), true, `${type} must use target project information`)
+  assert.equal(schemaModule.getProjectInfoFields(type), schemaModule.MACHINE_PROJECT_INFO_FIELDS, `${type} must reuse the machine field schema`)
+  assert.equal(schemaModule.getProjectInfoGroups(type), schemaModule.MACHINE_PROJECT_INFO_GROUPS, `${type} must reuse the machine group schema`)
+}
+assert.equal(schemaModule.isTargetProjectInfoType('tOS版本项目'), true, 'tOS must use target project information')
+assert.equal(schemaModule.isTargetProjectInfoType('技术项目'), false, 'technical projects must not satisfy the target project information predicate')
+assert.match(schema, /export type TargetProjectInfoType\s*=/, 'target project information must expose an exact project-type union')
+assert.match(schema, /type is TargetProjectInfoType/, 'target project information predicate must narrow to its exact union')
 
 assert.equal(JSON.stringify(keysFor(machineFields, 'basic')), JSON.stringify([
   'researchMode', 'developmentMode', 'firstSaleTosVersion', 'isFirstLaunchProject',
@@ -96,33 +113,110 @@ assert.equal(JSON.stringify(keysWhere(tosFields, field => field.requiredOnCreate
 ]), 'tOS create-required fields must match the reference document')
 assert.equal(tosFields.every(field => field.required), true, 'every tOS category field must be overall required')
 assert.equal(tosFields.filter(field => field.group === 'team').every(field => field.inputType === 'people'), true, 'all tOS roles must allow multiple members')
-assert.equal(
-  JSON.stringify(getBalancedRows([1, 2, 3, 4, 5, 6, 7, 8], 6)),
-  JSON.stringify([[1, 2, 3, 4], [5, 6, 7, 8]]),
-  'eight fields must balance as 4 + 4',
+assert.deepEqual(
+  Array.from(machineFields.find(field => field.key === 'versionType').options),
+  ['Full', 'Slim', 'PAD', 'GO'],
+  'version type options must match revision 259 exactly',
 )
+assert.deepEqual(
+  Array.from(machineFields.find(field => field.key === 'systemType').options),
+  ['32bit', '64bit', '64only'],
+  'system type options must match revision 259 exactly',
+)
+assert.equal(machineFields.find(field => field.key === 'startingRam').readOnly, true, 'starting RAM must be derived and read-only')
+assert.equal(tosFields.find(field => field.key === 'firstLaunchProjectChips').label, '首发项目芯片', 'tOS launch chip label must match revision 259')
+
+const projectInfoValuesModule = evaluateTypeScriptModule(
+  'src/lib/projectInfoValues.ts',
+  id => {
+    if (id === '@/constants/projectInfoSchema') return { isExternalMachineDevelopment: () => false }
+    if (id === '@/constants/projectTypes') return { isMachineProjectType: type => type === '整机产品-手机' }
+    throw new Error(`Unexpected project-info values module: ${id}`)
+  },
+)
+const projectInfoRulesModule = evaluateTypeScriptModule(
+  'src/lib/projectInfoRules.ts',
+  id => {
+    if (id === '@/constants/projectInfoSchema') {
+      return { getEffectiveProjectInfoFields: () => [], getProjectInfoFields: () => [] }
+    }
+    if (id === '@/constants/projectTypes') {
+      return {
+        isMachineProjectType: type => type === '整机产品-手机',
+        PROJECT_TYPE_TOS_VERSION: 'tOS版本项目',
+      }
+    }
+    if (id === '@/lib/projectInfoValues') {
+      return projectInfoValuesModule
+    }
+    throw new Error(`Unexpected project-info rules module: ${id}`)
+  },
+)
+assert.equal(projectInfoRulesModule.deriveStartingRam('8GB+256GB'), '8GB', 'starting RAM must parse compact memory values')
+assert.equal(projectInfoRulesModule.deriveStartingRam('8+256 GB, 12+512 GB'), '8GB', 'starting RAM must parse capacity-list values')
+assert.equal(projectInfoRulesModule.deriveStartingRam('12+512 GB, 8+256 GB'), '8GB', 'starting RAM must use the smallest configured RAM regardless of option order')
+assert.equal(projectInfoValuesModule.getProjectInfoValue({
+  id: 'machine-legacy',
+  name: 'Legacy machine',
+  type: '整机产品-手机',
+  memory: '8GB+256GB',
+}, 'startingRam'), '8GB', 'existing machine projects must display automatically derived starting RAM')
+assert.equal(projectInfoValuesModule.getProjectInfoValue({
+  id: 'machine-stale-starting-ram',
+  name: 'Machine with stale stored RAM',
+  type: '整机产品-手机',
+  memory: '8GB+256GB',
+  startingRam: '12GB',
+  fieldValues: { startingRam: '16GB' },
+}, 'startingRam'), '8GB', 'derived starting RAM must override stale root and stored values')
+const aggregates = projectInfoRulesModule.deriveTosProjectAggregates([
+  'machine-1', 'machine-2',
+], [
+  { id: 'machine-1', type: '整机产品-手机', name: 'A', brand: 'TECNO', productLine: 'CAMON', chipPlatform: 'MTK', fieldValues: { chipCode: 'D1', chipModel: 'M1' } },
+  { id: 'machine-2', type: '整机产品-手机', name: 'B', brand: 'Infinix', productLine: 'NOTE', chipPlatform: 'UNISOC', fieldValues: { chipCode: 'D2', chipModel: 'M2' } },
+], 'tOS17.0')
+assert.equal(aggregates.values.applicableBrands, 'TECNO,Infinix', 'tOS aggregates must use the reference English comma separator')
+assert.equal(aggregates.values.firstLaunchProjectChips, 'D1（M1）,D2（M2）', 'tOS launch-chip aggregates must use the reference English comma separator')
 
 assert.match(schema, /required:\s*boolean/, 'field schema must expose overall required metadata')
+assert.doesNotMatch(projectMocks, /versionType:\s*'Go'/, 'machine project mocks must use the canonical GO version type')
 assert.match(schema, /'tOS15\.0\.1'[\s\S]*'tOS17\.2'/, 'first-sale tOS options must match the reference document')
 assert.match(schema, /\['S', 'A', 'B', 'C', 'D'\]/, 'software project levels must include S through D')
 assert.match(schema, /'不维护'[\s\S]*'升3维5'/, 'dimension upgrade strategies must match the reference document')
-assert.match(schema, /label:\s*'首发项目芯片编码'/, 'the tOS launch chip label must match the reference document')
+assert.match(schema, /label:\s*'首发项目芯片'/, 'the tOS launch chip label must match the reference document')
 assert.doesNotMatch(schema, /group:\s*'team',[^\n]*inputType:\s*'person'/, 'every team role must support multiple people')
 assert.match(values, /normalizeTeamMembers/, 'legacy and multi-person team values must share a normalizer')
 
 assert.doesNotMatch(view, /statusConfig\.tagColor/, 'project status must not be repeated beside the title')
 assert.doesNotMatch(view, /healthConfig\.tagColor/, 'health status must not be repeated beside the title')
-assert.match(sections, /getBalancedRows/, 'information sections must balance visible fields without blank cells')
+assert.match(view, /afterCore/, 'the target project view must support content immediately after the core card')
+assert.match(view, /visibleGroupKeys/, 'the target project view must pass display-group filtering')
+assert.match(sections, /visibleGroupKeys/, 'project-space sections must support caller-selected groups')
+assert.doesNotMatch(sections, /Grid\.useBreakpoint|getBalancedRows|displayRows/, 'information sections must not use responsive or balanced dynamic columns')
+assert.match(sections, /pms-project-info-display-grid[\s\S]*visibleFields\.map/, 'information sections must render visible fields in schema order through one grid')
 assert.match(sections, /pms-project-info-team-role/, 'team sections must separate role names from member lists')
 assert.match(modal, /mode === 'create' \? field\.requiredOnCreate : field\.required/, 'create and edit must use their own required rules')
 assert.match(styles, /\.pms-project-info-form-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/, 'project forms must use four desktop columns')
+assert.match(styles, /\.pms-project-info-display-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)[\s\S]*background:\s*#fff/, 'basic and extended information must use five equal white columns')
+assert.match(styles, /\.pms-project-info-display-item\s*\{[\s\S]*background:\s*#fff/, 'each information field cell must retain a white background')
 
 assert.match(market, /pms-market-matrix/, 'market editing must use the matrix surface')
 assert.match(market, /dataIndex:\s*row\.id/, 'each market row must become a table column')
 
 assert.match(plan, /visibleFieldKeys/, 'plan information must accept field visibility preferences')
 assert.match(plan, /getBalancedRows\(metrics, 5, 2\)/, 'plan information must fit visible fields into at most two rows')
-assert.match(planSchema, /planStartDate[\s\S]*isMadaControlled[\s\S]*isCarrierCustomized[\s\S]*cancelPauseDate/, 'plan fields must keep the reference document order')
+const planSchemaModule = evaluateTypeScriptModule('src/constants/projectPlanInfoSchema.ts')
+assert.deepEqual(Array.from(planSchemaModule.PROJECT_PLAN_INFO_FIELDS, field => field.key), [
+  'planStartDate', 'planEndDate', 'developCycle', 'googleLaunchDate',
+  'isCarrierCustomized', 'isSimLocked', 'isCancelPaused', 'cancelPauseDate',
+  'isMadaControlled',
+], 'plan fields must keep revision 259 order')
+assert.match(plan, /key:\s*'planStartDate'[\s\S]*key:\s*'isMadaControlled'/, 'plan display metrics must match schema order')
 assert.match(planSchema, /key: 'isCarrierCustomized'[^\n]*hideable: false/, 'carrier customization must remain fixed visible')
+
+assert.match(projectSpace, /afterCore=\{isWholeMachine \? renderWholeMachinePlanInfo\(\) : renderProjectPlanInfo\(\)\}/, 'target project plan information must remain directly below the core card')
+assert.match(projectSpace, /const anchorSections = \[[\s\S]*id: 'section-plan', label: '计划信息'/, 'the target project anchor must use the unified plan-information label')
+assert.match(projectSpace, /\{!isTargetProject && renderProjectPlanInfo\(\)\}/, 'only non-target projects may use the lower plan-information section')
+assert.match(projectSpace, /\{!isTargetProject && \(isSoftware \|\| isTech\) && \(/, 'target machine and tOS projects must not render the standalone configuration section')
 
 console.log('Project info matrix refresh verification passed.')

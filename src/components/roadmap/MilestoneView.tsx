@@ -31,6 +31,7 @@ import {
 import {
   LEGACY_SOFTWARE_PROJECT_TYPE,
   SOFTWARE_PROJECT_DISPLAY_TYPE,
+  isMachineProjectType,
   isSoftwareProjectType,
   normalizeSoftwareProjectType,
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
@@ -137,6 +138,10 @@ const SCOPE_BY_PROJECT_TYPE: Record<string, RoadmapScope> = {
   [PROJECT_TYPE_TECH]: 'tech',
 }
 
+const getRoadmapScope = (projectType: string): RoadmapScope | undefined => (
+  isMachineProjectType(projectType) ? 'machine' : SCOPE_BY_PROJECT_TYPE[projectType]
+)
+
 const PROJECT_TYPE_BY_SCOPE: Record<RoadmapScope, string> = {
   overall: '整体',
   machine: PROJECT_TYPE_MACHINE,
@@ -215,11 +220,11 @@ const DEPARTMENT_BY_PROJECT: Record<string, string> = {
 }
 
 const FALLBACK_MILESTONES: Record<string, string[]> = {
-  整机产品项目: ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5'],
-  产品项目: ['概念启动', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5', 'MR6', 'MR7'],
-  tOS版本项目: ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'tOS16.1.101', 'tOS16.1.102', 'tOS16.1.103', 'tOS16.1.104'],
-  独立软件产品项目: ['概念启动', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5', 'MR6', 'MR7'],
-  技术项目: ['概念启动', 'TDR1', 'TDR2', 'TDR3', 'TDR4'],
+  [PROJECT_TYPE_MACHINE]: ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5'],
+  [LEGACY_SOFTWARE_PROJECT_TYPE]: ['概念启动', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5', 'MR6', 'MR7'],
+  [PROJECT_TYPE_TOS_VERSION]: ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'tOS16.1.101', 'tOS16.1.102', 'tOS16.1.103', 'tOS16.1.104'],
+  [PROJECT_TYPE_INDEPENDENT_SOFTWARE]: ['概念启动', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5', 'MR6', 'MR7'],
+  [PROJECT_TYPE_TECH]: ['概念启动', 'TDR1', 'TDR2', 'TDR3', 'TDR4'],
 }
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 const MILESTONE_DATE_RANGE_PRESETS = [
@@ -373,7 +378,8 @@ const formatTaskDate = (value: any) => {
 }
 
 const buildMilestoneNodes = (project: any, sourceTasks: any[], rowIndex: number): RoadmapMilestone[] => {
-  const fallbackNames = FALLBACK_MILESTONES[project.type] || FALLBACK_MILESTONES['整机产品项目']
+  const fallbackType = isMachineProjectType(project.type) ? PROJECT_TYPE_MACHINE : project.type
+  const fallbackNames = FALLBACK_MILESTONES[fallbackType] || FALLBACK_MILESTONES[PROJECT_TYPE_MACHINE]
   const taskMilestones = sourceTasks
     .filter(task => task?.parentId && task?.taskName)
     .map(task => ({
@@ -419,7 +425,9 @@ const buildRoadmapMilestoneRow = (
   const row: RoadmapMilestoneRow = {
     key: `${options.keyPrefix}-${project.id}`,
     projectId: project.id,
-    projectType: normalizeSoftwareProjectType(project.type, project.name) || project.type,
+    projectType: isMachineProjectType(project.type)
+      ? PROJECT_TYPE_MACHINE
+      : normalizeSoftwareProjectType(project.type, project.name) || project.type,
     ...buildProjectFields(project),
     status,
     market: options.market,
@@ -457,7 +465,7 @@ const getTosGroups = (projects: any[]) => {
 
   if (!groups.size) {
     projects
-      .filter(project => (isSoftwareProjectType(project.type) || [PROJECT_TYPE_MACHINE, PROJECT_TYPE_TECH].includes(project.type)) && !isIndependentSoftwareProject(project) && normalizeStatus(project.status))
+      .filter(project => (isSoftwareProjectType(project.type) || isMachineProjectType(project.type) || project.type === PROJECT_TYPE_TECH) && !isIndependentSoftwareProject(project) && normalizeStatus(project.status))
       .forEach(project => {
         const version = getOverallTosVersion(project)
         groups.set(version, groups.get(version) || [])
@@ -480,7 +488,7 @@ function buildRoadmapMilestoneRows(
   const rows: RoadmapMilestoneRow[] = []
   let rowIndex = 0
   const tosGroups = getTosGroups(projects)
-  const machineProjects = sortProjectsByRoadmapDimension(projects.filter(project => project.type === PROJECT_TYPE_MACHINE && normalizeStatus(project.status)))
+  const machineProjects = sortProjectsByRoadmapDimension(projects.filter(project => isMachineProjectType(project.type) && normalizeStatus(project.status)))
   const techProjects = sortProjectsByRoadmapDimension(projects.filter(project => project.type === PROJECT_TYPE_TECH && normalizeStatus(project.status)))
 
   for (const tosGroup of tosGroups) {
@@ -533,10 +541,12 @@ function buildScopedMilestoneRows(
   }
 
   let rowIndex = 0
-  return sortProjectsByRoadmapDimension(projects.filter(project => project.type === typeMap[scope] && !isIndependentSoftwareProject(project) && normalizeStatus(project.status)))
+  return sortProjectsByRoadmapDimension(projects.filter(project => (
+    scope === 'machine' ? isMachineProjectType(project.type) : project.type === typeMap[scope]
+  ) && !isIndependentSoftwareProject(project) && normalizeStatus(project.status)))
     .map(project => {
-      const mainMarket = project.type === PROJECT_TYPE_MACHINE ? getMainMarket(project) : undefined
-      const sourceTasks = project.type === PROJECT_TYPE_MACHINE
+      const mainMarket = isMachineProjectType(project.type) ? getMainMarket(project) : undefined
+      const sourceTasks = isMachineProjectType(project.type)
         ? marketPlanData[mainMarket || '']?.tasks || []
         : level1Tasks
       const row = buildRoadmapMilestoneRow(project, buildMilestoneNodes(project, sourceTasks, rowIndex), {
@@ -798,7 +808,7 @@ export default function MilestoneView({
 	hideProjectTypeTabs,
 	scopeExtra,
 }: MilestoneViewProps) {
-  const initialScope = initialProjectType ? SCOPE_BY_PROJECT_TYPE[initialProjectType] || 'overall' : 'overall'
+  const initialScope = initialProjectType ? getRoadmapScope(initialProjectType) || 'overall' : 'overall'
   const [scope, setScope] = useState<RoadmapScope>(initialScope)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [collapsedTosGroups, setCollapsedTosGroups] = useState<Set<string>>(new Set())
@@ -834,7 +844,7 @@ export default function MilestoneView({
 
   useEffect(() => {
     if (!initialProjectType) return
-    const nextScope = SCOPE_BY_PROJECT_TYPE[initialProjectType]
+    const nextScope = getRoadmapScope(initialProjectType)
     if (!nextScope || nextScope === scope) return
     setScope(nextScope)
     setStatusFilter('all')

@@ -36,11 +36,15 @@ const {
   createTosTypePlanEntry,
   ensureTosTypePlanDataForRows,
   getMainTosType,
+  getTosTypePlanSourceType,
+  getTosTypeSummaryGroups,
   getTosTypeCurrentVersion,
   getTosTypeSnapshotKey,
   getTosTypeVersionKey,
   getTosTypeVersions,
   normalizeTosTypeRows,
+  isFollowTosType,
+  isTosTypeLevel1ReadOnly,
   setTosTypeCurrentVersion,
   setTosTypeVersions,
 } = sandbox.module.exports
@@ -51,22 +55,22 @@ assert.deepEqual(plain(TOS_TYPE_OPTIONS), ['Full', 'Slim', 'PAD', 'GO'])
 
 assert.deepEqual(
   plain(buildTosTypeRows([], 'Slim')),
-  [{ id: 'tos-type-Slim', type: 'Slim', isMain: true }],
+  [{ id: 'tos-type-Slim', type: 'Slim', isMain: true, followsMain: false }],
   'an existing scalar version type should become the only main type',
 )
 
 assert.deepEqual(
   plain(buildTosTypeRows(['Full', 'Slim'], 'Slim')),
   [
-    { id: 'tos-type-Full', type: 'Full', isMain: false },
-    { id: 'tos-type-Slim', type: 'Slim', isMain: true },
+    { id: 'tos-type-Full', type: 'Full', isMain: false, followsMain: false },
+    { id: 'tos-type-Slim', type: 'Slim', isMain: true, followsMain: false },
   ],
   'the scalar compatibility field should remain the main type when reconstructing rows',
 )
 
 assert.deepEqual(
   plain(buildTosTypeRows([], 'invalid')),
-  [{ id: 'tos-type-Full', type: 'Full', isMain: true }],
+  [{ id: 'tos-type-Full', type: 'Full', isMain: true, followsMain: false }],
   'missing or invalid project data should default to Full',
 )
 
@@ -79,12 +83,86 @@ const normalized = normalizeTosTypeRows([
 assert.deepEqual(
   plain(normalized),
   [
-    { id: '1', type: 'Full', isMain: false },
-    { id: '2', type: 'Slim', isMain: true },
+    { id: '1', type: 'Full', isMain: false, followsMain: false },
+    { id: '2', type: 'Slim', isMain: true, followsMain: false },
   ],
   'normalization should remove invalid and duplicate rows while preserving one main type',
 )
 assert.equal(getMainTosType(normalized), 'Slim')
+
+const followRows = normalizeTosTypeRows([
+  { id: 'full', type: 'Full', isMain: true, followsMain: false },
+  { id: 'go', type: 'GO', isMain: false, followsMain: true },
+  { id: 'pad', type: 'PAD', isMain: false, followsMain: false },
+])
+assert.deepEqual(
+  plain(followRows),
+  [
+    { id: 'full', type: 'Full', isMain: true, followsMain: false },
+    { id: 'go', type: 'GO', isMain: false, followsMain: true },
+    { id: 'pad', type: 'PAD', isMain: false, followsMain: false },
+  ],
+  'normalization should preserve main-follow flags',
+)
+assert.deepEqual(
+  plain(normalizeTosTypeRows([
+    { id: 'full', type: 'Full', isMain: true, followsMain: true },
+    { id: 'go', type: 'GO', isMain: false, followsMain: true },
+  ])),
+  [
+    { id: 'full', type: 'Full', isMain: true, followsMain: false },
+    { id: 'go', type: 'GO', isMain: false, followsMain: true },
+  ],
+  'a main type cannot follow itself',
+)
+assert.equal(isFollowTosType(followRows, 'GO'), true)
+assert.equal(isFollowTosType(followRows, 'PAD'), false)
+assert.equal(getTosTypePlanSourceType(followRows, 'GO', 'level1'), 'Full')
+assert.equal(getTosTypePlanSourceType(followRows, 'GO', 'level2'), 'GO')
+assert.equal(isTosTypeLevel1ReadOnly(followRows, 'GO', 'level1'), true)
+assert.equal(isTosTypeLevel1ReadOnly(followRows, 'GO', 'level2'), false)
+assert.deepEqual(
+  plain(getTosTypeSummaryGroups(followRows)),
+  [
+    { key: 'Full', label: 'Full&GO', sourceType: 'Full', memberTypes: ['Full', 'GO'] },
+    { key: 'PAD', label: 'PAD', sourceType: 'PAD', memberTypes: ['PAD'] },
+  ],
+)
+assert.deepEqual(
+  plain(getTosTypeSummaryGroups(normalizeTosTypeRows([
+    { id: 'pad', type: 'PAD', isMain: false, followsMain: false },
+    { id: 'full', type: 'Full', isMain: true, followsMain: false },
+    { id: 'go', type: 'GO', isMain: false, followsMain: true },
+  ]))),
+  [
+    { key: 'PAD', label: 'PAD', sourceType: 'PAD', memberTypes: ['PAD'] },
+    { key: 'Full', label: 'Full&GO', sourceType: 'Full', memberTypes: ['Full', 'GO'] },
+  ],
+  'summary groups should preserve configured type order',
+)
+assert.deepEqual(
+  plain(getTosTypeSummaryGroups(normalizeTosTypeRows([
+    { id: 'full', type: 'Full', isMain: false, followsMain: true },
+    { id: 'go', type: 'GO', isMain: true, followsMain: false },
+  ]))),
+  [
+    { key: 'GO', label: 'Full&GO', sourceType: 'GO', memberTypes: ['Full', 'GO'] },
+  ],
+  'the merged label must preserve configured order even when the main type is not first',
+)
+
+const changedMainRows = normalizeTosTypeRows([
+  { id: 'full', type: 'Full', isMain: false, followsMain: true },
+  { id: 'pad', type: 'PAD', isMain: true, followsMain: false },
+], 'Full')
+assert.deepEqual(
+  plain(changedMainRows),
+  [
+    { id: 'full', type: 'Full', isMain: false, followsMain: false },
+    { id: 'pad', type: 'PAD', isMain: true, followsMain: false },
+  ],
+  'changing the main type should clear every follow relationship',
+)
 
 const seed = createTosTypePlanEntry({
   level1Tasks: [{ id: '1', taskName: 'STR1' }],

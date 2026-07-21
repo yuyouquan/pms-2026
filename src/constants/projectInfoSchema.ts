@@ -1,6 +1,8 @@
 import {
-  PROJECT_TYPE_MACHINE,
+  MACHINE_PROJECT_TYPES,
+  LEGACY_PROJECT_TYPE_MACHINE,
   PROJECT_TYPE_TOS_VERSION,
+  isMachineProjectType,
   type ProjectTypeName,
 } from '@/constants/projectTypes'
 import type { ProjectInfoValues } from '@/types/app'
@@ -106,14 +108,14 @@ export const MACHINE_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineF
   { key: 'firstSaleTosVersion', label: '首销 tOS 版本', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: firstSaleTosVersions },
   { key: 'isFirstLaunchProject', label: '是否首发项目', group: 'basic', inputType: 'boolean', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: yesNo },
   { key: 'softwareProjectLevel', label: '软件项目等级', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: softwareProjectLevels },
-  { key: 'versionType', label: '版本类型', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: ['Full', 'Slim', 'Go'] },
+  { key: 'versionType', label: '版本类型', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: ['Full', 'Slim', 'PAD', 'GO'] },
   { key: 'dimensionUpgradeStrategy', label: '升维策略', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: dimensionUpgradeStrategies },
   { key: 'projectModel', label: '项目名', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
   { key: 'mainboardName', label: '主板名', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
   { key: 'androidMajorUpgrade', label: '是否大版本升级', group: 'basic', inputType: 'boolean', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true, options: yesNo },
   { key: 'productType', label: '产品类型', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
   { key: 'targetMarkets', label: '目标市场', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
-  { key: 'systemType', label: '系统类型', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true, options: ['64bit', '64only'] },
+  { key: 'systemType', label: '系统类型', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true, options: ['32bit', '64bit', '64only'] },
   { key: 'kernelVersion', label: 'Kernel 版本', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true, placeholder: '请选择或输入 Kernel 版本' },
   { key: 'confidentialityLevel', label: '保密级别', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
   { key: 'androidVersion', label: '安卓版本', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
@@ -128,7 +130,7 @@ export const MACHINE_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineF
   { key: 'chipModel', label: '芯片型号', group: 'extended', inputType: 'text', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'chipPlatform', label: '芯片平台', group: 'extended', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: ['MTK', 'UNISOC', 'QCOM'] },
   { key: 'memorySize', label: '内存大小', group: 'extended', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
-  { key: 'startingRam', label: '起步 RAM', group: 'extended', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'startingRam', label: '起步 RAM', group: 'extended', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'wholeMachinePd', label: '整机 PD', group: 'extended', inputType: 'link', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, placeholder: '请输入链接或 Excel 文件地址' },
   { key: 'pcbaSheet', label: 'PCBA 表', group: 'extended', inputType: 'link', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, placeholder: '请输入链接或 Excel 文件地址' },
   { key: 'shippingCountrySheet', label: '出货国家表', group: 'extended', inputType: 'link', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, placeholder: '请输入链接或 Excel 文件地址' },
@@ -150,7 +152,7 @@ export const MACHINE_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineF
 
 export const TOS_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineFields([
   { key: 'firstLaunchProjects', label: '首发项目', group: 'basic', inputType: 'multiSelect', requiredOnCreate: true, defaultVisible: true, hideable: false },
-  { key: 'firstLaunchProjectChips', label: '首发项目芯片编码', group: 'basic', inputType: 'text', requiredOnCreate: true, defaultVisible: true, hideable: false, readOnly: true },
+  { key: 'firstLaunchProjectChips', label: '首发项目芯片', group: 'basic', inputType: 'text', requiredOnCreate: true, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'applicableBrands', label: '适用品牌', group: 'basic', inputType: 'text', requiredOnCreate: true, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'applicableProductLines', label: '适用产品线', group: 'basic', inputType: 'text', requiredOnCreate: true, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'applicableChipPlatforms', label: '适用芯片平台', group: 'basic', inputType: 'text', requiredOnCreate: true, defaultVisible: true, hideable: false, readOnly: true },
@@ -178,20 +180,24 @@ export const TOS_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineField
   { key: 'tosEcosystemRepresentative', label: '研发战略生态合作部代表', group: 'team', inputType: 'people', requiredOnCreate: false, defaultVisible: false, hideable: true },
 ], true)
 
-export const TARGET_PROJECT_TYPES = [PROJECT_TYPE_MACHINE, PROJECT_TYPE_TOS_VERSION] as const
+export const TARGET_PROJECT_TYPES = [...MACHINE_PROJECT_TYPES, PROJECT_TYPE_TOS_VERSION] as const
 
-export const isTargetProjectInfoType = (type: string | undefined): type is typeof TARGET_PROJECT_TYPES[number] => (
-  type === PROJECT_TYPE_MACHINE || type === PROJECT_TYPE_TOS_VERSION
+export type TargetProjectInfoType = typeof MACHINE_PROJECT_TYPES[number]
+  | typeof LEGACY_PROJECT_TYPE_MACHINE
+  | typeof PROJECT_TYPE_TOS_VERSION
+
+export const isTargetProjectInfoType = (type: string | undefined): type is TargetProjectInfoType => (
+  isMachineProjectType(type) || type === PROJECT_TYPE_TOS_VERSION
 )
 
 export const getProjectInfoFields = (type: string | undefined) => {
-  if (type === PROJECT_TYPE_MACHINE) return MACHINE_PROJECT_INFO_FIELDS
+  if (isMachineProjectType(type)) return MACHINE_PROJECT_INFO_FIELDS
   if (type === PROJECT_TYPE_TOS_VERSION) return TOS_PROJECT_INFO_FIELDS
   return []
 }
 
 export const getProjectInfoGroups = (type: string | undefined) => {
-  if (type === PROJECT_TYPE_MACHINE) return MACHINE_PROJECT_INFO_GROUPS
+  if (isMachineProjectType(type)) return MACHINE_PROJECT_INFO_GROUPS
   if (type === PROJECT_TYPE_TOS_VERSION) return TOS_PROJECT_INFO_GROUPS
   return []
 }

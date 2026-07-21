@@ -1,10 +1,6 @@
 import { create } from 'zustand'
 import {
-  PROJECT_TYPE_CAPABILITY,
-  PROJECT_TYPE_INDEPENDENT_SOFTWARE,
-  PROJECT_TYPE_MACHINE,
-  PROJECT_TYPE_TECH,
-  PROJECT_TYPE_TOS_VERSION,
+  PROJECT_TEMPLATE_TYPES,
 } from '@/constants/projectTypes'
 import type { GanttScaleMode } from '@/lib/ganttScale'
 import type { FollowVersionSource, MarketCurrentVersionState, MarketVersionsState } from '@/lib/marketRules'
@@ -14,6 +10,9 @@ import type {
   TosTypeVersionsState,
 } from '@/lib/tosTypeRules'
 import type { CompareTableRow } from '@/lib/versionCompare'
+import { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
+
+export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
 // ─── Exported constants ───────────────────────────────────────────────
 
@@ -54,17 +53,7 @@ export const LEVEL1_TEMPLATE_TASKS = LEVEL1_TASKS.map(t => ({
   status: '未开始', progress: 0,
 }))
 
-export const TEMPLATE_PROJECT_TYPES = [
-  PROJECT_TYPE_MACHINE,
-  PROJECT_TYPE_TOS_VERSION,
-  PROJECT_TYPE_INDEPENDENT_SOFTWARE,
-  PROJECT_TYPE_TECH,
-  PROJECT_TYPE_CAPABILITY,
-]
-
-export const getTemplateSnapshotKey = (projectType: string, versionId: string, planLevel = 'level1') => (
-  `template::${projectType}::${planLevel}::${versionId}`
-)
+export const TEMPLATE_PROJECT_TYPES = PROJECT_TEMPLATE_TYPES
 
 const cloneLevel1TemplateTasks = () => LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
 

@@ -77,19 +77,26 @@ import {
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
   PROJECT_TYPE_TECH,
   PROJECT_TYPE_TOS_VERSION,
+  getProjectTypeFamilyKey,
+  isMachineProjectType,
   isSoftwareProjectType,
 } from '@/constants/projectTypes'
 import {
   buildMarketRowsFromMarkets,
+  canUseMarketPlanScope,
   canChangeMainMarket,
+  canCreateRevisionForMarket,
   cancelDraftRevision,
   formatFollowVersionSource,
   ensureMarketPlanDataForRows,
+  getConfiguredMarketMetadataValue,
+  getConfiguredMarketSelection,
   getMainMarket,
   getMarketCurrentVersion,
   getMarketFollowVersionKey,
   getMarketVersions,
   getProjectMarketSnapshotKey,
+  isConfiguredMarket,
   isFollowMarket,
   markTaskActualTimeDetachedFromMain,
   mergeFollowMarketActualDates,
@@ -107,10 +114,14 @@ import {
   createTosTypePlanEntry,
   ensureTosTypePlanDataForRows,
   getMainTosType,
+  getTosTypePlanSourceType,
+  getTosTypeSummaryGroups,
   getTosTypeCurrentVersion,
   getTosTypeSnapshotKey,
   getTosTypeVersionKey,
   getTosTypeVersions,
+  isFollowTosType,
+  isTosTypeLevel1ReadOnly,
   normalizeTosTypeRows,
   setTosTypeCurrentVersion,
   setTosTypeVersions,
@@ -137,6 +148,10 @@ import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPick
 import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
 import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
+import {
+  getTemplateSnapshotForProjectType,
+  getTemplateTasksForProjectType,
+} from '@/lib/projectTemplateCompatibility'
 import {
   getProjectResponsiblePersons,
   haveProjectResponsiblePersonsChanged,
@@ -428,7 +443,7 @@ export default function ProjectSpaceContainer() {
   const [showProjectInfoEditor, setShowProjectInfoEditor] = useState(false)
 
   // ═══════ Derived ═══════
-  const isWholeMachineProject = selectedProject?.type === '整机产品项目'
+  const isWholeMachineProject = isMachineProjectType(selectedProject?.type)
   const isTosVersionProject = selectedProject?.type === PROJECT_TYPE_TOS_VERSION
   const legacyMarketBuildConfig = selectedProject
     ? {
@@ -445,6 +460,8 @@ export default function ProjectSpaceContainer() {
       )
     : []
   const primaryMarket = getMainMarket(marketConfigRows)
+  const selectedMarketIsConfigured = isConfiguredMarket(marketConfigRows, selectedMarketTab)
+  const configuredMarketName = getConfiguredMarketMetadataValue(marketConfigRows, selectedMarketTab)
   const tosTypeConfigRows = selectedProject && isTosVersionProject
     ? buildTosTypeRows(
         selectedProject.versionTypes || [],
@@ -453,23 +470,52 @@ export default function ProjectSpaceContainer() {
       )
     : []
   const primaryTosType = getMainTosType(tosTypeConfigRows)
-  const tosTypeScopeSignature = tosTypeConfigRows.map(row => `${row.type}:${row.isMain ? 'main' : 'secondary'}`).join('|')
+  const tosTypeScopeSignature = tosTypeConfigRows.map(row => `${row.type}:${row.isMain ? 'main' : row.followsMain ? 'follow' : 'secondary'}`).join('|')
   const scopedPlanLevel = projectPlanLevel === 'level2' ? 'level2' : 'level1'
-  const isMarketScopedLevel1 = !!selectedProject && isWholeMachineProject && projectPlanLevel === 'level1' && !!selectedMarketTab
+  const canUseSelectedMarketPlanScope = canUseMarketPlanScope(
+    marketConfigRows,
+    selectedMarketTab,
+    isWholeMachineProject,
+    projectPlanLevel,
+  )
+  const machineMarketPlanUnavailable = isWholeMachineProject && !canUseSelectedMarketPlanScope
+  const isMarketScopedLevel1 = !!selectedProject
+    && isWholeMachineProject
+    && projectPlanLevel === 'level1'
+    && selectedMarketIsConfigured
   const isTosTypeScoped = !!selectedProject && isTosVersionProject && !!selectedTosTypeTab
+  const effectiveTosLevel1Type = getTosTypePlanSourceType(tosTypeConfigRows, selectedTosTypeTab, 'level1')
+  const scopedTosPlanType = scopedPlanLevel === 'level1' ? effectiveTosLevel1Type : selectedTosTypeTab
+  const currentTosTypeIsFollow = isTosTypeScoped && isFollowTosType(tosTypeConfigRows, selectedTosTypeTab)
+  const followedTosLevel1ReadOnly = isTosTypeScoped
+    && scopedPlanLevel === 'level1'
+    && isTosTypeLevel1ReadOnly(tosTypeConfigRows, selectedTosTypeTab, 'level1')
+  const isFollowReadOnlyOverview = followedTosLevel1ReadOnly && projectPlanLevel === 'overview'
+  const tosLevel1FollowSourceText = `当前类型跟随 ${effectiveTosLevel1Type}，请切换到 ${effectiveTosLevel1Type} 维护一级计划`
+  const canMaintainCurrentPlan = canEditCurrentPlan
+    && !followedTosLevel1ReadOnly
+    && !machineMarketPlanUnavailable
+  const currentPlanMaintenanceDisabledReason = followedTosLevel1ReadOnly
+    ? tosLevel1FollowSourceText
+    : `无${currentPlanPermissionLabel}编辑权限`
+  const canCreateCurrentRevision = canMaintainCurrentPlan && (
+    !isMarketScopedLevel1 || canCreateRevisionForMarket(marketConfigRows, selectedMarketTab, scopedPlanLevel)
+  )
   const latestTemplateVersion = useMemo(
     () => baseVersions.filter(version => version.status === '已发布').sort((left, right) => comparePlanVersions(right, left))[0],
     [baseVersions],
   )
   const tosTypeSeedEntry = useMemo<TosTypePlanEntry>(() => {
     const templateSnapshot = latestTemplateVersion
-      ? (
-          publishedSnapshots[getTemplateSnapshotKey(PROJECT_TYPE_TOS_VERSION, latestTemplateVersion.id, 'level1')]
-          || publishedSnapshots[getTemplateSnapshotKey(PROJECT_TYPE_TOS_VERSION, latestTemplateVersion.id)]
+      ? getTemplateSnapshotForProjectType(
+          publishedSnapshots,
+          PROJECT_TYPE_TOS_VERSION,
+          latestTemplateVersion.id,
+          'level1',
         )
       : undefined
     const templateTasks = templateSnapshot
-      || configTemplateTasksByType[PROJECT_TYPE_TOS_VERSION]
+      || getTemplateTasksForProjectType(configTemplateTasksByType, PROJECT_TYPE_TOS_VERSION)
       || LEVEL1_TEMPLATE_TASKS
     return createTosTypePlanEntry({
       level1Tasks: templateTasks.map(task => {
@@ -500,6 +546,12 @@ export default function ProjectSpaceContainer() {
         || createTosTypePlanEntry(tosTypeSeedEntry)
       )
     : null
+  const currentTosLevel1Data = isTosTypeScoped && selectedProject
+    ? (
+        tosTypePlanDataByProjectId[selectedProject.id]?.[effectiveTosLevel1Type]
+        || createTosTypePlanEntry(tosTypeSeedEntry)
+      )
+    : null
 
   const versions = useMemo(
     () => (
@@ -507,23 +559,26 @@ export default function ProjectSpaceContainer() {
         ? getTosTypeVersions(
             tosTypeVersionsByKey,
             selectedProject.id,
-            selectedTosTypeTab,
+            scopedTosPlanType,
             scopedPlanLevel,
             VERSION_DATA,
           )
         : isMarketScopedLevel1 && selectedProject
-        ? getMarketVersions(marketVersionsByKey, selectedProject.id, selectedMarketTab, baseVersions)
-        : baseVersions
+          ? getMarketVersions(marketVersionsByKey, selectedProject.id, selectedMarketTab, baseVersions)
+          : machineMarketPlanUnavailable
+            ? []
+            : baseVersions
     ),
     [
       baseVersions,
       isMarketScopedLevel1,
       isTosTypeScoped,
+      machineMarketPlanUnavailable,
       marketVersionsByKey,
       scopedPlanLevel,
       selectedMarketTab,
       selectedProject?.id,
-      selectedTosTypeTab,
+      scopedTosPlanType,
       tosTypeVersionsByKey,
     ],
   )
@@ -531,20 +586,22 @@ export default function ProjectSpaceContainer() {
     ? getTosTypeCurrentVersion(
         tosTypeCurrentVersionByKey,
         selectedProject.id,
-        selectedTosTypeTab,
+        scopedTosPlanType,
         scopedPlanLevel,
         versions,
         INITIAL_TOS_CURRENT_VERSION,
       )
     : isMarketScopedLevel1 && selectedProject
       ? getMarketCurrentVersion(marketCurrentVersionByKey, selectedProject.id, selectedMarketTab, versions, baseCurrentVersion)
-      : baseCurrentVersion
+      : machineMarketPlanUnavailable
+        ? ''
+        : baseCurrentVersion
   const setVersions = (nextVersions: PlanVersionLike[] | ((prev: PlanVersionLike[]) => PlanVersionLike[])) => {
     if (isTosTypeScoped && selectedProject) {
       setTosTypeVersionsByKey(prev => setTosTypeVersions(
         prev,
         selectedProject.id,
-        selectedTosTypeTab,
+        scopedTosPlanType,
         scopedPlanLevel,
         VERSION_DATA,
         nextVersions,
@@ -555,6 +612,7 @@ export default function ProjectSpaceContainer() {
       setMarketVersionsByKey(prev => setMarketVersions(prev, selectedProject.id, selectedMarketTab, baseVersions, nextVersions))
       return
     }
+    if (machineMarketPlanUnavailable) return
     setBaseVersions(nextVersions as typeof baseVersions)
   }
   const setCurrentVersion = (versionId: string) => {
@@ -562,7 +620,7 @@ export default function ProjectSpaceContainer() {
       setTosTypeCurrentVersionByKey(prev => setTosTypeCurrentVersion(
         prev,
         selectedProject.id,
-        selectedTosTypeTab,
+        scopedTosPlanType,
         scopedPlanLevel,
         versionId,
       ))
@@ -572,6 +630,7 @@ export default function ProjectSpaceContainer() {
       setMarketCurrentVersionByKey(prev => setMarketCurrentVersion(prev, selectedProject.id, selectedMarketTab, versionId))
       return
     }
+    if (machineMarketPlanUnavailable) return
     setBaseCurrentVersion(versionId)
   }
   const getVersionsForMarket = (market: string) => (
@@ -596,13 +655,13 @@ export default function ProjectSpaceContainer() {
   const latestPublishedVersion = versions.filter(v => v.status === '已发布').sort((a, b) => comparePlanVersions(b, a))[0]
   const isLatestPublished = !isCurrentDraft && currentVersion === latestPublishedVersion?.id
   const tosLevel1Versions = selectedProject && isTosTypeScoped
-    ? getTosTypeVersions(tosTypeVersionsByKey, selectedProject.id, selectedTosTypeTab, 'level1', VERSION_DATA)
+    ? getTosTypeVersions(tosTypeVersionsByKey, selectedProject.id, effectiveTosLevel1Type, 'level1', VERSION_DATA)
     : []
   const tosLevel1CurrentVersion = selectedProject && isTosTypeScoped
     ? getTosTypeCurrentVersion(
         tosTypeCurrentVersionByKey,
         selectedProject.id,
-        selectedTosTypeTab,
+        effectiveTosLevel1Type,
         'level1',
         tosLevel1Versions,
         INITIAL_TOS_CURRENT_VERSION,
@@ -610,7 +669,7 @@ export default function ProjectSpaceContainer() {
     : ''
   const tosLevel1CurrentVersionData = tosLevel1Versions.find(version => version.id === tosLevel1CurrentVersion)
   const tosLevel1PublishedSnapshot = selectedProject && isTosTypeScoped && tosLevel1CurrentVersionData?.status === '已发布'
-    ? publishedSnapshots[getTosTypeSnapshotKey(selectedProject.id, selectedTosTypeTab, 'level1', tosLevel1CurrentVersion)]
+    ? publishedSnapshots[getTosTypeSnapshotKey(selectedProject.id, effectiveTosLevel1Type, 'level1', tosLevel1CurrentVersion)]
     : undefined
   const tosLevel2Versions = selectedProject && isTosTypeScoped
     ? getTosTypeVersions(tosTypeVersionsByKey, selectedProject.id, selectedTosTypeTab, 'level2', VERSION_DATA)
@@ -633,17 +692,19 @@ export default function ProjectSpaceContainer() {
     ? getTosTypeVersions(
         tosTypeVersionsByKey,
         selectedProject.id,
-        selectedTosTypeTab,
+        effectiveTosLevel1Type,
         'level1',
         VERSION_DATA,
       ).some(version => version.status === '已发布')
     : versions.some(version => version.status === '已发布')
   const allPlanTypes = [...LEVEL2_PLAN_TYPES, ...customTypes]
 
-  const currentMarketIsFollow = isWholeMachineProject && isFollowMarket(marketConfigRows, selectedMarketTab)
-  const currentMarketData = isWholeMachineProject ? marketPlanData[selectedMarketTab] : null
+  const currentMarketIsFollow = isMarketScopedLevel1 && isFollowMarket(marketConfigRows, selectedMarketTab)
+  const currentMarketData = isWholeMachineProject && selectedMarketIsConfigured
+    ? marketPlanData[selectedMarketTab]
+    : null
   const getCurrentMarketFollowVersionSource = (versionId: string) => {
-    if (!selectedProject || !isWholeMachineProject || projectPlanLevel !== 'level1') return undefined
+    if (!selectedProject || !isMarketScopedLevel1) return undefined
     return marketFollowVersionMeta[getMarketFollowVersionKey(selectedProject.id, selectedMarketTab, versionId)]
   }
   const renderVersionLabel = (version: PlanVersionLike) => {
@@ -658,29 +719,33 @@ export default function ProjectSpaceContainer() {
     )
   }
   const versionSelectWidth = isWholeMachineProject && projectPlanLevel === 'level1' ? 250 : 150
-  const updateCurrentTosTypeData = (updater: (previous: TosTypePlanEntry) => TosTypePlanEntry) => {
+  const updateCurrentTosTypeData = (type: string, updater: (previous: TosTypePlanEntry) => TosTypePlanEntry) => {
     if (!selectedProject || !isTosTypeScoped) return
     setTosTypePlanDataByProjectId(previous => {
       const ensured = ensureTosTypePlanDataForRows(previous, selectedProject.id, tosTypeConfigRows, tosTypeSeedEntry)
       const projectData = ensured[selectedProject.id] || {}
-      const current = projectData[selectedTosTypeTab] || createTosTypePlanEntry(tosTypeSeedEntry)
+      const current = projectData[type] || createTosTypePlanEntry(tosTypeSeedEntry)
       return {
         ...ensured,
         [selectedProject.id]: {
           ...projectData,
-          [selectedTosTypeTab]: updater(current),
+          [type]: updater(current),
         },
       }
     })
   }
 
   // 整机项目按市场隔离；tOS 版本项目按类型隔离；其他项目沿用全局数据。
-  const effectiveTasks = currentTosTypeData
-    ? (tosLevel1PublishedSnapshot ?? currentTosTypeData.level1Tasks)
-    : currentMarketData?.tasks || tasks
-  const setEffectiveTasks = currentTosTypeData
+  const effectiveTasks = currentTosLevel1Data
+    ? (tosLevel1PublishedSnapshot ?? currentTosLevel1Data.level1Tasks)
+    : currentMarketData?.tasks || (isWholeMachineProject ? [] : tasks)
+  const setEffectiveTasks = currentTosLevel1Data
     ? (newTasks: any[] | ((prev: any[]) => any[])) => {
-        updateCurrentTosTypeData(previous => ({
+        if (currentTosTypeIsFollow) {
+          void message.warning(tosLevel1FollowSourceText)
+          return
+        }
+        updateCurrentTosTypeData(effectiveTosLevel1Type, previous => ({
           ...previous,
           level1Tasks: typeof newTasks === 'function' ? newTasks(previous.level1Tasks) : newTasks,
         }))
@@ -695,21 +760,23 @@ export default function ProjectSpaceContainer() {
           },
         }))
       }
-      : setTasks
+      : machineMarketPlanUnavailable
+        ? () => undefined
+        : setTasks
 
   const effectiveLevel2PlanTasks = currentTosTypeData
     ? (tosLevel2PublishedSnapshot ?? currentTosTypeData.level2PlanTasks)
     : baseLevel2PlanTasks
   const level2PlanTasks = effectiveLevel2PlanTasks
   const setLevel2PlanTasks = currentTosTypeData
-    ? (value: any[] | ((previous: any[]) => any[])) => updateCurrentTosTypeData(previous => ({
+    ? (value: any[] | ((previous: any[]) => any[])) => updateCurrentTosTypeData(selectedTosTypeTab, previous => ({
         ...previous,
         level2PlanTasks: typeof value === 'function' ? value(previous.level2PlanTasks) : value,
       }))
     : setBaseLevel2PlanTasks
   const level2PlanMilestones = currentTosTypeData?.level2PlanMilestones || baseLevel2PlanMilestones
   const setLevel2PlanMilestones = currentTosTypeData
-    ? (value: string[] | ((previous: string[]) => string[])) => updateCurrentTosTypeData(previous => ({
+    ? (value: string[] | ((previous: string[]) => string[])) => updateCurrentTosTypeData(selectedTosTypeTab, previous => ({
         ...previous,
         level2PlanMilestones: typeof value === 'function' ? value(previous.level2PlanMilestones) : value,
       }))
@@ -717,25 +784,25 @@ export default function ProjectSpaceContainer() {
   const effectiveCreatedLevel2Plans = currentTosTypeData?.createdLevel2Plans || baseCreatedLevel2Plans
   const createdLevel2Plans = effectiveCreatedLevel2Plans
   const setCreatedLevel2Plans = currentTosTypeData
-    ? (value: typeof baseCreatedLevel2Plans | ((previous: typeof baseCreatedLevel2Plans) => typeof baseCreatedLevel2Plans)) => updateCurrentTosTypeData(previous => ({
+    ? (value: typeof baseCreatedLevel2Plans | ((previous: typeof baseCreatedLevel2Plans) => typeof baseCreatedLevel2Plans)) => updateCurrentTosTypeData(selectedTosTypeTab, previous => ({
         ...previous,
         createdLevel2Plans: typeof value === 'function' ? value(previous.createdLevel2Plans) : value,
       }))
     : setBaseCreatedLevel2Plans
   const activeLevel2Plan = currentTosTypeData?.activeLevel2Plan || baseActiveLevel2Plan
   const setActiveLevel2Plan = currentTosTypeData
-    ? (value: string) => updateCurrentTosTypeData(previous => ({ ...previous, activeLevel2Plan: value }))
+    ? (value: string) => updateCurrentTosTypeData(selectedTosTypeTab, previous => ({ ...previous, activeLevel2Plan: value }))
     : setBaseActiveLevel2Plan
   const effectiveLevel2PlanMeta = currentTosTypeData?.level2PlanMeta || baseLevel2PlanMeta
   const level2PlanMeta = effectiveLevel2PlanMeta
   const setLevel2PlanMeta = currentTosTypeData
-    ? (value: Record<string, any> | ((previous: Record<string, any>) => Record<string, any>)) => updateCurrentTosTypeData(previous => ({
+    ? (value: Record<string, any> | ((previous: Record<string, any>) => Record<string, any>)) => updateCurrentTosTypeData(selectedTosTypeTab, previous => ({
         ...previous,
         level2PlanMeta: typeof value === 'function' ? value(previous.level2PlanMeta) : value,
       }))
     : setBaseLevel2PlanMeta
   const setVersionTrainRecords = currentTosTypeData
-    ? (records: typeof INITIAL_VERSION_TRAIN_DATA) => updateCurrentTosTypeData(previous => ({
+    ? (records: typeof INITIAL_VERSION_TRAIN_DATA) => updateCurrentTosTypeData(selectedTosTypeTab, previous => ({
         ...previous,
         versionTrainRecords: records,
       }))
@@ -908,12 +975,10 @@ export default function ProjectSpaceContainer() {
     const versionId = versionNoToVersionId(source.versionNo)
 
     if (source.type === 'template') {
-      const projectType = selectedProject?.type || selectedPlanType
-      const templateSnapshotKey = getTemplateSnapshotKey(projectType, versionId, 'level1')
+      const projectType = getProjectTypeFamilyKey(selectedProject?.type || selectedPlanType)
       return (
-        publishedSnapshots[templateSnapshotKey]
-        || publishedSnapshots[getTemplateSnapshotKey(projectType, versionId)]
-        || configTemplateTasksByType[projectType]
+        getTemplateSnapshotForProjectType(publishedSnapshots, projectType, versionId, 'level1')
+        || getTemplateTasksForProjectType(configTemplateTasksByType, projectType)
         || LEVEL1_TEMPLATE_TASKS
       )
     }
@@ -930,6 +995,16 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleClonePlanSource = (source: PlanCloneSource) => {
+    if (!canMaintainCurrentPlan) {
+      void message.warning(
+        machineMarketPlanUnavailable
+          ? '请先配置并选择有效市场'
+          : followedTosLevel1ReadOnly
+            ? tosLevel1FollowSourceText
+            : `无${currentPlanPermissionLabel}编辑权限`,
+      )
+      return
+    }
     const sourceTasks = getCloneSourceTasks(source)
     if (!sourceTasks.length) {
       message.warning(`未找到 ${source.label} 的计划数据`)
@@ -986,9 +1061,9 @@ export default function ProjectSpaceContainer() {
   const renderPlanCloneButton = (style?: CSSProperties) => {
     if (!isCurrentDraft || projectPlanLevel !== 'level1') return null
     const buttonStyle = style || { borderRadius: 6 }
-    if (!canEditLevel1Plan) {
+    if (!canMaintainCurrentPlan) {
       return (
-        <Tooltip title="无一级计划编辑权限">
+        <Tooltip title={followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : '无一级计划编辑权限'}>
           <Button icon={<CopyOutlined />} style={buttonStyle} disabled aria-label="克隆计划" />
         </Tooltip>
       )
@@ -1017,6 +1092,20 @@ export default function ProjectSpaceContainer() {
 
   const renderCreateRevisionButton = (style?: CSSProperties) => {
     const buttonStyle = style || { borderRadius: 6 }
+    if (!canCreateCurrentRevision) {
+      const disabledReason = followedTosLevel1ReadOnly
+        ? tosLevel1FollowSourceText
+        : isMarketScopedLevel1 && currentMarketIsFollow
+          ? `当前市场跟随 ${primaryMarket}，不能创建一级计划修订`
+          : `无${currentPlanPermissionLabel}编辑权限`
+      return (
+        <Tooltip title={disabledReason}>
+          <Button type="primary" icon={<PlusOutlined />} style={buttonStyle} disabled aria-label="创建修订">
+            创建修订
+          </Button>
+        </Tooltip>
+      )
+    }
     return (
       <Dropdown
         menu={{ items: buildCreateRevisionMenuItems(), onClick: handleCreateRevisionMenuClick }}
@@ -1050,21 +1139,25 @@ export default function ProjectSpaceContainer() {
       id: `tos-type-${Date.now()}`,
       type: 'Full',
       isMain: true,
+      followsMain: false,
     }])
     setShowTosTypeEditor(true)
   }
 
   const updateTosTypeDraftRow = (rowId: string, patch: Partial<TosTypeConfigRow>) => {
     setTosTypeDraftRows(previous => {
+      const previousMainType = getMainTosType(previous)
       const nextRows = previous.map(row => ({ ...row }))
       const targetRow = nextRows.find(row => row.id === rowId)
       if (!targetRow) return previous
 
       if (patch.type !== undefined) targetRow.type = patch.type
+      if (patch.followsMain !== undefined && !targetRow.isMain) targetRow.followsMain = patch.followsMain
       if (patch.isMain) {
         nextRows.forEach(row => { row.isMain = row.id === rowId })
+        targetRow.followsMain = false
       }
-      return normalizeTosTypeRows(nextRows)
+      return normalizeTosTypeRows(nextRows, previousMainType)
     })
   }
 
@@ -1075,14 +1168,19 @@ export default function ProjectSpaceContainer() {
       message.warning('可选类型已全部添加')
       return
     }
-    setTosTypeDraftRows(previous => normalizeTosTypeRows([
-      ...previous,
-      {
-        id: `tos-type-${Date.now()}`,
-        type: nextType,
-        isMain: previous.length === 0,
-      },
-    ]))
+    setTosTypeDraftRows(previous => {
+      const previousMainType = getMainTosType(previous)
+      const nextRows = [
+        ...previous,
+        {
+          id: `tos-type-${Date.now()}`,
+          type: nextType,
+          isMain: previous.length === 0,
+          followsMain: false,
+        },
+      ]
+      return normalizeTosTypeRows(nextRows, previousMainType)
+    })
   }
 
   const removeTosTypeDraftRow = (rowId: string) => {
@@ -1090,7 +1188,11 @@ export default function ProjectSpaceContainer() {
       message.warning('至少保留一个类型')
       return
     }
-    setTosTypeDraftRows(previous => normalizeTosTypeRows(previous.filter(row => row.id !== rowId)))
+    setTosTypeDraftRows(previous => {
+      const previousMainType = getMainTosType(previous)
+      const filtered = previous.filter(row => row.id !== rowId)
+      return normalizeTosTypeRows(filtered, previousMainType)
+    })
   }
 
   const saveTosTypeConfig = () => {
@@ -1160,7 +1262,7 @@ export default function ProjectSpaceContainer() {
       message.error('无基础信息编辑权限')
       return
     }
-    if (!selectedProject || selectedProject.type !== '整机产品项目') return
+    if (!selectedProject || !isMachineProjectType(selectedProject.type)) return
     const previousRows = getCurrentMarketRows()
     const previousMainMarket = getMainMarket(previousRows)
     const normalizedRows = normalizeMarketRows(marketDraftRows, previousMainMarket)
@@ -1242,6 +1344,7 @@ export default function ProjectSpaceContainer() {
     setSelectedProject(updatedProject)
     setProjects(prev => prev.map(project => project.id === updatedProject.id ? updatedProject : project) as typeof prev)
     setMarketPlanData(syncedMarketPlanData)
+    setSelectedMarketTab(getConfiguredMarketSelection(normalizedRows, selectedMarketTab))
     if (unfollowedMarkets.length > 0) {
       setMarketFollowVersionMeta(prev => removeFollowVersionMetaForMarkets(prev, {
         projectId: selectedProject.id,
@@ -1280,7 +1383,6 @@ export default function ProjectSpaceContainer() {
       const versionText = followPublishPlans.map(plan => `${plan.market} ${plan.versionNo}`).join('、')
       message.success(`市场配置已保存，已为跟随市场发布${kindLabel}版本：${versionText}`)
     } else {
-      if (!nextMarkets.includes(selectedMarketTab)) setSelectedMarketTab(mainMarket || nextMarkets[0])
       if (newlyFollowedMarkets.length > 0) {
         message.warning('市场配置已保存，主市场暂无可跟随版本，未自动创建跟随版本')
       } else {
@@ -1363,10 +1465,13 @@ export default function ProjectSpaceContainer() {
   // Scope key for collapse
   const getScopeKey = (): string | null => {
     if (!selectedProject) return null
+    if (isWholeMachineProject && projectPlanLevel === 'level1' && !selectedMarketIsConfigured) return null
     const planDimension = isTosVersionProject
-      ? `type::${selectedTosTypeTab}`
+      ? `type::${projectPlanLevel === 'level1' ? effectiveTosLevel1Type : selectedTosTypeTab}`
       : isWholeMachineProject
-        ? `market::${selectedMarketTab}`
+        ? projectPlanLevel === 'level1'
+          ? `market::${configuredMarketName}`
+          : 'machine'
         : 'default'
     if (projectPlanLevel === 'level1') return `${selectedProject.id}::${planDimension}::level1`
     if (projectPlanLevel === 'level2' && activeLevel2Plan) return `${selectedProject.id}::${planDimension}::level2::${activeLevel2Plan}`
@@ -1385,13 +1490,13 @@ export default function ProjectSpaceContainer() {
   // ═══════ Effects ═══════
   // Draft auto-edit mode
   useEffect(() => {
-    if (isCurrentDraft) {
+    if (isCurrentDraft && !followedTosLevel1ReadOnly) {
       setIsEditMode(true)
       if (projectPlanViewMode === 'horizontal') setProjectPlanViewMode('table')
     } else {
       setIsEditMode(false)
     }
-  }, [currentVersion, isCurrentDraft])
+  }, [currentVersion, followedTosLevel1ReadOnly, isCurrentDraft])
 
   // 进入项目空间「计划」时按权限+责任人矩阵选择默认版本
   // - 有编辑权 / 是责任人：有修订版 → 默认修订版；无修订版 → 最新已发布
@@ -1402,8 +1507,16 @@ export default function ProjectSpaceContainer() {
     if (activeModule !== 'projectSpace') return
     if (projectSpaceModule !== 'plan') return
     if (!selectedProject) return
+    if (machineMarketPlanUnavailable) return
     if (versions.length === 0) return
-    const key = `${selectedProject.id}::${selectedMarketTab || ''}::${selectedTosTypeTab || ''}::${projectPlanLevel}::${currentLoginUser}`
+    const draftDimension = isTosTypeScoped
+      ? scopedTosPlanType
+      : isMarketScopedLevel1
+        ? `market::${configuredMarketName}`
+        : isWholeMachineProject
+          ? 'machine'
+          : ''
+    const key = `${selectedProject.id}::${draftDimension}::${projectPlanLevel}::${currentLoginUser}`
     if (lastVersionInitKeyRef.current === key) return
     lastVersionInitKeyRef.current = key
     const draft = versions.find(v => v.status === '修订中')
@@ -1415,7 +1528,7 @@ export default function ProjectSpaceContainer() {
     } else if (latestPub) {
       if (currentVersion !== latestPub.id) setCurrentVersion(latestPub.id)
     }
-  }, [activeModule, projectSpaceModule, selectedProject?.id, selectedMarketTab, selectedTosTypeTab, projectPlanLevel, canViewDraft, versions, currentLoginUser])
+  }, [activeModule, projectSpaceModule, selectedProject?.id, selectedMarketTab, scopedTosPlanType, projectPlanLevel, canViewDraft, versions, currentLoginUser])
 
   // Due task scanning
   useEffect(() => {
@@ -1423,8 +1536,9 @@ export default function ProjectSpaceContainer() {
     if (!selectedProject) return
     if (projectSpaceModule !== 'plan') return
     if (projectPlanLevel !== 'level1') return
+    if (machineMarketPlanUnavailable) return
     const dueScanDimension = isTosTypeScoped
-      ? selectedTosTypeTab
+      ? effectiveTosLevel1Type
       : isWholeMachineProject
         ? selectedMarketTab
         : ''
@@ -1435,8 +1549,8 @@ export default function ProjectSpaceContainer() {
       .filter(v => v.status === '已发布')
       .sort((a, b) => comparePlanVersions(b, a))[0]
     const scanSnapshotKey = latestPub && isTosTypeScoped
-      ? getTosTypeSnapshotKey(selectedProject.id, selectedTosTypeTab, 'level1', latestPub.id)
-      : latestPub && isWholeMachineProject
+      ? getTosTypeSnapshotKey(selectedProject.id, effectiveTosLevel1Type, 'level1', latestPub.id)
+      : latestPub && isMarketScopedLevel1
         ? getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, latestPub.id)
         : latestPub?.id
     const scanTarget = isTosTypeScoped
@@ -1450,7 +1564,7 @@ export default function ProjectSpaceContainer() {
     if (notices.length === 0) return
     // 后台仍触发飞书 mock 推送，但不再弹 notification 干扰用户进入计划视图的体验
     notifyDueTasks(notices, MOCK_USER_MAP)
-  }, [selectedProject?.id, selectedMarketTab, selectedTosTypeTab, projectPlanLevel, activeModule, projectSpaceModule])
+  }, [selectedProject?.id, selectedMarketTab, effectiveTosLevel1Type, projectPlanLevel, activeModule, projectSpaceModule])
 
   // ═══════ Helper functions ═══════
   const toggleNode = (nodeId: string) => {
@@ -1507,6 +1621,10 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleAddSubTask = (parentId: string) => {
+    if (followedTosLevel1ReadOnly) {
+      void message.warning(tosLevel1FollowSourceText)
+      return
+    }
     const isLevel2Context = projectPlanLevel === 'level2'
     const isLevel2TaskContext = isLevel2Context && activeLevel2Plan
     const currentTasks = isLevel2TaskContext ? level2PlanTasks.filter(t => t.planId === activeLevel2Plan) : effectiveTasks
@@ -1536,6 +1654,10 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleProgressChange = (taskId: string, newProgress: number) => {
+    if (followedTosLevel1ReadOnly) {
+      void message.warning(tosLevel1FollowSourceText)
+      return
+    }
     setEffectiveTasks(effectiveTasks.map(t => {
       if (t.id === taskId) { let s = t.status; if (newProgress === 100) s = '已完成'; else if (newProgress > 0) s = '进行中'; else s = '未开始'; return { ...t, progress: newProgress, status: s } }
       return t
@@ -1583,22 +1705,36 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleGanttTimeChange = (taskId: string, field: 'planStartDate' | 'planEndDate', date: string) => {
+    if (!canMaintainCurrentPlan) {
+      void message.warning(machineMarketPlanUnavailable ? '请先配置并选择有效市场' : currentPlanMaintenanceDisabledReason)
+      return
+    }
     const task = effectiveTasks.find(t => t.id === taskId); if (!task) return
     if (!checkPredecessor(task, field, date)) return
     setEffectiveTasks(effectiveTasks.map(t => t.id === taskId ? { ...t, [field]: date } : t)); setGanttEditingTask(null); message.success('时间已更新')
   }
 
   const confirmPredecessorChange = () => {
+    if (!canMaintainCurrentPlan) {
+      void message.warning(machineMarketPlanUnavailable ? '请先配置并选择有效市场' : currentPlanMaintenanceDisabledReason)
+      return
+    }
     if (!predecessorWarning.task) return
     setEffectiveTasks(effectiveTasks.map(t => t.id === predecessorWarning.task.id ? predecessorWarning.task : t))
     setPredecessorWarning({ visible: false, task: null, message: '' }); setGanttEditingTask(null); message.success('时间已更新（已确认前置任务冲突）')
   }
 
   const handleCreateRevision = (revisionKind: PlanRevisionKind) => {
+    if (!canCreateCurrentRevision) {
+      if (followedTosLevel1ReadOnly) void message.warning(tosLevel1FollowSourceText)
+      else if (isMarketScopedLevel1 && currentMarketIsFollow) void message.warning(`当前市场跟随 ${primaryMarket}，不能创建一级计划修订`)
+      else void message.warning(`无${currentPlanPermissionLabel}编辑权限`)
+      return
+    }
     const versionNo = getNextPlanRevisionVersionNo(versions, revisionKind)
     const nid = getPlanVersionId(versionNo)
-    const projectType = selectedProject?.type || selectedPlanType
-    const templateTasks = configTemplateTasksByType[projectType] || LEVEL1_TEMPLATE_TASKS
+    const projectType = getProjectTypeFamilyKey(selectedProject?.type || selectedPlanType)
+    const templateTasks = getTemplateTasksForProjectType(configTemplateTasksByType, projectType) || LEVEL1_TEMPLATE_TASKS
     const clonedTasks = initializeProjectPlanTasksFromTemplate(templateTasks)
     const kindLabel = getPlanRevisionKindLabel(revisionKind)
     setVersions([...versions, { id: nid, versionNo, status: '修订中' }])
@@ -1616,6 +1752,10 @@ export default function ProjectSpaceContainer() {
   }
 
   const handlePublish = () => {
+    if (!canMaintainCurrentPlan) {
+      void message.warning(followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`)
+      return
+    }
     // 父子时间区间校验：违规则阻止发布并滚动到首条违规行
     const tasksToValidate = isTosVersionTrainPlan
       ? []
@@ -1647,11 +1787,11 @@ export default function ProjectSpaceContainer() {
     const previousSnapshotKey = selectedProject && isTosTypeScoped && prevPublished
       ? getTosTypeSnapshotKey(
           selectedProject.id,
-          selectedTosTypeTab,
+          scopedTosPlanType,
           isTosVersionTrainPlan ? TOS_VERSION_TRAIN_SNAPSHOT_LEVEL : scopedPlanLevel,
           prevPublished.id,
         )
-      : selectedProject && isWholeMachineProject && projectPlanLevel === 'level1' && prevPublished
+      : selectedProject && isMarketScopedLevel1 && prevPublished
         ? getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, prevPublished.id)
         : ''
     const baselineTasks: any[] = prevPublished
@@ -1662,12 +1802,12 @@ export default function ProjectSpaceContainer() {
     const changes = isTosVersionTrainPlan ? [] : diffTasksForNotify(baselineTasks, planTasksForVersion)
     const publishedVersionId = currentVersion; const publishedVersion = versions.find(v => v.id === publishedVersionId)
     const mainMarket = getMainMarket(marketConfigRows)
-    const shouldSyncFollowMarkets = isWholeMachineProject && projectPlanLevel === 'level1' && selectedMarketTab === mainMarket
+    const shouldSyncFollowMarkets = isMarketScopedLevel1 && selectedMarketTab === mainMarket
     const nextMarketPlanData = shouldSyncFollowMarkets ? syncFollowMarketPlans(marketPlanData, marketConfigRows) : marketPlanData
     const versionNo = publishedVersion?.versionNo || publishedVersionId
     setVersions(versions.map(v => v.id === publishedVersionId ? { ...v, status: '已发布' } : v))
     if (shouldSyncFollowMarkets) setMarketPlanData(nextMarketPlanData)
-    if (selectedProject && isWholeMachineProject && projectPlanLevel === 'level1') {
+    if (selectedProject && isMarketScopedLevel1) {
       setMarketFollowVersionMeta(prev => {
         const currentMarketKey = getMarketFollowVersionKey(selectedProject.id, selectedMarketTab, publishedVersionId)
         const nextMeta = { ...prev }
@@ -1685,9 +1825,9 @@ export default function ProjectSpaceContainer() {
           nextSnapshots[getTosTypeSnapshotKey(selectedProject.id, selectedTosTypeTab, 'level2', publishedVersionId)] = JSON.parse(JSON.stringify(level2PlanTasks))
           nextSnapshots[getTosTypeSnapshotKey(selectedProject.id, selectedTosTypeTab, TOS_VERSION_TRAIN_SNAPSHOT_LEVEL, publishedVersionId)] = JSON.parse(JSON.stringify(versionTrainRecordsForSnapshot))
         } else {
-          nextSnapshots[getTosTypeSnapshotKey(selectedProject.id, selectedTosTypeTab, scopedPlanLevel, publishedVersionId)] = snapshot
+          nextSnapshots[getTosTypeSnapshotKey(selectedProject.id, scopedTosPlanType, scopedPlanLevel, publishedVersionId)] = snapshot
         }
-      } else if (selectedProject && isWholeMachineProject && projectPlanLevel === 'level1') {
+      } else if (selectedProject && isMarketScopedLevel1) {
         nextSnapshots[getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, publishedVersionId)] = snapshot
       } else {
         nextSnapshots[publishedVersionId] = snapshot
@@ -1709,8 +1849,12 @@ export default function ProjectSpaceContainer() {
     value: string,
     isLevel2Custom: boolean,
   ) => {
+    if ((machineMarketPlanUnavailable && !isLevel2Custom) || (followedTosLevel1ReadOnly && (!isLevel2Custom || isFollowReadOnlyOverview))) {
+      void message.warning(machineMarketPlanUnavailable ? '请先配置并选择有效市场' : tosLevel1FollowSourceText)
+      return
+    }
     const patch = { [field]: value }
-    const isLevel1MarketTable = !isLevel2Custom && isWholeMachineProject && projectPlanLevel === 'level1'
+    const isLevel1MarketTable = !isLevel2Custom && isMarketScopedLevel1
 
     if (isLevel1MarketTable && currentMarketIsFollow) {
       currentSetTasks(markTaskActualTimeDetachedFromMain(tableTasks, record.id, patch))
@@ -1778,6 +1922,10 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleCancelRevision = () => {
+    if (!canMaintainCurrentPlan) {
+      void message.warning(followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`)
+      return
+    }
     if (!isCurrentDraft || !currentVersionData) return
     Modal.confirm({
       title: '取消修订版本',
@@ -1793,7 +1941,7 @@ export default function ProjectSpaceContainer() {
           if (scopedPlanLevel === 'level1') {
             const restoredTasks = publishedSnapshots[getTosTypeSnapshotKey(
               selectedProject.id,
-              selectedTosTypeTab,
+              effectiveTosLevel1Type,
               'level1',
               result.currentVersion,
             )]
@@ -1885,6 +2033,7 @@ export default function ProjectSpaceContainer() {
     )
     const updatedBase = {
       ...selectedProject,
+      type: payload.projectType,
       leader: payload.responsiblePersons[0] || selectedProject.leader,
       responsiblePersons: payload.responsiblePersons,
       healthStatus: payload.healthStatus,
@@ -1999,7 +2148,7 @@ export default function ProjectSpaceContainer() {
     const collapsedSet = key ? (collapsedNodes[key] || new Set<string>()) : new Set<string>()
     return (
       <div style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
-        <DHTMLXGantt tasks={ganttTasks} onTaskClick={(task) => message.info(`点击任务: ${task.text}`)} readOnly={!isEditMode} collapsedIds={collapsedSet}
+        <DHTMLXGantt tasks={ganttTasks} onTaskClick={(task) => message.info(`点击任务: ${task.text}`)} readOnly={!isEditMode || followedTosLevel1ReadOnly || isFollowReadOnlyOverview} collapsedIds={collapsedSet}
           scaleMode={!customTasks && projectPlanLevel === 'level1' ? projectPlanGanttScaleMode : 'month'}
           onCollapsedChange={(updater) => { if (!key) return; setCollapsedNodes(prev => { const c = prev[key] || new Set<string>(); return { ...prev, [key]: updater(c) } }) }}
         />
@@ -2011,12 +2160,20 @@ export default function ProjectSpaceContainer() {
   const renderTaskTable = (customTasks?: any[]) => {
     const isLevel2Custom = !!customTasks
     const tableTasks = customTasks || effectiveTasks
-    const currentSetTasks = isLevel2Custom ? (newTasks: any[]) => {
+    const isFollowReadOnlyTable = followedTosLevel1ReadOnly && (!isLevel2Custom || isFollowReadOnlyOverview)
+    const writeTableTasks = isLevel2Custom ? (newTasks: any[]) => {
       const planId = customTasks?.[0]?.planId
       if (planId) {
         setLevel2PlanTasks(prev => [...prev.filter(t => t.planId !== planId), ...newTasks])
       }
     } : setEffectiveTasks
+    const currentSetTasks = (newTasks: any[]) => {
+      if (isFollowReadOnlyTable) {
+        void message.warning(tosLevel1FollowSourceText)
+        return
+      }
+      writeTableTasks(newTasks)
+    }
     const displayTasks = isLevel2Custom
       ? filterBySearchText(tableTasks)
       : projectPlanLevel === 'level1'
@@ -2033,8 +2190,8 @@ export default function ProjectSpaceContainer() {
     //   canFullyEdit  — 编辑模式下且用户有相应级别的计划编辑权 → 拖拽/新增/删除/改任意单元格
     //   isRowEditable — 编辑模式下用户有编辑权 OR 是该行责任人 → 只能改自己负责的行的单元格
     const editPerm = isLevel2Custom ? canEditLevel2Plan : canEditLevel1Plan
-    const canFullyEdit = isEditMode && editPerm
-    const isRowEditable = (record: any) => isEditMode && (editPerm || isResponsibleNameMatched(record.responsible, currentLoginUser))
+    const canFullyEdit = isEditMode && editPerm && !isFollowReadOnlyTable
+    const isRowEditable = (record: any) => isEditMode && !isFollowReadOnlyTable && (editPerm || isResponsibleNameMatched(record.responsible, currentLoginUser))
     const getColumns = (): ColumnsType<any> => {
       const cols: ColumnsType<any> = []
       if (visibleColumns.includes('id')) cols.push({ title: '序号', dataIndex: 'id', key: 'id', width: 130, fixed: 'left', render: (id: string, record: any) => {
@@ -2092,11 +2249,11 @@ export default function ProjectSpaceContainer() {
       } })
       if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isRowEditable(record) ? <Input className="pms-edit-input" value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val}天</span> })
       if (visibleColumns.includes('actualStartDate')) cols.push({ title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 130, render: (val: string, record: any) => {
-        if (isLatestPublished && !isEditMode) return <ClickToEditDate value={val} onChange={(newVal) => updateActualDateForTask(tableTasks, currentSetTasks, record, 'actualStartDate', newVal, isLevel2Custom)} disabledDate={(current) => record.actualEndDate ? current.isAfter(dayjs(record.actualEndDate), 'day') : false} />
+        if (isLatestPublished && !isEditMode && !isFollowReadOnlyTable) return <ClickToEditDate value={val} onChange={(newVal) => updateActualDateForTask(tableTasks, currentSetTasks, record, 'actualStartDate', newVal, isLevel2Custom)} disabledDate={(current) => record.actualEndDate ? current.isAfter(dayjs(record.actualEndDate), 'day') : false} />
         return <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span>
       } })
       if (visibleColumns.includes('actualEndDate')) cols.push({ title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 130, render: (val: string, record: any) => {
-        if (isLatestPublished && !isEditMode) return <ClickToEditDate value={val} onChange={(newVal) => updateActualDateForTask(tableTasks, currentSetTasks, record, 'actualEndDate', newVal, isLevel2Custom)} disabledDate={(current) => record.actualStartDate ? current.isBefore(dayjs(record.actualStartDate), 'day') : false} />
+        if (isLatestPublished && !isEditMode && !isFollowReadOnlyTable) return <ClickToEditDate value={val} onChange={(newVal) => updateActualDateForTask(tableTasks, currentSetTasks, record, 'actualEndDate', newVal, isLevel2Custom)} disabledDate={(current) => record.actualStartDate ? current.isBefore(dayjs(record.actualStartDate), 'day') : false} />
         return <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span>
       } })
       if (visibleColumns.includes('actualDays')) cols.push({ title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (val: number) => <span style={{ fontSize: 12, color: '#4b5563' }}>{val > 0 ? `${val}天` : '-'}</span> })
@@ -2112,6 +2269,10 @@ export default function ProjectSpaceContainer() {
     }
 
     const handleTableDragEnd = (event: DragEndEvent) => {
+      if (isFollowReadOnlyTable) {
+        void message.warning(tosLevel1FollowSourceText)
+        return
+      }
       const { active, over } = event
       if (!over || active.id === over.id) return
       const activeId = String(active.id)
@@ -2208,23 +2369,23 @@ export default function ProjectSpaceContainer() {
       ? getTosTypeVersions(
           tosTypeVersionsByKey,
           selectedProject.id,
-          selectedTosTypeTab,
+          effectiveTosLevel1Type,
           'level1',
           VERSION_DATA,
         )
-      : selectedProject && isWholeMachineProject && selectedMarketTab
+      : selectedProject && isWholeMachineProject && selectedMarketIsConfigured
         ? getMarketVersions(marketVersionsByKey, selectedProject.id, selectedMarketTab, baseVersions)
         : versions
     const horizontalCurrentVersion = selectedProject && isTosVersionProject && selectedTosTypeTab
       ? getTosTypeCurrentVersion(
           tosTypeCurrentVersionByKey,
           selectedProject.id,
-          selectedTosTypeTab,
+          effectiveTosLevel1Type,
           'level1',
           horizontalVersions,
           INITIAL_TOS_CURRENT_VERSION,
         )
-      : selectedProject && isWholeMachineProject && selectedMarketTab
+      : selectedProject && isWholeMachineProject && selectedMarketIsConfigured
         ? getMarketCurrentVersion(
             marketCurrentVersionByKey,
             selectedProject.id,
@@ -2253,8 +2414,8 @@ export default function ProjectSpaceContainer() {
     const versionOffsetIndex = new Map(recencyVersions.map((version, index) => [version.id, index]))
     const getVersionTasks = (versionId: string) => {
       const scopedSnapshot = selectedProject && isTosVersionProject && selectedTosTypeTab
-        ? publishedSnapshots[getTosTypeSnapshotKey(selectedProject.id, selectedTosTypeTab, 'level1', versionId)]
-        : selectedProject && isWholeMachineProject && selectedMarketTab
+        ? publishedSnapshots[getTosTypeSnapshotKey(selectedProject.id, effectiveTosLevel1Type, 'level1', versionId)]
+        : selectedProject && isWholeMachineProject && selectedMarketIsConfigured
           ? publishedSnapshots[getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, versionId)]
           : publishedSnapshots[versionId]
       if (scopedSnapshot !== undefined) return scopedSnapshot
@@ -2370,8 +2531,8 @@ export default function ProjectSpaceContainer() {
         <Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{currentVersionData?.versionNo}({currentVersionData?.status})</Tag>
         <Tag color="green" style={{ fontSize: 12 }}>自动保存</Tag>
         {renderPlanCloneButton()}
-        <Tooltip title="发布"><Button type="primary" icon={<SaveOutlined />} onClick={handlePublish} aria-label="发布" /></Tooltip>
-        <Tooltip title="取消修订"><Button danger icon={<StopOutlined />} onClick={handleCancelRevision} aria-label="取消修订" /></Tooltip>
+        <Tooltip title={canMaintainCurrentPlan ? '发布' : currentPlanMaintenanceDisabledReason}><Button type="primary" icon={<SaveOutlined />} onClick={handlePublish} disabled={!canMaintainCurrentPlan} aria-label="发布" /></Tooltip>
+        <Tooltip title={canMaintainCurrentPlan ? '取消修订' : currentPlanMaintenanceDisabledReason}><Button danger icon={<StopOutlined />} onClick={handleCancelRevision} disabled={!canMaintainCurrentPlan} aria-label="取消修订" /></Tooltip>
       </Space>
     )
     return (
@@ -2447,7 +2608,7 @@ export default function ProjectSpaceContainer() {
   const renderProjectBasicInfo = () => {
     const p = selectedProject
     if (!p) return null
-    const isWholeMachine = p.type === '整机产品项目'
+    const isWholeMachine = isMachineProjectType(p.type)
     const isTargetProject = isWholeMachine || p.type === PROJECT_TYPE_TOS_VERSION
     const isSoftware = isSoftwareProjectType(p.type)
     const isTech = p.type === '技术项目'
@@ -2628,12 +2789,75 @@ export default function ProjectSpaceContainer() {
     const headerExtra = p.name
     const wideWholeMachineBasicInfoFields = WHOLE_MACHINE_BASIC_INFO_FIELDS.filter(field => ['projectDescription', 'jiraProjects'].includes(field.key))
     const compactWholeMachineBasicInfoFields = WHOLE_MACHINE_BASIC_INFO_FIELDS.filter(field => !['projectDescription', 'jiraProjects'].includes(field.key))
+    const renderWholeMachinePlanInfo = () => {
+      if (markets.length === 0) {
+        return (
+          <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#6366f1' }} />, '计划信息', '#6366f1')}>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="尚未配置市场"
+            >
+              <Button type="primary" icon={<PlusOutlined />} onClick={openMarketEditor}>市场编辑</Button>
+            </Empty>
+          </Card>
+        )
+      }
+      return (
+        <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#6366f1' }} />, '计划信息', '#6366f1')}>
+          <Tabs activeKey={selectedMarketTab} onChange={setSelectedMarketTab} type="card"
+            tabBarExtraContent={{
+              right: (
+                <Tooltip title="编辑市场">
+                  <Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6, marginLeft: 8 }} onClick={openMarketEditor}>市场编辑</Button>
+                </Tooltip>
+              ),
+            }}
+            items={marketRows.map(row => {
+              const m = row.market
+              const marketColor = marketColors[m] || '#faad14'
+              return {
+                key: m,
+                label: <Space size={6}><Badge color={marketColor} /><span style={{ fontWeight: 500 }}>{m}</span>{row.isMain && <Tag color="blue" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>主</Tag>}{row.followsMain && <Tag color="green" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>跟随</Tag>}</Space>,
+                children: (
+                  <div style={{ padding: '8px 0' }}>
+                    <div className="pms-project-plan-info-heading">
+                      <span>计划信息</span>
+                      <FieldVisibilityPicker
+                        groupLabel="计划信息"
+                        fields={PROJECT_PLAN_INFO_FIELDS}
+                        visibleFieldKeys={visiblePlanInfoFieldKeys}
+                        onChange={setVisiblePlanInfoFieldKeys}
+                        disabled={!canViewBasicInfo}
+                      />
+                    </div>
+                    <ProjectPlanInfoGrid
+                      visibleFieldKeys={visiblePlanInfoFieldKeys}
+                      planStartDate={p.planStartDate}
+                      planEndDate={p.planEndDate}
+                      developCycle={p.developCycle}
+                      googleLaunchDate={row.googleLaunchDate}
+                      isCarrierCustomized={row.isCarrierCustomized}
+                      isSimLocked={row.isSimLocked}
+                      isCancelPaused={row.isCancelPaused}
+                      cancelPauseDate={row.isCancelPaused === '是' ? row.cancelPauseDate : undefined}
+                      isMadaControlled={row.isMadaControlled}
+                    />
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12 }}>里程碑计划（横排视图）</div>
+                    {renderHorizontalTable()}
+                  </div>
+                ),
+              }
+            })}
+          />
+        </Card>
+      )
+    }
     const anchorSections = [
       { id: 'section-header', label: isTargetProject ? '项目名称' : '项目概览', icon: <ProjectOutlined /> },
+      { id: 'section-plan', label: '计划信息', icon: <CalendarOutlined /> },
       { id: 'section-basic', label: isTargetProject ? '项目信息' : '基本信息', icon: <SettingOutlined /> },
       ...(isWholeMachine && currentProjectTransferApps.length > 0 ? [{ id: 'section-transfer', label: '转维信息', icon: <DeploymentUnitOutlined /> }] : []),
-      { id: 'section-plan', label: isWholeMachine ? '计划与配置' : '计划信息', icon: <CalendarOutlined /> },
-      ...(!isWholeMachine && (isSoftware || isTech) ? [{ id: 'section-config', label: '配置信息', icon: <SettingOutlined /> }] : []),
+      ...(!isTargetProject && (isSoftware || isTech) ? [{ id: 'section-config', label: '配置信息', icon: <SettingOutlined /> }] : []),
     ]
     const scrollToSection = (id: string) => {
       const container = document.getElementById('basic-info-scroll-container')
@@ -2672,6 +2896,8 @@ export default function ProjectSpaceContainer() {
             canConfigure={canViewBasicInfo}
             onEdit={() => setShowProjectInfoEditor(true)}
             onApplyTransfer={isWholeMachine ? () => transfer.setTransferView('apply') : undefined}
+            afterCore={isWholeMachine ? renderWholeMachinePlanInfo() : renderProjectPlanInfo()}
+            visibleGroupKeys={isTosVersionProject ? ['team'] : undefined}
           />
         ) : (
           <>
@@ -2837,77 +3063,17 @@ export default function ProjectSpaceContainer() {
             />
           </Card>
         )}
-        {/* Plan + Config info */}
-        {isWholeMachine && markets.length > 0 ? (
-          <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#6366f1' }} />, '计划信息与配置信息', '#6366f1')}>
-            <Tabs activeKey={selectedMarketTab} onChange={setSelectedMarketTab} type="card"
-              tabBarExtraContent={{
-                right: (
-                  <Tooltip title="编辑市场">
-                    <Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6, marginLeft: 8 }} onClick={openMarketEditor}>市场编辑</Button>
-                  </Tooltip>
-                ),
-              }}
-              items={marketRows.map(row => {
-                const m = row.market
-                const marketColor = marketColors[m] || '#faad14'
-                return {
-                  key: m,
-                  label: <Space size={6}><Badge color={marketColor} /><span style={{ fontWeight: 500 }}>{m}</span>{row.isMain && <Tag color="blue" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>主</Tag>}{row.followsMain && <Tag color="green" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>跟随</Tag>}</Space>,
-                  children: (
-                    <div style={{ padding: '8px 0' }}>
-                      <div className="pms-project-plan-info-heading">
-                        <span>计划信息</span>
-                        <FieldVisibilityPicker
-                          groupLabel="计划信息"
-                          fields={PROJECT_PLAN_INFO_FIELDS}
-                          visibleFieldKeys={visiblePlanInfoFieldKeys}
-                          onChange={setVisiblePlanInfoFieldKeys}
-                          disabled={!canViewBasicInfo}
-                        />
-                      </div>
-                      <ProjectPlanInfoGrid
-                        visibleFieldKeys={visiblePlanInfoFieldKeys}
-                        planStartDate={p.planStartDate}
-                        planEndDate={p.planEndDate}
-                        developCycle={p.developCycle}
-                        googleLaunchDate={row.googleLaunchDate}
-                        isCarrierCustomized={row.isCarrierCustomized}
-                        isSimLocked={row.isSimLocked}
-                        isCancelPaused={row.isCancelPaused}
-                        cancelPauseDate={row.isCancelPaused === '是' ? row.cancelPauseDate : undefined}
-                        isMadaControlled={row.isMadaControlled}
-                      />
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12 }}>里程碑计划（横排视图）</div>
-                      {renderHorizontalTable()}
-                      <Divider />
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 16 }}>配置信息</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>构建信息</div>
-                      <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>
-                        <Descriptions.Item label="分支信息">{row.branchInfo || '-'}</Descriptions.Item>
-                        <Descriptions.Item label="Jenkins构建">{row.jenkinsUrl ? <a href={row.jenkinsUrl} target="_blank" rel="noopener noreferrer">{row.jenkinsUrl}</a> : '-'}</Descriptions.Item>
-                        <Descriptions.Item label="版本地址">{row.buildAddress ? <a href={row.buildAddress} target="_blank" rel="noopener noreferrer">{row.buildAddress}</a> : '-'}</Descriptions.Item>
-                      </Descriptions>
-                    </div>
-                  ),
-                }
-              })}
-            />
+        {/* Target-project plan information is rendered directly after the core card. */}
+        {!isTargetProject && renderProjectPlanInfo()}
+        {!isTargetProject && (isSoftware || isTech) && (
+          <Card id="section-config" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#52c41a' }} />, '配置信息', '#52c41a')}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>构建信息</div>
+            <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>
+              <Descriptions.Item label="分支信息">{editableField('branchInfo', p.branchInfo)}</Descriptions.Item>
+              <Descriptions.Item label="Jenkins构建">{basicInfoEditMode ? editableField('jenkinsUrl', p.jenkinsUrl) : (p.jenkinsUrl ? <a href={p.jenkinsUrl} target="_blank" rel="noopener noreferrer">{p.jenkinsUrl}</a> : '-')}</Descriptions.Item>
+              <Descriptions.Item label="版本地址">{basicInfoEditMode ? editableField('buildAddress', p.buildAddress) : (p.buildAddress ? <a href={p.buildAddress} target="_blank" rel="noopener noreferrer">{p.buildAddress}</a> : '-')}</Descriptions.Item>
+            </Descriptions>
           </Card>
-        ) : (
-          <>
-            {renderProjectPlanInfo()}
-            {(isSoftware || isTech) && (
-              <Card id="section-config" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#52c41a' }} />, '配置信息', '#52c41a')}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>构建信息</div>
-                <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>
-                  <Descriptions.Item label="分支信息">{editableField('branchInfo', p.branchInfo)}</Descriptions.Item>
-                  <Descriptions.Item label="Jenkins构建">{basicInfoEditMode ? editableField('jenkinsUrl', p.jenkinsUrl) : (p.jenkinsUrl ? <a href={p.jenkinsUrl} target="_blank" rel="noopener noreferrer">{p.jenkinsUrl}</a> : '-')}</Descriptions.Item>
-                  <Descriptions.Item label="版本地址">{basicInfoEditMode ? editableField('buildAddress', p.buildAddress) : (p.buildAddress ? <a href={p.buildAddress} target="_blank" rel="noopener noreferrer">{p.buildAddress}</a> : '-')}</Descriptions.Item>
-                </Descriptions>
-              </Card>
-            )}
-          </>
         )}
         {isTargetProject && (
           <ProjectInfoModal
@@ -2928,6 +3094,12 @@ export default function ProjectSpaceContainer() {
   // ═══════ renderProjectPlanInfo ═══════
   const renderProjectPlanInfo = () => {
     const p = selectedProject!
+    const summaryTosTypeGroups = getTosTypeSummaryGroups(tosTypeConfigRows)
+    const summaryActiveType = getTosTypePlanSourceType(
+      tosTypeConfigRows,
+      selectedTosTypeTab,
+      'level1',
+    )
     const tosPlanStartDate = isTosVersionProject
       ? (effectiveTasks.map(task => task.planStartDate).filter(Boolean).sort()[0] || '')
       : ''
@@ -2965,13 +3137,17 @@ export default function ProjectSpaceContainer() {
     const displayedHealthLabel = tosPlanHealth === 'normal' ? '健康' : tosPlanHealth === 'warning' ? '关注' : tosPlanHealth === 'risk' ? '风险' : '-'
     const planInfoContent = (
       <>
-        <Row gutter={[24, 16]}>
-          <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划开始时间</span>} value={displayedPlanStartDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />} /></Col>
-          <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划结束时间</span>} value={displayedPlanEndDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />} /></Col>
-          <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>开发周期（工作日）</span>} value={displayedDevelopCycle || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} suffix={displayedDevelopCycle ? <span style={{ fontSize: 12, color: '#9ca3af' }}>天</span> : undefined} /></Col>
-          <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>健康状态</span>} value={displayedHealthLabel} valueStyle={{ fontSize: 16, fontWeight: 600, color: tosPlanHealth === 'normal' ? '#52c41a' : tosPlanHealth === 'warning' ? '#faad14' : tosPlanHealth === 'risk' ? '#ff4d4f' : '#9ca3af' }} /></Col>
-        </Row>
-        <Divider style={{ margin: '16px 0' }} />
+        {!isTosVersionProject && (
+          <>
+            <Row gutter={[24, 16]}>
+              <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划开始时间</span>} value={displayedPlanStartDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />} /></Col>
+              <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划结束时间</span>} value={displayedPlanEndDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />} /></Col>
+              <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>开发周期（工作日）</span>} value={displayedDevelopCycle || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} suffix={displayedDevelopCycle ? <span style={{ fontSize: 12, color: '#9ca3af' }}>天</span> : undefined} /></Col>
+              <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>健康状态</span>} value={displayedHealthLabel} valueStyle={{ fontSize: 16, fontWeight: 600, color: tosPlanHealth === 'normal' ? '#52c41a' : tosPlanHealth === 'warning' ? '#faad14' : tosPlanHealth === 'risk' ? '#ff4d4f' : '#9ca3af' }} /></Col>
+            </Row>
+            <Divider style={{ margin: '16px 0' }} />
+          </>
+        )}
         <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, textTransform: 'uppercase' as const, letterSpacing: 1 }}>里程碑计划（横排视图）</div>
         {renderHorizontalTable()}
       </>
@@ -2980,7 +3156,7 @@ export default function ProjectSpaceContainer() {
       <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={<Space><CalendarOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>计划信息</span></Space>}>
         {isTosVersionProject ? (
           <Tabs
-            activeKey={selectedTosTypeTab}
+            activeKey={summaryActiveType}
             onChange={(type) => navigateWithEditGuard(() => setSelectedTosTypeTab(type))}
             type="card"
             tabBarExtraContent={{
@@ -2988,9 +3164,9 @@ export default function ProjectSpaceContainer() {
                 ? <Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6, marginLeft: 8 }} onClick={openTosTypeEditor}>类型编辑</Button>
                 : <Tooltip title="无基本信息编辑权限"><Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6, marginLeft: 8 }} disabled>类型编辑</Button></Tooltip>,
             }}
-            items={tosTypeConfigRows.map(row => ({
-              key: row.type,
-              label: <Space size={6}><span style={{ fontWeight: 500 }}>{row.type}</span>{row.isMain && <Tag color="blue" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>主</Tag>}</Space>,
+            items={summaryTosTypeGroups.map(group => ({
+              key: group.key,
+              label: <span style={{ fontWeight: 500 }}>{group.label}</span>,
               children: <div style={{ paddingTop: 8 }}>{planInfoContent}</div>,
             }))}
           />
@@ -3032,8 +3208,7 @@ export default function ProjectSpaceContainer() {
 
   // ═══════ renderProjectPlan ═══════
   const renderProjectPlan = () => {
-    const markets = marketConfigRows.map(row => row.market)
-    const showMarketTabs = selectedProject?.type === '整机产品项目' && markets.length > 0
+    const showMarketControls = isMachineProjectType(selectedProject?.type)
     const showTosTypeTabs = selectedProject?.type === PROJECT_TYPE_TOS_VERSION && tosTypeConfigRows.length > 0
     const planTabItems = [
       { key: 'level1', label: '一级计划' },
@@ -3055,7 +3230,7 @@ export default function ProjectSpaceContainer() {
                       style={{ cursor: 'pointer', borderRadius: 4, padding: '4px 12px', fontSize: 13, fontWeight: selectedTosTypeTab === row.type ? 600 : 400, borderColor: selectedTosTypeTab === row.type ? tosTypeColors[row.type] : '#d9d9d9' }}
                       onClick={() => navigateWithEditGuard(() => setSelectedTosTypeTab(row.type))}
                     >
-                      <Space size={4}>{row.type}{row.isMain && <span style={{ fontSize: 11 }}>主</span>}</Space>
+                      <Space size={4}>{row.type}{row.isMain && <span style={{ fontSize: 11 }}>主</span>}{row.followsMain && <span style={{ fontSize: 11 }}>跟随</span>}</Space>
                     </Tag>
                   ))}
                 </Space>
@@ -3068,7 +3243,7 @@ export default function ProjectSpaceContainer() {
             </Row>
           </Card>
         )}
-        {showMarketTabs && (
+        {showMarketControls && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
             <Row align="middle" justify="space-between">
               <Col>
@@ -3097,6 +3272,28 @@ export default function ProjectSpaceContainer() {
             <Col><Tag color={projectPlanLevel === 'overview' ? 'blue' : 'default'} style={{ fontSize: 11 }}>{planTabItems.find(t => t.key === projectPlanLevel)?.label}</Tag></Col>
           </Row>
         </Card>
+        {machineMarketPlanUnavailable ? (
+          <Card style={{ borderRadius: 8 }}>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={marketConfigRows.length === 0 ? '尚未配置市场，无法查看一级计划' : '当前市场不属于本项目，请重新选择市场'}
+            >
+              <Button type="primary" icon={<PlusOutlined />} onClick={openMarketEditor}>
+                {marketConfigRows.length === 0 ? '添加市场' : '市场编辑'}
+              </Button>
+            </Empty>
+          </Card>
+        ) : (
+          <>
+        {showTosTypeTabs && projectPlanLevel === 'level1' && currentTosTypeIsFollow && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16, borderRadius: 8 }}
+            message={`当前类型跟随 ${effectiveTosLevel1Type}`}
+            description={`一级计划来自 ${effectiveTosLevel1Type}；如需创建修订、编辑或发布，请切换到 ${effectiveTosLevel1Type}。`}
+          />
+        )}
         {projectPlanLevel === 'overview' && renderProjectPlanOverview()}
         {projectPlanLevel === 'level2' && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px 4px 16px' } }}>
@@ -3232,16 +3429,16 @@ export default function ProjectSpaceContainer() {
                     {isCurrentDraft && <Tag color="green" style={{ fontSize: 12, margin: 0 }}>自动保存</Tag>}
                   </Space>
                   <Space size={6}>
-                    {!hasDraftVersion && (canEditCurrentPlan
+                    {(followedTosLevel1ReadOnly || !hasDraftVersion) && (canEditCurrentPlan
                       ? renderCreateRevisionButton({ borderRadius: 6 })
                       : <Tooltip title={`无${currentPlanPermissionLabel}编辑权限`}><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled aria-label="创建修订">创建修订</Button></Tooltip>)}
                     {renderPlanCloneButton({ borderRadius: 6 })}
-                    {isCurrentDraft && (canEditCurrentPlan
+                    {isCurrentDraft && (canMaintainCurrentPlan
                       ? <Tooltip title="发布"><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} onClick={handlePublish} aria-label="发布" /></Tooltip>
-                      : <Tooltip title={`无${currentPlanPermissionLabel}编辑权限`}><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} disabled aria-label="发布" /></Tooltip>)}
-                    {isCurrentDraft && (canEditCurrentPlan
+                      : <Tooltip title={followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`}><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} disabled aria-label="发布" /></Tooltip>)}
+                    {isCurrentDraft && (canMaintainCurrentPlan
                       ? <Tooltip title="取消修订"><Button danger icon={<StopOutlined />} style={{ borderRadius: 6 }} onClick={handleCancelRevision} aria-label="取消修订" /></Tooltip>
-                      : <Tooltip title={`无${currentPlanPermissionLabel}编辑权限`}><Button danger icon={<StopOutlined />} style={{ borderRadius: 6 }} disabled aria-label="取消修订" /></Tooltip>)}
+                      : <Tooltip title={followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`}><Button danger icon={<StopOutlined />} style={{ borderRadius: 6 }} disabled aria-label="取消修订" /></Tooltip>)}
                   </Space>
                 </Space>
               </Col>
@@ -3325,6 +3522,8 @@ export default function ProjectSpaceContainer() {
                 : renderTaskTable(level2PlanTasks.filter(t => t.planId === activeLevel2Plan))
             )}
           </Card>
+        )}
+          </>
         )}
       </div>
     )
@@ -3442,7 +3641,7 @@ export default function ProjectSpaceContainer() {
                 if (!selectedProject || !isTosTypeScoped) return currentScopedTasks
                 const snapshot = publishedSnapshots[getTosTypeSnapshotKey(
                   selectedProject.id,
-                  selectedTosTypeTab,
+                  scopedTosPlanType,
                   isTosVersionTrainPlan ? TOS_VERSION_TRAIN_SNAPSHOT_LEVEL : scopedPlanLevel,
                   versionId,
                 )]
@@ -3654,6 +3853,21 @@ export default function ProjectSpaceContainer() {
               ),
             },
             {
+              title: '跟随主类型',
+              dataIndex: 'followsMain',
+              width: 180,
+              align: 'center',
+              render: (_: boolean, record: TosTypeConfigRow) => (
+                <Checkbox
+                  checked={!record.isMain && record.followsMain}
+                  disabled={record.isMain}
+                  onChange={(event) => updateTosTypeDraftRow(record.id, { followsMain: event.target.checked })}
+                >
+                  跟随主类型计划
+                </Checkbox>
+              ),
+            },
+            {
               title: '操作',
               width: 100,
               align: 'center',
@@ -3695,9 +3909,9 @@ export default function ProjectSpaceContainer() {
               meta.mrVersion = selectedMRVersion
               meta.transferType = createFormValues.transferType || ''
               meta.tosVersion = createFormValues.tosVersion || ''
-              if (selectedProject?.type === '整机产品项目') {
+              if (isMachineProjectType(selectedProject?.type)) {
                 Object.assign(meta, {
-                  productLine: selectedProject?.productLine || '', marketName: selectedMarketTab, projectName: selectedProject?.name || '', chipVendor: selectedProject?.chipPlatform || '',
+                  productLine: selectedProject?.productLine || '', marketName: configuredMarketName, projectName: selectedProject?.name || '', chipVendor: selectedProject?.chipPlatform || '',
                   branch: createFormValues.branch || '', isMada: createFormValues.isMada || '', madaMarket: createFormValues.madaMarket || '',
                   spm: createFormValues.spm || '', tpm: createFormValues.tpm || '', contact: createFormValues.contact || '', projectVersion: createFormValues.projectVersion || '',
                 })
@@ -3737,10 +3951,10 @@ export default function ProjectSpaceContainer() {
                 </Select>
               </Form.Item>
               <Form.Item label="tOS-市场版本号"><Input placeholder="请输入tOS-市场版本号" value={createFormValues.tosVersion || ''} onChange={(e) => setCreateFormValues((prev: any) => ({...prev, tosVersion: e.target.value}))} /></Form.Item>
-              {selectedProject?.type === '整机产品项目' && (
+              {isMachineProjectType(selectedProject?.type) && (
                 <>
                   <Form.Item label="产品线"><Input placeholder="自动获取" disabled value={selectedProject?.productLine || ''} /></Form.Item>
-                  <Form.Item label="市场名"><Input placeholder="自动获取" disabled value={selectedMarketTab} /></Form.Item>
+                  <Form.Item label="市场名"><Input placeholder="自动获取" disabled value={configuredMarketName} /></Form.Item>
                   <Form.Item label="项目名称"><Input placeholder="自动获取" disabled value={selectedProject?.name || ''} /></Form.Item>
                   <Form.Item label="芯片厂商"><Input placeholder="自动获取" disabled value={selectedProject?.chipPlatform || ''} /></Form.Item>
                   <Form.Item label="分支信息"><Input placeholder="请输入分支信息" value={createFormValues.branch || ''} onChange={(e) => setCreateFormValues((prev: any) => ({...prev, branch: e.target.value}))} /></Form.Item>

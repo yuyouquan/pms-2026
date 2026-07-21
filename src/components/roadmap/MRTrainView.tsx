@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { Table, Tag, Tabs, Button, Empty, Dropdown, Tooltip } from 'antd'
 import { EyeOutlined, DownloadOutlined } from '@ant-design/icons'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
+import { isMachineProjectType, isSoftwareProjectType, normalizeMachineProjectType } from '@/constants/projectTypes'
 
 // ======================== Mock Data ========================
 
@@ -223,24 +224,28 @@ export default function MRTrainView({ onViewProject }: MRTrainViewProps) {
   const [dimension, setDimension] = useState('tosVersion')
 
   const dimConfig = DIMENSIONS[dimension] || DIMENSIONS.tosVersion
+  const normalizedTrainData = useMemo(() => MR_TRAIN_DATA.map(row => ({
+    ...row,
+    projectType: normalizeMachineProjectType(row.projectType),
+  })), [])
 
   // 按当前维度排序（同组内软件项目排在整机产品项目前面）
   const sortedData = useMemo(() => {
-    const typeOrder: Record<string, number> = { 'tOS版本项目': 0, '独立软件产品项目': 0, '产品项目': 0, '整机产品项目': 1 }
-    return [...MR_TRAIN_DATA].sort((a: any, b: any) => {
+    const getTypeOrder = (type: string) => isSoftwareProjectType(type) ? 0 : isMachineProjectType(type) ? 1 : 2
+    return [...normalizedTrainData].sort((a: any, b: any) => {
       // 先按主键排序（如 tosVersion）
       const primaryCmp = (a[dimConfig.primaryKey] || '').localeCompare(b[dimConfig.primaryKey] || '')
       if (primaryCmp !== 0) return primaryCmp
       // 同主键组内，软件项目排最前
-      const ta = typeOrder[a.projectType] ?? 2
-      const tb = typeOrder[b.projectType] ?? 2
+      const ta = getTypeOrder(a.projectType)
+      const tb = getTypeOrder(b.projectType)
       if (ta !== tb) return ta - tb
       // 再按次级键排序（如 chipPlatform）
       const secondaryCmp = (a[dimConfig.secondaryKey] || '').localeCompare(b[dimConfig.secondaryKey] || '')
       if (secondaryCmp !== 0) return secondaryCmp
       return 0
     })
-  }, [dimConfig])
+  }, [dimConfig, normalizedTrainData])
 
   // 计算 rowSpan
   const primarySpans = useMemo(() => computeRowSpans(sortedData, dimConfig.primaryKey), [sortedData, dimConfig])
@@ -418,7 +423,7 @@ export default function MRTrainView({ onViewProject }: MRTrainViewProps) {
 
     // 数据源：本视图当前无筛选 UI，scope current/all 等价于 sortedData；
     // 保留下拉交互一致性。未来若新增筛选，此处 scope='all' 应切回 MR_TRAIN_DATA。
-    const rows = scope === 'current' ? sortedData : MR_TRAIN_DATA
+    const rows = scope === 'current' ? sortedData : normalizedTrainData
 
     const filename = `MR版本火车视图_${dimConfig.primaryTitle}_${exportTimestamp()}.xlsx`
     exportSheet(rows, exportCols, filename, 'MR版本火车视图')

@@ -18,10 +18,21 @@ import { ProjectCard, TodoList, KanbanBoard } from '@/components/workspace/Works
 import type { ProjectType, TodoType } from '@/components/workspace/WorkspaceModule'
 import WorkTracker from '@/components/work-tracker/WorkTracker'
 import AddProjectModal from '@/components/workspace/AddProjectModal'
-import { initialProjects, PROJECT_TYPES, PROJECT_STATUS_CONFIG } from '@/data/projects'
+import { PROJECT_TYPES, PROJECT_STATUS_CONFIG } from '@/data/projects'
 import { initialTodos } from '@/components/shared/PlanHelpers'
 import { kanbanColumns } from '@/stores/project'
-import { PROJECT_TYPE_COLORS, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
+import {
+  PROJECT_TYPE_CAPABILITY,
+  PROJECT_TYPE_COLORS,
+  PROJECT_TYPE_INDEPENDENT_SOFTWARE,
+  PROJECT_TYPE_MACHINE_LAPTOP,
+  PROJECT_TYPE_MACHINE_PAD,
+  PROJECT_TYPE_MACHINE_PHONE,
+  PROJECT_TYPE_TECH,
+  PROJECT_TYPE_TOS_VERSION,
+  isMachineProjectType,
+  normalizeMachineProjectType,
+} from '@/constants/projectTypes'
 import { buildTosTypeRows, getMainTosType } from '@/lib/tosTypeRules'
 
 export default function WorkspaceContainer() {
@@ -96,12 +107,12 @@ export default function WorkspaceContainer() {
       result = result.filter(p => p.status === projectStatusFilter)
     }
     if (projectTypeFilter !== 'all') {
-      result = result.filter(p => p.type === projectTypeFilter)
+      result = result.filter(p => normalizeMachineProjectType(p.type) === projectTypeFilter)
     }
     return result
   }, [visibleProjects, projectSearchText2, projectStatusFilter, projectTypeFilter])
 
-  const renderProjectCard = (project: typeof initialProjects[0]) => (
+  const renderProjectCard = (project: typeof projects[number]) => (
     <ProjectCard
       project={project as ProjectType}
       setSelectedProject={(p) => activateProject(p as typeof projects[number])}
@@ -215,11 +226,13 @@ export default function WorkspaceContainer() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 4px', background: 'rgba(99,102,241,0.04)', borderRadius: 20, border: '1px solid rgba(99,102,241,0.06)' }}>
               {[
                 { label: '全部', value: 'all' },
-                { label: '整机', value: '整机产品项目' },
-                { label: 'tOS版本', value: 'tOS版本项目' },
-                { label: '独立软件', value: '独立软件产品项目' },
-                { label: '技术', value: '技术项目' },
-                { label: '能力', value: '能力建设项目' },
+                { label: '整机-手机', value: PROJECT_TYPE_MACHINE_PHONE },
+                { label: '整机-PAD', value: PROJECT_TYPE_MACHINE_PAD },
+                { label: '整机-笔电', value: PROJECT_TYPE_MACHINE_LAPTOP },
+                { label: 'tOS版本', value: PROJECT_TYPE_TOS_VERSION },
+                { label: '独立软件', value: PROJECT_TYPE_INDEPENDENT_SOFTWARE },
+                { label: '技术', value: PROJECT_TYPE_TECH },
+                { label: '能力建设', value: PROJECT_TYPE_CAPABILITY },
               ].map(item => {
                 const isActive = projectTypeFilter === item.value
                 return (
@@ -309,8 +322,8 @@ export default function WorkspaceContainer() {
                 columns={[
                   { title: '项目名称', dataIndex: 'name', width: 200, render: (name: string, r: any) => (
                     <div>
-                      <div style={{ fontWeight: 500 }}>{r.type === '整机产品项目' && r.marketName ? r.marketName : name}</div>
-                      {r.type === '整机产品项目' && r.marketName && <div style={{ fontSize: 11, color: '#9ca3af' }}>{name}</div>}
+                      <div style={{ fontWeight: 500 }}>{isMachineProjectType(r.type) && r.marketName ? r.marketName : name}</div>
+                      {isMachineProjectType(r.type) && r.marketName && <div style={{ fontSize: 11, color: '#9ca3af' }}>{name}</div>}
                     </div>
                   )},
                   { title: '类型', dataIndex: 'type', width: 120, render: (t: string) => {

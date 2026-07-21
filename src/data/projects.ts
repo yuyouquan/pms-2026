@@ -7,6 +7,7 @@ import {
   PROJECT_TYPE_TECH,
   PROJECT_TYPE_TOS_VERSION,
   PROJECT_TYPES,
+  isMachineProjectType,
 } from '@/constants/projectTypes'
 
 // 项目类型选项
@@ -23,7 +24,7 @@ export const mapIpmStatus = (ipmStatus: string, projectType: string): string => 
     '已上市': '上市',
     '维护': '转维',
   }
-  if (projectType === '整机产品项目' && ipmStatus === '已上市') return '上市'
+  if (isMachineProjectType(projectType) && ipmStatus === '已上市') return '上市'
   if (projectType === '技术项目' && ipmStatus === '已迁移') return '已迁移'
   if (projectType === '技术项目' && ipmStatus === '待立议') return '待立议'
   if (projectType === '技术项目' && ipmStatus === '待验') return '待验'
@@ -190,7 +191,7 @@ export const initialProjects = [
     frontCamera: '50MP', primaryCamera: '200MP+12MP+5MP',
     operatingSystem: 'Android 16', version: 'V0.1.0',
     buildAddress: 'https://build.example.com/X6890',
-    productType: '新品', versionType: 'Go',
+    productType: '新品', versionType: 'GO',
     cooperationForm: '内部自研', bom: 'BOM-X6890-H1001',
     market: 'OP,TR,RU,IN', ppm: '王明', tpm: '刘洋', projectLevel: 'S',
     androidMajorUpgrade: '否', systemType: '64bit', isGo: '是',
@@ -396,7 +397,7 @@ export const initialProjects = [
     frontCamera: '16MP', primaryCamera: '50MP+2MP',
     operatingSystem: 'Android 16', version: 'V1.0.0',
     buildAddress: 'https://build.example.com/PV6-A',
-    productType: '新品', versionType: 'Go',
+    productType: '新品', versionType: 'GO',
     cooperationForm: '内部自研', bom: 'BOM-PV6A-H701',
     market: 'OP', ppm: '王明', tpm: '刘洋', projectLevel: 'B',
     androidMajorUpgrade: '否', systemType: '64bit', isGo: '是',

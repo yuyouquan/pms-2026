@@ -21,13 +21,17 @@ import { useTransferStore } from '@/stores/transfer'
 import { useProjectStore } from '@/stores/project'
 import { usePermissionStore } from '@/stores/permission'
 import { TransferConfig } from '@/components/transfer/TransferModule'
-import { PROJECT_TYPES } from '@/data/projects'
+import { PROJECT_TEMPLATE_TYPES, getProjectTypeFamilyKey } from '@/constants/projectTypes'
 import { DHTMLXGantt, DragHandle, SortableRow, DragHandleContext, ClickToEditDate, getTaskDepth, hasChildren, filterByCollapsed, getAllExpandableIds } from '@/components/shared/PlanHelpers'
 import { compareVersionsForTable, type CompareTableRow, type FieldDiff } from '@/lib/versionCompare'
 import type { TaskChange } from '@/types/plan-notify'
 import { NOTIFY_DIFF_FIELDS, MOCK_USER_MAP } from '@/components/shared/PlanHelpers'
 import { notifyPublishChanges } from '@/lib/feishu-notify'
 import { cancelDraftRevision } from '@/lib/marketRules'
+import {
+  getTemplateSnapshotForProjectType,
+  getTemplateTasksForProjectType,
+} from '@/lib/projectTemplateCompatibility'
 import dayjs from 'dayjs'
 
 const { Option } = Select
@@ -95,12 +99,15 @@ export default function ConfigContainer() {
   }
 
   // 配置中心使用模板数据（按项目类型隔离，无日期/工期）
-  const configTasks = configTemplateTasksByType[selectedProjectType] || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
+  const selectedTemplateType = getProjectTypeFamilyKey(selectedProjectType)
+  const configTasks = getTemplateTasksForProjectType(configTemplateTasksByType, selectedTemplateType)
+    || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
   const setConfigTasks = (next: any[] | ((prev: any[]) => any[])) => {
     setConfigTemplateTasksByType(prev => {
-      const current = prev[selectedProjectType] || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
+      const current = getTemplateTasksForProjectType(prev, selectedTemplateType)
+        || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
       const resolved = typeof next === 'function' ? next(current) : next
-      return { ...prev, [selectedProjectType]: resolved }
+      return { ...prev, [selectedTemplateType]: resolved }
     })
   }
 
@@ -356,7 +363,9 @@ export default function ConfigContainer() {
       .filter(v => v.status === '已发布' && v.id !== currentVersion)
       .sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
     const getSnapshot = (versionId: string) => {
-      return publishedSnapshots[getTemplateSnapshotKey(selectedProjectType, versionId)] || publishedSnapshots[versionId] || []
+      return getTemplateSnapshotForProjectType(publishedSnapshots, selectedProjectType, versionId)
+        || publishedSnapshots[versionId]
+        || []
     }
     const baselineTasks: any[] = prevPublished ? getSnapshot(prevPublished.id) : []
     const changes: TaskChange[] = []
@@ -566,7 +575,7 @@ export default function ConfigContainer() {
               title={!sidebarCollapsed && <span style={{ fontSize: 13, fontWeight: 600, color: '#4b5563' }}>项目类型</span>}
               extra={<Button type="text" size="small" icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} />}
             >
-              {!sidebarCollapsed && <Menu mode="inline" selectedKeys={[selectedProjectType]} style={{ border: 'none', fontSize: 13 }} items={PROJECT_TYPES.map(t => ({ key: t, label: <span style={{ fontWeight: selectedProjectType === t ? 500 : 400 }}>{t}</span>, onClick: () => navigateWithEditGuard(() => setSelectedProjectType(t)) }))} />}
+              {!sidebarCollapsed && <Menu mode="inline" selectedKeys={[selectedTemplateType]} style={{ border: 'none', fontSize: 13 }} items={PROJECT_TEMPLATE_TYPES.map(t => ({ key: t, label: <span style={{ fontWeight: selectedTemplateType === t ? 500 : 400 }}>{t}</span>, onClick: () => navigateWithEditGuard(() => setSelectedProjectType(t)) }))} />}
             </Card>
           </Col>
           <Col span={sidebarCollapsed ? 23 : 20}>
@@ -577,7 +586,7 @@ export default function ConfigContainer() {
                   <Col>
                     <Space size={8} align="center">
                       <CalendarOutlined style={{ color: '#6366f1', fontSize: 16 }} />
-                      <span style={{ fontSize: 16, fontWeight: 600, color: '#111827' }}>{selectedProjectType}</span>
+                      <span style={{ fontSize: 16, fontWeight: 600, color: '#111827' }}>{selectedTemplateType}</span>
                       <Divider type="vertical" style={{ height: 16, margin: '0 4px' }} />
                       <span style={{ fontSize: 14, color: '#4b5563' }}>计划模板配置</span>
                     </Space>

@@ -2,8 +2,9 @@ import {
   getEffectiveProjectInfoFields,
   getProjectInfoFields,
 } from '@/constants/projectInfoSchema'
-import { PROJECT_TYPE_MACHINE, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
-import { getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
+import { isMachineProjectType, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
+import { deriveStartingRam, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
+export { deriveStartingRam } from '@/lib/projectInfoValues'
 import type { ProjectInfoValues } from '@/types/app'
 
 export interface ProjectInfoValidationError {
@@ -35,7 +36,7 @@ export interface ExternalProjectInfoSource {
 }
 
 const uniqueText = (values: Array<unknown>) => (
-  [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))].join('、')
+  [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))].join(',')
 )
 
 const parseMachineProjectName = (name: string) => {
@@ -51,11 +52,6 @@ const parseMachineProjectName = (name: string) => {
 export const deriveProductType = (androidMajorUpgrade: unknown) => (
   String(androidMajorUpgrade || '') === '是' ? '老品' : '新品'
 )
-
-export const deriveStartingRam = (memorySize: unknown) => {
-  const match = String(memorySize || '').match(/(\d+)\s*GB/i)
-  return match ? `${match[1]}GB` : ''
-}
 
 export const deriveMachineProjectInfoValues = (source: ExternalProjectInfoSource): ProjectInfoValues => {
   const parsedName = parseMachineProjectName(source.name)
@@ -112,7 +108,7 @@ export const deriveTosProjectAggregates = (
 ): TosAggregateResult => {
   const machineProjects = projects
     .map(asInfoProject)
-    .filter(project => project.type === PROJECT_TYPE_MACHINE)
+    .filter(project => isMachineProjectType(project.type))
   const selectedProjects = selectedProjectIds
     .map(projectId => machineProjects.find(project => project.id === projectId))
     .filter((project): project is ProjectInfoProject => !!project)

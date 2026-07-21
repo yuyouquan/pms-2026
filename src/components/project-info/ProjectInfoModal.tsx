@@ -12,7 +12,12 @@ import {
   isTargetProjectInfoType,
   type ProjectInfoGroupKey,
 } from '@/constants/projectInfoSchema'
-import { PROJECT_TYPES, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
+import {
+  PROJECT_TYPES,
+  PROJECT_TYPE_TOS_VERSION,
+  isMachineProjectType,
+  normalizeMachineProjectType,
+} from '@/constants/projectTypes'
 import { fetchByBid, type ExternalProjectEntry } from '@/data/externalProjectPool'
 import {
   deriveMachineProjectInfoValues,
@@ -139,7 +144,7 @@ export default function ProjectInfoModal({
   const editableFields = useMemo(() => fields.filter(field => !field.readOnly), [fields])
   const groups = useMemo(() => getProjectInfoGroups(projectType), [projectType])
   const firstLaunchOptions = useMemo(() => existingProjects
-    .filter(item => item.type === '整机产品项目')
+    .filter(item => isMachineProjectType(item.type))
     .map(item => ({ label: item.name, value: item.id })), [existingProjects])
   const isDraftHydrating = mode === 'create'
     && open
@@ -243,7 +248,8 @@ export default function ProjectInfoModal({
     // The Form instance survives modal close/reopen. Clear the previous project's
     // unmentioned fields before applying the next project's values.
     form.resetFields()
-    const projectFields = getProjectInfoFields(project.type)
+    const normalizedProjectType = normalizeMachineProjectType(project.type)
+    const projectFields = getProjectInfoFields(normalizedProjectType)
     const storedInfoValues = buildProjectInfoValues(project, projectFields.map(field => field.key))
     let infoValues = storedInfoValues
     if (project.type === PROJECT_TYPE_TOS_VERSION) {
@@ -257,7 +263,7 @@ export default function ProjectInfoModal({
     const initialValues: ProjectInfoFormState = {
       ...infoValues,
       projectName: project.name,
-      type: project.type,
+      type: normalizedProjectType,
       responsiblePersons,
       healthStatus: typeof project.healthStatus === 'string' ? project.healthStatus : 'normal',
       status: typeof project.status === 'string' ? project.status : '',
@@ -268,9 +274,9 @@ export default function ProjectInfoModal({
       productLine: typeof project.productLine === 'string' ? project.productLine : '',
     }
     form.setFieldsValue(initialValues)
-    previousTypeRef.current = project.type
+    previousTypeRef.current = normalizedProjectType
     const nextActiveGroups = projectFields.length
-      ? getProjectInfoGroups(project.type).map(group => group.key)
+      ? getProjectInfoGroups(normalizedProjectType).map(group => group.key)
       : []
     activeGroupsRef.current = nextActiveGroups
     setActiveGroups(nextActiveGroups)
@@ -317,8 +323,10 @@ export default function ProjectInfoModal({
         }
         if (!isCurrentCreateDraftSession(session)) return
       } else if (draft) {
-        form.setFieldsValue(draft.values as ProjectInfoFormState)
-        const restoredType = typeof draft.values.type === 'string' ? draft.values.type : ''
+        const restoredType = normalizeMachineProjectType(
+          typeof draft.values.type === 'string' ? draft.values.type : '',
+        )
+        form.setFieldsValue({ ...draft.values, type: restoredType } as ProjectInfoFormState)
         lastAppliedSourceRef.current = `${restoredBid}::${restoredType}`
         previousTypeRef.current = restoredType
         activeGroupsRef.current = draft.activeGroups
@@ -353,7 +361,7 @@ export default function ProjectInfoModal({
       productLine: sourceValues.productLine || '',
       status: '待立项',
     })
-    if (type === '整机产品项目') {
+    if (isMachineProjectType(type)) {
       form.setFieldsValue(deriveMachineProjectInfoValues({ ...entry, ...sourceValues }))
     }
     if (type === 'tOS版本项目') {
@@ -595,7 +603,8 @@ export default function ProjectInfoModal({
       return
     }
 
-    const effectiveFields = getEffectiveProjectInfoFields(projectType, values)
+    const normalizedProjectType = normalizeMachineProjectType(projectType)
+    const effectiveFields = getEffectiveProjectInfoFields(normalizedProjectType, values)
     const infoValues = effectiveFields.reduce<ProjectInfoValues>((result, field) => {
       const value = values[field.key]
       if (value !== undefined) result[field.key] = value
@@ -603,7 +612,7 @@ export default function ProjectInfoModal({
     }, {})
     const editableFieldKeys = new Set(editableFields.map(field => field.key))
     const editableErrors = validateProjectInfoValues(
-      projectType,
+      normalizedProjectType,
       infoValues,
       {
         tosAggregateMissingSources: aggregateWarnings,
@@ -640,7 +649,7 @@ export default function ProjectInfoModal({
       await onSubmit({
         bid: values.bid,
         projectName,
-        projectType,
+        projectType: normalizedProjectType,
         responsiblePersons: Array.isArray(values.responsiblePersons) ? values.responsiblePersons : [],
         healthStatus: String(values.healthStatus || 'normal'),
         infoValues,

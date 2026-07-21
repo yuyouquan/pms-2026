@@ -48,6 +48,7 @@ import { compareVersionsForTable, CompareTableRow, FieldDiff } from '@/lib/versi
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
 import { gantt } from 'dhtmlx-gantt'
 import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
+import { isMachineProjectType } from '@/constants/projectTypes'
 import VersionTrainPlan from '@/components/plans/VersionTrainPlan'
 import type { Avatar } from 'antd'
 
@@ -1339,7 +1340,7 @@ export function ProjectPlan({
   setProjectPlanOverviewTab,
 }: ProjectPlanProps) {
   const markets = selectedProject?.markets || []
-  const showMarketTabs = selectedProject?.type === '整机产品项目' && markets.length > 0
+  const showMarketTabs = isMachineProjectType(selectedProject?.type) && markets.length > 0
   const hasDraftVersion = versions.some(v => v.status === '修订中')
   const currentVersionData = versions.find(v => v.id === currentVersion)
   const isCurrentDraft = currentVersionData?.status === '修订中'

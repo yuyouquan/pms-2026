@@ -108,6 +108,44 @@ export const markTaskActualTimeDetachedFromMain = (
 
 export const isValidMarket = (market: string) => MARKET_OPTIONS.includes(market)
 
+export const normalizeTargetMarkets = (value: unknown): string[] => {
+  const source = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : []
+  const seen = new Set<string>()
+  return source.reduce<string[]>((markets, item) => {
+    const market = typeof item === 'string' ? item.trim() : ''
+    if (!market || !isValidMarket(market) || seen.has(market)) return markets
+    seen.add(market)
+    markets.push(market)
+    return markets
+  }, [])
+}
+
+export const isConfiguredMarket = (
+  rows: Array<{ market?: string; marketName?: string }>,
+  selectedMarket: string,
+) => !!selectedMarket && rows.some(row => (row.market || row.marketName) === selectedMarket)
+
+export const canUseMarketPlanScope = (
+  rows: Array<{ market?: string; marketName?: string }>,
+  selectedMarket: string,
+  isMachineProject: boolean,
+  planLevel: string,
+) => !isMachineProject || planLevel !== 'level1' || isConfiguredMarket(rows, selectedMarket)
+
+export const getConfiguredMarketSelection = (
+  rows: Array<{ market?: string; marketName?: string; isMain?: boolean }>,
+  selectedMarket: string,
+) => {
+  if (isConfiguredMarket(rows, selectedMarket)) return selectedMarket
+  const mainRow = rows.find(row => row.isMain) || rows[0]
+  return mainRow?.market || mainRow?.marketName || ''
+}
+
+export const getConfiguredMarketMetadataValue = (
+  rows: Array<{ market?: string; marketName?: string }>,
+  selectedMarket: string,
+) => isConfiguredMarket(rows, selectedMarket) ? selectedMarket : ''
+
 export const getMarketPlanVersionKey = (
   projectId: string,
   market: string,
@@ -233,11 +271,11 @@ export const isFollowMarket = (rows: MarketConfigRow[], market: string) => {
 }
 
 export const canCreateRevisionForMarket = (
-  _rows: MarketConfigRow[],
-  _market: string,
-  _planLevel: string,
+  rows: MarketConfigRow[],
+  market: string,
+  planLevel: string,
 ) => {
-  return true
+  return planLevel !== 'level1' || !isFollowMarket(rows, market)
 }
 
 export const canChangeMainMarket = (versions: PlanVersionLike[]) => (
