@@ -3364,7 +3364,7 @@ export default function ProjectSpaceContainer() {
                     {isCurrentDraft && <Tag color="green" style={{ fontSize: 12, margin: 0 }}>自动保存</Tag>}
                   </Space>
                   <Space size={6}>
-                    {!hasDraftVersion && (canEditCurrentPlan
+                    {(followedTosLevel1ReadOnly || !hasDraftVersion) && (canEditCurrentPlan
                       ? renderCreateRevisionButton({ borderRadius: 6 })
                       : <Tooltip title={`无${currentPlanPermissionLabel}编辑权限`}><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled aria-label="创建修订">创建修订</Button></Tooltip>)}
                     {renderPlanCloneButton({ borderRadius: 6 })}

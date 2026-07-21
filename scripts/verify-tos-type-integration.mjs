@@ -26,6 +26,7 @@ const required = [
   ['src/containers/ProjectSpaceContainer.tsx', 'followedTosLevel1ReadOnly && (!isLevel2Custom || isFollowReadOnlyOverview)'],
   ['src/containers/ProjectSpaceContainer.tsx', 'readOnly={!isEditMode || followedTosLevel1ReadOnly || isFollowReadOnlyOverview}'],
   ['src/containers/ProjectSpaceContainer.tsx', 'canMaintainCurrentPlan'],
+  ['src/containers/ProjectSpaceContainer.tsx', '(followedTosLevel1ReadOnly || !hasDraftVersion)'],
   ['src/containers/ProjectSpaceContainer.tsx', '当前类型跟随'],
   ['src/containers/ProjectSpaceContainer.tsx', '请切换到'],
   ['src/containers/ProjectSpaceContainer.tsx', 'isTosTypeLevel1ReadOnly'],
