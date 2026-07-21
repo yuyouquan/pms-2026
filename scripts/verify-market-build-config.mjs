@@ -29,10 +29,10 @@ const spugProviderPath = 'src/lib/spugBuildOptions.ts'
 
 const { buildMarketRowsFromMarkets, normalizeMarketRows, normalizeTargetMarkets } = evaluateTypeScriptModule(marketRulesPath)
 const {
-  findMarketBuildSelectionIssue,
   formatMarketBuildSelectionIssue,
   loadSpugBuildOptions,
   mockSpugBuildOptionsProvider,
+  validateMarketBuildSelections,
 } = evaluateTypeScriptModule(spugProviderPath)
 const fallback = {
   buildOption: 'ko2_sl303',
@@ -78,7 +78,7 @@ assert.deepEqual(
 )
 
 assert.equal(typeof loadSpugBuildOptions, 'function', 'SPUG loading must expose a testable stale-request guard')
-assert.equal(typeof findMarketBuildSelectionIssue, 'function', 'SPUG selections must expose pure ordered validation')
+assert.equal(typeof validateMarketBuildSelections, 'function', 'SPUG selections must expose pure structured validation')
 assert.equal(typeof formatMarketBuildSelectionIssue, 'function', 'SPUG selection issues must expose exact user messages')
 
 let resolveStaleRequest
@@ -144,45 +144,68 @@ const selectionOptions = {
   buildOptions: ['ko2', 'x1103b'],
   buildMarkets: ['op', 'tr'],
 }
-assert.equal(findMarketBuildSelectionIssue([{
+const validSelectionResult = validateMarketBuildSelections([{
   market: 'OP', buildOption: 'ko2', buildMarket: 'op',
 }, {
   market: 'TR', buildOption: 'x1103b', buildMarket: 'tr',
-}], selectionOptions), undefined, 'independent valid market build selections must pass')
+}], selectionOptions)
+assert.equal(validSelectionResult.firstRequiredIssue, undefined, 'valid independent rows must not have a required issue')
+assert.deepEqual(JSON.parse(JSON.stringify(validSelectionResult.unsupportedIssues)), [], 'valid independent rows must not have unsupported issues')
 
-const missingBuildOptionIssue = findMarketBuildSelectionIssue([{
+const missingBuildOptionResult = validateMarketBuildSelections([{
   market: 'OP', buildOption: '', buildMarket: 'op',
 }], selectionOptions)
-assert.deepEqual(JSON.parse(JSON.stringify(missingBuildOptionIssue)), {
+assert.deepEqual(JSON.parse(JSON.stringify(missingBuildOptionResult.firstRequiredIssue)), {
   field: 'buildOption', reason: 'required', market: 'OP', value: '',
 }, 'a missing build option must return the first exact issue')
-assert.equal(formatMarketBuildSelectionIssue(missingBuildOptionIssue), '请填写 OP 市场的编译选项', 'missing build option message must identify its market')
+assert.equal(formatMarketBuildSelectionIssue(missingBuildOptionResult.firstRequiredIssue), '请填写 OP 市场的编译选项', 'missing build option message must identify its market')
 
-const missingBuildMarketIssue = findMarketBuildSelectionIssue([{
+const missingBuildMarketResult = validateMarketBuildSelections([{
   market: 'TR', buildOption: 'x1103b', buildMarket: '  ',
 }], selectionOptions)
-assert.deepEqual(JSON.parse(JSON.stringify(missingBuildMarketIssue)), {
+assert.deepEqual(JSON.parse(JSON.stringify(missingBuildMarketResult.firstRequiredIssue)), {
   field: 'buildMarket', reason: 'required', market: 'TR', value: '  ',
 }, 'a missing build market must return the first exact issue')
-assert.equal(formatMarketBuildSelectionIssue(missingBuildMarketIssue), '请填写 TR 市场的编译市场', 'missing build market message must identify its market')
+assert.equal(formatMarketBuildSelectionIssue(missingBuildMarketResult.firstRequiredIssue), '请填写 TR 市场的编译市场', 'missing build market message must identify its market')
 
-const unsupportedBuildOptionIssue = findMarketBuildSelectionIssue([{
-  market: 'OP', buildOption: 'legacy-option', buildMarket: 'legacy-market',
-}], selectionOptions)
-assert.deepEqual(JSON.parse(JSON.stringify(unsupportedBuildOptionIssue)), {
-  field: 'buildOption', reason: 'unsupported', market: 'OP', value: 'legacy-option',
-}, 'unsupported values must check build option before build market within a row')
-assert.equal(formatMarketBuildSelectionIssue(unsupportedBuildOptionIssue), 'OP 市场的编译选项不在当前 SPUG 枚举中，请重新选择', 'unsupported build option message must be exact')
-
-const unsupportedBuildMarketIssue = findMarketBuildSelectionIssue([{
-  market: 'OP', buildOption: 'ko2', buildMarket: 'legacy-market',
+const buildOptionRequiredBeforeEarlierBuildMarket = validateMarketBuildSelections([{
+  market: 'OP', buildOption: 'ko2', buildMarket: '',
 }, {
-  market: 'TR', buildOption: 'legacy-option', buildMarket: 'tr',
+  market: 'TR', buildOption: '', buildMarket: 'tr',
 }], selectionOptions)
-assert.deepEqual(JSON.parse(JSON.stringify(unsupportedBuildMarketIssue)), {
-  field: 'buildMarket', reason: 'unsupported', market: 'OP', value: 'legacy-market',
-}, 'unsupported values must scan markets in row order before later field issues')
-assert.equal(formatMarketBuildSelectionIssue(unsupportedBuildMarketIssue), 'OP 市场的编译市场不在当前 SPUG 枚举中，请重新选择', 'unsupported build market message must be exact')
+assert.deepEqual(JSON.parse(JSON.stringify(buildOptionRequiredBeforeEarlierBuildMarket.firstRequiredIssue)), {
+  field: 'buildOption', reason: 'required', market: 'TR', value: '',
+}, 'missing build options across all rows must take precedence over an earlier missing build market')
+
+const requiredAndUnsupportedResult = validateMarketBuildSelections([{
+  market: 'OP', buildOption: '', buildMarket: 'op',
+}, {
+  market: 'TR', buildOption: 'x1103b', buildMarket: 'legacy-market',
+}], selectionOptions)
+assert.deepEqual(JSON.parse(JSON.stringify(requiredAndUnsupportedResult.firstRequiredIssue)), {
+  field: 'buildOption', reason: 'required', market: 'OP', value: '',
+}, 'required validation must retain its first missing build option')
+assert.deepEqual(JSON.parse(JSON.stringify(requiredAndUnsupportedResult.unsupportedIssues)), [{
+  field: 'buildMarket', reason: 'unsupported', market: 'TR', value: 'legacy-market',
+}], 'unsupported aggregation must remain visible even when a required issue exists')
+
+const multipleUnsupportedResult = validateMarketBuildSelections([{
+  market: 'OP', buildOption: 'legacy-option-op', buildMarket: 'legacy-market-op',
+}, {
+  market: 'TR', buildOption: 'legacy-option-tr', buildMarket: 'legacy-market-tr',
+}], selectionOptions)
+assert.equal(multipleUnsupportedResult.firstRequiredIssue, undefined, 'non-empty unsupported values must not be reported as required')
+assert.deepEqual(JSON.parse(JSON.stringify(multipleUnsupportedResult.unsupportedIssues)), [{
+  field: 'buildOption', reason: 'unsupported', market: 'OP', value: 'legacy-option-op',
+}, {
+  field: 'buildMarket', reason: 'unsupported', market: 'OP', value: 'legacy-market-op',
+}, {
+  field: 'buildOption', reason: 'unsupported', market: 'TR', value: 'legacy-option-tr',
+}, {
+  field: 'buildMarket', reason: 'unsupported', market: 'TR', value: 'legacy-market-tr',
+}], 'all unsupported values must be returned in deterministic row and field order')
+assert.equal(formatMarketBuildSelectionIssue(multipleUnsupportedResult.unsupportedIssues[0]), 'OP 市场的编译选项不在当前 SPUG 枚举中，请重新选择', 'unsupported build option message must be exact')
+assert.equal(formatMarketBuildSelectionIssue(multipleUnsupportedResult.unsupportedIssues[1]), 'OP 市场的编译市场不在当前 SPUG 枚举中，请重新选择', 'unsupported build market message must be exact')
 
 const initialized = buildMarketRowsFromMarkets(['OP', 'TR'], undefined, fallback)
 assert.equal(initialized[0].buildOption, fallback.buildOption, 'existing OP must initialize the historical build option')
@@ -278,10 +301,13 @@ assert.match(marketEditorSource, /spugLoading/, 'the market editor must track SP
 assert.match(marketEditorSource, /spugError/, 'the market editor must track SPUG failure state')
 assert.match(marketEditorSource, /loadSpugBuildOptions/, 'the market editor effect must use the tested SPUG loader')
 assert.match(marketEditorSource, /spugLoaded/, 'the market editor must track whether the current SPUG request loaded successfully')
+assert.match(marketEditorSource, /validateMarketBuildSelections/, 'the market editor must use structured SPUG selection validation')
+assert.match(marketEditorSource, /firstRequiredIssue/, 'the market editor must retain the container-compatible required issue')
+assert.match(marketEditorSource, /unsupportedIssues/, 'the market editor must retain every unsupported issue')
 assert.match(marketEditorSource, /status=\{[^\n]*Unsupported[^\n]*\? 'error' : undefined\}/, 'unsupported legacy selections must remain visible with error status')
 assert.match(marketEditorSource, /type="warning"[\s\S]*formatMarketBuildSelectionIssue/, 'the market editor must visibly warn about unsupported loaded values')
-assert.match(marketEditorSource, /const handleSave =[\s\S]*spugLoading[\s\S]*spugError[\s\S]*spugLoaded[\s\S]*message\.error\(formatMarketBuildSelectionIssue\(buildSelectionIssue\)\)[\s\S]*onSave\(\)/, 'market save must reject unavailable SPUG state and exact selection issues before persistence')
-assert.match(marketEditorSource, /saveDisabled=\{[\s\S]{0,240}spugLoading[\s\S]{0,240}spugError[\s\S]{0,240}!spugLoaded[\s\S]{0,240}reason === 'unsupported'/, 'market save must disable while SPUG is unavailable or loaded values are unsupported')
+assert.match(marketEditorSource, /const handleSave =[\s\S]*spugLoading[\s\S]*spugError[\s\S]*spugLoaded[\s\S]*firstRequiredIssue[\s\S]*unsupportedIssues\[0\][\s\S]*onSave\(\)/, 'market save must enforce required ordering before its defensive unsupported guard')
+assert.match(marketEditorSource, /saveDisabled=\{[\s\S]{0,240}spugLoading[\s\S]{0,240}spugError[\s\S]{0,240}!spugLoaded[\s\S]{0,240}unsupportedIssues\.length/, 'market save must disable when any unsupported issue exists')
 assert.match(marketEditorSource, />重新获取</, 'the market editor must expose a visible SPUG retry action')
 
 const projectSpaceSource = fs.readFileSync(projectSpacePath, 'utf8')

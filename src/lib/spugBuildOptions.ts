@@ -20,11 +20,16 @@ export type MarketBuildSelectionRow = {
   buildMarket?: string
 }
 
-export type MarketBuildSelectionIssue = {
+export type SpugMarketBuildSelectionIssue = {
   field: 'buildOption' | 'buildMarket'
   reason: 'required' | 'unsupported'
   market: string
   value: string
+}
+
+export interface SpugMarketBuildValidationResult {
+  firstRequiredIssue?: SpugMarketBuildSelectionIssue
+  unsupportedIssues: SpugMarketBuildSelectionIssue[]
 }
 
 export const MOCK_SPUG_BUILD_OPTIONS = ['ko2_sl303', 'ko2', 'a681l_sm386', 'lj8k_h781', 'lj8_h781', 'lj7_h782', 'x1103b']
@@ -54,31 +59,56 @@ export const loadSpugBuildOptions = async (
   }
 }
 
-export const findMarketBuildSelectionIssue = (
+export const validateMarketBuildSelections = (
   rows: readonly MarketBuildSelectionRow[],
   options: SpugBuildOptions,
-): MarketBuildSelectionIssue | undefined => {
+): SpugMarketBuildValidationResult => {
+  const firstMissingBuildOptionRow = rows.find(row => !row.buildOption?.trim())
+  const firstMissingBuildMarketRow = firstMissingBuildOptionRow
+    ? undefined
+    : rows.find(row => !row.buildMarket?.trim())
+  const firstRequiredIssue: SpugMarketBuildSelectionIssue | undefined = firstMissingBuildOptionRow
+    ? {
+        field: 'buildOption',
+        reason: 'required',
+        market: firstMissingBuildOptionRow.market,
+        value: firstMissingBuildOptionRow.buildOption ?? '',
+      }
+    : firstMissingBuildMarketRow
+      ? {
+          field: 'buildMarket',
+          reason: 'required',
+          market: firstMissingBuildMarketRow.market,
+          value: firstMissingBuildMarketRow.buildMarket ?? '',
+        }
+      : undefined
+
+  const unsupportedIssues: SpugMarketBuildSelectionIssue[] = []
   for (const row of rows) {
     const buildOption = row.buildOption ?? ''
-    if (!buildOption.trim()) {
-      return { field: 'buildOption', reason: 'required', market: row.market, value: buildOption }
-    }
-    if (!options.buildOptions.includes(buildOption)) {
-      return { field: 'buildOption', reason: 'unsupported', market: row.market, value: buildOption }
+    if (buildOption.trim() && !options.buildOptions.includes(buildOption)) {
+      unsupportedIssues.push({
+        field: 'buildOption',
+        reason: 'unsupported',
+        market: row.market,
+        value: buildOption,
+      })
     }
 
     const buildMarket = row.buildMarket ?? ''
-    if (!buildMarket.trim()) {
-      return { field: 'buildMarket', reason: 'required', market: row.market, value: buildMarket }
-    }
-    if (!options.buildMarkets.includes(buildMarket)) {
-      return { field: 'buildMarket', reason: 'unsupported', market: row.market, value: buildMarket }
+    if (buildMarket.trim() && !options.buildMarkets.includes(buildMarket)) {
+      unsupportedIssues.push({
+        field: 'buildMarket',
+        reason: 'unsupported',
+        market: row.market,
+        value: buildMarket,
+      })
     }
   }
-  return undefined
+  return { firstRequiredIssue, unsupportedIssues }
 }
 
-export const formatMarketBuildSelectionIssue = (issue: MarketBuildSelectionIssue): string => {
+export const formatMarketBuildSelectionIssue = (issue: SpugMarketBuildSelectionIssue): string => {
   if (issue.field === 'buildOption') {
     return issue.reason === 'required'
       ? `请填写 ${issue.market} 市场的编译选项`

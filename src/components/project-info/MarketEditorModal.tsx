@@ -24,12 +24,13 @@ import {
   type MarketYesNoValue,
 } from '@/lib/marketRules'
 import {
-  findMarketBuildSelectionIssue,
   formatMarketBuildSelectionIssue,
   loadSpugBuildOptions,
   mockSpugBuildOptionsProvider,
+  validateMarketBuildSelections,
   type SpugBuildOptions,
   type SpugBuildOptionsProvider,
+  type SpugMarketBuildValidationResult,
 } from '@/lib/spugBuildOptions'
 
 const YES_NO_OPTIONS: Array<{ label: MarketYesNoValue; value: MarketYesNoValue }> = [
@@ -143,12 +144,13 @@ export default function MarketEditorModal({
     }
   }, [availableMarkets, selectedMarket])
 
-  const buildSelectionIssue = useMemo(() => (
-    spugLoaded ? findMarketBuildSelectionIssue(rows, spugOptions) : undefined
+  const buildValidation = useMemo<SpugMarketBuildValidationResult>(() => (
+    spugLoaded
+      ? validateMarketBuildSelections(rows, spugOptions)
+      : { unsupportedIssues: [] }
   ), [rows, spugLoaded, spugOptions])
-  const unsupportedBuildSelectionIssue = buildSelectionIssue?.reason === 'unsupported'
-    ? buildSelectionIssue
-    : undefined
+  const { firstRequiredIssue, unsupportedIssues } = buildValidation
+  const firstUnsupportedIssue = unsupportedIssues[0]
 
   const updateRow = (rowId: string, patch: Partial<MarketConfigRow>) => {
     const previousMainMarket = getMainMarket(rows)
@@ -312,12 +314,12 @@ export default function MarketEditorModal({
           action={<Button size="small" onClick={() => setSpugRetryKey(key => key + 1)}>重新获取</Button>}
         />
       )}
-      {unsupportedBuildSelectionIssue && (
+      {firstUnsupportedIssue && (
         <Alert
           type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          title={formatMarketBuildSelectionIssue(unsupportedBuildSelectionIssue)}
+          title={formatMarketBuildSelectionIssue(firstUnsupportedIssue)}
         />
       )}
     </>
@@ -345,8 +347,12 @@ export default function MarketEditorModal({
 
   const handleSave = () => {
     if (spugLoading || spugError || !spugLoaded) return
-    if (buildSelectionIssue) {
-      message.error(formatMarketBuildSelectionIssue(buildSelectionIssue))
+    if (firstRequiredIssue) {
+      message.error(formatMarketBuildSelectionIssue(firstRequiredIssue))
+      return
+    }
+    if (unsupportedIssues[0]) {
+      message.error(formatMarketBuildSelectionIssue(unsupportedIssues[0]))
       return
     }
     onSave()
@@ -366,7 +372,7 @@ export default function MarketEditorModal({
         || spugLoading
         || Boolean(spugError)
         || !spugLoaded
-        || buildSelectionIssue?.reason === 'unsupported'
+        || unsupportedIssues.length > 0
       }
       onSave={handleSave}
       onCancel={onCancel}
