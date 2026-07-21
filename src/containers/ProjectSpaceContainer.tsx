@@ -447,6 +447,8 @@ export default function ProjectSpaceContainer() {
   const isTosVersionProject = selectedProject?.type === PROJECT_TYPE_TOS_VERSION
   const legacyMarketBuildConfig = selectedProject
     ? {
+        buildOption: (selectedProject as any).buildOption,
+        buildMarket: (selectedProject as any).buildMarket,
         branchInfo: selectedProject.branchInfo,
         jenkinsUrl: selectedProject.jenkinsUrl,
         buildAddress: selectedProject.buildAddress,

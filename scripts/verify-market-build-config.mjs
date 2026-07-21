@@ -24,15 +24,33 @@ const evaluateTypeScriptModule = (filename) => {
 const marketRulesPath = 'src/lib/marketRules.ts'
 const marketEditorPath = 'src/components/project-info/MarketEditorModal.tsx'
 const projectSpacePath = 'src/containers/ProjectSpaceContainer.tsx'
+const spugProviderPath = 'src/lib/spugBuildOptions.ts'
 
 const { buildMarketRowsFromMarkets, normalizeMarketRows, normalizeTargetMarkets } = evaluateTypeScriptModule(marketRulesPath)
+const { mockSpugBuildOptionsProvider } = evaluateTypeScriptModule(spugProviderPath)
 const fallback = {
+  buildOption: 'ko2_sl303',
+  buildMarket: 'op',
   branchInfo: 'feature/global',
   jenkinsUrl: 'https://jenkins.example/job/global',
   buildAddress: 'https://build.example/global',
 }
 
+const spugBuildOptions = await mockSpugBuildOptionsProvider.load()
+assert.deepEqual(
+  JSON.parse(JSON.stringify(spugBuildOptions.buildOptions)),
+  ['ko2_sl303', 'ko2', 'a681l_sm386', 'lj8k_h781', 'lj8_h781', 'lj7_h782', 'x1103b'],
+  'SPUG provider must expose the mock build options asynchronously',
+)
+assert.deepEqual(
+  JSON.parse(JSON.stringify(spugBuildOptions.buildMarkets)),
+  ['op', 'tr'],
+  'SPUG provider must expose the mock build markets asynchronously',
+)
+
 const initialized = buildMarketRowsFromMarkets(['OP', 'TR'], undefined, fallback)
+assert.equal(initialized[0].buildOption, fallback.buildOption, 'existing OP must initialize the historical build option')
+assert.equal(initialized[1].buildMarket, fallback.buildMarket, 'every existing market must initialize the historical build market')
 assert.equal(initialized[0].branchInfo, fallback.branchInfo, 'existing OP must initialize the historical branch')
 assert.equal(initialized[0].jenkinsUrl, fallback.jenkinsUrl, 'existing OP must initialize the historical Jenkins URL')
 assert.equal(initialized[1].buildAddress, fallback.buildAddress, 'every existing market must initialize the historical build URL')
@@ -42,10 +60,14 @@ const preserved = buildMarketRowsFromMarkets(['OP'], [{
   market: 'OP',
   isMain: true,
   followsMain: false,
+  buildOption: '',
+  buildMarket: undefined,
   branchInfo: '',
   jenkinsUrl: undefined,
   buildAddress: 'https://build.example/op',
 }], fallback)[0]
+assert.equal(preserved.buildOption, '', 'an explicitly cleared build option must not be backfilled')
+assert.equal(preserved.buildMarket, fallback.buildMarket, 'only an undefined build market should be backfilled')
 assert.equal(preserved.branchInfo, '', 'an explicitly cleared branch must not be backfilled')
 assert.equal(preserved.jenkinsUrl, fallback.jenkinsUrl, 'only an undefined legacy field should be backfilled')
 assert.equal(preserved.buildAddress, 'https://build.example/op', 'a market-specific value must win over the historical project value')
@@ -65,6 +87,26 @@ const normalizedBuildConfig = normalizeMarketRows([{
 assert.equal(normalizedBuildConfig.branchInfo, 'feature/op', 'normalizing markets must preserve branch values')
 assert.equal(normalizedBuildConfig.jenkinsUrl, 'https://jenkins.example/job/op', 'normalizing markets must preserve Jenkins values')
 assert.equal(normalizedBuildConfig.buildAddress, 'https://build.example/op', 'normalizing markets must preserve build values')
+
+const isolatedBuildConfigs = normalizeMarketRows([{
+  id: 'market-OP',
+  market: 'OP',
+  isMain: true,
+  followsMain: false,
+  buildOption: 'ko2',
+  buildMarket: 'op',
+}, {
+  id: 'market-TR',
+  market: 'TR',
+  isMain: false,
+  followsMain: true,
+  buildOption: 'x1103b',
+  buildMarket: 'tr',
+}])
+assert.equal(isolatedBuildConfigs[0].buildOption, 'ko2', 'main market must retain its own build option')
+assert.equal(isolatedBuildConfigs[0].buildMarket, 'op', 'main market must retain its own build market')
+assert.equal(isolatedBuildConfigs[1].buildOption, 'x1103b', 'following market must retain its own build option')
+assert.equal(isolatedBuildConfigs[1].buildMarket, 'tr', 'following market must retain its own build market')
 
 assert.deepEqual(
   JSON.parse(JSON.stringify(normalizeTargetMarkets(' OP,TR, OP , ,RU '))),
@@ -116,4 +158,4 @@ assert.doesNotMatch(projectSpaceSource, /if \(isWholeMachineProject && !selected
 const addProjectSource = fs.readFileSync('src/components/workspace/AddProjectModal.tsx', 'utf8')
 assert.match(addProjectSource, /isMachineProjectType\(projectType\)[\s\S]*normalizeTargetMarkets\(payload\.infoValues\.targetMarkets \?\? extra\.targetMarkets\)/, 'machine creation must bootstrap markets from targetMarkets')
 
-console.log('market-specific build configuration verification passed (24 assertions)')
+console.log('market-specific build configuration verification passed')

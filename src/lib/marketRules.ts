@@ -13,6 +13,8 @@ export type MarketConfigRow = {
   isCancelPaused?: MarketYesNoValue
   cancelPauseDate?: string
   isMadaControlled?: MarketYesNoValue
+  buildOption?: string
+  buildMarket?: string
   branchInfo?: string
   jenkinsUrl?: string
   buildAddress?: string
@@ -20,7 +22,7 @@ export type MarketConfigRow = {
 
 export type LegacyMarketBuildConfig = Pick<
   MarketConfigRow,
-  'branchInfo' | 'jenkinsUrl' | 'buildAddress'
+  'buildOption' | 'buildMarket' | 'branchInfo' | 'jenkinsUrl' | 'buildAddress'
 >
 
 export type PlanVersionLike = {
@@ -256,6 +258,8 @@ export const buildMarketRowsFromMarkets = (
   const hydratedRows = legacyBuildConfig
     ? sourceRows.map(row => ({
         ...row,
+        buildOption: row.buildOption === undefined ? (legacyBuildConfig.buildOption || '') : row.buildOption,
+        buildMarket: row.buildMarket === undefined ? (legacyBuildConfig.buildMarket || '') : row.buildMarket,
         branchInfo: row.branchInfo === undefined ? (legacyBuildConfig.branchInfo || '') : row.branchInfo,
         jenkinsUrl: row.jenkinsUrl === undefined ? (legacyBuildConfig.jenkinsUrl || '') : row.jenkinsUrl,
         buildAddress: row.buildAddress === undefined ? (legacyBuildConfig.buildAddress || '') : row.buildAddress,
