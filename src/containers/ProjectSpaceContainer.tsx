@@ -83,6 +83,7 @@ import {
 } from '@/constants/projectTypes'
 import {
   buildMarketRowsFromMarkets,
+  canUseMarketPlanScope,
   canChangeMainMarket,
   canCreateRevisionForMarket,
   cancelDraftRevision,
@@ -469,9 +470,13 @@ export default function ProjectSpaceContainer() {
   const primaryTosType = getMainTosType(tosTypeConfigRows)
   const tosTypeScopeSignature = tosTypeConfigRows.map(row => `${row.type}:${row.isMain ? 'main' : row.followsMain ? 'follow' : 'secondary'}`).join('|')
   const scopedPlanLevel = projectPlanLevel === 'level2' ? 'level2' : 'level1'
-  const machineMarketPlanUnavailable = isWholeMachineProject
-    && projectPlanLevel === 'level1'
-    && !selectedMarketIsConfigured
+  const canUseSelectedMarketPlanScope = canUseMarketPlanScope(
+    marketConfigRows,
+    selectedMarketTab,
+    isWholeMachineProject,
+    projectPlanLevel,
+  )
+  const machineMarketPlanUnavailable = isWholeMachineProject && !canUseSelectedMarketPlanScope
   const isMarketScopedLevel1 = !!selectedProject
     && isWholeMachineProject
     && projectPlanLevel === 'level1'
@@ -3203,20 +3208,6 @@ export default function ProjectSpaceContainer() {
   const renderProjectPlan = () => {
     const showMarketControls = isMachineProjectType(selectedProject?.type)
     const showTosTypeTabs = selectedProject?.type === PROJECT_TYPE_TOS_VERSION && tosTypeConfigRows.length > 0
-    if (isWholeMachineProject && !selectedMarketIsConfigured) {
-      return (
-        <Card style={{ borderRadius: 8 }}>
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={marketConfigRows.length === 0 ? '尚未配置市场，无法查看项目计划' : '当前市场不属于本项目，请重新选择市场'}
-          >
-            <Button type="primary" icon={<PlusOutlined />} onClick={openMarketEditor}>
-              {marketConfigRows.length === 0 ? '添加市场' : '市场编辑'}
-            </Button>
-          </Empty>
-        </Card>
-      )
-    }
     const planTabItems = [
       { key: 'level1', label: '一级计划' },
       { key: 'level2', label: '二级计划' },
@@ -3279,6 +3270,19 @@ export default function ProjectSpaceContainer() {
             <Col><Tag color={projectPlanLevel === 'overview' ? 'blue' : 'default'} style={{ fontSize: 11 }}>{planTabItems.find(t => t.key === projectPlanLevel)?.label}</Tag></Col>
           </Row>
         </Card>
+        {machineMarketPlanUnavailable ? (
+          <Card style={{ borderRadius: 8 }}>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={marketConfigRows.length === 0 ? '尚未配置市场，无法查看一级计划' : '当前市场不属于本项目，请重新选择市场'}
+            >
+              <Button type="primary" icon={<PlusOutlined />} onClick={openMarketEditor}>
+                {marketConfigRows.length === 0 ? '添加市场' : '市场编辑'}
+              </Button>
+            </Empty>
+          </Card>
+        ) : (
+          <>
         {showTosTypeTabs && projectPlanLevel === 'level1' && currentTosTypeIsFollow && (
           <Alert
             type="info"
@@ -3516,6 +3520,8 @@ export default function ProjectSpaceContainer() {
                 : renderTaskTable(level2PlanTasks.filter(t => t.planId === activeLevel2Plan))
             )}
           </Card>
+        )}
+          </>
         )}
       </div>
     )
