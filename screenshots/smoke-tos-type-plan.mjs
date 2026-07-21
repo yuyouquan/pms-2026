@@ -180,63 +180,104 @@ async function assertProjectInformationOrder(page) {
   }
 }
 
-async function findTypeEditorRow(page, type) {
-  return page.evaluateHandle((target) => (
-    Array.from(document.querySelectorAll('.ant-modal .ant-table-tbody tr')).find(row => (
-      (row.querySelector('td:first-child')?.textContent || '').trim() === target
-    )) || null
-  ), type)
+async function getTypeEditorColumns(page) {
+  return page.$$eval('.ant-modal .ant-table-thead th', headers => {
+    const supportedTypes = ['Full', 'Slim', 'PAD', 'GO']
+    return headers.slice(1).flatMap((header, offset) => {
+      const rect = header.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return []
+      const normalizedText = (header.textContent || '').replace(/\s+/g, '')
+      const type = supportedTypes.find(candidate => normalizedText.startsWith(candidate))
+      return type ? [{ type, columnIndex: offset + 1 }] : []
+    })
+  })
 }
 
-async function typeEditorHasRow(page, type) {
-  return page.evaluate((target) => (
-    Array.from(document.querySelectorAll('.ant-modal .ant-table-tbody tr')).some(row => (
-      (row.querySelector('td:first-child')?.textContent || '').trim() === target
-    ))
-  ), type)
+async function findTypeEditorColumn(page, type) {
+  return (await getTypeEditorColumns(page)).find(column => column.type === type)
 }
 
-async function ensureTypeEditorRow(page, type) {
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    if (await typeEditorHasRow(page, type)) return
-    const previousRowCount = await page.$$eval('.ant-modal .ant-table-tbody tr', rows => rows.length)
-    await clickVisibleText(page, '.ant-modal button', '添加类型')
-    try {
-      await page.waitForFunction((count) => (
-        document.querySelectorAll('.ant-modal .ant-table-tbody tr').length > count
-      ), { timeout: 3000 }, previousRowCount)
-    } catch {
-      const currentRows = await page.$$eval(
-        '.ant-modal .ant-table-tbody tr td:first-child',
-        cells => cells.map(cell => (cell.textContent || '').trim()),
-      )
-      fail(`Adding ${type} did not add a row; existing rows: ${currentRows.join(', ')}`)
+async function ensureTypeEditorColumn(page, type) {
+  if (await findTypeEditorColumn(page, type)) return
+
+  try {
+    const toolbarSelect = await page.$('.ant-modal .pms-dimension-matrix-toolbar .ant-select')
+    if (!toolbarSelect) fail(`Type editor toolbar select not found while adding ${type}`)
+    await toolbarSelect.click()
+    await page.waitForSelector('.ant-select-dropdown:not(.ant-select-dropdown-hidden)', {
+      visible: true,
+      timeout: 3000,
+    })
+    await clickVisibleText(
+      page,
+      '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option-content',
+      type,
+    )
+    await clickVisibleText(page, '.ant-modal button', '增加类型')
+    await page.waitForFunction((target) => {
+      const supportedTypes = ['Full', 'Slim', 'PAD', 'GO']
+      return Array.from(document.querySelectorAll('.ant-modal .ant-table-thead th'))
+        .slice(1)
+        .some(header => {
+          const rect = header.getBoundingClientRect()
+          const normalizedText = (header.textContent || '').replace(/\s+/g, '')
+          const headerType = supportedTypes.find(candidate => normalizedText.startsWith(candidate))
+          return rect.width > 0 && rect.height > 0 && headerType === target
+        })
+    }, { timeout: 3000 }, type)
+  } catch (error) {
+    const currentTypes = (await getTypeEditorColumns(page)).map(column => column.type)
+    fail(`Unable to add ${type}; current header types: ${currentTypes.join(', ')}; cause: ${error.message}`)
+  }
+}
+
+async function setTypeEditorControl(page, type, fieldLabel, selector, checked) {
+  const typeColumn = await findTypeEditorColumn(page, type)
+  if (!typeColumn) {
+    const currentTypes = (await getTypeEditorColumns(page)).map(column => column.type)
+    fail(`Type editor column not found: ${type}; current header types: ${currentTypes.join(', ')}`)
+  }
+
+  const fieldRows = await page.$$('.ant-modal .ant-table-tbody tr')
+  let targetRow = null
+  for (const row of fieldRows) {
+    const label = await row.$eval('td:first-child', cell => (cell.textContent || '').replace(/\s+/g, '').trim())
+      .catch(() => '')
+    if (label === fieldLabel) {
+      targetRow = row
+      break
     }
   }
-  if (!(await typeEditorHasRow(page, type))) {
-    const existingTypes = await page.$$eval(
+  if (!targetRow) {
+    const currentFields = await page.$$eval(
       '.ant-modal .ant-table-tbody tr td:first-child',
-      cells => cells.map(cell => (cell.textContent || '').trim()),
+      cells => cells.map(cell => (cell.textContent || '').replace(/\s+/g, '').trim()),
     )
-    fail(`Unable to add tOS type: ${type}; existing rows: ${existingTypes.join(', ')}`)
+    fail(`Type editor field row not found: ${fieldLabel}; current fields: ${currentFields.join(', ')}`)
   }
-}
 
-async function setTypeEditorControl(page, type, selector, checked) {
-  const rowHandle = await findTypeEditorRow(page, type)
-  const row = rowHandle.asElement()
-  if (!row) fail(`Type editor row not found: ${type}`)
-  const input = await row.$(selector)
-  if (!input) fail(`Control ${selector} not found for type ${type}`)
+  const cells = await targetRow.$$('td')
+  const targetCell = cells[typeColumn.columnIndex]
+  if (!targetCell) fail(`Type editor cell not found for ${fieldLabel}/${type} at column ${typeColumn.columnIndex}`)
+  const input = await targetCell.$(selector)
+  if (!input) fail(`Control ${selector} not found for ${fieldLabel}/${type}`)
   const current = await input.evaluate(node => node.checked)
   if (current !== checked) await input.click()
-  await page.waitForFunction((target, controlSelector, expected) => {
-    const targetRow = Array.from(document.querySelectorAll('.ant-modal .ant-table-tbody tr')).find(candidate => (
-      (candidate.querySelector('td:first-child')?.textContent || '').trim() === target
+
+  await page.waitForFunction((targetType, targetField, controlSelector, expected) => {
+    const supportedTypes = ['Full', 'Slim', 'PAD', 'GO']
+    const headers = Array.from(document.querySelectorAll('.ant-modal .ant-table-thead th'))
+    const columnIndex = headers.findIndex((header, index) => {
+      if (index === 0) return false
+      const normalizedText = (header.textContent || '').replace(/\s+/g, '')
+      return supportedTypes.find(candidate => normalizedText.startsWith(candidate)) === targetType
+    })
+    const row = Array.from(document.querySelectorAll('.ant-modal .ant-table-tbody tr')).find(candidate => (
+      (candidate.querySelector('td:first-child')?.textContent || '').replace(/\s+/g, '').trim() === targetField
     ))
-    return targetRow?.querySelector(controlSelector)?.checked === expected
-  }, { timeout: 3000 }, type, selector, checked)
-  await rowHandle.dispose()
+    const cell = columnIndex >= 0 ? row?.querySelectorAll('td')[columnIndex] : undefined
+    return cell?.querySelector(controlSelector)?.checked === expected
+  }, { timeout: 3000 }, type, fieldLabel, selector, checked)
 }
 
 async function saveTypeEditor(page) {
@@ -251,9 +292,9 @@ async function openTypeEditor(page, rootSelector) {
 }
 
 async function configureGoFollower(page, followsMain) {
-  await ensureTypeEditorRow(page, 'GO')
-  await setTypeEditorControl(page, 'Full', 'input[type="radio"]', true)
-  await setTypeEditorControl(page, 'GO', 'input[type="checkbox"]', followsMain)
+  await ensureTypeEditorColumn(page, 'GO')
+  await setTypeEditorControl(page, 'Full', '主类型', 'input[type="radio"]', true)
+  await setTypeEditorControl(page, 'GO', '跟随主类型', 'input[type="checkbox"]', followsMain)
   await saveTypeEditor(page)
 }
 
@@ -506,6 +547,7 @@ try {
   await assertVisibleText(page, '版本', '#section-plan table')
 
   await openTypeEditor(page, '#section-plan')
+  await ensureTypeEditorColumn(page, 'PAD')
   await configureGoFollower(page, false)
   await assertVisibleText(page, 'GO', '#section-plan')
 
