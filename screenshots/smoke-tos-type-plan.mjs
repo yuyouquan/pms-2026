@@ -184,6 +184,7 @@ async function assertProjectInformationOrder(page) {
 
 async function assertTransferInformationCollapse(page) {
   await assertVisibleText(page, '转维信息', '#section-transfer')
+  const expandedCardHeight = await page.$eval('#section-transfer', card => card.getBoundingClientRect().height)
   const initialTableText = await page.$eval('#section-transfer-content table tbody tr', row => (
     (row.textContent || '').replace(/\s+/g, ' ').trim()
   ))
@@ -192,6 +193,25 @@ async function assertTransferInformationCollapse(page) {
   await clickVisibleText(page, '#section-transfer button', '折叠')
   await page.waitForFunction(() => !document.querySelector('#section-transfer-content'), { timeout: 3000 })
   await assertNoVisibleText(page, initialTableText, '#section-transfer')
+  const collapsedLayout = await page.$eval('#section-transfer', card => {
+    const body = card.querySelector('.ant-card-body')
+    const head = card.querySelector('.ant-card-head')
+    const bodyStyle = body ? getComputedStyle(body) : null
+    return {
+      cardHeight: card.getBoundingClientRect().height,
+      headHeight: head?.getBoundingClientRect().height || 0,
+      bodyDisplay: bodyStyle?.display || '',
+      bodyPaddingTop: bodyStyle?.paddingTop || '',
+      bodyPaddingBottom: bodyStyle?.paddingBottom || '',
+    }
+  })
+  if (
+    collapsedLayout.bodyDisplay !== 'none'
+    || collapsedLayout.cardHeight > collapsedLayout.headHeight + 6
+    || collapsedLayout.cardHeight >= expandedCardHeight - 20
+  ) {
+    fail(`Collapsed transfer card must not retain an empty padded body: ${JSON.stringify({ expandedCardHeight, collapsedLayout })}`)
+  }
 
   await clickVisibleText(page, '#section-transfer button', '展开')
   await page.waitForSelector('#section-transfer-content table tbody tr', { visible: true, timeout: 3000 })
@@ -200,6 +220,10 @@ async function assertTransferInformationCollapse(page) {
   ))
   if (restoredTableText !== initialTableText) {
     fail(`Transfer table did not recover after expanding: ${JSON.stringify({ initialTableText, restoredTableText })}`)
+  }
+  const restoredCardHeight = await page.$eval('#section-transfer', card => card.getBoundingClientRect().height)
+  if (Math.abs(restoredCardHeight - expandedCardHeight) > 2) {
+    fail(`Transfer card height did not recover after expanding: ${JSON.stringify({ expandedCardHeight, restoredCardHeight })}`)
   }
 }
 

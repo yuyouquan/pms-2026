@@ -30,6 +30,18 @@ export const getProjectInfoModalGroups = (type: string) => {
   return getProjectInfoGroups(type).filter(group => visibleGroupKeys.has(group.key))
 }
 
+export const getProjectInfoModalSubmitValues = (
+  type: string,
+  values: ProjectInfoValues,
+): ProjectInfoValues => {
+  const modalFieldKeys = new Set(getProjectInfoModalFields(type).map(field => field.key))
+  return getEffectiveProjectInfoFields(type, values).reduce<ProjectInfoValues>((result, field) => {
+    const value = values[field.key]
+    if (modalFieldKeys.has(field.key) && value !== undefined) result[field.key] = value
+    return result
+  }, {})
+}
+
 export interface ExternalProjectInfoSource {
   name: string
   spm?: string

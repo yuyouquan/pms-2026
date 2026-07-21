@@ -6,7 +6,6 @@ import { Alert, Button, Collapse, Form, Input, Modal, Select, Space, Spin, Tag, 
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import ProjectInfoFieldInput from '@/components/project-info/ProjectInfoFieldInput'
 import {
-  getEffectiveProjectInfoFields,
   getProjectInfoFields,
   isTargetProjectInfoType,
   type ProjectInfoGroupKey,
@@ -23,6 +22,7 @@ import {
   deriveTosProjectAggregates,
   getProjectInfoModalFields,
   getProjectInfoModalGroups,
+  getProjectInfoModalSubmitValues,
   validateProjectInfoValues,
 } from '@/lib/projectInfoRules'
 import {
@@ -607,12 +607,7 @@ export default function ProjectInfoModal({
     }
 
     const normalizedProjectType = normalizeMachineProjectType(projectType)
-    const effectiveFields = getEffectiveProjectInfoFields(normalizedProjectType, values)
-    const infoValues = effectiveFields.reduce<ProjectInfoValues>((result, field) => {
-      const value = values[field.key]
-      if (value !== undefined) result[field.key] = value
-      return result
-    }, {})
+    const infoValues = getProjectInfoModalSubmitValues(normalizedProjectType, values)
     const editableFieldKeys = new Set(editableFields.map(field => field.key))
     const editableErrors = validateProjectInfoValues(
       normalizedProjectType,

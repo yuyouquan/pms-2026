@@ -3003,6 +3003,7 @@ export default function ProjectSpaceContainer() {
           <Card
             id="section-transfer"
             style={{ marginBottom: 20, borderRadius: 8 }}
+            styles={{ body: transferInfoCollapsed ? { display: 'none', padding: 0 } : undefined }}
             title={sectionTitle(<DeploymentUnitOutlined style={{ color: '#6366f1' }} />, '转维信息', '#6366f1')}
             extra={(
               <Button
