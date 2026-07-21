@@ -10,7 +10,7 @@ export type TosTypeConfigRow = {
 }
 
 export type TosTypeSummaryGroup = {
-  key: string
+  key: TosPlanType
   label: string
   sourceType: TosPlanType
   memberTypes: TosPlanType[]
@@ -135,7 +135,6 @@ export const getTosTypeSummaryGroups = (rows: TosTypeConfigRow[]): TosTypeSummar
   if (!main) return []
 
   const followers = normalizedRows.filter(row => !row.isMain && row.followsMain)
-  const independentRows = normalizedRows.filter(row => !row.isMain && !row.followsMain)
   const mainMemberTypes = [main.type, ...followers.map(row => row.type)]
   const mainGroup: TosTypeSummaryGroup = {
     key: main.type,
@@ -143,15 +142,16 @@ export const getTosTypeSummaryGroups = (rows: TosTypeConfigRow[]): TosTypeSummar
     sourceType: main.type,
     memberTypes: mainMemberTypes,
   }
-  return [
-    mainGroup,
-    ...independentRows.map(row => ({
+  return normalizedRows.flatMap<TosTypeSummaryGroup>(row => {
+    if (row.followsMain) return []
+    if (row.isMain) return [mainGroup]
+    return [{
       key: row.type,
       label: row.type,
       sourceType: row.type,
       memberTypes: [row.type],
-    })),
-  ]
+    }]
+  })
 }
 
 export const createTosTypePlanEntry = (seed: TosTypePlanEntry): TosTypePlanEntry => clone(seed)

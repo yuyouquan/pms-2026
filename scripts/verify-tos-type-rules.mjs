@@ -104,6 +104,17 @@ assert.deepEqual(
   ],
   'normalization should preserve main-follow flags',
 )
+assert.deepEqual(
+  plain(normalizeTosTypeRows([
+    { id: 'full', type: 'Full', isMain: true, followsMain: true },
+    { id: 'go', type: 'GO', isMain: false, followsMain: true },
+  ])),
+  [
+    { id: 'full', type: 'Full', isMain: true, followsMain: false },
+    { id: 'go', type: 'GO', isMain: false, followsMain: true },
+  ],
+  'a main type cannot follow itself',
+)
 assert.equal(isFollowTosType(followRows, 'GO'), true)
 assert.equal(isFollowTosType(followRows, 'PAD'), false)
 assert.equal(getTosTypePlanSourceType(followRows, 'GO', 'level1'), 'Full')
@@ -116,6 +127,18 @@ assert.deepEqual(
     { key: 'Full', label: 'Full&GO', sourceType: 'Full', memberTypes: ['Full', 'GO'] },
     { key: 'PAD', label: 'PAD', sourceType: 'PAD', memberTypes: ['PAD'] },
   ],
+)
+assert.deepEqual(
+  plain(getTosTypeSummaryGroups(normalizeTosTypeRows([
+    { id: 'pad', type: 'PAD', isMain: false, followsMain: false },
+    { id: 'full', type: 'Full', isMain: true, followsMain: false },
+    { id: 'go', type: 'GO', isMain: false, followsMain: true },
+  ]))),
+  [
+    { key: 'PAD', label: 'PAD', sourceType: 'PAD', memberTypes: ['PAD'] },
+    { key: 'Full', label: 'Full&GO', sourceType: 'Full', memberTypes: ['Full', 'GO'] },
+  ],
+  'summary groups should preserve configured type order',
 )
 
 const changedMainRows = normalizeTosTypeRows([
