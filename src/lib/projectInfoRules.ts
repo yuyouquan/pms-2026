@@ -89,7 +89,7 @@ export const deriveMachineProjectInfoValues = (source: ExternalProjectInfoSource
     memorySize,
     startingRam: deriveStartingRam(memorySize),
     baselineName: source.name,
-    machineSpm: source.spm || '',
+    machineSpm: source.spm ? [source.spm] : [],
   }
 }
 

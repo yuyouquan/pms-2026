@@ -2054,8 +2054,7 @@ body {
   background: #fff;
 }
 
-.pms-project-info-display-label,
-.pms-project-info-role-label {
+.pms-project-info-display-label {
   color: #7c8798;
   font-size: 12px;
 }
@@ -2069,48 +2068,51 @@ body {
   word-break: break-word;
 }
 
-.pms-project-info-role-grid {
+.pms-project-info-team-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  padding: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+  padding: 4px 18px 12px;
 }
 
-.pms-project-info-role-card {
-  display: flex;
-  align-items: center;
-  gap: 9px;
+.pms-project-info-team-role {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.32fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
   min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid #e8edf5;
-  border-radius: 8px;
-  background: #fbfdff;
-  transition: border-color 200ms ease, box-shadow 200ms ease, background-color 200ms ease;
+  padding: 12px 4px;
+  border-bottom: 1px solid #edf1f6;
 }
 
-.pms-project-info-role-card:hover {
-  border-color: #d5ddea;
-  background: #fff;
-  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.055);
+.pms-project-info-team-role-name {
+  padding-top: 5px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pms-project-info-team-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  min-width: 0;
+}
+
+.pms-project-info-team-member {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: #172033;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .pms-project-info-role-avatar {
   flex: none;
   background: linear-gradient(135deg, #14b8a6, #6366f1);
   transition: box-shadow 200ms ease;
-}
-
-.pms-project-info-role-card:hover .pms-project-info-role-avatar {
-  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.18);
-}
-
-.pms-project-info-role-name {
-  overflow: hidden;
-  color: #111827;
-  font-size: 13px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .pms-project-info-empty {
@@ -2238,7 +2240,7 @@ body {
 
 @media (max-width: 1100px) {
   .pms-project-info-display-grid,
-  .pms-project-info-role-grid {
+  .pms-project-info-team-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -2255,7 +2257,7 @@ body {
   }
 
   .pms-project-info-display-grid,
-  .pms-project-info-role-grid {
+  .pms-project-info-team-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2263,7 +2265,7 @@ body {
     padding-inline: 12px !important;
   }
 
-  .pms-project-info-role-grid {
+  .pms-project-info-team-grid {
     padding: 12px;
   }
 }
@@ -2283,7 +2285,7 @@ body {
   .pms-project-info-collapse,
   .pms-project-info-collapse .ant-collapse-header,
   .pms-project-info-group-icon,
-  .pms-project-info-role-card,
+  .pms-project-info-team-role,
   .pms-project-info-role-avatar {
     transition: none !important;
   }

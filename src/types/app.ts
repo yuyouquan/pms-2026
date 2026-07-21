@@ -18,7 +18,9 @@ export interface VersionFiveRoles {
   版本质量代表: string;
 }
 
-export type ProjectInfoValue = string | boolean | null | string[] | JiraProjectConfig[] | Record<string, string>
+export type ProjectTeamRoleValue = string | string[]
+export type ProjectTeamRoleMap = Record<string, ProjectTeamRoleValue>
+export type ProjectInfoValue = string | boolean | null | string[] | JiraProjectConfig[] | ProjectTeamRoleMap
 export type ProjectInfoValues = Record<string, ProjectInfoValue>
 
 /** Project record - matches initialProjects structure in page.tsx */

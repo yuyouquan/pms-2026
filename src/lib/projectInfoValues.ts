@@ -1,6 +1,11 @@
 import { isExternalMachineDevelopment } from '@/constants/projectInfoSchema'
 import type { JiraProjectConfig } from '@/lib/jiraProject'
-import type { ProjectInfoValue, ProjectInfoValues, VersionFiveRoles } from '@/types/app'
+import type {
+  ProjectInfoValue,
+  ProjectInfoValues,
+  ProjectTeamRoleMap,
+  VersionFiveRoles,
+} from '@/types/app'
 
 export type ProjectInfoProject = {
   id: string
@@ -84,26 +89,45 @@ const TOS_TEAM_KEYS: Record<string, string> = {
   tosEcosystemRepresentative: 'ecosystemRepresentative',
 }
 
-const isStringRecord = (value: unknown): value is Record<string, string> => (
-  !!value && typeof value === 'object' && !Array.isArray(value)
-)
+const isTeamRoleMap = (value: unknown): value is ProjectTeamRoleMap => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  return Object.values(value).every(item => (
+    typeof item === 'string'
+    || (Array.isArray(item) && item.every(member => typeof member === 'string'))
+  ))
+}
+
+export const normalizeTeamMembers = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string' && item.trim() !== '')
+  }
+  return typeof value === 'string' && value.trim() ? [value] : []
+}
 
 export const getProjectInfoValue = (project: ProjectInfoProject, key: string): ProjectInfoValue | undefined => {
   const stored = project.fieldValues?.[key]
-  if (stored !== undefined) return stored
+  if (stored !== undefined) {
+    return MACHINE_TEAM_KEYS[key] || TOS_TEAM_KEYS[key]
+      ? normalizeTeamMembers(stored)
+      : stored
+  }
 
   if (MACHINE_TEAM_KEYS[key]) {
     const roles = project.fieldValues?.machineTeamRoles
-    if (isStringRecord(roles) && roles[MACHINE_TEAM_KEYS[key]] !== undefined) return roles[MACHINE_TEAM_KEYS[key]]
+    if (isTeamRoleMap(roles) && roles[MACHINE_TEAM_KEYS[key]] !== undefined) {
+      return normalizeTeamMembers(roles[MACHINE_TEAM_KEYS[key]])
+    }
   }
   if (TOS_TEAM_KEYS[key]) {
     const roles = project.fieldValues?.tosTeamRoles
-    if (isStringRecord(roles) && roles[TOS_TEAM_KEYS[key]] !== undefined) return roles[TOS_TEAM_KEYS[key]]
+    if (isTeamRoleMap(roles) && roles[TOS_TEAM_KEYS[key]] !== undefined) {
+      return normalizeTeamMembers(roles[TOS_TEAM_KEYS[key]])
+    }
   }
   if (TOS_FIVE_ROLE_KEYS[key]) {
     const fiveRoles = project.versionFiveRoles as VersionFiveRoles | undefined
     const value = fiveRoles?.[TOS_FIVE_ROLE_KEYS[key]]
-    if (value !== undefined) return value
+    if (value !== undefined) return normalizeTeamMembers(value)
   }
 
   if (key === 'targetMarkets') {
@@ -150,15 +174,13 @@ export const sanitizeInactiveProjectInfoValues = (
   return next
 }
 
-const buildMachineTeamRoles = (values: ProjectInfoValues) => Object.entries(MACHINE_TEAM_KEYS).reduce<Record<string, string>>((roles, [key, role]) => {
-  const value = values[key]
-  if (typeof value === 'string') roles[role] = value
+const buildMachineTeamRoles = (values: ProjectInfoValues) => Object.entries(MACHINE_TEAM_KEYS).reduce<Record<string, string[]>>((roles, [key, role]) => {
+  roles[role] = normalizeTeamMembers(values[key])
   return roles
 }, {})
 
-const buildTosTeamRoles = (values: ProjectInfoValues) => Object.entries(TOS_TEAM_KEYS).reduce<Record<string, string>>((roles, [key, role]) => {
-  const value = values[key]
-  if (typeof value === 'string') roles[role] = value
+const buildTosTeamRoles = (values: ProjectInfoValues) => Object.entries(TOS_TEAM_KEYS).reduce<Record<string, string[]>>((roles, [key, role]) => {
+  roles[role] = normalizeTeamMembers(values[key])
   return roles
 }, {})
 
@@ -206,8 +228,8 @@ export const mergeProjectInfoValues = <T extends ProjectInfoProject>(
 
   const existingFiveRoles = (project.versionFiveRoles || {}) as Partial<VersionFiveRoles>
   const versionFiveRoles = Object.entries(TOS_FIVE_ROLE_KEYS).reduce<Partial<VersionFiveRoles>>((roles, [key, role]) => {
-    const value = values[key]
-    if (typeof value === 'string') roles[role] = value
+    const [primaryMember] = normalizeTeamMembers(values[key])
+    if (primaryMember) roles[role] = primaryMember
     return roles
   }, { ...existingFiveRoles })
   if (Object.keys(versionFiveRoles).length > 0) {

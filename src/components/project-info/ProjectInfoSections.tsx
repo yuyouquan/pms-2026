@@ -16,6 +16,7 @@ import {
   buildProjectInfoValues,
   formatProjectInfoValue,
   getProjectInfoValue,
+  normalizeTeamMembers,
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
 
@@ -111,17 +112,21 @@ function ProjectInfoGroupPanel({
             />
           ),
           children: group.key === 'team' ? (
-            <div className="pms-project-info-role-grid">
+            <div className="pms-project-info-team-grid">
               {visibleFields.map(field => {
-                const value = formatProjectInfoValue(getProjectInfoValue(project, field.key))
+                const members = normalizeTeamMembers(getProjectInfoValue(project, field.key))
                 return (
-                  <div key={field.key} className="pms-project-info-role-card">
-                    <Avatar size={30} className="pms-project-info-role-avatar">{value === '-' ? '?' : value.slice(0, 1)}</Avatar>
-                    <div>
-                      <div className={value === '-' ? 'pms-project-info-empty' : 'pms-project-info-role-name'}>{value}</div>
-                      <div className="pms-project-info-role-label">{field.label}</div>
+                  <article key={field.key} className="pms-project-info-team-role">
+                    <div className="pms-project-info-team-role-name">{field.label}</div>
+                    <div className="pms-project-info-team-members">
+                      {members.length ? members.map(name => (
+                        <span key={name} className="pms-project-info-team-member">
+                          <Avatar size={28} className="pms-project-info-role-avatar">{name.slice(0, 1)}</Avatar>
+                          <span>{name}</span>
+                        </span>
+                      )) : <span className="pms-project-info-empty">未配置</span>}
                     </div>
-                  </div>
+                  </article>
                 )
               })}
             </div>
