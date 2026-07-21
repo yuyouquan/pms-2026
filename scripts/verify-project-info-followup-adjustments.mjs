@@ -146,5 +146,7 @@ assert.match(
 const smoke = read('screenshots/smoke-tos-type-plan.mjs')
 assert.match(smoke, /assertNoVisibleText\(page, '里程碑计划（横排视图）', '#section-plan'\)/, 'the smoke path must reject the removed subtitle')
 assert.match(smoke, /assertNoVisibleText\(page, '首发项目', '\.pms-project-info-modal'\)/, 'the smoke path must reject the removed tOS modal field')
+assert.match(smoke, /async function assertTransferInformationCollapse[\s\S]*'折叠'[\s\S]*!document\.querySelector\('#section-transfer-content'\)[\s\S]*'展开'/, 'the browser smoke must collapse and restore real transfer table content')
+assert.match(smoke, /'tOS版本项目'[\s\S]*selectVisibleModalOption\(page, '项目名', 'tOS19\.0'\)[\s\S]*assertNoVisibleText\(page, '基础信息', '\.pms-project-info-modal'\)[\s\S]*assertVisibleText\(page, '团队信息', '\.pms-project-info-modal'\)/, 'the browser smoke must select tOS in create mode and verify its modal groups')
 
 console.log('Project information follow-up adjustment verification passed.')

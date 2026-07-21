@@ -2,6 +2,7 @@ import puppeteer from 'puppeteer'
 
 const BASE = process.env.PMS_BASE_URL || 'http://localhost:3004'
 const TOS_TYPE_EDITOR_MODAL = '.pms-tos-type-editor-modal'
+const WRITE_SMOKE_SCREENSHOTS = process.env.PMS_WRITE_SMOKE_SCREENSHOTS !== '0'
 
 const fail = message => { throw new Error(message) }
 
@@ -178,6 +179,27 @@ async function assertProjectInformationOrder(page) {
   }
   if (!(order.core < order.plan && order.plan < order.sections)) {
     fail(`Unexpected project-information order: ${JSON.stringify(order)}`)
+  }
+}
+
+async function assertTransferInformationCollapse(page) {
+  await assertVisibleText(page, '转维信息', '#section-transfer')
+  const initialTableText = await page.$eval('#section-transfer-content table tbody tr', row => (
+    (row.textContent || '').replace(/\s+/g, ' ').trim()
+  ))
+  if (!initialTableText) fail('Transfer table must contain data before collapsing')
+
+  await clickVisibleText(page, '#section-transfer button', '折叠')
+  await page.waitForFunction(() => !document.querySelector('#section-transfer-content'), { timeout: 3000 })
+  await assertNoVisibleText(page, initialTableText, '#section-transfer')
+
+  await clickVisibleText(page, '#section-transfer button', '展开')
+  await page.waitForSelector('#section-transfer-content table tbody tr', { visible: true, timeout: 3000 })
+  const restoredTableText = await page.$eval('#section-transfer-content table tbody tr', row => (
+    (row.textContent || '').replace(/\s+/g, ' ').trim()
+  ))
+  if (restoredTableText !== initialTableText) {
+    fail(`Transfer table did not recover after expanding: ${JSON.stringify({ initialTableText, restoredTableText })}`)
   }
 }
 
@@ -647,10 +669,13 @@ try {
   await assertNoVisibleText(page, '配置信息', '#section-plan')
   await assertNoVisibleText(page, '里程碑计划（横排视图）', '#section-plan')
   await assertNoElement(page, '#section-config')
+  await assertTransferInformationCollapse(page)
   await new Promise(resolve => setTimeout(resolve, 3500))
   const planSection = await page.$('#section-plan')
   if (!planSection) fail('Whole-machine plan section must exist for the PRD screenshot')
-  await planSection.screenshot({ path: 'screenshots/smoke-project-plan-information.png' })
+  if (WRITE_SMOKE_SCREENSHOTS) {
+    await planSection.screenshot({ path: 'screenshots/smoke-project-plan-information.png' })
+  }
   await expandInformationGroup(page, 'basic')
   await expandInformationGroup(page, 'extended')
   await assertFixedFiveColumnInformationGrid(page, 'basic')
@@ -662,7 +687,9 @@ try {
   }, { timeout: 3000 })
   const informationSection = await page.$('#section-basic')
   if (!informationSection) fail('Whole-machine information section must exist for the PRD screenshot')
-  await informationSection.screenshot({ path: 'screenshots/smoke-project-info-five-columns.png' })
+  if (WRITE_SMOKE_SCREENSHOTS) {
+    await informationSection.screenshot({ path: 'screenshots/smoke-project-info-five-columns.png' })
+  }
 
   await clickVisibleText(page, 'button', '返回工作台')
   await waitForVisibleText(page, '新增项目', 'button')
@@ -674,6 +701,21 @@ try {
     await assertVisibleText(page, type, '.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
   }
   await assertNoVisibleText(page, '整机产品项目', '.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+  await clickVisibleText(
+    page,
+    '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option-content',
+    'tOS版本项目',
+  )
+  await waitForVisibleText(page, '团队信息', '.pms-project-info-modal')
+  await selectVisibleModalOption(page, '项目名', 'tOS19.0')
+  await waitForVisibleText(page, 'tOS版本项目', '.pms-project-info-modal')
+  await assertNoVisibleText(page, '基础信息', '.pms-project-info-modal')
+  await assertNoVisibleText(page, '首发项目', '.pms-project-info-modal')
+  await assertVisibleText(page, '团队信息', '.pms-project-info-modal')
+  await clickVisibleText(page, '.pms-project-info-modal button', '取消')
+  await page.waitForFunction(() => !Array.from(document.querySelectorAll('.pms-project-info-modal')).some(modal => (
+    modal.getBoundingClientRect().width > 0 && modal.getBoundingClientRect().height > 0
+  )), { timeout: 3000 })
 
   if (runtimeErrors.length > 0) fail(`Runtime errors: ${runtimeErrors.join(' | ')}`)
   if (consoleErrors.length > 0) fail(`Console errors: ${consoleErrors.join(' | ')}`)
