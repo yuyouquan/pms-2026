@@ -11,6 +11,7 @@ const view = read('src/components/project-info/TargetProjectInformationView.tsx'
 const sections = read('src/components/project-info/ProjectInfoSections.tsx')
 const modal = read('src/components/project-info/ProjectInfoModal.tsx')
 const market = read('src/components/project-info/MarketEditorModal.tsx')
+const dimensionMatrix = read('src/components/project-info/DimensionMatrixEditor.tsx')
 const plan = read('src/components/project-info/ProjectPlanInfoGrid.tsx')
 const planSchema = read('src/constants/projectPlanInfoSchema.ts')
 const styles = read('src/styles/globals.css')
@@ -200,8 +201,16 @@ assert.match(styles, /\.pms-project-info-form-grid\s*\{[\s\S]*grid-template-colu
 assert.match(styles, /\.pms-project-info-display-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)[\s\S]*background:\s*#fff/, 'basic and extended information must use five equal white columns')
 assert.match(styles, /\.pms-project-info-display-item\s*\{[\s\S]*background:\s*#fff/, 'each information field cell must retain a white background')
 
-assert.match(market, /pms-market-matrix/, 'market editing must use the matrix surface')
-assert.match(market, /dataIndex:\s*row\.id/, 'each market row must become a table column')
+assert.match(dimensionMatrix, /pms-dimension-matrix/, 'shared dimension editing must use the common matrix surface')
+assert.match(dimensionMatrix, /dataIndex:\s*dimension\.id/, 'each dimension must become a table column in the shared editor')
+assert.match(market, /<DimensionMatrixEditor/, 'market editing must wrap the shared dimension matrix')
+for (const hiddenField of ['isCarrierCustomized', 'branchInfo', 'jenkinsUrl', 'buildAddress']) {
+  assert.doesNotMatch(
+    market,
+    new RegExp(`(?:key|case)\\s*:\\s*['\"]${hiddenField}['\"]|case\\s+['\"]${hiddenField}['\"]`),
+    `market editing must not expose the hidden ${hiddenField} field`,
+  )
+}
 
 assert.match(plan, /visibleFieldKeys/, 'plan information must accept field visibility preferences')
 assert.match(plan, /getBalancedRows\(metrics, 5, 2\)/, 'plan information must fit visible fields into at most two rows')

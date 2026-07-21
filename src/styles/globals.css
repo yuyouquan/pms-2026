@@ -2154,7 +2154,7 @@ body {
   color: #c0c7d1;
 }
 
-.pms-market-matrix-toolbar {
+.pms-dimension-matrix-toolbar {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -2162,41 +2162,41 @@ body {
   margin-bottom: 14px;
 }
 
-.pms-market-matrix-toolbar .ant-select {
+.pms-dimension-matrix-toolbar .ant-select {
   width: 180px;
 }
 
-.pms-market-matrix .ant-table {
+.pms-dimension-matrix .ant-table {
   border-radius: 10px;
 }
 
-.pms-market-matrix .ant-table-cell {
+.pms-dimension-matrix .ant-table-cell {
   padding: 10px 12px !important;
   vertical-align: middle;
 }
 
-.pms-market-matrix .ant-table-thead > tr > th {
+.pms-dimension-matrix .ant-table-thead > tr > th {
   text-align: center;
   background: #f6f8fc;
 }
 
-.pms-market-matrix .ant-table-tbody > tr > td:not(:first-child) {
+.pms-dimension-matrix .ant-table-tbody > tr > td:not(:first-child) {
   text-align: center;
 }
 
-.pms-market-matrix .ant-input,
-.pms-market-matrix .ant-picker,
-.pms-market-matrix .ant-select {
+.pms-dimension-matrix .ant-input,
+.pms-dimension-matrix .ant-picker,
+.pms-dimension-matrix .ant-select {
   width: 100%;
 }
 
-.pms-market-matrix-field-label {
+.pms-dimension-matrix-field-label {
   color: #475569;
   font-size: 12px;
   font-weight: 600;
 }
 
-.pms-market-matrix-market-header {
+.pms-dimension-matrix-header {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2204,16 +2204,16 @@ body {
   min-height: 28px;
 }
 
-.pms-market-matrix-market-header > span:first-child {
+.pms-dimension-matrix-header > span:first-child {
   color: #1e293b;
   font-weight: 700;
 }
 
-.pms-market-matrix-market-header .ant-tag {
+.pms-dimension-matrix-header .ant-tag {
   margin-inline-end: 0;
 }
 
-.pms-market-matrix-date > span {
+.pms-dimension-matrix-date > span {
   display: block;
   margin-top: 4px;
   color: #dc2626;
@@ -2221,13 +2221,13 @@ body {
 }
 
 @media (max-width: 640px) {
-  .pms-market-matrix-toolbar {
+  .pms-dimension-matrix-toolbar {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .pms-market-matrix-toolbar .ant-select,
-  .pms-market-matrix-toolbar .ant-btn {
+  .pms-dimension-matrix-toolbar .ant-select,
+  .pms-dimension-matrix-toolbar .ant-btn {
     width: 100%;
   }
 }

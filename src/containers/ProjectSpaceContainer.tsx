@@ -1256,6 +1256,8 @@ export default function ProjectSpaceContainer() {
       market: 'OP',
       isMain: true,
       followsMain: false,
+      buildOption: '',
+      buildMarket: '',
       branchInfo: '',
       jenkinsUrl: '',
       buildAddress: '',
@@ -1284,6 +1286,17 @@ export default function ProjectSpaceContainer() {
       && !canChangeMainMarket(getVersionsForMarket(previousMainMarket))
     ) {
       message.error('现有主市场存在修订版本，不可变更主市场')
+      return
+    }
+
+    const missingBuildOptionRow = normalizedRows.find(row => !row.buildOption?.trim())
+    if (missingBuildOptionRow) {
+      message.error(`请填写 ${missingBuildOptionRow.market} 市场的编译选项`)
+      return
+    }
+    const missingBuildMarketRow = normalizedRows.find(row => !row.buildMarket?.trim())
+    if (missingBuildMarketRow) {
+      message.error(`请填写 ${missingBuildMarketRow.market} 市场的编译市场`)
       return
     }
 

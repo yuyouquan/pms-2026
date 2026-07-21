@@ -6,18 +6,15 @@ import {
   Button,
   Checkbox,
   DatePicker,
-  Input,
-  Modal,
   Radio,
   Select,
   Space,
-  Table,
   Tag,
   Tooltip,
 } from 'antd'
-import type { ColumnsType } from 'antd/es/table'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
+import DimensionMatrixEditor from '@/components/project-info/DimensionMatrixEditor'
 import {
   MARKET_OPTIONS,
   getMainMarket,
@@ -25,6 +22,11 @@ import {
   type MarketConfigRow,
   type MarketYesNoValue,
 } from '@/lib/marketRules'
+import {
+  mockSpugBuildOptionsProvider,
+  type SpugBuildOptions,
+  type SpugBuildOptionsProvider,
+} from '@/lib/spugBuildOptions'
 
 const YES_NO_OPTIONS: Array<{ label: MarketYesNoValue; value: MarketYesNoValue }> = [
   { label: '是', value: '是' },
@@ -34,15 +36,13 @@ const YES_NO_OPTIONS: Array<{ label: MarketYesNoValue; value: MarketYesNoValue }
 const MARKET_MATRIX_FIELDS = [
   { key: 'isMain', label: '主市场' },
   { key: 'followsMain', label: '跟随主市场' },
+  { key: 'buildOption', label: '编译选项' },
+  { key: 'buildMarket', label: '编译市场' },
   { key: 'googleLaunchDate', label: 'Google Launch Date' },
-  { key: 'isCarrierCustomized', label: '是否运营商定制' },
+  { key: 'isMadaControlled', label: '是否 MADA 管控' },
   { key: 'isSimLocked', label: '是否锁卡' },
   { key: 'isCancelPaused', label: '是否取消暂停' },
   { key: 'cancelPauseDate', label: '取消暂停时间' },
-  { key: 'isMadaControlled', label: '是否 MADA 管控' },
-  { key: 'branchInfo', label: '分支信息' },
-  { key: 'jenkinsUrl', label: 'Jenkins 构建' },
-  { key: 'buildAddress', label: '版本地址' },
 ] as const
 
 type MarketMatrixFieldKey = typeof MARKET_MATRIX_FIELDS[number]['key']
@@ -56,6 +56,7 @@ export interface MarketEditorModalProps {
   onSave: () => void
   onCancel: () => void
   saving?: boolean
+  spugProvider?: SpugBuildOptionsProvider
 }
 
 const createMarketRow = (market: string, isMain: boolean): MarketConfigRow => ({
@@ -63,15 +64,13 @@ const createMarketRow = (market: string, isMain: boolean): MarketConfigRow => ({
   market,
   isMain,
   followsMain: false,
+  buildOption: '',
+  buildMarket: '',
   googleLaunchDate: '',
-  isCarrierCustomized: undefined,
+  isMadaControlled: undefined,
   isSimLocked: undefined,
   isCancelPaused: undefined,
   cancelPauseDate: '',
-  isMadaControlled: undefined,
-  branchInfo: '',
-  jenkinsUrl: '',
-  buildAddress: '',
 })
 
 const normalizeDateString = (value: string | string[] | null) => (
@@ -86,11 +85,41 @@ export default function MarketEditorModal({
   onSave,
   onCancel,
   saving = false,
+  spugProvider = mockSpugBuildOptionsProvider,
 }: MarketEditorModalProps) {
   const [selectedMarket, setSelectedMarket] = useState<string>()
+  const [spugOptions, setSpugOptions] = useState<SpugBuildOptions>({
+    buildOptions: [],
+    buildMarkets: [],
+  })
+  const [spugLoading, setSpugLoading] = useState(false)
+  const [spugError, setSpugError] = useState<string>()
+  const [spugRetryKey, setSpugRetryKey] = useState(0)
   const availableMarkets = useMemo(() => MARKET_OPTIONS.filter(market => (
     !rows.some(row => row.market === market)
   )), [rows])
+
+  useEffect(() => {
+    if (!open) return
+    let active = true
+    setSpugLoading(true)
+    setSpugError(undefined)
+
+    spugProvider.load()
+      .then(options => {
+        if (active) setSpugOptions(options)
+      })
+      .catch(() => {
+        if (active) setSpugError('SPUG 枚举获取失败，请重新获取')
+      })
+      .finally(() => {
+        if (active) setSpugLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [open, spugProvider, spugRetryKey])
 
   useEffect(() => {
     if (!availableMarkets.length) {
@@ -178,6 +207,28 @@ export default function MarketEditorModal({
             跟随主市场计划
           </Checkbox>
         )
+      case 'buildOption':
+        return (
+          <Select
+            value={row.buildOption || undefined}
+            placeholder="请选择编译选项"
+            options={spugOptions.buildOptions.map(value => ({ label: value, value }))}
+            loading={spugLoading}
+            disabled={spugLoading || Boolean(spugError)}
+            onChange={value => updateRow(row.id, { buildOption: value })}
+          />
+        )
+      case 'buildMarket':
+        return (
+          <Select
+            value={row.buildMarket || undefined}
+            placeholder="请选择编译市场"
+            options={spugOptions.buildMarkets.map(value => ({ label: value, value }))}
+            loading={spugLoading}
+            disabled={spugLoading || Boolean(spugError)}
+            onChange={value => updateRow(row.id, { buildMarket: value })}
+          />
+        )
       case 'googleLaunchDate':
         return (
           <DatePicker
@@ -186,8 +237,8 @@ export default function MarketEditorModal({
             onChange={(_, value) => updateRow(row.id, { googleLaunchDate: normalizeDateString(value) })}
           />
         )
-      case 'isCarrierCustomized':
-        return renderYesNo(row.isCarrierCustomized, value => updateRow(row.id, { isCarrierCustomized: value }))
+      case 'isMadaControlled':
+        return renderYesNo(row.isMadaControlled, value => updateRow(row.id, { isMadaControlled: value }))
       case 'isSimLocked':
         return renderYesNo(row.isSimLocked, value => updateRow(row.id, { isSimLocked: value }))
       case 'isCancelPaused':
@@ -195,7 +246,7 @@ export default function MarketEditorModal({
       case 'cancelPauseDate': {
         const enabled = row.isCancelPaused === '是'
         return (
-          <div className="pms-market-matrix-date">
+          <div className="pms-dimension-matrix-date">
             <DatePicker
               disabled={!enabled}
               status={enabled && !row.cancelPauseDate ? 'error' : undefined}
@@ -207,49 +258,68 @@ export default function MarketEditorModal({
           </div>
         )
       }
-      case 'isMadaControlled':
-        return renderYesNo(row.isMadaControlled, value => updateRow(row.id, { isMadaControlled: value }))
-      case 'branchInfo':
-        return (
-          <Input
-            value={row.branchInfo || ''}
-            placeholder="请输入分支信息"
-            onChange={event => updateRow(row.id, { branchInfo: event.target.value })}
-          />
-        )
-      case 'jenkinsUrl':
-        return (
-          <Input
-            value={row.jenkinsUrl || ''}
-            placeholder="请输入 Jenkins 构建地址"
-            onChange={event => updateRow(row.id, { jenkinsUrl: event.target.value })}
-          />
-        )
-      case 'buildAddress':
-        return (
-          <Input
-            value={row.buildAddress || ''}
-            placeholder="请输入版本地址"
-            onChange={event => updateRow(row.id, { buildAddress: event.target.value })}
-          />
-        )
       default:
         return null
     }
   }
 
-  const columns: ColumnsType<MarketMatrixField> = [
-    {
-      title: '字段',
-      dataIndex: 'label',
-      key: 'label',
-      fixed: 'left',
-      width: 168,
-      render: label => <strong className="pms-market-matrix-field-label">{label}</strong>,
-    },
-    ...rows.map(row => ({
-      title: (
-        <div className="pms-market-matrix-market-header">
+  const notice = (
+    <>
+      {!canChangeMainMarket && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          title="现有主市场存在修订版本，不可变更主市场"
+          description="可以继续新增、删除非主市场或调整跟随主市场；如需变更主市场，请先发布或取消当前修订版本。"
+        />
+      )}
+      {spugError && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={spugError}
+          action={<Button size="small" onClick={() => setSpugRetryKey(key => key + 1)}>重新获取</Button>}
+        />
+      )}
+    </>
+  )
+
+  const toolbar = (
+    <>
+      <Select
+        value={selectedMarket}
+        placeholder="请选择新增市场"
+        options={availableMarkets.map(market => ({ label: market, value: market }))}
+        onChange={setSelectedMarket}
+        disabled={!availableMarkets.length}
+      />
+      <Button
+        type="primary"
+        icon={<PlusOutlined />}
+        disabled={!selectedMarket}
+        onClick={addMarket}
+      >
+        {availableMarkets.length ? '增加市场' : '已添加全部市场'}
+      </Button>
+    </>
+  )
+
+  return (
+    <DimensionMatrixEditor<MarketMatrixField, MarketConfigRow>
+      open={open}
+      title={<Space><EditOutlined style={{ color: '#6366f1' }} /><span>市场编辑</span></Space>}
+      fields={MARKET_MATRIX_FIELDS}
+      dimensions={rows}
+      notice={notice}
+      toolbar={toolbar}
+      saving={saving}
+      saveDisabled={rows.length === 0}
+      onSave={onSave}
+      onCancel={onCancel}
+      renderDimensionHeader={row => (
+        <div className="pms-dimension-matrix-header">
           <span>{row.market}</span>
           {row.isMain && <Tag color="blue">主市场</Tag>}
           <Tooltip title={row.isMain ? '请先指定其他主市场后再删除' : '删除市场'}>
@@ -266,66 +336,8 @@ export default function MarketEditorModal({
             </span>
           </Tooltip>
         </div>
-      ),
-      dataIndex: row.id,
-      key: row.id,
-      width: 228,
-      render: (_value: unknown, field: MarketMatrixField) => renderMarketControl(field.key, row),
-    })),
-  ]
-
-  return (
-    <Modal
-      className="pms-modal pms-market-matrix-modal"
-      title={<Space><EditOutlined style={{ color: '#6366f1' }} /><span>市场编辑</span></Space>}
-      open={open}
-      onCancel={onCancel}
-      width={1200}
-      footer={[
-        <Button key="cancel" onClick={onCancel} disabled={saving}>取消</Button>,
-        <Button key="save" type="primary" onClick={onSave} loading={saving} disabled={rows.length === 0}>
-          保存
-        </Button>,
-      ]}
-    >
-      {!canChangeMainMarket && (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-          title="现有主市场存在修订版本，不可变更主市场"
-          description="可以继续新增、删除非主市场或调整跟随主市场；如需变更主市场，请先发布或取消当前修订版本。"
-        />
       )}
-
-      <div className="pms-market-matrix-toolbar">
-        <Select
-          value={selectedMarket}
-          placeholder="请选择新增市场"
-          options={availableMarkets.map(market => ({ label: market, value: market }))}
-          onChange={setSelectedMarket}
-          disabled={!availableMarkets.length}
-        />
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          disabled={!selectedMarket}
-          onClick={addMarket}
-        >
-          {availableMarkets.length ? '增加市场' : '已添加全部市场'}
-        </Button>
-      </div>
-
-      <Table<MarketMatrixField>
-        className="pms-market-matrix"
-        rowKey="key"
-        bordered
-        size="small"
-        pagination={false}
-        dataSource={[...MARKET_MATRIX_FIELDS]}
-        columns={columns}
-        scroll={{ x: 168 + rows.length * 228 }}
-      />
-    </Modal>
+      renderControl={(field, row) => renderMarketControl(field.key, row)}
+    />
   )
 }

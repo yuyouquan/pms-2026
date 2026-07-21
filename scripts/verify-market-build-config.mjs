@@ -22,6 +22,7 @@ const evaluateTypeScriptModule = (filename) => {
 }
 
 const marketRulesPath = 'src/lib/marketRules.ts'
+const dimensionMatrixPath = 'src/components/project-info/DimensionMatrixEditor.tsx'
 const marketEditorPath = 'src/components/project-info/MarketEditorModal.tsx'
 const projectSpacePath = 'src/containers/ProjectSpaceContainer.tsx'
 const spugProviderPath = 'src/lib/spugBuildOptions.ts'
@@ -142,14 +143,28 @@ assert.deepEqual(
   'machine creation must accept array-shaped target-market values',
 )
 
+const dimensionMatrixSource = fs.readFileSync(dimensionMatrixPath, 'utf8')
 const marketEditorSource = fs.readFileSync(marketEditorPath, 'utf8')
-assert.match(marketEditorSource, /branchInfo:\s*''/, 'a newly added market must start with an empty branch')
-assert.match(marketEditorSource, /jenkinsUrl:\s*''/, 'a newly added market must start with an empty Jenkins URL')
-assert.match(marketEditorSource, /buildAddress:\s*''/, 'a newly added market must start with an empty build URL')
-assert.match(marketEditorSource, /key: 'branchInfo', label: '分支信息'/, 'the market matrix must include the branch row')
-assert.match(marketEditorSource, /case 'branchInfo':[\s\S]*value=\{row\.branchInfo \|\| ''\}/, 'the market editor must bind branch information to the current market column')
-assert.match(marketEditorSource, /case 'jenkinsUrl':[\s\S]*value=\{row\.jenkinsUrl \|\| ''\}/, 'the market editor must bind Jenkins URL to the current market column')
-assert.match(marketEditorSource, /case 'buildAddress':[\s\S]*value=\{row\.buildAddress \|\| ''\}/, 'the market editor must bind build URL to the current market column')
+assert.match(dimensionMatrixSource, /dataIndex:\s*dimension\.id/, 'the shared matrix must key each dimension column by its id')
+assert.match(dimensionMatrixSource, /pms-dimension-matrix/, 'the shared matrix must expose the common matrix class')
+assert.match(marketEditorSource, /import DimensionMatrixEditor[\s\S]*from '@\/components\/project-info\/DimensionMatrixEditor'/, 'the market editor must import the shared dimension matrix')
+assert.match(marketEditorSource, /<DimensionMatrixEditor/, 'the market editor must render the shared dimension matrix')
+assert.match(
+  marketEditorSource,
+  /key: 'isMain'[\s\S]*key: 'followsMain'[\s\S]*key: 'buildOption'[\s\S]*key: 'buildMarket'[\s\S]*key: 'googleLaunchDate'[\s\S]*key: 'isMadaControlled'[\s\S]*key: 'isSimLocked'[\s\S]*key: 'isCancelPaused'[\s\S]*key: 'cancelPauseDate'/,
+  'the market matrix must expose structural and business fields in the required order',
+)
+for (const hiddenField of ['isCarrierCustomized', 'branchInfo', 'jenkinsUrl', 'buildAddress']) {
+  assert.doesNotMatch(
+    marketEditorSource,
+    new RegExp(`(?:key|case)\\s*:\\s*['\"]${hiddenField}['\"]|case\\s+['\"]${hiddenField}['\"]`),
+    `the market editor must not expose the hidden ${hiddenField} field`,
+  )
+}
+assert.match(marketEditorSource, /mockSpugBuildOptionsProvider/, 'the market editor must use the default mock SPUG provider')
+assert.match(marketEditorSource, /spugLoading/, 'the market editor must track SPUG loading state')
+assert.match(marketEditorSource, /spugError/, 'the market editor must track SPUG failure state')
+assert.match(marketEditorSource, />重新获取</, 'the market editor must expose a visible SPUG retry action')
 
 const projectSpaceSource = fs.readFileSync(projectSpacePath, 'utf8')
 assert.match(projectSpaceSource, /const legacyMarketBuildConfig =/, 'the project space must define the historical project-level fallback')
@@ -168,6 +183,8 @@ assert.match(wholeMachinePlanSource, /title=\{sectionTitle\([^\n]*'计划信息'
 assert.doesNotMatch(wholeMachinePlanSource, /配置信息|构建信息|label="分支信息"|label="Jenkins构建"|label="版本地址"/, 'whole-machine plan view must not display build configuration')
 assert.match(projectSpaceSource, /<MarketEditorModal[\s\S]*rows=\{marketDraftRows\}/, 'market configuration editing must remain available')
 assert.match(projectSpaceSource, /setMarketConfigForProject\(selectedProject\.id, normalizedRows\)/, 'saving the market editor must persist the full normalized rows')
+assert.match(projectSpaceSource, /message\.error\(`请填写 \$\{missingBuildOptionRow\.market\} 市场的编译选项`\)/, 'market save must identify the market missing its build option')
+assert.match(projectSpaceSource, /message\.error\(`请填写 \$\{missingBuildMarketRow\.market\} 市场的编译市场`\)/, 'market save must identify the market missing its build market')
 assert.match(projectSpaceSource, /showMarketControls\s*=\s*isMachineProjectType/, 'machine plan controls must remain visible before the first market exists')
 assert.match(projectSpaceSource, /尚未配置市场[\s\S]*onClick=\{openMarketEditor\}/, 'machine basic information must expose the first-market editor from an empty state')
 assert.match(projectSpaceSource, /selectedMarketIsConfigured\s*=\s*isConfiguredMarket\(marketConfigRows, selectedMarketTab\)/, 'market plan scope must derive membership from the current project configuration')
