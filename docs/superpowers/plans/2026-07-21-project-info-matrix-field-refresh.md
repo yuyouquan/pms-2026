@@ -4,7 +4,7 @@
 
 **Goal:** Deliver the confirmed project-information layout, team multi-person editing, market matrix editor, configurable plan fields, four-column project Modal, and Feishu field-rule refresh, then publish dev→master and update the PRD.
 
-**Architecture:** Keep `projectInfoSchema.ts` as the field source of truth, add overall-required metadata, and normalize team roles at the value boundary so old single-person mocks remain readable. Reuse the existing local preference repository for plan visibility by adding a `plan` scope, keep market data row-based while rendering it as a transposed matrix, and centralize balanced row partitioning in a pure helper shared by information and plan grids.
+**Architecture:** Keep `projectInfoSchema.ts` as the project-form field source of truth, add overall-required metadata, and normalize team roles at the value boundary so old single-person mocks remain readable. Reuse the existing local preference repository for plan visibility through a separate preference-scope type, keep market data row-based while rendering it as a transposed matrix, and centralize balanced row partitioning in a pure helper shared by information and plan grids.
 
 **Tech Stack:** Next.js 14, React 18, TypeScript, Ant Design 6, Zustand 4, CSS, Node verification scripts, lark-cli.
 
@@ -329,7 +329,6 @@ git commit -m "feat: edit project markets in a matrix"
 
 **Files:**
 - Create: `src/constants/projectPlanInfoSchema.ts`
-- Modify: `src/constants/projectInfoSchema.ts`
 - Modify: `src/lib/projectFieldPreferences.ts`
 - Modify: `src/hooks/useProjectFieldVisibility.ts`
 - Modify: `src/components/project-info/FieldVisibilityPicker.tsx`
@@ -359,7 +358,7 @@ export const PROJECT_PLAN_INFO_FIELDS = [
 
 - [ ] **Step 2: Reuse preference storage with a plan scope**
 
-Extend `ProjectInfoGroupKey` to `'basic' | 'extended' | 'team' | 'plan'`. Generalize the preference utilities and picker to accept `{ key, label, defaultVisible, hideable, conditionalHint? }` so plan definitions can use the same Drawer without pretending to be project-info form fields.
+Export `ProjectFieldPreferenceGroupKey = ProjectInfoGroupKey | 'plan'` from `projectFieldPreferences.ts` and use it only for persistence scopes. Keep `ProjectInfoGroupKey` unchanged as `'basic' | 'extended' | 'team'`, so Modal grouping and `GROUP_COLORS` remain exhaustive. Generalize the preference utilities and picker to accept `{ key, label, defaultVisible, hideable, conditionalHint? }` so plan definitions can use the same Drawer without pretending to be project-info form fields.
 
 Call `useProjectFieldVisibility` with `groupKey: 'plan'`, `userId: currentLoginUser`, and `projectId: selectedProject.id`. This deliberately omits market from the storage key so all markets in one project share the preference.
 
@@ -388,7 +387,7 @@ Expected: all exit 0.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/constants/projectPlanInfoSchema.ts src/constants/projectInfoSchema.ts src/lib/projectFieldPreferences.ts src/hooks/useProjectFieldVisibility.ts src/components/project-info/FieldVisibilityPicker.tsx src/components/project-info/ProjectPlanInfoGrid.tsx src/containers/ProjectSpaceContainer.tsx src/styles/globals.css scripts/verify-project-field-preferences.mjs scripts/verify-project-info-matrix-refresh.mjs
+git add src/constants/projectPlanInfoSchema.ts src/lib/projectFieldPreferences.ts src/hooks/useProjectFieldVisibility.ts src/components/project-info/FieldVisibilityPicker.tsx src/components/project-info/ProjectPlanInfoGrid.tsx src/containers/ProjectSpaceContainer.tsx src/styles/globals.css scripts/verify-project-field-preferences.mjs scripts/verify-project-info-matrix-refresh.mjs
 git commit -m "feat: configure project plan information fields"
 ```
 

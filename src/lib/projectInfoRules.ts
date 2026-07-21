@@ -170,15 +170,17 @@ export const validateProjectInfoValues = (
   },
 ): ProjectInfoValidationError[] => {
   const effectiveKeys = new Set(getEffectiveProjectInfoFields(type, values).map(field => field.key))
-  const errors = options?.validateRequiredOnCreate === false
-    ? []
-    : getProjectInfoFields(type)
-      .filter(field => field.requiredOnCreate && effectiveKeys.has(field.key) && isEmptyValue(values[field.key]))
-      .map(field => ({
-        fieldKey: field.key,
-        groupKey: field.group,
-        message: `请填写${field.label}`,
-      }))
+  const errors = getProjectInfoFields(type)
+    .filter(field => (
+      (options?.validateRequiredOnCreate ? field.requiredOnCreate : field.required)
+      && effectiveKeys.has(field.key)
+      && isEmptyValue(values[field.key])
+    ))
+    .map(field => ({
+      fieldKey: field.key,
+      groupKey: field.group,
+      message: `请填写${field.label}`,
+    }))
 
   if (type === PROJECT_TYPE_TOS_VERSION && options?.tosAggregateMissingSources?.length) {
     errors.push({

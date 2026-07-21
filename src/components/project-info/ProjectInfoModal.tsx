@@ -772,6 +772,7 @@ export default function ProjectInfoModal({
                     {groupFields.map(field => {
                       const active = !field.visibleWhen || field.visibleWhen(watchedValues)
                       if (!active) return null
+                      const isRequired = mode === 'create' ? field.requiredOnCreate : field.required
                       return (
                         <Form.Item
                           key={field.key}
@@ -779,7 +780,7 @@ export default function ProjectInfoModal({
                           name={field.key}
                           extra={field.conditionalHint}
                           className={field.inputType === 'jira' ? 'pms-project-info-form-span' : undefined}
-                          rules={mode === 'create' && field.requiredOnCreate
+                          rules={isRequired
                             ? [{ required: true, message: `请填写${field.label}` }]
                             : undefined}
                         >
