@@ -6,6 +6,14 @@ export type TosTypeConfigRow = {
   id: string
   type: TosPlanType
   isMain: boolean
+  followsMain: boolean
+}
+
+export type TosTypeSummaryGroup = {
+  key: string
+  label: string
+  sourceType: TosPlanType
+  memberTypes: TosPlanType[]
 }
 
 export type TosTypePlanEntry = {
@@ -54,7 +62,8 @@ export const isValidTosType = (value: string): value is TosPlanType => (
 )
 
 export const normalizeTosTypeRows = (
-  rows: Array<{ id: string; type: string; isMain: boolean }>,
+  rows: Array<{ id: string; type: string; isMain: boolean; followsMain?: boolean }>,
+  previousMainType?: string,
 ): TosTypeConfigRow[] => {
   const seen = new Set<string>()
   const filtered: TosTypeConfigRow[] = []
@@ -62,12 +71,17 @@ export const normalizeTosTypeRows = (
   rows.forEach(row => {
     if (!isValidTosType(row.type) || seen.has(row.type)) return
     seen.add(row.type)
-    filtered.push({ id: row.id, type: row.type, isMain: row.isMain })
+    filtered.push({ id: row.id, type: row.type, isMain: row.isMain, followsMain: !!row.followsMain })
   })
 
   if (filtered.length === 0) return []
   const mainType = filtered.find(row => row.isMain)?.type || filtered[0].type
-  return filtered.map(row => ({ ...row, isMain: row.type === mainType }))
+  const mainChanged = !!previousMainType && previousMainType !== mainType
+  return filtered.map(row => ({
+    ...row,
+    isMain: row.type === mainType,
+    followsMain: !mainChanged && row.type !== mainType && row.followsMain,
+  }))
 }
 
 export const buildTosTypeRows = (
@@ -85,12 +99,60 @@ export const buildTosTypeRows = (
     id: `tos-type-${type}`,
     type,
     isMain: type === mainType,
+    followsMain: false,
   })))
 }
 
 export const getMainTosType = (rows: TosTypeConfigRow[]) => (
   normalizeTosTypeRows(rows).find(row => row.isMain)?.type || ''
 )
+
+export const isFollowTosType = (rows: TosTypeConfigRow[], type: string) => (
+  normalizeTosTypeRows(rows).some(row => row.type === type && !row.isMain && row.followsMain)
+)
+
+export const getTosTypePlanSourceType = (
+  rows: TosTypeConfigRow[],
+  type: string,
+  planLevel: string,
+) => {
+  const normalizedRows = normalizeTosTypeRows(rows)
+  const mainType = getMainTosType(normalizedRows)
+  const row = normalizedRows.find(item => item.type === type)
+  if (!row) return mainType
+  return planLevel === 'level1' && isFollowTosType(normalizedRows, type) ? mainType : row.type
+}
+
+export const isTosTypeLevel1ReadOnly = (
+  rows: TosTypeConfigRow[],
+  type: string,
+  planLevel: string,
+) => planLevel === 'level1' && isFollowTosType(rows, type)
+
+export const getTosTypeSummaryGroups = (rows: TosTypeConfigRow[]): TosTypeSummaryGroup[] => {
+  const normalizedRows = normalizeTosTypeRows(rows)
+  const main = normalizedRows.find(row => row.isMain)
+  if (!main) return []
+
+  const followers = normalizedRows.filter(row => !row.isMain && row.followsMain)
+  const independentRows = normalizedRows.filter(row => !row.isMain && !row.followsMain)
+  const mainMemberTypes = [main.type, ...followers.map(row => row.type)]
+  const mainGroup: TosTypeSummaryGroup = {
+    key: main.type,
+    label: mainMemberTypes.join('&'),
+    sourceType: main.type,
+    memberTypes: mainMemberTypes,
+  }
+  return [
+    mainGroup,
+    ...independentRows.map(row => ({
+      key: row.type,
+      label: row.type,
+      sourceType: row.type,
+      memberTypes: [row.type],
+    })),
+  ]
+}
 
 export const createTosTypePlanEntry = (seed: TosTypePlanEntry): TosTypePlanEntry => clone(seed)
 
