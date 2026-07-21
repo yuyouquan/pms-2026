@@ -1057,15 +1057,18 @@ export default function ProjectSpaceContainer() {
 
   const updateTosTypeDraftRow = (rowId: string, patch: Partial<TosTypeConfigRow>) => {
     setTosTypeDraftRows(previous => {
+      const previousMainType = getMainTosType(previous)
       const nextRows = previous.map(row => ({ ...row }))
       const targetRow = nextRows.find(row => row.id === rowId)
       if (!targetRow) return previous
 
       if (patch.type !== undefined) targetRow.type = patch.type
+      if (patch.followsMain !== undefined && !targetRow.isMain) targetRow.followsMain = patch.followsMain
       if (patch.isMain) {
         nextRows.forEach(row => { row.isMain = row.id === rowId })
+        targetRow.followsMain = false
       }
-      return normalizeTosTypeRows(nextRows)
+      return normalizeTosTypeRows(nextRows, previousMainType)
     })
   }
 
@@ -1076,14 +1079,19 @@ export default function ProjectSpaceContainer() {
       message.warning('可选类型已全部添加')
       return
     }
-    setTosTypeDraftRows(previous => normalizeTosTypeRows([
-      ...previous,
-      {
-        id: `tos-type-${Date.now()}`,
-        type: nextType,
-        isMain: previous.length === 0,
-      },
-    ]))
+    setTosTypeDraftRows(previous => {
+      const previousMainType = getMainTosType(previous)
+      const nextRows = [
+        ...previous,
+        {
+          id: `tos-type-${Date.now()}`,
+          type: nextType,
+          isMain: previous.length === 0,
+          followsMain: false,
+        },
+      ]
+      return normalizeTosTypeRows(nextRows, previousMainType)
+    })
   }
 
   const removeTosTypeDraftRow = (rowId: string) => {
@@ -1091,7 +1099,11 @@ export default function ProjectSpaceContainer() {
       message.warning('至少保留一个类型')
       return
     }
-    setTosTypeDraftRows(previous => normalizeTosTypeRows(previous.filter(row => row.id !== rowId)))
+    setTosTypeDraftRows(previous => {
+      const previousMainType = getMainTosType(previous)
+      const filtered = previous.filter(row => row.id !== rowId)
+      return normalizeTosTypeRows(filtered, previousMainType)
+    })
   }
 
   const saveTosTypeConfig = () => {
@@ -3652,6 +3664,21 @@ export default function ProjectSpaceContainer() {
                   checked={record.isMain}
                   onChange={() => updateTosTypeDraftRow(record.id, { isMain: true })}
                 />
+              ),
+            },
+            {
+              title: '跟随主类型',
+              dataIndex: 'followsMain',
+              width: 180,
+              align: 'center',
+              render: (_: boolean, record: TosTypeConfigRow) => (
+                <Checkbox
+                  checked={!record.isMain && record.followsMain}
+                  disabled={record.isMain}
+                  onChange={(event) => updateTosTypeDraftRow(record.id, { followsMain: event.target.checked })}
+                >
+                  跟随主类型计划
+                </Checkbox>
               ),
             },
             {
