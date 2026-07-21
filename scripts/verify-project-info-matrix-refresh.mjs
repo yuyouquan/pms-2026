@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import vm from 'node:vm'
+import ts from 'typescript'
 
 const read = path => readFileSync(path, 'utf8')
 
@@ -11,6 +13,30 @@ const modal = read('src/components/project-info/ProjectInfoModal.tsx')
 const market = read('src/components/project-info/MarketEditorModal.tsx')
 const plan = read('src/components/project-info/ProjectPlanInfoGrid.tsx')
 const styles = read('src/styles/globals.css')
+
+const evaluateTypeScriptModule = filename => {
+  const output = ts.transpileModule(read(filename), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+    },
+  }).outputText
+  const module = { exports: {} }
+  vm.runInNewContext(output, { module, exports: module.exports }, { filename })
+  return module.exports
+}
+
+const { getBalancedRows } = evaluateTypeScriptModule('src/lib/balancedRows.ts')
+assert.equal(
+  JSON.stringify(getBalancedRows([1, 2, 3, 4, 5, 6, 7], 6)),
+  JSON.stringify([[1, 2, 3, 4], [5, 6, 7]]),
+  'seven fields must balance as 4 + 3',
+)
+assert.equal(
+  JSON.stringify(getBalancedRows([1, 2, 3, 4, 5, 6, 7, 8], 6)),
+  JSON.stringify([[1, 2, 3, 4], [5, 6, 7, 8]]),
+  'eight fields must balance as 4 + 4',
+)
 
 assert.match(schema, /required:\s*boolean/, 'field schema must expose overall required metadata')
 assert.match(schema, /'tOS15\.0\.1'[\s\S]*'tOS17\.2'/, 'first-sale tOS options must match the reference document')

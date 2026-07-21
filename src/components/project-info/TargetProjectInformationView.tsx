@@ -1,9 +1,8 @@
 'use client'
 
-import { Button, Card, Tag, Tooltip } from 'antd'
+import { Button, Card, Tooltip } from 'antd'
 import { EditOutlined, ProjectOutlined, SendOutlined } from '@ant-design/icons'
 import ProjectInfoSections from '@/components/project-info/ProjectInfoSections'
-import { PROJECT_STATUS_CONFIG } from '@/data/projects'
 import { formatProjectInfoValue, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
 
 interface TargetProjectInformationViewProps {
@@ -31,7 +30,6 @@ export default function TargetProjectInformationView({
 }: TargetProjectInformationViewProps) {
   const isWholeMachine = project.type === '整机产品项目'
   const status = String(project.status || '-')
-  const statusConfig = PROJECT_STATUS_CONFIG[status] || { tagColor: 'default' }
   const health = HEALTH_CONFIG[String(project.healthStatus || 'normal')] || HEALTH_CONFIG.normal
   const showCancelPauseDate = ['暂停', '已暂停', '已取消'].includes(status)
   const coreFields = isWholeMachine ? [
@@ -64,8 +62,6 @@ export default function TargetProjectInformationView({
         )}
         extra={(
           <div className="pms-project-info-core-actions">
-            <Tag color={statusConfig.tagColor}>{status}</Tag>
-            <Tag style={{ background: health.color, color: '#fff', border: 0 }}>{health.label}</Tag>
             {isWholeMachine && onApplyTransfer && <Button type="primary" icon={<SendOutlined />} onClick={onApplyTransfer}>申请转维</Button>}
             {canEdit
               ? <Button icon={<EditOutlined />} onClick={onEdit}>编辑</Button>
