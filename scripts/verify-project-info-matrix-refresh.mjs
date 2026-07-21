@@ -12,6 +12,7 @@ const sections = read('src/components/project-info/ProjectInfoSections.tsx')
 const modal = read('src/components/project-info/ProjectInfoModal.tsx')
 const market = read('src/components/project-info/MarketEditorModal.tsx')
 const plan = read('src/components/project-info/ProjectPlanInfoGrid.tsx')
+const planSchema = read('src/constants/projectPlanInfoSchema.ts')
 const styles = read('src/styles/globals.css')
 
 const evaluateTypeScriptModule = filename => {
@@ -58,5 +59,7 @@ assert.match(market, /dataIndex:\s*row\.id/, 'each market row must become a tabl
 
 assert.match(plan, /visibleFieldKeys/, 'plan information must accept field visibility preferences')
 assert.match(plan, /getBalancedRows\(metrics, 5, 2\)/, 'plan information must fit visible fields into at most two rows')
+assert.match(planSchema, /planStartDate[\s\S]*isMadaControlled[\s\S]*isCarrierCustomized[\s\S]*cancelPauseDate/, 'plan fields must keep the reference document order')
+assert.match(planSchema, /key: 'isCarrierCustomized'[^\n]*hideable: false/, 'carrier customization must remain fixed visible')
 
 console.log('Project info matrix refresh verification passed.')

@@ -1,5 +1,4 @@
 import type {
-  ProjectInfoFieldDefinition,
   ProjectInfoGroupKey,
 } from '@/constants/projectInfoSchema'
 import {
@@ -7,10 +6,21 @@ import {
   PROJECT_INFO_SCHEMA_VERSION,
 } from '@/constants/projectInfoSchema'
 
+export type ProjectFieldPreferenceGroupKey = ProjectInfoGroupKey | 'plan'
+
+export interface ProjectVisibilityFieldDefinition {
+  key: string
+  label: string
+  defaultVisible: boolean
+  hideable: boolean
+  conditionalHint?: string
+  introducedInSchemaVersion?: number
+}
+
 export interface ProjectFieldPreferenceScope {
   userId: string
   projectId: string
-  groupKey: ProjectInfoGroupKey
+  groupKey: ProjectFieldPreferenceGroupKey
 }
 
 export interface ProjectFieldVisibilityPreference extends ProjectFieldPreferenceScope {
@@ -62,12 +72,12 @@ export class LocalStorageProjectFieldPreferenceRepository implements ProjectFiel
 
 export const defaultProjectFieldPreferenceRepository = new LocalStorageProjectFieldPreferenceRepository()
 
-export const getDefaultVisibleFieldKeys = (fields: ProjectInfoFieldDefinition[]) => (
+export const getDefaultVisibleFieldKeys = (fields: ProjectVisibilityFieldDefinition[]) => (
   fields.filter(field => field.defaultVisible || !field.hideable).map(field => field.key)
 )
 
 export const reconcileVisibleFieldKeys = (
-  fields: ProjectInfoFieldDefinition[],
+  fields: ProjectVisibilityFieldDefinition[],
   storedPreference?: Pick<ProjectFieldVisibilityPreference, 'visibleFieldKeys' | 'schemaVersion'> | null,
 ) => {
   const validKeys = new Set(fields.map(field => field.key))

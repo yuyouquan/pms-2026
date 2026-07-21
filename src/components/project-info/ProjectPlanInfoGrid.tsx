@@ -11,8 +11,10 @@ import {
   PauseCircleOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons'
+import { getBalancedRows } from '@/lib/balancedRows'
 
 export interface ProjectPlanInfoGridProps {
+  visibleFieldKeys: string[]
   planStartDate?: string
   planEndDate?: string
   developCycle?: string | number
@@ -47,6 +49,7 @@ const displayBoolean = (value: string | undefined) => (
 )
 
 export default function ProjectPlanInfoGrid({
+  visibleFieldKeys,
   planStartDate,
   planEndDate,
   developCycle,
@@ -87,6 +90,12 @@ export default function ProjectPlanInfoGrid({
       tabular: true,
     },
     {
+      key: 'isMadaControlled',
+      label: '是否MADA管控',
+      value: displayBoolean(isMadaControlled),
+      icon: <SafetyCertificateOutlined />,
+    },
+    {
       key: 'isCarrierCustomized',
       label: '是否运营商定制',
       value: displayBoolean(isCarrierCustomized),
@@ -111,23 +120,26 @@ export default function ProjectPlanInfoGrid({
       icon: <CalendarOutlined />,
       tabular: true,
     },
-    {
-      key: 'isMadaControlled',
-      label: '是否MADA管控',
-      value: displayBoolean(isMadaControlled),
-      icon: <SafetyCertificateOutlined />,
-    },
-  ]
+  ].filter(metric => visibleFieldKeys.includes(metric.key))
+  const metricRows = getBalancedRows(metrics, 5, 2)
 
   return (
-    <dl className="pms-project-plan-info-grid" aria-label="计划信息">
-      {metrics.map(metric => (
-        <div key={metric.key} className="pms-project-plan-info-metric">
-          <dt className="pms-project-plan-info-label">{metric.label}</dt>
-          <dd className={`pms-project-plan-info-value${metric.tabular ? ' pms-project-plan-info-value--tabular' : ''}`}>
-            <span className="pms-project-plan-info-icon" aria-hidden="true">{metric.icon}</span>
-            <span className="pms-project-plan-info-value-text">{metric.value}</span>
-          </dd>
+    <dl className="pms-project-plan-info-rows" aria-label="计划信息" data-visible-count={metrics.length}>
+      {metricRows.map((row, rowIndex) => (
+        <div
+          key={`plan-info-${rowIndex}`}
+          className="pms-project-plan-info-grid"
+          style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}
+        >
+          {row.map(metric => (
+            <div key={metric.key} className="pms-project-plan-info-metric">
+              <dt className="pms-project-plan-info-label">{metric.label}</dt>
+              <dd className={`pms-project-plan-info-value${metric.tabular ? ' pms-project-plan-info-value--tabular' : ''}`}>
+                <span className="pms-project-plan-info-icon" aria-hidden="true">{metric.icon}</span>
+                <span className="pms-project-plan-info-value-text">{metric.value}</span>
+              </dd>
+            </div>
+          ))}
         </div>
       ))}
     </dl>

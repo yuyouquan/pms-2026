@@ -1425,15 +1425,33 @@ body {
 }
 
 /* ─── Project information schema-driven surfaces ─── */
+.pms-project-plan-info-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin: 0 0 16px;
+}
+
+.pms-project-plan-info-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .pms-project-plan-info-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
   grid-auto-rows: 1fr;
   gap: 12px;
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  margin: 0 0 16px;
+  margin: 0;
 }
 
 .pms-project-plan-info-metric {
@@ -2316,18 +2334,6 @@ body {
   gap: 16px;
 }
 
-@media (max-width: 1280px) {
-  .pms-project-plan-info-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 900px) {
-  .pms-project-plan-info-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 1100px) {
   .pms-project-info-team-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2355,12 +2361,6 @@ body {
 
   .pms-project-info-team-grid {
     padding: 12px;
-  }
-}
-
-@media (max-width: 560px) {
-  .pms-project-plan-info-grid {
-    grid-template-columns: 1fr;
   }
 }
 

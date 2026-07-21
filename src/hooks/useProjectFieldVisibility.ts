@@ -3,22 +3,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   PROJECT_INFO_SCHEMA_VERSION,
-  type ProjectInfoFieldDefinition,
-  type ProjectInfoGroupKey,
 } from '@/constants/projectInfoSchema'
 import {
   createCurrentFieldVisibilityPreference,
   defaultProjectFieldPreferenceRepository,
   getDefaultVisibleFieldKeys,
   reconcileVisibleFieldKeys,
+  type ProjectFieldPreferenceGroupKey,
   type ProjectFieldPreferenceRepository,
+  type ProjectVisibilityFieldDefinition,
 } from '@/lib/projectFieldPreferences'
 
 interface UseProjectFieldVisibilityOptions {
   userId: string
   projectId: string
-  groupKey: ProjectInfoGroupKey
-  fields: ProjectInfoFieldDefinition[]
+  groupKey: ProjectFieldPreferenceGroupKey
+  fields: ProjectVisibilityFieldDefinition[]
   repository?: ProjectFieldPreferenceRepository
   onSaveError?: () => void
 }
