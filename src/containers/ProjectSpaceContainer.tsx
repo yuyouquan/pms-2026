@@ -2838,15 +2838,13 @@ export default function ProjectSpaceContainer() {
                     </div>
                     <ProjectPlanInfoGrid
                       visibleFieldKeys={visiblePlanInfoFieldKeys}
-                      planStartDate={p.planStartDate}
-                      planEndDate={p.planEndDate}
-                      developCycle={p.developCycle}
+                      buildOption={row.buildOption}
+                      buildMarket={row.buildMarket}
                       googleLaunchDate={row.googleLaunchDate}
-                      isCarrierCustomized={row.isCarrierCustomized}
+                      isMadaControlled={row.isMadaControlled}
                       isSimLocked={row.isSimLocked}
                       isCancelPaused={row.isCancelPaused}
                       cancelPauseDate={row.isCancelPaused === '是' ? row.cancelPauseDate : undefined}
-                      isMadaControlled={row.isMadaControlled}
                     />
                     <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12 }}>里程碑计划（横排视图）</div>
                     {renderHorizontalTable()}

@@ -4,8 +4,7 @@ import type { ReactNode } from 'react'
 import { Tag } from 'antd'
 import {
   CalendarOutlined,
-  ClockCircleOutlined,
-  CustomerServiceOutlined,
+  CodeOutlined,
   GlobalOutlined,
   LockOutlined,
   PauseCircleOutlined,
@@ -15,15 +14,13 @@ import { getBalancedRows } from '@/lib/balancedRows'
 
 export interface ProjectPlanInfoGridProps {
   visibleFieldKeys: string[]
-  planStartDate?: string
-  planEndDate?: string
-  developCycle?: string | number
+  buildOption?: string
+  buildMarket?: string
   googleLaunchDate?: string
-  isCarrierCustomized?: string
+  isMadaControlled?: string
   isSimLocked?: string
   isCancelPaused?: string
   cancelPauseDate?: string
-  isMadaControlled?: string
 }
 
 interface PlanMetric {
@@ -50,50 +47,39 @@ const displayBoolean = (value: string | undefined) => (
 
 export default function ProjectPlanInfoGrid({
   visibleFieldKeys,
-  planStartDate,
-  planEndDate,
-  developCycle,
+  buildOption,
+  buildMarket,
   googleLaunchDate,
-  isCarrierCustomized,
+  isMadaControlled,
   isSimLocked,
   isCancelPaused,
   cancelPauseDate,
-  isMadaControlled,
 }: ProjectPlanInfoGridProps) {
   const metrics: PlanMetric[] = [
     {
-      key: 'planStartDate',
-      label: '计划开始时间',
-      value: displayValue(planStartDate),
-      icon: <CalendarOutlined />,
-      tabular: true,
+      key: 'buildOption',
+      label: '编译选项',
+      value: displayValue(buildOption),
+      icon: <CodeOutlined />,
     },
     {
-      key: 'planEndDate',
-      label: '计划结束时间',
-      value: displayValue(planEndDate),
-      icon: <CalendarOutlined />,
-      tabular: true,
-    },
-    {
-      key: 'developCycle',
-      label: '开发周期（工作日）',
-      value: hasValue(developCycle) ? <>{developCycle}<span className="pms-project-plan-info-suffix">天</span></> : '-',
-      icon: <ClockCircleOutlined />,
-      tabular: true,
+      key: 'buildMarket',
+      label: '编译市场',
+      value: displayValue(buildMarket),
+      icon: <GlobalOutlined />,
     },
     {
       key: 'googleLaunchDate',
       label: 'Google Launch Date',
       value: displayValue(googleLaunchDate),
-      icon: <GlobalOutlined />,
+      icon: <CalendarOutlined />,
       tabular: true,
     },
     {
-      key: 'isCarrierCustomized',
-      label: '是否运营商定制',
-      value: displayBoolean(isCarrierCustomized),
-      icon: <CustomerServiceOutlined />,
+      key: 'isMadaControlled',
+      label: '是否MADA管控',
+      value: displayBoolean(isMadaControlled),
+      icon: <SafetyCertificateOutlined />,
     },
     {
       key: 'isSimLocked',
@@ -113,12 +99,6 @@ export default function ProjectPlanInfoGrid({
       value: displayValue(isCancelPaused === '是' ? cancelPauseDate : undefined),
       icon: <CalendarOutlined />,
       tabular: true,
-    },
-    {
-      key: 'isMadaControlled',
-      label: '是否MADA管控',
-      value: displayBoolean(isMadaControlled),
-      icon: <SafetyCertificateOutlined />,
     },
   ].filter(metric => visibleFieldKeys.includes(metric.key))
   const metricRows = getBalancedRows(metrics, 5, 2)

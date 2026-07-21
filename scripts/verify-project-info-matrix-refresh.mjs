@@ -207,12 +207,21 @@ assert.match(plan, /visibleFieldKeys/, 'plan information must accept field visib
 assert.match(plan, /getBalancedRows\(metrics, 5, 2\)/, 'plan information must fit visible fields into at most two rows')
 const planSchemaModule = evaluateTypeScriptModule('src/constants/projectPlanInfoSchema.ts')
 assert.deepEqual(Array.from(planSchemaModule.PROJECT_PLAN_INFO_FIELDS, field => field.key), [
-  'planStartDate', 'planEndDate', 'developCycle', 'googleLaunchDate',
-  'isCarrierCustomized', 'isSimLocked', 'isCancelPaused', 'cancelPauseDate',
-  'isMadaControlled',
-], 'plan fields must keep revision 259 order')
-assert.match(plan, /key:\s*'planStartDate'[\s\S]*key:\s*'isMadaControlled'/, 'plan display metrics must match schema order')
-assert.match(planSchema, /key: 'isCarrierCustomized'[^\n]*hideable: false/, 'carrier customization must remain fixed visible')
+  'buildOption', 'buildMarket', 'googleLaunchDate', 'isMadaControlled',
+  'isSimLocked', 'isCancelPaused', 'cancelPauseDate',
+], 'plan fields must keep the refreshed field order')
+assert.deepEqual(
+  Array.from(planSchemaModule.PROJECT_PLAN_INFO_FIELDS, field => field.defaultVisible ? field.key : undefined).filter(Boolean),
+  ['googleLaunchDate', 'isMadaControlled', 'isSimLocked', 'isCancelPaused', 'cancelPauseDate'],
+  'only the five fixed plan fields must be visible by default',
+)
+assert.deepEqual(
+  Array.from(planSchemaModule.PROJECT_PLAN_INFO_FIELDS, field => field.hideable ? field.key : undefined).filter(Boolean),
+  ['buildOption', 'buildMarket'],
+  'only build fields must be hideable',
+)
+assert.doesNotMatch(plan, /planStartDate|planEndDate|developCycle|isCarrierCustomized/, 'plan grid must not retain removed metrics')
+assert.match(plan, /key:\s*'buildOption'[\s\S]*key:\s*'buildMarket'[\s\S]*key:\s*'googleLaunchDate'[\s\S]*key:\s*'isMadaControlled'[\s\S]*key:\s*'isSimLocked'[\s\S]*key:\s*'isCancelPaused'[\s\S]*key:\s*'cancelPauseDate'/, 'plan display metrics must match schema order')
 
 assert.match(projectSpace, /afterCore=\{isWholeMachine \? renderWholeMachinePlanInfo\(\) : renderProjectPlanInfo\(\)\}/, 'target project plan information must remain directly below the core card')
 assert.match(projectSpace, /const anchorSections = \[[\s\S]*id: 'section-plan', label: '计划信息'/, 'the target project anchor must use the unified plan-information label')
