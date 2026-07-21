@@ -11,6 +11,7 @@ const view = read('src/components/project-info/TargetProjectInformationView.tsx'
 const sections = read('src/components/project-info/ProjectInfoSections.tsx')
 const modal = read('src/components/project-info/ProjectInfoModal.tsx')
 const market = read('src/components/project-info/MarketEditorModal.tsx')
+const dimensionMatrix = read('src/components/project-info/DimensionMatrixEditor.tsx')
 const plan = read('src/components/project-info/ProjectPlanInfoGrid.tsx')
 const planSchema = read('src/constants/projectPlanInfoSchema.ts')
 const styles = read('src/styles/globals.css')
@@ -200,19 +201,50 @@ assert.match(styles, /\.pms-project-info-form-grid\s*\{[\s\S]*grid-template-colu
 assert.match(styles, /\.pms-project-info-display-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)[\s\S]*background:\s*#fff/, 'basic and extended information must use five equal white columns')
 assert.match(styles, /\.pms-project-info-display-item\s*\{[\s\S]*background:\s*#fff/, 'each information field cell must retain a white background')
 
-assert.match(market, /pms-market-matrix/, 'market editing must use the matrix surface')
-assert.match(market, /dataIndex:\s*row\.id/, 'each market row must become a table column')
+assert.match(dimensionMatrix, /pms-dimension-matrix/, 'shared dimension editing must use the common matrix surface')
+assert.match(dimensionMatrix, /dataIndex:\s*dimension\.id/, 'each dimension must become a table column in the shared editor')
+assert.match(market, /<DimensionMatrixEditor/, 'market editing must wrap the shared dimension matrix')
+for (const hiddenField of ['isCarrierCustomized', 'branchInfo', 'jenkinsUrl', 'buildAddress']) {
+  assert.doesNotMatch(
+    market,
+    new RegExp(`(?:key|case)\\s*:\\s*['\"]${hiddenField}['\"]|case\\s+['\"]${hiddenField}['\"]`),
+    `market editing must not expose the hidden ${hiddenField} field`,
+  )
+}
 
 assert.match(plan, /visibleFieldKeys/, 'plan information must accept field visibility preferences')
 assert.match(plan, /getBalancedRows\(metrics, 5, 2\)/, 'plan information must fit visible fields into at most two rows')
 const planSchemaModule = evaluateTypeScriptModule('src/constants/projectPlanInfoSchema.ts')
 assert.deepEqual(Array.from(planSchemaModule.PROJECT_PLAN_INFO_FIELDS, field => field.key), [
-  'planStartDate', 'planEndDate', 'developCycle', 'googleLaunchDate',
-  'isCarrierCustomized', 'isSimLocked', 'isCancelPaused', 'cancelPauseDate',
-  'isMadaControlled',
-], 'plan fields must keep revision 259 order')
-assert.match(plan, /key:\s*'planStartDate'[\s\S]*key:\s*'isMadaControlled'/, 'plan display metrics must match schema order')
-assert.match(planSchema, /key: 'isCarrierCustomized'[^\n]*hideable: false/, 'carrier customization must remain fixed visible')
+  'buildOption', 'buildMarket', 'googleLaunchDate', 'isMadaControlled',
+  'isSimLocked', 'isCancelPaused', 'cancelPauseDate',
+], 'plan fields must keep the refreshed field order')
+assert.deepEqual(
+  Array.from(planSchemaModule.PROJECT_PLAN_INFO_FIELDS, field => field.defaultVisible ? field.key : undefined).filter(Boolean),
+  ['googleLaunchDate', 'isMadaControlled', 'isSimLocked', 'isCancelPaused', 'cancelPauseDate'],
+  'only the five fixed plan fields must be visible by default',
+)
+assert.deepEqual(
+  Array.from(planSchemaModule.PROJECT_PLAN_INFO_FIELDS, field => field.hideable ? field.key : undefined).filter(Boolean),
+  ['buildOption', 'buildMarket'],
+  'only build fields must be hideable',
+)
+assert.doesNotMatch(plan, /planStartDate|planEndDate|developCycle|isCarrierCustomized/, 'plan grid must not retain removed metrics')
+assert.match(plan, /key:\s*'buildOption'[\s\S]*key:\s*'buildMarket'[\s\S]*key:\s*'googleLaunchDate'[\s\S]*key:\s*'isMadaControlled'[\s\S]*key:\s*'isSimLocked'[\s\S]*key:\s*'isCancelPaused'[\s\S]*key:\s*'cancelPauseDate'/, 'plan display metrics must match schema order')
+assert.match(plan, /import type \{ MarketYesNoValue \} from '@\/lib\/marketRules'/, 'plan grid must use the market yes-no value type')
+assert.match(plan, /isMadaControlled\?: MarketYesNoValue \| undefined[\s\S]*isSimLocked\?: MarketYesNoValue \| undefined[\s\S]*isCancelPaused\?: MarketYesNoValue \| undefined/, 'plan grid boolean props must use the market yes-no value type')
+assert.match(plan, /const displayBoolean = \(value: MarketYesNoValue \| undefined\)/, 'plan grid boolean display helper must use the market yes-no value type')
+
+const wholeMachinePlanInfoStart = projectSpace.indexOf('const renderWholeMachinePlanInfo = () => {')
+const wholeMachinePlanInfoEnd = projectSpace.indexOf('\n    const anchorSections', wholeMachinePlanInfoStart)
+assert.notEqual(wholeMachinePlanInfoStart, -1, 'whole-machine plan information renderer must exist')
+assert.notEqual(wholeMachinePlanInfoEnd, -1, 'whole-machine plan information renderer must have a bounded source section')
+const wholeMachinePlanInfo = projectSpace.slice(wholeMachinePlanInfoStart, wholeMachinePlanInfoEnd)
+assert.match(
+  wholeMachinePlanInfo,
+  /<ProjectPlanInfoGrid\s+visibleFieldKeys=\{visiblePlanInfoFieldKeys\}\s+buildOption=\{row\.buildOption\}\s+buildMarket=\{row\.buildMarket\}\s+googleLaunchDate=\{row\.googleLaunchDate\}\s+isMadaControlled=\{row\.isMadaControlled\}\s+isSimLocked=\{row\.isSimLocked\}\s+isCancelPaused=\{row\.isCancelPaused\}\s+cancelPauseDate=\{row\.isCancelPaused === '是' \? row\.cancelPauseDate : undefined\}\s+\/>/,
+  'whole-machine plan information must pass every grid field from the selected market row',
+)
 
 assert.match(projectSpace, /afterCore=\{isWholeMachine \? renderWholeMachinePlanInfo\(\) : renderProjectPlanInfo\(\)\}/, 'target project plan information must remain directly below the core card')
 assert.match(projectSpace, /const anchorSections = \[[\s\S]*id: 'section-plan', label: '计划信息'/, 'the target project anchor must use the unified plan-information label')

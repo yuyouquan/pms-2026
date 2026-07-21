@@ -109,7 +109,6 @@ import {
   type PlanVersionLike,
 } from '@/lib/marketRules'
 import {
-  TOS_TYPE_OPTIONS,
   buildTosTypeRows,
   createTosTypePlanEntry,
   ensureTosTypePlanDataForRows,
@@ -143,6 +142,7 @@ import VersionTrainPlan, { INITIAL_VERSION_TRAIN_DATA } from '@/components/plans
 import ProjectInfoModal, { type ProjectInfoSubmitPayload } from '@/components/project-info/ProjectInfoModal'
 import TargetProjectInformationView from '@/components/project-info/TargetProjectInformationView'
 import MarketEditorModal from '@/components/project-info/MarketEditorModal'
+import TosTypeEditorModal from '@/components/project-info/TosTypeEditorModal'
 import ProjectPlanInfoGrid from '@/components/project-info/ProjectPlanInfoGrid'
 import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
 import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
@@ -441,12 +441,23 @@ export default function ProjectSpaceContainer() {
   const [showTosTypeEditor, setShowTosTypeEditor] = useState(false)
   const [tosTypeDraftRows, setTosTypeDraftRows] = useState<TosTypeConfigRow[]>([])
   const [showProjectInfoEditor, setShowProjectInfoEditor] = useState(false)
+  const [transferInfoCollapsed, setTransferInfoCollapsed] = useState(false)
+
+  useEffect(() => {
+    setTransferInfoCollapsed(false)
+  }, [selectedProject?.id])
 
   // ═══════ Derived ═══════
   const isWholeMachineProject = isMachineProjectType(selectedProject?.type)
   const isTosVersionProject = selectedProject?.type === PROJECT_TYPE_TOS_VERSION
+  const legacyBuildFields = selectedProject as NonNullable<typeof selectedProject> & {
+    buildOption?: string
+    buildMarket?: string
+  }
   const legacyMarketBuildConfig = selectedProject
     ? {
+        buildOption: legacyBuildFields.buildOption,
+        buildMarket: legacyBuildFields.buildMarket,
         branchInfo: selectedProject.branchInfo,
         jenkinsUrl: selectedProject.jenkinsUrl,
         buildAddress: selectedProject.buildAddress,
@@ -1144,57 +1155,6 @@ export default function ProjectSpaceContainer() {
     setShowTosTypeEditor(true)
   }
 
-  const updateTosTypeDraftRow = (rowId: string, patch: Partial<TosTypeConfigRow>) => {
-    setTosTypeDraftRows(previous => {
-      const previousMainType = getMainTosType(previous)
-      const nextRows = previous.map(row => ({ ...row }))
-      const targetRow = nextRows.find(row => row.id === rowId)
-      if (!targetRow) return previous
-
-      if (patch.type !== undefined) targetRow.type = patch.type
-      if (patch.followsMain !== undefined && !targetRow.isMain) targetRow.followsMain = patch.followsMain
-      if (patch.isMain) {
-        nextRows.forEach(row => { row.isMain = row.id === rowId })
-        targetRow.followsMain = false
-      }
-      return normalizeTosTypeRows(nextRows, previousMainType)
-    })
-  }
-
-  const addTosTypeDraftRow = () => {
-    const selectedTypes = new Set(tosTypeDraftRows.map(row => row.type))
-    const nextType = TOS_TYPE_OPTIONS.find(type => !selectedTypes.has(type))
-    if (!nextType) {
-      message.warning('可选类型已全部添加')
-      return
-    }
-    setTosTypeDraftRows(previous => {
-      const previousMainType = getMainTosType(previous)
-      const nextRows = [
-        ...previous,
-        {
-          id: `tos-type-${Date.now()}`,
-          type: nextType,
-          isMain: previous.length === 0,
-          followsMain: false,
-        },
-      ]
-      return normalizeTosTypeRows(nextRows, previousMainType)
-    })
-  }
-
-  const removeTosTypeDraftRow = (rowId: string) => {
-    if (tosTypeDraftRows.length <= 1) {
-      message.warning('至少保留一个类型')
-      return
-    }
-    setTosTypeDraftRows(previous => {
-      const previousMainType = getMainTosType(previous)
-      const filtered = previous.filter(row => row.id !== rowId)
-      return normalizeTosTypeRows(filtered, previousMainType)
-    })
-  }
-
   const saveTosTypeConfig = () => {
     if (!canEditBasicInfo) {
       message.error('无基本信息编辑权限')
@@ -1250,6 +1210,8 @@ export default function ProjectSpaceContainer() {
       market: 'OP',
       isMain: true,
       followsMain: false,
+      buildOption: '',
+      buildMarket: '',
       branchInfo: '',
       jenkinsUrl: '',
       buildAddress: '',
@@ -1278,6 +1240,17 @@ export default function ProjectSpaceContainer() {
       && !canChangeMainMarket(getVersionsForMarket(previousMainMarket))
     ) {
       message.error('现有主市场存在修订版本，不可变更主市场')
+      return
+    }
+
+    const missingBuildOptionRow = normalizedRows.find(row => !row.buildOption?.trim())
+    if (missingBuildOptionRow) {
+      message.error(`请填写 ${missingBuildOptionRow.market} 市场的编译选项`)
+      return
+    }
+    const missingBuildMarketRow = normalizedRows.find(row => !row.buildMarket?.trim())
+    if (missingBuildMarketRow) {
+      message.error(`请填写 ${missingBuildMarketRow.market} 市场的编译市场`)
       return
     }
 
@@ -2832,17 +2805,14 @@ export default function ProjectSpaceContainer() {
                     </div>
                     <ProjectPlanInfoGrid
                       visibleFieldKeys={visiblePlanInfoFieldKeys}
-                      planStartDate={p.planStartDate}
-                      planEndDate={p.planEndDate}
-                      developCycle={p.developCycle}
+                      buildOption={row.buildOption}
+                      buildMarket={row.buildMarket}
                       googleLaunchDate={row.googleLaunchDate}
-                      isCarrierCustomized={row.isCarrierCustomized}
+                      isMadaControlled={row.isMadaControlled}
                       isSimLocked={row.isSimLocked}
                       isCancelPaused={row.isCancelPaused}
                       cancelPauseDate={row.isCancelPaused === '是' ? row.cancelPauseDate : undefined}
-                      isMadaControlled={row.isMadaControlled}
                     />
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12 }}>里程碑计划（横排视图）</div>
                     {renderHorizontalTable()}
                   </div>
                 ),
@@ -3030,8 +3000,26 @@ export default function ProjectSpaceContainer() {
         )}
         {/* Transfer info */}
         {isWholeMachine && currentProjectTransferApps.length > 0 && (
-          <Card id="section-transfer" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<DeploymentUnitOutlined style={{ color: '#6366f1' }} />, '转维信息', '#6366f1')}>
-            <Table dataSource={currentProjectTransferApps} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
+          <Card
+            id="section-transfer"
+            style={{ marginBottom: 20, borderRadius: 8 }}
+            styles={{ body: transferInfoCollapsed ? { display: 'none', padding: 0 } : undefined }}
+            title={sectionTitle(<DeploymentUnitOutlined style={{ color: '#6366f1' }} />, '转维信息', '#6366f1')}
+            extra={(
+              <Button
+                type="text"
+                size="small"
+                aria-expanded={!transferInfoCollapsed}
+                aria-controls="section-transfer-content"
+                icon={<DownOutlined style={{ transition: 'transform 0.2s', transform: transferInfoCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }} />}
+                onClick={() => setTransferInfoCollapsed(collapsed => !collapsed)}
+              >
+                {transferInfoCollapsed ? '展开' : '折叠'}
+              </Button>
+            )}
+          >
+            {!transferInfoCollapsed && <div id="section-transfer-content">
+              <Table dataSource={currentProjectTransferApps} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
               rowClassName={(r: any) => r.status === 'cancelled' ? 'tm-row-cancelled' : ''}
               columns={[
                 { title: '项目名称', dataIndex: 'projectName', width: 200, render: (_: unknown, r: TransferApplication) => (
@@ -3060,7 +3048,8 @@ export default function ProjectSpaceContainer() {
                   </Space>
                 ) },
               ]}
-            />
+              />
+            </div>}
           </Card>
         )}
         {/* Target-project plan information is rendered directly after the core card. */}
@@ -3148,7 +3137,9 @@ export default function ProjectSpaceContainer() {
             <Divider style={{ margin: '16px 0' }} />
           </>
         )}
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, textTransform: 'uppercase' as const, letterSpacing: 1 }}>里程碑计划（横排视图）</div>
+        {!isTosVersionProject && (
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, textTransform: 'uppercase' as const, letterSpacing: 1 }}>里程碑计划（横排视图）</div>
+        )}
         {renderHorizontalTable()}
       </>
     )
@@ -3801,97 +3792,14 @@ export default function ProjectSpaceContainer() {
         onSave={saveMarketConfig}
         onCancel={() => setShowMarketEditor(false)}
       />
-      {/* tOS type editor modal */}
-      <Modal
-        className="pms-modal"
-        title={<Space><EditOutlined style={{ color: '#6366f1' }} /><span>类型编辑</span></Space>}
+      <TosTypeEditorModal
         open={showTosTypeEditor}
+        rows={tosTypeDraftRows}
+        canEdit={canEditBasicInfo}
+        onChange={setTosTypeDraftRows}
+        onSave={saveTosTypeConfig}
         onCancel={() => setShowTosTypeEditor(false)}
-        width={780}
-        footer={[
-          <Button key="cancel" onClick={() => setShowTosTypeEditor(false)}>取消</Button>,
-          <Tooltip key="save-tooltip" title={canEditBasicInfo ? undefined : '无基本信息编辑权限'}>
-            <Button key="save" type="primary" disabled={!canEditBasicInfo} onClick={saveTosTypeConfig}>保存</Button>
-          </Tooltip>,
-        ]}
-      >
-        <Table
-          className="pms-table"
-          rowKey="id"
-          size="small"
-          pagination={false}
-          dataSource={tosTypeDraftRows}
-          columns={[
-            {
-              title: '类型',
-              dataIndex: 'type',
-              width: 300,
-              render: (value: TosPlanType, record: TosTypeConfigRow) => (
-                <Select
-                  value={value || undefined}
-                  placeholder="请选择类型"
-                  style={{ width: '100%' }}
-                  onChange={(type) => updateTosTypeDraftRow(record.id, { type })}
-                  options={TOS_TYPE_OPTIONS.map(type => ({
-                    label: type,
-                    value: type,
-                    disabled: tosTypeDraftRows.some(row => row.id !== record.id && row.type === type),
-                  }))}
-                />
-              ),
-            },
-            {
-              title: '是否主类型',
-              dataIndex: 'isMain',
-              width: 160,
-              align: 'center',
-              render: (_: boolean, record: TosTypeConfigRow) => (
-                <Radio
-                  checked={record.isMain}
-                  onChange={() => updateTosTypeDraftRow(record.id, { isMain: true })}
-                />
-              ),
-            },
-            {
-              title: '跟随主类型',
-              dataIndex: 'followsMain',
-              width: 180,
-              align: 'center',
-              render: (_: boolean, record: TosTypeConfigRow) => (
-                <Checkbox
-                  checked={!record.isMain && record.followsMain}
-                  disabled={record.isMain}
-                  onChange={(event) => updateTosTypeDraftRow(record.id, { followsMain: event.target.checked })}
-                >
-                  跟随主类型计划
-                </Checkbox>
-              ),
-            },
-            {
-              title: '操作',
-              width: 100,
-              align: 'center',
-              render: (_: unknown, record: TosTypeConfigRow) => (
-                <Button
-                  type="text"
-                  danger
-                  size="small"
-                  icon={<DeleteOutlined />}
-                  onClick={() => removeTosTypeDraftRow(record.id)}
-                />
-              ),
-            },
-          ]}
-        />
-        <Button
-          type="dashed"
-          icon={<PlusOutlined />}
-          style={{ width: '100%', marginTop: 12, borderRadius: 6 }}
-          onClick={addTosTypeDraftRow}
-        >
-          添加类型
-        </Button>
-      </Modal>
+      />
       {/* Create L2 plan modal */}
       <Modal className="pms-modal"
         title="创建二级计划"
