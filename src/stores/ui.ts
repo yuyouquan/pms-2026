@@ -55,7 +55,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   workspaceTab: 'projects',
   configTab: 'plan',
   sidebarCollapsed: false,
-  selectedProjectType: PROJECT_TYPES[0], // '整机产品项目'
+  selectedProjectType: PROJECT_TYPES[0], // '整机产品-手机'
   projectSpaceModule: 'basic',
 
   // Edit guard

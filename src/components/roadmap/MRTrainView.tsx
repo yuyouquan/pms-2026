@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { Table, Tag, Tabs, Button, Empty, Dropdown, Tooltip } from 'antd'
 import { EyeOutlined, DownloadOutlined } from '@ant-design/icons'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
+import { isMachineProjectType, isSoftwareProjectType } from '@/constants/projectTypes'
 
 // ======================== Mock Data ========================
 
@@ -226,14 +227,14 @@ export default function MRTrainView({ onViewProject }: MRTrainViewProps) {
 
   // 按当前维度排序（同组内软件项目排在整机产品项目前面）
   const sortedData = useMemo(() => {
-    const typeOrder: Record<string, number> = { 'tOS版本项目': 0, '独立软件产品项目': 0, '产品项目': 0, '整机产品项目': 1 }
+    const getTypeOrder = (type: string) => isSoftwareProjectType(type) ? 0 : isMachineProjectType(type) ? 1 : 2
     return [...MR_TRAIN_DATA].sort((a: any, b: any) => {
       // 先按主键排序（如 tosVersion）
       const primaryCmp = (a[dimConfig.primaryKey] || '').localeCompare(b[dimConfig.primaryKey] || '')
       if (primaryCmp !== 0) return primaryCmp
       // 同主键组内，软件项目排最前
-      const ta = typeOrder[a.projectType] ?? 2
-      const tb = typeOrder[b.projectType] ?? 2
+      const ta = getTypeOrder(a.projectType)
+      const tb = getTypeOrder(b.projectType)
       if (ta !== tb) return ta - tb
       // 再按次级键排序（如 chipPlatform）
       const secondaryCmp = (a[dimConfig.secondaryKey] || '').localeCompare(b[dimConfig.secondaryKey] || '')

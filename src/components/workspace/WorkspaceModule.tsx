@@ -16,6 +16,7 @@ import {
 import { CalendarOutlined } from '@ant-design/icons'
 import {
   PROJECT_TYPE_COLORS,
+  isMachineProjectType,
   type PersistedProjectTypeName,
 } from '@/constants/projectTypes'
 
@@ -91,7 +92,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
 }) => {
   const [hovered, setHovered] = useState(false)
   const statusConf = PROJECT_STATUS_CONFIG[project.status] || { color: '#8c8c8c', tagColor: 'default' }
-  const isWholeMachine = project.type === '整机产品项目'
+  const isWholeMachine = isMachineProjectType(project.type)
   const isCapability = project.type === '能力建设项目'
 
   // Project type color mapping
@@ -278,7 +279,7 @@ export const TodoList: React.FC<TodoListProps> = ({
                   if (todo.planLevel === 'level2' && todo.planTabKey) {
                     setActiveLevel2Plan(todo.planTabKey)
                   }
-                  if (proj.type === '整机产品项目' && todo.market) {
+                  if (isMachineProjectType(proj.type) && todo.market) {
                     setSelectedMarketTab(todo.market)
                   }
                   setTimeout(() => {

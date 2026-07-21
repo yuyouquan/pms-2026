@@ -10,6 +10,7 @@ import {
   inferTosVersionFromProjectName,
 } from '@/constants/projectBasicFields'
 import {
+  isMachineProjectType,
   isSoftwareProjectType,
   normalizeSoftwareProjectType,
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
@@ -300,12 +301,12 @@ const makeSummaryRows = (projects: any[]): SummaryRow[] => {
     const status = normalizeSummaryStatus(project.status)
     if (!status) continue
 
-    if (project.type === PROJECT_TYPE_MACHINE) {
+    if (isMachineProjectType(project.type)) {
       const milestones = buildMilestones(project, MACHINE_MILESTONE_NAMES, rowIndex)
       rows.push({
         key: `machine-${project.id}`,
         projectId: project.id,
-        projectType: project.type,
+        projectType: PROJECT_TYPE_MACHINE,
         ...buildProjectFields(project),
         productCategory: getMachineCategory(project),
         productSeries: getMachineSeries(project),

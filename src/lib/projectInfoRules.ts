@@ -2,7 +2,7 @@ import {
   getEffectiveProjectInfoFields,
   getProjectInfoFields,
 } from '@/constants/projectInfoSchema'
-import { PROJECT_TYPE_MACHINE, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
+import { isMachineProjectType, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import type { ProjectInfoValues } from '@/types/app'
 
@@ -112,7 +112,7 @@ export const deriveTosProjectAggregates = (
 ): TosAggregateResult => {
   const machineProjects = projects
     .map(asInfoProject)
-    .filter(project => project.type === PROJECT_TYPE_MACHINE)
+    .filter(project => isMachineProjectType(project.type))
   const selectedProjects = selectedProjectIds
     .map(projectId => machineProjects.find(project => project.id === projectId))
     .filter((project): project is ProjectInfoProject => !!project)

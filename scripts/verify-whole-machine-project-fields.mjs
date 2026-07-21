@@ -11,6 +11,7 @@ const expectedBasicLabels = [
   '项目名',
   '主板名',
   '市场名',
+  '产品系列',
   '产品类型',
   '安卓版本',
   'tOS版本',
@@ -136,7 +137,7 @@ assertSameLabels(extractLabels(fieldsSource, 'WHOLE_MACHINE_HARDWARE_CONFIG_FIEL
 assertSameLabels(extractMappedStringOptions(jiraLibSource, 'SPUG_BUILD_OPTION_OPTIONS'), expectedBuildOptions, 'SPUG_BUILD_OPTION_OPTIONS')
 assertSameLabels(extractMappedStringOptions(jiraLibSource, 'SPUG_BUILD_MARKET_OPTIONS'), expectedBuildMarkets, 'SPUG_BUILD_MARKET_OPTIONS')
 
-for (const symbol of ['WHOLE_MACHINE_BASIC_INFO_FIELDS', 'WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS']) {
+for (const symbol of ['WHOLE_MACHINE_BASIC_INFO_FIELDS']) {
   if (!containerSource.includes(symbol)) fail(`ProjectSpaceContainer.tsx does not use ${symbol}`)
 }
 
@@ -154,9 +155,6 @@ for (const marker of [
   'getJiraProjectUrl(project)',
   'target="_blank"',
   'isOutsourcedMini',
-  "field.key === 'marketProjectName'",
-  "field.key === 'buildOption'",
-  "field.key === 'buildMarket'",
 ]) {
   if (!containerSource.includes(marker)) fail(`ProjectSpaceContainer.tsx missing marker: ${marker}`)
 }

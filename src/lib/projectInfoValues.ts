@@ -1,4 +1,5 @@
 import { isExternalMachineDevelopment } from '@/constants/projectInfoSchema'
+import { isMachineProjectType } from '@/constants/projectTypes'
 import type { JiraProjectConfig } from '@/lib/jiraProject'
 import type {
   ProjectInfoValue,
@@ -167,7 +168,7 @@ export const sanitizeInactiveProjectInfoValues = (
   values: ProjectInfoValues,
 ): ProjectInfoValues => {
   const next = { ...values }
-  if (type === '整机产品项目' && !isExternalMachineDevelopment(next)) {
+  if (isMachineProjectType(type) && !isExternalMachineDevelopment(next)) {
     delete next.isTwoStage
     delete next.isOutsourcedMini
   }
@@ -195,7 +196,7 @@ export const mergeProjectInfoValues = <T extends ProjectInfoProject>(
     machineTeamRoles: buildMachineTeamRoles(values),
     tosTeamRoles: buildTosTeamRoles(values),
   }
-  if (project.type === '整机产品项目' && !isExternalMachineDevelopment(values)) {
+  if (isMachineProjectType(project.type) && !isExternalMachineDevelopment(values)) {
     delete nextFieldValues.isTwoStage
     delete nextFieldValues.isOutsourcedMini
   }
@@ -212,7 +213,7 @@ export const mergeProjectInfoValues = <T extends ProjectInfoProject>(
     const value = values[key]
     if (value !== undefined) (next as Record<string, unknown>)[key] = value
   })
-  if (project.type === '整机产品项目' && !isExternalMachineDevelopment(values)) {
+  if (isMachineProjectType(project.type) && !isExternalMachineDevelopment(values)) {
     delete (next as Record<string, unknown>).isTwoStage
     delete (next as Record<string, unknown>).isOutsourcedMini
   }

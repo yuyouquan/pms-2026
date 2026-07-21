@@ -4,9 +4,10 @@ import { useState } from 'react'
 import type { ProjectType, PlanTask, PlanVersion, Level2PlanType } from '@/types'
 import { generateTaskNumber } from '@/lib/taskNumber'
 import { compareVersionsForTable, CompareTableRow, FieldDiff } from '@/lib/versionCompare'
+import { PROJECT_TEMPLATE_TYPES, PROJECT_TYPE_MACHINE } from '@/constants/projectTypes'
 
 // 项目类型选项
-const PROJECT_TYPES: ProjectType[] = ['整机产品项目', 'tOS版本项目', '独立软件产品项目', '技术项目', '能力建设项目']
+const PROJECT_TYPES: readonly ProjectType[] = PROJECT_TEMPLATE_TYPES
 const PLAN_TEMPLATE_ROLE_OPTIONS = ['SPM']
 
 // 二级计划固定类型（需求开发计划和在研版本火车计划为系统内置，不在模板管理中配置）
@@ -18,7 +19,7 @@ const LEVEL2_PLAN_TYPES: Level2PlanType[] = [
 ]
 
 export default function Level2PlanTemplatePage() {
-  const [projectType, setProjectType] = useState<ProjectType>('整机产品项目')
+  const [projectType, setProjectType] = useState<ProjectType>(PROJECT_TYPE_MACHINE)
   const [selectedPlanType, setSelectedPlanType] = useState<Level2PlanType>('1+N MR版本火车计划')
   const [showAddCustom, setShowAddCustom] = useState(false)
   const [customTypeName, setCustomTypeName] = useState('')

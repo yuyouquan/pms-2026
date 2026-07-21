@@ -5,6 +5,7 @@ import { Button, Card, Tooltip } from 'antd'
 import { EditOutlined, ProjectOutlined, SendOutlined } from '@ant-design/icons'
 import ProjectInfoSections from '@/components/project-info/ProjectInfoSections'
 import type { ProjectInfoGroupKey } from '@/constants/projectInfoSchema'
+import { isMachineProjectType } from '@/constants/projectTypes'
 import { formatProjectInfoValue, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
 
 interface TargetProjectInformationViewProps {
@@ -34,7 +35,7 @@ export default function TargetProjectInformationView({
   afterCore,
   visibleGroupKeys,
 }: TargetProjectInformationViewProps) {
-  const isWholeMachine = project.type === '整机产品项目'
+  const isWholeMachine = isMachineProjectType(project.type)
   const status = String(project.status || '-')
   const health = HEALTH_CONFIG[String(project.healthStatus || 'normal')] || HEALTH_CONFIG.normal
   const showCancelPauseDate = ['暂停', '已暂停', '已取消'].includes(status)
