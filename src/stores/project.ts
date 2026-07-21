@@ -30,7 +30,10 @@ export const kanbanColumns = [
   { title: '发布阶段', key: 'released', color: '#722ed1' },
 ]
 
-type Project = typeof initialProjects[number] & { versionTypes?: string[] }
+type Project = typeof initialProjects[number] & {
+  versionTypes?: string[]
+  responsiblePersons?: string[]
+}
 
 const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) => {
   if (project.type === '整机产品项目' && project.markets?.length) {
@@ -102,6 +105,7 @@ export interface ProjectActions {
 
   setProjectMember: (projectId: string, members: string[]) => void
   addProject: (newProject: Project) => void
+  updateProject: (projectId: string, updater: (project: Project) => Project) => void
 }
 
 export const useProjectStore = create<ProjectState & ProjectActions>()((set) => ({
@@ -162,4 +166,14 @@ export const useProjectStore = create<ProjectState & ProjectActions>()((set) => 
   addProject: (newProject) => set((s) => ({
     projects: [...s.projects, newProject],
   })),
+  updateProject: (projectId, updater) => set((s) => {
+    let updatedSelected = s.selectedProject
+    const projects = s.projects.map(project => {
+      if (project.id !== projectId) return project
+      const updated = updater(project)
+      if (s.selectedProject?.id === projectId) updatedSelected = updated
+      return updated
+    })
+    return { projects, selectedProject: updatedSelected }
+  }),
 }))

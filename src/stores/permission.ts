@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { PROJECT_PERMISSION_ITEMS, FIXED_ROLES, getProjectPermissionKeys } from '@/constants/permissions'
 import { initialProjects } from '@/data/projects'
+import { getProjectResponsiblePersons } from '@/lib/projectResponsibility'
 
 // ─── Defaults shared by every project's initial role-permission slot ─
 
@@ -132,7 +133,12 @@ function buildInitialPerProject(): {
   const rolesByProject: Record<string, Role[]> = {}
   const rolePermissionsByProject: Record<string, Record<string, Record<string, boolean>>> = {}
   initialProjects.forEach(p => {
-    rolesByProject[p.id] = buildDefaultRoles()
+    const responsiblePersons = getProjectResponsiblePersons(p)
+    rolesByProject[p.id] = buildDefaultRoles().map(role => (
+      role.name === '系统管理员'
+        ? { ...role, members: responsiblePersons }
+        : role
+    ))
     rolePermissionsByProject[p.id] = buildDefaultRolePermissions()
   })
   return { rolesByProject, rolePermissionsByProject }

@@ -1,10 +1,18 @@
 export const MARKET_OPTIONS = ['OP', 'RU', 'TR', 'OPPJ', 'COCL', 'IN', 'EU']
 
+export type MarketYesNoValue = '是' | '否'
+
 export type MarketConfigRow = {
   id: string
   market: string
   isMain: boolean
   followsMain: boolean
+  googleLaunchDate?: string
+  isCarrierCustomized?: MarketYesNoValue
+  isSimLocked?: MarketYesNoValue
+  isCancelPaused?: MarketYesNoValue
+  cancelPauseDate?: string
+  isMadaControlled?: MarketYesNoValue
 }
 
 export type PlanVersionLike = {
@@ -190,6 +198,12 @@ export const buildMarketRowsFromMarkets = (
         market,
         isMain: index === 0,
         followsMain: false,
+        googleLaunchDate: '',
+        isCarrierCustomized: undefined,
+        isSimLocked: undefined,
+        isCancelPaused: undefined,
+        cancelPauseDate: '',
+        isMadaControlled: undefined,
       }))
 
   return normalizeMarketRows(sourceRows)

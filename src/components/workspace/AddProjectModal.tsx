@@ -1,165 +1,106 @@
 'use client'
 
-import { useMemo, useEffect, useState } from 'react'
-import { Modal, Form, Select, message } from 'antd'
-import { ALL_USERS } from '@/components/permission/PermissionModule'
-import { PROJECT_TYPES } from '@/data/projects'
-import { EXTERNAL_PROJECT_POOL, fetchByBid, type ExternalProjectEntry } from '@/data/externalProjectPool'
+import { useMemo } from 'react'
+import { message } from 'antd'
+import ProjectInfoModal, { type ProjectInfoSubmitPayload } from '@/components/project-info/ProjectInfoModal'
+import { EXTERNAL_PROJECT_POOL, type ExternalProjectEntry } from '@/data/externalProjectPool'
 import { useProjectStore } from '@/stores/project'
 import { useUiStore } from '@/stores/ui'
 import { usePermissionStore } from '@/stores/permission'
 import { inferOsSeriesFromProjectName, inferTosVersionFromProjectName } from '@/constants/projectBasicFields'
 import {
   PROJECT_TYPE_TOS_VERSION,
-  inferSoftwareProjectTypeFromName,
   isSoftwareProjectType,
 } from '@/constants/projectTypes'
+import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
 
 interface AddProjectModalProps {
   open: boolean
   onCancel: () => void
 }
 
-interface FormShape {
-  bid: string
-  type: string
-  responsiblePersons: string[]
-}
-
 export default function AddProjectModal({ open, onCancel }: AddProjectModalProps) {
-  const [form] = Form.useForm<FormShape>()
-  const [submitting, setSubmitting] = useState(false)
-
-  const { projects, addProject, setSelectedProject, setProjectMember, setSelectedMarketTab, setSelectedTosTypeTab } = useProjectStore()
+  const {
+    projects,
+    currentLoginUser,
+    addProject,
+    setSelectedProject,
+    setProjectMember,
+    setSelectedMarketTab,
+    setSelectedTosTypeTab,
+  } = useProjectStore()
   const { setActiveModule, setProjectSpaceModule } = useUiStore()
-  const initProjectPermissions = usePermissionStore(s => s.initProjectPermissions)
+  const initProjectPermissions = usePermissionStore(state => state.initProjectPermissions)
 
-  // Exclude bids whose name is already in projects.
   const candidatePool = useMemo<ExternalProjectEntry[]>(() => {
-    const existingNames = new Set(projects.map(p => p.name))
-    return EXTERNAL_PROJECT_POOL.filter(e => !existingNames.has(e.name))
+    const existingNames = new Set(projects.map(project => project.name))
+    return EXTERNAL_PROJECT_POOL.filter(entry => !existingNames.has(entry.name))
   }, [projects])
 
-  // Reset form when modal opens.
-  useEffect(() => {
-    if (open) form.resetFields()
-  }, [open, form])
-
-  const handleSubmit = async () => {
-    let values: FormShape
-    try {
-      values = await form.validateFields()
-    } catch {
-      return
-    }
-    const entry = candidatePool.find(e => e.bid === values.bid)
+  const handleSubmit = async (payload: ProjectInfoSubmitPayload) => {
+    const entry = payload.sourceEntry
     if (!entry) {
       message.error('未找到外部项目条目')
       return
     }
-    setSubmitting(true)
-    try {
-      const extra = fetchByBid(entry.bid)
-      const newId = `${Date.now()}`
-      const projectType = values.type || inferSoftwareProjectTypeFromName(entry.name)
-      const isSoftwareProject = isSoftwareProjectType(projectType)
-      const inferredTosVersion = inferTosVersionFromProjectName(entry.name)
-      const inferredOsSeries = inferOsSeriesFromProjectName(entry.name)
-      const newProject: any = {
-        id: newId,
-        name: entry.name,
-        type: projectType,
-        status: '待立项',
-        progress: 0,
-        leader: values.responsiblePersons[0],
-        markets: [],
-        androidVersion: extra.androidVersion ?? '',
-        chipPlatform: extra.chipPlatform ?? '',
-        spm: entry.spm,
-        updatedAt: '刚刚',
-        productLine: extra.productLine ?? '',
-        productSeries: projectType === PROJECT_TYPE_TOS_VERSION ? inferredOsSeries : '',
-        osSeries: projectType === PROJECT_TYPE_TOS_VERSION ? inferredOsSeries : (isSoftwareProject ? '' : undefined),
-        versionType: projectType === PROJECT_TYPE_TOS_VERSION ? 'Full' : undefined,
-        versionTypes: projectType === PROJECT_TYPE_TOS_VERSION ? ['Full'] : undefined,
-        tosVersion: isSoftwareProject ? (inferredTosVersion || extra.tosVersion || '') : (extra.tosVersion ?? ''),
-        brand: extra.brand ?? undefined,
-        planStartDate: extra.planStartDate ?? '',
-        planEndDate: extra.planEndDate ?? '',
-        healthStatus: 'normal',
-      }
-      addProject(newProject)
-      setProjectMember(newId, values.responsiblePersons)
-      initProjectPermissions(newId, { '系统管理员': values.responsiblePersons })
-      setSelectedProject(newProject)
-      setSelectedMarketTab('OP')
-      if (projectType === PROJECT_TYPE_TOS_VERSION) setSelectedTosTypeTab('Full')
-      setProjectSpaceModule('basic')
-      setActiveModule('projectSpace')
-      message.success('项目创建成功')
-      onCancel()
-    } finally {
-      setSubmitting(false)
+    const extra = payload.sourceValues
+    const newId = `${Date.now()}`
+    const projectType = payload.projectType
+    const isSoftwareProject = isSoftwareProjectType(projectType)
+    const inferredTosVersion = inferTosVersionFromProjectName(entry.name)
+    const inferredOsSeries = inferOsSeriesFromProjectName(entry.name)
+    const baseProject = {
+      id: newId,
+      name: entry.name,
+      type: projectType,
+      status: '待立项',
+      progress: 0,
+      leader: payload.responsiblePersons[0],
+      responsiblePersons: payload.responsiblePersons,
+      markets: [],
+      androidVersion: extra.androidVersion ?? '',
+      chipPlatform: extra.chipPlatform ?? '',
+      spm: entry.spm,
+      updatedAt: '刚刚',
+      productLine: extra.productLine ?? '',
+      marketName: extra.marketName ?? '',
+      productSeries: projectType === PROJECT_TYPE_TOS_VERSION ? inferredOsSeries : '',
+      osSeries: projectType === PROJECT_TYPE_TOS_VERSION ? inferredOsSeries : (isSoftwareProject ? '' : undefined),
+      versionType: projectType === PROJECT_TYPE_TOS_VERSION ? 'Full' : undefined,
+      versionTypes: projectType === PROJECT_TYPE_TOS_VERSION ? ['Full'] : undefined,
+      tosVersion: isSoftwareProject ? (inferredTosVersion || extra.tosVersion || '') : (extra.tosVersion ?? ''),
+      brand: extra.brand ?? undefined,
+      planStartDate: extra.planStartDate ?? '',
+      planEndDate: extra.planEndDate ?? '',
+      healthStatus: payload.healthStatus as 'normal' | 'warning' | 'risk',
     }
+    const newProject = mergeProjectInfoValues(baseProject as ProjectInfoProject, payload.infoValues) as typeof baseProject
+
+    addProject(newProject as unknown as Parameters<typeof addProject>[0])
+    setProjectMember(newId, payload.responsiblePersons)
+    initProjectPermissions(newId, { '系统管理员': payload.responsiblePersons })
+    setSelectedProject(newProject as unknown as Parameters<typeof setSelectedProject>[0])
+    setSelectedMarketTab('OP')
+    if (projectType === PROJECT_TYPE_TOS_VERSION) setSelectedTosTypeTab('Full')
+  }
+
+  const handleAfterCreate = () => {
+    setProjectSpaceModule('basic')
+    setActiveModule('projectSpace')
+    message.success('项目创建成功')
   }
 
   return (
-    <Modal
-      title="新增项目"
+    <ProjectInfoModal
+      mode="create"
       open={open}
+      draftOwnerId={currentLoginUser}
+      candidateProjects={candidatePool}
+      existingProjects={projects as unknown as ProjectInfoProject[]}
+      responsiblePersons={[]}
       onCancel={onCancel}
-      onOk={handleSubmit}
-      okText="创建"
-      cancelText="取消"
-      confirmLoading={submitting}
-      destroyOnClose
-    >
-      <Form form={form} layout="vertical" preserve={false}>
-        <Form.Item
-          label="项目名"
-          name="bid"
-          rules={[{ required: true, message: '请选择项目名' }]}
-        >
-          <Select
-            showSearch
-            placeholder="搜索并选择项目"
-            optionFilterProp="label"
-            filterOption={(input, option) => (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())}
-            options={candidatePool.map(e => ({ label: e.name, value: e.bid }))}
-            notFoundContent="无匹配项目"
-            onChange={(bid) => {
-              const selectedEntry = candidatePool.find(item => item.bid === bid)
-              if (!selectedEntry) return
-              const inferredType = inferSoftwareProjectTypeFromName(selectedEntry.name)
-              if (inferredType === 'tOS版本项目') {
-                form.setFieldValue('type', inferredType)
-              }
-            }}
-          />
-        </Form.Item>
-        <Form.Item
-          label="项目类型"
-          name="type"
-          rules={[{ required: true, message: '请选择项目类型' }]}
-        >
-          <Select
-            placeholder="请选择项目类型"
-            options={PROJECT_TYPES.map(t => ({ label: t, value: t }))}
-          />
-        </Form.Item>
-        <Form.Item
-          label="项目责任人"
-          name="responsiblePersons"
-          rules={[{ required: true, message: '请选择项目责任人', type: 'array', min: 1 }]}
-          extra="创建后将成为权限中心的「系统管理员」"
-        >
-          <Select
-            mode="multiple"
-            placeholder="请选择项目责任人"
-            options={ALL_USERS.map(u => ({ label: u, value: u }))}
-          />
-        </Form.Item>
-      </Form>
-    </Modal>
+      onSubmit={handleSubmit}
+      onAfterCreate={handleAfterCreate}
+    />
   )
 }
