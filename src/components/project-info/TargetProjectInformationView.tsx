@@ -1,8 +1,10 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { Button, Card, Tooltip } from 'antd'
 import { EditOutlined, ProjectOutlined, SendOutlined } from '@ant-design/icons'
 import ProjectInfoSections from '@/components/project-info/ProjectInfoSections'
+import type { ProjectInfoGroupKey } from '@/constants/projectInfoSchema'
 import { formatProjectInfoValue, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
 
 interface TargetProjectInformationViewProps {
@@ -12,6 +14,8 @@ interface TargetProjectInformationViewProps {
   canConfigure: boolean
   onEdit: () => void
   onApplyTransfer?: () => void
+  afterCore?: ReactNode
+  visibleGroupKeys?: ProjectInfoGroupKey[]
 }
 
 const HEALTH_CONFIG: Record<string, { label: string; color: string }> = {
@@ -27,6 +31,8 @@ export default function TargetProjectInformationView({
   canConfigure,
   onEdit,
   onApplyTransfer,
+  afterCore,
+  visibleGroupKeys,
 }: TargetProjectInformationViewProps) {
   const isWholeMachine = project.type === '整机产品项目'
   const status = String(project.status || '-')
@@ -84,7 +90,13 @@ export default function TargetProjectInformationView({
           ))}
         </div>
       </Card>
-      <ProjectInfoSections project={project} currentUser={currentUser} canConfigure={canConfigure} />
+      {afterCore}
+      <ProjectInfoSections
+        project={project}
+        currentUser={currentUser}
+        canConfigure={canConfigure}
+        visibleGroupKeys={visibleGroupKeys}
+      />
     </>
   )
 }

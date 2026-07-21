@@ -25,6 +25,7 @@ interface ProjectInfoSectionsProps {
   project: ProjectInfoProject
   currentUser: string
   canConfigure: boolean
+  visibleGroupKeys?: ProjectInfoGroupKey[]
 }
 
 const GROUP_ICON: Record<ProjectInfoGroupKey, React.ReactNode> = {
@@ -158,8 +159,14 @@ function ProjectInfoGroupPanel({
   )
 }
 
-export default function ProjectInfoSections({ project, currentUser, canConfigure }: ProjectInfoSectionsProps) {
+export default function ProjectInfoSections({
+  project,
+  currentUser,
+  canConfigure,
+  visibleGroupKeys,
+}: ProjectInfoSectionsProps) {
   const groups = getProjectInfoGroups(project.type)
+    .filter(group => !visibleGroupKeys || visibleGroupKeys.includes(group.key))
   return (
     <div id="section-basic" className="pms-project-info-sections">
       {groups.map(group => (

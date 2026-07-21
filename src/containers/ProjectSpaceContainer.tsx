@@ -109,6 +109,7 @@ import {
   ensureTosTypePlanDataForRows,
   getMainTosType,
   getTosTypePlanSourceType,
+  getTosTypeSummaryGroups,
   getTosTypeCurrentVersion,
   getTosTypeSnapshotKey,
   getTosTypeVersionKey,
@@ -2735,11 +2736,71 @@ export default function ProjectSpaceContainer() {
     const headerExtra = p.name
     const wideWholeMachineBasicInfoFields = WHOLE_MACHINE_BASIC_INFO_FIELDS.filter(field => ['projectDescription', 'jiraProjects'].includes(field.key))
     const compactWholeMachineBasicInfoFields = WHOLE_MACHINE_BASIC_INFO_FIELDS.filter(field => !['projectDescription', 'jiraProjects'].includes(field.key))
+    const renderWholeMachinePlanInfo = () => {
+      if (markets.length === 0) return renderProjectPlanInfo()
+      return (
+        <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#6366f1' }} />, '计划信息与配置信息', '#6366f1')}>
+          <Tabs activeKey={selectedMarketTab} onChange={setSelectedMarketTab} type="card"
+            tabBarExtraContent={{
+              right: (
+                <Tooltip title="编辑市场">
+                  <Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6, marginLeft: 8 }} onClick={openMarketEditor}>市场编辑</Button>
+                </Tooltip>
+              ),
+            }}
+            items={marketRows.map(row => {
+              const m = row.market
+              const marketColor = marketColors[m] || '#faad14'
+              return {
+                key: m,
+                label: <Space size={6}><Badge color={marketColor} /><span style={{ fontWeight: 500 }}>{m}</span>{row.isMain && <Tag color="blue" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>主</Tag>}{row.followsMain && <Tag color="green" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>跟随</Tag>}</Space>,
+                children: (
+                  <div style={{ padding: '8px 0' }}>
+                    <div className="pms-project-plan-info-heading">
+                      <span>计划信息</span>
+                      <FieldVisibilityPicker
+                        groupLabel="计划信息"
+                        fields={PROJECT_PLAN_INFO_FIELDS}
+                        visibleFieldKeys={visiblePlanInfoFieldKeys}
+                        onChange={setVisiblePlanInfoFieldKeys}
+                        disabled={!canViewBasicInfo}
+                      />
+                    </div>
+                    <ProjectPlanInfoGrid
+                      visibleFieldKeys={visiblePlanInfoFieldKeys}
+                      planStartDate={p.planStartDate}
+                      planEndDate={p.planEndDate}
+                      developCycle={p.developCycle}
+                      googleLaunchDate={row.googleLaunchDate}
+                      isCarrierCustomized={row.isCarrierCustomized}
+                      isSimLocked={row.isSimLocked}
+                      isCancelPaused={row.isCancelPaused}
+                      cancelPauseDate={row.isCancelPaused === '是' ? row.cancelPauseDate : undefined}
+                      isMadaControlled={row.isMadaControlled}
+                    />
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12 }}>里程碑计划（横排视图）</div>
+                    {renderHorizontalTable()}
+                    <Divider />
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 16 }}>配置信息</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>构建信息</div>
+                    <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>
+                      <Descriptions.Item label="分支信息">{row.branchInfo || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="Jenkins构建">{row.jenkinsUrl ? <a href={row.jenkinsUrl} target="_blank" rel="noopener noreferrer">{row.jenkinsUrl}</a> : '-'}</Descriptions.Item>
+                      <Descriptions.Item label="版本地址">{row.buildAddress ? <a href={row.buildAddress} target="_blank" rel="noopener noreferrer">{row.buildAddress}</a> : '-'}</Descriptions.Item>
+                    </Descriptions>
+                  </div>
+                ),
+              }
+            })}
+          />
+        </Card>
+      )
+    }
     const anchorSections = [
       { id: 'section-header', label: isTargetProject ? '项目名称' : '项目概览', icon: <ProjectOutlined /> },
+      { id: 'section-plan', label: isWholeMachine ? '计划与配置' : '计划信息', icon: <CalendarOutlined /> },
       { id: 'section-basic', label: isTargetProject ? '项目信息' : '基本信息', icon: <SettingOutlined /> },
       ...(isWholeMachine && currentProjectTransferApps.length > 0 ? [{ id: 'section-transfer', label: '转维信息', icon: <DeploymentUnitOutlined /> }] : []),
-      { id: 'section-plan', label: isWholeMachine ? '计划与配置' : '计划信息', icon: <CalendarOutlined /> },
       ...(!isWholeMachine && (isSoftware || isTech) ? [{ id: 'section-config', label: '配置信息', icon: <SettingOutlined /> }] : []),
     ]
     const scrollToSection = (id: string) => {
@@ -2779,6 +2840,8 @@ export default function ProjectSpaceContainer() {
             canConfigure={canViewBasicInfo}
             onEdit={() => setShowProjectInfoEditor(true)}
             onApplyTransfer={isWholeMachine ? () => transfer.setTransferView('apply') : undefined}
+            afterCore={isWholeMachine ? renderWholeMachinePlanInfo() : renderProjectPlanInfo()}
+            visibleGroupKeys={isTosVersionProject ? ['team'] : undefined}
           />
         ) : (
           <>
@@ -2944,77 +3007,17 @@ export default function ProjectSpaceContainer() {
             />
           </Card>
         )}
-        {/* Plan + Config info */}
-        {isWholeMachine && markets.length > 0 ? (
-          <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#6366f1' }} />, '计划信息与配置信息', '#6366f1')}>
-            <Tabs activeKey={selectedMarketTab} onChange={setSelectedMarketTab} type="card"
-              tabBarExtraContent={{
-                right: (
-                  <Tooltip title="编辑市场">
-                    <Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6, marginLeft: 8 }} onClick={openMarketEditor}>市场编辑</Button>
-                  </Tooltip>
-                ),
-              }}
-              items={marketRows.map(row => {
-                const m = row.market
-                const marketColor = marketColors[m] || '#faad14'
-                return {
-                  key: m,
-                  label: <Space size={6}><Badge color={marketColor} /><span style={{ fontWeight: 500 }}>{m}</span>{row.isMain && <Tag color="blue" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>主</Tag>}{row.followsMain && <Tag color="green" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>跟随</Tag>}</Space>,
-                  children: (
-                    <div style={{ padding: '8px 0' }}>
-                      <div className="pms-project-plan-info-heading">
-                        <span>计划信息</span>
-                        <FieldVisibilityPicker
-                          groupLabel="计划信息"
-                          fields={PROJECT_PLAN_INFO_FIELDS}
-                          visibleFieldKeys={visiblePlanInfoFieldKeys}
-                          onChange={setVisiblePlanInfoFieldKeys}
-                          disabled={!canViewBasicInfo}
-                        />
-                      </div>
-                      <ProjectPlanInfoGrid
-                        visibleFieldKeys={visiblePlanInfoFieldKeys}
-                        planStartDate={p.planStartDate}
-                        planEndDate={p.planEndDate}
-                        developCycle={p.developCycle}
-                        googleLaunchDate={row.googleLaunchDate}
-                        isCarrierCustomized={row.isCarrierCustomized}
-                        isSimLocked={row.isSimLocked}
-                        isCancelPaused={row.isCancelPaused}
-                        cancelPauseDate={row.isCancelPaused === '是' ? row.cancelPauseDate : undefined}
-                        isMadaControlled={row.isMadaControlled}
-                      />
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12 }}>里程碑计划（横排视图）</div>
-                      {renderHorizontalTable()}
-                      <Divider />
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 16 }}>配置信息</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>构建信息</div>
-                      <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>
-                        <Descriptions.Item label="分支信息">{row.branchInfo || '-'}</Descriptions.Item>
-                        <Descriptions.Item label="Jenkins构建">{row.jenkinsUrl ? <a href={row.jenkinsUrl} target="_blank" rel="noopener noreferrer">{row.jenkinsUrl}</a> : '-'}</Descriptions.Item>
-                        <Descriptions.Item label="版本地址">{row.buildAddress ? <a href={row.buildAddress} target="_blank" rel="noopener noreferrer">{row.buildAddress}</a> : '-'}</Descriptions.Item>
-                      </Descriptions>
-                    </div>
-                  ),
-                }
-              })}
-            />
+        {/* Target-project plan information is rendered directly after the core card. */}
+        {!isTargetProject && renderProjectPlanInfo()}
+        {(isSoftware || isTech) && (
+          <Card id="section-config" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#52c41a' }} />, '配置信息', '#52c41a')}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>构建信息</div>
+            <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>
+              <Descriptions.Item label="分支信息">{editableField('branchInfo', p.branchInfo)}</Descriptions.Item>
+              <Descriptions.Item label="Jenkins构建">{basicInfoEditMode ? editableField('jenkinsUrl', p.jenkinsUrl) : (p.jenkinsUrl ? <a href={p.jenkinsUrl} target="_blank" rel="noopener noreferrer">{p.jenkinsUrl}</a> : '-')}</Descriptions.Item>
+              <Descriptions.Item label="版本地址">{basicInfoEditMode ? editableField('buildAddress', p.buildAddress) : (p.buildAddress ? <a href={p.buildAddress} target="_blank" rel="noopener noreferrer">{p.buildAddress}</a> : '-')}</Descriptions.Item>
+            </Descriptions>
           </Card>
-        ) : (
-          <>
-            {renderProjectPlanInfo()}
-            {(isSoftware || isTech) && (
-              <Card id="section-config" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#52c41a' }} />, '配置信息', '#52c41a')}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f3f4f6' }}>构建信息</div>
-                <Descriptions bordered size="small" column={1} labelStyle={{ ...descLabelStyle, width: 120 }} contentStyle={descContentStyle}>
-                  <Descriptions.Item label="分支信息">{editableField('branchInfo', p.branchInfo)}</Descriptions.Item>
-                  <Descriptions.Item label="Jenkins构建">{basicInfoEditMode ? editableField('jenkinsUrl', p.jenkinsUrl) : (p.jenkinsUrl ? <a href={p.jenkinsUrl} target="_blank" rel="noopener noreferrer">{p.jenkinsUrl}</a> : '-')}</Descriptions.Item>
-                  <Descriptions.Item label="版本地址">{basicInfoEditMode ? editableField('buildAddress', p.buildAddress) : (p.buildAddress ? <a href={p.buildAddress} target="_blank" rel="noopener noreferrer">{p.buildAddress}</a> : '-')}</Descriptions.Item>
-                </Descriptions>
-              </Card>
-            )}
-          </>
         )}
         {isTargetProject && (
           <ProjectInfoModal
@@ -3035,6 +3038,12 @@ export default function ProjectSpaceContainer() {
   // ═══════ renderProjectPlanInfo ═══════
   const renderProjectPlanInfo = () => {
     const p = selectedProject!
+    const summaryTosTypeGroups = getTosTypeSummaryGroups(tosTypeConfigRows)
+    const summaryActiveType = getTosTypePlanSourceType(
+      tosTypeConfigRows,
+      selectedTosTypeTab,
+      'level1',
+    )
     const tosPlanStartDate = isTosVersionProject
       ? (effectiveTasks.map(task => task.planStartDate).filter(Boolean).sort()[0] || '')
       : ''
@@ -3072,13 +3081,17 @@ export default function ProjectSpaceContainer() {
     const displayedHealthLabel = tosPlanHealth === 'normal' ? '健康' : tosPlanHealth === 'warning' ? '关注' : tosPlanHealth === 'risk' ? '风险' : '-'
     const planInfoContent = (
       <>
-        <Row gutter={[24, 16]}>
-          <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划开始时间</span>} value={displayedPlanStartDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />} /></Col>
-          <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划结束时间</span>} value={displayedPlanEndDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />} /></Col>
-          <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>开发周期（工作日）</span>} value={displayedDevelopCycle || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} suffix={displayedDevelopCycle ? <span style={{ fontSize: 12, color: '#9ca3af' }}>天</span> : undefined} /></Col>
-          <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>健康状态</span>} value={displayedHealthLabel} valueStyle={{ fontSize: 16, fontWeight: 600, color: tosPlanHealth === 'normal' ? '#52c41a' : tosPlanHealth === 'warning' ? '#faad14' : tosPlanHealth === 'risk' ? '#ff4d4f' : '#9ca3af' }} /></Col>
-        </Row>
-        <Divider style={{ margin: '16px 0' }} />
+        {!isTosVersionProject && (
+          <>
+            <Row gutter={[24, 16]}>
+              <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划开始时间</span>} value={displayedPlanStartDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />} /></Col>
+              <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划结束时间</span>} value={displayedPlanEndDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />} /></Col>
+              <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>开发周期（工作日）</span>} value={displayedDevelopCycle || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} suffix={displayedDevelopCycle ? <span style={{ fontSize: 12, color: '#9ca3af' }}>天</span> : undefined} /></Col>
+              <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>健康状态</span>} value={displayedHealthLabel} valueStyle={{ fontSize: 16, fontWeight: 600, color: tosPlanHealth === 'normal' ? '#52c41a' : tosPlanHealth === 'warning' ? '#faad14' : tosPlanHealth === 'risk' ? '#ff4d4f' : '#9ca3af' }} /></Col>
+            </Row>
+            <Divider style={{ margin: '16px 0' }} />
+          </>
+        )}
         <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, textTransform: 'uppercase' as const, letterSpacing: 1 }}>里程碑计划（横排视图）</div>
         {renderHorizontalTable()}
       </>
@@ -3087,7 +3100,7 @@ export default function ProjectSpaceContainer() {
       <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={<Space><CalendarOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>计划信息</span></Space>}>
         {isTosVersionProject ? (
           <Tabs
-            activeKey={selectedTosTypeTab}
+            activeKey={summaryActiveType}
             onChange={(type) => navigateWithEditGuard(() => setSelectedTosTypeTab(type))}
             type="card"
             tabBarExtraContent={{
@@ -3095,9 +3108,9 @@ export default function ProjectSpaceContainer() {
                 ? <Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6, marginLeft: 8 }} onClick={openTosTypeEditor}>类型编辑</Button>
                 : <Tooltip title="无基本信息编辑权限"><Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6, marginLeft: 8 }} disabled>类型编辑</Button></Tooltip>,
             }}
-            items={tosTypeConfigRows.map(row => ({
-              key: row.type,
-              label: <Space size={6}><span style={{ fontWeight: 500 }}>{row.type}</span>{row.isMain && <Tag color="blue" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>主</Tag>}{row.followsMain && <Tag color="green" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>跟随</Tag>}</Space>,
+            items={summaryTosTypeGroups.map(group => ({
+              key: group.key,
+              label: <span style={{ fontWeight: 500 }}>{group.label}</span>,
               children: <div style={{ paddingTop: 8 }}>{planInfoContent}</div>,
             }))}
           />

@@ -112,6 +112,9 @@ assert.match(values, /normalizeTeamMembers/, 'legacy and multi-person team value
 
 assert.doesNotMatch(view, /statusConfig\.tagColor/, 'project status must not be repeated beside the title')
 assert.doesNotMatch(view, /healthConfig\.tagColor/, 'health status must not be repeated beside the title')
+assert.match(view, /afterCore/, 'the target project view must support content immediately after the core card')
+assert.match(view, /visibleGroupKeys/, 'the target project view must pass display-group filtering')
+assert.match(sections, /visibleGroupKeys/, 'project-space sections must support caller-selected groups')
 assert.match(sections, /getBalancedRows/, 'information sections must balance visible fields without blank cells')
 assert.match(sections, /pms-project-info-team-role/, 'team sections must separate role names from member lists')
 assert.match(modal, /mode === 'create' \? field\.requiredOnCreate : field\.required/, 'create and edit must use their own required rules')
