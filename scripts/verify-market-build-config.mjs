@@ -81,6 +81,10 @@ assert.match(projectSpaceSource, /row\.jenkinsUrl \? <a href=\{row\.jenkinsUrl\}
 assert.match(projectSpaceSource, /row\.buildAddress \? <a href=\{row\.buildAddress\}/, 'whole-machine configuration must display the selected market build URL')
 assert.match(projectSpaceSource, /showMarketControls\s*=\s*isMachineProjectType/, 'machine plan controls must remain visible before the first market exists')
 assert.match(projectSpaceSource, /尚未配置市场[\s\S]*onClick=\{openMarketEditor\}/, 'machine basic information must expose the first-market editor from an empty state')
+assert.match(projectSpaceSource, /selectedMarketIsConfigured\s*=\s*isConfiguredMarket\(marketConfigRows, selectedMarketTab\)/, 'market plan scope must derive membership from the current project configuration')
+assert.match(projectSpaceSource, /currentMarketData\s*=\s*isWholeMachineProject && selectedMarketIsConfigured/, 'machine plan data must never read an unconfigured selected market')
+assert.match(projectSpaceSource, /setSelectedMarketTab\(getConfiguredMarketSelection\(normalizedRows, selectedMarketTab\)\)/, 'saving market configuration must activate a configured market')
+assert.match(projectSpaceSource, /if \(isWholeMachineProject && !selectedMarketIsConfigured\) \{[\s\S]*return \([\s\S]*尚未配置市场/, 'the plan module must short-circuit to an empty state before rendering plan controls')
 
 const addProjectSource = fs.readFileSync('src/components/workspace/AddProjectModal.tsx', 'utf8')
 assert.match(addProjectSource, /isMachineProjectType\(projectType\)[\s\S]*normalizeTargetMarkets\(payload\.infoValues\.targetMarkets \?\? extra\.targetMarkets\)/, 'machine creation must bootstrap markets from targetMarkets')

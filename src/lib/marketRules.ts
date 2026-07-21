@@ -120,6 +120,27 @@ export const normalizeTargetMarkets = (value: unknown): string[] => {
   }, [])
 }
 
+export const isConfiguredMarket = (
+  rows: Array<{ market?: string; marketName?: string }>,
+  selectedMarket: string,
+) => !!selectedMarket && rows.some(row => (row.market || row.marketName) === selectedMarket)
+
+export const canUseMarketPlanScope = (
+  rows: Array<{ market?: string; marketName?: string }>,
+  selectedMarket: string,
+  isMachineProject: boolean,
+  planLevel: string,
+) => !isMachineProject || planLevel !== 'level1' || isConfiguredMarket(rows, selectedMarket)
+
+export const getConfiguredMarketSelection = (
+  rows: Array<{ market?: string; marketName?: string; isMain?: boolean }>,
+  selectedMarket: string,
+) => {
+  if (isConfiguredMarket(rows, selectedMarket)) return selectedMarket
+  const mainRow = rows.find(row => row.isMain) || rows[0]
+  return mainRow?.market || mainRow?.marketName || ''
+}
+
 export const getMarketPlanVersionKey = (
   projectId: string,
   market: string,

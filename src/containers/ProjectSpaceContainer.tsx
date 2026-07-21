@@ -88,11 +88,13 @@ import {
   cancelDraftRevision,
   formatFollowVersionSource,
   ensureMarketPlanDataForRows,
+  getConfiguredMarketSelection,
   getMainMarket,
   getMarketCurrentVersion,
   getMarketFollowVersionKey,
   getMarketVersions,
   getProjectMarketSnapshotKey,
+  isConfiguredMarket,
   isFollowMarket,
   markTaskActualTimeDetachedFromMain,
   mergeFollowMarketActualDates,
@@ -456,6 +458,7 @@ export default function ProjectSpaceContainer() {
       )
     : []
   const primaryMarket = getMainMarket(marketConfigRows)
+  const selectedMarketIsConfigured = isConfiguredMarket(marketConfigRows, selectedMarketTab)
   const tosTypeConfigRows = selectedProject && isTosVersionProject
     ? buildTosTypeRows(
         selectedProject.versionTypes || [],
@@ -466,7 +469,13 @@ export default function ProjectSpaceContainer() {
   const primaryTosType = getMainTosType(tosTypeConfigRows)
   const tosTypeScopeSignature = tosTypeConfigRows.map(row => `${row.type}:${row.isMain ? 'main' : row.followsMain ? 'follow' : 'secondary'}`).join('|')
   const scopedPlanLevel = projectPlanLevel === 'level2' ? 'level2' : 'level1'
-  const isMarketScopedLevel1 = !!selectedProject && isWholeMachineProject && projectPlanLevel === 'level1' && !!selectedMarketTab
+  const machineMarketPlanUnavailable = isWholeMachineProject
+    && projectPlanLevel === 'level1'
+    && !selectedMarketIsConfigured
+  const isMarketScopedLevel1 = !!selectedProject
+    && isWholeMachineProject
+    && projectPlanLevel === 'level1'
+    && selectedMarketIsConfigured
   const isTosTypeScoped = !!selectedProject && isTosVersionProject && !!selectedTosTypeTab
   const effectiveTosLevel1Type = getTosTypePlanSourceType(tosTypeConfigRows, selectedTosTypeTab, 'level1')
   const scopedTosPlanType = scopedPlanLevel === 'level1' ? effectiveTosLevel1Type : selectedTosTypeTab
@@ -476,7 +485,9 @@ export default function ProjectSpaceContainer() {
     && isTosTypeLevel1ReadOnly(tosTypeConfigRows, selectedTosTypeTab, 'level1')
   const isFollowReadOnlyOverview = followedTosLevel1ReadOnly && projectPlanLevel === 'overview'
   const tosLevel1FollowSourceText = `当前类型跟随 ${effectiveTosLevel1Type}，请切换到 ${effectiveTosLevel1Type} 维护一级计划`
-  const canMaintainCurrentPlan = canEditCurrentPlan && !followedTosLevel1ReadOnly
+  const canMaintainCurrentPlan = canEditCurrentPlan
+    && !followedTosLevel1ReadOnly
+    && !machineMarketPlanUnavailable
   const currentPlanMaintenanceDisabledReason = followedTosLevel1ReadOnly
     ? tosLevel1FollowSourceText
     : `无${currentPlanPermissionLabel}编辑权限`
@@ -546,13 +557,16 @@ export default function ProjectSpaceContainer() {
             VERSION_DATA,
           )
         : isMarketScopedLevel1 && selectedProject
-        ? getMarketVersions(marketVersionsByKey, selectedProject.id, selectedMarketTab, baseVersions)
-        : baseVersions
+          ? getMarketVersions(marketVersionsByKey, selectedProject.id, selectedMarketTab, baseVersions)
+          : machineMarketPlanUnavailable
+            ? []
+            : baseVersions
     ),
     [
       baseVersions,
       isMarketScopedLevel1,
       isTosTypeScoped,
+      machineMarketPlanUnavailable,
       marketVersionsByKey,
       scopedPlanLevel,
       selectedMarketTab,
@@ -572,7 +586,9 @@ export default function ProjectSpaceContainer() {
       )
     : isMarketScopedLevel1 && selectedProject
       ? getMarketCurrentVersion(marketCurrentVersionByKey, selectedProject.id, selectedMarketTab, versions, baseCurrentVersion)
-      : baseCurrentVersion
+      : machineMarketPlanUnavailable
+        ? ''
+        : baseCurrentVersion
   const setVersions = (nextVersions: PlanVersionLike[] | ((prev: PlanVersionLike[]) => PlanVersionLike[])) => {
     if (isTosTypeScoped && selectedProject) {
       setTosTypeVersionsByKey(prev => setTosTypeVersions(
@@ -589,6 +605,7 @@ export default function ProjectSpaceContainer() {
       setMarketVersionsByKey(prev => setMarketVersions(prev, selectedProject.id, selectedMarketTab, baseVersions, nextVersions))
       return
     }
+    if (machineMarketPlanUnavailable) return
     setBaseVersions(nextVersions as typeof baseVersions)
   }
   const setCurrentVersion = (versionId: string) => {
@@ -606,6 +623,7 @@ export default function ProjectSpaceContainer() {
       setMarketCurrentVersionByKey(prev => setMarketCurrentVersion(prev, selectedProject.id, selectedMarketTab, versionId))
       return
     }
+    if (machineMarketPlanUnavailable) return
     setBaseCurrentVersion(versionId)
   }
   const getVersionsForMarket = (market: string) => (
@@ -674,10 +692,12 @@ export default function ProjectSpaceContainer() {
     : versions.some(version => version.status === '已发布')
   const allPlanTypes = [...LEVEL2_PLAN_TYPES, ...customTypes]
 
-  const currentMarketIsFollow = isWholeMachineProject && isFollowMarket(marketConfigRows, selectedMarketTab)
-  const currentMarketData = isWholeMachineProject ? marketPlanData[selectedMarketTab] : null
+  const currentMarketIsFollow = isMarketScopedLevel1 && isFollowMarket(marketConfigRows, selectedMarketTab)
+  const currentMarketData = isWholeMachineProject && selectedMarketIsConfigured
+    ? marketPlanData[selectedMarketTab]
+    : null
   const getCurrentMarketFollowVersionSource = (versionId: string) => {
-    if (!selectedProject || !isWholeMachineProject || projectPlanLevel !== 'level1') return undefined
+    if (!selectedProject || !isMarketScopedLevel1) return undefined
     return marketFollowVersionMeta[getMarketFollowVersionKey(selectedProject.id, selectedMarketTab, versionId)]
   }
   const renderVersionLabel = (version: PlanVersionLike) => {
@@ -711,7 +731,7 @@ export default function ProjectSpaceContainer() {
   // 整机项目按市场隔离；tOS 版本项目按类型隔离；其他项目沿用全局数据。
   const effectiveTasks = currentTosLevel1Data
     ? (tosLevel1PublishedSnapshot ?? currentTosLevel1Data.level1Tasks)
-    : currentMarketData?.tasks || tasks
+    : currentMarketData?.tasks || (isWholeMachineProject ? [] : tasks)
   const setEffectiveTasks = currentTosLevel1Data
     ? (newTasks: any[] | ((prev: any[]) => any[])) => {
         if (currentTosTypeIsFollow) {
@@ -733,7 +753,9 @@ export default function ProjectSpaceContainer() {
           },
         }))
       }
-      : setTasks
+      : machineMarketPlanUnavailable
+        ? () => undefined
+        : setTasks
 
   const effectiveLevel2PlanTasks = currentTosTypeData
     ? (tosLevel2PublishedSnapshot ?? currentTosTypeData.level2PlanTasks)
@@ -966,8 +988,14 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleClonePlanSource = (source: PlanCloneSource) => {
-    if (followedTosLevel1ReadOnly) {
-      void message.warning(tosLevel1FollowSourceText)
+    if (!canMaintainCurrentPlan) {
+      void message.warning(
+        machineMarketPlanUnavailable
+          ? '请先配置并选择有效市场'
+          : followedTosLevel1ReadOnly
+            ? tosLevel1FollowSourceText
+            : `无${currentPlanPermissionLabel}编辑权限`,
+      )
       return
     }
     const sourceTasks = getCloneSourceTasks(source)
@@ -1309,6 +1337,7 @@ export default function ProjectSpaceContainer() {
     setSelectedProject(updatedProject)
     setProjects(prev => prev.map(project => project.id === updatedProject.id ? updatedProject : project) as typeof prev)
     setMarketPlanData(syncedMarketPlanData)
+    setSelectedMarketTab(getConfiguredMarketSelection(normalizedRows, selectedMarketTab))
     if (unfollowedMarkets.length > 0) {
       setMarketFollowVersionMeta(prev => removeFollowVersionMetaForMarkets(prev, {
         projectId: selectedProject.id,
@@ -1347,7 +1376,6 @@ export default function ProjectSpaceContainer() {
       const versionText = followPublishPlans.map(plan => `${plan.market} ${plan.versionNo}`).join('、')
       message.success(`市场配置已保存，已为跟随市场发布${kindLabel}版本：${versionText}`)
     } else {
-      if (!nextMarkets.includes(selectedMarketTab)) setSelectedMarketTab(mainMarket || nextMarkets[0])
       if (newlyFollowedMarkets.length > 0) {
         message.warning('市场配置已保存，主市场暂无可跟随版本，未自动创建跟随版本')
       } else {
@@ -1430,6 +1458,7 @@ export default function ProjectSpaceContainer() {
   // Scope key for collapse
   const getScopeKey = (): string | null => {
     if (!selectedProject) return null
+    if (isWholeMachineProject && projectPlanLevel === 'level1' && !selectedMarketIsConfigured) return null
     const planDimension = isTosVersionProject
       ? `type::${projectPlanLevel === 'level1' ? effectiveTosLevel1Type : selectedTosTypeTab}`
       : isWholeMachineProject
@@ -1469,6 +1498,7 @@ export default function ProjectSpaceContainer() {
     if (activeModule !== 'projectSpace') return
     if (projectSpaceModule !== 'plan') return
     if (!selectedProject) return
+    if (machineMarketPlanUnavailable) return
     if (versions.length === 0) return
     const draftDimension = isTosTypeScoped ? scopedTosPlanType : selectedMarketTab || ''
     const key = `${selectedProject.id}::${draftDimension}::${projectPlanLevel}::${currentLoginUser}`
@@ -1491,6 +1521,7 @@ export default function ProjectSpaceContainer() {
     if (!selectedProject) return
     if (projectSpaceModule !== 'plan') return
     if (projectPlanLevel !== 'level1') return
+    if (machineMarketPlanUnavailable) return
     const dueScanDimension = isTosTypeScoped
       ? effectiveTosLevel1Type
       : isWholeMachineProject
@@ -1504,7 +1535,7 @@ export default function ProjectSpaceContainer() {
       .sort((a, b) => comparePlanVersions(b, a))[0]
     const scanSnapshotKey = latestPub && isTosTypeScoped
       ? getTosTypeSnapshotKey(selectedProject.id, effectiveTosLevel1Type, 'level1', latestPub.id)
-      : latestPub && isWholeMachineProject
+      : latestPub && isMarketScopedLevel1
         ? getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, latestPub.id)
         : latestPub?.id
     const scanTarget = isTosTypeScoped
@@ -1659,8 +1690,8 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleGanttTimeChange = (taskId: string, field: 'planStartDate' | 'planEndDate', date: string) => {
-    if (followedTosLevel1ReadOnly) {
-      void message.warning(tosLevel1FollowSourceText)
+    if (!canMaintainCurrentPlan) {
+      void message.warning(machineMarketPlanUnavailable ? '请先配置并选择有效市场' : currentPlanMaintenanceDisabledReason)
       return
     }
     const task = effectiveTasks.find(t => t.id === taskId); if (!task) return
@@ -1669,8 +1700,8 @@ export default function ProjectSpaceContainer() {
   }
 
   const confirmPredecessorChange = () => {
-    if (followedTosLevel1ReadOnly) {
-      void message.warning(tosLevel1FollowSourceText)
+    if (!canMaintainCurrentPlan) {
+      void message.warning(machineMarketPlanUnavailable ? '请先配置并选择有效市场' : currentPlanMaintenanceDisabledReason)
       return
     }
     if (!predecessorWarning.task) return
@@ -1745,7 +1776,7 @@ export default function ProjectSpaceContainer() {
           isTosVersionTrainPlan ? TOS_VERSION_TRAIN_SNAPSHOT_LEVEL : scopedPlanLevel,
           prevPublished.id,
         )
-      : selectedProject && isWholeMachineProject && projectPlanLevel === 'level1' && prevPublished
+      : selectedProject && isMarketScopedLevel1 && prevPublished
         ? getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, prevPublished.id)
         : ''
     const baselineTasks: any[] = prevPublished
@@ -1756,12 +1787,12 @@ export default function ProjectSpaceContainer() {
     const changes = isTosVersionTrainPlan ? [] : diffTasksForNotify(baselineTasks, planTasksForVersion)
     const publishedVersionId = currentVersion; const publishedVersion = versions.find(v => v.id === publishedVersionId)
     const mainMarket = getMainMarket(marketConfigRows)
-    const shouldSyncFollowMarkets = isWholeMachineProject && projectPlanLevel === 'level1' && selectedMarketTab === mainMarket
+    const shouldSyncFollowMarkets = isMarketScopedLevel1 && selectedMarketTab === mainMarket
     const nextMarketPlanData = shouldSyncFollowMarkets ? syncFollowMarketPlans(marketPlanData, marketConfigRows) : marketPlanData
     const versionNo = publishedVersion?.versionNo || publishedVersionId
     setVersions(versions.map(v => v.id === publishedVersionId ? { ...v, status: '已发布' } : v))
     if (shouldSyncFollowMarkets) setMarketPlanData(nextMarketPlanData)
-    if (selectedProject && isWholeMachineProject && projectPlanLevel === 'level1') {
+    if (selectedProject && isMarketScopedLevel1) {
       setMarketFollowVersionMeta(prev => {
         const currentMarketKey = getMarketFollowVersionKey(selectedProject.id, selectedMarketTab, publishedVersionId)
         const nextMeta = { ...prev }
@@ -1781,7 +1812,7 @@ export default function ProjectSpaceContainer() {
         } else {
           nextSnapshots[getTosTypeSnapshotKey(selectedProject.id, scopedTosPlanType, scopedPlanLevel, publishedVersionId)] = snapshot
         }
-      } else if (selectedProject && isWholeMachineProject && projectPlanLevel === 'level1') {
+      } else if (selectedProject && isMarketScopedLevel1) {
         nextSnapshots[getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, publishedVersionId)] = snapshot
       } else {
         nextSnapshots[publishedVersionId] = snapshot
@@ -1803,12 +1834,12 @@ export default function ProjectSpaceContainer() {
     value: string,
     isLevel2Custom: boolean,
   ) => {
-    if (followedTosLevel1ReadOnly && (!isLevel2Custom || isFollowReadOnlyOverview)) {
-      void message.warning(tosLevel1FollowSourceText)
+    if ((machineMarketPlanUnavailable && !isLevel2Custom) || (followedTosLevel1ReadOnly && (!isLevel2Custom || isFollowReadOnlyOverview))) {
+      void message.warning(machineMarketPlanUnavailable ? '请先配置并选择有效市场' : tosLevel1FollowSourceText)
       return
     }
     const patch = { [field]: value }
-    const isLevel1MarketTable = !isLevel2Custom && isWholeMachineProject && projectPlanLevel === 'level1'
+    const isLevel1MarketTable = !isLevel2Custom && isMarketScopedLevel1
 
     if (isLevel1MarketTable && currentMarketIsFollow) {
       currentSetTasks(markTaskActualTimeDetachedFromMain(tableTasks, record.id, patch))
@@ -2327,7 +2358,7 @@ export default function ProjectSpaceContainer() {
           'level1',
           VERSION_DATA,
         )
-      : selectedProject && isWholeMachineProject && selectedMarketTab
+      : selectedProject && isWholeMachineProject && selectedMarketIsConfigured
         ? getMarketVersions(marketVersionsByKey, selectedProject.id, selectedMarketTab, baseVersions)
         : versions
     const horizontalCurrentVersion = selectedProject && isTosVersionProject && selectedTosTypeTab
@@ -2339,7 +2370,7 @@ export default function ProjectSpaceContainer() {
           horizontalVersions,
           INITIAL_TOS_CURRENT_VERSION,
         )
-      : selectedProject && isWholeMachineProject && selectedMarketTab
+      : selectedProject && isWholeMachineProject && selectedMarketIsConfigured
         ? getMarketCurrentVersion(
             marketCurrentVersionByKey,
             selectedProject.id,
@@ -2369,7 +2400,7 @@ export default function ProjectSpaceContainer() {
     const getVersionTasks = (versionId: string) => {
       const scopedSnapshot = selectedProject && isTosVersionProject && selectedTosTypeTab
         ? publishedSnapshots[getTosTypeSnapshotKey(selectedProject.id, effectiveTosLevel1Type, 'level1', versionId)]
-        : selectedProject && isWholeMachineProject && selectedMarketTab
+        : selectedProject && isWholeMachineProject && selectedMarketIsConfigured
           ? publishedSnapshots[getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, versionId)]
           : publishedSnapshots[versionId]
       if (scopedSnapshot !== undefined) return scopedSnapshot
@@ -3172,6 +3203,20 @@ export default function ProjectSpaceContainer() {
   const renderProjectPlan = () => {
     const showMarketControls = isMachineProjectType(selectedProject?.type)
     const showTosTypeTabs = selectedProject?.type === PROJECT_TYPE_TOS_VERSION && tosTypeConfigRows.length > 0
+    if (isWholeMachineProject && !selectedMarketIsConfigured) {
+      return (
+        <Card style={{ borderRadius: 8 }}>
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={marketConfigRows.length === 0 ? '尚未配置市场，无法查看项目计划' : '当前市场不属于本项目，请重新选择市场'}
+          >
+            <Button type="primary" icon={<PlusOutlined />} onClick={openMarketEditor}>
+              {marketConfigRows.length === 0 ? '添加市场' : '市场编辑'}
+            </Button>
+          </Empty>
+        </Card>
+      )
+    }
     const planTabItems = [
       { key: 'level1', label: '一级计划' },
       { key: 'level2', label: '二级计划' },

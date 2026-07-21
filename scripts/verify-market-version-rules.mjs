@@ -37,9 +37,12 @@ const {
   cancelDraftRevision,
   formatFollowVersionSource,
   getMarketCurrentVersion,
+  getConfiguredMarketSelection,
   getMarketFollowVersionKey,
   getMarketPlanVersionKey,
   getMarketVersions,
+  isConfiguredMarket,
+  canUseMarketPlanScope,
   markTaskActualTimeDetachedFromMain,
   mergeFollowMarketActualDates,
   normalizeMarketRows,
@@ -48,6 +51,38 @@ const {
   setMarketVersions,
   syncFollowMarketPlans,
 } = sandbox.module.exports
+
+assert.equal(isConfiguredMarket([], 'OP'), false, 'a default OP tab is not configured for an empty machine project')
+assert.equal(
+  isConfiguredMarket([{ id: '1', market: 'OP', isMain: true, followsMain: false }], 'OP'),
+  true,
+  'a market becomes available only after it exists in project configuration',
+)
+assert.equal(
+  isConfiguredMarket([{ id: '1', marketName: 'TR', isMain: true, followsMain: false }], 'TR'),
+  true,
+  'the configured-market helper must accept the persisted marketName alias',
+)
+assert.equal(canUseMarketPlanScope([], 'OP', true, 'level1'), false, 'machine level-one plans must reject phantom markets')
+assert.equal(canUseMarketPlanScope([], 'OP', false, 'level1'), true, 'non-machine plans must not be blocked by market configuration')
+assert.equal(canUseMarketPlanScope([], 'OP', true, 'level2'), true, 'machine level-two plans remain outside the level-one market scope')
+assert.equal(getConfiguredMarketSelection([], 'OP'), '', 'an empty project must not retain the default OP selection')
+assert.equal(
+  getConfiguredMarketSelection([
+    { id: '1', market: 'TR', isMain: true, followsMain: false },
+    { id: '2', market: 'RU', isMain: false, followsMain: false },
+  ], 'OP'),
+  'TR',
+  'saving the first configuration must activate its main market when the previous tab is invalid',
+)
+assert.equal(
+  getConfiguredMarketSelection([
+    { id: '1', market: 'TR', isMain: true, followsMain: false },
+    { id: '2', market: 'RU', isMain: false, followsMain: false },
+  ], 'RU'),
+  'RU',
+  'saving market configuration must preserve a still-valid selected market',
+)
 
 const normalized = normalizeMarketRows([
   { id: '1', market: 'OP', isMain: true, followsMain: true },
