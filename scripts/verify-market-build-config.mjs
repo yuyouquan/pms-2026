@@ -37,6 +37,7 @@ const fallback = {
 }
 
 const spugBuildOptions = await mockSpugBuildOptionsProvider.load()
+const secondSpugBuildOptions = await mockSpugBuildOptionsProvider.load()
 assert.deepEqual(
   JSON.parse(JSON.stringify(spugBuildOptions.buildOptions)),
   ['ko2_sl303', 'ko2', 'a681l_sm386', 'lj8k_h781', 'lj8_h781', 'lj7_h782', 'x1103b'],
@@ -46,6 +47,28 @@ assert.deepEqual(
   JSON.parse(JSON.stringify(spugBuildOptions.buildMarkets)),
   ['op', 'tr'],
   'SPUG provider must expose the mock build markets asynchronously',
+)
+assert.notStrictEqual(
+  spugBuildOptions.buildOptions,
+  secondSpugBuildOptions.buildOptions,
+  'each SPUG provider response must own its build options array',
+)
+assert.notStrictEqual(
+  spugBuildOptions.buildMarkets,
+  secondSpugBuildOptions.buildMarkets,
+  'each SPUG provider response must own its build markets array',
+)
+spugBuildOptions.buildOptions.push('mutated-option')
+spugBuildOptions.buildMarkets.push('mutated-market')
+assert.deepEqual(
+  JSON.parse(JSON.stringify(secondSpugBuildOptions.buildOptions)),
+  ['ko2_sl303', 'ko2', 'a681l_sm386', 'lj8k_h781', 'lj8_h781', 'lj7_h782', 'x1103b'],
+  'mutating one SPUG response must not affect a later response build options',
+)
+assert.deepEqual(
+  JSON.parse(JSON.stringify(secondSpugBuildOptions.buildMarkets)),
+  ['op', 'tr'],
+  'mutating one SPUG response must not affect a later response build markets',
 )
 
 const initialized = buildMarketRowsFromMarkets(['OP', 'TR'], undefined, fallback)
@@ -130,6 +153,13 @@ assert.match(marketEditorSource, /case 'buildAddress':[\s\S]*value=\{row\.buildA
 
 const projectSpaceSource = fs.readFileSync(projectSpacePath, 'utf8')
 assert.match(projectSpaceSource, /const legacyMarketBuildConfig =/, 'the project space must define the historical project-level fallback')
+const legacyMarketBuildConfigSource = projectSpaceSource.slice(
+  projectSpaceSource.indexOf('const legacyMarketBuildConfig ='),
+  projectSpaceSource.indexOf('  const marketConfigRows ='),
+)
+assert.match(legacyMarketBuildConfigSource, /buildOption:\s*legacyBuildFields\.buildOption/, 'the historical fallback must include the project build option')
+assert.match(legacyMarketBuildConfigSource, /buildMarket:\s*legacyBuildFields\.buildMarket/, 'the historical fallback must include the project build market')
+assert.doesNotMatch(legacyMarketBuildConfigSource, /\(selectedProject as any\)\.(buildOption|buildMarket)/, 'the historical fallback must avoid broad any casts')
 assert.match(projectSpaceSource, /buildMarketRowsFromMarkets\([\s\S]*legacyMarketBuildConfig[\s\S]*\)/, 'market rows must be hydrated with the historical project values')
 const wholeMachinePlanStart = projectSpaceSource.indexOf('const renderWholeMachinePlanInfo = () =>')
 const wholeMachinePlanEnd = projectSpaceSource.indexOf('const anchorSections = [', wholeMachinePlanStart)

@@ -445,10 +445,14 @@ export default function ProjectSpaceContainer() {
   // ═══════ Derived ═══════
   const isWholeMachineProject = isMachineProjectType(selectedProject?.type)
   const isTosVersionProject = selectedProject?.type === PROJECT_TYPE_TOS_VERSION
+  const legacyBuildFields = selectedProject as NonNullable<typeof selectedProject> & {
+    buildOption?: string
+    buildMarket?: string
+  }
   const legacyMarketBuildConfig = selectedProject
     ? {
-        buildOption: (selectedProject as any).buildOption,
-        buildMarket: (selectedProject as any).buildMarket,
+        buildOption: legacyBuildFields.buildOption,
+        buildMarket: legacyBuildFields.buildMarket,
         branchInfo: selectedProject.branchInfo,
         jenkinsUrl: selectedProject.jenkinsUrl,
         buildAddress: selectedProject.buildAddress,
