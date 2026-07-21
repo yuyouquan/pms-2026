@@ -107,6 +107,69 @@ export const getMainTosType = (rows: TosTypeConfigRow[]) => (
   normalizeTosTypeRows(rows).find(row => row.isMain)?.type || ''
 )
 
+export const getAvailableTosTypes = (rows: TosTypeConfigRow[]): TosPlanType[] => {
+  const configuredTypes = new Set(rows.map(row => row.type))
+  return TOS_TYPE_OPTIONS.filter(type => !configuredTypes.has(type))
+}
+
+export const updateTosTypeDraftRows = (
+  rows: TosTypeConfigRow[],
+  rowId: string,
+  patch: Partial<TosTypeConfigRow>,
+): TosTypeConfigRow[] => {
+  const normalizedRows = normalizeTosTypeRows(rows)
+  const previousMainType = getMainTosType(normalizedRows)
+  const nextRows = normalizedRows.map(row => ({ ...row }))
+  const targetRow = nextRows.find(row => row.id === rowId)
+  if (!targetRow) return normalizedRows
+
+  if (patch.followsMain !== undefined && !targetRow.isMain) {
+    targetRow.followsMain = patch.followsMain
+  }
+  if (patch.isMain) {
+    nextRows.forEach(row => {
+      row.isMain = row.id === rowId
+    })
+    targetRow.followsMain = false
+  }
+
+  return normalizeTosTypeRows(nextRows, previousMainType)
+}
+
+export const addTosTypeDraftRow = (
+  rows: TosTypeConfigRow[],
+  type: string,
+  id: string,
+): TosTypeConfigRow[] => {
+  const normalizedRows = normalizeTosTypeRows(rows)
+  if (!isValidTosType(type) || normalizedRows.some(row => row.type === type)) return normalizedRows
+  const previousMainType = getMainTosType(normalizedRows)
+  return normalizeTosTypeRows([
+    ...normalizedRows,
+    {
+      id,
+      type,
+      isMain: normalizedRows.length === 0,
+      followsMain: false,
+    },
+  ], previousMainType)
+}
+
+export const removeTosTypeDraftRow = (
+  rows: TosTypeConfigRow[],
+  rowId: string,
+): TosTypeConfigRow[] => {
+  const normalizedRows = normalizeTosTypeRows(rows)
+  if (normalizedRows.length <= 1) return normalizedRows
+  const targetRow = normalizedRows.find(row => row.id === rowId)
+  if (!targetRow || targetRow.isMain) return normalizedRows
+  const previousMainType = getMainTosType(normalizedRows)
+  return normalizeTosTypeRows(
+    normalizedRows.filter(row => row.id !== rowId),
+    previousMainType,
+  )
+}
+
 export const isFollowTosType = (rows: TosTypeConfigRow[], type: string) => (
   normalizeTosTypeRows(rows).some(row => row.type === type && !row.isMain && row.followsMain)
 )

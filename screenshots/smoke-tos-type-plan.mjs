@@ -1,6 +1,7 @@
 import puppeteer from 'puppeteer'
 
 const BASE = process.env.PMS_BASE_URL || 'http://localhost:3004'
+const TOS_TYPE_EDITOR_MODAL = '.pms-tos-type-editor-modal'
 
 const fail = message => { throw new Error(message) }
 
@@ -180,8 +181,43 @@ async function assertProjectInformationOrder(page) {
   }
 }
 
+async function getVisibleTosTypeEditorModal(page) {
+  const modals = await page.$$(TOS_TYPE_EDITOR_MODAL)
+  const visibleModals = []
+  for (const modal of modals) {
+    const visible = await modal.evaluate(node => {
+      const rect = node.getBoundingClientRect()
+      const style = getComputedStyle(node)
+      return rect.width > 0 && rect.height > 0
+        && style.display !== 'none'
+        && style.visibility !== 'hidden'
+        && Number(style.opacity) !== 0
+    })
+    if (visible) visibleModals.push(modal)
+  }
+  if (visibleModals.length !== 1) {
+    fail(`Expected exactly one visible tOS type editor modal; found ${visibleModals.length}`)
+  }
+  return visibleModals[0]
+}
+
+async function clickTypeEditorText(page, selector, text) {
+  const modal = await getVisibleTosTypeEditorModal(page)
+  const clicked = await modal.evaluate((root, candidateSelector, target) => {
+    const element = Array.from(root.querySelectorAll(candidateSelector)).find(node => {
+      const rect = node.getBoundingClientRect()
+      return rect.width > 0 && rect.height > 0 && (node.textContent || '').trim() === target
+    })
+    if (!element) return false
+    element.click()
+    return true
+  }, selector, text)
+  if (!clicked) fail(`Unable to click tOS type editor text: ${text}`)
+}
+
 async function getTypeEditorColumns(page) {
-  return page.$$eval('.ant-modal .ant-table-thead th', headers => {
+  const modal = await getVisibleTosTypeEditorModal(page)
+  return modal.$$eval('.ant-table-thead th', headers => {
     const supportedTypes = ['Full', 'Slim', 'PAD', 'GO']
     return headers.slice(1).flatMap((header, offset) => {
       const rect = header.getBoundingClientRect()
@@ -201,7 +237,8 @@ async function ensureTypeEditorColumn(page, type) {
   if (await findTypeEditorColumn(page, type)) return
 
   try {
-    const toolbarSelect = await page.$('.ant-modal .pms-dimension-matrix-toolbar .ant-select')
+    const modal = await getVisibleTosTypeEditorModal(page)
+    const toolbarSelect = await modal.$('.pms-dimension-matrix-toolbar .ant-select')
     if (!toolbarSelect) fail(`Type editor toolbar select not found while adding ${type}`)
     await toolbarSelect.click()
     await page.waitForSelector('.ant-select-dropdown:not(.ant-select-dropdown-hidden)', {
@@ -213,10 +250,15 @@ async function ensureTypeEditorColumn(page, type) {
       '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option-content',
       type,
     )
-    await clickVisibleText(page, '.ant-modal button', '增加类型')
-    await page.waitForFunction((target) => {
+    await clickTypeEditorText(page, 'button', '增加类型')
+    await page.waitForFunction((modalSelector, target) => {
       const supportedTypes = ['Full', 'Slim', 'PAD', 'GO']
-      return Array.from(document.querySelectorAll('.ant-modal .ant-table-thead th'))
+      const visibleModals = Array.from(document.querySelectorAll(modalSelector)).filter(modal => {
+        const rect = modal.getBoundingClientRect()
+        return rect.width > 0 && rect.height > 0
+      })
+      if (visibleModals.length !== 1) return false
+      return Array.from(visibleModals[0].querySelectorAll('.ant-table-thead th'))
         .slice(1)
         .some(header => {
           const rect = header.getBoundingClientRect()
@@ -224,7 +266,7 @@ async function ensureTypeEditorColumn(page, type) {
           const headerType = supportedTypes.find(candidate => normalizedText.startsWith(candidate))
           return rect.width > 0 && rect.height > 0 && headerType === target
         })
-    }, { timeout: 3000 }, type)
+    }, { timeout: 3000 }, TOS_TYPE_EDITOR_MODAL, type)
   } catch (error) {
     const currentTypes = (await getTypeEditorColumns(page)).map(column => column.type)
     fail(`Unable to add ${type}; current header types: ${currentTypes.join(', ')}; cause: ${error.message}`)
@@ -238,7 +280,8 @@ async function setTypeEditorControl(page, type, fieldLabel, selector, checked) {
     fail(`Type editor column not found: ${type}; current header types: ${currentTypes.join(', ')}`)
   }
 
-  const fieldRows = await page.$$('.ant-modal .ant-table-tbody tr')
+  const modal = await getVisibleTosTypeEditorModal(page)
+  const fieldRows = await modal.$$('.ant-table-tbody tr')
   let targetRow = null
   for (const row of fieldRows) {
     const label = await row.$eval('td:first-child', cell => (cell.textContent || '').replace(/\s+/g, '').trim())
@@ -249,8 +292,8 @@ async function setTypeEditorControl(page, type, fieldLabel, selector, checked) {
     }
   }
   if (!targetRow) {
-    const currentFields = await page.$$eval(
-      '.ant-modal .ant-table-tbody tr td:first-child',
+    const currentFields = await modal.$$eval(
+      '.ant-table-tbody tr td:first-child',
       cells => cells.map(cell => (cell.textContent || '').replace(/\s+/g, '').trim()),
     )
     fail(`Type editor field row not found: ${fieldLabel}; current fields: ${currentFields.join(', ')}`)
@@ -264,31 +307,47 @@ async function setTypeEditorControl(page, type, fieldLabel, selector, checked) {
   const current = await input.evaluate(node => node.checked)
   if (current !== checked) await input.click()
 
-  await page.waitForFunction((targetType, targetField, controlSelector, expected) => {
+  await page.waitForFunction((modalSelector, targetType, targetField, controlSelector, expected) => {
     const supportedTypes = ['Full', 'Slim', 'PAD', 'GO']
-    const headers = Array.from(document.querySelectorAll('.ant-modal .ant-table-thead th'))
+    const visibleModals = Array.from(document.querySelectorAll(modalSelector)).filter(candidate => {
+      const rect = candidate.getBoundingClientRect()
+      return rect.width > 0 && rect.height > 0
+    })
+    if (visibleModals.length !== 1) return false
+    const visibleModal = visibleModals[0]
+    const headers = Array.from(visibleModal.querySelectorAll('.ant-table-thead th'))
     const columnIndex = headers.findIndex((header, index) => {
       if (index === 0) return false
       const normalizedText = (header.textContent || '').replace(/\s+/g, '')
       return supportedTypes.find(candidate => normalizedText.startsWith(candidate)) === targetType
     })
-    const row = Array.from(document.querySelectorAll('.ant-modal .ant-table-tbody tr')).find(candidate => (
+    const row = Array.from(visibleModal.querySelectorAll('.ant-table-tbody tr')).find(candidate => (
       (candidate.querySelector('td:first-child')?.textContent || '').replace(/\s+/g, '').trim() === targetField
     ))
     const cell = columnIndex >= 0 ? row?.querySelectorAll('td')[columnIndex] : undefined
     return cell?.querySelector(controlSelector)?.checked === expected
-  }, { timeout: 3000 }, type, fieldLabel, selector, checked)
+  }, { timeout: 3000 }, TOS_TYPE_EDITOR_MODAL, type, fieldLabel, selector, checked)
 }
 
 async function saveTypeEditor(page) {
-  await clickVisibleText(page, '.ant-modal-footer button', '保存')
-  await page.waitForFunction(() => !Array.from(document.querySelectorAll('.ant-modal'))
-    .some(node => node.getBoundingClientRect().width > 0 && (node.textContent || '').includes('类型编辑')), { timeout: 5000 })
+  await clickTypeEditorText(page, '.ant-modal-footer button', '保存')
+  await page.waitForFunction(modalSelector => !Array.from(document.querySelectorAll(modalSelector))
+    .some(node => node.getBoundingClientRect().width > 0), { timeout: 5000 }, TOS_TYPE_EDITOR_MODAL)
 }
 
 async function openTypeEditor(page, rootSelector) {
   await clickVisibleText(page, `${rootSelector} button`, '类型编辑')
-  await waitForVisibleText(page, '跟随主类型计划', '.ant-modal')
+  await waitForVisibleText(page, '跟随主类型计划', TOS_TYPE_EDITOR_MODAL)
+  await getVisibleTosTypeEditorModal(page)
+}
+
+async function assertMainTypeDeleteDisabled(page, type) {
+  const modal = await getVisibleTosTypeEditorModal(page)
+  const ariaLabel = `删除${type}类型`
+  const button = await modal.$(`button[aria-label="${ariaLabel}"]`)
+  if (!button) fail(`Main type delete button not found: ${ariaLabel}`)
+  const disabled = await button.evaluate(node => node.disabled)
+  if (!disabled) fail(`Main type delete button should be disabled: ${ariaLabel}`)
 }
 
 async function configureGoFollower(page, followsMain) {
@@ -547,6 +606,7 @@ try {
   await assertVisibleText(page, '版本', '#section-plan table')
 
   await openTypeEditor(page, '#section-plan')
+  await assertMainTypeDeleteDisabled(page, 'Full')
   await ensureTypeEditorColumn(page, 'PAD')
   await configureGoFollower(page, false)
   await assertVisibleText(page, 'GO', '#section-plan')

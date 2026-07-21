@@ -32,9 +32,11 @@ vm.runInNewContext(compiled, sandbox, { filename: sourcePath })
 
 const {
   TOS_TYPE_OPTIONS,
+  addTosTypeDraftRow,
   buildTosTypeRows,
   createTosTypePlanEntry,
   ensureTosTypePlanDataForRows,
+  getAvailableTosTypes,
   getMainTosType,
   getTosTypePlanSourceType,
   getTosTypeSummaryGroups,
@@ -45,13 +47,19 @@ const {
   normalizeTosTypeRows,
   isFollowTosType,
   isTosTypeLevel1ReadOnly,
+  removeTosTypeDraftRow,
   setTosTypeCurrentVersion,
   setTosTypeVersions,
+  updateTosTypeDraftRows,
 } = sandbox.module.exports
 
 const plain = value => JSON.parse(JSON.stringify(value))
 
 assert.deepEqual(plain(TOS_TYPE_OPTIONS), ['Full', 'Slim', 'PAD', 'GO'])
+assert.equal(typeof getAvailableTosTypes, 'function', 'draft candidates must expose a pure helper')
+assert.equal(typeof updateTosTypeDraftRows, 'function', 'draft updates must expose a pure helper')
+assert.equal(typeof addTosTypeDraftRow, 'function', 'draft additions must expose a pure helper')
+assert.equal(typeof removeTosTypeDraftRow, 'function', 'draft removals must expose a pure helper')
 
 assert.deepEqual(
   plain(buildTosTypeRows([], 'Slim')),
@@ -162,6 +170,120 @@ assert.deepEqual(
     { id: 'pad', type: 'PAD', isMain: true, followsMain: false },
   ],
   'changing the main type should clear every follow relationship',
+)
+
+assert.deepEqual(
+  plain(getAvailableTosTypes([])),
+  ['Full', 'Slim', 'PAD', 'GO'],
+  'an empty draft should offer every type in canonical order',
+)
+assert.deepEqual(
+  plain(getAvailableTosTypes([
+    { id: 'go', type: 'GO', isMain: false, followsMain: false },
+    { id: 'full', type: 'Full', isMain: true, followsMain: false },
+  ])),
+  ['Slim', 'PAD'],
+  'configured types should be excluded without changing canonical candidate order',
+)
+assert.deepEqual(
+  plain(getAvailableTosTypes([
+    { id: 'go', type: 'GO', isMain: false, followsMain: false },
+    { id: 'pad', type: 'PAD', isMain: false, followsMain: false },
+    { id: 'slim', type: 'Slim', isMain: false, followsMain: false },
+    { id: 'full', type: 'Full', isMain: true, followsMain: false },
+  ])),
+  [],
+  'a fully configured draft should have no candidates',
+)
+
+const switchedDraftRows = updateTosTypeDraftRows([
+  { id: 'full', type: 'Full', isMain: true, followsMain: false },
+  { id: 'pad', type: 'PAD', isMain: false, followsMain: false },
+  { id: 'go', type: 'GO', isMain: false, followsMain: true },
+], 'pad', { isMain: true })
+assert.deepEqual(
+  plain(switchedDraftRows),
+  [
+    { id: 'full', type: 'Full', isMain: false, followsMain: false },
+    { id: 'pad', type: 'PAD', isMain: true, followsMain: false },
+    { id: 'go', type: 'GO', isMain: false, followsMain: false },
+  ],
+  'switching the main type should leave exactly the target main and clear every follow flag',
+)
+assert.equal(switchedDraftRows.filter(row => row.isMain).length, 1)
+
+const followedNonMainRows = updateTosTypeDraftRows([
+  { id: 'full', type: 'Full', isMain: true, followsMain: false },
+  { id: 'go', type: 'GO', isMain: false, followsMain: false },
+], 'go', { followsMain: true })
+assert.equal(followedNonMainRows.find(row => row.id === 'go')?.followsMain, true)
+const mainFollowAttemptRows = updateTosTypeDraftRows(
+  followedNonMainRows,
+  'full',
+  { followsMain: true },
+)
+assert.equal(
+  mainFollowAttemptRows.find(row => row.id === 'full')?.followsMain,
+  false,
+  'only non-main types may change their follow flag',
+)
+
+assert.deepEqual(
+  plain(addTosTypeDraftRow([], 'Full', 'first-full')),
+  [{ id: 'first-full', type: 'Full', isMain: true, followsMain: false }],
+  'the first added draft type should become main',
+)
+
+const removableDraftRows = [
+  { id: 'full', type: 'Full', isMain: true, followsMain: false },
+  { id: 'go', type: 'GO', isMain: false, followsMain: true },
+]
+assert.deepEqual(
+  plain(removeTosTypeDraftRow(removableDraftRows, 'full')),
+  plain(removableDraftRows),
+  'the main type cannot be removed directly',
+)
+assert.deepEqual(
+  plain(removeTosTypeDraftRow([removableDraftRows[0]], 'full')),
+  [removableDraftRows[0]],
+  'the only remaining type cannot be removed',
+)
+const removedGoRows = removeTosTypeDraftRow(removableDraftRows, 'go')
+assert.deepEqual(
+  plain(removedGoRows),
+  [{ id: 'full', type: 'Full', isMain: true, followsMain: false }],
+  'a non-main type should be removable',
+)
+assert.deepEqual(
+  plain(getAvailableTosTypes(removedGoRows)),
+  ['Slim', 'PAD', 'GO'],
+  'a removed type should become an available candidate again',
+)
+
+const readdedGoRows = addTosTypeDraftRow(removedGoRows, 'GO', 'go-readded')
+assert.deepEqual(
+  plain(readdedGoRows),
+  [
+    { id: 'full', type: 'Full', isMain: true, followsMain: false },
+    { id: 'go-readded', type: 'GO', isMain: false, followsMain: false },
+  ],
+  'a deleted type should be re-addable with an injected deterministic id',
+)
+assert.equal(readdedGoRows.filter(row => row.type === 'GO').length, 1)
+assert.deepEqual(
+  plain(getAvailableTosTypes(readdedGoRows)),
+  ['Slim', 'PAD'],
+  'a re-added type should be filtered from candidates again',
+)
+assert.deepEqual(
+  plain(addTosTypeDraftRow(readdedGoRows, 'GO', 'duplicate-go')),
+  plain(readdedGoRows),
+  'adding a duplicate type should be rejected',
+)
+assert.deepEqual(
+  plain(addTosTypeDraftRow(readdedGoRows, 'INVALID', 'invalid-type')),
+  plain(readdedGoRows),
+  'adding an invalid type should be rejected',
 )
 
 const seed = createTosTypePlanEntry({

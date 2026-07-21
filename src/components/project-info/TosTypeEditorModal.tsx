@@ -5,11 +5,12 @@ import { Button, Checkbox, Radio, Select, Space, Tag, Tooltip } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import DimensionMatrixEditor from '@/components/project-info/DimensionMatrixEditor'
 import {
-  TOS_TYPE_OPTIONS,
-  getMainTosType,
-  normalizeTosTypeRows,
+  addTosTypeDraftRow,
+  getAvailableTosTypes,
+  removeTosTypeDraftRow,
   type TosPlanType,
   type TosTypeConfigRow,
+  updateTosTypeDraftRows,
 } from '@/lib/tosTypeRules'
 
 const TOS_TYPE_MATRIX_FIELDS = [
@@ -39,7 +40,7 @@ export default function TosTypeEditorModal({
 }: TosTypeEditorModalProps) {
   const [selectedType, setSelectedType] = useState<TosPlanType>()
   const availableTypes = useMemo(
-    () => TOS_TYPE_OPTIONS.filter(type => !rows.some(row => row.type === type)),
+    () => getAvailableTosTypes(rows),
     [rows],
   )
 
@@ -55,46 +56,21 @@ export default function TosTypeEditorModal({
 
   const updateRow = (rowId: string, patch: Partial<TosTypeConfigRow>) => {
     if (!canEdit) return
-    const previousMainType = getMainTosType(rows)
-    const nextRows = rows.map(row => ({ ...row }))
-    const targetRow = nextRows.find(row => row.id === rowId)
-    if (!targetRow) return
-
-    if (patch.followsMain !== undefined && !targetRow.isMain) {
-      targetRow.followsMain = patch.followsMain
-    }
-    if (patch.isMain) {
-      nextRows.forEach(row => {
-        row.isMain = row.id === rowId
-      })
-      targetRow.followsMain = false
-    }
-
-    onChange(normalizeTosTypeRows(nextRows, previousMainType))
+    onChange(updateTosTypeDraftRows(rows, rowId, patch))
   }
 
   const addType = () => {
     if (!canEdit || !selectedType || !availableTypes.includes(selectedType)) return
-    const previousMainType = getMainTosType(rows)
-    const nextRows = [
-      ...rows,
-      {
-        id: `tos-type-${selectedType}-${Date.now()}`,
-        type: selectedType,
-        isMain: rows.length === 0,
-        followsMain: false,
-      },
-    ]
-    onChange(normalizeTosTypeRows(nextRows, previousMainType))
+    onChange(addTosTypeDraftRow(
+      rows,
+      selectedType,
+      `tos-type-${selectedType}-${Date.now()}`,
+    ))
   }
 
   const removeType = (rowId: string) => {
     if (!canEdit || rows.length <= 1) return
-    const targetRow = rows.find(row => row.id === rowId)
-    if (targetRow?.isMain) return
-    const previousMainType = getMainTosType(rows)
-    const nextRows = rows.filter(row => row.id !== rowId)
-    onChange(normalizeTosTypeRows(nextRows, previousMainType))
+    onChange(removeTosTypeDraftRow(rows, rowId))
   }
 
   const renderControl = (fieldKey: TosTypeMatrixFieldKey, row: TosTypeConfigRow): ReactNode => {
@@ -113,7 +89,7 @@ export default function TosTypeEditorModal({
         return (
           <Checkbox
             checked={!row.isMain && row.followsMain}
-            disabled={row.isMain}
+            disabled={!canEdit || row.isMain}
             onChange={event => updateRow(row.id, { followsMain: event.target.checked })}
           >
             跟随主类型计划
@@ -152,6 +128,7 @@ export default function TosTypeEditorModal({
       dimensions={rows}
       toolbar={toolbar}
       width={980}
+      className="pms-tos-type-editor-modal"
       saveDisabled={!canEdit || rows.length === 0}
       onSave={onSave}
       onCancel={onCancel}
