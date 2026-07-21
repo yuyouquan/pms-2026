@@ -41,8 +41,14 @@ const schemaModule = evaluateTypeScriptModule(
   id => {
     if (id === '@/constants/projectTypes') {
       return {
-        PROJECT_TYPE_MACHINE: '整机产品项目',
+        MACHINE_PROJECT_TYPES: ['整机产品-手机', '整机产品-PAD', '整机产品-笔电'],
         PROJECT_TYPE_TOS_VERSION: 'tOS版本项目',
+        isMachineProjectType: type => [
+          '整机产品-手机',
+          '整机产品-PAD',
+          '整机产品-笔电',
+          '整机产品项目',
+        ].includes(type),
       }
     }
     throw new Error(`Unexpected schema module: ${id}`)
@@ -52,6 +58,18 @@ const machineFields = Array.from(schemaModule.MACHINE_PROJECT_INFO_FIELDS)
 const tosFields = Array.from(schemaModule.TOS_PROJECT_INFO_FIELDS)
 const keysFor = (fields, group) => fields.filter(field => field.group === group).map(field => field.key)
 const keysWhere = (fields, predicate) => fields.filter(predicate).map(field => field.key)
+
+assert.deepEqual(Array.from(schemaModule.TARGET_PROJECT_TYPES), [
+  '整机产品-手机',
+  '整机产品-PAD',
+  '整机产品-笔电',
+  'tOS版本项目',
+], 'new project choices must expose the three machine categories without the legacy value')
+for (const type of ['整机产品-手机', '整机产品-PAD', '整机产品-笔电', '整机产品项目']) {
+  assert.equal(schemaModule.isTargetProjectInfoType(type), true, `${type} must use target project information`)
+  assert.equal(schemaModule.getProjectInfoFields(type), schemaModule.MACHINE_PROJECT_INFO_FIELDS, `${type} must reuse the machine field schema`)
+  assert.equal(schemaModule.getProjectInfoGroups(type), schemaModule.MACHINE_PROJECT_INFO_GROUPS, `${type} must reuse the machine group schema`)
+}
 
 assert.equal(JSON.stringify(keysFor(machineFields, 'basic')), JSON.stringify([
   'researchMode', 'developmentMode', 'firstSaleTosVersion', 'isFirstLaunchProject',

@@ -7,6 +7,7 @@ import {
   PROJECT_TYPE_TECH,
   PROJECT_TYPE_TOS_VERSION,
   PROJECT_TYPES,
+  isMachineProjectType,
 } from '@/constants/projectTypes'
 
 // 项目类型选项
@@ -23,7 +24,7 @@ export const mapIpmStatus = (ipmStatus: string, projectType: string): string => 
     '已上市': '上市',
     '维护': '转维',
   }
-  if (projectType === '整机产品项目' && ipmStatus === '已上市') return '上市'
+  if (isMachineProjectType(projectType) && ipmStatus === '已上市') return '上市'
   if (projectType === '技术项目' && ipmStatus === '已迁移') return '已迁移'
   if (projectType === '技术项目' && ipmStatus === '待立议') return '待立议'
   if (projectType === '技术项目' && ipmStatus === '待验') return '待验'

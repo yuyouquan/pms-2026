@@ -1,10 +1,22 @@
-export const PROJECT_TYPE_MACHINE = '整机产品项目'
-export const PROJECT_TYPE_TOS_VERSION = 'tOS版本项目'
-export const PROJECT_TYPE_INDEPENDENT_SOFTWARE = '独立软件产品项目'
-export const PROJECT_TYPE_TECH = '技术项目'
-export const PROJECT_TYPE_CAPABILITY = '能力建设项目'
-export const LEGACY_SOFTWARE_PROJECT_TYPE = '产品项目'
-export const SOFTWARE_PROJECT_DISPLAY_TYPE = '软件产品项目'
+export const PROJECT_TYPE_MACHINE_PHONE = '整机产品-手机' as const
+export const PROJECT_TYPE_MACHINE_PAD = '整机产品-PAD' as const
+export const PROJECT_TYPE_MACHINE_LAPTOP = '整机产品-笔电' as const
+export const LEGACY_PROJECT_TYPE_MACHINE = '整机产品项目' as const
+// Keep the legacy literal in this alias's static type until every consumer has
+// moved to `isMachineProjectType`; its runtime value is the canonical phone type.
+export const PROJECT_TYPE_MACHINE: typeof PROJECT_TYPE_MACHINE_PHONE | typeof LEGACY_PROJECT_TYPE_MACHINE = PROJECT_TYPE_MACHINE_PHONE
+export const PROJECT_TYPE_TOS_VERSION = 'tOS版本项目' as const
+export const PROJECT_TYPE_INDEPENDENT_SOFTWARE = '独立软件产品项目' as const
+export const PROJECT_TYPE_TECH = '技术项目' as const
+export const PROJECT_TYPE_CAPABILITY = '能力建设项目' as const
+export const LEGACY_SOFTWARE_PROJECT_TYPE = '产品项目' as const
+export const SOFTWARE_PROJECT_DISPLAY_TYPE = '软件产品项目' as const
+
+export const MACHINE_PROJECT_TYPES = [
+  PROJECT_TYPE_MACHINE_PHONE,
+  PROJECT_TYPE_MACHINE_PAD,
+  PROJECT_TYPE_MACHINE_LAPTOP,
+] as const
 
 export const SOFTWARE_PROJECT_TYPES = [
   PROJECT_TYPE_TOS_VERSION,
@@ -12,6 +24,14 @@ export const SOFTWARE_PROJECT_TYPES = [
 ] as const
 
 export const PROJECT_TYPES = [
+  ...MACHINE_PROJECT_TYPES,
+  PROJECT_TYPE_TOS_VERSION,
+  PROJECT_TYPE_INDEPENDENT_SOFTWARE,
+  PROJECT_TYPE_TECH,
+  PROJECT_TYPE_CAPABILITY,
+] as const
+
+export const PROJECT_TEMPLATE_TYPES = [
   PROJECT_TYPE_MACHINE,
   PROJECT_TYPE_TOS_VERSION,
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
@@ -19,15 +39,31 @@ export const PROJECT_TYPES = [
   PROJECT_TYPE_CAPABILITY,
 ] as const
 
-export type ProjectTypeName = typeof PROJECT_TYPES[number]
+export type ProjectTypeName = typeof PROJECT_TYPES[number] | typeof LEGACY_PROJECT_TYPE_MACHINE
 
 export const PROJECT_TYPE_COLORS: Record<string, { bg: string; color: string }> = {
   [PROJECT_TYPE_MACHINE]: { bg: 'rgba(99,102,241,0.08)', color: '#6366f1' },
+  [PROJECT_TYPE_MACHINE_PAD]: { bg: 'rgba(99,102,241,0.08)', color: '#6366f1' },
+  [PROJECT_TYPE_MACHINE_LAPTOP]: { bg: 'rgba(99,102,241,0.08)', color: '#6366f1' },
+  [LEGACY_PROJECT_TYPE_MACHINE]: { bg: 'rgba(99,102,241,0.08)', color: '#6366f1' },
   [PROJECT_TYPE_TOS_VERSION]: { bg: 'rgba(6,182,212,0.10)', color: '#0891b2' },
   [PROJECT_TYPE_INDEPENDENT_SOFTWARE]: { bg: 'rgba(20,184,166,0.10)', color: '#0f766e' },
   [PROJECT_TYPE_TECH]: { bg: 'rgba(250,173,20,0.08)', color: '#d48806' },
   [PROJECT_TYPE_CAPABILITY]: { bg: 'rgba(82,196,26,0.08)', color: '#389e0d' },
   [LEGACY_SOFTWARE_PROJECT_TYPE]: { bg: 'rgba(22,119,255,0.08)', color: '#1677ff' },
+}
+
+export function isMachineProjectType(type: string | undefined | null) {
+  return type === LEGACY_PROJECT_TYPE_MACHINE
+    || (MACHINE_PROJECT_TYPES as readonly string[]).includes(String(type || ''))
+}
+
+export function normalizeMachineProjectType(type: string | undefined | null) {
+  return type === LEGACY_PROJECT_TYPE_MACHINE ? PROJECT_TYPE_MACHINE_PHONE : type || ''
+}
+
+export function getProjectTypeFamilyKey(type: string | undefined | null) {
+  return isMachineProjectType(type) ? PROJECT_TYPE_MACHINE : type || ''
 }
 
 export function isSoftwareProjectType(type: string | undefined | null) {

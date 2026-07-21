@@ -1,6 +1,7 @@
 import {
-  PROJECT_TYPE_MACHINE,
+  MACHINE_PROJECT_TYPES,
   PROJECT_TYPE_TOS_VERSION,
+  isMachineProjectType,
   type ProjectTypeName,
 } from '@/constants/projectTypes'
 import type { ProjectInfoValues } from '@/types/app'
@@ -178,20 +179,20 @@ export const TOS_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineField
   { key: 'tosEcosystemRepresentative', label: '研发战略生态合作部代表', group: 'team', inputType: 'people', requiredOnCreate: false, defaultVisible: false, hideable: true },
 ], true)
 
-export const TARGET_PROJECT_TYPES = [PROJECT_TYPE_MACHINE, PROJECT_TYPE_TOS_VERSION] as const
+export const TARGET_PROJECT_TYPES = [...MACHINE_PROJECT_TYPES, PROJECT_TYPE_TOS_VERSION] as const
 
-export const isTargetProjectInfoType = (type: string | undefined): type is typeof TARGET_PROJECT_TYPES[number] => (
-  type === PROJECT_TYPE_MACHINE || type === PROJECT_TYPE_TOS_VERSION
+export const isTargetProjectInfoType = (type: string | undefined): type is ProjectTypeName => (
+  isMachineProjectType(type) || type === PROJECT_TYPE_TOS_VERSION
 )
 
 export const getProjectInfoFields = (type: string | undefined) => {
-  if (type === PROJECT_TYPE_MACHINE) return MACHINE_PROJECT_INFO_FIELDS
+  if (isMachineProjectType(type)) return MACHINE_PROJECT_INFO_FIELDS
   if (type === PROJECT_TYPE_TOS_VERSION) return TOS_PROJECT_INFO_FIELDS
   return []
 }
 
 export const getProjectInfoGroups = (type: string | undefined) => {
-  if (type === PROJECT_TYPE_MACHINE) return MACHINE_PROJECT_INFO_GROUPS
+  if (isMachineProjectType(type)) return MACHINE_PROJECT_INFO_GROUPS
   if (type === PROJECT_TYPE_TOS_VERSION) return TOS_PROJECT_INFO_GROUPS
   return []
 }
