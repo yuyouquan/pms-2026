@@ -7,11 +7,11 @@ import dayjs from 'dayjs'
 import {
   createFilterCondition,
   getFieldOptionsWithDuplicateDisabled,
-  getFilterOperatorsForKind,
   isValuelessFilterOperator,
   normalizeFilterConditions,
   type FilterFieldDefinition,
 } from '@/lib/filterConditions'
+import { getRoadmapFilterOperators } from '@/lib/roadmapFilters'
 import type { RoadmapFilterCondition, RoadmapFilterOperator } from '@/types/roadmap'
 
 const DRAWER_Z_INDEX = 1300
@@ -165,7 +165,7 @@ export default function RoadmapFilterDrawer({
       <Flex vertical gap={12}>
         {draftConditions.length ? draftConditions.map(condition => {
           const definition = definitionsByKey.get(condition.field)
-          const operatorOptions = getFilterOperatorsForKind(definition?.kind ?? 'text')
+          const operatorOptions = getRoadmapFilterOperators(condition.field, definition?.kind ?? 'text')
           return (
             <div key={condition.id} style={conditionCardStyle}>
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) minmax(104px, .8fr) 44px', gap: 8 }}>

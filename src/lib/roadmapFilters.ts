@@ -39,6 +39,16 @@ export type RoadmapQuickFilterField = 'brand' | 'productType'
 export type RoadmapQuickFilterValue = 'all' | 'custom' | RoadmapBrand | RoadmapProductType
 const ROADMAP_QUICK_BRANDS = new Set<RoadmapBrand>(['TECNO', 'Infinix', 'itel'])
 
+export function getRoadmapFilterOperators(
+  field: string,
+  kind: FilterFieldDefinition['kind'],
+) {
+  const operators = getFilterOperatorsForKind(kind)
+  return field === 'firstSaleTosVersionId'
+    ? operators.filter(operator => operator.value === 'equals')
+    : operators
+}
+
 export function getRoadmapQuickFilterValue(
   filters: readonly RoadmapFilterCondition[],
   field: 'brand',
@@ -184,7 +194,8 @@ export function sanitizeRoadmapFilterConditions(
     const definition = definitionsByKey.get(candidate.field)
     if (!definition || typeof candidate.operator !== 'string') return
     const operator = candidate.operator as RoadmapFilterOperator
-    if (!getFilterOperatorsForKind(definition.kind).some(optionDefinition => optionDefinition.value === operator)) return
+    if (!getRoadmapFilterOperators(candidate.field, definition.kind)
+      .some(optionDefinition => optionDefinition.value === operator)) return
 
     let normalizedValue = ''
     if (!isValuelessFilterOperator(operator)) {

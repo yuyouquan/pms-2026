@@ -2115,6 +2115,9 @@ registerAssertion('roadmap filter domain sanitizers enforce catalog and approved
     { id: 'bad-date', field: 'launchDate', operator: 'after', value: '2026-02-30' },
     { id: 'valid-date', field: 'str5Date', operator: 'before', value: '2028-02-29' },
     { id: 'bad-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos-99-0' },
+    { id: 'bad-version-not-equals', field: 'firstSaleTosVersionId', operator: 'notEquals', value: 'tos-17-2' },
+    { id: 'bad-version-empty', field: 'firstSaleTosVersionId', operator: 'isEmpty', value: '' },
+    { id: 'bad-version-not-empty', field: 'firstSaleTosVersionId', operator: 'isNotEmpty', value: '' },
     { id: 'legacy-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos18.0' },
     { id: 'blank-text', field: 'remark', operator: 'contains', value: '   ' },
     { id: 'empty', field: 'productSeries', operator: 'isEmpty', value: 'discard-me' },
@@ -2132,6 +2135,10 @@ registerAssertion('roadmap filter domain sanitizers enforce catalog and approved
   }
   const secondPass = domain.sanitizeRoadmapFilterConditions(sanitized, versions)
   if (JSON.stringify(secondPass) !== JSON.stringify(sanitized)) throw new Error('roadmap filter sanitizer is not idempotent')
+  const tosOperators = domain.getRoadmapFilterOperators('firstSaleTosVersionId', 'enum')
+  if (JSON.stringify(tosOperators) !== JSON.stringify([{ value: 'equals', label: '等于' }])) {
+    throw new Error(`tOS filter exposed non-equality operators: ${JSON.stringify(tosOperators)}`)
+  }
 
   const columns = domain.sanitizeRoadmapVisibleColumns(['remark', 'brand', 'brand', 'unknown'])
   if (JSON.stringify(columns) !== JSON.stringify(['brand', 'remark'])) {
@@ -2146,6 +2153,18 @@ registerAssertion('roadmap filter domain sanitizers enforce catalog and approved
 registerAssertion('roadmap filter setters and tOS deletion preserve dynamic catalog invariants', () => {
   const storeModule = loadIsolatedRoadmapStore()
   const store = resetRoadmapStore(storeModule)
+  for (const operator of ['notEquals', 'isEmpty', 'isNotEmpty']) {
+    store.getState().setFilters([{
+      id: `invalid-tos-${operator}`,
+      field: 'firstSaleTosVersionId',
+      operator,
+      value: operator === 'notEquals' ? 'tos-17-2' : '',
+    }])
+    if (store.getState().selectedTosVersionId !== null
+      || store.getState().filters.some(filter => filter.field === 'firstSaleTosVersionId')) {
+      throw new Error(`runtime sanitizer retained tOS ${operator}`)
+    }
+  }
   store.getState().setFilters([
     { id: 'version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos-18-0' },
     { id: 'bad-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos-99-0' },
@@ -2177,6 +2196,9 @@ registerAssertion('current-version roadmap hydration rejects malicious typed fil
         { id: 'bad-enum', field: 'brand', operator: 'equals', value: '__proto__' },
         { id: 'bad-date', field: 'launchDate', operator: 'before', value: '2026-13-01' },
         { id: 'bad-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'missing' },
+        { id: 'bad-version-not-equals', field: 'firstSaleTosVersionId', operator: 'notEquals', value: 'tos-17-2' },
+        { id: 'bad-version-empty', field: 'firstSaleTosVersionId', operator: 'isEmpty', value: '' },
+        { id: 'bad-version-not-empty', field: 'firstSaleTosVersionId', operator: 'isNotEmpty', value: '' },
         { id: 'valid-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos-17-2' },
         { id: 'valid-text', field: 'remark', operator: 'notContains', value: '  risk  ' },
       ],
@@ -2339,6 +2361,7 @@ registerAssertion('roadmap filter and column drawers preserve quick filters and 
     'Input',
     'resetAdvancedFilters',
     'onApply',
+    'getRoadmapFilterOperators',
   ]) {
     if (!filterSource.includes(contract)) throw new Error(`RoadmapFilterDrawer is missing ${contract}`)
   }
