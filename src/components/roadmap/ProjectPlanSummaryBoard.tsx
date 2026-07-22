@@ -10,10 +10,11 @@ import {
   inferTosVersionFromProjectName,
 } from '@/constants/projectBasicFields'
 import {
+  isMachineProjectType,
   isSoftwareProjectType,
   normalizeSoftwareProjectType,
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
-  PROJECT_TYPE_MACHINE,
+  PROJECT_TYPE_MACHINE_PHONE,
   PROJECT_TYPE_TECH,
   PROJECT_TYPE_TOS_VERSION,
 } from '@/constants/projectTypes'
@@ -78,7 +79,7 @@ interface SummaryRow {
 
 const SUMMARY_SCOPES: { key: SummaryScope; label: string }[] = [
   { key: 'overall', label: '整体' },
-  { key: 'machine', label: '整机产品项目' },
+  { key: 'machine', label: '整机项目' },
   { key: 'tosVersion', label: 'tOS版本项目' },
   { key: 'tech', label: '技术项目' },
 ]
@@ -276,7 +277,7 @@ const buildProjectFields = (project: any) => ({
 })
 
 function getExtraColumnsForScope(scope: SummaryScope): RoadmapColumnConfig[] {
-  if (scope === 'machine') return getFixedColumnsForType(PROJECT_TYPE_MACHINE).filter(col => !BASE_COLUMN_KEYS.has(col.key))
+  if (scope === 'machine') return getFixedColumnsForType(PROJECT_TYPE_MACHINE_PHONE).filter(col => !BASE_COLUMN_KEYS.has(col.key))
   if (scope === 'tosVersion') return getFixedColumnsForType(PROJECT_TYPE_TOS_VERSION).filter(col => !BASE_COLUMN_KEYS.has(col.key))
   return []
 }
@@ -300,7 +301,7 @@ const makeSummaryRows = (projects: any[]): SummaryRow[] => {
     const status = normalizeSummaryStatus(project.status)
     if (!status) continue
 
-    if (project.type === PROJECT_TYPE_MACHINE) {
+    if (isMachineProjectType(project.type)) {
       const milestones = buildMilestones(project, MACHINE_MILESTONE_NAMES, rowIndex)
       rows.push({
         key: `machine-${project.id}`,
@@ -420,7 +421,7 @@ function countProjectsBySeriesGroup(rows: SummaryRow[]) {
 }
 
 function scopeRows(rows: SummaryRow[], scope: SummaryScope) {
-  if (scope === 'machine') return rows.filter(row => row.projectType === PROJECT_TYPE_MACHINE)
+  if (scope === 'machine') return rows.filter(row => isMachineProjectType(row.projectType))
   if (scope === 'tosVersion') return rows.filter(row => row.projectType === PROJECT_TYPE_TOS_VERSION)
   if (scope === 'tech') return rows.filter(row => row.projectType === PROJECT_TYPE_TECH)
   return rows

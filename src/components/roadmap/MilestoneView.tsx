@@ -30,11 +30,15 @@ import {
 } from '@/constants/projectBasicFields'
 import {
   LEGACY_SOFTWARE_PROJECT_TYPE,
+  MACHINE_PROJECT_TYPES,
   SOFTWARE_PROJECT_DISPLAY_TYPE,
+  isMachineProjectType,
   isSoftwareProjectType,
   normalizeSoftwareProjectType,
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
-  PROJECT_TYPE_MACHINE,
+  PROJECT_TYPE_MACHINE_LAPTOP,
+  PROJECT_TYPE_MACHINE_PAD,
+  PROJECT_TYPE_MACHINE_PHONE,
   PROJECT_TYPE_TECH,
   PROJECT_TYPE_TOS_VERSION,
 } from '@/constants/projectTypes'
@@ -123,14 +127,16 @@ interface RoadmapCompareRow extends RoadmapMilestoneRow {
 
 const ROADMAP_SCOPES: { key: RoadmapScope; label: string; projectType: string }[] = [
   { key: 'overall', label: '整体', projectType: '整体' },
-  { key: 'machine', label: '整机产品项目', projectType: PROJECT_TYPE_MACHINE },
+  { key: 'machine', label: '整机项目', projectType: PROJECT_TYPE_MACHINE_PHONE },
   { key: 'tosVersion', label: 'tOS版本项目', projectType: PROJECT_TYPE_TOS_VERSION },
   { key: 'tech', label: '技术项目', projectType: PROJECT_TYPE_TECH },
 ]
 
 const SCOPE_BY_PROJECT_TYPE: Record<string, RoadmapScope> = {
   整体: 'overall',
-  [PROJECT_TYPE_MACHINE]: 'machine',
+  [PROJECT_TYPE_MACHINE_PHONE]: 'machine',
+  [PROJECT_TYPE_MACHINE_PAD]: 'machine',
+  [PROJECT_TYPE_MACHINE_LAPTOP]: 'machine',
   [PROJECT_TYPE_TOS_VERSION]: 'tosVersion',
   [SOFTWARE_PROJECT_DISPLAY_TYPE]: 'tosVersion',
   [LEGACY_SOFTWARE_PROJECT_TYPE]: 'tosVersion',
@@ -139,7 +145,7 @@ const SCOPE_BY_PROJECT_TYPE: Record<string, RoadmapScope> = {
 
 const PROJECT_TYPE_BY_SCOPE: Record<RoadmapScope, string> = {
   overall: '整体',
-  machine: PROJECT_TYPE_MACHINE,
+  machine: PROJECT_TYPE_MACHINE_PHONE,
   tosVersion: PROJECT_TYPE_TOS_VERSION,
   tech: PROJECT_TYPE_TECH,
 }
@@ -214,8 +220,9 @@ const DEPARTMENT_BY_PROJECT: Record<string, string> = {
   '9': '软件项目二部',
 }
 
+const MACHINE_FALLBACK_MILESTONES = ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5']
 const FALLBACK_MILESTONES: Record<string, string[]> = {
-  整机产品项目: ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5'],
+  ...Object.fromEntries(MACHINE_PROJECT_TYPES.map(type => [type, MACHINE_FALLBACK_MILESTONES])),
   产品项目: ['概念启动', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5', 'MR6', 'MR7'],
   tOS版本项目: ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'tOS16.1.101', 'tOS16.1.102', 'tOS16.1.103', 'tOS16.1.104'],
   独立软件产品项目: ['概念启动', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5', 'MR6', 'MR7'],
@@ -373,7 +380,7 @@ const formatTaskDate = (value: any) => {
 }
 
 const buildMilestoneNodes = (project: any, sourceTasks: any[], rowIndex: number): RoadmapMilestone[] => {
-  const fallbackNames = FALLBACK_MILESTONES[project.type] || FALLBACK_MILESTONES['整机产品项目']
+  const fallbackNames = FALLBACK_MILESTONES[project.type] || MACHINE_FALLBACK_MILESTONES
   const taskMilestones = sourceTasks
     .filter(task => task?.parentId && task?.taskName)
     .map(task => ({
@@ -457,7 +464,7 @@ const getTosGroups = (projects: any[]) => {
 
   if (!groups.size) {
     projects
-      .filter(project => (isSoftwareProjectType(project.type) || [PROJECT_TYPE_MACHINE, PROJECT_TYPE_TECH].includes(project.type)) && !isIndependentSoftwareProject(project) && normalizeStatus(project.status))
+      .filter(project => (isSoftwareProjectType(project.type) || isMachineProjectType(project.type) || project.type === PROJECT_TYPE_TECH) && !isIndependentSoftwareProject(project) && normalizeStatus(project.status))
       .forEach(project => {
         const version = getOverallTosVersion(project)
         groups.set(version, groups.get(version) || [])
@@ -480,7 +487,7 @@ function buildRoadmapMilestoneRows(
   const rows: RoadmapMilestoneRow[] = []
   let rowIndex = 0
   const tosGroups = getTosGroups(projects)
-  const machineProjects = sortProjectsByRoadmapDimension(projects.filter(project => project.type === PROJECT_TYPE_MACHINE && normalizeStatus(project.status)))
+  const machineProjects = sortProjectsByRoadmapDimension(projects.filter(project => isMachineProjectType(project.type) && normalizeStatus(project.status)))
   const techProjects = sortProjectsByRoadmapDimension(projects.filter(project => project.type === PROJECT_TYPE_TECH && normalizeStatus(project.status)))
 
   for (const tosGroup of tosGroups) {
@@ -527,16 +534,20 @@ function buildScopedMilestoneRows(
 
   const typeMap: Record<RoadmapScope, string> = {
     overall: '',
-    machine: PROJECT_TYPE_MACHINE,
+    machine: PROJECT_TYPE_MACHINE_PHONE,
     tosVersion: PROJECT_TYPE_TOS_VERSION,
     tech: PROJECT_TYPE_TECH,
   }
 
   let rowIndex = 0
-  return sortProjectsByRoadmapDimension(projects.filter(project => project.type === typeMap[scope] && !isIndependentSoftwareProject(project) && normalizeStatus(project.status)))
+  return sortProjectsByRoadmapDimension(projects.filter(project => (
+    (scope === 'machine' ? isMachineProjectType(project.type) : project.type === typeMap[scope])
+    && !isIndependentSoftwareProject(project)
+    && normalizeStatus(project.status)
+  )))
     .map(project => {
-      const mainMarket = project.type === PROJECT_TYPE_MACHINE ? getMainMarket(project) : undefined
-      const sourceTasks = project.type === PROJECT_TYPE_MACHINE
+      const mainMarket = isMachineProjectType(project.type) ? getMainMarket(project) : undefined
+      const sourceTasks = isMachineProjectType(project.type)
         ? marketPlanData[mainMarket || '']?.tasks || []
         : level1Tasks
       const row = buildRoadmapMilestoneRow(project, buildMilestoneNodes(project, sourceTasks, rowIndex), {
@@ -596,7 +607,7 @@ function countProjectsBySeriesGroup(rows: RoadmapMilestoneRow[], scope: RoadmapS
 
 function scopeRows(rows: RoadmapMilestoneRow[], scope: RoadmapScope) {
   if (scope === 'overall') return rows
-  if (scope === 'machine') return rows.filter(row => row.projectType === PROJECT_TYPE_MACHINE)
+  if (scope === 'machine') return rows.filter(row => isMachineProjectType(row.projectType))
   if (scope === 'tosVersion') return rows.filter(row => row.projectType === PROJECT_TYPE_TOS_VERSION)
   return rows.filter(row => row.projectType === PROJECT_TYPE_TECH)
 }

@@ -3,10 +3,11 @@ import {
   PROJECT_TYPE_CAPABILITY,
   PROJECT_TYPE_COLORS,
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
-  PROJECT_TYPE_MACHINE,
+  PROJECT_TYPE_MACHINE_PHONE,
   PROJECT_TYPE_TECH,
   PROJECT_TYPE_TOS_VERSION,
   PROJECT_TYPES,
+  isMachineProjectType,
 } from '@/constants/projectTypes'
 
 // 项目类型选项
@@ -23,7 +24,7 @@ export const mapIpmStatus = (ipmStatus: string, projectType: string): string => 
     '已上市': '上市',
     '维护': '转维',
   }
-  if (projectType === '整机产品项目' && ipmStatus === '已上市') return '上市'
+  if (isMachineProjectType(projectType) && ipmStatus === '已上市') return '上市'
   if (projectType === '技术项目' && ipmStatus === '已迁移') return '已迁移'
   if (projectType === '技术项目' && ipmStatus === '待立议') return '待立议'
   if (projectType === '技术项目' && ipmStatus === '待验') return '待验'
@@ -52,7 +53,7 @@ export const PROJECT_STATUS_CONFIG: Record<string, { color: string; tagColor: st
 // 项目数据
 export const initialProjects = [
   {
-    id: '1', name: 'X6877-D8400_H991', type: PROJECT_TYPE_MACHINE,
+    id: '1', name: 'X6877-D8400_H991', type: PROJECT_TYPE_MACHINE_PHONE,
     status: '在研', progress: 65, leader: '张三',
     markets: ['OP', 'TR', 'RU'], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '李白', updatedAt: '2小时前', productLine: 'NOTE', productCategory: 'CAMON', productSeries: 'CAMON 50', tosVersion: 'tOS16.3',
@@ -83,7 +84,7 @@ export const initialProjects = [
     branchInfo: 'main_dev_x6877', jenkinsUrl: 'https://jenkins.example.com/job/X6877',
   },
   {
-    id: '3', name: 'X6855_H8917', type: PROJECT_TYPE_MACHINE,
+    id: '3', name: 'X6855_H8917', type: PROJECT_TYPE_MACHINE_PHONE,
     status: '暂停', progress: 45, leader: '王五',
     markets: ['OP', 'TR'], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '赵六', updatedAt: '3天前', productLine: 'SPARK', productCategory: 'CAMON', productSeries: 'P', tosVersion: 'tOS16.3',
@@ -178,7 +179,7 @@ export const initialProjects = [
     teamMembers: '周八,王五,李白',
   },
   {
-    id: '7', name: 'X6890-D8500_H1001', type: PROJECT_TYPE_MACHINE,
+    id: '7', name: 'X6890-D8500_H1001', type: PROJECT_TYPE_MACHINE_PHONE,
     status: '上市', progress: 100, leader: '李白',
     markets: ['OP', 'TR', 'RU', 'IN'], androidVersion: 'Android 16', chipPlatform: 'QCOM',
     spm: '张三', updatedAt: '1天前', productLine: 'CAMON', productCategory: 'Note', productSeries: 'A', tosVersion: 'tOS16.3',
@@ -246,7 +247,7 @@ export const initialProjects = [
     teamMembers: '孙七,周八,李白,杜甫,王五',
   },
   {
-    id: '12', name: 'CN5C-D8400_H992', type: PROJECT_TYPE_MACHINE,
+    id: '12', name: 'CN5C-D8400_H992', type: PROJECT_TYPE_MACHINE_PHONE,
     status: '在研', progress: 58, leader: '张三',
     markets: ['OP', 'TR'], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '李白,张三', updatedAt: '30分钟前', productLine: 'CAMON', productCategory: 'CAMON', productSeries: 'CAMON 50', tosVersion: 'tOS16.3',
@@ -269,7 +270,7 @@ export const initialProjects = [
     branchInfo: 'main_dev_cn5c', jenkinsUrl: 'https://jenkins.example.com/job/CN5C',
   },
   {
-    id: '13', name: 'CN5M-D8400_H993', type: PROJECT_TYPE_MACHINE,
+    id: '13', name: 'CN5M-D8400_H993', type: PROJECT_TYPE_MACHINE_PHONE,
     status: '转维', progress: 92, leader: '李四',
     markets: ['OP', 'RU'], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '王五', updatedAt: '4小时前', productLine: 'CAMON', productCategory: 'CAMON', productSeries: 'CAMON 50', tosVersion: 'tOS16.3',
@@ -292,7 +293,7 @@ export const initialProjects = [
     branchInfo: 'main_dev_cn5m', jenkinsUrl: 'https://jenkins.example.com/job/CN5M',
   },
   {
-    id: '14', name: 'CN6_H902', type: PROJECT_TYPE_MACHINE,
+    id: '14', name: 'CN6_H902', type: PROJECT_TYPE_MACHINE_PHONE,
     status: '上市', progress: 100, leader: '赵六',
     markets: ['OP', 'TR', 'RU'], androidVersion: 'Android 16', chipPlatform: 'QCOM',
     spm: '赵六', updatedAt: '昨天', productLine: 'CAMON', productCategory: 'CAMON', productSeries: 'P', tosVersion: 'tOS16.3',
@@ -315,7 +316,7 @@ export const initialProjects = [
     branchInfo: 'main_dev_cn6', jenkinsUrl: 'https://jenkins.example.com/job/CN6',
   },
   {
-    id: '15', name: 'CN6C_H903', type: PROJECT_TYPE_MACHINE,
+    id: '15', name: 'CN6C_H903', type: PROJECT_TYPE_MACHINE_PHONE,
     status: '在研', progress: 67, leader: '孙七',
     markets: ['OP', 'IN'], androidVersion: 'Android 16', chipPlatform: 'QCOM',
     spm: '吴九', updatedAt: '6小时前', productLine: 'CAMON', productCategory: 'CAMON', productSeries: 'P', tosVersion: 'tOS16.3',
@@ -338,7 +339,7 @@ export const initialProjects = [
     branchInfo: 'main_dev_cn6c', jenkinsUrl: 'https://jenkins.example.com/job/CN6C',
   },
   {
-    id: '16', name: 'NT-X1', type: PROJECT_TYPE_MACHINE,
+    id: '16', name: 'NT-X1', type: PROJECT_TYPE_MACHINE_PHONE,
     status: '在研', progress: 62, leader: '李白',
     markets: ['OP', 'TR'], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '李欣', updatedAt: '2小时前', productLine: 'NOTE', productCategory: 'Note', productSeries: 'NOTE X', tosVersion: 'tOS16.3',
@@ -361,7 +362,7 @@ export const initialProjects = [
     branchInfo: 'main_dev_ntx1', jenkinsUrl: 'https://jenkins.example.com/job/NT-X1',
   },
   {
-    id: '17', name: 'NT-X2', type: PROJECT_TYPE_MACHINE,
+    id: '17', name: 'NT-X2', type: PROJECT_TYPE_MACHINE_PHONE,
     status: '转维', progress: 88, leader: '王五',
     markets: ['OP', 'RU'], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '周宇', updatedAt: '1小时前', productLine: 'NOTE', productCategory: 'Note', productSeries: 'NOTE X', tosVersion: 'tOS16.3',
@@ -384,7 +385,7 @@ export const initialProjects = [
     branchInfo: 'main_dev_ntx2', jenkinsUrl: 'https://jenkins.example.com/job/NT-X2',
   },
   {
-    id: '18', name: 'PV6-A', type: PROJECT_TYPE_MACHINE,
+    id: '18', name: 'PV6-A', type: PROJECT_TYPE_MACHINE_PHONE,
     status: '上市', progress: 100, leader: '周八',
     markets: ['OP'], androidVersion: 'Android 16', chipPlatform: 'UNISOC',
     spm: '王五', updatedAt: '今天', productLine: 'POVA', productCategory: 'POVA', productSeries: 'POVA 6', tosVersion: 'tOS16.1',

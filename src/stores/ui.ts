@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { PROJECT_TYPES } from '@/data/projects'
+import { PROJECT_TYPE_MACHINE_PHONE } from '@/constants/projectTypes'
 
 export interface UiState {
   // Navigation
@@ -55,7 +55,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   workspaceTab: 'projects',
   configTab: 'plan',
   sidebarCollapsed: false,
-  selectedProjectType: PROJECT_TYPES[0], // '整机产品项目'
+  selectedProjectType: PROJECT_TYPE_MACHINE_PHONE,
   projectSpaceModule: 'basic',
 
   // Edit guard

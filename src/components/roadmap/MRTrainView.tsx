@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { Table, Tag, Tabs, Button, Empty, Dropdown, Tooltip } from 'antd'
 import { EyeOutlined, DownloadOutlined } from '@ant-design/icons'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
+import { isMachineProjectType, PROJECT_TYPE_MACHINE_PHONE } from '@/constants/projectTypes'
 
 // ======================== Mock Data ========================
 
@@ -24,10 +25,10 @@ const MR_TRAIN_DATA = [
     act_版本开发_代码开发_start: '2026-01-05', act_版本开发_代码开发_end: '2026-02-28',
     act_版本开发_集成编译_start: '2026-03-01', act_版本开发_集成编译_end: '2026-03-15',
   },
-  // tOS16.3.50 - 高通（整机产品项目）
+  // tOS16.3.50 - 高通（整机项目）
   {
     key: '1', tosVersion: 'tOS16.3.50', chipPlatform: '高通', productLine: '高端系列', market: 'OP',
-    projectName: 'X6877-D8400_H991', projectId: '1', projectType: '整机产品项目', isMada: '是', madaMarket: 'GMS',
+    projectName: 'X6877-D8400_H991', projectId: '1', projectType: PROJECT_TYPE_MACHINE_PHONE, isMada: '是', madaMarket: 'GMS',
     spm: '李白', contact: '张三', tpm: '王五', mrType: 'FR', projectVersion: '16.3.050.01', crossTestType: '标准',
     branch: '16.3.050_main',
     act_版本规划_需求收集_start: '2026-01-02', act_版本规划_需求收集_end: '2026-01-10',
@@ -37,7 +38,7 @@ const MR_TRAIN_DATA = [
   },
   {
     key: '2', tosVersion: 'tOS16.3.50', chipPlatform: '高通', productLine: '高端系列', market: 'TR',
-    projectName: 'X6877-D8400_H991', projectId: '1', projectType: '整机产品项目', isMada: '否', madaMarket: '-',
+    projectName: 'X6877-D8400_H991', projectId: '1', projectType: PROJECT_TYPE_MACHINE_PHONE, isMada: '否', madaMarket: '-',
     spm: '李白', contact: '张三', tpm: '王五', mrType: 'MR1', projectVersion: '16.3.050.02', crossTestType: '标准',
     branch: '16.3.050_MR1',
     act_版本规划_需求收集_start: '2026-02-01', act_版本规划_需求收集_end: '2026-02-08',
@@ -47,7 +48,7 @@ const MR_TRAIN_DATA = [
   },
   {
     key: '3', tosVersion: 'tOS16.3.50', chipPlatform: '高通', productLine: '中端系列', market: 'RU',
-    projectName: 'X6801_TBD', projectId: '2', projectType: '整机产品项目', isMada: '否', madaMarket: '-',
+    projectName: 'X6801_TBD', projectId: '2', projectType: PROJECT_TYPE_MACHINE_PHONE, isMada: '否', madaMarket: '-',
     spm: '张三', contact: '李四', tpm: '赵六', mrType: 'MR4', projectVersion: '16.3.050.03', crossTestType: '跨测',
     branch: '16.3.050_MR4',
     act_版本规划_需求收集_start: '', act_版本规划_需求收集_end: '',
@@ -57,7 +58,7 @@ const MR_TRAIN_DATA = [
   },
   {
     key: '4', tosVersion: 'tOS16.3.50', chipPlatform: '高通', productLine: '中端系列', market: 'OP',
-    projectName: 'X6801_TBD', projectId: '2', projectType: '整机产品项目', isMada: '否', madaMarket: '-',
+    projectName: 'X6801_TBD', projectId: '2', projectType: PROJECT_TYPE_MACHINE_PHONE, isMada: '否', madaMarket: '-',
     spm: '张三', contact: '李四', tpm: '赵六', mrType: 'MR2', projectVersion: '16.3.050.04', crossTestType: '标准',
     branch: '16.3.050_MR2',
     act_版本规划_需求收集_start: '', act_版本规划_需求收集_end: '',
@@ -68,7 +69,7 @@ const MR_TRAIN_DATA = [
   // tOS16.3.50 - MTK
   {
     key: '5', tosVersion: 'tOS16.3.50', chipPlatform: 'MTK', productLine: '高端系列', market: 'OP',
-    projectName: 'X6855_H8917', projectId: '3', projectType: '整机产品项目', isMada: '是', madaMarket: 'GMS',
+    projectName: 'X6855_H8917', projectId: '3', projectType: PROJECT_TYPE_MACHINE_PHONE, isMada: '是', madaMarket: 'GMS',
     spm: '赵六', contact: '王五', tpm: '孙七', mrType: 'MR1', projectVersion: '16.3.050.05', crossTestType: '标准',
     branch: '16.3.050_main',
     act_版本规划_需求收集_start: '2026-01-05', act_版本规划_需求收集_end: '2026-01-12',
@@ -78,7 +79,7 @@ const MR_TRAIN_DATA = [
   },
   {
     key: '6', tosVersion: 'tOS16.3.50', chipPlatform: 'MTK', productLine: '高端系列', market: 'TR',
-    projectName: 'X6855_H8917', projectId: '3', projectType: '整机产品项目', isMada: '否', madaMarket: '-',
+    projectName: 'X6855_H8917', projectId: '3', projectType: PROJECT_TYPE_MACHINE_PHONE, isMada: '否', madaMarket: '-',
     spm: '赵六', contact: '王五', tpm: '孙七', mrType: 'MR1', projectVersion: '16.3.050.06', crossTestType: '跨测',
     branch: '16.3.050_MR1',
     act_版本规划_需求收集_start: '2026-02-05', act_版本规划_需求收集_end: '2026-02-12',
@@ -88,7 +89,7 @@ const MR_TRAIN_DATA = [
   },
   {
     key: '7', tosVersion: 'tOS16.3.50', chipPlatform: 'MTK', productLine: '中端系列', market: 'OP',
-    projectName: 'X6890_H100', projectId: '6', projectType: '整机产品项目', isMada: '否', madaMarket: '-',
+    projectName: 'X6890_H100', projectId: '6', projectType: PROJECT_TYPE_MACHINE_PHONE, isMada: '否', madaMarket: '-',
     spm: '李四', contact: '赵六', tpm: '周八', mrType: 'MR1', projectVersion: '16.3.050.07', crossTestType: '标准',
     branch: '16.3.050_MP',
     act_版本规划_需求收集_start: '', act_版本规划_需求收集_end: '',
@@ -98,7 +99,7 @@ const MR_TRAIN_DATA = [
   },
   {
     key: '8', tosVersion: 'tOS16.3.50', chipPlatform: 'MTK', productLine: '中端系列', market: 'IN',
-    projectName: 'X6890_H100', projectId: '6', projectType: '整机产品项目', isMada: '是', madaMarket: 'GMS',
+    projectName: 'X6890_H100', projectId: '6', projectType: PROJECT_TYPE_MACHINE_PHONE, isMada: '是', madaMarket: 'GMS',
     spm: '李四', contact: '赵六', tpm: '周八', mrType: 'MR1', projectVersion: '16.3.050.08', crossTestType: '标准',
     branch: '16.3.050_MP',
     act_版本规划_需求收集_start: '', act_版本规划_需求收集_end: '',
@@ -109,7 +110,7 @@ const MR_TRAIN_DATA = [
   // tOS16.3.50 - SPRD
   {
     key: '9', tosVersion: 'tOS16.3.50', chipPlatform: 'SPRD', productLine: '入门系列', market: 'OP',
-    projectName: 'X6873_H972', projectId: '5', projectType: '整机产品项目', isMada: '否', madaMarket: '-',
+    projectName: 'X6873_H972', projectId: '5', projectType: PROJECT_TYPE_MACHINE_PHONE, isMada: '否', madaMarket: '-',
     spm: '王五', contact: '周八', tpm: '吴九', mrType: 'MR1', projectVersion: '16.3.050.09', crossTestType: '标准',
     branch: '16.3.050_main',
     act_版本规划_需求收集_start: '', act_版本规划_需求收集_end: '',
@@ -119,7 +120,7 @@ const MR_TRAIN_DATA = [
   },
   {
     key: '10', tosVersion: 'tOS16.3.50', chipPlatform: 'SPRD', productLine: '入门系列', market: 'BR',
-    projectName: 'X6873_H972', projectId: '5', projectType: '整机产品项目', isMada: '否', madaMarket: '-',
+    projectName: 'X6873_H972', projectId: '5', projectType: PROJECT_TYPE_MACHINE_PHONE, isMada: '否', madaMarket: '-',
     spm: '王五', contact: '周八', tpm: '吴九', mrType: 'MR1', projectVersion: '16.3.050.10', crossTestType: '跨测',
     branch: '16.3.050_MR1',
     act_版本规划_需求收集_start: '', act_版本规划_需求收集_end: '',
@@ -129,7 +130,7 @@ const MR_TRAIN_DATA = [
   },
   {
     key: '11', tosVersion: 'tOS16.3.50', chipPlatform: 'SPRD', productLine: '入门系列', market: 'IN',
-    projectName: 'X6880_H200', projectId: '7', projectType: '整机产品项目', isMada: '否', madaMarket: '-',
+    projectName: 'X6880_H200', projectId: '7', projectType: PROJECT_TYPE_MACHINE_PHONE, isMada: '否', madaMarket: '-',
     spm: '孙七', contact: '吴九', tpm: '李四', mrType: 'MR1', projectVersion: '16.3.050.11', crossTestType: '标准',
     branch: '16.3.050_MR1',
     act_版本规划_需求收集_start: '', act_版本规划_需求收集_end: '',
@@ -224,16 +225,16 @@ export default function MRTrainView({ onViewProject }: MRTrainViewProps) {
 
   const dimConfig = DIMENSIONS[dimension] || DIMENSIONS.tosVersion
 
-  // 按当前维度排序（同组内软件项目排在整机产品项目前面）
+  // 按当前维度排序（同组内软件项目排在整机项目前面）
   const sortedData = useMemo(() => {
-    const typeOrder: Record<string, number> = { 'tOS版本项目': 0, '独立软件产品项目': 0, '产品项目': 0, '整机产品项目': 1 }
+    const softwareTypeOrder: Record<string, number> = { 'tOS版本项目': 0, '独立软件产品项目': 0, '产品项目': 0 }
     return [...MR_TRAIN_DATA].sort((a: any, b: any) => {
       // 先按主键排序（如 tosVersion）
       const primaryCmp = (a[dimConfig.primaryKey] || '').localeCompare(b[dimConfig.primaryKey] || '')
       if (primaryCmp !== 0) return primaryCmp
       // 同主键组内，软件项目排最前
-      const ta = typeOrder[a.projectType] ?? 2
-      const tb = typeOrder[b.projectType] ?? 2
+      const ta = isMachineProjectType(a.projectType) ? 1 : softwareTypeOrder[a.projectType] ?? 2
+      const tb = isMachineProjectType(b.projectType) ? 1 : softwareTypeOrder[b.projectType] ?? 2
       if (ta !== tb) return ta - tb
       // 再按次级键排序（如 chipPlatform）
       const secondaryCmp = (a[dimConfig.secondaryKey] || '').localeCompare(b[dimConfig.secondaryKey] || '')

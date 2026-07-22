@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { initialProjects } from '@/data/projects'
+import { isMachineProjectType } from '@/constants/projectTypes'
 import { buildMarketRowsFromMarkets, type MarketConfigRow } from '@/lib/marketRules'
 
 // Default login user (mock)
@@ -31,7 +32,7 @@ export const kanbanColumns = [
 type Project = typeof initialProjects[0]
 
 const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) => {
-  if (project.type === '整机产品项目' && project.markets?.length) {
+  if (isMachineProjectType(project.type) && project.markets?.length) {
     acc[project.id] = buildMarketRowsFromMarkets(project.markets)
   }
   return acc

@@ -12,6 +12,7 @@ import { MainHeader } from '@/containers/AppShell'
 import WorkspaceContainer from '@/containers/WorkspaceContainer'
 import ProjectSpaceContainer from '@/containers/ProjectSpaceContainer'
 import ConfigContainer from '@/containers/ConfigContainer'
+import { isMachineProjectType } from '@/constants/projectTypes'
 
 // Minimal page-specific style overrides (bulk styles live in globals.css)
 const globalStyles = `
@@ -60,7 +61,7 @@ export default function Home() {
     setActiveModule('projectSpace')
     setProjectSpaceModule('plan')
     setProjectPlanLevel('level1')
-    if (market && project.type === '整机产品项目') {
+    if (market && isMachineProjectType(project.type)) {
       setSelectedMarketTab(market)
     }
   }

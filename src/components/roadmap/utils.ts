@@ -4,10 +4,10 @@ import type { ColumnsType } from 'antd/es/table'
 import { Tag, Tooltip, Button } from 'antd'
 import { EyeOutlined, ArrowRightOutlined } from '@ant-design/icons'
 import {
+  isMachineProjectType,
   isSoftwareProjectType,
   normalizeSoftwareProjectType,
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
-  PROJECT_TYPE_MACHINE,
   PROJECT_TYPE_TECH,
   PROJECT_TYPE_TOS_VERSION,
 } from '@/constants/projectTypes'
@@ -229,7 +229,7 @@ export const MACHINE_FIXED_COLUMNS = MACHINE_PROJECT_INFO_COLUMNS
 
 export function getFixedColumnsForType(projectType: string): RoadmapColumnConfig[] {
   if (projectType === '整体') return OVERALL_PROJECT_INFO_COLUMNS
-  if (projectType === PROJECT_TYPE_MACHINE) return MACHINE_PROJECT_INFO_COLUMNS
+  if (isMachineProjectType(projectType)) return MACHINE_PROJECT_INFO_COLUMNS
   if (projectType === PROJECT_TYPE_TECH) return TECH_PROJECT_INFO_COLUMNS
   return SOFTWARE_PROJECT_INFO_COLUMNS
 }
@@ -302,7 +302,7 @@ function normalizeValue(value: any): string {
 }
 
 function buildProjectInfo(project: any, projectType: string, market?: string): any {
-  const isMachine = projectType === PROJECT_TYPE_MACHINE
+  const isMachine = isMachineProjectType(projectType)
   return {
     projectId: project.id,
     projectName: project.name,
@@ -362,7 +362,7 @@ export function generateTableData(
   const rows: any[] = []
 
   for (const project of filtered) {
-    if (project.type === PROJECT_TYPE_MACHINE) {
+    if (isMachineProjectType(project.type)) {
       const markets = project.markets?.length ? project.markets : [project.market || '-']
       for (const market of markets) {
         const row: any = {

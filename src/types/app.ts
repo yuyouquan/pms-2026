@@ -1,8 +1,10 @@
 // Common prop types for extracted components
 // Derived from the mock data structures in src/app/page.tsx
 
+import type { MachineProjectType } from '@/constants/projectTypes'
+
 /** Project type literals used in initialProjects */
-export type ProjectCategory = '整机产品项目' | 'tOS版本项目' | '独立软件产品项目' | '技术项目' | '能力建设项目';
+export type ProjectCategory = MachineProjectType | 'tOS版本项目' | '独立软件产品项目' | '技术项目' | '能力建设项目';
 
 /** Health status for project cards */
 export type HealthStatus = 'normal' | 'warning' | 'risk';
@@ -41,7 +43,7 @@ export interface ProjectItem {
   currentNode?: string;
   branchInfo?: string;
   jenkinsUrl?: string;
-  // 整机产品项目 specific
+  // 整机项目 specific
   marketName?: string;
   brand?: string;
   developMode?: string;

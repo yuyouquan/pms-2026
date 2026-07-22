@@ -50,6 +50,7 @@ import { gantt } from 'dhtmlx-gantt'
 import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
 import VersionTrainPlan from '@/components/plans/VersionTrainPlan'
 import type { Avatar } from 'antd'
+import { isMachineProjectType } from '@/constants/projectTypes'
 
 const { Option } = Select
 
@@ -1339,7 +1340,7 @@ export function ProjectPlan({
   setProjectPlanOverviewTab,
 }: ProjectPlanProps) {
   const markets = selectedProject?.markets || []
-  const showMarketTabs = selectedProject?.type === '整机产品项目' && markets.length > 0
+  const showMarketTabs = isMachineProjectType(selectedProject?.type) && markets.length > 0
   const hasDraftVersion = versions.some(v => v.status === '修订中')
   const currentVersionData = versions.find(v => v.id === currentVersion)
   const isCurrentDraft = currentVersionData?.status === '修订中'
@@ -1401,7 +1402,7 @@ export function ProjectPlan({
 
   return (
     <div>
-      {/* 市场TAB切换 - 仅整机产品项目显示 */}
+      {/* 市场TAB切换 - 仅整机项目显示 */}
       {showMarketTabs && (
         <Card
           size="small"

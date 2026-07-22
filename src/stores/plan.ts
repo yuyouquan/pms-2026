@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import {
   PROJECT_TYPE_CAPABILITY,
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
-  PROJECT_TYPE_MACHINE,
+  MACHINE_PROJECT_TYPES,
   PROJECT_TYPE_TECH,
   PROJECT_TYPE_TOS_VERSION,
 } from '@/constants/projectTypes'
@@ -50,7 +50,7 @@ export const LEVEL1_TEMPLATE_TASKS = LEVEL1_TASKS.map(t => ({
 }))
 
 export const TEMPLATE_PROJECT_TYPES = [
-  PROJECT_TYPE_MACHINE,
+  ...MACHINE_PROJECT_TYPES,
   PROJECT_TYPE_TOS_VERSION,
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
   PROJECT_TYPE_TECH,
@@ -340,7 +340,7 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
   compareShowUnchanged: false,
   compareFilterType: 'all',
 
-  // Market plan data — 整机产品项目按市场维度维护独立的计划数据
+  // Market plan data — 整机项目按市场维度维护独立的计划数据
   marketPlanData: {
     'OP': { tasks: [...LEVEL1_TASKS], level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] },
     'TR': {

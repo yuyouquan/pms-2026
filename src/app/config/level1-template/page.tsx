@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react'
 import type { ProjectType, PlanTask, PlanVersion, VersionStatus } from '@/types'
 import { generateTaskNumber } from '@/lib/taskNumber'
 import { compareVersionsForTable, CompareTableRow, FieldDiff } from '@/lib/versionCompare'
+import { PROJECT_TYPES, PROJECT_TYPE_MACHINE_PHONE } from '@/constants/projectTypes'
 
 // 项目类型选项
-const PROJECT_TYPES: ProjectType[] = ['整机产品项目', 'tOS版本项目', '独立软件产品项目', '技术项目', '能力建设项目']
 const PLAN_TEMPLATE_ROLE_OPTIONS = ['SPM']
 
 // 示例数据
@@ -25,7 +25,7 @@ const SAMPLE_TASKS: PlanTask[] = [
 ].map(task => ({ ...task, responsible: 'SPM' })) as PlanTask[]
 
 export default function Level1PlanTemplatePage() {
-  const [projectType, setProjectType] = useState<ProjectType>('整机产品项目')
+  const [projectType, setProjectType] = useState<ProjectType>(PROJECT_TYPE_MACHINE_PHONE)
   const [versions, setVersions] = useState<PlanVersion[]>([
     { id: 'v1', versionNo: 'V1', status: '已发布', tasks: [...SAMPLE_TASKS], createdAt: new Date('2026-01-01'), publishedAt: new Date('2026-01-15') },
   ])

@@ -79,6 +79,7 @@ import {
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
   PROJECT_TYPE_TECH,
   PROJECT_TYPE_TOS_VERSION,
+  isMachineProjectType,
   isSoftwareProjectType,
 } from '@/constants/projectTypes'
 import {
@@ -343,7 +344,7 @@ export default function ProjectSpaceContainer() {
   const [marketDraftRows, setMarketDraftRows] = useState<MarketConfigRow[]>([])
 
   // ═══════ Derived ═══════
-  const isWholeMachineProject = selectedProject?.type === '整机产品项目'
+  const isWholeMachineProject = isMachineProjectType(selectedProject?.type)
   const marketConfigRows = selectedProject && isWholeMachineProject
     ? buildMarketRowsFromMarkets(selectedProject.markets || [], marketConfigsByProjectId[selectedProject.id])
     : []
@@ -416,7 +417,7 @@ export default function ProjectSpaceContainer() {
     )
   }
   const versionSelectWidth = isWholeMachineProject && projectPlanLevel === 'level1' ? 250 : 150
-  // 整机产品项目使用市场维度数据，其他项目使用全局 tasks
+  // 整机项目使用市场维度数据，其他项目使用全局 tasks
   const effectiveTasks = currentMarketData ? currentMarketData.tasks : tasks
   const setEffectiveTasks = currentMarketData
     ? (newTasks: any[] | ((prev: any[]) => any[])) => {
@@ -677,7 +678,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const saveMarketConfig = () => {
-    if (!selectedProject || selectedProject.type !== '整机产品项目') return
+    if (!selectedProject || !isMachineProjectType(selectedProject.type)) return
     const previousRows = getCurrentMarketRows()
     const previousMainMarket = getMainMarket(previousRows)
     const normalizedRows = normalizeMarketRows(marketDraftRows, previousMainMarket)
@@ -1799,7 +1800,7 @@ export default function ProjectSpaceContainer() {
   const renderProjectBasicInfo = () => {
     const p = selectedProject
     if (!p) return null
-    const isWholeMachine = p.type === '整机产品项目'
+    const isWholeMachine = isMachineProjectType(p.type)
     const isSoftware = isSoftwareProjectType(p.type)
     const isTech = p.type === '技术项目'
     const isCapability = p.type === '能力建设项目'
@@ -2296,7 +2297,7 @@ export default function ProjectSpaceContainer() {
   // ═══════ renderProjectPlan ═══════
   const renderProjectPlan = () => {
     const markets = marketConfigRows.map(row => row.market)
-    const showMarketTabs = selectedProject?.type === '整机产品项目' && markets.length > 0
+    const showMarketTabs = isMachineProjectType(selectedProject?.type) && markets.length > 0
     const planTabItems = [
       { key: 'level1', label: '一级计划' },
       { key: 'level2', label: '二级计划' },
@@ -2867,7 +2868,7 @@ export default function ProjectSpaceContainer() {
               meta.mrVersion = selectedMRVersion
               meta.transferType = createFormValues.transferType || ''
               meta.tosVersion = createFormValues.tosVersion || ''
-              if (selectedProject?.type === '整机产品项目') {
+              if (isMachineProjectType(selectedProject?.type)) {
                 Object.assign(meta, {
                   productLine: selectedProject?.productLine || '', marketName: selectedMarketTab, projectName: selectedProject?.name || '', chipVendor: selectedProject?.chipPlatform || '',
                   branch: createFormValues.branch || '', isMada: createFormValues.isMada || '', madaMarket: createFormValues.madaMarket || '',
@@ -2909,7 +2910,7 @@ export default function ProjectSpaceContainer() {
                 </Select>
               </Form.Item>
               <Form.Item label="tOS-市场版本号"><Input placeholder="请输入tOS-市场版本号" value={createFormValues.tosVersion || ''} onChange={(e) => setCreateFormValues((prev: any) => ({...prev, tosVersion: e.target.value}))} /></Form.Item>
-              {selectedProject?.type === '整机产品项目' && (
+              {isMachineProjectType(selectedProject?.type) && (
                 <>
                   <Form.Item label="产品线"><Input placeholder="自动获取" disabled value={selectedProject?.productLine || ''} /></Form.Item>
                   <Form.Item label="市场名"><Input placeholder="自动获取" disabled value={selectedMarketTab} /></Form.Item>

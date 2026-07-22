@@ -74,6 +74,85 @@ const roadmapPath = path.join(root, 'src/components/roadmap/RoadmapView.tsx')
 const roadmapSource = fs.readFileSync(roadmapPath, 'utf8')
 const roadmapAnalysis = analyzeRoadmapSource(roadmapSource, roadmapPath)
 
+const expectedMachineProjectTypes = ['整机-手机', '整机-PAD', '整机-笔电']
+
+function findLegacyMachineComparisons(filePath) {
+  const source = fs.readFileSync(filePath, 'utf8')
+  const sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, filePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
+  const failures = []
+  const equalityKinds = new Set([
+    ts.SyntaxKind.EqualsEqualsToken,
+    ts.SyntaxKind.EqualsEqualsEqualsToken,
+    ts.SyntaxKind.ExclamationEqualsToken,
+    ts.SyntaxKind.ExclamationEqualsEqualsToken,
+  ])
+
+  function visit(node) {
+    if (ts.isBinaryExpression(node) && equalityKinds.has(node.operatorToken.kind)) {
+      const operands = [node.left, node.right]
+      const comparesLegacyLiteral = operands.some(operand => ts.isStringLiteral(operand) && operand.text === '整机产品项目')
+      const comparesOldMachineConstant = operands.some(operand => ts.isIdentifier(operand) && operand.text === 'PROJECT_TYPE_MACHINE')
+      if (comparesLegacyLiteral || comparesOldMachineConstant) {
+        const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+        failures.push(`${path.relative(root, filePath)}:${line + 1} ${node.getText(sourceFile)}`)
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+
+  visit(sourceFile)
+  return failures
+}
+
+function getInitialProjectTypeInitializers(filePath) {
+  const source = fs.readFileSync(filePath, 'utf8')
+  const sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const projectTypes = new Map()
+
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'initialProjects' && ts.isArrayLiteralExpression(node.initializer)) {
+      for (const element of node.initializer.elements) {
+        if (!ts.isObjectLiteralExpression(element)) continue
+        const idProperty = element.properties.find(property => ts.isPropertyAssignment(property) && property.name.getText(sourceFile) === 'id')
+        const typeProperty = element.properties.find(property => ts.isPropertyAssignment(property) && property.name.getText(sourceFile) === 'type')
+        if (!idProperty || !typeProperty || !ts.isPropertyAssignment(idProperty) || !ts.isPropertyAssignment(typeProperty)) continue
+        if (!ts.isStringLiteral(idProperty.initializer)) continue
+        projectTypes.set(idProperty.initializer.text, typeProperty.initializer.getText(sourceFile))
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+
+  visit(sourceFile)
+  return projectTypes
+}
+
+function functionCallsMachineTypeGuard(filePath, functionName) {
+  const source = fs.readFileSync(filePath, 'utf8')
+  const sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  let found = false
+
+  function visit(node, insideTarget = false) {
+    const isTargetDeclaration = ts.isVariableDeclaration(node)
+      && ts.isIdentifier(node.name)
+      && node.name.text === functionName
+    const inTarget = insideTarget || isTargetDeclaration
+    if (
+      inTarget
+      && ts.isCallExpression(node)
+      && ts.isIdentifier(node.expression)
+      && node.expression.text === 'isMachineProjectType'
+      && node.arguments.some(argument => ts.isIdentifier(argument) && argument.text === 'projectType')
+    ) {
+      found = true
+    }
+    ts.forEachChild(node, child => visit(child, inTarget))
+  }
+
+  visit(sourceFile)
+  return found
+}
+
 registerAssertion('RoadmapView does not import or mount legacy roadmap views', () => {
   if (roadmapAnalysis.legacyImports.length || roadmapAnalysis.legacyJsxMounts.length) {
     throw new Error(`found imports [${roadmapAnalysis.legacyImports.join(', ')}] and JSX mounts [${roadmapAnalysis.legacyJsxMounts.join(', ')}]`)
@@ -92,6 +171,73 @@ registerAssertion('RoadmapView retains the summary shell and blank roadmap branc
   if (!roadmapAnalysis.hasProjectViewOptionLabels) throw new Error('missing project-view option labels')
   if (!roadmapAnalysis.summaryConditionals.some(conditional => conditional.mountsSummaryBoard && conditional.hasNullFalseBranch)) {
     throw new Error('summary conditional must mount ProjectPlanSummaryBoard with a null false branch')
+  }
+})
+
+registerAssertion('machine project types expose the exact supported values in order', () => {
+  const projectTypes = loadTypeScriptModule(path.join(root, 'src/constants/projectTypes.ts'))
+  if (JSON.stringify(projectTypes.MACHINE_PROJECT_TYPES) !== JSON.stringify(expectedMachineProjectTypes)) {
+    throw new Error(`expected ${JSON.stringify(expectedMachineProjectTypes)}, got ${JSON.stringify(projectTypes.MACHINE_PROJECT_TYPES)}`)
+  }
+  for (const type of expectedMachineProjectTypes) {
+    if (!projectTypes.isMachineProjectType(type)) throw new Error(`${type} must be recognized as a machine project`)
+  }
+  if (projectTypes.isMachineProjectType('整机产品项目')) throw new Error('legacy machine project type must not be recognized')
+  if ('PROJECT_TYPE_MACHINE' in projectTypes) throw new Error('legacy PROJECT_TYPE_MACHINE export must be removed')
+})
+
+registerAssertion('PROJECT_TYPES contains every machine type and excludes the legacy value', () => {
+  const { PROJECT_TYPES } = loadTypeScriptModule(path.join(root, 'src/constants/projectTypes.ts'))
+  const machinePrefix = PROJECT_TYPES.slice(0, expectedMachineProjectTypes.length)
+  if (JSON.stringify(machinePrefix) !== JSON.stringify(expectedMachineProjectTypes)) {
+    throw new Error(`machine types must lead PROJECT_TYPES, got ${JSON.stringify(PROJECT_TYPES)}`)
+  }
+  if (PROJECT_TYPES.includes('整机产品项目')) throw new Error('PROJECT_TYPES still contains the legacy value')
+})
+
+registerAssertion('existing machine mocks are explicitly migrated to the phone project type', () => {
+  const projectTypesById = getInitialProjectTypeInitializers(path.join(root, 'src/data/projects.ts'))
+  const expectedMachineMockIds = ['1', '3', '7', '12', '13', '14', '15', '16', '17', '18']
+  const failures = expectedMachineMockIds
+    .filter(id => projectTypesById.get(id) !== 'PROJECT_TYPE_MACHINE_PHONE')
+    .map(id => `${id}:${projectTypesById.get(id) || 'missing project'}`)
+  if (failures.length) throw new Error(failures.join(', '))
+})
+
+registerAssertion('runtime files contain no legacy machine equality logic', () => {
+  const runtimeFiles = [
+    'src/data/projects.ts',
+    'src/stores/project.ts',
+    'src/components/workspace/WorkspaceModule.tsx',
+    'src/containers/WorkspaceContainer.tsx',
+    'src/containers/ProjectSpaceContainer.tsx',
+    'src/components/plan/PlanModule.tsx',
+    'src/app/page.tsx',
+    'src/app/share/plan/page.tsx',
+    'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    'src/components/roadmap/utils.ts',
+    'src/components/roadmap/MilestoneView.tsx',
+    'src/components/roadmap/MRTrainView.tsx',
+  ]
+  const failures = runtimeFiles.flatMap(file => findLegacyMachineComparisons(path.join(root, file)))
+  if (failures.length) throw new Error(failures.join('; '))
+})
+
+registerAssertion('machine type guard drives market rows, status mapping, and template coverage', () => {
+  const dataPath = path.join(root, 'src/data/projects.ts')
+  if (!functionCallsMachineTypeGuard(dataPath, 'mapIpmStatus')) {
+    throw new Error('mapIpmStatus must call isMachineProjectType(projectType)')
+  }
+  const { TEMPLATE_PROJECT_TYPES } = createTypeScriptModuleLoader()(path.join(root, 'src/stores/plan.ts'))
+  const { generateTableData } = createTypeScriptModuleLoader()(path.join(root, 'src/components/roadmap/utils.ts'))
+
+  for (const [index, type] of expectedMachineProjectTypes.entries()) {
+    if (!TEMPLATE_PROJECT_TYPES.includes(type)) throw new Error(`${type} is missing from template project types`)
+    const project = { id: `machine-${index}`, name: type, type, markets: ['OP', 'TR'] }
+    const rows = generateTableData([project], [], type, {}, [])
+    if (rows.length !== 2 || rows.map(row => row.market).join(',') !== 'OP,TR') {
+      throw new Error(`${type} did not expand into per-market roadmap rows`)
+    }
   }
 })
 

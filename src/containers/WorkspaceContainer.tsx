@@ -21,7 +21,7 @@ import AddProjectModal from '@/components/workspace/AddProjectModal'
 import { initialProjects, PROJECT_TYPES, PROJECT_STATUS_CONFIG } from '@/data/projects'
 import { initialTodos } from '@/components/shared/PlanHelpers'
 import { kanbanColumns } from '@/stores/project'
-import { PROJECT_TYPE_COLORS } from '@/constants/projectTypes'
+import { isMachineProjectType, PROJECT_TYPE_COLORS } from '@/constants/projectTypes'
 
 export default function WorkspaceContainer() {
   const {
@@ -80,7 +80,9 @@ export default function WorkspaceContainer() {
     if (projectStatusFilter !== 'all') {
       result = result.filter(p => p.status === projectStatusFilter)
     }
-    if (projectTypeFilter !== 'all') {
+    if (projectTypeFilter === 'machine') {
+      result = result.filter(p => isMachineProjectType(p.type))
+    } else if (projectTypeFilter !== 'all') {
       result = result.filter(p => p.type === projectTypeFilter)
     }
     return result
@@ -200,7 +202,7 @@ export default function WorkspaceContainer() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 4px', background: 'rgba(99,102,241,0.04)', borderRadius: 20, border: '1px solid rgba(99,102,241,0.06)' }}>
               {[
                 { label: '全部', value: 'all' },
-                { label: '整机', value: '整机产品项目' },
+                { label: '整机项目', value: 'machine' },
                 { label: 'tOS版本', value: 'tOS版本项目' },
                 { label: '独立软件', value: '独立软件产品项目' },
                 { label: '技术', value: '技术项目' },
@@ -294,8 +296,8 @@ export default function WorkspaceContainer() {
                 columns={[
                   { title: '项目名称', dataIndex: 'name', width: 200, render: (name: string, r: any) => (
                     <div>
-                      <div style={{ fontWeight: 500 }}>{r.type === '整机产品项目' && r.marketName ? r.marketName : name}</div>
-                      {r.type === '整机产品项目' && r.marketName && <div style={{ fontSize: 11, color: '#9ca3af' }}>{name}</div>}
+                      <div style={{ fontWeight: 500 }}>{isMachineProjectType(r.type) && r.marketName ? r.marketName : name}</div>
+                      {isMachineProjectType(r.type) && r.marketName && <div style={{ fontSize: 11, color: '#9ca3af' }}>{name}</div>}
                     </div>
                   )},
                   { title: '类型', dataIndex: 'type', width: 120, render: (t: string) => {

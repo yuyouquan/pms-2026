@@ -1,4 +1,6 @@
-export const PROJECT_TYPE_MACHINE = '整机产品项目'
+export const PROJECT_TYPE_MACHINE_PHONE = '整机-手机'
+export const PROJECT_TYPE_MACHINE_PAD = '整机-PAD'
+export const PROJECT_TYPE_MACHINE_LAPTOP = '整机-笔电'
 export const PROJECT_TYPE_TOS_VERSION = 'tOS版本项目'
 export const PROJECT_TYPE_INDEPENDENT_SOFTWARE = '独立软件产品项目'
 export const PROJECT_TYPE_TECH = '技术项目'
@@ -11,8 +13,20 @@ export const SOFTWARE_PROJECT_TYPES = [
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
 ] as const
 
+export const MACHINE_PROJECT_TYPES = [
+  PROJECT_TYPE_MACHINE_PHONE,
+  PROJECT_TYPE_MACHINE_PAD,
+  PROJECT_TYPE_MACHINE_LAPTOP,
+] as const
+
+export type MachineProjectType = typeof MACHINE_PROJECT_TYPES[number]
+
+export function isMachineProjectType(type: string | null | undefined): type is MachineProjectType {
+  return MACHINE_PROJECT_TYPES.includes(type as MachineProjectType)
+}
+
 export const PROJECT_TYPES = [
-  PROJECT_TYPE_MACHINE,
+  ...MACHINE_PROJECT_TYPES,
   PROJECT_TYPE_TOS_VERSION,
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
   PROJECT_TYPE_TECH,
@@ -22,7 +36,9 @@ export const PROJECT_TYPES = [
 export type ProjectTypeName = typeof PROJECT_TYPES[number]
 
 export const PROJECT_TYPE_COLORS: Record<string, { bg: string; color: string }> = {
-  [PROJECT_TYPE_MACHINE]: { bg: 'rgba(99,102,241,0.08)', color: '#6366f1' },
+  [PROJECT_TYPE_MACHINE_PHONE]: { bg: 'rgba(99,102,241,0.08)', color: '#6366f1' },
+  [PROJECT_TYPE_MACHINE_PAD]: { bg: 'rgba(99,102,241,0.08)', color: '#6366f1' },
+  [PROJECT_TYPE_MACHINE_LAPTOP]: { bg: 'rgba(99,102,241,0.08)', color: '#6366f1' },
   [PROJECT_TYPE_TOS_VERSION]: { bg: 'rgba(6,182,212,0.10)', color: '#0891b2' },
   [PROJECT_TYPE_INDEPENDENT_SOFTWARE]: { bg: 'rgba(20,184,166,0.10)', color: '#0f766e' },
   [PROJECT_TYPE_TECH]: { bg: 'rgba(250,173,20,0.08)', color: '#d48806' },
