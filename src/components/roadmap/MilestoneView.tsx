@@ -78,7 +78,6 @@ interface MilestoneViewProps {
   level1Tasks: any[]
   onViewProject: (projectId: string, market?: string) => void
   initialProjectType?: string
-  onProjectTypeChange?: (type: string) => void
   hideProjectTypeTabs?: boolean
   scopeExtra?: ReactNode
 }
@@ -125,11 +124,11 @@ interface RoadmapCompareRow extends RoadmapMilestoneRow {
   changeSummary?: string
 }
 
-const ROADMAP_SCOPES: { key: RoadmapScope; label: string; projectType: string }[] = [
-  { key: 'overall', label: '整体', projectType: '整体' },
-  { key: 'machine', label: '整机项目', projectType: PROJECT_TYPE_MACHINE_PHONE },
-  { key: 'tosVersion', label: 'tOS版本项目', projectType: PROJECT_TYPE_TOS_VERSION },
-  { key: 'tech', label: '技术项目', projectType: PROJECT_TYPE_TECH },
+const ROADMAP_SCOPES: { key: RoadmapScope; label: string }[] = [
+  { key: 'overall', label: '整体' },
+  { key: 'machine', label: '整机项目' },
+  { key: 'tosVersion', label: 'tOS版本项目' },
+  { key: 'tech', label: '技术项目' },
 ]
 
 const SCOPE_BY_PROJECT_TYPE: Record<string, RoadmapScope> = {
@@ -141,13 +140,6 @@ const SCOPE_BY_PROJECT_TYPE: Record<string, RoadmapScope> = {
   [SOFTWARE_PROJECT_DISPLAY_TYPE]: 'tosVersion',
   [LEGACY_SOFTWARE_PROJECT_TYPE]: 'tosVersion',
   [PROJECT_TYPE_TECH]: 'tech',
-}
-
-const PROJECT_TYPE_BY_SCOPE: Record<RoadmapScope, string> = {
-  overall: '整体',
-  machine: PROJECT_TYPE_MACHINE_PHONE,
-  tosVersion: PROJECT_TYPE_TOS_VERSION,
-  tech: PROJECT_TYPE_TECH,
 }
 
 const SUMMARY_VISIBLE_STATUSES: RoadmapStatus[] = ['待立项', '在研', '上市', '转维', 'EOS', '暂停', '已取消', '已迁移']
@@ -805,7 +797,6 @@ export default function MilestoneView({
   level1Tasks,
   onViewProject,
 	initialProjectType,
-	onProjectTypeChange,
 	hideProjectTypeTabs,
 	scopeExtra,
 }: MilestoneViewProps) {
@@ -983,7 +974,6 @@ export default function MilestoneView({
       : getDefaultVisibleColumnsForScope(nextScope)
 
     setScope(nextScope)
-    onProjectTypeChange?.(PROJECT_TYPE_BY_SCOPE[nextScope])
     setStatusFilter(normalizeStatusFilter(state.statusFilter))
     const nextDateRange = normalizeDateRange(state.milestoneDateRange)
     const nextFilters = normalizeProjectFilterConditions((state.filters || []) as FilterCondition[], nextDateRange)
@@ -1030,7 +1020,6 @@ export default function MilestoneView({
   const handleScopeChange = (key: string) => {
     const nextScope = key as RoadmapScope
     setScope(nextScope)
-    onProjectTypeChange?.(PROJECT_TYPE_BY_SCOPE[nextScope])
     setStatusFilter('all')
     setFilters([])
     setTempFilters([])

@@ -21,8 +21,21 @@ export const MACHINE_PROJECT_TYPES = [
 
 export type MachineProjectType = typeof MACHINE_PROJECT_TYPES[number]
 
+export const MACHINE_PROJECT_TYPE_FILTER = 'machine'
+
+export const MACHINE_PROJECT_FILTER_OPTIONS = [
+  { label: '整机项目', value: MACHINE_PROJECT_TYPE_FILTER },
+  ...MACHINE_PROJECT_TYPES.map(type => ({ label: type, value: type })),
+] as const
+
 export function isMachineProjectType(type: string | null | undefined): type is MachineProjectType {
   return MACHINE_PROJECT_TYPES.includes(type as MachineProjectType)
+}
+
+export function matchesProjectTypeFilter(projectType: string, selectedFilter: string) {
+  if (selectedFilter === 'all') return true
+  if (selectedFilter === MACHINE_PROJECT_TYPE_FILTER) return isMachineProjectType(projectType)
+  return projectType === selectedFilter
 }
 
 export const PROJECT_TYPES = [

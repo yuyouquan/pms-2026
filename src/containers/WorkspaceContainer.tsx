@@ -21,7 +21,12 @@ import AddProjectModal from '@/components/workspace/AddProjectModal'
 import { initialProjects, PROJECT_TYPES, PROJECT_STATUS_CONFIG } from '@/data/projects'
 import { initialTodos } from '@/components/shared/PlanHelpers'
 import { kanbanColumns } from '@/stores/project'
-import { isMachineProjectType, PROJECT_TYPE_COLORS } from '@/constants/projectTypes'
+import {
+  isMachineProjectType,
+  MACHINE_PROJECT_FILTER_OPTIONS,
+  matchesProjectTypeFilter,
+  PROJECT_TYPE_COLORS,
+} from '@/constants/projectTypes'
 
 export default function WorkspaceContainer() {
   const {
@@ -80,10 +85,8 @@ export default function WorkspaceContainer() {
     if (projectStatusFilter !== 'all') {
       result = result.filter(p => p.status === projectStatusFilter)
     }
-    if (projectTypeFilter === 'machine') {
-      result = result.filter(p => isMachineProjectType(p.type))
-    } else if (projectTypeFilter !== 'all') {
-      result = result.filter(p => p.type === projectTypeFilter)
+    if (projectTypeFilter !== 'all') {
+      result = result.filter(p => matchesProjectTypeFilter(p.type, projectTypeFilter))
     }
     return result
   }, [visibleProjects, projectSearchText2, projectStatusFilter, projectTypeFilter])
@@ -202,7 +205,7 @@ export default function WorkspaceContainer() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 4px', background: 'rgba(99,102,241,0.04)', borderRadius: 20, border: '1px solid rgba(99,102,241,0.06)' }}>
               {[
                 { label: '全部', value: 'all' },
-                { label: '整机项目', value: 'machine' },
+                ...MACHINE_PROJECT_FILTER_OPTIONS,
                 { label: 'tOS版本', value: 'tOS版本项目' },
                 { label: '独立软件', value: '独立软件产品项目' },
                 { label: '技术', value: '技术项目' },

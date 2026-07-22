@@ -153,6 +153,31 @@ function functionCallsMachineTypeGuard(filePath, functionName) {
   return found
 }
 
+function findIdentifierReferences(filePath, identifierName) {
+  const source = fs.readFileSync(filePath, 'utf8')
+  const sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, filePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
+  const references = []
+
+  function visit(node) {
+    if (ts.isIdentifier(node) && node.text === identifierName) {
+      const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+      references.push(`${path.relative(root, filePath)}:${line + 1}`)
+    }
+    ts.forEachChild(node, visit)
+  }
+
+  visit(sourceFile)
+  return references
+}
+
+function listTypeScriptFiles(directoryPath) {
+  return fs.readdirSync(directoryPath, { withFileTypes: true }).flatMap(entry => {
+    const entryPath = path.join(directoryPath, entry.name)
+    if (entry.isDirectory()) return listTypeScriptFiles(entryPath)
+    return /\.tsx?$/.test(entry.name) ? [entryPath] : []
+  })
+}
+
 registerAssertion('RoadmapView does not import or mount legacy roadmap views', () => {
   if (roadmapAnalysis.legacyImports.length || roadmapAnalysis.legacyJsxMounts.length) {
     throw new Error(`found imports [${roadmapAnalysis.legacyImports.join(', ')}] and JSX mounts [${roadmapAnalysis.legacyJsxMounts.join(', ')}]`)
@@ -239,6 +264,51 @@ registerAssertion('machine type guard drives market rows, status mapping, and te
       throw new Error(`${type} did not expand into per-market roadmap rows`)
     }
   }
+})
+
+registerAssertion('workspace machine filters preserve exact and aggregate subtype semantics', () => {
+  const {
+    MACHINE_PROJECT_FILTER_OPTIONS,
+    MACHINE_PROJECT_TYPE_FILTER,
+    matchesProjectTypeFilter,
+  } = loadTypeScriptModule(path.join(root, 'src/constants/projectTypes.ts'))
+  const expectedFilterValues = ['machine', ...expectedMachineProjectTypes]
+  const actualFilterValues = MACHINE_PROJECT_FILTER_OPTIONS?.map(option => option.value)
+  if (JSON.stringify(actualFilterValues) !== JSON.stringify(expectedFilterValues)) {
+    throw new Error(`expected machine filters ${JSON.stringify(expectedFilterValues)}, got ${JSON.stringify(actualFilterValues)}`)
+  }
+  if (MACHINE_PROJECT_TYPE_FILTER !== 'machine') throw new Error('aggregate machine filter value must remain machine')
+
+  for (const selectedType of expectedMachineProjectTypes) {
+    for (const projectType of expectedMachineProjectTypes) {
+      const expected = projectType === selectedType
+      if (matchesProjectTypeFilter(projectType, selectedType) !== expected) {
+        throw new Error(`${selectedType} must ${expected ? '' : 'not '}match ${projectType}`)
+      }
+    }
+    if (!matchesProjectTypeFilter(selectedType, MACHINE_PROJECT_TYPE_FILTER)) {
+      throw new Error(`aggregate machine filter must match ${selectedType}`)
+    }
+  }
+
+  if (matchesProjectTypeFilter('技术项目', MACHINE_PROJECT_TYPE_FILTER)) throw new Error('aggregate machine filter matched a non-machine type')
+  if (!matchesProjectTypeFilter('技术项目', '技术项目')) throw new Error('exact non-machine filter behavior changed')
+  if (matchesProjectTypeFilter('技术项目', 'tOS版本项目')) throw new Error('different non-machine filters must not match')
+})
+
+registerAssertion('MilestoneView does not translate aggregate machine scope into an exact project type', () => {
+  const milestonePath = path.join(root, 'src/components/roadmap/MilestoneView.tsx')
+  const ambiguousReferences = [
+    ...findIdentifierReferences(milestonePath, 'PROJECT_TYPE_BY_SCOPE'),
+    ...findIdentifierReferences(milestonePath, 'onProjectTypeChange'),
+  ]
+  if (ambiguousReferences.length) throw new Error(ambiguousReferences.join(', '))
+})
+
+registerAssertion('runtime source has no references to the removed PROJECT_TYPE_MACHINE identifier', () => {
+  const references = listTypeScriptFiles(path.join(root, 'src'))
+    .flatMap(file => findIdentifierReferences(file, 'PROJECT_TYPE_MACHINE'))
+  if (references.length) throw new Error(references.join(', '))
 })
 
 const failures = []
