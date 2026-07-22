@@ -150,9 +150,15 @@ export default function RoadmapTableView({
           ? conflictKeyByPlannedIdentity.get(`planned:${row.id}`)
           : undefined
         return (
-          <Flex vertical gap={4} align="flex-start">
-            <Typography.Text strong>{formattedValue}</Typography.Text>
-            {row.source === 'planned' ? <Tag color="purple">待规划</Tag> : null}
+          <Flex vertical gap={4} align="flex-start" style={{ minWidth: 0 }}>
+            <Flex className="roadmap-table-project-name-row" align="center" gap={6} wrap={false}>
+              <Typography.Text className="roadmap-table-project-name" title={formattedValue} strong>
+                {formattedValue}
+              </Typography.Text>
+              {row.source === 'planned' ? (
+                <Tag className="roadmap-table-project-source-tag" color="purple">待规划</Tag>
+              ) : null}
+            </Flex>
             {conflictKey ? (
               <Button
                 className="roadmap-conflict-link"
@@ -323,6 +329,24 @@ export default function RoadmapTableView({
       />
 
       <style jsx global>{`
+        .roadmap-table-shell .roadmap-table-project-name-row {
+          width: 100%;
+          min-width: 0;
+          flex-wrap: nowrap;
+        }
+        .roadmap-table-shell .roadmap-table-project-name {
+          display: block;
+          min-width: 0;
+          flex: 1;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .roadmap-table-shell .roadmap-table-project-source-tag {
+          flex: none;
+          margin-inline-end: 0;
+          white-space: nowrap;
+        }
         .roadmap-table-shell .pms-table .ant-table-tbody > tr.roadmap-conflict-row > td {
           background: color-mix(in srgb, var(--warning-light) 78%, white) !important;
           transition: background-color var(--duration-fast) var(--ease-out);

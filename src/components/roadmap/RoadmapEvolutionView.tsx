@@ -23,6 +23,12 @@ export interface EvolutionBrandGroup {
 
 type EvolutionBrand = (typeof EVOLUTION_BRAND_ORDER)[number]
 
+const EVOLUTION_BRAND_CLASS_NAMES: Record<EvolutionBrand, string> = {
+  TECNO: 'brand-tecno',
+  Infinix: 'brand-infinix',
+  itel: 'brand-itel',
+}
+
 function isEvolutionBrand(brand: RoadmapBrand): brand is EvolutionBrand {
   return EVOLUTION_BRAND_ORDER.some(candidate => candidate === brand)
 }
@@ -126,30 +132,35 @@ function EvolutionProductCell({
         </div>
       ) : null}
 
-      {groups.length ? groups.map(group => (
-        <section key={`${version.id}:${productType}:${group.brand}`} className="pms-roadmap-evolution-brand-section">
-          <div className="pms-roadmap-evolution-brand-heading">
-            <span className={`pms-roadmap-evolution-brand-dot brand-${group.brand.toLowerCase()}`} aria-hidden />
-            <Typography.Text strong>{group.brand}</Typography.Text>
-            <Typography.Text type="secondary">{group.rows.length}</Typography.Text>
-          </div>
-          <div className="pms-roadmap-evolution-card-list">
-            {group.rows.map(row => (
-              <RoadmapProjectCard
-                key={`${row.source}:${row.id}`}
-                row={row}
-                versions={versions}
-                visibleColumns={visibleColumns}
-                conflictKey={conflictKeyByIdentity.get(`${row.source}:${row.id}`)}
-                canEdit={canEdit}
-                onOpenConflict={onOpenConflict}
-                onEditPlannedProject={onEditPlannedProject}
-                onDeletePlannedProject={onDeletePlannedProject}
-              />
-            ))}
-          </div>
-        </section>
-      )) : (
+      {groups.length ? groups.map(group => {
+        const brandClassName = EVOLUTION_BRAND_CLASS_NAMES[group.brand]
+        return (
+          <section key={`${version.id}:${productType}:${group.brand}`} className="pms-roadmap-evolution-brand-section">
+            <div className="pms-roadmap-evolution-brand-heading">
+              <span className={`pms-roadmap-evolution-brand-dot ${brandClassName}`} aria-hidden />
+              <Typography.Text className={`pms-roadmap-evolution-brand-label ${brandClassName}`} strong>
+                {group.brand}
+              </Typography.Text>
+              <Typography.Text type="secondary">{group.rows.length}</Typography.Text>
+            </div>
+            <div className="pms-roadmap-evolution-card-list">
+              {group.rows.map(row => (
+                <RoadmapProjectCard
+                  key={`${row.source}:${row.id}`}
+                  row={row}
+                  versions={versions}
+                  visibleColumns={visibleColumns}
+                  conflictKey={conflictKeyByIdentity.get(`${row.source}:${row.id}`)}
+                  canEdit={canEdit}
+                  onOpenConflict={onOpenConflict}
+                  onEditPlannedProject={onEditPlannedProject}
+                  onDeletePlannedProject={onDeletePlannedProject}
+                />
+              ))}
+            </div>
+          </section>
+        )
+      }) : (
         <div className="pms-roadmap-evolution-empty">暂无{productType}项目</div>
       )}
     </section>
@@ -432,14 +443,31 @@ export default function RoadmapEvolutionView({
           box-shadow: 0 0 0 3px rgba(67, 56, 202, 0.1);
         }
 
+        .pms-roadmap-evolution-brand-dot.brand-tecno {
+          background: #1677ff;
+          box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.1);
+        }
+
         .pms-roadmap-evolution-brand-dot.brand-infinix {
-          background: #15803d;
-          box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.1);
+          background: #52c41a;
+          box-shadow: 0 0 0 3px rgba(82, 196, 26, 0.1);
         }
 
         .pms-roadmap-evolution-brand-dot.brand-itel {
-          background: #dc2626;
-          box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+          background: #ff4d4f;
+          box-shadow: 0 0 0 3px rgba(255, 77, 79, 0.1);
+        }
+
+        .pms-roadmap-evolution-brand-label.brand-tecno {
+          color: #1677ff;
+        }
+
+        .pms-roadmap-evolution-brand-label.brand-infinix {
+          color: #52c41a;
+        }
+
+        .pms-roadmap-evolution-brand-label.brand-itel {
+          color: #ff4d4f;
         }
 
         .pms-roadmap-evolution-card-list {
@@ -471,9 +499,15 @@ export default function RoadmapEvolutionView({
           box-shadow: inset 4px 0 0 var(--warning), var(--shadow-xs);
         }
 
-        .pms-roadmap-evolution-card-title,
-        .pms-roadmap-evolution-card-code {
+        .pms-roadmap-evolution-card-header {
+          min-width: 0;
+          flex-wrap: nowrap;
+        }
+
+        .pms-roadmap-evolution-card-title {
           display: block;
+          min-width: 0;
+          flex: 1;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
@@ -484,14 +518,10 @@ export default function RoadmapEvolutionView({
           color: var(--text-primary);
         }
 
-        .pms-roadmap-evolution-card-code {
-          margin-top: 2px;
-          font-size: var(--text-sm);
-        }
-
         .pms-roadmap-evolution-source-tag {
           flex: none;
           margin-inline-end: 0;
+          white-space: nowrap;
         }
 
         .pms-roadmap-evolution-card-details {

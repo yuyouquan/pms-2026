@@ -5,16 +5,19 @@ import { Button, Checkbox, Drawer, Flex, Typography } from 'antd'
 import {
   DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
   DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS,
+  ensureRoadmapLockedColumns,
 } from '@/lib/roadmapFilters'
 import { ROADMAP_COLUMNS, type RoadmapColumnKey, type RoadmapViewMode } from '@/types/roadmap'
 
 const DRAWER_Z_INDEX = 1300
+const NO_LOCKED_COLUMNS: readonly RoadmapColumnKey[] = []
 
 interface RoadmapColumnSettingsDrawerProps {
   open: boolean
   onClose: () => void
   viewMode: RoadmapViewMode
   visibleColumns: readonly RoadmapColumnKey[]
+  lockedColumns?: readonly RoadmapColumnKey[]
   onChange: (columns: RoadmapColumnKey[]) => void
 }
 
@@ -23,27 +26,32 @@ export default function RoadmapColumnSettingsDrawer({
   onClose,
   viewMode,
   visibleColumns,
+  lockedColumns = NO_LOCKED_COLUMNS,
   onChange,
 }: RoadmapColumnSettingsDrawerProps) {
-  const [draftColumns, setDraftColumns] = useState<RoadmapColumnKey[]>([...visibleColumns])
+  const [draftColumns, setDraftColumns] = useState<RoadmapColumnKey[]>(() => (
+    ensureRoadmapLockedColumns(visibleColumns, lockedColumns)
+  ))
   const defaultVisibleColumns = viewMode === 'table'
     ? DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS
     : DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS
 
   useEffect(() => {
-    if (open) setDraftColumns([...visibleColumns])
-  }, [open, visibleColumns])
+    if (open) setDraftColumns(ensureRoadmapLockedColumns(visibleColumns, lockedColumns))
+  }, [lockedColumns, open, visibleColumns])
 
   const updateDraftColumns = (values: Array<string | number>) => {
     const next = ROADMAP_COLUMNS
       .map(column => column.key)
       .filter(key => values.includes(key))
-    if (next.length) setDraftColumns(next)
+    const nextWithLockedColumns = ensureRoadmapLockedColumns(next, lockedColumns)
+    if (nextWithLockedColumns.length) setDraftColumns(nextWithLockedColumns)
   }
 
   const applyColumns = () => {
-    if (!draftColumns.length) return
-    onChange(draftColumns)
+    const next = ensureRoadmapLockedColumns(draftColumns, lockedColumns)
+    if (!next.length) return
+    onChange(next)
     onClose()
   }
 
@@ -60,7 +68,7 @@ export default function RoadmapColumnSettingsDrawer({
         <Flex justify="space-between" align="center" gap={12} wrap>
           <Button
             size="large"
-            onClick={() => setDraftColumns([...defaultVisibleColumns])}
+            onClick={() => setDraftColumns(ensureRoadmapLockedColumns(defaultVisibleColumns, lockedColumns))}
             style={{ minHeight: 44 }}
           >
             重置默认
@@ -84,6 +92,7 @@ export default function RoadmapColumnSettingsDrawer({
         <Flex vertical gap={4}>
           {ROADMAP_COLUMNS.map(column => {
             const checked = draftColumns.includes(column.key)
+            const isLocked = lockedColumns.includes(column.key)
             return (
               <label
                 key={column.key}
@@ -94,12 +103,12 @@ export default function RoadmapColumnSettingsDrawer({
                   padding: '8px 12px',
                   borderRadius: 'var(--radius-md)',
                   background: checked ? 'var(--bg-purple-tint)' : 'transparent',
-                  cursor: checked && draftColumns.length === 1 ? 'not-allowed' : 'pointer',
+                  cursor: isLocked || (checked && draftColumns.length === 1) ? 'not-allowed' : 'pointer',
                 }}
               >
                 <Checkbox
                   value={column.key}
-                  disabled={checked && draftColumns.length === 1}
+                  disabled={isLocked || (checked && draftColumns.length === 1)}
                 >
                   {column.label}
                 </Checkbox>

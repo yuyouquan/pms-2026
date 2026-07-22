@@ -23,7 +23,13 @@ export const DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS = ROADMAP_COLUMNS
   .filter(column => column.defaultVisible)
   .map(column => column.key)
 
+export const ROADMAP_EVOLUTION_LOCKED_COLUMNS: RoadmapColumnKey[] = [
+  'productSeries',
+  'displayName',
+]
+
 export const DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS: RoadmapColumnKey[] = [
+  'productSeries',
   'marketName',
   'displayName',
   'platform',
@@ -34,6 +40,14 @@ export const DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS: RoadmapColumnKey[] = [
 ]
 
 export const DEFAULT_ROADMAP_VISIBLE_COLUMNS = DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS
+
+export function ensureRoadmapLockedColumns(
+  columns: readonly RoadmapColumnKey[],
+  lockedColumns: readonly RoadmapColumnKey[] = [],
+): RoadmapColumnKey[] {
+  const requested = new Set([...columns, ...lockedColumns])
+  return ROADMAP_COLUMNS.flatMap(column => requested.has(column.key) ? [column.key] : [])
+}
 
 export type RoadmapQuickFilterField = 'brand' | 'productType'
 export type RoadmapQuickFilterValue = 'all' | 'custom' | RoadmapBrand | RoadmapProductType

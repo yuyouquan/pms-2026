@@ -9,6 +9,12 @@ import {
   type TosVersionConfig,
 } from '@/types/roadmap'
 
+const VERSION_TYPE_TAG_COLORS = {
+  Full: 'blue',
+  Slim: 'gold',
+  Go: 'cyan',
+} as const
+
 export interface RoadmapProjectCardProps {
   row: RoadmapProjectRow
   versions: readonly TosVersionConfig[]
@@ -32,6 +38,10 @@ export function formatRoadmapCardValue(
   return typeof value === 'string' && value.trim() ? value : '—'
 }
 
+export function formatEvolutionCardTitle(row: RoadmapProjectRow): string {
+  return `${row.productSeries.trim() || '—'}（${row.displayName.trim() || '—'}）`
+}
+
 export default function RoadmapProjectCard({
   row,
   versions,
@@ -43,26 +53,22 @@ export default function RoadmapProjectCard({
   onDeletePlannedProject,
 }: RoadmapProjectCardProps) {
   const detailColumns = ROADMAP_COLUMNS.filter(column => (
-    column.key !== 'displayName' && visibleColumns.includes(column.key)
+    column.key !== 'productSeries'
+    && column.key !== 'displayName'
+    && visibleColumns.includes(column.key)
   ))
   const isPlanned = row.source === 'planned'
+  const title = formatEvolutionCardTitle(row)
 
   return (
     <article
       className={`pms-roadmap-evolution-card${conflictKey && isPlanned ? ' is-conflict' : ''}`}
-      aria-label={`${row.displayName}，${isPlanned ? '待规划项目' : '正常项目，只读'}`}
+      aria-label={`${title}，${isPlanned ? '待规划项目' : '正常项目，只读'}`}
     >
-      <Flex justify="space-between" align="flex-start" gap={8}>
-        <div style={{ minWidth: 0 }}>
-          <Typography.Text className="pms-roadmap-evolution-card-title" strong>
-            {row.displayName}
-          </Typography.Text>
-          {row.projectCode !== row.displayName ? (
-            <Typography.Text className="pms-roadmap-evolution-card-code" type="secondary">
-              {row.projectCode}
-            </Typography.Text>
-          ) : null}
-        </div>
+      <Flex className="pms-roadmap-evolution-card-header" justify="space-between" align="center" gap={8} wrap={false}>
+        <Typography.Text className="pms-roadmap-evolution-card-title" title={title} strong>
+          {title}
+        </Typography.Text>
         <Tag className="pms-roadmap-evolution-source-tag" color={isPlanned ? 'purple' : 'blue'}>
           {isPlanned ? '待规划项目' : '正常项目 · 只读'}
         </Tag>
@@ -70,14 +76,20 @@ export default function RoadmapProjectCard({
 
       {detailColumns.length ? (
         <dl className="pms-roadmap-evolution-card-details">
-          {detailColumns.map(column => (
-            <div key={column.key} className="pms-roadmap-evolution-card-detail">
-              <dt>{column.label}</dt>
-              <dd title={formatRoadmapCardValue(column.key, row, versions)}>
-                {formatRoadmapCardValue(column.key, row, versions)}
-              </dd>
-            </div>
-          ))}
+          {detailColumns.map(column => {
+            const value = formatRoadmapCardValue(column.key, row, versions)
+            const tagColor = column.key === 'versionType'
+              ? VERSION_TYPE_TAG_COLORS[row.versionType]
+              : null
+            return (
+              <div key={column.key} className="pms-roadmap-evolution-card-detail">
+                <dt>{column.label}</dt>
+                <dd title={value}>
+                  {tagColor && value !== '—' ? <Tag color={tagColor}>{value}</Tag> : value}
+                </dd>
+              </div>
+            )
+          })}
         </dl>
       ) : null}
 

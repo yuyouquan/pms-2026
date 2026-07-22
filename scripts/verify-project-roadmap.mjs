@@ -2457,6 +2457,56 @@ registerAssertion('version evolution uses one aligned shared scroll grid', () =>
   }
 })
 
+registerAssertion('evolution cards keep locked titles and approved colors', () => {
+  const filters = loadTypeScriptModule(path.join(root, 'src/lib/roadmapFilters.ts'))
+  const cardModule = loadTypeScriptModule(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'))
+  const cardSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'), 'utf8')
+  const drawerSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapColumnSettingsDrawer.tsx'), 'utf8')
+  const evolutionSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapEvolutionView.tsx'), 'utf8')
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  const tableSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
+
+  if (cardModule.formatEvolutionCardTitle({ productSeries: ' SPARK 60 ', displayName: ' KJ6 ' }) !== 'SPARK 60（KJ6）') {
+    throw new Error('evolution card title does not use product series and full-width parentheses')
+  }
+  if (cardModule.formatEvolutionCardTitle({ productSeries: ' ', displayName: '' }) !== '—（—）') {
+    throw new Error('evolution card title does not fall back for empty structural values')
+  }
+  const expectedLocked = ['productSeries', 'displayName']
+  if (JSON.stringify(filters.ROADMAP_EVOLUTION_LOCKED_COLUMNS) !== JSON.stringify(expectedLocked)) {
+    throw new Error('evolution structural columns are not locked')
+  }
+  const expectedEvolution = [
+    'productSeries', 'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
+  ]
+  if (JSON.stringify(filters.DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS) !== JSON.stringify(expectedEvolution)) {
+    throw new Error('evolution defaults do not include both structural title fields')
+  }
+  const lockedSelection = filters.ensureRoadmapLockedColumns(['marketName'], expectedLocked)
+  if (JSON.stringify(lockedSelection) !== JSON.stringify(['productSeries', 'marketName', 'displayName'])) {
+    throw new Error('locked structural fields can be removed from a column selection')
+  }
+
+  for (const token of ['lockedColumns', 'ensureRoadmapLockedColumns', 'disabled={isLocked ||']) {
+    if (!drawerSource.includes(token)) throw new Error(`column drawer is missing ${token}`)
+  }
+  if (!moduleSource.includes("lockedColumns={viewMode === 'evolution' ? ROADMAP_EVOLUTION_LOCKED_COLUMNS : undefined}")) {
+    throw new Error('locked columns are not scoped to evolution mode')
+  }
+  for (const token of ['formatEvolutionCardTitle', "Full: 'blue'", "Slim: 'gold'", "Go: 'cyan'", "column.key !== 'productSeries'", "column.key !== 'displayName'"]) {
+    if (!cardSource.includes(token)) throw new Error(`card is missing ${token}`)
+  }
+  for (const token of ['brand-tecno', 'brand-infinix', 'brand-itel', 'pms-roadmap-evolution-brand-label']) {
+    if (!evolutionSource.includes(token)) throw new Error(`brand styling is missing ${token}`)
+  }
+  for (const token of ['pms-roadmap-evolution-card-header', 'pms-roadmap-evolution-card-title', 'pms-roadmap-evolution-source-tag']) {
+    if (!evolutionSource.includes(token) && !cardSource.includes(token)) throw new Error(`card nowrap styling is missing ${token}`)
+  }
+  for (const token of ['roadmap-table-project-name-row', 'roadmap-table-project-name', 'roadmap-table-project-source-tag']) {
+    if (!tableSource.includes(token)) throw new Error(`table project-name nowrap styling is missing ${token}`)
+  }
+})
+
 registerAssertion('global roadmap conflicts stay visible and actionable until resolved', () => {
   const alertSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapConflictAlert.tsx'), 'utf8')
   const drawerSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapConflictDrawer.tsx'), 'utf8')
@@ -2610,7 +2660,7 @@ registerAssertion('table and evolution views keep the approved independent defau
     'developMode', 'remark',
   ]
   const expectedEvolution = [
-    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
+    'productSeries', 'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
   ]
   if (JSON.stringify(filterModule.DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS) !== JSON.stringify(expectedTable)) {
     throw new Error('table default columns do not match the approved matrix')

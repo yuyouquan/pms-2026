@@ -7,6 +7,7 @@ import {
   buildRoadmapFilterFieldDefinitions,
   createRoadmapTextFilterDebouncer,
   getRoadmapQuickFilterValue,
+  ROADMAP_EVOLUTION_LOCKED_COLUMNS,
   sanitizeRoadmapFilterConditions,
   setRoadmapQuickFilter,
   type RoadmapTextFilterDebouncer,
@@ -409,6 +410,7 @@ export default function ProjectRoadmapModule({
         onClose={() => setColumnDrawerOpen(false)}
         viewMode={viewMode}
         visibleColumns={visibleColumns}
+        lockedColumns={viewMode === 'evolution' ? ROADMAP_EVOLUTION_LOCKED_COLUMNS : undefined}
         onChange={setVisibleColumns}
       />
       <PlannedProjectModal
