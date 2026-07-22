@@ -15,6 +15,12 @@ export function registerAssertion(name, assertion) {
   assertions.push({ name, assertion })
 }
 
+export function registerTableAssertions(groupName, cases) {
+  for (const [caseName, assertion] of cases) {
+    registerAssertion(`${groupName}: ${caseName}`, assertion)
+  }
+}
+
 export function resolveTypeScriptModule(specifier, parentPath = path.join(root, 'index.ts')) {
   const candidate = specifier.startsWith('@/')
     ? path.join(root, 'src', specifier.slice(2))
@@ -404,6 +410,32 @@ registerAssertion('roadmap validation normalizes names, duplicate keys, tOS vers
   if (validation.normalizeLegacyRoadmapProductType('未知') !== null) throw new Error('unknown product types must normalize to null')
 })
 
+registerAssertion('roadmap duplicate keys use locale-independent Unicode normalization', () => {
+  const { buildRoadmapDuplicateKey } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
+  const normalized = buildRoadmapDuplicateKey(' ｘ６８７７ ', 'Android 16', '新品')
+  if (normalized !== 'X6877|Android 16|新品') throw new Error(`unexpected normalized key ${normalized}`)
+})
+
+registerTableAssertions('tOS normalization rejects unsafe components', [
+  ['negative major', () => {
+    const { normalizeTosVersionName } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
+    if (normalizeTosVersionName('tOS -1.2') !== null) throw new Error('negative major must be rejected')
+  }],
+  ['negative minor', () => {
+    const { normalizeTosVersionName } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
+    if (normalizeTosVersionName('tOS 17.-1') !== null) throw new Error('negative minor must be rejected')
+  }],
+  ['component above finite bound', () => {
+    const { normalizeTosVersionName, MAX_TOS_VERSION_COMPONENT } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
+    if (!Number.isFinite(MAX_TOS_VERSION_COMPONENT)) throw new Error('finite component bound must be exported')
+    if (normalizeTosVersionName(`tOS ${MAX_TOS_VERSION_COMPONENT + 1}.0`) !== null) throw new Error('oversized major must be rejected')
+  }],
+  ['overflowing digits', () => {
+    const { normalizeTosVersionName } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
+    if (normalizeTosVersionName(`tOS ${'9'.repeat(400)}.0`) !== null) throw new Error('overflowing version must not emit Infinity')
+  }],
+])
+
 registerAssertion('roadmap product-line and planned-project validation enforce only approved rules', () => {
   const validation = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
   const expectedLines = {
@@ -437,7 +469,8 @@ registerAssertion('roadmap product-line and planned-project validation enforce o
     developMode: '自研',
   }
   const existing = [{ id: 'planned-1', ...validInput, displayName: 'X6877', source: 'planned', status: '待规划', readOnly: false, remark: '' }]
-  const validErrors = validation.validatePlannedProject(validInput, existing, 'planned-1')
+  const validTosIds = new Set(['tos-17-2'])
+  const validErrors = validation.validatePlannedProject(validInput, existing, 'planned-1', validTosIds)
   if (Object.keys(validErrors).length) {
     throw new Error(`remark must be optional, editing must exclude self, and dates have no cross-field rule: ${JSON.stringify(validErrors)}`)
   }
@@ -446,15 +479,65 @@ registerAssertion('roadmap product-line and planned-project validation enforce o
 
   const missingRequired = { ...validInput }
   delete missingRequired.platform
-  const requiredErrors = validation.validatePlannedProject(missingRequired, [])
+  const requiredErrors = validation.validatePlannedProject(missingRequired, [], undefined, validTosIds)
   if (!requiredErrors.platform || requiredErrors.remark) throw new Error(`required-field errors are wrong: ${JSON.stringify(requiredErrors)}`)
 
-  const badBrandLineErrors = validation.validatePlannedProject({ ...validInput, productLine: 'ZERO' }, [])
+  const badBrandLineErrors = validation.validatePlannedProject({ ...validInput, productLine: 'ZERO' }, [], undefined, validTosIds)
   if (!badBrandLineErrors.productLine) throw new Error('brand/product-line mismatch must be rejected')
-  const invalidBrandErrors = validation.validatePlannedProject({ ...validInput, brand: 'Unknown', productLine: 'SPARK' }, [])
+  const invalidBrandErrors = validation.validatePlannedProject({ ...validInput, brand: 'Unknown', productLine: 'SPARK' }, [], undefined, validTosIds)
   if (!invalidBrandErrors.brand) throw new Error('unknown brands must be rejected')
-  const badDateErrors = validation.validatePlannedProject({ ...validInput, str5Date: '2027-2-1' }, [])
+  const badDateErrors = validation.validatePlannedProject({ ...validInput, str5Date: '2027-2-1' }, [], undefined, validTosIds)
   if (!badDateErrors.str5Date) throw new Error('dates must use exact YYYY-MM-DD format')
+})
+
+const validPlannedRoadmapInput = {
+  machineProjectType: '整机-手机',
+  projectCode: 'X6877',
+  androidVersion: 'Android 16',
+  firstSaleTosVersionId: 'tos-17-2',
+  brand: 'TECNO',
+  productLine: 'SPARK',
+  productSeries: 'SPARK 60',
+  marketName: 'SPARK 60',
+  productType: '新品',
+  platform: 'G100',
+  startRam: '4GB',
+  versionType: 'Slim',
+  str5Date: '2027-02-01',
+  launchDate: '2027-01-01',
+  developMode: '自研',
+}
+const validRoadmapTosIds = new Set(['tos-17-2'])
+
+registerTableAssertions('planned-project runtime enum validation', [
+  ['machine project type', 'machineProjectType', '整机-电视'],
+  ['Android version', 'androidVersion', 'Android 19'],
+  ['product type', 'productType', '换代'],
+  ['start RAM', 'startRam', '5GB'],
+  ['version type', 'versionType', 'Lite'],
+  ['develop mode', 'developMode', '外研'],
+  ['brand', 'brand', 'Unknown'],
+  ['product line', 'productLine', 'ZERO'],
+].map(([caseName, field, malformedValue]) => [caseName, () => {
+  const { validatePlannedProject } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
+  const errors = validatePlannedProject(
+    { ...validPlannedRoadmapInput, [field]: malformedValue },
+    [],
+    undefined,
+    validRoadmapTosIds,
+  )
+  if (!errors[field]) throw new Error(`${field} malformed runtime value was accepted`)
+}]))
+
+registerAssertion('planned-project validation rejects unknown stable tOS IDs', () => {
+  const { validatePlannedProject } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
+  const errors = validatePlannedProject(
+    { ...validPlannedRoadmapInput, firstSaleTosVersionId: 'tos-99-0' },
+    [],
+    undefined,
+    validRoadmapTosIds,
+  )
+  if (!errors.firstSaleTosVersionId) throw new Error('unknown first-sale tOS ID was accepted')
 })
 
 registerAssertion('roadmap sorting uses semantic versions, numeric RAM, ISO dates, and localized text', () => {
@@ -475,6 +558,77 @@ registerAssertion('roadmap sorting uses semantic versions, numeric RAM, ISO date
   for (const field of ['firstSaleTosVersionId', 'startRam', 'launchDate', 'displayName']) {
     if (sorting.compareRoadmapValues(field, older, newer, versions) >= 0) throw new Error(`${field} field comparator is wrong`)
   }
+})
+
+registerTableAssertions('roadmap RAM sorting rejects partial and missing values deterministically', [
+  ['empty sorts after valid', () => {
+    const { compareRam } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapSorting.ts'))
+    const result = compareRam('', '8GB')
+    if (!Number.isFinite(result) || result <= 0) throw new Error('empty RAM must sort after valid RAM')
+  }],
+  ['malformed suffix sorts after valid', () => {
+    const { compareRam } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapSorting.ts'))
+    const result = compareRam('8GB-extra', '8GB')
+    if (!Number.isFinite(result) || result <= 0) throw new Error('partially parsed RAM must be invalid')
+  }],
+  ['2TB sorts after valid', () => {
+    const { compareRam } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapSorting.ts'))
+    const result = compareRam('2TB', '16GB')
+    if (!Number.isFinite(result) || result <= 0) throw new Error('2TB must not be parsed as approved RAM')
+  }],
+  ['invalid values have total order', () => {
+    const { compareRam } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapSorting.ts'))
+    const forward = compareRam('', '2TB')
+    const reverse = compareRam('2TB', '')
+    if (forward === 0 || forward !== -reverse) throw new Error('invalid RAM values need deterministic antisymmetric ordering')
+  }],
+])
+
+registerTableAssertions('semantic tOS sorting guards malformed values', [
+  ['valid sorts before invalid', () => {
+    const { compareSemanticTos } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapSorting.ts'))
+    const result = compareSemanticTos({ major: 17, minor: 2 }, { major: Infinity, minor: 0 })
+    if (!Number.isFinite(result) || result >= 0) {
+      throw new Error('valid semantic version must sort before invalid')
+    }
+  }],
+  ['missing component is invalid', () => {
+    const { compareSemanticTos } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapSorting.ts'))
+    const result = compareSemanticTos({ major: 17 }, { major: 18, minor: 0 })
+    if (!Number.isFinite(result) || result <= 0) {
+      throw new Error('malformed semantic version must sort after valid')
+    }
+  }],
+  ['invalid values have total order', () => {
+    const { compareSemanticTos } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapSorting.ts'))
+    const forward = compareSemanticTos({ major: Infinity, minor: 0 }, { major: NaN, minor: 0 })
+    const reverse = compareSemanticTos({ major: NaN, minor: 0 }, { major: Infinity, minor: 0 })
+    if (forward === 0 || forward !== -reverse) throw new Error('invalid semantic versions need deterministic antisymmetric ordering')
+  }],
+])
+
+registerAssertion('roadmap mutation failure contracts require reason-specific payloads', () => {
+  const typesSource = fs.readFileSync(path.join(root, 'src/types/roadmap.ts'), 'utf8')
+  for (const token of [
+    'export interface RoadmapReferencedMutationFailure',
+    "reason: 'referenced'",
+    'referenceCount: number',
+    'export interface RoadmapInvalidMutationFailure',
+    "reason: 'invalid'",
+    'errors: Record<string, string>',
+  ]) {
+    if (!typesSource.includes(token)) throw new Error(`missing mutation contract token ${token}`)
+  }
+})
+
+registerAssertion('roadmap audit snapshots have a display-value contract distinct from project fields', () => {
+  const typesSource = fs.readFileSync(path.join(root, 'src/types/roadmap.ts'), 'utf8')
+  if (!typesSource.includes('export type RoadmapAuditSnapshot = Partial<Record<RoadmapAuditField, string>>')) {
+    throw new Error('missing RoadmapAuditSnapshot display-value type')
+  }
+  if (!typesSource.includes('snapshot?: RoadmapAuditSnapshot')) throw new Error('change logs must use RoadmapAuditSnapshot')
+  const auditSource = fs.readFileSync(path.join(root, 'src/lib/roadmapAudit.ts'), 'utf8')
+  if (!auditSource.includes('): RoadmapAuditSnapshot')) throw new Error('snapshot helper must return RoadmapAuditSnapshot')
 })
 
 registerAssertion('roadmap audit uses the fixed whitelist, resolved tOS names, and true changes only', () => {

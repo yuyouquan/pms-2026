@@ -1,5 +1,6 @@
 import type {
   RoadmapAuditField,
+  RoadmapAuditSnapshot,
   RoadmapFieldChange,
   RoadmapProjectFields,
   TosVersionConfig,
@@ -41,7 +42,7 @@ function resolveAuditValue(
   field: RoadmapAuditField,
   value: RoadmapProjectFields[RoadmapAuditField],
   versions: readonly TosVersionConfig[],
-) {
+): string {
   if (field !== 'firstSaleTosVersionId') return String(value ?? '')
   return versions.find(version => version.id === value)?.name ?? String(value ?? '')
 }
@@ -61,8 +62,8 @@ export function diffRoadmapProjectFields(
 export function createRoadmapAuditSnapshot(
   fields: RoadmapProjectFields,
   versions: readonly TosVersionConfig[],
-): Partial<RoadmapProjectFields> {
+): RoadmapAuditSnapshot {
   return Object.fromEntries(
     ROADMAP_AUDIT_FIELDS.map(field => [field, resolveAuditValue(field, fields[field], versions)]),
-  ) as Partial<RoadmapProjectFields>
+  ) as RoadmapAuditSnapshot
 }

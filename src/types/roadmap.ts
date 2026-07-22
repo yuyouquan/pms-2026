@@ -97,6 +97,8 @@ export interface RoadmapFieldChange {
   after: string
 }
 
+export type RoadmapAuditSnapshot = Partial<Record<RoadmapAuditField, string>>
+
 export interface RoadmapChangeLog {
   id: string
   projectId: string
@@ -107,7 +109,7 @@ export interface RoadmapChangeLog {
   occurredAt: string
   tosVersionName: string
   changes: RoadmapFieldChange[]
-  snapshot?: Partial<RoadmapProjectFields>
+  snapshot?: RoadmapAuditSnapshot
 }
 
 export type RoadmapColumnKey =
@@ -180,11 +182,40 @@ export interface RoadmapStoreState {
 
 export type RoadmapMutationFailureReason = 'duplicate' | 'referenced' | 'not-found' | 'invalid'
 
-export type RoadmapMutationResult =
-  | { ok: true }
-  | { ok: false; reason: RoadmapMutationFailureReason; referenceCount?: number; errors?: RoadmapValidationErrors }
+export interface RoadmapMutationSuccess {
+  ok: true
+}
 
-export type RoadmapValidationErrors = Partial<Record<keyof PlannedRoadmapProjectInput, string>>
+export interface RoadmapDuplicateMutationFailure {
+  ok: false
+  reason: 'duplicate'
+}
+
+export interface RoadmapReferencedMutationFailure {
+  ok: false
+  reason: 'referenced'
+  referenceCount: number
+}
+
+export interface RoadmapNotFoundMutationFailure {
+  ok: false
+  reason: 'not-found'
+}
+
+export interface RoadmapInvalidMutationFailure {
+  ok: false
+  reason: 'invalid'
+  errors: Record<string, string>
+}
+
+export type RoadmapMutationResult =
+  | RoadmapMutationSuccess
+  | RoadmapDuplicateMutationFailure
+  | RoadmapReferencedMutationFailure
+  | RoadmapNotFoundMutationFailure
+  | RoadmapInvalidMutationFailure
+
+export type RoadmapValidationErrors = Record<string, string>
 
 export type PlannedRoadmapProjectMutationInput = PlannedRoadmapProjectInput & {
   actor: string
