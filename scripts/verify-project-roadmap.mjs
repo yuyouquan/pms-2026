@@ -2071,6 +2071,16 @@ registerAssertion('roadmap module composes controls and overlays without standal
   if (!moduleSource.includes('150')) throw new Error('free-text roadmap filters are missing the 150ms debounce')
 })
 
+registerAssertion('sticky roadmap toolbar stays below the main header', () => {
+  const toolbarSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
+  if (!toolbarSource.includes("top: 'var(--pms-main-header-height, 56px)'")) {
+    throw new Error('sticky roadmap toolbar must offset below the 56px main header')
+  }
+  if (!toolbarSource.includes('zIndex: 30')) {
+    throw new Error('roadmap toolbar z-index must stay below the main header and above roadmap content')
+  }
+})
+
 registerAssertion('roadmap filter and column drawers preserve quick filters and shared business columns', () => {
   const filterSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapFilterDrawer.tsx'), 'utf8')
   for (const contract of [

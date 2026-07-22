@@ -68,7 +68,7 @@ export default function RoadmapToolbar({
       className="roadmap-toolbar-glass"
       style={{
         position: 'sticky',
-        top: 0,
+        top: 'var(--pms-main-header-height, 56px)',
         zIndex: 30,
         padding: '12px clamp(8px, 2vw, 16px)',
         margin: '0 0 16px',
