@@ -174,10 +174,10 @@ export default function RoadmapToolbar({
               </Button>
             </>
           ) : null}
-          <Tooltip title={filterCount ? `已启用 ${filterCount} 个筛选条件` : '筛选'}>
+          <Tooltip title={filterCount ? `已配置 ${filterCount} 个筛选条件` : '筛选'}>
             <Badge count={filterCount} size="small" offset={[-2, 2]}>
               <Button
-                aria-label={filterCount ? `筛选，已启用 ${filterCount} 个条件` : '筛选'}
+                aria-label={filterCount ? `筛选，已配置 ${filterCount} 个条件` : '筛选'}
                 type={filterCount ? 'primary' : 'default'}
                 size="large"
                 icon={<FilterOutlined />}

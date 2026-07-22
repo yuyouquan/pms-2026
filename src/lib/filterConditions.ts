@@ -114,7 +114,8 @@ export function applyFilterConditions<T extends object>(
     if (condition.operator === 'isNotEmpty') return !isEmptyFilterValue(actualRaw)
 
     const kind = definitionsByKey?.get(condition.field)?.kind ?? 'text'
-    const actual = String(actualRaw ?? '').trim().toLowerCase()
+    const actualText = String(actualRaw ?? '')
+    const actual = (definitionsByKey ? actualText.trim() : actualText).toLowerCase()
     const expected = condition.value.trim().toLowerCase()
 
     if (condition.operator === 'equals') return actual === expected

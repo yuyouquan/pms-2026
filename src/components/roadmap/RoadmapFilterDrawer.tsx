@@ -33,7 +33,6 @@ interface RoadmapFilterDrawerProps {
   conditions: readonly RoadmapFilterCondition[]
   fieldDefinitions: readonly FilterFieldDefinition[]
   onApply: (conditions: RoadmapFilterCondition[]) => void
-  onReset: () => void
 }
 
 export default function RoadmapFilterDrawer({
@@ -42,7 +41,6 @@ export default function RoadmapFilterDrawer({
   conditions,
   fieldDefinitions,
   onApply,
-  onReset,
 }: RoadmapFilterDrawerProps) {
   const [draftConditions, setDraftConditions] = useState<RoadmapFilterCondition[]>([
     createRoadmapFilterCondition(),
@@ -131,7 +129,6 @@ export default function RoadmapFilterDrawer({
 
   const resetAdvancedFilters = () => {
     setDraftConditions([createRoadmapFilterCondition()])
-    onReset()
   }
 
   const applyAdvancedFilters = () => {

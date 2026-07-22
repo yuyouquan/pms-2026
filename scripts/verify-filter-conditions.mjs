@@ -67,6 +67,27 @@ assert.deepEqual(
   ['Gamma'],
 )
 
+const paddedRows = [{ name: ' Alpha ' }]
+assert.deepEqual(
+  plain(applyFilterConditions(paddedRows, [{ id: 'legacy-equals', field: 'name', operator: 'equals', value: 'Alpha' }])),
+  [],
+  'legacy equals must preserve actual-value whitespace',
+)
+assert.deepEqual(
+  plain(applyFilterConditions(paddedRows, [{ id: 'legacy-not-equals', field: 'name', operator: 'notEquals', value: 'Alpha' }])),
+  paddedRows,
+  'legacy notEquals must preserve actual-value whitespace',
+)
+assert.deepEqual(
+  plain(applyFilterConditions(
+    paddedRows,
+    [{ id: 'typed-equals', field: 'name', operator: 'equals', value: 'Alpha' }],
+    [{ key: 'name', label: '项目名', kind: 'text' }],
+  )),
+  paddedRows,
+  'typed roadmap filters may normalize actual-value whitespace',
+)
+
 assert.deepEqual(
   plain(normalizeFilterConditions([
     { id: '1', field: 'owner', operator: 'contains', value: '张' },

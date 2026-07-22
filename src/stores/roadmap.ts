@@ -5,6 +5,11 @@ import {
   diffRoadmapProjectFields,
   ROADMAP_AUDIT_FIELDS,
 } from '@/lib/roadmapAudit'
+import {
+  DEFAULT_ROADMAP_VISIBLE_COLUMNS,
+  sanitizeRoadmapFilterConditions,
+  sanitizeRoadmapVisibleColumns,
+} from '@/lib/roadmapFilters'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
 import {
   buildRoadmapDisplayName,
@@ -22,7 +27,6 @@ import {
   type RoadmapColumnKey,
   type RoadmapDuplicateComparison,
   type RoadmapFilterCondition,
-  type RoadmapFilterOperator,
   type RoadmapMutationResult,
   type RoadmapNormalChangeInput,
   type RoadmapProductType,
@@ -38,20 +42,6 @@ const INITIAL_TIMESTAMP = '2026-01-01T00:00:00.000Z'
 const ROADMAP_STORAGE_KEY = 'pms-project-roadmap'
 
 const KNOWN_COLUMN_KEYS = new Set<RoadmapColumnKey>(ROADMAP_COLUMNS.map(column => column.key))
-const DEFAULT_VISIBLE_COLUMNS = ROADMAP_COLUMNS
-  .filter(column => column.defaultVisible)
-  .map(column => column.key)
-
-const FILTER_OPERATORS = new Set<RoadmapFilterOperator>([
-  'equals',
-  'notEquals',
-  'contains',
-  'notContains',
-  'isEmpty',
-  'isNotEmpty',
-  'before',
-  'after',
-])
 const ROADMAP_BRANDS = new Set<RoadmapBrand>(['TECNO', 'Infinix', 'itel', '待定', '其他品牌'])
 const ROADMAP_PRODUCT_TYPES = new Set<RoadmapProductType>(['新品', '老品'])
 const ROADMAP_AUDIT_FIELD_SET = new Set<string>(ROADMAP_AUDIT_FIELDS)
@@ -160,39 +150,10 @@ export function createInitialRoadmapState(): RoadmapStoreState {
     brandFilter: 'all',
     productTypeFilter: 'all',
     filters: [],
-    visibleColumns: [...DEFAULT_VISIBLE_COLUMNS],
+    visibleColumns: [...DEFAULT_ROADMAP_VISIBLE_COLUMNS],
     sort: { field: null, direction: null },
     selectedConflictKey: null,
   }
-}
-
-function sanitizeVisibleColumns(value: unknown): RoadmapColumnKey[] {
-  if (!Array.isArray(value)) return [...DEFAULT_VISIBLE_COLUMNS]
-  const visible = [...new Set(value.filter((key): key is RoadmapColumnKey => (
-    typeof key === 'string' && KNOWN_COLUMN_KEYS.has(key as RoadmapColumnKey)
-  )))]
-  return visible.length ? visible : [DEFAULT_VISIBLE_COLUMNS[0]]
-}
-
-function sanitizeFilters(value: unknown): RoadmapFilterCondition[] {
-  if (!Array.isArray(value)) return []
-  const usedIds = new Set<string>()
-  return value.flatMap((filter, index) => {
-    if (!isRecord(filter)) return []
-    if (
-      typeof filter.field !== 'string'
-      || !KNOWN_COLUMN_KEYS.has(filter.field as RoadmapColumnKey)
-      || typeof filter.operator !== 'string'
-      || !FILTER_OPERATORS.has(filter.operator as RoadmapFilterOperator)
-      || typeof filter.value !== 'string'
-    ) return []
-    return [{
-      id: claimDeterministicId(filter.id, `roadmap-filter-migrated-${index + 1}`, usedIds),
-      field: filter.field as RoadmapColumnKey,
-      operator: filter.operator as RoadmapFilterOperator,
-      value: filter.value,
-    }]
-  })
 }
 
 function sanitizeSort(value: unknown): RoadmapSortState {
@@ -410,8 +371,8 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
     productTypeFilter: persistedState.productTypeFilter === 'all' || ROADMAP_PRODUCT_TYPES.has(persistedState.productTypeFilter as RoadmapProductType)
       ? persistedState.productTypeFilter as 'all' | RoadmapProductType
       : 'all',
-    filters: sanitizeFilters(persistedState.filters),
-    visibleColumns: sanitizeVisibleColumns(persistedState.visibleColumns),
+    filters: sanitizeRoadmapFilterConditions(persistedState.filters, tosVersions),
+    visibleColumns: sanitizeRoadmapVisibleColumns(persistedState.visibleColumns),
     sort: sanitizeSort(persistedState.sort),
     selectedConflictKey: null,
   }
@@ -534,8 +495,10 @@ export const useRoadmapStore = create<RoadmapStore>()(
       setProductTypeFilter: (productType: 'all' | RoadmapProductType) => {
         if (productType === 'all' || ROADMAP_PRODUCT_TYPES.has(productType)) set({ productTypeFilter: productType })
       },
-      setFilters: filters => set({ filters: sanitizeFilters(filters) }),
-      setVisibleColumns: columns => set({ visibleColumns: sanitizeVisibleColumns(columns) }),
+      setFilters: filters => set(state => ({
+        filters: sanitizeRoadmapFilterConditions(filters, state.tosVersions),
+      })),
+      setVisibleColumns: columns => set({ visibleColumns: sanitizeRoadmapVisibleColumns(columns) }),
       setSort: sort => set({ sort: sanitizeSort(sort) }),
       setSelectedConflictKey: selectedConflictKey => set({ selectedConflictKey }),
       createPlannedProject: (rawInput, comparison) => {
@@ -661,6 +624,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
         set(state => ({
           tosVersions,
           selectedTosVersionId: repairSelectedTosVersionId(state.selectedTosVersionId, tosVersions),
+          filters: sanitizeRoadmapFilterConditions(state.filters, tosVersions),
         }))
         return { ok: true }
       },

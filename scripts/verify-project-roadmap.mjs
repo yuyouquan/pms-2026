@@ -2013,6 +2013,155 @@ registerAssertion('roadmap typed filters enforce kind-specific operators with AN
   }
 })
 
+registerAssertion('roadmap filter domain sanitizers enforce catalog and approved column invariants', () => {
+  const domainPath = path.join(root, 'src/lib/roadmapFilters.ts')
+  if (!fs.existsSync(domainPath)) throw new Error('roadmapFilters.ts is missing')
+  const domain = loadTypeScriptModule(domainPath)
+  const versions = [
+    { id: 'tos-18-0', name: 'tOS 18.0', major: 18, minor: 0, targets: [], createdAt: '', updatedAt: '' },
+    { id: 'tos-17-2', name: 'tOS 17.2', major: 17, minor: 2, targets: [], createdAt: '', updatedAt: '' },
+  ]
+  const malicious = [
+    { id: 'text', field: 'marketName', operator: 'contains', value: '  Europe  ' },
+    { id: 'duplicate-field', field: 'marketName', operator: 'equals', value: 'ignored' },
+    { id: 'bad-enum-operator', field: 'brand', operator: 'contains', value: 'TEC' },
+    { id: 'bad-enum-value', field: 'brand', operator: 'equals', value: 'Unknown' },
+    { id: 'valid-enum', field: 'brand', operator: 'equals', value: 'TECNO' },
+    { id: 'bad-date', field: 'launchDate', operator: 'after', value: '2026-02-30' },
+    { id: 'valid-date', field: 'str5Date', operator: 'before', value: '2028-02-29' },
+    { id: 'bad-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos-99-0' },
+    { id: 'legacy-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos18.0' },
+    { id: 'blank-text', field: 'remark', operator: 'contains', value: '   ' },
+    { id: 'empty', field: 'productSeries', operator: 'isEmpty', value: 'discard-me' },
+  ]
+  const sanitized = domain.sanitizeRoadmapFilterConditions(malicious, versions)
+  const expected = [
+    ['marketName', 'contains', 'Europe'],
+    ['brand', 'equals', 'TECNO'],
+    ['str5Date', 'before', '2028-02-29'],
+    ['firstSaleTosVersionId', 'equals', 'tos-18-0'],
+    ['productSeries', 'isEmpty', ''],
+  ]
+  if (JSON.stringify(sanitized.map(item => [item.field, item.operator, item.value])) !== JSON.stringify(expected)) {
+    throw new Error(`roadmap filter sanitizer leaked invalid state: ${JSON.stringify(sanitized)}`)
+  }
+  const secondPass = domain.sanitizeRoadmapFilterConditions(sanitized, versions)
+  if (JSON.stringify(secondPass) !== JSON.stringify(sanitized)) throw new Error('roadmap filter sanitizer is not idempotent')
+
+  const columns = domain.sanitizeRoadmapVisibleColumns(['remark', 'brand', 'brand', 'unknown'])
+  if (JSON.stringify(columns) !== JSON.stringify(['brand', 'remark'])) {
+    throw new Error(`visible columns did not restore approved order: ${JSON.stringify(columns)}`)
+  }
+  const minimumColumns = domain.sanitizeRoadmapVisibleColumns(['unknown'])
+  if (JSON.stringify(minimumColumns) !== JSON.stringify(['firstSaleTosVersionId'])) {
+    throw new Error(`visible columns did not preserve the one-column minimum: ${JSON.stringify(minimumColumns)}`)
+  }
+})
+
+registerAssertion('roadmap filter setters and tOS deletion preserve dynamic catalog invariants', () => {
+  const storeModule = loadIsolatedRoadmapStore()
+  const store = resetRoadmapStore(storeModule)
+  store.getState().setFilters([
+    { id: 'version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos-18-0' },
+    { id: 'bad-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos-99-0' },
+    { id: 'bad-brand', field: 'brand', operator: 'equals', value: 'Other' },
+    { id: 'date', field: 'launchDate', operator: 'after', value: '2027-12-01' },
+  ])
+  if (store.getState().filters.map(filter => filter.id).join(',') !== 'version,date') {
+    throw new Error(`setFilters bypassed domain sanitization: ${JSON.stringify(store.getState().filters)}`)
+  }
+  store.getState().setVisibleColumns(['remark', 'brand', 'brand'])
+  if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(['brand', 'remark'])) {
+    throw new Error(`setVisibleColumns did not restore approved order: ${JSON.stringify(store.getState().visibleColumns)}`)
+  }
+  const deleted = store.getState().deleteTosVersion('tos-18-0', 0)
+  if (!deleted.ok || store.getState().filters.some(filter => filter.value === 'tos-18-0')) {
+    throw new Error('deleting a tOS version left an orphan filter reference')
+  }
+})
+
+registerAssertion('current-version roadmap hydration rejects malicious typed filters', () => {
+  const initialStore = loadIsolatedRoadmapStore()
+  const state = initialStore.createInitialRoadmapState()
+  const hydrated = hydrateRoadmapStoreFromEnvelope({
+    version: 1,
+    state: {
+      ...state,
+      filters: [
+        { id: 'bad-operator', field: 'brand', operator: 'contains', value: 'TEC' },
+        { id: 'bad-enum', field: 'brand', operator: 'equals', value: '__proto__' },
+        { id: 'bad-date', field: 'launchDate', operator: 'before', value: '2026-13-01' },
+        { id: 'bad-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'missing' },
+        { id: 'valid-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos-17-2' },
+        { id: 'valid-text', field: 'remark', operator: 'notContains', value: '  risk  ' },
+      ],
+      visibleColumns: ['remark', 'brand', 'unknown', 'brand'],
+    },
+  })
+  if (hydrated.filters.map(filter => filter.id).join(',') !== 'valid-version,valid-text') {
+    throw new Error(`malicious version-1 filters survived hydration: ${JSON.stringify(hydrated.filters)}`)
+  }
+  if (hydrated.filters[1].value !== 'risk' || JSON.stringify(hydrated.visibleColumns) !== JSON.stringify(['brand', 'remark'])) {
+    throw new Error(`hydrated filter/column state was not normalized: ${JSON.stringify(hydrated)}`)
+  }
+})
+
+registerAssertion('roadmap text-filter debouncer removes stale conditions before delaying replacements', () => {
+  const domain = loadTypeScriptModule(path.join(root, 'src/lib/roadmapFilters.ts'))
+  const oldText = { id: 'name', field: 'displayName', operator: 'contains', value: 'old' }
+  const retainedText = { id: 'remark', field: 'remark', operator: 'notContains', value: 'risk' }
+  const nextText = { ...oldText, value: 'new' }
+  const addedText = { id: 'market', field: 'marketName', operator: 'contains', value: 'EU' }
+  const transition = domain.transitionRoadmapTextFilters([oldText, retainedText], [nextText, retainedText, addedText])
+  if (transition.immediate.map(filter => filter.id).join(',') !== 'remark' || transition.pending.map(filter => filter.id).join(',') !== 'name,market') {
+    throw new Error(`text transition retained stale filters: ${JSON.stringify(transition)}`)
+  }
+
+  const scheduled = new Map()
+  let timerId = 0
+  const scheduler = {
+    setTimeout(callback, delay) {
+      timerId += 1
+      scheduled.set(timerId, { callback, delay })
+      return timerId
+    },
+    clearTimeout(id) { scheduled.delete(id) },
+  }
+  const publications = []
+  const debouncer = domain.createRoadmapTextFilterDebouncer(
+    [oldText, retainedText],
+    filters => publications.push(filters.map(filter => `${filter.id}:${filter.value}`).join(',')),
+    scheduler,
+  )
+  debouncer.update([nextText, retainedText, addedText])
+  if (publications.at(-1) !== 'remark:risk') throw new Error(`stale text stayed effective: ${JSON.stringify(publications)}`)
+  const pendingTimer = [...scheduled.values()][0]
+  if (!pendingTimer || pendingTimer.delay !== 150) throw new Error(`text debounce delay is wrong: ${JSON.stringify([...scheduled.values()])}`)
+  pendingTimer.callback()
+  if (publications.at(-1) !== 'name:new,remark:risk,market:EU') throw new Error(`new text did not apply after fake time: ${JSON.stringify(publications)}`)
+  debouncer.update([])
+  if (publications.at(-1) !== '' || scheduled.size !== 0) throw new Error('text reset was not immediate')
+  debouncer.dispose()
+})
+
+registerAssertion('roadmap filter drawer resets draft state without mutating applied filters', () => {
+  const drawerSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapFilterDrawer.tsx'), 'utf8')
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  if (drawerSource.includes('onReset') || moduleSource.includes('onReset={() => setFilters([])}')) {
+    throw new Error('filter reset still mutates the applied store before Apply')
+  }
+  const resetBody = drawerSource.match(/const resetAdvancedFilters = \(\) => \{([\s\S]*?)\n  \}/)?.[1] ?? ''
+  if (!resetBody.includes('setDraftConditions') || resetBody.includes('onApply')) {
+    throw new Error('filter reset is not draft-only')
+  }
+  if ((drawerSource.match(/onApply\(/g) ?? []).length !== 1) {
+    throw new Error('only the Apply action may submit drawer conditions')
+  }
+  if (!drawerSource.includes('if (!open) return') || !drawerSource.includes('setDraftConditions(conditions.length')) {
+    throw new Error('cancel/reopen does not restore the original applied filters')
+  }
+})
+
 registerAssertion('roadmap module composes controls and overlays without standalone search', () => {
   const componentNames = [
     'ProjectRoadmapModule.tsx',
@@ -2058,8 +2207,8 @@ registerAssertion('roadmap module composes controls and overlays without standal
     'TosTargetEditor',
     'normalProjects={projects}',
     'plannedProjects={plannedProjects}',
-    'activeFilterCount',
-    'filterCount={activeFilterCount}',
+    'configuredFilterCount',
+    'filterCount={configuredFilterCount}',
   ]) {
     if (!moduleSource.includes(contract)) throw new Error(`ProjectRoadmapModule is missing ${contract}`)
   }
@@ -2068,7 +2217,14 @@ registerAssertion('roadmap module composes controls and overlays without standal
   if (conflictIndex < 0 || filterIndex < conflictIndex) {
     throw new Error('conflicts must be derived from the full row sets before filtering')
   }
-  if (!moduleSource.includes('150')) throw new Error('free-text roadmap filters are missing the 150ms debounce')
+  const filterDomainSource = fs.readFileSync(path.join(root, 'src/lib/roadmapFilters.ts'), 'utf8')
+  if (!filterDomainSource.includes('ROADMAP_FILTER_DEBOUNCE_MS = 150')
+    || !moduleSource.includes('createRoadmapTextFilterDebouncer')) {
+    throw new Error('free-text roadmap filters are missing the shared 150ms debounce')
+  }
+  if (!toolbarSource.includes('已配置')) {
+    throw new Error('roadmap toolbar must describe the badge as configured filters during debounce')
+  }
 })
 
 registerAssertion('sticky roadmap toolbar stays below the main header', () => {
@@ -2092,7 +2248,7 @@ registerAssertion('roadmap filter and column drawers preserve quick filters and 
     'DatePicker',
     'Select',
     'Input',
-    'onReset',
+    'resetAdvancedFilters',
     'onApply',
   ]) {
     if (!filterSource.includes(contract)) throw new Error(`RoadmapFilterDrawer is missing ${contract}`)

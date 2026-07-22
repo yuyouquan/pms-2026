@@ -1,19 +1,19 @@
 'use client'
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Empty, Result } from 'antd'
-import { PRODUCT_LINES_BY_BRAND } from '@/lib/roadmapValidation'
+import {
+  applyRoadmapFilters,
+  buildRoadmapFilterFieldDefinitions,
+  createRoadmapTextFilterDebouncer,
+  sanitizeRoadmapFilterConditions,
+  type RoadmapTextFilterDebouncer,
+} from '@/lib/roadmapFilters'
 import {
   adaptNormalProject,
   adaptPlannedProject,
   deriveRoadmapPlanningConflicts,
 } from '@/lib/roadmapProjectAdapter'
-import { compareSemanticTos } from '@/lib/roadmapSorting'
-import {
-  applyFilterConditions,
-  normalizeFilterConditions,
-  type FilterFieldDefinition,
-} from '@/lib/filterConditions'
 import { useHasGlobalPermission } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
 import { useRoadmapStore } from '@/stores/roadmap'
@@ -38,51 +38,6 @@ import TosTargetEditor from './TosTargetEditor'
 import TosVersionMaintenanceModal from './TosVersionMaintenanceModal'
 
 const isPresent = <T,>(value: T | null): value is T => value !== null
-
-const option = (value: string) => ({ label: value, value })
-
-export function buildRoadmapFilterFieldDefinitions(
-  versions: readonly TosVersionConfig[],
-): FilterFieldDefinition[] {
-  const productLines = [...new Set(Object.values(PRODUCT_LINES_BY_BRAND).flat())]
-  return [
-    {
-      key: 'firstSaleTosVersionId',
-      label: 'tOS版本',
-      kind: 'enum',
-      options: [...versions]
-        .sort((left, right) => compareSemanticTos(right, left))
-        .map(version => ({ label: version.name, value: version.id })),
-    },
-    { key: 'brand', label: '品牌', kind: 'enum', options: ['TECNO', 'Infinix', 'itel', '待定', '其他品牌'].map(option) },
-    { key: 'productLine', label: '产品线', kind: 'enum', options: productLines.map(option) },
-    { key: 'productSeries', label: '产品系列', kind: 'text' },
-    { key: 'marketName', label: '市场名', kind: 'text' },
-    { key: 'displayName', label: '项目名', kind: 'text' },
-    { key: 'productType', label: '产品类型', kind: 'enum', options: ['新品', '老品'].map(option) },
-    { key: 'platform', label: '平台', kind: 'text' },
-    { key: 'startRam', label: '起步RAM', kind: 'enum', options: ['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB'].map(option) },
-    { key: 'versionType', label: '版本类型', kind: 'enum', options: ['Full', 'Slim', 'Go'].map(option) },
-    { key: 'str5Date', label: 'STR5时间', kind: 'date' },
-    { key: 'launchDate', label: '上市时间', kind: 'date' },
-    { key: 'developMode', label: '开发模式', kind: 'enum', options: ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'].map(option) },
-    { key: 'remark', label: '备注', kind: 'text' },
-  ]
-}
-
-export function applyRoadmapFilters(
-  rows: readonly RoadmapProjectRow[],
-  brandFilter: 'all' | RoadmapBrand,
-  productTypeFilter: 'all' | RoadmapProductType,
-  filters: readonly RoadmapFilterCondition[],
-  fieldDefinitions: readonly FilterFieldDefinition[],
-): RoadmapProjectRow[] {
-  const quickFilteredRows = rows.filter(row => (
-    (brandFilter === 'all' || row.brand === brandFilter)
-    && (productTypeFilter === 'all' || row.productType === productTypeFilter)
-  ))
-  return applyFilterConditions(quickFilteredRows, filters, fieldDefinitions)
-}
 
 export interface RoadmapViewRenderContext {
   rows: readonly RoadmapProjectRow[]
@@ -141,6 +96,7 @@ export default function ProjectRoadmapModule({
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [columnDrawerOpen, setColumnDrawerOpen] = useState(false)
   const [changeLogRequested, setChangeLogRequested] = useState(false)
+  const textFilterDebouncerRef = useRef<RoadmapTextFilterDebouncer | null>(null)
 
   const filterFieldDefinitions = useMemo(
     () => buildRoadmapFilterFieldDefinitions(versions),
@@ -169,26 +125,37 @@ export default function ProjectRoadmapModule({
   )
 
   const normalizedFilters = useMemo(
-    () => normalizeFilterConditions(filters, filterFieldDefinitions),
-    [filterFieldDefinitions, filters],
+    () => sanitizeRoadmapFilterConditions(filters, versions),
+    [filters, versions],
   )
-  const activeFilterCount = normalizedFilters.length
+  const configuredFilterCount = normalizedFilters.length
   const immediateFilters = useMemo(() => normalizedFilters.filter(condition => (
     filterDefinitionsByKey.get(condition.field)?.kind !== 'text'
   )), [filterDefinitionsByKey, normalizedFilters])
   const textFilters = useMemo(() => normalizedFilters.filter(condition => (
     filterDefinitionsByKey.get(condition.field)?.kind === 'text'
   )), [filterDefinitionsByKey, normalizedFilters])
-  const [debouncedTextFilters, setDebouncedTextFilters] = useState<RoadmapFilterCondition[]>(textFilters)
+  const [effectiveTextFilters, setEffectiveTextFilters] = useState<RoadmapFilterCondition[]>(textFilters)
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedTextFilters(textFilters), 150)
-    return () => window.clearTimeout(timer)
+    if (!textFilterDebouncerRef.current) {
+      textFilterDebouncerRef.current = createRoadmapTextFilterDebouncer(
+        textFilters,
+        setEffectiveTextFilters,
+      )
+      return
+    }
+    textFilterDebouncerRef.current.update(textFilters)
   }, [textFilters])
 
+  useEffect(() => () => {
+    textFilterDebouncerRef.current?.dispose()
+    textFilterDebouncerRef.current = null
+  }, [])
+
   const appliedFilters = useMemo(
-    () => normalizeFilterConditions([...immediateFilters, ...debouncedTextFilters], filterFieldDefinitions),
-    [debouncedTextFilters, filterFieldDefinitions, immediateFilters],
+    () => [...immediateFilters, ...effectiveTextFilters],
+    [effectiveTextFilters, immediateFilters],
   )
   const filteredRows = useMemo(
     () => applyRoadmapFilters(allRows, brandFilter, productTypeFilter, appliedFilters, filterFieldDefinitions),
@@ -265,7 +232,7 @@ export default function ProjectRoadmapModule({
         onBrandFilterChange={setBrandFilter}
         productTypeFilter={productTypeFilter}
         onProductTypeFilterChange={setProductTypeFilter}
-        filterCount={activeFilterCount}
+        filterCount={configuredFilterCount}
         onOpenChangeLog={requestChangeLog}
         onOpenTosMaintenance={() => setTosMaintenanceOpen(true)}
         onCreatePlannedProject={openCreatePlannedProject}
@@ -294,7 +261,6 @@ export default function ProjectRoadmapModule({
         conditions={filters}
         fieldDefinitions={filterFieldDefinitions}
         onApply={setFilters}
-        onReset={() => setFilters([])}
       />
       <RoadmapColumnSettingsDrawer
         open={columnDrawerOpen}
