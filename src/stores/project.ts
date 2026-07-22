@@ -2,6 +2,11 @@ import { create } from 'zustand'
 import { initialProjects } from '@/data/projects'
 import { isMachineProjectType } from '@/constants/projectTypes'
 import { buildMarketRowsFromMarkets, type MarketConfigRow } from '@/lib/marketRules'
+import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
+import { createRoadmapAuditSnapshot, diffRoadmapProjectFields } from '@/lib/roadmapAudit'
+import { useRoadmapStore } from '@/stores/roadmap'
+import type { ProjectItem } from '@/types/app'
+import type { RoadmapChangeAction, RoadmapFieldChange, RoadmapProjectRow, TosVersionConfig } from '@/types/roadmap'
 
 // Default login user (mock)
 export const DEFAULT_LOGIN_USER = '张三'
@@ -29,7 +34,8 @@ export const kanbanColumns = [
   { title: '发布阶段', key: 'released', color: '#722ed1' },
 ]
 
-type Project = typeof initialProjects[0]
+type Project = typeof initialProjects[number]
+type ProjectPatch = Partial<Omit<ProjectItem, 'type'>> & { type?: string; [key: string]: any }
 
 const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) => {
   if (isMachineProjectType(project.type) && project.markets?.length) {
@@ -88,10 +94,57 @@ export interface ProjectActions {
   setTodoCollapsed: (v: boolean) => void
 
   setProjectMember: (projectId: string, members: string[]) => void
-  addProject: (newProject: Project) => void
+  addProject: (newProject: Project, actor?: string) => void
+  updateProject: (projectId: string, patch: ProjectPatch, actor?: string) => Project | null
+  deleteProject: (projectId: string, actor?: string) => boolean
 }
 
-export const useProjectStore = create<ProjectState & ProjectActions>()((set) => ({
+function resolveTosVersionName(versions: readonly TosVersionConfig[], versionId: string): string {
+  return versions.find(version => version.id === versionId)?.name ?? versionId
+}
+
+function recordNormalProjectAudit(
+  action: RoadmapChangeAction,
+  before: Project | null,
+  after: Project | null,
+  actor: string,
+): void {
+  const roadmapState = useRoadmapStore.getState()
+  const versions = roadmapState.tosVersions
+  const beforeRow = before ? adaptNormalProject(before as ProjectItem, versions) : null
+  const afterRow = after ? adaptNormalProject(after as ProjectItem, versions) : null
+
+  let auditRow: RoadmapProjectRow | null = null
+  if (action === 'create') auditRow = afterRow
+  if (action === 'delete') auditRow = beforeRow
+  if (action === 'update') {
+    if (!beforeRow || !afterRow) return
+    const changes = diffRoadmapProjectFields(beforeRow, afterRow, versions)
+    if (!changes.length) return
+    roadmapState.recordNormalProjectChange({
+      projectId: afterRow.id,
+      projectDisplayName: afterRow.displayName,
+      action,
+      actor,
+      tosVersionName: resolveTosVersionName(versions, afterRow.firstSaleTosVersionId),
+      changes: changes as [RoadmapFieldChange, ...RoadmapFieldChange[]],
+    })
+    return
+  }
+
+  if (!auditRow) return
+  roadmapState.recordNormalProjectChange({
+    projectId: auditRow.id,
+    projectDisplayName: auditRow.displayName,
+    action,
+    actor,
+    tosVersionName: resolveTosVersionName(versions, auditRow.firstSaleTosVersionId),
+    changes: [],
+    snapshot: createRoadmapAuditSnapshot(auditRow, versions),
+  })
+}
+
+export const useProjectStore = create<ProjectState & ProjectActions>()((set, get) => ({
   projects: initialProjects,
   selectedProject: null,
   currentLoginUser: DEFAULT_LOGIN_USER,
@@ -140,7 +193,29 @@ export const useProjectStore = create<ProjectState & ProjectActions>()((set) => 
   setProjectMember: (projectId, members) => set((s) => ({
     projectMemberMap: { ...s.projectMemberMap, [projectId]: members },
   })),
-  addProject: (newProject) => set((s) => ({
-    projects: [...s.projects, newProject],
-  })),
+  addProject: (newProject, actor) => {
+    set((state) => ({ projects: [...state.projects, newProject] }))
+    recordNormalProjectAudit('create', null, newProject, actor?.trim() || get().currentLoginUser.trim() || '系统')
+  },
+  updateProject: (projectId, patch, actor) => {
+    const existing = get().projects.find(project => project.id === projectId)
+    if (!existing) return null
+    const updated = { ...existing, ...patch } as Project
+    set(state => ({
+      projects: state.projects.map(project => project.id === projectId ? updated : project),
+      selectedProject: state.selectedProject?.id === projectId ? updated : state.selectedProject,
+    }))
+    recordNormalProjectAudit('update', existing, updated, actor?.trim() || get().currentLoginUser.trim() || '系统')
+    return updated
+  },
+  deleteProject: (projectId, actor) => {
+    const existing = get().projects.find(project => project.id === projectId)
+    if (!existing) return false
+    set(state => ({
+      projects: state.projects.filter(project => project.id !== projectId),
+      selectedProject: state.selectedProject?.id === projectId ? null : state.selectedProject,
+    }))
+    recordNormalProjectAudit('delete', existing, null, actor?.trim() || get().currentLoginUser.trim() || '系统')
+    return true
+  },
 }))

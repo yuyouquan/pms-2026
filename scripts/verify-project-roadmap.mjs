@@ -1516,6 +1516,196 @@ registerAssertion('every machine mock owns explicit normal-roadmap fields', () =
   if (missing.length) throw new Error(missing.join(', '))
 })
 
+registerAssertion('normal project writes expose one shared audited action boundary', () => {
+  const projectStoreSource = fs.readFileSync(path.join(root, 'src/stores/project.ts'), 'utf8')
+  for (const action of ['addProject:', 'updateProject:', 'deleteProject:']) {
+    if (!projectStoreSource.includes(action)) throw new Error(`ProjectActions is missing ${action}`)
+  }
+  if (!projectStoreSource.includes('recordNormalProjectChange')) {
+    throw new Error('project store does not route normal-project audit records through roadmap store')
+  }
+
+  const projectSpaceSource = fs.readFileSync(path.join(root, 'src/containers/ProjectSpaceContainer.tsx'), 'utf8')
+  if (projectSpaceSource.includes('setProjects(')) {
+    throw new Error('project-space saves still replace the project array directly')
+  }
+  if (!projectSpaceSource.includes('updateProject(selectedProject.id')) {
+    throw new Error('project-space saves do not use the shared updateProject action')
+  }
+})
+
+registerAssertion('normal machine creation requires maintained first-sale tOS and maps roadmap fields', () => {
+  const addModalSource = fs.readFileSync(path.join(root, 'src/components/workspace/AddProjectModal.tsx'), 'utf8')
+  if (addModalSource.includes('destroyOnClose')) throw new Error('AddProjectModal still uses deprecated destroyOnClose')
+  for (const fragment of [
+    'firstSaleTosVersionId',
+    '请选择首销 tOS 版本',
+    'isMachineProjectType',
+    'useRoadmapStore',
+    'projectCode',
+    'platform',
+    'productType',
+    'startRam',
+    'versionType',
+    'str5Date',
+    'launchDate',
+    'developMode',
+    'remark',
+  ]) {
+    if (!addModalSource.includes(fragment)) throw new Error(`AddProjectModal is missing ${fragment}`)
+  }
+
+  const externalSource = fs.readFileSync(path.join(root, 'src/data/externalProjectPool.ts'), 'utf8')
+  for (const field of ['projectCode', 'platform', 'productType', 'startRam', 'versionType', 'str5Date', 'launchDate', 'developMode', 'remark']) {
+    if (!externalSource.includes(`${field}?:`)) throw new Error(`external project mapping is missing ${field}`)
+  }
+})
+
+registerAssertion('global roadmap permissions combine all global roles and preserve admin bypass', () => {
+  const permissionSource = fs.readFileSync(path.join(root, 'src/stores/permission.ts'), 'utf8')
+  if (!permissionSource.includes('export function hasGlobalPermission')) throw new Error('missing hasGlobalPermission')
+  if (!permissionSource.includes('export function useHasGlobalPermission')) throw new Error('missing useHasGlobalPermission')
+  const moduleCache = new Map([[
+    path.join(root, 'src/data/projects.ts'),
+    { exports: { initialProjects: [] } },
+  ]])
+  const loader = createTypeScriptModuleLoader(moduleCache)
+  const permissionModule = loader(path.join(root, 'src/stores/permission.ts'))
+  if (typeof permissionModule.hasGlobalPermission !== 'function') throw new Error('missing hasGlobalPermission')
+  if (typeof permissionModule.useHasGlobalPermission !== 'function') throw new Error('missing useHasGlobalPermission')
+
+  const permissionStore = permissionModule.usePermissionStore
+  const original = permissionStore.getState()
+  try {
+    permissionStore.setState({
+      globalRoles: [
+        { name: '管理组', members: ['管理员'] },
+        { name: '只看', members: ['多角色用户'] },
+        { name: '可编辑', members: ['多角色用户'] },
+      ],
+      globalRolePerms: {
+        管理组: {},
+        只看: { 'roadmap:view': true },
+        可编辑: { 'roadmap:edit': true },
+      },
+    })
+    if (!permissionModule.hasGlobalPermission('管理员', '任意权限')) throw new Error('management group lost global bypass')
+    if (!permissionModule.hasGlobalPermission('多角色用户', 'roadmap:view')) throw new Error('first global role permission was ignored')
+    if (!permissionModule.hasGlobalPermission('多角色用户', 'roadmap:edit')) throw new Error('second global role permission was ignored')
+    if (permissionModule.hasGlobalPermission('陌生用户', 'roadmap:view')) throw new Error('unassigned user gained a global permission')
+  } finally {
+    permissionStore.setState({
+      globalRoles: original.globalRoles,
+      globalRolePerms: original.globalRolePerms,
+    })
+  }
+})
+
+registerAssertion('shared project actions audit only legal normal machine snapshots once', () => {
+  const projectSource = fs.readFileSync(path.join(root, 'src/stores/project.ts'), 'utf8')
+  if (!projectSource.includes('updateProject:') || !projectSource.includes('deleteProject:')) {
+    throw new Error('project store audited actions are not implemented')
+  }
+  const moduleCache = new Map([[
+    path.join(root, 'src/data/projects.ts'),
+    { exports: { initialProjects: [] } },
+  ]])
+  const loader = createTypeScriptModuleLoader(moduleCache)
+  const projectModule = loader(path.join(root, 'src/stores/project.ts'))
+  const roadmapModule = loader(path.join(root, 'src/stores/roadmap.ts'))
+  const projectStore = projectModule.useProjectStore
+  const roadmapStore = roadmapModule.useRoadmapStore
+  const initialRoadmap = roadmapModule.createInitialRoadmapState()
+  roadmapStore.setState(initialRoadmap)
+  projectStore.setState({
+    projects: [],
+    selectedProject: null,
+    currentLoginUser: '默认操作人',
+  })
+
+  const validMachine = {
+    id: 'normal-audit-1', name: 'X9000', type: '整机-手机', status: '待立项', progress: 0,
+    leader: '张三', markets: [], androidVersion: 'Android 18', chipPlatform: 'G200', spm: '张三',
+    updatedAt: '刚刚', productLine: 'SPARK', tosVersion: 'tOS 18.0', planStartDate: '', planEndDate: '',
+    developCycle: 0, healthStatus: 'normal', firstSaleTosVersionId: 'tos-18-0', projectCode: 'X9000',
+    brand: 'TECNO', productSeries: 'SPARK 80', marketName: 'SPARK 80', productType: '新品', platform: 'G200',
+    startRam: '8GB', versionType: 'Full', str5Date: '2027-01-01', launchDate: '2027-02-01',
+    developMode: '自研', remark: '',
+  }
+
+  projectStore.getState().addProject(validMachine, '创建人')
+  let logs = roadmapStore.getState().changeLogs
+  if (logs.length !== 1 || logs[0].action !== 'create' || logs[0].actor !== '创建人' || !logs[0].snapshot) {
+    throw new Error(`valid machine create did not emit one snapshot log: ${JSON.stringify(logs)}`)
+  }
+
+  projectStore.setState({ selectedProject: validMachine })
+  const updated = projectStore.getState().updateProject(validMachine.id, { brand: 'Infinix' }, '修改人')
+  logs = roadmapStore.getState().changeLogs
+  if (!updated || updated.brand !== 'Infinix' || projectStore.getState().selectedProject?.brand !== 'Infinix') {
+    throw new Error('updateProject did not update both canonical and selected project state')
+  }
+  if (logs.length !== 2 || logs[0].action !== 'update' || logs[0].changes.length !== 1 || logs[0].changes[0].field !== 'brand') {
+    throw new Error(`valid machine update did not emit exactly one diff log: ${JSON.stringify(logs)}`)
+  }
+
+  projectStore.getState().updateProject(validMachine.id, { progress: 50 }, '修改人')
+  if (roadmapStore.getState().changeLogs.length !== 2) throw new Error('non-roadmap update emitted an empty audit log')
+
+  projectStore.getState().updateProject(validMachine.id, { productType: '未知' }, '修改人')
+  if (roadmapStore.getState().changeLogs.length !== 2) throw new Error('invalid after-snapshot emitted an audit log')
+
+  const deleted = projectStore.getState().deleteProject(validMachine.id, '删除人')
+  logs = roadmapStore.getState().changeLogs
+  if (!deleted || projectStore.getState().projects.length || projectStore.getState().selectedProject !== null) {
+    throw new Error('deleteProject did not remove and deselect the project')
+  }
+  if (logs.length !== 2) {
+    throw new Error('invalid before-snapshot emitted a delete audit log')
+  }
+
+  const validDelete = { ...validMachine, id: 'normal-audit-delete' }
+  projectStore.getState().addProject(validDelete)
+  projectStore.getState().deleteProject(validDelete.id, '删除人')
+  logs = roadmapStore.getState().changeLogs
+  if (logs[0].action !== 'delete' || logs[0].actor !== '删除人' || !logs[0].snapshot) {
+    throw new Error(`valid machine delete did not emit a snapshot log: ${JSON.stringify(logs[0])}`)
+  }
+
+  const nonMachine = { ...validMachine, id: 'normal-tech', type: '技术项目' }
+  const beforeNonMachine = roadmapStore.getState().changeLogs.length
+  projectStore.getState().addProject(nonMachine, '张三')
+  projectStore.getState().updateProject(nonMachine.id, { projectDescription: '不应审计' }, '张三')
+  projectStore.getState().deleteProject(nonMachine.id, '张三')
+  if (roadmapStore.getState().changeLogs.length !== beforeNonMachine) throw new Error('non-machine writes emitted roadmap audit logs')
+  if (projectStore.getState().updateProject('missing', {}, '张三') !== null) throw new Error('missing update must return null')
+  if (projectStore.getState().deleteProject('missing', '张三') !== false) throw new Error('missing delete must return false')
+})
+
+registerAssertion('machine basic information exposes maintained roadmap selectors and fields', () => {
+  const fieldModule = loadTypeScriptModule(path.join(root, 'src/constants/projectBasicFields.ts'))
+  const basicFields = new Map(fieldModule.WHOLE_MACHINE_BASIC_INFO_FIELDS.map(field => [field.key, field.label]))
+  const hardwareFields = new Map(fieldModule.WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS.map(field => [field.key, field.label]))
+  for (const [key, label] of [
+    ['firstSaleTosVersionId', '首销 tOS 版本'],
+    ['projectCode', '项目名'],
+    ['startRam', '起步RAM'],
+    ['str5Date', 'STR5时间'],
+    ['launchDate', '上市时间'],
+    ['remark', '备注'],
+  ]) {
+    if (basicFields.get(key) !== label) throw new Error(`basic information is missing ${key}:${label}`)
+  }
+  if (hardwareFields.get('platform') !== '平台') throw new Error('hardware information is missing roadmap platform')
+
+  const projectSpaceSource = fs.readFileSync(path.join(root, 'src/containers/ProjectSpaceContainer.tsx'), 'utf8')
+  if (!projectSpaceSource.includes('useRoadmapStore')) throw new Error('project-space tOS selector is not catalog-backed')
+  if (!projectSpaceSource.includes("field.key === 'firstSaleTosVersionId'")) throw new Error('missing first-sale tOS editor')
+  if (!projectSpaceSource.includes("editableField('firstSaleTosVersionId', firstSaleTosVersionName")) {
+    throw new Error('read-only first-sale tOS renders a stable ID instead of its maintained name')
+  }
+})
+
 const failures = []
 for (const { name, assertion } of assertions) {
   try {

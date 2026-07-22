@@ -9,9 +9,12 @@ import { useProjectStore } from '@/stores/project'
 import { useUiStore } from '@/stores/ui'
 import { usePermissionStore } from '@/stores/permission'
 import { inferOsSeriesFromProjectName, inferTosVersionFromProjectName } from '@/constants/projectBasicFields'
+import { compareSemanticTos } from '@/lib/roadmapSorting'
+import { useRoadmapStore } from '@/stores/roadmap'
 import {
   PROJECT_TYPE_TOS_VERSION,
   inferSoftwareProjectTypeFromName,
+  isMachineProjectType,
   isSoftwareProjectType,
 } from '@/constants/projectTypes'
 
@@ -23,6 +26,7 @@ interface AddProjectModalProps {
 interface FormShape {
   bid: string
   type: string
+  firstSaleTosVersionId?: string
   responsiblePersons: string[]
 }
 
@@ -31,8 +35,16 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
   const [submitting, setSubmitting] = useState(false)
 
   const { projects, addProject, setSelectedProject, setProjectMember, setSelectedMarketTab } = useProjectStore()
+  const currentLoginUser = useProjectStore(state => state.currentLoginUser)
+  const tosVersions = useRoadmapStore(state => state.tosVersions)
   const { setActiveModule, setProjectSpaceModule } = useUiStore()
   const initProjectPermissions = usePermissionStore(s => s.initProjectPermissions)
+  const selectedProjectType = Form.useWatch('type', form)
+  const isMachineProject = isMachineProjectType(selectedProjectType)
+  const descendingVersions = useMemo(
+    () => [...tosVersions].sort((left, right) => compareSemanticTos(right, left)),
+    [tosVersions],
+  )
 
   // Exclude bids whose name is already in projects.
   const candidatePool = useMemo<ExternalProjectEntry[]>(() => {
@@ -63,6 +75,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       const newId = `${Date.now()}`
       const projectType = values.type || inferSoftwareProjectTypeFromName(entry.name)
       const isSoftwareProject = isSoftwareProjectType(projectType)
+      const isMachineProject = isMachineProjectType(projectType)
       const inferredTosVersion = inferTosVersionFromProjectName(entry.name)
       const inferredOsSeries = inferOsSeriesFromProjectName(entry.name)
       const newProject: any = {
@@ -85,8 +98,20 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
         planStartDate: extra.planStartDate ?? '',
         planEndDate: extra.planEndDate ?? '',
         healthStatus: 'normal',
+        ...(isMachineProject ? {
+          firstSaleTosVersionId: values.firstSaleTosVersionId,
+          projectCode: extra.projectCode ?? '',
+          platform: extra.platform ?? extra.chipPlatform ?? '',
+          productType: extra.productType ?? '',
+          startRam: extra.startRam,
+          versionType: extra.versionType ?? '',
+          str5Date: extra.str5Date ?? '',
+          launchDate: extra.launchDate ?? '',
+          developMode: extra.developMode ?? '',
+          remark: extra.remark ?? '',
+        } : {}),
       }
-      addProject(newProject)
+      addProject(newProject, currentLoginUser)
       setProjectMember(newId, values.responsiblePersons)
       initProjectPermissions(newId, { '系统管理员': values.responsiblePersons })
       setSelectedProject(newProject)
@@ -109,7 +134,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       okText="创建"
       cancelText="取消"
       confirmLoading={submitting}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical" preserve={false}>
         <Form.Item
@@ -156,6 +181,18 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
             options={ALL_USERS.map(u => ({ label: u, value: u }))}
           />
         </Form.Item>
+        {isMachineProject && (
+          <Form.Item
+            label="首销 tOS 版本"
+            name="firstSaleTosVersionId"
+            rules={[{ required: true, message: '请选择首销 tOS 版本' }]}
+          >
+            <Select
+              placeholder="请选择首销 tOS 版本"
+              options={descendingVersions.map(version => ({ label: version.name, value: version.id }))}
+            />
+          </Form.Item>
+        )}
       </Form>
     </Modal>
   )

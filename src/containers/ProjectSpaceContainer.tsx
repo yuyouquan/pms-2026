@@ -51,6 +51,7 @@ import {
   type FilterCondition,
 } from '@/lib/filterConditions'
 import { GANTT_SCALE_OPTIONS } from '@/lib/ganttScale'
+import { compareSemanticTos } from '@/lib/roadmapSorting'
 import {
   comparePlanVersions,
   getDisplayPlanVersionsForHorizontalPlan,
@@ -108,6 +109,7 @@ import {
 
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
+import { useRoadmapStore } from '@/stores/roadmap'
 import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
 import { usePermissionStore, useHasPermission } from '@/stores/permission'
@@ -270,12 +272,20 @@ export default function ProjectSpaceContainer() {
   } = ui
 
   const {
-    projects, selectedProject, setSelectedProject, setProjects,
+    projects, selectedProject, updateProject,
     currentLoginUser,
     basicInfoEditMode, setBasicInfoEditMode, editingProjectFields, setEditingProjectFields,
     selectedMarketTab, setSelectedMarketTab,
     marketConfigsByProjectId, setMarketConfigForProject,
   } = proj
+
+  const roadmapTosVersions = useRoadmapStore(state => state.tosVersions)
+  const roadmapTosOptions = useMemo(
+    () => [...roadmapTosVersions]
+      .sort((left, right) => compareSemanticTos(right, left))
+      .map(version => ({ label: version.name, value: version.id })),
+    [roadmapTosVersions],
+  )
 
   const {
     projectPlanLevel, setProjectPlanLevel, projectPlanViewMode, setProjectPlanViewMode,
@@ -732,15 +742,15 @@ export default function ProjectSpaceContainer() {
           }
         })
       : []
-    const updatedProject = {
-      ...selectedProject,
+    const persistedProject = updateProject(selectedProject.id, {
       markets: nextMarkets,
       market: nextMarkets.join(','),
-    } as typeof selectedProject
-
+    }, currentLoginUser)
+    if (!persistedProject) {
+      message.error('项目不存在，市场配置保存失败')
+      return
+    }
     setMarketConfigForProject(selectedProject.id, normalizedRows)
-    setSelectedProject(updatedProject)
-    setProjects(prev => prev.map(project => project.id === updatedProject.id ? updatedProject : project) as typeof prev)
     setMarketPlanData(syncedMarketPlanData)
     if (unfollowedMarkets.length > 0) {
       setMarketFollowVersionMeta(prev => removeFollowVersionMetaForMarkets(prev, {
@@ -1250,6 +1260,20 @@ export default function ProjectSpaceContainer() {
     if (!selectedProject) return; const p = selectedProject
     const currentJiraProjects = Array.isArray((p as any).jiraProjects) ? (p as any).jiraProjects.map((row: JiraProjectConfig) => ({ ...row })) : []
     setEditingProjectFields({
+      ...(isMachineProjectType(p.type) ? {
+        projectCode: p.projectCode || p.model || '',
+        androidVersion: p.androidVersion || p.operatingSystem || '',
+        firstSaleTosVersionId: p.firstSaleTosVersionId || '',
+        brand: p.brand || '',
+        productLine: p.productLine || '',
+        marketName: p.marketName || '',
+        platform: p.platform || p.cpu || p.chipPlatform || '',
+        startRam: p.startRam || '',
+        versionType: p.versionType || '',
+        str5Date: p.str5Date || '',
+        launchDate: p.launchDate || '',
+        remark: p.remark || '',
+      } : {}),
       productType: p.productType || '',
       developMode: p.developMode || '',
       cooperationForm: p.cooperationForm || '',
@@ -1296,7 +1320,13 @@ export default function ProjectSpaceContainer() {
           osSeries: getSoftwareProductSeriesValue(mergedProject),
         } as typeof selectedProject
       : mergedProject
-    setSelectedProject(updated); setProjects(prev => prev.map(p => p.id === updated.id ? updated : p) as typeof prev); setBasicInfoEditMode(false); message.success('基本信息已保存')
+    const saved = updateProject(selectedProject.id, updated, currentLoginUser)
+    if (!saved) {
+      message.error('项目不存在，基本信息保存失败')
+      return
+    }
+    setBasicInfoEditMode(false)
+    message.success('基本信息已保存')
   }
 
   // Export functions
@@ -1821,6 +1851,11 @@ export default function ProjectSpaceContainer() {
     const nodeChoices = [{ label: '概念启动', value: '概念启动' }, { label: 'STR1', value: 'STR1' }, { label: 'STR2', value: 'STR2' }, { label: 'STR3', value: 'STR3' }, { label: 'STR4', value: 'STR4' }, { label: 'STR5', value: 'STR5' }, { label: 'STR6', value: 'STR6' }]
     const healthChoices = [{ label: '正常', value: 'normal' }, { label: '关注', value: 'warning' }, { label: '风险', value: 'risk' }]
     const developModeChoices = [{ label: 'ODC', value: 'ODC' }, { label: 'JDM', value: 'JDM' }, { label: '自研', value: '自研' }, { label: '外研', value: '外研' }]
+    const roadmapDevelopModeChoices = ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'].map(value => ({ label: value, value }))
+    const brandChoices = ['TECNO', 'Infinix', 'itel', '待定', '其他品牌'].map(value => ({ label: value, value }))
+    const androidVersionChoices = ['Android 16', 'Android 17', 'Android 18'].map(value => ({ label: value, value }))
+    const startRamChoices = ['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB'].map(value => ({ label: value, value }))
+    const versionTypeChoices = ['Full', 'Slim', 'Go'].map(value => ({ label: value, value }))
     const projectLevelChoices = [{ label: 'S', value: 'S' }, { label: 'A', value: 'A' }, { label: 'B', value: 'B' }, { label: 'C', value: 'C' }]
     const systemTypeChoices = [{ label: '32bit', value: '32bit' }, { label: '64bit', value: '64bit' }, { label: '64only', value: '64only' }]
     const yesNoChoices = [{ label: '是', value: '是' }, { label: '否', value: '否' }]
@@ -1945,11 +1980,27 @@ export default function ProjectSpaceContainer() {
     )
     const renderWholeMachineBasicInfoField = (field: (typeof WHOLE_MACHINE_BASIC_INFO_FIELDS)[number]) => {
       const visibleDevelopMode = basicInfoEditMode ? ef.developMode : p.developMode
-      if (field.key === 'isOutsourcedMini' && visibleDevelopMode !== '外研') return null
-      let content: React.ReactNode = getProjectFieldValue(field)
-      if (field.key === 'productType') content = editableField('productType', p.productType, { type: 'select', choices: [{ label: '新品', value: '新品' }, { label: '换代', value: '换代' }] })
+      const firstSaleTosVersionName = roadmapTosVersions.find(version => version.id === p.firstSaleTosVersionId)?.name || p.firstSaleTosVersionId || '-'
+      if (field.key === 'isOutsourcedMini' && !['纯外研', '外研'].includes(visibleDevelopMode)) return null
+      let content: React.ReactNode = field.key === 'firstSaleTosVersionId'
+        ? firstSaleTosVersionName
+        : getProjectFieldValue(field)
+      if (field.key === 'projectCode') content = editableField('projectCode', p.projectCode || p.model)
+      if (field.key === 'androidVersion') content = editableField('androidVersion', p.androidVersion || p.operatingSystem, { type: 'select', choices: androidVersionChoices })
+      if (field.key === 'firstSaleTosVersionId') content = editableField('firstSaleTosVersionId', firstSaleTosVersionName, { type: 'select', choices: roadmapTosOptions })
+      if (field.key === 'brand') content = editableField('brand', p.brand, { type: 'select', choices: brandChoices })
+      if (field.key === 'productLine') content = editableField('productLine', p.productLine)
+      if (field.key === 'marketName') content = editableField('marketName', p.marketName)
+      if (field.key === 'productType') content = editableField('productType', p.productType, { type: 'select', choices: [{ label: '新品', value: '新品' }, { label: '老品', value: '老品' }] })
       if (field.key === 'productSeries') content = editableField('productSeries', (p as any).productSeries)
-      if (field.key === 'developMode') content = editableField('developMode', p.developMode, { type: 'select', choices: developModeChoices })
+      if (field.key === 'startRam') content = editableField('startRam', p.startRam, { type: 'select', choices: startRamChoices })
+      if (field.key === 'str5Date' || field.key === 'launchDate') {
+        const dateValue = ef[field.key]
+        content = basicInfoEditMode
+          ? <DatePicker size="small" value={dateValue ? dayjs(dateValue) : null} onChange={date => setEf(field.key, date?.format('YYYY-MM-DD') || '')} style={{ width: '100%' }} />
+          : <span>{getProjectFieldValue(field)}</span>
+      }
+      if (field.key === 'developMode') content = editableField('developMode', p.developMode, { type: 'select', choices: roadmapDevelopModeChoices })
       if (field.key === 'cooperationForm') content = editableField('cooperationForm', p.cooperationForm)
       if (field.key === 'projectLevel') content = editableField('projectLevel', p.projectLevel, { type: 'select', choices: projectLevelChoices })
       if (field.key === 'systemType') content = editableField('systemType', (p as any).systemType, { type: 'select', choices: systemTypeChoices })
@@ -1957,6 +2008,10 @@ export default function ProjectSpaceContainer() {
       if (field.key === 'isTwoStage') content = editableField('isTwoStage', (p as any).isTwoStage, { type: 'select', choices: yesNoChoices })
       if (field.key === 'isSlimVersion') content = editableField('isSlimVersion', (p as any).isSlimVersion, { type: 'select', choices: yesNoChoices })
       if (field.key === 'isOutsourcedMini') content = editableField('isOutsourcedMini', (p as any).isOutsourcedMini, { type: 'select', choices: yesNoChoices })
+      if (field.key === 'remark') {
+        content = editableField('remark', p.remark, { type: 'textarea' })
+        return <Descriptions.Item key={field.key} label={field.label} span={4}>{content}</Descriptions.Item>
+      }
       if (field.key === 'projectDescription') {
         content = basicInfoEditMode
           ? <Input.TextArea size="small" value={ef.projectDescription} onChange={e => setEf('projectDescription', e.target.value)} autoSize={{ minRows: 3, maxRows: 8 }} />
@@ -1973,6 +2028,8 @@ export default function ProjectSpaceContainer() {
     const renderWholeMachineHardwareConfigField = (field: (typeof WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS)[number]) => {
       let content: React.ReactNode = getProjectFieldValue(field)
       if (field.key === 'marketProjectName') content = getMarketProjectName(p.name, selectedMarketTab)
+      if (field.key === 'platform') content = editableField('platform', p.platform || p.cpu || p.chipPlatform)
+      if (field.key === 'versionType') content = editableField('versionType', p.versionType, { type: 'select', choices: versionTypeChoices })
       if (field.key === 'buildOption') content = editableField('buildOption', (p as any).buildOption, { type: 'select', choices: SPUG_BUILD_OPTION_OPTIONS })
       if (field.key === 'buildMarket') content = editableField('buildMarket', (p as any).buildMarket, { type: 'select', choices: SPUG_BUILD_MARKET_OPTIONS })
       return <Descriptions.Item key={field.key} label={field.label}>{content}</Descriptions.Item>
@@ -1981,8 +2038,8 @@ export default function ProjectSpaceContainer() {
     const descContentStyle: CSSProperties = { color: '#111827', fontSize: 13 }
     const sectionTitle = (icon: React.ReactNode, title: string, _color: string) => (<Space size={8}>{icon}<span style={{ fontSize: 15, fontWeight: 600 }}>{title}</span></Space>)
     const headerExtra = p.name
-    const wideWholeMachineBasicInfoFields = WHOLE_MACHINE_BASIC_INFO_FIELDS.filter(field => ['projectDescription', 'jiraProjects'].includes(field.key))
-    const compactWholeMachineBasicInfoFields = WHOLE_MACHINE_BASIC_INFO_FIELDS.filter(field => !['projectDescription', 'jiraProjects'].includes(field.key))
+    const wideWholeMachineBasicInfoFields = WHOLE_MACHINE_BASIC_INFO_FIELDS.filter(field => ['remark', 'projectDescription', 'jiraProjects'].includes(field.key))
+    const compactWholeMachineBasicInfoFields = WHOLE_MACHINE_BASIC_INFO_FIELDS.filter(field => !['remark', 'projectDescription', 'jiraProjects'].includes(field.key))
     const anchorSections = [
       { id: 'section-header', label: '项目概览', icon: <ProjectOutlined /> },
       { id: 'section-basic', label: '基本信息', icon: <SettingOutlined /> },
