@@ -4,10 +4,12 @@ import path from 'node:path'
 import vm from 'node:vm'
 import { createRequire } from 'node:module'
 import ts from 'typescript'
+import { analyzeRoadmapSource, getRoadmapAnalysisFixtureFailures } from './lib/roadmap-source-analysis.mjs'
 
 const root = process.cwd()
 const require = createRequire(import.meta.url)
 const assertions = []
+const typeScriptModuleCache = new Map()
 
 export function registerAssertion(name, assertion) {
   assertions.push({ name, assertion })
@@ -35,7 +37,7 @@ export function resolveTypeScriptModule(specifier, parentPath = path.join(root, 
   throw new Error(`Cannot resolve module "${specifier}" from ${parentPath}`)
 }
 
-export function loadTypeScriptModule(modulePath, moduleCache = new Map()) {
+export function loadTypeScriptModule(modulePath, moduleCache = typeScriptModuleCache) {
   const resolvedPath = path.resolve(modulePath)
   if (moduleCache.has(resolvedPath)) return moduleCache.get(resolvedPath).exports
 
@@ -64,58 +66,32 @@ export function loadTypeScriptModule(modulePath, moduleCache = new Map()) {
   return module.exports
 }
 
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-export function findLegacyRoadmapReferences(content) {
-  const references = []
-  const legacyModulePattern = /import\s+(?:[\s\S]*?\s+from\s+)?['"]\.\/(MilestoneView|MRTrainView)['"]/g
-  const defaultImportPattern = /import\s+([A-Za-z_$][\w$]*)\s*(?:,\s*[\s\S]*?)?\s+from\s+['"]\.\/(?:MilestoneView|MRTrainView)['"]/g
-  const legacyJsxNames = new Set(['MilestoneView', 'MRTrainView'])
-
-  for (const match of content.matchAll(legacyModulePattern)) {
-    references.push(`legacy module import: ./${match[1]}`)
-  }
-  for (const match of content.matchAll(defaultImportPattern)) {
-    legacyJsxNames.add(match[1])
-  }
-  for (const name of legacyJsxNames) {
-    if (new RegExp(`<\\s*${escapeRegExp(name)}\\b`).test(content)) {
-      references.push(`legacy JSX mount: <${name}`)
-    }
-  }
-
-  return references
+export function createTypeScriptModuleLoader(moduleCache = new Map()) {
+  return modulePath => loadTypeScriptModule(modulePath, moduleCache)
 }
 
 const roadmapPath = path.join(root, 'src/components/roadmap/RoadmapView.tsx')
 const roadmapSource = fs.readFileSync(roadmapPath, 'utf8')
+const roadmapAnalysis = analyzeRoadmapSource(roadmapSource, roadmapPath)
 
 registerAssertion('RoadmapView does not import or mount legacy roadmap views', () => {
-  const legacyReferences = findLegacyRoadmapReferences(roadmapSource)
-  if (legacyReferences.length) {
-    throw new Error(`found ${legacyReferences.join(', ')}`)
+  if (roadmapAnalysis.legacyImports.length || roadmapAnalysis.legacyJsxMounts.length) {
+    throw new Error(`found imports [${roadmapAnalysis.legacyImports.join(', ')}] and JSX mounts [${roadmapAnalysis.legacyJsxMounts.join(', ')}]`)
   }
 })
 
-registerAssertion('legacy roadmap detector catches aliased double-quoted imports and mounts', () => {
-  const fixture = 'import LegacyMilestone from "./MilestoneView"\nconst view = <LegacyMilestone />'
-  const references = findLegacyRoadmapReferences(fixture)
-  if (references.length !== 2) {
-    throw new Error(`expected two legacy references, found ${references.length}`)
+registerAssertion('roadmap AST analysis handles legacy and cleared-state fixtures', () => {
+  const fixtureFailures = getRoadmapAnalysisFixtureFailures()
+  if (fixtureFailures.length) {
+    throw new Error(fixtureFailures.join('; '))
   }
 })
 
 registerAssertion('RoadmapView retains the summary shell and blank roadmap branch', () => {
-  for (const requiredFragment of [
-    '<ProjectPlanSummaryBoard',
-    "label: '项目路标视图'",
-    ') : null}',
-  ]) {
-    if (!roadmapSource.includes(requiredFragment)) {
-      throw new Error(`missing cleared-roadmap baseline fragment: ${requiredFragment}`)
-    }
+  if (!roadmapAnalysis.hasProjectViewHeader) throw new Error('missing project-view header text')
+  if (!roadmapAnalysis.hasProjectViewOptionLabels) throw new Error('missing project-view option labels')
+  if (!roadmapAnalysis.summaryConditionals.some(conditional => conditional.mountsSummaryBoard && conditional.hasNullFalseBranch)) {
+    throw new Error('summary conditional must mount ProjectPlanSummaryBoard with a null false branch')
   }
 })
 
