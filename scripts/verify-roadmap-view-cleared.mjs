@@ -20,8 +20,11 @@ for (const legacyMount of analysis.legacyJsxMounts) {
 
 if (!analysis.hasProjectViewHeader) failures.push('Project-view header text is missing')
 if (!analysis.hasProjectViewOptionLabels) failures.push('Project-view option labels are missing')
-if (!analysis.summaryConditionals.some(conditional => conditional.mountsSummaryBoard && conditional.hasNullFalseBranch)) {
-  failures.push('Summary conditional must mount ProjectPlanSummaryBoard and use a null roadmap branch')
+if (!analysis.hasProjectRoadmapImport) failures.push('Rebuilt ProjectRoadmapModule import is missing')
+if (!analysis.summaryConditionals.some(conditional => (
+  conditional.mountsSummaryBoard && conditional.mountsProjectRoadmapModule
+))) {
+  failures.push('Project-view conditional must mount ProjectPlanSummaryBoard and rebuilt ProjectRoadmapModule')
 }
 
 if (failures.length) {
@@ -30,4 +33,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Roadmap cleared-state verification passed.')
+console.log('Roadmap rebuilt-state verification passed.')

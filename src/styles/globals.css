@@ -1423,3 +1423,33 @@ body {
 .pms-plan-view-mode-switcher .ant-radio-button-wrapper .anticon {
   font-size: 15px;
 }
+
+/* Project roadmap — scoped purple-glass hierarchy and accessibility */
+.pms-roadmap-shell {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  color: var(--text-primary);
+}
+
+.pms-roadmap-shell .roadmap-table-shell .ant-table-container,
+.pms-roadmap-shell .pms-roadmap-evolution-card {
+  background: #fff;
+}
+
+.pms-roadmap-shell :where(button, [role='button'], input, .ant-select-selector):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pms-roadmap-shell,
+  .pms-roadmap-shell *,
+  .pms-roadmap-shell *::before,
+  .pms-roadmap-shell *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

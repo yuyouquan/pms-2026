@@ -1,15 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Card, Space } from 'antd'
+import { Button, Card, Space } from 'antd'
 import { AppstoreOutlined, GlobalOutlined, TableOutlined } from '@ant-design/icons'
+import type { ProjectItem } from '@/types/app'
 import ProjectPlanSummaryBoard from './ProjectPlanSummaryBoard'
+import ProjectRoadmapModule from './ProjectRoadmapModule'
 import { PROJECT_VIEW_KINDS, parseProjectViewShare } from './utils'
 
 interface RoadmapViewProps {
-  projects: any[]
-  marketPlanData: Record<string, { tasks: any[], level2Tasks: any[], createdLevel2Plans: any[] }>
-  level1Tasks: any[]
+  projects: ProjectItem[]
   onViewProject: (projectId: string, market?: string) => void
 }
 
@@ -43,7 +43,7 @@ export default function RoadmapView({ projects, onViewProject }: RoadmapViewProp
           <AppstoreOutlined style={{ fontSize: 20, color: '#fff' }} />
           <div>
             <div style={{ fontSize: 17, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>项目视图</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 2 }}>全局查看项目计划汇总、里程碑路标与版本节奏</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 2 }}>全局查看项目计划汇总、项目路标与版本演进</div>
           </div>
         </Space>
         <div style={{
@@ -53,9 +53,11 @@ export default function RoadmapView({ projects, onViewProject }: RoadmapViewProp
           {PROJECT_VIEW_OPTIONS.map(v => {
             const isActive = activeProjectView === v.key
             return (
-              <div
+              <Button
                 key={v.key}
+                type="text"
                 onClick={() => setActiveProjectView(v.key)}
+                aria-pressed={isActive}
                 style={{
                   padding: '5px 18px', borderRadius: 18, cursor: 'pointer',
                   fontSize: 13, fontWeight: 600, transition: 'all 0.25s',
@@ -67,7 +69,7 @@ export default function RoadmapView({ projects, onViewProject }: RoadmapViewProp
               >
                 {v.icon}
                 {v.label}
-              </div>
+              </Button>
             )
           })}
         </div>
@@ -80,7 +82,9 @@ export default function RoadmapView({ projects, onViewProject }: RoadmapViewProp
       >
         {activeProjectView === 'summary' ? (
           <ProjectPlanSummaryBoard projects={projects} onViewProject={onViewProject} />
-        ) : null}
+        ) : (
+          <ProjectRoadmapModule projects={projects} onViewProject={onViewProject} />
+        )}
       </Card>
     </div>
   )

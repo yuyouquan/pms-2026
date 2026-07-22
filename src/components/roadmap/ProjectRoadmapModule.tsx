@@ -32,6 +32,10 @@ import type {
 } from '@/types/roadmap'
 import PlannedProjectModal from './PlannedProjectModal'
 import RoadmapColumnSettingsDrawer from './RoadmapColumnSettingsDrawer'
+import RoadmapChangeLogDrawer from './RoadmapChangeLogDrawer'
+import RoadmapConflictAlert from './RoadmapConflictAlert'
+import RoadmapConflictDrawer from './RoadmapConflictDrawer'
+import RoadmapEvolutionView from './RoadmapEvolutionView'
 import RoadmapFilterDrawer from './RoadmapFilterDrawer'
 import RoadmapTableView from './RoadmapTableView'
 import RoadmapToolbar from './RoadmapToolbar'
@@ -81,6 +85,7 @@ export default function ProjectRoadmapModule({
 
   const plannedProjects = useRoadmapStore(state => state.plannedProjects)
   const versions = useRoadmapStore(state => state.tosVersions)
+  const changeLogs = useRoadmapStore(state => state.changeLogs)
   const viewMode = useRoadmapStore(state => state.viewMode)
   const selectedTosVersionId = useRoadmapStore(state => state.selectedTosVersionId)
   const brandFilter = useRoadmapStore(state => state.brandFilter)
@@ -88,6 +93,7 @@ export default function ProjectRoadmapModule({
   const filters = useRoadmapStore(state => state.filters)
   const visibleColumns = useRoadmapStore(state => state.visibleColumns)
   const sort = useRoadmapStore(state => state.sort)
+  const selectedConflictKey = useRoadmapStore(state => state.selectedConflictKey)
   const setViewMode = useRoadmapStore(state => state.setViewMode)
   const setSelectedTosVersionId = useRoadmapStore(state => state.setSelectedTosVersionId)
   const setBrandFilter = useRoadmapStore(state => state.setBrandFilter)
@@ -104,7 +110,8 @@ export default function ProjectRoadmapModule({
   const [targetVersionId, setTargetVersionId] = useState<string | null>(null)
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [columnDrawerOpen, setColumnDrawerOpen] = useState(false)
-  const [changeLogRequested, setChangeLogRequested] = useState(false)
+  const [changeLogOpen, setChangeLogOpen] = useState(false)
+  const [conflictDrawerOpen, setConflictDrawerOpen] = useState(false)
   const textFilterDebouncerRef = useRef<RoadmapTextFilterDebouncer | null>(null)
 
   const filterFieldDefinitions = useMemo(
@@ -196,7 +203,12 @@ export default function ProjectRoadmapModule({
   const requestChangeLog = () => {
     if (!canView) return
     if (onOpenChangeLog) onOpenChangeLog()
-    else setChangeLogRequested(true)
+    else setChangeLogOpen(true)
+  }
+  const openConflictDrawer = (conflictKey?: string) => {
+    const nextKey = conflictKey ?? conflicts[0]?.key ?? null
+    setSelectedConflictKey(nextKey)
+    setConflictDrawerOpen(Boolean(nextKey))
   }
   const requestDeletePlannedProject = (projectId: string, onDeleted?: () => void) => {
     if (!canEdit) return
@@ -207,7 +219,12 @@ export default function ProjectRoadmapModule({
     }
     Modal.confirm({
       title: '删除待规划项目？',
-      content: `确认删除“${project.displayName}”？删除后项目将从路标中移除，但修改记录会保留删除前快照。`,
+      content: (
+        <>
+          <div style={{ marginBottom: 8 }}>项目：{project.displayName}</div>
+          <div>删除后，该待规划项目会立即从项目路标中移除；修改记录仍保留删除前快照。确认删除？</div>
+        </>
+      ),
       okText: '确认删除',
       cancelText: '取消',
       okButtonProps: { danger: true },
@@ -247,17 +264,17 @@ export default function ProjectRoadmapModule({
     onSelectedTosVersionChange: setSelectedTosVersionId,
     onSortChange: setSort,
     onEditTosTargets: setTargetVersionId,
-    onOpenConflict: setSelectedConflictKey,
+    onOpenConflict: openConflictDrawer,
     onEditPlannedProject: openPlannedProjectEditor,
     onDeletePlannedProject: requestDeletePlannedProject,
   }
 
   const content = viewMode === 'table'
     ? renderTableView?.(renderContext) ?? <RoadmapTableView {...renderContext} />
-    : renderEvolutionView?.(renderContext)
+    : renderEvolutionView?.(renderContext) ?? <RoadmapEvolutionView {...renderContext} />
 
   return (
-    <section aria-label="项目路标" style={{ width: '100%', minWidth: 0 }}>
+    <section className="pms-roadmap-shell" aria-label="项目路标" style={{ width: '100%', minWidth: 0 }}>
       <RoadmapToolbar
         canView={canView}
         canEdit={canEdit}
@@ -278,6 +295,11 @@ export default function ProjectRoadmapModule({
         onOpenColumnSettings={() => setColumnDrawerOpen(true)}
       />
 
+      <RoadmapConflictAlert
+        groups={conflicts}
+        onViewConflicts={() => openConflictDrawer()}
+      />
+
       {content ?? (
         <div style={{ padding: '48px 16px' }}>
           <Empty
@@ -286,12 +308,6 @@ export default function ProjectRoadmapModule({
           />
         </div>
       )}
-
-      <div
-        data-roadmap-overlay="change-log-pending"
-        data-requested={changeLogRequested ? 'true' : 'false'}
-        hidden
-      />
 
       <RoadmapFilterDrawer
         open={filterDrawerOpen}
@@ -329,6 +345,23 @@ export default function ProjectRoadmapModule({
         onCancel={() => setTargetVersionId(null)}
         version={targetVersion}
         canEdit={canEdit}
+      />
+      <RoadmapConflictDrawer
+        open={conflictDrawerOpen}
+        groups={conflicts}
+        tosVersions={versions}
+        selectedConflictKey={selectedConflictKey}
+        canEdit={canEdit}
+        onClose={() => setConflictDrawerOpen(false)}
+        onSelectedConflictKeyChange={setSelectedConflictKey}
+        onViewProject={projectId => onViewProject(projectId)}
+        onDeletePlannedProject={project => requestDeletePlannedProject(project.id)}
+      />
+      <RoadmapChangeLogDrawer
+        open={changeLogOpen}
+        onClose={() => setChangeLogOpen(false)}
+        changeLogs={changeLogs}
+        tosVersions={versions}
       />
     </section>
   )

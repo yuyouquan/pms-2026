@@ -1,6 +1,7 @@
 import ts from 'typescript'
 
 const LEGACY_COMPONENTS = new Set(['MilestoneView', 'MRTrainView'])
+const ROADMAP_MODULE = 'ProjectRoadmapModule'
 const PROJECT_VIEW_OPTION_LABELS = new Set(['项目计划汇总看板', '项目路标视图'])
 
 function getPropertyName(property) {
@@ -21,6 +22,12 @@ function isLegacyModulePath(modulePath) {
   ))
 }
 
+function isProjectRoadmapModulePath(modulePath) {
+  const normalizedPath = modulePath.replace(/\.(?:ts|tsx|js|jsx)$/, '')
+  return normalizedPath === `./${ROADMAP_MODULE}`
+    || normalizedPath === `@/components/roadmap/${ROADMAP_MODULE}`
+}
+
 function isSummaryConditional(node) {
   return ts.isConditionalExpression(node)
     && ts.isBinaryExpression(node.condition)
@@ -31,11 +38,11 @@ function isSummaryConditional(node) {
     && node.condition.right.text === 'summary'
 }
 
-function containsProjectPlanSummaryBoard(node) {
+function containsJsxTag(node, tagNames) {
   let found = false
   const visit = current => {
     if ((ts.isJsxOpeningElement(current) || ts.isJsxSelfClosingElement(current))
-      && getTagName(current.tagName) === 'ProjectPlanSummaryBoard') {
+      && tagNames.has(getTagName(current.tagName))) {
       found = true
     }
     if (!found) ts.forEachChild(current, visit)
@@ -74,6 +81,8 @@ export function analyzeRoadmapSource(source, fileName = 'RoadmapView.tsx') {
   const legacyImports = []
   const legacyJsxMounts = []
   const legacyLocalNames = new Set(LEGACY_COMPONENTS)
+  const roadmapModuleLocalNames = new Set([ROADMAP_MODULE])
+  let hasProjectRoadmapImport = false
   const headerTexts = new Set()
   const summaryConditionals = []
 
@@ -84,10 +93,17 @@ export function analyzeRoadmapSource(source, fileName = 'RoadmapView.tsx') {
       legacyImports.push(node.moduleSpecifier.text)
       if (node.importClause?.name) legacyLocalNames.add(node.importClause.name.text)
     }
+    if (ts.isImportDeclaration(node)
+      && ts.isStringLiteral(node.moduleSpecifier)
+      && isProjectRoadmapModulePath(node.moduleSpecifier.text)) {
+      hasProjectRoadmapImport = true
+      if (node.importClause?.name) roadmapModuleLocalNames.add(node.importClause.name.text)
+    }
     if (ts.isJsxText(node) && node.text.trim()) headerTexts.add(node.text.trim())
     if (isSummaryConditional(node)) {
       summaryConditionals.push({
-        mountsSummaryBoard: containsProjectPlanSummaryBoard(node.whenTrue),
+        mountsSummaryBoard: containsJsxTag(node.whenTrue, new Set(['ProjectPlanSummaryBoard'])),
+        mountsProjectRoadmapModule: containsJsxTag(node.whenFalse, roadmapModuleLocalNames),
         hasNullFalseBranch: node.whenFalse.kind === ts.SyntaxKind.NullKeyword,
       })
     }
@@ -110,6 +126,7 @@ export function analyzeRoadmapSource(source, fileName = 'RoadmapView.tsx') {
     legacyJsxMounts,
     hasProjectViewHeader: headerTexts.has('项目视图'),
     hasProjectViewOptionLabels: [...PROJECT_VIEW_OPTION_LABELS].every(label => projectViewOptionLabels.has(label)),
+    hasProjectRoadmapImport,
     summaryConditionals,
   }
 }
@@ -134,9 +151,16 @@ export function getRoadmapAnalysisFixtureFailures() {
     failures.push('commented legacy code was incorrectly detected')
   }
 
-  const populatedFalseBranch = analyzeRoadmapSource("const view = activeProjectView === 'summary' ? <ProjectPlanSummaryBoard /> : <RoadmapPlaceholder />")
-  if (populatedFalseBranch.summaryConditionals.length !== 1 || populatedFalseBranch.summaryConditionals[0].hasNullFalseBranch) {
-    failures.push('populated false branch was not rejected')
+  const wrongRoadmapBranch = analyzeRoadmapSource("const view = activeProjectView === 'summary' ? <ProjectPlanSummaryBoard /> : <RoadmapPlaceholder />")
+  if (wrongRoadmapBranch.summaryConditionals.length !== 1
+    || wrongRoadmapBranch.summaryConditionals[0].mountsProjectRoadmapModule) {
+    failures.push('wrong populated roadmap branch was not rejected')
+  }
+
+  const rebuiltRoadmapBranch = analyzeRoadmapSource("import RebuiltRoadmap from './ProjectRoadmapModule.tsx'\nconst view = activeProjectView === 'summary' ? <ProjectPlanSummaryBoard /> : <RebuiltRoadmap />")
+  if (!rebuiltRoadmapBranch.hasProjectRoadmapImport
+    || !rebuiltRoadmapBranch.summaryConditionals[0]?.mountsProjectRoadmapModule) {
+    failures.push('rebuilt roadmap branch fixture was not detected')
   }
 
   return failures

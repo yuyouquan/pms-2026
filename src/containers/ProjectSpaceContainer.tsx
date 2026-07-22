@@ -1322,7 +1322,9 @@ export default function ProjectSpaceContainer() {
       : mergedProject
     const saved = updateProject(selectedProject.id, updated, currentLoginUser)
     if (!saved) {
-      message.error('项目不存在，基本信息保存失败')
+      message.error(isMachineProjectType(updated.type)
+        ? '整机项目的路标必填信息不完整或取值不合法，无法保存'
+        : '项目不存在，基本信息保存失败')
       return
     }
     setBasicInfoEditMode(false)

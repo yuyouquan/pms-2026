@@ -221,11 +221,14 @@ registerAssertion('roadmap AST analysis handles legacy and cleared-state fixture
   }
 })
 
-registerAssertion('RoadmapView retains the summary shell and blank roadmap branch', () => {
+registerAssertion('RoadmapView retains the summary shell and mounts the rebuilt roadmap branch', () => {
   if (!roadmapAnalysis.hasProjectViewHeader) throw new Error('missing project-view header text')
   if (!roadmapAnalysis.hasProjectViewOptionLabels) throw new Error('missing project-view option labels')
-  if (!roadmapAnalysis.summaryConditionals.some(conditional => conditional.mountsSummaryBoard && conditional.hasNullFalseBranch)) {
-    throw new Error('summary conditional must mount ProjectPlanSummaryBoard with a null false branch')
+  if (!roadmapAnalysis.hasProjectRoadmapImport) throw new Error('missing rebuilt ProjectRoadmapModule import')
+  if (!roadmapAnalysis.summaryConditionals.some(conditional => (
+    conditional.mountsSummaryBoard && conditional.mountsProjectRoadmapModule
+  ))) {
+    throw new Error('summary conditional must mount ProjectPlanSummaryBoard and rebuilt ProjectRoadmapModule')
   }
 })
 
@@ -1532,6 +1535,9 @@ registerAssertion('normal project writes expose one shared audited action bounda
   if (!projectSpaceSource.includes('updateProject(selectedProject.id')) {
     throw new Error('project-space saves do not use the shared updateProject action')
   }
+  if (!projectSpaceSource.includes('整机项目的路标必填信息不完整或取值不合法，无法保存')) {
+    throw new Error('project-space invalid machine updates do not explain the roadmap validation failure')
+  }
 })
 
 registerAssertion('normal machine creation requires maintained first-sale tOS and maps roadmap fields', () => {
@@ -1675,16 +1681,19 @@ registerAssertion('shared project actions audit only legal normal machine snapsh
   projectStore.getState().updateProject(validMachine.id, { progress: 50 }, '修改人')
   if (roadmapStore.getState().changeLogs.length !== 2) throw new Error('non-roadmap update emitted an empty audit log')
 
-  projectStore.getState().updateProject(validMachine.id, { productType: '未知' }, '修改人')
-  if (roadmapStore.getState().changeLogs.length !== 2) throw new Error('invalid after-snapshot emitted an audit log')
+  const rejectedUpdate = projectStore.getState().updateProject(validMachine.id, { productType: '未知' }, '修改人')
+  const projectAfterRejectedUpdate = projectStore.getState().projects.find(project => project.id === validMachine.id)
+  if (rejectedUpdate !== null || projectAfterRejectedUpdate?.productType !== '新品' || roadmapStore.getState().changeLogs.length !== 2) {
+    throw new Error('invalid machine update mutated canonical state or emitted an audit log')
+  }
 
   const deleted = projectStore.getState().deleteProject(validMachine.id, '删除人')
   logs = roadmapStore.getState().changeLogs
   if (!deleted || projectStore.getState().projects.length || projectStore.getState().selectedProject !== null) {
     throw new Error('deleteProject did not remove and deselect the project')
   }
-  if (logs.length !== 2) {
-    throw new Error('invalid before-snapshot emitted a delete audit log')
+  if (logs.length !== 3 || logs[0].action !== 'delete') {
+    throw new Error('valid machine state was not preserved for audited deletion')
   }
 
   const validDelete = { ...validMachine, id: 'normal-audit-delete' }
@@ -1726,6 +1735,73 @@ registerAssertion('machine addProject rejects invalid data before canonical stat
   }, '张三')
   if (result !== false || projectStore.getState().projects.length || roadmapStore.getState().changeLogs.length) {
     throw new Error('invalid machine escaped the final addProject boundary')
+  }
+})
+
+registerAssertion('normal projects and their audit logs survive the same reload lifecycle', () => {
+  const previousWindow = globalThis.window
+  const storage = new Map()
+  globalThis.window = {
+    localStorage: {
+      getItem: key => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, value),
+      removeItem: key => storage.delete(key),
+    },
+  }
+
+  const loadStores = () => {
+    const moduleCache = new Map([[
+      path.join(root, 'src/data/projects.ts'),
+      { exports: { initialProjects: [] } },
+    ]])
+    const loader = createTypeScriptModuleLoader(moduleCache)
+    const projectModule = loader(path.join(root, 'src/stores/project.ts'))
+    const roadmapModule = loader(path.join(root, 'src/stores/roadmap.ts'))
+    return { projectModule, roadmapModule }
+  }
+
+  const validMachine = {
+    id: 'normal-persist-1', name: 'X9900', type: '整机-手机', status: '待立项', progress: 0,
+    leader: '张三', markets: [], androidVersion: 'Android 18', chipPlatform: 'G200', spm: '张三',
+    updatedAt: '刚刚', productLine: 'SPARK', tosVersion: 'tOS 18.0', planStartDate: '', planEndDate: '',
+    developCycle: 0, healthStatus: 'normal', firstSaleTosVersionId: 'tos-18-0', projectCode: 'X9900',
+    brand: 'TECNO', productSeries: 'SPARK 90', marketName: 'SPARK 90', productType: '新品', platform: 'G200',
+    startRam: '8GB', versionType: 'Full', str5Date: '2027-03-01', launchDate: '2027-04-01',
+    developMode: '自研', remark: '',
+  }
+
+  try {
+    const first = loadStores()
+    if (!first.projectModule.useProjectStore.getState().addProject(validMachine, '创建人')) {
+      throw new Error('valid persisted fixture was rejected')
+    }
+    if (!storage.has('pms-projects') || !storage.has('pms-project-roadmap')) {
+      throw new Error('project and roadmap stores did not both persist the normal create')
+    }
+
+    const second = loadStores()
+    if (!second.projectModule.useProjectStore.getState().projects.some(project => project.id === validMachine.id)) {
+      throw new Error('normal project disappeared after reload')
+    }
+    const createLog = second.roadmapModule.useRoadmapStore.getState().changeLogs.find(log => (
+      log.projectId === validMachine.id && log.action === 'create'
+    ))
+    if (!createLog) throw new Error('normal create audit disappeared after reload')
+
+    if (!second.projectModule.useProjectStore.getState().deleteProject(validMachine.id, '删除人')) {
+      throw new Error('persisted normal project could not be deleted')
+    }
+    const third = loadStores()
+    if (third.projectModule.useProjectStore.getState().projects.some(project => project.id === validMachine.id)) {
+      throw new Error('deleted normal project reappeared after reload')
+    }
+    const deleteLog = third.roadmapModule.useRoadmapStore.getState().changeLogs.find(log => (
+      log.projectId === validMachine.id && log.action === 'delete'
+    ))
+    if (!deleteLog) throw new Error('normal delete audit disappeared after reload')
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window
+    else globalThis.window = previousWindow
   }
 })
 
@@ -2325,6 +2401,80 @@ registerAssertion('single-version roadmap table preserves sorting, targets, sour
   const plannedModalSource = fs.readFileSync(path.join(root, 'src/components/roadmap/PlannedProjectModal.tsx'), 'utf8')
   if (!plannedModalSource.includes('onDeletePlannedProject') || plannedModalSource.includes('Modal.confirm({\n      title: \'删除待规划项目？\'')) {
     throw new Error('PlannedProjectModal must reuse the module-owned delete confirmation')
+  }
+})
+
+registerAssertion('version evolution uses one aligned shared scroll grid', () => {
+  const evolutionSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapEvolutionView.tsx'), 'utf8')
+  const cardSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'), 'utf8')
+  for (const contract of [
+    'grid-template-rows',
+    'scrollTo',
+    'scrollSignature',
+    "EVOLUTION_BRAND_ORDER = ['TECNO', 'Infinix', 'itel']",
+    'position: sticky',
+    'gridRow: 4',
+    'prefers-reduced-motion',
+  ]) {
+    if (!evolutionSource.includes(contract)) throw new Error(`RoadmapEvolutionView is missing ${contract}`)
+  }
+  if (evolutionSource.includes("overflowY: 'auto'") || evolutionSource.includes('最新')) {
+    throw new Error('evolution columns must share scrolling and must not mark a latest version')
+  }
+  for (const contract of ['待规划', '已存在正常项目', 'onEditPlannedProject', 'onDeletePlannedProject']) {
+    if (!cardSource.includes(contract)) throw new Error(`RoadmapProjectCard is missing ${contract}`)
+  }
+})
+
+registerAssertion('global roadmap conflicts stay visible and actionable until resolved', () => {
+  const alertSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapConflictAlert.tsx'), 'utf8')
+  const drawerSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapConflictDrawer.tsx'), 'utf8')
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  for (const copy of ['个待规划项目已存在对应正常项目', '查看冲突']) {
+    if (!alertSource.includes(copy)) throw new Error(`conflict alert is missing ${copy}`)
+  }
+  if (alertSource.includes('dismiss')) throw new Error('conflict alert must not be permanently dismissible')
+  for (const contract of ['查看正常项目', '删除待规划项目', 'selectedConflictKey', 'scrollIntoView']) {
+    if (!drawerSource.includes(contract)) throw new Error(`conflict drawer is missing ${contract}`)
+  }
+  for (const contract of ['RoadmapConflictAlert', 'RoadmapConflictDrawer', 'openConflictDrawer']) {
+    if (!moduleSource.includes(contract)) throw new Error(`conflict integration is missing ${contract}`)
+  }
+  if (!moduleSource.includes('删除后，该待规划项目会立即从项目路标中移除；修改记录仍保留删除前快照。确认删除？')) {
+    throw new Error('planned deletion must use the approved shared confirmation copy')
+  }
+})
+
+registerAssertion('roadmap change history filters, sorts, and renders fixed audit fields', () => {
+  const logSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapChangeLogDrawer.tsx'), 'utf8')
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  for (const label of ['项目标识', '来源', '动作', '日期范围', '正常项目', '待规划项目', '创建', '修改', '删除']) {
+    if (!logSource.includes(label)) throw new Error(`change log drawer is missing ${label}`)
+  }
+  for (const contract of ['ROADMAP_AUDIT_FIELDS', 'occurredAt', 'Pagination', '→']) {
+    if (!logSource.includes(contract)) throw new Error(`change log drawer is missing ${contract}`)
+  }
+  if (!moduleSource.includes('RoadmapChangeLogDrawer') || !moduleSource.includes('changeLogs={changeLogs}')) {
+    throw new Error('change log drawer is not connected to persisted roadmap logs')
+  }
+})
+
+registerAssertion('rebuilt roadmap is mounted without legacy roadmap content', () => {
+  const viewSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapView.tsx'), 'utf8')
+  const pageSource = fs.readFileSync(path.join(root, 'src/app/page.tsx'), 'utf8')
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  if (!viewSource.includes("import ProjectRoadmapModule from './ProjectRoadmapModule'")) {
+    throw new Error('RoadmapView is missing the rebuilt module import')
+  }
+  if (!viewSource.includes('<ProjectRoadmapModule')) throw new Error('RoadmapView does not mount the rebuilt module')
+  if (viewSource.includes('MilestoneView') || viewSource.includes('MRTrainView')) {
+    throw new Error('legacy roadmap content returned to RoadmapView')
+  }
+  if (pageSource.includes('marketPlanData={marketPlanData}') || pageSource.includes('level1Tasks={LEVEL1_TASKS}')) {
+    throw new Error('obsolete roadmap props are still passed from the page')
+  }
+  for (const contract of ['pms-roadmap-shell', 'RoadmapEvolutionView', 'RoadmapChangeLogDrawer']) {
+    if (!moduleSource.includes(contract)) throw new Error(`rebuilt module is missing ${contract}`)
   }
 })
 

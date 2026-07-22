@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { initialProjects } from '@/data/projects'
 import { isMachineProjectType } from '@/constants/projectTypes'
 import { buildMarketRowsFromMarkets, type MarketConfigRow } from '@/lib/marketRules'
@@ -36,6 +37,9 @@ export const kanbanColumns = [
 
 type Project = typeof initialProjects[number]
 type ProjectPatch = Partial<Omit<ProjectItem, 'type'>> & { type?: string; [key: string]: any }
+type PersistedProjectState = { projects: Project[] }
+
+const PROJECT_STORAGE_KEY = 'pms-projects'
 
 const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) => {
   if (isMachineProjectType(project.type) && project.markets?.length) {
@@ -103,6 +107,66 @@ function resolveTosVersionName(versions: readonly TosVersionConfig[], versionId:
   return versions.find(version => version.id === versionId)?.name ?? versionId
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function migrateProjectState(persistedState: unknown, _version: number): PersistedProjectState {
+  if (!isRecord(persistedState) || !Array.isArray(persistedState.projects)) {
+    return { projects: initialProjects }
+  }
+
+  const seenIds = new Set<string>()
+  const projects = persistedState.projects.flatMap(value => {
+    if (!isRecord(value)) return []
+    const id = typeof value.id === 'string' ? value.id.trim() : ''
+    const name = typeof value.name === 'string' ? value.name.trim() : ''
+    const type = typeof value.type === 'string' ? value.type.trim() : ''
+    if (!id || !name || !type || seenIds.has(id)) return []
+    seenIds.add(id)
+    return [value as Project]
+  })
+
+  if (persistedState.projects.length > 0 && projects.length === 0) {
+    return { projects: initialProjects }
+  }
+  return { projects }
+}
+
+export function partializeProjectState(state: ProjectState & ProjectActions): PersistedProjectState {
+  return { projects: state.projects }
+}
+
+const safeProjectStorage: StateStorage = {
+  getItem(name) {
+    if (typeof window === 'undefined') return null
+    try {
+      const stored = window.localStorage.getItem(name)
+      if (stored !== null) JSON.parse(stored)
+      return stored
+    } catch (error) {
+      console.error(`Failed to read ${PROJECT_STORAGE_KEY}; using initial project state.`, error)
+      return null
+    }
+  },
+  setItem(name, value) {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(name, value)
+    } catch (error) {
+      console.error(`Failed to persist ${PROJECT_STORAGE_KEY}.`, error)
+    }
+  },
+  removeItem(name) {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.removeItem(name)
+    } catch (error) {
+      console.error(`Failed to remove ${PROJECT_STORAGE_KEY}.`, error)
+    }
+  },
+}
+
 function recordNormalProjectAudit(
   action: RoadmapChangeAction,
   before: Project | null,
@@ -144,7 +208,8 @@ function recordNormalProjectAudit(
   })
 }
 
-export const useProjectStore = create<ProjectState & ProjectActions>()((set, get) => ({
+export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
+  (set, get) => ({
   projects: initialProjects,
   selectedProject: null,
   currentLoginUser: DEFAULT_LOGIN_USER,
@@ -206,6 +271,10 @@ export const useProjectStore = create<ProjectState & ProjectActions>()((set, get
     const existing = get().projects.find(project => project.id === projectId)
     if (!existing) return null
     const updated = { ...existing, ...patch } as Project
+    const versions = useRoadmapStore.getState().tosVersions
+    if (isMachineProjectType(updated.type) && !adaptNormalProject(updated as ProjectItem, versions)) {
+      return null
+    }
     set(state => ({
       projects: state.projects.map(project => project.id === projectId ? updated : project),
       selectedProject: state.selectedProject?.id === projectId ? updated : state.selectedProject,
@@ -223,4 +292,16 @@ export const useProjectStore = create<ProjectState & ProjectActions>()((set, get
     recordNormalProjectAudit('delete', existing, null, actor?.trim() || get().currentLoginUser.trim() || '系统')
     return true
   },
-}))
+  }),
+  {
+    name: PROJECT_STORAGE_KEY,
+    version: 1,
+    storage: createJSONStorage(() => safeProjectStorage),
+    migrate: migrateProjectState,
+    partialize: partializeProjectState,
+    merge: (persistedState, currentState) => ({
+      ...currentState,
+      ...migrateProjectState(persistedState, 1),
+    }),
+  },
+))
