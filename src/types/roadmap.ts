@@ -176,6 +176,7 @@ export interface RoadmapStoreState {
   productTypeFilter: 'all' | RoadmapProductType
   filters: RoadmapFilterCondition[]
   visibleColumns: RoadmapColumnKey[]
+  visibleColumnsByView: Record<RoadmapViewMode, RoadmapColumnKey[]>
   sort: RoadmapSortState
   selectedConflictKey: string | null
 }

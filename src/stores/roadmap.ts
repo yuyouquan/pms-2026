@@ -6,11 +6,14 @@ import {
   ROADMAP_AUDIT_FIELDS,
 } from '@/lib/roadmapAudit'
 import {
+  DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
+  DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS,
   DEFAULT_ROADMAP_VISIBLE_COLUMNS,
   getRoadmapQuickFilterValue,
   sanitizeRoadmapFilterConditions,
   sanitizeRoadmapVisibleColumns,
   setRoadmapQuickFilter,
+  setRoadmapTosVersionFilter,
 } from '@/lib/roadmapFilters'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
 import {
@@ -59,6 +62,7 @@ type PersistedRoadmapState = Pick<
   | 'productTypeFilter'
   | 'filters'
   | 'visibleColumns'
+  | 'visibleColumnsByView'
   | 'sort'
 >
 
@@ -153,6 +157,10 @@ export function createInitialRoadmapState(): RoadmapStoreState {
     productTypeFilter: 'all',
     filters: [],
     visibleColumns: [...DEFAULT_ROADMAP_VISIBLE_COLUMNS],
+    visibleColumnsByView: {
+      table: [...DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS],
+      evolution: [...DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS],
+    },
     sort: { field: null, direction: null },
     selectedConflictKey: null,
   }
@@ -375,19 +383,43 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
   }
   const migratedBrand = getRoadmapQuickFilterValue(filters, 'brand')
   const migratedProductType = getRoadmapQuickFilterValue(filters, 'productType')
+  const viewMode = persistedState.viewMode === 'evolution' ? 'evolution' : 'table'
+  const persistedColumnsByView = isRecord(persistedState.visibleColumnsByView)
+    ? persistedState.visibleColumnsByView
+    : null
+  const legacyVisibleColumns = sanitizeRoadmapVisibleColumns(persistedState.visibleColumns)
+  const tableVisibleColumns = persistedColumnsByView
+    ? sanitizeRoadmapVisibleColumns(
+      persistedColumnsByView.table,
+      DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS,
+    )
+    : legacyVisibleColumns
+  const evolutionVisibleColumns = persistedColumnsByView
+    ? sanitizeRoadmapVisibleColumns(
+      persistedColumnsByView.evolution,
+      DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
+    )
+    : JSON.stringify(legacyVisibleColumns) === JSON.stringify(DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS)
+      ? [...DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS]
+      : legacyVisibleColumns
+  const visibleColumnsByView = {
+    table: tableVisibleColumns,
+    evolution: evolutionVisibleColumns,
+  }
 
   return {
     plannedProjects,
     tosVersions,
     changeLogs,
-    viewMode: persistedState.viewMode === 'evolution' ? 'evolution' : 'table',
+    viewMode,
     selectedTosVersionId,
     brandFilter: ROADMAP_BRANDS.has(migratedBrand as RoadmapBrand) ? migratedBrand as RoadmapBrand : 'all',
     productTypeFilter: ROADMAP_PRODUCT_TYPES.has(migratedProductType as RoadmapProductType)
       ? migratedProductType as RoadmapProductType
       : 'all',
     filters,
-    visibleColumns: sanitizeRoadmapVisibleColumns(persistedState.visibleColumns),
+    visibleColumns: visibleColumnsByView[viewMode],
+    visibleColumnsByView,
     sort: sanitizeSort(persistedState.sort),
     selectedConflictKey: null,
   }
@@ -404,6 +436,7 @@ export function partializeRoadmapState(state: RoadmapStore): PersistedRoadmapSta
     productTypeFilter: state.productTypeFilter,
     filters: state.filters,
     visibleColumns: state.visibleColumns,
+    visibleColumnsByView: state.visibleColumnsByView,
     sort: state.sort,
   }
 }
@@ -497,11 +530,30 @@ export const useRoadmapStore = create<RoadmapStore>()(
     (set, get) => ({
       ...createInitialRoadmapState(),
       setViewMode: (viewMode: RoadmapViewMode) => {
-        if (viewMode === 'table' || viewMode === 'evolution') set({ viewMode })
+        if (viewMode === 'table' || viewMode === 'evolution') set(state => ({
+          viewMode,
+          visibleColumns: state.visibleColumnsByView[viewMode],
+          filters: viewMode === 'table'
+            && !state.filters.some(condition => condition.field === 'firstSaleTosVersionId')
+            ? sanitizeRoadmapFilterConditions(
+              setRoadmapTosVersionFilter(state.filters, state.selectedTosVersionId),
+              state.tosVersions,
+            )
+            : state.filters,
+        }))
       },
       setSelectedTosVersionId: (id: string | null) => {
         if (id === null || get().tosVersions.some(version => version.id === id)) {
-          set(state => ({ selectedTosVersionId: repairSelectedTosVersionId(id, state.tosVersions) }))
+          set(state => {
+            const selectedTosVersionId = repairSelectedTosVersionId(id, state.tosVersions)
+            return {
+              selectedTosVersionId,
+              filters: sanitizeRoadmapFilterConditions(
+                setRoadmapTosVersionFilter(state.filters, selectedTosVersionId),
+                state.tosVersions,
+              ),
+            }
+          })
         }
       },
       setBrandFilter: (brand: 'all' | RoadmapBrand) => {
@@ -523,18 +575,42 @@ export const useRoadmapStore = create<RoadmapStore>()(
         }))
       },
       setFilters: filters => set(state => {
-        const sanitized = sanitizeRoadmapFilterConditions(filters, state.tosVersions)
+        let sanitized = sanitizeRoadmapFilterConditions(filters, state.tosVersions)
+        const tosCondition = sanitized.find(condition => condition.field === 'firstSaleTosVersionId')
+        const selectedTosVersionId = tosCondition?.operator === 'equals'
+          && state.tosVersions.some(version => version.id === tosCondition.value)
+          ? tosCondition.value
+          : state.selectedTosVersionId
+        if (state.viewMode === 'table' && !tosCondition) {
+          sanitized = sanitizeRoadmapFilterConditions(
+            setRoadmapTosVersionFilter(sanitized, selectedTosVersionId),
+            state.tosVersions,
+          )
+        }
         const brand = getRoadmapQuickFilterValue(sanitized, 'brand')
         const productType = getRoadmapQuickFilterValue(sanitized, 'productType')
         return {
           filters: sanitized,
+          selectedTosVersionId,
           brandFilter: ROADMAP_BRANDS.has(brand as RoadmapBrand) ? brand as RoadmapBrand : 'all',
           productTypeFilter: ROADMAP_PRODUCT_TYPES.has(productType as RoadmapProductType)
             ? productType as RoadmapProductType
             : 'all',
         }
       }),
-      setVisibleColumns: columns => set({ visibleColumns: sanitizeRoadmapVisibleColumns(columns) }),
+      setVisibleColumns: columns => set(state => {
+        const fallback = state.viewMode === 'table'
+          ? DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS
+          : DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS
+        const visibleColumns = sanitizeRoadmapVisibleColumns(columns, fallback)
+        return {
+          visibleColumns,
+          visibleColumnsByView: {
+            ...state.visibleColumnsByView,
+            [state.viewMode]: visibleColumns,
+          },
+        }
+      }),
       setSort: sort => set({ sort: sanitizeSort(sort) }),
       setSelectedConflictKey: selectedConflictKey => set({ selectedConflictKey }),
       createPlannedProject: (rawInput, comparison) => {

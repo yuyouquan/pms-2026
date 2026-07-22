@@ -2,16 +2,18 @@
 
 import { useEffect, useState } from 'react'
 import { Button, Checkbox, Drawer, Flex, Typography } from 'antd'
-import { ROADMAP_COLUMNS, type RoadmapColumnKey } from '@/types/roadmap'
+import {
+  DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
+  DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS,
+} from '@/lib/roadmapFilters'
+import { ROADMAP_COLUMNS, type RoadmapColumnKey, type RoadmapViewMode } from '@/types/roadmap'
 
 const DRAWER_Z_INDEX = 1300
-const DEFAULT_VISIBLE_COLUMNS = ROADMAP_COLUMNS
-  .filter(column => column.defaultVisible)
-  .map(column => column.key)
 
 interface RoadmapColumnSettingsDrawerProps {
   open: boolean
   onClose: () => void
+  viewMode: RoadmapViewMode
   visibleColumns: readonly RoadmapColumnKey[]
   onChange: (columns: RoadmapColumnKey[]) => void
 }
@@ -19,10 +21,14 @@ interface RoadmapColumnSettingsDrawerProps {
 export default function RoadmapColumnSettingsDrawer({
   open,
   onClose,
+  viewMode,
   visibleColumns,
   onChange,
 }: RoadmapColumnSettingsDrawerProps) {
   const [draftColumns, setDraftColumns] = useState<RoadmapColumnKey[]>([...visibleColumns])
+  const defaultVisibleColumns = viewMode === 'table'
+    ? DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS
+    : DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS
 
   useEffect(() => {
     if (open) setDraftColumns([...visibleColumns])
@@ -54,7 +60,7 @@ export default function RoadmapColumnSettingsDrawer({
         <Flex justify="space-between" align="center" gap={12} wrap>
           <Button
             size="large"
-            onClick={() => setDraftColumns([...DEFAULT_VISIBLE_COLUMNS])}
+            onClick={() => setDraftColumns([...defaultVisibleColumns])}
             style={{ minHeight: 44 }}
           >
             重置默认
@@ -67,7 +73,7 @@ export default function RoadmapColumnSettingsDrawer({
       )}
     >
       <Typography.Paragraph type="secondary">
-        表单视图与版本演进视图共享同一份可见字段设置，至少保留 1 个业务字段。
+        当前视图单独保存列设置，至少保留 1 个业务字段。
       </Typography.Paragraph>
       <Checkbox.Group
         aria-label="路标可见业务字段"

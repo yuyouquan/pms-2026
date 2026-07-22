@@ -1441,7 +1441,15 @@ body {
   min-height: 100dvh;
   overflow: auto;
   padding: 12px;
-  background: var(--bg-page);
+  background: var(--bg-page, #f6f7fb);
+}
+
+.pms-roadmap-shell:fullscreen {
+  width: 100vw !important;
+  height: 100vh;
+  overflow: auto;
+  padding: 12px;
+  background: var(--bg-page, #f6f7fb);
 }
 
 .pms-roadmap-shell-fullscreen .roadmap-toolbar-glass {

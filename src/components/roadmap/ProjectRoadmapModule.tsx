@@ -112,6 +112,7 @@ export default function ProjectRoadmapModule({
   const [conflictDrawerOpen, setConflictDrawerOpen] = useState(false)
   const [collapsedTargetVersionIds, setCollapsedTargetVersionIds] = useState<Set<string>>(() => new Set())
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const roadmapShellRef = useRef<HTMLElement>(null)
   const textFilterDebouncerRef = useRef<RoadmapTextFilterDebouncer | null>(null)
 
   const filterFieldDefinitions = useMemo(
@@ -196,13 +197,24 @@ export default function ProjectRoadmapModule({
   }, [versions])
 
   useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === roadmapShellRef.current)
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
+
+  useEffect(() => {
     if (!isFullscreen) return undefined
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         const overlayOpen = document.querySelector('.ant-modal-wrap, .ant-drawer-open')
-        if (!overlayOpen) setIsFullscreen(false)
+        if (!overlayOpen) {
+          if (document.fullscreenElement) void document.exitFullscreen()
+          else setIsFullscreen(false)
+        }
       }
     }
     document.addEventListener('keydown', handleEscape)
@@ -211,6 +223,22 @@ export default function ProjectRoadmapModule({
       document.body.style.overflow = previousOverflow
     }
   }, [isFullscreen])
+
+  const toggleFullscreen = async () => {
+    const shell = roadmapShellRef.current
+    if (!shell) return
+    if (document.fullscreenElement) {
+      await document.exitFullscreen()
+      setIsFullscreen(false)
+      return
+    }
+    try {
+      await shell.requestFullscreen()
+      setIsFullscreen(true)
+    } catch {
+      setIsFullscreen(current => !current)
+    }
+  }
 
   const editingProject = useMemo(
     () => plannedProjects.find(project => project.id === editingPlannedProjectId) ?? null,
@@ -328,6 +356,7 @@ export default function ProjectRoadmapModule({
 
   return (
     <section
+      ref={roadmapShellRef}
       className={`pms-roadmap-shell${isFullscreen ? ' pms-roadmap-shell-fullscreen' : ''}`}
       aria-label="项目路标"
       style={{ width: '100%', minWidth: 0 }}
@@ -346,7 +375,7 @@ export default function ProjectRoadmapModule({
         allTargetsCollapsed={allTargetsCollapsed}
         onToggleAllTargets={toggleAllTargets}
         isFullscreen={isFullscreen}
-        onToggleFullscreen={() => setIsFullscreen(current => !current)}
+        onToggleFullscreen={() => void toggleFullscreen()}
         onOpenChangeLog={requestChangeLog}
         onOpenTosMaintenance={() => setTosMaintenanceOpen(true)}
         onCreatePlannedProject={openCreatePlannedProject}
@@ -378,6 +407,7 @@ export default function ProjectRoadmapModule({
       <RoadmapColumnSettingsDrawer
         open={columnDrawerOpen}
         onClose={() => setColumnDrawerOpen(false)}
+        viewMode={viewMode}
         visibleColumns={visibleColumns}
         onChange={setVisibleColumns}
       />

@@ -111,7 +111,7 @@ export default function RoadmapTableView({
 
   useEffect(() => {
     const effectiveId = version?.id ?? null
-    if (effectiveId !== selectedTosVersionId) onSelectedTosVersionChange(effectiveId)
+    onSelectedTosVersionChange(effectiveId)
   }, [onSelectedTosVersionChange, selectedTosVersionId, version?.id])
 
   const versionRows = useMemo(

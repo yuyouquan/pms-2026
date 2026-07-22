@@ -19,12 +19,25 @@ import {
 
 export const ROADMAP_FILTER_DEBOUNCE_MS = 150
 
-export const DEFAULT_ROADMAP_VISIBLE_COLUMNS = ROADMAP_COLUMNS
+export const DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS = ROADMAP_COLUMNS
   .filter(column => column.defaultVisible)
   .map(column => column.key)
 
+export const DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS: RoadmapColumnKey[] = [
+  'marketName',
+  'displayName',
+  'platform',
+  'startRam',
+  'versionType',
+  'str5Date',
+  'launchDate',
+]
+
+export const DEFAULT_ROADMAP_VISIBLE_COLUMNS = DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS
+
 export type RoadmapQuickFilterField = 'brand' | 'productType'
 export type RoadmapQuickFilterValue = 'all' | 'custom' | RoadmapBrand | RoadmapProductType
+const ROADMAP_QUICK_BRANDS = new Set<RoadmapBrand>(['TECNO', 'Infinix', 'itel'])
 
 export function getRoadmapQuickFilterValue(
   filters: readonly RoadmapFilterCondition[],
@@ -40,9 +53,9 @@ export function getRoadmapQuickFilterValue(
 ): RoadmapQuickFilterValue {
   const condition = filters.find(candidate => candidate.field === field)
   if (!condition) return 'all'
-  return condition.operator === 'equals' && condition.value
-    ? condition.value as RoadmapQuickFilterValue
-    : 'custom'
+  if (condition.operator !== 'equals' || !condition.value) return 'custom'
+  if (field === 'brand' && !ROADMAP_QUICK_BRANDS.has(condition.value as RoadmapBrand)) return 'custom'
+  return condition.value as RoadmapQuickFilterValue
 }
 
 export function setRoadmapQuickFilter(
@@ -60,6 +73,22 @@ export function setRoadmapQuickFilter(
   }
   if (!existing) return [...filters, replacement]
   return filters.map(condition => condition.field === field ? replacement : condition)
+}
+
+export function setRoadmapTosVersionFilter(
+  filters: readonly RoadmapFilterCondition[],
+  versionId: string | null,
+): RoadmapFilterCondition[] {
+  if (!versionId) return filters.filter(condition => condition.field !== 'firstSaleTosVersionId')
+  const existing = filters.find(condition => condition.field === 'firstSaleTosVersionId')
+  const replacement: RoadmapFilterCondition = {
+    id: existing?.id ?? 'roadmap-quick-firstSaleTosVersionId',
+    field: 'firstSaleTosVersionId',
+    operator: 'equals',
+    value: versionId,
+  }
+  if (!existing) return [...filters, replacement]
+  return filters.map(condition => condition.field === 'firstSaleTosVersionId' ? replacement : condition)
 }
 
 const option = (value: string) => ({ label: value, value })
@@ -185,11 +214,14 @@ export function sanitizeRoadmapFilterConditions(
   return sanitized
 }
 
-export function sanitizeRoadmapVisibleColumns(value: unknown): RoadmapColumnKey[] {
-  if (!Array.isArray(value)) return [...DEFAULT_ROADMAP_VISIBLE_COLUMNS]
+export function sanitizeRoadmapVisibleColumns(
+  value: unknown,
+  fallback: readonly RoadmapColumnKey[] = DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS,
+): RoadmapColumnKey[] {
+  if (!Array.isArray(value)) return [...fallback]
   const requested = new Set(value.filter((key): key is string => typeof key === 'string'))
   const approved = ROADMAP_COLUMNS.flatMap(column => requested.has(column.key) ? [column.key] : [])
-  return approved.length ? approved : [ROADMAP_COLUMNS[0].key]
+  return approved.length ? approved : [fallback[0] ?? ROADMAP_COLUMNS[0].key]
 }
 
 export function applyRoadmapFilters(

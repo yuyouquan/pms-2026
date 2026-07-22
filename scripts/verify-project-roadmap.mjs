@@ -851,7 +851,7 @@ registerAssertion('roadmap setters sanitize columns and persistence excludes tra
   if (store.getState().visibleColumns.length < 1) throw new Error('at least one business field must remain visible')
   store.getState().setSelectedConflictKey('X6877|Android 16|新品')
   const persisted = storeModule.partializeRoadmapState(store.getState())
-  const expectedKeys = ['plannedProjects', 'tosVersions', 'changeLogs', 'viewMode', 'selectedTosVersionId', 'brandFilter', 'productTypeFilter', 'filters', 'visibleColumns', 'sort']
+  const expectedKeys = ['plannedProjects', 'tosVersions', 'changeLogs', 'viewMode', 'selectedTosVersionId', 'brandFilter', 'productTypeFilter', 'filters', 'visibleColumns', 'visibleColumnsByView', 'sort']
   if (JSON.stringify(Object.keys(persisted)) !== JSON.stringify(expectedKeys)) throw new Error(`persistence boundary is wrong: ${Object.keys(persisted)}`)
   if ('selectedConflictKey' in persisted || 'normalProjects' in persisted || 'conflictGroups' in persisted) throw new Error('transient/derived state was persisted')
 })
@@ -2181,6 +2181,10 @@ registerAssertion('current-version roadmap hydration rejects malicious typed fil
         { id: 'valid-text', field: 'remark', operator: 'notContains', value: '  risk  ' },
       ],
       visibleColumns: ['remark', 'brand', 'unknown', 'brand'],
+      visibleColumnsByView: {
+        ...state.visibleColumnsByView,
+        table: ['remark', 'brand', 'unknown', 'brand'],
+      },
     },
   })
   if (hydrated.filters.map(filter => filter.id).join(',') !== 'valid-version,valid-text') {
@@ -2498,6 +2502,59 @@ registerAssertion('roadmap quick filters and drawer conditions share one source'
   if (filterModule.setRoadmapQuickFilter(custom, 'brand', 'all').length !== 0) {
     throw new Error('quick all did not clear the drawer condition')
   }
+  const nonQuickBrand = [{ ...brandEquals[0], value: '待定' }]
+  if (filterModule.getRoadmapQuickFilterValue(nonQuickBrand, 'brand') !== 'custom') {
+    throw new Error('brand values without an external shortcut must expose custom state')
+  }
+})
+
+registerAssertion('table tOS selector and drawer tOS condition stay synchronized', () => {
+  const storeModule = loadIsolatedRoadmapStore()
+  const store = resetRoadmapStore(storeModule)
+  store.getState().setSelectedTosVersionId('tos-17-2')
+  const selectorCondition = store.getState().filters.find(condition => condition.field === 'firstSaleTosVersionId')
+  if (selectorCondition?.operator !== 'equals' || selectorCondition.value !== 'tos-17-2') {
+    throw new Error('table tOS selector did not update the drawer condition')
+  }
+  store.getState().setFilters([{
+    id: 'drawer-tos',
+    field: 'firstSaleTosVersionId',
+    operator: 'equals',
+    value: 'tos-16-3',
+  }])
+  if (store.getState().selectedTosVersionId !== 'tos-16-3') {
+    throw new Error('drawer tOS condition did not update the table selector')
+  }
+})
+
+registerAssertion('table and evolution views keep the approved independent default columns', () => {
+  const filterModule = loadTypeScriptModule(path.join(root, 'src/lib/roadmapFilters.ts'))
+  const expectedTable = [
+    'firstSaleTosVersionId', 'brand', 'productLine', 'marketName', 'displayName',
+    'productType', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
+    'developMode', 'remark',
+  ]
+  const expectedEvolution = [
+    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
+  ]
+  if (JSON.stringify(filterModule.DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS) !== JSON.stringify(expectedTable)) {
+    throw new Error('table default columns do not match the approved matrix')
+  }
+  if (JSON.stringify(filterModule.DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS) !== JSON.stringify(expectedEvolution)) {
+    throw new Error('evolution default columns do not match the approved matrix')
+  }
+  const storeModule = loadIsolatedRoadmapStore()
+  const store = resetRoadmapStore(storeModule)
+  store.getState().setVisibleColumns(['brand'])
+  store.getState().setViewMode('evolution')
+  if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(expectedEvolution)) {
+    throw new Error('evolution view did not retain its independent defaults')
+  }
+  store.getState().setVisibleColumns(['marketName'])
+  store.getState().setViewMode('table')
+  if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(['brand'])) {
+    throw new Error('table view column customization was overwritten by evolution view')
+  }
 })
 
 registerAssertion('roadmap targets preserve raw text and expose collapse controls', () => {
@@ -2527,6 +2584,12 @@ registerAssertion('roadmap supports compact fullscreen controls', () => {
   if (toolbar.includes('表单视图 tOS 版本')) throw new Error('table tOS selector still lives in the toolbar')
   if (!moduleSource.includes("event.key === 'Escape'") || !moduleSource.includes('pms-roadmap-shell-fullscreen')) {
     throw new Error('module fullscreen lifecycle is incomplete')
+  }
+  for (const token of ['requestFullscreen', 'fullscreenchange', 'document.exitFullscreen']) {
+    if (!moduleSource.includes(token)) throw new Error(`native fullscreen lifecycle is missing ${token}`)
+  }
+  if (!toolbar.includes('data-roadmap-actions') || !toolbar.includes('wrap={false}')) {
+    throw new Error('roadmap action buttons may wrap the fullscreen control onto a second row')
   }
   if (!styles.includes('.pms-roadmap-shell-fullscreen')) throw new Error('fullscreen shell styles are missing')
 })

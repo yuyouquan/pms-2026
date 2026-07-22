@@ -139,7 +139,14 @@ export default function RoadmapToolbar({
           </Flex>
         </Flex>
 
-        <Flex align="center" justify="flex-end" gap={6} wrap style={{ minWidth: 0, flex: '1 1 420px' }}>
+        <Flex
+          data-roadmap-actions
+          align="center"
+          justify="flex-end"
+          gap={6}
+          wrap={false}
+          style={{ minWidth: 'max-content', flex: '0 0 auto', whiteSpace: 'nowrap' }}
+        >
           {viewMode === 'evolution' && hasTargetVersions ? (
             <Button
               icon={allTargetsCollapsed ? <DownOutlined /> : <UpOutlined />}
