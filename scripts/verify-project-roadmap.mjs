@@ -1225,20 +1225,38 @@ registerAssertion('tOS selection actions enforce valid references and repair tra
   store.getState().setSelectedTosVersionId('missing')
   if (store.getState().selectedTosVersionId !== 'tos-18-0') throw new Error('setter accepted an unknown tOS ID')
   store.getState().setSelectedTosVersionId(null)
-  if (store.getState().selectedTosVersionId !== null) throw new Error('setter rejected null')
-  const nullRoundTrip = storeModule.migrateRoadmapState(storeModule.partializeRoadmapState(store.getState()), 1)
-  if (nullRoundTrip.selectedTosVersionId !== null) throw new Error('persisted null selection was not preserved')
+  if (store.getState().selectedTosVersionId !== 'tos-18-0') throw new Error('setter left a non-empty catalog unselected')
 
-  store.setState({ selectedTosVersionId: 'stale-version-id' })
+  const nullPersistedState = {
+    ...storeModule.partializeRoadmapState(store.getState()),
+    selectedTosVersionId: null,
+  }
+  const nullRoundTrip = storeModule.migrateRoadmapState(nullPersistedState, 1)
+  if (nullRoundTrip.selectedTosVersionId !== 'tos-18-0') throw new Error('migration preserved null for a non-empty catalog')
+  const hydrated = hydrateRoadmapStoreFromEnvelope({ state: nullPersistedState, version: 1 })
+  if (hydrated.selectedTosVersionId !== 'tos-18-0') throw new Error('merge preserved null for a non-empty catalog')
+
+  store.setState({ selectedTosVersionId: null })
   const unselectedId = store.getState().tosVersions.at(-1).id
   if (!store.getState().deleteTosVersion(unselectedId, 0).ok) throw new Error('unselected version delete failed')
-  if (store.getState().selectedTosVersionId !== store.getState().tosVersions[0].id) throw new Error('delete did not repair stale selection')
+  if (store.getState().selectedTosVersionId !== store.getState().tosVersions[0].id) throw new Error('delete did not repair null selection')
+
+  store.setState({ selectedTosVersionId: null })
+  if (!store.getState().createTosVersion({ name: 'tOS 19.0' }).ok) throw new Error('version create failed')
+  if (store.getState().selectedTosVersionId !== store.getState().tosVersions[0].id) throw new Error('create did not repair null selection')
+
+  const renamedId = 'tos-17-2'
+  store.setState({ selectedTosVersionId: null })
+  if (!store.getState().renameTosVersion(renamedId, { name: 'tOS 20.0' }).ok) throw new Error('rename failed')
+  if (store.getState().selectedTosVersionId !== renamedId || store.getState().tosVersions[0].id !== renamedId) {
+    throw new Error('rename did not repair selection to the highest semantic version')
+  }
 
   store.setState({ tosVersions: [], selectedTosVersionId: null })
-  if (!store.getState().createTosVersion({ name: 'tOS 20.0' }).ok) throw new Error('first version create failed')
+  if (!store.getState().createTosVersion({ name: 'tOS 21.0' }).ok) throw new Error('first version create failed')
   const first = store.getState().tosVersions[0]
   if (store.getState().selectedTosVersionId !== first.id) throw new Error('first created version was not selected')
-  if (!store.getState().renameTosVersion(first.id, { name: 'tOS 20.1' }).ok) throw new Error('rename failed')
+  if (!store.getState().renameTosVersion(first.id, { name: 'tOS 21.1' }).ok) throw new Error('single-version rename failed')
   if (store.getState().selectedTosVersionId !== first.id || store.getState().tosVersions[0].id !== first.id) {
     throw new Error('rename changed the stable selected ID')
   }

@@ -120,6 +120,16 @@ function sortTosVersions(versions: readonly TosVersionConfig[]): TosVersionConfi
   return [...versions].sort((left, right) => compareSemanticTos(right, left))
 }
 
+function repairSelectedTosVersionId(
+  selectedTosVersionId: string | null | undefined,
+  tosVersions: readonly TosVersionConfig[],
+): string | null {
+  if (tosVersions.length === 0) return null
+  return tosVersions.some(version => version.id === selectedTosVersionId)
+    ? selectedTosVersionId as string
+    : tosVersions[0].id
+}
+
 export function createInitialTosVersions(): TosVersionConfig[] {
   return [
     [18, 0],
@@ -383,9 +393,10 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
   const changeLogs = 'changeLogs' in persistedState ? migrateChangeLogs(persistedState.changeLogs) : []
   if (!plannedProjects || !changeLogs) return initial
 
-  const selectedTosVersionId = tosVersions.length === 0 || persistedState.selectedTosVersionId === null
-    ? null
-    : resolveMigratedTosId(persistedState.selectedTosVersionId, tosVersions) ?? tosVersions[0].id
+  const selectedTosVersionId = repairSelectedTosVersionId(
+    resolveMigratedTosId(persistedState.selectedTosVersionId, tosVersions),
+    tosVersions,
+  )
 
   return {
     plannedProjects,
@@ -513,7 +524,9 @@ export const useRoadmapStore = create<RoadmapStore>()(
         if (viewMode === 'table' || viewMode === 'evolution') set({ viewMode })
       },
       setSelectedTosVersionId: (id: string | null) => {
-        if (id === null || get().tosVersions.some(version => version.id === id)) set({ selectedTosVersionId: id })
+        if (id === null || get().tosVersions.some(version => version.id === id)) {
+          set(state => ({ selectedTosVersionId: repairSelectedTosVersionId(id, state.tosVersions) }))
+        }
       },
       setBrandFilter: (brand: 'all' | RoadmapBrand) => {
         if (brand === 'all' || ROADMAP_BRANDS.has(brand)) set({ brandFilter: brand })
@@ -615,12 +628,10 @@ export const useRoadmapStore = create<RoadmapStore>()(
         }
         set(state => {
           const tosVersions = sortTosVersions([...state.tosVersions, version])
-          const selectedTosVersionId = state.tosVersions.length === 0
-            ? version.id
-            : state.selectedTosVersionId === null || state.tosVersions.some(item => item.id === state.selectedTosVersionId)
-              ? state.selectedTosVersionId
-              : tosVersions[0].id
-          return { tosVersions, selectedTosVersionId }
+          return {
+            tosVersions,
+            selectedTosVersionId: repairSelectedTosVersionId(state.selectedTosVersionId, tosVersions),
+          }
         })
         return { ok: true }
       },
@@ -631,9 +642,13 @@ export const useRoadmapStore = create<RoadmapStore>()(
         if (!normalized) return mutationFailure({ name: 'tOS 版本格式无效' })
         if (get().tosVersions.some(version => version.id !== id && version.name === normalized.name)) return { ok: false, reason: 'duplicate' }
         const updated = { ...existing, ...normalized, updatedAt: nowIso() }
-        set(state => ({
-          tosVersions: sortTosVersions(state.tosVersions.map(version => version.id === id ? updated : version)),
-        }))
+        set(state => {
+          const tosVersions = sortTosVersions(state.tosVersions.map(version => version.id === id ? updated : version))
+          return {
+            tosVersions,
+            selectedTosVersionId: repairSelectedTosVersionId(state.selectedTosVersionId, tosVersions),
+          }
+        })
         return { ok: true }
       },
       deleteTosVersion: (id, normalReferenceCount) => {
@@ -645,13 +660,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
         const tosVersions = sortTosVersions(get().tosVersions.filter(version => version.id !== id))
         set(state => ({
           tosVersions,
-          selectedTosVersionId: tosVersions.length === 0
-            ? null
-            : state.selectedTosVersionId === null
-              ? null
-              : tosVersions.some(version => version.id === state.selectedTosVersionId)
-                ? state.selectedTosVersionId
-                : tosVersions[0].id,
+          selectedTosVersionId: repairSelectedTosVersionId(state.selectedTosVersionId, tosVersions),
         }))
         return { ok: true }
       },
