@@ -28,16 +28,14 @@ export const ROADMAP_EVOLUTION_LOCKED_COLUMNS: RoadmapColumnKey[] = [
   'displayName',
 ]
 
-export const DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS: RoadmapColumnKey[] = [
-  'productSeries',
+export const DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS: RoadmapColumnKey[] = ensureRoadmapLockedColumns([
   'marketName',
-  'displayName',
   'platform',
   'startRam',
   'versionType',
   'str5Date',
   'launchDate',
-]
+], ROADMAP_EVOLUTION_LOCKED_COLUMNS)
 
 export const DEFAULT_ROADMAP_VISIBLE_COLUMNS = DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS
 

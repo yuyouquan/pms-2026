@@ -459,15 +459,15 @@ export default function RoadmapEvolutionView({
         }
 
         .pms-roadmap-evolution-brand-label.brand-tecno {
-          color: #1677ff;
+          color: #0958d9;
         }
 
         .pms-roadmap-evolution-brand-label.brand-infinix {
-          color: #52c41a;
+          color: #237804;
         }
 
         .pms-roadmap-evolution-brand-label.brand-itel {
-          color: #ff4d4f;
+          color: #cf1322;
         }
 
         .pms-roadmap-evolution-card-list {

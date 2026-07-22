@@ -894,7 +894,7 @@ registerAssertion('roadmap migration repairs legacy names, references, UI contro
     migrated.filters.length !== 2
     || migrated.filters.find(condition => condition.field === 'brand')?.value !== 'TECNO'
     || migrated.filters.find(condition => condition.field === 'productType')?.value !== '老品'
-    || JSON.stringify(migrated.visibleColumns) !== JSON.stringify(['marketName'])
+    || JSON.stringify(migrated.visibleColumns) !== JSON.stringify(['productSeries', 'marketName', 'displayName'])
   ) throw new Error('filters/columns were not sanitized or synchronized')
   if (migrated.selectedTosVersionId !== null || migrated.changeLogs.length !== 1 || 'conflictGroups' in migrated) {
     throw new Error('selection/log/conflict migration is wrong')
@@ -2499,6 +2499,13 @@ registerAssertion('evolution cards keep locked titles and approved colors', () =
   for (const token of ['brand-tecno', 'brand-infinix', 'brand-itel', 'pms-roadmap-evolution-brand-label']) {
     if (!evolutionSource.includes(token)) throw new Error(`brand styling is missing ${token}`)
   }
+  for (const contract of [
+    '.pms-roadmap-evolution-brand-label.brand-tecno {\n          color: #0958d9;',
+    '.pms-roadmap-evolution-brand-label.brand-infinix {\n          color: #237804;',
+    '.pms-roadmap-evolution-brand-label.brand-itel {\n          color: #cf1322;',
+  ]) {
+    if (!evolutionSource.includes(contract)) throw new Error(`brand label contrast is missing ${contract}`)
+  }
   for (const token of ['pms-roadmap-evolution-card-header', 'pms-roadmap-evolution-card-title', 'pms-roadmap-evolution-source-tag']) {
     if (!evolutionSource.includes(token) && !cardSource.includes(token)) throw new Error(`card nowrap styling is missing ${token}`)
   }
@@ -2676,9 +2683,35 @@ registerAssertion('table and evolution views keep the approved independent defau
     throw new Error('evolution view did not retain its independent defaults')
   }
   store.getState().setVisibleColumns(['marketName'])
+  if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(['productSeries', 'marketName', 'displayName'])) {
+    throw new Error('evolution direct column setter removed structural title fields')
+  }
   store.getState().setViewMode('table')
   if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(['brand'])) {
     throw new Error('table view column customization was overwritten by evolution view')
+  }
+})
+
+registerAssertion('roadmap migration canonicalizes locked evolution columns without changing table columns', () => {
+  const storeModule = loadIsolatedRoadmapStore()
+  const initial = storeModule.createInitialRoadmapState()
+  const persisted = storeModule.partializeRoadmapState(initial)
+  const migrated = storeModule.migrateRoadmapState({
+    ...persisted,
+    viewMode: 'evolution',
+    visibleColumns: ['marketName'],
+    visibleColumnsByView: {
+      table: ['brand'],
+      evolution: ['marketName'],
+    },
+  }, 1)
+  const expectedEvolution = ['productSeries', 'marketName', 'displayName']
+  if (JSON.stringify(migrated.visibleColumns) !== JSON.stringify(expectedEvolution)
+    || JSON.stringify(migrated.visibleColumnsByView.evolution) !== JSON.stringify(expectedEvolution)) {
+    throw new Error('persisted evolution columns were not repaired with structural title fields')
+  }
+  if (JSON.stringify(migrated.visibleColumnsByView.table) !== JSON.stringify(['brand'])) {
+    throw new Error('evolution migration changed table columns')
   }
 })
 

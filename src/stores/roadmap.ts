@@ -9,7 +9,9 @@ import {
   DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
   DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS,
   DEFAULT_ROADMAP_VISIBLE_COLUMNS,
+  ensureRoadmapLockedColumns,
   getRoadmapQuickFilterValue,
+  ROADMAP_EVOLUTION_LOCKED_COLUMNS,
   sanitizeRoadmapFilterConditions,
   sanitizeRoadmapVisibleColumns,
   setRoadmapQuickFilter,
@@ -400,7 +402,7 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
       DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS,
     )
     : legacyVisibleColumns
-  const evolutionVisibleColumns = persistedColumnsByView
+  const migratedEvolutionVisibleColumns = persistedColumnsByView
     ? sanitizeRoadmapVisibleColumns(
       persistedColumnsByView.evolution,
       DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
@@ -408,6 +410,10 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
     : JSON.stringify(legacyVisibleColumns) === JSON.stringify(DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS)
       ? [...DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS]
       : legacyVisibleColumns
+  const evolutionVisibleColumns = ensureRoadmapLockedColumns(
+    migratedEvolutionVisibleColumns,
+    ROADMAP_EVOLUTION_LOCKED_COLUMNS,
+  )
   const visibleColumnsByView = {
     table: tableVisibleColumns,
     evolution: evolutionVisibleColumns,
@@ -595,7 +601,10 @@ export const useRoadmapStore = create<RoadmapStore>()(
         const fallback = state.viewMode === 'table'
           ? DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS
           : DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS
-        const visibleColumns = sanitizeRoadmapVisibleColumns(columns, fallback)
+        const sanitizedColumns = sanitizeRoadmapVisibleColumns(columns, fallback)
+        const visibleColumns = state.viewMode === 'evolution'
+          ? ensureRoadmapLockedColumns(sanitizedColumns, ROADMAP_EVOLUTION_LOCKED_COLUMNS)
+          : sanitizedColumns
         return {
           visibleColumns,
           visibleColumnsByView: {
