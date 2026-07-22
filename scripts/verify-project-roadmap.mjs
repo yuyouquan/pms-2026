@@ -1390,6 +1390,51 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
   }
 })
 
+registerAssertion('normal adapter rejects invalid business values without inventing roadmap data', () => {
+  const adapter = loadTypeScriptModule(path.join(root, 'src/lib/roadmapProjectAdapter.ts'))
+  const versions = [
+    { id: 'tos-17-2', name: 'tOS 17.2', major: 17, minor: 2, targets: [], createdAt: '', updatedAt: '' },
+  ]
+  const validNormal = {
+    id: 'normal-valid', name: 'X6877-D8400_H991', type: '整机-手机', status: '在研',
+    androidVersion: 'Android 16', firstSaleTosVersionId: 'tos-17-2', projectCode: 'X6877',
+    brand: 'TECNO', productLine: 'SPARK', productSeries: 'SPARK 60', marketName: 'SPARK 60',
+    productType: '新品', platform: 'G100', startRam: '8GB', versionType: 'Full',
+    str5Date: '2027-01-01', launchDate: '2027-02-01', developMode: '自研', remark: '',
+  }
+  const invalidCases = [
+    ['missing product type', { productType: undefined }],
+    ['invalid RAM', { startRam: '32GB', memory: '32GB+512GB' }],
+    ['invalid version type', { versionType: 'Ultra' }],
+    ['invalid develop mode', { developMode: '合作开发' }],
+    ['invalid Android version', { androidVersion: 'Android 19', operatingSystem: 'Android 16' }],
+    ['invalid brand', { brand: 'Unknown' }],
+    ['unresolved first-sale tOS version', { firstSaleTosVersionId: 'missing', tosVersion: 'tOS 17.2' }],
+    ['missing project code', { projectCode: null, model: null, name: null }],
+  ]
+  for (const [label, override] of invalidCases) {
+    const row = adapter.adaptNormalProject({ ...validNormal, ...override }, versions)
+    if (row !== null) throw new Error(`${label} was silently normalized: ${JSON.stringify(row)}`)
+  }
+
+  const nullable = adapter.adaptNormalProject({
+    ...validNormal,
+    name: null,
+    marketName: null,
+    productSeries: null,
+    remark: null,
+    projectDescription: null,
+  }, versions)
+  if (!nullable || nullable.displayName !== 'X6877' || nullable.marketName !== '' || nullable.productSeries !== '' || nullable.remark !== '') {
+    throw new Error(`nullable text was not handled safely: ${JSON.stringify(nullable)}`)
+  }
+
+  const invalidNormal = adapter.adaptNormalProject({ ...validNormal, productType: undefined }, versions)
+  const planned = roadmapRow({ id: 'planned-conflict', source: 'planned', readOnly: false })
+  const groups = adapter.deriveRoadmapPlanningConflicts(invalidNormal ? [invalidNormal] : [], [planned])
+  if (groups.length) throw new Error(`invalid normal data manufactured a planning conflict: ${JSON.stringify(groups)}`)
+})
+
 registerAssertion('history matches use normalized project codes and exclude only the edited planned row', () => {
   const adapter = loadTypeScriptModule(path.join(root, 'src/lib/roadmapProjectAdapter.ts'))
   const rows = [

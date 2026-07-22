@@ -21,6 +21,7 @@ import type {
 } from '@/types/roadmap'
 
 const ROADMAP_BRANDS = new Set<RoadmapBrand>(['TECNO', 'Infinix', 'itel', '待定', '其他品牌'])
+const ROADMAP_ANDROID_VERSIONS = new Set<RoadmapAndroidVersion>(['Android 16', 'Android 17', 'Android 18'])
 const ROADMAP_RAMS = new Set<RoadmapRam>(['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB'])
 const ROADMAP_VERSION_TYPES = new Set<RoadmapVersionType>(['Full', 'Slim', 'Go'])
 const ROADMAP_DEVELOP_MODES = new Set<RoadmapDevelopMode>(['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'])
@@ -34,46 +35,69 @@ function firstNonBlank(...values: unknown[]): string {
   return ''
 }
 
-function normalizeNormalProductType(value: unknown): RoadmapProductType {
+function normalizeNormalProductType(value: unknown): RoadmapProductType | null {
   if (value === '切换') return '老品'
-  return normalizeLegacyRoadmapProductType(value) ?? '新品'
+  return normalizeLegacyRoadmapProductType(value)
 }
 
-function normalizeNormalDevelopMode(value: unknown): RoadmapDevelopMode {
+function normalizeNormalDevelopMode(value: unknown): RoadmapDevelopMode | null {
   if (value === '外研') return '纯外研'
   if (value === '联合开发') return 'ITD-ODC'
-  return ROADMAP_DEVELOP_MODES.has(value as RoadmapDevelopMode) ? value as RoadmapDevelopMode : '自研'
+  return ROADMAP_DEVELOP_MODES.has(value as RoadmapDevelopMode) ? value as RoadmapDevelopMode : null
 }
 
-function normalizeBrand(value: unknown): RoadmapBrand {
-  return ROADMAP_BRANDS.has(value as RoadmapBrand) ? value as RoadmapBrand : '其他品牌'
+function normalizeBrand(value: unknown): RoadmapBrand | null {
+  return ROADMAP_BRANDS.has(value as RoadmapBrand) ? value as RoadmapBrand : null
 }
 
-function normalizeRam(explicitRam: unknown, legacyMemory: unknown): RoadmapRam {
-  if (ROADMAP_RAMS.has(explicitRam as RoadmapRam)) return explicitRam as RoadmapRam
-  const match = typeof legacyMemory === 'string' ? legacyMemory.trim().match(/^(\d+GB)(?:\+|$)/) : null
-  return match && ROADMAP_RAMS.has(match[1] as RoadmapRam) ? match[1] as RoadmapRam : '2GB'
-}
-
-function normalizeVersionType(value: unknown): RoadmapVersionType {
-  return ROADMAP_VERSION_TYPES.has(value as RoadmapVersionType) ? value as RoadmapVersionType : 'Full'
-}
-
-function resolveTosVersionId(project: ProjectItem, versions: readonly TosVersionConfig[]): string {
-  const candidates = [project.firstSaleTosVersionId, project.tosVersionName, project.tosVersion]
-  for (const candidate of candidates) {
-    if (typeof candidate !== 'string' || !candidate.trim()) continue
-    const trimmed = candidate.trim()
-    const byId = versions.find(version => version.id === trimmed)
-    if (byId) return byId.id
-    const normalized = normalizeTosVersionName(trimmed)
-    if (!normalized) continue
-    const byVersion = versions.find(version => (
-      version.major === normalized.major && version.minor === normalized.minor
-    ))
-    if (byVersion) return byVersion.id
+function normalizeRam(explicitRam: unknown, legacyMemory: unknown): RoadmapRam | null {
+  if (explicitRam !== undefined && explicitRam !== null && explicitRam !== '') {
+    return ROADMAP_RAMS.has(explicitRam as RoadmapRam) ? explicitRam as RoadmapRam : null
   }
-  return ''
+  const match = typeof legacyMemory === 'string' ? legacyMemory.trim().match(/^(\d+GB)(?:\+|$)/) : null
+  return match && ROADMAP_RAMS.has(match[1] as RoadmapRam) ? match[1] as RoadmapRam : null
+}
+
+function normalizeVersionType(value: unknown): RoadmapVersionType | null {
+  return ROADMAP_VERSION_TYPES.has(value as RoadmapVersionType) ? value as RoadmapVersionType : null
+}
+
+function normalizeAndroidVersion(explicitVersion: unknown, legacyVersion: unknown): RoadmapAndroidVersion | null {
+  if (typeof explicitVersion === 'string' && explicitVersion.trim()) {
+    const value = explicitVersion.trim() as RoadmapAndroidVersion
+    return ROADMAP_ANDROID_VERSIONS.has(value) ? value : null
+  }
+  if (typeof legacyVersion === 'string' && legacyVersion.trim()) {
+    const value = legacyVersion.trim() as RoadmapAndroidVersion
+    return ROADMAP_ANDROID_VERSIONS.has(value) ? value : null
+  }
+  return null
+}
+
+function findTosVersionId(candidate: unknown, versions: readonly TosVersionConfig[]): string | null {
+  if (typeof candidate !== 'string' || !candidate.trim()) return null
+  const trimmed = candidate.trim()
+  const byId = versions.find(version => version.id === trimmed)
+  if (byId) return byId.id
+  const normalized = normalizeTosVersionName(trimmed)
+  if (!normalized) return null
+  const byVersion = versions.find(version => (
+    version.major === normalized.major && version.minor === normalized.minor
+  ))
+  return byVersion?.id ?? null
+}
+
+function resolveTosVersionId(project: ProjectItem, versions: readonly TosVersionConfig[]): string | null {
+  if (project.firstSaleTosVersionId !== undefined && project.firstSaleTosVersionId !== null) {
+    if (typeof project.firstSaleTosVersionId !== 'string' || project.firstSaleTosVersionId.trim()) {
+      return findTosVersionId(project.firstSaleTosVersionId, versions)
+    }
+  }
+  for (const candidate of [project.tosVersionName, project.tosVersion]) {
+    const resolved = findTosVersionId(candidate, versions)
+    if (resolved) return resolved
+  }
+  return null
 }
 
 function compareRows(left: RoadmapProjectRow, right: RoadmapProjectRow): number {
@@ -101,9 +125,26 @@ export function adaptNormalProject(
   if (!isMachineProjectType(project.type)) return null
 
   const projectCode = firstNonBlank(project.projectCode, project.model, project.name)
-  const androidVersion = firstNonBlank(project.androidVersion, project.operatingSystem) as RoadmapAndroidVersion
+  const androidVersion = normalizeAndroidVersion(project.androidVersion, project.operatingSystem)
   const productType = normalizeNormalProductType(project.productType)
-  const remark = project.remark === undefined
+  const firstSaleTosVersionId = resolveTosVersionId(project, versions)
+  const brand = normalizeBrand(project.brand)
+  const startRam = normalizeRam(project.startRam, project.memory)
+  const versionType = normalizeVersionType(project.versionType)
+  const developMode = normalizeNormalDevelopMode(project.developMode)
+  if (
+    !projectCode
+    || !androidVersion
+    || !productType
+    || !firstSaleTosVersionId
+    || !brand
+    || !startRam
+    || !versionType
+    || !developMode
+  ) {
+    return null
+  }
+  const remark = typeof project.remark !== 'string'
     ? firstNonBlank(project.projectDescription)
     : project.remark.trim()
 
@@ -116,18 +157,18 @@ export function adaptNormalProject(
     projectCode,
     displayName: firstNonBlank(project.name, buildRoadmapDisplayName(projectCode, androidVersion, productType)),
     androidVersion,
-    firstSaleTosVersionId: resolveTosVersionId(project, versions),
-    brand: normalizeBrand(project.brand),
+    firstSaleTosVersionId,
+    brand,
     productLine: firstNonBlank(project.productLine),
     productSeries: firstNonBlank(project.productSeries),
     marketName: firstNonBlank(project.marketName),
     productType,
     platform: firstNonBlank(project.platform, project.cpu, project.chipPlatform),
-    startRam: normalizeRam(project.startRam, project.memory),
-    versionType: normalizeVersionType(project.versionType),
+    startRam,
+    versionType,
     str5Date: firstNonBlank(project.str5Date),
     launchDate: firstNonBlank(project.launchDate),
-    developMode: normalizeNormalDevelopMode(project.developMode),
+    developMode,
     remark,
   }
 }
