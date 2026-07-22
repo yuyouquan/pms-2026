@@ -410,10 +410,13 @@ registerAssertion('roadmap validation normalizes names, duplicate keys, tOS vers
   if (validation.normalizeLegacyRoadmapProductType('未知') !== null) throw new Error('unknown product types must normalize to null')
 })
 
-registerAssertion('roadmap duplicate keys use locale-independent Unicode normalization', () => {
+registerAssertion('roadmap duplicate keys normalize only ASCII case and surrounding space', () => {
   const { buildRoadmapDuplicateKey } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
-  const normalized = buildRoadmapDuplicateKey(' ｘ６８７７ ', 'Android 16', '新品')
-  if (normalized !== 'X6877|Android 16|新品') throw new Error(`unexpected normalized key ${normalized}`)
+  const asciiKey = buildRoadmapDuplicateKey(' x6877 ', 'Android 16', '新品')
+  const upperAsciiKey = buildRoadmapDuplicateKey('X6877', 'Android 16', '新品')
+  const compatibilityKey = buildRoadmapDuplicateKey(' ｘ６８７７ ', 'Android 16', '新品')
+  if (asciiKey !== upperAsciiKey) throw new Error('ASCII case and surrounding spaces must collapse')
+  if (compatibilityKey === asciiKey) throw new Error('compatibility characters must not be silently normalized')
 })
 
 registerTableAssertions('tOS normalization rejects unsafe components', [
@@ -425,16 +428,23 @@ registerTableAssertions('tOS normalization rejects unsafe components', [
     const { normalizeTosVersionName } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
     if (normalizeTosVersionName('tOS 17.-1') !== null) throw new Error('negative minor must be rejected')
   }],
-  ['component above finite bound', () => {
-    const { normalizeTosVersionName, MAX_TOS_VERSION_COMPONENT } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
-    if (!Number.isFinite(MAX_TOS_VERSION_COMPONENT)) throw new Error('finite component bound must be exported')
-    if (normalizeTosVersionName(`tOS ${MAX_TOS_VERSION_COMPONENT + 1}.0`) !== null) throw new Error('oversized major must be rejected')
+  ['large safe integer component', () => {
+    const { normalizeTosVersionName } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
+    const normalized = normalizeTosVersionName('tOS 1000.0')
+    if (JSON.stringify(normalized) !== JSON.stringify({ name: 'tOS 1000.0', major: 1000, minor: 0 })) {
+      throw new Error('safe non-negative components must normalize without an arbitrary ceiling')
+    }
   }],
   ['overflowing digits', () => {
     const { normalizeTosVersionName } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
     if (normalizeTosVersionName(`tOS ${'9'.repeat(400)}.0`) !== null) throw new Error('overflowing version must not emit Infinity')
   }],
 ])
+
+registerAssertion('semantic tOS sorting has no arbitrary component ceiling', () => {
+  const sortingSource = fs.readFileSync(path.join(root, 'src/lib/roadmapSorting.ts'), 'utf8')
+  if (sortingSource.includes('MAX_TOS_VERSION_COMPONENT')) throw new Error('semantic sorting still applies the removed component ceiling')
+})
 
 registerAssertion('roadmap product-line and planned-project validation enforce only approved rules', () => {
   const validation = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))

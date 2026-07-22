@@ -3,7 +3,7 @@ import type {
   RoadmapProjectRow,
   TosVersionConfig,
 } from '@/types/roadmap'
-import { MAX_TOS_VERSION_COMPONENT, normalizeTosVersionName } from '@/lib/roadmapValidation'
+import { normalizeTosVersionName } from '@/lib/roadmapValidation'
 
 type SemanticTos = Pick<TosVersionConfig, 'major' | 'minor'>
 type ComparableRoadmapRecord = Partial<Record<RoadmapColumnKey, unknown>>
@@ -55,8 +55,6 @@ function parseSemanticTos(value: unknown): SemanticTos | null {
     || !Number.isSafeInteger(candidate.minor)
     || Number(candidate.major) < 0
     || Number(candidate.minor) < 0
-    || Number(candidate.major) > MAX_TOS_VERSION_COMPONENT
-    || Number(candidate.minor) > MAX_TOS_VERSION_COMPONENT
   ) return null
   return { major: Number(candidate.major), minor: Number(candidate.minor) }
 }

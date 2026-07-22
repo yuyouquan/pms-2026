@@ -43,9 +43,6 @@ const ROADMAP_RAMS = ['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB'] as cons
 const ROADMAP_VERSION_TYPES = ['Full', 'Slim', 'Go'] as const
 const ROADMAP_DEVELOP_MODES = ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'] as const
 
-/** Keeps normalized tOS components finite and within a practical three-digit roadmap range. */
-export const MAX_TOS_VERSION_COMPONENT = 999
-
 export interface NormalizedTosVersion {
   name: string
   major: number
@@ -68,7 +65,7 @@ export function buildRoadmapDuplicateKey(
   androidVersion: string,
   productType: string,
 ): string {
-  const normalizedCode = projectCode.trim().normalize('NFKC').toUpperCase()
+  const normalizedCode = projectCode.trim().toUpperCase()
   return `${normalizedCode}|${androidVersion.trim()}|${productType.trim()}`
 }
 
@@ -82,8 +79,6 @@ export function normalizeTosVersionName(input: string): NormalizedTosVersion | n
     || !Number.isSafeInteger(minor)
     || major < 0
     || minor < 0
-    || major > MAX_TOS_VERSION_COMPONENT
-    || minor > MAX_TOS_VERSION_COMPONENT
   ) return null
   return { name: `tOS ${major}.${minor}`, major, minor }
 }
