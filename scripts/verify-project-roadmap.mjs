@@ -674,6 +674,270 @@ registerAssertion('roadmap audit uses the fixed whitelist, resolved tOS names, a
   if ('androidVersion' in snapshot || 'productSeries' in snapshot) throw new Error('audit snapshot contains excluded fields')
 })
 
+const roadmapStorePath = path.join(root, 'src/stores/roadmap.ts')
+
+function loadIsolatedRoadmapStore() {
+  return createTypeScriptModuleLoader()(roadmapStorePath)
+}
+
+function resetRoadmapStore(storeModule) {
+  storeModule.useRoadmapStore.setState(storeModule.createInitialRoadmapState())
+  return storeModule.useRoadmapStore
+}
+
+function createPlannedInput(overrides = {}) {
+  return {
+    ...validPlannedRoadmapInput,
+    remark: '',
+    actor: '张三',
+    ...overrides,
+  }
+}
+
+registerAssertion('roadmap store declares the exact persistence boundary', () => {
+  const source = fs.readFileSync(roadmapStorePath, 'utf8')
+  for (const token of ['persist(', "name: 'pms-project-roadmap'", 'version: 1', 'migrate:', 'partialize:']) {
+    if (!source.includes(token)) throw new Error(`Roadmap store is missing ${token}`)
+  }
+  if (/from ['"]@\/stores\/project['"]/.test(source)) throw new Error('roadmap store must not import the project store')
+  if (/normalProjects\s*:/.test(source)) throw new Error('normal projects must not be copied into roadmap state')
+})
+
+registerAssertion('initial roadmap state has exact semantic-descending versions and UI defaults', () => {
+  const store = loadIsolatedRoadmapStore()
+  const versions = store.createInitialTosVersions()
+  const expected = [
+    ['tos-18-0', 'tOS 18.0'],
+    ['tos-17-2', 'tOS 17.2'],
+    ['tos-17-1', 'tOS 17.1'],
+    ['tos-17-0', 'tOS 17.0'],
+    ['tos-16-3', 'tOS 16.3'],
+    ['tos-16-2', 'tOS 16.2'],
+    ['tos-16-1', 'tOS 16.1'],
+  ]
+  if (JSON.stringify(versions.map(version => [version.id, version.name])) !== JSON.stringify(expected)) {
+    throw new Error(`initial versions are wrong: ${JSON.stringify(versions)}`)
+  }
+  if (versions.some(version => 'latest' in version || !Number.isFinite(Date.parse(version.createdAt)) || !Number.isFinite(Date.parse(version.updatedAt)))) {
+    throw new Error('initial versions must have valid timestamps and no latest metadata')
+  }
+  const initial = store.createInitialRoadmapState()
+  const expectedVisible = loadTypeScriptModule(path.join(root, 'src/types/roadmap.ts')).ROADMAP_COLUMNS
+    .filter(column => column.defaultVisible)
+    .map(column => column.key)
+  if (
+    initial.plannedProjects.length
+    || initial.viewMode !== 'table'
+    || initial.selectedTosVersionId !== 'tos-18-0'
+    || initial.brandFilter !== 'all'
+    || initial.productTypeFilter !== 'all'
+    || initial.filters.length
+    || JSON.stringify(initial.visibleColumns) !== JSON.stringify(expectedVisible)
+    || JSON.stringify(initial.sort) !== JSON.stringify({ field: null, direction: null })
+    || initial.selectedConflictKey !== null
+  ) throw new Error(`initial roadmap UI state is wrong: ${JSON.stringify(initial)}`)
+})
+
+registerAssertion('planned project CRUD enforces duplicates and audit semantics', () => {
+  const storeModule = loadIsolatedRoadmapStore()
+  const store = resetRoadmapStore(storeModule)
+  const createResult = store.getState().createPlannedProject(createPlannedInput())
+  if (!createResult.ok) throw new Error(`valid create failed: ${JSON.stringify(createResult)}`)
+  let state = store.getState()
+  const created = state.plannedProjects[0]
+  if (!created || created.displayName !== 'X6877' || created.status !== '待规划' || created.createdBy !== '张三' || created.updatedBy !== '张三') {
+    throw new Error(`created planned project is wrong: ${JSON.stringify(created)}`)
+  }
+  if (state.changeLogs[0]?.action !== 'create' || state.changeLogs[0]?.snapshot?.firstSaleTosVersionId !== 'tOS 17.2') {
+    throw new Error(`create audit is wrong: ${JSON.stringify(state.changeLogs[0])}`)
+  }
+  const duplicate = store.getState().createPlannedProject(createPlannedInput({ actor: '李四' }))
+  if (duplicate.ok || duplicate.reason !== 'duplicate') throw new Error(`own duplicate was accepted: ${JSON.stringify(duplicate)}`)
+  const externalDuplicate = store.getState().createPlannedProject(createPlannedInput({ projectCode: 'A100' }), {
+    duplicateKeys: ['A100|Android 16|新品'],
+  })
+  if (externalDuplicate.ok || externalDuplicate.reason !== 'duplicate') throw new Error('caller-supplied duplicate key was ignored')
+
+  const updated = store.getState().updatePlannedProject(created.id, createPlannedInput({
+    productType: '老品',
+    androidVersion: 'Android 17',
+    productSeries: 'SPARK 70',
+    remark: '已更新',
+    actor: '李四',
+  }))
+  if (!updated.ok) throw new Error(`valid update failed: ${JSON.stringify(updated)}`)
+  state = store.getState()
+  const after = state.plannedProjects[0]
+  if (after.displayName !== 'X6877(Android 17)' || after.createdAt !== created.createdAt || after.createdBy !== '张三' || after.updatedBy !== '李四') {
+    throw new Error(`updated planned project is wrong: ${JSON.stringify(after)}`)
+  }
+  if (state.changeLogs[0]?.action !== 'update' || state.changeLogs[0]?.changes.map(change => change.field).join(',') !== 'productType,remark') {
+    throw new Error(`update audit is wrong: ${JSON.stringify(state.changeLogs[0])}`)
+  }
+  const logCount = state.changeLogs.length
+  const excludedOnly = store.getState().updatePlannedProject(created.id, createPlannedInput({
+    productType: '老品', androidVersion: 'Android 18', productSeries: 'SPARK 80', remark: '已更新', actor: '王五',
+  }))
+  if (!excludedOnly.ok || store.getState().changeLogs.length !== logCount) {
+    throw new Error('Android/product-series-only update must mutate without an ordinary update log')
+  }
+  const deleted = store.getState().deletePlannedProject(created.id, '赵六')
+  if (!deleted.ok || store.getState().plannedProjects.length || store.getState().changeLogs[0]?.action !== 'delete') {
+    throw new Error(`delete behavior is wrong: ${JSON.stringify(store.getState())}`)
+  }
+  const missing = store.getState().deletePlannedProject(created.id, '赵六')
+  if (missing.ok || missing.reason !== 'not-found') throw new Error('missing delete needs a not-found result')
+})
+
+registerAssertion('planned project validation uses the current tOS catalog and caller comparison rows', () => {
+  const storeModule = loadIsolatedRoadmapStore()
+  const store = resetRoadmapStore(storeModule)
+  const malformedInput = { ...createPlannedInput() }
+  delete malformedInput.platform
+  const malformed = store.getState().createPlannedProject(malformedInput)
+  if (malformed.ok || malformed.reason !== 'invalid' || !malformed.errors.platform) {
+    throw new Error(`malformed runtime input needs a validation result: ${JSON.stringify(malformed)}`)
+  }
+  const invalid = store.getState().createPlannedProject(createPlannedInput({ firstSaleTosVersionId: 'tos-99-0' }))
+  if (invalid.ok || invalid.reason !== 'invalid' || !invalid.errors.firstSaleTosVersionId) {
+    throw new Error(`unknown tOS version was accepted: ${JSON.stringify(invalid)}`)
+  }
+  const comparisonRows = [{ id: 'normal-1', ...createPlannedInput(), displayName: 'X6877', source: 'normal', status: '进行中', readOnly: true }]
+  const duplicate = store.getState().createPlannedProject(createPlannedInput(), { comparisonRows })
+  if (duplicate.ok || duplicate.reason !== 'duplicate') throw new Error('caller comparison row was ignored')
+})
+
+registerAssertion('tOS CRUD normalizes names, preserves IDs, sorts, trims targets, and protects references', () => {
+  const storeModule = loadIsolatedRoadmapStore()
+  const store = resetRoadmapStore(storeModule)
+  if (!store.getState().createTosVersion({ name: ' TOS  19.2 ' }).ok) throw new Error('normalized tOS create failed')
+  let state = store.getState()
+  const created = state.tosVersions.find(version => version.name === 'tOS 19.2')
+  if (!created || created.id !== 'tos-19-2' || state.tosVersions[0].id !== created.id) throw new Error('new version ID/order is wrong')
+  const duplicate = store.getState().createTosVersion({ name: 'tos19.2' })
+  if (duplicate.ok || duplicate.reason !== 'duplicate') throw new Error('normalized duplicate version was accepted')
+  if (!store.getState().renameTosVersion(created.id, { name: 'tOS 15.9' }).ok) throw new Error('version rename failed')
+  state = store.getState()
+  const renamed = state.tosVersions.find(version => version.id === created.id)
+  if (!renamed || renamed.name !== 'tOS 15.9' || state.tosVersions.at(-1)?.id !== created.id) throw new Error('rename changed ID or failed to re-sort')
+  if (!store.getState().setTosTargets(created.id, ['  target A ', '', '   ', 'target B']).ok) throw new Error('target update failed')
+  if (JSON.stringify(store.getState().tosVersions.find(version => version.id === created.id)?.targets) !== JSON.stringify(['target A', 'target B'])) {
+    throw new Error('targets were not trimmed')
+  }
+
+  store.getState().createPlannedProject(createPlannedInput())
+  const referenced = store.getState().deleteTosVersion('tos-17-2', 2)
+  if (referenced.ok || referenced.reason !== 'referenced' || referenced.referenceCount !== 3) {
+    throw new Error(`reference count is wrong: ${JSON.stringify(referenced)}`)
+  }
+  store.getState().setSelectedTosVersionId('tos-18-0')
+  const deleted = store.getState().deleteTosVersion('tos-18-0', 0)
+  if (!deleted.ok || store.getState().selectedTosVersionId !== 'tos-17-2') {
+    throw new Error('selected-version fallback is wrong')
+  }
+})
+
+registerAssertion('roadmap setters sanitize columns and persistence excludes transient conflict state', () => {
+  const storeModule = loadIsolatedRoadmapStore()
+  const store = resetRoadmapStore(storeModule)
+  store.getState().setVisibleColumns(['unknown', 'brand', 'brand'])
+  if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(['brand'])) throw new Error('known visible columns were not sanitized')
+  store.getState().setVisibleColumns([])
+  if (store.getState().visibleColumns.length < 1) throw new Error('at least one business field must remain visible')
+  store.getState().setSelectedConflictKey('X6877|Android 16|新品')
+  const persisted = storeModule.partializeRoadmapState(store.getState())
+  const expectedKeys = ['plannedProjects', 'tosVersions', 'changeLogs', 'viewMode', 'selectedTosVersionId', 'brandFilter', 'productTypeFilter', 'filters', 'visibleColumns', 'sort']
+  if (JSON.stringify(Object.keys(persisted)) !== JSON.stringify(expectedKeys)) throw new Error(`persistence boundary is wrong: ${Object.keys(persisted)}`)
+  if ('selectedConflictKey' in persisted || 'normalProjects' in persisted || 'conflictGroups' in persisted) throw new Error('transient/derived state was persisted')
+})
+
+registerAssertion('roadmap migration repairs legacy names, references, UI controls, and selected version', () => {
+  const store = loadIsolatedRoadmapStore()
+  const migrated = store.migrateRoadmapState({
+    tosVersions: [
+      { name: 'tos17.2', targets: [' first ', '', 'second'], createdAt: '2024-01-01T00:00:00.000Z' },
+      { id: 'legacy-18', name: 'TOS 18.0', targets: [' top '] },
+    ],
+    plannedProjects: [{
+      id: 'planned-legacy', ...validPlannedRoadmapInput, displayName: 'stale', firstSaleTosVersionId: undefined,
+      tosVersion: 'tOS17.2', productType: '换代', status: '草稿', createdAt: 'bad', updatedAt: 'bad', createdBy: '甲', updatedBy: '乙',
+    }],
+    changeLogs: [{ id: 'log-1', projectId: 'normal-1', projectDisplayName: 'X1', source: 'normal', action: 'update', actor: '甲', occurredAt: '2024-01-01T00:00:00.000Z', tosVersionName: 'tOS 17.2', changes: [] }],
+    viewMode: 'evolution', selectedTosVersionId: 'missing', brandFilter: 'TECNO', productTypeFilter: '老品',
+    filters: [
+      { id: 'valid', field: 'brand', operator: 'equals', value: 'TECNO' },
+      { id: 'bad-field', field: 'unknown', operator: 'equals', value: 'x' },
+      { id: 'bad-operator', field: 'brand', operator: 'wat', value: 'x' },
+    ],
+    visibleColumns: ['unknown', 'marketName', 'marketName'],
+    sort: { field: 'launchDate', direction: 'descend' },
+  }, 0)
+  if (migrated.tosVersions.map(version => version.name).join(',') !== 'tOS 18.0,tOS 17.2') throw new Error('versions were not normalized/sorted')
+  if (migrated.tosVersions[1].id !== 'tos-17-2' || JSON.stringify(migrated.tosVersions[1].targets) !== JSON.stringify(['first', 'second'])) {
+    throw new Error('missing stable ID or targets were not repaired')
+  }
+  const planned = migrated.plannedProjects[0]
+  if (!planned || planned.firstSaleTosVersionId !== 'tos-17-2' || planned.displayName !== 'X6877(Android 16)' || planned.status !== '待规划') {
+    throw new Error(`legacy planned project was not repaired: ${JSON.stringify(planned)}`)
+  }
+  if (!Number.isFinite(Date.parse(planned.createdAt)) || !Number.isFinite(Date.parse(planned.updatedAt))) throw new Error('timestamps were not normalized')
+  if (migrated.filters.length !== 1 || JSON.stringify(migrated.visibleColumns) !== JSON.stringify(['marketName'])) throw new Error('filters/columns were not sanitized')
+  if (migrated.selectedTosVersionId !== 'legacy-18' || migrated.changeLogs.length !== 1 || 'conflictGroups' in migrated) {
+    throw new Error('selection/log/conflict migration is wrong')
+  }
+})
+
+registerAssertion('roadmap migration and malformed persisted JSON safely fall back', () => {
+  const store = loadIsolatedRoadmapStore()
+  const fallback = store.migrateRoadmapState(null, 0)
+  if (fallback.tosVersions[0]?.id !== 'tos-18-0' || fallback.plannedProjects.length) throw new Error('unusable shape did not fall back')
+
+  const previousWindow = globalThis.window
+  const previousError = console.error
+  const messages = []
+  globalThis.window = {
+    localStorage: {
+      getItem: () => '{malformed',
+      setItem: () => {},
+      removeItem: () => {},
+    },
+  }
+  console.error = (...args) => messages.push(args)
+  try {
+    const malformedModule = loadIsolatedRoadmapStore()
+    const state = malformedModule.useRoadmapStore.getState()
+    if (state.tosVersions[0]?.id !== 'tos-18-0' || state.plannedProjects.length) throw new Error('malformed JSON did not hydrate initial state')
+  } finally {
+    console.error = previousError
+    if (previousWindow === undefined) delete globalThis.window
+    else globalThis.window = previousWindow
+  }
+  if (messages.length !== 1) throw new Error(`malformed JSON must emit one console.error, got ${messages.length}`)
+})
+
+registerAssertion('roadmap store loads in Node without localStorage and prepends normal logs only', () => {
+  const previousWindow = globalThis.window
+  try {
+    delete globalThis.window
+    const storeModule = loadIsolatedRoadmapStore()
+    const store = resetRoadmapStore(storeModule)
+    store.getState().recordNormalProjectChange({
+      projectId: 'normal-1', projectDisplayName: 'X1', source: 'normal', action: 'update', actor: '张三',
+      tosVersionName: 'tOS 17.2', changes: [],
+    })
+    store.getState().recordNormalProjectChange({
+      projectId: 'normal-2', projectDisplayName: 'X2', source: 'normal', action: 'delete', actor: '李四',
+      tosVersionName: 'tOS 18.0', changes: [],
+    })
+    const state = store.getState()
+    if (state.changeLogs.map(log => log.projectId).join(',') !== 'normal-2,normal-1') throw new Error('normal logs were not prepended')
+    if ('normalProjects' in state) throw new Error('normal projects leaked into roadmap state')
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window
+    else globalThis.window = previousWindow
+  }
+})
+
 const failures = []
 for (const { name, assertion } of assertions) {
   try {
