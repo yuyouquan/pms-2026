@@ -178,6 +178,30 @@ function listTypeScriptFiles(directoryPath) {
   })
 }
 
+function getNamedObjectLiteralProperties(filePath, variableName) {
+  const source = fs.readFileSync(filePath, 'utf8')
+  const sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, filePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
+  const properties = new Map()
+
+  function visit(node) {
+    if (
+      ts.isVariableDeclaration(node)
+      && ts.isIdentifier(node.name)
+      && node.name.text === variableName
+      && ts.isObjectLiteralExpression(node.initializer)
+    ) {
+      for (const property of node.initializer.properties) {
+        if (!ts.isPropertyAssignment(property)) continue
+        properties.set(property.name.getText(sourceFile), property.initializer.getText(sourceFile))
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+
+  visit(sourceFile)
+  return properties
+}
+
 registerAssertion('RoadmapView does not import or mount legacy roadmap views', () => {
   if (roadmapAnalysis.legacyImports.length || roadmapAnalysis.legacyJsxMounts.length) {
     throw new Error(`found imports [${roadmapAnalysis.legacyImports.join(', ')}] and JSX mounts [${roadmapAnalysis.legacyJsxMounts.join(', ')}]`)
@@ -309,6 +333,16 @@ registerAssertion('runtime source has no references to the removed PROJECT_TYPE_
   const references = listTypeScriptFiles(path.join(root, 'src'))
     .flatMap(file => findIdentifierReferences(file, 'PROJECT_TYPE_MACHINE'))
   if (references.length) throw new Error(references.join(', '))
+})
+
+registerAssertion('workspace filter toolbar wraps without squeezing chip labels', () => {
+  const workspacePath = path.join(root, 'src/containers/WorkspaceContainer.tsx')
+  const toolbarStyle = getNamedObjectLiteralProperties(workspacePath, 'WORKSPACE_FILTER_TOOLBAR_STYLE')
+  const chipStyle = getNamedObjectLiteralProperties(workspacePath, 'WORKSPACE_FILTER_CHIP_STYLE')
+  if (toolbarStyle.get('flexWrap') !== "'wrap'") throw new Error('workspace toolbar must flex-wrap')
+  if (!toolbarStyle.has('rowGap')) throw new Error('workspace toolbar must retain a stable row gap')
+  if (chipStyle.get('whiteSpace') !== "'nowrap'") throw new Error('workspace filter labels must not wrap')
+  if (chipStyle.get('flexShrink') !== '0') throw new Error('workspace filter chips must not shrink')
 })
 
 const failures = []
