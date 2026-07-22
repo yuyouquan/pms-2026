@@ -94,7 +94,7 @@ export interface ProjectActions {
   setTodoCollapsed: (v: boolean) => void
 
   setProjectMember: (projectId: string, members: string[]) => void
-  addProject: (newProject: Project, actor?: string) => void
+  addProject: (newProject: Project, actor?: string) => boolean
   updateProject: (projectId: string, patch: ProjectPatch, actor?: string) => Project | null
   deleteProject: (projectId: string, actor?: string) => boolean
 }
@@ -194,8 +194,13 @@ export const useProjectStore = create<ProjectState & ProjectActions>()((set, get
     projectMemberMap: { ...s.projectMemberMap, [projectId]: members },
   })),
   addProject: (newProject, actor) => {
+    const versions = useRoadmapStore.getState().tosVersions
+    if (isMachineProjectType(newProject.type) && !adaptNormalProject(newProject as ProjectItem, versions)) {
+      return false
+    }
     set((state) => ({ projects: [...state.projects, newProject] }))
     recordNormalProjectAudit('create', null, newProject, actor?.trim() || get().currentLoginUser.trim() || '系统')
+    return true
   },
   updateProject: (projectId, patch, actor) => {
     const existing = get().projects.find(project => project.id === projectId)

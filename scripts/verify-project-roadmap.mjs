@@ -1551,6 +1551,8 @@ registerAssertion('normal machine creation requires maintained first-sale tOS an
     'launchDate',
     'developMode',
     'remark',
+    'adaptNormalProject',
+    '外部项目缺少或不符合路标字段',
   ]) {
     if (!addModalSource.includes(fragment)) throw new Error(`AddProjectModal is missing ${fragment}`)
   }
@@ -1633,10 +1635,31 @@ registerAssertion('shared project actions audit only legal normal machine snapsh
     developMode: '自研', remark: '',
   }
 
-  projectStore.getState().addProject(validMachine, '创建人')
+  const validCreateResult = projectStore.getState().addProject(validMachine, '创建人')
   let logs = roadmapStore.getState().changeLogs
-  if (logs.length !== 1 || logs[0].action !== 'create' || logs[0].actor !== '创建人' || !logs[0].snapshot) {
+  if (validCreateResult !== true || logs.length !== 1 || logs[0].action !== 'create' || logs[0].actor !== '创建人' || !logs[0].snapshot) {
     throw new Error(`valid machine create did not emit one snapshot log: ${JSON.stringify(logs)}`)
+  }
+
+  const externalModule = loader(path.join(root, 'src/data/externalProjectPool.ts'))
+  const externalWithoutRoadmapFields = externalModule.fetchByBid('EXT-006')
+  const invalidExternalMachine = {
+    ...validMachine,
+    id: 'normal-invalid-external',
+    name: 'AI-Engine-V3',
+    brand: externalWithoutRoadmapFields.brand,
+    productType: externalWithoutRoadmapFields.productType,
+    startRam: externalWithoutRoadmapFields.startRam,
+    versionType: externalWithoutRoadmapFields.versionType,
+    developMode: externalWithoutRoadmapFields.developMode,
+  }
+  const invalidCreateResult = projectStore.getState().addProject(invalidExternalMachine, '创建人')
+  if (
+    invalidCreateResult !== false
+    || projectStore.getState().projects.some(project => project.id === invalidExternalMachine.id)
+    || roadmapStore.getState().changeLogs.length !== 1
+  ) {
+    throw new Error('invalid external machine project was written without a roadmap row or audit log')
   }
 
   projectStore.setState({ selectedProject: validMachine })
@@ -1665,7 +1688,7 @@ registerAssertion('shared project actions audit only legal normal machine snapsh
   }
 
   const validDelete = { ...validMachine, id: 'normal-audit-delete' }
-  projectStore.getState().addProject(validDelete)
+  if (projectStore.getState().addProject(validDelete) !== true) throw new Error('valid delete fixture was rejected')
   projectStore.getState().deleteProject(validDelete.id, '删除人')
   logs = roadmapStore.getState().changeLogs
   if (logs[0].action !== 'delete' || logs[0].actor !== '删除人' || !logs[0].snapshot) {
@@ -1674,12 +1697,36 @@ registerAssertion('shared project actions audit only legal normal machine snapsh
 
   const nonMachine = { ...validMachine, id: 'normal-tech', type: '技术项目' }
   const beforeNonMachine = roadmapStore.getState().changeLogs.length
-  projectStore.getState().addProject(nonMachine, '张三')
+  if (projectStore.getState().addProject(nonMachine, '张三') !== true) throw new Error('non-machine create compatibility changed')
   projectStore.getState().updateProject(nonMachine.id, { projectDescription: '不应审计' }, '张三')
   projectStore.getState().deleteProject(nonMachine.id, '张三')
   if (roadmapStore.getState().changeLogs.length !== beforeNonMachine) throw new Error('non-machine writes emitted roadmap audit logs')
   if (projectStore.getState().updateProject('missing', {}, '张三') !== null) throw new Error('missing update must return null')
   if (projectStore.getState().deleteProject('missing', '张三') !== false) throw new Error('missing delete must return false')
+})
+
+registerAssertion('machine addProject rejects invalid data before canonical state mutation', () => {
+  const moduleCache = new Map([[
+    path.join(root, 'src/data/projects.ts'),
+    { exports: { initialProjects: [] } },
+  ]])
+  const loader = createTypeScriptModuleLoader(moduleCache)
+  const projectModule = loader(path.join(root, 'src/stores/project.ts'))
+  const roadmapModule = loader(path.join(root, 'src/stores/roadmap.ts'))
+  const projectStore = projectModule.useProjectStore
+  const roadmapStore = roadmapModule.useRoadmapStore
+  projectStore.setState({ projects: [], selectedProject: null, currentLoginUser: '张三' })
+  roadmapStore.setState(roadmapModule.createInitialRoadmapState())
+
+  const result = projectStore.getState().addProject({
+    id: 'invalid-machine-boundary',
+    name: 'AI-Engine-V3',
+    type: '整机-手机',
+    firstSaleTosVersionId: 'tos-18-0',
+  }, '张三')
+  if (result !== false || projectStore.getState().projects.length || roadmapStore.getState().changeLogs.length) {
+    throw new Error('invalid machine escaped the final addProject boundary')
+  }
 })
 
 registerAssertion('machine basic information exposes maintained roadmap selectors and fields', () => {

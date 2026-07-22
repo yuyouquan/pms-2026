@@ -10,6 +10,7 @@ import { useUiStore } from '@/stores/ui'
 import { usePermissionStore } from '@/stores/permission'
 import { inferOsSeriesFromProjectName, inferTosVersionFromProjectName } from '@/constants/projectBasicFields'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
+import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
 import { useRoadmapStore } from '@/stores/roadmap'
 import {
   PROJECT_TYPE_TOS_VERSION,
@@ -111,7 +112,15 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
           remark: extra.remark ?? '',
         } : {}),
       }
-      addProject(newProject, currentLoginUser)
+      if (isMachineProject && !adaptNormalProject(newProject, tosVersions)) {
+        message.error('外部项目缺少或不符合路标字段：项目名、安卓版本、首销 tOS 版本、品牌、产品类型、起步 RAM、版本类型或开发模式，无法创建整机项目')
+        return
+      }
+      const added = addProject(newProject, currentLoginUser)
+      if (!added) {
+        message.error('整机项目数据不符合路标要求，创建失败')
+        return
+      }
       setProjectMember(newId, values.responsiblePersons)
       initProjectPermissions(newId, { '系统管理员': values.responsiblePersons })
       setSelectedProject(newProject)
