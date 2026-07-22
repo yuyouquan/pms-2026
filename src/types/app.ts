@@ -2,6 +2,7 @@
 // Derived from the mock data structures in src/app/page.tsx
 
 import type { MachineProjectType } from '@/constants/projectTypes'
+import type { RoadmapRam } from '@/types/roadmap'
 
 /** Project type literals used in initialProjects */
 export type ProjectCategory = MachineProjectType | 'tOS版本项目' | '独立软件产品项目' | '技术项目' | '能力建设项目';
@@ -46,6 +47,7 @@ export interface ProjectItem {
   // 整机项目 specific
   marketName?: string;
   brand?: string;
+  productSeries?: string;
   developMode?: string;
   model?: string;
   mainboard?: string;
@@ -58,6 +60,12 @@ export interface ProjectItem {
   productType?: string;
   tosVersionName?: string;
   versionType?: string;
+  firstSaleTosVersionId?: string;
+  projectCode?: string;
+  platform?: string;
+  startRam?: RoadmapRam;
+  str5Date?: string;
+  remark?: string;
   market?: string;
   ppm?: string;
   tpm?: string;

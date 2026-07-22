@@ -1285,6 +1285,192 @@ registerAssertion('roadmap store loads in Node without localStorage and prepends
   }
 })
 
+function roadmapRow(overrides = {}) {
+  return {
+    id: 'normal-x6877',
+    source: 'normal',
+    readOnly: true,
+    status: '在研',
+    machineProjectType: '整机-手机',
+    projectCode: 'X6877',
+    displayName: 'X6877',
+    androidVersion: 'Android 16',
+    firstSaleTosVersionId: 'tos-17-2',
+    brand: 'TECNO',
+    productLine: 'SPARK',
+    productSeries: 'SPARK 60',
+    marketName: 'SPARK 60',
+    productType: '新品',
+    platform: 'G100',
+    startRam: '8GB',
+    versionType: 'Full',
+    str5Date: '2027-01-01',
+    launchDate: '2027-02-01',
+    developMode: '自研',
+    remark: '',
+    ...overrides,
+  }
+}
+
+registerAssertion('normal and planned roadmap adapters enforce source boundaries and migration fallbacks', () => {
+  const adapter = loadTypeScriptModule(path.join(root, 'src/lib/roadmapProjectAdapter.ts'))
+  const versions = [
+    { id: 'tos-17-2', name: 'tOS 17.2', major: 17, minor: 2, targets: [], createdAt: '', updatedAt: '' },
+    { id: 'tos-16-3', name: 'tOS 16.3', major: 16, minor: 3, targets: [], createdAt: '', updatedAt: '' },
+  ]
+  const normal = adapter.adaptNormalProject({
+    id: 'normal-1', name: 'legacy-name', type: '整机-手机', status: '在研',
+    androidVersion: 'Android 16', firstSaleTosVersionId: 'tos-17-2', tosVersion: 'tOS16.3',
+    projectCode: ' X6877 ', model: 'legacy-code', brand: 'TECNO', productLine: 'SPARK', productSeries: 'SPARK 60', marketName: 'SPARK 60',
+    productType: '升级', platform: 'explicit-platform', cpu: 'legacy-cpu', startRam: '8GB', memory: '6GB+128GB', versionType: 'Full',
+    str5Date: '2027-01-01', launchDate: '2027-02-01', developMode: '外研', remark: 'explicit remark', projectDescription: 'legacy remark',
+  }, versions)
+  if (!normal) throw new Error('machine project was excluded')
+  if (
+    normal.source !== 'normal'
+    || !normal.readOnly
+    || normal.projectCode !== 'X6877'
+    || normal.displayName !== 'legacy-name'
+    || normal.firstSaleTosVersionId !== 'tos-17-2'
+    || normal.productType !== '老品'
+    || normal.platform !== 'explicit-platform'
+    || normal.startRam !== '8GB'
+    || normal.developMode !== '纯外研'
+    || normal.remark !== 'explicit remark'
+  ) throw new Error(`normal adapter ignored explicit fields or legacy normalization: ${JSON.stringify(normal)}`)
+
+  const switched = adapter.adaptNormalProject({
+    ...normal,
+    id: 'normal-switch',
+    source: undefined,
+    readOnly: undefined,
+    type: '整机-PAD',
+    firstSaleTosVersionId: undefined,
+    tosVersion: 'tos16.3',
+    projectCode: undefined,
+    model: ' A100 ',
+    platform: undefined,
+    cpu: 'MTK-A',
+    startRam: undefined,
+    memory: '6GB+128GB',
+    productType: '切换',
+    developMode: '联合开发',
+    remark: undefined,
+    projectDescription: 'legacy description',
+  }, versions)
+  if (
+    !switched
+    || switched.projectCode !== 'A100'
+    || switched.firstSaleTosVersionId !== 'tos-16-3'
+    || switched.startRam !== '6GB'
+    || switched.productType !== '老品'
+    || switched.developMode !== 'ITD-ODC'
+    || switched.remark !== 'legacy description'
+  ) throw new Error(`legacy fallback mapping is wrong: ${JSON.stringify(switched)}`)
+  if (adapter.adaptNormalProject({ ...normal, type: '技术项目' }, versions) !== null) {
+    throw new Error('non-machine project entered the normal roadmap')
+  }
+
+  const plannedInput = {
+    ...roadmapRow({ id: 'planned-1', source: undefined, readOnly: undefined, status: '待规划', displayName: 'stale name' }),
+    createdAt: '', createdBy: '张三', updatedAt: '', updatedBy: '张三',
+  }
+  const planned = adapter.adaptPlannedProject(plannedInput)
+  if (planned.source !== 'planned' || planned.readOnly || planned.displayName !== 'X6877') {
+    throw new Error(`planned adapter boundary is wrong: ${JSON.stringify(planned)}`)
+  }
+
+  const merged = adapter.mergeRoadmapProjects(
+    [{ ...normal, type: '技术项目' }, { ...normal, id: 'normal-merge', type: '整机-手机' }],
+    [plannedInput],
+    versions,
+  )
+  if (merged.map(row => `${row.source}:${row.id}`).join(',') !== 'normal:normal-merge,planned:planned-1') {
+    throw new Error(`merge copied non-machine or lost source order: ${JSON.stringify(merged)}`)
+  }
+})
+
+registerAssertion('history matches use normalized project codes and exclude only the edited planned row', () => {
+  const adapter = loadTypeScriptModule(path.join(root, 'src/lib/roadmapProjectAdapter.ts'))
+  const rows = [
+    roadmapRow({ id: 'shared-id', source: 'normal' }),
+    roadmapRow({ id: 'shared-id', source: 'planned', readOnly: false }),
+    roadmapRow({ id: 'other', source: 'normal', projectCode: 'A100', displayName: 'A100' }),
+  ]
+  const matches = adapter.findRoadmapHistoryMatches(rows, ' x6877 ', 'shared-id')
+  if (matches.length !== 1 || matches[0].source !== 'normal') {
+    throw new Error(`history exclusion hid a normal project or retained the current planned row: ${JSON.stringify(matches)}`)
+  }
+})
+
+registerAssertion('roadmap conflicts derive only cross-source duplicates from complete input sets', () => {
+  const adapter = loadTypeScriptModule(path.join(root, 'src/lib/roadmapProjectAdapter.ts'))
+  const normalRows = [
+    roadmapRow({ id: 'normal-1', projectCode: ' x6877 ' }),
+    roadmapRow({ id: 'normal-2', projectCode: 'X6877', firstSaleTosVersionId: 'tos-18-0' }),
+    roadmapRow({ id: 'normal-2', projectCode: 'X6877', firstSaleTosVersionId: 'tos-18-0' }),
+    roadmapRow({ id: 'normal-only', projectCode: 'N100', displayName: 'N100' }),
+  ]
+  const plannedRows = [
+    roadmapRow({ id: 'planned-1', source: 'planned', readOnly: false, projectCode: 'X6877', firstSaleTosVersionId: 'tos-16-3' }),
+    roadmapRow({ id: 'planned-2', source: 'planned', readOnly: false, projectCode: 'x6877', firstSaleTosVersionId: 'tos-17-2' }),
+    roadmapRow({ id: 'planned-2', source: 'planned', readOnly: false, projectCode: 'x6877', firstSaleTosVersionId: 'tos-17-2' }),
+    roadmapRow({ id: 'planned-only', source: 'planned', readOnly: false, projectCode: 'P100', displayName: 'P100' }),
+  ]
+  const groups = adapter.deriveRoadmapPlanningConflicts(normalRows, plannedRows)
+  if (groups.length !== 1) throw new Error(`cross-source duplicates must form one group: ${JSON.stringify(groups)}`)
+  if (groups[0].normalProjects.length !== 2) throw new Error('conflict group must retain unique normal projects only')
+  if (groups[0].plannedProjects.length !== 2) throw new Error('conflict group must retain all unique planned projects across tOS versions')
+  if (adapter.countConflictingPlannedProjects(groups) !== 2) throw new Error('conflict count must count unique planned projects')
+  if (adapter.deriveRoadmapPlanningConflicts(normalRows, []).length) throw new Error('normal-vs-normal duplicates became conflicts')
+  if (adapter.deriveRoadmapPlanningConflicts([], plannedRows).length) throw new Error('planned-vs-planned duplicates became conflicts')
+  if (adapter.deriveRoadmapPlanningConflicts.length !== 2) throw new Error('conflict derivation must not accept view filter arguments')
+})
+
+registerAssertion('roadmap conflict groups sort by planned display name', () => {
+  const adapter = loadTypeScriptModule(path.join(root, 'src/lib/roadmapProjectAdapter.ts'))
+  const normalRows = [
+    roadmapRow({ id: 'normal-b', projectCode: 'B200', displayName: 'B200' }),
+    roadmapRow({ id: 'normal-a', projectCode: 'A100', displayName: 'A100' }),
+  ]
+  const plannedRows = [
+    roadmapRow({ id: 'planned-b', source: 'planned', readOnly: false, projectCode: 'B200', displayName: 'B200' }),
+    roadmapRow({ id: 'planned-a', source: 'planned', readOnly: false, projectCode: 'A100', displayName: 'A100' }),
+  ]
+  const groups = adapter.deriveRoadmapPlanningConflicts(normalRows, plannedRows)
+  if (groups.map(group => group.plannedProjects[0].displayName).join(',') !== 'A100,B200') {
+    throw new Error(`conflict group order is wrong: ${JSON.stringify(groups)}`)
+  }
+})
+
+registerAssertion('every machine mock owns explicit normal-roadmap fields', () => {
+  const projectPath = path.join(root, 'src/data/projects.ts')
+  const source = fs.readFileSync(projectPath, 'utf8')
+  const sourceFile = ts.createSourceFile(projectPath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const required = ['firstSaleTosVersionId', 'projectCode', 'platform', 'startRam', 'str5Date', 'remark']
+  const missing = []
+
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'initialProjects' && ts.isArrayLiteralExpression(node.initializer)) {
+      for (const element of node.initializer.elements) {
+        if (!ts.isObjectLiteralExpression(element)) continue
+        const properties = new Map(element.properties.flatMap(property => {
+          if (!ts.isPropertyAssignment(property)) return []
+          const name = property.name.getText(sourceFile).replaceAll("'", '')
+          return [[name, property.initializer.getText(sourceFile)]]
+        }))
+        if (properties.get('type') !== 'PROJECT_TYPE_MACHINE_PHONE') continue
+        for (const field of required) {
+          if (!properties.has(field)) missing.push(`${properties.get('id') || 'unknown'}:${field}`)
+        }
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  if (missing.length) throw new Error(missing.join(', '))
+})
+
 const failures = []
 for (const { name, assertion } of assertions) {
   try {
