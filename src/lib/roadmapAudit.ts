@@ -1,0 +1,68 @@
+import type {
+  RoadmapAuditField,
+  RoadmapFieldChange,
+  RoadmapProjectFields,
+  TosVersionConfig,
+} from '@/types/roadmap'
+
+export const ROADMAP_AUDIT_FIELDS: readonly RoadmapAuditField[] = [
+  'firstSaleTosVersionId',
+  'brand',
+  'productLine',
+  'marketName',
+  'projectCode',
+  'productType',
+  'platform',
+  'startRam',
+  'versionType',
+  'str5Date',
+  'launchDate',
+  'developMode',
+  'remark',
+]
+
+export const ROADMAP_AUDIT_FIELD_LABELS: Record<RoadmapAuditField, string> = {
+  firstSaleTosVersionId: 'tOS版本',
+  brand: '品牌',
+  productLine: '产品线',
+  marketName: '市场名',
+  projectCode: '项目名',
+  productType: '产品类型',
+  platform: '平台',
+  startRam: '起步RAM',
+  versionType: '版本类型',
+  str5Date: 'STR5时间',
+  launchDate: '上市时间',
+  developMode: '开发模式',
+  remark: '备注',
+}
+
+function resolveAuditValue(
+  field: RoadmapAuditField,
+  value: RoadmapProjectFields[RoadmapAuditField],
+  versions: readonly TosVersionConfig[],
+) {
+  if (field !== 'firstSaleTosVersionId') return String(value ?? '')
+  return versions.find(version => version.id === value)?.name ?? String(value ?? '')
+}
+
+export function diffRoadmapProjectFields(
+  before: RoadmapProjectFields,
+  after: RoadmapProjectFields,
+  versions: readonly TosVersionConfig[],
+): RoadmapFieldChange[] {
+  return ROADMAP_AUDIT_FIELDS.flatMap(field => {
+    const beforeValue = resolveAuditValue(field, before[field], versions)
+    const afterValue = resolveAuditValue(field, after[field], versions)
+    return beforeValue === afterValue ? [] : [{ field, before: beforeValue, after: afterValue }]
+  })
+}
+
+export function createRoadmapAuditSnapshot(
+  fields: RoadmapProjectFields,
+  versions: readonly TosVersionConfig[],
+): Partial<RoadmapProjectFields> {
+  return Object.fromEntries(
+    ROADMAP_AUDIT_FIELDS.map(field => [field, resolveAuditValue(field, fields[field], versions)]),
+  ) as Partial<RoadmapProjectFields>
+}

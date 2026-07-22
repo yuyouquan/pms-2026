@@ -345,6 +345,171 @@ registerAssertion('workspace filter toolbar wraps without squeezing chip labels'
   if (chipStyle.get('flexShrink') !== '0') throw new Error('workspace filter chips must not shrink')
 })
 
+registerAssertion('roadmap contracts expose the approved column order and defaults', () => {
+  const { ROADMAP_COLUMNS } = loadTypeScriptModule(path.join(root, 'src/types/roadmap.ts'))
+  const expectedColumns = [
+    ['firstSaleTosVersionId', 'tOS版本'],
+    ['brand', '品牌'],
+    ['productLine', '产品线'],
+    ['productSeries', '产品系列'],
+    ['marketName', '市场名'],
+    ['displayName', '项目名'],
+    ['productType', '产品类型'],
+    ['platform', '平台'],
+    ['startRam', '起步RAM'],
+    ['versionType', '版本类型'],
+    ['str5Date', 'STR5时间'],
+    ['launchDate', '上市时间'],
+    ['developMode', '开发模式'],
+    ['remark', '备注'],
+  ]
+  const actualColumns = ROADMAP_COLUMNS.map(column => [column.key, column.label])
+  if (JSON.stringify(actualColumns) !== JSON.stringify(expectedColumns)) {
+    throw new Error(`expected ${JSON.stringify(expectedColumns)}, got ${JSON.stringify(actualColumns)}`)
+  }
+  const hiddenByDefault = ROADMAP_COLUMNS.filter(column => !column.defaultVisible).map(column => column.key)
+  if (JSON.stringify(hiddenByDefault) !== JSON.stringify(['productSeries'])) {
+    throw new Error(`only productSeries may be hidden by default, got ${JSON.stringify(hiddenByDefault)}`)
+  }
+  if (ROADMAP_COLUMNS.some(column => !column.kind)) throw new Error('every roadmap column needs a field kind')
+})
+
+registerAssertion('roadmap validation normalizes names, duplicate keys, tOS versions, and legacy product types', () => {
+  const validation = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
+  if (validation.buildRoadmapDisplayName(' X6877 ', 'Android 16', '新品') !== 'X6877') {
+    throw new Error('new-product display name is wrong')
+  }
+  if (validation.buildRoadmapDisplayName(' X6877 ', 'Android 16', '老品') !== 'X6877(Android 16)') {
+    throw new Error('old-product display name is wrong')
+  }
+  const firstKey = validation.buildRoadmapDuplicateKey(' x6877 ', 'Android 16', '新品')
+  const secondKey = validation.buildRoadmapDuplicateKey('X6877', ' Android 16 ', ' 新品 ')
+  if (firstKey !== 'X6877|Android 16|新品' || firstKey !== secondKey) {
+    throw new Error('duplicate keys must trim fields and ignore project-code case')
+  }
+
+  for (const input of ['tOS17.2', 'tos 17.2', ' TOS  17.2 ']) {
+    const normalized = validation.normalizeTosVersionName(input)
+    if (JSON.stringify(normalized) !== JSON.stringify({ name: 'tOS 17.2', major: 17, minor: 2 })) {
+      throw new Error(`failed to normalize ${input}`)
+    }
+  }
+  if (validation.normalizeTosVersionName('tOS 17') !== null) throw new Error('tOS version must include major and minor')
+  if (validation.normalizeLegacyRoadmapProductType('新品') !== '新品') throw new Error('新品 must remain 新品')
+  for (const legacyValue of ['老品', '升级', '换代']) {
+    if (validation.normalizeLegacyRoadmapProductType(legacyValue) !== '老品') {
+      throw new Error(`${legacyValue} must normalize to 老品`)
+    }
+  }
+  if (validation.normalizeLegacyRoadmapProductType('未知') !== null) throw new Error('unknown product types must normalize to null')
+})
+
+registerAssertion('roadmap product-line and planned-project validation enforce only approved rules', () => {
+  const validation = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
+  const expectedLines = {
+    TECNO: ['PHANTOM', 'CAMON', 'POVA', 'SPARK', 'POP'],
+    Infinix: ['ZERO', 'NOTE', 'GT', 'HOT', 'SMART'],
+    itel: ['SUPER', 'POWER', 'CITY', 'A'],
+    待定: ['待定'],
+    其他品牌: ['其他系列'],
+  }
+  for (const [brand, lines] of Object.entries(expectedLines)) {
+    if (JSON.stringify(validation.getProductLineOptions(brand)) !== JSON.stringify(lines)) {
+      throw new Error(`${brand} product lines are wrong`)
+    }
+  }
+
+  const validInput = {
+    machineProjectType: '整机-手机',
+    projectCode: 'X6877',
+    androidVersion: 'Android 16',
+    firstSaleTosVersionId: 'tos-17-2',
+    brand: 'TECNO',
+    productLine: 'SPARK',
+    productSeries: 'SPARK 60',
+    marketName: 'SPARK 60',
+    productType: '新品',
+    platform: 'G100',
+    startRam: '4GB',
+    versionType: 'Slim',
+    str5Date: '2027-02-01',
+    launchDate: '2027-01-01',
+    developMode: '自研',
+  }
+  const existing = [{ id: 'planned-1', ...validInput, displayName: 'X6877', source: 'planned', status: '待规划', readOnly: false, remark: '' }]
+  const validErrors = validation.validatePlannedProject(validInput, existing, 'planned-1')
+  if (Object.keys(validErrors).length) {
+    throw new Error(`remark must be optional, editing must exclude self, and dates have no cross-field rule: ${JSON.stringify(validErrors)}`)
+  }
+  if (!validation.isExactRoadmapDuplicate(validInput, existing)) throw new Error('exact duplicate was not detected')
+  if (validation.isExactRoadmapDuplicate(validInput, existing, 'planned-1')) throw new Error('edit duplicate check did not exclude self')
+
+  const missingRequired = { ...validInput }
+  delete missingRequired.platform
+  const requiredErrors = validation.validatePlannedProject(missingRequired, [])
+  if (!requiredErrors.platform || requiredErrors.remark) throw new Error(`required-field errors are wrong: ${JSON.stringify(requiredErrors)}`)
+
+  const badBrandLineErrors = validation.validatePlannedProject({ ...validInput, productLine: 'ZERO' }, [])
+  if (!badBrandLineErrors.productLine) throw new Error('brand/product-line mismatch must be rejected')
+  const invalidBrandErrors = validation.validatePlannedProject({ ...validInput, brand: 'Unknown', productLine: 'SPARK' }, [])
+  if (!invalidBrandErrors.brand) throw new Error('unknown brands must be rejected')
+  const badDateErrors = validation.validatePlannedProject({ ...validInput, str5Date: '2027-2-1' }, [])
+  if (!badDateErrors.str5Date) throw new Error('dates must use exact YYYY-MM-DD format')
+})
+
+registerAssertion('roadmap sorting uses semantic versions, numeric RAM, ISO dates, and localized text', () => {
+  const sorting = loadTypeScriptModule(path.join(root, 'src/lib/roadmapSorting.ts'))
+  if (sorting.compareSemanticTos({ major: 18, minor: 0 }, { major: 17, minor: 2 }) <= 0) throw new Error('semantic tOS major ordering is wrong')
+  if (sorting.compareSemanticTos({ major: 17, minor: 10 }, { major: 17, minor: 2 }) <= 0) throw new Error('semantic tOS minor ordering is wrong')
+  if (sorting.compareRam('12GB', '8GB') <= 0) throw new Error('RAM ordering is wrong')
+  if (sorting.compareIsoDate('2027-10-01', '2027-02-01') <= 0) throw new Error('ISO date ordering is wrong')
+  if (sorting.compareLocalizedText('项目2', '项目10') >= 0) throw new Error('localized text must use numeric comparison')
+  if (sorting.compareLocalizedText('TECNO', 'tecno') !== 0) throw new Error('localized text must be case-insensitive')
+
+  const versions = [
+    { id: 'tos-17-2', name: 'tOS 17.2', major: 17, minor: 2 },
+    { id: 'tos-18-0', name: 'tOS 18.0', major: 18, minor: 0 },
+  ]
+  const older = { firstSaleTosVersionId: 'tos-17-2', startRam: '8GB', launchDate: '2027-02-01', displayName: '项目2' }
+  const newer = { firstSaleTosVersionId: 'tos-18-0', startRam: '12GB', launchDate: '2027-10-01', displayName: '项目10' }
+  for (const field of ['firstSaleTosVersionId', 'startRam', 'launchDate', 'displayName']) {
+    if (sorting.compareRoadmapValues(field, older, newer, versions) >= 0) throw new Error(`${field} field comparator is wrong`)
+  }
+})
+
+registerAssertion('roadmap audit uses the fixed whitelist, resolved tOS names, and true changes only', () => {
+  const audit = loadTypeScriptModule(path.join(root, 'src/lib/roadmapAudit.ts'))
+  const expectedFields = 'firstSaleTosVersionId,brand,productLine,marketName,projectCode,productType,platform,startRam,versionType,str5Date,launchDate,developMode,remark'
+  if (audit.ROADMAP_AUDIT_FIELDS.join(',') !== expectedFields) throw new Error('audit field whitelist or order is wrong')
+
+  const versions = [
+    { id: 'tos-17-2', name: 'tOS 17.2', major: 17, minor: 2 },
+    { id: 'tos-18-0', name: 'tOS 18.0', major: 18, minor: 0 },
+  ]
+  const before = {
+    machineProjectType: '整机-手机', projectCode: 'X6877', displayName: 'X6877', androidVersion: 'Android 16',
+    firstSaleTosVersionId: 'tos-17-2', brand: 'TECNO', productLine: 'SPARK', productSeries: 'SPARK 60', marketName: 'SPARK 60',
+    productType: '新品', platform: 'G100', startRam: '4GB', versionType: 'Slim', str5Date: '2027-01-01', launchDate: '2027-02-01',
+    developMode: '自研', remark: '',
+  }
+  const after = { ...before, androidVersion: 'Android 17', productSeries: 'SPARK 70', firstSaleTosVersionId: 'tos-18-0', brand: 'Infinix', remark: 'updated' }
+  const changes = audit.diffRoadmapProjectFields(before, after, versions)
+  if (changes.map(change => change.field).join(',') !== 'firstSaleTosVersionId,brand,remark') {
+    throw new Error(`audit diff included wrong fields or order: ${JSON.stringify(changes)}`)
+  }
+  if (changes[0].before !== 'tOS 17.2' || changes[0].after !== 'tOS 18.0') throw new Error('audit diff must resolve stable tOS IDs')
+  if (changes.some(change => change.field === 'androidVersion' || change.field === 'productSeries')) {
+    throw new Error('Android version and product series must be excluded from ordinary diffs')
+  }
+
+  const snapshot = audit.createRoadmapAuditSnapshot(after, versions)
+  if (Object.keys(snapshot).join(',') !== expectedFields) throw new Error(`audit snapshot order is wrong: ${Object.keys(snapshot).join(',')}`)
+  if (snapshot.firstSaleTosVersionId !== 'tOS 18.0' || snapshot.brand !== 'Infinix' || snapshot.remark !== 'updated') {
+    throw new Error(`audit snapshot content is wrong: ${JSON.stringify(snapshot)}`)
+  }
+  if ('androidVersion' in snapshot || 'productSeries' in snapshot) throw new Error('audit snapshot contains excluded fields')
+})
+
 const failures = []
 for (const { name, assertion } of assertions) {
   try {
