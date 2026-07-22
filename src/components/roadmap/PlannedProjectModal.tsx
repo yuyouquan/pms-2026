@@ -1,0 +1,418 @@
+'use client'
+
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import dayjs, { type Dayjs } from 'dayjs'
+import {
+  Alert,
+  Button,
+  Card,
+  DatePicker,
+  Flex,
+  Form,
+  Input,
+  Modal,
+  Row,
+  Col,
+  Select,
+  Table,
+  message,
+  type TableColumnsType,
+} from 'antd'
+import { MACHINE_PROJECT_TYPES } from '@/constants/projectTypes'
+import {
+  findRoadmapHistoryMatches,
+} from '@/lib/roadmapProjectAdapter'
+import { compareSemanticTos } from '@/lib/roadmapSorting'
+import {
+  buildRoadmapDuplicateKey,
+  getProductLineOptions,
+} from '@/lib/roadmapValidation'
+import { useRoadmapStore } from '@/stores/roadmap'
+import type {
+  PlannedRoadmapProject,
+  PlannedRoadmapProjectInput,
+  RoadmapAndroidVersion,
+  RoadmapBrand,
+  RoadmapDevelopMode,
+  RoadmapProductType,
+  RoadmapProjectRow,
+  RoadmapRam,
+  RoadmapVersionType,
+  TosVersionConfig,
+} from '@/types/roadmap'
+
+const ANDROID_VERSIONS: readonly RoadmapAndroidVersion[] = ['Android 16', 'Android 17', 'Android 18']
+const BRANDS: readonly RoadmapBrand[] = ['TECNO', 'Infinix', 'itel', '待定', '其他品牌']
+const PRODUCT_TYPES: readonly RoadmapProductType[] = ['新品', '老品']
+const RAM_OPTIONS: readonly RoadmapRam[] = ['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB']
+const VERSION_TYPES: readonly RoadmapVersionType[] = ['Full', 'Slim', 'Go']
+const DEVELOP_MODES: readonly RoadmapDevelopMode[] = ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研']
+
+const sectionStyle: CSSProperties = {
+  background: 'var(--bg-purple-tint)',
+  borderColor: 'var(--border-purple)',
+  borderRadius: 'var(--radius-lg)',
+}
+
+type PlannedProjectFormValues = Omit<PlannedRoadmapProjectInput, 'str5Date' | 'launchDate'> & {
+  str5Date: Dayjs
+  launchDate: Dayjs
+}
+
+interface PlannedProjectModalProps {
+  open: boolean
+  onCancel: () => void
+  editingProject?: PlannedRoadmapProject | null
+  allRows: readonly RoadmapProjectRow[]
+  tosVersions: readonly TosVersionConfig[]
+  currentUser: string
+  canEdit: boolean
+  onChanged?: () => void
+}
+
+function getFirstErrorField(error: unknown): (string | number)[] | null {
+  if (typeof error !== 'object' || error === null || !('errorFields' in error)) return null
+  const errorFields = (error as { errorFields?: Array<{ name?: (string | number)[] }> }).errorFields
+  return errorFields?.[0]?.name ?? null
+}
+
+export default function PlannedProjectModal({
+  open,
+  onCancel,
+  editingProject,
+  allRows,
+  tosVersions,
+  currentUser,
+  canEdit,
+  onChanged,
+}: PlannedProjectModalProps) {
+  const [form] = Form.useForm<PlannedProjectFormValues>()
+  const [submitting, setSubmitting] = useState(false)
+  const createPlannedProject = useRoadmapStore(state => state.createPlannedProject)
+  const updatePlannedProject = useRoadmapStore(state => state.updatePlannedProject)
+  const deletePlannedProject = useRoadmapStore(state => state.deletePlannedProject)
+
+  const projectCode = Form.useWatch('projectCode', form) || ''
+  const androidVersion = Form.useWatch('androidVersion', form)
+  const productType = Form.useWatch('productType', form)
+  const brand = Form.useWatch('brand', form)
+
+  const descendingTosVersions = useMemo(
+    () => [...tosVersions].sort((left, right) => compareSemanticTos(right, left)),
+    [tosVersions],
+  )
+  const productLineOptions = brand ? getProductLineOptions(brand) : []
+  const historyMatches = useMemo(
+    () => findRoadmapHistoryMatches([...allRows], projectCode, editingProject?.id),
+    [allRows, editingProject?.id, projectCode],
+  )
+  const duplicateExists = useMemo(() => {
+    if (!projectCode.trim() || !androidVersion || !productType) return false
+    const candidateKey = buildRoadmapDuplicateKey(projectCode, androidVersion, productType)
+    return allRows.some(row => (
+      !(row.source === 'planned' && row.id === editingProject?.id)
+      && buildRoadmapDuplicateKey(row.projectCode, row.androidVersion, row.productType) === candidateKey
+    ))
+  }, [allRows, androidVersion, editingProject?.id, projectCode, productType])
+
+  useEffect(() => {
+    if (!open) return
+    form.resetFields()
+    if (editingProject) {
+      form.setFieldsValue({
+        ...editingProject,
+        str5Date: dayjs(editingProject.str5Date),
+        launchDate: dayjs(editingProject.launchDate),
+      })
+      return
+    }
+    form.setFieldsValue({
+      machineProjectType: MACHINE_PROJECT_TYPES[0],
+      productType: '新品',
+      remark: '',
+    })
+  }, [editingProject, form, open])
+
+  useEffect(() => {
+    form.setFields([{
+      name: 'projectCode',
+      errors: duplicateExists
+        ? ['已存在相同项目：项目名、安卓版本和产品类型均相同，请修改后再保存']
+        : [],
+    }])
+  }, [duplicateExists, form])
+
+  const historyColumns: TableColumnsType<RoadmapProjectRow> = [
+    { title: '项目名称', dataIndex: 'displayName', key: 'displayName' },
+    { title: '项目名', dataIndex: 'projectCode', key: 'projectCode' },
+    { title: '安卓版本', dataIndex: 'androidVersion', key: 'androidVersion' },
+    { title: '产品类型', dataIndex: 'productType', key: 'productType' },
+  ]
+
+  const focusField = (firstErrorField: (string | number)[]) => {
+    form.scrollToField(firstErrorField, { block: 'center' })
+    requestAnimationFrame(() => {
+      const control = form.getFieldInstance(firstErrorField) as { focus?: () => void } | undefined
+      control?.focus?.()
+    })
+  }
+
+  const handleBrandChange = (nextBrand: RoadmapBrand) => {
+    const nextOptions = getProductLineOptions(nextBrand)
+    const currentLine = form.getFieldValue('productLine')
+    if (!nextOptions.some(option => option === currentLine)) form.setFieldValue('productLine', undefined)
+    if (nextOptions.length === 1) form.setFieldValue('productLine', nextOptions[0])
+  }
+
+  const handleSubmit = async () => {
+    if (!canEdit || duplicateExists) return
+    let values: PlannedProjectFormValues
+    try {
+      values = await form.validateFields()
+    } catch (error) {
+      const firstErrorField = getFirstErrorField(error)
+      if (firstErrorField) focusField(firstErrorField)
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const input = {
+        ...values,
+        projectCode: values.projectCode.trim(),
+        productSeries: values.productSeries.trim(),
+        marketName: values.marketName.trim(),
+        platform: values.platform.trim(),
+        remark: values.remark?.trim() ?? '',
+        str5Date: values.str5Date.format('YYYY-MM-DD'),
+        launchDate: values.launchDate.format('YYYY-MM-DD'),
+        actor: currentUser,
+      }
+      const comparison = { allRows }
+      const result = editingProject
+        ? updatePlannedProject(editingProject.id, input, comparison)
+        : createPlannedProject(input, comparison)
+
+      if (!result.ok) {
+        if (result.reason === 'duplicate') {
+          form.setFields([{
+            name: 'projectCode',
+            errors: ['已存在相同项目：项目名、安卓版本和产品类型均相同，请修改后再保存'],
+          }])
+          focusField(['projectCode'])
+          return
+        }
+        if (result.reason === 'invalid') {
+          form.setFields(Object.entries(result.errors).map(([name, error]) => ({
+            name: name as keyof PlannedProjectFormValues,
+            errors: [error],
+          })))
+          const firstInvalidField = Object.keys(result.errors)[0]
+          if (firstInvalidField) focusField([firstInvalidField])
+          return
+        }
+        message.error('待规划项目不存在，请刷新后重试')
+        return
+      }
+      message.success(editingProject ? '待规划项目已更新' : '待规划项目已创建')
+      onChanged?.()
+      onCancel()
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleDelete = () => {
+    if (!canEdit || !editingProject) return
+    Modal.confirm({
+      title: '删除待规划项目？',
+      content: '删除后项目将从路标中移除，但修改记录会保留删除前快照。',
+      okText: '确认删除',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        const result = deletePlannedProject(editingProject.id, currentUser)
+        if (!result.ok) {
+          message.error(result.reason === 'not-found' ? '待规划项目不存在，请刷新后重试' : '删除失败，请重试')
+          return Promise.reject(new Error('planned-project-delete-failed'))
+        }
+        message.success('待规划项目已删除，修改记录已保留')
+        onChanged?.()
+        onCancel()
+      },
+    })
+  }
+
+  return (
+    <Modal
+      className="pms-modal"
+      title={editingProject ? '编辑待规划项目' : '创建待规划项目'}
+      open={open}
+      onCancel={onCancel}
+      width={960}
+      destroyOnHidden
+      mask={{ closable: false }}
+      styles={{ body: { maxHeight: '68vh', overflowY: 'auto', paddingInlineEnd: 8 } }}
+      footer={(
+        <Flex justify="space-between" align="center" gap={16} wrap>
+          <div>
+            {editingProject && canEdit ? (
+              <Button danger onClick={handleDelete} disabled={submitting}>
+                删除待规划项目
+              </Button>
+            ) : null}
+          </div>
+          <Flex gap={8}>
+            <Button onClick={onCancel}>取消</Button>
+            {canEdit ? (
+              <Button
+                type="primary"
+                onClick={handleSubmit}
+                loading={submitting}
+                disabled={duplicateExists || submitting}
+              >
+                {editingProject ? '保存修改' : '创建项目'}
+              </Button>
+            ) : null}
+          </Flex>
+        </Flex>
+      )}
+    >
+      <Form form={form} layout="vertical" preserve={false} disabled={!canEdit} requiredMark>
+        <Flex vertical gap={16}>
+          <Card size="small" title="项目分类与识别" style={sectionStyle}>
+            <Row gutter={[16, 0]}>
+              <Col xs={24} md={8}>
+                <Form.Item label="项目分类" name="machineProjectType" rules={[{ required: true, message: '请选择项目分类' }]}>
+                  <Select options={MACHINE_PROJECT_TYPES.map(value => ({ label: value, value }))} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="项目名" name="projectCode" rules={[{ required: true, whitespace: true, message: '请输入项目名' }]}>
+                  <Input placeholder="例如 X6877" maxLength={80} autoComplete="off" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="安卓版本" name="androidVersion" rules={[{ required: true, message: '请选择安卓版本' }]}>
+                  <Select options={ANDROID_VERSIONS.map(value => ({ label: value, value }))} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="产品类型" name="productType" rules={[{ required: true, message: '请选择产品类型' }]}>
+                  <Select options={PRODUCT_TYPES.map(value => ({ label: value, value }))} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="首销 tOS 版本" name="firstSaleTosVersionId" rules={[{ required: true, message: '请选择首销 tOS 版本' }]}>
+                  <Select
+                    placeholder="请选择版本"
+                    options={descendingTosVersions.map(version => ({ label: version.name, value: version.id }))}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+            {projectCode.trim() ? (
+              <div aria-live="polite">
+                <Flex justify="space-between" align="center" gap={8} style={{ marginBottom: 8 }}>
+                  <strong>历史同名项目</strong>
+                  <span style={{ color: 'var(--text-secondary)' }}>{historyMatches.length} 条</span>
+                </Flex>
+                <Table<RoadmapProjectRow>
+                  className="pms-table"
+                  size="small"
+                  rowKey={row => `${row.source}:${row.id}`}
+                  columns={historyColumns}
+                  dataSource={historyMatches}
+                  pagination={false}
+                  locale={{ emptyText: '未找到历史同名项目' }}
+                  scroll={{ x: 560 }}
+                />
+                {duplicateExists ? (
+                  <Alert
+                    style={{ marginTop: 8 }}
+                    type="error"
+                    showIcon
+                    message="已存在相同项目"
+                    description="项目名、安卓版本和产品类型均相同，不能重复创建或保存。"
+                  />
+                ) : null}
+              </div>
+            ) : null}
+          </Card>
+
+          <Card size="small" title="产品与版本" style={sectionStyle}>
+            <Row gutter={[16, 0]}>
+              <Col xs={24} md={8}>
+                <Form.Item label="品牌" name="brand" rules={[{ required: true, message: '请选择品牌' }]}>
+                  <Select
+                    placeholder="请选择品牌"
+                    onChange={handleBrandChange}
+                    options={BRANDS.map(value => ({ label: value, value }))}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="产品线" name="productLine" rules={[{ required: true, message: '请选择产品线' }]}>
+                  <Select
+                    placeholder={brand ? '请选择产品线' : '请先选择品牌'}
+                    options={productLineOptions.map(value => ({ label: value, value }))}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="产品系列" name="productSeries" rules={[{ required: true, whitespace: true, message: '请输入产品系列' }]}>
+                  <Input placeholder="请输入产品系列" maxLength={80} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="市场名" name="marketName" rules={[{ required: true, whitespace: true, message: '请输入市场名' }]}>
+                  <Input placeholder="请输入市场名" maxLength={80} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="平台" name="platform" rules={[{ required: true, whitespace: true, message: '请输入平台' }]}>
+                  <Input placeholder="请输入平台" maxLength={80} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="起步 RAM" name="startRam" rules={[{ required: true, message: '请选择起步 RAM' }]}>
+                  <Select options={RAM_OPTIONS.map(value => ({ label: value, value }))} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="版本类型" name="versionType" rules={[{ required: true, message: '请选择版本类型' }]}>
+                  <Select options={VERSION_TYPES.map(value => ({ label: value, value }))} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="开发模式" name="developMode" rules={[{ required: true, message: '请选择开发模式' }]}>
+                  <Select options={DEVELOP_MODES.map(value => ({ label: value, value }))} />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Card>
+
+          <Card size="small" title="时间与备注" style={sectionStyle}>
+            <Row gutter={[16, 0]}>
+              <Col xs={24} md={8}>
+                <Form.Item label="STR5 时间" name="str5Date" rules={[{ required: true, message: '请选择 STR5 时间' }]}>
+                  <DatePicker format="YYYY-MM-DD" style={{ width: '100%' }} placeholder="请选择具体日期" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="上市时间" name="launchDate" rules={[{ required: true, message: '请选择上市时间' }]}>
+                  <DatePicker format="YYYY-MM-DD" style={{ width: '100%' }} placeholder="请选择具体日期" />
+                </Form.Item>
+              </Col>
+              <Col span={24}>
+                <Form.Item label="备注" name="remark">
+                  <Input.TextArea placeholder="可补充规划背景或风险" rows={3} maxLength={500} showCount />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Card>
+        </Flex>
+      </Form>
+    </Modal>
+  )
+}

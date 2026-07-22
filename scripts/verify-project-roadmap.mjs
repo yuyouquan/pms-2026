@@ -1753,6 +1753,103 @@ registerAssertion('machine basic information exposes maintained roadmap selector
   }
 })
 
+registerAssertion('planned-project overlay exposes the complete accessible maintenance contract', () => {
+  const plannedModalPath = path.join(root, 'src/components/roadmap/PlannedProjectModal.tsx')
+  if (!fs.existsSync(plannedModalPath)) throw new Error('PlannedProjectModal.tsx is missing')
+  const source = fs.readFileSync(plannedModalPath, 'utf8')
+  if (source.includes('maskClosable')) throw new Error('planned-project modal uses deprecated Ant Design maskClosable')
+  for (const field of [
+    'machineProjectType',
+    'projectCode',
+    'androidVersion',
+    'firstSaleTosVersionId',
+    'brand',
+    'productLine',
+    'productSeries',
+    'marketName',
+    'productType',
+    'platform',
+    'startRam',
+    'versionType',
+    'str5Date',
+    'launchDate',
+    'developMode',
+    'remark',
+  ]) {
+    if (!source.includes(`name="${field}"`) && !source.includes(`name='${field}'`)) {
+      throw new Error(`planned-project form is missing ${field}`)
+    }
+  }
+  for (const section of ['项目分类与识别', '产品与版本', '时间与备注']) {
+    if (!source.includes(section)) throw new Error(`planned-project form is missing the ${section} section`)
+  }
+  for (const contract of [
+    'Form.useWatch',
+    'findRoadmapHistoryMatches',
+    'buildRoadmapDuplicateKey',
+    '已存在相同项目',
+    'getProductLineOptions',
+    "form.setFieldValue('productLine'",
+    "form.scrollToField(firstErrorField, { block: 'center' })",
+    'getFieldInstance',
+    "format('YYYY-MM-DD')",
+    'deletePlannedProject',
+    'Modal.confirm',
+    'canEdit',
+  ]) {
+    if (!source.includes(contract)) throw new Error(`planned-project form is missing ${contract}`)
+  }
+  const historyHeaders = ['项目名称', '项目名', '安卓版本', '产品类型']
+  const missingHeaders = historyHeaders.filter(header => !source.includes(`title: '${header}'`) && !source.includes(`title: "${header}"`))
+  if (missingHeaders.length) throw new Error(`history table is missing exact columns: ${missingHeaders.join(', ')}`)
+})
+
+registerAssertion('tOS-version overlay preserves semantic ordering and deletion protection', () => {
+  const maintenancePath = path.join(root, 'src/components/roadmap/TosVersionMaintenanceModal.tsx')
+  if (!fs.existsSync(maintenancePath)) throw new Error('TosVersionMaintenanceModal.tsx is missing')
+  const source = fs.readFileSync(maintenancePath, 'utf8')
+  if (source.includes('最新')) throw new Error('tOS maintenance must not mark a newest version')
+  if (source.includes('onPressEnter')) {
+    throw new Error('the inline version form must use its native submit path for Enter instead of double-submitting')
+  }
+  for (const contract of [
+    'compareSemanticTos(right, left)',
+    'normalRows',
+    'plannedRows',
+    '引用',
+    '无法删除',
+    'Modal.confirm',
+    'normalizeTosVersionName',
+    'createTosVersion',
+    'renameTosVersion',
+    'deleteTosVersion',
+    '格式应为',
+    '该版本已存在',
+    'canEdit',
+  ]) {
+    if (!source.includes(contract)) throw new Error(`tOS maintenance is missing ${contract}`)
+  }
+})
+
+registerAssertion('tOS target editor keeps stable rows and removes blank targets', () => {
+  const targetPath = path.join(root, 'src/components/roadmap/TosTargetEditor.tsx')
+  if (!fs.existsSync(targetPath)) throw new Error('TosTargetEditor.tsx is missing')
+  const source = fs.readFileSync(targetPath, 'utf8')
+  if (source.includes('maskClosable')) throw new Error('target editor uses deprecated Ant Design maskClosable')
+  for (const contract of [
+    'Form.List',
+    'field.key',
+    '.trim()',
+    '.filter(Boolean)',
+    'setTosTargets',
+    'targets: []',
+    'canEdit',
+    'aria-label',
+  ]) {
+    if (!source.includes(contract)) throw new Error(`tOS target editor is missing ${contract}`)
+  }
+})
+
 const failures = []
 for (const { name, assertion } of assertions) {
   try {
