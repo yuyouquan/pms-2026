@@ -862,7 +862,11 @@ registerAssertion('roadmap migration repairs legacy names, references, UI contro
       id: 'planned-legacy', ...validPlannedRoadmapInput, displayName: 'stale', firstSaleTosVersionId: undefined,
       tosVersion: 'tOS17.2', productType: '换代', status: '草稿', createdAt: 'bad', updatedAt: 'bad', createdBy: '甲', updatedBy: '乙',
     }],
-    changeLogs: [{ id: 'log-1', projectId: 'normal-1', projectDisplayName: 'X1', source: 'normal', action: 'update', actor: '甲', occurredAt: '2024-01-01T00:00:00.000Z', tosVersionName: 'tOS 17.2', changes: [] }],
+    changeLogs: [{
+      id: 'log-1', projectId: 'normal-1', projectDisplayName: 'X1', source: 'normal', action: 'update', actor: '甲',
+      occurredAt: '2024-01-01T00:00:00.000Z', tosVersionName: 'tOS 17.2',
+      changes: [{ field: 'brand', before: 'TECNO', after: 'Infinix' }],
+    }],
     viewMode: 'evolution', selectedTosVersionId: 'missing', brandFilter: 'TECNO', productTypeFilter: '老品',
     filters: [
       { id: 'valid', field: 'brand', operator: 'equals', value: 'TECNO' },
@@ -913,6 +917,125 @@ registerAssertion('roadmap migration and malformed persisted JSON safely fall ba
     else globalThis.window = previousWindow
   }
   if (messages.length !== 1) throw new Error(`malformed JSON must emit one console.error, got ${messages.length}`)
+})
+
+const validMigratedLogBase = {
+  id: 'log-valid',
+  projectId: 'project-1',
+  projectDisplayName: 'X6877',
+  source: 'planned',
+  actor: '张三',
+  occurredAt: '2026-01-02T00:00:00.000Z',
+  tosVersionName: 'tOS 17.2',
+}
+
+function migrateChangeLogFixtures(changeLogs) {
+  const store = loadIsolatedRoadmapStore()
+  return store.migrateRoadmapState({
+    tosVersions: [],
+    plannedProjects: [],
+    changeLogs,
+    selectedTosVersionId: null,
+  }, 0).changeLogs
+}
+
+registerTableAssertions('roadmap migration rejects malformed audit changes', [
+  ['unknown audit field', () => {
+    const logs = migrateChangeLogFixtures([{
+      ...validMigratedLogBase,
+      action: 'update',
+      changes: [{ field: 'androidVersion', before: 'Android 16', after: 'Android 17' }],
+    }])
+    if (logs.length) throw new Error('unknown audit field was preserved')
+  }],
+  ['missing before string', () => {
+    const logs = migrateChangeLogFixtures([{
+      ...validMigratedLogBase,
+      action: 'update',
+      changes: [{ field: 'brand', after: 'Infinix' }],
+    }])
+    if (logs.length) throw new Error('change without before string was preserved')
+  }],
+  ['empty update changes', () => {
+    const logs = migrateChangeLogFixtures([{ ...validMigratedLogBase, action: 'update', changes: [] }])
+    if (logs.length) throw new Error('update without a valid change was preserved')
+  }],
+])
+
+registerTableAssertions('roadmap migration requires snapshots for create and delete audit logs', [
+  ['create snapshot', () => {
+    const logs = migrateChangeLogFixtures([{ ...validMigratedLogBase, action: 'create', changes: [] }])
+    if (logs.length) throw new Error('create log without snapshot was preserved')
+  }],
+  ['delete snapshot', () => {
+    const logs = migrateChangeLogFixtures([{ ...validMigratedLogBase, action: 'delete', changes: [] }])
+    if (logs.length) throw new Error('delete log without snapshot was preserved')
+  }],
+])
+
+registerTableAssertions('roadmap migration rejects malformed audit snapshots', [
+  ['empty snapshot', () => {
+    const logs = migrateChangeLogFixtures([{
+      ...validMigratedLogBase,
+      action: 'create',
+      changes: [],
+      snapshot: {},
+    }])
+    if (logs.length) throw new Error('empty snapshot was preserved')
+  }],
+  ['unknown snapshot key', () => {
+    const logs = migrateChangeLogFixtures([{
+      ...validMigratedLogBase,
+      action: 'create',
+      changes: [],
+      snapshot: { brand: 'TECNO', androidVersion: 'Android 16' },
+    }])
+    if (logs.length) throw new Error('snapshot with unknown key was preserved')
+  }],
+  ['non-string snapshot value', () => {
+    const logs = migrateChangeLogFixtures([{
+      ...validMigratedLogBase,
+      action: 'delete',
+      changes: [],
+      snapshot: { brand: 17 },
+    }])
+    if (logs.length) throw new Error('snapshot with non-string value was preserved')
+  }],
+])
+
+registerAssertion('roadmap migration preserves valid create, update, and delete audit logs', () => {
+  const logs = migrateChangeLogFixtures([
+    { ...validMigratedLogBase, id: 'create', action: 'create', changes: [], snapshot: { brand: 'TECNO' } },
+    { ...validMigratedLogBase, id: 'update', action: 'update', changes: [{ field: 'brand', before: 'TECNO', after: 'Infinix' }] },
+    { ...validMigratedLogBase, id: 'delete', action: 'delete', changes: [], snapshot: { firstSaleTosVersionId: 'tOS 17.2' } },
+  ])
+  if (logs.map(log => log.id).join(',') !== 'create,update,delete') {
+    throw new Error(`valid audit logs were not preserved: ${JSON.stringify(logs)}`)
+  }
+})
+
+registerAssertion('empty migrated tOS catalogs use null selection', () => {
+  const store = loadIsolatedRoadmapStore()
+  const migrated = store.migrateRoadmapState({
+    tosVersions: [],
+    plannedProjects: [],
+    changeLogs: [],
+    selectedTosVersionId: 'tos-18-0',
+  }, 0)
+  if (migrated.tosVersions.length || migrated.selectedTosVersionId !== null) {
+    throw new Error(`empty catalog selection must be null: ${JSON.stringify(migrated.selectedTosVersionId)}`)
+  }
+})
+
+registerAssertion('deleting the last tOS version sets selection to null', () => {
+  const storeModule = loadIsolatedRoadmapStore()
+  const store = resetRoadmapStore(storeModule)
+  const onlyVersion = storeModule.createInitialTosVersions().at(-1)
+  store.setState({ tosVersions: [onlyVersion], selectedTosVersionId: 'stale-version-id' })
+  const result = store.getState().deleteTosVersion(onlyVersion.id, 0)
+  if (!result.ok || store.getState().tosVersions.length || store.getState().selectedTosVersionId !== null) {
+    throw new Error(`delete-last selection must be null: ${JSON.stringify(store.getState().selectedTosVersionId)}`)
+  }
 })
 
 registerAssertion('roadmap store loads in Node without localStorage and prepends normal logs only', () => {

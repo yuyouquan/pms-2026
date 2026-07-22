@@ -1,6 +1,10 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
-import { createRoadmapAuditSnapshot, diffRoadmapProjectFields } from '@/lib/roadmapAudit'
+import {
+  createRoadmapAuditSnapshot,
+  diffRoadmapProjectFields,
+  ROADMAP_AUDIT_FIELDS,
+} from '@/lib/roadmapAudit'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
 import {
   buildRoadmapDisplayName,
@@ -51,6 +55,7 @@ const FILTER_OPERATORS = new Set<RoadmapFilterOperator>([
 ])
 const ROADMAP_BRANDS = new Set<RoadmapBrand>(['TECNO', 'Infinix', 'itel', '待定', '其他品牌'])
 const ROADMAP_PRODUCT_TYPES = new Set<RoadmapProductType>(['新品', '老品'])
+const ROADMAP_AUDIT_FIELD_SET = new Set<string>(ROADMAP_AUDIT_FIELDS)
 
 type PersistedRoadmapState = Pick<
   RoadmapStoreState,
@@ -311,12 +316,21 @@ function isValidChangeLog(value: unknown): value is RoadmapChangeLog {
     || typeof value.tosVersionName !== 'string'
     || !Array.isArray(value.changes)
   ) return false
-  return value.changes.every(change => (
+  const hasValidChanges = value.changes.every(change => (
     isRecord(change)
     && typeof change.field === 'string'
+    && ROADMAP_AUDIT_FIELD_SET.has(change.field)
     && typeof change.before === 'string'
     && typeof change.after === 'string'
   ))
+  if (!hasValidChanges || (value.action === 'update' && value.changes.length === 0)) return false
+
+  const snapshotEntries = isRecord(value.snapshot) ? Object.entries(value.snapshot) : []
+  const hasValidSnapshot = snapshotEntries.length > 0 && snapshotEntries.every(([field, fieldValue]) => (
+    ROADMAP_AUDIT_FIELD_SET.has(field) && typeof fieldValue === 'string'
+  ))
+  if ((value.action === 'create' || value.action === 'delete') && !hasValidSnapshot) return false
+  return value.snapshot === undefined || hasValidSnapshot
 }
 
 function migrateChangeLogs(value: unknown): RoadmapChangeLog[] | null {
@@ -348,7 +362,7 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
 
   const selectedTosVersionId = resolveMigratedTosId(persistedState.selectedTosVersionId, tosVersions)
     ?? tosVersions[0]?.id
-    ?? ''
+    ?? null
 
   return {
     plannedProjects,
@@ -592,9 +606,11 @@ export const useRoadmapStore = create<RoadmapStore>()(
         const tosVersions = sortTosVersions(get().tosVersions.filter(version => version.id !== id))
         set(state => ({
           tosVersions,
-          selectedTosVersionId: state.selectedTosVersionId === id
-            ? tosVersions[0]?.id ?? ''
-            : state.selectedTosVersionId,
+          selectedTosVersionId: tosVersions.length === 0
+            ? null
+            : state.selectedTosVersionId === id
+              ? tosVersions[0].id
+              : state.selectedTosVersionId,
         }))
         return { ok: true }
       },
