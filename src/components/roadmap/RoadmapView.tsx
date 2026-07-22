@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Card, Space } from 'antd'
-import { AppstoreOutlined, GlobalOutlined, FlagOutlined, RocketOutlined, TableOutlined } from '@ant-design/icons'
-import MilestoneView from './MilestoneView'
-import MRTrainView from './MRTrainView'
+import { AppstoreOutlined, GlobalOutlined, TableOutlined } from '@ant-design/icons'
 import ProjectPlanSummaryBoard from './ProjectPlanSummaryBoard'
 import { PROJECT_VIEW_KINDS, parseProjectViewShare } from './utils'
 
@@ -15,72 +13,23 @@ interface RoadmapViewProps {
   onViewProject: (projectId: string, market?: string) => void
 }
 
-export default function RoadmapView({ projects, marketPlanData, level1Tasks, onViewProject }: RoadmapViewProps) {
+export default function RoadmapView({ projects, onViewProject }: RoadmapViewProps) {
   const [activeProjectView, setActiveProjectView] = useState<'summary' | 'roadmap'>('summary')
-  const [activeView, setActiveView] = useState<'milestone' | 'mr-train'>('milestone')
-  const mrTrainDisabled = true
 
   useEffect(() => {
     const sharedView = parseProjectViewShare()
     if (sharedView?.kind === PROJECT_VIEW_KINDS.roadmapMilestone) {
       setActiveProjectView('roadmap')
-      setActiveView('milestone')
     }
     if (sharedView?.kind === PROJECT_VIEW_KINDS.summaryBoard) {
       setActiveProjectView('summary')
-      setActiveView('milestone')
     }
   }, [])
-
-  useEffect(() => {
-    if (mrTrainDisabled && activeView === 'mr-train') {
-      setActiveView('milestone')
-    }
-  }, [activeView, mrTrainDisabled])
 
   const PROJECT_VIEW_OPTIONS = [
     { key: 'summary' as const, label: '项目计划汇总看板', icon: <TableOutlined /> },
     { key: 'roadmap' as const, label: '项目路标视图', icon: <GlobalOutlined /> },
   ]
-
-  const VIEW_OPTIONS = [
-    { key: 'milestone' as const, label: '里程碑视图', icon: <FlagOutlined /> },
-    { key: 'mr-train' as const, label: 'MR版本火车视图', icon: <RocketOutlined /> },
-  ]
-
-  const renderRoadmapViewSwitcher = () => (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 4,
-      padding: '3px 4px', background: '#f3f4f6', borderRadius: 22,
-    }}>
-      {VIEW_OPTIONS.map(v => {
-        const isActive = activeView === v.key
-        const isDisabled = mrTrainDisabled && v.key === 'mr-train'
-        return (
-          <div
-            key={v.key}
-            aria-disabled={isDisabled}
-            onClick={() => {
-              if (isDisabled) return
-              setActiveView(v.key)
-            }}
-            style={{
-              padding: '5px 18px', borderRadius: 18, cursor: isDisabled ? 'not-allowed' : 'pointer',
-              fontSize: 13, fontWeight: 600, transition: 'all 0.25s',
-              display: 'flex', alignItems: 'center', gap: 6,
-              background: isActive && !isDisabled ? '#fff' : 'transparent',
-              color: isDisabled ? '#94a3b8' : (isActive ? '#4338ca' : '#64748b'),
-              opacity: isDisabled ? 0.72 : 1,
-              boxShadow: isActive && !isDisabled ? '0 2px 6px rgba(0,0,0,0.1)' : 'none',
-            }}
-          >
-            {v.icon}
-            {v.label}
-          </div>
-        )
-      })}
-    </div>
-  )
 
   return (
     <div>
@@ -131,26 +80,7 @@ export default function RoadmapView({ projects, marketPlanData, level1Tasks, onV
       >
         {activeProjectView === 'summary' ? (
           <ProjectPlanSummaryBoard projects={projects} onViewProject={onViewProject} />
-        ) : (
-          <>
-            {activeView === 'mr-train' ? (
-              <>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-                  {renderRoadmapViewSwitcher()}
-                </div>
-                <MRTrainView onViewProject={onViewProject} />
-              </>
-            ) : (
-              <MilestoneView
-                projects={projects}
-                marketPlanData={marketPlanData}
-                level1Tasks={level1Tasks}
-                onViewProject={onViewProject}
-                scopeExtra={renderRoadmapViewSwitcher()}
-              />
-            )}
-          </>
-        )}
+        ) : null}
       </Card>
     </div>
   )
