@@ -1955,6 +1955,152 @@ registerAssertion('referenced tOS delete protection exposes its reason to keyboa
   }
 })
 
+registerAssertion('roadmap typed filters enforce kind-specific operators with AND semantics', () => {
+  const filters = loadTypeScriptModule(path.join(root, 'src/lib/filterConditions.ts'))
+  for (const exportName of [
+    'getFilterOperatorsForKind',
+    'normalizeFilterConditions',
+    'applyFilterConditions',
+  ]) {
+    if (typeof filters[exportName] !== 'function') throw new Error(`filterConditions is missing ${exportName}`)
+  }
+
+  const definitions = [
+    { key: 'name', label: '项目名', kind: 'text' },
+    { key: 'brand', label: '品牌', kind: 'enum', options: [{ label: 'TECNO', value: 'TECNO' }] },
+    { key: 'launchDate', label: '上市时间', kind: 'date' },
+  ]
+  const rows = [
+    { name: 'Spark 40', brand: 'TECNO', launchDate: '2026-10-02' },
+    { name: 'Note 70', brand: 'Infinix', launchDate: '2026-08-01' },
+    { name: '', brand: 'TECNO', launchDate: '' },
+  ]
+  const filtered = filters.applyFilterConditions(rows, [
+    { id: 'name', field: 'name', operator: 'contains', value: 'spark' },
+    { id: 'brand', field: 'brand', operator: 'equals', value: 'TECNO' },
+    { id: 'date', field: 'launchDate', operator: 'after', value: '2026-09-30' },
+  ], definitions)
+  if (filtered.length !== 1 || filtered[0].name !== 'Spark 40') {
+    throw new Error(`typed filter AND semantics failed: ${JSON.stringify(filtered)}`)
+  }
+  const invalidEnumContains = filters.normalizeFilterConditions([
+    { id: 'invalid', field: 'brand', operator: 'contains', value: 'TEC' },
+  ], definitions)
+  if (invalidEnumContains.length !== 0) throw new Error('enum fields accepted the text-only contains operator')
+  const duplicateFields = filters.normalizeFilterConditions([
+    { id: 'one', field: 'name', operator: 'contains', value: 'Spark' },
+    { id: 'two', field: 'name', operator: 'notContains', value: 'Note' },
+  ], definitions)
+  if (duplicateFields.length !== 1) throw new Error('typed filters did not suppress duplicate fields')
+  const beforeRows = filters.applyFilterConditions(rows, [
+    { id: 'before', field: 'launchDate', operator: 'before', value: '2026-09-01' },
+  ], definitions)
+  if (beforeRows.length !== 1 || beforeRows[0].name !== 'Note 70') {
+    throw new Error(`date before/after operators must not treat empty values as dates: ${JSON.stringify(beforeRows)}`)
+  }
+
+  const textOperators = filters.getFilterOperatorsForKind('text').map(option => option.value)
+  const enumOperators = filters.getFilterOperatorsForKind('enum').map(option => option.value)
+  const dateOperators = filters.getFilterOperatorsForKind('date').map(option => option.value)
+  for (const operator of ['equals', 'notEquals', 'contains', 'notContains', 'isEmpty', 'isNotEmpty']) {
+    if (!textOperators.includes(operator)) throw new Error(`text operators are missing ${operator}`)
+  }
+  if (enumOperators.includes('contains') || !enumOperators.includes('isNotEmpty')) {
+    throw new Error('enum operators do not match the approved contract')
+  }
+  if (!dateOperators.includes('before') || !dateOperators.includes('after') || dateOperators.includes('contains')) {
+    throw new Error('date operators do not match the approved contract')
+  }
+})
+
+registerAssertion('roadmap module composes controls and overlays without standalone search', () => {
+  const componentNames = [
+    'ProjectRoadmapModule.tsx',
+    'RoadmapToolbar.tsx',
+    'RoadmapFilterDrawer.tsx',
+    'RoadmapColumnSettingsDrawer.tsx',
+  ]
+  for (const componentName of componentNames) {
+    if (!fs.existsSync(path.join(root, 'src/components/roadmap', componentName))) {
+      throw new Error(`${componentName} is missing`)
+    }
+  }
+  const toolbarSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
+  for (const label of ['表单视图', '版本演进视图', '修改记录', 'tOS 版本维护', '创建待规划项目', '筛选', '列设置']) {
+    if (!toolbarSource.includes(label)) throw new Error(`Roadmap toolbar is missing ${label}`)
+  }
+  if (/placeholder=["'][^"']*搜索/.test(toolbarSource)) throw new Error('Roadmap must not add a standalone search input')
+  for (const contract of [
+    'canView',
+    'canEdit',
+    'compareSemanticTos(right, left)',
+    "viewMode === 'table'",
+    'filterCount',
+    'roadmap-toolbar-glass',
+  ]) {
+    if (!toolbarSource.includes(contract)) throw new Error(`Roadmap toolbar is missing ${contract}`)
+  }
+  const wrappingQuickFilters = toolbarSource.match(/<Flex[^>]*data-roadmap-quick-filter[^>]*wrap[^>]*>/g) ?? []
+  if (wrappingQuickFilters.length !== 2) {
+    throw new Error('brand and product-type quick-filter groups must wrap their labels on narrow screens')
+  }
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  for (const contract of [
+    'useHasGlobalPermission',
+    "hasPermission('roadmap:view')",
+    "hasPermission('roadmap:edit')",
+    'adaptNormalProject',
+    'adaptPlannedProject',
+    'deriveRoadmapPlanningConflicts',
+    'applyRoadmapFilters',
+    'PlannedProjectModal',
+    'TosVersionMaintenanceModal',
+    'TosTargetEditor',
+    'normalProjects={projects}',
+    'plannedProjects={plannedProjects}',
+    'activeFilterCount',
+    'filterCount={activeFilterCount}',
+  ]) {
+    if (!moduleSource.includes(contract)) throw new Error(`ProjectRoadmapModule is missing ${contract}`)
+  }
+  const conflictIndex = moduleSource.indexOf('deriveRoadmapPlanningConflicts')
+  const filterIndex = moduleSource.indexOf('applyRoadmapFilters', conflictIndex)
+  if (conflictIndex < 0 || filterIndex < conflictIndex) {
+    throw new Error('conflicts must be derived from the full row sets before filtering')
+  }
+  if (!moduleSource.includes('150')) throw new Error('free-text roadmap filters are missing the 150ms debounce')
+})
+
+registerAssertion('roadmap filter and column drawers preserve quick filters and shared business columns', () => {
+  const filterSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapFilterDrawer.tsx'), 'utf8')
+  for (const contract of [
+    '筛选条件',
+    '字段',
+    '条件',
+    '值',
+    'getFieldOptionsWithDuplicateDisabled',
+    'DatePicker',
+    'Select',
+    'Input',
+    'onReset',
+    'onApply',
+  ]) {
+    if (!filterSource.includes(contract)) throw new Error(`RoadmapFilterDrawer is missing ${contract}`)
+  }
+  if (filterSource.includes('setBrandFilter') || filterSource.includes('setProductTypeFilter')) {
+    throw new Error('resetting advanced filters is coupled to quick filters')
+  }
+  const columnsSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapColumnSettingsDrawer.tsx'), 'utf8')
+  for (const contract of ['ROADMAP_COLUMNS', 'visibleColumns', 'onChange', '至少保留 1 个业务字段']) {
+    if (!columnsSource.includes(contract)) throw new Error(`RoadmapColumnSettingsDrawer is missing ${contract}`)
+  }
+  if (columnsSource.includes("操作列") || columnsSource.includes("key: 'action'")) {
+    throw new Error('the fixed action column leaked into shared column settings')
+  }
+  const roadMapTypes = loadTypeScriptModule(path.join(root, 'src/types/roadmap.ts'))
+  if (roadMapTypes.ROADMAP_COLUMNS.length !== 14) throw new Error('shared roadmap columns must contain all 14 business fields')
+})
+
 const failures = []
 for (const { name, assertion } of assertions) {
   try {
