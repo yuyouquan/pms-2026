@@ -120,10 +120,10 @@ function repairSelectedTosVersionId(
   selectedTosVersionId: string | null | undefined,
   tosVersions: readonly TosVersionConfig[],
 ): string | null {
-  if (tosVersions.length === 0) return null
+  if (!selectedTosVersionId) return null
   return tosVersions.some(version => version.id === selectedTosVersionId)
-    ? selectedTosVersionId as string
-    : tosVersions[0].id
+    ? selectedTosVersionId
+    : null
 }
 
 export function createInitialTosVersions(): TosVersionConfig[] {
@@ -152,7 +152,7 @@ export function createInitialRoadmapState(): RoadmapStoreState {
     tosVersions: createInitialTosVersions(),
     changeLogs: [],
     viewMode: 'table',
-    selectedTosVersionId: 'tos-18-0',
+    selectedTosVersionId: null,
     brandFilter: 'all',
     productTypeFilter: 'all',
     filters: [],
@@ -368,7 +368,13 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
     resolveMigratedTosId(persistedState.selectedTosVersionId, tosVersions),
     tosVersions,
   )
-  let filters = sanitizeRoadmapFilterConditions(persistedState.filters, tosVersions)
+  let filters = sanitizeRoadmapFilterConditions(
+    setRoadmapTosVersionFilter(
+      sanitizeRoadmapFilterConditions(persistedState.filters, tosVersions),
+      selectedTosVersionId,
+    ),
+    tosVersions,
+  )
   const legacyBrand = ROADMAP_BRANDS.has(persistedState.brandFilter as RoadmapBrand)
     ? persistedState.brandFilter as RoadmapBrand
     : null
@@ -533,13 +539,6 @@ export const useRoadmapStore = create<RoadmapStore>()(
         if (viewMode === 'table' || viewMode === 'evolution') set(state => ({
           viewMode,
           visibleColumns: state.visibleColumnsByView[viewMode],
-          filters: viewMode === 'table'
-            && !state.filters.some(condition => condition.field === 'firstSaleTosVersionId')
-            ? sanitizeRoadmapFilterConditions(
-              setRoadmapTosVersionFilter(state.filters, state.selectedTosVersionId),
-              state.tosVersions,
-            )
-            : state.filters,
         }))
       },
       setSelectedTosVersionId: (id: string | null) => {
@@ -575,18 +574,12 @@ export const useRoadmapStore = create<RoadmapStore>()(
         }))
       },
       setFilters: filters => set(state => {
-        let sanitized = sanitizeRoadmapFilterConditions(filters, state.tosVersions)
+        const sanitized = sanitizeRoadmapFilterConditions(filters, state.tosVersions)
         const tosCondition = sanitized.find(condition => condition.field === 'firstSaleTosVersionId')
         const selectedTosVersionId = tosCondition?.operator === 'equals'
           && state.tosVersions.some(version => version.id === tosCondition.value)
           ? tosCondition.value
-          : state.selectedTosVersionId
-        if (state.viewMode === 'table' && !tosCondition) {
-          sanitized = sanitizeRoadmapFilterConditions(
-            setRoadmapTosVersionFilter(sanitized, selectedTosVersionId),
-            state.tosVersions,
-          )
-        }
+          : null
         const brand = getRoadmapQuickFilterValue(sanitized, 'brand')
         const productType = getRoadmapQuickFilterValue(sanitized, 'productType')
         return {

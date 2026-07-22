@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import {
   BulbOutlined,
   DeleteOutlined,
@@ -59,9 +59,7 @@ export function resolveRoadmapTableVersion(
   versions: readonly TosVersionConfig[],
   selectedTosVersionId: string | null,
 ): TosVersionConfig | null {
-  if (!versions.length) return null
-  return versions.find(version => version.id === selectedTosVersionId)
-    ?? [...versions].sort((left, right) => compareSemanticTos(right, left))[0]
+  return versions.find(version => version.id === selectedTosVersionId) ?? null
 }
 
 export function getRoadmapAriaSort(
@@ -109,13 +107,8 @@ export default function RoadmapTableView({
     [selectedTosVersionId, versions],
   )
 
-  useEffect(() => {
-    const effectiveId = version?.id ?? null
-    onSelectedTosVersionChange(effectiveId)
-  }, [onSelectedTosVersionChange, selectedTosVersionId, version?.id])
-
   const versionRows = useMemo(
-    () => version ? rows.filter(row => row.firstSaleTosVersionId === version.id) : [],
+    () => version ? rows.filter(row => row.firstSaleTosVersionId === version.id) : rows,
     [rows, version],
   )
   const conflictKeyByPlannedIdentity = useMemo(() => {
@@ -253,11 +246,13 @@ export default function RoadmapTableView({
         <Flex align="center" gap={10} wrap>
           <Select
             aria-label="表单视图 tOS 版本"
-            value={version?.id}
+            value={selectedTosVersionId ?? 'all'}
             placeholder="选择 tOS 版本"
-            options={descendingVersions.map(item => ({ label: item.name, value: item.id }))}
-            onChange={onSelectedTosVersionChange}
-            disabled={!descendingVersions.length}
+            options={[
+              { label: '全部', value: 'all' },
+              ...descendingVersions.map(item => ({ label: item.name, value: item.id })),
+            ]}
+            onChange={selectedId => onSelectedTosVersionChange(selectedId === 'all' ? null : selectedId)}
             style={{ width: 156 }}
           />
           <Typography.Text type="secondary">共 {versionRows.length} 个项目</Typography.Text>
@@ -304,7 +299,7 @@ export default function RoadmapTableView({
 
       <Table<RoadmapProjectRow>
         className="pms-table roadmap-table"
-        aria-label={`${version?.name ?? '当前版本'} 项目表`}
+        aria-label={`${version?.name ?? '全部 tOS'} 项目表`}
         rowKey={row => `${row.source}:${row.id}`}
         columns={columns}
         dataSource={versionRows}
@@ -315,7 +310,14 @@ export default function RoadmapTableView({
             : ''
         )}
         pagination={{ pageSize: 20, showSizeChanger: true, showTotal: total => `共 ${total} 条` }}
-        locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前版本下暂无项目" /> }}
+        locale={{
+          emptyText: (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={version ? '当前版本下暂无项目' : '暂无项目'}
+            />
+          ),
+        }}
         scroll={{ x: 'max-content' }}
         size="middle"
       />

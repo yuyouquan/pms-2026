@@ -731,7 +731,7 @@ registerAssertion('initial roadmap state has exact semantic-descending versions 
   if (
     initial.plannedProjects.length
     || initial.viewMode !== 'table'
-    || initial.selectedTosVersionId !== 'tos-18-0'
+    || initial.selectedTosVersionId !== null
     || initial.brandFilter !== 'all'
     || initial.productTypeFilter !== 'all'
     || initial.filters.length
@@ -837,8 +837,8 @@ registerAssertion('tOS CRUD normalizes names, preserves IDs, sorts, trims target
   }
   store.getState().setSelectedTosVersionId('tos-18-0')
   const deleted = store.getState().deleteTosVersion('tos-18-0', 0)
-  if (!deleted.ok || store.getState().selectedTosVersionId !== 'tos-17-2') {
-    throw new Error('selected-version fallback is wrong')
+  if (!deleted.ok || store.getState().selectedTosVersionId !== null) {
+    throw new Error('deleted selected version did not fall back to all')
   }
 })
 
@@ -896,7 +896,7 @@ registerAssertion('roadmap migration repairs legacy names, references, UI contro
     || migrated.filters.find(condition => condition.field === 'productType')?.value !== '老品'
     || JSON.stringify(migrated.visibleColumns) !== JSON.stringify(['marketName'])
   ) throw new Error('filters/columns were not sanitized or synchronized')
-  if (migrated.selectedTosVersionId !== 'legacy-18' || migrated.changeLogs.length !== 1 || 'conflictGroups' in migrated) {
+  if (migrated.selectedTosVersionId !== null || migrated.changeLogs.length !== 1 || 'conflictGroups' in migrated) {
     throw new Error('selection/log/conflict migration is wrong')
   }
 })
@@ -1181,8 +1181,8 @@ registerAssertion('roadmap migration deterministically repairs IDs across persis
   }
   const secondPass = storeModule.migrateRoadmapState(migrated, 1)
   if (JSON.stringify(secondPass) !== JSON.stringify(migrated)) throw new Error('roadmap sanitizer is not idempotent')
-  if (migrated.selectedTosVersionId === null || !migrated.tosVersions.some(version => version.id === migrated.selectedTosVersionId)) {
-    throw new Error('sanitizer left an invalid selected version reference')
+  if (migrated.selectedTosVersionId !== null) {
+    throw new Error('sanitizer did not repair an invalid selected version to all')
   }
 
   const store = resetRoadmapStore(storeModule)
@@ -1227,46 +1227,46 @@ registerAssertion('normal change actions reject invalid shapes and round-trip th
   if (migrated.changeLogs.length !== inputs.length) throw new Error('action-produced normal logs did not survive migration')
 })
 
-registerAssertion('tOS selection actions enforce valid references and repair transitions', () => {
+registerAssertion('tOS selection actions preserve all across catalog transitions', () => {
   const storeModule = loadIsolatedRoadmapStore()
   const store = resetRoadmapStore(storeModule)
   store.getState().setSelectedTosVersionId('missing')
-  if (store.getState().selectedTosVersionId !== 'tos-18-0') throw new Error('setter accepted an unknown tOS ID')
+  if (store.getState().selectedTosVersionId !== null) throw new Error('setter accepted an unknown tOS ID')
   store.getState().setSelectedTosVersionId(null)
-  if (store.getState().selectedTosVersionId !== 'tos-18-0') throw new Error('setter left a non-empty catalog unselected')
+  if (store.getState().selectedTosVersionId !== null) throw new Error('setter did not preserve all')
 
   const nullPersistedState = {
     ...storeModule.partializeRoadmapState(store.getState()),
     selectedTosVersionId: null,
   }
   const nullRoundTrip = storeModule.migrateRoadmapState(nullPersistedState, 1)
-  if (nullRoundTrip.selectedTosVersionId !== 'tos-18-0') throw new Error('migration preserved null for a non-empty catalog')
+  if (nullRoundTrip.selectedTosVersionId !== null) throw new Error('migration did not preserve all for a non-empty catalog')
   const hydrated = hydrateRoadmapStoreFromEnvelope({ state: nullPersistedState, version: 1 })
-  if (hydrated.selectedTosVersionId !== 'tos-18-0') throw new Error('merge preserved null for a non-empty catalog')
+  if (hydrated.selectedTosVersionId !== null) throw new Error('merge did not preserve all for a non-empty catalog')
 
   store.setState({ selectedTosVersionId: null })
   const unselectedId = store.getState().tosVersions.at(-1).id
   if (!store.getState().deleteTosVersion(unselectedId, 0).ok) throw new Error('unselected version delete failed')
-  if (store.getState().selectedTosVersionId !== store.getState().tosVersions[0].id) throw new Error('delete did not repair null selection')
+  if (store.getState().selectedTosVersionId !== null) throw new Error('delete did not preserve all selection')
 
   store.setState({ selectedTosVersionId: null })
   if (!store.getState().createTosVersion({ name: 'tOS 19.0' }).ok) throw new Error('version create failed')
-  if (store.getState().selectedTosVersionId !== store.getState().tosVersions[0].id) throw new Error('create did not repair null selection')
+  if (store.getState().selectedTosVersionId !== null) throw new Error('create did not preserve all selection')
 
   const renamedId = 'tos-17-2'
   store.setState({ selectedTosVersionId: null })
   if (!store.getState().renameTosVersion(renamedId, { name: 'tOS 20.0' }).ok) throw new Error('rename failed')
-  if (store.getState().selectedTosVersionId !== renamedId || store.getState().tosVersions[0].id !== renamedId) {
-    throw new Error('rename did not repair selection to the highest semantic version')
+  if (store.getState().selectedTosVersionId !== null || store.getState().tosVersions[0].id !== renamedId) {
+    throw new Error('rename did not preserve all while retaining semantic version order')
   }
 
   store.setState({ tosVersions: [], selectedTosVersionId: null })
   if (!store.getState().createTosVersion({ name: 'tOS 21.0' }).ok) throw new Error('first version create failed')
   const first = store.getState().tosVersions[0]
-  if (store.getState().selectedTosVersionId !== first.id) throw new Error('first created version was not selected')
+  if (store.getState().selectedTosVersionId !== null) throw new Error('first created version replaced all selection')
   if (!store.getState().renameTosVersion(first.id, { name: 'tOS 21.1' }).ok) throw new Error('single-version rename failed')
-  if (store.getState().selectedTosVersionId !== first.id || store.getState().tosVersions[0].id !== first.id) {
-    throw new Error('rename changed the stable selected ID')
+  if (store.getState().selectedTosVersionId !== null || store.getState().tosVersions[0].id !== first.id) {
+    throw new Error('rename changed the all selection or stable version ID')
   }
 })
 
@@ -2187,10 +2187,10 @@ registerAssertion('current-version roadmap hydration rejects malicious typed fil
       },
     },
   })
-  if (hydrated.filters.map(filter => filter.id).join(',') !== 'valid-version,valid-text') {
+  if (hydrated.filters.map(filter => filter.id).join(',') !== 'valid-text') {
     throw new Error(`malicious version-1 filters survived hydration: ${JSON.stringify(hydrated.filters)}`)
   }
-  if (hydrated.filters[1].value !== 'risk' || JSON.stringify(hydrated.visibleColumns) !== JSON.stringify(['brand', 'remark'])) {
+  if (hydrated.filters[0].value !== 'risk' || JSON.stringify(hydrated.visibleColumns) !== JSON.stringify(['brand', 'remark'])) {
     throw new Error(`hydrated filter/column state was not normalized: ${JSON.stringify(hydrated)}`)
   }
 })
@@ -2511,10 +2511,18 @@ registerAssertion('roadmap quick filters and drawer conditions share one source'
 registerAssertion('table tOS selector and drawer tOS condition stay synchronized', () => {
   const storeModule = loadIsolatedRoadmapStore()
   const store = resetRoadmapStore(storeModule)
+  if (store.getState().selectedTosVersionId !== null) {
+    throw new Error('table did not default to the all-tOS scope')
+  }
   store.getState().setSelectedTosVersionId('tos-17-2')
   const selectorCondition = store.getState().filters.find(condition => condition.field === 'firstSaleTosVersionId')
   if (selectorCondition?.operator !== 'equals' || selectorCondition.value !== 'tos-17-2') {
     throw new Error('table tOS selector did not update the drawer condition')
+  }
+  store.getState().setSelectedTosVersionId(null)
+  if (store.getState().selectedTosVersionId !== null
+    || store.getState().filters.some(condition => condition.field === 'firstSaleTosVersionId')) {
+    throw new Error('all-tOS scope retained a version condition')
   }
   store.getState().setFilters([{
     id: 'drawer-tos',
@@ -2524,6 +2532,50 @@ registerAssertion('table tOS selector and drawer tOS condition stay synchronized
   }])
   if (store.getState().selectedTosVersionId !== 'tos-16-3') {
     throw new Error('drawer tOS condition did not update the table selector')
+  }
+  store.getState().setFilters([])
+  if (store.getState().selectedTosVersionId !== null) {
+    throw new Error('removing the drawer tOS condition did not restore all')
+  }
+  store.getState().setViewMode('evolution')
+  if (store.getState().filters.some(condition => condition.field === 'firstSaleTosVersionId')) {
+    throw new Error('switching to evolution invented a tOS condition')
+  }
+})
+
+registerAssertion('persisted tOS selection repairs to all unless its concrete ID is valid', () => {
+  const storeModule = loadIsolatedRoadmapStore()
+  const initial = storeModule.createInitialRoadmapState()
+  const persisted = storeModule.partializeRoadmapState(initial)
+  const valid = storeModule.migrateRoadmapState({
+    ...persisted,
+    selectedTosVersionId: 'tos-17-2',
+    filters: [],
+  }, 1)
+  const validCondition = valid.filters.find(condition => condition.field === 'firstSaleTosVersionId')
+  if (valid.selectedTosVersionId !== 'tos-17-2'
+    || validCondition?.operator !== 'equals'
+    || validCondition.value !== 'tos-17-2') {
+    throw new Error('valid persisted concrete selection was not preserved and synchronized')
+  }
+
+  for (const [name, overrides] of [
+    ['invalid', { selectedTosVersionId: 'missing-version' }],
+    ['deleted', {
+      selectedTosVersionId: 'tos-18-0',
+      tosVersions: initial.tosVersions.filter(version => version.id !== 'tos-18-0'),
+    }],
+    ['missing', { selectedTosVersionId: undefined }],
+  ]) {
+    const migrated = storeModule.migrateRoadmapState({
+      ...persisted,
+      filters: [{ id: 'stale-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos-17-2' }],
+      ...overrides,
+    }, 1)
+    if (migrated.selectedTosVersionId !== null
+      || migrated.filters.some(condition => condition.field === 'firstSaleTosVersionId')) {
+      throw new Error(`${name} persisted selection did not fall back to all`)
+    }
   }
 })
 
@@ -2598,6 +2650,17 @@ registerAssertion('roadmap table owns the tOS selector and fixed columns', () =>
   const table = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
   for (const token of ['<Select', '表单视图 tOS 版本', "fixed: column.key === 'firstSaleTosVersionId' ? 'left'", "fixed: 'right'"]) {
     if (!table.includes(token)) throw new Error(`roadmap table is missing ${token}`)
+  }
+  for (const contract of [
+    "{ label: '全部', value: 'all' }",
+    "value={selectedTosVersionId ?? 'all'}",
+    "selectedId === 'all' ? null : selectedId",
+    ': rows',
+  ]) {
+    if (!table.includes(contract)) throw new Error(`roadmap all-tOS table scope is missing ${contract}`)
+  }
+  if (table.indexOf("{ label: '全部', value: 'all' }") > table.indexOf('descendingVersions.map')) {
+    throw new Error('all must be the first tOS selector option')
   }
   if (table.includes('>只读</Typography.Text>')) throw new Error('normal project action still renders read-only text')
 })
