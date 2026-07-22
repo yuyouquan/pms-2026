@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
-import { BulbOutlined, EditOutlined } from '@ant-design/icons'
+import { BulbOutlined, DownOutlined, EditOutlined, UpOutlined } from '@ant-design/icons'
 import { Button, Empty, Flex, Typography } from 'antd'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
 import type {
@@ -33,6 +33,8 @@ export interface RoadmapEvolutionViewProps {
   versions: readonly TosVersionConfig[]
   visibleColumns: readonly RoadmapColumnKey[]
   canEdit: boolean
+  collapsedTargetVersionIds: ReadonlySet<string>
+  onToggleTarget: (versionId: string) => void
   onEditTosTargets: (versionId: string) => void
   onOpenConflict: (conflictKey: string) => void
   onEditPlannedProject: (projectId: string) => void
@@ -160,6 +162,8 @@ export default function RoadmapEvolutionView({
   versions,
   visibleColumns,
   canEdit,
+  collapsedTargetVersionIds,
+  onToggleTarget,
   onEditTosTargets,
   onOpenConflict,
   onEditPlannedProject,
@@ -204,45 +208,56 @@ export default function RoadmapEvolutionView({
       tabIndex={0}
     >
       <div className="pms-roadmap-evolution-grid" style={gridStyle}>
-        {orderedVersions.map((version, index) => (
-          <header
-            key={`header:${version.id}`}
-            className="pms-roadmap-evolution-version-cell"
-            style={{ gridColumn: index + 1, gridRow: 1 }}
-          >
-            <Flex justify="space-between" align="center" gap={8}>
-              <Typography.Title level={5}>{version.name}</Typography.Title>
-              <Typography.Text type="secondary">
-                {countEvolutionRows(rows, version.id)} 个项目
-              </Typography.Text>
-            </Flex>
-            {version.targets.length ? (
-              <section className="pms-roadmap-evolution-target" aria-label={`${version.name} 目标`}>
-                <Flex justify="space-between" align="center" gap={8}>
-                  <Flex align="center" gap={6}>
-                    <BulbOutlined aria-hidden />
-                    <Typography.Text strong>版本目标</Typography.Text>
-                  </Flex>
-                  {canEdit ? (
+        {orderedVersions.map((version, index) => {
+          const targetCollapsed = collapsedTargetVersionIds.has(version.id)
+          return (
+            <header
+              key={`header:${version.id}`}
+              className="pms-roadmap-evolution-version-cell"
+              style={{ gridColumn: index + 1, gridRow: 1 }}
+            >
+              <Flex justify="space-between" align="center" gap={8}>
+                <Typography.Title level={5}>{version.name}</Typography.Title>
+                <Typography.Text type="secondary">
+                  {countEvolutionRows(rows, version.id)} 个项目
+                </Typography.Text>
+              </Flex>
+              {version.targets.length ? (
+                <section className="pms-roadmap-evolution-target" aria-label={`${version.name} 目标`}>
+                  <Flex justify="space-between" align="center" gap={8}>
                     <Button
-                      type="link"
+                      type="text"
                       size="small"
-                      icon={<EditOutlined aria-hidden />}
-                      onClick={() => onEditTosTargets(version.id)}
+                      aria-expanded={!targetCollapsed}
+                      icon={targetCollapsed ? <DownOutlined aria-hidden /> : <UpOutlined aria-hidden />}
+                      onClick={() => onToggleTarget(version.id)}
                     >
-                      修改目标
+                      <BulbOutlined aria-hidden /> 版本目标
                     </Button>
+                    {canEdit ? (
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<EditOutlined aria-hidden />}
+                        onClick={() => onEditTosTargets(version.id)}
+                      >
+                        修改目标
+                      </Button>
+                    ) : null}
+                  </Flex>
+                  {!targetCollapsed ? (
+                    <Typography.Paragraph
+                      className="pms-roadmap-evolution-target-text"
+                      style={{ margin: '7px 0 0', lineHeight: 1.45, whiteSpace: 'pre-wrap' }}
+                    >
+                      {version.targets.join('\n')}
+                    </Typography.Paragraph>
                   ) : null}
-                </Flex>
-                <ul>
-                  {version.targets.map((target, targetIndex) => (
-                    <li key={`${version.id}:target:${targetIndex}`}>{target}</li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-          </header>
-        ))}
+                </section>
+              ) : null}
+            </header>
+          )
+        })}
 
         {orderedVersions.map((version, index) => (
           <div
@@ -361,14 +376,10 @@ export default function RoadmapEvolutionView({
           color: #713f12;
         }
 
-        .pms-roadmap-evolution-target ul {
+        .pms-roadmap-evolution-target-text {
           margin: 7px 0 0;
-          padding-inline-start: 19px;
-        }
-
-        .pms-roadmap-evolution-target li {
-          margin-block: 3px;
           line-height: 1.45;
+          white-space: pre-wrap;
         }
 
         .pms-roadmap-evolution-grid-cell {

@@ -4,10 +4,12 @@ import { useEffect, useMemo } from 'react'
 import {
   BulbOutlined,
   DeleteOutlined,
+  DownOutlined,
   EditOutlined,
+  UpOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
-import { Button, Empty, Flex, Table, Tag, Typography, type TableProps } from 'antd'
+import { Button, Empty, Flex, Select, Table, Tag, Typography, type TableProps } from 'antd'
 import { compareRoadmapValues, compareSemanticTos } from '@/lib/roadmapSorting'
 import {
   ROADMAP_COLUMNS,
@@ -32,6 +34,8 @@ interface RoadmapTableViewProps {
   onOpenConflict: (conflictKey: string) => void
   onEditPlannedProject: (projectId: string) => void
   onDeletePlannedProject: (projectId: string) => void
+  collapsedTargetVersionIds: ReadonlySet<string>
+  onToggleTarget: (versionId: string) => void
 }
 
 const COLUMN_WIDTHS: Record<RoadmapColumnKey, number> = {
@@ -97,6 +101,8 @@ export default function RoadmapTableView({
   onOpenConflict,
   onEditPlannedProject,
   onDeletePlannedProject,
+  collapsedTargetVersionIds,
+  onToggleTarget,
 }: RoadmapTableViewProps) {
   const version = useMemo(
     () => resolveRoadmapTableVersion(versions, selectedTosVersionId),
@@ -122,6 +128,11 @@ export default function RoadmapTableView({
     return keys
   }, [conflicts])
   const displayNameVisible = visibleColumns.includes('displayName')
+  const descendingVersions = useMemo(
+    () => [...versions].sort((left, right) => compareSemanticTos(right, left)),
+    [versions],
+  )
+  const targetCollapsed = version ? collapsedTargetVersionIds.has(version.id) : false
 
   const businessColumns = ROADMAP_COLUMNS
     .filter(column => visibleColumns.includes(column.key))
@@ -130,6 +141,7 @@ export default function RoadmapTableView({
       dataIndex: column.key,
       key: column.key,
       width: COLUMN_WIDTHS[column.key],
+      fixed: column.key === 'firstSaleTosVersionId' ? 'left' as const : undefined,
       ellipsis: column.key === 'remark' || column.key === 'productSeries',
       sorter: (left: RoadmapProjectRow, right: RoadmapProjectRow) => (
         compareRoadmapValues(column.key, left, right, versions)
@@ -175,7 +187,7 @@ export default function RoadmapTableView({
       width: displayNameVisible ? 172 : 230,
       render: (_value, row) => {
         if (row.source !== 'planned') {
-          return <Typography.Text type="secondary">只读</Typography.Text>
+          return null
         }
         const conflictKey = conflictKeyByPlannedIdentity.get(`planned:${row.id}`)
         return (
@@ -237,7 +249,40 @@ export default function RoadmapTableView({
 
   return (
     <div className="roadmap-table-shell" style={{ width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
-      {version && version.targets.length > 0 ? (
+      <Flex justify="space-between" align="center" gap={10} style={{ marginBottom: 8 }} wrap>
+        <Flex align="center" gap={10} wrap>
+          <Select
+            aria-label="表单视图 tOS 版本"
+            value={version?.id}
+            placeholder="选择 tOS 版本"
+            options={descendingVersions.map(item => ({ label: item.name, value: item.id }))}
+            onChange={onSelectedTosVersionChange}
+            disabled={!descendingVersions.length}
+            style={{ width: 156 }}
+          />
+          <Typography.Text type="secondary">共 {versionRows.length} 个项目</Typography.Text>
+        </Flex>
+        <Flex align="center" gap={6}>
+          {version?.targets.length ? (
+            <Button
+              size="small"
+              type="text"
+              icon={targetCollapsed ? <DownOutlined /> : <UpOutlined />}
+              aria-expanded={!targetCollapsed}
+              onClick={() => onToggleTarget(version.id)}
+            >
+              {targetCollapsed ? '展开版本目标' : '收起版本目标'}
+            </Button>
+          ) : null}
+          {version && canEdit ? (
+            <Button size="small" icon={<EditOutlined aria-hidden />} onClick={() => onEditTosTargets(version.id)}>
+              修改目标
+            </Button>
+          ) : null}
+        </Flex>
+      </Flex>
+
+      {version && version.targets.length > 0 && !targetCollapsed ? (
         <section
           className="pms-glass-panel roadmap-target-card"
           data-roadmap-target-card
@@ -248,35 +293,14 @@ export default function RoadmapTableView({
             background: 'linear-gradient(135deg, rgba(238, 242, 255, 0.96), rgba(250, 245, 255, 0.92))',
           }}
         >
-          <Flex justify="space-between" align="flex-start" gap={16} wrap>
-            <div style={{ minWidth: 0 }}>
-              <Flex align="center" gap={8} style={{ marginBottom: 8 }}>
-                <BulbOutlined aria-hidden style={{ color: 'var(--primary)' }} />
-                <Typography.Title level={5} style={{ margin: 0 }}>{version.name} 目标</Typography.Title>
-              </Flex>
-              <ul style={{ margin: 0, paddingInlineStart: 22 }}>
-                {version.targets.map((target, index) => (
-                  <li key={`${version.id}:target:${index}`} style={{ marginBlock: 4 }}>{target}</li>
-                ))}
-              </ul>
-            </div>
-            {canEdit ? (
-              <Button
-                icon={<EditOutlined aria-hidden />}
-                onClick={() => onEditTosTargets(version.id)}
-                style={{ minHeight: 44 }}
-              >
-                修改目标
-              </Button>
-            ) : null}
+          <Flex align="flex-start" gap={8}>
+            <BulbOutlined aria-hidden style={{ color: 'var(--primary)', marginTop: 3 }} />
+            <Typography.Paragraph style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+              {version.targets.join('\n')}
+            </Typography.Paragraph>
           </Flex>
         </section>
       ) : null}
-
-      <Flex justify="space-between" align="center" gap={12} style={{ marginBottom: 8 }} wrap>
-        <Typography.Text strong>{version?.name ?? '暂无 tOS 版本'}</Typography.Text>
-        <Typography.Text type="secondary">共 {versionRows.length} 个项目</Typography.Text>
-      </Flex>
 
       <Table<RoadmapProjectRow>
         className="pms-table roadmap-table"

@@ -890,7 +890,12 @@ registerAssertion('roadmap migration repairs legacy names, references, UI contro
     throw new Error(`legacy planned project was not repaired: ${JSON.stringify(planned)}`)
   }
   if (!Number.isFinite(Date.parse(planned.createdAt)) || !Number.isFinite(Date.parse(planned.updatedAt))) throw new Error('timestamps were not normalized')
-  if (migrated.filters.length !== 1 || JSON.stringify(migrated.visibleColumns) !== JSON.stringify(['marketName'])) throw new Error('filters/columns were not sanitized')
+  if (
+    migrated.filters.length !== 2
+    || migrated.filters.find(condition => condition.field === 'brand')?.value !== 'TECNO'
+    || migrated.filters.find(condition => condition.field === 'productType')?.value !== '老品'
+    || JSON.stringify(migrated.visibleColumns) !== JSON.stringify(['marketName'])
+  ) throw new Error('filters/columns were not sanitized or synchronized')
   if (migrated.selectedTosVersionId !== 'legacy-18' || migrated.changeLogs.length !== 1 || 'conflictGroups' in migrated) {
     throw new Error('selection/log/conflict migration is wrong')
   }
@@ -1968,18 +1973,17 @@ registerAssertion('tOS reference protection counts raw unique project identities
   }
 })
 
-registerAssertion('tOS target editor keeps stable rows and removes blank targets', () => {
+registerAssertion('tOS target editor preserves one multiline target value', () => {
   const targetPath = path.join(root, 'src/components/roadmap/TosTargetEditor.tsx')
   if (!fs.existsSync(targetPath)) throw new Error('TosTargetEditor.tsx is missing')
   const source = fs.readFileSync(targetPath, 'utf8')
   if (source.includes('maskClosable')) throw new Error('target editor uses deprecated Ant Design maskClosable')
   for (const contract of [
-    'Form.List',
-    'field.key',
+    'targetText',
+    '<Input.TextArea',
     '.trim()',
-    '.filter(Boolean)',
     'setTosTargets',
-    'targets: []',
+    'setTosTargets(version.id, normalizedTargets)',
     'canEdit',
     'aria-label',
   ]) {
@@ -2263,8 +2267,8 @@ registerAssertion('roadmap module composes controls and overlays without standal
   for (const contract of [
     'canView',
     'canEdit',
-    'compareSemanticTos(right, left)',
-    "viewMode === 'table'",
+    'onToggleFullscreen',
+    "viewMode === 'evolution'",
     'filterCount',
     'roadmap-toolbar-glass',
   ]) {
@@ -2310,7 +2314,7 @@ registerAssertion('roadmap module composes controls and overlays without standal
 
 registerAssertion('sticky roadmap toolbar stays below the main header', () => {
   const toolbarSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
-  if (!toolbarSource.includes("top: 'var(--pms-main-header-height, 56px)'")) {
+  if (!toolbarSource.includes("top: isFullscreen ? 0 : 'var(--pms-main-header-height, 56px)'")) {
     throw new Error('sticky roadmap toolbar must offset below the 56px main header')
   }
   if (!toolbarSource.includes('zIndex: 30')) {
@@ -2476,6 +2480,63 @@ registerAssertion('rebuilt roadmap is mounted without legacy roadmap content', (
   for (const contract of ['pms-roadmap-shell', 'RoadmapEvolutionView', 'RoadmapChangeLogDrawer']) {
     if (!moduleSource.includes(contract)) throw new Error(`rebuilt module is missing ${contract}`)
   }
+})
+
+registerAssertion('roadmap quick filters and drawer conditions share one source', () => {
+  const filterModule = loadTypeScriptModule(path.join(root, 'src/lib/roadmapFilters.ts'))
+  const brandEquals = filterModule.setRoadmapQuickFilter([], 'brand', 'TECNO')
+  if (brandEquals.length !== 1 || brandEquals[0].operator !== 'equals' || brandEquals[0].value !== 'TECNO') {
+    throw new Error('brand quick filter did not create an equals condition')
+  }
+  if (filterModule.getRoadmapQuickFilterValue(brandEquals, 'brand') !== 'TECNO') {
+    throw new Error('drawer equals condition did not select the quick value')
+  }
+  const custom = [{ ...brandEquals[0], operator: 'notEquals' }]
+  if (filterModule.getRoadmapQuickFilterValue(custom, 'brand') !== 'custom') {
+    throw new Error('non-equals drawer condition did not expose custom state')
+  }
+  if (filterModule.setRoadmapQuickFilter(custom, 'brand', 'all').length !== 0) {
+    throw new Error('quick all did not clear the drawer condition')
+  }
+})
+
+registerAssertion('roadmap targets preserve raw text and expose collapse controls', () => {
+  const editor = fs.readFileSync(path.join(root, 'src/components/roadmap/TosTargetEditor.tsx'), 'utf8')
+  const table = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
+  const evolution = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapEvolutionView.tsx'), 'utf8')
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  if (!editor.includes('targetText') || editor.includes('<Form.List')) throw new Error('target editor is not one multiline field')
+  for (const source of [table, evolution]) {
+    if (!source.includes("whiteSpace: 'pre-wrap'") || !source.includes("targets.join('\\n')")) {
+      throw new Error('target text is not rendered with original line breaks')
+    }
+    if (!source.includes('aria-expanded')) throw new Error('target section is missing accessible collapse state')
+  }
+  for (const token of ['collapsedTargetVersionIds', 'toggleAllTargets', 'allTargetsCollapsed']) {
+    if (!moduleSource.includes(token)) throw new Error(`target collapse integration is missing ${token}`)
+  }
+})
+
+registerAssertion('roadmap supports compact fullscreen controls', () => {
+  const toolbar = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  const styles = fs.readFileSync(path.join(root, 'src/styles/globals.css'), 'utf8')
+  for (const token of ['FullscreenOutlined', 'FullscreenExitOutlined', 'onToggleFullscreen', 'isFullscreen']) {
+    if (!toolbar.includes(token)) throw new Error(`compact toolbar is missing ${token}`)
+  }
+  if (toolbar.includes('表单视图 tOS 版本')) throw new Error('table tOS selector still lives in the toolbar')
+  if (!moduleSource.includes("event.key === 'Escape'") || !moduleSource.includes('pms-roadmap-shell-fullscreen')) {
+    throw new Error('module fullscreen lifecycle is incomplete')
+  }
+  if (!styles.includes('.pms-roadmap-shell-fullscreen')) throw new Error('fullscreen shell styles are missing')
+})
+
+registerAssertion('roadmap table owns the tOS selector and fixed columns', () => {
+  const table = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
+  for (const token of ['<Select', '表单视图 tOS 版本', "fixed: column.key === 'firstSaleTosVersionId' ? 'left'", "fixed: 'right'"]) {
+    if (!table.includes(token)) throw new Error(`roadmap table is missing ${token}`)
+  }
+  if (table.includes('>只读</Typography.Text>')) throw new Error('normal project action still renders read-only text')
 })
 
 const failures = []

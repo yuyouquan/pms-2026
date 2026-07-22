@@ -23,6 +23,45 @@ export const DEFAULT_ROADMAP_VISIBLE_COLUMNS = ROADMAP_COLUMNS
   .filter(column => column.defaultVisible)
   .map(column => column.key)
 
+export type RoadmapQuickFilterField = 'brand' | 'productType'
+export type RoadmapQuickFilterValue = 'all' | 'custom' | RoadmapBrand | RoadmapProductType
+
+export function getRoadmapQuickFilterValue(
+  filters: readonly RoadmapFilterCondition[],
+  field: 'brand',
+): 'all' | 'custom' | RoadmapBrand
+export function getRoadmapQuickFilterValue(
+  filters: readonly RoadmapFilterCondition[],
+  field: 'productType',
+): 'all' | 'custom' | RoadmapProductType
+export function getRoadmapQuickFilterValue(
+  filters: readonly RoadmapFilterCondition[],
+  field: RoadmapQuickFilterField,
+): RoadmapQuickFilterValue {
+  const condition = filters.find(candidate => candidate.field === field)
+  if (!condition) return 'all'
+  return condition.operator === 'equals' && condition.value
+    ? condition.value as RoadmapQuickFilterValue
+    : 'custom'
+}
+
+export function setRoadmapQuickFilter(
+  filters: readonly RoadmapFilterCondition[],
+  field: RoadmapQuickFilterField,
+  value: Exclude<RoadmapQuickFilterValue, 'custom'>,
+): RoadmapFilterCondition[] {
+  if (value === 'all') return filters.filter(condition => condition.field !== field)
+  const existing = filters.find(condition => condition.field === field)
+  const replacement: RoadmapFilterCondition = {
+    id: existing?.id ?? `roadmap-quick-${field}`,
+    field,
+    operator: 'equals',
+    value,
+  }
+  if (!existing) return [...filters, replacement]
+  return filters.map(condition => condition.field === field ? replacement : condition)
+}
+
 const option = (value: string) => ({ label: value, value })
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -7,8 +7,10 @@ import {
 } from '@/lib/roadmapAudit'
 import {
   DEFAULT_ROADMAP_VISIBLE_COLUMNS,
+  getRoadmapQuickFilterValue,
   sanitizeRoadmapFilterConditions,
   sanitizeRoadmapVisibleColumns,
+  setRoadmapQuickFilter,
 } from '@/lib/roadmapFilters'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
 import {
@@ -358,6 +360,21 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
     resolveMigratedTosId(persistedState.selectedTosVersionId, tosVersions),
     tosVersions,
   )
+  let filters = sanitizeRoadmapFilterConditions(persistedState.filters, tosVersions)
+  const legacyBrand = ROADMAP_BRANDS.has(persistedState.brandFilter as RoadmapBrand)
+    ? persistedState.brandFilter as RoadmapBrand
+    : null
+  const legacyProductType = ROADMAP_PRODUCT_TYPES.has(persistedState.productTypeFilter as RoadmapProductType)
+    ? persistedState.productTypeFilter as RoadmapProductType
+    : null
+  if (legacyBrand && !filters.some(condition => condition.field === 'brand')) {
+    filters = setRoadmapQuickFilter(filters, 'brand', legacyBrand)
+  }
+  if (legacyProductType && !filters.some(condition => condition.field === 'productType')) {
+    filters = setRoadmapQuickFilter(filters, 'productType', legacyProductType)
+  }
+  const migratedBrand = getRoadmapQuickFilterValue(filters, 'brand')
+  const migratedProductType = getRoadmapQuickFilterValue(filters, 'productType')
 
   return {
     plannedProjects,
@@ -365,13 +382,11 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
     changeLogs,
     viewMode: persistedState.viewMode === 'evolution' ? 'evolution' : 'table',
     selectedTosVersionId,
-    brandFilter: persistedState.brandFilter === 'all' || ROADMAP_BRANDS.has(persistedState.brandFilter as RoadmapBrand)
-      ? persistedState.brandFilter as 'all' | RoadmapBrand
+    brandFilter: ROADMAP_BRANDS.has(migratedBrand as RoadmapBrand) ? migratedBrand as RoadmapBrand : 'all',
+    productTypeFilter: ROADMAP_PRODUCT_TYPES.has(migratedProductType as RoadmapProductType)
+      ? migratedProductType as RoadmapProductType
       : 'all',
-    productTypeFilter: persistedState.productTypeFilter === 'all' || ROADMAP_PRODUCT_TYPES.has(persistedState.productTypeFilter as RoadmapProductType)
-      ? persistedState.productTypeFilter as 'all' | RoadmapProductType
-      : 'all',
-    filters: sanitizeRoadmapFilterConditions(persistedState.filters, tosVersions),
+    filters,
     visibleColumns: sanitizeRoadmapVisibleColumns(persistedState.visibleColumns),
     sort: sanitizeSort(persistedState.sort),
     selectedConflictKey: null,
@@ -490,14 +505,35 @@ export const useRoadmapStore = create<RoadmapStore>()(
         }
       },
       setBrandFilter: (brand: 'all' | RoadmapBrand) => {
-        if (brand === 'all' || ROADMAP_BRANDS.has(brand)) set({ brandFilter: brand })
+        if (brand === 'all' || ROADMAP_BRANDS.has(brand)) set(state => ({
+          brandFilter: brand,
+          filters: sanitizeRoadmapFilterConditions(
+            setRoadmapQuickFilter(state.filters, 'brand', brand),
+            state.tosVersions,
+          ),
+        }))
       },
       setProductTypeFilter: (productType: 'all' | RoadmapProductType) => {
-        if (productType === 'all' || ROADMAP_PRODUCT_TYPES.has(productType)) set({ productTypeFilter: productType })
+        if (productType === 'all' || ROADMAP_PRODUCT_TYPES.has(productType)) set(state => ({
+          productTypeFilter: productType,
+          filters: sanitizeRoadmapFilterConditions(
+            setRoadmapQuickFilter(state.filters, 'productType', productType),
+            state.tosVersions,
+          ),
+        }))
       },
-      setFilters: filters => set(state => ({
-        filters: sanitizeRoadmapFilterConditions(filters, state.tosVersions),
-      })),
+      setFilters: filters => set(state => {
+        const sanitized = sanitizeRoadmapFilterConditions(filters, state.tosVersions)
+        const brand = getRoadmapQuickFilterValue(sanitized, 'brand')
+        const productType = getRoadmapQuickFilterValue(sanitized, 'productType')
+        return {
+          filters: sanitized,
+          brandFilter: ROADMAP_BRANDS.has(brand as RoadmapBrand) ? brand as RoadmapBrand : 'all',
+          productTypeFilter: ROADMAP_PRODUCT_TYPES.has(productType as RoadmapProductType)
+            ? productType as RoadmapProductType
+            : 'all',
+        }
+      }),
       setVisibleColumns: columns => set({ visibleColumns: sanitizeRoadmapVisibleColumns(columns) }),
       setSort: sort => set({ sort: sanitizeSort(sort) }),
       setSelectedConflictKey: selectedConflictKey => set({ selectedConflictKey }),

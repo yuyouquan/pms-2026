@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
-import { Button, Empty, Flex, Form, Input, Modal, Tooltip, Typography, message } from 'antd'
+import { Button, Flex, Form, Input, Modal, Typography, message } from 'antd'
 import { useRoadmapStore } from '@/stores/roadmap'
 import type { TosVersionConfig } from '@/types/roadmap'
 
@@ -15,10 +14,10 @@ interface TosTargetEditorProps {
 }
 
 interface TosTargetFormValues {
-  targets: Array<{ value: string }>
+  targetText: string
 }
 
-const EMPTY_TARGET_FORM: TosTargetFormValues = { targets: [] }
+const EMPTY_TARGET_FORM: TosTargetFormValues = { targetText: '' }
 
 export default function TosTargetEditor({
   open,
@@ -34,7 +33,7 @@ export default function TosTargetEditor({
   useEffect(() => {
     if (!open) return
     form.setFieldsValue(version
-      ? { targets: version.targets.map(value => ({ value })) }
+      ? { targetText: version.targets.join('\n') }
       : EMPTY_TARGET_FORM)
   }, [form, open, version])
 
@@ -46,9 +45,8 @@ export default function TosTargetEditor({
     } catch {
       return
     }
-    const normalizedTargets = (values.targets ?? [])
-      .map(target => target.value.trim())
-      .filter(Boolean)
+    const targetText = values.targetText ?? ''
+    const normalizedTargets = targetText.trim() ? [targetText] : []
 
     setSubmitting(true)
     try {
@@ -86,51 +84,22 @@ export default function TosTargetEditor({
       )}
     >
       <Typography.Paragraph type="secondary">
-        每行维护一项目标；保存时会自动去除首尾空格，空白目标不会保留。
+        版本目标将完全按照多行文本的换行格式展示。
       </Typography.Paragraph>
       <Form form={form} layout="vertical" preserve={false} disabled={!canEdit}>
-        <Form.List name="targets">
-          {(fields, { add, remove }, { errors }) => (
-            <Flex vertical gap={12}>
-              {fields.length ? fields.map((field, index) => (
-                <Flex key={field.key} align="flex-start" gap={8}>
-                  <Form.Item
-                    {...field}
-                    label={`目标 ${index + 1}`}
-                    name={[field.name, 'value']}
-                    rules={[{ max: 200, message: '单项目标不能超过 200 个字符' }]}
-                    style={{ flex: 1, marginBottom: 0 }}
-                  >
-                    <Input.TextArea
-                      aria-label={`${version?.name ?? 'tOS'} 目标 ${index + 1}`}
-                      autoSize={{ minRows: 1, maxRows: 3 }}
-                      placeholder="请输入目标内容"
-                      maxLength={200}
-                      showCount
-                    />
-                  </Form.Item>
-                  <Tooltip title={`删除目标 ${index + 1}`}>
-                    <Button
-                      type="text"
-                      danger
-                      size="large"
-                      icon={<DeleteOutlined />}
-                      aria-label={`删除目标 ${index + 1}`}
-                      onClick={() => remove(field.name)}
-                      style={{ marginTop: 30 }}
-                    />
-                  </Tooltip>
-                </Flex>
-              )) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未设置目标，可点击下方按钮新增" />
-              )}
-              <Form.ErrorList errors={errors} />
-              <Button type="dashed" icon={<PlusOutlined />} onClick={() => add({ value: '' })} block>
-                新增一项目标
-              </Button>
-            </Flex>
-          )}
-        </Form.List>
+        <Form.Item
+          label="版本目标"
+          name="targetText"
+          rules={[{ max: 4000, message: '版本目标不能超过 4000 个字符' }]}
+        >
+          <Input.TextArea
+            aria-label={`${version?.name ?? 'tOS'} 版本目标`}
+            rows={10}
+            placeholder="请输入版本目标，可自由换行"
+            maxLength={4000}
+            showCount
+          />
+        </Form.Item>
       </Form>
     </Modal>
   )

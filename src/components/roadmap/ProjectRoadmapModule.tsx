@@ -6,7 +6,9 @@ import {
   applyRoadmapFilters,
   buildRoadmapFilterFieldDefinitions,
   createRoadmapTextFilterDebouncer,
+  getRoadmapQuickFilterValue,
   sanitizeRoadmapFilterConditions,
+  setRoadmapQuickFilter,
   type RoadmapTextFilterDebouncer,
 } from '@/lib/roadmapFilters'
 import {
@@ -20,11 +22,9 @@ import { useRoadmapStore } from '@/stores/roadmap'
 import type { ProjectItem } from '@/types/app'
 import type {
   PlannedRoadmapProject,
-  RoadmapBrand,
   RoadmapColumnKey,
   RoadmapFilterCondition,
   RoadmapPlanningConflictGroup,
-  RoadmapProductType,
   RoadmapProjectRow,
   RoadmapSortState,
   RoadmapViewMode,
@@ -61,6 +61,8 @@ export interface RoadmapViewRenderContext {
   onOpenConflict: (conflictKey: string) => void
   onEditPlannedProject: (projectId: string) => void
   onDeletePlannedProject: (projectId: string) => void
+  collapsedTargetVersionIds: ReadonlySet<string>
+  onToggleTarget: (versionId: string) => void
 }
 
 interface ProjectRoadmapModuleProps {
@@ -88,16 +90,12 @@ export default function ProjectRoadmapModule({
   const changeLogs = useRoadmapStore(state => state.changeLogs)
   const viewMode = useRoadmapStore(state => state.viewMode)
   const selectedTosVersionId = useRoadmapStore(state => state.selectedTosVersionId)
-  const brandFilter = useRoadmapStore(state => state.brandFilter)
-  const productTypeFilter = useRoadmapStore(state => state.productTypeFilter)
   const filters = useRoadmapStore(state => state.filters)
   const visibleColumns = useRoadmapStore(state => state.visibleColumns)
   const sort = useRoadmapStore(state => state.sort)
   const selectedConflictKey = useRoadmapStore(state => state.selectedConflictKey)
   const setViewMode = useRoadmapStore(state => state.setViewMode)
   const setSelectedTosVersionId = useRoadmapStore(state => state.setSelectedTosVersionId)
-  const setBrandFilter = useRoadmapStore(state => state.setBrandFilter)
-  const setProductTypeFilter = useRoadmapStore(state => state.setProductTypeFilter)
   const setFilters = useRoadmapStore(state => state.setFilters)
   const setVisibleColumns = useRoadmapStore(state => state.setVisibleColumns)
   const setSort = useRoadmapStore(state => state.setSort)
@@ -112,6 +110,8 @@ export default function ProjectRoadmapModule({
   const [columnDrawerOpen, setColumnDrawerOpen] = useState(false)
   const [changeLogOpen, setChangeLogOpen] = useState(false)
   const [conflictDrawerOpen, setConflictDrawerOpen] = useState(false)
+  const [collapsedTargetVersionIds, setCollapsedTargetVersionIds] = useState<Set<string>>(() => new Set())
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const textFilterDebouncerRef = useRef<RoadmapTextFilterDebouncer | null>(null)
 
   const filterFieldDefinitions = useMemo(
@@ -144,6 +144,8 @@ export default function ProjectRoadmapModule({
     () => sanitizeRoadmapFilterConditions(filters, versions),
     [filters, versions],
   )
+  const brandFilter = getRoadmapQuickFilterValue(normalizedFilters, 'brand')
+  const productTypeFilter = getRoadmapQuickFilterValue(normalizedFilters, 'productType')
   const configuredFilterCount = normalizedFilters.length
   const immediateFilters = useMemo(() => normalizedFilters.filter(condition => (
     filterDefinitionsByKey.get(condition.field)?.kind !== 'text'
@@ -174,9 +176,41 @@ export default function ProjectRoadmapModule({
     [effectiveTextFilters, immediateFilters],
   )
   const filteredRows = useMemo(
-    () => applyRoadmapFilters(allRows, brandFilter, productTypeFilter, appliedFilters, filterFieldDefinitions),
-    [allRows, appliedFilters, brandFilter, filterFieldDefinitions, productTypeFilter],
+    () => applyRoadmapFilters(allRows, 'all', 'all', appliedFilters, filterFieldDefinitions),
+    [allRows, appliedFilters, filterFieldDefinitions],
   )
+
+  const targetVersionIds = useMemo(
+    () => versions.filter(version => version.targets.length > 0).map(version => version.id),
+    [versions],
+  )
+  const allTargetsCollapsed = targetVersionIds.length > 0
+    && targetVersionIds.every(id => collapsedTargetVersionIds.has(id))
+
+  useEffect(() => {
+    const validIds = new Set(versions.map(version => version.id))
+    setCollapsedTargetVersionIds(current => {
+      const next = new Set([...current].filter(id => validIds.has(id)))
+      return next.size === current.size ? current : next
+    })
+  }, [versions])
+
+  useEffect(() => {
+    if (!isFullscreen) return undefined
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        const overlayOpen = document.querySelector('.ant-modal-wrap, .ant-drawer-open')
+        if (!overlayOpen) setIsFullscreen(false)
+      }
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isFullscreen])
 
   const editingProject = useMemo(
     () => plannedProjects.find(project => project.id === editingPlannedProjectId) ?? null,
@@ -199,6 +233,23 @@ export default function ProjectRoadmapModule({
   const closePlannedProjectModal = () => {
     setPlannedModalOpen(false)
     setEditingPlannedProjectId(null)
+  }
+  const toggleTarget = (versionId: string) => {
+    setCollapsedTargetVersionIds(current => {
+      const next = new Set(current)
+      if (next.has(versionId)) next.delete(versionId)
+      else next.add(versionId)
+      return next
+    })
+  }
+  const toggleAllTargets = () => {
+    setCollapsedTargetVersionIds(allTargetsCollapsed ? new Set() : new Set(targetVersionIds))
+  }
+  const updateQuickFilter = (
+    field: 'brand' | 'productType',
+    value: 'all' | 'TECNO' | 'Infinix' | 'itel' | '待定' | '其他品牌' | '新品' | '老品',
+  ) => {
+    setFilters(setRoadmapQuickFilter(normalizedFilters, field, value))
   }
   const requestChangeLog = () => {
     if (!canView) return
@@ -267,6 +318,8 @@ export default function ProjectRoadmapModule({
     onOpenConflict: openConflictDrawer,
     onEditPlannedProject: openPlannedProjectEditor,
     onDeletePlannedProject: requestDeletePlannedProject,
+    collapsedTargetVersionIds,
+    onToggleTarget: toggleTarget,
   }
 
   const content = viewMode === 'table'
@@ -274,20 +327,26 @@ export default function ProjectRoadmapModule({
     : renderEvolutionView?.(renderContext) ?? <RoadmapEvolutionView {...renderContext} />
 
   return (
-    <section className="pms-roadmap-shell" aria-label="项目路标" style={{ width: '100%', minWidth: 0 }}>
+    <section
+      className={`pms-roadmap-shell${isFullscreen ? ' pms-roadmap-shell-fullscreen' : ''}`}
+      aria-label="项目路标"
+      style={{ width: '100%', minWidth: 0 }}
+    >
       <RoadmapToolbar
         canView={canView}
         canEdit={canEdit}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
-        tosVersions={versions}
-        selectedTosVersionId={selectedTosVersionId}
-        onTosVersionChange={setSelectedTosVersionId}
         brandFilter={brandFilter}
-        onBrandFilterChange={setBrandFilter}
+        onBrandFilterChange={value => updateQuickFilter('brand', value)}
         productTypeFilter={productTypeFilter}
-        onProductTypeFilterChange={setProductTypeFilter}
+        onProductTypeFilterChange={value => updateQuickFilter('productType', value)}
         filterCount={configuredFilterCount}
+        hasTargetVersions={targetVersionIds.length > 0}
+        allTargetsCollapsed={allTargetsCollapsed}
+        onToggleAllTargets={toggleAllTargets}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={() => setIsFullscreen(current => !current)}
         onOpenChangeLog={requestChangeLog}
         onOpenTosMaintenance={() => setTosMaintenanceOpen(true)}
         onCreatePlannedProject={openCreatePlannedProject}

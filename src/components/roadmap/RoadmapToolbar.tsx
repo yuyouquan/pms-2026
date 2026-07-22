@@ -1,37 +1,41 @@
 'use client'
 
-import { useMemo, type CSSProperties } from 'react'
+import type { CSSProperties } from 'react'
 import {
   AuditOutlined,
+  DownOutlined,
   FilterOutlined,
+  FullscreenExitOutlined,
+  FullscreenOutlined,
   PlusOutlined,
   SettingOutlined,
   SlidersOutlined,
+  UpOutlined,
 } from '@ant-design/icons'
-import { Badge, Button, Flex, Segmented, Select, Tooltip, Typography } from 'antd'
-import { compareSemanticTos } from '@/lib/roadmapSorting'
+import { Badge, Button, Flex, Segmented, Tooltip, Typography } from 'antd'
 import type {
   RoadmapBrand,
   RoadmapProductType,
   RoadmapViewMode,
-  TosVersionConfig,
 } from '@/types/roadmap'
 
-const touchControlStyle: CSSProperties = { minHeight: 44 }
+const compactControlStyle: CSSProperties = { minHeight: 36, height: 36 }
 
 interface RoadmapToolbarProps {
   canView: boolean
   canEdit: boolean
   viewMode: RoadmapViewMode
   onViewModeChange: (mode: RoadmapViewMode) => void
-  tosVersions: readonly TosVersionConfig[]
-  selectedTosVersionId: string | null
-  onTosVersionChange: (id: string) => void
-  brandFilter: 'all' | RoadmapBrand
+  brandFilter: 'all' | 'custom' | RoadmapBrand
   onBrandFilterChange: (brand: 'all' | RoadmapBrand) => void
-  productTypeFilter: 'all' | RoadmapProductType
+  productTypeFilter: 'all' | 'custom' | RoadmapProductType
   onProductTypeFilterChange: (productType: 'all' | RoadmapProductType) => void
   filterCount: number
+  hasTargetVersions: boolean
+  allTargetsCollapsed: boolean
+  onToggleAllTargets: () => void
+  isFullscreen: boolean
+  onToggleFullscreen: () => void
   onOpenChangeLog: () => void
   onOpenTosMaintenance: () => void
   onCreatePlannedProject: () => void
@@ -44,34 +48,53 @@ export default function RoadmapToolbar({
   canEdit,
   viewMode,
   onViewModeChange,
-  tosVersions,
-  selectedTosVersionId,
-  onTosVersionChange,
   brandFilter,
   onBrandFilterChange,
   productTypeFilter,
   onProductTypeFilterChange,
   filterCount,
+  hasTargetVersions,
+  allTargetsCollapsed,
+  onToggleAllTargets,
+  isFullscreen,
+  onToggleFullscreen,
   onOpenChangeLog,
   onOpenTosMaintenance,
   onCreatePlannedProject,
   onOpenFilters,
   onOpenColumnSettings,
 }: RoadmapToolbarProps) {
-  const descendingVersions = useMemo(
-    () => [...tosVersions].sort((left, right) => compareSemanticTos(right, left)),
-    [tosVersions],
-  )
+  const brandOptions: Array<{
+    label: string
+    value: 'all' | 'custom' | RoadmapBrand
+    disabled?: boolean
+  }> = [
+    { label: '全部', value: 'all' },
+    { label: 'TECNO', value: 'TECNO' },
+    { label: 'Infinix', value: 'Infinix' },
+    { label: 'itel', value: 'itel' },
+  ]
+  if (brandFilter === 'custom') brandOptions.push({ label: '自定义', value: 'custom', disabled: true })
+  const productTypeOptions: Array<{
+    label: string
+    value: 'all' | 'custom' | RoadmapProductType
+    disabled?: boolean
+  }> = [
+    { label: '全部', value: 'all' },
+    { label: '新品', value: '新品' },
+    { label: '老品', value: '老品' },
+  ]
+  if (productTypeFilter === 'custom') productTypeOptions.push({ label: '自定义', value: 'custom', disabled: true })
 
   return (
     <div
       className="roadmap-toolbar-glass"
       style={{
         position: 'sticky',
-        top: 'var(--pms-main-header-height, 56px)',
+        top: isFullscreen ? 0 : 'var(--pms-main-header-height, 56px)',
         zIndex: 30,
-        padding: '12px clamp(8px, 2vw, 16px)',
-        margin: '0 0 16px',
+        padding: '8px 10px',
+        margin: '0 0 10px',
         border: '1px solid var(--border-purple)',
         borderRadius: 'var(--radius-lg)',
         background: 'rgba(255, 255, 255, 0.94)',
@@ -80,95 +103,74 @@ export default function RoadmapToolbar({
         boxShadow: 'var(--shadow-sm)',
       }}
     >
-      <Flex justify="space-between" align="flex-start" gap={12} wrap>
-        <Flex align="center" gap={12} wrap style={{ minWidth: 0, flex: '1 1 640px' }}>
+      <Flex justify="space-between" align="center" gap={8} wrap>
+        <Flex align="center" gap={8} wrap style={{ minWidth: 0, flex: '1 1 600px' }}>
           <Segmented<RoadmapViewMode>
             aria-label="路标视图"
-            size="large"
             value={viewMode}
             options={[
               { label: '表单视图', value: 'table' },
               { label: '版本演进视图', value: 'evolution' },
             ]}
             onChange={onViewModeChange}
-            style={touchControlStyle}
+            style={compactControlStyle}
           />
-
-          {viewMode === 'table' ? (
-            <Flex align="center" gap={6} style={{ minWidth: 0 }}>
-              <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap' }}>tOS 版本</Typography.Text>
-              <Select
-                aria-label="表单视图 tOS 版本"
-                size="large"
-                value={selectedTosVersionId ?? undefined}
-                placeholder="选择 tOS 版本"
-                options={descendingVersions.map(version => ({ label: version.name, value: version.id }))}
-                onChange={onTosVersionChange}
-                style={{ width: 150, maxWidth: '44vw', minHeight: 44 }}
-              />
-            </Flex>
-          ) : null}
 
           <Flex data-roadmap-quick-filter align="center" gap={6} wrap style={{ minWidth: 0, maxWidth: '100%' }}>
             <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap' }}>品牌</Typography.Text>
-            <Segmented<'all' | RoadmapBrand>
+            <Segmented<'all' | 'custom' | RoadmapBrand>
               aria-label="品牌快捷筛选"
-              size="large"
               value={brandFilter}
-              options={[
-                { label: '全部', value: 'all' },
-                { label: 'TECNO', value: 'TECNO' },
-                { label: 'Infinix', value: 'Infinix' },
-                { label: 'itel', value: 'itel' },
-              ]}
-              onChange={onBrandFilterChange}
-              style={touchControlStyle}
+              options={brandOptions}
+              onChange={value => value !== 'custom' && onBrandFilterChange(value)}
+              style={compactControlStyle}
             />
           </Flex>
 
           <Flex data-roadmap-quick-filter align="center" gap={6} wrap style={{ minWidth: 0, maxWidth: '100%' }}>
             <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap' }}>产品类型</Typography.Text>
-            <Segmented<'all' | RoadmapProductType>
+            <Segmented<'all' | 'custom' | RoadmapProductType>
               aria-label="产品类型快捷筛选"
-              size="large"
               value={productTypeFilter}
-              options={[
-                { label: '全部', value: 'all' },
-                { label: '新品', value: '新品' },
-                { label: '老品', value: '老品' },
-              ]}
-              onChange={onProductTypeFilterChange}
-              style={touchControlStyle}
+              options={productTypeOptions}
+              onChange={value => value !== 'custom' && onProductTypeFilterChange(value)}
+              style={compactControlStyle}
             />
           </Flex>
         </Flex>
 
-        <Flex align="center" justify="flex-end" gap={8} wrap style={{ minWidth: 0, flex: '1 1 420px' }}>
+        <Flex align="center" justify="flex-end" gap={6} wrap style={{ minWidth: 0, flex: '1 1 420px' }}>
+          {viewMode === 'evolution' && hasTargetVersions ? (
+            <Button
+              icon={allTargetsCollapsed ? <DownOutlined /> : <UpOutlined />}
+              onClick={onToggleAllTargets}
+              style={compactControlStyle}
+            >
+              {allTargetsCollapsed ? '展开全部目标' : '收起全部目标'}
+            </Button>
+          ) : null}
           <Button
-            size="large"
             icon={<AuditOutlined />}
             disabled={!canView}
             onClick={onOpenChangeLog}
-            style={touchControlStyle}
+            style={compactControlStyle}
           >
             修改记录
           </Button>
           {canEdit ? (
             <>
               <Button
-                size="large"
                 icon={<SlidersOutlined />}
                 onClick={onOpenTosMaintenance}
-                style={touchControlStyle}
+                style={compactControlStyle}
               >
                 tOS 版本维护
               </Button>
               <Button
                 type="primary"
-                size="large"
                 icon={<PlusOutlined />}
                 onClick={onCreatePlannedProject}
-                style={touchControlStyle}
+                style={compactControlStyle}
               >
                 创建待规划项目
               </Button>
@@ -179,24 +181,30 @@ export default function RoadmapToolbar({
               <Button
                 aria-label={filterCount ? `筛选，已配置 ${filterCount} 个条件` : '筛选'}
                 type={filterCount ? 'primary' : 'default'}
-                size="large"
                 icon={<FilterOutlined />}
                 disabled={!canView}
                 onClick={onOpenFilters}
-                style={touchControlStyle}
+                style={compactControlStyle}
               >
                 筛选
               </Button>
             </Badge>
           </Tooltip>
           <Button
-            size="large"
             icon={<SettingOutlined />}
             disabled={!canView}
             onClick={onOpenColumnSettings}
-            style={touchControlStyle}
+            style={compactControlStyle}
           >
             列设置
+          </Button>
+          <Button
+            icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+            aria-pressed={isFullscreen}
+            onClick={onToggleFullscreen}
+            style={compactControlStyle}
+          >
+            {isFullscreen ? '退出全屏' : '全屏'}
           </Button>
         </Flex>
       </Flex>
