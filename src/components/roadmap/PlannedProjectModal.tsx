@@ -67,6 +67,7 @@ interface PlannedProjectModalProps {
   tosVersions: readonly TosVersionConfig[]
   currentUser: string
   canEdit: boolean
+  onDeletePlannedProject: (projectId: string) => void
   onChanged?: () => void
 }
 
@@ -84,6 +85,7 @@ export default function PlannedProjectModal({
   tosVersions,
   currentUser,
   canEdit,
+  onDeletePlannedProject,
   onChanged,
 }: PlannedProjectModalProps) {
   const [form] = Form.useForm<PlannedProjectFormValues>()
@@ -93,7 +95,6 @@ export default function PlannedProjectModal({
   const dirtyRef = useRef(false)
   const createPlannedProject = useRoadmapStore(state => state.createPlannedProject)
   const updatePlannedProject = useRoadmapStore(state => state.updatePlannedProject)
-  const deletePlannedProject = useRoadmapStore(state => state.deletePlannedProject)
 
   const projectCode = Form.useWatch('projectCode', form) || ''
   const androidVersion = Form.useWatch('androidVersion', form)
@@ -259,23 +260,7 @@ export default function PlannedProjectModal({
 
   const handleDelete = () => {
     if (!canEdit || !editingProject) return
-    Modal.confirm({
-      title: '删除待规划项目？',
-      content: '删除后项目将从路标中移除，但修改记录会保留删除前快照。',
-      okText: '确认删除',
-      cancelText: '取消',
-      okButtonProps: { danger: true },
-      onOk: () => {
-        const result = deletePlannedProject(editingProject.id, currentUser)
-        if (!result.ok) {
-          message.error(result.reason === 'not-found' ? '待规划项目不存在，请刷新后重试' : '删除失败，请重试')
-          return Promise.reject(new Error('planned-project-delete-failed'))
-        }
-        message.success('待规划项目已删除，修改记录已保留')
-        onChanged?.()
-        onCancel()
-      },
-    })
+    onDeletePlannedProject(editingProject.id)
   }
 
   return (

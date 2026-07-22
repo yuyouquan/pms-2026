@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Empty, Result } from 'antd'
+import { Empty, Modal, Result, message } from 'antd'
 import {
   applyRoadmapFilters,
   buildRoadmapFilterFieldDefinitions,
@@ -33,6 +33,7 @@ import type {
 import PlannedProjectModal from './PlannedProjectModal'
 import RoadmapColumnSettingsDrawer from './RoadmapColumnSettingsDrawer'
 import RoadmapFilterDrawer from './RoadmapFilterDrawer'
+import RoadmapTableView from './RoadmapTableView'
 import RoadmapToolbar from './RoadmapToolbar'
 import TosTargetEditor from './TosTargetEditor'
 import TosVersionMaintenanceModal from './TosVersionMaintenanceModal'
@@ -50,7 +51,12 @@ export interface RoadmapViewRenderContext {
   sort: RoadmapSortState
   canEdit: boolean
   onViewProject: (projectId: string, market?: string) => void
+  onSelectedTosVersionChange: (id: string | null) => void
+  onSortChange: (sort: RoadmapSortState) => void
+  onEditTosTargets: (versionId: string) => void
+  onOpenConflict: (conflictKey: string) => void
   onEditPlannedProject: (projectId: string) => void
+  onDeletePlannedProject: (projectId: string) => void
 }
 
 interface ProjectRoadmapModuleProps {
@@ -88,6 +94,9 @@ export default function ProjectRoadmapModule({
   const setProductTypeFilter = useRoadmapStore(state => state.setProductTypeFilter)
   const setFilters = useRoadmapStore(state => state.setFilters)
   const setVisibleColumns = useRoadmapStore(state => state.setVisibleColumns)
+  const setSort = useRoadmapStore(state => state.setSort)
+  const setSelectedConflictKey = useRoadmapStore(state => state.setSelectedConflictKey)
+  const deletePlannedProject = useRoadmapStore(state => state.deletePlannedProject)
 
   const [plannedModalOpen, setPlannedModalOpen] = useState(false)
   const [editingPlannedProjectId, setEditingPlannedProjectId] = useState<string | null>(null)
@@ -189,6 +198,30 @@ export default function ProjectRoadmapModule({
     if (onOpenChangeLog) onOpenChangeLog()
     else setChangeLogRequested(true)
   }
+  const requestDeletePlannedProject = (projectId: string, onDeleted?: () => void) => {
+    if (!canEdit) return
+    const project = plannedProjects.find(candidate => candidate.id === projectId)
+    if (!project) {
+      message.error('待规划项目不存在，请刷新后重试')
+      return
+    }
+    Modal.confirm({
+      title: '删除待规划项目？',
+      content: `确认删除“${project.displayName}”？删除后项目将从路标中移除，但修改记录会保留删除前快照。`,
+      okText: '确认删除',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        const result = deletePlannedProject(project.id, currentLoginUser)
+        if (!result.ok) {
+          message.error(result.reason === 'not-found' ? '待规划项目不存在，请刷新后重试' : '删除失败，请重试')
+          return Promise.reject(new Error('planned-project-delete-failed'))
+        }
+        message.success('待规划项目已删除，修改记录已保留')
+        onDeleted?.()
+      },
+    })
+  }
 
   if (!canView) {
     return (
@@ -211,11 +244,16 @@ export default function ProjectRoadmapModule({
     sort,
     canEdit,
     onViewProject,
+    onSelectedTosVersionChange: setSelectedTosVersionId,
+    onSortChange: setSort,
+    onEditTosTargets: setTargetVersionId,
+    onOpenConflict: setSelectedConflictKey,
     onEditPlannedProject: openPlannedProjectEditor,
+    onDeletePlannedProject: requestDeletePlannedProject,
   }
 
   const content = viewMode === 'table'
-    ? renderTableView?.(renderContext)
+    ? renderTableView?.(renderContext) ?? <RoadmapTableView {...renderContext} />
     : renderEvolutionView?.(renderContext)
 
   return (
@@ -276,6 +314,7 @@ export default function ProjectRoadmapModule({
         tosVersions={versions}
         currentUser={currentLoginUser}
         canEdit={canEdit}
+        onDeletePlannedProject={projectId => requestDeletePlannedProject(projectId, closePlannedProjectModal)}
       />
       <TosVersionMaintenanceModal
         open={tosMaintenanceOpen}

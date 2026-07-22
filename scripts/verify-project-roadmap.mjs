@@ -1793,7 +1793,7 @@ registerAssertion('planned-project overlay exposes the complete accessible maint
     "form.scrollToField(firstErrorField, { block: 'center' })",
     'getFieldInstance',
     "format('YYYY-MM-DD')",
-    'deletePlannedProject',
+    'onDeletePlannedProject',
     'Modal.confirm',
     'canEdit',
     'submitLockRef',
@@ -1937,8 +1937,13 @@ registerAssertion('planned-project close guard confirms only touched drafts and 
   if (!source.includes('onCancel={requestClose}') || !source.includes('<Button onClick={requestClose}>取消</Button>')) {
     throw new Error('planned-project close affordances do not share the close guard')
   }
-  if ((source.match(/onChanged\?\.\(\)\s+onCancel\(\)/g) ?? []).length < 2) {
-    throw new Error('successful save and delete must close directly without a discard confirmation')
+  if ((source.match(/onChanged\?\.\(\)\s+onCancel\(\)/g) ?? []).length < 1
+    || !source.includes('onDeletePlannedProject(editingProject.id)')) {
+    throw new Error('successful save and shared deletion must bypass the discard confirmation')
+  }
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  if (!moduleSource.includes('requestDeletePlannedProject(projectId, closePlannedProjectModal)')) {
+    throw new Error('successful shared deletion does not close the planned-project editor directly')
   }
 })
 
@@ -2265,6 +2270,62 @@ registerAssertion('roadmap filter and column drawers preserve quick filters and 
   }
   const roadMapTypes = loadTypeScriptModule(path.join(root, 'src/types/roadmap.ts'))
   if (roadMapTypes.ROADMAP_COLUMNS.length !== 14) throw new Error('shared roadmap columns must contain all 14 business fields')
+})
+
+registerAssertion('single-version roadmap table preserves sorting, targets, sources, and conflicts', () => {
+  const tablePath = path.join(root, 'src/components/roadmap/RoadmapTableView.tsx')
+  if (!fs.existsSync(tablePath)) throw new Error('RoadmapTableView.tsx is missing')
+  const source = fs.readFileSync(tablePath, 'utf8')
+  for (const contract of [
+    'ROADMAP_COLUMNS',
+    'visibleColumns',
+    'compareRoadmapValues',
+    'sortOrder',
+    'aria-sort',
+    'resolveRoadmapTableVersion',
+    'firstSaleTosVersionId',
+    "formatRoadmapTableValue",
+    "rowKey={row => `${row.source}:${row.id}`}",
+    '修改目标',
+    'version.targets.length',
+    '待规划',
+    '已存在正常项目',
+    'roadmap-conflict-row',
+    'onOpenConflict',
+    'onEditPlannedProject',
+    'onDeletePlannedProject',
+    'action',
+  ]) {
+    if (!source.includes(contract)) throw new Error(`RoadmapTableView is missing ${contract}`)
+  }
+  if (!source.includes("row.source !== 'planned'")) {
+    throw new Error('normal roadmap rows are not explicitly excluded from planned edit/delete actions')
+  }
+  if (source.includes("key: 'action'\n") && source.includes('ROADMAP_COLUMNS.push')) {
+    throw new Error('the fixed action column must not mutate the shared business-column catalog')
+  }
+  if (source.includes('Modal.confirm') || source.includes('deletePlannedProject = useRoadmapStore')) {
+    throw new Error('the table duplicated the shared planned-project deletion path')
+  }
+
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  for (const contract of [
+    "import RoadmapTableView from './RoadmapTableView'",
+    '<RoadmapTableView',
+    'setSelectedTosVersionId',
+    'setSort',
+    'setSelectedConflictKey',
+    'setTargetVersionId',
+    'requestDeletePlannedProject',
+    'Modal.confirm',
+    'deletePlannedProject',
+  ]) {
+    if (!moduleSource.includes(contract)) throw new Error(`ProjectRoadmapModule table integration is missing ${contract}`)
+  }
+  const plannedModalSource = fs.readFileSync(path.join(root, 'src/components/roadmap/PlannedProjectModal.tsx'), 'utf8')
+  if (!plannedModalSource.includes('onDeletePlannedProject') || plannedModalSource.includes('Modal.confirm({\n      title: \'删除待规划项目？\'')) {
+    throw new Error('PlannedProjectModal must reuse the module-owned delete confirmation')
+  }
 })
 
 const failures = []
