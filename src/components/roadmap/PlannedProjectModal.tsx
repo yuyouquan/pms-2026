@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
 import {
   Alert,
@@ -88,6 +88,9 @@ export default function PlannedProjectModal({
 }: PlannedProjectModalProps) {
   const [form] = Form.useForm<PlannedProjectFormValues>()
   const [submitting, setSubmitting] = useState(false)
+  const submitLockRef = useRef(false)
+  const discardConfirmOpenRef = useRef(false)
+  const dirtyRef = useRef(false)
   const createPlannedProject = useRoadmapStore(state => state.createPlannedProject)
   const updatePlannedProject = useRoadmapStore(state => state.updatePlannedProject)
   const deletePlannedProject = useRoadmapStore(state => state.deletePlannedProject)
@@ -117,20 +120,25 @@ export default function PlannedProjectModal({
 
   useEffect(() => {
     if (!open) return
+    dirtyRef.current = false
     form.resetFields()
-    if (editingProject) {
-      form.setFieldsValue({
+    const nextValues: Partial<PlannedProjectFormValues> = editingProject
+      ? {
         ...editingProject,
         str5Date: dayjs(editingProject.str5Date),
         launchDate: dayjs(editingProject.launchDate),
-      })
-      return
-    }
-    form.setFieldsValue({
-      machineProjectType: MACHINE_PROJECT_TYPES[0],
-      productType: '新品',
-      remark: '',
-    })
+      }
+      : {
+          machineProjectType: MACHINE_PROJECT_TYPES[0],
+          productType: '新品',
+          remark: '',
+        }
+    form.setFields(Object.entries(nextValues).map(([name, value]) => ({
+      name: name as keyof PlannedProjectFormValues,
+      value,
+      touched: false,
+      errors: [],
+    })))
   }, [editingProject, form, open])
 
   useEffect(() => {
@@ -165,18 +173,20 @@ export default function PlannedProjectModal({
   }
 
   const handleSubmit = async () => {
-    if (!canEdit || duplicateExists) return
-    let values: PlannedProjectFormValues
+    if (submitLockRef.current) return
+    submitLockRef.current = true
     try {
-      values = await form.validateFields()
-    } catch (error) {
-      const firstErrorField = getFirstErrorField(error)
-      if (firstErrorField) focusField(firstErrorField)
-      return
-    }
+      if (!canEdit || duplicateExists) return
+      let values: PlannedProjectFormValues
+      try {
+        values = await form.validateFields()
+      } catch (error) {
+        const firstErrorField = getFirstErrorField(error)
+        if (firstErrorField) focusField(firstErrorField)
+        return
+      }
 
-    setSubmitting(true)
-    try {
+      setSubmitting(true)
       const input = {
         ...values,
         projectCode: values.projectCode.trim(),
@@ -219,7 +229,32 @@ export default function PlannedProjectModal({
       onCancel()
     } finally {
       setSubmitting(false)
+      submitLockRef.current = false
     }
+  }
+
+  const requestClose = () => {
+    if (submitLockRef.current || submitting || discardConfirmOpenRef.current) return
+    const hasTouchedDraft = dirtyRef.current && form.isFieldsTouched()
+    if (!hasTouchedDraft) {
+      onCancel()
+      return
+    }
+    discardConfirmOpenRef.current = true
+    Modal.confirm({
+      title: '放弃未保存的修改？',
+      content: '当前表单内容尚未保存，放弃后本次修改将不会保留。',
+      okText: '放弃修改',
+      cancelText: '继续编辑',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        form.resetFields()
+        onCancel()
+      },
+      afterClose: () => {
+        discardConfirmOpenRef.current = false
+      },
+    })
   }
 
   const handleDelete = () => {
@@ -248,7 +283,7 @@ export default function PlannedProjectModal({
       className="pms-modal"
       title={editingProject ? '编辑待规划项目' : '创建待规划项目'}
       open={open}
-      onCancel={onCancel}
+      onCancel={requestClose}
       width={960}
       destroyOnHidden
       mask={{ closable: false }}
@@ -263,7 +298,7 @@ export default function PlannedProjectModal({
             ) : null}
           </div>
           <Flex gap={8}>
-            <Button onClick={onCancel}>取消</Button>
+            <Button onClick={requestClose}>取消</Button>
             {canEdit ? (
               <Button
                 type="primary"
@@ -278,7 +313,16 @@ export default function PlannedProjectModal({
         </Flex>
       )}
     >
-      <Form form={form} layout="vertical" preserve={false} disabled={!canEdit} requiredMark>
+      <Form
+        form={form}
+        layout="vertical"
+        preserve={false}
+        disabled={!canEdit}
+        requiredMark
+        onValuesChange={() => {
+          dirtyRef.current = true
+        }}
+      >
         <Flex vertical gap={16}>
           <Card size="small" title="项目分类与识别" style={sectionStyle}>
             <Row gutter={[16, 0]}>

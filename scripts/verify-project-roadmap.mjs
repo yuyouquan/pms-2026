@@ -1796,8 +1796,21 @@ registerAssertion('planned-project overlay exposes the complete accessible maint
     'deletePlannedProject',
     'Modal.confirm',
     'canEdit',
+    'submitLockRef',
+    'form.isFieldsTouched()',
+    'requestClose',
+    '放弃未保存的修改',
   ]) {
     if (!source.includes(contract)) throw new Error(`planned-project form is missing ${contract}`)
+  }
+  if (!/const handleSubmit = async \(\) => \{\s*if \(submitLockRef\.current\) return\s+submitLockRef\.current = true/.test(source)) {
+    throw new Error('planned-project submit must acquire a synchronous ref lock before any other work')
+  }
+  if (!source.includes('submitLockRef.current = false')) {
+    throw new Error('planned-project submit lock is never released')
+  }
+  if (!source.includes('onCancel={requestClose}') || !source.includes('<Button onClick={requestClose}>取消</Button>')) {
+    throw new Error('planned-project X, Escape, and footer cancel must share the touched close guard')
   }
   const historyHeaders = ['项目名称', '项目名', '安卓版本', '产品类型']
   const missingHeaders = historyHeaders.filter(header => !source.includes(`title: '${header}'`) && !source.includes(`title: "${header}"`))
@@ -1814,8 +1827,9 @@ registerAssertion('tOS-version overlay preserves semantic ordering and deletion 
   }
   for (const contract of [
     'compareSemanticTos(right, left)',
-    'normalRows',
-    'plannedRows',
+    'normalProjects',
+    'plannedProjects',
+    'countTosVersionReferences',
     '引用',
     '无法删除',
     'Modal.confirm',
@@ -1826,8 +1840,55 @@ registerAssertion('tOS-version overlay preserves semantic ordering and deletion 
     '格式应为',
     '该版本已存在',
     'canEdit',
+    'submitLockRef',
+    'tabIndex={0}',
+    'role="button"',
+    'aria-disabled="true"',
+    'aria-label={`删除 ${version.name}',
   ]) {
     if (!source.includes(contract)) throw new Error(`tOS maintenance is missing ${contract}`)
+  }
+  if (!/const handleSubmit = async \(\) => \{\s*if \(submitLockRef\.current\) return\s+submitLockRef\.current = true/.test(source)) {
+    throw new Error('tOS-version submit must acquire a synchronous ref lock before any other work')
+  }
+  if (!source.includes('submitLockRef.current = false')) {
+    throw new Error('tOS-version submit lock is never released')
+  }
+})
+
+registerAssertion('tOS reference protection counts raw unique project identities before roadmap adaptation', () => {
+  const maintenance = loadTypeScriptModule(path.join(root, 'src/components/roadmap/TosVersionMaintenanceModal.tsx'))
+  if (typeof maintenance.countTosVersionReferences !== 'function') {
+    throw new Error('missing raw-project tOS reference counter')
+  }
+  const versions = [
+    { id: 'tos-17-2', name: 'tOS 17.2', major: 17, minor: 2, targets: [], createdAt: '', updatedAt: '' },
+    { id: 'tos-18-0', name: 'tOS 18.0', major: 18, minor: 0, targets: [], createdAt: '', updatedAt: '' },
+  ]
+  const invalidButReferencing = {
+    id: 'normal-invalid', type: '整机-手机', firstSaleTosVersionId: 'tos-17-2',
+    brand: '非法品牌', startRam: '1GB', productType: '未知',
+  }
+  const counts = maintenance.countTosVersionReferences(
+    [
+      invalidButReferencing,
+      { ...invalidButReferencing },
+      { id: 'normal-legacy', type: '整机-PAD', firstSaleTosVersionId: 'tos17.2' },
+      { id: 'non-machine', type: '技术项目', firstSaleTosVersionId: 'tos-17-2' },
+    ],
+    [
+      { id: 'planned-one', firstSaleTosVersionId: 'tos-17-2' },
+      { id: 'planned-one', firstSaleTosVersionId: 'tos-17-2' },
+      { id: 'planned-other-version', firstSaleTosVersionId: 'tos-18-0' },
+    ],
+    versions[0],
+    versions,
+  )
+  if (counts.normalReferenceCount !== 2) {
+    throw new Error(`raw normal references must survive invalid adapter fields and dedupe IDs: ${JSON.stringify(counts)}`)
+  }
+  if (counts.plannedReferenceCount !== 1 || counts.referenceCount !== 3) {
+    throw new Error(`planned references must dedupe by source:id: ${JSON.stringify(counts)}`)
   }
 })
 
@@ -1847,6 +1908,50 @@ registerAssertion('tOS target editor keeps stable rows and removes blank targets
     'aria-label',
   ]) {
     if (!source.includes(contract)) throw new Error(`tOS target editor is missing ${contract}`)
+  }
+})
+
+registerAssertion('roadmap maintenance submissions use same-tick locks around every async path', () => {
+  for (const fileName of ['PlannedProjectModal.tsx', 'TosVersionMaintenanceModal.tsx']) {
+    const source = fs.readFileSync(path.join(root, 'src/components/roadmap', fileName), 'utf8')
+    if (!/const handleSubmit = async \(\) => \{\s*if \(submitLockRef\.current\) return\s+submitLockRef\.current = true/.test(source)) {
+      throw new Error(`${fileName} does not reject a rapid second submit before awaiting validation`)
+    }
+    const acquireIndex = source.indexOf('submitLockRef.current = true')
+    const validateIndex = source.indexOf('form.validateFields()', acquireIndex)
+    const releaseIndex = source.indexOf('submitLockRef.current = false', validateIndex)
+    if (acquireIndex < 0 || validateIndex < acquireIndex || releaseIndex < validateIndex) {
+      throw new Error(`${fileName} does not hold its submit lock across validation and mutation`)
+    }
+  }
+})
+
+registerAssertion('planned-project close guard confirms only touched drafts and bypasses successful completion', () => {
+  const source = fs.readFileSync(path.join(root, 'src/components/roadmap/PlannedProjectModal.tsx'), 'utf8')
+  if (!source.includes('form.isFieldsTouched()') || !source.includes("title: '放弃未保存的修改？'")) {
+    throw new Error('planned-project modal does not distinguish untouched and dirty close requests')
+  }
+  if (!source.includes('dirtyRef.current && form.isFieldsTouched()') || !source.includes('onValuesChange')) {
+    throw new Error('planned-project modal must distinguish user changes from programmatic initialization')
+  }
+  if (!source.includes('onCancel={requestClose}') || !source.includes('<Button onClick={requestClose}>取消</Button>')) {
+    throw new Error('planned-project close affordances do not share the close guard')
+  }
+  if ((source.match(/onChanged\?\.\(\)\s+onCancel\(\)/g) ?? []).length < 2) {
+    throw new Error('successful save and delete must close directly without a discard confirmation')
+  }
+})
+
+registerAssertion('referenced tOS delete protection exposes its reason to keyboard users', () => {
+  const source = fs.readFileSync(path.join(root, 'src/components/roadmap/TosVersionMaintenanceModal.tsx'), 'utf8')
+  for (const contract of [
+    'tabIndex={0}',
+    'role="button"',
+    'aria-disabled="true"',
+    'aria-label={`删除 ${version.name}：已被 ${referenceCount} 个项目引用，无法删除`}',
+    "trigger={['hover', 'focus']}",
+  ]) {
+    if (!source.includes(contract)) throw new Error(`referenced delete reason is missing ${contract}`)
   }
 })
 
