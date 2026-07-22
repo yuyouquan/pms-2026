@@ -64,19 +64,46 @@ export function loadTypeScriptModule(modulePath, moduleCache = new Map()) {
   return module.exports
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+export function findLegacyRoadmapReferences(content) {
+  const references = []
+  const legacyModulePattern = /import\s+(?:[\s\S]*?\s+from\s+)?['"]\.\/(MilestoneView|MRTrainView)['"]/g
+  const defaultImportPattern = /import\s+([A-Za-z_$][\w$]*)\s*(?:,\s*[\s\S]*?)?\s+from\s+['"]\.\/(?:MilestoneView|MRTrainView)['"]/g
+  const legacyJsxNames = new Set(['MilestoneView', 'MRTrainView'])
+
+  for (const match of content.matchAll(legacyModulePattern)) {
+    references.push(`legacy module import: ./${match[1]}`)
+  }
+  for (const match of content.matchAll(defaultImportPattern)) {
+    legacyJsxNames.add(match[1])
+  }
+  for (const name of legacyJsxNames) {
+    if (new RegExp(`<\\s*${escapeRegExp(name)}\\b`).test(content)) {
+      references.push(`legacy JSX mount: <${name}`)
+    }
+  }
+
+  return references
+}
+
 const roadmapPath = path.join(root, 'src/components/roadmap/RoadmapView.tsx')
 const roadmapSource = fs.readFileSync(roadmapPath, 'utf8')
 
 registerAssertion('RoadmapView does not import or mount legacy roadmap views', () => {
-  for (const legacyReference of [
-    "import MilestoneView from './MilestoneView'",
-    "import MRTrainView from './MRTrainView'",
-    '<MilestoneView',
-    '<MRTrainView',
-  ]) {
-    if (roadmapSource.includes(legacyReference)) {
-      throw new Error(`found legacy roadmap reference: ${legacyReference}`)
-    }
+  const legacyReferences = findLegacyRoadmapReferences(roadmapSource)
+  if (legacyReferences.length) {
+    throw new Error(`found ${legacyReferences.join(', ')}`)
+  }
+})
+
+registerAssertion('legacy roadmap detector catches aliased double-quoted imports and mounts', () => {
+  const fixture = 'import LegacyMilestone from "./MilestoneView"\nconst view = <LegacyMilestone />'
+  const references = findLegacyRoadmapReferences(fixture)
+  if (references.length !== 2) {
+    throw new Error(`expected two legacy references, found ${references.length}`)
   }
 })
 
