@@ -754,9 +754,11 @@ registerAssertion('planned project CRUD enforces duplicates and audit semantics'
   const duplicate = store.getState().createPlannedProject(createPlannedInput({ actor: '李四' }))
   if (duplicate.ok || duplicate.reason !== 'duplicate') throw new Error(`own duplicate was accepted: ${JSON.stringify(duplicate)}`)
   const externalDuplicate = store.getState().createPlannedProject(createPlannedInput({ projectCode: 'A100' }), {
-    duplicateKeys: ['A100|Android 16|新品'],
+    allRows: [{
+      id: 'normal-a100', source: 'normal', projectCode: 'A100', androidVersion: 'Android 16', productType: '新品',
+    }],
   })
-  if (externalDuplicate.ok || externalDuplicate.reason !== 'duplicate') throw new Error('caller-supplied duplicate key was ignored')
+  if (externalDuplicate.ok || externalDuplicate.reason !== 'duplicate') throw new Error('caller-supplied normal row was ignored')
 
   const updated = store.getState().updatePlannedProject(created.id, createPlannedInput({
     productType: '老品',
@@ -803,7 +805,7 @@ registerAssertion('planned project validation uses the current tOS catalog and c
     throw new Error(`unknown tOS version was accepted: ${JSON.stringify(invalid)}`)
   }
   const comparisonRows = [{ id: 'normal-1', ...createPlannedInput(), displayName: 'X6877', source: 'normal', status: '进行中', readOnly: true }]
-  const duplicate = store.getState().createPlannedProject(createPlannedInput(), { comparisonRows })
+  const duplicate = store.getState().createPlannedProject(createPlannedInput(), { allRows: comparisonRows })
   if (duplicate.ok || duplicate.reason !== 'duplicate') throw new Error('caller comparison row was ignored')
 })
 
@@ -1038,6 +1040,210 @@ registerAssertion('deleting the last tOS version sets selection to null', () => 
   }
 })
 
+function hydrateRoadmapStoreFromEnvelope(envelope) {
+  const previousWindow = globalThis.window
+  globalThis.window = {
+    localStorage: {
+      getItem: key => key === 'pms-project-roadmap' ? JSON.stringify(envelope) : null,
+      setItem: () => {},
+      removeItem: () => {},
+    },
+  }
+  try {
+    const storeModule = loadIsolatedRoadmapStore()
+    return storeModule.useRoadmapStore.getState()
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window
+    else globalThis.window = previousWindow
+  }
+}
+
+registerTableAssertions('roadmap hydration sanitizes every persisted envelope version', [
+  ['current version', 1],
+  ['missing version', undefined],
+].map(([caseName, version]) => [caseName, () => {
+  const envelope = {
+    state: {
+      tosVersions: [],
+      plannedProjects: [],
+      changeLogs: [],
+      selectedTosVersionId: 'missing-version',
+      filters: [{ id: 'bad', field: 'unknown', operator: 'equals', value: 'x' }],
+      visibleColumns: ['unknown'],
+      selectedConflictKey: 'must-not-hydrate',
+    },
+  }
+  if (version !== undefined) envelope.version = version
+  const hydrated = hydrateRoadmapStoreFromEnvelope(envelope)
+  if (
+    hydrated.selectedTosVersionId !== null
+    || hydrated.filters.length
+    || hydrated.visibleColumns.length !== 1
+    || hydrated.visibleColumns[0] === 'unknown'
+    || hydrated.selectedConflictKey !== null
+    || typeof hydrated.createPlannedProject !== 'function'
+  ) throw new Error(`persisted state bypassed sanitization: ${JSON.stringify(hydrated)}`)
+}]))
+
+registerAssertion('roadmap duplicate-comparison contract uses source-aware allRows only', () => {
+  const typesSource = fs.readFileSync(path.join(root, 'src/types/roadmap.ts'), 'utf8')
+  if (!typesSource.includes("'id' | 'source' | 'projectCode' | 'androidVersion' | 'productType'")) {
+    throw new Error('comparison rows must carry source and ID')
+  }
+  if (!typesSource.includes('allRows?: readonly RoadmapDuplicateComparisonRow[]')) throw new Error('missing allRows comparison boundary')
+  if (typesSource.includes('duplicateKeys')) throw new Error('ambiguous duplicateKeys boundary remains')
+})
+
+registerAssertion('roadmap update excludes only its current planned row from natural allRows', () => {
+  const storeModule = loadIsolatedRoadmapStore()
+  const store = resetRoadmapStore(storeModule)
+  if (!store.getState().createPlannedProject(createPlannedInput()).ok) throw new Error('fixture create failed')
+  const created = store.getState().plannedProjects[0]
+  const allRows = [
+    { ...created, source: 'planned', readOnly: false },
+    {
+      ...created,
+      id: 'normal-unrelated',
+      source: 'normal',
+      projectCode: 'NORMAL-1',
+      displayName: 'NORMAL-1',
+      readOnly: true,
+    },
+  ]
+  const updated = store.getState().updatePlannedProject(created.id, createPlannedInput({ remark: '正常更新' }), { allRows })
+  if (!updated.ok || store.getState().plannedProjects[0].remark !== '正常更新') {
+    throw new Error(`current planned row was treated as an external duplicate: ${JSON.stringify(updated)}`)
+  }
+})
+
+function persistedPlannedProject(projectCode, overrides = {}) {
+  return {
+    ...validPlannedRoadmapInput,
+    id: `planned-${projectCode}`,
+    projectCode,
+    displayName: projectCode,
+    remark: '',
+    status: '待规划',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    createdBy: '张三',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    updatedBy: '张三',
+    ...overrides,
+  }
+}
+
+registerAssertion('roadmap migration deterministically repairs IDs across persisted collections', () => {
+  const storeModule = loadIsolatedRoadmapStore()
+  const migrated = storeModule.migrateRoadmapState({
+    tosVersions: [
+      { name: 'tOS 17.2' },
+      { id: 'tos-17-2', name: 'tOS 18.0' },
+    ],
+    plannedProjects: [
+      persistedPlannedProject('A1', { id: undefined }),
+      persistedPlannedProject('A2', { id: 'planned-migrated-1' }),
+      persistedPlannedProject('A3', { id: 'planned-shared' }),
+      persistedPlannedProject('A4', { id: 'planned-shared' }),
+    ],
+    changeLogs: [
+      { ...validMigratedLogBase, id: undefined, action: 'update', changes: [{ field: 'brand', before: 'TECNO', after: 'Infinix' }] },
+      { ...validMigratedLogBase, id: 'roadmap-log-migrated-1', action: 'update', changes: [{ field: 'brand', before: 'Infinix', after: 'itel' }] },
+      { ...validMigratedLogBase, id: 'shared-log', action: 'create', changes: [], snapshot: { brand: 'TECNO' } },
+      { ...validMigratedLogBase, id: 'shared-log', action: 'delete', changes: [], snapshot: { brand: 'TECNO' } },
+    ],
+    filters: [
+      { field: 'brand', operator: 'equals', value: 'TECNO' },
+      { id: 'roadmap-filter-migrated-1', field: 'marketName', operator: 'contains', value: 'A' },
+      { id: 'shared-filter', field: 'brand', operator: 'equals', value: 'Infinix' },
+      { id: 'shared-filter', field: 'brand', operator: 'equals', value: 'itel' },
+    ],
+    visibleColumns: ['brand'],
+    selectedTosVersionId: 'missing',
+  }, 0)
+  for (const [label, records] of [
+    ['versions', migrated.tosVersions],
+    ['projects', migrated.plannedProjects],
+    ['logs', migrated.changeLogs],
+    ['filters', migrated.filters],
+  ]) {
+    const ids = records.map(record => record.id)
+    if (ids.some(id => typeof id !== 'string' || !id) || new Set(ids).size !== ids.length) {
+      throw new Error(`${label} IDs are not React-key safe: ${JSON.stringify(ids)}`)
+    }
+  }
+  const secondPass = storeModule.migrateRoadmapState(migrated, 1)
+  if (JSON.stringify(secondPass) !== JSON.stringify(migrated)) throw new Error('roadmap sanitizer is not idempotent')
+  if (migrated.selectedTosVersionId === null || !migrated.tosVersions.some(version => version.id === migrated.selectedTosVersionId)) {
+    throw new Error('sanitizer left an invalid selected version reference')
+  }
+
+  const store = resetRoadmapStore(storeModule)
+  store.setState(migrated)
+  const repairedProject = migrated.plannedProjects.find(project => project.projectCode === 'A2')
+  const updateInput = { ...repairedProject, actor: '李四', remark: '修复后可编辑' }
+  if (!store.getState().updatePlannedProject(repairedProject.id, updateInput).ok) throw new Error('repaired project ID cannot be updated')
+  if (!store.getState().deletePlannedProject(repairedProject.id, '李四').ok) throw new Error('repaired project ID cannot be deleted')
+})
+
+registerAssertion('normal change actions reject invalid shapes and round-trip through persistence', () => {
+  const storeModule = loadIsolatedRoadmapStore()
+  const store = resetRoadmapStore(storeModule)
+  const invalid = store.getState().recordNormalProjectChange({
+    projectId: 'normal-bad', projectDisplayName: 'BAD', action: 'update', actor: '张三', tosVersionName: 'tOS 17.2', changes: [],
+  })
+  if (invalid?.ok !== false || invalid.reason !== 'invalid' || store.getState().changeLogs.length) {
+    throw new Error('invalid normal update was persisted')
+  }
+  const inputs = [
+    {
+      id: 'normal-shared', projectId: 'normal-update', projectDisplayName: 'N1', action: 'update', actor: '张三', tosVersionName: 'tOS 17.2',
+      changes: [{ field: 'brand', before: 'TECNO', after: 'Infinix' }],
+    },
+    {
+      id: 'normal-shared', projectId: 'normal-create', projectDisplayName: 'N2', action: 'create', actor: '张三', tosVersionName: 'tOS 17.2',
+      changes: [], snapshot: { brand: 'TECNO' },
+    },
+    {
+      projectId: 'normal-delete', projectDisplayName: 'N3', action: 'delete', actor: '张三', tosVersionName: 'tOS 17.2',
+      changes: [], snapshot: { brand: 'TECNO' },
+    },
+  ]
+  for (const input of inputs) {
+    const result = store.getState().recordNormalProjectChange(input)
+    if (!result?.ok) throw new Error(`valid normal log was rejected: ${JSON.stringify(result)}`)
+  }
+  const producedIds = store.getState().changeLogs.map(log => log.id)
+  if (new Set(producedIds).size !== producedIds.length) throw new Error(`caller log ID collision survived: ${JSON.stringify(producedIds)}`)
+  const persisted = storeModule.partializeRoadmapState(store.getState())
+  const migrated = storeModule.migrateRoadmapState(persisted, 1)
+  if (migrated.changeLogs.length !== inputs.length) throw new Error('action-produced normal logs did not survive migration')
+})
+
+registerAssertion('tOS selection actions enforce valid references and repair transitions', () => {
+  const storeModule = loadIsolatedRoadmapStore()
+  const store = resetRoadmapStore(storeModule)
+  store.getState().setSelectedTosVersionId('missing')
+  if (store.getState().selectedTosVersionId !== 'tos-18-0') throw new Error('setter accepted an unknown tOS ID')
+  store.getState().setSelectedTosVersionId(null)
+  if (store.getState().selectedTosVersionId !== null) throw new Error('setter rejected null')
+  const nullRoundTrip = storeModule.migrateRoadmapState(storeModule.partializeRoadmapState(store.getState()), 1)
+  if (nullRoundTrip.selectedTosVersionId !== null) throw new Error('persisted null selection was not preserved')
+
+  store.setState({ selectedTosVersionId: 'stale-version-id' })
+  const unselectedId = store.getState().tosVersions.at(-1).id
+  if (!store.getState().deleteTosVersion(unselectedId, 0).ok) throw new Error('unselected version delete failed')
+  if (store.getState().selectedTosVersionId !== store.getState().tosVersions[0].id) throw new Error('delete did not repair stale selection')
+
+  store.setState({ tosVersions: [], selectedTosVersionId: null })
+  if (!store.getState().createTosVersion({ name: 'tOS 20.0' }).ok) throw new Error('first version create failed')
+  const first = store.getState().tosVersions[0]
+  if (store.getState().selectedTosVersionId !== first.id) throw new Error('first created version was not selected')
+  if (!store.getState().renameTosVersion(first.id, { name: 'tOS 20.1' }).ok) throw new Error('rename failed')
+  if (store.getState().selectedTosVersionId !== first.id || store.getState().tosVersions[0].id !== first.id) {
+    throw new Error('rename changed the stable selected ID')
+  }
+})
+
 registerAssertion('roadmap store loads in Node without localStorage and prepends normal logs only', () => {
   const previousWindow = globalThis.window
   try {
@@ -1045,12 +1251,12 @@ registerAssertion('roadmap store loads in Node without localStorage and prepends
     const storeModule = loadIsolatedRoadmapStore()
     const store = resetRoadmapStore(storeModule)
     store.getState().recordNormalProjectChange({
-      projectId: 'normal-1', projectDisplayName: 'X1', source: 'normal', action: 'update', actor: '张三',
-      tosVersionName: 'tOS 17.2', changes: [],
+      projectId: 'normal-1', projectDisplayName: 'X1', action: 'update', actor: '张三',
+      tosVersionName: 'tOS 17.2', changes: [{ field: 'brand', before: 'TECNO', after: 'Infinix' }],
     })
     store.getState().recordNormalProjectChange({
-      projectId: 'normal-2', projectDisplayName: 'X2', source: 'normal', action: 'delete', actor: '李四',
-      tosVersionName: 'tOS 18.0', changes: [],
+      projectId: 'normal-2', projectDisplayName: 'X2', action: 'delete', actor: '李四',
+      tosVersionName: 'tOS 18.0', changes: [], snapshot: { brand: 'TECNO' },
     })
     const state = store.getState()
     if (state.changeLogs.map(log => log.projectId).join(',') !== 'normal-2,normal-1') throw new Error('normal logs were not prepended')

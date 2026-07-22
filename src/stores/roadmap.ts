@@ -8,7 +8,6 @@ import {
 import { compareSemanticTos } from '@/lib/roadmapSorting'
 import {
   buildRoadmapDisplayName,
-  buildRoadmapDuplicateKey,
   isExactRoadmapDuplicate,
   normalizeLegacyRoadmapProductType,
   normalizeTosVersionName,
@@ -105,6 +104,18 @@ function normalizeTargets(value: unknown): string[] {
   })
 }
 
+function claimDeterministicId(preferred: unknown, fallback: string, usedIds: Set<string>): string {
+  const base = typeof preferred === 'string' && preferred.trim() ? preferred.trim() : fallback
+  let candidate = base
+  let suffix = 2
+  while (usedIds.has(candidate)) {
+    candidate = `${base}-${suffix}`
+    suffix += 1
+  }
+  usedIds.add(candidate)
+  return candidate
+}
+
 function sortTosVersions(versions: readonly TosVersionConfig[]): TosVersionConfig[] {
   return [...versions].sort((left, right) => compareSemanticTos(right, left))
 }
@@ -155,18 +166,18 @@ function sanitizeVisibleColumns(value: unknown): RoadmapColumnKey[] {
 
 function sanitizeFilters(value: unknown): RoadmapFilterCondition[] {
   if (!Array.isArray(value)) return []
-  return value.flatMap(filter => {
+  const usedIds = new Set<string>()
+  return value.flatMap((filter, index) => {
     if (!isRecord(filter)) return []
     if (
-      typeof filter.id !== 'string'
-      || typeof filter.field !== 'string'
+      typeof filter.field !== 'string'
       || !KNOWN_COLUMN_KEYS.has(filter.field as RoadmapColumnKey)
       || typeof filter.operator !== 'string'
       || !FILTER_OPERATORS.has(filter.operator as RoadmapFilterOperator)
       || typeof filter.value !== 'string'
     ) return []
     return [{
-      id: filter.id,
+      id: claimDeterministicId(filter.id, `roadmap-filter-migrated-${index + 1}`, usedIds),
       field: filter.field as RoadmapColumnKey,
       operator: filter.operator as RoadmapFilterOperator,
       value: filter.value,
@@ -198,12 +209,8 @@ function migrateTosVersions(value: unknown): TosVersionConfig[] | null {
       : null
     const normalized = fromName ?? fromParts
     if (!normalized || usedNames.has(normalized.name)) continue
-    const requestedId = typeof entry.id === 'string' && entry.id.trim()
-      ? entry.id.trim()
-      : `tos-${normalized.major}-${normalized.minor}`
-    if (usedIds.has(requestedId)) continue
+    const requestedId = claimDeterministicId(entry.id, `tos-${normalized.major}-${normalized.minor}`, usedIds)
     usedNames.add(normalized.name)
-    usedIds.add(requestedId)
     versions.push({
       id: requestedId,
       ...normalized,
@@ -270,6 +277,7 @@ function toProjectFields(input: PlannedRoadmapProjectMutationInput): RoadmapProj
 function migratePlannedProjects(value: unknown, versions: readonly TosVersionConfig[]): PlannedRoadmapProject[] | null {
   if (!Array.isArray(value)) return null
   const projects: PlannedRoadmapProject[] = []
+  const usedIds = new Set<string>()
 
   for (const [index, entry] of value.entries()) {
     if (!isRecord(entry)) continue
@@ -291,7 +299,7 @@ function migratePlannedProjects(value: unknown, versions: readonly TosVersionCon
     const fields = toProjectFields(normalizedInput)
     projects.push({
       ...fields,
-      id: typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : `planned-migrated-${index + 1}`,
+      id: claimDeterministicId(entry.id, `planned-migrated-${index + 1}`, usedIds),
       status: '待规划',
       createdAt: normalizeTimestamp(entry.createdAt),
       createdBy: typeof entry.createdBy === 'string' && entry.createdBy.trim() ? entry.createdBy.trim() : '系统',
@@ -335,7 +343,22 @@ function isValidChangeLog(value: unknown): value is RoadmapChangeLog {
 
 function migrateChangeLogs(value: unknown): RoadmapChangeLog[] | null {
   if (!Array.isArray(value)) return null
-  return value.filter(isValidChangeLog)
+  const logs: RoadmapChangeLog[] = []
+  const usedIds = new Set<string>()
+  for (const [index, entry] of value.entries()) {
+    if (!isRecord(entry)) continue
+    const fallbackId = `roadmap-log-migrated-${index + 1}`
+    const candidate = {
+      ...entry,
+      id: typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : fallbackId,
+    }
+    if (!isValidChangeLog(candidate)) continue
+    logs.push({
+      ...candidate,
+      id: claimDeterministicId(candidate.id, fallbackId, usedIds),
+    })
+  }
+  return logs
 }
 
 export function migrateRoadmapState(persistedState: unknown, fromVersion: number): RoadmapStoreState {
@@ -360,9 +383,9 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
   const changeLogs = 'changeLogs' in persistedState ? migrateChangeLogs(persistedState.changeLogs) : []
   if (!plannedProjects || !changeLogs) return initial
 
-  const selectedTosVersionId = resolveMigratedTosId(persistedState.selectedTosVersionId, tosVersions)
-    ?? tosVersions[0]?.id
-    ?? null
+  const selectedTosVersionId = tosVersions.length === 0 || persistedState.selectedTosVersionId === null
+    ? null
+    : resolveMigratedTosId(persistedState.selectedTosVersionId, tosVersions) ?? tosVersions[0].id
 
   return {
     plannedProjects,
@@ -438,11 +461,12 @@ function isDuplicate(
   excludedId: string | undefined,
   comparison: RoadmapDuplicateComparison | undefined,
 ): boolean {
-  const comparisonRows = comparison?.comparisonRows ?? []
+  const comparisonRows = (comparison?.allRows ?? []).filter(row => !(
+    excludedId && row.source === 'planned' && row.id === excludedId
+  ))
   if (isExactRoadmapDuplicate(fields, plannedProjects, excludedId)) return true
   if (isExactRoadmapDuplicate(fields, comparisonRows)) return true
-  const key = buildRoadmapDuplicateKey(fields.projectCode, fields.androidVersion, fields.productType)
-  return comparison?.duplicateKeys?.some(duplicateKey => duplicateKey === key) ?? false
+  return false
 }
 
 function versionName(versions: readonly TosVersionConfig[], id: string): string {
@@ -476,6 +500,11 @@ function deriveAvailableTosId(major: number, minor: number, versions: readonly T
   return `${base}-${createCollisionResistantId('version').split('-').at(-1)}`
 }
 
+function createUniqueRuntimeId(prefix: string, existingIds: ReadonlySet<string>): string {
+  const id = createCollisionResistantId(prefix)
+  return claimDeterministicId(id, id, new Set(existingIds))
+}
+
 export const useRoadmapStore = create<RoadmapStore>()(
   persist(
     (set, get) => ({
@@ -483,7 +512,9 @@ export const useRoadmapStore = create<RoadmapStore>()(
       setViewMode: (viewMode: RoadmapViewMode) => {
         if (viewMode === 'table' || viewMode === 'evolution') set({ viewMode })
       },
-      setSelectedTosVersionId: (id: string | null) => set({ selectedTosVersionId: id }),
+      setSelectedTosVersionId: (id: string | null) => {
+        if (id === null || get().tosVersions.some(version => version.id === id)) set({ selectedTosVersionId: id })
+      },
       setBrandFilter: (brand: 'all' | RoadmapBrand) => {
         if (brand === 'all' || ROADMAP_BRANDS.has(brand)) set({ brandFilter: brand })
       },
@@ -582,7 +613,15 @@ export const useRoadmapStore = create<RoadmapStore>()(
           createdAt: occurredAt,
           updatedAt: occurredAt,
         }
-        set(state => ({ tosVersions: sortTosVersions([...state.tosVersions, version]) }))
+        set(state => {
+          const tosVersions = sortTosVersions([...state.tosVersions, version])
+          const selectedTosVersionId = state.tosVersions.length === 0
+            ? version.id
+            : state.selectedTosVersionId === null || state.tosVersions.some(item => item.id === state.selectedTosVersionId)
+              ? state.selectedTosVersionId
+              : tosVersions[0].id
+          return { tosVersions, selectedTosVersionId }
+        })
         return { ok: true }
       },
       renameTosVersion: (id, input) => {
@@ -608,9 +647,11 @@ export const useRoadmapStore = create<RoadmapStore>()(
           tosVersions,
           selectedTosVersionId: tosVersions.length === 0
             ? null
-            : state.selectedTosVersionId === id
-              ? tosVersions[0].id
-              : state.selectedTosVersionId,
+            : state.selectedTosVersionId === null
+              ? null
+              : tosVersions.some(version => version.id === state.selectedTosVersionId)
+                ? state.selectedTosVersionId
+                : tosVersions[0].id,
         }))
         return { ok: true }
       },
@@ -626,13 +667,21 @@ export const useRoadmapStore = create<RoadmapStore>()(
         return { ok: true }
       },
       recordNormalProjectChange: (input: RoadmapNormalChangeInput) => {
+        const existingIds = new Set(get().changeLogs.map(log => log.id))
+        const requestedId = typeof input.id === 'string' ? input.id.trim() : ''
+        const id = requestedId && !existingIds.has(requestedId)
+          ? requestedId
+          : createUniqueRuntimeId('roadmap-log', existingIds)
         const log: RoadmapChangeLog = {
           ...input,
-          id: input.id ?? createCollisionResistantId('roadmap-log'),
+          id,
           source: 'normal',
           occurredAt: input.occurredAt && isValidIsoTimestamp(input.occurredAt) ? input.occurredAt : nowIso(),
-        }
+          changes: input.changes ?? [],
+        } as RoadmapChangeLog
+        if (!isValidChangeLog(log)) return mutationFailure({ changeLog: '变更记录格式无效' })
         set(state => ({ changeLogs: [log, ...state.changeLogs] }))
+        return { ok: true }
       },
     }),
     {
@@ -641,6 +690,10 @@ export const useRoadmapStore = create<RoadmapStore>()(
       storage: createJSONStorage(() => safeRoadmapStorage),
       migrate: migrateRoadmapState,
       partialize: partializeRoadmapState,
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...migrateRoadmapState(persistedState, 1),
+      }),
     },
   ),
 )

@@ -223,22 +223,37 @@ export type PlannedRoadmapProjectMutationInput = PlannedRoadmapProjectInput & {
 
 export type RoadmapDuplicateComparisonRow = Pick<
   RoadmapProjectRow,
-  'id' | 'projectCode' | 'androidVersion' | 'productType'
+  'id' | 'source' | 'projectCode' | 'androidVersion' | 'productType'
 >
 
 export interface RoadmapDuplicateComparison {
-  comparisonRows?: readonly RoadmapDuplicateComparisonRow[]
-  duplicateKeys?: readonly string[]
+  allRows?: readonly RoadmapDuplicateComparisonRow[]
 }
 
 export interface CreateTosVersionInput {
   name: string
 }
 
-export type RoadmapNormalChangeInput = Omit<RoadmapChangeLog, 'id' | 'occurredAt'> & {
+type RoadmapNormalChangeInputBase = Omit<
+  RoadmapChangeLog,
+  'id' | 'occurredAt' | 'source' | 'action' | 'changes' | 'snapshot'
+> & {
   id?: string
   occurredAt?: string
 }
+
+export type RoadmapNormalChangeInput = RoadmapNormalChangeInputBase & (
+  | {
+      action: 'update'
+      changes: [RoadmapFieldChange, ...RoadmapFieldChange[]]
+      snapshot?: RoadmapAuditSnapshot
+    }
+  | {
+      action: 'create' | 'delete'
+      changes?: []
+      snapshot: RoadmapAuditSnapshot
+    }
+)
 
 export interface RoadmapStoreActions {
   setViewMode: (viewMode: RoadmapViewMode) => void
@@ -263,7 +278,7 @@ export interface RoadmapStoreActions {
   renameTosVersion: (id: string, input: CreateTosVersionInput) => RoadmapMutationResult
   deleteTosVersion: (id: string, normalReferenceCount: number) => RoadmapMutationResult
   setTosTargets: (id: string, targets: string[]) => RoadmapMutationResult
-  recordNormalProjectChange: (input: RoadmapNormalChangeInput) => void
+  recordNormalProjectChange: (input: RoadmapNormalChangeInput) => RoadmapMutationResult
 }
 
 export type RoadmapStore = RoadmapStoreState & RoadmapStoreActions
