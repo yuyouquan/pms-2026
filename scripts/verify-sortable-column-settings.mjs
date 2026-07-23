@@ -816,6 +816,34 @@ registerAssertion('roadmap hydration migrates partial visibility maps per view',
   )
 })
 
+registerAssertion('roadmap per-target controls stay inside compact target-card headers', () => {
+  const table = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
+  const evolution = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapEvolutionView.tsx'), 'utf8')
+  const toolbar = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
+
+  for (const [label, source] of [['table', table], ['evolution', evolution]]) {
+    for (const contract of [
+      'pms-roadmap-target-card-header',
+      'pms-roadmap-target-card-actions',
+      'wrap={false}',
+      'aria-expanded={!targetCollapsed}',
+    ]) {
+      assert.ok(source.includes(contract), `${label} target card is missing ${contract}`)
+    }
+  }
+
+  const tableCardIndex = table.indexOf('data-roadmap-target-card')
+  const tableToggleIndex = table.indexOf('onClick={() => onToggleTarget(version.id)}')
+  const tableEditIndex = table.indexOf('onClick={() => onEditTosTargets(version.id)}')
+  assert.ok(tableCardIndex >= 0 && tableToggleIndex > tableCardIndex)
+  assert.ok(tableEditIndex > tableCardIndex)
+  assert.equal(table.match(/onToggleTarget\(version\.id\)/g)?.length, 1)
+  assert.equal(table.match(/onEditTosTargets\(version\.id\)/g)?.length, 1)
+
+  assert.ok(toolbar.includes("viewMode === 'evolution' && hasTargetVersions"))
+  assert.ok(toolbar.includes('onToggleAllTargets'))
+})
+
 registerAssertion('roadmap table and evolution card render from parent-provided column order', () => {
   const table = parseTypeScript(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'))
   const card = parseTypeScript(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'))

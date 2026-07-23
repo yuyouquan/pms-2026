@@ -227,26 +227,45 @@ export default function RoadmapEvolutionView({
               </Flex>
               {version.targets.length ? (
                 <section className="pms-roadmap-evolution-target" aria-label={`${version.name} 目标`}>
-                  <Flex justify="space-between" align="center" gap={8}>
-                    <Button
-                      type="text"
-                      size="small"
-                      aria-expanded={!targetCollapsed}
-                      icon={targetCollapsed ? <DownOutlined aria-hidden /> : <UpOutlined aria-hidden />}
-                      onClick={() => onToggleTarget(version.id)}
+                  <Flex
+                    className="pms-roadmap-target-card-header"
+                    justify="space-between"
+                    align="center"
+                    gap={8}
+                    wrap={false}
+                  >
+                    <Flex align="center" gap={6} wrap={false} style={{ minWidth: 0 }}>
+                      <BulbOutlined aria-hidden />
+                      <Typography.Text strong ellipsis>版本目标</Typography.Text>
+                    </Flex>
+                    <Flex
+                      className="pms-roadmap-target-card-actions"
+                      align="center"
+                      justify="flex-end"
+                      gap={2}
+                      wrap={false}
+                      style={{ flex: '0 0 auto', whiteSpace: 'nowrap' }}
                     >
-                      <BulbOutlined aria-hidden /> 版本目标
-                    </Button>
-                    {canEdit ? (
                       <Button
-                        type="link"
+                        type="text"
                         size="small"
-                        icon={<EditOutlined aria-hidden />}
-                        onClick={() => onEditTosTargets(version.id)}
+                        aria-expanded={!targetCollapsed}
+                        icon={targetCollapsed ? <DownOutlined aria-hidden /> : <UpOutlined aria-hidden />}
+                        onClick={() => onToggleTarget(version.id)}
                       >
-                        修改目标
+                        {targetCollapsed ? '展开' : '收起'}
                       </Button>
-                    ) : null}
+                      {canEdit ? (
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<EditOutlined aria-hidden />}
+                          onClick={() => onEditTosTargets(version.id)}
+                        >
+                          修改目标
+                        </Button>
+                      ) : null}
+                    </Flex>
                   </Flex>
                   {!targetCollapsed ? (
                     <Typography.Paragraph
