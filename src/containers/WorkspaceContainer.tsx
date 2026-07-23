@@ -433,6 +433,7 @@ export default function WorkspaceContainer() {
             setProjectSpaceModule(module)
             setActiveModule('projectSpace')
             if (module === 'plan' && planLevel) {
+              if (planLevel === 'level2') setProjectPlanViewMode('table')
               setProjectPlanLevel(planLevel)
               if (planLevel === 'level2' && planType) {
                 const plan = createdLevel2Plans.find(p => p.name === planType)

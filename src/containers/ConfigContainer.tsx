@@ -16,7 +16,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { ColumnsType } from 'antd/es/table'
 import { useUiStore } from '@/stores/ui'
-import { usePlanStore, LEVEL2_PLAN_TYPES, LEVEL1_TEMPLATE_TASKS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
+import { usePlanStore, LEVEL2_PLAN_TYPES, LEVEL1_TEMPLATE_TASKS, getConfigColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
 import { useProjectStore } from '@/stores/project'
 import { usePermissionStore } from '@/stores/permission'
@@ -129,7 +129,7 @@ export default function ConfigContainer() {
   // View columns
   const getViewKey = () => `config-${planLevel}-${viewMode}`
   const currentViewMode = viewMode
-  const currentViewColumns = getColumnsForView(currentViewMode)
+  const currentViewColumns = getConfigColumnsForView(currentViewMode)
   const currentViewKey = getViewKey()
   const storedColumnSettings = columnSettingsByView[currentViewKey]
   const columnSettings = useMemo(

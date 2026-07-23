@@ -3375,7 +3375,15 @@ export default function ProjectSpaceContainer() {
         <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
           <Row align="middle" justify="space-between">
             <Col>
-              <Tabs activeKey={projectPlanLevel} onChange={(key) => navigateWithEditGuard(() => setProjectPlanLevel(key as string))} style={{ marginBottom: 0 }} items={planTabItems.map(item => ({ ...item, label: <span style={{ fontWeight: 500, padding: '0 4px' }}>{item.label}</span> }))} />
+              <Tabs
+                activeKey={projectPlanLevel}
+                onChange={(key) => navigateWithEditGuard(() => {
+                  if (key === 'level2') setProjectPlanViewMode('table')
+                  setProjectPlanLevel(key as string)
+                })}
+                style={{ marginBottom: 0 }}
+                items={planTabItems.map(item => ({ ...item, label: <span style={{ fontWeight: 500, padding: '0 4px' }}>{item.label}</span> }))}
+              />
             </Col>
             <Col><Tag color={projectPlanLevel === 'overview' ? 'blue' : 'default'} style={{ fontSize: 11 }}>{planTabItems.find(t => t.key === projectPlanLevel)?.label}</Tag></Col>
           </Row>

@@ -274,8 +274,8 @@ export const TodoList: React.FC<TodoListProps> = ({
                   setActiveModule('projectSpace')
                   setProjectSpaceModule('plan')
                   setCurrentVersion(todo.versionId || 'v2')
-                  setProjectPlanLevel(todo.planLevel)
                   setProjectPlanViewMode('table')
+                  setProjectPlanLevel(todo.planLevel)
                   setIsEditMode(true)
                   if (todo.planLevel === 'level2' && todo.planTabKey) {
                     setActiveLevel2Plan(todo.planTabKey)

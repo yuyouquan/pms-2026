@@ -83,6 +83,9 @@ export const ALL_COLUMNS: PlanColumnDefinition[] = [
 ]
 
 export const TABLE_COLUMNS = ALL_COLUMNS
+export const CONFIG_TABLE_COLUMNS = TABLE_COLUMNS.filter(column => (
+  !['actualStartDate', 'actualEndDate', 'actualDays'].includes(column.key)
+))
 
 export const GANTT_COLUMNS: PlanColumnDefinition[] = [
   { key: 'taskName', title: '任务名称', default: true, defaultVisible: true, hideable: false },
@@ -97,6 +100,11 @@ export const getColumnsForView = (viewMode: string) => {
   if (viewMode === 'gantt') return GANTT_COLUMNS
   if (viewMode === 'horizontal') return [] // 横版无自定义列
   return TABLE_COLUMNS
+}
+
+export const getConfigColumnsForView = (viewMode: string) => {
+  if (viewMode === 'gantt') return GANTT_COLUMNS
+  return CONFIG_TABLE_COLUMNS
 }
 
 /** Initial L2 plan tasks (in-line data from page.tsx) */
@@ -156,16 +164,20 @@ export const INITIAL_LEVEL2_PLAN_META: Record<string, any> = {
 }
 
 // ─── Helper to compute default columns ──────────────────────────────
-const defaultCols = ALL_COLUMNS.filter(c => c.default).map(c => c.key)
 const defaultTableColumnSettings = getDefaultColumnSettings(TABLE_COLUMNS)
+const defaultConfigTableColumnSettings = getDefaultColumnSettings(CONFIG_TABLE_COLUMNS)
 const defaultGanttColumnSettings = getDefaultColumnSettings(GANTT_COLUMNS)
 const initialColumnSettingsByView = [
   'project-level1-table',
   'project-level2-table',
+].reduce<Record<string, SortableColumnSettingsValue<string>>>((settings, key) => {
+  settings[key] = { order: [...defaultTableColumnSettings.order], visible: [...defaultTableColumnSettings.visible] }
+  return settings
+}, [
   'config-level1-table',
   'config-level2-table',
 ].reduce<Record<string, SortableColumnSettingsValue<string>>>((settings, key) => {
-  settings[key] = { order: [...defaultTableColumnSettings.order], visible: [...defaultTableColumnSettings.visible] }
+  settings[key] = { order: [...defaultConfigTableColumnSettings.order], visible: [...defaultConfigTableColumnSettings.visible] }
   return settings
 }, [
   'project-level1-gantt',
@@ -175,7 +187,7 @@ const initialColumnSettingsByView = [
 ].reduce<Record<string, SortableColumnSettingsValue<string>>>((settings, key) => {
   settings[key] = { order: [...defaultGanttColumnSettings.order], visible: [...defaultGanttColumnSettings.visible] }
   return settings
-}, {}))
+}, {})))
 
 // ─── Store types ────────────────────────────────────────────────────
 
@@ -215,7 +227,6 @@ export interface PlanState {
   selectedMRVersion: string
 
   // Columns per view
-  columnsByView: Record<string, string[]>
   columnSettingsByView: Record<string, SortableColumnSettingsValue<string>>
 
   // Collapsed tree nodes per scope
@@ -281,7 +292,6 @@ export interface PlanActions {
   setSelectedMilestones: (v: string[] | ((prev: string[]) => string[])) => void
   setSelectedMRVersion: (v: string) => void
 
-  setColumnsByView: (v: Record<string, string[]> | ((prev: Record<string, string[]>) => Record<string, string[]>)) => void
   setColumnSettingsByView: (
     v: Record<string, SortableColumnSettingsValue<string>>
       | ((prev: Record<string, SortableColumnSettingsValue<string>>) => Record<string, SortableColumnSettingsValue<string>>)
@@ -351,13 +361,6 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
   selectedMRVersion: 'FR',
 
   // Columns per view
-  columnsByView: {
-    'config-table': [...defaultCols],
-    'config-gantt': [...defaultCols],
-    'project-table': [...defaultCols],
-    'project-gantt': [...defaultCols],
-    'project-horizontal': [...defaultCols],
-  },
   columnSettingsByView: initialColumnSettingsByView,
 
   // Collapsed tree nodes
@@ -451,7 +454,6 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
   setSelectedMilestones: (v) => set((s) => ({ selectedMilestones: typeof v === 'function' ? v(s.selectedMilestones) : v })),
   setSelectedMRVersion: (v) => set({ selectedMRVersion: v }),
 
-  setColumnsByView: (v) => set((s) => ({ columnsByView: typeof v === 'function' ? v(s.columnsByView) : v })),
   setColumnSettingsByView: (v) => set((s) => ({
     columnSettingsByView: typeof v === 'function' ? v(s.columnSettingsByView) : v,
   })),
