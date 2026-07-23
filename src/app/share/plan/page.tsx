@@ -3,14 +3,28 @@
 import { useState, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
-  Card, Tag, Space, Input, Button, Tooltip, Modal, Checkbox, Empty, Segmented, Divider, Row, Col
+  Card, Tag, Space, Input, Button, Tooltip, Empty, Segmented, Divider, Row, Col
 } from 'antd'
 import {
   SearchOutlined, BarChartOutlined, TableOutlined,
   UnorderedListOutlined, SettingOutlined
 } from '@ant-design/icons'
 import { initialProjects, PROJECT_TYPE_COLORS } from '@/data/projects'
-import { TaskTable, HorizontalTable, GanttChart, ALL_COLUMNS, VERSION_DATA, LEVEL1_TASKS } from '@/components/plan/PlanModule'
+import {
+  TaskTable,
+  HorizontalTable,
+  GanttChart,
+  ALL_COLUMNS,
+  DEFAULT_PLAN_COLUMN_SETTINGS,
+  VERSION_DATA,
+  LEVEL1_TASKS,
+} from '@/components/plan/PlanModule'
+import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
+import {
+  getDefaultColumnSettings,
+  type SortableColumnDefinition,
+  type SortableColumnSettingsValue,
+} from '@/lib/columnSettings'
 import { isMachineProjectType } from '@/constants/projectTypes'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
 
@@ -47,9 +61,11 @@ function SharePlanContent() {
   const [selectedMarket, setSelectedMarket] = useState(markets[0] || '')
   const [viewMode, setViewMode] = useState<'table' | 'horizontal' | 'gantt'>('table')
   const [searchText, setSearchText] = useState('')
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(ALL_COLUMNS.filter(c => c.default).map(c => c.key))
+  const columnDefinitions: readonly SortableColumnDefinition<string>[] = ALL_COLUMNS
+  const [columnSettings, setColumnSettings] = useState<SortableColumnSettingsValue<string>>(
+    () => getDefaultColumnSettings(columnDefinitions),
+  )
   const [showColumnModal, setShowColumnModal] = useState(false)
-  const [tempColumns, setTempColumns] = useState<string[]>([])
 
   // Current tasks based on market selection
   const tasks = useMemo(() => {
@@ -164,7 +180,7 @@ function SharePlanContent() {
                   <Button
                     icon={<SettingOutlined />}
                     style={{ borderRadius: 6 }}
-                    onClick={() => { setTempColumns([...visibleColumns]); setShowColumnModal(true) }}
+                    onClick={() => setShowColumnModal(true)}
                   />
                 </Tooltip>
               )}
@@ -193,7 +209,7 @@ function SharePlanContent() {
             setTasks={() => {}}
             isEditMode={false}
             isCurrentDraft={false}
-            visibleColumns={visibleColumns}
+            columnSettings={columnSettings}
             searchText={searchText}
             activeModule="share"
             planLevel="level1"
@@ -207,37 +223,21 @@ function SharePlanContent() {
           <HorizontalTable tasks={tasks} versions={publishedVersions} />
         )}
         {viewMode === 'gantt' && (
-          <GanttChart tasks={tasks} isEditMode={false} />
+          <GanttChart tasks={tasks} isEditMode={false} columnSettings={columnSettings} />
         )}
       </Card>
 
-      {/* Column Settings Modal */}
-      <Modal
-        title="自定义列显示"
+      <SortableColumnSettings
         open={showColumnModal}
-        onOk={() => { setVisibleColumns(tempColumns); setShowColumnModal(false) }}
+        definitions={columnDefinitions}
+        value={columnSettings}
+        defaultValue={DEFAULT_PLAN_COLUMN_SETTINGS}
         onCancel={() => setShowColumnModal(false)}
-        width={480}
-        className="pms-modal"
-      >
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '12px 0' }}>
-          {ALL_COLUMNS.map(col => (
-            <Checkbox
-              key={col.key}
-              checked={tempColumns.includes(col.key)}
-              onChange={(e) => {
-                if (e.target.checked) {
-                  setTempColumns([...tempColumns, col.key])
-                } else {
-                  setTempColumns(tempColumns.filter(k => k !== col.key))
-                }
-              }}
-            >
-              {col.title}
-            </Checkbox>
-          ))}
-        </div>
-      </Modal>
+        onApply={(nextSettings) => {
+          setColumnSettings(nextSettings)
+          setShowColumnModal(false)
+        }}
+      />
     </div>
   )
 }
