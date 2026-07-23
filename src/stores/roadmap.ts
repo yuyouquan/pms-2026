@@ -157,7 +157,9 @@ export function createInitialTosVersions(): TosVersionConfig[] {
 export function createInitialPlannedProjects(
   tosVersions: readonly TosVersionConfig[] = createInitialTosVersions(),
 ): PlannedRoadmapProject[] {
-  const firstSaleVersion = tosVersions.find(version => version.id === 'tos-17-2') ?? tosVersions[0]
+  const firstSaleVersion = tosVersions.find(version => version.id === 'tos-16-3')
+    ?? tosVersions.find(version => version.major === 16 && version.minor === 3)
+    ?? tosVersions[0]
   if (!firstSaleVersion) return []
   return [{
     id: 'planned-mock-x6877-android16-new',
@@ -688,10 +690,10 @@ export function mergeRoadmapPersistedState(
     return roadmapStorageReadFailed ? { ...currentState, ...migrated } : currentState
   }
   const mock = createInitialRoadmapMockState(migrated.tosVersions)
-  const existingLogIds = new Set(migrated.changeLogs.map(log => log.id))
+  const mockLogIds = new Set(mock.changeLogs.map(log => log.id))
   const changeLogs = [
-    ...mock.changeLogs.filter(log => !existingLogIds.has(log.id)),
-    ...migrated.changeLogs,
+    ...mock.changeLogs,
+    ...migrated.changeLogs.filter(log => !mockLogIds.has(log.id)),
   ].sort((left, right) => (
     Date.parse(right.occurredAt) - Date.parse(left.occurredAt) || left.id.localeCompare(right.id)
   ))
@@ -710,11 +712,13 @@ export function mergeRoadmapPersistedState(
     && log.projectId === plannedSeed.id
   ))
   const canResolveSeedTos = migrated.tosVersions.some(version => version.id === plannedSeed.firstSaleTosVersionId)
-  const hasSeedProject = migrated.plannedProjects.some(project => project.id === plannedSeed.id)
-  const hasEquivalentPlannedProject = isExactRoadmapDuplicate(plannedSeed, migrated.plannedProjects)
-  const plannedProjects = !seedWasDeleted && canResolveSeedTos && !hasSeedProject && !hasEquivalentPlannedProject
-    ? [plannedSeed, ...migrated.plannedProjects]
-    : migrated.plannedProjects
+  const projectsWithoutSeed = migrated.plannedProjects.filter(project => project.id !== plannedSeed.id)
+  const hasEquivalentPlannedProject = isExactRoadmapDuplicate(plannedSeed, projectsWithoutSeed)
+  const plannedProjects = seedWasDeleted
+    ? projectsWithoutSeed
+    : canResolveSeedTos && !hasEquivalentPlannedProject
+      ? [plannedSeed, ...projectsWithoutSeed]
+      : projectsWithoutSeed
 
   return {
     ...currentState,

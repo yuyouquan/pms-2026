@@ -65,6 +65,9 @@ const audit = load(path.join(root, 'src/lib/roadmapAudit.ts'))
 const initial = roadmapStore.createInitialRoadmapMockState()
 const planned = initial.plannedProjects.find(project => project.id === 'planned-mock-x6877-android16-new')
 if (!planned) throw new Error('missing planned X6877 roadmap mock')
+if (planned.firstSaleTosVersionId !== 'tos-16-3') {
+  throw new Error(`Android 16 planned mock must use tos-16-3, got ${planned.firstSaleTosVersionId}`)
+}
 
 const normal = projectData.initialProjects.find(project => project.id === '1')
 if (!normal) throw new Error('missing normal X6877 project mock')
@@ -117,6 +120,9 @@ for (const source of ['normal', 'planned']) {
   if (!hydrated.changeLogs.some(log => log.source === source)) {
     throw new Error(`${source} audit records did not survive hydration`)
   }
+}
+if (/tOS\s*17\./i.test(JSON.stringify({ planned, changeLogs: initial.changeLogs }))) {
+  throw new Error('Android 16 mock state still contains a tOS 17.x reference')
 }
 
 const legacyHydrated = roadmapStore.mergeRoadmapPersistedState(
@@ -199,6 +205,41 @@ if (
   || logOnlyLegacyHydrated.plannedProjects[0]?.firstSaleTosVersionId !== legacyVersion.id
 ) {
   throw new Error('a prior logs-only seed prevented the missing planned mock from being repaired')
+}
+
+const oldVersionPlanned = {
+  ...planned,
+  firstSaleTosVersionId: 'tos-17-2',
+}
+const oldVersionLogs = initial.changeLogs.map(log => (
+  log.source !== 'planned'
+    ? log
+    : {
+        ...log,
+        tosVersionName: 'tOS 17.2',
+        snapshot: log.snapshot
+          ? { ...log.snapshot, firstSaleTosVersionId: 'tOS 17.2' }
+          : log.snapshot,
+      }
+))
+const oldMockHydrated = hydrateActualRoadmapStore({
+  version: 1,
+  state: {
+    ...initial,
+    plannedProjects: [oldVersionPlanned],
+    changeLogs: oldVersionLogs,
+  },
+})
+const refreshedPlanned = oldMockHydrated.plannedProjects.find(project => project.id === planned.id)
+if (
+  refreshedPlanned?.firstSaleTosVersionId !== 'tos-16-3'
+  || oldMockHydrated.changeLogs.length !== 4
+  || /tOS\s*17\./i.test(JSON.stringify({
+    planned: refreshedPlanned,
+    changeLogs: oldMockHydrated.changeLogs,
+  }))
+) {
+  throw new Error('persisted tOS 17.2 mock records were not refreshed to canonical tOS 16.3')
 }
 
 const userPlanned = {
