@@ -11,6 +11,11 @@ import {
   PROJECT_TYPE_TECH,
   PROJECT_TYPE_TOS_VERSION,
 } from '@/constants/projectTypes'
+import {
+  normalizeColumnSettings,
+  type SortableColumnDefinition,
+  type SortableColumnSettingsValue,
+} from '@/lib/columnSettings'
 
 const STORAGE_KEY = 'pms_roadmap_milestone_views'
 const PROJECT_VIEW_STORAGE_KEY = 'pms_project_custom_views'
@@ -27,6 +32,7 @@ export interface ProjectViewState {
   scope: string
   statusFilter: string
   visibleColumns: string[]
+  columnOrder?: string[]
   filters: any[]
   collapsedKeys: string[]
   viewMode?: 'table' | 'calendar'
@@ -145,6 +151,47 @@ export interface RoadmapColumnConfig {
   width?: number
   defaultVisible?: boolean
   locked?: boolean
+}
+
+export function getScopedColumnDefinitions(
+  columns: readonly RoadmapColumnConfig[],
+  fixedLeftKeys: readonly string[],
+): SortableColumnDefinition<string>[] {
+  const fixedKeys = new Set(fixedLeftKeys)
+  return columns.map(column => ({
+    key: column.key,
+    title: column.title,
+    defaultVisible: Boolean(column.locked || column.defaultVisible),
+    hideable: column.locked ? false : undefined,
+    fixed: fixedKeys.has(column.key) ? 'left' : undefined,
+    disabledReason: column.locked ? '固定字段' : undefined,
+  }))
+}
+
+export function getProjectViewColumnSettings(
+  definitions: readonly SortableColumnDefinition<string>[],
+  state: Pick<ProjectViewState, 'columnOrder' | 'visibleColumns'>,
+): SortableColumnSettingsValue<string> {
+  const visible = Array.isArray(state.visibleColumns) ? state.visibleColumns.map(String) : []
+  if (Array.isArray(state.columnOrder) && state.columnOrder.length) {
+    return normalizeColumnSettings(definitions, {
+      order: state.columnOrder.map(String),
+      visible,
+    })
+  }
+
+  const availableKeys = definitions.map(definition => definition.key)
+  const availableKeySet = new Set(availableKeys)
+  const legacyVisibleOrder = visible.filter((key, index) => (
+    availableKeySet.has(key) && visible.indexOf(key) === index
+  ))
+  return normalizeColumnSettings(definitions, {
+    order: [
+      ...legacyVisibleOrder,
+      ...availableKeys.filter(key => !legacyVisibleOrder.includes(key)),
+    ],
+    visible: legacyVisibleOrder,
+  })
 }
 
 // Shared project-info column configs.

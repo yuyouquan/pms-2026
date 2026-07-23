@@ -24,6 +24,7 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
+import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
 import {
   inferOsSeriesFromProjectName,
   inferTosVersionFromProjectName,
@@ -44,6 +45,12 @@ import {
 } from '@/constants/projectTypes'
 import type { FilterCondition } from '@/lib/filterConditions'
 import {
+  getDefaultColumnSettings,
+  normalizeColumnSettings,
+  orderVisibleDefinitions,
+  type SortableColumnSettingsValue,
+} from '@/lib/columnSettings'
+import {
   FILTER_OPERATORS,
   applyFilterConditions,
   createFilterCondition,
@@ -58,6 +65,8 @@ import {
   createProjectViewShareUrl,
   deleteProjectView,
   getFixedColumnsForType,
+  getProjectViewColumnSettings,
+  getScopedColumnDefinitions,
   loadProjectViews,
   parseProjectViewShare,
   saveProjectView,
@@ -807,7 +816,14 @@ export default function MilestoneView({
   const [motionVersion, setMotionVersion] = useState(0)
   const [filters, setFilters] = useState<FilterCondition[]>([])
   const [tempFilters, setTempFilters] = useState<FilterCondition[]>([])
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(() => getDefaultVisibleColumnsForScope(initialScope))
+  const [columnSettings, setColumnSettings] = useState<SortableColumnSettingsValue<string>>(() => (
+    getDefaultColumnSettings(getScopedColumnDefinitions(
+      getAvailableColumnsForScope(initialScope),
+      initialScope === 'overall'
+        ? ['tosVersionGroup', 'productCategory', 'productSeries', 'projectName']
+        : ['productCategory', 'productSeries', 'projectName'],
+    ))
+  ))
   const [showFilterDrawer, setShowFilterDrawer] = useState(false)
   const [showColumnDrawer, setShowColumnDrawer] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -844,7 +860,15 @@ export default function MilestoneView({
     setTempFilters([])
     setMilestoneDateRange(null)
     setCollapsedTosGroups(new Set())
-    setVisibleColumns(getDefaultVisibleColumnsForScope(nextScope))
+    setColumnSettings(current => normalizeColumnSettings(
+      getScopedColumnDefinitions(
+        getAvailableColumnsForScope(nextScope),
+        nextScope === 'overall'
+          ? ['tosVersionGroup', 'productCategory', 'productSeries', 'projectName']
+          : ['productCategory', 'productSeries', 'projectName'],
+      ),
+      current,
+    ))
     setActiveSnapshotId(null)
     setSnapshotDateRange(null)
     setCompareMode(false)
@@ -888,7 +912,17 @@ export default function MilestoneView({
     scope === 'overall' && !compareMode ? applyCollapsedTosGroups(sourceRows, collapsedTosGroups) : sourceRows
   ), [sourceRows, scope, compareMode, collapsedTosGroups])
   const availableColumns = useMemo(() => getAvailableColumnsForScope(scope), [scope])
-  const defaultVisibleColumns = useMemo(() => getDefaultVisibleColumnsForScope(scope), [scope])
+  const columnDefinitions = useMemo(() => getScopedColumnDefinitions(
+    availableColumns,
+    scope === 'overall'
+      ? ['tosVersionGroup', 'productCategory', 'productSeries', 'projectName']
+      : ['productCategory', 'productSeries', 'projectName'],
+  ), [availableColumns, scope])
+  const defaultColumnSettings = useMemo(
+    () => getDefaultColumnSettings(columnDefinitions),
+    [columnDefinitions],
+  )
+  const visibleColumns = columnSettings.visible
   const hasActiveFilters = normalizedFilters.some(isFilterConditionActive)
   const filterFieldOptions = useMemo(() => (
     availableColumns.map(col => ({
@@ -935,13 +969,12 @@ export default function MilestoneView({
     rows.map(row => `${row.key}:${row.isCollapsedPreview ? 'closed' : 'open'}:${row.hiddenProjectCount || 0}`).join('|')
   ), [rows])
 
-  const getSafeVisibleColumns = (nextScope: RoadmapScope, nextVisibleColumns: string[]) => {
-    const available = getAvailableColumnsForScope(nextScope)
-    const availableKeys = new Set(available.map(col => col.key))
-    const lockedKeys = available.filter(col => col.locked).map(col => col.key)
-    const safeColumns = nextVisibleColumns.filter(key => availableKeys.has(key))
-    return Array.from(new Set([...lockedKeys, ...safeColumns]))
-  }
+  const getDefinitionsForScope = (nextScope: RoadmapScope) => getScopedColumnDefinitions(
+    getAvailableColumnsForScope(nextScope),
+    nextScope === 'overall'
+      ? ['tosVersionGroup', 'productCategory', 'productSeries', 'projectName']
+      : ['productCategory', 'productSeries', 'projectName'],
+  )
 
   const normalizeScope = (value: string | undefined): RoadmapScope => {
     if (value === 'software') return 'tosVersion'
@@ -960,6 +993,7 @@ export default function MilestoneView({
     scope,
     statusFilter,
     visibleColumns,
+    columnOrder: columnSettings.order,
     filters: normalizedFilters,
     collapsedKeys: Array.from(collapsedTosGroups),
     viewMode,
@@ -969,9 +1003,7 @@ export default function MilestoneView({
 
   const applyProjectViewState = (state: ProjectViewState) => {
     const nextScope = normalizeScope(state.scope)
-    const nextVisibleColumns = Array.isArray(state.visibleColumns) && state.visibleColumns.length
-      ? state.visibleColumns
-      : getDefaultVisibleColumnsForScope(nextScope)
+    const nextDefinitions = getDefinitionsForScope(nextScope)
 
     setScope(nextScope)
     setStatusFilter(normalizeStatusFilter(state.statusFilter))
@@ -980,7 +1012,7 @@ export default function MilestoneView({
     setFilters(nextFilters)
     setTempFilters([])
     setCollapsedTosGroups(new Set(Array.isArray(state.collapsedKeys) ? state.collapsedKeys : []))
-    setVisibleColumns(getSafeVisibleColumns(nextScope, nextVisibleColumns))
+    setColumnSettings(getProjectViewColumnSettings(nextDefinitions, state))
     setViewMode(normalizeViewMode(state.viewMode))
     const appliedDateRange = getMilestoneDateRangeFromFilters(nextFilters)
     setMilestoneDateRange(appliedDateRange)
@@ -1025,7 +1057,7 @@ export default function MilestoneView({
     setTempFilters([])
     setMilestoneDateRange(null)
     setCollapsedTosGroups(new Set())
-    setVisibleColumns(getDefaultVisibleColumnsForScope(nextScope))
+    setColumnSettings(current => normalizeColumnSettings(getDefinitionsForScope(nextScope), current))
     setActiveSnapshotId(null)
     setSnapshotDateRange(null)
     setCompareMode(false)
@@ -1098,11 +1130,10 @@ export default function MilestoneView({
 	  }
 
   const buildExportColumns = () => (
-    availableColumns
-      .filter(col => col.locked || visibleColumns.includes(col.key))
-      .map<ExportColumn>(col => ({
-        key: col.key === 'milestones' ? 'milestonesText' : col.key,
-        title: col.title,
+    orderVisibleDefinitions(columnDefinitions, columnSettings)
+      .map<ExportColumn>(definition => ({
+        key: definition.key === 'milestones' ? 'milestonesText' : definition.key,
+        title: String(definition.title),
       }))
   )
 
@@ -1118,6 +1149,7 @@ export default function MilestoneView({
         scope: 'overall',
         statusFilter: 'all',
         visibleColumns: getDefaultVisibleColumnsForScope('overall'),
+        columnOrder: getDefinitionsForScope('overall').map(definition => definition.key),
         filters: [],
         collapsedKeys: [],
         viewMode: 'table',
@@ -1308,6 +1340,7 @@ export default function MilestoneView({
   ]
 
   const columns = useMemo<ColumnsType<RoadmapMilestoneRow>>(() => {
+    const orderedDefinitions = orderVisibleDefinitions(columnDefinitions, columnSettings)
     const isVisible = (key: string) => {
       const column = availableColumns.find(item => item.key === key)
       return Boolean(column?.locked || visibleColumns.includes(key))
@@ -1512,8 +1545,18 @@ export default function MilestoneView({
       ),
     })
 
-    return cols
-  }, [availableColumns, visibleColumns, scope, tosSpans, categorySpans, seriesSpans, collapsedTosGroups, tosCounts, seriesProjectCounts, compareMode, onViewProject])
+    const columnByKey = new Map(cols.map(column => [String(column.key), column]))
+    const compareColumn = columnByKey.get('changeSummary')
+    const actionColumn = columnByKey.get('action')
+    const orderedColumns = orderedDefinitions
+      .map(definition => columnByKey.get(definition.key))
+      .filter((column): column is NonNullable<typeof column> => Boolean(column))
+    return [
+      ...orderedColumns,
+      ...(compareColumn ? [compareColumn] : []),
+      ...(actionColumn ? [actionColumn] : []),
+    ]
+  }, [availableColumns, columnDefinitions, columnSettings, visibleColumns, scope, tosSpans, categorySpans, seriesSpans, collapsedTosGroups, tosCounts, seriesProjectCounts, compareMode, onViewProject])
 
   const calendarDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth])
   const calendarEvents = useMemo(() => {
@@ -2808,49 +2851,19 @@ export default function MilestoneView({
         </div>
       </Drawer>
 
-      <Drawer
-        title="列设置"
+      <SortableColumnSettings
         open={showColumnDrawer}
-        onClose={() => setShowColumnDrawer(false)}
-        width={420}
-        placement="right"
-        zIndex={ROADMAP_DRAWER_Z_INDEX}
-        footer={(
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button onClick={() => {
-	              setVisibleColumns(defaultVisibleColumns)
-	              setActiveSavedViewId(null)
-              setSharedRowsOverride(null)
-	            }}>重置默认</Button>
-            <Space>
-              <Button onClick={() => setShowColumnDrawer(false)}>取消</Button>
-              <Button type="primary" onClick={() => setShowColumnDrawer(false)}>确定</Button>
-            </Space>
-          </div>
-        )}
-      >
-        <div style={{ marginBottom: 8, fontSize: 12, color: '#9ca3af' }}>
-          {scope === 'overall' ? '整体视图保留首列 tOS版本维度，不显示项目名后的重复 tOS版本；' : '当前视图不显示首列 tOS版本维度；'}固定列始终显示。
-        </div>
-        <Checkbox.Group
-          value={visibleColumns}
-	          onChange={(vals) => {
-	            setVisibleColumns(vals as string[])
-	            setActiveSavedViewId(null)
-              setSharedRowsOverride(null)
-	          }}
-          style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
-        >
-          {availableColumns.map(col => (
-            <Checkbox key={col.key} value={col.key} disabled={!!col.locked}>
-              <Space size={6}>
-                <span>{col.title}</span>
-                {col.locked && <Tag color="blue" style={{ marginInlineEnd: 0 }}>固定</Tag>}
-              </Space>
-            </Checkbox>
-          ))}
-        </Checkbox.Group>
-      </Drawer>
+        definitions={columnDefinitions}
+        value={columnSettings}
+        defaultValue={defaultColumnSettings}
+        onCancel={() => setShowColumnDrawer(false)}
+        onApply={(nextSettings) => {
+          setColumnSettings(nextSettings)
+          setActiveSavedViewId(null)
+          setSharedRowsOverride(null)
+          setShowColumnDrawer(false)
+        }}
+      />
     </div>
   )
 }
