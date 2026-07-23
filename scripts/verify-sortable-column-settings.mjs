@@ -870,6 +870,23 @@ registerAssertion('roadmap conflicts use one compact counted toolbar action', ()
   }
 })
 
+registerAssertion('roadmap toolbar is one polished horizontally scrollable control rail', () => {
+  const toolbar = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
+  for (const contract of [
+    'roadmap-toolbar-scroll-row',
+    'roadmap-toolbar-view-switch',
+    'roadmap-toolbar-filter-group',
+    'roadmap-toolbar-group-divider',
+    "overflowX: 'auto'",
+    'wrap={false}',
+    'height: 32',
+    'minHeight: 44',
+    '.roadmap-toolbar-glass .ant-btn::before',
+  ]) {
+    assert.ok(toolbar.includes(contract), `roadmap toolbar polish is missing ${contract}`)
+  }
+})
+
 registerAssertion('roadmap table and evolution card render from parent-provided column order', () => {
   const table = parseTypeScript(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'))
   const card = parseTypeScript(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'))
