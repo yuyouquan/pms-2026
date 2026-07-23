@@ -187,6 +187,23 @@ function sanitizeSort(value: unknown): RoadmapSortState {
   return field && direction ? { field, direction } : { field: null, direction: null }
 }
 
+function preserveKnownColumnOrder(value: unknown): RoadmapColumnKey[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const seen = new Set<RoadmapColumnKey>()
+  const order: RoadmapColumnKey[] = []
+  for (const candidate of value) {
+    if (
+      typeof candidate !== 'string'
+      || !KNOWN_COLUMN_KEYS.has(candidate as RoadmapColumnKey)
+      || seen.has(candidate as RoadmapColumnKey)
+    ) continue
+    const key = candidate as RoadmapColumnKey
+    seen.add(key)
+    order.push(key)
+  }
+  return order
+}
+
 function migrateTosVersions(value: unknown): TosVersionConfig[] | null {
   if (!Array.isArray(value)) return null
   const versions: TosVersionConfig[] = []
@@ -437,19 +454,28 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
   const persistedOrderByView = isRecord(persistedState.columnOrderByView)
     ? persistedState.columnOrderByView
     : null
-  const legacyColumnOrder = Array.isArray(persistedState.columnOrder)
-    ? persistedState.columnOrder as RoadmapColumnKey[]
-    : undefined
+  const legacyColumnOrder = preserveKnownColumnOrder(persistedState.columnOrder)
+  const legacyVisibleColumnOrder = preserveKnownColumnOrder(persistedState.visibleColumns)
+  const tableLegacyVisibleOrder = persistedColumnsByView
+    ? preserveKnownColumnOrder(persistedColumnsByView.table)
+    : legacyVisibleColumnOrder
+  const evolutionLegacyVisibleOrder = persistedColumnsByView
+    ? preserveKnownColumnOrder(persistedColumnsByView.evolution)
+    : legacyVisibleColumnOrder
   const tableSettings = normalizeRoadmapColumnSettings('table', {
     order: Array.isArray(persistedOrderByView?.table)
       ? persistedOrderByView.table as RoadmapColumnKey[]
-      : viewMode === 'table' ? legacyColumnOrder : undefined,
+      : viewMode === 'table' && legacyColumnOrder
+        ? legacyColumnOrder
+        : tableLegacyVisibleOrder,
     visible: visibleColumnsByView.table,
   })
   const evolutionSettings = normalizeRoadmapColumnSettings('evolution', {
     order: Array.isArray(persistedOrderByView?.evolution)
       ? persistedOrderByView.evolution as RoadmapColumnKey[]
-      : viewMode === 'evolution' ? legacyColumnOrder : undefined,
+      : viewMode === 'evolution' && legacyColumnOrder
+        ? legacyColumnOrder
+        : evolutionLegacyVisibleOrder,
     visible: visibleColumnsByView.evolution,
   })
   const columnOrderByView = {

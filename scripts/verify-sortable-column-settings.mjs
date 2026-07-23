@@ -660,6 +660,50 @@ registerAssertion('roadmap store normalizes and persists independent ordered col
   assert.ok(Object.hasOwn(persisted, 'columnOrderByView'))
 })
 
+registerAssertion('roadmap migration preserves legacy visible-only relative order', () => {
+  const roadmapStoreModule = loadTypeScriptModule(path.join(root, 'src/stores/roadmap.ts'), new Map())
+  const persisted = roadmapStoreModule.partializeRoadmapState(
+    roadmapStoreModule.createInitialRoadmapState(),
+  )
+  const {
+    columnOrder: _legacyMissingColumnOrder,
+    columnOrderByView: _legacyMissingOrderByView,
+    ...legacyVisibleOnly
+  } = persisted
+
+  const migratedLegacy = roadmapStoreModule.migrateRoadmapState({
+    ...legacyVisibleOnly,
+    viewMode: 'table',
+    visibleColumns: ['remark', 'unknown', 'brand', 'remark'],
+    visibleColumnsByView: undefined,
+  }, 0)
+  assert.deepEqual(
+    migratedLegacy.columnOrderByView.table.slice(0, 3),
+    ['firstSaleTosVersionId', 'remark', 'brand'],
+  )
+  assert.deepEqual(
+    migratedLegacy.visibleColumnsByView.table,
+    ['firstSaleTosVersionId', 'brand', 'remark'],
+  )
+
+  const migratedPerView = roadmapStoreModule.migrateRoadmapState({
+    ...legacyVisibleOnly,
+    viewMode: 'evolution',
+    visibleColumnsByView: {
+      table: ['remark', 'unknown', 'brand', 'remark'],
+      evolution: ['launchDate', 'unknown', 'brand', 'launchDate'],
+    },
+  }, 0)
+  assert.deepEqual(
+    migratedPerView.columnOrderByView.table.slice(0, 3),
+    ['firstSaleTosVersionId', 'remark', 'brand'],
+  )
+  assert.deepEqual(
+    migratedPerView.columnOrderByView.evolution.slice(0, 2),
+    ['launchDate', 'brand'],
+  )
+})
+
 registerAssertion('roadmap table and evolution card render from parent-provided column order', () => {
   const table = parseTypeScript(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'))
   const card = parseTypeScript(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'))
