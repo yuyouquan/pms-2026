@@ -422,16 +422,18 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
   const persistedColumnsByView = isRecord(persistedState.visibleColumnsByView)
     ? persistedState.visibleColumnsByView
     : null
+  const hasPersistedTableColumns = Array.isArray(persistedColumnsByView?.table)
+  const hasPersistedEvolutionColumns = Array.isArray(persistedColumnsByView?.evolution)
   const legacyVisibleColumns = sanitizeRoadmapVisibleColumns(persistedState.visibleColumns)
-  const tableVisibleColumns = persistedColumnsByView
+  const tableVisibleColumns = hasPersistedTableColumns
     ? sanitizeRoadmapVisibleColumns(
-      persistedColumnsByView.table,
+      persistedColumnsByView?.table,
       DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS,
     )
     : legacyVisibleColumns
-  const migratedEvolutionVisibleColumns = persistedColumnsByView
+  const migratedEvolutionVisibleColumns = hasPersistedEvolutionColumns
     ? sanitizeRoadmapVisibleColumns(
-      persistedColumnsByView.evolution,
+      persistedColumnsByView?.evolution,
       DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
     )
     : JSON.stringify(legacyVisibleColumns) === JSON.stringify(DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS)
@@ -456,11 +458,11 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
     : null
   const legacyColumnOrder = preserveKnownColumnOrder(persistedState.columnOrder)
   const legacyVisibleColumnOrder = preserveKnownColumnOrder(persistedState.visibleColumns)
-  const tableLegacyVisibleOrder = persistedColumnsByView
-    ? preserveKnownColumnOrder(persistedColumnsByView.table)
+  const tableLegacyVisibleOrder = hasPersistedTableColumns
+    ? preserveKnownColumnOrder(persistedColumnsByView?.table)
     : legacyVisibleColumnOrder
-  const evolutionLegacyVisibleOrder = persistedColumnsByView
-    ? preserveKnownColumnOrder(persistedColumnsByView.evolution)
+  const evolutionLegacyVisibleOrder = hasPersistedEvolutionColumns
+    ? preserveKnownColumnOrder(persistedColumnsByView?.evolution)
     : legacyVisibleColumnOrder
   const tableSettings = normalizeRoadmapColumnSettings('table', {
     order: Array.isArray(persistedOrderByView?.table)

@@ -704,6 +704,93 @@ registerAssertion('roadmap migration preserves legacy visible-only relative orde
   )
 })
 
+registerAssertion('roadmap hydration migrates partial visibility maps per view', () => {
+  const roadmapStoreModule = loadTypeScriptModule(path.join(root, 'src/stores/roadmap.ts'), new Map())
+  const roadmapFilters = loadTypeScriptModule(path.join(root, 'src/lib/roadmapFilters.ts'), new Map())
+  const persisted = roadmapStoreModule.partializeRoadmapState(
+    roadmapStoreModule.createInitialRoadmapState(),
+  )
+  const {
+    columnOrder: _legacyMissingColumnOrder,
+    columnOrderByView: _legacyMissingOrderByView,
+    ...legacyVisibleOnly
+  } = persisted
+
+  const hydrateEnvelope = envelope => {
+    const previousWindow = globalThis.window
+    globalThis.window = {
+      localStorage: {
+        getItem: key => key === 'pms-project-roadmap' ? JSON.stringify(envelope) : null,
+        setItem: () => {},
+        removeItem: () => {},
+      },
+    }
+    try {
+      return loadTypeScriptModule(path.join(root, 'src/stores/roadmap.ts'), new Map())
+        .useRoadmapStore.getState()
+    } finally {
+      if (previousWindow === undefined) delete globalThis.window
+      else globalThis.window = previousWindow
+    }
+  }
+
+  const currentVersion = hydrateEnvelope({
+    version: 1,
+    state: {
+      ...legacyVisibleOnly,
+      viewMode: 'table',
+      visibleColumns: ['remark', 'brand'],
+      visibleColumnsByView: {
+        evolution: ['launchDate', 'brand'],
+      },
+    },
+  })
+  assert.deepEqual(
+    currentVersion.visibleColumnsByView.table,
+    ['firstSaleTosVersionId', 'brand', 'remark'],
+  )
+  assert.deepEqual(
+    currentVersion.columnOrderByView.table.slice(0, 3),
+    ['firstSaleTosVersionId', 'remark', 'brand'],
+  )
+
+  const versionless = hydrateEnvelope({
+    state: {
+      ...legacyVisibleOnly,
+      viewMode: 'evolution',
+      visibleColumnsByView: {
+        table: ['remark', 'brand'],
+      },
+    },
+  })
+  assert.deepEqual(
+    versionless.visibleColumnsByView.evolution,
+    roadmapFilters.DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
+  )
+
+  const malformedMembers = roadmapStoreModule.migrateRoadmapState({
+    ...legacyVisibleOnly,
+    viewMode: 'table',
+    visibleColumns: ['remark', 'brand'],
+    visibleColumnsByView: {
+      table: { invalid: true },
+      evolution: 'invalid',
+    },
+  }, 1)
+  assert.deepEqual(
+    malformedMembers.visibleColumnsByView.table,
+    ['firstSaleTosVersionId', 'brand', 'remark'],
+  )
+  assert.deepEqual(
+    malformedMembers.visibleColumnsByView.evolution,
+    ['brand', 'productSeries', 'displayName', 'remark'],
+  )
+  assert.deepEqual(
+    malformedMembers.columnOrderByView.evolution.slice(0, 2),
+    ['remark', 'brand'],
+  )
+})
+
 registerAssertion('roadmap table and evolution card render from parent-provided column order', () => {
   const table = parseTypeScript(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'))
   const card = parseTypeScript(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'))
