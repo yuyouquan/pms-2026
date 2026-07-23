@@ -169,6 +169,62 @@
   }
 }
 
+.pms-sortable-column-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pms-sortable-column-row {
+  min-height: 40px;
+  display: grid;
+  grid-template-columns: 28px 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid rgba(99, 102, 241, .12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .72);
+}
+
+.pms-sortable-column-row.is-dragging {
+  box-shadow: 0 12px 28px rgba(79, 70, 229, .18);
+  border-color: rgba(99, 102, 241, .45);
+}
+
+.pms-sortable-column-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  color: #7c7a91;
+  touch-action: none;
+}
+
+.pms-sortable-column-handle:active {
+  cursor: grabbing;
+}
+
+.pms-sortable-column-handle:focus-visible {
+  outline: 2px solid rgba(79, 70, 229, .55);
+  outline-offset: 2px;
+}
+
+.pms-sortable-column-title {
+  min-width: 0;
+}
+
+.pms-sortable-column-fixed {
+  color: #8b88a1;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 
 /* ================================================================
    Base & Reset
