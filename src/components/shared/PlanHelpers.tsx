@@ -42,6 +42,24 @@ export function DragHandle() {
 }
 
 // ─── DHTMLXGantt ────────────────────────────────────────────────────
+export interface DHTMLXGanttColumn {
+  name: string
+  label: string
+  width: number
+  align?: string
+  tree?: boolean
+  template?: (task: any) => string
+}
+
+const DEFAULT_GANTT_COLUMNS: DHTMLXGanttColumn[] = [
+  { name: 'text', label: '任务名称', width: 180, tree: true },
+  { name: 'predecessor', label: '前置任务', align: 'center', width: 70 },
+  { name: 'start_date', label: '计划开始', align: 'center', width: 90 },
+  { name: 'end_date', label: '计划完成', align: 'center', width: 90 },
+  { name: 'duration', label: '计划周期', align: 'center', width: 60, template: (task: any) => task.duration + '天' },
+  { name: 'progress', label: '进度', align: 'center', width: 60, template: (task: any) => Math.round(task.progress * 100) + '%' },
+]
+
 export function DHTMLXGantt({
   tasks,
   onTaskClick,
@@ -49,6 +67,7 @@ export function DHTMLXGantt({
   scaleMode = 'month',
   collapsedIds,
   onCollapsedChange,
+  columns = DEFAULT_GANTT_COLUMNS,
 }: {
   tasks: any[]
   onTaskClick?: (task: any) => void
@@ -56,6 +75,7 @@ export function DHTMLXGantt({
   scaleMode?: GanttScaleMode
   collapsedIds?: Set<string>
   onCollapsedChange?: (updater: (prev: Set<string>) => Set<string>) => void
+  columns?: DHTMLXGanttColumn[]
 }) {
   const ganttContainer = useRef<HTMLDivElement>(null)
   const suppressFeedback = useRef(false)
@@ -69,14 +89,7 @@ export function DHTMLXGantt({
     if (!ganttContainer.current) return
 
     gantt.config.date_format = '%Y-%m-%d'
-    gantt.config.columns = [
-      { name: 'text', label: '任务名称', width: 180, tree: true },
-      { name: 'predecessor', label: '前置任务', align: 'center', width: 70 },
-      { name: 'start_date', label: '计划开始', align: 'center', width: 90 },
-      { name: 'end_date', label: '计划完成', align: 'center', width: 90 },
-      { name: 'duration', label: '计划周期', align: 'center', width: 60, template: (task: any) => task.duration + '天' },
-      { name: 'progress', label: '进度', align: 'center', width: 60, template: (task: any) => Math.round(task.progress * 100) + '%' },
-    ]
+    gantt.config.columns = columns
     const scaleConfig = getGanttScaleConfig(scaleMode)
     const ganttConfig = gantt.config as any
     ganttConfig.scales = scaleConfig.scales
@@ -141,7 +154,7 @@ export function DHTMLXGantt({
       if (clickHandler) gantt.detachEvent(clickHandler)
       gantt.clearAll()
     }
-  }, [tasks, readOnly, scaleMode])
+  }, [columns, tasks, readOnly, scaleMode])
 
   useEffect(() => {
     if (!ganttContainer.current) return

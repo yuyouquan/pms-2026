@@ -1,8 +1,15 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Card, Table, Tag, Space, Row, Col, Input, Button, Modal, Form, Select, DatePicker, Upload, Popconfirm, Checkbox, message } from 'antd'
+import { Card, Table, Tag, Space, Row, Col, Input, Button, Modal, Form, Select, DatePicker, Upload, Popconfirm, message } from 'antd'
 import { SearchOutlined, PlusOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined, DownloadOutlined, UploadOutlined, PaperClipOutlined, LinkOutlined, ExportOutlined } from '@ant-design/icons'
+import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
+import {
+  getDefaultColumnSettings,
+  orderVisibleDefinitions,
+  type SortableColumnDefinition,
+  type SortableColumnSettingsValue,
+} from '@/lib/columnSettings'
 import type { VersionTrainRecord, VersionTrainStatus, VersionCategory } from '@/types'
 import dayjs from 'dayjs'
 
@@ -68,25 +75,23 @@ export const INITIAL_VERSION_TRAIN_DATA: VersionTrainRecord[] = [
 ]
 
 // 所有列定义
-const ALL_COLUMNS_DEF = [
-  { key: 'index', label: '序号', default: true },
-  { key: 'versionNo', label: '版本号', default: true },
-  { key: 'versionCategory', label: '版本分类', default: true },
-  { key: 'status', label: '状态', default: true },
-  { key: 'planCompileTime', label: '计划编译时间', default: true },
-  { key: 'planTestTransferTime', label: '计划转测时间', default: true },
-  { key: 'planTestStartTime', label: '计划测试开始时间', default: true },
-  { key: 'planTestEndTime', label: '计划测试完成时间', default: true },
-  { key: 'mainTestModel', label: '主测机型', default: true },
-  { key: 'versionGoal', label: '版本目标', default: true },
-  { key: 'actualCompileTime', label: '实际编译时间', default: true },
-  { key: 'actualTestTransferTime', label: '实际转测时间', default: true },
-  { key: 'actualTestStartTime', label: '实际测试开始时间', default: true },
-  { key: 'actualTestEndTime', label: '实际测试完成时间', default: true },
-  { key: 'relatedRequirements', label: '关联需求清单', default: true },
-  { key: 'relatedDefects', label: '关联缺陷清单', default: true },
-  { key: 'attachments', label: '附件', default: true },
-  { key: 'action', label: '操作', default: true },
+const ALL_COLUMNS_DEF: readonly SortableColumnDefinition<string>[] = [
+  { key: 'versionNo', title: '版本号', defaultVisible: true, hideable: false, fixed: 'left', disabledReason: '固定标识字段' },
+  { key: 'versionCategory', title: '版本分类', defaultVisible: true, hideable: false, disabledReason: '必选字段' },
+  { key: 'status', title: '状态', defaultVisible: true, hideable: false, disabledReason: '必选字段' },
+  { key: 'planCompileTime', title: '计划编译时间', defaultVisible: true },
+  { key: 'planTestTransferTime', title: '计划转测时间', defaultVisible: true },
+  { key: 'planTestStartTime', title: '计划测试开始时间', defaultVisible: true },
+  { key: 'planTestEndTime', title: '计划测试完成时间', defaultVisible: true },
+  { key: 'mainTestModel', title: '主测机型', defaultVisible: true, hideable: false, disabledReason: '必选字段' },
+  { key: 'versionGoal', title: '版本目标', defaultVisible: true },
+  { key: 'actualCompileTime', title: '实际编译时间', defaultVisible: true },
+  { key: 'actualTestTransferTime', title: '实际转测时间', defaultVisible: true },
+  { key: 'actualTestStartTime', title: '实际测试开始时间', defaultVisible: true },
+  { key: 'actualTestEndTime', title: '实际测试完成时间', defaultVisible: true },
+  { key: 'relatedRequirements', title: '关联需求清单', defaultVisible: true },
+  { key: 'relatedDefects', title: '关联缺陷清单', defaultVisible: true },
+  { key: 'attachments', title: '附件', defaultVisible: true },
 ]
 
 const statusColors: Record<string, string> = {
@@ -125,7 +130,9 @@ export default function VersionTrainPlan({ data: controlledData, onDataChange, c
   const [showDefectModal, setShowDefectModal] = useState(false)
   const [currentViewRecord, setCurrentViewRecord] = useState<VersionTrainRecord | null>(null)
   const [showColumnModal, setShowColumnModal] = useState(false)
-  const [visibleColumns, setVisibleColumns] = useState(ALL_COLUMNS_DEF.filter(c => c.default).map(c => c.key))
+  const [columnSettings, setColumnSettings] = useState<SortableColumnSettingsValue<string>>(
+    () => getDefaultColumnSettings(ALL_COLUMNS_DEF),
+  )
   const [form] = Form.useForm()
 
   // 搜索过滤
@@ -253,8 +260,8 @@ export default function VersionTrainPlan({ data: controlledData, onDataChange, c
   // 表格列
   const columns = useMemo(() => {
     const allCols: any[] = [
-      { title: '序号', key: 'index', width: 60, align: 'center' as const, render: (_: any, __: any, index: number) => index + 1 },
-      { title: '版本号', dataIndex: 'versionNo', key: 'versionNo', width: 110, sorter: (a: VersionTrainRecord, b: VersionTrainRecord) => a.versionNo.localeCompare(b.versionNo, undefined, { numeric: true }) },
+      { title: '序号', key: 'index', width: 60, align: 'center' as const, fixed: 'left' as const, render: (_: any, __: any, index: number) => index + 1 },
+      { title: '版本号', dataIndex: 'versionNo', key: 'versionNo', width: 110, fixed: 'left' as const, sorter: (a: VersionTrainRecord, b: VersionTrainRecord) => a.versionNo.localeCompare(b.versionNo, undefined, { numeric: true }) },
       { title: '版本分类', dataIndex: 'versionCategory', key: 'versionCategory', width: 100, align: 'center' as const, render: (v: string) => <Tag color={categoryColors[v]}>{v}</Tag> },
       { title: '状态', dataIndex: 'status', key: 'status', width: 90, align: 'center' as const, render: (s: string) => <Tag color={statusColors[s]}>{s}</Tag> },
       { title: '计划编译时间', dataIndex: 'planCompileTime', key: 'planCompileTime', width: 120 },
@@ -318,8 +325,14 @@ export default function VersionTrainPlan({ data: controlledData, onDataChange, c
         ),
       },
     ]
-    return allCols.filter(c => visibleColumns.includes(c.key))
-  }, [visibleColumns, data, canEdit])
+    const columnsByKey = new Map(allCols.map(column => [column.key, column]))
+    const orderedColumns = orderVisibleDefinitions(ALL_COLUMNS_DEF, columnSettings)
+      .map(definition => columnsByKey.get(definition.key))
+      .filter(Boolean)
+    const indexColumn = allCols.find(column => column.key === 'index')
+    const actionColumn = allCols.find(column => column.key === 'action')
+    return [indexColumn, ...orderedColumns, actionColumn].filter(Boolean)
+  }, [columnSettings, data, canEdit])
 
   // Modal表单内容
   const renderFormContent = () => (
@@ -506,35 +519,17 @@ export default function VersionTrainPlan({ data: controlledData, onDataChange, c
         />
       </Modal>
 
-      {/* 自定义列Modal */}
-      <Modal
-        title="自定义列配置"
+      <SortableColumnSettings
         open={showColumnModal}
+        definitions={ALL_COLUMNS_DEF}
+        value={columnSettings}
+        defaultValue={getDefaultColumnSettings(ALL_COLUMNS_DEF)}
         onCancel={() => setShowColumnModal(false)}
-        onOk={() => setShowColumnModal(false)}
-        className="pms-modal"
-        width={400}
-      >
-        <div style={{ maxHeight: 400, overflow: 'auto' }}>
-          {ALL_COLUMNS_DEF.map(col => (
-            <div key={col.key} style={{ padding: '6px 0' }}>
-              <Checkbox
-                checked={visibleColumns.includes(col.key)}
-                disabled={col.key === 'index' || col.key === 'action'}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setVisibleColumns([...visibleColumns, col.key])
-                  } else {
-                    setVisibleColumns(visibleColumns.filter(k => k !== col.key))
-                  }
-                }}
-              >
-                {col.label}
-              </Checkbox>
-            </div>
-          ))}
-        </div>
-      </Modal>
+        onApply={(nextSettings) => {
+          setColumnSettings(nextSettings)
+          setShowColumnModal(false)
+        }}
+      />
     </Card>
   )
 }

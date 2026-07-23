@@ -11,6 +11,7 @@ import {
   SettingOutlined,
   SlidersOutlined,
   UpOutlined,
+  WarningOutlined,
 } from '@ant-design/icons'
 import { Badge, Button, Flex, Segmented, Tooltip, Typography } from 'antd'
 import type {
@@ -19,7 +20,7 @@ import type {
   RoadmapViewMode,
 } from '@/types/roadmap'
 
-const compactControlStyle: CSSProperties = { minHeight: 36, height: 36 }
+const compactControlStyle: CSSProperties = { minHeight: 32, height: 32, borderRadius: 8 }
 
 interface RoadmapToolbarProps {
   canView: boolean
@@ -31,6 +32,8 @@ interface RoadmapToolbarProps {
   productTypeFilter: 'all' | 'custom' | RoadmapProductType
   onProductTypeFilterChange: (productType: 'all' | RoadmapProductType) => void
   filterCount: number
+  conflictCount: number
+  onResolveConflicts: () => void
   hasTargetVersions: boolean
   allTargetsCollapsed: boolean
   onToggleAllTargets: () => void
@@ -53,6 +56,8 @@ export default function RoadmapToolbar({
   productTypeFilter,
   onProductTypeFilterChange,
   filterCount,
+  conflictCount,
+  onResolveConflicts,
   hasTargetVersions,
   allTargetsCollapsed,
   onToggleAllTargets,
@@ -101,22 +106,52 @@ export default function RoadmapToolbar({
         backdropFilter: 'blur(18px) saturate(145%)',
         WebkitBackdropFilter: 'blur(18px) saturate(145%)',
         boxShadow: 'var(--shadow-sm)',
+        overflowX: 'auto',
+        overflowY: 'hidden',
+        scrollbarWidth: 'thin',
       }}
     >
-      <Flex justify="space-between" align="center" gap={8} wrap>
-        <Flex align="center" gap={8} wrap style={{ minWidth: 0, flex: '1 1 600px' }}>
-          <Segmented<RoadmapViewMode>
-            aria-label="路标视图"
-            value={viewMode}
-            options={[
-              { label: '表单视图', value: 'table' },
-              { label: '版本演进视图', value: 'evolution' },
-            ]}
-            onChange={onViewModeChange}
-            style={compactControlStyle}
-          />
+      <Flex
+        className="roadmap-toolbar-scroll-row"
+        justify="space-between"
+        align="center"
+        gap={12}
+        wrap={false}
+        style={{ minWidth: 'max-content' }}
+      >
+        <Flex align="center" gap={10} wrap={false} style={{ minWidth: 'max-content', flex: '0 0 auto' }}>
+          <div
+            className="roadmap-toolbar-view-switch"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              minHeight: 44,
+              paddingInline: 4,
+              border: '1px solid var(--border-purple)',
+              borderRadius: 10,
+              background: 'var(--bg-purple-tint)',
+            }}
+          >
+            <Segmented<RoadmapViewMode>
+              aria-label="路标视图"
+              value={viewMode}
+              options={[
+                { label: '表单视图', value: 'table' },
+                { label: '版本演进视图', value: 'evolution' },
+              ]}
+              onChange={onViewModeChange}
+              style={{ ...compactControlStyle, background: 'transparent' }}
+            />
+          </div>
 
-          <Flex data-roadmap-quick-filter align="center" gap={6} wrap style={{ minWidth: 0, maxWidth: '100%' }}>
+          <Flex
+            className="roadmap-toolbar-filter-group"
+            data-roadmap-quick-filter
+            align="center"
+            gap={6}
+            wrap={false}
+            style={{ minHeight: 44 }}
+          >
             <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap' }}>品牌</Typography.Text>
             <Segmented<'all' | 'custom' | RoadmapBrand>
               aria-label="品牌快捷筛选"
@@ -127,7 +162,18 @@ export default function RoadmapToolbar({
             />
           </Flex>
 
-          <Flex data-roadmap-quick-filter align="center" gap={6} wrap style={{ minWidth: 0, maxWidth: '100%' }}>
+          <Flex
+            className="roadmap-toolbar-filter-group roadmap-toolbar-group-divider"
+            data-roadmap-quick-filter
+            align="center"
+            gap={6}
+            wrap={false}
+            style={{
+              minHeight: 44,
+              paddingInlineStart: 10,
+              borderInlineStart: '1px solid var(--border-purple)',
+            }}
+          >
             <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap' }}>产品类型</Typography.Text>
             <Segmented<'all' | 'custom' | RoadmapProductType>
               aria-label="产品类型快捷筛选"
@@ -145,7 +191,7 @@ export default function RoadmapToolbar({
           justify="flex-end"
           gap={6}
           wrap={false}
-          style={{ minWidth: 'max-content', flex: '0 0 auto', whiteSpace: 'nowrap' }}
+          style={{ minWidth: 'max-content', minHeight: 44, flex: '0 0 auto', whiteSpace: 'nowrap' }}
         >
           {viewMode === 'evolution' && hasTargetVersions ? (
             <Button
@@ -155,6 +201,23 @@ export default function RoadmapToolbar({
             >
               {allTargetsCollapsed ? '展开全部目标' : '收起全部目标'}
             </Button>
+          ) : null}
+          {conflictCount > 0 ? (
+            <Badge count={conflictCount} size="small" color="var(--primary)" offset={[-2, 2]}>
+              <Button
+                className="pms-roadmap-conflict-action"
+                icon={<WarningOutlined aria-hidden />}
+                onClick={onResolveConflicts}
+                style={{
+                  ...compactControlStyle,
+                  borderColor: 'var(--border-purple)',
+                  color: 'var(--primary)',
+                  background: 'var(--bg-purple-tint)',
+                }}
+              >
+                解决冲突
+              </Button>
+            </Badge>
           ) : null}
           <Button
             icon={<AuditOutlined />}
@@ -215,6 +278,33 @@ export default function RoadmapToolbar({
           </Button>
         </Flex>
       </Flex>
+      <style jsx global>{`
+        .roadmap-toolbar-glass .ant-btn {
+          position: relative;
+          height: 32px;
+          min-height: 32px;
+          border-radius: 8px;
+        }
+        .roadmap-toolbar-glass .ant-btn::before {
+          content: '';
+          position: absolute;
+          inset: -6px 0;
+        }
+        .roadmap-toolbar-glass .ant-segmented {
+          padding: 2px;
+        }
+        .roadmap-toolbar-glass .ant-segmented-item {
+          min-height: 28px;
+          line-height: 28px;
+          border-radius: 7px;
+        }
+        .roadmap-toolbar-glass .ant-segmented-item-label {
+          min-height: 28px;
+          line-height: 28px;
+          padding-inline: 10px;
+          white-space: nowrap;
+        }
+      `}</style>
     </div>
   )
 }

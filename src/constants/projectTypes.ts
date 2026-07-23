@@ -55,10 +55,10 @@ export type PersistedProjectTypeName = CurrentProjectTypeName | LegacyMachinePro
 
 export const MACHINE_PROJECT_TYPE_FILTER = 'machine'
 
-export const MACHINE_PROJECT_FILTER_OPTIONS = [
-  { label: '整机项目', value: MACHINE_PROJECT_TYPE_FILTER },
-  ...MACHINE_PROJECT_TYPES.map(type => ({ label: type, value: type })),
-] as const
+export const MACHINE_PROJECT_FILTER_OPTIONS = MACHINE_PROJECT_TYPES.map(type => ({
+  label: type,
+  value: type,
+}))
 
 export const PROJECT_TYPE_COLORS: Record<string, { bg: string; color: string }> = {
   [PROJECT_TYPE_MACHINE_PHONE]: { bg: 'rgba(99,102,241,0.08)', color: '#6366f1' },

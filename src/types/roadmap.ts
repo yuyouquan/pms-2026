@@ -1,4 +1,5 @@
 import type { MachineProjectType } from '@/constants/projectTypes'
+import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
 
 export type RoadmapSource = 'normal' | 'planned'
 export type RoadmapViewMode = 'table' | 'evolution'
@@ -175,6 +176,8 @@ export interface RoadmapStoreState {
   brandFilter: 'all' | RoadmapBrand
   productTypeFilter: 'all' | RoadmapProductType
   filters: RoadmapFilterCondition[]
+  columnOrder: RoadmapColumnKey[]
+  columnOrderByView: Record<RoadmapViewMode, RoadmapColumnKey[]>
   visibleColumns: RoadmapColumnKey[]
   visibleColumnsByView: Record<RoadmapViewMode, RoadmapColumnKey[]>
   sort: RoadmapSortState
@@ -262,6 +265,7 @@ export interface RoadmapStoreActions {
   setBrandFilter: (brand: 'all' | RoadmapBrand) => void
   setProductTypeFilter: (productType: 'all' | RoadmapProductType) => void
   setFilters: (filters: RoadmapFilterCondition[]) => void
+  setColumnSettings: (value: SortableColumnSettingsValue<RoadmapColumnKey>) => void
   setVisibleColumns: (columns: RoadmapColumnKey[]) => void
   setSort: (sort: RoadmapSortState) => void
   setSelectedConflictKey: (key: string | null) => void

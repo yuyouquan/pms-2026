@@ -7,17 +7,20 @@ import {
 } from '@/lib/roadmapAudit'
 import {
   DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
+  DEFAULT_ROADMAP_COLUMN_ORDER,
   DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS,
   DEFAULT_ROADMAP_VISIBLE_COLUMNS,
   ensureRoadmapLockedColumns,
   getRoadmapQuickFilterValue,
   ROADMAP_EVOLUTION_LOCKED_COLUMNS,
+  normalizeRoadmapColumnSettings,
   sanitizeRoadmapFilterConditions,
   sanitizeRoadmapVisibleColumns,
   setRoadmapQuickFilter,
   setRoadmapTosVersionFilter,
 } from '@/lib/roadmapFilters'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
+import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
 import {
   buildRoadmapDisplayName,
   isExactRoadmapDuplicate,
@@ -63,12 +66,15 @@ type PersistedRoadmapState = Pick<
   | 'brandFilter'
   | 'productTypeFilter'
   | 'filters'
+  | 'columnOrder'
+  | 'columnOrderByView'
   | 'visibleColumns'
   | 'visibleColumnsByView'
   | 'sort'
 >
 
 let fallbackIdCounter = 0
+let roadmapStorageReadFailed = false
 
 function nowIso(): string {
   return new Date().toISOString()
@@ -148,6 +154,135 @@ export function createInitialTosVersions(): TosVersionConfig[] {
   }))
 }
 
+export function createInitialPlannedProjects(
+  tosVersions: readonly TosVersionConfig[] = createInitialTosVersions(),
+): PlannedRoadmapProject[] {
+  const firstSaleVersion = tosVersions.find(version => version.id === 'tos-16-3')
+    ?? tosVersions.find(version => version.major === 16 && version.minor === 3)
+    ?? tosVersions[0]
+  if (!firstSaleVersion) return []
+  return [{
+    id: 'planned-mock-x6877-android16-new',
+    status: '待规划',
+    machineProjectType: '整机-手机',
+    projectCode: 'X6877',
+    displayName: 'X6877',
+    androidVersion: 'Android 16',
+    firstSaleTosVersionId: firstSaleVersion.id,
+    brand: 'Infinix',
+    productLine: 'NOTE',
+    productSeries: 'NOTE 60',
+    marketName: 'NOTE 60 Pro',
+    productType: '新品',
+    platform: 'MT6877',
+    startRam: '8GB',
+    versionType: 'Full',
+    str5Date: '2026-10-15',
+    launchDate: '2026-11-20',
+    developMode: 'ODC',
+    remark: '待规划样例：用于确认与已存在普通项目的重复冲突处理。',
+    createdAt: '2026-07-21T02:15:00.000Z',
+    createdBy: '李四',
+    updatedAt: '2026-07-22T09:30:00.000Z',
+    updatedBy: '张三',
+  }]
+}
+
+export function createInitialRoadmapChangeLogs(
+  tosVersions: readonly TosVersionConfig[] = createInitialTosVersions(),
+  plannedProjects: readonly PlannedRoadmapProject[] = createInitialPlannedProjects(tosVersions),
+): RoadmapChangeLog[] {
+  const planned = plannedProjects.find(project => project.id === 'planned-mock-x6877-android16-new')
+  if (!planned) return []
+  const plannedTosVersionName = tosVersions.find(version => version.id === planned.firstSaleTosVersionId)?.name
+    ?? planned.firstSaleTosVersionId
+  const normalAfterVersion = tosVersions.find(version => version.id === 'tos-16-3') ?? tosVersions[0]
+  const normalBeforeVersion = tosVersions.find(version => version.id === 'tos-16-2') ?? normalAfterVersion
+  if (!normalAfterVersion || !normalBeforeVersion) return []
+
+  const normalBefore: RoadmapProjectFields = {
+    machineProjectType: '整机-手机',
+    projectCode: 'X6877',
+    displayName: 'X6877-D8400_H991',
+    androidVersion: 'Android 16',
+    firstSaleTosVersionId: normalBeforeVersion.id,
+    brand: 'TECNO',
+    productLine: 'NOTE',
+    productSeries: 'CAMON 50',
+    marketName: 'NOTE 50',
+    productType: '新品',
+    platform: 'MT6877',
+    startRam: '8GB',
+    versionType: 'Full',
+    str5Date: '2026-05-15',
+    launchDate: '2026-06-15',
+    developMode: 'ODC',
+    remark: '重点验证海外市场首销版本交付。',
+  }
+  const normalAfter: RoadmapProjectFields = {
+    ...normalBefore,
+    firstSaleTosVersionId: normalAfterVersion.id,
+    marketName: 'NOTE 50 Pro',
+    remark: '重点验证 tOS 16.3 全量版本交付。',
+  }
+  const plannedBefore: RoadmapProjectFields = {
+    ...planned,
+    brand: '待定',
+    productLine: '待定',
+    productSeries: '待定',
+    marketName: 'X6877',
+  }
+
+  return [
+    {
+      id: 'roadmap-log-mock-planned-update-x6877',
+      projectId: planned.id,
+      projectDisplayName: planned.displayName,
+      source: 'planned',
+      action: 'update',
+      actor: '张三',
+      occurredAt: '2026-07-22T09:30:00.000Z',
+      tosVersionName: plannedTosVersionName,
+      changes: diffRoadmapProjectFields(plannedBefore, planned, tosVersions),
+    },
+    {
+      id: 'roadmap-log-mock-normal-update-x6877',
+      projectId: '1',
+      projectDisplayName: normalAfter.displayName,
+      source: 'normal',
+      action: 'update',
+      actor: '张三',
+      occurredAt: '2026-07-22T08:45:00.000Z',
+      tosVersionName: normalAfterVersion.name,
+      changes: diffRoadmapProjectFields(normalBefore, normalAfter, tosVersions),
+    },
+    {
+      id: 'roadmap-log-mock-planned-create-x6877',
+      projectId: planned.id,
+      projectDisplayName: planned.displayName,
+      source: 'planned',
+      action: 'create',
+      actor: '李四',
+      occurredAt: '2026-07-21T02:15:00.000Z',
+      tosVersionName: plannedTosVersionName,
+      changes: [],
+      snapshot: createRoadmapAuditSnapshot(plannedBefore, tosVersions),
+    },
+    {
+      id: 'roadmap-log-mock-normal-create-x6877',
+      projectId: '1',
+      projectDisplayName: normalBefore.displayName,
+      source: 'normal',
+      action: 'create',
+      actor: '李四',
+      occurredAt: '2026-07-20T06:20:00.000Z',
+      tosVersionName: normalBeforeVersion.name,
+      changes: [],
+      snapshot: createRoadmapAuditSnapshot(normalBefore, tosVersions),
+    },
+  ]
+}
+
 export function createInitialRoadmapState(): RoadmapStoreState {
   return {
     plannedProjects: [],
@@ -158,6 +293,39 @@ export function createInitialRoadmapState(): RoadmapStoreState {
     brandFilter: 'all',
     productTypeFilter: 'all',
     filters: [],
+    columnOrder: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+    columnOrderByView: {
+      table: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+      evolution: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+    },
+    visibleColumns: [...DEFAULT_ROADMAP_VISIBLE_COLUMNS],
+    visibleColumnsByView: {
+      table: [...DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS],
+      evolution: [...DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS],
+    },
+    sort: { field: null, direction: null },
+    selectedConflictKey: null,
+  }
+}
+
+export function createInitialRoadmapMockState(
+  tosVersions: TosVersionConfig[] = createInitialTosVersions(),
+): RoadmapStoreState {
+  const plannedProjects = createInitialPlannedProjects(tosVersions)
+  return {
+    plannedProjects,
+    tosVersions,
+    changeLogs: createInitialRoadmapChangeLogs(tosVersions, plannedProjects),
+    viewMode: 'table',
+    selectedTosVersionId: null,
+    brandFilter: 'all',
+    productTypeFilter: 'all',
+    filters: [],
+    columnOrder: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+    columnOrderByView: {
+      table: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+      evolution: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+    },
     visibleColumns: [...DEFAULT_ROADMAP_VISIBLE_COLUMNS],
     visibleColumnsByView: {
       table: [...DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS],
@@ -175,6 +343,23 @@ function sanitizeSort(value: unknown): RoadmapSortState {
     : null
   const direction = value.direction === 'ascend' || value.direction === 'descend' ? value.direction : null
   return field && direction ? { field, direction } : { field: null, direction: null }
+}
+
+function preserveKnownColumnOrder(value: unknown): RoadmapColumnKey[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const seen = new Set<RoadmapColumnKey>()
+  const order: RoadmapColumnKey[] = []
+  for (const candidate of value) {
+    if (
+      typeof candidate !== 'string'
+      || !KNOWN_COLUMN_KEYS.has(candidate as RoadmapColumnKey)
+      || seen.has(candidate as RoadmapColumnKey)
+    ) continue
+    const key = candidate as RoadmapColumnKey
+    seen.add(key)
+    order.push(key)
+  }
+  return order
 }
 
 function migrateTosVersions(value: unknown): TosVersionConfig[] | null {
@@ -395,16 +580,18 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
   const persistedColumnsByView = isRecord(persistedState.visibleColumnsByView)
     ? persistedState.visibleColumnsByView
     : null
+  const hasPersistedTableColumns = Array.isArray(persistedColumnsByView?.table)
+  const hasPersistedEvolutionColumns = Array.isArray(persistedColumnsByView?.evolution)
   const legacyVisibleColumns = sanitizeRoadmapVisibleColumns(persistedState.visibleColumns)
-  const tableVisibleColumns = persistedColumnsByView
+  const tableVisibleColumns = hasPersistedTableColumns
     ? sanitizeRoadmapVisibleColumns(
-      persistedColumnsByView.table,
+      persistedColumnsByView?.table,
       DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS,
     )
     : legacyVisibleColumns
-  const migratedEvolutionVisibleColumns = persistedColumnsByView
+  const migratedEvolutionVisibleColumns = hasPersistedEvolutionColumns
     ? sanitizeRoadmapVisibleColumns(
-      persistedColumnsByView.evolution,
+      persistedColumnsByView?.evolution,
       DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
     )
     : JSON.stringify(legacyVisibleColumns) === JSON.stringify(DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS)
@@ -415,8 +602,45 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
     ROADMAP_EVOLUTION_LOCKED_COLUMNS,
   )
   const visibleColumnsByView = {
-    table: tableVisibleColumns,
-    evolution: evolutionVisibleColumns,
+    table: normalizeRoadmapColumnSettings('table', {
+      order: [],
+      visible: tableVisibleColumns,
+    }).visible,
+    evolution: normalizeRoadmapColumnSettings('evolution', {
+      order: [],
+      visible: evolutionVisibleColumns,
+    }).visible,
+  }
+  const persistedOrderByView = isRecord(persistedState.columnOrderByView)
+    ? persistedState.columnOrderByView
+    : null
+  const legacyColumnOrder = preserveKnownColumnOrder(persistedState.columnOrder)
+  const legacyVisibleColumnOrder = preserveKnownColumnOrder(persistedState.visibleColumns)
+  const tableLegacyVisibleOrder = hasPersistedTableColumns
+    ? preserveKnownColumnOrder(persistedColumnsByView?.table)
+    : legacyVisibleColumnOrder
+  const evolutionLegacyVisibleOrder = hasPersistedEvolutionColumns
+    ? preserveKnownColumnOrder(persistedColumnsByView?.evolution)
+    : legacyVisibleColumnOrder
+  const tableSettings = normalizeRoadmapColumnSettings('table', {
+    order: Array.isArray(persistedOrderByView?.table)
+      ? persistedOrderByView.table as RoadmapColumnKey[]
+      : viewMode === 'table' && legacyColumnOrder
+        ? legacyColumnOrder
+        : tableLegacyVisibleOrder,
+    visible: visibleColumnsByView.table,
+  })
+  const evolutionSettings = normalizeRoadmapColumnSettings('evolution', {
+    order: Array.isArray(persistedOrderByView?.evolution)
+      ? persistedOrderByView.evolution as RoadmapColumnKey[]
+      : viewMode === 'evolution' && legacyColumnOrder
+        ? legacyColumnOrder
+        : evolutionLegacyVisibleOrder,
+    visible: visibleColumnsByView.evolution,
+  })
+  const columnOrderByView = {
+    table: tableSettings.order,
+    evolution: evolutionSettings.order,
   }
 
   return {
@@ -430,6 +654,8 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
       ? migratedProductType as RoadmapProductType
       : 'all',
     filters,
+    columnOrder: columnOrderByView[viewMode],
+    columnOrderByView,
     visibleColumns: visibleColumnsByView[viewMode],
     visibleColumnsByView,
     sort: sanitizeSort(persistedState.sort),
@@ -447,9 +673,58 @@ export function partializeRoadmapState(state: RoadmapStore): PersistedRoadmapSta
     brandFilter: state.brandFilter,
     productTypeFilter: state.productTypeFilter,
     filters: state.filters,
+    columnOrder: state.columnOrder,
+    columnOrderByView: state.columnOrderByView,
     visibleColumns: state.visibleColumns,
     visibleColumnsByView: state.visibleColumnsByView,
     sort: state.sort,
+  }
+}
+
+export function mergeRoadmapPersistedState(
+  persistedState: unknown,
+  currentState: RoadmapStore,
+): RoadmapStore {
+  const migrated = migrateRoadmapState(persistedState, 1)
+  if (persistedState === null || persistedState === undefined) {
+    return roadmapStorageReadFailed ? { ...currentState, ...migrated } : currentState
+  }
+  const mock = createInitialRoadmapMockState(migrated.tosVersions)
+  const mockLogIds = new Set(mock.changeLogs.map(log => log.id))
+  const changeLogs = [
+    ...mock.changeLogs,
+    ...migrated.changeLogs.filter(log => !mockLogIds.has(log.id)),
+  ].sort((left, right) => (
+    Date.parse(right.occurredAt) - Date.parse(left.occurredAt) || left.id.localeCompare(right.id)
+  ))
+
+  const plannedSeed = mock.plannedProjects[0]
+  if (!plannedSeed) {
+    return {
+      ...currentState,
+      ...migrated,
+      changeLogs,
+    }
+  }
+  const seedWasDeleted = migrated.changeLogs.some(log => (
+    log.source === 'planned'
+    && log.action === 'delete'
+    && log.projectId === plannedSeed.id
+  ))
+  const canResolveSeedTos = migrated.tosVersions.some(version => version.id === plannedSeed.firstSaleTosVersionId)
+  const projectsWithoutSeed = migrated.plannedProjects.filter(project => project.id !== plannedSeed.id)
+  const hasEquivalentPlannedProject = isExactRoadmapDuplicate(plannedSeed, projectsWithoutSeed)
+  const plannedProjects = seedWasDeleted
+    ? projectsWithoutSeed
+    : canResolveSeedTos && !hasEquivalentPlannedProject
+      ? [plannedSeed, ...projectsWithoutSeed]
+      : projectsWithoutSeed
+
+  return {
+    ...currentState,
+    ...migrated,
+    plannedProjects,
+    changeLogs,
   }
 }
 
@@ -459,8 +734,10 @@ const safeRoadmapStorage: StateStorage = {
     try {
       const stored = window.localStorage.getItem(name)
       if (stored !== null) JSON.parse(stored)
+      roadmapStorageReadFailed = false
       return stored
     } catch (error) {
+      roadmapStorageReadFailed = true
       console.error(`Failed to read ${ROADMAP_STORAGE_KEY}; using initial roadmap state.`, error)
       return null
     }
@@ -540,10 +817,11 @@ function createUniqueRuntimeId(prefix: string, existingIds: ReadonlySet<string>)
 export const useRoadmapStore = create<RoadmapStore>()(
   persist(
     (set, get) => ({
-      ...createInitialRoadmapState(),
+      ...createInitialRoadmapMockState(),
       setViewMode: (viewMode: RoadmapViewMode) => {
         if (viewMode === 'table' || viewMode === 'evolution') set(state => ({
           viewMode,
+          columnOrder: state.columnOrderByView[viewMode],
           visibleColumns: state.visibleColumnsByView[viewMode],
         }))
       },
@@ -597,19 +875,36 @@ export const useRoadmapStore = create<RoadmapStore>()(
             : 'all',
         }
       }),
-      setVisibleColumns: columns => set(state => {
-        const fallback = state.viewMode === 'table'
-          ? DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS
-          : DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS
-        const sanitizedColumns = sanitizeRoadmapVisibleColumns(columns, fallback)
-        const visibleColumns = state.viewMode === 'evolution'
-          ? ensureRoadmapLockedColumns(sanitizedColumns, ROADMAP_EVOLUTION_LOCKED_COLUMNS)
-          : sanitizedColumns
+      setColumnSettings: (value: SortableColumnSettingsValue<RoadmapColumnKey>) => set(state => {
+        const settings = normalizeRoadmapColumnSettings(state.viewMode, value)
         return {
-          visibleColumns,
+          columnOrder: settings.order,
+          columnOrderByView: {
+            ...state.columnOrderByView,
+            [state.viewMode]: settings.order,
+          },
+          visibleColumns: settings.visible,
           visibleColumnsByView: {
             ...state.visibleColumnsByView,
-            [state.viewMode]: visibleColumns,
+            [state.viewMode]: settings.visible,
+          },
+        }
+      }),
+      setVisibleColumns: columns => set(state => {
+        const settings = normalizeRoadmapColumnSettings(state.viewMode, {
+          order: state.columnOrder,
+          visible: columns,
+        })
+        return {
+          columnOrder: settings.order,
+          columnOrderByView: {
+            ...state.columnOrderByView,
+            [state.viewMode]: settings.order,
+          },
+          visibleColumns: settings.visible,
+          visibleColumnsByView: {
+            ...state.visibleColumnsByView,
+            [state.viewMode]: settings.visible,
           },
         }
       }),
@@ -777,10 +1072,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
       storage: createJSONStorage(() => safeRoadmapStorage),
       migrate: migrateRoadmapState,
       partialize: partializeRoadmapState,
-      merge: (persistedState, currentState) => ({
-        ...currentState,
-        ...migrateRoadmapState(persistedState, 1),
-      }),
+      merge: mergeRoadmapPersistedState,
     },
   ),
 )

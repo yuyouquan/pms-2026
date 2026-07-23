@@ -1,10 +1,17 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef, type CSSProperties } from 'react'
-import { Card, Tabs, Table, Tag, Space, Row, Col, Input, Button, Modal, Checkbox, Radio } from 'antd'
+import { Card, Tabs, Table, Tag, Space, Row, Col, Input, Button, Radio } from 'antd'
 import { SearchOutlined, AppstoreOutlined } from '@ant-design/icons'
 import { gantt } from 'dhtmlx-gantt'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
+import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
+import {
+  getDefaultColumnSettings,
+  orderVisibleDefinitions,
+  type SortableColumnDefinition,
+  type SortableColumnSettingsValue,
+} from '@/lib/columnSettings'
 import type { IRRequirement, SRRequirement } from '@/types'
 
 // IR需求Mock数据
@@ -32,52 +39,64 @@ const SR_MOCK_DATA: SRRequirement[] = [
 ]
 
 // IR所有列定义
-const IR_ALL_COLUMNS = [
-  { key: 'id', label: '序号', default: true },
-  { key: 'domain', label: '领域', default: true },
-  { key: 'irNo', label: 'IR编号', default: true },
-  { key: 'irTitle', label: 'IR标题', default: true },
-  { key: 'priority', label: '优先级', default: true },
-  { key: 'irStatus', label: 'IR状态', default: true },
-  { key: 'testPlanStart', label: '需求测试计划开始时间', default: true },
-  { key: 'testPlanEnd', label: '需求测试计划完成时间', default: true },
-  { key: 'acceptPlanStart', label: '需求验收计划开始时间', default: true },
-  { key: 'acceptPlanEnd', label: '需求验收计划完成时间', default: true },
+const IR_ALL_COLUMNS: readonly SortableColumnDefinition<string>[] = [
+  { key: 'id', title: '序号', defaultVisible: true, hideable: false, disabledReason: '必选字段' },
+  { key: 'domain', title: '领域', defaultVisible: true },
+  { key: 'irNo', title: 'IR编号', defaultVisible: true },
+  { key: 'irTitle', title: 'IR标题', defaultVisible: true },
+  { key: 'priority', title: '优先级', defaultVisible: true },
+  { key: 'irStatus', title: 'IR状态', defaultVisible: true },
+  { key: 'testPlanStart', title: '需求测试计划开始时间', defaultVisible: true },
+  { key: 'testPlanEnd', title: '需求测试计划完成时间', defaultVisible: true },
+  { key: 'acceptPlanStart', title: '需求验收计划开始时间', defaultVisible: true },
+  { key: 'acceptPlanEnd', title: '需求验收计划完成时间', defaultVisible: true },
 ]
 
 // SR所有列定义
-const SR_ALL_COLUMNS = [
-  { key: 'id', label: '序号', default: true },
-  { key: 'srNo', label: 'SR编号', default: true },
-  { key: 'srTitle', label: 'SR标题', default: true },
-  { key: 'relatedIR', label: '关联IR', default: true },
-  { key: 'devDept', label: '开发部门', default: true },
-  { key: 'srStatus', label: 'SR状态', default: true },
-  { key: 'planTestVersion', label: '计划转测版本', default: true },
-  { key: 'actualTestVersion', label: '实际转测版本', default: true },
-  { key: 'testPlanStart', label: '需求测试计划开始时间', default: true },
-  { key: 'testPlanEnd', label: '需求测试计划完成时间', default: true },
-  { key: 'acceptPlanStart', label: '需求验收计划开始时间', default: true },
-  { key: 'acceptPlanEnd', label: '需求验收计划完成时间', default: true },
+const SR_ALL_COLUMNS: readonly SortableColumnDefinition<string>[] = [
+  { key: 'id', title: '序号', defaultVisible: true, hideable: false, disabledReason: '必选字段' },
+  { key: 'srNo', title: 'SR编号', defaultVisible: true },
+  { key: 'srTitle', title: 'SR标题', defaultVisible: true },
+  { key: 'relatedIR', title: '关联IR', defaultVisible: true },
+  { key: 'devDept', title: '开发部门', defaultVisible: true },
+  { key: 'srStatus', title: 'SR状态', defaultVisible: true },
+  { key: 'planTestVersion', title: '计划转测版本', defaultVisible: true },
+  { key: 'actualTestVersion', title: '实际转测版本', defaultVisible: true },
+  { key: 'testPlanStart', title: '需求测试计划开始时间', defaultVisible: true },
+  { key: 'testPlanEnd', title: '需求测试计划完成时间', defaultVisible: true },
+  { key: 'acceptPlanStart', title: '需求验收计划开始时间', defaultVisible: true },
+  { key: 'acceptPlanEnd', title: '需求验收计划完成时间', defaultVisible: true },
 ]
 
 // 甘特图组件
-function RequirementGantt({ data, dimension }: { data: any[]; dimension: 'test' | 'accept' }) {
+function RequirementGantt({
+  data,
+  dimension,
+  definitions,
+  columnSettings,
+}: {
+  data: any[]
+  dimension: 'test' | 'accept'
+  definitions: readonly SortableColumnDefinition<string>[]
+  columnSettings: SortableColumnSettingsValue<string>
+}) {
   const ganttContainer = useRef<HTMLDivElement>(null)
+  const orderedGanttColumns = useMemo(
+    () => orderVisibleDefinitions(definitions, columnSettings).map(definition => ({
+      name: definition.key,
+      label: definition.title as string,
+      width: definition.key.endsWith('Title') ? 200 : definition.key.includes('Plan') ? 150 : 100,
+      tree: false,
+      align: definition.key.endsWith('Title') ? 'left' as const : 'center' as const,
+    })),
+    [columnSettings, definitions],
+  )
 
   useEffect(() => {
     if (!ganttContainer.current || data.length === 0) return
 
     gantt.config.date_format = '%Y-%m-%d'
-    gantt.config.columns = [
-      { name: 'text', label: '标题', width: 200, tree: false },
-      { name: 'domain', label: '领域', width: 70, align: 'center' as const },
-      { name: 'no', label: '编号', width: 110, align: 'center' as const },
-      { name: 'priority', label: '优先级', width: 60, align: 'center' as const },
-      { name: 'statusText', label: '状态', width: 70, align: 'center' as const },
-      { name: 'start_date', label: '计划开始', width: 90, align: 'center' as const },
-      { name: 'end_date_display', label: '计划完成', width: 90, align: 'center' as const },
-    ]
+    gantt.config.columns = orderedGanttColumns
     gantt.config.scale_unit = 'month'
     gantt.config.date_scale = '%Y年%m月'
     gantt.config.subscales = [{ unit: 'day', step: 1, date: '%d日' }]
@@ -96,14 +115,10 @@ function RequirementGantt({ data, dimension }: { data: any[]; dimension: 'test' 
         const end = new Date(endDate)
         const duration = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)))
         return {
+          ...item,
           id: index + 1,
           text: item.irTitle || item.srTitle || '',
-          domain: item.domain || item.devDept || '',
-          no: item.irNo || item.srNo || '',
-          priority: item.priority || '',
-          statusText: item.irStatus || item.srStatus || '',
           start_date: startDate,
-          end_date_display: endDate,
           duration,
           progress: item.irStatus === '已验收' || item.srStatus === '已验收' ? 1 : item.irStatus === '测试中' || item.srStatus === '测试中' ? 0.6 : 0.3,
         }
@@ -116,7 +131,7 @@ function RequirementGantt({ data, dimension }: { data: any[]; dimension: 'test' 
     return () => {
       gantt.clearAll()
     }
-  }, [data, dimension])
+  }, [data, dimension, orderedGanttColumns])
 
   return <div ref={ganttContainer} style={{ width: '100%', height: '500px' }} />
 }
@@ -130,8 +145,12 @@ export default function RequirementDevPlan({ isEditMode = false }: RequirementDe
   const [viewMode, setViewMode] = useState<'table' | 'horizontal' | 'gantt'>('table')
   const [searchText, setSearchText] = useState('')
   const [showColumnModal, setShowColumnModal] = useState(false)
-  const [irVisibleColumns, setIrVisibleColumns] = useState(IR_ALL_COLUMNS.filter(c => c.default).map(c => c.key))
-  const [srVisibleColumns, setSrVisibleColumns] = useState(SR_ALL_COLUMNS.filter(c => c.default).map(c => c.key))
+  const [irColumnSettings, setIrColumnSettings] = useState<SortableColumnSettingsValue<string>>(
+    () => getDefaultColumnSettings(IR_ALL_COLUMNS),
+  )
+  const [srColumnSettings, setSrColumnSettings] = useState<SortableColumnSettingsValue<string>>(
+    () => getDefaultColumnSettings(SR_ALL_COLUMNS),
+  )
   const [ganttDimension, setGanttDimension] = useState<'test' | 'accept'>('test')
 
   // 编辑模式下不支持横版表格，自动切回竖版表格
@@ -190,8 +209,11 @@ export default function RequirementDevPlan({ isEditMode = false }: RequirementDe
       { title: '需求验收计划开始时间', dataIndex: 'acceptPlanStart', key: 'acceptPlanStart', width: 160 },
       { title: '需求验收计划完成时间', dataIndex: 'acceptPlanEnd', key: 'acceptPlanEnd', width: 160 },
     ]
-    return allCols.filter(c => irVisibleColumns.includes(c.key))
-  }, [irVisibleColumns])
+    const columnsByKey = new Map(allCols.map(column => [column.key, column]))
+    return orderVisibleDefinitions(IR_ALL_COLUMNS, irColumnSettings)
+      .map(definition => columnsByKey.get(definition.key))
+      .filter(Boolean)
+  }, [irColumnSettings])
 
   // SR表格列
   const srColumns = useMemo(() => {
@@ -209,12 +231,14 @@ export default function RequirementDevPlan({ isEditMode = false }: RequirementDe
       { title: '需求验收计划开始时间', dataIndex: 'acceptPlanStart', key: 'acceptPlanStart', width: 160 },
       { title: '需求验收计划完成时间', dataIndex: 'acceptPlanEnd', key: 'acceptPlanEnd', width: 160 },
     ]
-    return allCols.filter(c => srVisibleColumns.includes(c.key))
-  }, [srVisibleColumns])
+    const columnsByKey = new Map(allCols.map(column => [column.key, column]))
+    return orderVisibleDefinitions(SR_ALL_COLUMNS, srColumnSettings)
+      .map(definition => columnsByKey.get(definition.key))
+      .filter(Boolean)
+  }, [srColumnSettings])
 
   const currentAllColumns = activeTab === 'ir' ? IR_ALL_COLUMNS : SR_ALL_COLUMNS
-  const currentVisibleColumns = activeTab === 'ir' ? irVisibleColumns : srVisibleColumns
-  const setCurrentVisibleColumns = activeTab === 'ir' ? setIrVisibleColumns : setSrVisibleColumns
+  const currentColumnSettings = activeTab === 'ir' ? irColumnSettings : srColumnSettings
 
   // 横版表格渲染
   const renderHorizontalTable = (type: 'ir' | 'sr') => {
@@ -248,7 +272,15 @@ export default function RequirementDevPlan({ isEditMode = false }: RequirementDe
       { label: '需求验收计划开始时间', key: 'acceptPlanStart' },
       { label: '需求验收计划完成时间', key: 'acceptPlanEnd' },
     ]
-    const fields = type === 'ir' ? irFields : srFields
+    const fieldByKey = new Map(
+      (type === 'ir' ? irFields : srFields).map(field => [field.key, field]),
+    )
+    const fields = orderVisibleDefinitions(
+      type === 'ir' ? IR_ALL_COLUMNS : SR_ALL_COLUMNS,
+      type === 'ir' ? irColumnSettings : srColumnSettings,
+    )
+      .map(definition => fieldByKey.get(definition.key))
+      .filter((field): field is { label: string; key: string } => Boolean(field))
 
     const renderCellValue = (item: any, key: string) => {
       const val = item[key]
@@ -370,7 +402,12 @@ export default function RequirementDevPlan({ isEditMode = false }: RequirementDe
                 <Radio.Button value="accept">需求验收</Radio.Button>
               </Radio.Group>
             </Row>
-            <RequirementGantt data={filteredIR} dimension={ganttDimension} />
+            <RequirementGantt
+              data={filteredIR}
+              dimension={ganttDimension}
+              definitions={IR_ALL_COLUMNS}
+              columnSettings={irColumnSettings}
+            />
           </div>
         )
       )}
@@ -397,40 +434,28 @@ export default function RequirementDevPlan({ isEditMode = false }: RequirementDe
                 <Radio.Button value="accept">需求验收</Radio.Button>
               </Radio.Group>
             </Row>
-            <RequirementGantt data={filteredSR} dimension={ganttDimension} />
+            <RequirementGantt
+              data={filteredSR}
+              dimension={ganttDimension}
+              definitions={SR_ALL_COLUMNS}
+              columnSettings={srColumnSettings}
+            />
           </div>
         )
       )}
 
-      {/* 自定义列Modal */}
-      <Modal
-        title="自定义列配置"
+      <SortableColumnSettings
         open={showColumnModal}
+        definitions={currentAllColumns}
+        value={currentColumnSettings}
+        defaultValue={getDefaultColumnSettings(currentAllColumns)}
         onCancel={() => setShowColumnModal(false)}
-        onOk={() => setShowColumnModal(false)}
-        className="pms-modal"
-        width={400}
-      >
-        <div style={{ maxHeight: 400, overflow: 'auto' }}>
-          {currentAllColumns.map(col => (
-            <div key={col.key} style={{ padding: '6px 0' }}>
-              <Checkbox
-                checked={currentVisibleColumns.includes(col.key)}
-                disabled={col.key === 'id'}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setCurrentVisibleColumns([...currentVisibleColumns, col.key])
-                  } else {
-                    setCurrentVisibleColumns(currentVisibleColumns.filter(k => k !== col.key))
-                  }
-                }}
-              >
-                {col.label}
-              </Checkbox>
-            </div>
-          ))}
-        </div>
-      </Modal>
+        onApply={(nextSettings) => {
+          if (activeTab === 'ir') setIrColumnSettings(nextSettings)
+          else if (activeTab === 'sr') setSrColumnSettings(nextSettings)
+          setShowColumnModal(false)
+        }}
+      />
     </Card>
   )
 }

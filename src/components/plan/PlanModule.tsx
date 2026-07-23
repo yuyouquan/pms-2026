@@ -45,6 +45,14 @@ import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrate
 import { CSS } from '@dnd-kit/utilities'
 import type { ColumnsType } from 'antd/es/table'
 import { compareVersionsForTable, CompareTableRow, FieldDiff } from '@/lib/versionCompare'
+import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
+import {
+  getDefaultColumnSettings,
+  normalizeColumnSettings,
+  orderVisibleDefinitions,
+  type SortableColumnDefinition,
+  type SortableColumnSettingsValue,
+} from '@/lib/columnSettings'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
 import { gantt } from 'dhtmlx-gantt'
 import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
@@ -73,20 +81,40 @@ export const LEVEL1_TASKS = [
   { id: '4', order: 4, taskName: '上市保障', status: '未开始', progress: 0, responsible: '', predecessor: '3', planStartDate: '2026-03-16', planEndDate: '2026-04-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
 ]
 
-export const ALL_COLUMNS = [
-  { key: 'id', title: '序号', default: true },
-  { key: 'taskName', title: '任务名称', default: true },
-  { key: 'responsible', title: '责任人', default: true },
-  { key: 'predecessor', title: '前置任务', default: true },
-  { key: 'planStartDate', title: '计划开始', default: true },
-  { key: 'planEndDate', title: '计划完成', default: true },
-  { key: 'estimatedDays', title: '预估工期', default: true },
-  { key: 'actualStartDate', title: '实际开始', default: true },
-  { key: 'actualEndDate', title: '实际完成', default: true },
-  { key: 'actualDays', title: '实际工期', default: true },
-  { key: 'status', title: '状态', default: true },
-  { key: 'progress', title: '进度', default: true },
+export type PlanColumnKey =
+  | 'id'
+  | 'taskName'
+  | 'responsible'
+  | 'predecessor'
+  | 'planStartDate'
+  | 'planEndDate'
+  | 'estimatedDays'
+  | 'actualStartDate'
+  | 'actualEndDate'
+  | 'actualDays'
+  | 'status'
+  | 'progress'
+
+export const ALL_COLUMNS: SortableColumnDefinition<PlanColumnKey>[] = [
+  { key: 'id', title: '序号', defaultVisible: true, hideable: false, fixed: 'left' },
+  { key: 'taskName', title: '任务名称', defaultVisible: true, hideable: false },
+  { key: 'responsible', title: '责任人', defaultVisible: true },
+  { key: 'predecessor', title: '前置任务', defaultVisible: true },
+  { key: 'planStartDate', title: '计划开始', defaultVisible: true },
+  { key: 'planEndDate', title: '计划完成', defaultVisible: true },
+  { key: 'estimatedDays', title: '预估工期', defaultVisible: true },
+  { key: 'actualStartDate', title: '实际开始', defaultVisible: true },
+  { key: 'actualEndDate', title: '实际完成', defaultVisible: true },
+  { key: 'actualDays', title: '实际工期', defaultVisible: true },
+  { key: 'status', title: '状态', defaultVisible: true },
+  { key: 'progress', title: '进度', defaultVisible: true },
 ]
+
+export const DEFAULT_PLAN_COLUMN_SETTINGS = getDefaultColumnSettings(ALL_COLUMNS)
+
+const GANTT_COLUMN_DEFINITIONS = ALL_COLUMNS.filter(column => (
+  ['id', 'taskName', 'planStartDate', 'estimatedDays', 'progress'] as PlanColumnKey[]
+).includes(column.key))
 
 export const LEVEL2_PLAN_TYPES = ['1+N MR版本火车计划', '粉丝版本计划', '基础体验计划', 'WBS计划']
 
@@ -96,7 +124,17 @@ export const FIXED_LEVEL2_PLANS = [
 ]
 
 // ========== DHTMLXGantt Component ==========
-function DHTMLXGantt({ tasks, onTaskClick, readOnly = false }: { tasks: any[], onTaskClick?: (task: any) => void, readOnly?: boolean }) {
+function DHTMLXGantt({
+  tasks,
+  columnSettings,
+  onTaskClick,
+  readOnly = false,
+}: {
+  tasks: any[]
+  columnSettings?: SortableColumnSettingsValue<string>
+  onTaskClick?: (task: any) => void
+  readOnly?: boolean
+}) {
   const ganttContainer = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -104,12 +142,28 @@ function DHTMLXGantt({ tasks, onTaskClick, readOnly = false }: { tasks: any[], o
 
     // 配置Gantt
     gantt.config.date_format = '%Y-%m-%d'
-    gantt.config.columns = [
-      { name: 'text', label: '任务名称', width: 200, tree: true },
-      { name: 'start_date', label: '开始', align: 'center', width: 80 },
-      { name: 'duration', label: '天数', align: 'center', width: 50 },
-      { name: 'progress', label: '进度', align: 'center', width: 60, template: (task: any) => Math.round(task.progress * 100) + '%' }
-    ]
+    const ganttColumnByKey: Record<PlanColumnKey, any> = {
+      id: { name: 'id', label: '序号', align: 'center', width: 70 },
+      taskName: { name: 'text', label: '任务名称', width: 200, tree: true },
+      responsible: { name: 'responsible', label: '责任人', align: 'center', width: 90 },
+      predecessor: { name: 'predecessor', label: '前置任务', align: 'center', width: 80 },
+      planStartDate: { name: 'start_date', label: '开始', align: 'center', width: 80 },
+      planEndDate: { name: 'end_date', label: '完成', align: 'center', width: 80 },
+      estimatedDays: { name: 'duration', label: '天数', align: 'center', width: 50 },
+      actualStartDate: { name: 'actualStartDate', label: '实际开始', align: 'center', width: 90 },
+      actualEndDate: { name: 'actualEndDate', label: '实际完成', align: 'center', width: 90 },
+      actualDays: { name: 'actualDays', label: '实际工期', align: 'center', width: 80 },
+      status: { name: 'status', label: '状态', align: 'center', width: 80 },
+      progress: { name: 'progress', label: '进度', align: 'center', width: 60, template: (task: any) => Math.round(task.progress * 100) + '%' },
+    }
+    const normalizedSettings = normalizeColumnSettings(
+      GANTT_COLUMN_DEFINITIONS,
+      columnSettings,
+    )
+    gantt.config.columns = orderVisibleDefinitions(
+      GANTT_COLUMN_DEFINITIONS,
+      normalizedSettings,
+    ).map(column => ganttColumnByKey[column.key as PlanColumnKey])
     gantt.config.scale_unit = 'month'
     gantt.config.date_scale = '%Y年%m月'
     gantt.config.subscales = [{ unit: 'day', step: 1, date: '%d日' }]
@@ -136,7 +190,11 @@ function DHTMLXGantt({ tasks, onTaskClick, readOnly = false }: { tasks: any[], o
         parent: t.parentId || 0,
         open: true,
         status: t.status,
-        responsible: t.responsible
+        responsible: t.responsible,
+        predecessor: t.predecessor,
+        actualStartDate: t.actualStartDate,
+        actualEndDate: t.actualEndDate,
+        actualDays: t.actualDays,
       })),
       links: tasks.filter(t => t.predecessor).map((t, i) => ({
         id: i + 1,
@@ -160,7 +218,7 @@ function DHTMLXGantt({ tasks, onTaskClick, readOnly = false }: { tasks: any[], o
     return () => {
       gantt.clearAll()
     }
-  }, [tasks, readOnly])
+  }, [columnSettings, tasks, readOnly])
 
   return <div ref={ganttContainer} style={{ width: '100%', height: '500px' }} />
 }
@@ -173,7 +231,7 @@ function SortableRow({ children, ...props }: any) {
   const style = { ...props.style, transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
   return (
     <DragHandleContext.Provider value={listeners || {}}>
-      <tr ref={setNodeRef} style={style} {...attributes}>{children}</tr>
+      <tr {...props} ref={setNodeRef} style={style} {...attributes}>{children}</tr>
     </DragHandleContext.Provider>
   )
 }
@@ -205,7 +263,7 @@ export interface TaskTableProps {
   isEditMode: boolean
   isCurrentDraft?: boolean
   currentLoginUser?: string
-  visibleColumns: string[]
+  columnSettings: SortableColumnSettingsValue<string>
   searchText: string
   activeModule: string
   planLevel: string
@@ -263,8 +321,8 @@ export interface ProjectPlanProps {
   setViewMode: (v: 'table' | 'gantt') => void
   searchText: string
   setSearchText: (v: string) => void
-  visibleColumns: string[]
-  setVisibleColumns: (v: string[]) => void
+  columnSettings: SortableColumnSettingsValue<string>
+  setColumnSettings: (v: SortableColumnSettingsValue<string>) => void
   showColumnModal: boolean
   setShowColumnModal: (v: boolean) => void
   projectPlanLevel: string
@@ -316,7 +374,7 @@ export interface PlanOverviewProps {
   tasks: any[]
   level2PlanTasks: any[]
   isEditMode: boolean
-  visibleColumns: string[]
+  columnSettings: SortableColumnSettingsValue<string>
   projectPlanViewMode: 'table' | 'horizontal' | 'gantt'
   setProjectPlanViewMode: (v: 'table' | 'horizontal' | 'gantt') => void
   activeModule: string
@@ -488,11 +546,22 @@ export function HorizontalTable({ tasks, versions }: HorizontalTableProps) {
 
 // ========== GanttChart Component ==========
 
-export function GanttChart({ tasks, isEditMode, onTaskClick }: { tasks: any[]; isEditMode: boolean; onTaskClick?: (task: any) => void }) {
+export function GanttChart({
+  tasks,
+  isEditMode,
+  columnSettings,
+  onTaskClick,
+}: {
+  tasks: any[]
+  isEditMode: boolean
+  columnSettings?: SortableColumnSettingsValue<string>
+  onTaskClick?: (task: any) => void
+}) {
   return (
     <div style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
       <DHTMLXGantt
         tasks={tasks}
+        columnSettings={columnSettings}
         onTaskClick={(task) => {
           if (onTaskClick) {
             onTaskClick(task)
@@ -554,7 +623,7 @@ export function TaskTable({
   setTasks: currentSetTasks,
   isEditMode,
   isCurrentDraft,
-  visibleColumns,
+  columnSettings,
   searchText,
   activeModule,
   planLevel,
@@ -616,8 +685,14 @@ export function TaskTable({
   const flatTasks = tableTasks.map(task => ({ ...task, indentLevel: getTaskDepth(task, tableTasks) }))
 
   const getColumns = (): ColumnsType<any> => {
-    const cols: ColumnsType<any> = []
-    if (visibleColumns.includes('id')) cols.push({ title: '序号', dataIndex: 'id', key: 'id', width: 130, fixed: 'left', render: (id: string, record: any) => {
+    const renderActualDateCell = (field: 'actualStartDate' | 'actualEndDate') => (val: string, record: any) => {
+      if (isCurrentDraft) {
+        return <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span>
+      }
+      return <ActualDateCell value={val} onChange={(newVal) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, [field]: newVal } : t); currentSetTasks(updated) }} />
+    }
+    const columnByKey: Record<PlanColumnKey, ColumnsType<any>[number]> = {
+      id: { title: '序号', dataIndex: 'id', key: 'id', width: 130, fixed: 'left', render: (id: string, record: any) => {
       const depth = record.indentLevel || 0
       const isLevel2Mode = (activeModule === 'config' && planLevel === 'level2') || (activeModule === 'projectSpace' && projectPlanLevel === 'level2')
       const maxDepth = isLevel2Mode ? 3 : 2
@@ -629,8 +704,8 @@ export function TaskTable({
           <span style={{ fontWeight: depth === 0 ? 600 : 500, color: depth === 0 ? '#111827' : '#4b5563', fontSize: 13 }}>{id}</span>
         </div>
       )
-    } })
-    if (visibleColumns.includes('taskName')) cols.push({ title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 220, render: (name: string, record: any) => {
+      } },
+      taskName: { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 220, render: (name: string, record: any) => {
       const depth = record.indentLevel || 0
       if (isEditMode) return <Input className="pms-edit-input" value={name} size="small" style={{ fontWeight: depth === 0 ? 600 : 400 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, taskName: e.target.value } : t); currentSetTasks(updated) }} />
       return (
@@ -639,31 +714,27 @@ export function TaskTable({
           <span style={{ color: depth === 0 ? '#111827' : depth === 1 ? '#4b5563' : '#9ca3af', fontWeight: depth === 0 ? 600 : 400 }}>{name}</span>
         </div>
       )
-    } })
-    if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <span style={{ fontSize: 13 }}>{val}</span> : <span style={{ color: '#e5e7eb' }}>-</span>) })
-    if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>) })
-    if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planStartDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span> })
-    if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planEndDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span> })
-    if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val}天</span> })
-    // 实际时间：修订版本中不可编辑，已发布版本中点击切换编辑
-    const renderActualDateCell = (field: 'actualStartDate' | 'actualEndDate') => (val: string, record: any) => {
-      if (isCurrentDraft) {
-        // 修订版本：只读
-        return <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span>
-      }
-      // 已发布版本：点击编辑
-      return <ActualDateCell value={val} onChange={(newVal) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, [field]: newVal } : t); currentSetTasks(updated) }} />
+      } },
+      responsible: { title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <span style={{ fontSize: 13 }}>{val}</span> : <span style={{ color: '#e5e7eb' }}>-</span>) },
+      predecessor: { title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>) },
+      planStartDate: { title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planStartDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span> },
+      planEndDate: { title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 130, render: (val: string, record: any) => isEditMode ? <DatePicker size="small" value={val ? dayjs(val) : null} style={{ width: 120 }} onChange={(date) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, planEndDate: date ? date.format('YYYY-MM-DD') : '' } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span> },
+      estimatedDays: { title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map(t => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val}天</span> },
+      actualStartDate: { title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 130, render: renderActualDateCell('actualStartDate') },
+      actualEndDate: { title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 130, render: renderActualDateCell('actualEndDate') },
+      actualDays: { title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (val: number) => <span style={{ fontSize: 12, color: '#4b5563' }}>{val > 0 ? `${val}天` : '-'}</span> },
+      status: { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={s === '已完成' ? 'success' : s === '进行中' ? 'processing' : 'default'} style={{ borderRadius: 4, fontSize: 12 }}>{s}</Tag> },
+      progress: { title: '进度', dataIndex: 'progress', key: 'progress', width: 130, render: (p: number) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Progress percent={p} size="small" showInfo={false} strokeColor={p === 100 ? '#52c41a' : '#1890ff'} style={{ flex: 1, marginBottom: 0 }} />
+          <span style={{ fontSize: 11, color: p === 100 ? '#52c41a' : '#4b5563', fontWeight: 500, minWidth: 32 }}>{p}%</span>
+        </div>
+      ) },
     }
-    if (visibleColumns.includes('actualStartDate')) cols.push({ title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 130, render: renderActualDateCell('actualStartDate') })
-    if (visibleColumns.includes('actualEndDate')) cols.push({ title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 130, render: renderActualDateCell('actualEndDate') })
-    if (visibleColumns.includes('actualDays')) cols.push({ title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (val: number) => <span style={{ fontSize: 12, color: '#4b5563' }}>{val > 0 ? `${val}天` : '-'}</span> })
-    if (visibleColumns.includes('status')) cols.push({ title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={s === '已完成' ? 'success' : s === '进行中' ? 'processing' : 'default'} style={{ borderRadius: 4, fontSize: 12 }}>{s}</Tag> })
-    if (visibleColumns.includes('progress')) cols.push({ title: '进度', dataIndex: 'progress', key: 'progress', width: 130, render: (p: number) => (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Progress percent={p} size="small" showInfo={false} strokeColor={p === 100 ? '#52c41a' : '#1890ff'} style={{ flex: 1, marginBottom: 0 }} />
-        <span style={{ fontSize: 11, color: p === 100 ? '#52c41a' : '#4b5563', fontWeight: 500, minWidth: 32 }}>{p}%</span>
-      </div>
-    ) })
+    const cols = orderVisibleDefinitions(
+      ALL_COLUMNS,
+      normalizeColumnSettings(ALL_COLUMNS, columnSettings),
+    ).map(column => columnByKey[column.key as PlanColumnKey])
     if (isEditMode) cols.push({ title: '操作', key: 'action', width: 60, fixed: 'right', render: (_: any, record: any) => (<Popconfirm title="确认删除" description={`删除 "${record.taskName}" 及其子任务？`} onConfirm={() => { const filtered = tableTasks.filter(t => t.id !== record.id && t.parentId !== record.id && !(t.parentId && tableTasks.find((p: any) => p.id === t.parentId)?.parentId === record.id)); currentSetTasks(filtered); message.success(`已删除任务: ${record.id}`) }} okText="确认" cancelText="取消"><Button type="text" icon={<DeleteOutlined />} size="small" danger style={{ borderRadius: 4 }} /></Popconfirm>) })
     return cols
   }
@@ -761,6 +832,7 @@ export function TaskTable({
 
   const TableComponents = isEditMode ? { body: { row: SortableRow } } : undefined
   const tableClassName = `pms-table ${isEditMode ? 'pms-table-edit' : ''}`
+  const columns = getColumns()
   return (
     <div>
       {isEditMode && (
@@ -770,7 +842,7 @@ export function TaskTable({
           <span style={{ fontSize: 12, color: '#ad8b00' }}>- 拖拽手柄排序，点击单元格编辑，完成后点击保存</span>
         </div>
       )}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTableDragEnd}><SortableContext items={flatTasks.map(t => t.id)} strategy={verticalListSortingStrategy}><Table className={tableClassName} dataSource={flatTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} size="middle" /></SortableContext></DndContext>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTableDragEnd}><SortableContext items={flatTasks.map(t => t.id)} strategy={verticalListSortingStrategy}><Table className={tableClassName} dataSource={flatTasks} columns={columns} rowKey="id" pagination={false} scroll={{ x: columns.length * 100 + 200 }} components={TableComponents} size="middle" /></SortableContext></DndContext>
       {isEditMode && (
         <div style={{ padding: '12px 16px', borderTop: '1px solid #f3f4f6', background: '#f8fafc' }}>
           <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%', borderRadius: 6, height: 36 }} onClick={() => {
@@ -1133,7 +1205,7 @@ export function PlanOverview({
   tasks,
   level2PlanTasks,
   isEditMode,
-  visibleColumns,
+  columnSettings,
   projectPlanViewMode,
   setProjectPlanViewMode,
   activeModule,
@@ -1254,14 +1326,14 @@ export function PlanOverview({
         {/* 表格/甘特图内容 */}
         <div style={{ padding: 0 }}>
           {projectPlanViewMode === 'gantt' ? (
-            <GanttChart tasks={displayTasks} isEditMode={isEditMode} />
+            <GanttChart tasks={displayTasks} isEditMode={isEditMode} columnSettings={columnSettings} />
           ) : (
             <TaskTable
               tasks={displayTasks}
               setTasks={setTasks}
               isEditMode={isEditMode}
               isCurrentDraft={false}
-              visibleColumns={visibleColumns}
+              columnSettings={columnSettings}
               searchText={searchText}
               activeModule={activeModule}
               planLevel={planLevel}
@@ -1291,8 +1363,8 @@ export function ProjectPlan({
   setIsEditMode,
   searchText,
   setSearchText,
-  visibleColumns,
-  setVisibleColumns,
+  columnSettings,
+  setColumnSettings,
   showColumnModal,
   setShowColumnModal,
   projectPlanLevel,
@@ -1448,7 +1520,10 @@ export function ProjectPlan({
           <Col>
             <Tabs
               activeKey={projectPlanLevel}
-              onChange={(key) => navigateWithEditGuard(() => setProjectPlanLevel(key as string))}
+              onChange={(key) => navigateWithEditGuard(() => {
+                if (key === 'level2') setProjectPlanViewMode('table')
+                setProjectPlanLevel(key as string)
+              })}
               style={{ marginBottom: 0 }}
               items={planTabItems.map(item => ({
                 ...item,
@@ -1470,7 +1545,7 @@ export function ProjectPlan({
           tasks={tasks}
           level2PlanTasks={level2PlanTasks}
           isEditMode={isEditMode}
-          visibleColumns={visibleColumns}
+          columnSettings={columnSettings}
           projectPlanViewMode={projectPlanViewMode}
           setProjectPlanViewMode={setProjectPlanViewMode}
           activeModule={activeModule}
@@ -1652,7 +1727,7 @@ export function ProjectPlan({
       <Card style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
         {projectPlanLevel === 'level1' && (
           projectPlanViewMode === 'gantt' ? (
-            <GanttChart tasks={filteredTasks} isEditMode={isEditMode} />
+            <GanttChart tasks={filteredTasks} isEditMode={isEditMode} columnSettings={columnSettings} />
           ) : projectPlanViewMode === 'horizontal' ? (
             <HorizontalTable tasks={tasks} versions={versions} />
           ) : (
@@ -1661,7 +1736,7 @@ export function ProjectPlan({
               setTasks={setTasks}
               isEditMode={isEditMode}
               isCurrentDraft={isCurrentDraft}
-              visibleColumns={visibleColumns}
+              columnSettings={columnSettings}
               searchText={searchText}
               activeModule={activeModule}
               planLevel={planLevel}
@@ -1674,7 +1749,7 @@ export function ProjectPlan({
         )}
         {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1' && activeLevel2Plan && (
           projectPlanViewMode === 'gantt' ? (
-            <GanttChart tasks={level2PlanTasks.filter(t => t.planId === activeLevel2Plan)} isEditMode={isEditMode} />
+            <GanttChart tasks={level2PlanTasks.filter(t => t.planId === activeLevel2Plan)} isEditMode={isEditMode} columnSettings={columnSettings} />
           ) : (
             <TaskTable
               tasks={level2PlanTasks.filter(t => t.planId === activeLevel2Plan)}
@@ -1686,7 +1761,7 @@ export function ProjectPlan({
               }}
               isEditMode={isEditMode}
               isCurrentDraft={isCurrentDraft}
-              visibleColumns={visibleColumns}
+              columnSettings={columnSettings}
               searchText={searchText}
               activeModule={activeModule}
               planLevel={planLevel}
@@ -1772,15 +1847,18 @@ export function ProjectPlan({
         />
       </Modal>
 
-      {/* 自定义列Modal */}
-      <Modal className="pms-modal" title="自定义列" open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(ALL_COLUMNS.filter(c => c.default).map(c => c.key))}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}>
-        <Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}>
-          <Row>
-            <Col span={12}>{ALL_COLUMNS.slice(0, 6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col>
-            <Col span={12}>{ALL_COLUMNS.slice(6).map(c => <Checkbox key={c.key} value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox>)}</Col>
-          </Row>
-        </Checkbox.Group>
-      </Modal>
+      <SortableColumnSettings
+        open={showColumnModal}
+        definitions={ALL_COLUMNS}
+        value={columnSettings}
+        defaultValue={DEFAULT_PLAN_COLUMN_SETTINGS}
+        onCancel={() => setShowColumnModal(false)}
+        onApply={(nextSettings) => {
+          setColumnSettings(nextSettings)
+          setShowColumnModal(false)
+          message.success('列配置已保存')
+        }}
+      />
     </div>
   )
 }

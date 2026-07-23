@@ -10,6 +10,8 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import { Button, Empty, Flex, Select, Table, Tag, Typography, type TableProps } from 'antd'
+import { orderVisibleDefinitions } from '@/lib/columnSettings'
+import { getRoadmapSortableColumnDefinitions } from '@/lib/roadmapFilters'
 import { compareRoadmapValues, compareSemanticTos } from '@/lib/roadmapSorting'
 import {
   ROADMAP_COLUMNS,
@@ -25,6 +27,7 @@ interface RoadmapTableViewProps {
   conflicts: readonly RoadmapPlanningConflictGroup[]
   versions: readonly TosVersionConfig[]
   selectedTosVersionId: string | null
+  columnOrder: readonly RoadmapColumnKey[]
   visibleColumns: readonly RoadmapColumnKey[]
   sort: RoadmapSortState
   canEdit: boolean
@@ -90,6 +93,7 @@ export default function RoadmapTableView({
   conflicts,
   versions,
   selectedTosVersionId,
+  columnOrder,
   visibleColumns,
   sort,
   canEdit,
@@ -127,10 +131,16 @@ export default function RoadmapTableView({
   )
   const targetCollapsed = version ? collapsedTargetVersionIds.has(version.id) : false
 
-  const businessColumns = ROADMAP_COLUMNS
-    .filter(column => visibleColumns.includes(column.key))
+  const orderedDefinitions = orderVisibleDefinitions(
+    getRoadmapSortableColumnDefinitions('table'),
+    {
+      order: [...columnOrder],
+      visible: [...visibleColumns],
+    },
+  )
+  const businessColumns = orderedDefinitions
     .map(column => ({
-      title: column.label,
+      title: column.title,
       dataIndex: column.key,
       key: column.key,
       width: COLUMN_WIDTHS[column.key],
@@ -248,7 +258,7 @@ export default function RoadmapTableView({
 
   return (
     <div className="roadmap-table-shell" style={{ width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
-      <Flex justify="space-between" align="center" gap={10} style={{ marginBottom: 8 }} wrap>
+      <Flex align="center" gap={10} style={{ marginBottom: 8 }} wrap>
         <Flex align="center" gap={10} wrap>
           <Select
             aria-label="表单视图 tOS 版本"
@@ -263,27 +273,9 @@ export default function RoadmapTableView({
           />
           <Typography.Text type="secondary">共 {versionRows.length} 个项目</Typography.Text>
         </Flex>
-        <Flex align="center" gap={6}>
-          {version?.targets.length ? (
-            <Button
-              size="small"
-              type="text"
-              icon={targetCollapsed ? <DownOutlined /> : <UpOutlined />}
-              aria-expanded={!targetCollapsed}
-              onClick={() => onToggleTarget(version.id)}
-            >
-              {targetCollapsed ? '展开版本目标' : '收起版本目标'}
-            </Button>
-          ) : null}
-          {version && canEdit ? (
-            <Button size="small" icon={<EditOutlined aria-hidden />} onClick={() => onEditTosTargets(version.id)}>
-              修改目标
-            </Button>
-          ) : null}
-        </Flex>
       </Flex>
 
-      {version && version.targets.length > 0 && !targetCollapsed ? (
+      {version ? (
         <section
           className="pms-glass-panel roadmap-target-card"
           data-roadmap-target-card
@@ -294,12 +286,53 @@ export default function RoadmapTableView({
             background: 'linear-gradient(135deg, rgba(238, 242, 255, 0.96), rgba(250, 245, 255, 0.92))',
           }}
         >
-          <Flex align="flex-start" gap={8}>
-            <BulbOutlined aria-hidden style={{ color: 'var(--primary)', marginTop: 3 }} />
-            <Typography.Paragraph style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+          <Flex
+            className="pms-roadmap-target-card-header"
+            justify="space-between"
+            align="center"
+            gap={8}
+            wrap={false}
+          >
+            <Flex align="center" gap={6} wrap={false} style={{ minWidth: 0 }}>
+              <BulbOutlined aria-hidden style={{ color: 'var(--primary)' }} />
+              <Typography.Text strong ellipsis>{version.name} 版本目标</Typography.Text>
+            </Flex>
+            <Flex
+              className="pms-roadmap-target-card-actions"
+              align="center"
+              justify="flex-end"
+              gap={4}
+              wrap={false}
+              style={{ flex: '0 0 auto', whiteSpace: 'nowrap' }}
+            >
+              {version.targets.length ? (
+                <Button
+                  size="small"
+                  type="text"
+                  icon={targetCollapsed ? <DownOutlined /> : <UpOutlined />}
+                  aria-expanded={!targetCollapsed}
+                  onClick={() => onToggleTarget(version.id)}
+                >
+                  {targetCollapsed ? '展开版本目标' : '收起版本目标'}
+                </Button>
+              ) : null}
+              {canEdit ? (
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<EditOutlined aria-hidden />}
+                  onClick={() => onEditTosTargets(version.id)}
+                >
+                  修改目标
+                </Button>
+              ) : null}
+            </Flex>
+          </Flex>
+          {version.targets.length > 0 && !targetCollapsed ? (
+            <Typography.Paragraph style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap' }}>
               {version.targets.join('\n')}
             </Typography.Paragraph>
-          </Flex>
+          ) : null}
         </section>
       ) : null}
 

@@ -172,8 +172,14 @@ import {
   DHTMLXGantt, DragHandle, SortableRow, ClickToEditDate, MiniPipeline,
   getTaskDepth, hasChildren, filterByCollapsed, getAllExpandableIds,
   mergePlans, shiftDateStrForExport,
-  NOTIFY_DIFF_FIELDS, MOCK_USER_MAP,
+  NOTIFY_DIFF_FIELDS, MOCK_USER_MAP, type DHTMLXGanttColumn,
 } from '@/components/shared/PlanHelpers'
+import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
+import {
+  getDefaultColumnSettings,
+  normalizeColumnSettings,
+  orderVisibleDefinitions,
+} from '@/lib/columnSettings'
 import {
   ROLE_COLORS,
   type TransferApplication,
@@ -376,7 +382,7 @@ export default function ProjectSpaceContainer() {
     createFormValues, setCreateFormValues,
     selectedLevel2PlanType, setSelectedLevel2PlanType,
     selectedMilestones, setSelectedMilestones, selectedMRVersion, setSelectedMRVersion,
-    columnsByView, setColumnsByView, collapsedNodes, setCollapsedNodes,
+    columnSettingsByView, setColumnSettingsByView, collapsedNodes, setCollapsedNodes,
     publishedSnapshots, setPublishedSnapshots, configTemplateTasksByType,
     compareVersionA, setCompareVersionA, compareVersionB, setCompareVersionB,
     compareResult, setCompareResult, compareShowUnchanged, setCompareShowUnchanged,
@@ -1443,10 +1449,34 @@ export default function ProjectSpaceContainer() {
   const getViewKey = () => `project-${projectPlanLevel}-${projectPlanViewMode}`
   const currentViewMode = projectPlanViewMode
   const currentViewColumns = getColumnsForView(currentViewMode)
-  const currentViewDefaultCols = currentViewColumns.filter((c: any) => c.default).map((c: any) => c.key)
-  const visibleColumns = columnsByView[getViewKey()] || currentViewDefaultCols
-  const setVisibleColumns = (cols: string[]) => {
-    setColumnsByView((prev: Record<string, string[]>) => ({ ...prev, [getViewKey()]: cols }))
+  const currentViewKey = getViewKey()
+  const storedColumnSettings = columnSettingsByView[currentViewKey]
+  const columnSettings = useMemo(
+    () => normalizeColumnSettings(currentViewColumns, storedColumnSettings),
+    [currentViewColumns, storedColumnSettings],
+  )
+  const orderedVisibleColumns = useMemo(
+    () => orderVisibleDefinitions(currentViewColumns, columnSettings),
+    [columnSettings, currentViewColumns],
+  )
+  const visibleColumns = orderedVisibleColumns.map(column => column.key)
+  const ganttColumns = useMemo<DHTMLXGanttColumn[]>(() => (
+    orderedVisibleColumns.map(column => {
+      const ganttColumnByKey: Record<string, DHTMLXGanttColumn> = {
+        taskName: { name: 'text', label: '任务名称', width: 180, tree: true },
+        predecessor: { name: 'predecessor', label: '前置任务', align: 'center', width: 70 },
+        planStartDate: { name: 'start_date', label: '计划开始', align: 'center', width: 90 },
+        planEndDate: { name: 'end_date', label: '计划完成', align: 'center', width: 90 },
+        estimatedDays: { name: 'duration', label: '计划周期', align: 'center', width: 60, template: task => task.duration + '天' },
+        progress: { name: 'progress', label: '进度', align: 'center', width: 60, template: task => Math.round(task.progress * 100) + '%' },
+      }
+      return ganttColumnByKey[column.key]
+    }).filter((column): column is DHTMLXGanttColumn => Boolean(column))
+  ), [orderedVisibleColumns])
+  const applyColumnSettings = (nextSettings: typeof columnSettings) => {
+    setColumnSettingsByView(previous => ({ ...previous, [currentViewKey]: nextSettings }))
+    setShowColumnModal(false)
+    message.success('列配置已保存')
   }
 
   // Scope key for collapse
@@ -2175,7 +2205,7 @@ export default function ProjectSpaceContainer() {
     const collapsedSet = key ? (collapsedNodes[key] || new Set<string>()) : new Set<string>()
     return (
       <div style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
-        <DHTMLXGantt tasks={ganttTasks} onTaskClick={(task) => message.info(`点击任务: ${task.text}`)} readOnly={!isEditMode || followedTosLevel1ReadOnly || isFollowReadOnlyOverview} collapsedIds={collapsedSet}
+        <DHTMLXGantt tasks={ganttTasks} columns={ganttColumns} onTaskClick={(task) => message.info(`点击任务: ${task.text}`)} readOnly={!isEditMode || followedTosLevel1ReadOnly || isFollowReadOnlyOverview} collapsedIds={collapsedSet}
           scaleMode={!customTasks && projectPlanLevel === 'level1' ? projectPlanGanttScaleMode : 'month'}
           onCollapsedChange={(updater) => { if (!key) return; setCollapsedNodes(prev => { const c = prev[key] || new Set<string>(); return { ...prev, [key]: updater(c) } }) }}
         />
@@ -2292,7 +2322,16 @@ export default function ProjectSpaceContainer() {
         </div>
       ) })
       if (canFullyEdit) cols.push({ title: '操作', key: 'action', width: 60, fixed: 'right', render: (_: any, record: any) => (<Popconfirm title="确认删除" description={`删除 "${record.taskName}" 及其子任务？`} onConfirm={() => { const filtered = tableTasks.filter((t: any) => t.id !== record.id && t.parentId !== record.id && !(t.parentId && tableTasks.find((p: any) => p.id === t.parentId)?.parentId === record.id)); currentSetTasks(filtered); message.success(`已删除任务: ${record.id}`) }} okText="确认" cancelText="取消"><Button type="text" icon={<DeleteOutlined />} size="small" danger style={{ borderRadius: 4 }} /></Popconfirm>) })
-      return cols
+      const configurableColumnByKey = new Map(
+        cols
+          .filter(column => column.key !== 'action')
+          .map(column => [String(column.key), column] as const),
+      )
+      const orderedConfigurableColumns = orderVisibleDefinitions(currentViewColumns, columnSettings)
+        .map(definition => configurableColumnByKey.get(definition.key))
+        .filter((column): column is ColumnsType<any>[number] => Boolean(column))
+      const systemColumns = cols.filter(column => column.key === 'action')
+      return [...orderedConfigurableColumns, ...systemColumns]
     }
 
     const handleTableDragEnd = (event: DragEndEvent) => {
@@ -3336,7 +3375,15 @@ export default function ProjectSpaceContainer() {
         <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
           <Row align="middle" justify="space-between">
             <Col>
-              <Tabs activeKey={projectPlanLevel} onChange={(key) => navigateWithEditGuard(() => setProjectPlanLevel(key as string))} style={{ marginBottom: 0 }} items={planTabItems.map(item => ({ ...item, label: <span style={{ fontWeight: 500, padding: '0 4px' }}>{item.label}</span> }))} />
+              <Tabs
+                activeKey={projectPlanLevel}
+                onChange={(key) => navigateWithEditGuard(() => {
+                  if (key === 'level2') setProjectPlanViewMode('table')
+                  setProjectPlanLevel(key as string)
+                })}
+                style={{ marginBottom: 0 }}
+                items={planTabItems.map(item => ({ ...item, label: <span style={{ fontWeight: 500, padding: '0 4px' }}>{item.label}</span> }))}
+              />
             </Col>
             <Col><Tag color={projectPlanLevel === 'overview' ? 'blue' : 'default'} style={{ fontSize: 11 }}>{planTabItems.find(t => t.key === projectPlanLevel)?.label}</Tag></Col>
           </Row>
@@ -3548,7 +3595,7 @@ export default function ProjectSpaceContainer() {
                       <Tooltip title="导出为 Excel"><Button icon={<DownloadOutlined />} style={{ borderRadius: 6 }} /></Tooltip>
                     </Dropdown>
                   )}
-                  {(projectPlanLevel === 'level1' ? projectPlanViewMode === 'table' : projectPlanViewMode !== 'horizontal') && (
+                  {projectPlanViewMode !== 'horizontal' && (
                     <Tooltip title="列设置">
                       <Button
                         icon={projectPlanLevel === 'level1' ? <SettingOutlined /> : <AppstoreOutlined />}
@@ -3822,42 +3869,15 @@ export default function ProjectSpaceContainer() {
       </Drawer>
 
       {/* Custom column settings */}
-      {projectPlanLevel === 'level1' ? (
-        <Drawer
-          title="列设置"
+      {currentViewMode !== 'horizontal' && (
+        <SortableColumnSettings
           open={showColumnModal}
-          onClose={() => setShowColumnModal(false)}
-          width={420}
-          placement="right"
-          zIndex={PLAN_DRAWER_Z_INDEX}
-          footer={(
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Button onClick={() => setVisibleColumns(currentViewDefaultCols)}>重置默认</Button>
-              <Space>
-                <Button onClick={() => setShowColumnModal(false)}>取消</Button>
-                <Button type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>
-              </Space>
-            </div>
-          )}
-        >
-          <div style={{ marginBottom: 8, fontSize: 12, color: '#9ca3af' }}>
-            字段纵向排列，勾选后立即更新当前一级计划表格列。
-          </div>
-          <Checkbox.Group
-            value={visibleColumns}
-            onChange={(vals) => setVisibleColumns(vals as string[])}
-            style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', margin: '8px 0 2px' }}>一级计划字段</div>
-            {currentViewColumns.map((c: any) => (
-              <Checkbox key={c.key} value={c.key}>{c.title}</Checkbox>
-            ))}
-          </Checkbox.Group>
-        </Drawer>
-      ) : (
-        <Modal className="pms-modal" title={`自定义列 - ${currentViewMode === 'gantt' ? '甘特图' : '竖版表格'}`} open={showColumnModal} onCancel={() => setShowColumnModal(false)} footer={[<Button key="reset" onClick={() => setVisibleColumns(currentViewDefaultCols)}>重置</Button>, <Button key="cancel" onClick={() => setShowColumnModal(false)}>取消</Button>, <Button key="ok" type="primary" onClick={() => { setShowColumnModal(false); message.success('列配置已保存') }}>确定</Button>]}>
-          <Checkbox.Group value={visibleColumns} onChange={(vals) => setVisibleColumns(vals as string[])}><Row>{currentViewColumns.map((c: any) => <Col span={12} key={c.key}><Checkbox value={c.key} style={{ margin: '8px 0' }}>{c.title}</Checkbox></Col>)}</Row></Checkbox.Group>
-        </Modal>
+          definitions={currentViewColumns}
+          value={columnSettings}
+          defaultValue={getDefaultColumnSettings(currentViewColumns)}
+          onApply={applyColumnSettings}
+          onCancel={() => setShowColumnModal(false)}
+        />
       )}
       {/* Market editor modal */}
       <MarketEditorModal
