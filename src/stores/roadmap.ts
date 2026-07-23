@@ -7,17 +7,20 @@ import {
 } from '@/lib/roadmapAudit'
 import {
   DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
+  DEFAULT_ROADMAP_COLUMN_ORDER,
   DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS,
   DEFAULT_ROADMAP_VISIBLE_COLUMNS,
   ensureRoadmapLockedColumns,
   getRoadmapQuickFilterValue,
   ROADMAP_EVOLUTION_LOCKED_COLUMNS,
+  normalizeRoadmapColumnSettings,
   sanitizeRoadmapFilterConditions,
   sanitizeRoadmapVisibleColumns,
   setRoadmapQuickFilter,
   setRoadmapTosVersionFilter,
 } from '@/lib/roadmapFilters'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
+import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
 import {
   buildRoadmapDisplayName,
   isExactRoadmapDuplicate,
@@ -63,6 +66,8 @@ type PersistedRoadmapState = Pick<
   | 'brandFilter'
   | 'productTypeFilter'
   | 'filters'
+  | 'columnOrder'
+  | 'columnOrderByView'
   | 'visibleColumns'
   | 'visibleColumnsByView'
   | 'sort'
@@ -158,6 +163,11 @@ export function createInitialRoadmapState(): RoadmapStoreState {
     brandFilter: 'all',
     productTypeFilter: 'all',
     filters: [],
+    columnOrder: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+    columnOrderByView: {
+      table: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+      evolution: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+    },
     visibleColumns: [...DEFAULT_ROADMAP_VISIBLE_COLUMNS],
     visibleColumnsByView: {
       table: [...DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS],
@@ -415,8 +425,36 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
     ROADMAP_EVOLUTION_LOCKED_COLUMNS,
   )
   const visibleColumnsByView = {
-    table: tableVisibleColumns,
-    evolution: evolutionVisibleColumns,
+    table: normalizeRoadmapColumnSettings('table', {
+      order: [],
+      visible: tableVisibleColumns,
+    }).visible,
+    evolution: normalizeRoadmapColumnSettings('evolution', {
+      order: [],
+      visible: evolutionVisibleColumns,
+    }).visible,
+  }
+  const persistedOrderByView = isRecord(persistedState.columnOrderByView)
+    ? persistedState.columnOrderByView
+    : null
+  const legacyColumnOrder = Array.isArray(persistedState.columnOrder)
+    ? persistedState.columnOrder as RoadmapColumnKey[]
+    : undefined
+  const tableSettings = normalizeRoadmapColumnSettings('table', {
+    order: Array.isArray(persistedOrderByView?.table)
+      ? persistedOrderByView.table as RoadmapColumnKey[]
+      : viewMode === 'table' ? legacyColumnOrder : undefined,
+    visible: visibleColumnsByView.table,
+  })
+  const evolutionSettings = normalizeRoadmapColumnSettings('evolution', {
+    order: Array.isArray(persistedOrderByView?.evolution)
+      ? persistedOrderByView.evolution as RoadmapColumnKey[]
+      : viewMode === 'evolution' ? legacyColumnOrder : undefined,
+    visible: visibleColumnsByView.evolution,
+  })
+  const columnOrderByView = {
+    table: tableSettings.order,
+    evolution: evolutionSettings.order,
   }
 
   return {
@@ -430,6 +468,8 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
       ? migratedProductType as RoadmapProductType
       : 'all',
     filters,
+    columnOrder: columnOrderByView[viewMode],
+    columnOrderByView,
     visibleColumns: visibleColumnsByView[viewMode],
     visibleColumnsByView,
     sort: sanitizeSort(persistedState.sort),
@@ -447,6 +487,8 @@ export function partializeRoadmapState(state: RoadmapStore): PersistedRoadmapSta
     brandFilter: state.brandFilter,
     productTypeFilter: state.productTypeFilter,
     filters: state.filters,
+    columnOrder: state.columnOrder,
+    columnOrderByView: state.columnOrderByView,
     visibleColumns: state.visibleColumns,
     visibleColumnsByView: state.visibleColumnsByView,
     sort: state.sort,
@@ -544,6 +586,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
       setViewMode: (viewMode: RoadmapViewMode) => {
         if (viewMode === 'table' || viewMode === 'evolution') set(state => ({
           viewMode,
+          columnOrder: state.columnOrderByView[viewMode],
           visibleColumns: state.visibleColumnsByView[viewMode],
         }))
       },
@@ -597,19 +640,36 @@ export const useRoadmapStore = create<RoadmapStore>()(
             : 'all',
         }
       }),
-      setVisibleColumns: columns => set(state => {
-        const fallback = state.viewMode === 'table'
-          ? DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS
-          : DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS
-        const sanitizedColumns = sanitizeRoadmapVisibleColumns(columns, fallback)
-        const visibleColumns = state.viewMode === 'evolution'
-          ? ensureRoadmapLockedColumns(sanitizedColumns, ROADMAP_EVOLUTION_LOCKED_COLUMNS)
-          : sanitizedColumns
+      setColumnSettings: (value: SortableColumnSettingsValue<RoadmapColumnKey>) => set(state => {
+        const settings = normalizeRoadmapColumnSettings(state.viewMode, value)
         return {
-          visibleColumns,
+          columnOrder: settings.order,
+          columnOrderByView: {
+            ...state.columnOrderByView,
+            [state.viewMode]: settings.order,
+          },
+          visibleColumns: settings.visible,
           visibleColumnsByView: {
             ...state.visibleColumnsByView,
-            [state.viewMode]: visibleColumns,
+            [state.viewMode]: settings.visible,
+          },
+        }
+      }),
+      setVisibleColumns: columns => set(state => {
+        const settings = normalizeRoadmapColumnSettings(state.viewMode, {
+          order: state.columnOrder,
+          visible: columns,
+        })
+        return {
+          columnOrder: settings.order,
+          columnOrderByView: {
+            ...state.columnOrderByView,
+            [state.viewMode]: settings.order,
+          },
+          visibleColumns: settings.visible,
+          visibleColumnsByView: {
+            ...state.visibleColumnsByView,
+            [state.viewMode]: settings.visible,
           },
         }
       }),

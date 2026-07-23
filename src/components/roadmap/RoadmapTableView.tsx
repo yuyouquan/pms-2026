@@ -10,6 +10,8 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import { Button, Empty, Flex, Select, Table, Tag, Typography, type TableProps } from 'antd'
+import { orderVisibleDefinitions } from '@/lib/columnSettings'
+import { getRoadmapSortableColumnDefinitions } from '@/lib/roadmapFilters'
 import { compareRoadmapValues, compareSemanticTos } from '@/lib/roadmapSorting'
 import {
   ROADMAP_COLUMNS,
@@ -25,6 +27,7 @@ interface RoadmapTableViewProps {
   conflicts: readonly RoadmapPlanningConflictGroup[]
   versions: readonly TosVersionConfig[]
   selectedTosVersionId: string | null
+  columnOrder: readonly RoadmapColumnKey[]
   visibleColumns: readonly RoadmapColumnKey[]
   sort: RoadmapSortState
   canEdit: boolean
@@ -90,6 +93,7 @@ export default function RoadmapTableView({
   conflicts,
   versions,
   selectedTosVersionId,
+  columnOrder,
   visibleColumns,
   sort,
   canEdit,
@@ -127,10 +131,16 @@ export default function RoadmapTableView({
   )
   const targetCollapsed = version ? collapsedTargetVersionIds.has(version.id) : false
 
-  const businessColumns = ROADMAP_COLUMNS
-    .filter(column => visibleColumns.includes(column.key))
+  const orderedDefinitions = orderVisibleDefinitions(
+    getRoadmapSortableColumnDefinitions('table'),
+    {
+      order: [...columnOrder],
+      visible: [...visibleColumns],
+    },
+  )
+  const businessColumns = orderedDefinitions
     .map(column => ({
-      title: column.label,
+      title: column.title,
       dataIndex: column.key,
       key: column.key,
       width: COLUMN_WIDTHS[column.key],

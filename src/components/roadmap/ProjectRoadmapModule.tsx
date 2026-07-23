@@ -7,7 +7,6 @@ import {
   buildRoadmapFilterFieldDefinitions,
   createRoadmapTextFilterDebouncer,
   getRoadmapQuickFilterValue,
-  ROADMAP_EVOLUTION_LOCKED_COLUMNS,
   sanitizeRoadmapFilterConditions,
   setRoadmapQuickFilter,
   type RoadmapTextFilterDebouncer,
@@ -52,6 +51,7 @@ export interface RoadmapViewRenderContext {
   conflicts: readonly RoadmapPlanningConflictGroup[]
   versions: readonly TosVersionConfig[]
   selectedTosVersionId: string | null
+  columnOrder: readonly RoadmapColumnKey[]
   visibleColumns: readonly RoadmapColumnKey[]
   sort: RoadmapSortState
   canEdit: boolean
@@ -92,13 +92,14 @@ export default function ProjectRoadmapModule({
   const viewMode = useRoadmapStore(state => state.viewMode)
   const selectedTosVersionId = useRoadmapStore(state => state.selectedTosVersionId)
   const filters = useRoadmapStore(state => state.filters)
+  const columnOrder = useRoadmapStore(state => state.columnOrder)
   const visibleColumns = useRoadmapStore(state => state.visibleColumns)
   const sort = useRoadmapStore(state => state.sort)
   const selectedConflictKey = useRoadmapStore(state => state.selectedConflictKey)
   const setViewMode = useRoadmapStore(state => state.setViewMode)
   const setSelectedTosVersionId = useRoadmapStore(state => state.setSelectedTosVersionId)
   const setFilters = useRoadmapStore(state => state.setFilters)
-  const setVisibleColumns = useRoadmapStore(state => state.setVisibleColumns)
+  const setColumnSettings = useRoadmapStore(state => state.setColumnSettings)
   const setSort = useRoadmapStore(state => state.setSort)
   const setSelectedConflictKey = useRoadmapStore(state => state.setSelectedConflictKey)
   const deletePlannedProject = useRoadmapStore(state => state.deletePlannedProject)
@@ -337,6 +338,7 @@ export default function ProjectRoadmapModule({
     conflicts,
     versions,
     selectedTosVersionId,
+    columnOrder,
     visibleColumns,
     sort,
     canEdit,
@@ -409,9 +411,8 @@ export default function ProjectRoadmapModule({
         open={columnDrawerOpen}
         onClose={() => setColumnDrawerOpen(false)}
         viewMode={viewMode}
-        visibleColumns={visibleColumns}
-        lockedColumns={viewMode === 'evolution' ? ROADMAP_EVOLUTION_LOCKED_COLUMNS : undefined}
-        onChange={setVisibleColumns}
+        value={{ order: [...columnOrder], visible: [...visibleColumns] }}
+        onChange={setColumnSettings}
       />
       <PlannedProjectModal
         open={plannedModalOpen}

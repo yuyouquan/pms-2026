@@ -846,12 +846,14 @@ registerAssertion('roadmap setters sanitize columns and persistence excludes tra
   const storeModule = loadIsolatedRoadmapStore()
   const store = resetRoadmapStore(storeModule)
   store.getState().setVisibleColumns(['unknown', 'brand', 'brand'])
-  if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(['brand'])) throw new Error('known visible columns were not sanitized')
+  if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(['firstSaleTosVersionId', 'brand'])) {
+    throw new Error('known visible columns or fixed table prefix were not sanitized')
+  }
   store.getState().setVisibleColumns([])
   if (store.getState().visibleColumns.length < 1) throw new Error('at least one business field must remain visible')
   store.getState().setSelectedConflictKey('X6877|Android 16|新品')
   const persisted = storeModule.partializeRoadmapState(store.getState())
-  const expectedKeys = ['plannedProjects', 'tosVersions', 'changeLogs', 'viewMode', 'selectedTosVersionId', 'brandFilter', 'productTypeFilter', 'filters', 'visibleColumns', 'visibleColumnsByView', 'sort']
+  const expectedKeys = ['plannedProjects', 'tosVersions', 'changeLogs', 'viewMode', 'selectedTosVersionId', 'brandFilter', 'productTypeFilter', 'filters', 'columnOrder', 'columnOrderByView', 'visibleColumns', 'visibleColumnsByView', 'sort']
   if (JSON.stringify(Object.keys(persisted)) !== JSON.stringify(expectedKeys)) throw new Error(`persistence boundary is wrong: ${Object.keys(persisted)}`)
   if ('selectedConflictKey' in persisted || 'normalProjects' in persisted || 'conflictGroups' in persisted) throw new Error('transient/derived state was persisted')
 })
@@ -1086,8 +1088,9 @@ registerTableAssertions('roadmap hydration sanitizes every persisted envelope ve
   if (
     hydrated.selectedTosVersionId !== null
     || hydrated.filters.length
-    || hydrated.visibleColumns.length !== 1
+    || !hydrated.visibleColumns.includes('firstSaleTosVersionId')
     || hydrated.visibleColumns[0] === 'unknown'
+    || hydrated.columnOrder[0] !== 'firstSaleTosVersionId'
     || hydrated.selectedConflictKey !== null
     || typeof hydrated.createPlannedProject !== 'function'
   ) throw new Error(`persisted state bypassed sanitization: ${JSON.stringify(hydrated)}`)
@@ -2175,7 +2178,7 @@ registerAssertion('roadmap filter setters and tOS deletion preserve dynamic cata
     throw new Error(`setFilters bypassed domain sanitization: ${JSON.stringify(store.getState().filters)}`)
   }
   store.getState().setVisibleColumns(['remark', 'brand', 'brand'])
-  if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(['brand', 'remark'])) {
+  if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(['firstSaleTosVersionId', 'brand', 'remark'])) {
     throw new Error(`setVisibleColumns did not restore approved order: ${JSON.stringify(store.getState().visibleColumns)}`)
   }
   const deleted = store.getState().deleteTosVersion('tos-18-0', 0)
@@ -2212,7 +2215,8 @@ registerAssertion('current-version roadmap hydration rejects malicious typed fil
   if (hydrated.filters.map(filter => filter.id).join(',') !== 'valid-text') {
     throw new Error(`malicious version-1 filters survived hydration: ${JSON.stringify(hydrated.filters)}`)
   }
-  if (hydrated.filters[0].value !== 'risk' || JSON.stringify(hydrated.visibleColumns) !== JSON.stringify(['brand', 'remark'])) {
+  if (hydrated.filters[0].value !== 'risk'
+    || JSON.stringify(hydrated.visibleColumns) !== JSON.stringify(['firstSaleTosVersionId', 'brand', 'remark'])) {
     throw new Error(`hydrated filter/column state was not normalized: ${JSON.stringify(hydrated)}`)
   }
 })
@@ -2369,7 +2373,7 @@ registerAssertion('roadmap filter and column drawers preserve quick filters and 
     throw new Error('resetting advanced filters is coupled to quick filters')
   }
   const columnsSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapColumnSettingsDrawer.tsx'), 'utf8')
-  for (const contract of ['ROADMAP_COLUMNS', 'visibleColumns', 'onChange', '至少保留 1 个业务字段']) {
+  for (const contract of ['SortableColumnSettings', 'getRoadmapSortableColumnDefinitions', 'value', 'onChange']) {
     if (!columnsSource.includes(contract)) throw new Error(`RoadmapColumnSettingsDrawer is missing ${contract}`)
   }
   if (columnsSource.includes("操作列") || columnsSource.includes("key: 'action'")) {
@@ -2487,11 +2491,16 @@ registerAssertion('evolution cards keep locked titles and approved colors', () =
     throw new Error('locked structural fields can be removed from a column selection')
   }
 
-  for (const token of ['lockedColumns', 'ensureRoadmapLockedColumns', 'disabled={isLocked ||']) {
-    if (!drawerSource.includes(token)) throw new Error(`column drawer is missing ${token}`)
+  for (const token of ['SortableColumnSettings', 'normalizeRoadmapColumnSettings', 'getRoadmapSortableColumnDefinitions']) {
+    if (!drawerSource.includes(token)) throw new Error(`column settings are missing ${token}`)
   }
-  if (!moduleSource.includes("lockedColumns={viewMode === 'evolution' ? ROADMAP_EVOLUTION_LOCKED_COLUMNS : undefined}")) {
-    throw new Error('locked columns are not scoped to evolution mode')
+  for (const token of ["viewMode === 'table'", "['firstSaleTosVersionId']", 'ROADMAP_EVOLUTION_LOCKED_COLUMNS']) {
+    if (!fs.readFileSync(path.join(root, 'src/lib/roadmapFilters.ts'), 'utf8').includes(token)) {
+      throw new Error(`roadmap column definitions are missing ${token}`)
+    }
+  }
+  if (!moduleSource.includes('value={{ order: [...columnOrder], visible: [...visibleColumns] }}')) {
+    throw new Error('active ordered settings are not passed to the roadmap column settings entry')
   }
   for (const token of ['formatEvolutionCardTitle', "Full: 'blue'", "Slim: 'gold'", "Go: 'cyan'", "column.key !== 'productSeries'", "column.key !== 'displayName'"]) {
     if (!cardSource.includes(token)) throw new Error(`card is missing ${token}`)
@@ -2687,7 +2696,7 @@ registerAssertion('table and evolution views keep the approved independent defau
     throw new Error('evolution direct column setter removed structural title fields')
   }
   store.getState().setViewMode('table')
-  if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(['brand'])) {
+  if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(['firstSaleTosVersionId', 'brand'])) {
     throw new Error('table view column customization was overwritten by evolution view')
   }
 })
@@ -2710,7 +2719,7 @@ registerAssertion('roadmap migration canonicalizes locked evolution columns with
     || JSON.stringify(migrated.visibleColumnsByView.evolution) !== JSON.stringify(expectedEvolution)) {
     throw new Error('persisted evolution columns were not repaired with structural title fields')
   }
-  if (JSON.stringify(migrated.visibleColumnsByView.table) !== JSON.stringify(['brand'])) {
+  if (JSON.stringify(migrated.visibleColumnsByView.table) !== JSON.stringify(['firstSaleTosVersionId', 'brand'])) {
     throw new Error('evolution migration changed table columns')
   }
 })

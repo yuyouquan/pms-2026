@@ -606,6 +606,79 @@ registerAssertion('shared SortableColumnSettings component exists', () => {
   )
 })
 
+registerAssertion('roadmap store normalizes and persists independent ordered column settings', () => {
+  const roadmapTypes = loadTypeScriptModule(path.join(root, 'src/types/roadmap.ts'))
+  const roadmapStoreModule = loadTypeScriptModule(path.join(root, 'src/stores/roadmap.ts'), new Map())
+  const store = roadmapStoreModule.useRoadmapStore
+  store.setState(roadmapStoreModule.createInitialRoadmapState())
+  const allKeys = roadmapTypes.ROADMAP_COLUMNS.map(column => column.key)
+
+  store.getState().setColumnSettings({
+    order: ['firstSaleTosVersionId', 'displayName', 'brand', 'remark'],
+    visible: ['firstSaleTosVersionId', 'displayName', 'brand'],
+  })
+  let state = store.getState()
+  assert.deepEqual(state.columnOrder.slice(0, 4), [
+    'firstSaleTosVersionId', 'displayName', 'brand', 'remark',
+  ])
+  assert.deepEqual([...new Set(state.columnOrder)], state.columnOrder)
+  assert.deepEqual([...state.columnOrder].sort(), [...allKeys].sort())
+  assert.deepEqual(state.visibleColumns, ['firstSaleTosVersionId', 'brand', 'displayName'])
+
+  store.getState().setViewMode('evolution')
+  store.getState().setColumnSettings({
+    order: ['remark', 'displayName', 'productSeries', 'brand'],
+    visible: ['remark'],
+  })
+  state = store.getState()
+  assert.deepEqual(state.columnOrder.slice(0, 4), ['remark', 'displayName', 'productSeries', 'brand'])
+  assert.deepEqual(state.visibleColumns, ['productSeries', 'displayName', 'remark'])
+
+  store.getState().setViewMode('table')
+  state = store.getState()
+  assert.deepEqual(state.columnOrder.slice(0, 4), [
+    'firstSaleTosVersionId', 'displayName', 'brand', 'remark',
+  ])
+
+  const migrated = roadmapStoreModule.migrateRoadmapState({
+    ...roadmapStoreModule.partializeRoadmapState(state),
+    viewMode: 'table',
+    columnOrder: ['remark', 'unknown', 'remark', 'brand'],
+    columnOrderByView: {
+      table: ['remark', 'unknown', 'firstSaleTosVersionId', 'brand', 'brand'],
+      evolution: ['displayName', 'unknown', 'remark', 'displayName'],
+    },
+  }, 1)
+  assert.equal(migrated.columnOrderByView.table[0], 'firstSaleTosVersionId')
+  assert.deepEqual([...new Set(migrated.columnOrderByView.table)], migrated.columnOrderByView.table)
+  assert.deepEqual([...migrated.columnOrderByView.table].sort(), [...allKeys].sort())
+  assert.deepEqual(migrated.columnOrder, migrated.columnOrderByView.table)
+  assert.deepEqual(migrated.columnOrderByView.evolution.slice(0, 2), ['displayName', 'remark'])
+
+  const persisted = roadmapStoreModule.partializeRoadmapState(migrated)
+  assert.ok(Object.hasOwn(persisted, 'columnOrder'))
+  assert.ok(Object.hasOwn(persisted, 'columnOrderByView'))
+})
+
+registerAssertion('roadmap table and evolution card render from parent-provided column order', () => {
+  const table = parseTypeScript(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'))
+  const card = parseTypeScript(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'))
+  const evolution = parseTypeScript(path.join(root, 'src/components/roadmap/RoadmapEvolutionView.tsx'))
+  const moduleSource = parseTypeScript(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx')).source
+
+  assert.ok(importedLocalNames(table.sourceFile, '@/lib/columnSettings', 'orderVisibleDefinitions').size)
+  assert.ok(importedLocalNames(card.sourceFile, '@/lib/columnSettings', 'orderVisibleDefinitions').size)
+  assert.ok(returnedRenderHasOrderedColumns(createRenderAnalysis(table.sourceFile, 'RoadmapTableView'), 'Table'))
+  assert.ok(returnedRenderHasOrderedMap(createRenderAnalysis(card.sourceFile, 'RoadmapProjectCard')))
+  assert.ok(returnedRenderPassesConfiguredOrder(
+    createRenderAnalysis(evolution.sourceFile, 'RoadmapEvolutionView'),
+    'RoadmapProjectCard',
+  ))
+  for (const contract of ['columnOrder', 'setColumnSettings']) {
+    assert.ok(moduleSource.includes(contract), `ProjectRoadmapModule is missing ${contract}`)
+  }
+})
+
 const entryFiles = [
   'src/components/roadmap/RoadmapColumnSettingsDrawer.tsx',
   'src/containers/ProjectSpaceContainer.tsx',

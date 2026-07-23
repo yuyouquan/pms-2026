@@ -2,8 +2,9 @@
 
 import { DeleteOutlined, EditOutlined, WarningOutlined } from '@ant-design/icons'
 import { Button, Flex, Tag, Typography } from 'antd'
+import { orderVisibleDefinitions } from '@/lib/columnSettings'
+import { getRoadmapSortableColumnDefinitions } from '@/lib/roadmapFilters'
 import {
-  ROADMAP_COLUMNS,
   type RoadmapColumnKey,
   type RoadmapProjectRow,
   type TosVersionConfig,
@@ -18,6 +19,7 @@ const VERSION_TYPE_TAG_COLORS = {
 export interface RoadmapProjectCardProps {
   row: RoadmapProjectRow
   versions: readonly TosVersionConfig[]
+  columnOrder: readonly RoadmapColumnKey[]
   visibleColumns: readonly RoadmapColumnKey[]
   conflictKey?: string
   canEdit: boolean
@@ -45,6 +47,7 @@ export function formatEvolutionCardTitle(row: RoadmapProjectRow): string {
 export default function RoadmapProjectCard({
   row,
   versions,
+  columnOrder,
   visibleColumns,
   conflictKey,
   canEdit,
@@ -52,11 +55,13 @@ export default function RoadmapProjectCard({
   onEditPlannedProject,
   onDeletePlannedProject,
 }: RoadmapProjectCardProps) {
-  const detailColumns = ROADMAP_COLUMNS.filter(column => (
-    column.key !== 'productSeries'
-    && column.key !== 'displayName'
-    && visibleColumns.includes(column.key)
-  ))
+  const detailColumns = orderVisibleDefinitions(
+    getRoadmapSortableColumnDefinitions('evolution'),
+    {
+      order: [...columnOrder],
+      visible: [...visibleColumns],
+    },
+  ).filter(column => column.key !== 'productSeries' && column.key !== 'displayName')
   const isPlanned = row.source === 'planned'
   const title = formatEvolutionCardTitle(row)
 
@@ -83,7 +88,7 @@ export default function RoadmapProjectCard({
               : null
             return (
               <div key={column.key} className="pms-roadmap-evolution-card-detail">
-                <dt>{column.label}</dt>
+                <dt>{column.title}</dt>
                 <dd title={value}>
                   {tagColor && value !== '—' ? <Tag color={tagColor}>{value}</Tag> : value}
                 </dd>

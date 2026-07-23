@@ -5,6 +5,11 @@ import {
   type FilterFieldDefinition,
 } from '@/lib/filterConditions'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
+import {
+  normalizeColumnSettings,
+  type SortableColumnDefinition,
+  type SortableColumnSettingsValue,
+} from '@/lib/columnSettings'
 import { normalizeTosVersionName, PRODUCT_LINES_BY_BRAND } from '@/lib/roadmapValidation'
 import {
   ROADMAP_COLUMNS,
@@ -38,6 +43,39 @@ export const DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS: RoadmapColumnKey[] = ens
 ], ROADMAP_EVOLUTION_LOCKED_COLUMNS)
 
 export const DEFAULT_ROADMAP_VISIBLE_COLUMNS = DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS
+export const DEFAULT_ROADMAP_COLUMN_ORDER = ROADMAP_COLUMNS.map(column => column.key)
+
+export function getRoadmapSortableColumnDefinitions(
+  viewMode: 'table' | 'evolution',
+): SortableColumnDefinition<RoadmapColumnKey>[] {
+  const defaultVisible = new Set(
+    viewMode === 'table'
+      ? DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS
+      : DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
+  )
+  const nonHideable = new Set(
+    viewMode === 'table'
+      ? ['firstSaleTosVersionId'] satisfies RoadmapColumnKey[]
+      : ROADMAP_EVOLUTION_LOCKED_COLUMNS,
+  )
+
+  return ROADMAP_COLUMNS.map(column => ({
+    key: column.key,
+    title: column.label,
+    accessibilityLabel: column.label,
+    defaultVisible: defaultVisible.has(column.key),
+    hideable: !nonHideable.has(column.key),
+    fixed: viewMode === 'table' && column.key === 'firstSaleTosVersionId' ? 'left' : undefined,
+    disabledReason: nonHideable.has(column.key) ? '该字段为当前视图必选项' : undefined,
+  }))
+}
+
+export function normalizeRoadmapColumnSettings(
+  viewMode: 'table' | 'evolution',
+  value?: Partial<SortableColumnSettingsValue<RoadmapColumnKey>> | readonly RoadmapColumnKey[] | null,
+): SortableColumnSettingsValue<RoadmapColumnKey> {
+  return normalizeColumnSettings(getRoadmapSortableColumnDefinitions(viewMode), value)
+}
 
 export function ensureRoadmapLockedColumns(
   columns: readonly RoadmapColumnKey[],

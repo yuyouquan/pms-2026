@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
 import { BulbOutlined, DownOutlined, EditOutlined, UpOutlined } from '@ant-design/icons'
 import { Button, Empty, Flex, Typography } from 'antd'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
@@ -37,6 +37,7 @@ export interface RoadmapEvolutionViewProps {
   rows: readonly RoadmapProjectRow[]
   conflicts: readonly RoadmapPlanningConflictGroup[]
   versions: readonly TosVersionConfig[]
+  columnOrder: readonly RoadmapColumnKey[]
   visibleColumns: readonly RoadmapColumnKey[]
   canEdit: boolean
   collapsedTargetVersionIds: ReadonlySet<string>
@@ -96,26 +97,14 @@ interface EvolutionProductCellProps {
   productType: RoadmapProductType
   version: TosVersionConfig
   rows: readonly RoadmapProjectRow[]
-  versions: readonly TosVersionConfig[]
-  visibleColumns: readonly RoadmapColumnKey[]
-  conflictKeyByIdentity: ReadonlyMap<string, string>
-  canEdit: boolean
-  onOpenConflict: (conflictKey: string) => void
-  onEditPlannedProject: (projectId: string) => void
-  onDeletePlannedProject: (projectId: string) => void
+  renderProjectCard: (row: RoadmapProjectRow) => ReactNode
 }
 
 function EvolutionProductCell({
   productType,
   version,
   rows,
-  versions,
-  visibleColumns,
-  conflictKeyByIdentity,
-  canEdit,
-  onOpenConflict,
-  onEditPlannedProject,
-  onDeletePlannedProject,
+  renderProjectCard,
 }: EvolutionProductCellProps) {
   const groups = groupEvolutionRows(rows, version.id, productType)
   const count = groups.reduce((total, group) => total + group.rows.length, 0)
@@ -144,19 +133,7 @@ function EvolutionProductCell({
               <Typography.Text type="secondary">{group.rows.length}</Typography.Text>
             </div>
             <div className="pms-roadmap-evolution-card-list">
-              {group.rows.map(row => (
-                <RoadmapProjectCard
-                  key={`${row.source}:${row.id}`}
-                  row={row}
-                  versions={versions}
-                  visibleColumns={visibleColumns}
-                  conflictKey={conflictKeyByIdentity.get(`${row.source}:${row.id}`)}
-                  canEdit={canEdit}
-                  onOpenConflict={onOpenConflict}
-                  onEditPlannedProject={onEditPlannedProject}
-                  onDeletePlannedProject={onDeletePlannedProject}
-                />
-              ))}
+              {group.rows.map(renderProjectCard)}
             </div>
           </section>
         )
@@ -171,6 +148,7 @@ export default function RoadmapEvolutionView({
   rows,
   conflicts,
   versions,
+  columnOrder,
   visibleColumns,
   canEdit,
   collapsedTargetVersionIds,
@@ -184,6 +162,20 @@ export default function RoadmapEvolutionView({
   const orderedVersions = useMemo(() => sortEvolutionVersions(versions), [versions])
   const conflictKeyByIdentity = useMemo(() => buildEvolutionConflictMap(conflicts), [conflicts])
   const scrollSignature = `evolution:${orderedVersions.map(version => version.id).join('|')}`
+  const renderProjectCard = (row: RoadmapProjectRow) => (
+    <RoadmapProjectCard
+      key={`${row.source}:${row.id}`}
+      row={row}
+      versions={orderedVersions}
+      columnOrder={columnOrder}
+      visibleColumns={visibleColumns}
+      conflictKey={conflictKeyByIdentity.get(`${row.source}:${row.id}`)}
+      canEdit={canEdit}
+      onOpenConflict={onOpenConflict}
+      onEditPlannedProject={onEditPlannedProject}
+      onDeletePlannedProject={onDeletePlannedProject}
+    />
+  )
 
   useEffect(() => {
     if (scrollSignature === 'evolution:') return undefined
@@ -280,13 +272,7 @@ export default function RoadmapEvolutionView({
               productType="新品"
               version={version}
               rows={rows}
-              versions={orderedVersions}
-              visibleColumns={visibleColumns}
-              conflictKeyByIdentity={conflictKeyByIdentity}
-              canEdit={canEdit}
-              onOpenConflict={onOpenConflict}
-              onEditPlannedProject={onEditPlannedProject}
-              onDeletePlannedProject={onDeletePlannedProject}
+              renderProjectCard={renderProjectCard}
             />
           </div>
         ))}
@@ -315,13 +301,7 @@ export default function RoadmapEvolutionView({
               productType="老品"
               version={version}
               rows={rows}
-              versions={orderedVersions}
-              visibleColumns={visibleColumns}
-              conflictKeyByIdentity={conflictKeyByIdentity}
-              canEdit={canEdit}
-              onOpenConflict={onOpenConflict}
-              onEditPlannedProject={onEditPlannedProject}
-              onDeletePlannedProject={onDeletePlannedProject}
+              renderProjectCard={renderProjectCard}
             />
           </div>
         ))}
