@@ -11,6 +11,11 @@ import type {
 } from '@/lib/tosTypeRules'
 import type { CompareTableRow } from '@/lib/versionCompare'
 import { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
+import {
+  getDefaultColumnSettings,
+  type SortableColumnDefinition,
+  type SortableColumnSettingsValue,
+} from '@/lib/columnSettings'
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
@@ -57,30 +62,35 @@ export const TEMPLATE_PROJECT_TYPES = PROJECT_TEMPLATE_TYPES
 
 const cloneLevel1TemplateTasks = () => LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
 
-export const ALL_COLUMNS = [
-  { key: 'id', title: '序号', default: true },
-  { key: 'taskName', title: '任务名称', default: true },
-  { key: 'responsible', title: '责任人', default: true },
-  { key: 'predecessor', title: '前置任务', default: true },
-  { key: 'planStartDate', title: '计划开始', default: true },
-  { key: 'planEndDate', title: '计划完成', default: true },
-  { key: 'estimatedDays', title: '预估工期', default: true },
-  { key: 'actualStartDate', title: '实际开始', default: true },
-  { key: 'actualEndDate', title: '实际完成', default: true },
-  { key: 'actualDays', title: '实际工期', default: true },
-  { key: 'status', title: '状态', default: true },
-  { key: 'progress', title: '进度', default: true },
+type PlanColumnDefinition = Omit<SortableColumnDefinition<string>, 'title'> & {
+  title: string
+  default: boolean
+}
+
+export const ALL_COLUMNS: PlanColumnDefinition[] = [
+  { key: 'id', title: '序号', default: true, defaultVisible: true, hideable: false, fixed: 'left' },
+  { key: 'taskName', title: '任务名称', default: true, defaultVisible: true, hideable: false },
+  { key: 'responsible', title: '责任人', default: true, defaultVisible: true },
+  { key: 'predecessor', title: '前置任务', default: true, defaultVisible: true },
+  { key: 'planStartDate', title: '计划开始', default: true, defaultVisible: true },
+  { key: 'planEndDate', title: '计划完成', default: true, defaultVisible: true },
+  { key: 'estimatedDays', title: '预估工期', default: true, defaultVisible: true },
+  { key: 'actualStartDate', title: '实际开始', default: true, defaultVisible: true },
+  { key: 'actualEndDate', title: '实际完成', default: true, defaultVisible: true },
+  { key: 'actualDays', title: '实际工期', default: true, defaultVisible: true },
+  { key: 'status', title: '状态', default: true, defaultVisible: true },
+  { key: 'progress', title: '进度', default: true, defaultVisible: true },
 ]
 
 export const TABLE_COLUMNS = ALL_COLUMNS
 
-export const GANTT_COLUMNS = [
-  { key: 'taskName', title: '任务名称', default: true },
-  { key: 'predecessor', title: '前置任务', default: true },
-  { key: 'planStartDate', title: '计划开始', default: true },
-  { key: 'planEndDate', title: '计划完成', default: true },
-  { key: 'estimatedDays', title: '计划周期', default: true },
-  { key: 'progress', title: '进度', default: true },
+export const GANTT_COLUMNS: PlanColumnDefinition[] = [
+  { key: 'taskName', title: '任务名称', default: true, defaultVisible: true, hideable: false },
+  { key: 'predecessor', title: '前置任务', default: true, defaultVisible: true },
+  { key: 'planStartDate', title: '计划开始', default: true, defaultVisible: true },
+  { key: 'planEndDate', title: '计划完成', default: true, defaultVisible: true },
+  { key: 'estimatedDays', title: '计划周期', default: true, defaultVisible: true },
+  { key: 'progress', title: '进度', default: true, defaultVisible: true },
 ]
 
 export const getColumnsForView = (viewMode: string) => {
@@ -147,6 +157,25 @@ export const INITIAL_LEVEL2_PLAN_META: Record<string, any> = {
 
 // ─── Helper to compute default columns ──────────────────────────────
 const defaultCols = ALL_COLUMNS.filter(c => c.default).map(c => c.key)
+const defaultTableColumnSettings = getDefaultColumnSettings(TABLE_COLUMNS)
+const defaultGanttColumnSettings = getDefaultColumnSettings(GANTT_COLUMNS)
+const initialColumnSettingsByView = [
+  'project-level1-table',
+  'project-level2-table',
+  'config-level1-table',
+  'config-level2-table',
+].reduce<Record<string, SortableColumnSettingsValue<string>>>((settings, key) => {
+  settings[key] = { order: [...defaultTableColumnSettings.order], visible: [...defaultTableColumnSettings.visible] }
+  return settings
+}, [
+  'project-level1-gantt',
+  'project-level2-gantt',
+  'config-level1-gantt',
+  'config-level2-gantt',
+].reduce<Record<string, SortableColumnSettingsValue<string>>>((settings, key) => {
+  settings[key] = { order: [...defaultGanttColumnSettings.order], visible: [...defaultGanttColumnSettings.visible] }
+  return settings
+}, {}))
 
 // ─── Store types ────────────────────────────────────────────────────
 
@@ -187,6 +216,7 @@ export interface PlanState {
 
   // Columns per view
   columnsByView: Record<string, string[]>
+  columnSettingsByView: Record<string, SortableColumnSettingsValue<string>>
 
   // Collapsed tree nodes per scope
   collapsedNodes: Record<string, Set<string>>
@@ -252,6 +282,10 @@ export interface PlanActions {
   setSelectedMRVersion: (v: string) => void
 
   setColumnsByView: (v: Record<string, string[]> | ((prev: Record<string, string[]>) => Record<string, string[]>)) => void
+  setColumnSettingsByView: (
+    v: Record<string, SortableColumnSettingsValue<string>>
+      | ((prev: Record<string, SortableColumnSettingsValue<string>>) => Record<string, SortableColumnSettingsValue<string>>)
+  ) => void
   setCollapsedNodes: (v: Record<string, Set<string>> | ((prev: Record<string, Set<string>>) => Record<string, Set<string>>)) => void
 
   setPublishedSnapshots: (v: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void
@@ -324,6 +358,7 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
     'project-gantt': [...defaultCols],
     'project-horizontal': [...defaultCols],
   },
+  columnSettingsByView: initialColumnSettingsByView,
 
   // Collapsed tree nodes
   collapsedNodes: {},
@@ -417,6 +452,9 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
   setSelectedMRVersion: (v) => set({ selectedMRVersion: v }),
 
   setColumnsByView: (v) => set((s) => ({ columnsByView: typeof v === 'function' ? v(s.columnsByView) : v })),
+  setColumnSettingsByView: (v) => set((s) => ({
+    columnSettingsByView: typeof v === 'function' ? v(s.columnSettingsByView) : v,
+  })),
   setCollapsedNodes: (v) => set((s) => ({ collapsedNodes: typeof v === 'function' ? v(s.collapsedNodes) : v })),
 
   setPublishedSnapshots: (v) => set((s) => ({ publishedSnapshots: typeof v === 'function' ? v(s.publishedSnapshots) : v })),

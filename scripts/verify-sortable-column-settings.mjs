@@ -286,6 +286,17 @@ function hasConfiguredOrder(expression, analysis, resolving = new Set()) {
   ) {
     return Boolean(expression.arguments[1] && hasConfiguredOrder(expression.arguments[1], analysis, resolving))
   }
+  if (
+    ts.isCallExpression(expression)
+    && ts.isIdentifier(expression.expression)
+    && ['useMemo', 'useCallback'].includes(expression.expression.text)
+    && expression.arguments[0]
+  ) {
+    const callback = resolveFunction(expression.arguments[0], analysis)
+    if (!callback) return false
+    const nested = { ...analysis, initializers: new Map([...analysis.initializers, ...collectVariableInitializers(callback)]) }
+    return returnedExpressions(callback).some(result => hasConfiguredOrder(result, nested, resolving))
+  }
   if (ts.isIdentifier(expression)) {
     if (resolving.has(expression.text)) return false
     if (
@@ -318,6 +329,17 @@ function expressionUsesOrderedResult(expression, analysis, resolving = new Set()
     return expressionUsesOrderedResult(initializer, analysis, next)
   }
   if (ts.isCallExpression(expression)) {
+    if (
+      ts.isIdentifier(expression.expression)
+      && ['useMemo', 'useCallback'].includes(expression.expression.text)
+      && expression.arguments[0]
+    ) {
+      const callback = resolveFunction(expression.arguments[0], analysis)
+      if (callback) {
+        const nested = { ...analysis, initializers: new Map([...analysis.initializers, ...collectVariableInitializers(callback)]) }
+        return returnedExpressions(callback).some(result => expressionUsesOrderedResult(result, nested, resolving))
+      }
+    }
     const callable = resolveFunction(expression.expression, analysis)
     if (callable) {
       const nested = { ...analysis, initializers: new Map([...analysis.initializers, ...collectVariableInitializers(callable)]) }
@@ -831,6 +853,65 @@ registerAssertion('every user-facing column-settings entry imports SortableColum
   }
 })
 
+registerAssertion('project-space and config-center use normalized full settings from the shared model', () => {
+  for (const relativePath of [
+    'src/containers/ProjectSpaceContainer.tsx',
+    'src/containers/ConfigContainer.tsx',
+  ]) {
+    const filePath = path.join(root, relativePath)
+    const { source, sourceFile } = parseTypeScript(filePath)
+    assert.equal(
+      importsSortableColumnSettings(filePath),
+      true,
+      `${relativePath} must import SortableColumnSettings from the shared component`,
+    )
+    assert.ok(
+      importedLocalNames(sourceFile, '@/lib/columnSettings', 'normalizeColumnSettings').size,
+      `${relativePath} must import normalizeColumnSettings from the shared model`,
+    )
+    assert.ok(
+      importedLocalNames(sourceFile, '@/lib/columnSettings', 'orderVisibleDefinitions').size,
+      `${relativePath} must import orderVisibleDefinitions from the shared model`,
+    )
+    assert.match(source, /\bcolumnSettingsByView\s*\[/)
+    assert.match(source, /\bsetColumnSettingsByView\s*\(/)
+    assert.doesNotMatch(source, /\bcolumnsByView\b/)
+  }
+})
+
+registerAssertion('plan store keeps table and Gantt full settings independent and horizontal empty', () => {
+  const planModule = loadTypeScriptModule(path.join(root, 'src/stores/plan.ts'), new Map())
+  const {
+    GANTT_COLUMNS,
+    TABLE_COLUMNS,
+    getColumnsForView,
+    usePlanStore,
+  } = planModule
+
+  assert.deepEqual(getColumnsForView('horizontal'), [])
+  assert.equal(TABLE_COLUMNS.find(column => column.key === 'id').fixed, 'left')
+  assert.equal(TABLE_COLUMNS.find(column => column.key === 'id').hideable, false)
+  assert.equal(TABLE_COLUMNS.find(column => column.key === 'taskName').hideable, false)
+  assert.equal(TABLE_COLUMNS.find(column => column.key === 'taskName').fixed, undefined)
+  assert.equal(GANTT_COLUMNS.find(column => column.key === 'taskName').hideable, false)
+  assert.equal(GANTT_COLUMNS.find(column => column.key === 'taskName').fixed, undefined)
+
+  const initial = usePlanStore.getState().columnSettingsByView
+  assert.ok(initial['project-level1-table'])
+  assert.ok(initial['project-level1-gantt'])
+  assert.notStrictEqual(initial['project-level1-table'], initial['project-level1-gantt'])
+
+  const priorGantt = initial['project-level1-gantt']
+  usePlanStore.getState().setColumnSettingsByView(previous => ({
+    ...previous,
+    'project-level1-table': {
+      order: [...previous['project-level1-table'].order].reverse(),
+      visible: [...previous['project-level1-table'].visible],
+    },
+  }))
+  assert.strictEqual(usePlanStore.getState().columnSettingsByView['project-level1-gantt'], priorGantt)
+})
+
 registerAssertion('ordered render analysis handles aliases, reachability, and configured settings', () => {
   const fixture = (name, source, componentName) => {
     const sourceFile = ts.createSourceFile(name, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
@@ -976,6 +1057,7 @@ registerAssertion('every display surface consumes column order when producing fi
   const roadmapTable = parseTypeScript(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx')).sourceFile
   const roadmapCard = parseTypeScript(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx')).sourceFile
   const projectSpace = parseTypeScript(path.join(root, 'src/containers/ProjectSpaceContainer.tsx')).sourceFile
+  const configCenter = parseTypeScript(path.join(root, 'src/containers/ConfigContainer.tsx')).sourceFile
   const requirementPlan = parseTypeScript(path.join(root, 'src/components/plans/RequirementDevPlan.tsx')).sourceFile
   const versionTrain = parseTypeScript(path.join(root, 'src/components/plans/VersionTrainPlan.tsx')).sourceFile
   const summaryBoard = parseTypeScript(path.join(root, 'src/components/roadmap/ProjectPlanSummaryBoard.tsx')).sourceFile
@@ -987,6 +1069,7 @@ registerAssertion('every display surface consumes column order when producing fi
   const roadmapCardAnalysis = createRenderAnalysis(roadmapCard, 'RoadmapProjectCard')
   const roadmapEvolutionAnalysis = createRenderAnalysis(roadmapEvolution, 'RoadmapEvolutionView')
   const projectSpaceAnalysis = createRenderAnalysis(projectSpace, 'ProjectSpaceContainer')
+  const configCenterAnalysis = createRenderAnalysis(configCenter, 'ConfigContainer')
   const requirementPlanAnalysis = createRenderAnalysis(requirementPlan, 'RequirementDevPlan')
   const requirementGanttAnalysis = createRenderAnalysis(requirementPlan, 'RequirementGantt')
   const versionTrainAnalysis = createRenderAnalysis(versionTrain, 'VersionTrainPlan')
@@ -1009,6 +1092,12 @@ registerAssertion('every display surface consumes column order when producing fi
   }
   if (!projectSpaceAnalysis || !returnedRenderHasOrderedColumns(projectSpaceAnalysis, 'DHTMLXGantt')) {
     failures.push('plan Gantt: ordered definitions must flow into <DHTMLXGantt columns>')
+  }
+  if (!configCenterAnalysis || !returnedRenderHasOrderedColumns(configCenterAnalysis, 'Table')) {
+    failures.push('config table: configured order must drive returned <Table columns>')
+  }
+  if (!configCenterAnalysis || !returnedRenderHasOrderedColumns(configCenterAnalysis, 'DHTMLXGantt')) {
+    failures.push('config Gantt: ordered definitions must flow into <DHTMLXGantt columns>')
   }
   if (!requirementPlanAnalysis || !returnedRenderHasOrderedMap(requirementPlanAnalysis)) {
     failures.push('requirement plan table: ordered fields must drive the rendered row map')
