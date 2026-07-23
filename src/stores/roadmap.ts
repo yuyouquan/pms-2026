@@ -153,11 +153,156 @@ export function createInitialTosVersions(): TosVersionConfig[] {
   }))
 }
 
+export function createInitialPlannedProjects(): PlannedRoadmapProject[] {
+  return [{
+    id: 'planned-mock-x6877-android16-new',
+    status: '待规划',
+    machineProjectType: '整机-手机',
+    projectCode: 'X6877',
+    displayName: 'X6877',
+    androidVersion: 'Android 16',
+    firstSaleTosVersionId: 'tos-17-2',
+    brand: 'Infinix',
+    productLine: 'NOTE',
+    productSeries: 'NOTE 60',
+    marketName: 'NOTE 60 Pro',
+    productType: '新品',
+    platform: 'MT6877',
+    startRam: '8GB',
+    versionType: 'Full',
+    str5Date: '2026-10-15',
+    launchDate: '2026-11-20',
+    developMode: 'ODC',
+    remark: '待规划样例：用于确认与已存在普通项目的重复冲突处理。',
+    createdAt: '2026-07-21T02:15:00.000Z',
+    createdBy: '李四',
+    updatedAt: '2026-07-22T09:30:00.000Z',
+    updatedBy: '张三',
+  }]
+}
+
+export function createInitialRoadmapChangeLogs(
+  plannedProjects: readonly PlannedRoadmapProject[] = createInitialPlannedProjects(),
+  tosVersions: readonly TosVersionConfig[] = createInitialTosVersions(),
+): RoadmapChangeLog[] {
+  const planned = plannedProjects.find(project => project.id === 'planned-mock-x6877-android16-new')
+  if (!planned) return []
+
+  const normalBefore: RoadmapProjectFields = {
+    machineProjectType: '整机-手机',
+    projectCode: 'X6877',
+    displayName: 'X6877-D8400_H991',
+    androidVersion: 'Android 16',
+    firstSaleTosVersionId: 'tos-16-2',
+    brand: 'TECNO',
+    productLine: 'NOTE',
+    productSeries: 'CAMON 50',
+    marketName: 'NOTE 50',
+    productType: '新品',
+    platform: 'MT6877',
+    startRam: '8GB',
+    versionType: 'Full',
+    str5Date: '2026-05-15',
+    launchDate: '2026-06-15',
+    developMode: 'ODC',
+    remark: '重点验证海外市场首销版本交付。',
+  }
+  const normalAfter: RoadmapProjectFields = {
+    ...normalBefore,
+    firstSaleTosVersionId: 'tos-16-3',
+    marketName: 'NOTE 50 Pro',
+    remark: '重点验证 tOS 16.3 全量版本交付。',
+  }
+  const plannedBefore: RoadmapProjectFields = {
+    ...planned,
+    brand: '待定',
+    productLine: '待定',
+    productSeries: '待定',
+    marketName: 'X6877',
+  }
+
+  return [
+    {
+      id: 'roadmap-log-mock-planned-update-x6877',
+      projectId: planned.id,
+      projectDisplayName: planned.displayName,
+      source: 'planned',
+      action: 'update',
+      actor: '张三',
+      occurredAt: '2026-07-22T09:30:00.000Z',
+      tosVersionName: 'tOS 17.2',
+      changes: diffRoadmapProjectFields(plannedBefore, planned, tosVersions),
+    },
+    {
+      id: 'roadmap-log-mock-normal-update-x6877',
+      projectId: '1',
+      projectDisplayName: normalAfter.displayName,
+      source: 'normal',
+      action: 'update',
+      actor: '张三',
+      occurredAt: '2026-07-22T08:45:00.000Z',
+      tosVersionName: 'tOS 16.3',
+      changes: diffRoadmapProjectFields(normalBefore, normalAfter, tosVersions),
+    },
+    {
+      id: 'roadmap-log-mock-planned-create-x6877',
+      projectId: planned.id,
+      projectDisplayName: planned.displayName,
+      source: 'planned',
+      action: 'create',
+      actor: '李四',
+      occurredAt: '2026-07-21T02:15:00.000Z',
+      tosVersionName: 'tOS 17.2',
+      changes: [],
+      snapshot: createRoadmapAuditSnapshot(plannedBefore, tosVersions),
+    },
+    {
+      id: 'roadmap-log-mock-normal-create-x6877',
+      projectId: '1',
+      projectDisplayName: normalBefore.displayName,
+      source: 'normal',
+      action: 'create',
+      actor: '李四',
+      occurredAt: '2026-07-20T06:20:00.000Z',
+      tosVersionName: 'tOS 16.2',
+      changes: [],
+      snapshot: createRoadmapAuditSnapshot(normalBefore, tosVersions),
+    },
+  ]
+}
+
 export function createInitialRoadmapState(): RoadmapStoreState {
   return {
     plannedProjects: [],
     tosVersions: createInitialTosVersions(),
     changeLogs: [],
+    viewMode: 'table',
+    selectedTosVersionId: null,
+    brandFilter: 'all',
+    productTypeFilter: 'all',
+    filters: [],
+    columnOrder: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+    columnOrderByView: {
+      table: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+      evolution: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+    },
+    visibleColumns: [...DEFAULT_ROADMAP_VISIBLE_COLUMNS],
+    visibleColumnsByView: {
+      table: [...DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS],
+      evolution: [...DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS],
+    },
+    sort: { field: null, direction: null },
+    selectedConflictKey: null,
+  }
+}
+
+export function createInitialRoadmapMockState(): RoadmapStoreState {
+  const tosVersions = createInitialTosVersions()
+  const plannedProjects = createInitialPlannedProjects()
+  return {
+    plannedProjects,
+    tosVersions,
+    changeLogs: createInitialRoadmapChangeLogs(plannedProjects, tosVersions),
     viewMode: 'table',
     selectedTosVersionId: null,
     brandFilter: 'all',
@@ -523,6 +668,40 @@ export function partializeRoadmapState(state: RoadmapStore): PersistedRoadmapSta
   }
 }
 
+export function mergeRoadmapPersistedState(
+  persistedState: unknown,
+  currentState: RoadmapStore,
+): RoadmapStore {
+  const migrated = migrateRoadmapState(persistedState, 1)
+  if (persistedState === null || persistedState === undefined) {
+    return { ...currentState, ...migrated }
+  }
+  const mock = createInitialRoadmapMockState()
+  const existingLogIds = new Set(migrated.changeLogs.map(log => log.id))
+  const changeLogs = [
+    ...mock.changeLogs.filter(log => !existingLogIds.has(log.id)),
+    ...migrated.changeLogs,
+  ].sort((left, right) => (
+    Date.parse(right.occurredAt) - Date.parse(left.occurredAt) || left.id.localeCompare(right.id)
+  ))
+
+  const plannedSeed = mock.plannedProjects[0]
+  const seedWasPreviouslyKnown = existingLogIds.has('roadmap-log-mock-planned-create-x6877')
+  const canResolveSeedTos = migrated.tosVersions.some(version => version.id === plannedSeed.firstSaleTosVersionId)
+  const hasSeedProject = migrated.plannedProjects.some(project => project.id === plannedSeed.id)
+  const hasEquivalentPlannedProject = isExactRoadmapDuplicate(plannedSeed, migrated.plannedProjects)
+  const plannedProjects = !seedWasPreviouslyKnown && canResolveSeedTos && !hasSeedProject && !hasEquivalentPlannedProject
+    ? [plannedSeed, ...migrated.plannedProjects]
+    : migrated.plannedProjects
+
+  return {
+    ...currentState,
+    ...migrated,
+    plannedProjects,
+    changeLogs,
+  }
+}
+
 const safeRoadmapStorage: StateStorage = {
   getItem(name) {
     if (typeof window === 'undefined') return null
@@ -610,7 +789,7 @@ function createUniqueRuntimeId(prefix: string, existingIds: ReadonlySet<string>)
 export const useRoadmapStore = create<RoadmapStore>()(
   persist(
     (set, get) => ({
-      ...createInitialRoadmapState(),
+      ...createInitialRoadmapMockState(),
       setViewMode: (viewMode: RoadmapViewMode) => {
         if (viewMode === 'table' || viewMode === 'evolution') set(state => ({
           viewMode,
@@ -865,10 +1044,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
       storage: createJSONStorage(() => safeRoadmapStorage),
       migrate: migrateRoadmapState,
       partialize: partializeRoadmapState,
-      merge: (persistedState, currentState) => ({
-        ...currentState,
-        ...migrateRoadmapState(persistedState, 1),
-      }),
+      merge: mergeRoadmapPersistedState,
     },
   ),
 )
