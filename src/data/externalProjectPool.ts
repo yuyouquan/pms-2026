@@ -40,18 +40,26 @@ export interface FetchByBidResult {
   targetMarkets?: string
   planStartDate?: string
   planEndDate?: string
+  projectCode?: string
+  platform?: string
+  productType?: '新品' | '老品'
+  startRam?: '2GB' | '3GB' | '4GB' | '6GB' | '8GB' | '12GB' | '16GB'
+  versionType?: 'Full' | 'Slim' | 'Go'
+  str5Date?: string
+  developMode?: '自研' | 'ODC' | 'ITD-ODC' | 'ODM' | '纯外研'
+  remark?: string
 }
 
 // Mocked "external system" fetch. Returns supplementary fields, keyed by bid.
 export function fetchByBid(bid: string): FetchByBidResult {
   const map: Record<string, FetchByBidResult> = {
-    'EXT-001': { productLine: 'NOTE', productSeries: 'NOTE 60', marketName: 'NOTE 60 Pro', brand: 'TECNO', androidVersion: 'Android 17', chipPlatform: 'MTK', chipCode: 'D8600', chipModel: 'MT6899', memorySize: '8GB+256GB', mainboardName: 'H1100', researchMode: '自研', androidMajorUpgrade: '否', confidentialityLevel: '内部公开', targetMarkets: 'OP,TR,RU', planStartDate: '2026-06-01', planEndDate: '2026-12-31' },
-    'EXT-002': { productLine: 'NOTE', productSeries: 'NOTE 60', marketName: 'NOTE 60', brand: 'TECNO', androidVersion: 'Android 17', chipPlatform: 'MTK', chipCode: 'D8700', chipModel: 'MT6888', memorySize: '8GB+128GB', mainboardName: 'H1102', researchMode: '外研', androidMajorUpgrade: '否', confidentialityLevel: '机密', targetMarkets: 'OP,IN', planStartDate: '2026-07-01', planEndDate: '2027-01-31' },
+    'EXT-001': { productLine: 'NOTE', productSeries: 'NOTE 60', marketName: 'NOTE 60 Pro', brand: 'TECNO', androidVersion: 'Android 17', chipPlatform: 'MTK', chipCode: 'D8600', chipModel: 'MT6899', memorySize: '8GB+256GB', mainboardName: 'H1100', researchMode: '自研', androidMajorUpgrade: '否', confidentialityLevel: '内部公开', targetMarkets: 'OP,TR,RU', planStartDate: '2026-06-01', planEndDate: '2026-12-31', projectCode: 'X6900', platform: 'D8600', productType: '新品', startRam: '8GB', versionType: 'Full', str5Date: '2026-12-15', launchDate: '2027-01-15', developMode: '自研', remark: '外部项目池同步的整机项目。' },
+    'EXT-002': { productLine: 'NOTE', productSeries: 'NOTE 60', marketName: 'NOTE 60', brand: 'TECNO', androidVersion: 'Android 17', chipPlatform: 'MTK', chipCode: 'D8700', chipModel: 'MT6888', memorySize: '8GB+128GB', mainboardName: 'H1102', researchMode: '外研', androidMajorUpgrade: '否', confidentialityLevel: '机密', targetMarkets: 'OP,IN', planStartDate: '2026-07-01', planEndDate: '2027-01-31', projectCode: 'X6901', platform: 'D8700', productType: '新品', startRam: '8GB', versionType: 'Slim', str5Date: '2027-01-15', launchDate: '2027-02-15', developMode: 'ODC', remark: '外部项目池同步的整机项目。' },
     'EXT-003': { productLine: 'tOS', tosVersion: 'tOS16.1', androidVersion: 'Android 17', chipPlatform: 'MTK', planStartDate: '2026-06-01', planEndDate: '2026-11-30' },
     'EXT-004': { productLine: 'tOS', tosVersion: 'tOS16.3', androidVersion: 'Android 17', chipPlatform: 'QCOM', planStartDate: '2026-08-01', planEndDate: '2027-02-28' },
-    'EXT-005': { productLine: 'SPARK', productSeries: 'SPARK 40', marketName: 'SPARK 40 Pro', brand: 'TECNO', androidVersion: 'Android 17', chipPlatform: 'MTK', chipCode: 'X6912', chipModel: 'MT6878', memorySize: '6GB+128GB', mainboardName: 'H1208', researchMode: '自研', androidMajorUpgrade: '是', confidentialityLevel: '内部公开', targetMarkets: 'OP,TR', planStartDate: '2026-06-15', planEndDate: '2026-12-15' },
+    'EXT-005': { productLine: 'SPARK', productSeries: 'SPARK 40', marketName: 'SPARK 40 Pro', brand: 'TECNO', androidVersion: 'Android 17', chipPlatform: 'MTK', chipCode: 'X6912', chipModel: 'MT6878', memorySize: '6GB+128GB', mainboardName: 'H1208', researchMode: '自研', androidMajorUpgrade: '是', confidentialityLevel: '内部公开', targetMarkets: 'OP,TR', planStartDate: '2026-06-15', planEndDate: '2026-12-15', projectCode: 'X6912', platform: 'H1208', productType: '新品', startRam: '6GB', versionType: 'Full', str5Date: '2026-11-30', launchDate: '2027-01-01', developMode: 'ODM', remark: '外部项目池同步的整机项目。' },
     'EXT-006': { productLine: 'AI引擎', androidVersion: 'Android 17', chipPlatform: 'MTK', planStartDate: '2026-05-15', planEndDate: '2026-10-31' },
-    'EXT-007': { productLine: 'CAMON', productSeries: 'CAMON 50', marketName: 'CAMON 50 Premier', brand: 'TECNO', androidVersion: 'Android 17', chipPlatform: 'QCOM', chipCode: 'D8800', chipModel: 'SM8850', memorySize: '12GB+256GB', mainboardName: 'H1300', researchMode: '自研', androidMajorUpgrade: '否', confidentialityLevel: '绝密', targetMarkets: 'OP,RU,EU', planStartDate: '2026-07-15', planEndDate: '2027-03-31' },
+    'EXT-007': { productLine: 'CAMON', productSeries: 'CAMON 50', marketName: 'CAMON 50 Premier', brand: 'TECNO', androidVersion: 'Android 17', chipPlatform: 'QCOM', chipCode: 'D8800', chipModel: 'SM8850', memorySize: '12GB+256GB', mainboardName: 'H1300', researchMode: '自研', androidMajorUpgrade: '否', confidentialityLevel: '绝密', targetMarkets: 'OP,RU,EU', planStartDate: '2026-07-15', planEndDate: '2027-03-31', projectCode: 'X6920', platform: 'D8800', productType: '新品', startRam: '12GB', versionType: 'Full', str5Date: '2027-03-15', launchDate: '2027-04-15', developMode: 'ITD-ODC', remark: '外部项目池同步的整机项目。' },
     'EXT-008': { productLine: '工程效率', planStartDate: '2026-06-01', planEndDate: '2026-12-31' },
     'EXT-009': { productLine: '系统应用', tosVersion: 'tOS16.1', androidVersion: 'Android 16', chipPlatform: 'MTK', planStartDate: '2026-06-10', planEndDate: '2026-12-10' },
   }

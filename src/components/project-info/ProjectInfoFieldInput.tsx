@@ -18,6 +18,7 @@ interface ProjectInfoFieldInputProps {
   value?: ProjectInfoValue
   onChange?: (value: ProjectInfoValue) => void
   firstLaunchProjectOptions?: Array<{ label: string; value: string }>
+  optionsOverride?: readonly string[]
 }
 
 const toText = (value: ProjectInfoValue | undefined) => (
@@ -34,6 +35,7 @@ export default function ProjectInfoFieldInput({
   value,
   onChange,
   firstLaunchProjectOptions = [],
+  optionsOverride,
 }: ProjectInfoFieldInputProps) {
   if (field.inputType === 'jira') {
     const rows = Array.isArray(value) && value.every(item => typeof item === 'object')
@@ -102,8 +104,8 @@ export default function ProjectInfoFieldInput({
     )
   }
 
-  if (field.inputType === 'boolean' || (field.inputType === 'select' && field.options?.length)) {
-    const options = (field.options || []).map(option => ({ label: option, value: option }))
+  if (field.inputType === 'boolean' || (field.inputType === 'select' && (optionsOverride?.length || field.options?.length))) {
+    const options = (optionsOverride || field.options || []).map(option => ({ label: option, value: option }))
     const current = toText(value)
     if (current && !options.some(option => option.value === current)) options.unshift({ label: current, value: current })
     return (

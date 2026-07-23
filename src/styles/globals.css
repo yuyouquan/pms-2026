@@ -107,6 +107,68 @@
   --duration-slow: 0.4s;
 }
 
+/* Project roadmap — scoped purple-glass hierarchy and accessibility */
+.pms-roadmap-shell {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  color: var(--text-primary);
+}
+
+.pms-roadmap-shell-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  overflow: auto;
+  padding: 12px;
+  background: var(--bg-page, #f6f7fb);
+}
+
+.pms-roadmap-shell:fullscreen {
+  width: 100vw !important;
+  height: 100vh;
+  overflow: auto;
+  padding: 12px;
+  background: var(--bg-page, #f6f7fb);
+}
+
+.pms-roadmap-shell-fullscreen .roadmap-toolbar-glass {
+  top: 0 !important;
+  flex: none;
+}
+
+.pms-roadmap-shell-fullscreen .roadmap-table-shell,
+.pms-roadmap-shell-fullscreen .pms-roadmap-evolution-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(100dvh - 76px);
+}
+
+.pms-roadmap-shell .roadmap-table-shell .ant-table-container,
+.pms-roadmap-shell .pms-roadmap-evolution-card {
+  background: #fff;
+}
+
+.pms-roadmap-shell :where(button, [role='button'], input, .ant-select-selector):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pms-roadmap-shell,
+  .pms-roadmap-shell *,
+  .pms-roadmap-shell *::before,
+  .pms-roadmap-shell *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 
 /* ================================================================
    Base & Reset

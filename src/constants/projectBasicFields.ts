@@ -1,11 +1,16 @@
 export const WHOLE_MACHINE_BASIC_INFO_FIELDS = [
-  { label: '项目名', key: 'name' },
+  { label: '项目名称', key: 'name' },
+  { label: '项目名', key: 'projectCode', fallbackKeys: ['model'] },
   { label: '主板名', key: 'mainboard' },
   { label: '市场名', key: 'marketName' },
   { label: '产品系列', key: 'productSeries' },
   { label: '产品类型', key: 'productType' },
   { label: '安卓版本', key: 'androidVersion', fallbackKeys: ['operatingSystem'] },
   { label: 'tOS版本', key: 'tosVersion' },
+  { label: '首销 tOS 版本', key: 'firstSaleTosVersionId' },
+  { label: '起步RAM', key: 'startRam' },
+  { label: 'STR5时间', key: 'str5Date' },
+  { label: '上市时间', key: 'launchDate' },
   { label: '研发模式', key: 'developMode' },
   { label: '合作形式', key: 'cooperationForm' },
   { label: '品牌', key: 'brand' },
@@ -18,12 +23,14 @@ export const WHOLE_MACHINE_BASIC_INFO_FIELDS = [
   { label: '是否二段式', key: 'isTwoStage' },
   { label: '是否为Slim版本', key: 'isSlimVersion' },
   { label: '是否外研mini版本', key: 'isOutsourcedMini' },
+  { label: '备注', key: 'remark' },
   { label: '项目描述', key: 'projectDescription' },
   { label: 'Jira项目', key: 'jiraProjects' },
 ] as const
 
 export const WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS = [
   { label: '市场项目名', key: 'marketProjectName' },
+  { label: '平台', key: 'platform', fallbackKeys: ['cpu', 'chipPlatform'] },
   { label: '芯片平台', key: 'chipPlatform' },
   { label: '芯片型号', key: 'cpu' },
   { label: '版本类型', key: 'versionType' },

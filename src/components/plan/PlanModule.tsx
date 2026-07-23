@@ -1402,7 +1402,7 @@ export function ProjectPlan({
 
   return (
     <div>
-      {/* 市场TAB切换 - 仅整机产品项目显示 */}
+      {/* 市场TAB切换 - 仅整机项目显示 */}
       {showMarketTabs && (
         <Card
           size="small"

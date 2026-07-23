@@ -75,8 +75,9 @@ interface ProjectInfoModalProps {
   draftOwnerId?: string
   draftRepository?: ProjectCreationDraftRepository
   onCancel: () => void
-  onSubmit: (payload: ProjectInfoSubmitPayload) => Promise<void> | void
+  onSubmit: (payload: ProjectInfoSubmitPayload) => Promise<boolean | void> | boolean | void
   onAfterCreate?: () => void
+  fieldOptionOverrides?: Partial<Record<string, readonly string[]>>
 }
 
 export const PROJECT_CREATION_DRAFT_SAVE_DELAY_MS = 300
@@ -120,6 +121,7 @@ export default function ProjectInfoModal({
   onCancel,
   onSubmit,
   onAfterCreate,
+  fieldOptionOverrides,
 }: ProjectInfoModalProps) {
   const [form] = Form.useForm<ProjectInfoFormState>()
   const [submitting, setSubmitting] = useState(false)
@@ -645,7 +647,7 @@ export default function ProjectInfoModal({
     cancelDraftSave()
     setSubmitting(true)
     try {
-      await onSubmit({
+      const submitResult = await onSubmit({
         bid: values.bid,
         projectName,
         projectType: normalizedProjectType,
@@ -655,6 +657,7 @@ export default function ProjectInfoModal({
         sourceEntry,
         sourceValues: values.bid ? fetchByBid(values.bid) : {},
       })
+      if (submitResult === false) return
       if (mode === 'create' && submitSession) {
         let draftClearFailed = false
         try {
@@ -795,6 +798,7 @@ export default function ProjectInfoModal({
                           <ProjectInfoFieldInput
                             field={field}
                             firstLaunchProjectOptions={firstLaunchOptions}
+                            optionsOverride={isMachineProjectType(projectType) ? fieldOptionOverrides?.[field.key] : undefined}
                           />
                         </Form.Item>
                       )

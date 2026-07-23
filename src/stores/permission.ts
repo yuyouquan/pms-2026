@@ -273,6 +273,28 @@ export function isGlobalAdmin(userName: string): boolean {
   return !!admin?.members.includes(userName)
 }
 
+// Global permission check used by cross-project modules such as Project Roadmap.
+// A user may belong to several global roles; permissions are the union of all roles.
+export function hasGlobalPermission(userName: string, permKey: string): boolean {
+  if (!userName) return false
+  const state = usePermissionStore.getState()
+  const userRoles = state.globalRoles.filter(role => role.members.includes(userName))
+  if (userRoles.some(role => role.name === '管理组')) return true
+  return userRoles.some(role => state.globalRolePerms[role.name]?.[permKey] === true)
+}
+
+// React hook variant — subscribes to both global role membership and grants.
+export function useHasGlobalPermission(userName: string): (permKey: string) => boolean {
+  const globalRoles = usePermissionStore(state => state.globalRoles)
+  const globalRolePerms = usePermissionStore(state => state.globalRolePerms)
+  return (permKey: string) => {
+    if (!userName) return false
+    const userRoles = globalRoles.filter(role => role.members.includes(userName))
+    if (userRoles.some(role => role.name === '管理组')) return true
+    return userRoles.some(role => globalRolePerms[role.name]?.[permKey] === true)
+  }
+}
+
 // Project-scoped permission check.
 // projectId may be undefined during navigation transitions — returns global-admin result only.
 export function hasPermission(userName: string, projectId: string | undefined, permKey: string): boolean {
