@@ -299,13 +299,13 @@ registerAssertion('machine type guard drives market rows, status mapping, and te
   }
 })
 
-registerAssertion('workspace machine filters preserve exact and aggregate subtype semantics', () => {
+registerAssertion('workspace machine filters expose only the three exact machine subtypes', () => {
   const {
     MACHINE_PROJECT_FILTER_OPTIONS,
     MACHINE_PROJECT_TYPE_FILTER,
     matchesProjectTypeFilter,
   } = loadTypeScriptModule(path.join(root, 'src/constants/projectTypes.ts'))
-  const expectedFilterValues = ['machine', ...expectedMachineProjectTypes]
+  const expectedFilterValues = expectedMachineProjectTypes
   const actualFilterValues = MACHINE_PROJECT_FILTER_OPTIONS?.map(option => option.value)
   if (JSON.stringify(actualFilterValues) !== JSON.stringify(expectedFilterValues)) {
     throw new Error(`expected machine filters ${JSON.stringify(expectedFilterValues)}, got ${JSON.stringify(actualFilterValues)}`)
@@ -2557,6 +2557,26 @@ registerAssertion('roadmap change history filters, sorts, and renders fixed audi
   if (!moduleSource.includes('RoadmapChangeLogDrawer') || !moduleSource.includes('changeLogs={changeLogs}')) {
     throw new Error('change log drawer is not connected to persisted roadmap logs')
   }
+  for (const compactContract of [
+    'CHANGE_LOG_FILTER_CONTROL_HEIGHT = 32',
+    'pms-roadmap-change-log-filters-compact',
+    'size="small"',
+  ]) {
+    if (!logSource.includes(compactContract)) throw new Error(`change log filters are missing compact contract ${compactContract}`)
+  }
+})
+
+registerAssertion('roadmap filter conditions use one compact row per condition', () => {
+  const source = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapFilterDrawer.tsx'), 'utf8')
+  for (const contract of [
+    'ROADMAP_FILTER_CONTROL_HEIGHT = 32',
+    'conditionRowStyle',
+    "gridTemplateColumns: 'minmax(108px, 1fr) minmax(86px, .8fr) minmax(132px, 1.2fr) 32px'",
+    'pms-roadmap-filter-condition-row',
+  ]) {
+    if (!source.includes(contract)) throw new Error(`roadmap filter drawer is missing compact row contract ${contract}`)
+  }
+  if (source.includes('>值</Typography.Text>')) throw new Error('filter value label must not occupy a second row')
 })
 
 registerAssertion('rebuilt roadmap is mounted without legacy roadmap content', () => {

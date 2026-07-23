@@ -27,6 +27,7 @@ import type {
 
 const DEFAULT_PAGE_SIZE = 8
 const DRAWER_Z_INDEX = 1300
+const CHANGE_LOG_FILTER_CONTROL_HEIGHT = 32
 
 const ACTION_LABELS: Record<RoadmapChangeAction, string> = {
   create: '创建',
@@ -51,9 +52,9 @@ const SOURCE_COLORS: Record<RoadmapSource, string> = {
 }
 
 const filterPanelStyle: CSSProperties = {
-  padding: 'var(--space-md)',
+  padding: 10,
   border: '1px solid var(--border-purple)',
-  borderRadius: 'var(--radius-lg)',
+  borderRadius: 'var(--radius-md)',
   background: 'var(--bg-purple-tint)',
 }
 
@@ -311,25 +312,25 @@ export default function RoadmapChangeLogDrawer({
       width="min(960px, 100vw)"
       zIndex={DRAWER_Z_INDEX}
       styles={{
-        body: { padding: 'var(--space-md)', background: 'var(--bg-primary)' },
+        body: { padding: 12, background: 'var(--bg-primary)' },
         header: { background: 'var(--bg-glass-heavy)', backdropFilter: 'var(--glass-blur)' },
       }}
     >
-      <Flex vertical gap={16}>
-        <section aria-label="修改记录筛选" style={filterPanelStyle}>
+      <Flex vertical gap={12}>
+        <section aria-label="修改记录筛选" className="pms-roadmap-change-log-filters-compact" style={filterPanelStyle}>
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))',
-              gap: 'var(--space-sm)',
+              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              gap: 8,
             }}
           >
-            <Flex vertical gap={4}>
-              <Typography.Text strong>项目标识</Typography.Text>
+            <Flex vertical gap={2}>
+              <Typography.Text strong style={{ fontSize: 12 }}>项目标识</Typography.Text>
               <Input
                 ref={searchInputRef}
                 aria-label="项目标识"
-                size="large"
+                size="small"
                 allowClear
                 prefix={<SearchOutlined aria-hidden />}
                 placeholder="项目名 / 项目 ID"
@@ -338,14 +339,14 @@ export default function RoadmapChangeLogDrawer({
                   setProjectQuery(event.target.value)
                   resetPage()
                 }}
-                style={{ minHeight: 44 }}
+                style={{ height: CHANGE_LOG_FILTER_CONTROL_HEIGHT }}
               />
             </Flex>
-            <Flex vertical gap={4}>
-              <Typography.Text strong>来源</Typography.Text>
+            <Flex vertical gap={2}>
+              <Typography.Text strong style={{ fontSize: 12 }}>来源</Typography.Text>
               <Select<RoadmapChangeLogSourceFilter>
                 aria-label="来源"
-                size="large"
+                size="small"
                 value={source}
                 options={[
                   { label: '全部来源', value: 'all' },
@@ -356,14 +357,14 @@ export default function RoadmapChangeLogDrawer({
                   setSource(value)
                   resetPage()
                 }}
-                style={{ minHeight: 44 }}
+                style={{ height: CHANGE_LOG_FILTER_CONTROL_HEIGHT }}
               />
             </Flex>
-            <Flex vertical gap={4}>
-              <Typography.Text strong>动作</Typography.Text>
+            <Flex vertical gap={2}>
+              <Typography.Text strong style={{ fontSize: 12 }}>动作</Typography.Text>
               <Select<RoadmapChangeLogActionFilter>
                 aria-label="动作"
-                size="large"
+                size="small"
                 value={action}
                 options={[
                   { label: '全部动作', value: 'all' },
@@ -375,14 +376,14 @@ export default function RoadmapChangeLogDrawer({
                   setAction(value)
                   resetPage()
                 }}
-                style={{ minHeight: 44 }}
+                style={{ height: CHANGE_LOG_FILTER_CONTROL_HEIGHT }}
               />
             </Flex>
-            <Flex vertical gap={4}>
-              <Typography.Text strong>日期范围</Typography.Text>
+            <Flex vertical gap={2}>
+              <Typography.Text strong style={{ fontSize: 12 }}>日期范围</Typography.Text>
               <DatePicker.RangePicker
                 aria-label="日期范围"
-                size="large"
+                size="small"
                 allowClear
                 format="YYYY-MM-DD"
                 placeholder={['开始日期', '结束日期']}
@@ -391,15 +392,15 @@ export default function RoadmapChangeLogDrawer({
                   setDatePickerRange(dates ? [dates[0], dates[1]] : null)
                   resetPage()
                 }}
-                style={{ width: '100%', minHeight: 44 }}
+                style={{ width: '100%', height: CHANGE_LOG_FILTER_CONTROL_HEIGHT }}
               />
             </Flex>
           </div>
-          <Flex justify="space-between" align="center" gap={12} wrap style={{ marginTop: 'var(--space-sm)' }}>
-            <Typography.Text type="secondary" aria-live="polite">
+          <Flex justify="space-between" align="center" gap={8} wrap style={{ marginTop: 6 }}>
+            <Typography.Text type="secondary" aria-live="polite" style={{ fontSize: 12 }}>
               多个条件按 AND 关系生效，共 {filteredLogs.length} 条记录
             </Typography.Text>
-            <Button size="large" disabled={!hasActiveFilters} onClick={resetFilters}>清空筛选</Button>
+            <Button size="small" disabled={!hasActiveFilters} onClick={resetFilters}>清空筛选</Button>
           </Flex>
         </section>
 
