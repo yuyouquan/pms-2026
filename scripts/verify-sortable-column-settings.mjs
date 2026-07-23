@@ -444,14 +444,18 @@ const definitions = [
 registerAssertion('shared column-settings helper implements normalization, movement, and display ordering', () => {
   const helperPath = path.join(root, 'src/lib/columnSettings.ts')
   const {
+    getColumnDefinitionSignature,
     getDefaultColumnSettings,
+    getSortableColumnAccessibilityLabel,
     moveColumnSetting,
     normalizeColumnSettings,
     orderVisibleDefinitions,
   } = loadTypeScriptModule(helperPath)
 
   for (const [name, value] of Object.entries({
+    getColumnDefinitionSignature,
     getDefaultColumnSettings,
+    getSortableColumnAccessibilityLabel,
     normalizeColumnSettings,
     moveColumnSetting,
     orderVisibleDefinitions,
@@ -553,6 +557,40 @@ registerAssertion('shared column-settings helper implements normalization, movem
     moveColumnSetting(multipleFixedDefinitions, multipleFixedOrder, 'owner', 'id'),
     ['id', 'select', 'owner', 'name'],
   )
+
+  assert.equal(
+    getColumnDefinitionSignature(definitions),
+    getColumnDefinitionSignature(definitions.map(definition => ({ ...definition }))),
+  )
+  assert.notEqual(
+    getColumnDefinitionSignature(definitions),
+    getColumnDefinitionSignature(definitions.map(definition => (
+      definition.key === 'owner' ? { ...definition, hideable: false } : definition
+    ))),
+  )
+
+  assert.equal(
+    getSortableColumnAccessibilityLabel({
+      key: 'jsx',
+      title: {
+        type: 'span',
+        props: {
+          children: ['里程碑', { type: 'strong', props: { children: '状态' } }],
+        },
+      },
+      defaultVisible: true,
+    }),
+    '里程碑 状态',
+  )
+  assert.equal(
+    getSortableColumnAccessibilityLabel({
+      key: 'explicit',
+      title: { type: 'span', props: { children: '忽略标题' } },
+      accessibilityLabel: '自定义字段名',
+      defaultVisible: true,
+    }),
+    '自定义字段名',
+  )
 })
 
 registerAssertion('shared SortableColumnSettings component exists', () => {
@@ -560,6 +598,12 @@ registerAssertion('shared SortableColumnSettings component exists', () => {
   if (!fs.existsSync(componentPath)) {
     throw new Error(`missing shared component: ${path.relative(root, componentPath)}`)
   }
+  const source = fs.readFileSync(componentPath, 'utf8')
+  assert.match(source, /getColumnDefinitionSignature\(definitions\)/)
+  assert.match(
+    source,
+    /setDraft\(current\s*=>\s*normalizeColumnSettings\(\s*definitions,\s*current\s*\)\)/,
+  )
 })
 
 const entryFiles = [

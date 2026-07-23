@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 export interface SortableColumnDefinition<Key extends string = string> {
   key: Key
   title: ReactNode
+  accessibilityLabel?: string
   defaultVisible: boolean
   hideable?: boolean
   fixed?: 'left'
@@ -12,6 +13,45 @@ export interface SortableColumnDefinition<Key extends string = string> {
 export interface SortableColumnSettingsValue<Key extends string = string> {
   order: Key[]
   visible: Key[]
+}
+
+export function getColumnDefinitionSignature<Key extends string>(
+  definitions: readonly SortableColumnDefinition<Key>[],
+): string {
+  return JSON.stringify(definitions.map(definition => [
+    definition.key,
+    definition.defaultVisible,
+    definition.hideable !== false,
+    definition.fixed === 'left',
+  ]))
+}
+
+function collectAccessibilityText(node: ReactNode): string[] {
+  if (typeof node === 'string' || typeof node === 'number') {
+    const text = String(node).trim()
+    return text ? [text] : []
+  }
+  if (Array.isArray(node)) {
+    return node.flatMap(collectAccessibilityText)
+  }
+  if (!node || typeof node !== 'object' || !('props' in node)) return []
+
+  const props = node.props
+  if (!props || typeof props !== 'object' || !('children' in props)) return []
+  return collectAccessibilityText(props.children as ReactNode)
+}
+
+export function getSortableColumnAccessibilityLabel<Key extends string>(
+  definition: SortableColumnDefinition<Key>,
+): string {
+  const explicitLabel = definition.accessibilityLabel?.trim()
+  if (explicitLabel) return explicitLabel
+
+  const derivedLabel = collectAccessibilityText(definition.title)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return derivedLabel || '字段'
 }
 
 function normalizeOrder<Key extends string>(

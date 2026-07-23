@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, Checkbox, Modal, Tooltip } from 'antd'
 import { HolderOutlined } from '@ant-design/icons'
 import {
@@ -21,7 +21,9 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
+  getColumnDefinitionSignature,
   getDefaultColumnSettings,
+  getSortableColumnAccessibilityLabel,
   moveColumnSetting,
   normalizeColumnSettings,
   type SortableColumnDefinition,
@@ -46,12 +48,6 @@ interface SortableColumnRowProps<Key extends string> {
   onCheckedChange: (checked: boolean) => void
 }
 
-function getPlainTitle(title: ReactNode): string {
-  return typeof title === 'string' || typeof title === 'number'
-    ? String(title)
-    : '字段'
-}
-
 function SortableColumnRow<Key extends string>({
   definition,
   checked,
@@ -71,19 +67,22 @@ function SortableColumnRow<Key extends string>({
     transform: CSS.Transform.toString(transform),
     transition,
   }
+  const accessibilityLabel = getSortableColumnAccessibilityLabel(definition)
   const unavailableReason = definition.disabledReason || '不可取消'
   const checkbox = (
     <Checkbox
       checked={checked}
       disabled={definition.hideable === false || checkboxDisabled}
       onChange={event => onCheckedChange(event.target.checked)}
-      aria-label={`${checked ? '隐藏' : '显示'}${getPlainTitle(definition.title)}`}
+      aria-label={`${accessibilityLabel}列${checked ? '已显示' : '已隐藏'}`}
     />
   )
 
   return (
     <div
       ref={setNodeRef}
+      role="group"
+      aria-label={accessibilityLabel}
       className={`pms-sortable-column-row${isDragging ? ' is-dragging' : ''}`}
       style={style}
     >
@@ -93,7 +92,7 @@ function SortableColumnRow<Key extends string>({
         <button
           type="button"
           className="pms-sortable-column-handle"
-          aria-label={`拖动${getPlainTitle(definition.title)}调整顺序`}
+          aria-label={`拖动${accessibilityLabel}调整顺序`}
           {...attributes}
           {...listeners}
         >
@@ -125,6 +124,8 @@ export function SortableColumnSettings<Key extends string>({
     () => normalizeColumnSettings(definitions, value),
   )
   const wasOpen = useRef(false)
+  const definitionSignature = getColumnDefinitionSignature(definitions)
+  const previousDefinitionSignature = useRef(definitionSignature)
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(TouchSensor),
@@ -134,9 +135,16 @@ export function SortableColumnSettings<Key extends string>({
   useEffect(() => {
     if (open && !wasOpen.current) {
       setDraft(normalizeColumnSettings(definitions, value))
+    } else if (
+      open
+      && wasOpen.current
+      && previousDefinitionSignature.current !== definitionSignature
+    ) {
+      setDraft(current => normalizeColumnSettings(definitions, current))
     }
     wasOpen.current = open
-  }, [definitions, open, value])
+    previousDefinitionSignature.current = definitionSignature
+  }, [definitionSignature, definitions, open, value])
 
   const definitionByKey = new Map(
     definitions.map(definition => [definition.key, definition] as const),
