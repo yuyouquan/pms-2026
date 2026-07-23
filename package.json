@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "db:generate": "prisma generate",
-    "db:push": "prisma db push"
+    "db:push": "prisma db push",
+    "verify:column-settings": "node scripts/verify-sortable-column-settings.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
