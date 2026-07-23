@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Button, Checkbox, Modal, Tooltip } from 'antd'
+import { Button, Checkbox, Drawer, Space, Tooltip } from 'antd'
 import { HolderOutlined } from '@ant-design/icons'
 import {
   closestCenter,
@@ -204,18 +204,24 @@ export function SortableColumnSettings<Key extends string>({
   }
 
   return (
-    <Modal
-      className="pms-modal"
+    <Drawer
       title="列设置"
       open={open}
-      onCancel={onCancel}
-      footer={[
-        <Button key="reset" onClick={handleReset}>重置</Button>,
-        <Button key="cancel" onClick={onCancel}>取消</Button>,
-        <Button key="apply" type="primary" disabled={applyDisabled} onClick={handleApply}>
-          {applyLabel}
-        </Button>,
-      ]}
+      placement="right"
+      width="min(420px, 100vw)"
+      zIndex={1300}
+      onClose={onCancel}
+      footer={(
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Button onClick={handleReset}>重置</Button>
+          <Space>
+            <Button onClick={onCancel}>取消</Button>
+            <Button type="primary" disabled={applyDisabled} onClick={handleApply}>
+              {applyLabel}
+            </Button>
+          </Space>
+        </div>
+      )}
     >
       <DndContext
         sensors={sensors}
@@ -244,6 +250,6 @@ export function SortableColumnSettings<Key extends string>({
           </div>
         </SortableContext>
       </DndContext>
-    </Modal>
+    </Drawer>
   )
 }

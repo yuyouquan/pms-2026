@@ -626,6 +626,9 @@ registerAssertion('shared SortableColumnSettings component exists', () => {
     source,
     /setDraft\(current\s*=>\s*normalizeColumnSettings\(\s*definitions,\s*current\s*\)\)/,
   )
+  assert.match(source, /<Drawer\b/)
+  assert.match(source, /placement=(?:"right"|\{'right'\})/)
+  assert.doesNotMatch(source, /<Modal\b/)
 })
 
 registerAssertion('roadmap store normalizes and persists independent ordered column settings', () => {
