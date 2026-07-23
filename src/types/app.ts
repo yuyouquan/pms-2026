@@ -3,6 +3,7 @@
 
 import type { JiraProjectConfig } from '@/lib/jiraProject'
 import type { PersistedProjectTypeName } from '@/constants/projectTypes'
+import type { RoadmapRam } from '@/types/roadmap'
 
 /** Project type literals used in initialProjects */
 export type ProjectCategory = PersistedProjectTypeName;
@@ -52,6 +53,7 @@ export interface ProjectItem {
   // 整机产品项目 specific
   marketName?: string;
   brand?: string;
+  productSeries?: string;
   developMode?: string;
   model?: string;
   mainboard?: string;
@@ -65,6 +67,12 @@ export interface ProjectItem {
   tosVersionName?: string;
   versionType?: string;
   versionTypes?: string[];
+  firstSaleTosVersionId?: string;
+  projectCode?: string;
+  platform?: string;
+  startRam?: RoadmapRam;
+  str5Date?: string;
+  remark?: string;
   market?: string;
   ppm?: string;
   tpm?: string;

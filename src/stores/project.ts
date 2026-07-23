@@ -1,32 +1,43 @@
 import { create } from 'zustand'
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { initialProjects } from '@/data/projects'
 import {
   PROJECT_TYPE_TOS_VERSION,
   isMachineProjectType,
+  normalizeMachineProjectType,
   type PersistedProjectTypeName,
 } from '@/constants/projectTypes'
 import { buildMarketRowsFromMarkets, type MarketConfigRow } from '@/lib/marketRules'
 import { buildTosTypeRows, type TosTypeConfigRow } from '@/lib/tosTypeRules'
+import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
+import { createRoadmapAuditSnapshot, diffRoadmapProjectFields } from '@/lib/roadmapAudit'
+import { useRoadmapStore } from '@/stores/roadmap'
+import type { ProjectItem } from '@/types/app'
+import type {
+  RoadmapChangeAction,
+  RoadmapFieldChange,
+  RoadmapProjectRow,
+  TosVersionConfig,
+} from '@/types/roadmap'
 
 // Default login user (mock)
 export const DEFAULT_LOGIN_USER = '张三'
 
 // Initial project-member assignment (mock seed; runtime value lives in store state below).
 export const INITIAL_PROJECT_MEMBER_MAP: Record<string, string[]> = {
-  '1': ['张三', '李四', '王五', '赵六', '李白'],         // X6877
-  '3': ['王五', '赵六', '孙七'],                         // X6855
-  '2': ['张三', '李四', '王五', '赵六', '孙七'],         // tOS16.0
-  '6': ['赵六', '李四', '王五'],                         // tOS17.1
-  '4': ['孙七', '李四', '张三'],                         // X6876_H786
-  '5': ['周八', '王五', '李白'],                         // X6873_H972
-  '7': ['李白', '张三', '王五'],                         // X6890 CAMON
-  '8': ['杜甫', '李白', '张三', '李四', '王五'],         // tOS18.0
-  '9': ['李四', '张三', '赵六', '孙七'],                 // AI-Engine-V2
-  '10': ['孙七', '周八', '李白', '杜甫', '王五'],        // DevOps-Platform
-  '11': ['王五', '李白', '张三', '赵六'],                // HiOS-Launcher
+  '1': ['张三', '李四', '王五', '赵六', '李白'],
+  '3': ['王五', '赵六', '孙七'],
+  '2': ['张三', '李四', '王五', '赵六', '孙七'],
+  '6': ['赵六', '李四', '王五'],
+  '4': ['孙七', '李四', '张三'],
+  '5': ['周八', '王五', '李白'],
+  '7': ['李白', '张三', '王五'],
+  '8': ['杜甫', '李白', '张三', '李四', '王五'],
+  '9': ['李四', '张三', '赵六', '孙七'],
+  '10': ['孙七', '周八', '李白', '杜甫', '王五'],
+  '11': ['王五', '李白', '张三', '赵六'],
 }
 
-// Kanban stage columns
 export const kanbanColumns = [
   { title: '概念阶段', key: 'concept', color: '#1890ff' },
   { title: '计划阶段', key: 'planning', color: '#52c41a' },
@@ -38,7 +49,13 @@ type Project = Omit<typeof initialProjects[number], 'type'> & {
   type: PersistedProjectTypeName
   versionTypes?: string[]
   responsiblePersons?: string[]
+  [key: string]: any
 }
+type ProjectPatch = Partial<Omit<ProjectItem, 'type'>> & { type?: PersistedProjectTypeName; [key: string]: any }
+type ProjectUpdate = ProjectPatch | ((project: Project) => Project)
+type PersistedProjectState = { projects: Project[] }
+
+const PROJECT_STORAGE_KEY = 'pms-projects'
 
 const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) => {
   if (isMachineProjectType(project.type) && project.markets?.length) {
@@ -59,29 +76,20 @@ export interface ProjectState {
   projects: Project[]
   selectedProject: Project | null
   currentLoginUser: string
-
-  // Workspace filters
   projectSearchText2: string
   projectStatusFilter: string
   projectTypeFilter: string
   projectListView: 'card' | 'list'
   projectCardPage: number
-
-  // Basic info editing
   basicInfoEditMode: boolean
   editingProjectFields: Record<string, any>
-
-  // Market & kanban
   selectedMarketTab: string
   marketConfigsByProjectId: Record<string, MarketConfigRow[]>
   selectedTosTypeTab: string
   tosTypeConfigsByProjectId: Record<string, TosTypeConfigRow[]>
   kanbanDimension: 'stage' | 'type' | 'status'
-
-  // Todos
   todoFilter: 'all' | 'overdue' | 'upcoming' | 'pending' | 'completed'
   todoCollapsed: boolean
-
   projectMemberMap: Record<string, string[]>
 }
 
@@ -89,96 +97,225 @@ export interface ProjectActions {
   setProjects: (v: Project[] | ((prev: Project[]) => Project[])) => void
   setSelectedProject: (v: Project | null) => void
   setCurrentLoginUser: (v: string) => void
-
   setProjectSearchText2: (v: string) => void
   setProjectStatusFilter: (v: string) => void
   setProjectTypeFilter: (v: string) => void
   setProjectListView: (v: 'card' | 'list') => void
   setProjectCardPage: (v: number) => void
-
   setBasicInfoEditMode: (v: boolean) => void
   setEditingProjectFields: (v: Record<string, any> | ((prev: Record<string, any>) => Record<string, any>)) => void
-
   setSelectedMarketTab: (v: string) => void
   setMarketConfigForProject: (projectId: string, rows: MarketConfigRow[]) => void
   setSelectedTosTypeTab: (v: string) => void
   setTosTypeConfigForProject: (projectId: string, rows: TosTypeConfigRow[]) => void
   setKanbanDimension: (v: 'stage' | 'type' | 'status') => void
-
   setTodoFilter: (v: 'all' | 'overdue' | 'upcoming' | 'pending' | 'completed') => void
   setTodoCollapsed: (v: boolean) => void
-
   setProjectMember: (projectId: string, members: string[]) => void
-  addProject: (newProject: Project) => void
-  updateProject: (projectId: string, updater: (project: Project) => Project) => void
+  addProject: (newProject: Project, actor?: string) => boolean
+  updateProject: (projectId: string, update: ProjectUpdate, actor?: string) => Project | null
+  deleteProject: (projectId: string, actor?: string) => boolean
 }
 
-export const useProjectStore = create<ProjectState & ProjectActions>()((set) => ({
-  projects: initialProjects,
-  selectedProject: null,
-  currentLoginUser: DEFAULT_LOGIN_USER,
+function resolveTosVersionName(versions: readonly TosVersionConfig[], versionId: string): string {
+  return versions.find(version => version.id === versionId)?.name ?? versionId
+}
 
-  projectSearchText2: '',
-  projectStatusFilter: 'all',
-  projectTypeFilter: 'all',
-  projectListView: 'card',
-  projectCardPage: 1,
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
 
-  basicInfoEditMode: false,
-  editingProjectFields: {},
+export function migrateProjectState(persistedState: unknown, _version: number): PersistedProjectState {
+  if (!isRecord(persistedState) || !Array.isArray(persistedState.projects)) {
+    return { projects: initialProjects as Project[] }
+  }
 
-  selectedMarketTab: 'OP',
-  marketConfigsByProjectId: initialMarketConfigsByProjectId,
-  selectedTosTypeTab: 'Full',
-  tosTypeConfigsByProjectId: initialTosTypeConfigsByProjectId,
-  kanbanDimension: 'stage',
+  const seenIds = new Set<string>()
+  const projects = persistedState.projects.flatMap(value => {
+    if (!isRecord(value)) return []
+    const id = typeof value.id === 'string' ? value.id.trim() : ''
+    const name = typeof value.name === 'string' ? value.name.trim() : ''
+    const rawType = typeof value.type === 'string' ? value.type.trim() : ''
+    const type = normalizeMachineProjectType(rawType) ?? rawType
+    if (!id || !name || !type || seenIds.has(id)) return []
+    seenIds.add(id)
+    return [{ ...value, id, name, type } as Project]
+  })
 
-  todoFilter: 'all',
-  todoCollapsed: false,
+  if (persistedState.projects.length > 0 && projects.length === 0) {
+    return { projects: initialProjects as Project[] }
+  }
+  return { projects }
+}
 
-  projectMemberMap: { ...INITIAL_PROJECT_MEMBER_MAP },
+export function partializeProjectState(state: ProjectState & ProjectActions): PersistedProjectState {
+  return { projects: state.projects }
+}
 
-  // Setters
-  setProjects: (v) => set((s) => ({ projects: typeof v === 'function' ? v(s.projects) : v })),
-  setSelectedProject: (v) => set({ selectedProject: v }),
-  setCurrentLoginUser: (v) => set({ currentLoginUser: v }),
+const safeProjectStorage: StateStorage = {
+  getItem(name) {
+    if (typeof window === 'undefined') return null
+    try {
+      const stored = window.localStorage.getItem(name)
+      if (stored !== null) JSON.parse(stored)
+      return stored
+    } catch (error) {
+      console.error(`Failed to read ${PROJECT_STORAGE_KEY}; using initial project state.`, error)
+      return null
+    }
+  },
+  setItem(name, value) {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(name, value)
+    } catch (error) {
+      console.error(`Failed to persist ${PROJECT_STORAGE_KEY}.`, error)
+    }
+  },
+  removeItem(name) {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.removeItem(name)
+    } catch (error) {
+      console.error(`Failed to remove ${PROJECT_STORAGE_KEY}.`, error)
+    }
+  },
+}
 
-  setProjectSearchText2: (v) => set({ projectSearchText2: v }),
-  setProjectStatusFilter: (v) => set({ projectStatusFilter: v }),
-  setProjectTypeFilter: (v) => set({ projectTypeFilter: v }),
-  setProjectListView: (v) => set({ projectListView: v }),
-  setProjectCardPage: (v) => set({ projectCardPage: v }),
+function recordNormalProjectAudit(
+  action: RoadmapChangeAction,
+  before: Project | null,
+  after: Project | null,
+  actor: string,
+): void {
+  const roadmapState = useRoadmapStore.getState()
+  const versions = roadmapState.tosVersions
+  const beforeRow = before ? adaptNormalProject(before as unknown as ProjectItem, versions) : null
+  const afterRow = after ? adaptNormalProject(after as unknown as ProjectItem, versions) : null
 
-  setBasicInfoEditMode: (v) => set({ basicInfoEditMode: v }),
-  setEditingProjectFields: (v) => set((s) => ({ editingProjectFields: typeof v === 'function' ? v(s.editingProjectFields) : v })),
-
-  setSelectedMarketTab: (v) => set({ selectedMarketTab: v }),
-  setMarketConfigForProject: (projectId, rows) => set((s) => ({
-    marketConfigsByProjectId: { ...s.marketConfigsByProjectId, [projectId]: rows },
-  })),
-  setSelectedTosTypeTab: (v) => set({ selectedTosTypeTab: v }),
-  setTosTypeConfigForProject: (projectId, rows) => set((s) => ({
-    tosTypeConfigsByProjectId: { ...s.tosTypeConfigsByProjectId, [projectId]: rows },
-  })),
-  setKanbanDimension: (v) => set({ kanbanDimension: v }),
-
-  setTodoFilter: (v) => set({ todoFilter: v }),
-  setTodoCollapsed: (v) => set({ todoCollapsed: v }),
-
-  setProjectMember: (projectId, members) => set((s) => ({
-    projectMemberMap: { ...s.projectMemberMap, [projectId]: members },
-  })),
-  addProject: (newProject) => set((s) => ({
-    projects: [...s.projects, newProject],
-  })),
-  updateProject: (projectId, updater) => set((s) => {
-    let updatedSelected = s.selectedProject
-    const projects = s.projects.map(project => {
-      if (project.id !== projectId) return project
-      const updated = updater(project)
-      if (s.selectedProject?.id === projectId) updatedSelected = updated
-      return updated
+  let auditRow: RoadmapProjectRow | null = null
+  if (action === 'create') auditRow = afterRow
+  if (action === 'delete') auditRow = beforeRow
+  if (action === 'update') {
+    if (!beforeRow || !afterRow) return
+    const changes = diffRoadmapProjectFields(beforeRow, afterRow, versions)
+    if (!changes.length) return
+    roadmapState.recordNormalProjectChange({
+      projectId: afterRow.id,
+      projectDisplayName: afterRow.displayName,
+      action,
+      actor,
+      tosVersionName: resolveTosVersionName(versions, afterRow.firstSaleTosVersionId),
+      changes: changes as [RoadmapFieldChange, ...RoadmapFieldChange[]],
     })
-    return { projects, selectedProject: updatedSelected }
+    return
+  }
+
+  if (!auditRow) return
+  roadmapState.recordNormalProjectChange({
+    projectId: auditRow.id,
+    projectDisplayName: auditRow.displayName,
+    action,
+    actor,
+    tosVersionName: resolveTosVersionName(versions, auditRow.firstSaleTosVersionId),
+    changes: [],
+    snapshot: createRoadmapAuditSnapshot(auditRow, versions),
+  })
+}
+
+export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
+  (set, get) => ({
+    projects: initialProjects as Project[],
+    selectedProject: null,
+    currentLoginUser: DEFAULT_LOGIN_USER,
+    projectSearchText2: '',
+    projectStatusFilter: 'all',
+    projectTypeFilter: 'all',
+    projectListView: 'card',
+    projectCardPage: 1,
+    basicInfoEditMode: false,
+    editingProjectFields: {},
+    selectedMarketTab: 'OP',
+    marketConfigsByProjectId: initialMarketConfigsByProjectId,
+    selectedTosTypeTab: 'Full',
+    tosTypeConfigsByProjectId: initialTosTypeConfigsByProjectId,
+    kanbanDimension: 'stage',
+    todoFilter: 'all',
+    todoCollapsed: false,
+    projectMemberMap: { ...INITIAL_PROJECT_MEMBER_MAP },
+
+    setProjects: (v) => set(state => ({ projects: typeof v === 'function' ? v(state.projects) : v })),
+    setSelectedProject: (v) => set({ selectedProject: v }),
+    setCurrentLoginUser: (v) => set({ currentLoginUser: v }),
+    setProjectSearchText2: (v) => set({ projectSearchText2: v }),
+    setProjectStatusFilter: (v) => set({ projectStatusFilter: v }),
+    setProjectTypeFilter: (v) => set({ projectTypeFilter: v }),
+    setProjectListView: (v) => set({ projectListView: v }),
+    setProjectCardPage: (v) => set({ projectCardPage: v }),
+    setBasicInfoEditMode: (v) => set({ basicInfoEditMode: v }),
+    setEditingProjectFields: (v) => set(state => ({
+      editingProjectFields: typeof v === 'function' ? v(state.editingProjectFields) : v,
+    })),
+    setSelectedMarketTab: (v) => set({ selectedMarketTab: v }),
+    setMarketConfigForProject: (projectId, rows) => set(state => ({
+      marketConfigsByProjectId: { ...state.marketConfigsByProjectId, [projectId]: rows },
+    })),
+    setSelectedTosTypeTab: (v) => set({ selectedTosTypeTab: v }),
+    setTosTypeConfigForProject: (projectId, rows) => set(state => ({
+      tosTypeConfigsByProjectId: { ...state.tosTypeConfigsByProjectId, [projectId]: rows },
+    })),
+    setKanbanDimension: (v) => set({ kanbanDimension: v }),
+    setTodoFilter: (v) => set({ todoFilter: v }),
+    setTodoCollapsed: (v) => set({ todoCollapsed: v }),
+    setProjectMember: (projectId, members) => set(state => ({
+      projectMemberMap: { ...state.projectMemberMap, [projectId]: members },
+    })),
+    addProject: (newProject, actor) => {
+      const versions = useRoadmapStore.getState().tosVersions
+      if (isMachineProjectType(newProject.type) && !adaptNormalProject(newProject as unknown as ProjectItem, versions)) {
+        return false
+      }
+      set(state => ({ projects: [...state.projects, newProject] }))
+      recordNormalProjectAudit('create', null, newProject, actor?.trim() || get().currentLoginUser.trim() || '系统')
+      return true
+    },
+    updateProject: (projectId, update, actor) => {
+      const existing = get().projects.find(project => project.id === projectId)
+      if (!existing) return null
+      const updated = typeof update === 'function'
+        ? update(existing)
+        : { ...existing, ...update } as Project
+      const versions = useRoadmapStore.getState().tosVersions
+      if (isMachineProjectType(updated.type) && !adaptNormalProject(updated as unknown as ProjectItem, versions)) {
+        return null
+      }
+      set(state => ({
+        projects: state.projects.map(project => project.id === projectId ? updated : project),
+        selectedProject: state.selectedProject?.id === projectId ? updated : state.selectedProject,
+      }))
+      recordNormalProjectAudit('update', existing, updated, actor?.trim() || get().currentLoginUser.trim() || '系统')
+      return updated
+    },
+    deleteProject: (projectId, actor) => {
+      const existing = get().projects.find(project => project.id === projectId)
+      if (!existing) return false
+      set(state => ({
+        projects: state.projects.filter(project => project.id !== projectId),
+        selectedProject: state.selectedProject?.id === projectId ? null : state.selectedProject,
+      }))
+      recordNormalProjectAudit('delete', existing, null, actor?.trim() || get().currentLoginUser.trim() || '系统')
+      return true
+    },
   }),
-}))
+  {
+    name: PROJECT_STORAGE_KEY,
+    version: 2,
+    storage: createJSONStorage(() => safeProjectStorage),
+    migrate: migrateProjectState,
+    partialize: partializeProjectState,
+    merge: (persistedState, currentState) => ({
+      ...currentState,
+      ...migrateProjectState(persistedState, 2),
+    }),
+  },
+))

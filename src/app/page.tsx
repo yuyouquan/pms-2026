@@ -5,7 +5,7 @@ import { ConfigProvider, Modal, Button, Space, Card, Empty } from 'antd'
 import { ExclamationCircleOutlined } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
-import { usePlanStore, LEVEL1_TASKS } from '@/stores/plan'
+import { usePlanStore } from '@/stores/plan'
 import RoadmapView from '@/components/roadmap/RoadmapView'
 import { parseProjectViewShare } from '@/components/roadmap/utils'
 import { MainHeader } from '@/containers/AppShell'
@@ -13,6 +13,7 @@ import WorkspaceContainer from '@/containers/WorkspaceContainer'
 import ProjectSpaceContainer from '@/containers/ProjectSpaceContainer'
 import ConfigContainer from '@/containers/ConfigContainer'
 import { isMachineProjectType } from '@/constants/projectTypes'
+import type { ProjectItem } from '@/types/app'
 
 // Minimal page-specific style overrides (bulk styles live in globals.css)
 const globalStyles = `
@@ -37,10 +38,7 @@ export default function Home() {
     setSelectedMarketTab,
   } = useProjectStore()
 
-  const {
-    marketPlanData,
-    setProjectPlanLevel,
-  } = usePlanStore()
+  const { setProjectPlanLevel } = usePlanStore()
 
   const {
     setActiveModule,
@@ -86,9 +84,7 @@ export default function Home() {
               {/* Roadmap */}
               {activeModule === 'roadmap' && (
                 <RoadmapView
-                  projects={projects}
-                  marketPlanData={marketPlanData}
-                  level1Tasks={LEVEL1_TASKS}
+                  projects={projects as unknown as ProjectItem[]}
                   onViewProject={handleViewProjectFromRoadmap}
                 />
               )}

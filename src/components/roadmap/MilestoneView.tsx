@@ -30,12 +30,15 @@ import {
 } from '@/constants/projectBasicFields'
 import {
   LEGACY_SOFTWARE_PROJECT_TYPE,
+  MACHINE_PROJECT_TYPES,
   SOFTWARE_PROJECT_DISPLAY_TYPE,
   isMachineProjectType,
   isSoftwareProjectType,
   normalizeSoftwareProjectType,
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
-  PROJECT_TYPE_MACHINE,
+  PROJECT_TYPE_MACHINE_LAPTOP,
+  PROJECT_TYPE_MACHINE_PAD,
+  PROJECT_TYPE_MACHINE_PHONE,
   PROJECT_TYPE_TECH,
   PROJECT_TYPE_TOS_VERSION,
 } from '@/constants/projectTypes'
@@ -75,7 +78,6 @@ interface MilestoneViewProps {
   level1Tasks: any[]
   onViewProject: (projectId: string, market?: string) => void
   initialProjectType?: string
-  onProjectTypeChange?: (type: string) => void
   hideProjectTypeTabs?: boolean
   scopeExtra?: ReactNode
 }
@@ -122,31 +124,22 @@ interface RoadmapCompareRow extends RoadmapMilestoneRow {
   changeSummary?: string
 }
 
-const ROADMAP_SCOPES: { key: RoadmapScope; label: string; projectType: string }[] = [
-  { key: 'overall', label: '整体', projectType: '整体' },
-  { key: 'machine', label: '整机产品项目', projectType: PROJECT_TYPE_MACHINE },
-  { key: 'tosVersion', label: 'tOS版本项目', projectType: PROJECT_TYPE_TOS_VERSION },
-  { key: 'tech', label: '技术项目', projectType: PROJECT_TYPE_TECH },
+const ROADMAP_SCOPES: { key: RoadmapScope; label: string }[] = [
+  { key: 'overall', label: '整体' },
+  { key: 'machine', label: '整机项目' },
+  { key: 'tosVersion', label: 'tOS版本项目' },
+  { key: 'tech', label: '技术项目' },
 ]
 
 const SCOPE_BY_PROJECT_TYPE: Record<string, RoadmapScope> = {
   整体: 'overall',
-  [PROJECT_TYPE_MACHINE]: 'machine',
+  [PROJECT_TYPE_MACHINE_PHONE]: 'machine',
+  [PROJECT_TYPE_MACHINE_PAD]: 'machine',
+  [PROJECT_TYPE_MACHINE_LAPTOP]: 'machine',
   [PROJECT_TYPE_TOS_VERSION]: 'tosVersion',
   [SOFTWARE_PROJECT_DISPLAY_TYPE]: 'tosVersion',
   [LEGACY_SOFTWARE_PROJECT_TYPE]: 'tosVersion',
   [PROJECT_TYPE_TECH]: 'tech',
-}
-
-const getRoadmapScope = (projectType: string): RoadmapScope | undefined => (
-  isMachineProjectType(projectType) ? 'machine' : SCOPE_BY_PROJECT_TYPE[projectType]
-)
-
-const PROJECT_TYPE_BY_SCOPE: Record<RoadmapScope, string> = {
-  overall: '整体',
-  machine: PROJECT_TYPE_MACHINE,
-  tosVersion: PROJECT_TYPE_TOS_VERSION,
-  tech: PROJECT_TYPE_TECH,
 }
 
 const SUMMARY_VISIBLE_STATUSES: RoadmapStatus[] = ['待立项', '在研', '上市', '转维', 'EOS', '暂停', '已取消', '已迁移']
@@ -219,12 +212,13 @@ const DEPARTMENT_BY_PROJECT: Record<string, string> = {
   '9': '软件项目二部',
 }
 
+const MACHINE_FALLBACK_MILESTONES = ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5']
 const FALLBACK_MILESTONES: Record<string, string[]> = {
-  [PROJECT_TYPE_MACHINE]: ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5'],
-  [LEGACY_SOFTWARE_PROJECT_TYPE]: ['概念启动', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5', 'MR6', 'MR7'],
-  [PROJECT_TYPE_TOS_VERSION]: ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'tOS16.1.101', 'tOS16.1.102', 'tOS16.1.103', 'tOS16.1.104'],
-  [PROJECT_TYPE_INDEPENDENT_SOFTWARE]: ['概念启动', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5', 'MR6', 'MR7'],
-  [PROJECT_TYPE_TECH]: ['概念启动', 'TDR1', 'TDR2', 'TDR3', 'TDR4'],
+  ...Object.fromEntries(MACHINE_PROJECT_TYPES.map(type => [type, MACHINE_FALLBACK_MILESTONES])),
+  产品项目: ['概念启动', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5', 'MR6', 'MR7'],
+  tOS版本项目: ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'tOS16.1.101', 'tOS16.1.102', 'tOS16.1.103', 'tOS16.1.104'],
+  独立软件产品项目: ['概念启动', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5', 'MR6', 'MR7'],
+  技术项目: ['概念启动', 'TDR1', 'TDR2', 'TDR3', 'TDR4'],
 }
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 const MILESTONE_DATE_RANGE_PRESETS = [
@@ -378,8 +372,7 @@ const formatTaskDate = (value: any) => {
 }
 
 const buildMilestoneNodes = (project: any, sourceTasks: any[], rowIndex: number): RoadmapMilestone[] => {
-  const fallbackType = isMachineProjectType(project.type) ? PROJECT_TYPE_MACHINE : project.type
-  const fallbackNames = FALLBACK_MILESTONES[fallbackType] || FALLBACK_MILESTONES[PROJECT_TYPE_MACHINE]
+  const fallbackNames = FALLBACK_MILESTONES[project.type] || MACHINE_FALLBACK_MILESTONES
   const taskMilestones = sourceTasks
     .filter(task => task?.parentId && task?.taskName)
     .map(task => ({
@@ -425,9 +418,7 @@ const buildRoadmapMilestoneRow = (
   const row: RoadmapMilestoneRow = {
     key: `${options.keyPrefix}-${project.id}`,
     projectId: project.id,
-    projectType: isMachineProjectType(project.type)
-      ? PROJECT_TYPE_MACHINE
-      : normalizeSoftwareProjectType(project.type, project.name) || project.type,
+    projectType: normalizeSoftwareProjectType(project.type, project.name) || project.type,
     ...buildProjectFields(project),
     status,
     market: options.market,
@@ -535,15 +526,17 @@ function buildScopedMilestoneRows(
 
   const typeMap: Record<RoadmapScope, string> = {
     overall: '',
-    machine: PROJECT_TYPE_MACHINE,
+    machine: PROJECT_TYPE_MACHINE_PHONE,
     tosVersion: PROJECT_TYPE_TOS_VERSION,
     tech: PROJECT_TYPE_TECH,
   }
 
   let rowIndex = 0
   return sortProjectsByRoadmapDimension(projects.filter(project => (
-    scope === 'machine' ? isMachineProjectType(project.type) : project.type === typeMap[scope]
-  ) && !isIndependentSoftwareProject(project) && normalizeStatus(project.status)))
+    (scope === 'machine' ? isMachineProjectType(project.type) : project.type === typeMap[scope])
+    && !isIndependentSoftwareProject(project)
+    && normalizeStatus(project.status)
+  )))
     .map(project => {
       const mainMarket = isMachineProjectType(project.type) ? getMainMarket(project) : undefined
       const sourceTasks = isMachineProjectType(project.type)
@@ -606,7 +599,7 @@ function countProjectsBySeriesGroup(rows: RoadmapMilestoneRow[], scope: RoadmapS
 
 function scopeRows(rows: RoadmapMilestoneRow[], scope: RoadmapScope) {
   if (scope === 'overall') return rows
-  if (scope === 'machine') return rows.filter(row => row.projectType === PROJECT_TYPE_MACHINE)
+  if (scope === 'machine') return rows.filter(row => isMachineProjectType(row.projectType))
   if (scope === 'tosVersion') return rows.filter(row => row.projectType === PROJECT_TYPE_TOS_VERSION)
   return rows.filter(row => row.projectType === PROJECT_TYPE_TECH)
 }
@@ -804,11 +797,10 @@ export default function MilestoneView({
   level1Tasks,
   onViewProject,
 	initialProjectType,
-	onProjectTypeChange,
 	hideProjectTypeTabs,
 	scopeExtra,
 }: MilestoneViewProps) {
-  const initialScope = initialProjectType ? getRoadmapScope(initialProjectType) || 'overall' : 'overall'
+  const initialScope = initialProjectType ? SCOPE_BY_PROJECT_TYPE[initialProjectType] || 'overall' : 'overall'
   const [scope, setScope] = useState<RoadmapScope>(initialScope)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [collapsedTosGroups, setCollapsedTosGroups] = useState<Set<string>>(new Set())
@@ -844,7 +836,7 @@ export default function MilestoneView({
 
   useEffect(() => {
     if (!initialProjectType) return
-    const nextScope = getRoadmapScope(initialProjectType)
+    const nextScope = SCOPE_BY_PROJECT_TYPE[initialProjectType]
     if (!nextScope || nextScope === scope) return
     setScope(nextScope)
     setStatusFilter('all')
@@ -982,7 +974,6 @@ export default function MilestoneView({
       : getDefaultVisibleColumnsForScope(nextScope)
 
     setScope(nextScope)
-    onProjectTypeChange?.(PROJECT_TYPE_BY_SCOPE[nextScope])
     setStatusFilter(normalizeStatusFilter(state.statusFilter))
     const nextDateRange = normalizeDateRange(state.milestoneDateRange)
     const nextFilters = normalizeProjectFilterConditions((state.filters || []) as FilterCondition[], nextDateRange)
@@ -1029,7 +1020,6 @@ export default function MilestoneView({
   const handleScopeChange = (key: string) => {
     const nextScope = key as RoadmapScope
     setScope(nextScope)
-    onProjectTypeChange?.(PROJECT_TYPE_BY_SCOPE[nextScope])
     setStatusFilter('all')
     setFilters([])
     setTempFilters([])

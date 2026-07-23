@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, type CSSProperties } from 'react'
 import {
   Row, Col, Space, Input, Table, Progress, Tag, Badge, Button,
   Segmented, Pagination,
@@ -25,15 +25,34 @@ import {
   PROJECT_TYPE_CAPABILITY,
   PROJECT_TYPE_COLORS,
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
-  PROJECT_TYPE_MACHINE_LAPTOP,
-  PROJECT_TYPE_MACHINE_PAD,
-  PROJECT_TYPE_MACHINE_PHONE,
   PROJECT_TYPE_TECH,
   PROJECT_TYPE_TOS_VERSION,
+  MACHINE_PROJECT_FILTER_OPTIONS,
   isMachineProjectType,
-  normalizeMachineProjectType,
+  matchesProjectTypeFilter,
 } from '@/constants/projectTypes'
 import { buildTosTypeRows, getMainTosType } from '@/lib/tosTypeRules'
+
+const WORKSPACE_FILTER_TOOLBAR_STYLE: CSSProperties = {
+  background: 'rgba(255,255,255,0.8)',
+  backdropFilter: 'blur(8px)',
+  borderRadius: 14,
+  padding: '8px 20px',
+  marginBottom: 16,
+  border: '1px solid rgba(99,102,241,0.08)',
+  boxShadow: '0 2px 8px rgba(99,102,241,0.04)',
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  columnGap: 16,
+  rowGap: 10,
+}
+
+const WORKSPACE_FILTER_CHIP_STYLE: CSSProperties = {
+  whiteSpace: 'nowrap',
+  flexShrink: 0,
+}
 
 export default function WorkspaceContainer() {
   const {
@@ -107,7 +126,7 @@ export default function WorkspaceContainer() {
       result = result.filter(p => p.status === projectStatusFilter)
     }
     if (projectTypeFilter !== 'all') {
-      result = result.filter(p => normalizeMachineProjectType(p.type) === projectTypeFilter)
+      result = result.filter(p => matchesProjectTypeFilter(p.type, projectTypeFilter))
     }
     return result
   }, [visibleProjects, projectSearchText2, projectStatusFilter, projectTypeFilter])
@@ -156,12 +175,8 @@ export default function WorkspaceContainer() {
   return (
     <div>
       {/* Unified toolbar */}
-      <div style={{
-        background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(8px)', borderRadius: 14, padding: '8px 20px', marginBottom: 16,
-        border: '1px solid rgba(99,102,241,0.08)', boxShadow: '0 2px 8px rgba(99,102,241,0.04)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+      <div style={WORKSPACE_FILTER_TOOLBAR_STYLE}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', flex: '1 1 680px', minWidth: 0, columnGap: 0, rowGap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '2px 3px', background: 'rgba(99,102,241,0.05)', borderRadius: 8 }}>
             {([
               { key: 'projects' as const, label: '项目列表', icon: <AppstoreOutlined /> },
@@ -173,6 +188,7 @@ export default function WorkspaceContainer() {
                   key={tab.key}
                   onClick={() => setWorkspaceTab(tab.key)}
                   style={{
+                    ...WORKSPACE_FILTER_CHIP_STYLE,
                     padding: '4px 14px', borderRadius: 6, cursor: 'pointer',
                     fontSize: 13, fontWeight: isActive ? 600 : 400,
                     display: 'flex', alignItems: 'center', gap: 5,
@@ -190,7 +206,7 @@ export default function WorkspaceContainer() {
           {workspaceTab === 'projects' && (
             <>
               <div style={{ width: 1, height: 20, background: 'rgba(99,102,241,0.12)', margin: '0 14px' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 6, rowGap: 4 }}>
                 {[
                   { label: '全部', value: visibleProjects.length, filterValue: 'all', color: '#6366f1' },
                   { label: '待立项', value: visibleProjects.filter(p => p.status === '待立项').length, filterValue: '待立项', color: '#faad14' },
@@ -204,6 +220,7 @@ export default function WorkspaceContainer() {
                       key={stat.filterValue}
                       onClick={() => { setProjectStatusFilter(stat.filterValue); setProjectCardPage(1); }}
                       style={{
+                        ...WORKSPACE_FILTER_CHIP_STYLE,
                         padding: '4px 14px', borderRadius: 20, cursor: 'pointer',
                         fontSize: 13, fontWeight: 500, transition: 'all 0.2s',
                         background: isActive ? stat.color : 'transparent',
@@ -222,13 +239,11 @@ export default function WorkspaceContainer() {
           )}
         </div>
         {workspaceTab === 'projects' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 4px', background: 'rgba(99,102,241,0.04)', borderRadius: 20, border: '1px solid rgba(99,102,241,0.06)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', flex: '1 1 760px', minWidth: 0, columnGap: 10, rowGap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 4, padding: '2px 4px', background: 'rgba(99,102,241,0.04)', borderRadius: 20, border: '1px solid rgba(99,102,241,0.06)' }}>
               {[
                 { label: '全部', value: 'all' },
-                { label: '整机-手机', value: PROJECT_TYPE_MACHINE_PHONE },
-                { label: '整机-PAD', value: PROJECT_TYPE_MACHINE_PAD },
-                { label: '整机-笔电', value: PROJECT_TYPE_MACHINE_LAPTOP },
+                ...MACHINE_PROJECT_FILTER_OPTIONS,
                 { label: 'tOS版本', value: PROJECT_TYPE_TOS_VERSION },
                 { label: '独立软件', value: PROJECT_TYPE_INDEPENDENT_SOFTWARE },
                 { label: '技术', value: PROJECT_TYPE_TECH },
@@ -240,6 +255,7 @@ export default function WorkspaceContainer() {
                     key={item.value}
                     onClick={() => { setProjectTypeFilter(item.value); setProjectCardPage(1); }}
                     style={{
+                      ...WORKSPACE_FILTER_CHIP_STYLE,
                       padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
                       fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
                       background: isActive ? '#fff' : 'transparent',
