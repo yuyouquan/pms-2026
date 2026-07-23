@@ -74,6 +74,7 @@ type PersistedRoadmapState = Pick<
 >
 
 let fallbackIdCounter = 0
+let roadmapStorageReadFailed = false
 
 function nowIso(): string {
   return new Date().toISOString()
@@ -153,7 +154,11 @@ export function createInitialTosVersions(): TosVersionConfig[] {
   }))
 }
 
-export function createInitialPlannedProjects(): PlannedRoadmapProject[] {
+export function createInitialPlannedProjects(
+  tosVersions: readonly TosVersionConfig[] = createInitialTosVersions(),
+): PlannedRoadmapProject[] {
+  const firstSaleVersion = tosVersions.find(version => version.id === 'tos-17-2') ?? tosVersions[0]
+  if (!firstSaleVersion) return []
   return [{
     id: 'planned-mock-x6877-android16-new',
     status: '待规划',
@@ -161,7 +166,7 @@ export function createInitialPlannedProjects(): PlannedRoadmapProject[] {
     projectCode: 'X6877',
     displayName: 'X6877',
     androidVersion: 'Android 16',
-    firstSaleTosVersionId: 'tos-17-2',
+    firstSaleTosVersionId: firstSaleVersion.id,
     brand: 'Infinix',
     productLine: 'NOTE',
     productSeries: 'NOTE 60',
@@ -182,18 +187,23 @@ export function createInitialPlannedProjects(): PlannedRoadmapProject[] {
 }
 
 export function createInitialRoadmapChangeLogs(
-  plannedProjects: readonly PlannedRoadmapProject[] = createInitialPlannedProjects(),
   tosVersions: readonly TosVersionConfig[] = createInitialTosVersions(),
+  plannedProjects: readonly PlannedRoadmapProject[] = createInitialPlannedProjects(tosVersions),
 ): RoadmapChangeLog[] {
   const planned = plannedProjects.find(project => project.id === 'planned-mock-x6877-android16-new')
   if (!planned) return []
+  const plannedTosVersionName = tosVersions.find(version => version.id === planned.firstSaleTosVersionId)?.name
+    ?? planned.firstSaleTosVersionId
+  const normalAfterVersion = tosVersions.find(version => version.id === 'tos-16-3') ?? tosVersions[0]
+  const normalBeforeVersion = tosVersions.find(version => version.id === 'tos-16-2') ?? normalAfterVersion
+  if (!normalAfterVersion || !normalBeforeVersion) return []
 
   const normalBefore: RoadmapProjectFields = {
     machineProjectType: '整机-手机',
     projectCode: 'X6877',
     displayName: 'X6877-D8400_H991',
     androidVersion: 'Android 16',
-    firstSaleTosVersionId: 'tos-16-2',
+    firstSaleTosVersionId: normalBeforeVersion.id,
     brand: 'TECNO',
     productLine: 'NOTE',
     productSeries: 'CAMON 50',
@@ -209,7 +219,7 @@ export function createInitialRoadmapChangeLogs(
   }
   const normalAfter: RoadmapProjectFields = {
     ...normalBefore,
-    firstSaleTosVersionId: 'tos-16-3',
+    firstSaleTosVersionId: normalAfterVersion.id,
     marketName: 'NOTE 50 Pro',
     remark: '重点验证 tOS 16.3 全量版本交付。',
   }
@@ -230,7 +240,7 @@ export function createInitialRoadmapChangeLogs(
       action: 'update',
       actor: '张三',
       occurredAt: '2026-07-22T09:30:00.000Z',
-      tosVersionName: 'tOS 17.2',
+      tosVersionName: plannedTosVersionName,
       changes: diffRoadmapProjectFields(plannedBefore, planned, tosVersions),
     },
     {
@@ -241,7 +251,7 @@ export function createInitialRoadmapChangeLogs(
       action: 'update',
       actor: '张三',
       occurredAt: '2026-07-22T08:45:00.000Z',
-      tosVersionName: 'tOS 16.3',
+      tosVersionName: normalAfterVersion.name,
       changes: diffRoadmapProjectFields(normalBefore, normalAfter, tosVersions),
     },
     {
@@ -252,7 +262,7 @@ export function createInitialRoadmapChangeLogs(
       action: 'create',
       actor: '李四',
       occurredAt: '2026-07-21T02:15:00.000Z',
-      tosVersionName: 'tOS 17.2',
+      tosVersionName: plannedTosVersionName,
       changes: [],
       snapshot: createRoadmapAuditSnapshot(plannedBefore, tosVersions),
     },
@@ -264,7 +274,7 @@ export function createInitialRoadmapChangeLogs(
       action: 'create',
       actor: '李四',
       occurredAt: '2026-07-20T06:20:00.000Z',
-      tosVersionName: 'tOS 16.2',
+      tosVersionName: normalBeforeVersion.name,
       changes: [],
       snapshot: createRoadmapAuditSnapshot(normalBefore, tosVersions),
     },
@@ -296,13 +306,14 @@ export function createInitialRoadmapState(): RoadmapStoreState {
   }
 }
 
-export function createInitialRoadmapMockState(): RoadmapStoreState {
-  const tosVersions = createInitialTosVersions()
-  const plannedProjects = createInitialPlannedProjects()
+export function createInitialRoadmapMockState(
+  tosVersions: TosVersionConfig[] = createInitialTosVersions(),
+): RoadmapStoreState {
+  const plannedProjects = createInitialPlannedProjects(tosVersions)
   return {
     plannedProjects,
     tosVersions,
-    changeLogs: createInitialRoadmapChangeLogs(plannedProjects, tosVersions),
+    changeLogs: createInitialRoadmapChangeLogs(tosVersions, plannedProjects),
     viewMode: 'table',
     selectedTosVersionId: null,
     brandFilter: 'all',
@@ -674,9 +685,9 @@ export function mergeRoadmapPersistedState(
 ): RoadmapStore {
   const migrated = migrateRoadmapState(persistedState, 1)
   if (persistedState === null || persistedState === undefined) {
-    return { ...currentState, ...migrated }
+    return roadmapStorageReadFailed ? { ...currentState, ...migrated } : currentState
   }
-  const mock = createInitialRoadmapMockState()
+  const mock = createInitialRoadmapMockState(migrated.tosVersions)
   const existingLogIds = new Set(migrated.changeLogs.map(log => log.id))
   const changeLogs = [
     ...mock.changeLogs.filter(log => !existingLogIds.has(log.id)),
@@ -686,11 +697,22 @@ export function mergeRoadmapPersistedState(
   ))
 
   const plannedSeed = mock.plannedProjects[0]
-  const seedWasPreviouslyKnown = existingLogIds.has('roadmap-log-mock-planned-create-x6877')
+  if (!plannedSeed) {
+    return {
+      ...currentState,
+      ...migrated,
+      changeLogs,
+    }
+  }
+  const seedWasDeleted = migrated.changeLogs.some(log => (
+    log.source === 'planned'
+    && log.action === 'delete'
+    && log.projectId === plannedSeed.id
+  ))
   const canResolveSeedTos = migrated.tosVersions.some(version => version.id === plannedSeed.firstSaleTosVersionId)
   const hasSeedProject = migrated.plannedProjects.some(project => project.id === plannedSeed.id)
   const hasEquivalentPlannedProject = isExactRoadmapDuplicate(plannedSeed, migrated.plannedProjects)
-  const plannedProjects = !seedWasPreviouslyKnown && canResolveSeedTos && !hasSeedProject && !hasEquivalentPlannedProject
+  const plannedProjects = !seedWasDeleted && canResolveSeedTos && !hasSeedProject && !hasEquivalentPlannedProject
     ? [plannedSeed, ...migrated.plannedProjects]
     : migrated.plannedProjects
 
@@ -708,8 +730,10 @@ const safeRoadmapStorage: StateStorage = {
     try {
       const stored = window.localStorage.getItem(name)
       if (stored !== null) JSON.parse(stored)
+      roadmapStorageReadFailed = false
       return stored
     } catch (error) {
+      roadmapStorageReadFailed = true
       console.error(`Failed to read ${ROADMAP_STORAGE_KEY}; using initial roadmap state.`, error)
       return null
     }
