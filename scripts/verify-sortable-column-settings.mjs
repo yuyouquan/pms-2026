@@ -844,6 +844,32 @@ registerAssertion('roadmap per-target controls stay inside compact target-card h
   assert.ok(toolbar.includes('onToggleAllTargets'))
 })
 
+registerAssertion('roadmap conflicts use one compact counted toolbar action', () => {
+  const alertPath = path.join(root, 'src/components/roadmap/RoadmapConflictAlert.tsx')
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  const toolbar = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
+
+  assert.equal(fs.existsSync(alertPath), false, 'full-width roadmap conflict Alert still exists')
+  assert.ok(!moduleSource.includes('RoadmapConflictAlert'))
+  assert.ok(!moduleSource.includes('个待规划项目已存在对应正常项目'))
+  for (const contract of [
+    'countConflictingPlannedProjects',
+    'conflictCount={conflictCount}',
+    'onResolveConflicts={() => openConflictDrawer()}',
+  ]) {
+    assert.ok(moduleSource.includes(contract), `roadmap module is missing ${contract}`)
+  }
+  for (const contract of [
+    'conflictCount > 0',
+    'count={conflictCount}',
+    'onClick={onResolveConflicts}',
+    '解决冲突',
+    'wrap={false}',
+  ]) {
+    assert.ok(toolbar.includes(contract), `roadmap toolbar is missing ${contract}`)
+  }
+})
+
 registerAssertion('roadmap table and evolution card render from parent-provided column order', () => {
   const table = parseTypeScript(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'))
   const card = parseTypeScript(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'))

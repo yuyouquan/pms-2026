@@ -11,6 +11,7 @@ import {
   SettingOutlined,
   SlidersOutlined,
   UpOutlined,
+  WarningOutlined,
 } from '@ant-design/icons'
 import { Badge, Button, Flex, Segmented, Tooltip, Typography } from 'antd'
 import type {
@@ -31,6 +32,8 @@ interface RoadmapToolbarProps {
   productTypeFilter: 'all' | 'custom' | RoadmapProductType
   onProductTypeFilterChange: (productType: 'all' | RoadmapProductType) => void
   filterCount: number
+  conflictCount: number
+  onResolveConflicts: () => void
   hasTargetVersions: boolean
   allTargetsCollapsed: boolean
   onToggleAllTargets: () => void
@@ -53,6 +56,8 @@ export default function RoadmapToolbar({
   productTypeFilter,
   onProductTypeFilterChange,
   filterCount,
+  conflictCount,
+  onResolveConflicts,
   hasTargetVersions,
   allTargetsCollapsed,
   onToggleAllTargets,
@@ -155,6 +160,23 @@ export default function RoadmapToolbar({
             >
               {allTargetsCollapsed ? '展开全部目标' : '收起全部目标'}
             </Button>
+          ) : null}
+          {conflictCount > 0 ? (
+            <Badge count={conflictCount} size="small" color="var(--primary)" offset={[-2, 2]}>
+              <Button
+                className="pms-roadmap-conflict-action"
+                icon={<WarningOutlined aria-hidden />}
+                onClick={onResolveConflicts}
+                style={{
+                  ...compactControlStyle,
+                  borderColor: 'var(--border-purple)',
+                  color: 'var(--primary)',
+                  background: 'var(--bg-purple-tint)',
+                }}
+              >
+                解决冲突
+              </Button>
+            </Badge>
           ) : null}
           <Button
             icon={<AuditOutlined />}

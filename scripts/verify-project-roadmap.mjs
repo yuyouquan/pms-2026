@@ -2524,18 +2524,21 @@ registerAssertion('evolution cards keep locked titles and approved colors', () =
 })
 
 registerAssertion('global roadmap conflicts stay visible and actionable until resolved', () => {
-  const alertSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapConflictAlert.tsx'), 'utf8')
+  const alertPath = path.join(root, 'src/components/roadmap/RoadmapConflictAlert.tsx')
   const drawerSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapConflictDrawer.tsx'), 'utf8')
   const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
-  for (const copy of ['个待规划项目已存在对应正常项目', '查看冲突']) {
-    if (!alertSource.includes(copy)) throw new Error(`conflict alert is missing ${copy}`)
+  const toolbarSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
+  if (fs.existsSync(alertPath) || moduleSource.includes('RoadmapConflictAlert')) {
+    throw new Error('full-width conflict alert remains mounted')
   }
-  if (alertSource.includes('dismiss')) throw new Error('conflict alert must not be permanently dismissible')
   for (const contract of ['查看正常项目', '删除待规划项目', 'selectedConflictKey', 'scrollIntoView']) {
     if (!drawerSource.includes(contract)) throw new Error(`conflict drawer is missing ${contract}`)
   }
-  for (const contract of ['RoadmapConflictAlert', 'RoadmapConflictDrawer', 'openConflictDrawer']) {
+  for (const contract of ['RoadmapConflictDrawer', 'openConflictDrawer', 'countConflictingPlannedProjects']) {
     if (!moduleSource.includes(contract)) throw new Error(`conflict integration is missing ${contract}`)
+  }
+  for (const contract of ['解决冲突', 'count={conflictCount}', 'onClick={onResolveConflicts}']) {
+    if (!toolbarSource.includes(contract)) throw new Error(`compact conflict action is missing ${contract}`)
   }
   if (!moduleSource.includes('删除后，该待规划项目会立即从项目路标中移除；修改记录仍保留删除前快照。确认删除？')) {
     throw new Error('planned deletion must use the approved shared confirmation copy')

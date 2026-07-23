@@ -14,6 +14,7 @@ import {
 import {
   adaptNormalProject,
   adaptPlannedProject,
+  countConflictingPlannedProjects,
   deriveRoadmapPlanningConflicts,
 } from '@/lib/roadmapProjectAdapter'
 import { useHasGlobalPermission } from '@/stores/permission'
@@ -33,7 +34,6 @@ import type {
 import PlannedProjectModal from './PlannedProjectModal'
 import RoadmapColumnSettingsDrawer from './RoadmapColumnSettingsDrawer'
 import RoadmapChangeLogDrawer from './RoadmapChangeLogDrawer'
-import RoadmapConflictAlert from './RoadmapConflictAlert'
 import RoadmapConflictDrawer from './RoadmapConflictDrawer'
 import RoadmapEvolutionView from './RoadmapEvolutionView'
 import RoadmapFilterDrawer from './RoadmapFilterDrawer'
@@ -138,6 +138,7 @@ export default function ProjectRoadmapModule({
     () => deriveRoadmapPlanningConflicts(normalRows, plannedRows),
     [normalRows, plannedRows],
   )
+  const conflictCount = countConflictingPlannedProjects([...conflicts])
   const allRows = useMemo(
     () => [...normalRows, ...plannedRows],
     [normalRows, plannedRows],
@@ -374,6 +375,8 @@ export default function ProjectRoadmapModule({
         productTypeFilter={productTypeFilter}
         onProductTypeFilterChange={value => updateQuickFilter('productType', value)}
         filterCount={configuredFilterCount}
+        conflictCount={conflictCount}
+        onResolveConflicts={() => openConflictDrawer()}
         hasTargetVersions={targetVersionIds.length > 0}
         allTargetsCollapsed={allTargetsCollapsed}
         onToggleAllTargets={toggleAllTargets}
@@ -384,11 +387,6 @@ export default function ProjectRoadmapModule({
         onCreatePlannedProject={openCreatePlannedProject}
         onOpenFilters={() => setFilterDrawerOpen(true)}
         onOpenColumnSettings={() => setColumnDrawerOpen(true)}
-      />
-
-      <RoadmapConflictAlert
-        groups={conflicts}
-        onViewConflicts={() => openConflictDrawer()}
       />
 
       {content ?? (
