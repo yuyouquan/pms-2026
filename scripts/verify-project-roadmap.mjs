@@ -2114,23 +2114,25 @@ registerAssertion('roadmap filter domain sanitizers enforce catalog and approved
     { id: 'duplicate-field', field: 'marketName', operator: 'equals', value: 'ignored' },
     { id: 'bad-enum-operator', field: 'brand', operator: 'contains', value: 'TEC' },
     { id: 'bad-enum-value', field: 'brand', operator: 'equals', value: 'Unknown' },
-    { id: 'valid-enum', field: 'brand', operator: 'equals', value: 'TECNO' },
+    { id: 'valid-enum', field: 'brand', operator: 'equals', value: ['TECNO', 'Infinix', 'Unknown', 'TECNO'] },
+    { id: 'valid-ram', field: 'startRam', operator: 'notEquals', value: '4GB' },
     { id: 'bad-date', field: 'launchDate', operator: 'after', value: '2026-02-30' },
     { id: 'valid-date', field: 'str5Date', operator: 'before', value: '2028-02-29' },
     { id: 'bad-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos-99-0' },
     { id: 'bad-version-not-equals', field: 'firstSaleTosVersionId', operator: 'notEquals', value: 'tos-17-2' },
     { id: 'bad-version-empty', field: 'firstSaleTosVersionId', operator: 'isEmpty', value: '' },
     { id: 'bad-version-not-empty', field: 'firstSaleTosVersionId', operator: 'isNotEmpty', value: '' },
-    { id: 'legacy-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos18.0' },
+    { id: 'legacy-version', field: 'firstSaleTosVersionId', operator: 'equals', value: ['tos-18-0', 'tos-99-0'] },
     { id: 'blank-text', field: 'remark', operator: 'contains', value: '   ' },
     { id: 'empty', field: 'productSeries', operator: 'isEmpty', value: 'discard-me' },
   ]
   const sanitized = domain.sanitizeRoadmapFilterConditions(malicious, versions)
   const expected = [
     ['marketName', 'contains', 'Europe'],
-    ['brand', 'equals', 'TECNO'],
+    ['brand', 'equals', ['TECNO', 'Infinix']],
+    ['startRam', 'notEquals', ['4GB']],
     ['str5Date', 'before', '2028-02-29'],
-    ['firstSaleTosVersionId', 'equals', 'tos-18-0'],
+    ['firstSaleTosVersionId', 'equals', ['tos-18-0']],
     ['productSeries', 'isEmpty', ''],
   ]
   if (JSON.stringify(sanitized.map(item => [item.field, item.operator, item.value])) !== JSON.stringify(expected)) {
@@ -2150,6 +2152,50 @@ registerAssertion('roadmap filter domain sanitizers enforce catalog and approved
   const minimumColumns = domain.sanitizeRoadmapVisibleColumns(['unknown'])
   if (JSON.stringify(minimumColumns) !== JSON.stringify(['firstSaleTosVersionId'])) {
     throw new Error(`visible columns did not preserve the one-column minimum: ${JSON.stringify(minimumColumns)}`)
+  }
+})
+
+registerAssertion('roadmap selectable filters use OR within a condition and AND across conditions', () => {
+  const domain = loadTypeScriptModule(path.join(root, 'src/lib/roadmapFilters.ts'))
+  const definitions = domain.buildRoadmapFilterFieldDefinitions([])
+  const rows = [
+    { id: 'one', brand: 'TECNO', startRam: '4GB' },
+    { id: 'two', brand: 'Infinix', startRam: '8GB' },
+    { id: 'three', brand: 'itel', startRam: '4GB' },
+  ]
+  const equals = domain.applyRoadmapFilters(rows, 'all', 'all', [
+    { id: 'brand', field: 'brand', operator: 'equals', value: ['TECNO', 'Infinix'] },
+    { id: 'ram', field: 'startRam', operator: 'equals', value: ['4GB', '8GB'] },
+  ], definitions)
+  if (equals.map(row => row.id).join(',') !== 'one,two') {
+    throw new Error(`multi equals must OR values and AND conditions: ${JSON.stringify(equals)}`)
+  }
+  const notEquals = domain.applyRoadmapFilters(rows, 'all', 'all', [
+    { id: 'brand', field: 'brand', operator: 'notEquals', value: ['TECNO', 'itel'] },
+  ], definitions)
+  if (notEquals.map(row => row.id).join(',') !== 'two') {
+    throw new Error(`multi notEquals must reject every listed value: ${JSON.stringify(notEquals)}`)
+  }
+})
+
+registerAssertion('roadmap selectable filter UI and evolution columns honor multi-selection', () => {
+  const drawerSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapFilterDrawer.tsx'), 'utf8')
+  for (const contract of ['mode="multiple"', 'maxTagCount="responsive"', "definition.kind === 'enum'"]) {
+    if (!drawerSource.includes(contract)) throw new Error(`selectable filter UI is missing ${contract}`)
+  }
+  const evolution = loadTypeScriptModule(path.join(root, 'src/components/roadmap/RoadmapEvolutionView.tsx'))
+  const versions = [
+    { id: 'tos-17-2-1', major: 17, minor: 2, patch: 1 },
+    { id: 'tos-18-0-0', major: 18, minor: 0, patch: 0 },
+    { id: 'tos-17-2-0', major: 17, minor: 2, patch: 0 },
+  ]
+  const all = evolution.selectEvolutionVersions(versions, [])
+  if (all.map(version => version.id).join(',') !== 'tos-18-0-0,tos-17-2-1,tos-17-2-0') {
+    throw new Error(`evolution versions lost semantic descending order: ${JSON.stringify(all)}`)
+  }
+  const selected = evolution.selectEvolutionVersions(versions, ['tos-17-2-0', 'tos-18-0-0'])
+  if (selected.map(version => version.id).join(',') !== 'tos-18-0-0,tos-17-2-0') {
+    throw new Error(`evolution did not restrict columns to selected versions: ${JSON.stringify(selected)}`)
   }
 })
 
@@ -2601,7 +2647,8 @@ registerAssertion('rebuilt roadmap is mounted without legacy roadmap content', (
 registerAssertion('roadmap quick filters and drawer conditions share one source', () => {
   const filterModule = loadTypeScriptModule(path.join(root, 'src/lib/roadmapFilters.ts'))
   const brandEquals = filterModule.setRoadmapQuickFilter([], 'brand', 'TECNO')
-  if (brandEquals.length !== 1 || brandEquals[0].operator !== 'equals' || brandEquals[0].value !== 'TECNO') {
+  if (brandEquals.length !== 1 || brandEquals[0].operator !== 'equals'
+    || JSON.stringify(brandEquals[0].value) !== JSON.stringify(['TECNO'])) {
     throw new Error('brand quick filter did not create an equals condition')
   }
   if (filterModule.getRoadmapQuickFilterValue(brandEquals, 'brand') !== 'TECNO') {
@@ -2614,7 +2661,7 @@ registerAssertion('roadmap quick filters and drawer conditions share one source'
   if (filterModule.setRoadmapQuickFilter(custom, 'brand', 'all').length !== 0) {
     throw new Error('quick all did not clear the drawer condition')
   }
-  const nonQuickBrand = [{ ...brandEquals[0], value: '待定' }]
+  const nonQuickBrand = [{ ...brandEquals[0], value: ['待定'] }]
   if (filterModule.getRoadmapQuickFilterValue(nonQuickBrand, 'brand') !== 'custom') {
     throw new Error('brand values without an external shortcut must expose custom state')
   }
@@ -2628,7 +2675,8 @@ registerAssertion('table tOS selector and drawer tOS condition stay synchronized
   }
   store.getState().setSelectedTosVersionId('tos-17-2')
   const selectorCondition = store.getState().filters.find(condition => condition.field === 'firstSaleTosVersionId')
-  if (selectorCondition?.operator !== 'equals' || selectorCondition.value !== 'tos-17-2') {
+  if (selectorCondition?.operator !== 'equals'
+    || JSON.stringify(selectorCondition.value) !== JSON.stringify(['tos-17-2'])) {
     throw new Error('table tOS selector did not update the drawer condition')
   }
   store.getState().setSelectedTosVersionId(null)
@@ -2640,18 +2688,18 @@ registerAssertion('table tOS selector and drawer tOS condition stay synchronized
     id: 'drawer-tos',
     field: 'firstSaleTosVersionId',
     operator: 'equals',
-    value: 'tos-16-3',
+    value: ['tos-16-3', 'tos-17-2'],
   }])
-  if (store.getState().selectedTosVersionId !== 'tos-16-3') {
-    throw new Error('drawer tOS condition did not update the table selector')
+  if (store.getState().selectedTosVersionId !== null) {
+    throw new Error('multi-select drawer condition must not pretend the table has one selected version')
   }
   store.getState().setFilters([])
   if (store.getState().selectedTosVersionId !== null) {
     throw new Error('removing the drawer tOS condition did not restore all')
   }
-  store.getState().setViewMode('evolution')
-  if (store.getState().filters.some(condition => condition.field === 'firstSaleTosVersionId')) {
-    throw new Error('switching to evolution invented a tOS condition')
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  for (const contract of ['handleViewModeChange', "viewMode === 'table'", "nextViewMode === 'evolution'", "condition.field !== 'firstSaleTosVersionId'", 'setSelectedTosVersionId(null)']) {
+    if (!moduleSource.includes(contract)) throw new Error(`table-to-evolution cleanup is missing ${contract}`)
   }
 })
 
@@ -2667,7 +2715,7 @@ registerAssertion('persisted tOS selection repairs to all unless its concrete ID
   const validCondition = valid.filters.find(condition => condition.field === 'firstSaleTosVersionId')
   if (valid.selectedTosVersionId !== 'tos-17-2'
     || validCondition?.operator !== 'equals'
-    || validCondition.value !== 'tos-17-2') {
+    || JSON.stringify(validCondition.value) !== JSON.stringify(['tos-17-2'])) {
     throw new Error('valid persisted concrete selection was not preserved and synchronized')
   }
 

@@ -37,6 +37,7 @@ export interface RoadmapEvolutionViewProps {
   rows: readonly RoadmapProjectRow[]
   conflicts: readonly RoadmapPlanningConflictGroup[]
   versions: readonly TosVersionConfig[]
+  selectedTosVersionIds: readonly string[]
   columnOrder: readonly RoadmapColumnKey[]
   visibleColumns: readonly RoadmapColumnKey[]
   canEdit: boolean
@@ -51,7 +52,16 @@ export interface RoadmapEvolutionViewProps {
 export function sortEvolutionVersions(
   versions: readonly TosVersionConfig[],
 ): TosVersionConfig[] {
-  return [...versions].sort(compareSemanticTos)
+  return [...versions].sort((left, right) => compareSemanticTos(right, left))
+}
+
+export function selectEvolutionVersions(
+  versions: readonly TosVersionConfig[],
+  selectedTosVersionIds: readonly string[],
+): TosVersionConfig[] {
+  const selectedIds = new Set(selectedTosVersionIds)
+  const ordered = sortEvolutionVersions(versions)
+  return selectedIds.size ? ordered.filter(version => selectedIds.has(version.id)) : ordered
 }
 
 export function groupEvolutionRows(
@@ -148,6 +158,7 @@ export default function RoadmapEvolutionView({
   rows,
   conflicts,
   versions,
+  selectedTosVersionIds,
   columnOrder,
   visibleColumns,
   canEdit,
@@ -159,7 +170,10 @@ export default function RoadmapEvolutionView({
   onDeletePlannedProject,
 }: RoadmapEvolutionViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const orderedVersions = useMemo(() => sortEvolutionVersions(versions), [versions])
+  const orderedVersions = useMemo(
+    () => selectEvolutionVersions(versions, selectedTosVersionIds),
+    [selectedTosVersionIds, versions],
+  )
   const conflictKeyByIdentity = useMemo(() => buildEvolutionConflictMap(conflicts), [conflicts])
   const scrollSignature = `evolution:${orderedVersions.map(version => version.id).join('|')}`
   const renderProjectCard = (row: RoadmapProjectRow) => (

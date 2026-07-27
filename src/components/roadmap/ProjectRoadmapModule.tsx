@@ -7,6 +7,7 @@ import {
   buildRoadmapFilterFieldDefinitions,
   createRoadmapTextFilterDebouncer,
   getRoadmapQuickFilterValue,
+  getRoadmapSelectedTosVersionIds,
   sanitizeRoadmapFilterConditions,
   setRoadmapQuickFilter,
   type RoadmapTextFilterDebouncer,
@@ -51,6 +52,7 @@ export interface RoadmapViewRenderContext {
   conflicts: readonly RoadmapPlanningConflictGroup[]
   versions: readonly TosVersionConfig[]
   selectedTosVersionId: string | null
+  selectedTosVersionIds: readonly string[]
   columnOrder: readonly RoadmapColumnKey[]
   visibleColumns: readonly RoadmapColumnKey[]
   sort: RoadmapSortState
@@ -151,6 +153,10 @@ export default function ProjectRoadmapModule({
   const brandFilter = getRoadmapQuickFilterValue(normalizedFilters, 'brand')
   const productTypeFilter = getRoadmapQuickFilterValue(normalizedFilters, 'productType')
   const configuredFilterCount = normalizedFilters.length
+  const selectedTosVersionIds = useMemo(
+    () => getRoadmapSelectedTosVersionIds(normalizedFilters),
+    [normalizedFilters],
+  )
   const immediateFilters = useMemo(() => normalizedFilters.filter(condition => (
     filterDefinitionsByKey.get(condition.field)?.kind !== 'text'
   )), [filterDefinitionsByKey, normalizedFilters])
@@ -282,6 +288,13 @@ export default function ProjectRoadmapModule({
   ) => {
     setFilters(setRoadmapQuickFilter(normalizedFilters, field, value))
   }
+  const handleViewModeChange = (nextViewMode: RoadmapViewMode) => {
+    if (viewMode === 'table' && nextViewMode === 'evolution') {
+      setFilters(normalizedFilters.filter(condition => condition.field !== 'firstSaleTosVersionId'))
+      setSelectedTosVersionId(null)
+    }
+    setViewMode(nextViewMode)
+  }
   const requestChangeLog = () => {
     if (!canView) return
     if (onOpenChangeLog) onOpenChangeLog()
@@ -339,6 +352,7 @@ export default function ProjectRoadmapModule({
     conflicts,
     versions,
     selectedTosVersionId,
+    selectedTosVersionIds,
     columnOrder,
     visibleColumns,
     sort,
@@ -369,7 +383,7 @@ export default function ProjectRoadmapModule({
         canView={canView}
         canEdit={canEdit}
         viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        onViewModeChange={handleViewModeChange}
         brandFilter={brandFilter}
         onBrandFilterChange={value => updateQuickFilter('brand', value)}
         productTypeFilter={productTypeFilter}

@@ -8,7 +8,6 @@ import {
   createFilterCondition,
   getFieldOptionsWithDuplicateDisabled,
   isValuelessFilterOperator,
-  normalizeFilterConditions,
   type FilterFieldDefinition,
 } from '@/lib/filterConditions'
 import { getRoadmapFilterOperators } from '@/lib/roadmapFilters'
@@ -80,7 +79,7 @@ export default function RoadmapFilterDrawer({
     updateCondition(condition.id, {
       field: field as RoadmapFilterCondition['field'],
       operator: definition?.kind === 'text' ? 'contains' : 'equals',
-      value: '',
+      value: definition?.kind === 'enum' ? [] : '',
     })
   }
 
@@ -100,11 +99,15 @@ export default function RoadmapFilterDrawer({
         <Select
           aria-label={`${definition.label}筛选值`}
           size="small"
+          mode="multiple"
+          maxTagCount="responsive"
           allowClear
-          value={condition.value || undefined}
+          value={Array.isArray(condition.value)
+            ? condition.value
+            : condition.value ? [condition.value] : []}
           placeholder={`请选择${definition.label}`}
           options={definition.options ?? []}
-          onChange={value => updateCondition(condition.id, { value: value ?? '' })}
+          onChange={value => updateCondition(condition.id, { value })}
           style={{ width: '100%', height: ROADMAP_FILTER_CONTROL_HEIGHT }}
         />
       )
@@ -117,7 +120,9 @@ export default function RoadmapFilterDrawer({
           size="small"
           allowClear
           format="YYYY-MM-DD"
-          value={condition.value ? dayjs(condition.value, 'YYYY-MM-DD') : null}
+          value={typeof condition.value === 'string' && condition.value
+            ? dayjs(condition.value, 'YYYY-MM-DD')
+            : null}
           onChange={date => updateCondition(condition.id, { value: date?.format('YYYY-MM-DD') ?? '' })}
           style={{ width: '100%', height: ROADMAP_FILTER_CONTROL_HEIGHT }}
         />
@@ -128,7 +133,7 @@ export default function RoadmapFilterDrawer({
       <Input
         aria-label={`${definition.label}筛选值`}
         size="small"
-        value={condition.value}
+        value={typeof condition.value === 'string' ? condition.value : ''}
         placeholder={`请输入${definition.label}`}
         onChange={event => updateCondition(condition.id, { value: event.target.value })}
         style={{ height: ROADMAP_FILTER_CONTROL_HEIGHT }}
@@ -141,7 +146,29 @@ export default function RoadmapFilterDrawer({
   }
 
   const applyAdvancedFilters = () => {
-    onApply(normalizeFilterConditions(draftConditions, fieldDefinitions))
+    const selectedFields = new Set<string>()
+    const normalized = draftConditions.flatMap(condition => {
+      const definition = definitionsByKey.get(condition.field)
+      if (!definition || selectedFields.has(condition.field)) return []
+      if (!getRoadmapFilterOperators(condition.field, definition.kind)
+        .some(option => option.value === condition.operator)) return []
+      const valueless = isValuelessFilterOperator(condition.operator)
+      const value = definition.kind === 'enum'
+        ? valueless
+          ? []
+          : [...new Set((Array.isArray(condition.value) ? condition.value : [condition.value])
+            .filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+            .map(item => item.trim()))]
+        : valueless
+          ? ''
+          : typeof condition.value === 'string'
+            ? condition.value.trim()
+            : ''
+      if (!valueless && (Array.isArray(value) ? value.length === 0 : !value)) return []
+      selectedFields.add(condition.field)
+      return [{ ...condition, value }]
+    })
+    onApply(normalized)
     onClose()
   }
 
@@ -169,7 +196,7 @@ export default function RoadmapFilterDrawer({
       )}
     >
       <Typography.Paragraph type="secondary" style={{ marginBottom: 10, fontSize: 12 }}>
-        多个条件按 AND 关系同时生效；字段、条件、值需要成组设置。
+        同一条件内多个值按 OR 生效，多个条件按 AND 关系同时生效。
       </Typography.Paragraph>
       <Flex vertical gap={8}>
         {draftConditions.length ? draftConditions.map(condition => {
@@ -183,7 +210,14 @@ export default function RoadmapFilterDrawer({
                   size="small"
                   placeholder="字段"
                   value={condition.field || undefined}
-                  options={getFieldOptionsWithDuplicateDisabled(fieldOptions, draftConditions, condition.id)}
+                  options={getFieldOptionsWithDuplicateDisabled(
+                    fieldOptions,
+                    draftConditions.map(item => ({
+                      ...item,
+                      value: Array.isArray(item.value) ? item.value.join(',') : item.value,
+                    })),
+                    condition.id,
+                  )}
                   onChange={field => handleFieldChange(condition, field)}
                   style={{ minWidth: 0, height: ROADMAP_FILTER_CONTROL_HEIGHT }}
                 />
@@ -195,7 +229,9 @@ export default function RoadmapFilterDrawer({
                   options={operatorOptions as unknown as { label: string; value: RoadmapFilterOperator }[]}
                   onChange={operator => updateCondition(condition.id, {
                     operator,
-                    value: isValuelessFilterOperator(operator) ? '' : condition.value,
+                    value: isValuelessFilterOperator(operator)
+                      ? definition?.kind === 'enum' ? [] : ''
+                      : condition.value,
                   })}
                   style={{ minWidth: 0, height: ROADMAP_FILTER_CONTROL_HEIGHT }}
                 />
