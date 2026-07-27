@@ -2706,6 +2706,15 @@ registerAssertion('global roadmap conflicts stay visible and actionable until re
 registerAssertion('roadmap change history filters, sorts, and renders fixed audit fields', () => {
   const logSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapChangeLogDrawer.tsx'), 'utf8')
   const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  const logModule = loadTypeScriptModule(path.join(root, 'src/components/roadmap/RoadmapChangeLogDrawer.tsx'))
+  const projectNameEntries = logModule.getRoadmapAuditDisplayEntries({
+    action: 'update',
+    projectDisplayName: 'CN7(Android 16)',
+    changes: [{ field: 'projectCode', before: 'CN6', after: 'CN7' }],
+  })
+  if (projectNameEntries[0]?.before !== 'CN6(Android 16)' || projectNameEntries[0]?.after !== 'CN7(Android 16)') {
+    throw new Error(`project-name audit lost its canonical Android suffix: ${JSON.stringify(projectNameEntries)}`)
+  }
   for (const label of ['项目标识', '来源', '动作', '日期范围', '正常项目', '待规划项目', '创建', '修改', '删除']) {
     if (!logSource.includes(label)) throw new Error(`change log drawer is missing ${label}`)
   }

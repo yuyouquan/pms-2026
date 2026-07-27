@@ -101,6 +101,20 @@ export interface RoadmapChangeLogDrawerProps {
   pageSize?: number
 }
 
+function formatProjectCodeChange(
+  projectCode: string,
+  afterProjectCode: string,
+  projectDisplayName: string,
+): string {
+  const normalizedCode = projectCode.trim()
+  const normalizedAfterCode = afterProjectCode.trim()
+  const canonicalAfterName = projectDisplayName.trim()
+  const suffix = canonicalAfterName.startsWith(normalizedAfterCode)
+    ? canonicalAfterName.slice(normalizedAfterCode.length)
+    : ''
+  return `${normalizedCode}${suffix}`
+}
+
 function comparableText(value: string): string {
   return value.trim().toLocaleLowerCase('zh-CN')
 }
@@ -162,13 +176,16 @@ export function getRoadmapAuditDisplayEntries(log: RoadmapChangeLog): RoadmapAud
   if (log.action === 'update') {
     const changesByField = new Map(log.changes.map(change => [change.field, change]))
     return ROADMAP_AUDIT_FIELDS.flatMap(field => {
-      if (field === 'projectCode') return []
       const change = changesByField.get(field)
       return change ? [{
         field,
         label: ROADMAP_AUDIT_FIELD_LABELS[field],
-        before: change.before,
-        after: change.after,
+        before: field === 'projectCode'
+          ? formatProjectCodeChange(change.before, change.after, log.projectDisplayName)
+          : change.before,
+        after: field === 'projectCode'
+          ? formatProjectCodeChange(change.after, change.after, log.projectDisplayName)
+          : change.after,
       }] : []
     })
   }
