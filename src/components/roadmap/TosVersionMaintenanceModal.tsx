@@ -49,11 +49,19 @@ function resolveTosReferenceId(value: unknown, versions: readonly TosVersionConf
   const trimmed = value.trim()
   const byId = versions.find(version => version.id === trimmed)
   if (byId) return byId.id
-  const normalized = normalizeLegacyTosVersionName(trimmed)
-  if (!normalized) return null
+  const normalized = normalizeTosVersionName(trimmed)
+  if (normalized) {
+    return versions.find(version => (
+      version.major === normalized.major
+      && version.minor === normalized.minor
+      && version.patch === normalized.patch
+    ))?.id ?? null
+  }
+  if (!/^(?:tos\s*)?\d+\.\d+$/i.test(trimmed)) return null
+  const legacyNormalized = normalizeLegacyTosVersionName(trimmed)
+  if (!legacyNormalized) return null
   return versions.find(version => (
-    version.major === normalized.major && version.minor === normalized.minor
-    && (normalized.major >= 16 || version.patch === normalized.patch)
+    version.major === legacyNormalized.major && version.minor === legacyNormalized.minor
   ))?.id ?? null
 }
 

@@ -2017,6 +2017,36 @@ registerAssertion('tOS reference protection counts raw unique project identities
   }
 })
 
+registerAssertion('tOS reference resolution preserves explicit patch identities', () => {
+  const maintenance = loadTypeScriptModule(path.join(root, 'src/components/roadmap/TosVersionMaintenanceModal.tsx'))
+  const versions = [
+    {
+      id: 'tos-17-2-0', name: 'tOS 17.2.0', major: 17, minor: 2, patch: 0,
+      periodStartDate: '', periodEndDate: '', targets: [], createdAt: '', updatedAt: '',
+    },
+    {
+      id: 'tos-17-2-3', name: 'tOS 17.2.3', major: 17, minor: 2, patch: 3,
+      periodStartDate: '', periodEndDate: '', targets: [], createdAt: '', updatedAt: '',
+    },
+  ]
+  const normalProjects = [{
+    id: 'normal-patch-three',
+    type: '整机-手机',
+    firstSaleTosVersionId: 'tOS 17.2.3',
+  }]
+  const patchZeroCounts = maintenance.countTosVersionReferences(
+    normalProjects, [], versions[0], versions,
+  )
+  const patchThreeCounts = maintenance.countTosVersionReferences(
+    normalProjects, [], versions[1], versions,
+  )
+  if (patchZeroCounts.referenceCount !== 0 || patchThreeCounts.referenceCount !== 1) {
+    throw new Error(
+      `full three-part tOS reference was rebound by major/minor: ${JSON.stringify({ patchZeroCounts, patchThreeCounts })}`,
+    )
+  }
+})
+
 registerAssertion('tOS target editor preserves one multiline target value', () => {
   const targetPath = path.join(root, 'src/components/roadmap/TosTargetEditor.tsx')
   if (!fs.existsSync(targetPath)) throw new Error('TosTargetEditor.tsx is missing')
