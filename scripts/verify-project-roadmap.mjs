@@ -2746,6 +2746,25 @@ registerAssertion('persisted tOS selection repairs to all unless its concrete ID
     || JSON.stringify(evolutionCondition?.value) !== JSON.stringify(['tos-18-0', 'tos-17-2'])) {
     throw new Error(`evolution multi-select filter was lost on reload: ${JSON.stringify(evolutionMulti)}`)
   }
+  const roundTripStore = resetRoadmapStore(storeModule)
+  roundTripStore.getState().setViewMode('evolution')
+  roundTripStore.getState().setFilters([{
+    id: 'round-trip-tos',
+    field: 'firstSaleTosVersionId',
+    operator: 'equals',
+    value: ['tos-18-0', 'tos-17-2'],
+  }])
+  roundTripStore.getState().setViewMode('table')
+  const tableReload = storeModule.migrateRoadmapState(
+    storeModule.partializeRoadmapState(roundTripStore.getState()),
+    1,
+  )
+  const roundTripCondition = tableReload.filters.find(condition => condition.field === 'firstSaleTosVersionId')
+  if (tableReload.viewMode !== 'table'
+    || tableReload.selectedTosVersionId !== null
+    || JSON.stringify(roundTripCondition?.value) !== JSON.stringify(['tos-18-0', 'tos-17-2'])) {
+    throw new Error(`evolution multi-select did not survive table reload: ${JSON.stringify(tableReload)}`)
+  }
 
   for (const [name, overrides] of [
     ['invalid', { selectedTosVersionId: 'missing-version' }],
@@ -2760,10 +2779,20 @@ registerAssertion('persisted tOS selection repairs to all unless its concrete ID
       filters: [{ id: 'stale-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos-17-2' }],
       ...overrides,
     }, 1)
-    if (migrated.selectedTosVersionId !== null
-      || migrated.filters.some(condition => condition.field === 'firstSaleTosVersionId')) {
-      throw new Error(`${name} persisted selection did not fall back to all`)
+    const filter = migrated.filters.find(condition => condition.field === 'firstSaleTosVersionId')
+    if (migrated.selectedTosVersionId !== 'tos-17-2'
+      || JSON.stringify(filter?.value) !== JSON.stringify(['tos-17-2'])) {
+      throw new Error(`${name} persisted selection overrode the valid filter fact`)
     }
+  }
+  const invalidWithoutFilter = storeModule.migrateRoadmapState({
+    ...persisted,
+    selectedTosVersionId: 'missing-version',
+    filters: [],
+  }, 1)
+  if (invalidWithoutFilter.selectedTosVersionId !== null
+    || invalidWithoutFilter.filters.some(condition => condition.field === 'firstSaleTosVersionId')) {
+    throw new Error('invalid persisted selection without a filter did not fall back to all')
   }
 })
 

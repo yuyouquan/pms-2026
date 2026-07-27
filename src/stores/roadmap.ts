@@ -605,18 +605,23 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
   const changeLogs = 'changeLogs' in persistedState ? migrateChangeLogs(persistedState.changeLogs) : []
   if (!plannedProjects || !changeLogs) return initial
 
-  const selectedTosVersionId = repairSelectedTosVersionId(
+  const persistedSelectedTosVersionId = repairSelectedTosVersionId(
     resolveMigratedTosId(persistedState.selectedTosVersionId, tosVersions),
     tosVersions,
   )
   const viewMode = persistedState.viewMode === 'evolution' ? 'evolution' : 'table'
-  const persistedFilters = sanitizeRoadmapFilterConditions(persistedState.filters, tosVersions)
-  let filters = viewMode === 'table'
-    ? sanitizeRoadmapFilterConditions(
-      setRoadmapTosVersionFilter(persistedFilters, selectedTosVersionId),
+  let filters = sanitizeRoadmapFilterConditions(persistedState.filters, tosVersions)
+  const tosCondition = filters.find(condition => condition.field === 'firstSaleTosVersionId')
+  const tosValues = tosCondition && Array.isArray(tosCondition.value) ? tosCondition.value : null
+  const selectedTosVersionId = tosValues
+    ? tosValues.length === 1 ? tosValues[0] : null
+    : persistedSelectedTosVersionId
+  if (!tosCondition && viewMode === 'table' && selectedTosVersionId) {
+    filters = sanitizeRoadmapFilterConditions(
+      setRoadmapTosVersionFilter(filters, selectedTosVersionId),
       tosVersions,
     )
-    : persistedFilters
+  }
   const legacyBrand = ROADMAP_BRANDS.has(persistedState.brandFilter as RoadmapBrand)
     ? persistedState.brandFilter as RoadmapBrand
     : null
