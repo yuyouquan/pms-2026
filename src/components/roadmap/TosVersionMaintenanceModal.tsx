@@ -1,14 +1,21 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { Button, Card, Empty, Flex, Form, Input, List, Modal, Tooltip, Typography, message } from 'antd'
+import dayjs, { type Dayjs } from 'dayjs'
+import { Button, Card, DatePicker, Empty, Flex, Form, Input, List, Modal, Tooltip, Typography, message } from 'antd'
 import type { InputRef } from 'antd'
 import { isMachineProjectType } from '@/constants/projectTypes'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
-import { normalizeTosVersionName } from '@/lib/roadmapValidation'
+import {
+  formatTosVersionFull,
+  normalizeLegacyTosVersionName,
+  normalizeTosVersionName,
+} from '@/lib/roadmapValidation'
 import { useRoadmapStore } from '@/stores/roadmap'
 import type { ProjectItem } from '@/types/app'
 import type { PlannedRoadmapProject, TosVersionConfig } from '@/types/roadmap'
+
+const CREATE_VERSION_ID = '__create__'
 
 const versionCardStyle: CSSProperties = {
   borderColor: 'var(--border-purple)',
@@ -22,12 +29,13 @@ interface TosVersionMaintenanceModalProps {
   normalProjects: readonly ProjectItem[]
   plannedProjects: readonly PlannedRoadmapProject[]
   canEdit: boolean
-  onEditTargets: (version: TosVersionConfig) => void
   onChanged?: () => void
 }
 
 interface TosVersionFormValues {
   name: string
+  period?: [Dayjs | null, Dayjs | null]
+  targetText: string
 }
 
 export interface TosVersionReferenceCounts {
@@ -41,10 +49,11 @@ function resolveTosReferenceId(value: unknown, versions: readonly TosVersionConf
   const trimmed = value.trim()
   const byId = versions.find(version => version.id === trimmed)
   if (byId) return byId.id
-  const normalized = normalizeTosVersionName(trimmed)
+  const normalized = normalizeLegacyTosVersionName(trimmed)
   if (!normalized) return null
   return versions.find(version => (
     version.major === normalized.major && version.minor === normalized.minor
+    && (normalized.major >= 16 || version.patch === normalized.patch)
   ))?.id ?? null
 }
 
@@ -91,12 +100,12 @@ export default function TosVersionMaintenanceModal({
   normalProjects,
   plannedProjects,
   canEdit,
-  onEditTargets,
   onChanged,
 }: TosVersionMaintenanceModalProps) {
   const [form] = Form.useForm<TosVersionFormValues>()
   const nameInputRef = useRef<InputRef>(null)
   const submitLockRef = useRef(false)
+  const dirtyRef = useRef(false)
   const [editingVersionId, setEditingVersionId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const tosVersions = useRoadmapStore(state => state.tosVersions)
@@ -119,6 +128,7 @@ export default function TosVersionMaintenanceModal({
   useEffect(() => {
     if (!open) return
     setEditingVersionId(null)
+    dirtyRef.current = false
     form.resetFields()
   }, [form, open])
 
@@ -138,7 +148,10 @@ export default function TosVersionMaintenanceModal({
       return
     }
     const duplicate = tosVersions.some(version => (
-      version.id !== editingVersionId && version.name === normalized.name
+      version.id !== editingVersionId && (
+        version.name === normalized.name
+        || (normalized.major >= 16 && version.major === normalized.major && version.minor === normalized.minor)
+      )
     ))
     if (duplicate) {
       form.setFieldValue('name', normalized.name)
@@ -150,16 +163,56 @@ export default function TosVersionMaintenanceModal({
   }
 
   const resetInlineForm = () => {
+    dirtyRef.current = false
     setEditingVersionId(null)
     form.resetFields()
   }
 
-  const handleEdit = (version: TosVersionConfig) => {
-    setEditingVersionId(version.id)
-    form.setFieldsValue({ name: version.name })
+  const beginEdit = (version: TosVersionConfig | null) => {
+    setEditingVersionId(version?.id ?? CREATE_VERSION_ID)
+    form.resetFields()
+    form.setFieldsValue(version
+      ? {
+          name: formatTosVersionFull(version),
+          period: version.periodStartDate && version.periodEndDate
+            ? [dayjs(version.periodStartDate), dayjs(version.periodEndDate)]
+            : undefined,
+          targetText: version.targets.join('\n'),
+        }
+      : { name: '', period: undefined, targetText: '' })
     form.setFields([{ name: 'name', errors: [] }])
+    dirtyRef.current = false
     focusNameInput()
   }
+
+  const hasDirtyDraft = () => dirtyRef.current && form.isFieldsTouched()
+
+  const confirmDiscard = (next: () => void) => {
+    if (!hasDirtyDraft()) {
+      next()
+      return
+    }
+    Modal.confirm({
+      title: '放弃未保存的修改？',
+      content: '当前输入尚未保存。',
+      okText: '放弃修改',
+      cancelText: '继续编辑',
+      onOk: next,
+    })
+  }
+
+  const requestEdit = (version: TosVersionConfig | null) => {
+    const nextId = version?.id ?? CREATE_VERSION_ID
+    if (editingVersionId === nextId) return
+    confirmDiscard(() => beginEdit(version))
+  }
+
+  const requestCancelEdit = () => confirmDiscard(resetInlineForm)
+
+  const requestClose = () => confirmDiscard(() => {
+    resetInlineForm()
+    onCancel()
+  })
 
   const handleSubmit = async () => {
     if (submitLockRef.current) return
@@ -175,27 +228,50 @@ export default function TosVersionMaintenanceModal({
       }
       const normalized = normalizeTosVersionName(values.name)
       if (!normalized) {
-        setNameError('格式应为 tOS 主版本.次版本，例如 tOS 18.1')
+        setNameError('格式应为完整三位版本，例如 tOS 18.1.0')
         return
       }
 
+      const periodStartDate = values.period?.[0]?.format('YYYY-MM-DD') ?? ''
+      const periodEndDate = values.period?.[1]?.format('YYYY-MM-DD') ?? ''
+      const targetText = values.targetText?.trim() ?? ''
+      const input = {
+        name: normalized.name,
+        periodStartDate,
+        periodEndDate,
+        targets: targetText ? [targetText] : [],
+      }
       setSubmitting(true)
-      const result = editingVersionId
-        ? renameTosVersion(editingVersionId, { name: normalized.name })
-        : createTosVersion({ name: normalized.name })
+      const result = editingVersionId && editingVersionId !== CREATE_VERSION_ID
+        ? renameTosVersion(editingVersionId, {
+            name: input.name,
+            periodStartDate: input.periodStartDate,
+            periodEndDate: input.periodEndDate,
+            targets: input.targets,
+          })
+        : createTosVersion({
+            name: input.name,
+            periodStartDate: input.periodStartDate,
+            periodEndDate: input.periodEndDate,
+            targets: input.targets,
+          })
       if (!result.ok) {
         if (result.reason === 'duplicate') {
           setNameError('该版本已存在，请输入其他版本号')
           return
         }
         if (result.reason === 'invalid') {
-          setNameError(result.errors.name ?? '格式应为 tOS 主版本.次版本，例如 tOS 18.1')
+          if (result.errors.name) {
+            setNameError(result.errors.name)
+          } else {
+            message.error(result.errors.periodStartDate ?? result.errors.periodEndDate ?? '保存失败，请检查输入')
+          }
           return
         }
         setNameError('版本不存在，请刷新后重试')
         return
       }
-      message.success(editingVersionId ? 'tOS 版本已更新' : 'tOS 版本已新增')
+      message.success(editingVersionId === CREATE_VERSION_ID ? 'tOS 版本已新增' : 'tOS 版本已更新')
       resetInlineForm()
       onChanged?.()
     } finally {
@@ -228,45 +304,89 @@ export default function TosVersionMaintenanceModal({
     })
   }
 
+  const renderEditingCard = () => (
+    <Card
+      size="small"
+      title={editingVersionId === CREATE_VERSION_ID ? '新增版本' : '编辑版本'}
+      style={{ ...versionCardStyle, width: '100%' }}
+    >
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={handleSubmit}
+        onValuesChange={() => {
+          dirtyRef.current = true
+        }}
+      >
+        <Flex gap={12} wrap>
+          <Form.Item
+            label="tOS 版本"
+            name="name"
+            rules={[{ required: true, whitespace: true, message: '请输入 tOS 版本' }]}
+            style={{ flex: '1 1 220px', marginBottom: 12 }}
+          >
+            <Input
+              ref={nameInputRef}
+              placeholder="例如 tOS 18.1.0"
+              autoComplete="off"
+              onBlur={normalizeNameField}
+            />
+          </Form.Item>
+          <Form.Item
+            label="项目周期"
+            name="period"
+            style={{ flex: '1 1 300px', marginBottom: 12 }}
+          >
+            <DatePicker.RangePicker
+              allowEmpty={[true, true]}
+              format="YYYY-MM-DD"
+              style={{ width: '100%' }}
+              placeholder={['开始日期', '结束日期']}
+            />
+          </Form.Item>
+        </Flex>
+        <Form.Item
+          label="版本目标"
+          name="targetText"
+          rules={[{ max: 4000, message: '版本目标不能超过 4000 个字符' }]}
+          style={{ marginBottom: 12 }}
+        >
+          <Input.TextArea
+            rows={5}
+            maxLength={4000}
+            showCount
+            placeholder="请输入版本目标，可自由换行"
+          />
+        </Form.Item>
+        <Flex justify="flex-end" gap={8}>
+          <Button onClick={requestCancelEdit}>取消</Button>
+          <Button type="primary" htmlType="submit" loading={submitting} disabled={submitting}>
+            保存
+          </Button>
+        </Flex>
+      </Form>
+    </Card>
+  )
+
   return (
     <Modal
       className="pms-modal"
       title="tOS 版本维护"
       open={open}
-      onCancel={onCancel}
+      onCancel={requestClose}
       width={820}
       destroyOnHidden
-      footer={<Button onClick={onCancel}>关闭</Button>}
+      footer={<Button onClick={requestClose}>关闭</Button>}
       styles={{ body: { maxHeight: '68vh', overflowY: 'auto', paddingInlineEnd: 8 } }}
     >
       <Flex vertical gap={16}>
         {canEdit ? (
-          <Card size="small" title={editingVersionId ? '编辑版本' : '新增版本'} style={versionCardStyle}>
-            <Form form={form} layout="inline" onFinish={handleSubmit} style={{ alignItems: 'flex-start' }}>
-              <Form.Item
-                label="tOS 版本"
-                name="name"
-                rules={[{ required: true, whitespace: true, message: '请输入 tOS 版本' }]}
-                style={{ flex: 1, minWidth: 280, marginBottom: 0 }}
-              >
-                <Input
-                  ref={nameInputRef}
-                  placeholder="例如 tOS 18.1"
-                  autoComplete="off"
-                  onBlur={normalizeNameField}
-                />
-              </Form.Item>
-              <Form.Item style={{ marginBottom: 0 }}>
-                <Flex gap={8}>
-                  {editingVersionId ? <Button onClick={resetInlineForm}>取消编辑</Button> : null}
-                  <Button type="primary" htmlType="submit" loading={submitting} disabled={submitting}>
-                    {editingVersionId ? '保存版本' : '新增版本'}
-                  </Button>
-                </Flex>
-              </Form.Item>
-            </Form>
-          </Card>
+          <Flex justify="flex-end">
+            <Button type="primary" onClick={() => requestEdit(null)}>新增版本</Button>
+          </Flex>
         ) : null}
+
+        {editingVersionId === CREATE_VERSION_ID ? renderEditingCard() : null}
 
         <List
           aria-label="tOS 版本列表"
@@ -278,13 +398,19 @@ export default function TosVersionMaintenanceModal({
             const referenceTip = `正常项目 ${normalReferenceCount} 个，待规划项目 ${plannedReferenceCount} 个`
             return (
               <List.Item style={{ paddingInline: 0 }}>
-                <Card size="small" style={{ ...versionCardStyle, width: '100%' }}>
+                {editingVersionId === version.id ? renderEditingCard() : (
+                  <Card size="small" style={{ ...versionCardStyle, width: '100%' }}>
                   <Flex justify="space-between" align="center" gap={16} wrap>
                     <Flex vertical gap={4} style={{ minWidth: 0, flex: 1 }}>
                       <Typography.Text strong style={{ fontSize: 'var(--text-lg)' }}>
-                        {version.name}
+                        {formatTosVersionFull(version)}
                       </Typography.Text>
-                      <Typography.Text type="secondary" ellipsis={{ tooltip: version.targets.join('；') }}>
+                      {version.periodStartDate && version.periodEndDate ? (
+                        <Typography.Text type="secondary">
+                          项目周期：{version.periodStartDate} 至 {version.periodEndDate}
+                        </Typography.Text>
+                      ) : null}
+                      <Typography.Text type="secondary" ellipsis={{ tooltip: version.targets.join('\n') }}>
                         版本目标：{version.targets.length ? version.targets.join('；') : '未设置'}
                       </Typography.Text>
                       <Tooltip title={referenceTip}>
@@ -295,8 +421,7 @@ export default function TosVersionMaintenanceModal({
                     </Flex>
                     {canEdit ? (
                       <Flex gap={8} wrap>
-                        <Button onClick={() => handleEdit(version)}>编辑</Button>
-                        <Button onClick={() => onEditTargets(version)}>维护目标</Button>
+                        <Button onClick={() => requestEdit(version)}>编辑</Button>
                         {referenceCount > 0 ? (
                           <Tooltip
                             title={`已被 ${referenceCount} 个项目引用，无法删除`}
@@ -318,7 +443,8 @@ export default function TosVersionMaintenanceModal({
                       </Flex>
                     ) : null}
                   </Flex>
-                </Card>
+                  </Card>
+                )}
               </List.Item>
             )
           }}

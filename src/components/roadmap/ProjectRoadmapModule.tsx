@@ -40,7 +40,6 @@ import RoadmapEvolutionView from './RoadmapEvolutionView'
 import RoadmapFilterDrawer from './RoadmapFilterDrawer'
 import RoadmapTableView from './RoadmapTableView'
 import RoadmapToolbar from './RoadmapToolbar'
-import TosTargetEditor from './TosTargetEditor'
 import TosVersionMaintenanceModal from './TosVersionMaintenanceModal'
 
 const isPresent = <T,>(value: T | null): value is T => value !== null
@@ -60,7 +59,6 @@ export interface RoadmapViewRenderContext {
   onViewProject: (projectId: string, market?: string) => void
   onSelectedTosVersionChange: (id: string | null) => void
   onSortChange: (sort: RoadmapSortState) => void
-  onEditTosTargets: (versionId: string) => void
   onOpenConflict: (conflictKey: string) => void
   onEditPlannedProject: (projectId: string) => void
   onDeletePlannedProject: (projectId: string) => void
@@ -109,12 +107,16 @@ export default function ProjectRoadmapModule({
   const [plannedModalOpen, setPlannedModalOpen] = useState(false)
   const [editingPlannedProjectId, setEditingPlannedProjectId] = useState<string | null>(null)
   const [tosMaintenanceOpen, setTosMaintenanceOpen] = useState(false)
-  const [targetVersionId, setTargetVersionId] = useState<string | null>(null)
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [columnDrawerOpen, setColumnDrawerOpen] = useState(false)
   const [changeLogOpen, setChangeLogOpen] = useState(false)
   const [conflictDrawerOpen, setConflictDrawerOpen] = useState(false)
-  const [collapsedTargetVersionIds, setCollapsedTargetVersionIds] = useState<Set<string>>(() => new Set())
+  const [collapsedTargetVersionIds, setCollapsedTargetVersionIds] = useState<Set<string>>(
+    () => new Set(versions.filter(version => version.targets.length > 0).map(version => version.id)),
+  )
+  const knownTargetVersionIdsRef = useRef<Set<string>>(
+    new Set(versions.filter(version => version.targets.length > 0).map(version => version.id)),
+  )
   const [isFullscreen, setIsFullscreen] = useState(false)
   const roadmapShellRef = useRef<HTMLElement>(null)
   const textFilterDebouncerRef = useRef<RoadmapTextFilterDebouncer | null>(null)
@@ -199,11 +201,15 @@ export default function ProjectRoadmapModule({
 
   useEffect(() => {
     const validIds = new Set(versions.map(version => version.id))
+    const nextTargetIds = new Set(targetVersionIds)
+    const newTargetIds = targetVersionIds.filter(id => !knownTargetVersionIdsRef.current.has(id))
     setCollapsedTargetVersionIds(current => {
       const next = new Set([...current].filter(id => validIds.has(id)))
-      return next.size === current.size ? current : next
+      newTargetIds.forEach(id => next.add(id))
+      return next.size === current.size && [...next].every(id => current.has(id)) ? current : next
     })
-  }, [versions])
+    knownTargetVersionIdsRef.current = nextTargetIds
+  }, [targetVersionIds, versions])
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -253,11 +259,6 @@ export default function ProjectRoadmapModule({
     () => plannedProjects.find(project => project.id === editingPlannedProjectId) ?? null,
     [editingPlannedProjectId, plannedProjects],
   )
-  const targetVersion = useMemo(
-    () => versions.find(version => version.id === targetVersionId) ?? null,
-    [targetVersionId, versions],
-  )
-
   const openCreatePlannedProject = () => {
     setEditingPlannedProjectId(null)
     setPlannedModalOpen(true)
@@ -360,7 +361,6 @@ export default function ProjectRoadmapModule({
     onViewProject,
     onSelectedTosVersionChange: setSelectedTosVersionId,
     onSortChange: setSort,
-    onEditTosTargets: setTargetVersionId,
     onOpenConflict: openConflictDrawer,
     onEditPlannedProject: openPlannedProjectEditor,
     onDeletePlannedProject: requestDeletePlannedProject,
@@ -441,13 +441,6 @@ export default function ProjectRoadmapModule({
         onCancel={() => setTosMaintenanceOpen(false)}
         normalProjects={projects}
         plannedProjects={plannedProjects}
-        canEdit={canEdit}
-        onEditTargets={version => setTargetVersionId(version.id)}
-      />
-      <TosTargetEditor
-        open={Boolean(targetVersionId)}
-        onCancel={() => setTargetVersionId(null)}
-        version={targetVersion}
         canEdit={canEdit}
       />
       <RoadmapConflictDrawer

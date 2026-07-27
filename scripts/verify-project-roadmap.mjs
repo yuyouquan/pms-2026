@@ -1940,6 +1940,47 @@ registerAssertion('tOS-version overlay preserves semantic ordering and deletion 
   }
 })
 
+registerAssertion('tOS version maintenance uses inline cards with atomic fields', () => {
+  const source = fs.readFileSync(path.join(root, 'src/components/roadmap/TosVersionMaintenanceModal.tsx'), 'utf8')
+  for (const contract of [
+    '新增版本',
+    'editingVersionId',
+    '<DatePicker.RangePicker',
+    '<Input.TextArea',
+    'periodStartDate',
+    'periodEndDate',
+    'targets:',
+    'requestEdit',
+    'requestClose',
+    'formatTosVersionFull',
+  ]) {
+    if (!source.includes(contract)) throw new Error(`inline tOS card is missing ${contract}`)
+  }
+  if (source.includes('onEditTargets') || source.includes('维护目标')) {
+    throw new Error('tOS maintenance still delegates target editing to a separate overlay')
+  }
+  if (!/renameTosVersion\(editingVersionId,\s*\{[\s\S]*name:[\s\S]*periodStartDate[\s\S]*periodEndDate[\s\S]*targets/.test(source)) {
+    throw new Error('inline tOS edit is not one atomic rename mutation')
+  }
+  if (!/createTosVersion\(\{[\s\S]*name:[\s\S]*periodStartDate[\s\S]*periodEndDate[\s\S]*targets/.test(source)) {
+    throw new Error('inline tOS create is not one atomic create mutation')
+  }
+})
+
+registerAssertion('roadmap business views use compact display versions with full tooltips and periods', () => {
+  const table = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
+  const evolution = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapEvolutionView.tsx'), 'utf8')
+  const card = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'), 'utf8')
+  for (const [name, source] of [['table', table], ['evolution', evolution], ['card', card]]) {
+    if (!source.includes('formatTosVersionDisplay') || !source.includes('formatTosVersionFull')) {
+      throw new Error(`${name} view is missing display/full version formatting`)
+    }
+  }
+  for (const contract of ['periodStartDate', 'periodEndDate', '<Tooltip']) {
+    if (!evolution.includes(contract)) throw new Error(`evolution version header is missing ${contract}`)
+  }
+})
+
 registerAssertion('tOS reference protection counts raw unique project identities before roadmap adaptation', () => {
   const maintenance = loadTypeScriptModule(path.join(root, 'src/components/roadmap/TosVersionMaintenanceModal.tsx'))
   if (typeof maintenance.countTosVersionReferences !== 'function') {
@@ -2368,7 +2409,6 @@ registerAssertion('roadmap module composes controls and overlays without standal
     'applyRoadmapFilters',
     'PlannedProjectModal',
     'TosVersionMaintenanceModal',
-    'TosTargetEditor',
     'normalProjects={projects}',
     'plannedProjects={plannedProjects}',
     'configuredFilterCount',
@@ -2446,7 +2486,6 @@ registerAssertion('single-version roadmap table preserves sorting, targets, sour
     'firstSaleTosVersionId',
     "formatRoadmapTableValue",
     "rowKey={row => `${row.source}:${row.id}`}",
-    '修改目标',
     'version.targets.length',
     '待规划',
     '已存在正常项目',
@@ -2475,7 +2514,6 @@ registerAssertion('single-version roadmap table preserves sorting, targets, sour
     'setSelectedTosVersionId',
     'setSort',
     'setSelectedConflictKey',
-    'setTargetVersionId',
     'requestDeletePlannedProject',
     'Modal.confirm',
     'deletePlannedProject',
@@ -2867,6 +2905,13 @@ registerAssertion('roadmap targets preserve raw text and expose collapse control
   for (const token of ['collapsedTargetVersionIds', 'toggleAllTargets', 'allTargetsCollapsed']) {
     if (!moduleSource.includes(token)) throw new Error(`target collapse integration is missing ${token}`)
   }
+  for (const contract of [
+    'new Set(versions.filter(version => version.targets.length > 0).map(version => version.id))',
+    'knownTargetVersionIdsRef',
+    'newTargetIds.forEach(id => next.add(id))',
+  ]) {
+    if (!moduleSource.includes(contract)) throw new Error(`target default collapse is missing ${contract}`)
+  }
 })
 
 registerAssertion('roadmap supports compact fullscreen controls', () => {
@@ -2908,8 +2953,17 @@ registerAssertion('roadmap table owns the tOS selector and fixed columns', () =>
   if (table.includes('>只读</Typography.Text>')) throw new Error('normal project action still renders read-only text')
 })
 
+const focus = process.env.ROADMAP_VERIFY_FOCUS?.trim()
+const selectedAssertions = focus
+  ? assertions.filter(({ name }) => name.includes(focus))
+  : assertions
+if (focus && !selectedAssertions.length) {
+  console.error(`FAIL no roadmap assertions matched focus: ${focus}`)
+  process.exit(1)
+}
+
 const failures = []
-for (const { name, assertion } of assertions) {
+for (const { name, assertion } of selectedAssertions) {
   try {
     assertion()
     console.log(`PASS ${name}`)
@@ -2921,4 +2975,4 @@ for (const { name, assertion } of assertions) {
 
 if (failures.length) process.exit(1)
 
-console.log(`Project roadmap baseline verification passed (${assertions.length} assertions).`)
+console.log(`Project roadmap baseline verification passed (${selectedAssertions.length} assertions).`)

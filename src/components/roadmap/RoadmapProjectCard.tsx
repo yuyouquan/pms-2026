@@ -1,9 +1,10 @@
 'use client'
 
 import { DeleteOutlined, EditOutlined, WarningOutlined } from '@ant-design/icons'
-import { Button, Flex, Tag, Typography } from 'antd'
+import { Button, Flex, Tag, Tooltip, Typography } from 'antd'
 import { orderVisibleDefinitions } from '@/lib/columnSettings'
 import { getRoadmapSortableColumnDefinitions } from '@/lib/roadmapFilters'
+import { formatTosVersionDisplay, formatTosVersionFull } from '@/lib/roadmapValidation'
 import {
   type RoadmapColumnKey,
   type RoadmapProjectRow,
@@ -34,7 +35,8 @@ export function formatRoadmapCardValue(
   versions: readonly TosVersionConfig[],
 ): string {
   if (field === 'firstSaleTosVersionId') {
-    return versions.find(version => version.id === row.firstSaleTosVersionId)?.name ?? '—'
+    const version = versions.find(candidate => candidate.id === row.firstSaleTosVersionId)
+    return version ? formatTosVersionDisplay(version) : '—'
   }
   const value = row[field]
   return typeof value === 'string' && value.trim() ? value : '—'
@@ -86,11 +88,16 @@ export default function RoadmapProjectCard({
             const tagColor = column.key === 'versionType'
               ? VERSION_TYPE_TAG_COLORS[row.versionType]
               : null
+            const cellVersion = column.key === 'firstSaleTosVersionId'
+              ? versions.find(candidate => candidate.id === row.firstSaleTosVersionId)
+              : null
             return (
               <div key={column.key} className="pms-roadmap-evolution-card-detail">
                 <dt>{column.title}</dt>
                 <dd title={value}>
-                  {tagColor && value !== '—' ? <Tag color={tagColor}>{value}</Tag> : value}
+                  {cellVersion ? (
+                    <Tooltip title={formatTosVersionFull(cellVersion)}>{value}</Tooltip>
+                  ) : tagColor && value !== '—' ? <Tag color={tagColor}>{value}</Tag> : value}
                 </dd>
               </div>
             )
