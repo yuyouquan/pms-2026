@@ -24,6 +24,7 @@ import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
 import {
   buildRoadmapDisplayName,
   formatTosVersionFull,
+  isExactIsoDate,
   isExactRoadmapDuplicate,
   normalizeLegacyRoadmapProductType,
   normalizeLegacyTosVersionName,
@@ -108,6 +109,35 @@ function normalizeTargets(value: unknown): string[] {
     const trimmed = target.trim()
     return trimmed ? [trimmed] : []
   })
+}
+
+function normalizeTosPeriod(
+  periodStartDate: unknown,
+  periodEndDate: unknown,
+): { periodStartDate: string; periodEndDate: string } {
+  return {
+    periodStartDate: typeof periodStartDate === 'string' ? periodStartDate.trim() : '',
+    periodEndDate: typeof periodEndDate === 'string' ? periodEndDate.trim() : '',
+  }
+}
+
+function validateTosPeriod(
+  periodStartDate: string,
+  periodEndDate: string,
+): Record<string, string> {
+  if (!periodStartDate && !periodEndDate) return {}
+  if (!periodStartDate || !periodEndDate) {
+    return {
+      [periodStartDate ? 'periodEndDate' : 'periodStartDate']: '项目周期开始和结束日期需同时填写',
+    }
+  }
+  const errors: Record<string, string> = {}
+  if (!isExactIsoDate(periodStartDate)) errors.periodStartDate = '日期格式必须为 YYYY-MM-DD'
+  if (!isExactIsoDate(periodEndDate)) errors.periodEndDate = '日期格式必须为 YYYY-MM-DD'
+  if (!Object.keys(errors).length && periodStartDate > periodEndDate) {
+    errors.periodEndDate = '项目周期开始时间不能晚于结束时间'
+  }
+  return errors
 }
 
 function claimDeterministicId(preferred: unknown, fallback: string, usedIds: Set<string>): string {
@@ -388,11 +418,14 @@ function migrateTosVersions(value: unknown): TosVersionConfig[] | null {
     const patch = Number.isSafeInteger(entry.patch) && Number(entry.patch) >= 0 ? Number(entry.patch) : parsed.patch
     const normalized = { ...parsed, patch, name: formatTosVersionFull({ ...parsed, patch }) }
     const requestedId = claimDeterministicId(entry.id, `tos-${normalized.major}-${normalized.minor}-${normalized.patch}`, usedIds)
+    const period = normalizeTosPeriod(entry.periodStartDate, entry.periodEndDate)
+    const migratedPeriod = Object.keys(validateTosPeriod(period.periodStartDate, period.periodEndDate)).length
+      ? { periodStartDate: '', periodEndDate: '' }
+      : period
     versions.push({
       id: requestedId,
       ...normalized,
-      periodStartDate: typeof entry.periodStartDate === 'string' ? entry.periodStartDate.trim() : '',
-      periodEndDate: typeof entry.periodEndDate === 'string' ? entry.periodEndDate.trim() : '',
+      ...migratedPeriod,
       targets: normalizeTargets(entry.targets),
       createdAt: normalizeTimestamp(entry.createdAt),
       updatedAt: normalizeTimestamp(entry.updatedAt),
@@ -1011,11 +1044,9 @@ export const useRoadmapStore = create<RoadmapStore>()(
       createTosVersion: input => {
         const normalized = normalizeTosVersionName(input.name)
         if (!normalized) return mutationFailure({ name: 'tOS 版本格式无效' })
-        const periodStartDate = input.periodStartDate?.trim() ?? ''
-        const periodEndDate = input.periodEndDate?.trim() ?? ''
-        if (periodStartDate && periodEndDate && periodStartDate > periodEndDate) {
-          return mutationFailure({ periodEndDate: '项目周期开始时间不能晚于结束时间' })
-        }
+        const { periodStartDate, periodEndDate } = normalizeTosPeriod(input.periodStartDate, input.periodEndDate)
+        const periodErrors = validateTosPeriod(periodStartDate, periodEndDate)
+        if (Object.keys(periodErrors).length) return mutationFailure(periodErrors)
         if (get().tosVersions.some(version => (
           version.name === normalized.name
           || (normalized.major >= 16 && version.major === normalized.major && version.minor === normalized.minor)
@@ -1044,12 +1075,18 @@ export const useRoadmapStore = create<RoadmapStore>()(
         if (!existing) return { ok: false, reason: 'not-found' }
         const normalized = normalizeTosVersionName(input.name)
         if (!normalized) return mutationFailure({ name: 'tOS 版本格式无效' })
-        const periodStartDate = input.periodStartDate?.trim() ?? existing.periodStartDate
-        const periodEndDate = input.periodEndDate?.trim() ?? existing.periodEndDate
-        if (periodStartDate && periodEndDate && periodStartDate > periodEndDate) {
-          return mutationFailure({ periodEndDate: '项目周期开始时间不能晚于结束时间' })
-        }
-        if (get().tosVersions.some(version => (
+        const { periodStartDate, periodEndDate } = normalizeTosPeriod(
+          input.periodStartDate ?? existing.periodStartDate,
+          input.periodEndDate ?? existing.periodEndDate,
+        )
+        const periodErrors = validateTosPeriod(periodStartDate, periodEndDate)
+        if (Object.keys(periodErrors).length) return mutationFailure(periodErrors)
+        const semanticVersionChanged = (
+          existing.major !== normalized.major
+          || existing.minor !== normalized.minor
+          || existing.patch !== normalized.patch
+        )
+        if (semanticVersionChanged && get().tosVersions.some(version => (
           version.id !== id
           && (
             version.name === normalized.name
