@@ -80,7 +80,16 @@ const roadmapPath = path.join(root, 'src/components/roadmap/RoadmapView.tsx')
 const roadmapSource = fs.readFileSync(roadmapPath, 'utf8')
 const roadmapAnalysis = analyzeRoadmapSource(roadmapSource, roadmapPath)
 
-const expectedMachineProjectTypes = ['整机-手机', '整机-PAD', '整机-笔电']
+const expectedMachineProjectTypes = [
+  '整机-手机',
+  '整机-平板',
+  '整机-笔电',
+  '整机-功能机',
+  '整机-AIOT',
+  '整机-基线',
+  '整机-N+1',
+  '整机-预研',
+]
 
 function findLegacyMachineComparisons(filePath) {
   const source = fs.readFileSync(filePath, 'utf8')
@@ -299,7 +308,7 @@ registerAssertion('machine type guard drives market rows, status mapping, and te
   }
 })
 
-registerAssertion('workspace machine filters expose only the three exact machine subtypes', () => {
+registerAssertion('workspace machine filters expose the exact machine subtypes', () => {
   const {
     MACHINE_PROJECT_FILTER_OPTIONS,
     MACHINE_PROJECT_TYPE_FILTER,
@@ -702,11 +711,17 @@ registerAssertion('roadmap STR5 estimate and canonical project-name contracts st
   ]) {
     if (!modalSource.includes(contract)) throw new Error(`planned-project modal is missing ${contract}`)
   }
+  if (!tableSource.includes('row.str5Estimated') || !tableSource.includes('color="gold"') || !tableSource.includes('>预估</Tag>')) {
+    throw new Error('table does not render the STR5 estimate tag')
+  }
+  if (!cardSource.includes('row.str5Estimated')
+    || !cardSource.includes('ClockCircleOutlined')
+    || !cardSource.includes('title="预估时间"')
+    || cardSource.includes('>预估</Tag>')) {
+    throw new Error('evolution card does not render the compact estimated-time icon')
+  }
   for (const [sourceName, source] of [['table', tableSource], ['card', cardSource]]) {
-    if (!source.includes('row.str5Estimated') || !source.includes('color="gold"') || !source.includes('>预估</Tag>')) {
-      throw new Error(`${sourceName} does not render the STR5 estimate tag`)
-    }
-    if (!source.includes('wrap={false}')) throw new Error(`${sourceName} may wrap the STR5 estimate tag`)
+    if (!source.includes('wrap={false}')) throw new Error(`${sourceName} may wrap the STR5 estimate marker`)
   }
   if (conflictSource.includes('{project.displayName}')) {
     throw new Error('conflict drawer trusts a potentially stale displayName')
@@ -748,7 +763,7 @@ function createPlannedInput(overrides = {}) {
 
 registerAssertion('roadmap store declares the exact persistence boundary', () => {
   const source = fs.readFileSync(roadmapStorePath, 'utf8')
-  for (const token of ['persist(', "name: 'pms-project-roadmap'", 'version: 3', 'migrate:', 'partialize:']) {
+  for (const token of ['persist(', "name: 'pms-project-roadmap'", 'version: 5', 'migrate:', 'partialize:']) {
     if (!source.includes(token)) throw new Error(`Roadmap store is missing ${token}`)
   }
   if (/from ['"]@\/stores\/project['"]/.test(source)) throw new Error('roadmap store must not import the project store')
@@ -946,7 +961,7 @@ registerAssertion('roadmap migration repairs legacy names, references, UI contro
     || JSON.stringify(migrated.filters.find(condition => condition.field === 'brand')?.value) !== JSON.stringify(['TECNO'])
     || JSON.stringify(migrated.filters.find(condition => condition.field === 'productType')?.value) !== JSON.stringify(['老品'])
     || JSON.stringify(migrated.visibleColumns) !== JSON.stringify([
-      'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
+      'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate', 'developMode',
     ])
   ) throw new Error(`filters/columns were not sanitized or synchronized: ${JSON.stringify({
     filters: migrated.filters,
@@ -2656,7 +2671,7 @@ registerAssertion('evolution cards keep locked titles and approved colors', () =
     throw new Error('evolution structural columns are not locked')
   }
   const expectedEvolution = [
-    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
+    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate', 'developMode',
   ]
   if (JSON.stringify(filters.DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS) !== JSON.stringify(expectedEvolution)) {
     throw new Error('evolution defaults do not include both structural title fields')
@@ -2939,13 +2954,17 @@ registerAssertion('table and evolution views keep the approved independent defau
     'developMode', 'remark',
   ]
   const expectedEvolution = [
-    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
+    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate', 'developMode',
   ]
   if (JSON.stringify(filterModule.DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS) !== JSON.stringify(expectedTable)) {
     throw new Error('table default columns do not match the approved matrix')
   }
   if (JSON.stringify(filterModule.DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS) !== JSON.stringify(expectedEvolution)) {
     throw new Error('evolution default columns do not match the approved matrix')
+  }
+  const evolutionOrder = filterModule.DEFAULT_ROADMAP_EVOLUTION_COLUMN_ORDER
+  if (evolutionOrder.indexOf('developMode') !== evolutionOrder.indexOf('versionType') + 1) {
+    throw new Error('evolution development mode is not positioned directly after version type')
   }
   const storeModule = loadIsolatedRoadmapStore()
   const store = resetRoadmapStore(storeModule)
@@ -2978,7 +2997,7 @@ registerAssertion('roadmap migration canonicalizes locked evolution columns with
     },
   }, 1)
   const expectedEvolution = [
-    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
+    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate', 'developMode',
   ]
   if (JSON.stringify(migrated.visibleColumns) !== JSON.stringify(expectedEvolution)
     || JSON.stringify(migrated.visibleColumnsByView.evolution) !== JSON.stringify(expectedEvolution)) {

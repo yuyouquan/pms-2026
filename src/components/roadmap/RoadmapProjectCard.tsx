@@ -1,6 +1,6 @@
 'use client'
 
-import { DeleteOutlined, EditOutlined, WarningOutlined } from '@ant-design/icons'
+import { ClockCircleOutlined, DeleteOutlined, EditOutlined, WarningOutlined } from '@ant-design/icons'
 import { Button, Flex, Tag, Tooltip, Typography } from 'antd'
 import { orderVisibleDefinitions } from '@/lib/columnSettings'
 import { getRoadmapSortableColumnDefinitions } from '@/lib/roadmapFilters'
@@ -103,12 +103,22 @@ export default function RoadmapProjectCard({
                   ) : column.key === 'str5Date' && row.str5Estimated ? (
                     <Flex align="center" gap={6} wrap={false} style={{ whiteSpace: 'nowrap' }}>
                       <span>{value}</span>
-                      <Tag color="gold" style={{ marginInlineEnd: 0 }}>预估</Tag>
+                      <Tooltip title="预估时间">
+                        <ClockCircleOutlined
+                          aria-label="预估时间"
+                          style={{ color: '#d48806', fontSize: 12 }}
+                        />
+                      </Tooltip>
                     </Flex>
                   ) : column.key === 'launchDate' && row.launchEstimated ? (
                     <Flex align="center" gap={6} wrap={false} style={{ whiteSpace: 'nowrap' }}>
                       <span>{value}</span>
-                      <Tag color="gold" style={{ marginInlineEnd: 0 }}>预估</Tag>
+                      <Tooltip title="预估时间">
+                        <ClockCircleOutlined
+                          aria-label="预估时间"
+                          style={{ color: '#d48806', fontSize: 12 }}
+                        />
+                      </Tooltip>
                     </Flex>
                   ) : tagColor && value !== '—' ? <Tag color={tagColor}>{value}</Tag> : value}
                 </dd>

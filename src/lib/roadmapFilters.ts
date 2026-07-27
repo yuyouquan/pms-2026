@@ -38,12 +38,18 @@ export const DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS: RoadmapColumnKey[] = ens
   'platform',
   'startRam',
   'versionType',
+  'developMode',
   'str5Date',
   'launchDate',
 ], ROADMAP_EVOLUTION_LOCKED_COLUMNS)
 
 export const DEFAULT_ROADMAP_VISIBLE_COLUMNS = DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS
 export const DEFAULT_ROADMAP_COLUMN_ORDER = ROADMAP_COLUMNS.map(column => column.key)
+export const DEFAULT_ROADMAP_EVOLUTION_COLUMN_ORDER: RoadmapColumnKey[] = [
+  ...DEFAULT_ROADMAP_COLUMN_ORDER.slice(0, 10),
+  'developMode',
+  ...DEFAULT_ROADMAP_COLUMN_ORDER.slice(10).filter(key => key !== 'developMode'),
+]
 
 export function getRoadmapSortableColumnDefinitions(
   viewMode: 'table' | 'evolution',

@@ -37,8 +37,6 @@ import {
   isSoftwareProjectType,
   normalizeSoftwareProjectType,
   PROJECT_TYPE_INDEPENDENT_SOFTWARE,
-  PROJECT_TYPE_MACHINE_LAPTOP,
-  PROJECT_TYPE_MACHINE_PAD,
   PROJECT_TYPE_MACHINE_PHONE,
   PROJECT_TYPE_TECH,
   PROJECT_TYPE_TOS_VERSION,
@@ -142,9 +140,7 @@ const ROADMAP_SCOPES: { key: RoadmapScope; label: string }[] = [
 
 const SCOPE_BY_PROJECT_TYPE: Record<string, RoadmapScope> = {
   整体: 'overall',
-  [PROJECT_TYPE_MACHINE_PHONE]: 'machine',
-  [PROJECT_TYPE_MACHINE_PAD]: 'machine',
-  [PROJECT_TYPE_MACHINE_LAPTOP]: 'machine',
+  ...Object.fromEntries(MACHINE_PROJECT_TYPES.map(type => [type, 'machine' as RoadmapScope])),
   [PROJECT_TYPE_TOS_VERSION]: 'tosVersion',
   [SOFTWARE_PROJECT_DISPLAY_TYPE]: 'tosVersion',
   [LEGACY_SOFTWARE_PROJECT_TYPE]: 'tosVersion',

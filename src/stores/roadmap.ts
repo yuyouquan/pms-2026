@@ -6,8 +6,9 @@ import {
   ROADMAP_AUDIT_FIELDS,
 } from '@/lib/roadmapAudit'
 import {
-  DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
   DEFAULT_ROADMAP_COLUMN_ORDER,
+  DEFAULT_ROADMAP_EVOLUTION_COLUMN_ORDER,
+  DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
   DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS,
   DEFAULT_ROADMAP_VISIBLE_COLUMNS,
   ensureRoadmapLockedColumns,
@@ -334,7 +335,7 @@ export function createInitialRoadmapState(): RoadmapStoreState {
     columnOrder: [...DEFAULT_ROADMAP_COLUMN_ORDER],
     columnOrderByView: {
       table: [...DEFAULT_ROADMAP_COLUMN_ORDER],
-      evolution: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+      evolution: [...DEFAULT_ROADMAP_EVOLUTION_COLUMN_ORDER],
     },
     visibleColumns: [...DEFAULT_ROADMAP_VISIBLE_COLUMNS],
     visibleColumnsByView: {
@@ -362,7 +363,7 @@ export function createInitialRoadmapMockState(
     columnOrder: [...DEFAULT_ROADMAP_COLUMN_ORDER],
     columnOrderByView: {
       table: [...DEFAULT_ROADMAP_COLUMN_ORDER],
-      evolution: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+      evolution: [...DEFAULT_ROADMAP_EVOLUTION_COLUMN_ORDER],
     },
     visibleColumns: [...DEFAULT_ROADMAP_VISIBLE_COLUMNS],
     visibleColumnsByView: {
@@ -591,7 +592,6 @@ function migrateChangeLogs(value: unknown): RoadmapChangeLog[] | null {
 }
 
 export function migrateRoadmapState(persistedState: unknown, fromVersion: number): RoadmapStoreState {
-  void fromVersion
   const initial = createInitialRoadmapState()
   if (!isRecord(persistedState)) return initial
   const roadmapKeys = ['plannedProjects', 'tosVersions', 'changeLogs', 'viewMode', 'selectedTosVersionId']
@@ -663,10 +663,18 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
     : JSON.stringify(legacyVisibleColumns) === JSON.stringify(DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS)
       ? [...DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS]
       : legacyVisibleColumns
-  const evolutionVisibleColumns = ensureRoadmapLockedColumns(
+  let evolutionVisibleColumns = ensureRoadmapLockedColumns(
     migratedEvolutionVisibleColumns,
     ROADMAP_EVOLUTION_LOCKED_COLUMNS,
   )
+  if (fromVersion < 4) {
+    evolutionVisibleColumns = [...DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS]
+  } else if (fromVersion < 5 && !evolutionVisibleColumns.includes('developMode')) {
+    evolutionVisibleColumns = ensureRoadmapLockedColumns(
+      [...evolutionVisibleColumns, 'developMode'],
+      ROADMAP_EVOLUTION_LOCKED_COLUMNS,
+    )
+  }
   const visibleColumnsByView = {
     table: normalizeRoadmapColumnSettings('table', {
       order: [],
@@ -696,8 +704,27 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
         : tableLegacyVisibleOrder,
     visible: visibleColumnsByView.table,
   })
+  const persistedEvolutionOrder = Array.isArray(persistedOrderByView?.evolution)
+    ? persistedOrderByView.evolution as RoadmapColumnKey[]
+    : viewMode === 'evolution' && legacyColumnOrder
+      ? legacyColumnOrder
+      : evolutionLegacyVisibleOrder
+  const preservedEvolutionOrder = preserveKnownColumnOrder(persistedEvolutionOrder)
+    ?? [...DEFAULT_ROADMAP_EVOLUTION_COLUMN_ORDER]
+  const completeEvolutionOrder = normalizeRoadmapColumnSettings('evolution', {
+    order: preservedEvolutionOrder,
+    visible: evolutionVisibleColumns,
+  }).order
+  const upgradedEvolutionOrder: RoadmapColumnKey[] = completeEvolutionOrder.filter(key => key !== 'developMode')
+  upgradedEvolutionOrder.splice(
+    Math.max(upgradedEvolutionOrder.indexOf('versionType') + 1, 0),
+    0,
+    'developMode',
+  )
   const evolutionSettings = normalizeRoadmapColumnSettings('evolution', {
-    order: Array.isArray(persistedOrderByView?.evolution)
+    order: fromVersion < 5
+      ? upgradedEvolutionOrder
+      : Array.isArray(persistedOrderByView?.evolution)
       ? persistedOrderByView.evolution as RoadmapColumnKey[]
       : viewMode === 'evolution' && legacyColumnOrder
         ? legacyColumnOrder
@@ -1165,7 +1192,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
     }),
     {
       name: 'pms-project-roadmap',
-      version: 3,
+      version: 5,
       storage: createJSONStorage(() => safeRoadmapStorage),
       migrate: migrateRoadmapState,
       partialize: partializeRoadmapState,
