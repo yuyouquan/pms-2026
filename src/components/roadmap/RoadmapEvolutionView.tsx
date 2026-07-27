@@ -52,7 +52,7 @@ export interface RoadmapEvolutionViewProps {
 export function sortEvolutionVersions(
   versions: readonly TosVersionConfig[],
 ): TosVersionConfig[] {
-  return [...versions].sort((left, right) => compareSemanticTos(right, left))
+  return [...versions].sort(compareSemanticTos)
 }
 
 export function selectEvolutionVersions(

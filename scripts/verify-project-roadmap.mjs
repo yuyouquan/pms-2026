@@ -2190,11 +2190,11 @@ registerAssertion('roadmap selectable filter UI and evolution columns honor mult
     { id: 'tos-17-2-0', major: 17, minor: 2, patch: 0 },
   ]
   const all = evolution.selectEvolutionVersions(versions, [])
-  if (all.map(version => version.id).join(',') !== 'tos-18-0-0,tos-17-2-1,tos-17-2-0') {
-    throw new Error(`evolution versions lost semantic descending order: ${JSON.stringify(all)}`)
+  if (all.map(version => version.id).join(',') !== 'tos-17-2-0,tos-17-2-1,tos-18-0-0') {
+    throw new Error(`evolution versions lost old-to-new chronology: ${JSON.stringify(all)}`)
   }
   const selected = evolution.selectEvolutionVersions(versions, ['tos-17-2-0', 'tos-18-0-0'])
-  if (selected.map(version => version.id).join(',') !== 'tos-18-0-0,tos-17-2-0') {
+  if (selected.map(version => version.id).join(',') !== 'tos-17-2-0,tos-18-0-0') {
     throw new Error(`evolution did not restrict columns to selected versions: ${JSON.stringify(selected)}`)
   }
 })
