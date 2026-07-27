@@ -480,7 +480,9 @@ function migratePlannedProjects(value: unknown, versions: readonly TosVersionCon
       remark: typeof entry.remark === 'string' ? entry.remark : '',
       actor: typeof entry.updatedBy === 'string' ? entry.updatedBy : '系统',
     } as PlannedRoadmapProjectMutationInput
-    const errors = validatePlannedProject(migratedInput, projects, undefined, versions)
+    // Historical persisted rows may legitimately share the same business key.
+    // Migration validates row shape and references but only repairs identity collisions.
+    const errors = validatePlannedProject(migratedInput, [], undefined, versions)
     if (Object.keys(errors).length) continue
     const normalizedInput = normalizeProjectInput(migratedInput)
     const fields = toProjectFields(normalizedInput)
