@@ -93,7 +93,7 @@ function ConflictProjectCard({
             type="secondary"
             style={{ display: 'block', marginTop: 4, overflowWrap: 'anywhere' }}
           >
-            首销 tOS：
+            tOS 版本：
             {tosVersion ? (
               <Tooltip title={formatTosVersionFull(tosVersion)}>
                 {formatTosVersionDisplay(tosVersion)}

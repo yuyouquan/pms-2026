@@ -5,7 +5,7 @@ import type {
 } from '@/types/roadmap'
 import { normalizeLegacyTosVersionName } from '@/lib/roadmapValidation'
 
-type SemanticTos = Pick<TosVersionConfig, 'major' | 'minor' | 'patch'>
+type SemanticTos = Pick<TosVersionConfig, 'major' | 'minor'>
 type ComparableRoadmapRecord = Partial<Record<RoadmapColumnKey, unknown>>
 
 const APPROVED_RAM_VALUES = new Map([
@@ -22,8 +22,8 @@ function deterministicValueKey(value: unknown): string {
   if (value === null) return 'null'
   if (typeof value !== 'object') return `${typeof value}:${String(value)}`
   const record = value as Record<string, unknown>
-  if ('major' in record || 'minor' in record || 'patch' in record) {
-    return `semantic:${String(record.major)}|${String(record.minor)}|${String(record.patch)}`
+  if ('major' in record || 'minor' in record) {
+    return `semantic:${String(record.major)}|${String(record.minor)}`
   }
   return `object:${Object.keys(record).sort().map(key => `${key}=${String(record[key])}`).join('|')}`
 }
@@ -55,12 +55,10 @@ function parseSemanticTos(value: unknown): SemanticTos | null {
   if (
     !Number.isSafeInteger(candidate.major)
     || !Number.isSafeInteger(candidate.minor)
-    || !Number.isSafeInteger(candidate.patch)
     || Number(candidate.major) < 0
     || Number(candidate.minor) < 0
-    || Number(candidate.patch) < 0
   ) return null
-  return { major: Number(candidate.major), minor: Number(candidate.minor), patch: Number(candidate.patch) }
+  return { major: Number(candidate.major), minor: Number(candidate.minor) }
 }
 
 export function compareSemanticTos(left: unknown, right: unknown): number {
@@ -74,7 +72,6 @@ export function compareSemanticTos(left: unknown, right: unknown): number {
     (leftValue, rightValue) => (
       leftValue.major - rightValue.major
       || leftValue.minor - rightValue.minor
-      || leftValue.patch - rightValue.patch
     ),
   )
 }

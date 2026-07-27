@@ -4,7 +4,11 @@ import { DeleteOutlined, EditOutlined, WarningOutlined } from '@ant-design/icons
 import { Button, Flex, Tag, Tooltip, Typography } from 'antd'
 import { orderVisibleDefinitions } from '@/lib/columnSettings'
 import { getRoadmapSortableColumnDefinitions } from '@/lib/roadmapFilters'
-import { formatTosVersionDisplay, formatTosVersionFull } from '@/lib/roadmapValidation'
+import {
+  buildRoadmapDisplayName,
+  formatTosVersionDisplay,
+  formatTosVersionFull,
+} from '@/lib/roadmapValidation'
 import {
   type RoadmapColumnKey,
   type RoadmapProjectRow,
@@ -43,7 +47,9 @@ export function formatRoadmapCardValue(
 }
 
 export function formatEvolutionCardTitle(row: RoadmapProjectRow): string {
-  return `${row.productSeries.trim() || '—'}（${row.displayName.trim() || '—'}）`
+  const marketName = row.marketName?.trim() || '—'
+  const projectName = buildRoadmapDisplayName(row.projectCode, row.androidVersion, row.productType)
+  return `${marketName}（${projectName || '—'}）`
 }
 
 export default function RoadmapProjectCard({
@@ -63,7 +69,7 @@ export default function RoadmapProjectCard({
       order: [...columnOrder],
       visible: [...visibleColumns],
     },
-  ).filter(column => column.key !== 'productSeries' && column.key !== 'displayName')
+  ).filter(column => column.key !== 'marketName' && column.key !== 'displayName')
   const isPlanned = row.source === 'planned'
   const title = formatEvolutionCardTitle(row)
 
@@ -76,9 +82,6 @@ export default function RoadmapProjectCard({
         <Typography.Text className="pms-roadmap-evolution-card-title" title={title} strong>
           {title}
         </Typography.Text>
-        <Tag className="pms-roadmap-evolution-source-tag" color={isPlanned ? 'purple' : 'blue'}>
-          {isPlanned ? '待规划项目' : '正常项目 · 只读'}
-        </Tag>
       </Flex>
 
       {detailColumns.length ? (
@@ -93,11 +96,16 @@ export default function RoadmapProjectCard({
               : null
             return (
               <div key={column.key} className="pms-roadmap-evolution-card-detail">
-                <dt>{column.title}</dt>
+                {column.key === 'str5Date' || column.key === 'launchDate' ? <dt>{column.title}</dt> : null}
                 <dd title={value}>
                   {cellVersion ? (
                     <Tooltip title={formatTosVersionFull(cellVersion)}>{value}</Tooltip>
                   ) : column.key === 'str5Date' && row.str5Estimated ? (
+                    <Flex align="center" gap={6} wrap={false} style={{ whiteSpace: 'nowrap' }}>
+                      <span>{value}</span>
+                      <Tag color="gold" style={{ marginInlineEnd: 0 }}>预估</Tag>
+                    </Flex>
+                  ) : column.key === 'launchDate' && row.launchEstimated ? (
                     <Flex align="center" gap={6} wrap={false} style={{ whiteSpace: 'nowrap' }}>
                       <span>{value}</span>
                       <Tag color="gold" style={{ marginInlineEnd: 0 }}>预估</Tag>

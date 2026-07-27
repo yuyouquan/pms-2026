@@ -38,6 +38,7 @@ export interface RoadmapProjectFields {
   str5Date: string
   str5Estimated: boolean
   launchDate: string
+  launchEstimated: boolean
   developMode: RoadmapDevelopMode
   remark: string
 }
@@ -67,7 +68,6 @@ export interface TosVersionConfig {
   name: string
   major: number
   minor: number
-  patch: number
   periodStartDate: string
   periodEndDate: string
   targets: string[]

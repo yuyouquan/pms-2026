@@ -318,7 +318,7 @@ export default function ProjectRoadmapModule({
       content: (
         <>
           <div style={{ marginBottom: 8 }}>项目：{project.displayName}</div>
-          <div>删除后，该待规划项目会立即从项目路标中移除；修改记录仍保留删除前快照。确认删除？</div>
+          <div>删除后，该待规划项目会立即从 tOS 路标中移除；修改记录仍保留删除前快照。确认删除？</div>
         </>
       ),
       okText: '确认删除',
@@ -340,8 +340,8 @@ export default function ProjectRoadmapModule({
     return (
       <Result
         status="403"
-        title="暂无项目路标查看权限"
-        subTitle="请联系管理员开通项目路标查看权限。"
+        title="暂无 tOS 路标查看权限"
+        subTitle="请联系管理员开通 tOS 路标查看权限。"
       />
     )
   }
@@ -376,7 +376,7 @@ export default function ProjectRoadmapModule({
     <section
       ref={roadmapShellRef}
       className={`pms-roadmap-shell${isFullscreen ? ' pms-roadmap-shell-fullscreen' : ''}`}
-      aria-label="项目路标"
+      aria-label="tOS 路标视图"
       style={{ width: '100%', minWidth: 0 }}
     >
       <RoadmapToolbar

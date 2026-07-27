@@ -130,11 +130,13 @@ export default function PlannedProjectModal({
         str5Date: dayjs(editingProject.str5Date),
         str5Estimated: editingProject.str5Estimated === true,
         launchDate: dayjs(editingProject.launchDate),
+        launchEstimated: editingProject.launchEstimated === true,
       }
       : {
           machineProjectType: MACHINE_PROJECT_TYPES[0],
           productType: '新品',
           str5Estimated: false,
+          launchEstimated: false,
           remark: '',
         }
     form.setFields(Object.entries(nextValues).map(([name, value]) => ({
@@ -335,7 +337,7 @@ export default function PlannedProjectModal({
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
-                <Form.Item label="首销 tOS 版本" name="firstSaleTosVersionId" rules={[{ required: true, message: '请选择首销 tOS 版本' }]}>
+                <Form.Item label="tOS 版本" name="firstSaleTosVersionId" rules={[{ required: true, message: '请选择 tOS 版本' }]}>
                   <Select
                     placeholder="请选择版本"
                     options={descendingTosVersions.map(version => ({ label: version.name, value: version.id }))}
@@ -439,8 +441,15 @@ export default function PlannedProjectModal({
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
-                <Form.Item label="上市时间" name="launchDate" rules={[{ required: true, message: '请选择上市时间' }]}>
-                  <DatePicker format="YYYY-MM-DD" style={{ width: '100%' }} placeholder="请选择具体日期" />
+                <Form.Item label="上市时间" required>
+                  <Flex align="center" gap={8} wrap={false}>
+                    <Form.Item name="launchDate" noStyle rules={[{ required: true, message: '请选择上市时间' }]}>
+                      <DatePicker format="YYYY-MM-DD" style={{ flex: 1, minWidth: 0 }} placeholder="请选择具体日期" />
+                    </Form.Item>
+                    <Form.Item name="launchEstimated" valuePropName="checked" noStyle>
+                      <Checkbox>预估</Checkbox>
+                    </Form.Item>
+                  </Flex>
                 </Form.Item>
               </Col>
               <Col span={24}>

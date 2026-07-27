@@ -82,17 +82,24 @@ function findTosVersionId(candidate: unknown, versions: readonly TosVersionConfi
   const normalized = normalizeLegacyTosVersionName(trimmed)
   if (!normalized) return null
   const byVersion = versions.find(version => (
-    version.major === normalized.major && version.minor === normalized.minor && version.patch === normalized.patch
+    version.major === normalized.major && version.minor === normalized.minor
   ))
   return byVersion?.id ?? null
 }
 
-function resolveTosVersionId(project: ProjectItem, versions: readonly TosVersionConfig[]): string | null {
-  if (project.firstSaleTosVersionId !== undefined && project.firstSaleTosVersionId !== null) {
-    if (typeof project.firstSaleTosVersionId !== 'string' || project.firstSaleTosVersionId.trim()) {
-      return findTosVersionId(project.firstSaleTosVersionId, versions)
-    }
-  }
+function resolveTosVersionId(
+  project: ProjectItem,
+  productType: RoadmapProductType,
+  versions: readonly TosVersionConfig[],
+): string | null {
+  const preferredCandidates = productType === '新品'
+    ? [project.firstSaleTosVersionId, project.firstSaleTosVersion]
+    : [project.currentTosVersionId, project.currentTosVersion]
+  const explicitCandidate = preferredCandidates.find(candidate => (
+    typeof candidate === 'string' && candidate.trim()
+  ))
+  if (explicitCandidate) return findTosVersionId(explicitCandidate, versions)
+
   for (const candidate of [project.tosVersionName, project.tosVersion]) {
     const resolved = findTosVersionId(candidate, versions)
     if (resolved) return resolved
@@ -127,7 +134,7 @@ export function adaptNormalProject(
   const projectCode = firstNonBlank(project.projectCode, project.model)
   const androidVersion = normalizeAndroidVersion(project.androidVersion, project.operatingSystem)
   const productType = normalizeNormalProductType(project.productType)
-  const firstSaleTosVersionId = resolveTosVersionId(project, versions)
+  const firstSaleTosVersionId = productType ? resolveTosVersionId(project, productType, versions) : null
   const brand = normalizeBrand(project.brand)
   const startRam = normalizeRam(project.startRam, project.memory)
   const versionType = normalizeVersionType(project.versionType)
@@ -170,6 +177,7 @@ export function adaptNormalProject(
     str5Date: firstNonBlank(project.str5Date),
     str5Estimated: false,
     launchDate: firstNonBlank(project.launchDate),
+    launchEstimated: false,
     developMode,
     remark,
   }

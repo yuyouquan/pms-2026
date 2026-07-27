@@ -8,6 +8,7 @@ import { isMachineProjectType } from '@/constants/projectTypes'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
 import {
   formatTosVersionFull,
+  normalizeLegacyRoadmapProductType,
   normalizeLegacyTosVersionName,
   normalizeTosVersionName,
 } from '@/lib/roadmapValidation'
@@ -54,10 +55,8 @@ function resolveTosReferenceId(value: unknown, versions: readonly TosVersionConf
     return versions.find(version => (
       version.major === normalized.major
       && version.minor === normalized.minor
-      && version.patch === normalized.patch
     ))?.id ?? null
   }
-  if (!/^(?:tos\s*)?\d+\.\d+$/i.test(trimmed)) return null
   const legacyNormalized = normalizeLegacyTosVersionName(trimmed)
   if (!legacyNormalized) return null
   return versions.find(version => (
@@ -70,11 +69,20 @@ function resolveNormalProjectTosReference(
   versions: readonly TosVersionConfig[],
 ): string | null {
   if (!isMachineProjectType(project.type)) return null
-  if (typeof project.firstSaleTosVersionId === 'string' && project.firstSaleTosVersionId.trim()) {
-    return resolveTosReferenceId(project.firstSaleTosVersionId, versions)
+  const productType = normalizeLegacyRoadmapProductType(project.productType)
+  const preferredCandidates = productType === '新品'
+    ? [project.firstSaleTosVersionId, project.firstSaleTosVersion]
+    : productType === '老品'
+      ? [project.currentTosVersionId, project.currentTosVersion]
+      : [project.firstSaleTosVersionId, project.firstSaleTosVersion, project.currentTosVersionId, project.currentTosVersion]
+  const candidates = preferredCandidates.some(candidate => typeof candidate === 'string' && candidate.trim())
+    ? preferredCandidates
+    : [project.tosVersionName, project.tosVersion]
+  for (const candidate of candidates) {
+    const resolved = resolveTosReferenceId(candidate, versions)
+    if (resolved) return resolved
   }
-  return resolveTosReferenceId(project.tosVersionName, versions)
-    ?? resolveTosReferenceId(project.tosVersion, versions)
+  return null
 }
 
 export function countTosVersionReferences(
@@ -156,10 +164,9 @@ export default function TosVersionMaintenanceModal({
       return
     }
     const duplicate = tosVersions.some(version => (
-      version.id !== editingVersionId && (
-        version.name === normalized.name
-        || (normalized.major >= 16 && version.major === normalized.major && version.minor === normalized.minor)
-      )
+      version.id !== editingVersionId
+      && version.major === normalized.major
+      && version.minor === normalized.minor
     ))
     if (duplicate) {
       form.setFieldValue('name', normalized.name)
@@ -236,7 +243,7 @@ export default function TosVersionMaintenanceModal({
       }
       const normalized = normalizeTosVersionName(values.name)
       if (!normalized) {
-        setNameError('格式应为完整三位版本，例如 tOS 18.1.0')
+        setNameError('格式应为两位版本，例如 tOS 18.1')
         return
       }
 
@@ -335,7 +342,7 @@ export default function TosVersionMaintenanceModal({
           >
             <Input
               ref={nameInputRef}
-              placeholder="例如 tOS 18.1.0"
+              placeholder="例如 tOS 18.1"
               autoComplete="off"
               onBlur={normalizeNameField}
             />

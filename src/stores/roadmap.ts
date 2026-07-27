@@ -177,10 +177,9 @@ export function createInitialTosVersions(): TosVersionConfig[] {
     [16, 1],
   ].map(([major, minor]) => ({
     id: `tos-${major}-${minor}`,
-    name: `tOS ${major}.${minor}.0`,
+    name: `tOS ${major}.${minor}`,
     major,
     minor,
-    patch: 0,
     periodStartDate: '',
     periodEndDate: '',
     targets: [],
@@ -213,8 +212,9 @@ export function createInitialPlannedProjects(
     startRam: '8GB',
     versionType: 'Full',
     str5Date: '2026-10-15',
-    str5Estimated: false,
+    str5Estimated: true,
     launchDate: '2026-11-20',
+    launchEstimated: true,
     developMode: 'ODC',
     remark: '待规划样例：用于确认与已存在普通项目的重复冲突处理。',
     createdAt: '2026-07-21T02:15:00.000Z',
@@ -253,6 +253,7 @@ export function createInitialRoadmapChangeLogs(
     str5Date: '2026-05-15',
     str5Estimated: false,
     launchDate: '2026-06-15',
+    launchEstimated: false,
     developMode: 'ODC',
     remark: '重点验证海外市场首销版本交付。',
   }
@@ -401,37 +402,37 @@ function preserveKnownColumnOrder(value: unknown): RoadmapColumnKey[] | undefine
 
 function migrateTosVersions(value: unknown): TosVersionConfig[] | null {
   if (!Array.isArray(value)) return null
-  const versions: TosVersionConfig[] = []
-  const usedIds = new Set<string>()
+  const versionsByKey = new Map<string, TosVersionConfig>()
 
   for (const entry of value) {
     if (!isRecord(entry)) continue
     const fromName = typeof entry.name === 'string' ? normalizeLegacyTosVersionName(entry.name) : null
     const fromParts = Number.isSafeInteger(entry.major) && Number(entry.major) >= 0
       && Number.isSafeInteger(entry.minor) && Number(entry.minor) >= 0
-      ? normalizeTosVersionName(
-        `tOS ${Number(entry.major)}.${Number(entry.minor)}.${Number.isSafeInteger(entry.patch) && Number(entry.patch) >= 0 ? Number(entry.patch) : 0}`,
-      )
+      ? normalizeTosVersionName(`tOS ${Number(entry.major)}.${Number(entry.minor)}`)
       : null
     const parsed = fromName ?? fromParts
     if (!parsed) continue
-    const patch = Number.isSafeInteger(entry.patch) && Number(entry.patch) >= 0 ? Number(entry.patch) : parsed.patch
-    const normalized = { ...parsed, patch, name: formatTosVersionFull({ ...parsed, patch }) }
-    const requestedId = claimDeterministicId(entry.id, `tos-${normalized.major}-${normalized.minor}-${normalized.patch}`, usedIds)
     const period = normalizeTosPeriod(entry.periodStartDate, entry.periodEndDate)
     const migratedPeriod = Object.keys(validateTosPeriod(period.periodStartDate, period.periodEndDate)).length
       ? { periodStartDate: '', periodEndDate: '' }
       : period
-    versions.push({
-      id: requestedId,
-      ...normalized,
+    const candidate: TosVersionConfig = {
+      id: `tos-${parsed.major}-${parsed.minor}`,
+      ...parsed,
       ...migratedPeriod,
       targets: normalizeTargets(entry.targets),
       createdAt: normalizeTimestamp(entry.createdAt),
       updatedAt: normalizeTimestamp(entry.updatedAt),
-    })
+    }
+    const key = `${parsed.major}.${parsed.minor}`
+    const existing = versionsByKey.get(key)
+    if (!existing || Date.parse(candidate.updatedAt) >= Date.parse(existing.updatedAt)) {
+      versionsByKey.set(key, candidate)
+    }
   }
 
+  const versions = [...versionsByKey.values()]
   if (value.length > 0 && versions.length === 0) return null
   return sortTosVersions(versions)
 }
@@ -441,12 +442,16 @@ function resolveMigratedTosId(value: unknown, versions: readonly TosVersionConfi
   const trimmed = value.trim()
   const exact = versions.find(version => version.id === trimmed)
   if (exact) return exact.id
+  const legacyId = trimmed.match(/^tos-(\d+)-(\d+)(?:-\d+)?$/i)
+  if (legacyId) {
+    const matched = versions.find(version => version.major === Number(legacyId[1]) && version.minor === Number(legacyId[2]))
+    if (matched) return matched.id
+  }
   const normalized = normalizeLegacyTosVersionName(trimmed)
   return normalized
     ? versions.find(version => (
       version.major === normalized.major
       && version.minor === normalized.minor
-      && version.patch === normalized.patch
     ))?.id ?? null
     : null
 }
@@ -466,6 +471,7 @@ function normalizeProjectInput(input: PlannedRoadmapProjectMutationInput): Plann
     str5Date: trimStringValue(input.str5Date),
     str5Estimated: input.str5Estimated === true,
     launchDate: trimStringValue(input.launchDate),
+    launchEstimated: input.launchEstimated === true,
     remark: trimStringValue(input.remark) ?? '',
     actor: trimStringValue(input.actor),
   }
@@ -489,6 +495,7 @@ function toProjectFields(input: PlannedRoadmapProjectMutationInput): RoadmapProj
     str5Date: input.str5Date,
     str5Estimated: input.str5Estimated === true,
     launchDate: input.launchDate,
+    launchEstimated: input.launchEstimated === true,
     developMode: input.developMode,
     remark: input.remark ?? '',
   }
@@ -862,8 +869,8 @@ function createPlannedChangeLog(
   }
 }
 
-function deriveAvailableTosId(major: number, minor: number, patch: number, versions: readonly TosVersionConfig[]): string {
-  const base = `tos-${major}-${minor}-${patch}`
+function deriveAvailableTosId(major: number, minor: number, versions: readonly TosVersionConfig[]): string {
+  const base = `tos-${major}-${minor}`
   if (!versions.some(version => version.id === base)) return base
   return `${base}-${createCollisionResistantId('version').split('-').at(-1)}`
 }
@@ -1054,12 +1061,11 @@ export const useRoadmapStore = create<RoadmapStore>()(
         const periodErrors = validateTosPeriod(periodStartDate, periodEndDate)
         if (Object.keys(periodErrors).length) return mutationFailure(periodErrors)
         if (get().tosVersions.some(version => (
-          version.name === normalized.name
-          || (normalized.major >= 16 && version.major === normalized.major && version.minor === normalized.minor)
+          version.major === normalized.major && version.minor === normalized.minor
         ))) return { ok: false, reason: 'duplicate' }
         const occurredAt = nowIso()
         const version: TosVersionConfig = {
-          id: deriveAvailableTosId(normalized.major, normalized.minor, normalized.patch, get().tosVersions),
+          id: deriveAvailableTosId(normalized.major, normalized.minor, get().tosVersions),
           ...normalized,
           periodStartDate,
           periodEndDate,
@@ -1090,13 +1096,11 @@ export const useRoadmapStore = create<RoadmapStore>()(
         const semanticVersionChanged = (
           existing.major !== normalized.major
           || existing.minor !== normalized.minor
-          || existing.patch !== normalized.patch
         )
         if (semanticVersionChanged && get().tosVersions.some(version => (
           version.id !== id
           && (
-            version.name === normalized.name
-            || (normalized.major >= 16 && version.major === normalized.major && version.minor === normalized.minor)
+            version.major === normalized.major && version.minor === normalized.minor
           )
         ))) return { ok: false, reason: 'duplicate' }
         const updated = {
@@ -1161,7 +1165,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
     }),
     {
       name: 'pms-project-roadmap',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => safeRoadmapStorage),
       migrate: migrateRoadmapState,
       partialize: partializeRoadmapState,

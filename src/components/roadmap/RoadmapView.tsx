@@ -28,7 +28,7 @@ export default function RoadmapView({ projects, onViewProject }: RoadmapViewProp
 
   const PROJECT_VIEW_OPTIONS = [
     { key: 'summary' as const, label: '项目计划汇总看板', icon: <TableOutlined /> },
-    { key: 'roadmap' as const, label: '项目路标视图', icon: <GlobalOutlined /> },
+    { key: 'roadmap' as const, label: 'tOS 路标视图', icon: <GlobalOutlined /> },
   ]
 
   return (
@@ -42,8 +42,10 @@ export default function RoadmapView({ projects, onViewProject }: RoadmapViewProp
         <Space size={12}>
           <AppstoreOutlined style={{ fontSize: 20, color: '#fff' }} />
           <div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>项目视图</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 2 }}>全局查看项目计划汇总、项目路标与版本演进</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>
+              {activeProjectView === 'roadmap' ? 'tOS 路标视图' : '项目视图'}
+            </div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 2 }}>全局查看项目计划汇总、tOS 路标与版本演进</div>
           </div>
         </Space>
         <div style={{

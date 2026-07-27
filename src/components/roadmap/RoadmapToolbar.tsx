@@ -115,11 +115,11 @@ export default function RoadmapToolbar({
         className="roadmap-toolbar-scroll-row"
         justify="space-between"
         align="center"
-        gap={12}
+        gap={8}
         wrap={false}
         style={{ minWidth: 'max-content' }}
       >
-        <Flex align="center" gap={10} wrap={false} style={{ minWidth: 'max-content', flex: '0 0 auto' }}>
+        <Flex align="center" gap={6} wrap={false} style={{ minWidth: 'max-content', flex: '0 0 auto' }}>
           <div
             className="roadmap-toolbar-view-switch"
             style={{
@@ -199,7 +199,7 @@ export default function RoadmapToolbar({
               onClick={onToggleAllTargets}
               style={compactControlStyle}
             >
-              {allTargetsCollapsed ? '展开全部目标' : '收起全部目标'}
+              {allTargetsCollapsed ? '展开目标' : '收起目标'}
             </Button>
           ) : null}
           {conflictCount > 0 ? (
@@ -215,7 +215,7 @@ export default function RoadmapToolbar({
                   background: 'var(--bg-purple-tint)',
                 }}
               >
-                解决冲突
+                冲突
               </Button>
             </Badge>
           ) : null}
@@ -225,7 +225,7 @@ export default function RoadmapToolbar({
             onClick={onOpenChangeLog}
             style={compactControlStyle}
           >
-            修改记录
+            记录
           </Button>
           {canEdit ? (
             <>
@@ -242,13 +242,14 @@ export default function RoadmapToolbar({
                 onClick={onCreatePlannedProject}
                 style={compactControlStyle}
               >
-                创建待规划项目
+                创建项目
               </Button>
             </>
           ) : null}
           <Tooltip title={filterCount ? `已配置 ${filterCount} 个筛选条件` : '筛选'}>
             <Badge count={filterCount} size="small" offset={[-2, 2]}>
               <Button
+                className="roadmap-toolbar-icon-action"
                 aria-label={filterCount ? `筛选，已配置 ${filterCount} 个条件` : '筛选'}
                 type={filterCount ? 'primary' : 'default'}
                 icon={<FilterOutlined />}
@@ -260,22 +261,30 @@ export default function RoadmapToolbar({
               </Button>
             </Badge>
           </Tooltip>
-          <Button
-            icon={<SettingOutlined />}
-            disabled={!canView}
-            onClick={onOpenColumnSettings}
-            style={compactControlStyle}
-          >
-            列设置
-          </Button>
-          <Button
-            icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
-            aria-pressed={isFullscreen}
-            onClick={onToggleFullscreen}
-            style={compactControlStyle}
-          >
-            {isFullscreen ? '退出全屏' : '全屏'}
-          </Button>
+          <Tooltip title="列设置">
+            <Button
+              className="roadmap-toolbar-icon-action"
+              aria-label="列设置"
+              icon={<SettingOutlined />}
+              disabled={!canView}
+              onClick={onOpenColumnSettings}
+              style={compactControlStyle}
+            >
+              列设置
+            </Button>
+          </Tooltip>
+          <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
+            <Button
+              className="roadmap-toolbar-icon-action"
+              icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+              aria-label={isFullscreen ? '退出全屏' : '全屏'}
+              aria-pressed={isFullscreen}
+              onClick={onToggleFullscreen}
+              style={compactControlStyle}
+            >
+              {isFullscreen ? '退出全屏' : '全屏'}
+            </Button>
+          </Tooltip>
         </Flex>
       </Flex>
       <style jsx global>{`
@@ -283,6 +292,7 @@ export default function RoadmapToolbar({
           position: relative;
           height: 32px;
           min-height: 32px;
+          padding-inline: 8px;
           border-radius: 8px;
         }
         .roadmap-toolbar-glass .ant-btn::before {
@@ -301,8 +311,20 @@ export default function RoadmapToolbar({
         .roadmap-toolbar-glass .ant-segmented-item-label {
           min-height: 28px;
           line-height: 28px;
-          padding-inline: 10px;
+          padding-inline: 6px;
           white-space: nowrap;
+        }
+        @media (max-width: 1360px) {
+          .roadmap-toolbar-glass .roadmap-toolbar-icon-action {
+            width: 32px;
+            padding-inline: 0;
+            overflow: hidden;
+            font-size: 0;
+          }
+          .roadmap-toolbar-glass .roadmap-toolbar-icon-action .anticon {
+            margin-inline-end: 0;
+            font-size: 14px;
+          }
         }
       `}</style>
     </div>

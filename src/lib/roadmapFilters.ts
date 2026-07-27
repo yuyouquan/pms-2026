@@ -29,7 +29,7 @@ export const DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS = ROADMAP_COLUMNS
   .map(column => column.key)
 
 export const ROADMAP_EVOLUTION_LOCKED_COLUMNS: RoadmapColumnKey[] = [
-  'productSeries',
+  'marketName',
   'displayName',
 ]
 

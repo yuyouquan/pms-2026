@@ -17,7 +17,7 @@ export const PRODUCT_LINES_BY_BRAND = {
   其他品牌: ['其他系列'],
 } as const satisfies Record<RoadmapBrand, readonly string[]>
 
-const REQUIRED_PLANNED_FIELDS: readonly (Exclude<keyof PlannedRoadmapProjectInput, 'remark' | 'str5Estimated'>)[] = [
+const REQUIRED_PLANNED_FIELDS: readonly (Exclude<keyof PlannedRoadmapProjectInput, 'remark' | 'str5Estimated' | 'launchEstimated'>)[] = [
   'machineProjectType',
   'projectCode',
   'androidVersion',
@@ -47,7 +47,6 @@ export interface NormalizedTosVersion {
   name: string
   major: number
   minor: number
-  patch: number
 }
 
 export type RoadmapTosVersionCatalog = ReadonlySet<string> | readonly Pick<TosVersionConfig, 'id'>[]
@@ -71,40 +70,37 @@ export function buildRoadmapDuplicateKey(
 }
 
 export function normalizeTosVersionName(input: string): NormalizedTosVersion | null {
-  const match = input.trim().match(/^(?:tos\s*)?(\d+)\.(\d+)\.(\d+)$/i)
+  const match = input.trim().match(/^(?:tos\s*)?(\d+)\.(\d+)$/i)
   if (!match) return null
   const major = Number(match[1])
   const minor = Number(match[2])
-  const patch = Number(match[3])
   if (
     !Number.isSafeInteger(major)
     || !Number.isSafeInteger(minor)
-    || !Number.isSafeInteger(patch)
     || major < 0
     || minor < 0
-    || patch < 0
   ) return null
-  return { name: `tOS ${major}.${minor}.${patch}`, major, minor, patch }
+  return { name: `tOS ${major}.${minor}`, major, minor }
 }
 
 export function normalizeLegacyTosVersionName(input: string): NormalizedTosVersion | null {
   const normalized = normalizeTosVersionName(input)
   if (normalized) return normalized
-  const match = input.trim().match(/^(?:tos\s*)?(\d+)\.(\d+)$/i)
+  const match = input.trim().match(/^(?:tos\s*)?(\d+)\.(\d+)\.\d+$/i)
   if (!match) return null
-  return normalizeTosVersionName(`${match[1]}.${match[2]}.0`)
+  return normalizeTosVersionName(`${match[1]}.${match[2]}`)
 }
 
 export function formatTosVersionFull(
-  version: Pick<TosVersionConfig, 'major' | 'minor' | 'patch'>,
+  version: Pick<TosVersionConfig, 'major' | 'minor'>,
 ): string {
-  return `tOS ${version.major}.${version.minor}.${version.patch}`
+  return `tOS ${version.major}.${version.minor}`
 }
 
 export function formatTosVersionDisplay(
-  version: Pick<TosVersionConfig, 'major' | 'minor' | 'patch'>,
+  version: Pick<TosVersionConfig, 'major' | 'minor'>,
 ): string {
-  return version.major <= 15 ? formatTosVersionFull(version) : `tOS ${version.major}.${version.minor}`
+  return formatTosVersionFull(version)
 }
 
 export function getProductLineOptions(brand: RoadmapBrand): readonly string[] {
@@ -178,6 +174,9 @@ export function validatePlannedProject(
   if (values.str5Estimated !== undefined && typeof values.str5Estimated !== 'boolean') {
     errors.str5Estimated = 'STR5 预估状态无效'
   }
+  if (values.launchEstimated !== undefined && typeof values.launchEstimated !== 'boolean') {
+    errors.launchEstimated = '上市时间预估状态无效'
+  }
 
   if (values.machineProjectType && !isMachineProjectType(String(values.machineProjectType))) {
     errors.machineProjectType = '整机项目类型无效'
@@ -204,7 +203,7 @@ export function validatePlannedProject(
     && values.firstSaleTosVersionId.trim()
     && !tosCatalogHasId(tosVersionCatalog, values.firstSaleTosVersionId)
   ) {
-    errors.firstSaleTosVersionId = '首销 tOS 版本无效'
+    errors.firstSaleTosVersionId = 'tOS 版本无效'
   }
 
   for (const field of ['str5Date', 'launchDate'] as const) {

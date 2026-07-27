@@ -68,6 +68,9 @@ export interface ProjectItem {
   versionType?: string;
   versionTypes?: string[];
   firstSaleTosVersionId?: string;
+  firstSaleTosVersion?: string;
+  currentTosVersionId?: string;
+  currentTosVersion?: string;
   projectCode?: string;
   platform?: string;
   startRam?: RoadmapRam;

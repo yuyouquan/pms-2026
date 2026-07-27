@@ -169,6 +169,14 @@ export default function RoadmapTableView({
             </Flex>
           )
         }
+        if (column.key === 'launchDate' && row.launchEstimated) {
+          return (
+            <Flex align="center" gap={6} wrap={false} style={{ whiteSpace: 'nowrap' }}>
+              <span>{formattedValue}</span>
+              <Tag color="gold" style={{ marginInlineEnd: 0 }}>预估</Tag>
+            </Flex>
+          )
+        }
         if (column.key !== 'displayName') return formattedValue
         const conflictKey = row.source === 'planned'
           ? conflictKeyByPlannedIdentity.get(`planned:${row.id}`)

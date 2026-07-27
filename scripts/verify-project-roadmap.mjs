@@ -403,7 +403,7 @@ registerAssertion('roadmap validation normalizes names, duplicate keys, tOS vers
       throw new Error(`failed to normalize ${input}`)
     }
   }
-  if (validation.normalizeTosVersionName('tOS 17') !== null) throw new Error('tOS version must include major and minor')
+  if (validation.normalizeTosVersionName('tOS 17.2.0') !== null) throw new Error('maintained tOS version must contain only major and minor')
   if (validation.normalizeLegacyRoadmapProductType('新品') !== '新品') throw new Error('新品 must remain 新品')
   for (const legacyValue of ['老品', '升级', '换代']) {
     if (validation.normalizeLegacyRoadmapProductType(legacyValue) !== '老品') {
@@ -748,7 +748,7 @@ function createPlannedInput(overrides = {}) {
 
 registerAssertion('roadmap store declares the exact persistence boundary', () => {
   const source = fs.readFileSync(roadmapStorePath, 'utf8')
-  for (const token of ['persist(', "name: 'pms-project-roadmap'", 'version: 1', 'migrate:', 'partialize:']) {
+  for (const token of ['persist(', "name: 'pms-project-roadmap'", 'version: 3', 'migrate:', 'partialize:']) {
     if (!source.includes(token)) throw new Error(`Roadmap store is missing ${token}`)
   }
   if (/from ['"]@\/stores\/project['"]/.test(source)) throw new Error('roadmap store must not import the project store')
@@ -943,10 +943,15 @@ registerAssertion('roadmap migration repairs legacy names, references, UI contro
   if (!Number.isFinite(Date.parse(planned.createdAt)) || !Number.isFinite(Date.parse(planned.updatedAt))) throw new Error('timestamps were not normalized')
   if (
     migrated.filters.length !== 2
-    || migrated.filters.find(condition => condition.field === 'brand')?.value !== 'TECNO'
-    || migrated.filters.find(condition => condition.field === 'productType')?.value !== '老品'
-    || JSON.stringify(migrated.visibleColumns) !== JSON.stringify(['productSeries', 'marketName', 'displayName'])
-  ) throw new Error('filters/columns were not sanitized or synchronized')
+    || JSON.stringify(migrated.filters.find(condition => condition.field === 'brand')?.value) !== JSON.stringify(['TECNO'])
+    || JSON.stringify(migrated.filters.find(condition => condition.field === 'productType')?.value) !== JSON.stringify(['老品'])
+    || JSON.stringify(migrated.visibleColumns) !== JSON.stringify([
+      'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
+    ])
+  ) throw new Error(`filters/columns were not sanitized or synchronized: ${JSON.stringify({
+    filters: migrated.filters,
+    visibleColumns: migrated.visibleColumns,
+  })}`)
   if (migrated.selectedTosVersionId !== null || migrated.changeLogs.length !== 1 || 'conflictGroups' in migrated) {
     throw new Error('selection/log/conflict migration is wrong')
   }
@@ -1380,7 +1385,7 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
   ]
   const normal = adapter.adaptNormalProject({
     id: 'normal-1', name: 'legacy-name', type: '整机-手机', status: '在研',
-    androidVersion: 'Android 16', firstSaleTosVersionId: 'tos-17-2', tosVersion: 'tOS16.3',
+    androidVersion: 'Android 16', firstSaleTosVersionId: 'tos-17-2', currentTosVersionId: 'tos-16-3', tosVersion: 'tOS16.3',
     projectCode: ' X6877 ', model: 'legacy-code', brand: 'TECNO', productLine: 'SPARK', productSeries: 'SPARK 60', marketName: 'SPARK 60',
     productType: '升级', platform: 'explicit-platform', cpu: 'legacy-cpu', startRam: '8GB', memory: '6GB+128GB', versionType: 'Full',
     str5Date: '2027-01-01', launchDate: '2027-02-01', developMode: '外研', remark: 'explicit remark', projectDescription: 'legacy remark',
@@ -1390,8 +1395,8 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
     normal.source !== 'normal'
     || !normal.readOnly
     || normal.projectCode !== 'X6877'
-    || normal.displayName !== 'legacy-name'
-    || normal.firstSaleTosVersionId !== 'tos-17-2'
+    || normal.displayName !== 'X6877(Android 16)'
+    || normal.firstSaleTosVersionId !== 'tos-16-3'
     || normal.productType !== '老品'
     || normal.platform !== 'explicit-platform'
     || normal.startRam !== '8GB'
@@ -1406,6 +1411,7 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
     readOnly: undefined,
     type: '整机-PAD',
     firstSaleTosVersionId: undefined,
+    currentTosVersionId: undefined,
     tosVersion: 'tos16.3',
     projectCode: undefined,
     model: ' A100 ',
@@ -1441,7 +1447,12 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
   }
 
   const merged = adapter.mergeRoadmapProjects(
-    [{ ...normal, type: '技术项目' }, { ...normal, id: 'normal-merge', type: '整机-手机' }],
+    [{ ...normal, type: '技术项目' }, {
+      ...normal,
+      id: 'normal-merge',
+      type: '整机-手机',
+      currentTosVersionId: normal.firstSaleTosVersionId,
+    }],
     [plannedInput],
     versions,
   )
@@ -2066,32 +2077,26 @@ registerAssertion('tOS reference protection counts raw unique project identities
   }
 })
 
-registerAssertion('tOS reference resolution preserves explicit patch identities', () => {
+registerAssertion('tOS reference resolution collapses legacy patch identities', () => {
   const maintenance = loadTypeScriptModule(path.join(root, 'src/components/roadmap/TosVersionMaintenanceModal.tsx'))
   const versions = [
     {
-      id: 'tos-17-2-0', name: 'tOS 17.2.0', major: 17, minor: 2, patch: 0,
-      periodStartDate: '', periodEndDate: '', targets: [], createdAt: '', updatedAt: '',
-    },
-    {
-      id: 'tos-17-2-3', name: 'tOS 17.2.3', major: 17, minor: 2, patch: 3,
+      id: 'tos-17-2', name: 'tOS 17.2', major: 17, minor: 2,
       periodStartDate: '', periodEndDate: '', targets: [], createdAt: '', updatedAt: '',
     },
   ]
   const normalProjects = [{
     id: 'normal-patch-three',
     type: '整机-手机',
+    productType: '新品',
     firstSaleTosVersionId: 'tOS 17.2.3',
   }]
-  const patchZeroCounts = maintenance.countTosVersionReferences(
+  const collapsedCounts = maintenance.countTosVersionReferences(
     normalProjects, [], versions[0], versions,
   )
-  const patchThreeCounts = maintenance.countTosVersionReferences(
-    normalProjects, [], versions[1], versions,
-  )
-  if (patchZeroCounts.referenceCount !== 0 || patchThreeCounts.referenceCount !== 1) {
+  if (collapsedCounts.referenceCount !== 1) {
     throw new Error(
-      `full three-part tOS reference was rebound by major/minor: ${JSON.stringify({ patchZeroCounts, patchThreeCounts })}`,
+      `legacy patch tOS reference was not aggregated by major/minor: ${JSON.stringify(collapsedCounts)}`,
     )
   }
 })
@@ -2305,16 +2310,16 @@ registerAssertion('roadmap selectable filter UI and evolution columns honor mult
   }
   const evolution = loadTypeScriptModule(path.join(root, 'src/components/roadmap/RoadmapEvolutionView.tsx'))
   const versions = [
-    { id: 'tos-17-2-1', major: 17, minor: 2, patch: 1 },
-    { id: 'tos-18-0-0', major: 18, minor: 0, patch: 0 },
-    { id: 'tos-17-2-0', major: 17, minor: 2, patch: 0 },
+    { id: 'tos-17-2', major: 17, minor: 2 },
+    { id: 'tos-18-0', major: 18, minor: 0 },
+    { id: 'tos-16-3', major: 16, minor: 3 },
   ]
   const all = evolution.selectEvolutionVersions(versions, [])
-  if (all.map(version => version.id).join(',') !== 'tos-17-2-0,tos-17-2-1,tos-18-0-0') {
+  if (all.map(version => version.id).join(',') !== 'tos-16-3,tos-17-2,tos-18-0') {
     throw new Error(`evolution versions lost old-to-new chronology: ${JSON.stringify(all)}`)
   }
-  const selected = evolution.selectEvolutionVersions(versions, ['tos-17-2-0', 'tos-18-0-0'])
-  if (selected.map(version => version.id).join(',') !== 'tos-17-2-0,tos-18-0-0') {
+  const selected = evolution.selectEvolutionVersions(versions, ['tos-17-2', 'tos-18-0'])
+  if (selected.map(version => version.id).join(',') !== 'tos-17-2,tos-18-0') {
     throw new Error(`evolution did not restrict columns to selected versions: ${JSON.stringify(selected)}`)
   }
 })
@@ -2459,7 +2464,7 @@ registerAssertion('roadmap module composes controls and overlays without standal
     }
   }
   const toolbarSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
-  for (const label of ['表单视图', '版本演进视图', '修改记录', 'tOS 版本维护', '创建待规划项目', '筛选', '列设置']) {
+  for (const label of ['表单视图', '版本演进视图', '记录', 'tOS 版本维护', '创建项目', '筛选', '列设置']) {
     if (!toolbarSource.includes(label)) throw new Error(`Roadmap toolbar is missing ${label}`)
   }
   if (/placeholder=["'][^"']*搜索/.test(toolbarSource)) throw new Error('Roadmap must not add a standalone search input')
@@ -2636,24 +2641,28 @@ registerAssertion('evolution cards keep locked titles and approved colors', () =
   const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
   const tableSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
 
-  if (cardModule.formatEvolutionCardTitle({ productSeries: ' SPARK 60 ', displayName: ' KJ6 ' }) !== 'SPARK 60（KJ6）') {
-    throw new Error('evolution card title does not use product series and full-width parentheses')
+  if (cardModule.formatEvolutionCardTitle({
+    marketName: ' SPARK 60 ', projectCode: 'KJ6', androidVersion: 'Android 16', productType: '新品',
+  }) !== 'SPARK 60（KJ6）') {
+    throw new Error('evolution card title does not use market name, project name, and full-width parentheses')
   }
-  if (cardModule.formatEvolutionCardTitle({ productSeries: ' ', displayName: '' }) !== '—（—）') {
+  if (cardModule.formatEvolutionCardTitle({
+    marketName: ' ', projectCode: '', androidVersion: 'Android 16', productType: '新品',
+  }) !== '—（—）') {
     throw new Error('evolution card title does not fall back for empty structural values')
   }
-  const expectedLocked = ['productSeries', 'displayName']
+  const expectedLocked = ['marketName', 'displayName']
   if (JSON.stringify(filters.ROADMAP_EVOLUTION_LOCKED_COLUMNS) !== JSON.stringify(expectedLocked)) {
     throw new Error('evolution structural columns are not locked')
   }
   const expectedEvolution = [
-    'productSeries', 'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
+    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
   ]
   if (JSON.stringify(filters.DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS) !== JSON.stringify(expectedEvolution)) {
     throw new Error('evolution defaults do not include both structural title fields')
   }
   const lockedSelection = filters.ensureRoadmapLockedColumns(['marketName'], expectedLocked)
-  if (JSON.stringify(lockedSelection) !== JSON.stringify(['productSeries', 'marketName', 'displayName'])) {
+  if (JSON.stringify(lockedSelection) !== JSON.stringify(['marketName', 'displayName'])) {
     throw new Error('locked structural fields can be removed from a column selection')
   }
 
@@ -2668,7 +2677,7 @@ registerAssertion('evolution cards keep locked titles and approved colors', () =
   if (!moduleSource.includes('value={{ order: [...columnOrder], visible: [...visibleColumns] }}')) {
     throw new Error('active ordered settings are not passed to the roadmap column settings entry')
   }
-  for (const token of ['formatEvolutionCardTitle', "Full: 'blue'", "Slim: 'gold'", "Go: 'cyan'", "column.key !== 'productSeries'", "column.key !== 'displayName'"]) {
+  for (const token of ['formatEvolutionCardTitle', "Full: 'blue'", "Slim: 'gold'", "Go: 'cyan'", "column.key !== 'marketName'", "column.key !== 'displayName'"]) {
     if (!cardSource.includes(token)) throw new Error(`card is missing ${token}`)
   }
   for (const token of ['brand-tecno', 'brand-infinix', 'brand-itel', 'pms-roadmap-evolution-brand-label']) {
@@ -2681,7 +2690,7 @@ registerAssertion('evolution cards keep locked titles and approved colors', () =
   ]) {
     if (!evolutionSource.includes(contract)) throw new Error(`brand label contrast is missing ${contract}`)
   }
-  for (const token of ['pms-roadmap-evolution-card-header', 'pms-roadmap-evolution-card-title', 'pms-roadmap-evolution-source-tag']) {
+  for (const token of ['pms-roadmap-evolution-card-header', 'pms-roadmap-evolution-card-title']) {
     if (!evolutionSource.includes(token) && !cardSource.includes(token)) throw new Error(`card nowrap styling is missing ${token}`)
   }
   for (const token of ['roadmap-table-project-name-row', 'roadmap-table-project-name', 'roadmap-table-project-source-tag']) {
@@ -2703,10 +2712,10 @@ registerAssertion('global roadmap conflicts stay visible and actionable until re
   for (const contract of ['RoadmapConflictDrawer', 'openConflictDrawer', 'countConflictingPlannedProjects']) {
     if (!moduleSource.includes(contract)) throw new Error(`conflict integration is missing ${contract}`)
   }
-  for (const contract of ['解决冲突', 'count={conflictCount}', 'onClick={onResolveConflicts}']) {
+  for (const contract of ['冲突', 'count={conflictCount}', 'onClick={onResolveConflicts}']) {
     if (!toolbarSource.includes(contract)) throw new Error(`compact conflict action is missing ${contract}`)
   }
-  if (!moduleSource.includes('删除后，该待规划项目会立即从项目路标中移除；修改记录仍保留删除前快照。确认删除？')) {
+  if (!moduleSource.includes('删除后，该待规划项目会立即从 tOS 路标中移除；修改记录仍保留删除前快照。确认删除？')) {
     throw new Error('planned deletion must use the approved shared confirmation copy')
   }
 })
@@ -2930,7 +2939,7 @@ registerAssertion('table and evolution views keep the approved independent defau
     'developMode', 'remark',
   ]
   const expectedEvolution = [
-    'productSeries', 'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
+    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
   ]
   if (JSON.stringify(filterModule.DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS) !== JSON.stringify(expectedTable)) {
     throw new Error('table default columns do not match the approved matrix')
@@ -2946,8 +2955,8 @@ registerAssertion('table and evolution views keep the approved independent defau
     throw new Error('evolution view did not retain its independent defaults')
   }
   store.getState().setVisibleColumns(['marketName'])
-  if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(['productSeries', 'marketName', 'displayName'])) {
-    throw new Error('evolution direct column setter removed structural title fields')
+  if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(expectedEvolution)) {
+    throw new Error(`evolution direct column setter removed structural title fields: ${JSON.stringify(store.getState().visibleColumns)}`)
   }
   store.getState().setViewMode('table')
   if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(['firstSaleTosVersionId', 'brand'])) {
@@ -2968,10 +2977,15 @@ registerAssertion('roadmap migration canonicalizes locked evolution columns with
       evolution: ['marketName'],
     },
   }, 1)
-  const expectedEvolution = ['productSeries', 'marketName', 'displayName']
+  const expectedEvolution = [
+    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
+  ]
   if (JSON.stringify(migrated.visibleColumns) !== JSON.stringify(expectedEvolution)
     || JSON.stringify(migrated.visibleColumnsByView.evolution) !== JSON.stringify(expectedEvolution)) {
-    throw new Error('persisted evolution columns were not repaired with structural title fields')
+    throw new Error(`persisted evolution columns were not repaired with structural title fields: ${JSON.stringify({
+      visibleColumns: migrated.visibleColumns,
+      evolution: migrated.visibleColumnsByView.evolution,
+    })}`)
   }
   if (JSON.stringify(migrated.visibleColumnsByView.table) !== JSON.stringify(['firstSaleTosVersionId', 'brand'])) {
     throw new Error('evolution migration changed table columns')
@@ -3039,6 +3053,82 @@ registerAssertion('roadmap table owns the tOS selector and fixed columns', () =>
     throw new Error('all must be the first tOS selector option')
   }
   if (table.includes('>只读</Typography.Text>')) throw new Error('normal project action still renders read-only text')
+})
+
+registerAssertion('two-digit roadmap contracts stay canonical end to end', () => {
+  const validation = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
+  const maintained = validation.normalizeTosVersionName('tOS 16.3')
+  if (JSON.stringify(maintained) !== JSON.stringify({ name: 'tOS 16.3', major: 16, minor: 3 })) {
+    throw new Error(`two-digit maintained version is not canonical: ${JSON.stringify(maintained)}`)
+  }
+  const legacyPatch = validation.normalizeLegacyTosVersionName('tOS 16.3.2')
+  if (JSON.stringify(legacyPatch) !== JSON.stringify({ name: 'tOS 16.3', major: 16, minor: 3 })) {
+    throw new Error(`legacy patch version does not collapse to major.minor: ${JSON.stringify(legacyPatch)}`)
+  }
+  const storeModule = loadIsolatedRoadmapStore()
+  const migrated = storeModule.migrateRoadmapState({
+    tosVersions: [
+      {
+        id: 'tos-15-1-0', name: 'tOS 15.1.0', targets: ['旧目标'],
+        periodStartDate: '2026-01-01', periodEndDate: '2026-03-01',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'tos-15-1-2', name: 'tOS 15.1.2', targets: ['最新目标'],
+        periodStartDate: '2026-02-01', periodEndDate: '2026-04-01',
+        updatedAt: '2026-02-01T00:00:00.000Z',
+      },
+    ],
+  }, 2)
+  const collapsed = migrated.tosVersions.filter(version => version.major === 15 && version.minor === 1)
+  if (
+    collapsed.length !== 1
+    || collapsed[0].id !== 'tos-15-1'
+    || collapsed[0].targets[0] !== '最新目标'
+    || collapsed[0].periodStartDate !== '2026-02-01'
+    || collapsed[0].periodEndDate !== '2026-04-01'
+  ) {
+    throw new Error(`legacy maintained versions did not keep the latest two-digit config: ${JSON.stringify(collapsed)}`)
+  }
+
+  const types = fs.readFileSync(path.join(root, 'src/types/roadmap.ts'), 'utf8')
+  if (!types.includes('launchEstimated: boolean')) throw new Error('launch estimate field is missing')
+  if (types.includes('patch: number')) throw new Error('maintained tOS still exposes patch identity')
+
+  const modal = fs.readFileSync(path.join(root, 'src/components/roadmap/PlannedProjectModal.tsx'), 'utf8')
+  for (const token of ['label="tOS 版本"', 'name="launchEstimated"', 'valuePropName="checked"']) {
+    if (!modal.includes(token)) throw new Error(`planned project modal is missing ${token}`)
+  }
+
+  const toolbar = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
+  for (const token of ['展开目标', '收起目标', '冲突', '记录', '创建项目']) {
+    if (!toolbar.includes(token)) throw new Error(`compact tOS roadmap toolbar is missing ${token}`)
+  }
+  for (const oldText of ['展开全部目标', '收起全部目标', '解决冲突', '修改记录', '创建待规划项目']) {
+    if (toolbar.includes(oldText)) throw new Error(`compact toolbar still contains ${oldText}`)
+  }
+
+  const roadmapView = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapView.tsx'), 'utf8')
+  if (!roadmapView.includes("label: 'tOS 路标视图'") || roadmapView.includes("label: '项目路标视图'")) {
+    throw new Error('project-view tab was not renamed to tOS roadmap')
+  }
+
+  const card = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'), 'utf8')
+  if (!card.includes('row.marketName?.trim()') || card.includes('pms-roadmap-evolution-source-tag')) {
+    throw new Error('evolution card title/source layout is stale')
+  }
+  if (!card.includes("column.key === 'launchDate' && row.launchEstimated")) {
+    throw new Error('evolution card does not render launch estimate')
+  }
+  const table = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
+  if (!table.includes("column.key === 'launchDate' && row.launchEstimated")) {
+    throw new Error('table does not render launch estimate')
+  }
+
+  const filters = loadTypeScriptModule(path.join(root, 'src/lib/roadmapFilters.ts'))
+  if (filters.DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS.includes('productLine')) {
+    throw new Error('product line must be disabled by default in evolution view')
+  }
 })
 
 const focus = process.env.ROADMAP_VERIFY_FOCUS?.trim()
