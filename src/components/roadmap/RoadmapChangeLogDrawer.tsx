@@ -12,11 +12,13 @@ import {
   Pagination,
   Select,
   Tag,
+  Tooltip,
   Typography,
   type InputRef,
 } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
 import { ROADMAP_AUDIT_FIELDS, ROADMAP_AUDIT_FIELD_LABELS } from '@/lib/roadmapAudit'
+import { formatTosVersionDisplay, formatTosVersionFull } from '@/lib/roadmapValidation'
 import type {
   RoadmapAuditField,
   RoadmapChangeAction,
@@ -160,6 +162,7 @@ export function getRoadmapAuditDisplayEntries(log: RoadmapChangeLog): RoadmapAud
   if (log.action === 'update') {
     const changesByField = new Map(log.changes.map(change => [change.field, change]))
     return ROADMAP_AUDIT_FIELDS.flatMap(field => {
+      if (field === 'projectCode') return []
       const change = changesByField.get(field)
       return change ? [{
         field,
@@ -172,29 +175,44 @@ export function getRoadmapAuditDisplayEntries(log: RoadmapChangeLog): RoadmapAud
 
   const snapshot = log.snapshot ?? {}
   return ROADMAP_AUDIT_FIELDS.flatMap(field => (
-    Object.prototype.hasOwnProperty.call(snapshot, field)
+    field !== 'projectCode' && Object.prototype.hasOwnProperty.call(snapshot, field)
       ? [{ field, label: ROADMAP_AUDIT_FIELD_LABELS[field], value: snapshot[field] ?? '' }]
       : []
   ))
 }
 
-function findMaintainedTosName(value: string, tosVersions: readonly TosVersionConfig[]): string | null {
+function findMaintainedTosVersion(value: string, tosVersions: readonly TosVersionConfig[]): TosVersionConfig | null {
   const candidate = value.trim()
   if (!candidate) return null
   const directMatch = tosVersions.find(version => version.id === candidate || version.name === candidate)
-  if (directMatch) return directMatch.name
+  if (directMatch) return directMatch
 
   const semanticMatch = candidate.match(/^tos\s*(\d+)\.(\d+)$/i)
   if (!semanticMatch) return null
   const major = Number(semanticMatch[1])
   const minor = Number(semanticMatch[2])
-  return tosVersions.find(version => version.major === major && version.minor === minor)?.name ?? null
+  return tosVersions.find(version => version.major === major && version.minor === minor) ?? null
 }
 
 export function resolveRoadmapChangeLogTosName(
   log: RoadmapChangeLog,
   tosVersions: readonly TosVersionConfig[],
 ): string {
+  const maintainedVersion = resolveRoadmapChangeLogTosVersion(log, tosVersions)
+  if (maintainedVersion) return formatTosVersionDisplay(maintainedVersion)
+  const firstSaleChange = log.changes.find(change => change.field === 'firstSaleTosVersionId')
+  return [
+    log.tosVersionName,
+    firstSaleChange?.after,
+    log.snapshot?.firstSaleTosVersionId,
+  ].find((value): value is string => typeof value === 'string' && Boolean(value.trim()))?.trim()
+    || '未关联 tOS 版本'
+}
+
+function resolveRoadmapChangeLogTosVersion(
+  log: RoadmapChangeLog,
+  tosVersions: readonly TosVersionConfig[],
+): TosVersionConfig | null {
   const firstSaleChange = log.changes.find(change => change.field === 'firstSaleTosVersionId')
   const candidates = [
     log.tosVersionName,
@@ -203,10 +221,10 @@ export function resolveRoadmapChangeLogTosName(
   ].filter((value): value is string => typeof value === 'string' && Boolean(value.trim()))
 
   for (const candidate of candidates) {
-    const maintainedName = findMaintainedTosName(candidate, tosVersions)
-    if (maintainedName) return maintainedName
+    const maintainedVersion = findMaintainedTosVersion(candidate, tosVersions)
+    if (maintainedVersion) return maintainedVersion
   }
-  return candidates[0]?.trim() || '未关联 tOS 版本'
+  return null
 }
 
 function formatAuditValue(
@@ -217,7 +235,21 @@ function formatAuditValue(
   const normalized = value?.trim() ?? ''
   if (!normalized) return '—'
   if (field !== 'firstSaleTosVersionId') return normalized
-  return findMaintainedTosName(normalized, tosVersions) ?? normalized
+  const maintainedVersion = findMaintainedTosVersion(normalized, tosVersions)
+  return maintainedVersion ? formatTosVersionDisplay(maintainedVersion) : normalized
+}
+
+function renderAuditValue(
+  field: RoadmapAuditField,
+  value: string | undefined,
+  tosVersions: readonly TosVersionConfig[],
+) {
+  const displayValue = formatAuditValue(field, value, tosVersions)
+  if (field !== 'firstSaleTosVersionId' || !value) return displayValue
+  const maintainedVersion = findMaintainedTosVersion(value, tosVersions)
+  return maintainedVersion
+    ? <Tooltip title={formatTosVersionFull(maintainedVersion)}>{displayValue}</Tooltip>
+    : displayValue
 }
 
 function formatOccurredAt(value: string): string {
@@ -284,11 +316,11 @@ export default function RoadmapChangeLogDrawer({
         <Typography.Text strong>{entry.label}：</Typography.Text>
         {log.action === 'update' ? (
           <Typography.Text style={{ overflowWrap: 'anywhere' }}>
-            {formatAuditValue(entry.field, entry.before, tosVersions)} → {formatAuditValue(entry.field, entry.after, tosVersions)}
+            {renderAuditValue(entry.field, entry.before, tosVersions)} → {renderAuditValue(entry.field, entry.after, tosVersions)}
           </Typography.Text>
         ) : (
           <Typography.Text style={{ overflowWrap: 'anywhere' }}>
-            {formatAuditValue(entry.field, entry.value, tosVersions)}
+            {renderAuditValue(entry.field, entry.value, tosVersions)}
           </Typography.Text>
         )}
       </div>
@@ -421,7 +453,16 @@ export default function RoadmapChangeLogDrawer({
                         {formatOccurredAt(log.occurredAt)}
                       </Typography.Text>
                       <Typography.Text strong style={{ fontSize: 'var(--text-lg)', overflowWrap: 'anywhere' }}>
-                        {log.actor} {ACTION_LABELS[log.action]} {resolveRoadmapChangeLogTosName(log, tosVersions)} · {log.projectDisplayName}
+                        {log.actor} {ACTION_LABELS[log.action]}{' '}
+                        <Tooltip title={(() => {
+                          const version = resolveRoadmapChangeLogTosVersion(log, tosVersions)
+                          return version
+                            ? formatTosVersionFull(version)
+                            : resolveRoadmapChangeLogTosName(log, tosVersions)
+                        })()}>
+                          {resolveRoadmapChangeLogTosName(log, tosVersions)}
+                        </Tooltip>
+                        {' '}· {log.projectDisplayName}
                       </Typography.Text>
                       <Typography.Text type="secondary" copyable={{ text: log.projectId }}>
                         项目 ID：{log.projectId}
