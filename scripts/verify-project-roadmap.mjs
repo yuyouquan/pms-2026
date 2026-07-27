@@ -668,6 +668,14 @@ registerAssertion('roadmap audit uses the fixed whitelist, resolved tOS names, a
   if (changes.some(change => change.field === 'androidVersion' || change.field === 'productSeries')) {
     throw new Error('Android version and product series must be excluded from ordinary diffs')
   }
+  const renamedAcrossProductTypes = audit.diffRoadmapProjectFields(
+    { ...before, projectCode: 'CN6', productType: '新品', androidVersion: 'Android 16' },
+    { ...after, projectCode: 'CN7', productType: '老品', androidVersion: 'Android 17' },
+    versions,
+  ).find(change => change.field === 'projectCode')
+  if (renamedAcrossProductTypes?.before !== 'CN6' || renamedAcrossProductTypes?.after !== 'CN7(Android 17)') {
+    throw new Error(`project-name audit values are not canonical: ${JSON.stringify(renamedAcrossProductTypes)}`)
+  }
 
   const snapshot = audit.createRoadmapAuditSnapshot(after, versions)
   if (Object.keys(snapshot).join(',') !== expectedFields) throw new Error(`audit snapshot order is wrong: ${Object.keys(snapshot).join(',')}`)

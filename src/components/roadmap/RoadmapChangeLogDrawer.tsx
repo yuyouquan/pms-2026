@@ -109,6 +109,8 @@ function formatProjectCodeChange(
   const normalizedCode = projectCode.trim()
   const normalizedAfterCode = afterProjectCode.trim()
   const canonicalAfterName = projectDisplayName.trim()
+  if (/\(Android \d+\)$/.test(normalizedCode)) return normalizedCode
+  // Legacy logs stored raw project codes. New logs already carry canonical before/after values.
   const suffix = canonicalAfterName.startsWith(normalizedAfterCode)
     ? canonicalAfterName.slice(normalizedAfterCode.length)
     : ''
