@@ -6,6 +6,7 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   DatePicker,
   Flex,
   Form,
@@ -127,11 +128,13 @@ export default function PlannedProjectModal({
       ? {
         ...editingProject,
         str5Date: dayjs(editingProject.str5Date),
+        str5Estimated: editingProject.str5Estimated === true,
         launchDate: dayjs(editingProject.launchDate),
       }
       : {
           machineProjectType: MACHINE_PROJECT_TYPES[0],
           productType: '新品',
+          str5Estimated: false,
           remark: '',
         }
     form.setFields(Object.entries(nextValues).map(([name, value]) => ({
@@ -424,8 +427,15 @@ export default function PlannedProjectModal({
           <Card size="small" title="时间与备注" style={sectionStyle}>
             <Row gutter={[16, 0]}>
               <Col xs={24} md={8}>
-                <Form.Item label="STR5 时间" name="str5Date" rules={[{ required: true, message: '请选择 STR5 时间' }]}>
-                  <DatePicker format="YYYY-MM-DD" style={{ width: '100%' }} placeholder="请选择具体日期" />
+                <Form.Item label="STR5 时间" required>
+                  <Flex align="center" gap={8} wrap={false}>
+                    <Form.Item name="str5Date" noStyle rules={[{ required: true, message: '请选择 STR5 时间' }]}>
+                      <DatePicker format="YYYY-MM-DD" style={{ flex: 1, minWidth: 0 }} placeholder="请选择具体日期" />
+                    </Form.Item>
+                    <Form.Item name="str5Estimated" valuePropName="checked" noStyle>
+                      <Checkbox>预估</Checkbox>
+                    </Form.Item>
+                  </Flex>
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>

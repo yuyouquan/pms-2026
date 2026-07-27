@@ -274,7 +274,7 @@ export function createInitialRoadmapChangeLogs(
     {
       id: 'roadmap-log-mock-planned-update-x6877',
       projectId: planned.id,
-      projectDisplayName: planned.displayName,
+      projectDisplayName: buildRoadmapDisplayName(planned.projectCode, planned.androidVersion, planned.productType),
       source: 'planned',
       action: 'update',
       actor: '张三',
@@ -285,7 +285,7 @@ export function createInitialRoadmapChangeLogs(
     {
       id: 'roadmap-log-mock-normal-update-x6877',
       projectId: '1',
-      projectDisplayName: normalAfter.displayName,
+      projectDisplayName: buildRoadmapDisplayName(normalAfter.projectCode, normalAfter.androidVersion, normalAfter.productType),
       source: 'normal',
       action: 'update',
       actor: '张三',
@@ -296,7 +296,7 @@ export function createInitialRoadmapChangeLogs(
     {
       id: 'roadmap-log-mock-planned-create-x6877',
       projectId: planned.id,
-      projectDisplayName: planned.displayName,
+      projectDisplayName: buildRoadmapDisplayName(planned.projectCode, planned.androidVersion, planned.productType),
       source: 'planned',
       action: 'create',
       actor: '李四',
@@ -308,7 +308,7 @@ export function createInitialRoadmapChangeLogs(
     {
       id: 'roadmap-log-mock-normal-create-x6877',
       projectId: '1',
-      projectDisplayName: normalBefore.displayName,
+      projectDisplayName: buildRoadmapDisplayName(normalBefore.projectCode, normalBefore.androidVersion, normalBefore.productType),
       source: 'normal',
       action: 'create',
       actor: '李四',
@@ -851,7 +851,7 @@ function createPlannedChangeLog(
   return {
     id: createCollisionResistantId('roadmap-log'),
     projectId: project.id,
-    projectDisplayName: project.displayName,
+    projectDisplayName: buildRoadmapDisplayName(project.projectCode, project.androidVersion, project.productType),
     source: 'planned',
     action,
     actor,
@@ -1020,7 +1020,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
         const log: RoadmapChangeLog | null = changes.length ? {
           id: createCollisionResistantId('roadmap-log'),
           projectId: updated.id,
-          projectDisplayName: updated.displayName,
+          projectDisplayName: buildRoadmapDisplayName(updated.projectCode, updated.androidVersion, updated.productType),
           source: 'planned',
           action: 'update',
           actor: input.actor,

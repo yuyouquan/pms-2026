@@ -677,6 +677,47 @@ registerAssertion('roadmap audit uses the fixed whitelist, resolved tOS names, a
   if ('androidVersion' in snapshot || 'productSeries' in snapshot) throw new Error('audit snapshot contains excluded fields')
 })
 
+registerAssertion('roadmap STR5 estimate and canonical project-name contracts stay end to end', () => {
+  const modalSource = fs.readFileSync(path.join(root, 'src/components/roadmap/PlannedProjectModal.tsx'), 'utf8')
+  const tableSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
+  const cardSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'), 'utf8')
+  const conflictSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapConflictDrawer.tsx'), 'utf8')
+  const projectStoreSource = fs.readFileSync(path.join(root, 'src/stores/project.ts'), 'utf8')
+  const roadmapStoreSource = fs.readFileSync(path.join(root, 'src/stores/roadmap.ts'), 'utf8')
+
+  for (const contract of [
+    'Checkbox',
+    'name="str5Estimated"',
+    'valuePropName="checked"',
+    'str5Estimated: editingProject.str5Estimated === true',
+    'str5Estimated: false',
+  ]) {
+    if (!modalSource.includes(contract)) throw new Error(`planned-project modal is missing ${contract}`)
+  }
+  for (const [sourceName, source] of [['table', tableSource], ['card', cardSource]]) {
+    if (!source.includes('row.str5Estimated') || !source.includes('color="gold"') || !source.includes('>预估</Tag>')) {
+      throw new Error(`${sourceName} does not render the STR5 estimate tag`)
+    }
+    if (!source.includes('wrap={false}')) throw new Error(`${sourceName} may wrap the STR5 estimate tag`)
+  }
+  if (conflictSource.includes('{project.displayName}')) {
+    throw new Error('conflict drawer trusts a potentially stale displayName')
+  }
+  for (const [sourceName, source] of [['normal project audit', projectStoreSource], ['planned project audit', roadmapStoreSource]]) {
+    if (!source.includes('buildRoadmapDisplayName(')) throw new Error(`${sourceName} does not build canonical project names`)
+    if (source.includes('projectDisplayName: afterRow.displayName')
+      || source.includes('projectDisplayName: auditRow.displayName')
+      || source.includes('projectDisplayName: project.displayName')
+      || source.includes('projectDisplayName: updated.displayName')) {
+      throw new Error(`${sourceName} still trusts a potentially stale displayName`)
+    }
+  }
+  const audit = loadTypeScriptModule(path.join(root, 'src/lib/roadmapAudit.ts'))
+  if (audit.ROADMAP_AUDIT_FIELDS.includes('str5Estimated')) {
+    throw new Error('STR5 estimate must stay outside the audit whitelist')
+  }
+})
+
 const roadmapStorePath = path.join(root, 'src/stores/roadmap.ts')
 
 function loadIsolatedRoadmapStore() {

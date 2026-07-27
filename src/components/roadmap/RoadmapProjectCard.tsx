@@ -97,6 +97,11 @@ export default function RoadmapProjectCard({
                 <dd title={value}>
                   {cellVersion ? (
                     <Tooltip title={formatTosVersionFull(cellVersion)}>{value}</Tooltip>
+                  ) : column.key === 'str5Date' && row.str5Estimated ? (
+                    <Flex align="center" gap={6} wrap={false} style={{ whiteSpace: 'nowrap' }}>
+                      <span>{value}</span>
+                      <Tag color="gold" style={{ marginInlineEnd: 0 }}>预估</Tag>
+                    </Flex>
                   ) : tagColor && value !== '—' ? <Tag color={tagColor}>{value}</Tag> : value}
                 </dd>
               </div>

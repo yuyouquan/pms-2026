@@ -52,7 +52,7 @@ const COLUMN_WIDTHS: Record<RoadmapColumnKey, number> = {
   platform: 120,
   startRam: 110,
   versionType: 110,
-  str5Date: 130,
+  str5Date: 176,
   launchDate: 130,
   developMode: 120,
   remark: 220,
@@ -160,6 +160,14 @@ export default function RoadmapTableView({
           return cellVersion ? (
             <Tooltip title={formatTosVersionFull(cellVersion)}>{formattedValue}</Tooltip>
           ) : formattedValue
+        }
+        if (column.key === 'str5Date' && row.str5Estimated) {
+          return (
+            <Flex align="center" gap={6} wrap={false} style={{ whiteSpace: 'nowrap' }}>
+              <span>{formattedValue}</span>
+              <Tag color="gold" style={{ marginInlineEnd: 0 }}>预估</Tag>
+            </Flex>
+          )
         }
         if (column.key !== 'displayName') return formattedValue
         const conflictKey = row.source === 'planned'

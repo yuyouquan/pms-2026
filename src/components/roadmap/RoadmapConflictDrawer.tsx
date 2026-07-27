@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { DeleteOutlined, EyeOutlined, WarningOutlined } from '@ant-design/icons'
 import { Button, Drawer, Empty, Flex, Space, Tag, Typography } from 'antd'
+import { buildRoadmapDisplayName } from '@/lib/roadmapValidation'
 import type {
   RoadmapPlanningConflictGroup,
   RoadmapProjectRow,
@@ -61,6 +62,11 @@ function ConflictProjectCard({
   onDeletePlannedProject,
 }: ConflictProjectCardProps) {
   const isNormal = kind === 'normal'
+  const projectDisplayName = buildRoadmapDisplayName(
+    project.projectCode,
+    project.androidVersion,
+    project.productType,
+  )
 
   return (
     <div
@@ -72,7 +78,7 @@ function ConflictProjectCard({
       <Flex align="center" justify="space-between" gap={12} wrap>
         <div style={{ minWidth: 0, flex: '1 1 220px' }}>
           <Space size={8} wrap>
-            <Typography.Text strong>{project.displayName}</Typography.Text>
+            <Typography.Text strong>{projectDisplayName}</Typography.Text>
             <Tag color={isNormal ? 'blue' : 'purple'} style={{ marginInlineEnd: 0 }}>
               {isNormal ? '正常项目' : '待规划项目'}
             </Tag>
