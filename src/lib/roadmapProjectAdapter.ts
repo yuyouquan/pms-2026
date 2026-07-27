@@ -3,7 +3,7 @@ import {
   buildRoadmapDisplayName,
   buildRoadmapDuplicateKey,
   normalizeLegacyRoadmapProductType,
-  normalizeTosVersionName,
+  normalizeLegacyTosVersionName,
 } from '@/lib/roadmapValidation'
 import type { ProjectItem } from '@/types/app'
 import type {
@@ -79,10 +79,10 @@ function findTosVersionId(candidate: unknown, versions: readonly TosVersionConfi
   const trimmed = candidate.trim()
   const byId = versions.find(version => version.id === trimmed)
   if (byId) return byId.id
-  const normalized = normalizeTosVersionName(trimmed)
+  const normalized = normalizeLegacyTosVersionName(trimmed)
   if (!normalized) return null
   const byVersion = versions.find(version => (
-    version.major === normalized.major && version.minor === normalized.minor
+    version.major === normalized.major && version.minor === normalized.minor && version.patch === normalized.patch
   ))
   return byVersion?.id ?? null
 }
@@ -124,7 +124,7 @@ export function adaptNormalProject(
 ): RoadmapProjectRow | null {
   if (!isMachineProjectType(project.type)) return null
 
-  const projectCode = firstNonBlank(project.projectCode, project.model, project.name)
+  const projectCode = firstNonBlank(project.projectCode, project.model)
   const androidVersion = normalizeAndroidVersion(project.androidVersion, project.operatingSystem)
   const productType = normalizeNormalProductType(project.productType)
   const firstSaleTosVersionId = resolveTosVersionId(project, versions)
@@ -156,7 +156,7 @@ export function adaptNormalProject(
     readOnly: true,
     machineProjectType: machineProjectType as RoadmapProjectRow['machineProjectType'],
     projectCode,
-    displayName: firstNonBlank(project.name, buildRoadmapDisplayName(projectCode, androidVersion, productType)),
+    displayName: buildRoadmapDisplayName(projectCode, androidVersion, productType),
     androidVersion,
     firstSaleTosVersionId,
     brand,
@@ -168,6 +168,7 @@ export function adaptNormalProject(
     startRam,
     versionType,
     str5Date: firstNonBlank(project.str5Date),
+    str5Estimated: false,
     launchDate: firstNonBlank(project.launchDate),
     developMode,
     remark,
