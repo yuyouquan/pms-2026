@@ -63,6 +63,76 @@ const adapter = load(path.join(root, 'src/lib/roadmapProjectAdapter.ts'))
 const audit = load(path.join(root, 'src/lib/roadmapAudit.ts'))
 
 const initial = roadmapStore.createInitialRoadmapMockState()
+
+const historicalDuplicateState = roadmapStore.migrateRoadmapState({
+  ...roadmapStore.createInitialRoadmapState(),
+  tosVersions: [
+    { id: 'historical-17-2-0', name: 'tOS 17.2.0' },
+    { id: 'historical-17-2-1', name: 'tOS 17.2.1' },
+  ],
+}, 1)
+roadmapStore.useRoadmapStore.setState(historicalDuplicateState)
+const metadataOnlyUpdate = roadmapStore.useRoadmapStore.getState().renameTosVersion('historical-17-2-0', {
+  name: 'tOS 17.2.0',
+  periodStartDate: '2026-01-01',
+  periodEndDate: '2026-12-31',
+  targets: [' target A ', 'target B'],
+})
+if (!metadataOnlyUpdate.ok) {
+  throw new Error(`metadata-only update on a historical 16+ duplicate was rejected: ${JSON.stringify(metadataOnlyUpdate)}`)
+}
+const metadataUpdated = roadmapStore.useRoadmapStore.getState().tosVersions.find(version => version.id === 'historical-17-2-0')
+if (
+  metadataUpdated?.periodStartDate !== '2026-01-01'
+  || metadataUpdated.periodEndDate !== '2026-12-31'
+  || metadataUpdated.targets.join(',') !== 'target A,target B'
+) {
+  throw new Error(`metadata-only update was not atomic: ${JSON.stringify(metadataUpdated)}`)
+}
+const semanticConflict = roadmapStore.useRoadmapStore.getState().renameTosVersion('historical-17-2-0', {
+  name: 'tOS 17.2.2',
+  periodStartDate: '2026-01-01',
+  periodEndDate: '2026-12-31',
+})
+if (semanticConflict.ok || semanticConflict.reason !== 'duplicate') {
+  throw new Error('semantic version change into a historical 16+ major.minor conflict was accepted')
+}
+
+for (const [label, periodStartDate, periodEndDate] of [
+  ['single-ended', '2026-01-01', ''],
+  ['impossible date', '2026-02-30', '2026-03-01'],
+  ['reversed', '2026-04-01', '2026-03-01'],
+]) {
+  const beforeCount = roadmapStore.useRoadmapStore.getState().tosVersions.length
+  const result = roadmapStore.useRoadmapStore.getState().createTosVersion({
+    name: 'tOS 19.1.0',
+    periodStartDate,
+    periodEndDate,
+  })
+  if (result.ok || result.reason !== 'invalid' || roadmapStore.useRoadmapStore.getState().tosVersions.length !== beforeCount) {
+    throw new Error(`${label} tOS period was not rejected atomically`)
+  }
+}
+
+const migratedPeriods = roadmapStore.migrateRoadmapState({
+  ...roadmapStore.createInitialRoadmapState(),
+  tosVersions: [
+    { id: 'single-period', name: 'tOS 15.1', periodStartDate: '2026-01-01', periodEndDate: '' },
+    { id: 'invalid-period', name: 'tOS 15.2', periodStartDate: '2026-02-30', periodEndDate: '2026-03-01' },
+    { id: 'valid-period', name: 'tOS 15.3', periodStartDate: '2026-01-01', periodEndDate: '2026-12-31' },
+  ],
+}, 1)
+for (const id of ['single-period', 'invalid-period']) {
+  const version = migratedPeriods.tosVersions.find(candidate => candidate.id === id)
+  if (version?.periodStartDate || version?.periodEndDate) {
+    throw new Error(`migration did not clear invalid period pair ${id}`)
+  }
+}
+const validPeriod = migratedPeriods.tosVersions.find(version => version.id === 'valid-period')
+if (validPeriod?.periodStartDate !== '2026-01-01' || validPeriod.periodEndDate !== '2026-12-31') {
+  throw new Error('migration did not preserve a valid period pair')
+}
+
 const planned = initial.plannedProjects.find(project => project.id === 'planned-mock-x6877-android16-new')
 if (!planned) throw new Error('missing planned X6877 roadmap mock')
 if (planned.firstSaleTosVersionId !== 'tos-16-3') {
@@ -168,9 +238,12 @@ for (const [label, envelope] of [
 
 const legacyVersion = {
   id: 'legacy-tos-16-3',
-  name: 'tOS 16.3',
+  name: 'tOS 16.3.0',
   major: 16,
   minor: 3,
+  patch: 0,
+  periodStartDate: '',
+  periodEndDate: '',
   targets: [],
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',

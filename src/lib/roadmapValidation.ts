@@ -17,7 +17,7 @@ export const PRODUCT_LINES_BY_BRAND = {
   其他品牌: ['其他系列'],
 } as const satisfies Record<RoadmapBrand, readonly string[]>
 
-const REQUIRED_PLANNED_FIELDS: readonly (Exclude<keyof PlannedRoadmapProjectInput, 'remark'>)[] = [
+const REQUIRED_PLANNED_FIELDS: readonly (Exclude<keyof PlannedRoadmapProjectInput, 'remark' | 'str5Estimated' | 'launchEstimated'>)[] = [
   'machineProjectType',
   'projectCode',
   'androidVersion',
@@ -70,7 +70,7 @@ export function buildRoadmapDuplicateKey(
 }
 
 export function normalizeTosVersionName(input: string): NormalizedTosVersion | null {
-  const match = input.trim().match(/^tos\s*(\d+)\.(\d+)$/i)
+  const match = input.trim().match(/^(?:tos\s*)?(\d+)\.(\d+)$/i)
   if (!match) return null
   const major = Number(match[1])
   const minor = Number(match[2])
@@ -81,6 +81,26 @@ export function normalizeTosVersionName(input: string): NormalizedTosVersion | n
     || minor < 0
   ) return null
   return { name: `tOS ${major}.${minor}`, major, minor }
+}
+
+export function normalizeLegacyTosVersionName(input: string): NormalizedTosVersion | null {
+  const normalized = normalizeTosVersionName(input)
+  if (normalized) return normalized
+  const match = input.trim().match(/^(?:tos\s*)?(\d+)\.(\d+)\.\d+$/i)
+  if (!match) return null
+  return normalizeTosVersionName(`${match[1]}.${match[2]}`)
+}
+
+export function formatTosVersionFull(
+  version: Pick<TosVersionConfig, 'major' | 'minor'>,
+): string {
+  return `tOS ${version.major}.${version.minor}`
+}
+
+export function formatTosVersionDisplay(
+  version: Pick<TosVersionConfig, 'major' | 'minor'>,
+): string {
+  return formatTosVersionFull(version)
 }
 
 export function getProductLineOptions(brand: RoadmapBrand): readonly string[] {
@@ -112,7 +132,7 @@ export function isExactRoadmapDuplicate(
   ))
 }
 
-function isExactIsoDate(value: unknown): value is string {
+export function isExactIsoDate(value: unknown): value is string {
   if (typeof value !== 'string' || !ISO_DATE_PATTERN.test(value)) return false
   const [year, month, day] = value.split('-').map(Number)
   const date = new Date(Date.UTC(year, month - 1, day))
@@ -151,6 +171,12 @@ export function validatePlannedProject(
   }
 
   if (values.remark !== undefined && typeof values.remark !== 'string') errors.remark = '备注格式无效'
+  if (values.str5Estimated !== undefined && typeof values.str5Estimated !== 'boolean') {
+    errors.str5Estimated = 'STR5 预估状态无效'
+  }
+  if (values.launchEstimated !== undefined && typeof values.launchEstimated !== 'boolean') {
+    errors.launchEstimated = '上市时间预估状态无效'
+  }
 
   if (values.machineProjectType && !isMachineProjectType(String(values.machineProjectType))) {
     errors.machineProjectType = '整机项目类型无效'
@@ -177,7 +203,7 @@ export function validatePlannedProject(
     && values.firstSaleTosVersionId.trim()
     && !tosCatalogHasId(tosVersionCatalog, values.firstSaleTosVersionId)
   ) {
-    errors.firstSaleTosVersionId = '首销 tOS 版本无效'
+    errors.firstSaleTosVersionId = 'tOS 版本无效'
   }
 
   for (const field of ['str5Date', 'launchDate'] as const) {

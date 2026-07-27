@@ -80,7 +80,16 @@ const roadmapPath = path.join(root, 'src/components/roadmap/RoadmapView.tsx')
 const roadmapSource = fs.readFileSync(roadmapPath, 'utf8')
 const roadmapAnalysis = analyzeRoadmapSource(roadmapSource, roadmapPath)
 
-const expectedMachineProjectTypes = ['整机-手机', '整机-PAD', '整机-笔电']
+const expectedMachineProjectTypes = [
+  '整机-手机',
+  '整机-平板',
+  '整机-笔电',
+  '整机-功能机',
+  '整机-AIOT',
+  '整机-基线',
+  '整机-N+1',
+  '整机-预研',
+]
 
 function findLegacyMachineComparisons(filePath) {
   const source = fs.readFileSync(filePath, 'utf8')
@@ -299,7 +308,7 @@ registerAssertion('machine type guard drives market rows, status mapping, and te
   }
 })
 
-registerAssertion('workspace machine filters expose only the three exact machine subtypes', () => {
+registerAssertion('workspace machine filters expose the exact machine subtypes', () => {
   const {
     MACHINE_PROJECT_FILTER_OPTIONS,
     MACHINE_PROJECT_TYPE_FILTER,
@@ -403,7 +412,7 @@ registerAssertion('roadmap validation normalizes names, duplicate keys, tOS vers
       throw new Error(`failed to normalize ${input}`)
     }
   }
-  if (validation.normalizeTosVersionName('tOS 17') !== null) throw new Error('tOS version must include major and minor')
+  if (validation.normalizeTosVersionName('tOS 17.2.0') !== null) throw new Error('maintained tOS version must contain only major and minor')
   if (validation.normalizeLegacyRoadmapProductType('新品') !== '新品') throw new Error('新品 must remain 新品')
   for (const legacyValue of ['老品', '升级', '换代']) {
     if (validation.normalizeLegacyRoadmapProductType(legacyValue) !== '老品') {
@@ -668,6 +677,14 @@ registerAssertion('roadmap audit uses the fixed whitelist, resolved tOS names, a
   if (changes.some(change => change.field === 'androidVersion' || change.field === 'productSeries')) {
     throw new Error('Android version and product series must be excluded from ordinary diffs')
   }
+  const renamedAcrossProductTypes = audit.diffRoadmapProjectFields(
+    { ...before, projectCode: 'CN6', productType: '新品', androidVersion: 'Android 16' },
+    { ...after, projectCode: 'CN7', productType: '老品', androidVersion: 'Android 17' },
+    versions,
+  ).find(change => change.field === 'projectCode')
+  if (renamedAcrossProductTypes?.before !== 'CN6' || renamedAcrossProductTypes?.after !== 'CN7(Android 17)') {
+    throw new Error(`project-name audit values are not canonical: ${JSON.stringify(renamedAcrossProductTypes)}`)
+  }
 
   const snapshot = audit.createRoadmapAuditSnapshot(after, versions)
   if (Object.keys(snapshot).join(',') !== expectedFields) throw new Error(`audit snapshot order is wrong: ${Object.keys(snapshot).join(',')}`)
@@ -675,6 +692,53 @@ registerAssertion('roadmap audit uses the fixed whitelist, resolved tOS names, a
     throw new Error(`audit snapshot content is wrong: ${JSON.stringify(snapshot)}`)
   }
   if ('androidVersion' in snapshot || 'productSeries' in snapshot) throw new Error('audit snapshot contains excluded fields')
+})
+
+registerAssertion('roadmap STR5 estimate and canonical project-name contracts stay end to end', () => {
+  const modalSource = fs.readFileSync(path.join(root, 'src/components/roadmap/PlannedProjectModal.tsx'), 'utf8')
+  const tableSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
+  const cardSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'), 'utf8')
+  const conflictSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapConflictDrawer.tsx'), 'utf8')
+  const projectStoreSource = fs.readFileSync(path.join(root, 'src/stores/project.ts'), 'utf8')
+  const roadmapStoreSource = fs.readFileSync(path.join(root, 'src/stores/roadmap.ts'), 'utf8')
+
+  for (const contract of [
+    'Checkbox',
+    'name="str5Estimated"',
+    'valuePropName="checked"',
+    'str5Estimated: editingProject.str5Estimated === true',
+    'str5Estimated: false',
+  ]) {
+    if (!modalSource.includes(contract)) throw new Error(`planned-project modal is missing ${contract}`)
+  }
+  if (!tableSource.includes('row.str5Estimated') || !tableSource.includes('color="gold"') || !tableSource.includes('>预估</Tag>')) {
+    throw new Error('table does not render the STR5 estimate tag')
+  }
+  if (!cardSource.includes('row.str5Estimated')
+    || !cardSource.includes('ClockCircleOutlined')
+    || !cardSource.includes('title="预估时间"')
+    || cardSource.includes('>预估</Tag>')) {
+    throw new Error('evolution card does not render the compact estimated-time icon')
+  }
+  for (const [sourceName, source] of [['table', tableSource], ['card', cardSource]]) {
+    if (!source.includes('wrap={false}')) throw new Error(`${sourceName} may wrap the STR5 estimate marker`)
+  }
+  if (conflictSource.includes('{project.displayName}')) {
+    throw new Error('conflict drawer trusts a potentially stale displayName')
+  }
+  for (const [sourceName, source] of [['normal project audit', projectStoreSource], ['planned project audit', roadmapStoreSource]]) {
+    if (!source.includes('buildRoadmapDisplayName(')) throw new Error(`${sourceName} does not build canonical project names`)
+    if (source.includes('projectDisplayName: afterRow.displayName')
+      || source.includes('projectDisplayName: auditRow.displayName')
+      || source.includes('projectDisplayName: project.displayName')
+      || source.includes('projectDisplayName: updated.displayName')) {
+      throw new Error(`${sourceName} still trusts a potentially stale displayName`)
+    }
+  }
+  const audit = loadTypeScriptModule(path.join(root, 'src/lib/roadmapAudit.ts'))
+  if (audit.ROADMAP_AUDIT_FIELDS.includes('str5Estimated')) {
+    throw new Error('STR5 estimate must stay outside the audit whitelist')
+  }
 })
 
 const roadmapStorePath = path.join(root, 'src/stores/roadmap.ts')
@@ -699,7 +763,7 @@ function createPlannedInput(overrides = {}) {
 
 registerAssertion('roadmap store declares the exact persistence boundary', () => {
   const source = fs.readFileSync(roadmapStorePath, 'utf8')
-  for (const token of ['persist(', "name: 'pms-project-roadmap'", 'version: 1', 'migrate:', 'partialize:']) {
+  for (const token of ['persist(', "name: 'pms-project-roadmap'", 'version: 5', 'migrate:', 'partialize:']) {
     if (!source.includes(token)) throw new Error(`Roadmap store is missing ${token}`)
   }
   if (/from ['"]@\/stores\/project['"]/.test(source)) throw new Error('roadmap store must not import the project store')
@@ -894,10 +958,15 @@ registerAssertion('roadmap migration repairs legacy names, references, UI contro
   if (!Number.isFinite(Date.parse(planned.createdAt)) || !Number.isFinite(Date.parse(planned.updatedAt))) throw new Error('timestamps were not normalized')
   if (
     migrated.filters.length !== 2
-    || migrated.filters.find(condition => condition.field === 'brand')?.value !== 'TECNO'
-    || migrated.filters.find(condition => condition.field === 'productType')?.value !== '老品'
-    || JSON.stringify(migrated.visibleColumns) !== JSON.stringify(['productSeries', 'marketName', 'displayName'])
-  ) throw new Error('filters/columns were not sanitized or synchronized')
+    || JSON.stringify(migrated.filters.find(condition => condition.field === 'brand')?.value) !== JSON.stringify(['TECNO'])
+    || JSON.stringify(migrated.filters.find(condition => condition.field === 'productType')?.value) !== JSON.stringify(['老品'])
+    || JSON.stringify(migrated.visibleColumns) !== JSON.stringify([
+      'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate', 'developMode',
+    ])
+  ) throw new Error(`filters/columns were not sanitized or synchronized: ${JSON.stringify({
+    filters: migrated.filters,
+    visibleColumns: migrated.visibleColumns,
+  })}`)
   if (migrated.selectedTosVersionId !== null || migrated.changeLogs.length !== 1 || 'conflictGroups' in migrated) {
     throw new Error('selection/log/conflict migration is wrong')
   }
@@ -1331,7 +1400,7 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
   ]
   const normal = adapter.adaptNormalProject({
     id: 'normal-1', name: 'legacy-name', type: '整机-手机', status: '在研',
-    androidVersion: 'Android 16', firstSaleTosVersionId: 'tos-17-2', tosVersion: 'tOS16.3',
+    androidVersion: 'Android 16', firstSaleTosVersionId: 'tos-17-2', currentTosVersionId: 'tos-16-3', tosVersion: 'tOS16.3',
     projectCode: ' X6877 ', model: 'legacy-code', brand: 'TECNO', productLine: 'SPARK', productSeries: 'SPARK 60', marketName: 'SPARK 60',
     productType: '升级', platform: 'explicit-platform', cpu: 'legacy-cpu', startRam: '8GB', memory: '6GB+128GB', versionType: 'Full',
     str5Date: '2027-01-01', launchDate: '2027-02-01', developMode: '外研', remark: 'explicit remark', projectDescription: 'legacy remark',
@@ -1341,8 +1410,8 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
     normal.source !== 'normal'
     || !normal.readOnly
     || normal.projectCode !== 'X6877'
-    || normal.displayName !== 'legacy-name'
-    || normal.firstSaleTosVersionId !== 'tos-17-2'
+    || normal.displayName !== 'X6877(Android 16)'
+    || normal.firstSaleTosVersionId !== 'tos-16-3'
     || normal.productType !== '老品'
     || normal.platform !== 'explicit-platform'
     || normal.startRam !== '8GB'
@@ -1357,6 +1426,7 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
     readOnly: undefined,
     type: '整机-PAD',
     firstSaleTosVersionId: undefined,
+    currentTosVersionId: undefined,
     tosVersion: 'tos16.3',
     projectCode: undefined,
     model: ' A100 ',
@@ -1392,7 +1462,12 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
   }
 
   const merged = adapter.mergeRoadmapProjects(
-    [{ ...normal, type: '技术项目' }, { ...normal, id: 'normal-merge', type: '整机-手机' }],
+    [{ ...normal, type: '技术项目' }, {
+      ...normal,
+      id: 'normal-merge',
+      type: '整机-手机',
+      currentTosVersionId: normal.firstSaleTosVersionId,
+    }],
     [plannedInput],
     versions,
   )
@@ -1940,6 +2015,47 @@ registerAssertion('tOS-version overlay preserves semantic ordering and deletion 
   }
 })
 
+registerAssertion('tOS version maintenance uses inline cards with atomic fields', () => {
+  const source = fs.readFileSync(path.join(root, 'src/components/roadmap/TosVersionMaintenanceModal.tsx'), 'utf8')
+  for (const contract of [
+    '新增版本',
+    'editingVersionId',
+    '<DatePicker.RangePicker',
+    '<Input.TextArea',
+    'periodStartDate',
+    'periodEndDate',
+    'targets:',
+    'requestEdit',
+    'requestClose',
+    'formatTosVersionFull',
+  ]) {
+    if (!source.includes(contract)) throw new Error(`inline tOS card is missing ${contract}`)
+  }
+  if (source.includes('onEditTargets') || source.includes('维护目标')) {
+    throw new Error('tOS maintenance still delegates target editing to a separate overlay')
+  }
+  if (!/renameTosVersion\(editingVersionId,\s*\{[\s\S]*name:[\s\S]*periodStartDate[\s\S]*periodEndDate[\s\S]*targets/.test(source)) {
+    throw new Error('inline tOS edit is not one atomic rename mutation')
+  }
+  if (!/createTosVersion\(\{[\s\S]*name:[\s\S]*periodStartDate[\s\S]*periodEndDate[\s\S]*targets/.test(source)) {
+    throw new Error('inline tOS create is not one atomic create mutation')
+  }
+})
+
+registerAssertion('roadmap business views use compact display versions with full tooltips and periods', () => {
+  const table = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
+  const evolution = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapEvolutionView.tsx'), 'utf8')
+  const card = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'), 'utf8')
+  for (const [name, source] of [['table', table], ['evolution', evolution], ['card', card]]) {
+    if (!source.includes('formatTosVersionDisplay') || !source.includes('formatTosVersionFull')) {
+      throw new Error(`${name} view is missing display/full version formatting`)
+    }
+  }
+  for (const contract of ['periodStartDate', 'periodEndDate', '<Tooltip']) {
+    if (!evolution.includes(contract)) throw new Error(`evolution version header is missing ${contract}`)
+  }
+})
+
 registerAssertion('tOS reference protection counts raw unique project identities before roadmap adaptation', () => {
   const maintenance = loadTypeScriptModule(path.join(root, 'src/components/roadmap/TosVersionMaintenanceModal.tsx'))
   if (typeof maintenance.countTosVersionReferences !== 'function') {
@@ -1973,6 +2089,30 @@ registerAssertion('tOS reference protection counts raw unique project identities
   }
   if (counts.plannedReferenceCount !== 1 || counts.referenceCount !== 3) {
     throw new Error(`planned references must dedupe by source:id: ${JSON.stringify(counts)}`)
+  }
+})
+
+registerAssertion('tOS reference resolution collapses legacy patch identities', () => {
+  const maintenance = loadTypeScriptModule(path.join(root, 'src/components/roadmap/TosVersionMaintenanceModal.tsx'))
+  const versions = [
+    {
+      id: 'tos-17-2', name: 'tOS 17.2', major: 17, minor: 2,
+      periodStartDate: '', periodEndDate: '', targets: [], createdAt: '', updatedAt: '',
+    },
+  ]
+  const normalProjects = [{
+    id: 'normal-patch-three',
+    type: '整机-手机',
+    productType: '新品',
+    firstSaleTosVersionId: 'tOS 17.2.3',
+  }]
+  const collapsedCounts = maintenance.countTosVersionReferences(
+    normalProjects, [], versions[0], versions,
+  )
+  if (collapsedCounts.referenceCount !== 1) {
+    throw new Error(
+      `legacy patch tOS reference was not aggregated by major/minor: ${JSON.stringify(collapsedCounts)}`,
+    )
   }
 })
 
@@ -2114,23 +2254,25 @@ registerAssertion('roadmap filter domain sanitizers enforce catalog and approved
     { id: 'duplicate-field', field: 'marketName', operator: 'equals', value: 'ignored' },
     { id: 'bad-enum-operator', field: 'brand', operator: 'contains', value: 'TEC' },
     { id: 'bad-enum-value', field: 'brand', operator: 'equals', value: 'Unknown' },
-    { id: 'valid-enum', field: 'brand', operator: 'equals', value: 'TECNO' },
+    { id: 'valid-enum', field: 'brand', operator: 'equals', value: ['TECNO', 'Infinix', 'Unknown', 'TECNO'] },
+    { id: 'valid-ram', field: 'startRam', operator: 'notEquals', value: '4GB' },
     { id: 'bad-date', field: 'launchDate', operator: 'after', value: '2026-02-30' },
     { id: 'valid-date', field: 'str5Date', operator: 'before', value: '2028-02-29' },
     { id: 'bad-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos-99-0' },
     { id: 'bad-version-not-equals', field: 'firstSaleTosVersionId', operator: 'notEquals', value: 'tos-17-2' },
     { id: 'bad-version-empty', field: 'firstSaleTosVersionId', operator: 'isEmpty', value: '' },
     { id: 'bad-version-not-empty', field: 'firstSaleTosVersionId', operator: 'isNotEmpty', value: '' },
-    { id: 'legacy-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos18.0' },
+    { id: 'legacy-version', field: 'firstSaleTosVersionId', operator: 'equals', value: ['tos-18-0', 'tos-99-0'] },
     { id: 'blank-text', field: 'remark', operator: 'contains', value: '   ' },
     { id: 'empty', field: 'productSeries', operator: 'isEmpty', value: 'discard-me' },
   ]
   const sanitized = domain.sanitizeRoadmapFilterConditions(malicious, versions)
   const expected = [
     ['marketName', 'contains', 'Europe'],
-    ['brand', 'equals', 'TECNO'],
+    ['brand', 'equals', ['TECNO', 'Infinix']],
+    ['startRam', 'notEquals', ['4GB']],
     ['str5Date', 'before', '2028-02-29'],
-    ['firstSaleTosVersionId', 'equals', 'tos-18-0'],
+    ['firstSaleTosVersionId', 'equals', ['tos-18-0']],
     ['productSeries', 'isEmpty', ''],
   ]
   if (JSON.stringify(sanitized.map(item => [item.field, item.operator, item.value])) !== JSON.stringify(expected)) {
@@ -2150,6 +2292,50 @@ registerAssertion('roadmap filter domain sanitizers enforce catalog and approved
   const minimumColumns = domain.sanitizeRoadmapVisibleColumns(['unknown'])
   if (JSON.stringify(minimumColumns) !== JSON.stringify(['firstSaleTosVersionId'])) {
     throw new Error(`visible columns did not preserve the one-column minimum: ${JSON.stringify(minimumColumns)}`)
+  }
+})
+
+registerAssertion('roadmap selectable filters use OR within a condition and AND across conditions', () => {
+  const domain = loadTypeScriptModule(path.join(root, 'src/lib/roadmapFilters.ts'))
+  const definitions = domain.buildRoadmapFilterFieldDefinitions([])
+  const rows = [
+    { id: 'one', brand: 'TECNO', startRam: '4GB' },
+    { id: 'two', brand: 'Infinix', startRam: '8GB' },
+    { id: 'three', brand: 'itel', startRam: '4GB' },
+  ]
+  const equals = domain.applyRoadmapFilters(rows, 'all', 'all', [
+    { id: 'brand', field: 'brand', operator: 'equals', value: ['TECNO', 'Infinix'] },
+    { id: 'ram', field: 'startRam', operator: 'equals', value: ['4GB', '8GB'] },
+  ], definitions)
+  if (equals.map(row => row.id).join(',') !== 'one,two') {
+    throw new Error(`multi equals must OR values and AND conditions: ${JSON.stringify(equals)}`)
+  }
+  const notEquals = domain.applyRoadmapFilters(rows, 'all', 'all', [
+    { id: 'brand', field: 'brand', operator: 'notEquals', value: ['TECNO', 'itel'] },
+  ], definitions)
+  if (notEquals.map(row => row.id).join(',') !== 'two') {
+    throw new Error(`multi notEquals must reject every listed value: ${JSON.stringify(notEquals)}`)
+  }
+})
+
+registerAssertion('roadmap selectable filter UI and evolution columns honor multi-selection', () => {
+  const drawerSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapFilterDrawer.tsx'), 'utf8')
+  for (const contract of ['mode="multiple"', 'maxTagCount="responsive"', "definition.kind === 'enum'"]) {
+    if (!drawerSource.includes(contract)) throw new Error(`selectable filter UI is missing ${contract}`)
+  }
+  const evolution = loadTypeScriptModule(path.join(root, 'src/components/roadmap/RoadmapEvolutionView.tsx'))
+  const versions = [
+    { id: 'tos-17-2', major: 17, minor: 2 },
+    { id: 'tos-18-0', major: 18, minor: 0 },
+    { id: 'tos-16-3', major: 16, minor: 3 },
+  ]
+  const all = evolution.selectEvolutionVersions(versions, [])
+  if (all.map(version => version.id).join(',') !== 'tos-16-3,tos-17-2,tos-18-0') {
+    throw new Error(`evolution versions lost old-to-new chronology: ${JSON.stringify(all)}`)
+  }
+  const selected = evolution.selectEvolutionVersions(versions, ['tos-17-2', 'tos-18-0'])
+  if (selected.map(version => version.id).join(',') !== 'tos-17-2,tos-18-0') {
+    throw new Error(`evolution did not restrict columns to selected versions: ${JSON.stringify(selected)}`)
   }
 })
 
@@ -2194,6 +2380,8 @@ registerAssertion('current-version roadmap hydration rejects malicious typed fil
     version: 1,
     state: {
       ...state,
+      viewMode: 'evolution',
+      selectedTosVersionId: null,
       filters: [
         { id: 'bad-operator', field: 'brand', operator: 'contains', value: 'TEC' },
         { id: 'bad-enum', field: 'brand', operator: 'equals', value: '__proto__' },
@@ -2212,11 +2400,12 @@ registerAssertion('current-version roadmap hydration rejects malicious typed fil
       },
     },
   })
-  if (hydrated.filters.map(filter => filter.id).join(',') !== 'valid-text') {
+  if (hydrated.filters.map(filter => filter.id).join(',') !== 'valid-version,valid-text') {
     throw new Error(`malicious version-1 filters survived hydration: ${JSON.stringify(hydrated.filters)}`)
   }
-  if (hydrated.filters[0].value !== 'risk'
-    || JSON.stringify(hydrated.visibleColumns) !== JSON.stringify(['firstSaleTosVersionId', 'brand', 'remark'])) {
+  if (JSON.stringify(hydrated.filters[0].value) !== JSON.stringify(['tos-17-2'])
+    || hydrated.filters[1].value !== 'risk'
+    || JSON.stringify(hydrated.visibleColumnsByView.table) !== JSON.stringify(['firstSaleTosVersionId', 'brand', 'remark'])) {
     throw new Error(`hydrated filter/column state was not normalized: ${JSON.stringify(hydrated)}`)
   }
 })
@@ -2290,7 +2479,7 @@ registerAssertion('roadmap module composes controls and overlays without standal
     }
   }
   const toolbarSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
-  for (const label of ['表单视图', '版本演进视图', '修改记录', 'tOS 版本维护', '创建待规划项目', '筛选', '列设置']) {
+  for (const label of ['表单视图', '版本演进视图', '记录', 'tOS 版本维护', '创建项目', '筛选', '列设置']) {
     if (!toolbarSource.includes(label)) throw new Error(`Roadmap toolbar is missing ${label}`)
   }
   if (/placeholder=["'][^"']*搜索/.test(toolbarSource)) throw new Error('Roadmap must not add a standalone search input')
@@ -2319,7 +2508,6 @@ registerAssertion('roadmap module composes controls and overlays without standal
     'applyRoadmapFilters',
     'PlannedProjectModal',
     'TosVersionMaintenanceModal',
-    'TosTargetEditor',
     'normalProjects={projects}',
     'plannedProjects={plannedProjects}',
     'configuredFilterCount',
@@ -2397,7 +2585,6 @@ registerAssertion('single-version roadmap table preserves sorting, targets, sour
     'firstSaleTosVersionId',
     "formatRoadmapTableValue",
     "rowKey={row => `${row.source}:${row.id}`}",
-    '修改目标',
     'version.targets.length',
     '待规划',
     '已存在正常项目',
@@ -2426,7 +2613,6 @@ registerAssertion('single-version roadmap table preserves sorting, targets, sour
     'setSelectedTosVersionId',
     'setSort',
     'setSelectedConflictKey',
-    'setTargetVersionId',
     'requestDeletePlannedProject',
     'Modal.confirm',
     'deletePlannedProject',
@@ -2470,24 +2656,28 @@ registerAssertion('evolution cards keep locked titles and approved colors', () =
   const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
   const tableSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
 
-  if (cardModule.formatEvolutionCardTitle({ productSeries: ' SPARK 60 ', displayName: ' KJ6 ' }) !== 'SPARK 60（KJ6）') {
-    throw new Error('evolution card title does not use product series and full-width parentheses')
+  if (cardModule.formatEvolutionCardTitle({
+    marketName: ' SPARK 60 ', projectCode: 'KJ6', androidVersion: 'Android 16', productType: '新品',
+  }) !== 'SPARK 60（KJ6）') {
+    throw new Error('evolution card title does not use market name, project name, and full-width parentheses')
   }
-  if (cardModule.formatEvolutionCardTitle({ productSeries: ' ', displayName: '' }) !== '—（—）') {
+  if (cardModule.formatEvolutionCardTitle({
+    marketName: ' ', projectCode: '', androidVersion: 'Android 16', productType: '新品',
+  }) !== '—（—）') {
     throw new Error('evolution card title does not fall back for empty structural values')
   }
-  const expectedLocked = ['productSeries', 'displayName']
+  const expectedLocked = ['marketName', 'displayName']
   if (JSON.stringify(filters.ROADMAP_EVOLUTION_LOCKED_COLUMNS) !== JSON.stringify(expectedLocked)) {
     throw new Error('evolution structural columns are not locked')
   }
   const expectedEvolution = [
-    'productSeries', 'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
+    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate', 'developMode',
   ]
   if (JSON.stringify(filters.DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS) !== JSON.stringify(expectedEvolution)) {
     throw new Error('evolution defaults do not include both structural title fields')
   }
   const lockedSelection = filters.ensureRoadmapLockedColumns(['marketName'], expectedLocked)
-  if (JSON.stringify(lockedSelection) !== JSON.stringify(['productSeries', 'marketName', 'displayName'])) {
+  if (JSON.stringify(lockedSelection) !== JSON.stringify(['marketName', 'displayName'])) {
     throw new Error('locked structural fields can be removed from a column selection')
   }
 
@@ -2502,7 +2692,7 @@ registerAssertion('evolution cards keep locked titles and approved colors', () =
   if (!moduleSource.includes('value={{ order: [...columnOrder], visible: [...visibleColumns] }}')) {
     throw new Error('active ordered settings are not passed to the roadmap column settings entry')
   }
-  for (const token of ['formatEvolutionCardTitle', "Full: 'blue'", "Slim: 'gold'", "Go: 'cyan'", "column.key !== 'productSeries'", "column.key !== 'displayName'"]) {
+  for (const token of ['formatEvolutionCardTitle', "Full: 'blue'", "Slim: 'gold'", "Go: 'cyan'", "column.key !== 'marketName'", "column.key !== 'displayName'"]) {
     if (!cardSource.includes(token)) throw new Error(`card is missing ${token}`)
   }
   for (const token of ['brand-tecno', 'brand-infinix', 'brand-itel', 'pms-roadmap-evolution-brand-label']) {
@@ -2515,7 +2705,7 @@ registerAssertion('evolution cards keep locked titles and approved colors', () =
   ]) {
     if (!evolutionSource.includes(contract)) throw new Error(`brand label contrast is missing ${contract}`)
   }
-  for (const token of ['pms-roadmap-evolution-card-header', 'pms-roadmap-evolution-card-title', 'pms-roadmap-evolution-source-tag']) {
+  for (const token of ['pms-roadmap-evolution-card-header', 'pms-roadmap-evolution-card-title']) {
     if (!evolutionSource.includes(token) && !cardSource.includes(token)) throw new Error(`card nowrap styling is missing ${token}`)
   }
   for (const token of ['roadmap-table-project-name-row', 'roadmap-table-project-name', 'roadmap-table-project-source-tag']) {
@@ -2537,10 +2727,10 @@ registerAssertion('global roadmap conflicts stay visible and actionable until re
   for (const contract of ['RoadmapConflictDrawer', 'openConflictDrawer', 'countConflictingPlannedProjects']) {
     if (!moduleSource.includes(contract)) throw new Error(`conflict integration is missing ${contract}`)
   }
-  for (const contract of ['解决冲突', 'count={conflictCount}', 'onClick={onResolveConflicts}']) {
+  for (const contract of ['冲突', 'count={conflictCount}', 'onClick={onResolveConflicts}']) {
     if (!toolbarSource.includes(contract)) throw new Error(`compact conflict action is missing ${contract}`)
   }
-  if (!moduleSource.includes('删除后，该待规划项目会立即从项目路标中移除；修改记录仍保留删除前快照。确认删除？')) {
+  if (!moduleSource.includes('删除后，该待规划项目会立即从 tOS 路标中移除；修改记录仍保留删除前快照。确认删除？')) {
     throw new Error('planned deletion must use the approved shared confirmation copy')
   }
 })
@@ -2548,6 +2738,15 @@ registerAssertion('global roadmap conflicts stay visible and actionable until re
 registerAssertion('roadmap change history filters, sorts, and renders fixed audit fields', () => {
   const logSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapChangeLogDrawer.tsx'), 'utf8')
   const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  const logModule = loadTypeScriptModule(path.join(root, 'src/components/roadmap/RoadmapChangeLogDrawer.tsx'))
+  const projectNameEntries = logModule.getRoadmapAuditDisplayEntries({
+    action: 'update',
+    projectDisplayName: 'CN7(Android 16)',
+    changes: [{ field: 'projectCode', before: 'CN6', after: 'CN7' }],
+  })
+  if (projectNameEntries[0]?.before !== 'CN6(Android 16)' || projectNameEntries[0]?.after !== 'CN7(Android 16)') {
+    throw new Error(`project-name audit lost its canonical Android suffix: ${JSON.stringify(projectNameEntries)}`)
+  }
   for (const label of ['项目标识', '来源', '动作', '日期范围', '正常项目', '待规划项目', '创建', '修改', '删除']) {
     if (!logSource.includes(label)) throw new Error(`change log drawer is missing ${label}`)
   }
@@ -2601,7 +2800,8 @@ registerAssertion('rebuilt roadmap is mounted without legacy roadmap content', (
 registerAssertion('roadmap quick filters and drawer conditions share one source', () => {
   const filterModule = loadTypeScriptModule(path.join(root, 'src/lib/roadmapFilters.ts'))
   const brandEquals = filterModule.setRoadmapQuickFilter([], 'brand', 'TECNO')
-  if (brandEquals.length !== 1 || brandEquals[0].operator !== 'equals' || brandEquals[0].value !== 'TECNO') {
+  if (brandEquals.length !== 1 || brandEquals[0].operator !== 'equals'
+    || JSON.stringify(brandEquals[0].value) !== JSON.stringify(['TECNO'])) {
     throw new Error('brand quick filter did not create an equals condition')
   }
   if (filterModule.getRoadmapQuickFilterValue(brandEquals, 'brand') !== 'TECNO') {
@@ -2614,7 +2814,7 @@ registerAssertion('roadmap quick filters and drawer conditions share one source'
   if (filterModule.setRoadmapQuickFilter(custom, 'brand', 'all').length !== 0) {
     throw new Error('quick all did not clear the drawer condition')
   }
-  const nonQuickBrand = [{ ...brandEquals[0], value: '待定' }]
+  const nonQuickBrand = [{ ...brandEquals[0], value: ['待定'] }]
   if (filterModule.getRoadmapQuickFilterValue(nonQuickBrand, 'brand') !== 'custom') {
     throw new Error('brand values without an external shortcut must expose custom state')
   }
@@ -2628,7 +2828,8 @@ registerAssertion('table tOS selector and drawer tOS condition stay synchronized
   }
   store.getState().setSelectedTosVersionId('tos-17-2')
   const selectorCondition = store.getState().filters.find(condition => condition.field === 'firstSaleTosVersionId')
-  if (selectorCondition?.operator !== 'equals' || selectorCondition.value !== 'tos-17-2') {
+  if (selectorCondition?.operator !== 'equals'
+    || JSON.stringify(selectorCondition.value) !== JSON.stringify(['tos-17-2'])) {
     throw new Error('table tOS selector did not update the drawer condition')
   }
   store.getState().setSelectedTosVersionId(null)
@@ -2640,18 +2841,27 @@ registerAssertion('table tOS selector and drawer tOS condition stay synchronized
     id: 'drawer-tos',
     field: 'firstSaleTosVersionId',
     operator: 'equals',
-    value: 'tos-16-3',
+    value: ['tos-16-3', 'tos-17-2'],
+  }])
+  if (store.getState().selectedTosVersionId !== null) {
+    throw new Error('multi-select drawer condition must not pretend the table has one selected version')
+  }
+  store.getState().setFilters([{
+    id: 'drawer-single-tos',
+    field: 'firstSaleTosVersionId',
+    operator: 'equals',
+    value: ['tos-16-3'],
   }])
   if (store.getState().selectedTosVersionId !== 'tos-16-3') {
-    throw new Error('drawer tOS condition did not update the table selector')
+    throw new Error('single-value drawer tOS condition did not synchronize the table selector')
   }
   store.getState().setFilters([])
   if (store.getState().selectedTosVersionId !== null) {
     throw new Error('removing the drawer tOS condition did not restore all')
   }
-  store.getState().setViewMode('evolution')
-  if (store.getState().filters.some(condition => condition.field === 'firstSaleTosVersionId')) {
-    throw new Error('switching to evolution invented a tOS condition')
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  for (const contract of ['handleViewModeChange', "viewMode === 'table'", "nextViewMode === 'evolution'", "condition.field !== 'firstSaleTosVersionId'", 'setSelectedTosVersionId(null)']) {
+    if (!moduleSource.includes(contract)) throw new Error(`table-to-evolution cleanup is missing ${contract}`)
   }
 })
 
@@ -2667,8 +2877,43 @@ registerAssertion('persisted tOS selection repairs to all unless its concrete ID
   const validCondition = valid.filters.find(condition => condition.field === 'firstSaleTosVersionId')
   if (valid.selectedTosVersionId !== 'tos-17-2'
     || validCondition?.operator !== 'equals'
-    || validCondition.value !== 'tos-17-2') {
+    || JSON.stringify(validCondition.value) !== JSON.stringify(['tos-17-2'])) {
     throw new Error('valid persisted concrete selection was not preserved and synchronized')
+  }
+  const evolutionMulti = storeModule.migrateRoadmapState({
+    ...persisted,
+    viewMode: 'evolution',
+    selectedTosVersionId: null,
+    filters: [{
+      id: 'evolution-tos',
+      field: 'firstSaleTosVersionId',
+      operator: 'equals',
+      value: ['tos-18-0', 'tos-17-2'],
+    }],
+  }, 1)
+  const evolutionCondition = evolutionMulti.filters.find(condition => condition.field === 'firstSaleTosVersionId')
+  if (evolutionMulti.selectedTosVersionId !== null
+    || JSON.stringify(evolutionCondition?.value) !== JSON.stringify(['tos-18-0', 'tos-17-2'])) {
+    throw new Error(`evolution multi-select filter was lost on reload: ${JSON.stringify(evolutionMulti)}`)
+  }
+  const roundTripStore = resetRoadmapStore(storeModule)
+  roundTripStore.getState().setViewMode('evolution')
+  roundTripStore.getState().setFilters([{
+    id: 'round-trip-tos',
+    field: 'firstSaleTosVersionId',
+    operator: 'equals',
+    value: ['tos-18-0', 'tos-17-2'],
+  }])
+  roundTripStore.getState().setViewMode('table')
+  const tableReload = storeModule.migrateRoadmapState(
+    storeModule.partializeRoadmapState(roundTripStore.getState()),
+    1,
+  )
+  const roundTripCondition = tableReload.filters.find(condition => condition.field === 'firstSaleTosVersionId')
+  if (tableReload.viewMode !== 'table'
+    || tableReload.selectedTosVersionId !== null
+    || JSON.stringify(roundTripCondition?.value) !== JSON.stringify(['tos-18-0', 'tos-17-2'])) {
+    throw new Error(`evolution multi-select did not survive table reload: ${JSON.stringify(tableReload)}`)
   }
 
   for (const [name, overrides] of [
@@ -2684,10 +2929,20 @@ registerAssertion('persisted tOS selection repairs to all unless its concrete ID
       filters: [{ id: 'stale-version', field: 'firstSaleTosVersionId', operator: 'equals', value: 'tos-17-2' }],
       ...overrides,
     }, 1)
-    if (migrated.selectedTosVersionId !== null
-      || migrated.filters.some(condition => condition.field === 'firstSaleTosVersionId')) {
-      throw new Error(`${name} persisted selection did not fall back to all`)
+    const filter = migrated.filters.find(condition => condition.field === 'firstSaleTosVersionId')
+    if (migrated.selectedTosVersionId !== 'tos-17-2'
+      || JSON.stringify(filter?.value) !== JSON.stringify(['tos-17-2'])) {
+      throw new Error(`${name} persisted selection overrode the valid filter fact`)
     }
+  }
+  const invalidWithoutFilter = storeModule.migrateRoadmapState({
+    ...persisted,
+    selectedTosVersionId: 'missing-version',
+    filters: [],
+  }, 1)
+  if (invalidWithoutFilter.selectedTosVersionId !== null
+    || invalidWithoutFilter.filters.some(condition => condition.field === 'firstSaleTosVersionId')) {
+    throw new Error('invalid persisted selection without a filter did not fall back to all')
   }
 })
 
@@ -2699,13 +2954,17 @@ registerAssertion('table and evolution views keep the approved independent defau
     'developMode', 'remark',
   ]
   const expectedEvolution = [
-    'productSeries', 'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
+    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate', 'developMode',
   ]
   if (JSON.stringify(filterModule.DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS) !== JSON.stringify(expectedTable)) {
     throw new Error('table default columns do not match the approved matrix')
   }
   if (JSON.stringify(filterModule.DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS) !== JSON.stringify(expectedEvolution)) {
     throw new Error('evolution default columns do not match the approved matrix')
+  }
+  const evolutionOrder = filterModule.DEFAULT_ROADMAP_EVOLUTION_COLUMN_ORDER
+  if (evolutionOrder.indexOf('developMode') !== evolutionOrder.indexOf('versionType') + 1) {
+    throw new Error('evolution development mode is not positioned directly after version type')
   }
   const storeModule = loadIsolatedRoadmapStore()
   const store = resetRoadmapStore(storeModule)
@@ -2715,8 +2974,8 @@ registerAssertion('table and evolution views keep the approved independent defau
     throw new Error('evolution view did not retain its independent defaults')
   }
   store.getState().setVisibleColumns(['marketName'])
-  if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(['productSeries', 'marketName', 'displayName'])) {
-    throw new Error('evolution direct column setter removed structural title fields')
+  if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(expectedEvolution)) {
+    throw new Error(`evolution direct column setter removed structural title fields: ${JSON.stringify(store.getState().visibleColumns)}`)
   }
   store.getState().setViewMode('table')
   if (JSON.stringify(store.getState().visibleColumns) !== JSON.stringify(['firstSaleTosVersionId', 'brand'])) {
@@ -2737,10 +2996,15 @@ registerAssertion('roadmap migration canonicalizes locked evolution columns with
       evolution: ['marketName'],
     },
   }, 1)
-  const expectedEvolution = ['productSeries', 'marketName', 'displayName']
+  const expectedEvolution = [
+    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate', 'developMode',
+  ]
   if (JSON.stringify(migrated.visibleColumns) !== JSON.stringify(expectedEvolution)
     || JSON.stringify(migrated.visibleColumnsByView.evolution) !== JSON.stringify(expectedEvolution)) {
-    throw new Error('persisted evolution columns were not repaired with structural title fields')
+    throw new Error(`persisted evolution columns were not repaired with structural title fields: ${JSON.stringify({
+      visibleColumns: migrated.visibleColumns,
+      evolution: migrated.visibleColumnsByView.evolution,
+    })}`)
   }
   if (JSON.stringify(migrated.visibleColumnsByView.table) !== JSON.stringify(['firstSaleTosVersionId', 'brand'])) {
     throw new Error('evolution migration changed table columns')
@@ -2761,6 +3025,13 @@ registerAssertion('roadmap targets preserve raw text and expose collapse control
   }
   for (const token of ['collapsedTargetVersionIds', 'toggleAllTargets', 'allTargetsCollapsed']) {
     if (!moduleSource.includes(token)) throw new Error(`target collapse integration is missing ${token}`)
+  }
+  for (const contract of [
+    'new Set(versions.filter(version => version.targets.length > 0).map(version => version.id))',
+    'knownTargetVersionIdsRef',
+    'newTargetIds.forEach(id => next.add(id))',
+  ]) {
+    if (!moduleSource.includes(contract)) throw new Error(`target default collapse is missing ${contract}`)
   }
 })
 
@@ -2803,8 +3074,93 @@ registerAssertion('roadmap table owns the tOS selector and fixed columns', () =>
   if (table.includes('>只读</Typography.Text>')) throw new Error('normal project action still renders read-only text')
 })
 
+registerAssertion('two-digit roadmap contracts stay canonical end to end', () => {
+  const validation = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
+  const maintained = validation.normalizeTosVersionName('tOS 16.3')
+  if (JSON.stringify(maintained) !== JSON.stringify({ name: 'tOS 16.3', major: 16, minor: 3 })) {
+    throw new Error(`two-digit maintained version is not canonical: ${JSON.stringify(maintained)}`)
+  }
+  const legacyPatch = validation.normalizeLegacyTosVersionName('tOS 16.3.2')
+  if (JSON.stringify(legacyPatch) !== JSON.stringify({ name: 'tOS 16.3', major: 16, minor: 3 })) {
+    throw new Error(`legacy patch version does not collapse to major.minor: ${JSON.stringify(legacyPatch)}`)
+  }
+  const storeModule = loadIsolatedRoadmapStore()
+  const migrated = storeModule.migrateRoadmapState({
+    tosVersions: [
+      {
+        id: 'tos-15-1-0', name: 'tOS 15.1.0', targets: ['旧目标'],
+        periodStartDate: '2026-01-01', periodEndDate: '2026-03-01',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'tos-15-1-2', name: 'tOS 15.1.2', targets: ['最新目标'],
+        periodStartDate: '2026-02-01', periodEndDate: '2026-04-01',
+        updatedAt: '2026-02-01T00:00:00.000Z',
+      },
+    ],
+  }, 2)
+  const collapsed = migrated.tosVersions.filter(version => version.major === 15 && version.minor === 1)
+  if (
+    collapsed.length !== 1
+    || collapsed[0].id !== 'tos-15-1'
+    || collapsed[0].targets[0] !== '最新目标'
+    || collapsed[0].periodStartDate !== '2026-02-01'
+    || collapsed[0].periodEndDate !== '2026-04-01'
+  ) {
+    throw new Error(`legacy maintained versions did not keep the latest two-digit config: ${JSON.stringify(collapsed)}`)
+  }
+
+  const types = fs.readFileSync(path.join(root, 'src/types/roadmap.ts'), 'utf8')
+  if (!types.includes('launchEstimated: boolean')) throw new Error('launch estimate field is missing')
+  if (types.includes('patch: number')) throw new Error('maintained tOS still exposes patch identity')
+
+  const modal = fs.readFileSync(path.join(root, 'src/components/roadmap/PlannedProjectModal.tsx'), 'utf8')
+  for (const token of ['label="tOS 版本"', 'name="launchEstimated"', 'valuePropName="checked"']) {
+    if (!modal.includes(token)) throw new Error(`planned project modal is missing ${token}`)
+  }
+
+  const toolbar = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
+  for (const token of ['展开目标', '收起目标', '冲突', '记录', '创建项目']) {
+    if (!toolbar.includes(token)) throw new Error(`compact tOS roadmap toolbar is missing ${token}`)
+  }
+  for (const oldText of ['展开全部目标', '收起全部目标', '解决冲突', '修改记录', '创建待规划项目']) {
+    if (toolbar.includes(oldText)) throw new Error(`compact toolbar still contains ${oldText}`)
+  }
+
+  const roadmapView = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapView.tsx'), 'utf8')
+  if (!roadmapView.includes("label: 'tOS 路标视图'") || roadmapView.includes("label: '项目路标视图'")) {
+    throw new Error('project-view tab was not renamed to tOS roadmap')
+  }
+
+  const card = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'), 'utf8')
+  if (!card.includes('row.marketName?.trim()') || card.includes('pms-roadmap-evolution-source-tag')) {
+    throw new Error('evolution card title/source layout is stale')
+  }
+  if (!card.includes("column.key === 'launchDate' && row.launchEstimated")) {
+    throw new Error('evolution card does not render launch estimate')
+  }
+  const table = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
+  if (!table.includes("column.key === 'launchDate' && row.launchEstimated")) {
+    throw new Error('table does not render launch estimate')
+  }
+
+  const filters = loadTypeScriptModule(path.join(root, 'src/lib/roadmapFilters.ts'))
+  if (filters.DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS.includes('productLine')) {
+    throw new Error('product line must be disabled by default in evolution view')
+  }
+})
+
+const focus = process.env.ROADMAP_VERIFY_FOCUS?.trim()
+const selectedAssertions = focus
+  ? assertions.filter(({ name }) => name.includes(focus))
+  : assertions
+if (focus && !selectedAssertions.length) {
+  console.error(`FAIL no roadmap assertions matched focus: ${focus}`)
+  process.exit(1)
+}
+
 const failures = []
-for (const { name, assertion } of assertions) {
+for (const { name, assertion } of selectedAssertions) {
   try {
     assertion()
     console.log(`PASS ${name}`)
@@ -2816,4 +3172,4 @@ for (const { name, assertion } of assertions) {
 
 if (failures.length) process.exit(1)
 
-console.log(`Project roadmap baseline verification passed (${assertions.length} assertions).`)
+console.log(`Project roadmap baseline verification passed (${selectedAssertions.length} assertions).`)

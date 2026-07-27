@@ -7,6 +7,7 @@ import {
   buildRoadmapFilterFieldDefinitions,
   createRoadmapTextFilterDebouncer,
   getRoadmapQuickFilterValue,
+  getRoadmapSelectedTosVersionIds,
   sanitizeRoadmapFilterConditions,
   setRoadmapQuickFilter,
   type RoadmapTextFilterDebouncer,
@@ -39,7 +40,6 @@ import RoadmapEvolutionView from './RoadmapEvolutionView'
 import RoadmapFilterDrawer from './RoadmapFilterDrawer'
 import RoadmapTableView from './RoadmapTableView'
 import RoadmapToolbar from './RoadmapToolbar'
-import TosTargetEditor from './TosTargetEditor'
 import TosVersionMaintenanceModal from './TosVersionMaintenanceModal'
 
 const isPresent = <T,>(value: T | null): value is T => value !== null
@@ -51,6 +51,7 @@ export interface RoadmapViewRenderContext {
   conflicts: readonly RoadmapPlanningConflictGroup[]
   versions: readonly TosVersionConfig[]
   selectedTosVersionId: string | null
+  selectedTosVersionIds: readonly string[]
   columnOrder: readonly RoadmapColumnKey[]
   visibleColumns: readonly RoadmapColumnKey[]
   sort: RoadmapSortState
@@ -58,7 +59,6 @@ export interface RoadmapViewRenderContext {
   onViewProject: (projectId: string, market?: string) => void
   onSelectedTosVersionChange: (id: string | null) => void
   onSortChange: (sort: RoadmapSortState) => void
-  onEditTosTargets: (versionId: string) => void
   onOpenConflict: (conflictKey: string) => void
   onEditPlannedProject: (projectId: string) => void
   onDeletePlannedProject: (projectId: string) => void
@@ -107,12 +107,16 @@ export default function ProjectRoadmapModule({
   const [plannedModalOpen, setPlannedModalOpen] = useState(false)
   const [editingPlannedProjectId, setEditingPlannedProjectId] = useState<string | null>(null)
   const [tosMaintenanceOpen, setTosMaintenanceOpen] = useState(false)
-  const [targetVersionId, setTargetVersionId] = useState<string | null>(null)
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [columnDrawerOpen, setColumnDrawerOpen] = useState(false)
   const [changeLogOpen, setChangeLogOpen] = useState(false)
   const [conflictDrawerOpen, setConflictDrawerOpen] = useState(false)
-  const [collapsedTargetVersionIds, setCollapsedTargetVersionIds] = useState<Set<string>>(() => new Set())
+  const [collapsedTargetVersionIds, setCollapsedTargetVersionIds] = useState<Set<string>>(
+    () => new Set(versions.filter(version => version.targets.length > 0).map(version => version.id)),
+  )
+  const knownTargetVersionIdsRef = useRef<Set<string>>(
+    new Set(versions.filter(version => version.targets.length > 0).map(version => version.id)),
+  )
   const [isFullscreen, setIsFullscreen] = useState(false)
   const roadmapShellRef = useRef<HTMLElement>(null)
   const textFilterDebouncerRef = useRef<RoadmapTextFilterDebouncer | null>(null)
@@ -151,6 +155,10 @@ export default function ProjectRoadmapModule({
   const brandFilter = getRoadmapQuickFilterValue(normalizedFilters, 'brand')
   const productTypeFilter = getRoadmapQuickFilterValue(normalizedFilters, 'productType')
   const configuredFilterCount = normalizedFilters.length
+  const selectedTosVersionIds = useMemo(
+    () => getRoadmapSelectedTosVersionIds(normalizedFilters),
+    [normalizedFilters],
+  )
   const immediateFilters = useMemo(() => normalizedFilters.filter(condition => (
     filterDefinitionsByKey.get(condition.field)?.kind !== 'text'
   )), [filterDefinitionsByKey, normalizedFilters])
@@ -193,11 +201,15 @@ export default function ProjectRoadmapModule({
 
   useEffect(() => {
     const validIds = new Set(versions.map(version => version.id))
+    const nextTargetIds = new Set(targetVersionIds)
+    const newTargetIds = targetVersionIds.filter(id => !knownTargetVersionIdsRef.current.has(id))
     setCollapsedTargetVersionIds(current => {
       const next = new Set([...current].filter(id => validIds.has(id)))
-      return next.size === current.size ? current : next
+      newTargetIds.forEach(id => next.add(id))
+      return next.size === current.size && [...next].every(id => current.has(id)) ? current : next
     })
-  }, [versions])
+    knownTargetVersionIdsRef.current = nextTargetIds
+  }, [targetVersionIds, versions])
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -247,11 +259,6 @@ export default function ProjectRoadmapModule({
     () => plannedProjects.find(project => project.id === editingPlannedProjectId) ?? null,
     [editingPlannedProjectId, plannedProjects],
   )
-  const targetVersion = useMemo(
-    () => versions.find(version => version.id === targetVersionId) ?? null,
-    [targetVersionId, versions],
-  )
-
   const openCreatePlannedProject = () => {
     setEditingPlannedProjectId(null)
     setPlannedModalOpen(true)
@@ -282,6 +289,13 @@ export default function ProjectRoadmapModule({
   ) => {
     setFilters(setRoadmapQuickFilter(normalizedFilters, field, value))
   }
+  const handleViewModeChange = (nextViewMode: RoadmapViewMode) => {
+    if (viewMode === 'table' && nextViewMode === 'evolution') {
+      setFilters(normalizedFilters.filter(condition => condition.field !== 'firstSaleTosVersionId'))
+      setSelectedTosVersionId(null)
+    }
+    setViewMode(nextViewMode)
+  }
   const requestChangeLog = () => {
     if (!canView) return
     if (onOpenChangeLog) onOpenChangeLog()
@@ -304,7 +318,7 @@ export default function ProjectRoadmapModule({
       content: (
         <>
           <div style={{ marginBottom: 8 }}>项目：{project.displayName}</div>
-          <div>删除后，该待规划项目会立即从项目路标中移除；修改记录仍保留删除前快照。确认删除？</div>
+          <div>删除后，该待规划项目会立即从 tOS 路标中移除；修改记录仍保留删除前快照。确认删除？</div>
         </>
       ),
       okText: '确认删除',
@@ -326,8 +340,8 @@ export default function ProjectRoadmapModule({
     return (
       <Result
         status="403"
-        title="暂无项目路标查看权限"
-        subTitle="请联系管理员开通项目路标查看权限。"
+        title="暂无 tOS 路标查看权限"
+        subTitle="请联系管理员开通 tOS 路标查看权限。"
       />
     )
   }
@@ -339,6 +353,7 @@ export default function ProjectRoadmapModule({
     conflicts,
     versions,
     selectedTosVersionId,
+    selectedTosVersionIds,
     columnOrder,
     visibleColumns,
     sort,
@@ -346,7 +361,6 @@ export default function ProjectRoadmapModule({
     onViewProject,
     onSelectedTosVersionChange: setSelectedTosVersionId,
     onSortChange: setSort,
-    onEditTosTargets: setTargetVersionId,
     onOpenConflict: openConflictDrawer,
     onEditPlannedProject: openPlannedProjectEditor,
     onDeletePlannedProject: requestDeletePlannedProject,
@@ -362,14 +376,14 @@ export default function ProjectRoadmapModule({
     <section
       ref={roadmapShellRef}
       className={`pms-roadmap-shell${isFullscreen ? ' pms-roadmap-shell-fullscreen' : ''}`}
-      aria-label="项目路标"
+      aria-label="tOS 路标视图"
       style={{ width: '100%', minWidth: 0 }}
     >
       <RoadmapToolbar
         canView={canView}
         canEdit={canEdit}
         viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        onViewModeChange={handleViewModeChange}
         brandFilter={brandFilter}
         onBrandFilterChange={value => updateQuickFilter('brand', value)}
         productTypeFilter={productTypeFilter}
@@ -427,13 +441,6 @@ export default function ProjectRoadmapModule({
         onCancel={() => setTosMaintenanceOpen(false)}
         normalProjects={projects}
         plannedProjects={plannedProjects}
-        canEdit={canEdit}
-        onEditTargets={version => setTargetVersionId(version.id)}
-      />
-      <TosTargetEditor
-        open={Boolean(targetVersionId)}
-        onCancel={() => setTargetVersionId(null)}
-        version={targetVersion}
         canEdit={canEdit}
       />
       <RoadmapConflictDrawer

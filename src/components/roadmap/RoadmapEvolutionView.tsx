@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
-import { BulbOutlined, DownOutlined, EditOutlined, UpOutlined } from '@ant-design/icons'
-import { Button, Empty, Flex, Typography } from 'antd'
+import { BulbOutlined, DownOutlined, UpOutlined } from '@ant-design/icons'
+import { Button, Empty, Flex, Tooltip, Typography } from 'antd'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
+import { formatTosVersionDisplay, formatTosVersionFull } from '@/lib/roadmapValidation'
 import type {
   RoadmapBrand,
   RoadmapColumnKey,
@@ -37,12 +38,12 @@ export interface RoadmapEvolutionViewProps {
   rows: readonly RoadmapProjectRow[]
   conflicts: readonly RoadmapPlanningConflictGroup[]
   versions: readonly TosVersionConfig[]
+  selectedTosVersionIds: readonly string[]
   columnOrder: readonly RoadmapColumnKey[]
   visibleColumns: readonly RoadmapColumnKey[]
   canEdit: boolean
   collapsedTargetVersionIds: ReadonlySet<string>
   onToggleTarget: (versionId: string) => void
-  onEditTosTargets: (versionId: string) => void
   onOpenConflict: (conflictKey: string) => void
   onEditPlannedProject: (projectId: string) => void
   onDeletePlannedProject: (projectId: string) => void
@@ -52,6 +53,15 @@ export function sortEvolutionVersions(
   versions: readonly TosVersionConfig[],
 ): TosVersionConfig[] {
   return [...versions].sort(compareSemanticTos)
+}
+
+export function selectEvolutionVersions(
+  versions: readonly TosVersionConfig[],
+  selectedTosVersionIds: readonly string[],
+): TosVersionConfig[] {
+  const selectedIds = new Set(selectedTosVersionIds)
+  const ordered = sortEvolutionVersions(versions)
+  return selectedIds.size ? ordered.filter(version => selectedIds.has(version.id)) : ordered
 }
 
 export function groupEvolutionRows(
@@ -112,7 +122,7 @@ function EvolutionProductCell({
   return (
     <section
       className={`pms-roadmap-evolution-product-cell is-${productType === '新品' ? 'new' : 'old'}`}
-      aria-label={`${version.name} ${productType}项目，共 ${count} 个`}
+      aria-label={`${formatTosVersionDisplay(version)} ${productType}项目，共 ${count} 个`}
     >
       {productType === '新品' ? (
         <div className="pms-roadmap-evolution-product-heading">
@@ -148,18 +158,21 @@ export default function RoadmapEvolutionView({
   rows,
   conflicts,
   versions,
+  selectedTosVersionIds,
   columnOrder,
   visibleColumns,
   canEdit,
   collapsedTargetVersionIds,
   onToggleTarget,
-  onEditTosTargets,
   onOpenConflict,
   onEditPlannedProject,
   onDeletePlannedProject,
 }: RoadmapEvolutionViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const orderedVersions = useMemo(() => sortEvolutionVersions(versions), [versions])
+  const orderedVersions = useMemo(
+    () => selectEvolutionVersions(versions, selectedTosVersionIds),
+    [selectedTosVersionIds, versions],
+  )
   const conflictKeyByIdentity = useMemo(() => buildEvolutionConflictMap(conflicts), [conflicts])
   const scrollSignature = `evolution:${orderedVersions.map(version => version.id).join('|')}`
   const renderProjectCard = (row: RoadmapProjectRow) => (
@@ -220,13 +233,23 @@ export default function RoadmapEvolutionView({
               style={{ gridColumn: index + 1, gridRow: 1 }}
             >
               <Flex justify="space-between" align="center" gap={8}>
-                <Typography.Title level={5}>{version.name}</Typography.Title>
+                <Tooltip title={formatTosVersionFull(version)}>
+                  <Typography.Title level={5}>{formatTosVersionDisplay(version)}</Typography.Title>
+                </Tooltip>
                 <Typography.Text type="secondary">
                   {countEvolutionRows(rows, version.id)} 个项目
                 </Typography.Text>
               </Flex>
+              {version.periodStartDate && version.periodEndDate ? (
+                <Typography.Text type="secondary">
+                  项目周期：{version.periodStartDate} 至 {version.periodEndDate}
+                </Typography.Text>
+              ) : null}
               {version.targets.length ? (
-                <section className="pms-roadmap-evolution-target" aria-label={`${version.name} 目标`}>
+                <section
+                  className="pms-roadmap-evolution-target"
+                  aria-label={`${formatTosVersionDisplay(version)} 目标`}
+                >
                   <Flex
                     className="pms-roadmap-target-card-header"
                     justify="space-between"
@@ -255,16 +278,6 @@ export default function RoadmapEvolutionView({
                       >
                         {targetCollapsed ? '展开' : '收起'}
                       </Button>
-                      {canEdit ? (
-                        <Button
-                          type="link"
-                          size="small"
-                          icon={<EditOutlined aria-hidden />}
-                          onClick={() => onEditTosTargets(version.id)}
-                        >
-                          修改目标
-                        </Button>
-                      ) : null}
                     </Flex>
                   </Flex>
                   {!targetCollapsed ? (

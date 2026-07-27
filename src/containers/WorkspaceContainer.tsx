@@ -175,7 +175,8 @@ export default function WorkspaceContainer() {
   return (
     <div>
       {/* Unified toolbar */}
-      <div style={WORKSPACE_FILTER_TOOLBAR_STYLE}>
+      <div style={{ ...WORKSPACE_FILTER_TOOLBAR_STYLE, flexDirection: 'column', alignItems: 'stretch' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', columnGap: 16, rowGap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', flex: '1 1 680px', minWidth: 0, columnGap: 0, rowGap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '2px 3px', background: 'rgba(99,102,241,0.05)', borderRadius: 8 }}>
             {([
@@ -239,35 +240,7 @@ export default function WorkspaceContainer() {
           )}
         </div>
         {workspaceTab === 'projects' && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', flex: '1 1 760px', minWidth: 0, columnGap: 10, rowGap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 4, padding: '2px 4px', background: 'rgba(99,102,241,0.04)', borderRadius: 20, border: '1px solid rgba(99,102,241,0.06)' }}>
-              {[
-                { label: '全部', value: 'all' },
-                ...MACHINE_PROJECT_FILTER_OPTIONS,
-                { label: 'tOS版本', value: PROJECT_TYPE_TOS_VERSION },
-                { label: '独立软件', value: PROJECT_TYPE_INDEPENDENT_SOFTWARE },
-                { label: '技术', value: PROJECT_TYPE_TECH },
-                { label: '能力建设', value: PROJECT_TYPE_CAPABILITY },
-              ].map(item => {
-                const isActive = projectTypeFilter === item.value
-                return (
-                  <div
-                    key={item.value}
-                    onClick={() => { setProjectTypeFilter(item.value); setProjectCardPage(1); }}
-                    style={{
-                      ...WORKSPACE_FILTER_CHIP_STYLE,
-                      padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
-                      fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
-                      background: isActive ? '#fff' : 'transparent',
-                      color: isActive ? '#6366f1' : '#9ca3af',
-                      boxShadow: isActive ? '0 2px 6px rgba(99,102,241,0.15)' : 'none',
-                    }}
-                  >
-                    {item.label}
-                  </div>
-                )
-              })}
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', minWidth: 0, columnGap: 10, rowGap: 8 }}>
             <Input
               placeholder="搜索项目名称..."
               prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
@@ -295,6 +268,54 @@ export default function WorkspaceContainer() {
                 </Button>
               </>
             )}
+          </div>
+        )}
+        </div>
+        {workspaceTab === 'projects' && (
+          <div
+            aria-label="项目类型筛选"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 4,
+              width: '100%',
+              padding: '3px 4px',
+              background: 'rgba(99,102,241,0.04)',
+              borderRadius: 10,
+              border: '1px solid rgba(99,102,241,0.06)',
+            }}
+          >
+            {[
+              { label: '全部', value: 'all' },
+              ...MACHINE_PROJECT_FILTER_OPTIONS,
+              { label: 'tOS版本', value: PROJECT_TYPE_TOS_VERSION },
+              { label: '独立软件', value: PROJECT_TYPE_INDEPENDENT_SOFTWARE },
+              { label: '技术', value: PROJECT_TYPE_TECH },
+              { label: '能力建设', value: PROJECT_TYPE_CAPABILITY },
+            ].map(item => {
+              const isActive = projectTypeFilter === item.value
+              return (
+                <div
+                  key={item.value}
+                  onClick={() => { setProjectTypeFilter(item.value); setProjectCardPage(1); }}
+                  style={{
+                    ...WORKSPACE_FILTER_CHIP_STYLE,
+                    padding: '3px 12px',
+                    borderRadius: 16,
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    transition: 'all 0.2s',
+                    background: isActive ? '#fff' : 'transparent',
+                    color: isActive ? '#6366f1' : '#9ca3af',
+                    boxShadow: isActive ? '0 2px 6px rgba(99,102,241,0.15)' : 'none',
+                  }}
+                >
+                  {item.label}
+                </div>
+              )
+            })}
           </div>
         )}
       </div>

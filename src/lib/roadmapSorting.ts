@@ -3,7 +3,7 @@ import type {
   RoadmapProjectRow,
   TosVersionConfig,
 } from '@/types/roadmap'
-import { normalizeTosVersionName } from '@/lib/roadmapValidation'
+import { normalizeLegacyTosVersionName } from '@/lib/roadmapValidation'
 
 type SemanticTos = Pick<TosVersionConfig, 'major' | 'minor'>
 type ComparableRoadmapRecord = Partial<Record<RoadmapColumnKey, unknown>>
@@ -22,7 +22,9 @@ function deterministicValueKey(value: unknown): string {
   if (value === null) return 'null'
   if (typeof value !== 'object') return `${typeof value}:${String(value)}`
   const record = value as Record<string, unknown>
-  if ('major' in record || 'minor' in record) return `semantic:${String(record.major)}|${String(record.minor)}`
+  if ('major' in record || 'minor' in record) {
+    return `semantic:${String(record.major)}|${String(record.minor)}`
+  }
   return `object:${Object.keys(record).sort().map(key => `${key}=${String(record[key])}`).join('|')}`
 }
 
@@ -67,7 +69,10 @@ export function compareSemanticTos(left: unknown, right: unknown): number {
     right,
     leftVersion,
     rightVersion,
-    (leftValue, rightValue) => leftValue.major - rightValue.major || leftValue.minor - rightValue.minor,
+    (leftValue, rightValue) => (
+      leftValue.major - rightValue.major
+      || leftValue.minor - rightValue.minor
+    ),
   )
 }
 
@@ -109,7 +114,7 @@ function resolveTosValue(value: unknown, versions: readonly TosVersionConfig[]):
   if (typeof value !== 'string') return null
   const configured = versions.find(version => version.id === value || version.name === value)
   if (configured) return parseSemanticTos(configured)
-  return normalizeTosVersionName(value)
+  return normalizeLegacyTosVersionName(value)
 }
 
 function compareTextValues(left: unknown, right: unknown): number {

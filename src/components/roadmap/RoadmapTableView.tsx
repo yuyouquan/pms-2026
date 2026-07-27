@@ -9,10 +9,11 @@ import {
   UpOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
-import { Button, Empty, Flex, Select, Table, Tag, Typography, type TableProps } from 'antd'
+import { Button, Empty, Flex, Select, Table, Tag, Tooltip, Typography, type TableProps } from 'antd'
 import { orderVisibleDefinitions } from '@/lib/columnSettings'
 import { getRoadmapSortableColumnDefinitions } from '@/lib/roadmapFilters'
 import { compareRoadmapValues, compareSemanticTos } from '@/lib/roadmapSorting'
+import { formatTosVersionDisplay, formatTosVersionFull } from '@/lib/roadmapValidation'
 import {
   ROADMAP_COLUMNS,
   type RoadmapColumnKey,
@@ -33,7 +34,6 @@ interface RoadmapTableViewProps {
   canEdit: boolean
   onSelectedTosVersionChange: (id: string | null) => void
   onSortChange: (sort: RoadmapSortState) => void
-  onEditTosTargets: (versionId: string) => void
   onOpenConflict: (conflictKey: string) => void
   onEditPlannedProject: (projectId: string) => void
   onDeletePlannedProject: (projectId: string) => void
@@ -52,7 +52,7 @@ const COLUMN_WIDTHS: Record<RoadmapColumnKey, number> = {
   platform: 120,
   startRam: 110,
   versionType: 110,
-  str5Date: 130,
+  str5Date: 176,
   launchDate: 130,
   developMode: 120,
   remark: 220,
@@ -79,7 +79,8 @@ export function formatRoadmapTableValue(
   versions: readonly TosVersionConfig[],
 ): string {
   if (field === 'firstSaleTosVersionId') {
-    return versions.find(version => version.id === row.firstSaleTosVersionId)?.name ?? '—'
+    const version = versions.find(candidate => candidate.id === row.firstSaleTosVersionId)
+    return version ? formatTosVersionDisplay(version) : '—'
   }
   const value = row[field]
   if (field === 'str5Date' || field === 'launchDate') {
@@ -99,7 +100,6 @@ export default function RoadmapTableView({
   canEdit,
   onSelectedTosVersionChange,
   onSortChange,
-  onEditTosTargets,
   onOpenConflict,
   onEditPlannedProject,
   onDeletePlannedProject,
@@ -155,6 +155,28 @@ export default function RoadmapTableView({
       }),
       render: (_value: unknown, row: RoadmapProjectRow) => {
         const formattedValue = formatRoadmapTableValue(column.key, row, versions)
+        if (column.key === 'firstSaleTosVersionId') {
+          const cellVersion = versions.find(candidate => candidate.id === row.firstSaleTosVersionId)
+          return cellVersion ? (
+            <Tooltip title={formatTosVersionFull(cellVersion)}>{formattedValue}</Tooltip>
+          ) : formattedValue
+        }
+        if (column.key === 'str5Date' && row.str5Estimated) {
+          return (
+            <Flex align="center" gap={6} wrap={false} style={{ whiteSpace: 'nowrap' }}>
+              <span>{formattedValue}</span>
+              <Tag color="gold" style={{ marginInlineEnd: 0 }}>预估</Tag>
+            </Flex>
+          )
+        }
+        if (column.key === 'launchDate' && row.launchEstimated) {
+          return (
+            <Flex align="center" gap={6} wrap={false} style={{ whiteSpace: 'nowrap' }}>
+              <span>{formattedValue}</span>
+              <Tag color="gold" style={{ marginInlineEnd: 0 }}>预估</Tag>
+            </Flex>
+          )
+        }
         if (column.key !== 'displayName') return formattedValue
         const conflictKey = row.source === 'planned'
           ? conflictKeyByPlannedIdentity.get(`planned:${row.id}`)
@@ -266,7 +288,14 @@ export default function RoadmapTableView({
             placeholder="选择 tOS 版本"
             options={[
               { label: '全部', value: 'all' },
-              ...descendingVersions.map(item => ({ label: item.name, value: item.id })),
+              ...descendingVersions.map(item => ({
+                label: (
+                  <Tooltip title={formatTosVersionFull(item)}>
+                    {formatTosVersionDisplay(item)}
+                  </Tooltip>
+                ),
+                value: item.id,
+              })),
             ]}
             onChange={selectedId => onSelectedTosVersionChange(selectedId === 'all' ? null : selectedId)}
             style={{ width: 156 }}
@@ -279,7 +308,7 @@ export default function RoadmapTableView({
         <section
           className="pms-glass-panel roadmap-target-card"
           data-roadmap-target-card
-          aria-label={`${version.name} 目标`}
+          aria-label={`${formatTosVersionDisplay(version)} 目标`}
           style={{
             marginBottom: 16,
             borderColor: 'var(--border-purple)',
@@ -295,7 +324,9 @@ export default function RoadmapTableView({
           >
             <Flex align="center" gap={6} wrap={false} style={{ minWidth: 0 }}>
               <BulbOutlined aria-hidden style={{ color: 'var(--primary)' }} />
-              <Typography.Text strong ellipsis>{version.name} 版本目标</Typography.Text>
+              <Tooltip title={formatTosVersionFull(version)}>
+                <Typography.Text strong ellipsis>{formatTosVersionDisplay(version)} 版本目标</Typography.Text>
+              </Tooltip>
             </Flex>
             <Flex
               className="pms-roadmap-target-card-actions"
@@ -316,16 +347,6 @@ export default function RoadmapTableView({
                   {targetCollapsed ? '展开版本目标' : '收起版本目标'}
                 </Button>
               ) : null}
-              {canEdit ? (
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<EditOutlined aria-hidden />}
-                  onClick={() => onEditTosTargets(version.id)}
-                >
-                  修改目标
-                </Button>
-              ) : null}
             </Flex>
           </Flex>
           {version.targets.length > 0 && !targetCollapsed ? (
@@ -338,7 +359,7 @@ export default function RoadmapTableView({
 
       <Table<RoadmapProjectRow>
         className="pms-table roadmap-table"
-        aria-label={`${version?.name ?? '全部 tOS'} 项目表`}
+        aria-label={`${version ? formatTosVersionDisplay(version) : '全部 tOS'} 项目表`}
         rowKey={row => `${row.source}:${row.id}`}
         columns={columns}
         dataSource={versionRows}

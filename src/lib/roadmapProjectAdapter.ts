@@ -3,7 +3,7 @@ import {
   buildRoadmapDisplayName,
   buildRoadmapDuplicateKey,
   normalizeLegacyRoadmapProductType,
-  normalizeTosVersionName,
+  normalizeLegacyTosVersionName,
 } from '@/lib/roadmapValidation'
 import type { ProjectItem } from '@/types/app'
 import type {
@@ -79,7 +79,7 @@ function findTosVersionId(candidate: unknown, versions: readonly TosVersionConfi
   const trimmed = candidate.trim()
   const byId = versions.find(version => version.id === trimmed)
   if (byId) return byId.id
-  const normalized = normalizeTosVersionName(trimmed)
+  const normalized = normalizeLegacyTosVersionName(trimmed)
   if (!normalized) return null
   const byVersion = versions.find(version => (
     version.major === normalized.major && version.minor === normalized.minor
@@ -87,12 +87,19 @@ function findTosVersionId(candidate: unknown, versions: readonly TosVersionConfi
   return byVersion?.id ?? null
 }
 
-function resolveTosVersionId(project: ProjectItem, versions: readonly TosVersionConfig[]): string | null {
-  if (project.firstSaleTosVersionId !== undefined && project.firstSaleTosVersionId !== null) {
-    if (typeof project.firstSaleTosVersionId !== 'string' || project.firstSaleTosVersionId.trim()) {
-      return findTosVersionId(project.firstSaleTosVersionId, versions)
-    }
-  }
+function resolveTosVersionId(
+  project: ProjectItem,
+  productType: RoadmapProductType,
+  versions: readonly TosVersionConfig[],
+): string | null {
+  const preferredCandidates = productType === '新品'
+    ? [project.firstSaleTosVersionId, project.firstSaleTosVersion]
+    : [project.currentTosVersionId, project.currentTosVersion]
+  const explicitCandidate = preferredCandidates.find(candidate => (
+    typeof candidate === 'string' && candidate.trim()
+  ))
+  if (explicitCandidate) return findTosVersionId(explicitCandidate, versions)
+
   for (const candidate of [project.tosVersionName, project.tosVersion]) {
     const resolved = findTosVersionId(candidate, versions)
     if (resolved) return resolved
@@ -124,10 +131,10 @@ export function adaptNormalProject(
 ): RoadmapProjectRow | null {
   if (!isMachineProjectType(project.type)) return null
 
-  const projectCode = firstNonBlank(project.projectCode, project.model, project.name)
+  const projectCode = firstNonBlank(project.projectCode, project.model)
   const androidVersion = normalizeAndroidVersion(project.androidVersion, project.operatingSystem)
   const productType = normalizeNormalProductType(project.productType)
-  const firstSaleTosVersionId = resolveTosVersionId(project, versions)
+  const firstSaleTosVersionId = productType ? resolveTosVersionId(project, productType, versions) : null
   const brand = normalizeBrand(project.brand)
   const startRam = normalizeRam(project.startRam, project.memory)
   const versionType = normalizeVersionType(project.versionType)
@@ -156,7 +163,7 @@ export function adaptNormalProject(
     readOnly: true,
     machineProjectType: machineProjectType as RoadmapProjectRow['machineProjectType'],
     projectCode,
-    displayName: firstNonBlank(project.name, buildRoadmapDisplayName(projectCode, androidVersion, productType)),
+    displayName: buildRoadmapDisplayName(projectCode, androidVersion, productType),
     androidVersion,
     firstSaleTosVersionId,
     brand,
@@ -168,7 +175,9 @@ export function adaptNormalProject(
     startRam,
     versionType,
     str5Date: firstNonBlank(project.str5Date),
+    str5Estimated: false,
     launchDate: firstNonBlank(project.launchDate),
+    launchEstimated: false,
     developMode,
     remark,
   }

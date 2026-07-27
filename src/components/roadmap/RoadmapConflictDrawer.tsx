@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { DeleteOutlined, EyeOutlined, WarningOutlined } from '@ant-design/icons'
-import { Button, Drawer, Empty, Flex, Space, Tag, Typography } from 'antd'
+import { Button, Drawer, Empty, Flex, Space, Tag, Tooltip, Typography } from 'antd'
+import {
+  buildRoadmapDisplayName,
+  formatTosVersionDisplay,
+  formatTosVersionFull,
+} from '@/lib/roadmapValidation'
 import type {
   RoadmapPlanningConflictGroup,
   RoadmapProjectRow,
@@ -45,7 +50,8 @@ export interface RoadmapConflictDrawerProps {
 
 interface ConflictProjectCardProps {
   project: RoadmapProjectRow
-  tosVersionName: string
+  tosVersion: TosVersionConfig | null
+  fallbackTosVersionName: string
   kind: 'normal' | 'planned'
   canEdit: boolean
   onViewProject: (projectId: string) => void
@@ -54,13 +60,19 @@ interface ConflictProjectCardProps {
 
 function ConflictProjectCard({
   project,
-  tosVersionName,
+  tosVersion,
+  fallbackTosVersionName,
   kind,
   canEdit,
   onViewProject,
   onDeletePlannedProject,
 }: ConflictProjectCardProps) {
   const isNormal = kind === 'normal'
+  const projectDisplayName = buildRoadmapDisplayName(
+    project.projectCode,
+    project.androidVersion,
+    project.productType,
+  )
 
   return (
     <div
@@ -72,7 +84,7 @@ function ConflictProjectCard({
       <Flex align="center" justify="space-between" gap={12} wrap>
         <div style={{ minWidth: 0, flex: '1 1 220px' }}>
           <Space size={8} wrap>
-            <Typography.Text strong>{project.displayName}</Typography.Text>
+            <Typography.Text strong>{projectDisplayName}</Typography.Text>
             <Tag color={isNormal ? 'blue' : 'purple'} style={{ marginInlineEnd: 0 }}>
               {isNormal ? '正常项目' : '待规划项目'}
             </Tag>
@@ -81,7 +93,12 @@ function ConflictProjectCard({
             type="secondary"
             style={{ display: 'block', marginTop: 4, overflowWrap: 'anywhere' }}
           >
-            首销 tOS：{tosVersionName}
+            tOS 版本：
+            {tosVersion ? (
+              <Tooltip title={formatTosVersionFull(tosVersion)}>
+                {formatTosVersionDisplay(tosVersion)}
+              </Tooltip>
+            ) : fallbackTosVersionName}
           </Typography.Text>
         </div>
 
@@ -124,8 +141,8 @@ export default function RoadmapConflictDrawer({
   const groupElementsRef = useRef(new Map<string, HTMLElement>())
   const previousGroupKeysRef = useRef<string[]>([])
   const groupKeys = useMemo(() => groups.map(group => group.key), [groups])
-  const tosVersionNames = useMemo(
-    () => new Map(tosVersions.map(version => [version.id, version.name])),
+  const tosVersionsById = useMemo(
+    () => new Map(tosVersions.map(version => [version.id, version])),
     [tosVersions],
   )
   const activeConflictKey = selectedConflictKey && groupKeys.includes(selectedConflictKey)
@@ -176,10 +193,7 @@ export default function RoadmapConflictDrawer({
     return () => window.cancelAnimationFrame(animationFrame)
   }, [activeConflictKey, groups, open])
 
-  const versionNameFor = (project: RoadmapProjectRow) => {
-    const versionName = tosVersionNames.get(project.firstSaleTosVersionId)
-    return versionName ?? (project.firstSaleTosVersionId.trim() || '未维护')
-  }
+  const versionFor = (project: RoadmapProjectRow) => tosVersionsById.get(project.firstSaleTosVersionId) ?? null
 
   return (
     <Drawer
@@ -241,7 +255,8 @@ export default function RoadmapConflictDrawer({
                         <ConflictProjectCard
                           key={`normal:${project.id}`}
                           project={project}
-                          tosVersionName={versionNameFor(project)}
+                          tosVersion={versionFor(project)}
+                          fallbackTosVersionName={project.firstSaleTosVersionId.trim() || '未维护'}
                           kind="normal"
                           canEdit={canEdit}
                           onViewProject={onViewProject}
@@ -260,7 +275,8 @@ export default function RoadmapConflictDrawer({
                         <ConflictProjectCard
                           key={`planned:${project.id}`}
                           project={project}
-                          tosVersionName={versionNameFor(project)}
+                          tosVersion={versionFor(project)}
+                          fallbackTosVersionName={project.firstSaleTosVersionId.trim() || '未维护'}
                           kind="planned"
                           canEdit={canEdit}
                           onViewProject={onViewProject}

@@ -384,6 +384,7 @@ export const initialProjects = [
     spm: '周宇', updatedAt: '1小时前', productLine: 'NOTE', productCategory: 'Note', productSeries: 'NOTE X', tosVersion: 'tOS16.3',
     marketName: 'NOTE X2', brand: 'Infinix', developMode: '外研',
     firstSaleTosVersionId: 'tos-16-3', projectCode: 'NT-X2', platform: 'MT6890', startRam: '12GB' as const,
+    currentTosVersionId: 'tos-16-3', currentTosVersion: 'tOS16.3',
     str5Date: '2026-07-10', remark: '用于体现老品项目和 NOTE X 系列多项目折叠。',
     planStartDate: '2026-02-20', planEndDate: '2026-08-20',
     developCycle: 130, healthStatus: 'normal' as const,

@@ -29,7 +29,7 @@ export const DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS = ROADMAP_COLUMNS
   .map(column => column.key)
 
 export const ROADMAP_EVOLUTION_LOCKED_COLUMNS: RoadmapColumnKey[] = [
-  'productSeries',
+  'marketName',
   'displayName',
 ]
 
@@ -38,12 +38,18 @@ export const DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS: RoadmapColumnKey[] = ens
   'platform',
   'startRam',
   'versionType',
+  'developMode',
   'str5Date',
   'launchDate',
 ], ROADMAP_EVOLUTION_LOCKED_COLUMNS)
 
 export const DEFAULT_ROADMAP_VISIBLE_COLUMNS = DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS
 export const DEFAULT_ROADMAP_COLUMN_ORDER = ROADMAP_COLUMNS.map(column => column.key)
+export const DEFAULT_ROADMAP_EVOLUTION_COLUMN_ORDER: RoadmapColumnKey[] = [
+  ...DEFAULT_ROADMAP_COLUMN_ORDER.slice(0, 10),
+  'developMode',
+  ...DEFAULT_ROADMAP_COLUMN_ORDER.slice(10).filter(key => key !== 'developMode'),
+]
 
 export function getRoadmapSortableColumnDefinitions(
   viewMode: 'table' | 'evolution',
@@ -113,9 +119,10 @@ export function getRoadmapQuickFilterValue(
 ): RoadmapQuickFilterValue {
   const condition = filters.find(candidate => candidate.field === field)
   if (!condition) return 'all'
-  if (condition.operator !== 'equals' || !condition.value) return 'custom'
-  if (field === 'brand' && !ROADMAP_QUICK_BRANDS.has(condition.value as RoadmapBrand)) return 'custom'
-  return condition.value as RoadmapQuickFilterValue
+  if (condition.operator !== 'equals' || !Array.isArray(condition.value) || condition.value.length !== 1) return 'custom'
+  const [value] = condition.value
+  if (field === 'brand' && !ROADMAP_QUICK_BRANDS.has(value as RoadmapBrand)) return 'custom'
+  return value as RoadmapQuickFilterValue
 }
 
 export function setRoadmapQuickFilter(
@@ -129,7 +136,7 @@ export function setRoadmapQuickFilter(
     id: existing?.id ?? `roadmap-quick-${field}`,
     field,
     operator: 'equals',
-    value,
+    value: [value],
   }
   if (!existing) return [...filters, replacement]
   return filters.map(condition => condition.field === field ? replacement : condition)
@@ -145,7 +152,7 @@ export function setRoadmapTosVersionFilter(
     id: existing?.id ?? 'roadmap-quick-firstSaleTosVersionId',
     field: 'firstSaleTosVersionId',
     operator: 'equals',
-    value: versionId,
+    value: [versionId],
   }
   if (!existing) return [...filters, replacement]
   return filters.map(condition => condition.field === 'firstSaleTosVersionId' ? replacement : condition)
@@ -247,19 +254,26 @@ export function sanitizeRoadmapFilterConditions(
     if (!getRoadmapFilterOperators(candidate.field, definition.kind)
       .some(optionDefinition => optionDefinition.value === operator)) return
 
-    let normalizedValue = ''
+    let normalizedValue: string | string[] = definition.kind === 'enum' ? [] : ''
     if (!isValuelessFilterOperator(operator)) {
-      if (typeof candidate.value !== 'string' || !candidate.value.trim()) return
-      const trimmedValue = candidate.value.trim()
-      if (definition.kind === 'date') {
-        if (!isStrictCalendarDate(trimmedValue)) return
-        normalizedValue = trimmedValue
-      } else if (definition.kind === 'enum') {
-        const enumValue = normalizeEnumFilterValue(candidate.field, trimmedValue, definition, versions)
-        if (!enumValue) return
-        normalizedValue = enumValue
+      if (definition.kind === 'enum') {
+        const rawValues = Array.isArray(candidate.value) ? candidate.value : [candidate.value]
+        const enumValues = rawValues.flatMap(rawValue => {
+          if (typeof rawValue !== 'string' || !rawValue.trim()) return []
+          const enumValue = normalizeEnumFilterValue(candidate.field as string, rawValue.trim(), definition, versions)
+          return enumValue ? [enumValue] : []
+        })
+        normalizedValue = [...new Set(enumValues)]
+        if (!normalizedValue.length) return
       } else {
-        normalizedValue = trimmedValue
+        if (typeof candidate.value !== 'string' || !candidate.value.trim()) return
+        const trimmedValue = candidate.value.trim()
+        if (definition.kind === 'date') {
+          if (!isStrictCalendarDate(trimmedValue)) return
+          normalizedValue = trimmedValue
+        } else {
+          normalizedValue = trimmedValue
+        }
       }
     }
 
@@ -296,14 +310,45 @@ export function applyRoadmapFilters(
     (brandFilter === 'all' || row.brand === brandFilter)
     && (productTypeFilter === 'all' || row.productType === productTypeFilter)
   ))
-  return applyFilterConditions(quickFilteredRows, filters, fieldDefinitions)
+  const definitionsByKey = new Map(fieldDefinitions.map(definition => [definition.key, definition]))
+  return quickFilteredRows.filter(row => filters.every(condition => {
+    const definition = definitionsByKey.get(condition.field)
+    if (!definition) return true
+    if (definition.kind !== 'enum') {
+      if (Array.isArray(condition.value)) return false
+      return applyFilterConditions(
+        [row],
+        [{ ...condition, value: condition.value }],
+        fieldDefinitions,
+      ).length === 1
+    }
+
+    const actualRaw = row[condition.field]
+    const actual = String(actualRaw ?? '').trim().toLowerCase()
+    if (condition.operator === 'isEmpty') return actual === ''
+    if (condition.operator === 'isNotEmpty') return actual !== ''
+    if (!Array.isArray(condition.value) || condition.value.length === 0) return true
+    const expected = condition.value.map(value => value.trim().toLowerCase())
+    if (condition.operator === 'equals') return expected.some(value => value === actual)
+    if (condition.operator === 'notEquals') return expected.every(value => value !== actual)
+    return false
+  }))
 }
 
 function sameFilter(left: RoadmapFilterCondition, right: RoadmapFilterCondition): boolean {
   return left.id === right.id
     && left.field === right.field
     && left.operator === right.operator
-    && left.value === right.value
+    && JSON.stringify(left.value) === JSON.stringify(right.value)
+}
+
+export function getRoadmapSelectedTosVersionIds(
+  filters: readonly RoadmapFilterCondition[],
+): string[] {
+  const condition = filters.find(candidate => (
+    candidate.field === 'firstSaleTosVersionId' && candidate.operator === 'equals'
+  ))
+  return Array.isArray(condition?.value) ? [...condition.value] : []
 }
 
 export interface RoadmapTextFilterTransition {

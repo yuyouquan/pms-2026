@@ -11,6 +11,7 @@ import { buildMarketRowsFromMarkets, type MarketConfigRow } from '@/lib/marketRu
 import { buildTosTypeRows, type TosTypeConfigRow } from '@/lib/tosTypeRules'
 import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
 import { createRoadmapAuditSnapshot, diffRoadmapProjectFields } from '@/lib/roadmapAudit'
+import { buildRoadmapDisplayName } from '@/lib/roadmapValidation'
 import { useRoadmapStore } from '@/stores/roadmap'
 import type { ProjectItem } from '@/types/app'
 import type {
@@ -202,7 +203,11 @@ function recordNormalProjectAudit(
     if (!changes.length) return
     roadmapState.recordNormalProjectChange({
       projectId: afterRow.id,
-      projectDisplayName: afterRow.displayName,
+      projectDisplayName: buildRoadmapDisplayName(
+        afterRow.projectCode,
+        afterRow.androidVersion,
+        afterRow.productType,
+      ),
       action,
       actor,
       tosVersionName: resolveTosVersionName(versions, afterRow.firstSaleTosVersionId),
@@ -214,7 +219,11 @@ function recordNormalProjectAudit(
   if (!auditRow) return
   roadmapState.recordNormalProjectChange({
     projectId: auditRow.id,
-    projectDisplayName: auditRow.displayName,
+    projectDisplayName: buildRoadmapDisplayName(
+      auditRow.projectCode,
+      auditRow.androidVersion,
+      auditRow.productType,
+    ),
     action,
     actor,
     tosVersionName: resolveTosVersionName(versions, auditRow.firstSaleTosVersionId),

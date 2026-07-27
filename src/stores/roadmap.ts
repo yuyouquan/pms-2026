@@ -6,8 +6,9 @@ import {
   ROADMAP_AUDIT_FIELDS,
 } from '@/lib/roadmapAudit'
 import {
-  DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
   DEFAULT_ROADMAP_COLUMN_ORDER,
+  DEFAULT_ROADMAP_EVOLUTION_COLUMN_ORDER,
+  DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
   DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS,
   DEFAULT_ROADMAP_VISIBLE_COLUMNS,
   ensureRoadmapLockedColumns,
@@ -23,8 +24,11 @@ import { compareSemanticTos } from '@/lib/roadmapSorting'
 import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
 import {
   buildRoadmapDisplayName,
+  formatTosVersionFull,
+  isExactIsoDate,
   isExactRoadmapDuplicate,
   normalizeLegacyRoadmapProductType,
+  normalizeLegacyTosVersionName,
   normalizeTosVersionName,
   validatePlannedProject,
 } from '@/lib/roadmapValidation'
@@ -108,6 +112,35 @@ function normalizeTargets(value: unknown): string[] {
   })
 }
 
+function normalizeTosPeriod(
+  periodStartDate: unknown,
+  periodEndDate: unknown,
+): { periodStartDate: string; periodEndDate: string } {
+  return {
+    periodStartDate: typeof periodStartDate === 'string' ? periodStartDate.trim() : '',
+    periodEndDate: typeof periodEndDate === 'string' ? periodEndDate.trim() : '',
+  }
+}
+
+function validateTosPeriod(
+  periodStartDate: string,
+  periodEndDate: string,
+): Record<string, string> {
+  if (!periodStartDate && !periodEndDate) return {}
+  if (!periodStartDate || !periodEndDate) {
+    return {
+      [periodStartDate ? 'periodEndDate' : 'periodStartDate']: '项目周期开始和结束日期需同时填写',
+    }
+  }
+  const errors: Record<string, string> = {}
+  if (!isExactIsoDate(periodStartDate)) errors.periodStartDate = '日期格式必须为 YYYY-MM-DD'
+  if (!isExactIsoDate(periodEndDate)) errors.periodEndDate = '日期格式必须为 YYYY-MM-DD'
+  if (!Object.keys(errors).length && periodStartDate > periodEndDate) {
+    errors.periodEndDate = '项目周期开始时间不能晚于结束时间'
+  }
+  return errors
+}
+
 function claimDeterministicId(preferred: unknown, fallback: string, usedIds: Set<string>): string {
   const base = typeof preferred === 'string' && preferred.trim() ? preferred.trim() : fallback
   let candidate = base
@@ -148,6 +181,8 @@ export function createInitialTosVersions(): TosVersionConfig[] {
     name: `tOS ${major}.${minor}`,
     major,
     minor,
+    periodStartDate: '',
+    periodEndDate: '',
     targets: [],
     createdAt: INITIAL_TIMESTAMP,
     updatedAt: INITIAL_TIMESTAMP,
@@ -178,7 +213,9 @@ export function createInitialPlannedProjects(
     startRam: '8GB',
     versionType: 'Full',
     str5Date: '2026-10-15',
+    str5Estimated: true,
     launchDate: '2026-11-20',
+    launchEstimated: true,
     developMode: 'ODC',
     remark: '待规划样例：用于确认与已存在普通项目的重复冲突处理。',
     createdAt: '2026-07-21T02:15:00.000Z',
@@ -203,7 +240,7 @@ export function createInitialRoadmapChangeLogs(
   const normalBefore: RoadmapProjectFields = {
     machineProjectType: '整机-手机',
     projectCode: 'X6877',
-    displayName: 'X6877-D8400_H991',
+    displayName: buildRoadmapDisplayName('X6877', 'Android 16', '新品'),
     androidVersion: 'Android 16',
     firstSaleTosVersionId: normalBeforeVersion.id,
     brand: 'TECNO',
@@ -215,7 +252,9 @@ export function createInitialRoadmapChangeLogs(
     startRam: '8GB',
     versionType: 'Full',
     str5Date: '2026-05-15',
+    str5Estimated: false,
     launchDate: '2026-06-15',
+    launchEstimated: false,
     developMode: 'ODC',
     remark: '重点验证海外市场首销版本交付。',
   }
@@ -237,7 +276,7 @@ export function createInitialRoadmapChangeLogs(
     {
       id: 'roadmap-log-mock-planned-update-x6877',
       projectId: planned.id,
-      projectDisplayName: planned.displayName,
+      projectDisplayName: buildRoadmapDisplayName(planned.projectCode, planned.androidVersion, planned.productType),
       source: 'planned',
       action: 'update',
       actor: '张三',
@@ -248,7 +287,7 @@ export function createInitialRoadmapChangeLogs(
     {
       id: 'roadmap-log-mock-normal-update-x6877',
       projectId: '1',
-      projectDisplayName: normalAfter.displayName,
+      projectDisplayName: buildRoadmapDisplayName(normalAfter.projectCode, normalAfter.androidVersion, normalAfter.productType),
       source: 'normal',
       action: 'update',
       actor: '张三',
@@ -259,7 +298,7 @@ export function createInitialRoadmapChangeLogs(
     {
       id: 'roadmap-log-mock-planned-create-x6877',
       projectId: planned.id,
-      projectDisplayName: planned.displayName,
+      projectDisplayName: buildRoadmapDisplayName(planned.projectCode, planned.androidVersion, planned.productType),
       source: 'planned',
       action: 'create',
       actor: '李四',
@@ -271,7 +310,7 @@ export function createInitialRoadmapChangeLogs(
     {
       id: 'roadmap-log-mock-normal-create-x6877',
       projectId: '1',
-      projectDisplayName: normalBefore.displayName,
+      projectDisplayName: buildRoadmapDisplayName(normalBefore.projectCode, normalBefore.androidVersion, normalBefore.productType),
       source: 'normal',
       action: 'create',
       actor: '李四',
@@ -296,7 +335,7 @@ export function createInitialRoadmapState(): RoadmapStoreState {
     columnOrder: [...DEFAULT_ROADMAP_COLUMN_ORDER],
     columnOrderByView: {
       table: [...DEFAULT_ROADMAP_COLUMN_ORDER],
-      evolution: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+      evolution: [...DEFAULT_ROADMAP_EVOLUTION_COLUMN_ORDER],
     },
     visibleColumns: [...DEFAULT_ROADMAP_VISIBLE_COLUMNS],
     visibleColumnsByView: {
@@ -324,7 +363,7 @@ export function createInitialRoadmapMockState(
     columnOrder: [...DEFAULT_ROADMAP_COLUMN_ORDER],
     columnOrderByView: {
       table: [...DEFAULT_ROADMAP_COLUMN_ORDER],
-      evolution: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+      evolution: [...DEFAULT_ROADMAP_EVOLUTION_COLUMN_ORDER],
     },
     visibleColumns: [...DEFAULT_ROADMAP_VISIBLE_COLUMNS],
     visibleColumnsByView: {
@@ -364,30 +403,37 @@ function preserveKnownColumnOrder(value: unknown): RoadmapColumnKey[] | undefine
 
 function migrateTosVersions(value: unknown): TosVersionConfig[] | null {
   if (!Array.isArray(value)) return null
-  const versions: TosVersionConfig[] = []
-  const usedNames = new Set<string>()
-  const usedIds = new Set<string>()
+  const versionsByKey = new Map<string, TosVersionConfig>()
 
   for (const entry of value) {
     if (!isRecord(entry)) continue
-    const fromName = typeof entry.name === 'string' ? normalizeTosVersionName(entry.name) : null
+    const fromName = typeof entry.name === 'string' ? normalizeLegacyTosVersionName(entry.name) : null
     const fromParts = Number.isSafeInteger(entry.major) && Number(entry.major) >= 0
       && Number.isSafeInteger(entry.minor) && Number(entry.minor) >= 0
       ? normalizeTosVersionName(`tOS ${Number(entry.major)}.${Number(entry.minor)}`)
       : null
-    const normalized = fromName ?? fromParts
-    if (!normalized || usedNames.has(normalized.name)) continue
-    const requestedId = claimDeterministicId(entry.id, `tos-${normalized.major}-${normalized.minor}`, usedIds)
-    usedNames.add(normalized.name)
-    versions.push({
-      id: requestedId,
-      ...normalized,
+    const parsed = fromName ?? fromParts
+    if (!parsed) continue
+    const period = normalizeTosPeriod(entry.periodStartDate, entry.periodEndDate)
+    const migratedPeriod = Object.keys(validateTosPeriod(period.periodStartDate, period.periodEndDate)).length
+      ? { periodStartDate: '', periodEndDate: '' }
+      : period
+    const candidate: TosVersionConfig = {
+      id: `tos-${parsed.major}-${parsed.minor}`,
+      ...parsed,
+      ...migratedPeriod,
       targets: normalizeTargets(entry.targets),
       createdAt: normalizeTimestamp(entry.createdAt),
       updatedAt: normalizeTimestamp(entry.updatedAt),
-    })
+    }
+    const key = `${parsed.major}.${parsed.minor}`
+    const existing = versionsByKey.get(key)
+    if (!existing || Date.parse(candidate.updatedAt) >= Date.parse(existing.updatedAt)) {
+      versionsByKey.set(key, candidate)
+    }
   }
 
+  const versions = [...versionsByKey.values()]
   if (value.length > 0 && versions.length === 0) return null
   return sortTosVersions(versions)
 }
@@ -397,8 +443,18 @@ function resolveMigratedTosId(value: unknown, versions: readonly TosVersionConfi
   const trimmed = value.trim()
   const exact = versions.find(version => version.id === trimmed)
   if (exact) return exact.id
-  const normalized = normalizeTosVersionName(trimmed)
-  return normalized ? versions.find(version => version.name === normalized.name)?.id ?? null : null
+  const legacyId = trimmed.match(/^tos-(\d+)-(\d+)(?:-\d+)?$/i)
+  if (legacyId) {
+    const matched = versions.find(version => version.major === Number(legacyId[1]) && version.minor === Number(legacyId[2]))
+    if (matched) return matched.id
+  }
+  const normalized = normalizeLegacyTosVersionName(trimmed)
+  return normalized
+    ? versions.find(version => (
+      version.major === normalized.major
+      && version.minor === normalized.minor
+    ))?.id ?? null
+    : null
 }
 
 function trimStringValue<T>(value: T): T {
@@ -414,7 +470,9 @@ function normalizeProjectInput(input: PlannedRoadmapProjectMutationInput): Plann
     marketName: trimStringValue(input.marketName),
     platform: trimStringValue(input.platform),
     str5Date: trimStringValue(input.str5Date),
+    str5Estimated: input.str5Estimated === true,
     launchDate: trimStringValue(input.launchDate),
+    launchEstimated: input.launchEstimated === true,
     remark: trimStringValue(input.remark) ?? '',
     actor: trimStringValue(input.actor),
   }
@@ -436,7 +494,9 @@ function toProjectFields(input: PlannedRoadmapProjectMutationInput): RoadmapProj
     startRam: input.startRam,
     versionType: input.versionType,
     str5Date: input.str5Date,
+    str5Estimated: input.str5Estimated === true,
     launchDate: input.launchDate,
+    launchEstimated: input.launchEstimated === true,
     developMode: input.developMode,
     remark: input.remark ?? '',
   }
@@ -461,7 +521,9 @@ function migratePlannedProjects(value: unknown, versions: readonly TosVersionCon
       remark: typeof entry.remark === 'string' ? entry.remark : '',
       actor: typeof entry.updatedBy === 'string' ? entry.updatedBy : '系统',
     } as PlannedRoadmapProjectMutationInput
-    const errors = validatePlannedProject(migratedInput, projects, undefined, versions)
+    // Historical persisted rows may legitimately share the same business key.
+    // Migration validates row shape and references but only repairs identity collisions.
+    const errors = validatePlannedProject(migratedInput, [], undefined, versions)
     if (Object.keys(errors).length) continue
     const normalizedInput = normalizeProjectInput(migratedInput)
     const fields = toProjectFields(normalizedInput)
@@ -530,7 +592,6 @@ function migrateChangeLogs(value: unknown): RoadmapChangeLog[] | null {
 }
 
 export function migrateRoadmapState(persistedState: unknown, fromVersion: number): RoadmapStoreState {
-  void fromVersion
   const initial = createInitialRoadmapState()
   if (!isRecord(persistedState)) return initial
   const roadmapKeys = ['plannedProjects', 'tosVersions', 'changeLogs', 'viewMode', 'selectedTosVersionId']
@@ -551,17 +612,23 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
   const changeLogs = 'changeLogs' in persistedState ? migrateChangeLogs(persistedState.changeLogs) : []
   if (!plannedProjects || !changeLogs) return initial
 
-  const selectedTosVersionId = repairSelectedTosVersionId(
+  const persistedSelectedTosVersionId = repairSelectedTosVersionId(
     resolveMigratedTosId(persistedState.selectedTosVersionId, tosVersions),
     tosVersions,
   )
-  let filters = sanitizeRoadmapFilterConditions(
-    setRoadmapTosVersionFilter(
-      sanitizeRoadmapFilterConditions(persistedState.filters, tosVersions),
-      selectedTosVersionId,
-    ),
-    tosVersions,
-  )
+  const viewMode = persistedState.viewMode === 'evolution' ? 'evolution' : 'table'
+  let filters = sanitizeRoadmapFilterConditions(persistedState.filters, tosVersions)
+  const tosCondition = filters.find(condition => condition.field === 'firstSaleTosVersionId')
+  const tosValues = tosCondition && Array.isArray(tosCondition.value) ? tosCondition.value : null
+  const selectedTosVersionId = tosValues
+    ? tosValues.length === 1 ? tosValues[0] : null
+    : persistedSelectedTosVersionId
+  if (!tosCondition && viewMode === 'table' && selectedTosVersionId) {
+    filters = sanitizeRoadmapFilterConditions(
+      setRoadmapTosVersionFilter(filters, selectedTosVersionId),
+      tosVersions,
+    )
+  }
   const legacyBrand = ROADMAP_BRANDS.has(persistedState.brandFilter as RoadmapBrand)
     ? persistedState.brandFilter as RoadmapBrand
     : null
@@ -576,7 +643,6 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
   }
   const migratedBrand = getRoadmapQuickFilterValue(filters, 'brand')
   const migratedProductType = getRoadmapQuickFilterValue(filters, 'productType')
-  const viewMode = persistedState.viewMode === 'evolution' ? 'evolution' : 'table'
   const persistedColumnsByView = isRecord(persistedState.visibleColumnsByView)
     ? persistedState.visibleColumnsByView
     : null
@@ -597,10 +663,18 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
     : JSON.stringify(legacyVisibleColumns) === JSON.stringify(DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS)
       ? [...DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS]
       : legacyVisibleColumns
-  const evolutionVisibleColumns = ensureRoadmapLockedColumns(
+  let evolutionVisibleColumns = ensureRoadmapLockedColumns(
     migratedEvolutionVisibleColumns,
     ROADMAP_EVOLUTION_LOCKED_COLUMNS,
   )
+  if (fromVersion < 4) {
+    evolutionVisibleColumns = [...DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS]
+  } else if (fromVersion < 5 && !evolutionVisibleColumns.includes('developMode')) {
+    evolutionVisibleColumns = ensureRoadmapLockedColumns(
+      [...evolutionVisibleColumns, 'developMode'],
+      ROADMAP_EVOLUTION_LOCKED_COLUMNS,
+    )
+  }
   const visibleColumnsByView = {
     table: normalizeRoadmapColumnSettings('table', {
       order: [],
@@ -630,8 +704,27 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
         : tableLegacyVisibleOrder,
     visible: visibleColumnsByView.table,
   })
+  const persistedEvolutionOrder = Array.isArray(persistedOrderByView?.evolution)
+    ? persistedOrderByView.evolution as RoadmapColumnKey[]
+    : viewMode === 'evolution' && legacyColumnOrder
+      ? legacyColumnOrder
+      : evolutionLegacyVisibleOrder
+  const preservedEvolutionOrder = preserveKnownColumnOrder(persistedEvolutionOrder)
+    ?? [...DEFAULT_ROADMAP_EVOLUTION_COLUMN_ORDER]
+  const completeEvolutionOrder = normalizeRoadmapColumnSettings('evolution', {
+    order: preservedEvolutionOrder,
+    visible: evolutionVisibleColumns,
+  }).order
+  const upgradedEvolutionOrder: RoadmapColumnKey[] = completeEvolutionOrder.filter(key => key !== 'developMode')
+  upgradedEvolutionOrder.splice(
+    Math.max(upgradedEvolutionOrder.indexOf('versionType') + 1, 0),
+    0,
+    'developMode',
+  )
   const evolutionSettings = normalizeRoadmapColumnSettings('evolution', {
-    order: Array.isArray(persistedOrderByView?.evolution)
+    order: fromVersion < 5
+      ? upgradedEvolutionOrder
+      : Array.isArray(persistedOrderByView?.evolution)
       ? persistedOrderByView.evolution as RoadmapColumnKey[]
       : viewMode === 'evolution' && legacyColumnOrder
         ? legacyColumnOrder
@@ -792,7 +885,7 @@ function createPlannedChangeLog(
   return {
     id: createCollisionResistantId('roadmap-log'),
     projectId: project.id,
-    projectDisplayName: project.displayName,
+    projectDisplayName: buildRoadmapDisplayName(project.projectCode, project.androidVersion, project.productType),
     source: 'planned',
     action,
     actor,
@@ -861,8 +954,10 @@ export const useRoadmapStore = create<RoadmapStore>()(
         const sanitized = sanitizeRoadmapFilterConditions(filters, state.tosVersions)
         const tosCondition = sanitized.find(condition => condition.field === 'firstSaleTosVersionId')
         const selectedTosVersionId = tosCondition?.operator === 'equals'
-          && state.tosVersions.some(version => version.id === tosCondition.value)
-          ? tosCondition.value
+          && Array.isArray(tosCondition.value)
+          && tosCondition.value.length === 1
+          && state.tosVersions.some(version => version.id === tosCondition.value[0])
+          ? tosCondition.value[0]
           : null
         const brand = getRoadmapQuickFilterValue(sanitized, 'brand')
         const productType = getRoadmapQuickFilterValue(sanitized, 'productType')
@@ -959,7 +1054,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
         const log: RoadmapChangeLog | null = changes.length ? {
           id: createCollisionResistantId('roadmap-log'),
           projectId: updated.id,
-          projectDisplayName: updated.displayName,
+          projectDisplayName: buildRoadmapDisplayName(updated.projectCode, updated.androidVersion, updated.productType),
           source: 'planned',
           action: 'update',
           actor: input.actor,
@@ -989,12 +1084,19 @@ export const useRoadmapStore = create<RoadmapStore>()(
       createTosVersion: input => {
         const normalized = normalizeTosVersionName(input.name)
         if (!normalized) return mutationFailure({ name: 'tOS 版本格式无效' })
-        if (get().tosVersions.some(version => version.name === normalized.name)) return { ok: false, reason: 'duplicate' }
+        const { periodStartDate, periodEndDate } = normalizeTosPeriod(input.periodStartDate, input.periodEndDate)
+        const periodErrors = validateTosPeriod(periodStartDate, periodEndDate)
+        if (Object.keys(periodErrors).length) return mutationFailure(periodErrors)
+        if (get().tosVersions.some(version => (
+          version.major === normalized.major && version.minor === normalized.minor
+        ))) return { ok: false, reason: 'duplicate' }
         const occurredAt = nowIso()
         const version: TosVersionConfig = {
           id: deriveAvailableTosId(normalized.major, normalized.minor, get().tosVersions),
           ...normalized,
-          targets: [],
+          periodStartDate,
+          periodEndDate,
+          targets: normalizeTargets(input.targets),
           createdAt: occurredAt,
           updatedAt: occurredAt,
         }
@@ -1012,8 +1114,30 @@ export const useRoadmapStore = create<RoadmapStore>()(
         if (!existing) return { ok: false, reason: 'not-found' }
         const normalized = normalizeTosVersionName(input.name)
         if (!normalized) return mutationFailure({ name: 'tOS 版本格式无效' })
-        if (get().tosVersions.some(version => version.id !== id && version.name === normalized.name)) return { ok: false, reason: 'duplicate' }
-        const updated = { ...existing, ...normalized, updatedAt: nowIso() }
+        const { periodStartDate, periodEndDate } = normalizeTosPeriod(
+          input.periodStartDate ?? existing.periodStartDate,
+          input.periodEndDate ?? existing.periodEndDate,
+        )
+        const periodErrors = validateTosPeriod(periodStartDate, periodEndDate)
+        if (Object.keys(periodErrors).length) return mutationFailure(periodErrors)
+        const semanticVersionChanged = (
+          existing.major !== normalized.major
+          || existing.minor !== normalized.minor
+        )
+        if (semanticVersionChanged && get().tosVersions.some(version => (
+          version.id !== id
+          && (
+            version.major === normalized.major && version.minor === normalized.minor
+          )
+        ))) return { ok: false, reason: 'duplicate' }
+        const updated = {
+          ...existing,
+          ...normalized,
+          periodStartDate,
+          periodEndDate,
+          targets: input.targets === undefined ? existing.targets : normalizeTargets(input.targets),
+          updatedAt: nowIso(),
+        }
         set(state => {
           const tosVersions = sortTosVersions(state.tosVersions.map(version => version.id === id ? updated : version))
           return {
@@ -1068,7 +1192,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
     }),
     {
       name: 'pms-project-roadmap',
-      version: 1,
+      version: 5,
       storage: createJSONStorage(() => safeRoadmapStorage),
       migrate: migrateRoadmapState,
       partialize: partializeRoadmapState,

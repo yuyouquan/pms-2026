@@ -2,7 +2,7 @@ import ts from 'typescript'
 
 const LEGACY_COMPONENTS = new Set(['MilestoneView', 'MRTrainView'])
 const ROADMAP_MODULE = 'ProjectRoadmapModule'
-const PROJECT_VIEW_OPTION_LABELS = new Set(['项目计划汇总看板', '项目路标视图'])
+const PROJECT_VIEW_OPTION_LABELS = new Set(['项目计划汇总看板', 'tOS 路标视图'])
 
 function getPropertyName(property) {
   return ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)
@@ -124,7 +124,8 @@ export function analyzeRoadmapSource(source, fileName = 'RoadmapView.tsx') {
   return {
     legacyImports,
     legacyJsxMounts,
-    hasProjectViewHeader: headerTexts.has('项目视图'),
+    hasProjectViewHeader: headerTexts.has('项目视图')
+      || source.includes("activeProjectView === 'roadmap' ? 'tOS 路标视图' : '项目视图'"),
     hasProjectViewOptionLabels: [...PROJECT_VIEW_OPTION_LABELS].every(label => projectViewOptionLabels.has(label)),
     hasProjectRoadmapImport,
     summaryConditionals,

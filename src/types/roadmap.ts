@@ -36,7 +36,9 @@ export interface RoadmapProjectFields {
   startRam: RoadmapRam
   versionType: RoadmapVersionType
   str5Date: string
+  str5Estimated: boolean
   launchDate: string
+  launchEstimated: boolean
   developMode: RoadmapDevelopMode
   remark: string
 }
@@ -66,6 +68,8 @@ export interface TosVersionConfig {
   name: string
   major: number
   minor: number
+  periodStartDate: string
+  periodEndDate: string
   targets: string[]
   createdAt: string
   updatedAt: string
@@ -159,7 +163,7 @@ export interface RoadmapFilterCondition {
   id: string
   field: RoadmapColumnKey
   operator: RoadmapFilterOperator
-  value: string
+  value: string | string[]
 }
 
 export interface RoadmapSortState {
@@ -236,6 +240,9 @@ export interface RoadmapDuplicateComparison {
 
 export interface CreateTosVersionInput {
   name: string
+  periodStartDate?: string
+  periodEndDate?: string
+  targets?: string[]
 }
 
 type RoadmapNormalChangeInputBase = Omit<
