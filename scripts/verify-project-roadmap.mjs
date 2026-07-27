@@ -2240,6 +2240,8 @@ registerAssertion('current-version roadmap hydration rejects malicious typed fil
     version: 1,
     state: {
       ...state,
+      viewMode: 'evolution',
+      selectedTosVersionId: null,
       filters: [
         { id: 'bad-operator', field: 'brand', operator: 'contains', value: 'TEC' },
         { id: 'bad-enum', field: 'brand', operator: 'equals', value: '__proto__' },
@@ -2258,11 +2260,12 @@ registerAssertion('current-version roadmap hydration rejects malicious typed fil
       },
     },
   })
-  if (hydrated.filters.map(filter => filter.id).join(',') !== 'valid-text') {
+  if (hydrated.filters.map(filter => filter.id).join(',') !== 'valid-version,valid-text') {
     throw new Error(`malicious version-1 filters survived hydration: ${JSON.stringify(hydrated.filters)}`)
   }
-  if (hydrated.filters[0].value !== 'risk'
-    || JSON.stringify(hydrated.visibleColumns) !== JSON.stringify(['firstSaleTosVersionId', 'brand', 'remark'])) {
+  if (JSON.stringify(hydrated.filters[0].value) !== JSON.stringify(['tos-17-2'])
+    || hydrated.filters[1].value !== 'risk'
+    || JSON.stringify(hydrated.visibleColumnsByView.table) !== JSON.stringify(['firstSaleTosVersionId', 'brand', 'remark'])) {
     throw new Error(`hydrated filter/column state was not normalized: ${JSON.stringify(hydrated)}`)
   }
 })
@@ -2693,6 +2696,15 @@ registerAssertion('table tOS selector and drawer tOS condition stay synchronized
   if (store.getState().selectedTosVersionId !== null) {
     throw new Error('multi-select drawer condition must not pretend the table has one selected version')
   }
+  store.getState().setFilters([{
+    id: 'drawer-single-tos',
+    field: 'firstSaleTosVersionId',
+    operator: 'equals',
+    value: ['tos-16-3'],
+  }])
+  if (store.getState().selectedTosVersionId !== 'tos-16-3') {
+    throw new Error('single-value drawer tOS condition did not synchronize the table selector')
+  }
   store.getState().setFilters([])
   if (store.getState().selectedTosVersionId !== null) {
     throw new Error('removing the drawer tOS condition did not restore all')
@@ -2717,6 +2729,22 @@ registerAssertion('persisted tOS selection repairs to all unless its concrete ID
     || validCondition?.operator !== 'equals'
     || JSON.stringify(validCondition.value) !== JSON.stringify(['tos-17-2'])) {
     throw new Error('valid persisted concrete selection was not preserved and synchronized')
+  }
+  const evolutionMulti = storeModule.migrateRoadmapState({
+    ...persisted,
+    viewMode: 'evolution',
+    selectedTosVersionId: null,
+    filters: [{
+      id: 'evolution-tos',
+      field: 'firstSaleTosVersionId',
+      operator: 'equals',
+      value: ['tos-18-0', 'tos-17-2'],
+    }],
+  }, 1)
+  const evolutionCondition = evolutionMulti.filters.find(condition => condition.field === 'firstSaleTosVersionId')
+  if (evolutionMulti.selectedTosVersionId !== null
+    || JSON.stringify(evolutionCondition?.value) !== JSON.stringify(['tos-18-0', 'tos-17-2'])) {
+    throw new Error(`evolution multi-select filter was lost on reload: ${JSON.stringify(evolutionMulti)}`)
   }
 
   for (const [name, overrides] of [

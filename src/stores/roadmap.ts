@@ -609,13 +609,14 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
     resolveMigratedTosId(persistedState.selectedTosVersionId, tosVersions),
     tosVersions,
   )
-  let filters = sanitizeRoadmapFilterConditions(
-    setRoadmapTosVersionFilter(
-      sanitizeRoadmapFilterConditions(persistedState.filters, tosVersions),
-      selectedTosVersionId,
-    ),
-    tosVersions,
-  )
+  const viewMode = persistedState.viewMode === 'evolution' ? 'evolution' : 'table'
+  const persistedFilters = sanitizeRoadmapFilterConditions(persistedState.filters, tosVersions)
+  let filters = viewMode === 'table'
+    ? sanitizeRoadmapFilterConditions(
+      setRoadmapTosVersionFilter(persistedFilters, selectedTosVersionId),
+      tosVersions,
+    )
+    : persistedFilters
   const legacyBrand = ROADMAP_BRANDS.has(persistedState.brandFilter as RoadmapBrand)
     ? persistedState.brandFilter as RoadmapBrand
     : null
@@ -630,7 +631,6 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
   }
   const migratedBrand = getRoadmapQuickFilterValue(filters, 'brand')
   const migratedProductType = getRoadmapQuickFilterValue(filters, 'productType')
-  const viewMode = persistedState.viewMode === 'evolution' ? 'evolution' : 'table'
   const persistedColumnsByView = isRecord(persistedState.visibleColumnsByView)
     ? persistedState.visibleColumnsByView
     : null
@@ -915,9 +915,10 @@ export const useRoadmapStore = create<RoadmapStore>()(
         const sanitized = sanitizeRoadmapFilterConditions(filters, state.tosVersions)
         const tosCondition = sanitized.find(condition => condition.field === 'firstSaleTosVersionId')
         const selectedTosVersionId = tosCondition?.operator === 'equals'
-          && typeof tosCondition.value === 'string'
-          && state.tosVersions.some(version => version.id === tosCondition.value)
-          ? tosCondition.value
+          && Array.isArray(tosCondition.value)
+          && tosCondition.value.length === 1
+          && state.tosVersions.some(version => version.id === tosCondition.value[0])
+          ? tosCondition.value[0]
           : null
         const brand = getRoadmapQuickFilterValue(sanitized, 'brand')
         const productType = getRoadmapQuickFilterValue(sanitized, 'productType')
