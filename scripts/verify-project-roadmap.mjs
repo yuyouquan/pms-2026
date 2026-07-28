@@ -711,8 +711,11 @@ registerAssertion('roadmap STR5 estimate and canonical project-name contracts st
   ]) {
     if (!modalSource.includes(contract)) throw new Error(`planned-project modal is missing ${contract}`)
   }
-  if (!tableSource.includes('row.str5Estimated') || !tableSource.includes('color="gold"') || !tableSource.includes('>预估</Tag>')) {
-    throw new Error('table does not render the STR5 estimate tag')
+  if (!tableSource.includes('row.str5Estimated')
+    || !tableSource.includes('ClockCircleOutlined')
+    || !tableSource.includes('title="预估时间"')
+    || tableSource.includes('>预估</Tag>')) {
+    throw new Error('table does not render the compact estimated-time icon')
   }
   if (!cardSource.includes('row.str5Estimated')
     || !cardSource.includes('ClockCircleOutlined')
@@ -2586,8 +2589,7 @@ registerAssertion('single-version roadmap table preserves sorting, targets, sour
     "formatRoadmapTableValue",
     "rowKey={row => `${row.source}:${row.id}`}",
     'version.targets.length',
-    '待规划',
-    '已存在正常项目',
+    '已存在正式项目',
     'roadmap-conflict-row',
     'onOpenConflict',
     'onEditPlannedProject',
@@ -2625,6 +2627,26 @@ registerAssertion('single-version roadmap table preserves sorting, targets, sour
   }
 })
 
+registerAssertion('roadmap table hides planned labels and uses opaque fixed columns with hover actions', () => {
+  const source = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
+  for (const contract of [
+    'roadmap-planned-row',
+    'roadmap-table-row-actions',
+    '.ant-table-cell-fix-start',
+    '.ant-table-cell-fix-end',
+    'position: sticky !important',
+    'background: var(--bg-secondary) !important',
+    'tr.roadmap-planned-row:hover .roadmap-table-row-actions',
+    'tr.roadmap-planned-row:focus-within .roadmap-table-row-actions',
+    '已存在正式项目',
+  ]) {
+    if (!source.includes(contract)) throw new Error(`roadmap table refinement is missing ${contract}`)
+  }
+  if (source.includes('roadmap-table-project-source-tag') || />待规划<\/Tag>/.test(source)) {
+    throw new Error('roadmap table still displays planned-project tags')
+  }
+})
+
 registerAssertion('version evolution uses one aligned shared scroll grid', () => {
   const evolutionSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapEvolutionView.tsx'), 'utf8')
   const cardSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'), 'utf8')
@@ -2644,6 +2666,33 @@ registerAssertion('version evolution uses one aligned shared scroll grid', () =>
   }
   for (const contract of ['待规划', '已存在正常项目', 'onEditPlannedProject', 'onDeletePlannedProject']) {
     if (!cardSource.includes(contract)) throw new Error(`RoadmapProjectCard is missing ${contract}`)
+  }
+})
+
+registerAssertion('evolution old-product divider and planned actions use compact progressive disclosure', () => {
+  const evolutionSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapEvolutionView.tsx'), 'utf8')
+  const cardSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'), 'utf8')
+  for (const contract of [
+    '.pms-roadmap-evolution-separator',
+    'background: rgba(238, 242, 255, 0.54)',
+    'box-shadow: inset 0 1px 0',
+  ]) {
+    if (!evolutionSource.includes(contract)) throw new Error(`old-product divider is missing ${contract}`)
+  }
+  if (/\.pms-roadmap-evolution-separator\s*\{[\s\S]*?background:\s*rgba\(255,\s*255,\s*255/.test(evolutionSource)) {
+    throw new Error('old-product divider still uses a white raised surface')
+  }
+  for (const contract of [
+    'MoreOutlined',
+    'actionsExpanded',
+    'aria-expanded={actionsExpanded}',
+    'pms-roadmap-evolution-actions-collapse',
+    'grid-template-rows: 0fr',
+    'grid-template-rows: 1fr',
+  ]) {
+    if (!cardSource.includes(contract) && !evolutionSource.includes(contract)) {
+      throw new Error(`planned-project action disclosure is missing ${contract}`)
+    }
   }
 })
 
@@ -2708,7 +2757,7 @@ registerAssertion('evolution cards keep locked titles and approved colors', () =
   for (const token of ['pms-roadmap-evolution-card-header', 'pms-roadmap-evolution-card-title']) {
     if (!evolutionSource.includes(token) && !cardSource.includes(token)) throw new Error(`card nowrap styling is missing ${token}`)
   }
-  for (const token of ['roadmap-table-project-name-row', 'roadmap-table-project-name', 'roadmap-table-project-source-tag']) {
+  for (const token of ['roadmap-table-project-name-row', 'roadmap-table-project-name']) {
     if (!tableSource.includes(token)) throw new Error(`table project-name nowrap styling is missing ${token}`)
   }
 })

@@ -1,6 +1,13 @@
 'use client'
 
-import { ClockCircleOutlined, DeleteOutlined, EditOutlined, WarningOutlined } from '@ant-design/icons'
+import { useId, useState } from 'react'
+import {
+  ClockCircleOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  MoreOutlined,
+  WarningOutlined,
+} from '@ant-design/icons'
 import { Button, Flex, Tag, Tooltip, Typography } from 'antd'
 import { orderVisibleDefinitions } from '@/lib/columnSettings'
 import { getRoadmapSortableColumnDefinitions } from '@/lib/roadmapFilters'
@@ -63,6 +70,8 @@ export default function RoadmapProjectCard({
   onEditPlannedProject,
   onDeletePlannedProject,
 }: RoadmapProjectCardProps) {
+  const [actionsExpanded, setActionsExpanded] = useState(false)
+  const actionsId = useId()
   const detailColumns = orderVisibleDefinitions(
     getRoadmapSortableColumnDefinitions('evolution'),
     {
@@ -82,6 +91,20 @@ export default function RoadmapProjectCard({
         <Typography.Text className="pms-roadmap-evolution-card-title" title={title} strong>
           {title}
         </Typography.Text>
+        {isPlanned && canEdit ? (
+          <Tooltip title={actionsExpanded ? '收起操作' : '操作'}>
+            <Button
+              className="pms-roadmap-evolution-action-toggle"
+              type="text"
+              size="small"
+              icon={<MoreOutlined aria-hidden />}
+              aria-label={actionsExpanded ? '收起项目操作' : '展开项目操作'}
+              aria-expanded={actionsExpanded}
+              aria-controls={actionsId}
+              onClick={() => setActionsExpanded(expanded => !expanded)}
+            />
+          </Tooltip>
+        ) : null}
       </Flex>
 
       {detailColumns.length ? (
@@ -141,25 +164,39 @@ export default function RoadmapProjectCard({
       ) : null}
 
       {isPlanned && canEdit ? (
-        <Flex className="pms-roadmap-evolution-card-actions" gap={4} wrap>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined aria-hidden />}
-            onClick={() => onEditPlannedProject(row.id)}
-          >
-            编辑
-          </Button>
-          <Button
-            type="link"
-            danger
-            size="small"
-            icon={<DeleteOutlined aria-hidden />}
-            onClick={() => onDeletePlannedProject(row.id)}
-          >
-            删除
-          </Button>
-        </Flex>
+        <div
+          id={actionsId}
+          className={`pms-roadmap-evolution-actions-collapse${actionsExpanded ? ' is-expanded' : ''}`}
+          aria-hidden={!actionsExpanded}
+        >
+          <div className="pms-roadmap-evolution-actions-inner">
+            <Flex className="pms-roadmap-evolution-card-actions" gap={4} wrap>
+              <Button
+                type="link"
+                size="small"
+                icon={<EditOutlined aria-hidden />}
+                onClick={() => {
+                  setActionsExpanded(false)
+                  onEditPlannedProject(row.id)
+                }}
+              >
+                编辑
+              </Button>
+              <Button
+                type="link"
+                danger
+                size="small"
+                icon={<DeleteOutlined aria-hidden />}
+                onClick={() => {
+                  setActionsExpanded(false)
+                  onDeletePlannedProject(row.id)
+                }}
+              >
+                删除
+              </Button>
+            </Flex>
+          </div>
+        </div>
       ) : null}
     </article>
   )
