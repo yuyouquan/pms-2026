@@ -85,10 +85,34 @@ const expectedMachineProjectTypes = [
   '整机-平板',
   '整机-笔电',
   '整机-功能机',
-  '整机-AIOT',
-  '整机-基线',
-  '整机-N+1',
-  '整机-预研',
+  '整机-AIOT扩品类',
+  '整机-基线项目',
+  '整机-N+1项目',
+  '整机-预研项目',
+]
+const expectedProjectCategories = ['整机产品项目', 'tOS版本项目', '技术项目', '能力建设项目']
+const expectedIpmProjectClassifications = [
+  ['整机产品-基线IPD', '整机产品项目', '整机-手机'],
+  ['整机产品-模块化IPD', '整机产品项目', '整机-手机'],
+  ['整机产品-非IPD', '整机产品项目', '整机-手机'],
+  ['手机整机产品-大版本升级', '整机产品项目', '整机-手机'],
+  ['其他-平板--整机产品项目', '整机产品项目', '整机-平板'],
+  ['其他-笔电/移动互联及其他--整机产品项目', '整机产品项目', '整机-笔电'],
+  ['其他-功能机', '整机产品项目', '整机-功能机'],
+  ['其他-AIOT', '整机产品项目', '整机-AIOT扩品类'],
+  ['基线项目', '整机产品项目', '整机-基线项目'],
+  ['N+1项目', '整机产品项目', '整机-N+1项目'],
+  ['预研类项目', '整机产品项目', '整机-预研项目'],
+  ['软件产品项目', 'tOS版本项目', 'tOS版本项目'],
+  ['研发级-基础研究-重点项目', '技术项目', '中长期技术'],
+  ['研发级-基础研究-非重点项目', '技术项目', '中长期技术'],
+  ['部门级-基础研究', '技术项目', '中长期技术'],
+  ['研发级-技术研发-重点项目', '技术项目', '技术项目'],
+  ['研发级-技术研发-非重点项目', '技术项目', '技术项目'],
+  ['部门级-技术研发', '技术项目', '技术项目'],
+  ['技术项目前置工作', '技术项目', '技术项目'],
+  ['部门级能力建设', '能力建设项目', '能力建设项目'],
+  ['公司级/研发级能力建设', '能力建设项目', '能力建设项目'],
 ]
 
 function findLegacyMachineComparisons(filePath) {
@@ -104,10 +128,9 @@ function findLegacyMachineComparisons(filePath) {
 
   function visit(node) {
     if (ts.isBinaryExpression(node) && equalityKinds.has(node.operatorToken.kind)) {
-      const operands = [node.left, node.right]
-      const comparesLegacyLiteral = operands.some(operand => ts.isStringLiteral(operand) && operand.text === '整机产品项目')
-      const comparesOldMachineConstant = operands.some(operand => ts.isIdentifier(operand) && operand.text === 'PROJECT_TYPE_MACHINE')
-      if (comparesLegacyLiteral || comparesOldMachineConstant) {
+      const comparesOldMachineConstant = [node.left, node.right]
+        .some(operand => ts.isIdentifier(operand) && operand.text === 'PROJECT_TYPE_MACHINE')
+      if (comparesOldMachineConstant) {
         const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
         failures.push(`${path.relative(root, filePath)}:${line + 1} ${node.getText(sourceFile)}`)
       }
@@ -119,7 +142,7 @@ function findLegacyMachineComparisons(filePath) {
   return failures
 }
 
-function getInitialProjectTypeInitializers(filePath) {
+function getInitialProjectClassificationInitializers(filePath) {
   const source = fs.readFileSync(filePath, 'utf8')
   const sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
   const projectTypes = new Map()
@@ -130,9 +153,17 @@ function getInitialProjectTypeInitializers(filePath) {
         if (!ts.isObjectLiteralExpression(element)) continue
         const idProperty = element.properties.find(property => ts.isPropertyAssignment(property) && property.name.getText(sourceFile) === 'id')
         const typeProperty = element.properties.find(property => ts.isPropertyAssignment(property) && property.name.getText(sourceFile) === 'type')
+        const secondaryCategoryProperty = element.properties.find(property => (
+          ts.isPropertyAssignment(property) && property.name.getText(sourceFile) === 'secondaryCategory'
+        ))
         if (!idProperty || !typeProperty || !ts.isPropertyAssignment(idProperty) || !ts.isPropertyAssignment(typeProperty)) continue
         if (!ts.isStringLiteral(idProperty.initializer)) continue
-        projectTypes.set(idProperty.initializer.text, typeProperty.initializer.getText(sourceFile))
+        projectTypes.set(idProperty.initializer.text, {
+          type: typeProperty.initializer.getText(sourceFile),
+          secondaryCategory: secondaryCategoryProperty && ts.isPropertyAssignment(secondaryCategoryProperty)
+            ? secondaryCategoryProperty.initializer.getText(sourceFile)
+            : undefined,
+        })
       }
     }
     ts.forEachChild(node, visit)
@@ -249,25 +280,49 @@ registerAssertion('machine project types expose the exact supported values in or
   for (const type of expectedMachineProjectTypes) {
     if (!projectTypes.isMachineProjectType(type)) throw new Error(`${type} must be recognized as a machine project`)
   }
-  if (projectTypes.isMachineProjectType('整机产品项目')) throw new Error('legacy machine project type must not be recognized')
+  if (!projectTypes.isMachineProjectType('整机产品项目')) throw new Error('machine project category must be recognized')
   if ('PROJECT_TYPE_MACHINE' in projectTypes) throw new Error('legacy PROJECT_TYPE_MACHINE export must be removed')
 })
 
-registerAssertion('PROJECT_TYPES contains every machine type and excludes the legacy value', () => {
+registerAssertion('PROJECT_TYPES contains the four first-level project categories', () => {
   const { PROJECT_TYPES } = loadTypeScriptModule(path.join(root, 'src/constants/projectTypes.ts'))
-  const machinePrefix = PROJECT_TYPES.slice(0, expectedMachineProjectTypes.length)
-  if (JSON.stringify(machinePrefix) !== JSON.stringify(expectedMachineProjectTypes)) {
-    throw new Error(`machine types must lead PROJECT_TYPES, got ${JSON.stringify(PROJECT_TYPES)}`)
+  if (JSON.stringify(PROJECT_TYPES) !== JSON.stringify(expectedProjectCategories)) {
+    throw new Error(`expected first-level project categories ${JSON.stringify(expectedProjectCategories)}, got ${JSON.stringify(PROJECT_TYPES)}`)
   }
-  if (PROJECT_TYPES.includes('整机产品项目')) throw new Error('PROJECT_TYPES still contains the legacy value')
 })
 
-registerAssertion('existing machine mocks are explicitly migrated to the phone project type', () => {
-  const projectTypesById = getInitialProjectTypeInitializers(path.join(root, 'src/data/projects.ts'))
+registerTableAssertions('IPM project classification mapping', expectedIpmProjectClassifications.map(([
+  ipmProjectCategoryName,
+  projectCategory,
+  secondaryCategory,
+]) => [
+  ipmProjectCategoryName,
+  () => {
+    const { mapIpmProjectClassification } = loadTypeScriptModule(path.join(root, 'src/constants/projectTypes.ts'))
+    const actual = mapIpmProjectClassification(ipmProjectCategoryName)
+    const expected = { projectCategory, secondaryCategory }
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      throw new Error(`expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`)
+    }
+  },
+]))
+
+registerAssertion('unknown IPM project classification returns undefined', () => {
+  const { mapIpmProjectClassification } = loadTypeScriptModule(path.join(root, 'src/constants/projectTypes.ts'))
+  if (mapIpmProjectClassification('未知分类') !== undefined) {
+    throw new Error('unknown IPM project classification must return undefined')
+  }
+})
+
+registerAssertion('existing machine mocks use the machine category and phone secondary category', () => {
+  const classificationsById = getInitialProjectClassificationInitializers(path.join(root, 'src/data/projects.ts'))
   const expectedMachineMockIds = ['1', '3', '7', '12', '13', '14', '15', '16', '17', '18']
   const failures = expectedMachineMockIds
-    .filter(id => projectTypesById.get(id) !== 'PROJECT_TYPE_MACHINE_PHONE')
-    .map(id => `${id}:${projectTypesById.get(id) || 'missing project'}`)
+    .filter(id => (
+      classificationsById.get(id)?.type !== 'PROJECT_CATEGORY_MACHINE'
+      || classificationsById.get(id)?.secondaryCategory !== 'PROJECT_TYPE_MACHINE_PHONE'
+    ))
+    .map(id => `${id}:${JSON.stringify(classificationsById.get(id) || 'missing project')}`)
   if (failures.length) throw new Error(failures.join(', '))
 })
 
@@ -298,12 +353,20 @@ registerAssertion('machine type guard drives market rows, status mapping, and te
   const { TEMPLATE_PROJECT_TYPES } = createTypeScriptModuleLoader()(path.join(root, 'src/stores/plan.ts'))
   const { generateTableData } = createTypeScriptModuleLoader()(path.join(root, 'src/components/roadmap/utils.ts'))
 
-  for (const [index, type] of expectedMachineProjectTypes.entries()) {
-    if (!TEMPLATE_PROJECT_TYPES.includes(type)) throw new Error(`${type} is missing from template project types`)
-    const project = { id: `machine-${index}`, name: type, type, markets: ['OP', 'TR'] }
-    const rows = generateTableData([project], [], type, {}, [])
+  if (JSON.stringify(TEMPLATE_PROJECT_TYPES) !== JSON.stringify(expectedProjectCategories)) {
+    throw new Error(`template project types must contain only first-level categories: ${JSON.stringify(TEMPLATE_PROJECT_TYPES)}`)
+  }
+  for (const [index, secondaryCategory] of expectedMachineProjectTypes.entries()) {
+    const project = {
+      id: `machine-${index}`,
+      name: secondaryCategory,
+      type: '整机产品项目',
+      secondaryCategory,
+      markets: ['OP', 'TR'],
+    }
+    const rows = generateTableData([project], [], '整机产品项目', {}, [])
     if (rows.length !== 2 || rows.map(row => row.market).join(',') !== 'OP,TR') {
-      throw new Error(`${type} did not expand into per-market roadmap rows`)
+      throw new Error(`${secondaryCategory} did not expand into per-market roadmap rows`)
     }
   }
 })
@@ -322,13 +385,13 @@ registerAssertion('workspace machine filters expose the exact machine subtypes',
   if (MACHINE_PROJECT_TYPE_FILTER !== 'machine') throw new Error('aggregate machine filter value must remain machine')
 
   for (const selectedType of expectedMachineProjectTypes) {
-    for (const projectType of expectedMachineProjectTypes) {
-      const expected = projectType === selectedType
-      if (matchesProjectTypeFilter(projectType, selectedType) !== expected) {
-        throw new Error(`${selectedType} must ${expected ? '' : 'not '}match ${projectType}`)
+    for (const secondaryCategory of expectedMachineProjectTypes) {
+      const expected = secondaryCategory === selectedType
+      if (matchesProjectTypeFilter('整机产品项目', selectedType, secondaryCategory) !== expected) {
+        throw new Error(`${selectedType} must ${expected ? '' : 'not '}match ${secondaryCategory}`)
       }
     }
-    if (!matchesProjectTypeFilter(selectedType, MACHINE_PROJECT_TYPE_FILTER)) {
+    if (!matchesProjectTypeFilter('整机产品项目', MACHINE_PROJECT_TYPE_FILTER, selectedType)) {
       throw new Error(`aggregate machine filter must match ${selectedType}`)
     }
   }
@@ -361,6 +424,59 @@ registerAssertion('workspace filter toolbar wraps without squeezing chip labels'
   if (!toolbarStyle.has('rowGap')) throw new Error('workspace toolbar must retain a stable row gap')
   if (chipStyle.get('whiteSpace') !== "'nowrap'") throw new Error('workspace filter labels must not wrap')
   if (chipStyle.get('flexShrink') !== '0') throw new Error('workspace filter chips must not shrink')
+})
+
+registerAssertion('workspace uses linked category, secondary category, and status filters', () => {
+  const workspacePath = path.join(root, 'src/containers/WorkspaceContainer.tsx')
+  const workspaceSource = fs.readFileSync(workspacePath, 'utf8')
+  const projectStoreSource = fs.readFileSync(path.join(root, 'src/stores/project.ts'), 'utf8')
+  const {
+    matchesProjectSecondaryCategoryFilter,
+  } = loadTypeScriptModule(path.join(root, 'src/constants/projectTypes.ts'))
+
+  for (const fragment of [
+    'projectSecondaryCategoryFilter, setProjectSecondaryCategoryFilter',
+    'PROJECT_SECONDARY_CATEGORIES[projectTypeFilter',
+    'matchesProjectTypeFilter(p.type, projectTypeFilter, p.secondaryCategory)',
+    'matchesProjectSecondaryCategoryFilter(',
+    'setProjectSecondaryCategoryFilter(\'all\')',
+    'setProjectStatusFilter(\'all\')',
+    'aria-label="项目分类筛选"',
+    'aria-label="项目二级分类筛选"',
+    'aria-label="项目状态筛选"',
+  ]) {
+    if (!workspaceSource.includes(fragment)) throw new Error(`workspace linked filter source missing: ${fragment}`)
+  }
+  for (const fragment of [
+    'projectSecondaryCategoryFilter: string',
+    'setProjectSecondaryCategoryFilter: (v: string) => void',
+    "projectSecondaryCategoryFilter: 'all'",
+  ]) {
+    if (!projectStoreSource.includes(fragment)) throw new Error(`project store secondary filter source missing: ${fragment}`)
+  }
+  if (!matchesProjectSecondaryCategoryFilter('整机产品项目', '整机-手机', 'all')) {
+    throw new Error('secondary category all filter must match every project')
+  }
+  if (!matchesProjectSecondaryCategoryFilter('整机产品项目', '整机-手机', '整机-手机')) {
+    throw new Error('secondary category filter must match its exact classification')
+  }
+  if (matchesProjectSecondaryCategoryFilter('整机产品项目', '整机-手机', '整机-平板')) {
+    throw new Error('secondary category filter must reject a different classification')
+  }
+})
+
+registerAssertion('MR train labels machine subtype data as project secondary category', () => {
+  const source = fs.readFileSync(path.join(root, 'src/components/roadmap/MRTrainView.tsx'), 'utf8')
+  const secondaryCategoryTitles = source.match(/title:\s*'项目二级分类'/g) || []
+  if (secondaryCategoryTitles.length < 2) {
+    throw new Error('MR train table and export must both label projectType as 项目二级分类')
+  }
+  if (/title:\s*'项目分类'[\s\S]{0,100}dataIndex:\s*'projectType'/.test(source)) {
+    throw new Error('MR train projectType column must not claim to contain first-level project category data')
+  }
+  if (/\{\s*key:\s*'projectType',\s*title:\s*'项目分类'\s*\}/.test(source)) {
+    throw new Error('MR train projectType export must not claim to contain first-level project category data')
+  }
 })
 
 registerAssertion('roadmap contracts expose the approved column order and defaults', () => {
@@ -533,6 +649,7 @@ const validRoadmapTosIds = new Set(['tos-17-2'])
 
 registerTableAssertions('planned-project runtime enum validation', [
   ['machine project type', 'machineProjectType', '整机-电视'],
+  ['first-level project category', 'machineProjectType', '整机产品项目'],
   ['Android version', 'androidVersion', 'Android 19'],
   ['product type', 'productType', '换代'],
   ['start RAM', 'startRam', '5GB'],
@@ -548,6 +665,9 @@ registerTableAssertions('planned-project runtime enum validation', [
     undefined,
     validRoadmapTosIds,
   )
+  if (field === 'machineProjectType' && errors.machineProjectType !== '项目二级分类无效') {
+    throw new Error(`machine project type error copy is wrong: ${JSON.stringify(errors)}`)
+  }
   if (!errors[field]) throw new Error(`${field} malformed runtime value was accepted`)
 }]))
 
@@ -1215,6 +1335,46 @@ function persistedPlannedProject(projectCode, overrides = {}) {
   }
 }
 
+registerTableAssertions('roadmap hydration normalizes every legacy planned machine subtype', [
+  ['machine category', '整机产品项目', '整机-手机'],
+  ['legacy phone', '整机产品-手机', '整机-手机'],
+  ['legacy current PAD', '整机-PAD', '整机-平板'],
+  ['legacy PAD', '整机产品-PAD', '整机-平板'],
+  ['legacy laptop', '整机产品-笔电', '整机-笔电'],
+  ['legacy AIOT', '整机-AIOT', '整机-AIOT扩品类'],
+  ['legacy baseline', '整机-基线', '整机-基线项目'],
+  ['legacy N+1', '整机-N+1', '整机-N+1项目'],
+  ['legacy pre-research', '整机-预研', '整机-预研项目'],
+].map(([caseName, legacyValue, expectedValue], index) => [caseName, () => {
+  const hydrated = hydrateRoadmapStoreFromEnvelope({
+    version: 5,
+    state: {
+      tosVersions: [{
+        id: 'tos-17-2',
+        name: 'tOS 17.2',
+        major: 17,
+        minor: 2,
+        periodStartDate: '',
+        periodEndDate: '',
+        targets: [],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      }],
+      plannedProjects: [
+        persistedPlannedProject(`LEGACY-${index + 1}`, { machineProjectType: legacyValue }),
+      ],
+      changeLogs: [],
+      selectedTosVersionId: null,
+    },
+  })
+  const hydratedLegacyProject = hydrated.plannedProjects.find(
+    project => project.projectCode === `LEGACY-${index + 1}`,
+  )
+  if (hydratedLegacyProject?.machineProjectType !== expectedValue) {
+    throw new Error(`legacy planned subtype was not hydrated: ${JSON.stringify(hydrated.plannedProjects)}`)
+  }
+}]))
+
 registerAssertion('roadmap migration deterministically repairs IDs across persisted collections', () => {
   const storeModule = loadIsolatedRoadmapStore()
   const migrated = storeModule.migrateRoadmapState({
@@ -1454,6 +1614,25 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
   if (adapter.adaptNormalProject({ ...normal, type: '技术项目' }, versions) !== null) {
     throw new Error('non-machine project entered the normal roadmap')
   }
+  const categorized = adapter.adaptNormalProject({
+    ...normal,
+    id: 'normal-categorized',
+    type: '整机产品项目',
+    secondaryCategory: '整机-笔电',
+    currentTosVersionId: 'tos-16-3',
+  }, versions)
+  if (!categorized || categorized.machineProjectType !== '整机-笔电') {
+    throw new Error(`normal adapter did not prefer the project secondary category: ${JSON.stringify(categorized)}`)
+  }
+  if (adapter.adaptNormalProject({
+    ...normal,
+    id: 'normal-category-only',
+    type: '整机产品项目',
+    secondaryCategory: undefined,
+    currentTosVersionId: 'tos-16-3',
+  }, versions)?.machineProjectType !== '整机-手机') {
+    throw new Error('normal adapter did not apply the default phone secondary category')
+  }
 
   const plannedInput = {
     ...roadmapRow({ id: 'planned-1', source: undefined, readOnly: undefined, status: '待规划', displayName: 'stale name' }),
@@ -1583,6 +1762,7 @@ registerAssertion('every machine mock owns explicit normal-roadmap fields', () =
   const sourceFile = ts.createSourceFile(projectPath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
   const required = ['firstSaleTosVersionId', 'projectCode', 'platform', 'startRam', 'str5Date', 'remark']
   const missing = []
+  let matchedMachineMocks = 0
 
   function visit(node) {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'initialProjects' && ts.isArrayLiteralExpression(node.initializer)) {
@@ -1593,7 +1773,11 @@ registerAssertion('every machine mock owns explicit normal-roadmap fields', () =
           const name = property.name.getText(sourceFile).replaceAll("'", '')
           return [[name, property.initializer.getText(sourceFile)]]
         }))
-        if (properties.get('type') !== 'PROJECT_TYPE_MACHINE_PHONE') continue
+        if (properties.get('type') !== 'PROJECT_CATEGORY_MACHINE') continue
+        matchedMachineMocks += 1
+        if (properties.get('secondaryCategory') !== 'PROJECT_TYPE_MACHINE_PHONE') {
+          missing.push(`${properties.get('id') || 'unknown'}:secondaryCategory`)
+        }
         for (const field of required) {
           if (!properties.has(field)) missing.push(`${properties.get('id') || 'unknown'}:${field}`)
         }
@@ -1602,6 +1786,7 @@ registerAssertion('every machine mock owns explicit normal-roadmap fields', () =
     ts.forEachChild(node, visit)
   }
   visit(sourceFile)
+  if (matchedMachineMocks === 0) throw new Error('machine mock scan matched zero first-level machine projects')
   if (missing.length) throw new Error(missing.join(', '))
 })
 
@@ -1920,6 +2105,16 @@ registerAssertion('planned-project overlay exposes the complete accessible maint
   if (!fs.existsSync(plannedModalPath)) throw new Error('PlannedProjectModal.tsx is missing')
   const source = fs.readFileSync(plannedModalPath, 'utf8')
   if (source.includes('maskClosable')) throw new Error('planned-project modal uses deprecated Ant Design maskClosable')
+  for (const classificationContract of [
+    'PROJECT_SECONDARY_CATEGORIES[PROJECT_CATEGORY_MACHINE]',
+    'label="项目分类"',
+    '<Input value={PROJECT_CATEGORY_MACHINE} disabled />',
+    'label="项目二级分类"',
+  ]) {
+    if (!source.includes(classificationContract)) {
+      throw new Error(`planned-project classification is missing ${classificationContract}`)
+    }
+  }
   for (const field of [
     'machineProjectType',
     'projectCode',

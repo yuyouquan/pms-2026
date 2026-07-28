@@ -281,7 +281,7 @@ export default function MRTrainView({ onViewProject }: MRTrainViewProps) {
     // 信息列
     const infoCols: any[] = [
       {
-        title: '项目类型',
+        title: '项目二级分类',
         dataIndex: 'projectType',
         key: 'projectType',
         width: 110,
@@ -395,7 +395,7 @@ export default function MRTrainView({ onViewProject }: MRTrainViewProps) {
       exportCols.push({ key: 'tosVersion', title: 'tOS版本号' })
     }
     exportCols.push(
-      { key: 'projectType', title: '项目类型' },
+      { key: 'projectType', title: '项目二级分类' },
       { key: 'productLine', title: '产品线' },
       { key: 'market', title: '市场名' },
       { key: 'projectName', title: '项目名称' },

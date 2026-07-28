@@ -19,7 +19,10 @@ import {
   message,
   type TableColumnsType,
 } from 'antd'
-import { MACHINE_PROJECT_TYPES } from '@/constants/projectTypes'
+import {
+  PROJECT_CATEGORY_MACHINE,
+  PROJECT_SECONDARY_CATEGORIES,
+} from '@/constants/projectTypes'
 import {
   findRoadmapHistoryMatches,
 } from '@/lib/roadmapProjectAdapter'
@@ -133,7 +136,7 @@ export default function PlannedProjectModal({
         launchEstimated: editingProject.launchEstimated === true,
       }
       : {
-          machineProjectType: MACHINE_PROJECT_TYPES[0],
+          machineProjectType: PROJECT_SECONDARY_CATEGORIES[PROJECT_CATEGORY_MACHINE][0],
           productType: '新品',
           str5Estimated: false,
           launchEstimated: false,
@@ -317,8 +320,15 @@ export default function PlannedProjectModal({
           <Card size="small" title="项目分类与识别" style={sectionStyle}>
             <Row gutter={[16, 0]}>
               <Col xs={24} md={8}>
-                <Form.Item label="项目分类" name="machineProjectType" rules={[{ required: true, message: '请选择项目分类' }]}>
-                  <Select options={MACHINE_PROJECT_TYPES.map(value => ({ label: value, value }))} />
+                <Form.Item label="项目分类">
+                  <Input value={PROJECT_CATEGORY_MACHINE} disabled />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="项目二级分类" name="machineProjectType" rules={[{ required: true, message: '请选择项目二级分类' }]}>
+                  <Select
+                    options={PROJECT_SECONDARY_CATEGORIES[PROJECT_CATEGORY_MACHINE].map(value => ({ label: value, value }))}
+                  />
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>

@@ -11,10 +11,13 @@ import {
   type ProjectInfoGroupKey,
 } from '@/constants/projectInfoSchema'
 import {
+  PROJECT_SECONDARY_CATEGORIES,
   PROJECT_TYPES,
   PROJECT_TYPE_TOS_VERSION,
   isMachineProjectType,
+  mapIpmProjectClassification,
   normalizeMachineProjectType,
+  resolveProjectClassification,
 } from '@/constants/projectTypes'
 import { fetchByBid, type ExternalProjectEntry } from '@/data/externalProjectPool'
 import {
@@ -37,13 +40,13 @@ import {
   type ProjectCreationDraftSession,
   type ProjectCreationDraftRepository,
 } from '@/lib/projectCreationDraft'
-import { inferSoftwareProjectTypeFromName } from '@/constants/projectTypes'
 import type { ProjectInfoValues } from '@/types/app'
 
 type ProjectInfoFormState = ProjectInfoValues & {
   bid?: string
   projectName?: string
   type?: string
+  secondaryCategory?: string
   responsiblePersons?: string[]
   healthStatus?: string
   status?: string
@@ -58,6 +61,7 @@ export interface ProjectInfoSubmitPayload {
   bid?: string
   projectName: string
   projectType: string
+  projectSecondaryCategory: string
   responsiblePersons: string[]
   healthStatus: string
   infoValues: ProjectInfoValues
@@ -102,13 +106,6 @@ const GROUP_COLORS: Record<ProjectInfoGroupKey, string> = {
   team: '#14b8a6',
 }
 
-const hasValue = (value: unknown) => (
-  value !== undefined
-  && value !== null
-  && value !== ''
-  && (!Array.isArray(value) || value.length > 0)
-)
-
 export default function ProjectInfoModal({
   mode,
   open,
@@ -129,7 +126,6 @@ export default function ProjectInfoModal({
   const [aggregateWarnings, setAggregateWarnings] = useState<string[]>([])
   const [draftReadStatus, setDraftReadStatusState] = useState<DraftReadStatus>('idle')
   const [draftHydrationAttempt, setDraftHydrationAttempt] = useState(0)
-  const previousTypeRef = useRef<string>('')
   const lastAppliedSourceRef = useRef<string>('')
   const activeGroupsRef = useRef<string[]>([])
   const candidateProjectsRef = useRef(candidateProjects)
@@ -143,12 +139,26 @@ export default function ProjectInfoModal({
   createDraftContextRef.current = { open, mode, ownerId: draftOwnerId || '' }
   const watchedValues = (Form.useWatch([], { form, preserve: true }) || {}) as ProjectInfoFormState
   const projectType = String(watchedValues.type || project?.type || '')
+  const watchedBid = String(watchedValues.bid || '')
+  const selectedCandidate = mode === 'create'
+    ? candidateProjects.find(item => item.bid === watchedBid)
+    : undefined
+  const selectedIpmClassification = selectedCandidate
+    ? mapIpmProjectClassification(selectedCandidate.ipmProjectCategoryName)
+    : undefined
+  const isIpmClassificationMissing = Boolean(selectedCandidate && !selectedIpmClassification)
   const fields = useMemo(() => getProjectInfoModalFields(projectType), [projectType])
   const editableFields = useMemo(() => fields.filter(field => !field.readOnly), [fields])
   const groups = useMemo(() => getProjectInfoModalGroups(projectType), [projectType])
   const firstLaunchOptions = useMemo(() => existingProjects
     .filter(item => isMachineProjectType(item.type))
     .map(item => ({ label: item.name, value: item.id })), [existingProjects])
+  const secondaryCategoryOptions = useMemo(() => {
+    const values = PROJECT_SECONDARY_CATEGORIES[
+      projectType as keyof typeof PROJECT_SECONDARY_CATEGORIES
+    ] as readonly string[] | undefined
+    return (values || []).map(value => ({ label: value, value }))
+  }, [projectType])
   const isDraftHydrating = mode === 'create'
     && open
     && (
@@ -227,7 +237,6 @@ export default function ProjectInfoModal({
     setAggregateWarnings([])
     activeGroupsRef.current = []
     setActiveGroups([])
-    previousTypeRef.current = ''
     lastAppliedSourceRef.current = ''
   }, [form])
 
@@ -251,7 +260,11 @@ export default function ProjectInfoModal({
     // The Form instance survives modal close/reopen. Clear the previous project's
     // unmentioned fields before applying the next project's values.
     form.resetFields()
-    const normalizedProjectType = normalizeMachineProjectType(project.type)
+    const classification = resolveProjectClassification(
+      project.type,
+      typeof project.secondaryCategory === 'string' ? project.secondaryCategory : undefined,
+    )
+    const normalizedProjectType = classification.projectCategory
     const projectFields = getProjectInfoFields(normalizedProjectType)
     const storedInfoValues = buildProjectInfoValues(project, projectFields.map(field => field.key))
     let infoValues = storedInfoValues
@@ -267,6 +280,7 @@ export default function ProjectInfoModal({
       ...infoValues,
       projectName: project.name,
       type: normalizedProjectType,
+      secondaryCategory: classification.secondaryCategory || '',
       responsiblePersons,
       healthStatus: typeof project.healthStatus === 'string' ? project.healthStatus : 'normal',
       status: typeof project.status === 'string' ? project.status : '',
@@ -277,7 +291,6 @@ export default function ProjectInfoModal({
       productLine: typeof project.productLine === 'string' ? project.productLine : '',
     }
     form.setFieldsValue(initialValues)
-    previousTypeRef.current = normalizedProjectType
     const nextActiveGroups = projectFields.length
       ? getProjectInfoModalGroups(normalizedProjectType).map(group => group.key)
       : []
@@ -326,12 +339,17 @@ export default function ProjectInfoModal({
         }
         if (!isCurrentCreateDraftSession(session)) return
       } else if (draft) {
-        const restoredType = normalizeMachineProjectType(
-          typeof draft.values.type === 'string' ? draft.values.type : '',
+        const restoredEntry = candidateProjectsRef.current.find(item => item.bid === restoredBid)
+        const restoredClassification = mapIpmProjectClassification(
+          restoredEntry?.ipmProjectCategoryName,
         )
-        form.setFieldsValue({ ...draft.values, type: restoredType } as ProjectInfoFormState)
+        const restoredType = restoredClassification?.projectCategory || ''
+        form.setFieldsValue({
+          ...draft.values,
+          type: restoredType || undefined,
+          secondaryCategory: restoredClassification?.secondaryCategory,
+        } as ProjectInfoFormState)
         lastAppliedSourceRef.current = `${restoredBid}::${restoredType}`
-        previousTypeRef.current = restoredType
         const modalGroupKeys = new Set<string>(getProjectInfoModalGroups(restoredType).map(group => group.key))
         const restoredActiveGroups = draft.activeGroups.filter(groupKey => modalGroupKeys.has(groupKey))
         activeGroupsRef.current = restoredActiveGroups
@@ -377,8 +395,9 @@ export default function ProjectInfoModal({
   const handleCandidateChange = (bid: string) => {
     const entry = candidateProjects.find(item => item.bid === bid)
     if (!entry) return
-    const inferredType = inferSoftwareProjectTypeFromName(entry.name)
-    const shouldInferTos = inferredType === PROJECT_TYPE_TOS_VERSION
+    const classification = mapIpmProjectClassification(entry.ipmProjectCategoryName)
+    const mappedType = classification?.projectCategory || ''
+    const isMappedTos = mappedType === PROJECT_TYPE_TOS_VERSION
     const previousType = String(form.getFieldValue('type') || '')
     const previousFirstLaunchProjectIds = previousType === PROJECT_TYPE_TOS_VERSION
       && Array.isArray(form.getFieldValue('firstLaunchProjects'))
@@ -387,53 +406,26 @@ export default function ProjectInfoModal({
     // Candidate-specific fields must never leak from the previously selected
     // external project. Source-derived values are reapplied immediately below.
     if (previousType) clearTypeFields(previousType)
-    if (shouldInferTos) {
-      form.setFieldValue('type', inferredType)
-      previousTypeRef.current = inferredType
-      setActiveGroups(getProjectInfoModalGroups(inferredType).map(group => group.key))
+    form.setFieldsValue({
+      type: mappedType || undefined,
+      secondaryCategory: classification?.secondaryCategory,
+    })
+    activeGroupsRef.current = mappedType
+      ? getProjectInfoModalGroups(mappedType).map(group => group.key)
+      : []
+    setActiveGroups(activeGroupsRef.current)
+    if (!classification) {
+      message.error('该 IPM 项目分类尚未配置映射，请联系管理员维护')
     }
-    applySourceValues(bid, shouldInferTos ? inferredType : undefined)
-    if (shouldInferTos && previousFirstLaunchProjectIds.length > 0) {
+    applySourceValues(bid, mappedType)
+    if (isMappedTos && previousFirstLaunchProjectIds.length > 0) {
+      form.setFieldValue('firstLaunchProjects', previousFirstLaunchProjectIds)
       const aggregateResult = deriveTosProjectAggregates(previousFirstLaunchProjectIds, existingProjects, entry.name)
       form.setFieldsValue(aggregateResult.values)
       setAggregateWarnings(aggregateResult.missingSources)
     } else {
       setAggregateWarnings([])
     }
-  }
-
-  const commitTypeChange = (nextType: string, previousType: string) => {
-    clearTypeFields(previousType)
-    form.setFieldValue('type', nextType)
-    previousTypeRef.current = nextType
-    setAggregateWarnings([])
-    setActiveGroups(getProjectInfoModalGroups(nextType).map(group => group.key))
-    const bid = String(form.getFieldValue('bid') || '')
-    if (bid) applySourceValues(bid, nextType)
-  }
-
-  const handleTypeChange = (nextType: string) => {
-    const previousType = previousTypeRef.current
-    if (!previousType || previousType === nextType) {
-      previousTypeRef.current = nextType
-      setActiveGroups(getProjectInfoModalGroups(nextType).map(group => group.key))
-      const bid = String(form.getFieldValue('bid') || '')
-      if (bid) applySourceValues(bid, nextType)
-      return
-    }
-    const hasTypeValues = getProjectInfoFields(previousType).some(field => hasValue(form.getFieldValue(field.key)))
-    if (!hasTypeValues) {
-      commitTypeChange(nextType, previousType)
-      return
-    }
-    form.setFieldValue('type', previousType)
-    Modal.confirm({
-      title: '切换项目类型？',
-      content: '切换后将清空当前项目类型下已填写的信息。',
-      okText: '确认切换',
-      cancelText: '继续填写',
-      onOk: () => commitTypeChange(nextType, previousType),
-    })
   }
 
   const handleInfoFieldChange = (fieldKey: string, value: ProjectInfoValues[string]) => {
@@ -446,7 +438,6 @@ export default function ProjectInfoModal({
     setAggregateWarnings(result.missingSources)
   }
 
-  const watchedBid = String(watchedValues.bid || '')
   const firstLaunchSignature = Array.isArray(watchedValues.firstLaunchProjects)
     ? watchedValues.firstLaunchProjects.join('|')
     : ''
@@ -595,6 +586,22 @@ export default function ProjectInfoModal({
 
   const handleSubmit = async () => {
     if (isCreateDraftInteractionBlocked) return
+    const selectedBid = String(form.getFieldValue('bid') || '')
+    const sourceEntry = mode === 'create'
+      ? candidateProjects.find(item => item.bid === selectedBid)
+      : undefined
+    const ipmClassification = sourceEntry
+      ? mapIpmProjectClassification(sourceEntry.ipmProjectCategoryName)
+      : undefined
+    if (mode === 'create' && sourceEntry && !ipmClassification) {
+      const mappingMessage = '该 IPM 项目分类尚未配置映射，请联系管理员维护'
+      form.setFields([
+        { name: 'type', value: undefined, errors: [mappingMessage] },
+        { name: 'secondaryCategory', value: undefined, errors: [mappingMessage] },
+      ])
+      message.error(mappingMessage)
+      return
+    }
     let values: ProjectInfoFormState
     try {
       await form.validateFields()
@@ -608,7 +615,16 @@ export default function ProjectInfoModal({
       return
     }
 
-    const normalizedProjectType = normalizeMachineProjectType(projectType)
+    const normalizedProjectType = mode === 'create'
+      ? ipmClassification?.projectCategory || ''
+      : normalizeMachineProjectType(projectType)
+    const projectSecondaryCategory = mode === 'create'
+      ? ipmClassification?.secondaryCategory || ''
+      : String(values.secondaryCategory || '')
+    if (!normalizedProjectType || !projectSecondaryCategory) {
+      message.error('项目分类和项目二级分类均为必填项')
+      return
+    }
     const infoValues = getProjectInfoModalSubmitValues(normalizedProjectType, values)
     const editableFieldKeys = new Set(editableFields.map(field => field.key))
     const editableErrors = validateProjectInfoValues(
@@ -629,9 +645,6 @@ export default function ProjectInfoModal({
       return
     }
 
-    const sourceEntry = mode === 'create'
-      ? candidateProjects.find(item => item.bid === values.bid)
-      : undefined
     const projectName = mode === 'edit' ? project?.name || '' : sourceEntry?.name || ''
     if (!projectName) {
       message.error('未找到项目名称')
@@ -651,6 +664,7 @@ export default function ProjectInfoModal({
         bid: values.bid,
         projectName,
         projectType: normalizedProjectType,
+        projectSecondaryCategory,
         responsiblePersons: Array.isArray(values.responsiblePersons) ? values.responsiblePersons : [],
         healthStatus: String(values.healthStatus || 'normal'),
         infoValues,
@@ -705,7 +719,7 @@ export default function ProjectInfoModal({
       cancelText="取消"
       confirmLoading={submitting || isDraftHydrating}
       cancelButtonProps={{ disabled: isDraftInteractionLocked }}
-      okButtonProps={{ disabled: isCreateDraftInteractionBlocked }}
+      okButtonProps={{ disabled: isCreateDraftInteractionBlocked || isIpmClassificationMissing }}
       destroyOnHidden
       className="pms-modal pms-project-info-modal"
       styles={{ body: { maxHeight: '72vh', overflowY: 'auto', paddingRight: 24 } }}
@@ -727,7 +741,6 @@ export default function ProjectInfoModal({
         disabled={isCreateDraftInteractionBlocked}
         onValuesChange={(changedValues) => {
           if (typeof changedValues.bid === 'string') handleCandidateChange(changedValues.bid)
-          if (typeof changedValues.type === 'string') handleTypeChange(changedValues.type)
           if (changedValues.firstLaunchProjects !== undefined) {
             handleInfoFieldChange('firstLaunchProjects', changedValues.firstLaunchProjects)
           }
@@ -746,8 +759,11 @@ export default function ProjectInfoModal({
           ) : (
             <Form.Item label="项目名" name="projectName"><Input disabled /></Form.Item>
           )}
-          <Form.Item label="项目类型" name="type" rules={[{ required: true, message: '请选择项目类型' }]}>
-            <Select disabled={mode === 'edit'} options={PROJECT_TYPES.map(type => ({ label: type, value: type }))} />
+          <Form.Item label="项目分类" name="type" rules={[{ required: true, message: '请选择项目分类' }]}>
+            <Select disabled options={PROJECT_TYPES.map(type => ({ label: type, value: type }))} />
+          </Form.Item>
+          <Form.Item label="项目二级分类" name="secondaryCategory" rules={[{ required: true, message: '请选择项目二级分类' }]}>
+            <Select disabled options={secondaryCategoryOptions} />
           </Form.Item>
           <Form.Item label="项目责任人" name="responsiblePersons" extra="负责项目可见范围，并作为权限中心的系统管理员" rules={[{ required: true, type: 'array', min: 1, message: '请选择项目责任人' }]}>
             <Select mode="multiple" showSearch optionFilterProp="label" options={ALL_USERS.map(user => ({ label: user, value: user }))} />

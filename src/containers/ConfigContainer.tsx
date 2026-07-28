@@ -104,7 +104,7 @@ export default function ConfigContainer() {
     }
   }
 
-  // 配置中心使用模板数据（按项目类型隔离，无日期/工期）
+  // 配置中心使用模板数据（按项目分类隔离，无日期/工期）
   const selectedTemplateType = getProjectTypeFamilyKey(selectedProjectType)
   const configTasks = getTemplateTasksForProjectType(configTemplateTasksByType, selectedTemplateType)
     || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
@@ -613,7 +613,7 @@ export default function ConfigContainer() {
                 header: { background: '#f8fafc', borderBottom: '1px solid #f3f4f6', padding: '8px 12px', minHeight: 40 },
                 body: { padding: sidebarCollapsed ? '8px 4px' : '8px' },
               }}
-              title={!sidebarCollapsed && <span style={{ fontSize: 13, fontWeight: 600, color: '#4b5563' }}>项目类型</span>}
+              title={!sidebarCollapsed && <span style={{ fontSize: 13, fontWeight: 600, color: '#4b5563' }}>项目分类</span>}
               extra={<Button type="text" size="small" icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} />}
             >
               {!sidebarCollapsed && <Menu mode="inline" selectedKeys={[selectedTemplateType]} style={{ border: 'none', fontSize: 13 }} items={PROJECT_TEMPLATE_TYPES.map(t => ({ key: t, label: <span style={{ fontWeight: selectedTemplateType === t ? 500 : 400 }}>{t}</span>, onClick: () => navigateWithEditGuard(() => setSelectedProjectType(t)) }))} />}

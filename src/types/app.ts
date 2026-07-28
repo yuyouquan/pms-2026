@@ -30,6 +30,7 @@ export interface ProjectItem {
   id: string;
   name: string;
   type: ProjectCategory;
+  secondaryCategory?: string;
   status: string;
   progress: number;
   leader: string;

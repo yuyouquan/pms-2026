@@ -22,6 +22,7 @@ import {
 } from '@/lib/roadmapFilters'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
 import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
+import { normalizeMachineSecondaryCategory } from '@/constants/projectTypes'
 import {
   buildRoadmapDisplayName,
   formatTosVersionFull,
@@ -512,10 +513,14 @@ function migratePlannedProjects(value: unknown, versions: readonly TosVersionCon
     const productType = normalizeLegacyRoadmapProductType(entry.productType)
     const tosReference = entry.firstSaleTosVersionId ?? entry.tosVersion
     const tosVersionId = resolveMigratedTosId(tosReference, versions)
-    if (!productType || !tosVersionId) continue
+    const machineProjectType = normalizeMachineSecondaryCategory(
+      typeof entry.machineProjectType === 'string' ? entry.machineProjectType : null,
+    )
+    if (!productType || !tosVersionId || !machineProjectType) continue
 
     const migratedInput = {
       ...entry,
+      machineProjectType,
       productType,
       firstSaleTosVersionId: tosVersionId,
       remark: typeof entry.remark === 'string' ? entry.remark : '',

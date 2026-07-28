@@ -18,6 +18,7 @@ import {
   PROJECT_TYPE_COLORS,
   isMachineProjectType,
   matchesProjectTypeColumn,
+  resolveProjectClassification,
   type PersistedProjectTypeName,
 } from '@/constants/projectTypes'
 
@@ -30,6 +31,7 @@ export type ProjectType = {
   id: string
   name: string
   type: PersistedProjectTypeName
+  secondaryCategory?: string
   status: string
   progress: number
   leader: string
@@ -94,10 +96,14 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   const [hovered, setHovered] = useState(false)
   const statusConf = PROJECT_STATUS_CONFIG[project.status] || { color: '#8c8c8c', tagColor: 'default' }
   const isWholeMachine = isMachineProjectType(project.type)
-  const isCapability = project.type === '能力建设项目'
+  const classification = resolveProjectClassification(project.type, project.secondaryCategory)
+  const isCapability = classification.projectCategory === '能力建设项目'
+  const classificationLabel = classification.secondaryCategory
+    ? `${classification.projectCategory} · ${classification.secondaryCategory}`
+    : classification.projectCategory
 
-  // Project type color mapping
-  const typeColor = PROJECT_TYPE_COLORS[project.type] || { bg: 'rgba(140,140,140,0.08)', color: '#8c8c8c' }
+  // Project classification color mapping
+  const typeColor = PROJECT_TYPE_COLORS[classification.projectCategory] || { bg: 'rgba(140,140,140,0.08)', color: '#8c8c8c' }
 
   // Status tag gradient styles
   const statusTagStyle: Record<string, React.CSSProperties> = {
@@ -139,7 +145,13 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
           {isWholeMachine && project.marketName && (
             <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>市场名: {project.marketName}</div>
           )}
-          <Tag color="default" style={{ fontSize: 11, borderRadius: 3, margin: 0, background: typeColor.bg, color: typeColor.color, border: 'none' }}>{project.type}</Tag>
+          <Tag
+            color="default"
+            title={classificationLabel}
+            style={{ fontSize: 11, borderRadius: 3, margin: 0, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: typeColor.bg, color: typeColor.color, border: 'none' }}
+          >
+            {classificationLabel}
+          </Tag>
         </div>
         <Tag
           color={statusConf.tagColor}
@@ -388,7 +400,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             <span style={{ color: '#4b5563' }}>分组维度:</span>
             <Select value={kanbanDimension} onChange={setKanbanDimension} style={{ width: 120 }}>
               <Option value="stage">阶段</Option>
-              <Option value="type">项目类型</Option>
+              <Option value="type">项目分类</Option>
               <Option value="status">项目状态</Option>
             </Select>
           </Space>
@@ -401,7 +413,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               <Space direction="vertical" style={{ width: '100%' }}>
                 {visibleProjects.filter(getKanbanFilter(col)).map(project => (
                     <Card key={project.id} size="small" hoverable onClick={() => { setSelectedProject(project); setProjectSpaceModule('basic'); setActiveModule('projectSpace') }}>
-                    <Space direction="vertical" style={{ width: '100%' }}><div style={{ fontWeight: 500 }}>{project.name}</div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Tag style={{ fontSize: 11, borderRadius: 3, margin: 0, background: PROJECT_TYPE_COLORS[project.type]?.bg || 'rgba(140,140,140,0.08)', color: PROJECT_TYPE_COLORS[project.type]?.color || '#8c8c8c', border: 'none' }}>{project.type}</Tag><Progress percent={project.progress} size="small" style={{ width: 60 }} /></div></Space>
+                    <Space direction="vertical" style={{ width: '100%' }}><div style={{ fontWeight: 500 }}>{project.name}</div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}><Tag style={{ fontSize: 11, borderRadius: 3, margin: 0, maxWidth: 'calc(100% - 68px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: PROJECT_TYPE_COLORS[resolveProjectClassification(project.type, project.secondaryCategory).projectCategory]?.bg || 'rgba(140,140,140,0.08)', color: PROJECT_TYPE_COLORS[resolveProjectClassification(project.type, project.secondaryCategory).projectCategory]?.color || '#8c8c8c', border: 'none' }}>{resolveProjectClassification(project.type, project.secondaryCategory).projectCategory}{resolveProjectClassification(project.type, project.secondaryCategory).secondaryCategory ? ` · ${resolveProjectClassification(project.type, project.secondaryCategory).secondaryCategory}` : ''}</Tag><Progress percent={project.progress} size="small" style={{ width: 60, flexShrink: 0 }} /></div></Space>
                   </Card>
                 ))}
               </Space>

@@ -22,14 +22,15 @@ import { PROJECT_TYPES, PROJECT_STATUS_CONFIG } from '@/data/projects'
 import { initialTodos } from '@/components/shared/PlanHelpers'
 import { kanbanColumns } from '@/stores/project'
 import {
-  PROJECT_TYPE_CAPABILITY,
+  PROJECT_CATEGORIES,
+  PROJECT_SECONDARY_CATEGORIES,
   PROJECT_TYPE_COLORS,
-  PROJECT_TYPE_INDEPENDENT_SOFTWARE,
-  PROJECT_TYPE_TECH,
   PROJECT_TYPE_TOS_VERSION,
-  MACHINE_PROJECT_FILTER_OPTIONS,
+  getProjectStatusOptions,
   isMachineProjectType,
+  matchesProjectSecondaryCategoryFilter,
   matchesProjectTypeFilter,
+  resolveProjectClassification,
 } from '@/constants/projectTypes'
 import { buildTosTypeRows, getMainTosType } from '@/lib/tosTypeRules'
 
@@ -67,6 +68,7 @@ export default function WorkspaceContainer() {
     projectSearchText2, setProjectSearchText2,
     projectStatusFilter, setProjectStatusFilter,
     projectTypeFilter, setProjectTypeFilter,
+    projectSecondaryCategoryFilter, setProjectSecondaryCategoryFilter,
     projectListView, setProjectListView,
     projectCardPage, setProjectCardPage,
     kanbanDimension, setKanbanDimension,
@@ -116,20 +118,46 @@ export default function WorkspaceContainer() {
     })
   }, [projects, isAdminUser, currentLoginUser, projectMemberMap])
 
-  const workspaceFilteredProjects = useMemo(() => {
+  const categoryAndSecondaryFilteredProjects = useMemo(() => {
     let result = visibleProjects
     if (projectSearchText2) {
       const keyword = projectSearchText2.toLowerCase()
       result = result.filter(p => p.name.toLowerCase().includes(keyword) || (p.marketName && p.marketName.toLowerCase().includes(keyword)))
     }
-    if (projectStatusFilter !== 'all') {
-      result = result.filter(p => p.status === projectStatusFilter)
-    }
-    if (projectTypeFilter !== 'all') {
-      result = result.filter(p => matchesProjectTypeFilter(p.type, projectTypeFilter))
-    }
+    result = result.filter(p => matchesProjectTypeFilter(p.type, projectTypeFilter, p.secondaryCategory))
+    result = result.filter(p => matchesProjectSecondaryCategoryFilter(
+      p.type,
+      p.secondaryCategory,
+      projectSecondaryCategoryFilter,
+    ))
     return result
-  }, [visibleProjects, projectSearchText2, projectStatusFilter, projectTypeFilter])
+  }, [visibleProjects, projectSearchText2, projectTypeFilter, projectSecondaryCategoryFilter])
+
+  const workspaceFilteredProjects = useMemo(() => (
+    projectStatusFilter === 'all'
+      ? categoryAndSecondaryFilteredProjects
+      : categoryAndSecondaryFilteredProjects.filter(p => p.status === projectStatusFilter)
+  ), [categoryAndSecondaryFilteredProjects, projectStatusFilter])
+
+  const secondaryCategoryOptions = useMemo(() => {
+    if (projectTypeFilter === 'all') return []
+    const categoryOptions = PROJECT_SECONDARY_CATEGORIES[projectTypeFilter as keyof typeof PROJECT_SECONDARY_CATEGORIES] as readonly string[] | undefined
+    return categoryOptions ? [{ label: '全部', value: 'all' }, ...categoryOptions.map(value => ({ label: value, value }))] : []
+  }, [projectTypeFilter])
+
+  const statusOptions = useMemo(() => (
+    projectTypeFilter === 'all'
+      ? [{ label: '全部', value: 'all' }]
+      : getProjectStatusOptions(projectTypeFilter)
+  ), [projectTypeFilter])
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: categoryAndSecondaryFilteredProjects.length }
+    categoryAndSecondaryFilteredProjects.forEach(project => {
+      counts[project.status] = (counts[project.status] || 0) + 1
+    })
+    return counts
+  }, [categoryAndSecondaryFilteredProjects])
 
   const renderProjectCard = (project: typeof projects[number]) => (
     <ProjectCard
@@ -204,40 +232,6 @@ export default function WorkspaceContainer() {
               )
             })}
           </div>
-          {workspaceTab === 'projects' && (
-            <>
-              <div style={{ width: 1, height: 20, background: 'rgba(99,102,241,0.12)', margin: '0 14px' }} />
-              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 6, rowGap: 4 }}>
-                {[
-                  { label: '全部', value: visibleProjects.length, filterValue: 'all', color: '#6366f1' },
-                  { label: '待立项', value: visibleProjects.filter(p => p.status === '待立项').length, filterValue: '待立项', color: '#faad14' },
-                  { label: '在研', value: visibleProjects.filter(p => p.status === '在研').length, filterValue: '在研', color: '#6366f1' },
-                  { label: '上市', value: visibleProjects.filter(p => p.status === '上市').length, filterValue: '上市', color: '#722ed1' },
-                  { label: '转维', value: visibleProjects.filter(p => p.status === '转维').length, filterValue: '转维', color: '#13c2c2' },
-                ].map((stat) => {
-                  const isActive = projectStatusFilter === stat.filterValue
-                  return (
-                    <div
-                      key={stat.filterValue}
-                      onClick={() => { setProjectStatusFilter(stat.filterValue); setProjectCardPage(1); }}
-                      style={{
-                        ...WORKSPACE_FILTER_CHIP_STYLE,
-                        padding: '4px 14px', borderRadius: 20, cursor: 'pointer',
-                        fontSize: 13, fontWeight: 500, transition: 'all 0.2s',
-                        background: isActive ? stat.color : 'transparent',
-                        color: isActive ? '#fff' : '#4b5563',
-                        border: isActive ? `1px solid ${stat.color}` : '1px solid transparent',
-                      }}
-                      onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.background = 'rgba(99,102,241,0.06)' } }}
-                      onMouseLeave={(e) => { if (!isActive) { e.currentTarget.style.background = 'transparent' } }}
-                    >
-                      {stat.label} <span style={{ fontSize: 12, opacity: 0.85, marginLeft: 2 }}>{stat.value}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </>
-          )}
         </div>
         {workspaceTab === 'projects' && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', minWidth: 0, columnGap: 10, rowGap: 8 }}>
@@ -272,50 +266,87 @@ export default function WorkspaceContainer() {
         )}
         </div>
         {workspaceTab === 'projects' && (
-          <div
-            aria-label="项目类型筛选"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: 4,
-              width: '100%',
-              padding: '3px 4px',
-              background: 'rgba(99,102,241,0.04)',
-              borderRadius: 10,
-              border: '1px solid rgba(99,102,241,0.06)',
-            }}
-          >
-            {[
-              { label: '全部', value: 'all' },
-              ...MACHINE_PROJECT_FILTER_OPTIONS,
-              { label: 'tOS版本', value: PROJECT_TYPE_TOS_VERSION },
-              { label: '独立软件', value: PROJECT_TYPE_INDEPENDENT_SOFTWARE },
-              { label: '技术', value: PROJECT_TYPE_TECH },
-              { label: '能力建设', value: PROJECT_TYPE_CAPABILITY },
-            ].map(item => {
-              const isActive = projectTypeFilter === item.value
-              return (
-                <div
-                  key={item.value}
-                  onClick={() => { setProjectTypeFilter(item.value); setProjectCardPage(1); }}
-                  style={{
-                    ...WORKSPACE_FILTER_CHIP_STYLE,
-                    padding: '3px 12px',
-                    borderRadius: 16,
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    fontWeight: 500,
-                    transition: 'all 0.2s',
-                    background: isActive ? '#fff' : 'transparent',
-                    color: isActive ? '#6366f1' : '#9ca3af',
-                    boxShadow: isActive ? '0 2px 6px rgba(99,102,241,0.15)' : 'none',
-                  }}
-                >
-                  {item.label}
-                </div>
-              )
-            })}
+          <div style={{ display: 'grid', gap: 4, padding: '5px 8px', background: 'rgba(99,102,241,0.04)', borderRadius: 10, border: '1px solid rgba(99,102,241,0.06)' }}>
+            <div aria-label="项目分类筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+              <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目分类</span>
+              {[{ label: '全部', value: 'all' }, ...PROJECT_CATEGORIES.map(value => ({ label: value, value }))].map(item => {
+                const isActive = projectTypeFilter === item.value
+                return (
+                  <button
+                    type="button"
+                    key={item.value}
+                    onClick={() => {
+                      setProjectTypeFilter(item.value)
+                      setProjectSecondaryCategoryFilter('all')
+                      setProjectStatusFilter('all')
+                      setProjectCardPage(1)
+                    }}
+                    style={{
+                      ...WORKSPACE_FILTER_CHIP_STYLE,
+                      padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
+                      fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
+                      background: isActive ? '#fff' : 'transparent',
+                      color: isActive ? '#6366f1' : '#6b7280',
+                      boxShadow: isActive ? '0 2px 6px rgba(99,102,241,0.15)' : 'none',
+                      border: 0,
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            {projectTypeFilter !== 'all' && (
+              <div aria-label="项目二级分类筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目二级分类</span>
+                {secondaryCategoryOptions.map(item => {
+                  const isActive = projectSecondaryCategoryFilter === item.value
+                  return (
+                    <button
+                      type="button"
+                      key={item.value}
+                      onClick={() => { setProjectSecondaryCategoryFilter(item.value); setProjectCardPage(1) }}
+                      style={{
+                        ...WORKSPACE_FILTER_CHIP_STYLE,
+                        padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
+                        fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
+                        background: isActive ? '#fff' : 'transparent',
+                        color: isActive ? '#6366f1' : '#6b7280',
+                        boxShadow: isActive ? '0 2px 6px rgba(99,102,241,0.15)' : 'none',
+                        border: 0,
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            <div aria-label="项目状态筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+              <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>状态</span>
+              {statusOptions.map(item => {
+                const isActive = projectStatusFilter === item.value
+                return (
+                  <button
+                    type="button"
+                    key={item.value}
+                    onClick={() => { setProjectStatusFilter(item.value); setProjectCardPage(1) }}
+                    style={{
+                      ...WORKSPACE_FILTER_CHIP_STYLE,
+                      padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
+                      fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
+                      background: isActive ? '#6366f1' : 'transparent',
+                      color: isActive ? '#fff' : '#6b7280',
+                      border: 0,
+                    }}
+                  >
+                    {item.label} <span style={{ fontSize: 11, opacity: 0.8 }}>{statusCounts[item.value] || 0}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -363,10 +394,12 @@ export default function WorkspaceContainer() {
                       {isMachineProjectType(r.type) && r.marketName && <div style={{ fontSize: 11, color: '#9ca3af' }}>{name}</div>}
                     </div>
                   )},
-                  { title: '类型', dataIndex: 'type', width: 120, render: (t: string) => {
-                    const tc = PROJECT_TYPE_COLORS[t] || { bg: 'rgba(140,140,140,0.08)', color: '#8c8c8c' }
-                    return <Tag color="default" style={{ fontSize: 11, borderRadius: 3, background: tc.bg, color: tc.color, border: 'none' }}>{t}</Tag>
+                  { title: '项目分类', dataIndex: 'type', width: 130, render: (_: string, r: any) => {
+                    const classification = resolveProjectClassification(r.type, r.secondaryCategory)
+                    const tc = PROJECT_TYPE_COLORS[classification.projectCategory] || { bg: 'rgba(140,140,140,0.08)', color: '#8c8c8c' }
+                    return <Tag color="default" style={{ fontSize: 11, borderRadius: 3, background: tc.bg, color: tc.color, border: 'none' }}>{classification.projectCategory}</Tag>
                   }},
+                  { title: '项目二级分类', dataIndex: 'secondaryCategory', width: 140, render: (_: string, r: any) => resolveProjectClassification(r.type, r.secondaryCategory).secondaryCategory || '-' },
                   { title: '状态', dataIndex: 'status', width: 80, render: (s: string) => {
                     const conf = PROJECT_STATUS_CONFIG[s] || { tagColor: 'default' }
                     return <Tag color={conf.tagColor}>{s}</Tag>
