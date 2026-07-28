@@ -118,12 +118,27 @@ export default function WorkspaceContainer() {
     })
   }, [projects, isAdminUser, currentLoginUser, projectMemberMap])
 
-  const categoryAndSecondaryFilteredProjects = useMemo(() => {
+  const searchFilteredProjects = useMemo(() => {
     let result = visibleProjects
     if (projectSearchText2) {
       const keyword = projectSearchText2.toLowerCase()
       result = result.filter(p => p.name.toLowerCase().includes(keyword) || (p.marketName && p.marketName.toLowerCase().includes(keyword)))
     }
+    return result
+  }, [visibleProjects, projectSearchText2])
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: searchFilteredProjects.length }
+    PROJECT_CATEGORIES.forEach(category => {
+      counts[category] = searchFilteredProjects.filter(project => (
+        matchesProjectTypeFilter(project.type, category, project.secondaryCategory)
+      )).length
+    })
+    return counts
+  }, [searchFilteredProjects])
+
+  const categoryAndSecondaryFilteredProjects = useMemo(() => {
+    let result = searchFilteredProjects
     result = result.filter(p => matchesProjectTypeFilter(p.type, projectTypeFilter, p.secondaryCategory))
     result = result.filter(p => matchesProjectSecondaryCategoryFilter(
       p.type,
@@ -131,7 +146,7 @@ export default function WorkspaceContainer() {
       projectSecondaryCategoryFilter,
     ))
     return result
-  }, [visibleProjects, projectSearchText2, projectTypeFilter, projectSecondaryCategoryFilter])
+  }, [searchFilteredProjects, projectTypeFilter, projectSecondaryCategoryFilter])
 
   const workspaceFilteredProjects = useMemo(() => (
     projectStatusFilter === 'all'
@@ -291,7 +306,7 @@ export default function WorkspaceContainer() {
                       border: 0,
                     }}
                   >
-                    {item.label}
+                    {item.label} <span style={{ fontSize: 11, opacity: 0.8 }}>{categoryCounts[item.value] || 0}</span>
                   </button>
                 )
               })}
@@ -324,29 +339,31 @@ export default function WorkspaceContainer() {
               </div>
             )}
 
-            <div aria-label="项目状态筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
-              <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>状态</span>
-              {statusOptions.map(item => {
-                const isActive = projectStatusFilter === item.value
-                return (
-                  <button
-                    type="button"
-                    key={item.value}
-                    onClick={() => { setProjectStatusFilter(item.value); setProjectCardPage(1) }}
-                    style={{
-                      ...WORKSPACE_FILTER_CHIP_STYLE,
-                      padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
-                      fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
-                      background: isActive ? '#6366f1' : 'transparent',
-                      color: isActive ? '#fff' : '#6b7280',
-                      border: 0,
-                    }}
-                  >
-                    {item.label} <span style={{ fontSize: 11, opacity: 0.8 }}>{statusCounts[item.value] || 0}</span>
-                  </button>
-                )
-              })}
-            </div>
+            {projectTypeFilter !== 'all' && (
+              <div aria-label="项目状态筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>状态</span>
+                {statusOptions.map(item => {
+                  const isActive = projectStatusFilter === item.value
+                  return (
+                    <button
+                      type="button"
+                      key={item.value}
+                      onClick={() => { setProjectStatusFilter(item.value); setProjectCardPage(1) }}
+                      style={{
+                        ...WORKSPACE_FILTER_CHIP_STYLE,
+                        padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
+                        fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
+                        background: isActive ? '#6366f1' : 'transparent',
+                        color: isActive ? '#fff' : '#6b7280',
+                        border: 0,
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
