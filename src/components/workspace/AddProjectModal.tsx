@@ -80,6 +80,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       id: newId,
       name: entry.name,
       type: projectType,
+      secondaryCategory: payload.projectSecondaryCategory,
       status: '待立项',
       progress: 0,
       leader: payload.responsiblePersons[0],

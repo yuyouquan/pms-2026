@@ -1,4 +1,10 @@
-import { isMachineProjectType, normalizeMachineProjectType } from '@/constants/projectTypes'
+import {
+  isMachineProjectType,
+  MACHINE_PROJECT_TYPES,
+  normalizeMachineSecondaryCategory,
+  resolveProjectClassification,
+  type MachineProjectType,
+} from '@/constants/projectTypes'
 import {
   buildRoadmapDisplayName,
   buildRoadmapDuplicateKey,
@@ -139,9 +145,13 @@ export function adaptNormalProject(
   const startRam = normalizeRam(project.startRam, project.memory)
   const versionType = normalizeVersionType(project.versionType)
   const developMode = normalizeNormalDevelopMode(project.developMode)
-  const machineProjectType = normalizeMachineProjectType(project.type)
+  const machineProjectType = firstNonBlank(project.secondaryCategory)
+    ? normalizeMachineSecondaryCategory(project.secondaryCategory)
+    : resolveProjectClassification(project.type).secondaryCategory
   if (
-    !projectCode
+    !machineProjectType
+    || !MACHINE_PROJECT_TYPES.includes(machineProjectType as MachineProjectType)
+    || !projectCode
     || !androidVersion
     || !productType
     || !firstSaleTosVersionId
@@ -161,7 +171,7 @@ export function adaptNormalProject(
     source: 'normal',
     status: project.status,
     readOnly: true,
-    machineProjectType: machineProjectType as RoadmapProjectRow['machineProjectType'],
+    machineProjectType: machineProjectType as MachineProjectType,
     projectCode,
     displayName: buildRoadmapDisplayName(projectCode, androidVersion, productType),
     androidVersion,

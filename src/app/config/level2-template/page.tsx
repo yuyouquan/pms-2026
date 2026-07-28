@@ -4,7 +4,7 @@ import { useState } from 'react'
 import type { ProjectType, PlanTask, PlanVersion, Level2PlanType } from '@/types'
 import { generateTaskNumber } from '@/lib/taskNumber'
 import { compareVersionsForTable, CompareTableRow, FieldDiff } from '@/lib/versionCompare'
-import { PROJECT_TEMPLATE_TYPES, PROJECT_TYPE_MACHINE_PHONE } from '@/constants/projectTypes'
+import { PROJECT_CATEGORY_MACHINE, PROJECT_TEMPLATE_TYPES } from '@/constants/projectTypes'
 
 // 项目类型选项
 const PROJECT_TYPES: readonly ProjectType[] = PROJECT_TEMPLATE_TYPES
@@ -19,7 +19,7 @@ const LEVEL2_PLAN_TYPES: Level2PlanType[] = [
 ]
 
 export default function Level2PlanTemplatePage() {
-  const [projectType, setProjectType] = useState<ProjectType>(PROJECT_TYPE_MACHINE_PHONE)
+  const [projectType, setProjectType] = useState<ProjectType>(PROJECT_CATEGORY_MACHINE)
   const [selectedPlanType, setSelectedPlanType] = useState<Level2PlanType>('1+N MR版本火车计划')
   const [showAddCustom, setShowAddCustom] = useState(false)
   const [customTypeName, setCustomTypeName] = useState('')
@@ -271,7 +271,7 @@ export default function Level2PlanTemplatePage() {
             <div className="card mb-6">
               <div className="p-4 flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <label className="text-sm text-gray-600">项目类型:</label>
+                  <label className="text-sm text-gray-600">项目分类:</label>
                   <select
                     value={projectType}
                     onChange={(e) => navigateWithEditGuard(() => setProjectType(e.target.value as ProjectType))}

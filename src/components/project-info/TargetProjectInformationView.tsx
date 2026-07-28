@@ -5,7 +5,7 @@ import { Button, Card, Tooltip } from 'antd'
 import { EditOutlined, ProjectOutlined, SendOutlined } from '@ant-design/icons'
 import ProjectInfoSections from '@/components/project-info/ProjectInfoSections'
 import type { ProjectInfoGroupKey } from '@/constants/projectInfoSchema'
-import { isMachineProjectType } from '@/constants/projectTypes'
+import { isMachineProjectType, resolveProjectClassification } from '@/constants/projectTypes'
 import { formatProjectInfoValue, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
 
 interface TargetProjectInformationViewProps {
@@ -36,6 +36,13 @@ export default function TargetProjectInformationView({
   visibleGroupKeys,
 }: TargetProjectInformationViewProps) {
   const isWholeMachine = isMachineProjectType(project.type)
+  const classification = resolveProjectClassification(
+    project.type,
+    typeof project.secondaryCategory === 'string' ? project.secondaryCategory : undefined,
+  )
+  const classificationLabel = classification.secondaryCategory
+    ? `${classification.projectCategory} · ${classification.secondaryCategory}`
+    : classification.projectCategory
   const status = String(project.status || '-')
   const health = HEALTH_CONFIG[String(project.healthStatus || 'normal')] || HEALTH_CONFIG.normal
   const showCancelPauseDate = ['暂停', '已暂停', '已取消'].includes(status)
@@ -46,12 +53,13 @@ export default function TargetProjectInformationView({
     { label: '产品线', value: String(project.productLine || '-'), accent: '#0ea5e9' },
     { label: '项目状态', value: status, accent: '#f59e0b' },
     ...(showCancelPauseDate ? [{ label: '取消暂停时间', value: formatProjectInfoValue(getProjectInfoValue(project, 'cancelPauseDate')), accent: '#f97316' }] : []),
-    { label: '项目分类', value: project.type, accent: '#14b8a6' },
+    { label: '项目分类', value: classificationLabel, accent: '#14b8a6' },
     { label: '健康状态', value: health.label, accent: health.color },
     { label: '下一个节点', value: String(project.currentNode || '-'), accent: '#f43f5e' },
   ] : [
     { label: '项目名称', value: project.name, accent: '#4f46e5' },
     { label: '项目状态', value: status, accent: '#f59e0b' },
+    { label: '项目分类', value: classificationLabel, accent: '#14b8a6' },
     { label: '健康状态', value: health.label, accent: health.color },
     { label: '下一个节点', value: String(project.currentNode || '-'), accent: '#f43f5e' },
   ]

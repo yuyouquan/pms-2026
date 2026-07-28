@@ -4,7 +4,7 @@ import { initialProjects } from '@/data/projects'
 import {
   PROJECT_TYPE_TOS_VERSION,
   isMachineProjectType,
-  normalizeMachineProjectType,
+  resolveProjectClassification,
   type PersistedProjectTypeName,
 } from '@/constants/projectTypes'
 import { buildMarketRowsFromMarkets, type MarketConfigRow } from '@/lib/marketRules'
@@ -48,11 +48,16 @@ export const kanbanColumns = [
 
 type Project = Omit<typeof initialProjects[number], 'type'> & {
   type: PersistedProjectTypeName
+  secondaryCategory?: string
   versionTypes?: string[]
   responsiblePersons?: string[]
   [key: string]: any
 }
-type ProjectPatch = Partial<Omit<ProjectItem, 'type'>> & { type?: PersistedProjectTypeName; [key: string]: any }
+type ProjectPatch = Partial<Omit<ProjectItem, 'type' | 'secondaryCategory'>> & {
+  type?: PersistedProjectTypeName
+  secondaryCategory?: string
+  [key: string]: any
+}
 type ProjectUpdate = ProjectPatch | ((project: Project) => Project)
 type PersistedProjectState = { projects: Project[] }
 
@@ -80,6 +85,7 @@ export interface ProjectState {
   projectSearchText2: string
   projectStatusFilter: string
   projectTypeFilter: string
+  projectSecondaryCategoryFilter: string
   projectListView: 'card' | 'list'
   projectCardPage: number
   basicInfoEditMode: boolean
@@ -101,6 +107,7 @@ export interface ProjectActions {
   setProjectSearchText2: (v: string) => void
   setProjectStatusFilter: (v: string) => void
   setProjectTypeFilter: (v: string) => void
+  setProjectSecondaryCategoryFilter: (v: string) => void
   setProjectListView: (v: 'card' | 'list') => void
   setProjectCardPage: (v: number) => void
   setBasicInfoEditMode: (v: boolean) => void
@@ -137,10 +144,20 @@ export function migrateProjectState(persistedState: unknown, _version: number): 
     const id = typeof value.id === 'string' ? value.id.trim() : ''
     const name = typeof value.name === 'string' ? value.name.trim() : ''
     const rawType = typeof value.type === 'string' ? value.type.trim() : ''
-    const type = normalizeMachineProjectType(rawType) ?? rawType
+    const rawSecondaryCategory = typeof value.secondaryCategory === 'string'
+      ? value.secondaryCategory.trim()
+      : ''
+    const classification = resolveProjectClassification(rawType, rawSecondaryCategory)
+    const type = classification.projectCategory
     if (!id || !name || !type || seenIds.has(id)) return []
     seenIds.add(id)
-    return [{ ...value, id, name, type } as Project]
+    return [{
+      ...value,
+      id,
+      name,
+      type,
+      secondaryCategory: classification.secondaryCategory,
+    } as Project]
   })
 
   if (persistedState.projects.length > 0 && projects.length === 0) {
@@ -240,6 +257,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
     projectSearchText2: '',
     projectStatusFilter: 'all',
     projectTypeFilter: 'all',
+    projectSecondaryCategoryFilter: 'all',
     projectListView: 'card',
     projectCardPage: 1,
     basicInfoEditMode: false,
@@ -259,6 +277,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
     setProjectSearchText2: (v) => set({ projectSearchText2: v }),
     setProjectStatusFilter: (v) => set({ projectStatusFilter: v }),
     setProjectTypeFilter: (v) => set({ projectTypeFilter: v }),
+    setProjectSecondaryCategoryFilter: (v) => set({ projectSecondaryCategoryFilter: v }),
     setProjectListView: (v) => set({ projectListView: v }),
     setProjectCardPage: (v) => set({ projectCardPage: v }),
     setBasicInfoEditMode: (v) => set({ basicInfoEditMode: v }),
@@ -318,13 +337,13 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
   }),
   {
     name: PROJECT_STORAGE_KEY,
-    version: 2,
+    version: 3,
     storage: createJSONStorage(() => safeProjectStorage),
     migrate: migrateProjectState,
     partialize: partializeProjectState,
     merge: (persistedState, currentState) => ({
       ...currentState,
-      ...migrateProjectState(persistedState, 2),
+      ...migrateProjectState(persistedState, 3),
     }),
   },
 ))

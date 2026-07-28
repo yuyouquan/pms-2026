@@ -22,6 +22,7 @@ export type RoadmapFilterOperator =
   | 'after'
 
 export interface RoadmapProjectFields {
+  /** Persisted field name retained for compatibility; represents 项目二级分类. */
   machineProjectType: MachineProjectType
   projectCode: string
   displayName: string

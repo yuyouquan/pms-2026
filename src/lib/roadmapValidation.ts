@@ -1,4 +1,7 @@
-import { isMachineProjectType } from '@/constants/projectTypes'
+import {
+  PROJECT_CATEGORY_MACHINE,
+  PROJECT_SECONDARY_CATEGORIES,
+} from '@/constants/projectTypes'
 import type {
   PlannedRoadmapProjectInput,
   RoadmapAndroidVersion,
@@ -178,8 +181,12 @@ export function validatePlannedProject(
     errors.launchEstimated = '上市时间预估状态无效'
   }
 
-  if (values.machineProjectType && !isMachineProjectType(String(values.machineProjectType))) {
-    errors.machineProjectType = '整机项目类型无效'
+  if (
+    values.machineProjectType
+    && !(PROJECT_SECONDARY_CATEGORIES[PROJECT_CATEGORY_MACHINE] as readonly string[])
+      .includes(String(values.machineProjectType))
+  ) {
+    errors.machineProjectType = '项目二级分类无效'
   }
   if (values.androidVersion && !isAllowedValue(values.androidVersion, ROADMAP_ANDROID_VERSIONS)) {
     errors.androidVersion = '安卓版本无效'
