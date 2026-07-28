@@ -430,11 +430,11 @@ export default function RoadmapEvolutionView({
         }
 
         .pms-roadmap-evolution-separator {
-          min-height: 48px;
-          padding: 10px 12px;
-          border: 1px solid var(--border-purple);
-          background: rgba(255, 255, 255, 0.9);
-          box-shadow: 0 6px 18px rgba(67, 56, 202, 0.08);
+          min-height: 40px;
+          padding: 8px 12px;
+          border-inline: 1px solid var(--border-purple);
+          background: rgba(238, 242, 255, 0.54);
+          box-shadow: inset 0 1px 0 rgba(99, 102, 241, 0.12);
         }
 
         .pms-roadmap-evolution-brand-section + .pms-roadmap-evolution-brand-section {
@@ -516,6 +516,28 @@ export default function RoadmapEvolutionView({
           flex-wrap: nowrap;
         }
 
+        .pms-roadmap-evolution-action-toggle {
+          width: 28px;
+          min-width: 28px;
+          height: 28px;
+          flex: none;
+          color: var(--text-secondary);
+          border-radius: var(--radius-md);
+          transition: color var(--duration-fast) var(--ease-out),
+            background-color var(--duration-fast) var(--ease-out),
+            transform var(--duration-fast) var(--ease-out);
+        }
+
+        .pms-roadmap-evolution-action-toggle:hover,
+        .pms-roadmap-evolution-action-toggle[aria-expanded='true'] {
+          color: var(--primary);
+          background: rgba(79, 70, 229, 0.08);
+        }
+
+        .pms-roadmap-evolution-action-toggle[aria-expanded='true'] {
+          transform: rotate(90deg);
+        }
+
         .pms-roadmap-evolution-card-title {
           display: block;
           min-width: 0;
@@ -574,9 +596,34 @@ export default function RoadmapEvolutionView({
           text-align: start;
         }
 
+        .pms-roadmap-evolution-actions-collapse {
+          display: grid;
+          grid-template-rows: 0fr;
+          opacity: 0;
+          transform: translateY(-4px);
+          visibility: hidden;
+          transition: grid-template-rows 220ms var(--ease-out),
+            opacity 160ms var(--ease-out),
+            transform 220ms var(--ease-out),
+            visibility 0s linear 220ms;
+        }
+
+        .pms-roadmap-evolution-actions-collapse.is-expanded {
+          grid-template-rows: 1fr;
+          opacity: 1;
+          transform: translateY(0);
+          visibility: visible;
+          transition-delay: 0s;
+        }
+
+        .pms-roadmap-evolution-actions-inner {
+          min-height: 0;
+          overflow: hidden;
+        }
+
         .pms-roadmap-evolution-card-actions {
-          margin-top: 6px;
-          padding-top: 6px;
+          margin-top: 8px;
+          padding-top: 7px;
           border-top: 1px solid var(--border-light);
         }
 

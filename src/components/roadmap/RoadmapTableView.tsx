@@ -3,13 +3,14 @@
 import { useMemo } from 'react'
 import {
   BulbOutlined,
+  ClockCircleOutlined,
   DeleteOutlined,
   DownOutlined,
   EditOutlined,
   UpOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
-import { Button, Empty, Flex, Select, Table, Tag, Tooltip, Typography, type TableProps } from 'antd'
+import { Button, Empty, Flex, Select, Table, Tooltip, Typography, type TableProps } from 'antd'
 import { orderVisibleDefinitions } from '@/lib/columnSettings'
 import { getRoadmapSortableColumnDefinitions } from '@/lib/roadmapFilters'
 import { compareRoadmapValues, compareSemanticTos } from '@/lib/roadmapSorting'
@@ -165,7 +166,12 @@ export default function RoadmapTableView({
           return (
             <Flex align="center" gap={6} wrap={false} style={{ whiteSpace: 'nowrap' }}>
               <span>{formattedValue}</span>
-              <Tag color="gold" style={{ marginInlineEnd: 0 }}>预估</Tag>
+              <Tooltip title="预估时间">
+                <ClockCircleOutlined
+                  aria-label="预估时间"
+                  style={{ color: '#d48806', fontSize: 12 }}
+                />
+              </Tooltip>
             </Flex>
           )
         }
@@ -173,7 +179,12 @@ export default function RoadmapTableView({
           return (
             <Flex align="center" gap={6} wrap={false} style={{ whiteSpace: 'nowrap' }}>
               <span>{formattedValue}</span>
-              <Tag color="gold" style={{ marginInlineEnd: 0 }}>预估</Tag>
+              <Tooltip title="预估时间">
+                <ClockCircleOutlined
+                  aria-label="预估时间"
+                  style={{ color: '#d48806', fontSize: 12 }}
+                />
+              </Tooltip>
             </Flex>
           )
         }
@@ -187,9 +198,6 @@ export default function RoadmapTableView({
               <Typography.Text className="roadmap-table-project-name" title={formattedValue} strong>
                 {formattedValue}
               </Typography.Text>
-              {row.source === 'planned' ? (
-                <Tag className="roadmap-table-project-source-tag" color="purple">待规划</Tag>
-              ) : null}
             </Flex>
             {conflictKey ? (
               <Button
@@ -201,7 +209,7 @@ export default function RoadmapTableView({
                 onClick={() => onOpenConflict(conflictKey)}
                 style={{ height: 'auto', minHeight: 28, padding: 0, whiteSpace: 'normal', textAlign: 'start' }}
               >
-                已存在正常项目
+                已存在正式项目
               </Button>
             ) : null}
           </Flex>
@@ -223,7 +231,6 @@ export default function RoadmapTableView({
         const conflictKey = conflictKeyByPlannedIdentity.get(`planned:${row.id}`)
         return (
           <Flex vertical gap={6} align="flex-start">
-            {!displayNameVisible ? <Tag color="purple">待规划</Tag> : null}
             {!displayNameVisible && conflictKey ? (
               <Button
                 className="roadmap-conflict-link"
@@ -234,11 +241,11 @@ export default function RoadmapTableView({
                 onClick={() => onOpenConflict(conflictKey)}
                 style={{ height: 'auto', minHeight: 28, padding: 0, whiteSpace: 'normal', textAlign: 'start' }}
               >
-                已存在正常项目
+                已存在正式项目
               </Button>
             ) : null}
             {canEdit ? (
-              <Flex gap={4} wrap>
+              <Flex className="roadmap-table-row-actions" gap={4} wrap>
                 <Button
                   type="link"
                   size="small"
@@ -364,11 +371,14 @@ export default function RoadmapTableView({
         columns={columns}
         dataSource={versionRows}
         onChange={handleTableChange}
-        rowClassName={row => (
-          row.source === 'planned' && conflictKeyByPlannedIdentity.has(`planned:${row.id}`)
-            ? 'roadmap-conflict-row'
-            : ''
-        )}
+        rowClassName={row => {
+          const classNames = []
+          if (row.source === 'planned') classNames.push('roadmap-planned-row')
+          if (row.source === 'planned' && conflictKeyByPlannedIdentity.has(`planned:${row.id}`)) {
+            classNames.push('roadmap-conflict-row')
+          }
+          return classNames.join(' ')
+        }}
         pagination={{ pageSize: 20, showSizeChanger: true, showTotal: total => `共 ${total} 条` }}
         locale={{
           emptyText: (
@@ -396,10 +406,38 @@ export default function RoadmapTableView({
           text-overflow: ellipsis;
           white-space: nowrap;
         }
-        .roadmap-table-shell .roadmap-table-project-source-tag {
-          flex: none;
-          margin-inline-end: 0;
-          white-space: nowrap;
+        .roadmap-table-shell .roadmap-table .ant-table-thead > tr > th.ant-table-cell-fix-start,
+        .roadmap-table-shell .roadmap-table .ant-table-thead > tr > th.ant-table-cell-fix-end {
+          position: sticky !important;
+          z-index: 4;
+          background: #f7f7fd !important;
+        }
+        .roadmap-table-shell .roadmap-table .ant-table-tbody > tr > td.ant-table-cell-fix-start,
+        .roadmap-table-shell .roadmap-table .ant-table-tbody > tr > td.ant-table-cell-fix-end {
+          position: sticky !important;
+          z-index: 2;
+          background: var(--bg-secondary) !important;
+        }
+        .roadmap-table-shell .roadmap-table .ant-table-tbody > tr:nth-child(even) > td.ant-table-cell-fix-start,
+        .roadmap-table-shell .roadmap-table .ant-table-tbody > tr:nth-child(even) > td.ant-table-cell-fix-end {
+          background: #fbfbff !important;
+        }
+        .roadmap-table-shell .roadmap-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-start,
+        .roadmap-table-shell .roadmap-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-end {
+          background: #f5f4ff !important;
+        }
+        .roadmap-table-shell .roadmap-table-row-actions {
+          opacity: 0;
+          pointer-events: none;
+          transform: translateY(3px);
+          transition: opacity 160ms var(--ease-out),
+            transform 180ms var(--ease-out);
+        }
+        .roadmap-table-shell .pms-table .ant-table-tbody > tr.roadmap-planned-row:hover .roadmap-table-row-actions,
+        .roadmap-table-shell .pms-table .ant-table-tbody > tr.roadmap-planned-row:focus-within .roadmap-table-row-actions {
+          opacity: 1;
+          pointer-events: auto;
+          transform: translateY(0);
         }
         .roadmap-table-shell .pms-table .ant-table-tbody > tr.roadmap-conflict-row > td {
           background: color-mix(in srgb, var(--warning-light) 78%, white) !important;
@@ -417,7 +455,8 @@ export default function RoadmapTableView({
           border-radius: var(--radius-sm);
         }
         @media (prefers-reduced-motion: reduce) {
-          .roadmap-table-shell .pms-table .ant-table-tbody > tr.roadmap-conflict-row > td {
+          .roadmap-table-shell .pms-table .ant-table-tbody > tr.roadmap-conflict-row > td,
+          .roadmap-table-shell .roadmap-table-row-actions {
             transition: none;
           }
         }
