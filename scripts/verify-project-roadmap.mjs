@@ -441,11 +441,17 @@ registerAssertion('workspace uses linked category, secondary category, and statu
     'matchesProjectSecondaryCategoryFilter(',
     'setProjectSecondaryCategoryFilter(\'all\')',
     'setProjectStatusFilter(\'all\')',
+    'const categoryCounts = useMemo(() => {',
+    '{categoryCounts[item.value] || 0}',
     'aria-label="项目分类筛选"',
     'aria-label="项目二级分类筛选"',
     'aria-label="项目状态筛选"',
+    "{projectTypeFilter !== 'all' && (",
   ]) {
     if (!workspaceSource.includes(fragment)) throw new Error(`workspace linked filter source missing: ${fragment}`)
+  }
+  if (workspaceSource.includes('{statusCounts[item.value] || 0}')) {
+    throw new Error('workspace status filters must not display project counts')
   }
   for (const fragment of [
     'projectSecondaryCategoryFilter: string',
