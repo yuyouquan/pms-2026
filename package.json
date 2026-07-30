@@ -9,7 +9,8 @@
     "lint": "next lint",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "verify:column-settings": "node scripts/verify-sortable-column-settings.mjs"
+    "verify:column-settings": "node scripts/verify-sortable-column-settings.mjs",
+    "verify:project-summary": "node scripts/verify-project-summary.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
