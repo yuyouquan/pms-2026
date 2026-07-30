@@ -151,6 +151,7 @@ const assertSelectText = async (ariaLabel, expected) => {
 }
 
 const waitForPanelFirstControlFocus = async ariaLabel => {
+  await wait(600)
   await page.waitForFunction(label => {
     const panel = document.querySelector(
       `.pms-floating-config-panel[aria-label="${label}"]`,
