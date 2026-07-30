@@ -47,10 +47,10 @@ export function FloatingConfigPopover({
         },
       }}
       content={
-        <section aria-label={String(title)} className="pms-floating-config-panel">
-          <div className="pms-floating-config-panel-header">{title}</div>
-          <div className="pms-floating-config-panel-body">{children}</div>
-          <div className="pms-floating-config-panel-footer">{footer}</div>
+        <section className="pms-floating-config-panel" aria-label={String(title)}>
+          <header className="pms-floating-config-header">{title}</header>
+          <div className="pms-floating-config-body">{children}</div>
+          <footer className="pms-floating-config-footer">{footer}</footer>
         </section>
       }
     >

@@ -122,25 +122,23 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   max-height: min(680px, calc(100vh - 40px));
-  background: white;
+  background: #fff;
 }
 
-.pms-floating-config-panel-header,
-.pms-floating-config-panel-footer {
+.pms-floating-config-header {
   padding: 12px 16px;
   background: rgba(255, 255, 255, .98);
-}
-
-.pms-floating-config-panel-header {
-  border-bottom: 1px solid rgba(99, 102, 241, .16);
+  border-bottom: 1px solid #eef2f7;
   font-weight: 600;
 }
 
-.pms-floating-config-panel-footer {
-  border-top: 1px solid rgba(99, 102, 241, .16);
+.pms-floating-config-footer {
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, .98);
+  border-top: 1px solid #eef2f7;
 }
 
-.pms-floating-config-panel-body {
+.pms-floating-config-body {
   min-height: 0;
   overflow: auto;
   padding: 12px 16px;
