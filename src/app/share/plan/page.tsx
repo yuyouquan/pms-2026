@@ -176,26 +176,26 @@ function SharePlanContent() {
                 onChange={(e) => setSearchText(e.target.value)}
               />
               {viewMode === 'table' && (
-                <Tooltip title="自定义列">
-                  <SortableColumnSettings
-                    open={showColumnModal}
-                    trigger={(
+                <SortableColumnSettings
+                  open={showColumnModal}
+                  trigger={(
+                    <Tooltip title="自定义列">
                       <Button
                         icon={<SettingOutlined />}
                         style={{ borderRadius: 6 }}
                         onClick={() => setShowColumnModal(true)}
                       />
-                    )}
-                    definitions={columnDefinitions}
-                    value={columnSettings}
-                    defaultValue={DEFAULT_PLAN_COLUMN_SETTINGS}
-                    onCancel={() => setShowColumnModal(false)}
-                    onApply={(nextSettings) => {
-                      setColumnSettings(nextSettings)
-                      setShowColumnModal(false)
-                    }}
-                  />
-                </Tooltip>
+                    </Tooltip>
+                  )}
+                  definitions={columnDefinitions}
+                  value={columnSettings}
+                  defaultValue={DEFAULT_PLAN_COLUMN_SETTINGS}
+                  onCancel={() => setShowColumnModal(false)}
+                  onApply={(nextSettings) => {
+                    setColumnSettings(nextSettings)
+                    setShowColumnModal(false)
+                  }}
+                />
               )}
             </Space>
           </Col>

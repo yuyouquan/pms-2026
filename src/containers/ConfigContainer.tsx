@@ -695,17 +695,19 @@ export default function ConfigContainer() {
                 <Col>
                   <Space size={6}>
                     <Input placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
-                    <Tooltip title="自定义列">
-                      <SortableColumnSettings
-                        open={showColumnModal}
-                        trigger={<Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />}
-                        definitions={currentViewColumns}
-                        value={columnSettings}
-                        defaultValue={getDefaultColumnSettings(currentViewColumns)}
-                        onApply={applyColumnSettings}
-                        onCancel={() => setShowColumnModal(false)}
-                      />
-                    </Tooltip>
+                    <SortableColumnSettings
+                      open={showColumnModal}
+                      trigger={(
+                        <Tooltip title="自定义列">
+                          <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
+                        </Tooltip>
+                      )}
+                      definitions={currentViewColumns}
+                      value={columnSettings}
+                      defaultValue={getDefaultColumnSettings(currentViewColumns)}
+                      onApply={applyColumnSettings}
+                      onCancel={() => setShowColumnModal(false)}
+                    />
                     {getScopeKey() !== null && (
                       <>
                         <Tooltip title="全部展开"><Button icon={<PlusSquareOutlined />} style={{ borderRadius: 6 }} onClick={expandAll} /></Tooltip>

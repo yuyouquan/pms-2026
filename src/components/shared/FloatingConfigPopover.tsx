@@ -10,6 +10,7 @@ type FloatingConfigPopoverProps = {
   children: ReactNode;
   footer: ReactNode;
   width: number;
+  ariaLabel?: string;
   className?: string;
   onCancel: () => void;
   getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement;
@@ -22,6 +23,7 @@ export function FloatingConfigPopover({
   children,
   footer,
   width,
+  ariaLabel,
   className,
   onCancel,
   getPopupContainer,
@@ -47,7 +49,10 @@ export function FloatingConfigPopover({
         },
       }}
       content={
-        <section className="pms-floating-config-panel" aria-label={String(title)}>
+        <section
+          className="pms-floating-config-panel"
+          aria-label={ariaLabel ?? (typeof title === 'string' ? title : '配置面板')}
+        >
           <header className="pms-floating-config-header">{title}</header>
           <div className="pms-floating-config-body">{children}</div>
           <footer className="pms-floating-config-footer">{footer}</footer>

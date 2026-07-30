@@ -27,6 +27,8 @@ const requiredPatterns = [
   /placement="bottomRight"/,
   /onOpenChange/,
   /getPopupContainer/,
+  /\bariaLabel\b/,
+  /aria-label=\{ariaLabel\s*\?\?/,
   /<section\s+className="pms-floating-config-panel"/,
   /<header\s+className="pms-floating-config-header">/,
   /<div\s+className="pms-floating-config-body">/,
@@ -47,6 +49,9 @@ const sortableColumnSettingsSource = readFileSync(sortableColumnSettingsPath, 'u
 if (!/FloatingConfigPopover/.test(sortableColumnSettingsSource)) {
   throw new Error('SortableColumnSettings must use FloatingConfigPopover');
 }
+if (!/ariaLabel="列设置"/.test(sortableColumnSettingsSource)) {
+  throw new Error('SortableColumnSettings must provide an accessible panel label');
+}
 if (/<Drawer\b/.test(sortableColumnSettingsSource)) {
   throw new Error('SortableColumnSettings must not render Drawer');
 }
@@ -58,6 +63,9 @@ for (const callerPath of sortableColumnSettingsCallers) {
   }
   if (!/\btrigger=/.test(callerSource)) {
     throw new Error(`${callerPath} must pass the column-settings trigger`);
+  }
+  if (/<Tooltip\b[^>]*>\s*<SortableColumnSettings\b/s.test(callerSource)) {
+    throw new Error(`${callerPath} must not wrap SortableColumnSettings directly in Tooltip`);
   }
 }
 

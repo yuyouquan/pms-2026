@@ -263,8 +263,8 @@ export default function RoadmapToolbar({
               </Button>
             </Badge>
           </Tooltip>
-          <Tooltip title="列设置">
-            {renderColumnSettings(
+          {renderColumnSettings(
+            <Tooltip title="列设置">
               <Button
                 className="roadmap-toolbar-icon-action"
                 aria-label="列设置"
@@ -274,9 +274,9 @@ export default function RoadmapToolbar({
                 style={compactControlStyle}
               >
                 列设置
-              </Button>,
-            )}
-          </Tooltip>
+              </Button>
+            </Tooltip>,
+          )}
           <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
             <Button
               className="roadmap-toolbar-icon-action"

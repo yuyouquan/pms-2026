@@ -3596,24 +3596,24 @@ export default function ProjectSpaceContainer() {
                     </Dropdown>
                   )}
                   {projectPlanViewMode !== 'horizontal' && (
-                    <Tooltip title="列设置">
-                      <SortableColumnSettings
-                        open={showColumnModal}
-                        trigger={(
+                    <SortableColumnSettings
+                      open={showColumnModal}
+                      trigger={(
+                        <Tooltip title="列设置">
                           <Button
                             icon={projectPlanLevel === 'level1' ? <SettingOutlined /> : <AppstoreOutlined />}
                             style={{ borderRadius: 6 }}
                             onClick={() => setShowColumnModal(true)}
                             aria-label="列设置"
                           />
-                        )}
-                        definitions={currentViewColumns}
-                        value={columnSettings}
-                        defaultValue={getDefaultColumnSettings(currentViewColumns)}
-                        onApply={applyColumnSettings}
-                        onCancel={() => setShowColumnModal(false)}
-                      />
-                    </Tooltip>
+                        </Tooltip>
+                      )}
+                      definitions={currentViewColumns}
+                      value={columnSettings}
+                      defaultValue={getDefaultColumnSettings(currentViewColumns)}
+                      onApply={applyColumnSettings}
+                      onCancel={() => setShowColumnModal(false)}
+                    />
                   )}
                   {getScopeKey() !== null && (
                     <>

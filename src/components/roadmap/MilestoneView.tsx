@@ -2587,10 +2587,10 @@ export default function MilestoneView({
 	                }}
 	              />
 	            </Tooltip>
-	            <Tooltip title="列设置">
-	              <SortableColumnSettings
-	                open={showColumnDrawer}
-	                trigger={(
+	            <SortableColumnSettings
+	              open={showColumnDrawer}
+	              trigger={(
+	                <Tooltip title="列设置">
 	                  <Button
 	                    aria-label="列设置"
 	                    className="pms-summary-icon-button"
@@ -2598,19 +2598,19 @@ export default function MilestoneView({
 	                    icon={<SettingOutlined />}
 	                    onClick={() => setShowColumnDrawer(true)}
 	                  />
-	                )}
-	                definitions={columnDefinitions}
-	                value={columnSettings}
-	                defaultValue={defaultColumnSettings}
-	                onCancel={() => setShowColumnDrawer(false)}
-	                onApply={(nextSettings) => {
-	                  setColumnSettings(nextSettings)
-	                  setActiveSavedViewId(null)
-	                  setSharedRowsOverride(null)
-	                  setShowColumnDrawer(false)
-	                }}
-	              />
-	            </Tooltip>
+	                </Tooltip>
+	              )}
+	              definitions={columnDefinitions}
+	              value={columnSettings}
+	              defaultValue={defaultColumnSettings}
+	              onCancel={() => setShowColumnDrawer(false)}
+	              onApply={(nextSettings) => {
+	                setColumnSettings(nextSettings)
+	                setActiveSavedViewId(null)
+	                setSharedRowsOverride(null)
+	                setShowColumnDrawer(false)
+	              }}
+	            />
 		            <Popover
 		              title="快照"
 		              content={snapshotPopoverContent}

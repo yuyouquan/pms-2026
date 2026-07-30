@@ -1696,21 +1696,23 @@ export function ProjectPlan({
             <Col>
               <Space size={6}>
                 <Input placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
-                <Tooltip title="自定义列">
-                  <SortableColumnSettings
-                    open={showColumnModal}
-                    trigger={<Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />}
-                    definitions={ALL_COLUMNS}
-                    value={columnSettings}
-                    defaultValue={DEFAULT_PLAN_COLUMN_SETTINGS}
-                    onCancel={() => setShowColumnModal(false)}
-                    onApply={(nextSettings) => {
-                      setColumnSettings(nextSettings)
-                      setShowColumnModal(false)
-                      message.success('列配置已保存')
-                    }}
-                  />
-                </Tooltip>
+                <SortableColumnSettings
+                  open={showColumnModal}
+                  trigger={(
+                    <Tooltip title="自定义列">
+                      <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
+                    </Tooltip>
+                  )}
+                  definitions={ALL_COLUMNS}
+                  value={columnSettings}
+                  defaultValue={DEFAULT_PLAN_COLUMN_SETTINGS}
+                  onCancel={() => setShowColumnModal(false)}
+                  onApply={(nextSettings) => {
+                    setColumnSettings(nextSettings)
+                    setShowColumnModal(false)
+                    message.success('列配置已保存')
+                  }}
+                />
                 <Radio.Group
                   value={projectPlanViewMode === 'horizontal' && projectPlanLevel === 'level2' ? 'table' : projectPlanViewMode}
                   onChange={(e) => setProjectPlanViewMode(e.target.value)}

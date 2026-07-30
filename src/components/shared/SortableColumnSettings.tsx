@@ -231,6 +231,7 @@ export function SortableColumnSettings<Key extends string>({
       open={open}
       trigger={trigger}
       width={400}
+      ariaLabel="列设置"
       onCancel={onCancel}
       getPopupContainer={getPopupContainer}
       title={(
