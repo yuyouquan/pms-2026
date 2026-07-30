@@ -2178,7 +2178,11 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
                 className="pms-summary-icon-button"
                 size="small"
                 icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
-                onClick={() => setIsFullscreen(true)}
+                onClick={() => {
+                  setShowFilterDrawer(false)
+                  setShowColumnDrawer(false)
+                  setIsFullscreen(true)
+                }}
               />
             </Tooltip>
           </Space>
@@ -2186,7 +2190,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       </div>
       </div>
 
-      {renderCurrentView()}
+      {!isFullscreen && renderCurrentView()}
 
       <Modal
         title={(
@@ -2196,7 +2200,11 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
           </Space>
         )}
         open={isFullscreen}
-        onCancel={() => setIsFullscreen(false)}
+        onCancel={() => {
+          setShowFilterDrawer(false)
+          setShowColumnDrawer(false)
+          setIsFullscreen(false)
+        }}
         footer={null}
         width="100vw"
         style={{ top: 0, maxWidth: '100vw', paddingBottom: 0 }}

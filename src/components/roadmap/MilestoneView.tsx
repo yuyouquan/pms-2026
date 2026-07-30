@@ -2722,7 +2722,11 @@ export default function MilestoneView({
 	                className="pms-summary-icon-button"
 	                size="small"
 	                icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
-	                onClick={() => setIsFullscreen(true)}
+	                onClick={() => {
+	                  setShowFilterDrawer(false)
+	                  setShowColumnDrawer(false)
+	                  setIsFullscreen(true)
+	                }}
 	              />
 	            </Tooltip>
 	          </Space>
@@ -2760,7 +2764,7 @@ export default function MilestoneView({
 	        </div>
 	      )}
 
-	      {renderCurrentView()}
+	      {!isFullscreen && renderCurrentView()}
 
 	      <Modal
 	        title={(
@@ -2770,7 +2774,11 @@ export default function MilestoneView({
           </Space>
         )}
         open={isFullscreen}
-        onCancel={() => setIsFullscreen(false)}
+        onCancel={() => {
+          setShowFilterDrawer(false)
+          setShowColumnDrawer(false)
+          setIsFullscreen(false)
+        }}
         footer={null}
         width="100vw"
         style={{ top: 0, maxWidth: '100vw', paddingBottom: 0 }}
