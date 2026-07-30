@@ -88,6 +88,7 @@ function loadContracts() {
     'getWorkbenchListState',
     'buildProjectSummaryRow',
     'buildProjectSummaryColumns',
+    'normalizeStoredProjectSummaryFilters',
   ]
 
   for (const name of requiredProjectSummaryExports) {
@@ -125,6 +126,7 @@ const {
   getWorkbenchListState,
   buildProjectSummaryRow,
   buildProjectSummaryColumns,
+  normalizeStoredProjectSummaryFilters,
   MACHINE_PROJECT_INFO_FIELDS,
   TOS_PROJECT_INFO_FIELDS,
   applyFilterConditions,
@@ -259,6 +261,63 @@ registerAssertion('equals-any linked quick filters compose with AND semantics', 
   ])
 
   assert.deepEqual(filtered.map(row => row.id), ['1'])
+})
+
+registerAssertion('stored summary filters reject malformed data and migrate linked fields', () => {
+  const fieldDefinitions = [
+    { key: 'brand', label: '品牌', kind: 'enum', multiple: true },
+    { key: 'status', label: '状态', kind: 'text' },
+  ]
+
+  for (const malformed of [
+    null,
+    [null],
+    [{}],
+    [{ id: 'bad', field: 'brand', operator: 'equals', value: 123 }],
+  ]) {
+    assert.doesNotThrow(() => normalizeStoredProjectSummaryFilters(
+      malformed,
+      fieldDefinitions,
+    ))
+    assert.deepEqual(
+      normalizeStoredProjectSummaryFilters(malformed, fieldDefinitions),
+      [],
+    )
+  }
+
+  assert.deepEqual(
+    normalizeStoredProjectSummaryFilters([
+      { id: 'legacy', field: 'brand', operator: 'equals', value: ' TECNO ' },
+    ], fieldDefinitions),
+    [{ id: 'legacy', field: 'brand', operator: 'equalsAny', value: ['TECNO'] }],
+  )
+  assert.deepEqual(
+    normalizeStoredProjectSummaryFilters([
+      {
+        id: 'empty',
+        field: 'brand',
+        operator: 'isEmpty',
+        value: 'ignored legacy value',
+      },
+    ], fieldDefinitions),
+    [],
+  )
+  assert.deepEqual(
+    normalizeStoredProjectSummaryFilters([
+      {
+        id: 'linked',
+        field: 'brand',
+        operator: 'equalsAny',
+        value: [' TECNO ', 'Infinix', 'TECNO'],
+      },
+    ], fieldDefinitions),
+    [{
+      id: 'linked',
+      field: 'brand',
+      operator: 'equalsAny',
+      value: ['TECNO', 'Infinix'],
+    }],
+  )
 })
 
 registerAssertion('shared summary table composes only the approved reusable controls', () => {

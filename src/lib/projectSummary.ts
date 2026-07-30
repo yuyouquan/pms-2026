@@ -8,7 +8,12 @@ import {
   PROJECT_TYPE_TOS_VERSION,
   resolveProjectClassification,
 } from '@/constants/projectTypes'
-import type { AnyFilterCondition } from '@/lib/filterConditions'
+import {
+  isValuelessFilterOperator,
+  normalizeFilterConditions,
+  type AnyFilterCondition,
+  type FilterFieldDefinition,
+} from '@/lib/filterConditions'
 import {
   formatProjectInfoValue,
   getProjectInfoValue,
@@ -284,6 +289,67 @@ export function getLinkedQuickFilterValues(
     && Array.isArray(candidate.value)
   ))
   return condition && Array.isArray(condition.value) ? [...condition.value] : []
+}
+
+export function normalizeStoredProjectSummaryFilters(
+  value: unknown,
+  fieldDefinitions: readonly FilterFieldDefinition[],
+): AnyFilterCondition[] {
+  if (!Array.isArray(value)) return []
+
+  const definitionsByKey = new Map(
+    fieldDefinitions.map(definition => [definition.key, definition]),
+  )
+  const sanitized: AnyFilterCondition[] = []
+
+  value.forEach(item => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return
+    const candidate = item as Record<string, unknown>
+    if (
+      typeof candidate.id !== 'string'
+      || typeof candidate.field !== 'string'
+      || typeof candidate.operator !== 'string'
+    ) return
+
+    const rawValue = candidate.value
+    if (typeof rawValue !== 'string' && !Array.isArray(rawValue)) return
+    const normalizedRawValue = Array.isArray(rawValue)
+      ? rawValue.filter((entry): entry is string => typeof entry === 'string')
+      : rawValue
+    const definition = definitionsByKey.get(candidate.field)
+
+    if (definition?.multiple) {
+      if (isValuelessFilterOperator(
+        candidate.operator as AnyFilterCondition['operator'],
+      )) return
+      const values = [
+        ...new Set(
+          (Array.isArray(normalizedRawValue)
+            ? normalizedRawValue
+            : [normalizedRawValue])
+            .map(entry => entry.trim())
+            .filter(Boolean),
+        ),
+      ]
+      if (values.length === 0) return
+      sanitized.push({
+        id: candidate.id,
+        field: candidate.field,
+        operator: 'equalsAny',
+        value: values,
+      })
+      return
+    }
+
+    sanitized.push({
+      id: candidate.id,
+      field: candidate.field,
+      operator: candidate.operator as AnyFilterCondition['operator'],
+      value: normalizedRawValue,
+    })
+  })
+
+  return normalizeFilterConditions(sanitized, fieldDefinitions)
 }
 
 export interface ProjectSummaryRow extends Record<string, unknown> {

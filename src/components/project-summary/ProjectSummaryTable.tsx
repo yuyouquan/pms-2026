@@ -51,6 +51,7 @@ import {
   getProjectSummaryFieldDefinitions,
   getProjectSummaryQuickFilterDefinitions,
   getTemplateTaskFieldDefinitions,
+  normalizeStoredProjectSummaryFilters,
   updateLinkedQuickFilterCondition,
   type ProjectSummaryFieldDefinition,
   type ProjectSummaryRow,
@@ -249,27 +250,32 @@ export default function ProjectSummaryTable({
   const [hydratedKey, setHydratedKey] = useState('')
 
   useEffect(() => {
-    let stored: Record<string, unknown> = {}
+    let storedFilters: AnyFilterCondition[] = []
+    let storedColumns: SortableColumnSettingsValue<string> = defaultColumnSettings
     try {
       const raw = window.localStorage.getItem(storageKey)
       const parsed = raw ? JSON.parse(raw) as unknown : {}
-      stored = parsed && typeof parsed === 'object'
+      const stored = parsed && typeof parsed === 'object'
         ? parsed as Record<string, unknown>
         : {}
+      storedFilters = normalizeStoredProjectSummaryFilters(
+        stored.filters,
+        filterFieldDefinitionsRef.current,
+      )
+      storedColumns = normalizeColumnSettings(
+        columnDefinitions,
+        getStoredColumns(stored.columns),
+      )
     } catch {
-      stored = {}
+      storedFilters = []
+      storedColumns = defaultColumnSettings
     }
-    setFilters(normalizeFilterConditions(
-      Array.isArray(stored.filters) ? stored.filters as AnyFilterCondition[] : [],
-      filterFieldDefinitionsRef.current,
-    ))
-    setColumnSettings(normalizeColumnSettings(
-      columnDefinitions,
-      getStoredColumns(stored.columns),
-    ))
+    setFilters(storedFilters)
+    setColumnSettings(storedColumns)
     setHydratedKey(hydrationKey)
   }, [
     columnDefinitions,
+    defaultColumnSettings,
     filterDefinitionSignature,
     hydrationKey,
     storageKey,
@@ -515,11 +521,12 @@ export default function ProjectSummaryTable({
                         danger
                         aria-label="删除筛选条件"
                         icon={<DeleteOutlined />}
-                        onClick={() => setTempFilters(current => (
-                          current.length > 1
-                            ? current.filter(item => item.id !== condition.id)
-                            : [createFilterCondition()]
-                        ))}
+                        onClick={() => setTempFilters(current => {
+                          const remaining = current.filter(
+                            item => item.id !== condition.id,
+                          )
+                          return remaining.length ? remaining : [createFilterCondition()]
+                        })}
                       />
                     </div>
                     {renderFilterValue(condition)}
