@@ -117,15 +117,29 @@ export function getLatestPublishedTemplateTasks<T extends ProjectSummaryTemplate
   publishedSnapshots: Readonly<Record<string, readonly T[]>>,
   currentVersion: string,
   currentTemplateTasks: readonly T[],
+  options: { namespacedOnly?: boolean } = {},
 ): T[] {
-  const latest = versions
+  const publishedVersions = versions
     .filter(version => version.status === '已发布')
-    .sort((left, right) => getVersionNumber(right.versionNo) - getVersionNumber(left.versionNo))[0]
-  if (!latest) return []
+    .sort((left, right) => getVersionNumber(right.versionNo) - getVersionNumber(left.versionNo))
+  const namespacedVersion = publishedVersions.find(version => (
+    Object.prototype.hasOwnProperty.call(
+      publishedSnapshots,
+      getTemplateSnapshotKey(projectType, version.id),
+    )
+  ))
+  if (namespacedVersion) {
+    const snapshot = publishedSnapshots[
+      getTemplateSnapshotKey(projectType, namespacedVersion.id)
+    ]
+    return Array.isArray(snapshot) ? cloneTasks(snapshot) : []
+  }
+  if (options.namespacedOnly) return []
 
-  const snapshot = publishedSnapshots[getTemplateSnapshotKey(projectType, latest.id)]
-    ?? publishedSnapshots[latest.id]
-  if (snapshot) return cloneTasks(snapshot)
+  const latest = publishedVersions[0]
+  if (!latest) return []
+  const snapshot = publishedSnapshots[latest.id]
+  if (Array.isArray(snapshot)) return cloneTasks(snapshot)
   return latest.id === currentVersion ? cloneTasks(currentTemplateTasks) : []
 }
 

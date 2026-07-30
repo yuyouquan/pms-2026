@@ -732,6 +732,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         publishedSnapshots,
         currentVersion,
         currentTemplateTasks,
+        { namespacedOnly: true },
       )
       return [
         ...getProjectSummaryFieldDefinitions(projectType),

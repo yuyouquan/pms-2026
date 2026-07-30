@@ -151,6 +151,7 @@ export default function ProjectSummaryTable({
     publishedSnapshots,
     currentVersion,
     currentTemplateTasks,
+    { namespacedOnly: true },
   ), [
     currentTemplateTasks,
     currentVersion,

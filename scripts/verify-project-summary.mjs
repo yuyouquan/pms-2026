@@ -155,15 +155,38 @@ registerAssertion('latest published template ignores the current draft', () => {
     { id: 'v2', versionNo: 'V2', status: '已发布' },
     { id: 'v4', versionNo: 'V4', status: '修订中' },
     { id: 'v3', versionNo: 'V3', status: '已发布' },
+    { id: 'v99', versionNo: 'V99', status: '已发布' },
   ]
   const snapshots = {
     'template::整机产品项目::level1::v2': [{ id: 'old', taskName: '旧节点' }],
     'template::整机产品项目::level1::v3': [{ id: 'new', taskName: '新节点' }],
+    v99: [{ id: 'polluted-tech', taskName: '技术项目计划' }],
   }
 
   assert.equal(
     getLatestPublishedTemplateTasks('整机产品项目', versions, snapshots, 'v4', [])[0]?.id,
     'new',
+  )
+  assert.equal(
+    getLatestPublishedTemplateTasks(
+      '整机产品项目',
+      versions,
+      { v99: snapshots.v99 },
+      'v99',
+      [{ id: 'polluted-current', taskName: '当前技术项目计划' }],
+      { namespacedOnly: true },
+    ).length,
+    0,
+  )
+  assert.equal(
+    getLatestPublishedTemplateTasks(
+      '整机产品项目',
+      versions,
+      { v99: snapshots.v99 },
+      'v99',
+      [],
+    )[0]?.id,
+    'polluted-tech',
   )
 })
 
@@ -341,6 +364,10 @@ registerAssertion('shared summary table composes only the approved reusable cont
   assert.match(source, /getLinkedQuickFilterValues/)
   assert.match(
     source,
+    /getLatestPublishedTemplateTasks\([\s\S]{0,500}namespacedOnly:\s*true/,
+  )
+  assert.match(
+    source,
     /aria-label=\{`快捷筛选-\$\{definition\.label\}`\}/,
     'quick filters must expose the stable browser label prefix',
   )
@@ -413,6 +440,10 @@ registerAssertion('summary board consumes schema and template definitions throug
 
   assert.match(source, /getProjectSummaryFieldDefinitions/)
   assert.match(source, /getTemplateTaskFieldDefinitions/)
+  assert.match(
+    source,
+    /getLatestPublishedTemplateTasks\([\s\S]{0,500}namespacedOnly:\s*true/,
+  )
   assert.doesNotMatch(source, /MACHINE_MILESTONE_NAMES/)
   assert.doesNotMatch(source, /TOS_VERSION_MILESTONE_NAMES/)
   assert.match(
