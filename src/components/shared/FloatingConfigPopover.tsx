@@ -58,7 +58,14 @@ export function FloatingConfigPopover({
         ).find(element => element.getClientRects().length > 0);
         if (firstControl) {
           firstControl.focus();
-          if (document.activeElement === firstControl) return;
+          if (document.activeElement === firstControl) {
+            // Popup motion may restore focus to the trigger after the first
+            // successful focus. Re-check once after that motion settles.
+            timeout = window.setTimeout(() => {
+              if (!panel?.contains(document.activeElement)) firstControl.focus();
+            }, 240);
+            return;
+          }
         }
         timeout = window.setTimeout(focusFirstControl, 16);
       };
