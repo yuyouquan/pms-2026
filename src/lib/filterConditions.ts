@@ -14,6 +14,10 @@ export const ENUM_FILTER_OPERATORS = [
   { value: 'isNotEmpty', label: '不为空' },
 ] as const
 
+export const MULTI_ENUM_FILTER_OPERATORS = [
+  { value: 'equalsAny', label: '任一为' },
+] as const
+
 export const DATE_FILTER_OPERATORS = [
   { value: 'equals', label: '等于' },
   { value: 'notEquals', label: '不等于' },
@@ -35,6 +39,7 @@ export interface FilterFieldDefinition {
   label: string
   kind: FilterFieldKind
   options?: { label: string; value: string }[]
+  multiple?: boolean
 }
 
 export interface FilterCondition {
@@ -44,6 +49,15 @@ export interface FilterCondition {
   value: string
 }
 
+export interface LinkedFilterCondition {
+  id: string
+  field: string
+  operator: FilterOperator | 'equalsAny'
+  value: string | string[]
+}
+
+export type AnyFilterCondition = FilterCondition | LinkedFilterCondition
+
 export const createFilterCondition = (): FilterCondition => ({
   id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
   field: '',
@@ -51,7 +65,7 @@ export const createFilterCondition = (): FilterCondition => ({
   value: '',
 })
 
-export const isValuelessFilterOperator = (operator: FilterOperator) =>
+export const isValuelessFilterOperator = (operator: FilterOperator | 'equalsAny') =>
   operator === 'isEmpty' || operator === 'isNotEmpty'
 
 export function getFilterOperatorsForKind(kind: FilterFieldKind) {
@@ -60,16 +74,31 @@ export function getFilterOperatorsForKind(kind: FilterFieldKind) {
   return TEXT_FILTER_OPERATORS
 }
 
-function isOperatorAllowedForKind(operator: FilterOperator, kind: FilterFieldKind): boolean {
-  return getFilterOperatorsForKind(kind).some(option => option.value === operator)
+function isOperatorAllowedForDefinition(
+  operator: FilterOperator | 'equalsAny',
+  definition: FilterFieldDefinition,
+): boolean {
+  if (operator === 'equalsAny') return definition.multiple === true
+  return getFilterOperatorsForKind(definition.kind).some(option => option.value === operator)
 }
 
 const isEmptyFilterValue = (value: unknown) => value == null || String(value).trim() === ''
 
-export const isFilterConditionActive = (condition: FilterCondition) =>
-  Boolean(condition.field && (isValuelessFilterOperator(condition.operator) || condition.value.trim()))
+export const normalizeFilterValue = (value: string | string[]) => {
+  if (!Array.isArray(value)) return value.trim()
+  return [...new Set(value.map(item => item.trim()).filter(Boolean))]
+}
 
-export function normalizeFilterConditions<T extends FilterCondition>(
+export const isFilterConditionActive = (condition: AnyFilterCondition) => {
+  const value = normalizeFilterValue(condition.value)
+  return Boolean(
+    condition.field
+    && (isValuelessFilterOperator(condition.operator)
+      || (Array.isArray(value) ? value.length : value)),
+  )
+}
+
+export function normalizeFilterConditions<T extends AnyFilterCondition>(
   conditions: readonly T[],
   fieldDefinitions?: readonly FilterFieldDefinition[],
 ): T[] {
@@ -83,13 +112,20 @@ export function normalizeFilterConditions<T extends FilterCondition>(
     if (!isFilterConditionActive(condition) || selectedFields.has(condition.field)) return
     const definition = definitionsByKey?.get(condition.field)
     if (definitionsByKey && !definition) return
-    if (definition && !isOperatorAllowedForKind(condition.operator, definition.kind)) return
+    if (definition && !isOperatorAllowedForDefinition(condition.operator, definition)) return
 
+    const normalizedValue = normalizeFilterValue(condition.value)
     selectedFields.add(condition.field)
     normalized.push({
       ...condition,
-      value: isValuelessFilterOperator(condition.operator) ? '' : condition.value.trim(),
-    })
+      value: isValuelessFilterOperator(condition.operator)
+        ? ''
+        : condition.operator === 'equalsAny'
+          ? normalizedValue
+          : Array.isArray(normalizedValue)
+            ? normalizedValue[0] ?? ''
+            : normalizedValue,
+    } as T)
   })
 
   return normalized
@@ -97,7 +133,7 @@ export function normalizeFilterConditions<T extends FilterCondition>(
 
 export function applyFilterConditions<T extends object>(
   rows: readonly T[],
-  conditions: readonly FilterCondition[],
+  conditions: readonly AnyFilterCondition[],
   fieldDefinitions?: readonly FilterFieldDefinition[],
 ): T[] {
   const activeConditions = normalizeFilterConditions(conditions, fieldDefinitions)
@@ -116,7 +152,16 @@ export function applyFilterConditions<T extends object>(
     const kind = definitionsByKey?.get(condition.field)?.kind ?? 'text'
     const actualText = String(actualRaw ?? '')
     const actual = (definitionsByKey ? actualText.trim() : actualText).toLowerCase()
-    const expected = condition.value.trim().toLowerCase()
+    if (condition.operator === 'equalsAny') {
+      const expectedValues = (Array.isArray(condition.value) ? condition.value : [condition.value])
+        .map(value => value.trim().toLowerCase())
+        .filter(Boolean)
+      return expectedValues.includes(actual)
+    }
+
+    const expected = (Array.isArray(condition.value) ? condition.value[0] ?? '' : condition.value)
+      .trim()
+      .toLowerCase()
 
     if (condition.operator === 'equals') return actual === expected
     if (condition.operator === 'notEquals') return actual !== expected
@@ -129,7 +174,7 @@ export function applyFilterConditions<T extends object>(
 
 export function getFieldOptionsWithDuplicateDisabled<T extends { value: string; disabled?: boolean }>(
   options: T[],
-  conditions: readonly FilterCondition[],
+  conditions: readonly AnyFilterCondition[],
   currentConditionId: string,
 ): T[] {
   const selectedFields = new Set(
