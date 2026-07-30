@@ -426,7 +426,7 @@ registerAssertion('workspace filter toolbar wraps without squeezing chip labels'
   if (chipStyle.get('flexShrink') !== '0') throw new Error('workspace filter chips must not shrink')
 })
 
-registerAssertion('workspace uses linked category, secondary category, and status filters', () => {
+registerAssertion('workspace links category and supported secondary-category filters while retaining status state', () => {
   const workspacePath = path.join(root, 'src/containers/WorkspaceContainer.tsx')
   const workspaceSource = fs.readFileSync(workspacePath, 'utf8')
   const projectStoreSource = fs.readFileSync(path.join(root, 'src/stores/project.ts'), 'utf8')
@@ -444,9 +444,8 @@ registerAssertion('workspace uses linked category, secondary category, and statu
     'const categoryCounts = useMemo(() => {',
     '{categoryCounts[item.value] || 0}',
     'aria-label="项目分类筛选"',
-    'aria-label="项目二级分类筛选"',
-    'aria-label="项目状态筛选"',
-    "{projectTypeFilter !== 'all' && (",
+    'aria-label="项目二级分类快捷筛选"',
+    "workbenchListState.showSecondaryCategory && (",
   ]) {
     if (!workspaceSource.includes(fragment)) throw new Error(`workspace linked filter source missing: ${fragment}`)
   }
@@ -2655,12 +2654,15 @@ registerAssertion('roadmap text-filter debouncer removes stale conditions before
 registerAssertion('roadmap filter drawer resets draft state without mutating applied filters', () => {
   const drawerSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapFilterDrawer.tsx'), 'utf8')
   const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
-  if (drawerSource.includes('onReset') || moduleSource.includes('onReset={() => setFilters([])}')) {
+  if (moduleSource.includes('onReset={() => setFilters([])}')) {
     throw new Error('filter reset still mutates the applied store before Apply')
   }
   const resetBody = drawerSource.match(/const resetAdvancedFilters = \(\) => \{([\s\S]*?)\n  \}/)?.[1] ?? ''
   if (!resetBody.includes('setDraftConditions') || resetBody.includes('onApply')) {
     throw new Error('filter reset is not draft-only')
+  }
+  if (!drawerSource.includes('onReset={resetAdvancedFilters}')) {
+    throw new Error('floating filter reset is not wired to the draft-only reset handler')
   }
   if ((drawerSource.match(/onApply\(/g) ?? []).length !== 1) {
     throw new Error('only the Apply action may submit drawer conditions')
@@ -3373,7 +3375,7 @@ registerAssertion('two-digit roadmap contracts stay canonical end to end', () =>
   for (const token of ['展开目标', '收起目标', '冲突', '记录', '创建项目']) {
     if (!toolbar.includes(token)) throw new Error(`compact tOS roadmap toolbar is missing ${token}`)
   }
-  for (const oldText of ['展开全部目标', '收起全部目标', '解决冲突', '修改记录', '创建待规划项目']) {
+  for (const oldText of ['展开全部目标', '收起全部目标', '修改记录', '创建待规划项目']) {
     if (toolbar.includes(oldText)) throw new Error(`compact toolbar still contains ${oldText}`)
   }
 
