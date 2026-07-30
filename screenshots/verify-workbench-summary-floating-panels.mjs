@@ -5,24 +5,9 @@ import puppeteer from 'puppeteer'
 const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const STEP_TIMEOUT = 30_000
 let currentStep = 'launch'
+let browser = null
+let page = null
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
-
-const browser = await puppeteer.launch({
-  headless: 'new',
-  defaultViewport: { width: 1440, height: 1000 },
-  args: ['--no-sandbox', '--window-size=1440,1000'],
-})
-
-const page = await browser.newPage()
-page.setDefaultTimeout(STEP_TIMEOUT)
-page.on('pageerror', error => {
-  console.error(`[pageerror:${currentStep}] ${error.message}`)
-})
-page.on('console', message => {
-  if (message.type() === 'error') {
-    console.error(`[console:${currentStep}] ${message.text()}`)
-  }
-})
 
 const waitForVisible = async selector => {
   await page.waitForFunction(
@@ -166,6 +151,22 @@ const assertSelectText = async (ariaLabel, expected) => {
 }
 
 try {
+  browser = await puppeteer.launch({
+    headless: 'new',
+    defaultViewport: { width: 1440, height: 1000 },
+    args: ['--no-sandbox', '--window-size=1440,1000'],
+  })
+  page = await browser.newPage()
+  page.setDefaultTimeout(STEP_TIMEOUT)
+  page.on('pageerror', error => {
+    console.error(`[pageerror:${currentStep}] ${error.message}`)
+  })
+  page.on('console', message => {
+    if (message.type() === 'error') {
+      console.error(`[console:${currentStep}] ${message.text()}`)
+    }
+  })
+
   await step('open workbench', async () => {
     await page.goto(BASE_URL, { waitUntil: 'networkidle0', timeout: 30_000 })
     await assertText('项目列表')
@@ -261,6 +262,7 @@ try {
   console.error(`FAIL workbench summary floating panels\n${error.stack || error}`)
   process.exitCode = 1
 } finally {
-  await page.close()
-  await browser.close()
+  await browser?.close().catch(error => {
+    console.error(`[cleanup] ${error instanceof Error ? error.message : String(error)}`)
+  })
 }
