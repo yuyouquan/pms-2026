@@ -135,9 +135,9 @@ registerAssertion('project-info summary fields preserve each schema order', () =
 
 registerAssertion('latest published template ignores the current draft', () => {
   const versions = [
-    { id: 'v3', versionNo: 'V3', status: '已发布' },
-    { id: 'v4', versionNo: 'V4', status: '修订中' },
     { id: 'v2', versionNo: 'V2', status: '已发布' },
+    { id: 'v4', versionNo: 'V4', status: '修订中' },
+    { id: 'v3', versionNo: 'V3', status: '已发布' },
   ]
   const snapshots = {
     'template::整机产品项目::level1::v2': [{ id: 'old', taskName: '旧节点' }],
@@ -152,14 +152,15 @@ registerAssertion('latest published template ignores the current draft', () => {
 
 registerAssertion('level-one summary includes only direct second-level tasks', () => {
   const tasks = [
-    { id: '1', taskName: '第一阶段' },
-    { id: '1.1', parentId: '1', taskName: '直属二级任务' },
+    { id: '2.1', parentId: '2', order: 1, taskName: '第二阶段直属二级任务' },
+    { id: '2', order: 2, taskName: '第二阶段' },
+    { id: '1.2', parentId: '1', order: 2, taskName: '第一阶段第二个直属二级任务' },
     { id: '1.1.1', parentId: '1.1', taskName: '三级任务' },
-    { id: '2', taskName: '第二阶段' },
-    { id: '2.1', parentId: '2', taskName: '直属二级任务' },
+    { id: '1.1', parentId: '1', order: 1, taskName: '第一阶段第一个直属二级任务' },
+    { id: '1', order: 1, taskName: '第一阶段' },
   ]
 
-  assert.deepEqual(getLevel1SecondLevelTasks(tasks).map(task => task.id), ['1.1', '2.1'])
+  assert.deepEqual(getLevel1SecondLevelTasks(tasks).map(task => task.id), ['1.1', '1.2', '2.1'])
 })
 
 registerAssertion('workbench list state follows the selected category', () => {
