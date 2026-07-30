@@ -401,6 +401,16 @@ export default function ProjectRoadmapModule({
         onCreatePlannedProject={openCreatePlannedProject}
         onOpenFilters={() => setFilterDrawerOpen(true)}
         onOpenColumnSettings={() => setColumnDrawerOpen(true)}
+        renderFilters={trigger => (
+          <RoadmapFilterDrawer
+            open={filterDrawerOpen}
+            trigger={trigger}
+            onClose={() => setFilterDrawerOpen(false)}
+            conditions={filters}
+            fieldDefinitions={filterFieldDefinitions}
+            onApply={setFilters}
+          />
+        )}
         renderColumnSettings={trigger => (
           <RoadmapColumnSettingsDrawer
             open={columnDrawerOpen}
@@ -422,13 +432,6 @@ export default function ProjectRoadmapModule({
         </div>
       )}
 
-      <RoadmapFilterDrawer
-        open={filterDrawerOpen}
-        onClose={() => setFilterDrawerOpen(false)}
-        conditions={filters}
-        fieldDefinitions={filterFieldDefinitions}
-        onApply={setFilters}
-      />
       <PlannedProjectModal
         open={plannedModalOpen}
         onCancel={closePlannedProjectModal}

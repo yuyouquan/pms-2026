@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 const componentPath = resolve('src/components/shared/FloatingConfigPopover.tsx');
 const sortableColumnSettingsPath = resolve('src/components/shared/SortableColumnSettings.tsx');
+const roadmapFilterPath = resolve('src/components/roadmap/RoadmapFilterDrawer.tsx');
 const stylesPath = resolve('src/styles/globals.css');
 const sortableColumnSettingsCallers = [
   'src/app/share/plan/page.tsx',
@@ -54,6 +55,14 @@ if (!/ariaLabel="列设置"/.test(sortableColumnSettingsSource)) {
 }
 if (/<Drawer\b/.test(sortableColumnSettingsSource)) {
   throw new Error('SortableColumnSettings must not render Drawer');
+}
+
+const roadmapFilterSource = readFileSync(roadmapFilterPath, 'utf8');
+if (!/FloatingFilterPanel/.test(roadmapFilterSource)) {
+  throw new Error('RoadmapFilterDrawer must use FloatingFilterPanel');
+}
+if (/\bDrawer\b/.test(roadmapFilterSource)) {
+  throw new Error('RoadmapFilterDrawer must not use Drawer');
 }
 
 for (const callerPath of sortableColumnSettingsCallers) {

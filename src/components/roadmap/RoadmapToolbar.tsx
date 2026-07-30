@@ -44,6 +44,7 @@ interface RoadmapToolbarProps {
   onCreatePlannedProject: () => void
   onOpenFilters: () => void
   onOpenColumnSettings: () => void
+  renderFilters: (trigger: ReactElement) => ReactElement
   renderColumnSettings: (trigger: ReactElement) => ReactElement
 }
 
@@ -69,6 +70,7 @@ export default function RoadmapToolbar({
   onCreatePlannedProject,
   onOpenFilters,
   onOpenColumnSettings,
+  renderFilters,
   renderColumnSettings,
 }: RoadmapToolbarProps) {
   const brandOptions: Array<{
@@ -248,21 +250,23 @@ export default function RoadmapToolbar({
               </Button>
             </>
           ) : null}
-          <Tooltip title={filterCount ? `已配置 ${filterCount} 个筛选条件` : '筛选'}>
-            <Badge count={filterCount} size="small" offset={[-2, 2]}>
-              <Button
-                className="roadmap-toolbar-icon-action"
-                aria-label={filterCount ? `筛选，已配置 ${filterCount} 个条件` : '筛选'}
-                type={filterCount ? 'primary' : 'default'}
-                icon={<FilterOutlined />}
-                disabled={!canView}
-                onClick={onOpenFilters}
-                style={compactControlStyle}
-              >
-                筛选
-              </Button>
-            </Badge>
-          </Tooltip>
+          {renderFilters(
+            <Tooltip title={filterCount ? `已配置 ${filterCount} 个筛选条件` : '筛选'}>
+              <Badge count={filterCount} size="small" offset={[-2, 2]}>
+                <Button
+                  className="roadmap-toolbar-icon-action"
+                  aria-label={filterCount ? `筛选，已配置 ${filterCount} 个条件` : '筛选'}
+                  type={filterCount ? 'primary' : 'default'}
+                  icon={<FilterOutlined />}
+                  disabled={!canView}
+                  onClick={onOpenFilters}
+                  style={compactControlStyle}
+                >
+                  筛选
+                </Button>
+              </Badge>
+            </Tooltip>,
+          )}
           {renderColumnSettings(
             <Tooltip title="列设置">
               <Button
