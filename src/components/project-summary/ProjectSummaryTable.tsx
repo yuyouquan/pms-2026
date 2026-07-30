@@ -419,7 +419,7 @@ export default function ProjectSummaryTable({
               maxTagCount="responsive"
               optionFilterProp="label"
               placeholder={definition.label}
-              aria-label={definition.label}
+              aria-label={`快捷筛选-${definition.label}`}
               style={{ minWidth: 160, maxWidth: 240 }}
               options={definition.options}
               value={getLinkedQuickFilterValues(filters, definition.key)}

@@ -271,6 +271,11 @@ registerAssertion('shared summary table composes only the approved reusable cont
   assert.match(source, /SortableColumnSettings/)
   assert.match(source, /applyFilterConditions/)
   assert.match(source, /getLinkedQuickFilterValues/)
+  assert.match(
+    source,
+    /aria-label=\{`快捷筛选-\$\{definition\.label\}`\}/,
+    'quick filters must expose the stable browser label prefix',
+  )
   assert.doesNotMatch(source, /导出|分享|全屏|savedProjectView|calendar/)
 })
 
