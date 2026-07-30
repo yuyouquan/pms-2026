@@ -2,8 +2,7 @@
 
 import { useState, useMemo, type CSSProperties } from 'react'
 import {
-  Row, Col, Space, Input, Table, Progress, Tag, Badge, Button,
-  Segmented, Pagination,
+  Row, Col, Space, Input, Badge, Button, Empty, Segmented, Pagination,
 } from 'antd'
 import {
   AppstoreOutlined, UnorderedListOutlined, ClockCircleOutlined,
@@ -18,20 +17,20 @@ import { ProjectCard, TodoList, KanbanBoard } from '@/components/workspace/Works
 import type { ProjectType, TodoType } from '@/components/workspace/WorkspaceModule'
 import WorkTracker from '@/components/work-tracker/WorkTracker'
 import AddProjectModal from '@/components/workspace/AddProjectModal'
+import ProjectSummaryTable from '@/components/project-summary/ProjectSummaryTable'
 import { PROJECT_TYPES, PROJECT_STATUS_CONFIG } from '@/data/projects'
 import { initialTodos } from '@/components/shared/PlanHelpers'
 import { kanbanColumns } from '@/stores/project'
 import {
   PROJECT_CATEGORIES,
   PROJECT_SECONDARY_CATEGORIES,
-  PROJECT_TYPE_COLORS,
   PROJECT_TYPE_TOS_VERSION,
   getProjectStatusOptions,
-  isMachineProjectType,
   matchesProjectSecondaryCategoryFilter,
   matchesProjectTypeFilter,
-  resolveProjectClassification,
 } from '@/constants/projectTypes'
+import { getWorkbenchListState } from '@/lib/projectSummary'
+import { getTemplateTasksForProjectType } from '@/lib/projectTemplateCompatibility'
 import { buildTosTypeRows, getMainTosType } from '@/lib/tosTypeRules'
 
 const WORKSPACE_FILTER_TOOLBAR_STYLE: CSSProperties = {
@@ -82,6 +81,7 @@ export default function WorkspaceContainer() {
     setProjectPlanLevel, setProjectPlanViewMode,
     setCurrentVersion, setActiveLevel2Plan,
     createdLevel2Plans,
+    versions, currentVersion, publishedSnapshots, configTemplateTasksByType,
   } = usePlanStore()
 
   const { setIsEditMode } = useUiStore()
@@ -91,6 +91,10 @@ export default function WorkspaceContainer() {
   const projectCardPageSize = 9
   const [todos] = useState(initialTodos)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
+  const workbenchListState = useMemo(
+    () => getWorkbenchListState(projectTypeFilter),
+    [projectTypeFilter],
+  )
 
   const activateProject = (project: typeof projects[number]) => {
     setSelectedProject(project)
@@ -261,12 +265,13 @@ export default function WorkspaceContainer() {
             />
             <div style={{ width: 1, height: 20, background: '#e5e7eb' }} />
             <Segmented
+              aria-label="项目列表视图"
               size="small"
               value={projectListView}
               onChange={(v) => setProjectListView(v as 'card' | 'list')}
               options={[
-                { label: <AppstoreOutlined />, value: 'card' },
-                { label: <UnorderedListOutlined />, value: 'list' },
+                { label: <span aria-label="卡片视图"><AppstoreOutlined /></span>, value: 'card' },
+                { label: <span aria-label="列表视图"><UnorderedListOutlined /></span>, value: 'list' },
               ]}
             />
             {isAdminUser && (
@@ -312,8 +317,8 @@ export default function WorkspaceContainer() {
               })}
             </div>
 
-            {projectTypeFilter !== 'all' && (
-              <div aria-label="项目二级分类筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+            {workbenchListState.kind !== 'select-category' && workbenchListState.showSecondaryCategory && (
+              <div aria-label="项目二级分类快捷筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
                 <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目二级分类</span>
                 {secondaryCategoryOptions.map(item => {
                   const isActive = projectSecondaryCategoryFilter === item.value
@@ -339,8 +344,8 @@ export default function WorkspaceContainer() {
               </div>
             )}
 
-            {projectTypeFilter !== 'all' && (
-              <div aria-label="项目状态筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+            {workbenchListState.kind !== 'select-category' && workbenchListState.showStatusQuickFilter && (
+              <div aria-label="状态快捷筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
                 <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>状态</span>
                 {statusOptions.map(item => {
                   const isActive = projectStatusFilter === item.value
@@ -394,40 +399,33 @@ export default function WorkspaceContainer() {
                 )}
               </>
             ) : (
-              <Table
-                dataSource={workspaceFilteredProjects}
-                rowKey="id"
-                size="small"
-                pagination={{ pageSize: projectCardPageSize, size: 'small', showTotal: (total: number) => `共 ${total} 个项目` }}
-                className="pms-table"
-                onRow={(record) => ({
-                  style: { cursor: 'pointer' },
-                  onClick: () => { activateProject(record); setProjectSpaceModule('basic'); setActiveModule('projectSpace') },
-                })}
-                columns={[
-                  { title: '项目名称', dataIndex: 'name', width: 200, render: (name: string, r: any) => (
-                    <div>
-                      <div style={{ fontWeight: 500 }}>{isMachineProjectType(r.type) && r.marketName ? r.marketName : name}</div>
-                      {isMachineProjectType(r.type) && r.marketName && <div style={{ fontSize: 11, color: '#9ca3af' }}>{name}</div>}
-                    </div>
-                  )},
-                  { title: '项目分类', dataIndex: 'type', width: 130, render: (_: string, r: any) => {
-                    const classification = resolveProjectClassification(r.type, r.secondaryCategory)
-                    const tc = PROJECT_TYPE_COLORS[classification.projectCategory] || { bg: 'rgba(140,140,140,0.08)', color: '#8c8c8c' }
-                    return <Tag color="default" style={{ fontSize: 11, borderRadius: 3, background: tc.bg, color: tc.color, border: 'none' }}>{classification.projectCategory}</Tag>
-                  }},
-                  { title: '项目二级分类', dataIndex: 'secondaryCategory', width: 140, render: (_: string, r: any) => resolveProjectClassification(r.type, r.secondaryCategory).secondaryCategory || '-' },
-                  { title: '状态', dataIndex: 'status', width: 80, render: (s: string) => {
-                    const conf = PROJECT_STATUS_CONFIG[s] || { tagColor: 'default' }
-                    return <Tag color={conf.tagColor}>{s}</Tag>
-                  }},
-                  { title: '进度', dataIndex: 'progress', width: 120, render: (v: number) => <Progress percent={v} size="small" style={{ marginBottom: 0 }} /> },
-                  { title: '计划开始', dataIndex: 'planStartDate', width: 110 },
-                  { title: '计划结束', dataIndex: 'planEndDate', width: 110 },
-                  { title: 'SPM', dataIndex: 'spm', width: 80 },
-                  { title: '更新', dataIndex: 'updatedAt', width: 80, render: (t: string) => <span style={{ color: '#9ca3af', fontSize: 12 }}>{t}</span> },
-                ]}
-              />
+              workbenchListState.kind === 'select-category' ? (
+                <Empty description="请选择项目分类" />
+              ) : workbenchListState.kind === 'unsupported' ? (
+                <Empty description="该项目分类的列表视图暂未配置" />
+              ) : (
+                <ProjectSummaryTable
+                  projects={workspaceFilteredProjects}
+                  projectType={projectTypeFilter}
+                  versions={versions}
+                  currentVersion={currentVersion}
+                  publishedSnapshots={publishedSnapshots}
+                  currentTemplateTasks={
+                    getTemplateTasksForProjectType(
+                      configTemplateTasksByType,
+                      projectTypeFilter,
+                    ) ?? []
+                  }
+                  storageNamespace="workbench-project-list"
+                  onViewProject={(projectId) => {
+                    const project = workspaceFilteredProjects.find(item => item.id === projectId)
+                    if (!project) return
+                    activateProject(project)
+                    setProjectSpaceModule('basic')
+                    setActiveModule('projectSpace')
+                  }}
+                />
+              )
             )}
           </div>
 
