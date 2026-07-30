@@ -78,6 +78,7 @@ function loadContracts() {
   const projectSummary = loadTypeScriptModule(projectSummaryPath)
   const projectInfoSchema = loadTypeScriptModule(path.join(root, 'src/constants/projectInfoSchema.ts'))
   const filterConditions = loadTypeScriptModule(path.join(root, 'src/lib/filterConditions.ts'))
+  const roadmapUtils = loadTypeScriptModule(path.join(root, 'src/components/roadmap/utils.ts'))
   const requiredProjectSummaryExports = [
     'getProjectSummaryFieldDefinitions',
     'getLatestPublishedTemplateTasks',
@@ -102,8 +103,11 @@ function loadContracts() {
   if (typeof filterConditions.applyFilterConditions !== 'function') {
     throw new Error('missing shared helper: src/lib/filterConditions.ts (applyFilterConditions)')
   }
+  if (typeof roadmapUtils.migrateLegacySummaryRows !== 'function') {
+    throw new Error('missing shared helper: src/components/roadmap/utils.ts (migrateLegacySummaryRows)')
+  }
 
-  return { ...projectSummary, ...projectInfoSchema, ...filterConditions }
+  return { ...projectSummary, ...projectInfoSchema, ...filterConditions, ...roadmapUtils }
 }
 
 let contracts
@@ -130,6 +134,7 @@ const {
   MACHINE_PROJECT_INFO_FIELDS,
   TOS_PROJECT_INFO_FIELDS,
   applyFilterConditions,
+  migrateLegacySummaryRows,
 } = contracts
 
 registerAssertion('project-info summary fields preserve each schema order', () => {
@@ -338,6 +343,47 @@ registerAssertion('shared summary table composes only the approved reusable cont
   assert.doesNotMatch(source, /导出|分享|全屏|savedProjectView|calendar/)
 })
 
+registerAssertion('legacy shared milestone rows migrate safely to stable template keys', () => {
+  const definitions = [
+    {
+      key: 'templateTask::整机产品项目::1.1',
+      title: '概念启动',
+      source: 'templateTask',
+    },
+    {
+      key: 'templateTask::整机产品项目::2.1',
+      title: '计划 / 评审',
+      parentTaskName: '计划',
+      source: 'templateTask',
+    },
+    {
+      key: 'templateTask::整机产品项目::3.1',
+      title: '验证 / 评审',
+      parentTaskName: '验证',
+      source: 'templateTask',
+    },
+  ]
+  const legacyRows = [{
+    key: 'machine-1',
+    projectType: '整机产品项目',
+    milestones: [
+      { name: '概念启动', date: '2026/1/1' },
+      { name: '计划 / 评审', date: '2026/2/1' },
+      { name: '无法识别', date: 'not-a-date' },
+    ],
+  }]
+
+  const [migrated] = migrateLegacySummaryRows(legacyRows, definitions)
+  assert.equal(migrated['templateTask::整机产品项目::1.1'], '2026/1/1')
+  assert.equal(migrated['templateTask::整机产品项目::2.1'], '2026/2/1')
+  assert.equal(migrated['templateTask::整机产品项目::3.1'], '-')
+  assert.deepEqual(migrated.milestones, legacyRows[0].milestones)
+  assert.doesNotThrow(() => migrateLegacySummaryRows([
+    { key: 'machine-2', milestonesText: 'legacy free text only' },
+    null,
+  ], definitions))
+})
+
 registerAssertion('summary board consumes schema and template definitions through every data path', () => {
   const boardPath = path.join(root, 'src/components/roadmap/ProjectPlanSummaryBoard.tsx')
   const source = fs.readFileSync(boardPath, 'utf8')
@@ -346,12 +392,30 @@ registerAssertion('summary board consumes schema and template definitions throug
   assert.match(source, /getTemplateTaskFieldDefinitions/)
   assert.doesNotMatch(source, /MACHINE_MILESTONE_NAMES/)
   assert.doesNotMatch(source, /TOS_VERSION_MILESTONE_NAMES/)
-  assert.doesNotMatch(source, /title:\s*['"]里程碑节点['"]/)
+  assert.match(
+    source,
+    /TECHNICAL_MILESTONE_COLUMN[\s\S]{0,180}key:\s*['"]milestones['"][\s\S]{0,100}title:\s*['"]里程碑节点['"]/,
+  )
+  assert.doesNotMatch(source, /TECH_NODE_DEFINITIONS/)
   assert.match(source, /activeProjectSummaryDefinitions/)
   assert.match(source, /filterFieldDefinitions/)
+  assert.match(
+    source,
+    /project\.type === PROJECT_TYPE_TECH[\s\S]{0,900}milestones,\s*[\r\n]+\s*milestonesText:/,
+  )
+  assert.match(
+    source,
+    /getRowNodeMilestones[\s\S]{0,900}getSafeRowMilestones\(row\.milestones\)/,
+  )
+  assert.match(
+    source,
+    /applyMilestoneDateRange[\s\S]{0,1800}row\.projectType === PROJECT_TYPE_TECH[\s\S]{0,350}milestones,\s*[\r\n]+\s*milestonesText:/,
+  )
+  assert.match(source, /migrateLegacySummaryRows/)
   assert.match(source, /buildExportColumns[\s\S]{0,700}definition\.key/)
+  assert.match(source, /definition\.key === ['"]milestones['"][\s\S]{0,100}['"]milestonesText['"]/)
   assert.match(source, /buildCurrentProjectViewState[\s\S]{0,500}columnSettings\.order/)
-  assert.match(source, /calendarEvents[\s\S]{0,1400}nodeDefinitions[\s\S]{0,500}row\[definition\.key\]/)
+  assert.match(source, /calendarEvents[\s\S]{0,1200}getRowNodeMilestones/)
   assert.match(source, /orderVisibleDefinitions\(columnDefinitions,\s*columnSettings\)/)
 })
 

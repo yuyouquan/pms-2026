@@ -206,6 +206,67 @@ export function getProjectSummaryBoardFilterFields(
   })
 }
 
+interface LegacySummaryMilestone {
+  name: string
+  date: string
+}
+
+const normalizeLegacyMilestones = (value: unknown): LegacySummaryMilestone[] => {
+  if (!Array.isArray(value)) return []
+  return value.flatMap(item => {
+    if (!item || typeof item !== 'object') return []
+    const name = typeof (item as { name?: unknown }).name === 'string'
+      ? (item as { name: string }).name.trim()
+      : ''
+    const dateValue = (item as { date?: unknown }).date
+    const date = typeof dateValue === 'string' || typeof dateValue === 'number'
+      ? String(dateValue).trim()
+      : ''
+    return name && date ? [{ name, date }] : []
+  })
+}
+
+/**
+ * 将旧分享快照的聚合节点迁移到当前模板稳定键。
+ * 无法识别的自由文本或节点会被安全忽略，原聚合字段保持不变。
+ */
+export function migrateLegacySummaryRows(
+  rows: readonly unknown[],
+  definitions: readonly ProjectSummaryFieldDefinition[],
+): Record<string, any>[] {
+  const nodeDefinitions = definitions.filter(definition => definition.source === 'templateTask')
+  const duplicateBaseTitles = new Map<string, number>()
+  nodeDefinitions.forEach(definition => {
+    const baseTitle = definition.title.split(' / ').at(-1) || definition.title
+    duplicateBaseTitles.set(baseTitle, (duplicateBaseTitles.get(baseTitle) ?? 0) + 1)
+  })
+
+  return rows.flatMap(rowValue => {
+    if (!rowValue || typeof rowValue !== 'object' || Array.isArray(rowValue)) return []
+    const row = rowValue as Record<string, any>
+    const milestones = normalizeLegacyMilestones(row.milestones)
+    const unusedMilestoneIndexes = new Set(milestones.map((_, index) => index))
+    const migrated = { ...row }
+
+    nodeDefinitions.forEach(definition => {
+      if (Object.prototype.hasOwnProperty.call(row, definition.key)) return
+      const baseTitle = definition.title.split(' / ').at(-1) || definition.title
+      let matchIndex = milestones.findIndex((milestone, index) => (
+        unusedMilestoneIndexes.has(index) && milestone.name === definition.title
+      ))
+      if (matchIndex < 0 && (duplicateBaseTitles.get(baseTitle) ?? 0) === 1) {
+        matchIndex = milestones.findIndex((milestone, index) => (
+          unusedMilestoneIndexes.has(index) && milestone.name === baseTitle
+        ))
+      }
+      migrated[definition.key] = matchIndex >= 0 ? milestones[matchIndex].date : '-'
+      if (matchIndex >= 0) unusedMilestoneIndexes.delete(matchIndex)
+    })
+
+    return [migrated]
+  })
+}
+
 export function getScopedColumnDefinitions(
   columns: readonly RoadmapColumnConfig[],
   fixedLeftKeys: readonly string[],

@@ -47,6 +47,7 @@ import {
   getProjectViewColumnSettings,
   getScopedColumnDefinitions,
   getTemplateTaskFieldDefinitions,
+  migrateLegacySummaryRows,
   loadProjectViews,
   parseProjectViewShare,
   saveProjectView,
@@ -90,8 +91,8 @@ interface SummaryRow {
   status: SummaryStatus
   spm: string
   department: string
-  technicalMilestones?: SummaryMilestone[]
-  technicalMilestonesText?: string
+  milestones?: SummaryMilestone[]
+  milestonesText?: string
   isCollapsedPreview?: boolean
   collapsePreviewType?: 'category' | 'series'
   hiddenProjectCount?: number
@@ -188,22 +189,10 @@ const COMMON_COLUMN_OPTIONS: RoadmapColumnConfig[] = [
 ]
 const TECHNICAL_MILESTONE_COLUMN: RoadmapColumnConfig = {
   key: 'milestones',
-  title: '技术项目节点',
+  title: '里程碑节点',
   width: 720,
   defaultVisible: true,
 }
-const TECH_NODE_DEFINITIONS: ProjectSummaryFieldDefinition[] = TECH_MILESTONE_NAMES.map(
-  (taskName, index) => ({
-    key: `technicalTask::${taskName}`,
-    title: taskName,
-    source: 'templateTask',
-    defaultVisible: true,
-    hideable: true,
-    inputType: 'date',
-    width: 130,
-    taskId: String(index),
-  }),
-)
 
 const toDate = (baseDate: string | undefined, index: number, rowOffset: number) => {
   const base = baseDate && dayjs(baseDate).isValid() ? dayjs(baseDate) : dayjs('2026-01-01')
@@ -390,14 +379,7 @@ const makeSummaryRows = (
 
     if (project.type === PROJECT_TYPE_TECH) {
       const milestones = buildMilestones(project, TECH_MILESTONE_NAMES, rowIndex)
-      const technicalNodeValues = Object.fromEntries(
-        TECH_NODE_DEFINITIONS.map((definition, index) => [
-          definition.key,
-          milestones[index]?.date ?? '-',
-        ]),
-      )
       rows.push({
-        ...technicalNodeValues,
         key: `tech-${project.id}`,
         projectId: project.id,
         projectType: project.type,
@@ -408,8 +390,8 @@ const makeSummaryRows = (
         status,
         spm: project.spm || project.leader || '-',
         department: getDepartmentByFirstSpm(project, '集成维护部'),
-        technicalMilestones: milestones,
-        technicalMilestonesText: milestones
+        milestones,
+        milestonesText: milestones
           .map(item => `${item.date} ${item.name}`)
           .join(' '),
       })
@@ -507,18 +489,36 @@ function getNodeDefinitionsForRow(
   if (row.projectType === PROJECT_TYPE_TOS_VERSION) {
     return definitionSets.tosVersion.filter(definition => definition.source === 'templateTask')
   }
-  return row.projectType === PROJECT_TYPE_TECH ? TECH_NODE_DEFINITIONS : []
+  return []
+}
+
+function getSafeRowMilestones(value: unknown): SummaryMilestone[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap(item => {
+    if (!item || typeof item !== 'object') return []
+    const name = (item as { name?: unknown }).name
+    const date = (item as { date?: unknown }).date
+    return typeof name === 'string' && name.trim()
+      && typeof date === 'string' && date.trim()
+      ? [{ name: name.trim(), date: date.trim() }]
+      : []
+  })
 }
 
 function getRowNodeMilestones(
   row: SummaryRow,
   nodeDefinitions: readonly ProjectSummaryFieldDefinition[],
 ): SummaryMilestone[] {
-  return nodeDefinitions.flatMap(definition => {
+  if (row.projectType === PROJECT_TYPE_TECH) {
+    return getSafeRowMilestones(row.milestones)
+  }
+  const dynamicMilestones = nodeDefinitions.flatMap(definition => {
     const value = row[definition.key]
     if (typeof value !== 'string' || !value || value === '-') return []
     return [{ name: definition.title, date: value }]
   })
+  if (dynamicMilestones.length > 0) return dynamicMilestones
+  return getSafeRowMilestones(row.milestones)
 }
 
 function applyMilestoneDateRange(
@@ -530,13 +530,24 @@ function applyMilestoneDateRange(
   const [start, end] = range
   const startDate = dayjs(start).startOf('day')
   const endDate = dayjs(end).endOf('day')
-  return rows.filter(row => (
-    getRowNodeMilestones(row, getNodeDefinitionsForRow(row, definitionSets))
-      .some(milestone => {
-        const date = parseMilestoneDate(milestone.date)
-        return date.isValid() && !date.isBefore(startDate) && !date.isAfter(endDate)
-      })
-  ))
+  return rows.flatMap(row => {
+    const milestones = getRowNodeMilestones(
+      row,
+      getNodeDefinitionsForRow(row, definitionSets),
+    ).filter(milestone => {
+      const date = parseMilestoneDate(milestone.date)
+      return date.isValid() && !date.isBefore(startDate) && !date.isAfter(endDate)
+    })
+    if (milestones.length === 0) return []
+    if (row.projectType === PROJECT_TYPE_TECH) {
+      return [{
+        ...row,
+        milestones,
+        milestonesText: milestones.map(item => `${item.date} ${item.name}`).join(' '),
+      }]
+    }
+    return [row]
+  })
 }
 
 function normalizeDateRange(value: unknown): MilestoneDateRange {
@@ -604,8 +615,8 @@ function getCalendarDays(month: dayjs.Dayjs) {
 function cloneRowsForShare(rows: SummaryRow[]) {
   return rows.map(row => ({
     ...row,
-    ...(row.technicalMilestones ? {
-      technicalMilestones: row.technicalMilestones.map(milestone => ({ ...milestone })),
+    ...(row.milestones ? {
+      milestones: row.milestones.map(milestone => ({ ...milestone })),
     } : {}),
   }))
 }
@@ -935,7 +946,11 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     const appliedDateRange = getMilestoneDateRangeFromFilters(nextFilters)
     setMilestoneDateRange(appliedDateRange)
     if (appliedDateRange) setCalendarMonth(dayjs(appliedDateRange[0]).startOf('month'))
-    setSharedRowsOverride(Array.isArray(state.sharedRows) ? state.sharedRows as SummaryRow[] : null)
+    const sharedRows = Array.isArray(state.sharedRows) ? state.sharedRows : null
+    const migratedSharedRows = sharedRows && (nextScope === 'machine' || nextScope === 'tosVersion')
+      ? migrateLegacySummaryRows(sharedRows, getSummaryDefinitionsForScope(nextScope))
+      : sharedRows
+    setSharedRowsOverride(migratedSharedRows as SummaryRow[] | null)
   }
 
   const refreshSavedProjectViews = () => {
@@ -1021,7 +1036,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     orderVisibleDefinitions(columnDefinitions, columnSettings)
       .map<ExportColumn>(definition => ({
         key: scope === 'tech' && definition.key === 'milestones'
-          ? 'technicalMilestonesText'
+          ? 'milestonesText'
           : definition.key,
         title: String(definition.title),
       }))
@@ -1443,7 +1458,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     if (scope === 'tech' && isVisible('milestones')) {
       cols.push({
         title: TECHNICAL_MILESTONE_COLUMN.title,
-        dataIndex: 'technicalMilestones',
+        dataIndex: 'milestones',
         key: 'milestones',
         width: TECHNICAL_MILESTONE_COLUMN.width,
         className: 'pms-summary-milestones-cell',
@@ -1496,10 +1511,8 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         row,
         projectSummaryDefinitionsByScope,
       )
-      nodeDefinitions.forEach(definition => {
-        const rawDate = row[definition.key]
-        if (typeof rawDate !== 'string' || !rawDate || rawDate === '-') return
-        const date = parseMilestoneDate(rawDate)
+      getRowNodeMilestones(row, nodeDefinitions).forEach(milestone => {
+        const date = parseMilestoneDate(milestone.date)
         if (!date.isValid()) return
         if (activeMilestoneDateRange) {
           const [start, end] = activeMilestoneDateRange
@@ -1509,7 +1522,6 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
           ) return
         }
         const key = date.format('YYYY-MM-DD')
-        const milestone = { name: definition.title, date: rawDate }
         eventMap.set(key, [...(eventMap.get(key) || []), { row, milestone }])
       })
     })
