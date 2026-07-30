@@ -2725,7 +2725,7 @@ export default function MilestoneView({
 	                onClick={() => {
 	                  setShowFilterDrawer(false)
 	                  setShowColumnDrawer(false)
-	                  setIsFullscreen(true)
+	                  setIsFullscreen(current => !current)
 	                }}
 	              />
 	            </Tooltip>

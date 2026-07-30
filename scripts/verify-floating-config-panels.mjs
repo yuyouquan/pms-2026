@@ -152,8 +152,8 @@ for (const callerPath of summaryFilterCallers) {
   if ((callerSource.match(/\{renderCurrentView\(\)\}/g) ?? []).length !== 1) {
     throw new Error(`${callerPath} fullscreen Modal must keep exactly one current-view render`);
   }
-  if (!/icon=\{isFullscreen\s*\?\s*<FullscreenExitOutlined\s*\/>\s*:\s*<FullscreenOutlined\s*\/>\}[\s\S]{0,240}onClick=\{\(\)\s*=>\s*\{[\s\S]*?setShowFilterDrawer\(false\)[\s\S]*?setShowColumnDrawer\(false\)[\s\S]*?setIsFullscreen\(true\)[\s\S]*?\}\}/.test(callerSource)) {
-    throw new Error(`${callerPath} must close floating panels before entering fullscreen`);
+  if (!/icon=\{isFullscreen\s*\?\s*<FullscreenExitOutlined\s*\/>\s*:\s*<FullscreenOutlined\s*\/>\}[\s\S]{0,240}onClick=\{\(\)\s*=>\s*\{[\s\S]*?setShowFilterDrawer\(false\)[\s\S]*?setShowColumnDrawer\(false\)[\s\S]*?setIsFullscreen\(current\s*=>\s*!current\)[\s\S]*?\}\}/.test(callerSource)) {
+    throw new Error(`${callerPath} fullscreen control must close floating panels and toggle fullscreen`);
   }
   if (!/open=\{isFullscreen\}[\s\S]{0,240}onCancel=\{\(\)\s*=>\s*\{[\s\S]*?setShowFilterDrawer\(false\)[\s\S]*?setShowColumnDrawer\(false\)[\s\S]*?setIsFullscreen\(false\)[\s\S]*?\}\}/.test(callerSource)) {
     throw new Error(`${callerPath} must close floating panels before leaving fullscreen`);

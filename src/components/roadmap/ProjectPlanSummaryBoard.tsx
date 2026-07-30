@@ -2181,7 +2181,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
                 onClick={() => {
                   setShowFilterDrawer(false)
                   setShowColumnDrawer(false)
-                  setIsFullscreen(true)
+                  setIsFullscreen(current => !current)
                 }}
               />
             </Tooltip>
