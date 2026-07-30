@@ -17,6 +17,11 @@ const sortableColumnSettingsCallers = [
   'src/containers/ConfigContainer.tsx',
   'src/containers/ProjectSpaceContainer.tsx',
 ];
+const inlineFilterCallers = [
+  'src/components/roadmap/MilestoneView.tsx',
+  'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+  'src/containers/ProjectSpaceContainer.tsx',
+];
 
 if (!existsSync(componentPath)) {
   throw new Error('missing FloatingConfigPopover');
@@ -62,8 +67,9 @@ const roadmapFilterSource = readFileSync(roadmapFilterPath, 'utf8');
 if (!/FloatingFilterPanel/.test(roadmapFilterSource)) {
   throw new Error('RoadmapFilterDrawer must use FloatingFilterPanel');
 }
-if (/\bDrawer\b/.test(roadmapFilterSource)) {
-  throw new Error('RoadmapFilterDrawer must not use Drawer');
+if (/\bimport\s*\{[^}]*\bDrawer\b[^}]*\}\s*from\s*['"]antd['"]/.test(roadmapFilterSource)
+  || /<Drawer\b/.test(roadmapFilterSource)) {
+  throw new Error('RoadmapFilterDrawer must not import or render Drawer');
 }
 
 const projectRoadmapModuleSource = readFileSync(projectRoadmapModulePath, 'utf8');
@@ -107,6 +113,16 @@ for (const callerPath of sortableColumnSettingsCallers) {
   }
   if (/<Tooltip\b[^>]*>\s*<SortableColumnSettings\b/s.test(callerSource)) {
     throw new Error(`${callerPath} must not wrap SortableColumnSettings directly in Tooltip`);
+  }
+}
+
+for (const callerPath of inlineFilterCallers) {
+  const callerSource = readFileSync(resolve(callerPath), 'utf8');
+  if (!/<FloatingFilterPanel\b/.test(callerSource)) {
+    throw new Error(`${callerPath} must render FloatingFilterPanel`);
+  }
+  if (/<Drawer\b[\s\S]{0,240}title="筛选条件"|title="筛选条件"[\s\S]{0,240}<Drawer\b/.test(callerSource)) {
+    throw new Error(`${callerPath} must not render the filter UI in a Drawer`);
   }
 }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { Button, Checkbox, DatePicker, Drawer, Dropdown, Empty, Input, Modal, Popover, Segmented, Select, Space, Table, Tabs, Tag, Tooltip, message } from 'antd'
+import { Button, Checkbox, DatePicker, Dropdown, Empty, Input, Modal, Popover, Segmented, Select, Space, Table, Tabs, Tag, Tooltip, message } from 'antd'
 import {
   ArrowRightOutlined,
   CameraOutlined,
@@ -25,6 +25,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
+import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
 import {
   inferOsSeriesFromProjectName,
   inferTosVersionFromProjectName,
@@ -266,7 +267,6 @@ const BASE_COLUMN_OPTIONS = [
 ]
 
 const BASE_COLUMN_KEYS = new Set(BASE_COLUMN_OPTIONS.map(col => col.key))
-const ROADMAP_DRAWER_Z_INDEX = 1200
 
 const splitValues = (value: any) => String(value || '').split(/[,\uff0c、/]/).map(item => item.trim()).filter(Boolean)
 const getFirstSpm = (value: any) => splitValues(value)[0] || ''
@@ -2574,19 +2574,78 @@ export default function MilestoneView({
 		                </Tooltip>
 		              </>
 	            )}
-	            <Tooltip title={hasActiveFilters ? '筛选（已启用）' : '筛选'}>
-	              <Button
-	                aria-label="筛选"
-	                className="pms-summary-icon-button"
-	                size="small"
-	                icon={<FilterOutlined />}
-	                type={hasActiveFilters ? 'primary' : 'default'}
-	                onClick={() => {
-	                  setTempFilters(getFilterDrawerInitialConditions())
-	                  setShowFilterDrawer(true)
-	                }}
-	              />
-	            </Tooltip>
+	            <FloatingFilterPanel
+	              open={showFilterDrawer}
+	              trigger={(
+	                <Tooltip title={hasActiveFilters ? '筛选（已启用）' : '筛选'}>
+	                  <Button
+	                    aria-label="筛选"
+	                    className="pms-summary-icon-button"
+	                    size="small"
+	                    icon={<FilterOutlined />}
+	                    type={hasActiveFilters ? 'primary' : 'default'}
+	                    onClick={() => {
+	                      setShowColumnDrawer(false)
+	                      setTempFilters(getFilterDrawerInitialConditions())
+	                      setShowFilterDrawer(true)
+	                    }}
+	                  />
+	                </Tooltip>
+	              )}
+	              onReset={() => {
+	                setTempFilters([createFilterCondition()])
+	                setMilestoneDateRange(null)
+	              }}
+	              onClear={() => {
+	                setTempFilters([createFilterCondition()])
+	                setMilestoneDateRange(null)
+	                setSharedRowsOverride(null)
+	              }}
+	              onCancel={() => setShowFilterDrawer(false)}
+	              onConfirm={applyTempFilters}
+	            >
+	              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+	                {tempFilters.map((condition) => (
+	                  <div key={condition.id} style={{ padding: 12, border: '1px solid #eef2ff', borderRadius: 8, background: '#fafbff' }}>
+	                    <div style={{ display: 'grid', gridTemplateColumns: isMilestoneDateFilter(condition) ? 'minmax(0, 1fr) 40px' : 'minmax(0, 1fr) 116px 40px', gap: 8, marginBottom: isValuelessFilterOperator(condition.operator) && !isMilestoneDateFilter(condition) ? 0 : 8 }}>
+	                      <Select
+	                        aria-label="筛选字段"
+	                        placeholder="筛选字段"
+	                        value={condition.field || undefined}
+	                        options={getFieldOptionsWithDuplicateDisabled(filterFieldOptions, tempFilters, condition.id)}
+	                        onChange={(value) => handleTempFilterFieldChange(condition, value)}
+	                      />
+	                      {!isMilestoneDateFilter(condition) && (
+	                        <Select
+	                          value={condition.operator}
+	                          options={FILTER_OPERATORS as any}
+	                          onChange={(value) => {
+	                            const operator = value as FilterCondition['operator']
+	                            updateTempFilter(condition.id, {
+	                              operator,
+	                              value: isValuelessFilterOperator(operator) ? '' : condition.value,
+	                            })
+	                          }}
+	                        />
+	                      )}
+	                      <Button
+	                        icon={<DeleteOutlined />}
+	                        danger
+	                        onClick={() => setTempFilters(prev => prev.length > 1 ? prev.filter(item => item.id !== condition.id) : [createFilterCondition()])}
+	                      />
+	                    </div>
+	                    {renderFilterValueControl(condition)}
+	                  </div>
+	                ))}
+	                <Button
+	                  type="dashed"
+	                  icon={<PlusOutlined />}
+	                  onClick={() => setTempFilters(prev => [...prev, createFilterCondition()])}
+	                >
+	                  添加条件
+	                </Button>
+	              </div>
+	            </FloatingFilterPanel>
 	            <SortableColumnSettings
 	              open={showColumnDrawer}
 	              trigger={(
@@ -2596,7 +2655,10 @@ export default function MilestoneView({
 	                    className="pms-summary-icon-button"
 	                    size="small"
 	                    icon={<SettingOutlined />}
-	                    onClick={() => setShowColumnDrawer(true)}
+	                    onClick={() => {
+	                      setShowFilterDrawer(false)
+	                      setShowColumnDrawer(true)
+	                    }}
 	                  />
 	                </Tooltip>
 	              )}
@@ -2793,74 +2855,6 @@ export default function MilestoneView({
 	        </div>
 	      </Modal>
 
-	      <Drawer
-        title="筛选条件"
-        open={showFilterDrawer}
-        onClose={() => setShowFilterDrawer(false)}
-        width={520}
-        placement="right"
-        zIndex={ROADMAP_DRAWER_Z_INDEX}
-        footer={(
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button onClick={() => {
-              setTempFilters([createFilterCondition()])
-              setMilestoneDateRange(null)
-              setSharedRowsOverride(null)
-            }}>清除全部</Button>
-            <Space>
-              <Button onClick={() => setShowFilterDrawer(false)}>取消</Button>
-              <Button
-	                type="primary"
-	                onClick={applyTempFilters}
-              >
-                应用
-              </Button>
-            </Space>
-          </div>
-        )}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {tempFilters.map((condition) => (
-            <div key={condition.id} style={{ padding: 12, border: '1px solid #eef2ff', borderRadius: 8, background: '#fafbff' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: isMilestoneDateFilter(condition) ? 'minmax(0, 1fr) 40px' : 'minmax(0, 1fr) 116px 40px', gap: 8, marginBottom: isValuelessFilterOperator(condition.operator) && !isMilestoneDateFilter(condition) ? 0 : 8 }}>
-                <Select
-                  aria-label="筛选字段"
-                  placeholder="筛选字段"
-                  value={condition.field || undefined}
-                  options={getFieldOptionsWithDuplicateDisabled(filterFieldOptions, tempFilters, condition.id)}
-                  onChange={(value) => handleTempFilterFieldChange(condition, value)}
-                />
-                {!isMilestoneDateFilter(condition) && (
-                  <Select
-                    value={condition.operator}
-                    options={FILTER_OPERATORS as any}
-                    onChange={(value) => {
-                      const operator = value as FilterCondition['operator']
-                      updateTempFilter(condition.id, {
-                        operator,
-                        value: isValuelessFilterOperator(operator) ? '' : condition.value,
-                      })
-                    }}
-                  />
-                )}
-                <Button
-                  icon={<DeleteOutlined />}
-                  danger
-                  onClick={() => setTempFilters(prev => prev.length > 1 ? prev.filter(item => item.id !== condition.id) : [createFilterCondition()])}
-                />
-              </div>
-              {renderFilterValueControl(condition)}
-            </div>
-          ))}
-          <Button
-            type="dashed"
-            icon={<PlusOutlined />}
-            onClick={() => setTempFilters(prev => [...prev, createFilterCondition()])}
-          >
-            添加条件
-          </Button>
-        </div>
-      </Drawer>
     </div>
   )
 }

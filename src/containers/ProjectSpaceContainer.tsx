@@ -175,6 +175,7 @@ import {
   NOTIFY_DIFF_FIELDS, MOCK_USER_MAP, type DHTMLXGanttColumn,
 } from '@/components/shared/PlanHelpers'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
+import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
 import {
   getDefaultColumnSettings,
   normalizeColumnSettings,
@@ -187,7 +188,6 @@ import {
 import { ProjectSpaceHeader } from '@/containers/AppShell'
 
 const { Option } = Select
-const PLAN_DRAWER_Z_INDEX = 1200
 const TOS_VERSION_TRAIN_SNAPSHOT_LEVEL = 'level2-version-train'
 const PROJECT_SPACE_STATUS_OPTIONS = [
   { label: '待立项', value: '待立项' },
@@ -3574,19 +3574,88 @@ export default function ProjectSpaceContainer() {
                     </Space>
                   )}
                   {projectPlanLevel === 'level1' && projectPlanViewMode !== 'horizontal' ? (
-                    <Tooltip title="筛选">
-                      <Badge dot={hasActiveLevel1PlanFilters} offset={[-2, 2]}>
+                    <FloatingFilterPanel
+                      open={showLevel1PlanFilterDrawer && projectPlanLevel === 'level1'}
+                      trigger={(
+                        <Tooltip title="筛选">
+                          <Badge dot={hasActiveLevel1PlanFilters} offset={[-2, 2]}>
+                            <Button
+                              icon={<FilterOutlined />}
+                              style={{ borderRadius: 6 }}
+                              onClick={() => {
+                                setShowColumnModal(false)
+                                setTempLevel1PlanFilters(level1PlanFilters.length ? level1PlanFilters.map(item => ({ ...item })) : [createFilterCondition()])
+                                setShowLevel1PlanFilterDrawer(true)
+                              }}
+                              aria-label="筛选"
+                            />
+                          </Badge>
+                        </Tooltip>
+                      )}
+                      getPopupContainer={(triggerNode) => (
+                        triggerNode.closest('.ant-modal-content') as HTMLElement | null
+                      ) ?? document.body}
+                      onReset={() => setTempLevel1PlanFilters(
+                        level1PlanFilters.length
+                          ? level1PlanFilters.map(item => ({ ...item }))
+                          : [createFilterCondition()],
+                      )}
+                      onClear={() => setTempLevel1PlanFilters([createFilterCondition()])}
+                      onCancel={() => setShowLevel1PlanFilterDrawer(false)}
+                      onConfirm={() => {
+                        setLevel1PlanFilters(normalizeFilterConditions(tempLevel1PlanFilters))
+                        setShowLevel1PlanFilterDrawer(false)
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {tempLevel1PlanFilters.map((condition) => (
+                          <div key={condition.id} style={{ padding: 12, border: '1px solid #eef2ff', borderRadius: 8, background: '#fafbff' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 116px 40px', gap: 8, marginBottom: isValuelessFilterOperator(condition.operator) ? 0 : 8 }}>
+                              <Select
+                                aria-label="筛选字段"
+                                placeholder="筛选字段"
+                                value={condition.field || undefined}
+                                options={getFieldOptionsWithDuplicateDisabled(planFilterFieldOptions, tempLevel1PlanFilters, condition.id)}
+                                onChange={(value) => setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? { ...item, field: value } : item))}
+                              />
+                              <Select
+                                value={condition.operator}
+                                options={FILTER_OPERATORS as any}
+                                onChange={(value) => {
+                                  const operator = value as PlanFilterCondition['operator']
+                                  setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? {
+                                    ...item,
+                                    operator,
+                                    value: isValuelessFilterOperator(operator) ? '' : item.value,
+                                  } : item))
+                                }}
+                              />
+                              <Button
+                                icon={<DeleteOutlined />}
+                                danger
+                                onClick={() => setTempLevel1PlanFilters(prev => prev.length > 1 ? prev.filter(item => item.id !== condition.id) : [createFilterCondition()])}
+                              />
+                            </div>
+                            {!isValuelessFilterOperator(condition.operator) && (
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <Input
+                                  placeholder="输入筛选值"
+                                  value={condition.value}
+                                  onChange={(e) => setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? { ...item, value: e.target.value } : item))}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ))}
                         <Button
-                          icon={<FilterOutlined />}
-                          style={{ borderRadius: 6 }}
-                          onClick={() => {
-                            setTempLevel1PlanFilters(level1PlanFilters.length ? level1PlanFilters.map(item => ({ ...item })) : [createFilterCondition()])
-                            setShowLevel1PlanFilterDrawer(true)
-                          }}
-                          aria-label="筛选"
-                        />
-                      </Badge>
-                    </Tooltip>
+                          type="dashed"
+                          icon={<PlusOutlined />}
+                          onClick={() => setTempLevel1PlanFilters(prev => [...prev, createFilterCondition()])}
+                        >
+                          添加条件
+                        </Button>
+                      </div>
+                    </FloatingFilterPanel>
                   ) : projectPlanLevel !== 'level1' ? (
                     <Input placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
                   ) : null}
@@ -3603,7 +3672,10 @@ export default function ProjectSpaceContainer() {
                           <Button
                             icon={projectPlanLevel === 'level1' ? <SettingOutlined /> : <AppstoreOutlined />}
                             style={{ borderRadius: 6 }}
-                            onClick={() => setShowColumnModal(true)}
+                            onClick={() => {
+                              setShowLevel1PlanFilterDrawer(false)
+                              setShowColumnModal(true)
+                            }}
                             aria-label="列设置"
                           />
                         </Tooltip>
@@ -3801,82 +3873,6 @@ export default function ProjectSpaceContainer() {
         </div>
         {renderVersionCompareResult()}
       </Modal>
-      {/* Level 1 plan filter drawer */}
-      <Drawer
-        title="筛选条件"
-        open={showLevel1PlanFilterDrawer && projectPlanLevel === 'level1'}
-        onClose={() => setShowLevel1PlanFilterDrawer(false)}
-        width={520}
-        placement="right"
-        zIndex={PLAN_DRAWER_Z_INDEX}
-        footer={(
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button onClick={() => setTempLevel1PlanFilters([createFilterCondition()])}>
-              清除全部
-            </Button>
-            <Space>
-              <Button onClick={() => setShowLevel1PlanFilterDrawer(false)}>
-                取消
-              </Button>
-              <Button type="primary" onClick={() => {
-                setLevel1PlanFilters(normalizeFilterConditions(tempLevel1PlanFilters))
-                setShowLevel1PlanFilterDrawer(false)
-              }}>
-                应用
-              </Button>
-            </Space>
-          </div>
-        )}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {tempLevel1PlanFilters.map((condition) => (
-            <div key={condition.id} style={{ padding: 12, border: '1px solid #eef2ff', borderRadius: 8, background: '#fafbff' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 116px 40px', gap: 8, marginBottom: isValuelessFilterOperator(condition.operator) ? 0 : 8 }}>
-                <Select
-                  aria-label="筛选字段"
-                  placeholder="筛选字段"
-                  value={condition.field || undefined}
-                  options={getFieldOptionsWithDuplicateDisabled(planFilterFieldOptions, tempLevel1PlanFilters, condition.id)}
-                  onChange={(value) => setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? { ...item, field: value } : item))}
-                />
-                <Select
-                  value={condition.operator}
-                  options={FILTER_OPERATORS as any}
-                  onChange={(value) => {
-                    const operator = value as PlanFilterCondition['operator']
-                    setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? {
-                      ...item,
-                      operator,
-                      value: isValuelessFilterOperator(operator) ? '' : item.value,
-                    } : item))
-                  }}
-                />
-                <Button
-                  icon={<DeleteOutlined />}
-                  danger
-                  onClick={() => setTempLevel1PlanFilters(prev => prev.length > 1 ? prev.filter(item => item.id !== condition.id) : [createFilterCondition()])}
-                />
-              </div>
-              {!isValuelessFilterOperator(condition.operator) && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <Input
-                    placeholder="输入筛选值"
-                    value={condition.value}
-                    onChange={(e) => setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? { ...item, value: e.target.value } : item))}
-                  />
-                </div>
-              )}
-            </div>
-          ))}
-          <Button
-            type="dashed"
-            icon={<PlusOutlined />}
-            onClick={() => setTempLevel1PlanFilters(prev => [...prev, createFilterCondition()])}
-          >
-            添加条件
-          </Button>
-        </div>
-      </Drawer>
       {/* Market editor modal */}
       <MarketEditorModal
         open={showMarketEditor}
