@@ -124,7 +124,7 @@ export default function ProjectRoadmapModule({
     const shell = triggerNode.closest<HTMLElement>('[data-roadmap-shell]')
       ?? roadmapShellRef.current
     if (shell?.matches(':fullscreen')) return shell
-    return triggerNode.parentElement ?? document.body
+    return document.body
   }, [])
 
   const filterFieldDefinitions = useMemo(

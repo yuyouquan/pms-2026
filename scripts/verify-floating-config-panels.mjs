@@ -76,6 +76,15 @@ if (!/onOpenColumnSettings=\{\(\) => \{[\s\S]*?setFilterDrawerOpen\(false\)[\s\S
 if (!/const getRoadmapPopupContainer = useCallback/.test(projectRoadmapModuleSource)) {
   throw new Error('ProjectRoadmapModule must provide a stable roadmap popup container callback');
 }
+if (!/if \(shell\?\.matches\(':fullscreen'\)\) return shell/.test(projectRoadmapModuleSource)) {
+  throw new Error('ProjectRoadmapModule must keep fullscreen popovers inside the roadmap shell');
+}
+if (/return triggerNode\.parentElement/.test(projectRoadmapModuleSource)) {
+  throw new Error('ProjectRoadmapModule normal popovers must not use the clipping toolbar parent');
+}
+if (!/return document\.body/.test(projectRoadmapModuleSource)) {
+  throw new Error('ProjectRoadmapModule normal popovers must render under document.body');
+}
 if (!/data-roadmap-shell/.test(projectRoadmapModuleSource)) {
   throw new Error('ProjectRoadmapModule must mark the roadmap shell for popup lookup');
 }
