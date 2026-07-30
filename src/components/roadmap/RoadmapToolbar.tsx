@@ -217,7 +217,7 @@ export default function RoadmapToolbar({
                   background: 'var(--bg-purple-tint)',
                 }}
               >
-                冲突
+                解决冲突
               </Button>
             </Badge>
           ) : null}

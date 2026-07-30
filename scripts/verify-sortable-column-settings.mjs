@@ -658,7 +658,7 @@ registerAssertion('roadmap store normalizes and persists independent ordered col
   })
   state = store.getState()
   assert.deepEqual(state.columnOrder.slice(0, 4), ['remark', 'displayName', 'productSeries', 'brand'])
-  assert.deepEqual(state.visibleColumns, ['productSeries', 'displayName', 'remark'])
+  assert.deepEqual(state.visibleColumns, ['marketName', 'displayName', 'remark'])
 
   store.getState().setViewMode('table')
   state = store.getState()
@@ -809,7 +809,7 @@ registerAssertion('roadmap hydration migrates partial visibility maps per view',
   )
   assert.deepEqual(
     malformedMembers.visibleColumnsByView.evolution,
-    ['brand', 'productSeries', 'displayName', 'remark'],
+    roadmapFilters.DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
   )
   assert.deepEqual(
     malformedMembers.columnOrderByView.evolution.slice(0, 2),
@@ -833,13 +833,28 @@ registerAssertion('roadmap per-target controls stay inside compact target-card h
     }
   }
 
-  const tableCardIndex = table.indexOf('data-roadmap-target-card')
-  const tableToggleIndex = table.indexOf('onClick={() => onToggleTarget(version.id)}')
-  const tableEditIndex = table.indexOf('onClick={() => onEditTosTargets(version.id)}')
-  assert.ok(tableCardIndex >= 0 && tableToggleIndex > tableCardIndex)
-  assert.ok(tableEditIndex > tableCardIndex)
-  assert.equal(table.match(/onToggleTarget\(version\.id\)/g)?.length, 1)
-  assert.equal(table.match(/onEditTosTargets\(version\.id\)/g)?.length, 1)
+  for (const [label, source, cardToken] of [
+    ['table', table, 'data-roadmap-target-card'],
+    ['evolution', evolution, 'className="pms-roadmap-evolution-target"'],
+  ]) {
+    const cardIndex = source.indexOf(cardToken)
+    const headerIndex = source.indexOf('className="pms-roadmap-target-card-header"', cardIndex)
+    const actionsIndex = source.indexOf('className="pms-roadmap-target-card-actions"', headerIndex)
+    const toggleIndex = source.indexOf('onClick={() => onToggleTarget(version.id)}', actionsIndex)
+    const actionsEndIndex = source.indexOf('</Flex>', toggleIndex)
+    assert.ok(cardIndex >= 0, `${label} target card is missing`)
+    assert.ok(headerIndex > cardIndex, `${label} target header is outside its card`)
+    assert.ok(actionsIndex > headerIndex, `${label} target actions are outside the compact header`)
+    assert.ok(
+      toggleIndex > actionsIndex && toggleIndex < actionsEndIndex,
+      `${label} target toggle is outside the compact target-card actions`,
+    )
+    assert.equal(
+      source.match(/onToggleTarget\(version\.id\)/g)?.length,
+      1,
+      `${label} must render one per-target toggle`,
+    )
+  }
 
   assert.ok(toolbar.includes("viewMode === 'evolution' && hasTargetVersions"))
   assert.ok(toolbar.includes('onToggleAllTargets'))
@@ -869,6 +884,11 @@ registerAssertion('roadmap conflicts use one compact counted toolbar action', ()
   ]) {
     assert.ok(toolbar.includes(contract), `roadmap toolbar is missing ${contract}`)
   }
+  assert.equal(
+    toolbar.match(/onClick=\{onResolveConflicts\}/g)?.length,
+    1,
+    'roadmap toolbar must expose one conflict-resolution entry',
+  )
 })
 
 registerAssertion('roadmap toolbar is one polished horizontally scrollable control rail', () => {
