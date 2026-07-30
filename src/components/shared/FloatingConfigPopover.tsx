@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactElement, type ReactNode } from 'react';
 import { Popover } from 'antd';
 
 const FOCUSABLE_SELECTOR = [
@@ -38,13 +38,12 @@ export function FloatingConfigPopover({
   getPopupContainer,
 }: FloatingConfigPopoverProps) {
   const triggerContainerRef = useRef<HTMLSpanElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
   const wasOpenRef = useRef(false);
-  const instanceId = useId();
-  const popoverInstanceClass = `pms-floating-config-popover-${instanceId.replace(/:/g, '')}`;
 
-  const getVisiblePanel = () => Array.from(document.querySelectorAll<HTMLElement>(
-    `.${popoverInstanceClass} .pms-floating-config-panel`,
-  )).find(element => element.getClientRects().length > 0);
+  const getVisiblePanel = () => (
+    panelRef.current?.getClientRects().length ? panelRef.current : undefined
+  );
 
   useEffect(() => {
     const wasOpen = wasOpenRef.current;
@@ -74,7 +73,7 @@ export function FloatingConfigPopover({
         ?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
       ?.focus();
     }
-  }, [open, popoverInstanceClass]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -100,7 +99,7 @@ export function FloatingConfigPopover({
       }}
       getPopupContainer={getPopupContainer}
       classNames={{
-        root: `pms-floating-config-popover ${popoverInstanceClass} ${className ?? ''}`.trim(),
+        root: `pms-floating-config-popover ${className ?? ''}`.trim(),
       }}
       styles={{
         container: {
@@ -110,6 +109,7 @@ export function FloatingConfigPopover({
       }}
       content={
         <section
+          ref={panelRef}
           className="pms-floating-config-panel"
           aria-label={ariaLabel ?? (typeof title === 'string' ? title : '配置面板')}
         >
