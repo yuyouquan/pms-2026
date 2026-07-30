@@ -150,6 +150,27 @@ const assertSelectText = async (ariaLabel, expected) => {
   }
 }
 
+const waitForPanelFirstControlFocus = async ariaLabel => {
+  await page.waitForFunction(label => {
+    const panel = document.querySelector(
+      `.pms-floating-config-panel[aria-label="${label}"]`,
+    )
+    if (!panel) return false
+    const firstControl = Array.from(panel.querySelectorAll(
+      'button:not([disabled]), [href], input:not([disabled]), '
+      + 'select:not([disabled]), textarea:not([disabled]), '
+      + '[tabindex]:not([tabindex="-1"])',
+    )).find(element => element.getClientRects().length > 0)
+    return Boolean(firstControl) && document.activeElement === firstControl
+  }, { timeout: STEP_TIMEOUT }, ariaLabel)
+}
+
+const waitForTriggerFocus = async ariaLabel => {
+  await page.waitForFunction(label => (
+    document.activeElement?.matches(`button[aria-label="${label}"]`)
+  ), { timeout: STEP_TIMEOUT }, ariaLabel)
+}
+
 try {
   browser = await puppeteer.launch({
     headless: 'new',
@@ -211,12 +232,14 @@ try {
     console.log('  action: wait for brand value aria')
     await assertSelector('[aria-label="品牌筛选值"]')
     await assertSelectText('品牌筛选值', 'TECNO')
+    await waitForPanelFirstControlFocus('筛选')
     await assertNoDrawer()
     await clickExactText(
       '.pms-floating-config-popover',
       'button',
       '取消',
     )
+    await waitForTriggerFocus('筛选')
   })
 
   await step('verify column settings is anchored and Esc closes', async () => {
@@ -226,6 +249,7 @@ try {
     await assertSelector(
       '.pms-floating-config-panel[aria-label="列设置"]',
     )
+    await waitForPanelFirstControlFocus('列设置')
     console.log('  action: assert no drawer')
     await assertNoDrawer()
     await wait(150)
@@ -246,6 +270,7 @@ try {
         || rect.height === 0
         || panel.getClientRects().length === 0
     }, { timeout: STEP_TIMEOUT }, '.pms-floating-config-panel[aria-label="列设置"]')
+    await waitForTriggerFocus('列设置')
   })
 
   await step('switch to tOS category and verify quick-control matrix', async () => {
