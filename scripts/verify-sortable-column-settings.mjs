@@ -84,6 +84,57 @@ function parseTypeScript(filePath) {
   }
 }
 
+function extractBalancedJsxElement(source, startToken, label) {
+  const sourceFile = ts.createSourceFile(
+    `${label.replaceAll(/\W+/g, '-')}.tsx`,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  )
+  const matches = []
+  function visit(node) {
+    if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const openingElement = ts.isJsxElement(node) ? node.openingElement : node
+      if (openingElement.getText(sourceFile).includes(startToken)) matches.push(node)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  assert.equal(
+    matches.length,
+    1,
+    `${label} must have exactly one balanced JSX element containing ${startToken}`,
+  )
+  const [match] = matches
+  return source.slice(match.getStart(sourceFile), match.end)
+}
+
+function assertRoadmapTargetControlNesting(label, source, cardToken) {
+  const card = extractBalancedJsxElement(source, cardToken, `${label} target card`)
+  const header = extractBalancedJsxElement(
+    card,
+    'className="pms-roadmap-target-card-header"',
+    `${label} compact header`,
+  )
+  const actions = extractBalancedJsxElement(
+    header,
+    'className="pms-roadmap-target-card-actions"',
+    `${label} compact header actions`,
+  )
+  const toggleToken = 'onClick={() => onToggleTarget(version.id)}'
+  const toggle = extractBalancedJsxElement(actions, toggleToken, `${label} per-target toggle`)
+
+  assert.ok(header.includes('wrap={false}'), `${label} compact header must not wrap`)
+  assert.ok(actions.includes('wrap={false}'), `${label} compact header actions must not wrap`)
+  assert.ok(toggle.includes('aria-expanded={!targetCollapsed}'), `${label} target toggle must expose expanded state`)
+  assert.equal(
+    actions.split(toggleToken).length - 1,
+    1,
+    `${label} compact header actions must contain one per-target toggle`,
+  )
+}
+
 function importsSortableColumnSettings(filePath) {
   const { sourceFile } = parseTypeScript(filePath)
   return sourceFile.statements.some(statement => (
@@ -833,27 +884,49 @@ registerAssertion('roadmap per-target controls stay inside compact target-card h
     }
   }
 
+  for (const [label, fixture, expectedFailure] of [
+    [
+      'header drift fixture',
+      `
+        <section data-roadmap-target-card></section>
+        <Flex className="pms-roadmap-target-card-header" />
+      `,
+      /compact header/,
+    ],
+    [
+      'actions drift fixture',
+      `
+        <section data-roadmap-target-card>
+          <Flex className="pms-roadmap-target-card-header" />
+          <Flex className="pms-roadmap-target-card-actions" />
+        </section>
+      `,
+      /compact header actions/,
+    ],
+    [
+      'toggle drift fixture',
+      `
+        <section data-roadmap-target-card>
+          <Flex className="pms-roadmap-target-card-header">
+            <Flex className="pms-roadmap-target-card-actions" />
+            <Button onClick={() => onToggleTarget(version.id)} />
+          </Flex>
+        </section>
+      `,
+      /per-target toggle/,
+    ],
+  ]) {
+    assert.throws(
+      () => assertRoadmapTargetControlNesting(label, fixture, 'data-roadmap-target-card'),
+      expectedFailure,
+    )
+  }
+
   for (const [label, source, cardToken] of [
     ['table', table, 'data-roadmap-target-card'],
     ['evolution', evolution, 'className="pms-roadmap-evolution-target"'],
   ]) {
-    const cardIndex = source.indexOf(cardToken)
-    const headerIndex = source.indexOf('className="pms-roadmap-target-card-header"', cardIndex)
-    const actionsIndex = source.indexOf('className="pms-roadmap-target-card-actions"', headerIndex)
-    const toggleIndex = source.indexOf('onClick={() => onToggleTarget(version.id)}', actionsIndex)
-    const actionsEndIndex = source.indexOf('</Flex>', toggleIndex)
-    assert.ok(cardIndex >= 0, `${label} target card is missing`)
-    assert.ok(headerIndex > cardIndex, `${label} target header is outside its card`)
-    assert.ok(actionsIndex > headerIndex, `${label} target actions are outside the compact header`)
-    assert.ok(
-      toggleIndex > actionsIndex && toggleIndex < actionsEndIndex,
-      `${label} target toggle is outside the compact target-card actions`,
-    )
-    assert.equal(
-      source.match(/onToggleTarget\(version\.id\)/g)?.length,
-      1,
-      `${label} must render one per-target toggle`,
-    )
+    assertRoadmapTargetControlNesting(label, source, cardToken)
   }
 
   assert.ok(toolbar.includes("viewMode === 'evolution' && hasTargetVersions"))
