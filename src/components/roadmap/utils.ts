@@ -16,6 +16,13 @@ import {
   type SortableColumnDefinition,
   type SortableColumnSettingsValue,
 } from '@/lib/columnSettings'
+import { getProjectInfoFields } from '@/constants/projectInfoSchema'
+import type { FilterFieldDefinition, FilterFieldKind } from '@/lib/filterConditions'
+import {
+  getProjectSummaryFieldDefinitions as getSharedProjectSummaryFieldDefinitions,
+  getTemplateTaskFieldDefinitions as getSharedTemplateTaskFieldDefinitions,
+  type ProjectSummaryFieldDefinition,
+} from '@/lib/projectSummary'
 
 const STORAGE_KEY = 'pms_roadmap_milestone_views'
 const PROJECT_VIEW_STORAGE_KEY = 'pms_project_custom_views'
@@ -151,6 +158,52 @@ export interface RoadmapColumnConfig {
   width?: number
   defaultVisible?: boolean
   locked?: boolean
+}
+
+export const getProjectSummaryFieldDefinitions = getSharedProjectSummaryFieldDefinitions
+export const getTemplateTaskFieldDefinitions = getSharedTemplateTaskFieldDefinitions
+
+export function getProjectSummaryBoardColumns(
+  definitions: readonly ProjectSummaryFieldDefinition[],
+): RoadmapColumnConfig[] {
+  return definitions.map(definition => ({
+    key: definition.key,
+    title: definition.title,
+    width: definition.width,
+    defaultVisible: definition.defaultVisible,
+    locked: definition.hideable === false,
+  }))
+}
+
+const getSummaryFilterKind = (
+  definition: ProjectSummaryFieldDefinition,
+): FilterFieldKind => {
+  if (definition.source === 'templateTask' || definition.inputType === 'date') return 'date'
+  if (
+    definition.inputType === 'select'
+    || definition.inputType === 'boolean'
+  ) return 'enum'
+  return 'text'
+}
+
+export function getProjectSummaryBoardFilterFields(
+  projectType: string,
+  definitions: readonly ProjectSummaryFieldDefinition[],
+): FilterFieldDefinition[] {
+  const schemaByKey = new Map(
+    getProjectInfoFields(projectType).map(field => [field.key, field] as const),
+  )
+  return definitions.map(definition => {
+    const schema = schemaByKey.get(definition.key)
+    return {
+      key: definition.key,
+      label: definition.title,
+      kind: getSummaryFilterKind(definition),
+      ...(schema?.options ? {
+        options: schema.options.map(value => ({ label: value, value })),
+      } : {}),
+    }
+  })
 }
 
 export function getScopedColumnDefinitions(

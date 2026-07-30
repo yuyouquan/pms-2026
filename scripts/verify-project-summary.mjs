@@ -338,6 +338,23 @@ registerAssertion('shared summary table composes only the approved reusable cont
   assert.doesNotMatch(source, /导出|分享|全屏|savedProjectView|calendar/)
 })
 
+registerAssertion('summary board consumes schema and template definitions through every data path', () => {
+  const boardPath = path.join(root, 'src/components/roadmap/ProjectPlanSummaryBoard.tsx')
+  const source = fs.readFileSync(boardPath, 'utf8')
+
+  assert.match(source, /getProjectSummaryFieldDefinitions/)
+  assert.match(source, /getTemplateTaskFieldDefinitions/)
+  assert.doesNotMatch(source, /MACHINE_MILESTONE_NAMES/)
+  assert.doesNotMatch(source, /TOS_VERSION_MILESTONE_NAMES/)
+  assert.doesNotMatch(source, /title:\s*['"]里程碑节点['"]/)
+  assert.match(source, /activeProjectSummaryDefinitions/)
+  assert.match(source, /filterFieldDefinitions/)
+  assert.match(source, /buildExportColumns[\s\S]{0,700}definition\.key/)
+  assert.match(source, /buildCurrentProjectViewState[\s\S]{0,500}columnSettings\.order/)
+  assert.match(source, /calendarEvents[\s\S]{0,1400}nodeDefinitions[\s\S]{0,500}row\[definition\.key\]/)
+  assert.match(source, /orderVisibleDefinitions\(columnDefinitions,\s*columnSettings\)/)
+})
+
 let failureCount = 0
 for (const { name, assertion } of assertions) {
   try {

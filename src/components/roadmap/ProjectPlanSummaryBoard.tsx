@@ -12,6 +12,7 @@ import {
   inferTosVersionFromProjectName,
 } from '@/constants/projectBasicFields'
 import {
+  PROJECT_CATEGORY_MACHINE,
   isMachineProjectType,
   isSoftwareProjectType,
   normalizeSoftwareProjectType,
@@ -20,7 +21,7 @@ import {
   PROJECT_TYPE_TECH,
   PROJECT_TYPE_TOS_VERSION,
 } from '@/constants/projectTypes'
-import type { FilterCondition } from '@/lib/filterConditions'
+import type { FilterCondition, FilterFieldDefinition } from '@/lib/filterConditions'
 import {
   getDefaultColumnSettings,
   normalizeColumnSettings,
@@ -28,10 +29,10 @@ import {
   type SortableColumnSettingsValue,
 } from '@/lib/columnSettings'
 import {
-  FILTER_OPERATORS,
   applyFilterConditions,
   createFilterCondition,
   getFieldOptionsWithDuplicateDisabled,
+  getFilterOperatorsForKind,
   isFilterConditionActive,
   isValuelessFilterOperator,
   normalizeFilterConditions,
@@ -40,9 +41,12 @@ import {
   PROJECT_VIEW_KINDS,
   createProjectViewShareUrl,
   deleteProjectView,
-  getFixedColumnsForType,
+  getProjectSummaryBoardColumns,
+  getProjectSummaryBoardFilterFields,
+  getProjectSummaryFieldDefinitions,
   getProjectViewColumnSettings,
   getScopedColumnDefinitions,
+  getTemplateTaskFieldDefinitions,
   loadProjectViews,
   parseProjectViewShare,
   saveProjectView,
@@ -51,6 +55,13 @@ import {
   type SavedProjectView,
 } from './utils'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
+import {
+  buildProjectSummaryRow,
+  getLatestPublishedTemplateTasks,
+  type ProjectSummaryFieldDefinition,
+} from '@/lib/projectSummary'
+import { getTemplateTasksForProjectType } from '@/lib/projectTemplateCompatibility'
+import { usePlanStore } from '@/stores/plan'
 
 type SummaryScope = 'overall' | 'machine' | 'tosVersion' | 'tech'
 type SummaryStatus = '在研' | '上市' | '转维'
@@ -79,8 +90,8 @@ interface SummaryRow {
   status: SummaryStatus
   spm: string
   department: string
-  milestones: SummaryMilestone[]
-  milestonesText: string
+  technicalMilestones?: SummaryMilestone[]
+  technicalMilestonesText?: string
   isCollapsedPreview?: boolean
   collapsePreviewType?: 'category' | 'series'
   hiddenProjectCount?: number
@@ -152,8 +163,6 @@ const DEPARTMENT_BY_PROJECT: Record<string, string> = {
   '9': '软件项目二部',
 }
 
-const MACHINE_MILESTONE_NAMES = ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5']
-const TOS_VERSION_MILESTONE_NAMES = ['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'tOS16.1.101', 'tOS16.1.102', 'tOS16.1.103', 'tOS16.1.104']
 const TECH_MILESTONE_NAMES = ['概念启动', 'TDR1', 'TDR2', 'TDR3', 'TDR4']
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 const MILESTONE_DATE_RANGE_PRESETS = [
@@ -166,9 +175,9 @@ const MILESTONE_DATE_RANGE_PRESETS = [
     value: [dayjs().add(1, 'month').startOf('month'), dayjs().add(3, 'month').endOf('month')],
   },
 ]
-const MILESTONE_FILTER_FIELD = 'milestonesText'
+const MILESTONE_FILTER_FIELD = 'nodeDateRange'
 const MILESTONE_RANGE_SEPARATOR = '~'
-const BASE_COLUMN_OPTIONS: RoadmapColumnConfig[] = [
+const COMMON_COLUMN_OPTIONS: RoadmapColumnConfig[] = [
   { key: 'productCategory', title: '产品分类', width: 150, defaultVisible: true, locked: true },
   { key: 'productSeries', title: '产品系列', width: 146, defaultVisible: true },
   { key: 'projectName', title: '项目名', width: 176, defaultVisible: true, locked: true },
@@ -176,9 +185,25 @@ const BASE_COLUMN_OPTIONS: RoadmapColumnConfig[] = [
   { key: 'status', title: '状态', width: 104, defaultVisible: true },
   { key: 'spm', title: 'SPM', width: 90, defaultVisible: true },
   { key: 'department', title: '部门', width: 128, defaultVisible: true },
-  { key: 'milestones', title: '里程碑节点', width: 720, defaultVisible: true },
 ]
-const BASE_COLUMN_KEYS = new Set(BASE_COLUMN_OPTIONS.map(col => col.key))
+const TECHNICAL_MILESTONE_COLUMN: RoadmapColumnConfig = {
+  key: 'milestones',
+  title: '技术项目节点',
+  width: 720,
+  defaultVisible: true,
+}
+const TECH_NODE_DEFINITIONS: ProjectSummaryFieldDefinition[] = TECH_MILESTONE_NAMES.map(
+  (taskName, index) => ({
+    key: `technicalTask::${taskName}`,
+    title: taskName,
+    source: 'templateTask',
+    defaultVisible: true,
+    hideable: true,
+    inputType: 'date',
+    width: 130,
+    taskId: String(index),
+  }),
+)
 
 const toDate = (baseDate: string | undefined, index: number, rowOffset: number) => {
   const base = baseDate && dayjs(baseDate).isValid() ? dayjs(baseDate) : dayjs('2026-01-01')
@@ -285,24 +310,39 @@ const buildProjectFields = (project: any) => ({
   infrared: normalizeValue(project.infrared),
 })
 
-function getExtraColumnsForScope(scope: SummaryScope): RoadmapColumnConfig[] {
-  if (scope === 'machine') return getFixedColumnsForType(PROJECT_TYPE_MACHINE_PHONE).filter(col => !BASE_COLUMN_KEYS.has(col.key))
-  if (scope === 'tosVersion') return getFixedColumnsForType(PROJECT_TYPE_TOS_VERSION).filter(col => !BASE_COLUMN_KEYS.has(col.key))
-  return []
+function getAvailableColumnsForScope(
+  scope: SummaryScope,
+  activeProjectSummaryDefinitions: readonly ProjectSummaryFieldDefinition[] = [],
+): RoadmapColumnConfig[] {
+  if (scope === 'machine' || scope === 'tosVersion') {
+    return getProjectSummaryBoardColumns(activeProjectSummaryDefinitions)
+  }
+  const commonColumns = COMMON_COLUMN_OPTIONS.filter(
+    col => scope === 'overall' || col.key !== 'productCategory',
+  )
+  return scope === 'tech'
+    ? [...commonColumns, TECHNICAL_MILESTONE_COLUMN]
+    : commonColumns
 }
 
-function getAvailableColumnsForScope(scope: SummaryScope): RoadmapColumnConfig[] {
-  const baseColumns = BASE_COLUMN_OPTIONS.filter(col => scope === 'overall' || col.key !== 'productCategory')
-  return [...baseColumns, ...getExtraColumnsForScope(scope)]
-}
-
-function getDefaultVisibleColumnsForScope(scope: SummaryScope) {
-  return getAvailableColumnsForScope(scope)
+function getDefaultVisibleColumnsForScope(
+  scope: SummaryScope,
+  activeProjectSummaryDefinitions: readonly ProjectSummaryFieldDefinition[] = [],
+) {
+  return getAvailableColumnsForScope(scope, activeProjectSummaryDefinitions)
     .filter(col => col.locked || col.defaultVisible)
     .map(col => col.key)
 }
 
-const makeSummaryRows = (projects: any[]): SummaryRow[] => {
+interface ProjectSummaryDefinitionSets {
+  machine: ProjectSummaryFieldDefinition[]
+  tosVersion: ProjectSummaryFieldDefinition[]
+}
+
+const makeSummaryRows = (
+  projects: any[],
+  definitionSets: ProjectSummaryDefinitionSets,
+): SummaryRow[] => {
   const rows: SummaryRow[] = []
   let rowIndex = 0
 
@@ -311,20 +351,19 @@ const makeSummaryRows = (projects: any[]): SummaryRow[] => {
     if (!status) continue
 
     if (isMachineProjectType(project.type)) {
-      const milestones = buildMilestones(project, MACHINE_MILESTONE_NAMES, rowIndex)
+      const summaryValues = buildProjectSummaryRow(project, definitionSets.machine)
       rows.push({
+        ...buildProjectFields(project),
+        ...summaryValues,
         key: `machine-${project.id}`,
         projectId: project.id,
         projectType: PROJECT_TYPE_MACHINE_PHONE,
-        ...buildProjectFields(project),
         productCategory: getMachineCategory(project),
         productSeries: getMachineSeries(project),
         projectName: project.name,
         status,
         spm: project.spm || project.leader || '-',
         department: getDepartmentByFirstSpm(project, '软件项目一部'),
-        milestones,
-        milestonesText: milestones.map(item => `${item.date} ${item.name}`).join(' '),
       })
       rowIndex++
     }
@@ -332,27 +371,33 @@ const makeSummaryRows = (projects: any[]): SummaryRow[] => {
     if (isSoftwareProjectType(project.type)) {
       const normalizedProjectType = normalizeSoftwareProjectType(project.type, project.name)
       if (normalizedProjectType === PROJECT_TYPE_INDEPENDENT_SOFTWARE) continue
-      const milestones = buildMilestones(project, TOS_VERSION_MILESTONE_NAMES, rowIndex)
+      const summaryValues = buildProjectSummaryRow(project, definitionSets.tosVersion)
       rows.push({
+        ...buildProjectFields(project),
+        ...summaryValues,
         key: `${normalizedProjectType}-${project.id}`,
         projectId: project.id,
         projectType: normalizedProjectType,
-        ...buildProjectFields(project),
         productCategory: getSoftwareCategory(project),
         productSeries: getSoftwareSeries(project),
         projectName: project.name,
         status,
         spm: project.spm || project.leader || '-',
         department: getDepartmentByFirstSpm(project, '软件项目一部'),
-        milestones,
-        milestonesText: milestones.map(item => `${item.date} ${item.name}`).join(' '),
       })
       rowIndex++
     }
 
     if (project.type === PROJECT_TYPE_TECH) {
       const milestones = buildMilestones(project, TECH_MILESTONE_NAMES, rowIndex)
+      const technicalNodeValues = Object.fromEntries(
+        TECH_NODE_DEFINITIONS.map((definition, index) => [
+          definition.key,
+          milestones[index]?.date ?? '-',
+        ]),
+      )
       rows.push({
+        ...technicalNodeValues,
         key: `tech-${project.id}`,
         projectId: project.id,
         projectType: project.type,
@@ -363,8 +408,10 @@ const makeSummaryRows = (projects: any[]): SummaryRow[] => {
         status,
         spm: project.spm || project.leader || '-',
         department: getDepartmentByFirstSpm(project, '集成维护部'),
-        milestones,
-        milestonesText: milestones.map(item => `${item.date} ${item.name}`).join(' '),
+        technicalMilestones: milestones,
+        technicalMilestonesText: milestones
+          .map(item => `${item.date} ${item.name}`)
+          .join(' '),
       })
       rowIndex++
     }
@@ -450,30 +497,46 @@ function parseMilestoneDate(value: string) {
   return dayjs(value)
 }
 
-function filterMilestonesByDateRange(milestones: SummaryMilestone[], range: MilestoneDateRange) {
-  if (!range) return milestones
-  const [start, end] = range
-  const startDate = dayjs(start).startOf('day')
-  const endDate = dayjs(end).endOf('day')
-  return milestones.filter(milestone => {
-    const date = parseMilestoneDate(milestone.date)
-    if (!date.isValid()) return false
-    return !date.isBefore(startDate) && !date.isAfter(endDate)
+function getNodeDefinitionsForRow(
+  row: SummaryRow,
+  definitionSets: ProjectSummaryDefinitionSets,
+) {
+  if (isMachineProjectType(row.projectType)) {
+    return definitionSets.machine.filter(definition => definition.source === 'templateTask')
+  }
+  if (row.projectType === PROJECT_TYPE_TOS_VERSION) {
+    return definitionSets.tosVersion.filter(definition => definition.source === 'templateTask')
+  }
+  return row.projectType === PROJECT_TYPE_TECH ? TECH_NODE_DEFINITIONS : []
+}
+
+function getRowNodeMilestones(
+  row: SummaryRow,
+  nodeDefinitions: readonly ProjectSummaryFieldDefinition[],
+): SummaryMilestone[] {
+  return nodeDefinitions.flatMap(definition => {
+    const value = row[definition.key]
+    if (typeof value !== 'string' || !value || value === '-') return []
+    return [{ name: definition.title, date: value }]
   })
 }
 
-function applyMilestoneDateRange(rows: SummaryRow[], range: MilestoneDateRange) {
+function applyMilestoneDateRange(
+  rows: SummaryRow[],
+  range: MilestoneDateRange,
+  definitionSets: ProjectSummaryDefinitionSets,
+) {
   if (!range) return rows
-  return rows
-    .map(row => {
-      const milestones = filterMilestonesByDateRange(row.milestones, range)
-      return {
-        ...row,
-        milestones,
-        milestonesText: milestones.map(item => `${item.date} ${item.name}`).join(' '),
-      }
-    })
-    .filter(row => row.milestones.length > 0)
+  const [start, end] = range
+  const startDate = dayjs(start).startOf('day')
+  const endDate = dayjs(end).endOf('day')
+  return rows.filter(row => (
+    getRowNodeMilestones(row, getNodeDefinitionsForRow(row, definitionSets))
+      .some(milestone => {
+        const date = parseMilestoneDate(milestone.date)
+        return date.isValid() && !date.isBefore(startDate) && !date.isAfter(endDate)
+      })
+  ))
 }
 
 function normalizeDateRange(value: unknown): MilestoneDateRange {
@@ -517,8 +580,15 @@ function getStandardFilterConditions(conditions: FilterCondition[]) {
   return conditions.filter(condition => !isMilestoneDateFilter(condition))
 }
 
-function normalizeProjectFilterConditions(conditions: FilterCondition[], fallbackRange?: MilestoneDateRange) {
-  const normalized = normalizeFilterConditions(getStandardFilterConditions(conditions))
+function normalizeProjectFilterConditions(
+  conditions: FilterCondition[],
+  fallbackRange?: MilestoneDateRange,
+  filterFieldDefinitions?: readonly FilterFieldDefinition[],
+) {
+  const normalized = normalizeFilterConditions(
+    getStandardFilterConditions(conditions),
+    filterFieldDefinitions,
+  )
   const milestoneCondition = conditions.find(isMilestoneDateFilter)
   const range = getMilestoneDateRangeFromFilters(conditions) || fallbackRange || null
   return range
@@ -534,7 +604,9 @@ function getCalendarDays(month: dayjs.Dayjs) {
 function cloneRowsForShare(rows: SummaryRow[]) {
   return rows.map(row => ({
     ...row,
-    milestones: row.milestones.map(milestone => ({ ...milestone })),
+    ...(row.technicalMilestones ? {
+      technicalMilestones: row.technicalMilestones.map(milestone => ({ ...milestone })),
+    } : {}),
   }))
 }
 
@@ -614,6 +686,40 @@ function renderInfoCell(key: string, value: any) {
 }
 
 export default function ProjectPlanSummaryBoard({ projects, onViewProject }: ProjectPlanSummaryBoardProps) {
+  const {
+    versions,
+    currentVersion,
+    publishedSnapshots,
+    configTemplateTasksByType,
+  } = usePlanStore()
+  const projectSummaryDefinitionsByScope = useMemo<ProjectSummaryDefinitionSets>(() => {
+    const getDefinitions = (projectType: string) => {
+      const currentTemplateTasks = getTemplateTasksForProjectType(
+        configTemplateTasksByType,
+        projectType,
+      ) ?? []
+      const publishedTemplateTasks = getLatestPublishedTemplateTasks(
+        projectType,
+        versions,
+        publishedSnapshots,
+        currentVersion,
+        currentTemplateTasks,
+      )
+      return [
+        ...getProjectSummaryFieldDefinitions(projectType),
+        ...getTemplateTaskFieldDefinitions(projectType, publishedTemplateTasks),
+      ]
+    }
+    return {
+      machine: getDefinitions(PROJECT_CATEGORY_MACHINE),
+      tosVersion: getDefinitions(PROJECT_TYPE_TOS_VERSION),
+    }
+  }, [
+    configTemplateTasksByType,
+    currentVersion,
+    publishedSnapshots,
+    versions,
+  ])
   const [scope, setScope] = useState<SummaryScope>('overall')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
@@ -623,7 +729,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   const [tempFilters, setTempFilters] = useState<FilterCondition[]>([])
   const [columnSettings, setColumnSettings] = useState<SortableColumnSettingsValue<string>>(() => (
     getDefaultColumnSettings(getScopedColumnDefinitions(
-      getAvailableColumnsForScope('overall'),
+      getAvailableColumnsForScope('overall', []),
       ['productCategory', 'productSeries', 'projectName'],
     ))
   ))
@@ -644,20 +750,74 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   const stickyRegionStyle = {
     '--pms-summary-sticky-offset': `${SUMMARY_STICKY_TOP}px`,
   } as CSSProperties
-  const allRows = useMemo(() => makeSummaryRows(projects), [projects])
+  const activeProjectType = scope === 'machine'
+    ? PROJECT_CATEGORY_MACHINE
+    : scope === 'tosVersion'
+      ? PROJECT_TYPE_TOS_VERSION
+      : null
+  const activeProjectSummaryDefinitions = useMemo(
+    () => activeProjectType
+      ? projectSummaryDefinitionsByScope[scope as 'machine' | 'tosVersion']
+      : [],
+    [activeProjectType, projectSummaryDefinitionsByScope, scope],
+  )
+  const allRows = useMemo(
+    () => makeSummaryRows(projects, projectSummaryDefinitionsByScope),
+    [projectSummaryDefinitionsByScope, projects],
+  )
   const scopedRows = useMemo(() => scopeRows(allRows, scope), [allRows, scope])
-  const normalizedFilters = useMemo(() => normalizeProjectFilterConditions(filters, milestoneDateRange), [filters, milestoneDateRange])
+  const availableColumns = useMemo(
+    () => getAvailableColumnsForScope(scope, activeProjectSummaryDefinitions),
+    [activeProjectSummaryDefinitions, scope],
+  )
+  const filterFieldDefinitions = useMemo<FilterFieldDefinition[]>(() => {
+    const baseFields = activeProjectType
+      ? getProjectSummaryBoardFilterFields(
+          activeProjectType,
+          activeProjectSummaryDefinitions,
+        )
+      : availableColumns.map(column => ({
+          key: column.key,
+          label: column.title,
+          kind: 'text' as const,
+        }))
+    return [
+      ...baseFields,
+      { key: MILESTONE_FILTER_FIELD, label: '节点日期范围', kind: 'date' },
+    ]
+  }, [activeProjectSummaryDefinitions, activeProjectType, availableColumns])
+  const filterFieldByKey = useMemo(
+    () => new Map(filterFieldDefinitions.map(field => [field.key, field] as const)),
+    [filterFieldDefinitions],
+  )
+  const normalizedFilters = useMemo(
+    () => normalizeProjectFilterConditions(
+      filters,
+      milestoneDateRange,
+      filterFieldDefinitions,
+    ),
+    [filterFieldDefinitions, filters, milestoneDateRange],
+  )
   const activeMilestoneDateRange = useMemo(() => getMilestoneDateRangeFromFilters(normalizedFilters), [normalizedFilters])
   const standardFilters = useMemo(() => getStandardFilterConditions(normalizedFilters), [normalizedFilters])
-  const filteredRows = useMemo(() => applyFilterConditions(scopedRows, standardFilters), [scopedRows, standardFilters])
-  const dateFilteredRows = useMemo(() => applyMilestoneDateRange(filteredRows, activeMilestoneDateRange), [filteredRows, activeMilestoneDateRange])
+  const filteredRows = useMemo(
+    () => applyFilterConditions(scopedRows, standardFilters, filterFieldDefinitions),
+    [filterFieldDefinitions, scopedRows, standardFilters],
+  )
+  const dateFilteredRows = useMemo(
+    () => applyMilestoneDateRange(
+      filteredRows,
+      activeMilestoneDateRange,
+      projectSummaryDefinitionsByScope,
+    ),
+    [activeMilestoneDateRange, filteredRows, projectSummaryDefinitionsByScope],
+  )
   const statusRows = useMemo(() => (
     sharedRowsOverride || applyStatusFilter(dateFilteredRows, statusFilter)
   ), [dateFilteredRows, statusFilter, sharedRowsOverride])
   const rows = useMemo(() => applyCollapsedGroups(statusRows, collapsedCategories, collapsedSeries), [statusRows, collapsedCategories, collapsedSeries])
   const categorySeriesCounts = useMemo(() => countSeriesByCategory(statusRows), [statusRows])
   const seriesProjectCounts = useMemo(() => countProjectsBySeriesGroup(statusRows), [statusRows])
-  const availableColumns = useMemo(() => getAvailableColumnsForScope(scope), [scope])
   const columnDefinitions = useMemo(() => getScopedColumnDefinitions(
     availableColumns,
     scope === 'overall'
@@ -671,11 +831,11 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   const visibleColumns = columnSettings.visible
   const hasActiveFilters = normalizedFilters.some(isFilterConditionActive)
   const filterFieldOptions = useMemo(() => (
-    availableColumns.map(col => ({
-      value: col.key === 'milestones' ? 'milestonesText' : col.key,
-      label: col.title,
+    filterFieldDefinitions.map(field => ({
+      value: field.key,
+      label: field.label,
     }))
-  ), [availableColumns])
+  ), [filterFieldDefinitions])
   const statusStats = useMemo(() => {
     const stats = SUMMARY_VISIBLE_STATUSES.reduce((acc, status) => {
       acc[status] = 0
@@ -693,12 +853,40 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     rows.map(row => `${row.key}:${row.isCollapsedPreview ? 'closed' : 'open'}:${row.hiddenProjectCount || 0}`).join('|')
   ), [rows])
 
+  const getSummaryDefinitionsForScope = (nextScope: SummaryScope) => (
+    nextScope === 'machine'
+      ? projectSummaryDefinitionsByScope.machine
+      : nextScope === 'tosVersion'
+        ? projectSummaryDefinitionsByScope.tosVersion
+        : []
+  )
+
   const getDefinitionsForScope = (nextScope: SummaryScope) => getScopedColumnDefinitions(
-    getAvailableColumnsForScope(nextScope),
+    getAvailableColumnsForScope(nextScope, getSummaryDefinitionsForScope(nextScope)),
     nextScope === 'overall'
       ? ['productCategory', 'productSeries', 'projectName']
       : ['productSeries', 'projectName'],
   )
+
+  const getFilterDefinitionsForScope = (nextScope: SummaryScope) => {
+    const projectType = nextScope === 'machine'
+      ? PROJECT_CATEGORY_MACHINE
+      : nextScope === 'tosVersion'
+        ? PROJECT_TYPE_TOS_VERSION
+        : null
+    const summaryDefinitions = getSummaryDefinitionsForScope(nextScope)
+    const fields = projectType
+      ? getProjectSummaryBoardFilterFields(projectType, summaryDefinitions)
+      : getAvailableColumnsForScope(nextScope, summaryDefinitions).map(column => ({
+          key: column.key,
+          label: column.title,
+          kind: 'text' as const,
+        }))
+    return [
+      ...fields,
+      { key: MILESTONE_FILTER_FIELD, label: '节点日期范围', kind: 'date' as const },
+    ]
+  }
 
   const normalizeScope = (value: string | undefined): SummaryScope => {
     if (value === 'software') return 'tosVersion'
@@ -732,7 +920,11 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     setScope(nextScope)
     setStatusFilter(normalizeStatusFilter(state.statusFilter))
     const nextDateRange = normalizeDateRange(state.milestoneDateRange)
-    const nextFilters = normalizeProjectFilterConditions((state.filters || []) as FilterCondition[], nextDateRange)
+    const nextFilters = normalizeProjectFilterConditions(
+      (state.filters || []) as FilterCondition[],
+      nextDateRange,
+      getFilterDefinitionsForScope(nextScope),
+    )
     const collapsedKeys = Array.isArray(state.collapsedKeys) ? state.collapsedKeys.map(String) : []
     setFilters(nextFilters)
     setTempFilters([])
@@ -762,6 +954,10 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   }, [rowsSignature])
 
   useEffect(() => {
+    setColumnSettings(current => normalizeColumnSettings(columnDefinitions, current))
+  }, [columnDefinitions])
+
+  useEffect(() => {
     refreshSavedProjectViews()
     const sharedView = parseProjectViewShare(SUMMARY_VIEW_KIND)
     if (sharedView) {
@@ -782,7 +978,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     setMilestoneDateRange(null)
     setCollapsedCategories(new Set())
     setCollapsedSeries(new Set())
-    setColumnSettings(current => normalizeColumnSettings(getDefinitionsForScope(nextScope), current))
+    setColumnSettings(getDefaultColumnSettings(getDefinitionsForScope(nextScope)))
     setActiveSavedViewId(null)
     setSharedRowsOverride(null)
   }
@@ -824,7 +1020,9 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   const buildExportColumns = () => (
     orderVisibleDefinitions(columnDefinitions, columnSettings)
       .map<ExportColumn>(definition => ({
-        key: definition.key === 'milestones' ? 'milestonesText' : definition.key,
+        key: scope === 'tech' && definition.key === 'milestones'
+          ? 'technicalMilestonesText'
+          : definition.key,
         title: String(definition.title),
       }))
   )
@@ -840,7 +1038,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       applyProjectViewState({
         scope: 'overall',
         statusFilter: 'all',
-        visibleColumns: getDefaultVisibleColumnsForScope('overall'),
+        visibleColumns: getDefaultVisibleColumnsForScope('overall', []),
         columnOrder: getDefinitionsForScope('overall').map(definition => definition.key),
         filters: [],
         collapsedKeys: [],
@@ -944,9 +1142,13 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   }
 
   const handleTempFilterFieldChange = (condition: FilterCondition, field: string) => {
+    const definition = filterFieldByKey.get(field)
+    const operator = field === MILESTONE_FILTER_FIELD
+      ? 'contains'
+      : getFilterOperatorsForKind(definition?.kind ?? 'text')[0]?.value ?? 'equals'
     updateTempFilter(condition.id, {
       field,
-      operator: field === MILESTONE_FILTER_FIELD ? 'contains' : condition.operator,
+      operator,
       value: '',
     })
   }
@@ -962,7 +1164,11 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   }
 
   const applyTempFilters = () => {
-    const nextFilters = normalizeProjectFilterConditions(tempFilters)
+    const nextFilters = normalizeProjectFilterConditions(
+      tempFilters,
+      undefined,
+      filterFieldDefinitions,
+    )
     const nextDateRange = getMilestoneDateRangeFromFilters(nextFilters)
     setFilters(nextFilters)
     setMilestoneDateRange(nextDateRange)
@@ -986,13 +1192,42 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
             onChange={(dates) => handleTempFilterDateRangeChange(condition, dates)}
           />
           <div style={{ marginTop: 6, color: '#64748b', fontSize: 12 }}>
-            选择后，里程碑节点列仅保留范围内的节点。
+            选择后，仅保留范围内存在计划节点的项目。
           </div>
         </div>
       )
     }
 
     if (isValuelessFilterOperator(condition.operator)) return null
+
+    const definition = filterFieldByKey.get(condition.field)
+    if (definition?.kind === 'enum' && definition.options?.length) {
+      return (
+        <Select
+          style={{ width: '100%' }}
+          showSearch
+          allowClear
+          placeholder="请选择筛选值"
+          options={definition.options}
+          value={condition.value || undefined}
+          onChange={value => updateTempFilter(condition.id, { value: value ?? '' })}
+        />
+      )
+    }
+    if (definition?.kind === 'date') {
+      return (
+        <DatePicker
+          style={{ width: '100%' }}
+          format="YYYY-MM-DD"
+          value={condition.value && dayjs(condition.value).isValid()
+            ? dayjs(condition.value)
+            : null}
+          onChange={date => updateTempFilter(condition.id, {
+            value: date ? date.format('YYYY-MM-DD') : '',
+          })}
+        />
+      )
+    }
 
     return (
       <Input
@@ -1034,7 +1269,40 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     }
     const cols: ColumnsType<SummaryRow> = []
 
-    if (scope === 'overall' && isVisible('productCategory')) {
+    if (activeProjectType) {
+      activeProjectSummaryDefinitions.forEach(definition => {
+        if (!isVisible(definition.key)) return
+        cols.push({
+          title: definition.title,
+          dataIndex: definition.key,
+          key: definition.key,
+          width: definition.width,
+          fixed: definition.key === 'projectName' ? 'left' as const : undefined,
+          className: definition.key === 'projectName' ? 'pms-summary-project-cell' : undefined,
+          render: (value: unknown, row) => {
+            if (definition.key === 'projectName') {
+              return (
+                <div className="pms-summary-project-content">
+                  <Tooltip title={row.projectType}>
+                    <span className="pms-summary-project-name">{String(value || '-')}</span>
+                  </Tooltip>
+                </div>
+              )
+            }
+            if (definition.key === 'status') {
+              return (
+                <Tag color={STATUS_COLORS[String(value)] || 'processing'} style={{ margin: 0 }}>
+                  {String(value || '-')}
+                </Tag>
+              )
+            }
+            return renderInfoCell(definition.key, value)
+          },
+        })
+      })
+    }
+
+    if (!activeProjectType && scope === 'overall' && isVisible('productCategory')) {
       cols.push({
         title: '产品分类',
         dataIndex: 'productCategory',
@@ -1072,7 +1340,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       })
     }
 
-	    if (isVisible('productSeries')) {
+	    if (!activeProjectType && isVisible('productSeries')) {
 	      cols.push({
 	        title: '产品系列',
 	        dataIndex: 'productSeries',
@@ -1119,7 +1387,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       })
     }
 
-    if (isVisible('projectName')) {
+    if (!activeProjectType && isVisible('projectName')) {
       cols.push({
         title: '项目名',
         dataIndex: 'projectName',
@@ -1142,7 +1410,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       })
     }
 
-    if (isVisible('tosVersion')) {
+    if (!activeProjectType && isVisible('tosVersion')) {
       cols.push({
         title: 'tOS版本',
         dataIndex: 'tosVersion',
@@ -1153,7 +1421,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       })
     }
 
-    if (isVisible('status')) {
+    if (!activeProjectType && isVisible('status')) {
       cols.push({
         title: '状态',
         dataIndex: 'status',
@@ -1164,34 +1432,23 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       })
     }
 
-    if (isVisible('spm')) {
+    if (!activeProjectType && isVisible('spm')) {
       cols.push({ title: 'SPM', dataIndex: 'spm', key: 'spm', width: 90, align: 'center' })
     }
 
-    if (isVisible('department')) {
+    if (!activeProjectType && isVisible('department')) {
       cols.push({ title: '部门', dataIndex: 'department', key: 'department', width: 128, align: 'center' })
     }
 
-    getExtraColumnsForScope(scope).forEach(col => {
-      if (!isVisible(col.key)) return
+    if (scope === 'tech' && isVisible('milestones')) {
       cols.push({
-        title: col.title,
-        dataIndex: col.key,
-        key: col.key,
-        width: col.width || 110,
-        render: (value: any) => renderInfoCell(col.key, value),
-      })
-    })
-
-    if (isVisible('milestones')) {
-      cols.push({
-        title: '里程碑节点',
-        dataIndex: 'milestones',
+        title: TECHNICAL_MILESTONE_COLUMN.title,
+        dataIndex: 'technicalMilestones',
         key: 'milestones',
-        width: 720,
+        width: TECHNICAL_MILESTONE_COLUMN.width,
         className: 'pms-summary-milestones-cell',
         onHeaderCell: () => ({ className: 'pms-summary-milestones-header' }),
-        render: (milestones: SummaryMilestone[]) => (
+        render: (milestones: SummaryMilestone[] = []) => (
           <div className="pms-summary-milestone-chain">
             {milestones.map((milestone, index) => (
               <div className="pms-summary-milestone-node" key={`${milestone.name}-${index}`}>
@@ -1229,21 +1486,35 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       .map(definition => columnByKey.get(definition.key))
       .filter((column): column is NonNullable<typeof column> => Boolean(column))
     return actionColumn ? [...orderedColumns, actionColumn] : orderedColumns
-  }, [availableColumns, columnDefinitions, columnSettings, visibleColumns, scope, categorySeriesCounts, categorySpans, collapsedCategories, collapsedSeries, onViewProject, seriesProjectCounts, seriesSpans])
+  }, [activeProjectSummaryDefinitions, activeProjectType, availableColumns, columnDefinitions, columnSettings, visibleColumns, scope, categorySeriesCounts, categorySpans, collapsedCategories, collapsedSeries, onViewProject, seriesProjectCounts, seriesSpans])
 
   const calendarDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth])
   const calendarEvents = useMemo(() => {
     const eventMap = new Map<string, { row: SummaryRow; milestone: SummaryMilestone }[]>()
     statusRows.forEach(row => {
-      row.milestones.forEach(milestone => {
-        const date = parseMilestoneDate(milestone.date)
+      const nodeDefinitions = getNodeDefinitionsForRow(
+        row,
+        projectSummaryDefinitionsByScope,
+      )
+      nodeDefinitions.forEach(definition => {
+        const rawDate = row[definition.key]
+        if (typeof rawDate !== 'string' || !rawDate || rawDate === '-') return
+        const date = parseMilestoneDate(rawDate)
         if (!date.isValid()) return
+        if (activeMilestoneDateRange) {
+          const [start, end] = activeMilestoneDateRange
+          if (
+            date.isBefore(dayjs(start).startOf('day'))
+            || date.isAfter(dayjs(end).endOf('day'))
+          ) return
+        }
         const key = date.format('YYYY-MM-DD')
+        const milestone = { name: definition.title, date: rawDate }
         eventMap.set(key, [...(eventMap.get(key) || []), { row, milestone }])
       })
     })
     return eventMap
-  }, [statusRows])
+  }, [activeMilestoneDateRange, projectSummaryDefinitionsByScope, statusRows])
 
   const renderCalendarView = () => (
     <div className="pms-project-calendar">
@@ -2099,7 +2370,9 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
                       {!isMilestoneDateFilter(condition) && (
                         <Select
                           value={condition.operator}
-                          options={FILTER_OPERATORS as any}
+                          options={getFilterOperatorsForKind(
+                            filterFieldByKey.get(condition.field)?.kind ?? 'text',
+                          ) as any}
                           onChange={(value) => {
                             const operator = value as FilterCondition['operator']
                             updateTempFilter(condition.id, {
