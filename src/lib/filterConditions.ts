@@ -82,7 +82,11 @@ function isOperatorAllowedForDefinition(
   return getFilterOperatorsForKind(definition.kind).some(option => option.value === operator)
 }
 
-const isEmptyFilterValue = (value: unknown) => value == null || String(value).trim() === ''
+const EMPTY_FILTER_SENTINELS = new Set(['', '-', '—'])
+
+const isEmptyFilterValue = (value: unknown) => (
+  value == null || EMPTY_FILTER_SENTINELS.has(String(value).trim())
+)
 
 export const normalizeFilterValue = (value: string | string[]) => {
   if (!Array.isArray(value)) return value.trim()
@@ -150,6 +154,7 @@ export function applyFilterConditions<T extends object>(
     if (condition.operator === 'isNotEmpty') return !isEmptyFilterValue(actualRaw)
 
     const kind = definitionsByKey?.get(condition.field)?.kind ?? 'text'
+    if (kind === 'date' && isEmptyFilterValue(actualRaw)) return false
     const actualText = String(actualRaw ?? '')
     const actual = (definitionsByKey ? actualText.trim() : actualText).toLowerCase()
     if (condition.operator === 'equalsAny') {

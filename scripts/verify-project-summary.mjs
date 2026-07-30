@@ -203,6 +203,30 @@ registerAssertion('latest published template ignores the current draft', () => {
   )
 })
 
+registerAssertion('latest published template uses the last snapshot when version numbers tie', () => {
+  const versions = [
+    { id: 'v3-old', versionNo: 'V3', status: '已发布' },
+    { id: 'v2', versionNo: 'V2', status: '已发布' },
+    { id: 'v3-new', versionNo: 'V3', status: '已发布' },
+  ]
+  const snapshots = {
+    'template::整机产品项目::level1::v3-old': [{ id: 'old', taskName: '旧快照' }],
+    'template::整机产品项目::level1::v3-new': [{ id: 'new', taskName: '最后更新快照' }],
+  }
+
+  assert.equal(
+    getLatestPublishedTemplateTasks(
+      '整机产品项目',
+      versions,
+      snapshots,
+      'v3-new',
+      [],
+      { namespacedOnly: true },
+    )[0]?.id,
+    'new',
+  )
+})
+
 registerAssertion('initial plan store seeds isolated V3 template snapshots', () => {
   const state = usePlanStore.getState()
   assert.equal(
@@ -281,19 +305,47 @@ registerAssertion('summary rows map project info and real template task dates', 
     type: '整机产品项目',
     status: '在研',
     developMode: 'ODC',
-    level1PlanTasks: [{ id: '1.1', planEndDate: '2026-08-01' }],
   }
+  const planTasks = [{ id: '1.1', planEndDate: '2026-08-01' }]
   const definitions = [
     ...getProjectSummaryFieldDefinitions('整机产品项目'),
     ...getTemplateTaskFieldDefinitions('整机产品项目', tasks),
   ]
-  const row = buildProjectSummaryRow(project, definitions)
+  const row = buildProjectSummaryRow(project, definitions, planTasks)
 
   assert.equal(row.projectName, 'Demo')
   assert.equal(row.developmentMode, 'ODC')
   assert.equal(row['templateTask::整机产品项目::1.1'], '2026-08-01')
   assert.equal(row['templateTask::整机产品项目::2.1'], '-')
   assert.equal(buildProjectSummaryColumns(definitions).at(0)?.fixed, 'left')
+})
+
+registerAssertion('workbench summary keeps option projects and plan tasks independent from row filters', () => {
+  const workspacePath = path.join(root, 'src/containers/WorkspaceContainer.tsx')
+  const tablePath = path.join(root, 'src/components/project-summary/ProjectSummaryTable.tsx')
+  const workspaceSource = fs.readFileSync(workspacePath, 'utf8')
+  const tableSource = fs.readFileSync(tablePath, 'utf8')
+
+  assert.match(
+    workspaceSource,
+    /const categoryBaseProjects[\s\S]{0,500}visibleProjects[\s\S]{0,500}matchesProjectTypeFilter/,
+  )
+  assert.match(
+    workspaceSource,
+    /optionProjects=\{categoryBaseProjects\}/,
+  )
+  assert.match(
+    workspaceSource,
+    /planTasksByProjectId=\{projectSummaryPlanTasksByProjectId\}/,
+  )
+  assert.match(
+    tableSource,
+    /getProjectSummaryQuickFilterDefinitions\(projectType,\s*optionProjects\)/,
+  )
+  assert.match(
+    tableSource,
+    /buildProjectSummaryRow\([\s\S]{0,180}planTasksByProjectId\[project\.id\]/,
+  )
 })
 
 registerAssertion('workbench list state follows the selected category', () => {

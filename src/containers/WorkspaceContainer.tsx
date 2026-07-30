@@ -26,12 +26,14 @@ import {
   PROJECT_SECONDARY_CATEGORIES,
   PROJECT_TYPE_TOS_VERSION,
   getProjectStatusOptions,
+  isMachineProjectType,
   matchesProjectSecondaryCategoryFilter,
   matchesProjectTypeFilter,
 } from '@/constants/projectTypes'
 import { getWorkbenchListState } from '@/lib/projectSummary'
 import { getTemplateTasksForProjectType } from '@/lib/projectTemplateCompatibility'
 import { buildTosTypeRows, getMainTosType } from '@/lib/tosTypeRules'
+import { buildMarketRowsFromMarkets, getMainMarket } from '@/lib/marketRules'
 
 const WORKSPACE_FILTER_TOOLBAR_STYLE: CSSProperties = {
   background: 'rgba(255,255,255,0.8)',
@@ -74,7 +76,7 @@ export default function WorkspaceContainer() {
     todoFilter, setTodoFilter,
     todoCollapsed, setTodoCollapsed,
     setSelectedMarketTab,
-    setSelectedTosTypeTab, tosTypeConfigsByProjectId,
+    setSelectedTosTypeTab, tosTypeConfigsByProjectId, marketConfigsByProjectId,
   } = useProjectStore()
 
   const {
@@ -82,6 +84,7 @@ export default function WorkspaceContainer() {
     setCurrentVersion, setActiveLevel2Plan,
     createdLevel2Plans,
     versions, currentVersion, publishedSnapshots, configTemplateTasksByType,
+    marketPlanData, tosTypePlanDataByProjectId,
   } = usePlanStore()
 
   const { setIsEditMode } = useUiStore()
@@ -130,6 +133,45 @@ export default function WorkspaceContainer() {
     }
     return result
   }, [visibleProjects, projectSearchText2])
+
+  const categoryBaseProjects = useMemo(
+    () => visibleProjects.filter(project => (
+      matchesProjectTypeFilter(project.type, projectTypeFilter, project.secondaryCategory)
+    )),
+    [projectTypeFilter, visibleProjects],
+  )
+
+  const projectSummaryPlanTasksByProjectId = useMemo(() => (
+    Object.fromEntries(categoryBaseProjects.map(project => {
+      if (isMachineProjectType(project.type)) {
+        const marketRows = buildMarketRowsFromMarkets(
+          project.markets || [],
+          marketConfigsByProjectId[project.id],
+        )
+        const mainMarket = getMainMarket(marketRows)
+        return [project.id, marketPlanData[mainMarket]?.tasks || []]
+      }
+      if (project.type === PROJECT_TYPE_TOS_VERSION) {
+        const typeRows = buildTosTypeRows(
+          project.versionTypes || [],
+          project.versionType || '',
+          tosTypeConfigsByProjectId[project.id],
+        )
+        const mainType = getMainTosType(typeRows)
+        return [
+          project.id,
+          tosTypePlanDataByProjectId[project.id]?.[mainType]?.level1Tasks || [],
+        ]
+      }
+      return [project.id, []]
+    }))
+  ), [
+    categoryBaseProjects,
+    marketConfigsByProjectId,
+    marketPlanData,
+    tosTypeConfigsByProjectId,
+    tosTypePlanDataByProjectId,
+  ])
 
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { all: searchFilteredProjects.length }
@@ -406,6 +448,8 @@ export default function WorkspaceContainer() {
               ) : (
                 <ProjectSummaryTable
                   projects={workspaceFilteredProjects}
+                  optionProjects={categoryBaseProjects}
+                  planTasksByProjectId={projectSummaryPlanTasksByProjectId}
                   projectType={projectTypeFilter}
                   versions={versions}
                   currentVersion={currentVersion}

@@ -120,8 +120,13 @@ export function getLatestPublishedTemplateTasks<T extends ProjectSummaryTemplate
   options: { namespacedOnly?: boolean } = {},
 ): T[] {
   const publishedVersions = versions
-    .filter(version => version.status === '已发布')
-    .sort((left, right) => getVersionNumber(right.versionNo) - getVersionNumber(left.versionNo))
+    .map((version, index) => ({ version, index }))
+    .filter(({ version }) => version.status === '已发布')
+    .sort((left, right) => (
+      getVersionNumber(right.version.versionNo) - getVersionNumber(left.version.versionNo)
+      || right.index - left.index
+    ))
+    .map(({ version }) => version)
   const namespacedVersion = publishedVersions.find(version => (
     Object.prototype.hasOwnProperty.call(
       publishedSnapshots,
@@ -372,8 +377,10 @@ export interface ProjectSummaryRow extends Record<string, unknown> {
   projectName: string
 }
 
-function findProjectTaskDate(project: ProjectInfoProject, taskId: string) {
-  const tasks = Array.isArray(project.level1PlanTasks) ? project.level1PlanTasks : []
+function findProjectTaskDate(
+  tasks: readonly ProjectSummaryTemplateTask[],
+  taskId: string,
+) {
   const task = tasks.find(item => String(item?.id) === taskId)
   return typeof task?.planEndDate === 'string' && task.planEndDate ? task.planEndDate : '-'
 }
@@ -386,6 +393,7 @@ const getTopLevelSummaryValue = (project: ProjectInfoProject, key: string) => {
 export function buildProjectSummaryRow(
   project: ProjectInfoProject,
   definitions: readonly ProjectSummaryFieldDefinition[],
+  level1PlanTasks: readonly ProjectSummaryTemplateTask[] = [],
 ): ProjectSummaryRow {
   const classification = resolveProjectClassification(
     project.type,
@@ -411,7 +419,7 @@ export function buildProjectSummaryRow(
         getProjectInfoValue(project, definition.key),
       )
     } else if (definition.source === 'templateTask' && definition.taskId) {
-      row[definition.key] = findProjectTaskDate(project, definition.taskId)
+      row[definition.key] = findProjectTaskDate(level1PlanTasks, definition.taskId)
     }
   })
 

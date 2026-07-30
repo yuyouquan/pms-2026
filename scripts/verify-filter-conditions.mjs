@@ -52,19 +52,34 @@ const rows = [
   { name: 'Alpha', owner: '张三', status: '进行中', note: '' },
   { name: 'Beta', owner: '李四', status: '已完成', note: null },
   { name: 'Gamma', owner: '', status: '未开始', note: 'ready' },
+  { name: 'Delta', owner: '王五', status: '未开始', note: '-', dueDate: '-' },
+  { name: 'Epsilon', owner: '赵六', status: '未开始', note: '—', dueDate: '—' },
 ]
 
 assert.deepEqual(
   plain(applyFilterConditions(rows, [{ id: '1', field: 'owner', operator: 'notEquals', value: '张三' }]).map((row) => row.name)),
-  ['Beta', 'Gamma'],
+  ['Beta', 'Gamma', 'Delta', 'Epsilon'],
 )
 assert.deepEqual(
   plain(applyFilterConditions(rows, [{ id: '1', field: 'note', operator: 'isEmpty', value: '' }]).map((row) => row.name)),
-  ['Alpha', 'Beta'],
+  ['Alpha', 'Beta', 'Delta', 'Epsilon'],
 )
 assert.deepEqual(
   plain(applyFilterConditions(rows, [{ id: '1', field: 'note', operator: 'isNotEmpty', value: '' }]).map((row) => row.name)),
   ['Gamma'],
+)
+
+assert.deepEqual(
+  plain(applyFilterConditions(
+    [
+      ...rows,
+      { name: 'Zeta', dueDate: '2026-08-01' },
+    ],
+    [{ id: '1', field: 'dueDate', operator: 'before', value: '2026-09-01' }],
+    [{ key: 'dueDate', label: '计划完成日期', kind: 'date' }],
+  ).map((row) => row.name)),
+  ['Zeta'],
+  'missing-value sentinels must not participate in date comparisons',
 )
 
 const paddedRows = [{ name: ' Alpha ' }]

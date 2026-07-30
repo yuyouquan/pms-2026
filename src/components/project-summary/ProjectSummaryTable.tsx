@@ -66,6 +66,8 @@ interface ProjectSummaryVersion {
 
 export interface ProjectSummaryTableProps {
   projects: ProjectInfoProject[]
+  optionProjects: ProjectInfoProject[]
+  planTasksByProjectId: Record<string, ProjectSummaryTemplateTask[]>
   projectType: string
   versions: ProjectSummaryVersion[]
   currentVersion: string
@@ -130,6 +132,8 @@ const cloneConditions = (conditions: readonly AnyFilterCondition[]) => (
 
 export default function ProjectSummaryTable({
   projects,
+  optionProjects,
+  planTasksByProjectId,
   projectType,
   versions,
   currentVersion,
@@ -185,12 +189,16 @@ export default function ProjectSummaryTable({
   )
 
   const baseRows = useMemo(
-    () => projects.map(project => buildProjectSummaryRow(project, fieldDefinitions)),
-    [fieldDefinitions, projects],
+    () => projects.map(project => buildProjectSummaryRow(
+      project,
+      fieldDefinitions,
+      planTasksByProjectId[project.id],
+    )),
+    [fieldDefinitions, planTasksByProjectId, projects],
   )
   const quickFilterDefinitions = useMemo(
-    () => getProjectSummaryQuickFilterDefinitions(projectType, projects),
-    [projectType, projects],
+    () => getProjectSummaryQuickFilterDefinitions(projectType, optionProjects),
+    [optionProjects, projectType],
   )
   const quickFilterByKey = useMemo(
     () => new Map(quickFilterDefinitions.map(definition => [definition.key, definition])),
