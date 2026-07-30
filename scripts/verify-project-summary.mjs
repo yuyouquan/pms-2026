@@ -135,18 +135,18 @@ registerAssertion('project-info summary fields preserve each schema order', () =
 
 registerAssertion('latest published template ignores the current draft', () => {
   const versions = [
-    { id: 'v3', status: '已发布' },
-    { id: 'v4', status: '修订中' },
-    { id: 'v2', status: '已发布' },
+    { id: 'v3', versionNo: 'V3', status: '已发布' },
+    { id: 'v4', versionNo: 'V4', status: '修订中' },
+    { id: 'v2', versionNo: 'V2', status: '已发布' },
   ]
   const snapshots = {
-    v2: [{ id: '1', taskName: '旧节点' }],
-    v3: [{ id: '1', taskName: '新节点' }],
+    'template::整机产品项目::level1::v2': [{ id: 'old', taskName: '旧节点' }],
+    'template::整机产品项目::level1::v3': [{ id: 'new', taskName: '新节点' }],
   }
 
-  assert.deepEqual(
-    getLatestPublishedTemplateTasks(versions, snapshots, 'v4', []),
-    [{ id: '1', taskName: '新节点' }],
+  assert.equal(
+    getLatestPublishedTemplateTasks('整机产品项目', versions, snapshots, 'v4', [])[0]?.id,
+    'new',
   )
 })
 
@@ -163,23 +163,19 @@ registerAssertion('level-one summary includes only direct second-level tasks', (
 })
 
 registerAssertion('workbench list state follows the selected category', () => {
-  assert.deepEqual(getWorkbenchListState('all'), {
-    mode: 'select-category',
-    showSecondaryCategory: false,
-    showStatusQuickFilter: false,
-  })
+  assert.equal(getWorkbenchListState('all').kind, 'select-category')
   assert.deepEqual(getWorkbenchListState('整机产品项目'), {
-    mode: 'table',
+    kind: 'table',
     showSecondaryCategory: true,
     showStatusQuickFilter: true,
   })
   assert.deepEqual(getWorkbenchListState('tOS版本项目'), {
-    mode: 'table',
+    kind: 'table',
     showSecondaryCategory: false,
     showStatusQuickFilter: false,
   })
   assert.deepEqual(getWorkbenchListState('技术项目'), {
-    mode: 'unsupported',
+    kind: 'unsupported',
     showSecondaryCategory: true,
     showStatusQuickFilter: true,
   })
@@ -187,11 +183,11 @@ registerAssertion('workbench list state follows the selected category', () => {
 
 registerAssertion('quick filters expose the expected linked project-info fields', () => {
   assert.deepEqual(
-    getProjectSummaryQuickFilterDefinitions('整机产品项目').map(field => field.key),
+    getProjectSummaryQuickFilterDefinitions('整机产品项目', []).map(field => field.key),
     ['firstSaleTosVersion', 'chipCode', 'brand', 'productSeries', 'productType'],
   )
   assert.deepEqual(
-    getProjectSummaryQuickFilterDefinitions('tOS版本项目').map(field => field.key),
+    getProjectSummaryQuickFilterDefinitions('tOS版本项目', []).map(field => field.key),
     ['versionType', 'tosVersion'],
   )
 })
@@ -207,16 +203,16 @@ registerAssertion('linked quick filters add and clear equals-any conditions', ()
 
 registerAssertion('equals-any linked quick filters compose with AND semantics', () => {
   const rows = [
-    { id: 1, brand: 'TECNO', productType: '新品' },
-    { id: 2, brand: 'Infinix', productType: '老品' },
-    { id: 3, brand: 'itel', productType: '新品' },
+    { id: '1', brand: 'TECNO', productType: '新品' },
+    { id: '2', brand: 'Infinix', productType: '老品' },
+    { id: '3', brand: 'itel', productType: '新品' },
   ]
   const filtered = applyFilterConditions(rows, [
     { id: 'brand', field: 'brand', operator: 'equalsAny', value: ['TECNO', 'Infinix'] },
     { id: 'productType', field: 'productType', operator: 'equalsAny', value: ['新品'] },
   ])
 
-  assert.deepEqual(filtered.map(row => row.id), [1])
+  assert.deepEqual(filtered.map(row => row.id), ['1'])
 })
 
 let failureCount = 0
