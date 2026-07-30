@@ -10,7 +10,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "verify:column-settings": "node scripts/verify-sortable-column-settings.mjs",
-    "verify:project-summary": "node scripts/verify-project-summary.mjs"
+    "verify:project-summary": "node scripts/verify-project-summary.mjs",
+    "verify:floating-panels": "node scripts/verify-floating-config-panels.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
