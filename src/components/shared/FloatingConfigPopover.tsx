@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactElement, ReactNode } from 'react';
+import { useEffect, type ReactElement, type ReactNode } from 'react';
 import { Popover } from 'antd';
 
 type FloatingConfigPopoverProps = {
@@ -28,6 +28,17 @@ export function FloatingConfigPopover({
   onCancel,
   getPopupContainer,
 }: FloatingConfigPopoverProps) {
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      onCancel();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onCancel, open]);
+
   return (
     <Popover
       open={open}

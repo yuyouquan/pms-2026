@@ -356,6 +356,7 @@ export default function ProjectSummaryTable({
       return (
         <Select
           mode="multiple"
+          aria-label={`${definition.label}筛选值`}
           allowClear
           showSearch
           optionFilterProp="label"
@@ -373,6 +374,7 @@ export default function ProjectSummaryTable({
         : null
       return (
         <DatePicker
+          aria-label={`${definition.label}筛选值`}
           style={{ width: '100%' }}
           value={value?.isValid() ? value : null}
           onChange={date => updateTempCondition(
@@ -385,6 +387,7 @@ export default function ProjectSummaryTable({
     if (definition.kind === 'enum') {
       return (
         <Select
+          aria-label={`${definition.label}筛选值`}
           allowClear
           showSearch
           optionFilterProp="label"
@@ -400,6 +403,7 @@ export default function ProjectSummaryTable({
     }
     return (
       <Input
+        aria-label={`${definition.label}筛选值`}
         placeholder="输入筛选值"
         value={typeof condition.value === 'string' ? condition.value : ''}
         onChange={event => updateTempCondition(condition.id, { value: event.target.value })}
@@ -423,7 +427,7 @@ export default function ProjectSummaryTable({
               mode="multiple"
               allowClear
               showSearch
-              maxTagCount="responsive"
+              maxTagCount={1}
               optionFilterProp="label"
               placeholder={definition.label}
               aria-label={`快捷筛选-${definition.label}`}

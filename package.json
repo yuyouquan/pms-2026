@@ -12,7 +12,8 @@
     "verify:column-settings": "node scripts/verify-sortable-column-settings.mjs",
     "verify:project-summary": "node scripts/verify-project-summary.mjs",
     "verify:floating-panels": "node scripts/verify-floating-config-panels.mjs",
-    "verify:workbench-list": "node scripts/verify-workbench-project-list.mjs"
+    "verify:workbench-list": "node scripts/verify-workbench-project-list.mjs",
+    "verify:workbench-browser": "node screenshots/verify-workbench-summary-floating-panels.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
