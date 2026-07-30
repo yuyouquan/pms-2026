@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 const componentPath = resolve('src/components/shared/FloatingConfigPopover.tsx');
 const sortableColumnSettingsPath = resolve('src/components/shared/SortableColumnSettings.tsx');
 const roadmapFilterPath = resolve('src/components/roadmap/RoadmapFilterDrawer.tsx');
+const projectRoadmapModulePath = resolve('src/components/roadmap/ProjectRoadmapModule.tsx');
 const stylesPath = resolve('src/styles/globals.css');
 const sortableColumnSettingsCallers = [
   'src/app/share/plan/page.tsx',
@@ -63,6 +64,28 @@ if (!/FloatingFilterPanel/.test(roadmapFilterSource)) {
 }
 if (/\bDrawer\b/.test(roadmapFilterSource)) {
   throw new Error('RoadmapFilterDrawer must not use Drawer');
+}
+
+const projectRoadmapModuleSource = readFileSync(projectRoadmapModulePath, 'utf8');
+if (!/onOpenFilters=\{\(\) => \{[\s\S]*?setColumnDrawerOpen\(false\)[\s\S]*?setFilterDrawerOpen\(true\)[\s\S]*?\}\}/.test(projectRoadmapModuleSource)) {
+  throw new Error('ProjectRoadmapModule must close column settings before opening filters');
+}
+if (!/onOpenColumnSettings=\{\(\) => \{[\s\S]*?setFilterDrawerOpen\(false\)[\s\S]*?setColumnDrawerOpen\(true\)[\s\S]*?\}\}/.test(projectRoadmapModuleSource)) {
+  throw new Error('ProjectRoadmapModule must close filters before opening column settings');
+}
+if (!/const getRoadmapPopupContainer = useCallback/.test(projectRoadmapModuleSource)) {
+  throw new Error('ProjectRoadmapModule must provide a stable roadmap popup container callback');
+}
+if (!/data-roadmap-shell/.test(projectRoadmapModuleSource)) {
+  throw new Error('ProjectRoadmapModule must mark the roadmap shell for popup lookup');
+}
+for (const componentName of ['RoadmapFilterDrawer', 'RoadmapColumnSettingsDrawer']) {
+  const componentPattern = new RegExp(
+    `<${componentName}\\b[\\s\\S]*?getPopupContainer=\\{getRoadmapPopupContainer\\}`,
+  );
+  if (!componentPattern.test(projectRoadmapModuleSource)) {
+    throw new Error(`ProjectRoadmapModule must pass getPopupContainer to ${componentName}`);
+  }
 }
 
 for (const callerPath of sortableColumnSettingsCallers) {

@@ -38,6 +38,7 @@ function createRoadmapFilterCondition(): RoadmapFilterCondition {
 interface RoadmapFilterDrawerProps {
   open: boolean
   trigger: ReactElement
+  getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
   onClose: () => void
   conditions: readonly RoadmapFilterCondition[]
   fieldDefinitions: readonly FilterFieldDefinition[]
@@ -47,6 +48,7 @@ interface RoadmapFilterDrawerProps {
 export default function RoadmapFilterDrawer({
   open,
   trigger,
+  getPopupContainer,
   onClose,
   conditions,
   fieldDefinitions,
@@ -178,6 +180,7 @@ export default function RoadmapFilterDrawer({
     <FloatingFilterPanel
       open={open}
       trigger={trigger}
+      getPopupContainer={getPopupContainer}
       onReset={resetAdvancedFilters}
       onClear={() => setDraftConditions([createRoadmapFilterCondition()])}
       onCancel={onClose}

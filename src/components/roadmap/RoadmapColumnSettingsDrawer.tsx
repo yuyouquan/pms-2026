@@ -12,6 +12,7 @@ import type { RoadmapColumnKey, RoadmapViewMode } from '@/types/roadmap'
 interface RoadmapColumnSettingsDrawerProps {
   open: boolean
   trigger: ReactElement
+  getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
   onClose: () => void
   viewMode: RoadmapViewMode
   value: SortableColumnSettingsValue<RoadmapColumnKey>
@@ -21,6 +22,7 @@ interface RoadmapColumnSettingsDrawerProps {
 export default function RoadmapColumnSettingsDrawer({
   open,
   trigger,
+  getPopupContainer,
   onClose,
   viewMode,
   value,
@@ -33,6 +35,7 @@ export default function RoadmapColumnSettingsDrawer({
     <SortableColumnSettings
       open={open}
       trigger={trigger}
+      getPopupContainer={getPopupContainer}
       definitions={definitions}
       value={value}
       defaultValue={defaultValue}

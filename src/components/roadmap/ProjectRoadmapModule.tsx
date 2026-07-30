@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Empty, Modal, Result, message } from 'antd'
 import {
   applyRoadmapFilters,
@@ -120,6 +120,12 @@ export default function ProjectRoadmapModule({
   const [isFullscreen, setIsFullscreen] = useState(false)
   const roadmapShellRef = useRef<HTMLElement>(null)
   const textFilterDebouncerRef = useRef<RoadmapTextFilterDebouncer | null>(null)
+  const getRoadmapPopupContainer = useCallback((triggerNode: HTMLElement) => {
+    const shell = triggerNode.closest<HTMLElement>('[data-roadmap-shell]')
+      ?? roadmapShellRef.current
+    if (shell?.matches(':fullscreen')) return shell
+    return triggerNode.parentElement ?? document.body
+  }, [])
 
   const filterFieldDefinitions = useMemo(
     () => buildRoadmapFilterFieldDefinitions(versions),
@@ -375,6 +381,7 @@ export default function ProjectRoadmapModule({
   return (
     <section
       ref={roadmapShellRef}
+      data-roadmap-shell
       className={`pms-roadmap-shell${isFullscreen ? ' pms-roadmap-shell-fullscreen' : ''}`}
       aria-label="tOS 路标视图"
       style={{ width: '100%', minWidth: 0 }}
@@ -399,12 +406,19 @@ export default function ProjectRoadmapModule({
         onOpenChangeLog={requestChangeLog}
         onOpenTosMaintenance={() => setTosMaintenanceOpen(true)}
         onCreatePlannedProject={openCreatePlannedProject}
-        onOpenFilters={() => setFilterDrawerOpen(true)}
-        onOpenColumnSettings={() => setColumnDrawerOpen(true)}
+        onOpenFilters={() => {
+          setColumnDrawerOpen(false)
+          setFilterDrawerOpen(true)
+        }}
+        onOpenColumnSettings={() => {
+          setFilterDrawerOpen(false)
+          setColumnDrawerOpen(true)
+        }}
         renderFilters={trigger => (
           <RoadmapFilterDrawer
             open={filterDrawerOpen}
             trigger={trigger}
+            getPopupContainer={getRoadmapPopupContainer}
             onClose={() => setFilterDrawerOpen(false)}
             conditions={filters}
             fieldDefinitions={filterFieldDefinitions}
@@ -415,6 +429,7 @@ export default function ProjectRoadmapModule({
           <RoadmapColumnSettingsDrawer
             open={columnDrawerOpen}
             trigger={trigger}
+            getPopupContainer={getRoadmapPopupContainer}
             onClose={() => setColumnDrawerOpen(false)}
             viewMode={viewMode}
             value={{ order: [...columnOrder], visible: [...visibleColumns] }}
