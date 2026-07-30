@@ -2594,12 +2594,9 @@ export default function MilestoneView({
 	              )}
 	              onReset={() => {
 	                setTempFilters([createFilterCondition()])
-	                setMilestoneDateRange(null)
 	              }}
 	              onClear={() => {
 	                setTempFilters([createFilterCondition()])
-	                setMilestoneDateRange(null)
-	                setSharedRowsOverride(null)
 	              }}
 	              onCancel={() => setShowFilterDrawer(false)}
 	              onConfirm={applyTempFilters}

@@ -2078,12 +2078,9 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
               )}
               onReset={() => {
                 setTempFilters([createFilterCondition()])
-                setMilestoneDateRange(null)
               }}
               onClear={() => {
                 setTempFilters([createFilterCondition()])
-                setMilestoneDateRange(null)
-                setSharedRowsOverride(null)
               }}
               onCancel={() => setShowFilterDrawer(false)}
               onConfirm={applyTempFilters}

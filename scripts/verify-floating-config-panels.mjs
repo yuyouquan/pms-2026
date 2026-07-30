@@ -22,6 +22,17 @@ const inlineFilterCallers = [
   'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
   'src/containers/ProjectSpaceContainer.tsx',
 ];
+const summaryFilterCallers = inlineFilterCallers.slice(0, 2);
+
+function getFloatingFilterProp(source, propName, nextPropName, callerPath) {
+  const panelStart = source.indexOf('<FloatingFilterPanel');
+  const propStart = source.indexOf(`${propName}=`, panelStart);
+  const propEnd = source.indexOf(`${nextPropName}=`, propStart);
+  if (panelStart < 0 || propStart < 0 || propEnd < 0) {
+    throw new Error(`${callerPath} must provide bounded ${propName} and ${nextPropName} props`);
+  }
+  return source.slice(propStart, propEnd);
+}
 
 if (!existsSync(componentPath)) {
   throw new Error('missing FloatingConfigPopover');
@@ -124,6 +135,32 @@ for (const callerPath of inlineFilterCallers) {
   if (/<Drawer\b[\s\S]{0,240}title="筛选条件"|title="筛选条件"[\s\S]{0,240}<Drawer\b/.test(callerSource)) {
     throw new Error(`${callerPath} must not render the filter UI in a Drawer`);
   }
+}
+
+for (const callerPath of summaryFilterCallers) {
+  const callerSource = readFileSync(resolve(callerPath), 'utf8');
+  const resetProp = getFloatingFilterProp(callerSource, 'onReset', 'onClear', callerPath);
+  const clearProp = getFloatingFilterProp(callerSource, 'onClear', 'onCancel', callerPath);
+  for (const [propName, propSource] of [['onReset', resetProp], ['onClear', clearProp]]) {
+    if (/setMilestoneDateRange|setSharedRowsOverride/.test(propSource)) {
+      throw new Error(`${callerPath} ${propName} must only update the filter draft`);
+    }
+  }
+}
+
+const projectSpaceSource = readFileSync(resolve('src/containers/ProjectSpaceContainer.tsx'), 'utf8');
+const projectSpaceResetProp = getFloatingFilterProp(
+  projectSpaceSource,
+  'onReset',
+  'onClear',
+  'src/containers/ProjectSpaceContainer.tsx',
+);
+if (!/setTempLevel1PlanFilters\(\s*\[\s*createFilterCondition\(\)\s*\]\s*\)/.test(projectSpaceResetProp)) {
+  throw new Error('ProjectSpaceContainer onReset must restore the default empty condition');
+}
+if (/\bimport\s*\{[^}]*\bDrawer\b[^}]*\}\s*from\s*['"]antd['"]/.test(projectSpaceSource)
+  || /<Drawer\b/.test(projectSpaceSource)) {
+  throw new Error('ProjectSpaceContainer must not import or render Drawer');
 }
 
 const requiredStylePatterns = [

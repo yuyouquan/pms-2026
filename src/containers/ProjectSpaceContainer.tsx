@@ -19,7 +19,7 @@ import {
   Menu, message, notification, Select, Input, Popconfirm, Tooltip, Modal,
   Checkbox, DatePicker, Form, Avatar, Empty, Slider, Alert, Statistic,
   Descriptions, Divider, Radio, Dropdown, Breadcrumb, Collapse,
-  Typography, Pagination, Drawer, Switch
+  Typography, Pagination, Switch
 } from 'antd'
 import dayjs from 'dayjs'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
@@ -3595,11 +3595,7 @@ export default function ProjectSpaceContainer() {
                       getPopupContainer={(triggerNode) => (
                         triggerNode.closest('.ant-modal-content') as HTMLElement | null
                       ) ?? document.body}
-                      onReset={() => setTempLevel1PlanFilters(
-                        level1PlanFilters.length
-                          ? level1PlanFilters.map(item => ({ ...item }))
-                          : [createFilterCondition()],
-                      )}
+                      onReset={() => setTempLevel1PlanFilters([createFilterCondition()])}
                       onClear={() => setTempLevel1PlanFilters([createFilterCondition()])}
                       onCancel={() => setShowLevel1PlanFilterDrawer(false)}
                       onConfirm={() => {
