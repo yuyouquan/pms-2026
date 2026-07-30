@@ -2500,7 +2500,9 @@ export default function MilestoneView({
 		        </div>
 	      </div>
 
-	      <div className="pms-summary-sticky-region pms-summary-sticky-offset" style={stickyRegionStyle}>
+	      {(() => {
+	        const renderToolbar = () => (
+	          <div className="pms-summary-sticky-region pms-summary-sticky-offset" style={stickyRegionStyle}>
 	        <div className="pms-summary-toolbar-shell">
 		        <div className="pms-summary-toolbar">
 		          <div className="pms-summary-status-group">
@@ -2730,11 +2732,17 @@ export default function MilestoneView({
 	              />
 	            </Tooltip>
 	          </Space>
-	        </div>
-	      </div>
-	      </div>
+		        </div>
+		      </div>
+		      </div>
 
-	      {activeSnapshot && !compareMode && (
+	        )
+
+	        return (
+	          <>
+	      {!isFullscreen && renderToolbar()}
+
+		      {activeSnapshot && !compareMode && (
 	        <div className="pms-roadmap-info-bar">
 	          <Space size={8}>
 	            <HistoryOutlined />
@@ -2782,10 +2790,14 @@ export default function MilestoneView({
         footer={null}
         width="100vw"
         style={{ top: 0, maxWidth: '100vw', paddingBottom: 0 }}
-        styles={{ body: { height: 'calc(100vh - 110px)', overflow: 'auto' } }}
-      >
-        {renderCurrentView()}
-      </Modal>
+	        styles={{ body: { height: 'calc(100vh - 110px)', overflow: 'auto' } }}
+	      >
+	        {isFullscreen && renderToolbar()}
+	        {renderCurrentView()}
+	      </Modal>
+	          </>
+	        )
+	      })()}
 
 	      <Modal
 	        title="新建视图"

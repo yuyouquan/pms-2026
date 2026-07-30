@@ -149,6 +149,18 @@ for (const callerPath of summaryFilterCallers) {
   if (!/\{!isFullscreen\s*&&\s*renderCurrentView\(\)\}/.test(callerSource)) {
     throw new Error(`${callerPath} must hide the background view while fullscreen`);
   }
+  if (!/const renderToolbar = \(\) => \(/.test(callerSource)) {
+    throw new Error(`${callerPath} must define one reusable toolbar renderer`);
+  }
+  if (!/\{!isFullscreen\s*&&\s*renderToolbar\(\)\}/.test(callerSource)) {
+    throw new Error(`${callerPath} must hide the background toolbar while fullscreen`);
+  }
+  if (!/open=\{isFullscreen\}[\s\S]*?\{isFullscreen\s*&&\s*renderToolbar\(\)\}[\s\S]*?\{renderCurrentView\(\)\}/.test(callerSource)) {
+    throw new Error(`${callerPath} fullscreen Modal must render the complete toolbar before the current view`);
+  }
+  if ((callerSource.match(/\{isFullscreen\s*&&\s*renderToolbar\(\)\}/g) ?? []).length !== 1) {
+    throw new Error(`${callerPath} fullscreen Modal must keep exactly one toolbar render`);
+  }
   if ((callerSource.match(/\{renderCurrentView\(\)\}/g) ?? []).length !== 1) {
     throw new Error(`${callerPath} fullscreen Modal must keep exactly one current-view render`);
   }

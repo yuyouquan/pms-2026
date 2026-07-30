@@ -2280,7 +2280,9 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
 	        </div>
       </div>
 
-      <div className="pms-summary-sticky-region pms-summary-sticky-offset" style={stickyRegionStyle}>
+      {(() => {
+        const renderToolbar = () => (
+          <div className="pms-summary-sticky-region pms-summary-sticky-offset" style={stickyRegionStyle}>
         <div className="pms-summary-toolbar-shell">
 	        <div className="pms-summary-toolbar">
 	          <div className="pms-summary-status-group">
@@ -2488,6 +2490,12 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       </div>
       </div>
 
+        )
+
+        return (
+          <>
+      {!isFullscreen && renderToolbar()}
+
       {!isFullscreen && renderCurrentView()}
 
       <Modal
@@ -2508,8 +2516,12 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         style={{ top: 0, maxWidth: '100vw', paddingBottom: 0 }}
         styles={{ body: { height: 'calc(100vh - 110px)', overflow: 'auto' } }}
 	      >
+          {isFullscreen && renderToolbar()}
 	        {renderCurrentView()}
 	      </Modal>
+          </>
+        )
+      })()}
 
 	      <Modal
 	        title="新建视图"
