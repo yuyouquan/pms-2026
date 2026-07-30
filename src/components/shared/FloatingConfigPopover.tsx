@@ -63,7 +63,9 @@ export function FloatingConfigPopover({
         }
         timeout = window.setTimeout(focusFirstControl, 16);
       };
-      timeout = window.setTimeout(focusFirstControl, 0);
+      // Wait for Ant Design's popup motion and auto-focus work to settle before
+      // moving focus into the actual configuration panel.
+      timeout = window.setTimeout(focusFirstControl, 120);
       return () => window.clearTimeout(timeout);
     }
 
