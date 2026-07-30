@@ -79,6 +79,7 @@ function loadContracts() {
   const projectInfoSchema = loadTypeScriptModule(path.join(root, 'src/constants/projectInfoSchema.ts'))
   const filterConditions = loadTypeScriptModule(path.join(root, 'src/lib/filterConditions.ts'))
   const roadmapUtils = loadTypeScriptModule(path.join(root, 'src/components/roadmap/utils.ts'))
+  const planStore = loadTypeScriptModule(path.join(root, 'src/stores/plan.ts'))
   const requiredProjectSummaryExports = [
     'getProjectSummaryFieldDefinitions',
     'getLatestPublishedTemplateTasks',
@@ -109,8 +110,17 @@ function loadContracts() {
   if (typeof roadmapUtils.getProjectSummaryScopeFilterFields !== 'function') {
     throw new Error('missing shared helper: src/components/roadmap/utils.ts (getProjectSummaryScopeFilterFields)')
   }
+  if (typeof planStore.usePlanStore?.getState !== 'function') {
+    throw new Error('missing initial plan store contract: src/stores/plan.ts (usePlanStore.getState)')
+  }
 
-  return { ...projectSummary, ...projectInfoSchema, ...filterConditions, ...roadmapUtils }
+  return {
+    ...projectSummary,
+    ...projectInfoSchema,
+    ...filterConditions,
+    ...roadmapUtils,
+    ...planStore,
+  }
 }
 
 let contracts
@@ -139,6 +149,9 @@ const {
   applyFilterConditions,
   migrateLegacySummaryRows,
   getProjectSummaryScopeFilterFields,
+  usePlanStore,
+  TEMPLATE_PROJECT_TYPES,
+  getTemplateSnapshotKey,
 } = contracts
 
 registerAssertion('project-info summary fields preserve each schema order', () => {
@@ -188,6 +201,47 @@ registerAssertion('latest published template ignores the current draft', () => {
     )[0]?.id,
     'polluted-tech',
   )
+})
+
+registerAssertion('initial plan store seeds isolated V3 template snapshots', () => {
+  const state = usePlanStore.getState()
+  assert.equal(
+    state.versions.some(version => (
+      version.id === 'v3' && version.status === '已发布'
+    )),
+    true,
+  )
+
+  const snapshots = TEMPLATE_PROJECT_TYPES.map(projectType => {
+    const key = getTemplateSnapshotKey(projectType, 'v3')
+    const snapshot = state.publishedSnapshots[key]
+    const configuredTasks = state.configTemplateTasksByType[projectType]
+    assert.ok(Array.isArray(snapshot) && snapshot.length > 0, `${projectType} missing V3 snapshot`)
+    assert.deepEqual(snapshot, configuredTasks)
+    assert.notStrictEqual(snapshot, configuredTasks)
+    snapshot.forEach((task, index) => {
+      assert.notStrictEqual(task, configuredTasks[index])
+    })
+    assert.ok(
+      getLatestPublishedTemplateTasks(
+        projectType,
+        state.versions,
+        state.publishedSnapshots,
+        state.currentVersion,
+        configuredTasks,
+        { namespacedOnly: true },
+      ).length > 0,
+      `${projectType} strict template lookup is empty`,
+    )
+    return snapshot
+  })
+
+  snapshots.forEach((snapshot, index) => {
+    snapshots.slice(index + 1).forEach(otherSnapshot => {
+      assert.notStrictEqual(snapshot, otherSnapshot)
+      assert.notStrictEqual(snapshot[0], otherSnapshot[0])
+    })
+  })
 })
 
 registerAssertion('level-one summary includes only direct second-level tasks', () => {

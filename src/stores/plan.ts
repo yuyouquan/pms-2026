@@ -62,6 +62,13 @@ export const TEMPLATE_PROJECT_TYPES = PROJECT_TEMPLATE_TYPES
 
 const cloneLevel1TemplateTasks = () => LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
 
+export const createInitialTemplatePublishedSnapshots = (
+  versionId = 'v3',
+): Record<string, any[]> => TEMPLATE_PROJECT_TYPES.reduce((snapshots, projectType) => {
+  snapshots[getTemplateSnapshotKey(projectType, versionId)] = cloneLevel1TemplateTasks()
+  return snapshots
+}, {} as Record<string, any[]>)
+
 type PlanColumnDefinition = Omit<SortableColumnDefinition<string>, 'title'> & {
   title: string
   default: boolean
@@ -367,7 +374,7 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
   collapsedNodes: {},
 
   // Published snapshots
-  publishedSnapshots: {},
+  publishedSnapshots: createInitialTemplatePublishedSnapshots(),
   configTemplateTasksByType: TEMPLATE_PROJECT_TYPES.reduce((acc, type) => {
     acc[type] = cloneLevel1TemplateTasks()
     return acc
