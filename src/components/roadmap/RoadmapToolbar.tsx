@@ -1,6 +1,6 @@
 'use client'
 
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactElement } from 'react'
 import {
   AuditOutlined,
   DownOutlined,
@@ -44,6 +44,7 @@ interface RoadmapToolbarProps {
   onCreatePlannedProject: () => void
   onOpenFilters: () => void
   onOpenColumnSettings: () => void
+  renderColumnSettings: (trigger: ReactElement) => ReactElement
 }
 
 export default function RoadmapToolbar({
@@ -68,6 +69,7 @@ export default function RoadmapToolbar({
   onCreatePlannedProject,
   onOpenFilters,
   onOpenColumnSettings,
+  renderColumnSettings,
 }: RoadmapToolbarProps) {
   const brandOptions: Array<{
     label: string
@@ -262,16 +264,18 @@ export default function RoadmapToolbar({
             </Badge>
           </Tooltip>
           <Tooltip title="列设置">
-            <Button
-              className="roadmap-toolbar-icon-action"
-              aria-label="列设置"
-              icon={<SettingOutlined />}
-              disabled={!canView}
-              onClick={onOpenColumnSettings}
-              style={compactControlStyle}
-            >
-              列设置
-            </Button>
+            {renderColumnSettings(
+              <Button
+                className="roadmap-toolbar-icon-action"
+                aria-label="列设置"
+                icon={<SettingOutlined />}
+                disabled={!canView}
+                onClick={onOpenColumnSettings}
+                style={compactControlStyle}
+              >
+                列设置
+              </Button>,
+            )}
           </Tooltip>
           <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
             <Button

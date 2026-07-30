@@ -626,8 +626,9 @@ registerAssertion('shared SortableColumnSettings component exists', () => {
     source,
     /setDraft\(current\s*=>\s*normalizeColumnSettings\(\s*definitions,\s*current\s*\)\)/,
   )
-  assert.match(source, /<Drawer\b/)
-  assert.match(source, /placement=(?:"right"|\{'right'\})/)
+  assert.match(source, /<FloatingConfigPopover\b/)
+  assert.match(source, /\bKeyboardSensor\b/)
+  assert.doesNotMatch(source, /<Drawer\b/)
   assert.doesNotMatch(source, /<Modal\b/)
 })
 

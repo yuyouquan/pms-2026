@@ -177,10 +177,23 @@ function SharePlanContent() {
               />
               {viewMode === 'table' && (
                 <Tooltip title="自定义列">
-                  <Button
-                    icon={<SettingOutlined />}
-                    style={{ borderRadius: 6 }}
-                    onClick={() => setShowColumnModal(true)}
+                  <SortableColumnSettings
+                    open={showColumnModal}
+                    trigger={(
+                      <Button
+                        icon={<SettingOutlined />}
+                        style={{ borderRadius: 6 }}
+                        onClick={() => setShowColumnModal(true)}
+                      />
+                    )}
+                    definitions={columnDefinitions}
+                    value={columnSettings}
+                    defaultValue={DEFAULT_PLAN_COLUMN_SETTINGS}
+                    onCancel={() => setShowColumnModal(false)}
+                    onApply={(nextSettings) => {
+                      setColumnSettings(nextSettings)
+                      setShowColumnModal(false)
+                    }}
                   />
                 </Tooltip>
               )}
@@ -226,18 +239,6 @@ function SharePlanContent() {
           <GanttChart tasks={tasks} isEditMode={false} columnSettings={columnSettings} />
         )}
       </Card>
-
-      <SortableColumnSettings
-        open={showColumnModal}
-        definitions={columnDefinitions}
-        value={columnSettings}
-        defaultValue={DEFAULT_PLAN_COLUMN_SETTINGS}
-        onCancel={() => setShowColumnModal(false)}
-        onApply={(nextSettings) => {
-          setColumnSettings(nextSettings)
-          setShowColumnModal(false)
-        }}
-      />
     </div>
   )
 }

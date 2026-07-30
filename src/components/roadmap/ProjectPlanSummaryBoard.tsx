@@ -2072,12 +2072,27 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
               />
             </Tooltip>
             <Tooltip title={scope === 'overall' ? '整体视图保留产品分类维度；其它视图不显示产品分类。' : '当前视图不显示产品分类。'}>
-              <Button
-                aria-label="列设置"
-                className="pms-summary-icon-button"
-                size="small"
-                icon={<SettingOutlined />}
-                onClick={() => setShowColumnDrawer(true)}
+              <SortableColumnSettings
+                open={showColumnDrawer}
+                trigger={(
+                  <Button
+                    aria-label="列设置"
+                    className="pms-summary-icon-button"
+                    size="small"
+                    icon={<SettingOutlined />}
+                    onClick={() => setShowColumnDrawer(true)}
+                  />
+                )}
+                definitions={columnDefinitions}
+                value={columnSettings}
+                defaultValue={defaultColumnSettings}
+                onCancel={() => setShowColumnDrawer(false)}
+                onApply={(nextSettings) => {
+                  setColumnSettings(nextSettings)
+                  setActiveSavedViewId(null)
+                  setSharedRowsOverride(null)
+                  setShowColumnDrawer(false)
+                }}
               />
             </Tooltip>
             <Dropdown
@@ -2245,20 +2260,6 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
           </Button>
         </div>
       </Drawer>
-
-      <SortableColumnSettings
-        open={showColumnDrawer}
-        definitions={columnDefinitions}
-        value={columnSettings}
-        defaultValue={defaultColumnSettings}
-        onCancel={() => setShowColumnDrawer(false)}
-        onApply={(nextSettings) => {
-          setColumnSettings(nextSettings)
-          setActiveSavedViewId(null)
-          setSharedRowsOverride(null)
-          setShowColumnDrawer(false)
-        }}
-      />
     </div>
   )
 }

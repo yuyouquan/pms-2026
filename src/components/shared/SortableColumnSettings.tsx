@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { Button, Checkbox, Drawer, Space, Tooltip } from 'antd'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { Button, Checkbox, Space, Tooltip } from 'antd'
 import { HolderOutlined } from '@ant-design/icons'
 import {
   closestCenter,
@@ -20,6 +20,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { FloatingConfigPopover } from '@/components/shared/FloatingConfigPopover'
 import {
   getColumnDefinitionSignature,
   getDefaultColumnSettings,
@@ -32,6 +33,7 @@ import {
 
 export interface SortableColumnSettingsProps<Key extends string> {
   open: boolean
+  trigger: ReactElement
   definitions: readonly SortableColumnDefinition<Key>[]
   value: SortableColumnSettingsValue<Key>
   defaultValue?: SortableColumnSettingsValue<Key>
@@ -39,6 +41,7 @@ export interface SortableColumnSettingsProps<Key extends string> {
   applyLabel?: string
   onApply: (value: SortableColumnSettingsValue<Key>) => void
   onCancel: () => void
+  getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
 }
 
 interface SortableColumnRowProps<Key extends string> {
@@ -112,6 +115,7 @@ function SortableColumnRow<Key extends string>({
 
 export function SortableColumnSettings<Key extends string>({
   open,
+  trigger,
   definitions,
   value,
   defaultValue,
@@ -119,6 +123,7 @@ export function SortableColumnSettings<Key extends string>({
   applyLabel = '确定',
   onApply,
   onCancel,
+  getPopupContainer,
 }: SortableColumnSettingsProps<Key>) {
   const [draft, setDraft] = useState<SortableColumnSettingsValue<Key>>(
     () => normalizeColumnSettings(definitions, value),
@@ -203,24 +208,44 @@ export function SortableColumnSettings<Key extends string>({
     onApply(normalizeColumnSettings(definitions, draft))
   }
 
+  const renderedRows = draft.order.map(key => {
+    const definition = definitionByKey.get(key)
+    if (!definition) return null
+    const checked = visibleKeys.has(key)
+    const wouldViolateMinimum = definition.hideable !== false
+      && checked
+      && visibleHideableCount <= minimum
+    return (
+      <SortableColumnRow
+        key={key}
+        definition={definition}
+        checked={checked}
+        checkboxDisabled={wouldViolateMinimum}
+        onCheckedChange={nextChecked => handleVisibilityChange(key, nextChecked)}
+      />
+    )
+  })
+
   return (
-    <Drawer
-      title="列设置"
+    <FloatingConfigPopover
       open={open}
-      placement="right"
-      width="min(420px, 100vw)"
-      zIndex={1300}
-      onClose={onCancel}
-      footer={(
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Button onClick={handleReset}>重置</Button>
-          <Space>
-            <Button onClick={onCancel}>取消</Button>
-            <Button type="primary" disabled={applyDisabled} onClick={handleApply}>
-              {applyLabel}
-            </Button>
-          </Space>
+      trigger={trigger}
+      width={400}
+      onCancel={onCancel}
+      getPopupContainer={getPopupContainer}
+      title={(
+        <div className="pms-floating-config-title-row">
+          <span>列设置</span>
+          <Button type="link" danger size="small" onClick={handleReset}>重置</Button>
         </div>
+      )}
+      footer={(
+        <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+          <Button onClick={onCancel}>取消</Button>
+          <Button type="primary" disabled={applyDisabled} onClick={handleApply}>
+            {applyLabel}
+          </Button>
+        </Space>
       )}
     >
       <DndContext
@@ -230,26 +255,10 @@ export function SortableColumnSettings<Key extends string>({
       >
         <SortableContext items={draft.order} strategy={verticalListSortingStrategy}>
           <div className="pms-sortable-column-list">
-            {draft.order.map(key => {
-              const definition = definitionByKey.get(key)
-              if (!definition) return null
-              const checked = visibleKeys.has(key)
-              const wouldViolateMinimum = definition.hideable !== false
-                && checked
-                && visibleHideableCount <= minimum
-              return (
-                <SortableColumnRow
-                  key={key}
-                  definition={definition}
-                  checked={checked}
-                  checkboxDisabled={wouldViolateMinimum}
-                  onCheckedChange={nextChecked => handleVisibilityChange(key, nextChecked)}
-                />
-              )
-            })}
+            {renderedRows}
           </div>
         </SortableContext>
       </DndContext>
-    </Drawer>
+    </FloatingConfigPopover>
   )
 }

@@ -1697,7 +1697,19 @@ export function ProjectPlan({
               <Space size={6}>
                 <Input placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
                 <Tooltip title="自定义列">
-                  <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />
+                  <SortableColumnSettings
+                    open={showColumnModal}
+                    trigger={<Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)} />}
+                    definitions={ALL_COLUMNS}
+                    value={columnSettings}
+                    defaultValue={DEFAULT_PLAN_COLUMN_SETTINGS}
+                    onCancel={() => setShowColumnModal(false)}
+                    onApply={(nextSettings) => {
+                      setColumnSettings(nextSettings)
+                      setShowColumnModal(false)
+                      message.success('列配置已保存')
+                    }}
+                  />
                 </Tooltip>
                 <Radio.Group
                   value={projectPlanViewMode === 'horizontal' && projectPlanLevel === 'level2' ? 'table' : projectPlanViewMode}
@@ -1846,19 +1858,6 @@ export function ProjectPlan({
           setCompareFilterType={setCompareFilterType}
         />
       </Modal>
-
-      <SortableColumnSettings
-        open={showColumnModal}
-        definitions={ALL_COLUMNS}
-        value={columnSettings}
-        defaultValue={DEFAULT_PLAN_COLUMN_SETTINGS}
-        onCancel={() => setShowColumnModal(false)}
-        onApply={(nextSettings) => {
-          setColumnSettings(nextSettings)
-          setShowColumnModal(false)
-          message.success('列配置已保存')
-        }}
-      />
     </div>
   )
 }

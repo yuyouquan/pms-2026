@@ -2,7 +2,19 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const componentPath = resolve('src/components/shared/FloatingConfigPopover.tsx');
+const sortableColumnSettingsPath = resolve('src/components/shared/SortableColumnSettings.tsx');
 const stylesPath = resolve('src/styles/globals.css');
+const sortableColumnSettingsCallers = [
+  'src/app/share/plan/page.tsx',
+  'src/components/plan/PlanModule.tsx',
+  'src/components/plans/RequirementDevPlan.tsx',
+  'src/components/plans/VersionTrainPlan.tsx',
+  'src/components/roadmap/MilestoneView.tsx',
+  'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+  'src/components/roadmap/RoadmapColumnSettingsDrawer.tsx',
+  'src/containers/ConfigContainer.tsx',
+  'src/containers/ProjectSpaceContainer.tsx',
+];
 
 if (!existsSync(componentPath)) {
   throw new Error('missing FloatingConfigPopover');
@@ -29,6 +41,24 @@ for (const pattern of requiredPatterns) {
 
 if (/\bDrawer\b/.test(source)) {
   throw new Error('FloatingConfigPopover must not use Drawer');
+}
+
+const sortableColumnSettingsSource = readFileSync(sortableColumnSettingsPath, 'utf8');
+if (!/FloatingConfigPopover/.test(sortableColumnSettingsSource)) {
+  throw new Error('SortableColumnSettings must use FloatingConfigPopover');
+}
+if (/<Drawer\b/.test(sortableColumnSettingsSource)) {
+  throw new Error('SortableColumnSettings must not render Drawer');
+}
+
+for (const callerPath of sortableColumnSettingsCallers) {
+  const callerSource = readFileSync(resolve(callerPath), 'utf8');
+  if (!/<SortableColumnSettings\b/.test(callerSource)) {
+    throw new Error(`${callerPath} must render SortableColumnSettings`);
+  }
+  if (!/\btrigger=/.test(callerSource)) {
+    throw new Error(`${callerPath} must pass the column-settings trigger`);
+  }
 }
 
 const requiredStylePatterns = [

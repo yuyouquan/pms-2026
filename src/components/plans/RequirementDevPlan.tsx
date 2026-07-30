@@ -355,7 +355,19 @@ export default function RequirementDevPlan({ isEditMode = false }: RequirementDe
             {activeTab !== 'fusion' && (
               <>
                 {effectiveViewMode !== 'horizontal' && (
-                  <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)}>自定义列</Button>
+                  <SortableColumnSettings
+                    open={showColumnModal}
+                    trigger={<Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)}>自定义列</Button>}
+                    definitions={currentAllColumns}
+                    value={currentColumnSettings}
+                    defaultValue={getDefaultColumnSettings(currentAllColumns)}
+                    onCancel={() => setShowColumnModal(false)}
+                    onApply={(nextSettings) => {
+                      if (activeTab === 'ir') setIrColumnSettings(nextSettings)
+                      else if (activeTab === 'sr') setSrColumnSettings(nextSettings)
+                      setShowColumnModal(false)
+                    }}
+                  />
                 )}
                 <Radio.Group
                   value={effectiveViewMode}
@@ -443,19 +455,6 @@ export default function RequirementDevPlan({ isEditMode = false }: RequirementDe
           </div>
         )
       )}
-
-      <SortableColumnSettings
-        open={showColumnModal}
-        definitions={currentAllColumns}
-        value={currentColumnSettings}
-        defaultValue={getDefaultColumnSettings(currentAllColumns)}
-        onCancel={() => setShowColumnModal(false)}
-        onApply={(nextSettings) => {
-          if (activeTab === 'ir') setIrColumnSettings(nextSettings)
-          else if (activeTab === 'sr') setSrColumnSettings(nextSettings)
-          setShowColumnModal(false)
-        }}
-      />
     </Card>
   )
 }

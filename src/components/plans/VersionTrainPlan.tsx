@@ -418,9 +418,22 @@ export default function VersionTrainPlan({ data: controlledData, onDataChange, c
               onChange={(e) => setSearchText(e.target.value)}
               value={searchText}
             />
-            <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)}>
-              自定义列
-            </Button>
+            <SortableColumnSettings
+              open={showColumnModal}
+              trigger={(
+                <Button icon={<AppstoreOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowColumnModal(true)}>
+                  自定义列
+                </Button>
+              )}
+              definitions={ALL_COLUMNS_DEF}
+              value={columnSettings}
+              defaultValue={getDefaultColumnSettings(ALL_COLUMNS_DEF)}
+              onCancel={() => setShowColumnModal(false)}
+              onApply={(nextSettings) => {
+                setColumnSettings(nextSettings)
+                setShowColumnModal(false)
+              }}
+            />
           </Space>
         </Col>
       </Row>
@@ -518,18 +531,6 @@ export default function VersionTrainPlan({ data: controlledData, onDataChange, c
           locale={{ emptyText: '暂无关联缺陷' }}
         />
       </Modal>
-
-      <SortableColumnSettings
-        open={showColumnModal}
-        definitions={ALL_COLUMNS_DEF}
-        value={columnSettings}
-        defaultValue={getDefaultColumnSettings(ALL_COLUMNS_DEF)}
-        onCancel={() => setShowColumnModal(false)}
-        onApply={(nextSettings) => {
-          setColumnSettings(nextSettings)
-          setShowColumnModal(false)
-        }}
-      />
     </Card>
   )
 }

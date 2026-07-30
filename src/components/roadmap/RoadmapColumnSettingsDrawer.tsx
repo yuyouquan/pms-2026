@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactElement } from 'react'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
 import {
   getRoadmapSortableColumnDefinitions,
@@ -10,6 +11,7 @@ import type { RoadmapColumnKey, RoadmapViewMode } from '@/types/roadmap'
 
 interface RoadmapColumnSettingsDrawerProps {
   open: boolean
+  trigger: ReactElement
   onClose: () => void
   viewMode: RoadmapViewMode
   value: SortableColumnSettingsValue<RoadmapColumnKey>
@@ -18,6 +20,7 @@ interface RoadmapColumnSettingsDrawerProps {
 
 export default function RoadmapColumnSettingsDrawer({
   open,
+  trigger,
   onClose,
   viewMode,
   value,
@@ -29,6 +32,7 @@ export default function RoadmapColumnSettingsDrawer({
   return (
     <SortableColumnSettings
       open={open}
+      trigger={trigger}
       definitions={definitions}
       value={value}
       defaultValue={defaultValue}

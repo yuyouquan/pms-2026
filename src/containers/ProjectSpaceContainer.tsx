@@ -3597,11 +3597,21 @@ export default function ProjectSpaceContainer() {
                   )}
                   {projectPlanViewMode !== 'horizontal' && (
                     <Tooltip title="列设置">
-                      <Button
-                        icon={projectPlanLevel === 'level1' ? <SettingOutlined /> : <AppstoreOutlined />}
-                        style={{ borderRadius: 6 }}
-                        onClick={() => setShowColumnModal(true)}
-                        aria-label="列设置"
+                      <SortableColumnSettings
+                        open={showColumnModal}
+                        trigger={(
+                          <Button
+                            icon={projectPlanLevel === 'level1' ? <SettingOutlined /> : <AppstoreOutlined />}
+                            style={{ borderRadius: 6 }}
+                            onClick={() => setShowColumnModal(true)}
+                            aria-label="列设置"
+                          />
+                        )}
+                        definitions={currentViewColumns}
+                        value={columnSettings}
+                        defaultValue={getDefaultColumnSettings(currentViewColumns)}
+                        onApply={applyColumnSettings}
+                        onCancel={() => setShowColumnModal(false)}
                       />
                     </Tooltip>
                   )}
@@ -3867,18 +3877,6 @@ export default function ProjectSpaceContainer() {
           </Button>
         </div>
       </Drawer>
-
-      {/* Custom column settings */}
-      {currentViewMode !== 'horizontal' && (
-        <SortableColumnSettings
-          open={showColumnModal}
-          definitions={currentViewColumns}
-          value={columnSettings}
-          defaultValue={getDefaultColumnSettings(currentViewColumns)}
-          onApply={applyColumnSettings}
-          onCancel={() => setShowColumnModal(false)}
-        />
-      )}
       {/* Market editor modal */}
       <MarketEditorModal
         open={showMarketEditor}
