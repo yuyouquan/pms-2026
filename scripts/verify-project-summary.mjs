@@ -106,6 +106,9 @@ function loadContracts() {
   if (typeof roadmapUtils.migrateLegacySummaryRows !== 'function') {
     throw new Error('missing shared helper: src/components/roadmap/utils.ts (migrateLegacySummaryRows)')
   }
+  if (typeof roadmapUtils.getProjectSummaryScopeFilterFields !== 'function') {
+    throw new Error('missing shared helper: src/components/roadmap/utils.ts (getProjectSummaryScopeFilterFields)')
+  }
 
   return { ...projectSummary, ...projectInfoSchema, ...filterConditions, ...roadmapUtils }
 }
@@ -135,6 +138,7 @@ const {
   TOS_PROJECT_INFO_FIELDS,
   applyFilterConditions,
   migrateLegacySummaryRows,
+  getProjectSummaryScopeFilterFields,
 } = contracts
 
 registerAssertion('project-info summary fields preserve each schema order', () => {
@@ -384,6 +388,25 @@ registerAssertion('legacy shared milestone rows migrate safely to stable templat
   ], definitions))
 })
 
+registerAssertion('technical summary exposes only its legacy aggregate date filter', () => {
+  const baseFields = [
+    { key: 'projectName', label: '项目名称', kind: 'text' },
+    { key: 'milestones', label: '里程碑节点', kind: 'text' },
+  ]
+  assert.deepEqual(getProjectSummaryScopeFilterFields('tech', baseFields), [
+    { key: 'projectName', label: '项目名称', kind: 'text' },
+    { key: 'milestonesText', label: '里程碑节点', kind: 'date' },
+  ])
+  assert.deepEqual(getProjectSummaryScopeFilterFields('machine', baseFields), [
+    { key: 'projectName', label: '项目名称', kind: 'text' },
+    { key: 'nodeDateRange', label: '节点日期范围', kind: 'date' },
+  ])
+  assert.deepEqual(getProjectSummaryScopeFilterFields('overall', [baseFields[0]]), [
+    { key: 'projectName', label: '项目名称', kind: 'text' },
+    { key: 'nodeDateRange', label: '节点日期范围', kind: 'date' },
+  ])
+})
+
 registerAssertion('summary board consumes schema and template definitions through every data path', () => {
   const boardPath = path.join(root, 'src/components/roadmap/ProjectPlanSummaryBoard.tsx')
   const source = fs.readFileSync(boardPath, 'utf8')
@@ -412,6 +435,22 @@ registerAssertion('summary board consumes schema and template definitions throug
     /applyMilestoneDateRange[\s\S]{0,1800}row\.projectType === PROJECT_TYPE_TECH[\s\S]{0,350}milestones,\s*[\r\n]+\s*milestonesText:/,
   )
   assert.match(source, /migrateLegacySummaryRows/)
+  assert.ok(
+    (source.match(/getProjectSummaryScopeFilterFields/g) || []).length >= 3,
+    'current and saved/share filter definitions must use the shared scope contract',
+  )
+  assert.match(
+    source,
+    /isMilestoneDateFilter[\s\S]{0,260}MILESTONE_FILTER_FIELD[\s\S]{0,160}TECH_MILESTONE_FILTER_FIELD/,
+  )
+  assert.match(
+    source,
+    /milestoneFilterField\s*=\s*milestoneCondition\?\.field\s*\?\?/,
+  )
+  assert.match(
+    source,
+    /filterFieldDefinitions\?\.some\([\s\S]{0,180}TECH_MILESTONE_FILTER_FIELD[\s\S]{0,220}createMilestoneDateFilter/,
+  )
   assert.match(source, /buildExportColumns[\s\S]{0,700}definition\.key/)
   assert.match(source, /definition\.key === ['"]milestones['"][\s\S]{0,100}['"]milestonesText['"]/)
   assert.match(source, /buildCurrentProjectViewState[\s\S]{0,500}columnSettings\.order/)

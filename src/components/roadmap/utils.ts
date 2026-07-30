@@ -206,6 +206,38 @@ export function getProjectSummaryBoardFilterFields(
   })
 }
 
+export const MILESTONE_FILTER_FIELD = 'nodeDateRange'
+export const TECH_MILESTONE_FILTER_FIELD = 'milestonesText'
+
+export function getProjectSummaryScopeFilterFields(
+  scope: string,
+  fields: readonly FilterFieldDefinition[],
+): FilterFieldDefinition[] {
+  const regularFields = fields.filter(field => (
+    field.key !== 'milestones'
+    && field.key !== MILESTONE_FILTER_FIELD
+    && field.key !== TECH_MILESTONE_FILTER_FIELD
+  ))
+  if (scope === 'tech') {
+    return [
+      ...regularFields,
+      {
+        key: TECH_MILESTONE_FILTER_FIELD,
+        label: '里程碑节点',
+        kind: 'date',
+      },
+    ]
+  }
+  return [
+    ...regularFields,
+    {
+      key: MILESTONE_FILTER_FIELD,
+      label: '节点日期范围',
+      kind: 'date',
+    },
+  ]
+}
+
 interface LegacySummaryMilestone {
   name: string
   date: string

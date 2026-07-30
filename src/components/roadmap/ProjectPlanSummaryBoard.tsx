@@ -44,10 +44,13 @@ import {
   getProjectSummaryBoardColumns,
   getProjectSummaryBoardFilterFields,
   getProjectSummaryFieldDefinitions,
+  getProjectSummaryScopeFilterFields,
   getProjectViewColumnSettings,
   getScopedColumnDefinitions,
   getTemplateTaskFieldDefinitions,
+  MILESTONE_FILTER_FIELD,
   migrateLegacySummaryRows,
+  TECH_MILESTONE_FILTER_FIELD,
   loadProjectViews,
   parseProjectViewShare,
   saveProjectView,
@@ -176,7 +179,6 @@ const MILESTONE_DATE_RANGE_PRESETS = [
     value: [dayjs().add(1, 'month').startOf('month'), dayjs().add(3, 'month').endOf('month')],
   },
 ]
-const MILESTONE_FILTER_FIELD = 'nodeDateRange'
 const MILESTONE_RANGE_SEPARATOR = '~'
 const COMMON_COLUMN_OPTIONS: RoadmapColumnConfig[] = [
   { key: 'productCategory', title: '产品分类', width: 150, defaultVisible: true, locked: true },
@@ -571,12 +573,17 @@ function parseMilestoneDateRangeValue(value: unknown): MilestoneDateRange {
 
 function isMilestoneDateFilter(condition: FilterCondition) {
   return condition.field === MILESTONE_FILTER_FIELD
+    || condition.field === TECH_MILESTONE_FILTER_FIELD
 }
 
-function createMilestoneDateFilter(range: MilestoneDateRange, id?: string): FilterCondition {
+function createMilestoneDateFilter(
+  range: MilestoneDateRange,
+  id?: string,
+  field = MILESTONE_FILTER_FIELD,
+): FilterCondition {
   return {
     id: id || createFilterCondition().id,
-    field: MILESTONE_FILTER_FIELD,
+    field,
     operator: 'contains',
     value: formatMilestoneDateRangeValue(range),
   }
@@ -602,8 +609,18 @@ function normalizeProjectFilterConditions(
   )
   const milestoneCondition = conditions.find(isMilestoneDateFilter)
   const range = getMilestoneDateRangeFromFilters(conditions) || fallbackRange || null
+  const defaultMilestoneFilterField = filterFieldDefinitions?.some(
+    definition => definition.key === TECH_MILESTONE_FILTER_FIELD,
+  )
+    ? TECH_MILESTONE_FILTER_FIELD
+    : MILESTONE_FILTER_FIELD
+  const milestoneFilterField = milestoneCondition?.field ?? defaultMilestoneFilterField
   return range
-    ? [...normalized, createMilestoneDateFilter(range, milestoneCondition?.id)]
+    ? [...normalized, createMilestoneDateFilter(
+        range,
+        milestoneCondition?.id,
+        milestoneFilterField,
+      )]
     : normalized
 }
 
@@ -792,11 +809,8 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
           label: column.title,
           kind: 'text' as const,
         }))
-    return [
-      ...baseFields,
-      { key: MILESTONE_FILTER_FIELD, label: '节点日期范围', kind: 'date' },
-    ]
-  }, [activeProjectSummaryDefinitions, activeProjectType, availableColumns])
+    return getProjectSummaryScopeFilterFields(scope, baseFields)
+  }, [activeProjectSummaryDefinitions, activeProjectType, availableColumns, scope])
   const filterFieldByKey = useMemo(
     () => new Map(filterFieldDefinitions.map(field => [field.key, field] as const)),
     [filterFieldDefinitions],
@@ -893,10 +907,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
           label: column.title,
           kind: 'text' as const,
         }))
-    return [
-      ...fields,
-      { key: MILESTONE_FILTER_FIELD, label: '节点日期范围', kind: 'date' as const },
-    ]
+    return getProjectSummaryScopeFilterFields(nextScope, fields)
   }
 
   const normalizeScope = (value: string | undefined): SummaryScope => {
@@ -1159,6 +1170,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   const handleTempFilterFieldChange = (condition: FilterCondition, field: string) => {
     const definition = filterFieldByKey.get(field)
     const operator = field === MILESTONE_FILTER_FIELD
+      || field === TECH_MILESTONE_FILTER_FIELD
       ? 'contains'
       : getFilterOperatorsForKind(definition?.kind ?? 'text')[0]?.value ?? 'equals'
     updateTempFilter(condition.id, {
