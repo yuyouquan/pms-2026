@@ -124,7 +124,9 @@ export function getLevel1SecondLevelTasks<T extends ProjectSummaryTemplateTask>(
   tasks: readonly T[],
 ): T[] {
   const indexedTasks = tasks.map((task, index) => ({ task, index }))
-  const topLevelTasks = indexedTasks.filter(({ task }) => !task.parentId)
+  const topLevelTasks = indexedTasks
+    .filter(({ task }) => !task.parentId)
+    .map(({ task }, index) => ({ task, index }))
   const topLevelById = new Map(topLevelTasks.map(entry => [String(entry.task.id), entry]))
 
   return indexedTasks

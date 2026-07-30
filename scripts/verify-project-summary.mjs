@@ -163,6 +163,17 @@ registerAssertion('level-one summary includes only direct second-level tasks', (
   assert.deepEqual(getLevel1SecondLevelTasks(tasks).map(task => task.id), ['1.1', '1.2', '2.1'])
 })
 
+registerAssertion('top-level tasks without order use their top-level sequence index', () => {
+  const tasks = [
+    { id: 'a', order: 2, taskName: '显式排序阶段' },
+    { id: 'a1', parentId: 'a', taskName: '显式排序阶段任务' },
+    { id: 'b', taskName: '缺省排序阶段' },
+    { id: 'b1', parentId: 'b', taskName: '缺省排序阶段任务' },
+  ]
+
+  assert.deepEqual(getLevel1SecondLevelTasks(tasks).map(task => task.id), ['b1', 'a1'])
+})
+
 registerAssertion('workbench list state follows the selected category', () => {
   assert.equal(getWorkbenchListState('all').kind, 'select-category')
   assert.deepEqual(getWorkbenchListState('整机产品项目'), {
