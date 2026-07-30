@@ -9,7 +9,11 @@ import {
   resolveProjectClassification,
 } from '@/constants/projectTypes'
 import type { AnyFilterCondition } from '@/lib/filterConditions'
-import { getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
+import {
+  formatProjectInfoValue,
+  getProjectInfoValue,
+  type ProjectInfoProject,
+} from '@/lib/projectInfoValues'
 import { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
 export type ProjectSummaryFieldSource = 'system' | 'projectInfo' | 'templateTask'
@@ -280,4 +284,69 @@ export function getLinkedQuickFilterValues(
     && Array.isArray(candidate.value)
   ))
   return condition && Array.isArray(condition.value) ? [...condition.value] : []
+}
+
+export interface ProjectSummaryRow extends Record<string, unknown> {
+  key: string
+  projectId: string
+  projectName: string
+}
+
+function findProjectTaskDate(project: ProjectInfoProject, taskId: string) {
+  const tasks = Array.isArray(project.level1PlanTasks) ? project.level1PlanTasks : []
+  const task = tasks.find(item => String(item?.id) === taskId)
+  return typeof task?.planEndDate === 'string' && task.planEndDate ? task.planEndDate : '-'
+}
+
+const getTopLevelSummaryValue = (project: ProjectInfoProject, key: string) => {
+  const value = project[key]
+  return typeof value === 'string' && value ? value : '-'
+}
+
+export function buildProjectSummaryRow(
+  project: ProjectInfoProject,
+  definitions: readonly ProjectSummaryFieldDefinition[],
+): ProjectSummaryRow {
+  const classification = resolveProjectClassification(
+    project.type,
+    String(project.secondaryCategory ?? ''),
+  )
+  const row: ProjectSummaryRow = {
+    key: project.id,
+    projectId: project.id,
+    projectName: project.name,
+    brand: getTopLevelSummaryValue(project, 'brand'),
+    versionType: getTopLevelSummaryValue(project, 'versionType'),
+    tosVersion: getTopLevelSummaryValue(project, 'tosVersion'),
+  }
+
+  definitions.forEach(definition => {
+    if (definition.key === 'projectName') row[definition.key] = project.name
+    else if (definition.key === 'projectCategory') {
+      row[definition.key] = classification.projectCategory
+    } else if (definition.key === 'status') {
+      row[definition.key] = formatProjectInfoValue(project.status as never)
+    } else if (definition.source === 'projectInfo') {
+      row[definition.key] = formatProjectInfoValue(
+        getProjectInfoValue(project, definition.key),
+      )
+    } else if (definition.source === 'templateTask' && definition.taskId) {
+      row[definition.key] = findProjectTaskDate(project, definition.taskId)
+    }
+  })
+
+  return row
+}
+
+export function buildProjectSummaryColumns(
+  definitions: readonly ProjectSummaryFieldDefinition[],
+) {
+  return definitions.map(definition => ({
+    title: definition.title,
+    dataIndex: definition.key,
+    key: definition.key,
+    width: definition.width,
+    fixed: definition.key === 'projectName' ? 'left' as const : undefined,
+    ellipsis: true,
+  }))
 }

@@ -82,9 +82,12 @@ function loadContracts() {
     'getProjectSummaryFieldDefinitions',
     'getLatestPublishedTemplateTasks',
     'getLevel1SecondLevelTasks',
+    'getTemplateTaskFieldDefinitions',
     'getProjectSummaryQuickFilterDefinitions',
     'updateLinkedQuickFilterCondition',
     'getWorkbenchListState',
+    'buildProjectSummaryRow',
+    'buildProjectSummaryColumns',
   ]
 
   for (const name of requiredProjectSummaryExports) {
@@ -116,9 +119,12 @@ const {
   getProjectSummaryFieldDefinitions,
   getLatestPublishedTemplateTasks,
   getLevel1SecondLevelTasks,
+  getTemplateTaskFieldDefinitions,
   getProjectSummaryQuickFilterDefinitions,
   updateLinkedQuickFilterCondition,
   getWorkbenchListState,
+  buildProjectSummaryRow,
+  buildProjectSummaryColumns,
   MACHINE_PROJECT_INFO_FIELDS,
   TOS_PROJECT_INFO_FIELDS,
   applyFilterConditions,
@@ -174,6 +180,34 @@ registerAssertion('top-level tasks without order use their top-level sequence in
   assert.deepEqual(getLevel1SecondLevelTasks(tasks).map(task => task.id), ['b1', 'a1'])
 })
 
+registerAssertion('summary rows map project info and real template task dates', () => {
+  const tasks = [
+    { id: '1', order: 1, taskName: '第一阶段' },
+    { id: '1.1', parentId: '1', order: 1, taskName: '节点 A' },
+    { id: '2', order: 2, taskName: '第二阶段' },
+    { id: '2.1', parentId: '2', order: 1, taskName: '节点 B' },
+  ]
+  const project = {
+    id: 'p1',
+    name: 'Demo',
+    type: '整机产品项目',
+    status: '在研',
+    developMode: 'ODC',
+    level1PlanTasks: [{ id: '1.1', planEndDate: '2026-08-01' }],
+  }
+  const definitions = [
+    ...getProjectSummaryFieldDefinitions('整机产品项目'),
+    ...getTemplateTaskFieldDefinitions('整机产品项目', tasks),
+  ]
+  const row = buildProjectSummaryRow(project, definitions)
+
+  assert.equal(row.projectName, 'Demo')
+  assert.equal(row.developmentMode, 'ODC')
+  assert.equal(row['templateTask::整机产品项目::1.1'], '2026-08-01')
+  assert.equal(row['templateTask::整机产品项目::2.1'], '-')
+  assert.equal(buildProjectSummaryColumns(definitions).at(0)?.fixed, 'left')
+})
+
 registerAssertion('workbench list state follows the selected category', () => {
   assert.equal(getWorkbenchListState('all').kind, 'select-category')
   assert.deepEqual(getWorkbenchListState('整机产品项目'), {
@@ -225,6 +259,19 @@ registerAssertion('equals-any linked quick filters compose with AND semantics', 
   ])
 
   assert.deepEqual(filtered.map(row => row.id), ['1'])
+})
+
+registerAssertion('shared summary table composes only the approved reusable controls', () => {
+  const componentPath = path.join(root, 'src/components/project-summary/ProjectSummaryTable.tsx')
+  assert.equal(fs.existsSync(componentPath), true, 'missing shared ProjectSummaryTable')
+  const source = fs.readFileSync(componentPath, 'utf8')
+
+  assert.match(source, /mode="multiple"/)
+  assert.match(source, /FloatingFilterPanel/)
+  assert.match(source, /SortableColumnSettings/)
+  assert.match(source, /applyFilterConditions/)
+  assert.match(source, /getLinkedQuickFilterValues/)
+  assert.doesNotMatch(source, /导出|分享|全屏|savedProjectView|calendar/)
 })
 
 let failureCount = 0
