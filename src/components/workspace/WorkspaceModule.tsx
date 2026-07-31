@@ -104,6 +104,11 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
 
   // Project classification color mapping
   const typeColor = PROJECT_TYPE_COLORS[classification.projectCategory] || { bg: 'rgba(140,140,140,0.08)', color: '#8c8c8c' }
+  const openProject = () => {
+    setSelectedProject(project)
+    setProjectSpaceModule('basic')
+    setActiveModule('projectSpace')
+  }
 
   // Status tag gradient styles
   const statusTagStyle: Record<string, React.CSSProperties> = {
@@ -120,6 +125,9 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
 
   return (
     <Card
+      role="button"
+      tabIndex={0}
+      aria-label={`打开项目 ${project.sourceBid || project.id}`}
       hoverable
       className="pms-card-hover"
       style={{
@@ -134,7 +142,13 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       styles={{ body: { padding: '16px 20px', height: '100%', display: 'flex', flexDirection: 'column' as const } }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onClick={() => { setSelectedProject(project); setProjectSpaceModule('basic'); setActiveModule('projectSpace') }}
+      onClick={openProject}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          openProject()
+        }
+      }}
     >
       {/* 头部: 项目名 + 状态 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>

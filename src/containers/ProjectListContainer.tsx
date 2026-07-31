@@ -233,7 +233,7 @@ export default function ProjectListContainer() {
             {isAdminUser && (
               <>
                 <div style={{ width: 1, height: 20, background: '#e5e7eb' }} />
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddProjectOpen(true)} style={{ borderRadius: 6 }}>
+                <Button aria-label="新增项目" type="primary" icon={<PlusOutlined />} onClick={() => setAddProjectOpen(true)} style={{ borderRadius: 6 }}>
                   新增项目
                 </Button>
               </>

@@ -3106,8 +3106,8 @@ export default function ProjectSpaceContainer() {
         <Card id="section-basic" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#6366f1' }} />, '基本信息', '#6366f1')} extra={
           basicInfoEditMode ? (<Space><Button size="small" onClick={() => setBasicInfoEditMode(false)}>取消</Button><Button size="small" type="primary" onClick={saveBasicInfoEdit}>保存</Button></Space>) : (
             canEditBasicInfo
-              ? <Button size="small" icon={<EditOutlined />} onClick={startBasicInfoEdit}>编辑</Button>
-              : <Tooltip title="无基本信息编辑权限"><Button size="small" icon={<EditOutlined />} disabled>编辑</Button></Tooltip>
+              ? <Button aria-label="编辑项目信息" size="small" icon={<EditOutlined />} onClick={startBasicInfoEdit}>编辑</Button>
+              : <Tooltip title="无基本信息编辑权限"><Button aria-label="编辑项目信息" size="small" icon={<EditOutlined />} disabled>编辑</Button></Tooltip>
           )
         }>
           {isSoftware && (
