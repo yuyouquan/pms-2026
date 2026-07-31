@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { PROJECT_PERMISSION_ITEMS, FIXED_ROLES, getProjectPermissionKeys } from '@/constants/permissions'
 import { initialProjects } from '@/data/projects'
 import { getProjectResponsiblePersons } from '@/lib/projectResponsibility'
@@ -74,6 +75,9 @@ export const getFixedProjectRoles = (project: RoleProject): Role[] => {
 export const resolvePermissionProjectId = (projectId: string, parentProjectId?: string): string => (
   parentProjectId?.trim() || projectId
 )
+
+export const PERMISSION_STORAGE_KEY = 'pms-project-permissions'
+export const PERMISSION_STORAGE_VERSION = 1
 
 // ─── Defaults shared by every project's initial role-permission slot ─
 
@@ -214,6 +218,97 @@ function mergeProjectRoles(project: RoleProject, existing: readonly Role[] = [])
   return [...fixed, ...existing.filter(role => !role.isFixed)]
 }
 
+type PersistedPermissionState = Pick<PermissionState, 'rolesByProject' | 'rolePermissionsByProject'>
+
+const isRecord = (value: unknown): value is Record<string, unknown> => (
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+)
+
+const sanitizeRolesByProject = (value: unknown): Record<string, Role[]> => {
+  if (!isRecord(value)) return {}
+  return Object.fromEntries(Object.entries(value).flatMap(([rawProjectId, rawRoles]) => {
+    const projectId = rawProjectId.trim()
+    if (!projectId || !Array.isArray(rawRoles)) return []
+    const seen = new Set<string>()
+    const roles = rawRoles.flatMap(rawRole => {
+      if (!isRecord(rawRole)) return []
+      const name = typeof rawRole.name === 'string' ? rawRole.name.trim() : ''
+      if (!name || seen.has(name)) return []
+      seen.add(name)
+      return [{
+        name,
+        members: normalizeRoleMembers(rawRole.members),
+        isFixed: rawRole.isFixed === true,
+      }]
+    })
+    return [[projectId, roles]]
+  }))
+}
+
+const VALID_PROJECT_PERMISSION_KEYS = new Set(PROJECT_PERMISSION_ITEMS.flatMap(getProjectPermissionKeys))
+
+const sanitizeRolePermissionsByProject = (value: unknown): Record<string, Record<string, Record<string, boolean>>> => {
+  if (!isRecord(value)) return {}
+  return Object.fromEntries(Object.entries(value).flatMap(([rawProjectId, rawRolePermissions]) => {
+    const projectId = rawProjectId.trim()
+    if (!projectId || !isRecord(rawRolePermissions)) return []
+    const rolePermissions = Object.fromEntries(Object.entries(rawRolePermissions).flatMap(([rawRoleName, rawPermissions]) => {
+      const roleName = rawRoleName.trim()
+      if (!roleName || !isRecord(rawPermissions)) return []
+      const permissions = Object.fromEntries(Object.entries(rawPermissions).filter(
+        ([key, enabled]) => VALID_PROJECT_PERMISSION_KEYS.has(key) && typeof enabled === 'boolean',
+      )) as Record<string, boolean>
+      return [[roleName, permissions]]
+    }))
+    return [[projectId, rolePermissions]]
+  }))
+}
+
+export function migratePermissionState(persistedState: unknown, _version: number): PersistedPermissionState {
+  if (!isRecord(persistedState)) return { rolesByProject: {}, rolePermissionsByProject: {} }
+  return {
+    rolesByProject: sanitizeRolesByProject(persistedState.rolesByProject),
+    rolePermissionsByProject: sanitizeRolePermissionsByProject(persistedState.rolePermissionsByProject),
+  }
+}
+
+export function partializePermissionState(state: PermissionState & PermissionActions): PersistedPermissionState {
+  return {
+    rolesByProject: state.rolesByProject,
+    rolePermissionsByProject: state.rolePermissionsByProject,
+  }
+}
+
+const safePermissionStorage: StateStorage = {
+  getItem(name) {
+    if (typeof window === 'undefined') return null
+    try {
+      const stored = window.localStorage.getItem(name)
+      if (stored !== null) JSON.parse(stored)
+      return stored
+    } catch (error) {
+      console.error(`Failed to read ${PERMISSION_STORAGE_KEY}; using initial permission state.`, error)
+      return null
+    }
+  },
+  setItem(name, value) {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(name, value)
+    } catch (error) {
+      console.error(`Failed to persist ${PERMISSION_STORAGE_KEY}.`, error)
+    }
+  },
+  removeItem(name) {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.removeItem(name)
+    } catch (error) {
+      console.error(`Failed to remove ${PERMISSION_STORAGE_KEY}.`, error)
+    }
+  },
+}
+
 function buildInitialPerProject(): {
   rolesByProject: Record<string, Role[]>,
   rolePermissionsByProject: Record<string, Record<string, Record<string, boolean>>>,
@@ -238,6 +333,20 @@ function buildInitialPerProject(): {
 }
 
 const __INITIAL = buildInitialPerProject()
+
+function hasProjectRoleManagementAccess(
+  state: Pick<PermissionState, 'globalRoles' | 'rolesByProject' | 'rolePermissionsByProject'>,
+  actor: string,
+  projectId: string,
+): boolean {
+  const user = actor.trim()
+  if (!user || !projectId) return false
+  if (state.globalRoles.some(role => role.name === '管理组' && role.members.includes(user))) return true
+  const roleNames = (state.rolesByProject[projectId] || [])
+    .filter(role => role.members.includes(user))
+    .map(role => role.name)
+  return roleNames.some(roleName => state.rolePermissionsByProject[projectId]?.[roleName]?.['projectPermission:manageRoles'] === true)
+}
 
 // ─── Store types ────────────────────────────────────────────────────
 
@@ -269,8 +378,11 @@ export interface PermissionActions {
   // Per-project actions
   setRolesForProject: (projectId: string, v: Role[] | ((prev: Role[]) => Role[])) => void
   setRolePermissionsForProject: (projectId: string, v: Record<string, Record<string, boolean>> | ((prev: Record<string, Record<string, boolean>>) => Record<string, Record<string, boolean>>)) => void
+  setRolesForProjectGuarded: (projectId: string, actor: string, v: Role[] | ((prev: Role[]) => Role[])) => boolean
+  setRolePermissionsForProjectGuarded: (projectId: string, actor: string, v: Record<string, Record<string, boolean>> | ((prev: Record<string, Record<string, boolean>>) => Record<string, Record<string, boolean>>)) => boolean
   initProjectPermissions: (projectId: string, overrides?: Partial<Record<string, string[]>>) => void
   syncProjectTeamPermissionMembers: (project: RoleProject) => void
+  ensureProjectPermissions: (projects: readonly RoleProject[]) => void
 
   // UI state setters
   setShowAddRoleModal: (v: boolean) => void
@@ -291,7 +403,7 @@ export interface PermissionActions {
   setGlobalPermActiveRole: (v: string) => void
 }
 
-export const usePermissionStore = create<PermissionState & PermissionActions>()((set, get) => ({
+export const usePermissionStore = create<PermissionState & PermissionActions>()(persist((set, get) => ({
   rolesByProject: __INITIAL.rolesByProject,
   rolePermissionsByProject: __INITIAL.rolePermissionsByProject,
 
@@ -331,6 +443,16 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
     const next = typeof v === 'function' ? v(prev) : v
     return { rolePermissionsByProject: { ...s.rolePermissionsByProject, [projectId]: next } }
   }),
+  setRolesForProjectGuarded: (projectId, actor, v) => {
+    if (!hasProjectRoleManagementAccess(get(), actor, projectId)) return false
+    get().setRolesForProject(projectId, v)
+    return true
+  },
+  setRolePermissionsForProjectGuarded: (projectId, actor, v) => {
+    if (!hasProjectRoleManagementAccess(get(), actor, projectId)) return false
+    get().setRolePermissionsForProject(projectId, v)
+    return true
+  },
   initProjectPermissions: (projectId, overrides) => set((s) => {
     const roles = buildDefaultRoles().map(r => overrides && overrides[r.name] ? { ...r, members: [...overrides[r.name]!] } : r)
     const perms = buildDefaultRolePermissions()
@@ -352,6 +474,28 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
       rolePermissionsByProject: { ...s.rolePermissionsByProject, [project.id]: rolePermissions },
     }
   }),
+  ensureProjectPermissions: (projects) => set((s) => {
+    const rolesByProject = { ...s.rolesByProject }
+    const rolePermissionsByProject = { ...s.rolePermissionsByProject }
+    projects.forEach(project => {
+      const expectedFixed = getFixedProjectRoles(project)
+      const expectedNames = new Set(expectedFixed.map(role => role.name))
+      const existing = rolesByProject[project.id] || []
+      const existingByName = new Map(existing.map(role => [role.name, role]))
+      const fixed = expectedFixed.map(role => {
+        const configured = existingByName.get(role.name)
+        return configured ? { ...configured, isFixed: true } : role
+      })
+      const custom = existing.filter(role => !expectedNames.has(role.name) && !role.isFixed)
+      const roles = [...fixed, ...custom]
+      rolesByProject[project.id] = roles
+      rolePermissionsByProject[project.id] = {
+        ...buildPermissionsForRoles(roles),
+        ...(rolePermissionsByProject[project.id] || {}),
+      }
+    })
+    return { rolesByProject, rolePermissionsByProject }
+  }),
 
   // UI state setters
   setShowAddRoleModal: (v) => set({ showAddRoleModal: v }),
@@ -370,6 +514,23 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
   setGlobalEditingRole: (v) => set({ globalEditingRole: v }),
   setGlobalEditRoleValue: (v) => set({ globalEditRoleValue: v }),
   setGlobalPermActiveRole: (v) => set({ globalPermActiveRole: v }),
+}), {
+  name: PERMISSION_STORAGE_KEY,
+  version: PERMISSION_STORAGE_VERSION,
+  storage: createJSONStorage(() => safePermissionStorage),
+  migrate: migratePermissionState,
+  partialize: partializePermissionState,
+  merge: (persistedState, currentState) => {
+    const migrated = migratePermissionState(persistedState, PERMISSION_STORAGE_VERSION)
+    return {
+      ...currentState,
+      rolesByProject: { ...currentState.rolesByProject, ...migrated.rolesByProject },
+      rolePermissionsByProject: {
+        ...currentState.rolePermissionsByProject,
+        ...migrated.rolePermissionsByProject,
+      },
+    }
+  },
 }))
 
 // ─── Permission helpers ─────────────────────────────────────────────

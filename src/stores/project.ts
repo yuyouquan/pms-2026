@@ -31,6 +31,7 @@ import { buildProjectInfoValues, mergeProjectInfoValues } from '@/lib/projectInf
 import {
   TECHNICAL_TEAM_PERMISSION_MAPPING,
   TOS_TEAM_PERMISSION_MAPPING,
+  hasPermission,
   usePermissionStore,
 } from '@/stores/permission'
 import { mergeResponsiblePersonsIntoVisibleMembers } from '@/lib/projectResponsibility'
@@ -248,6 +249,7 @@ export interface ProjectActions {
   deleteProject: (projectId: string, actor?: string) => boolean
   syncTechnicalTeamPermissionMembers: (projectId: string) => boolean
   syncTosTeamPermissionMembers: (projectId: string, role?: string, members?: string[]) => boolean
+  syncTosTeamPermissionMembersGuarded: (projectId: string, actor: string, role: string, members: string[]) => boolean
 }
 
 function resolveAllowedFirstSaleTosValues(options?: ProjectMutationOptions): string[] {
@@ -669,6 +671,10 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       usePermissionStore.getState().syncProjectTeamPermissionMembers(synchronizedProject)
       return true
     },
+    syncTosTeamPermissionMembersGuarded: (projectId, actor, role, members) => {
+      if (!hasPermission(actor, projectId, 'projectPermission:manageRoles')) return false
+      return get().syncTosTeamPermissionMembers(projectId, role, members)
+    },
   }),
   {
     name: PROJECT_STORAGE_KEY,
@@ -680,5 +686,8 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       ...currentState,
       ...migrateProjectState(persistedState, 4),
     }),
+    onRehydrateStorage: () => (state) => {
+      if (state) usePermissionStore.getState().ensureProjectPermissions(state.projects)
+    },
   },
 ))

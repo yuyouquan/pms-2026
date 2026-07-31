@@ -138,7 +138,7 @@ import { useProjectStore } from '@/stores/project'
 import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, INITIAL_LEVEL2_PLAN_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
 import { selectTechnicalProjectStage, useTechnicalPlanStore } from '@/stores/technicalPlan'
-import { usePermissionStore, useHasPermission } from '@/stores/permission'
+import { resolvePermissionProjectId, usePermissionStore, useHasPermission } from '@/stores/permission'
 import { PermissionConfig } from '@/components/permission/PermissionModule'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import { TransferApply, TransferDetail, TransferEntry, TransferReview, TransferSqaReview } from '@/components/transfer/TransferModule'
@@ -368,7 +368,7 @@ export default function ProjectSpaceContainer() {
     marketConfigsByProjectId, setMarketConfigForProject,
     selectedTosTypeTab, setSelectedTosTypeTab,
     tosTypeConfigsByProjectId, setTosTypeConfigForProject,
-    projectMemberMap, setProjectMember, updateProject, syncTosTeamPermissionMembers,
+    projectMemberMap, setProjectMember, updateProject, syncTosTeamPermissionMembersGuarded,
   } = proj
   const technicalToday = useMemo(() => new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -436,21 +436,30 @@ export default function ProjectSpaceContainer() {
   // proxied through setRolesForProject/setRolePermissionsForProject so the
   // existing PermissionConfig signature (which takes roles/setRoles/etc.) is
   // unchanged.
-  const _permProjectId = selectedProject?.id ?? ''
+  const _permProjectId = resolvePermissionProjectId(
+    selectedProject?.id ?? '',
+    typeof selectedProject?.parentProjectId === 'string' ? selectedProject.parentProjectId : undefined,
+  )
+  const canDo = useHasPermission(currentLoginUser, _permProjectId)
+  const canManageRoles = canDo('projectPermission:manageRoles')
   const roles = perm.rolesByProject[_permProjectId] ?? []
   const setRoles = (v: Parameters<typeof perm.setRolesForProject>[1]) => {
     if (!_permProjectId) return
-    perm.setRolesForProject(_permProjectId, v)
+    if (!perm.setRolesForProjectGuarded(_permProjectId, currentLoginUser, v)) {
+      message.error('无权限修改项目角色')
+    }
   }
   const rolePermissions = perm.rolePermissionsByProject[_permProjectId] ?? {}
   const setRolePermissions = (v: Parameters<typeof perm.setRolePermissionsForProject>[1]) => {
     if (!_permProjectId) return
-    perm.setRolePermissionsForProject(_permProjectId, v)
+    if (!perm.setRolePermissionsForProjectGuarded(_permProjectId, currentLoginUser, v)) {
+      message.error('无权限修改项目角色')
+    }
   }
   const handleProjectRoleMembersChange = (roleName: string, members: string[]) => {
     const role = roles.find(item => item.name === roleName)
     if (selectedProject?.type === PROJECT_TYPE_TOS_VERSION && role?.isFixed) {
-      if (!syncTosTeamPermissionMembers(selectedProject.id, roleName, members)) {
+      if (!syncTosTeamPermissionMembersGuarded(_permProjectId, currentLoginUser, roleName, members)) {
         message.error('角色成员同步失败')
       }
       return
@@ -466,7 +475,6 @@ export default function ProjectSpaceContainer() {
 
   // ═══════ Permissions ═══════
   // RBAC check tied to the currently logged-in user. Global "管理组" bypasses.
-  const canDo = useHasPermission(currentLoginUser, selectedProject?.id)
   const canEditBasicInfo = canDo('basicInfo:编辑')
   const canViewBasicInfo = canDo('basicInfo:查看')
   const canEditLevel1Plan = canDo('plan:一级计划-编辑')
@@ -3942,7 +3950,7 @@ export default function ProjectSpaceContainer() {
             </Card>
           )}
           {transfer.transferView === null && projectSpaceModule === 'permission' && (
-            <PermissionConfig roles={roles} setRoles={setRoles} rolePermissions={rolePermissions} setRolePermissions={setRolePermissions} permConfigTab={permConfigTab} setPermConfigTab={setPermConfigTab} permissionActiveRole={permissionActiveRole} setPermissionActiveRole={setPermissionActiveRole} showAddRoleModal={showAddRoleModal} setShowAddRoleModal={setShowAddRoleModal} newRoleName={newRoleName} setNewRoleName={setNewRoleName} editingRoleName={editingRoleName} setEditingRoleName={setEditingRoleName} editRoleNameValue={editRoleNameValue} setEditRoleNameValue={setEditRoleNameValue} projectType={selectedProject?.type} onRoleMembersChange={handleProjectRoleMembersChange} syncTosTeamPermissionMembers={handleProjectRoleMembersChange} />
+            <PermissionConfig roles={roles} setRoles={setRoles} rolePermissions={rolePermissions} setRolePermissions={setRolePermissions} permConfigTab={permConfigTab} setPermConfigTab={setPermConfigTab} permissionActiveRole={permissionActiveRole} setPermissionActiveRole={setPermissionActiveRole} showAddRoleModal={showAddRoleModal} setShowAddRoleModal={setShowAddRoleModal} newRoleName={newRoleName} setNewRoleName={setNewRoleName} editingRoleName={editingRoleName} setEditingRoleName={setEditingRoleName} editRoleNameValue={editRoleNameValue} setEditRoleNameValue={setEditRoleNameValue} projectType={selectedProject?.type} onRoleMembersChange={handleProjectRoleMembersChange} syncTosTeamPermissionMembers={handleProjectRoleMembersChange} canManageRoles={canManageRoles} />
           )}
           {transfer.transferView === null && !['basic', 'plan', 'overview', 'requirements', 'permission'].includes(projectSpaceModule) && (
             <Card style={{ borderRadius: 8, textAlign: 'center', padding: '40px 0' }}>
