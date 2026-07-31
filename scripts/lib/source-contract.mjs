@@ -70,3 +70,34 @@ export const hasCallExpression = (source, name) => {
   visit(file)
   return found
 }
+
+export const hasPropertyDefinition = (source, name) => {
+  const file = ts.createSourceFile('contract.ts', source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS)
+  let found = false
+  const visit = node => {
+    if (ts.isPropertyAssignment(node) && node.name.getText(file) === name) found = true
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  return found
+}
+
+export const hasNestedCallExpression = (source, outerName, innerName) => {
+  const file = ts.createSourceFile('contract.tsx', source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TSX)
+  let found = false
+  const containsInnerCall = node => {
+    let nested = false
+    const visit = child => {
+      if (ts.isCallExpression(child) && child.expression.getText(file).endsWith(innerName)) nested = true
+      ts.forEachChild(child, visit)
+    }
+    visit(node)
+    return nested
+  }
+  const visit = node => {
+    if (ts.isCallExpression(node) && node.expression.getText(file).endsWith(outerName) && node.arguments.some(argument => (ts.isArrowFunction(argument) || ts.isFunctionExpression(argument)) && containsInnerCall(argument.body))) found = true
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  return found
+}

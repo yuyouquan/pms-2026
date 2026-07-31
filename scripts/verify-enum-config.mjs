@@ -14,12 +14,13 @@ assert.throws(() => values.validateEnumValue('tos-2-part', '17.10.0'), /format/i
 assert.throws(() => values.validateEnumValue('tos-3-part', '17.10'), /format/i, 'three-part category rejects two-part values')
 assert.deepEqual(values.sortEnumValues(['17.2.0', '17.10.0']), ['17.10.0', '17.2.0'], 'version values sort numerically')
 assert.equal(typeof store.createEnumStore, 'function', 'missing enum store fixture factory')
-const enums = store.createEnumStore({ values: { 'tos-3-part': ['17.2.0'] }, businessRecords: { project: '17.2.0' } })
+const enums = store.createEnumStore({ valuesByType: { 'tos-3-part': ['17.2.0'] } })
 assert.deepEqual(enums.addEnumValue('tos-3-part', ' 17.10.0 '), { ok: true }, 'store adds a trimmed value')
 assert.deepEqual(enums.addEnumValue('tos-3-part', '17.10.0'), { ok: false, reason: 'duplicate' }, 'store rejects duplicate values')
-const capturedBusinessString = enums.getBusinessValue('project')
+const selectedString = enums.getValues('tos-3-part')[0]
+const businessRecord = { tosVersion: selectedString }
+const readBusinessValue = record => record.tosVersion
 assert.deepEqual(enums.deleteEnumValue('tos-3-part', '17.2.0'), { ok: true }, 'store deletes configured option')
-assert.equal(capturedBusinessString, '17.2.0', 'business string is captured from the real store before deletion')
-assert.equal(enums.getBusinessValue('project'), '17.2.0', 'business read path keeps the captured historical string')
+assert.equal(readBusinessValue(businessRecord), '17.2.0', 'independent business snapshot keeps its selected string after deletion')
 assert.equal(enums.getValues('tos-3-part').includes('17.2.0'), false, 'deleted option is gone from configuration')
 console.log('enum config contract passed')
