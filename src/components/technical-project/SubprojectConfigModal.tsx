@@ -87,7 +87,11 @@ export default function SubprojectConfigModal({
     }
     const result = updateConfiguration(subproject.id, configuration)
     if (!result.ok) {
-      message.error(result.reason === 'missing' ? '子项目已不存在' : '子项目配置无效')
+      message.error(result.reason === 'missing'
+        ? '子项目已不存在'
+        : result.reason === 'inactive'
+          ? '子项目已停用，无法保存配置'
+          : '子项目配置无效')
       return
     }
     message.success('子项目信息已保存')

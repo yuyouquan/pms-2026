@@ -147,6 +147,21 @@ export const EMPTY_SUBPROJECT_CONFIGURATION: TechnicalSubprojectConfiguration = 
   firstMachineProjectId: '',
 }
 
+const cloneNestedValue = <T>(value: T): T => {
+  if (Array.isArray(value)) return value.map(cloneNestedValue) as T
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .map(([key, nested]) => [key, cloneNestedValue(nested)]),
+    ) as T
+  }
+  return value
+}
+
+export const cloneTechnicalSubproject = (subproject: TechnicalSubproject): TechnicalSubproject => (
+  cloneNestedValue(subproject)
+)
+
 export const isTechnicalSubprojectConfigured = (
   subproject: Pick<TechnicalSubproject, 'configuration'>,
 ) => Boolean(
@@ -200,7 +215,8 @@ export const synchronizeTechnicalSubprojects = (
     ipmOrder: item.ipmOrder,
   }]))
   const existingIds = new Set(existing.map(item => item.id))
-  const items = existing.map(item => {
+  const items = existing.map(sourceItem => {
+    const item = cloneTechnicalSubproject(sourceItem)
     const next = incomingById.get(item.id)
     return next ? { ...item, ...next, active: true } : { ...item, active: false }
   })

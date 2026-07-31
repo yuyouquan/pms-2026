@@ -73,8 +73,22 @@ assert.equal(rules.isTechnicalSubprojectConfigured(orderedSync.items[1]), false,
 assert.equal(rules.canCreateSubprojectPlanRevision(orderedSync.items[1]), false, 'pending configuration blocks plan revision')
 assert.equal(rules.canCreateSubprojectPlanRevision(orderedSync.items[0]), true, 'active configured child permits plan revision')
 assert.equal(rules.canCreateSubprojectPlanRevision({ ...orderedSync.items[0], active: false }), false, 'inactive child cannot create a plan revision')
+orderedSync.items[0].configuration.coreValue = '人有我有'
+assert.equal(configuredChildren[0].configuration.coreValue, '追赶', 'successful sync deep-clones PMS configuration instead of sharing input references')
+const nestedReferenceInput = [{ ...configuredChildren[0], planReferences: { versions: [{ id: 'v1' }] } }]
+const nestedReferenceSync = rules.synchronizeTechnicalSubprojects(nestedReferenceInput, [{ id: 'child-a', parentProjectId: 'tech-1', name: 'A', ipmOrder: 1 }], 'tech-1')
+nestedReferenceSync.items[0].planReferences.versions[0].id = 'changed'
+assert.equal(nestedReferenceInput[0].planReferences.versions[0].id, 'v1', 'successful sync deep-clones nested plan references')
+const localStorageData = new Map()
+globalThis.localStorage = {
+  getItem: key => localStorageData.get(key) ?? null,
+  setItem: (key, value) => { localStorageData.set(key, value) },
+  removeItem: key => { localStorageData.delete(key) },
+}
 const technicalStoreModule = loadTypeScriptModule(root, 'src/stores/technicalProject.ts')
 const technicalStore = technicalStoreModule.createTechnicalProjectStore({ subprojects: configuredChildren })
+let fixtureNotifications = 0
+const unsubscribeFixture = technicalStore.subscribe(() => { fixtureNotifications += 1 })
 const beforeFailedStoreSync = technicalStore.getState().subprojects
 assert.equal(technicalStore.synchronizeSubprojects('tech-1', [{ id: 'dup', parentProjectId: 'tech-1', name: 'One', ipmOrder: 1 }, { id: 'dup', parentProjectId: 'tech-1', name: 'Two', ipmOrder: 2 }]).ok, false, 'store rejects duplicate IDs')
 assert.deepEqual(technicalStore.getState().subprojects, beforeFailedStoreSync, 'failed store sync is atomic')
@@ -84,8 +98,49 @@ const beforeCrossParentConflict = crossParentStore.getState().subprojects
 assert.deepEqual(crossParentStore.synchronizeSubprojects('tech-1', [{ id: 'shared-id', parentProjectId: 'tech-1', name: 'Conflicting child', ipmOrder: 1 }]), { ok: false, reason: 'duplicate-id', items: beforeCrossParentConflict }, 'stable IPM IDs stay globally unique across TDT parents')
 assert.deepEqual(crossParentStore.getState().subprojects, beforeCrossParentConflict, 'cross-parent ID conflict is atomic')
 assert.equal(typeof technicalStore.deleteSubproject, 'undefined', 'store intentionally exposes no manual child deletion action')
-assert.equal(technicalStore.updateConfiguration('child-a', { coreValue: '人无我有', developmentMode: '谷歌合作', firstTosVersion: '17.2', firstMachineProjectId: '2' }).ok, true, 'PMS configuration can be saved')
-assert.equal(technicalStore.getState().subprojects[0].configuration.coreValue, '人无我有', 'configuration save commits all draft fields')
+const beforeInactiveFixtureSave = technicalStore.getState().subprojects
+assert.deepEqual(technicalStore.synchronizeSubprojects('tech-1', []), { ok: true, items: [{ ...configuredChildren[0], active: false }] }, 'empty successful IPM batch soft-deactivates the child')
+fixtureNotifications = 0
+const beforeRejectedFixtureSaves = technicalStore.getState().subprojects
+assert.deepEqual(technicalStore.updateConfiguration('child-a', { coreValue: '人有我有' }), { ok: false, reason: 'inactive' }, 'fixture store rejects stale saves for inactive children')
+assert.equal(fixtureNotifications, 0, 'inactive fixture save emits no notification')
+assert.deepEqual(technicalStore.getState().subprojects, beforeRejectedFixtureSaves, 'inactive fixture save leaves state unchanged')
+assert.notDeepEqual(technicalStore.getState().subprojects, beforeInactiveFixtureSave, 'only the preceding synchronization changed fixture state')
+assert.deepEqual(technicalStore.updateConfiguration('missing', { coreValue: '人有我有' }), { ok: false, reason: 'missing' }, 'fixture store rejects missing children')
+assert.equal(fixtureNotifications, 0, 'missing fixture save emits no notification')
+unsubscribeFixture()
+const activeTechnicalStore = technicalStoreModule.createTechnicalProjectStore({ subprojects: configuredChildren })
+assert.equal(activeTechnicalStore.updateConfiguration('child-a', { coreValue: '人无我有', developmentMode: '谷歌合作', firstTosVersion: '17.2', firstMachineProjectId: '2' }).ok, true, 'PMS configuration can be saved')
+assert.equal(activeTechnicalStore.getState().subprojects[0].configuration.coreValue, '人无我有', 'configuration save commits all draft fields')
+
+const liveStore = technicalStoreModule.useTechnicalProjectStore
+liveStore.setState({ subprojects: [{ ...configuredChildren[0], active: false }] })
+let liveNotifications = 0
+const unsubscribeLive = liveStore.subscribe(() => { liveNotifications += 1 })
+const beforeRejectedLiveSaves = liveStore.getState().subprojects
+assert.deepEqual(liveStore.getState().updateConfiguration('child-a', { coreValue: '人有我有' }), { ok: false, reason: 'inactive' }, 'persisted store rejects stale saves for inactive children')
+assert.deepEqual(liveStore.getState().updateConfiguration('missing', { coreValue: '人有我有' }), { ok: false, reason: 'missing' }, 'persisted store rejects missing children')
+assert.equal(liveNotifications, 0, 'rejected persisted-store saves emit no notification')
+assert.deepEqual(liveStore.getState().subprojects, beforeRejectedLiveSaves, 'rejected persisted-store saves leave state unchanged')
+liveStore.setState({ subprojects: configuredChildren })
+liveNotifications = 0
+assert.equal(liveStore.getState().updateConfiguration('child-a', { coreValue: '人无我有' }).ok, true, 'active persisted child can be configured')
+assert.equal(liveNotifications, 1, 'successful persisted-store save emits exactly one notification')
+unsubscribeLive()
+
+const migrated = technicalStoreModule.migrateTechnicalProjectState({ subprojects: [
+  { id: ' good ', parentProjectId: ' parent ', name: ' Child ', active: true, ipmOrder: 2, configuration: { coreValue: '人无我有', developmentMode: '谷歌合作', firstTosVersion: '99.9', firstMachineProjectId: 'machine-old' }, planInstanceId: 'plan-1' },
+  { id: 'good', parentProjectId: 'duplicate-parent', name: 'Duplicate', active: true, ipmOrder: 1 },
+  { id: '', parentProjectId: 'parent', name: 'Broken', active: true, ipmOrder: 1 },
+  { id: 'legacy', parentProjectId: 'parent', name: 'Legacy', ipmOrder: 'bad', config: { coreValue: '人有我有', developmentMode: 'SoC合作', firstTosVersion: '17.2', firstMachineProjectId: '1' } },
+] }, 1)
+assert.deepEqual(migrated.subprojects.map(item => item.id), ['good', 'legacy'], 'migration trims stable IDs, removes malformed/duplicate records, and keeps valid legacy rows')
+assert.equal(migrated.subprojects[0].configuration.firstTosVersion, '99.9', 'migration preserves historical enum string references')
+assert.equal(migrated.subprojects[0].planInstanceId, 'plan-1', 'migration preserves valid plan references')
+assert.deepEqual(migrated.subprojects[1].configuration, { coreValue: '人有我有', developmentMode: 'SoC合作', firstTosVersion: '17.2', firstMachineProjectId: '1' }, 'migration upgrades the legacy config shape')
+localStorage.setItem(technicalStoreModule.TECHNICAL_PROJECT_STORAGE_KEY, JSON.stringify({ state: { subprojects: [{ id: 'rehydrated', parentProjectId: 'tech-r', name: 'Recovered', active: true, ipmOrder: null, configuration: { coreValue: 'invalid', developmentMode: '自研', firstTosVersion: 16, firstMachineProjectId: null } }] }, version: 1 }))
+await liveStore.persist.rehydrate()
+assert.deepEqual(liveStore.getState().subprojects, [{ id: 'rehydrated', parentProjectId: 'tech-r', name: 'Recovered', active: true, ipmOrder: 1, configuration: { coreValue: '', developmentMode: '自研', firstTosVersion: '', firstMachineProjectId: '' } }], 'persist rehydrate sanitizes malformed fields without throwing or replacing the stable ID')
 const modal = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 assert.match(modal, /TechnicalProjectCreateFields/, 'project modal renders focused technical fields')
 assert.doesNotMatch(modal, /projectType === ['"]技术项目['"][\s\S]{0,200}name="responsiblePersons"/, 'technical project must not render the generic owner input')

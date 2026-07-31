@@ -67,6 +67,7 @@ export interface TechnicalSubproject {
   ipmOrder: number
   configuration: TechnicalSubprojectConfiguration
   planInstanceId?: string
+  planReferences?: Record<string, unknown>
 }
 
 export interface IpmTechnicalSubproject {
