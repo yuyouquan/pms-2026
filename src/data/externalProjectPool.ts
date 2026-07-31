@@ -8,6 +8,11 @@ export interface ExternalProjectEntry {
   spm: string
   ipmProjectCategoryName: string
   technicalTrack?: string
+  subprojects?: Array<{
+    id: string
+    name: string
+    ipmOrder: number
+  }>
 }
 
 export const EXTERNAL_PROJECT_POOL: ExternalProjectEntry[] = [
@@ -16,7 +21,16 @@ export const EXTERNAL_PROJECT_POOL: ExternalProjectEntry[] = [
   { bid: 'EXT-003', name: 'tOS19.0', spm: '李四', ipmProjectCategoryName: '软件产品项目' },
   { bid: 'EXT-004', name: 'tOS19.1', spm: '王五', ipmProjectCategoryName: '软件产品项目' },
   { bid: 'EXT-005', name: 'X6912_H1208', spm: '赵六', ipmProjectCategoryName: '其他-平板--整机产品项目' },
-  { bid: 'EXT-006', name: 'AI-Engine-V3', spm: '张三', ipmProjectCategoryName: '研发级-基础研究-重点项目', technicalTrack: 'AIOS' },
+  {
+    bid: 'EXT-006', name: 'AI-Engine-V3', spm: '张三', ipmProjectCategoryName: '研发级-基础研究-重点项目', technicalTrack: 'AIOS',
+    subprojects: [
+      { id: 'IPM-AI-001', name: 'AI推理引擎子项目', ipmOrder: 1 },
+      { id: 'IPM-AI-002', name: '多模态子项目', ipmOrder: 2 },
+      // The same stable ID exists as inactive in the PMS seed, so a sync
+      // demonstrates lossless reactivation rather than creating a new child.
+      { id: 'IPM-AI-003', name: '端侧训练子项目', ipmOrder: 3 },
+    ],
+  },
   { bid: 'EXT-007', name: 'X6920-D8800_H1300', spm: '李白', ipmProjectCategoryName: '整机产品-非IPD' },
   { bid: 'EXT-008', name: 'CI-Platform-V2', spm: '孙七', ipmProjectCategoryName: '公司级能力建设' },
   { bid: 'EXT-009', name: 'HiOS-Launcher-V2', spm: '王五', ipmProjectCategoryName: '部门级-技术研发', technicalTrack: '系统体验' },

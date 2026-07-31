@@ -49,9 +49,35 @@ export interface TechnicalProjectValues extends TechnicalTeam {
   deliverables: Partial<TechnicalDeliverables>
 }
 
+export type TechnicalSubprojectCoreValue = '' | '追赶' | '人无我有' | '人有我有'
+export type TechnicalSubprojectDevelopmentMode = '' | '自研' | '谷歌合作' | 'SoC合作' | '高校合作'
+
+export interface TechnicalSubprojectConfiguration {
+  coreValue: TechnicalSubprojectCoreValue
+  developmentMode: TechnicalSubprojectDevelopmentMode
+  firstTosVersion: string
+  firstMachineProjectId: string
+}
+
 export interface TechnicalSubproject {
   id: string
-  name?: string
+  parentProjectId: string
+  name: string
   active: boolean
-  config?: Record<string, unknown>
+  ipmOrder: number
+  configuration: TechnicalSubprojectConfiguration
+  planInstanceId?: string
 }
+
+export interface IpmTechnicalSubproject {
+  id: string
+  parentProjectId: string
+  name: string
+  ipmOrder: number
+}
+
+export type TechnicalSubprojectSyncResult =
+  | { ok: true; items: TechnicalSubproject[] }
+  | { ok: false; reason: 'duplicate-id' | 'invalid-payload'; items: readonly TechnicalSubproject[] }
+
+export type TechnicalSubprojectConfigurationPatch = Partial<TechnicalSubprojectConfiguration>

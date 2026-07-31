@@ -1,5 +1,12 @@
 import { NO_SUBDOMAIN_DOMAINS, SUBDOMAINS_BY_DOMAIN, TECHNICAL_DELIVERABLE_FIELDS, TECHNICAL_STRING_FIELD_KEYS } from '@/constants/technicalProject'
-import type { DeliverableValue, TechnicalDomain, TechnicalSubproject } from '@/types/technicalProject'
+import type {
+  DeliverableValue,
+  IpmTechnicalSubproject,
+  TechnicalDomain,
+  TechnicalSubproject,
+  TechnicalSubprojectConfiguration,
+  TechnicalSubprojectSyncResult,
+} from '@/types/technicalProject'
 
 type ResolveInput = {
   ipm?: { projectName?: string; category?: string; secondaryCategory?: string; technicalTrack?: string }
@@ -133,21 +140,80 @@ export const getPreProjectCandidates = <T extends { id: string }>(projects: read
   projects.filter(project => project.id !== currentProjectId)
 )
 
+export const EMPTY_SUBPROJECT_CONFIGURATION: TechnicalSubprojectConfiguration = {
+  coreValue: '',
+  developmentMode: '',
+  firstTosVersion: '',
+  firstMachineProjectId: '',
+}
+
+export const isTechnicalSubprojectConfigured = (
+  subproject: Pick<TechnicalSubproject, 'configuration'>,
+) => Boolean(
+  subproject.configuration?.coreValue
+  && subproject.configuration?.developmentMode,
+)
+
+export const canCreateSubprojectPlanRevision = (
+  subproject: Pick<TechnicalSubproject, 'active' | 'configuration'>,
+) => subproject.active && isTechnicalSubprojectConfigured(subproject)
+
+const isValidIncomingSubproject = (
+  value: Partial<IpmTechnicalSubproject>,
+  parentProjectId?: string,
+) => {
+  const id = String(value.id || '').trim()
+  const name = String(value.name || '').trim()
+  const parentId = String(value.parentProjectId || parentProjectId || '').trim()
+  const order = Number(value.ipmOrder)
+  return Boolean(
+    id
+    && name
+    && parentId
+    && (!parentProjectId || parentId === parentProjectId)
+    && Number.isInteger(order)
+    && order >= 0,
+  )
+}
+
+const compareSubprojects = (left: TechnicalSubproject, right: TechnicalSubproject) => (
+  left.ipmOrder - right.ipmOrder
+  || left.id.localeCompare(right.id)
+)
+
 export const synchronizeTechnicalSubprojects = (
   existing: readonly TechnicalSubproject[],
-  incoming: ReadonlyArray<{ id: string; name?: string }>,
-) => {
-  if (new Set(incoming.map(item => item.id)).size !== incoming.length) {
+  incoming: readonly IpmTechnicalSubproject[],
+  parentProjectId?: string,
+): TechnicalSubprojectSyncResult => {
+  const normalizedIds = incoming.map(item => String(item.id || '').trim())
+  if (new Set(normalizedIds).size !== incoming.length) {
     return { ok: false as const, reason: 'duplicate-id' as const, items: existing }
   }
-  const incomingById = new Map(incoming.map(item => [item.id, item]))
+  if (!incoming.every(item => isValidIncomingSubproject(item, parentProjectId))) {
+    return { ok: false as const, reason: 'invalid-payload' as const, items: existing }
+  }
+  const incomingById = new Map(incoming.map(item => [item.id.trim(), {
+    id: item.id.trim(),
+    parentProjectId: item.parentProjectId.trim(),
+    name: item.name.trim(),
+    ipmOrder: item.ipmOrder,
+  }]))
   const existingIds = new Set(existing.map(item => item.id))
   const items = existing.map(item => {
     const next = incomingById.get(item.id)
     return next ? { ...item, ...next, active: true } : { ...item, active: false }
   })
   incoming.forEach(item => {
-    if (!existingIds.has(item.id)) items.push({ ...item, active: true })
+    const id = item.id.trim()
+    if (!existingIds.has(id)) items.push({
+      id,
+      parentProjectId: item.parentProjectId.trim(),
+      name: item.name.trim(),
+      active: true,
+      ipmOrder: item.ipmOrder,
+      configuration: { ...EMPTY_SUBPROJECT_CONFIGURATION },
+    })
   })
-  return { ok: true as const, items }
+  return { ok: true as const, items: items.sort(compareSubprojects) }
 }

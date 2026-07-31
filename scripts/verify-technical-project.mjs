@@ -5,7 +5,7 @@ import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-cont
 const root = projectRoot(import.meta.url)
 const rules = loadTypeScriptModule(root, 'src/lib/technicalProjectRules.ts')
 const constants = loadTypeScriptModule(root, 'src/constants/technicalProject.ts')
-for (const name of ['resolveTechnicalProjectFields', 'validateTechnicalProject', 'synchronizeTechnicalSubprojects', 'switchDeliverableMode', 'normalizeTechnicalProjectValues', 'synchronizeTechnicalProjectRecord']) assert.equal(typeof rules[name], 'function', `missing ${name}`)
+for (const name of ['resolveTechnicalProjectFields', 'validateTechnicalProject', 'synchronizeTechnicalSubprojects', 'isTechnicalSubprojectConfigured', 'canCreateSubprojectPlanRevision', 'switchDeliverableMode', 'normalizeTechnicalProjectValues', 'synchronizeTechnicalProjectRecord']) assert.equal(typeof rules[name], 'function', `missing ${name}`)
 assert.deepEqual(constants.SUBDOMAINS_BY_DOMAIN, {
   基础架构TMG: ['无'], 性能TMG: ['无'], 'DFX TMG': ['无'], 'UX TMG': ['无'],
   系统应用: ['AIOS', '应用', '图形', '内核', '多媒体'],
@@ -48,11 +48,44 @@ assert.equal(editedRecord.leader, '张三', 'edit resynchronizes leader from the
 for (const key of Object.keys(editedValues)) assert.deepEqual(editedRecord[key], editedRecord.fieldValues[key], `edit keeps root and fieldValues consistent for ${key}`)
 assert.equal(editedRecord.projectKpi, null, 'edit can clear a previously selected deliverable')
 assert.deepEqual(rules.getPreProjectCandidates([{ id: '1', type: '整机产品项目' }, { id: '2', type: 'tOS版本项目' }, { id: '3', type: '技术项目' }], '2').map(item => item.id), ['1', '3'], 'pre-project candidates include every project type except current')
-const existing = [{ id: 'a', name: 'A', active: true, config: { owner: '张三' } }, { id: 'b', name: 'B', active: true, config: { owner: '李四' } }]
-const synced = rules.synchronizeTechnicalSubprojects(existing, [{ id: 'a', name: 'A2' }, { id: 'c', name: 'C' }])
-assert.deepEqual(synced, { ok: true, items: [{ id: 'a', name: 'A2', active: true, config: { owner: '张三' } }, { id: 'b', name: 'B', active: false, config: { owner: '李四' } }, { id: 'c', name: 'C', active: true }] }, 'sync preserves stable ids/config, soft-inactivates missing items, and adds new ids')
-assert.deepEqual(rules.synchronizeTechnicalSubprojects(synced.items, [{ id: 'b', name: 'B' }]).items[1], { id: 'b', name: 'B', active: true, config: { owner: '李四' } }, 'returning subproject reactivates and preserves config')
-assert.deepEqual(rules.synchronizeTechnicalSubprojects(existing, [{ id: 'a' }, { id: 'a' }]), { ok: false, reason: 'duplicate-id', items: existing }, 'duplicate batch fails atomically')
+const existing = [{ id: 'a', parentProjectId: 'tech', name: 'A', active: true, ipmOrder: 1, configuration: { coreValue: '追赶', developmentMode: '自研', firstTosVersion: '', firstMachineProjectId: '' } }, { id: 'b', parentProjectId: 'tech', name: 'B', active: true, ipmOrder: 2, configuration: { coreValue: '人有我有', developmentMode: 'SoC合作', firstTosVersion: '', firstMachineProjectId: '' } }]
+const synced = rules.synchronizeTechnicalSubprojects(existing, [{ id: 'a', parentProjectId: 'tech', name: 'A2', ipmOrder: 1 }, { id: 'c', parentProjectId: 'tech', name: 'C', ipmOrder: 3 }], 'tech')
+assert.deepEqual(synced, { ok: true, items: [{ id: 'a', parentProjectId: 'tech', name: 'A2', active: true, ipmOrder: 1, configuration: { coreValue: '追赶', developmentMode: '自研', firstTosVersion: '', firstMachineProjectId: '' } }, { id: 'b', parentProjectId: 'tech', name: 'B', active: false, ipmOrder: 2, configuration: { coreValue: '人有我有', developmentMode: 'SoC合作', firstTosVersion: '', firstMachineProjectId: '' } }, { id: 'c', parentProjectId: 'tech', name: 'C', active: true, ipmOrder: 3, configuration: { coreValue: '', developmentMode: '', firstTosVersion: '', firstMachineProjectId: '' } }] }, 'sync preserves stable ids/config, soft-inactivates missing items, and adds new ids')
+assert.deepEqual(rules.synchronizeTechnicalSubprojects(synced.items, [{ id: 'b', parentProjectId: 'tech', name: 'B', ipmOrder: 2 }], 'tech').items[1], { id: 'b', parentProjectId: 'tech', name: 'B', active: true, ipmOrder: 2, configuration: { coreValue: '人有我有', developmentMode: 'SoC合作', firstTosVersion: '', firstMachineProjectId: '' } }, 'returning subproject reactivates and preserves config')
+assert.deepEqual(rules.synchronizeTechnicalSubprojects(existing, [{ id: 'a', parentProjectId: 'tech', name: 'A', ipmOrder: 1 }, { id: 'a', parentProjectId: 'tech', name: 'A2', ipmOrder: 2 }], 'tech'), { ok: false, reason: 'duplicate-id', items: existing }, 'duplicate batch fails atomically')
+const configuredChildren = [{
+  id: 'child-a', parentProjectId: 'tech-1', name: 'A', active: true, ipmOrder: 5,
+  configuration: { coreValue: '追赶', developmentMode: '自研', firstTosVersion: '16.0', firstMachineProjectId: '1' },
+  planInstanceId: 'plan-child-a',
+}]
+const orderedSync = rules.synchronizeTechnicalSubprojects(configuredChildren, [
+  { id: 'child-b', parentProjectId: 'tech-1', name: 'B', ipmOrder: 2 },
+  { id: 'child-a', parentProjectId: 'tech-1', name: 'A renamed', ipmOrder: 1 },
+], 'tech-1')
+assert.equal(orderedSync.ok, true, 'a valid IPM batch synchronizes')
+assert.deepEqual(orderedSync.items.map(item => item.id), ['child-a', 'child-b'], 'sync order is deterministic by IPM order then stable ID')
+assert.deepEqual(orderedSync.items[0].configuration, configuredChildren[0].configuration, 'IPM updates preserve PMS-owned configuration')
+assert.equal(orderedSync.items[0].planInstanceId, 'plan-child-a', 'IPM updates preserve plan references')
+assert.deepEqual(orderedSync.items[1].configuration, { coreValue: '', developmentMode: '', firstTosVersion: '', firstMachineProjectId: '' }, 'new children start pending configuration')
+assert.deepEqual(rules.synchronizeTechnicalSubprojects(configuredChildren, [{ id: '', parentProjectId: 'tech-1', name: 'Broken', ipmOrder: 1 }], 'tech-1'), { ok: false, reason: 'invalid-payload', items: configuredChildren }, 'invalid payload fails atomically')
+assert.deepEqual(rules.synchronizeTechnicalSubprojects(configuredChildren, [{ id: 'x', parentProjectId: 'other', name: 'Wrong parent', ipmOrder: 1 }], 'tech-1'), { ok: false, reason: 'invalid-payload', items: configuredChildren }, 'wrong-parent payload fails atomically')
+assert.equal(rules.isTechnicalSubprojectConfigured(orderedSync.items[1]), false, 'missing required configuration is pending')
+assert.equal(rules.canCreateSubprojectPlanRevision(orderedSync.items[1]), false, 'pending configuration blocks plan revision')
+assert.equal(rules.canCreateSubprojectPlanRevision(orderedSync.items[0]), true, 'active configured child permits plan revision')
+assert.equal(rules.canCreateSubprojectPlanRevision({ ...orderedSync.items[0], active: false }), false, 'inactive child cannot create a plan revision')
+const technicalStoreModule = loadTypeScriptModule(root, 'src/stores/technicalProject.ts')
+const technicalStore = technicalStoreModule.createTechnicalProjectStore({ subprojects: configuredChildren })
+const beforeFailedStoreSync = technicalStore.getState().subprojects
+assert.equal(technicalStore.synchronizeSubprojects('tech-1', [{ id: 'dup', parentProjectId: 'tech-1', name: 'One', ipmOrder: 1 }, { id: 'dup', parentProjectId: 'tech-1', name: 'Two', ipmOrder: 2 }]).ok, false, 'store rejects duplicate IDs')
+assert.deepEqual(technicalStore.getState().subprojects, beforeFailedStoreSync, 'failed store sync is atomic')
+assert.deepEqual(technicalStore.synchronizeSubprojects('', [{ id: 'x', parentProjectId: 'tech-1', name: 'Wrong scope', ipmOrder: 1 }]), { ok: false, reason: 'invalid-payload', items: beforeFailedStoreSync }, 'empty parent scope rejects atomically')
+const crossParentStore = technicalStoreModule.createTechnicalProjectStore({ subprojects: [...configuredChildren, { id: 'shared-id', parentProjectId: 'tech-2', name: 'Other child', active: true, ipmOrder: 1, configuration: { coreValue: '', developmentMode: '', firstTosVersion: '', firstMachineProjectId: '' } }] })
+const beforeCrossParentConflict = crossParentStore.getState().subprojects
+assert.deepEqual(crossParentStore.synchronizeSubprojects('tech-1', [{ id: 'shared-id', parentProjectId: 'tech-1', name: 'Conflicting child', ipmOrder: 1 }]), { ok: false, reason: 'duplicate-id', items: beforeCrossParentConflict }, 'stable IPM IDs stay globally unique across TDT parents')
+assert.deepEqual(crossParentStore.getState().subprojects, beforeCrossParentConflict, 'cross-parent ID conflict is atomic')
+assert.equal(typeof technicalStore.deleteSubproject, 'undefined', 'store intentionally exposes no manual child deletion action')
+assert.equal(technicalStore.updateConfiguration('child-a', { coreValue: '人无我有', developmentMode: '谷歌合作', firstTosVersion: '17.2', firstMachineProjectId: '2' }).ok, true, 'PMS configuration can be saved')
+assert.equal(technicalStore.getState().subprojects[0].configuration.coreValue, '人无我有', 'configuration save commits all draft fields')
 const modal = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 assert.match(modal, /TechnicalProjectCreateFields/, 'project modal renders focused technical fields')
 assert.doesNotMatch(modal, /projectType === ['"]技术项目['"][\s\S]{0,200}name="responsiblePersons"/, 'technical project must not render the generic owner input')
@@ -60,4 +93,11 @@ assert.match(readSource(root, 'src/components/workspace/AddProjectModal.tsx'), /
 const sourcePool = readSource(root, 'src/data/externalProjectPool.ts')
 assert.match(sourcePool, /ipmProjectCategoryName: '技术项目前置工作'/, 'mock IPM pool exposes the conditional predecessor-work path')
 assert.match(sourcePool, /technicalTrack: 'AIOS'/, 'technical track is supplied by IPM and not manually entered')
+assert.match(sourcePool, /subprojects:\s*\[/, 'IPM fixture includes derived child rows')
+const configModal = readSource(root, 'src/components/technical-project/SubprojectConfigModal.tsx')
+assert.match(configModal, /核心价值/, 'configuration modal renders core value')
+assert.match(configModal, /开发模式/, 'configuration modal renders development mode')
+assert.match(configModal, /valuesByType\[['"]tos-2-part['"]\]/, 'first tOS choices come from current two-part enum values')
+assert.match(configModal, /showSearch/, 'first machine project is searchable')
+assert.doesNotMatch(configModal, /删除/, 'subproject configuration has no delete action')
 console.log('technical project contract passed')
