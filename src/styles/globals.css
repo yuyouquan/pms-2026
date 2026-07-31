@@ -107,6 +107,44 @@
   --duration-slow: 0.4s;
 }
 
+.pms-technical-project-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.pms-technical-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid rgba(99, 102, 241, 0.13);
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.08), rgba(255, 255, 255, 0.72));
+  color: #312e81;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.pms-technical-section-heading small {
+  margin-left: auto;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.pms-technical-deliverable {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.pms-technical-deliverable .ant-upload-wrapper {
+  display: inline-flex;
+}
+
 /* ─── Workbench classified todo center ───────────────────────────── */
 .pms-todo-center {
   min-height: 592px;

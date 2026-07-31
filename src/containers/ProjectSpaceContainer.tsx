@@ -3086,7 +3086,7 @@ export default function ProjectSpaceContainer() {
         {/* Header card */}
         <Card id="section-header" style={{ marginBottom: 20, borderRadius: 8, overflow: 'hidden' }} styles={{ header: { background: 'linear-gradient(135deg, #312e81 0%, #4338ca 100%)', borderBottom: 'none', padding: '16px 24px' }, body: { padding: 0 } }}
           title={<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, rgba(129,140,248,0.3) 0%, rgba(99,102,241,0.4) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 16px rgba(99,102,241,0.3)' }}><ProjectOutlined style={{ color: '#fff', fontSize: 18 }} /></div><div><div style={{ color: '#fff', fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}>{headerExtra}</div></div></div>}
-          extra={<Space size={8}><Tag color={statusConf.tagColor} style={{ margin: 0, borderRadius: 4, fontWeight: 500 }}>{p.status}</Tag><Tag style={{ margin: 0, borderRadius: 4, background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag>{isWholeMachine && <Button type="primary" icon={<SendOutlined />} style={{ background: '#4338ca', borderColor: '#4338ca' }} onClick={() => transfer.setTransferView('apply')}>申请转维</Button>}</Space>}
+          extra={<Space size={8}><Tag color={statusConf.tagColor} style={{ margin: 0, borderRadius: 4, fontWeight: 500 }}>{p.status}</Tag><Tag style={{ margin: 0, borderRadius: 4, background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag>{isTech && canEditBasicInfo && <Button ghost icon={<EditOutlined />} onClick={() => setShowProjectInfoEditor(true)}>编辑项目信息</Button>}{isWholeMachine && <Button type="primary" icon={<SendOutlined />} style={{ background: '#4338ca', borderColor: '#4338ca' }} onClick={() => transfer.setTransferView('apply')}>申请转维</Button>}</Space>}
         >
           <div style={{ display: 'flex', background: 'linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)', borderBottom: '1px solid rgba(99,102,241,0.08)' }}>
             {[
@@ -3276,7 +3276,7 @@ export default function ProjectSpaceContainer() {
             </Descriptions>
           </Card>
         )}
-        {isTargetProject && (
+        {(isTargetProject || isTech) && (
           <ProjectInfoModal
             mode="edit"
             open={showProjectInfoEditor}

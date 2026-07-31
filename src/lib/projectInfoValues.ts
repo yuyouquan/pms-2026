@@ -92,6 +92,7 @@ const TOS_TEAM_KEYS: Record<string, string> = {
 
 const isTeamRoleMap = (value: unknown): value is ProjectTeamRoleMap => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  if ('kind' in value) return false
   return Object.values(value).every(item => (
     typeof item === 'string'
     || (Array.isArray(item) && item.every(member => typeof member === 'string'))
@@ -140,14 +141,16 @@ export const getProjectInfoValue = (project: ProjectInfoProject, key: string): P
 
   if (MACHINE_TEAM_KEYS[key]) {
     const roles = project.fieldValues?.machineTeamRoles
-    if (isTeamRoleMap(roles) && roles[MACHINE_TEAM_KEYS[key]] !== undefined) {
-      return normalizeTeamMembers(roles[MACHINE_TEAM_KEYS[key]])
+    const roleKey = MACHINE_TEAM_KEYS[key]
+    if (isTeamRoleMap(roles) && (roles as ProjectTeamRoleMap)[roleKey] !== undefined) {
+      return normalizeTeamMembers((roles as ProjectTeamRoleMap)[roleKey])
     }
   }
   if (TOS_TEAM_KEYS[key]) {
     const roles = project.fieldValues?.tosTeamRoles
-    if (isTeamRoleMap(roles) && roles[TOS_TEAM_KEYS[key]] !== undefined) {
-      return normalizeTeamMembers(roles[TOS_TEAM_KEYS[key]])
+    const roleKey = TOS_TEAM_KEYS[key]
+    if (isTeamRoleMap(roles) && (roles as ProjectTeamRoleMap)[roleKey] !== undefined) {
+      return normalizeTeamMembers((roles as ProjectTeamRoleMap)[roleKey])
     }
   }
   if (TOS_FIVE_ROLE_KEYS[key]) {

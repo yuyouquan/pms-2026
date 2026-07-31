@@ -3,7 +3,7 @@ import {
   getProjectInfoFields,
   getProjectInfoGroups,
 } from '@/constants/projectInfoSchema'
-import { isMachineProjectType, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
+import { isMachineProjectType, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { deriveStartingRam, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
 export { deriveStartingRam } from '@/lib/projectInfoValues'
 import type { ProjectInfoValues } from '@/types/app'
@@ -31,6 +31,7 @@ export const deriveProjectResponsiblePersons = (
   if (type === PROJECT_TYPE_TOS_VERSION) {
     return normalizeResponsiblePersons(values.tosVersionProjectManager)
   }
+  if (type === PROJECT_CATEGORY_TECH) return normalizeResponsiblePersons(values.technicalLead)
   return normalizeResponsiblePersons(manualResponsiblePersons)
 }
 
@@ -52,6 +53,7 @@ export const getProjectInfoModalFields = (type: string) => (
 )
 
 export const getProjectInfoModalGroups = (type: string) => {
+  if (type === PROJECT_CATEGORY_TECH) return []
   const visibleGroupKeys = new Set(getProjectInfoModalFields(type).map(field => field.group))
   return getProjectInfoGroups(type).filter(group => visibleGroupKeys.has(group.key))
 }
