@@ -187,7 +187,11 @@ export default function TodoCenter({ todos, today, loading = false, onOpenTodo }
         </Button>
       </div>
 
-      <div className="pms-todo-center__table" aria-live="polite">
+      <div className="pms-todo-center__result-status" role="status" aria-live="polite" aria-atomic="true">
+        {loading ? '待办加载中' : `当前显示 ${filteredTodos.length} 条待办`}
+      </div>
+
+      <div className="pms-todo-center__table">
         {loading ? (
           <div className="pms-todo-center__loading">待办加载中...</div>
         ) : (
@@ -197,42 +201,36 @@ export default function TodoCenter({ todos, today, loading = false, onOpenTodo }
             rowKey={record => `${record.source}:${record.id}`}
             dataSource={filteredTodos}
             pagination={false}
-            scroll={{ x: 900, y: 360 }}
+            scroll={{ x: 1080, y: 360 }}
             locale={{
               emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyDescription} />,
             }}
-            onRow={record => ({
-              tabIndex: 0,
-              role: 'button',
-              'aria-label': `打开待办 ${record.title}`,
-              onClick: () => onOpenTodo(record),
-              onKeyDown: event => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  onOpenTodo(record)
-                }
-              },
-            })}
             columns={[
               {
                 title: '任务',
                 dataIndex: 'title',
                 key: 'title',
-                width: 300,
-                render: (title: string, record) => (
-                  <div className="pms-todo-center__task">
-                    <span className="pms-todo-center__task-title">{title}</span>
-                    <span>{record.projectName || '未关联项目'}</span>
-                  </div>
-                ),
+                width: 260,
+                render: (title: string) => <span className="pms-todo-center__task-title">{title}</span>,
               },
               {
-                title: '分类',
+                title: '所属项目',
+                dataIndex: 'projectName',
+                key: 'projectName',
+                width: 190,
+                render: (projectName: string) => projectName || '未关联项目',
+              },
+              {
+                title: '来源',
                 dataIndex: 'source',
                 key: 'source',
-                width: 112,
-                render: (source: TodoSource) => (
-                  <Tag color={source === 'plan' ? 'purple' : 'cyan'}>{SOURCE_LABELS[source]}</Tag>
+                width: 230,
+                render: (source: TodoSource, record) => (
+                  <div className="pms-todo-center__source">
+                    <Tag color={source === 'plan' ? 'purple' : 'cyan'}>{SOURCE_LABELS[source]}</Tag>
+                    <span>{record.sourceLabel || SOURCE_LABELS[source]}</span>
+                    {record.context && <span className="pms-todo-center__context">{record.context}</span>}
+                  </div>
                 ),
               },
               {
@@ -262,6 +260,22 @@ export default function TodoCenter({ todos, today, loading = false, onOpenTodo }
                     </div>
                   )
                 },
+              },
+              {
+                title: '操作',
+                key: 'action',
+                fixed: 'right',
+                width: 88,
+                render: (_value, record) => (
+                  <Button
+                    type="link"
+                    size="small"
+                    aria-label={`打开待办 ${record.title}`}
+                    onClick={() => onOpenTodo(record)}
+                  >
+                    打开
+                  </Button>
+                ),
               },
             ]}
           />

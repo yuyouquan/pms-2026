@@ -10,6 +10,7 @@ type ActivatableProject = ProjectState['projects'][number]
 
 interface ActivateProjectOptions {
   market?: string
+  tosType?: string
 }
 
 export function useActivateProject() {
@@ -39,7 +40,10 @@ export function useActivateProject() {
         project.versionType || '',
         tosTypeConfigsByProjectId[project.id],
       )
-      setSelectedTosTypeTab(getMainTosType(typeRows) || typeRows[0]?.type || 'Full')
+      const requestedType = options.tosType && typeRows.some(row => row.type === options.tosType)
+        ? options.tosType
+        : undefined
+      setSelectedTosTypeTab(requestedType || getMainTosType(typeRows) || typeRows[0]?.type || 'Full')
     }
   }, [
     setSelectedMarketTab,

@@ -11,6 +11,19 @@ export type MainModule =
 
 export type WorkbenchTab = 'todo' | 'workTracker'
 
+export interface PlanNavigationIntent {
+  source: 'todo'
+  projectId: string
+  currentUser: string
+  planLevel: 'level1' | 'level2'
+  planKey: string
+  versionId: string
+  market?: string
+  marketKey?: string
+  tosType?: string
+  tosTypeKey?: string
+}
+
 export type ProjectSpaceOrigin = {
   module: Exclude<MainModule, 'projectSpace'>
   workbenchTab?: WorkbenchTab
@@ -25,6 +38,7 @@ export interface UiState {
   sidebarCollapsed: boolean
   selectedProjectType: string
   projectSpaceModule: string
+  planNavigationIntent: PlanNavigationIntent | null
 
   // Edit guard
   isEditMode: boolean
@@ -49,6 +63,7 @@ export interface UiActions {
   setSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
   setSelectedProjectType: (v: string) => void
   setProjectSpaceModule: (v: string) => void
+  setPlanNavigationIntent: (v: PlanNavigationIntent | null) => void
 
   setIsEditMode: (v: boolean) => void
   setShowLeaveConfirm: (v: boolean) => void
@@ -76,6 +91,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   sidebarCollapsed: false,
   selectedProjectType: PROJECT_CATEGORY_MACHINE,
   projectSpaceModule: 'basic',
+  planNavigationIntent: null,
 
   // Edit guard
   isEditMode: false,
@@ -130,6 +146,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   setSidebarCollapsed: (v) => set((s) => ({ sidebarCollapsed: typeof v === 'function' ? v(s.sidebarCollapsed) : v })),
   setSelectedProjectType: (v) => set({ selectedProjectType: v }),
   setProjectSpaceModule: (v) => set({ projectSpaceModule: v }),
+  setPlanNavigationIntent: (v) => set({ planNavigationIntent: v }),
 
   setIsEditMode: (v) => set({ isEditMode: v }),
   setShowLeaveConfirm: (v) => set({ showLeaveConfirm: v }),

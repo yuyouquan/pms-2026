@@ -14,6 +14,10 @@ for (const name of [
   'filterWorkbenchTodos',
   'summarizeWorkbenchTodos',
   'mapTransferOwnerToPmsUser',
+  'buildPlanTodoCandidates',
+  'buildTransferTodoCandidates',
+  'filterTodoCandidatesByAccess',
+  'resolveVisiblePlanVersion',
   'resolvePlanTodoNavigation',
 ]) assert.equal(typeof todos[name], 'function', `missing ${name}`)
 const input = {
@@ -37,6 +41,71 @@ assert.deepEqual(todos.filterWorkbenchTodos(all, { source: 'transfer' }).map(ite
 assert.deepEqual(todos.filterWorkbenchTodos(all, { source: 'plan' }).map(item => item.id), ['plan-overdue', 'plan-today', 'plan-done'], 'source filter counts plan todos separately')
 assert.deepEqual(todos.summarizeWorkbenchTodos(all, '2026-07-31'), { total: 4, dueToday: 1, overdue: 1, completedThisWeek: 1 }, 'summary derives today, overdue, and this-week completion from aggregate output')
 assert.equal(all[0].route.marketKey, 'project::p1::OP::level1::versions', 'market plan routes preserve their validated market scope key')
+assert.deepEqual(
+  todos.aggregateWorkbenchTodos({ ...input, currentUser: '   ', planTodos: [{ ...input.planTodos[0], assignee: '' }] }),
+  [],
+  'blank current users never receive anonymous candidates',
+)
+
+const versions = [
+  { id: 'v3', versionNo: 'V3', status: '已发布' },
+  { id: 'v4', versionNo: 'V4', status: '修订中' },
+]
+const indexedCandidates = todos.buildPlanTodoCandidates({
+  projects: [
+    { id: 'generic-a', name: '通用项目 A' },
+    { id: 'market-a', name: '整机项目 A', markets: ['OP'] },
+    { id: 'market-b', name: '整机项目 B', markets: ['TR'] },
+    { id: 'tos-a', name: 'tOS 项目 A', versionTypes: ['Full'] },
+  ],
+  sources: [
+    { projectId: 'generic-a', planLevel: 'level1', planKey: 'level1', planName: '一级计划', tasks: [{ id: 'g1', taskName: '通用任务', responsible: '张三' }], versions, currentVersionId: 'v4' },
+    { projectId: 'market-a', planLevel: 'level1', planKey: 'level1', planName: '一级计划', dimension: { kind: 'market', value: 'OP', versionKey: 'project::market-a::OP::level1::versions' }, tasks: [{ id: 'm1', taskName: '市场 A 任务', responsible: '张三' }], versions, currentVersionId: 'v3' },
+    { projectId: 'market-b', planLevel: 'level1', planKey: 'level1', planName: '一级计划', dimension: { kind: 'market', value: 'TR', versionKey: 'project::market-b::TR::level1::versions' }, tasks: [{ id: 'm2', taskName: '市场 B 任务', responsible: '李四' }], versions, currentVersionId: 'v4' },
+    { projectId: 'tos-a', planLevel: 'level1', planKey: 'level1', planName: '一级计划', dimension: { kind: 'tos', value: 'Full', versionKey: 'project::tos-a::tos-type::Full::level1::versions' }, tasks: [{ id: 't1', taskName: 'Full 任务', responsible: '张三' }], versions, currentVersionId: 'v3' },
+    { projectId: 'generic-a', planLevel: 'level2', planKey: 'plan2', planName: 'FR版本火车计划', tasks: [{ id: 'l2', taskName: '版本评审', responsible: '张三' }], versions, currentVersionId: 'v3' },
+    { projectId: 'missing', planLevel: 'level1', planKey: 'level1', tasks: [{ id: 'bad', taskName: '不应生成', responsible: '张三' }], versions, currentVersionId: 'v3' },
+  ],
+})
+assert.deepEqual(
+  indexedCandidates.map(candidate => `${candidate.projectId}:${candidate.planLevel}:${candidate.market || candidate.tosType || 'generic'}:${candidate.title}`),
+  [
+    'generic-a:level1:generic:通用任务',
+    'market-a:level1:OP:OP · 市场 A 任务',
+    'market-b:level1:TR:TR · 市场 B 任务',
+    'tos-a:level1:Full:Full · Full 任务',
+    'generic-a:level2:generic:版本评审',
+  ],
+  'explicit generic, market, tOS, and L2 sources stay bound to their own projects',
+)
+assert.equal(indexedCandidates[1].context, 'OP · V3 (已发布)')
+assert.equal(indexedCandidates[3].context, 'tOS Full · V3 (已发布)')
+assert.equal(indexedCandidates[4].sourceLabel, 'FR版本火车计划')
+
+const accessFiltered = todos.filterTodoCandidatesByAccess({
+  currentUser: '李四',
+  planTodos: indexedCandidates,
+  transferApplications: [{ applicationId: 'ta-secret', projectId: 'market-b', projectName: '整机项目 B', activeOwner: '李四', completed: false, title: '机密转维节点', view: 'review' }],
+  canViewPlan: (_projectId, planLevel) => planLevel === 'level2',
+  canViewTransfer: () => false,
+})
+assert.deepEqual(accessFiltered, { planTodos: [], transferApplications: [] }, 'non-admin users never receive titles from unauthorized plan or transfer work')
+
+assert.equal(todos.resolveVisiblePlanVersion(versions, 'v4', false), 'v3', 'users without draft visibility fall back to the latest published version')
+assert.equal(todos.resolveVisiblePlanVersion(versions, 'v4', true), 'v4', 'authorized todo intent may restore a draft')
+assert.equal(todos.resolveVisiblePlanVersion(versions, undefined, true), 'v4', 'ordinary authorized project entry keeps role-default draft behavior')
+
+const transferFixtures = todos.buildTransferTodoCandidates({
+  projects: [{ id: 'p1', name: '项目 A' }],
+  applications: [
+    { id: 'review', projectId: 'p1', projectName: '项目 A', status: 'in_progress', applicantId: 'u001', applicant: '张明辉', plannedReviewDate: '2026-08-01', pipeline: { dataEntry: 'success', maintenanceReview: 'in_progress', sqaReview: 'not_started' }, team: { maintenance: [{ id: 'u003', name: '王建国', role: 'SPM' }], research: [] } },
+    { id: 'sqa', projectId: 'p1', projectName: '项目 A', status: 'in_progress', applicantId: 'u001', applicant: '张明辉', plannedReviewDate: '2026-08-02', pipeline: { dataEntry: 'success', maintenanceReview: 'success', sqaReview: 'in_progress' }, team: { maintenance: [], research: [{ id: 'u007', name: '陈晓峰', role: 'SQA' }] } },
+  ],
+})
+assert.deepEqual(transferFixtures.map(item => [item.view, item.activeOwner, item.sourceLabel]), [
+  ['review', '王五', '转维维护审核'],
+  ['sqa-review', '李白', '转维 SQA 审核'],
+], 'review and SQA nodes use their current authoritative owner identities')
 
 const crossDayCandidates = {
   currentUser: '张三',
@@ -136,6 +205,10 @@ assert.deepEqual(
 const todoCenterSource = readSource(root, 'src/components/workspace/TodoCenter.tsx')
 const aggregationSource = readSource(root, 'src/lib/todoAggregation.ts')
 const workbenchSource = readSource(root, 'src/containers/WorkbenchContainer.tsx')
+const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
+const uiStoreSource = readSource(root, 'src/stores/ui.ts')
+const todayHookSource = readSource(root, 'src/hooks/useLocalToday.ts')
+const browserSource = readSource(root, 'screenshots/verify-workbench-summary-floating-panels.mjs')
 for (const label of [
   '全部', '计划待办', '转维待办',
   '待办总数', '今日到期', '已逾期', '本周完成',
@@ -146,9 +219,21 @@ for (const label of [
 requireSource(root, 'src/containers/WorkbenchContainer.tsx', /<TodoCenter\b/, 'workbench must render the classified TodoCenter')
 requireSource(root, 'src/containers/WorkbenchContainer.tsx', /useActivateProject\(\)/, 'todo navigation must reuse shared project activation')
 assert.doesNotMatch(aggregationSource, /new Date\(\)/, 'todo aggregation must not read the process wall clock')
-assert.match(workbenchSource, /TRANSFER_TO_PMS_USER_MAP|mapTransferOwnerToPmsUser/, 'transfer ownership must use the explicit mock identity bridge')
-assert.match(workbenchSource, /application\.applicantId/, 'entry ownership must start from the authoritative transfer applicant identity')
+assert.match(aggregationSource, /TRANSFER_TO_PMS_USER_MAP|mapTransferOwnerToPmsUser/, 'transfer ownership must use the explicit mock identity bridge')
+assert.match(aggregationSource, /application\.applicantId/, 'entry ownership must start from the authoritative transfer applicant identity')
 assert.doesNotMatch(workbenchSource, /linkedProject\?\.leader/, 'entry ownership must never fall back to the project leader')
-assert.match(workbenchSource, /setMarketCurrentVersionByKey[\s\S]*?setMarketCurrentVersion/, 'market plan navigation must update market-scoped current version state')
+assert.doesNotMatch(workbenchSource, /projects\.find\(item => Array\.isArray\(item\.markets\)/, 'plan candidates must never guess the first market project')
+assert.doesNotMatch(workbenchSource, /\.find\(meta => typeof meta\?\.projectName/, 'plan candidates must never guess ownership from the first metadata row')
+assert.match(uiStoreSource, /planNavigationIntent/, 'todo navigation requires a typed one-shot intent')
+assert.match(projectSpaceSource, /setPlanNavigationIntent\(null\)/, 'project space must consume and clear todo navigation intent')
+assert.doesNotMatch(projectSpaceSource, /explicitMarketVersion/, 'historical market selection must not masquerade as explicit todo navigation')
+for (const column of ['所属项目', '来源', '操作']) assert.match(todoCenterSource, new RegExp(column), `todo table missing ${column} column`)
+assert.doesNotMatch(todoCenterSource, /onRow=/, 'todo table rows are not interactive controls')
+assert.match(todoCenterSource, /role="status"/, 'todo results expose a dedicated polite status region')
+assert.match(todoCenterSource, /aria-label={`打开待办/, 'todo actions expose explicit accessible buttons')
+assert.match(todayHookSource, /setTimeout/, 'local today hook schedules the next midnight refresh')
+assert.match(todayHookSource, /clearTimeout/, 'local today hook cleans up its midnight timer')
+assert.match(browserSource, /unexpectedBrowserErrors/, 'browser verification must retain unexpected errors')
+assert.match(browserSource, /throw new Error\(`unexpected browser errors/, 'browser verification must fail on unexpected browser errors')
 assert.doesNotMatch(todoCenterSource, /checklist\.map|tmChecklistItems\.map/, 'todo center must not split transfer checklists into rows')
 console.log('todo center contract passed')

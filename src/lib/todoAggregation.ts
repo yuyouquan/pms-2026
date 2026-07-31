@@ -17,6 +17,8 @@ export type WorkbenchTodoRoute =
     planKey: string
     versionId: string
     marketKey?: string
+    tosType?: string
+    tosTypeKey?: string
   }
   | {
     kind: 'transfer'
@@ -35,6 +37,9 @@ export interface WorkbenchTodo {
   status: TodoStatus
   completedAt?: string
   market?: string
+  tosType?: string
+  sourceLabel?: string
+  context?: string
   route: WorkbenchTodoRoute
 }
 
@@ -48,6 +53,10 @@ export interface PlanTodoCandidate {
   completedAt?: string
   market?: string
   marketKey?: string
+  tosType?: string
+  tosTypeKey?: string
+  sourceLabel?: string
+  context?: string
   status?: TodoStatus
   title: string
   planLevel: 'level1' | 'level2'
@@ -67,6 +76,212 @@ export interface TransferTodoCandidate {
   completedAt?: string
   title: string
   view: 'entry' | 'review' | 'sqa-review'
+  sourceLabel?: string
+  context?: string
+}
+
+export interface PlanTodoTaskLike {
+  id?: string
+  taskName?: string
+  responsible?: string
+  planEndDate?: string
+  actualEndDate?: string
+  status?: string
+  progress?: number
+}
+
+export interface PlanTodoSource {
+  projectId: string
+  planLevel: 'level1' | 'level2'
+  planKey: string
+  planName?: string
+  dimension?: {
+    kind: 'market' | 'tos'
+    value: string
+    versionKey: string
+  }
+  tasks: readonly PlanTodoTaskLike[]
+  versions: readonly PlanVersionLike[]
+  currentVersionId: string
+}
+
+interface BuildPlanTodoCandidatesInput {
+  projects: readonly {
+    id: string
+    name: string
+    markets?: readonly string[]
+    versionTypes?: readonly string[]
+    versionType?: string
+  }[]
+  sources: readonly PlanTodoSource[]
+}
+
+function compareVersionNumber(left: PlanVersionLike, right: PlanVersionLike): number {
+  const parts = (value: string) => value.replace(/^V/i, '').split('.').map(part => Number.parseInt(part, 10) || 0)
+  const leftParts = parts(left.versionNo)
+  const rightParts = parts(right.versionNo)
+  const length = Math.max(leftParts.length, rightParts.length)
+  for (let index = 0; index < length; index += 1) {
+    const delta = (leftParts[index] || 0) - (rightParts[index] || 0)
+    if (delta) return delta
+  }
+  return 0
+}
+
+export function resolveVisiblePlanVersion(
+  versions: readonly PlanVersionLike[],
+  requestedVersionId: string | undefined,
+  canViewDraft: boolean,
+): string {
+  const requested = versions.find(version => version.id === requestedVersionId)
+  if (requested && (requested.status !== '修订中' || canViewDraft)) return requested.id
+  const visibleVersions = versions.filter(version => version.status !== '修订中' || canViewDraft)
+  const preferred = canViewDraft
+    ? visibleVersions.find(version => version.status === '修订中')
+    : undefined
+  const latestPublished = visibleVersions
+    .filter(version => version.status === '已发布')
+    .sort((left, right) => compareVersionNumber(right, left))[0]
+  return preferred?.id || latestPublished?.id || visibleVersions[0]?.id || ''
+}
+
+function resolvePlanTodoStatus(task: PlanTodoTaskLike): TodoStatus {
+  if (task.status === '已完成' || Number(task.progress) >= 100) return 'completed'
+  if (task.status === '进行中' || Number(task.progress) > 0) return 'in_progress'
+  return 'pending'
+}
+
+export function buildPlanTodoCandidates({
+  projects,
+  sources,
+}: BuildPlanTodoCandidatesInput): PlanTodoCandidate[] {
+  const projectById = new Map(projects.map(project => [project.id, project]))
+  return sources.flatMap(source => {
+    const project = projectById.get(source.projectId)
+    if (!project) return []
+    if (source.dimension?.kind === 'market' && !project.markets?.includes(source.dimension.value)) return []
+    if (source.dimension?.kind === 'tos') {
+      const configuredTypes = new Set([...(project.versionTypes || []), project.versionType || ''].filter(Boolean))
+      if (!configuredTypes.has(source.dimension.value)) return []
+    }
+    const versionId = resolveVisiblePlanVersion(source.versions, source.currentVersionId, true)
+    const version = source.versions.find(item => item.id === versionId)
+    if (!versionId || !version) return []
+    const dimensionLabel = source.dimension?.kind === 'market'
+      ? source.dimension.value
+      : source.dimension?.kind === 'tos' ? `tOS ${source.dimension.value}` : ''
+    const context = [dimensionLabel, `${version.versionNo} (${version.status})`].filter(Boolean).join(' · ')
+    return source.tasks.map((task, index): PlanTodoCandidate => {
+      const status = resolvePlanTodoStatus(task)
+      const taskId = String(task.id || index + 1)
+      const taskTitle = task.taskName || '未命名计划任务'
+      const dimensionPrefix = source.dimension?.value ? `${source.dimension.value} · ` : ''
+      return {
+        id: `plan:${project.id}:${source.dimension?.kind || 'generic'}:${source.dimension?.value || 'default'}:${source.planLevel}:${source.planKey}:${taskId}`,
+        projectId: project.id,
+        projectName: project.name,
+        assignee: task.responsible || '',
+        dueDate: task.planEndDate || '',
+        completed: status === 'completed',
+        completedAt: task.actualEndDate || undefined,
+        status,
+        title: `${dimensionPrefix}${taskTitle}`,
+        planLevel: source.planLevel,
+        planKey: source.planKey,
+        versionId,
+        sourceLabel: source.planName || (source.planLevel === 'level1' ? '一级计划' : source.planKey),
+        context,
+        ...(source.dimension?.kind === 'market'
+          ? { market: source.dimension.value, marketKey: source.dimension.versionKey }
+          : {}),
+        ...(source.dimension?.kind === 'tos'
+          ? { tosType: source.dimension.value, tosTypeKey: source.dimension.versionKey }
+          : {}),
+      }
+    })
+  })
+}
+
+interface TransferApplicationLike {
+  id: string
+  projectId: string
+  projectName: string
+  status: string
+  applicantId: string
+  applicant: string
+  plannedReviewDate?: string
+  pipeline: { dataEntry: string; maintenanceReview: string; sqaReview: string }
+  team: {
+    maintenance: Array<{ id: string; name: string; role: string }>
+    research: Array<{ id: string; name: string; role: string }>
+  }
+}
+
+export function buildTransferTodoCandidates({
+  applications,
+  projects,
+}: {
+  applications: readonly TransferApplicationLike[]
+  projects: readonly { id: string; name: string }[]
+}): TransferTodoCandidate[] {
+  return applications.flatMap(application => {
+    if (application.status !== 'in_progress') return []
+    const view = ['in_progress', 'failed'].includes(application.pipeline.sqaReview)
+      ? 'sqa-review'
+      : ['in_progress', 'failed'].includes(application.pipeline.maintenanceReview)
+        ? 'review'
+        : ['in_progress', 'failed'].includes(application.pipeline.dataEntry) ? 'entry' : null
+    if (!view) return []
+    const project = projects.find(candidate => candidate.id === application.projectId || candidate.name === application.projectName)
+    if (!project) return []
+    const externalOwner = view === 'entry'
+      ? { id: application.applicantId, name: application.applicant }
+      : view === 'review'
+        ? application.team.maintenance.find(member => member.role === 'SPM')
+        : application.team.research.find(member => member.role === 'SQA')
+    const activeOwner = mapTransferOwnerToPmsUser(externalOwner?.id, externalOwner?.name)
+    if (!activeOwner) return []
+    const sourceLabel = view === 'entry' ? '转维资料录入' : view === 'review' ? '转维维护审核' : '转维 SQA 审核'
+    return [{
+      applicationId: application.id,
+      projectId: project.id,
+      projectName: project.name,
+      activeOwner,
+      dueDate: application.plannedReviewDate || '',
+      completed: false,
+      title: sourceLabel,
+      sourceLabel,
+      context: '当前活动节点',
+      view,
+    }]
+  })
+}
+
+export function filterTodoCandidatesByAccess({
+  currentUser,
+  planTodos,
+  transferApplications,
+  canViewPlan,
+  canViewTransfer,
+}: {
+  currentUser: string
+  planTodos: readonly PlanTodoCandidate[]
+  transferApplications: readonly TransferTodoCandidate[]
+  canViewPlan: (projectId: string, planLevel: 'level1' | 'level2') => boolean
+  canViewTransfer: (projectId: string, view: TransferTodoCandidate['view']) => boolean
+}): { planTodos: PlanTodoCandidate[]; transferApplications: TransferTodoCandidate[] } {
+  if (!currentUser.trim()) return { planTodos: [], transferApplications: [] }
+  const normalizedUser = currentUser.trim()
+  return {
+    planTodos: planTodos.filter(candidate => (
+      candidate.assignee.trim() === normalizedUser
+      && canViewPlan(candidate.projectId, candidate.planLevel)
+    )),
+    transferApplications: transferApplications.filter(candidate => (
+      candidate.activeOwner.trim() === normalizedUser
+      && canViewTransfer(candidate.projectId, candidate.view)
+    )),
+  }
 }
 
 export interface TodoFilters {
@@ -226,6 +441,7 @@ export function aggregateWorkbenchTodos({
   transferApplications,
 }: AggregateWorkbenchTodosInput): WorkbenchTodo[] {
   const normalizedUser = currentUser.trim()
+  if (!normalizedUser) return []
 
   const planItems = planTodos
     .filter(candidate => candidate.assignee?.trim() === normalizedUser)
@@ -245,12 +461,17 @@ export function aggregateWorkbenchTodos({
         status,
         completedAt: toDateKey(candidate.completedAt) || undefined,
         market: candidate.market,
+        tosType: candidate.tosType,
+        sourceLabel: candidate.sourceLabel,
+        context: candidate.context,
         route: {
           kind: 'plan',
           planLevel: candidate.planLevel === 'level2' ? 'level2' : 'level1',
           planKey: candidate.planKey || '',
           versionId: candidate.versionId || '',
           ...(candidate.marketKey ? { marketKey: candidate.marketKey } : {}),
+          ...(candidate.tosType ? { tosType: candidate.tosType } : {}),
+          ...(candidate.tosTypeKey ? { tosTypeKey: candidate.tosTypeKey } : {}),
         },
       }
     })
@@ -269,6 +490,8 @@ export function aggregateWorkbenchTodos({
         dueDate: toDateKey(candidate.dueDate),
         status: 'in_progress',
         completedAt: undefined,
+        sourceLabel: candidate.sourceLabel,
+        context: candidate.context,
         route: {
           kind: 'transfer',
           applicationId,
@@ -296,7 +519,7 @@ export function filterWorkbenchTodos(
     if (projectId && todo.projectId !== projectId) return false
     if (status !== 'all' && todo.status !== status) return false
     if (search) {
-      const haystack = `${todo.title} ${todo.projectName}`.toLocaleLowerCase('zh-CN')
+      const haystack = `${todo.title} ${todo.projectName} ${todo.sourceLabel || ''} ${todo.context || ''}`.toLocaleLowerCase('zh-CN')
       if (!haystack.includes(search)) return false
     }
     const dueDate = toDateKey(todo.dueDate)

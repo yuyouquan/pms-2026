@@ -52,6 +52,7 @@ import {
 } from '@/lib/filterConditions'
 import { GANTT_SCALE_OPTIONS } from '@/lib/ganttScale'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
+import { resolveVisiblePlanVersion } from '@/lib/todoAggregation'
 import {
   comparePlanVersions,
   getDisplayPlanVersionsForHorizontalPlan,
@@ -348,6 +349,7 @@ export default function ProjectSpaceContainer() {
     handleConfirmLeave, handleCancelLeave, showLeaveConfirm,
     setPendingNavigation, setShowLeaveConfirm: setShowLeaveConfirmFn,
     sidebarCollapsed,
+    planNavigationIntent, setPlanNavigationIntent,
   } = ui
 
   const {
@@ -432,6 +434,8 @@ export default function ProjectSpaceContainer() {
   const canViewBasicInfo = canDo('basicInfo:查看')
   const canEditLevel1Plan = canDo('plan:一级计划-编辑')
   const canEditLevel2Plan = canDo('plan:二级计划-编辑')
+  const canViewLevel1Plan = canDo('plan:一级计划-查看')
+  const canViewLevel2Plan = canDo('plan:二级计划-查看')
   const canEditCurrentPlan = projectPlanLevel === 'level2' ? canEditLevel2Plan : canEditLevel1Plan
   const currentPlanPermissionLabel = projectPlanLevel === 'level2' ? '二级计划' : '一级计划'
   const {
@@ -1443,8 +1447,9 @@ export default function ProjectSpaceContainer() {
     return (effectiveTasks as any[]).some(t => isResponsibleNameMatched(t.responsible, currentLoginUser)) ||
            level2PlanTasks.some(t => isResponsibleNameMatched(t.responsible, currentLoginUser))
   }, [effectiveTasks, level2PlanTasks, currentLoginUser])
-  // 用户能否查看修订版：有任一计划编辑权 OR 是某条任务的责任人
-  const canViewDraft = canEditLevel1Plan || canEditLevel2Plan || isResponsibleForAnyTask
+  // 用户能否查看修订版：先有当前计划查看权，再满足编辑权或任务责任人条件。
+  const canViewCurrentPlan = projectPlanLevel === 'level2' ? canViewLevel2Plan : canViewLevel1Plan
+  const canViewDraft = canViewCurrentPlan && (canEditLevel1Plan || canEditLevel2Plan || isResponsibleForAnyTask)
 
   // View columns
   const getViewKey = () => `project-${projectPlanLevel}-${projectPlanViewMode}`
@@ -1522,7 +1527,10 @@ export default function ProjectSpaceContainer() {
   // 用 ref 锁定到 project+市场/类型+level，防止用户手动切换版本后被覆盖
   const lastVersionInitKeyRef = useRef<string | null>(null)
   useEffect(() => {
-    if (activeModule !== 'projectSpace') return
+    if (activeModule !== 'projectSpace') {
+      lastVersionInitKeyRef.current = null
+      return
+    }
     if (projectSpaceModule !== 'plan') return
     if (!selectedProject) return
     if (machineMarketPlanUnavailable) return
@@ -1537,23 +1545,55 @@ export default function ProjectSpaceContainer() {
     const key = `${selectedProject.id}::${draftDimension}::${projectPlanLevel}::${currentLoginUser}`
     if (lastVersionInitKeyRef.current === key) return
     lastVersionInitKeyRef.current = key
-    const explicitMarketVersion = isMarketScopedLevel1
-      ? marketCurrentVersionByKey[getMarketPlanVersionKey(selectedProject.id, selectedMarketTab)]
+    const intent = planNavigationIntent
+    if (intent) setPlanNavigationIntent(null)
+    const expectedMarketKey = isMarketScopedLevel1
+      ? getMarketPlanVersionKey(selectedProject.id, selectedMarketTab)
       : undefined
-    // Workbench todo routes write their market-scoped version before entering
-    // project space. Preserve that explicit selection instead of replacing it
-    // with the normal role-based default draft on initial mount.
-    if (explicitMarketVersion && versions.some(version => version.id === explicitMarketVersion)) return
-    const draft = versions.find(v => v.status === '修订中')
-    const latestPub = versions
-      .filter(v => v.status === '已发布')
-      .sort((a, b) => comparePlanVersions(b, a))[0]
-    if (draft && canViewDraft) {
-      if (currentVersion !== draft.id) setCurrentVersion(draft.id)
-    } else if (latestPub) {
-      if (currentVersion !== latestPub.id) setCurrentVersion(latestPub.id)
+    const expectedTosTypeKey = isTosTypeScoped
+      ? getTosTypeVersionKey(selectedProject.id, scopedTosPlanType, scopedPlanLevel)
+      : undefined
+    const validIntent = intent?.source === 'todo'
+      && intent.projectId === selectedProject.id
+      && intent.currentUser === currentLoginUser
+      && intent.planLevel === scopedPlanLevel
+      && versions.some(version => version.id === intent.versionId)
+      && (intent.marketKey
+        ? intent.market === selectedMarketTab && intent.marketKey === expectedMarketKey
+        : !isMarketScopedLevel1)
+      && (intent.tosTypeKey
+        ? intent.tosType === scopedTosPlanType && intent.tosTypeKey === expectedTosTypeKey
+        : !isTosTypeScoped)
+    const selectedVersion = resolveVisiblePlanVersion(
+      versions,
+      validIntent ? intent.versionId : undefined,
+      canViewDraft,
+    )
+    if (selectedVersion && currentVersion !== selectedVersion) setCurrentVersion(selectedVersion)
+    if (validIntent && intent.planLevel === 'level2') {
+      const targetPlan = createdLevel2Plans.find(planItem => planItem.id === intent.planKey)
+      const fallbackPlan = createdLevel2Plans[0]
+      if (targetPlan) setActiveLevel2Plan(targetPlan.id)
+      else if (fallbackPlan) setActiveLevel2Plan(fallbackPlan.id)
     }
-  }, [activeModule, projectSpaceModule, selectedProject?.id, selectedMarketTab, scopedTosPlanType, projectPlanLevel, canViewDraft, versions, currentLoginUser, isMarketScopedLevel1, marketCurrentVersionByKey])
+  }, [
+    activeModule,
+    canViewDraft,
+    createdLevel2Plans,
+    currentLoginUser,
+    currentVersion,
+    isMarketScopedLevel1,
+    isTosTypeScoped,
+    planNavigationIntent,
+    projectPlanLevel,
+    projectSpaceModule,
+    scopedPlanLevel,
+    scopedTosPlanType,
+    selectedMarketTab,
+    selectedProject?.id,
+    setPlanNavigationIntent,
+    versions,
+  ])
 
   // Due task scanning
   useEffect(() => {

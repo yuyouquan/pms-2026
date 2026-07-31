@@ -70,14 +70,16 @@ function UserSwitcher() {
       trigger={['click']}
       overlayStyle={{ minWidth: 340 }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '5px 14px', borderRadius: 24, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', transition: 'all 0.25s', backdropFilter: 'blur(8px)' }}
-        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.22)'}
-        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
+      <Button
+        type="text"
+        aria-label="切换当前用户"
+        data-current-user={currentLoginUser}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, height: 'auto', cursor: 'pointer', padding: '5px 14px', borderRadius: 24, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', transition: 'all 0.25s', backdropFilter: 'blur(8px)' }}
       >
         <Avatar size={28} style={{ background: 'rgba(255,255,255,0.25)', fontSize: 13, fontWeight: 600 }}>{currentLoginUser.slice(-1)}</Avatar>
         <span style={{ color: '#fff', fontSize: 13, fontWeight: 500 }}>{currentLoginUser}</span>
         {isAdminUser && <Tag color="rgba(255,100,100,0.35)" style={{ color: '#fff', border: '1px solid rgba(255,255,255,0.25)', fontSize: 10, margin: 0 }}>管理组</Tag>}
-      </div>
+      </Button>
     </Dropdown>
   )
 }

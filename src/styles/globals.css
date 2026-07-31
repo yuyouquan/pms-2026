@@ -272,26 +272,15 @@
   backdrop-filter: blur(10px);
 }
 
-.pms-todo-center__table .ant-table-tbody > tr[role='button'] {
-  cursor: pointer;
-  transition: background-color 140ms ease;
-}
-
-.pms-todo-center__table .ant-table-tbody > tr[role='button']:hover > td,
-.pms-todo-center__table .ant-table-tbody > tr[role='button']:focus-visible > td {
-  background: rgba(238, 242, 255, 0.7) !important;
-}
-
-.pms-todo-center__table .ant-table-tbody > tr[role='button']:focus-visible {
-  outline: 2px solid #6366f1;
-  outline-offset: -2px;
-}
-
-.pms-todo-center__task {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
+.pms-todo-center__result-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .pms-todo-center__task-title {
@@ -306,13 +295,23 @@
   white-space: nowrap;
 }
 
-.pms-todo-center__table .ant-table-tbody > tr[role='button']:hover .pms-todo-center__task-title,
-.pms-todo-center__table .ant-table-tbody > tr[role='button']:focus-visible .pms-todo-center__task-title {
-  color: #4f46e5;
+.pms-todo-center__source {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  color: #475569;
+  font-size: 12px;
 }
 
-.pms-todo-center__task span {
+.pms-todo-center__source .ant-tag {
+  margin: 0 0 2px;
+}
+
+.pms-todo-center__context {
   overflow: hidden;
+  max-width: 100%;
   color: #94a3b8;
   font-size: 11px;
   text-overflow: ellipsis;

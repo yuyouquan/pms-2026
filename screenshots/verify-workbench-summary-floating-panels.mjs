@@ -7,6 +7,14 @@ const STEP_TIMEOUT = 30_000
 let currentStep = 'launch'
 let browser = null
 let page = null
+const unexpectedBrowserErrors = []
+const ALLOWED_ANTD_DEPRECATIONS = [
+  'Warning: [antd: ConfigProvider] `autoInsertSpaceInButton` is deprecated. Please use `{ button: { autoInsertSpace: boolean }}` instead.',
+  'Warning: [antd: Dropdown] `overlayStyle` is deprecated. Please use `styles.root` instead.',
+  'Warning: [antd: Space] `split` is deprecated. Please use `separator` instead.',
+  'Warning: [antd: Divider] `type` is deprecated. Please use `orientation` instead.',
+  'Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.',
+]
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 
 const waitForVisible = async selector => {
@@ -119,7 +127,7 @@ const waitForTodoMetric = async (label, expected) => {
 }
 
 const openTodoRowWithKeyboard = async title => {
-  const selector = `tr[role="button"][aria-label="打开待办 ${title}"]`
+  const selector = `button[aria-label="打开待办 ${title}"]`
   await waitForVisible(selector)
   await page.focus(selector)
   await page.keyboard.press('Enter')
@@ -138,6 +146,28 @@ const assertSelectedProjectMarket = async market => {
 
 const assertCurrentPlanVersion = async versionLabel => {
   await waitForVisible(`.ant-select-content[title="${versionLabel}"]`)
+}
+
+const switchUser = async (currentUser, nextUser) => {
+  const trigger = 'button[aria-label="切换当前用户"]'
+  console.log(`    switch user: locate ${currentUser}`)
+  await waitForVisible(trigger)
+  await page.$eval(trigger, element => element.click())
+  console.log('    switch user: menu opened')
+  await waitForVisible('.ant-dropdown:not(.ant-dropdown-hidden)')
+  const clicked = await page.evaluate(user => {
+    const item = Array.from(document.querySelectorAll('.ant-dropdown-menu-item'))
+      .find(element => Array.from(element.querySelectorAll('span')).some(span => (span.textContent || '').trim() === user))
+    if (!item) return false
+    item.click()
+    return true
+  }, nextUser)
+  if (!clicked) throw new Error(`missing user switch option: ${nextUser}`)
+  console.log(`    switch user: selected ${nextUser}`)
+  await page.waitForFunction(user => (
+    document.querySelector('button[aria-label="切换当前用户"]')?.getAttribute('data-current-user') === user
+  ), { timeout: STEP_TIMEOUT }, nextUser)
+  console.log(`    switch user: rendered ${nextUser}`)
 }
 
 const fillReactInput = async (selector, value) => {
@@ -328,12 +358,28 @@ try {
   page = await browser.newPage()
   page.setDefaultTimeout(STEP_TIMEOUT)
   page.on('pageerror', error => {
-    console.error(`[pageerror:${currentStep}] ${error.message}`)
+    const detail = `[pageerror:${currentStep}] ${error.message}`
+    unexpectedBrowserErrors.push(detail)
+    console.error(detail)
   })
   page.on('console', message => {
     if (message.type() === 'error') {
-      console.error(`[console:${currentStep}] ${message.text()}`)
+      if (ALLOWED_ANTD_DEPRECATIONS.includes(message.text())) {
+        console.warn(`[console:${currentStep}] ${message.text()}`)
+        return
+      }
+      const detail = `[console:${currentStep}] ${message.text()}`
+      unexpectedBrowserErrors.push(detail)
+      console.error(detail)
     }
+  })
+  page.on('response', response => {
+    if (response.status() < 400) return
+    const url = response.url()
+    if (response.status() === 404 && /\/favicon\.ico(?:\?|$)/.test(url)) return
+    const detail = `[response:${currentStep}] ${response.status()} ${url}`
+    unexpectedBrowserErrors.push(detail)
+    console.error(detail)
   })
 
   await step('open default workbench tabs', async () => {
@@ -523,11 +569,32 @@ try {
     await clickVisibleTextCard('body', 'X6877-D8400_H991')
     console.log('  action: assert project-list return label')
     await assertText('返回项目列表')
-    console.log('  action: return to project list')
+    console.log('  action: ordinary admin entry uses draft default')
+    await clickExactText('body', '[role="menuitem"]', '计划')
+    await assertCurrentPlanVersion('V4 (修订中)')
+    console.log('  action: return before restricted-user entry')
+    await clickExactText('body', 'button', '返回项目列表')
+    await assertSelectedTopNav('项目列表')
+    console.log('  action: user without draft visibility falls back to published')
+    await switchUser('张三', '李四')
+    await clickVisibleTextCard('body', 'X6877-D8400_H991')
+    await clickExactText('body', '[role="menuitem"]', '计划')
+    await assertCurrentPlanVersion('V3 (已发布)')
+    console.log('  action: return to project list as restricted user')
     await clickExactText('body', 'button', '返回项目列表')
     console.log('  action: assert project-list origin restored')
     await assertSelectedTopNav('项目列表')
     await assertSelector('[aria-label="项目列表视图"]')
+    console.log('  action: unauthorized plan titles are absent before aggregation')
+    await clickExactText('body', '[role="menuitem"]', '工作台')
+    await clickTodoSource('计划待办')
+    await waitForTodoMetric('待办总数', 0)
+    await assertText('暂无计划待办')
+    console.log('  action: restore admin for todo visibility')
+    await switchUser('李四', '张三')
+    await assertText('OP · 概念启动')
+    await clickExactText('body', '[role="menuitem"]', '项目列表')
+    await assertSelectedTopNav('项目列表')
   })
 
   await step('return from todo preserves selected todo tab', async () => {
@@ -535,8 +602,10 @@ try {
     await assertSelectedTopNav('工作台')
     await assertVisibleTabLabels(['待办中心', '工作跟踪'])
     await assertSelectedWorkbenchTab('待办中心')
-    await clickVisibleTextCard('.ant-tabs-tabpane-active', 'X6877-D8400_H991')
+    await openTodoRowWithKeyboard('OP · 概念启动')
     await assertText('返回工作台')
+    await assertSelectedProjectMarket('OP')
+    await assertCurrentPlanVersion('V3 (已发布)')
     await clickExactText('body', 'button', '返回工作台')
     await wait(200)
     await clickExactButtonIfVisible('确认离开')
@@ -577,6 +646,9 @@ try {
     await page.setViewport({ width: 1440, height: 1000 })
   })
 
+  if (unexpectedBrowserErrors.length > 0) {
+    throw new Error(`unexpected browser errors:\n${unexpectedBrowserErrors.join('\n')}`)
+  }
   console.log(`PASS workbench summary floating panels (${BASE_URL})`)
 } catch (error) {
   console.error(`FAIL workbench summary floating panels\n${error.stack || error}`)
