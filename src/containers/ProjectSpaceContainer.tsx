@@ -2183,7 +2183,9 @@ export default function ProjectSpaceContainer() {
         const reasonMessage = resolution.reason === 'missing-new-product'
           ? '未找到项目名完全相同的新品项目，无法保存老品项目'
           : resolution.reason === 'duplicate-new-product'
-            ? '存在多个项目名完全相同的新品项目，无法保存老品项目'
+            ? updated.productType === '新品'
+              ? '已存在项目名完全相同的新品项目，无法保存'
+              : '存在多个项目名完全相同的新品项目，无法保存老品项目'
             : 'tOS 版本必须是严格的三段数字，例如 14.0.0'
         message.error(reasonMessage)
         return false

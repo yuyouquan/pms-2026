@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { initialProjects } from '@/data/projects'
+import { EXTERNAL_PROJECT_POOL } from '@/data/externalProjectPool'
 import {
   PROJECT_TYPE_TOS_VERSION,
   isMachineProjectType,
@@ -112,7 +113,21 @@ function migrateMachineTosHistory(project: Project): Project {
   return migrated
 }
 
-const initialProjectState = (initialProjects as Project[]).map(migrateMachineTosHistory)
+function migrateProjectSourceIdentity(project: Project): Project {
+  const existingBid = typeof project.sourceBid === 'string' ? project.sourceBid.trim() : ''
+  if (existingBid) return existingBid === project.sourceBid ? project : { ...project, sourceBid: existingBid }
+  const projectName = project.name.trim()
+  const matchingEntries = EXTERNAL_PROJECT_POOL.filter(entry => entry.name.trim() === projectName)
+  return matchingEntries.length === 1
+    ? { ...project, sourceBid: matchingEntries[0].bid }
+    : project
+}
+
+const migrateProjectHistory = (project: Project): Project => (
+  migrateProjectSourceIdentity(migrateMachineTosHistory(project))
+)
+
+const initialProjectState = (initialProjects as Project[]).map(migrateProjectHistory)
 
 const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) => {
   if (isMachineProjectType(project.type) && project.markets?.length) {
@@ -183,6 +198,20 @@ function resolveAllowedFirstSaleTosValues(options?: ProjectMutationOptions): str
   const enumState = useEnumStore.getState()
   if (!enumState.hasHydrated || enumState.hydrationError) return []
   return getCurrentTosEnumValues('tos-3-part', enumState.valuesByType['tos-3-part'])
+}
+
+function normalizeProjectSourceBid(project: Project): string {
+  return typeof project.sourceBid === 'string' ? project.sourceBid.trim() : ''
+}
+
+function hasDuplicateProjectSourceBid(
+  projects: readonly Project[],
+  project: Project,
+): boolean {
+  const sourceBid = normalizeProjectSourceBid(project)
+  return Boolean(sourceBid && projects.some(existing => (
+    existing.id !== project.id && normalizeProjectSourceBid(existing) === sourceBid
+  )))
 }
 
 function resolveMachineTosValue(project: Project): string {
@@ -274,7 +303,7 @@ export function migrateProjectState(persistedState: unknown, _version: number): 
     const type = classification.projectCategory
     if (!id || !name || !type || seenIds.has(id)) return []
     seenIds.add(id)
-    return [migrateMachineTosHistory({
+    return [migrateProjectHistory({
       ...value,
       id,
       name,
@@ -421,10 +450,14 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       projectMemberMap: { ...state.projectMemberMap, [projectId]: members },
     })),
     addProject: (newProject, actor, options) => {
-      let projectToAdd = newProject
+      const sourceBid = normalizeProjectSourceBid(newProject)
+      let projectToAdd = sourceBid && newProject.sourceBid !== sourceBid
+        ? { ...newProject, sourceBid }
+        : newProject
+      if (hasDuplicateProjectSourceBid(get().projects, projectToAdd)) return false
       let machineResolution: Extract<MachineTosResolution<Project>, { ok: true }> | null = null
-      if (isMachineProjectType(newProject.type)) {
-        const resolution = resolveMachineTosUpdate(get().projects, newProject)
+      if (isMachineProjectType(projectToAdd.type)) {
+        const resolution = resolveMachineTosUpdate(get().projects, projectToAdd)
         if (!resolution.ok) return false
         projectToAdd = synchronizeMachineTosValues(
           resolution.candidate,
@@ -436,12 +469,18 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       }
       if (machineResolution) {
         const resolution = machineResolution
-        set(state => ({
-          projects: applyMachineTosResolution(state.projects, {
+        set(state => {
+          const projects = applyMachineTosResolution(state.projects, {
             ...resolution,
             updates: resolution.updates,
-          }, true),
-        }))
+          }, true)
+          return {
+            projects,
+            selectedProject: state.selectedProject
+              ? projects.find(project => project.id === state.selectedProject?.id) || state.selectedProject
+              : null,
+          }
+        })
       } else {
         set(state => ({ projects: [...state.projects, projectToAdd] }))
       }
@@ -454,10 +493,14 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       const updated = typeof update === 'function'
         ? update(existing)
         : { ...existing, ...update } as Project
-      let projectToSave = updated
+      const sourceBid = normalizeProjectSourceBid(updated)
+      let projectToSave = sourceBid && updated.sourceBid !== sourceBid
+        ? { ...updated, sourceBid }
+        : updated
+      if (hasDuplicateProjectSourceBid(get().projects, projectToSave)) return null
       let machineResolution: Extract<MachineTosResolution<Project>, { ok: true }> | null = null
-      if (isMachineProjectType(updated.type)) {
-        const resolution = resolveMachineTosUpdate(get().projects, updated)
+      if (isMachineProjectType(projectToSave.type)) {
+        const resolution = resolveMachineTosUpdate(get().projects, projectToSave)
         if (!resolution.ok) return null
         projectToSave = synchronizeMachineTosValues(
           resolution.candidate,
@@ -503,6 +546,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
           && project.productType === '新品'
           && normalizeMachineFamilyName(project.name) === familyName
         ))
+        if (matchingNewProjects.length > 1) return false
         if (matchingNewProjects.length === 1) {
           const resolution = resolveMachineTosUpdate(projects, matchingNewProjects[0])
           if (!resolution.ok) return false

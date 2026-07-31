@@ -96,20 +96,20 @@ const maximumVersion = (versions: string[]): string | null => {
   ))
 }
 
-const replaceCandidate = <T extends MachineTosProjectLike>(projects: T[], candidate: T): T[] => {
+const replaceCandidate = <T extends MachineTosProjectLike>(projects: readonly T[], candidate: T): T[] => {
   const existingIndex = projects.findIndex(project => project.id === candidate.id)
   if (existingIndex < 0) return [...projects, candidate]
   return projects.map((project, index) => index === existingIndex ? candidate : project)
 }
 
-const newProjectsInFamily = <T extends MachineTosProjectLike>(projects: T[], familyName: string) => (
+const newProjectsInFamily = <T extends MachineTosProjectLike>(projects: readonly T[], familyName: string) => (
   projects.filter(project => (
     getMachineKind(project) === 'new'
     && normalizeMachineFamilyName(project.name) === familyName
   ))
 )
 
-const legacyCurrentVersionsInFamily = <T extends MachineTosProjectLike>(projects: T[], familyName: string) => (
+const legacyCurrentVersionsInFamily = <T extends MachineTosProjectLike>(projects: readonly T[], familyName: string) => (
   projects
     .filter(project => (
       getMachineKind(project) === 'legacy'
@@ -119,7 +119,7 @@ const legacyCurrentVersionsInFamily = <T extends MachineTosProjectLike>(projects
 )
 
 export const resolveMachineTosUpdate = <T extends MachineTosProjectLike>(
-  projects: T[],
+  projects: readonly T[],
   candidate: T,
 ): MachineTosResolution<T> => {
   const kind = getMachineKind(candidate)
@@ -129,6 +129,9 @@ export const resolveMachineTosUpdate = <T extends MachineTosProjectLike>(
   const previous = projects.find(project => project.id === candidate.id)
 
   if (kind === 'new') {
+    const otherNewProjects = newProjectsInFamily(projects, familyName)
+      .filter(project => project.id !== candidate.id)
+    if (otherNewProjects.length > 0) return { ok: false, reason: 'duplicate-new-product' }
     const firstSaleTosVersion = getFirstSaleVersion(candidate)
     if (!isValidVersion(firstSaleTosVersion)) return { ok: false, reason: 'invalid-version' }
     const hypotheticalProjects = replaceCandidate(projects, {

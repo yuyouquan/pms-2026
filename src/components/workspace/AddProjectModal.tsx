@@ -43,12 +43,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
     const existingBids = new Set(projects
       .map(project => typeof project.sourceBid === 'string' ? project.sourceBid : '')
       .filter(Boolean))
-    const legacyExistingNames = new Set(projects
-      .filter(project => typeof project.sourceBid !== 'string' || !project.sourceBid)
-      .map(project => project.name))
-    return EXTERNAL_PROJECT_POOL.filter(entry => (
-      !existingBids.has(entry.bid) && !legacyExistingNames.has(entry.name)
-    ))
+    return EXTERNAL_PROJECT_POOL.filter(entry => !existingBids.has(entry.bid))
   }, [projects])
 
   const handleSubmit = async (payload: ProjectInfoSubmitPayload) => {
@@ -167,7 +162,9 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
         const reasonMessage = resolution.reason === 'missing-new-product'
           ? '未找到项目名完全相同的新品项目，无法创建老品项目'
           : resolution.reason === 'duplicate-new-product'
-            ? '存在多个项目名完全相同的新品项目，无法创建老品项目'
+            ? machineProductType === '新品'
+              ? '已存在项目名完全相同的新品项目，无法重复创建'
+              : '存在多个项目名完全相同的新品项目，无法创建老品项目'
             : 'tOS 版本必须是严格的三段数字，例如 14.0.0'
         message.error(reasonMessage)
         return false

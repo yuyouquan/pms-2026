@@ -55,11 +55,21 @@ assert.deepEqual(
   { ok: false, reason: 'duplicate-new-product' },
 )
 assert.deepEqual(
+  rules.resolveMachineTosUpdate([newMachine], { ...newMachine, id: 'new-2' }),
+  { ok: false, reason: 'duplicate-new-product' },
+  'creating a duplicate same-name new machine is rejected',
+)
+assert.deepEqual(
   rules.resolveMachineTosUpdate([], { ...newMachine, firstSaleTosVersion: 'bad' }),
   { ok: false, reason: 'invalid-version' },
 )
 
 const otherNew = { ...newMachine, id: 'other-new', name: 'X6880', firstSaleTosVersion: '16.0.0' }
+assert.deepEqual(
+  rules.resolveMachineTosUpdate([newMachine, otherNew], { ...otherNew, name: ' X6870 ' }),
+  { ok: false, reason: 'duplicate-new-product' },
+  'renaming a new machine into another exact trimmed new family is rejected',
+)
 assert.deepEqual(
   rules.resolveMachineTosUpdate([newMachine, otherNew], oldMachine).updates,
   [{ id: 'new', currentTosVersion: '15.0.0' }],
@@ -139,6 +149,16 @@ const migratedMachineState = projectStore.migrateProjectState({ projects: [
     firstSaleTosVersionId: '14.0',
     currentTosVersion: '15.0',
   },
+  {
+    id: 'persisted-unique-source-name',
+    name: 'tOS19.0',
+    type: 'tOS版本项目',
+  },
+  {
+    ...persistedMachineBase,
+    id: 'persisted-explicit-source',
+    sourceBid: 'EXTERNAL-KEEP',
+  },
 ] }, 2)
 assert.deepEqual(
   migratedMachineState.projects.map(project => ({
@@ -148,12 +168,15 @@ assert.deepEqual(
     current: project.currentTosVersion,
     fieldFirst: project.fieldValues?.firstSaleTosVersion,
     fieldCurrent: project.fieldValues?.currentTosVersion,
+    sourceBid: project.sourceBid,
   })),
   [
-    { id: 'persisted-machine', productType: '新品', first: '16.3.0', current: '14.0.0', fieldFirst: '16.3.0', fieldCurrent: '14.0.0' },
-    { id: 'persisted-three-part', productType: '新品', first: '17.10.0', current: '17.10.0', fieldFirst: undefined, fieldCurrent: undefined },
-    { id: 'persisted-unknown', productType: '新品', first: 'future-version', current: 'future-current', fieldFirst: undefined, fieldCurrent: undefined },
-    { id: 'persisted-legacy-product-type', productType: '老品', first: '14.0.0', current: '15.0.0', fieldFirst: undefined, fieldCurrent: undefined },
+    { id: 'persisted-machine', productType: '新品', first: '16.3.0', current: '14.0.0', fieldFirst: '16.3.0', fieldCurrent: '14.0.0', sourceBid: undefined },
+    { id: 'persisted-three-part', productType: '新品', first: '17.10.0', current: '17.10.0', fieldFirst: undefined, fieldCurrent: undefined, sourceBid: undefined },
+    { id: 'persisted-unknown', productType: '新品', first: 'future-version', current: 'future-current', fieldFirst: undefined, fieldCurrent: undefined, sourceBid: undefined },
+    { id: 'persisted-legacy-product-type', productType: '老品', first: '14.0.0', current: '15.0.0', fieldFirst: undefined, fieldCurrent: undefined, sourceBid: undefined },
+    { id: 'persisted-unique-source-name', productType: undefined, first: undefined, current: undefined, fieldFirst: undefined, fieldCurrent: undefined, sourceBid: 'EXT-003' },
+    { id: 'persisted-explicit-source', productType: '新品', first: undefined, current: undefined, fieldFirst: undefined, fieldCurrent: undefined, sourceBid: 'EXTERNAL-KEEP' },
   ],
   'persisted two-part references migrate to canonical three-part values without clearing unknown display history',
 )
@@ -285,12 +308,110 @@ assert.equal(invalidHistoryDelete.selectedProject, deleteNew, 'failed legacy del
 assert.equal(invalidHistoryDelete.auditLogsAfter, invalidHistoryDelete.auditLogsBefore, 'failed legacy deletion writes no audit log')
 assert.equal(invalidHistoryDelete.projectStoreNotifications, 0, 'failed legacy deletion emits no project-store transaction')
 
+const validMachineFields = {
+  type: '整机产品项目',
+  secondaryCategory: '整机-手机',
+  status: '待立项',
+  androidVersion: 'Android 18',
+  brand: 'TECNO',
+  startRam: '8GB',
+  versionType: 'Full',
+  developMode: '自研',
+}
+const validSourceNew = {
+  ...validMachineFields,
+  id: 'source-new',
+  sourceBid: 'BID-NEW',
+  name: 'SOURCE-X',
+  projectCode: 'SOURCE-X',
+  productType: '新品',
+  firstSaleTosVersion: '14.0.0',
+  currentTosVersion: '14.0.0',
+}
+const validSourceLegacy = {
+  ...validMachineFields,
+  id: 'source-old',
+  sourceBid: 'BID-OLD',
+  name: 'SOURCE-X',
+  projectCode: 'SOURCE-X',
+  productType: '老品',
+  firstSaleTosVersion: '14.0.0',
+  currentTosVersion: '15.0.0',
+}
+
+projectStore.useProjectStore.setState({ projects: [validSourceNew], selectedProject: validSourceNew })
+let selectedSyncNotifications = 0
+const unsubscribeSelectedSync = projectStore.useProjectStore.subscribe(() => {
+  selectedSyncNotifications += 1
+})
+assert.equal(
+  projectStore.useProjectStore.getState().addProject(validSourceLegacy, '张三', { allowedFirstSaleTosValues: ['14.0.0', '15.0.0'] }),
+  true,
+  'different source BIDs may create same-name linked new and legacy projects',
+)
+unsubscribeSelectedSync()
+const selectedSyncState = projectStore.useProjectStore.getState()
+const linkedNewAfterLegacy = selectedSyncState.projects.find(project => project.id === validSourceNew.id)
+assert.equal(linkedNewAfterLegacy?.currentTosVersion, '15.0.0', 'legacy add recomputes its linked new machine')
+assert.equal(selectedSyncState.selectedProject, linkedNewAfterLegacy, 'legacy add synchronizes selectedProject to the updated new project object')
+assert.equal(selectedSyncNotifications, 1, 'legacy add and selectedProject synchronization are atomic')
+
+const duplicateBidCandidate = {
+  ...validSourceNew,
+  id: 'duplicate-bid-candidate',
+  name: 'OTHER-X',
+  projectCode: 'OTHER-X',
+}
+const beforeDuplicateBidProjects = selectedSyncState.projects
+let duplicateBidNotifications = 0
+const unsubscribeDuplicateBid = projectStore.useProjectStore.subscribe(() => {
+  duplicateBidNotifications += 1
+})
+assert.equal(
+  projectStore.useProjectStore.getState().addProject(duplicateBidCandidate, '张三', { allowedFirstSaleTosValues: ['14.0.0'] }),
+  false,
+  'addProject rejects a reused non-empty source BID',
+)
+unsubscribeDuplicateBid()
+assert.equal(projectStore.useProjectStore.getState().projects, beforeDuplicateBidProjects, 'duplicate BID add preserves projects identity')
+assert.equal(duplicateBidNotifications, 0, 'duplicate BID add emits no project-store transaction')
+
+const updateBidFixture = {
+  ...validSourceNew,
+  id: 'update-bid-fixture',
+  sourceBid: 'BID-OTHER',
+  name: 'UPDATE-X',
+  projectCode: 'UPDATE-X',
+}
+projectStore.useProjectStore.setState({ projects: [validSourceNew, updateBidFixture], selectedProject: updateBidFixture })
+const beforeDuplicateBidUpdate = projectStore.useProjectStore.getState().projects
+assert.equal(
+  projectStore.useProjectStore.getState().updateProject(updateBidFixture.id, { sourceBid: 'BID-NEW' }, '张三', { allowedFirstSaleTosValues: ['14.0.0'] }),
+  null,
+  'updateProject rejects another project source BID',
+)
+assert.equal(projectStore.useProjectStore.getState().projects, beforeDuplicateBidUpdate, 'duplicate BID update is atomic')
+
+const duplicateDeleteNew = { ...deleteNew, id: 'duplicate-delete-new' }
+const duplicateFamilyProjects = [deleteNew, duplicateDeleteNew, auditedLegacyToDelete]
+const duplicateFamilyDelete = deleteFixture(
+  duplicateFamilyProjects,
+  auditedLegacyToDelete.id,
+  deleteNew,
+)
+assert.equal(duplicateFamilyDelete.deleted, false, 'legacy deletion fails when the retained family has multiple new machines')
+assert.equal(duplicateFamilyDelete.projects, duplicateFamilyProjects, 'duplicate-new deletion failure preserves projects identity')
+assert.equal(duplicateFamilyDelete.selectedProject, deleteNew, 'duplicate-new deletion failure preserves selected project')
+assert.equal(duplicateFamilyDelete.auditLogsAfter, duplicateFamilyDelete.auditLogsBefore, 'duplicate-new deletion failure writes no audit')
+assert.equal(duplicateFamilyDelete.projectStoreNotifications, 0, 'duplicate-new deletion failure emits no project-store transaction')
+
 const modalSource = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 const addSource = readSource(root, 'src/components/workspace/AddProjectModal.tsx')
 const storeSource = readSource(root, 'src/stores/project.ts')
 const fieldInputSource = readSource(root, 'src/components/project-info/ProjectInfoFieldInput.tsx')
 const infoSectionsSource = readSource(root, 'src/components/project-info/ProjectInfoSections.tsx')
 const externalPoolSource = readSource(root, 'src/data/externalProjectPool.ts')
+const machineRulesSource = readSource(root, 'src/lib/machineTosVersions.ts')
 assert.match(modalSource, /projectType\s*!==\s*PROJECT_TYPE_TOS_VERSION[\s\S]*!isMachineProjectType\(projectType\)/, 'machine and tOS forms omit the independent owner input')
 assert.match(addSource, /deriveProjectResponsiblePersons/, 'create derives responsibility from category fields')
 assert.match(addSource, /deriveProjectTosVersion/, 'tOS create reads version from project name')
@@ -300,6 +421,10 @@ assert.match(fieldInputSource, /formatTosEnumValue/, 'read-only machine version 
 assert.match(infoSectionsSource, /formatTosEnumValue/, 'machine version information displays the tOS prefix')
 assert.match(addSource, /sourceBid:\s*payload\.bid/, 'created projects retain their external source identity')
 assert.match(addSource, /existingBids/, 'candidate filtering permits distinct source records with the same project name')
+assert.doesNotMatch(addSource, /legacyExistingNames/, 'unlinked historical names do not reserve every external source BID in that family')
+assert.match(modalSource, /mode\s*===\s*'create'[\s\S]*currentTosVersion/, 'new-machine create initializes current from first sale without applying that rule to edit mode')
+assert.match(modalSource, /resolveMachineTosUpdate/, 'new-machine edit resolves its linked current version from the complete existing family')
+assert.match(machineRulesSource, /readonly\s+T\[\]/, 'machine family resolver accepts readonly project arrays')
 assert.ok((externalPoolSource.match(/name:\s*'X6870'/g) || []).length >= 3, 'browser fixtures expose one new and two same-name legacy projects')
 
 console.log('machine tOS versions contract passed')

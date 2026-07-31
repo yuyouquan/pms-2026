@@ -34,7 +34,7 @@ import {
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
 import { normalizeTosEnumReference } from '@/lib/tosEnumOptions'
-import { normalizeMachineFamilyName } from '@/lib/machineTosVersions'
+import { normalizeMachineFamilyName, resolveMachineTosUpdate } from '@/lib/machineTosVersions'
 import {
   defaultProjectCreationDraftRepository,
   isProjectCreationDraftEmpty,
@@ -496,10 +496,34 @@ export default function ProjectInfoModal({
       return
     }
     if (!isLegacyMachine) {
-      setMachineFamilyError('')
       const normalizedFirstSale = normalizeTosEnumReference(watchedFirstSaleTosVersion)
-      if (normalizedFirstSale && form.getFieldValue('currentTosVersion') !== normalizedFirstSale) {
-        form.setFieldValue('currentTosVersion', normalizedFirstSale)
+      if (!normalizedFirstSale) {
+        setMachineFamilyError('')
+        return
+      }
+      const existingProject = existingProjects.find(item => item.id === project?.id)
+      const candidate = {
+        ...(existingProject || project || {}),
+        id: mode === 'edit' ? project?.id || '' : `create:${machineProjectName}`,
+        name: machineProjectName,
+        type: projectType,
+        productType: '新品',
+        firstSaleTosVersionId: normalizedFirstSale,
+        firstSaleTosVersion: normalizedFirstSale,
+      }
+      const resolution = resolveMachineTosUpdate(existingProjects, candidate)
+      if (!resolution.ok) {
+        setMachineFamilyError(resolution.reason === 'duplicate-new-product'
+          ? '已存在项目名完全相同的新品项目，不能重复创建或保存'
+          : 'tOS 版本必须是严格的三段数字，例如 14.0.0')
+        return
+      }
+      setMachineFamilyError('')
+      const resolvedCurrent = mode === 'create'
+        ? normalizedFirstSale
+        : resolution.candidate.currentTosVersion
+      if (form.getFieldValue('currentTosVersion') !== resolvedCurrent) {
+        form.setFieldValue('currentTosVersion', resolvedCurrent)
       }
       return
     }
@@ -819,7 +843,7 @@ export default function ProjectInfoModal({
                 showSearch
                 optionFilterProp="label"
                 placeholder="搜索并选择项目"
-                options={candidateProjects.map(item => ({ label: item.name, value: item.bid }))}
+                options={candidateProjects.map(item => ({ label: `${item.name}（${item.bid}）`, value: item.bid }))}
               />
             </Form.Item>
           ) : (
