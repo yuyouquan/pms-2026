@@ -120,3 +120,18 @@ export const actionReadsObjectFields = (source, actionName, objectName, fields) 
   visit(action)
   return fields.every(field => seen.has(field))
 }
+
+export const getStringUnionTypeMembers = (source, typeName) => {
+  const file = ts.createSourceFile('contract.ts', source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS)
+  const members = []
+  const visit = node => {
+    if (ts.isTypeAliasDeclaration(node) && node.name.text === typeName && ts.isUnionTypeNode(node.type)) {
+      node.type.types.forEach(type => {
+        if (ts.isLiteralTypeNode(type) && ts.isStringLiteral(type.literal)) members.push(type.literal.text)
+      })
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  return members
+}

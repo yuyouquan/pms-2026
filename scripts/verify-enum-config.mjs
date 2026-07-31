@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
-import { loadTypeScriptModule, projectRoot, requireSource } from './lib/source-contract.mjs'
+import { getStringUnionTypeMembers, loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
-requireSource(root, 'src/types/enums.ts', /Enum/, 'missing enum type contract')
+assert.deepEqual(getStringUnionTypeMembers(readSource(root, 'src/types/enums.ts'), 'EnumTypeKey').sort(), ['tos-2-part', 'tos-3-part'], 'EnumTypeKey must be exactly the two fixed tOS string literals')
 const values = loadTypeScriptModule(root, 'src/lib/enumValues.ts')
 const store = loadTypeScriptModule(root, 'src/stores/enums.ts')
 assert.deepEqual(Object.keys(values.TOS_ENUM_REGISTRY).sort(), ['tos-2-part', 'tos-3-part'], 'only two tOS enum registries are registered')
