@@ -24,12 +24,12 @@ export const TECHNICAL_TEAM_FIELDS: ReadonlyArray<{ key: keyof TechnicalTeam; la
 ]
 
 export const TECHNICAL_DELIVERABLE_FIELDS: ReadonlyArray<{ key: TechnicalDeliverableKey; label: string }> = [
-  { key: 'projectKpi', label: '项目 KPI 文件' },
+  { key: 'projectKpi', label: '项目KPI文件' },
   { key: 'conceptDesign', label: '概设' },
-  { key: 'charterReport', label: 'charter 报告' },
-  { key: 'pdcpReport', label: 'PDCP 报告' },
-  { key: 'tdcpReport', label: 'TDCP 报告' },
-  { key: 'edcpReport', label: 'EDCP 报告' },
+  { key: 'charterReport', label: 'charter报告' },
+  { key: 'pdcpReport', label: 'PDCP报告' },
+  { key: 'tdcpReport', label: 'TDCP报告' },
+  { key: 'edcpReport', label: 'EDCP报告' },
 ]
 
 export const TECHNICAL_STRING_FIELD_KEYS = [

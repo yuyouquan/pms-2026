@@ -149,11 +149,17 @@ import MarketEditorModal from '@/components/project-info/MarketEditorModal'
 import TosTypeEditorModal from '@/components/project-info/TosTypeEditorModal'
 import ProjectPlanInfoGrid from '@/components/project-info/ProjectPlanInfoGrid'
 import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
+import TechnicalProjectOverview from '@/components/technical-project/TechnicalProjectOverview'
+import TechnicalProjectBasicInfo from '@/components/technical-project/TechnicalProjectBasicInfo'
 import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
 import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
 import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
-import { synchronizeTechnicalProjectRecord } from '@/lib/technicalProjectRules'
+import {
+  resolveLatestPublishedTechnicalProjectStage,
+  synchronizeTechnicalProjectRecord,
+  type TechnicalStagePlanVersion,
+} from '@/lib/technicalProjectRules'
 import { deriveProjectTosVersion } from '@/lib/projectInfoRules'
 import {
   getTemplateSnapshotForProjectType,
@@ -434,6 +440,20 @@ export default function ProjectSpaceContainer() {
     if (!_permProjectId) return
     perm.setRolePermissionsForProject(_permProjectId, v)
   }
+  const isTechnicalProject = selectedProject?.type === '技术项目'
+  const technicalStage = useMemo(() => {
+    if (!isTechnicalProject || !selectedProject) return '-'
+    const versions = (selectedProject as unknown as { technicalPlanVersions?: TechnicalStagePlanVersion[] }).technicalPlanVersions || []
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date())
+    return resolveLatestPublishedTechnicalProjectStage(versions, today)
+  }, [isTechnicalProject, selectedProject])
+  const technicalPreProjectName = useMemo(() => {
+    if (!selectedProject) return undefined
+    const preProjectId = String(selectedProject.preProjectId || selectedProject.fieldValues?.preProjectId || '')
+    return projects.find(project => project.id === preProjectId)?.name
+  }, [projects, selectedProject])
 
   // ═══════ Permissions ═══════
   // RBAC check tied to the currently logged-in user. Global "管理组" bypasses.
@@ -3883,12 +3903,29 @@ export default function ProjectSpaceContainer() {
           {transfer.transferView === 'entry' && <TransferEntry {...transferProps} />}
           {transfer.transferView === 'review' && <TransferReview {...transferProps} />}
           {transfer.transferView === 'sqa-review' && <TransferSqaReview {...transferProps} />}
-          {transfer.transferView === null && projectSpaceModule === 'basic' && renderProjectBasicInfo()}
+          {transfer.transferView === null && projectSpaceModule === 'basic' && (
+            isTechnicalProject && selectedProject
+              ? <TechnicalProjectBasicInfo projectId={selectedProject.id} currentLoginUser={currentLoginUser} />
+              : renderProjectBasicInfo()
+          )}
           {transfer.transferView === null && projectSpaceModule === 'plan' && renderProjectPlan()}
           {transfer.transferView === null && projectSpaceModule === 'overview' && (
-            <Card style={{ borderRadius: 8, textAlign: 'center', padding: '48px 0' }}>
-              <Empty description={<span style={{ color: '#9ca3af' }}>概况模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-            </Card>
+            isTechnicalProject && selectedProject
+              ? (
+                <TechnicalProjectOverview
+                  project={selectedProject}
+                  stage={technicalStage}
+                  preProjectName={technicalPreProjectName}
+                  customRoles={roles.filter(role => !role.isFixed)}
+                  canEdit={canEditBasicInfo}
+                  onEdit={() => setShowProjectInfoEditor(true)}
+                />
+              )
+              : (
+                <Card style={{ borderRadius: 8, textAlign: 'center', padding: '48px 0' }}>
+                  <Empty description={<span style={{ color: '#9ca3af' }}>概况模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                </Card>
+              )
           )}
           {transfer.transferView === null && projectSpaceModule === 'requirements' && (
             <Card style={{ borderRadius: 8, textAlign: 'center', padding: '48px 0' }}>

@@ -8,6 +8,81 @@ import type {
   TechnicalSubprojectSyncResult,
 } from '@/types/technicalProject'
 
+export interface TechnicalStageTask {
+  id: string
+  name?: string
+  taskName?: string
+  parentId?: string | null
+  planStartDate: string
+  planEndDate: string
+  order: number
+}
+
+export interface TechnicalStagePlanVersion {
+  id: string
+  templateType: string
+  status: string
+  publishedAt?: string
+  versionNo?: string
+  tasks: readonly TechnicalStageTask[]
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+const parseIsoDate = (value: string) => {
+  if (!ISO_DATE.test(value)) return Number.NaN
+  const timestamp = Date.parse(`${value}T00:00:00Z`)
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value
+    ? timestamp
+    : Number.NaN
+}
+
+/** Resolves a TDT stage from top-level phase intervals. Child tasks never affect it. */
+export function calculateTechnicalProjectStage(
+  tasks: readonly TechnicalStageTask[],
+  today: string,
+  inheritedParentStage?: string,
+): string {
+  if (inheritedParentStage !== undefined) return inheritedParentStage
+  const todayTimestamp = parseIsoDate(today)
+  if (!Number.isFinite(todayTimestamp)) return '-'
+  const phases = tasks
+    .filter(task => !task.parentId)
+    .map(task => ({
+      ...task,
+      name: String(task.name || task.taskName || '').trim(),
+      start: parseIsoDate(String(task.planStartDate || '')),
+      end: parseIsoDate(String(task.planEndDate || '')),
+    }))
+    .sort((left, right) => left.order - right.order || left.start - right.start || left.id.localeCompare(right.id))
+  if (!phases.length || phases.some(phase => !phase.name || !Number.isFinite(phase.start) || !Number.isFinite(phase.end) || phase.start > phase.end)) return '-'
+  if (phases.some((phase, index) => index > 0 && phase.start <= phases[index - 1].end)) return '-'
+  if (todayTimestamp < phases[0].start) return '未开始'
+  if (todayTimestamp > phases[phases.length - 1].end) return '已完成'
+  const active = phases.filter(phase => todayTimestamp >= phase.start && todayTimestamp <= phase.end)
+  return active.length === 1 ? active[0].name : '-'
+}
+
+const technicalVersionTimestamp = (version: TechnicalStagePlanVersion) => {
+  const published = Date.parse(String(version.publishedAt || ''))
+  if (Number.isFinite(published)) return published
+  const numericVersion = Number(String(version.versionNo || '').replace(/\D/g, ''))
+  return Number.isFinite(numericVersion) ? numericVersion : 0
+}
+
+/** Selects only the latest published TDT snapshot. Draft and child-plan snapshots are excluded. */
+export function resolveLatestPublishedTechnicalProjectStage(
+  versions: readonly TechnicalStagePlanVersion[],
+  today: string,
+  inheritedParentStage?: string,
+): string {
+  if (inheritedParentStage !== undefined) return inheritedParentStage
+  const latest = versions
+    .filter(version => version.status === '已发布' && ['tdt', 'TDT项目计划'].includes(version.templateType))
+    .sort((left, right) => technicalVersionTimestamp(right) - technicalVersionTimestamp(left))[0]
+  return latest ? calculateTechnicalProjectStage(latest.tasks, today) : '-'
+}
+
 type ResolveInput = {
   ipm?: { projectName?: string; category?: string; secondaryCategory?: string; technicalTrack?: string }
   tmg?: string

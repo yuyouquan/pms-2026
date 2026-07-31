@@ -5,7 +5,7 @@ import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-cont
 const root = projectRoot(import.meta.url)
 const rules = loadTypeScriptModule(root, 'src/lib/technicalProjectRules.ts')
 const constants = loadTypeScriptModule(root, 'src/constants/technicalProject.ts')
-for (const name of ['resolveTechnicalProjectFields', 'validateTechnicalProject', 'synchronizeTechnicalSubprojects', 'isTechnicalSubprojectConfigured', 'canCreateSubprojectPlanRevision', 'switchDeliverableMode', 'normalizeTechnicalProjectValues', 'synchronizeTechnicalProjectRecord']) assert.equal(typeof rules[name], 'function', `missing ${name}`)
+for (const name of ['resolveTechnicalProjectFields', 'validateTechnicalProject', 'synchronizeTechnicalSubprojects', 'isTechnicalSubprojectConfigured', 'canCreateSubprojectPlanRevision', 'switchDeliverableMode', 'normalizeTechnicalProjectValues', 'synchronizeTechnicalProjectRecord', 'calculateTechnicalProjectStage', 'resolveLatestPublishedTechnicalProjectStage']) assert.equal(typeof rules[name], 'function', `missing ${name}`)
 assert.deepEqual(constants.SUBDOMAINS_BY_DOMAIN, {
   基础架构TMG: ['无'], 性能TMG: ['无'], 'DFX TMG': ['无'], 'UX TMG': ['无'],
   系统应用: ['AIOS', '应用', '图形', '内核', '多媒体'],
@@ -183,4 +183,38 @@ assert.match(configModal, /开发模式/, 'configuration modal renders developme
 assert.match(configModal, /valuesByType\[['"]tos-2-part['"]\]/, 'first tOS choices come from current two-part enum values')
 assert.match(configModal, /showSearch/, 'first machine project is searchable')
 assert.doesNotMatch(configModal, /删除/, 'subproject configuration has no delete action')
+
+const validStages = [
+  { id: 'phase-1', name: '规划阶段', parentId: null, planStartDate: '2026-01-01', planEndDate: '2026-01-31', order: 1 },
+  { id: 'child-ignored', name: '规划启动', parentId: 'phase-1', planStartDate: '2026-01-01', planEndDate: '2026-01-03', order: 1 },
+  { id: 'phase-2', name: '概念阶段', parentId: null, planStartDate: '2026-02-01', planEndDate: '2026-02-28', order: 2 },
+]
+assert.equal(rules.calculateTechnicalProjectStage(validStages, '2025-12-31'), '未开始', 'date before first phase is not started')
+assert.equal(rules.calculateTechnicalProjectStage(validStages, '2026-01-15'), '规划阶段', 'date inside a unique top-level phase uses its name')
+assert.equal(rules.calculateTechnicalProjectStage(validStages, '2026-03-01'), '已完成', 'date after all phases is complete')
+assert.equal(rules.calculateTechnicalProjectStage([{ ...validStages[0], planStartDate: '' }], '2026-01-15'), '-', 'missing phase dates are invalid')
+assert.equal(rules.calculateTechnicalProjectStage([validStages[0], { ...validStages[2], planStartDate: '2026-02-02' }], '2026-02-01'), '-', 'date in a phase gap is indeterminate')
+assert.equal(rules.calculateTechnicalProjectStage([validStages[0], { ...validStages[2], planStartDate: '2026-01-20' }], '2026-01-25'), '-', 'overlapping phases are indeterminate')
+const stageVersions = [
+  { id: 'published-old', templateType: 'tdt', status: '已发布', publishedAt: '2026-01-01T00:00:00Z', tasks: validStages },
+  { id: 'draft-new', templateType: 'tdt', status: '修订中', publishedAt: '2026-04-01T00:00:00Z', tasks: [{ ...validStages[0], name: '草稿阶段' }] },
+  { id: 'published-new', templateType: 'tdt', status: '已发布', publishedAt: '2026-02-01T00:00:00Z', tasks: [{ ...validStages[0], name: '最新规划阶段' }, validStages[2]] },
+  { id: 'child-plan', templateType: 'subproject', status: '已发布', publishedAt: '2026-03-01T00:00:00Z', tasks: [{ ...validStages[0], name: '子项目阶段' }] },
+]
+assert.equal(rules.resolveLatestPublishedTechnicalProjectStage(stageVersions, '2026-01-15'), '最新规划阶段', 'only the latest published TDT version determines stage; drafts and child plans are ignored')
+assert.equal(rules.resolveLatestPublishedTechnicalProjectStage(stageVersions, '2026-01-15', '父项目阶段'), '父项目阶段', 'child rows inherit the already resolved parent stage')
+
+const overview = readSource(root, 'src/components/technical-project/TechnicalProjectOverview.tsx')
+assert.match(overview, /项目价值/, 'technical overview renders the full-width project value')
+assert.match(overview, /TECHNICAL_TEAM_FIELDS/, 'technical overview renders the exact six fixed team roles from the shared schema')
+assert.deepEqual(constants.TECHNICAL_TEAM_FIELDS.map(field => field.label), ['技术项目负责人', '技术项目经理', '测试代表', '质量代表', '产品代表', '标准化代表'], 'technical overview fixed team labels remain exact')
+assert.match(overview, /TECHNICAL_DELIVERABLE_FIELDS/, 'technical overview renders all deliverables from the shared schema')
+assert.deepEqual(constants.TECHNICAL_DELIVERABLE_FIELDS.map(field => field.label), ['项目KPI文件', '概设', 'charter报告', 'PDCP报告', 'TDCP报告', 'EDCP报告'], 'technical deliverable labels remain exact')
+const basicInfo = readSource(root, 'src/components/technical-project/TechnicalProjectBasicInfo.tsx')
+assert.match(basicInfo, /显示已停用/, 'technical basic information can reveal inactive children')
+assert.match(basicInfo, /SubprojectConfigModal/, 'active child tabs mount the configuration modal')
+assert.doesNotMatch(basicInfo, /TDT项目计划/, 'TDT is not a technical basic-information tab')
+const projectSpace = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
+assert.match(projectSpace, /<TechnicalProjectOverview/, 'project space mounts the focused technical overview')
+assert.match(projectSpace, /<TechnicalProjectBasicInfo/, 'project space mounts focused child-only basic information')
 console.log('technical project contract passed')
