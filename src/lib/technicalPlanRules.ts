@@ -113,6 +113,41 @@ export const validateTechnicalTemplateDepth = (
   return true
 }
 
+export interface InvalidTechnicalTaskFields {
+  start?: string[]
+  end?: string[]
+}
+
+/** Same-row and parent-range date checks used by technical plan drafts. Empty dates stay valid. */
+export const getInvalidTechnicalTaskFields = (
+  tasks: readonly TechnicalTemplateTaskInput[],
+): Map<string, InvalidTechnicalTaskFields> => {
+  const result = new Map<string, InvalidTechnicalTaskFields>()
+  const byId = new Map(tasks.filter(task => task.id).map(task => [task.id!, task]))
+  const add = (id: string, field: keyof InvalidTechnicalTaskFields, reason: string) => {
+    const current = result.get(id) || {}
+    current[field] = [...(current[field] || []), reason]
+    result.set(id, current)
+  }
+  tasks.forEach(task => {
+    if (!task.id) return
+    const start = String(task.planStartDate || '')
+    const end = String(task.planEndDate || '')
+    if (start && end && start > end) {
+      add(task.id, 'start', '计划开始不能晚于计划完成')
+      add(task.id, 'end', '计划完成不能早于计划开始')
+    }
+    if (!task.parentId) return
+    const parent = byId.get(task.parentId)
+    if (!parent) return
+    const parentStart = String(parent.planStartDate || '')
+    const parentEnd = String(parent.planEndDate || '')
+    if (start && parentStart && start < parentStart) add(task.id, 'start', '计划开始不能早于父任务')
+    if (end && parentEnd && end > parentEnd) add(task.id, 'end', '计划完成不能晚于父任务')
+  })
+  return result
+}
+
 const isLegacyTechnicalTemplateKey = (key: string) => (
   key === '技术项目'
   || key.startsWith('技术项目::一级计划')

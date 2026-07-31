@@ -152,6 +152,7 @@ import ProjectPlanInfoGrid from '@/components/project-info/ProjectPlanInfoGrid'
 import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
 import TechnicalProjectOverview from '@/components/technical-project/TechnicalProjectOverview'
 import TechnicalProjectBasicInfo from '@/components/technical-project/TechnicalProjectBasicInfo'
+import TechnicalPlanModule from '@/components/technical-project/TechnicalPlanModule'
 import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
 import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
 import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
@@ -3925,7 +3926,11 @@ export default function ProjectSpaceContainer() {
               ? <TechnicalProjectBasicInfo projectId={selectedProject.id} currentLoginUser={currentLoginUser} />
               : renderProjectBasicInfo()
           )}
-          {transfer.transferView === null && projectSpaceModule === 'plan' && renderProjectPlan()}
+          {transfer.transferView === null && projectSpaceModule === 'plan' && (
+            isTechnicalProject && selectedProject
+              ? <TechnicalPlanModule projectId={selectedProject.id} currentLoginUser={currentLoginUser} canEdit={canEditLevel1Plan} canPublish={canEditLevel1Plan} />
+              : renderProjectPlan()
+          )}
           {transfer.transferView === null && projectSpaceModule === 'overview' && (
             isTechnicalProject && selectedProject
               ? (

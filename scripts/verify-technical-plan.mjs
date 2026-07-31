@@ -110,6 +110,57 @@ assert.equal(compatibility.getTemplateSnapshotForProjectType(snapshots, '技术�
 assert.equal(compare.compareVersionsForTable(tdtTasks, tdtPublishedTasks).some(row => row.changeType !== '未变更'), true, 'TDT compare uses its scoped publication')
 assert.equal(compare.compareVersionsForTable(subprojectTasks, subprojectPublishedTasks).some(row => row.changeType !== '未变更'), true, 'subproject compare uses its scoped publication')
 
+const technicalProjectModule = loadTypeScriptModule(root, 'src/stores/technicalProject.ts')
+const technicalPlanModule = loadTypeScriptModule(root, 'src/stores/technicalPlan.ts')
+const orderedTabs = technicalPlanModule.buildTechnicalPlanTabs('9', technicalProjectModule.INITIAL_TECHNICAL_SUBPROJECTS, false)
+assert.deepEqual(orderedTabs.map(tab => tab.key), ['9:tdt', '9:subproject:IPM-AI-001', '9:subproject:IPM-AI-002'], 'TDT is first and active children follow IPM order')
+assert.equal(orderedTabs[0].label, 'TDT项目计划')
+assert.deepEqual(
+  technicalPlanModule.buildTechnicalPlanTabs('9', technicalProjectModule.INITIAL_TECHNICAL_SUBPROJECTS, true).map(tab => tab.key),
+  ['9:tdt', '9:subproject:IPM-AI-001', '9:subproject:IPM-AI-002', '9:subproject:IPM-AI-003'],
+  'history mode includes inactive children in IPM order',
+)
+
+const instanceStore = technicalPlanModule.createTechnicalPlanStore({ plansByKey: {} })
+const tdtPlanScope = { kind: 'tdt', parentProjectId: '9' }
+const childPlanScope = { kind: 'subproject', parentProjectId: '9', subprojectId: 'IPM-AI-001' }
+const incompleteChildScope = { kind: 'subproject', parentProjectId: '9', subprojectId: 'IPM-AI-002' }
+const inactiveChildScope = { kind: 'subproject', parentProjectId: '9', subprojectId: 'IPM-AI-003' }
+const configuredChild = technicalProjectModule.INITIAL_TECHNICAL_SUBPROJECTS[0]
+const incompleteChild = technicalProjectModule.INITIAL_TECHNICAL_SUBPROJECTS[1]
+const inactiveChild = technicalProjectModule.INITIAL_TECHNICAL_SUBPROJECTS[2]
+assert.deepEqual(instanceStore.createRevision({ scope: tdtPlanScope, templateKind: 'tdt', templateTasks: tdtTasks }), { ok: true, versionId: 'V1-draft' }, 'TDT creates its own first draft')
+assert.deepEqual(instanceStore.createRevision({ scope: tdtPlanScope, templateKind: 'tdt', templateTasks: tdtTasks }), { ok: false, reason: 'draft-exists' }, 'one instance allows at most one draft')
+assert.equal(instanceStore.publishRevision(tdtPlanScope, '2026-08-01T00:00:00Z').ok, true, 'TDT draft publishes')
+assert.deepEqual(instanceStore.createRevision({ scope: childPlanScope, templateKind: 'subproject', templateTasks: subprojectTasks, subproject: configuredChild }), { ok: true, versionId: 'V1-draft' }, 'child has an independent V1 sequence')
+assert.equal(instanceStore.getState().plansByKey['9:tdt'].versions.length, 1, 'publishing child does not mutate TDT versions')
+assert.deepEqual(instanceStore.createRevision({ scope: inactiveChildScope, templateKind: 'subproject', templateTasks: subprojectTasks, subproject: inactiveChild }), { ok: false, reason: 'inactive' }, 'inactive child is history-only')
+assert.deepEqual(instanceStore.createRevision({ scope: incompleteChildScope, templateKind: 'subproject', templateTasks: subprojectTasks, subproject: incompleteChild }), { ok: false, reason: 'incomplete-configuration' }, 'incomplete child cannot create a revision')
+
+const childV1 = instanceStore.getState().plansByKey['9:subproject:IPM-AI-001'].versions[0]
+const editedTemplate = subprojectTasks.map((task, index) => ({ ...task, taskName: index === 0 ? '后改模板' : task.taskName }))
+assert.equal(instanceStore.publishRevision(childPlanScope, '2026-08-01T01:00:00Z').ok, true)
+assert.deepEqual(instanceStore.createRevision({ scope: childPlanScope, templateKind: 'subproject', templateTasks: editedTemplate, subproject: configuredChild }), { ok: true, versionId: 'V2-draft' }, 'next child revision advances only its own sequence')
+const childState = instanceStore.getState().plansByKey['9:subproject:IPM-AI-001']
+assert.equal(childState.versions[0].tasks[0].taskName, childV1.tasks[0].taskName, 'template edits never mutate existing versions')
+assert.equal(childState.versions[1].tasks[0].taskName, '后改模板', 'new draft uses latest matching template snapshot')
+assert.notStrictEqual(childState.versions[0].tasks, childState.versions[1].tasks, 'version task snapshots are isolated')
+assert.deepEqual(instanceStore.getState().plansByKey['9:tdt'].versions.map(version => version.versionNo), ['V1'], 'child actions do not change TDT sequence')
+instanceStore.setColumns(childPlanScope, { order: ['taskName'], visible: ['taskName'] })
+instanceStore.setCollapsed(childPlanScope, ['subproject-1'])
+assert.deepEqual(instanceStore.getState().plansByKey['9:subproject:IPM-AI-001'].columnSettings.visible, ['taskName'], 'columns persist per plan key')
+assert.deepEqual(instanceStore.getState().plansByKey['9:subproject:IPM-AI-001'].collapsedRows, ['subproject-1'], 'collapsed rows persist per plan key')
+assert.equal(instanceStore.getState().plansByKey['9:tdt'].columnSettings.visible.includes('taskName'), true, 'TDT column state remains independent')
+
+const technicalModuleSource = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
+assert.match(technicalModuleSource, /TDT项目计划/, 'technical plan UI renders the fixed TDT tab')
+assert.match(technicalModuleSource, /显示已停用/, 'technical plan UI exposes history mode')
+assert.match(technicalModuleSource, /SettingOutlined/, 'child plan tabs expose configuration')
+assert.match(technicalModuleSource, /compareVersionsForTable/, 'technical plans reuse version comparison')
+assert.match(technicalModuleSource, /exportSheet/, 'technical plans reuse Excel export')
+assert.match(technicalModuleSource, /SortableRow/, 'technical plans reuse sortable task rows')
+assert.match(technicalModuleSource, /getInvalidTechnicalTaskFields/, 'technical plans enforce plan date validation')
+
 const machineScope = rules.getTemplateConfigScopeKey('整机产品项目', 'level1')
 const migratedPlan = planModule.migratePlanStoreState({
   versions: [{ id: 'legacy-v', versionNo: 'V88', status: '已发布' }],
