@@ -10,7 +10,7 @@ import {
   type SortableColumnDefinition,
   type SortableColumnSettingsValue,
 } from '@/lib/columnSettings'
-import { normalizeTosVersionName, PRODUCT_LINES_BY_BRAND } from '@/lib/roadmapValidation'
+import { normalizeRoadmapTosReference, PRODUCT_LINES_BY_BRAND } from '@/lib/roadmapValidation'
 import {
   ROADMAP_COLUMNS,
   type RoadmapBrand,
@@ -200,6 +200,7 @@ export function buildRoadmapFilterFieldDefinitions(
       label: 'tOS版本',
       kind: 'enum',
       options: [...versions]
+        .filter(version => version.selectable !== false)
         .sort((left, right) => compareSemanticTos(right, left))
         .map(version => ({ label: version.name, value: version.id })),
     },
@@ -228,11 +229,8 @@ function normalizeEnumFilterValue(
   const exact = definition.options?.find(candidate => candidate.value === rawValue)
   if (exact) return exact.value
   if (field !== 'firstSaleTosVersionId') return null
-  const normalized = normalizeTosVersionName(rawValue)
-  if (!normalized) return null
-  return versions.find(version => (
-    version.major === normalized.major && version.minor === normalized.minor
-  ))?.id ?? null
+  const normalized = normalizeRoadmapTosReference(rawValue, versions)
+  return versions.some(version => version.id === normalized) ? normalized : null
 }
 
 export function sanitizeRoadmapFilterConditions(

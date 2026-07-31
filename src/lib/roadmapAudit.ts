@@ -5,7 +5,7 @@ import type {
   RoadmapProjectFields,
   TosVersionConfig,
 } from '@/types/roadmap'
-import { buildRoadmapDisplayName } from '@/lib/roadmapValidation'
+import { buildRoadmapDisplayName, formatRoadmapTosValue } from '@/lib/roadmapValidation'
 
 export const ROADMAP_AUDIT_FIELDS: readonly RoadmapAuditField[] = [
   'firstSaleTosVersionId',
@@ -45,7 +45,7 @@ function resolveAuditValue(
   versions: readonly TosVersionConfig[],
 ): string {
   if (field !== 'firstSaleTosVersionId') return String(value ?? '')
-  return versions.find(version => version.id === value)?.name ?? String(value ?? '')
+  return versions.find(version => version.id === value)?.name ?? formatRoadmapTosValue(String(value ?? ''))
 }
 
 export function diffRoadmapProjectFields(

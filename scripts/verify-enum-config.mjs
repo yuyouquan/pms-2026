@@ -53,6 +53,12 @@ assert.deepEqual(store.partializeEnumState({
   selectedType: 'tos-2-part',
   loading: true,
 }), { valuesByType: { 'tos-2-part': ['18.0'], 'tos-3-part': ['18.0.1'] } }, 'persisted partial contains business values only')
+assert.equal(store.useEnumStore.getState().selectedType, 'tos-2-part', 'two-part enum is the default configuration focus')
+store.useEnumStore.getState().setSelectedType('tos-3-part')
+assert.equal(store.useEnumStore.getState().selectedType, 'tos-3-part', 'configuration focus can be selected before navigation')
+assert.deepEqual(store.partializeEnumState(store.useEnumStore.getState()), {
+  valuesByType: store.useEnumStore.getState().valuesByType,
+}, 'configuration focus remains non-persisted UI state')
 assert.deepEqual(store.migrateEnumState({
   valuesByType: {
     'tos-2-part': [' 18.10 ', 'bad', '18.2', '18.2'],
@@ -81,6 +87,8 @@ const storeSource = readSource(root, 'src/stores/enums.ts')
 assert.match(configUi, /key:\s*['"]enum['"][\s\S]*枚举值配置/, 'configuration center exposes the enum-value tab')
 assert.match(configUi, /configTab\s*===\s*['"]enum['"][\s\S]*<EnumConfig/, 'enum tab renders EnumConfig')
 assert.match(enumUi, /TOS_ENUM_TYPE_KEYS\.map[\s\S]*TOS_ENUM_REGISTRY\[type\]/, 'fixed registry drives the two visible enum type labels')
+assert.match(enumUi, /useEnumStore\(state\s*=>\s*state\.selectedType\)/, 'enum type focus is shared for cross-module navigation')
+assert.match(enumUi, /useEnumStore\(state\s*=>\s*state\.setSelectedType\)/, 'enum type focus exposes one non-persisted action')
 for (const copy of ['新增枚举值', '历史已保存字符串不受影响', '格式要求', '加载枚举值失败', '暂无枚举值']) {
   assert.ok(enumUi.includes(copy), `EnumConfig must include UI copy: ${copy}`)
 }

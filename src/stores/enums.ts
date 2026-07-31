@@ -13,11 +13,13 @@ import type { EnumActionResult, EnumTypeKey, EnumValuesByType } from '@/types/en
 
 export interface EnumState {
   valuesByType: EnumValuesByType
+  selectedType: EnumTypeKey
   hasHydrated: boolean
   hydrationError: string | null
 }
 
 export interface EnumActions {
+  setSelectedType: (type: EnumTypeKey) => void
   addEnumValue: (type: EnumTypeKey, input: string) => EnumActionResult
   updateEnumValue: (type: EnumTypeKey, currentValue: string, input: string) => EnumActionResult
   deleteEnumValue: (type: EnumTypeKey, value: string) => EnumActionResult
@@ -202,8 +204,12 @@ export const useEnumStore = create<EnumStore>()((rawSet, get, api) => {
 
       return {
         valuesByType: createInitialEnumValues(),
+        selectedType: 'tos-2-part',
         hasHydrated: false,
         hydrationError: null,
+        setSelectedType: type => {
+          if (isEnumTypeKey(type)) rawSet({ selectedType: type })
+        },
         addEnumValue: (type, input) => {
           const previousValues = get().valuesByType
           const next = addValue(previousValues, type, input)

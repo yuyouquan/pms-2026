@@ -44,6 +44,8 @@ function resultMessage(result: EnumActionResult): string {
 
 export default function EnumConfig() {
   const valuesByType = useEnumStore(state => state.valuesByType)
+  const selectedType = useEnumStore(state => state.selectedType)
+  const setSelectedType = useEnumStore(state => state.setSelectedType)
   const addEnumValue = useEnumStore(state => state.addEnumValue)
   const updateEnumValue = useEnumStore(state => state.updateEnumValue)
   const deleteEnumValue = useEnumStore(state => state.deleteEnumValue)
@@ -51,7 +53,6 @@ export default function EnumConfig() {
   const hydrationError = useEnumStore(state => state.hydrationError)
   const hydrateEnumStore = useEnumStore(state => state.hydrateEnumStore)
   const resetLocalConfig = useEnumStore(state => state.resetLocalConfig)
-  const [selectedType, setSelectedType] = useState<EnumTypeKey>('tos-2-part')
   const [modalOpen, setModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<ModalMode>('add')
   const [editingValue, setEditingValue] = useState<string | null>(null)

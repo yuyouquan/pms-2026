@@ -21,6 +21,13 @@ import {
 import { useHasGlobalPermission } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
 import { useRoadmapStore } from '@/stores/roadmap'
+import { useEnumStore } from '@/stores/enums'
+import { useUiStore } from '@/stores/ui'
+import {
+  formatRoadmapTosValue,
+  normalizeRoadmapTosReference,
+  normalizeRoadmapTosValue,
+} from '@/lib/roadmapValidation'
 import type { ProjectItem } from '@/types/app'
 import type {
   PlannedRoadmapProject,
@@ -40,7 +47,6 @@ import RoadmapEvolutionView from './RoadmapEvolutionView'
 import RoadmapFilterDrawer from './RoadmapFilterDrawer'
 import RoadmapTableView from './RoadmapTableView'
 import RoadmapToolbar from './RoadmapToolbar'
-import TosVersionMaintenanceModal from './TosVersionMaintenanceModal'
 
 const isPresent = <T,>(value: T | null): value is T => value !== null
 
@@ -87,7 +93,12 @@ export default function ProjectRoadmapModule({
   const canEdit = hasPermission('roadmap:edit')
 
   const plannedProjects = useRoadmapStore(state => state.plannedProjects)
-  const versions = useRoadmapStore(state => state.tosVersions)
+  const storedVersionDetails = useRoadmapStore(state => state.tosVersions)
+  const enumTosValues = useEnumStore(state => state.valuesByType['tos-2-part'])
+  const setSelectedType = useEnumStore(state => state.setSelectedType)
+  const setActiveModule = useUiStore(state => state.setActiveModule)
+  const setConfigTab = useUiStore(state => state.setConfigTab)
+  const navigateWithEditGuard = useUiStore(state => state.navigateWithEditGuard)
   const changeLogs = useRoadmapStore(state => state.changeLogs)
   const viewMode = useRoadmapStore(state => state.viewMode)
   const selectedTosVersionId = useRoadmapStore(state => state.selectedTosVersionId)
@@ -103,10 +114,54 @@ export default function ProjectRoadmapModule({
   const setSort = useRoadmapStore(state => state.setSort)
   const setSelectedConflictKey = useRoadmapStore(state => state.setSelectedConflictKey)
   const deletePlannedProject = useRoadmapStore(state => state.deletePlannedProject)
+  const versions = useMemo<TosVersionConfig[]>(() => {
+    const currentValues = enumTosValues.map(normalizeRoadmapTosValue).filter(Boolean)
+    const historicalReferences = [
+      ...plannedProjects.map(project => project.firstSaleTosVersionId),
+      ...projects.flatMap(project => [
+        project.firstSaleTosVersionId,
+        project.firstSaleTosVersion,
+        project.currentTosVersionId,
+        project.currentTosVersion,
+        project.tosVersionName,
+        project.tosVersion,
+      ]),
+      ...storedVersionDetails.flatMap(version => (
+        version.targets.length || version.periodStartDate || version.periodEndDate ? [version.id] : []
+      )),
+    ].map(value => normalizeRoadmapTosReference(value, storedVersionDetails)).filter(Boolean)
+    const allValues = [...new Set([...currentValues, ...historicalReferences])]
+    return allValues.map(normalizedValue => {
+      const [major, minor] = normalizedValue.split('.').map(Number)
+      const existing = storedVersionDetails.find(version => (
+        version.major === major && version.minor === minor
+      ))
+      return {
+        id: normalizedValue,
+        name: formatRoadmapTosValue(normalizedValue),
+        major,
+        minor,
+        periodStartDate: existing?.periodStartDate ?? '',
+        periodEndDate: existing?.periodEndDate ?? '',
+        targets: existing?.targets ?? [],
+        createdAt: existing?.createdAt ?? '2026-01-01T00:00:00.000Z',
+        updatedAt: existing?.updatedAt ?? '2026-01-01T00:00:00.000Z',
+        selectable: currentValues.includes(normalizedValue),
+      }
+    }).sort((left, right) => (
+      Number.isFinite(left.major) && Number.isFinite(left.minor)
+        && Number.isFinite(right.major) && Number.isFinite(right.minor)
+        ? right.major - left.major || right.minor - left.minor
+        : left.name.localeCompare(right.name, 'zh-CN')
+    ))
+  }, [enumTosValues, plannedProjects, projects, storedVersionDetails])
+  const selectableVersions = useMemo(
+    () => versions.filter(version => version.selectable !== false),
+    [versions],
+  )
 
   const [plannedModalOpen, setPlannedModalOpen] = useState(false)
   const [editingPlannedProjectId, setEditingPlannedProjectId] = useState<string | null>(null)
-  const [tosMaintenanceOpen, setTosMaintenanceOpen] = useState(false)
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [columnDrawerOpen, setColumnDrawerOpen] = useState(false)
   const [changeLogOpen, setChangeLogOpen] = useState(false)
@@ -218,6 +273,12 @@ export default function ProjectRoadmapModule({
   }, [targetVersionIds, versions])
 
   useEffect(() => {
+    if (selectedTosVersionId && !selectableVersions.some(version => version.id === selectedTosVersionId)) {
+      setSelectedTosVersionId(null)
+    }
+  }, [selectableVersions, selectedTosVersionId, setSelectedTosVersionId])
+
+  useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(document.fullscreenElement === roadmapShellRef.current)
     }
@@ -306,6 +367,13 @@ export default function ProjectRoadmapModule({
     if (!canView) return
     if (onOpenChangeLog) onOpenChangeLog()
     else setChangeLogOpen(true)
+  }
+  const openSharedTosEnumConfig = () => {
+    navigateWithEditGuard(() => {
+      setSelectedType('tos-2-part')
+      setConfigTab('enum')
+      setActiveModule('config')
+    }, false)
   }
   const openConflictDrawer = (conflictKey?: string) => {
     const nextKey = conflictKey ?? conflicts[0]?.key ?? null
@@ -404,7 +472,7 @@ export default function ProjectRoadmapModule({
         isFullscreen={isFullscreen}
         onToggleFullscreen={() => void toggleFullscreen()}
         onOpenChangeLog={requestChangeLog}
-        onOpenTosMaintenance={() => setTosMaintenanceOpen(true)}
+        onOpenTosMaintenance={openSharedTosEnumConfig}
         onCreatePlannedProject={openCreatePlannedProject}
         onOpenFilters={() => {
           setColumnDrawerOpen(false)
@@ -452,17 +520,10 @@ export default function ProjectRoadmapModule({
         onCancel={closePlannedProjectModal}
         editingProject={editingProject}
         allRows={allRows}
-        tosVersions={versions}
+        tosVersions={selectableVersions}
         currentUser={currentLoginUser}
         canEdit={canEdit}
         onDeletePlannedProject={projectId => requestDeletePlannedProject(projectId, closePlannedProjectModal)}
-      />
-      <TosVersionMaintenanceModal
-        open={tosMaintenanceOpen}
-        onCancel={() => setTosMaintenanceOpen(false)}
-        normalProjects={projects}
-        plannedProjects={plannedProjects}
-        canEdit={canEdit}
       />
       <RoadmapConflictDrawer
         open={conflictDrawerOpen}

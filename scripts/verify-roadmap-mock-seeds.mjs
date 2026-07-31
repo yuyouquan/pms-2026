@@ -72,46 +72,20 @@ const historicalDuplicateState = roadmapStore.migrateRoadmapState({
   ],
 }, 1)
 roadmapStore.useRoadmapStore.setState(historicalDuplicateState)
-const metadataOnlyUpdate = roadmapStore.useRoadmapStore.getState().renameTosVersion('historical-17-2-0', {
-  name: 'tOS 17.2.0',
-  periodStartDate: '2026-01-01',
-  periodEndDate: '2026-12-31',
-  targets: [' target A ', 'target B'],
-})
-if (!metadataOnlyUpdate.ok) {
-  throw new Error(`metadata-only update on a historical 16+ duplicate was rejected: ${JSON.stringify(metadataOnlyUpdate)}`)
+for (const removedAction of ['createTosVersion', 'renameTosVersion', 'deleteTosVersion']) {
+  if (removedAction in roadmapStore.useRoadmapStore.getState()) {
+    throw new Error(`roadmap compatibility metadata still exposes ${removedAction}`)
+  }
 }
-const metadataUpdated = roadmapStore.useRoadmapStore.getState().tosVersions.find(version => version.id === 'historical-17-2-0')
+const metadataOnlyUpdate = roadmapStore.useRoadmapStore.getState().setTosTargets('17.2', [' target A ', 'target B'])
+if (!metadataOnlyUpdate.ok) {
+  throw new Error(`target metadata update on a migrated two-part version was rejected: ${JSON.stringify(metadataOnlyUpdate)}`)
+}
+const metadataUpdated = roadmapStore.useRoadmapStore.getState().tosVersions.find(version => version.id === '17.2')
 if (
-  metadataUpdated?.periodStartDate !== '2026-01-01'
-  || metadataUpdated.periodEndDate !== '2026-12-31'
-  || metadataUpdated.targets.join(',') !== 'target A,target B'
+  metadataUpdated?.targets.join(',') !== 'target A,target B'
 ) {
   throw new Error(`metadata-only update was not atomic: ${JSON.stringify(metadataUpdated)}`)
-}
-const semanticConflict = roadmapStore.useRoadmapStore.getState().renameTosVersion('historical-17-2-0', {
-  name: 'tOS 17.2.2',
-  periodStartDate: '2026-01-01',
-  periodEndDate: '2026-12-31',
-})
-if (semanticConflict.ok || semanticConflict.reason !== 'duplicate') {
-  throw new Error('semantic version change into a historical 16+ major.minor conflict was accepted')
-}
-
-for (const [label, periodStartDate, periodEndDate] of [
-  ['single-ended', '2026-01-01', ''],
-  ['impossible date', '2026-02-30', '2026-03-01'],
-  ['reversed', '2026-04-01', '2026-03-01'],
-]) {
-  const beforeCount = roadmapStore.useRoadmapStore.getState().tosVersions.length
-  const result = roadmapStore.useRoadmapStore.getState().createTosVersion({
-    name: 'tOS 19.1.0',
-    periodStartDate,
-    periodEndDate,
-  })
-  if (result.ok || result.reason !== 'invalid' || roadmapStore.useRoadmapStore.getState().tosVersions.length !== beforeCount) {
-    throw new Error(`${label} tOS period was not rejected atomically`)
-  }
 }
 
 const migratedPeriods = roadmapStore.migrateRoadmapState({
@@ -122,21 +96,21 @@ const migratedPeriods = roadmapStore.migrateRoadmapState({
     { id: 'valid-period', name: 'tOS 15.3', periodStartDate: '2026-01-01', periodEndDate: '2026-12-31' },
   ],
 }, 1)
-for (const id of ['single-period', 'invalid-period']) {
+for (const id of ['15.1', '15.2']) {
   const version = migratedPeriods.tosVersions.find(candidate => candidate.id === id)
   if (version?.periodStartDate || version?.periodEndDate) {
     throw new Error(`migration did not clear invalid period pair ${id}`)
   }
 }
-const validPeriod = migratedPeriods.tosVersions.find(version => version.id === 'valid-period')
+const validPeriod = migratedPeriods.tosVersions.find(version => version.id === '15.3')
 if (validPeriod?.periodStartDate !== '2026-01-01' || validPeriod.periodEndDate !== '2026-12-31') {
   throw new Error('migration did not preserve a valid period pair')
 }
 
 const planned = initial.plannedProjects.find(project => project.id === 'planned-mock-x6877-android16-new')
 if (!planned) throw new Error('missing planned X6877 roadmap mock')
-if (planned.firstSaleTosVersionId !== 'tos-16-3') {
-  throw new Error(`Android 16 planned mock must use tos-16-3, got ${planned.firstSaleTosVersionId}`)
+if (planned.firstSaleTosVersionId !== '16.3') {
+  throw new Error(`Android 16 planned mock must use 16.3, got ${planned.firstSaleTosVersionId}`)
 }
 
 const normal = projectData.initialProjects.find(project => project.id === '1')
@@ -258,9 +232,9 @@ const legacyCatalogHydrated = hydrateActualRoadmapStore({
 const legacyPlanned = legacyCatalogHydrated.plannedProjects.find(project => project.id === planned.id)
 if (
   !legacyPlanned
-  || legacyPlanned.firstSaleTosVersionId !== legacyVersion.id
+  || legacyPlanned.firstSaleTosVersionId !== '16.3'
   || legacyCatalogHydrated.changeLogs.length !== 4
-  || legacyCatalogHydrated.changeLogs.some(log => log.source === 'planned' && log.tosVersionName !== legacyVersion.name)
+  || legacyCatalogHydrated.changeLogs.some(log => log.source === 'planned' && log.tosVersionName !== 'tOS16.3')
 ) {
   throw new Error('legacy tOS catalog did not receive a fully resolvable planned mock and history')
 }
@@ -275,7 +249,7 @@ const logOnlyLegacyHydrated = hydrateActualRoadmapStore({
 })
 if (
   logOnlyLegacyHydrated.plannedProjects[0]?.id !== planned.id
-  || logOnlyLegacyHydrated.plannedProjects[0]?.firstSaleTosVersionId !== legacyVersion.id
+  || logOnlyLegacyHydrated.plannedProjects[0]?.firstSaleTosVersionId !== '16.3'
 ) {
   throw new Error('a prior logs-only seed prevented the missing planned mock from being repaired')
 }
@@ -305,7 +279,7 @@ const oldMockHydrated = hydrateActualRoadmapStore({
 })
 const refreshedPlanned = oldMockHydrated.plannedProjects.find(project => project.id === planned.id)
 if (
-  refreshedPlanned?.firstSaleTosVersionId !== 'tos-16-3'
+  refreshedPlanned?.firstSaleTosVersionId !== '16.3'
   || oldMockHydrated.changeLogs.length !== 4
   || /tOS\s*17\./i.test(JSON.stringify({
     planned: refreshedPlanned,

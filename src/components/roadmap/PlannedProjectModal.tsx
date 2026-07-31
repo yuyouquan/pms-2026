@@ -26,9 +26,10 @@ import {
 import {
   findRoadmapHistoryMatches,
 } from '@/lib/roadmapProjectAdapter'
-import { compareSemanticTos } from '@/lib/roadmapSorting'
 import {
+  buildRoadmapTosSelectOptions,
   buildRoadmapDuplicateKey,
+  formatRoadmapTosValue,
   getProductLineOptions,
 } from '@/lib/roadmapValidation'
 import { useRoadmapStore } from '@/stores/roadmap'
@@ -105,9 +106,13 @@ export default function PlannedProjectModal({
   const productType = Form.useWatch('productType', form)
   const brand = Form.useWatch('brand', form)
 
-  const descendingTosVersions = useMemo(
-    () => [...tosVersions].sort((left, right) => compareSemanticTos(right, left)),
-    [tosVersions],
+  const tosVersionOptions = useMemo(() => buildRoadmapTosSelectOptions(
+    tosVersions.map(version => version.id),
+    editingProject?.firstSaleTosVersionId,
+  ), [editingProject?.firstSaleTosVersionId, tosVersions])
+  const hasInactiveTosVersion = Boolean(
+    editingProject?.firstSaleTosVersionId
+    && !tosVersions.some(version => version.id === editingProject.firstSaleTosVersionId),
   )
   const productLineOptions = brand ? getProductLineOptions(brand) : []
   const historyMatches = useMemo(
@@ -124,7 +129,11 @@ export default function PlannedProjectModal({
   }, [allRows, androidVersion, editingProject?.id, projectCode, productType])
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      dirtyRef.current = false
+      form.resetFields()
+      return
+    }
     dirtyRef.current = false
     form.resetFields()
     const nextValues: Partial<PlannedProjectFormValues> = editingProject
@@ -142,9 +151,9 @@ export default function PlannedProjectModal({
           launchEstimated: false,
           remark: '',
         }
-    form.setFields(Object.entries(nextValues).map(([name, value]) => ({
+    form.setFieldsValue(nextValues)
+    form.setFields(Object.keys(nextValues).map(name => ({
       name: name as keyof PlannedProjectFormValues,
-      value,
       touched: false,
       errors: [],
     })))
@@ -235,18 +244,24 @@ export default function PlannedProjectModal({
       }
       message.success(editingProject ? '待规划项目已更新' : '待规划项目已创建')
       onChanged?.()
-      onCancel()
+      clearDraftAndClose()
     } finally {
       setSubmitting(false)
       submitLockRef.current = false
     }
   }
 
+  const clearDraftAndClose = () => {
+    dirtyRef.current = false
+    form.resetFields()
+    onCancel()
+  }
+
   const requestClose = () => {
     if (submitLockRef.current || submitting || discardConfirmOpenRef.current) return
     const hasTouchedDraft = dirtyRef.current && form.isFieldsTouched()
     if (!hasTouchedDraft) {
-      onCancel()
+      clearDraftAndClose()
       return
     }
     discardConfirmOpenRef.current = true
@@ -257,8 +272,7 @@ export default function PlannedProjectModal({
       cancelText: '继续编辑',
       okButtonProps: { danger: true },
       onOk: () => {
-        form.resetFields()
-        onCancel()
+        clearDraftAndClose()
       },
       afterClose: () => {
         discardConfirmOpenRef.current = false
@@ -278,6 +292,7 @@ export default function PlannedProjectModal({
       open={open}
       onCancel={requestClose}
       width={960}
+      forceRender
       destroyOnHidden
       mask={{ closable: false }}
       styles={{ body: { maxHeight: '68vh', overflowY: 'auto', paddingInlineEnd: 8 } }}
@@ -350,9 +365,17 @@ export default function PlannedProjectModal({
                 <Form.Item label="tOS 版本" name="firstSaleTosVersionId" rules={[{ required: true, message: '请选择 tOS 版本' }]}>
                   <Select
                     placeholder="请选择版本"
-                    options={descendingTosVersions.map(version => ({ label: version.name, value: version.id }))}
+                    options={tosVersionOptions}
                   />
                 </Form.Item>
+                {hasInactiveTosVersion ? (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    title={`${formatRoadmapTosValue(editingProject?.firstSaleTosVersionId)}（已停用）`}
+                    description="当前历史值仅用于显示；重新选择时只能使用配置中心仍启用的两位 tOS 版本。"
+                  />
+                ) : null}
               </Col>
             </Row>
             {projectCode.trim() ? (

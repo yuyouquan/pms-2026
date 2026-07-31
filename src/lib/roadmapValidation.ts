@@ -52,6 +52,12 @@ export interface NormalizedTosVersion {
   minor: number
 }
 
+export interface RoadmapTosSelectOption {
+  label: string
+  value: string
+  disabled?: boolean
+}
+
 export type RoadmapTosVersionCatalog = ReadonlySet<string> | readonly Pick<TosVersionConfig, 'id'>[]
 
 export function buildRoadmapDisplayName(
@@ -94,14 +100,70 @@ export function normalizeLegacyTosVersionName(input: string): NormalizedTosVersi
   return normalizeTosVersionName(`${match[1]}.${match[2]}`)
 }
 
-export function formatTosVersionFull(
-  version: Pick<TosVersionConfig, 'major' | 'minor'>,
+/**
+ * Roadmap records persist the enum's numeric string, while unknown historical
+ * strings remain intact so removing an enum never erases business history.
+ */
+export function normalizeRoadmapTosValue(input: unknown): string {
+  if (typeof input !== 'string') return ''
+  const trimmed = input.trim()
+  if (!trimmed) return ''
+  const normalized = normalizeTosVersionName(trimmed)
+  return normalized ? `${normalized.major}.${normalized.minor}` : trimmed
+}
+
+export function normalizeRoadmapTosReference(
+  input: unknown,
+  compatibilityDirectory: readonly Pick<TosVersionConfig, 'id' | 'name' | 'major' | 'minor'>[] = [],
 ): string {
-  return `tOS ${version.major}.${version.minor}`
+  if (typeof input !== 'string') return ''
+  const trimmed = input.trim()
+  if (!trimmed) return ''
+  const configured = compatibilityDirectory.find(version => (
+    version.id === trimmed || version.name === trimmed
+  ))
+  if (configured) return `${configured.major}.${configured.minor}`
+  const legacyId = trimmed.match(/^tos-(\d+)-(\d+)(?:-\d+)?$/i)
+  if (legacyId) return `${Number(legacyId[1])}.${Number(legacyId[2])}`
+  const normalized = normalizeLegacyTosVersionName(trimmed)
+  return normalized ? `${normalized.major}.${normalized.minor}` : trimmed
+}
+
+export function formatRoadmapTosValue(input: unknown): string {
+  if (typeof input !== 'string' || !input.trim()) return '-'
+  return `tOS${input.trim().replace(/^tOS\s*/i, '')}`
+}
+
+export function buildRoadmapTosSelectOptions(
+  currentValues: readonly string[],
+  currentHistoricalValue?: string | null,
+): RoadmapTosSelectOption[] {
+  const current = currentValues.map(normalizeRoadmapTosValue).filter(Boolean)
+  const currentSet = new Set(current)
+  const historical = normalizeRoadmapTosReference(currentHistoricalValue)
+  return [
+    ...(historical && !currentSet.has(historical)
+      ? [{
+          label: `${formatRoadmapTosValue(historical)}（已停用）`,
+          value: historical,
+          disabled: true,
+        }]
+      : []),
+    ...current.map(value => ({ label: formatRoadmapTosValue(value), value })),
+  ]
+}
+
+export function formatTosVersionFull(
+  version: Pick<TosVersionConfig, 'major' | 'minor'> & Partial<Pick<TosVersionConfig, 'id' | 'name'>>,
+): string {
+  if (Number.isSafeInteger(version.major) && Number.isSafeInteger(version.minor)) {
+    return formatRoadmapTosValue(`${version.major}.${version.minor}`)
+  }
+  return formatRoadmapTosValue(version.id ?? version.name ?? '')
 }
 
 export function formatTosVersionDisplay(
-  version: Pick<TosVersionConfig, 'major' | 'minor'>,
+  version: Pick<TosVersionConfig, 'major' | 'minor'> & Partial<Pick<TosVersionConfig, 'id' | 'name'>>,
 ): string {
   return formatTosVersionFull(version)
 }
@@ -151,8 +213,13 @@ function isVersionIdSet(catalog: RoadmapTosVersionCatalog): catalog is ReadonlyS
 }
 
 function tosCatalogHasId(catalog: RoadmapTosVersionCatalog, id: string): boolean {
-  if (isVersionIdSet(catalog)) return catalog.has(id)
-  return (catalog as readonly Pick<TosVersionConfig, 'id'>[]).some(version => version.id === id)
+  const normalizedId = normalizeRoadmapTosReference(id)
+  if (isVersionIdSet(catalog)) {
+    return catalog.has(id) || catalog.has(normalizedId)
+  }
+  return (catalog as readonly Pick<TosVersionConfig, 'id'>[]).some(version => (
+    version.id === id || normalizeRoadmapTosReference(version.id) === normalizedId
+  ))
 }
 
 export function validatePlannedProject(

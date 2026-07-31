@@ -9,7 +9,7 @@ import {
   buildRoadmapDisplayName,
   buildRoadmapDuplicateKey,
   normalizeLegacyRoadmapProductType,
-  normalizeLegacyTosVersionName,
+  normalizeRoadmapTosReference,
 } from '@/lib/roadmapValidation'
 import type { ProjectItem } from '@/types/app'
 import type {
@@ -83,14 +83,8 @@ function normalizeAndroidVersion(explicitVersion: unknown, legacyVersion: unknow
 function findTosVersionId(candidate: unknown, versions: readonly TosVersionConfig[]): string | null {
   if (typeof candidate !== 'string' || !candidate.trim()) return null
   const trimmed = candidate.trim()
-  const byId = versions.find(version => version.id === trimmed)
-  if (byId) return byId.id
-  const normalized = normalizeLegacyTosVersionName(trimmed)
-  if (!normalized) return null
-  const byVersion = versions.find(version => (
-    version.major === normalized.major && version.minor === normalized.minor
-  ))
-  return byVersion?.id ?? null
+  const normalized = normalizeRoadmapTosReference(trimmed, versions)
+  return normalized || null
 }
 
 function resolveTosVersionId(
@@ -197,6 +191,7 @@ export function adaptPlannedProject(project: PlannedRoadmapProject): RoadmapProj
   const projectCode = project.projectCode.trim()
   return {
     ...project,
+    firstSaleTosVersionId: normalizeRoadmapTosReference(project.firstSaleTosVersionId),
     projectCode,
     displayName: buildRoadmapDisplayName(projectCode, project.androidVersion, project.productType),
     source: 'planned',
