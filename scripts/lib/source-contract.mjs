@@ -15,7 +15,7 @@ export const readSource = (root, relativePath) => {
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
 }
 export const requireSource = (root, relativePath, pattern, message) => {
-  assert.match(readSource(root, relativePath), pattern, message)
+  assert.ok(pattern.test(readSource(root, relativePath)), message)
 }
 
 const resolveModule = (root, specifier, parentPath) => {
@@ -46,6 +46,7 @@ const loadResolved = (root, modulePath) => {
   }).outputText
   const localRequire = specifier => {
     const dependency = resolveModule(root, specifier, resolved)
+    if (/\.(?:css|scss|sass|less|svg|png|jpg|jpeg|gif)$/.test(dependency)) return {}
     return /\.(?:ts|tsx|js|jsx)$/.test(dependency) ? loadResolved(root, dependency) : require(dependency)
   }
   const wrapper = vm.runInThisContext(`(function (exports, require, module, __filename, __dirname) {${output}\n})`, { filename: resolved })
