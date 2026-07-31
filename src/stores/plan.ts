@@ -1,5 +1,7 @@
 import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
 import {
+  PROJECT_CATEGORY_TECH,
   PROJECT_TEMPLATE_TYPES,
 } from '@/constants/projectTypes'
 import type { GanttScaleMode } from '@/lib/ganttScale'
@@ -16,8 +18,19 @@ import {
   type SortableColumnDefinition,
   type SortableColumnSettingsValue,
 } from '@/lib/columnSettings'
+import {
+  buildSubprojectTemplateTasks,
+  buildTdtTemplateTasks,
+  migrateTechnicalTemplateState,
+  TECHNICAL_TEMPLATE_STORAGE_KEYS,
+  validateTechnicalTemplateDepth,
+} from '@/lib/technicalPlanRules'
+import type { TechnicalTemplateKind } from '@/types/technicalPlan'
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
+
+export const PLAN_STORE_VERSION = 1
+export const PLAN_STORE_STORAGE_KEY = 'pms-plan-store'
 
 // ─── Exported constants ───────────────────────────────────────────────
 
@@ -64,10 +77,34 @@ const cloneLevel1TemplateTasks = () => LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t })
 
 export const createInitialTemplatePublishedSnapshots = (
   versionId = 'v3',
-): Record<string, any[]> => TEMPLATE_PROJECT_TYPES.reduce((snapshots, projectType) => {
-  snapshots[getTemplateSnapshotKey(projectType, versionId)] = cloneLevel1TemplateTasks()
+): Record<string, any[]> => {
+  const snapshots = TEMPLATE_PROJECT_TYPES.reduce((result, projectType) => {
+    if (projectType !== PROJECT_CATEGORY_TECH) {
+      result[getTemplateSnapshotKey(projectType, versionId)] = cloneLevel1TemplateTasks()
+    }
+    return result
+  }, {} as Record<string, any[]>)
+  snapshots[getTemplateSnapshotKey(PROJECT_CATEGORY_TECH, versionId)] = buildTdtTemplateTasks()
+  snapshots[getTemplateSnapshotKey(PROJECT_CATEGORY_TECH, versionId, 'tdt')] = buildTdtTemplateTasks()
+  snapshots[getTemplateSnapshotKey(PROJECT_CATEGORY_TECH, versionId, 'subproject')] = buildSubprojectTemplateTasks()
   return snapshots
-}, {} as Record<string, any[]>)
+}
+
+const createInitialConfigTemplateTasks = () => {
+  const templates = TEMPLATE_PROJECT_TYPES.reduce((result, projectType) => {
+    if (projectType !== PROJECT_CATEGORY_TECH) result[projectType] = cloneLevel1TemplateTasks()
+    return result
+  }, {} as Record<string, any[]>)
+  templates[PROJECT_CATEGORY_TECH] = buildTdtTemplateTasks()
+  templates[TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt] = buildTdtTemplateTasks()
+  templates[TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject] = buildSubprojectTemplateTasks()
+  return templates
+}
+
+export const migratePlanStoreState = (persistedState: unknown) => {
+  if (!persistedState || typeof persistedState !== 'object') return persistedState as PlanState
+  return migrateTechnicalTemplateState(persistedState as Record<string, any>) as PlanState
+}
 
 type PlanColumnDefinition = Omit<SortableColumnDefinition<string>, 'title'> & {
   title: string
@@ -307,6 +344,7 @@ export interface PlanActions {
 
   setPublishedSnapshots: (v: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void
   setConfigTemplateTasksByType: (v: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void
+  setTechnicalTemplateTasks: (kind: TechnicalTemplateKind, v: any[] | ((prev: any[]) => any[])) => void
 
   setCompareVersionA: (v: string) => void
   setCompareVersionB: (v: string) => void
@@ -330,7 +368,7 @@ export interface PlanActions {
   setPredecessorWarning: (v: { visible: boolean; task: any; message: string }) => void
 }
 
-export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
+export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get) => ({
   // Config-center plan
   planLevel: 'level1',
   selectedPlanType: LEVEL2_PLAN_TYPES[0],
@@ -375,10 +413,7 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
 
   // Published snapshots
   publishedSnapshots: createInitialTemplatePublishedSnapshots(),
-  configTemplateTasksByType: TEMPLATE_PROJECT_TYPES.reduce((acc, type) => {
-    acc[type] = cloneLevel1TemplateTasks()
-    return acc
-  }, {} as Record<string, any[]>),
+  configTemplateTasksByType: createInitialConfigTemplateTasks(),
 
   // Version compare
   compareVersionA: 'v1',
@@ -468,6 +503,21 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
 
   setPublishedSnapshots: (v) => set((s) => ({ publishedSnapshots: typeof v === 'function' ? v(s.publishedSnapshots) : v })),
   setConfigTemplateTasksByType: (v) => set((s) => ({ configTemplateTasksByType: typeof v === 'function' ? v(s.configTemplateTasksByType) : v })),
+  setTechnicalTemplateTasks: (kind, v) => {
+    const key = TECHNICAL_TEMPLATE_STORAGE_KEYS[kind]
+    const current = get().configTemplateTasksByType[key] || []
+    const input = current.map(task => ({ ...task }))
+    const resolved = typeof v === 'function' ? v(input) : v
+    validateTechnicalTemplateDepth(kind, resolved)
+    const next = resolved.map(task => ({ ...task }))
+    set(state => ({
+      configTemplateTasksByType: {
+        ...state.configTemplateTasksByType,
+        [key]: next,
+        ...(kind === 'tdt' ? { [PROJECT_CATEGORY_TECH]: next.map(task => ({ ...task })) } : {}),
+      },
+    }))
+  },
 
   setCompareVersionA: (v) => set({ compareVersionA: v }),
   setCompareVersionB: (v) => set({ compareVersionB: v }),
@@ -489,4 +539,15 @@ export const usePlanStore = create<PlanState & PlanActions>()((set) => ({
   setParentTimeWarning: (v) => set({ parentTimeWarning: v }),
   setMilestoneTimeWarning: (v) => set({ milestoneTimeWarning: v }),
   setPredecessorWarning: (v) => set({ predecessorWarning: v }),
+}), {
+  name: PLAN_STORE_STORAGE_KEY,
+  version: PLAN_STORE_VERSION,
+  storage: createJSONStorage(() => localStorage),
+  migrate: migratePlanStoreState,
+  partialize: state => ({
+    versions: state.versions,
+    currentVersion: state.currentVersion,
+    publishedSnapshots: state.publishedSnapshots,
+    configTemplateTasksByType: state.configTemplateTasksByType,
+  }),
 }))

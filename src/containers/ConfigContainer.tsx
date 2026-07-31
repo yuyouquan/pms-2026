@@ -22,7 +22,7 @@ import { useTransferStore } from '@/stores/transfer'
 import { useProjectStore } from '@/stores/project'
 import { usePermissionStore } from '@/stores/permission'
 import { TransferConfig } from '@/components/transfer/TransferModule'
-import { PROJECT_TEMPLATE_TYPES, getProjectTypeFamilyKey } from '@/constants/projectTypes'
+import { PROJECT_CATEGORY_TECH, PROJECT_TEMPLATE_TYPES, getProjectTypeFamilyKey } from '@/constants/projectTypes'
 import { DHTMLXGantt, DragHandle, SortableRow, DragHandleContext, ClickToEditDate, getTaskDepth, hasChildren, filterByCollapsed, getAllExpandableIds, type DHTMLXGanttColumn } from '@/components/shared/PlanHelpers'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
 import {
@@ -40,6 +40,10 @@ import {
   getTemplateSnapshotForProjectType,
   getTemplateTasksForProjectType,
 } from '@/lib/projectTemplateCompatibility'
+import {
+  TECHNICAL_TEMPLATE_STORAGE_KEYS,
+} from '@/lib/technicalPlanRules'
+import type { TechnicalTemplateKind } from '@/types/technicalPlan'
 import dayjs from 'dayjs'
 
 const { Option } = Select
@@ -73,7 +77,7 @@ export default function ConfigContainer() {
     predecessorWarning, setPredecessorWarning,
     level2PlanTasks, setLevel2PlanTasks,
     activeLevel2Plan,
-    configTemplateTasksByType, setConfigTemplateTasksByType,
+    configTemplateTasksByType, setConfigTemplateTasksByType, setTechnicalTemplateTasks,
   } = usePlanStore()
 
   const transferStore = useTransferStore()
@@ -108,9 +112,19 @@ export default function ConfigContainer() {
 
   // 配置中心使用模板数据（按项目分类隔离，无日期/工期）
   const selectedTemplateType = getProjectTypeFamilyKey(selectedProjectType)
-  const configTasks = getTemplateTasksForProjectType(configTemplateTasksByType, selectedTemplateType)
-    || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
+  const isTechnicalTemplate = selectedTemplateType === PROJECT_CATEGORY_TECH
+  const technicalTemplateKind: TechnicalTemplateKind = planLevel === 'subproject' ? 'subproject' : 'tdt'
+  const templatePlanLevel = isTechnicalTemplate ? technicalTemplateKind : 'level1'
+  const technicalTemplateKey = TECHNICAL_TEMPLATE_STORAGE_KEYS[technicalTemplateKind]
+  const configTasks = isTechnicalTemplate
+    ? configTemplateTasksByType[technicalTemplateKey] || []
+    : getTemplateTasksForProjectType(configTemplateTasksByType, selectedTemplateType)
+      || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
   const setConfigTasks = (next: any[] | ((prev: any[]) => any[])) => {
+    if (isTechnicalTemplate) {
+      setTechnicalTemplateTasks(technicalTemplateKind, next)
+      return
+    }
     setConfigTemplateTasksByType(prev => {
       const current = getTemplateTasksForProjectType(prev, selectedTemplateType)
         || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
@@ -118,6 +132,11 @@ export default function ConfigContainer() {
       return { ...prev, [selectedTemplateType]: resolved }
     })
   }
+
+  useEffect(() => {
+    if (isTechnicalTemplate && planLevel !== 'tdt' && planLevel !== 'subproject') setPlanLevel('tdt')
+    if (!isTechnicalTemplate && planLevel !== 'level1' && planLevel !== 'level2') setPlanLevel('level1')
+  }, [isTechnicalTemplate, planLevel, setPlanLevel])
 
   // 修订版本自动进入编辑状态，已发布版本退出编辑
   useEffect(() => {
@@ -165,6 +184,7 @@ export default function ConfigContainer() {
 
   // Scope key for collapse
   const getScopeKey = (): string | null => {
+    if (isTechnicalTemplate) return `config::${PROJECT_CATEGORY_TECH}::${technicalTemplateKind}`
     if (planLevel === 'level1') return `config::${selectedProjectType}::level1`
     if (planLevel === 'level2') return `config::${selectedProjectType}::level2::${selectedPlanType}`
     return null
@@ -228,7 +248,7 @@ export default function ConfigContainer() {
       if (visibleColumns.includes('id')) cols.push({ title: '序号', dataIndex: 'id', key: 'id', width: 130, fixed: 'left', render: (id: string, record: any) => {
         const depth = record.indentLevel || 0
         const isLevel2Mode = planLevel === 'level2'
-        const maxDepth = isLevel2Mode ? 3 : 2
+        const maxDepth = isTechnicalTemplate ? (technicalTemplateKind === 'tdt' ? 2 : 1) : isLevel2Mode ? 3 : 2
         const canAddChild = isEditMode && depth < maxDepth - 1
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: depth * 20 }}>
@@ -343,15 +363,19 @@ export default function ConfigContainer() {
   }
 
   const handleAddSubTask = (parentId: string) => {
+    if (isTechnicalTemplate && technicalTemplateKind === 'subproject') {
+      message.warning('子项目计划只支持一级任务，不可添加子任务')
+      return
+    }
     const isLevel2Context = planLevel === 'level2'
     const isLevel2TaskContext = isLevel2Context && activeLevel2Plan
     const currentTasks = isLevel2TaskContext ? level2PlanTasks.filter((t: any) => t.planId === activeLevel2Plan) : configTasks
     const parentTask = currentTasks.find((t: any) => t.id === parentId)
     if (!parentTask) return
     const depth = getTaskDepth(parentTask, currentTasks)
-    const maxDepth = isLevel2Context ? 3 : 2
+    const maxDepth = isTechnicalTemplate ? 2 : isLevel2Context ? 3 : 2
     if (depth + 1 >= maxDepth) {
-      message.warning(`${isLevel2Context ? '二级' : '一级'}计划最多支持${maxDepth}层活动`)
+      message.warning(`${isTechnicalTemplate ? 'TDT项目' : isLevel2Context ? '二级' : '一级'}计划最多支持${maxDepth}层活动`)
       return
     }
     const siblingTasks = currentTasks.filter((t: any) => t.parentId === parentId)
@@ -392,7 +416,9 @@ export default function ConfigContainer() {
     }, 0)
     const newVersionNum = maxVersionNum + 1
     const newVersionId = `v${newVersionNum}`
-    const clonedTasks = LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
+    const clonedTasks = isTechnicalTemplate
+      ? configTasks.map(task => ({ ...task }))
+      : LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
     const newVersion = { id: newVersionId, versionNo: `V${newVersionNum}`, status: '修订中' }
     setVersions([...versions, newVersion])
     setCurrentVersion(newVersionId)
@@ -405,7 +431,7 @@ export default function ConfigContainer() {
       .filter(v => v.status === '已发布' && v.id !== currentVersion)
       .sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
     const getSnapshot = (versionId: string) => {
-      return getTemplateSnapshotForProjectType(publishedSnapshots, selectedProjectType, versionId)
+      return getTemplateSnapshotForProjectType(publishedSnapshots, selectedProjectType, versionId, templatePlanLevel)
         || publishedSnapshots[versionId]
         || []
     }
@@ -429,7 +455,10 @@ export default function ConfigContainer() {
     setPublishedSnapshots(prev => ({
       ...prev,
       [publishedVersionId]: snapshot,
-      [getTemplateSnapshotKey(selectedProjectType, publishedVersionId)]: snapshot,
+      [getTemplateSnapshotKey(selectedProjectType, publishedVersionId, templatePlanLevel)]: snapshot,
+      ...(isTechnicalTemplate && technicalTemplateKind === 'tdt'
+        ? { [getTemplateSnapshotKey(selectedProjectType, publishedVersionId)]: JSON.parse(JSON.stringify(snapshot)) }
+        : {}),
     }))
 
     const versionNo = publishedVersion?.versionNo || publishedVersionId
@@ -622,7 +651,7 @@ export default function ConfigContainer() {
               title={!sidebarCollapsed && <span style={{ fontSize: 13, fontWeight: 600, color: '#4b5563' }}>项目分类</span>}
               extra={<Button type="text" size="small" icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} />}
             >
-              {!sidebarCollapsed && <Menu mode="inline" selectedKeys={[selectedTemplateType]} style={{ border: 'none', fontSize: 13 }} items={PROJECT_TEMPLATE_TYPES.map(t => ({ key: t, label: <span style={{ fontWeight: selectedTemplateType === t ? 500 : 400 }}>{t}</span>, onClick: () => navigateWithEditGuard(() => setSelectedProjectType(t)) }))} />}
+              {!sidebarCollapsed && <Menu mode="inline" selectedKeys={[selectedTemplateType]} style={{ border: 'none', fontSize: 13 }} items={PROJECT_TEMPLATE_TYPES.map(t => ({ key: t, label: <span style={{ fontWeight: selectedTemplateType === t ? 500 : 400 }}>{t}</span>, onClick: () => navigateWithEditGuard(() => { setSelectedProjectType(t); setPlanLevel(t === PROJECT_CATEGORY_TECH ? 'tdt' : 'level1') }) }))} />}
             </Card>
           </Col>
           <Col span={sidebarCollapsed ? 23 : 20}>
@@ -642,7 +671,20 @@ export default function ConfigContainer() {
                 </Row>
               </div>
               <div style={{ padding: '4px 16px' }}>
-                <Tabs activeKey={planLevel} onChange={(key) => navigateWithEditGuard(() => setPlanLevel(key))} style={{ marginBottom: 0 }} items={[{ key: 'level1', label: <span style={{ fontWeight: 500 }}>一级计划</span> }, { key: 'level2', label: <span style={{ fontWeight: 500 }}>二级计划</span> }]} />
+                <Tabs
+                  activeKey={planLevel}
+                  onChange={(key) => navigateWithEditGuard(() => setPlanLevel(key))}
+                  style={{ marginBottom: 0 }}
+                  items={isTechnicalTemplate
+                    ? [
+                      { key: 'tdt', label: <span style={{ fontWeight: 500 }}>TDT项目计划</span> },
+                      { key: 'subproject', label: <span style={{ fontWeight: 500 }}>子项目计划</span> },
+                    ]
+                    : [
+                      { key: 'level1', label: <span style={{ fontWeight: 500 }}>一级计划</span> },
+                      { key: 'level2', label: <span style={{ fontWeight: 500 }}>二级计划</span> },
+                    ]}
+                />
               </div>
             </Card>
 
