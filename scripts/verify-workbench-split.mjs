@@ -44,11 +44,21 @@ const projectListSource = readSource(root, 'src/containers/ProjectListContainer.
 assert.match(projectListSource, /ProjectSummaryTable/, 'project-list implementation must own the summary table')
 assert.match(projectListSource, /AddProjectModal/, 'project-list implementation must own project creation')
 assert.match(projectListSource, /enterProjectSpace\(\{\s*module:\s*['"]projectList['"]\s*\}\)/, 'project-list entries must record their origin')
+assert.match(projectListSource, /useActivateProject\(\)/, 'project list must reuse the shared project activation hook')
+assert.doesNotMatch(projectListSource, /const\s+activateProject\s*=\s*\(/, 'project list must not duplicate project activation')
+assert.match(workbenchSource, /useActivateProject\(\)/, 'workbench must reuse the shared project activation hook')
+assert.doesNotMatch(workbenchSource, /const\s+activateProject\s*=\s*\(/, 'workbench must not duplicate project activation')
 const compatibilitySource = readSource(root, 'src/containers/WorkspaceContainer.tsx')
 assert.match(compatibilitySource, /export\s*\{\s*default\s*\}\s*from\s*['"]@\/containers\/ProjectListContainer['"]/, 'WorkspaceContainer must be a compatibility re-export')
 assert.doesNotMatch(compatibilitySource, /^import\s/m, 'WorkspaceContainer compatibility file must not retain implementation imports')
 
 const shellSource = readSource(root, 'src/containers/AppShell.tsx')
+assert.match(shellSource, /useActivateProject\(\)/, 'project-space header must reuse the shared project activation hook')
+const activationSource = readSource(root, 'src/hooks/useActivateProject.ts')
+assert.match(activationSource, /setTransferView\(null\)/, 'shared activation must reset transfer view')
+assert.match(activationSource, /setSelectedProject\(project\)/, 'shared activation must select the project')
+assert.match(activationSource, /setSelectedMarketTab\(selectedMarket\)/, 'shared activation must select the requested or default market')
+assert.match(activationSource, /buildTosTypeRows[\s\S]*?getMainTosType[\s\S]*?setSelectedTosTypeTab/, 'shared activation must select the tOS main type')
 const expectedHeaderOrder = /key:\s*['"]workbench['"],\s*label:\s*['"]工作台['"][\s\S]*?key:\s*['"]projectList['"],\s*label:\s*['"]项目列表['"][\s\S]*?key:\s*['"]roadmap['"],\s*label:\s*['"]项目视图['"][\s\S]*?key:\s*['"]hrPipeline['"],\s*label:\s*['"]人力资源管道['"][\s\S]*?key:\s*['"]config['"],\s*label:\s*['"]配置中心['"]/
 assert.match(
   shellSource,
@@ -60,6 +70,20 @@ assert.equal(hasNestedCallExpression(shellSource, 'navigateWithEditGuard', 'retu
 const { useUiStore } = loadTypeScriptModule(root, 'src/stores/ui.ts')
 assert.equal(useUiStore.getState().activeModule, 'workbench')
 assert.equal(useUiStore.getState().workbenchTab, 'todo')
+let guardedNavigationCount = 0
+useUiStore.setState({
+  isEditMode: true,
+  showLeaveConfirm: false,
+  pendingNavigation: null,
+})
+useUiStore.getState().navigateWithEditGuard(() => { guardedNavigationCount += 1 }, true)
+assert.equal(guardedNavigationCount, 1, 'current auto-saved draft navigation must run immediately')
+assert.equal(useUiStore.getState().showLeaveConfirm, false, 'current auto-saved draft must not show leave confirmation')
+useUiStore.getState().navigateWithEditGuard(() => { guardedNavigationCount += 1 }, false)
+assert.equal(guardedNavigationCount, 1, 'unsubmitted navigation must wait for confirmation')
+assert.equal(useUiStore.getState().showLeaveConfirm, true, 'unsubmitted navigation must show leave confirmation')
+assert.equal(typeof useUiStore.getState().pendingNavigation, 'function', 'unsubmitted navigation must retain its pending action')
+useUiStore.getState().handleCancelLeave()
 useUiStore.getState().enterProjectSpace({ module: 'workbench', workbenchTab: 'workTracker' })
 useUiStore.getState().returnFromProjectSpace()
 assert.equal(useUiStore.getState().activeModule, 'workbench')

@@ -18,6 +18,7 @@ import { normalizeTargetMarkets } from '@/lib/marketRules'
 import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
 import { useRoadmapStore } from '@/stores/roadmap'
+import { useActivateProject } from '@/hooks/useActivateProject'
 
 interface AddProjectModalProps {
   open: boolean
@@ -29,12 +30,10 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
     projects,
     currentLoginUser,
     addProject,
-    setSelectedProject,
     setProjectMember,
-    setSelectedMarketTab,
-    setSelectedTosTypeTab,
   } = useProjectStore()
-  const { setActiveModule, setProjectSpaceModule } = useUiStore()
+  const { enterProjectSpace, setProjectSpaceModule } = useUiStore()
+  const activateProject = useActivateProject()
   const initProjectPermissions = usePermissionStore(state => state.initProjectPermissions)
   const tosVersions = useRoadmapStore(state => state.tosVersions)
   const descendingTosVersions = useMemo(
@@ -134,15 +133,13 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
     }
     setProjectMember(newId, payload.responsiblePersons)
     initProjectPermissions(newId, { '系统管理员': payload.responsiblePersons })
-    setSelectedProject(newProject as unknown as Parameters<typeof setSelectedProject>[0])
-    setSelectedMarketTab(initialMarkets[0] || 'OP')
-    if (projectType === PROJECT_TYPE_TOS_VERSION) setSelectedTosTypeTab('Full')
+    activateProject(newProject as unknown as Parameters<typeof activateProject>[0])
     return true
   }
 
   const handleAfterCreate = () => {
     setProjectSpaceModule('basic')
-    setActiveModule('projectSpace')
+    enterProjectSpace({ module: 'projectList' })
     message.success('项目创建成功')
   }
 

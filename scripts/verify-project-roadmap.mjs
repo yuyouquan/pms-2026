@@ -331,7 +331,9 @@ registerAssertion('runtime files contain no legacy machine equality logic', () =
     'src/data/projects.ts',
     'src/stores/project.ts',
     'src/components/workspace/WorkspaceModule.tsx',
-    'src/containers/WorkspaceContainer.tsx',
+    'src/containers/ProjectListContainer.tsx',
+    'src/containers/WorkbenchContainer.tsx',
+    'src/hooks/useActivateProject.ts',
     'src/containers/ProjectSpaceContainer.tsx',
     'src/components/plan/PlanModule.tsx',
     'src/app/page.tsx',
@@ -417,7 +419,7 @@ registerAssertion('runtime source has no references to the removed PROJECT_TYPE_
 })
 
 registerAssertion('workspace filter toolbar wraps without squeezing chip labels', () => {
-  const workspacePath = path.join(root, 'src/containers/WorkspaceContainer.tsx')
+  const workspacePath = path.join(root, 'src/containers/ProjectListContainer.tsx')
   const toolbarStyle = getNamedObjectLiteralProperties(workspacePath, 'WORKSPACE_FILTER_TOOLBAR_STYLE')
   const chipStyle = getNamedObjectLiteralProperties(workspacePath, 'WORKSPACE_FILTER_CHIP_STYLE')
   if (toolbarStyle.get('flexWrap') !== "'wrap'") throw new Error('workspace toolbar must flex-wrap')
@@ -427,7 +429,7 @@ registerAssertion('workspace filter toolbar wraps without squeezing chip labels'
 })
 
 registerAssertion('workspace links category and supported secondary-category filters while retaining status state', () => {
-  const workspacePath = path.join(root, 'src/containers/WorkspaceContainer.tsx')
+  const workspacePath = path.join(root, 'src/containers/ProjectListContainer.tsx')
   const workspaceSource = fs.readFileSync(workspacePath, 'utf8')
   const projectStoreSource = fs.readFileSync(path.join(root, 'src/stores/project.ts'), 'utf8')
   const {

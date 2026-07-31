@@ -71,16 +71,21 @@ const assertVisibleTabLabels = async expected => {
         const rect = element.getBoundingClientRect()
         return rect.width > 0 && rect.height > 0
       })
-      .map(element => (element.textContent || '').trim())
+      .map(element => (element.textContent || '').trim().replace(/^Tab \d+ of \d+\s*/, ''))
     return JSON.stringify(visibleLabels) === JSON.stringify(labels)
   }, { timeout: STEP_TIMEOUT }, expected)
 }
 
 const assertSelectedWorkbenchTab = async expected => {
-  await page.waitForFunction(value => (
-    (document.querySelector('[role="tab"][aria-selected="true"]')?.textContent || '').trim()
-      === value
-  ), { timeout: STEP_TIMEOUT }, expected)
+  await page.waitForFunction(value => {
+    const selectedTab = Array.from(document.querySelectorAll('[role="tab"][aria-selected="true"]'))
+      .find(element => {
+        const rect = element.getBoundingClientRect()
+        return rect.width > 0 && rect.height > 0
+      })
+    const label = (selectedTab?.textContent || '').trim().replace(/^Tab \d+ of \d+\s*/, '')
+    return label === value
+  }, { timeout: STEP_TIMEOUT }, expected)
 }
 
 const assertSelectedTopNav = async expected => {
@@ -163,6 +168,30 @@ const clickExactButtonIfVisible = async text => {
     return true
   }
   return false
+}
+
+const clickButtonInTableRow = async (rowText, buttonText) => {
+  const clicked = await page.evaluate((rowValue, buttonValue) => {
+    const rows = Array.from(document.querySelectorAll('.ant-tabs-tabpane-active tbody tr'))
+      .filter(element => {
+        const rect = element.getBoundingClientRect()
+        return rect.width > 0 && rect.height > 0
+      })
+    const row = rows.find(element => (element.textContent || '').includes(rowValue))
+    if (!row) return false
+    const button = Array.from(row.querySelectorAll('button')).find(element => {
+      const rect = element.getBoundingClientRect()
+      return rect.width > 0
+        && rect.height > 0
+        && (element.textContent || '').trim() === buttonValue
+    })
+    if (!button) return false
+    button.click()
+    return true
+  }, rowText, buttonText)
+  if (!clicked) {
+    throw new Error(`unable to click "${buttonText}" in table row containing "${rowText}"`)
+  }
 }
 
 const clickCategory = async label => {
@@ -383,6 +412,24 @@ try {
     await assertSelectedTopNav('工作台')
     await assertVisibleTabLabels(['待办中心', '工作跟踪'])
     await assertSelectedWorkbenchTab('待办中心')
+    await assertAbsent('[aria-label="项目列表视图"]')
+  })
+
+  await step('return from work tracker preserves selected work-tracker tab', async () => {
+    console.log('  action: select work-tracker tab')
+    await clickExactText('[role="tablist"]', '[role="tab"]', '工作跟踪')
+    await assertSelectedWorkbenchTab('工作跟踪')
+    console.log('  action: open requirement details from a visible work-tracker row')
+    await clickButtonInTableRow('AI相机功能需求分析', '详情')
+    console.log('  action: assert workbench return label')
+    await assertText('返回工作台')
+    console.log('  action: return to originating work-tracker tab')
+    await clickExactText('body', 'button', '返回工作台')
+    await wait(200)
+    await clickExactButtonIfVisible('确认离开')
+    await assertSelectedTopNav('工作台')
+    await assertVisibleTabLabels(['待办中心', '工作跟踪'])
+    await assertSelectedWorkbenchTab('工作跟踪')
     await assertAbsent('[aria-label="项目列表视图"]')
   })
 

@@ -13,7 +13,7 @@ import WorkbenchContainer from '@/containers/WorkbenchContainer'
 import ProjectListContainer from '@/containers/ProjectListContainer'
 import ProjectSpaceContainer from '@/containers/ProjectSpaceContainer'
 import ConfigContainer from '@/containers/ConfigContainer'
-import { isMachineProjectType } from '@/constants/projectTypes'
+import { useActivateProject } from '@/hooks/useActivateProject'
 import type { ProjectItem } from '@/types/app'
 
 // Minimal page-specific style overrides (bulk styles live in globals.css)
@@ -35,9 +35,8 @@ export default function Home() {
   const {
     projects,
     selectedProject,
-    setSelectedProject,
-    setSelectedMarketTab,
   } = useProjectStore()
+  const activateProject = useActivateProject()
 
   const { setProjectPlanLevel } = usePlanStore()
 
@@ -57,13 +56,10 @@ export default function Home() {
   const handleViewProjectFromRoadmap = (projectId: string, market?: string) => {
     const project = projects.find(p => p.id === projectId)
     if (!project) return
-    setSelectedProject(project)
+    activateProject(project, { market })
     enterProjectSpace({ module: 'roadmap' })
     setProjectSpaceModule('plan')
     setProjectPlanLevel('level1')
-    if (market && isMachineProjectType(project.type)) {
-      setSelectedMarketTab(market)
-    }
   }
 
   // ═══════ Render ═══════

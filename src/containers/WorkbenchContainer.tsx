@@ -10,8 +10,7 @@ import { TodoList } from '@/components/workspace/WorkspaceModule'
 import type { ProjectType, TodoType } from '@/components/workspace/WorkspaceModule'
 import WorkTracker from '@/components/work-tracker/WorkTracker'
 import { initialTodos } from '@/components/shared/PlanHelpers'
-import { PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
-import { buildTosTypeRows, getMainTosType } from '@/lib/tosTypeRules'
+import { useActivateProject } from '@/hooks/useActivateProject'
 
 export default function WorkbenchContainer() {
   const {
@@ -24,12 +23,9 @@ export default function WorkbenchContainer() {
   } = useUiStore()
   const {
     projects,
-    setSelectedProject,
     currentLoginUser,
     todoFilter,
     setSelectedMarketTab,
-    setSelectedTosTypeTab,
-    tosTypeConfigsByProjectId,
   } = useProjectStore()
   const {
     setProjectPlanLevel,
@@ -37,21 +33,12 @@ export default function WorkbenchContainer() {
     setCurrentVersion,
     setActiveLevel2Plan,
     createdLevel2Plans,
+    versions,
+    currentVersion,
   } = usePlanStore()
   const [todos] = useState(initialTodos)
-
-  const activateProject = (project: typeof projects[number]) => {
-    setSelectedProject(project)
-    if (project.markets?.length) setSelectedMarketTab(project.markets[0])
-    if (project.type === PROJECT_TYPE_TOS_VERSION) {
-      const typeRows = buildTosTypeRows(
-        project.versionTypes || [],
-        project.versionType || '',
-        tosTypeConfigsByProjectId[project.id],
-      )
-      setSelectedTosTypeTab(getMainTosType(typeRows) || typeRows[0]?.type || 'Full')
-    }
-  }
+  const activateProject = useActivateProject()
+  const isCurrentDraft = versions.find(version => version.id === currentVersion)?.status === '修订中'
 
   const todoContent = (
     <Card styles={{ body: { padding: 16 } }}>
@@ -103,7 +90,10 @@ export default function WorkbenchContainer() {
   return (
     <Tabs
       activeKey={workbenchTab}
-      onChange={(key) => navigateWithEditGuard(() => setWorkbenchTab(key as WorkbenchTab))}
+      onChange={(key) => navigateWithEditGuard(
+        () => setWorkbenchTab(key as WorkbenchTab),
+        isCurrentDraft,
+      )}
       items={[
         { key: 'todo', label: <span><CheckSquareOutlined /> 待办中心</span>, children: todoContent },
         { key: 'workTracker', label: <span><ClockCircleOutlined /> 工作跟踪</span>, children: workTrackerContent },

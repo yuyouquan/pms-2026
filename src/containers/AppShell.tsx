@@ -9,11 +9,11 @@ import {
 } from '@ant-design/icons'
 import { useUiStore, type MainModule } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
+import { usePlanStore } from '@/stores/plan'
 import { usePermissionStore } from '@/stores/permission'
 import { useTransferStore } from '@/stores/transfer'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
-import { PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
-import { buildTosTypeRows, getMainTosType } from '@/lib/tosTypeRules'
+import { useActivateProject } from '@/hooks/useActivateProject'
 import { useRef, useEffect, useMemo } from 'react'
 
 // ─── Shared user switcher (head avatar + dropdown) ──────────────────
@@ -89,6 +89,8 @@ export function MainHeader() {
     activeModule, setActiveModule, setConfigTab,
     setIsEditMode, navigateWithEditGuard,
   } = useUiStore()
+  const { versions, currentVersion } = usePlanStore()
+  const isCurrentDraft = versions.find(version => version.id === currentVersion)?.status === '修订中'
 
   return (
     <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)', padding: '0 32px', boxShadow: '0 4px 20px rgba(30,27,75,0.4)', position: 'sticky', top: 0, zIndex: 100, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
@@ -105,7 +107,10 @@ export function MainHeader() {
               theme="dark"
               mode="horizontal"
               selectedKeys={[activeModule]}
-              onClick={({ key }) => navigateWithEditGuard(() => { setIsEditMode(false); setActiveModule(key as MainModule); if (key === 'config') setConfigTab('plan') })}
+              onClick={({ key }) => navigateWithEditGuard(
+                () => { setIsEditMode(false); setActiveModule(key as MainModule); if (key === 'config') setConfigTab('plan') },
+                isCurrentDraft,
+              )}
               style={{ background: 'transparent', borderBottom: 'none', fontSize: 14 }}
               items={[
                 { key: 'workbench', label: '工作台' },
@@ -139,13 +144,13 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
   } = useUiStore()
 
   const {
-    projects, selectedProject, setSelectedProject,
-    currentLoginUser, setSelectedMarketTab, projectMemberMap,
-    setSelectedTosTypeTab, tosTypeConfigsByProjectId,
+    projects, selectedProject,
+    currentLoginUser, projectMemberMap,
   } = useProjectStore()
 
   const { globalRoles } = usePermissionStore()
   const { setTransferView } = useTransferStore()
+  const activateProject = useActivateProject()
 
   const projectSearchRef = useRef<HTMLDivElement>(null)
 
@@ -250,22 +255,10 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
                         onMouseLeave={(e) => { if (selectedProject?.id !== p.id) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                         onClick={() => {
                           navigateWithEditGuard(() => {
-                            setTransferView(null)
-                            setSelectedProject(p)
+                            activateProject(p)
                             setProjectSpaceModule('basic')
                             setShowProjectSearch(false)
                             setProjectSearchText('')
-                            if (p.markets && p.markets.length > 0) {
-                              setSelectedMarketTab(p.markets[0])
-                            }
-                            if (p.type === PROJECT_TYPE_TOS_VERSION) {
-                              const typeRows = buildTosTypeRows(
-                                p.versionTypes || [],
-                                p.versionType || '',
-                                tosTypeConfigsByProjectId[p.id],
-                              )
-                              setSelectedTosTypeTab(getMainTosType(typeRows) || typeRows[0]?.type || 'Full')
-                            }
                           })
                         }}
                       >

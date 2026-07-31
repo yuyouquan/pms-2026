@@ -472,14 +472,14 @@ const checks = [
     includes: 'inferSoftwareProjectTypeFromName',
   },
   {
-    name: 'Workspace filters include tOS version project type',
-    file: 'src/containers/WorkspaceContainer.tsx',
-    includes: "value: 'tOS版本项目'",
+    name: 'Project list filters use current first-level project categories',
+    file: 'src/containers/ProjectListContainer.tsx',
+    includes: 'PROJECT_CATEGORIES',
   },
   {
-    name: 'Workspace filters include independent software project type',
-    file: 'src/containers/WorkspaceContainer.tsx',
-    includes: "value: '独立软件产品项目'",
+    name: 'Project type helpers retain independent software compatibility',
+    file: 'src/constants/projectTypes.ts',
+    includes: 'PROJECT_TYPE_INDEPENDENT_SOFTWARE',
   },
   {
     name: 'Project space treats split software projects as old software projects',

@@ -62,7 +62,7 @@ export interface UiActions {
   setProjectSearchText: (v: string) => void
 
   // Convenience methods
-  navigateWithEditGuard: (action: () => void) => void
+  navigateWithEditGuard: (action: () => void, isCurrentDraft: boolean) => void
   handleConfirmLeave: () => void
   handleCancelLeave: () => void
 }
@@ -143,10 +143,9 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   setProjectSearchText: (v) => set({ projectSearchText: v }),
 
   // Convenience methods
-  navigateWithEditGuard: (action) => {
+  navigateWithEditGuard: (action, isCurrentDraft) => {
     const { isEditMode } = get()
-    // NOTE: isCurrentDraft check will be added when integrating with plan store
-    if (isEditMode) {
+    if (isEditMode && !isCurrentDraft) {
       set({ pendingNavigation: () => action, showLeaveConfirm: true })
     } else {
       action()

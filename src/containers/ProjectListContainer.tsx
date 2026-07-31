@@ -29,6 +29,7 @@ import { getWorkbenchListState } from '@/lib/projectSummary'
 import { getTemplateTasksForProjectType } from '@/lib/projectTemplateCompatibility'
 import { buildTosTypeRows, getMainTosType } from '@/lib/tosTypeRules'
 import { buildMarketRowsFromMarkets, getMainMarket } from '@/lib/marketRules'
+import { useActivateProject } from '@/hooks/useActivateProject'
 
 const WORKSPACE_FILTER_TOOLBAR_STYLE: CSSProperties = {
   background: 'rgba(255,255,255,0.8)',
@@ -57,7 +58,7 @@ export default function ProjectListContainer() {
   } = useUiStore()
 
   const {
-    projects, setSelectedProject,
+    projects,
     currentLoginUser,
     projectMemberMap,
     projectSearchText2, setProjectSearchText2,
@@ -66,8 +67,7 @@ export default function ProjectListContainer() {
     projectSecondaryCategoryFilter, setProjectSecondaryCategoryFilter,
     projectListView, setProjectListView,
     projectCardPage, setProjectCardPage,
-    setSelectedMarketTab,
-    setSelectedTosTypeTab, tosTypeConfigsByProjectId, marketConfigsByProjectId,
+    tosTypeConfigsByProjectId, marketConfigsByProjectId,
   } = useProjectStore()
 
   const {
@@ -76,6 +76,7 @@ export default function ProjectListContainer() {
   } = usePlanStore()
 
   const { globalRoles } = usePermissionStore()
+  const activateProject = useActivateProject()
 
   const projectCardPageSize = 9
   const [addProjectOpen, setAddProjectOpen] = useState(false)
@@ -83,19 +84,6 @@ export default function ProjectListContainer() {
     () => getWorkbenchListState(projectTypeFilter),
     [projectTypeFilter],
   )
-
-  const activateProject = (project: typeof projects[number]) => {
-    setSelectedProject(project)
-    if (project.markets?.length) setSelectedMarketTab(project.markets[0])
-    if (project.type === PROJECT_TYPE_TOS_VERSION) {
-      const typeRows = buildTosTypeRows(
-        project.versionTypes || [],
-        project.versionType || '',
-        tosTypeConfigsByProjectId[project.id],
-      )
-      setSelectedTosTypeTab(getMainTosType(typeRows) || typeRows[0]?.type || 'Full')
-    }
-  }
 
   const isAdminUser = useMemo(() => {
     const adminGroup = globalRoles.find(r => r.name === '管理组')

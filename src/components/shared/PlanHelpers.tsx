@@ -351,7 +351,7 @@ export function shiftDateStrForExport(dateStr: string, deltaDays: number): strin
   return d.toISOString().split('T')[0]
 }
 
-// ─── initialTodos (data used by WorkspaceContainer) ─────────────────
+// ─── initialTodos (compatibility data used by WorkbenchContainer) ───
 // 待办数据：仅修订中(未发布)的版本才会产生待办，已发布版本不产生待办
 // 当前版本状态：V1/V2/V3 已发布，V4 修订中
 // 一级计划待办来自 V4 修订版，二级计划待办来自各自的 V1 修订版
