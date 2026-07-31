@@ -173,22 +173,30 @@ export const canCreateSubprojectPlanRevision = (
   subproject: Pick<TechnicalSubproject, 'active' | 'configuration'>,
 ) => subproject.active && isTechnicalSubprojectConfigured(subproject)
 
-const isValidIncomingSubproject = (
-  value: Partial<IpmTechnicalSubproject>,
-  parentProjectId?: string,
-) => {
-  const id = String(value.id || '').trim()
-  const name = String(value.name || '').trim()
-  const parentId = String(value.parentProjectId || parentProjectId || '').trim()
-  const order = Number(value.ipmOrder)
-  return Boolean(
-    id
-    && name
-    && parentId
-    && (!parentProjectId || parentId === parentProjectId)
-    && Number.isInteger(order)
-    && order >= 0,
-  )
+const normalizeIncomingSubproject = (
+  value: unknown,
+  parentProjectId: string,
+): IpmTechnicalSubproject | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const candidate = value as Record<string, unknown>
+  if (
+    typeof candidate.id !== 'string'
+    || typeof candidate.name !== 'string'
+    || typeof candidate.parentProjectId !== 'string'
+  ) return null
+  const id = candidate.id.trim()
+  const name = candidate.name.trim()
+  const normalizedParentId = candidate.parentProjectId.trim()
+  if (
+    !id
+    || !name
+    || !normalizedParentId
+    || normalizedParentId !== parentProjectId
+    || typeof candidate.ipmOrder !== 'number'
+    || !Number.isInteger(candidate.ipmOrder)
+    || candidate.ipmOrder < 0
+  ) return null
+  return { id, name, parentProjectId: normalizedParentId, ipmOrder: candidate.ipmOrder }
 }
 
 const compareSubprojects = (left: TechnicalSubproject, right: TechnicalSubproject) => (
@@ -199,33 +207,34 @@ const compareSubprojects = (left: TechnicalSubproject, right: TechnicalSubprojec
 export const synchronizeTechnicalSubprojects = (
   existing: readonly TechnicalSubproject[],
   incoming: readonly IpmTechnicalSubproject[],
-  parentProjectId?: string,
+  parentProjectId: string,
 ): TechnicalSubprojectSyncResult => {
-  const normalizedIds = incoming.map(item => String(item.id || '').trim())
-  if (new Set(normalizedIds).size !== incoming.length) {
-    return { ok: false as const, reason: 'duplicate-id' as const, items: existing }
-  }
-  if (!incoming.every(item => isValidIncomingSubproject(item, parentProjectId))) {
+  if (typeof parentProjectId !== 'string' || !parentProjectId.trim() || !Array.isArray(incoming)) {
     return { ok: false as const, reason: 'invalid-payload' as const, items: existing }
   }
-  const incomingById = new Map(incoming.map(item => [item.id.trim(), {
-    id: item.id.trim(),
-    parentProjectId: item.parentProjectId.trim(),
-    name: item.name.trim(),
-    ipmOrder: item.ipmOrder,
-  }]))
+  const normalizedParentId = parentProjectId.trim()
+  const normalizedIncoming = incoming.map(item => normalizeIncomingSubproject(item, normalizedParentId))
+  if (normalizedIncoming.some(item => item === null)) {
+    return { ok: false as const, reason: 'invalid-payload' as const, items: existing }
+  }
+  const payload = normalizedIncoming as IpmTechnicalSubproject[]
+  const normalizedIds = payload.map(item => item.id)
+  if (new Set(normalizedIds).size !== payload.length) {
+    return { ok: false as const, reason: 'duplicate-id' as const, items: existing }
+  }
+  const incomingById = new Map(payload.map(item => [item.id, item]))
   const existingIds = new Set(existing.map(item => item.id))
   const items = existing.map(sourceItem => {
     const item = cloneTechnicalSubproject(sourceItem)
     const next = incomingById.get(item.id)
     return next ? { ...item, ...next, active: true } : { ...item, active: false }
   })
-  incoming.forEach(item => {
-    const id = item.id.trim()
+  payload.forEach(item => {
+    const id = item.id
     if (!existingIds.has(id)) items.push({
       id,
-      parentProjectId: item.parentProjectId.trim(),
-      name: item.name.trim(),
+      parentProjectId: item.parentProjectId,
+      name: item.name,
       active: true,
       ipmOrder: item.ipmOrder,
       configuration: { ...EMPTY_SUBPROJECT_CONFIGURATION },

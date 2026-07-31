@@ -69,6 +69,22 @@ assert.equal(orderedSync.items[0].planInstanceId, 'plan-child-a', 'IPM updates p
 assert.deepEqual(orderedSync.items[1].configuration, { coreValue: '', developmentMode: '', firstTosVersion: '', firstMachineProjectId: '' }, 'new children start pending configuration')
 assert.deepEqual(rules.synchronizeTechnicalSubprojects(configuredChildren, [{ id: '', parentProjectId: 'tech-1', name: 'Broken', ipmOrder: 1 }], 'tech-1'), { ok: false, reason: 'invalid-payload', items: configuredChildren }, 'invalid payload fails atomically')
 assert.deepEqual(rules.synchronizeTechnicalSubprojects(configuredChildren, [{ id: 'x', parentProjectId: 'other', name: 'Wrong parent', ipmOrder: 1 }], 'tech-1'), { ok: false, reason: 'invalid-payload', items: configuredChildren }, 'wrong-parent payload fails atomically')
+for (const payload of [
+  [{ id: 'missing-parent', name: 'Missing parent', ipmOrder: 1 }],
+  [{ id: 'empty-name', parentProjectId: 'tech-1', name: '   ', ipmOrder: 1 }],
+]) {
+  assert.deepEqual(rules.synchronizeTechnicalSubprojects(configuredChildren, payload, 'tech-1'), { ok: false, reason: 'invalid-payload', items: configuredChildren }, 'missing or empty identity fields reject the whole batch')
+}
+for (const payload of [
+  [{ id: 123, parentProjectId: 'tech-1', name: 'Numeric id', ipmOrder: 1 }],
+  [{ id: 'numeric-name', parentProjectId: 'tech-1', name: 456, ipmOrder: 1 }],
+  [{ id: 'numeric-parent', parentProjectId: 789, name: 'Numeric parent', ipmOrder: 1 }],
+]) {
+  assert.doesNotThrow(() => rules.synchronizeTechnicalSubprojects(configuredChildren, payload, 'tech-1'), 'wrong-type identity fields return a result instead of throwing')
+  assert.deepEqual(rules.synchronizeTechnicalSubprojects(configuredChildren, payload, 'tech-1'), { ok: false, reason: 'invalid-payload', items: configuredChildren }, 'wrong-type identity fields reject atomically')
+}
+assert.deepEqual(rules.synchronizeTechnicalSubprojects(configuredChildren, [{ id: 'wrong-trimmed-parent', parentProjectId: ' tech-2 ', name: 'Wrong trimmed parent', ipmOrder: 1 }], 'tech-1'), { ok: false, reason: 'invalid-payload', items: configuredChildren }, 'trimmed parent identity must exactly match the requested parent')
+assert.deepEqual(configuredChildren, [{ id: 'child-a', parentProjectId: 'tech-1', name: 'A', active: true, ipmOrder: 5, configuration: { coreValue: '追赶', developmentMode: '自研', firstTosVersion: '16.0', firstMachineProjectId: '1' }, planInstanceId: 'plan-child-a' }], 'all rejected payloads leave the existing input untouched')
 assert.equal(rules.isTechnicalSubprojectConfigured(orderedSync.items[1]), false, 'missing required configuration is pending')
 assert.equal(rules.canCreateSubprojectPlanRevision(orderedSync.items[1]), false, 'pending configuration blocks plan revision')
 assert.equal(rules.canCreateSubprojectPlanRevision(orderedSync.items[0]), true, 'active configured child permits plan revision')

@@ -154,21 +154,22 @@ const synchronizeParent = (
     result: { ok: false as const, reason, items: allSubprojects },
     next: allSubprojects,
   })
-  if (!parentProjectId.trim()) return invalidResult('invalid-payload')
+  if (typeof parentProjectId !== 'string' || !parentProjectId.trim()) return invalidResult('invalid-payload')
+  const normalizedParentProjectId = parentProjectId.trim()
   const allIds = allSubprojects.map(item => item.id)
   if (new Set(allIds).size !== allIds.length) return invalidResult('duplicate-id')
   const otherParentIds = new Set(
     allSubprojects
-      .filter(item => item.parentProjectId !== parentProjectId)
+      .filter(item => item.parentProjectId !== normalizedParentProjectId)
       .map(item => item.id),
   )
   if (incoming.some(item => otherParentIds.has(String(item.id || '').trim()))) {
     return invalidResult('duplicate-id')
   }
-  const scoped = allSubprojects.filter(item => item.parentProjectId === parentProjectId)
-  const result = synchronizeTechnicalSubprojects(scoped, incoming, parentProjectId)
+  const scoped = allSubprojects.filter(item => item.parentProjectId === normalizedParentProjectId)
+  const result = synchronizeTechnicalSubprojects(scoped, incoming, normalizedParentProjectId)
   if (!result.ok) return { result, next: allSubprojects }
-  const untouched = allSubprojects.filter(item => item.parentProjectId !== parentProjectId)
+  const untouched = allSubprojects.filter(item => item.parentProjectId !== normalizedParentProjectId)
   return {
     result,
     next: [...untouched, ...result.items].sort((left, right) => (
