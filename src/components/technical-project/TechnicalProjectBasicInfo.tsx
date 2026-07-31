@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button, Card, Descriptions, Empty, Space, Switch, Tabs, Tag, Tooltip, Typography } from 'antd'
 import { SettingOutlined } from '@ant-design/icons'
 import SubprojectConfigModal from '@/components/technical-project/SubprojectConfigModal'
-import { isTechnicalSubprojectConfigured } from '@/lib/technicalProjectRules'
+import { isTechnicalSubprojectConfigured, resolveTechnicalChildSelection } from '@/lib/technicalProjectRules'
 import { useProjectStore } from '@/stores/project'
 import { useTechnicalProjectStore } from '@/stores/technicalProject'
 import type { TechnicalSubproject } from '@/types/technicalProject'
@@ -27,7 +27,13 @@ export default function TechnicalProjectBasicInfo({ projectId, currentLoginUser 
     .sort((left, right) => left.ipmOrder - right.ipmOrder || left.id.localeCompare(right.id)), [projectId, showInactive, subprojects])
 
   useEffect(() => {
-    if (!children.some(child => child.id === activeChildId)) setActiveChildId(children[0]?.id || '')
+    setConfiguringChild(null)
+    setActiveChildId('')
+  }, [projectId])
+
+  useEffect(() => {
+    const nextChildId = resolveTechnicalChildSelection(children.map(child => child.id), activeChildId, false)
+    if (nextChildId !== activeChildId) setActiveChildId(nextChildId)
   }, [activeChildId, children])
 
   const machineName = (id: string) => projects.find(project => project.id === id)?.name || id || '-'

@@ -3,6 +3,7 @@
 import { Avatar, Button, Card, Col, Descriptions, Empty, Row, Space, Tag, Typography } from 'antd'
 import { EditOutlined, FileOutlined, LinkOutlined, ProjectOutlined, TeamOutlined } from '@ant-design/icons'
 import { TECHNICAL_DELIVERABLE_FIELDS, TECHNICAL_TEAM_FIELDS } from '@/constants/technicalProject'
+import { normalizeTechnicalCustomRoles, sanitizeTechnicalDeliverableUrl } from '@/lib/technicalProjectRules'
 import type { ProjectItem } from '@/types/app'
 import type { DeliverableValue } from '@/types/technicalProject'
 
@@ -33,8 +34,10 @@ const renderDeliverable = (value: unknown) => {
   const deliverable = value as DeliverableValue | undefined
   if (!deliverable) return <Text type="secondary">未上传</Text>
   if (deliverable.kind === 'url') {
+    const safeUrl = sanitizeTechnicalDeliverableUrl(deliverable.url)
+    if (!safeUrl) return <Text type="secondary">链接不可用</Text>
     return (
-      <a href={deliverable.url} target="_blank" rel="noreferrer" className="technical-deliverable-link">
+      <a href={safeUrl} target="_blank" rel="noopener noreferrer" className="technical-deliverable-link">
         <LinkOutlined aria-hidden />
         <span>打开链接</span>
       </a>
@@ -58,13 +61,17 @@ export default function TechnicalProjectOverview({
   canEdit = false,
 }: TechnicalProjectOverviewProps) {
   const projectValue = valueOf(project, 'projectValue')
+  const normalizedCustomRoles = normalizeTechnicalCustomRoles(
+    customRoles,
+    TECHNICAL_TEAM_FIELDS.map(field => field.label),
+  )
   const roles = [
     ...TECHNICAL_TEAM_FIELDS.map(field => ({
       name: field.label,
       members: displayText(valueOf(project, field.key)) === '-' ? [] : [displayText(valueOf(project, field.key))],
       fixed: true,
     })),
-    ...customRoles.filter(role => !role.isFixed).map(role => ({ ...role, fixed: false })),
+    ...normalizedCustomRoles.map(role => ({ ...role, fixed: false })),
   ]
 
   return (

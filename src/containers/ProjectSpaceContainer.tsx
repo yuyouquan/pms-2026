@@ -137,6 +137,7 @@ import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, INITIAL_LEVEL2_PLAN_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
+import { selectTechnicalProjectStage, useTechnicalPlanStore } from '@/stores/technicalPlan'
 import { usePermissionStore, useHasPermission } from '@/stores/permission'
 import { PermissionConfig } from '@/components/permission/PermissionModule'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
@@ -156,9 +157,7 @@ import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
 import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import {
-  resolveLatestPublishedTechnicalProjectStage,
   synchronizeTechnicalProjectRecord,
-  type TechnicalStagePlanVersion,
 } from '@/lib/technicalProjectRules'
 import { deriveProjectTosVersion } from '@/lib/projectInfoRules'
 import {
@@ -371,6 +370,14 @@ export default function ProjectSpaceContainer() {
     tosTypeConfigsByProjectId, setTosTypeConfigForProject,
     projectMemberMap, setProjectMember, updateProject,
   } = proj
+  const technicalToday = useMemo(() => new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date()), [])
+  const technicalStage = useTechnicalPlanStore(state => (
+    selectedProject?.type === '技术项目'
+      ? selectTechnicalProjectStage(state.plansByKey, selectedProject.id, technicalToday)
+      : '-'
+  ))
 
   const machineTosHistory = useMemo(() => selectedProject ? [
     selectedProject.firstSaleTosVersionId,
@@ -441,14 +448,6 @@ export default function ProjectSpaceContainer() {
     perm.setRolePermissionsForProject(_permProjectId, v)
   }
   const isTechnicalProject = selectedProject?.type === '技术项目'
-  const technicalStage = useMemo(() => {
-    if (!isTechnicalProject || !selectedProject) return '-'
-    const versions = (selectedProject as unknown as { technicalPlanVersions?: TechnicalStagePlanVersion[] }).technicalPlanVersions || []
-    const today = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
-    }).format(new Date())
-    return resolveLatestPublishedTechnicalProjectStage(versions, today)
-  }, [isTechnicalProject, selectedProject])
   const technicalPreProjectName = useMemo(() => {
     if (!selectedProject) return undefined
     const preProjectId = String(selectedProject.preProjectId || selectedProject.fieldValues?.preProjectId || '')

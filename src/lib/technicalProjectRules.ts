@@ -1,4 +1,5 @@
 import { NO_SUBDOMAIN_DOMAINS, SUBDOMAINS_BY_DOMAIN, TECHNICAL_DELIVERABLE_FIELDS, TECHNICAL_STRING_FIELD_KEYS } from '@/constants/technicalProject'
+import { comparePlanVersions } from '@/lib/planVersioning'
 import type {
   DeliverableValue,
   IpmTechnicalSubproject,
@@ -65,9 +66,26 @@ export function calculateTechnicalProjectStage(
 
 const technicalVersionTimestamp = (version: TechnicalStagePlanVersion) => {
   const published = Date.parse(String(version.publishedAt || ''))
-  if (Number.isFinite(published)) return published
-  const numericVersion = Number(String(version.versionNo || '').replace(/\D/g, ''))
-  return Number.isFinite(numericVersion) ? numericVersion : 0
+  return Number.isFinite(published) ? published : null
+}
+
+export const comparePublishedTechnicalPlanVersions = (
+  left: TechnicalStagePlanVersion,
+  right: TechnicalStagePlanVersion,
+) => {
+  const semanticOrder = comparePlanVersions(
+    { versionNo: right.versionNo || '' },
+    { versionNo: left.versionNo || '' },
+  )
+  if (semanticOrder !== 0) return semanticOrder
+  const leftPublishedAt = technicalVersionTimestamp(left)
+  const rightPublishedAt = technicalVersionTimestamp(right)
+  if (leftPublishedAt !== rightPublishedAt) {
+    if (leftPublishedAt === null) return 1
+    if (rightPublishedAt === null) return -1
+    return rightPublishedAt - leftPublishedAt
+  }
+  return right.id.localeCompare(left.id)
 }
 
 /** Selects only the latest published TDT snapshot. Draft and child-plan snapshots are excluded. */
@@ -79,9 +97,50 @@ export function resolveLatestPublishedTechnicalProjectStage(
   if (inheritedParentStage !== undefined) return inheritedParentStage
   const latest = versions
     .filter(version => version.status === '已发布' && ['tdt', 'TDT项目计划'].includes(version.templateType))
-    .sort((left, right) => technicalVersionTimestamp(right) - technicalVersionTimestamp(left))[0]
+    .sort(comparePublishedTechnicalPlanVersions)[0]
   return latest ? calculateTechnicalProjectStage(latest.tasks, today) : '-'
 }
+
+export const sanitizeTechnicalDeliverableUrl = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null
+  try {
+    const url = new URL(value.trim())
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : null
+  } catch {
+    return null
+  }
+}
+
+type TechnicalRoleLike = { name: string; members?: readonly string[]; isFixed?: boolean }
+
+const normalizeRoleName = (value: string) => value.normalize('NFKC').trim().replace(/\s+/g, ' ')
+
+export const normalizeTechnicalCustomRoles = (
+  roles: readonly TechnicalRoleLike[],
+  fixedRoleNames: readonly string[],
+) => {
+  const fixedNames = new Set(fixedRoleNames.map(normalizeRoleName))
+  const normalized = new Map<string, { name: string; members: string[]; isFixed: false }>()
+  roles.forEach(role => {
+    if (role.isFixed) return
+    const name = normalizeRoleName(String(role.name || ''))
+    if (!name || fixedNames.has(name)) return
+    const item = normalized.get(name) || { name, members: [], isFixed: false as const }
+    const members = Array.isArray(role.members) ? role.members : []
+    members.forEach(member => {
+      const normalizedMember = String(member || '').trim()
+      if (normalizedMember && !item.members.includes(normalizedMember)) item.members.push(normalizedMember)
+    })
+    normalized.set(name, item)
+  })
+  return [...normalized.values()]
+}
+
+export const resolveTechnicalChildSelection = (
+  childIds: readonly string[],
+  currentChildId: string,
+  projectChanged: boolean,
+) => !projectChanged && childIds.includes(currentChildId) ? currentChildId : childIds[0] || ''
 
 type ResolveInput = {
   ipm?: { projectName?: string; category?: string; secondaryCategory?: string; technicalTrack?: string }

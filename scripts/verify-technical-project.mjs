@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
 const rules = loadTypeScriptModule(root, 'src/lib/technicalProjectRules.ts')
 const constants = loadTypeScriptModule(root, 'src/constants/technicalProject.ts')
-for (const name of ['resolveTechnicalProjectFields', 'validateTechnicalProject', 'synchronizeTechnicalSubprojects', 'isTechnicalSubprojectConfigured', 'canCreateSubprojectPlanRevision', 'switchDeliverableMode', 'normalizeTechnicalProjectValues', 'synchronizeTechnicalProjectRecord', 'calculateTechnicalProjectStage', 'resolveLatestPublishedTechnicalProjectStage']) assert.equal(typeof rules[name], 'function', `missing ${name}`)
+for (const name of ['resolveTechnicalProjectFields', 'validateTechnicalProject', 'synchronizeTechnicalSubprojects', 'isTechnicalSubprojectConfigured', 'canCreateSubprojectPlanRevision', 'switchDeliverableMode', 'normalizeTechnicalProjectValues', 'synchronizeTechnicalProjectRecord', 'calculateTechnicalProjectStage', 'resolveLatestPublishedTechnicalProjectStage', 'sanitizeTechnicalDeliverableUrl', 'normalizeTechnicalCustomRoles', 'resolveTechnicalChildSelection']) assert.equal(typeof rules[name], 'function', `missing ${name}`)
 assert.deepEqual(constants.SUBDOMAINS_BY_DOMAIN, {
   基础架构TMG: ['无'], 性能TMG: ['无'], 'DFX TMG': ['无'], 'UX TMG': ['无'],
   系统应用: ['AIOS', '应用', '图形', '内核', '多媒体'],
@@ -203,6 +204,25 @@ const stageVersions = [
 ]
 assert.equal(rules.resolveLatestPublishedTechnicalProjectStage(stageVersions, '2026-01-15'), '最新规划阶段', 'only the latest published TDT version determines stage; drafts and child plans are ignored')
 assert.equal(rules.resolveLatestPublishedTechnicalProjectStage(stageVersions, '2026-01-15', '父项目阶段'), '父项目阶段', 'child rows inherit the already resolved parent stage')
+assert.equal(rules.resolveLatestPublishedTechnicalProjectStage([
+  { id: 'v1-10', templateType: 'tdt', status: '已发布', versionNo: 'V1.10', publishedAt: '2027-01-01T00:00:00Z', tasks: [{ ...validStages[0], name: 'V1.10阶段' }] },
+  { id: 'v2', templateType: 'tdt', status: '已发布', versionNo: 'V2', tasks: [{ ...validStages[0], name: 'V2阶段' }] },
+], '2026-01-15'), 'V2阶段', 'plan version semantics outrank mixed or missing publication dates')
+assert.equal(rules.resolveLatestPublishedTechnicalProjectStage([
+  { id: 'older-date', templateType: 'tdt', status: '已发布', versionNo: 'V2', publishedAt: '2026-01-01T00:00:00Z', tasks: [{ ...validStages[0], name: '旧发布时间' }] },
+  { id: 'newer-date', templateType: 'tdt', status: '已发布', versionNo: 'V2', publishedAt: '2026-02-01T00:00:00Z', tasks: [{ ...validStages[0], name: '新发布时间' }] },
+], '2026-01-15'), '新发布时间', 'publication time is only a same-version tie-break')
+assert.equal(rules.sanitizeTechnicalDeliverableUrl('https://a.example/file'), 'https://a.example/file', 'HTTPS deliverables remain clickable')
+assert.equal(rules.sanitizeTechnicalDeliverableUrl('javascript:alert(1)'), null, 'dangerous deliverable protocols are non-clickable')
+assert.equal(rules.sanitizeTechnicalDeliverableUrl('data:text/html,bad'), null, 'data URLs are non-clickable')
+assert.deepEqual(rules.normalizeTechnicalCustomRoles([
+  { name: ' 技术项目负责人 ', members: ['恶意重复'] },
+  { name: '架构顾问', members: ['张三', ' 张三 '] },
+  { name: ' 架构顾问 ', members: ['李四'] },
+  { name: '临时角色', members: ['王五'], isFixed: true },
+], constants.TECHNICAL_TEAM_FIELDS.map(field => field.label)), [{ name: '架构顾问', members: ['张三', '李四'], isFixed: false }], 'custom roles normalize, merge duplicates, and exclude fixed role names and fixed records')
+assert.equal(rules.resolveTechnicalChildSelection(['child-a', 'child-b'], 'child-b', false), 'child-b', 'stable child selection is preserved within one project')
+assert.equal(rules.resolveTechnicalChildSelection(['child-a', 'child-b'], 'child-b', true), 'child-a', 'project changes reset selection to the first IPM child')
 
 const overview = readSource(root, 'src/components/technical-project/TechnicalProjectOverview.tsx')
 assert.match(overview, /项目价值/, 'technical overview renders the full-width project value')
@@ -217,4 +237,12 @@ assert.doesNotMatch(basicInfo, /TDT项目计划/, 'TDT is not a technical basic-
 const projectSpace = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 assert.match(projectSpace, /<TechnicalProjectOverview/, 'project space mounts the focused technical overview')
 assert.match(projectSpace, /<TechnicalProjectBasicInfo/, 'project space mounts focused child-only basic information')
+assert.match(projectSpace, /useTechnicalPlanStore/, 'project stage subscribes to real keyed technical-plan state')
+assert.doesNotMatch(projectSpace, /selectedProject[^\n]*technicalPlanVersions|technicalPlanVersions[^\n]*selectedProject/, 'project objects are not used as an imaginary technical-plan state source')
+assert.equal(fs.existsSync(`${root}/src/stores/technicalPlan.ts`), true, 'technical plan keyed store exists')
+const technicalPlanStore = loadTypeScriptModule(root, 'src/stores/technicalPlan.ts')
+assert.equal(technicalPlanStore.getTechnicalPlanKey({ kind: 'tdt', parentProjectId: '9' }), '9:tdt', 'TDT plan key is stable and Task11-compatible')
+const latestTdt = technicalPlanStore.selectLatestPublishedTechnicalPlanVersion(technicalPlanStore.INITIAL_TECHNICAL_PLANS, '9')
+assert.equal(latestTdt?.status, '已发布', 'selector exposes a representative real published TDT plan')
+assert.notEqual(technicalPlanStore.selectTechnicalProjectStage(technicalPlanStore.INITIAL_TECHNICAL_PLANS, '9', '2026-07-15'), '-', 'real keyed plan state drives a visible stage')
 console.log('technical project contract passed')
