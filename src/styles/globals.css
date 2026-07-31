@@ -385,6 +385,109 @@
   }
 }
 
+/* Responsive main navigation */
+.pms-main-header {
+  width: 100%;
+  max-width: 100%;
+}
+
+.pms-main-header__row {
+  flex-wrap: nowrap;
+}
+
+.pms-main-header__primary {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pms-main-header__content.ant-space {
+  width: 100%;
+  min-width: 0;
+}
+
+.pms-main-header__content > .ant-space-item:last-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pms-main-header__brand,
+.pms-main-header__user {
+  flex: 0 0 auto;
+}
+
+.pms-main-header__nav-scroll {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pms-main-header__menu {
+  min-width: max-content;
+}
+
+@media (max-width: 768px) {
+  .pms-main-header {
+    height: 56px;
+    padding-inline: 12px !important;
+    overflow: hidden;
+  }
+
+  .pms-main-header__row {
+    height: 56px !important;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .pms-main-header__content.ant-space {
+    gap: 8px !important;
+  }
+
+  .pms-main-header__brand-title {
+    display: none;
+  }
+
+  .pms-main-header__nav-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pms-main-header__nav-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pms-main-header__menu .ant-menu-overflow-item {
+    flex: 0 0 auto;
+  }
+
+  .pms-main-header__menu .ant-menu-item:focus-visible,
+  .pms-main-header__user .pms-user-switcher:focus-visible {
+    outline: 2px solid #c7d2fe;
+    outline-offset: -3px;
+  }
+
+  .pms-main-header__user {
+    flex: 0 0 40px;
+    width: 40px;
+  }
+
+  .pms-main-header__user .pms-user-switcher {
+    width: 40px;
+    min-width: 40px;
+    height: 40px !important;
+    justify-content: center;
+    gap: 0 !important;
+    padding: 5px !important;
+    overflow: hidden;
+  }
+
+  .pms-main-header__user .pms-user-switcher > .ant-avatar ~ * {
+    display: none;
+  }
+}
+
 /* Fixed tOS enum value configuration */
 .pms-enum-config {
   display: grid;

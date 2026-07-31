@@ -71,6 +71,7 @@ function UserSwitcher() {
       overlayStyle={{ minWidth: 340 }}
     >
       <Button
+        className="pms-user-switcher"
         type="text"
         aria-label="切换当前用户"
         data-current-user={currentLoginUser}
@@ -95,36 +96,39 @@ export function MainHeader() {
   const isCurrentDraft = versions.find(version => version.id === currentVersion)?.status === '修订中'
 
   return (
-    <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)', padding: '0 32px', boxShadow: '0 4px 20px rgba(30,27,75,0.4)', position: 'sticky', top: 0, zIndex: 100, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-      <Row align="middle" justify="space-between" style={{ height: 56 }}>
-        <Col>
-          <Space size={32} align="center">
-            <Space size={10}>
+    <div className="pms-main-header" style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)', padding: '0 32px', boxShadow: '0 4px 20px rgba(30,27,75,0.4)', position: 'sticky', top: 0, zIndex: 100, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      <Row className="pms-main-header__row" align="middle" justify="space-between" style={{ height: 56 }}>
+        <Col className="pms-main-header__primary">
+          <Space className="pms-main-header__content" size={32} align="center">
+            <Space className="pms-main-header__brand" size={10}>
               <div style={{ width: 30, height: 30, borderRadius: 8, background: 'linear-gradient(135deg, #818cf8 0%, #6366f1 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(129,140,248,0.4)' }}>
                 <AppstoreOutlined style={{ color: '#fff', fontSize: 16 }} />
               </div>
-              <span style={{ fontSize: 17, fontWeight: 700, color: '#fff', letterSpacing: 1.5, textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>项目管理系统</span>
+              <span className="pms-main-header__brand-title" style={{ fontSize: 17, fontWeight: 700, color: '#fff', letterSpacing: 1.5, textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>项目管理系统</span>
             </Space>
-            <Menu
-              theme="dark"
-              mode="horizontal"
-              selectedKeys={[activeModule]}
-              onClick={({ key }) => navigateWithEditGuard(
-                () => { setIsEditMode(false); setActiveModule(key as MainModule); if (key === 'config') setConfigTab('plan') },
-                isCurrentDraft,
-              )}
-              style={{ background: 'transparent', borderBottom: 'none', fontSize: 14 }}
-              items={[
-                { key: 'workbench', label: '工作台' },
-                { key: 'projectList', label: '项目列表' },
-                { key: 'roadmap', label: '项目视图' },
-                { key: 'hrPipeline', label: '人力资源管道' },
-                { key: 'config', label: '配置中心' },
-              ]}
-            />
+            <div className="pms-main-header__nav-scroll" aria-label="主导航滚动区">
+              <Menu
+                className="pms-main-header__menu"
+                theme="dark"
+                mode="horizontal"
+                selectedKeys={[activeModule]}
+                onClick={({ key }) => navigateWithEditGuard(
+                  () => { setIsEditMode(false); setActiveModule(key as MainModule); if (key === 'config') setConfigTab('plan') },
+                  isCurrentDraft,
+                )}
+                style={{ background: 'transparent', borderBottom: 'none', fontSize: 14 }}
+                items={[
+                  { key: 'workbench', label: '工作台' },
+                  { key: 'projectList', label: '项目列表' },
+                  { key: 'roadmap', label: '项目视图' },
+                  { key: 'hrPipeline', label: '人力资源管道' },
+                  { key: 'config', label: '配置中心' },
+                ]}
+              />
+            </div>
           </Space>
         </Col>
-        <Col>
+        <Col className="pms-main-header__user">
           <UserSwitcher />
         </Col>
       </Row>
