@@ -17,6 +17,8 @@ requireContract('src/app/page.tsx', /['"]workbench['"]/, 'The app router must ha
 requireContract('src/app/page.tsx', /['"]projectList['"]/, 'The app router must have a project-list module branch.')
 requireContract('src/containers/AppShell.tsx', /projectSpaceOrigin\b/, 'Project-space header must read the saved navigation origin.')
 requireContract('src/containers/AppShell.tsx', /navigateWithEditGuard\(/, 'Source return must pass through the shared edit guard.')
-requireContract('src/containers/AppShell.tsx', /setActiveModule\(projectSpaceOrigin\)/, 'Source return must restore the recorded workbench or project-list module.')
+requireContract('src/containers/AppShell.tsx', /returnFromProjectSpace\b/, 'Project-space header must centralize source return for the origin object.')
+requireContract('src/containers/AppShell.tsx', /projectSpaceOrigin\.module\b/, 'Source return must restore the originating module from projectSpaceOrigin.module.')
+requireContract('src/containers/AppShell.tsx', /projectSpaceOrigin\.workbenchTab\b/, 'Source return must restore the originating workbench tab from projectSpaceOrigin.workbenchTab.')
 
 console.log('workbench split contract passed')

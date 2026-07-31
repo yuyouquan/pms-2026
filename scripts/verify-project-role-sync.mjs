@@ -11,7 +11,7 @@ const read = relativePath => {
 const requireContract = (file, pattern, message) => assert.match(read(file), pattern, message)
 
 const roles = 'src/lib/projectRoleSync.ts'
-for (const role of ['技术项目负责人', '技术项目经理', '系统工程师', '软件项目经理', '硬件项目经理', '测试项目经理']) {
+for (const role of ['技术项目负责人', '技术项目经理', '测试代表', '质量代表', '产品代表', '标准化代表']) {
   requireContract(roles, new RegExp(`['"]${role}['"]`), `Technical-team fixed role ${role} must participate in one-way permission-member sync.`)
 }
 requireContract(roles, /syncTechnicalTeamToPermissionMembers\b/, 'Technical teams must synchronize their six fixed roles into permission members.')
