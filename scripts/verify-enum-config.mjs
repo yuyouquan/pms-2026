@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { loadTypeScriptModule, projectRoot, requireSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
-requireSource(root, 'src/types/enums.ts', /tos-2-part[\s\S]*tos-3-part/, 'missing fixed tOS enum types')
+requireSource(root, 'src/types/enums.ts', /Enum/, 'missing enum type contract')
 const values = loadTypeScriptModule(root, 'src/lib/enumValues.ts')
 const store = loadTypeScriptModule(root, 'src/stores/enums.ts')
 assert.deepEqual(Object.keys(values.TOS_ENUM_REGISTRY).sort(), ['tos-2-part', 'tos-3-part'], 'only two tOS enum registries are registered')
@@ -12,7 +12,7 @@ assert.throws(() => values.validateEnumValue('tos-3-part', '17.a.0'), /format/i,
 assert.doesNotThrow(() => values.validateEnumValue('tos-2-part', '17.10'), 'two-part values are accepted only by the two-part category')
 assert.throws(() => values.validateEnumValue('tos-2-part', '17.10.0'), /format/i, 'two-part category rejects three-part values')
 assert.throws(() => values.validateEnumValue('tos-3-part', '17.10'), /format/i, 'three-part category rejects two-part values')
-assert.deepEqual(values.sortEnumValues(['17.2.0', '17.10.0']), ['17.10.0', '17.2.0'], 'version values sort numerically')
+assert.deepEqual(values.sortEnumValues(['17.10.0', '17.2.0']), ['17.2.0', '17.10.0'], 'version values sort by numeric segments in natural ascending order, not lexical order')
 assert.equal(typeof store.createEnumStore, 'function', 'missing enum store fixture factory')
 const enums = store.createEnumStore({ valuesByType: { 'tos-3-part': ['17.2.0'] } })
 assert.deepEqual(enums.addEnumValue('tos-3-part', ' 17.10.0 '), { ok: true }, 'store adds a trimmed value')

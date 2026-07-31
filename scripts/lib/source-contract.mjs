@@ -101,3 +101,22 @@ export const hasNestedCallExpression = (source, outerName, innerName) => {
   visit(file)
   return found
 }
+
+export const actionReadsObjectFields = (source, actionName, objectName, fields) => {
+  const file = ts.createSourceFile('contract.ts', source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS)
+  let action
+  const findAction = node => {
+    if (ts.isPropertyAssignment(node) && node.name.getText(file) === actionName) action = node.initializer
+    ts.forEachChild(node, findAction)
+  }
+  findAction(file)
+  if (!action) return false
+  const seen = new Set()
+  const visit = node => {
+    if (ts.isPropertyAccessExpression(node) && node.expression.getText(file) === objectName) seen.add(node.name.getText(file))
+    if (ts.isVariableDeclaration(node) && node.initializer?.getText(file) === objectName && ts.isObjectBindingPattern(node.name)) node.name.elements.forEach(element => seen.add((element.propertyName ?? element.name).getText(file)))
+    ts.forEachChild(node, visit)
+  }
+  visit(action)
+  return fields.every(field => seen.has(field))
+}
