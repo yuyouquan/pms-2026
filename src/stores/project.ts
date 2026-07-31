@@ -12,13 +12,14 @@ import { buildTosTypeRows, type TosTypeConfigRow } from '@/lib/tosTypeRules'
 import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
 import { createRoadmapAuditSnapshot, diffRoadmapProjectFields } from '@/lib/roadmapAudit'
 import { buildRoadmapDisplayName } from '@/lib/roadmapValidation'
+import { getCurrentTosEnumValues, normalizeTosEnumReference } from '@/lib/tosEnumOptions'
+import { useEnumStore } from '@/stores/enums'
 import { useRoadmapStore } from '@/stores/roadmap'
 import type { ProjectItem } from '@/types/app'
 import type {
   RoadmapChangeAction,
   RoadmapFieldChange,
   RoadmapProjectRow,
-  TosVersionConfig,
 } from '@/types/roadmap'
 
 // Default login user (mock)
@@ -60,6 +61,10 @@ type ProjectPatch = Partial<Omit<ProjectItem, 'type' | 'secondaryCategory'>> & {
 }
 type ProjectUpdate = ProjectPatch | ((project: Project) => Project)
 type PersistedProjectState = { projects: Project[] }
+
+export interface ProjectMutationOptions {
+  allowedFirstSaleTosValues?: readonly string[]
+}
 
 const PROJECT_STORAGE_KEY = 'pms-projects'
 
@@ -120,13 +125,40 @@ export interface ProjectActions {
   setTodoFilter: (v: 'all' | 'overdue' | 'upcoming' | 'pending' | 'completed') => void
   setTodoCollapsed: (v: boolean) => void
   setProjectMember: (projectId: string, members: string[]) => void
-  addProject: (newProject: Project, actor?: string) => boolean
-  updateProject: (projectId: string, update: ProjectUpdate, actor?: string) => Project | null
+  addProject: (newProject: Project, actor?: string, options?: ProjectMutationOptions) => boolean
+  updateProject: (projectId: string, update: ProjectUpdate, actor?: string, options?: ProjectMutationOptions) => Project | null
   deleteProject: (projectId: string, actor?: string) => boolean
 }
 
-function resolveTosVersionName(versions: readonly TosVersionConfig[], versionId: string): string {
-  return versions.find(version => version.id === versionId)?.name ?? versionId
+function resolveAllowedFirstSaleTosValues(options?: ProjectMutationOptions): string[] {
+  if (options?.allowedFirstSaleTosValues) {
+    return getCurrentTosEnumValues('tos-3-part', options.allowedFirstSaleTosValues)
+  }
+  const enumState = useEnumStore.getState()
+  if (!enumState.hasHydrated || enumState.hydrationError) return []
+  return getCurrentTosEnumValues('tos-3-part', enumState.valuesByType['tos-3-part'])
+}
+
+function resolveMachineTosValue(project: Project): string {
+  const preferred = project.productType === '老品'
+    ? [project.currentTosVersionId, project.currentTosVersion]
+    : [project.firstSaleTosVersionId, project.firstSaleTosVersion]
+  const candidate = [...preferred, project.tosVersionName, project.tosVersion]
+    .find(value => typeof value === 'string' && value.trim())
+  return normalizeTosEnumReference(candidate)
+}
+
+function isValidMachineProjectMutation(
+  project: Project,
+  options?: ProjectMutationOptions,
+  previousProject?: Project,
+): boolean {
+  if (!adaptNormalProject(project as unknown as ProjectItem, [])) return false
+  const tosValue = resolveMachineTosValue(project)
+  if (!tosValue) return false
+  const previousTosValue = previousProject ? resolveMachineTosValue(previousProject) : ''
+  if (previousTosValue && tosValue === previousTosValue) return true
+  return resolveAllowedFirstSaleTosValues(options).includes(tosValue)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -207,16 +239,15 @@ function recordNormalProjectAudit(
   actor: string,
 ): void {
   const roadmapState = useRoadmapStore.getState()
-  const versions = roadmapState.tosVersions
-  const beforeRow = before ? adaptNormalProject(before as unknown as ProjectItem, versions) : null
-  const afterRow = after ? adaptNormalProject(after as unknown as ProjectItem, versions) : null
+  const beforeRow = before ? adaptNormalProject(before as unknown as ProjectItem, []) : null
+  const afterRow = after ? adaptNormalProject(after as unknown as ProjectItem, []) : null
 
   let auditRow: RoadmapProjectRow | null = null
   if (action === 'create') auditRow = afterRow
   if (action === 'delete') auditRow = beforeRow
   if (action === 'update') {
     if (!beforeRow || !afterRow) return
-    const changes = diffRoadmapProjectFields(beforeRow, afterRow, versions)
+    const changes = diffRoadmapProjectFields(beforeRow, afterRow, [])
     if (!changes.length) return
     roadmapState.recordNormalProjectChange({
       projectId: afterRow.id,
@@ -227,7 +258,7 @@ function recordNormalProjectAudit(
       ),
       action,
       actor,
-      tosVersionName: resolveTosVersionName(versions, afterRow.firstSaleTosVersionId),
+      tosVersionName: `tOS${afterRow.firstSaleTosVersionId}`,
       changes: changes as [RoadmapFieldChange, ...RoadmapFieldChange[]],
     })
     return
@@ -243,9 +274,9 @@ function recordNormalProjectAudit(
     ),
     action,
     actor,
-    tosVersionName: resolveTosVersionName(versions, auditRow.firstSaleTosVersionId),
+    tosVersionName: `tOS${auditRow.firstSaleTosVersionId}`,
     changes: [],
-    snapshot: createRoadmapAuditSnapshot(auditRow, versions),
+    snapshot: createRoadmapAuditSnapshot(auditRow, []),
   })
 }
 
@@ -298,23 +329,21 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
     setProjectMember: (projectId, members) => set(state => ({
       projectMemberMap: { ...state.projectMemberMap, [projectId]: members },
     })),
-    addProject: (newProject, actor) => {
-      const versions = useRoadmapStore.getState().tosVersions
-      if (isMachineProjectType(newProject.type) && !adaptNormalProject(newProject as unknown as ProjectItem, versions)) {
+    addProject: (newProject, actor, options) => {
+      if (isMachineProjectType(newProject.type) && !isValidMachineProjectMutation(newProject, options)) {
         return false
       }
       set(state => ({ projects: [...state.projects, newProject] }))
       recordNormalProjectAudit('create', null, newProject, actor?.trim() || get().currentLoginUser.trim() || '系统')
       return true
     },
-    updateProject: (projectId, update, actor) => {
+    updateProject: (projectId, update, actor, options) => {
       const existing = get().projects.find(project => project.id === projectId)
       if (!existing) return null
       const updated = typeof update === 'function'
         ? update(existing)
         : { ...existing, ...update } as Project
-      const versions = useRoadmapStore.getState().tosVersions
-      if (isMachineProjectType(updated.type) && !adaptNormalProject(updated as unknown as ProjectItem, versions)) {
+      if (isMachineProjectType(updated.type) && !isValidMachineProjectMutation(updated, options, existing)) {
         return null
       }
       set(state => ({

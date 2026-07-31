@@ -51,7 +51,7 @@ import {
   type FilterCondition,
 } from '@/lib/filterConditions'
 import { GANTT_SCALE_OPTIONS } from '@/lib/ganttScale'
-import { compareSemanticTos } from '@/lib/roadmapSorting'
+import { formatTosEnumValue, normalizeTosEnumReference, resolveCurrentTosEnumValue } from '@/lib/tosEnumOptions'
 import { resolveVisiblePlanVersion } from '@/lib/todoAggregation'
 import {
   comparePlanVersions,
@@ -134,7 +134,6 @@ import {
 
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
-import { useRoadmapStore } from '@/stores/roadmap'
 import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, INITIAL_LEVEL2_PLAN_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
 import { usePermissionStore, useHasPermission } from '@/stores/permission'
@@ -151,6 +150,7 @@ import ProjectPlanInfoGrid from '@/components/project-info/ProjectPlanInfoGrid'
 import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
 import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
 import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
+import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import {
   getTemplateSnapshotForProjectType,
@@ -363,13 +363,18 @@ export default function ProjectSpaceContainer() {
     projectMemberMap, setProjectMember, updateProject,
   } = proj
 
-  const roadmapTosVersions = useRoadmapStore(state => state.tosVersions)
-  const roadmapTosOptions = useMemo(
-    () => [...roadmapTosVersions]
-      .sort((left, right) => compareSemanticTos(right, left))
-      .map(version => ({ label: version.name, value: version.id })),
-    [roadmapTosVersions],
-  )
+  const machineTosHistory = useMemo(() => selectedProject ? [
+    selectedProject.firstSaleTosVersionId,
+    selectedProject.firstSaleTosVersion,
+    selectedProject.currentTosVersionId,
+    selectedProject.currentTosVersion,
+    selectedProject.tosVersionName,
+    selectedProject.tosVersion,
+  ] : [], [selectedProject])
+  const {
+    currentValues: machineTosValues,
+    options: machineTosOptions,
+  } = useTosEnumOptions('tos-3-part', machineTosHistory)
 
   const {
     projectPlanLevel, setProjectPlanLevel, projectPlanViewMode, setProjectPlanViewMode,
@@ -2042,7 +2047,7 @@ export default function ProjectSpaceContainer() {
     setEditingProjectFields({
       projectCode: p.projectCode || p.model || '',
       androidVersion: p.androidVersion || p.operatingSystem || '',
-      firstSaleTosVersionId: p.firstSaleTosVersionId || '',
+      firstSaleTosVersionId: normalizeTosEnumReference(p.firstSaleTosVersionId || p.tosVersionName) || '',
       brand: p.brand || '',
       productLine: p.productLine || '',
       marketName: p.marketName || '',
@@ -2098,7 +2103,7 @@ export default function ProjectSpaceContainer() {
           osSeries: getSoftwareProductSeriesValue(mergedProject),
         } as typeof selectedProject
       : mergedProject
-    if (!updateProject(selectedProject.id, updated, currentLoginUser)) {
+    if (!updateProject(selectedProject.id, updated, currentLoginUser, { allowedFirstSaleTosValues: machineTosValues })) {
       message.error('整机项目的路标必填信息不完整或取值不合法，无法保存')
       return
     }
@@ -2128,9 +2133,15 @@ export default function ProjectSpaceContainer() {
     const firstSaleTosVersionName = typeof payload.infoValues.firstSaleTosVersion === 'string'
       ? payload.infoValues.firstSaleTosVersion.trim()
       : ''
-    const firstSaleTosVersionId = roadmapTosVersions.find(version => (
-      version.name.replace(/\s+/g, '').toLowerCase() === firstSaleTosVersionName.replace(/\s+/g, '').toLowerCase()
-    ))?.id || selectedProject.firstSaleTosVersionId
+    const submittedFirstSaleTos = normalizeTosEnumReference(firstSaleTosVersionName)
+    const existingFirstSaleTos = normalizeTosEnumReference(
+      selectedProject.firstSaleTosVersionId || selectedProject.tosVersionName,
+    )
+    const firstSaleTosVersionId = resolveCurrentTosEnumValue(
+      'tos-3-part',
+      submittedFirstSaleTos,
+      machineTosValues,
+    ) || (submittedFirstSaleTos === existingFirstSaleTos ? existingFirstSaleTos : '')
     const rawVersionType = typeof payload.infoValues.versionType === 'string'
       ? payload.infoValues.versionType
       : selectedProject.versionType || ''
@@ -2144,7 +2155,9 @@ export default function ProjectSpaceContainer() {
           developMode: typeof payload.infoValues.developmentMode === 'string' ? payload.infoValues.developmentMode : selectedProject.developMode,
         }
       : merged
-    if (!updateProject(selectedProject.id, () => updated as unknown as typeof selectedProject, currentLoginUser)) {
+    if (!updateProject(selectedProject.id, () => updated as unknown as typeof selectedProject, currentLoginUser, {
+      allowedFirstSaleTosValues: machineTosValues,
+    })) {
       message.error('整机项目的路标必填信息不完整或取值不合法，无法保存')
       return false
     }
@@ -2738,7 +2751,7 @@ export default function ProjectSpaceContainer() {
     const markets = marketRows.map(row => row.market)
     const ef = editingProjectFields
     const setEf = (key: string, value: any) => setEditingProjectFields((prev: any) => ({ ...prev, [key]: value }))
-    const editableField = (key: string, value: any, options?: { type?: 'input' | 'select' | 'select-multiple' | 'textarea'; choices?: { label: string; value: string }[] }) => {
+    const editableField = (key: string, value: any, options?: { type?: 'input' | 'select' | 'select-multiple' | 'textarea'; choices?: { label: string; value: string; disabled?: boolean }[] }) => {
       if (!basicInfoEditMode) return <span>{value || '-'}</span>
       if (options?.type === 'select') return <Select size="small" value={ef[key]} onChange={(v: string) => setEf(key, v)} style={{ width: '100%' }} options={options.choices} />
       if (options?.type === 'select-multiple') return <Select size="small" mode="multiple" value={(ef[key] || '').split(',').filter(Boolean)} onChange={(v: string[]) => setEf(key, v.join(','))} style={{ width: '100%' }} options={options.choices} />
@@ -2876,13 +2889,16 @@ export default function ProjectSpaceContainer() {
     const renderWholeMachineBasicInfoField = (field: (typeof WHOLE_MACHINE_BASIC_INFO_FIELDS)[number]) => {
       const visibleDevelopMode = basicInfoEditMode ? ef.developMode : p.developMode
       if (field.key === 'isOutsourcedMini' && visibleDevelopMode !== '外研') return null
-      const firstSaleTosVersionName = roadmapTosVersions.find(version => version.id === p.firstSaleTosVersionId)?.name || p.firstSaleTosVersionId || '-'
+      const firstSaleTosValue = normalizeTosEnumReference(p.firstSaleTosVersionId || p.tosVersionName)
+      const firstSaleTosVersionName = machineTosOptions.find(option => option.value === firstSaleTosValue)?.label
+        || formatTosEnumValue(firstSaleTosValue)
+        || '-'
       let content: React.ReactNode = field.key === 'firstSaleTosVersionId'
         ? firstSaleTosVersionName
         : getProjectFieldValue(field)
       if (field.key === 'projectCode') content = editableField('projectCode', p.projectCode || p.model)
       if (field.key === 'androidVersion') content = editableField('androidVersion', p.androidVersion || p.operatingSystem)
-      if (field.key === 'firstSaleTosVersionId') content = editableField('firstSaleTosVersionId', firstSaleTosVersionName, { type: 'select', choices: roadmapTosOptions })
+      if (field.key === 'firstSaleTosVersionId') content = editableField('firstSaleTosVersionId', firstSaleTosVersionName, { type: 'select', choices: machineTosOptions })
       if (field.key === 'brand') content = editableField('brand', p.brand)
       if (field.key === 'productLine') content = editableField('productLine', p.productLine)
       if (field.key === 'marketName') content = editableField('marketName', p.marketName)
@@ -3235,7 +3251,7 @@ export default function ProjectSpaceContainer() {
             onCancel={() => setShowProjectInfoEditor(false)}
             onSubmit={saveTargetProjectInfo}
             fieldOptionOverrides={{
-              firstSaleTosVersion: roadmapTosOptions.map(option => option.label),
+              firstSaleTosVersion: machineTosOptions,
               versionType: ['Full', 'Slim', 'Go'],
               developmentMode: ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'],
             }}

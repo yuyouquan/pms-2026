@@ -21,8 +21,9 @@ import {
 import { useHasGlobalPermission } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
 import { useRoadmapStore } from '@/stores/roadmap'
-import { ensureEnumHydrated, useEnumStore } from '@/stores/enums'
+import { useEnumStore } from '@/stores/enums'
 import { useUiStore } from '@/stores/ui'
+import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
 import {
   formatRoadmapTosValue,
   normalizeRoadmapTosReference,
@@ -94,9 +95,12 @@ export default function ProjectRoadmapModule({
 
   const plannedProjects = useRoadmapStore(state => state.plannedProjects)
   const storedVersionDetails = useRoadmapStore(state => state.tosVersions)
-  const enumTosValues = useEnumStore(state => state.valuesByType['tos-2-part'])
-  const enumHasHydrated = useEnumStore(state => state.hasHydrated)
-  const enumHydrationError = useEnumStore(state => state.hydrationError)
+  const {
+    currentValues: enumTosValues,
+    hasHydrated: enumHasHydrated,
+    hydrationError: enumHydrationError,
+    retryHydration,
+  } = useTosEnumOptions('tos-2-part')
   const setSelectedType = useEnumStore(state => state.setSelectedType)
   const setActiveModule = useUiStore(state => state.setActiveModule)
   const setConfigTab = useUiStore(state => state.setConfigTab)
@@ -116,10 +120,6 @@ export default function ProjectRoadmapModule({
   const setSort = useRoadmapStore(state => state.setSort)
   const setSelectedConflictKey = useRoadmapStore(state => state.setSelectedConflictKey)
   const deletePlannedProject = useRoadmapStore(state => state.deletePlannedProject)
-
-  useEffect(() => {
-    if (!enumHasHydrated) void ensureEnumHydrated()
-  }, [enumHasHydrated])
 
   const versions = useMemo<TosVersionConfig[]>(() => {
     const currentValues = enumTosValues.map(normalizeRoadmapTosValue).filter(Boolean)
@@ -454,7 +454,7 @@ export default function ProjectRoadmapModule({
           <Space orientation="vertical" size={12}>
             <Typography.Text>{enumHydrationError}</Typography.Text>
             <Space wrap>
-              <Button type="primary" onClick={() => void ensureEnumHydrated()}>
+              <Button type="primary" onClick={() => void retryHydration()}>
                 重试加载
               </Button>
               <Button onClick={openSharedTosEnumConfig}>前往枚举配置恢复</Button>

@@ -5,6 +5,7 @@ import { getStringUnionTypeMembers, loadTypeScriptModule, projectRoot, readSourc
 const root = projectRoot(import.meta.url)
 assert.deepEqual(getStringUnionTypeMembers(readSource(root, 'src/types/enums.ts'), 'EnumTypeKey').sort(), ['tos-2-part', 'tos-3-part'], 'EnumTypeKey must be exactly the two fixed tOS string literals')
 const values = loadTypeScriptModule(root, 'src/lib/enumValues.ts')
+const options = loadTypeScriptModule(root, 'src/lib/tosEnumOptions.ts')
 const store = loadTypeScriptModule(root, 'src/stores/enums.ts')
 assert.deepEqual(Object.keys(values.TOS_ENUM_REGISTRY).sort(), ['tos-2-part', 'tos-3-part'], 'only two tOS enum registries are registered')
 assert.deepEqual(values.TOS_ENUM_REGISTRY, {
@@ -45,6 +46,18 @@ assert.deepEqual(enums.deleteEnumValue('tos-3-part', '17.2.0'), { ok: false, rea
 assert.equal(readBusinessValue(businessRecord), '17.2.0', 'independent business snapshot keeps its selected string after deletion')
 assert.equal(enums.getValues('tos-3-part').includes('17.2.0'), false, 'deleted option is gone from configuration')
 
+assert.deepEqual(options.buildTosEnumOptions('tos-3-part', ['17.2.0', '19.4.1', '19.4'], ['16.3.7']), [
+  { label: 'tOS17.2.0', value: '17.2.0' },
+  { label: 'tOS19.4.1', value: '19.4.1' },
+  { label: 'tOS16.3.7（已停用）', value: '16.3.7', disabled: true },
+], 'three-part consumers keep current values in semantic ascending order and append their explicit historical orphan')
+assert.deepEqual(options.buildTosEnumOptions('tos-2-part', ['17.2', '19.4', '19.4.1'], []), [
+  { label: 'tOS17.2', value: '17.2' },
+  { label: 'tOS19.4', value: '19.4' },
+], 'two-part consumers do not inherit three-part values')
+assert.equal(options.resolveCurrentTosEnumValue('tos-3-part', ' tOS19.4.1 ', ['17.2.0', '19.4.1']), '19.4.1', 'current values resolve from either labels or canonical values')
+assert.equal(options.resolveCurrentTosEnumValue('tos-3-part', 'tOS16.3.7（已停用）', ['17.2.0', '19.4.1']), null, 'historical display values cannot be selected as new values')
+
 assert.deepEqual(store.partializeEnumState({
   valuesByType: { 'tos-2-part': ['18.0'], 'tos-3-part': ['18.0.1'] },
   hasHydrated: true,
@@ -84,6 +97,11 @@ const configUi = readSource(root, 'src/containers/ConfigContainer.tsx')
 const appShell = readSource(root, 'src/containers/AppShell.tsx')
 const globalStyles = readSource(root, 'src/styles/globals.css')
 const storeSource = readSource(root, 'src/stores/enums.ts')
+const hookSource = readSource(root, 'src/hooks/useTosEnumOptions.ts')
+const addProjectSource = readSource(root, 'src/components/workspace/AddProjectModal.tsx')
+const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
+const projectStoreSource = readSource(root, 'src/stores/project.ts')
+const roadmapModuleSource = readSource(root, 'src/components/roadmap/ProjectRoadmapModule.tsx')
 assert.match(configUi, /key:\s*['"]enum['"][\s\S]*枚举值配置/, 'configuration center exposes the enum-value tab')
 assert.match(configUi, /configTab\s*===\s*['"]enum['"][\s\S]*<EnumConfig/, 'enum tab renders EnumConfig')
 assert.match(enumUi, /TOS_ENUM_TYPE_KEYS\.map[\s\S]*TOS_ENUM_REGISTRY\[type\]/, 'fixed registry drives the two visible enum type labels')
@@ -105,6 +123,14 @@ assert.match(storeSource, /onRehydrateStorage/, 'persist completion callback own
 assert.match(storeSource, /skipHydration:\s*true/, 'browser hydration is started explicitly after mount')
 assert.match(storeSource, /export async function ensureEnumHydrated/, 'enum hydration exposes one reusable coordinator')
 assert.match(storeSource, /ENUM_STORAGE_KEY/, 'the enum storage key is named for exact reset')
+assert.match(hookSource, /ensureEnumHydrated/, 'shared tOS option hook owns reusable enum hydration')
+assert.match(addProjectSource, /useTosEnumOptions\(['"]tos-3-part['"]/, 'whole-machine create consumes the three-part enum')
+assert.doesNotMatch(addProjectSource, /useRoadmapStore|tosVersions/, 'whole-machine create no longer uses roadmap metadata as an option source')
+assert.match(projectSpaceSource, /useTosEnumOptions\(['"]tos-3-part['"]/, 'whole-machine edit consumes the three-part enum')
+assert.doesNotMatch(projectSpaceSource, /roadmapTosVersions|roadmapTosOptions/, 'whole-machine edit no longer uses roadmap metadata as an option source')
+assert.match(roadmapModuleSource, /useTosEnumOptions\(['"]tos-2-part['"]/, 'roadmap consumes only the two-part enum adapter')
+assert.match(projectStoreSource, /allowedFirstSaleTosValues/, 'project mutations accept an explicit current enum allow-list')
+assert.match(projectStoreSource, /valuesByType\[['"]tos-3-part['"]\]/, 'project validation falls back only to the hydrated three-part enum')
 assert.match(appShell, /styles=\{\{\s*root:/, 'user dropdown uses the Ant Design 6 popup styling API')
 assert.doesNotMatch(appShell, /overlayStyle=/, 'deprecated dropdown overlayStyle is removed')
 assert.match(appShell, /className="pms-main-header"[\s\S]*className="pms-main-header__row"/, 'main header exposes responsive layout hooks')

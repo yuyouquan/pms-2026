@@ -32,6 +32,7 @@ import {
   buildProjectInfoValues,
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
+import { normalizeTosEnumReference } from '@/lib/tosEnumOptions'
 import {
   defaultProjectCreationDraftRepository,
   isProjectCreationDraftEmpty,
@@ -81,7 +82,7 @@ interface ProjectInfoModalProps {
   onCancel: () => void
   onSubmit: (payload: ProjectInfoSubmitPayload) => Promise<boolean | void> | boolean | void
   onAfterCreate?: () => void
-  fieldOptionOverrides?: Partial<Record<string, readonly string[]>>
+  fieldOptionOverrides?: Partial<Record<string, readonly (string | { label: string; value: string; disabled?: boolean })[]>>
 }
 
 export const PROJECT_CREATION_DRAFT_SAVE_DELAY_MS = 300
@@ -267,7 +268,13 @@ export default function ProjectInfoModal({
     const normalizedProjectType = classification.projectCategory
     const projectFields = getProjectInfoFields(normalizedProjectType)
     const storedInfoValues = buildProjectInfoValues(project, projectFields.map(field => field.key))
-    let infoValues = storedInfoValues
+    let infoValues = isMachineProjectType(project.type)
+      ? {
+          ...storedInfoValues,
+          firstSaleTosVersion: normalizeTosEnumReference(storedInfoValues.firstSaleTosVersion),
+          currentTosVersion: normalizeTosEnumReference(storedInfoValues.currentTosVersion),
+        }
+      : storedInfoValues
     if (project.type === PROJECT_TYPE_TOS_VERSION) {
       const selectedIds = Array.isArray(storedInfoValues.firstLaunchProjects)
         ? storedInfoValues.firstLaunchProjects.filter((item): item is string => typeof item === 'string')

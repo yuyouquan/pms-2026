@@ -16,9 +16,9 @@ import {
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import { normalizeTargetMarkets } from '@/lib/marketRules'
 import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
-import { compareSemanticTos } from '@/lib/roadmapSorting'
-import { useRoadmapStore } from '@/stores/roadmap'
+import { resolveCurrentTosEnumValue } from '@/lib/tosEnumOptions'
 import { useActivateProject } from '@/hooks/useActivateProject'
+import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
 
 interface AddProjectModalProps {
   open: boolean
@@ -35,11 +35,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
   const { enterProjectSpace, setProjectSpaceModule } = useUiStore()
   const activateProject = useActivateProject()
   const initProjectPermissions = usePermissionStore(state => state.initProjectPermissions)
-  const tosVersions = useRoadmapStore(state => state.tosVersions)
-  const descendingTosVersions = useMemo(
-    () => [...tosVersions].sort((left, right) => compareSemanticTos(right, left)),
-    [tosVersions],
-  )
+  const { currentValues: machineTosValues, options: machineTosOptions } = useTosEnumOptions('tos-3-part')
 
   const candidatePool = useMemo<ExternalProjectEntry[]>(() => {
     const existingNames = new Set(projects.map(project => project.name))
@@ -64,10 +60,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
     const selectedFirstSaleTosVersion = typeof payload.infoValues.firstSaleTosVersion === 'string'
       ? payload.infoValues.firstSaleTosVersion.trim()
       : ''
-    const normalizeVersionName = (value: string) => value.replace(/\s+/g, '').toLowerCase()
-    const firstSaleTosVersionId = tosVersions.find(version => (
-      normalizeVersionName(version.name) === normalizeVersionName(selectedFirstSaleTosVersion)
-    ))?.id
+    const firstSaleTosVersionId = resolveCurrentTosEnumValue('tos-3-part', selectedFirstSaleTosVersion, machineTosValues)
     const rawVersionType = typeof payload.infoValues.versionType === 'string'
       ? payload.infoValues.versionType
       : extra.versionType ?? ''
@@ -119,14 +112,16 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       : mergedProject
 
     if (isMachineProjectType(projectType) && !firstSaleTosVersionId) {
-      message.error(tosVersions.length ? '请选择首销 tOS 版本' : '请先维护 tOS 版本后再创建整机项目')
+      message.error(machineTosValues.length ? '请选择首销 tOS 版本' : '请先维护 tOS 版本后再创建整机项目')
       return false
     }
-    if (isMachineProjectType(projectType) && !adaptNormalProject(newProject as any, tosVersions)) {
+    if (isMachineProjectType(projectType) && !adaptNormalProject(newProject as any, [])) {
       message.error('外部项目缺少或不符合路标字段，请检查安卓版本、品牌、产品类型、起步 RAM、版本类型和开发模式')
       return false
     }
-    const added = addProject(newProject as unknown as Parameters<typeof addProject>[0], currentLoginUser)
+    const added = addProject(newProject as unknown as Parameters<typeof addProject>[0], currentLoginUser, {
+      allowedFirstSaleTosValues: machineTosValues,
+    })
     if (!added) {
       message.error('项目创建失败，请检查整机项目的首销 tOS 版本和路标字段')
       return false
@@ -155,7 +150,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       onSubmit={handleSubmit}
       onAfterCreate={handleAfterCreate}
       fieldOptionOverrides={{
-        firstSaleTosVersion: descendingTosVersions.map(version => version.name),
+        firstSaleTosVersion: machineTosOptions,
         versionType: ['Full', 'Slim', 'Go'],
         developmentMode: ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'],
       }}

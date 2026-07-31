@@ -59,6 +59,7 @@ import { useEnumStore } from '@/stores/enums'
 
 const INITIAL_TIMESTAMP = '2026-01-01T00:00:00.000Z'
 const ROADMAP_STORAGE_KEY = 'pms-project-roadmap'
+export const ROADMAP_STORE_VERSION = 6
 
 const KNOWN_COLUMN_KEYS = new Set<RoadmapColumnKey>(ROADMAP_COLUMNS.map(column => column.key))
 const ROADMAP_BRANDS = new Set<RoadmapBrand>(['TECNO', 'Infinix', 'itel', '待定', '其他品牌'])
@@ -589,7 +590,7 @@ function migrateChangeLogs(value: unknown): RoadmapChangeLog[] | null {
   return logs
 }
 
-export function migrateRoadmapState(persistedState: unknown, fromVersion: number): RoadmapStoreState {
+function normalizeRoadmapState(persistedState: unknown, fromVersion: number | null): RoadmapStoreState {
   const initial = createInitialRoadmapState()
   if (!isRecord(persistedState)) return initial
   const roadmapKeys = ['plannedProjects', 'tosVersions', 'changeLogs', 'viewMode', 'selectedTosVersionId']
@@ -665,9 +666,9 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
     migratedEvolutionVisibleColumns,
     ROADMAP_EVOLUTION_LOCKED_COLUMNS,
   )
-  if (fromVersion < 4) {
+  if (fromVersion !== null && fromVersion < 4) {
     evolutionVisibleColumns = [...DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS]
-  } else if (fromVersion < 5 && !evolutionVisibleColumns.includes('developMode')) {
+  } else if (fromVersion !== null && fromVersion < 5 && !evolutionVisibleColumns.includes('developMode')) {
     evolutionVisibleColumns = ensureRoadmapLockedColumns(
       [...evolutionVisibleColumns, 'developMode'],
       ROADMAP_EVOLUTION_LOCKED_COLUMNS,
@@ -720,7 +721,7 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
     'developMode',
   )
   const evolutionSettings = normalizeRoadmapColumnSettings('evolution', {
-    order: fromVersion < 5
+    order: fromVersion !== null && fromVersion < 5
       ? upgradedEvolutionOrder
       : Array.isArray(persistedOrderByView?.evolution)
       ? persistedOrderByView.evolution as RoadmapColumnKey[]
@@ -754,6 +755,14 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
   }
 }
 
+export function migrateRoadmapState(persistedState: unknown, fromVersion: number): RoadmapStoreState {
+  return normalizeRoadmapState(persistedState, fromVersion)
+}
+
+export function sanitizeRoadmapCurrentState(persistedState: unknown): RoadmapStoreState {
+  return normalizeRoadmapState(persistedState, null)
+}
+
 export function partializeRoadmapState(state: RoadmapStore): PersistedRoadmapState {
   return {
     plannedProjects: state.plannedProjects,
@@ -776,7 +785,7 @@ export function mergeRoadmapPersistedState(
   persistedState: unknown,
   currentState: RoadmapStore,
 ): RoadmapStore {
-  const migrated = migrateRoadmapState(persistedState, 1)
+  const migrated = sanitizeRoadmapCurrentState(persistedState)
   if (persistedState === null || persistedState === undefined) {
     return roadmapStorageReadFailed ? { ...currentState, ...migrated } : currentState
   }
@@ -1154,7 +1163,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
     }),
     {
       name: 'pms-project-roadmap',
-      version: 6,
+      version: ROADMAP_STORE_VERSION,
       storage: createJSONStorage(() => safeRoadmapStorage),
       migrate: migrateRoadmapState,
       partialize: partializeRoadmapState,
