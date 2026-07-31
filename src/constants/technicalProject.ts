@@ -32,6 +32,12 @@ export const TECHNICAL_DELIVERABLE_FIELDS: ReadonlyArray<{ key: TechnicalDeliver
   { key: 'edcpReport', label: 'EDCP 报告' },
 ]
 
+export const TECHNICAL_STRING_FIELD_KEYS = [
+  'technicalTrack', 'tmg', 'subdomain', 'preProjectId', 'projectYear', 'projectValue',
+  'technicalLead', 'technicalProjectManager', 'testRepresentative', 'qualityRepresentative',
+  'productRepresentative', 'standardizationRepresentative',
+] as const
+
 export const EMPTY_TECHNICAL_TEAM: TechnicalTeam = {
   technicalLead: '', technicalProjectManager: '', testRepresentative: '',
   qualityRepresentative: '', productRepresentative: '', standardizationRepresentative: '',

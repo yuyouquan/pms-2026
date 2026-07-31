@@ -37,7 +37,7 @@ import {
 } from '@/lib/projectInfoValues'
 import { normalizeTosEnumReference } from '@/lib/tosEnumOptions'
 import { normalizeMachineFamilyName, resolveMachineTosUpdate } from '@/lib/machineTosVersions'
-import { validateTechnicalProject } from '@/lib/technicalProjectRules'
+import { normalizeTechnicalProjectValues, TechnicalProjectValidationError, validateTechnicalProject } from '@/lib/technicalProjectRules'
 import {
   defaultProjectCreationDraftRepository,
   isProjectCreationDraftEmpty,
@@ -47,6 +47,7 @@ import {
   type ProjectCreationDraftRepository,
 } from '@/lib/projectCreationDraft'
 import type { ProjectInfoValues } from '@/types/app'
+import { TECHNICAL_DELIVERABLE_FIELDS } from '@/constants/technicalProject'
 
 type ProjectInfoFormState = ProjectInfoValues & {
   bid?: string
@@ -711,7 +712,9 @@ export default function ProjectInfoModal({
       message.error('项目分类和项目二级分类均为必填项')
       return
     }
-    const infoValues = getProjectInfoModalSubmitValues(normalizedProjectType, values)
+    const infoValues = normalizedProjectType === PROJECT_CATEGORY_TECH
+      ? normalizeTechnicalProjectValues(values as Record<string, unknown>) as ProjectInfoValues
+      : getProjectInfoModalSubmitValues(normalizedProjectType, values)
     if (normalizedProjectType === PROJECT_CATEGORY_TECH) {
       try {
         validateTechnicalProject({
@@ -729,10 +732,16 @@ export default function ProjectInfoModal({
           },
         })
       } catch (error) {
-        const field = error instanceof Error ? error.message : 'technicalProject'
+        const field = error instanceof TechnicalProjectValidationError
+          ? error.fieldKey
+          : error instanceof Error ? error.message : 'technicalProject'
         const labels: Record<string, string> = { technicalLead: '技术项目负责人', tmg: 'TMG 及技术领域', subdomain: '子领域', preProjectId: '前置项目', projectYear: '项目年份', deliverable: '交付物' }
-        message.error(`请检查${labels[field] || '技术项目信息'}`)
-        if (field !== 'deliverable') form.scrollToField(field, { block: 'center' })
+        const deliverableLabel = TECHNICAL_DELIVERABLE_FIELDS.find(item => item.key === field)?.label
+        message.error(`请检查${labels[field] || deliverableLabel || '技术项目信息'}`)
+        if (field !== 'deliverable') {
+          form.setFields([{ name: field, errors: [`请填写有效的${deliverableLabel || labels[field] || '字段值'}`] }])
+          form.scrollToField(field, { block: 'center' })
+        }
         return
       }
     }

@@ -10,6 +10,7 @@ import { usePermissionStore } from '@/stores/permission'
 import { inferOsSeriesFromProjectName } from '@/constants/projectBasicFields'
 import {
   PROJECT_TYPE_TOS_VERSION,
+  PROJECT_CATEGORY_TECH,
   isMachineProjectType,
   isSoftwareProjectType,
 } from '@/constants/projectTypes'
@@ -21,6 +22,7 @@ import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
 import { normalizeTosEnumReference, resolveCurrentTosEnumValue } from '@/lib/tosEnumOptions'
 import { useActivateProject } from '@/hooks/useActivateProject'
 import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
+import { synchronizeTechnicalProjectRecord } from '@/lib/technicalProjectRules'
 
 interface AddProjectModalProps {
   open: boolean
@@ -125,21 +127,6 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       planStartDate: extra.planStartDate ?? '',
       planEndDate: extra.planEndDate ?? '',
       healthStatus: payload.healthStatus as 'normal' | 'warning' | 'risk',
-      ...(projectType === '技术项目' ? {
-        technicalTrack: typeof payload.infoValues.technicalTrack === 'string' ? payload.infoValues.technicalTrack : entry.technicalTrack || '',
-        tmg: typeof payload.infoValues.tmg === 'string' ? payload.infoValues.tmg : '',
-        subdomain: typeof payload.infoValues.subdomain === 'string' ? payload.infoValues.subdomain : '',
-        technicalLead: typeof payload.infoValues.technicalLead === 'string' ? payload.infoValues.technicalLead : '',
-        technicalProjectManager: typeof payload.infoValues.technicalProjectManager === 'string' ? payload.infoValues.technicalProjectManager : '',
-        testRepresentative: typeof payload.infoValues.testRepresentative === 'string' ? payload.infoValues.testRepresentative : '',
-        qualityRepresentative: typeof payload.infoValues.qualityRepresentative === 'string' ? payload.infoValues.qualityRepresentative : '',
-        productRepresentative: typeof payload.infoValues.productRepresentative === 'string' ? payload.infoValues.productRepresentative : '',
-        standardizationRepresentative: typeof payload.infoValues.standardizationRepresentative === 'string' ? payload.infoValues.standardizationRepresentative : '',
-        preProjectId: typeof payload.infoValues.preProjectId === 'string' ? payload.infoValues.preProjectId : '',
-        projectYear: typeof payload.infoValues.projectYear === 'string' ? payload.infoValues.projectYear : '',
-        projectValue: typeof payload.infoValues.projectValue === 'string' ? payload.infoValues.projectValue : '',
-        ipmProjectType: entry.ipmProjectCategoryName,
-      } : {}),
       ...(isMachineProjectType(projectType) ? {
         firstSaleTosVersionId,
         firstSaleTosVersion: firstSaleTosVersionId,
@@ -157,9 +144,16 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       } : {}),
     }
     const mergedProject = mergeProjectInfoValues(baseProject as ProjectInfoProject, payload.infoValues) as typeof baseProject
-    const newProject = isMachineProjectType(projectType)
-      ? { ...mergedProject, market: initialMarkets.join(','), markets: initialMarkets }
+    const synchronizedProject = projectType === PROJECT_CATEGORY_TECH
+      ? synchronizeTechnicalProjectRecord(
+          mergedProject as unknown as Record<string, unknown>,
+          payload.infoValues as Record<string, unknown>,
+          { ipmProjectType: entry.ipmProjectCategoryName },
+        )
       : mergedProject
+    const newProject = isMachineProjectType(projectType)
+      ? { ...synchronizedProject, market: initialMarkets.join(','), markets: initialMarkets }
+      : synchronizedProject
 
     if (isMachineProjectType(projectType) && !selectedMachineTosVersionId) {
       if (!machineTosValues.length) message.error('请先维护 tOS 版本后再创建整机项目')

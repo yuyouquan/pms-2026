@@ -153,6 +153,7 @@ import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
 import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
 import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
+import { synchronizeTechnicalProjectRecord } from '@/lib/technicalProjectRules'
 import { deriveProjectTosVersion } from '@/lib/projectInfoRules'
 import {
   getTemplateSnapshotForProjectType,
@@ -2176,7 +2177,13 @@ export default function ProjectSpaceContainer() {
           versionType: rawVersionType.toUpperCase() === 'GO' ? 'Go' : rawVersionType,
           developMode: typeof payload.infoValues.developmentMode === 'string' ? payload.infoValues.developmentMode : selectedProject.developMode,
         }
-      : merged
+      : selectedProject.type === '技术项目'
+        ? synchronizeTechnicalProjectRecord(
+            merged as unknown as Record<string, unknown>,
+            payload.infoValues as Record<string, unknown>,
+            { ipmProjectType: String(selectedProject.ipmProjectType || '') },
+          ) as unknown as typeof merged
+        : merged
     if (isMachineProjectType(selectedProject.type)) {
       const resolution = resolveMachineTosUpdate(projects as any[], updated as any)
       if (!resolution.ok) {

@@ -1,5 +1,5 @@
-import { NO_SUBDOMAIN_DOMAINS, SUBDOMAINS_BY_DOMAIN } from '@/constants/technicalProject'
-import type { TechnicalDomain, TechnicalSubproject } from '@/types/technicalProject'
+import { NO_SUBDOMAIN_DOMAINS, SUBDOMAINS_BY_DOMAIN, TECHNICAL_DELIVERABLE_FIELDS, TECHNICAL_STRING_FIELD_KEYS } from '@/constants/technicalProject'
+import type { DeliverableValue, TechnicalDomain, TechnicalSubproject } from '@/types/technicalProject'
 
 type ResolveInput = {
   ipm?: { projectName?: string; category?: string; secondaryCategory?: string; technicalTrack?: string }
@@ -28,21 +28,52 @@ export const resolveTechnicalProjectFields = (
   return result
 }
 
+export class TechnicalProjectValidationError extends Error {
+  constructor(public fieldKey: string, message = fieldKey) {
+    super(message)
+    this.name = 'TechnicalProjectValidationError'
+  }
+}
+
+export const switchDeliverableMode = (
+  value: DeliverableValue | undefined,
+  nextKind: 'url' | 'file',
+): DeliverableValue => value?.kind === nextKind ? value : null
+
+export const normalizeDeliverableValue = (value: unknown): DeliverableValue => {
+  if (!value || typeof value !== 'object') return null
+  const item = value as Record<string, unknown>
+  if (item.kind === 'url') {
+    const url = String(item.url || '').trim()
+    return url ? { kind: 'url', url } : null
+  }
+  if (item.kind === 'file') {
+    const name = String(item.name || '').trim()
+    const mimeType = String(item.mimeType || '').trim()
+    const size = Number(item.size)
+    return name && mimeType && Number.isFinite(size) && size >= 0
+      ? { kind: 'file', name, size, mimeType }
+      : null
+  }
+  return null
+}
+
 const assertDeliverables = (deliverables: unknown) => {
   if (!deliverables || typeof deliverables !== 'object') return
-  Object.values(deliverables as Record<string, unknown>).forEach(value => {
+  Object.entries(deliverables as Record<string, unknown>).forEach(([fieldKey, value]) => {
     if (value == null) return
-    if (typeof value !== 'object') throw new Error('deliverable')
+    const invalid = () => { throw new TechnicalProjectValidationError(fieldKey, `deliverable:${fieldKey}`) }
+    if (typeof value !== 'object') invalid()
     const item = value as Record<string, unknown>
     const hasUrl = typeof item.url === 'string' && item.url.trim() !== ''
     const hasFile = item.file != null || item.kind === 'file'
-    if ((hasUrl && hasFile) || (item.kind !== 'url' && item.kind !== 'file')) throw new Error('deliverable')
+    if ((hasUrl && hasFile) || (item.kind !== 'url' && item.kind !== 'file')) invalid()
     if (item.kind === 'url') {
       try {
         const url = new URL(String(item.url || ''))
         if (!['http:', 'https:'].includes(url.protocol)) throw new Error('protocol')
       } catch {
-        throw new Error('deliverable')
+        invalid()
       }
     }
     if (item.kind === 'file' && (
@@ -50,8 +81,40 @@ const assertDeliverables = (deliverables: unknown) => {
       || !Number.isFinite(item.size)
       || Number(item.size) < 0
       || !String(item.mimeType || '').trim()
-    )) throw new Error('deliverable')
+    )) invalid()
   })
+}
+
+export const normalizeTechnicalProjectValues = (rawValues: Record<string, unknown>) => {
+  const values: Record<string, unknown> = {}
+  TECHNICAL_STRING_FIELD_KEYS.forEach(key => {
+    values[key] = typeof rawValues[key] === 'string' ? rawValues[key] : ''
+  })
+  TECHNICAL_DELIVERABLE_FIELDS.forEach(({ key }) => {
+    values[key] = normalizeDeliverableValue(rawValues[key])
+  })
+  return values
+}
+
+export const synchronizeTechnicalProjectRecord = <T extends Record<string, unknown>>(
+  project: T,
+  rawValues: Record<string, unknown>,
+  metadata: { ipmProjectType?: string } = {},
+) => {
+  const values = normalizeTechnicalProjectValues(rawValues)
+  const technicalLead = String(values.technicalLead || '').trim()
+  const ipmProjectType = String(metadata.ipmProjectType ?? project.ipmProjectType ?? '')
+  const synchronizedValues = { ...values, ipmProjectType }
+  return {
+    ...project,
+    ...synchronizedValues,
+    fieldValues: {
+      ...((project.fieldValues && typeof project.fieldValues === 'object') ? project.fieldValues as Record<string, unknown> : {}),
+      ...synchronizedValues,
+    },
+    leader: technicalLead,
+    responsiblePersons: technicalLead ? [technicalLead] : [],
+  }
 }
 
 export const validateTechnicalProject = (value: Record<string, unknown>) => {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { FileOutlined, LinkOutlined, UploadOutlined } from '@ant-design/icons'
 import { Button, DatePicker, Form, Input, Radio, Select, Space, Tag, Upload, type FormInstance } from 'antd'
 import dayjs from 'dayjs'
@@ -12,23 +12,28 @@ import {
   TECHNICAL_DOMAINS,
   TECHNICAL_TEAM_FIELDS,
 } from '@/constants/technicalProject'
-import { getPreProjectCandidates } from '@/lib/technicalProjectRules'
+import { getPreProjectCandidates, switchDeliverableMode } from '@/lib/technicalProjectRules'
 import type { ProjectInfoProject } from '@/lib/projectInfoValues'
 import type { DeliverableValue, TechnicalDomain } from '@/types/technicalProject'
 
 const personOptions = ALL_USERS.map(user => ({ label: user, value: user }))
 
-function DeliverableControl({ value, onChange }: { value?: DeliverableValue; onChange?: (value: DeliverableValue) => void }) {
-  const kind = value?.kind || 'url'
+function DeliverableControl({ label, value, onChange }: { label: string; value?: DeliverableValue; onChange?: (value: DeliverableValue) => void }) {
+  const [kind, setKind] = useState<'url' | 'file'>(value?.kind || 'url')
+  useEffect(() => {
+    if (value?.kind) setKind(value.kind)
+  }, [value?.kind])
   return (
     <div className="pms-technical-deliverable">
       <Radio.Group
         size="small"
         value={kind}
-        aria-label="交付物录入方式"
-        onChange={event => onChange?.(event.target.value === 'url'
-          ? { kind: 'url', url: '' }
-          : { kind: 'file', name: '', size: 0, mimeType: '' })}
+        aria-label={`${label}录入方式`}
+        onChange={event => {
+          const nextKind = event.target.value as 'url' | 'file'
+          setKind(nextKind)
+          onChange?.(switchDeliverableMode(value, nextKind))
+        }}
       >
         <Radio.Button value="url"><LinkOutlined /> 链接</Radio.Button>
         <Radio.Button value="file"><FileOutlined /> 文件</Radio.Button>
@@ -39,7 +44,7 @@ function DeliverableControl({ value, onChange }: { value?: DeliverableValue; onC
           value={value?.kind === 'url' ? value.url : ''}
           prefix={<LinkOutlined />}
           placeholder="https://"
-          aria-label="交付物链接"
+          aria-label={`${label}链接`}
           onChange={event => onChange?.(event.target.value ? { kind: 'url', url: event.target.value } : null)}
         />
       ) : (
@@ -52,7 +57,7 @@ function DeliverableControl({ value, onChange }: { value?: DeliverableValue; onC
               return Upload.LIST_IGNORE
             }}
           >
-            <Button icon={<UploadOutlined />}>选择文件</Button>
+            <Button icon={<UploadOutlined />} aria-label={`上传${label}`}>选择文件</Button>
           </Upload>
           {value?.kind === 'file' && value.name && <Tag closable onClose={() => onChange?.(null)}>{value.name}</Tag>}
         </Space>
@@ -147,7 +152,7 @@ export default function TechnicalProjectCreateFields({
       <div className="pms-project-info-form-grid">
         {TECHNICAL_DELIVERABLE_FIELDS.map(field => (
           <Form.Item key={field.key} label={field.label} name={field.key}>
-            <DeliverableControl />
+            <DeliverableControl label={field.label} />
           </Form.Item>
         ))}
       </div>
