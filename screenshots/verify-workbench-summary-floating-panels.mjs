@@ -94,6 +94,46 @@ const assertSelectedTopNav = async expected => {
   ), { timeout: STEP_TIMEOUT }, expected)
 }
 
+const clickTodoSource = async label => {
+  const clicked = await page.evaluate(value => {
+    const item = Array.from(document.querySelectorAll('[aria-label="待办来源"] .ant-segmented-item'))
+      .find(element => (element.textContent || '').trim() === value)
+    if (!item) return false
+    item.click()
+    return true
+  }, label)
+  if (!clicked) throw new Error(`missing todo source: ${label}`)
+}
+
+const readTodoMetric = async label => page.$eval(
+  `[aria-label^="${label} "]`,
+  element => Number((element.textContent || '').trim()),
+)
+
+const waitForTodoMetric = async (label, expected) => {
+  await page.waitForFunction((metricLabel, metricValue) => {
+    const element = Array.from(document.querySelectorAll('[aria-label]'))
+      .find(candidate => candidate.getAttribute('aria-label')?.startsWith(`${metricLabel} `))
+    return Number((element?.textContent || '').trim()) === metricValue
+  }, { timeout: STEP_TIMEOUT }, label, expected)
+}
+
+const openTodoRowWithKeyboard = async title => {
+  const selector = `tr[role="button"][aria-label="打开待办 ${title}"]`
+  await waitForVisible(selector)
+  await page.focus(selector)
+  await page.keyboard.press('Enter')
+}
+
+const fillReactInput = async (selector, value) => {
+  await waitForVisible(selector)
+  await page.$eval(selector, (element, nextValue) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(element, nextValue)
+    element.dispatchEvent(new Event('input', { bubbles: true }))
+  }, value)
+}
+
 const clickAria = async label => {
   const selector = ['筛选', '列设置'].includes(label)
     ? `button[aria-label="${label}"]`
@@ -287,6 +327,63 @@ try {
     await assertVisibleTabLabels(['待办中心', '工作跟踪'])
     await assertSelectedWorkbenchTab('待办中心')
     await assertAbsent('[aria-label="项目列表视图"]')
+    await assertSelector('[aria-label="分类待办中心"]')
+    await assertSelector('[aria-label="搜索待办"]')
+    await assertSelector('[aria-label="项目筛选"]')
+    await assertSelector('[aria-label="状态筛选"]')
+  })
+
+  await step('todo source switch and filters update the same metrics', async () => {
+    console.log('  action: read aggregate metric')
+    const allCount = await readTodoMetric('待办总数')
+    if (allCount < 2) throw new Error(`expected aggregated todo sources, got ${allCount}`)
+
+    console.log('  action: select transfer source')
+    await clickTodoSource('转维待办')
+    console.log('  action: wait transfer metric')
+    await waitForTodoMetric('待办总数', 1)
+    await assertText('转维资料录入')
+    await fillReactInput('[aria-label="搜索待办"]', '不存在的待办')
+    await waitForTodoMetric('待办总数', 0)
+    await assertText('暂无转维待办')
+    await clickExactText('body', 'button', '清空筛选')
+    await waitForTodoMetric('待办总数', allCount)
+
+    console.log('  action: select plan source')
+    await clickTodoSource('计划待办')
+    console.log('  action: read plan metric')
+    const planCount = await readTodoMetric('待办总数')
+    if (planCount < 2 || planCount >= allCount) {
+      throw new Error(`plan metric expected between 2 and ${allCount - 1}, got ${planCount}`)
+    }
+
+    console.log('  action: type todo search')
+    await fillReactInput('[aria-label="搜索待办"]', '概念')
+    console.log('  action: wait search metric')
+    await waitForTodoMetric('待办总数', 2)
+    console.log('  action: clear filters')
+    await clickExactText('body', 'button', '清空筛选')
+    await waitForTodoMetric('待办总数', allCount)
+  })
+
+  await step('keyboard-open a plan todo and return to todo origin', async () => {
+    await openTodoRowWithKeyboard('OP · 概念启动')
+    await assertText('返回工作台')
+    await assertText('一级计划')
+    await clickExactText('body', 'button', '返回工作台')
+    await assertSelectedTopNav('工作台')
+    await assertSelectedWorkbenchTab('待办中心')
+  })
+
+  await step('open transfer todo and return to todo origin', async () => {
+    await clickTodoSource('转维待办')
+    await waitForTodoMetric('待办总数', 1)
+    await openTodoRowWithKeyboard('转维资料录入')
+    await assertText('X6877-D8400_H991 - 资料录入')
+    await assertText('返回工作台')
+    await clickExactText('body', 'button', '返回工作台')
+    await assertSelectedTopNav('工作台')
+    await assertSelectedWorkbenchTab('待办中心')
   })
 
   await step('navigate to dedicated project list', async () => {
@@ -431,6 +528,19 @@ try {
     await assertVisibleTabLabels(['待办中心', '工作跟踪'])
     await assertSelectedWorkbenchTab('工作跟踪')
     await assertAbsent('[aria-label="项目列表视图"]')
+  })
+
+  await step('todo center wraps controls below 1100px', async () => {
+    await clickExactText('[role="tablist"]', '[role="tab"]', '待办中心')
+    await page.setViewport({ width: 1000, height: 900 })
+    await page.waitForFunction(() => {
+      const sourceRow = document.querySelector('.pms-todo-center__source-row')
+      const filters = document.querySelector('.pms-todo-center__filters')
+      if (!sourceRow || !filters) return false
+      return getComputedStyle(sourceRow).flexDirection === 'column'
+        && getComputedStyle(filters).gridTemplateColumns.split(' ').length === 3
+    }, { timeout: STEP_TIMEOUT })
+    await page.setViewport({ width: 1440, height: 1000 })
   })
 
   console.log(`PASS workbench summary floating panels (${BASE_URL})`)
