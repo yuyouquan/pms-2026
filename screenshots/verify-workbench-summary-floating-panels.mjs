@@ -45,10 +45,9 @@ const step = async (name, action) => {
 }
 
 const assertText = async text => {
-  const found = await page.evaluate(value => (
+  await page.waitForFunction(value => (
     (document.body?.innerText || '').includes(value)
-  ), text)
-  if (!found) throw new Error(`missing text: ${text}`)
+  ), { timeout: STEP_TIMEOUT }, text)
 }
 
 const assertSelector = async selector => {
@@ -65,6 +64,31 @@ const assertNoDrawer = async () => {
   if (count !== 0) throw new Error(`expected no .ant-drawer, found ${count}`)
 }
 
+const assertVisibleTabLabels = async expected => {
+  await page.waitForFunction(labels => {
+    const visibleLabels = Array.from(document.querySelectorAll('[role="tab"]'))
+      .filter(element => {
+        const rect = element.getBoundingClientRect()
+        return rect.width > 0 && rect.height > 0
+      })
+      .map(element => (element.textContent || '').trim())
+    return JSON.stringify(visibleLabels) === JSON.stringify(labels)
+  }, { timeout: STEP_TIMEOUT }, expected)
+}
+
+const assertSelectedWorkbenchTab = async expected => {
+  await page.waitForFunction(value => (
+    (document.querySelector('[role="tab"][aria-selected="true"]')?.textContent || '').trim()
+      === value
+  ), { timeout: STEP_TIMEOUT }, expected)
+}
+
+const assertSelectedTopNav = async expected => {
+  await page.waitForFunction(value => (
+    (document.querySelector('.ant-menu-item-selected')?.textContent || '').trim() === value
+  ), { timeout: STEP_TIMEOUT }, expected)
+}
+
 const clickAria = async label => {
   const selector = ['筛选', '列设置'].includes(label)
     ? `button[aria-label="${label}"]`
@@ -79,7 +103,7 @@ const clickAria = async label => {
     control.focus()
   })
   await page.keyboard.press(
-    ['列表视图', '筛选', '列设置'].includes(label) ? 'Space' : 'Enter',
+    ['卡片视图', '列表视图', '筛选', '列设置'].includes(label) ? 'Space' : 'Enter',
   )
 }
 
@@ -100,6 +124,45 @@ const clickExactText = async (scope, selector, text) => {
     return
   }
   throw new Error(`unable to click exact text "${text}" in ${scope}`)
+}
+
+const clickVisibleTextCard = async (scope, text) => {
+  const clicked = await page.evaluate((scopeSelector, value) => {
+    const root = document.querySelector(scopeSelector)
+    if (!root) return false
+    const candidates = Array.from(root.querySelectorAll('*'))
+    for (const candidate of candidates) {
+      const rect = candidate.getBoundingClientRect()
+      if (rect.width === 0 || rect.height === 0) continue
+      if ((candidate.textContent || '').trim() !== value) continue
+      let clickable = candidate
+      while (clickable && clickable !== root) {
+        if (window.getComputedStyle(clickable).cursor === 'pointer') {
+          clickable.click()
+          return true
+        }
+        clickable = clickable.parentElement
+      }
+    }
+    return false
+  }, scope, text)
+  if (!clicked) throw new Error(`unable to click card containing exact text "${text}"`)
+}
+
+const clickExactButtonIfVisible = async text => {
+  const buttons = await page.$$('button')
+  for (const button of buttons) {
+    const matches = await button.evaluate((element, value) => {
+      const rect = element.getBoundingClientRect()
+      return rect.width > 0
+        && rect.height > 0
+        && (element.textContent || '').trim() === value
+    }, text)
+    if (!matches) continue
+    await button.click()
+    return true
+  }
+  return false
 }
 
 const clickCategory = async label => {
@@ -189,9 +252,18 @@ try {
     }
   })
 
-  await step('open workbench', async () => {
+  await step('open default workbench tabs', async () => {
     await page.goto(BASE_URL, { waitUntil: 'networkidle0', timeout: 30_000 })
-    await assertText('项目列表')
+    await assertSelectedTopNav('工作台')
+    await assertVisibleTabLabels(['待办中心', '工作跟踪'])
+    await assertSelectedWorkbenchTab('待办中心')
+    await assertAbsent('[aria-label="项目列表视图"]')
+  })
+
+  await step('navigate to dedicated project list', async () => {
+    await clickExactText('body', '[role="menuitem"]', '项目列表')
+    await assertSelectedTopNav('项目列表')
+    await assertSelector('[aria-label="项目列表视图"]')
   })
 
   await step('switch to list view and show category prompt', async () => {
@@ -281,6 +353,37 @@ try {
     await assertSelector('[aria-label="快捷筛选-版本类型"]')
     await assertSelector('[aria-label="快捷筛选-tOS 版本"]')
     await assertAbsent('[aria-label="快捷筛选-品牌"]')
+  })
+
+  await step('return from project space to project list origin', async () => {
+    console.log('  action: switch back to machine category and card view')
+    await clickCategory('整机产品项目')
+    await clickAria('卡片视图')
+    console.log('  action: enter project space from a project card')
+    await clickVisibleTextCard('body', 'X6877-D8400_H991')
+    console.log('  action: assert project-list return label')
+    await assertText('返回项目列表')
+    console.log('  action: return to project list')
+    await clickExactText('body', 'button', '返回项目列表')
+    console.log('  action: assert project-list origin restored')
+    await assertSelectedTopNav('项目列表')
+    await assertSelector('[aria-label="项目列表视图"]')
+  })
+
+  await step('return from todo preserves selected todo tab', async () => {
+    await clickExactText('body', '[role="menuitem"]', '工作台')
+    await assertSelectedTopNav('工作台')
+    await assertVisibleTabLabels(['待办中心', '工作跟踪'])
+    await assertSelectedWorkbenchTab('待办中心')
+    await clickVisibleTextCard('.ant-tabs-tabpane-active', 'X6877-D8400_H991')
+    await assertText('返回工作台')
+    await clickExactText('body', 'button', '返回工作台')
+    await wait(200)
+    await clickExactButtonIfVisible('确认离开')
+    await assertSelectedTopNav('工作台')
+    await assertVisibleTabLabels(['待办中心', '工作跟踪'])
+    await assertSelectedWorkbenchTab('待办中心')
+    await assertAbsent('[aria-label="项目列表视图"]')
   })
 
   console.log(`PASS workbench summary floating panels (${BASE_URL})`)
