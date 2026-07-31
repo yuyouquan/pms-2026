@@ -6,6 +6,7 @@ const root = projectRoot(import.meta.url)
 const rules = loadTypeScriptModule(root, 'src/lib/machineTosVersions.ts')
 const projectInfoRules = loadTypeScriptModule(root, 'src/lib/projectInfoRules.ts')
 const projectStore = loadTypeScriptModule(root, 'src/stores/project.ts')
+const roadmapStore = loadTypeScriptModule(root, 'src/stores/roadmap.ts')
 
 const newMachine = {
   id: 'new',
@@ -182,8 +183,9 @@ const deleteLegacy17 = {
   currentTosVersion: '17.10.0',
 }
 
-const deleteFixture = (projects, projectId) => {
-  projectStore.useProjectStore.setState({ projects, selectedProject: null })
+const deleteFixture = (projects, projectId, selectedProject = null) => {
+  projectStore.useProjectStore.setState({ projects, selectedProject })
+  const auditLogs = roadmapStore.useRoadmapStore.getState().changeLogs
   let projectStoreNotifications = 0
   const unsubscribe = projectStore.useProjectStore.subscribe(() => {
     projectStoreNotifications += 1
@@ -194,6 +196,9 @@ const deleteFixture = (projects, projectId) => {
     deleted,
     projectStoreNotifications,
     projects: projectStore.useProjectStore.getState().projects,
+    selectedProject: projectStore.useProjectStore.getState().selectedProject,
+    auditLogsBefore: auditLogs,
+    auditLogsAfter: roadmapStore.useRoadmapStore.getState().changeLogs,
   }
 }
 
@@ -251,6 +256,34 @@ const unknownDelete = deleteFixture(beforeUnknownDelete, 'missing-project')
 assert.equal(unknownDelete.deleted, false, 'unknown project deletion still returns false')
 assert.equal(unknownDelete.projects, beforeUnknownDelete, 'unknown project deletion keeps the same project collection')
 assert.equal(unknownDelete.projectStoreNotifications, 0, 'unknown project deletion does not emit a project-store transaction')
+
+const auditedLegacyToDelete = {
+  ...deleteLegacy17,
+  id: 'delete-audited-legacy',
+  secondaryCategory: '整机-手机',
+  projectCode: 'X6870',
+  androidVersion: 'Android 18',
+  brand: 'TECNO',
+  startRam: '8GB',
+  versionType: 'Full',
+  developMode: '自研',
+}
+const unknownRemainingLegacy = {
+  ...deleteLegacy15,
+  id: 'remaining-unknown-legacy',
+  currentTosVersion: 'future-current',
+}
+const invalidHistoryProjects = [deleteNew, auditedLegacyToDelete, unknownRemainingLegacy]
+const invalidHistoryDelete = deleteFixture(
+  invalidHistoryProjects,
+  auditedLegacyToDelete.id,
+  deleteNew,
+)
+assert.equal(invalidHistoryDelete.deleted, false, 'legacy deletion fails when required family recompute contains unknown history')
+assert.equal(invalidHistoryDelete.projects, invalidHistoryProjects, 'failed legacy deletion preserves the original project collection')
+assert.equal(invalidHistoryDelete.selectedProject, deleteNew, 'failed legacy deletion preserves selected project identity')
+assert.equal(invalidHistoryDelete.auditLogsAfter, invalidHistoryDelete.auditLogsBefore, 'failed legacy deletion writes no audit log')
+assert.equal(invalidHistoryDelete.projectStoreNotifications, 0, 'failed legacy deletion emits no project-store transaction')
 
 const modalSource = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 const addSource = readSource(root, 'src/components/workspace/AddProjectModal.tsx')
