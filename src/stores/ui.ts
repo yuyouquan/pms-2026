@@ -1,10 +1,26 @@
 import { create } from 'zustand'
 import { PROJECT_CATEGORY_MACHINE } from '@/constants/projectTypes'
 
+export type MainModule =
+  | 'workbench'
+  | 'projectList'
+  | 'roadmap'
+  | 'hrPipeline'
+  | 'config'
+  | 'projectSpace'
+
+export type WorkbenchTab = 'todo' | 'workTracker'
+
+export type ProjectSpaceOrigin = {
+  module: Exclude<MainModule, 'projectSpace'>
+  workbenchTab?: WorkbenchTab
+} | null
+
 export interface UiState {
   // Navigation
-  activeModule: string
-  workspaceTab: 'projects' | 'workTracker'
+  activeModule: MainModule
+  workbenchTab: WorkbenchTab
+  projectSpaceOrigin: ProjectSpaceOrigin
   configTab: string
   sidebarCollapsed: boolean
   selectedProjectType: string
@@ -25,8 +41,10 @@ export interface UiState {
 }
 
 export interface UiActions {
-  setActiveModule: (v: string) => void
-  setWorkspaceTab: (v: 'projects' | 'workTracker') => void
+  setActiveModule: (v: MainModule) => void
+  setWorkbenchTab: (v: WorkbenchTab) => void
+  enterProjectSpace: (origin: NonNullable<ProjectSpaceOrigin>) => void
+  returnFromProjectSpace: () => void
   setConfigTab: (v: string) => void
   setSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
   setSelectedProjectType: (v: string) => void
@@ -51,8 +69,9 @@ export interface UiActions {
 
 export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   // Navigation
-  activeModule: 'projects',
-  workspaceTab: 'projects',
+  activeModule: 'workbench',
+  workbenchTab: 'todo',
+  projectSpaceOrigin: null,
   configTab: 'plan',
   sidebarCollapsed: false,
   selectedProjectType: PROJECT_CATEGORY_MACHINE,
@@ -72,8 +91,41 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   projectSearchText: '',
 
   // Setters
-  setActiveModule: (v) => set({ activeModule: v }),
-  setWorkspaceTab: (v) => set({ workspaceTab: v }),
+  setActiveModule: (v) => {
+    const { activeModule, workbenchTab, projectSpaceOrigin } = get()
+    // Compatibility for existing callers that still navigate directly. New
+    // project-space entry points should call enterProjectSpace explicitly.
+    if (v === 'projectSpace' && activeModule !== 'projectSpace' && !projectSpaceOrigin) {
+      set({
+        activeModule: v,
+        projectSpaceOrigin: {
+          module: activeModule,
+          ...(activeModule === 'workbench' ? { workbenchTab } : {}),
+        },
+      })
+      return
+    }
+    set({ activeModule: v })
+  },
+  setWorkbenchTab: (v) => set({ workbenchTab: v }),
+  enterProjectSpace: (origin) => set({
+    activeModule: 'projectSpace',
+    projectSpaceOrigin: origin.module === 'workbench'
+      ? { module: 'workbench', workbenchTab: origin.workbenchTab ?? get().workbenchTab }
+      : { module: origin.module },
+  }),
+  returnFromProjectSpace: () => {
+    const projectSpaceOrigin = get().projectSpaceOrigin ?? {
+      module: 'workbench' as const,
+      workbenchTab: 'todo' as const,
+    }
+    const { module, workbenchTab } = projectSpaceOrigin
+    set({
+      activeModule: module,
+      workbenchTab: module === 'workbench' ? (workbenchTab ?? 'todo') : get().workbenchTab,
+      projectSpaceOrigin: null,
+    })
+  },
   setConfigTab: (v) => set({ configTab: v }),
   setSidebarCollapsed: (v) => set((s) => ({ sidebarCollapsed: typeof v === 'function' ? v(s.sidebarCollapsed) : v })),
   setSelectedProjectType: (v) => set({ selectedProjectType: v }),

@@ -321,7 +321,7 @@ registerAssertion('summary rows map project info and real template task dates', 
 })
 
 registerAssertion('workbench summary keeps option projects and plan tasks independent from row filters', () => {
-  const workspacePath = path.join(root, 'src/containers/WorkspaceContainer.tsx')
+  const workspacePath = path.join(root, 'src/containers/ProjectListContainer.tsx')
   const tablePath = path.join(root, 'src/components/project-summary/ProjectSummaryTable.tsx')
   const workspaceSource = fs.readFileSync(workspacePath, 'utf8')
   const tableSource = fs.readFileSync(tablePath, 'utf8')

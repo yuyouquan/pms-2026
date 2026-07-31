@@ -9,7 +9,8 @@ import { usePlanStore } from '@/stores/plan'
 import RoadmapView from '@/components/roadmap/RoadmapView'
 import { parseProjectViewShare } from '@/components/roadmap/utils'
 import { MainHeader } from '@/containers/AppShell'
-import WorkspaceContainer from '@/containers/WorkspaceContainer'
+import WorkbenchContainer from '@/containers/WorkbenchContainer'
+import ProjectListContainer from '@/containers/ProjectListContainer'
 import ProjectSpaceContainer from '@/containers/ProjectSpaceContainer'
 import ConfigContainer from '@/containers/ConfigContainer'
 import { isMachineProjectType } from '@/constants/projectTypes'
@@ -42,6 +43,7 @@ export default function Home() {
 
   const {
     setActiveModule,
+    enterProjectSpace,
     setProjectSpaceModule,
   } = useUiStore()
 
@@ -56,7 +58,7 @@ export default function Home() {
     const project = projects.find(p => p.id === projectId)
     if (!project) return
     setSelectedProject(project)
-    setActiveModule('projectSpace')
+    enterProjectSpace({ module: 'roadmap' })
     setProjectSpaceModule('plan')
     setProjectPlanLevel('level1')
     if (market && isMachineProjectType(project.type)) {
@@ -78,8 +80,11 @@ export default function Home() {
             <MainHeader />
 
             <div style={{ padding: 24 }}>
-              {/* Workspace (projects + work tracker) */}
-              {activeModule === 'projects' && <WorkspaceContainer />}
+              {/* Workbench (todo center + work tracker) */}
+              {activeModule === 'workbench' && <WorkbenchContainer />}
+
+              {/* Dedicated project list */}
+              {activeModule === 'projectList' && <ProjectListContainer />}
 
               {/* Roadmap */}
               {activeModule === 'roadmap' && (

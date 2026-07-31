@@ -4,8 +4,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const root = process.cwd()
-const workspacePath = path.join(root, 'src/containers/WorkspaceContainer.tsx')
-const source = fs.readFileSync(workspacePath, 'utf8')
+const projectListPath = path.join(root, 'src/containers/ProjectListContainer.tsx')
+const source = fs.readFileSync(projectListPath, 'utf8')
 
 assert.match(source, /ProjectSummaryTable/)
 assert.match(source, /getWorkbenchListState/)
