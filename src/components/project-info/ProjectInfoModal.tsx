@@ -48,6 +48,7 @@ import {
 } from '@/lib/projectCreationDraft'
 import type { ProjectInfoValues } from '@/types/app'
 import { TECHNICAL_DELIVERABLE_FIELDS } from '@/constants/technicalProject'
+import { useProjectStore } from '@/stores/project'
 
 type ProjectInfoFormState = ProjectInfoValues & {
   bid?: string
@@ -128,6 +129,8 @@ export default function ProjectInfoModal({
   fieldOptionOverrides,
 }: ProjectInfoModalProps) {
   const [form] = Form.useForm<ProjectInfoFormState>()
+  const syncTechnicalTeamPermissionMembers = useProjectStore(state => state.syncTechnicalTeamPermissionMembers)
+  const syncTosTeamPermissionMembers = useProjectStore(state => state.syncTosTeamPermissionMembers)
   const [submitting, setSubmitting] = useState(false)
   const [activeGroups, setActiveGroups] = useState<string[]>([])
   const [aggregateWarnings, setAggregateWarnings] = useState<string[]>([])
@@ -802,6 +805,13 @@ export default function ProjectInfoModal({
         sourceValues: values.bid ? fetchByBid(values.bid) : {},
       })
       if (submitResult === false) return
+      if (mode === 'edit' && project?.id) {
+        if (normalizedProjectType === PROJECT_CATEGORY_TECH) {
+          syncTechnicalTeamPermissionMembers(project.id)
+        } else if (normalizedProjectType === PROJECT_TYPE_TOS_VERSION) {
+          syncTosTeamPermissionMembers(project.id)
+        }
+      }
       if (mode === 'create' && submitSession) {
         let draftClearFailed = false
         try {

@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Card, Tabs, Table, Button, Space, Input, Select, Tag, Modal, Form, Popconfirm, Empty, message } from 'antd'
+import { Card, Tabs, Table, Button, Space, Input, Select, Tag, Modal, Form, Popconfirm, Empty, Tooltip, message } from 'antd'
 import { TeamOutlined, SafetyCertificateOutlined, PlusOutlined, CheckSquareFilled, CloseOutlined } from '@ant-design/icons'
 import {
   ALL_USERS,
@@ -43,6 +43,9 @@ export interface PermissionConfigProps {
   setEditingRoleName: (v: string | null) => void
   editRoleNameValue: string
   setEditRoleNameValue: (v: string) => void
+  projectType?: string
+  onRoleMembersChange?: (roleName: string, members: string[]) => void
+  syncTosTeamPermissionMembers?: (roleName: string, members: string[]) => void
 }
 
 export interface GlobalPermissionConfigProps {
@@ -83,6 +86,9 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
   setEditingRoleName,
   editRoleNameValue,
   setEditRoleNameValue,
+  projectType,
+  onRoleMembersChange,
+  syncTosTeamPermissionMembers,
 }) => {
   const handleAddRole = () => {
     const name = newRoleName.trim()
@@ -111,6 +117,14 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
     message.success('角色名称已修改')
   }
   const handleMembersChange = (roleName: string, members: string[]) => {
+    if (projectType === 'tOS版本项目' && roles.find(role => role.name === roleName)?.isFixed && syncTosTeamPermissionMembers) {
+      syncTosTeamPermissionMembers(roleName, members)
+      return
+    }
+    if (onRoleMembersChange) {
+      onRoleMembersChange(roleName, members)
+      return
+    }
     setRoles(roles.map(r => r.name === roleName ? { ...r, members } : r))
   }
   const handlePermToggle = (roleName: string, permKey: string) => {
@@ -137,7 +151,7 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
       {permConfigTab === 'roles' && (
         <div>
           <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 14, color: '#4b5563' }}>共 {roles.length} 个角色（{FIXED_ROLES.length} 个固定角色）</span>
+            <span style={{ fontSize: 14, color: '#4b5563' }}>共 {roles.length} 个角色（{roles.filter(role => role.isFixed).length} 个固定角色）</span>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowAddRoleModal(true)}>新增角色</Button>
           </div>
           <Table
@@ -168,17 +182,24 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
               },
               {
                 title: '人员配置', dataIndex: 'members',
-                render: (_: any, record: any) => (
-                  <Select
-                    mode="multiple"
-                    value={record.members}
-                    onChange={(val: string[]) => handleMembersChange(record.name, val)}
-                    style={{ width: '100%', minWidth: 300 }}
-                    placeholder="请选择人员"
-                    maxTagCount={5}
-                    options={ALL_USERS.map(u => ({ label: u, value: u }))}
-                  />
-                )
+                render: (_: any, record: any) => {
+                  const isTechnicalFixedRole = projectType === '技术项目' && record.isFixed
+                  const memberSelect = (
+                    <Select
+                      mode="multiple"
+                      value={record.members}
+                      disabled={isTechnicalFixedRole}
+                      onChange={(val: string[]) => handleMembersChange(record.name, val)}
+                      style={{ width: '100%', minWidth: 300 }}
+                      placeholder="请选择人员"
+                      maxTagCount={5}
+                      options={ALL_USERS.map(u => ({ label: u, value: u }))}
+                    />
+                  )
+                  return isTechnicalFixedRole
+                    ? <Tooltip title="请在项目团队信息中维护"><span>{memberSelect}</span></Tooltip>
+                    : memberSelect
+                }
               },
               {
                 title: '操作', width: 120,

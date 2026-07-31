@@ -187,7 +187,9 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       return false
     }
     setProjectMember(newId, derivedResponsiblePersons)
-    initProjectPermissions(newId, { '系统管理员': derivedResponsiblePersons })
+    if (projectType !== PROJECT_CATEGORY_TECH && projectType !== PROJECT_TYPE_TOS_VERSION) {
+      initProjectPermissions(newId, { '系统管理员': derivedResponsiblePersons })
+    }
     const createdProject = useProjectStore.getState().projects.find(project => project.id === newId)
     if (createdProject) activateProject(createdProject as unknown as Parameters<typeof activateProject>[0])
     return true

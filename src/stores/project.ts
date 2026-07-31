@@ -27,6 +27,13 @@ import type {
   RoadmapFieldChange,
   RoadmapProjectRow,
 } from '@/types/roadmap'
+import { buildProjectInfoValues, mergeProjectInfoValues } from '@/lib/projectInfoValues'
+import {
+  TECHNICAL_TEAM_PERMISSION_MAPPING,
+  TOS_TEAM_PERMISSION_MAPPING,
+  usePermissionStore,
+} from '@/stores/permission'
+import { mergeResponsiblePersonsIntoVisibleMembers } from '@/lib/projectResponsibility'
 
 // Default login user (mock)
 export const DEFAULT_LOGIN_USER = '张三'
@@ -67,6 +74,56 @@ type ProjectPatch = Partial<Omit<ProjectItem, 'type' | 'secondaryCategory'>> & {
 }
 type ProjectUpdate = ProjectPatch | ((project: Project) => Project)
 type PersistedProjectState = { projects: Project[] }
+
+export function synchronizeTechnicalRoleMembers(
+  existing: Record<string, string[]>,
+  incoming: Record<string, string[]>,
+): Record<string, string[]> {
+  const next = { ...existing }
+  Object.keys(TECHNICAL_TEAM_PERMISSION_MAPPING).forEach(role => {
+    next[role] = [...(incoming[role] || [])]
+  })
+  return next
+}
+
+type TosRoleSyncFixtureState = {
+  teamMembers?: string[]
+  permissionMembers?: string[]
+  responsiblePersons?: string[]
+}
+
+export function synchronizeTosRoleMembers(
+  state: TosRoleSyncFixtureState,
+  update: { source: 'team' | 'permission'; members: string[]; role: string },
+): TosRoleSyncFixtureState {
+  const members = Array.from(new Set(update.members.map(member => member.trim()).filter(Boolean)))
+  return {
+    ...state,
+    teamMembers: members,
+    permissionMembers: members,
+    ...(update.role === '版本项目经理' ? { responsiblePersons: members } : {}),
+  }
+}
+
+function applyTosRoleMembersToProject(project: Project, role: string, members: string[]): Project | null {
+  const field = TOS_TEAM_PERMISSION_MAPPING[role as keyof typeof TOS_TEAM_PERMISSION_MAPPING]
+  if (!field || project.type !== PROJECT_TYPE_TOS_VERSION) return null
+  const normalizedMembers = Array.from(new Set(members.map(member => member.trim()).filter(Boolean)))
+  const teamValues = buildProjectInfoValues(
+    project as any,
+    Object.values(TOS_TEAM_PERMISSION_MAPPING),
+  )
+  const merged = mergeProjectInfoValues(project as any, {
+    ...teamValues,
+    [field]: normalizedMembers,
+  }) as Project
+  if (role !== '版本项目经理') return merged
+  return {
+    ...merged,
+    leader: normalizedMembers[0] || '',
+    responsiblePersons: normalizedMembers,
+  }
+}
 
 export interface ProjectMutationOptions {
   allowedFirstSaleTosValues?: readonly string[]
@@ -189,6 +246,8 @@ export interface ProjectActions {
   addProject: (newProject: Project, actor?: string, options?: ProjectMutationOptions) => boolean
   updateProject: (projectId: string, update: ProjectUpdate, actor?: string, options?: ProjectMutationOptions) => Project | null
   deleteProject: (projectId: string, actor?: string) => boolean
+  syncTechnicalTeamPermissionMembers: (projectId: string) => boolean
+  syncTosTeamPermissionMembers: (projectId: string, role?: string, members?: string[]) => boolean
 }
 
 function resolveAllowedFirstSaleTosValues(options?: ProjectMutationOptions): string[] {
@@ -484,6 +543,10 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       } else {
         set(state => ({ projects: [...state.projects, projectToAdd] }))
       }
+      if (projectToAdd.type === '技术项目' || projectToAdd.type === PROJECT_TYPE_TOS_VERSION) {
+        const savedProject = get().projects.find(project => project.id === projectToAdd.id)
+        if (savedProject) usePermissionStore.getState().syncProjectTeamPermissionMembers(savedProject)
+      }
       recordNormalProjectAudit('create', null, projectToAdd, actor?.trim() || get().currentLoginUser.trim() || '系统')
       return true
     },
@@ -530,6 +593,10 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
           selectedProject: state.selectedProject?.id === projectId ? projectToSave : state.selectedProject,
         }))
       }
+      if (projectToSave.type === '技术项目' || projectToSave.type === PROJECT_TYPE_TOS_VERSION) {
+        const savedProject = get().projects.find(project => project.id === projectId)
+        if (savedProject) usePermissionStore.getState().syncProjectTeamPermissionMembers(savedProject)
+      }
       recordNormalProjectAudit('update', existing, projectToSave, actor?.trim() || get().currentLoginUser.trim() || '系统')
       return projectToSave
     },
@@ -569,6 +636,37 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
             : state.selectedProject,
       }))
       recordNormalProjectAudit('delete', existing, null, actor?.trim() || get().currentLoginUser.trim() || '系统')
+      return true
+    },
+    syncTechnicalTeamPermissionMembers: (projectId) => {
+      const project = get().projects.find(item => item.id === projectId)
+      if (!project || project.type !== '技术项目') return false
+      usePermissionStore.getState().syncProjectTeamPermissionMembers(project)
+      return true
+    },
+    syncTosTeamPermissionMembers: (projectId, role, members) => {
+      const project = get().projects.find(item => item.id === projectId)
+      if (!project || project.type !== PROJECT_TYPE_TOS_VERSION) return false
+      let synchronizedProject = project
+      if (role) {
+        const nextProject = applyTosRoleMembersToProject(project, role, members || [])
+        if (!nextProject) return false
+        synchronizedProject = nextProject
+        set(state => ({
+          projects: state.projects.map(item => item.id === projectId ? synchronizedProject : item),
+          selectedProject: state.selectedProject?.id === projectId ? synchronizedProject : state.selectedProject,
+          projectMemberMap: role === '版本项目经理'
+            ? {
+                ...state.projectMemberMap,
+                [projectId]: mergeResponsiblePersonsIntoVisibleMembers(
+                  state.projectMemberMap[projectId] || [],
+                  synchronizedProject.responsiblePersons || [],
+                ),
+              }
+            : state.projectMemberMap,
+        }))
+      }
+      usePermissionStore.getState().syncProjectTeamPermissionMembers(synchronizedProject)
       return true
     },
   }),

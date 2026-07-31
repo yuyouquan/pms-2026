@@ -2,6 +2,78 @@ import { create } from 'zustand'
 import { PROJECT_PERMISSION_ITEMS, FIXED_ROLES, getProjectPermissionKeys } from '@/constants/permissions'
 import { initialProjects } from '@/data/projects'
 import { getProjectResponsiblePersons } from '@/lib/projectResponsibility'
+import { PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
+import { getProjectInfoValue } from '@/lib/projectInfoValues'
+
+export const TECHNICAL_TEAM_PERMISSION_MAPPING = {
+  '技术项目负责人': 'technicalLead',
+  '技术项目经理': 'technicalProjectManager',
+  '测试代表': 'testRepresentative',
+  '质量代表': 'qualityRepresentative',
+  '产品代表': 'productRepresentative',
+  '标准化代表': 'standardizationRepresentative',
+} as const
+
+export const TOS_TEAM_PERMISSION_MAPPING = {
+  '版本项目经理': 'tosVersionProjectManager',
+  '规划代表': 'tosPlanningRepresentative',
+  'SE': 'tosSe',
+  '测试代表': 'tosTestRepresentative',
+  'SQA': 'tosSqa',
+  'CMO': 'tosCmo',
+  'UX': 'tosUx',
+  '稳定性代表': 'tosStabilityRepresentative',
+  '性能代表': 'tosPerformanceRepresentative',
+  '功耗代表': 'tosPowerRepresentative',
+  '系统应用开发代表': 'tosSystemAppDevRepresentative',
+  '底软通信开发代表': 'tosBasebandDevRepresentative',
+  '集成维护开发代表': 'tosIntegrationDevRepresentative',
+  '软件架设与技术规划部开发代表': 'tosArchitectureDevRepresentative',
+  '创新产品开发代表': 'tosInnovationDevRepresentative',
+  'TEX AI开发代表': 'tosTexAiDevRepresentative',
+  '影像开发代表': 'tosImagingDevRepresentative',
+  '预装管理开发代表': 'tosPreinstallRepresentative',
+  '研发战略生态合作部代表': 'tosEcosystemRepresentative',
+} as const
+
+export const TECHNICAL_FIXED_ROLES = Object.keys(TECHNICAL_TEAM_PERMISSION_MAPPING)
+export const TOS_FIXED_ROLES = Object.keys(TOS_TEAM_PERMISSION_MAPPING)
+
+type RoleProject = {
+  id: string
+  type: string
+  fieldValues?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+const normalizeRoleMembers = (value: unknown): string[] => {
+  const values = Array.isArray(value) ? value : typeof value === 'string' ? [value] : []
+  return Array.from(new Set(values.map(item => String(item).trim()).filter(Boolean)))
+}
+
+const getProjectTeamMembers = (project: RoleProject, field: string): string[] => {
+  const members = normalizeRoleMembers(getProjectInfoValue(project as any, field))
+  if (members.length || field !== 'technicalLead') return members
+  return normalizeRoleMembers(project.responsiblePersons ?? project.leader)
+}
+
+export const getFixedProjectRoles = (project: RoleProject): Role[] => {
+  const mapping = project.type === PROJECT_CATEGORY_TECH
+    ? TECHNICAL_TEAM_PERMISSION_MAPPING
+    : project.type === PROJECT_TYPE_TOS_VERSION
+      ? TOS_TEAM_PERMISSION_MAPPING
+      : null
+  if (!mapping) return buildDefaultRoles()
+  return Object.entries(mapping).map(([name, field]) => ({
+    name,
+    members: getProjectTeamMembers(project, field),
+    isFixed: true,
+  }))
+}
+
+export const resolvePermissionProjectId = (projectId: string, parentProjectId?: string): string => (
+  parentProjectId?.trim() || projectId
+)
 
 // ─── Defaults shared by every project's initial role-permission slot ─
 
@@ -101,7 +173,7 @@ const DEFAULT_ROLE_MEMBERS: Record<string, string[]> = {
   '其他': [],
 }
 
-interface Role {
+export interface Role {
   name: string
   members: string[]
   isFixed: boolean
@@ -126,6 +198,22 @@ function buildDefaultRolePermissions(): Record<string, Record<string, boolean>> 
   return init
 }
 
+function buildPermissionsForRoles(roles: readonly Role[]): Record<string, Record<string, boolean>> {
+  return Object.fromEntries(roles.map(role => {
+    const managerRole = role.name === '技术项目负责人' || role.name === '版本项目经理'
+    const source = managerRole
+      ? PROJECT_PERMISSION_PRESETS['项目经理']
+      : PROJECT_PERMISSION_PRESETS[role.name] || ['basicInfo:查看']
+    return [role.name, Object.fromEntries(expandProjectPermissionKeys(source).map(key => [key, true]))]
+  }))
+}
+
+function mergeProjectRoles(project: RoleProject, existing: readonly Role[] = []): Role[] {
+  const fixed = getFixedProjectRoles(project)
+  if (project.type !== PROJECT_CATEGORY_TECH && project.type !== PROJECT_TYPE_TOS_VERSION) return fixed
+  return [...fixed, ...existing.filter(role => !role.isFixed)]
+}
+
 function buildInitialPerProject(): {
   rolesByProject: Record<string, Role[]>,
   rolePermissionsByProject: Record<string, Record<string, Record<string, boolean>>>,
@@ -134,12 +222,17 @@ function buildInitialPerProject(): {
   const rolePermissionsByProject: Record<string, Record<string, Record<string, boolean>>> = {}
   initialProjects.forEach(p => {
     const responsiblePersons = getProjectResponsiblePersons(p)
-    rolesByProject[p.id] = buildDefaultRoles().map(role => (
-      role.name === '系统管理员'
-        ? { ...role, members: responsiblePersons }
-        : role
-    ))
-    rolePermissionsByProject[p.id] = buildDefaultRolePermissions()
+    const specialRoles = p.type === PROJECT_CATEGORY_TECH || p.type === PROJECT_TYPE_TOS_VERSION
+    rolesByProject[p.id] = specialRoles
+      ? mergeProjectRoles(p as unknown as RoleProject)
+      : buildDefaultRoles().map(role => (
+          role.name === '系统管理员'
+            ? { ...role, members: responsiblePersons }
+            : role
+        ))
+    rolePermissionsByProject[p.id] = specialRoles
+      ? buildPermissionsForRoles(rolesByProject[p.id])
+      : buildDefaultRolePermissions()
   })
   return { rolesByProject, rolePermissionsByProject }
 }
@@ -177,6 +270,7 @@ export interface PermissionActions {
   setRolesForProject: (projectId: string, v: Role[] | ((prev: Role[]) => Role[])) => void
   setRolePermissionsForProject: (projectId: string, v: Record<string, Record<string, boolean>> | ((prev: Record<string, Record<string, boolean>>) => Record<string, Record<string, boolean>>)) => void
   initProjectPermissions: (projectId: string, overrides?: Partial<Record<string, string[]>>) => void
+  syncProjectTeamPermissionMembers: (project: RoleProject) => void
 
   // UI state setters
   setShowAddRoleModal: (v: boolean) => void
@@ -243,6 +337,19 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
     return {
       rolesByProject: { ...s.rolesByProject, [projectId]: roles },
       rolePermissionsByProject: { ...s.rolePermissionsByProject, [projectId]: perms },
+    }
+  }),
+  syncProjectTeamPermissionMembers: (project) => set((s) => {
+    const previousRoles = s.rolesByProject[project.id] ?? []
+    const roles = mergeProjectRoles(project, previousRoles)
+    const previousPermissions = s.rolePermissionsByProject[project.id] ?? {}
+    const rolePermissions = {
+      ...buildPermissionsForRoles(roles),
+      ...previousPermissions,
+    }
+    return {
+      rolesByProject: { ...s.rolesByProject, [project.id]: roles },
+      rolePermissionsByProject: { ...s.rolePermissionsByProject, [project.id]: rolePermissions },
     }
   }),
 

@@ -368,7 +368,7 @@ export default function ProjectSpaceContainer() {
     marketConfigsByProjectId, setMarketConfigForProject,
     selectedTosTypeTab, setSelectedTosTypeTab,
     tosTypeConfigsByProjectId, setTosTypeConfigForProject,
-    projectMemberMap, setProjectMember, updateProject,
+    projectMemberMap, setProjectMember, updateProject, syncTosTeamPermissionMembers,
   } = proj
   const technicalToday = useMemo(() => new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -446,6 +446,16 @@ export default function ProjectSpaceContainer() {
   const setRolePermissions = (v: Parameters<typeof perm.setRolePermissionsForProject>[1]) => {
     if (!_permProjectId) return
     perm.setRolePermissionsForProject(_permProjectId, v)
+  }
+  const handleProjectRoleMembersChange = (roleName: string, members: string[]) => {
+    const role = roles.find(item => item.name === roleName)
+    if (selectedProject?.type === PROJECT_TYPE_TOS_VERSION && role?.isFixed) {
+      if (!syncTosTeamPermissionMembers(selectedProject.id, roleName, members)) {
+        message.error('角色成员同步失败')
+      }
+      return
+    }
+    setRoles(previous => previous.map(item => item.name === roleName ? { ...item, members } : item))
   }
   const isTechnicalProject = selectedProject?.type === '技术项目'
   const technicalPreProjectName = useMemo(() => {
@@ -3932,7 +3942,7 @@ export default function ProjectSpaceContainer() {
             </Card>
           )}
           {transfer.transferView === null && projectSpaceModule === 'permission' && (
-            <PermissionConfig roles={roles} setRoles={setRoles} rolePermissions={rolePermissions} setRolePermissions={setRolePermissions} permConfigTab={permConfigTab} setPermConfigTab={setPermConfigTab} permissionActiveRole={permissionActiveRole} setPermissionActiveRole={setPermissionActiveRole} showAddRoleModal={showAddRoleModal} setShowAddRoleModal={setShowAddRoleModal} newRoleName={newRoleName} setNewRoleName={setNewRoleName} editingRoleName={editingRoleName} setEditingRoleName={setEditingRoleName} editRoleNameValue={editRoleNameValue} setEditRoleNameValue={setEditRoleNameValue} />
+            <PermissionConfig roles={roles} setRoles={setRoles} rolePermissions={rolePermissions} setRolePermissions={setRolePermissions} permConfigTab={permConfigTab} setPermConfigTab={setPermConfigTab} permissionActiveRole={permissionActiveRole} setPermissionActiveRole={setPermissionActiveRole} showAddRoleModal={showAddRoleModal} setShowAddRoleModal={setShowAddRoleModal} newRoleName={newRoleName} setNewRoleName={setNewRoleName} editingRoleName={editingRoleName} setEditingRoleName={setEditingRoleName} editRoleNameValue={editRoleNameValue} setEditRoleNameValue={setEditRoleNameValue} projectType={selectedProject?.type} onRoleMembersChange={handleProjectRoleMembersChange} syncTosTeamPermissionMembers={handleProjectRoleMembersChange} />
           )}
           {transfer.transferView === null && !['basic', 'plan', 'overview', 'requirements', 'permission'].includes(projectSpaceModule) && (
             <Card style={{ borderRadius: 8, textAlign: 'center', padding: '40px 0' }}>
