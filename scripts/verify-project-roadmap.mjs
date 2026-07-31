@@ -1207,7 +1207,7 @@ registerAssertion('roadmap migration preserves valid create, update, and delete 
   }
 })
 
-registerAssertion('empty migrated tOS catalogs use null selection', () => {
+registerAssertion('empty migrated tOS catalogs preserve a normalized saved orphan selection', () => {
   const store = loadIsolatedRoadmapStore()
   const migrated = store.migrateRoadmapState({
     tosVersions: [],
@@ -1215,8 +1215,8 @@ registerAssertion('empty migrated tOS catalogs use null selection', () => {
     changeLogs: [],
     selectedTosVersionId: 'tos-18-0',
   }, 0)
-  if (migrated.tosVersions.length || migrated.selectedTosVersionId !== null) {
-    throw new Error(`empty catalog selection must be null: ${JSON.stringify(migrated.selectedTosVersionId)}`)
+  if (migrated.tosVersions.length || migrated.selectedTosVersionId !== '18.0') {
+    throw new Error(`empty catalog selection must preserve the saved orphan: ${JSON.stringify(migrated.selectedTosVersionId)}`)
   }
 })
 
@@ -2321,7 +2321,7 @@ registerAssertion('roadmap typed filters enforce kind-specific operators with AN
   }
 })
 
-registerAssertion('roadmap filter domain sanitizers enforce catalog and approved column invariants', () => {
+registerAssertion('roadmap filter domain sanitizers preserve valid saved orphans and approved column invariants', () => {
   const domainPath = path.join(root, 'src/lib/roadmapFilters.ts')
   if (!fs.existsSync(domainPath)) throw new Error('roadmapFilters.ts is missing')
   const domain = loadTypeScriptModule(domainPath)
@@ -2352,7 +2352,7 @@ registerAssertion('roadmap filter domain sanitizers enforce catalog and approved
     ['brand', 'equals', ['TECNO', 'Infinix']],
     ['startRam', 'notEquals', ['4GB']],
     ['str5Date', 'before', '2028-02-29'],
-    ['firstSaleTosVersionId', 'equals', ['tos-18-0']],
+    ['firstSaleTosVersionId', 'equals', ['99.0']],
     ['productSeries', 'isEmpty', ''],
   ]
   if (JSON.stringify(sanitized.map(item => [item.field, item.operator, item.value])) !== JSON.stringify(expected)) {
@@ -3355,6 +3355,55 @@ registerAssertion('roadmap tOS values normalize persistence while preserving his
   const migratedMetadata = migrated.tosVersions.find(version => version.id === '17.2')
   if (migratedMetadata?.targets[0] !== 'legacy target' || migratedMetadata.periodStartDate !== '2026-02-01') {
     throw new Error(`legacy metadata association was lost: ${JSON.stringify(migrated.tosVersions)}`)
+  }
+})
+
+registerAssertion('roadmap defers enum policy until hydration and preserves saved orphan filters', () => {
+  const storeModule = loadIsolatedRoadmapStore()
+  const initial = storeModule.createInitialRoadmapState()
+  const orphanFilter = {
+    id: 'saved-orphan-filter',
+    field: 'firstSaleTosVersionId',
+    operator: 'equals',
+    value: ['tos-19-4'],
+  }
+  const migrated = storeModule.migrateRoadmapState({
+    ...storeModule.partializeRoadmapState(initial),
+    plannedProjects: [],
+    changeLogs: [],
+    selectedTosVersionId: 'tos-19-4',
+    filters: [orphanFilter],
+  }, 6)
+  if (migrated.selectedTosVersionId !== '19.4') {
+    throw new Error(`migration cleared the not-yet-hydrated selection: ${migrated.selectedTosVersionId}`)
+  }
+  const migratedValues = migrated.filters.find(filter => filter.field === 'firstSaleTosVersionId')?.value
+  if (JSON.stringify(migratedValues) !== JSON.stringify(['19.4'])) {
+    throw new Error(`migration cleared the not-yet-hydrated filter: ${JSON.stringify(migrated.filters)}`)
+  }
+
+  const filtersModule = loadTypeScriptModule(path.join(root, 'src/lib/roadmapFilters.ts'))
+  const versions = [
+    { id: '17.2', name: 'tOS17.2', major: 17, minor: 2, selectable: true },
+    { id: '16.3', name: 'tOS16.3', major: 16, minor: 3, selectable: false },
+  ]
+  const sanitized = filtersModule.sanitizeRoadmapFilterConditions([orphanFilter], versions)
+  const savedValues = filtersModule.getRoadmapSelectedTosVersionIds(sanitized)
+  if (JSON.stringify(savedValues) !== JSON.stringify(['19.4'])) {
+    throw new Error(`runtime sanitizer deleted the saved orphan: ${JSON.stringify(sanitized)}`)
+  }
+  const tosDefinition = filtersModule.buildRoadmapFilterFieldDefinitions(versions, savedValues)
+    .find(definition => definition.key === 'firstSaleTosVersionId')
+  if (JSON.stringify(tosDefinition?.options) !== JSON.stringify([
+    { label: 'tOS19.4（已停用）', value: '19.4', disabled: true },
+    { label: 'tOS17.2', value: '17.2' },
+  ])) {
+    throw new Error(`filter options leaked unrelated history or lost the saved orphan: ${JSON.stringify(tosDefinition?.options)}`)
+  }
+
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  for (const token of ['ensureEnumHydrated', 'state.hasHydrated', 'state.hydrationError', '正在加载 tOS 版本配置', '加载 tOS 版本配置失败', '前往枚举配置恢复']) {
+    if (!moduleSource.includes(token)) throw new Error(`roadmap hydration UX is missing ${token}`)
   }
 })
 

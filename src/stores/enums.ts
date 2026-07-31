@@ -297,4 +297,10 @@ export const useEnumStore = create<EnumStore>()((rawSet, get, api) => {
   return persistedCreator(rawSet, get, api as Parameters<typeof persistedCreator>[2])
 })
 
+export async function ensureEnumHydrated(): Promise<boolean> {
+  const state = useEnumStore.getState()
+  if (state.hasHydrated && !state.hydrationError) return true
+  return state.hydrateEnumStore()
+}
+
 export { TOS_ENUM_TYPE_KEYS }

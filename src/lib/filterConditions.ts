@@ -38,7 +38,7 @@ export interface FilterFieldDefinition {
   key: string
   label: string
   kind: FilterFieldKind
-  options?: { label: string; value: string }[]
+  options?: { label: string; value: string; disabled?: boolean }[]
   multiple?: boolean
 }
 

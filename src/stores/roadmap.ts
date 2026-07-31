@@ -446,7 +446,8 @@ function migrateTosVersions(value: unknown): TosVersionConfig[] | null {
 
 function resolveMigratedTosId(value: unknown, versions: readonly TosVersionConfig[]): string | null {
   const normalized = normalizeRoadmapTosReference(value, versions)
-  return normalized || null
+  const parsed = normalizeTosVersionName(normalized)
+  return parsed ? `${parsed.major}.${parsed.minor}` : null
 }
 
 function trimStringValue<T>(value: T): T {
@@ -504,7 +505,7 @@ function migratePlannedProjects(value: unknown, versions: readonly TosVersionCon
     if (!isRecord(entry)) continue
     const productType = normalizeLegacyRoadmapProductType(entry.productType)
     const tosReference = entry.firstSaleTosVersionId ?? entry.tosVersion
-    const tosVersionId = resolveMigratedTosId(tosReference, versions)
+    const tosVersionId = normalizeRoadmapTosReference(tosReference, versions)
     const machineProjectType = normalizeMachineSecondaryCategory(
       typeof entry.machineProjectType === 'string' ? entry.machineProjectType : null,
     )
@@ -609,13 +610,12 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
   const changeLogs = 'changeLogs' in persistedState ? migrateChangeLogs(persistedState.changeLogs) : []
   if (!plannedProjects || !changeLogs) return initial
 
-  const selectableVersions = currentTosEnumVersions()
-  const persistedSelectedTosVersionId = repairSelectedTosVersionId(
-    resolveMigratedTosId(persistedState.selectedTosVersionId, tosVersions),
-    selectableVersions,
+  const persistedSelectedTosVersionId = resolveMigratedTosId(
+    persistedState.selectedTosVersionId,
+    tosVersions,
   )
   const viewMode = persistedState.viewMode === 'evolution' ? 'evolution' : 'table'
-  let filters = sanitizeRoadmapFilterConditions(persistedState.filters, selectableVersions)
+  let filters = sanitizeRoadmapFilterConditions(persistedState.filters, tosVersions)
   const tosCondition = filters.find(condition => condition.field === 'firstSaleTosVersionId')
   const tosValues = tosCondition && Array.isArray(tosCondition.value) ? tosCondition.value : null
   const selectedTosVersionId = tosValues
@@ -624,7 +624,7 @@ export function migrateRoadmapState(persistedState: unknown, fromVersion: number
   if (!tosCondition && viewMode === 'table' && selectedTosVersionId) {
     filters = sanitizeRoadmapFilterConditions(
       setRoadmapTosVersionFilter(filters, selectedTosVersionId),
-      selectableVersions,
+      tosVersions,
     )
   }
   const legacyBrand = ROADMAP_BRANDS.has(persistedState.brandFilter as RoadmapBrand)
@@ -979,7 +979,6 @@ export const useRoadmapStore = create<RoadmapStore>()(
         const selectedTosVersionId = tosCondition?.operator === 'equals'
           && Array.isArray(tosCondition.value)
           && tosCondition.value.length === 1
-          && selectableVersions.some(version => version.id === tosCondition.value[0])
           ? tosCondition.value[0]
           : null
         const brand = getRoadmapQuickFilterValue(sanitized, 'brand')

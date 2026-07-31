@@ -10,7 +10,12 @@ import {
   type SortableColumnDefinition,
   type SortableColumnSettingsValue,
 } from '@/lib/columnSettings'
-import { normalizeRoadmapTosReference, PRODUCT_LINES_BY_BRAND } from '@/lib/roadmapValidation'
+import {
+  formatRoadmapTosValue,
+  normalizeRoadmapTosReference,
+  normalizeTosVersionName,
+  PRODUCT_LINES_BY_BRAND,
+} from '@/lib/roadmapValidation'
 import {
   ROADMAP_COLUMNS,
   type RoadmapBrand,
@@ -192,17 +197,32 @@ function isStrictCalendarDate(value: string): boolean {
 
 export function buildRoadmapFilterFieldDefinitions(
   versions: readonly TosVersionConfig[],
+  savedTosVersionValues: readonly string[] = [],
 ): FilterFieldDefinition[] {
   const productLines = [...new Set(Object.values(PRODUCT_LINES_BY_BRAND).flat())]
+  const selectableVersions = [...versions]
+    .filter(version => version.selectable !== false)
+    .sort((left, right) => compareSemanticTos(right, left))
+  const selectableIds = new Set(selectableVersions.map(version => version.id))
+  const savedOrphanOptions = [...new Set(savedTosVersionValues
+    .map(value => normalizeRoadmapTosReference(value, versions))
+    .filter(Boolean))]
+    .filter(value => !selectableIds.has(value))
+    .sort((left, right) => compareSemanticTos(right, left))
+    .map(value => ({
+      label: `${formatRoadmapTosValue(value)}（已停用）`,
+      value,
+      disabled: true,
+    }))
   return [
     {
       key: 'firstSaleTosVersionId',
       label: 'tOS版本',
       kind: 'enum',
-      options: [...versions]
-        .filter(version => version.selectable !== false)
-        .sort((left, right) => compareSemanticTos(right, left))
-        .map(version => ({ label: version.name, value: version.id })),
+      options: [
+        ...savedOrphanOptions,
+        ...selectableVersions.map(version => ({ label: version.name, value: version.id })),
+      ],
     },
     { key: 'brand', label: '品牌', kind: 'enum', options: ['TECNO', 'Infinix', 'itel', '待定', '其他品牌'].map(option) },
     { key: 'productLine', label: '产品线', kind: 'enum', options: productLines.map(option) },
@@ -226,11 +246,12 @@ function normalizeEnumFilterValue(
   definition: FilterFieldDefinition,
   versions: readonly TosVersionConfig[],
 ): string | null {
-  const exact = definition.options?.find(candidate => candidate.value === rawValue)
-  if (exact) return exact.value
-  if (field !== 'firstSaleTosVersionId') return null
-  const normalized = normalizeRoadmapTosReference(rawValue, versions)
-  return versions.some(version => version.id === normalized) ? normalized : null
+  if (field === 'firstSaleTosVersionId') {
+    const normalized = normalizeRoadmapTosReference(rawValue, versions)
+    const parsed = normalizeTosVersionName(normalized)
+    return parsed ? `${parsed.major}.${parsed.minor}` : null
+  }
+  return definition.options?.find(candidate => candidate.value === rawValue)?.value ?? null
 }
 
 export function sanitizeRoadmapFilterConditions(

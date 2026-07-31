@@ -103,6 +103,7 @@ assert.match(storeSource, /hasHydrated/, 'hydration completion lives at the stor
 assert.match(storeSource, /hydrationError/, 'hydration failures live at the store boundary')
 assert.match(storeSource, /onRehydrateStorage/, 'persist completion callback owns hydration completion')
 assert.match(storeSource, /skipHydration:\s*true/, 'browser hydration is started explicitly after mount')
+assert.match(storeSource, /export async function ensureEnumHydrated/, 'enum hydration exposes one reusable coordinator')
 assert.match(storeSource, /ENUM_STORAGE_KEY/, 'the enum storage key is named for exact reset')
 assert.match(appShell, /styles=\{\{\s*root:/, 'user dropdown uses the Ant Design 6 popup styling API')
 assert.doesNotMatch(appShell, /overlayStyle=/, 'deprecated dropdown overlayStyle is removed')

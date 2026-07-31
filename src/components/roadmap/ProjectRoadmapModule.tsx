@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Empty, Modal, Result, message } from 'antd'
+import { Alert, Button, Card, Empty, Modal, Result, Skeleton, Space, Typography, message } from 'antd'
 import {
   applyRoadmapFilters,
   buildRoadmapFilterFieldDefinitions,
@@ -21,7 +21,7 @@ import {
 import { useHasGlobalPermission } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
 import { useRoadmapStore } from '@/stores/roadmap'
-import { useEnumStore } from '@/stores/enums'
+import { ensureEnumHydrated, useEnumStore } from '@/stores/enums'
 import { useUiStore } from '@/stores/ui'
 import {
   formatRoadmapTosValue,
@@ -95,6 +95,8 @@ export default function ProjectRoadmapModule({
   const plannedProjects = useRoadmapStore(state => state.plannedProjects)
   const storedVersionDetails = useRoadmapStore(state => state.tosVersions)
   const enumTosValues = useEnumStore(state => state.valuesByType['tos-2-part'])
+  const enumHasHydrated = useEnumStore(state => state.hasHydrated)
+  const enumHydrationError = useEnumStore(state => state.hydrationError)
   const setSelectedType = useEnumStore(state => state.setSelectedType)
   const setActiveModule = useUiStore(state => state.setActiveModule)
   const setConfigTab = useUiStore(state => state.setConfigTab)
@@ -114,6 +116,11 @@ export default function ProjectRoadmapModule({
   const setSort = useRoadmapStore(state => state.setSort)
   const setSelectedConflictKey = useRoadmapStore(state => state.setSelectedConflictKey)
   const deletePlannedProject = useRoadmapStore(state => state.deletePlannedProject)
+
+  useEffect(() => {
+    if (!enumHasHydrated) void ensureEnumHydrated()
+  }, [enumHasHydrated])
+
   const versions = useMemo<TosVersionConfig[]>(() => {
     const currentValues = enumTosValues.map(normalizeRoadmapTosValue).filter(Boolean)
     const historicalReferences = [
@@ -129,6 +136,8 @@ export default function ProjectRoadmapModule({
       ...storedVersionDetails.flatMap(version => (
         version.targets.length || version.periodStartDate || version.periodEndDate ? [version.id] : []
       )),
+      selectedTosVersionId,
+      ...getRoadmapSelectedTosVersionIds(filters),
     ].map(value => normalizeRoadmapTosReference(value, storedVersionDetails)).filter(Boolean)
     const allValues = [...new Set([...currentValues, ...historicalReferences])]
     return allValues.map(normalizedValue => {
@@ -154,10 +163,18 @@ export default function ProjectRoadmapModule({
         ? right.major - left.major || right.minor - left.minor
         : left.name.localeCompare(right.name, 'zh-CN')
     ))
-  }, [enumTosValues, plannedProjects, projects, storedVersionDetails])
+  }, [enumTosValues, filters, plannedProjects, projects, selectedTosVersionId, storedVersionDetails])
   const selectableVersions = useMemo(
     () => versions.filter(version => version.selectable !== false),
     [versions],
+  )
+  const normalizedFilters = useMemo(
+    () => sanitizeRoadmapFilterConditions(filters, versions),
+    [filters, versions],
+  )
+  const savedTosFilterValues = useMemo(
+    () => getRoadmapSelectedTosVersionIds(normalizedFilters),
+    [normalizedFilters],
   )
 
   const [plannedModalOpen, setPlannedModalOpen] = useState(false)
@@ -183,8 +200,8 @@ export default function ProjectRoadmapModule({
   }, [])
 
   const filterFieldDefinitions = useMemo(
-    () => buildRoadmapFilterFieldDefinitions(versions),
-    [versions],
+    () => buildRoadmapFilterFieldDefinitions(versions, savedTosFilterValues),
+    [savedTosFilterValues, versions],
   )
   const filterDefinitionsByKey = useMemo(
     () => new Map(filterFieldDefinitions.map(definition => [definition.key, definition])),
@@ -209,10 +226,6 @@ export default function ProjectRoadmapModule({
     [normalRows, plannedRows],
   )
 
-  const normalizedFilters = useMemo(
-    () => sanitizeRoadmapFilterConditions(filters, versions),
-    [filters, versions],
-  )
   const brandFilter = getRoadmapQuickFilterValue(normalizedFilters, 'brand')
   const productTypeFilter = getRoadmapQuickFilterValue(normalizedFilters, 'productType')
   const configuredFilterCount = normalizedFilters.length
@@ -273,10 +286,10 @@ export default function ProjectRoadmapModule({
   }, [targetVersionIds, versions])
 
   useEffect(() => {
-    if (selectedTosVersionId && !selectableVersions.some(version => version.id === selectedTosVersionId)) {
+    if (enumHasHydrated && selectedTosVersionId && !versions.some(version => version.id === selectedTosVersionId)) {
       setSelectedTosVersionId(null)
     }
-  }, [selectableVersions, selectedTosVersionId, setSelectedTosVersionId])
+  }, [enumHasHydrated, selectedTosVersionId, setSelectedTosVersionId, versions])
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -416,6 +429,38 @@ export default function ProjectRoadmapModule({
         status="403"
         title="暂无 tOS 路标查看权限"
         subTitle="请联系管理员开通 tOS 路标查看权限。"
+      />
+    )
+  }
+
+  if (!enumHasHydrated) {
+    return (
+      <Card aria-live="polite" style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+          <Typography.Text strong>正在加载 tOS 版本配置…</Typography.Text>
+          <Skeleton active paragraph={{ rows: 5 }} />
+        </Space>
+      </Card>
+    )
+  }
+
+  if (enumHydrationError) {
+    return (
+      <Alert
+        type="error"
+        showIcon
+        message="加载 tOS 版本配置失败"
+        description={(
+          <Space orientation="vertical" size={12}>
+            <Typography.Text>{enumHydrationError}</Typography.Text>
+            <Space wrap>
+              <Button type="primary" onClick={() => void ensureEnumHydrated()}>
+                重试加载
+              </Button>
+              <Button onClick={openSharedTosEnumConfig}>前往枚举配置恢复</Button>
+            </Space>
+          </Space>
+        )}
       />
     )
   }
