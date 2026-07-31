@@ -129,6 +129,15 @@ export const getProjectInfoValue = (project: ProjectInfoProject, key: string): P
       : stored
   }
 
+  if (key === 'firstSaleTosVersion') {
+    const explicitVersion = project.firstSaleTosVersionId ?? project.firstSaleTosVersion
+    if (typeof explicitVersion === 'string') return explicitVersion
+  }
+  if (key === 'currentTosVersion') {
+    const explicitVersion = project.currentTosVersionId ?? project.currentTosVersion
+    if (typeof explicitVersion === 'string') return explicitVersion
+  }
+
   if (MACHINE_TEAM_KEYS[key]) {
     const roles = project.fieldValues?.machineTeamRoles
     if (isTeamRoleMap(roles) && roles[MACHINE_TEAM_KEYS[key]] !== undefined) {

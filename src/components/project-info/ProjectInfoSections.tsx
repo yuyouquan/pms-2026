@@ -19,6 +19,7 @@ import {
   normalizeTeamMembers,
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
+import { formatTosEnumValue } from '@/lib/tosEnumOptions'
 
 interface ProjectInfoSectionsProps {
   project: ProjectInfoProject
@@ -37,7 +38,7 @@ const isJiraArray = (value: unknown): value is JiraProjectConfig[] => (
   Array.isArray(value) && value.every(item => !!item && typeof item === 'object' && 'id' in item)
 )
 
-const renderNormalValue = (value: ReturnType<typeof getProjectInfoValue>, inputType: string) => {
+const renderNormalValue = (value: ReturnType<typeof getProjectInfoValue>, inputType: string, fieldKey: string) => {
   if (inputType === 'jira' && isJiraArray(value)) {
     if (!value.length) return <span className="pms-project-info-empty">-</span>
     return (
@@ -50,7 +51,9 @@ const renderNormalValue = (value: ReturnType<typeof getProjectInfoValue>, inputT
       </Space>
     )
   }
-  const text = formatProjectInfoValue(value)
+  const text = ['firstSaleTosVersion', 'currentTosVersion'].includes(fieldKey)
+    ? formatTosEnumValue(value) || '-'
+    : formatProjectInfoValue(value)
   if (inputType === 'link' && text !== '-') {
     const isUrl = /^https?:\/\//i.test(text)
     return isUrl ? <a href={text} target="_blank" rel="noreferrer">{text}</a> : <span>{text}</span>
@@ -136,7 +139,7 @@ function ProjectInfoGroupPanel({
                 {visibleFields.map(field => (
                   <div key={field.key} className="pms-project-info-display-item">
                     <div className="pms-project-info-display-label">{field.label}</div>
-                    <div className="pms-project-info-display-value">{renderNormalValue(getProjectInfoValue(project, field.key), field.inputType)}</div>
+                    <div className="pms-project-info-display-value">{renderNormalValue(getProjectInfoValue(project, field.key), field.inputType, field.key)}</div>
                   </div>
                 ))}
               </div>

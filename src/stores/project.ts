@@ -12,6 +12,10 @@ import { buildTosTypeRows, type TosTypeConfigRow } from '@/lib/tosTypeRules'
 import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
 import { createRoadmapAuditSnapshot, diffRoadmapProjectFields } from '@/lib/roadmapAudit'
 import { buildRoadmapDisplayName } from '@/lib/roadmapValidation'
+import {
+  resolveMachineTosUpdate,
+  type MachineTosResolution,
+} from '@/lib/machineTosVersions'
 import { getCurrentTosEnumValues, normalizeTosEnumReference } from '@/lib/tosEnumOptions'
 import { useEnumStore } from '@/stores/enums'
 import { useRoadmapStore } from '@/stores/roadmap'
@@ -67,6 +71,47 @@ export interface ProjectMutationOptions {
 }
 
 const PROJECT_STORAGE_KEY = 'pms-projects'
+
+const MACHINE_TOS_VERSION_KEYS = [
+  'firstSaleTosVersionId',
+  'firstSaleTosVersion',
+  'currentTosVersionId',
+  'currentTosVersion',
+  'tosVersionName',
+  'tosVersion',
+] as const
+
+function migrateMachineThreePartReference(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  const normalized = normalizeTosEnumReference(value)
+  if (/^\d+\.\d+\.\d+$/.test(normalized)) return normalized
+  if (/^\d+\.\d+$/.test(normalized)) return `${normalized}.0`
+  return value
+}
+
+function migrateMachineTosHistory(project: Project): Project {
+  if (!isMachineProjectType(project.type)) return project
+  const migrated = { ...project }
+  if (['升级', '切换', '换代'].includes(String(migrated.productType || '').trim())) {
+    migrated.productType = '老品'
+  }
+  MACHINE_TOS_VERSION_KEYS.forEach(key => {
+    if (key in migrated) migrated[key] = migrateMachineThreePartReference(migrated[key])
+  })
+  if (project.fieldValues && typeof project.fieldValues === 'object') {
+    const fieldValues = { ...project.fieldValues }
+    if (['升级', '切换', '换代'].includes(String(fieldValues.productType || '').trim())) {
+      fieldValues.productType = '老品'
+    }
+    ;(['firstSaleTosVersion', 'currentTosVersion'] as const).forEach(key => {
+      if (key in fieldValues) fieldValues[key] = migrateMachineThreePartReference(fieldValues[key]) as any
+    })
+    migrated.fieldValues = fieldValues
+  }
+  return migrated
+}
+
+const initialProjectState = (initialProjects as Project[]).map(migrateMachineTosHistory)
 
 const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) => {
   if (isMachineProjectType(project.type) && project.markets?.length) {
@@ -161,13 +206,58 @@ function isValidMachineProjectMutation(
   return resolveAllowedFirstSaleTosValues(options).includes(tosValue)
 }
 
+function synchronizeMachineTosValues(
+  project: Project,
+  firstSaleTosVersion: string,
+  currentTosVersion: string,
+): Project {
+  return {
+    ...project,
+    firstSaleTosVersionId: firstSaleTosVersion,
+    firstSaleTosVersion,
+    currentTosVersionId: currentTosVersion,
+    currentTosVersion,
+    tosVersionName: firstSaleTosVersion,
+    tosVersion: currentTosVersion,
+    fieldValues: {
+      ...(project.fieldValues || {}),
+      firstSaleTosVersion,
+      currentTosVersion,
+    },
+  }
+}
+
+function applyMachineTosResolution(
+  projects: Project[],
+  resolution: Extract<MachineTosResolution<Project>, { ok: true }>,
+  appendCandidate: boolean,
+): Project[] {
+  const updateById = new Map(resolution.updates.map(update => [update.id, update]))
+  const synchronizedCandidate = synchronizeMachineTosValues(
+    resolution.candidate,
+    resolution.candidate.firstSaleTosVersion,
+    resolution.candidate.currentTosVersion,
+  )
+  const nextProjects = projects.map(project => {
+    if (project.id === synchronizedCandidate.id) return synchronizedCandidate
+    const update = updateById.get(project.id)
+    if (!update) return project
+    return synchronizeMachineTosValues(
+      project,
+      resolveMachineTosValue({ ...project, productType: '新品' } as Project),
+      update.currentTosVersion,
+    )
+  })
+  return appendCandidate ? [...nextProjects, synchronizedCandidate] : nextProjects
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export function migrateProjectState(persistedState: unknown, _version: number): PersistedProjectState {
   if (!isRecord(persistedState) || !Array.isArray(persistedState.projects)) {
-    return { projects: initialProjects as Project[] }
+    return { projects: initialProjectState }
   }
 
   const seenIds = new Set<string>()
@@ -183,17 +273,17 @@ export function migrateProjectState(persistedState: unknown, _version: number): 
     const type = classification.projectCategory
     if (!id || !name || !type || seenIds.has(id)) return []
     seenIds.add(id)
-    return [{
+    return [migrateMachineTosHistory({
       ...value,
       id,
       name,
       type,
       secondaryCategory: classification.secondaryCategory,
-    } as Project]
+    } as Project)]
   })
 
   if (persistedState.projects.length > 0 && projects.length === 0) {
-    return { projects: initialProjects as Project[] }
+    return { projects: initialProjectState }
   }
   return { projects }
 }
@@ -282,7 +372,7 @@ function recordNormalProjectAudit(
 
 export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
   (set, get) => ({
-    projects: initialProjects as Project[],
+    projects: initialProjectState,
     selectedProject: null,
     currentLoginUser: DEFAULT_LOGIN_USER,
     projectSearchText2: '',
@@ -330,11 +420,31 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       projectMemberMap: { ...state.projectMemberMap, [projectId]: members },
     })),
     addProject: (newProject, actor, options) => {
-      if (isMachineProjectType(newProject.type) && !isValidMachineProjectMutation(newProject, options)) {
-        return false
+      let projectToAdd = newProject
+      let machineResolution: Extract<MachineTosResolution<Project>, { ok: true }> | null = null
+      if (isMachineProjectType(newProject.type)) {
+        const resolution = resolveMachineTosUpdate(get().projects, newProject)
+        if (!resolution.ok) return false
+        projectToAdd = synchronizeMachineTosValues(
+          resolution.candidate,
+          resolution.candidate.firstSaleTosVersion,
+          resolution.candidate.currentTosVersion,
+        )
+        if (!isValidMachineProjectMutation(projectToAdd, options)) return false
+        machineResolution = resolution
       }
-      set(state => ({ projects: [...state.projects, newProject] }))
-      recordNormalProjectAudit('create', null, newProject, actor?.trim() || get().currentLoginUser.trim() || '系统')
+      if (machineResolution) {
+        const resolution = machineResolution
+        set(state => ({
+          projects: applyMachineTosResolution(state.projects, {
+            ...resolution,
+            updates: resolution.updates,
+          }, true),
+        }))
+      } else {
+        set(state => ({ projects: [...state.projects, projectToAdd] }))
+      }
+      recordNormalProjectAudit('create', null, projectToAdd, actor?.trim() || get().currentLoginUser.trim() || '系统')
       return true
     },
     updateProject: (projectId, update, actor, options) => {
@@ -343,15 +453,41 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       const updated = typeof update === 'function'
         ? update(existing)
         : { ...existing, ...update } as Project
-      if (isMachineProjectType(updated.type) && !isValidMachineProjectMutation(updated, options, existing)) {
-        return null
+      let projectToSave = updated
+      let machineResolution: Extract<MachineTosResolution<Project>, { ok: true }> | null = null
+      if (isMachineProjectType(updated.type)) {
+        const resolution = resolveMachineTosUpdate(get().projects, updated)
+        if (!resolution.ok) return null
+        projectToSave = synchronizeMachineTosValues(
+          resolution.candidate,
+          resolution.candidate.firstSaleTosVersion,
+          resolution.candidate.currentTosVersion,
+        )
+        if (!isValidMachineProjectMutation(projectToSave, options, existing)) return null
+        machineResolution = resolution
       }
-      set(state => ({
-        projects: state.projects.map(project => project.id === projectId ? updated : project),
-        selectedProject: state.selectedProject?.id === projectId ? updated : state.selectedProject,
-      }))
-      recordNormalProjectAudit('update', existing, updated, actor?.trim() || get().currentLoginUser.trim() || '系统')
-      return updated
+      if (machineResolution) {
+        const resolution = machineResolution
+        set(state => {
+          const projects = applyMachineTosResolution(state.projects, {
+            ...resolution,
+            updates: resolution.updates,
+          }, false)
+          return {
+            projects,
+            selectedProject: state.selectedProject
+              ? projects.find(project => project.id === state.selectedProject?.id) || state.selectedProject
+              : null,
+          }
+        })
+      } else {
+        set(state => ({
+          projects: state.projects.map(project => project.id === projectId ? projectToSave : project),
+          selectedProject: state.selectedProject?.id === projectId ? projectToSave : state.selectedProject,
+        }))
+      }
+      recordNormalProjectAudit('update', existing, projectToSave, actor?.trim() || get().currentLoginUser.trim() || '系统')
+      return projectToSave
     },
     deleteProject: (projectId, actor) => {
       const existing = get().projects.find(project => project.id === projectId)
@@ -366,13 +502,13 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
   }),
   {
     name: PROJECT_STORAGE_KEY,
-    version: 3,
+    version: 4,
     storage: createJSONStorage(() => safeProjectStorage),
     migrate: migrateProjectState,
     partialize: partializeProjectState,
     merge: (persistedState, currentState) => ({
       ...currentState,
-      ...migrateProjectState(persistedState, 3),
+      ...migrateProjectState(persistedState, 4),
     }),
   },
 ))

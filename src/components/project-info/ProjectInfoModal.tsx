@@ -22,6 +22,7 @@ import {
 import { fetchByBid, type ExternalProjectEntry } from '@/data/externalProjectPool'
 import {
   deriveMachineProjectInfoValues,
+  deriveProjectResponsiblePersons,
   deriveTosProjectAggregates,
   getProjectInfoModalFields,
   getProjectInfoModalGroups,
@@ -33,6 +34,7 @@ import {
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
 import { normalizeTosEnumReference } from '@/lib/tosEnumOptions'
+import { normalizeMachineFamilyName } from '@/lib/machineTosVersions'
 import {
   defaultProjectCreationDraftRepository,
   isProjectCreationDraftEmpty,
@@ -125,6 +127,7 @@ export default function ProjectInfoModal({
   const [submitting, setSubmitting] = useState(false)
   const [activeGroups, setActiveGroups] = useState<string[]>([])
   const [aggregateWarnings, setAggregateWarnings] = useState<string[]>([])
+  const [machineFamilyError, setMachineFamilyError] = useState('')
   const [draftReadStatus, setDraftReadStatusState] = useState<DraftReadStatus>('idle')
   const [draftHydrationAttempt, setDraftHydrationAttempt] = useState(0)
   const lastAppliedSourceRef = useRef<string>('')
@@ -148,6 +151,8 @@ export default function ProjectInfoModal({
     ? mapIpmProjectClassification(selectedCandidate.ipmProjectCategoryName)
     : undefined
   const isIpmClassificationMissing = Boolean(selectedCandidate && !selectedIpmClassification)
+  const machineProductType = String(watchedValues.productType || '')
+  const isLegacyMachine = isMachineProjectType(projectType) && machineProductType === '老品'
   const fields = useMemo(() => getProjectInfoModalFields(projectType), [projectType])
   const editableFields = useMemo(() => fields.filter(field => !field.readOnly), [fields])
   const groups = useMemo(() => getProjectInfoModalGroups(projectType), [projectType])
@@ -236,6 +241,7 @@ export default function ProjectInfoModal({
     form.resetFields()
     form.setFieldsValue(CREATE_FORM_DEFAULTS)
     setAggregateWarnings([])
+    setMachineFamilyError('')
     activeGroupsRef.current = []
     setActiveGroups([])
     lastAppliedSourceRef.current = ''
@@ -258,6 +264,7 @@ export default function ProjectInfoModal({
     if (!open || mode !== 'edit' || !project) return
     lastAppliedSourceRef.current = ''
     setAggregateWarnings([])
+    setMachineFamilyError('')
     // The Form instance survives modal close/reopen. Clear the previous project's
     // unmentioned fields before applying the next project's values.
     form.resetFields()
@@ -478,6 +485,47 @@ export default function ProjectInfoModal({
     setAggregateWarnings(result.missingSources)
   }, [candidateProjects, existingProjects, firstLaunchSignature, form, mode, open, project, projectType, watchedBid])
 
+  const machineProjectName = mode === 'edit'
+    ? project?.name || ''
+    : selectedCandidate?.name || ''
+  const watchedFirstSaleTosVersion = String(watchedValues.firstSaleTosVersion || '')
+
+  useEffect(() => {
+    if (!open || !isMachineProjectType(projectType) || !machineProjectName) {
+      setMachineFamilyError('')
+      return
+    }
+    if (!isLegacyMachine) {
+      setMachineFamilyError('')
+      const normalizedFirstSale = normalizeTosEnumReference(watchedFirstSaleTosVersion)
+      if (normalizedFirstSale && form.getFieldValue('currentTosVersion') !== normalizedFirstSale) {
+        form.setFieldValue('currentTosVersion', normalizedFirstSale)
+      }
+      return
+    }
+
+    const familyName = normalizeMachineFamilyName(machineProjectName)
+    const matchingNewProjects = existingProjects.filter(item => {
+      if (item.id === project?.id || !isMachineProjectType(item.type)) return false
+      const values = buildProjectInfoValues(item, ['productType'])
+      return values.productType === '新品'
+        && normalizeMachineFamilyName(item.name) === familyName
+    })
+    if (matchingNewProjects.length !== 1) {
+      form.setFieldValue('firstSaleTosVersion', '')
+      setMachineFamilyError(matchingNewProjects.length === 0
+        ? '未找到项目名完全相同的新品项目，无法继承首销 tOS 版本'
+        : '找到多个项目名完全相同的新品项目，无法确定首销 tOS 版本来源')
+      return
+    }
+    const inheritedValues = buildProjectInfoValues(matchingNewProjects[0], ['firstSaleTosVersion'])
+    form.setFieldValue(
+      'firstSaleTosVersion',
+      normalizeTosEnumReference(inheritedValues.firstSaleTosVersion),
+    )
+    setMachineFamilyError('')
+  }, [existingProjects, form, isLegacyMachine, machineProjectName, mode, open, project?.id, projectType, watchedFirstSaleTosVersion])
+
   const persistCreateDraft = useCallback(async (session: ProjectCreationDraftSession) => {
     if (draftReadStatusRef.current !== 'ready' || !isCurrentCreateDraftSession(session)) return
 
@@ -633,6 +681,13 @@ export default function ProjectInfoModal({
       return
     }
     const infoValues = getProjectInfoModalSubmitValues(normalizedProjectType, values)
+    if (isMachineProjectType(normalizedProjectType) && machineFamilyError) {
+      form.setFields([{ name: 'firstSaleTosVersion', errors: [machineFamilyError] }])
+      setActiveGroups(previous => [...new Set([...previous, 'basic'])])
+      setTimeout(() => form.scrollToField('firstSaleTosVersion', { block: 'center' }), 0)
+      message.error(machineFamilyError)
+      return
+    }
     const editableFieldKeys = new Set(editableFields.map(field => field.key))
     const editableErrors = validateProjectInfoValues(
       normalizedProjectType,
@@ -672,7 +727,11 @@ export default function ProjectInfoModal({
         projectName,
         projectType: normalizedProjectType,
         projectSecondaryCategory,
-        responsiblePersons: Array.isArray(values.responsiblePersons) ? values.responsiblePersons : [],
+        responsiblePersons: deriveProjectResponsiblePersons(
+          normalizedProjectType,
+          infoValues,
+          Array.isArray(values.responsiblePersons) ? values.responsiblePersons : [],
+        ),
         healthStatus: String(values.healthStatus || 'normal'),
         infoValues,
         sourceEntry,
@@ -735,7 +794,7 @@ export default function ProjectInfoModal({
         <Alert
           type="error"
           showIcon
-          message="项目草稿读取失败"
+          title="项目草稿读取失败"
           description="已保存的内容暂时无法恢复，当前填写和自动保存已暂停。"
           action={<Button size="small" onClick={retryCreateDraftHydration}>重新读取</Button>}
           style={{ marginBottom: 16 }}
@@ -772,9 +831,11 @@ export default function ProjectInfoModal({
           <Form.Item label="项目二级分类" name="secondaryCategory" rules={[{ required: true, message: '请选择项目二级分类' }]}>
             <Select disabled options={secondaryCategoryOptions} />
           </Form.Item>
-          <Form.Item label="项目责任人" name="responsiblePersons" extra="负责项目可见范围，并作为权限中心的系统管理员" rules={[{ required: true, type: 'array', min: 1, message: '请选择项目责任人' }]}>
-            <Select mode="multiple" showSearch optionFilterProp="label" options={ALL_USERS.map(user => ({ label: user, value: user }))} />
-          </Form.Item>
+          {projectType !== PROJECT_TYPE_TOS_VERSION && !isMachineProjectType(projectType) && (
+            <Form.Item label="项目责任人" name="responsiblePersons" extra="负责项目可见范围，并作为权限中心的系统管理员" rules={[{ required: true, type: 'array', min: 1, message: '请选择项目责任人' }]}>
+              <Select mode="multiple" showSearch optionFilterProp="label" options={ALL_USERS.map(user => ({ label: user, value: user }))} />
+            </Form.Item>
+          )}
           {isTargetProjectInfoType(projectType) && (
             <Form.Item label="健康状态" name="healthStatus" initialValue="normal" rules={[{ required: true, message: '请选择健康状态' }]}>
               <Select options={HEALTH_OPTIONS} />
@@ -783,7 +844,11 @@ export default function ProjectInfoModal({
         </div>
 
         {projectType !== PROJECT_TYPE_TOS_VERSION && aggregateWarnings.length > 0 && (
-          <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="首发项目来源字段不完整" description={aggregateWarnings.join('；')} />
+          <Alert type="warning" showIcon style={{ marginBottom: 12 }} title="首发项目来源字段不完整" description={aggregateWarnings.join('；')} />
+        )}
+
+        {machineFamilyError && (
+          <Alert type="error" showIcon style={{ marginBottom: 12 }} title="tOS 版本联动失败" description={machineFamilyError} />
         )}
 
         {groups.length > 0 && (
@@ -807,6 +872,11 @@ export default function ProjectInfoModal({
                       const active = !field.visibleWhen || field.visibleWhen(watchedValues)
                       if (!active) return null
                       const isRequired = mode === 'create' ? field.requiredOnCreate : field.required
+                      const renderedField = field.key === 'firstSaleTosVersion'
+                        ? { ...field, readOnly: isLegacyMachine }
+                        : field.key === 'currentTosVersion'
+                          ? { ...field, readOnly: !isLegacyMachine }
+                          : field
                       return (
                         <Form.Item
                           key={field.key}
@@ -819,7 +889,7 @@ export default function ProjectInfoModal({
                             : undefined}
                         >
                           <ProjectInfoFieldInput
-                            field={field}
+                            field={renderedField}
                             firstLaunchProjectOptions={firstLaunchOptions}
                             optionsOverride={isMachineProjectType(projectType) ? fieldOptionOverrides?.[field.key] : undefined}
                           />

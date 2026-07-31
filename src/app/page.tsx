@@ -64,7 +64,7 @@ export default function Home() {
 
   // ═══════ Render ═══════
   return (
-    <ConfigProvider autoInsertSpaceInButton={false}>
+    <ConfigProvider button={{ autoInsertSpace: false }}>
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
       <div style={{ minHeight: '100vh', background: '#f5f6fa' }}>
         {/* Project Space — full-screen layout with its own header */}

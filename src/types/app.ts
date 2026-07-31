@@ -28,6 +28,7 @@ export type ProjectInfoValues = Record<string, ProjectInfoValue>
 /** Project record - matches initialProjects structure in page.tsx */
 export interface ProjectItem {
   id: string;
+  sourceBid?: string;
   name: string;
   type: ProjectCategory;
   secondaryCategory?: string;

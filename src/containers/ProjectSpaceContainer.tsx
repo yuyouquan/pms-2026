@@ -52,6 +52,7 @@ import {
 } from '@/lib/filterConditions'
 import { GANTT_SCALE_OPTIONS } from '@/lib/ganttScale'
 import { formatTosEnumValue, normalizeTosEnumReference, resolveCurrentTosEnumValue } from '@/lib/tosEnumOptions'
+import { resolveMachineTosUpdate } from '@/lib/machineTosVersions'
 import { resolveVisiblePlanVersion } from '@/lib/todoAggregation'
 import {
   comparePlanVersions,
@@ -152,6 +153,7 @@ import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
 import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
 import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
+import { deriveProjectTosVersion } from '@/lib/projectInfoRules'
 import {
   getTemplateSnapshotForProjectType,
   getTemplateTasksForProjectType,
@@ -2121,8 +2123,13 @@ export default function ProjectSpaceContainer() {
     const updatedBase = {
       ...selectedProject,
       type: payload.projectType,
-      leader: payload.responsiblePersons[0] || selectedProject.leader,
+      leader: payload.responsiblePersons[0] || '',
       responsiblePersons: payload.responsiblePersons,
+      tosVersion: deriveProjectTosVersion(
+        payload.projectType,
+        selectedProject.name,
+        selectedProject.tosVersion || '',
+      ),
       healthStatus: payload.healthStatus,
       updatedAt: '刚刚',
     }
@@ -2137,11 +2144,23 @@ export default function ProjectSpaceContainer() {
     const existingFirstSaleTos = normalizeTosEnumReference(
       selectedProject.firstSaleTosVersionId || selectedProject.tosVersionName,
     )
+    const currentTosVersionName = typeof payload.infoValues.currentTosVersion === 'string'
+      ? payload.infoValues.currentTosVersion.trim()
+      : ''
+    const submittedCurrentTos = normalizeTosEnumReference(currentTosVersionName)
+    const existingCurrentTos = normalizeTosEnumReference(
+      selectedProject.currentTosVersionId || selectedProject.currentTosVersion || selectedProject.tosVersion,
+    )
     const firstSaleTosVersionId = resolveCurrentTosEnumValue(
       'tos-3-part',
       submittedFirstSaleTos,
       machineTosValues,
     ) || (submittedFirstSaleTos === existingFirstSaleTos ? existingFirstSaleTos : '')
+    const currentTosVersionId = resolveCurrentTosEnumValue(
+      'tos-3-part',
+      submittedCurrentTos,
+      machineTosValues,
+    ) || (submittedCurrentTos === existingCurrentTos ? existingCurrentTos : '')
     const rawVersionType = typeof payload.infoValues.versionType === 'string'
       ? payload.infoValues.versionType
       : selectedProject.versionType || ''
@@ -2149,12 +2168,27 @@ export default function ProjectSpaceContainer() {
       ? {
           ...merged,
           firstSaleTosVersionId,
+          firstSaleTosVersion: submittedFirstSaleTos,
+          currentTosVersionId,
+          currentTosVersion: submittedCurrentTos,
           projectCode: typeof payload.infoValues.projectModel === 'string' ? payload.infoValues.projectModel : selectedProject.projectCode,
           startRam: typeof payload.infoValues.startingRam === 'string' ? payload.infoValues.startingRam : selectedProject.startRam,
           versionType: rawVersionType.toUpperCase() === 'GO' ? 'Go' : rawVersionType,
           developMode: typeof payload.infoValues.developmentMode === 'string' ? payload.infoValues.developmentMode : selectedProject.developMode,
         }
       : merged
+    if (isMachineProjectType(selectedProject.type)) {
+      const resolution = resolveMachineTosUpdate(projects as any[], updated as any)
+      if (!resolution.ok) {
+        const reasonMessage = resolution.reason === 'missing-new-product'
+          ? '未找到项目名完全相同的新品项目，无法保存老品项目'
+          : resolution.reason === 'duplicate-new-product'
+            ? '存在多个项目名完全相同的新品项目，无法保存老品项目'
+            : 'tOS 版本必须是严格的三段数字，例如 14.0.0'
+        message.error(reasonMessage)
+        return false
+      }
+    }
     if (!updateProject(selectedProject.id, () => updated as unknown as typeof selectedProject, currentLoginUser, {
       allowedFirstSaleTosValues: machineTosValues,
     })) {
@@ -3252,6 +3286,7 @@ export default function ProjectSpaceContainer() {
             onSubmit={saveTargetProjectInfo}
             fieldOptionOverrides={{
               firstSaleTosVersion: machineTosOptions,
+              currentTosVersion: machineTosOptions,
               versionType: ['Full', 'Slim', 'Go'],
               developmentMode: ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'],
             }}

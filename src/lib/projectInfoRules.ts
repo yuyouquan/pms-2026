@@ -14,6 +14,32 @@ export interface ProjectInfoValidationError {
   message: string
 }
 
+const normalizeResponsiblePersons = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value
+    .filter((item): item is string => typeof item === 'string')
+    .map(item => item.trim())
+    .filter(Boolean))]
+}
+
+export const deriveProjectResponsiblePersons = (
+  type: string,
+  values: ProjectInfoValues,
+  manualResponsiblePersons: string[],
+): string[] => {
+  if (isMachineProjectType(type)) return normalizeResponsiblePersons(values.machineSpm)
+  if (type === PROJECT_TYPE_TOS_VERSION) {
+    return normalizeResponsiblePersons(values.tosVersionProjectManager)
+  }
+  return normalizeResponsiblePersons(manualResponsiblePersons)
+}
+
+export const deriveProjectTosVersion = (
+  type: string,
+  projectName: string,
+  existingValue = '',
+): string => type === PROJECT_TYPE_TOS_VERSION ? projectName.trim() : existingValue
+
 /**
  * tOS basic information is still part of the display/storage schema, but it is
  * no longer maintained in the create/edit modal. Keeping this as a modal-only
