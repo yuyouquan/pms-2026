@@ -4,20 +4,19 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const root = process.cwd()
-const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8')
-const requireSourceContract = (relativePath, pattern, message) => {
-  assert.match(read(relativePath), pattern, message)
+const read = relativePath => {
+  const file = path.join(root, relativePath)
+  return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
 }
+const requireContract = (file, pattern, message) => assert.match(read(file), pattern, message)
 
-requireSourceContract(
-  'src/containers/WorkspaceContainer.tsx',
-  /<WorkbenchTodoCenter\b/,
-  'WorkspaceContainer must render the standalone workbench todo center instead of mixing todo ownership into the project list.',
-)
-requireSourceContract(
-  'src/components/workspace/WorkspaceModule.tsx',
-  /onOpenProjectSource\b/,
-  'Project-list rows must expose an explicit source-return action so users can return to the originating project context.',
-)
+requireContract('src/stores/ui.ts', /activeModule[\s\S]*?['"]workbench['"][\s\S]*?['"]projectList['"]/, 'UI navigation must model workbench and projectList as distinct modules.')
+requireContract('src/stores/ui.ts', /projectSpaceOrigin\b/, 'UI state must retain the project-space origin for source return.')
+requireContract('src/app/page.tsx', /ProjectListContainer\b/, 'The app router must render the extracted ProjectListContainer.')
+requireContract('src/app/page.tsx', /['"]workbench['"]/, 'The app router must have a workbench module branch.')
+requireContract('src/app/page.tsx', /['"]projectList['"]/, 'The app router must have a project-list module branch.')
+requireContract('src/containers/AppShell.tsx', /projectSpaceOrigin\b/, 'Project-space header must read the saved navigation origin.')
+requireContract('src/containers/AppShell.tsx', /navigateWithEditGuard\(/, 'Source return must pass through the shared edit guard.')
+requireContract('src/containers/AppShell.tsx', /setActiveModule\(projectSpaceOrigin\)/, 'Source return must restore the recorded workbench or project-list module.')
 
 console.log('workbench split contract passed')

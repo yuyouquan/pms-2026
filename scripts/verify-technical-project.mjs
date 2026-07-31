@@ -4,20 +4,15 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const root = process.cwd()
-const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8')
-const requireSourceContract = (relativePath, pattern, message) => {
-  assert.match(read(relativePath), pattern, message)
+const read = relativePath => {
+  const file = path.join(root, relativePath)
+  return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
 }
+const requireContract = (file, pattern, message) => assert.match(read(file), pattern, message)
 
-requireSourceContract(
-  'src/constants/projectTypes.ts',
-  /PROJECT_TYPE_TECHNICAL\s*=\s*['"]技术项目['"]/,
-  'Technical projects must be a first-class project type.',
-)
-requireSourceContract(
-  'src/lib/technicalProject.ts',
-  /export\s+function\s+softDisableTechnicalSubproject\b/,
-  'Technical subprojects must support soft disablement instead of destructive removal.',
-)
+requireContract('src/types/technicalProject.ts', /TechnicalProjectType[\s\S]*?['"]TDT['"][\s\S]*?['"]subproject['"]/, 'Technical-project types must distinguish TDT and subproject records.')
+requireContract('src/lib/technicalProjectRules.ts', /export\s+function\s+softDisableTechnicalSubproject\b/, 'Technical subprojects must be soft-disabled through a pure rule.')
+requireContract('src/lib/technicalProjectRules.ts', /disabledAt\b/, 'Soft disablement must retain an audit timestamp rather than delete the subproject.')
+requireContract('src/stores/technicalProject.ts', /softDisableTechnicalSubproject\b/, 'The technical-project store must apply the soft-disable rule.')
 
 console.log('technical project contract passed')

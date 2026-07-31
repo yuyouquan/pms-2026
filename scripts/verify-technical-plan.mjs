@@ -5,22 +5,16 @@ import path from 'node:path'
 
 const root = process.cwd()
 const read = relativePath => {
-  const absolutePath = path.join(root, relativePath)
-  return fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, 'utf8') : ''
+  const file = path.join(root, relativePath)
+  return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
 }
-const requireSourceContract = (relativePath, pattern, message) => {
-  assert.match(read(relativePath), pattern, message)
-}
+const requireContract = (file, pattern, message) => assert.match(read(file), pattern, message)
 
-requireSourceContract(
-  'src/lib/technicalPlanTemplates.ts',
-  /export\s+const\s+TDT_PLAN_TEMPLATE\b/,
-  'Technical projects require a dedicated TDT plan template.',
-)
-requireSourceContract(
-  'src/lib/technicalPlanTemplates.ts',
-  /subprojectTemplateId\b/,
-  'Technical-plan templates must retain the parent-to-subproject template hierarchy.',
-)
+const rules = 'src/lib/technicalPlanRules.ts'
+requireContract(rules, /export\s+const\s+TDT_TEMPLATE_SEED\b/, 'Technical planning must provide the TDT template seed.')
+requireContract(rules, /export\s+const\s+SUBPROJECT_TEMPLATE_SEED\b/, 'Technical planning must provide the subproject template seed.')
+requireContract(rules, /export\s+function\s+validateTechnicalPlanDepth\b/, 'Technical planning must validate template depth before persistence.')
+requireContract(rules, /TDT_TEMPLATE_SEED[\s\S]*?maxDepth\s*:\s*2/, 'The TDT seed must declare its maximum plan depth.')
+requireContract(rules, /SUBPROJECT_TEMPLATE_SEED[\s\S]*?maxDepth\s*:\s*3/, 'The subproject seed must declare its maximum plan depth.')
 
 console.log('technical plan contract passed')
