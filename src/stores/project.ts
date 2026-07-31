@@ -13,6 +13,7 @@ import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
 import { createRoadmapAuditSnapshot, diffRoadmapProjectFields } from '@/lib/roadmapAudit'
 import { buildRoadmapDisplayName } from '@/lib/roadmapValidation'
 import {
+  normalizeMachineFamilyName,
   resolveMachineTosUpdate,
   type MachineTosResolution,
 } from '@/lib/machineTosVersions'
@@ -492,10 +493,40 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
     deleteProject: (projectId, actor) => {
       const existing = get().projects.find(project => project.id === projectId)
       if (!existing) return false
-      set(state => ({
-        projects: state.projects.filter(project => project.id !== projectId),
-        selectedProject: state.selectedProject?.id === projectId ? null : state.selectedProject,
-      }))
+      set(state => {
+        let projects = state.projects.filter(project => project.id !== projectId)
+        let recomputedNewProject: Project | null = null
+        if (isMachineProjectType(existing.type) && existing.productType === '老品') {
+          const familyName = normalizeMachineFamilyName(existing.name)
+          const matchingNewProjects = projects.filter(project => (
+            isMachineProjectType(project.type)
+            && project.productType === '新品'
+            && normalizeMachineFamilyName(project.name) === familyName
+          ))
+          if (matchingNewProjects.length === 1) {
+            const resolution = resolveMachineTosUpdate(projects, matchingNewProjects[0])
+            if (resolution.ok) {
+              const nextNewProject = synchronizeMachineTosValues(
+                resolution.candidate,
+                resolution.candidate.firstSaleTosVersion,
+                resolution.candidate.currentTosVersion,
+              )
+              recomputedNewProject = nextNewProject
+              projects = projects.map(project => (
+                project.id === nextNewProject.id ? nextNewProject : project
+              ))
+            }
+          }
+        }
+        return {
+          projects,
+          selectedProject: state.selectedProject?.id === projectId
+            ? null
+            : recomputedNewProject && state.selectedProject?.id === recomputedNewProject.id
+              ? recomputedNewProject
+              : state.selectedProject,
+        }
+      })
       recordNormalProjectAudit('delete', existing, null, actor?.trim() || get().currentLoginUser.trim() || '系统')
       return true
     },

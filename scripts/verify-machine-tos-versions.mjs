@@ -162,6 +162,96 @@ assert.deepEqual(
   'machine version persistence migration is idempotent',
 )
 
+const deleteNew = {
+  ...newMachine,
+  id: 'delete-new',
+  currentTosVersion: '17.10.0',
+}
+const deleteLegacy15 = {
+  ...oldMachine,
+  id: 'delete-old-15',
+  name: 'X6870',
+  firstSaleTosVersion: '14.0.0',
+  currentTosVersion: '15.0.0',
+}
+const deleteLegacy17 = {
+  ...oldMachine,
+  id: 'delete-old-17',
+  name: 'X6870',
+  firstSaleTosVersion: '14.0.0',
+  currentTosVersion: '17.10.0',
+}
+
+const deleteFixture = (projects, projectId) => {
+  projectStore.useProjectStore.setState({ projects, selectedProject: null })
+  let projectStoreNotifications = 0
+  const unsubscribe = projectStore.useProjectStore.subscribe(() => {
+    projectStoreNotifications += 1
+  })
+  const deleted = projectStore.useProjectStore.getState().deleteProject(projectId, '张三')
+  unsubscribe()
+  return {
+    deleted,
+    projectStoreNotifications,
+    projects: projectStore.useProjectStore.getState().projects,
+  }
+}
+
+const withoutMaximumLegacy = deleteFixture(
+  [deleteNew, deleteLegacy15, deleteLegacy17],
+  deleteLegacy17.id,
+)
+assert.deepEqual(
+  withoutMaximumLegacy.projects.map(project => ({ id: project.id, current: project.currentTosVersion })),
+  [
+    { id: deleteNew.id, current: '15.0.0' },
+    { id: deleteLegacy15.id, current: '15.0.0' },
+  ],
+  'deleting the greatest legacy version recomputes its unique new machine from remaining legacy history',
+)
+assert.equal(withoutMaximumLegacy.projectStoreNotifications, 1, 'legacy deletion and new-machine recompute are one project-store transaction')
+
+const withoutLastLegacy = deleteFixture([deleteNew, deleteLegacy15], deleteLegacy15.id)
+assert.deepEqual(
+  withoutLastLegacy.projects.map(project => ({ id: project.id, current: project.currentTosVersion })),
+  [{ id: deleteNew.id, current: '14.0.0' }],
+  'deleting the last legacy version resets its unique new machine current to first sale',
+)
+assert.equal(withoutLastLegacy.projectStoreNotifications, 1, 'last legacy deletion and reset are one project-store transaction')
+
+const withoutNonMaximumLegacy = deleteFixture(
+  [deleteNew, deleteLegacy15, deleteLegacy17],
+  deleteLegacy15.id,
+)
+assert.deepEqual(
+  withoutNonMaximumLegacy.projects.map(project => ({ id: project.id, current: project.currentTosVersion })),
+  [
+    { id: deleteNew.id, current: '17.10.0' },
+    { id: deleteLegacy17.id, current: '17.10.0' },
+  ],
+  'deleting a non-maximum legacy version preserves the family maximum',
+)
+assert.equal(withoutNonMaximumLegacy.projectStoreNotifications, 1, 'non-maximum legacy deletion remains one project-store transaction')
+
+const deletingNewKeepsLegacyHistory = deleteFixture(
+  [deleteNew, deleteLegacy15, deleteLegacy17],
+  deleteNew.id,
+)
+assert.deepEqual(
+  deletingNewKeepsLegacyHistory.projects.map(project => ({ id: project.id, current: project.currentTosVersion })),
+  [
+    { id: deleteLegacy15.id, current: '15.0.0' },
+    { id: deleteLegacy17.id, current: '17.10.0' },
+  ],
+  'deleting a new machine preserves legacy history',
+)
+
+const beforeUnknownDelete = [deleteNew, deleteLegacy15]
+const unknownDelete = deleteFixture(beforeUnknownDelete, 'missing-project')
+assert.equal(unknownDelete.deleted, false, 'unknown project deletion still returns false')
+assert.equal(unknownDelete.projects, beforeUnknownDelete, 'unknown project deletion keeps the same project collection')
+assert.equal(unknownDelete.projectStoreNotifications, 0, 'unknown project deletion does not emit a project-store transaction')
+
 const modalSource = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 const addSource = readSource(root, 'src/components/workspace/AddProjectModal.tsx')
 const storeSource = readSource(root, 'src/stores/project.ts')
