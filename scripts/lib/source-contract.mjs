@@ -54,9 +54,18 @@ const loadResolved = (root, modulePath) => {
 }
 
 export const loadTypeScriptModule = (root, relativePath) => {
-  try {
-    return loadResolved(root, path.join(root, relativePath))
-  } catch {
-    assert.fail(`contract module unavailable: ${relativePath}`)
+  const absolutePath = path.join(root, relativePath)
+  if (!fs.existsSync(absolutePath)) assert.fail(`contract module missing: ${relativePath}`)
+  return loadResolved(root, absolutePath)
+}
+
+export const hasCallExpression = (source, name) => {
+  const file = ts.createSourceFile('contract.tsx', source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TSX)
+  let found = false
+  const visit = node => {
+    if (ts.isCallExpression(node) && node.expression.getText(file).endsWith(name)) found = true
+    ts.forEachChild(node, visit)
   }
+  visit(file)
+  return found
 }

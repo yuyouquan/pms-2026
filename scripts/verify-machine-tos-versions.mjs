@@ -3,17 +3,14 @@ import assert from 'node:assert/strict'
 import { loadTypeScriptModule, projectRoot } from './lib/source-contract.mjs'
 
 const rules = loadTypeScriptModule(projectRoot(import.meta.url), 'src/lib/machineTosVersions.ts')
-for (const name of ['compareThreePartVersions', 'resolveMachineTosUpdate']) assert.equal(typeof rules[name], 'function', `missing ${name}`)
-
 assert.ok(rules.compareThreePartVersions('17.10.0', '17.2.0') > 0, 'three-part versions sort numerically')
-assert.deepEqual(
-  rules.resolveMachineTosUpdate({ machine: { isNew: true, name: 'A' }, tosProjects: [{ name: 'A', version: '17.2.0' }] }),
-  { version: '17.2.0', mode: 'initialize' },
-  'a unique new-machine match initializes the linked tOS version',
-)
-assert.deepEqual(
-  rules.resolveMachineTosUpdate({ machine: { isNew: false, name: 'A', tosVersion: '17.2.0' }, tosProjects: [{ name: 'A', version: '17.10.0' }, { name: 'A', version: '17.2.0' }] }),
-  { version: '17.10.0', mode: 'inherit' },
-  'a legacy machine inherits the greatest same-name tOS version',
-)
+const newMachine = { id: 'new', name: 'A', kind: 'new', firstSale: '14.0.0', current: '' }
+const oldMachine = { id: 'old', name: ' A ', kind: 'legacy', firstSale: '14.0.0', current: '15.0.0' }
+assert.deepEqual(rules.resolveMachineTosUpdate(newMachine, [newMachine]), { current: '14.0.0' }, 'new machine initializes current from first sale')
+assert.deepEqual(rules.resolveMachineTosUpdate(oldMachine, [newMachine, oldMachine]), { current: '14.0.0' }, 'unique trim-matched legacy machine inherits new-machine first sale')
+const laterOld = { id: 'old-2', name: 'A', kind: 'legacy', firstSale: '14.0.0', current: '17.10.0' }
+assert.deepEqual(rules.resolveMachineTosUpdate(newMachine, [newMachine, oldMachine, laterOld]), { current: '17.10.0' }, 'new machine recomputes to greatest same-name legacy current')
+assert.equal(laterOld.current, '17.10.0', 'legacy history is never rewritten')
+assert.throws(() => rules.resolveMachineTosUpdate(oldMachine, []), /unique/i, 'zero matching new machines fails')
+assert.throws(() => rules.resolveMachineTosUpdate(oldMachine, [newMachine, { ...newMachine, id: 'new-2' }]), /unique/i, 'multiple matching new machines fail')
 console.log('machine tOS versions contract passed')

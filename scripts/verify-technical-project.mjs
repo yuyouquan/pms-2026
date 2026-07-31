@@ -1,9 +1,12 @@
 #!/usr/bin/env node
-import { projectRoot, requireSource } from './lib/source-contract.mjs'
+import assert from 'node:assert/strict'
+import { loadTypeScriptModule, projectRoot } from './lib/source-contract.mjs'
 
-const root = projectRoot(import.meta.url)
-requireSource(root, 'src/types/technicalProject.ts', /TechnicalProjectType[\s\S]*?['"]TDT['"][\s\S]*?['"]subproject['"]/, 'missing TDT and subproject type contract')
-requireSource(root, 'src/constants/technicalProject.ts', /TECHNICAL_PROJECT_TYPES\b/, 'missing technical project type constants')
-requireSource(root, 'src/lib/technicalProjectRules.ts', /validateTechnicalProjectType\b/, 'missing technical project type validation rule')
-requireSource(root, 'src/lib/technicalProjectRules.ts', /subproject[\s\S]*?parent/, 'subproject rules must require a TDT parent')
+const rules = loadTypeScriptModule(projectRoot(import.meta.url), 'src/lib/technicalProjectRules.ts')
+for (const name of ['resolveTechnicalProjectFields', 'validateTechnicalProject']) assert.equal(typeof rules[name], 'function', `missing ${name}`)
+assert.deepEqual(rules.resolveTechnicalProjectFields({ ipm: '王五', tmg: '影像', technicalLead: '李四' }, { tmgSubdomains: { 影像: ['相机'] } }), { ipm: '王五', projectManager: '王五', tmg: '影像', subdomains: ['相机'], technicalLead: '李四', responsiblePersons: ['李四'] }, 'IPM maps manager, lead derives persons, and TMG maps subdomains')
+assert.deepEqual(rules.resolveTechnicalProjectFields({ tmg: '未知', technicalLead: '李四' }, { tmgSubdomains: {} }).subdomains, [], 'unknown TMG does not auto-fill')
+assert.throws(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '' }), /technicalLead/, 'technical lead is required')
+assert.throws(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '李四', predecessor: { type: 'technical', work: '' } }), /predecessor/, 'technical predecessor requires work')
+assert.doesNotThrow(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '李四', predecessor: { type: 'machine', work: '' } }), 'nontechnical predecessor work is optional')
 console.log('technical project contract passed')
