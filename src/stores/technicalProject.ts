@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import {
   cloneTechnicalSubproject,
   EMPTY_SUBPROJECT_CONFIGURATION,
+  normalizeTechnicalSubprojectPayload,
   synchronizeTechnicalSubprojects,
 } from '@/lib/technicalProjectRules'
 import type {
@@ -148,14 +149,16 @@ const isValidConfigurationPatch = (patch: TechnicalSubprojectConfigurationPatch)
 const synchronizeParent = (
   allSubprojects: readonly TechnicalSubproject[],
   parentProjectId: string,
-  incoming: readonly IpmTechnicalSubproject[],
+  incoming: unknown,
 ) => {
   const invalidResult = (reason: 'duplicate-id' | 'invalid-payload') => ({
     result: { ok: false as const, reason, items: allSubprojects },
     next: allSubprojects,
   })
-  if (typeof parentProjectId !== 'string' || !parentProjectId.trim()) return invalidResult('invalid-payload')
-  const normalizedParentProjectId = parentProjectId.trim()
+  const normalized = normalizeTechnicalSubprojectPayload(incoming, parentProjectId)
+  if (!normalized.ok) return invalidResult('invalid-payload')
+  const normalizedParentProjectId = normalized.parentProjectId
+  const normalizedIncoming = normalized.items
   const allIds = allSubprojects.map(item => item.id)
   if (new Set(allIds).size !== allIds.length) return invalidResult('duplicate-id')
   const otherParentIds = new Set(
@@ -163,11 +166,11 @@ const synchronizeParent = (
       .filter(item => item.parentProjectId !== normalizedParentProjectId)
       .map(item => item.id),
   )
-  if (incoming.some(item => otherParentIds.has(String(item.id || '').trim()))) {
+  if (normalizedIncoming.some(item => otherParentIds.has(item.id))) {
     return invalidResult('duplicate-id')
   }
   const scoped = allSubprojects.filter(item => item.parentProjectId === normalizedParentProjectId)
-  const result = synchronizeTechnicalSubprojects(scoped, incoming, normalizedParentProjectId)
+  const result = synchronizeTechnicalSubprojects(scoped, normalizedIncoming, normalizedParentProjectId)
   if (!result.ok) return { result, next: allSubprojects }
   const untouched = allSubprojects.filter(item => item.parentProjectId !== normalizedParentProjectId)
   return {

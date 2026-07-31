@@ -199,6 +199,27 @@ const normalizeIncomingSubproject = (
   return { id, name, parentProjectId: normalizedParentId, ipmOrder: candidate.ipmOrder }
 }
 
+export type NormalizedTechnicalSubprojectPayload =
+  | { ok: true; parentProjectId: string; items: IpmTechnicalSubproject[] }
+  | { ok: false; reason: 'invalid-payload' }
+
+export const normalizeTechnicalSubprojectPayload = (
+  incoming: unknown,
+  parentProjectId: unknown,
+): NormalizedTechnicalSubprojectPayload => {
+  if (typeof parentProjectId !== 'string' || !parentProjectId.trim() || !Array.isArray(incoming)) {
+    return { ok: false, reason: 'invalid-payload' }
+  }
+  const normalizedParentId = parentProjectId.trim()
+  const items = incoming.map(item => normalizeIncomingSubproject(item, normalizedParentId))
+  if (items.some(item => item === null)) return { ok: false, reason: 'invalid-payload' }
+  return {
+    ok: true,
+    parentProjectId: normalizedParentId,
+    items: items as IpmTechnicalSubproject[],
+  }
+}
+
 const compareSubprojects = (left: TechnicalSubproject, right: TechnicalSubproject) => (
   left.ipmOrder - right.ipmOrder
   || left.id.localeCompare(right.id)
@@ -209,15 +230,11 @@ export const synchronizeTechnicalSubprojects = (
   incoming: readonly IpmTechnicalSubproject[],
   parentProjectId: string,
 ): TechnicalSubprojectSyncResult => {
-  if (typeof parentProjectId !== 'string' || !parentProjectId.trim() || !Array.isArray(incoming)) {
+  const normalized = normalizeTechnicalSubprojectPayload(incoming, parentProjectId)
+  if (!normalized.ok) {
     return { ok: false as const, reason: 'invalid-payload' as const, items: existing }
   }
-  const normalizedParentId = parentProjectId.trim()
-  const normalizedIncoming = incoming.map(item => normalizeIncomingSubproject(item, normalizedParentId))
-  if (normalizedIncoming.some(item => item === null)) {
-    return { ok: false as const, reason: 'invalid-payload' as const, items: existing }
-  }
-  const payload = normalizedIncoming as IpmTechnicalSubproject[]
+  const payload = normalized.items
   const normalizedIds = payload.map(item => item.id)
   if (new Set(normalizedIds).size !== payload.length) {
     return { ok: false as const, reason: 'duplicate-id' as const, items: existing }

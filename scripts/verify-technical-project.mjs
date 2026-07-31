@@ -106,6 +106,12 @@ const technicalStore = technicalStoreModule.createTechnicalProjectStore({ subpro
 let fixtureNotifications = 0
 const unsubscribeFixture = technicalStore.subscribe(() => { fixtureNotifications += 1 })
 const beforeFailedStoreSync = technicalStore.getState().subprojects
+for (const malformedBatch of [null, { id: 'not-an-array' }, [null]]) {
+  assert.doesNotThrow(() => technicalStore.synchronizeSubprojects('tech-1', malformedBatch), 'fixture store returns an error for malformed batches instead of throwing')
+  assert.deepEqual(technicalStore.synchronizeSubprojects('tech-1', malformedBatch), { ok: false, reason: 'invalid-payload', items: beforeFailedStoreSync }, 'fixture store rejects malformed batches atomically')
+}
+assert.equal(fixtureNotifications, 0, 'malformed fixture batches emit no notifications')
+assert.deepEqual(technicalStore.getState().subprojects, beforeFailedStoreSync, 'malformed fixture batches leave state unchanged')
 assert.equal(technicalStore.synchronizeSubprojects('tech-1', [{ id: 'dup', parentProjectId: 'tech-1', name: 'One', ipmOrder: 1 }, { id: 'dup', parentProjectId: 'tech-1', name: 'Two', ipmOrder: 2 }]).ok, false, 'store rejects duplicate IDs')
 assert.deepEqual(technicalStore.getState().subprojects, beforeFailedStoreSync, 'failed store sync is atomic')
 assert.deepEqual(technicalStore.synchronizeSubprojects('', [{ id: 'x', parentProjectId: 'tech-1', name: 'Wrong scope', ipmOrder: 1 }]), { ok: false, reason: 'invalid-payload', items: beforeFailedStoreSync }, 'empty parent scope rejects atomically')
@@ -134,6 +140,12 @@ liveStore.setState({ subprojects: [{ ...configuredChildren[0], active: false }] 
 let liveNotifications = 0
 const unsubscribeLive = liveStore.subscribe(() => { liveNotifications += 1 })
 const beforeRejectedLiveSaves = liveStore.getState().subprojects
+for (const malformedBatch of [null, { id: 'not-an-array' }, [null]]) {
+  assert.doesNotThrow(() => liveStore.getState().synchronizeSubprojects('tech-1', malformedBatch), 'persisted store returns an error for malformed batches instead of throwing')
+  assert.deepEqual(liveStore.getState().synchronizeSubprojects('tech-1', malformedBatch), { ok: false, reason: 'invalid-payload', items: beforeRejectedLiveSaves }, 'persisted store rejects malformed batches atomically')
+}
+assert.equal(liveNotifications, 0, 'malformed persisted-store batches emit no notifications')
+assert.deepEqual(liveStore.getState().subprojects, beforeRejectedLiveSaves, 'malformed persisted-store batches leave state unchanged')
 assert.deepEqual(liveStore.getState().updateConfiguration('child-a', { coreValue: '人有我有' }), { ok: false, reason: 'inactive' }, 'persisted store rejects stale saves for inactive children')
 assert.deepEqual(liveStore.getState().updateConfiguration('missing', { coreValue: '人有我有' }), { ok: false, reason: 'missing' }, 'persisted store rejects missing children')
 assert.equal(liveNotifications, 0, 'rejected persisted-store saves emit no notification')
