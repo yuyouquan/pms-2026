@@ -424,6 +424,35 @@
   min-width: max-content;
 }
 
+.pms-user-dropdown .ant-dropdown-menu-item,
+.pms-user-dropdown .ant-dropdown-menu-title-content,
+.pms-user-menu__summary,
+.pms-user-menu__current,
+.pms-user-menu__row {
+  min-width: 0;
+}
+
+.pms-user-menu__current,
+.pms-user-menu__row {
+  overflow: hidden;
+}
+
+.pms-user-menu__name,
+.pms-user-menu__count {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pms-user-menu__name {
+  flex: 0 1 auto;
+}
+
+.pms-user-menu__count {
+  flex: 1 1 auto;
+  text-align: right;
+}
+
 @media (max-width: 768px) {
   .pms-main-header {
     height: 56px;

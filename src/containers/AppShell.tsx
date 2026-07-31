@@ -31,9 +31,9 @@ function UserSwitcher() {
     <Dropdown
       menu={{
         items: [
-          { key: 'label', label: <div style={{ padding: '4px 0', borderBottom: '1px solid #f3f4f6' }}>
+          { key: 'label', label: <div className="pms-user-menu__summary" style={{ padding: '4px 0', borderBottom: '1px solid #f3f4f6' }}>
             <span style={{ color: '#999', fontSize: 11 }}>当前登录用户</span>
-            <div style={{ fontWeight: 600, marginTop: 2 }}>{currentLoginUser}
+            <div className="pms-user-menu__current" style={{ fontWeight: 600, marginTop: 2 }}>{currentLoginUser}
               {(() => {
                 const adminGroup = globalRoles.find(r => r.name === '管理组')
                 const isAdmin = adminGroup?.members.includes(currentLoginUser)
@@ -54,11 +54,11 @@ function UserSwitcher() {
             const projectCount = isAdmin ? projects.length : projects.filter(p => (projectMemberMap[p.id] || []).includes(u)).length
             return {
               key: u,
-              label: <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: isActive ? 600 : 400 }}>
+              label: <div className="pms-user-menu__row" style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: isActive ? 600 : 400 }}>
                 <Avatar size="small" style={{ background: isActive ? '#4338ca' : '#e0e0e0', fontSize: 12 }}>{u.slice(-1)}</Avatar>
-                <span>{u}</span>
+                <span className="pms-user-menu__name">{u}</span>
                 {isAdmin && <Tag color="red" style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>管理组</Tag>}
-                <span style={{ color: '#9ca3af', fontSize: 11, marginLeft: 'auto' }}>{projectCount}个项目</span>
+                <span className="pms-user-menu__count" style={{ color: '#9ca3af', fontSize: 11, marginLeft: 'auto' }}>{projectCount}个项目</span>
                 {isActive && <CheckCircleOutlined style={{ color: '#4338ca' }} />}
               </div>,
               onClick: () => { setCurrentLoginUser(u); setProjectCardPage(1) },
@@ -67,8 +67,16 @@ function UserSwitcher() {
         ],
       }}
       placement="bottomRight"
+      align={{ offset: [4, 0] }}
       trigger={['click']}
-      overlayStyle={{ minWidth: 340 }}
+      classNames={{ root: 'pms-user-dropdown' }}
+      styles={{
+        root: {
+          width: 'min(340px, calc(100vw - 16px))',
+          minWidth: 'min(340px, calc(100vw - 16px))',
+        },
+        itemContent: { minWidth: 0, overflow: 'hidden' },
+      }}
     >
       <Button
         className="pms-user-switcher"

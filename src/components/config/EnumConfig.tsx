@@ -10,6 +10,7 @@ import {
   Modal,
   Popconfirm,
   Skeleton,
+  Space,
   Table,
   Tooltip,
   Typography,
@@ -22,11 +23,10 @@ import {
   PlusOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
-import { TOS_ENUM_REGISTRY, TOS_ENUM_TYPE_KEYS } from '@/lib/enumValues'
+import { normalizeEnumValue, TOS_ENUM_REGISTRY, TOS_ENUM_TYPE_KEYS } from '@/lib/enumValues'
 import { useEnumStore } from '@/stores/enums'
 import type { EnumActionResult, EnumTypeKey } from '@/types/enums'
 
-type LoadState = 'loading' | 'ready' | 'error'
 type ModalMode = 'add' | 'edit'
 
 const FORMAT_HINT: Record<EnumTypeKey, string> = {
@@ -38,6 +38,7 @@ function resultMessage(result: EnumActionResult): string {
   if (result.ok) return ''
   if (result.reason === 'duplicate') return '该枚举值已存在，请勿重复添加'
   if (result.reason === 'missing') return '原枚举值已不存在，请刷新后重试'
+  if (result.reason === 'storage') return '本地存储写入失败，配置未保存，请恢复存储后重试'
   return '格式不正确，请按当前枚举类型的格式输入'
 }
 
@@ -46,28 +47,25 @@ export default function EnumConfig() {
   const addEnumValue = useEnumStore(state => state.addEnumValue)
   const updateEnumValue = useEnumStore(state => state.updateEnumValue)
   const deleteEnumValue = useEnumStore(state => state.deleteEnumValue)
+  const hasHydrated = useEnumStore(state => state.hasHydrated)
+  const hydrationError = useEnumStore(state => state.hydrationError)
+  const hydrateEnumStore = useEnumStore(state => state.hydrateEnumStore)
+  const resetLocalConfig = useEnumStore(state => state.resetLocalConfig)
   const [selectedType, setSelectedType] = useState<EnumTypeKey>('tos-2-part')
-  const [loadState, setLoadState] = useState<LoadState>(
-    useEnumStore.persist.hasHydrated() ? 'ready' : 'loading',
-  )
   const [modalOpen, setModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<ModalMode>('add')
   const [editingValue, setEditingValue] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [fieldError, setFieldError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [recoveryAction, setRecoveryAction] = useState<'retry' | 'reset' | null>(null)
   const triggerRef = useRef<HTMLElement | null>(null)
+  const updatedValueFocusRef = useRef<string | null>(null)
   const submittingRef = useRef(false)
 
   useEffect(() => {
-    if (useEnumStore.persist.hasHydrated()) {
-      setLoadState('ready')
-      return undefined
-    }
-    const unsubscribe = useEnumStore.persist.onFinishHydration(() => setLoadState('ready'))
-    Promise.resolve(useEnumStore.persist.rehydrate()).catch(() => setLoadState('error'))
-    return unsubscribe
-  }, [])
+    if (!hasHydrated) void hydrateEnumStore()
+  }, [hasHydrated, hydrateEnumStore])
 
   const selectedDefinition = TOS_ENUM_REGISTRY[selectedType]
   const rows = useMemo(
@@ -76,7 +74,18 @@ export default function EnumConfig() {
   )
 
   const restoreTriggerFocus = () => {
-    window.requestAnimationFrame(() => triggerRef.current?.focus())
+    window.setTimeout(() => {
+      const updatedValue = updatedValueFocusRef.current
+      updatedValueFocusRef.current = null
+      const updatedEditButton = updatedValue
+        ? Array.from(document.querySelectorAll<HTMLButtonElement>('[data-enum-edit-value]'))
+          .find(button => button.dataset.enumEditValue === updatedValue)
+        : null
+      const originalTrigger = triggerRef.current?.isConnected ? triggerRef.current : null
+      const addButton = document.querySelector<HTMLButtonElement>('[data-enum-add-value]')
+      const focusTarget = updatedEditButton ?? originalTrigger ?? addButton
+      focusTarget?.focus()
+    }, 350)
   }
 
   const closeModal = () => {
@@ -90,6 +99,7 @@ export default function EnumConfig() {
   }
 
   const openAddModal = () => {
+    if (submittingRef.current) return
     triggerRef.current = document.activeElement as HTMLElement | null
     setModalMode('add')
     setEditingValue(null)
@@ -116,12 +126,14 @@ export default function EnumConfig() {
       : updateEnumValue(selectedType, editingValue ?? '', draft)
 
     if (!result.ok) {
+      if (result.reason === 'storage') message.error(resultMessage(result))
       setFieldError(resultMessage(result))
       setSubmitting(false)
       submittingRef.current = false
       return
     }
 
+    if (modalMode === 'edit') updatedValueFocusRef.current = normalizeEnumValue(draft)
     message.success(modalMode === 'add' ? '枚举值已新增' : '枚举值已更新')
     closeModal()
     // Keep the synchronous guard closed through this event-loop turn even
@@ -129,13 +141,27 @@ export default function EnumConfig() {
     submittingRef.current = true
     window.setTimeout(() => {
       submittingRef.current = false
-    }, 0)
+    }, 300)
   }
 
   const handleDelete = (value: string) => {
     const result = deleteEnumValue(selectedType, value)
     if (result.ok) message.success('枚举值已删除')
     else message.error(resultMessage(result))
+  }
+
+  const handleRetry = async () => {
+    setRecoveryAction('retry')
+    await hydrateEnumStore()
+    setRecoveryAction(null)
+  }
+
+  const handleReset = async () => {
+    setRecoveryAction('reset')
+    const reset = await resetLocalConfig()
+    if (reset) message.success('本地枚举配置已重置')
+    else message.error('本地枚举配置重置失败')
+    setRecoveryAction(null)
   }
 
   const columns: ColumnsType<{ key: string; value: string }> = [
@@ -160,7 +186,8 @@ export default function EnumConfig() {
         <div className="pms-enum-actions">
           <Tooltip title="编辑枚举值">
             <Button
-              aria-label="编辑枚举值"
+              aria-label={`编辑枚举值 ${record.value}`}
+              data-enum-edit-value={record.value}
               type="text"
               icon={<EditOutlined />}
               onClick={event => {
@@ -190,7 +217,7 @@ export default function EnumConfig() {
     },
   ]
 
-  if (loadState === 'loading') {
+  if (!hasHydrated) {
     return (
       <Card className="pms-enum-loading" aria-live="polite">
         <Typography.Text type="secondary">正在加载枚举值…</Typography.Text>
@@ -199,13 +226,25 @@ export default function EnumConfig() {
     )
   }
 
-  if (loadState === 'error') {
+  if (hydrationError) {
     return (
       <Alert
         type="error"
         showIcon
-        message="加载枚举值失败"
-        description="本地配置读取失败，请刷新页面后重试。"
+        title="加载枚举值失败"
+        description={(
+          <Space orientation="vertical" size={10}>
+            <span>{hydrationError}</span>
+            <Space wrap>
+              <Button size="small" loading={recoveryAction === 'retry'} onClick={handleRetry}>
+                重试
+              </Button>
+              <Button size="small" danger loading={recoveryAction === 'reset'} onClick={handleReset}>
+                重置本地配置
+              </Button>
+            </Space>
+          </Space>
+        )}
       />
     )
   }
@@ -245,7 +284,7 @@ export default function EnumConfig() {
           </div>
         )}
         extra={(
-          <Button type="primary" icon={<PlusOutlined />} onClick={openAddModal}>
+          <Button data-enum-add-value type="primary" icon={<PlusOutlined />} onClick={openAddModal}>
             新增枚举值
           </Button>
         )}
@@ -270,9 +309,6 @@ export default function EnumConfig() {
         cancelButtonProps={{ 'aria-label': '取消枚举值编辑' }}
         confirmLoading={submitting}
         destroyOnHidden
-        afterOpenChange={open => {
-          if (!open) restoreTriggerFocus()
-        }}
         onCancel={closeModal}
         onOk={submit}
       >

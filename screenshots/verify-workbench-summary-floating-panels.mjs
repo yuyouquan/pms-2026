@@ -10,7 +10,6 @@ let page = null
 const unexpectedBrowserErrors = []
 const ALLOWED_ANTD_DEPRECATIONS = [
   'Warning: [antd: ConfigProvider] `autoInsertSpaceInButton` is deprecated. Please use `{ button: { autoInsertSpace: boolean }}` instead.',
-  'Warning: [antd: Dropdown] `overlayStyle` is deprecated. Please use `styles.root` instead.',
   'Warning: [antd: Space] `split` is deprecated. Please use `separator` instead.',
   'Warning: [antd: Divider] `type` is deprecated. Please use `orientation` instead.',
   'Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.',
@@ -349,31 +348,24 @@ const waitForTriggerFocus = async ariaLabel => {
   ), { timeout: STEP_TIMEOUT }, ariaLabel)
 }
 
-try {
-  browser = await puppeteer.launch({
-    headless: 'new',
-    defaultViewport: { width: 1440, height: 1000 },
-    args: ['--no-sandbox', '--window-size=1440,1000'],
-  })
-  page = await browser.newPage()
-  page.setDefaultTimeout(STEP_TIMEOUT)
-  page.on('pageerror', error => {
+const attachPageObservers = targetPage => {
+  targetPage.setDefaultTimeout(STEP_TIMEOUT)
+  targetPage.on('pageerror', error => {
     const detail = `[pageerror:${currentStep}] ${error.message}`
     unexpectedBrowserErrors.push(detail)
     console.error(detail)
   })
-  page.on('console', message => {
-    if (message.type() === 'error') {
-      if (ALLOWED_ANTD_DEPRECATIONS.includes(message.text())) {
-        console.warn(`[console:${currentStep}] ${message.text()}`)
-        return
-      }
-      const detail = `[console:${currentStep}] ${message.text()}`
-      unexpectedBrowserErrors.push(detail)
-      console.error(detail)
+  targetPage.on('console', message => {
+    if (message.type() !== 'error') return
+    if (ALLOWED_ANTD_DEPRECATIONS.includes(message.text())) {
+      console.warn(`[console:${currentStep}] ${message.text()}`)
+      return
     }
+    const detail = `[console:${currentStep}] ${message.text()}`
+    unexpectedBrowserErrors.push(detail)
+    console.error(detail)
   })
-  page.on('response', response => {
+  targetPage.on('response', response => {
     if (response.status() < 400) return
     const url = response.url()
     if (response.status() === 404 && /\/favicon\.ico(?:\?|$)/.test(url)) return
@@ -381,6 +373,16 @@ try {
     unexpectedBrowserErrors.push(detail)
     console.error(detail)
   })
+}
+
+try {
+  browser = await puppeteer.launch({
+    headless: 'new',
+    defaultViewport: { width: 1440, height: 1000 },
+    args: ['--no-sandbox', '--window-size=1440,1000'],
+  })
+  page = await browser.newPage()
+  attachPageObservers(page)
 
   await step('open default workbench tabs', async () => {
     await page.goto(BASE_URL, { waitUntil: 'networkidle0', timeout: 30_000 })

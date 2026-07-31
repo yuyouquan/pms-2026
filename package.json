@@ -16,6 +16,7 @@
     "verify:workbench-split": "node scripts/verify-workbench-split.mjs",
     "verify:todo-center": "node scripts/verify-todo-center.mjs",
     "verify:enum-config": "node scripts/verify-enum-config.mjs",
+    "verify:enum-browser": "node screenshots/verify-enum-config-browser.mjs",
     "verify:machine-tos": "node scripts/verify-machine-tos-versions.mjs",
     "verify:technical-project": "node scripts/verify-technical-project.mjs",
     "verify:technical-plan": "node scripts/verify-technical-plan.mjs",

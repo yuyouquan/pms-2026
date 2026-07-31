@@ -47,6 +47,8 @@ assert.equal(enums.getValues('tos-3-part').includes('17.2.0'), false, 'deleted o
 
 assert.deepEqual(store.partializeEnumState({
   valuesByType: { 'tos-2-part': ['18.0'], 'tos-3-part': ['18.0.1'] },
+  hasHydrated: true,
+  hydrationError: 'not persisted',
   modalOpen: true,
   selectedType: 'tos-2-part',
   loading: true,
@@ -75,15 +77,27 @@ const enumUi = readSource(root, 'src/components/config/EnumConfig.tsx')
 const configUi = readSource(root, 'src/containers/ConfigContainer.tsx')
 const appShell = readSource(root, 'src/containers/AppShell.tsx')
 const globalStyles = readSource(root, 'src/styles/globals.css')
+const storeSource = readSource(root, 'src/stores/enums.ts')
 assert.match(configUi, /key:\s*['"]enum['"][\s\S]*枚举值配置/, 'configuration center exposes the enum-value tab')
 assert.match(configUi, /configTab\s*===\s*['"]enum['"][\s\S]*<EnumConfig/, 'enum tab renders EnumConfig')
 assert.match(enumUi, /TOS_ENUM_TYPE_KEYS\.map[\s\S]*TOS_ENUM_REGISTRY\[type\]/, 'fixed registry drives the two visible enum type labels')
 for (const copy of ['新增枚举值', '历史已保存字符串不受影响', '格式要求', '加载枚举值失败', '暂无枚举值']) {
   assert.ok(enumUi.includes(copy), `EnumConfig must include UI copy: ${copy}`)
 }
-assert.match(enumUi, /aria-label=["']编辑/, 'icon-only edit action has an aria label')
+assert.match(enumUi, /aria-label=\{`编辑枚举值/, 'icon-only edit action has a value-specific aria label')
 assert.match(enumUi, /aria-label=["']删除/, 'icon-only delete action has an aria label')
 assert.doesNotMatch(enumUi, /添加类型|编辑类型|删除类型/, 'fixed enum types expose no type CRUD')
+assert.match(enumUi, /重试/, 'hydration error UI exposes retry')
+assert.match(enumUi, /重置本地配置/, 'hydration error UI exposes exact-key reset')
+assert.match(enumUi, /const submit = \(\) => \{\s*if \(submittingRef\.current\) return/, 'same-tick repeated submit is rejected before any store write')
+assert.match(enumUi, /const openAddModal = \(\) => \{\s*if \(submittingRef\.current\) return/, 'a trailing Enter cannot reopen the add modal while submission is guarded')
+assert.match(storeSource, /hasHydrated/, 'hydration completion lives at the store boundary')
+assert.match(storeSource, /hydrationError/, 'hydration failures live at the store boundary')
+assert.match(storeSource, /onRehydrateStorage/, 'persist completion callback owns hydration completion')
+assert.match(storeSource, /skipHydration:\s*true/, 'browser hydration is started explicitly after mount')
+assert.match(storeSource, /ENUM_STORAGE_KEY/, 'the enum storage key is named for exact reset')
+assert.match(appShell, /styles=\{\{\s*root:/, 'user dropdown uses the Ant Design 6 popup styling API')
+assert.doesNotMatch(appShell, /overlayStyle=/, 'deprecated dropdown overlayStyle is removed')
 assert.match(appShell, /className="pms-main-header"[\s\S]*className="pms-main-header__row"/, 'main header exposes responsive layout hooks')
 assert.match(appShell, /className="pms-main-header__nav-scroll"[\s\S]*className="pms-main-header__menu"/, 'main navigation has its own scroll container')
 assert.match(globalStyles, /@media\s*\(max-width:\s*768px\)[\s\S]*\.pms-main-header__row[\s\S]*flex-wrap:\s*nowrap/, 'narrow header must stay on one row')

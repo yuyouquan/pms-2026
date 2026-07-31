@@ -4,7 +4,7 @@ export type EnumValuesByType = Record<EnumTypeKey, string[]>
 
 export type EnumActionResult =
   | { ok: true }
-  | { ok: false; reason: 'invalid' | 'duplicate' | 'missing' }
+  | { ok: false; reason: 'invalid' | 'duplicate' | 'missing' | 'storage' }
 
 export interface EnumTypeDefinition {
   key: EnumTypeKey

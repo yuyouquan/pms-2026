@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
+import type { StateStorage } from 'zustand/middleware'
 import {
   createInitialEnumValues,
   isEnumTypeKey,
@@ -12,18 +13,51 @@ import type { EnumActionResult, EnumTypeKey, EnumValuesByType } from '@/types/en
 
 export interface EnumState {
   valuesByType: EnumValuesByType
+  hasHydrated: boolean
+  hydrationError: string | null
 }
 
 export interface EnumActions {
   addEnumValue: (type: EnumTypeKey, input: string) => EnumActionResult
   updateEnumValue: (type: EnumTypeKey, currentValue: string, input: string) => EnumActionResult
   deleteEnumValue: (type: EnumTypeKey, value: string) => EnumActionResult
+  hydrateEnumStore: () => Promise<boolean>
+  resetLocalConfig: () => Promise<boolean>
+  completeHydration: (error?: unknown) => void
 }
 
 export type EnumStore = EnumState & EnumActions
 export type PersistedEnumState = Pick<EnumState, 'valuesByType'>
 
+export const ENUM_STORAGE_KEY = 'pms-enum-values'
 const ENUM_STORE_VERSION = 1
+
+const enumStateStorage: StateStorage = {
+  getItem(name) {
+    if (typeof window === 'undefined') throw new Error('localStorage unavailable')
+    return window.localStorage.getItem(name)
+  },
+  setItem(name, value) {
+    if (typeof window === 'undefined') throw new Error('localStorage unavailable')
+    window.localStorage.setItem(name, value)
+  },
+  removeItem(name) {
+    if (typeof window === 'undefined') throw new Error('localStorage unavailable')
+    window.localStorage.removeItem(name)
+  },
+}
+
+function hydrationErrorMessage(error: unknown): string {
+  const name = error instanceof DOMException ? error.name : ''
+  const detail = error instanceof Error ? error.message : String(error ?? '')
+  if (error instanceof SyntaxError || /JSON|parse|unexpected token/i.test(detail)) {
+    return '本地枚举配置无法读取，请重试或重置本地配置。'
+  }
+  if (name === 'SecurityError' || /storage.*(?:blocked|unavailable)|localStorage unavailable/i.test(detail)) {
+    return '本地枚举存储不可用，请检查浏览器权限后重试。'
+  }
+  return '本地枚举配置加载失败，请重试或重置本地配置。'
+}
 
 function cloneValues(values: EnumValuesByType): EnumValuesByType {
   return {
@@ -110,14 +144,14 @@ export function migrateEnumState(persistedState: unknown, _fromVersion: number):
   }
 }
 
-export function partializeEnumState(state: EnumState): PersistedEnumState {
+export function partializeEnumState(state: Pick<EnumState, 'valuesByType'>): PersistedEnumState {
   return { valuesByType: cloneValues(state.valuesByType) }
 }
 
 export function createEnumStore(initial?: Partial<PersistedEnumState>) {
   let valuesByType = mergeInitialValues(initial)
   const fixture = {
-    getState: (): EnumState => ({ valuesByType: cloneValues(valuesByType) }),
+    getState: (): PersistedEnumState => ({ valuesByType: cloneValues(valuesByType) }),
     getValues: (type: EnumTypeKey): string[] => [...valuesByType[type]],
     addEnumValue: (type: EnumTypeKey, input: string): EnumActionResult => {
       const next = addValue(valuesByType, type, input)
@@ -138,36 +172,123 @@ export function createEnumStore(initial?: Partial<PersistedEnumState>) {
   return fixture
 }
 
-export const useEnumStore = create<EnumStore>()(persist<EnumStore, [], [], PersistedEnumState>(
-  (set, get) => ({
-    valuesByType: createInitialEnumValues(),
-    addEnumValue: (type, input) => {
-      const next = addValue(get().valuesByType, type, input)
-      if (next.result.ok) set({ valuesByType: next.valuesByType })
-      return next.result
+export const useEnumStore = create<EnumStore>()((rawSet, get, api) => {
+  let hydrationInFlight: Promise<boolean> | null = null
+
+  const persistedCreator = persist<EnumStore, [], [], PersistedEnumState>(
+    (set) => {
+      const commitValues = (
+        previousValues: EnumValuesByType,
+        nextValues: EnumValuesByType,
+      ): EnumActionResult => {
+        try {
+          set({ valuesByType: nextValues })
+          return { ok: true }
+        } catch (error) {
+          rawSet({
+            valuesByType: cloneValues(previousValues),
+            hasHydrated: true,
+            hydrationError: hydrationErrorMessage(error),
+          })
+          return { ok: false, reason: 'storage' }
+        }
+      }
+
+      const readPersistApi = () => (
+        api as typeof api & {
+          persist?: { rehydrate?: () => Promise<void> | void }
+        }
+      ).persist
+
+      return {
+        valuesByType: createInitialEnumValues(),
+        hasHydrated: false,
+        hydrationError: null,
+        addEnumValue: (type, input) => {
+          const previousValues = get().valuesByType
+          const next = addValue(previousValues, type, input)
+          if (!next.result.ok) return next.result
+          return commitValues(previousValues, next.valuesByType)
+        },
+        updateEnumValue: (type, currentValue, input) => {
+          const previousValues = get().valuesByType
+          const next = updateValue(previousValues, type, currentValue, input)
+          if (!next.result.ok) return next.result
+          return commitValues(previousValues, next.valuesByType)
+        },
+        deleteEnumValue: (type, value) => {
+          const previousValues = get().valuesByType
+          const next = deleteValue(previousValues, type, value)
+          if (!next.result.ok) return next.result
+          return commitValues(previousValues, next.valuesByType)
+        },
+        completeHydration: (error) => {
+          rawSet({
+            hasHydrated: true,
+            hydrationError: error ? hydrationErrorMessage(error) : null,
+          })
+        },
+        hydrateEnumStore: async () => {
+          if (hydrationInFlight) return hydrationInFlight
+          const persistApi = readPersistApi()
+          if (!persistApi?.rehydrate) {
+            rawSet({
+              hasHydrated: true,
+              hydrationError: '本地枚举存储不可用，请刷新页面后重试。',
+            })
+            return false
+          }
+
+          rawSet({ hasHydrated: false, hydrationError: null })
+          hydrationInFlight = Promise.resolve(persistApi.rehydrate())
+            .then(() => get().hasHydrated && !get().hydrationError)
+            .catch(error => {
+              rawSet({ hasHydrated: true, hydrationError: hydrationErrorMessage(error) })
+              return false
+            })
+            .finally(() => {
+              hydrationInFlight = null
+            })
+          return hydrationInFlight
+        },
+        resetLocalConfig: async () => {
+          try {
+            enumStateStorage.removeItem(ENUM_STORAGE_KEY)
+          } catch (error) {
+            rawSet({ hasHydrated: true, hydrationError: hydrationErrorMessage(error) })
+            return false
+          }
+
+          const seeds = createInitialEnumValues()
+          rawSet({ valuesByType: seeds, hasHydrated: false, hydrationError: null })
+          try {
+            set({ valuesByType: seeds })
+          } catch (error) {
+            rawSet({ valuesByType: seeds, hasHydrated: true, hydrationError: hydrationErrorMessage(error) })
+            return false
+          }
+          return get().hydrateEnumStore()
+        },
+      }
     },
-    updateEnumValue: (type, currentValue, input) => {
-      const next = updateValue(get().valuesByType, type, currentValue, input)
-      if (next.result.ok) set({ valuesByType: next.valuesByType })
-      return next.result
+    {
+      name: ENUM_STORAGE_KEY,
+      version: ENUM_STORE_VERSION,
+      storage: createJSONStorage<PersistedEnumState>(() => enumStateStorage),
+      migrate: migrateEnumState,
+      partialize: partializeEnumState,
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...migrateEnumState(persistedState, ENUM_STORE_VERSION),
+      }),
+      onRehydrateStorage: state => (_hydratedState, error) => {
+        state.completeHydration(error)
+      },
+      skipHydration: true,
     },
-    deleteEnumValue: (type, value) => {
-      const next = deleteValue(get().valuesByType, type, value)
-      if (next.result.ok) set({ valuesByType: next.valuesByType })
-      return next.result
-    },
-  }),
-  {
-    name: 'pms-enum-values',
-    version: ENUM_STORE_VERSION,
-    storage: createJSONStorage(() => localStorage),
-    migrate: migrateEnumState,
-    partialize: partializeEnumState,
-    merge: (persistedState, currentState) => ({
-      ...currentState,
-      ...migrateEnumState(persistedState, ENUM_STORE_VERSION),
-    }),
-  },
-))
+  )
+
+  return persistedCreator(rawSet, get, api as Parameters<typeof persistedCreator>[2])
+})
 
 export { TOS_ENUM_TYPE_KEYS }
