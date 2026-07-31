@@ -11,6 +11,7 @@ import {
   HistoryOutlined, SearchOutlined, AppstoreOutlined, EditOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, PlusSquareOutlined, MinusSquareOutlined,
   DeleteOutlined, CaretDownOutlined, StopOutlined,
+  NumberOutlined,
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -34,6 +35,7 @@ import type { TaskChange } from '@/types/plan-notify'
 import { NOTIFY_DIFF_FIELDS, MOCK_USER_MAP } from '@/components/shared/PlanHelpers'
 import { notifyPublishChanges } from '@/lib/feishu-notify'
 import { cancelDraftRevision } from '@/lib/marketRules'
+import EnumConfig from '@/components/config/EnumConfig'
 import {
   getTemplateSnapshotForProjectType,
   getTemplateTasksForProjectType,
@@ -595,12 +597,16 @@ export default function ConfigContainer() {
           items={[
             { key: 'plan', label: <Space size={6}><CalendarOutlined />计划模板配置</Space> },
             { key: 'transfer', label: <Space size={6}><SwapOutlined />转维材料模板配置</Space> },
+            { key: 'enum', label: <Space size={6}><NumberOutlined />枚举值配置</Space> },
           ]}
         />
       </Card>
 
       {/* Transfer config */}
       {configTab === 'transfer' && <TransferConfig {...transferProps} />}
+
+      {/* Fixed tOS enum value config */}
+      {configTab === 'enum' && <EnumConfig />}
 
       {/* Plan config */}
       {configTab === 'plan' && (

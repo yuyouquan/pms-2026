@@ -385,6 +385,186 @@
   }
 }
 
+/* Fixed tOS enum value configuration */
+.pms-enum-config {
+  display: grid;
+  grid-template-columns: minmax(224px, 280px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.pms-enum-config .ant-card {
+  border-color: rgba(99, 102, 241, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(79, 70, 229, 0.06);
+}
+
+.pms-enum-type-card {
+  position: sticky;
+  top: 24px;
+}
+
+.pms-enum-type-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pms-enum-type-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px;
+  color: #475569;
+  text-align: left;
+  border: 1px solid #e8edf5;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.pms-enum-type-item:hover {
+  border-color: rgba(99, 102, 241, 0.38);
+  background: #fafaff;
+  transform: translateY(-1px);
+}
+
+.pms-enum-type-item:focus-visible {
+  outline: 3px solid rgba(99, 102, 241, 0.2);
+  outline-offset: 2px;
+}
+
+.pms-enum-type-item.is-active {
+  color: #4338ca;
+  border-color: rgba(99, 102, 241, 0.44);
+  background: linear-gradient(135deg, rgba(238, 242, 255, 0.96), rgba(250, 245, 255, 0.96));
+  box-shadow: inset 3px 0 0 #6366f1, 0 6px 18px rgba(99, 102, 241, 0.1);
+}
+
+.pms-enum-type-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  color: #6366f1;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.pms-enum-type-item strong,
+.pms-enum-type-item small,
+.pms-enum-card-heading small {
+  display: block;
+}
+
+.pms-enum-type-item strong {
+  font-size: 13px;
+}
+
+.pms-enum-type-item small,
+.pms-enum-card-heading small {
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.pms-enum-preview {
+  display: inline-flex;
+  padding: 4px 10px;
+  color: #4f46e5;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid rgba(99, 102, 241, 0.16);
+  border-radius: 999px;
+  background: rgba(238, 242, 255, 0.82);
+}
+
+.pms-enum-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.pms-enum-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.pms-enum-form label {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pms-enum-format-hint {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.pms-enum-field-error {
+  min-height: 20px;
+  color: #dc2626;
+  font-size: 12px;
+}
+
+.pms-enum-loading .ant-skeleton {
+  margin-top: 16px;
+}
+
+@media (max-width: 760px) {
+  .pms-enum-config {
+    grid-template-columns: 1fr;
+  }
+
+  .pms-enum-type-card {
+    position: static;
+  }
+
+  .pms-enum-type-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pms-enum-values-card .ant-card-head-wrapper {
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .pms-enum-type-list {
+    grid-template-columns: 1fr;
+  }
+
+  .pms-enum-values-card .ant-card-head-wrapper {
+    flex-direction: column;
+  }
+
+  .pms-enum-values-card .ant-card-extra,
+  .pms-enum-values-card .ant-card-extra .ant-btn {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pms-enum-type-item {
+    transition: none !important;
+  }
+
+  .pms-enum-type-item:hover {
+    transform: none;
+  }
+}
+
 .pms-floating-config-popover {
   z-index: 1400;
 }
