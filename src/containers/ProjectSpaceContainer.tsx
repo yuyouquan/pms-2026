@@ -95,6 +95,7 @@ import {
   getMainMarket,
   getMarketCurrentVersion,
   getMarketFollowVersionKey,
+  getMarketPlanVersionKey,
   getMarketVersions,
   getProjectMarketSnapshotKey,
   isConfiguredMarket,
@@ -1536,6 +1537,13 @@ export default function ProjectSpaceContainer() {
     const key = `${selectedProject.id}::${draftDimension}::${projectPlanLevel}::${currentLoginUser}`
     if (lastVersionInitKeyRef.current === key) return
     lastVersionInitKeyRef.current = key
+    const explicitMarketVersion = isMarketScopedLevel1
+      ? marketCurrentVersionByKey[getMarketPlanVersionKey(selectedProject.id, selectedMarketTab)]
+      : undefined
+    // Workbench todo routes write their market-scoped version before entering
+    // project space. Preserve that explicit selection instead of replacing it
+    // with the normal role-based default draft on initial mount.
+    if (explicitMarketVersion && versions.some(version => version.id === explicitMarketVersion)) return
     const draft = versions.find(v => v.status === '修订中')
     const latestPub = versions
       .filter(v => v.status === '已发布')
@@ -1545,7 +1553,7 @@ export default function ProjectSpaceContainer() {
     } else if (latestPub) {
       if (currentVersion !== latestPub.id) setCurrentVersion(latestPub.id)
     }
-  }, [activeModule, projectSpaceModule, selectedProject?.id, selectedMarketTab, scopedTosPlanType, projectPlanLevel, canViewDraft, versions, currentLoginUser])
+  }, [activeModule, projectSpaceModule, selectedProject?.id, selectedMarketTab, scopedTosPlanType, projectPlanLevel, canViewDraft, versions, currentLoginUser, isMarketScopedLevel1, marketCurrentVersionByKey])
 
   // Due task scanning
   useEffect(() => {
@@ -3358,7 +3366,12 @@ export default function ProjectSpaceContainer() {
                 <Space size={4} align="center">
                   <span style={{ fontSize: 13, fontWeight: 500, color: '#9ca3af', marginRight: 8 }}>市场</span>
                   {marketConfigRows.map(row => (
-                    <Tag key={row.market} color={selectedMarketTab === row.market ? (marketColors[row.market] || '#1890ff') : 'default'} style={{ cursor: 'pointer', borderRadius: 4, padding: '4px 12px', fontSize: 13, fontWeight: selectedMarketTab === row.market ? 600 : 400, borderColor: selectedMarketTab === row.market ? (marketColors[row.market] || '#1890ff') : '#d9d9d9' }} onClick={() => navigateWithEditGuard(() => setSelectedMarketTab(row.market))}>
+                    <Tag key={row.market} color={selectedMarketTab === row.market ? (marketColors[row.market] || '#1890ff') : 'default'} role="button" tabIndex={0} aria-label={`市场 ${row.market}`} aria-pressed={selectedMarketTab === row.market} style={{ cursor: 'pointer', borderRadius: 4, padding: '4px 12px', fontSize: 13, fontWeight: selectedMarketTab === row.market ? 600 : 400, borderColor: selectedMarketTab === row.market ? (marketColors[row.market] || '#1890ff') : '#d9d9d9' }} onClick={() => navigateWithEditGuard(() => setSelectedMarketTab(row.market))} onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        navigateWithEditGuard(() => setSelectedMarketTab(row.market))
+                      }
+                    }}>
                       <Space size={4}>{row.market}{row.isMain && <span style={{ fontSize: 11 }}>主</span>}{row.followsMain && <span style={{ fontSize: 11 }}>跟随</span>}</Space>
                     </Tag>
                   ))}

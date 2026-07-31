@@ -30,6 +30,7 @@ import {
 
 export interface TodoCenterProps {
   todos: WorkbenchTodo[]
+  today: string
   loading?: boolean
   onOpenTodo: (todo: WorkbenchTodo) => void
 }
@@ -67,9 +68,8 @@ function getDueBadge(todo: WorkbenchTodo, today: string) {
   return { status: 'default' as const, text: todo.dueDate ? '按期' : '未设日期', className: '' }
 }
 
-export default function TodoCenter({ todos, loading = false, onOpenTodo }: TodoCenterProps) {
+export default function TodoCenter({ todos, today, loading = false, onOpenTodo }: TodoCenterProps) {
   const [filters, setFilters] = useState<TodoFilters>(EMPTY_FILTERS)
-  const today = dayjs().format('YYYY-MM-DD')
 
   const filteredTodos = useMemo(
     () => filterWorkbenchTodos(todos, filters),

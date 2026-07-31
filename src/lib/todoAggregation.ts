@@ -1,3 +1,12 @@
+import {
+  getMarketCurrentVersion,
+  getMarketPlanVersionKey,
+  getMarketVersions,
+  type MarketCurrentVersionState,
+  type MarketVersionsState,
+  type PlanVersionLike,
+} from '@/lib/marketRules'
+
 export type TodoSource = 'plan' | 'transfer'
 export type TodoStatus = 'pending' | 'in_progress' | 'completed'
 
@@ -7,6 +16,7 @@ export type WorkbenchTodoRoute =
     planLevel: 'level1' | 'level2'
     planKey: string
     versionId: string
+    marketKey?: string
   }
   | {
     kind: 'transfer'
@@ -37,6 +47,7 @@ export interface PlanTodoCandidate {
   completed: boolean
   completedAt?: string
   market?: string
+  marketKey?: string
   status?: TodoStatus
   title: string
   planLevel: 'level1' | 'level2'
@@ -76,8 +87,101 @@ export interface TodoSummary {
 
 interface AggregateWorkbenchTodosInput {
   currentUser: string
+  today: string | Date
   planTodos: readonly PlanTodoCandidate[]
   transferApplications: readonly TransferTodoCandidate[]
+}
+
+/**
+ * Identity bridge between the independent transfer-maintenance and PMS mock
+ * user directories. Keys are authoritative transfer external user IDs; an
+ * unmapped ID intentionally produces no PMS todo.
+ */
+export const TRANSFER_TO_PMS_USER_MAP: Readonly<Record<string, {
+  transferUserName: string
+  pmsUserName: string
+}>> = {
+  u001: { transferUserName: '张明辉', pmsUserName: '张三' },
+  u002: { transferUserName: '李思源', pmsUserName: '李四' },
+  u003: { transferUserName: '王建国', pmsUserName: '王五' },
+  u004: { transferUserName: '赵丽华', pmsUserName: '赵六' },
+  u005: { transferUserName: '孙伟强', pmsUserName: '孙七' },
+  u006: { transferUserName: '周文博', pmsUserName: '周八' },
+  u007: { transferUserName: '陈晓峰', pmsUserName: '李白' },
+  u008: { transferUserName: '刘志远', pmsUserName: '杜甫' },
+}
+
+export function mapTransferOwnerToPmsUser(
+  transferExternalUserId: string | undefined,
+  transferExternalUserName: string | undefined,
+): string | undefined {
+  if (!transferExternalUserId || !transferExternalUserName) return undefined
+  const identity = TRANSFER_TO_PMS_USER_MAP[transferExternalUserId]
+  return identity?.transferUserName === transferExternalUserName
+    ? identity.pmsUserName
+    : undefined
+}
+
+interface ResolvePlanTodoNavigationInput {
+  projectId: string
+  projectMarkets: readonly string[]
+  todoMarket?: string
+  route: Extract<WorkbenchTodoRoute, { kind: 'plan' }>
+  baseVersions: PlanVersionLike[]
+  marketVersionsByKey: MarketVersionsState
+  marketCurrentVersionByKey: MarketCurrentVersionState
+  baseCurrentVersion: string
+}
+
+export type ResolvedPlanTodoNavigation =
+  | {
+    usesMarketVersion: true
+    market: string
+    marketKey: string
+    versionId: string
+  }
+  | {
+    usesMarketVersion: false
+    versionId: string
+  }
+
+export function resolvePlanTodoNavigation({
+  projectId,
+  projectMarkets,
+  todoMarket,
+  route,
+  baseVersions,
+  marketVersionsByKey,
+  marketCurrentVersionByKey,
+  baseCurrentVersion,
+}: ResolvePlanTodoNavigationInput): ResolvedPlanTodoNavigation | null {
+  if (route.planLevel !== 'level1' || !route.marketKey) {
+    const versionId = baseVersions.some(version => version.id === route.versionId)
+      ? route.versionId
+      : baseCurrentVersion
+    return { usesMarketVersion: false, versionId }
+  }
+
+  const market = todoMarket?.trim() || ''
+  const expectedMarketKey = getMarketPlanVersionKey(projectId, market)
+  if (!market || !projectMarkets.includes(market) || route.marketKey !== expectedMarketKey) return null
+
+  const marketVersions = getMarketVersions(marketVersionsByKey, projectId, market, baseVersions)
+  const versionId = marketVersions.some(version => version.id === route.versionId)
+    ? route.versionId
+    : getMarketCurrentVersion(
+      marketCurrentVersionByKey,
+      projectId,
+      market,
+      marketVersions,
+      baseCurrentVersion,
+    )
+  return {
+    usesMarketVersion: true,
+    market,
+    marketKey: expectedMarketKey,
+    versionId,
+  }
 }
 
 const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
@@ -100,7 +204,7 @@ function isOverdue(todo: WorkbenchTodo, today: string): boolean {
     && toDateKey(todo.dueDate) < today
 }
 
-function sortTodos(todos: WorkbenchTodo[], today = toDateKey(new Date())): WorkbenchTodo[] {
+function sortTodos(todos: WorkbenchTodo[], today: string): WorkbenchTodo[] {
   return todos.sort((left, right) => {
     const overdueDelta = Number(isOverdue(right, today)) - Number(isOverdue(left, today))
     if (overdueDelta) return overdueDelta
@@ -117,6 +221,7 @@ function sortTodos(todos: WorkbenchTodo[], today = toDateKey(new Date())): Workb
 
 export function aggregateWorkbenchTodos({
   currentUser,
+  today,
   planTodos,
   transferApplications,
 }: AggregateWorkbenchTodosInput): WorkbenchTodo[] {
@@ -145,6 +250,7 @@ export function aggregateWorkbenchTodos({
           planLevel: candidate.planLevel === 'level2' ? 'level2' : 'level1',
           planKey: candidate.planKey || '',
           versionId: candidate.versionId || '',
+          ...(candidate.marketKey ? { marketKey: candidate.marketKey } : {}),
         },
       }
     })
@@ -171,7 +277,7 @@ export function aggregateWorkbenchTodos({
       }
     })
 
-  return sortTodos([...planItems, ...transferItems])
+  return sortTodos([...planItems, ...transferItems], toDateKey(today))
 }
 
 export function filterWorkbenchTodos(

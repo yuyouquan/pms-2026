@@ -125,6 +125,21 @@ const openTodoRowWithKeyboard = async title => {
   await page.keyboard.press('Enter')
 }
 
+const clickProjectMarket = async market => {
+  const selector = `[aria-label="市场 ${market}"]`
+  await waitForVisible(selector)
+  await page.focus(selector)
+  await page.keyboard.press('Enter')
+}
+
+const assertSelectedProjectMarket = async market => {
+  await waitForVisible(`[aria-label="市场 ${market}"][aria-pressed="true"]`)
+}
+
+const assertCurrentPlanVersion = async versionLabel => {
+  await waitForVisible(`.ant-select-content[title="${versionLabel}"]`)
+}
+
 const fillReactInput = async (selector, value) => {
   await waitForVisible(selector)
   await page.$eval(selector, (element, nextValue) => {
@@ -366,10 +381,29 @@ try {
     await waitForTodoMetric('待办总数', allCount)
   })
 
-  await step('keyboard-open a plan todo and return to todo origin', async () => {
+  await step('plan todo restores its market version after another market selection', async () => {
+    console.log('  action: open OP plan todo')
     await openTodoRowWithKeyboard('OP · 概念启动')
     await assertText('返回工作台')
     await assertText('一级计划')
+    console.log('  action: assert OP V3 route context')
+    await assertSelectedProjectMarket('OP')
+    await assertCurrentPlanVersion('V3 (已发布)')
+
+    console.log('  action: switch to TR draft')
+    await clickProjectMarket('TR')
+    await assertSelectedProjectMarket('TR')
+    await assertCurrentPlanVersion('V4 (修订中)')
+    console.log('  action: return from TR')
+    await clickExactText('body', 'button', '返回工作台')
+    await wait(200)
+    await clickExactButtonIfVisible('确认离开')
+    await assertSelectedWorkbenchTab('待办中心')
+
+    console.log('  action: reopen OP todo')
+    await openTodoRowWithKeyboard('OP · 概念启动')
+    await assertSelectedProjectMarket('OP')
+    await assertCurrentPlanVersion('V3 (已发布)')
     await clickExactText('body', 'button', '返回工作台')
     await assertSelectedTopNav('工作台')
     await assertSelectedWorkbenchTab('待办中心')

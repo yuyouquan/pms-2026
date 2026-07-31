@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import { message, Tabs } from 'antd'
+import dayjs from 'dayjs'
 import { CheckSquareOutlined, ClockCircleOutlined } from '@ant-design/icons'
 import { useUiStore, type WorkbenchTab } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
@@ -14,10 +15,18 @@ import { hasPermission } from '@/stores/permission'
 import type { TransferApplication } from '@/mock/transfer-maintenance'
 import {
   aggregateWorkbenchTodos,
+  mapTransferOwnerToPmsUser,
+  resolvePlanTodoNavigation,
   type PlanTodoCandidate,
   type TransferTodoCandidate,
   type WorkbenchTodo,
 } from '@/lib/todoAggregation'
+import {
+  getMarketCurrentVersion,
+  getMarketPlanVersionKey,
+  getMarketVersions,
+  setMarketCurrentVersion,
+} from '@/lib/marketRules'
 
 type WorkbenchProject = ReturnType<typeof useProjectStore.getState>['projects'][number]
 
@@ -32,7 +41,10 @@ function adaptPlanTasks(
   marketPlanData: ReturnType<typeof usePlanStore.getState>['marketPlanData'],
   level2PlanTasks: ReturnType<typeof usePlanStore.getState>['level2PlanTasks'],
   level2PlanMeta: ReturnType<typeof usePlanStore.getState>['level2PlanMeta'],
+  versions: ReturnType<typeof usePlanStore.getState>['versions'],
   currentVersion: string,
+  marketVersionsByKey: ReturnType<typeof usePlanStore.getState>['marketVersionsByKey'],
+  marketCurrentVersionByKey: ReturnType<typeof usePlanStore.getState>['marketCurrentVersionByKey'],
 ): PlanTodoCandidate[] {
   const configuredProjectName = Object.values(level2PlanMeta)
     .find(meta => typeof meta?.projectName === 'string')?.projectName
@@ -41,7 +53,17 @@ function adaptPlanTasks(
   if (!project) return []
 
   const level1Candidates = Object.entries(marketPlanData).flatMap(([market, data]) => (
-    data.tasks.map(task => ({
+    data.tasks.map(task => {
+      const marketKey = getMarketPlanVersionKey(project.id, market)
+      const marketVersions = getMarketVersions(marketVersionsByKey, project.id, market, versions)
+      const versionId = getMarketCurrentVersion(
+        marketCurrentVersionByKey,
+        project.id,
+        market,
+        marketVersions,
+        currentVersion,
+      )
+      return {
       id: `plan:${project.id}:${market}:level1:${task.id}`,
       projectId: project.id,
       projectName: project.name,
@@ -53,9 +75,11 @@ function adaptPlanTasks(
       title: `${market} · ${task.taskName || '未命名计划任务'}`,
       planLevel: 'level1' as const,
       planKey: 'level1',
-      versionId: currentVersion,
+      versionId,
       market,
-    }))
+      marketKey,
+      }
+    })
   ))
 
   const level2Candidates = level2PlanTasks.map(task => ({
@@ -85,22 +109,15 @@ function getTransferView(application: TransferApplication): TransferTodoCandidat
   return null
 }
 
-function getTransferOwner(
+function getTransferOwnerExternalIdentity(
   application: TransferApplication,
   view: NonNullable<ReturnType<typeof getTransferView>>,
-  linkedProject: WorkbenchProject | undefined,
-): string {
-  if (view === 'entry') {
-    // The transfer mock keeps subsystem identities separate from PMS identities.
-    // Project leader is the aggregate owner for the current data-entry node.
-    return linkedProject?.leader || application.applicant
-  }
+): { id: string; name: string } | undefined {
+  if (view === 'entry') return { id: application.applicantId, name: application.applicant }
   if (view === 'review') {
-    return application.team.maintenance.find(member => member.role === 'SPM')?.name
-      || application.applicant
+    return application.team.maintenance.find(member => member.role === 'SPM')
   }
-  return application.team.research.find(member => member.role === 'SQA')?.name
-    || application.applicant
+  return application.team.research.find(member => member.role === 'SQA')
 }
 
 function adaptTransferApplications(
@@ -113,12 +130,16 @@ function adaptTransferApplications(
     const linkedProject = projects.find(project => (
       project.id === application.projectId || project.name === application.projectName
     ))
+    if (!linkedProject) return []
+    const externalOwner = getTransferOwnerExternalIdentity(application, view)
+    const activeOwner = mapTransferOwnerToPmsUser(externalOwner?.id, externalOwner?.name)
+    if (!activeOwner) return []
     const nodeTitle = view === 'entry' ? '转维资料录入' : view === 'review' ? '转维维护审核' : '转维 SQA 审核'
     return [{
       applicationId: application.id,
       projectId: linkedProject?.id || application.projectId,
       projectName: linkedProject?.name || application.projectName,
-      activeOwner: getTransferOwner(application, view, linkedProject),
+      activeOwner,
       dueDate: application.plannedReviewDate,
       completed: false,
       title: nodeTitle,
@@ -151,6 +172,9 @@ export default function WorkbenchContainer() {
     level2PlanTasks,
     level2PlanMeta,
     marketPlanData,
+    marketVersionsByKey,
+    marketCurrentVersionByKey,
+    setMarketCurrentVersionByKey,
   } = usePlanStore()
   const {
     transferApplications,
@@ -159,10 +183,29 @@ export default function WorkbenchContainer() {
   } = useTransferStore()
   const activateProject = useActivateProject()
   const isCurrentDraft = versions.find(version => version.id === currentVersion)?.status === '修订中'
+  const today = dayjs().format('YYYY-MM-DD')
 
   const planTodoCandidates = useMemo(
-    () => adaptPlanTasks(projects, marketPlanData, level2PlanTasks, level2PlanMeta, currentVersion),
-    [currentVersion, level2PlanMeta, level2PlanTasks, marketPlanData, projects],
+    () => adaptPlanTasks(
+      projects,
+      marketPlanData,
+      level2PlanTasks,
+      level2PlanMeta,
+      versions,
+      currentVersion,
+      marketVersionsByKey,
+      marketCurrentVersionByKey,
+    ),
+    [
+      currentVersion,
+      level2PlanMeta,
+      level2PlanTasks,
+      marketCurrentVersionByKey,
+      marketPlanData,
+      marketVersionsByKey,
+      projects,
+      versions,
+    ],
   )
   const transferTodoCandidates = useMemo(
     () => adaptTransferApplications(transferApplications, projects),
@@ -170,15 +213,33 @@ export default function WorkbenchContainer() {
   )
   const todos = useMemo(() => aggregateWorkbenchTodos({
     currentUser: currentLoginUser,
+    today,
     planTodos: planTodoCandidates,
     transferApplications: transferTodoCandidates,
-  }), [currentLoginUser, planTodoCandidates, transferTodoCandidates])
+  }), [currentLoginUser, planTodoCandidates, today, transferTodoCandidates])
 
   const openTodo = (todo: WorkbenchTodo) => {
     const route = todo.route
     const project = projects.find(item => item.id === todo.projectId || item.name === todo.projectName)
     if (!project) {
       void message.warning('该待办暂无可打开的项目，请先补齐项目关联')
+      return
+    }
+
+    const planNavigation = route.kind === 'plan'
+      ? resolvePlanTodoNavigation({
+        projectId: project.id,
+        projectMarkets: project.markets || [],
+        todoMarket: todo.market,
+        route,
+        baseVersions: versions,
+        marketVersionsByKey,
+        marketCurrentVersionByKey,
+        baseCurrentVersion: currentVersion,
+      })
+      : null
+    if (route.kind === 'plan' && !planNavigation) {
+      void message.warning('该待办的市场路由与当前项目不匹配，已停止跳转')
       return
     }
 
@@ -191,20 +252,29 @@ export default function WorkbenchContainer() {
     }
 
     navigateWithEditGuard(() => {
-      activateProject(project, { market: todo.market })
+      activateProject(project, {
+        market: planNavigation?.usesMarketVersion ? planNavigation.market : undefined,
+      })
       setIsEditMode(false)
 
-      if (route.kind === 'plan') {
-        const selectedVersion = versions.some(version => version.id === route.versionId)
-          ? route.versionId
-          : currentVersion
+      if (route.kind === 'plan' && planNavigation) {
+        const selectedVersion = planNavigation.versionId
         if (selectedVersion !== route.versionId) {
           void message.info('原待办版本已不可用，已安全回退到当前版本')
         }
         setProjectSpaceModule('plan')
         setProjectPlanLevel(route.planLevel)
         setProjectPlanViewMode('table')
-        setCurrentVersion(selectedVersion)
+        if (planNavigation.usesMarketVersion) {
+          setMarketCurrentVersionByKey(previous => setMarketCurrentVersion(
+            previous,
+            project.id,
+            planNavigation.market,
+            selectedVersion,
+          ))
+        } else {
+          setCurrentVersion(selectedVersion)
+        }
         if (route.planLevel === 'level2') {
           const targetPlan = createdLevel2Plans.find(plan => plan.id === route.planKey)
           const fallbackPlan = createdLevel2Plans[0]
@@ -214,7 +284,7 @@ export default function WorkbenchContainer() {
             void message.info('原二级计划已不可用，已回退到首个可用计划')
           }
         }
-      } else {
+      } else if (route.kind === 'transfer') {
         setProjectSpaceModule('basic')
         setSelectedTransferAppId(route.applicationId)
         setTransferView(route.view)
@@ -224,7 +294,7 @@ export default function WorkbenchContainer() {
   }
 
   const todoContent = (
-    <TodoCenter todos={todos} onOpenTodo={openTodo} />
+    <TodoCenter todos={todos} today={today} onOpenTodo={openTodo} />
   )
 
   const workTrackerContent = (
