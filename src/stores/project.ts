@@ -3,6 +3,7 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 import { initialProjects } from '@/data/projects'
 import { EXTERNAL_PROJECT_POOL } from '@/data/externalProjectPool'
 import {
+  PROJECT_CATEGORY_MACHINE,
   PROJECT_TYPE_TOS_VERSION,
   isMachineProjectType,
   resolveProjectClassification,
@@ -468,9 +469,9 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
     currentLoginUser: DEFAULT_LOGIN_USER,
     projectSearchText2: '',
     projectStatusFilter: 'all',
-    projectTypeFilter: 'all',
+    projectTypeFilter: PROJECT_CATEGORY_MACHINE,
     projectSecondaryCategoryFilter: 'all',
-    projectListView: 'card',
+    projectListView: 'list',
     projectCardPage: 1,
     basicInfoEditMode: false,
     editingProjectFields: {},

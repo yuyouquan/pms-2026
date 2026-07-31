@@ -107,6 +107,38 @@
   --duration-slow: 0.4s;
 }
 
+.pms-project-filter-chip {
+  border: 0;
+  border-radius: 16px;
+  padding: 3px 12px;
+  color: #6b7280;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.pms-project-filter-chip.is-active {
+  color: #fff;
+  background: #6366f1;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.24);
+}
+
+.pms-technical-list-stack { display: grid; gap: 20px; }
+.pms-project-list-section-title {
+  margin: 0 0 10px 2px;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 650;
+}
+.pms-table .ant-table-tbody > tr > td.pms-project-list-milestone-cell { background: #fff; }
+.pms-table .ant-table-tbody > tr > td.pms-project-list-overdue { color: #dc2626; font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pms-project-filter-chip { transition: none; }
+}
+
 /* Technical project space */
 .technical-project-space {
   width: min(100%, 1280px);

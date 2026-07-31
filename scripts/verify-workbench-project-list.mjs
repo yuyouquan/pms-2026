@@ -9,8 +9,11 @@ const source = fs.readFileSync(projectListPath, 'utf8')
 
 assert.match(source, /ProjectSummaryTable/)
 assert.match(source, /getWorkbenchListState/)
-assert.match(source, /请选择项目分类/)
 assert.match(source, /该项目分类的列表视图暂未配置/)
+assert.doesNotMatch(source, /label:\s*'全部',\s*value:\s*'all'\s*\},\s*\.\.\.PROJECT_CATEGORIES/)
+assert.match(source, /technicalListType/)
+assert.match(source, /matrixVariant="technical-tdt"/)
+assert.match(source, /matrixVariant="technical-subproject"/)
 assert.doesNotMatch(source, /columns=\{\[\s*\{\s*title:\s*'项目名称'/)
 
 for (const label of [

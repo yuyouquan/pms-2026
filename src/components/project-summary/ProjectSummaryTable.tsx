@@ -48,6 +48,7 @@ import {
   buildProjectSummaryRow,
   getLatestPublishedTemplateTasks,
   getLinkedQuickFilterValues,
+  getProjectListFieldDefinitions,
   getProjectSummaryFieldDefinitions,
   getProjectSummaryQuickFilterDefinitions,
   getTemplateTaskFieldDefinitions,
@@ -57,6 +58,7 @@ import {
   type ProjectSummaryRow,
   type ProjectSummaryTemplateTask,
 } from '@/lib/projectSummary'
+import { TECHNICAL_PROJECT_TYPE_OPTIONS, type ProjectListVariant } from '@/lib/projectListMatrix'
 
 interface ProjectSummaryVersion {
   id: string
@@ -75,6 +77,10 @@ export interface ProjectSummaryTableProps {
   currentTemplateTasks: ProjectSummaryTemplateTask[]
   storageNamespace: string
   onViewProject: (projectId: string) => void
+  matrixVariant?: ProjectListVariant
+  matrixTemplateTasks?: ProjectSummaryTemplateTask[]
+  providedRows?: ProjectSummaryRow[]
+  onViewRow?: (row: ProjectSummaryRow) => void
 }
 
 interface StoredProjectSummaryPreferences {
@@ -141,6 +147,10 @@ export default function ProjectSummaryTable({
   currentTemplateTasks,
   storageNamespace,
   onViewProject,
+  matrixVariant,
+  matrixTemplateTasks,
+  providedRows,
+  onViewRow,
 }: ProjectSummaryTableProps) {
   const [filters, setFilters] = useState<AnyFilterCondition[]>([])
   const [tempFilters, setTempFilters] = useState<AnyFilterCondition[]>([
@@ -164,10 +174,13 @@ export default function ProjectSummaryTable({
     versions,
   ])
 
-  const fieldDefinitions = useMemo(() => [
-    ...getProjectSummaryFieldDefinitions(projectType),
-    ...getTemplateTaskFieldDefinitions(projectType, templateTasks),
-  ], [projectType, templateTasks])
+  const effectiveTemplateTasks = matrixTemplateTasks ?? templateTasks
+  const fieldDefinitions = useMemo(() => matrixVariant
+    ? getProjectListFieldDefinitions(matrixVariant, effectiveTemplateTasks, projectType)
+    : [
+        ...getProjectSummaryFieldDefinitions(projectType),
+        ...getTemplateTaskFieldDefinitions(projectType, templateTasks),
+      ], [effectiveTemplateTasks, matrixVariant, projectType, templateTasks])
 
   const columnDefinitions = useMemo<SortableColumnDefinition<string>[]>(() => (
     fieldDefinitions.map(definition => ({
@@ -175,7 +188,7 @@ export default function ProjectSummaryTable({
       title: definition.title,
       defaultVisible: definition.defaultVisible,
       hideable: definition.hideable,
-      fixed: definition.key === 'projectName' ? 'left' : undefined,
+      fixed: !matrixVariant && definition.key === 'projectName' ? 'left' : undefined,
       disabledReason: definition.hideable === false ? '项目汇总必显字段' : undefined,
     }))
   ), [fieldDefinitions])
@@ -189,17 +202,40 @@ export default function ProjectSummaryTable({
   )
 
   const baseRows = useMemo(
-    () => projects.map(project => buildProjectSummaryRow(
+    () => providedRows?.map(row => Object.fromEntries([
+      ...fieldDefinitions.map(definition => [definition.key, row[definition.key] ?? '-']),
+      ...Object.entries(row),
+    ]) as ProjectSummaryRow) ?? projects.map(project => buildProjectSummaryRow(
       project,
       fieldDefinitions,
       planTasksByProjectId[project.id],
     )),
-    [fieldDefinitions, planTasksByProjectId, projects],
+    [fieldDefinitions, planTasksByProjectId, projects, providedRows],
   )
-  const quickFilterDefinitions = useMemo(
-    () => getProjectSummaryQuickFilterDefinitions(projectType, optionProjects),
-    [optionProjects, projectType],
-  )
+  const quickFilterDefinitions = useMemo(() => {
+    const projectOptions = (key: string) => [...new Set(optionProjects
+      .map(project => String(project[key] ?? '').trim())
+      .filter(Boolean))]
+      .sort((left, right) => left.localeCompare(right, 'zh-CN', { numeric: true }))
+      .map(value => ({ label: value, value }))
+    if (matrixVariant === 'machine') {
+      return [
+        { key: 'secondaryCategory', label: '项目二级分类', options: projectOptions('secondaryCategory') },
+        { key: 'status', label: '状态', options: projectOptions('status') },
+        ...getProjectSummaryQuickFilterDefinitions(projectType, optionProjects),
+      ]
+    }
+    if (!matrixVariant?.startsWith('technical')) {
+      return getProjectSummaryQuickFilterDefinitions(projectType, optionProjects)
+    }
+    const optionsFor = (key: string) => collectOptions(baseRows, key)
+    return [
+      { key: 'status', label: '状态', options: optionsFor('status') },
+      { key: 'technicalProjectType', label: '项目类型', options: TECHNICAL_PROJECT_TYPE_OPTIONS.slice(1).map(option => ({ ...option })) },
+      { key: 'technicalTrack', label: '技术赛道', options: optionsFor('technicalTrack') },
+      { key: 'projectStage', label: '项目阶段', options: optionsFor('projectStage') },
+    ]
+  }, [baseRows, matrixVariant, optionProjects, projectType])
   const quickFilterByKey = useMemo(
     () => new Map(quickFilterDefinitions.map(definition => [definition.key, definition])),
     [quickFilterDefinitions],
@@ -321,16 +357,34 @@ export default function ProjectSummaryTable({
   const tableColumnByKey = useMemo(
     () => new Map(buildProjectSummaryColumns(fieldDefinitions).map(column => [
       String(column.key),
-      column,
+      matrixVariant ? { ...column, fixed: undefined } : column,
     ])),
-    [fieldDefinitions],
+    [fieldDefinitions, matrixVariant],
   )
-  const columns = useMemo<ColumnsType<ProjectSummaryRow>>(
-    () => visibleDefinitions
-      .map(definition => tableColumnByKey.get(definition.key))
-      .filter((column): column is NonNullable<typeof column> => Boolean(column)),
-    [tableColumnByKey, visibleDefinitions],
-  )
+  const columns = useMemo<ColumnsType<ProjectSummaryRow>>(() => {
+    const result: ColumnsType<ProjectSummaryRow> = []
+    visibleDefinitions.forEach(definition => {
+      const column = tableColumnByKey.get(definition.key)
+      if (!column) return
+      const field = fieldDefinitions.find(item => item.key === definition.key)
+      if (!field?.group) {
+        result.push(column)
+        return
+      }
+      const previous = result[result.length - 1]
+      if (previous && String(previous.key) === `group::${field.group.key}` && 'children' in previous) {
+        previous.children = [...(previous.children || []), column]
+        return
+      }
+      result.push({
+        key: `group::${field.group.key}`,
+        title: field.group.label,
+        onHeaderCell: () => ({ style: { background: field.group!.color } }),
+        children: [column],
+      })
+    })
+    return result
+  }, [fieldDefinitions, tableColumnByKey, visibleDefinitions])
   const scrollWidth = visibleDefinitions.reduce((total, definition) => {
     const field = fieldDefinitions.find(candidate => candidate.key === definition.key)
     return total + (field?.width ?? 140)
@@ -429,6 +483,23 @@ export default function ProjectSummaryTable({
         marginBottom: 12,
       }}>
         <Space size={8} wrap>
+          {matrixVariant?.startsWith('technical') && (
+            <Input
+              allowClear
+              aria-label="快捷筛选-项目名称"
+              placeholder="项目名称"
+              prefix={<FilterOutlined />}
+              style={{ width: 180 }}
+              value={typeof filters.find(item => item.field === 'projectName')?.value === 'string'
+                ? filters.find(item => item.field === 'projectName')?.value as string
+                : ''}
+              onChange={event => setFilters(current => {
+                const others = current.filter(item => item.field !== 'projectName')
+                const value = event.target.value
+                return value ? [...others, { id: 'quick-projectName', field: 'projectName', operator: 'contains', value }] : others
+              })}
+            />
+          )}
           {quickFilterDefinitions.map(definition => (
             <Select
               key={definition.key}
@@ -588,7 +659,7 @@ export default function ProjectSummaryTable({
 
       {templateTasks.length === 0 && (
         <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-          暂无已发布一级计划模板
+          暂无已发布计划模板
         </Typography.Text>
       )}
 
@@ -609,7 +680,7 @@ export default function ProjectSummaryTable({
         }}
         onRow={row => ({
           style: { cursor: 'pointer' },
-          onClick: () => onViewProject(row.projectId),
+          onClick: () => onViewRow ? onViewRow(row) : onViewProject(row.projectId),
         })}
       />
     </div>

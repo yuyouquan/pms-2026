@@ -18,6 +18,9 @@ import ProjectSummaryTable from '@/components/project-summary/ProjectSummaryTabl
 import { PROJECT_STATUS_CONFIG } from '@/data/projects'
 import {
   PROJECT_CATEGORIES,
+  PROJECT_CATEGORY_CAPABILITY,
+  PROJECT_CATEGORY_MACHINE,
+  PROJECT_CATEGORY_TECH,
   PROJECT_SECONDARY_CATEGORIES,
   PROJECT_TYPE_TOS_VERSION,
   getProjectStatusOptions,
@@ -30,6 +33,10 @@ import { getTemplateTasksForProjectType } from '@/lib/projectTemplateCompatibili
 import { buildTosTypeRows, getMainTosType } from '@/lib/tosTypeRules'
 import { buildMarketRowsFromMarkets, getMainMarket } from '@/lib/marketRules'
 import { useActivateProject } from '@/hooks/useActivateProject'
+import { useTechnicalProjectStore } from '@/stores/technicalProject'
+import { useTechnicalPlanStore } from '@/stores/technicalPlan'
+import { buildTechnicalProjectListRows } from '@/lib/projectListMatrix'
+import { TECHNICAL_TEMPLATE_STORAGE_KEYS, buildSubprojectTemplateTasks, buildTdtTemplateTasks } from '@/lib/technicalPlanRules'
 
 const WORKSPACE_FILTER_TOOLBAR_STYLE: CSSProperties = {
   background: 'rgba(255,255,255,0.8)',
@@ -77,6 +84,9 @@ export default function ProjectListContainer() {
 
   const { globalRoles } = usePermissionStore()
   const activateProject = useActivateProject()
+  const technicalSubprojects = useTechnicalProjectStore(state => state.subprojects)
+  const technicalPlansByKey = useTechnicalPlanStore(state => state.plansByKey)
+  const [technicalListType, setTechnicalListType] = useState<'all' | 'tdt' | 'subproject'>('all')
 
   const projectCardPageSize = 9
   const [addProjectOpen, setAddProjectOpen] = useState(false)
@@ -193,6 +203,30 @@ export default function ProjectListContainer() {
     return counts
   }, [categoryAndSecondaryFilteredProjects])
 
+  const technicalRows = useMemo(() => buildTechnicalProjectListRows({
+    projects: visibleProjects,
+    subprojects: technicalSubprojects,
+    plansByKey: technicalPlansByKey,
+    machineProjects: visibleProjects.filter(project => isMachineProjectType(project.type)),
+  }), [technicalPlansByKey, technicalSubprojects, visibleProjects])
+
+  const technicalTdtTemplate = configTemplateTasksByType[TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt]
+    ?? buildTdtTemplateTasks()
+  const technicalSubprojectTemplate = configTemplateTasksByType[TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject]
+    ?? buildSubprojectTemplateTasks()
+
+  const enterSummaryRow = (row: { targetProjectId?: unknown; targetSubprojectId?: unknown; projectId: string }) => {
+    const targetProjectId = String(row.targetProjectId || row.projectId)
+    const project = visibleProjects.find(item => item.id === targetProjectId)
+    if (!project) return
+    if (row.targetSubprojectId) {
+      window.sessionStorage.setItem('pms:technical-project-list-target-child', String(row.targetSubprojectId))
+    }
+    activateProject(project)
+    setProjectSpaceModule('basic')
+    enterProjectSpace({ module: 'projectList' })
+  }
+
   const renderProjectCard = (project: typeof projects[number]) => (
     <ProjectCard
       project={project as ProjectType}
@@ -210,7 +244,7 @@ export default function ProjectListContainer() {
       {/* Unified toolbar */}
       <div style={{ ...WORKSPACE_FILTER_TOOLBAR_STYLE, flexDirection: 'column', alignItems: 'stretch' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', minWidth: 0, columnGap: 10, rowGap: 8 }}>
-            <Input
+            {projectTypeFilter !== PROJECT_CATEGORY_TECH && <Input
               placeholder="搜索项目名称..."
               prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
               style={{ width: 220, borderRadius: 20, background: '#f7f8fa' }}
@@ -218,7 +252,7 @@ export default function ProjectListContainer() {
               allowClear
               value={projectSearchText2}
               onChange={e => { setProjectSearchText2(e.target.value); setProjectCardPage(1); }}
-            />
+            />}
             <div style={{ width: 1, height: 20, background: '#e5e7eb' }} />
             <Segmented
               aria-label="项目列表视图"
@@ -242,7 +276,7 @@ export default function ProjectListContainer() {
         <div style={{ display: 'grid', gap: 4, padding: '5px 8px', background: 'rgba(99,102,241,0.04)', borderRadius: 10, border: '1px solid rgba(99,102,241,0.06)' }}>
             <div aria-label="项目分类筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
               <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目分类</span>
-              {[{ label: '全部', value: 'all' }, ...PROJECT_CATEGORIES.map(value => ({ label: value, value }))].map(item => {
+              {PROJECT_CATEGORIES.map(value => ({ label: value, value })).map(item => {
                 const isActive = projectTypeFilter === item.value
                 return (
                   <button
@@ -270,7 +304,7 @@ export default function ProjectListContainer() {
               })}
             </div>
 
-            {workbenchListState.kind !== 'select-category' && workbenchListState.showSecondaryCategory && (
+            {projectListView === 'card' && workbenchListState.kind !== 'select-category' && workbenchListState.showSecondaryCategory && (
               <div aria-label="项目二级分类快捷筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
                 <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目二级分类</span>
                 {secondaryCategoryOptions.map(item => {
@@ -297,7 +331,7 @@ export default function ProjectListContainer() {
               </div>
             )}
 
-            {workbenchListState.kind !== 'select-category' && workbenchListState.showStatusQuickFilter && (
+            {projectListView === 'card' && workbenchListState.kind !== 'select-category' && workbenchListState.showStatusQuickFilter && (
               <div aria-label="状态快捷筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
                 <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>状态</span>
                 {statusOptions.map(item => {
@@ -320,6 +354,22 @@ export default function ProjectListContainer() {
                     </button>
                   )
                 })}
+              </div>
+            )}
+
+            {projectTypeFilter === PROJECT_CATEGORY_TECH && (
+              <div aria-label="技术项目类型快捷筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目类型</span>
+                {[
+                  { label: '全部', value: 'all' }, { label: 'TDT项目', value: 'tdt' }, { label: '子项目', value: 'subproject' },
+                ].map(item => (
+                  <button
+                    type="button"
+                    key={item.value}
+                    onClick={() => setTechnicalListType(item.value as typeof technicalListType)}
+                    className={technicalListType === item.value ? 'pms-project-filter-chip is-active' : 'pms-project-filter-chip'}
+                  >{item.label}</button>
+                ))}
               </div>
             )}
         </div>
@@ -350,10 +400,53 @@ export default function ProjectListContainer() {
                 )}
               </>
             ) : (
-              workbenchListState.kind === 'select-category' ? (
-                <Empty description="请选择项目分类" />
-              ) : workbenchListState.kind === 'unsupported' ? (
+              projectTypeFilter === PROJECT_CATEGORY_CAPABILITY ? (
                 <Empty description="该项目分类的列表视图暂未配置" />
+              ) : projectTypeFilter === PROJECT_CATEGORY_TECH ? (
+                <div className="pms-technical-list-stack">
+                  {(technicalListType === 'all' || technicalListType === 'tdt') && (
+                    <section aria-label="TDT项目列表">
+                      {technicalListType === 'all' && <div className="pms-project-list-section-title">TDT项目</div>}
+                      <ProjectSummaryTable
+                        projects={[]}
+                        optionProjects={[]}
+                        planTasksByProjectId={{}}
+                        projectType={PROJECT_CATEGORY_TECH}
+                        versions={versions}
+                        currentVersion={currentVersion}
+                        publishedSnapshots={publishedSnapshots}
+                        currentTemplateTasks={technicalTdtTemplate}
+                        matrixTemplateTasks={technicalTdtTemplate}
+                        matrixVariant="technical-tdt"
+                        providedRows={technicalRows.tdt}
+                        storageNamespace="project-list-technical-tdt"
+                        onViewProject={() => undefined}
+                        onViewRow={enterSummaryRow}
+                      />
+                    </section>
+                  )}
+                  {(technicalListType === 'all' || technicalListType === 'subproject') && (
+                    <section aria-label="子项目列表">
+                      {technicalListType === 'all' && <div className="pms-project-list-section-title">子项目</div>}
+                      <ProjectSummaryTable
+                        projects={[]}
+                        optionProjects={[]}
+                        planTasksByProjectId={{}}
+                        projectType={PROJECT_CATEGORY_TECH}
+                        versions={versions}
+                        currentVersion={currentVersion}
+                        publishedSnapshots={publishedSnapshots}
+                        currentTemplateTasks={technicalSubprojectTemplate}
+                        matrixTemplateTasks={technicalSubprojectTemplate}
+                        matrixVariant="technical-subproject"
+                        providedRows={technicalRows.children}
+                        storageNamespace="project-list-technical-subproject"
+                        onViewProject={() => undefined}
+                        onViewRow={enterSummaryRow}
+                      />
+                    </section>
+                  )}
+                </div>
               ) : (
                 <ProjectSummaryTable
                   projects={workspaceFilteredProjects}
@@ -370,6 +463,7 @@ export default function ProjectListContainer() {
                     ) ?? []
                   }
                   storageNamespace="workbench-project-list"
+                  matrixVariant={projectTypeFilter === PROJECT_CATEGORY_MACHINE ? 'machine' : 'tos'}
                   onViewProject={(projectId) => {
                     const project = workspaceFilteredProjects.find(item => item.id === projectId)
                     if (!project) return

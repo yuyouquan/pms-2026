@@ -361,8 +361,8 @@ registerAssertion('workbench list state follows the selected category', () => {
     showStatusQuickFilter: false,
   })
   assert.deepEqual(getWorkbenchListState('技术项目'), {
-    kind: 'unsupported',
-    showSecondaryCategory: true,
+    kind: 'table',
+    showSecondaryCategory: false,
     showStatusQuickFilter: true,
   })
 })

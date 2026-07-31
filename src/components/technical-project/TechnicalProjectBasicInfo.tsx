@@ -32,7 +32,15 @@ export default function TechnicalProjectBasicInfo({ projectId, currentLoginUser 
   }, [projectId])
 
   useEffect(() => {
-    const nextChildId = resolveTechnicalChildSelection(children.map(child => child.id), activeChildId, false)
+    const targetChildId = window.sessionStorage.getItem('pms:technical-project-list-target-child') || ''
+    const nextChildId = resolveTechnicalChildSelection(
+      children.map(child => child.id),
+      targetChildId || activeChildId,
+      false,
+    )
+    if (targetChildId && nextChildId === targetChildId) {
+      window.sessionStorage.removeItem('pms:technical-project-list-target-child')
+    }
     if (nextChildId !== activeChildId) setActiveChildId(nextChildId)
   }, [activeChildId, children])
 

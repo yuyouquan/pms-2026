@@ -20,6 +20,12 @@ import {
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
 import { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
+import {
+  getProjectListMatrix,
+  isOverdueProjectListDate,
+  type ProjectListTemplateTask,
+  type ProjectListVariant,
+} from '@/lib/projectListMatrix'
 
 export type ProjectSummaryFieldSource = 'system' | 'projectInfo' | 'templateTask'
 
@@ -33,6 +39,31 @@ export interface ProjectSummaryFieldDefinition {
   width: number
   taskId?: string
   parentTaskName?: string
+  group?: { key: string; label: string; color: string }
+}
+
+export function getProjectListFieldDefinitions(
+  variant: ProjectListVariant,
+  templateTasks: readonly ProjectListTemplateTask[],
+  projectType: string,
+): ProjectSummaryFieldDefinition[] {
+  const optionalFields = getProjectInfoFields(projectType).map(field => ({
+    key: field.key,
+    label: field.label,
+    defaultVisible: field.defaultVisible,
+    width: getProjectInfoFieldWidth(field.inputType),
+  }))
+  return getProjectListMatrix(variant, { templateTasks, optionalFields }).map(column => ({
+    key: column.key,
+    title: column.label,
+    source: column.source ?? 'system',
+    defaultVisible: column.required,
+    hideable: column.hideable,
+    inputType: column.source === 'templateTask' ? 'date' : 'system',
+    width: column.width ?? 140,
+    taskId: column.taskId,
+    group: column.group,
+  }))
 }
 
 const SYSTEM_FIELDS: ProjectSummaryFieldDefinition[] = [
@@ -217,7 +248,7 @@ export function getWorkbenchListState(projectType: string): WorkbenchListState {
     return { kind: 'table', showSecondaryCategory: false, showStatusQuickFilter: false }
   }
   if (projectCategory === PROJECT_CATEGORY_TECH) {
-    return { kind: 'unsupported', showSecondaryCategory: true, showStatusQuickFilter: true }
+    return { kind: 'table', showSecondaryCategory: false, showStatusQuickFilter: true }
   }
   return { kind: 'unsupported', showSecondaryCategory: false, showStatusQuickFilter: false }
 }
@@ -403,6 +434,7 @@ export function buildProjectSummaryRow(
     key: project.id,
     projectId: project.id,
     projectName: project.name,
+    secondaryCategory: String(project.secondaryCategory || '-'),
     brand: getTopLevelSummaryValue(project, 'brand'),
     versionType: getTopLevelSummaryValue(project, 'versionType'),
     tosVersion: getTopLevelSummaryValue(project, 'tosVersion'),
@@ -419,7 +451,23 @@ export function buildProjectSummaryRow(
         getProjectInfoValue(project, definition.key),
       )
     } else if (definition.source === 'templateTask' && definition.taskId) {
-      row[definition.key] = findProjectTaskDate(level1PlanTasks, definition.taskId)
+      const byId = findProjectTaskDate(level1PlanTasks, definition.taskId)
+      const byName = level1PlanTasks.find(task => task.taskName === definition.title)?.planEndDate
+      row[definition.key] = byId === '-' && typeof byName === 'string' && byName ? byName : byId
+    } else if (definition.source === 'system') {
+      const aliases: Record<string, string> = {
+        spm: 'machineSpm',
+        spmDepartment: 'machineSpmDepartment',
+      }
+      const key = aliases[definition.key] ?? definition.key
+      const raw = project[definition.key] ?? getProjectInfoValue(project, key)
+      const formatted = raw === undefined || raw === null || raw === ''
+        ? '-'
+        : formatProjectInfoValue(raw as never)
+      row[definition.key] = ['firstSaleTosVersion', 'currentTosVersion', 'tosVersion'].includes(definition.key)
+        && formatted !== '-' && !String(formatted).toLowerCase().startsWith('tos')
+        ? `tOS${formatted}`
+        : formatted
     }
   })
 
@@ -436,5 +484,14 @@ export function buildProjectSummaryColumns(
     width: definition.width,
     fixed: definition.key === 'projectName' ? 'left' as const : undefined,
     ellipsis: true,
+    className: definition.source === 'templateTask' ? 'pms-project-list-milestone-cell' : undefined,
+    onHeaderCell: () => ({
+      style: definition.group ? { background: definition.group.color } : undefined,
+    }),
+    onCell: (record: ProjectSummaryRow) => ({
+      className: isOverdueProjectListDate(record[definition.key])
+        ? 'pms-project-list-overdue'
+        : '',
+    }),
   }))
 }
