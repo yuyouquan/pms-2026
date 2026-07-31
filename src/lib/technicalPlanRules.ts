@@ -24,6 +24,10 @@ export const TECHNICAL_TEMPLATE_STORAGE_KEYS = {
   subproject: '技术项目::子项目计划',
 } as const satisfies Record<TechnicalTemplateKind, string>
 
+export const getTemplateConfigScopeKey = (projectType: string, planLevel: string) => (
+  `config-template::${projectType}::${planLevel}`
+)
+
 const createTask = (
   id: string,
   order: number,

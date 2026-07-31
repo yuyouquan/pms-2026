@@ -17,7 +17,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { ColumnsType } from 'antd/es/table'
 import { useUiStore } from '@/stores/ui'
-import { usePlanStore, LEVEL2_PLAN_TYPES, LEVEL1_TEMPLATE_TASKS, getConfigColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
+import { usePlanStore, LEVEL2_PLAN_TYPES, LEVEL1_TEMPLATE_TASKS, VERSION_DATA, getConfigColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
 import { useProjectStore } from '@/stores/project'
 import { usePermissionStore } from '@/stores/permission'
@@ -41,6 +41,7 @@ import {
   getTemplateTasksForProjectType,
 } from '@/lib/projectTemplateCompatibility'
 import {
+  getTemplateConfigScopeKey,
   TECHNICAL_TEMPLATE_STORAGE_KEYS,
 } from '@/lib/technicalPlanRules'
 import type { TechnicalTemplateKind } from '@/types/technicalPlan'
@@ -63,11 +64,9 @@ export default function ConfigContainer() {
   const {
     planLevel, setPlanLevel, selectedPlanType, setSelectedPlanType,
     customTypes, setCustomTypes, viewMode, setViewMode,
-    versions, setVersions, currentVersion, setCurrentVersion,
     tasks, setTasks, searchText, setSearchText,
     columnSettingsByView, setColumnSettingsByView, collapsedNodes, setCollapsedNodes,
     publishedSnapshots, setPublishedSnapshots,
-    compareVersionA, setCompareVersionA, compareVersionB, setCompareVersionB,
     compareResult, setCompareResult, compareShowUnchanged, setCompareShowUnchanged,
     compareFilterType, setCompareFilterType,
     ganttEditingTask, setGanttEditingTask,
@@ -78,6 +77,8 @@ export default function ConfigContainer() {
     level2PlanTasks, setLevel2PlanTasks,
     activeLevel2Plan,
     configTemplateTasksByType, setConfigTemplateTasksByType, setTechnicalTemplateTasks,
+    configTemplateVersionScopes, setConfigTemplateVersions, setConfigTemplateCurrentVersion,
+    configTemplateCompareScopes, setConfigTemplateCompareVersions,
   } = usePlanStore()
 
   const transferStore = useTransferStore()
@@ -97,6 +98,39 @@ export default function ConfigContainer() {
   const [newCustomTypeName, setNewCustomTypeName] = useState('')
 
   const allPlanTypes = [...LEVEL2_PLAN_TYPES, ...customTypes]
+  // 配置中心使用模板数据（按项目分类隔离，无日期/工期）
+  const selectedTemplateType = getProjectTypeFamilyKey(selectedProjectType)
+  const isTechnicalTemplate = selectedTemplateType === PROJECT_CATEGORY_TECH
+  const technicalTemplateKind: TechnicalTemplateKind = planLevel === 'subproject' ? 'subproject' : 'tdt'
+  const templatePlanLevel = isTechnicalTemplate ? technicalTemplateKind : planLevel
+  const templateVersionScope = getTemplateConfigScopeKey(selectedTemplateType, templatePlanLevel)
+  const versionScope = configTemplateVersionScopes[templateVersionScope] || {
+    versions: VERSION_DATA.map(version => ({ ...version })),
+    currentVersion: 'v3',
+  }
+  const versions = versionScope.versions
+  const currentVersion = versions.some(version => version.id === versionScope.currentVersion)
+    ? versionScope.currentVersion
+    : versions.at(-1)?.id || ''
+  const setVersions = (next: typeof versions | ((previous: typeof versions) => typeof versions)) => (
+    setConfigTemplateVersions(templateVersionScope, next)
+  )
+  const setCurrentVersion = (versionId: string) => (
+    setConfigTemplateCurrentVersion(templateVersionScope, versionId)
+  )
+  const configuredCompareScope = configTemplateCompareScopes[templateVersionScope]
+  const compareVersionA = versions.some(version => version.id === configuredCompareScope?.versionA)
+    ? configuredCompareScope.versionA
+    : versions[0]?.id || ''
+  const compareVersionB = versions.some(version => version.id === configuredCompareScope?.versionB)
+    ? configuredCompareScope.versionB
+    : versions.filter(version => version.status === '已发布').at(-1)?.id || currentVersion
+  const setCompareVersionA = (versionId: string) => (
+    setConfigTemplateCompareVersions(templateVersionScope, versionId, compareVersionB)
+  )
+  const setCompareVersionB = (versionId: string) => (
+    setConfigTemplateCompareVersions(templateVersionScope, compareVersionA, versionId)
+  )
   const hasDraftVersion = versions.some(v => v.status === '修订中')
   const currentVersionData = versions.find(v => v.id === currentVersion)
   const isCurrentDraft = currentVersionData?.status === '修订中'
@@ -110,11 +144,6 @@ export default function ConfigContainer() {
     }
   }
 
-  // 配置中心使用模板数据（按项目分类隔离，无日期/工期）
-  const selectedTemplateType = getProjectTypeFamilyKey(selectedProjectType)
-  const isTechnicalTemplate = selectedTemplateType === PROJECT_CATEGORY_TECH
-  const technicalTemplateKind: TechnicalTemplateKind = planLevel === 'subproject' ? 'subproject' : 'tdt'
-  const templatePlanLevel = isTechnicalTemplate ? technicalTemplateKind : 'level1'
   const technicalTemplateKey = TECHNICAL_TEMPLATE_STORAGE_KEYS[technicalTemplateKind]
   const configTasks = isTechnicalTemplate
     ? configTemplateTasksByType[technicalTemplateKey] || []
@@ -432,7 +461,6 @@ export default function ConfigContainer() {
       .sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
     const getSnapshot = (versionId: string) => {
       return getTemplateSnapshotForProjectType(publishedSnapshots, selectedProjectType, versionId, templatePlanLevel)
-        || publishedSnapshots[versionId]
         || []
     }
     const baselineTasks: any[] = prevPublished ? getSnapshot(prevPublished.id) : []
@@ -454,7 +482,6 @@ export default function ConfigContainer() {
     const snapshot = JSON.parse(JSON.stringify(configTasks))
     setPublishedSnapshots(prev => ({
       ...prev,
-      [publishedVersionId]: snapshot,
       [getTemplateSnapshotKey(selectedProjectType, publishedVersionId, templatePlanLevel)]: snapshot,
       ...(isTechnicalTemplate && technicalTemplateKind === 'tdt'
         ? { [getTemplateSnapshotKey(selectedProjectType, publishedVersionId)]: JSON.parse(JSON.stringify(snapshot)) }
@@ -829,20 +856,18 @@ export default function ConfigContainer() {
             const versionA = versions.find(v => v.id === compareVersionA)
             const versionB = versions.find(v => v.id === compareVersionB)
             if (versionA && versionB) {
-              const vANum = parseInt(versionA.versionNo.replace('V', ''))
-              const vBNum = parseInt(versionB.versionNo.replace('V', ''))
-              const oldTasks = versionA.status === '已发布' ? LEVEL1_TEMPLATE_TASKS : configTasks
-              let newTasks = versionB.status === '已发布' ? LEVEL1_TEMPLATE_TASKS : configTasks
-              if (vANum !== vBNum) {
-                newTasks = [
-                  ...configTasks.map(t => {
-                    if (t.id === '2.1') return { ...t, taskName: 'STR2(更新)', status: '已完成', progress: 100 }
-                    if (t.id === '3') return { ...t, responsible: 'SPM', planStartDate: '2026-02-20' }
-                    return t
-                  }),
-                  { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: 'SPM', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 }
-                ]
-              }
+              const getVersionTasks = (version: typeof versionA) => (
+                version.status === '已发布'
+                  ? getTemplateSnapshotForProjectType(
+                    publishedSnapshots,
+                    selectedProjectType,
+                    version.id,
+                    templatePlanLevel,
+                  ) || []
+                  : version.id === currentVersion ? configTasks : []
+              )
+              const oldTasks = getVersionTasks(versionA)
+              const newTasks = getVersionTasks(versionB)
               const result = compareVersionsForTable(oldTasks as any, newTasks as any)
               setCompareResult(result as CompareTableRow[])
               setCompareFilterType('all')

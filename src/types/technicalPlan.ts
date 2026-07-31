@@ -1,5 +1,21 @@
 export type TechnicalTemplateKind = 'tdt' | 'subproject'
 
+export interface ConfigTemplateVersion {
+  id: string
+  versionNo: string
+  status: string
+}
+
+export interface ConfigTemplateVersionScope {
+  versions: ConfigTemplateVersion[]
+  currentVersion: string
+}
+
+export interface ConfigTemplateCompareScope {
+  versionA: string
+  versionB: string
+}
+
 export interface TechnicalTemplateTask {
   id: string
   order: number
@@ -23,4 +39,3 @@ export type TechnicalTemplateTaskInput = Partial<TechnicalTemplateTask> & {
   taskName?: string
   children?: readonly TechnicalTemplateTaskInput[]
 }
-

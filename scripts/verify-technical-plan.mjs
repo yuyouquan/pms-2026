@@ -48,11 +48,96 @@ assert.deepEqual(migrated.publishedSnapshots['template::技术项目::subproject
 assert.deepEqual(migrated.publishedSnapshots['template::技术项目::level1::v3'], tdtTasks, 'migration resets legacy technical compatibility snapshot')
 
 const planSource = readSource(root, 'src/stores/plan.ts')
+const configSource = readSource(root, 'src/containers/ConfigContainer.tsx')
 assert.match(planSource, /PLAN_STORE_VERSION\s*=\s*\d+/, 'plan store declares a persistence version')
 assert.match(planSource, /setTechnicalTemplateTasks/, 'plan store exposes a validating technical-template setter')
 assert.match(planSource, /validateTechnicalTemplateDepth/, 'plan store enforces technical template depth')
+assert.doesNotMatch(configSource, /publishedSnapshots\[versionId\]/, 'config snapshots never fall back across template scopes')
 
-const configSource = readSource(root, 'src/containers/ConfigContainer.tsx')
+const memoryStorage = new Map()
+globalThis.localStorage = {
+  getItem: key => memoryStorage.get(key) ?? null,
+  setItem: (key, value) => memoryStorage.set(key, value),
+  removeItem: key => memoryStorage.delete(key),
+}
+const planModule = loadTypeScriptModule(root, 'src/stores/plan.ts')
+const planStore = planModule.usePlanStore
+const tdtScope = rules.getTemplateConfigScopeKey('技术项目', 'tdt')
+const subprojectScope = rules.getTemplateConfigScopeKey('技术项目', 'subproject')
+const tdtInitial = planStore.getState().configTemplateVersionScopes[tdtScope]
+const subprojectInitial = planStore.getState().configTemplateVersionScopes[subprojectScope]
+assert.ok(tdtInitial && subprojectInitial, 'both technical template version scopes are seeded')
+assert.notStrictEqual(tdtInitial.versions, subprojectInitial.versions, 'technical tabs do not share version arrays')
+
+planStore.getState().setConfigTemplateVersions(tdtScope, previous => [
+  ...previous,
+  { id: 'v-tdt-only', versionNo: 'V-TDT', status: '修订中' },
+])
+assert.equal(planStore.getState().setConfigTemplateCurrentVersion(tdtScope, 'v-tdt-only'), true, 'TDT can select its own revision')
+assert.equal(planStore.getState().setConfigTemplateCurrentVersion(subprojectScope, 'v-tdt-only'), false, 'subproject rejects a nonexistent TDT version')
+assert.equal(planStore.getState().configTemplateVersionScopes[subprojectScope].versions.some(version => version.id === 'v-tdt-only'), false, 'TDT revision never appears in subproject')
+
+planStore.getState().setConfigTemplateVersions(subprojectScope, previous => [
+  ...previous,
+  { id: 'v-subproject-only', versionNo: 'V-SUB', status: '修订中' },
+])
+assert.equal(planStore.getState().setConfigTemplateCurrentVersion(subprojectScope, 'v-subproject-only'), true, 'subproject can select its own revision')
+planStore.getState().setConfigTemplateVersions(tdtScope, previous => previous.map(version => (
+  version.id === 'v-tdt-only' ? { ...version, status: '已发布' } : version
+)))
+planStore.getState().setConfigTemplateVersions(subprojectScope, previous => previous.map(version => (
+  version.id === 'v-subproject-only' ? { ...version, status: '已发布' } : version
+)))
+assert.equal(planStore.getState().configTemplateVersionScopes[tdtScope].currentVersion, 'v-tdt-only', 'switching back restores TDT current version')
+assert.equal(planStore.getState().configTemplateVersionScopes[subprojectScope].currentVersion, 'v-subproject-only', 'subproject current version remains independent')
+
+assert.equal(planStore.getState().setConfigTemplateCompareVersions(tdtScope, 'v3', 'v-tdt-only'), true, 'TDT compare selects only versions in its scope')
+assert.equal(planStore.getState().setConfigTemplateCompareVersions(subprojectScope, 'v3', 'v-tdt-only'), false, 'subproject compare rejects a TDT-only version')
+
+const compatibility = loadTypeScriptModule(root, 'src/lib/projectTemplateCompatibility.ts')
+const compare = loadTypeScriptModule(root, 'src/lib/versionCompare.ts')
+const tdtPublishedTasks = [{ ...tdtTasks[0], taskName: 'TDT独立发布' }]
+const subprojectPublishedTasks = [{ ...subprojectTasks[0], taskName: '子项目独立发布' }]
+planStore.getState().setPublishedSnapshots(previous => ({
+  ...previous,
+  [compatibility.getTemplateSnapshotKey('技术项目', 'v-tdt-only', 'tdt')]: tdtPublishedTasks,
+  [compatibility.getTemplateSnapshotKey('技术项目', 'v-subproject-only', 'subproject')]: subprojectPublishedTasks,
+}))
+const snapshots = planStore.getState().publishedSnapshots
+assert.deepEqual(compatibility.getTemplateSnapshotForProjectType(snapshots, '技术项目', 'v-tdt-only', 'tdt'), tdtPublishedTasks, 'TDT publish stays in TDT snapshot scope')
+assert.deepEqual(compatibility.getTemplateSnapshotForProjectType(snapshots, '技术项目', 'v-subproject-only', 'subproject'), subprojectPublishedTasks, 'subproject publish stays in subproject snapshot scope')
+assert.equal(compatibility.getTemplateSnapshotForProjectType(snapshots, '技术项目', 'v-tdt-only', 'subproject'), undefined, 'subproject cannot read a TDT publication')
+assert.equal(compare.compareVersionsForTable(tdtTasks, tdtPublishedTasks).some(row => row.changeType !== '未变更'), true, 'TDT compare uses its scoped publication')
+assert.equal(compare.compareVersionsForTable(subprojectTasks, subprojectPublishedTasks).some(row => row.changeType !== '未变更'), true, 'subproject compare uses its scoped publication')
+
+const machineScope = rules.getTemplateConfigScopeKey('整机产品项目', 'level1')
+const migratedPlan = planModule.migratePlanStoreState({
+  versions: [{ id: 'legacy-v', versionNo: 'V88', status: '已发布' }],
+  currentVersion: 'legacy-v',
+  configTemplateVersionScopes: {
+    [machineScope]: {
+      versions: [{ id: 'machine-v', versionNo: 'V99', status: '已发布' }],
+      currentVersion: 'machine-v',
+    },
+  },
+})
+assert.deepEqual(migratedPlan.configTemplateVersionScopes[machineScope], {
+  versions: [{ id: 'machine-v', versionNo: 'V99', status: '已发布' }],
+  currentVersion: 'machine-v',
+}, 'migration preserves an existing nontechnical version scope')
+const editedTdt = [{ ...tdtTasks[0], taskName: '用户已编辑TDT模板' }]
+const migratedFromTask10 = planModule.migratePlanStoreState({
+  configTemplateTasksByType: {
+    [rules.TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt]: editedTdt,
+  },
+  publishedSnapshots: {
+    'template::技术项目::tdt::v5': editedTdt,
+  },
+}, 1)
+assert.deepEqual(migratedFromTask10.configTemplateTasksByType[rules.TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt], editedTdt, 'v1 to v2 migration preserves edited TDT templates')
+assert.deepEqual(migratedFromTask10.publishedSnapshots['template::技术项目::tdt::v5'], editedTdt, 'v1 to v2 migration preserves technical publications')
+delete globalThis.localStorage
+
 assert.match(configSource, /TDT项目计划/, 'technical config exposes TDT project plan tab')
 assert.match(configSource, /子项目计划/, 'technical config exposes subproject plan tab')
 assert.match(configSource, /isTechnicalTemplate/, 'technical config branches from generic templates')

@@ -21,15 +21,20 @@ import {
 import {
   buildSubprojectTemplateTasks,
   buildTdtTemplateTasks,
+  getTemplateConfigScopeKey,
   migrateTechnicalTemplateState,
   TECHNICAL_TEMPLATE_STORAGE_KEYS,
   validateTechnicalTemplateDepth,
 } from '@/lib/technicalPlanRules'
-import type { TechnicalTemplateKind } from '@/types/technicalPlan'
+import type {
+  ConfigTemplateCompareScope,
+  ConfigTemplateVersionScope,
+  TechnicalTemplateKind,
+} from '@/types/technicalPlan'
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
-export const PLAN_STORE_VERSION = 1
+export const PLAN_STORE_VERSION = 2
 export const PLAN_STORE_STORAGE_KEY = 'pms-plan-store'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -49,6 +54,30 @@ export const VERSION_DATA = [
   { id: 'v3', versionNo: 'V3', status: '已发布' },
   { id: 'v4', versionNo: 'V4', status: '修订中' },
 ]
+
+const createVersionScope = (): ConfigTemplateVersionScope => ({
+  versions: VERSION_DATA.map(version => ({ ...version })),
+  currentVersion: 'v3',
+})
+
+const createInitialConfigTemplateVersionScopes = () => {
+  const scopes: Record<string, ConfigTemplateVersionScope> = {}
+  PROJECT_TEMPLATE_TYPES.forEach(projectType => {
+    if (projectType === PROJECT_CATEGORY_TECH) return
+    scopes[getTemplateConfigScopeKey(projectType, 'level1')] = createVersionScope()
+    scopes[getTemplateConfigScopeKey(projectType, 'level2')] = createVersionScope()
+  })
+  scopes[getTemplateConfigScopeKey(PROJECT_CATEGORY_TECH, 'tdt')] = createVersionScope()
+  scopes[getTemplateConfigScopeKey(PROJECT_CATEGORY_TECH, 'subproject')] = createVersionScope()
+  return scopes
+}
+
+const createInitialConfigTemplateCompareScopes = () => Object.fromEntries(
+  Object.keys(createInitialConfigTemplateVersionScopes()).map(scope => [
+    scope,
+    { versionA: 'v1', versionB: 'v3' },
+  ]),
+) as Record<string, ConfigTemplateCompareScope>
 
 export const LEVEL1_TASKS = [
   { id: '1', order: 1, taskName: '概念', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-01-15', estimatedDays: 15, actualStartDate: '2026-01-01', actualEndDate: '2026-01-14', actualDays: 14 },
@@ -101,9 +130,36 @@ const createInitialConfigTemplateTasks = () => {
   return templates
 }
 
-export const migratePlanStoreState = (persistedState: unknown) => {
+export const migratePlanStoreState = (persistedState: unknown, persistedVersion = 0) => {
   if (!persistedState || typeof persistedState !== 'object') return persistedState as PlanState
-  return migrateTechnicalTemplateState(persistedState as Record<string, any>) as PlanState
+  const migrated = persistedVersion < 1
+    ? migrateTechnicalTemplateState(persistedState as Record<string, any>)
+    : persistedState as Record<string, any>
+  const initialScopes = createInitialConfigTemplateVersionScopes()
+  const legacyVersions = Array.isArray(migrated.versions)
+    ? migrated.versions.map((version: any) => ({ ...version }))
+    : VERSION_DATA.map(version => ({ ...version }))
+  const legacyCurrentVersion = legacyVersions.some((version: any) => version.id === migrated.currentVersion)
+    ? migrated.currentVersion
+    : 'v3'
+  const storedScopes = migrated.configTemplateVersionScopes && typeof migrated.configTemplateVersionScopes === 'object'
+    ? migrated.configTemplateVersionScopes as Record<string, ConfigTemplateVersionScope>
+    : {}
+  const configTemplateVersionScopes = Object.fromEntries(Object.keys(initialScopes).map(scope => {
+    const stored = storedScopes[scope]
+    if (stored && Array.isArray(stored.versions) && stored.versions.some(version => version.id === stored.currentVersion)) {
+      return [scope, { versions: stored.versions.map(version => ({ ...version })), currentVersion: stored.currentVersion }]
+    }
+    return [scope, { versions: legacyVersions.map((version: any) => ({ ...version })), currentVersion: legacyCurrentVersion }]
+  }))
+  return {
+    ...migrated,
+    configTemplateVersionScopes,
+    configTemplateCompareScopes: {
+      ...createInitialConfigTemplateCompareScopes(),
+      ...(migrated.configTemplateCompareScopes || {}),
+    },
+  } as PlanState
 }
 
 type PlanColumnDefinition = Omit<SortableColumnDefinition<string>, 'title'> & {
@@ -279,6 +335,8 @@ export interface PlanState {
   // Published snapshots
   publishedSnapshots: Record<string, any[]>
   configTemplateTasksByType: Record<string, any[]>
+  configTemplateVersionScopes: Record<string, ConfigTemplateVersionScope>
+  configTemplateCompareScopes: Record<string, ConfigTemplateCompareScope>
 
   // Version compare
   compareVersionA: string
@@ -345,6 +403,9 @@ export interface PlanActions {
   setPublishedSnapshots: (v: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void
   setConfigTemplateTasksByType: (v: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void
   setTechnicalTemplateTasks: (kind: TechnicalTemplateKind, v: any[] | ((prev: any[]) => any[])) => void
+  setConfigTemplateVersions: (scope: string, v: ConfigTemplateVersionScope['versions'] | ((prev: ConfigTemplateVersionScope['versions']) => ConfigTemplateVersionScope['versions'])) => void
+  setConfigTemplateCurrentVersion: (scope: string, versionId: string) => boolean
+  setConfigTemplateCompareVersions: (scope: string, versionA: string, versionB: string) => boolean
 
   setCompareVersionA: (v: string) => void
   setCompareVersionB: (v: string) => void
@@ -414,6 +475,8 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
   // Published snapshots
   publishedSnapshots: createInitialTemplatePublishedSnapshots(),
   configTemplateTasksByType: createInitialConfigTemplateTasks(),
+  configTemplateVersionScopes: createInitialConfigTemplateVersionScopes(),
+  configTemplateCompareScopes: createInitialConfigTemplateCompareScopes(),
 
   // Version compare
   compareVersionA: 'v1',
@@ -518,6 +581,42 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
       },
     }))
   },
+  setConfigTemplateVersions: (scope, v) => set(state => {
+    const current = state.configTemplateVersionScopes[scope] || createVersionScope()
+    const input = current.versions.map(version => ({ ...version }))
+    const versions = (typeof v === 'function' ? v(input) : v).map(version => ({ ...version }))
+    const currentVersion = versions.some(version => version.id === current.currentVersion)
+      ? current.currentVersion
+      : versions.at(-1)?.id || ''
+    return {
+      configTemplateVersionScopes: {
+        ...state.configTemplateVersionScopes,
+        [scope]: { versions, currentVersion },
+      },
+    }
+  }),
+  setConfigTemplateCurrentVersion: (scope, versionId) => {
+    const current = get().configTemplateVersionScopes[scope]
+    if (!current?.versions.some(version => version.id === versionId)) return false
+    set(state => ({
+      configTemplateVersionScopes: {
+        ...state.configTemplateVersionScopes,
+        [scope]: { ...state.configTemplateVersionScopes[scope], currentVersion: versionId },
+      },
+    }))
+    return true
+  },
+  setConfigTemplateCompareVersions: (scope, versionA, versionB) => {
+    const versions = get().configTemplateVersionScopes[scope]?.versions || []
+    if (![versionA, versionB].every(versionId => versions.some(version => version.id === versionId))) return false
+    set(state => ({
+      configTemplateCompareScopes: {
+        ...state.configTemplateCompareScopes,
+        [scope]: { versionA, versionB },
+      },
+    }))
+    return true
+  },
 
   setCompareVersionA: (v) => set({ compareVersionA: v }),
   setCompareVersionB: (v) => set({ compareVersionB: v }),
@@ -549,5 +648,7 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
     currentVersion: state.currentVersion,
     publishedSnapshots: state.publishedSnapshots,
     configTemplateTasksByType: state.configTemplateTasksByType,
+    configTemplateVersionScopes: state.configTemplateVersionScopes,
+    configTemplateCompareScopes: state.configTemplateCompareScopes,
   }),
 }))
