@@ -1,6 +1,6 @@
 'use client'
 
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactElement } from 'react'
 import {
   AuditOutlined,
   DownOutlined,
@@ -44,6 +44,8 @@ interface RoadmapToolbarProps {
   onCreatePlannedProject: () => void
   onOpenFilters: () => void
   onOpenColumnSettings: () => void
+  renderFilters: (trigger: ReactElement) => ReactElement
+  renderColumnSettings: (trigger: ReactElement) => ReactElement
 }
 
 export default function RoadmapToolbar({
@@ -68,6 +70,8 @@ export default function RoadmapToolbar({
   onCreatePlannedProject,
   onOpenFilters,
   onOpenColumnSettings,
+  renderFilters,
+  renderColumnSettings,
 }: RoadmapToolbarProps) {
   const brandOptions: Array<{
     label: string
@@ -215,7 +219,7 @@ export default function RoadmapToolbar({
                   background: 'var(--bg-purple-tint)',
                 }}
               >
-                冲突
+                解决冲突
               </Button>
             </Badge>
           ) : null}
@@ -246,33 +250,37 @@ export default function RoadmapToolbar({
               </Button>
             </>
           ) : null}
-          <Tooltip title={filterCount ? `已配置 ${filterCount} 个筛选条件` : '筛选'}>
-            <Badge count={filterCount} size="small" offset={[-2, 2]}>
+          {renderFilters(
+            <Tooltip title={filterCount ? `已配置 ${filterCount} 个筛选条件` : '筛选'}>
+              <Badge count={filterCount} size="small" offset={[-2, 2]}>
+                <Button
+                  className="roadmap-toolbar-icon-action"
+                  aria-label={filterCount ? `筛选，已配置 ${filterCount} 个条件` : '筛选'}
+                  type={filterCount ? 'primary' : 'default'}
+                  icon={<FilterOutlined />}
+                  disabled={!canView}
+                  onClick={onOpenFilters}
+                  style={compactControlStyle}
+                >
+                  筛选
+                </Button>
+              </Badge>
+            </Tooltip>,
+          )}
+          {renderColumnSettings(
+            <Tooltip title="列设置">
               <Button
                 className="roadmap-toolbar-icon-action"
-                aria-label={filterCount ? `筛选，已配置 ${filterCount} 个条件` : '筛选'}
-                type={filterCount ? 'primary' : 'default'}
-                icon={<FilterOutlined />}
+                aria-label="列设置"
+                icon={<SettingOutlined />}
                 disabled={!canView}
-                onClick={onOpenFilters}
+                onClick={onOpenColumnSettings}
                 style={compactControlStyle}
               >
-                筛选
+                列设置
               </Button>
-            </Badge>
-          </Tooltip>
-          <Tooltip title="列设置">
-            <Button
-              className="roadmap-toolbar-icon-action"
-              aria-label="列设置"
-              icon={<SettingOutlined />}
-              disabled={!canView}
-              onClick={onOpenColumnSettings}
-              style={compactControlStyle}
-            >
-              列设置
-            </Button>
-          </Tooltip>
+            </Tooltip>,
+          )}
           <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
             <Button
               className="roadmap-toolbar-icon-action"

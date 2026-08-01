@@ -9,10 +9,11 @@ import { usePlanStore } from '@/stores/plan'
 import RoadmapView from '@/components/roadmap/RoadmapView'
 import { parseProjectViewShare } from '@/components/roadmap/utils'
 import { MainHeader } from '@/containers/AppShell'
-import WorkspaceContainer from '@/containers/WorkspaceContainer'
+import WorkbenchContainer from '@/containers/WorkbenchContainer'
+import ProjectListContainer from '@/containers/ProjectListContainer'
 import ProjectSpaceContainer from '@/containers/ProjectSpaceContainer'
 import ConfigContainer from '@/containers/ConfigContainer'
-import { isMachineProjectType } from '@/constants/projectTypes'
+import { useActivateProject } from '@/hooks/useActivateProject'
 import type { ProjectItem } from '@/types/app'
 
 // Minimal page-specific style overrides (bulk styles live in globals.css)
@@ -34,14 +35,14 @@ export default function Home() {
   const {
     projects,
     selectedProject,
-    setSelectedProject,
-    setSelectedMarketTab,
   } = useProjectStore()
+  const activateProject = useActivateProject()
 
   const { setProjectPlanLevel } = usePlanStore()
 
   const {
     setActiveModule,
+    enterProjectSpace,
     setProjectSpaceModule,
   } = useUiStore()
 
@@ -55,18 +56,15 @@ export default function Home() {
   const handleViewProjectFromRoadmap = (projectId: string, market?: string) => {
     const project = projects.find(p => p.id === projectId)
     if (!project) return
-    setSelectedProject(project)
-    setActiveModule('projectSpace')
+    activateProject(project, { market })
+    enterProjectSpace({ module: 'roadmap' })
     setProjectSpaceModule('plan')
     setProjectPlanLevel('level1')
-    if (market && isMachineProjectType(project.type)) {
-      setSelectedMarketTab(market)
-    }
   }
 
   // ═══════ Render ═══════
   return (
-    <ConfigProvider autoInsertSpaceInButton={false}>
+    <ConfigProvider button={{ autoInsertSpace: false }}>
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
       <div style={{ minHeight: '100vh', background: '#f5f6fa' }}>
         {/* Project Space — full-screen layout with its own header */}
@@ -78,8 +76,11 @@ export default function Home() {
             <MainHeader />
 
             <div style={{ padding: 24 }}>
-              {/* Workspace (projects + work tracker) */}
-              {activeModule === 'projects' && <WorkspaceContainer />}
+              {/* Workbench (todo center + work tracker) */}
+              {activeModule === 'workbench' && <WorkbenchContainer />}
+
+              {/* Dedicated project list */}
+              {activeModule === 'projectList' && <ProjectListContainer />}
 
               {/* Roadmap */}
               {activeModule === 'roadmap' && (

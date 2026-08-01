@@ -1,14 +1,44 @@
 import { create } from 'zustand'
 import { PROJECT_CATEGORY_MACHINE } from '@/constants/projectTypes'
 
+export type MainModule =
+  | 'workbench'
+  | 'projectList'
+  | 'roadmap'
+  | 'hrPipeline'
+  | 'config'
+  | 'projectSpace'
+
+export type WorkbenchTab = 'todo' | 'workTracker'
+
+export interface PlanNavigationIntent {
+  source: 'todo'
+  projectId: string
+  currentUser: string
+  planLevel: 'level1' | 'level2'
+  planKey: string
+  versionId: string
+  market?: string
+  marketKey?: string
+  tosType?: string
+  tosTypeKey?: string
+}
+
+export type ProjectSpaceOrigin = {
+  module: Exclude<MainModule, 'projectSpace'>
+  workbenchTab?: WorkbenchTab
+} | null
+
 export interface UiState {
   // Navigation
-  activeModule: string
-  workspaceTab: 'projects' | 'workTracker'
+  activeModule: MainModule
+  workbenchTab: WorkbenchTab
+  projectSpaceOrigin: ProjectSpaceOrigin
   configTab: string
   sidebarCollapsed: boolean
   selectedProjectType: string
   projectSpaceModule: string
+  planNavigationIntent: PlanNavigationIntent | null
 
   // Edit guard
   isEditMode: boolean
@@ -25,12 +55,15 @@ export interface UiState {
 }
 
 export interface UiActions {
-  setActiveModule: (v: string) => void
-  setWorkspaceTab: (v: 'projects' | 'workTracker') => void
+  setActiveModule: (v: MainModule) => void
+  setWorkbenchTab: (v: WorkbenchTab) => void
+  enterProjectSpace: (origin: NonNullable<ProjectSpaceOrigin>) => void
+  returnFromProjectSpace: () => void
   setConfigTab: (v: string) => void
   setSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
   setSelectedProjectType: (v: string) => void
   setProjectSpaceModule: (v: string) => void
+  setPlanNavigationIntent: (v: PlanNavigationIntent | null) => void
 
   setIsEditMode: (v: boolean) => void
   setShowLeaveConfirm: (v: boolean) => void
@@ -44,19 +77,21 @@ export interface UiActions {
   setProjectSearchText: (v: string) => void
 
   // Convenience methods
-  navigateWithEditGuard: (action: () => void) => void
+  navigateWithEditGuard: (action: () => void, isCurrentDraft: boolean) => void
   handleConfirmLeave: () => void
   handleCancelLeave: () => void
 }
 
 export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   // Navigation
-  activeModule: 'projects',
-  workspaceTab: 'projects',
+  activeModule: 'workbench',
+  workbenchTab: 'todo',
+  projectSpaceOrigin: null,
   configTab: 'plan',
   sidebarCollapsed: false,
   selectedProjectType: PROJECT_CATEGORY_MACHINE,
   projectSpaceModule: 'basic',
+  planNavigationIntent: null,
 
   // Edit guard
   isEditMode: false,
@@ -72,12 +107,46 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   projectSearchText: '',
 
   // Setters
-  setActiveModule: (v) => set({ activeModule: v }),
-  setWorkspaceTab: (v) => set({ workspaceTab: v }),
+  setActiveModule: (v) => {
+    const { activeModule, workbenchTab, projectSpaceOrigin } = get()
+    // Compatibility for existing callers that still navigate directly. New
+    // project-space entry points should call enterProjectSpace explicitly.
+    if (v === 'projectSpace' && activeModule !== 'projectSpace' && !projectSpaceOrigin) {
+      set({
+        activeModule: v,
+        projectSpaceOrigin: {
+          module: activeModule,
+          ...(activeModule === 'workbench' ? { workbenchTab } : {}),
+        },
+      })
+      return
+    }
+    set({ activeModule: v })
+  },
+  setWorkbenchTab: (v) => set({ workbenchTab: v }),
+  enterProjectSpace: (origin) => set({
+    activeModule: 'projectSpace',
+    projectSpaceOrigin: origin.module === 'workbench'
+      ? { module: 'workbench', workbenchTab: origin.workbenchTab ?? get().workbenchTab }
+      : { module: origin.module },
+  }),
+  returnFromProjectSpace: () => {
+    const projectSpaceOrigin = get().projectSpaceOrigin ?? {
+      module: 'workbench' as const,
+      workbenchTab: 'todo' as const,
+    }
+    const { module, workbenchTab } = projectSpaceOrigin
+    set({
+      activeModule: module,
+      workbenchTab: module === 'workbench' ? (workbenchTab ?? 'todo') : get().workbenchTab,
+      projectSpaceOrigin: null,
+    })
+  },
   setConfigTab: (v) => set({ configTab: v }),
   setSidebarCollapsed: (v) => set((s) => ({ sidebarCollapsed: typeof v === 'function' ? v(s.sidebarCollapsed) : v })),
   setSelectedProjectType: (v) => set({ selectedProjectType: v }),
   setProjectSpaceModule: (v) => set({ projectSpaceModule: v }),
+  setPlanNavigationIntent: (v) => set({ planNavigationIntent: v }),
 
   setIsEditMode: (v) => set({ isEditMode: v }),
   setShowLeaveConfirm: (v) => set({ showLeaveConfirm: v }),
@@ -91,10 +160,9 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   setProjectSearchText: (v) => set({ projectSearchText: v }),
 
   // Convenience methods
-  navigateWithEditGuard: (action) => {
+  navigateWithEditGuard: (action, isCurrentDraft) => {
     const { isEditMode } = get()
-    // NOTE: isCurrentDraft check will be added when integrating with plan store
-    if (isEditMode) {
+    if (isEditMode && !isCurrentDraft) {
       set({ pendingNavigation: () => action, showLeaveConfirm: true })
     } else {
       action()

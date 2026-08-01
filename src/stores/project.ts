@@ -1,7 +1,9 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { initialProjects } from '@/data/projects'
+import { EXTERNAL_PROJECT_POOL } from '@/data/externalProjectPool'
 import {
+  PROJECT_CATEGORY_MACHINE,
   PROJECT_TYPE_TOS_VERSION,
   isMachineProjectType,
   resolveProjectClassification,
@@ -12,14 +14,28 @@ import { buildTosTypeRows, type TosTypeConfigRow } from '@/lib/tosTypeRules'
 import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
 import { createRoadmapAuditSnapshot, diffRoadmapProjectFields } from '@/lib/roadmapAudit'
 import { buildRoadmapDisplayName } from '@/lib/roadmapValidation'
+import {
+  normalizeMachineFamilyName,
+  resolveMachineTosUpdate,
+  type MachineTosResolution,
+} from '@/lib/machineTosVersions'
+import { getCurrentTosEnumValues, normalizeTosEnumReference } from '@/lib/tosEnumOptions'
+import { useEnumStore } from '@/stores/enums'
 import { useRoadmapStore } from '@/stores/roadmap'
 import type { ProjectItem } from '@/types/app'
 import type {
   RoadmapChangeAction,
   RoadmapFieldChange,
   RoadmapProjectRow,
-  TosVersionConfig,
 } from '@/types/roadmap'
+import { buildProjectInfoValues, mergeProjectInfoValues } from '@/lib/projectInfoValues'
+import {
+  TECHNICAL_TEAM_PERMISSION_MAPPING,
+  TOS_TEAM_PERMISSION_MAPPING,
+  hasPermission,
+  usePermissionStore,
+} from '@/stores/permission'
+import { mergeResponsiblePersonsIntoVisibleMembers } from '@/lib/projectResponsibility'
 
 // Default login user (mock)
 export const DEFAULT_LOGIN_USER = '张三'
@@ -61,7 +77,116 @@ type ProjectPatch = Partial<Omit<ProjectItem, 'type' | 'secondaryCategory'>> & {
 type ProjectUpdate = ProjectPatch | ((project: Project) => Project)
 type PersistedProjectState = { projects: Project[] }
 
+export function synchronizeTechnicalRoleMembers(
+  existing: Record<string, string[]>,
+  incoming: Record<string, string[]>,
+): Record<string, string[]> {
+  const next = { ...existing }
+  Object.keys(TECHNICAL_TEAM_PERMISSION_MAPPING).forEach(role => {
+    next[role] = [...(incoming[role] || [])]
+  })
+  return next
+}
+
+type TosRoleSyncFixtureState = {
+  teamMembers?: string[]
+  permissionMembers?: string[]
+  responsiblePersons?: string[]
+}
+
+export function synchronizeTosRoleMembers(
+  state: TosRoleSyncFixtureState,
+  update: { source: 'team' | 'permission'; members: string[]; role: string },
+): TosRoleSyncFixtureState {
+  const members = Array.from(new Set(update.members.map(member => member.trim()).filter(Boolean)))
+  return {
+    ...state,
+    teamMembers: members,
+    permissionMembers: members,
+    ...(update.role === '版本项目经理' ? { responsiblePersons: members } : {}),
+  }
+}
+
+function applyTosRoleMembersToProject(project: Project, role: string, members: string[]): Project | null {
+  const field = TOS_TEAM_PERMISSION_MAPPING[role as keyof typeof TOS_TEAM_PERMISSION_MAPPING]
+  if (!field || project.type !== PROJECT_TYPE_TOS_VERSION) return null
+  const normalizedMembers = Array.from(new Set(members.map(member => member.trim()).filter(Boolean)))
+  const teamValues = buildProjectInfoValues(
+    project as any,
+    Object.values(TOS_TEAM_PERMISSION_MAPPING),
+  )
+  const merged = mergeProjectInfoValues(project as any, {
+    ...teamValues,
+    [field]: normalizedMembers,
+  }) as Project
+  if (role !== '版本项目经理') return merged
+  return {
+    ...merged,
+    leader: normalizedMembers[0] || '',
+    responsiblePersons: normalizedMembers,
+  }
+}
+
+export interface ProjectMutationOptions {
+  allowedFirstSaleTosValues?: readonly string[]
+}
+
 const PROJECT_STORAGE_KEY = 'pms-projects'
+
+const MACHINE_TOS_VERSION_KEYS = [
+  'firstSaleTosVersionId',
+  'firstSaleTosVersion',
+  'currentTosVersionId',
+  'currentTosVersion',
+  'tosVersionName',
+  'tosVersion',
+] as const
+
+function migrateMachineThreePartReference(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  const normalized = normalizeTosEnumReference(value)
+  if (/^\d+\.\d+\.\d+$/.test(normalized)) return normalized
+  if (/^\d+\.\d+$/.test(normalized)) return `${normalized}.0`
+  return value
+}
+
+function migrateMachineTosHistory(project: Project): Project {
+  if (!isMachineProjectType(project.type)) return project
+  const migrated = { ...project }
+  if (['升级', '切换', '换代'].includes(String(migrated.productType || '').trim())) {
+    migrated.productType = '老品'
+  }
+  MACHINE_TOS_VERSION_KEYS.forEach(key => {
+    if (key in migrated) migrated[key] = migrateMachineThreePartReference(migrated[key])
+  })
+  if (project.fieldValues && typeof project.fieldValues === 'object') {
+    const fieldValues = { ...project.fieldValues }
+    if (['升级', '切换', '换代'].includes(String(fieldValues.productType || '').trim())) {
+      fieldValues.productType = '老品'
+    }
+    ;(['firstSaleTosVersion', 'currentTosVersion'] as const).forEach(key => {
+      if (key in fieldValues) fieldValues[key] = migrateMachineThreePartReference(fieldValues[key]) as any
+    })
+    migrated.fieldValues = fieldValues
+  }
+  return migrated
+}
+
+function migrateProjectSourceIdentity(project: Project): Project {
+  const existingBid = typeof project.sourceBid === 'string' ? project.sourceBid.trim() : ''
+  if (existingBid) return existingBid === project.sourceBid ? project : { ...project, sourceBid: existingBid }
+  const projectName = project.name.trim()
+  const matchingEntries = EXTERNAL_PROJECT_POOL.filter(entry => entry.name.trim() === projectName)
+  return matchingEntries.length === 1
+    ? { ...project, sourceBid: matchingEntries[0].bid }
+    : project
+}
+
+const migrateProjectHistory = (project: Project): Project => (
+  migrateProjectSourceIdentity(migrateMachineTosHistory(project))
+)
+
+const initialProjectState = (initialProjects as Project[]).map(migrateProjectHistory)
 
 const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) => {
   if (isMachineProjectType(project.type) && project.markets?.length) {
@@ -120,13 +245,102 @@ export interface ProjectActions {
   setTodoFilter: (v: 'all' | 'overdue' | 'upcoming' | 'pending' | 'completed') => void
   setTodoCollapsed: (v: boolean) => void
   setProjectMember: (projectId: string, members: string[]) => void
-  addProject: (newProject: Project, actor?: string) => boolean
-  updateProject: (projectId: string, update: ProjectUpdate, actor?: string) => Project | null
+  addProject: (newProject: Project, actor?: string, options?: ProjectMutationOptions) => boolean
+  updateProject: (projectId: string, update: ProjectUpdate, actor?: string, options?: ProjectMutationOptions) => Project | null
   deleteProject: (projectId: string, actor?: string) => boolean
+  syncTechnicalTeamPermissionMembers: (projectId: string) => boolean
+  syncTosTeamPermissionMembers: (projectId: string, role?: string, members?: string[]) => boolean
+  syncTosTeamPermissionMembersGuarded: (projectId: string, actor: string, role: string, members: string[]) => boolean
 }
 
-function resolveTosVersionName(versions: readonly TosVersionConfig[], versionId: string): string {
-  return versions.find(version => version.id === versionId)?.name ?? versionId
+function resolveAllowedFirstSaleTosValues(options?: ProjectMutationOptions): string[] {
+  if (options?.allowedFirstSaleTosValues) {
+    return getCurrentTosEnumValues('tos-3-part', options.allowedFirstSaleTosValues)
+  }
+  const enumState = useEnumStore.getState()
+  if (!enumState.hasHydrated || enumState.hydrationError) return []
+  return getCurrentTosEnumValues('tos-3-part', enumState.valuesByType['tos-3-part'])
+}
+
+function normalizeProjectSourceBid(project: Project): string {
+  return typeof project.sourceBid === 'string' ? project.sourceBid.trim() : ''
+}
+
+function hasDuplicateProjectSourceBid(
+  projects: readonly Project[],
+  project: Project,
+): boolean {
+  const sourceBid = normalizeProjectSourceBid(project)
+  return Boolean(sourceBid && projects.some(existing => (
+    existing.id !== project.id && normalizeProjectSourceBid(existing) === sourceBid
+  )))
+}
+
+function resolveMachineTosValue(project: Project): string {
+  const preferred = project.productType === '老品'
+    ? [project.currentTosVersionId, project.currentTosVersion]
+    : [project.firstSaleTosVersionId, project.firstSaleTosVersion]
+  const candidate = [...preferred, project.tosVersionName, project.tosVersion]
+    .find(value => typeof value === 'string' && value.trim())
+  return normalizeTosEnumReference(candidate)
+}
+
+function isValidMachineProjectMutation(
+  project: Project,
+  options?: ProjectMutationOptions,
+  previousProject?: Project,
+): boolean {
+  if (!adaptNormalProject(project as unknown as ProjectItem, [])) return false
+  const tosValue = resolveMachineTosValue(project)
+  if (!tosValue) return false
+  const previousTosValue = previousProject ? resolveMachineTosValue(previousProject) : ''
+  if (previousTosValue && tosValue === previousTosValue) return true
+  return resolveAllowedFirstSaleTosValues(options).includes(tosValue)
+}
+
+function synchronizeMachineTosValues(
+  project: Project,
+  firstSaleTosVersion: string,
+  currentTosVersion: string,
+): Project {
+  return {
+    ...project,
+    firstSaleTosVersionId: firstSaleTosVersion,
+    firstSaleTosVersion,
+    currentTosVersionId: currentTosVersion,
+    currentTosVersion,
+    tosVersionName: firstSaleTosVersion,
+    tosVersion: currentTosVersion,
+    fieldValues: {
+      ...(project.fieldValues || {}),
+      firstSaleTosVersion,
+      currentTosVersion,
+    },
+  }
+}
+
+function applyMachineTosResolution(
+  projects: Project[],
+  resolution: Extract<MachineTosResolution<Project>, { ok: true }>,
+  appendCandidate: boolean,
+): Project[] {
+  const updateById = new Map(resolution.updates.map(update => [update.id, update]))
+  const synchronizedCandidate = synchronizeMachineTosValues(
+    resolution.candidate,
+    resolution.candidate.firstSaleTosVersion,
+    resolution.candidate.currentTosVersion,
+  )
+  const nextProjects = projects.map(project => {
+    if (project.id === synchronizedCandidate.id) return synchronizedCandidate
+    const update = updateById.get(project.id)
+    if (!update) return project
+    return synchronizeMachineTosValues(
+      project,
+      resolveMachineTosValue({ ...project, productType: '新品' } as Project),
+      update.currentTosVersion,
+    )
+  })
+  return appendCandidate ? [...nextProjects, synchronizedCandidate] : nextProjects
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -135,7 +349,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function migrateProjectState(persistedState: unknown, _version: number): PersistedProjectState {
   if (!isRecord(persistedState) || !Array.isArray(persistedState.projects)) {
-    return { projects: initialProjects as Project[] }
+    return { projects: initialProjectState }
   }
 
   const seenIds = new Set<string>()
@@ -151,17 +365,17 @@ export function migrateProjectState(persistedState: unknown, _version: number): 
     const type = classification.projectCategory
     if (!id || !name || !type || seenIds.has(id)) return []
     seenIds.add(id)
-    return [{
+    return [migrateProjectHistory({
       ...value,
       id,
       name,
       type,
       secondaryCategory: classification.secondaryCategory,
-    } as Project]
+    } as Project)]
   })
 
   if (persistedState.projects.length > 0 && projects.length === 0) {
-    return { projects: initialProjects as Project[] }
+    return { projects: initialProjectState }
   }
   return { projects }
 }
@@ -207,16 +421,15 @@ function recordNormalProjectAudit(
   actor: string,
 ): void {
   const roadmapState = useRoadmapStore.getState()
-  const versions = roadmapState.tosVersions
-  const beforeRow = before ? adaptNormalProject(before as unknown as ProjectItem, versions) : null
-  const afterRow = after ? adaptNormalProject(after as unknown as ProjectItem, versions) : null
+  const beforeRow = before ? adaptNormalProject(before as unknown as ProjectItem, []) : null
+  const afterRow = after ? adaptNormalProject(after as unknown as ProjectItem, []) : null
 
   let auditRow: RoadmapProjectRow | null = null
   if (action === 'create') auditRow = afterRow
   if (action === 'delete') auditRow = beforeRow
   if (action === 'update') {
     if (!beforeRow || !afterRow) return
-    const changes = diffRoadmapProjectFields(beforeRow, afterRow, versions)
+    const changes = diffRoadmapProjectFields(beforeRow, afterRow, [])
     if (!changes.length) return
     roadmapState.recordNormalProjectChange({
       projectId: afterRow.id,
@@ -227,7 +440,7 @@ function recordNormalProjectAudit(
       ),
       action,
       actor,
-      tosVersionName: resolveTosVersionName(versions, afterRow.firstSaleTosVersionId),
+      tosVersionName: `tOS${afterRow.firstSaleTosVersionId}`,
       changes: changes as [RoadmapFieldChange, ...RoadmapFieldChange[]],
     })
     return
@@ -243,22 +456,22 @@ function recordNormalProjectAudit(
     ),
     action,
     actor,
-    tosVersionName: resolveTosVersionName(versions, auditRow.firstSaleTosVersionId),
+    tosVersionName: `tOS${auditRow.firstSaleTosVersionId}`,
     changes: [],
-    snapshot: createRoadmapAuditSnapshot(auditRow, versions),
+    snapshot: createRoadmapAuditSnapshot(auditRow, []),
   })
 }
 
 export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
   (set, get) => ({
-    projects: initialProjects as Project[],
+    projects: initialProjectState,
     selectedProject: null,
     currentLoginUser: DEFAULT_LOGIN_USER,
     projectSearchText2: '',
     projectStatusFilter: 'all',
-    projectTypeFilter: 'all',
+    projectTypeFilter: PROJECT_CATEGORY_MACHINE,
     projectSecondaryCategoryFilter: 'all',
-    projectListView: 'card',
+    projectListView: 'list',
     projectCardPage: 1,
     basicInfoEditMode: false,
     editingProjectFields: {},
@@ -298,52 +511,184 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
     setProjectMember: (projectId, members) => set(state => ({
       projectMemberMap: { ...state.projectMemberMap, [projectId]: members },
     })),
-    addProject: (newProject, actor) => {
-      const versions = useRoadmapStore.getState().tosVersions
-      if (isMachineProjectType(newProject.type) && !adaptNormalProject(newProject as unknown as ProjectItem, versions)) {
-        return false
+    addProject: (newProject, actor, options) => {
+      const sourceBid = normalizeProjectSourceBid(newProject)
+      let projectToAdd = sourceBid && newProject.sourceBid !== sourceBid
+        ? { ...newProject, sourceBid }
+        : newProject
+      if (hasDuplicateProjectSourceBid(get().projects, projectToAdd)) return false
+      let machineResolution: Extract<MachineTosResolution<Project>, { ok: true }> | null = null
+      if (isMachineProjectType(projectToAdd.type)) {
+        const resolution = resolveMachineTosUpdate(get().projects, projectToAdd)
+        if (!resolution.ok) return false
+        projectToAdd = synchronizeMachineTosValues(
+          resolution.candidate,
+          resolution.candidate.firstSaleTosVersion,
+          resolution.candidate.currentTosVersion,
+        )
+        if (!isValidMachineProjectMutation(projectToAdd, options)) return false
+        machineResolution = resolution
       }
-      set(state => ({ projects: [...state.projects, newProject] }))
-      recordNormalProjectAudit('create', null, newProject, actor?.trim() || get().currentLoginUser.trim() || '系统')
+      if (machineResolution) {
+        const resolution = machineResolution
+        set(state => {
+          const projects = applyMachineTosResolution(state.projects, {
+            ...resolution,
+            updates: resolution.updates,
+          }, true)
+          return {
+            projects,
+            selectedProject: state.selectedProject
+              ? projects.find(project => project.id === state.selectedProject?.id) || state.selectedProject
+              : null,
+          }
+        })
+      } else {
+        set(state => ({ projects: [...state.projects, projectToAdd] }))
+      }
+      if (projectToAdd.type === '技术项目' || projectToAdd.type === PROJECT_TYPE_TOS_VERSION) {
+        const savedProject = get().projects.find(project => project.id === projectToAdd.id)
+        if (savedProject) usePermissionStore.getState().syncProjectTeamPermissionMembers(savedProject)
+      }
+      recordNormalProjectAudit('create', null, projectToAdd, actor?.trim() || get().currentLoginUser.trim() || '系统')
       return true
     },
-    updateProject: (projectId, update, actor) => {
+    updateProject: (projectId, update, actor, options) => {
       const existing = get().projects.find(project => project.id === projectId)
       if (!existing) return null
       const updated = typeof update === 'function'
         ? update(existing)
         : { ...existing, ...update } as Project
-      const versions = useRoadmapStore.getState().tosVersions
-      if (isMachineProjectType(updated.type) && !adaptNormalProject(updated as unknown as ProjectItem, versions)) {
-        return null
+      const sourceBid = normalizeProjectSourceBid(updated)
+      let projectToSave = sourceBid && updated.sourceBid !== sourceBid
+        ? { ...updated, sourceBid }
+        : updated
+      if (hasDuplicateProjectSourceBid(get().projects, projectToSave)) return null
+      let machineResolution: Extract<MachineTosResolution<Project>, { ok: true }> | null = null
+      if (isMachineProjectType(projectToSave.type)) {
+        const resolution = resolveMachineTosUpdate(get().projects, projectToSave)
+        if (!resolution.ok) return null
+        projectToSave = synchronizeMachineTosValues(
+          resolution.candidate,
+          resolution.candidate.firstSaleTosVersion,
+          resolution.candidate.currentTosVersion,
+        )
+        if (!isValidMachineProjectMutation(projectToSave, options, existing)) return null
+        machineResolution = resolution
       }
-      set(state => ({
-        projects: state.projects.map(project => project.id === projectId ? updated : project),
-        selectedProject: state.selectedProject?.id === projectId ? updated : state.selectedProject,
-      }))
-      recordNormalProjectAudit('update', existing, updated, actor?.trim() || get().currentLoginUser.trim() || '系统')
-      return updated
+      if (machineResolution) {
+        const resolution = machineResolution
+        set(state => {
+          const projects = applyMachineTosResolution(state.projects, {
+            ...resolution,
+            updates: resolution.updates,
+          }, false)
+          return {
+            projects,
+            selectedProject: state.selectedProject
+              ? projects.find(project => project.id === state.selectedProject?.id) || state.selectedProject
+              : null,
+          }
+        })
+      } else {
+        set(state => ({
+          projects: state.projects.map(project => project.id === projectId ? projectToSave : project),
+          selectedProject: state.selectedProject?.id === projectId ? projectToSave : state.selectedProject,
+        }))
+      }
+      if (projectToSave.type === '技术项目' || projectToSave.type === PROJECT_TYPE_TOS_VERSION) {
+        const savedProject = get().projects.find(project => project.id === projectId)
+        if (savedProject) usePermissionStore.getState().syncProjectTeamPermissionMembers(savedProject)
+      }
+      recordNormalProjectAudit('update', existing, projectToSave, actor?.trim() || get().currentLoginUser.trim() || '系统')
+      return projectToSave
     },
     deleteProject: (projectId, actor) => {
-      const existing = get().projects.find(project => project.id === projectId)
+      const currentProjects = get().projects
+      const existing = currentProjects.find(project => project.id === projectId)
       if (!existing) return false
+      let projects = currentProjects.filter(project => project.id !== projectId)
+      let recomputedNewProject: Project | null = null
+      if (isMachineProjectType(existing.type) && existing.productType === '老品') {
+        const familyName = normalizeMachineFamilyName(existing.name)
+        const matchingNewProjects = projects.filter(project => (
+          isMachineProjectType(project.type)
+          && project.productType === '新品'
+          && normalizeMachineFamilyName(project.name) === familyName
+        ))
+        if (matchingNewProjects.length > 1) return false
+        if (matchingNewProjects.length === 1) {
+          const resolution = resolveMachineTosUpdate(projects, matchingNewProjects[0])
+          if (!resolution.ok) return false
+          recomputedNewProject = synchronizeMachineTosValues(
+            resolution.candidate,
+            resolution.candidate.firstSaleTosVersion,
+            resolution.candidate.currentTosVersion,
+          )
+          projects = projects.map(project => (
+            project.id === recomputedNewProject?.id ? recomputedNewProject : project
+          ))
+        }
+      }
       set(state => ({
-        projects: state.projects.filter(project => project.id !== projectId),
-        selectedProject: state.selectedProject?.id === projectId ? null : state.selectedProject,
+        projects,
+        selectedProject: state.selectedProject?.id === projectId
+          ? null
+          : recomputedNewProject && state.selectedProject?.id === recomputedNewProject.id
+            ? recomputedNewProject
+            : state.selectedProject,
       }))
       recordNormalProjectAudit('delete', existing, null, actor?.trim() || get().currentLoginUser.trim() || '系统')
       return true
     },
+    syncTechnicalTeamPermissionMembers: (projectId) => {
+      const project = get().projects.find(item => item.id === projectId)
+      if (!project || project.type !== '技术项目') return false
+      usePermissionStore.getState().syncProjectTeamPermissionMembers(project)
+      return true
+    },
+    syncTosTeamPermissionMembers: (projectId, role, members) => {
+      const project = get().projects.find(item => item.id === projectId)
+      if (!project || project.type !== PROJECT_TYPE_TOS_VERSION) return false
+      let synchronizedProject = project
+      if (role) {
+        const nextProject = applyTosRoleMembersToProject(project, role, members || [])
+        if (!nextProject) return false
+        synchronizedProject = nextProject
+        set(state => ({
+          projects: state.projects.map(item => item.id === projectId ? synchronizedProject : item),
+          selectedProject: state.selectedProject?.id === projectId ? synchronizedProject : state.selectedProject,
+          projectMemberMap: role === '版本项目经理'
+            ? {
+                ...state.projectMemberMap,
+                [projectId]: mergeResponsiblePersonsIntoVisibleMembers(
+                  state.projectMemberMap[projectId] || [],
+                  synchronizedProject.responsiblePersons || [],
+                ),
+              }
+            : state.projectMemberMap,
+        }))
+      }
+      usePermissionStore.getState().syncProjectTeamPermissionMembers(synchronizedProject)
+      return true
+    },
+    syncTosTeamPermissionMembersGuarded: (projectId, actor, role, members) => {
+      if (!hasPermission(actor, projectId, 'projectPermission:manageRoles')) return false
+      return get().syncTosTeamPermissionMembers(projectId, role, members)
+    },
   }),
   {
     name: PROJECT_STORAGE_KEY,
-    version: 3,
+    version: 4,
     storage: createJSONStorage(() => safeProjectStorage),
     migrate: migrateProjectState,
     partialize: partializeProjectState,
     merge: (persistedState, currentState) => ({
       ...currentState,
-      ...migrateProjectState(persistedState, 3),
+      ...migrateProjectState(persistedState, 4),
     }),
+    onRehydrateStorage: () => (state) => {
+      if (state) usePermissionStore.getState().ensureProjectPermissions(state.projects)
+    },
   },
 ))

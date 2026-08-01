@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { Button, Checkbox, DatePicker, Drawer, Dropdown, Empty, Input, Modal, Popover, Segmented, Select, Space, Table, Tabs, Tag, Tooltip, message } from 'antd'
+import { Button, Checkbox, DatePicker, Dropdown, Empty, Input, Modal, Popover, Segmented, Select, Space, Table, Tabs, Tag, Tooltip, message } from 'antd'
 import {
   ArrowRightOutlined,
   CameraOutlined,
@@ -25,6 +25,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
+import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
 import {
   inferOsSeriesFromProjectName,
   inferTosVersionFromProjectName,
@@ -266,7 +267,6 @@ const BASE_COLUMN_OPTIONS = [
 ]
 
 const BASE_COLUMN_KEYS = new Set(BASE_COLUMN_OPTIONS.map(col => col.key))
-const ROADMAP_DRAWER_Z_INDEX = 1200
 
 const splitValues = (value: any) => String(value || '').split(/[,\uff0c、/]/).map(item => item.trim()).filter(Boolean)
 const getFirstSpm = (value: any) => splitValues(value)[0] || ''
@@ -2500,7 +2500,9 @@ export default function MilestoneView({
 		        </div>
 	      </div>
 
-	      <div className="pms-summary-sticky-region pms-summary-sticky-offset" style={stickyRegionStyle}>
+	      {(() => {
+	        const renderToolbar = () => (
+	          <div className="pms-summary-sticky-region pms-summary-sticky-offset" style={stickyRegionStyle}>
 	        <div className="pms-summary-toolbar-shell">
 		        <div className="pms-summary-toolbar">
 		          <div className="pms-summary-status-group">
@@ -2574,28 +2576,102 @@ export default function MilestoneView({
 		                </Tooltip>
 		              </>
 	            )}
-	            <Tooltip title={hasActiveFilters ? '筛选（已启用）' : '筛选'}>
-	              <Button
-	                aria-label="筛选"
-	                className="pms-summary-icon-button"
-	                size="small"
-	                icon={<FilterOutlined />}
-	                type={hasActiveFilters ? 'primary' : 'default'}
-	                onClick={() => {
-	                  setTempFilters(getFilterDrawerInitialConditions())
-	                  setShowFilterDrawer(true)
-	                }}
-	              />
-	            </Tooltip>
-	            <Tooltip title="列设置">
-	              <Button
-	                aria-label="列设置"
-	                className="pms-summary-icon-button"
-	                size="small"
-	                icon={<SettingOutlined />}
-	                onClick={() => setShowColumnDrawer(true)}
-	              />
-	            </Tooltip>
+	            <FloatingFilterPanel
+	              open={showFilterDrawer}
+	              trigger={(
+	                <Tooltip title={hasActiveFilters ? '筛选（已启用）' : '筛选'}>
+	                  <Button
+	                    aria-label="筛选"
+	                    className="pms-summary-icon-button"
+	                    size="small"
+	                    icon={<FilterOutlined />}
+	                    type={hasActiveFilters ? 'primary' : 'default'}
+	                    onClick={() => {
+	                      setShowColumnDrawer(false)
+	                      setTempFilters(getFilterDrawerInitialConditions())
+	                      setShowFilterDrawer(true)
+	                    }}
+	                  />
+	                </Tooltip>
+	              )}
+	              onReset={() => {
+	                setTempFilters([createFilterCondition()])
+	              }}
+	              onClear={() => {
+	                setTempFilters([createFilterCondition()])
+	              }}
+	              onCancel={() => setShowFilterDrawer(false)}
+	              onConfirm={applyTempFilters}
+	            >
+	              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+	                {tempFilters.map((condition) => (
+	                  <div key={condition.id} style={{ padding: 12, border: '1px solid #eef2ff', borderRadius: 8, background: '#fafbff' }}>
+	                    <div style={{ display: 'grid', gridTemplateColumns: isMilestoneDateFilter(condition) ? 'minmax(0, 1fr) 40px' : 'minmax(0, 1fr) 116px 40px', gap: 8, marginBottom: isValuelessFilterOperator(condition.operator) && !isMilestoneDateFilter(condition) ? 0 : 8 }}>
+	                      <Select
+	                        aria-label="筛选字段"
+	                        placeholder="筛选字段"
+	                        value={condition.field || undefined}
+	                        options={getFieldOptionsWithDuplicateDisabled(filterFieldOptions, tempFilters, condition.id)}
+	                        onChange={(value) => handleTempFilterFieldChange(condition, value)}
+	                      />
+	                      {!isMilestoneDateFilter(condition) && (
+	                        <Select
+	                          value={condition.operator}
+	                          options={FILTER_OPERATORS as any}
+	                          onChange={(value) => {
+	                            const operator = value as FilterCondition['operator']
+	                            updateTempFilter(condition.id, {
+	                              operator,
+	                              value: isValuelessFilterOperator(operator) ? '' : condition.value,
+	                            })
+	                          }}
+	                        />
+	                      )}
+	                      <Button
+	                        icon={<DeleteOutlined />}
+	                        danger
+	                        onClick={() => setTempFilters(prev => prev.length > 1 ? prev.filter(item => item.id !== condition.id) : [createFilterCondition()])}
+	                      />
+	                    </div>
+	                    {renderFilterValueControl(condition)}
+	                  </div>
+	                ))}
+	                <Button
+	                  type="dashed"
+	                  icon={<PlusOutlined />}
+	                  onClick={() => setTempFilters(prev => [...prev, createFilterCondition()])}
+	                >
+	                  添加条件
+	                </Button>
+	              </div>
+	            </FloatingFilterPanel>
+	            <SortableColumnSettings
+	              open={showColumnDrawer}
+	              trigger={(
+	                <Tooltip title="列设置">
+	                  <Button
+	                    aria-label="列设置"
+	                    className="pms-summary-icon-button"
+	                    size="small"
+	                    icon={<SettingOutlined />}
+	                    onClick={() => {
+	                      setShowFilterDrawer(false)
+	                      setShowColumnDrawer(true)
+	                    }}
+	                  />
+	                </Tooltip>
+	              )}
+	              definitions={columnDefinitions}
+	              value={columnSettings}
+	              defaultValue={defaultColumnSettings}
+	              onCancel={() => setShowColumnDrawer(false)}
+	              onApply={(nextSettings) => {
+	                setColumnSettings(nextSettings)
+	                setActiveSavedViewId(null)
+	                setSharedRowsOverride(null)
+	                setShowColumnDrawer(false)
+	              }}
+	            />
 		            <Popover
 		              title="快照"
 		              content={snapshotPopoverContent}
@@ -2648,15 +2724,25 @@ export default function MilestoneView({
 	                className="pms-summary-icon-button"
 	                size="small"
 	                icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
-	                onClick={() => setIsFullscreen(true)}
+	                onClick={() => {
+	                  setShowFilterDrawer(false)
+	                  setShowColumnDrawer(false)
+	                  setIsFullscreen(current => !current)
+	                }}
 	              />
 	            </Tooltip>
 	          </Space>
-	        </div>
-	      </div>
-	      </div>
+		        </div>
+		      </div>
+		      </div>
 
-	      {activeSnapshot && !compareMode && (
+	        )
+
+	        return (
+	          <>
+	      {!isFullscreen && renderToolbar()}
+
+		      {activeSnapshot && !compareMode && (
 	        <div className="pms-roadmap-info-bar">
 	          <Space size={8}>
 	            <HistoryOutlined />
@@ -2686,7 +2772,7 @@ export default function MilestoneView({
 	        </div>
 	      )}
 
-	      {renderCurrentView()}
+	      {!isFullscreen && renderCurrentView()}
 
 	      <Modal
 	        title={(
@@ -2696,14 +2782,22 @@ export default function MilestoneView({
           </Space>
         )}
         open={isFullscreen}
-        onCancel={() => setIsFullscreen(false)}
+        onCancel={() => {
+          setShowFilterDrawer(false)
+          setShowColumnDrawer(false)
+          setIsFullscreen(false)
+        }}
         footer={null}
         width="100vw"
         style={{ top: 0, maxWidth: '100vw', paddingBottom: 0 }}
-        styles={{ body: { height: 'calc(100vh - 110px)', overflow: 'auto' } }}
-      >
-        {renderCurrentView()}
-      </Modal>
+	        styles={{ body: { height: 'calc(100vh - 110px)', overflow: 'auto' } }}
+	      >
+	        {isFullscreen && renderToolbar()}
+	        {renderCurrentView()}
+	      </Modal>
+	          </>
+	        )
+	      })()}
 
 	      <Modal
 	        title="新建视图"
@@ -2778,88 +2872,6 @@ export default function MilestoneView({
 	        </div>
 	      </Modal>
 
-	      <Drawer
-        title="筛选条件"
-        open={showFilterDrawer}
-        onClose={() => setShowFilterDrawer(false)}
-        width={520}
-        placement="right"
-        zIndex={ROADMAP_DRAWER_Z_INDEX}
-        footer={(
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button onClick={() => {
-              setTempFilters([createFilterCondition()])
-              setMilestoneDateRange(null)
-              setSharedRowsOverride(null)
-            }}>清除全部</Button>
-            <Space>
-              <Button onClick={() => setShowFilterDrawer(false)}>取消</Button>
-              <Button
-	                type="primary"
-	                onClick={applyTempFilters}
-              >
-                应用
-              </Button>
-            </Space>
-          </div>
-        )}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {tempFilters.map((condition) => (
-            <div key={condition.id} style={{ padding: 12, border: '1px solid #eef2ff', borderRadius: 8, background: '#fafbff' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: isMilestoneDateFilter(condition) ? 'minmax(0, 1fr) 40px' : 'minmax(0, 1fr) 116px 40px', gap: 8, marginBottom: isValuelessFilterOperator(condition.operator) && !isMilestoneDateFilter(condition) ? 0 : 8 }}>
-                <Select
-                  aria-label="筛选字段"
-                  placeholder="筛选字段"
-                  value={condition.field || undefined}
-                  options={getFieldOptionsWithDuplicateDisabled(filterFieldOptions, tempFilters, condition.id)}
-                  onChange={(value) => handleTempFilterFieldChange(condition, value)}
-                />
-                {!isMilestoneDateFilter(condition) && (
-                  <Select
-                    value={condition.operator}
-                    options={FILTER_OPERATORS as any}
-                    onChange={(value) => {
-                      const operator = value as FilterCondition['operator']
-                      updateTempFilter(condition.id, {
-                        operator,
-                        value: isValuelessFilterOperator(operator) ? '' : condition.value,
-                      })
-                    }}
-                  />
-                )}
-                <Button
-                  icon={<DeleteOutlined />}
-                  danger
-                  onClick={() => setTempFilters(prev => prev.length > 1 ? prev.filter(item => item.id !== condition.id) : [createFilterCondition()])}
-                />
-              </div>
-              {renderFilterValueControl(condition)}
-            </div>
-          ))}
-          <Button
-            type="dashed"
-            icon={<PlusOutlined />}
-            onClick={() => setTempFilters(prev => [...prev, createFilterCondition()])}
-          >
-            添加条件
-          </Button>
-        </div>
-      </Drawer>
-
-      <SortableColumnSettings
-        open={showColumnDrawer}
-        definitions={columnDefinitions}
-        value={columnSettings}
-        defaultValue={defaultColumnSettings}
-        onCancel={() => setShowColumnDrawer(false)}
-        onApply={(nextSettings) => {
-          setColumnSettings(nextSettings)
-          setActiveSavedViewId(null)
-          setSharedRowsOverride(null)
-          setShowColumnDrawer(false)
-        }}
-      />
     </div>
   )
 }

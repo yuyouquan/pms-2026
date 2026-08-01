@@ -302,6 +302,7 @@ export default function RoadmapTableView({
                   </Tooltip>
                 ),
                 value: item.id,
+                disabled: item.selectable === false,
               })),
             ]}
             onChange={selectedId => onSelectedTosVersionChange(selectedId === 'all' ? null : selectedId)}

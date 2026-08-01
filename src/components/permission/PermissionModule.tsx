@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Card, Tabs, Table, Button, Space, Input, Select, Tag, Modal, Form, Popconfirm, Empty, message } from 'antd'
+import { Card, Tabs, Table, Button, Space, Input, Select, Tag, Modal, Form, Popconfirm, Empty, Tooltip, message } from 'antd'
 import { TeamOutlined, SafetyCertificateOutlined, PlusOutlined, CheckSquareFilled, CloseOutlined } from '@ant-design/icons'
 import {
   ALL_USERS,
@@ -43,6 +43,10 @@ export interface PermissionConfigProps {
   setEditingRoleName: (v: string | null) => void
   editRoleNameValue: string
   setEditRoleNameValue: (v: string) => void
+  projectType?: string
+  onRoleMembersChange?: (roleName: string, members: string[]) => void
+  syncTosTeamPermissionMembers?: (roleName: string, members: string[]) => void
+  canManageRoles: boolean
 }
 
 export interface GlobalPermissionConfigProps {
@@ -83,8 +87,13 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
   setEditingRoleName,
   editRoleNameValue,
   setEditRoleNameValue,
+  projectType,
+  onRoleMembersChange,
+  syncTosTeamPermissionMembers,
+  canManageRoles,
 }) => {
   const handleAddRole = () => {
+    if (!canManageRoles) { message.warning('无权限修改项目角色'); return }
     const name = newRoleName.trim()
     if (!name) { message.warning('请输入角色名称'); return }
     if (roles.some(r => r.name === name)) { message.warning('角色名称已存在'); return }
@@ -95,12 +104,14 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
     message.success('角色添加成功')
   }
   const handleDeleteRole = (roleName: string) => {
+    if (!canManageRoles) { message.warning('无权限修改项目角色'); return }
     setRoles(roles.filter(r => r.name !== roleName))
     setRolePermissions(prev => { const next = { ...prev }; delete next[roleName]; return next })
     if (permissionActiveRole === roleName) setPermissionActiveRole(roles[0]?.name || '系统管理员')
     message.success('角色已删除')
   }
   const handleRenameRole = (oldName: string) => {
+    if (!canManageRoles) { message.warning('无权限修改项目角色'); return }
     const newName = editRoleNameValue.trim()
     if (!newName) { message.warning('角色名称不能为空'); return }
     if (newName !== oldName && roles.some(r => r.name === newName)) { message.warning('角色名称已存在'); return }
@@ -111,9 +122,19 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
     message.success('角色名称已修改')
   }
   const handleMembersChange = (roleName: string, members: string[]) => {
+    if (!canManageRoles) { message.warning('无权限修改项目角色'); return }
+    if (projectType === 'tOS版本项目' && roles.find(role => role.name === roleName)?.isFixed && syncTosTeamPermissionMembers) {
+      syncTosTeamPermissionMembers(roleName, members)
+      return
+    }
+    if (onRoleMembersChange) {
+      onRoleMembersChange(roleName, members)
+      return
+    }
     setRoles(roles.map(r => r.name === roleName ? { ...r, members } : r))
   }
   const handlePermToggle = (roleName: string, permKey: string) => {
+    if (!canManageRoles) { message.warning('无权限修改项目角色'); return }
     const permission = PROJECT_PERMISSION_ITEMS.find(item => item.key === permKey)
     const permissionKeys = permission ? getProjectPermissionKeys(permission) : [permKey]
     setRolePermissions(prev => ({
@@ -137,8 +158,8 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
       {permConfigTab === 'roles' && (
         <div>
           <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 14, color: '#4b5563' }}>共 {roles.length} 个角色（{FIXED_ROLES.length} 个固定角色）</span>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowAddRoleModal(true)}>新增角色</Button>
+            <span style={{ fontSize: 14, color: '#4b5563' }}>共 {roles.length} 个角色（{roles.filter(role => role.isFixed).length} 个固定角色）</span>
+            <Button type="primary" icon={<PlusOutlined />} disabled={!canManageRoles} onClick={() => setShowAddRoleModal(true)}>新增角色</Button>
           </div>
           <Table
             dataSource={roles}
@@ -152,8 +173,8 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
                   if (editingRoleName === name) {
                     return (
                       <Space>
-                        <Input size="small" value={editRoleNameValue} onChange={e => setEditRoleNameValue(e.target.value)} onPressEnter={() => handleRenameRole(name)} style={{ width: 120 }} />
-                        <Button size="small" type="link" onClick={() => handleRenameRole(name)}>确定</Button>
+                        <Input size="small" disabled={!canManageRoles} value={editRoleNameValue} onChange={e => setEditRoleNameValue(e.target.value)} onPressEnter={() => handleRenameRole(name)} style={{ width: 120 }} />
+                        <Button size="small" type="link" disabled={!canManageRoles} onClick={() => handleRenameRole(name)}>确定</Button>
                         <Button size="small" type="link" onClick={() => setEditingRoleName(null)}>取消</Button>
                       </Space>
                     )
@@ -168,17 +189,24 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
               },
               {
                 title: '人员配置', dataIndex: 'members',
-                render: (_: any, record: any) => (
-                  <Select
-                    mode="multiple"
-                    value={record.members}
-                    onChange={(val: string[]) => handleMembersChange(record.name, val)}
-                    style={{ width: '100%', minWidth: 300 }}
-                    placeholder="请选择人员"
-                    maxTagCount={5}
-                    options={ALL_USERS.map(u => ({ label: u, value: u }))}
-                  />
-                )
+                render: (_: any, record: any) => {
+                  const isTechnicalFixedRole = projectType === '技术项目' && record.isFixed
+                  const memberSelect = (
+                    <Select
+                      mode="multiple"
+                      value={record.members}
+                      disabled={isTechnicalFixedRole || !canManageRoles}
+                      onChange={(val: string[]) => handleMembersChange(record.name, val)}
+                      style={{ width: '100%', minWidth: 300 }}
+                      placeholder="请选择人员"
+                      maxTagCount={5}
+                      options={ALL_USERS.map(u => ({ label: u, value: u }))}
+                    />
+                  )
+                  return isTechnicalFixedRole
+                    ? <Tooltip title="请在项目团队信息中维护"><span>{memberSelect}</span></Tooltip>
+                    : memberSelect
+                }
               },
               {
                 title: '操作', width: 120,
@@ -186,19 +214,19 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
                   <span style={{ color: '#bfbfbf', fontSize: 12 }}>-</span>
                 ) : (
                   <Space>
-                    <Button type="link" size="small" onClick={() => { setEditingRoleName(record.name); setEditRoleNameValue(record.name) }}>重命名</Button>
-                    <Popconfirm title="确定删除该角色？" onConfirm={() => handleDeleteRole(record.name)}>
-                      <Button type="link" size="small" danger>删除</Button>
+                    <Button type="link" size="small" disabled={!canManageRoles} onClick={() => { setEditingRoleName(record.name); setEditRoleNameValue(record.name) }}>重命名</Button>
+                    <Popconfirm title="确定删除该角色？" disabled={!canManageRoles} onConfirm={() => handleDeleteRole(record.name)}>
+                      <Button type="link" size="small" danger disabled={!canManageRoles}>删除</Button>
                     </Popconfirm>
                   </Space>
                 )
               },
             ]}
           />
-          <Modal title="新增角色" open={showAddRoleModal} onCancel={() => { setShowAddRoleModal(false); setNewRoleName('') }} onOk={handleAddRole} okText="确定" cancelText="取消">
+          <Modal title="新增角色" open={showAddRoleModal} onCancel={() => { setShowAddRoleModal(false); setNewRoleName('') }} onOk={handleAddRole} okText="确定" cancelText="取消" okButtonProps={{ disabled: !canManageRoles }}>
             <Form layout="vertical">
               <Form.Item label="角色名称" required>
-                <Input placeholder="请输入角色名称" value={newRoleName} onChange={e => setNewRoleName(e.target.value)} onPressEnter={handleAddRole} />
+                <Input placeholder="请输入角色名称" disabled={!canManageRoles} value={newRoleName} onChange={e => setNewRoleName(e.target.value)} onPressEnter={handleAddRole} />
               </Form.Item>
             </Form>
           </Modal>
@@ -247,13 +275,15 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
                               <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.4, minHeight: 20, marginBottom: 8 }}>{permission.name}</div>
                               <button
                                 type="button"
+                                disabled={!canManageRoles}
                                 aria-label={`${selectedPermissionRole}-${group.module}-${permission.name}-${enabled ? '已启用' : '未启用'}`}
                                 onClick={() => handlePermToggle(selectedPermissionRole, permission.key)}
                                 style={{
                                   border: 'none',
                                   background: 'transparent',
                                   padding: 0,
-                                  cursor: 'pointer',
+                                  cursor: canManageRoles ? 'pointer' : 'not-allowed',
+                                  opacity: canManageRoles ? 1 : 0.55,
                                   lineHeight: 1,
                                 }}
                               >

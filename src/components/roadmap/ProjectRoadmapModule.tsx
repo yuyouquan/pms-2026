@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Empty, Modal, Result, message } from 'antd'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Alert, Button, Card, Empty, Modal, Result, Skeleton, Space, Typography, message } from 'antd'
 import {
   applyRoadmapFilters,
   buildRoadmapFilterFieldDefinitions,
@@ -21,6 +21,14 @@ import {
 import { useHasGlobalPermission } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
 import { useRoadmapStore } from '@/stores/roadmap'
+import { useEnumStore } from '@/stores/enums'
+import { useUiStore } from '@/stores/ui'
+import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
+import {
+  formatRoadmapTosValue,
+  normalizeRoadmapTosReference,
+  normalizeRoadmapTosValue,
+} from '@/lib/roadmapValidation'
 import type { ProjectItem } from '@/types/app'
 import type {
   PlannedRoadmapProject,
@@ -40,7 +48,6 @@ import RoadmapEvolutionView from './RoadmapEvolutionView'
 import RoadmapFilterDrawer from './RoadmapFilterDrawer'
 import RoadmapTableView from './RoadmapTableView'
 import RoadmapToolbar from './RoadmapToolbar'
-import TosVersionMaintenanceModal from './TosVersionMaintenanceModal'
 
 const isPresent = <T,>(value: T | null): value is T => value !== null
 
@@ -87,7 +94,17 @@ export default function ProjectRoadmapModule({
   const canEdit = hasPermission('roadmap:edit')
 
   const plannedProjects = useRoadmapStore(state => state.plannedProjects)
-  const versions = useRoadmapStore(state => state.tosVersions)
+  const storedVersionDetails = useRoadmapStore(state => state.tosVersions)
+  const {
+    currentValues: enumTosValues,
+    hasHydrated: enumHasHydrated,
+    hydrationError: enumHydrationError,
+    retryHydration,
+  } = useTosEnumOptions('tos-2-part')
+  const setSelectedType = useEnumStore(state => state.setSelectedType)
+  const setActiveModule = useUiStore(state => state.setActiveModule)
+  const setConfigTab = useUiStore(state => state.setConfigTab)
+  const navigateWithEditGuard = useUiStore(state => state.navigateWithEditGuard)
   const changeLogs = useRoadmapStore(state => state.changeLogs)
   const viewMode = useRoadmapStore(state => state.viewMode)
   const selectedTosVersionId = useRoadmapStore(state => state.selectedTosVersionId)
@@ -104,9 +121,64 @@ export default function ProjectRoadmapModule({
   const setSelectedConflictKey = useRoadmapStore(state => state.setSelectedConflictKey)
   const deletePlannedProject = useRoadmapStore(state => state.deletePlannedProject)
 
+  const versions = useMemo<TosVersionConfig[]>(() => {
+    const currentValues = enumTosValues.map(normalizeRoadmapTosValue).filter(Boolean)
+    const historicalReferences = [
+      ...plannedProjects.map(project => project.firstSaleTosVersionId),
+      ...projects.flatMap(project => [
+        project.firstSaleTosVersionId,
+        project.firstSaleTosVersion,
+        project.currentTosVersionId,
+        project.currentTosVersion,
+        project.tosVersionName,
+        project.tosVersion,
+      ]),
+      ...storedVersionDetails.flatMap(version => (
+        version.targets.length || version.periodStartDate || version.periodEndDate ? [version.id] : []
+      )),
+      selectedTosVersionId,
+      ...getRoadmapSelectedTosVersionIds(filters),
+    ].map(value => normalizeRoadmapTosReference(value, storedVersionDetails)).filter(Boolean)
+    const allValues = [...new Set([...currentValues, ...historicalReferences])]
+    return allValues.map(normalizedValue => {
+      const [major, minor] = normalizedValue.split('.').map(Number)
+      const existing = storedVersionDetails.find(version => (
+        version.major === major && version.minor === minor
+      ))
+      return {
+        id: normalizedValue,
+        name: formatRoadmapTosValue(normalizedValue),
+        major,
+        minor,
+        periodStartDate: existing?.periodStartDate ?? '',
+        periodEndDate: existing?.periodEndDate ?? '',
+        targets: existing?.targets ?? [],
+        createdAt: existing?.createdAt ?? '2026-01-01T00:00:00.000Z',
+        updatedAt: existing?.updatedAt ?? '2026-01-01T00:00:00.000Z',
+        selectable: currentValues.includes(normalizedValue),
+      }
+    }).sort((left, right) => (
+      Number.isFinite(left.major) && Number.isFinite(left.minor)
+        && Number.isFinite(right.major) && Number.isFinite(right.minor)
+        ? right.major - left.major || right.minor - left.minor
+        : left.name.localeCompare(right.name, 'zh-CN')
+    ))
+  }, [enumTosValues, filters, plannedProjects, projects, selectedTosVersionId, storedVersionDetails])
+  const selectableVersions = useMemo(
+    () => versions.filter(version => version.selectable !== false),
+    [versions],
+  )
+  const normalizedFilters = useMemo(
+    () => sanitizeRoadmapFilterConditions(filters, versions),
+    [filters, versions],
+  )
+  const savedTosFilterValues = useMemo(
+    () => getRoadmapSelectedTosVersionIds(normalizedFilters),
+    [normalizedFilters],
+  )
+
   const [plannedModalOpen, setPlannedModalOpen] = useState(false)
   const [editingPlannedProjectId, setEditingPlannedProjectId] = useState<string | null>(null)
-  const [tosMaintenanceOpen, setTosMaintenanceOpen] = useState(false)
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [columnDrawerOpen, setColumnDrawerOpen] = useState(false)
   const [changeLogOpen, setChangeLogOpen] = useState(false)
@@ -120,10 +192,16 @@ export default function ProjectRoadmapModule({
   const [isFullscreen, setIsFullscreen] = useState(false)
   const roadmapShellRef = useRef<HTMLElement>(null)
   const textFilterDebouncerRef = useRef<RoadmapTextFilterDebouncer | null>(null)
+  const getRoadmapPopupContainer = useCallback((triggerNode: HTMLElement) => {
+    const shell = triggerNode.closest<HTMLElement>('[data-roadmap-shell]')
+      ?? roadmapShellRef.current
+    if (shell?.matches(':fullscreen')) return shell
+    return document.body
+  }, [])
 
   const filterFieldDefinitions = useMemo(
-    () => buildRoadmapFilterFieldDefinitions(versions),
-    [versions],
+    () => buildRoadmapFilterFieldDefinitions(versions, savedTosFilterValues),
+    [savedTosFilterValues, versions],
   )
   const filterDefinitionsByKey = useMemo(
     () => new Map(filterFieldDefinitions.map(definition => [definition.key, definition])),
@@ -148,10 +226,6 @@ export default function ProjectRoadmapModule({
     [normalRows, plannedRows],
   )
 
-  const normalizedFilters = useMemo(
-    () => sanitizeRoadmapFilterConditions(filters, versions),
-    [filters, versions],
-  )
   const brandFilter = getRoadmapQuickFilterValue(normalizedFilters, 'brand')
   const productTypeFilter = getRoadmapQuickFilterValue(normalizedFilters, 'productType')
   const configuredFilterCount = normalizedFilters.length
@@ -210,6 +284,12 @@ export default function ProjectRoadmapModule({
     })
     knownTargetVersionIdsRef.current = nextTargetIds
   }, [targetVersionIds, versions])
+
+  useEffect(() => {
+    if (enumHasHydrated && selectedTosVersionId && !versions.some(version => version.id === selectedTosVersionId)) {
+      setSelectedTosVersionId(null)
+    }
+  }, [enumHasHydrated, selectedTosVersionId, setSelectedTosVersionId, versions])
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -301,6 +381,13 @@ export default function ProjectRoadmapModule({
     if (onOpenChangeLog) onOpenChangeLog()
     else setChangeLogOpen(true)
   }
+  const openSharedTosEnumConfig = () => {
+    navigateWithEditGuard(() => {
+      setSelectedType('tos-2-part')
+      setConfigTab('enum')
+      setActiveModule('config')
+    }, false)
+  }
   const openConflictDrawer = (conflictKey?: string) => {
     const nextKey = conflictKey ?? conflicts[0]?.key ?? null
     setSelectedConflictKey(nextKey)
@@ -346,6 +433,38 @@ export default function ProjectRoadmapModule({
     )
   }
 
+  if (!enumHasHydrated) {
+    return (
+      <Card aria-live="polite" style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+          <Typography.Text strong>正在加载 tOS 版本配置…</Typography.Text>
+          <Skeleton active paragraph={{ rows: 5 }} />
+        </Space>
+      </Card>
+    )
+  }
+
+  if (enumHydrationError) {
+    return (
+      <Alert
+        type="error"
+        showIcon
+        message="加载 tOS 版本配置失败"
+        description={(
+          <Space orientation="vertical" size={12}>
+            <Typography.Text>{enumHydrationError}</Typography.Text>
+            <Space wrap>
+              <Button type="primary" onClick={() => void retryHydration()}>
+                重试加载
+              </Button>
+              <Button onClick={openSharedTosEnumConfig}>前往枚举配置恢复</Button>
+            </Space>
+          </Space>
+        )}
+      />
+    )
+  }
+
   const renderContext: RoadmapViewRenderContext = {
     rows: filteredRows,
     normalRows,
@@ -375,6 +494,7 @@ export default function ProjectRoadmapModule({
   return (
     <section
       ref={roadmapShellRef}
+      data-roadmap-shell
       className={`pms-roadmap-shell${isFullscreen ? ' pms-roadmap-shell-fullscreen' : ''}`}
       aria-label="tOS 路标视图"
       style={{ width: '100%', minWidth: 0 }}
@@ -397,10 +517,38 @@ export default function ProjectRoadmapModule({
         isFullscreen={isFullscreen}
         onToggleFullscreen={() => void toggleFullscreen()}
         onOpenChangeLog={requestChangeLog}
-        onOpenTosMaintenance={() => setTosMaintenanceOpen(true)}
+        onOpenTosMaintenance={openSharedTosEnumConfig}
         onCreatePlannedProject={openCreatePlannedProject}
-        onOpenFilters={() => setFilterDrawerOpen(true)}
-        onOpenColumnSettings={() => setColumnDrawerOpen(true)}
+        onOpenFilters={() => {
+          setColumnDrawerOpen(false)
+          setFilterDrawerOpen(true)
+        }}
+        onOpenColumnSettings={() => {
+          setFilterDrawerOpen(false)
+          setColumnDrawerOpen(true)
+        }}
+        renderFilters={trigger => (
+          <RoadmapFilterDrawer
+            open={filterDrawerOpen}
+            trigger={trigger}
+            getPopupContainer={getRoadmapPopupContainer}
+            onClose={() => setFilterDrawerOpen(false)}
+            conditions={filters}
+            fieldDefinitions={filterFieldDefinitions}
+            onApply={setFilters}
+          />
+        )}
+        renderColumnSettings={trigger => (
+          <RoadmapColumnSettingsDrawer
+            open={columnDrawerOpen}
+            trigger={trigger}
+            getPopupContainer={getRoadmapPopupContainer}
+            onClose={() => setColumnDrawerOpen(false)}
+            viewMode={viewMode}
+            value={{ order: [...columnOrder], visible: [...visibleColumns] }}
+            onChange={setColumnSettings}
+          />
+        )}
       />
 
       {content ?? (
@@ -412,36 +560,15 @@ export default function ProjectRoadmapModule({
         </div>
       )}
 
-      <RoadmapFilterDrawer
-        open={filterDrawerOpen}
-        onClose={() => setFilterDrawerOpen(false)}
-        conditions={filters}
-        fieldDefinitions={filterFieldDefinitions}
-        onApply={setFilters}
-      />
-      <RoadmapColumnSettingsDrawer
-        open={columnDrawerOpen}
-        onClose={() => setColumnDrawerOpen(false)}
-        viewMode={viewMode}
-        value={{ order: [...columnOrder], visible: [...visibleColumns] }}
-        onChange={setColumnSettings}
-      />
       <PlannedProjectModal
         open={plannedModalOpen}
         onCancel={closePlannedProjectModal}
         editingProject={editingProject}
         allRows={allRows}
-        tosVersions={versions}
+        tosVersions={selectableVersions}
         currentUser={currentLoginUser}
         canEdit={canEdit}
         onDeletePlannedProject={projectId => requestDeletePlannedProject(projectId, closePlannedProjectModal)}
-      />
-      <TosVersionMaintenanceModal
-        open={tosMaintenanceOpen}
-        onCancel={() => setTosMaintenanceOpen(false)}
-        normalProjects={projects}
-        plannedProjects={plannedProjects}
-        canEdit={canEdit}
       />
       <RoadmapConflictDrawer
         open={conflictDrawerOpen}

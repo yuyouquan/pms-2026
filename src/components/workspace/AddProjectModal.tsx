@@ -7,17 +7,22 @@ import { EXTERNAL_PROJECT_POOL, type ExternalProjectEntry } from '@/data/externa
 import { useProjectStore } from '@/stores/project'
 import { useUiStore } from '@/stores/ui'
 import { usePermissionStore } from '@/stores/permission'
-import { inferOsSeriesFromProjectName, inferTosVersionFromProjectName } from '@/constants/projectBasicFields'
+import { inferOsSeriesFromProjectName } from '@/constants/projectBasicFields'
 import {
   PROJECT_TYPE_TOS_VERSION,
+  PROJECT_CATEGORY_TECH,
   isMachineProjectType,
   isSoftwareProjectType,
 } from '@/constants/projectTypes'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
+import { deriveProjectResponsiblePersons, deriveProjectTosVersion } from '@/lib/projectInfoRules'
+import { resolveMachineTosUpdate } from '@/lib/machineTosVersions'
 import { normalizeTargetMarkets } from '@/lib/marketRules'
 import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
-import { compareSemanticTos } from '@/lib/roadmapSorting'
-import { useRoadmapStore } from '@/stores/roadmap'
+import { normalizeTosEnumReference, resolveCurrentTosEnumValue } from '@/lib/tosEnumOptions'
+import { useActivateProject } from '@/hooks/useActivateProject'
+import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
+import { synchronizeTechnicalProjectRecord } from '@/lib/technicalProjectRules'
 
 interface AddProjectModalProps {
   open: boolean
@@ -29,22 +34,18 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
     projects,
     currentLoginUser,
     addProject,
-    setSelectedProject,
     setProjectMember,
-    setSelectedMarketTab,
-    setSelectedTosTypeTab,
   } = useProjectStore()
-  const { setActiveModule, setProjectSpaceModule } = useUiStore()
+  const { enterProjectSpace, setProjectSpaceModule } = useUiStore()
+  const activateProject = useActivateProject()
   const initProjectPermissions = usePermissionStore(state => state.initProjectPermissions)
-  const tosVersions = useRoadmapStore(state => state.tosVersions)
-  const descendingTosVersions = useMemo(
-    () => [...tosVersions].sort((left, right) => compareSemanticTos(right, left)),
-    [tosVersions],
-  )
+  const { currentValues: machineTosValues, options: machineTosOptions } = useTosEnumOptions('tos-3-part')
 
   const candidatePool = useMemo<ExternalProjectEntry[]>(() => {
-    const existingNames = new Set(projects.map(project => project.name))
-    return EXTERNAL_PROJECT_POOL.filter(entry => !existingNames.has(entry.name))
+    const existingBids = new Set(projects
+      .map(project => typeof project.sourceBid === 'string' ? project.sourceBid : '')
+      .filter(Boolean))
+    return EXTERNAL_PROJECT_POOL.filter(entry => !existingBids.has(entry.bid))
   }, [projects])
 
   const handleSubmit = async (payload: ProjectInfoSubmitPayload) => {
@@ -60,15 +61,35 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
     const initialMarkets = isMachineProjectType(projectType)
       ? normalizeTargetMarkets(payload.infoValues.targetMarkets ?? extra.targetMarkets)
       : []
-    const inferredTosVersion = inferTosVersionFromProjectName(entry.name)
     const inferredOsSeries = inferOsSeriesFromProjectName(entry.name)
     const selectedFirstSaleTosVersion = typeof payload.infoValues.firstSaleTosVersion === 'string'
       ? payload.infoValues.firstSaleTosVersion.trim()
       : ''
-    const normalizeVersionName = (value: string) => value.replace(/\s+/g, '').toLowerCase()
-    const firstSaleTosVersionId = tosVersions.find(version => (
-      normalizeVersionName(version.name) === normalizeVersionName(selectedFirstSaleTosVersion)
-    ))?.id
+    const selectedCurrentTosVersion = typeof payload.infoValues.currentTosVersion === 'string'
+      ? payload.infoValues.currentTosVersion.trim()
+      : ''
+    const machineProductType = typeof payload.infoValues.productType === 'string'
+      ? payload.infoValues.productType
+      : extra.productType ?? ''
+    const selectedMachineTosVersion = machineProductType === '老品'
+      ? selectedCurrentTosVersion
+      : selectedFirstSaleTosVersion
+    const selectedMachineTosVersionId = resolveCurrentTosEnumValue(
+      'tos-3-part',
+      selectedMachineTosVersion,
+      machineTosValues,
+    )
+    const firstSaleTosVersionId = machineProductType === '老品'
+      ? normalizeTosEnumReference(selectedFirstSaleTosVersion)
+      : selectedMachineTosVersionId
+    const currentTosVersionId = machineProductType === '老品'
+      ? selectedMachineTosVersionId
+      : firstSaleTosVersionId
+    const derivedResponsiblePersons = deriveProjectResponsiblePersons(
+      projectType,
+      payload.infoValues,
+      payload.responsiblePersons,
+    )
     const rawVersionType = typeof payload.infoValues.versionType === 'string'
       ? payload.infoValues.versionType
       : extra.versionType ?? ''
@@ -78,13 +99,14 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       : extra.developMode ?? ''
     const baseProject = {
       id: newId,
+      sourceBid: payload.bid,
       name: entry.name,
       type: projectType,
       secondaryCategory: payload.projectSecondaryCategory,
       status: '待立项',
       progress: 0,
-      leader: payload.responsiblePersons[0],
-      responsiblePersons: payload.responsiblePersons,
+      leader: derivedResponsiblePersons[0] || '',
+      responsiblePersons: derivedResponsiblePersons,
       markets: initialMarkets,
       androidVersion: extra.androidVersion ?? '',
       chipPlatform: extra.chipPlatform ?? '',
@@ -96,16 +118,23 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       osSeries: projectType === PROJECT_TYPE_TOS_VERSION ? inferredOsSeries : (isSoftwareProject ? '' : undefined),
       versionType: projectType === PROJECT_TYPE_TOS_VERSION ? 'Full' : undefined,
       versionTypes: projectType === PROJECT_TYPE_TOS_VERSION ? ['Full'] : undefined,
-      tosVersion: isSoftwareProject ? (inferredTosVersion || extra.tosVersion || '') : (extra.tosVersion ?? ''),
+      tosVersion: deriveProjectTosVersion(
+        projectType,
+        entry.name,
+        isSoftwareProject ? (extra.tosVersion || '') : (extra.tosVersion ?? ''),
+      ),
       brand: extra.brand ?? undefined,
       planStartDate: extra.planStartDate ?? '',
       planEndDate: extra.planEndDate ?? '',
       healthStatus: payload.healthStatus as 'normal' | 'warning' | 'risk',
       ...(isMachineProjectType(projectType) ? {
         firstSaleTosVersionId,
+        firstSaleTosVersion: firstSaleTosVersionId,
+        currentTosVersionId,
+        currentTosVersion: currentTosVersionId,
         projectCode: extra.projectCode ?? (typeof payload.infoValues.projectModel === 'string' ? payload.infoValues.projectModel : entry.name),
         platform: extra.platform ?? extra.chipPlatform ?? '',
-        productType: extra.productType ?? (typeof payload.infoValues.productType === 'string' ? payload.infoValues.productType : ''),
+        productType: machineProductType,
         startRam: extra.startRam ?? (typeof payload.infoValues.startingRam === 'string' ? payload.infoValues.startingRam : ''),
         versionType: normalizedVersionType,
         str5Date: extra.str5Date ?? '',
@@ -115,34 +144,60 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       } : {}),
     }
     const mergedProject = mergeProjectInfoValues(baseProject as ProjectInfoProject, payload.infoValues) as typeof baseProject
-    const newProject = isMachineProjectType(projectType)
-      ? { ...mergedProject, market: initialMarkets.join(','), markets: initialMarkets }
+    const synchronizedProject = projectType === PROJECT_CATEGORY_TECH
+      ? synchronizeTechnicalProjectRecord(
+          mergedProject as unknown as Record<string, unknown>,
+          payload.infoValues as Record<string, unknown>,
+          { ipmProjectType: entry.ipmProjectCategoryName },
+        )
       : mergedProject
+    const newProject = isMachineProjectType(projectType)
+      ? { ...synchronizedProject, market: initialMarkets.join(','), markets: initialMarkets }
+      : synchronizedProject
 
-    if (isMachineProjectType(projectType) && !firstSaleTosVersionId) {
-      message.error(tosVersions.length ? '请选择首销 tOS 版本' : '请先维护 tOS 版本后再创建整机项目')
+    if (isMachineProjectType(projectType) && !selectedMachineTosVersionId) {
+      if (!machineTosValues.length) message.error('请先维护 tOS 版本后再创建整机项目')
+      else if (machineProductType === '老品') message.error('请选择当前 tOS 版本')
+      else message.error('请选择首销 tOS 版本')
       return false
     }
-    if (isMachineProjectType(projectType) && !adaptNormalProject(newProject as any, tosVersions)) {
+    if (isMachineProjectType(projectType) && !adaptNormalProject(newProject as any, [])) {
       message.error('外部项目缺少或不符合路标字段，请检查安卓版本、品牌、产品类型、起步 RAM、版本类型和开发模式')
       return false
     }
-    const added = addProject(newProject as unknown as Parameters<typeof addProject>[0], currentLoginUser)
+    if (isMachineProjectType(projectType)) {
+      const resolution = resolveMachineTosUpdate(projects as any[], newProject as any)
+      if (!resolution.ok) {
+        const reasonMessage = resolution.reason === 'missing-new-product'
+          ? '未找到项目名完全相同的新品项目，无法创建老品项目'
+          : resolution.reason === 'duplicate-new-product'
+            ? machineProductType === '新品'
+              ? '已存在项目名完全相同的新品项目，无法重复创建'
+              : '存在多个项目名完全相同的新品项目，无法创建老品项目'
+            : 'tOS 版本必须是严格的三段数字，例如 14.0.0'
+        message.error(reasonMessage)
+        return false
+      }
+    }
+    const added = addProject(newProject as unknown as Parameters<typeof addProject>[0], currentLoginUser, {
+      allowedFirstSaleTosValues: machineTosValues,
+    })
     if (!added) {
       message.error('项目创建失败，请检查整机项目的首销 tOS 版本和路标字段')
       return false
     }
-    setProjectMember(newId, payload.responsiblePersons)
-    initProjectPermissions(newId, { '系统管理员': payload.responsiblePersons })
-    setSelectedProject(newProject as unknown as Parameters<typeof setSelectedProject>[0])
-    setSelectedMarketTab(initialMarkets[0] || 'OP')
-    if (projectType === PROJECT_TYPE_TOS_VERSION) setSelectedTosTypeTab('Full')
+    setProjectMember(newId, derivedResponsiblePersons)
+    if (projectType !== PROJECT_CATEGORY_TECH && projectType !== PROJECT_TYPE_TOS_VERSION) {
+      initProjectPermissions(newId, { '系统管理员': derivedResponsiblePersons })
+    }
+    const createdProject = useProjectStore.getState().projects.find(project => project.id === newId)
+    if (createdProject) activateProject(createdProject as unknown as Parameters<typeof activateProject>[0])
     return true
   }
 
   const handleAfterCreate = () => {
     setProjectSpaceModule('basic')
-    setActiveModule('projectSpace')
+    enterProjectSpace({ module: 'projectList' })
     message.success('项目创建成功')
   }
 
@@ -158,7 +213,8 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       onSubmit={handleSubmit}
       onAfterCreate={handleAfterCreate}
       fieldOptionOverrides={{
-        firstSaleTosVersion: descendingTosVersions.map(version => version.name),
+        firstSaleTosVersion: machineTosOptions,
+        currentTosVersion: machineTosOptions,
         versionType: ['Full', 'Slim', 'Go'],
         developmentMode: ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'],
       }}

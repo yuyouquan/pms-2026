@@ -19,7 +19,7 @@ import {
   Menu, message, notification, Select, Input, Popconfirm, Tooltip, Modal,
   Checkbox, DatePicker, Form, Avatar, Empty, Slider, Alert, Statistic,
   Descriptions, Divider, Radio, Dropdown, Breadcrumb, Collapse,
-  Typography, Pagination, Drawer, Switch
+  Typography, Pagination, Switch
 } from 'antd'
 import dayjs from 'dayjs'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
@@ -51,7 +51,9 @@ import {
   type FilterCondition,
 } from '@/lib/filterConditions'
 import { GANTT_SCALE_OPTIONS } from '@/lib/ganttScale'
-import { compareSemanticTos } from '@/lib/roadmapSorting'
+import { formatTosEnumValue, normalizeTosEnumReference, resolveCurrentTosEnumValue } from '@/lib/tosEnumOptions'
+import { resolveMachineTosUpdate } from '@/lib/machineTosVersions'
+import { resolveVisiblePlanVersion } from '@/lib/todoAggregation'
 import {
   comparePlanVersions,
   getDisplayPlanVersionsForHorizontalPlan,
@@ -95,6 +97,7 @@ import {
   getMainMarket,
   getMarketCurrentVersion,
   getMarketFollowVersionKey,
+  getMarketPlanVersionKey,
   getMarketVersions,
   getProjectMarketSnapshotKey,
   isConfiguredMarket,
@@ -132,10 +135,10 @@ import {
 
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
-import { useRoadmapStore } from '@/stores/roadmap'
 import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, INITIAL_LEVEL2_PLAN_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
-import { usePermissionStore, useHasPermission } from '@/stores/permission'
+import { selectTechnicalProjectStage, useTechnicalPlanStore } from '@/stores/technicalPlan'
+import { resolvePermissionProjectId, usePermissionStore, useHasPermission } from '@/stores/permission'
 import { PermissionConfig } from '@/components/permission/PermissionModule'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import { TransferApply, TransferDetail, TransferEntry, TransferReview, TransferSqaReview } from '@/components/transfer/TransferModule'
@@ -147,9 +150,17 @@ import MarketEditorModal from '@/components/project-info/MarketEditorModal'
 import TosTypeEditorModal from '@/components/project-info/TosTypeEditorModal'
 import ProjectPlanInfoGrid from '@/components/project-info/ProjectPlanInfoGrid'
 import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
+import TechnicalProjectOverview from '@/components/technical-project/TechnicalProjectOverview'
+import TechnicalProjectBasicInfo from '@/components/technical-project/TechnicalProjectBasicInfo'
+import TechnicalPlanModule from '@/components/technical-project/TechnicalPlanModule'
 import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
 import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
+import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
+import {
+  synchronizeTechnicalProjectRecord,
+} from '@/lib/technicalProjectRules'
+import { deriveProjectTosVersion } from '@/lib/projectInfoRules'
 import {
   getTemplateSnapshotForProjectType,
   getTemplateTasksForProjectType,
@@ -175,6 +186,7 @@ import {
   NOTIFY_DIFF_FIELDS, MOCK_USER_MAP, type DHTMLXGanttColumn,
 } from '@/components/shared/PlanHelpers'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
+import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
 import {
   getDefaultColumnSettings,
   normalizeColumnSettings,
@@ -187,7 +199,6 @@ import {
 import { ProjectSpaceHeader } from '@/containers/AppShell'
 
 const { Option } = Select
-const PLAN_DRAWER_Z_INDEX = 1200
 const TOS_VERSION_TRAIN_SNAPSHOT_LEVEL = 'level2-version-train'
 const PROJECT_SPACE_STATUS_OPTIONS = [
   { label: '待立项', value: '待立项' },
@@ -347,6 +358,7 @@ export default function ProjectSpaceContainer() {
     handleConfirmLeave, handleCancelLeave, showLeaveConfirm,
     setPendingNavigation, setShowLeaveConfirm: setShowLeaveConfirmFn,
     sidebarCollapsed,
+    planNavigationIntent, setPlanNavigationIntent,
   } = ui
 
   const {
@@ -357,16 +369,29 @@ export default function ProjectSpaceContainer() {
     marketConfigsByProjectId, setMarketConfigForProject,
     selectedTosTypeTab, setSelectedTosTypeTab,
     tosTypeConfigsByProjectId, setTosTypeConfigForProject,
-    projectMemberMap, setProjectMember, updateProject,
+    projectMemberMap, setProjectMember, updateProject, syncTosTeamPermissionMembersGuarded,
   } = proj
+  const technicalToday = useMemo(() => new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date()), [])
+  const technicalStage = useTechnicalPlanStore(state => (
+    selectedProject?.type === '技术项目'
+      ? selectTechnicalProjectStage(state.plansByKey, selectedProject.id, technicalToday)
+      : '-'
+  ))
 
-  const roadmapTosVersions = useRoadmapStore(state => state.tosVersions)
-  const roadmapTosOptions = useMemo(
-    () => [...roadmapTosVersions]
-      .sort((left, right) => compareSemanticTos(right, left))
-      .map(version => ({ label: version.name, value: version.id })),
-    [roadmapTosVersions],
-  )
+  const machineTosHistory = useMemo(() => selectedProject ? [
+    selectedProject.firstSaleTosVersionId,
+    selectedProject.firstSaleTosVersion,
+    selectedProject.currentTosVersionId,
+    selectedProject.currentTosVersion,
+    selectedProject.tosVersionName,
+    selectedProject.tosVersion,
+  ] : [], [selectedProject])
+  const {
+    currentValues: machineTosValues,
+    options: machineTosOptions,
+  } = useTosEnumOptions('tos-3-part', machineTosHistory)
 
   const {
     projectPlanLevel, setProjectPlanLevel, projectPlanViewMode, setProjectPlanViewMode,
@@ -412,25 +437,53 @@ export default function ProjectSpaceContainer() {
   // proxied through setRolesForProject/setRolePermissionsForProject so the
   // existing PermissionConfig signature (which takes roles/setRoles/etc.) is
   // unchanged.
-  const _permProjectId = selectedProject?.id ?? ''
+  const _permProjectId = resolvePermissionProjectId(
+    selectedProject?.id ?? '',
+    typeof selectedProject?.parentProjectId === 'string' ? selectedProject.parentProjectId : undefined,
+  )
+  const canDo = useHasPermission(currentLoginUser, _permProjectId)
+  const canManageRoles = canDo('projectPermission:manageRoles')
   const roles = perm.rolesByProject[_permProjectId] ?? []
   const setRoles = (v: Parameters<typeof perm.setRolesForProject>[1]) => {
     if (!_permProjectId) return
-    perm.setRolesForProject(_permProjectId, v)
+    if (!perm.setRolesForProjectGuarded(_permProjectId, currentLoginUser, v)) {
+      message.error('无权限修改项目角色')
+    }
   }
   const rolePermissions = perm.rolePermissionsByProject[_permProjectId] ?? {}
   const setRolePermissions = (v: Parameters<typeof perm.setRolePermissionsForProject>[1]) => {
     if (!_permProjectId) return
-    perm.setRolePermissionsForProject(_permProjectId, v)
+    if (!perm.setRolePermissionsForProjectGuarded(_permProjectId, currentLoginUser, v)) {
+      message.error('无权限修改项目角色')
+    }
   }
+  const handleProjectRoleMembersChange = (roleName: string, members: string[]) => {
+    const role = roles.find(item => item.name === roleName)
+    if (selectedProject?.type === PROJECT_TYPE_TOS_VERSION && role?.isFixed) {
+      if (!syncTosTeamPermissionMembersGuarded(_permProjectId, currentLoginUser, roleName, members)) {
+        message.error('角色成员同步失败')
+      }
+      return
+    }
+    setRoles(previous => previous.map(item => item.name === roleName ? { ...item, members } : item))
+  }
+  const isTechnicalProject = selectedProject?.type === '技术项目'
+  const technicalPreProjectName = useMemo(() => {
+    if (!selectedProject) return undefined
+    const preProjectId = String(selectedProject.preProjectId || selectedProject.fieldValues?.preProjectId || '')
+    return projects.find(project => project.id === preProjectId)?.name
+  }, [projects, selectedProject])
 
   // ═══════ Permissions ═══════
   // RBAC check tied to the currently logged-in user. Global "管理组" bypasses.
-  const canDo = useHasPermission(currentLoginUser, selectedProject?.id)
   const canEditBasicInfo = canDo('basicInfo:编辑')
   const canViewBasicInfo = canDo('basicInfo:查看')
   const canEditLevel1Plan = canDo('plan:一级计划-编辑')
   const canEditLevel2Plan = canDo('plan:二级计划-编辑')
+  const canViewLevel1Plan = canDo('plan:一级计划-查看')
+  const canViewLevel2Plan = canDo('plan:二级计划-查看')
+  const canImportTechnicalPlan = canDo('plan:导入')
+  const canExportTechnicalPlan = canDo('plan:导出')
   const canEditCurrentPlan = projectPlanLevel === 'level2' ? canEditLevel2Plan : canEditLevel1Plan
   const currentPlanPermissionLabel = projectPlanLevel === 'level2' ? '二级计划' : '一级计划'
   const {
@@ -1442,8 +1495,9 @@ export default function ProjectSpaceContainer() {
     return (effectiveTasks as any[]).some(t => isResponsibleNameMatched(t.responsible, currentLoginUser)) ||
            level2PlanTasks.some(t => isResponsibleNameMatched(t.responsible, currentLoginUser))
   }, [effectiveTasks, level2PlanTasks, currentLoginUser])
-  // 用户能否查看修订版：有任一计划编辑权 OR 是某条任务的责任人
-  const canViewDraft = canEditLevel1Plan || canEditLevel2Plan || isResponsibleForAnyTask
+  // 用户能否查看修订版：先有当前计划查看权，再满足编辑权或任务责任人条件。
+  const canViewCurrentPlan = projectPlanLevel === 'level2' ? canViewLevel2Plan : canViewLevel1Plan
+  const canViewDraft = canViewCurrentPlan && (canEditLevel1Plan || canEditLevel2Plan || isResponsibleForAnyTask)
 
   // View columns
   const getViewKey = () => `project-${projectPlanLevel}-${projectPlanViewMode}`
@@ -1521,7 +1575,10 @@ export default function ProjectSpaceContainer() {
   // 用 ref 锁定到 project+市场/类型+level，防止用户手动切换版本后被覆盖
   const lastVersionInitKeyRef = useRef<string | null>(null)
   useEffect(() => {
-    if (activeModule !== 'projectSpace') return
+    if (activeModule !== 'projectSpace') {
+      lastVersionInitKeyRef.current = null
+      return
+    }
     if (projectSpaceModule !== 'plan') return
     if (!selectedProject) return
     if (machineMarketPlanUnavailable) return
@@ -1536,16 +1593,55 @@ export default function ProjectSpaceContainer() {
     const key = `${selectedProject.id}::${draftDimension}::${projectPlanLevel}::${currentLoginUser}`
     if (lastVersionInitKeyRef.current === key) return
     lastVersionInitKeyRef.current = key
-    const draft = versions.find(v => v.status === '修订中')
-    const latestPub = versions
-      .filter(v => v.status === '已发布')
-      .sort((a, b) => comparePlanVersions(b, a))[0]
-    if (draft && canViewDraft) {
-      if (currentVersion !== draft.id) setCurrentVersion(draft.id)
-    } else if (latestPub) {
-      if (currentVersion !== latestPub.id) setCurrentVersion(latestPub.id)
+    const intent = planNavigationIntent
+    if (intent) setPlanNavigationIntent(null)
+    const expectedMarketKey = isMarketScopedLevel1
+      ? getMarketPlanVersionKey(selectedProject.id, selectedMarketTab)
+      : undefined
+    const expectedTosTypeKey = isTosTypeScoped
+      ? getTosTypeVersionKey(selectedProject.id, scopedTosPlanType, scopedPlanLevel)
+      : undefined
+    const validIntent = intent?.source === 'todo'
+      && intent.projectId === selectedProject.id
+      && intent.currentUser === currentLoginUser
+      && intent.planLevel === scopedPlanLevel
+      && versions.some(version => version.id === intent.versionId)
+      && (intent.marketKey
+        ? intent.market === selectedMarketTab && intent.marketKey === expectedMarketKey
+        : !isMarketScopedLevel1)
+      && (intent.tosTypeKey
+        ? intent.tosType === scopedTosPlanType && intent.tosTypeKey === expectedTosTypeKey
+        : !isTosTypeScoped)
+    const selectedVersion = resolveVisiblePlanVersion(
+      versions,
+      validIntent ? intent.versionId : undefined,
+      canViewDraft,
+    )
+    if (selectedVersion && currentVersion !== selectedVersion) setCurrentVersion(selectedVersion)
+    if (validIntent && intent.planLevel === 'level2') {
+      const targetPlan = createdLevel2Plans.find(planItem => planItem.id === intent.planKey)
+      const fallbackPlan = createdLevel2Plans[0]
+      if (targetPlan) setActiveLevel2Plan(targetPlan.id)
+      else if (fallbackPlan) setActiveLevel2Plan(fallbackPlan.id)
     }
-  }, [activeModule, projectSpaceModule, selectedProject?.id, selectedMarketTab, scopedTosPlanType, projectPlanLevel, canViewDraft, versions, currentLoginUser])
+  }, [
+    activeModule,
+    canViewDraft,
+    createdLevel2Plans,
+    currentLoginUser,
+    currentVersion,
+    isMarketScopedLevel1,
+    isTosTypeScoped,
+    planNavigationIntent,
+    projectPlanLevel,
+    projectSpaceModule,
+    scopedPlanLevel,
+    scopedTosPlanType,
+    selectedMarketTab,
+    selectedProject?.id,
+    setPlanNavigationIntent,
+    versions,
+  ])
 
   // Due task scanning
   useEffect(() => {
@@ -1994,7 +2090,7 @@ export default function ProjectSpaceContainer() {
     setEditingProjectFields({
       projectCode: p.projectCode || p.model || '',
       androidVersion: p.androidVersion || p.operatingSystem || '',
-      firstSaleTosVersionId: p.firstSaleTosVersionId || '',
+      firstSaleTosVersionId: normalizeTosEnumReference(p.firstSaleTosVersionId || p.tosVersionName) || '',
       brand: p.brand || '',
       productLine: p.productLine || '',
       marketName: p.marketName || '',
@@ -2050,7 +2146,7 @@ export default function ProjectSpaceContainer() {
           osSeries: getSoftwareProductSeriesValue(mergedProject),
         } as typeof selectedProject
       : mergedProject
-    if (!updateProject(selectedProject.id, updated, currentLoginUser)) {
+    if (!updateProject(selectedProject.id, updated, currentLoginUser, { allowedFirstSaleTosValues: machineTosValues })) {
       message.error('整机项目的路标必填信息不完整或取值不合法，无法保存')
       return
     }
@@ -2068,8 +2164,13 @@ export default function ProjectSpaceContainer() {
     const updatedBase = {
       ...selectedProject,
       type: payload.projectType,
-      leader: payload.responsiblePersons[0] || selectedProject.leader,
+      leader: payload.responsiblePersons[0] || '',
       responsiblePersons: payload.responsiblePersons,
+      tosVersion: deriveProjectTosVersion(
+        payload.projectType,
+        selectedProject.name,
+        selectedProject.tosVersion || '',
+      ),
       healthStatus: payload.healthStatus,
       updatedAt: '刚刚',
     }
@@ -2080,9 +2181,27 @@ export default function ProjectSpaceContainer() {
     const firstSaleTosVersionName = typeof payload.infoValues.firstSaleTosVersion === 'string'
       ? payload.infoValues.firstSaleTosVersion.trim()
       : ''
-    const firstSaleTosVersionId = roadmapTosVersions.find(version => (
-      version.name.replace(/\s+/g, '').toLowerCase() === firstSaleTosVersionName.replace(/\s+/g, '').toLowerCase()
-    ))?.id || selectedProject.firstSaleTosVersionId
+    const submittedFirstSaleTos = normalizeTosEnumReference(firstSaleTosVersionName)
+    const existingFirstSaleTos = normalizeTosEnumReference(
+      selectedProject.firstSaleTosVersionId || selectedProject.tosVersionName,
+    )
+    const currentTosVersionName = typeof payload.infoValues.currentTosVersion === 'string'
+      ? payload.infoValues.currentTosVersion.trim()
+      : ''
+    const submittedCurrentTos = normalizeTosEnumReference(currentTosVersionName)
+    const existingCurrentTos = normalizeTosEnumReference(
+      selectedProject.currentTosVersionId || selectedProject.currentTosVersion || selectedProject.tosVersion,
+    )
+    const firstSaleTosVersionId = resolveCurrentTosEnumValue(
+      'tos-3-part',
+      submittedFirstSaleTos,
+      machineTosValues,
+    ) || (submittedFirstSaleTos === existingFirstSaleTos ? existingFirstSaleTos : '')
+    const currentTosVersionId = resolveCurrentTosEnumValue(
+      'tos-3-part',
+      submittedCurrentTos,
+      machineTosValues,
+    ) || (submittedCurrentTos === existingCurrentTos ? existingCurrentTos : '')
     const rawVersionType = typeof payload.infoValues.versionType === 'string'
       ? payload.infoValues.versionType
       : selectedProject.versionType || ''
@@ -2090,13 +2209,38 @@ export default function ProjectSpaceContainer() {
       ? {
           ...merged,
           firstSaleTosVersionId,
+          firstSaleTosVersion: submittedFirstSaleTos,
+          currentTosVersionId,
+          currentTosVersion: submittedCurrentTos,
           projectCode: typeof payload.infoValues.projectModel === 'string' ? payload.infoValues.projectModel : selectedProject.projectCode,
           startRam: typeof payload.infoValues.startingRam === 'string' ? payload.infoValues.startingRam : selectedProject.startRam,
           versionType: rawVersionType.toUpperCase() === 'GO' ? 'Go' : rawVersionType,
           developMode: typeof payload.infoValues.developmentMode === 'string' ? payload.infoValues.developmentMode : selectedProject.developMode,
         }
-      : merged
-    if (!updateProject(selectedProject.id, () => updated as unknown as typeof selectedProject, currentLoginUser)) {
+      : selectedProject.type === '技术项目'
+        ? synchronizeTechnicalProjectRecord(
+            merged as unknown as Record<string, unknown>,
+            payload.infoValues as Record<string, unknown>,
+            { ipmProjectType: String(selectedProject.ipmProjectType || '') },
+          ) as unknown as typeof merged
+        : merged
+    if (isMachineProjectType(selectedProject.type)) {
+      const resolution = resolveMachineTosUpdate(projects as any[], updated as any)
+      if (!resolution.ok) {
+        const reasonMessage = resolution.reason === 'missing-new-product'
+          ? '未找到项目名完全相同的新品项目，无法保存老品项目'
+          : resolution.reason === 'duplicate-new-product'
+            ? updated.productType === '新品'
+              ? '已存在项目名完全相同的新品项目，无法保存'
+              : '存在多个项目名完全相同的新品项目，无法保存老品项目'
+            : 'tOS 版本必须是严格的三段数字，例如 14.0.0'
+        message.error(reasonMessage)
+        return false
+      }
+    }
+    if (!updateProject(selectedProject.id, () => updated as unknown as typeof selectedProject, currentLoginUser, {
+      allowedFirstSaleTosValues: machineTosValues,
+    })) {
       message.error('整机项目的路标必填信息不完整或取值不合法，无法保存')
       return false
     }
@@ -2690,7 +2834,7 @@ export default function ProjectSpaceContainer() {
     const markets = marketRows.map(row => row.market)
     const ef = editingProjectFields
     const setEf = (key: string, value: any) => setEditingProjectFields((prev: any) => ({ ...prev, [key]: value }))
-    const editableField = (key: string, value: any, options?: { type?: 'input' | 'select' | 'select-multiple' | 'textarea'; choices?: { label: string; value: string }[] }) => {
+    const editableField = (key: string, value: any, options?: { type?: 'input' | 'select' | 'select-multiple' | 'textarea'; choices?: { label: string; value: string; disabled?: boolean }[] }) => {
       if (!basicInfoEditMode) return <span>{value || '-'}</span>
       if (options?.type === 'select') return <Select size="small" value={ef[key]} onChange={(v: string) => setEf(key, v)} style={{ width: '100%' }} options={options.choices} />
       if (options?.type === 'select-multiple') return <Select size="small" mode="multiple" value={(ef[key] || '').split(',').filter(Boolean)} onChange={(v: string[]) => setEf(key, v.join(','))} style={{ width: '100%' }} options={options.choices} />
@@ -2828,13 +2972,16 @@ export default function ProjectSpaceContainer() {
     const renderWholeMachineBasicInfoField = (field: (typeof WHOLE_MACHINE_BASIC_INFO_FIELDS)[number]) => {
       const visibleDevelopMode = basicInfoEditMode ? ef.developMode : p.developMode
       if (field.key === 'isOutsourcedMini' && visibleDevelopMode !== '外研') return null
-      const firstSaleTosVersionName = roadmapTosVersions.find(version => version.id === p.firstSaleTosVersionId)?.name || p.firstSaleTosVersionId || '-'
+      const firstSaleTosValue = normalizeTosEnumReference(p.firstSaleTosVersionId || p.tosVersionName)
+      const firstSaleTosVersionName = machineTosOptions.find(option => option.value === firstSaleTosValue)?.label
+        || formatTosEnumValue(firstSaleTosValue)
+        || '-'
       let content: React.ReactNode = field.key === 'firstSaleTosVersionId'
         ? firstSaleTosVersionName
         : getProjectFieldValue(field)
       if (field.key === 'projectCode') content = editableField('projectCode', p.projectCode || p.model)
       if (field.key === 'androidVersion') content = editableField('androidVersion', p.androidVersion || p.operatingSystem)
-      if (field.key === 'firstSaleTosVersionId') content = editableField('firstSaleTosVersionId', firstSaleTosVersionName, { type: 'select', choices: roadmapTosOptions })
+      if (field.key === 'firstSaleTosVersionId') content = editableField('firstSaleTosVersionId', firstSaleTosVersionName, { type: 'select', choices: machineTosOptions })
       if (field.key === 'brand') content = editableField('brand', p.brand)
       if (field.key === 'productLine') content = editableField('productLine', p.productLine)
       if (field.key === 'marketName') content = editableField('marketName', p.marketName)
@@ -2986,7 +3133,7 @@ export default function ProjectSpaceContainer() {
         {/* Header card */}
         <Card id="section-header" style={{ marginBottom: 20, borderRadius: 8, overflow: 'hidden' }} styles={{ header: { background: 'linear-gradient(135deg, #312e81 0%, #4338ca 100%)', borderBottom: 'none', padding: '16px 24px' }, body: { padding: 0 } }}
           title={<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, rgba(129,140,248,0.3) 0%, rgba(99,102,241,0.4) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 16px rgba(99,102,241,0.3)' }}><ProjectOutlined style={{ color: '#fff', fontSize: 18 }} /></div><div><div style={{ color: '#fff', fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}>{headerExtra}</div></div></div>}
-          extra={<Space size={8}><Tag color={statusConf.tagColor} style={{ margin: 0, borderRadius: 4, fontWeight: 500 }}>{p.status}</Tag><Tag style={{ margin: 0, borderRadius: 4, background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag>{isWholeMachine && <Button type="primary" icon={<SendOutlined />} style={{ background: '#4338ca', borderColor: '#4338ca' }} onClick={() => transfer.setTransferView('apply')}>申请转维</Button>}</Space>}
+          extra={<Space size={8}><Tag color={statusConf.tagColor} style={{ margin: 0, borderRadius: 4, fontWeight: 500 }}>{p.status}</Tag><Tag style={{ margin: 0, borderRadius: 4, background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag>{isTech && canEditBasicInfo && <Button ghost icon={<EditOutlined />} onClick={() => setShowProjectInfoEditor(true)}>编辑项目信息</Button>}{isWholeMachine && <Button type="primary" icon={<SendOutlined />} style={{ background: '#4338ca', borderColor: '#4338ca' }} onClick={() => transfer.setTransferView('apply')}>申请转维</Button>}</Space>}
         >
           <div style={{ display: 'flex', background: 'linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)', borderBottom: '1px solid rgba(99,102,241,0.08)' }}>
             {[
@@ -3006,8 +3153,8 @@ export default function ProjectSpaceContainer() {
         <Card id="section-basic" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#6366f1' }} />, '基本信息', '#6366f1')} extra={
           basicInfoEditMode ? (<Space><Button size="small" onClick={() => setBasicInfoEditMode(false)}>取消</Button><Button size="small" type="primary" onClick={saveBasicInfoEdit}>保存</Button></Space>) : (
             canEditBasicInfo
-              ? <Button size="small" icon={<EditOutlined />} onClick={startBasicInfoEdit}>编辑</Button>
-              : <Tooltip title="无基本信息编辑权限"><Button size="small" icon={<EditOutlined />} disabled>编辑</Button></Tooltip>
+              ? <Button aria-label="编辑项目信息" size="small" icon={<EditOutlined />} onClick={startBasicInfoEdit}>编辑</Button>
+              : <Tooltip title="无基本信息编辑权限"><Button aria-label="编辑项目信息" size="small" icon={<EditOutlined />} disabled>编辑</Button></Tooltip>
           )
         }>
           {isSoftware && (
@@ -3176,7 +3323,7 @@ export default function ProjectSpaceContainer() {
             </Descriptions>
           </Card>
         )}
-        {isTargetProject && (
+        {(isTargetProject || isTech) && (
           <ProjectInfoModal
             mode="edit"
             open={showProjectInfoEditor}
@@ -3187,7 +3334,8 @@ export default function ProjectSpaceContainer() {
             onCancel={() => setShowProjectInfoEditor(false)}
             onSubmit={saveTargetProjectInfo}
             fieldOptionOverrides={{
-              firstSaleTosVersion: roadmapTosOptions.map(option => option.label),
+              firstSaleTosVersion: machineTosOptions,
+              currentTosVersion: machineTosOptions,
               versionType: ['Full', 'Slim', 'Go'],
               developmentMode: ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'],
             }}
@@ -3358,7 +3506,12 @@ export default function ProjectSpaceContainer() {
                 <Space size={4} align="center">
                   <span style={{ fontSize: 13, fontWeight: 500, color: '#9ca3af', marginRight: 8 }}>市场</span>
                   {marketConfigRows.map(row => (
-                    <Tag key={row.market} color={selectedMarketTab === row.market ? (marketColors[row.market] || '#1890ff') : 'default'} style={{ cursor: 'pointer', borderRadius: 4, padding: '4px 12px', fontSize: 13, fontWeight: selectedMarketTab === row.market ? 600 : 400, borderColor: selectedMarketTab === row.market ? (marketColors[row.market] || '#1890ff') : '#d9d9d9' }} onClick={() => navigateWithEditGuard(() => setSelectedMarketTab(row.market))}>
+                    <Tag key={row.market} color={selectedMarketTab === row.market ? (marketColors[row.market] || '#1890ff') : 'default'} role="button" tabIndex={0} aria-label={`市场 ${row.market}`} aria-pressed={selectedMarketTab === row.market} style={{ cursor: 'pointer', borderRadius: 4, padding: '4px 12px', fontSize: 13, fontWeight: selectedMarketTab === row.market ? 600 : 400, borderColor: selectedMarketTab === row.market ? (marketColors[row.market] || '#1890ff') : '#d9d9d9' }} onClick={() => navigateWithEditGuard(() => setSelectedMarketTab(row.market))} onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        navigateWithEditGuard(() => setSelectedMarketTab(row.market))
+                      }
+                    }}>
                       <Space size={4}>{row.market}{row.isMain && <span style={{ fontSize: 11 }}>主</span>}{row.followsMain && <span style={{ fontSize: 11 }}>跟随</span>}</Space>
                     </Tag>
                   ))}
@@ -3574,19 +3727,84 @@ export default function ProjectSpaceContainer() {
                     </Space>
                   )}
                   {projectPlanLevel === 'level1' && projectPlanViewMode !== 'horizontal' ? (
-                    <Tooltip title="筛选">
-                      <Badge dot={hasActiveLevel1PlanFilters} offset={[-2, 2]}>
+                    <FloatingFilterPanel
+                      open={showLevel1PlanFilterDrawer && projectPlanLevel === 'level1'}
+                      trigger={(
+                        <Tooltip title="筛选">
+                          <Badge dot={hasActiveLevel1PlanFilters} offset={[-2, 2]}>
+                            <Button
+                              icon={<FilterOutlined />}
+                              style={{ borderRadius: 6 }}
+                              onClick={() => {
+                                setShowColumnModal(false)
+                                setTempLevel1PlanFilters(level1PlanFilters.length ? level1PlanFilters.map(item => ({ ...item })) : [createFilterCondition()])
+                                setShowLevel1PlanFilterDrawer(true)
+                              }}
+                              aria-label="筛选"
+                            />
+                          </Badge>
+                        </Tooltip>
+                      )}
+                      getPopupContainer={(triggerNode) => (
+                        triggerNode.closest('.ant-modal-content') as HTMLElement | null
+                      ) ?? document.body}
+                      onReset={() => setTempLevel1PlanFilters([createFilterCondition()])}
+                      onClear={() => setTempLevel1PlanFilters([createFilterCondition()])}
+                      onCancel={() => setShowLevel1PlanFilterDrawer(false)}
+                      onConfirm={() => {
+                        setLevel1PlanFilters(normalizeFilterConditions(tempLevel1PlanFilters))
+                        setShowLevel1PlanFilterDrawer(false)
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {tempLevel1PlanFilters.map((condition) => (
+                          <div key={condition.id} style={{ padding: 12, border: '1px solid #eef2ff', borderRadius: 8, background: '#fafbff' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 116px 40px', gap: 8, marginBottom: isValuelessFilterOperator(condition.operator) ? 0 : 8 }}>
+                              <Select
+                                aria-label="筛选字段"
+                                placeholder="筛选字段"
+                                value={condition.field || undefined}
+                                options={getFieldOptionsWithDuplicateDisabled(planFilterFieldOptions, tempLevel1PlanFilters, condition.id)}
+                                onChange={(value) => setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? { ...item, field: value } : item))}
+                              />
+                              <Select
+                                value={condition.operator}
+                                options={FILTER_OPERATORS as any}
+                                onChange={(value) => {
+                                  const operator = value as PlanFilterCondition['operator']
+                                  setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? {
+                                    ...item,
+                                    operator,
+                                    value: isValuelessFilterOperator(operator) ? '' : item.value,
+                                  } : item))
+                                }}
+                              />
+                              <Button
+                                icon={<DeleteOutlined />}
+                                danger
+                                onClick={() => setTempLevel1PlanFilters(prev => prev.length > 1 ? prev.filter(item => item.id !== condition.id) : [createFilterCondition()])}
+                              />
+                            </div>
+                            {!isValuelessFilterOperator(condition.operator) && (
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <Input
+                                  placeholder="输入筛选值"
+                                  value={condition.value}
+                                  onChange={(e) => setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? { ...item, value: e.target.value } : item))}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ))}
                         <Button
-                          icon={<FilterOutlined />}
-                          style={{ borderRadius: 6 }}
-                          onClick={() => {
-                            setTempLevel1PlanFilters(level1PlanFilters.length ? level1PlanFilters.map(item => ({ ...item })) : [createFilterCondition()])
-                            setShowLevel1PlanFilterDrawer(true)
-                          }}
-                          aria-label="筛选"
-                        />
-                      </Badge>
-                    </Tooltip>
+                          type="dashed"
+                          icon={<PlusOutlined />}
+                          onClick={() => setTempLevel1PlanFilters(prev => [...prev, createFilterCondition()])}
+                        >
+                          添加条件
+                        </Button>
+                      </div>
+                    </FloatingFilterPanel>
                   ) : projectPlanLevel !== 'level1' ? (
                     <Input placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
                   ) : null}
@@ -3596,14 +3814,27 @@ export default function ProjectSpaceContainer() {
                     </Dropdown>
                   )}
                   {projectPlanViewMode !== 'horizontal' && (
-                    <Tooltip title="列设置">
-                      <Button
-                        icon={projectPlanLevel === 'level1' ? <SettingOutlined /> : <AppstoreOutlined />}
-                        style={{ borderRadius: 6 }}
-                        onClick={() => setShowColumnModal(true)}
-                        aria-label="列设置"
-                      />
-                    </Tooltip>
+                    <SortableColumnSettings
+                      open={showColumnModal}
+                      trigger={(
+                        <Tooltip title="列设置">
+                          <Button
+                            icon={projectPlanLevel === 'level1' ? <SettingOutlined /> : <AppstoreOutlined />}
+                            style={{ borderRadius: 6 }}
+                            onClick={() => {
+                              setShowLevel1PlanFilterDrawer(false)
+                              setShowColumnModal(true)
+                            }}
+                            aria-label="列设置"
+                          />
+                        </Tooltip>
+                      )}
+                      definitions={currentViewColumns}
+                      value={columnSettings}
+                      defaultValue={getDefaultColumnSettings(currentViewColumns)}
+                      onApply={applyColumnSettings}
+                      onCancel={() => setShowColumnModal(false)}
+                    />
                   )}
                   {getScopeKey() !== null && (
                     <>
@@ -3692,12 +3923,41 @@ export default function ProjectSpaceContainer() {
           {transfer.transferView === 'entry' && <TransferEntry {...transferProps} />}
           {transfer.transferView === 'review' && <TransferReview {...transferProps} />}
           {transfer.transferView === 'sqa-review' && <TransferSqaReview {...transferProps} />}
-          {transfer.transferView === null && projectSpaceModule === 'basic' && renderProjectBasicInfo()}
-          {transfer.transferView === null && projectSpaceModule === 'plan' && renderProjectPlan()}
+          {transfer.transferView === null && projectSpaceModule === 'basic' && (
+            isTechnicalProject && selectedProject
+              ? <TechnicalProjectBasicInfo projectId={selectedProject.id} currentLoginUser={currentLoginUser} />
+              : renderProjectBasicInfo()
+          )}
+          {transfer.transferView === null && projectSpaceModule === 'plan' && (
+            isTechnicalProject && selectedProject
+              ? <TechnicalPlanModule
+                  projectId={selectedProject.id}
+                  currentLoginUser={currentLoginUser}
+                  canEdit={canEditLevel1Plan}
+                  canPublish={canEditLevel1Plan}
+                  canImport={canImportTechnicalPlan}
+                  canExport={canExportTechnicalPlan}
+                  maxDepthByKind={{ tdt: 2, subproject: 1 }}
+                />
+              : renderProjectPlan()
+          )}
           {transfer.transferView === null && projectSpaceModule === 'overview' && (
-            <Card style={{ borderRadius: 8, textAlign: 'center', padding: '48px 0' }}>
-              <Empty description={<span style={{ color: '#9ca3af' }}>概况模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-            </Card>
+            isTechnicalProject && selectedProject
+              ? (
+                <TechnicalProjectOverview
+                  project={selectedProject}
+                  stage={technicalStage}
+                  preProjectName={technicalPreProjectName}
+                  customRoles={roles.filter(role => !role.isFixed)}
+                  canEdit={canEditBasicInfo}
+                  onEdit={() => setShowProjectInfoEditor(true)}
+                />
+              )
+              : (
+                <Card style={{ borderRadius: 8, textAlign: 'center', padding: '48px 0' }}>
+                  <Empty description={<span style={{ color: '#9ca3af' }}>概况模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                </Card>
+              )
           )}
           {transfer.transferView === null && projectSpaceModule === 'requirements' && (
             <Card style={{ borderRadius: 8, textAlign: 'center', padding: '48px 0' }}>
@@ -3705,12 +3965,30 @@ export default function ProjectSpaceContainer() {
             </Card>
           )}
           {transfer.transferView === null && projectSpaceModule === 'permission' && (
-            <PermissionConfig roles={roles} setRoles={setRoles} rolePermissions={rolePermissions} setRolePermissions={setRolePermissions} permConfigTab={permConfigTab} setPermConfigTab={setPermConfigTab} permissionActiveRole={permissionActiveRole} setPermissionActiveRole={setPermissionActiveRole} showAddRoleModal={showAddRoleModal} setShowAddRoleModal={setShowAddRoleModal} newRoleName={newRoleName} setNewRoleName={setNewRoleName} editingRoleName={editingRoleName} setEditingRoleName={setEditingRoleName} editRoleNameValue={editRoleNameValue} setEditRoleNameValue={setEditRoleNameValue} />
+            <PermissionConfig roles={roles} setRoles={setRoles} rolePermissions={rolePermissions} setRolePermissions={setRolePermissions} permConfigTab={permConfigTab} setPermConfigTab={setPermConfigTab} permissionActiveRole={permissionActiveRole} setPermissionActiveRole={setPermissionActiveRole} showAddRoleModal={showAddRoleModal} setShowAddRoleModal={setShowAddRoleModal} newRoleName={newRoleName} setNewRoleName={setNewRoleName} editingRoleName={editingRoleName} setEditingRoleName={setEditingRoleName} editRoleNameValue={editRoleNameValue} setEditRoleNameValue={setEditRoleNameValue} projectType={selectedProject?.type} onRoleMembersChange={handleProjectRoleMembersChange} syncTosTeamPermissionMembers={handleProjectRoleMembersChange} canManageRoles={canManageRoles} />
           )}
           {transfer.transferView === null && !['basic', 'plan', 'overview', 'requirements', 'permission'].includes(projectSpaceModule) && (
             <Card style={{ borderRadius: 8, textAlign: 'center', padding: '40px 0' }}>
               <Empty description={<span style={{ color: '#9ca3af' }}>{`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`}</span>} />
             </Card>
+          )}
+          {isTechnicalProject && selectedProject && (
+            <ProjectInfoModal
+              mode="edit"
+              open={showProjectInfoEditor}
+              candidateProjects={[]}
+              project={selectedProject as unknown as ProjectInfoProject}
+              existingProjects={projects as unknown as ProjectInfoProject[]}
+              responsiblePersons={getProjectResponsiblePersons(selectedProject)}
+              onCancel={() => setShowProjectInfoEditor(false)}
+              onSubmit={saveTargetProjectInfo}
+              fieldOptionOverrides={{
+                firstSaleTosVersion: machineTosOptions,
+                currentTosVersion: machineTosOptions,
+                versionType: ['Full', 'Slim', 'Go'],
+                developmentMode: ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'],
+              }}
+            />
           )}
         </div>
       </div>
@@ -3791,94 +4069,6 @@ export default function ProjectSpaceContainer() {
         </div>
         {renderVersionCompareResult()}
       </Modal>
-      {/* Level 1 plan filter drawer */}
-      <Drawer
-        title="筛选条件"
-        open={showLevel1PlanFilterDrawer && projectPlanLevel === 'level1'}
-        onClose={() => setShowLevel1PlanFilterDrawer(false)}
-        width={520}
-        placement="right"
-        zIndex={PLAN_DRAWER_Z_INDEX}
-        footer={(
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button onClick={() => setTempLevel1PlanFilters([createFilterCondition()])}>
-              清除全部
-            </Button>
-            <Space>
-              <Button onClick={() => setShowLevel1PlanFilterDrawer(false)}>
-                取消
-              </Button>
-              <Button type="primary" onClick={() => {
-                setLevel1PlanFilters(normalizeFilterConditions(tempLevel1PlanFilters))
-                setShowLevel1PlanFilterDrawer(false)
-              }}>
-                应用
-              </Button>
-            </Space>
-          </div>
-        )}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {tempLevel1PlanFilters.map((condition) => (
-            <div key={condition.id} style={{ padding: 12, border: '1px solid #eef2ff', borderRadius: 8, background: '#fafbff' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 116px 40px', gap: 8, marginBottom: isValuelessFilterOperator(condition.operator) ? 0 : 8 }}>
-                <Select
-                  aria-label="筛选字段"
-                  placeholder="筛选字段"
-                  value={condition.field || undefined}
-                  options={getFieldOptionsWithDuplicateDisabled(planFilterFieldOptions, tempLevel1PlanFilters, condition.id)}
-                  onChange={(value) => setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? { ...item, field: value } : item))}
-                />
-                <Select
-                  value={condition.operator}
-                  options={FILTER_OPERATORS as any}
-                  onChange={(value) => {
-                    const operator = value as PlanFilterCondition['operator']
-                    setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? {
-                      ...item,
-                      operator,
-                      value: isValuelessFilterOperator(operator) ? '' : item.value,
-                    } : item))
-                  }}
-                />
-                <Button
-                  icon={<DeleteOutlined />}
-                  danger
-                  onClick={() => setTempLevel1PlanFilters(prev => prev.length > 1 ? prev.filter(item => item.id !== condition.id) : [createFilterCondition()])}
-                />
-              </div>
-              {!isValuelessFilterOperator(condition.operator) && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <Input
-                    placeholder="输入筛选值"
-                    value={condition.value}
-                    onChange={(e) => setTempLevel1PlanFilters(prev => prev.map(item => item.id === condition.id ? { ...item, value: e.target.value } : item))}
-                  />
-                </div>
-              )}
-            </div>
-          ))}
-          <Button
-            type="dashed"
-            icon={<PlusOutlined />}
-            onClick={() => setTempLevel1PlanFilters(prev => [...prev, createFilterCondition()])}
-          >
-            添加条件
-          </Button>
-        </div>
-      </Drawer>
-
-      {/* Custom column settings */}
-      {currentViewMode !== 'horizontal' && (
-        <SortableColumnSettings
-          open={showColumnModal}
-          definitions={currentViewColumns}
-          value={columnSettings}
-          defaultValue={getDefaultColumnSettings(currentViewColumns)}
-          onApply={applyColumnSettings}
-          onCancel={() => setShowColumnModal(false)}
-        />
-      )}
       {/* Market editor modal */}
       <MarketEditorModal
         open={showMarketEditor}

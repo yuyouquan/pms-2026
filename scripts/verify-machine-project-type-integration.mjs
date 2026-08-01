@@ -6,7 +6,8 @@ import ts from 'typescript'
 
 const read = file => readFileSync(file, 'utf8')
 const required = [
-  ['src/app/page.tsx', 'isMachineProjectType(project.type)'],
+  ['src/app/page.tsx', 'useActivateProject'],
+  ['src/hooks/useActivateProject.ts', 'project.markets'],
   ['src/app/config/level1-template/page.tsx', 'PROJECT_TEMPLATE_TYPES'],
   ['src/app/config/level2-template/page.tsx', 'PROJECT_TEMPLATE_TYPES'],
   ['src/components/project-info/TargetProjectInformationView.tsx', 'isMachineProjectType'],
@@ -18,7 +19,7 @@ const required = [
   ['src/app/share/plan/page.tsx', 'isMachineProjectType(project?.type)'],
   ['src/components/plan/PlanModule.tsx', 'isMachineProjectType(selectedProject?.type)'],
   ['src/components/workspace/WorkspaceModule.tsx', 'matchesProjectTypeColumn(p.type, col.key)'],
-  ['src/containers/WorkspaceContainer.tsx', 'PROJECT_TYPE_MACHINE_LAPTOP'],
+  ['src/containers/ProjectListContainer.tsx', 'PROJECT_SECONDARY_CATEGORIES'],
   ['src/components/roadmap/utils.ts', 'isMachineProjectType'],
   ['src/components/roadmap/MilestoneView.tsx', 'isMachineProjectType'],
   ['src/components/roadmap/ProjectPlanSummaryBoard.tsx', 'isMachineProjectType'],
@@ -68,7 +69,9 @@ const directComparisonFiles = [
   'src/components/project-info/TargetProjectInformationView.tsx',
   'src/components/workspace/WorkspaceModule.tsx',
   'src/containers/ProjectSpaceContainer.tsx',
-  'src/containers/WorkspaceContainer.tsx',
+  'src/containers/ProjectListContainer.tsx',
+  'src/containers/WorkbenchContainer.tsx',
+  'src/hooks/useActivateProject.ts',
   'src/stores/project.ts',
 ]
 

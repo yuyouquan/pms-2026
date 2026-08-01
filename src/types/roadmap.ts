@@ -74,6 +74,8 @@ export interface TosVersionConfig {
   targets: string[]
   createdAt: string
   updatedAt: string
+  /** Derived view flag; false means historical display only, never a new choice. */
+  selectable?: boolean
 }
 
 export interface RoadmapPlanningConflictGroup {
@@ -239,13 +241,6 @@ export interface RoadmapDuplicateComparison {
   allRows?: readonly RoadmapDuplicateComparisonRow[]
 }
 
-export interface CreateTosVersionInput {
-  name: string
-  periodStartDate?: string
-  periodEndDate?: string
-  targets?: string[]
-}
-
 type RoadmapNormalChangeInputBase = Omit<
   RoadmapChangeLog,
   'id' | 'occurredAt' | 'source' | 'action' | 'changes' | 'snapshot'
@@ -287,9 +282,6 @@ export interface RoadmapStoreActions {
     comparison?: RoadmapDuplicateComparison,
   ) => RoadmapMutationResult
   deletePlannedProject: (id: string, actor: string) => RoadmapMutationResult
-  createTosVersion: (input: CreateTosVersionInput) => RoadmapMutationResult
-  renameTosVersion: (id: string, input: CreateTosVersionInput) => RoadmapMutationResult
-  deleteTosVersion: (id: string, normalReferenceCount: number) => RoadmapMutationResult
   setTosTargets: (id: string, targets: string[]) => RoadmapMutationResult
   recordNormalProjectChange: (input: RoadmapNormalChangeInput) => RoadmapMutationResult
 }

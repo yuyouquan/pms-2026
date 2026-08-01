@@ -3,7 +3,7 @@ import {
   getProjectInfoFields,
   getProjectInfoGroups,
 } from '@/constants/projectInfoSchema'
-import { isMachineProjectType, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
+import { isMachineProjectType, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { deriveStartingRam, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
 export { deriveStartingRam } from '@/lib/projectInfoValues'
 import type { ProjectInfoValues } from '@/types/app'
@@ -13,6 +13,33 @@ export interface ProjectInfoValidationError {
   groupKey: 'basic' | 'extended' | 'team'
   message: string
 }
+
+const normalizeResponsiblePersons = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value
+    .filter((item): item is string => typeof item === 'string')
+    .map(item => item.trim())
+    .filter(Boolean))]
+}
+
+export const deriveProjectResponsiblePersons = (
+  type: string,
+  values: ProjectInfoValues,
+  manualResponsiblePersons: string[],
+): string[] => {
+  if (isMachineProjectType(type)) return normalizeResponsiblePersons(values.machineSpm)
+  if (type === PROJECT_TYPE_TOS_VERSION) {
+    return normalizeResponsiblePersons(values.tosVersionProjectManager)
+  }
+  if (type === PROJECT_CATEGORY_TECH) return normalizeResponsiblePersons(values.technicalLead)
+  return normalizeResponsiblePersons(manualResponsiblePersons)
+}
+
+export const deriveProjectTosVersion = (
+  type: string,
+  projectName: string,
+  existingValue = '',
+): string => type === PROJECT_TYPE_TOS_VERSION ? projectName.trim() : existingValue
 
 /**
  * tOS basic information is still part of the display/storage schema, but it is
@@ -26,6 +53,7 @@ export const getProjectInfoModalFields = (type: string) => (
 )
 
 export const getProjectInfoModalGroups = (type: string) => {
+  if (type === PROJECT_CATEGORY_TECH) return []
   const visibleGroupKeys = new Set(getProjectInfoModalFields(type).map(field => field.group))
   return getProjectInfoGroups(type).filter(group => visibleGroupKeys.has(group.key))
 }

@@ -16,6 +16,13 @@ import {
   type SortableColumnDefinition,
   type SortableColumnSettingsValue,
 } from '@/lib/columnSettings'
+import { getProjectInfoFields } from '@/constants/projectInfoSchema'
+import type { FilterFieldDefinition, FilterFieldKind } from '@/lib/filterConditions'
+import {
+  getProjectSummaryFieldDefinitions as getSharedProjectSummaryFieldDefinitions,
+  getTemplateTaskFieldDefinitions as getSharedTemplateTaskFieldDefinitions,
+  type ProjectSummaryFieldDefinition,
+} from '@/lib/projectSummary'
 
 const STORAGE_KEY = 'pms_roadmap_milestone_views'
 const PROJECT_VIEW_STORAGE_KEY = 'pms_project_custom_views'
@@ -151,6 +158,145 @@ export interface RoadmapColumnConfig {
   width?: number
   defaultVisible?: boolean
   locked?: boolean
+}
+
+export const getProjectSummaryFieldDefinitions = getSharedProjectSummaryFieldDefinitions
+export const getTemplateTaskFieldDefinitions = getSharedTemplateTaskFieldDefinitions
+
+export function getProjectSummaryBoardColumns(
+  definitions: readonly ProjectSummaryFieldDefinition[],
+): RoadmapColumnConfig[] {
+  return definitions.map(definition => ({
+    key: definition.key,
+    title: definition.title,
+    width: definition.width,
+    defaultVisible: definition.defaultVisible,
+    locked: definition.hideable === false,
+  }))
+}
+
+const getSummaryFilterKind = (
+  definition: ProjectSummaryFieldDefinition,
+): FilterFieldKind => {
+  if (definition.source === 'templateTask' || definition.inputType === 'date') return 'date'
+  if (
+    definition.inputType === 'select'
+    || definition.inputType === 'boolean'
+  ) return 'enum'
+  return 'text'
+}
+
+export function getProjectSummaryBoardFilterFields(
+  projectType: string,
+  definitions: readonly ProjectSummaryFieldDefinition[],
+): FilterFieldDefinition[] {
+  const schemaByKey = new Map(
+    getProjectInfoFields(projectType).map(field => [field.key, field] as const),
+  )
+  return definitions.map(definition => {
+    const schema = schemaByKey.get(definition.key)
+    return {
+      key: definition.key,
+      label: definition.title,
+      kind: getSummaryFilterKind(definition),
+      ...(schema?.options ? {
+        options: schema.options.map(value => ({ label: value, value })),
+      } : {}),
+    }
+  })
+}
+
+export const MILESTONE_FILTER_FIELD = 'nodeDateRange'
+export const TECH_MILESTONE_FILTER_FIELD = 'milestonesText'
+
+export function getProjectSummaryScopeFilterFields(
+  scope: string,
+  fields: readonly FilterFieldDefinition[],
+): FilterFieldDefinition[] {
+  const regularFields = fields.filter(field => (
+    field.key !== 'milestones'
+    && field.key !== MILESTONE_FILTER_FIELD
+    && field.key !== TECH_MILESTONE_FILTER_FIELD
+  ))
+  if (scope === 'tech') {
+    return [
+      ...regularFields,
+      {
+        key: TECH_MILESTONE_FILTER_FIELD,
+        label: '里程碑节点',
+        kind: 'date',
+      },
+    ]
+  }
+  return [
+    ...regularFields,
+    {
+      key: MILESTONE_FILTER_FIELD,
+      label: '节点日期范围',
+      kind: 'date',
+    },
+  ]
+}
+
+interface LegacySummaryMilestone {
+  name: string
+  date: string
+}
+
+const normalizeLegacyMilestones = (value: unknown): LegacySummaryMilestone[] => {
+  if (!Array.isArray(value)) return []
+  return value.flatMap(item => {
+    if (!item || typeof item !== 'object') return []
+    const name = typeof (item as { name?: unknown }).name === 'string'
+      ? (item as { name: string }).name.trim()
+      : ''
+    const dateValue = (item as { date?: unknown }).date
+    const date = typeof dateValue === 'string' || typeof dateValue === 'number'
+      ? String(dateValue).trim()
+      : ''
+    return name && date ? [{ name, date }] : []
+  })
+}
+
+/**
+ * 将旧分享快照的聚合节点迁移到当前模板稳定键。
+ * 无法识别的自由文本或节点会被安全忽略，原聚合字段保持不变。
+ */
+export function migrateLegacySummaryRows(
+  rows: readonly unknown[],
+  definitions: readonly ProjectSummaryFieldDefinition[],
+): Record<string, any>[] {
+  const nodeDefinitions = definitions.filter(definition => definition.source === 'templateTask')
+  const duplicateBaseTitles = new Map<string, number>()
+  nodeDefinitions.forEach(definition => {
+    const baseTitle = definition.title.split(' / ').at(-1) || definition.title
+    duplicateBaseTitles.set(baseTitle, (duplicateBaseTitles.get(baseTitle) ?? 0) + 1)
+  })
+
+  return rows.flatMap(rowValue => {
+    if (!rowValue || typeof rowValue !== 'object' || Array.isArray(rowValue)) return []
+    const row = rowValue as Record<string, any>
+    const milestones = normalizeLegacyMilestones(row.milestones)
+    const unusedMilestoneIndexes = new Set(milestones.map((_, index) => index))
+    const migrated = { ...row }
+
+    nodeDefinitions.forEach(definition => {
+      if (Object.prototype.hasOwnProperty.call(row, definition.key)) return
+      const baseTitle = definition.title.split(' / ').at(-1) || definition.title
+      let matchIndex = milestones.findIndex((milestone, index) => (
+        unusedMilestoneIndexes.has(index) && milestone.name === definition.title
+      ))
+      if (matchIndex < 0 && (duplicateBaseTitles.get(baseTitle) ?? 0) === 1) {
+        matchIndex = milestones.findIndex((milestone, index) => (
+          unusedMilestoneIndexes.has(index) && milestone.name === baseTitle
+        ))
+      }
+      migrated[definition.key] = matchIndex >= 0 ? milestones[matchIndex].date : '-'
+      if (matchIndex >= 0) unusedMilestoneIndexes.delete(matchIndex)
+    })
+
+    return [migrated]
+  })
 }
 
 export function getScopedColumnDefinitions(

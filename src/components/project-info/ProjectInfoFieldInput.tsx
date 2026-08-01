@@ -12,13 +12,14 @@ import {
   type JiraProjectConfig,
 } from '@/lib/jiraProject'
 import type { ProjectInfoValue } from '@/types/app'
+import { formatTosEnumValue } from '@/lib/tosEnumOptions'
 
 interface ProjectInfoFieldInputProps {
   field: ProjectInfoFieldDefinition
   value?: ProjectInfoValue
   onChange?: (value: ProjectInfoValue) => void
   firstLaunchProjectOptions?: Array<{ label: string; value: string }>
-  optionsOverride?: readonly string[]
+  optionsOverride?: readonly (string | { label: string; value: string; disabled?: boolean })[]
 }
 
 const toText = (value: ProjectInfoValue | undefined) => (
@@ -45,7 +46,7 @@ export default function ProjectInfoFieldInput({
       onChange?.(rows.map(row => row.id === id ? { ...row, ...patch } : row))
     }
     return (
-      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={8} style={{ width: '100%' }}>
         {rows.map(row => (
           <Card key={row.id} size="small" className="pms-project-info-jira-row">
             <div className="pms-project-info-jira-grid">
@@ -62,7 +63,10 @@ export default function ProjectInfoFieldInput({
   }
 
   if (field.readOnly) {
-    return <Input value={toText(value)} disabled placeholder="自动获取" />
+    const displayValue = ['firstSaleTosVersion', 'currentTosVersion'].includes(field.key)
+      ? formatTosEnumValue(value)
+      : toText(value)
+    return <Input value={displayValue} disabled placeholder="自动获取" />
   }
 
   if (field.inputType === 'person') {
@@ -105,9 +109,13 @@ export default function ProjectInfoFieldInput({
   }
 
   if (field.inputType === 'boolean' || (field.inputType === 'select' && (optionsOverride?.length || field.options?.length))) {
-    const options = (optionsOverride || field.options || []).map(option => ({ label: option, value: option }))
+    const options = (optionsOverride || field.options || []).map(option => (
+      typeof option === 'string' ? { label: option, value: option } : option
+    ))
     const current = toText(value)
-    if (current && !options.some(option => option.value === current)) options.unshift({ label: current, value: current })
+    if (current && !options.some(option => option.value === current)) {
+      options.unshift({ label: `${current}（已停用）`, value: current, disabled: true })
+    }
     return (
       <Select
         allowClear

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, createContext, useContext } from 'react'
-import { Progress, Tag, Avatar, DatePicker, message } from 'antd'
+import { Progress, Tag, Avatar, DatePicker, Tooltip, message } from 'antd'
 import dayjs from 'dayjs'
 import { HolderOutlined, StopOutlined, FileTextOutlined, LinkOutlined, FolderOpenOutlined } from '@ant-design/icons'
 import { useSortable } from '@dnd-kit/sortable'
@@ -38,7 +38,13 @@ export function SortableRow({ children, ...props }: any) {
 // ─── DragHandle ─────────────────────────────────────────────────────
 export function DragHandle() {
   const listeners = useContext(DragHandleContext)
-  return <HolderOutlined style={{ cursor: 'grab', color: '#999' }} {...listeners} />
+  return (
+    <Tooltip title="拖拽排序">
+      <button type="button" className="pms-drag-handle" aria-label="拖拽排序" {...listeners}>
+        <HolderOutlined aria-hidden />
+      </button>
+    </Tooltip>
+  )
 }
 
 // ─── DHTMLXGantt ────────────────────────────────────────────────────
@@ -351,7 +357,7 @@ export function shiftDateStrForExport(dateStr: string, deltaDays: number): strin
   return d.toISOString().split('T')[0]
 }
 
-// ─── initialTodos (data used by WorkspaceContainer) ─────────────────
+// ─── initialTodos (compatibility data used by WorkbenchContainer) ───
 // 待办数据：仅修订中(未发布)的版本才会产生待办，已发布版本不产生待办
 // 当前版本状态：V1/V2/V3 已发布，V4 修订中
 // 一级计划待办来自 V4 修订版，二级计划待办来自各自的 V1 修订版

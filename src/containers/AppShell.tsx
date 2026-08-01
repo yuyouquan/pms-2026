@@ -7,14 +7,13 @@ import {
   AppstoreOutlined, LeftOutlined, ProjectOutlined, DownOutlined,
   SearchOutlined, SwapOutlined, CheckCircleOutlined,
 } from '@ant-design/icons'
-import { useUiStore } from '@/stores/ui'
+import { useUiStore, type MainModule } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
 import { usePermissionStore } from '@/stores/permission'
 import { useTransferStore } from '@/stores/transfer'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
-import { PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
-import { buildTosTypeRows, getMainTosType } from '@/lib/tosTypeRules'
+import { useActivateProject } from '@/hooks/useActivateProject'
 import { useRef, useEffect, useMemo } from 'react'
 
 // ─── Shared user switcher (head avatar + dropdown) ──────────────────
@@ -32,9 +31,9 @@ function UserSwitcher() {
     <Dropdown
       menu={{
         items: [
-          { key: 'label', label: <div style={{ padding: '4px 0', borderBottom: '1px solid #f3f4f6' }}>
+          { key: 'label', label: <div className="pms-user-menu__summary" style={{ padding: '4px 0', borderBottom: '1px solid #f3f4f6' }}>
             <span style={{ color: '#999', fontSize: 11 }}>当前登录用户</span>
-            <div style={{ fontWeight: 600, marginTop: 2 }}>{currentLoginUser}
+            <div className="pms-user-menu__current" style={{ fontWeight: 600, marginTop: 2 }}>{currentLoginUser}
               {(() => {
                 const adminGroup = globalRoles.find(r => r.name === '管理组')
                 const isAdmin = adminGroup?.members.includes(currentLoginUser)
@@ -55,11 +54,11 @@ function UserSwitcher() {
             const projectCount = isAdmin ? projects.length : projects.filter(p => (projectMemberMap[p.id] || []).includes(u)).length
             return {
               key: u,
-              label: <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: isActive ? 600 : 400 }}>
+              label: <div className="pms-user-menu__row" style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: isActive ? 600 : 400 }}>
                 <Avatar size="small" style={{ background: isActive ? '#4338ca' : '#e0e0e0', fontSize: 12 }}>{u.slice(-1)}</Avatar>
-                <span>{u}</span>
+                <span className="pms-user-menu__name">{u}</span>
                 {isAdmin && <Tag color="red" style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>管理组</Tag>}
-                <span style={{ color: '#9ca3af', fontSize: 11, marginLeft: 'auto' }}>{projectCount}个项目</span>
+                <span className="pms-user-menu__count" style={{ color: '#9ca3af', fontSize: 11, marginLeft: 'auto' }}>{projectCount}个项目</span>
                 {isActive && <CheckCircleOutlined style={{ color: '#4338ca' }} />}
               </div>,
               onClick: () => { setCurrentLoginUser(u); setProjectCardPage(1) },
@@ -68,69 +67,76 @@ function UserSwitcher() {
         ],
       }}
       placement="bottomRight"
+      align={{ offset: [4, 0] }}
       trigger={['click']}
-      overlayStyle={{ minWidth: 340 }}
+      classNames={{ root: 'pms-user-dropdown' }}
+      styles={{
+        root: {
+          width: 'min(340px, calc(100vw - 16px))',
+          minWidth: 'min(340px, calc(100vw - 16px))',
+        },
+        itemContent: { minWidth: 0, overflow: 'hidden' },
+      }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '5px 14px', borderRadius: 24, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', transition: 'all 0.25s', backdropFilter: 'blur(8px)' }}
-        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.22)'}
-        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
+      <Button
+        className="pms-user-switcher"
+        type="text"
+        aria-label="切换当前用户"
+        data-current-user={currentLoginUser}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, height: 'auto', cursor: 'pointer', padding: '5px 14px', borderRadius: 24, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', transition: 'all 0.25s', backdropFilter: 'blur(8px)' }}
       >
         <Avatar size={28} style={{ background: 'rgba(255,255,255,0.25)', fontSize: 13, fontWeight: 600 }}>{currentLoginUser.slice(-1)}</Avatar>
         <span style={{ color: '#fff', fontSize: 13, fontWeight: 500 }}>{currentLoginUser}</span>
         {isAdminUser && <Tag color="rgba(255,100,100,0.35)" style={{ color: '#fff', border: '1px solid rgba(255,255,255,0.25)', fontSize: 10, margin: 0 }}>管理组</Tag>}
-      </div>
+      </Button>
     </Dropdown>
   )
 }
 
-// ─── Main mode header (工作台, 路标, 配置) ───────────────────────────
+// ─── Main mode header (workbench, project list, roadmap, HR, config) ─
 
 export function MainHeader() {
   const {
-    activeModule, setActiveModule, configTab, setConfigTab,
-    isEditMode, setIsEditMode, setShowLeaveConfirm, setPendingNavigation,
+    activeModule, setActiveModule, setConfigTab,
+    setIsEditMode, navigateWithEditGuard,
   } = useUiStore()
-
   const { versions, currentVersion } = usePlanStore()
-  const currentVersionData = versions.find(v => v.id === currentVersion)
-  const isCurrentDraft = currentVersionData?.status === '修订中'
-
-  const navigateWithEditGuard = (action: () => void) => {
-    if (isEditMode && !isCurrentDraft) {
-      setPendingNavigation(() => action)
-      setShowLeaveConfirm(true)
-    } else {
-      action()
-    }
-  }
+  const isCurrentDraft = versions.find(version => version.id === currentVersion)?.status === '修订中'
 
   return (
-    <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)', padding: '0 32px', boxShadow: '0 4px 20px rgba(30,27,75,0.4)', position: 'sticky', top: 0, zIndex: 100, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-      <Row align="middle" justify="space-between" style={{ height: 56 }}>
-        <Col>
-          <Space size={32} align="center">
-            <Space size={10}>
+    <div className="pms-main-header" style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)', padding: '0 32px', boxShadow: '0 4px 20px rgba(30,27,75,0.4)', position: 'sticky', top: 0, zIndex: 100, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      <Row className="pms-main-header__row" align="middle" justify="space-between" style={{ height: 56 }}>
+        <Col className="pms-main-header__primary">
+          <Space className="pms-main-header__content" size={32} align="center">
+            <Space className="pms-main-header__brand" size={10}>
               <div style={{ width: 30, height: 30, borderRadius: 8, background: 'linear-gradient(135deg, #818cf8 0%, #6366f1 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(129,140,248,0.4)' }}>
                 <AppstoreOutlined style={{ color: '#fff', fontSize: 16 }} />
               </div>
-              <span style={{ fontSize: 17, fontWeight: 700, color: '#fff', letterSpacing: 1.5, textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>项目管理系统</span>
+              <span className="pms-main-header__brand-title" style={{ fontSize: 17, fontWeight: 700, color: '#fff', letterSpacing: 1.5, textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>项目管理系统</span>
             </Space>
-            <Menu
-              theme="dark"
-              mode="horizontal"
-              selectedKeys={[activeModule]}
-              onClick={({ key }) => navigateWithEditGuard(() => { setIsEditMode(false); setActiveModule(key); if (key === 'config') setConfigTab('plan') })}
-              style={{ background: 'transparent', borderBottom: 'none', fontSize: 14 }}
-              items={[
-                { key: 'projects', label: '工作台' },
-                { key: 'roadmap', label: '项目视图' },
-                { key: 'hrPipeline', label: '人力资源管道' },
-                { key: 'config', label: '配置中心' },
-              ]}
-            />
+            <div className="pms-main-header__nav-scroll" aria-label="主导航滚动区">
+              <Menu
+                className="pms-main-header__menu"
+                theme="dark"
+                mode="horizontal"
+                selectedKeys={[activeModule]}
+                onClick={({ key }) => navigateWithEditGuard(
+                  () => { setIsEditMode(false); setActiveModule(key as MainModule); if (key === 'config') setConfigTab('plan') },
+                  isCurrentDraft,
+                )}
+                style={{ background: 'transparent', borderBottom: 'none', fontSize: 14 }}
+                items={[
+                  { key: 'workbench', label: '工作台' },
+                  { key: 'projectList', label: '项目列表' },
+                  { key: 'roadmap', label: '项目视图' },
+                  { key: 'hrPipeline', label: '人力资源管道' },
+                  { key: 'config', label: '配置中心' },
+                ]}
+              />
+            </div>
           </Space>
         </Col>
-        <Col>
+        <Col className="pms-main-header__user">
           <UserSwitcher />
         </Col>
       </Row>
@@ -146,18 +152,19 @@ interface ProjectSpaceHeaderProps {
 
 export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeaderProps) {
   const {
-    setActiveModule, showProjectSearch, setShowProjectSearch,
+    showProjectSearch, setShowProjectSearch,
     projectSearchText, setProjectSearchText, setProjectSpaceModule,
+    projectSpaceOrigin, returnFromProjectSpace, setIsEditMode,
   } = useUiStore()
 
   const {
-    projects, selectedProject, setSelectedProject,
-    currentLoginUser, setSelectedMarketTab, projectMemberMap,
-    setSelectedTosTypeTab, tosTypeConfigsByProjectId,
+    projects, selectedProject,
+    currentLoginUser, projectMemberMap,
   } = useProjectStore()
 
   const { globalRoles } = usePermissionStore()
   const { setTransferView } = useTransferStore()
+  const activateProject = useActivateProject()
 
   const projectSearchRef = useRef<HTMLDivElement>(null)
 
@@ -181,6 +188,12 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
       p.leader.includes(projectSearchText)
   })
 
+  const returnLabel = projectSpaceOrigin?.module === 'projectList'
+    ? '返回项目列表'
+    : projectSpaceOrigin?.module === 'roadmap'
+      ? '返回项目视图'
+      : '返回工作台'
+
   // Click outside to close search
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -198,7 +211,18 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
     <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)', padding: '0 24px', boxShadow: '0 4px 20px rgba(30,27,75,0.4)', position: 'sticky', top: 0, zIndex: 100, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
       <Row align="middle" style={{ height: 56 }}>
         <Col flex="none">
-          <Button type="text" icon={<LeftOutlined style={{ color: '#fff' }} />} onClick={() => { setTransferView(null); navigateWithEditGuard(() => { useUiStore.getState().setIsEditMode(false); setActiveModule('projects'); }); }} style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 500 }}>返回工作台</Button>
+          <Button
+            type="text"
+            icon={<LeftOutlined style={{ color: '#fff' }} />}
+            onClick={() => navigateWithEditGuard(() => {
+              setTransferView(null)
+              setIsEditMode(false)
+              returnFromProjectSpace()
+            })}
+            style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 500 }}
+          >
+            {returnLabel}
+          </Button>
         </Col>
         <Col flex="auto" style={{ textAlign: 'center' }}>
           <div ref={projectSearchRef} style={{ display: 'inline-block', position: 'relative' }}>
@@ -245,21 +269,10 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
                         onMouseLeave={(e) => { if (selectedProject?.id !== p.id) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                         onClick={() => {
                           navigateWithEditGuard(() => {
-                            setSelectedProject(p)
+                            activateProject(p)
                             setProjectSpaceModule('basic')
                             setShowProjectSearch(false)
                             setProjectSearchText('')
-                            if (p.markets && p.markets.length > 0) {
-                              setSelectedMarketTab(p.markets[0])
-                            }
-                            if (p.type === PROJECT_TYPE_TOS_VERSION) {
-                              const typeRows = buildTosTypeRows(
-                                p.versionTypes || [],
-                                p.versionType || '',
-                                tosTypeConfigsByProjectId[p.id],
-                              )
-                              setSelectedTosTypeTab(getMainTosType(typeRows) || typeRows[0]?.type || 'Full')
-                            }
                           })
                         }}
                       >

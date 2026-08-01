@@ -9,7 +9,21 @@
     "lint": "next lint",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "verify:column-settings": "node scripts/verify-sortable-column-settings.mjs"
+    "verify:column-settings": "node scripts/verify-sortable-column-settings.mjs",
+    "verify:project-summary": "node scripts/verify-project-summary.mjs",
+    "verify:floating-panels": "node scripts/verify-floating-config-panels.mjs",
+    "verify:workbench-list": "node scripts/verify-workbench-project-list.mjs",
+    "verify:workbench-split": "node scripts/verify-workbench-split.mjs",
+    "verify:todo-center": "node scripts/verify-todo-center.mjs",
+    "verify:enum-config": "node scripts/verify-enum-config.mjs",
+    "verify:enum-browser": "node screenshots/verify-enum-config-browser.mjs",
+    "verify:machine-tos": "node scripts/verify-machine-tos-versions.mjs",
+    "verify:technical-project": "node scripts/verify-technical-project.mjs",
+    "verify:technical-plan": "node scripts/verify-technical-plan.mjs",
+    "verify:project-list-matrix": "node scripts/verify-project-list-matrix.mjs",
+    "verify:project-role-sync": "node scripts/verify-project-role-sync.mjs",
+    "verify:workbench-browser": "node screenshots/verify-workbench-summary-floating-panels.mjs",
+    "verify:redesign-browser": "node screenshots/verify-workbench-technical-project-redesign.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",

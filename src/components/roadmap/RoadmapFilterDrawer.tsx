@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type ReactElement } from 'react'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
-import { Button, DatePicker, Drawer, Empty, Flex, Input, Select, Tooltip, Typography } from 'antd'
+import { Button, DatePicker, Empty, Flex, Input, Select, Tooltip, Typography } from 'antd'
 import dayjs from 'dayjs'
+import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
 import {
   createFilterCondition,
   getFieldOptionsWithDuplicateDisabled,
@@ -13,7 +14,6 @@ import {
 import { getRoadmapFilterOperators } from '@/lib/roadmapFilters'
 import type { RoadmapFilterCondition, RoadmapFilterOperator } from '@/types/roadmap'
 
-const DRAWER_Z_INDEX = 1300
 const ROADMAP_FILTER_CONTROL_HEIGHT = 32
 
 const conditionCardStyle: CSSProperties = {
@@ -37,6 +37,8 @@ function createRoadmapFilterCondition(): RoadmapFilterCondition {
 
 interface RoadmapFilterDrawerProps {
   open: boolean
+  trigger: ReactElement
+  getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
   onClose: () => void
   conditions: readonly RoadmapFilterCondition[]
   fieldDefinitions: readonly FilterFieldDefinition[]
@@ -45,6 +47,8 @@ interface RoadmapFilterDrawerProps {
 
 export default function RoadmapFilterDrawer({
   open,
+  trigger,
+  getPopupContainer,
   onClose,
   conditions,
   fieldDefinitions,
@@ -173,30 +177,17 @@ export default function RoadmapFilterDrawer({
   }
 
   return (
-    <Drawer
-      className="pms-roadmap-filter-drawer"
-      title="筛选条件"
+    <FloatingFilterPanel
       open={open}
-      onClose={onClose}
-      placement="right"
-      width="min(520px, 100vw)"
-      zIndex={DRAWER_Z_INDEX}
-      footer={(
-        <Flex justify="space-between" align="center" gap={12} wrap>
-          <Button size="small" onClick={resetAdvancedFilters} style={{ height: ROADMAP_FILTER_CONTROL_HEIGHT }}>
-            重置筛选
-          </Button>
-          <Flex gap={8}>
-            <Button size="small" onClick={onClose} style={{ height: ROADMAP_FILTER_CONTROL_HEIGHT }}>取消</Button>
-            <Button type="primary" size="small" onClick={applyAdvancedFilters} style={{ height: ROADMAP_FILTER_CONTROL_HEIGHT }}>
-              应用
-            </Button>
-          </Flex>
-        </Flex>
-      )}
+      trigger={trigger}
+      getPopupContainer={getPopupContainer}
+      onReset={resetAdvancedFilters}
+      onClear={() => setDraftConditions([createRoadmapFilterCondition()])}
+      onCancel={onClose}
+      onConfirm={applyAdvancedFilters}
     >
       <Typography.Paragraph type="secondary" style={{ marginBottom: 10, fontSize: 12 }}>
-        同一条件内多个值按 OR 生效，多个条件按 AND 关系同时生效。
+        多个条件按 AND 关系同时生效。
       </Typography.Paragraph>
       <Flex vertical gap={8}>
         {draftConditions.length ? draftConditions.map(condition => {
@@ -264,6 +255,6 @@ export default function RoadmapFilterDrawer({
           添加条件
         </Button>
       </Flex>
-    </Drawer>
+    </FloatingFilterPanel>
   )
 }

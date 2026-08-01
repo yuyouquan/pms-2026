@@ -4,6 +4,7 @@
 import type { JiraProjectConfig } from '@/lib/jiraProject'
 import type { PersistedProjectTypeName } from '@/constants/projectTypes'
 import type { RoadmapRam } from '@/types/roadmap'
+import type { DeliverableValue } from '@/types/technicalProject'
 
 /** Project type literals used in initialProjects */
 export type ProjectCategory = PersistedProjectTypeName;
@@ -22,12 +23,13 @@ export interface VersionFiveRoles {
 
 export type ProjectTeamRoleValue = string | string[]
 export type ProjectTeamRoleMap = Record<string, ProjectTeamRoleValue>
-export type ProjectInfoValue = string | boolean | null | string[] | JiraProjectConfig[] | ProjectTeamRoleMap
+export type ProjectInfoValue = string | boolean | null | string[] | JiraProjectConfig[] | ProjectTeamRoleMap | DeliverableValue
 export type ProjectInfoValues = Record<string, ProjectInfoValue>
 
 /** Project record - matches initialProjects structure in page.tsx */
 export interface ProjectItem {
   id: string;
+  sourceBid?: string;
   name: string;
   type: ProjectCategory;
   secondaryCategory?: string;
@@ -98,6 +100,18 @@ export interface ProjectItem {
   // 技术项目 / 能力建设项目 specific
   projectDescription?: string;
   teamMembers?: string;
+  technicalTrack?: string;
+  tmg?: string;
+  subdomain?: string;
+  preProjectId?: string;
+  projectYear?: string;
+  projectValue?: string;
+  technicalLead?: string;
+  technicalProjectManager?: string;
+  testRepresentative?: string;
+  qualityRepresentative?: string;
+  productRepresentative?: string;
+  standardizationRepresentative?: string;
   fieldValues?: ProjectInfoValues;
 }
 

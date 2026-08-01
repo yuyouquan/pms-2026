@@ -5,6 +5,7 @@ import { ReloadOutlined } from '@ant-design/icons'
 import { Alert, Button, Collapse, Form, Input, Modal, Select, Space, Spin, Tag, message } from 'antd'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import ProjectInfoFieldInput from '@/components/project-info/ProjectInfoFieldInput'
+import TechnicalProjectCreateFields from '@/components/technical-project/TechnicalProjectCreateFields'
 import {
   getProjectInfoFields,
   isTargetProjectInfoType,
@@ -14,6 +15,7 @@ import {
   PROJECT_SECONDARY_CATEGORIES,
   PROJECT_TYPES,
   PROJECT_TYPE_TOS_VERSION,
+  PROJECT_CATEGORY_TECH,
   isMachineProjectType,
   mapIpmProjectClassification,
   normalizeMachineProjectType,
@@ -22,6 +24,7 @@ import {
 import { fetchByBid, type ExternalProjectEntry } from '@/data/externalProjectPool'
 import {
   deriveMachineProjectInfoValues,
+  deriveProjectResponsiblePersons,
   deriveTosProjectAggregates,
   getProjectInfoModalFields,
   getProjectInfoModalGroups,
@@ -32,6 +35,9 @@ import {
   buildProjectInfoValues,
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
+import { normalizeTosEnumReference } from '@/lib/tosEnumOptions'
+import { normalizeMachineFamilyName, resolveMachineTosUpdate } from '@/lib/machineTosVersions'
+import { normalizeTechnicalProjectValues, TechnicalProjectValidationError, validateTechnicalProject } from '@/lib/technicalProjectRules'
 import {
   defaultProjectCreationDraftRepository,
   isProjectCreationDraftEmpty,
@@ -41,6 +47,9 @@ import {
   type ProjectCreationDraftRepository,
 } from '@/lib/projectCreationDraft'
 import type { ProjectInfoValues } from '@/types/app'
+import { TECHNICAL_DELIVERABLE_FIELDS } from '@/constants/technicalProject'
+import { useProjectStore } from '@/stores/project'
+import { useOverlayInteraction } from '@/hooks/useOverlayInteraction'
 
 type ProjectInfoFormState = ProjectInfoValues & {
   bid?: string
@@ -81,7 +90,7 @@ interface ProjectInfoModalProps {
   onCancel: () => void
   onSubmit: (payload: ProjectInfoSubmitPayload) => Promise<boolean | void> | boolean | void
   onAfterCreate?: () => void
-  fieldOptionOverrides?: Partial<Record<string, readonly string[]>>
+  fieldOptionOverrides?: Partial<Record<string, readonly (string | { label: string; value: string; disabled?: boolean })[]>>
 }
 
 export const PROJECT_CREATION_DRAFT_SAVE_DELAY_MS = 300
@@ -121,9 +130,13 @@ export default function ProjectInfoModal({
   fieldOptionOverrides,
 }: ProjectInfoModalProps) {
   const [form] = Form.useForm<ProjectInfoFormState>()
+  const syncTechnicalTeamPermissionMembers = useProjectStore(state => state.syncTechnicalTeamPermissionMembers)
+  const syncTosTeamPermissionMembers = useProjectStore(state => state.syncTosTeamPermissionMembers)
   const [submitting, setSubmitting] = useState(false)
+  const { tryBeginSubmit, releaseSubmission } = useOverlayInteraction()
   const [activeGroups, setActiveGroups] = useState<string[]>([])
   const [aggregateWarnings, setAggregateWarnings] = useState<string[]>([])
+  const [machineFamilyError, setMachineFamilyError] = useState('')
   const [draftReadStatus, setDraftReadStatusState] = useState<DraftReadStatus>('idle')
   const [draftHydrationAttempt, setDraftHydrationAttempt] = useState(0)
   const lastAppliedSourceRef = useRef<string>('')
@@ -147,6 +160,9 @@ export default function ProjectInfoModal({
     ? mapIpmProjectClassification(selectedCandidate.ipmProjectCategoryName)
     : undefined
   const isIpmClassificationMissing = Boolean(selectedCandidate && !selectedIpmClassification)
+  const machineProductType = String(watchedValues.productType || '')
+  const isLegacyMachine = isMachineProjectType(projectType) && machineProductType === '老品'
+  const isTechnicalProject = projectType === PROJECT_CATEGORY_TECH
   const fields = useMemo(() => getProjectInfoModalFields(projectType), [projectType])
   const editableFields = useMemo(() => fields.filter(field => !field.readOnly), [fields])
   const groups = useMemo(() => getProjectInfoModalGroups(projectType), [projectType])
@@ -235,6 +251,7 @@ export default function ProjectInfoModal({
     form.resetFields()
     form.setFieldsValue(CREATE_FORM_DEFAULTS)
     setAggregateWarnings([])
+    setMachineFamilyError('')
     activeGroupsRef.current = []
     setActiveGroups([])
     lastAppliedSourceRef.current = ''
@@ -257,6 +274,7 @@ export default function ProjectInfoModal({
     if (!open || mode !== 'edit' || !project) return
     lastAppliedSourceRef.current = ''
     setAggregateWarnings([])
+    setMachineFamilyError('')
     // The Form instance survives modal close/reopen. Clear the previous project's
     // unmentioned fields before applying the next project's values.
     form.resetFields()
@@ -267,7 +285,13 @@ export default function ProjectInfoModal({
     const normalizedProjectType = classification.projectCategory
     const projectFields = getProjectInfoFields(normalizedProjectType)
     const storedInfoValues = buildProjectInfoValues(project, projectFields.map(field => field.key))
-    let infoValues = storedInfoValues
+    let infoValues = isMachineProjectType(project.type)
+      ? {
+          ...storedInfoValues,
+          firstSaleTosVersion: normalizeTosEnumReference(storedInfoValues.firstSaleTosVersion),
+          currentTosVersion: normalizeTosEnumReference(storedInfoValues.currentTosVersion),
+        }
+      : storedInfoValues
     if (project.type === PROJECT_TYPE_TOS_VERSION) {
       const selectedIds = Array.isArray(storedInfoValues.firstLaunchProjects)
         ? storedInfoValues.firstLaunchProjects.filter((item): item is string => typeof item === 'string')
@@ -383,6 +407,9 @@ export default function ProjectInfoModal({
       brand: sourceValues.brand || '',
       productLine: sourceValues.productLine || '',
       status: '待立项',
+      technicalTrack: entry.technicalTrack || '',
+      ipmProjectType: entry.ipmProjectCategoryName,
+      ...(entry.ipmProjectCategoryName === '技术项目前置工作' ? {} : { preProjectId: undefined }),
     })
     if (isMachineProjectType(type)) {
       form.setFieldsValue(deriveMachineProjectInfoValues({ ...entry, ...sourceValues }))
@@ -470,6 +497,71 @@ export default function ProjectInfoModal({
     form.setFieldsValue(result.values)
     setAggregateWarnings(result.missingSources)
   }, [candidateProjects, existingProjects, firstLaunchSignature, form, mode, open, project, projectType, watchedBid])
+
+  const machineProjectName = mode === 'edit'
+    ? project?.name || ''
+    : selectedCandidate?.name || ''
+  const watchedFirstSaleTosVersion = String(watchedValues.firstSaleTosVersion || '')
+
+  useEffect(() => {
+    if (!open || !isMachineProjectType(projectType) || !machineProjectName) {
+      setMachineFamilyError('')
+      return
+    }
+    if (!isLegacyMachine) {
+      const normalizedFirstSale = normalizeTosEnumReference(watchedFirstSaleTosVersion)
+      if (!normalizedFirstSale) {
+        setMachineFamilyError('')
+        return
+      }
+      const existingProject = existingProjects.find(item => item.id === project?.id)
+      const candidate = {
+        ...(existingProject || project || {}),
+        id: mode === 'edit' ? project?.id || '' : `create:${machineProjectName}`,
+        name: machineProjectName,
+        type: projectType,
+        productType: '新品',
+        firstSaleTosVersionId: normalizedFirstSale,
+        firstSaleTosVersion: normalizedFirstSale,
+      }
+      const resolution = resolveMachineTosUpdate(existingProjects, candidate)
+      if (!resolution.ok) {
+        setMachineFamilyError(resolution.reason === 'duplicate-new-product'
+          ? '已存在项目名完全相同的新品项目，不能重复创建或保存'
+          : 'tOS 版本必须是严格的三段数字，例如 14.0.0')
+        return
+      }
+      setMachineFamilyError('')
+      const resolvedCurrent = mode === 'create'
+        ? normalizedFirstSale
+        : resolution.candidate.currentTosVersion
+      if (form.getFieldValue('currentTosVersion') !== resolvedCurrent) {
+        form.setFieldValue('currentTosVersion', resolvedCurrent)
+      }
+      return
+    }
+
+    const familyName = normalizeMachineFamilyName(machineProjectName)
+    const matchingNewProjects = existingProjects.filter(item => {
+      if (item.id === project?.id || !isMachineProjectType(item.type)) return false
+      const values = buildProjectInfoValues(item, ['productType'])
+      return values.productType === '新品'
+        && normalizeMachineFamilyName(item.name) === familyName
+    })
+    if (matchingNewProjects.length !== 1) {
+      form.setFieldValue('firstSaleTosVersion', '')
+      setMachineFamilyError(matchingNewProjects.length === 0
+        ? '未找到项目名完全相同的新品项目，无法继承首销 tOS 版本'
+        : '找到多个项目名完全相同的新品项目，无法确定首销 tOS 版本来源')
+      return
+    }
+    const inheritedValues = buildProjectInfoValues(matchingNewProjects[0], ['firstSaleTosVersion'])
+    form.setFieldValue(
+      'firstSaleTosVersion',
+      normalizeTosEnumReference(inheritedValues.firstSaleTosVersion),
+    )
+    setMachineFamilyError('')
+  }, [existingProjects, form, isLegacyMachine, machineProjectName, mode, open, project?.id, projectType, watchedFirstSaleTosVersion])
 
   const persistCreateDraft = useCallback(async (session: ProjectCreationDraftSession) => {
     if (draftReadStatusRef.current !== 'ready' || !isCurrentCreateDraftSession(session)) return
@@ -586,6 +678,9 @@ export default function ProjectInfoModal({
 
   const handleSubmit = async () => {
     if (isCreateDraftInteractionBlocked) return
+    if (!tryBeginSubmit()) return
+    setSubmitting(true)
+    try {
     const selectedBid = String(form.getFieldValue('bid') || '')
     const sourceEntry = mode === 'create'
       ? candidateProjects.find(item => item.bid === selectedBid)
@@ -625,7 +720,46 @@ export default function ProjectInfoModal({
       message.error('项目分类和项目二级分类均为必填项')
       return
     }
-    const infoValues = getProjectInfoModalSubmitValues(normalizedProjectType, values)
+    const infoValues = normalizedProjectType === PROJECT_CATEGORY_TECH
+      ? normalizeTechnicalProjectValues(values as Record<string, unknown>) as ProjectInfoValues
+      : getProjectInfoModalSubmitValues(normalizedProjectType, values)
+    if (normalizedProjectType === PROJECT_CATEGORY_TECH) {
+      try {
+        validateTechnicalProject({
+          ...infoValues,
+          type: (sourceEntry?.ipmProjectCategoryName || String(values.ipmProjectType || project?.ipmProjectType || '')) === '技术项目前置工作'
+            ? '技术项目前置工作'
+            : 'tdt',
+          deliverables: {
+            projectKpi: infoValues.projectKpi,
+            conceptDesign: infoValues.conceptDesign,
+            charterReport: infoValues.charterReport,
+            pdcpReport: infoValues.pdcpReport,
+            tdcpReport: infoValues.tdcpReport,
+            edcpReport: infoValues.edcpReport,
+          },
+        })
+      } catch (error) {
+        const field = error instanceof TechnicalProjectValidationError
+          ? error.fieldKey
+          : error instanceof Error ? error.message : 'technicalProject'
+        const labels: Record<string, string> = { technicalLead: '技术项目负责人', tmg: 'TMG 及技术领域', subdomain: '子领域', preProjectId: '前置项目', projectYear: '项目年份', deliverable: '交付物' }
+        const deliverableLabel = TECHNICAL_DELIVERABLE_FIELDS.find(item => item.key === field)?.label
+        message.error(`请检查${labels[field] || deliverableLabel || '技术项目信息'}`)
+        if (field !== 'deliverable') {
+          form.setFields([{ name: field, errors: [`请填写有效的${deliverableLabel || labels[field] || '字段值'}`] }])
+          form.scrollToField(field, { block: 'center' })
+        }
+        return
+      }
+    }
+    if (isMachineProjectType(normalizedProjectType) && machineFamilyError) {
+      form.setFields([{ name: 'firstSaleTosVersion', errors: [machineFamilyError] }])
+      setActiveGroups(previous => [...new Set([...previous, 'basic'])])
+      setTimeout(() => form.scrollToField('firstSaleTosVersion', { block: 'center' }), 0)
+      message.error(machineFamilyError)
+      return
+    }
     const editableFieldKeys = new Set(editableFields.map(field => field.key))
     const editableErrors = validateProjectInfoValues(
       normalizedProjectType,
@@ -658,20 +792,29 @@ export default function ProjectInfoModal({
     )) return
 
     cancelDraftSave()
-    setSubmitting(true)
-    try {
       const submitResult = await onSubmit({
         bid: values.bid,
         projectName,
         projectType: normalizedProjectType,
         projectSecondaryCategory,
-        responsiblePersons: Array.isArray(values.responsiblePersons) ? values.responsiblePersons : [],
+        responsiblePersons: deriveProjectResponsiblePersons(
+          normalizedProjectType,
+          infoValues,
+          Array.isArray(values.responsiblePersons) ? values.responsiblePersons : [],
+        ),
         healthStatus: String(values.healthStatus || 'normal'),
         infoValues,
         sourceEntry,
         sourceValues: values.bid ? fetchByBid(values.bid) : {},
       })
       if (submitResult === false) return
+      if (mode === 'edit' && project?.id) {
+        if (normalizedProjectType === PROJECT_CATEGORY_TECH) {
+          syncTechnicalTeamPermissionMembers(project.id)
+        } else if (normalizedProjectType === PROJECT_TYPE_TOS_VERSION) {
+          syncTosTeamPermissionMembers(project.id)
+        }
+      }
       if (mode === 'create' && submitSession) {
         let draftClearFailed = false
         try {
@@ -695,6 +838,7 @@ export default function ProjectInfoModal({
       }
     } finally {
       if (componentMountedRef.current) setSubmitting(false)
+      releaseSubmission()
     }
   }
 
@@ -728,7 +872,7 @@ export default function ProjectInfoModal({
         <Alert
           type="error"
           showIcon
-          message="项目草稿读取失败"
+          title="项目草稿读取失败"
           description="已保存的内容暂时无法恢复，当前填写和自动保存已暂停。"
           action={<Button size="small" onClick={retryCreateDraftHydration}>重新读取</Button>}
           style={{ marginBottom: 16 }}
@@ -753,7 +897,7 @@ export default function ProjectInfoModal({
                 showSearch
                 optionFilterProp="label"
                 placeholder="搜索并选择项目"
-                options={candidateProjects.map(item => ({ label: item.name, value: item.bid }))}
+                options={candidateProjects.map(item => ({ label: `${item.name}（${item.bid}）`, value: item.bid }))}
               />
             </Form.Item>
           ) : (
@@ -765,9 +909,11 @@ export default function ProjectInfoModal({
           <Form.Item label="项目二级分类" name="secondaryCategory" rules={[{ required: true, message: '请选择项目二级分类' }]}>
             <Select disabled options={secondaryCategoryOptions} />
           </Form.Item>
-          <Form.Item label="项目责任人" name="responsiblePersons" extra="负责项目可见范围，并作为权限中心的系统管理员" rules={[{ required: true, type: 'array', min: 1, message: '请选择项目责任人' }]}>
-            <Select mode="multiple" showSearch optionFilterProp="label" options={ALL_USERS.map(user => ({ label: user, value: user }))} />
-          </Form.Item>
+          {projectType !== PROJECT_TYPE_TOS_VERSION && !isMachineProjectType(projectType) && !isTechnicalProject && (
+            <Form.Item label="项目责任人" name="responsiblePersons" extra="负责项目可见范围，并作为权限中心的系统管理员" rules={[{ required: true, type: 'array', min: 1, message: '请选择项目责任人' }]}>
+              <Select mode="multiple" showSearch optionFilterProp="label" options={ALL_USERS.map(user => ({ label: user, value: user }))} />
+            </Form.Item>
+          )}
           {isTargetProjectInfoType(projectType) && (
             <Form.Item label="健康状态" name="healthStatus" initialValue="normal" rules={[{ required: true, message: '请选择健康状态' }]}>
               <Select options={HEALTH_OPTIONS} />
@@ -776,7 +922,21 @@ export default function ProjectInfoModal({
         </div>
 
         {projectType !== PROJECT_TYPE_TOS_VERSION && aggregateWarnings.length > 0 && (
-          <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="首发项目来源字段不完整" description={aggregateWarnings.join('；')} />
+          <Alert type="warning" showIcon style={{ marginBottom: 12 }} title="首发项目来源字段不完整" description={aggregateWarnings.join('；')} />
+        )}
+
+        {machineFamilyError && (
+          <Alert type="error" showIcon style={{ marginBottom: 12 }} title="tOS 版本联动失败" description={machineFamilyError} />
+        )}
+
+        {isTechnicalProject && (
+          <TechnicalProjectCreateFields
+            form={form}
+            existingProjects={existingProjects}
+            currentProjectId={project?.id}
+            ipmProjectType={mode === 'create' ? selectedCandidate?.ipmProjectCategoryName || '' : String(watchedValues.ipmProjectType || project?.fieldValues?.ipmProjectType || project?.ipmProjectType || '')}
+            technicalTrack={mode === 'create' ? selectedCandidate?.technicalTrack || '' : String(watchedValues.technicalTrack || project?.fieldValues?.technicalTrack || '')}
+          />
         )}
 
         {groups.length > 0 && (
@@ -800,6 +960,11 @@ export default function ProjectInfoModal({
                       const active = !field.visibleWhen || field.visibleWhen(watchedValues)
                       if (!active) return null
                       const isRequired = mode === 'create' ? field.requiredOnCreate : field.required
+                      const renderedField = field.key === 'firstSaleTosVersion'
+                        ? { ...field, readOnly: isLegacyMachine }
+                        : field.key === 'currentTosVersion'
+                          ? { ...field, readOnly: !isLegacyMachine }
+                          : field
                       return (
                         <Form.Item
                           key={field.key}
@@ -812,7 +977,7 @@ export default function ProjectInfoModal({
                             : undefined}
                         >
                           <ProjectInfoFieldInput
-                            field={field}
+                            field={renderedField}
                             firstLaunchProjectOptions={firstLaunchOptions}
                             optionsOverride={isMachineProjectType(projectType) ? fieldOptionOverrides?.[field.key] : undefined}
                           />

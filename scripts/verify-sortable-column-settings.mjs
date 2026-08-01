@@ -84,6 +84,57 @@ function parseTypeScript(filePath) {
   }
 }
 
+function extractBalancedJsxElement(source, startToken, label) {
+  const sourceFile = ts.createSourceFile(
+    `${label.replaceAll(/\W+/g, '-')}.tsx`,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  )
+  const matches = []
+  function visit(node) {
+    if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const openingElement = ts.isJsxElement(node) ? node.openingElement : node
+      if (openingElement.getText(sourceFile).includes(startToken)) matches.push(node)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  assert.equal(
+    matches.length,
+    1,
+    `${label} must have exactly one balanced JSX element containing ${startToken}`,
+  )
+  const [match] = matches
+  return source.slice(match.getStart(sourceFile), match.end)
+}
+
+function assertRoadmapTargetControlNesting(label, source, cardToken) {
+  const card = extractBalancedJsxElement(source, cardToken, `${label} target card`)
+  const header = extractBalancedJsxElement(
+    card,
+    'className="pms-roadmap-target-card-header"',
+    `${label} compact header`,
+  )
+  const actions = extractBalancedJsxElement(
+    header,
+    'className="pms-roadmap-target-card-actions"',
+    `${label} compact header actions`,
+  )
+  const toggleToken = 'onClick={() => onToggleTarget(version.id)}'
+  const toggle = extractBalancedJsxElement(actions, toggleToken, `${label} per-target toggle`)
+
+  assert.ok(header.includes('wrap={false}'), `${label} compact header must not wrap`)
+  assert.ok(actions.includes('wrap={false}'), `${label} compact header actions must not wrap`)
+  assert.ok(toggle.includes('aria-expanded={!targetCollapsed}'), `${label} target toggle must expose expanded state`)
+  assert.equal(
+    actions.split(toggleToken).length - 1,
+    1,
+    `${label} compact header actions must contain one per-target toggle`,
+  )
+}
+
 function importsSortableColumnSettings(filePath) {
   const { sourceFile } = parseTypeScript(filePath)
   return sourceFile.statements.some(statement => (
@@ -626,8 +677,9 @@ registerAssertion('shared SortableColumnSettings component exists', () => {
     source,
     /setDraft\(current\s*=>\s*normalizeColumnSettings\(\s*definitions,\s*current\s*\)\)/,
   )
-  assert.match(source, /<Drawer\b/)
-  assert.match(source, /placement=(?:"right"|\{'right'\})/)
+  assert.match(source, /<FloatingConfigPopover\b/)
+  assert.match(source, /\bKeyboardSensor\b/)
+  assert.doesNotMatch(source, /<Drawer\b/)
   assert.doesNotMatch(source, /<Modal\b/)
 })
 
@@ -657,7 +709,7 @@ registerAssertion('roadmap store normalizes and persists independent ordered col
   })
   state = store.getState()
   assert.deepEqual(state.columnOrder.slice(0, 4), ['remark', 'displayName', 'productSeries', 'brand'])
-  assert.deepEqual(state.visibleColumns, ['productSeries', 'displayName', 'remark'])
+  assert.deepEqual(state.visibleColumns, ['marketName', 'displayName', 'remark'])
 
   store.getState().setViewMode('table')
   state = store.getState()
@@ -808,7 +860,7 @@ registerAssertion('roadmap hydration migrates partial visibility maps per view',
   )
   assert.deepEqual(
     malformedMembers.visibleColumnsByView.evolution,
-    ['brand', 'productSeries', 'displayName', 'remark'],
+    roadmapFilters.DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
   )
   assert.deepEqual(
     malformedMembers.columnOrderByView.evolution.slice(0, 2),
@@ -832,13 +884,50 @@ registerAssertion('roadmap per-target controls stay inside compact target-card h
     }
   }
 
-  const tableCardIndex = table.indexOf('data-roadmap-target-card')
-  const tableToggleIndex = table.indexOf('onClick={() => onToggleTarget(version.id)}')
-  const tableEditIndex = table.indexOf('onClick={() => onEditTosTargets(version.id)}')
-  assert.ok(tableCardIndex >= 0 && tableToggleIndex > tableCardIndex)
-  assert.ok(tableEditIndex > tableCardIndex)
-  assert.equal(table.match(/onToggleTarget\(version\.id\)/g)?.length, 1)
-  assert.equal(table.match(/onEditTosTargets\(version\.id\)/g)?.length, 1)
+  for (const [label, fixture, expectedFailure] of [
+    [
+      'header drift fixture',
+      `
+        <section data-roadmap-target-card></section>
+        <Flex className="pms-roadmap-target-card-header" />
+      `,
+      /compact header/,
+    ],
+    [
+      'actions drift fixture',
+      `
+        <section data-roadmap-target-card>
+          <Flex className="pms-roadmap-target-card-header" />
+          <Flex className="pms-roadmap-target-card-actions" />
+        </section>
+      `,
+      /compact header actions/,
+    ],
+    [
+      'toggle drift fixture',
+      `
+        <section data-roadmap-target-card>
+          <Flex className="pms-roadmap-target-card-header">
+            <Flex className="pms-roadmap-target-card-actions" />
+            <Button onClick={() => onToggleTarget(version.id)} />
+          </Flex>
+        </section>
+      `,
+      /per-target toggle/,
+    ],
+  ]) {
+    assert.throws(
+      () => assertRoadmapTargetControlNesting(label, fixture, 'data-roadmap-target-card'),
+      expectedFailure,
+    )
+  }
+
+  for (const [label, source, cardToken] of [
+    ['table', table, 'data-roadmap-target-card'],
+    ['evolution', evolution, 'className="pms-roadmap-evolution-target"'],
+  ]) {
+    assertRoadmapTargetControlNesting(label, source, cardToken)
+  }
 
   assert.ok(toolbar.includes("viewMode === 'evolution' && hasTargetVersions"))
   assert.ok(toolbar.includes('onToggleAllTargets'))
@@ -868,6 +957,11 @@ registerAssertion('roadmap conflicts use one compact counted toolbar action', ()
   ]) {
     assert.ok(toolbar.includes(contract), `roadmap toolbar is missing ${contract}`)
   }
+  assert.equal(
+    toolbar.match(/onClick=\{onResolveConflicts\}/g)?.length,
+    1,
+    'roadmap toolbar must expose one conflict-resolution entry',
+  )
 })
 
 registerAssertion('roadmap toolbar is one polished horizontally scrollable control rail', () => {

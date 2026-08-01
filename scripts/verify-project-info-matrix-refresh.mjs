@@ -90,13 +90,13 @@ assert.equal(JSON.stringify(keysFor(machineFields, 'team')), JSON.stringify([
 assert.equal(JSON.stringify(keysWhere(machineFields, field => field.required)), JSON.stringify([
   'developmentMode', 'firstSaleTosVersion', 'isFirstLaunchProject', 'softwareProjectLevel',
   'versionType', 'dimensionUpgradeStrategy', 'systemType', 'kernelVersion', 'productSeries',
-  'chipModel', 'chipPlatform', 'wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet',
+  'currentTosVersion', 'chipModel', 'chipPlatform', 'wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet',
   'keyComponentsSheet', 'isTwoStage', 'isOutsourcedMini', 'machineSpm',
 ]), 'machine overall required fields must match the reference document')
 assert.equal(JSON.stringify(keysWhere(machineFields, field => field.requiredOnCreate)), JSON.stringify([
   'developmentMode', 'firstSaleTosVersion', 'isFirstLaunchProject', 'softwareProjectLevel',
   'versionType', 'dimensionUpgradeStrategy', 'systemType', 'kernelVersion', 'productSeries',
-  'chipModel', 'chipPlatform', 'wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet',
+  'currentTosVersion', 'chipModel', 'chipPlatform', 'wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet',
   'keyComponentsSheet', 'isTwoStage', 'isOutsourcedMini',
 ]), 'machine create-required fields must match the reference document')
 assert.equal(JSON.stringify(keysWhere(machineFields, field => field.defaultVisible)), JSON.stringify([
@@ -181,11 +181,16 @@ assert.equal(aggregates.values.firstLaunchProjectChips, 'D1（M1）,D2（M2）',
 
 assert.match(schema, /required:\s*boolean/, 'field schema must expose overall required metadata')
 assert.doesNotMatch(projectMocks, /versionType:\s*'Go'/, 'machine project mocks must use the canonical GO version type')
-assert.match(schema, /'tOS15\.0\.1'[\s\S]*'tOS17\.2'/, 'first-sale tOS options must match the reference document')
+assert.doesNotMatch(schema, /'tOS15\.0\.1'[\s\S]*'tOS17\.2'/, 'first-sale tOS options must not remain hard-coded in the field schema')
+assert.match(modal, /optionsOverride=\{isMachineProjectType\(projectType\) \? fieldOptionOverrides\?\.\[field\.key\]/, 'machine tOS fields must consume the configured enum option override')
 assert.match(schema, /\['S', 'A', 'B', 'C', 'D'\]/, 'software project levels must include S through D')
 assert.match(schema, /'不维护'[\s\S]*'升3维5'/, 'dimension upgrade strategies must match the reference document')
 assert.match(schema, /label:\s*'首发项目芯片'/, 'the tOS launch chip label must match the reference document')
-assert.doesNotMatch(schema, /group:\s*'team',[^\n]*inputType:\s*'person'/, 'every team role must support multiple people')
+assert.equal(
+  [...machineFields, ...tosFields].filter(field => field.group === 'team').every(field => field.inputType === 'people'),
+  true,
+  'machine and tOS team roles must continue to support multiple people',
+)
 assert.match(values, /normalizeTeamMembers/, 'legacy and multi-person team values must share a normalizer')
 
 assert.doesNotMatch(view, /statusConfig\.tagColor/, 'project status must not be repeated beside the title')

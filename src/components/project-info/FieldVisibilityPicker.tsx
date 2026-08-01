@@ -86,7 +86,7 @@ export default function FieldVisibilityPicker({
         onClose={closeDrawer}
         closable={!confirming}
         maskClosable={!confirming}
-        width={420}
+        size={420}
         placement="right"
         footer={(
           <div className="pms-project-info-picker-footer">

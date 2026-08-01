@@ -7,6 +7,12 @@ export interface ExternalProjectEntry {
   name: string
   spm: string
   ipmProjectCategoryName: string
+  technicalTrack?: string
+  subprojects?: Array<{
+    id: string
+    name: string
+    ipmOrder: number
+  }>
 }
 
 export const EXTERNAL_PROJECT_POOL: ExternalProjectEntry[] = [
@@ -15,10 +21,23 @@ export const EXTERNAL_PROJECT_POOL: ExternalProjectEntry[] = [
   { bid: 'EXT-003', name: 'tOS19.0', spm: '李四', ipmProjectCategoryName: '软件产品项目' },
   { bid: 'EXT-004', name: 'tOS19.1', spm: '王五', ipmProjectCategoryName: '软件产品项目' },
   { bid: 'EXT-005', name: 'X6912_H1208', spm: '赵六', ipmProjectCategoryName: '其他-平板--整机产品项目' },
-  { bid: 'EXT-006', name: 'AI-Engine-V3', spm: '张三', ipmProjectCategoryName: '研发级-基础研究-重点项目' },
+  {
+    bid: 'EXT-006', name: 'AI-Engine-V3', spm: '张三', ipmProjectCategoryName: '研发级-基础研究-重点项目', technicalTrack: 'AIOS',
+    subprojects: [
+      { id: 'IPM-AI-001', name: 'AI推理引擎子项目', ipmOrder: 1 },
+      { id: 'IPM-AI-002', name: '多模态子项目', ipmOrder: 2 },
+      // The same stable ID exists as inactive in the PMS seed, so a sync
+      // demonstrates lossless reactivation rather than creating a new child.
+      { id: 'IPM-AI-003', name: '端侧训练子项目', ipmOrder: 3 },
+    ],
+  },
   { bid: 'EXT-007', name: 'X6920-D8800_H1300', spm: '李白', ipmProjectCategoryName: '整机产品-非IPD' },
   { bid: 'EXT-008', name: 'CI-Platform-V2', spm: '孙七', ipmProjectCategoryName: '公司级能力建设' },
-  { bid: 'EXT-009', name: 'HiOS-Launcher-V2', spm: '王五', ipmProjectCategoryName: '部门级-技术研发' },
+  { bid: 'EXT-009', name: 'HiOS-Launcher-V2', spm: '王五', ipmProjectCategoryName: '部门级-技术研发', technicalTrack: '系统体验' },
+  { bid: 'EXT-010', name: 'X6870', spm: '李白', ipmProjectCategoryName: '整机产品-基线IPD' },
+  { bid: 'EXT-011', name: 'X6870', spm: '李白', ipmProjectCategoryName: '手机整机产品-大版本升级' },
+  { bid: 'EXT-012', name: 'X6870', spm: '李白', ipmProjectCategoryName: '手机整机产品-大版本升级' },
+  { bid: 'EXT-013', name: 'AIOS-Architecture-Prestudy', spm: '赵六', ipmProjectCategoryName: '技术项目前置工作', technicalTrack: 'AIOS' },
 ]
 
 export interface FetchByBidResult {
@@ -63,6 +82,10 @@ export function fetchByBid(bid: string): FetchByBidResult {
     'EXT-007': { productLine: 'CAMON', productSeries: 'CAMON 50', marketName: 'CAMON 50 Premier', brand: 'TECNO', androidVersion: 'Android 17', chipPlatform: 'QCOM', chipCode: 'D8800', chipModel: 'SM8850', memorySize: '12GB+256GB', mainboardName: 'H1300', researchMode: '自研', androidMajorUpgrade: '否', confidentialityLevel: '绝密', targetMarkets: 'OP,RU,EU', planStartDate: '2026-07-15', planEndDate: '2027-03-31', projectCode: 'X6920', platform: 'D8800', productType: '新品', startRam: '12GB', versionType: 'Full', str5Date: '2027-03-15', launchDate: '2027-04-15', developMode: 'ITD-ODC', remark: '外部项目池同步的整机项目。' },
     'EXT-008': { productLine: '工程效率', planStartDate: '2026-06-01', planEndDate: '2026-12-31' },
     'EXT-009': { productLine: '系统应用', tosVersion: 'tOS16.1', androidVersion: 'Android 16', chipPlatform: 'MTK', planStartDate: '2026-06-10', planEndDate: '2026-12-10' },
+    'EXT-010': { productLine: 'NOTE', productSeries: 'NOTE 60', marketName: 'X6870', brand: 'TECNO', androidVersion: 'Android 17', chipPlatform: 'MTK', chipCode: 'D8600', chipModel: 'MT6899', memorySize: '8GB+256GB', mainboardName: 'H1100', researchMode: '自研', androidMajorUpgrade: '否', confidentialityLevel: '内部公开', targetMarkets: 'OP,TR', planStartDate: '2026-06-01', planEndDate: '2026-12-31', projectCode: 'X6870', platform: 'D8600', productType: '新品', startRam: '8GB', versionType: 'Full', str5Date: '2026-12-15', launchDate: '2027-01-15', developMode: '自研', remark: 'X6870 新品联动验证。' },
+    'EXT-011': { productLine: 'NOTE', productSeries: 'NOTE 60', marketName: 'X6870', brand: 'TECNO', androidVersion: 'Android 18', chipPlatform: 'MTK', chipCode: 'D8600', chipModel: 'MT6899', memorySize: '8GB+256GB', mainboardName: 'H1100', researchMode: '自研', androidMajorUpgrade: '是', confidentialityLevel: '内部公开', targetMarkets: 'OP,TR', planStartDate: '2027-01-01', planEndDate: '2027-06-30', projectCode: 'X6870', platform: 'D8600', productType: '老品', startRam: '8GB', versionType: 'Full', str5Date: '2027-05-15', launchDate: '2027-07-15', developMode: '自研', remark: 'X6870 老品 15.0.0 联动验证。' },
+    'EXT-012': { productLine: 'NOTE', productSeries: 'NOTE 60', marketName: 'X6870', brand: 'TECNO', androidVersion: 'Android 18', chipPlatform: 'MTK', chipCode: 'D8600', chipModel: 'MT6899', memorySize: '8GB+256GB', mainboardName: 'H1100', researchMode: '自研', androidMajorUpgrade: '是', confidentialityLevel: '内部公开', targetMarkets: 'OP,TR', planStartDate: '2027-03-01', planEndDate: '2027-09-30', projectCode: 'X6870', platform: 'D8600', productType: '老品', startRam: '8GB', versionType: 'Full', str5Date: '2027-08-15', launchDate: '2027-10-15', developMode: '自研', remark: 'X6870 老品 17.10.0 联动验证。' },
+    'EXT-013': { productLine: '系统应用', planStartDate: '2026-08-01', planEndDate: '2026-12-31' },
   }
   return map[bid] ?? {}
 }

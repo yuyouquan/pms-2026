@@ -6,6 +6,7 @@ import {
   type ProjectTypeName,
 } from '@/constants/projectTypes'
 import type { ProjectInfoValues } from '@/types/app'
+import { PROJECT_CATEGORY_TECH } from '@/constants/projectTypes'
 
 export type ProjectInfoGroupKey = 'basic' | 'extended' | 'team'
 
@@ -19,6 +20,8 @@ export type ProjectInfoInputType =
   | 'date'
   | 'boolean'
   | 'jira'
+  | 'textarea'
+  | 'deliverable'
 
 export interface ProjectInfoFieldDefinition {
   key: string
@@ -51,17 +54,6 @@ export const PROJECT_INFO_SCHEMA_VERSION = 2
 export const LEGACY_PROJECT_INFO_SCHEMA_VERSION = 0
 
 const yesNo = ['是', '否'] as const
-const firstSaleTosVersions = [
-  'tOS15.0.1',
-  'tOS15.1.0',
-  'tOS16.0',
-  'tOS16.1',
-  'tOS16.2',
-  'tOS16.3',
-  'tOS17.0',
-  'tOS17.1',
-  'tOS17.2',
-] as const
 const softwareProjectLevels = ['S', 'A', 'B', 'C', 'D'] as const
 const dimensionUpgradeStrategies = [
   '不维护',
@@ -105,7 +97,7 @@ export const MACHINE_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineF
   // 基础信息（顺序与字段参考文档保持一致）
   { key: 'researchMode', label: '研发模式', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'developmentMode', label: '开发模式', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, placeholder: '请选择或输入开发模式' },
-  { key: 'firstSaleTosVersion', label: '首销 tOS 版本', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: firstSaleTosVersions },
+  { key: 'firstSaleTosVersion', label: '首销 tOS 版本', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'isFirstLaunchProject', label: '是否首发项目', group: 'basic', inputType: 'boolean', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: yesNo },
   { key: 'softwareProjectLevel', label: '软件项目等级', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: softwareProjectLevels },
   { key: 'versionType', label: '版本类型', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: ['Full', 'Slim', 'PAD', 'GO'] },
@@ -121,7 +113,7 @@ export const MACHINE_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineF
   { key: 'androidVersion', label: '安卓版本', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
   { key: 'productSeries', label: '产品系列', group: 'basic', inputType: 'text', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true },
   { key: 'modelCategory', label: '机型分类', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
-  { key: 'currentTosVersion', label: '当前 tOS 版本', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
+  { key: 'currentTosVersion', label: '当前 tOS 版本', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true },
   { key: 'launchDate', label: '上市时间', group: 'basic', inputType: 'date', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
   { key: 'productionForbiddenDate', label: '禁止生产时间', group: 'basic', inputType: 'date', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
 
@@ -151,6 +143,7 @@ export const MACHINE_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineF
 ])
 
 export const TOS_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineFields([
+  { key: 'tosVersion', label: 'tOS 版本', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'firstLaunchProjects', label: '首发项目', group: 'basic', inputType: 'multiSelect', requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'firstLaunchProjectChips', label: '首发项目芯片', group: 'basic', inputType: 'text', requiredOnCreate: true, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'applicableBrands', label: '适用品牌', group: 'basic', inputType: 'text', requiredOnCreate: true, defaultVisible: true, hideable: false, readOnly: true },
@@ -180,6 +173,33 @@ export const TOS_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineField
   { key: 'tosEcosystemRepresentative', label: '研发战略生态合作部代表', group: 'team', inputType: 'people', requiredOnCreate: false, defaultVisible: false, hideable: true },
 ], true)
 
+export const TECHNICAL_PROJECT_INFO_GROUPS: ProjectInfoGroupDefinition[] = [
+  { key: 'basic', label: '技术信息' },
+  { key: 'team', label: '团队人员' },
+  { key: 'extended', label: '交付物' },
+]
+
+export const TECHNICAL_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineFields([
+  { key: 'technicalTrack', label: '技术赛道', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
+  { key: 'tmg', label: 'TMG及技术领域', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
+  { key: 'subdomain', label: '子领域', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
+  { key: 'preProjectId', label: '前置项目', group: 'basic', inputType: 'select', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'projectYear', label: '项目年份', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'projectValue', label: '项目价值', group: 'basic', inputType: 'textarea', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'technicalLead', label: '技术项目负责人', group: 'team', inputType: 'person', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
+  { key: 'technicalProjectManager', label: '技术项目经理', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'testRepresentative', label: '测试代表', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'qualityRepresentative', label: '质量代表', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'productRepresentative', label: '产品代表', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'standardizationRepresentative', label: '标准化代表', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'projectKpi', label: '项目KPI文件', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'conceptDesign', label: '概设', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'charterReport', label: 'charter报告', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'pdcpReport', label: 'PDCP报告', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'tdcpReport', label: 'TDCP报告', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'edcpReport', label: 'EDCP报告', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
+])
+
 export const TARGET_PROJECT_TYPES = [...MACHINE_PROJECT_TYPES, PROJECT_TYPE_TOS_VERSION] as const
 
 export type TargetProjectInfoType = typeof MACHINE_PROJECT_TYPES[number]
@@ -193,12 +213,14 @@ export const isTargetProjectInfoType = (type: string | undefined): type is Targe
 export const getProjectInfoFields = (type: string | undefined) => {
   if (isMachineProjectType(type)) return MACHINE_PROJECT_INFO_FIELDS
   if (type === PROJECT_TYPE_TOS_VERSION) return TOS_PROJECT_INFO_FIELDS
+  if (type === PROJECT_CATEGORY_TECH) return TECHNICAL_PROJECT_INFO_FIELDS
   return []
 }
 
 export const getProjectInfoGroups = (type: string | undefined) => {
   if (isMachineProjectType(type)) return MACHINE_PROJECT_INFO_GROUPS
   if (type === PROJECT_TYPE_TOS_VERSION) return TOS_PROJECT_INFO_GROUPS
+  if (type === PROJECT_CATEGORY_TECH) return TECHNICAL_PROJECT_INFO_GROUPS
   return []
 }
 
