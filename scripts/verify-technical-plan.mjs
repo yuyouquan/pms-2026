@@ -112,6 +112,23 @@ assert.equal(compare.compareVersionsForTable(subprojectTasks, subprojectPublishe
 
 const technicalProjectModule = loadTypeScriptModule(root, 'src/stores/technicalProject.ts')
 const technicalPlanModule = loadTypeScriptModule(root, 'src/stores/technicalPlan.ts')
+assert.ok(technicalPlanModule.TECHNICAL_PLAN_STORE_VERSION >= 2, 'technical plan persistence declares a migration version')
+const migratedLegacyPlan = technicalPlanModule.migrateTechnicalPlanState({
+  plansByKey: {
+    '9:tdt': {
+      planKey: '9:tdt', templateKind: 'tdt', currentVersionId: 'tech-9-v2-draft',
+      versions: [{ id: 'tech-9-v2-draft', versionNo: 'V2', templateType: 'tdt', status: '修订中', tasks: [{ id: 'legacy-only', taskName: '旧默认任务' }] }],
+    },
+  },
+}, 0)
+assert.deepEqual(
+  migratedLegacyPlan.plansByKey['9:tdt'].versions[0].tasks.map(task => task.taskName),
+  tdtTasks.map(task => task.taskName),
+  'legacy seeded TDT draft migrates to the complete Task10 TDT template',
+)
+assert.deepEqual(migratedLegacyPlan.plansByKey['9:tdt'].versions.at(-1).tasks.map(task => task.taskName), tdtTasks.map(task => task.taskName), 'legacy seeded draft is also reset to the complete TDT template')
+assert.ok(migratedLegacyPlan.plansByKey['9:tdt'].columnSettings, 'migration backfills per-instance columns')
+assert.deepEqual(migratedLegacyPlan.plansByKey['9:tdt'].collapsedRows, [], 'migration backfills collapsed rows')
 const orderedTabs = technicalPlanModule.buildTechnicalPlanTabs('9', technicalProjectModule.INITIAL_TECHNICAL_SUBPROJECTS, false)
 assert.deepEqual(orderedTabs.map(tab => tab.key), ['9:tdt', '9:subproject:IPM-AI-001', '9:subproject:IPM-AI-002'], 'TDT is first and active children follow IPM order')
 assert.equal(orderedTabs[0].label, 'TDT项目计划')
@@ -152,6 +169,33 @@ assert.deepEqual(instanceStore.getState().plansByKey['9:subproject:IPM-AI-001'].
 assert.deepEqual(instanceStore.getState().plansByKey['9:subproject:IPM-AI-001'].collapsedRows, ['subproject-1'], 'collapsed rows persist per plan key')
 assert.equal(instanceStore.getState().plansByKey['9:tdt'].columnSettings.visible.includes('taskName'), true, 'TDT column state remains independent')
 
+const invalidTdtTasks = [{ ...tdtTasks[0] }, { ...tdtTasks[1] }, { ...tdtTasks[1], id: 'too-deep', parentId: tdtTasks[1].id }]
+assert.deepEqual(
+  instanceStore.createRevision({ scope: { kind: 'tdt', parentProjectId: 'depth-test' }, templateKind: 'tdt', maxDepth: 2, templateTasks: invalidTdtTasks }),
+  { ok: false, reason: 'max-depth' },
+  'TDT store rejects revisions deeper than two levels',
+)
+assert.deepEqual(
+  instanceStore.createRevision({ scope: { kind: 'subproject', parentProjectId: '9', subprojectId: 'depth-child' }, templateKind: 'subproject', maxDepth: 1, templateTasks: [{ ...subprojectTasks[0], parentId: 'parent' }], subproject: configuredChild }),
+  { ok: false, reason: 'max-depth' },
+  'subproject store rejects child tasks',
+)
+const tdtBeforeInvalidWrite = instanceStore.getState().plansByKey['9:tdt'].versions[0].tasks
+assert.equal(instanceStore.createRevision({ scope: tdtPlanScope, templateKind: 'tdt', maxDepth: 2, templateTasks: tdtTasks }).ok, true)
+assert.deepEqual(instanceStore.updateCurrentTasks(tdtPlanScope, invalidTdtTasks, 2), { ok: false, reason: 'max-depth' }, 'all task writes enforce maxDepth')
+assert.deepEqual(instanceStore.getState().plansByKey['9:tdt'].versions[0].tasks, tdtBeforeInvalidWrite, 'rejected writes are atomic')
+
+const addedTopLevel = rules.insertTechnicalPlanTask(tdtTasks, { ...tdtTasks[0], id: 'new-top', parentId: undefined }, 'tdt', 2)
+assert.equal(addedTopLevel.at(-1).id, 'new-top', 'draft editing can add a top-level task')
+const addedTdtChild = rules.insertTechnicalPlanTask(tdtTasks, { ...tdtTasks[0], id: 'new-child', parentId: tdtTasks[0].id }, 'tdt', 2)
+assert.equal(addedTdtChild.find(task => task.id === 'new-child').parentId, tdtTasks[0].id, 'TDT editing can add a second-level task')
+assert.throws(() => rules.insertTechnicalPlanTask(subprojectTasks, { ...subprojectTasks[0], id: 'illegal-child', parentId: subprojectTasks[0].id }, 'subproject', 1), /depth|child/i, 'subproject editing cannot add child tasks')
+assert.deepEqual(
+  rules.deleteTechnicalPlanTaskCascade(addedTdtChild, tdtTasks[0].id).map(task => task.id),
+  tdtTasks.filter(task => task.id !== tdtTasks[0].id && task.parentId !== tdtTasks[0].id).map(task => task.id),
+  'deleting a parent cascades through its children',
+)
+
 const technicalModuleSource = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
 assert.match(technicalModuleSource, /TDT项目计划/, 'technical plan UI renders the fixed TDT tab')
 assert.match(technicalModuleSource, /显示已停用/, 'technical plan UI exposes history mode')
@@ -160,6 +204,16 @@ assert.match(technicalModuleSource, /compareVersionsForTable/, 'technical plans 
 assert.match(technicalModuleSource, /exportSheet/, 'technical plans reuse Excel export')
 assert.match(technicalModuleSource, /SortableRow/, 'technical plans reuse sortable task rows')
 assert.match(technicalModuleSource, /getInvalidTechnicalTaskFields/, 'technical plans enforce plan date validation')
+assert.match(technicalModuleSource, /maxDepthByKind/, 'technical plan depth is a component input')
+assert.match(technicalModuleSource, /handleAddTopLevelTask/, 'drafts can add top-level tasks')
+assert.match(technicalModuleSource, /handleAddChildTask/, 'TDT drafts can add second-level tasks')
+assert.match(technicalModuleSource, /handleDeleteTask/, 'drafts can delete tasks with cascade handling')
+assert.match(technicalModuleSource, /SortableColumnSettings/, 'column settings reuse sortable staged apply/cancel interaction')
+assert.match(technicalModuleSource, /canImport/, 'technical plan import has a dedicated permission input')
+assert.match(technicalModuleSource, /canExport/, 'technical plan export has a dedicated permission input')
+const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
+assert.match(projectSpaceSource, /canDo\('plan:导入'\)/, 'project space passes technical import permission')
+assert.match(projectSpaceSource, /canDo\('plan:导出'\)/, 'project space passes technical export permission')
 
 const machineScope = rules.getTemplateConfigScopeKey('整机产品项目', 'level1')
 const migratedPlan = planModule.migratePlanStoreState({

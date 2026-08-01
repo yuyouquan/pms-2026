@@ -113,6 +113,58 @@ export const validateTechnicalTemplateDepth = (
   return true
 }
 
+export const validateTechnicalPlanInstanceDepth = (
+  kind: TechnicalTemplateKind,
+  tasks: readonly TechnicalTemplateTaskInput[],
+  maxDepth: number,
+) => {
+  validateTechnicalTemplateDepth(kind, tasks)
+  if (!Number.isInteger(maxDepth) || maxDepth < 1) throw new Error('Technical plan maxDepth is invalid')
+  const byId = new Map(tasks.filter(task => task.id).map(task => [task.id!, task]))
+  tasks.forEach(task => {
+    if (getFlatDepth(task, byId) > maxDepth) throw new Error('Technical plan maxDepth exceeded')
+  })
+  return true
+}
+
+export const insertTechnicalPlanTask = <Task extends TechnicalTemplateTaskInput>(
+  tasks: readonly Task[],
+  task: Task,
+  kind: TechnicalTemplateKind,
+  maxDepth: number,
+): Task[] => {
+  const next = tasks.map(item => ({ ...item })) as Task[]
+  if (task.parentId) {
+    const parentIndex = next.findIndex(item => item.id === task.parentId)
+    if (parentIndex < 0) throw new Error('Technical plan parent is missing')
+    const lastChildIndex = next.reduce((last, item, index) => item.parentId === task.parentId ? index : last, parentIndex)
+    next.splice(lastChildIndex + 1, 0, { ...task })
+  } else {
+    next.push({ ...task })
+  }
+  const ordered = next.map((item, index) => ({ ...item, order: index + 1 })) as Task[]
+  validateTechnicalPlanInstanceDepth(kind, ordered, maxDepth)
+  return ordered
+}
+
+export const deleteTechnicalPlanTaskCascade = <Task extends TechnicalTemplateTaskInput>(
+  tasks: readonly Task[],
+  taskId: string,
+): Task[] => {
+  const removed = new Set([taskId])
+  let changed = true
+  while (changed) {
+    changed = false
+    tasks.forEach(task => {
+      if (task.parentId && removed.has(task.parentId) && task.id && !removed.has(task.id)) {
+        removed.add(task.id)
+        changed = true
+      }
+    })
+  }
+  return tasks.filter(task => !task.id || !removed.has(task.id)).map((task, index) => ({ ...task, order: index + 1 })) as Task[]
+}
+
 export interface InvalidTechnicalTaskFields {
   start?: string[]
   end?: string[]

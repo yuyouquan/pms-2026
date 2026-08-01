@@ -482,6 +482,8 @@ export default function ProjectSpaceContainer() {
   const canEditLevel2Plan = canDo('plan:二级计划-编辑')
   const canViewLevel1Plan = canDo('plan:一级计划-查看')
   const canViewLevel2Plan = canDo('plan:二级计划-查看')
+  const canImportTechnicalPlan = canDo('plan:导入')
+  const canExportTechnicalPlan = canDo('plan:导出')
   const canEditCurrentPlan = projectPlanLevel === 'level2' ? canEditLevel2Plan : canEditLevel1Plan
   const currentPlanPermissionLabel = projectPlanLevel === 'level2' ? '二级计划' : '一级计划'
   const {
@@ -3928,7 +3930,15 @@ export default function ProjectSpaceContainer() {
           )}
           {transfer.transferView === null && projectSpaceModule === 'plan' && (
             isTechnicalProject && selectedProject
-              ? <TechnicalPlanModule projectId={selectedProject.id} currentLoginUser={currentLoginUser} canEdit={canEditLevel1Plan} canPublish={canEditLevel1Plan} />
+              ? <TechnicalPlanModule
+                  projectId={selectedProject.id}
+                  currentLoginUser={currentLoginUser}
+                  canEdit={canEditLevel1Plan}
+                  canPublish={canEditLevel1Plan}
+                  canImport={canImportTechnicalPlan}
+                  canExport={canExportTechnicalPlan}
+                  maxDepthByKind={{ tdt: 2, subproject: 1 }}
+                />
               : renderProjectPlan()
           )}
           {transfer.transferView === null && projectSpaceModule === 'overview' && (
