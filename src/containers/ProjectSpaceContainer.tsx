@@ -3972,6 +3972,24 @@ export default function ProjectSpaceContainer() {
               <Empty description={<span style={{ color: '#9ca3af' }}>{`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`}</span>} />
             </Card>
           )}
+          {isTechnicalProject && selectedProject && (
+            <ProjectInfoModal
+              mode="edit"
+              open={showProjectInfoEditor}
+              candidateProjects={[]}
+              project={selectedProject as unknown as ProjectInfoProject}
+              existingProjects={projects as unknown as ProjectInfoProject[]}
+              responsiblePersons={getProjectResponsiblePersons(selectedProject)}
+              onCancel={() => setShowProjectInfoEditor(false)}
+              onSubmit={saveTargetProjectInfo}
+              fieldOptionOverrides={{
+                firstSaleTosVersion: machineTosOptions,
+                currentTosVersion: machineTosOptions,
+                versionType: ['Full', 'Slim', 'Go'],
+                developmentMode: ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'],
+              }}
+            />
+          )}
         </div>
       </div>
       {/* Shared modals */}
