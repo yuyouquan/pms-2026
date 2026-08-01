@@ -187,7 +187,7 @@ Assert:
 
 - [ ] **Step 2: Run the verifier**
 
-Run: `npm run verify:workbench-split`  
+Run: `npm run verify:workbench-split`
 Expected: FAIL on missing `workbench`, `projectList`, or origin state.
 
 - [ ] **Step 3: Add typed navigation state**
@@ -367,7 +367,7 @@ Verifier fixtures must prove:
 
 - [ ] **Step 2: Run RED**
 
-Run: `npm run verify:todo-center`  
+Run: `npm run verify:todo-center`
 Expected: FAIL because `todoAggregation.ts` does not exist.
 
 - [ ] **Step 3: Implement pure aggregation**
@@ -458,7 +458,7 @@ Fixtures must prove:
 
 - [ ] **Step 2: Run RED**
 
-Run: `npm run verify:enum-config`  
+Run: `npm run verify:enum-config`
 Expected: FAIL on missing enum store.
 
 - [ ] **Step 3: Implement types and rules**
@@ -630,7 +630,7 @@ Cover:
 
 - [ ] **Step 2: Run RED**
 
-Run: `npm run verify:machine-tos`  
+Run: `npm run verify:machine-tos`
 Expected: FAIL on missing `machineTosVersions.ts`.
 
 - [ ] **Step 3: Implement pure functions**
@@ -735,7 +735,7 @@ Prove:
 
 - [ ] **Step 2: Run RED**
 
-Run: `npm run verify:technical-project`  
+Run: `npm run verify:technical-project`
 Expected: FAIL on missing contracts.
 
 - [ ] **Step 3: Define technical types**
@@ -843,7 +843,7 @@ Test:
 
 - [ ] **Step 2: Run RED**
 
-Run: `npm run verify:technical-project`  
+Run: `npm run verify:technical-project`
 Expected: synchronization assertions fail.
 
 - [ ] **Step 3: Implement the store**
@@ -933,7 +933,7 @@ Assert project-space source mounts technical overview and basic-info components 
 
 - [ ] **Step 2: Run RED**
 
-Run: `npm run verify:technical-project`  
+Run: `npm run verify:technical-project`
 Expected: stage or component assertion fails.
 
 - [ ] **Step 3: Implement the stage selector**
@@ -1014,7 +1014,7 @@ Assert:
 
 - [ ] **Step 2: Run RED**
 
-Run: `npm run verify:technical-plan`  
+Run: `npm run verify:technical-plan`
 Expected: FAIL on missing technical template model.
 
 - [ ] **Step 3: Define seeds and validators**
@@ -1097,7 +1097,7 @@ Fixtures must prove:
 
 - [ ] **Step 2: Run RED**
 
-Run: `npm run verify:technical-plan`  
+Run: `npm run verify:technical-plan`
 Expected: instance assertions fail.
 
 - [ ] **Step 3: Implement keyed plan state**
@@ -1190,7 +1190,7 @@ tOS assertions:
 
 - [ ] **Step 2: Run RED**
 
-Run: `npm run verify:project-role-sync`  
+Run: `npm run verify:project-role-sync`
 Expected: FAIL on missing role contracts.
 
 - [ ] **Step 3: Add typed mappings**
@@ -1265,7 +1265,7 @@ Assert:
 
 - [ ] **Step 2: Run RED**
 
-Run: `npm run verify:project-list-matrix`  
+Run: `npm run verify:project-list-matrix`
 Expected: FAIL on missing matrix.
 
 - [ ] **Step 3: Define the matrix**
