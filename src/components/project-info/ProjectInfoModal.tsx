@@ -49,6 +49,7 @@ import {
 import type { ProjectInfoValues } from '@/types/app'
 import { TECHNICAL_DELIVERABLE_FIELDS } from '@/constants/technicalProject'
 import { useProjectStore } from '@/stores/project'
+import { useOverlayInteraction } from '@/hooks/useOverlayInteraction'
 
 type ProjectInfoFormState = ProjectInfoValues & {
   bid?: string
@@ -132,6 +133,7 @@ export default function ProjectInfoModal({
   const syncTechnicalTeamPermissionMembers = useProjectStore(state => state.syncTechnicalTeamPermissionMembers)
   const syncTosTeamPermissionMembers = useProjectStore(state => state.syncTosTeamPermissionMembers)
   const [submitting, setSubmitting] = useState(false)
+  const { tryBeginSubmit, releaseSubmission } = useOverlayInteraction()
   const [activeGroups, setActiveGroups] = useState<string[]>([])
   const [aggregateWarnings, setAggregateWarnings] = useState<string[]>([])
   const [machineFamilyError, setMachineFamilyError] = useState('')
@@ -676,6 +678,9 @@ export default function ProjectInfoModal({
 
   const handleSubmit = async () => {
     if (isCreateDraftInteractionBlocked) return
+    if (!tryBeginSubmit()) return
+    setSubmitting(true)
+    try {
     const selectedBid = String(form.getFieldValue('bid') || '')
     const sourceEntry = mode === 'create'
       ? candidateProjects.find(item => item.bid === selectedBid)
@@ -787,8 +792,6 @@ export default function ProjectInfoModal({
     )) return
 
     cancelDraftSave()
-    setSubmitting(true)
-    try {
       const submitResult = await onSubmit({
         bid: values.bid,
         projectName,
@@ -835,6 +838,7 @@ export default function ProjectInfoModal({
       }
     } finally {
       if (componentMountedRef.current) setSubmitting(false)
+      releaseSubmission()
     }
   }
 

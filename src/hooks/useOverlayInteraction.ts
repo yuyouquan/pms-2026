@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef } from 'react'
+import { createSubmissionGuard } from '@/lib/submissionGuard'
 
 type FocusTarget = HTMLElement | null | undefined | (() => HTMLElement | null | undefined)
 
@@ -11,13 +12,13 @@ const resolveFocusTarget = (target: FocusTarget) => (
 /** Shared focus-return and same-tick submission guard for short-lived overlays. */
 export function useOverlayInteraction() {
   const triggerRef = useRef<HTMLElement | null>(null)
-  const submitLockedRef = useRef(false)
+  const submissionGuardRef = useRef<ReturnType<typeof createSubmissionGuard>>()
+  if (!submissionGuardRef.current) submissionGuardRef.current = createSubmissionGuard()
   const focusTimerRef = useRef<number | null>(null)
-  const unlockTimerRef = useRef<number | null>(null)
 
   useEffect(() => () => {
     if (focusTimerRef.current !== null) window.clearTimeout(focusTimerRef.current)
-    if (unlockTimerRef.current !== null) window.clearTimeout(unlockTimerRef.current)
+    submissionGuardRef.current?.dispose()
   }, [])
 
   const captureTrigger = useCallback((target?: HTMLElement | null) => {
@@ -36,22 +37,10 @@ export function useOverlayInteraction() {
     }, 180)
   }, [])
 
-  const tryBeginSubmit = useCallback(() => {
-    if (submitLockedRef.current) return false
-    submitLockedRef.current = true
-    return true
-  }, [])
+  const tryBeginSubmit = useCallback(() => submissionGuardRef.current!.tryBeginSubmit(), [])
 
   const releaseSubmission = useCallback((afterCurrentTick = false) => {
-    if (unlockTimerRef.current !== null) window.clearTimeout(unlockTimerRef.current)
-    if (!afterCurrentTick) {
-      submitLockedRef.current = false
-      return
-    }
-    unlockTimerRef.current = window.setTimeout(() => {
-      submitLockedRef.current = false
-      unlockTimerRef.current = null
-    }, 0)
+    submissionGuardRef.current!.releaseSubmission(afterCurrentTick)
   }, [])
 
   return { captureTrigger, restoreTriggerFocus, tryBeginSubmit, releaseSubmission }
