@@ -58,7 +58,7 @@ import {
   type ProjectSummaryRow,
   type ProjectSummaryTemplateTask,
 } from '@/lib/projectSummary'
-import { TECHNICAL_PROJECT_TYPE_OPTIONS, type ProjectListVariant } from '@/lib/projectListMatrix'
+import { buildStableGroupSegments, TECHNICAL_PROJECT_TYPE_OPTIONS, type ProjectListVariant } from '@/lib/projectListMatrix'
 
 interface ProjectSummaryVersion {
   id: string
@@ -81,6 +81,8 @@ export interface ProjectSummaryTableProps {
   matrixTemplateTasks?: ProjectSummaryTemplateTask[]
   providedRows?: ProjectSummaryRow[]
   onViewRow?: (row: ProjectSummaryRow) => void
+  controlledFilters?: AnyFilterCondition[]
+  onFiltersChange?: (filters: AnyFilterCondition[]) => void
 }
 
 interface StoredProjectSummaryPreferences {
@@ -151,8 +153,17 @@ export default function ProjectSummaryTable({
   matrixTemplateTasks,
   providedRows,
   onViewRow,
+  controlledFilters,
+  onFiltersChange,
 }: ProjectSummaryTableProps) {
-  const [filters, setFilters] = useState<AnyFilterCondition[]>([])
+  const [uncontrolledFilters, setUncontrolledFilters] = useState<AnyFilterCondition[]>([])
+  const isFilterControlled = controlledFilters !== undefined
+  const filters = controlledFilters ?? uncontrolledFilters
+  const setFilters = (next: AnyFilterCondition[] | ((current: AnyFilterCondition[]) => AnyFilterCondition[])) => {
+    const resolved = typeof next === 'function' ? next(filters) : next
+    if (controlledFilters !== undefined) onFiltersChange?.(resolved)
+    else setUncontrolledFilters(resolved)
+  }
   const [tempFilters, setTempFilters] = useState<AnyFilterCondition[]>([
     createFilterCondition(),
   ])
@@ -315,7 +326,7 @@ export default function ProjectSummaryTable({
       storedFilters = []
       storedColumns = defaultColumnSettings
     }
-    setFilters(storedFilters)
+    if (!isFilterControlled) setUncontrolledFilters(storedFilters)
     setColumnSettings(storedColumns)
     setHydratedKey(hydrationKey)
   }, [
@@ -324,6 +335,7 @@ export default function ProjectSummaryTable({
     filterDefinitionSignature,
     hydrationKey,
     storageKey,
+    isFilterControlled,
   ])
 
   useEffect(() => {
@@ -363,24 +375,22 @@ export default function ProjectSummaryTable({
   )
   const columns = useMemo<ColumnsType<ProjectSummaryRow>>(() => {
     const result: ColumnsType<ProjectSummaryRow> = []
-    visibleDefinitions.forEach(definition => {
+    const entries = visibleDefinitions.flatMap(definition => {
       const column = tableColumnByKey.get(definition.key)
-      if (!column) return
+      if (!column) return []
       const field = fieldDefinitions.find(item => item.key === definition.key)
-      if (!field?.group) {
-        result.push(column)
-        return
-      }
-      const previous = result[result.length - 1]
-      if (previous && String(previous.key) === `group::${field.group.key}` && 'children' in previous) {
-        previous.children = [...(previous.children || []), column]
+      return [{ key: definition.key, group: field?.group, column }]
+    })
+    buildStableGroupSegments(entries).forEach(segment => {
+      if (!segment.group) {
+        result.push(segment.items[0].column)
         return
       }
       result.push({
-        key: `group::${field.group.key}`,
-        title: field.group.label,
-        onHeaderCell: () => ({ style: { background: field.group!.color } }),
-        children: [column],
+        key: segment.key,
+        title: segment.group.label,
+        onHeaderCell: () => ({ style: { background: segment.group!.color } }),
+        children: segment.items.map(item => item.column),
       })
     })
     return result

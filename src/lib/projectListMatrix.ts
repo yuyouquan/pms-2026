@@ -1,5 +1,10 @@
 import type { ProjectItem } from '@/types/app'
 import type { TechnicalSubproject } from '@/types/technicalProject'
+import { comparePlanVersions } from '@/lib/planVersioning'
+import {
+  calculateTechnicalProjectStage,
+  comparePublishedTechnicalPlanVersions,
+} from '@/lib/technicalProjectRules'
 
 export type ProjectListVariant =
   | 'machine'
@@ -18,6 +23,46 @@ export interface ProjectListColumnDefinition {
   source?: 'system' | 'projectInfo' | 'templateTask'
   taskId?: string
   group?: { key: string; label: string; color: string }
+}
+
+export interface ProjectListGroupSegment<T extends { key: string; group?: ProjectListColumnDefinition['group'] }> {
+  key: string
+  group?: ProjectListColumnDefinition['group']
+  items: T[]
+}
+
+export function buildStableGroupSegments<T extends { key: string; group?: ProjectListColumnDefinition['group'] }>(
+  items: readonly T[],
+): ProjectListGroupSegment<T>[] {
+  const segments: ProjectListGroupSegment<T>[] = []
+  items.forEach((item, index) => {
+    if (!item.group) {
+      segments.push({ key: `${item.key}::plain`, items: [item] })
+      return
+    }
+    const previous = segments[segments.length - 1]
+    if (previous?.group?.key === item.group.key) {
+      previous.items.push(item)
+      return
+    }
+    segments.push({ key: `${item.group.key}::segment-${index}`, group: item.group, items: [item] })
+  })
+  return segments
+}
+
+interface PublishedVersionLike { id: string; versionNo: string; status: string }
+export function selectLatestPublishedScopedSnapshot<T>(
+  versions: readonly PublishedVersionLike[],
+  snapshots: Readonly<Record<string, readonly T[]>>,
+  snapshotKey: (versionId: string) => string,
+): T[] {
+  const published = versions
+    .filter(version => version.status === '已发布')
+    .sort((left, right) => comparePlanVersions(right, left))
+  const latest = published[0]
+  if (!latest) return []
+  const snapshot = snapshots[snapshotKey(latest.id)]
+  return Array.isArray(snapshot) ? snapshot.map(item => ({ ...item })) : []
 }
 
 export interface ProjectListTemplateTask {
@@ -201,34 +246,22 @@ interface TechnicalPlanVersionLike {
   id: string
   versionNo: string
   status: string
+  templateType: string
   publishedAt?: string
   tasks: readonly ProjectListTemplateTask[]
 }
 interface TechnicalPlanInstanceLike { templateKind: 'tdt' | 'subproject'; versions: readonly TechnicalPlanVersionLike[] }
 
-const versionNumber = (value: string) => Number(String(value).match(/\d+/)?.[0] || -1)
 const latestPublished = (instance?: TechnicalPlanInstanceLike) => instance?.versions
   .filter(version => version.status === '已发布')
-  .map((version, index) => ({ version, index }))
-  .sort((left, right) => (
-    (Number.isNaN(Date.parse(right.version.publishedAt || '')) ? 0 : Date.parse(right.version.publishedAt || ''))
-    - (Number.isNaN(Date.parse(left.version.publishedAt || '')) ? 0 : Date.parse(left.version.publishedAt || ''))
-    || versionNumber(right.version.versionNo) - versionNumber(left.version.versionNo)
-    || right.index - left.index
-  ))[0]?.version
+  .sort((left, right) => comparePublishedTechnicalPlanVersions(
+    { ...left, tasks: [] },
+    { ...right, tasks: [] },
+  ))[0]
 
 const milestoneValues = (tasks: readonly ProjectListTemplateTask[]) => Object.fromEntries(
   tasks.map(task => [`milestone::${getTaskName(task)}`, task.planEndDate || '-']),
 )
-
-const stageAt = (tasks: readonly ProjectListTemplateTask[], today: string) => {
-  const current = tasks.filter(task => !task.parentId).sort(sortTasks).find(task => {
-    const start = String(task.planStartDate || '')
-    const end = String(task.planEndDate || '')
-    return start && end && start <= today && today <= end
-  })
-  return current ? getTaskName(current) : '-'
-}
 
 export interface TechnicalProjectListRow extends Record<string, unknown> {
   key: string
@@ -253,7 +286,16 @@ export function buildTechnicalProjectListRows(input: {
   const stageByParent = new Map<string, string>()
   const tdt = technicalProjects.map(project => {
     const published = latestPublished(input.plansByKey[`${project.id}:tdt`])
-    const projectStage = published ? stageAt(published.tasks, today) : '-'
+    const projectStage = published ? calculateTechnicalProjectStage(
+      published.tasks.map(task => ({
+        ...task,
+        name: getTaskName(task),
+        planStartDate: task.planStartDate || '',
+        planEndDate: task.planEndDate || '',
+        order: task.order ?? 0,
+      })),
+      today,
+    ) : '-'
     stageByParent.set(project.id, projectStage)
     return {
       key: `tdt::${project.id}`,

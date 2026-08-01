@@ -28,15 +28,22 @@ import {
   matchesProjectSecondaryCategoryFilter,
   matchesProjectTypeFilter,
 } from '@/constants/projectTypes'
-import { getWorkbenchListState } from '@/lib/projectSummary'
+import {
+  getLatestPublishedTemplateTasks,
+  getLinkedQuickFilterValues,
+  getWorkbenchListState,
+  updateLinkedQuickFilterCondition,
+  type ProjectSummaryTemplateTask,
+} from '@/lib/projectSummary'
 import { getTemplateTasksForProjectType } from '@/lib/projectTemplateCompatibility'
-import { buildTosTypeRows, getMainTosType } from '@/lib/tosTypeRules'
-import { buildMarketRowsFromMarkets, getMainMarket } from '@/lib/marketRules'
+import { buildTosTypeRows, getMainTosType, getTosTypeSnapshotKey, getTosTypeVersionKey } from '@/lib/tosTypeRules'
+import { buildMarketRowsFromMarkets, getMainMarket, getMarketPlanVersionKey, getProjectMarketSnapshotKey } from '@/lib/marketRules'
 import { useActivateProject } from '@/hooks/useActivateProject'
 import { useTechnicalProjectStore } from '@/stores/technicalProject'
 import { useTechnicalPlanStore } from '@/stores/technicalPlan'
-import { buildTechnicalProjectListRows } from '@/lib/projectListMatrix'
-import { TECHNICAL_TEMPLATE_STORAGE_KEYS, buildSubprojectTemplateTasks, buildTdtTemplateTasks } from '@/lib/technicalPlanRules'
+import { buildTechnicalProjectListRows, selectLatestPublishedScopedSnapshot } from '@/lib/projectListMatrix'
+import { getTemplateConfigScopeKey } from '@/lib/technicalPlanRules'
+import type { AnyFilterCondition } from '@/lib/filterConditions'
 
 const WORKSPACE_FILTER_TOOLBAR_STYLE: CSSProperties = {
   background: 'rgba(255,255,255,0.8)',
@@ -79,14 +86,16 @@ export default function ProjectListContainer() {
 
   const {
     versions, currentVersion, publishedSnapshots, configTemplateTasksByType,
-    marketPlanData, tosTypePlanDataByProjectId,
+    configTemplateVersionScopes, marketVersionsByKey, tosTypeVersionsByKey,
   } = usePlanStore()
 
   const { globalRoles } = usePermissionStore()
   const activateProject = useActivateProject()
   const technicalSubprojects = useTechnicalProjectStore(state => state.subprojects)
   const technicalPlansByKey = useTechnicalPlanStore(state => state.plansByKey)
-  const [technicalListType, setTechnicalListType] = useState<'all' | 'tdt' | 'subproject'>('all')
+  const [technicalFilters, setTechnicalFilters] = useState<AnyFilterCondition[]>([])
+  const technicalListType = (getLinkedQuickFilterValues(technicalFilters, 'technicalProjectType')[0]
+    || 'all') as 'all' | 'tdt' | 'subproject'
 
   const projectCardPageSize = 9
   const [addProjectOpen, setAddProjectOpen] = useState(false)
@@ -132,7 +141,12 @@ export default function ProjectListContainer() {
           marketConfigsByProjectId[project.id],
         )
         const mainMarket = getMainMarket(marketRows)
-        return [project.id, marketPlanData[mainMarket]?.tasks || []]
+        const scopedVersions = marketVersionsByKey[getMarketPlanVersionKey(project.id, mainMarket)] || []
+        return [project.id, selectLatestPublishedScopedSnapshot(
+          scopedVersions,
+          publishedSnapshots,
+          versionId => getProjectMarketSnapshotKey(project.id, mainMarket, versionId),
+        )]
       }
       if (project.type === PROJECT_TYPE_TOS_VERSION) {
         const typeRows = buildTosTypeRows(
@@ -141,19 +155,22 @@ export default function ProjectListContainer() {
           tosTypeConfigsByProjectId[project.id],
         )
         const mainType = getMainTosType(typeRows)
-        return [
-          project.id,
-          tosTypePlanDataByProjectId[project.id]?.[mainType]?.level1Tasks || [],
-        ]
+        const scopedVersions = tosTypeVersionsByKey[getTosTypeVersionKey(project.id, mainType, 'level1')] || []
+        return [project.id, selectLatestPublishedScopedSnapshot(
+          scopedVersions,
+          publishedSnapshots,
+          versionId => getTosTypeSnapshotKey(project.id, mainType, 'level1', versionId),
+        )]
       }
       return [project.id, []]
     }))
   ), [
     categoryBaseProjects,
     marketConfigsByProjectId,
-    marketPlanData,
+    marketVersionsByKey,
+    publishedSnapshots,
     tosTypeConfigsByProjectId,
-    tosTypePlanDataByProjectId,
+    tosTypeVersionsByKey,
   ])
 
   const categoryCounts = useMemo(() => {
@@ -210,10 +227,24 @@ export default function ProjectListContainer() {
     machineProjects: visibleProjects.filter(project => isMachineProjectType(project.type)),
   }), [technicalPlansByKey, technicalSubprojects, visibleProjects])
 
-  const technicalTdtTemplate = configTemplateTasksByType[TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt]
-    ?? buildTdtTemplateTasks()
-  const technicalSubprojectTemplate = configTemplateTasksByType[TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject]
-    ?? buildSubprojectTemplateTasks()
+  const technicalTdtScope = configTemplateVersionScopes[getTemplateConfigScopeKey(PROJECT_CATEGORY_TECH, 'tdt')]
+  const technicalSubprojectScope = configTemplateVersionScopes[getTemplateConfigScopeKey(PROJECT_CATEGORY_TECH, 'subproject')]
+  const technicalTdtTemplate = getLatestPublishedTemplateTasks<ProjectSummaryTemplateTask>(
+    PROJECT_CATEGORY_TECH,
+    technicalTdtScope?.versions || [],
+    publishedSnapshots,
+    technicalTdtScope?.currentVersion || '',
+    [],
+    { namespacedOnly: true, planLevel: 'tdt' },
+  )
+  const technicalSubprojectTemplate = getLatestPublishedTemplateTasks<ProjectSummaryTemplateTask>(
+    PROJECT_CATEGORY_TECH,
+    technicalSubprojectScope?.versions || [],
+    publishedSnapshots,
+    technicalSubprojectScope?.currentVersion || '',
+    [],
+    { namespacedOnly: true, planLevel: 'subproject' },
+  )
 
   const enterSummaryRow = (row: { targetProjectId?: unknown; targetSubprojectId?: unknown; projectId: string }) => {
     const targetProjectId = String(row.targetProjectId || row.projectId)
@@ -366,7 +397,11 @@ export default function ProjectListContainer() {
                   <button
                     type="button"
                     key={item.value}
-                    onClick={() => setTechnicalListType(item.value as typeof technicalListType)}
+                    onClick={() => setTechnicalFilters(current => updateLinkedQuickFilterCondition(
+                      current,
+                      'technicalProjectType',
+                      item.value === 'all' ? [] : [item.value],
+                    ))}
                     className={technicalListType === item.value ? 'pms-project-filter-chip is-active' : 'pms-project-filter-chip'}
                   >{item.label}</button>
                 ))}
@@ -378,7 +413,9 @@ export default function ProjectListContainer() {
       {/* Project list content */}
       <div style={{ display: 'flex', gap: 20 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            {projectListView === 'card' ? (
+            {projectTypeFilter === PROJECT_CATEGORY_CAPABILITY ? (
+              <Empty description="该项目分类暂未配置" />
+            ) : projectListView === 'card' ? (
               <>
                 <Row gutter={[16, 16]}>
                   {workspaceFilteredProjects.slice((projectCardPage - 1) * projectCardPageSize, projectCardPage * projectCardPageSize).map(p => (
@@ -400,9 +437,7 @@ export default function ProjectListContainer() {
                 )}
               </>
             ) : (
-              projectTypeFilter === PROJECT_CATEGORY_CAPABILITY ? (
-                <Empty description="该项目分类的列表视图暂未配置" />
-              ) : projectTypeFilter === PROJECT_CATEGORY_TECH ? (
+              projectTypeFilter === PROJECT_CATEGORY_TECH ? (
                 <div className="pms-technical-list-stack">
                   {(technicalListType === 'all' || technicalListType === 'tdt') && (
                     <section aria-label="TDT项目列表">
@@ -422,6 +457,8 @@ export default function ProjectListContainer() {
                         storageNamespace="project-list-technical-tdt"
                         onViewProject={() => undefined}
                         onViewRow={enterSummaryRow}
+                        controlledFilters={technicalFilters}
+                        onFiltersChange={setTechnicalFilters}
                       />
                     </section>
                   )}
@@ -443,6 +480,8 @@ export default function ProjectListContainer() {
                         storageNamespace="project-list-technical-subproject"
                         onViewProject={() => undefined}
                         onViewRow={enterSummaryRow}
+                        controlledFilters={technicalFilters}
+                        onFiltersChange={setTechnicalFilters}
                       />
                     </section>
                   )}

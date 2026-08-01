@@ -20,6 +20,7 @@ import {
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
 import { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
+import { comparePlanVersions } from '@/lib/planVersioning'
 import {
   getProjectListMatrix,
   isOverdueProjectListDate,
@@ -137,43 +138,32 @@ const cloneTasks = <T extends ProjectSummaryTemplateTask>(tasks: readonly T[]): 
   tasks.map(task => ({ ...task }))
 )
 
-const getVersionNumber = (versionNo: string) => {
-  const match = String(versionNo).match(/\d+/)
-  return match ? Number(match[0]) : -1
-}
-
 export function getLatestPublishedTemplateTasks<T extends ProjectSummaryTemplateTask>(
   projectType: string,
   versions: readonly PublishedTemplateVersion[],
   publishedSnapshots: Readonly<Record<string, readonly T[]>>,
   currentVersion: string,
   currentTemplateTasks: readonly T[],
-  options: { namespacedOnly?: boolean } = {},
+  options: { namespacedOnly?: boolean; planLevel?: string } = {},
 ): T[] {
   const publishedVersions = versions
     .map((version, index) => ({ version, index }))
     .filter(({ version }) => version.status === '已发布')
-    .sort((left, right) => (
-      getVersionNumber(right.version.versionNo) - getVersionNumber(left.version.versionNo)
-      || right.index - left.index
-    ))
+    .sort((left, right) => comparePlanVersions(right.version, left.version) || right.index - left.index)
     .map(({ version }) => version)
-  const namespacedVersion = publishedVersions.find(version => (
-    Object.prototype.hasOwnProperty.call(
-      publishedSnapshots,
-      getTemplateSnapshotKey(projectType, version.id),
-    )
-  ))
-  if (namespacedVersion) {
+  const latest = publishedVersions[0]
+  if (!latest) return []
+  if (Object.prototype.hasOwnProperty.call(
+    publishedSnapshots,
+    getTemplateSnapshotKey(projectType, latest.id, options.planLevel),
+  )) {
     const snapshot = publishedSnapshots[
-      getTemplateSnapshotKey(projectType, namespacedVersion.id)
+      getTemplateSnapshotKey(projectType, latest.id, options.planLevel)
     ]
     return Array.isArray(snapshot) ? cloneTasks(snapshot) : []
   }
   if (options.namespacedOnly) return []
 
-  const latest = publishedVersions[0]
-  if (!latest) return []
   const snapshot = publishedSnapshots[latest.id]
   if (Array.isArray(snapshot)) return cloneTasks(snapshot)
   return latest.id === currentVersion ? cloneTasks(currentTemplateTasks) : []

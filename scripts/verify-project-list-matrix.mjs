@@ -7,6 +7,8 @@ assert.equal(typeof matrix.getProjectListMatrix, 'function', 'missing getProject
 assert.equal(typeof matrix.buildGroupedMilestoneColumns, 'function', 'missing grouped milestone builder')
 assert.equal(typeof matrix.buildTechnicalProjectListRows, 'function', 'missing technical row builder')
 assert.equal(typeof matrix.isOverdueProjectListDate, 'function', 'missing overdue date helper')
+assert.equal(typeof matrix.selectLatestPublishedScopedSnapshot, 'function', 'missing strict scoped published selector')
+assert.equal(typeof matrix.buildStableGroupSegments, 'function', 'missing stable group segment builder')
 assert.deepEqual(matrix.PROJECT_LIST_CATEGORIES, ['整机产品项目', 'tOS版本项目', '技术项目', '能力建设项目'])
 assert.deepEqual(matrix.PROJECT_LIST_QUICK_FILTERS.machine.map(item => item.label), ['项目二级分类', '状态', '首销tOS版本', '芯片编码', '品牌', '产品系列', '产品类型'])
 assert.deepEqual(matrix.PROJECT_LIST_QUICK_FILTERS.tos.map(item => item.label), ['版本类型', 'tOS版本'])
@@ -69,4 +71,52 @@ assert.equal(rows.children[0].targetProjectId, '9')
 assert.equal(rows.children[0].targetSubprojectId, 'IPM-1')
 assert.equal(matrix.isOverdueProjectListDate('2026-05-31', '2026-06-01'), true)
 assert.equal(matrix.isOverdueProjectListDate('2026-02-30', '2026-06-01'), false)
+
+const scoped = matrix.selectLatestPublishedScopedSnapshot(
+  [
+    { id: 'v1.2', versionNo: 'V1.2', status: '已发布' },
+    { id: 'v1.10', versionNo: 'V1.10', status: '已发布' },
+    { id: 'v2', versionNo: 'V2', status: '修订中' },
+  ],
+  { 'scope::v1.2': [{ id: 'old' }], 'scope::v1.10': [{ id: 'latest' }], 'scope::v2': [{ id: 'draft' }] },
+  versionId => `scope::${versionId}`,
+)
+assert.equal(scoped[0]?.id, 'latest', 'semantic latest published scoped snapshot')
+assert.deepEqual(matrix.selectLatestPublishedScopedSnapshot(
+  [{ id: 'v9', versionNo: 'V9', status: '已发布' }],
+  { v9: [{ id: 'global-pollution' }] },
+  versionId => `missing-project::${versionId}`,
+), [], 'strict scope never falls back to a global snapshot')
+assert.deepEqual(matrix.selectLatestPublishedScopedSnapshot(
+  [{ id: 'v1', versionNo: 'V1', status: '已发布' }, { id: 'v2', versionNo: 'V2', status: '已发布' }],
+  { 'scope::v1': [{ id: 'stale' }] },
+  versionId => `scope::${versionId}`,
+), [], 'missing latest snapshot never falls back to an older published version')
+
+const semanticTechnical = matrix.buildTechnicalProjectListRows({
+  projects: [{ id: 'semantic', name: '语义版本项目', type: '技术项目', status: '在研' }],
+  subprojects: [],
+  plansByKey: {
+    'semantic:tdt': { planKey: 'semantic:tdt', templateKind: 'tdt', currentVersionId: 'draft', versions: [
+      { id: 'v1.2', versionNo: 'V1.2', templateType: 'tdt', status: '已发布', tasks: [{ id: 'old', name: '旧阶段', parentId: null, order: 1, planStartDate: '2026-01-01', planEndDate: '2026-12-31' }] },
+      { id: 'v1.10', versionNo: 'V1.10', templateType: 'tdt', status: '已发布', tasks: [
+        { id: 'a', name: '阶段A', parentId: null, order: 1, planStartDate: '2026-01-01', planEndDate: '2026-08-01' },
+        { id: 'b', name: '阶段B', parentId: null, order: 2, planStartDate: '2026-07-01', planEndDate: '2026-12-31' },
+        { id: 'node', name: '最新节点', parentId: 'a', order: 1, planStartDate: '2026-01-01', planEndDate: '2026-07-31' },
+      ] },
+      { id: 'draft', versionNo: 'V2', templateType: 'tdt', status: '修订中', tasks: [{ id: 'draft-node', name: '草稿节点', parentId: null, order: 1, planStartDate: '2026-01-01', planEndDate: '2026-12-31' }] },
+    ] },
+  },
+  today: '2026-07-15',
+})
+assert.equal(semanticTechnical.tdt[0].projectStage, '-', 'overlapping top-level phases have no inferred stage')
+assert.equal(semanticTechnical.tdt[0]['milestone::最新节点'], '2026-07-31', 'V1.10 beats V1.2')
+assert.equal(semanticTechnical.tdt[0]['milestone::草稿节点'], undefined, 'draft tasks never enter list rows')
+
+const segments = matrix.buildStableGroupSegments([
+  { key: 'a', group: { key: 'phase', label: '阶段', color: '#fff' } },
+  { key: 'plain' },
+  { key: 'b', group: { key: 'phase', label: '阶段', color: '#fff' } },
+])
+assert.deepEqual(segments.map(segment => segment.key), ['phase::segment-0', 'plain::plain', 'phase::segment-2'])
 console.log('project list matrix contract passed')

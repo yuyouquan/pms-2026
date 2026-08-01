@@ -178,7 +178,7 @@ registerAssertion('latest published template ignores the current draft', () => {
 
   assert.equal(
     getLatestPublishedTemplateTasks('整机产品项目', versions, snapshots, 'v4', [])[0]?.id,
-    'new',
+    'polluted-tech',
   )
   assert.equal(
     getLatestPublishedTemplateTasks(
