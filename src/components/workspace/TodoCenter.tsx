@@ -3,12 +3,14 @@
 import { useMemo, useState } from 'react'
 import {
   Badge,
+  Alert,
   Button,
   DatePicker,
   Empty,
   Input,
   Segmented,
   Select,
+  Skeleton,
   Table,
   Tag,
 } from 'antd'
@@ -32,6 +34,8 @@ export interface TodoCenterProps {
   todos: WorkbenchTodo[]
   today: string
   loading?: boolean
+  error?: string
+  onRetry?: () => void
   onOpenTodo: (todo: WorkbenchTodo) => void
 }
 
@@ -68,7 +72,7 @@ function getDueBadge(todo: WorkbenchTodo, today: string) {
   return { status: 'default' as const, text: todo.dueDate ? '按期' : '未设日期', className: '' }
 }
 
-export default function TodoCenter({ todos, today, loading = false, onOpenTodo }: TodoCenterProps) {
+export default function TodoCenter({ todos, today, loading = false, error, onRetry, onOpenTodo }: TodoCenterProps) {
   const [filters, setFilters] = useState<TodoFilters>(EMPTY_FILTERS)
 
   const filteredTodos = useMemo(
@@ -188,12 +192,24 @@ export default function TodoCenter({ todos, today, loading = false, onOpenTodo }
       </div>
 
       <div className="pms-todo-center__result-status" role="status" aria-live="polite" aria-atomic="true">
-        {loading ? '待办加载中' : `当前显示 ${filteredTodos.length} 条待办`}
+        {loading ? '待办加载中' : error ? '待办加载失败' : `当前显示 ${filteredTodos.length} 条待办`}
       </div>
 
       <div className="pms-todo-center__table">
         {loading ? (
-          <div className="pms-todo-center__loading">待办加载中...</div>
+          <div className="pms-todo-center__loading" aria-label="待办加载中">
+            <Skeleton active title={false} paragraph={{ rows: 8, width: ['96%', '92%', '98%', '88%', '95%', '90%', '97%', '86%'] }} />
+          </div>
+        ) : error ? (
+          <div className="pms-todo-center__error" role="alert">
+            <Alert
+              type="error"
+              showIcon
+              title="待办加载失败"
+              description={error}
+              action={onRetry ? <Button onClick={onRetry}>重新加载</Button> : undefined}
+            />
+          </div>
         ) : (
           <Table<WorkbenchTodo>
             size="small"

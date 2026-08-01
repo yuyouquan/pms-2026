@@ -2,7 +2,7 @@
 
 import { useState, useMemo, type CSSProperties } from 'react'
 import {
-  Row, Col, Input, Button, Empty, Segmented, Pagination,
+  Row, Col, Input, Button, Empty, Segmented, Pagination, Tooltip,
 } from 'antd'
 import {
   AppstoreOutlined, UnorderedListOutlined, SearchOutlined, PlusOutlined,
@@ -52,7 +52,7 @@ import type { AnyFilterCondition } from '@/lib/filterConditions'
 const WORKSPACE_FILTER_TOOLBAR_STYLE: CSSProperties = {
   background: 'rgba(255,255,255,0.8)',
   backdropFilter: 'blur(8px)',
-  borderRadius: 14,
+  borderRadius: 12,
   padding: '8px 20px',
   marginBottom: 16,
   border: '1px solid rgba(99,102,241,0.08)',
@@ -275,9 +275,9 @@ export default function ProjectListContainer() {
   )
 
   return (
-    <div>
+    <div className="pms-project-list">
       {/* Unified toolbar */}
-      <div style={{ ...WORKSPACE_FILTER_TOOLBAR_STYLE, flexDirection: 'column', alignItems: 'stretch' }}>
+      <div className="pms-project-list-toolbar pms-wide-table-toolbar" style={{ ...WORKSPACE_FILTER_TOOLBAR_STYLE, flexDirection: 'column', alignItems: 'stretch' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', minWidth: 0, columnGap: 10, rowGap: 8 }}>
             {projectTypeFilter !== PROJECT_CATEGORY_TECH && <Input
               placeholder="搜索项目名称..."
@@ -295,8 +295,8 @@ export default function ProjectListContainer() {
               value={projectListView}
               onChange={(v) => setProjectListView(v as 'card' | 'list')}
               options={[
-                { label: <span aria-label="卡片视图"><AppstoreOutlined /></span>, value: 'card' },
-                { label: <span aria-label="列表视图"><UnorderedListOutlined /></span>, value: 'list' },
+                { label: <Tooltip title="卡片视图"><span aria-label="卡片视图"><AppstoreOutlined /></span></Tooltip>, value: 'card' },
+                { label: <Tooltip title="列表视图"><span aria-label="列表视图"><UnorderedListOutlined /></span></Tooltip>, value: 'list' },
               ]}
             />
             {isAdminUser && (
@@ -308,7 +308,7 @@ export default function ProjectListContainer() {
               </>
             )}
         </div>
-        <div style={{ display: 'grid', gap: 4, padding: '5px 8px', background: 'rgba(99,102,241,0.04)', borderRadius: 10, border: '1px solid rgba(99,102,241,0.06)' }}>
+        <div className="pms-project-list-filter-grid" style={{ display: 'grid', gap: 4, padding: '5px 8px', background: 'rgba(99,102,241,0.04)', borderRadius: 10, border: '1px solid rgba(99,102,241,0.06)' }}>
             <div aria-label="项目分类筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
               <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目分类</span>
               {PROJECT_CATEGORIES.map(value => ({ label: value, value })).map(item => {
@@ -419,7 +419,7 @@ export default function ProjectListContainer() {
       </div>
 
       {/* Project list content */}
-      <div style={{ display: 'flex', gap: 20 }}>
+      <div className="pms-project-list-content" style={{ display: 'flex', gap: 20 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             {projectTypeFilter === PROJECT_CATEGORY_CAPABILITY ? (
               <Empty description="该项目分类暂未配置" />

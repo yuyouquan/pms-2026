@@ -1,6 +1,6 @@
 'use client'
 
-import { Avatar, Button, Card, Col, Descriptions, Empty, Row, Space, Tag, Typography } from 'antd'
+import { Avatar, Button, Card, Col, Descriptions, Empty, Row, Space, Tag, Tooltip, Typography } from 'antd'
 import { EditOutlined, FileOutlined, LinkOutlined, ProjectOutlined, TeamOutlined } from '@ant-design/icons'
 import { TECHNICAL_DELIVERABLE_FIELDS, TECHNICAL_TEAM_FIELDS } from '@/constants/technicalProject'
 import { normalizeTechnicalCustomRoles, sanitizeTechnicalDeliverableUrl } from '@/lib/technicalProjectRules'
@@ -83,15 +83,19 @@ export default function TechnicalProjectOverview({
           <Space size={8}>
             <Tag color="purple" style={{ margin: 0 }}>{stage}</Tag>
             {onEdit && (
-              <Button
-                size="small"
-                icon={<EditOutlined />}
-                disabled={!canEdit}
-                title={canEdit ? '编辑技术项目信息' : '无基础信息编辑权限'}
-                onClick={onEdit}
-              >
-                编辑
-              </Button>
+              <Tooltip title={canEdit ? '编辑技术项目信息' : '当前账号无基础信息编辑权限'}>
+                <span>
+                  <Button
+                    size="small"
+                    icon={<EditOutlined />}
+                    disabled={!canEdit}
+                    aria-label={canEdit ? '编辑技术项目信息' : '当前账号无基础信息编辑权限'}
+                    onClick={onEdit}
+                  >
+                    编辑
+                  </Button>
+                </span>
+              </Tooltip>
             )}
           </Space>
         )}

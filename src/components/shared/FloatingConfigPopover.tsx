@@ -45,6 +45,13 @@ export function FloatingConfigPopover({
     panelRef.current?.getClientRects().length ? panelRef.current : undefined
   );
 
+  const isTopmostFloatingPanel = () => {
+    const visiblePanels = Array.from(
+      document.querySelectorAll<HTMLElement>('.pms-floating-config-panel'),
+    ).filter(panel => panel.getClientRects().length > 0);
+    return visiblePanels[visiblePanels.length - 1] === panelRef.current;
+  };
+
   useEffect(() => {
     const wasOpen = wasOpenRef.current;
     wasOpenRef.current = open;
@@ -86,6 +93,7 @@ export function FloatingConfigPopover({
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      if (event.defaultPrevented || !isTopmostFloatingPanel()) return;
       if (!getVisiblePanel()?.contains(document.activeElement)) return;
       event.stopPropagation();
       onCancel();
@@ -118,6 +126,8 @@ export function FloatingConfigPopover({
         <section
           ref={panelRef}
           className="pms-floating-config-panel"
+          role="dialog"
+          aria-modal="false"
           aria-label={ariaLabel ?? (typeof title === 'string' ? title : '配置面板')}
         >
           <header className="pms-floating-config-header">{title}</header>

@@ -83,6 +83,7 @@ export default function TechnicalPlanModule({
   const [compareIds, setCompareIds] = useState<string[]>([])
   const [columnsOpen, setColumnsOpen] = useState(false)
   const [configuringChild, setConfiguringChild] = useState<TechnicalSubproject | null>(null)
+  const [configTrigger, setConfigTrigger] = useState<HTMLElement | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   const subprojects = useTechnicalProjectStore(state => state.subprojects)
@@ -195,7 +196,23 @@ export default function TechnicalPlanModule({
     { key: 'estimatedDays', title: '预估工期', dataIndex: 'estimatedDays', width: 100 },
     { key: 'status', title: '状态', dataIndex: 'status', width: 95, render: value => <Tag color={value === '已完成' ? 'success' : value === '进行中' ? 'processing' : 'default'}>{value}</Tag> },
     { key: 'progress', title: '进度', dataIndex: 'progress', width: 80, render: value => `${value || 0}%` },
-    { key: 'actions', title: '操作', fixed: 'right', width: 105, render: (_, row) => <Space size={2}>{tab?.templateKind === 'tdt' && !row.parentId && <Tooltip title="新增二级任务"><Button type="text" size="small" icon={<PlusOutlined />} disabled={!canMaintain || maxDepth < 2} onClick={() => handleAddChildTask(row.id)} /></Tooltip>}<Popconfirm title={tasks.some(task => task.parentId === row.id) ? '删除一级任务将同时删除其下所有二级任务，是否继续？' : '确认删除该任务？'} onConfirm={() => handleDeleteTask(row.id)}><Button type="text" danger size="small" icon={<DeleteOutlined />} disabled={!canMaintain} /></Popconfirm></Space> },
+    {
+      key: 'actions', title: '操作', fixed: 'right', width: 105,
+      render: (_, row) => (
+        <Space size={2}>
+          {tab?.templateKind === 'tdt' && !row.parentId && (
+            <Tooltip title="新增二级任务">
+              <Button type="text" size="small" aria-label={`新增二级任务 ${row.taskName}`} icon={<PlusOutlined />} disabled={!canMaintain || maxDepth < 2} onClick={() => handleAddChildTask(row.id)} />
+            </Tooltip>
+          )}
+          <Popconfirm title={tasks.some(task => task.parentId === row.id) ? '删除一级任务将同时删除其下所有二级任务，是否继续？' : '确认删除该任务？'} onConfirm={() => handleDeleteTask(row.id)}>
+            <Tooltip title="删除任务">
+              <Button type="text" danger size="small" aria-label={`删除任务 ${row.taskName}`} icon={<DeleteOutlined />} disabled={!canMaintain} />
+            </Tooltip>
+          </Popconfirm>
+        </Space>
+      ),
+    },
   ]
   const visibleKeys = new Set(instance?.columnSettings.visible || Object.keys(COLUMN_LABELS))
   const columnOrder = ['drag', ...(instance?.columnSettings.order || Object.keys(COLUMN_LABELS))]
@@ -242,15 +259,16 @@ export default function TechnicalPlanModule({
         <Row justify="space-between" align="middle" wrap={false}>
           <Tabs activeKey={tab?.key} onChange={setActiveKey} items={tabs.map(item => ({
             key: item.key,
-            label: <Space size={5}><span>{item.label}</span>{item.subproject && !item.subproject.active && <Tag>已停用</Tag>}{item.subproject?.active && <Tooltip title="子项目信息配置"><Button type="text" size="small" aria-label={`配置子项目 ${item.subproject.name}`} icon={<SettingOutlined />} onClick={event => { event.stopPropagation(); setConfiguringChild(item.subproject!) }} /></Tooltip>}</Space>,
+            label: <Space size={5}><span>{item.label}</span>{item.subproject && !item.subproject.active && <Tag>已停用</Tag>}{item.subproject?.active && <Tooltip title="子项目信息配置"><Button type="text" size="small" aria-label={`配置子项目 ${item.subproject.name}`} icon={<SettingOutlined />} onClick={event => { event.preventDefault(); event.stopPropagation(); setConfigTrigger(event.currentTarget); setConfiguringChild(item.subproject!) }} /></Tooltip>}</Space>,
           }))} />
           <Space size={8}><Text type="secondary">显示已停用</Text><Switch checked={showInactive} onChange={setShowInactive} aria-label="显示已停用子项目计划" /></Space>
         </Row>
       </Card>
 
       {readOnlyReason && <Alert showIcon type={tab?.subproject?.active ? 'warning' : 'info'} message={readOnlyReason} style={{ marginTop: 12 }} />}
+      {!readOnlyReason && !canEdit && <Alert showIcon type="info" message="当前账号无计划编辑权限，仅可查看计划" style={{ marginTop: 12 }} />}
 
-      <Card className="technical-space-card" style={{ marginTop: 12 }} styles={{ body: { padding: 16 } }}>
+      <Card className="technical-space-card technical-plan-toolbar pms-wide-table-toolbar" style={{ marginTop: 12 }} styles={{ body: { padding: 16 } }}>
         <Row justify="space-between" align="middle" gutter={[12, 12]}>
           <Space wrap>
             <Text type="secondary">版本</Text>
@@ -262,8 +280,11 @@ export default function TechnicalPlanModule({
             <Button icon={<PlusOutlined />} disabled={!canMaintain} onClick={handleAddTopLevelTask}>新增一级任务</Button>
           </Space>
           <Space wrap>
-            <Radio.Group value={viewMode} onChange={event => setViewMode(event.target.value)} optionType="button" buttonStyle="solid" options={[{ value: 'table', label: <UnorderedListOutlined /> }, { value: 'gantt', label: <BarChartOutlined /> }]} />
-            <Tooltip title="版本对比"><Button icon={<HistoryOutlined />} disabled={(instance?.versions.length || 0) < 2} onClick={() => { setCompareIds((instance?.versions || []).slice(-2).map(version => version.id)); setCompareOpen(true) }} /></Tooltip>
+            <Radio.Group aria-label="计划视图" value={viewMode} onChange={event => setViewMode(event.target.value)} optionType="button" buttonStyle="solid" options={[
+              { value: 'table', label: <Tooltip title="表格视图"><span aria-label="表格视图"><UnorderedListOutlined /></span></Tooltip> },
+              { value: 'gantt', label: <Tooltip title="甘特视图"><span aria-label="甘特视图"><BarChartOutlined /></span></Tooltip> },
+            ]} />
+            <Tooltip title="版本对比"><Button aria-label="版本对比" icon={<HistoryOutlined />} disabled={(instance?.versions.length || 0) < 2} onClick={() => { setCompareIds((instance?.versions || []).slice(-2).map(version => version.id)); setCompareOpen(true) }} /></Tooltip>
             <SortableColumnSettings
               open={columnsOpen}
               trigger={<Tooltip title="列设置"><Button icon={<SettingOutlined />} disabled={!instance} onClick={() => setColumnsOpen(true)} aria-label="列设置" /></Tooltip>}
@@ -284,11 +305,11 @@ export default function TechnicalPlanModule({
           : <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}><SortableContext items={tasks.map(task => task.id)} strategy={verticalListSortingStrategy}><Table<TechnicalTemplateTask> rowKey="id" size="middle" pagination={false} scroll={{ x: 1050 }} dataSource={tasks} columns={columns} components={canMaintain ? { body: { row: SortableRow } } : undefined} rowClassName={row => row.parentId ? 'technical-plan-child-row' : 'technical-plan-phase-row'} /></SortableContext></DndContext>}
       </Card>
 
-      <Modal title="版本对比" open={compareOpen} onCancel={() => setCompareOpen(false)} footer={null} width={920}>
+      <Modal className="pms-scroll-modal" title="版本对比" open={compareOpen} onCancel={() => { setCompareOpen(false); setCompareIds([]) }} footer={null} width={920}>
         <Select mode="multiple" maxCount={2} value={compareIds} onChange={setCompareIds} style={{ width: '100%', marginBottom: 16 }} options={(instance?.versions || []).map(version => ({ value: version.id, label: version.versionNo }))} />
         <Table rowKey="id" size="small" pagination={false} dataSource={compareRows} columns={[{ title: '任务', dataIndex: 'taskName' }, { title: '变更', dataIndex: 'changeType', render: value => <Tag color={value === '新增' ? 'success' : value === '删除' ? 'error' : value === '修改' ? 'processing' : 'default'}>{value}</Tag> }]} />
       </Modal>
-      <SubprojectConfigModal open={Boolean(configuringChild)} subproject={configuringChild} currentLoginUser={currentLoginUser} onCancel={() => setConfiguringChild(null)} />
+      <SubprojectConfigModal open={Boolean(configuringChild)} subproject={configuringChild} currentLoginUser={currentLoginUser} returnFocusTo={configTrigger} onCancel={() => setConfiguringChild(null)} />
     </div>
   )
 }

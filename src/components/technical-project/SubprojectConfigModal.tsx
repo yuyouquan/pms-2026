@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Form, Modal, Select, Space, Tag, Typography, message } from 'antd'
 import { isMachineProjectType } from '@/constants/projectTypes'
 import { isTechnicalSubprojectConfigured } from '@/lib/technicalProjectRules'
@@ -13,6 +13,7 @@ import {
   useTechnicalProjectStore,
 } from '@/stores/technicalProject'
 import type { TechnicalSubproject, TechnicalSubprojectConfiguration } from '@/types/technicalProject'
+import { useOverlayInteraction } from '@/hooks/useOverlayInteraction'
 
 const { Text } = Typography
 
@@ -22,6 +23,7 @@ export interface SubprojectConfigModalProps {
   currentLoginUser?: string
   onCancel: () => void
   onSaved?: (configuration: TechnicalSubprojectConfiguration) => void
+  returnFocusTo?: HTMLElement | null
 }
 
 export default function SubprojectConfigModal({
@@ -30,6 +32,7 @@ export default function SubprojectConfigModal({
   currentLoginUser,
   onCancel,
   onSaved,
+  returnFocusTo,
 }: SubprojectConfigModalProps) {
   const [form] = Form.useForm<TechnicalSubprojectConfiguration>()
   const loginUserFromProject = useProjectStore(state => state.currentLoginUser)
@@ -41,6 +44,9 @@ export default function SubprojectConfigModal({
   const user = currentLoginUser || loginUserFromProject
   const canDo = useHasPermission(user, subproject?.parentProjectId)
   const canEdit = Boolean(subproject?.active) && canDo('basicInfo:编辑')
+  const [submitting, setSubmitting] = useState(false)
+  const submissionSequenceRef = useRef(0)
+  const { captureTrigger, restoreTriggerFocus, tryBeginSubmit, releaseSubmission } = useOverlayInteraction()
 
   useEffect(() => {
     if (open && !hasHydrated) void hydrateEnumStore()
@@ -48,8 +54,9 @@ export default function SubprojectConfigModal({
 
   useEffect(() => {
     if (!open || !subproject) return
+    captureTrigger(returnFocusTo)
     form.setFieldsValue(subproject.configuration)
-  }, [form, open, subproject])
+  }, [captureTrigger, form, open, returnFocusTo, subproject])
 
   const tosOptions = useMemo(() => {
     const current = valuesByType['tos-2-part']
@@ -67,18 +74,28 @@ export default function SubprojectConfigModal({
     .map(project => ({ value: project.id, label: project.name })), [projects])
 
   const closeWithoutSaving = () => {
+    submissionSequenceRef.current += 1
     form.resetFields()
+    setSubmitting(false)
+    releaseSubmission()
     onCancel()
+    restoreTriggerFocus(returnFocusTo)
   }
 
   const save = async () => {
     if (!subproject || !canEdit) return
+    if (!tryBeginSubmit()) return
+    const submissionSequence = ++submissionSequenceRef.current
+    setSubmitting(true)
     let values: TechnicalSubprojectConfiguration
     try {
       values = await form.validateFields()
     } catch {
+      setSubmitting(false)
+      releaseSubmission()
       return
     }
+    if (submissionSequence !== submissionSequenceRef.current) return
     const configuration: TechnicalSubprojectConfiguration = {
       coreValue: values.coreValue,
       developmentMode: values.developmentMode,
@@ -92,16 +109,22 @@ export default function SubprojectConfigModal({
         : result.reason === 'inactive'
           ? '子项目已停用，无法保存配置'
           : '子项目配置无效')
+      setSubmitting(false)
+      releaseSubmission()
       return
     }
     message.success('子项目信息已保存')
     onSaved?.(configuration)
     form.resetFields()
+    setSubmitting(false)
     onCancel()
+    restoreTriggerFocus(returnFocusTo)
+    releaseSubmission(true)
   }
 
   return (
     <Modal
+      className="pms-scroll-modal"
       open={open}
       title={(
         <Space size={10}>
@@ -115,7 +138,8 @@ export default function SubprojectConfigModal({
       )}
       okText="确认"
       cancelText="取消"
-      okButtonProps={{ disabled: !canEdit }}
+      okButtonProps={{ disabled: !canEdit || submitting }}
+      confirmLoading={submitting}
       onOk={() => void save()}
       onCancel={closeWithoutSaving}
       destroyOnHidden

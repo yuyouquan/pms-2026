@@ -184,6 +184,11 @@ assert.match(configModal, /开发模式/, 'configuration modal renders developme
 assert.match(configModal, /valuesByType\[['"]tos-2-part['"]\]/, 'first tOS choices come from current two-part enum values')
 assert.match(configModal, /showSearch/, 'first machine project is searchable')
 assert.doesNotMatch(configModal, /删除/, 'subproject configuration has no delete action')
+assert.match(configModal, /useOverlayInteraction/, 'subproject modal reuses the shared focus and submission guard')
+assert.match(configModal, /if\s*\(!tryBeginSubmit\(\)\)\s*return/, 'subproject confirm is guarded in the same event-loop tick')
+assert.match(configModal, /confirmLoading=\{submitting\}/, 'subproject confirm exposes loading feedback')
+assert.match(configModal, /form\.resetFields\(\)[\s\S]*?onCancel\(\)/, 'cancel discards the subproject draft before closing')
+assert.match(configModal, /className="pms-scroll-modal"/, 'long subproject modal scrolls internally')
 
 const validStages = [
   { id: 'phase-1', name: '规划阶段', parentId: null, planStartDate: '2026-01-01', planEndDate: '2026-01-31', order: 1 },
@@ -234,6 +239,24 @@ const basicInfo = readSource(root, 'src/components/technical-project/TechnicalPr
 assert.match(basicInfo, /显示已停用/, 'technical basic information can reveal inactive children')
 assert.match(basicInfo, /SubprojectConfigModal/, 'active child tabs mount the configuration modal')
 assert.doesNotMatch(basicInfo, /TDT项目计划/, 'TDT is not a technical basic-information tab')
+assert.match(basicInfo, /event\.preventDefault\(\)[\s\S]{0,100}event\.stopPropagation\(\)/, 'tab-adjacent configuration never activates the tab')
+const createFields = readSource(root, 'src/components/technical-project/TechnicalProjectCreateFields.tsx')
+assert.match(createFields, /Input\.TextArea[\s\S]{0,220}onPressEnter=\{event\s*=>\s*event\.stopPropagation\(\)\}/, 'Enter inside project-value textarea cannot bubble into modal submit')
+const technicalPlan = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
+const planHelpers = readSource(root, 'src/components/shared/PlanHelpers.tsx')
+assert.match(planHelpers, /<Tooltip\s+title="拖拽排序"/, 'drag icon exposes its action in a tooltip')
+assert.match(planHelpers, /<button[^>]*aria-label="拖拽排序"/, 'drag icon is a named native control')
+assert.match(technicalPlan, /event\.preventDefault\(\)[\s\S]{0,100}event\.stopPropagation\(\)[\s\S]{0,120}setConfiguringChild/, 'plan tab configuration is isolated from tab activation')
+for (const label of ['新增二级任务', '删除任务', '表格视图', '甘特视图', '版本对比']) {
+  assert.match(technicalPlan, new RegExp(`aria-label=[^\\n]{0,80}${label}`), `${label} icon control has an accessible name`)
+  assert.match(technicalPlan, new RegExp(`<Tooltip\\s+title=[^\\n]{0,80}${label}`), `${label} icon control has a tooltip`)
+}
+assert.match(technicalPlan, /className="[^"]*technical-plan-toolbar[^"]*pms-wide-table-toolbar[^"]*"/, 'wide technical plan keeps its toolbar visible')
+assert.match(technicalPlan, /当前账号无计划编辑权限，仅可查看计划/, 'technical plan explains read-only permission state')
+assert.match(technicalPlan, /className="pms-scroll-modal"/, 'version comparison modal scrolls internally')
+const overlayInteraction = readSource(root, 'src/hooks/useOverlayInteraction.ts')
+assert.match(overlayInteraction, /tryBeginSubmit/, 'shared overlay helper provides a synchronous submission lock')
+assert.match(overlayInteraction, /restoreTriggerFocus/, 'shared overlay helper restores focus to its opener')
 const projectSpace = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 assert.match(projectSpace, /<TechnicalProjectOverview/, 'project space mounts the focused technical overview')
 assert.match(projectSpace, /<TechnicalProjectBasicInfo/, 'project space mounts focused child-only basic information')

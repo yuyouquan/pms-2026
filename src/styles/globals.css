@@ -125,7 +125,7 @@
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.24);
 }
 
-.pms-technical-list-stack { display: grid; gap: 20px; }
+.pms-technical-list-stack { display: grid; gap: 16px; }
 .pms-project-list-section-title {
   margin: 0 0 10px 2px;
   color: #374151;
@@ -139,6 +139,83 @@
   .pms-project-filter-chip { transition: none; }
 }
 
+/* Redesigned workflow surfaces share one dense, stable interaction rhythm. */
+.pms-project-list {
+  min-width: 0;
+  color: #334155;
+}
+
+.pms-wide-table-toolbar {
+  position: sticky;
+  top: 72px;
+  z-index: 20;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 24px rgba(67, 56, 202, 0.07);
+  backdrop-filter: blur(12px);
+}
+
+.pms-project-list-toolbar {
+  gap: 8px !important;
+  margin-bottom: 16px !important;
+  padding: 12px !important;
+  border: 1px solid rgba(99, 102, 241, 0.12) !important;
+}
+
+.pms-project-list-filter-grid {
+  min-width: 0;
+}
+
+.pms-project-list-content {
+  min-width: 0;
+}
+
+.pms-project-list :where(.ant-btn, .ant-segmented-item, .pms-project-filter-chip),
+.technical-project-space :where(.ant-btn, .ant-radio-button-wrapper) {
+  transition-duration: 160ms !important;
+}
+
+.pms-project-list :where(.ant-btn:not(.ant-btn-primary), .ant-segmented-item),
+.technical-project-space :where(.ant-btn:not(.ant-btn-primary), .ant-radio-button-wrapper) {
+  min-height: 32px;
+}
+
+.pms-drag-handle {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  color: #64748b;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: grab;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.pms-drag-handle:hover,
+.pms-drag-handle:focus-visible {
+  color: #4f46e5;
+  background: #eef2ff;
+}
+
+.pms-drag-handle:active {
+  cursor: grabbing;
+}
+
+.pms-project-list .ant-btn-primary,
+.technical-project-space .ant-btn-primary {
+  min-height: 40px;
+  border-radius: 8px;
+}
+
+.pms-project-list :where(button, input, .ant-select-selector, .ant-segmented-item):focus-visible,
+.technical-project-space :where(button, input, textarea, .ant-select-selector, .ant-radio-button-wrapper):focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
 /* Technical project space */
 .technical-project-space {
   width: min(100%, 1280px);
@@ -146,10 +223,10 @@
 }
 
 .technical-space-card {
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   overflow: hidden;
   border: 1px solid rgba(99, 102, 241, 0.12);
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: 0 8px 28px rgba(51, 65, 85, 0.06);
 }
 
@@ -249,8 +326,8 @@
 }
 
 .technical-child-config-button {
-  width: 26px;
-  height: 26px;
+  width: 32px;
+  height: 32px;
   color: #6366f1;
 }
 
@@ -343,7 +420,7 @@
   padding: 24px;
   overflow: hidden;
   border: 1px solid rgba(99, 102, 241, 0.1);
-  border-radius: 16px;
+  border-radius: 12px;
   background:
     radial-gradient(circle at 94% 0%, rgba(129, 140, 248, 0.12), transparent 34%),
     linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 255, 0.92));
@@ -571,11 +648,22 @@
 }
 
 .pms-todo-center__loading {
-  display: grid;
   min-height: 410px;
-  place-items: center;
+  padding: 24px;
   color: #818cf8;
   font-size: 13px;
+}
+
+.pms-todo-center__error {
+  display: grid;
+  min-height: 410px;
+  padding: 24px;
+  place-items: center;
+}
+
+.pms-todo-center__error .ant-alert {
+  width: min(100%, 560px);
+  border-radius: 12px;
 }
 
 @media (max-width: 1100px) {
@@ -605,6 +693,16 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .pms-project-list,
+  .pms-project-list *,
+  .technical-project-space,
+  .technical-project-space * {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
   .pms-todo-center *,
   .pms-todo-center *::before,
   .pms-todo-center *::after {
@@ -853,6 +951,13 @@
   gap: 4px;
 }
 
+.pms-enum-actions .ant-btn {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
 .pms-enum-form {
   display: flex;
   flex-direction: column;
@@ -934,7 +1039,7 @@
 .pms-floating-config-popover .ant-popover-inner {
   overflow: hidden;
   border: 1px solid rgba(99, 102, 241, .16);
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: 0 18px 46px rgba(15, 23, 42, .18);
 }
 
@@ -961,7 +1066,39 @@
 .pms-floating-config-body {
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 12px 16px;
+}
+
+.pms-scroll-modal .ant-modal-content {
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.pms-scroll-modal .ant-modal-body {
+  max-height: min(640px, calc(100dvh - 220px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.technical-plan-toolbar {
+  top: 72px;
+  margin-bottom: 12px;
+}
+
+.technical-plan-toolbar .ant-card-body {
+  min-height: 64px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pms-floating-config-popover,
+  .pms-floating-config-popover *,
+  .pms-scroll-modal,
+  .pms-scroll-modal * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Project roadmap — scoped purple-glass hierarchy and accessibility */

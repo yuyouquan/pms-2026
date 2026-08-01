@@ -20,6 +20,7 @@ export default function TechnicalProjectBasicInfo({ projectId, currentLoginUser 
   const [showInactive, setShowInactive] = useState(false)
   const [activeChildId, setActiveChildId] = useState('')
   const [configuringChild, setConfiguringChild] = useState<TechnicalSubproject | null>(null)
+  const [configTrigger, setConfigTrigger] = useState<HTMLElement | null>(null)
   const projects = useProjectStore(state => state.projects)
   const subprojects = useTechnicalProjectStore(state => state.subprojects)
   const children = useMemo(() => subprojects
@@ -28,6 +29,7 @@ export default function TechnicalProjectBasicInfo({ projectId, currentLoginUser 
 
   useEffect(() => {
     setConfiguringChild(null)
+    setConfigTrigger(null)
     setActiveChildId('')
   }, [projectId])
 
@@ -65,6 +67,7 @@ export default function TechnicalProjectBasicInfo({ projectId, currentLoginUser 
               onClick={event => {
                 event.preventDefault()
                 event.stopPropagation()
+                setConfigTrigger(event.currentTarget)
                 setConfiguringChild(child)
               }}
             />
@@ -124,6 +127,7 @@ export default function TechnicalProjectBasicInfo({ projectId, currentLoginUser 
         open={Boolean(configuringChild)}
         subproject={configuringChild}
         currentLoginUser={currentLoginUser}
+        returnFocusTo={configTrigger}
         onCancel={() => setConfiguringChild(null)}
       />
     </div>

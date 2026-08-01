@@ -135,7 +135,13 @@ export default function TechnicalProjectCreateFields({
           <YearControl />
         </Form.Item>
         <Form.Item label="项目价值" name="projectValue" className="pms-project-info-form-span">
-          <Input.TextArea showCount maxLength={2000} autoSize={{ minRows: 3, maxRows: 7 }} placeholder="说明项目价值（选填）" />
+          <Input.TextArea
+            showCount
+            maxLength={2000}
+            autoSize={{ minRows: 3, maxRows: 7 }}
+            placeholder="说明项目价值（选填）"
+            onPressEnter={event => event.stopPropagation()}
+          />
         </Form.Item>
       </div>
 

@@ -50,6 +50,9 @@ const requiredPatterns = [
   /setTimeout\(focusFirstControl/,
   /triggerContainerRef/,
   /\bariaLabel\b/,
+  /role="dialog"/,
+  /aria-modal="false"/,
+  /isTopmostFloatingPanel/,
   /aria-label=\{ariaLabel\s*\?\?/,
   /<section[\s\S]{0,100}className="pms-floating-config-panel"/,
   /<header\s+className="pms-floating-config-header">/,
@@ -196,6 +199,9 @@ const requiredStylePatterns = [
   /\.pms-floating-config-header\s*\{[^}]*border-bottom:\s*1px solid #eef2f7;/s,
   /\.pms-floating-config-footer\s*\{[^}]*border-top:\s*1px solid #eef2f7;/s,
   /\.pms-floating-config-body\s*\{/,
+  /\.pms-floating-config-body\s*\{[^}]*overflow:\s*auto;[^}]*overscroll-behavior:\s*contain;/s,
+  /\.pms-scroll-modal\s+\.ant-modal-body\s*\{[^}]*overflow-y:\s*auto;/s,
+  /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.pms-floating-config-popover/s,
 ];
 
 for (const pattern of requiredStylePatterns) {

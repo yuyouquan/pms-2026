@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, createContext, useContext } from 'react'
-import { Progress, Tag, Avatar, DatePicker, message } from 'antd'
+import { Progress, Tag, Avatar, DatePicker, Tooltip, message } from 'antd'
 import dayjs from 'dayjs'
 import { HolderOutlined, StopOutlined, FileTextOutlined, LinkOutlined, FolderOpenOutlined } from '@ant-design/icons'
 import { useSortable } from '@dnd-kit/sortable'
@@ -38,7 +38,13 @@ export function SortableRow({ children, ...props }: any) {
 // ─── DragHandle ─────────────────────────────────────────────────────
 export function DragHandle() {
   const listeners = useContext(DragHandleContext)
-  return <HolderOutlined style={{ cursor: 'grab', color: '#999' }} {...listeners} />
+  return (
+    <Tooltip title="拖拽排序">
+      <button type="button" className="pms-drag-handle" aria-label="拖拽排序" {...listeners}>
+        <HolderOutlined aria-hidden />
+      </button>
+    </Tooltip>
+  )
 }
 
 // ─── DHTMLXGantt ────────────────────────────────────────────────────

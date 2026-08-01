@@ -26,6 +26,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { normalizeEnumValue, TOS_ENUM_REGISTRY, TOS_ENUM_TYPE_KEYS } from '@/lib/enumValues'
 import { useEnumStore } from '@/stores/enums'
 import type { EnumActionResult, EnumTypeKey } from '@/types/enums'
+import { useOverlayInteraction } from '@/hooks/useOverlayInteraction'
 
 type ModalMode = 'add' | 'edit'
 
@@ -60,9 +61,8 @@ export default function EnumConfig() {
   const [fieldError, setFieldError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [recoveryAction, setRecoveryAction] = useState<'retry' | 'reset' | null>(null)
-  const triggerRef = useRef<HTMLElement | null>(null)
   const updatedValueFocusRef = useRef<string | null>(null)
-  const submittingRef = useRef(false)
+  const { captureTrigger, restoreTriggerFocus, tryBeginSubmit, releaseSubmission } = useOverlayInteraction()
 
   useEffect(() => {
     if (!hasHydrated) void hydrateEnumStore()
@@ -74,19 +74,17 @@ export default function EnumConfig() {
     [selectedType, valuesByType],
   )
 
-  const restoreTriggerFocus = () => {
-    window.setTimeout(() => {
+  const restoreEnumTriggerFocus = () => {
+    restoreTriggerFocus(() => {
       const updatedValue = updatedValueFocusRef.current
       updatedValueFocusRef.current = null
       const updatedEditButton = updatedValue
         ? Array.from(document.querySelectorAll<HTMLButtonElement>('[data-enum-edit-value]'))
           .find(button => button.dataset.enumEditValue === updatedValue)
         : null
-      const originalTrigger = triggerRef.current?.isConnected ? triggerRef.current : null
       const addButton = document.querySelector<HTMLButtonElement>('[data-enum-add-value]')
-      const focusTarget = updatedEditButton ?? originalTrigger ?? addButton
-      focusTarget?.focus()
-    }, 350)
+      return updatedEditButton ?? (updatedValue ? addButton : undefined)
+    })
   }
 
   const closeModal = () => {
@@ -95,13 +93,12 @@ export default function EnumConfig() {
     setEditingValue(null)
     setFieldError('')
     setSubmitting(false)
-    submittingRef.current = false
-    restoreTriggerFocus()
+    releaseSubmission()
+    restoreEnumTriggerFocus()
   }
 
-  const openAddModal = () => {
-    if (submittingRef.current) return
-    triggerRef.current = document.activeElement as HTMLElement | null
+  const openAddModal = (trigger: HTMLElement) => {
+    captureTrigger(trigger)
     setModalMode('add')
     setEditingValue(null)
     setDraft('')
@@ -110,7 +107,7 @@ export default function EnumConfig() {
   }
 
   const openEditModal = (value: string, trigger: HTMLElement) => {
-    triggerRef.current = trigger
+    captureTrigger(trigger)
     setModalMode('edit')
     setEditingValue(value)
     setDraft(value)
@@ -119,8 +116,7 @@ export default function EnumConfig() {
   }
 
   const submit = () => {
-    if (submittingRef.current) return
-    submittingRef.current = true
+    if (!tryBeginSubmit()) return
     setSubmitting(true)
     const result = modalMode === 'add'
       ? addEnumValue(selectedType, draft)
@@ -130,7 +126,7 @@ export default function EnumConfig() {
       if (result.reason === 'storage') message.error(resultMessage(result))
       setFieldError(resultMessage(result))
       setSubmitting(false)
-      submittingRef.current = false
+      releaseSubmission()
       return
     }
 
@@ -139,10 +135,8 @@ export default function EnumConfig() {
     closeModal()
     // Keep the synchronous guard closed through this event-loop turn even
     // though closing the modal clears its visual loading state.
-    submittingRef.current = true
-    window.setTimeout(() => {
-      submittingRef.current = false
-    }, 300)
+    tryBeginSubmit()
+    releaseSubmission(true)
   }
 
   const handleDelete = (value: string) => {
@@ -206,7 +200,7 @@ export default function EnumConfig() {
           >
             <Tooltip title="删除枚举值">
               <Button
-                aria-label="删除枚举值"
+                aria-label={`删除枚举值 ${record.value}`}
                 danger
                 type="text"
                 icon={<DeleteOutlined />}
@@ -285,7 +279,7 @@ export default function EnumConfig() {
           </div>
         )}
         extra={(
-          <Button data-enum-add-value type="primary" icon={<PlusOutlined />} onClick={openAddModal}>
+          <Button data-enum-add-value type="primary" icon={<PlusOutlined />} onClick={event => openAddModal(event.currentTarget)}>
             新增枚举值
           </Button>
         )}
@@ -302,6 +296,7 @@ export default function EnumConfig() {
       </Card>
 
       <Modal
+        className="pms-scroll-modal"
         open={modalOpen}
         title={modalMode === 'add' ? `新增${selectedDefinition.label}枚举值` : `编辑${selectedDefinition.label}枚举值`}
         okText="确认"
