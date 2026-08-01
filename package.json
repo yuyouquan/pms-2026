@@ -22,7 +22,8 @@
     "verify:technical-plan": "node scripts/verify-technical-plan.mjs",
     "verify:project-list-matrix": "node scripts/verify-project-list-matrix.mjs",
     "verify:project-role-sync": "node scripts/verify-project-role-sync.mjs",
-    "verify:workbench-browser": "node screenshots/verify-workbench-summary-floating-panels.mjs"
+    "verify:workbench-browser": "node screenshots/verify-workbench-summary-floating-panels.mjs",
+    "verify:redesign-browser": "node screenshots/verify-workbench-technical-project-redesign.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
