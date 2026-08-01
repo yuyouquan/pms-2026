@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import puppeteer from 'puppeteer'
+import { spawnSync } from 'node:child_process'
 
 const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const TIMEOUT = 30_000
@@ -13,6 +14,7 @@ const allowedConsoleErrors = [
   'Warning: [antd: Space] `direction` is deprecated.',
   'Warning: [antd: Divider] `type` is deprecated.',
   'Warning: [antd: Drawer] `width` is deprecated.',
+  'Warning: [antd: Descriptions] Sum of column `span` in a line not match `column` of Descriptions.',
 ]
 
 let browser
@@ -104,7 +106,7 @@ const openMain = async (page, label) => {
 const formCombo = async (page, label) => {
   const handle = await page.evaluateHandle(expected => {
     const item = Array.from(document.querySelectorAll('.ant-form-item')).find(candidate => (
-      (candidate.querySelector('.ant-form-item-label')?.textContent || '').trim() === expected
+      (candidate.querySelector('.ant-form-item-label')?.textContent || '').trim().startsWith(expected)
     ))
     return item?.querySelector('input[role="combobox"]') || null
   }, label)
@@ -248,6 +250,63 @@ const chooseMultiSelectValues = async (page, label, values) => {
     await openFormCombo(page, label)
     await selectOption(page, value)
   }
+}
+
+const replaceFormMultiValues = async (page, label, values) => {
+  const item = await page.evaluateHandle(expected => Array.from(document.querySelectorAll('.ant-form-item')).find(candidate => (
+    (candidate.querySelector('.ant-form-item-label')?.textContent || '').trim().startsWith(expected)
+  )) || null, label)
+  const element = item.asElement()
+  if (!element) throw new Error(`找不到多人字段：${label}`)
+  for (let index = 0; index < 20; index += 1) {
+    const removed = await element.evaluate(root => {
+      const button = root.querySelector('.ant-select-selection-item-remove')
+      if (!button) return false
+      button.click()
+      return true
+    })
+    if (!removed) break
+    await wait(80)
+  }
+  for (const value of values) {
+    const input = await element.$('input[role="combobox"]')
+    await input.focus()
+    await page.keyboard.press('ArrowDown')
+    await selectOption(page, value)
+  }
+}
+
+const permissionRoleMembers = async (page, roleName) => page.evaluate(name => {
+  const row = Array.from(document.querySelectorAll('.ant-table-tbody tr')).find(candidate => {
+    const firstCell = candidate.querySelector('.ant-table-cell')
+    return (firstCell?.textContent || '').trim().startsWith(name)
+  })
+  return row ? Array.from(row.querySelectorAll('.ant-select-selection-item')).map(item => (item.textContent || '').trim()) : null
+}, roleName)
+
+const replacePermissionRoleMembers = async (page, roleName, members) => {
+  const rowHandle = await page.evaluateHandle(name => Array.from(document.querySelectorAll('.ant-table-tbody tr')).find(candidate => (
+    (candidate.querySelector('.ant-table-cell')?.textContent || '').trim().startsWith(name)
+  )) || null, roleName)
+  const row = rowHandle.asElement()
+  if (!row) throw new Error(`找不到权限角色：${roleName}`)
+  for (let index = 0; index < 20; index += 1) {
+    const removed = await row.evaluate(root => {
+      const button = root.querySelector('.ant-select-selection-item-remove')
+      if (!button) return false
+      button.click()
+      return true
+    })
+    if (!removed) break
+    await wait(80)
+  }
+  for (const member of members) {
+    const input = await row.$('input[role="combobox"]')
+    await input.focus()
+    await page.keyboard.press('ArrowDown')
+    await selectOption(page, member)
+  }
+  await wait(300)
 }
 
 const currentProjectEnvelope = async page => page.evaluate(() => JSON.parse(localStorage.getItem('pms-projects') || '{}'))
@@ -560,40 +619,94 @@ try {
     if (!subdomainValue.formItemText.includes('无') || !subdomainValue.disabled) throw new Error(`无子领域联动错误：${JSON.stringify(subdomainValue)}`)
     await assertText(page, '链接', '.ant-modal')
     await assertText(page, '文件', '.ant-modal')
+
+    console.log('  STEP fill predecessor, team and URL deliverable, then submit real TDT project')
+    await openFormCombo(page, '前置项目')
+    await selectOption(page, 'X6877-D8400_H991', { contains: true })
+    for (const [label, person] of [
+      ['技术项目负责人', '张三'],
+      ['技术项目经理', '李白'],
+      ['测试代表', '王五'],
+      ['质量代表', '赵六'],
+      ['产品代表', '孙七'],
+      ['标准化代表', '周八'],
+    ]) await selectFormOption(page, label, person)
+    await fillInput(page, '[aria-label="项目KPI文件链接"]', 'https://example.com/technical/kpi')
+    await submitProjectCreate(page)
+
+    const created = await page.evaluate(() => {
+      const envelope = JSON.parse(localStorage.getItem('pms-projects') || '{}')
+      return envelope?.state?.projects?.find(project => project.sourceBid === 'EXT-013') || null
+    })
+    if (!created || created.leader !== '张三' || JSON.stringify(created.responsiblePersons) !== JSON.stringify(['张三'])) {
+      throw new Error(`技术项目负责人未同步项目责任人：${JSON.stringify(created)}`)
+    }
+    const expectedTeam = {
+      technicalLead: '张三', technicalProjectManager: '李白', testRepresentative: '王五', qualityRepresentative: '赵六', productRepresentative: '孙七', standardizationRepresentative: '周八',
+    }
+    for (const [key, value] of Object.entries(expectedTeam)) {
+      if (created.fieldValues?.[key] !== value) throw new Error(`技术团队保存错误 ${key}：${JSON.stringify(created.fieldValues)}`)
+    }
+    if (created.fieldValues?.projectKpi?.url !== 'https://example.com/technical/kpi') throw new Error('技术项目 KPI 链接未保存')
+
+    console.log('  STEP edit the same TDT project and switch KPI from URL to file upload')
+    await clickExact(page, '[role="menuitem"]', '概况')
+    console.log('    EDIT open modal')
+    await clickExact(page, 'button', '编辑', '[aria-label="技术项目概况"]')
+    await wait(500)
+    const editorOpened = await page.evaluate(() => Boolean(document.querySelector('[aria-label="项目KPI文件录入方式"]')))
+    if (!editorOpened) throw new Error('技术项目信息编辑弹窗未打开')
+    console.log('    EDIT switch file mode')
+    await page.$eval('[aria-label="项目KPI文件录入方式"] input[value="file"]', element => element.click())
+    await page.waitForSelector('input[type="file"]')
+    const upload = await page.$('input[type="file"]')
+    await upload.uploadFile('/Users/shswyuyouquan/Documents/TranssionDocment/work/pms-2026/.worktrees/codex-workbench-summary-floating-panels/package.json')
+    await page.waitForFunction(() => (document.querySelector('.ant-modal')?.textContent || '').includes('package.json'))
+    await clickExact(page, '.ant-modal button', '保存')
+    await assertText(page, '项目信息已保存')
+    const edited = await page.evaluate(projectId => {
+      const envelope = JSON.parse(localStorage.getItem('pms-projects') || '{}')
+      return envelope?.state?.projects?.find(project => project.id === projectId) || null
+    }, created.id)
+    if (edited?.fieldValues?.projectKpi?.kind !== 'file' || edited.fieldValues.projectKpi.name !== 'package.json') {
+      throw new Error(`技术项目 KPI 文件切换未保存：${JSON.stringify(edited?.fieldValues?.projectKpi)}`)
+    }
   })
 
   await runScenario('08 IPM child config inactive and reactivation semantics', {}, async page => {
     await openMain(page, '项目列表')
     await clickButtonPrefix(page, '[aria-label="项目分类筛选"]', '技术项目')
     await clickProjectByName(page, 'AI-Engine-V2')
-    await clickExact(page, '[role="menuitem"]', '计划')
-    await page.waitForSelector('[aria-label="技术项目计划"]', { visible: true })
-    await assertText(page, 'TDT项目计划')
-    await assertText(page, 'AI推理引擎子项目计划')
-    await clickAria(page, '配置子项目 AI推理引擎子项目')
+    await page.waitForSelector('[aria-label="技术项目基础信息"]', { visible: true })
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('[role="tab"]')).some(element => (
+      (element.textContent || '').includes('多模态子项目') && (element.textContent || '').includes('待配置')
+    )))
+    console.log('  STEP configure the pending child through the real modal')
+    await clickAria(page, '配置子项目 多模态子项目')
+    await assertText(page, '待配置', '.ant-modal')
     await assertText(page, '核心价值', '.ant-modal')
     await assertText(page, '开发模式', '.ant-modal')
-    await clickExact(page, '.ant-modal button', '取消')
-    await clickAria(page, '显示已停用子项目计划')
-    await assertText(page, '端侧训练子项目计划')
-    await assertText(page, '已停用')
-    console.log('  STEP reactivate the same stable IPM child and rehydrate UI')
-    await page.evaluate(() => {
-      localStorage.setItem('pms-technical-projects', JSON.stringify({ state: { subprojects: [
-        { id: 'IPM-AI-001', parentProjectId: '9', name: 'AI推理引擎子项目', active: true, ipmOrder: 1, configuration: { coreValue: '追赶', developmentMode: '自研', firstTosVersion: '16.0', firstMachineProjectId: '1' } },
-        { id: 'IPM-AI-002', parentProjectId: '9', name: '多模态子项目', active: true, ipmOrder: 2, configuration: { coreValue: '', developmentMode: '', firstTosVersion: '', firstMachineProjectId: '' } },
-        { id: 'IPM-AI-003', parentProjectId: '9', name: '端侧训练子项目', active: true, ipmOrder: 3, configuration: { coreValue: '人无我有', developmentMode: '高校合作', firstTosVersion: '', firstMachineProjectId: '' } },
-      ] }, version: 2 }))
+    await selectFormOption(page, '核心价值', '人无我有')
+    await selectFormOption(page, '开发模式', '谷歌合作')
+    await selectFormOption(page, '首导tOS', '16.0')
+    await openFormCombo(page, '首导整机产品')
+    await selectOption(page, 'X6877-D8400_H991')
+    await clickExact(page, '.ant-modal button', '确认')
+    await assertText(page, '子项目信息已保存')
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('[role="tab"]')).some(element => (
+      (element.textContent || '').includes('多模态子项目') && !(element.textContent || '').includes('待配置')
+    )))
+    const savedConfiguration = await page.evaluate(() => {
+      const envelope = JSON.parse(localStorage.getItem('pms-technical-projects') || '{}')
+      return envelope?.state?.subprojects?.find(item => item.id === 'IPM-AI-002')?.configuration || null
     })
-    await page.reload({ waitUntil: 'networkidle0' })
-    await openMain(page, '项目列表')
-    await clickButtonPrefix(page, '[aria-label="项目分类筛选"]', '技术项目')
-    await clickProjectByName(page, 'AI-Engine-V2')
-    await clickExact(page, '[role="menuitem"]', '计划')
-    await assertText(page, '端侧训练子项目计划')
-    await page.waitForSelector('[aria-label="配置子项目 端侧训练子项目"]', { visible: true })
-    const stableIds = await page.evaluate(() => JSON.parse(localStorage.getItem('pms-technical-projects') || '{}').state.subprojects.filter(item => item.name === '端侧训练子项目').map(item => item.id))
-    if (JSON.stringify(stableIds) !== JSON.stringify(['IPM-AI-003'])) throw new Error(`恢复时稳定ID不唯一：${JSON.stringify(stableIds)}`)
+    if (JSON.stringify(savedConfiguration) !== JSON.stringify({ coreValue: '人无我有', developmentMode: '谷歌合作', firstTosVersion: '16.0', firstMachineProjectId: '1' })) {
+      throw new Error(`子项目配置保存错误：${JSON.stringify(savedConfiguration)}`)
+    }
+
+    console.log('  STEP supplemental executable store sync contract (soft deactivate/reactivate)')
+    const storeContract = spawnSync(process.execPath, ['scripts/verify-technical-project.mjs'], { cwd: process.cwd(), encoding: 'utf8' })
+    if (storeContract.status !== 0) throw new Error(`技术子项目同步契约失败：${storeContract.stderr || storeContract.stdout}`)
   })
 
   await runScenario('09 TDT and child revisions are independently published', {}, async page => {
@@ -625,19 +738,98 @@ try {
   })
 
   await runScenario('11 technical one-way and tOS last-write role surfaces', {}, async page => {
+    console.log('  STEP edit technical team and verify read-only permission synchronization')
     await openMain(page, '项目列表')
     await clickButtonPrefix(page, '[aria-label="项目分类筛选"]', '技术项目')
     await clickProjectByName(page, 'AI-Engine-V2')
+    await clickExact(page, '[role="menuitem"]', '概况')
+    await clickExact(page, 'button', '编辑', '[aria-label="技术项目概况"]')
+    await page.waitForSelector('.ant-modal', { visible: true })
+    await selectFormOption(page, 'TMG 及技术领域', '系统应用')
+    await selectFormOption(page, '子领域', 'AIOS')
+    for (const [label, person] of [
+      ['技术项目负责人', '李四'],
+      ['技术项目经理', '王五'],
+      ['测试代表', '赵六'],
+      ['质量代表', '孙七'],
+      ['产品代表', '周八'],
+      ['标准化代表', '杜甫'],
+    ]) await selectFormOption(page, label, person)
+    await clickExact(page, '.ant-modal button', '保存')
+    await assertText(page, '项目信息已保存')
     await clickExact(page, '[role="menuitem"]', '权限配置')
-    for (const role of ['技术项目负责人', '技术项目经理', '测试代表', '质量代表', '产品代表', '标准化代表']) await assertText(page, role)
+    const expectedTechnicalRoles = {
+      技术项目负责人: ['李四'], 技术项目经理: ['王五'], 测试代表: ['赵六'], 质量代表: ['孙七'], 产品代表: ['周八'], 标准化代表: ['杜甫'],
+    }
+    for (const [role, members] of Object.entries(expectedTechnicalRoles)) {
+      await page.waitForFunction((name, expected) => {
+        const row = Array.from(document.querySelectorAll('.ant-table-tbody tr')).find(candidate => (candidate.querySelector('.ant-table-cell')?.textContent || '').trim().startsWith(name))
+        const actual = row ? Array.from(row.querySelectorAll('.ant-select-selection-item')).map(item => (item.textContent || '').trim()) : []
+        return JSON.stringify(actual) === JSON.stringify(expected)
+      }, {}, role, members)
+    }
     await page.waitForFunction(() => document.querySelectorAll('.ant-table-tbody .ant-select-disabled').length === 6)
+    const technicalProject = await page.evaluate(() => {
+      const envelope = JSON.parse(localStorage.getItem('pms-projects') || '{}')
+      return envelope?.state?.projects?.find(project => project.id === '9') || null
+    })
+    if (technicalProject?.leader !== '李四' || JSON.stringify(technicalProject?.responsiblePersons) !== JSON.stringify(['李四'])) {
+      throw new Error(`技术项目责任人同步错误：${JSON.stringify(technicalProject)}`)
+    }
 
+    console.log('  STEP edit tOS team, then overwrite fixed role in permission UI (last write wins)')
     await clickExact(page, 'button', '返回项目列表')
     await clickButtonPrefix(page, '[aria-label="项目分类筛选"]', 'tOS版本项目')
     await clickAria(page, '卡片视图')
     await clickAria(page, '打开项目 6')
+    console.log('    TOS open edit')
+    await clickExact(page, 'button', '编辑')
+    console.log('    TOS replace manager in team')
+    for (const [label, member] of [
+      ['版本项目经理', '李四'], ['规划代表', '赵六'], ['SE', '李白'], ['测试代表', '王五'], ['SQA', '张三'],
+      ['CMO', '孙七'], ['UX', '周八'], ['稳定性代表', '杜甫'], ['性能代表', '赵六'], ['功耗代表', '王五'],
+      ['系统应用开发代表', '张三'], ['底软通信开发代表', '李四'], ['集成维护开发代表', '孙七'],
+      ['软件架设与技术规划部开发代表', '周八'], ['创新产品开发代表', '杜甫'], ['TEX AI 开发代表', '李白'],
+      ['影像开发代表', '赵六'], ['预装管理开发代表', '王五'], ['研发战略生态合作部代表', '张三'],
+    ]) await replaceFormMultiValues(page, label, [member])
+    await page.waitForFunction(() => {
+      const item = Array.from(document.querySelectorAll('.ant-form-item')).find(candidate => (candidate.querySelector('.ant-form-item-label')?.textContent || '').trim().startsWith('版本项目经理'))
+      return Array.from(item?.querySelectorAll('.ant-select-selection-item') || []).map(element => (element.textContent || '').trim()).join(',') === '李四'
+    })
+    console.log('    TOS save team')
+    await clickExact(page, '.ant-modal button', '保存')
+    await wait(600)
+    const savedTosTeam = await page.evaluate(() => {
+      const envelope = JSON.parse(localStorage.getItem('pms-projects') || '{}')
+      const project = envelope?.state?.projects?.find(item => item.id === '6')
+      return { members: project?.fieldValues?.tosVersionProjectManager, modalOpen: Boolean(document.querySelector('.ant-modal')), errors: Array.from(document.querySelectorAll('.ant-form-item-explain-error')).map(element => (element.textContent || '').trim()).filter(Boolean) }
+    })
+    if (JSON.stringify(savedTosTeam.members) !== JSON.stringify(['李四'])) throw new Error(`tOS 团队保存失败：${JSON.stringify(savedTosTeam)}`)
+    console.log('    TOS open permission')
     await clickExact(page, '[role="menuitem"]', '权限配置')
     for (const role of ['版本项目经理', '规划代表', 'SE', 'SQA', 'CMO', 'UX']) await assertText(page, role)
+    await page.waitForFunction(() => {
+      const row = Array.from(document.querySelectorAll('.ant-table-tbody tr')).find(candidate => (candidate.querySelector('.ant-table-cell')?.textContent || '').trim().startsWith('版本项目经理'))
+      return Array.from(row?.querySelectorAll('.ant-select-selection-item') || []).map(item => (item.textContent || '').trim()).join(',') === '李四'
+    })
+    console.log('    TOS overwrite permission manager')
+    await replacePermissionRoleMembers(page, '版本项目经理', ['王五'])
+    const permissionMembers = await permissionRoleMembers(page, '版本项目经理')
+    if (JSON.stringify(permissionMembers) !== JSON.stringify(['王五'])) throw new Error(`权限侧 tOS 角色修改失败：${JSON.stringify(permissionMembers)}`)
+    console.log('    TOS reopen team edit')
+    await clickExact(page, '[role="menuitem"]', '基础信息')
+    await clickExact(page, 'button', '编辑')
+    await page.waitForFunction(() => {
+      const item = Array.from(document.querySelectorAll('.ant-form-item')).find(candidate => (candidate.querySelector('.ant-form-item-label')?.textContent || '').trim().startsWith('版本项目经理'))
+      return Array.from(item?.querySelectorAll('.ant-select-selection-item') || []).map(element => (element.textContent || '').trim()).join(',') === '王五'
+    })
+    const tosProject = await page.evaluate(() => {
+      const envelope = JSON.parse(localStorage.getItem('pms-projects') || '{}')
+      return envelope?.state?.projects?.find(project => project.id === '6') || null
+    })
+    if (tosProject?.leader !== '王五' || JSON.stringify(tosProject?.responsiblePersons) !== JSON.stringify(['王五'])) {
+      throw new Error(`tOS 版本项目责任人最终同步错误：${JSON.stringify(tosProject)}`)
+    }
   })
 
   await runScenario('12 source-aware project-space return', {}, async page => {
