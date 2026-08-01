@@ -108,6 +108,13 @@ export const TECHNICAL_PROJECT_TYPE_OPTIONS = [
   { label: '子项目', value: 'subproject' },
 ] as const
 
+export function resolveTechnicalProjectTypeVisibility(values: readonly string[]) {
+  const selected = new Set(values.filter(value => value === 'tdt' || value === 'subproject'))
+  const showTdt = selected.size === 0 || selected.has('tdt')
+  const showSubproject = selected.size === 0 || selected.has('subproject')
+  return { showTdt, showSubproject, showBoth: showTdt && showSubproject }
+}
+
 const GROUP_COLORS = ['#e8f3ff', '#fff0e6', '#fff8db', '#edf6dc', '#f2e8ff'] as const
 
 const required = (key: string, label: string, width = 132): ProjectListColumnDefinition => ({

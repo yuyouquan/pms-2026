@@ -9,6 +9,7 @@ assert.equal(typeof matrix.buildTechnicalProjectListRows, 'function', 'missing t
 assert.equal(typeof matrix.isOverdueProjectListDate, 'function', 'missing overdue date helper')
 assert.equal(typeof matrix.selectLatestPublishedScopedSnapshot, 'function', 'missing strict scoped published selector')
 assert.equal(typeof matrix.buildStableGroupSegments, 'function', 'missing stable group segment builder')
+assert.equal(typeof matrix.resolveTechnicalProjectTypeVisibility, 'function', 'missing technical type visibility resolver')
 assert.deepEqual(matrix.PROJECT_LIST_CATEGORIES, ['整机产品项目', 'tOS版本项目', '技术项目', '能力建设项目'])
 assert.deepEqual(matrix.PROJECT_LIST_QUICK_FILTERS.machine.map(item => item.label), ['项目二级分类', '状态', '首销tOS版本', '芯片编码', '品牌', '产品系列', '产品类型'])
 assert.deepEqual(matrix.PROJECT_LIST_QUICK_FILTERS.tos.map(item => item.label), ['版本类型', 'tOS版本'])
@@ -119,4 +120,8 @@ const segments = matrix.buildStableGroupSegments([
   { key: 'b', group: { key: 'phase', label: '阶段', color: '#fff' } },
 ])
 assert.deepEqual(segments.map(segment => segment.key), ['phase::segment-0', 'plain::plain', 'phase::segment-2'])
+assert.deepEqual(matrix.resolveTechnicalProjectTypeVisibility([]), { showTdt: true, showSubproject: true, showBoth: true })
+assert.deepEqual(matrix.resolveTechnicalProjectTypeVisibility(['tdt']), { showTdt: true, showSubproject: false, showBoth: false })
+assert.deepEqual(matrix.resolveTechnicalProjectTypeVisibility(['subproject']), { showTdt: false, showSubproject: true, showBoth: false })
+assert.deepEqual(matrix.resolveTechnicalProjectTypeVisibility(['tdt', 'subproject']), { showTdt: true, showSubproject: true, showBoth: true })
 console.log('project list matrix contract passed')

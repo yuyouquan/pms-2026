@@ -41,7 +41,11 @@ import { buildMarketRowsFromMarkets, getMainMarket, getMarketPlanVersionKey, get
 import { useActivateProject } from '@/hooks/useActivateProject'
 import { useTechnicalProjectStore } from '@/stores/technicalProject'
 import { useTechnicalPlanStore } from '@/stores/technicalPlan'
-import { buildTechnicalProjectListRows, selectLatestPublishedScopedSnapshot } from '@/lib/projectListMatrix'
+import {
+  buildTechnicalProjectListRows,
+  resolveTechnicalProjectTypeVisibility,
+  selectLatestPublishedScopedSnapshot,
+} from '@/lib/projectListMatrix'
 import { getTemplateConfigScopeKey } from '@/lib/technicalPlanRules'
 import type { AnyFilterCondition } from '@/lib/filterConditions'
 
@@ -94,8 +98,8 @@ export default function ProjectListContainer() {
   const technicalSubprojects = useTechnicalProjectStore(state => state.subprojects)
   const technicalPlansByKey = useTechnicalPlanStore(state => state.plansByKey)
   const [technicalFilters, setTechnicalFilters] = useState<AnyFilterCondition[]>([])
-  const technicalListType = (getLinkedQuickFilterValues(technicalFilters, 'technicalProjectType')[0]
-    || 'all') as 'all' | 'tdt' | 'subproject'
+  const technicalSelectedTypes = getLinkedQuickFilterValues(technicalFilters, 'technicalProjectType')
+  const technicalTypeVisibility = resolveTechnicalProjectTypeVisibility(technicalSelectedTypes)
 
   const projectCardPageSize = 9
   const [addProjectOpen, setAddProjectOpen] = useState(false)
@@ -402,7 +406,11 @@ export default function ProjectListContainer() {
                       'technicalProjectType',
                       item.value === 'all' ? [] : [item.value],
                     ))}
-                    className={technicalListType === item.value ? 'pms-project-filter-chip is-active' : 'pms-project-filter-chip'}
+                    className={(
+                      item.value === 'all'
+                        ? technicalSelectedTypes.length === 0
+                        : technicalSelectedTypes.includes(item.value)
+                    ) ? 'pms-project-filter-chip is-active' : 'pms-project-filter-chip'}
                   >{item.label}</button>
                 ))}
               </div>
@@ -439,9 +447,9 @@ export default function ProjectListContainer() {
             ) : (
               projectTypeFilter === PROJECT_CATEGORY_TECH ? (
                 <div className="pms-technical-list-stack">
-                  {(technicalListType === 'all' || technicalListType === 'tdt') && (
+                  {technicalTypeVisibility.showTdt && (
                     <section aria-label="TDT项目列表">
-                      {technicalListType === 'all' && <div className="pms-project-list-section-title">TDT项目</div>}
+                      {technicalTypeVisibility.showBoth && <div className="pms-project-list-section-title">TDT项目</div>}
                       <ProjectSummaryTable
                         projects={[]}
                         optionProjects={[]}
@@ -462,9 +470,9 @@ export default function ProjectListContainer() {
                       />
                     </section>
                   )}
-                  {(technicalListType === 'all' || technicalListType === 'subproject') && (
+                  {technicalTypeVisibility.showSubproject && (
                     <section aria-label="子项目列表">
-                      {technicalListType === 'all' && <div className="pms-project-list-section-title">子项目</div>}
+                      {technicalTypeVisibility.showBoth && <div className="pms-project-list-section-title">子项目</div>}
                       <ProjectSummaryTable
                         projects={[]}
                         optionProjects={[]}
