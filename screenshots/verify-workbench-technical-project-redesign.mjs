@@ -2,6 +2,7 @@
 
 import puppeteer from 'puppeteer'
 import { spawnSync } from 'node:child_process'
+import { resolve } from 'node:path'
 
 const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const TIMEOUT = 30_000
@@ -97,10 +98,37 @@ const assertNoText = async (page, text, scope = 'body') => {
 }
 
 const openMain = async (page, label) => {
-  await clickExact(page, '[role="menuitem"]', label)
-  await page.waitForFunction(value => (
-    (document.querySelector('.ant-menu-item-selected')?.textContent || '').trim() === value
-  ), { timeout: TIMEOUT }, label)
+  const deadline = Date.now() + TIMEOUT
+  while (Date.now() < deadline) {
+    const active = await page.evaluate(value => (
+      (document.querySelector('.ant-menu-item-selected')?.textContent || '').trim() === value
+    ), label)
+    if (active) return
+
+    const items = await page.$$('[role="menuitem"]')
+    let target = null
+    for (const item of items) {
+      const matches = await item.evaluate((element, expected) => {
+        const rect = element.getBoundingClientRect()
+        return rect.width > 0 && rect.height > 0 && (element.textContent || '').trim() === expected
+      }, label)
+      if (matches) {
+        target = item
+        break
+      }
+    }
+    if (target) {
+      // Native clicks are intentionally retried: a menu item may be visible from
+      // SSR before React attaches its handler, in which case the first click is lost.
+      await target.evaluate(element => element.click()).catch(() => undefined)
+      const activated = await page.waitForFunction(value => (
+        (document.querySelector('.ant-menu-item-selected')?.textContent || '').trim() === value
+      ), { timeout: 900 }, label).then(() => true).catch(() => false)
+      if (activated) return
+    }
+    await wait(120)
+  }
+  throw new Error(`主导航在 ${TIMEOUT}ms 内未激活：${label}`)
 }
 
 const formCombo = async (page, label) => {
@@ -660,7 +688,7 @@ try {
     await page.$eval('[aria-label="项目KPI文件录入方式"] input[value="file"]', element => element.click())
     await page.waitForSelector('input[type="file"]')
     const upload = await page.$('input[type="file"]')
-    await upload.uploadFile('/Users/shswyuyouquan/Documents/TranssionDocment/work/pms-2026/.worktrees/codex-workbench-summary-floating-panels/package.json')
+    await upload.uploadFile(resolve(process.cwd(), 'package.json'))
     await page.waitForFunction(() => (document.querySelector('.ant-modal')?.textContent || '').includes('package.json'))
     await clickExact(page, '.ant-modal button', '保存')
     await assertText(page, '项目信息已保存')
