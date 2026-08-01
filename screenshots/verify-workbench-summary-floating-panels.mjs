@@ -474,19 +474,26 @@ try {
     await assertSelector('[aria-label="项目列表视图"]')
   })
 
-  await step('switch to list view and show category prompt', async () => {
+  await step('switch to list view and keep default machine category', async () => {
     console.log('  action: assert project-list text')
     await assertText('项目列表')
     console.log('  action: click list-view aria')
     await clickAria('列表视图')
-    console.log('  action: assert category prompt')
-    await assertText('请选择项目分类')
+    console.log('  action: assert default machine matrix and no first-level all option')
+    await assertText('产品系列')
+    await assertText('首销 tOS 版本')
+    const categoryLabels = await page.$$eval('[aria-label="项目分类筛选"] button', buttons => (
+      buttons.map(button => (button.textContent || '').trim().replace(/\s+\d+$/, ''))
+    ))
+    if (categoryLabels.includes('全部') || categoryLabels[0] !== '整机产品项目') {
+      throw new Error(`unexpected category labels: ${JSON.stringify(categoryLabels)}`)
+    }
   })
 
   await step('select machine category and expose quick controls', async () => {
     await clickCategory('整机产品项目')
-    await assertSelector('[aria-label="项目二级分类快捷筛选"]')
-    await assertSelector('[aria-label="状态快捷筛选"]')
+    await assertAbsent('[aria-label="项目二级分类快捷筛选"]')
+    await assertAbsent('[aria-label="状态快捷筛选"]')
     for (const label of [
       '首销 tOS 版本',
       '芯片编码',

@@ -129,7 +129,7 @@ const openMachineCreateOptions = async page => {
     return Boolean(modal && !modal.querySelector('.ant-spin-spinning'))
   })
   await openFormSelect(page, '项目名')
-  await selectVisibleOption(page, 'X6900-D8600_H1100')
+  await selectVisibleOption(page, 'X6900-D8600_H1100（EXT-001）')
   await page.waitForFunction(() => Array.from(document.querySelectorAll('.ant-form-item-label'))
     .some(element => (element.textContent || '').trim() === '首销 tOS 版本'))
   await openFormSelect(page, '首销 tOS 版本')
