@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import ts from 'typescript'
 import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
@@ -253,13 +254,136 @@ assert.deepEqual(constants.TECHNICAL_DELIVERABLE_FIELDS.map(field => field.label
 const technicalInformationViewPath = 'src/components/technical-project/TechnicalProjectInformationView.tsx'
 assert.equal(fs.existsSync(`${root}/${technicalInformationViewPath}`), true, 'technical information uses the shared information-frame component')
 const technicalInformationView = readSource(root, technicalInformationViewPath)
-assert.match(technicalInformationView, /<ProjectInformationFrame\b/, 'technical information mounts the whole-machine information frame')
-assert.match(technicalInformationView, /<TechnicalPlanSummary\b/, 'technical information mounts the technical plan summary in the shared frame')
-const technicalBasicInfoMountPattern = /(?:<TechnicalProjectBasicInfo\b|<[^>]*data-section=['"]technical-basic-information['"][^>]*>)/g
-assert.equal(technicalInformationView.match(technicalBasicInfoMountPattern)?.length, 1, 'technical information has exactly one basic-information mount')
-assert.match(technicalInformationView, /activeTab\.kind\s*===\s*['"]subproject['"]\s*&&\s*\(\s*(?:<TechnicalProjectBasicInfo\b|<[^>]*data-section=['"]technical-basic-information['"][^>]*>)/, 'the sole technical basic-information region is directly wrapped by the subproject condition')
-assert.match(technicalInformationView, /<CollapsibleInformationSection\b[\s\S]{0,240}团队/, 'technical team is carried by its own collapsible information section')
-assert.match(technicalInformationView, /<CollapsibleInformationSection\b[\s\S]{0,240}交付物/, 'technical deliverables are carried by their own collapsible information section')
+const parseTsx = (source, fileName) => ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+const technicalInformationSourceFile = parseTsx(technicalInformationView, technicalInformationViewPath)
+const hasExportModifier = node => node.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)
+const findExportedFunction = (sourceFile, name) => sourceFile.statements.find(statement => (
+  ts.isFunctionDeclaration(statement) && statement.name?.text === name && hasExportModifier(statement)
+))
+const importsComponent = (sourceFile, name, modulePath) => sourceFile.statements.some(statement => {
+  if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || statement.moduleSpecifier.text !== modulePath) return false
+  const clause = statement.importClause
+  if (clause?.name?.text === name) return true
+  return Boolean(clause?.namedBindings && ts.isNamedImports(clause.namedBindings) && clause.namedBindings.elements.some(element => element.name.text === name))
+})
+const collectBindings = sourceFile => {
+  const bindings = new Map()
+  const walk = node => {
+    if (ts.isFunctionDeclaration(node) && node.name) bindings.set(node.name.text, node)
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) bindings.set(node.name.text, node.initializer)
+    ts.forEachChild(node, walk)
+  }
+  walk(sourceFile)
+  return bindings
+}
+const returnedExpressions = functionLike => {
+  if (!ts.isBlock(functionLike.body)) return [functionLike.body]
+  const returns = []
+  const walk = node => {
+    if (node !== functionLike.body && ts.isFunctionLike(node)) return
+    if (ts.isReturnStatement(node) && node.expression) returns.push(node.expression)
+    else ts.forEachChild(node, walk)
+  }
+  walk(functionLike.body)
+  return returns
+}
+const collectReachableFromRoots = (sourceFile, roots) => {
+  const bindings = collectBindings(sourceFile)
+  const nodes = []
+  const seen = new Set()
+  const walk = node => {
+    if (!node || seen.has(node)) return
+    seen.add(node)
+    nodes.push(node)
+    if (ts.isIdentifier(node) && bindings.has(node.text)) {
+      const binding = bindings.get(node.text)
+      if (ts.isFunctionLike(binding)) returnedExpressions(binding).forEach(walk)
+      else walk(binding)
+    }
+    ts.forEachChild(node, walk)
+  }
+  roots.forEach(walk)
+  return nodes
+}
+const collectReachableNodes = (sourceFile, component) => collectReachableFromRoots(sourceFile, returnedExpressions(component))
+const jsxTagName = (node, sourceFile) => {
+  if (ts.isJsxElement(node)) return node.openingElement.tagName.getText(sourceFile)
+  if (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) return node.tagName.getText(sourceFile)
+  return ''
+}
+const liveJsxMounts = (nodes, sourceFile, name) => nodes.filter(node => (
+  (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) && jsxTagName(node, sourceFile) === name
+))
+const jsxAttribute = (node, name) => node.attributes.properties.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText() === name)
+const staticJsxAttributeText = attribute => {
+  if (!attribute?.initializer) return ''
+  if (ts.isStringLiteral(attribute.initializer)) return attribute.initializer.text
+  if (ts.isJsxExpression(attribute.initializer) && attribute.initializer.expression) return attribute.initializer.expression.getText()
+  return ''
+}
+const containsCall = (node, methodName) => {
+  let found = false
+  const walk = child => {
+    if (ts.isCallExpression(child) && ts.isPropertyAccessExpression(child.expression) && child.expression.name.text === methodName) found = true
+    if (!found) ts.forEachChild(child, walk)
+  }
+  walk(node)
+  return found
+}
+const activeComponent = findExportedFunction(technicalInformationSourceFile, 'TechnicalProjectInformationView')
+assert.ok(activeComponent, 'technical information checks bind to the exported live component')
+const technicalInformationReachableNodes = collectReachableNodes(technicalInformationSourceFile, activeComponent)
+for (const [name, modulePath] of [
+  ['ProjectInformationFrame', '@/components/project-info/ProjectInformationFrame'],
+  ['TechnicalPlanSummary', '@/components/technical-project/TechnicalPlanSummary'],
+  ['SubprojectConfigModal', '@/components/technical-project/SubprojectConfigModal'],
+]) {
+  assert.equal(importsComponent(technicalInformationSourceFile, name, modulePath), true, `technical information imports ${name} from its canonical module`)
+  assert.equal(liveJsxMounts(technicalInformationReachableNodes, technicalInformationSourceFile, name).length, 1, `the live technical information return tree mounts ${name}`)
+}
+const basicInfoMounts = liveJsxMounts(technicalInformationReachableNodes, technicalInformationSourceFile, 'TechnicalProjectBasicInfo')
+const inlineBasicInfoMounts = technicalInformationReachableNodes.filter(node => (
+  (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node))
+  && staticJsxAttributeText(jsxAttribute(node, 'data-section')) === 'technical-basic-information'
+))
+assert.equal(basicInfoMounts.length + inlineBasicInfoMounts.length, 1, 'technical information has exactly one live basic-information region')
+if (basicInfoMounts.length) {
+  assert.equal(basicInfoMounts.length, 1, 'technical information mounts one basic-information child')
+  assert.equal(importsComponent(technicalInformationSourceFile, 'TechnicalProjectBasicInfo', '@/components/technical-project/TechnicalProjectBasicInfo'), true, 'technical information imports its mounted basic-information child from the canonical module')
+  const basicInfoSource = readSource(root, 'src/components/technical-project/TechnicalProjectBasicInfo.tsx')
+  const basicInfoSourceFile = parseTsx(basicInfoSource, 'TechnicalProjectBasicInfo.tsx')
+  const basicInfoComponent = findExportedFunction(basicInfoSourceFile, 'TechnicalProjectBasicInfo')
+  assert.ok(basicInfoComponent, 'mounted technical basic information resolves to its exported live component')
+  const basicReachableNodes = collectReachableNodes(basicInfoSourceFile, basicInfoComponent)
+  assert.equal(importsComponent(basicInfoSourceFile, 'CollapsibleInformationSection', '@/components/project-info/CollapsibleInformationSection'), true, 'mounted basic information imports the shared collapsible section canonically')
+  assert.equal(liveJsxMounts(basicReachableNodes, basicInfoSourceFile, 'CollapsibleInformationSection').length, 1, 'mounted basic information renders its collapsible section')
+  assert.ok(basicReachableNodes.some(node => node.getText(basicInfoSourceFile).includes('该子任务已停用')), 'mounted basic information preserves inactive read-only feedback')
+} else {
+  assert.equal(inlineBasicInfoMounts.length, 1, 'inline basic information exposes one live technical-basic-information region')
+}
+const basicInfoMount = basicInfoMounts[0] || inlineBasicInfoMounts[0]
+const subprojectGuard = (() => {
+  let node = basicInfoMount.parent
+  while (node && node !== activeComponent) {
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+      const left = node.left
+      if (ts.isBinaryExpression(left) && [ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.EqualsEqualsToken].includes(left.operatorToken.kind)) {
+        const pairs = [[left.left, left.right], [left.right, left.left]]
+        if (pairs.some(([field, value]) => field.getText(technicalInformationSourceFile) === 'activeTab.kind' && ts.isStringLiteral(value) && value.text === 'subproject')) return node
+      }
+    }
+    node = node.parent
+  }
+  return undefined
+})()
+assert.ok(subprojectGuard, 'the sole live basic-information mount is structurally guarded by activeTab.kind === subproject')
+for (const title of ['团队信息', '交付物信息']) {
+  assert.ok(technicalInformationReachableNodes.some(node => (
+    (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node))
+    && jsxTagName(node, technicalInformationSourceFile) === 'CollapsibleInformationSection'
+    && staticJsxAttributeText(jsxAttribute(node, 'title')) === title
+  )), `${title} is carried by a live collapsible information section`)
+}
 assert.match(technicalInformationView, /label:\s*'项目名称'[\s\S]*label:\s*'项目分类'[\s\S]*label:\s*'技术赛道'[\s\S]*label:\s*'TMG及技术领域'[\s\S]*label:\s*'子领域'[\s\S]*label:\s*'项目阶段'[\s\S]*label:\s*'前置项目'[\s\S]*label:\s*'项目年份'[\s\S]*label:\s*'项目价值'/, 'technical core fields retain their approved order')
 assert.match(technicalInformationView, /label:\s*'项目价值'[^\n]*fullWidth:\s*true/, 'technical project value owns a full-width row')
 assert.match(technicalInformationView, /sessionStorage\.getItem\(['"]pms:technical-project-list-target-child['"]\)/, 'technical information consumes workbench child targeting')
@@ -269,17 +393,22 @@ const technicalPlanSummary = readSource(root, 'src/components/technical-project/
 assert.match(technicalPlanSummary, /useTechnicalPlanStore/, 'technical plan summary reads the scoped plan instance')
 assert.match(technicalPlanSummary, /暂无计划版本/, 'technical plan summary uses one empty state when no version exists')
 assert.doesNotMatch(technicalPlanSummary, /createRevision|创建修订|编辑/, 'technical plan summary is read-only and cannot create or edit plans')
-const legacyBasicInfoPath = 'src/components/technical-project/TechnicalProjectBasicInfo.tsx'
-const technicalBasicInfoBehaviorSources = [
-  technicalInformationView,
-  ...(fs.existsSync(`${root}/${legacyBasicInfoPath}`) ? [readSource(root, legacyBasicInfoPath)] : []),
-]
-const technicalBasicInfoBehaviorSource = technicalBasicInfoBehaviorSources.join('\n')
-assert.match(technicalBasicInfoBehaviorSource, /显示已停用/, 'technical basic information can reveal inactive children after migration')
-assert.match(technicalBasicInfoBehaviorSource, /SubprojectConfigModal/, 'active child information still mounts the configuration modal after migration')
-assert.match(technicalBasicInfoBehaviorSource, /event\.preventDefault\(\)[\s\S]{0,100}event\.stopPropagation\(\)/, 'tab-adjacent configuration still prevents navigation before opening')
-if (fs.existsSync(`${root}/${legacyBasicInfoPath}`)) assert.doesNotMatch(readSource(root, legacyBasicInfoPath), /TDT项目计划/, 'legacy basic information keeps TDT excluded')
-assert.doesNotMatch(technicalInformationView, /activeTab\.kind\s*===\s*['"]tdt['"][\s\S]{0,240}(?:<TechnicalProjectBasicInfo\b|data-section=['"]technical-basic-information['"])/, 'migrated basic information never renders for the TDT tab')
+assert.ok(technicalInformationReachableNodes.some(node => node.getText(technicalInformationSourceFile).includes('显示已停用')), 'the live technical information tree exposes inactive children')
+const configButton = technicalInformationReachableNodes.find(node => (
+  (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node))
+  && jsxTagName(node, technicalInformationSourceFile) === 'Button'
+  && staticJsxAttributeText(jsxAttribute(node, 'aria-label')).includes('配置子任务')
+))
+assert.ok(configButton, 'the live technical information tree renders the child configuration button')
+const configClick = jsxAttribute(configButton, 'onClick')
+assert.ok(configClick?.initializer && ts.isJsxExpression(configClick.initializer) && configClick.initializer.expression, 'child configuration button owns a concrete click handler')
+const configHandler = configClick.initializer.expression
+const configHandlerReachableNodes = collectReachableFromRoots(technicalInformationSourceFile, [configHandler])
+assert.equal(configHandlerReachableNodes.some(node => containsCall(node, 'preventDefault')), true, 'child configuration click prevents tab activation')
+assert.equal(configHandlerReachableNodes.some(node => containsCall(node, 'stopPropagation')), true, 'child configuration click stops tab propagation')
+assert.ok(configHandlerReachableNodes.some(node => node.getText(technicalInformationSourceFile).includes('setConfiguringChild')), 'child configuration click opens the mounted modal state')
+const configModalMount = liveJsxMounts(technicalInformationReachableNodes, technicalInformationSourceFile, 'SubprojectConfigModal')[0]
+assert.ok(staticJsxAttributeText(jsxAttribute(configModalMount, 'open')).includes('configuringChild'), 'mounted configuration modal consumes the state opened by its button')
 const createFields = readSource(root, 'src/components/technical-project/TechnicalProjectCreateFields.tsx')
 assert.match(createFields, /Input\.TextArea[\s\S]{0,220}onPressEnter=\{event\s*=>\s*event\.stopPropagation\(\)\}/, 'Enter inside project-value textarea cannot bubble into modal submit')
 const technicalPlan = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')

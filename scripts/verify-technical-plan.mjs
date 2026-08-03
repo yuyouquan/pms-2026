@@ -205,73 +205,191 @@ const planWorkspaceShell = readSource(root, planWorkspaceShellPath)
 const parseTsx = (source, fileName) => ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
 const shellSourceFile = parseTsx(planWorkspaceShell, planWorkspaceShellPath)
 const technicalSourceFile = parseTsx(technicalModuleSource, 'TechnicalPlanModule.tsx')
-const visit = (node, predicate) => {
-  if (predicate(node)) return node
-  let found
-  ts.forEachChild(node, child => { if (!found) found = visit(child, predicate) })
-  return found
-}
 const hasExportModifier = node => node.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)
-const exportsComponent = (sourceFile, name) => sourceFile.statements.some(statement => {
-  if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name?.text === name) return hasExportModifier(statement)
-  if (ts.isVariableStatement(statement) && hasExportModifier(statement)) return statement.declarationList.declarations.some(declaration => ts.isIdentifier(declaration.name) && declaration.name.text === name)
-  if (ts.isExportAssignment(statement)) return ts.isIdentifier(statement.expression) && statement.expression.text === name
-  if (ts.isExportDeclaration(statement) && statement.exportClause && ts.isNamedExports(statement.exportClause)) return statement.exportClause.elements.some(element => element.name.text === name || element.propertyName?.text === name)
-  return false
-})
+const functionLikeFromDeclaration = declaration => {
+  if (ts.isFunctionDeclaration(declaration)) return declaration
+  if (ts.isVariableDeclaration(declaration) && declaration.initializer && (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer))) return declaration.initializer
+  return undefined
+}
+const findLocalDeclaration = (sourceFile, name) => {
+  for (const statement of sourceFile.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name?.text === name) return statement
+    if (ts.isVariableStatement(statement)) {
+      const declaration = statement.declarationList.declarations.find(item => ts.isIdentifier(item.name) && item.name.text === name)
+      if (declaration) return declaration
+    }
+  }
+  return undefined
+}
+const findExportedFunctionComponent = (sourceFile, name) => {
+  for (const statement of sourceFile.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name?.text === name && hasExportModifier(statement)) return { declaration: statement, functionLike: statement }
+    if (ts.isVariableStatement(statement) && hasExportModifier(statement)) {
+      const declaration = statement.declarationList.declarations.find(item => ts.isIdentifier(item.name) && item.name.text === name)
+      const functionLike = declaration && functionLikeFromDeclaration(declaration)
+      if (declaration && functionLike) return { declaration, functionLike }
+    }
+    if (ts.isExportAssignment(statement) && ts.isIdentifier(statement.expression) && statement.expression.text === name) {
+      const declaration = findLocalDeclaration(sourceFile, name)
+      const functionLike = declaration && functionLikeFromDeclaration(declaration)
+      if (declaration && functionLike) return { declaration, functionLike }
+    }
+    if (ts.isExportDeclaration(statement) && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+      const element = statement.exportClause.elements.find(item => item.name.text === name)
+      const declaration = element && findLocalDeclaration(sourceFile, element.propertyName?.text || element.name.text)
+      const functionLike = declaration && functionLikeFromDeclaration(declaration)
+      if (declaration && functionLike) return { declaration, functionLike }
+    }
+  }
+  return undefined
+}
 const importsComponent = (sourceFile, name, modulePath) => sourceFile.statements.some(statement => {
   if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || statement.moduleSpecifier.text !== modulePath) return false
   const clause = statement.importClause
   if (clause?.name?.text === name) return true
   return Boolean(clause?.namedBindings && ts.isNamedImports(clause.namedBindings) && clause.namedBindings.elements.some(element => element.name.text === name))
 })
-const findJsxMount = (sourceFile, name) => visit(sourceFile, node => (
+const collectBindings = sourceFile => {
+  const bindings = new Map()
+  const walk = node => {
+    if (ts.isFunctionDeclaration(node) && node.name) bindings.set(node.name.text, node)
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) bindings.set(node.name.text, node.initializer)
+    ts.forEachChild(node, walk)
+  }
+  walk(sourceFile)
+  return bindings
+}
+const returnedExpressions = functionLike => {
+  if (!ts.isBlock(functionLike.body)) return [functionLike.body]
+  const returns = []
+  const walk = node => {
+    if (node !== functionLike.body && ts.isFunctionLike(node)) return
+    if (ts.isReturnStatement(node) && node.expression) returns.push(node.expression)
+    else ts.forEachChild(node, walk)
+  }
+  walk(functionLike.body)
+  return returns
+}
+const collectReachableFromRoots = (sourceFile, roots) => {
+  const bindings = collectBindings(sourceFile)
+  const nodes = []
+  const seen = new Set()
+  const walk = node => {
+    if (!node || seen.has(node)) return
+    seen.add(node)
+    nodes.push(node)
+    if (ts.isIdentifier(node) && bindings.has(node.text)) {
+      const binding = bindings.get(node.text)
+      if (ts.isFunctionLike(binding)) returnedExpressions(binding).forEach(walk)
+      else walk(binding)
+    }
+    ts.forEachChild(node, walk)
+  }
+  roots.forEach(walk)
+  return nodes
+}
+const collectReachableNodes = (sourceFile, component) => collectReachableFromRoots(sourceFile, returnedExpressions(component.functionLike))
+const findJsxMount = (nodes, sourceFile, name) => nodes.find(node => (
   (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) && node.tagName.getText(sourceFile) === name
 ))
 const jsxAttributeNames = node => new Set(node.attributes.properties.filter(ts.isJsxAttribute).map(attribute => attribute.name.getText()))
-const declaresProp = (sourceFile, prop) => Boolean(visit(sourceFile, node => (
-  (ts.isPropertySignature(node) || ts.isMethodSignature(node)) && node.name?.getText(sourceFile) === prop
-)))
-const rendersLabeledControl = (sourceFile, label) => Boolean(visit(sourceFile, node => {
-  if ((!ts.isJsxSelfClosingElement(node) && !ts.isJsxOpeningElement(node)) || !['Button', 'Tooltip'].includes(node.tagName.getText(sourceFile))) return false
-  return node.attributes.properties.some(attribute => {
+const jsxAttribute = (node, name) => node.attributes.properties.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText() === name)
+const propsMembersForComponent = (sourceFile, component) => {
+  let typeNode = component.functionLike.parameters[0]?.type
+  if (!typeNode && ts.isVariableDeclaration(component.declaration) && component.declaration.type && ts.isTypeReferenceNode(component.declaration.type)) {
+    typeNode = component.declaration.type.typeArguments?.[0]
+  }
+  const resolveMembers = candidate => {
+    if (!candidate) return []
+    if (ts.isTypeLiteralNode(candidate)) return candidate.members
+    if (ts.isIntersectionTypeNode(candidate)) return candidate.types.flatMap(resolveMembers)
+    if (ts.isTypeReferenceNode(candidate)) {
+      const typeName = candidate.typeName.getText(sourceFile)
+      const declaration = sourceFile.statements.find(statement => (
+        (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) && statement.name.text === typeName
+      ))
+      if (declaration && ts.isInterfaceDeclaration(declaration)) return declaration.members
+      if (declaration && ts.isTypeAliasDeclaration(declaration)) return resolveMembers(declaration.type)
+    }
+    return []
+  }
+  return new Set(resolveMembers(typeNode).map(member => member.name?.getText(sourceFile)).filter(Boolean))
+}
+const jsxControlHasLabel = (node, sourceFile, label) => {
+  const opening = ts.isJsxElement(node) ? node.openingElement : node
+  if ((!ts.isJsxSelfClosingElement(opening) && !ts.isJsxOpeningElement(opening)) || !['Button', 'Tooltip'].includes(opening.tagName.getText(sourceFile))) return false
+  const hasAttributeLabel = opening.attributes.properties.some(attribute => {
     if (!ts.isJsxAttribute(attribute) || !['aria-label', 'title'].includes(attribute.name.getText())) return false
     if (attribute.initializer && ts.isStringLiteral(attribute.initializer)) return attribute.initializer.text === label
     return Boolean(attribute.initializer && ts.isJsxExpression(attribute.initializer) && ts.isStringLiteral(attribute.initializer.expression) && attribute.initializer.expression.text === label)
   })
-}))
-const configuresViewMode = (sourceFile, mode) => Boolean(visit(sourceFile, node => (
+  const hasTextLabel = ts.isJsxElement(node) && node.children.some(child => ts.isJsxText(child) && child.text.trim() === label)
+  return hasAttributeLabel || hasTextLabel
+}
+const rendersLiveCapabilityControl = (nodes, sourceFile, label) => nodes.some(node => (
+  (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node))
+  && jsxControlHasLabel(node, sourceFile, label)
+))
+const configuresViewMode = (nodes, sourceFile, mode) => nodes.some(node => (
   ts.isPropertyAssignment(node) && node.name.getText(sourceFile) === 'value' && ts.isStringLiteral(node.initializer) && node.initializer.text === mode
-)))
-const hasViewBranch = (sourceFile, mode) => Boolean(visit(sourceFile, node => {
+))
+const hasViewBranch = (nodes, sourceFile, mode) => nodes.some(node => {
   if (!ts.isBinaryExpression(node) || ![ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.EqualsEqualsToken].includes(node.operatorToken.kind)) return false
   const pairs = [[node.left, node.right], [node.right, node.left]]
   return pairs.some(([candidate, value]) => candidate.getText(sourceFile).endsWith('viewMode') && ts.isStringLiteral(value) && value.text === mode)
-}))
+})
 
-assert.equal(exportsComponent(shellSourceFile, 'PlanWorkspaceShell'), true, 'shared plan workspace shell has an executable named or default export')
+const shellComponent = findExportedFunctionComponent(shellSourceFile, 'PlanWorkspaceShell')
+assert.ok(shellComponent, 'shared plan workspace shell resolves to an exported live function component')
+const shellProps = propsMembersForComponent(shellSourceFile, shellComponent)
+const shellReachableNodes = collectReachableNodes(shellSourceFile, shellComponent)
+for (const prop of ['versionControls', 'primaryActions', 'utilityActions', 'viewMode', 'onViewModeChange', 'children']) {
+  assert.equal(shellProps.has(prop), true, `the exported shell props declare live structure slot ${prop}`)
+}
+for (const label of ['计划版本操作', '计划工具', '计划内容']) {
+  assert.ok(shellReachableNodes.some(node => (
+    (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
+    && node.attributes.properties.some(attribute => ts.isJsxAttribute(attribute)
+      && attribute.name.getText() === 'aria-label'
+      && attribute.initializer
+      && ts.isStringLiteral(attribute.initializer)
+      && attribute.initializer.text === label)
+  )), `the exported shell return tree renders its ${label} structure`)
+}
+assert.equal(importsComponent(shellSourceFile, 'PlanViewModeSwitcher', '@/components/plans/PlanViewModeSwitcher'), true, 'the exported shell imports the canonical view-mode switcher')
+assert.ok(findJsxMount(shellReachableNodes, shellSourceFile, 'PlanViewModeSwitcher'), 'the exported shell return tree mounts its canonical view-mode switcher')
 assert.equal(importsComponent(technicalSourceFile, 'PlanWorkspaceShell', '@/components/plans/PlanWorkspaceShell'), true, 'technical plan module imports the shared shell from its canonical module')
-const technicalShellMount = findJsxMount(technicalSourceFile, 'PlanWorkspaceShell')
+const technicalComponent = findExportedFunctionComponent(technicalSourceFile, 'TechnicalPlanModule')
+assert.ok(technicalComponent, 'technical plan module resolves to its exported live function component')
+const technicalReachableNodes = collectReachableNodes(technicalSourceFile, technicalComponent)
+const technicalShellMount = findJsxMount(technicalReachableNodes, technicalSourceFile, 'PlanWorkspaceShell')
 assert.ok(technicalShellMount, 'technical plan module mounts the imported shared plan workspace shell')
 const technicalShellProps = jsxAttributeNames(technicalShellMount)
 const shellCapabilities = [
-  ['创建修订', 'onCreateRevision'],
-  ['计划克隆', 'onClonePlan'],
-  ['筛选', 'onFilter'],
-  ['列设置', 'onOpenColumnSettings'],
-  ['全部展开', 'onExpandAll'],
-  ['全部收起', 'onCollapseAll'],
-  ['版本对比', 'onCompareVersions'],
-  ['分享计划', 'onSharePlan'],
+  ['创建修订', 'primaryActions'],
+  ['计划克隆', 'primaryActions'],
+  ['筛选', 'utilityActions'],
+  ['列设置', 'utilityActions'],
+  ['全部展开', 'utilityActions'],
+  ['全部收起', 'utilityActions'],
+  ['版本对比', 'utilityActions'],
+  ['分享计划', 'utilityActions'],
 ]
-for (const [label, prop] of shellCapabilities) {
-  assert.equal(declaresProp(shellSourceFile, prop), true, `shared shell declares the ${label} capability prop ${prop}`)
-  assert.equal(rendersLabeledControl(shellSourceFile, label), true, `shared shell renders an actual ${label} control`)
-  assert.equal(technicalShellProps.has(prop), true, `technical plan passes ${prop} into its shell mount`)
+for (const slot of ['primaryActions', 'utilityActions']) assert.equal(technicalShellProps.has(slot), true, `technical plan fills the shared shell ${slot} slot`)
+for (const [label, slot] of shellCapabilities) {
+  const slotAttribute = jsxAttribute(technicalShellMount, slot)
+  assert.ok(slotAttribute?.initializer && ts.isJsxExpression(slotAttribute.initializer) && slotAttribute.initializer.expression, `technical plan passes a live ${slot} expression for ${label}`)
+  const slotNodes = collectReachableFromRoots(technicalSourceFile, [slotAttribute.initializer.expression])
+  assert.equal(rendersLiveCapabilityControl(slotNodes, technicalSourceFile, label), true, `technical plan's ${slot} slot renders an actual ${label} control`)
 }
+const viewSwitcherSource = readSource(root, 'src/components/plans/PlanViewModeSwitcher.tsx')
+const viewSwitcherSourceFile = parseTsx(viewSwitcherSource, 'PlanViewModeSwitcher.tsx')
+const viewSwitcherComponent = findExportedFunctionComponent(viewSwitcherSourceFile, 'PlanViewModeSwitcher')
+assert.ok(viewSwitcherComponent, 'canonical plan view-mode switcher resolves to its exported live component')
+const viewSwitcherReachableNodes = collectReachableNodes(viewSwitcherSourceFile, viewSwitcherComponent)
 for (const mode of ['vertical', 'horizontal', 'gantt']) {
-  assert.equal(configuresViewMode(shellSourceFile, mode), true, `shared shell configures the ${mode} view option`)
-  assert.equal(hasViewBranch(technicalSourceFile, mode), true, `technical plan renders a real ${mode} view branch`)
+  assert.equal(configuresViewMode(viewSwitcherReachableNodes, viewSwitcherSourceFile, mode), true, `the live canonical view switcher configures the ${mode} view option`)
+  assert.equal(hasViewBranch(technicalReachableNodes, technicalSourceFile, mode), true, `the exported technical plan renders a real ${mode} view branch`)
 }
 assert.equal(technicalShellProps.has('viewMode'), true, 'technical plan passes its current view mode into the shell')
 assert.equal(technicalShellProps.has('onViewModeChange'), true, 'technical plan passes its view-mode handler into the shell')
@@ -292,7 +410,9 @@ assert.match(technicalModuleSource, /canExport/, 'technical plan export has a de
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 const projectSpaceSourceFile = parseTsx(projectSpaceSource, 'ProjectSpaceContainer.tsx')
 assert.equal(importsComponent(projectSpaceSourceFile, 'PlanWorkspaceShell', '@/components/plans/PlanWorkspaceShell'), true, 'whole-machine project space imports the shared shell from its canonical module')
-assert.ok(findJsxMount(projectSpaceSourceFile, 'PlanWorkspaceShell'), 'whole-machine project space mounts the imported shared plan workspace shell')
+const projectSpaceComponent = findExportedFunctionComponent(projectSpaceSourceFile, 'ProjectSpaceContainer')
+assert.ok(projectSpaceComponent, 'whole-machine project space resolves to its exported live function component')
+assert.ok(findJsxMount(collectReachableNodes(projectSpaceSourceFile, projectSpaceComponent), projectSpaceSourceFile, 'PlanWorkspaceShell'), 'whole-machine project space mounts the imported shared shell in its live return tree')
 assert.match(projectSpaceSource, /canDo\('plan:导入'\)/, 'project space passes technical import permission')
 assert.match(projectSpaceSource, /canDo\('plan:导出'\)/, 'project space passes technical export permission')
 
