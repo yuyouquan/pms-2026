@@ -23,6 +23,19 @@ export function selectVisibleTechnicalPlanVersions<T extends { status: string }>
   return versions.filter(version => version.status !== '修订中' || canViewDraft)
 }
 
+export function isResponsibleForTechnicalPlanTasks(
+  tasks: readonly { responsible?: string }[],
+  currentLoginUser?: string,
+): boolean {
+  const userName = String(currentLoginUser || '').trim()
+  if (!userName) return false
+  return tasks.some(task => String(task.responsible || '')
+    .split(/[,，、;；/]/)
+    .map(name => name.trim())
+    .filter(Boolean)
+    .includes(userName))
+}
+
 export function includeTechnicalPlanAncestors<T extends { id: string; parentId?: string }>(
   allTasks: readonly T[],
   matchedTasks: readonly T[],
@@ -92,9 +105,18 @@ export function parseTechnicalPlanImportRows(
   rows: readonly Record<string, unknown>[],
   fallbackTasks: readonly TechnicalTemplateTask[] = [],
 ): TechnicalTemplateTask[] {
+  const hasIdColumn = rows.some(row => (
+    Object.prototype.hasOwnProperty.call(row, 'ID') || Object.prototype.hasOwnProperty.call(row, 'id')
+  ))
+  const fallbackById = new Map(fallbackTasks.map(task => [task.id, task]))
+  const usedIds = new Set<string>()
   return rows.map((row, index) => {
-    const fallback = fallbackTasks[index]
-    const id = stringValue(row.ID ?? row.id ?? fallback?.id ?? `import-${index + 1}`)
+    const rowId = optionalStringValue(row.ID ?? row.id)
+    const id = hasIdColumn ? rowId : fallbackTasks[index]?.id || ''
+    if (!id) throw new Error('technical-import-missing-id')
+    if (usedIds.has(id)) throw new Error('technical-import-duplicate-id')
+    usedIds.add(id)
+    const fallback = hasIdColumn ? fallbackById.get(id) : fallbackTasks[index]
     const parentId = optionalStringValue(row['父任务ID'] ?? row.parentId ?? fallback?.parentId)
     return {
       ...(fallback || {}),
@@ -139,6 +161,7 @@ export type TechnicalHorizontalRow = {
 
 export function buildTechnicalHorizontalRows(
   versions: readonly { id: string; versionNo: string; status: string; tasks: TechnicalTemplateTask[] }[],
+  currentVersionId: string,
 ): TechnicalHorizontalRow[] {
   const versionRows = versions.map(version => ({
     id: version.id,
@@ -148,7 +171,7 @@ export function buildTechnicalHorizontalRows(
     cycleDays: cycleDays(version.tasks, 'planStartDate', 'planEndDate'),
     endDatesByTaskId: Object.fromEntries(version.tasks.map(task => [task.id, task.planEndDate || ''])),
   }))
-  const latest = versions.at(-1)
+  const currentVersion = versions.find(version => version.id === currentVersionId)
   return [
     ...versionRows,
     {
@@ -156,8 +179,8 @@ export function buildTechnicalHorizontalRows(
       rowType: 'actual',
       versionNo: '实际',
       status: '',
-      cycleDays: latest ? cycleDays(latest.tasks, 'actualStartDate', 'actualEndDate') : null,
-      endDatesByTaskId: Object.fromEntries((latest?.tasks || []).map(task => [task.id, task.actualEndDate || ''])),
+      cycleDays: currentVersion ? cycleDays(currentVersion.tasks, 'actualStartDate', 'actualEndDate') : null,
+      endDatesByTaskId: Object.fromEntries((currentVersion?.tasks || []).map(task => [task.id, task.actualEndDate || ''])),
     },
   ]
 }

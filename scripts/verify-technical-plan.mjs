@@ -411,7 +411,9 @@ assert.match(technicalModuleSource, /canExport/, 'technical plan export has a de
 for (const label of ['实际开始', '实际完成', '实际工期']) {
   assert.match(technicalModuleSource, new RegExp(label), `technical plan vertical table exposes the whole-machine ${label} field`)
 }
-assert.match(technicalModuleSource, /canViewDraft/, 'technical plan accepts the shared draft-visibility capability')
+assert.match(technicalModuleSource, /canViewTechnicalPlan/, 'technical plan accepts only its L1 technical view capability')
+assert.match(technicalModuleSource, /isResponsibleForTechnicalPlanTasks/, 'technical draft visibility derives responsibility from the active technical scope')
+assert.doesNotMatch(technicalModuleSource, /effectiveTasks|level2PlanTasks|projectPlanLevel/, 'technical plan never reads whole-machine or level-2 plan state')
 assert.match(technicalModuleSource, /visibleVersions/, 'all technical plan version surfaces share one visible-version selector')
 assert.match(technicalModuleSource, /navigateWithEditGuard\([^,]+,\s*Boolean\(isDraft\)\)/s, 'scope and version switches use the current draft state for edit guarding')
 assert.match(technicalModuleSource, /<DHTMLXGantt[\s\S]{0,260}readOnly/, 'technical Gantt is explicitly read-only until write-back is implemented')
@@ -449,10 +451,35 @@ for (const title of ['ID', '父任务ID', '任务名称', '预估工期', '实�
 const horizontalRows = technicalWorkspace.buildTechnicalHorizontalRows([{
   ...publishedVersion,
   tasks: [{ ...hierarchy[0], planStartDate: '2026-01-01', planEndDate: '2026-01-10', actualStartDate: '2026-01-02', actualEndDate: '2026-01-09' }],
-}])
+}], 'v1')
 assert.equal(horizontalRows[0].rowType, 'version', 'horizontal plan includes a version row')
 assert.equal(horizontalRows.at(-1).rowType, 'actual', 'horizontal plan includes a final actual row')
 assert.equal(typeof horizontalRows[0].cycleDays, 'number', 'horizontal version rows include development cycle')
+assert.throws(
+  () => technicalWorkspace.parseTechnicalPlanImportRows([{ ID: 'same', '任务名称': 'A' }, { ID: 'same', '任务名称': 'B' }]),
+  /duplicate-id/,
+  'technical import rejects duplicate IDs',
+)
+assert.throws(
+  () => technicalWorkspace.parseTechnicalPlanImportRows([{ ID: '', '任务名称': 'A' }], [imported[0]]),
+  /missing-id/,
+  'an ID-based technical import rejects blank IDs',
+)
+const idMatchedFallback = technicalWorkspace.parseTechnicalPlanImportRows(
+  [{ ID: 'c1', '任务名称': '节点更新' }, { ID: 'p1', '任务名称': '阶段更新' }],
+  imported,
+)
+assert.deepEqual(idMatchedFallback.map(task => [task.id, task.responsible]), [['c1', '乙'], ['p1', '甲']], 'ID-based imports match fallback fields by ID instead of row index')
+assert.deepEqual(
+  technicalWorkspace.parseTechnicalPlanImportRows([{ '任务名称': '旧文件阶段' }], [imported[0]]).map(task => task.id),
+  ['p1'],
+  'legacy files without an ID column alone may fall back by row index',
+)
+const actualVersionRows = technicalWorkspace.buildTechnicalHorizontalRows([
+  { ...publishedVersion, id: 'selected', tasks: [{ ...imported[0], actualEndDate: '2026-01-09' }] },
+  { ...publishedVersion, id: 'later', tasks: [{ ...imported[0], actualEndDate: '2026-02-09' }] },
+], 'selected')
+assert.equal(actualVersionRows.at(-1).endDatesByTaskId.p1, '2026-01-09', 'horizontal actual row explicitly follows the selected version')
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 const projectSpaceSourceFile = parseTsx(projectSpaceSource, 'ProjectSpaceContainer.tsx')
 assert.equal(importsComponent(projectSpaceSourceFile, 'PlanWorkspaceShell', '@/components/plans/PlanWorkspaceShell'), true, 'whole-machine project space imports the shared shell from its canonical module')
@@ -461,7 +488,8 @@ assert.ok(projectSpaceComponent, 'whole-machine project space resolves to its ex
 assert.ok(findJsxMount(collectReachableNodes(projectSpaceSourceFile, projectSpaceComponent), projectSpaceSourceFile, 'PlanWorkspaceShell'), 'whole-machine project space mounts the imported shared shell in its live return tree')
 assert.match(projectSpaceSource, /canDo\('plan:导入'\)/, 'project space passes technical import permission')
 assert.match(projectSpaceSource, /canDo\('plan:导出'\)/, 'project space passes technical export permission')
-assert.match(projectSpaceSource, /<TechnicalPlanModule[\s\S]{0,420}canViewDraft=\{canViewDraft\}/, 'project space passes the shared draft visibility capability to technical plans')
+assert.match(projectSpaceSource, /<TechnicalPlanModule[\s\S]{0,420}canViewTechnicalPlan=\{canViewLevel1Plan\}/, 'project space passes only the technical L1 view capability')
+assert.doesNotMatch(projectSpaceSource.match(/<TechnicalPlanModule[\s\S]{0,520}\/>/)?.[0] || '', /canViewDraft|effectiveTasks|level2PlanTasks|projectPlanLevel/, 'technical draft access never depends on whole-machine or level-2 plan state')
 
 const machineScope = rules.getTemplateConfigScopeKey('整机产品项目', 'level1')
 const migratedPlan = planModule.migratePlanStoreState({

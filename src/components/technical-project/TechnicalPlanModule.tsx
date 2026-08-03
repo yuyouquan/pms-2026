@@ -30,6 +30,7 @@ import {
 import {
   buildTechnicalHorizontalRows,
   includeTechnicalPlanAncestors,
+  isResponsibleForTechnicalPlanTasks,
   parseTechnicalPlanImportRows,
   reorderTechnicalTasksWithinParent,
   selectVisibleTechnicalPlanVersions,
@@ -37,6 +38,7 @@ import {
 } from '@/lib/technicalPlanWorkspace'
 import { compareVersionsForTable } from '@/lib/versionCompare'
 import { getTemplateSnapshotForProjectType } from '@/lib/projectTemplateCompatibility'
+import { comparePublishedTechnicalPlanVersions } from '@/lib/technicalProjectRules'
 import {
   createFilterCondition,
   getFieldOptionsWithDuplicateDisabled,
@@ -97,15 +99,17 @@ const TECHNICAL_FILTER_FIELDS: readonly FilterFieldDefinition[] = [
 function TechnicalHorizontalPlanTable({
   tasks,
   versions,
+  currentVersionId,
 }: {
   tasks: readonly TechnicalTemplateTask[]
   versions: readonly { id: string; versionNo: string; status: string; tasks: TechnicalTemplateTask[] }[]
+  currentVersionId: string
 }) {
   const groups = buildPlanHorizontalStageGroups(
     tasks.map(task => ({ ...task })),
   )
   if (!groups.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无横版计划数据" />
-  const rows = buildTechnicalHorizontalRows(versions)
+  const rows = buildTechnicalHorizontalRows(versions, currentVersionId)
   const columns: ColumnsType<(typeof rows)[number]> = [
     {
       key: 'versionNo', title: '版本', dataIndex: 'versionNo', width: 110, fixed: 'left',
@@ -149,7 +153,7 @@ export interface TechnicalPlanModuleProps {
   canPublish: boolean
   canImport: boolean
   canExport: boolean
-  canViewDraft: boolean
+  canViewTechnicalPlan: boolean
   maxDepthByKind: Readonly<Record<TechnicalTemplateKind, number>>
 }
 
@@ -167,7 +171,7 @@ const latestPublishedTemplate = (
 }
 
 export default function TechnicalPlanModule({
-  projectId, currentLoginUser, canEdit, canPublish, canImport, canExport, canViewDraft,
+  projectId, currentLoginUser, canEdit, canPublish, canImport, canExport, canViewTechnicalPlan,
   maxDepthByKind = DEFAULT_MAX_DEPTH,
 }: TechnicalPlanModuleProps) {
   const [showInactive, setShowInactive] = useState(false)
@@ -212,11 +216,21 @@ export default function TechnicalPlanModule({
   const tab = tabs.find(item => item.key === activeKey) || tabs[0]
   const scope = tab?.scope || { kind: 'tdt' as const, parentProjectId: projectId }
   const instance = plansByKey[getTechnicalPlanKey(scope)]
-  const visibleVersions = useMemo(
-    () => selectVisibleTechnicalPlanVersions(instance?.versions || [], canViewDraft),
-    [canViewDraft, instance?.versions],
+  const technicalDraft = instance?.versions.find(version => version.status === '修订中')
+  const canViewTechnicalDraft = canViewTechnicalPlan && (
+    canEdit || isResponsibleForTechnicalPlanTasks(technicalDraft?.tasks || [], currentLoginUser)
   )
-  const currentVersion = visibleVersions.find(version => version.id === instance?.currentVersionId) || visibleVersions[0]
+  const visibleVersions = useMemo(
+    () => canViewTechnicalPlan
+      ? selectVisibleTechnicalPlanVersions(instance?.versions || [], canViewTechnicalDraft)
+      : [],
+    [canViewTechnicalDraft, canViewTechnicalPlan, instance?.versions],
+  )
+  const selectedVisibleVersion = visibleVersions.find(version => version.id === instance?.currentVersionId)
+  const latestPublishedVersion = [...visibleVersions]
+    .filter(version => version.status === '已发布')
+    .sort(comparePublishedTechnicalPlanVersions)[0]
+  const currentVersion = selectedVisibleVersion || latestPublishedVersion || visibleVersions[0]
   const tasks = currentVersion?.tasks || []
   const isDraft = currentVersion?.status === '修订中'
   const readOnlyReason = tab?.subproject && !tab.subproject.active
@@ -224,7 +238,8 @@ export default function TechnicalPlanModule({
     : tab?.subproject && (!tab.subproject.configuration.coreValue || !tab.subproject.configuration.developmentMode)
       ? '请先完成子项目信息配置'
       : ''
-  const canMaintain = canEdit && isDraft && !readOnlyReason
+  const canEditTechnicalPlan = canViewTechnicalPlan && canEdit
+  const canMaintain = canEditTechnicalPlan && isDraft && !readOnlyReason
   const templateTasks = latestPublishedTemplate(
     tab?.templateKind || 'tdt', configTemplateVersionScopes, publishedSnapshots,
     configTemplateTasksByType[TECHNICAL_TEMPLATE_STORAGE_KEYS[tab?.templateKind || 'tdt']] || [],
@@ -269,7 +284,7 @@ export default function TechnicalPlanModule({
   }, [activeKey])
 
   const handleCreateRevision = () => {
-    if (!tab || !canEdit) return
+    if (!tab || !canEditTechnicalPlan) return
     const result = createRevision({ scope: tab.scope, templateKind: tab.templateKind, maxDepth, templateTasks, subproject: tab.subproject })
     if (!result.ok) {
       message.warning(result.reason === 'draft-exists' ? '当前计划已有修订版' : readOnlyReason || '当前子项目不可创建修订')
@@ -279,7 +294,7 @@ export default function TechnicalPlanModule({
   }
 
   const handleClonePlan = () => {
-    if (!tab || !canEdit || readOnlyReason || hasDraft) return
+    if (!tab || !canEditTechnicalPlan || readOnlyReason || hasDraft) return
     const source = currentVersion?.status === '已发布'
       ? currentVersion
       : [...publishedVersions].sort((left, right) => right.versionNo.localeCompare(left.versionNo, undefined, { numeric: true }))[0]
@@ -297,11 +312,17 @@ export default function TechnicalPlanModule({
   const handlePublish = () => {
     if (!canPublish || !canMaintain) return
     if (invalid.size) {
+      setFilters([])
+      setTempFilters([createFilterCondition()])
+      setFilterOpen(false)
+      setColumnsOpen(false)
       setViewMode('vertical')
       const firstInvalidTaskId = invalid.keys().next().value
       requestAnimationFrame(() => {
-        document.querySelector(`[data-row-key="${CSS.escape(String(firstInvalidTaskId))}"]`)
-          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        requestAnimationFrame(() => {
+          document.querySelector(`[data-row-key="${CSS.escape(String(firstInvalidTaskId))}"]`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        })
       })
       message.error('请先修复计划日期冲突')
       return
@@ -423,7 +444,7 @@ export default function TechnicalPlanModule({
       if (group.colSpan > 1) merges.push({ s: { r: 0, c: columnIndex }, e: { r: 0, c: columnIndex + group.colSpan - 1 } })
       columnIndex += group.colSpan
     })
-    const rows = buildTechnicalHorizontalRows(visibleVersions).map(row => [
+    const rows = buildTechnicalHorizontalRows(visibleVersions, currentVersion?.id || '').map(row => [
       row.versionNo,
       row.cycleDays == null ? '-' : `${row.cycleDays}天`,
       ...milestoneTasks.map(task => row.endDatesByTaskId[task.id] || '-'),
@@ -461,7 +482,12 @@ export default function TechnicalPlanModule({
       const result = updateCurrentTasks(scope, imported, maxDepth)
       if (!result.ok) throw new Error('maxDepth')
       message.success('计划已导入')
-    } catch { message.error('导入失败，请检查文件层级与字段') }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : ''
+      if (reason.includes('duplicate-id')) message.error('导入失败：任务 ID 不可重复')
+      else if (reason.includes('missing-id')) message.error('导入失败：任务 ID 不能为空；旧模板无 ID 列时需与当前计划逐行对应')
+      else message.error('导入失败，请检查文件层级与字段')
+    }
     return false
   }
 
@@ -536,7 +562,8 @@ export default function TechnicalPlanModule({
         notices={(
           <>
             {readOnlyReason && <Alert showIcon type={tab?.subproject?.active ? 'warning' : 'info'} message={readOnlyReason} style={{ marginBottom: 12 }} />}
-            {!readOnlyReason && !canEdit && <Alert showIcon type="info" message="当前账号无计划编辑权限，仅可查看计划" style={{ marginBottom: 12 }} />}
+            {!canViewTechnicalPlan && <Alert showIcon type="warning" message="当前账号无技术项目一级计划查看权限" style={{ marginBottom: 12 }} />}
+            {canViewTechnicalPlan && !readOnlyReason && !canEdit && <Alert showIcon type="info" message="当前账号无计划编辑权限，仅可查看计划" style={{ marginBottom: 12 }} />}
             {canMaintain && viewMode === 'vertical' && (
               <div className="technical-plan-edit-notice" role="status">
                 <EditOutlined />
@@ -564,14 +591,14 @@ export default function TechnicalPlanModule({
         primaryActions={(
           <Space size={6}>
             {!hasDraft && (
-              <Tooltip title={!canEdit ? '无计划编辑权限' : readOnlyReason}>
-                <Button type="primary" icon={<PlusOutlined />} disabled={!canEdit || Boolean(readOnlyReason)} onClick={handleCreateRevision} aria-label="创建修订">创建修订</Button>
+              <Tooltip title={!canEditTechnicalPlan ? '无计划编辑权限' : readOnlyReason}>
+                <Button type="primary" icon={<PlusOutlined />} disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)} onClick={handleCreateRevision} aria-label="创建修订">创建修订</Button>
               </Tooltip>
             )}
-            <Tooltip title={!canEdit ? '无计划编辑权限' : readOnlyReason || (!publishedVersions.length ? '暂无已发布版本' : '计划克隆')}>
+            <Tooltip title={!canEditTechnicalPlan ? '无计划编辑权限' : readOnlyReason || (!publishedVersions.length ? '暂无已发布版本' : '计划克隆')}>
               <Button
                 icon={<PlusOutlined />}
-                disabled={!canEdit || Boolean(readOnlyReason) || hasDraft || !publishedVersions.length}
+                disabled={!canEditTechnicalPlan || Boolean(readOnlyReason) || hasDraft || !publishedVersions.length}
                 onClick={handleClonePlan}
                 aria-label="计划克隆"
               >
@@ -730,7 +757,7 @@ export default function TechnicalPlanModule({
             </SortableContext>
           </DndContext>
         ) : viewMode === 'horizontal' ? (
-          <TechnicalHorizontalPlanTable tasks={filteredTasks} versions={visibleVersions} />
+          <TechnicalHorizontalPlanTable tasks={filteredTasks} versions={visibleVersions} currentVersionId={currentVersion.id} />
         ) : viewMode === 'gantt' ? (
           <DHTMLXGantt
             tasks={filteredTasks}
