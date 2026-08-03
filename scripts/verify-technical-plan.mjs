@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import ts from 'typescript'
 import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
@@ -201,13 +202,79 @@ const technicalModuleSource = readSource(root, 'src/components/technical-project
 const planWorkspaceShellPath = 'src/components/plans/PlanWorkspaceShell.tsx'
 assert.equal(fs.existsSync(`${root}/${planWorkspaceShellPath}`), true, 'plan workspace provides a shared shell for whole-machine and technical projects')
 const planWorkspaceShell = readSource(root, planWorkspaceShellPath)
-for (const capability of ['创建修订', '计划克隆', '筛选', '列设置', '全部展开', '全部收起', '版本对比', '分享计划']) {
-  assert.match(planWorkspaceShell, new RegExp(capability), `shared plan workspace shell supports ${capability}`)
-  assert.match(technicalModuleSource, new RegExp(capability), `technical plan module consumes shared ${capability} capability`)
+const parseTsx = (source, fileName) => ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+const shellSourceFile = parseTsx(planWorkspaceShell, planWorkspaceShellPath)
+const technicalSourceFile = parseTsx(technicalModuleSource, 'TechnicalPlanModule.tsx')
+const visit = (node, predicate) => {
+  if (predicate(node)) return node
+  let found
+  ts.forEachChild(node, child => { if (!found) found = visit(child, predicate) })
+  return found
 }
-assert.match(planWorkspaceShell, /value:\s*['"]vertical['"][\s\S]{0,1200}value:\s*['"]horizontal['"][\s\S]{0,1200}value:\s*['"]gantt['"]/, 'shared plan workspace shell defines vertical, horizontal, then gantt view modes')
-assert.match(technicalModuleSource, /value:\s*['"]vertical['"][\s\S]{0,1200}value:\s*['"]horizontal['"][\s\S]{0,1200}value:\s*['"]gantt['"]/, 'technical plan module consumes vertical, horizontal, then gantt view modes')
-assert.match(technicalModuleSource, /<PlanWorkspaceShell\b/, 'technical plan module mounts the shared plan workspace shell')
+const hasExportModifier = node => node.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)
+const exportsComponent = (sourceFile, name) => sourceFile.statements.some(statement => {
+  if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name?.text === name) return hasExportModifier(statement)
+  if (ts.isVariableStatement(statement) && hasExportModifier(statement)) return statement.declarationList.declarations.some(declaration => ts.isIdentifier(declaration.name) && declaration.name.text === name)
+  if (ts.isExportAssignment(statement)) return ts.isIdentifier(statement.expression) && statement.expression.text === name
+  if (ts.isExportDeclaration(statement) && statement.exportClause && ts.isNamedExports(statement.exportClause)) return statement.exportClause.elements.some(element => element.name.text === name || element.propertyName?.text === name)
+  return false
+})
+const importsComponent = (sourceFile, name, modulePath) => sourceFile.statements.some(statement => {
+  if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || statement.moduleSpecifier.text !== modulePath) return false
+  const clause = statement.importClause
+  if (clause?.name?.text === name) return true
+  return Boolean(clause?.namedBindings && ts.isNamedImports(clause.namedBindings) && clause.namedBindings.elements.some(element => element.name.text === name))
+})
+const findJsxMount = (sourceFile, name) => visit(sourceFile, node => (
+  (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) && node.tagName.getText(sourceFile) === name
+))
+const jsxAttributeNames = node => new Set(node.attributes.properties.filter(ts.isJsxAttribute).map(attribute => attribute.name.getText()))
+const declaresProp = (sourceFile, prop) => Boolean(visit(sourceFile, node => (
+  (ts.isPropertySignature(node) || ts.isMethodSignature(node)) && node.name?.getText(sourceFile) === prop
+)))
+const rendersLabeledControl = (sourceFile, label) => Boolean(visit(sourceFile, node => {
+  if ((!ts.isJsxSelfClosingElement(node) && !ts.isJsxOpeningElement(node)) || !['Button', 'Tooltip'].includes(node.tagName.getText(sourceFile))) return false
+  return node.attributes.properties.some(attribute => {
+    if (!ts.isJsxAttribute(attribute) || !['aria-label', 'title'].includes(attribute.name.getText())) return false
+    if (attribute.initializer && ts.isStringLiteral(attribute.initializer)) return attribute.initializer.text === label
+    return Boolean(attribute.initializer && ts.isJsxExpression(attribute.initializer) && ts.isStringLiteral(attribute.initializer.expression) && attribute.initializer.expression.text === label)
+  })
+}))
+const configuresViewMode = (sourceFile, mode) => Boolean(visit(sourceFile, node => (
+  ts.isPropertyAssignment(node) && node.name.getText(sourceFile) === 'value' && ts.isStringLiteral(node.initializer) && node.initializer.text === mode
+)))
+const hasViewBranch = (sourceFile, mode) => Boolean(visit(sourceFile, node => {
+  if (!ts.isBinaryExpression(node) || ![ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.EqualsEqualsToken].includes(node.operatorToken.kind)) return false
+  const pairs = [[node.left, node.right], [node.right, node.left]]
+  return pairs.some(([candidate, value]) => candidate.getText(sourceFile).endsWith('viewMode') && ts.isStringLiteral(value) && value.text === mode)
+}))
+
+assert.equal(exportsComponent(shellSourceFile, 'PlanWorkspaceShell'), true, 'shared plan workspace shell has an executable named or default export')
+assert.equal(importsComponent(technicalSourceFile, 'PlanWorkspaceShell', '@/components/plans/PlanWorkspaceShell'), true, 'technical plan module imports the shared shell from its canonical module')
+const technicalShellMount = findJsxMount(technicalSourceFile, 'PlanWorkspaceShell')
+assert.ok(technicalShellMount, 'technical plan module mounts the imported shared plan workspace shell')
+const technicalShellProps = jsxAttributeNames(technicalShellMount)
+const shellCapabilities = [
+  ['创建修订', 'onCreateRevision'],
+  ['计划克隆', 'onClonePlan'],
+  ['筛选', 'onFilter'],
+  ['列设置', 'onOpenColumnSettings'],
+  ['全部展开', 'onExpandAll'],
+  ['全部收起', 'onCollapseAll'],
+  ['版本对比', 'onCompareVersions'],
+  ['分享计划', 'onSharePlan'],
+]
+for (const [label, prop] of shellCapabilities) {
+  assert.equal(declaresProp(shellSourceFile, prop), true, `shared shell declares the ${label} capability prop ${prop}`)
+  assert.equal(rendersLabeledControl(shellSourceFile, label), true, `shared shell renders an actual ${label} control`)
+  assert.equal(technicalShellProps.has(prop), true, `technical plan passes ${prop} into its shell mount`)
+}
+for (const mode of ['vertical', 'horizontal', 'gantt']) {
+  assert.equal(configuresViewMode(shellSourceFile, mode), true, `shared shell configures the ${mode} view option`)
+  assert.equal(hasViewBranch(technicalSourceFile, mode), true, `technical plan renders a real ${mode} view branch`)
+}
+assert.equal(technicalShellProps.has('viewMode'), true, 'technical plan passes its current view mode into the shell')
+assert.equal(technicalShellProps.has('onViewModeChange'), true, 'technical plan passes its view-mode handler into the shell')
 assert.match(technicalModuleSource, /TDT项目计划/, 'technical plan UI renders the fixed TDT tab')
 assert.match(technicalModuleSource, /显示已停用/, 'technical plan UI exposes history mode')
 assert.match(technicalModuleSource, /SettingOutlined/, 'child plan tabs expose configuration')
@@ -223,7 +290,9 @@ assert.match(technicalModuleSource, /SortableColumnSettings/, 'column settings r
 assert.match(technicalModuleSource, /canImport/, 'technical plan import has a dedicated permission input')
 assert.match(technicalModuleSource, /canExport/, 'technical plan export has a dedicated permission input')
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
-assert.match(projectSpaceSource, /<PlanWorkspaceShell\b/, 'whole-machine project space mounts the shared plan workspace shell')
+const projectSpaceSourceFile = parseTsx(projectSpaceSource, 'ProjectSpaceContainer.tsx')
+assert.equal(importsComponent(projectSpaceSourceFile, 'PlanWorkspaceShell', '@/components/plans/PlanWorkspaceShell'), true, 'whole-machine project space imports the shared shell from its canonical module')
+assert.ok(findJsxMount(projectSpaceSourceFile, 'PlanWorkspaceShell'), 'whole-machine project space mounts the imported shared plan workspace shell')
 assert.match(projectSpaceSource, /canDo\('plan:导入'\)/, 'project space passes technical import permission')
 assert.match(projectSpaceSource, /canDo\('plan:导出'\)/, 'project space passes technical export permission')
 

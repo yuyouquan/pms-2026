@@ -1,9 +1,35 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import ts from 'typescript'
 
 const root = process.cwd()
 
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
+const parseTsx = (source, fileName) => ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+const visit = (node, predicate) => {
+  if (predicate(node)) return node
+  let found
+  ts.forEachChild(node, child => { if (!found) found = visit(child, predicate) })
+  return found
+}
+const hasExportModifier = node => node.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)
+const exportsComponent = (sourceFile, name) => sourceFile.statements.some(statement => {
+  if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name?.text === name) return hasExportModifier(statement)
+  if (ts.isVariableStatement(statement) && hasExportModifier(statement)) return statement.declarationList.declarations.some(declaration => ts.isIdentifier(declaration.name) && declaration.name.text === name)
+  if (ts.isExportAssignment(statement)) return ts.isIdentifier(statement.expression) && statement.expression.text === name
+  if (ts.isExportDeclaration(statement) && statement.exportClause && ts.isNamedExports(statement.exportClause)) return statement.exportClause.elements.some(element => element.name.text === name || element.propertyName?.text === name)
+  return false
+})
+const importsComponent = (sourceFile, name, modulePath) => sourceFile.statements.some(statement => {
+  if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || statement.moduleSpecifier.text !== modulePath) return false
+  const clause = statement.importClause
+  if (clause?.name?.text === name) return true
+  return Boolean(clause?.namedBindings && ts.isNamedImports(clause.namedBindings) && clause.namedBindings.elements.some(element => element.name.text === name))
+})
+const mountsComponent = (sourceFile, name) => Boolean(visit(sourceFile, node => (
+  (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) && node.tagName.getText(sourceFile) === name
+)))
+const importsAndMounts = (sourceFile, name, modulePath) => importsComponent(sourceFile, name, modulePath) && mountsComponent(sourceFile, name)
 
 const checks = [
   {
@@ -514,27 +540,27 @@ const checks = [
   {
     name: 'Technical basic information mounts the shared information frame',
     file: 'src/components/technical-project/TechnicalProjectInformationView.tsx',
-    matches: /<ProjectInformationFrame\b/,
+    contract: source => mountsComponent(parseTsx(source, 'TechnicalProjectInformationView.tsx'), 'ProjectInformationFrame'),
   },
   {
     name: 'Technical basic information renders the technical plan summary',
     file: 'src/components/technical-project/TechnicalProjectInformationView.tsx',
-    matches: /<TechnicalPlanSummary\b/,
+    contract: source => mountsComponent(parseTsx(source, 'TechnicalProjectInformationView.tsx'), 'TechnicalPlanSummary'),
   },
   {
-    name: 'Technical plan and whole-machine plans share one workspace shell',
+    name: 'Shared plan workspace shell exports its component',
     file: 'src/components/plans/PlanWorkspaceShell.tsx',
-    exists: true,
+    contract: source => exportsComponent(parseTsx(source, 'PlanWorkspaceShell.tsx'), 'PlanWorkspaceShell'),
   },
   {
-    name: 'Technical plan module consumes the shared plan workspace shell',
+    name: 'Technical plan module imports and mounts the shared plan workspace shell',
     file: 'src/components/technical-project/TechnicalPlanModule.tsx',
-    matches: /<PlanWorkspaceShell\b/,
+    contract: source => importsAndMounts(parseTsx(source, 'TechnicalPlanModule.tsx'), 'PlanWorkspaceShell', '@/components/plans/PlanWorkspaceShell'),
   },
   {
-    name: 'Whole-machine project space consumes the shared plan workspace shell',
+    name: 'Whole-machine project space imports and mounts the shared plan workspace shell',
     file: 'src/containers/ProjectSpaceContainer.tsx',
-    matches: /<PlanWorkspaceShell\b/,
+    contract: source => importsAndMounts(parseTsx(source, 'ProjectSpaceContainer.tsx'), 'PlanWorkspaceShell', '@/components/plans/PlanWorkspaceShell'),
   },
 ]
 
@@ -548,6 +574,10 @@ for (const check of checks) {
   }
 
   const content = read(check.file)
+  if (check.contract) {
+    if (!check.contract(content)) failures.push(`${check.name}: executable source contract failed in ${check.file}`)
+    continue
+  }
   if (check.matches && !check.matches.test(content)) {
     failures.push(`${check.name}: missing JSX mount ${check.matches} in ${check.file}`)
     continue

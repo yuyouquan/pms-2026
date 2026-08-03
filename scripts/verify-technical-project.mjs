@@ -255,9 +255,22 @@ assert.equal(fs.existsSync(`${root}/${technicalInformationViewPath}`), true, 'te
 const technicalInformationView = readSource(root, technicalInformationViewPath)
 assert.match(technicalInformationView, /<ProjectInformationFrame\b/, 'technical information mounts the whole-machine information frame')
 assert.match(technicalInformationView, /<TechnicalPlanSummary\b/, 'technical information mounts the technical plan summary in the shared frame')
-assert.match(technicalInformationView, /activeTab\.kind\s*===\s*['"]subproject['"]\s*&&\s*\(\s*(?:<TechnicalProjectBasicInfo\b|<[^>]+>\s*基础信息)/, 'only a subproject condition can wrap the technical basic-information region')
+const technicalBasicInfoMountPattern = /(?:<TechnicalProjectBasicInfo\b|<[^>]*data-section=['"]technical-basic-information['"][^>]*>)/g
+assert.equal(technicalInformationView.match(technicalBasicInfoMountPattern)?.length, 1, 'technical information has exactly one basic-information mount')
+assert.match(technicalInformationView, /activeTab\.kind\s*===\s*['"]subproject['"]\s*&&\s*\(\s*(?:<TechnicalProjectBasicInfo\b|<[^>]*data-section=['"]technical-basic-information['"][^>]*>)/, 'the sole technical basic-information region is directly wrapped by the subproject condition')
 assert.match(technicalInformationView, /<CollapsibleInformationSection\b[\s\S]{0,240}团队/, 'technical team is carried by its own collapsible information section')
 assert.match(technicalInformationView, /<CollapsibleInformationSection\b[\s\S]{0,240}交付物/, 'technical deliverables are carried by their own collapsible information section')
+const legacyBasicInfoPath = 'src/components/technical-project/TechnicalProjectBasicInfo.tsx'
+const technicalBasicInfoBehaviorSources = [
+  technicalInformationView,
+  ...(fs.existsSync(`${root}/${legacyBasicInfoPath}`) ? [readSource(root, legacyBasicInfoPath)] : []),
+]
+const technicalBasicInfoBehaviorSource = technicalBasicInfoBehaviorSources.join('\n')
+assert.match(technicalBasicInfoBehaviorSource, /显示已停用/, 'technical basic information can reveal inactive children after migration')
+assert.match(technicalBasicInfoBehaviorSource, /SubprojectConfigModal/, 'active child information still mounts the configuration modal after migration')
+assert.match(technicalBasicInfoBehaviorSource, /event\.preventDefault\(\)[\s\S]{0,100}event\.stopPropagation\(\)/, 'tab-adjacent configuration still prevents navigation before opening')
+if (fs.existsSync(`${root}/${legacyBasicInfoPath}`)) assert.doesNotMatch(readSource(root, legacyBasicInfoPath), /TDT项目计划/, 'legacy basic information keeps TDT excluded')
+assert.doesNotMatch(technicalInformationView, /activeTab\.kind\s*===\s*['"]tdt['"][\s\S]{0,240}(?:<TechnicalProjectBasicInfo\b|data-section=['"]technical-basic-information['"])/, 'migrated basic information never renders for the TDT tab')
 const createFields = readSource(root, 'src/components/technical-project/TechnicalProjectCreateFields.tsx')
 assert.match(createFields, /Input\.TextArea[\s\S]{0,220}onPressEnter=\{event\s*=>\s*event\.stopPropagation\(\)\}/, 'Enter inside project-value textarea cannot bubble into modal submit')
 const technicalPlan = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
