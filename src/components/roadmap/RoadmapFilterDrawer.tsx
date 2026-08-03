@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactElement } from 'react'
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
-import { Button, DatePicker, Empty, Flex, Input, Select, Tooltip, Typography } from 'antd'
+import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { DeleteOutlined } from '@ant-design/icons'
+import { Button, DatePicker, Empty, Input, Select, Tooltip } from 'antd'
 import dayjs from 'dayjs'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
 import {
@@ -15,21 +15,6 @@ import { getRoadmapFilterOperators } from '@/lib/roadmapFilters'
 import type { RoadmapFilterCondition, RoadmapFilterOperator } from '@/types/roadmap'
 
 const ROADMAP_FILTER_CONTROL_HEIGHT = 32
-
-const conditionCardStyle: CSSProperties = {
-  padding: 8,
-  overflowX: 'auto',
-  border: '1px solid var(--border-purple)',
-  borderRadius: 'var(--radius-md)',
-  background: 'var(--bg-purple-tint)',
-}
-
-const conditionRowStyle: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'minmax(108px, 1fr) minmax(86px, .8fr) minmax(132px, 1.2fr) 32px',
-  alignItems: 'center',
-  gap: 8,
-}
 
 function createRoadmapFilterCondition(): RoadmapFilterCondition {
   return createFilterCondition() as RoadmapFilterCondition
@@ -72,8 +57,38 @@ export default function RoadmapFilterDrawer({
     [fieldDefinitions],
   )
 
+  const normalizeConditions = (candidateConditions: readonly RoadmapFilterCondition[]) => {
+    const selectedFields = new Set<string>()
+    return candidateConditions.flatMap(condition => {
+      const definition = definitionsByKey.get(condition.field)
+      if (!definition || selectedFields.has(condition.field)) return []
+      if (!getRoadmapFilterOperators(condition.field, definition.kind)
+        .some(option => option.value === condition.operator)) return []
+      const valueless = isValuelessFilterOperator(condition.operator)
+      const value = definition.kind === 'enum'
+        ? valueless
+          ? []
+          : [...new Set((Array.isArray(condition.value) ? condition.value : [condition.value])
+            .filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+            .map(item => item.trim()))]
+        : valueless
+          ? ''
+          : typeof condition.value === 'string'
+            ? condition.value.trim()
+            : ''
+      if (!valueless && (Array.isArray(value) ? value.length === 0 : !value)) return []
+      selectedFields.add(condition.field)
+      return [{ ...condition, value }]
+    })
+  }
+
+  const commitRoadmapFilters = (next: RoadmapFilterCondition[]) => {
+    setDraftConditions(next)
+    onApply(normalizeConditions(next))
+  }
+
   const updateCondition = (id: string, patch: Partial<RoadmapFilterCondition>) => {
-    setDraftConditions(current => current.map(condition => (
+    commitRoadmapFilters(draftConditions.map(condition => (
       condition.id === id ? { ...condition, ...patch } : condition
     )))
   }
@@ -88,10 +103,8 @@ export default function RoadmapFilterDrawer({
   }
 
   const removeCondition = (id: string) => {
-    setDraftConditions(current => {
-      const remaining = current.filter(condition => condition.id !== id)
-      return remaining.length ? remaining : [createRoadmapFilterCondition()]
-    })
+    const remaining = draftConditions.filter(condition => condition.id !== id)
+    commitRoadmapFilters(remaining.length ? remaining : [createRoadmapFilterCondition()])
   }
 
   const renderValueControl = (condition: RoadmapFilterCondition) => {
@@ -146,56 +159,26 @@ export default function RoadmapFilterDrawer({
   }
 
   const resetAdvancedFilters = () => {
-    setDraftConditions([createRoadmapFilterCondition()])
-  }
-
-  const applyAdvancedFilters = () => {
-    const selectedFields = new Set<string>()
-    const normalized = draftConditions.flatMap(condition => {
-      const definition = definitionsByKey.get(condition.field)
-      if (!definition || selectedFields.has(condition.field)) return []
-      if (!getRoadmapFilterOperators(condition.field, definition.kind)
-        .some(option => option.value === condition.operator)) return []
-      const valueless = isValuelessFilterOperator(condition.operator)
-      const value = definition.kind === 'enum'
-        ? valueless
-          ? []
-          : [...new Set((Array.isArray(condition.value) ? condition.value : [condition.value])
-            .filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
-            .map(item => item.trim()))]
-        : valueless
-          ? ''
-          : typeof condition.value === 'string'
-            ? condition.value.trim()
-            : ''
-      if (!valueless && (Array.isArray(value) ? value.length === 0 : !value)) return []
-      selectedFields.add(condition.field)
-      return [{ ...condition, value }]
-    })
-    onApply(normalized)
-    onClose()
+    commitRoadmapFilters([createRoadmapFilterCondition()])
   }
 
   return (
     <FloatingFilterPanel
       open={open}
       trigger={trigger}
+      title="路标筛选"
       getPopupContainer={getPopupContainer}
       onReset={resetAdvancedFilters}
-      onClear={() => setDraftConditions([createRoadmapFilterCondition()])}
-      onCancel={onClose}
-      onConfirm={applyAdvancedFilters}
+      onAdd={() => commitRoadmapFilters([...draftConditions, createRoadmapFilterCondition()])}
+      addDisabled={draftConditions.length >= fieldDefinitions.length}
+      onClose={onClose}
     >
-      <Typography.Paragraph type="secondary" style={{ marginBottom: 10, fontSize: 12 }}>
-        多个条件按 AND 关系同时生效。
-      </Typography.Paragraph>
-      <Flex vertical gap={8}>
+      <div className="pms-filter-condition-list">
         {draftConditions.length ? draftConditions.map(condition => {
           const definition = definitionsByKey.get(condition.field)
           const operatorOptions = getRoadmapFilterOperators(condition.field, definition?.kind ?? 'text')
           return (
-            <div key={condition.id} style={conditionCardStyle}>
-              <div className="pms-roadmap-filter-condition-row" style={conditionRowStyle}>
+            <div key={condition.id} className="pms-filter-condition-row">
                 <Select
                   aria-label="筛选字段"
                   size="small"
@@ -239,22 +222,10 @@ export default function RoadmapFilterDrawer({
                     style={{ width: ROADMAP_FILTER_CONTROL_HEIGHT, minWidth: ROADMAP_FILTER_CONTROL_HEIGHT, height: ROADMAP_FILTER_CONTROL_HEIGHT }}
                   />
                 </Tooltip>
-              </div>
             </div>
           )
         }) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无筛选条件" />}
-        <Button
-          type="dashed"
-          size="small"
-          icon={<PlusOutlined />}
-          disabled={draftConditions.length >= fieldDefinitions.length}
-          onClick={() => setDraftConditions(current => [...current, createRoadmapFilterCondition()])}
-          style={{ height: ROADMAP_FILTER_CONTROL_HEIGHT }}
-          block
-        >
-          添加条件
-        </Button>
-      </Flex>
+      </div>
     </FloatingFilterPanel>
   )
 }

@@ -395,7 +395,7 @@ for (const mode of ['vertical', 'horizontal', 'gantt']) {
 assert.equal(technicalShellProps.has('viewMode'), true, 'technical plan passes its current view mode into the shell')
 assert.equal(technicalShellProps.has('onViewModeChange'), true, 'technical plan passes its view-mode handler into the shell')
 assert.match(technicalModuleSource, /TDT项目计划/, 'technical plan UI renders the fixed TDT tab')
-assert.match(technicalModuleSource, /显示已停用/, 'technical plan UI exposes history mode')
+assert.doesNotMatch(technicalModuleSource, /显示已停用|showInactive|Switch/, 'technical plan UI hides inactive subprojects instead of exposing history mode')
 assert.match(technicalModuleSource, /SettingOutlined/, 'child plan tabs expose configuration')
 assert.match(technicalModuleSource, /compareVersionsForTable/, 'technical plans reuse version comparison')
 assert.match(technicalModuleSource, /exportSheet/, 'technical plans reuse Excel export')

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Alert, Badge, Button, Card, DatePicker, Dropdown, Empty, Input, Popconfirm,
-  Row, Select, Space, Switch, Table, Tabs, Tag, Tooltip, Typography, Upload, message,
+  Row, Select, Space, Table, Tabs, Tag, Tooltip, Typography, Upload, message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
@@ -175,7 +175,6 @@ export default function TechnicalPlanModule({
   projectId, currentLoginUser, canEdit, canPublish, canImport, canExport, canViewTechnicalPlan, canShareTechnicalPlan,
   maxDepthByKind = DEFAULT_MAX_DEPTH,
 }: TechnicalPlanModuleProps) {
-  const [showInactive, setShowInactive] = useState(false)
   const [activeKey, setActiveKey] = useState(`${projectId}:tdt`)
   const [viewMode, setViewMode] = useState<PlanWorkspaceViewMode>('vertical')
   const [compareOpen, setCompareOpen] = useState(false)
@@ -207,8 +206,8 @@ export default function TechnicalPlanModule({
   const navigateWithEditGuard = useUiStore(state => state.navigateWithEditGuard)
 
   const tabs = useMemo(
-    () => buildTechnicalPlanTabs(projectId, subprojects, showInactive),
-    [projectId, showInactive, subprojects],
+    () => buildTechnicalPlanTabs(projectId, subprojects, false),
+    [projectId, subprojects],
   )
   useEffect(() => {
     const firstKey = `${projectId}:tdt`
@@ -522,6 +521,15 @@ export default function TechnicalPlanModule({
       .catch(() => message.error('复制失败，请重试'))
   }
 
+  const commitTechnicalFilters = (next: FilterCondition[]) => {
+    setTempFilters(next)
+    setFilters(normalizeFilterConditions(next, TECHNICAL_FILTER_FIELDS))
+  }
+
+  const updateTechnicalFilter = (id: string, patch: Partial<FilterCondition>) => {
+    commitTechnicalFilters(tempFilters.map(item => item.id === id ? { ...item, ...patch } : item))
+  }
+
   return (
     <div className="technical-project-space" aria-label="技术项目计划">
       <PlanWorkspaceShell
@@ -536,8 +544,7 @@ export default function TechnicalPlanModule({
                   label: (
                     <Space size={5}>
                       <span>{item.label}</span>
-                      {item.subproject && !item.subproject.active && <Tag>已停用</Tag>}
-                      {item.subproject?.active && (
+                      {item.subproject && (
                         <Tooltip title="子项目信息配置">
                           <Button
                             type="text"
@@ -557,10 +564,6 @@ export default function TechnicalPlanModule({
                   ),
                 }))}
               />
-              <Space size={8}>
-                <Text type="secondary">显示已停用</Text>
-                <Switch checked={showInactive} onChange={setShowInactive} aria-label="显示已停用子项目计划" />
-              </Space>
             </Row>
           </Card>
         )}
@@ -631,6 +634,7 @@ export default function TechnicalPlanModule({
           <Space size={6}>
             <FloatingFilterPanel
               open={filterOpen}
+              title="计划筛选"
               trigger={(
                 <Tooltip title="筛选">
                   <Badge dot={filters.some(isFilterConditionActive)} offset={[-2, 2]}>
@@ -646,19 +650,16 @@ export default function TechnicalPlanModule({
                   </Badge>
                 </Tooltip>
               )}
-              onReset={() => setTempFilters([createFilterCondition()])}
-              onClear={() => setTempFilters([createFilterCondition()])}
-              onCancel={() => setFilterOpen(false)}
-              onConfirm={() => {
-                setFilters(normalizeFilterConditions(tempFilters, TECHNICAL_FILTER_FIELDS))
-                setFilterOpen(false)
-              }}
+              onReset={() => commitTechnicalFilters([createFilterCondition()])}
+              onAdd={() => commitTechnicalFilters([...tempFilters, createFilterCondition()])}
+              addDisabled={tempFilters.length >= TECHNICAL_FILTER_FIELDS.length}
+              onClose={() => setFilterOpen(false)}
             >
-              <div className="technical-plan-filter-list">
+              <div className="pms-filter-condition-list technical-plan-filter-list">
                 {tempFilters.map(condition => {
                   const definition = TECHNICAL_FILTER_FIELDS.find(item => item.key === condition.field)
                   return (
-                    <div key={condition.id} className="technical-plan-filter-row">
+                    <div key={condition.id} className="pms-filter-condition-row technical-plan-filter-row">
                       <Select
                         aria-label="筛选字段"
                         placeholder="筛选字段"
@@ -668,13 +669,13 @@ export default function TechnicalPlanModule({
                           tempFilters,
                           condition.id,
                         )}
-                        onChange={field => setTempFilters(current => current.map(item => item.id === condition.id ? { ...item, field, operator: 'equals', value: '' } : item))}
+                        onChange={field => updateTechnicalFilter(condition.id, { field, operator: 'equals', value: '' })}
                       />
                       <Select
                         aria-label="筛选条件"
                         value={condition.operator}
                         options={getFilterOperatorsForKind(definition?.kind || 'text') as any}
-                        onChange={(operator: FilterOperator) => setTempFilters(current => current.map(item => item.id === condition.id ? { ...item, operator, value: isValuelessFilterOperator(operator) ? '' : item.value } : item))}
+                        onChange={(operator: FilterOperator) => updateTechnicalFilter(condition.id, { operator, value: isValuelessFilterOperator(operator) ? '' : condition.value })}
                       />
                       {!isValuelessFilterOperator(condition.operator) && definition?.kind === 'enum' ? (
                         <Select
@@ -683,26 +684,28 @@ export default function TechnicalPlanModule({
                           allowClear
                           value={condition.value || undefined}
                           options={definition.options}
-                          onChange={value => setTempFilters(current => current.map(item => item.id === condition.id ? { ...item, value: value || '' } : item))}
+                          onChange={value => updateTechnicalFilter(condition.id, { value: value || '' })}
                         />
                       ) : !isValuelessFilterOperator(condition.operator) ? (
                         <Input
                           aria-label="筛选值"
                           placeholder={definition?.kind === 'date' ? 'YYYY-MM-DD' : '输入筛选值'}
                           value={condition.value}
-                          onChange={event => setTempFilters(current => current.map(item => item.id === condition.id ? { ...item, value: event.target.value } : item))}
+                          onChange={event => updateTechnicalFilter(condition.id, { value: event.target.value })}
                         />
-                      ) : <span />}
+                      ) : <span className="pms-filter-value-placeholder" aria-hidden />}
                       <Button
                         icon={<DeleteOutlined />}
                         danger
                         aria-label="删除筛选条件"
-                        onClick={() => setTempFilters(current => current.length > 1 ? current.filter(item => item.id !== condition.id) : [createFilterCondition()])}
+                        onClick={() => {
+                          const remaining = tempFilters.filter(item => item.id !== condition.id)
+                          commitTechnicalFilters(remaining.length ? remaining : [createFilterCondition()])
+                        }}
                       />
                     </div>
                   )
                 })}
-                <Button type="dashed" icon={<PlusOutlined />} onClick={() => setTempFilters(current => [...current, createFilterCondition()])}>添加条件</Button>
               </div>
             </FloatingFilterPanel>
             {viewMode === 'vertical' && (

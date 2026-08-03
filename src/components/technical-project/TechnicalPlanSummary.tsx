@@ -1,8 +1,8 @@
 'use client'
 
-import { Empty, Tag } from 'antd'
+import type { ReactNode } from 'react'
+import { Card, Empty, Space, Tag } from 'antd'
 import { CalendarOutlined } from '@ant-design/icons'
-import CollapsibleInformationSection from '@/components/project-info/CollapsibleInformationSection'
 import { resolveTechnicalPlanSummary } from '@/lib/technicalProjectRules'
 import { getTechnicalPlanKey, useTechnicalPlanStore, type TechnicalPlanScope } from '@/stores/technicalPlan'
 
@@ -16,21 +16,21 @@ const displayCycle = (days: number | null) => days === null ? '-' : `${days} 天
 export default function TechnicalPlanSummary({ scope, label }: TechnicalPlanSummaryProps) {
   const instance = useTechnicalPlanStore(state => state.plansByKey[getTechnicalPlanKey(scope)])
   const summary = resolveTechnicalPlanSummary(instance?.versions || [])
+  const planCard = (content: ReactNode) => (
+    <Card
+      className="pms-project-info-plan-card"
+      title={<Space size={8}><CalendarOutlined style={{ color: '#6366f1' }} /><span>计划信息</span></Space>}
+    >
+      {content}
+    </Card>
+  )
 
   if (!summary.latestVersion) {
-    return (
-      <CollapsibleInformationSection title={`${label}计划摘要`} icon={<CalendarOutlined />} defaultActive>
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无计划版本（仅展示已发布版本）" />
-      </CollapsibleInformationSection>
-    )
+    return planCard(<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无计划版本（仅展示已发布版本）" />)
   }
 
   if (!summary.hasTaskData) {
-    return (
-      <CollapsibleInformationSection title={`${label}计划摘要`} icon={<CalendarOutlined />} count={summary.versions.length} defaultActive>
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无计划数据" />
-      </CollapsibleInformationSection>
-    )
+    return planCard(<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无计划数据" />)
   }
 
   const stages = summary.latestVersion.tasks
@@ -44,14 +44,8 @@ export default function TechnicalPlanSummary({ scope, label }: TechnicalPlanSumm
   })
   const columns = groups.flatMap(group => group.milestones.length ? group.milestones : [group.stage])
 
-  return (
-    <CollapsibleInformationSection
-      title={`${label}计划摘要`}
-      icon={<CalendarOutlined />}
-      count={summary.versions.length}
-      defaultActive
-    >
-      <div className="technical-plan-summary" role="region" aria-label={`${label}计划摘要内容`} tabIndex={0}>
+  return planCard(
+      <div className="technical-plan-summary" role="region" aria-label={`${label}计划信息内容`} tabIndex={0}>
         <table aria-label={`${label}版本阶段里程碑`}>
           <thead>
             <tr>
@@ -91,7 +85,6 @@ export default function TechnicalPlanSummary({ scope, label }: TechnicalPlanSumm
             </tr>
           </tbody>
         </table>
-      </div>
-    </CollapsibleInformationSection>
+      </div>,
   )
 }

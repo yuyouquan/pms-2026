@@ -1164,8 +1164,23 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     normalizedFilters.length ? normalizedFilters.map(item => ({ ...item })) : [createFilterCondition()]
   )
 
+  const commitSummaryFilters = (next: FilterCondition[]) => {
+    const nextFilters = normalizeProjectFilterConditions(
+      next,
+      undefined,
+      filterFieldDefinitions,
+    )
+    const nextDateRange = getMilestoneDateRangeFromFilters(nextFilters)
+    setTempFilters(next)
+    setFilters(nextFilters)
+    setMilestoneDateRange(nextDateRange)
+    if (nextDateRange) setCalendarMonth(dayjs(nextDateRange[0]).startOf('month'))
+    setActiveSavedViewId(null)
+    setSharedRowsOverride(null)
+  }
+
   const updateTempFilter = (conditionId: string, patch: Partial<FilterCondition>) => {
-    setTempFilters(prev => prev.map(item => item.id === conditionId ? { ...item, ...patch } : item))
+    commitSummaryFilters(tempFilters.map(item => item.id === conditionId ? { ...item, ...patch } : item))
   }
 
   const handleTempFilterFieldChange = (condition: FilterCondition, field: string) => {
@@ -1189,21 +1204,6 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       operator: 'contains',
       value: formatMilestoneDateRangeValue(nextRange),
     })
-  }
-
-  const applyTempFilters = () => {
-    const nextFilters = normalizeProjectFilterConditions(
-      tempFilters,
-      undefined,
-      filterFieldDefinitions,
-    )
-    const nextDateRange = getMilestoneDateRangeFromFilters(nextFilters)
-    setFilters(nextFilters)
-    setMilestoneDateRange(nextDateRange)
-    if (nextDateRange) setCalendarMonth(dayjs(nextDateRange[0]).startOf('month'))
-    setShowFilterDrawer(false)
-    setActiveSavedViewId(null)
-    setSharedRowsOverride(null)
   }
 
   const renderFilterValueControl = (condition: FilterCondition) => {
@@ -2358,6 +2358,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
             )}
             <FloatingFilterPanel
               open={showFilterDrawer}
+              title="项目筛选"
               trigger={(
                 <Tooltip title={hasActiveFilters ? '筛选（已启用）' : '筛选'}>
                   <Button
@@ -2374,19 +2375,14 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
                   />
                 </Tooltip>
               )}
-              onReset={() => {
-                setTempFilters([createFilterCondition()])
-              }}
-              onClear={() => {
-                setTempFilters([createFilterCondition()])
-              }}
-              onCancel={() => setShowFilterDrawer(false)}
-              onConfirm={applyTempFilters}
+              onReset={() => commitSummaryFilters([createFilterCondition()])}
+              onAdd={() => commitSummaryFilters([...tempFilters, createFilterCondition()])}
+              addDisabled={tempFilters.length >= filterFieldOptions.length}
+              onClose={() => setShowFilterDrawer(false)}
             >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="pms-filter-condition-list">
                 {tempFilters.map((condition) => (
-                  <div key={condition.id} style={{ padding: 12, border: '1px solid #eef2ff', borderRadius: 8, background: '#fafbff' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: isMilestoneDateFilter(condition) ? 'minmax(0, 1fr) 40px' : 'minmax(0, 1fr) 116px 40px', gap: 8, marginBottom: isValuelessFilterOperator(condition.operator) && !isMilestoneDateFilter(condition) ? 0 : 8 }}>
+                  <div key={condition.id} className="pms-filter-condition-row">
                       <Select
                         aria-label="筛选字段"
                         placeholder="筛选字段"
@@ -2394,12 +2390,15 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
                         options={getFieldOptionsWithDuplicateDisabled(filterFieldOptions, tempFilters, condition.id)}
                         onChange={(value) => handleTempFilterFieldChange(condition, value)}
                       />
-                      {!isMilestoneDateFilter(condition) && (
-                        <Select
+                      <Select
+                          aria-label="筛选条件"
                           value={condition.operator}
-                          options={getFilterOperatorsForKind(
-                            filterFieldByKey.get(condition.field)?.kind ?? 'text',
-                          ) as any}
+                          options={(isMilestoneDateFilter(condition)
+                            ? [{ label: '范围内', value: 'contains' }]
+                            : getFilterOperatorsForKind(
+                              filterFieldByKey.get(condition.field)?.kind ?? 'text',
+                            )) as any}
+                          disabled={isMilestoneDateFilter(condition)}
                           onChange={(value) => {
                             const operator = value as FilterCondition['operator']
                             updateTempFilter(condition.id, {
@@ -2407,24 +2406,21 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
                               value: isValuelessFilterOperator(operator) ? '' : condition.value,
                             })
                           }}
-                        />
-                      )}
+                      />
+                      {isValuelessFilterOperator(condition.operator) && !isMilestoneDateFilter(condition)
+                        ? <span className="pms-filter-value-placeholder" aria-hidden />
+                        : renderFilterValueControl(condition)}
                       <Button
                         icon={<DeleteOutlined />}
                         danger
-                        onClick={() => setTempFilters(prev => prev.length > 1 ? prev.filter(item => item.id !== condition.id) : [createFilterCondition()])}
+                        aria-label="删除筛选条件"
+                        onClick={() => {
+                          const remaining = tempFilters.filter(item => item.id !== condition.id)
+                          commitSummaryFilters(remaining.length ? remaining : [createFilterCondition()])
+                        }}
                       />
-                    </div>
-                    {renderFilterValueControl(condition)}
                   </div>
                 ))}
-                <Button
-                  type="dashed"
-                  icon={<PlusOutlined />}
-                  onClick={() => setTempFilters(prev => [...prev, createFilterCondition()])}
-                >
-                  添加条件
-                </Button>
               </div>
             </FloatingFilterPanel>
             <SortableColumnSettings

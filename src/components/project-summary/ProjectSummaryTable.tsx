@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Button,
   DatePicker,
@@ -16,7 +17,6 @@ import {
   DeleteOutlined,
   DownOutlined,
   FilterOutlined,
-  PlusOutlined,
   RightOutlined,
   SettingOutlined,
 } from '@ant-design/icons'
@@ -93,6 +93,8 @@ export interface ProjectSummaryTableProps {
   onFiltersChange?: (filters: AnyFilterCondition[]) => void
   showQuickFilters?: boolean
   groupBy?: { key: string; fallbackLabel: string }
+  toolbarHost?: HTMLElement | null
+  showTable?: boolean
 }
 
 interface StoredProjectSummaryPreferences {
@@ -167,6 +169,8 @@ export default function ProjectSummaryTable({
   onFiltersChange,
   showQuickFilters = true,
   groupBy,
+  toolbarHost,
+  showTable = true,
 }: ProjectSummaryTableProps) {
   const [uncontrolledFilters, setUncontrolledFilters] = useState<AnyFilterCondition[]>([])
   const isFilterControlled = controlledFilters !== undefined
@@ -490,14 +494,17 @@ export default function ProjectSummaryTable({
     return total + (field?.width ?? 140)
   }, 0)
 
+  const commitTempFilters = (next: AnyFilterCondition[]) => {
+    setTempFilters(next)
+    setFilters(normalizeFilterConditions(next, filterFieldDefinitions))
+  }
+
   const updateTempCondition = (
     conditionId: string,
     patch: Partial<AnyFilterCondition>,
-  ) => {
-    setTempFilters(current => current.map(condition => (
-      condition.id === conditionId ? { ...condition, ...patch } as AnyFilterCondition : condition
-    )))
-  }
+  ) => commitTempFilters(tempFilters.map(condition => (
+    condition.id === conditionId ? { ...condition, ...patch } as AnyFilterCondition : condition
+  )))
 
   const handleFieldChange = (condition: AnyFilterCondition, field: string) => {
     const definition = filterDefinitionByKey.get(field)
@@ -573,9 +580,118 @@ export default function ProjectSummaryTable({
     )
   }
 
+  const toolbarActions = (
+    <Space size={8} className="pms-project-summary-actions">
+      <FloatingFilterPanel
+        open={filterOpen}
+        title="项目筛选"
+        getPopupContainer={getPopupContainer}
+        trigger={(
+          <Tooltip title={filters.length ? '筛选（已启用）' : '筛选'}>
+            <Button
+              aria-label="筛选"
+              icon={<FilterOutlined />}
+              type={filters.length ? 'primary' : 'default'}
+              onClick={() => {
+                setColumnOpen(false)
+                setTempFilters(filters.length
+                  ? cloneConditions(filters)
+                  : [createFilterCondition()])
+                setFilterOpen(true)
+              }}
+            >筛选</Button>
+          </Tooltip>
+        )}
+        onReset={() => commitTempFilters([createFilterCondition()])}
+        onAdd={() => commitTempFilters([...tempFilters, createFilterCondition()])}
+        addDisabled={tempFilters.length >= filterFieldDefinitions.length}
+        onClose={() => setFilterOpen(false)}
+      >
+        <div className="pms-filter-condition-list">
+          {tempFilters.map(condition => {
+            const definition = filterDefinitionByKey.get(condition.field)
+            const operatorOptions = definition?.multiple
+              ? MULTI_ENUM_FILTER_OPERATORS
+              : definition?.kind === 'enum'
+                ? ENUM_FILTER_OPERATORS
+                : getFilterOperatorsForKind(definition?.kind ?? 'text')
+            return (
+              <div
+                key={condition.id}
+                className="pms-filter-condition-row"
+              >
+                <Select
+                  aria-label="筛选字段"
+                  placeholder="筛选字段"
+                  value={condition.field || undefined}
+                  options={getFieldOptionsWithDuplicateDisabled(
+                    filterFieldDefinitions.map(field => ({
+                      label: field.label,
+                      value: field.key,
+                    })),
+                    tempFilters,
+                    condition.id,
+                  )}
+                  onChange={field => handleFieldChange(condition, field)}
+                />
+                <Select
+                  aria-label="筛选条件"
+                  value={condition.operator}
+                  options={operatorOptions as any}
+                  disabled={definition?.multiple}
+                  onChange={operator => updateTempCondition(condition.id, {
+                    operator,
+                    value: isValuelessFilterOperator(operator) ? '' : condition.value,
+                  })}
+                />
+                {isValuelessFilterOperator(condition.operator)
+                  ? <span className="pms-filter-value-placeholder" aria-hidden />
+                  : renderFilterValue(condition)}
+                <Button
+                  danger
+                  aria-label="删除筛选条件"
+                  icon={<DeleteOutlined />}
+                  onClick={() => {
+                    const remaining = tempFilters.filter(item => item.id !== condition.id)
+                    commitTempFilters(remaining.length ? remaining : [createFilterCondition()])
+                  }}
+                />
+              </div>
+            )
+          })}
+        </div>
+      </FloatingFilterPanel>
+
+      <SortableColumnSettings
+        open={columnOpen}
+        getPopupContainer={getPopupContainer}
+        trigger={(
+          <Tooltip title="列设置">
+            <Button
+              aria-label="列设置"
+              icon={<SettingOutlined />}
+              onClick={() => {
+                setFilterOpen(false)
+                setColumnOpen(true)
+              }}
+            >列设置</Button>
+          </Tooltip>
+        )}
+        definitions={columnDefinitions}
+        value={columnSettings}
+        defaultValue={defaultColumnSettings}
+        onCancel={() => setColumnOpen(false)}
+        onApply={nextSettings => {
+          setColumnSettings(nextSettings)
+          setColumnOpen(false)
+        }}
+      />
+    </Space>
+  )
+
   return (
     <div>
-      <div style={{
+      {(!toolbarHost || showQuickFilters) && <div style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -622,148 +738,18 @@ export default function ProjectSummaryTable({
           ))}
         </Space>
 
-        <Space size={6}>
-          <FloatingFilterPanel
-            open={filterOpen}
-            getPopupContainer={getPopupContainer}
-            trigger={(
-              <Tooltip title={filters.length ? '筛选（已启用）' : '筛选'}>
-                <Button
-                  aria-label="筛选"
-                  icon={<FilterOutlined />}
-                  type={filters.length ? 'primary' : 'default'}
-                  onClick={() => {
-                    setColumnOpen(false)
-                    setTempFilters(filters.length
-                      ? cloneConditions(filters)
-                      : [createFilterCondition()])
-                    setFilterOpen(true)
-                  }}
-                />
-              </Tooltip>
-            )}
-            onReset={() => setTempFilters([createFilterCondition()])}
-            onClear={() => setTempFilters([createFilterCondition()])}
-            onCancel={() => setFilterOpen(false)}
-            onConfirm={() => {
-              setFilters(normalizeFilterConditions(
-                tempFilters,
-                filterFieldDefinitions,
-              ))
-              setFilterOpen(false)
-            }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {tempFilters.map(condition => {
-                const definition = filterDefinitionByKey.get(condition.field)
-                const operatorOptions = definition?.multiple
-                  ? MULTI_ENUM_FILTER_OPERATORS
-                  : definition?.kind === 'enum'
-                    ? ENUM_FILTER_OPERATORS
-                    : getFilterOperatorsForKind(definition?.kind ?? 'text')
-                return (
-                  <div
-                    key={condition.id}
-                    style={{
-                      padding: 12,
-                      border: '1px solid #eef2ff',
-                      borderRadius: 8,
-                      background: '#fafbff',
-                    }}
-                  >
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'minmax(0, 1fr) 116px 40px',
-                      gap: 8,
-                      marginBottom: isValuelessFilterOperator(condition.operator) ? 0 : 8,
-                    }}>
-                      <Select
-                        aria-label="筛选字段"
-                        placeholder="筛选字段"
-                        value={condition.field || undefined}
-                        options={getFieldOptionsWithDuplicateDisabled(
-                          filterFieldDefinitions.map(field => ({
-                            label: field.label,
-                            value: field.key,
-                          })),
-                          tempFilters,
-                          condition.id,
-                        )}
-                        onChange={field => handleFieldChange(condition, field)}
-                      />
-                      <Select
-                        aria-label="筛选操作符"
-                        value={condition.operator}
-                        options={operatorOptions as any}
-                        disabled={definition?.multiple}
-                        onChange={operator => updateTempCondition(condition.id, {
-                          operator,
-                          value: isValuelessFilterOperator(operator) ? '' : condition.value,
-                        })}
-                      />
-                      <Button
-                        danger
-                        aria-label="删除筛选条件"
-                        icon={<DeleteOutlined />}
-                        onClick={() => setTempFilters(current => {
-                          const remaining = current.filter(
-                            item => item.id !== condition.id,
-                          )
-                          return remaining.length ? remaining : [createFilterCondition()]
-                        })}
-                      />
-                    </div>
-                    {renderFilterValue(condition)}
-                  </div>
-                )
-              })}
-              <Button
-                type="dashed"
-                icon={<PlusOutlined />}
-                onClick={() => setTempFilters(current => [
-                  ...current,
-                  createFilterCondition(),
-                ])}
-              >
-                添加条件
-              </Button>
-            </div>
-          </FloatingFilterPanel>
+        {!toolbarHost && toolbarActions}
+      </div>}
 
-          <SortableColumnSettings
-            open={columnOpen}
-            getPopupContainer={getPopupContainer}
-            trigger={(
-              <Tooltip title="列设置">
-                <Button
-                  aria-label="列设置"
-                  icon={<SettingOutlined />}
-                  onClick={() => {
-                    setFilterOpen(false)
-                    setColumnOpen(true)
-                  }}
-                />
-              </Tooltip>
-            )}
-            definitions={columnDefinitions}
-            value={columnSettings}
-            defaultValue={defaultColumnSettings}
-            onCancel={() => setColumnOpen(false)}
-            onApply={nextSettings => {
-              setColumnSettings(nextSettings)
-              setColumnOpen(false)
-            }}
-          />
-        </Space>
-      </div>
+      {toolbarHost && createPortal(toolbarActions, toolbarHost)}
 
-      {templateTasks.length === 0 && (
+      {showTable && templateTasks.length === 0 && (
         <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
           暂无已发布计划模板
         </Typography.Text>
       )}
 
-      <Table<ProjectSummaryRow>
+      {showTable && <Table<ProjectSummaryRow>
         className="pms-table pms-project-summary-table"
         rowKey="key"
         columns={columns}
@@ -786,7 +772,7 @@ export default function ProjectSummaryTable({
             else onViewProject(row.projectId)
           },
         })}
-      />
+      />}
     </div>
   )
 }

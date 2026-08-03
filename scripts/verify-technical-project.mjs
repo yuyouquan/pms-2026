@@ -376,7 +376,8 @@ if (basicInfoMounts.length) {
   const basicReachableNodes = collectReachableNodes(basicInfoSourceFile, basicInfoComponent)
   assert.equal(importsComponent(basicInfoSourceFile, 'CollapsibleInformationSection', '@/components/project-info/CollapsibleInformationSection'), true, 'mounted basic information imports the shared collapsible section canonically')
   assert.equal(liveJsxMounts(basicReachableNodes, basicInfoSourceFile, 'CollapsibleInformationSection').length, 1, 'mounted basic information renders its collapsible section')
-  assert.ok(basicReachableNodes.some(node => node.getText(basicInfoSourceFile).includes('该子任务已停用')), 'mounted basic information preserves inactive read-only feedback')
+  assert.ok(basicReachableNodes.some(node => node.getText(basicInfoSourceFile).includes('pms-project-info-display-grid')), 'mounted basic information reuses the whole-machine field grid')
+  assert.doesNotMatch(basicInfoSource, /该子任务已停用/, 'inactive-only feedback is removed with the inactive display feature')
 } else {
   assert.equal(inlineBasicInfoMounts.length, 1, 'inline basic information exposes one live technical-basic-information region')
 }
@@ -412,6 +413,8 @@ assert.match(technicalInformationView, /aria-label="技术信息内容"/, 'techn
 assert.match(technicalInformationView, /className="pms-project-info-empty">未配置</, 'empty team roles use the shared unconfigured wording')
 const technicalPlanSummary = readSource(root, 'src/components/technical-project/TechnicalPlanSummary.tsx')
 assert.match(technicalPlanSummary, /useTechnicalPlanStore/, 'technical plan summary reads the scoped plan instance')
+assert.match(technicalPlanSummary, /title=\{[\s\S]{0,180}计划信息/, 'technical summary uses the same plan-information card title as whole-machine projects')
+assert.doesNotMatch(technicalPlanSummary, /计划摘要/, 'technical plan header no longer prefixes the active tab name')
 assert.match(technicalPlanSummary, /暂无计划版本/, 'technical plan summary uses one empty state when no published version exists')
 assert.match(technicalPlanSummary, /暂无计划数据/, 'technical plan summary does not render an empty milestone table')
 assert.match(technicalPlanSummary, /actualRow[\s\S]*actualEndDate|actualEndDate[\s\S]*actualRow/, 'technical plan summary renders the published actual completion row')
@@ -422,7 +425,8 @@ assert.match(projectInformationFrame, /Math\.min\(8, Math\.max\(1, fields\.filte
 assert.doesNotMatch(projectInformationFrame, /repeat\(\$\{coreFields\.length\}/, 'the live shared frame does not count full-width fields as desktop columns')
 const globalStyles = readSource(root, 'src/styles/globals.css')
 assert.match(globalStyles, /grid-template-columns:\s*repeat\(var\(--pms-project-info-core-columns/, 'the core grid consumes the bounded live column count')
-assert.ok(technicalInformationReachableNodes.some(node => node.getText(technicalInformationSourceFile).includes('显示已停用')), 'the live technical information tree exposes inactive children')
+assert.doesNotMatch(technicalInformationView, /显示已停用|showInactive|Switch/, 'technical basic information no longer exposes inactive children')
+assert.doesNotMatch(technicalInformationView, /暂无交付物/, 'deliverable cards do not append a redundant empty state')
 const configButton = technicalInformationReachableNodes.find(node => (
   (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node))
   && jsxTagName(node, technicalInformationSourceFile) === 'Button'
@@ -441,6 +445,7 @@ assert.ok(staticJsxAttributeText(jsxAttribute(configModalMount, 'open')).include
 const createFields = readSource(root, 'src/components/technical-project/TechnicalProjectCreateFields.tsx')
 assert.match(createFields, /Input\.TextArea[\s\S]{0,220}onPressEnter=\{event\s*=>\s*event\.stopPropagation\(\)\}/, 'Enter inside project-value textarea cannot bubble into modal submit')
 const technicalPlan = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
+assert.doesNotMatch(technicalPlan, /显示已停用|showInactive|Switch/, 'technical plan scope tabs also omit inactive subprojects')
 const planViewModeSwitcher = readSource(root, 'src/components/plans/PlanViewModeSwitcher.tsx')
 const planVersionCompareModal = readSource(root, 'src/components/plans/PlanVersionCompareModal.tsx')
 const planHelpers = readSource(root, 'src/components/shared/PlanHelpers.tsx')
