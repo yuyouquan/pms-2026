@@ -213,7 +213,7 @@
   align-items: center;
   flex-wrap: nowrap;
   gap: 8px;
-  padding: 3px 4px;
+  padding: 0 4px;
   min-width: 0;
 }
 
@@ -241,8 +241,11 @@
   margin-left: auto;
 }
 
-.pms-project-summary-actions .ant-btn {
-  min-width: 80px;
+.pms-project-list .pms-project-summary-actions .ant-btn {
+  height: 32px;
+  min-height: 32px !important;
+  min-width: 72px;
+  padding-inline: 12px;
   border-radius: 8px;
 }
 
@@ -2361,6 +2364,20 @@ body {
   position: relative !important;
 }
 
+/* Ant Design fixed cells must remain sticky. The generic header position above
+   otherwise offsets fixed headers from their body cells during horizontal scroll. */
+.pms-table .ant-table-thead > tr > th.ant-table-cell-fix-start,
+.pms-table .ant-table-thead > tr > th.ant-table-cell-fix-start-shadow,
+.pms-table .ant-table-thead > tr > th.ant-table-cell-fix-end,
+.pms-table .ant-table-thead > tr > th.ant-table-cell-fix-end-shadow,
+.pms-table .ant-table-thead > tr > th.ant-table-cell-fix-left,
+.pms-table .ant-table-thead > tr > th.ant-table-cell-fix-left-last,
+.pms-table .ant-table-thead > tr > th.ant-table-cell-fix-right,
+.pms-table .ant-table-thead > tr > th.ant-table-cell-fix-right-first {
+  position: sticky !important;
+  z-index: 4;
+}
+
 .pms-table .ant-table-thead > tr > th::after {
   content: '';
   position: absolute;
@@ -2377,6 +2394,15 @@ body {
   vertical-align: middle !important;
   transition: background var(--duration-fast) !important;
   border-bottom: 1px solid var(--border-light) !important;
+}
+
+/* rc-table inserts a hidden sizing row when horizontal/fixed columns are used.
+   Do not let the dense table cell padding turn it into a visible blank row or
+   inflate the measured body widths. */
+.pms-table .ant-table-tbody > tr.ant-table-measure-row > td {
+  padding: 0 !important;
+  height: 0 !important;
+  border: 0 !important;
 }
 
 .pms-table .ant-table-tbody > tr:hover > td {
@@ -4059,6 +4085,66 @@ body {
 .technical-plan-edit-notice > strong {
   color: #ad6800;
   font-size: 13px;
+}
+
+.technical-plan-task-name-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.technical-plan-task-name-cell .pms-edit-input,
+.technical-plan-task-name-text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.technical-plan-task-name-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.technical-plan-vertical-table .ant-table-thead > tr > th.ant-table-cell-fix-start,
+.technical-plan-vertical-table .ant-table-thead > tr > th.ant-table-cell-fix-start-shadow,
+.technical-plan-vertical-table .ant-table-thead > tr > th.ant-table-cell-fix-end,
+.technical-plan-vertical-table .ant-table-thead > tr > th.ant-table-cell-fix-end-shadow {
+  background: linear-gradient(180deg, #fbfbff 0%, #f3f4fc 100%) !important;
+}
+
+.technical-plan-vertical-table .ant-table-tbody > tr > td.ant-table-cell-fix-start,
+.technical-plan-vertical-table .ant-table-tbody > tr > td.ant-table-cell-fix-start-shadow,
+.technical-plan-vertical-table .ant-table-tbody > tr > td.ant-table-cell-fix-end,
+.technical-plan-vertical-table .ant-table-tbody > tr > td.ant-table-cell-fix-end-shadow {
+  z-index: 3;
+  background: #fff !important;
+}
+
+.technical-plan-vertical-table.pms-table-edit .ant-table-tbody > tr > td.ant-table-cell-fix-start,
+.technical-plan-vertical-table.pms-table-edit .ant-table-tbody > tr > td.ant-table-cell-fix-start-shadow,
+.technical-plan-vertical-table.pms-table-edit .ant-table-tbody > tr > td.ant-table-cell-fix-end,
+.technical-plan-vertical-table.pms-table-edit .ant-table-tbody > tr > td.ant-table-cell-fix-end-shadow {
+  background: #fffce8 !important;
+}
+
+.technical-plan-vertical-table.pms-table-edit .ant-table-tbody > tr:hover > td.ant-table-cell-fix-start,
+.technical-plan-vertical-table.pms-table-edit .ant-table-tbody > tr:hover > td.ant-table-cell-fix-start-shadow,
+.technical-plan-vertical-table.pms-table-edit .ant-table-tbody > tr:hover > td.ant-table-cell-fix-end,
+.technical-plan-vertical-table.pms-table-edit .ant-table-tbody > tr:hover > td.ant-table-cell-fix-end-shadow {
+  background: #fff4cc !important;
+}
+
+.technical-plan-add-task {
+  padding: 12px 16px;
+  border-top: 1px solid #f3f4f6;
+  background: #f8fafc;
+}
+
+.technical-plan-add-task .ant-btn {
+  width: 100%;
+  height: 36px;
+  border-radius: 6px;
 }
 
 .technical-horizontal-plan-table .ant-table-thead > tr:first-child > th:not(:first-child) {

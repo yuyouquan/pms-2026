@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Alert, Badge, Button, Card, DatePicker, Dropdown, Empty, Input, Popconfirm,
+  Alert, Badge, Button, Card, DatePicker, Dropdown, Empty, Input, Modal, Popconfirm,
   Row, Select, Space, Table, Tabs, Tag, Tooltip, Typography, Upload, message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { MenuProps } from 'antd'
 import {
-  DeleteOutlined, DownloadOutlined, HistoryOutlined, PlusOutlined, SaveOutlined,
+  CopyOutlined, DeleteOutlined, DownloadOutlined, HistoryOutlined, PlusOutlined, SaveOutlined,
   EditOutlined, FilterOutlined, MinusSquareOutlined, PlusSquareOutlined, SettingOutlined, ShareAltOutlined,
   StopOutlined, UploadOutlined,
 } from '@ant-design/icons'
@@ -198,7 +198,6 @@ export default function TechnicalPlanModule({
   const subprojects = useTechnicalProjectStore(state => state.subprojects)
   const plansByKey = useTechnicalPlanStore(state => state.plansByKey)
   const createRevision = useTechnicalPlanStore(state => state.createRevision)
-  const clonePublishedVersion = useTechnicalPlanStore(state => state.clonePublishedVersion)
   const publishRevision = useTechnicalPlanStore(state => state.publishRevision)
   const cancelRevision = useTechnicalPlanStore(state => state.cancelRevision)
   const updateCurrentTasks = useTechnicalPlanStore(state => state.updateCurrentTasks)
@@ -306,19 +305,26 @@ export default function TechnicalPlanModule({
   }
 
   const handleClonePlan = () => {
-    if (!tab || !canEditTechnicalPlan || readOnlyReason || hasDraft) return
-    const source = currentVersion?.status === '已发布'
-      ? currentVersion
-      : [...publishedVersions].sort((left, right) => right.versionNo.localeCompare(left.versionNo, undefined, { numeric: true }))[0]
+    if (!tab || !canMaintain) return
+    const source = [...publishedVersions]
+      .sort((left, right) => right.versionNo.localeCompare(left.versionNo, undefined, { numeric: true }))[0]
     if (!source) { message.warning('暂无可克隆的已发布版本'); return }
-    const result = clonePublishedVersion({ scope: tab.scope, sourceVersionId: source.id, subproject: tab.subproject })
-    if (result.ok) { message.success(`已克隆为 ${result.versionId.replace('-draft', '')} 修订`); return }
-    const reasons = {
-      'draft-exists': '当前计划已有修订版', inactive: '已停用子项目不可创建修订',
-      'incomplete-configuration': '请先完成子项目信息配置', 'missing-instance': '暂无可克隆计划',
-      'missing-source': '请选择已发布版本进行克隆',
-    }
-    message.warning(reasons[result.reason])
+    Modal.confirm({
+      title: '确认克隆计划',
+      content: `确认将 ${source.versionNo} 的计划信息克隆到当前修订版本？实际开始和实际完成时间不会被克隆。`,
+      okText: '确认克隆',
+      cancelText: '取消',
+      onOk: () => {
+        const clonedTasks = source.tasks.map(task => ({
+          ...task,
+          actualStartDate: '',
+          actualEndDate: '',
+        }))
+        const result = updateCurrentTasks(scope, clonedTasks, maxDepth)
+        if (!result.ok) { message.error('计划克隆失败，请检查任务层级'); return }
+        message.success(`已克隆 ${source.versionNo}，实际开始和实际完成时间已清空`)
+      },
+    })
   }
 
   const handlePublish = () => {
@@ -400,8 +406,17 @@ export default function TechnicalPlanModule({
   const collapseAll = () => setCollapsed(scope, filteredTasks.filter(task => !task.parentId).map(task => task.id))
 
   const baseColumns: ColumnsType<TechnicalTemplateTask> = [
-    { key: 'drag', width: 42, fixed: 'left', render: () => canDrag ? <DragHandle /> : null },
-    { key: 'taskName', title: '任务名称', dataIndex: 'taskName', width: 230, fixed: 'left', render: (value, row) => canMaintain ? <Input value={value} onChange={event => updateTask(row.id, { taskName: event.target.value })} /> : <Space size={8}><span style={{ paddingLeft: row.parentId ? 20 : 0 }}>{value}</span>{!row.parentId && <Tag color="geekblue">阶段</Tag>}</Space> },
+    {
+      key: 'taskName', title: '任务名称', dataIndex: 'taskName', width: 260, fixed: 'left',
+      render: (value, row) => (
+        <div className="technical-plan-task-name-cell" style={{ paddingLeft: row.parentId ? 16 : 0 }}>
+          {canDrag && <DragHandle />}
+          {canMaintain
+            ? <Input className="pms-edit-input" value={value} onChange={event => updateTask(row.id, { taskName: event.target.value })} />
+            : <><span className="technical-plan-task-name-text">{value}</span>{!row.parentId && <Tag color="geekblue">阶段</Tag>}</>}
+        </div>
+      ),
+    },
     { key: 'responsible', title: '责任人', dataIndex: 'responsible', width: 130, render: (value, row) => canMaintain ? <Input value={value} onChange={event => updateTask(row.id, { responsible: event.target.value })} /> : value || '-' },
     { key: 'predecessor', title: '前置任务', dataIndex: 'predecessor', width: 120, render: (value, row) => canMaintain ? <Input value={value} onChange={event => updateTask(row.id, { predecessor: event.target.value })} /> : value || '-' },
     { key: 'planStartDate', title: '计划开始', dataIndex: 'planStartDate', width: 145, onCell: row => ({ className: invalid.get(row.id)?.start ? 'pms-cell-invalid' : '' }), render: (value, row) => canMaintain ? <Tooltip title={invalid.get(row.id)?.start?.join('；')}><DatePicker value={value ? dayjs(value) : null} onChange={date => updateTask(row.id, { planStartDate: date?.format('YYYY-MM-DD') || '' })} /></Tooltip> : value || '-' },
@@ -431,13 +446,16 @@ export default function TechnicalPlanModule({
     },
   ]
   const visibleKeys = new Set(instance?.columnSettings.visible || Object.keys(COLUMN_LABELS))
-  const columnOrder = ['drag', ...(instance?.columnSettings.order || Object.keys(COLUMN_LABELS))]
+  const columnOrder = instance?.columnSettings.order || Object.keys(COLUMN_LABELS)
   const columns = baseColumns
-    .filter(column => column.key === 'drag' || column.key === 'actions' || visibleKeys.has(String(column.key)))
+    .filter(column => column.key === 'actions' || visibleKeys.has(String(column.key)))
     .sort((left, right) => {
       const index = (key: unknown) => key === 'actions' ? Number.MAX_SAFE_INTEGER : columnOrder.indexOf(String(key))
       return index(left.key) - index(right.key)
     })
+  const verticalTableScrollX = columns.reduce((total, column) => (
+    total + (typeof column.width === 'number' ? column.width : 140)
+  ), 0)
 
   const exportHorizontalPlan = () => {
     const groups = buildPlanHorizontalStageGroups(
@@ -616,35 +634,27 @@ export default function TechnicalPlanModule({
                   placement="bottomLeft"
                   disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)}
                 >
-                  <Button type="primary" icon={<PlusOutlined />} disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)} aria-label="创建修订">创建修订</Button>
+                  <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)} aria-label="创建修订">创建修订</Button>
                 </Dropdown>
               </Tooltip>
             )}
-            <Tooltip title={!canEditTechnicalPlan ? '无计划编辑权限' : readOnlyReason || (!publishedVersions.length ? '暂无已发布版本' : '计划克隆')}>
-              <Button
-                icon={<PlusOutlined />}
-                disabled={!canEditTechnicalPlan || Boolean(readOnlyReason) || hasDraft || !publishedVersions.length}
-                onClick={handleClonePlan}
-                aria-label="计划克隆"
-              >
-                计划克隆
-              </Button>
-            </Tooltip>
+            {isDraft && (
+              <Tooltip title={!canMaintain ? readOnlyReason || '无计划编辑权限' : !publishedVersions.length ? '暂无已发布版本' : '计划克隆'}>
+                <Button icon={<CopyOutlined />} style={{ borderRadius: 6 }} disabled={!canMaintain || !publishedVersions.length} onClick={handleClonePlan} aria-label="计划克隆" />
+              </Tooltip>
+            )}
             {isDraft && (
               <Tooltip title={!canPublish ? '无计划发布权限' : !canMaintain ? readOnlyReason : '发布'}>
-                <Button type="primary" icon={<SaveOutlined />} disabled={!canPublish || !canMaintain} onClick={handlePublish} aria-label="发布">发布</Button>
+                <Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} disabled={!canPublish || !canMaintain} onClick={handlePublish} aria-label="发布" />
               </Tooltip>
             )}
             {isDraft && (
               <Popconfirm title="确认取消当前修订？" onConfirm={() => { if (cancelRevision(scope).ok) message.success('已取消修订') }}>
                 <Tooltip title={!canMaintain ? readOnlyReason || '无计划编辑权限' : '取消修订'}>
-                  <Button danger icon={<StopOutlined />} disabled={!canMaintain} aria-label="取消修订">取消修订</Button>
+                  <Button danger icon={<StopOutlined />} style={{ borderRadius: 6 }} disabled={!canMaintain} aria-label="取消修订" />
                 </Tooltip>
               </Popconfirm>
             )}
-            <Tooltip title={!canMaintain ? readOnlyReason || '仅修订中版本可新增任务' : viewMode !== 'vertical' ? '请切换至竖版表格新增任务' : '新增一级任务'}>
-              <Button icon={<PlusOutlined />} disabled={!canEditTaskStructure} onClick={handleAddTopLevelTask}>新增一级任务</Button>
-            </Tooltip>
           </Space>
         )}
         utilityActions={(
@@ -657,6 +667,7 @@ export default function TechnicalPlanModule({
                   <Badge dot={filters.some(isFilterConditionActive)} offset={[-2, 2]}>
                     <Button
                       icon={<FilterOutlined />}
+                      style={{ borderRadius: 6 }}
                       onClick={() => {
                         setColumnsOpen(false)
                         setTempFilters(filters.length ? filters.map(item => ({ ...item })) : [createFilterCondition()])
@@ -724,13 +735,21 @@ export default function TechnicalPlanModule({
                   )
                 })}
               </div>
-            </FloatingFilterPanel>
+              </FloatingFilterPanel>
+            <Dropdown
+              menu={{ items: [{ key: 'current', label: '导出当前视图' }, { key: 'all', label: '导出全部' }], onClick: ({ key }) => exportPlan(key as 'current' | 'all') }}
+              disabled={!canExport || !tasks.length}
+            >
+              <Tooltip title={!canExport ? '无计划导出权限' : '导出为 Excel'}>
+                <Button icon={<DownloadOutlined />} style={{ borderRadius: 6 }} disabled={!canExport || !tasks.length} aria-label="导出" />
+              </Tooltip>
+            </Dropdown>
             {viewMode === 'vertical' && (
               <SortableColumnSettings
                 open={columnsOpen}
                 trigger={(
                   <Tooltip title="列设置">
-                    <Button icon={<SettingOutlined />} disabled={!instance} onClick={() => { setFilterOpen(false); setColumnsOpen(true) }} aria-label="列设置" />
+                    <Button icon={<SettingOutlined />} style={{ borderRadius: 6 }} disabled={!instance} onClick={() => { setFilterOpen(false); setColumnsOpen(true) }} aria-label="列设置" />
                   </Tooltip>
                 )}
                 definitions={TECHNICAL_COLUMN_DEFINITIONS}
@@ -739,24 +758,16 @@ export default function TechnicalPlanModule({
                 onCancel={() => setColumnsOpen(false)}
               />
             )}
-            <Tooltip title="全部展开"><Button icon={<PlusSquareOutlined />} size="small" onClick={expandAll} aria-label="全部展开" /></Tooltip>
-            <Tooltip title="全部收起"><Button icon={<MinusSquareOutlined />} size="small" onClick={collapseAll} aria-label="全部收起" /></Tooltip>
-            <Tooltip title="版本对比"><Button aria-label="版本对比" icon={<HistoryOutlined />} disabled={visibleVersions.length < 2} onClick={openVersionCompare} /></Tooltip>
+            <Tooltip title="全部展开"><Button icon={<PlusSquareOutlined />} size="small" style={{ borderRadius: 6 }} onClick={expandAll} aria-label="全部展开" /></Tooltip>
+            <Tooltip title="全部收起"><Button icon={<MinusSquareOutlined />} size="small" style={{ borderRadius: 6 }} onClick={collapseAll} aria-label="全部收起" /></Tooltip>
+            <Tooltip title="版本对比"><Button aria-label="版本对比" icon={<HistoryOutlined />} style={{ borderRadius: 6 }} disabled={visibleVersions.length < 2} onClick={openVersionCompare} /></Tooltip>
             <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={importWorkbook} disabled={!canImport || !canMaintain}>
               <Tooltip title={!canImport ? '无计划导入权限' : !canMaintain ? readOnlyReason || '仅修订中版本可导入' : '导入'}>
-                <Button icon={<UploadOutlined />} disabled={!canImport || !canMaintain} aria-label="导入">导入</Button>
+                <Button icon={<UploadOutlined />} style={{ borderRadius: 6 }} disabled={!canImport || !canMaintain} aria-label="导入" />
               </Tooltip>
             </Upload>
-            <Dropdown
-              menu={{ items: [{ key: 'current', label: '导出当前视图' }, { key: 'all', label: '导出全部' }], onClick: ({ key }) => exportPlan(key as 'current' | 'all') }}
-              disabled={!canExport || !tasks.length}
-            >
-              <Tooltip title={!canExport ? '无计划导出权限' : '导出为 Excel'}>
-                <Button icon={<DownloadOutlined />} disabled={!canExport || !tasks.length} aria-label="导出" />
-              </Tooltip>
-            </Dropdown>
             <Tooltip title={!canViewTechnicalPlan ? '无技术项目一级计划查看权限' : !canShareTechnicalPlan ? '无技术项目一级计划分享权限' : publishedVersions.length ? '复制精确作用域分享链接' : '暂无已发布版本'}>
-              <Button icon={<ShareAltOutlined />} disabled={!canViewTechnicalPlan || !canShareTechnicalPlan || !publishedVersions.length} onClick={handleShare} aria-label="分享计划" />
+              <Button icon={<ShareAltOutlined />} style={{ borderRadius: 6 }} disabled={!canViewTechnicalPlan || !canShareTechnicalPlan || !publishedVersions.length} onClick={handleShare} aria-label="分享计划" />
             </Tooltip>
           </Space>
         )}
@@ -766,21 +777,28 @@ export default function TechnicalPlanModule({
         {!currentVersion ? (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无计划版本，请创建修订" />
         ) : viewMode === 'vertical' ? (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={visibleTasks.map(task => task.id)} strategy={verticalListSortingStrategy}>
-              <Table<TechnicalTemplateTask>
-                className="pms-table"
-                rowKey="id"
-                size="middle"
-                pagination={false}
-                scroll={{ x: 1050 }}
-                dataSource={visibleTasks}
-                columns={columns}
-                components={canDrag ? { body: { row: SortableRow } } : undefined}
-                rowClassName={row => row.parentId ? 'technical-plan-child-row' : 'technical-plan-phase-row'}
-              />
-            </SortableContext>
-          </DndContext>
+          <div className="technical-plan-vertical-table-shell">
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={visibleTasks.map(task => task.id)} strategy={verticalListSortingStrategy}>
+                <Table<TechnicalTemplateTask>
+                  className={`pms-table technical-plan-vertical-table ${canMaintain ? 'pms-table-edit' : ''}`}
+                  rowKey="id"
+                  size="middle"
+                  pagination={false}
+                  scroll={{ x: verticalTableScrollX }}
+                  dataSource={visibleTasks}
+                  columns={columns}
+                  components={canDrag ? { body: { row: SortableRow } } : undefined}
+                  rowClassName={row => row.parentId ? 'technical-plan-child-row' : 'technical-plan-phase-row'}
+                />
+              </SortableContext>
+            </DndContext>
+            {canEditTaskStructure && (
+              <div className="technical-plan-add-task">
+                <Button type="dashed" icon={<PlusOutlined />} onClick={handleAddTopLevelTask}>添加新活动</Button>
+              </div>
+            )}
+          </div>
         ) : viewMode === 'horizontal' ? (
           <TechnicalHorizontalPlanTable tasks={filteredTasks} versions={visibleVersions} currentVersionId={currentVersion.id} />
         ) : viewMode === 'gantt' ? (
