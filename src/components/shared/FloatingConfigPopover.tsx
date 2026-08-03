@@ -17,7 +17,7 @@ type FloatingConfigPopoverProps = {
   trigger: ReactElement;
   title: ReactNode;
   children: ReactNode;
-  footer: ReactNode;
+  footer?: ReactNode;
   width: number;
   ariaLabel?: string;
   className?: string;
@@ -132,7 +132,9 @@ export function FloatingConfigPopover({
         >
           <header className="pms-floating-config-header">{title}</header>
           <div className="pms-floating-config-body">{children}</div>
-          <footer className="pms-floating-config-footer">{footer}</footer>
+          {footer && (
+            <footer className="pms-floating-config-footer">{footer}</footer>
+          )}
         </section>
       }
     >

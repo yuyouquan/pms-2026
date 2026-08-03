@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const componentPath = resolve('src/components/shared/FloatingConfigPopover.tsx');
+const floatingFilterPanelPath = resolve('src/components/shared/FloatingFilterPanel.tsx');
 const sortableColumnSettingsPath = resolve('src/components/shared/SortableColumnSettings.tsx');
 const roadmapFilterPath = resolve('src/components/roadmap/RoadmapFilterDrawer.tsx');
 const projectRoadmapModulePath = resolve('src/components/roadmap/ProjectRoadmapModule.tsx');
@@ -20,6 +21,14 @@ const sortableColumnSettingsCallers = [
 const inlineFilterCallers = [
   'src/components/roadmap/MilestoneView.tsx',
   'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+  'src/containers/ProjectSpaceContainer.tsx',
+];
+const allFilterCallers = [
+  'src/components/project-summary/ProjectSummaryTable.tsx',
+  'src/components/roadmap/RoadmapFilterDrawer.tsx',
+  'src/components/roadmap/MilestoneView.tsx',
+  'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+  'src/components/technical-project/TechnicalPlanModule.tsx',
   'src/containers/ProjectSpaceContainer.tsx',
 ];
 const summaryFilterCallers = inlineFilterCallers.slice(0, 2);
@@ -57,7 +66,7 @@ const requiredPatterns = [
   /<section[\s\S]{0,100}className="pms-floating-config-panel"/,
   /<header\s+className="pms-floating-config-header">/,
   /<div\s+className="pms-floating-config-body">/,
-  /<footer\s+className="pms-floating-config-footer">/,
+  /\{footer\s*&&\s*\(/,
 ];
 
 for (const pattern of requiredPatterns) {
@@ -68,6 +77,41 @@ for (const pattern of requiredPatterns) {
 
 if (/\bDrawer\b/.test(source)) {
   throw new Error('FloatingConfigPopover must not use Drawer');
+}
+
+const floatingFilterPanelSource = readFileSync(floatingFilterPanelPath, 'utf8');
+for (const pattern of [
+  /title\?:\s*ReactNode/,
+  /onAdd:\s*\(\)\s*=>\s*void/,
+  /onClose:\s*\(\)\s*=>\s*void/,
+  /addDisabled\?:\s*boolean/,
+  /PlusOutlined/,
+  /CloseOutlined/,
+  /符合以下所有条件/,
+  /aria-label="关闭筛选"/,
+]) {
+  if (!pattern.test(floatingFilterPanelSource)) {
+    throw new Error(`FloatingFilterPanel is missing ${pattern}`);
+  }
+}
+for (const obsolete of ['onConfirm', 'onClear', '确认', '取消', '清空']) {
+  if (floatingFilterPanelSource.includes(obsolete)) {
+    throw new Error(`FloatingFilterPanel must remove obsolete ${obsolete} interaction`);
+  }
+}
+
+for (const callerPath of allFilterCallers) {
+  const callerSource = readFileSync(resolve(callerPath), 'utf8');
+  const start = callerSource.indexOf('<FloatingFilterPanel');
+  const end = callerSource.indexOf('</FloatingFilterPanel>', start);
+  if (start < 0 || end < 0) throw new Error(`${callerPath} must render FloatingFilterPanel`);
+  const block = callerSource.slice(start, end);
+  for (const required of ['onAdd=', 'onClose=', 'pms-filter-condition-row']) {
+    if (!block.includes(required)) throw new Error(`${callerPath} filter must include ${required}`);
+  }
+  for (const obsolete of ['onConfirm=', 'onClear=', 'onCancel=', '>添加条件<']) {
+    if (block.includes(obsolete)) throw new Error(`${callerPath} filter must remove ${obsolete}`);
+  }
 }
 
 const sortableColumnSettingsSource = readFileSync(sortableColumnSettingsPath, 'utf8');
@@ -146,13 +190,6 @@ for (const callerPath of inlineFilterCallers) {
 
 for (const callerPath of summaryFilterCallers) {
   const callerSource = readFileSync(resolve(callerPath), 'utf8');
-  const resetProp = getFloatingFilterProp(callerSource, 'onReset', 'onClear', callerPath);
-  const clearProp = getFloatingFilterProp(callerSource, 'onClear', 'onCancel', callerPath);
-  for (const [propName, propSource] of [['onReset', resetProp], ['onClear', clearProp]]) {
-    if (/setMilestoneDateRange|setSharedRowsOverride/.test(propSource)) {
-      throw new Error(`${callerPath} ${propName} must only update the filter draft`);
-    }
-  }
   if (!/\{!isFullscreen\s*&&\s*renderCurrentView\(\)\}/.test(callerSource)) {
     throw new Error(`${callerPath} must hide the background view while fullscreen`);
   }
@@ -183,11 +220,11 @@ const projectSpaceSource = readFileSync(resolve('src/containers/ProjectSpaceCont
 const projectSpaceResetProp = getFloatingFilterProp(
   projectSpaceSource,
   'onReset',
-  'onClear',
+  'onAdd',
   'src/containers/ProjectSpaceContainer.tsx',
 );
-if (!/setTempLevel1PlanFilters\(\s*\[\s*createFilterCondition\(\)\s*\]\s*\)/.test(projectSpaceResetProp)) {
-  throw new Error('ProjectSpaceContainer onReset must restore the default empty condition');
+if (!/commitLevel1PlanFilters\(\s*\[\s*createFilterCondition\(\)\s*\]\s*\)/.test(projectSpaceResetProp)) {
+  throw new Error('ProjectSpaceContainer onReset must immediately restore the default empty condition');
 }
 if (/\bimport\s*\{[^}]*\bDrawer\b[^}]*\}\s*from\s*['"]antd['"]/.test(projectSpaceSource)
   || /<Drawer\b/.test(projectSpaceSource)) {
@@ -195,9 +232,13 @@ if (/\bimport\s*\{[^}]*\bDrawer\b[^}]*\}\s*from\s*['"]antd['"]/.test(projectSpac
 }
 
 const requiredStylePatterns = [
+  /\.pms-floating-config-popover\s*\{[^}]*z-index:\s*1100;/s,
   /\.pms-floating-config-panel\s*\{[^}]*background:\s*#fff;/s,
   /\.pms-floating-config-header\s*\{[^}]*border-bottom:\s*1px solid #eef2f7;/s,
-  /\.pms-floating-config-footer\s*\{[^}]*border-top:\s*1px solid #eef2f7;/s,
+  /\.pms-filter-panel-header\s*\{/,
+  /\.pms-filter-panel-title\s*\{/,
+  /\.pms-filter-panel-subtitle\s*\{/,
+  /\.pms-filter-condition-row\s*\{/,
   /\.pms-floating-config-body\s*\{/,
   /\.pms-floating-config-body\s*\{[^}]*overflow:\s*auto;[^}]*overscroll-behavior:\s*contain;/s,
   /\.pms-scroll-modal\s+\.ant-modal-body\s*\{[^}]*overflow-y:\s*auto;/s,

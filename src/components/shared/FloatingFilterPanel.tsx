@@ -2,17 +2,18 @@
 
 import type { ReactElement, ReactNode } from 'react'
 import { Button, Space } from 'antd'
+import { CloseOutlined, PlusOutlined } from '@ant-design/icons'
 import { FloatingConfigPopover } from '@/components/shared/FloatingConfigPopover'
 
 interface FloatingFilterPanelProps {
   open: boolean
   trigger: ReactElement
   children: ReactNode
+  title?: ReactNode
   onReset: () => void
-  onClear: () => void
-  onCancel: () => void
-  onConfirm: () => void
-  confirmDisabled?: boolean
+  onAdd: () => void
+  onClose: () => void
+  addDisabled?: boolean
   getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
 }
 
@@ -20,11 +21,11 @@ export function FloatingFilterPanel({
   open,
   trigger,
   children,
+  title = '筛选',
   onReset,
-  onClear,
-  onCancel,
-  onConfirm,
-  confirmDisabled,
+  onAdd,
+  onClose,
+  addDisabled,
   getPopupContainer,
 }: FloatingFilterPanelProps) {
   return (
@@ -32,26 +33,38 @@ export function FloatingFilterPanel({
       open={open}
       trigger={trigger}
       title={(
-        <div className="pms-floating-config-title-row">
-          <span>筛选符合以下所有条件的结果</span>
-          <Space size={4}>
-            <Button type="link" danger size="small" onClick={onReset}>重置</Button>
-            <Button type="link" danger size="small" onClick={onClear}>清空</Button>
+        <div className="pms-filter-panel-header">
+          <div>
+            <div className="pms-filter-panel-title">{title}</div>
+            <div className="pms-filter-panel-subtitle">符合以下所有条件</div>
+          </div>
+          <Space size={8}>
+            <Button className="pms-filter-reset-button" danger onClick={onReset}>重置</Button>
+            <Button
+              type="primary"
+              className="pms-filter-add-button"
+              icon={<PlusOutlined />}
+              disabled={addDisabled}
+              onClick={onAdd}
+            >
+              增加
+            </Button>
+            <Button
+              type="text"
+              className="pms-filter-close-button"
+              aria-label="关闭筛选"
+              icon={<CloseOutlined />}
+              onClick={onClose}
+            />
           </Space>
         </div>
       )}
-      footer={(
-        <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
-          <Button onClick={onCancel}>取消</Button>
-          <Button type="primary" disabled={confirmDisabled} onClick={onConfirm}>确认</Button>
-        </Space>
-      )}
       width={720}
       ariaLabel="筛选"
-      onCancel={onCancel}
+      onCancel={onClose}
       getPopupContainer={getPopupContainer}
     >
-      {children}
+      <div className="pms-filter-panel-content">{children}</div>
     </FloatingConfigPopover>
   )
 }

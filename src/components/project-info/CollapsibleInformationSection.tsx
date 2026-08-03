@@ -6,6 +6,7 @@ import { Collapse } from 'antd'
 interface CollapsibleInformationSectionProps {
   title: string
   icon?: ReactNode
+  variant?: 'basic' | 'extended' | 'team' | 'deliverable'
   count?: number | string
   extra?: ReactNode
   defaultActive?: boolean
@@ -16,6 +17,7 @@ interface CollapsibleInformationSectionProps {
 export default function CollapsibleInformationSection({
   title,
   icon,
+  variant,
   count,
   extra,
   defaultActive = false,
@@ -30,7 +32,7 @@ export default function CollapsibleInformationSection({
 
   return (
     <Collapse
-      className="pms-project-info-collapse"
+      className={`pms-project-info-collapse${variant ? ` pms-project-info-collapse--${variant}` : ''}`}
       aria-label={`${title}信息区`}
       defaultActiveKey={defaultActive ? ['content'] : []}
       items={[{

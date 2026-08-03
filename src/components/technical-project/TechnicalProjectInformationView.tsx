@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Avatar, Button, Empty, Space, Switch, Tabs, Tag, Tooltip, Typography } from 'antd'
+import { Avatar, Button, Space, Tabs, Tag, Tooltip, Typography } from 'antd'
 import {
   CalendarOutlined,
   EditOutlined,
@@ -87,7 +87,6 @@ export default function TechnicalProjectInformationView({
   canEdit = false,
 }: TechnicalProjectInformationViewProps) {
   const tdtKey = getTechnicalPlanKey({ kind: 'tdt', parentProjectId: project.id })
-  const [showInactive, setShowInactive] = useState(false)
   const [activeKey, setActiveKey] = useState(tdtKey)
   const [configuringChild, setConfiguringChild] = useState<TechnicalSubproject | null>(null)
   const [configTrigger, setConfigTrigger] = useState<HTMLElement | null>(null)
@@ -97,23 +96,21 @@ export default function TechnicalProjectInformationView({
   const allChildren = useMemo(() => subprojects
     .filter(item => item.parentProjectId === project.id)
     .sort((left, right) => left.ipmOrder - right.ipmOrder || left.id.localeCompare(right.id)), [project.id, subprojects])
-  const visibleChildren = useMemo(() => allChildren.filter(item => item.active || showInactive), [allChildren, showInactive])
+  const visibleChildren = useMemo(() => allChildren.filter(item => item.active), [allChildren])
 
   useEffect(() => {
     if (initializedProject.current === project.id) return
     initializedProject.current = project.id
     setConfiguringChild(null)
     setConfigTrigger(null)
-    setShowInactive(false)
     setActiveKey(tdtKey)
   }, [project.id, tdtKey])
 
   useEffect(() => {
     const targetChildId = window.sessionStorage.getItem('pms:technical-project-list-target-child') || ''
     if (targetChildId) window.sessionStorage.removeItem('pms:technical-project-list-target-child')
-    const target = allChildren.find(child => child.id === targetChildId)
+    const target = allChildren.find(child => child.id === targetChildId && child.active)
     if (!target) return
-    setShowInactive(!target.active)
     setActiveKey(getTechnicalPlanKey({ kind: 'subproject', parentProjectId: project.id, subprojectId: target.id }))
   }, [allChildren, project.id, tdtKey])
 
@@ -166,9 +163,8 @@ export default function TechnicalProjectInformationView({
       label: (
         <Space size={5} className="technical-child-tab-label">
           <span>{child.name}</span>
-          {!child.active && <Tag style={{ margin: 0 }}>已停用</Tag>}
-          {child.active && !isTechnicalSubprojectConfigured(child) && <Tag color="warning" style={{ margin: 0 }}>待配置</Tag>}
-          {child.active && (
+          {!isTechnicalSubprojectConfigured(child) && <Tag color="warning" style={{ margin: 0 }}>待配置</Tag>}
+          {(
             <Tooltip title="配置子任务信息">
               <Button
                 type="text"
@@ -206,10 +202,6 @@ export default function TechnicalProjectInformationView({
           <div className="technical-information-plan">
             <div className="technical-information-tabs" aria-label="技术信息分类">
               <Tabs activeKey={activeKey} onChange={setActiveKey} items={tabItems} />
-              <Space size={8} className="technical-information-inactive-switch">
-                <Text type="secondary">显示已停用</Text>
-                <Switch aria-label="显示已停用子任务" checked={showInactive} onChange={setShowInactive} />
-              </Space>
             </div>
             {modules.plan && <TechnicalPlanSummary scope={activeScope} label={activeLabel} />}
           </div>
@@ -223,7 +215,7 @@ export default function TechnicalProjectInformationView({
                 readOnly={modules.readOnly}
               />
             )}
-            <CollapsibleInformationSection title="团队信息" icon={<TeamOutlined />} count={roles.length}>
+            <CollapsibleInformationSection title="团队信息" icon={<TeamOutlined />} variant="team" count={roles.length}>
               <div className="pms-project-info-team-grid">
                 {roles.map(role => (
                   <div className="pms-project-info-team-role" key={role.name}>
@@ -243,7 +235,7 @@ export default function TechnicalProjectInformationView({
                 ))}
               </div>
             </CollapsibleInformationSection>
-            <CollapsibleInformationSection title="交付物信息" icon={<FileOutlined />} count={TECHNICAL_DELIVERABLE_FIELDS.length}>
+            <CollapsibleInformationSection title="交付物信息" icon={<FileOutlined />} variant="deliverable" count={TECHNICAL_DELIVERABLE_FIELDS.length}>
               <div className="technical-deliverable-grid">
                 {TECHNICAL_DELIVERABLE_FIELDS.map(field => (
                   <div className="technical-deliverable-item" key={field.key}>
@@ -252,15 +244,12 @@ export default function TechnicalProjectInformationView({
                   </div>
                 ))}
               </div>
-              {!TECHNICAL_DELIVERABLE_FIELDS.some(field => valueOf(project, field.key)) && (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无交付物" className="technical-deliverable-empty" />
-              )}
             </CollapsibleInformationSection>
           </div>
         )}
         anchorItems={[
           { id: 'section-header', label: '核心信息', icon: <ProjectOutlined /> },
-          { id: 'section-plan', label: '计划摘要', icon: <CalendarOutlined /> },
+          { id: 'section-plan', label: '计划信息', icon: <CalendarOutlined /> },
           { id: 'section-basic', label: '基础信息', icon: <SettingOutlined /> },
         ]}
       />

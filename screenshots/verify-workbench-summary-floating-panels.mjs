@@ -512,20 +512,51 @@ try {
     await assertSelectText('快捷筛选-品牌', 'TECNO')
   })
 
-  await step('verify advanced filter mirrors brand', async () => {
+  await step('verify advanced filter is layered and applies immediately', async () => {
     console.log('  action: open advanced filter')
     await clickAria('筛选')
     console.log('  action: assert advanced header')
-    await assertText('筛选符合以下所有条件的结果')
+    await assertText('项目筛选')
+    await assertText('符合以下所有条件')
     console.log('  action: wait for brand value aria')
     await assertSelector('[aria-label="品牌筛选值"]')
     await assertSelectText('品牌筛选值', 'TECNO')
     await waitForPanelFirstControlFocus('筛选')
     await assertNoDrawer()
-    await clickExactText(
-      '.pms-floating-config-popover',
-      'button',
-      '取消',
+    const obsoleteActions = await page.$$eval(
+      '.pms-floating-config-popover button',
+      buttons => buttons
+        .map(button => (button.textContent || '').trim())
+        .filter(text => ['确认', '取消'].includes(text)),
+    )
+    if (obsoleteActions.length) throw new Error(`obsolete filter actions: ${obsoleteActions.join(',')}`)
+    await page.$eval('[aria-label="筛选字段"]', element => element.click())
+    await waitForVisible('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+    const popupLayers = await page.evaluate(() => {
+      const panel = Array.from(document.querySelectorAll('.pms-floating-config-popover'))
+        .find(element => element.getClientRects().length > 0)
+      const dropdown = Array.from(document.querySelectorAll('.ant-select-dropdown'))
+        .find(element => element.getClientRects().length > 0)
+      return {
+        panel: Number(window.getComputedStyle(panel).zIndex),
+        dropdown: Number(window.getComputedStyle(dropdown).zIndex),
+      }
+    })
+    if (!(popupLayers.dropdown > popupLayers.panel)) {
+      throw new Error(`filter dropdown must be above panel: ${JSON.stringify(popupLayers)}`)
+    }
+    await page.keyboard.press('Escape')
+    await page.$eval(
+      '.pms-floating-config-popover button[aria-label="删除筛选条件"]',
+      element => element.click(),
+    )
+    await page.waitForFunction(() => {
+      const select = document.querySelector('[aria-label="快捷筛选-品牌"]')?.closest('.ant-select')
+      return !select || !(select.textContent || '').includes('TECNO')
+    }, { timeout: STEP_TIMEOUT })
+    await page.$eval(
+      '.pms-floating-config-popover button[aria-label="关闭筛选"]',
+      element => element.click(),
     )
     await waitForTriggerFocus('筛选')
   })

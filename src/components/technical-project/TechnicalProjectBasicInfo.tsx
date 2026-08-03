@@ -1,7 +1,7 @@
 'use client'
 
-import { Alert, Descriptions, Typography } from 'antd'
-import { SettingOutlined } from '@ant-design/icons'
+import { Typography } from 'antd'
+import { InfoCircleOutlined } from '@ant-design/icons'
 import CollapsibleInformationSection from '@/components/project-info/CollapsibleInformationSection'
 import type { TechnicalSubproject } from '@/types/technicalProject'
 
@@ -21,22 +21,23 @@ export default function TechnicalProjectBasicInfo({
   readOnly,
 }: TechnicalProjectBasicInfoProps) {
   return (
-    <CollapsibleInformationSection title="基础信息" icon={<SettingOutlined />}>
+    <CollapsibleInformationSection title="基础信息" icon={<InfoCircleOutlined />} variant="basic" count={4}>
       <div aria-label={`${subproject.name}基础信息`} aria-readonly={readOnly}>
-        {readOnly && (
-          <Alert
-            showIcon
-            type="info"
-            message="该子任务已停用，仅可查看历史基础信息"
-            style={{ margin: '12px 16px 0' }}
-          />
-        )}
-        <Descriptions bordered size="small" column={{ xs: 1, md: 2 }} style={{ padding: 16 }}>
-          <Descriptions.Item label="核心价值">{configuredValue(subproject.configuration.coreValue)}</Descriptions.Item>
-          <Descriptions.Item label="开发模式">{configuredValue(subproject.configuration.developmentMode)}</Descriptions.Item>
-          <Descriptions.Item label="首导tOS">{subproject.configuration.firstTosVersion || '-'}</Descriptions.Item>
-          <Descriptions.Item label="首导整机产品">{machineName(subproject.configuration.firstMachineProjectId)}</Descriptions.Item>
-        </Descriptions>
+        <div className="pms-project-info-display-rows">
+          <div className="pms-project-info-display-grid pms-project-info-display-grid--technical-basic">
+            {[
+              { label: '核心价值', value: configuredValue(subproject.configuration.coreValue) },
+              { label: '开发模式', value: configuredValue(subproject.configuration.developmentMode) },
+              { label: '首导tOS', value: subproject.configuration.firstTosVersion || '-' },
+              { label: '首导整机产品', value: machineName(subproject.configuration.firstMachineProjectId) },
+            ].map(item => (
+              <div className="pms-project-info-display-item" key={item.label}>
+                <div className="pms-project-info-display-label">{item.label}</div>
+                <div className="pms-project-info-display-value">{item.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </CollapsibleInformationSection>
   )
