@@ -110,11 +110,11 @@ export default function TechnicalProjectInformationView({
 
   useEffect(() => {
     const targetChildId = window.sessionStorage.getItem('pms:technical-project-list-target-child') || ''
+    if (targetChildId) window.sessionStorage.removeItem('pms:technical-project-list-target-child')
     const target = allChildren.find(child => child.id === targetChildId)
     if (!target) return
     setShowInactive(!target.active)
     setActiveKey(getTechnicalPlanKey({ kind: 'subproject', parentProjectId: project.id, subprojectId: target.id }))
-    window.sessionStorage.removeItem('pms:technical-project-list-target-child')
   }, [allChildren, project.id, tdtKey])
 
   useEffect(() => {
@@ -237,7 +237,7 @@ export default function TechnicalProjectInformationView({
                           <Avatar size={26} className="pms-project-info-role-avatar">{member.slice(0, 1)}</Avatar>
                           <span>{member}</span>
                         </div>
-                      )) : <span className="pms-project-info-empty">待配置</span>}
+                      )) : <span className="pms-project-info-empty">未配置</span>}
                     </div>
                   </div>
                 ))}

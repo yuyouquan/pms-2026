@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { Card } from 'antd'
 import { ProjectOutlined } from '@ant-design/icons'
 
@@ -30,6 +30,10 @@ interface ProjectInformationFrameProps {
    */
   embedded?: boolean
 }
+
+export const resolveProjectInformationCoreColumnCount = (
+  fields: readonly Pick<ProjectInformationCoreField, 'fullWidth'>[],
+) => Math.min(8, Math.max(1, fields.filter(field => !field.fullWidth).length))
 
 function ProjectInformationAnchorNav({ items }: { items: ProjectInformationAnchorItem[] }) {
   const scrollToSection = (id: string) => {
@@ -83,6 +87,7 @@ function ProjectCoreFieldsCard({
   coreFields,
   actions,
 }: Pick<ProjectInformationFrameProps, 'projectName' | 'coreFields' | 'actions'>) {
+  const coreColumnCount = resolveProjectInformationCoreColumnCount(coreFields)
   return (
     <Card
       id="section-header"
@@ -100,7 +105,7 @@ function ProjectCoreFieldsCard({
         role="region"
         aria-label="项目核心字段"
         tabIndex={0}
-        style={{ gridTemplateColumns: `repeat(${coreFields.length}, minmax(0, 1fr))` }}
+        style={{ '--pms-project-info-core-columns': coreColumnCount } as CSSProperties}
       >
         {coreFields.map(field => (
           <div

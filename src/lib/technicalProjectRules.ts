@@ -16,6 +16,8 @@ export interface TechnicalStageTask {
   parentId?: string | null
   planStartDate: string
   planEndDate: string
+  actualStartDate?: string
+  actualEndDate?: string
   order: number
 }
 
@@ -86,6 +88,47 @@ export const comparePublishedTechnicalPlanVersions = (
     return rightPublishedAt - leftPublishedAt
   }
   return right.id.localeCompare(left.id)
+}
+
+const calculateTechnicalCycleDays = (
+  tasks: readonly TechnicalStageTask[],
+  startKey: 'planStartDate' | 'actualStartDate',
+  endKey: 'planEndDate' | 'actualEndDate',
+) => {
+  const starts = tasks.map(task => parseIsoDate(String(task[startKey] || ''))).filter(Number.isFinite)
+  const ends = tasks.map(task => parseIsoDate(String(task[endKey] || ''))).filter(Number.isFinite)
+  if (!starts.length || !ends.length) return null
+  return Math.max(0, Math.ceil((Math.max(...ends) - Math.min(...starts)) / 86_400_000))
+}
+
+const taskDatesById = (tasks: readonly TechnicalStageTask[], key: 'planEndDate' | 'actualEndDate') => (
+  Object.fromEntries(tasks.map(task => [task.id, String(task[key] || '')]))
+)
+
+export const resolvePublishedTechnicalPlanVersions = (
+  versions: readonly TechnicalStagePlanVersion[],
+) => versions
+  .filter(version => version.status === '已发布')
+  .sort(comparePublishedTechnicalPlanVersions)
+
+export const resolveTechnicalPlanSummary = (versions: readonly TechnicalStagePlanVersion[]) => {
+  const publishedVersions = resolvePublishedTechnicalPlanVersions(versions)
+  const latestVersion = publishedVersions[0]
+  const latestTasks = latestVersion?.tasks || []
+  return {
+    versions: publishedVersions,
+    latestVersion,
+    hasTaskData: latestTasks.length > 0,
+    versionRows: publishedVersions.map(version => ({
+      version,
+      cycleDays: calculateTechnicalCycleDays(version.tasks, 'planStartDate', 'planEndDate'),
+      endDatesByTaskId: taskDatesById(version.tasks, 'planEndDate'),
+    })),
+    actualRow: {
+      cycleDays: calculateTechnicalCycleDays(latestTasks, 'actualStartDate', 'actualEndDate'),
+      endDatesByTaskId: taskDatesById(latestTasks, 'actualEndDate'),
+    },
+  }
 }
 
 /** Selects only the latest published TDT snapshot. Draft and child-plan snapshots are excluded. */

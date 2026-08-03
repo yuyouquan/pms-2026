@@ -248,6 +248,25 @@ assert.equal(typeof rules.resolveTechnicalInformationModules, 'function', 'techn
 assert.deepEqual(rules.resolveTechnicalInformationModules({ kind: 'tdt' }), { plan: true, basic: false, readOnly: false }, 'TDT information shows plan only')
 assert.deepEqual(rules.resolveTechnicalInformationModules({ kind: 'subproject', active: true }), { plan: true, basic: true, readOnly: false }, 'active subproject information shows plan and editable basic details')
 assert.deepEqual(rules.resolveTechnicalInformationModules({ kind: 'subproject', active: false }), { plan: true, basic: true, readOnly: true }, 'inactive subproject information remains visible and read-only')
+assert.equal(typeof rules.resolveTechnicalPlanSummary, 'function', 'technical plan summaries expose an executable published-only resolver')
+const publishedSummary = rules.resolveTechnicalPlanSummary([
+  { id: 'draft-v3', templateType: 'tdt', status: '修订中', versionNo: 'V3', tasks: [{ ...validStages[0], actualStartDate: '2026-01-01', actualEndDate: '2026-01-31' }] },
+  { id: 'published-v2-early', templateType: 'tdt', status: '已发布', versionNo: 'V2', publishedAt: '2026-02-01T00:00:00Z', tasks: validStages },
+  { id: 'published-v1-late', templateType: 'tdt', status: '已发布', versionNo: 'V1', publishedAt: '2026-12-01T00:00:00Z', tasks: validStages },
+  {
+    id: 'published-v2-latest', templateType: 'tdt', status: '已发布', versionNo: 'V2', publishedAt: '2026-03-01T00:00:00Z',
+    tasks: [
+      { ...validStages[0], actualStartDate: '2026-01-02', actualEndDate: '2026-01-18' },
+      { ...validStages[1], actualStartDate: '2026-01-03', actualEndDate: '2026-01-20' },
+    ],
+  },
+])
+assert.deepEqual(publishedSummary.versions.map(version => version.id), ['published-v2-latest', 'published-v2-early', 'published-v1-late'], 'summary excludes drafts and orders published versions by semantic version then publication time')
+assert.equal(publishedSummary.latestVersion.id, 'published-v2-latest', 'the latest published version owns summary headers and actual data')
+assert.equal(publishedSummary.actualRow.cycleDays, 18, 'actual cycle spans the latest published actual start and completion dates')
+assert.equal(publishedSummary.actualRow.endDatesByTaskId['child-ignored'], '2026-01-20', 'actual row exposes milestone actual completion dates')
+assert.equal(rules.resolveTechnicalPlanSummary([{ id: 'empty', templateType: 'tdt', status: '已发布', versionNo: 'V1', tasks: [] }]).hasTaskData, false, 'published versions without tasks produce the no-plan-data state')
+assert.equal(rules.resolveTechnicalPlanSummary([{ id: 'draft-only', templateType: 'tdt', status: '修订中', versionNo: 'V9', tasks: validStages }]).latestVersion, undefined, 'draft-only scopes produce the no-published-version state')
 
 assert.deepEqual(constants.TECHNICAL_TEAM_FIELDS.map(field => field.label), ['技术项目负责人', '技术项目经理', '测试代表', '质量代表', '产品代表', '标准化代表'], 'technical information fixed team labels remain exact')
 assert.deepEqual(constants.TECHNICAL_DELIVERABLE_FIELDS.map(field => field.label), ['项目KPI文件', '概设', 'charter报告', 'PDCP报告', 'TDCP报告', 'EDCP报告'], 'technical deliverable labels remain exact')
@@ -387,12 +406,22 @@ for (const title of ['团队信息', '交付物信息']) {
 assert.match(technicalInformationView, /label:\s*'项目名称'[\s\S]*label:\s*'项目分类'[\s\S]*label:\s*'技术赛道'[\s\S]*label:\s*'TMG及技术领域'[\s\S]*label:\s*'子领域'[\s\S]*label:\s*'项目阶段'[\s\S]*label:\s*'前置项目'[\s\S]*label:\s*'项目年份'[\s\S]*label:\s*'项目价值'/, 'technical core fields retain their approved order')
 assert.match(technicalInformationView, /label:\s*'项目价值'[^\n]*fullWidth:\s*true/, 'technical project value owns a full-width row')
 assert.match(technicalInformationView, /sessionStorage\.getItem\(['"]pms:technical-project-list-target-child['"]\)/, 'technical information consumes workbench child targeting')
+assert.match(technicalInformationView, /const targetChildId[\s\S]{0,360}sessionStorage\.removeItem\(['"]pms:technical-project-list-target-child['"]\)[\s\S]{0,160}if \(!target\) return/, 'technical information consumes the one-shot workbench target even when it does not belong to this project')
 assert.match(technicalInformationView, /aria-label="技术信息分类"/, 'technical information tab classification has a stable accessible label')
 assert.match(technicalInformationView, /aria-label="技术信息内容"/, 'technical information content has a stable accessible label')
+assert.match(technicalInformationView, /className="pms-project-info-empty">未配置</, 'empty team roles use the shared unconfigured wording')
 const technicalPlanSummary = readSource(root, 'src/components/technical-project/TechnicalPlanSummary.tsx')
 assert.match(technicalPlanSummary, /useTechnicalPlanStore/, 'technical plan summary reads the scoped plan instance')
-assert.match(technicalPlanSummary, /暂无计划版本/, 'technical plan summary uses one empty state when no version exists')
+assert.match(technicalPlanSummary, /暂无计划版本/, 'technical plan summary uses one empty state when no published version exists')
+assert.match(technicalPlanSummary, /暂无计划数据/, 'technical plan summary does not render an empty milestone table')
+assert.match(technicalPlanSummary, /actualRow[\s\S]*actualEndDate|actualEndDate[\s\S]*actualRow/, 'technical plan summary renders the published actual completion row')
 assert.doesNotMatch(technicalPlanSummary, /createRevision|创建修订|编辑/, 'technical plan summary is read-only and cannot create or edit plans')
+const projectInformationFrame = readSource(root, 'src/components/project-info/ProjectInformationFrame.tsx')
+assert.match(projectInformationFrame, /resolveProjectInformationCoreColumnCount\(coreFields\)/, 'the live shared frame derives columns from non-full-width fields')
+assert.match(projectInformationFrame, /Math\.min\(8, Math\.max\(1, fields\.filter\(field => !field\.fullWidth\)\.length\)\)/, 'the live shared frame excludes full-width fields and bounds desktop columns at eight')
+assert.doesNotMatch(projectInformationFrame, /repeat\(\$\{coreFields\.length\}/, 'the live shared frame does not count full-width fields as desktop columns')
+const globalStyles = readSource(root, 'src/styles/globals.css')
+assert.match(globalStyles, /grid-template-columns:\s*repeat\(var\(--pms-project-info-core-columns/, 'the core grid consumes the bounded live column count')
 assert.ok(technicalInformationReachableNodes.some(node => node.getText(technicalInformationSourceFile).includes('显示已停用')), 'the live technical information tree exposes inactive children')
 const configButton = technicalInformationReachableNodes.find(node => (
   (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node))
