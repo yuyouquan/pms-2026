@@ -289,11 +289,18 @@ const clonePublishedVersionInState = (
   }
   const key = getTechnicalPlanKey(input.scope)
   const instance = state.plansByKey[key]
-  if (!instance) return { state, result: { ok: false, reason: 'missing-instance' } }
+  if (!instance || instance.templateKind !== input.scope.kind) {
+    return { state, result: { ok: false, reason: 'missing-instance' } }
+  }
   if (instance.versions.some(version => version.status === '修订中')) {
     return { state, result: { ok: false, reason: 'draft-exists' } }
   }
-  const source = instance.versions.find(version => version.id === input.sourceVersionId && version.status === '已发布')
+  const source = instance.versions.find(version => (
+    version.id === input.sourceVersionId
+    && version.status === '已发布'
+    && version.templateType === input.scope.kind
+    && version.templateType === instance.templateKind
+  ))
   if (!source) return { state, result: { ok: false, reason: 'missing-source' } }
   const versionNo = nextVersionNo(instance.versions)
   const versionId = `${versionNo}-draft`

@@ -186,6 +186,46 @@ assert.deepEqual(
   'an illegal kind is rejected before key lookup',
 )
 
+const wrongInstanceKindPlans = {
+  'project-a:tdt': instance('project-a:tdt', 'subproject', [
+    version('wrong-instance-source', 'V1', 'subproject', '已发布', [task('wrong-instance-task', '错配实例')]),
+  ]),
+}
+assert.deepEqual(
+  technicalPlan.createTechnicalPlanStore({ plansByKey: wrongInstanceKindPlans }).clonePublishedVersion({
+    scope: { kind: 'tdt', parentProjectId: 'project-a' }, sourceVersionId: 'wrong-instance-source',
+  }),
+  { ok: false, reason: 'missing-instance' },
+  'a TDT key containing a subproject instance is rejected as a missing instance',
+)
+
+const wrongSourceKindPlans = {
+  'project-a:tdt': instance('project-a:tdt', 'tdt', [
+    version('wrong-source-kind', 'V1', 'subproject', '已发布', [task('wrong-source-task', '错配来源')]),
+  ]),
+}
+assert.deepEqual(
+  technicalPlan.createTechnicalPlanStore({ plansByKey: wrongSourceKindPlans }).clonePublishedVersion({
+    scope: { kind: 'tdt', parentProjectId: 'project-a' }, sourceVersionId: 'wrong-source-kind',
+  }),
+  { ok: false, reason: 'missing-source' },
+  'a TDT instance cannot clone a published subproject source',
+)
+
+const reverseWrongKindPlans = {
+  'project-a:subproject:child-1': instance('project-a:subproject:child-1', 'subproject', [
+    version('reverse-wrong-source', 'V1', 'tdt', '已发布', [task('reverse-wrong-task', '反向错配来源')]),
+  ]),
+}
+assert.deepEqual(
+  technicalPlan.createTechnicalPlanStore({ plansByKey: reverseWrongKindPlans }).clonePublishedVersion({
+    scope: { kind: 'subproject', parentProjectId: 'project-a', subprojectId: 'child-1' },
+    sourceVersionId: 'reverse-wrong-source', subproject: configuredChild,
+  }),
+  { ok: false, reason: 'missing-source' },
+  'a subproject instance cannot clone a published TDT source',
+)
+
 const sharePlans = {
   'project-a:tdt': instance('project-a:tdt', 'tdt', [
     version('tdt-v9', 'V9', 'tdt', '已发布', [task('tdt-v9-task', 'TDT V9')]),
@@ -241,6 +281,23 @@ assert.deepEqual(
   }, { technical: '1', kind: 'tdt', projectId: 'project-a' }),
   { ok: false, reason: 'missing-published' },
   'a draft-only scope returns the same non-sensitive empty result',
+)
+assert.deepEqual(
+  technicalPlan.resolveTechnicalSharePlan(wrongInstanceKindPlans, { technical: '1', kind: 'tdt', projectId: 'project-a' }),
+  { ok: false, reason: 'missing-published' },
+  'public sharing rejects an instance whose kind conflicts with its TDT scope',
+)
+assert.deepEqual(
+  technicalPlan.resolveTechnicalSharePlan(wrongSourceKindPlans, { technical: '1', kind: 'tdt', projectId: 'project-a' }),
+  { ok: false, reason: 'missing-published' },
+  'public sharing rejects a published source whose kind conflicts with its TDT instance',
+)
+assert.deepEqual(
+  technicalPlan.resolveTechnicalSharePlan(reverseWrongKindPlans, {
+    technical: '1', kind: 'subproject', projectId: 'project-a', subprojectId: 'child-1',
+  }),
+  { ok: false, reason: 'missing-published' },
+  'public sharing enforces the same source-kind rule in the subproject direction',
 )
 
 const sharePageSource = readSource(root, 'src/app/share/plan/page.tsx')
