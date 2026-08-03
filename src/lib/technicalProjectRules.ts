@@ -142,6 +142,16 @@ export const resolveTechnicalChildSelection = (
   projectChanged: boolean,
 ) => !projectChanged && childIds.includes(currentChildId) ? currentChildId : childIds[0] || ''
 
+export type TechnicalInformationTab =
+  | { kind: 'tdt' }
+  | { kind: 'subproject'; active: boolean }
+
+export const resolveTechnicalInformationModules = (tab: TechnicalInformationTab) => ({
+  plan: true,
+  basic: tab.kind === 'subproject',
+  readOnly: tab.kind === 'subproject' && !tab.active,
+})
+
 type ResolveInput = {
   ipm?: { projectName?: string; category?: string; secondaryCategory?: string; technicalTrack?: string }
   tmg?: string

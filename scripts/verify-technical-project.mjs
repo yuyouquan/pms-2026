@@ -243,12 +243,12 @@ assert.deepEqual(rules.normalizeTechnicalCustomRoles([
 ], constants.TECHNICAL_TEAM_FIELDS.map(field => field.label)), [{ name: '架构顾问', members: ['张三', '李四'], isFixed: false }], 'custom roles normalize, merge duplicates, and exclude fixed role names and fixed records')
 assert.equal(rules.resolveTechnicalChildSelection(['child-a', 'child-b'], 'child-b', false), 'child-b', 'stable child selection is preserved within one project')
 assert.equal(rules.resolveTechnicalChildSelection(['child-a', 'child-b'], 'child-b', true), 'child-a', 'project changes reset selection to the first IPM child')
+assert.equal(typeof rules.resolveTechnicalInformationModules, 'function', 'technical information exposes a pure tab-module resolver')
+assert.deepEqual(rules.resolveTechnicalInformationModules({ kind: 'tdt' }), { plan: true, basic: false, readOnly: false }, 'TDT information shows plan only')
+assert.deepEqual(rules.resolveTechnicalInformationModules({ kind: 'subproject', active: true }), { plan: true, basic: true, readOnly: false }, 'active subproject information shows plan and editable basic details')
+assert.deepEqual(rules.resolveTechnicalInformationModules({ kind: 'subproject', active: false }), { plan: true, basic: true, readOnly: true }, 'inactive subproject information remains visible and read-only')
 
-const overview = readSource(root, 'src/components/technical-project/TechnicalProjectOverview.tsx')
-assert.match(overview, /项目价值/, 'technical overview renders the full-width project value')
-assert.match(overview, /TECHNICAL_TEAM_FIELDS/, 'technical overview renders the exact six fixed team roles from the shared schema')
-assert.deepEqual(constants.TECHNICAL_TEAM_FIELDS.map(field => field.label), ['技术项目负责人', '技术项目经理', '测试代表', '质量代表', '产品代表', '标准化代表'], 'technical overview fixed team labels remain exact')
-assert.match(overview, /TECHNICAL_DELIVERABLE_FIELDS/, 'technical overview renders all deliverables from the shared schema')
+assert.deepEqual(constants.TECHNICAL_TEAM_FIELDS.map(field => field.label), ['技术项目负责人', '技术项目经理', '测试代表', '质量代表', '产品代表', '标准化代表'], 'technical information fixed team labels remain exact')
 assert.deepEqual(constants.TECHNICAL_DELIVERABLE_FIELDS.map(field => field.label), ['项目KPI文件', '概设', 'charter报告', 'PDCP报告', 'TDCP报告', 'EDCP报告'], 'technical deliverable labels remain exact')
 const technicalInformationViewPath = 'src/components/technical-project/TechnicalProjectInformationView.tsx'
 assert.equal(fs.existsSync(`${root}/${technicalInformationViewPath}`), true, 'technical information uses the shared information-frame component')
@@ -260,6 +260,15 @@ assert.equal(technicalInformationView.match(technicalBasicInfoMountPattern)?.len
 assert.match(technicalInformationView, /activeTab\.kind\s*===\s*['"]subproject['"]\s*&&\s*\(\s*(?:<TechnicalProjectBasicInfo\b|<[^>]*data-section=['"]technical-basic-information['"][^>]*>)/, 'the sole technical basic-information region is directly wrapped by the subproject condition')
 assert.match(technicalInformationView, /<CollapsibleInformationSection\b[\s\S]{0,240}团队/, 'technical team is carried by its own collapsible information section')
 assert.match(technicalInformationView, /<CollapsibleInformationSection\b[\s\S]{0,240}交付物/, 'technical deliverables are carried by their own collapsible information section')
+assert.match(technicalInformationView, /label:\s*'项目名称'[\s\S]*label:\s*'项目分类'[\s\S]*label:\s*'技术赛道'[\s\S]*label:\s*'TMG及技术领域'[\s\S]*label:\s*'子领域'[\s\S]*label:\s*'项目阶段'[\s\S]*label:\s*'前置项目'[\s\S]*label:\s*'项目年份'[\s\S]*label:\s*'项目价值'/, 'technical core fields retain their approved order')
+assert.match(technicalInformationView, /label:\s*'项目价值'[^\n]*fullWidth:\s*true/, 'technical project value owns a full-width row')
+assert.match(technicalInformationView, /sessionStorage\.getItem\(['"]pms:technical-project-list-target-child['"]\)/, 'technical information consumes workbench child targeting')
+assert.match(technicalInformationView, /aria-label="技术信息分类"/, 'technical information tab classification has a stable accessible label')
+assert.match(technicalInformationView, /aria-label="技术信息内容"/, 'technical information content has a stable accessible label')
+const technicalPlanSummary = readSource(root, 'src/components/technical-project/TechnicalPlanSummary.tsx')
+assert.match(technicalPlanSummary, /useTechnicalPlanStore/, 'technical plan summary reads the scoped plan instance')
+assert.match(technicalPlanSummary, /暂无计划版本/, 'technical plan summary uses one empty state when no version exists')
+assert.doesNotMatch(technicalPlanSummary, /createRevision|创建修订|编辑/, 'technical plan summary is read-only and cannot create or edit plans')
 const legacyBasicInfoPath = 'src/components/technical-project/TechnicalProjectBasicInfo.tsx'
 const technicalBasicInfoBehaviorSources = [
   technicalInformationView,
@@ -289,8 +298,8 @@ const overlayInteraction = readSource(root, 'src/hooks/useOverlayInteraction.ts'
 assert.match(overlayInteraction, /tryBeginSubmit/, 'shared overlay helper provides a synchronous submission lock')
 assert.match(overlayInteraction, /restoreTriggerFocus/, 'shared overlay helper restores focus to its opener')
 const projectSpace = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
-assert.match(projectSpace, /<TechnicalProjectOverview/, 'project space mounts the focused technical overview')
 assert.match(projectSpace, /<TechnicalProjectInformationView\b/, 'project space mounts the shared-frame technical information view')
+assert.doesNotMatch(projectSpace, /<TechnicalProjectOverview\b/, 'technical overview no longer duplicates information-page ownership')
 assert.match(projectSpace, /useTechnicalPlanStore/, 'project stage subscribes to real keyed technical-plan state')
 assert.doesNotMatch(projectSpace, /selectedProject[^\n]*technicalPlanVersions|technicalPlanVersions[^\n]*selectedProject/, 'project objects are not used as an imaginary technical-plan state source')
 assert.equal(fs.existsSync(`${root}/src/stores/technicalPlan.ts`), true, 'technical plan keyed store exists')

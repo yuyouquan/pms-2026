@@ -150,8 +150,7 @@ import MarketEditorModal from '@/components/project-info/MarketEditorModal'
 import TosTypeEditorModal from '@/components/project-info/TosTypeEditorModal'
 import ProjectPlanInfoGrid from '@/components/project-info/ProjectPlanInfoGrid'
 import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
-import TechnicalProjectOverview from '@/components/technical-project/TechnicalProjectOverview'
-import TechnicalProjectBasicInfo from '@/components/technical-project/TechnicalProjectBasicInfo'
+import TechnicalProjectInformationView from '@/components/technical-project/TechnicalProjectInformationView'
 import TechnicalPlanModule from '@/components/technical-project/TechnicalPlanModule'
 import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
 import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
@@ -3925,7 +3924,15 @@ export default function ProjectSpaceContainer() {
           {transfer.transferView === 'sqa-review' && <TransferSqaReview {...transferProps} />}
           {transfer.transferView === null && projectSpaceModule === 'basic' && (
             isTechnicalProject && selectedProject
-              ? <TechnicalProjectBasicInfo projectId={selectedProject.id} currentLoginUser={currentLoginUser} />
+              ? <TechnicalProjectInformationView
+                  project={selectedProject}
+                  stage={technicalStage}
+                  preProjectName={technicalPreProjectName}
+                  customRoles={roles.filter(role => !role.isFixed)}
+                  currentLoginUser={currentLoginUser}
+                  canEdit={canEditBasicInfo}
+                  onEdit={() => setShowProjectInfoEditor(true)}
+                />
               : renderProjectBasicInfo()
           )}
           {transfer.transferView === null && projectSpaceModule === 'plan' && (
@@ -3942,22 +3949,9 @@ export default function ProjectSpaceContainer() {
               : renderProjectPlan()
           )}
           {transfer.transferView === null && projectSpaceModule === 'overview' && (
-            isTechnicalProject && selectedProject
-              ? (
-                <TechnicalProjectOverview
-                  project={selectedProject}
-                  stage={technicalStage}
-                  preProjectName={technicalPreProjectName}
-                  customRoles={roles.filter(role => !role.isFixed)}
-                  canEdit={canEditBasicInfo}
-                  onEdit={() => setShowProjectInfoEditor(true)}
-                />
-              )
-              : (
-                <Card style={{ borderRadius: 8, textAlign: 'center', padding: '48px 0' }}>
-                  <Empty description={<span style={{ color: '#9ca3af' }}>概况模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                </Card>
-              )
+            <Card style={{ borderRadius: 8, textAlign: 'center', padding: '48px 0' }}>
+              <Empty description={<span style={{ color: '#9ca3af' }}>概况模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            </Card>
           )}
           {transfer.transferView === null && projectSpaceModule === 'requirements' && (
             <Card style={{ borderRadius: 8, textAlign: 'center', padding: '48px 0' }}>
