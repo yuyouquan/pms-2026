@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
 
@@ -210,6 +210,38 @@ assert.match(
   /styles=\{\{ body: transferInfoCollapsed \? \{ display: 'none', padding: 0 \} : undefined \}\}/,
   'the collapsed transfer card must remove its body padding and layout space',
 )
+
+const projectInformationFramePath = 'src/components/project-info/ProjectInformationFrame.tsx'
+const collapsibleInformationSectionPath = 'src/components/project-info/CollapsibleInformationSection.tsx'
+assert.equal(existsSync(projectInformationFramePath), true, 'the shared project information frame must exist')
+assert.equal(existsSync(collapsibleInformationSectionPath), true, 'the shared collapsible information section must exist')
+
+const projectInformationFrame = read(projectInformationFramePath)
+assert.match(projectInformationFrame, /projectName:\s*string/, 'the shared frame exposes the project name slot')
+assert.match(projectInformationFrame, /coreFields:/, 'the shared frame exposes explicit core-field data')
+assert.match(projectInformationFrame, /actions:\s*ReactNode/, 'the shared frame exposes the action slot')
+assert.match(projectInformationFrame, /planInformation:\s*ReactNode/, 'the shared frame exposes the plan-information slot')
+assert.match(projectInformationFrame, /informationSections:\s*ReactNode/, 'the shared frame exposes the information-sections slot')
+assert.match(projectInformationFrame, /anchorItems:/, 'the shared frame exposes explicit anchor items')
+assert.match(projectInformationFrame, /embedded\??:\s*boolean/, 'the shared frame exposes a host-layout compatibility switch')
+assert.match(projectInformationFrame, /embedded\s*=\s*false/, 'the shared frame owns the full layout and navigation by default')
+assert.match(projectInformationFrame, /id="section-header"/, 'the shared frame preserves the project-core anchor')
+assert.match(projectInformationFrame, /withAnchorId\(planInformation, 'section-plan'\)/, 'the shared frame provides a stable plan-information slot anchor')
+assert.match(projectInformationFrame, /withAnchorId\(informationSections, 'section-basic'\)/, 'the shared frame provides a stable project-information slot anchor')
+assert.match(projectInformationFrame, /basic-info-scroll-container/, 'anchor navigation keeps using the existing scroll container')
+assert.doesNotMatch(projectInformationFrame, /isWholeMachine|isTechnicalProject|projectType/, 'the shared frame contains no project-type branches')
+
+const collapsibleInformationSection = read(collapsibleInformationSectionPath)
+assert.match(collapsibleInformationSection, /defaultActive\??:\s*boolean/, 'collapsible sections support an explicit default-open state')
+assert.match(collapsibleInformationSection, /defaultActive\s*=\s*false/, 'collapsible sections are closed by default')
+assert.match(collapsibleInformationSection, /pms-project-info-collapse/, 'collapsible sections reuse the established information-section visuals')
+assert.match(collapsibleInformationSection, /aria-label/, 'collapsible sections expose a stable accessible label')
+
+const targetProjectInformationView = read('src/components/project-info/TargetProjectInformationView.tsx')
+assert.match(targetProjectInformationView, /ProjectInformationFrame/, 'whole-machine and tOS information must consume the shared frame')
+assert.match(targetProjectInformationView, /embedded/, 'the existing target-project host keeps its outer layout without rendering a second anchor navigation')
+assert.match(targetProjectInformationView, /planInformation=\{afterCore\}/, 'the target-project adapter preserves its existing plan-information slot')
+assert.match(targetProjectInformationView, /informationSections=\{/, 'the target-project adapter preserves its existing project-information sections')
 
 const smoke = read('screenshots/smoke-tos-type-plan.mjs')
 assert.match(smoke, /assertNoVisibleText\(page, '里程碑计划（横排视图）', '#section-plan'\)/, 'the smoke path must reject the removed subtitle')
