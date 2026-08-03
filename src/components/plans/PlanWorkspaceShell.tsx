@@ -39,7 +39,7 @@ export function PlanWorkspaceShell({
       >
         <Row justify="space-between" align="middle" gutter={[12, 8]}>
           <Col>
-            <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
+            <Space size={8} separator={<Divider orientation="vertical" style={{ margin: 0 }} />}>
               <div aria-label="计划版本操作">{versionControls}</div>
               {primaryActions}
             </Space>
@@ -47,7 +47,7 @@ export function PlanWorkspaceShell({
           <Col>
             <Space size={6}>
               <div aria-label="计划工具">{utilityActions}</div>
-              <Divider type="vertical" style={{ margin: '0 2px' }} />
+              <Divider orientation="vertical" style={{ margin: '0 2px' }} />
               <PlanViewModeSwitcher
                 viewMode={viewMode}
                 onViewModeChange={onViewModeChange}

@@ -313,12 +313,11 @@ export const synchronizeTechnicalProjectRecord = <T extends Record<string, unkno
 
 export const validateTechnicalProject = (value: Record<string, unknown>) => {
   if (!String(value.technicalLead || '').trim()) throw new Error('technicalLead')
-  if (value.type === '技术项目前置工作' && !String(value.preProjectId || '').trim()) throw new Error('preProjectId')
   if (value.type !== 'tdt' && value.type !== '技术项目前置工作') return true
   const tmg = String(value.tmg || '') as TechnicalDomain
   if (!SUBDOMAINS_BY_DOMAIN[tmg]) throw new Error('tmg')
   if (!SUBDOMAINS_BY_DOMAIN[tmg].includes(String(value.subdomain || ''))) throw new Error('subdomain')
-  if (value.projectYear && !/^\d{4}$/.test(String(value.projectYear))) throw new Error('projectYear')
+  if (!/^\d{4}$/.test(String(value.projectYear || ''))) throw new Error('projectYear')
   assertDeliverables(value.deliverables)
   return true
 }

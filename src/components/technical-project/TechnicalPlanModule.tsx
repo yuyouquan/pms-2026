@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Alert, Badge, Button, Card, DatePicker, Dropdown, Empty, Input, Modal, Popconfirm,
+  Alert, Avatar, Badge, Button, Card, DatePicker, Dropdown, Empty, Input, Modal, Popconfirm, Progress,
   Row, Select, Space, Table, Tabs, Tag, Tooltip, Typography, Upload, message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -79,13 +79,14 @@ const PLAN_REVISION_KIND_OPTIONS: Array<{ key: PlanRevisionKind; label: string }
 ]
 
 const COLUMN_LABELS: Record<string, string> = {
+  id: '序号',
   taskName: '任务名称', responsible: '责任人', predecessor: '前置任务',
   planStartDate: '计划开始', planEndDate: '计划完成', estimatedDays: '预估工期',
   actualStartDate: '实际开始', actualEndDate: '实际完成', actualDays: '实际工期',
   status: '状态', progress: '进度',
 }
 const TECHNICAL_COLUMN_DEFINITIONS: readonly SortableColumnDefinition<string>[] = Object.entries(COLUMN_LABELS).map(([key, title]) => ({
-  key, title, defaultVisible: true, hideable: key !== 'taskName', fixed: key === 'taskName' ? 'left' : undefined,
+  key, title, defaultVisible: true, hideable: key !== 'id' && key !== 'taskName', fixed: key === 'id' || key === 'taskName' ? 'left' : undefined,
 }))
 const DEFAULT_MAX_DEPTH: Readonly<Record<TechnicalTemplateKind, number>> = { tdt: 2, subproject: 1 }
 const TECHNICAL_FILTER_FIELDS: readonly FilterFieldDefinition[] = [
@@ -407,17 +408,28 @@ export default function TechnicalPlanModule({
 
   const baseColumns: ColumnsType<TechnicalTemplateTask> = [
     {
-      key: 'taskName', title: '任务名称', dataIndex: 'taskName', width: 260, fixed: 'left',
+      key: 'id', title: '序号', dataIndex: 'id', width: 130, fixed: 'left',
       render: (value, row) => (
-        <div className="technical-plan-task-name-cell" style={{ paddingLeft: row.parentId ? 16 : 0 }}>
+        <div className="technical-plan-sequence-cell" style={{ paddingLeft: row.parentId ? 20 : 0 }}>
           {canDrag && <DragHandle />}
-          {canMaintain
-            ? <Input className="pms-edit-input" value={value} onChange={event => updateTask(row.id, { taskName: event.target.value })} />
-            : <><span className="technical-plan-task-name-text">{value}</span>{!row.parentId && <Tag color="geekblue">阶段</Tag>}</>}
+          {canMaintain && tab?.templateKind === 'tdt' && !row.parentId && maxDepth >= 2 && (
+            <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} onClick={() => handleAddChildTask(row.id)} /></Tooltip>
+          )}
+          <span>{value}</span>
         </div>
       ),
     },
-    { key: 'responsible', title: '责任人', dataIndex: 'responsible', width: 130, render: (value, row) => canMaintain ? <Input value={value} onChange={event => updateTask(row.id, { responsible: event.target.value })} /> : value || '-' },
+    {
+      key: 'taskName', title: '任务名称', dataIndex: 'taskName', width: 260, fixed: 'left',
+      render: (value, row) => (
+        <div className="technical-plan-task-name-cell" style={{ paddingLeft: row.parentId ? 16 : 0 }}>
+          {canMaintain
+            ? <Input className="pms-edit-input" value={value} onChange={event => updateTask(row.id, { taskName: event.target.value })} />
+            : <><span aria-hidden style={{ color: '#e5e7eb' }}>{row.parentId ? '├' : ''}</span><span className="technical-plan-task-name-text">{value}</span></>}
+        </div>
+      ),
+    },
+    { key: 'responsible', title: '责任人', dataIndex: 'responsible', width: 130, render: (value, row) => canMaintain ? <Input className="pms-edit-input" value={value} onChange={event => updateTask(row.id, { responsible: event.target.value })} /> : value ? <Space size={6}><Avatar size={20}>{String(value).slice(0, 1)}</Avatar><span>{value}</span></Space> : '-' },
     { key: 'predecessor', title: '前置任务', dataIndex: 'predecessor', width: 120, render: (value, row) => canMaintain ? <Input value={value} onChange={event => updateTask(row.id, { predecessor: event.target.value })} /> : value || '-' },
     { key: 'planStartDate', title: '计划开始', dataIndex: 'planStartDate', width: 145, onCell: row => ({ className: invalid.get(row.id)?.start ? 'pms-cell-invalid' : '' }), render: (value, row) => canMaintain ? <Tooltip title={invalid.get(row.id)?.start?.join('；')}><DatePicker value={value ? dayjs(value) : null} onChange={date => updateTask(row.id, { planStartDate: date?.format('YYYY-MM-DD') || '' })} /></Tooltip> : value || '-' },
     { key: 'planEndDate', title: '计划完成', dataIndex: 'planEndDate', width: 145, onCell: row => ({ className: invalid.get(row.id)?.end ? 'pms-cell-invalid' : '' }), render: (value, row) => canMaintain ? <Tooltip title={invalid.get(row.id)?.end?.join('；')}><DatePicker value={value ? dayjs(value) : null} onChange={date => updateTask(row.id, { planEndDate: date?.format('YYYY-MM-DD') || '' })} /></Tooltip> : value || '-' },
@@ -426,7 +438,7 @@ export default function TechnicalPlanModule({
     { key: 'actualEndDate', title: '实际完成', dataIndex: 'actualEndDate', width: 145, render: (value, row) => canMaintain ? <DatePicker value={value ? dayjs(value) : null} onChange={date => updateTask(row.id, { actualEndDate: date?.format('YYYY-MM-DD') || '' })} /> : value || '-' },
     { key: 'actualDays', title: '实际工期', dataIndex: 'actualDays', width: 100, render: (value, row) => canMaintain ? <Input type="number" min={0} value={value} onChange={event => updateTask(row.id, { actualDays: Number(event.target.value) || 0 })} /> : `${value || 0}天` },
     { key: 'status', title: '状态', dataIndex: 'status', width: 105, render: (value, row) => canMaintain ? <Select value={value} style={{ width: 96 }} options={['未开始', '进行中', '已完成'].map(status => ({ label: status, value: status }))} onChange={status => updateTask(row.id, { status })} /> : <Tag color={value === '已完成' ? 'success' : value === '进行中' ? 'processing' : 'default'}>{value}</Tag> },
-    { key: 'progress', title: '进度', dataIndex: 'progress', width: 100, render: (value, row) => canMaintain ? <Input type="number" min={0} max={100} value={value} suffix="%" onChange={event => updateTask(row.id, { progress: Math.max(0, Math.min(100, Number(event.target.value) || 0)) })} /> : `${value || 0}%` },
+    { key: 'progress', title: '进度', dataIndex: 'progress', width: 130, render: (value, row) => canMaintain ? <Input type="number" min={0} max={100} value={value} suffix="%" onChange={event => updateTask(row.id, { progress: Math.max(0, Math.min(100, Number(event.target.value) || 0)) })} /> : <div className="technical-plan-progress"><Progress percent={value || 0} size="small" showInfo={false} /><span>{value || 0}%</span></div> },
     {
       key: 'actions', title: '操作', fixed: 'right', width: 105,
       render: (_, row) => (
@@ -448,7 +460,7 @@ export default function TechnicalPlanModule({
   const visibleKeys = new Set(instance?.columnSettings.visible || Object.keys(COLUMN_LABELS))
   const columnOrder = instance?.columnSettings.order || Object.keys(COLUMN_LABELS)
   const columns = baseColumns
-    .filter(column => column.key === 'actions' || visibleKeys.has(String(column.key)))
+    .filter(column => column.key === 'actions' ? canMaintain : visibleKeys.has(String(column.key)))
     .sort((left, right) => {
       const index = (key: unknown) => key === 'actions' ? Number.MAX_SAFE_INTEGER : columnOrder.indexOf(String(key))
       return index(left.key) - index(right.key)
@@ -782,6 +794,7 @@ export default function TechnicalPlanModule({
               <SortableContext items={visibleTasks.map(task => task.id)} strategy={verticalListSortingStrategy}>
                 <Table<TechnicalTemplateTask>
                   className={`pms-table technical-plan-vertical-table ${canMaintain ? 'pms-table-edit' : ''}`}
+                  tableLayout="fixed"
                   rowKey="id"
                   size="middle"
                   pagination={false}

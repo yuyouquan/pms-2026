@@ -751,6 +751,7 @@ export default function ProjectSummaryTable({
 
       {showTable && <Table<ProjectSummaryRow>
         className="pms-table pms-project-summary-table"
+        tableLayout="fixed"
         rowKey="key"
         columns={columns}
         dataSource={displayedRows}

@@ -184,7 +184,7 @@ export const TECHNICAL_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defin
   { key: 'tmg', label: 'TMG及技术领域', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'subdomain', label: '子领域', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'preProjectId', label: '前置项目', group: 'basic', inputType: 'select', requiredOnCreate: false, defaultVisible: true, hideable: false },
-  { key: 'projectYear', label: '项目年份', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'projectYear', label: '项目年份', group: 'basic', inputType: 'text', requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'projectValue', label: '项目价值', group: 'basic', inputType: 'textarea', requiredOnCreate: false, defaultVisible: true, hideable: false },
   { key: 'technicalLead', label: '技术项目负责人', group: 'team', inputType: 'person', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'technicalProjectManager', label: '技术项目经理', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false },

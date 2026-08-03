@@ -2,7 +2,7 @@
 
 import { useState, useMemo, type CSSProperties } from 'react'
 import {
-  Row, Col, Input, Button, Card, Empty, Segmented, Pagination, Select,
+  Row, Col, Input, Button, Card, Checkbox, Empty, Segmented, Pagination, Select,
 } from 'antd'
 import {
   SearchOutlined, PlusOutlined,
@@ -53,6 +53,14 @@ import {
 } from '@/lib/projectListMatrix'
 import { getTemplateConfigScopeKey } from '@/lib/technicalPlanRules'
 import { applyFilterConditions, type AnyFilterCondition, type FilterFieldDefinition } from '@/lib/filterConditions'
+import {
+  countProjectsByCategory,
+  filterProjectsForList,
+  matchesAggregateProjectStatus,
+  type AggregateProjectStatus,
+} from '@/lib/projectListFilters'
+import ProjectListCalendar from '@/components/project-list/ProjectListCalendar'
+import type { ProjectListViewMode } from '@/stores/project'
 
 const WORKSPACE_FILTER_TOOLBAR_STYLE: CSSProperties = {
   background: 'rgba(255,255,255,0.8)',
@@ -97,7 +105,7 @@ export default function ProjectListContainer() {
     configTemplateVersionScopes, marketVersionsByKey, tosTypeVersionsByKey,
   } = usePlanStore()
 
-  const { globalRoles } = usePermissionStore()
+  const { globalRoles, rolesByProject } = usePermissionStore()
   const activateProject = useActivateProject()
   const technicalSubprojects = useTechnicalProjectStore(state => state.subprojects)
   const technicalPlansByKey = useTechnicalPlanStore(state => state.plansByKey)
@@ -106,6 +114,7 @@ export default function ProjectListContainer() {
     updateLinkedQuickFilterCondition([], 'technicalProjectType', ['tdt'])
   ))
   const [projectListTableToolbarHost, setProjectListTableToolbarHost] = useState<HTMLDivElement | null>(null)
+  const [aboutMineOnly, setAboutMineOnly] = useState(true)
   const technicalSelectedTypes = getLinkedQuickFilterValues(technicalFilters, 'technicalProjectType')
   const technicalActiveType = resolveTechnicalProjectType(technicalSelectedTypes)
 
@@ -129,13 +138,22 @@ export default function ProjectListContainer() {
     })
   }, [projects, isAdminUser, currentLoginUser, projectMemberMap])
 
-  const searchFilteredProjects = visibleProjects
+  const aboutMineProjects = useMemo(() => filterProjectsForList({
+    projects: visibleProjects,
+    aboutMine: aboutMineOnly,
+    currentLoginUser,
+    rolesByProject,
+    getProjectId: project => project.id,
+    matchesCategory: () => true,
+    matchesSecondaryCategory: () => true,
+    matchesStatus: () => true,
+  }), [aboutMineOnly, currentLoginUser, rolesByProject, visibleProjects])
 
   const categoryBaseProjects = useMemo(
-    () => visibleProjects.filter(project => (
+    () => aboutMineProjects.filter(project => (
       matchesProjectTypeFilter(project.type, projectTypeFilter, project.secondaryCategory)
     )),
-    [projectTypeFilter, visibleProjects],
+    [aboutMineProjects, projectTypeFilter],
   )
 
   const projectSummaryPlanTasksByProjectId = useMemo(() => (
@@ -179,40 +197,55 @@ export default function ProjectListContainer() {
   ])
 
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: searchFilteredProjects.length }
-    PROJECT_CATEGORIES.forEach(category => {
-      counts[category] = searchFilteredProjects.filter(project => (
-        matchesProjectTypeFilter(project.type, category, project.secondaryCategory)
-      )).length
-    })
-    return counts
-  }, [searchFilteredProjects])
+    return countProjectsByCategory(
+      aboutMineProjects,
+      PROJECT_CATEGORIES,
+      (project, category) => matchesProjectTypeFilter(project.type, category, project.secondaryCategory),
+    )
+  }, [aboutMineProjects])
 
   const categoryAndSecondaryFilteredProjects = useMemo(() => {
-    let result = searchFilteredProjects
-    result = result.filter(p => matchesProjectTypeFilter(p.type, projectTypeFilter, p.secondaryCategory))
-    result = result.filter(p => matchesProjectSecondaryCategoryFilter(
-      p.type,
-      p.secondaryCategory,
-      projectSecondaryCategoryFilter,
-    ))
-    return result
-  }, [searchFilteredProjects, projectTypeFilter, projectSecondaryCategoryFilter])
+    return filterProjectsForList({
+      projects: visibleProjects,
+      aboutMine: aboutMineOnly,
+      currentLoginUser,
+      rolesByProject,
+      getProjectId: project => project.id,
+      matchesCategory: project => matchesProjectTypeFilter(project.type, projectTypeFilter, project.secondaryCategory),
+      matchesSecondaryCategory: project => matchesProjectSecondaryCategoryFilter(
+        project.type,
+        project.secondaryCategory,
+        projectSecondaryCategoryFilter,
+      ),
+      matchesStatus: () => true,
+    })
+  }, [aboutMineOnly, currentLoginUser, projectSecondaryCategoryFilter, projectTypeFilter, rolesByProject, visibleProjects])
 
   const workspaceFilteredProjects = useMemo(() => (
     projectStatusFilter === 'all'
       ? categoryAndSecondaryFilteredProjects
-      : categoryAndSecondaryFilteredProjects.filter(p => p.status === projectStatusFilter)
-  ), [categoryAndSecondaryFilteredProjects, projectStatusFilter])
+      : categoryAndSecondaryFilteredProjects.filter(project => (
+          projectTypeFilter === PROJECT_TYPE_TOS_VERSION || projectTypeFilter === PROJECT_CATEGORY_TECH
+            ? matchesAggregateProjectStatus(project.status, projectStatusFilter as AggregateProjectStatus)
+            : project.status === projectStatusFilter
+        ))
+  ), [categoryAndSecondaryFilteredProjects, projectStatusFilter, projectTypeFilter])
 
   const secondaryCategoryOptions = useMemo(() => {
     if (projectTypeFilter === 'all') return []
+    if (projectTypeFilter === PROJECT_TYPE_TOS_VERSION) return [{ label: '全部', value: 'all' }]
     const categoryOptions = PROJECT_SECONDARY_CATEGORIES[projectTypeFilter as keyof typeof PROJECT_SECONDARY_CATEGORIES] as readonly string[] | undefined
     return categoryOptions ? [{ label: '全部', value: 'all' }, ...categoryOptions.map(value => ({ label: value, value }))] : []
   }, [projectTypeFilter])
 
   const statusOptions = useMemo(() => (
-    projectTypeFilter === 'all'
+    projectTypeFilter === PROJECT_TYPE_TOS_VERSION || projectTypeFilter === PROJECT_CATEGORY_TECH
+      ? [
+          { label: '全部', value: 'all' },
+          { label: '进行中', value: 'inProgress' },
+          { label: '已完成', value: 'completed' },
+        ]
+      : projectTypeFilter === 'all'
       ? [{ label: '全部', value: 'all' }]
       : getProjectStatusOptions(projectTypeFilter)
   ), [projectTypeFilter])
@@ -226,11 +259,11 @@ export default function ProjectListContainer() {
   }, [categoryAndSecondaryFilteredProjects])
 
   const technicalRows = useMemo(() => buildTechnicalProjectListRows({
-    projects: visibleProjects,
+    projects: aboutMineProjects,
     subprojects: technicalSubprojects,
     plansByKey: technicalPlansByKey,
-    machineProjects: visibleProjects.filter(project => isMachineProjectType(project.type)),
-  }), [technicalPlansByKey, technicalSubprojects, visibleProjects])
+    machineProjects: aboutMineProjects.filter(project => isMachineProjectType(project.type)),
+  }), [aboutMineProjects, technicalPlansByKey, technicalSubprojects])
 
   const technicalTdtScope = configTemplateVersionScopes[getTemplateConfigScopeKey(PROJECT_CATEGORY_TECH, 'tdt')]
   const technicalSubprojectScope = configTemplateVersionScopes[getTemplateConfigScopeKey(PROJECT_CATEGORY_TECH, 'subproject')]
@@ -302,9 +335,12 @@ export default function ProjectListContainer() {
   const technicalActiveRows = (technicalActiveType === 'tdt'
     ? technicalRows.tdt
     : technicalRows.children) as ProjectSummaryRow[]
+  const technicalStatusRows = useMemo(() => technicalActiveRows.filter(row => (
+    matchesAggregateProjectStatus(row.status, projectStatusFilter as AggregateProjectStatus)
+  )), [projectStatusFilter, technicalActiveRows])
   const technicalFilteredRows = useMemo(() => (
-    applyFilterConditions(technicalActiveRows, technicalFilters)
-  ), [technicalActiveRows, technicalFilters])
+    applyFilterConditions(technicalStatusRows, technicalFilters)
+  ), [technicalFilters, technicalStatusRows])
   const technicalFilterOptions = useMemo(() => {
     const optionsFor = (key: string) => [...new Set(technicalActiveRows
       .map(row => String(row[key] ?? '').trim())
@@ -344,6 +380,10 @@ export default function ProjectListContainer() {
   const cardRows = projectTypeFilter === PROJECT_CATEGORY_TECH
     ? technicalFilteredRows
     : cardProjects
+  const displayCategoryCounts = {
+    ...categoryCounts,
+    [projectTypeFilter]: cardRows.length,
+  }
   const pagedCardRows = cardRows.slice(
     (projectCardPage - 1) * projectCardPageSize,
     projectCardPage * projectCardPageSize,
@@ -379,7 +419,7 @@ export default function ProjectListContainer() {
                       border: 0,
                     }}
                   >
-                    {item.label} <span style={{ fontSize: 11, opacity: 0.8 }}>{categoryCounts[item.value] || 0}</span>
+                    {item.label} <span style={{ fontSize: 11, opacity: 0.8 }}>{displayCategoryCounts[item.value] || 0}</span>
                   </button>
                 )
               })}
@@ -389,10 +429,11 @@ export default function ProjectListContainer() {
                   size="small"
                   className="pms-project-list-view-switch"
                   value={projectListView}
-                  onChange={(value) => setProjectListView(value as 'card' | 'list')}
+                  onChange={(value) => setProjectListView(value as ProjectListViewMode)}
                   options={[
-                    { label: <span className="pms-project-list-view-option" aria-label="卡片视图">卡片视图</span>, value: 'card' },
                     { label: <span className="pms-project-list-view-option" aria-label="列表视图">列表视图</span>, value: 'list' },
+                    { label: <span className="pms-project-list-view-option" aria-label="卡片视图">卡片视图</span>, value: 'card' },
+                    { label: <span className="pms-project-list-view-option" aria-label="日历视图">日历视图</span>, value: 'calendar' },
                   ]}
                 />
                 {isAdminUser && (
@@ -403,9 +444,9 @@ export default function ProjectListContainer() {
               </div>
             </div>
 
-            {workbenchListState.kind !== 'select-category' && workbenchListState.showSecondaryCategory && (
+            {workbenchListState.kind !== 'select-category' && (workbenchListState.showSecondaryCategory || projectTypeFilter === PROJECT_TYPE_TOS_VERSION) && (
               <div aria-label="项目二级分类快捷筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
-                <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目二级分类</span>
+                <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>二级分类</span>
                 {secondaryCategoryOptions.map(item => {
                   const isActive = projectSecondaryCategoryFilter === item.value
                   return (
@@ -430,9 +471,9 @@ export default function ProjectListContainer() {
               </div>
             )}
 
-            {projectTypeFilter !== PROJECT_CATEGORY_TECH && workbenchListState.kind !== 'select-category' && workbenchListState.showStatusQuickFilter && (
+            {workbenchListState.kind !== 'select-category' && (workbenchListState.showStatusQuickFilter || projectTypeFilter === PROJECT_TYPE_TOS_VERSION || projectTypeFilter === PROJECT_CATEGORY_TECH) && (
               <div aria-label="状态快捷筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
-                <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>状态</span>
+                <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目状态</span>
                 {statusOptions.map(item => {
                   const isActive = projectStatusFilter === item.value
                   return (
@@ -516,6 +557,10 @@ export default function ProjectListContainer() {
                     }}
                   />
                 ))}
+                <Checkbox
+                  checked={aboutMineOnly}
+                  onChange={event => { setAboutMineOnly(event.target.checked); setProjectCardPage(1) }}
+                >关于我的</Checkbox>
                 <div className="pms-project-list-table-actions" ref={setProjectListTableToolbarHost} />
               </div>
             )}
@@ -561,6 +606,10 @@ export default function ProjectListContainer() {
                     />
                   )
                 })}
+                <Checkbox
+                  checked={aboutMineOnly}
+                  onChange={event => { setAboutMineOnly(event.target.checked); setProjectCardPage(1) }}
+                >关于我的</Checkbox>
                 <div className="pms-project-list-table-actions" ref={setProjectListTableToolbarHost} />
               </div>
             )}
@@ -572,6 +621,19 @@ export default function ProjectListContainer() {
           <div style={{ flex: 1, minWidth: 0 }}>
             {projectTypeFilter === PROJECT_CATEGORY_CAPABILITY ? (
               <Empty description="该项目分类暂未配置" />
+            ) : projectListView === 'calendar' ? (
+              <ProjectListCalendar
+                rows={(projectTypeFilter === PROJECT_CATEGORY_TECH ? technicalFilteredRows : standardRows.filter(row => standardFilteredProjectIds.has(row.projectId)))}
+                milestoneDefinitions={projectTypeFilter === PROJECT_CATEGORY_TECH
+                  ? (technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate).map(task => ({
+                      key: `milestone::${task.taskName}`,
+                      label: task.taskName,
+                    }))
+                  : standardFieldDefinitions
+                      .filter(definition => definition.source === 'templateTask')
+                      .map(definition => ({ key: definition.key, label: definition.title }))}
+                onOpenRow={enterSummaryRow}
+              />
             ) : projectListView === 'card' ? (
               <>
                 <Row gutter={[16, 16]}>
@@ -633,7 +695,7 @@ export default function ProjectListContainer() {
                     currentTemplateTasks={technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate}
                     matrixTemplateTasks={technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate}
                     matrixVariant={technicalActiveType === 'tdt' ? 'technical-tdt' : 'technical-subproject'}
-                    providedRows={technicalActiveRows}
+                    providedRows={technicalStatusRows}
                     storageNamespace={`project-list-technical-${technicalActiveType}`}
                     onViewProject={() => undefined}
                     onViewRow={enterSummaryRow}
@@ -681,7 +743,7 @@ export default function ProjectListContainer() {
                     currentTemplateTasks={technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate}
                     matrixTemplateTasks={technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate}
                     matrixVariant={technicalActiveType === 'tdt' ? 'technical-tdt' : 'technical-subproject'}
-                    providedRows={technicalActiveRows}
+                    providedRows={technicalStatusRows}
                     storageNamespace={`project-list-technical-${technicalActiveType}`}
                     onViewProject={() => undefined}
                     onViewRow={enterSummaryRow}

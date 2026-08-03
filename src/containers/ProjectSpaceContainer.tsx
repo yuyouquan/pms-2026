@@ -474,11 +474,6 @@ export default function ProjectSpaceContainer() {
     setRoles(previous => previous.map(item => item.name === roleName ? { ...item, members } : item))
   }
   const isTechnicalProject = selectedProject?.type === '技术项目'
-  const technicalPreProjectName = useMemo(() => {
-    if (!selectedProject) return undefined
-    const preProjectId = String(selectedProject.preProjectId || selectedProject.fieldValues?.preProjectId || '')
-    return projects.find(project => project.id === preProjectId)?.name
-  }, [projects, selectedProject])
 
   // ═══════ Permissions ═══════
   // RBAC check tied to the currently logged-in user. Global "管理组" bypasses.
@@ -3885,7 +3880,6 @@ export default function ProjectSpaceContainer() {
               ? <TechnicalProjectInformationView
                   project={selectedProject}
                   stage={technicalStage}
-                  preProjectName={technicalPreProjectName}
                   customRoles={roles.filter(role => !role.isFixed)}
                   currentLoginUser={currentLoginUser}
                   canEdit={canEditBasicInfo}
