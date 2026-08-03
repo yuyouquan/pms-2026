@@ -14,8 +14,10 @@ import {
 } from 'antd'
 import {
   DeleteOutlined,
+  DownOutlined,
   FilterOutlined,
   PlusOutlined,
+  RightOutlined,
   SettingOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
@@ -58,7 +60,13 @@ import {
   type ProjectSummaryRow,
   type ProjectSummaryTemplateTask,
 } from '@/lib/projectSummary'
-import { buildStableGroupSegments, TECHNICAL_PROJECT_TYPE_OPTIONS, type ProjectListVariant } from '@/lib/projectListMatrix'
+import {
+  buildStableGroupSegments,
+  getProjectListFixedColumnKeys,
+  groupProjectListRows,
+  TECHNICAL_PROJECT_TYPE_OPTIONS,
+  type ProjectListVariant,
+} from '@/lib/projectListMatrix'
 
 interface ProjectSummaryVersion {
   id: string
@@ -83,6 +91,8 @@ export interface ProjectSummaryTableProps {
   onViewRow?: (row: ProjectSummaryRow) => void
   controlledFilters?: AnyFilterCondition[]
   onFiltersChange?: (filters: AnyFilterCondition[]) => void
+  showQuickFilters?: boolean
+  groupBy?: { key: string; fallbackLabel: string }
 }
 
 interface StoredProjectSummaryPreferences {
@@ -155,6 +165,8 @@ export default function ProjectSummaryTable({
   onViewRow,
   controlledFilters,
   onFiltersChange,
+  showQuickFilters = true,
+  groupBy,
 }: ProjectSummaryTableProps) {
   const [uncontrolledFilters, setUncontrolledFilters] = useState<AnyFilterCondition[]>([])
   const isFilterControlled = controlledFilters !== undefined
@@ -169,6 +181,7 @@ export default function ProjectSummaryTable({
   ])
   const [filterOpen, setFilterOpen] = useState(false)
   const [columnOpen, setColumnOpen] = useState(false)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
 
   const templateTasks = useMemo(() => getLatestPublishedTemplateTasks(
     projectType,
@@ -193,16 +206,22 @@ export default function ProjectSummaryTable({
         ...getTemplateTaskFieldDefinitions(projectType, templateTasks),
       ], [effectiveTemplateTasks, matrixVariant, projectType, templateTasks])
 
+  const fixedColumnOrder = useMemo(
+    () => matrixVariant ? getProjectListFixedColumnKeys(matrixVariant) : ['projectName'],
+    [matrixVariant],
+  )
+  const fixedColumnKeys = useMemo(() => new Set(fixedColumnOrder), [fixedColumnOrder])
+
   const columnDefinitions = useMemo<SortableColumnDefinition<string>[]>(() => (
     fieldDefinitions.map(definition => ({
       key: definition.key,
       title: definition.title,
       defaultVisible: definition.defaultVisible,
       hideable: definition.hideable,
-      fixed: !matrixVariant && definition.key === 'projectName' ? 'left' : undefined,
+      fixed: fixedColumnKeys.has(definition.key) ? 'left' : undefined,
       disabledReason: definition.hideable === false ? '项目汇总必显字段' : undefined,
     }))
-  ), [fieldDefinitions])
+  ), [fieldDefinitions, fixedColumnKeys])
 
   const defaultColumnSettings = useMemo(
     () => getDefaultColumnSettings(columnDefinitions),
@@ -241,8 +260,7 @@ export default function ProjectSummaryTable({
     }
     const optionsFor = (key: string) => collectOptions(baseRows, key)
     return [
-      { key: 'status', label: '状态', options: optionsFor('status') },
-      { key: 'technicalProjectType', label: '项目类型', options: TECHNICAL_PROJECT_TYPE_OPTIONS.slice(1).map(option => ({ ...option })) },
+      { key: 'technicalProjectType', label: '项目类型', options: TECHNICAL_PROJECT_TYPE_OPTIONS.map(option => ({ ...option })) },
       { key: 'technicalTrack', label: '技术赛道', options: optionsFor('technicalTrack') },
       { key: 'projectStage', label: '项目阶段', options: optionsFor('projectStage') },
     ]
@@ -362,16 +380,88 @@ export default function ProjectSummaryTable({
     [baseRows, filterFieldDefinitions, filters],
   )
 
-  const visibleDefinitions = useMemo(
-    () => orderVisibleDefinitions(columnDefinitions, columnSettings),
-    [columnDefinitions, columnSettings],
-  )
+  const displayedRows = useMemo<ProjectSummaryRow[]>(() => {
+    if (!groupBy) return filteredRows
+    return groupProjectListRows(filteredRows, groupBy.key, groupBy.fallbackLabel)
+      .flatMap(group => {
+        const isCollapsed = collapsedGroups.has(group.key)
+        if (isCollapsed) {
+          const summary = Object.fromEntries(fieldDefinitions.map(definition => [definition.key, '-']))
+          return [{
+            ...summary,
+            key: `group::${group.key}`,
+            projectId: `group::${group.key}`,
+            projectName: '-',
+            [groupBy.key]: group.key,
+            __groupKey: group.key,
+            __groupSize: group.rows.length,
+            __groupIndex: 0,
+            __groupSummary: true,
+          } as ProjectSummaryRow]
+        }
+        return group.rows.map((row, index) => ({
+          ...row,
+          __groupKey: group.key,
+          __groupSize: group.rows.length,
+          __groupIndex: index,
+          __groupSummary: false,
+        }))
+      })
+  }, [collapsedGroups, fieldDefinitions, filteredRows, groupBy])
+
+  const visibleDefinitions = useMemo(() => {
+    const ordered = orderVisibleDefinitions(columnDefinitions, columnSettings)
+    const byKey = new Map(ordered.map(definition => [definition.key, definition]))
+    return [
+      ...fixedColumnOrder.flatMap(key => byKey.get(key) ? [byKey.get(key)!] : []),
+      ...ordered.filter(definition => !fixedColumnKeys.has(definition.key)),
+    ]
+  }, [columnDefinitions, columnSettings, fixedColumnKeys, fixedColumnOrder])
   const tableColumnByKey = useMemo(
-    () => new Map(buildProjectSummaryColumns(fieldDefinitions).map(column => [
-      String(column.key),
-      matrixVariant ? { ...column, fixed: undefined } : column,
-    ])),
-    [fieldDefinitions, matrixVariant],
+    () => new Map(buildProjectSummaryColumns(fieldDefinitions).map(column => {
+      const key = String(column.key)
+      const fixed = fixedColumnKeys.has(key) ? 'left' as const : undefined
+      if (!groupBy || key !== groupBy.key) return [key, { ...column, fixed }] as const
+      return [key, {
+        ...column,
+        fixed,
+        ellipsis: false,
+        render: (_value: unknown, record: ProjectSummaryRow) => {
+          if (Number(record.__groupIndex) > 0) return null
+          const groupKey = String(record.__groupKey ?? record[groupBy.key] ?? groupBy.fallbackLabel)
+          const groupSize = Number(record.__groupSize) || 0
+          const isCollapsed = collapsedGroups.has(groupKey)
+          return (
+            <button
+              type="button"
+              className="pms-project-series-toggle"
+              aria-expanded={!isCollapsed}
+              aria-label={`${isCollapsed ? '展开' : '收起'}产品系列 ${groupKey}`}
+              onClick={event => {
+                event.stopPropagation()
+                setCollapsedGroups(current => {
+                  const next = new Set(current)
+                  if (next.has(groupKey)) next.delete(groupKey)
+                  else next.add(groupKey)
+                  return next
+                })
+              }}
+            >
+              {isCollapsed ? <RightOutlined /> : <DownOutlined />}
+              <span className="pms-project-series-copy">
+                <strong>{groupKey}</strong>
+                <small>{groupSize}个项目</small>
+              </span>
+            </button>
+          )
+        },
+        onCell: (record: ProjectSummaryRow) => ({
+          className: 'pms-project-series-cell',
+          rowSpan: Number(record.__groupIndex) > 0 ? 0 : (collapsedGroups.has(String(record.__groupKey)) ? 1 : Number(record.__groupSize) || 1),
+        }),
+      }] as const
+    })),
+    [collapsedGroups, fieldDefinitions, fixedColumnKeys, groupBy],
   )
   const columns = useMemo<ColumnsType<ProjectSummaryRow>>(() => {
     const result: ColumnsType<ProjectSummaryRow> = []
@@ -493,7 +583,7 @@ export default function ProjectSummaryTable({
         marginBottom: 12,
       }}>
         <Space size={8} wrap>
-          {matrixVariant?.startsWith('technical') && (
+          {showQuickFilters && matrixVariant?.startsWith('technical') && (
             <Input
               allowClear
               aria-label="快捷筛选-项目名称"
@@ -510,7 +600,7 @@ export default function ProjectSummaryTable({
               })}
             />
           )}
-          {quickFilterDefinitions.map(definition => (
+          {showQuickFilters && quickFilterDefinitions.map(definition => (
             <Select
               key={definition.key}
               mode="multiple"
@@ -674,10 +764,10 @@ export default function ProjectSummaryTable({
       )}
 
       <Table<ProjectSummaryRow>
-        className="pms-table"
-        rowKey="projectId"
+        className="pms-table pms-project-summary-table"
+        rowKey="key"
         columns={columns}
-        dataSource={filteredRows}
+        dataSource={displayedRows}
         pagination={false}
         scroll={{ x: scrollWidth, y: 'calc(100vh - 260px)' }}
         locale={{
@@ -689,8 +779,12 @@ export default function ProjectSummaryTable({
           ),
         }}
         onRow={row => ({
-          style: { cursor: 'pointer' },
-          onClick: () => onViewRow ? onViewRow(row) : onViewProject(row.projectId),
+          style: { cursor: row.__groupSummary ? 'default' : 'pointer' },
+          onClick: () => {
+            if (row.__groupSummary) return
+            if (onViewRow) onViewRow(row)
+            else onViewProject(row.projectId)
+          },
         })}
       />
     </div>

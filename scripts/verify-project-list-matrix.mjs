@@ -9,12 +9,34 @@ assert.equal(typeof matrix.buildTechnicalProjectListRows, 'function', 'missing t
 assert.equal(typeof matrix.isOverdueProjectListDate, 'function', 'missing overdue date helper')
 assert.equal(typeof matrix.selectLatestPublishedScopedSnapshot, 'function', 'missing strict scoped published selector')
 assert.equal(typeof matrix.buildStableGroupSegments, 'function', 'missing stable group segment builder')
-assert.equal(typeof matrix.resolveTechnicalProjectTypeVisibility, 'function', 'missing technical type visibility resolver')
+assert.equal(typeof matrix.resolveTechnicalProjectType, 'function', 'missing technical type resolver')
+assert.equal(typeof matrix.getProjectListFixedColumnKeys, 'function', 'missing project-list fixed-column resolver')
 assert.deepEqual(matrix.PROJECT_LIST_CATEGORIES, ['整机产品项目', 'tOS版本项目', '技术项目', '能力建设项目'])
 assert.deepEqual(matrix.PROJECT_LIST_QUICK_FILTERS.machine.map(item => item.label), ['项目二级分类', '状态', '首销tOS版本', '芯片编码', '品牌', '产品系列', '产品类型'])
 assert.deepEqual(matrix.PROJECT_LIST_QUICK_FILTERS.tos.map(item => item.label), ['版本类型', 'tOS版本'])
-assert.deepEqual(matrix.PROJECT_LIST_QUICK_FILTERS.technical.map(item => item.label), ['状态', '项目类型', '项目名称', '技术赛道', '项目阶段'])
-assert.deepEqual(matrix.TECHNICAL_PROJECT_TYPE_OPTIONS.map(item => item.label), ['全部', 'TDT项目', '子项目'])
+assert.deepEqual(matrix.PROJECT_LIST_QUICK_FILTERS.technical.map(item => item.label), ['项目类型', '项目名称', '技术赛道', '项目阶段'])
+assert.deepEqual(matrix.TECHNICAL_PROJECT_TYPE_OPTIONS, [
+  { label: 'TDT项目', value: 'tdt' },
+  { label: '子项目', value: 'subproject' },
+])
+assert.equal(matrix.resolveTechnicalProjectType([]), 'tdt')
+assert.equal(matrix.resolveTechnicalProjectType(['tdt']), 'tdt')
+assert.equal(matrix.resolveTechnicalProjectType(['subproject']), 'subproject')
+assert.deepEqual(matrix.getProjectListFixedColumnKeys('machine'), ['productSeries', 'projectName'])
+assert.deepEqual(matrix.getProjectListFixedColumnKeys('tos'), ['tosVersion'])
+assert.deepEqual(matrix.getProjectListFixedColumnKeys('technical-tdt'), ['projectName'])
+assert.deepEqual(matrix.getProjectListFixedColumnKeys('technical-subproject'), ['projectName'])
+const seriesGroups = matrix.groupProjectListRows([
+  { projectId: '1', productSeries: 'CAMON 50', projectName: 'A' },
+  { projectId: '2', productSeries: 'P', projectName: 'B' },
+  { projectId: '3', productSeries: 'CAMON 50', projectName: 'C' },
+  { projectId: '4', productSeries: '-', projectName: 'D' },
+], 'productSeries', '未配置产品系列')
+assert.deepEqual(seriesGroups.map(group => [group.key, group.rows.map(row => row.projectId)]), [
+  ['CAMON 50', ['1', '3']],
+  ['P', ['2']],
+  ['未配置产品系列', ['4']],
+])
 const expected = {
   machine: ['产品系列', '项目名称', '品牌', '芯片编码', '版本类型', '首销tOS版本', '项目状态', 'SPM', 'SPM部门'],
   tos: ['tOS版本', '版本类型', '项目状态', 'SPM'],
@@ -120,8 +142,4 @@ const segments = matrix.buildStableGroupSegments([
   { key: 'b', group: { key: 'phase', label: '阶段', color: '#fff' } },
 ])
 assert.deepEqual(segments.map(segment => segment.key), ['phase::segment-0', 'plain::plain', 'phase::segment-2'])
-assert.deepEqual(matrix.resolveTechnicalProjectTypeVisibility([]), { showTdt: true, showSubproject: true, showBoth: true })
-assert.deepEqual(matrix.resolveTechnicalProjectTypeVisibility(['tdt']), { showTdt: true, showSubproject: false, showBoth: false })
-assert.deepEqual(matrix.resolveTechnicalProjectTypeVisibility(['subproject']), { showTdt: false, showSubproject: true, showBoth: false })
-assert.deepEqual(matrix.resolveTechnicalProjectTypeVisibility(['tdt', 'subproject']), { showTdt: true, showSubproject: true, showBoth: true })
 console.log('project list matrix contract passed')

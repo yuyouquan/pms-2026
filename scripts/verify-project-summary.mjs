@@ -363,7 +363,7 @@ registerAssertion('workbench list state follows the selected category', () => {
   assert.deepEqual(getWorkbenchListState('技术项目'), {
     kind: 'table',
     showSecondaryCategory: false,
-    showStatusQuickFilter: true,
+    showStatusQuickFilter: false,
   })
 })
 
@@ -375,6 +375,12 @@ registerAssertion('quick filters expose the expected linked project-info fields'
   assert.deepEqual(
     getProjectSummaryQuickFilterDefinitions('tOS版本项目', []).map(field => field.key),
     ['versionType', 'tosVersion'],
+  )
+  assert.deepEqual(
+    getProjectSummaryQuickFilterDefinitions('整机产品项目', [
+      { id: 'machine', name: 'X6870', type: '整机产品项目', firstSaleTosVersion: '17.0.0' },
+    ]).find(field => field.key === 'firstSaleTosVersion')?.options,
+    [{ label: 'tOS17.0.0', value: 'tOS17.0.0' }],
   )
 })
 

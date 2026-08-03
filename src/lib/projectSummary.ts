@@ -238,7 +238,7 @@ export function getWorkbenchListState(projectType: string): WorkbenchListState {
     return { kind: 'table', showSecondaryCategory: false, showStatusQuickFilter: false }
   }
   if (projectCategory === PROJECT_CATEGORY_TECH) {
-    return { kind: 'table', showSecondaryCategory: false, showStatusQuickFilter: true }
+    return { kind: 'table', showSecondaryCategory: false, showStatusQuickFilter: false }
   }
   return { kind: 'unsupported', showSecondaryCategory: false, showStatusQuickFilter: false }
 }
@@ -270,7 +270,14 @@ const getQuickFilterValue = (project: ProjectInfoProject, field: string) => {
     return typeof topLevelValue === 'string' ? topLevelValue.trim() : ''
   }
   const value = getProjectInfoValue(project, field)
-  return typeof value === 'string' ? value.trim() : ''
+  if (typeof value !== 'string') return ''
+  const normalized = value.trim()
+  if (
+    ['firstSaleTosVersion', 'currentTosVersion'].includes(field)
+    && normalized
+    && !normalized.toLowerCase().startsWith('tos')
+  ) return `tOS${normalized}`
+  return normalized
 }
 
 export function getProjectSummaryQuickFilterDefinitions(
