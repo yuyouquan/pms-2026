@@ -511,6 +511,31 @@ const checks = [
     file: 'src/components/roadmap/MilestoneView.tsx',
     includes: 'PROJECT_TYPE_INDEPENDENT_SOFTWARE',
   },
+  {
+    name: 'Technical basic information mounts the shared information frame',
+    file: 'src/components/technical-project/TechnicalProjectInformationView.tsx',
+    includes: 'ProjectInformationFrame',
+  },
+  {
+    name: 'Technical basic information renders the technical plan summary',
+    file: 'src/components/technical-project/TechnicalProjectInformationView.tsx',
+    includes: 'TechnicalPlanSummary',
+  },
+  {
+    name: 'Technical plan and whole-machine plans share one workspace shell',
+    file: 'src/components/plans/PlanWorkspaceShell.tsx',
+    includes: 'PlanWorkspaceShell',
+  },
+  {
+    name: 'Technical plan module consumes the shared plan workspace shell',
+    file: 'src/components/technical-project/TechnicalPlanModule.tsx',
+    includes: 'PlanWorkspaceShell',
+  },
+  {
+    name: 'Whole-machine project space consumes the shared plan workspace shell',
+    file: 'src/containers/ProjectSpaceContainer.tsx',
+    includes: 'PlanWorkspaceShell',
+  },
 ]
 
 const failures = []

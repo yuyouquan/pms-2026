@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
@@ -197,6 +198,13 @@ assert.deepEqual(
 )
 
 const technicalModuleSource = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
+const planWorkspaceShellPath = 'src/components/plans/PlanWorkspaceShell.tsx'
+assert.equal(fs.existsSync(`${root}/${planWorkspaceShellPath}`), true, 'plan workspace provides a shared shell for whole-machine and technical projects')
+const planWorkspaceShell = readSource(root, planWorkspaceShellPath)
+for (const capability of ['创建修订', '克隆计划', '筛选', '列设置', '全部展开', '全部收起', '版本对比', '分享计划', 'vertical', 'horizontal', 'gantt']) {
+  assert.match(planWorkspaceShell, new RegExp(capability), `shared plan workspace shell supports ${capability}`)
+}
+assert.match(technicalModuleSource, /PlanWorkspaceShell/, 'technical plan module consumes the shared plan workspace shell')
 assert.match(technicalModuleSource, /TDT项目计划/, 'technical plan UI renders the fixed TDT tab')
 assert.match(technicalModuleSource, /显示已停用/, 'technical plan UI exposes history mode')
 assert.match(technicalModuleSource, /SettingOutlined/, 'child plan tabs expose configuration')
@@ -212,6 +220,7 @@ assert.match(technicalModuleSource, /SortableColumnSettings/, 'column settings r
 assert.match(technicalModuleSource, /canImport/, 'technical plan import has a dedicated permission input')
 assert.match(technicalModuleSource, /canExport/, 'technical plan export has a dedicated permission input')
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
+assert.match(projectSpaceSource, /PlanWorkspaceShell/, 'whole-machine project space consumes the shared plan workspace shell')
 assert.match(projectSpaceSource, /canDo\('plan:导入'\)/, 'project space passes technical import permission')
 assert.match(projectSpaceSource, /canDo\('plan:导出'\)/, 'project space passes technical export permission')
 
