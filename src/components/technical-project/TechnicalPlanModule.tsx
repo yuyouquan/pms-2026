@@ -9,7 +9,7 @@ import type { ColumnsType } from 'antd/es/table'
 import type { MenuProps } from 'antd'
 import {
   CopyOutlined, DeleteOutlined, DownloadOutlined, HistoryOutlined, PlusOutlined, SaveOutlined,
-  EditOutlined, FilterOutlined, MinusSquareOutlined, PlusSquareOutlined, SettingOutlined, ShareAltOutlined,
+  CaretDownOutlined, EditOutlined, FilterOutlined, MinusSquareOutlined, PlusSquareOutlined, SettingOutlined, ShareAltOutlined,
   StopOutlined, UploadOutlined,
 } from '@ant-design/icons'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
@@ -263,8 +263,8 @@ export default function TechnicalPlanModule({
     [directlyFilteredTasks, hasActiveFilters, tasks],
   )
   const visibleTasks = useMemo(
-    () => hasActiveFilters ? filteredTasks : filterPlanTasksByCollapsed(filteredTasks, collapsedIds),
-    [collapsedIds, filteredTasks, hasActiveFilters],
+    () => filterPlanTasksByCollapsed(filteredTasks, collapsedIds),
+    [collapsedIds, filteredTasks],
   )
   const publishedVersions = useMemo(
     () => canViewTechnicalPlan
@@ -404,7 +404,15 @@ export default function TechnicalPlanModule({
   }
 
   const expandAll = () => setCollapsed(scope, [])
-  const collapseAll = () => setCollapsed(scope, filteredTasks.filter(task => !task.parentId).map(task => task.id))
+  const collapseAll = () => setCollapsed(scope, filteredTasks
+    .filter(task => tasks.some(child => child.parentId === task.id))
+    .map(task => task.id))
+  const toggleCollapsedTask = (taskId: string) => {
+    const nextCollapsedIds = new Set(collapsedIds)
+    if (nextCollapsedIds.has(taskId)) nextCollapsedIds.delete(taskId)
+    else nextCollapsedIds.add(taskId)
+    setCollapsed(scope, [...nextCollapsedIds])
+  }
 
   const baseColumns: ColumnsType<TechnicalTemplateTask> = [
     {
@@ -412,6 +420,22 @@ export default function TechnicalPlanModule({
       render: (value, row) => (
         <div className="technical-plan-sequence-cell" style={{ paddingLeft: row.parentId ? 20 : 0 }}>
           {canDrag && <DragHandle />}
+          {tasks.some(child => child.parentId === row.id) ? (
+            <Tooltip title={collapsedIds.has(row.id) ? '展开一级任务' : '收起一级任务'}>
+              <Button
+                type="text"
+                size="small"
+                className="technical-plan-collapse-button"
+                aria-label={`${collapsedIds.has(row.id) ? '展开' : '收起'}一级任务 ${row.taskName}`}
+                aria-expanded={!collapsedIds.has(row.id)}
+                icon={<CaretDownOutlined />}
+                onClick={event => {
+                  event.stopPropagation()
+                  toggleCollapsedTask(row.id)
+                }}
+              />
+            </Tooltip>
+          ) : <span className="technical-plan-collapse-placeholder" aria-hidden />}
           {canMaintain && tab?.templateKind === 'tdt' && !row.parentId && maxDepth >= 2 && (
             <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} onClick={() => handleAddChildTask(row.id)} /></Tooltip>
           )}
