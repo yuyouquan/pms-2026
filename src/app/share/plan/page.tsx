@@ -9,7 +9,7 @@ import {
   SearchOutlined, BarChartOutlined, TableOutlined,
   UnorderedListOutlined, SettingOutlined
 } from '@ant-design/icons'
-import { initialProjects, PROJECT_TYPE_COLORS } from '@/data/projects'
+import { PROJECT_TYPE_COLORS } from '@/data/projects'
 import {
   TaskTable,
   HorizontalTable,
@@ -26,6 +26,7 @@ import {
   type SortableColumnSettingsValue,
 } from '@/lib/columnSettings'
 import { isMachineProjectType } from '@/constants/projectTypes'
+import { useProjectStore } from '@/stores/project'
 import { resolveTechnicalSharePlan, useTechnicalPlanStore } from '@/stores/technicalPlan'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
 
@@ -37,6 +38,7 @@ function SharePlanContent() {
   const technical = searchParams.get('technical')
   const technicalKind = searchParams.get('kind')
   const technicalSubprojectId = searchParams.get('subprojectId')
+  const projects = useProjectStore(state => state.projects)
   const technicalPlansByKey = useTechnicalPlanStore(state => state.plansByKey)
   const isTechnicalShare = technical === '1'
   const technicalSharePlan = useMemo(() => resolveTechnicalSharePlan(technicalPlansByKey, {
@@ -47,7 +49,7 @@ function SharePlanContent() {
   }), [technicalPlansByKey, technical, technicalKind, projectId, technicalSubprojectId])
 
   // Find project
-  const project = initialProjects.find(p => p.id === projectId)
+  const project = projects.find(p => p.id === projectId)
 
   // Versions — published only
   const machinePublishedVersions = VERSION_DATA.filter(v => v.status === '已发布')

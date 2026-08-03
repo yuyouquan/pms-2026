@@ -304,5 +304,8 @@ const sharePageSource = readSource(root, 'src/app/share/plan/page.tsx')
 assert.match(sharePageSource, /searchParams\.get\(['"]technical['"]\)/, 'share route branches only on the explicit technical flag')
 assert.match(sharePageSource, /useTechnicalPlanStore/, 'share route reads the persisted technical plan store')
 assert.match(sharePageSource, /resolveTechnicalSharePlan/, 'share route uses the scope-safe pure resolver')
+assert.match(sharePageSource, /useProjectStore\(state\s*=>\s*state\.projects\)/, 'share route reads persisted runtime projects')
+assert.match(sharePageSource, /projects\.find\([^)]*\.id\s*===\s*projectId\)/, 'dynamic projects can resolve a technical share link')
+assert.doesNotMatch(sharePageSource, /initialProjects\.find/, 'technical share project resolution never falls back to static seed lookup')
 
 console.log('technical plan operation checks passed')
