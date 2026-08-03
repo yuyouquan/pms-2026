@@ -201,10 +201,13 @@ const technicalModuleSource = readSource(root, 'src/components/technical-project
 const planWorkspaceShellPath = 'src/components/plans/PlanWorkspaceShell.tsx'
 assert.equal(fs.existsSync(`${root}/${planWorkspaceShellPath}`), true, 'plan workspace provides a shared shell for whole-machine and technical projects')
 const planWorkspaceShell = readSource(root, planWorkspaceShellPath)
-for (const capability of ['创建修订', '克隆计划', '筛选', '列设置', '全部展开', '全部收起', '版本对比', '分享计划', 'vertical', 'horizontal', 'gantt']) {
+for (const capability of ['创建修订', '计划克隆', '筛选', '列设置', '全部展开', '全部收起', '版本对比', '分享计划']) {
   assert.match(planWorkspaceShell, new RegExp(capability), `shared plan workspace shell supports ${capability}`)
+  assert.match(technicalModuleSource, new RegExp(capability), `technical plan module consumes shared ${capability} capability`)
 }
-assert.match(technicalModuleSource, /PlanWorkspaceShell/, 'technical plan module consumes the shared plan workspace shell')
+assert.match(planWorkspaceShell, /value:\s*['"]vertical['"][\s\S]{0,1200}value:\s*['"]horizontal['"][\s\S]{0,1200}value:\s*['"]gantt['"]/, 'shared plan workspace shell defines vertical, horizontal, then gantt view modes')
+assert.match(technicalModuleSource, /value:\s*['"]vertical['"][\s\S]{0,1200}value:\s*['"]horizontal['"][\s\S]{0,1200}value:\s*['"]gantt['"]/, 'technical plan module consumes vertical, horizontal, then gantt view modes')
+assert.match(technicalModuleSource, /<PlanWorkspaceShell\b/, 'technical plan module mounts the shared plan workspace shell')
 assert.match(technicalModuleSource, /TDT项目计划/, 'technical plan UI renders the fixed TDT tab')
 assert.match(technicalModuleSource, /显示已停用/, 'technical plan UI exposes history mode')
 assert.match(technicalModuleSource, /SettingOutlined/, 'child plan tabs expose configuration')
@@ -220,7 +223,7 @@ assert.match(technicalModuleSource, /SortableColumnSettings/, 'column settings r
 assert.match(technicalModuleSource, /canImport/, 'technical plan import has a dedicated permission input')
 assert.match(technicalModuleSource, /canExport/, 'technical plan export has a dedicated permission input')
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
-assert.match(projectSpaceSource, /PlanWorkspaceShell/, 'whole-machine project space consumes the shared plan workspace shell')
+assert.match(projectSpaceSource, /<PlanWorkspaceShell\b/, 'whole-machine project space mounts the shared plan workspace shell')
 assert.match(projectSpaceSource, /canDo\('plan:导入'\)/, 'project space passes technical import permission')
 assert.match(projectSpaceSource, /canDo\('plan:导出'\)/, 'project space passes technical export permission')
 

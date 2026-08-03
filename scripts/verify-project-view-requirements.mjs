@@ -514,27 +514,27 @@ const checks = [
   {
     name: 'Technical basic information mounts the shared information frame',
     file: 'src/components/technical-project/TechnicalProjectInformationView.tsx',
-    includes: 'ProjectInformationFrame',
+    matches: /<ProjectInformationFrame\b/,
   },
   {
     name: 'Technical basic information renders the technical plan summary',
     file: 'src/components/technical-project/TechnicalProjectInformationView.tsx',
-    includes: 'TechnicalPlanSummary',
+    matches: /<TechnicalPlanSummary\b/,
   },
   {
     name: 'Technical plan and whole-machine plans share one workspace shell',
     file: 'src/components/plans/PlanWorkspaceShell.tsx',
-    includes: 'PlanWorkspaceShell',
+    exists: true,
   },
   {
     name: 'Technical plan module consumes the shared plan workspace shell',
     file: 'src/components/technical-project/TechnicalPlanModule.tsx',
-    includes: 'PlanWorkspaceShell',
+    matches: /<PlanWorkspaceShell\b/,
   },
   {
     name: 'Whole-machine project space consumes the shared plan workspace shell',
     file: 'src/containers/ProjectSpaceContainer.tsx',
-    includes: 'PlanWorkspaceShell',
+    matches: /<PlanWorkspaceShell\b/,
   },
 ]
 
@@ -548,6 +548,11 @@ for (const check of checks) {
   }
 
   const content = read(check.file)
+  if (check.matches && !check.matches.test(content)) {
+    failures.push(`${check.name}: missing JSX mount ${check.matches} in ${check.file}`)
+    continue
+  }
+  if (check.exists) continue
   if (!content.includes(check.includes)) {
     failures.push(`${check.name}: missing "${check.includes}" in ${check.file}`)
   }
