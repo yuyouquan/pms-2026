@@ -154,6 +154,7 @@ export interface TechnicalPlanModuleProps {
   canImport: boolean
   canExport: boolean
   canViewTechnicalPlan: boolean
+  canShareTechnicalPlan: boolean
   maxDepthByKind: Readonly<Record<TechnicalTemplateKind, number>>
 }
 
@@ -171,7 +172,7 @@ const latestPublishedTemplate = (
 }
 
 export default function TechnicalPlanModule({
-  projectId, currentLoginUser, canEdit, canPublish, canImport, canExport, canViewTechnicalPlan,
+  projectId, currentLoginUser, canEdit, canPublish, canImport, canExport, canViewTechnicalPlan, canShareTechnicalPlan,
   maxDepthByKind = DEFAULT_MAX_DEPTH,
 }: TechnicalPlanModuleProps) {
   const [showInactive, setShowInactive] = useState(false)
@@ -261,8 +262,10 @@ export default function TechnicalPlanModule({
     [collapsedIds, filteredTasks, hasActiveFilters],
   )
   const publishedVersions = useMemo(
-    () => (instance?.versions || []).filter(version => version.status === '已发布'),
-    [instance?.versions],
+    () => canViewTechnicalPlan
+      ? (instance?.versions || []).filter(version => version.status === '已发布')
+      : [],
+    [canViewTechnicalPlan, instance?.versions],
   )
   const hasDraft = Boolean(instance?.versions.some(version => version.status === '修订中'))
   const canEditTaskStructure = canMaintain && viewMode === 'vertical'
@@ -312,6 +315,7 @@ export default function TechnicalPlanModule({
   const handlePublish = () => {
     if (!canPublish || !canMaintain) return
     if (invalid.size) {
+      setCollapsed(scope, [])
       setFilters([])
       setTempFilters([createFilterCondition()])
       setFilterOpen(false)
@@ -508,6 +512,7 @@ export default function TechnicalPlanModule({
   }
 
   const handleShare = () => {
+    if (!canViewTechnicalPlan || !canShareTechnicalPlan) return
     if (!publishedVersions.length) { message.warning('暂无已发布版本可分享'); return }
     const query = new URLSearchParams({ technical: '1', kind: scope.kind, projectId: scope.parentProjectId })
     if (scope.kind === 'subproject') query.set('subprojectId', scope.subprojectId)
@@ -730,8 +735,8 @@ export default function TechnicalPlanModule({
                 <Button icon={<DownloadOutlined />} disabled={!canExport || !tasks.length} aria-label="导出" />
               </Tooltip>
             </Dropdown>
-            <Tooltip title={publishedVersions.length ? '复制精确作用域分享链接' : '暂无已发布版本'}>
-              <Button icon={<ShareAltOutlined />} disabled={!publishedVersions.length} onClick={handleShare} aria-label="分享计划" />
+            <Tooltip title={!canViewTechnicalPlan ? '无技术项目一级计划查看权限' : !canShareTechnicalPlan ? '无技术项目一级计划分享权限' : publishedVersions.length ? '复制精确作用域分享链接' : '暂无已发布版本'}>
+              <Button icon={<ShareAltOutlined />} disabled={!canViewTechnicalPlan || !canShareTechnicalPlan || !publishedVersions.length} onClick={handleShare} aria-label="分享计划" />
             </Tooltip>
           </Space>
         )}

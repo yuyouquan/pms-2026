@@ -488,6 +488,7 @@ export default function ProjectSpaceContainer() {
   const canEditLevel2Plan = canDo('plan:二级计划-编辑')
   const canViewLevel1Plan = canDo('plan:一级计划-查看')
   const canViewLevel2Plan = canDo('plan:二级计划-查看')
+  const canShareTechnicalPlan = canDo('plan:一级计划-分享')
   const canImportTechnicalPlan = canDo('plan:导入')
   const canExportTechnicalPlan = canDo('plan:导出')
   const canEditCurrentPlan = projectPlanLevel === 'level2' ? canEditLevel2Plan : canEditLevel1Plan
@@ -3903,6 +3904,7 @@ export default function ProjectSpaceContainer() {
                   canImport={canImportTechnicalPlan}
                   canExport={canExportTechnicalPlan}
                   canViewTechnicalPlan={canViewLevel1Plan}
+                  canShareTechnicalPlan={canShareTechnicalPlan}
                   maxDepthByKind={{ tdt: 2, subproject: 1 }}
                 />
               : renderProjectPlan()
