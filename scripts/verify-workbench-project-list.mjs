@@ -63,9 +63,12 @@ assert.match(styles, /\.pms-project-list-filter-grid\s*\{[^}]*height:\s*142px/s,
 assert.match(styles, /\.pms-project-list-view-switch\.ant-segmented\s*\{[^}]*background:\s*#f1f3fb/s, 'card/list switch uses the light capsule rail')
 assert.match(styles, /\.pms-project-list-view-switch\.ant-segmented\s*\{[^}]*border:\s*1px solid #dfe3f2/s, 'card/list switch keeps the light capsule border')
 assert.match(styles, /\.pms-project-list-view-switch \.ant-segmented-item-selected\s*\{[^}]*background:\s*#fff[^}]*box-shadow:/s, 'selected view uses a raised white capsule')
+assert.match(styles, /\.pms-project-list \.pms-project-summary-actions \.ant-btn\s*\{[^}]*height:\s*32px[^}]*min-height:\s*32px\s*!important[^}]*padding-inline:\s*12px/s, 'quick-filter actions keep the same compact height as the filter controls')
+assert.match(styles, /\.pms-project-list-field-filters\s*\{[^}]*padding:\s*0 4px/s, 'quick-filter row does not add vertical padding that overflows the fixed filter surface')
 assert.match(styles, /\.pms-project-summary-table[\s\S]{0,300}th\.ant-table-cell-fix-(?:left|start)[\s\S]{0,160}position:\s*sticky\s*!important/s, 'fixed summary header cells retain sticky positioning instead of relative offsets')
 assert.match(styles, /\.pms-table\.pms-project-summary-table \.ant-table-tbody\s*>\s*tr\s*>\s*td\.ant-table-cell-fix-(?:left|start)[^}]*\{[^}]*z-index:\s*3[^}]*background:\s*#fff\s*!important/s, 'fixed summary body cells stay opaque above scrolled cells')
 assert.match(styles, /\.pms-table\.pms-project-summary-table \.ant-table-tbody\s*>\s*tr:hover\s*>\s*td\.ant-table-cell-fix-(?:left|start)[^}]*\{[^}]*background:\s*#f4f4ff\s*!important/s, 'fixed summary hover cells use an opaque hover surface')
+assert.match(styles, /\.pms-table \.ant-table-tbody\s*>\s*tr\.ant-table-measure-row\s*>\s*td\s*\{[^}]*padding:\s*0\s*!important[^}]*height:\s*0\s*!important[^}]*border:\s*0\s*!important/s, 'Ant Design measurement rows stay invisible and cannot create a blank row or distort body widths')
 assert.match(styles, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.pms-project-list/s)
 
 console.log('workbench project-list contract passed')
