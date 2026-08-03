@@ -5,7 +5,7 @@ import {
   Row, Col, Input, Button, Card, Empty, Segmented, Pagination, Select,
 } from 'antd'
 import {
-  AppstoreOutlined, UnorderedListOutlined, SearchOutlined, PlusOutlined,
+  SearchOutlined, PlusOutlined,
 } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
@@ -391,8 +391,8 @@ export default function ProjectListContainer() {
                   value={projectListView}
                   onChange={(value) => setProjectListView(value as 'card' | 'list')}
                   options={[
-                    { label: <span className="pms-project-list-view-option" aria-label="卡片视图"><AppstoreOutlined /><span>卡片视图</span></span>, value: 'card' },
-                    { label: <span className="pms-project-list-view-option" aria-label="列表视图"><UnorderedListOutlined /><span>列表视图</span></span>, value: 'list' },
+                    { label: <span className="pms-project-list-view-option" aria-label="卡片视图">卡片视图</span>, value: 'card' },
+                    { label: <span className="pms-project-list-view-option" aria-label="列表视图">列表视图</span>, value: 'list' },
                   ]}
                 />
                 {isAdminUser && (

@@ -12,6 +12,11 @@ assert.throws(() => rules.validateTechnicalTemplateDepth('tdt', [{ children: [{ 
 assert.throws(() => rules.validateTechnicalTemplateDepth('subproject', [{ children: [{}] }]), /child/i)
 
 const tdtTasks = rules.buildTdtTemplateTasks()
+assert.deepEqual(
+  tdtTasks.map(task => task.id),
+  ['1', '1.1', '1.2', '2', '2.1', '3', '3.1', '3.2', '4', '4.1', '4.2', '5', '5.1', '5.2'],
+  'TDT template uses the same hierarchical numeric numbering as whole-machine templates',
+)
 assert.deepEqual(tdtTasks.filter(task => !task.parentId).map(task => task.taskName), rules.TDT_TEMPLATE_SEED.map(([name]) => name), 'TDT phases use exact order')
 for (const [phase, children] of rules.TDT_TEMPLATE_SEED) {
   const parent = tdtTasks.find(task => task.taskName === phase)
@@ -21,9 +26,18 @@ for (const [phase, children] of rules.TDT_TEMPLATE_SEED) {
 assert.equal(rules.validateTechnicalTemplateDepth('tdt', tdtTasks), true, 'TDT seed is valid')
 
 const subprojectTasks = rules.buildSubprojectTemplateTasks()
+assert.deepEqual(subprojectTasks.map(task => task.id), ['1', '2', '3', '4'], 'subproject template uses numeric root numbering')
 assert.deepEqual(subprojectTasks.map(task => task.taskName), rules.SUBPROJECT_TEMPLATE_SEED, 'subproject seed task order is exact')
 assert.ok(subprojectTasks.every(task => !task.parentId), 'subproject seed is single-level')
 assert.equal(rules.validateTechnicalTemplateDepth('subproject', subprojectTasks), true, 'subproject seed is valid')
+
+const renumberedLegacyTasks = rules.renumberTechnicalTasks([
+  { id: 'legacy-parent', order: 1, taskName: '父任务', predecessor: '' },
+  { id: 'legacy-child-a', parentId: 'legacy-parent', order: 1, taskName: '子任务A', predecessor: '' },
+  { id: 'legacy-child-b', parentId: 'legacy-parent', order: 2, taskName: '子任务B', predecessor: 'legacy-child-a' },
+])
+assert.deepEqual(renumberedLegacyTasks.map(task => task.id), ['1', '1.1', '1.2'], 'legacy technical IDs are migrated to hierarchical numeric IDs')
+assert.equal(renumberedLegacyTasks[2].predecessor, '1.1', 'predecessor references follow migrated task numbering')
 
 const nontechnical = [{ id: 'keep', taskName: '保留原模板' }]
 const migrated = rules.migrateTechnicalTemplateState({
@@ -52,9 +66,19 @@ assert.deepEqual(migrated.publishedSnapshots['template::技术项目::level1::v3
 const planSource = readSource(root, 'src/stores/plan.ts')
 const configSource = readSource(root, 'src/containers/ConfigContainer.tsx')
 assert.match(planSource, /PLAN_STORE_VERSION\s*=\s*\d+/, 'plan store declares a persistence version')
+assert.ok(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]) >= 3, 'plan store migrates persisted technical template numbering')
 assert.match(planSource, /setTechnicalTemplateTasks/, 'plan store exposes a validating technical-template setter')
 assert.match(planSource, /validateTechnicalTemplateDepth/, 'plan store enforces technical template depth')
 assert.doesNotMatch(configSource, /publishedSnapshots\[versionId\]/, 'config snapshots never fall back across template scopes')
+assert.match(configSource, /title:\s*['"]序号['"]/, 'technical templates use the shared numbered task table')
+assert.match(configSource, /技术项目负责人/, 'technical template role selector includes the technical project owner role')
+assert.match(configSource, /创建非正式版本/, 'config template revisions offer nonformal versions')
+assert.match(configSource, /创建正式版本/, 'config template revisions offer formal versions')
+
+const technicalPlanUiSource = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
+assert.match(technicalPlanUiSource, /创建非正式版本/, 'technical project plans offer nonformal revisions')
+assert.match(technicalPlanUiSource, /创建正式版本/, 'technical project plans offer formal revisions')
+assert.match(technicalPlanUiSource, /revisionKind/, 'technical project plan passes revision kind into its store')
 
 const memoryStorage = new Map()
 globalThis.localStorage = {

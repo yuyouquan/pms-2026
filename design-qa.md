@@ -1,8 +1,12 @@
-# 项目列表与技术项目信息 Design QA
+# 项目列表、技术项目信息与计划交互 Design QA
 
 - Source visual truth: `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-727a6c3c-d931-4a32-9dc5-cfd3923d3063.png`
 - Implementation screenshot: `screenshots/filter-panel-immediate-implementation.png`
 - Project-list implementation screenshot: `screenshots/project-list-toolbar-alignment.png`
+- Technical-plan source visual: `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-f5ebd5de-d489-4994-860c-1e8892835063.png`
+- Technical-plan implementation screenshot: `screenshots/technical-plan-revision-menu-implementation.png`
+- Technical-template implementation screenshot: `screenshots/technical-template-parity-implementation.png`
+- Technical-plan combined comparison: `screenshots/technical-plan-parity-comparison.png`
 - Viewport: 1274 × 717 CSS px
 - Source pixels: 1468 × 803 px; the reference is treated as a 2× capture, normalized to about 734 × 402 CSS px
 - Implementation pixels: 1274 × 717 px; visible filter panel measured 720 × 359 CSS px
@@ -49,6 +53,18 @@ The filter panel was measured and exercised directly in the in-app browser:
 - Six deliverable cards remain visible without the redundant `暂无交付物` footer.
 - Neither the basic-information surface nor the technical plan scope exposes `显示已停用`.
 
+## Technical plan and template parity evidence
+
+- The supplied whole-machine edit-state reference and the browser-rendered technical-plan implementation were normalized into one 2550 × 717 px side-by-side comparison input. The shared visual hierarchy is retained: scope tabs, edit notice/version bar, primary revision controls, utility toolbar, view switch, and plan content surface.
+- On the configured `AI推理引擎子项目计划` scope with no existing version, clicking `创建修订` opens two actionable entries: `创建非正式版本` and `创建正式版本`. No revision was created during the visual check.
+- The technical TDT scope retains the whole-machine/tOS operations already present: version selection, automatic save state, plan clone, publish, cancel revision, add top-level task, filter, column settings, expand/collapse, version compare, import, export, sharing, and vertical/horizontal/Gantt views.
+- The technical-plan revision store was exercised for both numbering paths: gray revision `V1.1` and formal revision `V2`, with the same one-draft-at-a-time rule.
+- In configuration center, technical TDT and subproject templates use the same shared task table and revision toolbar as other project templates. `创建修订` exposes the same formal/nonformal menu.
+- TDT task numbering is visibly hierarchical (`1`, `1.1`, `1.2`, `2`, `2.1` ...); subproject templates use single-level numeric numbering (`1` ... `4`). Existing technical template/plan data is migrated without resetting edited task content, and predecessor references follow renumbered IDs.
+- Technical template role cells visibly show `技术项目负责人`; the edit selector now contains both the common SPM role and the technical-project owner role.
+- Primary interactions tested in the in-app browser: project-category switch, project-space entry, plan-module navigation, TDT/subproject tab switch, revision-menu open, configuration-center navigation, technical-template tab switch, draft cancel confirmation, and configuration revision-menu open.
+- Browser-rendered state was checked at 1275 × 717 CSS px. No error overlay, broken layout, or failed interaction appeared; the development server showed successful route compilation and requests. The only terminal notices were non-blocking stale Browserslist data and a transient development cache warning before the clean build/restart cycle.
+
 ## Required fidelity surfaces
 
 - Fonts and typography: PMS system font retained; title/subtitle weight and hierarchy match the reference intent.
@@ -72,5 +88,10 @@ The filter panel was measured and exercised directly in the in-app browser:
 - [x] Immediate application for all six filter callers
 - [x] Dropdown layer above panel
 - [x] Responsive and reduced-motion styles retained
+- [x] Technical plan formal/nonformal revision menu
+- [x] Technical template formal/nonformal revision menu
+- [x] Shared technical template task numbering and role selector
+- [x] Persisted technical plan/template numbering migrations
+- [x] Browser interaction and combined visual comparison
 
 final result: passed

@@ -172,16 +172,18 @@
 }
 
 .pms-project-list-view-switch.ant-segmented {
-  padding: 3px;
-  color: rgba(255, 255, 255, 0.86);
-  border-radius: 11px;
-  background: linear-gradient(135deg, #4338ca, #6d5ce8);
-  box-shadow: 0 4px 12px rgba(67, 56, 202, 0.18);
+  padding: 4px;
+  color: #586079;
+  border: 1px solid #dfe3f2;
+  border-radius: 999px;
+  background: #f1f3fb;
+  box-shadow: 0 4px 14px rgba(76, 74, 122, 0.08);
 }
 
 .pms-project-list-view-switch .ant-segmented-item {
-  min-height: 32px;
-  border-radius: 8px;
+  min-height: 30px;
+  border-radius: 999px;
+  transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
 .pms-project-list-view-switch .ant-segmented-item-label {
@@ -189,9 +191,14 @@
 }
 
 .pms-project-list-view-switch .ant-segmented-item-selected {
-  color: #4338ca;
+  color: #3730a3;
   background: #fff;
-  box-shadow: 0 2px 7px rgba(30, 27, 75, 0.16);
+  box-shadow: 0 2px 8px rgba(76, 74, 122, 0.14);
+}
+
+.pms-project-list-view-switch .ant-segmented-item:not(.ant-segmented-item-selected):hover {
+  color: #4338ca;
+  background: rgba(255, 255, 255, 0.48);
 }
 
 .pms-project-list-view-option {
@@ -258,6 +265,33 @@
 .pms-project-summary-table .ant-table-thead > tr > th.ant-table-cell-fix-left-last,
 .pms-project-summary-table .ant-table-thead > tr > th.ant-table-cell-fix-start-shadow {
   position: sticky !important;
+}
+
+.pms-table.pms-project-summary-table .ant-table-tbody > tr > td.ant-table-cell-fix-left,
+.pms-table.pms-project-summary-table .ant-table-tbody > tr > td.ant-table-cell-fix-start,
+.pms-table.pms-project-summary-table .ant-table-tbody > tr > td.ant-table-cell-fix-left-last,
+.pms-table.pms-project-summary-table .ant-table-tbody > tr > td.ant-table-cell-fix-start-shadow {
+  z-index: 3;
+  background: #fff !important;
+}
+
+.pms-table.pms-project-summary-table .ant-table-tbody > tr:nth-child(even) > td.ant-table-cell-fix-left,
+.pms-table.pms-project-summary-table .ant-table-tbody > tr:nth-child(even) > td.ant-table-cell-fix-start,
+.pms-table.pms-project-summary-table .ant-table-tbody > tr:nth-child(even) > td.ant-table-cell-fix-left-last,
+.pms-table.pms-project-summary-table .ant-table-tbody > tr:nth-child(even) > td.ant-table-cell-fix-start-shadow {
+  background: #fcfcff !important;
+}
+
+.pms-table.pms-project-summary-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left,
+.pms-table.pms-project-summary-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-start,
+.pms-table.pms-project-summary-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left-last,
+.pms-table.pms-project-summary-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-start-shadow {
+  background: #f4f4ff !important;
+}
+
+.pms-table.pms-project-summary-table .ant-table-cell-fix-left-last::after,
+.pms-table.pms-project-summary-table .ant-table-cell-fix-start-shadow::after {
+  box-shadow: 5px 0 10px -5px rgba(71, 67, 126, 0.18) !important;
 }
 
 .pms-project-series-cell {
@@ -564,13 +598,44 @@
   background: #f8fafc;
 }
 
+.technical-plan-summary th.technical-plan-summary-sticky-version,
+.technical-plan-summary td.technical-plan-summary-sticky-version {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: 80px;
+  min-width: 80px;
+  background: #fff;
+}
+
+.technical-plan-summary th.technical-plan-summary-sticky-cycle,
+.technical-plan-summary td.technical-plan-summary-sticky-cycle {
+  position: sticky;
+  left: 80px;
+  z-index: 2;
+  width: 96px;
+  min-width: 96px;
+  background: #fff;
+}
+
+.technical-plan-summary th.technical-plan-summary-sticky-version,
+.technical-plan-summary th.technical-plan-summary-sticky-cycle {
+  z-index: 3;
+  background: #f8fafc;
+}
+
 .technical-plan-summary td {
   color: #334155;
   font-size: 13px;
 }
 
 .technical-plan-summary-current {
-  background: #f0f9ff;
+  background: rgba(99, 102, 241, 0.035);
+}
+
+.technical-plan-summary-current td.technical-plan-summary-sticky-version,
+.technical-plan-summary-current td.technical-plan-summary-sticky-cycle {
+  background: #f5f6ff;
 }
 
 .technical-plan-summary-actual {
@@ -578,10 +643,18 @@
   background: #fffbe6;
 }
 
+.technical-plan-summary-actual td.technical-plan-summary-sticky-version,
+.technical-plan-summary-actual td.technical-plan-summary-sticky-cycle {
+  background: #fffbe6;
+}
+
 .technical-plan-summary-version {
-  margin-right: 8px;
   color: #4338ca;
   font-weight: 700;
+}
+
+.technical-plan-summary-actual .technical-plan-summary-version {
+  color: #d48806;
 }
 
 .technical-deliverable-grid {

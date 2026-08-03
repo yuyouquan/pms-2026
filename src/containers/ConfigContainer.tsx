@@ -4,8 +4,9 @@ import { useState, useMemo, useEffect } from 'react'
 import {
   Card, Tabs, Table, Row, Col, Space, Divider, Tag, Menu, Button, Select,
   Input, Tooltip, Modal, Form, Checkbox, message, Progress, Popconfirm,
-  DatePicker, Avatar,
+  DatePicker, Avatar, Dropdown,
 } from 'antd'
+import type { MenuProps } from 'antd'
 import {
   CalendarOutlined, SwapOutlined, PlusOutlined, SaveOutlined,
   HistoryOutlined, SearchOutlined, AppstoreOutlined, EditOutlined,
@@ -35,6 +36,7 @@ import type { TaskChange } from '@/types/plan-notify'
 import { NOTIFY_DIFF_FIELDS, MOCK_USER_MAP } from '@/components/shared/PlanHelpers'
 import { notifyPublishChanges } from '@/lib/feishu-notify'
 import { cancelDraftRevision } from '@/lib/marketRules'
+import { comparePlanVersions, getNextPlanRevisionVersionNo, getPlanVersionId, type PlanRevisionKind } from '@/lib/planVersioning'
 import EnumConfig from '@/components/config/EnumConfig'
 import {
   getTemplateSnapshotForProjectType,
@@ -50,6 +52,11 @@ import dayjs from 'dayjs'
 const { Option } = Select
 const PLAN_TEMPLATE_ROLE_OPTIONS = [
   { label: 'SPM', value: 'SPM' },
+  { label: '技术项目负责人', value: '技术项目负责人' },
+]
+const PLAN_REVISION_KIND_OPTIONS: Array<{ key: PlanRevisionKind; label: string }> = [
+  { key: 'gray', label: '创建非正式版本' },
+  { key: 'formal', label: '创建正式版本' },
 ]
 
 export default function ConfigContainer() {
@@ -438,27 +445,27 @@ export default function ConfigContainer() {
   }
 
   // Action buttons
-  const handleCreateRevision = () => {
-    const maxVersionNum = versions.reduce((max, v) => {
-      const num = parseInt(v.versionNo.replace('V', ''))
-      return num > max ? num : max
-    }, 0)
-    const newVersionNum = maxVersionNum + 1
-    const newVersionId = `v${newVersionNum}`
+  const handleCreateRevision = (revisionKind: PlanRevisionKind) => {
+    const newVersionNo = getNextPlanRevisionVersionNo(versions, revisionKind)
+    const newVersionId = getPlanVersionId(newVersionNo)
     const clonedTasks = isTechnicalTemplate
       ? configTasks.map(task => ({ ...task }))
       : LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
-    const newVersion = { id: newVersionId, versionNo: `V${newVersionNum}`, status: '修订中' }
+    const newVersion = { id: newVersionId, versionNo: newVersionNo, status: '修订中' }
     setVersions([...versions, newVersion])
     setCurrentVersion(newVersionId)
     setConfigTasks(clonedTasks)
-    message.success(`已创建修订版本 V${newVersionNum}`)
+    message.success(`已创建${revisionKind === 'gray' ? '非正式' : '正式'}修订版本 ${newVersionNo}`)
+  }
+
+  const handleCreateRevisionMenuClick: MenuProps['onClick'] = ({ key }) => {
+    handleCreateRevision(key as PlanRevisionKind)
   }
 
   const handlePublish = () => {
     const prevPublished = versions
       .filter(v => v.status === '已发布' && v.id !== currentVersion)
-      .sort((a, b) => parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', '')))[0]
+      .sort((a, b) => comparePlanVersions(b, a))[0]
     const getSnapshot = (versionId: string) => {
       return getTemplateSnapshotForProjectType(publishedSnapshots, selectedProjectType, versionId, templatePlanLevel)
         || []
@@ -515,7 +522,7 @@ export default function ConfigContainer() {
 
   const renderActionButtons = () => {
     if (isCurrentDraft) return (<Space><Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{currentVersionData?.versionNo}({currentVersionData?.status})</Tag><Tag color="green" style={{ fontSize: 12 }}>自动保存</Tag><Button type="primary" icon={<SaveOutlined />} onClick={handlePublish}>发布</Button><Button danger icon={<StopOutlined />} onClick={handleCancelRevision}>取消修订</Button><Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
-    return (<Space>{!hasDraftVersion && <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateRevision}>创建修订</Button>}<Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
+    return (<Space>{!hasDraftVersion && <Dropdown menu={{ items: PLAN_REVISION_KIND_OPTIONS, onClick: handleCreateRevisionMenuClick }} trigger={['click']} placement="bottomLeft"><Button type="primary" icon={<PlusOutlined />}>创建修订</Button></Dropdown>}<Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
   }
 
   // Build transferProps for TransferConfig

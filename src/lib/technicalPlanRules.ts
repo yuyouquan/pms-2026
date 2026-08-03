@@ -53,11 +53,11 @@ const createTask = (
 
 export const buildTdtTemplateTasks = (): TechnicalTemplateTask[] => (
   TDT_TEMPLATE_SEED.flatMap(([phaseName, children], phaseIndex) => {
-    const parentId = `tdt-${phaseIndex + 1}`
+    const parentId = String(phaseIndex + 1)
     return [
       createTask(parentId, phaseIndex + 1, phaseName),
       ...children.map((taskName, childIndex) => (
-        createTask(`${parentId}-${childIndex + 1}`, childIndex + 1, taskName, parentId)
+        createTask(`${parentId}.${childIndex + 1}`, childIndex + 1, taskName, parentId)
       )),
     ]
   })
@@ -65,9 +65,57 @@ export const buildTdtTemplateTasks = (): TechnicalTemplateTask[] => (
 
 export const buildSubprojectTemplateTasks = (): TechnicalTemplateTask[] => (
   SUBPROJECT_TEMPLATE_SEED.map((taskName, index) => (
-    createTask(`subproject-${index + 1}`, index + 1, taskName)
+    createTask(String(index + 1), index + 1, taskName)
   ))
 )
+
+/** Keeps task content intact while aligning technical templates with the shared 1 / 1.1 numbering contract. */
+export const renumberTechnicalTasks = <Task extends TechnicalTemplateTaskInput>(
+  tasks: readonly Task[],
+): Task[] => {
+  const indexed = tasks.map((task, index) => ({ task, index }))
+  const byId = new Map(indexed.filter(item => item.task.id).map(item => [String(item.task.id), item]))
+  const childrenByParent = new Map<string, typeof indexed>()
+  indexed.forEach(item => {
+    if (!item.task.parentId || !byId.has(String(item.task.parentId))) return
+    const parentId = String(item.task.parentId)
+    childrenByParent.set(parentId, [...(childrenByParent.get(parentId) || []), item])
+  })
+  const sortSiblings = (items: typeof indexed) => [...items].sort((left, right) => (
+    (Number(left.task.order) || left.index + 1) - (Number(right.task.order) || right.index + 1)
+    || left.index - right.index
+  ))
+  const idMap = new Map<string, string>()
+  const visited = new Set<number>()
+  const numbered: Array<{ item: (typeof indexed)[number]; id: string; parentId?: string; order: number }> = []
+  const visit = (item: (typeof indexed)[number], id: string, parentId: string | undefined, order: number) => {
+    if (visited.has(item.index)) return
+    visited.add(item.index)
+    if (item.task.id) idMap.set(String(item.task.id), id)
+    numbered.push({ item, id, ...(parentId ? { parentId } : {}), order })
+    sortSiblings(childrenByParent.get(String(item.task.id || '')) || []).forEach((child, childIndex) => {
+      visit(child, `${id}.${childIndex + 1}`, id, childIndex + 1)
+    })
+  }
+  const roots = indexed.filter(item => !item.task.parentId || !byId.has(String(item.task.parentId)))
+  sortSiblings(roots).forEach((item, rootIndex) => visit(item, String(rootIndex + 1), undefined, rootIndex + 1))
+  indexed.filter(item => !visited.has(item.index)).forEach(item => {
+    const rootIndex = numbered.filter(entry => !entry.parentId).length
+    visit(item, String(rootIndex + 1), undefined, rootIndex + 1)
+  })
+  return numbered.map(({ item, id, parentId, order }) => {
+    const { parentId: _priorParentId, ...taskWithoutParent } = item.task
+    return {
+      ...taskWithoutParent,
+      id,
+      ...(parentId ? { parentId } : {}),
+      order,
+      ...(item.task.predecessor
+        ? { predecessor: idMap.get(String(item.task.predecessor)) || item.task.predecessor }
+        : {}),
+    }
+  }) as Task[]
+}
 
 const assertNestedDepth = (
   kind: TechnicalTemplateKind,
@@ -235,5 +283,26 @@ export const migrateTechnicalTemplateState = <T extends Record<string, any>>(sta
       'template::技术项目::tdt::v3': buildTdtTemplateTasks(),
       'template::技术项目::subproject::v3': buildSubprojectTemplateTasks(),
     },
+  }
+}
+
+/** Non-destructive migration for persisted technical templates created before numeric IDs were shared. */
+export const migrateTechnicalTemplateNumberingState = <T extends Record<string, any>>(state: T): T => {
+  const templates = state.configTemplateTasksByType && typeof state.configTemplateTasksByType === 'object'
+    ? state.configTemplateTasksByType as Record<string, unknown>
+    : {}
+  const snapshots = state.publishedSnapshots && typeof state.publishedSnapshots === 'object'
+    ? state.publishedSnapshots as Record<string, unknown>
+    : {}
+  return {
+    ...state,
+    configTemplateTasksByType: Object.fromEntries(Object.entries(templates).map(([key, value]) => [
+      key,
+      isLegacyTechnicalTemplateKey(key) && Array.isArray(value) ? renumberTechnicalTasks(value) : value,
+    ])),
+    publishedSnapshots: Object.fromEntries(Object.entries(snapshots).map(([key, value]) => [
+      key,
+      key.startsWith('template::技术项目::') && Array.isArray(value) ? renumberTechnicalTasks(value) : value,
+    ])),
   }
 }

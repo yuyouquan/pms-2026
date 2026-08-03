@@ -6,7 +6,8 @@ import {
   isTechnicalSubprojectConfigured,
   type TechnicalStagePlanVersion,
 } from '@/lib/technicalProjectRules'
-import { buildTdtTemplateTasks, validateTechnicalPlanInstanceDepth } from '@/lib/technicalPlanRules'
+import { buildTdtTemplateTasks, renumberTechnicalTasks, validateTechnicalPlanInstanceDepth } from '@/lib/technicalPlanRules'
+import { getNextPlanRevisionVersionNo, type PlanRevisionKind } from '@/lib/planVersioning'
 import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
 import type { TechnicalTemplateKind, TechnicalTemplateTask } from '@/types/technicalPlan'
 import type { TechnicalSubproject } from '@/types/technicalProject'
@@ -55,11 +56,11 @@ export interface TechnicalPlanInstance {
 export type TechnicalPlansByKey = Record<string, TechnicalPlanInstance>
 
 const TDT_PHASE_DATES: Record<string, [string, string]> = {
-  'tdt-1': ['2026-01-01', '2026-01-31'],
-  'tdt-2': ['2026-02-01', '2026-02-28'],
-  'tdt-3': ['2026-03-01', '2026-03-31'],
-  'tdt-4': ['2026-04-01', '2026-06-30'],
-  'tdt-5': ['2026-07-01', '2026-08-31'],
+  '1': ['2026-01-01', '2026-01-31'],
+  '2': ['2026-02-01', '2026-02-28'],
+  '3': ['2026-03-01', '2026-03-31'],
+  '4': ['2026-04-01', '2026-06-30'],
+  '5': ['2026-07-01', '2026-08-31'],
 }
 
 const buildInitialTdtTasks = () => buildTdtTemplateTasks().map(task => {
@@ -98,7 +99,7 @@ const clonePlans = (plans: TechnicalPlansByKey): TechnicalPlansByKey => Object.f
   }]),
 )
 
-export const TECHNICAL_PLAN_STORE_VERSION = 3
+export const TECHNICAL_PLAN_STORE_VERSION = 4
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
@@ -118,7 +119,8 @@ export const migrateTechnicalPlanState = (persistedState: unknown, fromVersion: 
     const templateKind: TechnicalTemplateKind = candidate.templateKind === 'subproject' ? 'subproject' : 'tdt'
     const versions = candidate.versions.flatMap((version): TechnicalPlanVersion[] => {
       if (!isRecord(version) || !Array.isArray(version.tasks)) return []
-      const tasks = version.tasks.filter(isRecord).map(task => ({ ...task })) as unknown as TechnicalTemplateTask[]
+      const storedTasks = version.tasks.filter(isRecord).map(task => ({ ...task })) as unknown as TechnicalTemplateTask[]
+      const tasks = fromVersion < 4 ? renumberTechnicalTasks(storedTasks) : storedTasks
       try { validateTechnicalPlanInstanceDepth(templateKind, tasks, templateKind === 'tdt' ? 2 : 1) } catch { return [] }
       return [{
         id: String(version.id || ''), versionNo: String(version.versionNo || ''), templateType: templateKind,
@@ -145,7 +147,7 @@ export const migrateTechnicalPlanState = (persistedState: unknown, fromVersion: 
         order,
         visible,
       },
-      collapsedRows: Array.isArray(candidate.collapsedRows) ? candidate.collapsedRows.map(String) : [],
+      collapsedRows: fromVersion < 4 ? [] : (Array.isArray(candidate.collapsedRows) ? candidate.collapsedRows.map(String) : []),
     }
   })
   return { plansByKey }
@@ -233,6 +235,7 @@ export interface CreateRevisionInput {
   templateKind: TechnicalTemplateKind
   maxDepth?: number
   templateTasks: readonly TechnicalTemplateTask[]
+  revisionKind?: PlanRevisionKind
   subproject?: TechnicalSubproject
 }
 
@@ -254,11 +257,6 @@ export interface TechnicalPlanActions {
   setCollapsed: (scope: TechnicalPlanScope, rowIds: readonly string[]) => void
 }
 
-const nextVersionNo = (versions: readonly TechnicalPlanVersion[]) => {
-  const max = versions.reduce((value, version) => Math.max(value, Number.parseInt(version.versionNo.replace(/\D/g, ''), 10) || 0), 0)
-  return `V${max + 1}`
-}
-
 const createRevisionInState = (state: TechnicalPlanState, input: CreateRevisionInput): { state: TechnicalPlanState; result: CreateRevisionResult } => {
   if (input.scope.kind === 'subproject') {
     if (!input.subproject?.active) return { state, result: { ok: false, reason: 'inactive' } }
@@ -272,7 +270,7 @@ const createRevisionInState = (state: TechnicalPlanState, input: CreateRevisionI
   const key = getTechnicalPlanKey(input.scope)
   const current = state.plansByKey[key]
   if (current?.versions.some(version => version.status === '修订中')) return { state, result: { ok: false, reason: 'draft-exists' } }
-  const versionNo = nextVersionNo(current?.versions || [])
+  const versionNo = getNextPlanRevisionVersionNo([...(current?.versions || [])], input.revisionKind || 'formal')
   const versionId = `${versionNo}-draft`
   const instance: TechnicalPlanInstance = current
     ? { ...current, versions: [...current.versions, { id: versionId, versionNo, templateType: input.templateKind, status: '修订中', tasks: cloneTasks(input.templateTasks) }], currentVersionId: versionId }
@@ -311,7 +309,7 @@ const clonePublishedVersionInState = (
     && version.templateType === instance.templateKind
   ))
   if (!source) return { state, result: { ok: false, reason: 'missing-source' } }
-  const versionNo = nextVersionNo(instance.versions)
+  const versionNo = getNextPlanRevisionVersionNo([...instance.versions], 'formal')
   const versionId = `${versionNo}-draft`
   const draft: TechnicalPlanVersion = {
     id: versionId,
