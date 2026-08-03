@@ -171,6 +171,13 @@
   white-space: nowrap;
 }
 
+.pms-project-list-category-actions > .ant-btn {
+  height: 32px;
+  min-height: 32px;
+  padding-inline: 12px;
+  border-radius: 8px;
+}
+
 .pms-project-list-view-switch.ant-segmented {
   padding: 4px;
   color: #586079;
@@ -222,6 +229,21 @@
   min-width: 128px;
   flex: 1 1 128px;
   max-width: 164px;
+}
+
+.pms-project-list-field-filters .ant-select-selection-overflow {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.pms-project-list-field-filters .ant-select-selection-overflow-item {
+  flex: 0 0 auto;
+  max-width: 112px;
+}
+
+.pms-project-list-field-filters .ant-checkbox-wrapper {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .pms-project-list-filter-label {
@@ -314,6 +336,7 @@
   border: 0;
   background: #fff;
   cursor: pointer;
+  overflow: hidden;
 }
 
 .pms-project-series-toggle:hover,
@@ -325,12 +348,17 @@
 .pms-project-series-copy {
   display: grid;
   gap: 3px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .pms-project-series-copy strong {
   color: #9a3412;
   font-size: 13px;
   font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pms-project-series-copy small {
@@ -4152,3 +4180,90 @@ body {
   background: #eef2ff;
   text-align: center;
 }
+.pms-project-list-calendar {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.pms-project-list-calendar .pms-project-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.pms-project-list-calendar .pms-project-calendar-title {
+  color: #111827;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.pms-project-list-calendar .pms-project-calendar-weekdays,
+.pms-project-list-calendar .pms-project-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(150px, 1fr));
+  min-width: 1050px;
+}
+
+.pms-project-list-calendar .pms-project-calendar-weekdays {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.pms-project-list-calendar .pms-project-calendar-weekdays > div {
+  padding: 9px 12px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.pms-project-list-calendar .pms-project-calendar-cell {
+  min-height: 132px;
+  padding: 8px 8px 10px;
+  border-right: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.pms-project-list-calendar .pms-project-calendar-cell:nth-child(7n) { border-right: 0; }
+.pms-project-list-calendar .pms-project-calendar-cell-muted { background: #fafafa; }
+
+.pms-project-list-calendar .pms-project-calendar-dayline {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pms-project-list-calendar .pms-project-calendar-cell-muted .pms-project-calendar-dayline { color: #94a3b8; }
+.pms-project-list-calendar .pms-project-calendar-events { display: flex; flex-direction: column; gap: 6px; }
+
+.pms-project-list-calendar-event {
+  width: 100%;
+  height: 24px;
+  padding: 0 7px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 5px;
+  background: linear-gradient(135deg, #6366f1, #7c3aed);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 24px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: opacity 180ms ease;
+}
+
+.pms-project-list-calendar-event:hover { opacity: .86; }
+.pms-project-list-calendar .pms-project-calendar-more { color: #64748b; font-size: 12px; font-weight: 700; }
