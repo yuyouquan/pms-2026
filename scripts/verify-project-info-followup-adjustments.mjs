@@ -226,8 +226,8 @@ assert.match(projectInformationFrame, /anchorItems:/, 'the shared frame exposes 
 assert.match(projectInformationFrame, /embedded\??:\s*boolean/, 'the shared frame exposes a host-layout compatibility switch')
 assert.match(projectInformationFrame, /embedded\s*=\s*false/, 'the shared frame owns the full layout and navigation by default')
 assert.match(projectInformationFrame, /id="section-header"/, 'the shared frame preserves the project-core anchor')
-assert.match(projectInformationFrame, /withAnchorId\(planInformation, 'section-plan'\)/, 'the shared frame provides a stable plan-information slot anchor')
-assert.match(projectInformationFrame, /withAnchorId\(informationSections, 'section-basic'\)/, 'the shared frame provides a stable project-information slot anchor')
+assert.match(projectInformationFrame, /embedded \? planInformation : <ProjectInformationSlot anchorId="section-plan">\{planInformation\}<\/ProjectInformationSlot>/, 'the complete shared frame provides a stable plan-information slot anchor while embedded hosts retain their own')
+assert.match(projectInformationFrame, /embedded \? informationSections : <ProjectInformationSlot anchorId="section-basic">\{informationSections\}<\/ProjectInformationSlot>/, 'the complete shared frame provides a stable project-information slot anchor while embedded hosts retain their own')
 assert.match(projectInformationFrame, /basic-info-scroll-container/, 'anchor navigation keeps using the existing scroll container')
 assert.doesNotMatch(projectInformationFrame, /isWholeMachine|isTechnicalProject|projectType/, 'the shared frame contains no project-type branches')
 

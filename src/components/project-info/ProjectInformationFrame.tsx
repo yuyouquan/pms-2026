@@ -1,6 +1,6 @@
 'use client'
 
-import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Card } from 'antd'
 import { ProjectOutlined } from '@ant-design/icons'
 
@@ -105,7 +105,7 @@ function ProjectCoreFieldsCard({
         {coreFields.map(field => (
           <div
             key={field.label}
-            className="pms-project-info-core-item"
+            className={`pms-project-info-core-item${field.fullWidth ? ' pms-project-info-core-item--full-width' : ''}`}
             style={{
               borderTopColor: field.accent,
               ...(field.fullWidth ? { gridColumn: '1 / -1' } : {}),
@@ -120,11 +120,12 @@ function ProjectCoreFieldsCard({
   )
 }
 
-function withAnchorId(content: ReactNode, id: string) {
-  if (isValidElement(content)) {
-    return cloneElement(content as ReactElement<{ id?: string }>, { id })
-  }
-  return <section id={id}>{content}</section>
+function ProjectInformationSlot({ anchorId, children }: { anchorId: string; children: ReactNode }) {
+  return (
+    <section id={anchorId} className="pms-project-information-slot">
+      {children}
+    </section>
+  )
 }
 
 export default function ProjectInformationFrame({
@@ -143,8 +144,8 @@ export default function ProjectInformationFrame({
     >
       {!embedded && <ProjectInformationAnchorNav items={anchorItems} />}
       <ProjectCoreFieldsCard projectName={projectName} coreFields={coreFields} actions={actions} />
-      {withAnchorId(planInformation, 'section-plan')}
-      {withAnchorId(informationSections, 'section-basic')}
+      {embedded ? planInformation : <ProjectInformationSlot anchorId="section-plan">{planInformation}</ProjectInformationSlot>}
+      {embedded ? informationSections : <ProjectInformationSlot anchorId="section-basic">{informationSections}</ProjectInformationSlot>}
     </div>
   )
 }

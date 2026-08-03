@@ -24,7 +24,7 @@ export default function CollapsibleInformationSection({
 }: CollapsibleInformationSectionProps) {
   const content = children ?? (
     <div className="pms-project-info-section-empty" role="status">
-      {emptyState}
+      {emptyState ?? '暂无数据'}
     </div>
   )
 
