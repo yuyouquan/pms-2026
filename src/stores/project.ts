@@ -75,7 +75,8 @@ type ProjectPatch = Partial<Omit<ProjectItem, 'type' | 'secondaryCategory'>> & {
   [key: string]: any
 }
 type ProjectUpdate = ProjectPatch | ((project: Project) => Project)
-type PersistedProjectState = { projects: Project[] }
+export type ProjectListViewMode = 'list' | 'card' | 'calendar'
+type PersistedProjectState = { projects: Project[]; projectListView: ProjectListViewMode }
 
 export function synchronizeTechnicalRoleMembers(
   existing: Record<string, string[]>,
@@ -211,7 +212,7 @@ export interface ProjectState {
   projectStatusFilter: string
   projectTypeFilter: string
   projectSecondaryCategoryFilter: string
-  projectListView: 'card' | 'list'
+  projectListView: 'list' | 'card' | 'calendar'
   projectCardPage: number
   basicInfoEditMode: boolean
   editingProjectFields: Record<string, any>
@@ -233,7 +234,7 @@ export interface ProjectActions {
   setProjectStatusFilter: (v: string) => void
   setProjectTypeFilter: (v: string) => void
   setProjectSecondaryCategoryFilter: (v: string) => void
-  setProjectListView: (v: 'card' | 'list') => void
+  setProjectListView: (v: 'list' | 'card' | 'calendar') => void
   setProjectCardPage: (v: number) => void
   setBasicInfoEditMode: (v: boolean) => void
   setEditingProjectFields: (v: Record<string, any> | ((prev: Record<string, any>) => Record<string, any>)) => void
@@ -349,8 +350,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function migrateProjectState(persistedState: unknown, _version: number): PersistedProjectState {
   if (!isRecord(persistedState) || !Array.isArray(persistedState.projects)) {
-    return { projects: initialProjectState }
+    return { projects: initialProjectState, projectListView: 'list' }
   }
+
+  const projectListView: ProjectListViewMode = persistedState.projectListView === 'card'
+    || persistedState.projectListView === 'calendar'
+    || persistedState.projectListView === 'list'
+    ? persistedState.projectListView
+    : 'list'
 
   const seenIds = new Set<string>()
   const projects = persistedState.projects.flatMap(value => {
@@ -375,13 +382,13 @@ export function migrateProjectState(persistedState: unknown, _version: number): 
   })
 
   if (persistedState.projects.length > 0 && projects.length === 0) {
-    return { projects: initialProjectState }
+    return { projects: initialProjectState, projectListView }
   }
-  return { projects }
+  return { projects, projectListView }
 }
 
 export function partializeProjectState(state: ProjectState & ProjectActions): PersistedProjectState {
-  return { projects: state.projects }
+  return { projects: state.projects, projectListView: state.projectListView }
 }
 
 const safeProjectStorage: StateStorage = {
@@ -679,13 +686,13 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
   }),
   {
     name: PROJECT_STORAGE_KEY,
-    version: 4,
+    version: 5,
     storage: createJSONStorage(() => safeProjectStorage),
     migrate: migrateProjectState,
     partialize: partializeProjectState,
     merge: (persistedState, currentState) => ({
       ...currentState,
-      ...migrateProjectState(persistedState, 4),
+      ...migrateProjectState(persistedState, 5),
     }),
     onRehydrateStorage: () => (state) => {
       if (state) usePermissionStore.getState().ensureProjectPermissions(state.projects)

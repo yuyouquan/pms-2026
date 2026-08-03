@@ -96,7 +96,6 @@ export default function TechnicalProjectCreateFields({
   const tmg = Form.useWatch('tmg', form) as TechnicalDomain | undefined
   const subdomainOptions = tmg ? SUBDOMAINS_BY_DOMAIN[tmg] || [] : []
   const subdomainDisabled = Boolean(tmg && NO_SUBDOMAIN_DOMAINS.includes(tmg))
-  const showPreProject = ipmProjectType === '技术项目前置工作'
   const preProjectOptions = getPreProjectCandidates(existingProjects, currentProjectId).map(project => ({
     value: project.id,
     label: `${project.name}（${project.type}）`,
@@ -117,7 +116,7 @@ export default function TechnicalProjectCreateFields({
 
   return (
     <div className="pms-technical-project-fields">
-      <div className="pms-technical-section-heading"><span>技术信息</span><Tag color="purple">IPM 同步</Tag></div>
+      <div className="pms-technical-section-heading"><span>技术信息</span></div>
       <div className="pms-project-info-form-grid">
         <Form.Item label="技术赛道" name="technicalTrack"><Input disabled value={technicalTrack} /></Form.Item>
         <Form.Item label="TMG 及技术领域" name="tmg" rules={[{ required: true, message: '请选择 TMG 及技术领域' }]}>
@@ -126,12 +125,10 @@ export default function TechnicalProjectCreateFields({
         <Form.Item label="子领域" name="subdomain" rules={[{ required: true, message: '请选择子领域' }]}>
           <Select disabled={!tmg || subdomainDisabled} showSearch optionFilterProp="label" placeholder={subdomainDisabled ? '无' : '请选择子领域'} options={subdomainOptions.map(value => ({ label: value, value }))} />
         </Form.Item>
-        {showPreProject && (
-          <Form.Item label="前置项目" name="preProjectId" rules={[{ required: true, message: '请选择前置项目' }]}>
-            <Select showSearch optionFilterProp="label" placeholder="搜索全部 PMS 项目" options={preProjectOptions} />
-          </Form.Item>
-        )}
-        <Form.Item label="项目年份" name="projectYear" rules={[{ pattern: /^\d{4}$/, message: '请选择四位项目年份' }]}>
+        <Form.Item label="前置项目" name="preProjectId">
+          <Select allowClear showSearch optionFilterProp="label" placeholder="搜索全部 PMS 项目（选填）" options={preProjectOptions} />
+        </Form.Item>
+        <Form.Item label="项目年份" name="projectYear" rules={[{ required: true, message: '请选择项目年份' }, { pattern: /^\d{4}$/, message: '请选择四位项目年份' }]}>
           <YearControl />
         </Form.Item>
         <Form.Item label="项目价值" name="projectValue" className="pms-project-info-form-span">

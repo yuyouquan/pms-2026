@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactElement } from 'react'
-import { Button, Checkbox, Space, Tooltip } from 'antd'
-import { HolderOutlined } from '@ant-design/icons'
+import { Button, Checkbox, Empty, Input, Space, Tooltip } from 'antd'
+import { HolderOutlined, SearchOutlined } from '@ant-design/icons'
 import {
   closestCenter,
   DndContext,
@@ -128,6 +128,7 @@ export function SortableColumnSettings<Key extends string>({
   const [draft, setDraft] = useState<SortableColumnSettingsValue<Key>>(
     () => normalizeColumnSettings(definitions, value),
   )
+  const [searchText, setSearchText] = useState('')
   const wasOpen = useRef(false)
   const definitionSignature = getColumnDefinitionSignature(definitions)
   const previousDefinitionSignature = useRef(definitionSignature)
@@ -140,6 +141,7 @@ export function SortableColumnSettings<Key extends string>({
   useEffect(() => {
     if (open && !wasOpen.current) {
       setDraft(normalizeColumnSettings(definitions, value))
+      setSearchText('')
     } else if (
       open
       && wasOpen.current
@@ -208,7 +210,16 @@ export function SortableColumnSettings<Key extends string>({
     onApply(normalizeColumnSettings(definitions, draft))
   }
 
-  const renderedRows = draft.order.map(key => {
+  const normalizedSearchText = searchText.trim().toLocaleLowerCase('zh-CN')
+  const filteredOrder = draft.order.filter(key => {
+    if (!normalizedSearchText) return true
+    const definition = definitionByKey.get(key)
+    if (!definition) return false
+    const searchableText = `${definition.title} ${getSortableColumnAccessibilityLabel(definition)}`
+      .toLocaleLowerCase('zh-CN')
+    return searchableText.includes(normalizedSearchText)
+  })
+  const renderedRows = filteredOrder.map(key => {
     const definition = definitionByKey.get(key)
     if (!definition) return null
     const checked = visibleKeys.has(key)
@@ -249,14 +260,25 @@ export function SortableColumnSettings<Key extends string>({
         </Space>
       )}
     >
+      <Input
+        allowClear
+        value={searchText}
+        prefix={<SearchOutlined />}
+        placeholder="搜索字段"
+        aria-label="搜索列设置字段"
+        onChange={event => setSearchText(event.target.value)}
+        style={{ marginBottom: 10 }}
+      />
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext items={draft.order} strategy={verticalListSortingStrategy}>
+        <SortableContext items={filteredOrder} strategy={verticalListSortingStrategy}>
           <div className="pms-sortable-column-list">
-            {renderedRows}
+            {renderedRows.length
+              ? renderedRows
+              : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到匹配列" />}
           </div>
         </SortableContext>
       </DndContext>

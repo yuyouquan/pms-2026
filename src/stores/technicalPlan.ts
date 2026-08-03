@@ -40,8 +40,8 @@ export interface TechnicalPlanVersion extends TechnicalStagePlanVersion {
 }
 
 const DEFAULT_COLUMNS: SortableColumnSettingsValue<string> = {
-  order: ['taskName', 'responsible', 'predecessor', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'status', 'progress'],
-  visible: ['taskName', 'responsible', 'predecessor', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'status', 'progress'],
+  order: ['id', 'taskName', 'responsible', 'predecessor', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'status', 'progress'],
+  visible: ['id', 'taskName', 'responsible', 'predecessor', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'status', 'progress'],
 }
 
 export interface TechnicalPlanInstance {
@@ -99,7 +99,7 @@ const clonePlans = (plans: TechnicalPlansByKey): TechnicalPlansByKey => Object.f
   }]),
 )
 
-export const TECHNICAL_PLAN_STORE_VERSION = 4
+export const TECHNICAL_PLAN_STORE_VERSION = 5
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
@@ -135,12 +135,14 @@ export const migrateTechnicalPlanState = (persistedState: unknown, fromVersion: 
     const storedOrder = Array.isArray(columns.order) ? columns.order.map(String) : [...DEFAULT_COLUMNS.order]
     const storedVisible = Array.isArray(columns.visible) ? columns.visible.map(String) : [...DEFAULT_COLUMNS.visible]
     const actualColumnKeys = ['actualStartDate', 'actualEndDate', 'actualDays']
-    const order = fromVersion < 3
+    const priorOrder = fromVersion < 3
       ? [...storedOrder, ...actualColumnKeys.filter(key => !storedOrder.includes(key))]
       : storedOrder
-    const visible = fromVersion < 3
+    const priorVisible = fromVersion < 3
       ? [...storedVisible, ...actualColumnKeys.filter(key => !storedVisible.includes(key))]
       : storedVisible
+    const order = priorOrder.includes('id') ? priorOrder : ['id', ...priorOrder]
+    const visible = priorVisible.includes('id') ? priorVisible : ['id', ...priorVisible]
     plansByKey[key] = {
       planKey: key, templateKind, versions, currentVersionId,
       columnSettings: {

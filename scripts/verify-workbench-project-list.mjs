@@ -48,7 +48,7 @@ assert.match(source, /className="pms-project-list-table-actions"/, 'filter and c
 assert.match(source, /toolbarHost=\{projectListTableToolbarHost\}/, 'summary controls render into the quick-filter action host')
 assert.match(source, /aria-label="快捷筛选-项目名称"[\s\S]{0,180}placeholder="项目名称"/, 'machine quick filters start with a project-name input')
 assert.doesNotMatch(source, /projectListView === 'card'[^\n]*workbenchListState\.showSecondaryCategory/)
-assert.match(source, /projectTypeFilter !== PROJECT_CATEGORY_TECH[\s\S]{0,220}workbenchListState\.showStatusQuickFilter/)
+assert.match(source, /projectTypeFilter === PROJECT_TYPE_TOS_VERSION \|\| projectTypeFilter === PROJECT_CATEGORY_TECH[\s\S]{0,260}进行中[\s\S]{0,120}已完成/)
 assert.match(source, /showQuickFilters=\{false\}/)
 assert.match(summarySource, /getProjectListFixedColumnKeys/)
 assert.match(summarySource, /fixedColumnKeys\.has\(definition\.key\)/)
