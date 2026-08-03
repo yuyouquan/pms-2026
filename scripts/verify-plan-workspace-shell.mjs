@@ -67,6 +67,19 @@ const importsAndMounts = (sourceFile, name, modulePath) => {
   const mounted = visits(sourceFile, node => (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && node.tagName.getText(sourceFile) === name)
   return imported && mounted
 }
+const findJsxMount = (sourceFile, name) => {
+  let mount
+  const visit = node => {
+    if (!mount && (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && node.tagName.getText(sourceFile) === name) mount = node
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return mount
+}
+const getJsxAttributeExpression = (mount, name) => {
+  const attribute = mount?.attributes.properties.find(property => ts.isJsxAttribute(property) && property.name.getText() === name)
+  return attribute?.initializer && ts.isJsxExpression(attribute.initializer) ? attribute.initializer.expression : undefined
+}
 
 const shellSource = readSource(root, 'src/components/plans/PlanWorkspaceShell.tsx')
 const shellFile = parseTsx(shellSource, 'PlanWorkspaceShell.tsx')
@@ -78,9 +91,23 @@ for (const label of ['计划作用域', '计划版本操作', '计划工具', '�
   assert.match(shellSource, new RegExp(`aria-label=[{]?['\"]${label}`), `shared shell exposes stable aria label ${label}`)
 }
 assert.equal(hasExport(parseTsx(readSource(root, 'src/components/plans/PlanViewModeSwitcher.tsx'), 'PlanViewModeSwitcher.tsx'), 'PlanViewModeSwitcher'), true, 'view switcher is exported')
-assert.equal(hasExport(parseTsx(readSource(root, 'src/components/plans/PlanVersionCompareModal.tsx'), 'PlanVersionCompareModal.tsx'), 'PlanVersionCompareModal'), true, 'version compare modal is exported')
+const compareModalSource = readSource(root, 'src/components/plans/PlanVersionCompareModal.tsx')
+assert.equal(hasExport(parseTsx(compareModalSource, 'PlanVersionCompareModal.tsx'), 'PlanVersionCompareModal'), true, 'version compare modal is exported')
+assert.match(compareModalSource, /const handleCompare = \(\) => \{\s*setFilterType\('all'\)\s*onCompare\(\)\s*\}/, 'starting a comparison resets the active change filter before comparing')
+assert.match(compareModalSource, /const handleCancel = \(\) => \{\s*setFilterType\('all'\)\s*setShowUnchanged\(false\)\s*onCancel\(\)\s*\}/, 'closing the comparison resets all internal filters before cancelling')
+assert.match(compareModalSource, /onClick=\{handleCompare\}/, 'the compare button uses the reset-aware comparison handler')
+assert.match(compareModalSource, /onCancel=\{handleCancel\}/, 'the modal uses the reset-aware cancel handler')
 
-const projectSpaceFile = parseTsx(readSource(root, 'src/containers/ProjectSpaceContainer.tsx'), 'ProjectSpaceContainer.tsx')
+const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
+const projectSpaceFile = parseTsx(projectSpaceSource, 'ProjectSpaceContainer.tsx')
 assert.equal(importsAndMounts(projectSpaceFile, 'PlanWorkspaceShell', '@/components/plans/PlanWorkspaceShell'), true, 'whole-machine plan imports and mounts the canonical shared shell')
+const projectSpaceShellMount = findJsxMount(projectSpaceFile, 'PlanWorkspaceShell')
+const scopeTabsExpression = getJsxAttributeExpression(projectSpaceShellMount, 'scopeTabs')
+const noticesExpression = getJsxAttributeExpression(projectSpaceShellMount, 'notices')
+assert.ok(scopeTabsExpression && scopeTabsExpression.kind !== ts.SyntaxKind.NullKeyword, 'whole-machine shell receives a live scope-tabs node')
+assert.ok(noticesExpression && noticesExpression.kind !== ts.SyntaxKind.NullKeyword, 'whole-machine shell receives a live notices node')
+assert.match(scopeTabsExpression.getText(projectSpaceFile), /planWorkspaceScopeTabs/, 'whole-machine shell mounts market, tOS type, and plan-level scope controls')
+assert.match(noticesExpression.getText(projectSpaceFile), /planWorkspaceNotices/, 'whole-machine shell mounts current plan notices')
+assert.doesNotMatch(projectSpaceSource, /scopeTabs=\{null\}|notices=\{null\}/, 'whole-machine shell never dead-mounts its scope or notice slots')
 
 console.log('plan workspace shell contract passed')

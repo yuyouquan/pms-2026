@@ -46,6 +46,16 @@ export function PlanVersionCompareModal({
     }
   }, [open])
 
+  const handleCompare = () => {
+    setFilterType('all')
+    onCompare()
+  }
+  const handleCancel = () => {
+    setFilterType('all')
+    setShowUnchanged(false)
+    onCancel()
+  }
+
   const changedRows = useMemo(() => rows.filter(row => row.changeType !== '未变更'), [rows])
   const filteredRows = useMemo(() => {
     const sourceRows = showUnchanged ? rows : changedRows
@@ -94,7 +104,7 @@ export function PlanVersionCompareModal({
       className="pms-modal"
       title={<Space><HistoryOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
       open={open}
-      onCancel={onCancel}
+      onCancel={handleCancel}
       footer={null}
       width={1200}
       styles={{ body: { padding: '20px 24px' } }}
@@ -109,7 +119,7 @@ export function PlanVersionCompareModal({
           <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>对比版本</span>
           <Select aria-label="对比版本" value={targetVersionId} onChange={onTargetVersionChange} style={{ width: 180 }} options={versions.map(version => ({ value: version.id, label: `${version.versionNo} (${version.status})` }))} />
         </div>
-        <Button type="primary" icon={<SearchOutlined />} style={{ borderRadius: 6 }} onClick={onCompare}>开始对比</Button>
+        <Button type="primary" icon={<SearchOutlined />} style={{ borderRadius: 6 }} onClick={handleCompare}>开始对比</Button>
       </div>
       {rows.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '48px 0', color: '#bfbfbf' }}>

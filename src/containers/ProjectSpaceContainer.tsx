@@ -3373,8 +3373,11 @@ export default function ProjectSpaceContainer() {
       { key: 'level2', label: '二级计划' },
       { key: 'overview', label: '计划总览' },
     ]
-    return (
-      <div>
+    const usesSharedPlanWorkspace = !machineMarketPlanUnavailable
+      && projectPlanLevel !== 'overview'
+      && !(projectPlanLevel === 'level2' && (activeLevel2Plan === 'plan0' || activeLevel2Plan === 'plan1'))
+    const planWorkspacePrimaryScopeTabs = (
+      <>
         {showTosTypeTabs && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
             <Row align="middle" justify="space-between">
@@ -3440,32 +3443,13 @@ export default function ProjectSpaceContainer() {
                 items={planTabItems.map(item => ({ ...item, label: <span style={{ fontWeight: 500, padding: '0 4px' }}>{item.label}</span> }))}
               />
             </Col>
-            <Col><Tag color={projectPlanLevel === 'overview' ? 'blue' : 'default'} style={{ fontSize: 11 }}>{planTabItems.find(t => t.key === projectPlanLevel)?.label}</Tag></Col>
+            <Col><Tag color={projectPlanLevel === 'overview' ? 'blue' : 'default'} style={{ fontSize: 11 }}>{planTabItems.find(tab => tab.key === projectPlanLevel)?.label}</Tag></Col>
           </Row>
         </Card>
-        {machineMarketPlanUnavailable ? (
-          <Card style={{ borderRadius: 8 }}>
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={marketConfigRows.length === 0 ? '尚未配置市场，无法查看一级计划' : '当前市场不属于本项目，请重新选择市场'}
-            >
-              <Button type="primary" icon={<PlusOutlined />} onClick={openMarketEditor}>
-                {marketConfigRows.length === 0 ? '添加市场' : '市场编辑'}
-              </Button>
-            </Empty>
-          </Card>
-        ) : (
-          <>
-        {showTosTypeTabs && projectPlanLevel === 'level1' && currentTosTypeIsFollow && (
-          <Alert
-            type="info"
-            showIcon
-            style={{ marginBottom: 16, borderRadius: 8 }}
-            message={`当前类型跟随 ${effectiveTosLevel1Type}`}
-            description={`一级计划来自 ${effectiveTosLevel1Type}；如需创建修订、编辑或发布，请切换到 ${effectiveTosLevel1Type}。`}
-          />
-        )}
-        {projectPlanLevel === 'overview' && renderProjectPlanOverview()}
+      </>
+    )
+    const planWorkspaceSecondaryScopeTabs = (
+      <>
         {projectPlanLevel === 'level2' && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px 4px 16px' } }}>
             <Row justify="space-between" align="middle">
@@ -3478,10 +3462,10 @@ export default function ProjectSpaceContainer() {
                         {plan2.name}
                         {!plan2.fixed && (
                           <Popconfirm title={`确认删除"${plan2.name}"？`}
-                            onConfirm={(e) => { e?.stopPropagation(); const newPlans = createdLevel2Plans.filter(p2 => p2.id !== plan2.id); setCreatedLevel2Plans(newPlans); if (activeLevel2Plan === plan2.id) setActiveLevel2Plan(newPlans[0]?.id || 'plan0'); message.success(`已删除${plan2.name}`) }}
-                            onCancel={(e) => e?.stopPropagation()} okText="确认" cancelText="取消"
+                            onConfirm={(event) => { event?.stopPropagation(); const newPlans = createdLevel2Plans.filter(item => item.id !== plan2.id); setCreatedLevel2Plans(newPlans); if (activeLevel2Plan === plan2.id) setActiveLevel2Plan(newPlans[0]?.id || 'plan0'); message.success(`已删除${plan2.name}`) }}
+                            onCancel={(event) => event?.stopPropagation()} okText="确认" cancelText="取消"
                           >
-                            <DeleteOutlined style={{ fontSize: 12, color: '#bfbfbf', marginLeft: 2 }} onClick={(e) => e.stopPropagation()} onMouseEnter={(e) => (e.currentTarget.style.color = '#ff4d4f')} onMouseLeave={(e) => (e.currentTarget.style.color = '#bfbfbf')} />
+                            <DeleteOutlined style={{ fontSize: 12, color: '#bfbfbf', marginLeft: 2 }} onClick={(event) => event.stopPropagation()} onMouseEnter={(event) => (event.currentTarget.style.color = '#ff4d4f')} onMouseLeave={(event) => (event.currentTarget.style.color = '#bfbfbf')} />
                           </Popconfirm>
                         )}
                       </span>
@@ -3497,7 +3481,6 @@ export default function ProjectSpaceContainer() {
             </Row>
           </Card>
         )}
-        {/* L2 plan meta */}
         {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1' && level2PlanMeta[activeLevel2Plan]?.planType === '1+N MR版本火车计划' && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8, border: '1px solid rgba(99,102,241,0.06)' }} styles={{ body: { padding: 0 } }}>
             <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }} onClick={() => setPlanMetaCollapsed(!planMetaCollapsed)}>
@@ -3534,6 +3517,39 @@ export default function ProjectSpaceContainer() {
             )}
           </Card>
         )}
+      </>
+    )
+    const planWorkspaceScopeTabs = <>{planWorkspacePrimaryScopeTabs}{planWorkspaceSecondaryScopeTabs}</>
+    const planWorkspaceNotices = showTosTypeTabs && projectPlanLevel === 'level1' && currentTosTypeIsFollow
+      ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16, borderRadius: 8 }}
+            message={`当前类型跟随 ${effectiveTosLevel1Type}`}
+            description={`一级计划来自 ${effectiveTosLevel1Type}；如需创建修订、编辑或发布，请切换到 ${effectiveTosLevel1Type}。`}
+          />
+        )
+      : null
+    return (
+      <div>
+        {!usesSharedPlanWorkspace && planWorkspacePrimaryScopeTabs}
+        {machineMarketPlanUnavailable ? (
+          <Card style={{ borderRadius: 8 }}>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={marketConfigRows.length === 0 ? '尚未配置市场，无法查看一级计划' : '当前市场不属于本项目，请重新选择市场'}
+            >
+              <Button type="primary" icon={<PlusOutlined />} onClick={openMarketEditor}>
+                {marketConfigRows.length === 0 ? '添加市场' : '市场编辑'}
+              </Button>
+            </Empty>
+          </Card>
+        ) : (
+          <>
+        {!usesSharedPlanWorkspace && planWorkspaceSecondaryScopeTabs}
+        {!usesSharedPlanWorkspace && planWorkspaceNotices}
+        {projectPlanLevel === 'overview' && renderProjectPlanOverview()}
         {projectPlanLevel === 'level2' && activeLevel2Plan === 'plan0' && <RequirementDevPlan isEditMode={isEditMode} />}
         {isTosVersionTrainPlan && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '12px 16px' } }}>
@@ -3585,10 +3601,10 @@ export default function ProjectSpaceContainer() {
           />
         )}
         {/* Version management + table/gantt for L1 and non-fixed L2 */}
-        {projectPlanLevel !== 'overview' && !(projectPlanLevel === 'level2' && (activeLevel2Plan === 'plan0' || activeLevel2Plan === 'plan1')) && (
+        {usesSharedPlanWorkspace && (
           <PlanWorkspaceShell
-            scopeTabs={null}
-            notices={null}
+            scopeTabs={planWorkspaceScopeTabs}
+            notices={planWorkspaceNotices}
             versionControls={(
               <Space size={6}>
                 <span style={{ color: '#9ca3af', fontSize: 13 }}>版本</span>
