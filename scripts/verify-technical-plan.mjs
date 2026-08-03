@@ -407,6 +407,9 @@ assert.match(technicalModuleSource, /handleDeleteTask/, 'drafts can delete tasks
 assert.match(technicalModuleSource, /SortableColumnSettings/, 'column settings reuse sortable staged apply/cancel interaction')
 assert.match(technicalModuleSource, /canImport/, 'technical plan import has a dedicated permission input')
 assert.match(technicalModuleSource, /canExport/, 'technical plan export has a dedicated permission input')
+for (const label of ['实际开始', '实际完成', '实际工期']) {
+  assert.match(technicalModuleSource, new RegExp(label), `technical plan vertical table exposes the whole-machine ${label} field`)
+}
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 const projectSpaceSourceFile = parseTsx(projectSpaceSource, 'ProjectSpaceContainer.tsx')
 assert.equal(importsComponent(projectSpaceSourceFile, 'PlanWorkspaceShell', '@/components/plans/PlanWorkspaceShell'), true, 'whole-machine project space imports the shared shell from its canonical module')

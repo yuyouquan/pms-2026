@@ -3736,3 +3736,35 @@ body {
     transform: none !important;
   }
 }
+.technical-plan-filter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.technical-plan-filter-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) 116px minmax(180px, 1.35fr) 40px;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #eef2ff;
+  border-radius: 8px;
+  background: #fafbff;
+}
+
+.technical-horizontal-plan-table .ant-table-thead > tr:first-child > th:not(:first-child) {
+  color: #4338ca;
+  background: #eef2ff;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .technical-plan-filter-row {
+    grid-template-columns: minmax(0, 1fr) 110px 40px;
+  }
+
+  .technical-plan-filter-row > :nth-child(3) {
+    grid-column: 1 / 3;
+  }
+}

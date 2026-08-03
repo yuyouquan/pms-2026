@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { BarChartOutlined, SwapOutlined, UnorderedListOutlined } from '@ant-design/icons'
 import { Radio, Tooltip } from 'antd'
 import type { PlanWorkspaceViewMode } from '@/lib/planWorkspace'
@@ -12,10 +13,10 @@ export interface PlanViewModeSwitcherProps {
 }
 
 const VIEW_OPTIONS = [
-  { label: '竖版表格', value: 'vertical' as const, icon: <UnorderedListOutlined /> },
-  { label: '横版表格', value: 'horizontal' as const, icon: <SwapOutlined /> },
-  { label: '甘特图', value: 'gantt' as const, icon: <BarChartOutlined /> },
-]
+  { label: '竖版表格', value: 'vertical', icon: <UnorderedListOutlined /> },
+  { label: '横版表格', value: 'horizontal', icon: <SwapOutlined /> },
+  { label: '甘特图', value: 'gantt', icon: <BarChartOutlined /> },
+] satisfies readonly { label: string; value: PlanWorkspaceViewMode; icon: ReactNode }[]
 
 export function PlanViewModeSwitcher({
   viewMode,
