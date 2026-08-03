@@ -448,8 +448,16 @@ assert.match(technicalModuleSource, /canShareTechnicalPlan/, 'technical plan sha
 assert.match(technicalModuleSource, /const handleShare = \(\) => \{\s*if \(!canViewTechnicalPlan \|\| !canShareTechnicalPlan\) return/, 'sharing has strict view and share permission guards')
 assert.match(technicalModuleSource, /disabled=\{!canViewTechnicalPlan \|\| !canShareTechnicalPlan \|\| !publishedVersions\.length\}[^>]*aria-label="分享计划"/, 'sharing is disabled without technical-plan view or share permission')
 assert.match(technicalModuleSource, /编辑模式[\s\S]{0,180}自动保存/, 'technical drafts expose the same edit-mode guidance as whole-machine plans')
-assert.match(technicalModuleSource, /key:\s*['"]drag['"][^\n]*fixed:\s*['"]left['"]/, 'the technical drag column stays fixed on horizontal scroll')
 assert.match(technicalModuleSource, /key:\s*['"]taskName['"][^\n]*fixed:\s*['"]left['"]/, 'the technical task-name column stays fixed on horizontal scroll')
+assert.doesNotMatch(technicalModuleSource, /key:\s*['"]drag['"]/, 'task name remains the first technical-plan column instead of following an empty drag column')
+assert.match(technicalModuleSource, /technical-plan-task-name-cell[\s\S]{0,260}<DragHandle\s*\/>/, 'the drag handle lives inside the fixed task-name column')
+assert.match(technicalModuleSource, /key:\s*['"]actions['"][^\n]*fixed:\s*['"]right['"]/, 'the technical operation column stays fixed on horizontal scroll')
+assert.match(technicalModuleSource, /className=[^\n]*technical-plan-vertical-table/, 'the technical vertical plan table has a stable layout scope')
+assert.match(technicalModuleSource, /technical-plan-add-task[\s\S]{0,320}handleAddTopLevelTask/, 'top-level task creation follows the whole-machine table footer interaction')
+assert.match(technicalModuleSource, /icon=\{<CopyOutlined\s*\/>\}[^>]*aria-label="计划克隆"[^>]*\/>/, 'technical plan clone uses the same icon-only draft action as whole-machine plans')
+assert.match(technicalModuleSource, /icon=\{<SaveOutlined\s*\/>\}[^>]*aria-label="发布"[^>]*\/>/, 'technical plan publish uses the same icon-only draft action as whole-machine plans')
+const globalStylesSource = readSource(root, 'src/styles/globals.css')
+assert.match(globalStylesSource, /\.pms-table \.ant-table-thead\s*>\s*tr\s*>\s*th\.ant-table-cell-fix-(?:start|end)[\s\S]{0,900}position:\s*sticky\s*!important/s, 'fixed technical-plan headers remain aligned with fixed body cells')
 for (const label of ['预估工期', '实际工期', '进度']) {
   assert.match(technicalModuleSource, new RegExp(`TECHNICAL_FILTER_FIELDS[\\s\\S]*${label}`), `technical filters include ${label}`)
 }
