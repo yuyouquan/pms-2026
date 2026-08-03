@@ -63,7 +63,7 @@ assert.notStrictEqual(clonedDraft.tasks[0], initialPlans['project-a:tdt'].versio
 assert.notStrictEqual(clonedDraft.tasks[0].children, initialPlans['project-a:tdt'].versions[0].tasks[0].children, 'nested task data is deeply isolated')
 assert.deepEqual(clonedState.plansByKey['project-b:tdt'], untouchedProjectB, 'another TDT scope is unchanged')
 assert.deepEqual(clonedState.plansByKey['project-a:subproject:child-1'], untouchedChild, 'a child scope is unchanged')
-assert.equal(technicalPlan.TECHNICAL_PLAN_STORE_VERSION, 3, 'actual-date default columns advance the persisted technical-plan shape')
+assert.equal(technicalPlan.TECHNICAL_PLAN_STORE_VERSION, 4, 'numeric task IDs advance the persisted technical-plan shape')
 const migratedVersionTwoColumns = technicalPlan.migrateTechnicalPlanState({
   plansByKey: {
     'custom:tdt': {
@@ -79,6 +79,29 @@ assert.deepEqual(
   'version-2 plan columns gain the new actual-date fields without resetting the plan',
 )
 assert.equal(migratedVersionTwoColumns.plansByKey['custom:tdt'].versions[0].tasks[0].taskName, '保留任务')
+
+const revisionKindStore = technicalPlan.createTechnicalPlanStore({ plansByKey: {
+  'revision-kind:tdt': instance('revision-kind:tdt', 'tdt', [
+    version('revision-kind-v1', 'V1', 'tdt', '已发布', [task('1', '正式版本任务')]),
+  ]),
+} })
+assert.deepEqual(
+  revisionKindStore.createRevision({
+    scope: { kind: 'tdt', parentProjectId: 'revision-kind' }, templateKind: 'tdt',
+    revisionKind: 'gray', templateTasks: [task('1', '非正式版本任务')],
+  }),
+  { ok: true, versionId: 'V1.1-draft' },
+  'technical plans can create a nonformal revision after the latest formal version',
+)
+assert.deepEqual(revisionKindStore.cancelRevision({ kind: 'tdt', parentProjectId: 'revision-kind' }), { ok: true })
+assert.deepEqual(
+  revisionKindStore.createRevision({
+    scope: { kind: 'tdt', parentProjectId: 'revision-kind' }, templateKind: 'tdt',
+    revisionKind: 'formal', templateTasks: [task('1', '正式版本任务')],
+  }),
+  { ok: true, versionId: 'V2-draft' },
+  'technical plans can create the next formal revision independently of gray revisions',
+)
 
 technicalPlan.useTechnicalPlanStore.setState({ plansByKey: initialPlans })
 assert.deepEqual(

@@ -22,7 +22,9 @@ import {
   buildSubprojectTemplateTasks,
   buildTdtTemplateTasks,
   getTemplateConfigScopeKey,
+  migrateTechnicalTemplateNumberingState,
   migrateTechnicalTemplateState,
+  renumberTechnicalTasks,
   TECHNICAL_TEMPLATE_STORAGE_KEYS,
   validateTechnicalTemplateDepth,
 } from '@/lib/technicalPlanRules'
@@ -34,7 +36,7 @@ import type {
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
-export const PLAN_STORE_VERSION = 2
+export const PLAN_STORE_VERSION = 3
 export const PLAN_STORE_STORAGE_KEY = 'pms-plan-store'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -132,9 +134,12 @@ const createInitialConfigTemplateTasks = () => {
 
 export const migratePlanStoreState = (persistedState: unknown, persistedVersion = 0) => {
   if (!persistedState || typeof persistedState !== 'object') return persistedState as PlanState
-  const migrated = persistedVersion < 1
+  const legacyMigrated = persistedVersion < 1
     ? migrateTechnicalTemplateState(persistedState as Record<string, any>)
     : persistedState as Record<string, any>
+  const migrated = persistedVersion < 3
+    ? migrateTechnicalTemplateNumberingState(legacyMigrated)
+    : legacyMigrated
   const initialScopes = createInitialConfigTemplateVersionScopes()
   const legacyVersions = Array.isArray(migrated.versions)
     ? migrated.versions.map((version: any) => ({ ...version }))
@@ -571,8 +576,8 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
     const current = get().configTemplateTasksByType[key] || []
     const input = current.map(task => ({ ...task }))
     const resolved = typeof v === 'function' ? v(input) : v
-    validateTechnicalTemplateDepth(kind, resolved)
-    const next = resolved.map(task => ({ ...task }))
+    const next = renumberTechnicalTasks(resolved)
+    validateTechnicalTemplateDepth(kind, next)
     set(state => ({
       configTemplateTasksByType: {
         ...state.configTemplateTasksByType,

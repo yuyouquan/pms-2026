@@ -6,6 +6,7 @@ import {
   Row, Select, Space, Table, Tabs, Tag, Tooltip, Typography, Upload, message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import type { MenuProps } from 'antd'
 import {
   DeleteOutlined, DownloadOutlined, HistoryOutlined, PlusOutlined, SaveOutlined,
   EditOutlined, FilterOutlined, MinusSquareOutlined, PlusSquareOutlined, SettingOutlined, ShareAltOutlined,
@@ -37,6 +38,7 @@ import {
   TECHNICAL_PLAN_EXPORT_COLUMNS,
 } from '@/lib/technicalPlanWorkspace'
 import { compareVersionsForTable } from '@/lib/versionCompare'
+import type { PlanRevisionKind } from '@/lib/planVersioning'
 import { getTemplateSnapshotForProjectType } from '@/lib/projectTemplateCompatibility'
 import { comparePublishedTechnicalPlanVersions } from '@/lib/technicalProjectRules'
 import {
@@ -71,6 +73,10 @@ import type { SortableColumnDefinition } from '@/lib/columnSettings'
 
 const { Text } = Typography
 const FIXED_TDT_LABEL = 'TDT项目计划'
+const PLAN_REVISION_KIND_OPTIONS: Array<{ key: PlanRevisionKind; label: string }> = [
+  { key: 'gray', label: '创建非正式版本' },
+  { key: 'formal', label: '创建正式版本' },
+]
 
 const COLUMN_LABELS: Record<string, string> = {
   taskName: '任务名称', responsible: '责任人', predecessor: '前置任务',
@@ -285,14 +291,18 @@ export default function TechnicalPlanModule({
     setHasCompared(false)
   }, [activeKey])
 
-  const handleCreateRevision = () => {
+  const handleCreateRevision = (revisionKind: PlanRevisionKind) => {
     if (!tab || !canEditTechnicalPlan) return
-    const result = createRevision({ scope: tab.scope, templateKind: tab.templateKind, maxDepth, templateTasks, subproject: tab.subproject })
+    const result = createRevision({ scope: tab.scope, templateKind: tab.templateKind, maxDepth, templateTasks, revisionKind, subproject: tab.subproject })
     if (!result.ok) {
       message.warning(result.reason === 'draft-exists' ? '当前计划已有修订版' : readOnlyReason || '当前子项目不可创建修订')
       return
     }
-    message.success(`已创建 ${result.versionId.replace('-draft', '')} 修订`)
+    message.success(`已创建${revisionKind === 'gray' ? '非正式' : '正式'}修订版本 ${result.versionId.replace('-draft', '')}`)
+  }
+
+  const handleCreateRevisionMenuClick: MenuProps['onClick'] = ({ key }) => {
+    handleCreateRevision(key as PlanRevisionKind)
   }
 
   const handleClonePlan = () => {
@@ -600,7 +610,14 @@ export default function TechnicalPlanModule({
           <Space size={6}>
             {!hasDraft && (
               <Tooltip title={!canEditTechnicalPlan ? '无计划编辑权限' : readOnlyReason}>
-                <Button type="primary" icon={<PlusOutlined />} disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)} onClick={handleCreateRevision} aria-label="创建修订">创建修订</Button>
+                <Dropdown
+                  menu={{ items: PLAN_REVISION_KIND_OPTIONS, onClick: handleCreateRevisionMenuClick }}
+                  trigger={['click']}
+                  placement="bottomLeft"
+                  disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)}
+                >
+                  <Button type="primary" icon={<PlusOutlined />} disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)} aria-label="创建修订">创建修订</Button>
+                </Dropdown>
               </Tooltip>
             )}
             <Tooltip title={!canEditTechnicalPlan ? '无计划编辑权限' : readOnlyReason || (!publishedVersions.length ? '暂无已发布版本' : '计划克隆')}>

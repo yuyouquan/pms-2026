@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Card, Empty, Space, Tag } from 'antd'
+import { Card, Empty, Space } from 'antd'
 import { CalendarOutlined } from '@ant-design/icons'
 import { resolveTechnicalPlanSummary } from '@/lib/technicalProjectRules'
 import { getTechnicalPlanKey, useTechnicalPlanStore, type TechnicalPlanScope } from '@/stores/technicalPlan'
@@ -11,7 +11,9 @@ interface TechnicalPlanSummaryProps {
   label: string
 }
 
-const displayCycle = (days: number | null) => days === null ? '-' : `${days} 天`
+const TECHNICAL_STAGE_COLORS = ['#1890ff', '#52c41a', '#722ed1', '#faad14', '#eb2f96', '#13c2c2'] as const
+
+const displayCycle = (days: number | null) => days === null ? '-' : days
 
 export default function TechnicalPlanSummary({ scope, label }: TechnicalPlanSummaryProps) {
   const instance = useTechnicalPlanStore(state => state.plansByKey[getTechnicalPlanKey(scope)])
@@ -49,11 +51,25 @@ export default function TechnicalPlanSummary({ scope, label }: TechnicalPlanSumm
         <table aria-label={`${label}版本阶段里程碑`}>
           <thead>
             <tr>
-              <th rowSpan={2}>版本</th>
-              <th rowSpan={2}>开发周期</th>
-              {groups.map(group => (
-                <th key={group.stage.id} colSpan={group.width}>{group.stage.taskName}</th>
-              ))}
+              <th className="technical-plan-summary-sticky-version" rowSpan={2}>版本</th>
+              <th className="technical-plan-summary-sticky-cycle" rowSpan={2}>开发周期</th>
+              {groups.map((group, index) => {
+                const stageColor = TECHNICAL_STAGE_COLORS[index % TECHNICAL_STAGE_COLORS.length]
+                return (
+                  <th
+                    key={group.stage.id}
+                    className="technical-plan-summary-stage"
+                    colSpan={group.width}
+                    style={{
+                      background: `${stageColor}10`,
+                      color: stageColor,
+                      borderBottom: `2px solid ${stageColor}`,
+                    }}
+                  >
+                    {group.stage.taskName}
+                  </th>
+                )
+              })}
             </tr>
             <tr>
               {groups.flatMap(group => group.milestones.length
@@ -64,11 +80,8 @@ export default function TechnicalPlanSummary({ scope, label }: TechnicalPlanSumm
           <tbody>
             {summary.versionRows.map(row => (
               <tr key={row.version.id} className={row.version.id === summary.latestVersion?.id ? 'technical-plan-summary-current' : undefined}>
-                <td>
-                  <span className="technical-plan-summary-version">{row.version.versionNo}</span>
-                  <Tag color="success">已发布</Tag>
-                </td>
-                <td>{displayCycle(row.cycleDays)}</td>
+                <td className="technical-plan-summary-sticky-version"><span className="technical-plan-summary-version">{row.version.versionNo}</span></td>
+                <td className="technical-plan-summary-sticky-cycle">{displayCycle(row.cycleDays)}</td>
                 {columns.map(column => {
                   const planEndDate = row.endDatesByTaskId[column.id]
                   return <td key={column.id}>{planEndDate || '-'}</td>
@@ -76,8 +89,8 @@ export default function TechnicalPlanSummary({ scope, label }: TechnicalPlanSumm
               </tr>
             ))}
             <tr className="technical-plan-summary-actual">
-              <td><span className="technical-plan-summary-version">实际</span></td>
-              <td>{displayCycle(summary.actualRow.cycleDays)}</td>
+              <td className="technical-plan-summary-sticky-version"><span className="technical-plan-summary-version">实际</span></td>
+              <td className="technical-plan-summary-sticky-cycle">{displayCycle(summary.actualRow.cycleDays)}</td>
               {columns.map(column => {
                 const actualEndDate = summary.actualRow.endDatesByTaskId[column.id]
                 return <td key={column.id}>{actualEndDate || '-'}</td>
