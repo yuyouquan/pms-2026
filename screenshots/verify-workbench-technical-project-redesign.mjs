@@ -455,18 +455,43 @@ try {
     await clickAria(page, '列表视图')
     await assertText(page, '产品系列')
     await assertText(page, '首销 tOS 版本')
+    const layout = await page.evaluate(() => {
+      const category = document.querySelector('[aria-label="项目分类筛选"]')?.getBoundingClientRect()
+      const actions = document.querySelector('.pms-project-list-category-actions')?.getBoundingClientRect()
+      const fixedHeaders = Array.from(document.querySelectorAll('.ant-table-thead th.ant-table-cell-fix-start, .ant-table-thead th.ant-table-cell-fix-left'))
+        .map(element => (element.textContent || '').trim())
+      return { categoryTop: category?.top, actionsTop: actions?.top, fixedHeaders }
+    })
+    if (layout.categoryTop !== layout.actionsTop) throw new Error(`项目分类与操作区未同行：${JSON.stringify(layout)}`)
+    if (!layout.fixedHeaders.some(text => text.includes('产品系列')) || !layout.fixedHeaders.some(text => text.includes('项目名称'))) {
+      throw new Error(`整机固定列错误：${JSON.stringify(layout.fixedHeaders)}`)
+    }
+    const firstSeries = await page.$('.pms-project-series-toggle')
+    if (!firstSeries) throw new Error('整机列表没有产品系列聚合')
+    const beforeCollapse = await page.$$eval('.ant-table-tbody tr[data-row-key]', rows => rows.filter(row => row.getBoundingClientRect().height > 0).length)
+    await firstSeries.click()
+    await page.waitForFunction(before => (
+      Array.from(document.querySelectorAll('.ant-table-tbody tr[data-row-key]')).filter(row => row.getBoundingClientRect().height > 0).length < before
+    ), {}, beforeCollapse)
+    await page.$eval('.pms-project-series-toggle', element => element.click())
   })
 
   await runScenario('04 machine tos technical quick filters are linked', {}, async page => {
     await openMain(page, '项目列表')
-    await clickAria(page, '列表视图')
+    await clickAria(page, '卡片视图')
     for (const label of ['快捷筛选-首销 tOS 版本', '快捷筛选-芯片编码', '快捷筛选-品牌', '快捷筛选-产品系列', '快捷筛选-产品类型']) {
       await page.waitForSelector(`[aria-label="${label}"]`, { visible: true })
     }
-    console.log('  STEP apply machine brand quick filter and verify rows')
+    console.log('  STEP apply machine brand quick filter in card view')
     await openAriaCombo(page, '快捷筛选-品牌')
     await selectOption(page, 'Infinix')
     await page.keyboard.press('Escape')
+    await page.waitForFunction(() => {
+      const cards = Array.from(document.querySelectorAll('.pms-project-list-content .ant-card')).filter(element => element.getBoundingClientRect().height > 0)
+      return cards.length === 2 && cards.every(card => (card.textContent || '').includes('Infinix'))
+    })
+    console.log('  STEP switch to list and preserve the same filtered result')
+    await clickAria(page, '列表视图')
     await page.waitForFunction(() => {
       const rows = Array.from(document.querySelectorAll('.ant-table-tbody tr[data-row-key]')).filter(element => element.getBoundingClientRect().height > 0)
       return rows.length === 2 && rows.every(row => (row.textContent || '').includes('Infinix'))
@@ -495,13 +520,15 @@ try {
     await clickButtonPrefix(page, '[aria-label="项目分类筛选"]', '技术项目')
     await page.waitForSelector('[aria-label="技术项目类型快捷筛选"]', { visible: true })
     for (const label of ['快捷筛选-项目名称', '快捷筛选-技术赛道', '快捷筛选-项目阶段']) await page.waitForSelector(`[aria-label="${label}"]`, { visible: true })
-    await page.waitForSelector('[aria-label="TDT项目列表"]', { visible: true })
-    await page.waitForSelector('[aria-label="子项目列表"]', { visible: true })
+    await assertText(page, 'TDT项目名称')
+    const hasChildHeader = await page.evaluate(() => Array.from(document.querySelectorAll('.ant-table-thead th')).some(element => (
+      (element.textContent || '').includes('子任务名称')
+    )))
+    if (hasChildHeader) throw new Error('默认 TDT 类型仍同时显示子项目表')
     console.log('  STEP apply technical name filter and verify TDT result')
     await fillInput(page, '[aria-label="快捷筛选-项目名称"]', 'AI-Engine')
     await page.waitForFunction(() => {
-      const section = document.querySelector('[aria-label="TDT项目列表"]')
-      const rows = Array.from(section?.querySelectorAll('.ant-table-tbody tr[data-row-key]') || []).filter(element => element.getBoundingClientRect().height > 0)
+      const rows = Array.from(document.querySelectorAll('.ant-table-tbody tr[data-row-key]')).filter(element => element.getBoundingClientRect().height > 0)
       return rows.length === 1 && (rows[0].textContent || '').includes('AI-Engine-V2')
     })
   })
@@ -758,10 +785,11 @@ try {
     await openMain(page, '项目列表')
     await clickAria(page, '列表视图')
     await clickButtonPrefix(page, '[aria-label="项目分类筛选"]', '技术项目')
-    await page.waitForSelector('[aria-label="TDT项目列表"]', { visible: true })
+    await assertText(page, 'TDT项目名称')
     for (const label of ['规划阶段', '概念阶段', '计划阶段', '开发验证阶段', '迁移阶段']) await assertText(page, label)
     await assertText(page, '项目阶段')
-    await page.waitForSelector('[aria-label="子项目列表"]', { visible: true })
+    await clickExact(page, '[aria-label="技术项目类型快捷筛选"] button', '子项目')
+    await assertText(page, '子任务名称')
     for (const label of ['第1版转测', '第2版转测', '第X版转测', 'TDR3']) await assertText(page, label)
   })
 

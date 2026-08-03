@@ -94,7 +94,6 @@ export const PROJECT_LIST_QUICK_FILTERS = {
     { key: 'tosVersion', label: 'tOS版本' },
   ],
   technical: [
-    { key: 'status', label: '状态' },
     { key: 'technicalProjectType', label: '项目类型' },
     { key: 'projectName', label: '项目名称' },
     { key: 'technicalTrack', label: '技术赛道' },
@@ -103,16 +102,52 @@ export const PROJECT_LIST_QUICK_FILTERS = {
 } as const
 
 export const TECHNICAL_PROJECT_TYPE_OPTIONS = [
-  { label: '全部', value: 'all' },
   { label: 'TDT项目', value: 'tdt' },
   { label: '子项目', value: 'subproject' },
 ] as const
 
-export function resolveTechnicalProjectTypeVisibility(values: readonly string[]) {
-  const selected = new Set(values.filter(value => value === 'tdt' || value === 'subproject'))
-  const showTdt = selected.size === 0 || selected.has('tdt')
-  const showSubproject = selected.size === 0 || selected.has('subproject')
-  return { showTdt, showSubproject, showBoth: showTdt && showSubproject }
+export type TechnicalProjectListType = typeof TECHNICAL_PROJECT_TYPE_OPTIONS[number]['value']
+
+export function resolveTechnicalProjectType(values: readonly string[]): TechnicalProjectListType {
+  return values.includes('subproject') ? 'subproject' : 'tdt'
+}
+
+const PROJECT_LIST_FIXED_COLUMN_KEYS: Record<ProjectListVariant, readonly string[]> = {
+  machine: ['productSeries', 'projectName'],
+  tos: ['tosVersion'],
+  'technical-tdt': ['projectName'],
+  'technical-subproject': ['projectName'],
+  capability: [],
+}
+
+export function getProjectListFixedColumnKeys(variant: ProjectListVariant): string[] {
+  return [...PROJECT_LIST_FIXED_COLUMN_KEYS[variant]]
+}
+
+export interface ProjectListRowGroup<T> {
+  key: string
+  rows: T[]
+}
+
+export function groupProjectListRows<T extends Record<string, unknown>>(
+  rows: readonly T[],
+  key: string,
+  fallbackLabel: string,
+): ProjectListRowGroup<T>[] {
+  const groups: ProjectListRowGroup<T>[] = []
+  const groupByKey = new Map<string, ProjectListRowGroup<T>>()
+  rows.forEach(row => {
+    const raw = String(row[key] ?? '').trim()
+    const groupKey = !raw || raw === '-' || raw === '—' ? fallbackLabel : raw
+    let group = groupByKey.get(groupKey)
+    if (!group) {
+      group = { key: groupKey, rows: [] }
+      groupByKey.set(groupKey, group)
+      groups.push(group)
+    }
+    group.rows.push(row)
+  })
+  return groups
 }
 
 const GROUP_COLORS = ['#e8f3ff', '#fff0e6', '#fff8db', '#edf6dc', '#f2e8ff'] as const
