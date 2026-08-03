@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Place project-list actions on the category row, render exactly one technical-project table selected by a two-value type filter, and pin the required identity columns during horizontal scrolling.
+**Goal:** Place project-list actions on the category row, share one linked filter system across card/table views, render one selected technical-project table, group machine projects by product series, and pin the required identity columns.
 
-**Architecture:** Keep `ProjectListContainer` as the owner of category/type selection and conditional rendering. Put the fixed-column mapping in `projectListMatrix.ts` so the table renderer and contract tests share one source of truth, then have `ProjectSummaryTable` apply that mapping to Ant Design columns. Preserve the existing controlled filter array so technical quick filters and the floating filter panel continue to use the same state.
+**Architecture:** Keep `ProjectListContainer` as the owner of category/type selection, shared filter conditions, and card/table data selection. Put fixed-column and product-series grouping helpers in `projectListMatrix.ts` so renderers and contract tests share one source of truth. Let `ProjectSummaryTable` consume controlled filters, hide duplicate internal quick controls, apply Ant Design fixed columns, and render optional grouped rows.
 
 **Tech Stack:** Next.js 14, React 18, TypeScript, Ant Design 6, Node source-contract scripts.
 
@@ -253,7 +253,129 @@ git add src/containers/ProjectListContainer.tsx src/styles/globals.css scripts/v
 git commit -m "fix: streamline technical project list layout"
 ```
 
-### Task 3: Apply fixed columns and run full regression
+### Task 3: Share quick filters across card and table views
+
+**Files:**
+- Modify: `src/containers/ProjectListContainer.tsx`
+- Modify: `src/components/project-summary/ProjectSummaryTable.tsx`
+- Modify: `scripts/verify-workbench-project-list.mjs`
+
+- [ ] **Step 1: Add failing shared-filter assertions**
+
+Require secondary/status rows to be view-independent, technical status to be excluded, and table-local quick fields to be suppressible:
+
+```js
+assert.doesNotMatch(source, /projectListView === 'card'[\s\S]{0,120}项目二级分类快捷筛选/)
+assert.match(source, /projectTypeFilter !== PROJECT_CATEGORY_TECH[\s\S]{0,180}状态快捷筛选/)
+assert.match(source, /showQuickFilters=\{false\}/)
+assert.match(summarySource, /showQuickFilters\?: boolean/)
+```
+
+Run: `node scripts/verify-workbench-project-list.mjs`
+
+Expected: FAIL because filters currently differ by view and table quick controls cannot be hidden.
+
+- [ ] **Step 2: Add controlled filter props and suppress duplicate quick controls**
+
+Extend `ProjectSummaryTableProps`:
+
+```ts
+showQuickFilters?: boolean
+```
+
+Default it to `true`, and wrap the local project-name input and `quickFilterDefinitions.map(...)` with `showQuickFilters`. Keep the filter button and column settings available.
+
+- [ ] **Step 3: Render shared external quick filters**
+
+In `ProjectListContainer`, keep one `summaryFilters` state for machine/tOS and the existing `technicalFilters` state for technical projects. Render machine and tOS options from `getProjectSummaryQuickFilterDefinitions(...)`; render technical project name, track, and stage from the active technical rows. Every select writes through:
+
+```ts
+setSummaryFilters(current => updateLinkedQuickFilterCondition(current, definition.key, values))
+```
+
+The technical fuzzy search writes a `contains` condition:
+
+```ts
+setTechnicalFilters(current => [
+  ...current.filter(condition => condition.field !== 'projectName'),
+  ...(value ? [{ id: 'quick-projectName', field: 'projectName', operator: 'contains', value }] : []),
+])
+```
+
+Remove the card-only guards from secondary/status rows and add `projectTypeFilter !== PROJECT_CATEGORY_TECH` to the status condition.
+
+- [ ] **Step 4: Apply shared conditions to cards and tables**
+
+Build matrix rows for card candidates with `getProjectListFieldDefinitions(...)` and `buildProjectSummaryRow(...)`, then call `applyFilterConditions(...)` with field definitions whose linked quick keys use `multiple: true`. Use the resulting project IDs for card pagination. Pass the same controlled filters into `ProjectSummaryTable` and set `showQuickFilters={false}`.
+
+For technical cards, use the active TDT/child rows: TDT renders existing project cards by `targetProjectId`; child selection renders compact child cards that call `enterSummaryRow` and show child name, parent TDT name, core value, development mode, first tOS, and project stage.
+
+- [ ] **Step 5: Run focused contracts**
+
+Run:
+
+```bash
+node scripts/verify-workbench-project-list.mjs
+node scripts/verify-project-summary.mjs
+```
+
+Expected: PASS.
+
+### Task 4: Group machine rows by product series
+
+**Files:**
+- Modify: `src/lib/projectListMatrix.ts`
+- Modify: `src/components/project-summary/ProjectSummaryTable.tsx`
+- Modify: `scripts/verify-project-list-matrix.mjs`
+
+- [ ] **Step 1: Add failing grouping assertions**
+
+Add a pure helper contract:
+
+```js
+const groups = matrix.groupProjectListRows([
+  { projectId: '1', productSeries: 'CAMON 50', projectName: 'A' },
+  { projectId: '2', productSeries: 'P', projectName: 'B' },
+  { projectId: '3', productSeries: 'CAMON 50', projectName: 'C' },
+  { projectId: '4', productSeries: '-', projectName: 'D' },
+], 'productSeries', '未配置产品系列')
+assert.deepEqual(groups.map(group => [group.key, group.rows.map(row => row.projectId)]), [
+  ['CAMON 50', ['1', '3']],
+  ['P', ['2']],
+  ['未配置产品系列', ['4']],
+])
+```
+
+Run: `node scripts/verify-project-list-matrix.mjs`
+
+Expected: FAIL because the grouping helper does not exist.
+
+- [ ] **Step 2: Implement stable grouping**
+
+Add `groupProjectListRows(rows, key, fallbackLabel)` to preserve the first occurrence order of groups and the original order within each group. Treat `''`, `-`, and `—` as missing.
+
+- [ ] **Step 3: Render merged expandable series cells**
+
+Add `groupBy?: { key: string; fallbackLabel: string }` to `ProjectSummaryTable`. Use a `Set<string>` of collapsed group keys. Expanded groups flatten all rows with group metadata and apply `rowSpan` to the first product-series cell; collapsed groups emit a non-navigable summary row. Render an accessible text button with `DownOutlined`/`RightOutlined`, series name, and `N个项目`.
+
+Pass this only for the machine table:
+
+```tsx
+groupBy={{ key: 'productSeries', fallbackLabel: '未配置产品系列' }}
+```
+
+- [ ] **Step 4: Run matrix and project-list contracts**
+
+Run:
+
+```bash
+node scripts/verify-project-list-matrix.mjs
+node scripts/verify-workbench-project-list.mjs
+```
+
+Expected: PASS.
+
+### Task 5: Apply fixed columns and run full regression
 
 **Files:**
 - Modify: `src/components/project-summary/ProjectSummaryTable.tsx`
