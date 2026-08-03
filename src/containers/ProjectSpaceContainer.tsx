@@ -7,7 +7,7 @@
  * renderProjectBasicInfo, renderProjectPlan, renderProjectPlanOverview,
  * renderProjectOverview, renderProjectRequirements, renderProjectPlanInfo,
  * renderHorizontalTable, renderTaskTable, renderGanttChart, renderActionButtons,
- * renderVersionCompareResult, version compare Modal, custom column Modal,
+ * version compare Modal, custom column Modal,
  * create L2 plan Modal, and all helper functions.
  *
  * This is the LARGEST container, reading from ALL 5 stores.
@@ -30,7 +30,7 @@ import {
   HolderOutlined, BarChartOutlined, CalendarOutlined, FileTextOutlined,
   SettingOutlined, TeamOutlined, WarningOutlined, BugOutlined, FolderOutlined,
   DownOutlined, ExclamationCircleOutlined, SafetyCertificateOutlined,
-  SwapOutlined, AuditOutlined, DownloadOutlined, CloseCircleOutlined,
+  AuditOutlined, DownloadOutlined, CloseCircleOutlined,
   SafetyOutlined, SendOutlined, DeploymentUnitOutlined, ShareAltOutlined,
   PlusSquareOutlined, MinusSquareOutlined, CaretDownOutlined, StopOutlined,
   FilterOutlined, CopyOutlined, QuestionCircleOutlined,
@@ -39,10 +39,18 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { MenuProps } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { compareVersionsForTable, type CompareTableRow, type FieldDiff } from '@/lib/versionCompare'
+import { compareVersionsForTable } from '@/lib/versionCompare'
+import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
+import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareModal'
+import {
+  applyPlanWorkspaceFilters,
+  buildPlanHorizontalMilestones,
+  buildPlanHorizontalStageGroups,
+  filterPlanTasksByCollapsed,
+  type PlanWorkspaceViewMode,
+} from '@/lib/planWorkspace'
 import {
   FILTER_OPERATORS,
-  applyFilterConditions,
   createFilterCondition,
   getFieldOptionsWithDuplicateDisabled,
   isFilterConditionActive,
@@ -150,8 +158,7 @@ import MarketEditorModal from '@/components/project-info/MarketEditorModal'
 import TosTypeEditorModal from '@/components/project-info/TosTypeEditorModal'
 import ProjectPlanInfoGrid from '@/components/project-info/ProjectPlanInfoGrid'
 import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
-import TechnicalProjectOverview from '@/components/technical-project/TechnicalProjectOverview'
-import TechnicalProjectBasicInfo from '@/components/technical-project/TechnicalProjectBasicInfo'
+import TechnicalProjectInformationView from '@/components/technical-project/TechnicalProjectInformationView'
 import TechnicalPlanModule from '@/components/technical-project/TechnicalPlanModule'
 import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
 import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
@@ -181,7 +188,7 @@ import {
 } from '@/constants/projectBasicFields'
 import {
   DHTMLXGantt, DragHandle, SortableRow, ClickToEditDate, MiniPipeline,
-  getTaskDepth, hasChildren, filterByCollapsed, getAllExpandableIds,
+  getTaskDepth, hasChildren, getAllExpandableIds,
   mergePlans, shiftDateStrForExport,
   NOTIFY_DIFF_FIELDS, MOCK_USER_MAP, type DHTMLXGanttColumn,
 } from '@/components/shared/PlanHelpers'
@@ -410,8 +417,7 @@ export default function ProjectSpaceContainer() {
     columnSettingsByView, setColumnSettingsByView, collapsedNodes, setCollapsedNodes,
     publishedSnapshots, setPublishedSnapshots, configTemplateTasksByType,
     compareVersionA, setCompareVersionA, compareVersionB, setCompareVersionB,
-    compareResult, setCompareResult, compareShowUnchanged, setCompareShowUnchanged,
-    compareFilterType, setCompareFilterType,
+    compareResult, setCompareResult,
     marketPlanData, setMarketPlanData,
     marketFollowVersionMeta, setMarketFollowVersionMeta,
     marketVersionsByKey, setMarketVersionsByKey,
@@ -482,6 +488,7 @@ export default function ProjectSpaceContainer() {
   const canEditLevel2Plan = canDo('plan:二级计划-编辑')
   const canViewLevel1Plan = canDo('plan:一级计划-查看')
   const canViewLevel2Plan = canDo('plan:二级计划-查看')
+  const canShareTechnicalPlan = canDo('plan:一级计划-分享')
   const canImportTechnicalPlan = canDo('plan:导入')
   const canExportTechnicalPlan = canDo('plan:导出')
   const canEditCurrentPlan = projectPlanLevel === 'level2' ? canEditLevel2Plan : canEditLevel1Plan
@@ -1694,7 +1701,7 @@ export default function ProjectSpaceContainer() {
 
   const planFilterFieldOptions = TABLE_COLUMNS.map(c => ({ label: c.title, value: c.key }))
   const hasActiveLevel1PlanFilters = level1PlanFilters.some(isFilterConditionActive)
-  const filteredLevel1PlanTasks = applyFilterConditions(effectiveTasks as any[], level1PlanFilters)
+  const filteredLevel1PlanTasks = applyPlanWorkspaceFilters(effectiveTasks as any[], level1PlanFilters)
   const filterBySearchText = (taskList: any[]) => taskList.filter((task: any) => {
     if (!searchText) return true
     const s = searchText.toLowerCase()
@@ -1993,45 +2000,6 @@ export default function ProjectSpaceContainer() {
     }
 
     currentSetTasks(updatedTasks)
-  }
-
-  const renderProjectPlanViewModeSwitcher = () => {
-    const currentValue = projectPlanViewMode === 'horizontal' && projectPlanLevel === 'level2'
-      ? 'table'
-      : projectPlanViewMode
-    const options = projectPlanLevel === 'level1'
-      ? (isEditMode
-        ? [
-            { label: '竖版表格', value: 'table', icon: <UnorderedListOutlined /> },
-            { label: '甘特图', value: 'gantt', icon: <BarChartOutlined /> },
-          ]
-        : [
-            { label: '竖版表格', value: 'table', icon: <UnorderedListOutlined /> },
-            { label: '横版表格', value: 'horizontal', icon: <SwapOutlined /> },
-            { label: '甘特图', value: 'gantt', icon: <BarChartOutlined /> },
-          ])
-      : [
-          { label: '表格', value: 'table', icon: <UnorderedListOutlined /> },
-          { label: '甘特图', value: 'gantt', icon: <BarChartOutlined /> },
-        ]
-
-    return (
-      <Radio.Group
-        value={currentValue}
-        onChange={(event) => setProjectPlanViewMode(event.target.value as 'table' | 'horizontal' | 'gantt')}
-        buttonStyle="solid"
-        size="middle"
-        className="pms-plan-view-mode-switcher"
-      >
-        {options.map(option => (
-          <Tooltip title={option.label} key={option.value}>
-            <Radio.Button value={option.value} aria-label={option.label}>
-              {option.icon}
-            </Radio.Button>
-          </Tooltip>
-        ))}
-      </Radio.Group>
-    )
   }
 
   const handleCancelRevision = () => {
@@ -2378,13 +2346,13 @@ export default function ProjectSpaceContainer() {
     const displayTasks = isLevel2Custom
       ? filterBySearchText(tableTasks)
       : projectPlanLevel === 'level1'
-        ? applyFilterConditions(tableTasks, level1PlanFilters)
+        ? applyPlanWorkspaceFilters(tableTasks, level1PlanFilters)
         : filterBySearchText(tableTasks)
     const flatTasks = displayTasks.map((task: any) => ({ ...task, indentLevel: getTaskDepth(task, tableTasks) }))
     const scopeKey = getScopeKey()
     const collapsedSet = scopeKey ? (collapsedNodes[scopeKey] || new Set<string>()) : new Set<string>()
     const expandEnabled = scopeKey !== null
-    const visibleTasks = expandEnabled ? filterByCollapsed(flatTasks, collapsedSet) : flatTasks
+    const visibleTasks = expandEnabled ? filterPlanTasksByCollapsed(flatTasks, collapsedSet) : flatTasks
     // 修订版本下扫描父子时间约束，违规字段在对应单元格上加 pms-cell-invalid 类
     const invalidFields = isCurrentDraft ? getInvalidTaskFields(tableTasks as any[]) : new Map<string, InvalidFields>()
     // 编辑权限分级：
@@ -2604,12 +2572,8 @@ export default function ProjectSpaceContainer() {
             baseCurrentVersion,
           )
         : currentVersion
-    const stages = effectiveTasks.filter((t: any) => !t.parentId).sort((a: any, b: any) => a.order - b.order)
-    const stageGroups = stages.map((stage: any) => {
-      const milestones = effectiveTasks.filter((t: any) => t.parentId === stage.id).sort((a: any, b: any) => a.order - b.order)
-      return { stage, milestones, colSpan: milestones.length || 1 }
-    })
-    const allMilestones = stageGroups.flatMap(({ stage, milestones }) => milestones.length > 0 ? milestones : [stage])
+    const stageGroups = buildPlanHorizontalStageGroups(effectiveTasks)
+    const allMilestones = buildPlanHorizontalMilestones(stageGroups)
     const calcDevCycle = (taskList: any[]) => {
       const starts = taskList.map((t: any) => t.planStartDate).filter(Boolean).map((d: string) => new Date(d).getTime())
       const ends = taskList.map((t: any) => t.planEndDate).filter(Boolean).map((d: string) => new Date(d).getTime())
@@ -2750,67 +2714,6 @@ export default function ProjectSpaceContainer() {
         {!hasDraftVersion && renderCreateRevisionButton()}
         <Tooltip title="历史版本对比"><Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)} aria-label="历史版本对比" /></Tooltip>
       </Space>
-    )
-  }
-
-  // ═══════ renderVersionCompareResult ═══════
-  const renderVersionCompareResult = () => {
-    if (compareResult.length === 0) {
-      return (
-        <div style={{ textAlign: 'center', padding: '48px 0', color: '#bfbfbf' }}>
-          <HistoryOutlined style={{ fontSize: 36, display: 'block', marginBottom: 12, color: '#e5e7eb' }} />
-          <div style={{ fontSize: 14, color: '#9ca3af' }}>选择两个版本后点击"开始对比"查看差异</div>
-        </div>
-      )
-    }
-    const changedRows = compareResult.filter(r => r.changeType !== '未变更')
-    const stats = { total: compareResult.length, added: changedRows.filter(r => r.changeType === '新增').length, deleted: changedRows.filter(r => r.changeType === '删除').length, modified: changedRows.filter(r => r.changeType === '修改').length, unchanged: compareResult.filter(r => r.changeType === '未变更').length }
-    let filteredData = compareShowUnchanged ? compareResult : changedRows
-    if (compareFilterType !== 'all') filteredData = filteredData.filter(r => r.changeType === compareFilterType)
-    const getRowBg = (type: string) => { if (type === '新增') return '#f6ffed'; if (type === '删除') return '#fff2f0'; if (type === '修改') return 'rgba(99,102,241,0.06)'; return undefined }
-    const renderDiffCell = (row: CompareTableRow, fieldKey: string, value: any) => {
-      const diff = row.fieldDiffs.find((d: FieldDiff) => d.field === fieldKey)
-      if (row.changeType === '修改' && diff) {
-        return (<Tooltip title={<div style={{ fontSize: 12 }}><div>修改人: {row.modifier}</div><div>修改时间: {row.modifyTime}</div></div>}><div style={{ lineHeight: 1.6 }}><div style={{ color: '#ff4d4f', fontSize: 11, textDecoration: 'line-through', opacity: 0.7 }}>{diff.oldValue}</div><div style={{ color: '#6366f1', fontWeight: 600, fontSize: 12 }}>{diff.newValue}</div></div></Tooltip>)
-      }
-      if (row.changeType === '新增') return <span style={{ color: '#52c41a', fontWeight: 500 }}>{value || '-'}</span>
-      if (row.changeType === '删除') return <span style={{ color: '#ff4d4f', textDecoration: 'line-through', opacity: 0.7 }}>{value || '-'}</span>
-      return <span style={{ color: '#4b5563' }}>{value || '-'}</span>
-    }
-    const compareColumns: any[] = [
-      { title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, render: (val: string, row: CompareTableRow) => (<span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? '#6366f1' : '#9ca3af' }}>{val}</span>) },
-      { title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, render: (val: string) => { const conf: Record<string, { color: string; bg: string }> = { '新增': { color: '#52c41a', bg: '#f6ffed' }, '删除': { color: '#ff4d4f', bg: '#fff2f0' }, '修改': { color: '#6366f1', bg: 'rgba(99,102,241,0.06)' }, '未变更': { color: '#9ca3af', bg: '#fafafa' } }; const c = conf[val]; return c ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: c.color, background: c.bg, border: `1px solid ${c.color}20` }}>{val}</span> : null } },
-      { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, ellipsis: true, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
-      { title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) },
-      { title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'predecessor', val) },
-      { title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 105, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'planStartDate', val) },
-      { title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 105, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'planEndDate', val) },
-      { title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 80, render: (val: number, row: CompareTableRow) => renderDiffCell(row, 'estimatedDays', val ? `${val}天` : '-') },
-      { title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 105, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'actualStartDate', val) },
-      { title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 105, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'actualEndDate', val) },
-      { title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 80, render: (val: number, row: CompareTableRow) => renderDiffCell(row, 'actualDays', val ? `${val}天` : '-') },
-      { title: '状态', dataIndex: 'status', key: 'status', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'status', val) },
-      { title: '进度', dataIndex: 'progress', key: 'progress', width: 70, render: (val: number, row: CompareTableRow) => renderDiffCell(row, 'progress', `${val}%`) },
-    ]
-    return (
-      <div style={{ marginTop: 16 }}>
-        <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
-          {[
-            { label: '变更总计', value: changedRows.length, color: '#6366f1', filterVal: 'all' },
-            { label: '新增', value: stats.added, color: '#52c41a', filterVal: '新增' },
-            { label: '修改', value: stats.modified, color: '#6366f1', filterVal: '修改' },
-            { label: '删除', value: stats.deleted, color: '#ff4d4f', filterVal: '删除' },
-          ].map(item => {
-            const isActive = compareFilterType === item.filterVal
-            return (<div key={item.filterVal} onClick={() => setCompareFilterType(item.filterVal)} style={{ flex: 1, padding: '10px 16px', borderRadius: 8, cursor: 'pointer', background: isActive ? `${item.color}10` : '#fafafa', border: isActive ? `1px solid ${item.color}` : '1px solid #f3f4f6', transition: 'all 0.2s' }}><div style={{ fontSize: 20, fontWeight: 700, color: item.color }}>{item.value}</div><div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{item.label}</div></div>)
-          })}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <span style={{ fontSize: 12, color: '#9ca3af' }}>共 {filteredData.length} 条记录</span>
-          <Checkbox checked={compareShowUnchanged} onChange={e => setCompareShowUnchanged(e.target.checked)}><span style={{ fontSize: 12 }}>显示未变更项</span></Checkbox>
-        </div>
-        <Table className="pms-table" columns={compareColumns} dataSource={filteredData} size="small" bordered pagination={filteredData.length > 15 ? { pageSize: 15, size: 'small', showTotal: (t) => `共 ${t} 条` } : false} scroll={{ x: 1200, y: 420 }} rowKey="key" onRow={(record: CompareTableRow) => ({ style: { background: getRowBg(record.changeType) } })} />
-      </div>
     )
   }
 
@@ -3471,8 +3374,11 @@ export default function ProjectSpaceContainer() {
       { key: 'level2', label: '二级计划' },
       { key: 'overview', label: '计划总览' },
     ]
-    return (
-      <div>
+    const usesSharedPlanWorkspace = !machineMarketPlanUnavailable
+      && projectPlanLevel !== 'overview'
+      && !(projectPlanLevel === 'level2' && (activeLevel2Plan === 'plan0' || activeLevel2Plan === 'plan1'))
+    const planWorkspacePrimaryScopeTabs = (
+      <>
         {showTosTypeTabs && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
             <Row align="middle" justify="space-between">
@@ -3538,32 +3444,13 @@ export default function ProjectSpaceContainer() {
                 items={planTabItems.map(item => ({ ...item, label: <span style={{ fontWeight: 500, padding: '0 4px' }}>{item.label}</span> }))}
               />
             </Col>
-            <Col><Tag color={projectPlanLevel === 'overview' ? 'blue' : 'default'} style={{ fontSize: 11 }}>{planTabItems.find(t => t.key === projectPlanLevel)?.label}</Tag></Col>
+            <Col><Tag color={projectPlanLevel === 'overview' ? 'blue' : 'default'} style={{ fontSize: 11 }}>{planTabItems.find(tab => tab.key === projectPlanLevel)?.label}</Tag></Col>
           </Row>
         </Card>
-        {machineMarketPlanUnavailable ? (
-          <Card style={{ borderRadius: 8 }}>
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={marketConfigRows.length === 0 ? '尚未配置市场，无法查看一级计划' : '当前市场不属于本项目，请重新选择市场'}
-            >
-              <Button type="primary" icon={<PlusOutlined />} onClick={openMarketEditor}>
-                {marketConfigRows.length === 0 ? '添加市场' : '市场编辑'}
-              </Button>
-            </Empty>
-          </Card>
-        ) : (
-          <>
-        {showTosTypeTabs && projectPlanLevel === 'level1' && currentTosTypeIsFollow && (
-          <Alert
-            type="info"
-            showIcon
-            style={{ marginBottom: 16, borderRadius: 8 }}
-            message={`当前类型跟随 ${effectiveTosLevel1Type}`}
-            description={`一级计划来自 ${effectiveTosLevel1Type}；如需创建修订、编辑或发布，请切换到 ${effectiveTosLevel1Type}。`}
-          />
-        )}
-        {projectPlanLevel === 'overview' && renderProjectPlanOverview()}
+      </>
+    )
+    const planWorkspaceSecondaryScopeTabs = (
+      <>
         {projectPlanLevel === 'level2' && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px 4px 16px' } }}>
             <Row justify="space-between" align="middle">
@@ -3576,10 +3463,10 @@ export default function ProjectSpaceContainer() {
                         {plan2.name}
                         {!plan2.fixed && (
                           <Popconfirm title={`确认删除"${plan2.name}"？`}
-                            onConfirm={(e) => { e?.stopPropagation(); const newPlans = createdLevel2Plans.filter(p2 => p2.id !== plan2.id); setCreatedLevel2Plans(newPlans); if (activeLevel2Plan === plan2.id) setActiveLevel2Plan(newPlans[0]?.id || 'plan0'); message.success(`已删除${plan2.name}`) }}
-                            onCancel={(e) => e?.stopPropagation()} okText="确认" cancelText="取消"
+                            onConfirm={(event) => { event?.stopPropagation(); const newPlans = createdLevel2Plans.filter(item => item.id !== plan2.id); setCreatedLevel2Plans(newPlans); if (activeLevel2Plan === plan2.id) setActiveLevel2Plan(newPlans[0]?.id || 'plan0'); message.success(`已删除${plan2.name}`) }}
+                            onCancel={(event) => event?.stopPropagation()} okText="确认" cancelText="取消"
                           >
-                            <DeleteOutlined style={{ fontSize: 12, color: '#bfbfbf', marginLeft: 2 }} onClick={(e) => e.stopPropagation()} onMouseEnter={(e) => (e.currentTarget.style.color = '#ff4d4f')} onMouseLeave={(e) => (e.currentTarget.style.color = '#bfbfbf')} />
+                            <DeleteOutlined style={{ fontSize: 12, color: '#bfbfbf', marginLeft: 2 }} onClick={(event) => event.stopPropagation()} onMouseEnter={(event) => (event.currentTarget.style.color = '#ff4d4f')} onMouseLeave={(event) => (event.currentTarget.style.color = '#bfbfbf')} />
                           </Popconfirm>
                         )}
                       </span>
@@ -3595,7 +3482,6 @@ export default function ProjectSpaceContainer() {
             </Row>
           </Card>
         )}
-        {/* L2 plan meta */}
         {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1' && level2PlanMeta[activeLevel2Plan]?.planType === '1+N MR版本火车计划' && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8, border: '1px solid rgba(99,102,241,0.06)' }} styles={{ body: { padding: 0 } }}>
             <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }} onClick={() => setPlanMetaCollapsed(!planMetaCollapsed)}>
@@ -3632,6 +3518,39 @@ export default function ProjectSpaceContainer() {
             )}
           </Card>
         )}
+      </>
+    )
+    const planWorkspaceScopeTabs = <>{planWorkspacePrimaryScopeTabs}{planWorkspaceSecondaryScopeTabs}</>
+    const planWorkspaceNotices = showTosTypeTabs && projectPlanLevel === 'level1' && currentTosTypeIsFollow
+      ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16, borderRadius: 8 }}
+            message={`当前类型跟随 ${effectiveTosLevel1Type}`}
+            description={`一级计划来自 ${effectiveTosLevel1Type}；如需创建修订、编辑或发布，请切换到 ${effectiveTosLevel1Type}。`}
+          />
+        )
+      : null
+    return (
+      <div>
+        {!usesSharedPlanWorkspace && planWorkspacePrimaryScopeTabs}
+        {machineMarketPlanUnavailable ? (
+          <Card style={{ borderRadius: 8 }}>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={marketConfigRows.length === 0 ? '尚未配置市场，无法查看一级计划' : '当前市场不属于本项目，请重新选择市场'}
+            >
+              <Button type="primary" icon={<PlusOutlined />} onClick={openMarketEditor}>
+                {marketConfigRows.length === 0 ? '添加市场' : '市场编辑'}
+              </Button>
+            </Empty>
+          </Card>
+        ) : (
+          <>
+        {!usesSharedPlanWorkspace && planWorkspaceSecondaryScopeTabs}
+        {!usesSharedPlanWorkspace && planWorkspaceNotices}
+        {projectPlanLevel === 'overview' && renderProjectPlanOverview()}
         {projectPlanLevel === 'level2' && activeLevel2Plan === 'plan0' && <RequirementDevPlan isEditMode={isEditMode} />}
         {isTosVersionTrainPlan && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '12px 16px' } }}>
@@ -3683,36 +3602,37 @@ export default function ProjectSpaceContainer() {
           />
         )}
         {/* Version management + table/gantt for L1 and non-fixed L2 */}
-        {projectPlanLevel !== 'overview' && !(projectPlanLevel === 'level2' && (activeLevel2Plan === 'plan0' || activeLevel2Plan === 'plan1')) && (
-          <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '12px 16px' } }}>
-            <Row justify="space-between" align="middle">
-              <Col>
-                <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
-                  <Space size={6}>
-                    <span style={{ color: '#9ca3af', fontSize: 13 }}>版本</span>
-                    <Select value={currentVersion} onChange={(val) => navigateWithEditGuard(() => { setCurrentVersion(val); setIsEditMode(false) })} style={{ width: versionSelectWidth }} size="middle">
-                      {versions
-                        .filter(v => v.status !== '修订中' || canViewDraft)
-                        .map(v => <Option key={v.id} value={v.id}>{renderVersionLabel(v)}</Option>)}
-                    </Select>
-                    {isCurrentDraft && <Tag color="green" style={{ fontSize: 12, margin: 0 }}>自动保存</Tag>}
-                  </Space>
-                  <Space size={6}>
-                    {(followedTosLevel1ReadOnly || !hasDraftVersion) && (canEditCurrentPlan
-                      ? renderCreateRevisionButton({ borderRadius: 6 })
-                      : <Tooltip title={`无${currentPlanPermissionLabel}编辑权限`}><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled aria-label="创建修订">创建修订</Button></Tooltip>)}
-                    {renderPlanCloneButton({ borderRadius: 6 })}
-                    {isCurrentDraft && (canMaintainCurrentPlan
-                      ? <Tooltip title="发布"><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} onClick={handlePublish} aria-label="发布" /></Tooltip>
-                      : <Tooltip title={followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`}><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} disabled aria-label="发布" /></Tooltip>)}
-                    {isCurrentDraft && (canMaintainCurrentPlan
-                      ? <Tooltip title="取消修订"><Button danger icon={<StopOutlined />} style={{ borderRadius: 6 }} onClick={handleCancelRevision} aria-label="取消修订" /></Tooltip>
-                      : <Tooltip title={followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`}><Button danger icon={<StopOutlined />} style={{ borderRadius: 6 }} disabled aria-label="取消修订" /></Tooltip>)}
-                  </Space>
-                </Space>
-              </Col>
-              <Col>
-                <Space size={6}>
+        {usesSharedPlanWorkspace && (
+          <PlanWorkspaceShell
+            scopeTabs={planWorkspaceScopeTabs}
+            notices={planWorkspaceNotices}
+            versionControls={(
+              <Space size={6}>
+                <span style={{ color: '#9ca3af', fontSize: 13 }}>版本</span>
+                <Select value={currentVersion} onChange={(val) => navigateWithEditGuard(() => { setCurrentVersion(val); setIsEditMode(false) })} style={{ width: versionSelectWidth }} size="middle">
+                  {versions
+                    .filter(v => v.status !== '修订中' || canViewDraft)
+                    .map(v => <Option key={v.id} value={v.id}>{renderVersionLabel(v)}</Option>)}
+                </Select>
+                {isCurrentDraft && <Tag color="green" style={{ fontSize: 12, margin: 0 }}>自动保存</Tag>}
+              </Space>
+            )}
+            primaryActions={(
+              <Space size={6}>
+                {(followedTosLevel1ReadOnly || !hasDraftVersion) && (canEditCurrentPlan
+                  ? renderCreateRevisionButton({ borderRadius: 6 })
+                  : <Tooltip title={`无${currentPlanPermissionLabel}编辑权限`}><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled aria-label="创建修订">创建修订</Button></Tooltip>)}
+                {renderPlanCloneButton({ borderRadius: 6 })}
+                {isCurrentDraft && (canMaintainCurrentPlan
+                  ? <Tooltip title="发布"><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} onClick={handlePublish} aria-label="发布" /></Tooltip>
+                  : <Tooltip title={followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`}><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} disabled aria-label="发布" /></Tooltip>)}
+                {isCurrentDraft && (canMaintainCurrentPlan
+                  ? <Tooltip title="取消修订"><Button danger icon={<StopOutlined />} style={{ borderRadius: 6 }} onClick={handleCancelRevision} aria-label="取消修订" /></Tooltip>
+                  : <Tooltip title={followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`}><Button danger icon={<StopOutlined />} style={{ borderRadius: 6 }} disabled aria-label="取消修订" /></Tooltip>)}
+              </Space>
+            )}
+            utilityActions={(
+              <Space size={6}>
                   {projectPlanLevel === 'level1' && projectPlanViewMode === 'gantt' && (
                     <Space size={4}>
                       <span style={{ color: '#9ca3af', fontSize: 13 }}>刻度</span>
@@ -3853,22 +3773,19 @@ export default function ProjectSpaceContainer() {
                       }} aria-label="分享计划" />
                     </Tooltip>
                   )}
-                  <Divider type="vertical" style={{ margin: '0 2px' }} />
-                  {renderProjectPlanViewModeSwitcher()}
-                </Space>
-              </Col>
-            </Row>
-          </Card>
-        )}
-        {!(projectPlanLevel === 'level2' && (activeLevel2Plan === 'plan0' || activeLevel2Plan === 'plan1')) && (
-          <Card style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
+              </Space>
+            )}
+            viewMode={(projectPlanViewMode === 'table' ? 'vertical' : projectPlanViewMode) as PlanWorkspaceViewMode}
+            onViewModeChange={(viewMode) => setProjectPlanViewMode(viewMode === 'vertical' ? 'table' : viewMode)}
+            horizontalDisabled={projectPlanLevel !== 'level1' || isEditMode}
+          >
             {projectPlanLevel === 'level1' && (projectPlanViewMode === 'gantt' ? renderGanttChart() : projectPlanViewMode === 'horizontal' ? renderHorizontalTable() : renderTaskTable())}
             {projectPlanLevel === 'level2' && activeLevel2Plan && (
               projectPlanViewMode === 'gantt'
                 ? renderGanttChart(level2PlanTasks.filter(t => t.planId === activeLevel2Plan))
                 : renderTaskTable(level2PlanTasks.filter(t => t.planId === activeLevel2Plan))
             )}
-          </Card>
+          </PlanWorkspaceShell>
         )}
           </>
         )}
@@ -3890,6 +3807,47 @@ export default function ProjectSpaceContainer() {
     { key: 'docs', icon: <FolderOutlined />, label: '项目文档' },
     { key: 'permission', icon: <SafetyCertificateOutlined />, label: '权限配置' },
   ]
+
+  const handleComparePlanVersions = () => {
+    const versionA = versions.find(version => version.id === compareVersionA)
+    const versionB = versions.find(version => version.id === compareVersionB)
+    if (!versionA || !versionB) return
+
+    const currentScopedTasks = isTosVersionTrainPlan
+      ? versionTrainRecordsToCompareTasks(versionTrainRecordsForCurrentVersion || [])
+      : projectPlanLevel === 'level2' ? level2PlanTasks : effectiveTasks
+    const getTosVersionTasks = (versionId: string) => {
+      if (!selectedProject || !isTosTypeScoped) return currentScopedTasks
+      const snapshot = publishedSnapshots[getTosTypeSnapshotKey(
+        selectedProject.id,
+        scopedTosPlanType,
+        isTosVersionTrainPlan ? TOS_VERSION_TRAIN_SNAPSHOT_LEVEL : scopedPlanLevel,
+        versionId,
+      )]
+      if (snapshot === undefined) return currentScopedTasks
+      return isTosVersionTrainPlan
+        ? versionTrainRecordsToCompareTasks(snapshot as VersionTrainRecord[])
+        : snapshot
+    }
+    const oldTasks = isTosTypeScoped
+      ? getTosVersionTasks(versionA.id)
+      : versionA.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
+    let newTasks = isTosTypeScoped
+      ? getTosVersionTasks(versionB.id)
+      : versionB.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
+    if (!isTosTypeScoped && comparePlanVersions(versionA, versionB) !== 0) {
+      newTasks = [
+        ...effectiveTasks.map(task => {
+          if (task.id === '2.1') return { ...task, taskName: 'STR2(更新)', status: '已完成', progress: 100 }
+          if (task.id === '3') return { ...task, responsible: '李四', planStartDate: '2026-02-20' }
+          return task
+        }),
+        { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
+      ]
+    }
+    setCompareResult(compareVersionsForTable(oldTasks as any, newTasks as any))
+    message.success('对比完成')
+  }
 
   // ═══════ RETURN ═══════
   // This is renderProjectSpace() extracted verbatim — the outer shell with header, sidebar, and content area.
@@ -3925,7 +3883,15 @@ export default function ProjectSpaceContainer() {
           {transfer.transferView === 'sqa-review' && <TransferSqaReview {...transferProps} />}
           {transfer.transferView === null && projectSpaceModule === 'basic' && (
             isTechnicalProject && selectedProject
-              ? <TechnicalProjectBasicInfo projectId={selectedProject.id} currentLoginUser={currentLoginUser} />
+              ? <TechnicalProjectInformationView
+                  project={selectedProject}
+                  stage={technicalStage}
+                  preProjectName={technicalPreProjectName}
+                  customRoles={roles.filter(role => !role.isFixed)}
+                  currentLoginUser={currentLoginUser}
+                  canEdit={canEditBasicInfo}
+                  onEdit={() => setShowProjectInfoEditor(true)}
+                />
               : renderProjectBasicInfo()
           )}
           {transfer.transferView === null && projectSpaceModule === 'plan' && (
@@ -3937,27 +3903,16 @@ export default function ProjectSpaceContainer() {
                   canPublish={canEditLevel1Plan}
                   canImport={canImportTechnicalPlan}
                   canExport={canExportTechnicalPlan}
+                  canViewTechnicalPlan={canViewLevel1Plan}
+                  canShareTechnicalPlan={canShareTechnicalPlan}
                   maxDepthByKind={{ tdt: 2, subproject: 1 }}
                 />
               : renderProjectPlan()
           )}
           {transfer.transferView === null && projectSpaceModule === 'overview' && (
-            isTechnicalProject && selectedProject
-              ? (
-                <TechnicalProjectOverview
-                  project={selectedProject}
-                  stage={technicalStage}
-                  preProjectName={technicalPreProjectName}
-                  customRoles={roles.filter(role => !role.isFixed)}
-                  canEdit={canEditBasicInfo}
-                  onEdit={() => setShowProjectInfoEditor(true)}
-                />
-              )
-              : (
-                <Card style={{ borderRadius: 8, textAlign: 'center', padding: '48px 0' }}>
-                  <Empty description={<span style={{ color: '#9ca3af' }}>概况模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                </Card>
-              )
+            <Card style={{ borderRadius: 8, textAlign: 'center', padding: '48px 0' }}>
+              <Empty description={<span style={{ color: '#9ca3af' }}>概况模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            </Card>
           )}
           {transfer.transferView === null && projectSpaceModule === 'requirements' && (
             <Card style={{ borderRadius: 8, textAlign: 'center', padding: '48px 0' }}>
@@ -4003,72 +3958,17 @@ export default function ProjectSpaceContainer() {
         <Alert type="warning" message="二级计划时间必须在绑定里程碑的时间范围内" description={milestoneTimeWarning.message} style={{ marginBottom: 16 }} />
       </Modal>
       {/* Version compare modal */}
-      <Modal className="pms-modal"
-        title={<Space><HistoryOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
+      <PlanVersionCompareModal
         open={showVersionCompare}
-        onCancel={() => { setShowVersionCompare(false); setCompareResult([]); setCompareFilterType('all'); setCompareShowUnchanged(false) }}
-        footer={null} width={1200}
-        styles={{ body: { padding: '20px 24px' } }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%)', borderRadius: 10, marginBottom: 16, border: '1px solid #e5e7eb' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>基准版本</span>
-            <Select value={compareVersionA} onChange={setCompareVersionA} style={{ width: 180 }} size="middle">
-              {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
-            </Select>
-          </div>
-          <div style={{ fontSize: 18, color: '#bfbfbf' }}>→</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>对比版本</span>
-            <Select value={compareVersionB} onChange={setCompareVersionB} style={{ width: 180 }} size="middle">
-              {versions.map(v => <Option key={v.id} value={v.id}>{v.versionNo} ({v.status})</Option>)}
-            </Select>
-          </div>
-          <Button type="primary" icon={<SearchOutlined />} style={{ borderRadius: 6 }} onClick={() => {
-            const versionA = versions.find(v => v.id === compareVersionA)
-            const versionB = versions.find(v => v.id === compareVersionB)
-            if (versionA && versionB) {
-              const currentScopedTasks = isTosVersionTrainPlan
-                ? versionTrainRecordsToCompareTasks(versionTrainRecordsForCurrentVersion || [])
-                : projectPlanLevel === 'level2' ? level2PlanTasks : effectiveTasks
-              const getTosVersionTasks = (versionId: string) => {
-                if (!selectedProject || !isTosTypeScoped) return currentScopedTasks
-                const snapshot = publishedSnapshots[getTosTypeSnapshotKey(
-                  selectedProject.id,
-                  scopedTosPlanType,
-                  isTosVersionTrainPlan ? TOS_VERSION_TRAIN_SNAPSHOT_LEVEL : scopedPlanLevel,
-                  versionId,
-                )]
-                if (snapshot === undefined) return currentScopedTasks
-                return isTosVersionTrainPlan
-                  ? versionTrainRecordsToCompareTasks(snapshot as VersionTrainRecord[])
-                  : snapshot
-              }
-              const oldTasks = isTosTypeScoped
-                ? getTosVersionTasks(versionA.id)
-                : versionA.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
-              let newTasks = isTosTypeScoped
-                ? getTosVersionTasks(versionB.id)
-                : versionB.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
-              if (!isTosTypeScoped && comparePlanVersions(versionA, versionB) !== 0) {
-                newTasks = [
-                  ...effectiveTasks.map(t => {
-                    if (t.id === '2.1') return { ...t, taskName: 'STR2(更新)', status: '已完成', progress: 100 }
-                    if (t.id === '3') return { ...t, responsible: '李四', planStartDate: '2026-02-20' }
-                    return t
-                  }),
-                  { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 }
-                ]
-              }
-              const result = compareVersionsForTable(oldTasks as any, newTasks as any)
-              setCompareResult(result as CompareTableRow[])
-              setCompareFilterType('all')
-              message.success('对比完成')
-            }
-          }}>开始对比</Button>
-        </div>
-        {renderVersionCompareResult()}
-      </Modal>
+        rows={compareResult}
+        versions={versions}
+        baseVersionId={compareVersionA}
+        targetVersionId={compareVersionB}
+        onBaseVersionChange={setCompareVersionA}
+        onTargetVersionChange={setCompareVersionB}
+        onCompare={handleComparePlanVersions}
+        onCancel={() => { setShowVersionCompare(false); setCompareResult([]) }}
+      />
       {/* Market editor modal */}
       <MarketEditorModal
         open={showMarketEditor}

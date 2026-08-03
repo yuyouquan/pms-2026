@@ -46,12 +46,25 @@ const clickExact = async (page, selector, text, scope = 'body') => {
 
 const clickAria = async (page, label) => {
   await page.waitForFunction(value => {
-    const element = document.querySelector(`[aria-label="${CSS.escape(value)}"]`)
-    if (!element) return false
-    const rect = element.getBoundingClientRect()
-    return rect.width > 0 && rect.height > 0
+    return Array.from(document.querySelectorAll(`[aria-label="${CSS.escape(value)}"]`)).some(element => {
+      const target = element.getBoundingClientRect().width > 0 ? element : element.closest('label')
+      const rect = target?.getBoundingClientRect()
+      const style = target ? getComputedStyle(target) : null
+      return Boolean(rect && rect.width > 0 && rect.height > 0 && style?.display !== 'none' && style?.visibility !== 'hidden')
+    })
   }, { timeout: TIMEOUT }, label)
-  await page.$eval(`[aria-label="${label.replaceAll('"', '\\"')}"]`, element => element.click())
+  const clicked = await page.evaluate(value => {
+    for (const element of document.querySelectorAll(`[aria-label="${CSS.escape(value)}"]`)) {
+      const target = element.getBoundingClientRect().width > 0 ? element : element.closest('label')
+      const rect = target?.getBoundingClientRect()
+      const style = target ? getComputedStyle(target) : null
+      if (!rect || rect.width <= 0 || rect.height <= 0 || style?.display === 'none' || style?.visibility === 'hidden') continue
+      target.click()
+      return true
+    }
+    return false
+  }, label)
+  if (!clicked) throw new Error(`找不到可见 ARIA 控件：${label}`)
   await wait(160)
 }
 
@@ -95,6 +108,33 @@ const assertText = async (page, text, scope = 'body') => {
 const assertNoText = async (page, text, scope = 'body') => {
   const found = await page.$eval(scope, (root, value) => (root.textContent || '').includes(value), text)
   if (found) throw new Error(`不应显示：${text}`)
+}
+
+const assertCollapsed = async (page, label, scope = 'body') => {
+  await page.waitForFunction((expected, rootSelector) => {
+    const root = document.querySelector(rootSelector)
+    return Array.from(root?.querySelectorAll('button,[role="button"]') || []).some(control => {
+      const rect = control.getBoundingClientRect()
+      const style = getComputedStyle(control)
+      return control.getAttribute('aria-expanded') === 'false'
+        && (control.textContent || '').trim().startsWith(expected)
+        && rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+    })
+  }, { timeout: TIMEOUT }, label, scope)
+}
+
+const assertNoCollapseSection = async (page, label, scope = 'body') => {
+  const found = await page.$eval(scope, (root, expected) => Array.from(root.querySelectorAll('button,[role="button"]')).some(control => {
+    const rect = control.getBoundingClientRect()
+    const style = getComputedStyle(control)
+    return (control.textContent || '').trim().startsWith(expected)
+      && rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+  }), label)
+  if (found) throw new Error(`不应显示折叠模块：${label}`)
+}
+
+const assertCheckedAria = async (page, label) => {
+  await page.waitForFunction(value => document.querySelector(`[aria-label="${CSS.escape(value)}"]`)?.checked === true, { timeout: TIMEOUT }, label)
 }
 
 const openMain = async (page, label) => {
@@ -705,9 +745,9 @@ try {
     if (created.fieldValues?.projectKpi?.url !== 'https://example.com/technical/kpi') throw new Error('技术项目 KPI 链接未保存')
 
     console.log('  STEP edit the same TDT project and switch KPI from URL to file upload')
-    await clickExact(page, '[role="menuitem"]', '概况')
+    await clickExact(page, '[role="menuitem"]', '基础信息')
     console.log('    EDIT open modal')
-    await clickExact(page, 'button', '编辑', '[aria-label="技术项目概况"]')
+    await clickExact(page, 'button', '编辑', '[aria-label="技术项目基础信息"]')
     await wait(500)
     const editorOpened = await page.evaluate(() => Boolean(document.querySelector('[aria-label="项目KPI文件录入方式"]')))
     if (!editorOpened) throw new Error('技术项目信息编辑弹窗未打开')
@@ -737,7 +777,7 @@ try {
       (element.textContent || '').includes('多模态子项目') && (element.textContent || '').includes('待配置')
     )))
     console.log('  STEP configure the pending child through the real modal')
-    await clickAria(page, '配置子项目 多模态子项目')
+    await clickAria(page, '配置子任务 多模态子项目')
     await assertText(page, '待配置', '.ant-modal')
     await assertText(page, '核心价值', '.ant-modal')
     await assertText(page, '开发模式', '.ant-modal')
@@ -770,12 +810,12 @@ try {
     await clickProjectByName(page, 'AI-Engine-V2')
     await clickExact(page, '[role="menuitem"]', '计划')
     await page.waitForSelector('[aria-label="技术项目计划"]', { visible: true })
-    await clickAria(page, '发布技术计划')
+    await clickAria(page, '发布')
     await assertText(page, '计划已发布')
     await clickExact(page, '[role="tab"]', 'AI推理引擎子项目计划')
     await clickExact(page, 'button', '创建修订')
     await assertText(page, '已创建 V1 修订')
-    await clickAria(page, '发布技术计划')
+    await clickAria(page, '发布')
     await assertText(page, '计划已发布')
     await clickExact(page, '[role="tab"]', 'TDT项目计划')
     await assertText(page, 'V2')
@@ -798,8 +838,8 @@ try {
     await openMain(page, '项目列表')
     await clickButtonPrefix(page, '[aria-label="项目分类筛选"]', '技术项目')
     await clickProjectByName(page, 'AI-Engine-V2')
-    await clickExact(page, '[role="menuitem"]', '概况')
-    await clickExact(page, 'button', '编辑', '[aria-label="技术项目概况"]')
+    await clickExact(page, '[role="menuitem"]', '基础信息')
+    await clickExact(page, 'button', '编辑', '[aria-label="技术项目基础信息"]')
     await page.waitForSelector('.ant-modal', { visible: true })
     await selectFormOption(page, 'TMG 及技术领域', '系统应用')
     await selectFormOption(page, '子领域', 'AIOS')
@@ -897,7 +937,88 @@ try {
     await assertText(page, '项目分类')
   })
 
-  const expectedCount = SCENARIO_ONLY ? 1 : 13 - Math.max(1, SCENARIO_FROM)
+  await runScenario('13 technical basic information follows scope tabs', {}, async page => {
+    await openMain(page, '项目列表')
+    await clickButtonPrefix(page, '[aria-label="项目分类筛选"]', '技术项目')
+    await clickProjectByName(page, 'AI-Engine-V2')
+    await page.waitForSelector('[aria-label="技术项目基础信息"]', { visible: true })
+
+    for (const label of ['项目名称', '项目分类', '技术赛道', 'TMG及技术领域', '子领域', '项目阶段', '前置项目', '项目年份', '项目价值']) {
+      await assertText(page, label, '[aria-label="技术项目基础信息"]')
+    }
+    await assertText(page, 'TDT', '[aria-label="技术信息分类"]')
+    await assertText(page, 'TDT计划摘要', '[aria-label="技术项目基础信息"]')
+    await assertNoText(page, '核心价值', '[aria-label="技术信息内容"]')
+    await assertNoCollapseSection(page, '基础信息', '[aria-label="技术信息内容"]')
+    await assertCollapsed(page, '团队信息', '[aria-label="技术信息内容"]')
+    await assertCollapsed(page, '交付物信息', '[aria-label="技术信息内容"]')
+
+    await clickExact(page, '[role="tab"]', 'AI推理引擎子项目', '[aria-label="技术信息分类"]')
+    await assertText(page, 'AI推理引擎子项目计划摘要', '[aria-label="技术项目基础信息"]')
+    await assertCollapsed(page, '基础信息', '[aria-label="技术信息内容"]')
+    await assertCollapsed(page, '团队信息', '[aria-label="技术信息内容"]')
+    await assertCollapsed(page, '交付物信息', '[aria-label="技术信息内容"]')
+    await clickExact(page, '[role="button"]', '基础信息', '[aria-label="技术信息内容"]')
+    for (const label of ['核心价值', '开发模式', '首导tOS', '首导整机产品']) await assertText(page, label, '[aria-label="技术信息内容"]')
+    await clickExact(page, '[role="tab"]', 'TDT', '[aria-label="技术信息分类"]')
+    await assertNoCollapseSection(page, '基础信息', '[aria-label="技术信息内容"]')
+  })
+
+  await runScenario('14 technical plan shares the whole-machine workspace', {}, async page => {
+    await openMain(page, '项目列表')
+    await clickButtonPrefix(page, '[aria-label="项目分类筛选"]', '技术项目')
+    await clickProjectByName(page, 'AI-Engine-V2')
+    await clickExact(page, '[role="menuitem"]', '计划')
+    await page.waitForSelector('[aria-label="技术项目计划"]', { visible: true })
+
+    for (const label of ['计划克隆', '发布', '取消修订', '筛选', '列设置', '全部展开', '全部收起', '版本对比', '导入', '导出', '分享计划']) {
+      await page.waitForSelector(`[aria-label="${label}"]`, { visible: true })
+    }
+    for (const label of ['竖版表格', '横版表格', '甘特图']) {
+      await page.waitForSelector(`[aria-label="${label}"]`)
+    }
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('[aria-label^="新增二级任务 "]')).some(element => {
+      const rect = element.getBoundingClientRect()
+      const style = getComputedStyle(element)
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' && !element.disabled
+    }))
+    await page.waitForSelector('.technical-plan-child-row', { visible: true })
+
+    await clickAria(page, '横版表格')
+    await assertCheckedAria(page, '横版表格')
+    await page.waitForFunction(() => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim() === 'TDT项目计划')
+    await page.waitForSelector('[aria-label="计划内容"] .technical-horizontal-plan-table', { visible: true })
+    await clickAria(page, '甘特图')
+    await assertCheckedAria(page, '甘特图')
+    await page.waitForFunction(() => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim() === 'TDT项目计划')
+    await page.waitForSelector('[aria-label="计划内容"] .gantt_container', { visible: true })
+    await clickAria(page, '竖版表格')
+    await assertCheckedAria(page, '竖版表格')
+    await page.waitForSelector('[aria-label="计划内容"] .pms-table', { visible: true })
+
+    await clickExact(page, '[role="tab"]', 'AI推理引擎子项目计划', '[aria-label="计划作用域"]')
+    await page.waitForSelector('[aria-label="创建修订"]', { visible: true })
+    await clickAria(page, '创建修订')
+    await assertText(page, '已创建 V1 修订')
+    await page.waitForFunction(() => document.querySelectorAll('[aria-label="计划内容"] .ant-table-tbody tr').length > 0)
+    const childTaskButtonCount = await page.$$eval('[aria-label^="新增二级任务 "]', elements => elements.filter(element => {
+      const rect = element.getBoundingClientRect()
+      return rect.width > 0 && rect.height > 0
+    }).length)
+    if (childTaskButtonCount !== 0) throw new Error(`子项目计划不应允许二级任务：${childTaskButtonCount}`)
+    const childScopeHasNestedTask = await page.evaluate(() => {
+      const envelope = JSON.parse(localStorage.getItem('pms-technical-plans') || '{}')
+      return (envelope?.state?.plansByKey?.['9:subproject:IPM-AI-001']?.versions || [])
+        .some(version => (version.tasks || []).some(task => Boolean(task.parentId)))
+    })
+    if (childScopeHasNestedTask) throw new Error('子项目计划不应保存二级任务')
+    await clickAria(page, '横版表格')
+    await assertCheckedAria(page, '横版表格')
+    await page.waitForFunction(() => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim() === 'AI推理引擎子项目计划')
+    await page.waitForSelector('[aria-label="计划内容"] .technical-horizontal-plan-table', { visible: true })
+  })
+
+  const expectedCount = SCENARIO_ONLY ? 1 : 15 - Math.max(1, SCENARIO_FROM)
   if (results.length !== expectedCount) throw new Error(`场景数量错误：${results.length}/${expectedCount}`)
   console.log(`PASS redesigned project workflows: ${results.length}/${expectedCount} scenarios (${BASE_URL})`)
 } catch (error) {

@@ -438,6 +438,86 @@
   border-top: 1px dashed #e2e8f0;
 }
 
+.technical-information-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  margin-bottom: 10px;
+  padding: 0 16px;
+  border: 1px solid #e8edf5;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.technical-information-tabs .ant-tabs {
+  min-width: 0;
+  flex: 1;
+}
+
+.technical-information-tabs .ant-tabs-nav {
+  margin: 0;
+}
+
+.technical-information-inactive-switch {
+  flex: none;
+}
+
+.technical-plan-summary {
+  width: 100%;
+  overflow: auto;
+}
+
+.technical-plan-summary table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.technical-plan-summary th,
+.technical-plan-summary td {
+  min-width: 110px;
+  padding: 10px 12px;
+  text-align: center;
+  white-space: nowrap;
+  border: 1px solid #e5e7eb;
+}
+
+.technical-plan-summary th {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 650;
+  background: #f8fafc;
+}
+
+.technical-plan-summary td {
+  color: #334155;
+  font-size: 13px;
+}
+
+.technical-plan-summary-current {
+  background: #f0f9ff;
+}
+
+.technical-plan-summary-actual {
+  color: #a16207;
+  background: #fffbe6;
+}
+
+.technical-plan-summary-version {
+  margin-right: 8px;
+  color: #4338ca;
+  font-weight: 700;
+}
+
+.technical-deliverable-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
 .technical-child-tabs .ant-tabs-nav {
   margin-bottom: 18px;
 }
@@ -482,6 +562,16 @@
 
   .technical-child-tab-label {
     max-width: 230px;
+  }
+
+  .technical-information-tabs {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 0 12px 12px;
+  }
+
+  .technical-deliverable-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -3083,6 +3173,7 @@ body {
 
 .pms-project-info-core-grid {
   display: grid;
+  grid-template-columns: repeat(var(--pms-project-info-core-columns, 1), minmax(0, 1fr));
   gap: 8px;
   min-width: 0;
   overflow-x: hidden;
@@ -3567,7 +3658,17 @@ body {
 }
 
 @media (max-width: 1100px) {
+  .pms-project-info-core-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .pms-project-info-team-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .pms-project-info-core-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -3593,6 +3694,12 @@ body {
 
   .pms-project-info-team-grid {
     padding: 12px;
+  }
+}
+
+@media (max-width: 520px) {
+  .pms-project-info-core-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -3627,5 +3734,60 @@ body {
 
   .pms-project-info-collapse > .ant-collapse-item-active > .ant-collapse-panel > .ant-collapse-body {
     transform: none !important;
+  }
+}
+.technical-plan-filter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.technical-plan-edit-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 16px;
+  color: #ad8b00;
+  background: linear-gradient(90deg, #fffbe6, #fff7cc);
+  border: 1px solid #ffe58f;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.technical-plan-edit-notice > .anticon {
+  color: #faad14;
+  font-size: 14px;
+}
+
+.technical-plan-edit-notice > strong {
+  color: #ad6800;
+  font-size: 13px;
+}
+
+.technical-plan-filter-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) 116px minmax(180px, 1.35fr) 40px;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #eef2ff;
+  border-radius: 8px;
+  background: #fafbff;
+}
+
+.technical-horizontal-plan-table .ant-table-thead > tr:first-child > th:not(:first-child) {
+  color: #4338ca;
+  background: #eef2ff;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .technical-plan-filter-row {
+    grid-template-columns: minmax(0, 1fr) 110px 40px;
+  }
+
+  .technical-plan-filter-row > :nth-child(3) {
+    grid-column: 1 / 3;
   }
 }

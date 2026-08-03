@@ -1,9 +1,10 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Button, Card, Tooltip } from 'antd'
-import { EditOutlined, ProjectOutlined, SendOutlined } from '@ant-design/icons'
+import { Button, Tooltip } from 'antd'
+import { CalendarOutlined, EditOutlined, ProjectOutlined, SendOutlined, SettingOutlined } from '@ant-design/icons'
 import ProjectInfoSections from '@/components/project-info/ProjectInfoSections'
+import ProjectInformationFrame from '@/components/project-info/ProjectInformationFrame'
 import type { ProjectInfoGroupKey } from '@/constants/projectInfoSchema'
 import { isMachineProjectType, resolveProjectClassification } from '@/constants/projectTypes'
 import { formatProjectInfoValue, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
@@ -65,47 +66,32 @@ export default function TargetProjectInformationView({
   ]
 
   return (
-    <>
-      <Card
-        id="section-header"
-        className="pms-project-info-core-card"
-        title={(
-          <div className="pms-project-info-core-title" title={project.name}>
-            <ProjectOutlined />
-            <div className="pms-project-info-core-name">{project.name}</div>
-          </div>
-        )}
-        extra={(
-          <div className="pms-project-info-core-actions">
-            {isWholeMachine && onApplyTransfer && <Button type="primary" icon={<SendOutlined />} onClick={onApplyTransfer}>申请转维</Button>}
-            {canEdit
-              ? <Button icon={<EditOutlined />} onClick={onEdit}>编辑</Button>
-              : <Tooltip title="无基础信息编辑权限"><Button icon={<EditOutlined />} disabled>编辑</Button></Tooltip>}
-          </div>
-        )}
-      >
-        <div
-          className="pms-project-info-core-grid"
-          role="region"
-          aria-label="项目核心字段"
-          tabIndex={0}
-          style={{ gridTemplateColumns: `repeat(${coreFields.length}, minmax(0, 1fr))` }}
-        >
-          {coreFields.map(field => (
-            <div key={field.label} className="pms-project-info-core-item" style={{ borderTopColor: field.accent }}>
-              <div className="pms-project-info-core-label"><span style={{ background: field.accent }} />{field.label}</div>
-              <div className="pms-project-info-core-value" style={{ color: field.accent }} title={String(field.value)}>{field.value}</div>
-            </div>
-          ))}
+    <ProjectInformationFrame
+      embedded
+      projectName={project.name}
+      coreFields={coreFields}
+      actions={(
+        <div className="pms-project-info-core-actions">
+          {isWholeMachine && onApplyTransfer && <Button type="primary" icon={<SendOutlined />} onClick={onApplyTransfer}>申请转维</Button>}
+          {canEdit
+            ? <Button icon={<EditOutlined />} onClick={onEdit}>编辑</Button>
+            : <Tooltip title="无基础信息编辑权限"><Button icon={<EditOutlined />} disabled>编辑</Button></Tooltip>}
         </div>
-      </Card>
-      {afterCore}
-      <ProjectInfoSections
-        project={project}
-        currentUser={currentUser}
-        canConfigure={canConfigure}
-        visibleGroupKeys={visibleGroupKeys}
-      />
-    </>
+      )}
+      planInformation={afterCore}
+      informationSections={(
+        <ProjectInfoSections
+          project={project}
+          currentUser={currentUser}
+          canConfigure={canConfigure}
+          visibleGroupKeys={visibleGroupKeys}
+        />
+      )}
+      anchorItems={[
+        { id: 'section-header', label: '项目名称', icon: <ProjectOutlined /> },
+        { id: 'section-plan', label: '计划信息', icon: <CalendarOutlined /> },
+        { id: 'section-basic', label: '项目信息', icon: <SettingOutlined /> },
+      ]}
+    />
   )
 }
