@@ -199,6 +199,7 @@ assert.deepEqual(
 )
 
 const technicalModuleSource = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
+const technicalWorkspace = loadTypeScriptModule(root, 'src/lib/technicalPlanWorkspace.ts')
 const planWorkspaceShellPath = 'src/components/plans/PlanWorkspaceShell.tsx'
 assert.equal(fs.existsSync(`${root}/${planWorkspaceShellPath}`), true, 'plan workspace provides a shared shell for whole-machine and technical projects')
 const planWorkspaceShell = readSource(root, planWorkspaceShellPath)
@@ -410,6 +411,48 @@ assert.match(technicalModuleSource, /canExport/, 'technical plan export has a de
 for (const label of ['实际开始', '实际完成', '实际工期']) {
   assert.match(technicalModuleSource, new RegExp(label), `technical plan vertical table exposes the whole-machine ${label} field`)
 }
+assert.match(technicalModuleSource, /canViewDraft/, 'technical plan accepts the shared draft-visibility capability')
+assert.match(technicalModuleSource, /visibleVersions/, 'all technical plan version surfaces share one visible-version selector')
+assert.match(technicalModuleSource, /navigateWithEditGuard\([^,]+,\s*Boolean\(isDraft\)\)/s, 'scope and version switches use the current draft state for edit guarding')
+assert.match(technicalModuleSource, /<DHTMLXGantt[\s\S]{0,260}readOnly/, 'technical Gantt is explicitly read-only until write-back is implemented')
+assert.match(technicalModuleSource, /scrollIntoView/, 'publish validation moves focus to the first invalid row')
+assert.match(technicalModuleSource, /编辑模式[\s\S]{0,180}自动保存/, 'technical drafts expose the same edit-mode guidance as whole-machine plans')
+assert.match(technicalModuleSource, /key:\s*['"]drag['"][^\n]*fixed:\s*['"]left['"]/, 'the technical drag column stays fixed on horizontal scroll')
+assert.match(technicalModuleSource, /key:\s*['"]taskName['"][^\n]*fixed:\s*['"]left['"]/, 'the technical task-name column stays fixed on horizontal scroll')
+for (const label of ['预估工期', '实际工期', '进度']) {
+  assert.match(technicalModuleSource, new RegExp(`TECHNICAL_FILTER_FIELDS[\\s\\S]*${label}`), `technical filters include ${label}`)
+}
+assert.match(readSource(root, 'src/stores/technicalPlan.ts'), /DEFAULT_COLUMNS[\s\S]{0,420}actualStartDate[\s\S]{0,120}actualEndDate[\s\S]{0,120}actualDays/, 'technical plan persisted defaults include actual-date columns')
+
+const publishedVersion = { id: 'v1', versionNo: 'V1', status: '已发布', templateType: 'tdt', tasks: [] }
+const draftVersion = { id: 'v2', versionNo: 'V2', status: '修订中', templateType: 'tdt', tasks: [] }
+assert.deepEqual(technicalWorkspace.selectVisibleTechnicalPlanVersions([publishedVersion, draftVersion], false).map(version => version.id), ['v1'], 'read-only users never receive a draft technical version')
+assert.deepEqual(technicalWorkspace.selectVisibleTechnicalPlanVersions([publishedVersion, draftVersion], true).map(version => version.id), ['v1', 'v2'], 'draft-capable users retain technical drafts')
+
+const hierarchy = [
+  { id: 'p1', order: 1, taskName: '阶段1' },
+  { id: 'c1', parentId: 'p1', order: 2, taskName: '节点1' },
+  { id: 'p2', order: 3, taskName: '阶段2' },
+  { id: 'c2', parentId: 'p2', order: 4, taskName: '节点2' },
+]
+assert.deepEqual(technicalWorkspace.includeTechnicalPlanAncestors(hierarchy, [hierarchy[1]]).map(task => task.id), ['p1', 'c1'], 'a child filter result retains its parent context')
+assert.deepEqual(technicalWorkspace.reorderTechnicalTasksWithinParent(hierarchy, 'c1', 'c2').map(task => task.id), hierarchy.map(task => task.id), 'dragging across parents cannot corrupt the technical hierarchy')
+
+const imported = technicalWorkspace.parseTechnicalPlanImportRows([
+  { ID: 'p1', '父任务ID': '', '任务名称': '阶段', '责任人': '甲', '前置任务': '', '计划开始': '2026-01-01', '计划完成': '2026-01-10', '预估工期': 10, '实际开始': '2026-01-02', '实际完成': '2026-01-09', '实际工期': 8, '状态': '已完成', '进度': 100 },
+  { ID: 'c1', '父任务ID': 'p1', '任务名称': '节点', '责任人': '乙', '前置任务': 'p1', '计划开始': '2026-01-02', '计划完成': '2026-01-08', '预估工期': 7, '实际开始': '2026-01-03', '实际完成': '2026-01-07', '实际工期': 5, '状态': '进行中', '进度': 80 },
+])
+assert.deepEqual(imported.map(task => [task.id, task.parentId, task.actualEndDate, task.actualDays, task.progress]), [['p1', undefined, '2026-01-09', 8, 100], ['c1', 'p1', '2026-01-07', 5, 80]], 'technical import preserves hierarchy and every exported actual/progress field')
+for (const title of ['ID', '父任务ID', '任务名称', '预估工期', '实际开始', '实际完成', '实际工期', '状态', '进度']) {
+  assert.equal(technicalWorkspace.TECHNICAL_PLAN_EXPORT_COLUMNS.some(column => column.title === title), true, `technical export includes ${title}`)
+}
+const horizontalRows = technicalWorkspace.buildTechnicalHorizontalRows([{
+  ...publishedVersion,
+  tasks: [{ ...hierarchy[0], planStartDate: '2026-01-01', planEndDate: '2026-01-10', actualStartDate: '2026-01-02', actualEndDate: '2026-01-09' }],
+}])
+assert.equal(horizontalRows[0].rowType, 'version', 'horizontal plan includes a version row')
+assert.equal(horizontalRows.at(-1).rowType, 'actual', 'horizontal plan includes a final actual row')
+assert.equal(typeof horizontalRows[0].cycleDays, 'number', 'horizontal version rows include development cycle')
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 const projectSpaceSourceFile = parseTsx(projectSpaceSource, 'ProjectSpaceContainer.tsx')
 assert.equal(importsComponent(projectSpaceSourceFile, 'PlanWorkspaceShell', '@/components/plans/PlanWorkspaceShell'), true, 'whole-machine project space imports the shared shell from its canonical module')
@@ -418,6 +461,7 @@ assert.ok(projectSpaceComponent, 'whole-machine project space resolves to its ex
 assert.ok(findJsxMount(collectReachableNodes(projectSpaceSourceFile, projectSpaceComponent), projectSpaceSourceFile, 'PlanWorkspaceShell'), 'whole-machine project space mounts the imported shared shell in its live return tree')
 assert.match(projectSpaceSource, /canDo\('plan:导入'\)/, 'project space passes technical import permission')
 assert.match(projectSpaceSource, /canDo\('plan:导出'\)/, 'project space passes technical export permission')
+assert.match(projectSpaceSource, /<TechnicalPlanModule[\s\S]{0,420}canViewDraft=\{canViewDraft\}/, 'project space passes the shared draft visibility capability to technical plans')
 
 const machineScope = rules.getTemplateConfigScopeKey('整机产品项目', 'level1')
 const migratedPlan = planModule.migratePlanStoreState({

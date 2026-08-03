@@ -3742,6 +3742,29 @@ body {
   gap: 12px;
 }
 
+.technical-plan-edit-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 16px;
+  color: #ad8b00;
+  background: linear-gradient(90deg, #fffbe6, #fff7cc);
+  border: 1px solid #ffe58f;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.technical-plan-edit-notice > .anticon {
+  color: #faad14;
+  font-size: 14px;
+}
+
+.technical-plan-edit-notice > strong {
+  color: #ad6800;
+  font-size: 13px;
+}
+
 .technical-plan-filter-row {
   display: grid;
   grid-template-columns: minmax(150px, 1fr) 116px minmax(180px, 1.35fr) 40px;

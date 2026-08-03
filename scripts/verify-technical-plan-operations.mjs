@@ -63,7 +63,22 @@ assert.notStrictEqual(clonedDraft.tasks[0], initialPlans['project-a:tdt'].versio
 assert.notStrictEqual(clonedDraft.tasks[0].children, initialPlans['project-a:tdt'].versions[0].tasks[0].children, 'nested task data is deeply isolated')
 assert.deepEqual(clonedState.plansByKey['project-b:tdt'], untouchedProjectB, 'another TDT scope is unchanged')
 assert.deepEqual(clonedState.plansByKey['project-a:subproject:child-1'], untouchedChild, 'a child scope is unchanged')
-assert.equal(technicalPlan.TECHNICAL_PLAN_STORE_VERSION, 2, 'an action-only change does not churn the persisted data-shape version')
+assert.equal(technicalPlan.TECHNICAL_PLAN_STORE_VERSION, 3, 'actual-date default columns advance the persisted technical-plan shape')
+const migratedVersionTwoColumns = technicalPlan.migrateTechnicalPlanState({
+  plansByKey: {
+    'custom:tdt': {
+      planKey: 'custom:tdt', templateKind: 'tdt', currentVersionId: 'custom-v1',
+      versions: [version('custom-v1', 'V1', 'tdt', '已发布', [task('custom-task', '保留任务')])],
+      columnSettings: { order: ['taskName'], visible: ['taskName'] }, collapsedRows: [],
+    },
+  },
+}, 2)
+assert.deepEqual(
+  migratedVersionTwoColumns.plansByKey['custom:tdt'].columnSettings.order,
+  ['taskName', 'actualStartDate', 'actualEndDate', 'actualDays'],
+  'version-2 plan columns gain the new actual-date fields without resetting the plan',
+)
+assert.equal(migratedVersionTwoColumns.plansByKey['custom:tdt'].versions[0].tasks[0].taskName, '保留任务')
 
 technicalPlan.useTechnicalPlanStore.setState({ plansByKey: initialPlans })
 assert.deepEqual(

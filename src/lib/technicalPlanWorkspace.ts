@@ -1,0 +1,163 @@
+import type { TechnicalTemplateTask } from '@/types/technicalPlan'
+
+export const TECHNICAL_PLAN_EXPORT_COLUMNS = [
+  { key: 'id', title: 'ID' },
+  { key: 'parentId', title: '父任务ID' },
+  { key: 'taskName', title: '任务名称' },
+  { key: 'responsible', title: '责任人' },
+  { key: 'predecessor', title: '前置任务' },
+  { key: 'planStartDate', title: '计划开始' },
+  { key: 'planEndDate', title: '计划完成' },
+  { key: 'estimatedDays', title: '预估工期' },
+  { key: 'actualStartDate', title: '实际开始' },
+  { key: 'actualEndDate', title: '实际完成' },
+  { key: 'actualDays', title: '实际工期' },
+  { key: 'status', title: '状态' },
+  { key: 'progress', title: '进度' },
+] as const
+
+export function selectVisibleTechnicalPlanVersions<T extends { status: string }>(
+  versions: readonly T[],
+  canViewDraft: boolean,
+): T[] {
+  return versions.filter(version => version.status !== '修订中' || canViewDraft)
+}
+
+export function includeTechnicalPlanAncestors<T extends { id: string; parentId?: string }>(
+  allTasks: readonly T[],
+  matchedTasks: readonly T[],
+): T[] {
+  const byId = new Map(allTasks.map(task => [task.id, task]))
+  const included = new Set(matchedTasks.map(task => task.id))
+  matchedTasks.forEach(task => {
+    let parentId = task.parentId
+    const visited = new Set<string>()
+    while (parentId && !visited.has(parentId)) {
+      visited.add(parentId)
+      included.add(parentId)
+      parentId = byId.get(parentId)?.parentId
+    }
+  })
+  return allTasks.filter(task => included.has(task.id))
+}
+
+export function reorderTechnicalTasksWithinParent<T extends { id: string; parentId?: string; order: number }>(
+  tasks: readonly T[],
+  activeId: string,
+  overId: string,
+): T[] {
+  const active = tasks.find(task => task.id === activeId)
+  const over = tasks.find(task => task.id === overId)
+  if (!active || !over || active.parentId !== over.parentId) return [...tasks]
+
+  if (active.parentId) {
+    const siblingIndexes = tasks.flatMap((task, index) => task.parentId === active.parentId ? [index] : [])
+    const siblings = siblingIndexes.map(index => tasks[index])
+    const oldIndex = siblings.findIndex(task => task.id === activeId)
+    const newIndex = siblings.findIndex(task => task.id === overId)
+    const reordered = [...siblings]
+    const [moved] = reordered.splice(oldIndex, 1)
+    reordered.splice(newIndex, 0, moved)
+    const next = [...tasks]
+    siblingIndexes.forEach((taskIndex, index) => { next[taskIndex] = reordered[index] })
+    return next.map((task, index) => ({ ...task, order: index + 1 }))
+  }
+
+  const rootTasks = tasks.filter(task => !task.parentId)
+  const oldRootIndex = rootTasks.findIndex(task => task.id === activeId)
+  const newRootIndex = rootTasks.findIndex(task => task.id === overId)
+  const reorderedRoots = [...rootTasks]
+  const [movedRoot] = reorderedRoots.splice(oldRootIndex, 1)
+  reorderedRoots.splice(newRootIndex, 0, movedRoot)
+  const descendantsByRoot = new Map(rootTasks.map(root => [
+    root.id,
+    tasks.filter(task => task.parentId === root.id),
+  ]))
+  return reorderedRoots
+    .flatMap(root => [root, ...(descendantsByRoot.get(root.id) || [])])
+    .map((task, index) => ({ ...task, order: index + 1 }))
+}
+
+const stringValue = (value: unknown) => value == null ? '' : String(value)
+const optionalStringValue = (value: unknown) => {
+  const text = stringValue(value).trim()
+  return text === '-' || text === '—' ? '' : text
+}
+const numberValue = (value: unknown) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+export function parseTechnicalPlanImportRows(
+  rows: readonly Record<string, unknown>[],
+  fallbackTasks: readonly TechnicalTemplateTask[] = [],
+): TechnicalTemplateTask[] {
+  return rows.map((row, index) => {
+    const fallback = fallbackTasks[index]
+    const id = stringValue(row.ID ?? row.id ?? fallback?.id ?? `import-${index + 1}`)
+    const parentId = optionalStringValue(row['父任务ID'] ?? row.parentId ?? fallback?.parentId)
+    return {
+      ...(fallback || {}),
+      id,
+      order: index + 1,
+      ...(parentId ? { parentId } : { parentId: undefined }),
+      taskName: stringValue(row['任务名称'] ?? row.taskName ?? fallback?.taskName),
+      responsible: optionalStringValue(row['责任人'] ?? row.responsible ?? fallback?.responsible),
+      predecessor: optionalStringValue(row['前置任务'] ?? row.predecessor ?? fallback?.predecessor),
+      planStartDate: optionalStringValue(row['计划开始'] ?? row.planStartDate ?? fallback?.planStartDate),
+      planEndDate: optionalStringValue(row['计划完成'] ?? row.planEndDate ?? fallback?.planEndDate),
+      estimatedDays: numberValue(row['预估工期'] ?? row.estimatedDays ?? fallback?.estimatedDays),
+      actualStartDate: optionalStringValue(row['实际开始'] ?? row.actualStartDate ?? fallback?.actualStartDate),
+      actualEndDate: optionalStringValue(row['实际完成'] ?? row.actualEndDate ?? fallback?.actualEndDate),
+      actualDays: numberValue(row['实际工期'] ?? row.actualDays ?? fallback?.actualDays),
+      status: stringValue(row['状态'] ?? row.status ?? fallback?.status ?? '未开始'),
+      progress: numberValue(row['进度'] ?? row.progress ?? fallback?.progress),
+      defaultRoadmap: Boolean(parentId),
+    }
+  })
+}
+
+const cycleDays = (
+  tasks: readonly TechnicalTemplateTask[],
+  startKey: 'planStartDate' | 'actualStartDate',
+  endKey: 'planEndDate' | 'actualEndDate',
+) => {
+  const starts = tasks.map(task => Date.parse(task[startKey])).filter(Number.isFinite)
+  const ends = tasks.map(task => Date.parse(task[endKey])).filter(Number.isFinite)
+  if (!starts.length || !ends.length) return null
+  return Math.max(0, Math.ceil((Math.max(...ends) - Math.min(...starts)) / 86_400_000))
+}
+
+export type TechnicalHorizontalRow = {
+  id: string
+  rowType: 'version' | 'actual'
+  versionNo: string
+  status: string
+  cycleDays: number | null
+  endDatesByTaskId: Record<string, string>
+}
+
+export function buildTechnicalHorizontalRows(
+  versions: readonly { id: string; versionNo: string; status: string; tasks: TechnicalTemplateTask[] }[],
+): TechnicalHorizontalRow[] {
+  const versionRows = versions.map(version => ({
+    id: version.id,
+    rowType: 'version' as const,
+    versionNo: version.versionNo,
+    status: version.status,
+    cycleDays: cycleDays(version.tasks, 'planStartDate', 'planEndDate'),
+    endDatesByTaskId: Object.fromEntries(version.tasks.map(task => [task.id, task.planEndDate || ''])),
+  }))
+  const latest = versions.at(-1)
+  return [
+    ...versionRows,
+    {
+      id: 'actual',
+      rowType: 'actual',
+      versionNo: '实际',
+      status: '',
+      cycleDays: latest ? cycleDays(latest.tasks, 'actualStartDate', 'actualEndDate') : null,
+      endDatesByTaskId: Object.fromEntries((latest?.tasks || []).map(task => [task.id, task.actualEndDate || ''])),
+    },
+  ]
+}

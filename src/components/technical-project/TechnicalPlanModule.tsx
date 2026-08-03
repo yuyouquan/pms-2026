@@ -8,11 +8,11 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import {
   DeleteOutlined, DownloadOutlined, HistoryOutlined, PlusOutlined, SaveOutlined,
-  FilterOutlined, MinusSquareOutlined, PlusSquareOutlined, SettingOutlined, ShareAltOutlined,
+  EditOutlined, FilterOutlined, MinusSquareOutlined, PlusSquareOutlined, SettingOutlined, ShareAltOutlined,
   StopOutlined, UploadOutlined,
 } from '@ant-design/icons'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
-import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
 import SubprojectConfigModal from '@/components/technical-project/SubprojectConfigModal'
@@ -27,6 +27,14 @@ import {
   filterPlanTasksByCollapsed,
   type PlanWorkspaceViewMode,
 } from '@/lib/planWorkspace'
+import {
+  buildTechnicalHorizontalRows,
+  includeTechnicalPlanAncestors,
+  parseTechnicalPlanImportRows,
+  reorderTechnicalTasksWithinParent,
+  selectVisibleTechnicalPlanVersions,
+  TECHNICAL_PLAN_EXPORT_COLUMNS,
+} from '@/lib/technicalPlanWorkspace'
 import { compareVersionsForTable } from '@/lib/versionCompare'
 import { getTemplateSnapshotForProjectType } from '@/lib/projectTemplateCompatibility'
 import {
@@ -48,7 +56,7 @@ import {
   TECHNICAL_TEMPLATE_STORAGE_KEYS,
   validateTechnicalTemplateDepth,
 } from '@/lib/technicalPlanRules'
-import { exportSheet, exportTimestamp } from '@/utils/exportExcel'
+import { exportMergedSheet, exportSheet, exportTimestamp } from '@/utils/exportExcel'
 import { usePlanStore } from '@/stores/plan'
 import { useTechnicalProjectStore } from '@/stores/technicalProject'
 import { useUiStore } from '@/stores/ui'
@@ -78,9 +86,12 @@ const TECHNICAL_FILTER_FIELDS: readonly FilterFieldDefinition[] = [
   { key: 'predecessor', label: '前置任务', kind: 'text' },
   { key: 'planStartDate', label: '计划开始', kind: 'date' },
   { key: 'planEndDate', label: '计划完成', kind: 'date' },
+  { key: 'estimatedDays', label: '预估工期', kind: 'text' },
   { key: 'actualStartDate', label: '实际开始', kind: 'date' },
   { key: 'actualEndDate', label: '实际完成', kind: 'date' },
+  { key: 'actualDays', label: '实际工期', kind: 'text' },
   { key: 'status', label: '状态', kind: 'enum', options: ['未开始', '进行中', '已完成'].map(value => ({ label: value, value })) },
+  { key: 'progress', label: '进度', kind: 'text' },
 ]
 
 function TechnicalHorizontalPlanTable({
@@ -91,13 +102,18 @@ function TechnicalHorizontalPlanTable({
   versions: readonly { id: string; versionNo: string; status: string; tasks: TechnicalTemplateTask[] }[]
 }) {
   const groups = buildPlanHorizontalStageGroups(
-    tasks as readonly (TechnicalTemplateTask & Record<string, unknown>)[],
+    tasks.map(task => ({ ...task })),
   )
   if (!groups.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无横版计划数据" />
-  const columns: ColumnsType<(typeof versions)[number]> = [
+  const rows = buildTechnicalHorizontalRows(versions)
+  const columns: ColumnsType<(typeof rows)[number]> = [
     {
-      key: 'versionNo', title: '版本', dataIndex: 'versionNo', width: 100, fixed: 'left',
+      key: 'versionNo', title: '版本', dataIndex: 'versionNo', width: 110, fixed: 'left',
       render: (value, row) => <Space size={4}><strong>{value}</strong>{row.status === '修订中' && <Tag color="green">修订中</Tag>}</Space>,
+    },
+    {
+      key: 'cycleDays', title: '开发周期', dataIndex: 'cycleDays', width: 100, fixed: 'left',
+      render: value => value == null ? '-' : `${value}天`,
     },
     ...groups.map(group => ({
       key: group.stage.id,
@@ -107,10 +123,7 @@ function TechnicalHorizontalPlanTable({
         title: milestone.taskName,
         width: 136,
         align: 'center' as const,
-        render: (_: unknown, version: (typeof versions)[number]) => {
-          const versionTask = version.tasks.find(task => task.id === milestone.id)
-          return versionTask?.planEndDate || versionTask?.planStartDate || '-'
-        },
+        render: (_: unknown, row: (typeof rows)[number]) => row.endDatesByTaskId[milestone.id] || '-',
       })),
     })),
   ]
@@ -122,8 +135,9 @@ function TechnicalHorizontalPlanTable({
       bordered
       pagination={false}
       columns={columns}
-      dataSource={[...versions]}
-      scroll={{ x: Math.max(960, groups.reduce((total, group) => total + group.colSpan * 136, 100)) }}
+      dataSource={rows}
+      rowClassName={row => row.rowType === 'actual' ? 'technical-plan-summary-actual' : ''}
+      scroll={{ x: Math.max(960, groups.reduce((total, group) => total + group.colSpan * 136, 210)) }}
     />
   )
 }
@@ -135,6 +149,7 @@ export interface TechnicalPlanModuleProps {
   canPublish: boolean
   canImport: boolean
   canExport: boolean
+  canViewDraft: boolean
   maxDepthByKind: Readonly<Record<TechnicalTemplateKind, number>>
 }
 
@@ -152,7 +167,7 @@ const latestPublishedTemplate = (
 }
 
 export default function TechnicalPlanModule({
-  projectId, currentLoginUser, canEdit, canPublish, canImport, canExport,
+  projectId, currentLoginUser, canEdit, canPublish, canImport, canExport, canViewDraft,
   maxDepthByKind = DEFAULT_MAX_DEPTH,
 }: TechnicalPlanModuleProps) {
   const [showInactive, setShowInactive] = useState(false)
@@ -197,7 +212,11 @@ export default function TechnicalPlanModule({
   const tab = tabs.find(item => item.key === activeKey) || tabs[0]
   const scope = tab?.scope || { kind: 'tdt' as const, parentProjectId: projectId }
   const instance = plansByKey[getTechnicalPlanKey(scope)]
-  const currentVersion = instance?.versions.find(version => version.id === instance.currentVersionId) || instance?.versions[0]
+  const visibleVersions = useMemo(
+    () => selectVisibleTechnicalPlanVersions(instance?.versions || [], canViewDraft),
+    [canViewDraft, instance?.versions],
+  )
+  const currentVersion = visibleVersions.find(version => version.id === instance?.currentVersionId) || visibleVersions[0]
   const tasks = currentVersion?.tasks || []
   const isDraft = currentVersion?.status === '修订中'
   const readOnlyReason = tab?.subproject && !tab.subproject.active
@@ -213,19 +232,26 @@ export default function TechnicalPlanModule({
   const maxDepth = Math.min(maxDepthByKind[tab?.templateKind || 'tdt'], tab?.templateKind === 'subproject' ? 1 : 2)
   const invalid = getInvalidTechnicalTaskFields(tasks)
   const collapsedIds = useMemo(() => new Set(instance?.collapsedRows || []), [instance?.collapsedRows])
-  const filteredTasks = useMemo(
+  const directlyFilteredTasks = useMemo(
     () => applyPlanWorkspaceFilters(tasks, filters, TECHNICAL_FILTER_FIELDS),
     [filters, tasks],
   )
+  const hasActiveFilters = filters.some(isFilterConditionActive)
+  const filteredTasks = useMemo(
+    () => hasActiveFilters ? includeTechnicalPlanAncestors(tasks, directlyFilteredTasks) : [...tasks],
+    [directlyFilteredTasks, hasActiveFilters, tasks],
+  )
   const visibleTasks = useMemo(
-    () => filterPlanTasksByCollapsed(filteredTasks, collapsedIds),
-    [collapsedIds, filteredTasks],
+    () => hasActiveFilters ? filteredTasks : filterPlanTasksByCollapsed(filteredTasks, collapsedIds),
+    [collapsedIds, filteredTasks, hasActiveFilters],
   )
   const publishedVersions = useMemo(
     () => (instance?.versions || []).filter(version => version.status === '已发布'),
     [instance?.versions],
   )
   const hasDraft = Boolean(instance?.versions.some(version => version.status === '修订中'))
+  const canEditTaskStructure = canMaintain && viewMode === 'vertical'
+  const canDrag = canEditTaskStructure && !hasActiveFilters
 
   useEffect(() => {
     setIsEditMode(Boolean(canMaintain))
@@ -235,6 +261,8 @@ export default function TechnicalPlanModule({
   useEffect(() => {
     setFilters([])
     setTempFilters([createFilterCondition()])
+    setFilterOpen(false)
+    setColumnsOpen(false)
     setViewMode('vertical')
     setCompareOpen(false)
     setHasCompared(false)
@@ -268,7 +296,16 @@ export default function TechnicalPlanModule({
 
   const handlePublish = () => {
     if (!canPublish || !canMaintain) return
-    if (invalid.size) { message.error('请先修复计划日期冲突'); return }
+    if (invalid.size) {
+      setViewMode('vertical')
+      const firstInvalidTaskId = invalid.keys().next().value
+      requestAnimationFrame(() => {
+        document.querySelector(`[data-row-key="${CSS.escape(String(firstInvalidTaskId))}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+      message.error('请先修复计划日期冲突')
+      return
+    }
     if (publishRevision(scope).ok) message.success('计划已发布')
   }
 
@@ -308,32 +345,29 @@ export default function TechnicalPlanModule({
   }
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over || active.id === over.id || !canMaintain) return
-    const oldIndex = tasks.findIndex(task => task.id === active.id)
-    const newIndex = tasks.findIndex(task => task.id === over.id)
-    if (oldIndex < 0 || newIndex < 0) return
-    const moved = arrayMove(tasks, oldIndex, newIndex).map((task, order) => ({ ...task, order: order + 1 }))
+    if (!over || active.id === over.id || !canDrag) return
+    const moved = reorderTechnicalTasksWithinParent(tasks, String(active.id), String(over.id))
     updateCurrentTasks(scope, moved, maxDepth)
   }
 
   const handleScopeChange = (nextKey: string) => {
-    const nextTab = tabs.find(item => item.key === nextKey)
-    const nextInstance = nextTab ? plansByKey[getTechnicalPlanKey(nextTab.scope)] : undefined
-    const nextVersion = nextInstance?.versions.find(version => version.id === nextInstance.currentVersionId)
-    navigateWithEditGuard(() => setActiveKey(nextKey), nextVersion?.status === '修订中')
+    navigateWithEditGuard(() => {
+      setFilterOpen(false)
+      setColumnsOpen(false)
+      setActiveKey(nextKey)
+    }, Boolean(isDraft))
   }
 
   const handleVersionChange = (versionId: string) => {
-    const nextVersion = instance?.versions.find(version => version.id === versionId)
-    navigateWithEditGuard(() => setCurrentVersion(scope, versionId), nextVersion?.status === '修订中')
+    navigateWithEditGuard(() => setCurrentVersion(scope, versionId), Boolean(isDraft))
   }
 
   const expandAll = () => setCollapsed(scope, [])
   const collapseAll = () => setCollapsed(scope, filteredTasks.filter(task => !task.parentId).map(task => task.id))
 
   const baseColumns: ColumnsType<TechnicalTemplateTask> = [
-    { key: 'drag', width: 42, render: () => canMaintain ? <DragHandle /> : null },
-    { key: 'taskName', title: '任务名称', dataIndex: 'taskName', width: 230, render: (value, row) => canMaintain ? <Input value={value} onChange={event => updateTask(row.id, { taskName: event.target.value })} /> : <Space size={8}><span style={{ paddingLeft: row.parentId ? 20 : 0 }}>{value}</span>{!row.parentId && <Tag color="geekblue">阶段</Tag>}</Space> },
+    { key: 'drag', width: 42, fixed: 'left', render: () => canDrag ? <DragHandle /> : null },
+    { key: 'taskName', title: '任务名称', dataIndex: 'taskName', width: 230, fixed: 'left', render: (value, row) => canMaintain ? <Input value={value} onChange={event => updateTask(row.id, { taskName: event.target.value })} /> : <Space size={8}><span style={{ paddingLeft: row.parentId ? 20 : 0 }}>{value}</span>{!row.parentId && <Tag color="geekblue">阶段</Tag>}</Space> },
     { key: 'responsible', title: '责任人', dataIndex: 'responsible', width: 130, render: (value, row) => canMaintain ? <Input value={value} onChange={event => updateTask(row.id, { responsible: event.target.value })} /> : value || '-' },
     { key: 'predecessor', title: '前置任务', dataIndex: 'predecessor', width: 120, render: (value, row) => canMaintain ? <Input value={value} onChange={event => updateTask(row.id, { predecessor: event.target.value })} /> : value || '-' },
     { key: 'planStartDate', title: '计划开始', dataIndex: 'planStartDate', width: 145, onCell: row => ({ className: invalid.get(row.id)?.start ? 'pms-cell-invalid' : '' }), render: (value, row) => canMaintain ? <Tooltip title={invalid.get(row.id)?.start?.join('；')}><DatePicker value={value ? dayjs(value) : null} onChange={date => updateTask(row.id, { planStartDate: date?.format('YYYY-MM-DD') || '' })} /></Tooltip> : value || '-' },
@@ -371,12 +405,49 @@ export default function TechnicalPlanModule({
       return index(left.key) - index(right.key)
     })
 
+  const exportHorizontalPlan = () => {
+    const groups = buildPlanHorizontalStageGroups(
+      filteredTasks.map(task => ({ ...task })),
+    )
+    const milestoneTasks = groups.flatMap(group => group.milestones.length ? group.milestones : [group.stage])
+    const headerMatrix: (string | null)[][] = [
+      ['版本', '开发周期', ...groups.flatMap(group => [group.stage.taskName, ...Array(Math.max(0, group.colSpan - 1)).fill(null)])],
+      [null, null, ...milestoneTasks.map(task => task.taskName)],
+    ]
+    const merges: XLSX.Range[] = [
+      { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } },
+      { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } },
+    ]
+    let columnIndex = 2
+    groups.forEach(group => {
+      if (group.colSpan > 1) merges.push({ s: { r: 0, c: columnIndex }, e: { r: 0, c: columnIndex + group.colSpan - 1 } })
+      columnIndex += group.colSpan
+    })
+    const rows = buildTechnicalHorizontalRows(visibleVersions).map(row => [
+      row.versionNo,
+      row.cycleDays == null ? '-' : `${row.cycleDays}天`,
+      ...milestoneTasks.map(task => row.endDatesByTaskId[task.id] || '-'),
+    ])
+    exportMergedSheet(
+      headerMatrix,
+      merges,
+      rows,
+      [12, 12, ...milestoneTasks.map(() => 15)],
+      `${tab?.label || '技术计划'}_横版_${exportTimestamp()}.xlsx`,
+      '横版计划',
+    )
+  }
+
   const exportPlan = (mode: 'current' | 'all') => {
     if (!canExport) { message.error('无计划导出权限'); return }
+    if (mode === 'current' && viewMode === 'horizontal') {
+      exportHorizontalPlan()
+      return
+    }
     const exportRows = mode === 'current' ? filteredTasks : tasks
-    const exportColumns = Object.entries(COLUMN_LABELS)
-      .filter(([key]) => mode === 'all' || visibleKeys.has(key))
-      .map(([key, title]) => ({ key, title }))
+    const exportColumns = TECHNICAL_PLAN_EXPORT_COLUMNS.filter(column => (
+      mode === 'all' || column.key === 'id' || column.key === 'parentId' || visibleKeys.has(column.key)
+    ))
     exportSheet(exportRows, exportColumns, `${tab?.label || '技术计划'}_${currentVersion?.versionNo || ''}_${exportTimestamp()}.xlsx`, '计划')
   }
   const importWorkbook = async (file: File) => {
@@ -385,11 +456,7 @@ export default function TechnicalPlanModule({
       const data = await file.arrayBuffer()
       const workbook = XLSX.read(data)
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[workbook.SheetNames[0]])
-      const imported = rows.map((row, index) => ({
-        ...(tasks[index] || templateTasks[index] || {}), id: String(row.ID || row.id || tasks[index]?.id || `import-${index + 1}`), order: index + 1,
-        taskName: String(row['任务名称'] || row.taskName || ''), responsible: String(row['责任人'] || row.responsible || ''),
-        predecessor: String(row['前置任务'] || row.predecessor || ''), planStartDate: String(row['计划开始'] || row.planStartDate || ''), planEndDate: String(row['计划完成'] || row.planEndDate || ''),
-      })) as TechnicalTemplateTask[]
+      const imported = parseTechnicalPlanImportRows(rows, tasks.length ? tasks : templateTasks)
       validateTechnicalTemplateDepth(tab?.templateKind || 'tdt', imported)
       const result = updateCurrentTasks(scope, imported, maxDepth)
       if (!result.ok) throw new Error('maxDepth')
@@ -400,15 +467,14 @@ export default function TechnicalPlanModule({
 
   const compareRows = useMemo(() => {
     if (!instance || !hasCompared || !compareBaseId || !compareTargetId) return []
-    const left = instance.versions.find(version => version.id === compareBaseId)
-    const right = instance.versions.find(version => version.id === compareTargetId)
+    const left = visibleVersions.find(version => version.id === compareBaseId)
+    const right = visibleVersions.find(version => version.id === compareTargetId)
     return left && right ? compareVersionsForTable(left.tasks as any, right.tasks as any) : []
-  }, [compareBaseId, compareTargetId, hasCompared, instance])
+  }, [compareBaseId, compareTargetId, hasCompared, instance, visibleVersions])
 
   const openVersionCompare = () => {
-    const versions = instance?.versions || []
-    const base = versions.find(version => version.status === '已发布') || versions[0]
-    const target = currentVersion || versions[versions.length - 1]
+    const base = visibleVersions.find(version => version.status === '已发布') || visibleVersions[0]
+    const target = currentVersion || visibleVersions[visibleVersions.length - 1]
     setCompareBaseId(base?.id || '')
     setCompareTargetId(target?.id || '')
     setHasCompared(false)
@@ -471,6 +537,13 @@ export default function TechnicalPlanModule({
           <>
             {readOnlyReason && <Alert showIcon type={tab?.subproject?.active ? 'warning' : 'info'} message={readOnlyReason} style={{ marginBottom: 12 }} />}
             {!readOnlyReason && !canEdit && <Alert showIcon type="info" message="当前账号无计划编辑权限，仅可查看计划" style={{ marginBottom: 12 }} />}
+            {canMaintain && viewMode === 'vertical' && (
+              <div className="technical-plan-edit-notice" role="status">
+                <EditOutlined />
+                <strong>编辑模式</strong>
+                <span>- 拖拽手柄排序，点击单元格编辑，修改内容自动保存</span>
+              </div>
+            )}
           </>
         )}
         versionControls={(
@@ -482,9 +555,10 @@ export default function TechnicalPlanModule({
               value={currentVersion?.id}
               placeholder="暂无版本"
               onChange={handleVersionChange}
-              options={(instance?.versions || []).map(version => ({ value: version.id, label: `${version.versionNo}${version.status === '修订中' ? '（修订中）' : ''}` }))}
+              options={visibleVersions.map(version => ({ value: version.id, label: `${version.versionNo}${version.status === '修订中' ? '（修订中）' : ''}` }))}
             />
-            {isDraft && <Tag color="green">自动保存</Tag>}
+            {isDraft && viewMode === 'vertical' && <Tag color="green">自动保存</Tag>}
+            {isDraft && viewMode !== 'vertical' && <Tag>{viewMode === 'gantt' ? '甘特图只读' : '横版只读'}</Tag>}
           </Space>
         )}
         primaryActions={(
@@ -516,8 +590,8 @@ export default function TechnicalPlanModule({
                 </Tooltip>
               </Popconfirm>
             )}
-            <Tooltip title={!canMaintain ? readOnlyReason || '仅修订中版本可新增任务' : '新增一级任务'}>
-              <Button icon={<PlusOutlined />} disabled={!canMaintain} onClick={handleAddTopLevelTask}>新增一级任务</Button>
+            <Tooltip title={!canMaintain ? readOnlyReason || '仅修订中版本可新增任务' : viewMode !== 'vertical' ? '请切换至竖版表格新增任务' : '新增一级任务'}>
+              <Button icon={<PlusOutlined />} disabled={!canEditTaskStructure} onClick={handleAddTopLevelTask}>新增一级任务</Button>
             </Tooltip>
           </Space>
         )}
@@ -615,7 +689,7 @@ export default function TechnicalPlanModule({
             )}
             <Tooltip title="全部展开"><Button icon={<PlusSquareOutlined />} size="small" onClick={expandAll} aria-label="全部展开" /></Tooltip>
             <Tooltip title="全部收起"><Button icon={<MinusSquareOutlined />} size="small" onClick={collapseAll} aria-label="全部收起" /></Tooltip>
-            <Tooltip title="版本对比"><Button aria-label="版本对比" icon={<HistoryOutlined />} disabled={(instance?.versions.length || 0) < 2} onClick={openVersionCompare} /></Tooltip>
+            <Tooltip title="版本对比"><Button aria-label="版本对比" icon={<HistoryOutlined />} disabled={visibleVersions.length < 2} onClick={openVersionCompare} /></Tooltip>
             <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={importWorkbook} disabled={!canImport || !canMaintain}>
               <Tooltip title={!canImport ? '无计划导入权限' : !canMaintain ? readOnlyReason || '仅修订中版本可导入' : '导入'}>
                 <Button icon={<UploadOutlined />} disabled={!canImport || !canMaintain} aria-label="导入">导入</Button>
@@ -635,7 +709,7 @@ export default function TechnicalPlanModule({
           </Space>
         )}
         viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        onViewModeChange={nextViewMode => { setFilterOpen(false); setColumnsOpen(false); setViewMode(nextViewMode) }}
       >
         {!currentVersion ? (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无计划版本，请创建修订" />
@@ -650,17 +724,17 @@ export default function TechnicalPlanModule({
                 scroll={{ x: 1050 }}
                 dataSource={visibleTasks}
                 columns={columns}
-                components={canMaintain ? { body: { row: SortableRow } } : undefined}
+                components={canDrag ? { body: { row: SortableRow } } : undefined}
                 rowClassName={row => row.parentId ? 'technical-plan-child-row' : 'technical-plan-phase-row'}
               />
             </SortableContext>
           </DndContext>
         ) : viewMode === 'horizontal' ? (
-          <TechnicalHorizontalPlanTable tasks={filteredTasks} versions={instance.versions} />
+          <TechnicalHorizontalPlanTable tasks={filteredTasks} versions={visibleVersions} />
         ) : viewMode === 'gantt' ? (
           <DHTMLXGantt
             tasks={filteredTasks}
-            readOnly={!canMaintain}
+            readOnly
             collapsedIds={collapsedIds}
             onCollapsedChange={updater => setCollapsed(scope, [...updater(collapsedIds)])}
           />
@@ -670,7 +744,7 @@ export default function TechnicalPlanModule({
       <PlanVersionCompareModal
         open={compareOpen}
         rows={compareRows}
-        versions={(instance?.versions || []).map(version => ({ id: version.id, versionNo: version.versionNo, status: version.status }))}
+        versions={visibleVersions.map(version => ({ id: version.id, versionNo: version.versionNo, status: version.status }))}
         baseVersionId={compareBaseId}
         targetVersionId={compareTargetId}
         onBaseVersionChange={value => { setCompareBaseId(value); setHasCompared(false) }}

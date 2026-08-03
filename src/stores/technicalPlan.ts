@@ -39,8 +39,8 @@ export interface TechnicalPlanVersion extends TechnicalStagePlanVersion {
 }
 
 const DEFAULT_COLUMNS: SortableColumnSettingsValue<string> = {
-  order: ['taskName', 'responsible', 'predecessor', 'planStartDate', 'planEndDate', 'estimatedDays', 'status', 'progress'],
-  visible: ['taskName', 'responsible', 'predecessor', 'planStartDate', 'planEndDate', 'estimatedDays', 'status', 'progress'],
+  order: ['taskName', 'responsible', 'predecessor', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'status', 'progress'],
+  visible: ['taskName', 'responsible', 'predecessor', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'status', 'progress'],
 }
 
 export interface TechnicalPlanInstance {
@@ -98,7 +98,7 @@ const clonePlans = (plans: TechnicalPlansByKey): TechnicalPlansByKey => Object.f
   }]),
 )
 
-export const TECHNICAL_PLAN_STORE_VERSION = 2
+export const TECHNICAL_PLAN_STORE_VERSION = 3
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
@@ -109,7 +109,7 @@ export const migrateTechnicalPlanState = (persistedState: unknown, fromVersion: 
   const plansByKey: TechnicalPlansByKey = {}
   Object.entries(source).forEach(([key, candidate]) => {
     if (!isRecord(candidate) || !Array.isArray(candidate.versions)) return
-    const legacySeed = fromVersion < TECHNICAL_PLAN_STORE_VERSION
+    const legacySeed = fromVersion < 2
       && candidate.versions.some(version => isRecord(version) && String(version.id || '').startsWith('tech-9-v'))
     if (legacySeed && key === '9:tdt') {
       plansByKey[key] = clonePlans(INITIAL_TECHNICAL_PLANS)[key]
@@ -130,11 +130,20 @@ export const migrateTechnicalPlanState = (persistedState: unknown, fromVersion: 
       ? String(candidate.currentVersionId)
       : versions[0].id
     const columns = isRecord(candidate.columnSettings) ? candidate.columnSettings : {}
+    const storedOrder = Array.isArray(columns.order) ? columns.order.map(String) : [...DEFAULT_COLUMNS.order]
+    const storedVisible = Array.isArray(columns.visible) ? columns.visible.map(String) : [...DEFAULT_COLUMNS.visible]
+    const actualColumnKeys = ['actualStartDate', 'actualEndDate', 'actualDays']
+    const order = fromVersion < 3
+      ? [...storedOrder, ...actualColumnKeys.filter(key => !storedOrder.includes(key))]
+      : storedOrder
+    const visible = fromVersion < 3
+      ? [...storedVisible, ...actualColumnKeys.filter(key => !storedVisible.includes(key))]
+      : storedVisible
     plansByKey[key] = {
       planKey: key, templateKind, versions, currentVersionId,
       columnSettings: {
-        order: Array.isArray(columns.order) ? columns.order.map(String) : [...DEFAULT_COLUMNS.order],
-        visible: Array.isArray(columns.visible) ? columns.visible.map(String) : [...DEFAULT_COLUMNS.visible],
+        order,
+        visible,
       },
       collapsedRows: Array.isArray(candidate.collapsedRows) ? candidate.collapsedRows.map(String) : [],
     }

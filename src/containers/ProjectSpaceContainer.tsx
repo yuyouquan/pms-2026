@@ -3902,6 +3902,7 @@ export default function ProjectSpaceContainer() {
                   canPublish={canEditLevel1Plan}
                   canImport={canImportTechnicalPlan}
                   canExport={canExportTechnicalPlan}
+                  canViewDraft={canViewDraft}
                   maxDepthByKind={{ tdt: 2, subproject: 1 }}
                 />
               : renderProjectPlan()
