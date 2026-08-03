@@ -38,7 +38,6 @@ export interface TechnicalProjectInformationViewProps {
   project: ProjectItem
   stage: string
   customRoles?: readonly ProjectRole[]
-  preProjectName?: string
   currentLoginUser?: string
   onEdit?: () => void
   canEdit?: boolean
@@ -81,7 +80,6 @@ export default function TechnicalProjectInformationView({
   project,
   stage,
   customRoles = [],
-  preProjectName,
   currentLoginUser,
   onEdit,
   canEdit = false,
@@ -152,7 +150,6 @@ export default function TechnicalProjectInformationView({
     { label: 'TMG及技术领域', value: displayText(valueOf(project, 'tmg')), accent: '#7c3aed' },
     { label: '子领域', value: displayText(valueOf(project, 'subdomain')), accent: '#2563eb' },
     { label: '项目阶段', value: stage, accent: '#d97706' },
-    { label: '前置项目', value: displayText(preProjectName || valueOf(project, 'preProjectId')), accent: '#db2777' },
     { label: '项目年份', value: displayText(valueOf(project, 'projectYear')), accent: '#059669' },
     { label: '项目价值', value: displayText(valueOf(project, 'projectValue')), accent: '#475569', fullWidth: true },
   ]
@@ -204,17 +201,19 @@ export default function TechnicalProjectInformationView({
               <Tabs activeKey={activeKey} onChange={setActiveKey} items={tabItems} />
             </div>
             {modules.plan && <TechnicalPlanSummary scope={activeScope} label={activeLabel} />}
+            {activeTab.kind === 'subproject' && (
+              <div className="technical-information-subproject-basic">
+                <TechnicalProjectBasicInfo
+                  subproject={activeChild!}
+                  machineName={machineName}
+                  readOnly={modules.readOnly}
+                />
+              </div>
+            )}
           </div>
         )}
         informationSections={(
           <div className="pms-project-info-sections" aria-label="技术信息内容">
-            {activeTab.kind === 'subproject' && (
-              <TechnicalProjectBasicInfo
-                subproject={activeChild!}
-                machineName={machineName}
-                readOnly={modules.readOnly}
-              />
-            )}
             <CollapsibleInformationSection title="团队信息" icon={<TeamOutlined />} variant="team" count={roles.length}>
               <div className="pms-project-info-team-grid">
                 {roles.map(role => (

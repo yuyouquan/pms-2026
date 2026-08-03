@@ -577,6 +577,50 @@
   margin: 0;
 }
 
+.technical-information-subproject-basic {
+  margin-top: 10px;
+}
+
+.technical-plan-sequence-cell,
+.technical-plan-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.technical-plan-sequence-cell > span:last-child {
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.technical-plan-progress .ant-progress {
+  min-width: 64px;
+  margin: 0;
+}
+
+.technical-plan-progress > span {
+  min-width: 32px;
+  color: #4b5563;
+  font-size: 11px;
+}
+
+.technical-plan-vertical-table .ant-table-thead > tr > th,
+.technical-plan-vertical-table .ant-table-tbody > tr > td {
+  height: 52px;
+  box-sizing: border-box;
+}
+
+.technical-plan-vertical-table .ant-table-cell-fix-left,
+.technical-plan-vertical-table .ant-table-cell-fix-right {
+  background: #fff !important;
+}
+
+.technical-plan-vertical-table.pms-table-edit .ant-table-cell-fix-left,
+.technical-plan-vertical-table.pms-table-edit .ant-table-cell-fix-right {
+  background: #fffdf0 !important;
+}
+
 .pms-project-info-plan-card {
   margin-bottom: 10px;
   overflow: hidden;

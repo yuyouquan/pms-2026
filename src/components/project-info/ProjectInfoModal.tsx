@@ -409,7 +409,6 @@ export default function ProjectInfoModal({
       status: '待立项',
       technicalTrack: entry.technicalTrack || '',
       ipmProjectType: entry.ipmProjectCategoryName,
-      ...(entry.ipmProjectCategoryName === '技术项目前置工作' ? {} : { preProjectId: undefined }),
     })
     if (isMachineProjectType(type)) {
       form.setFieldsValue(deriveMachineProjectInfoValues({ ...entry, ...sourceValues }))
