@@ -15,9 +15,22 @@ export type TechnicalPlanScope =
   | { kind: 'tdt'; parentProjectId: string }
   | { kind: 'subproject'; parentProjectId: string; subprojectId: string }
 
-export const getTechnicalPlanKey = (scope: TechnicalPlanScope) => scope.kind === 'tdt'
-  ? `${scope.parentProjectId}:tdt`
-  : `${scope.parentProjectId}:subproject:${scope.subprojectId}`
+export const isTechnicalPlanScope = (scope: unknown): scope is TechnicalPlanScope => {
+  if (!scope || typeof scope !== 'object') return false
+  const candidate = scope as Record<string, unknown>
+  if (typeof candidate.parentProjectId !== 'string' || !candidate.parentProjectId.trim()) return false
+  if (candidate.kind === 'tdt') return true
+  return candidate.kind === 'subproject'
+    && typeof candidate.subprojectId === 'string'
+    && Boolean(candidate.subprojectId.trim())
+}
+
+export const getTechnicalPlanKey = (scope: TechnicalPlanScope) => {
+  if (!isTechnicalPlanScope(scope)) throw new Error('Invalid technical plan scope')
+  return scope.kind === 'tdt'
+    ? `${scope.parentProjectId}:tdt`
+    : `${scope.parentProjectId}:subproject:${scope.subprojectId}`
+}
 
 export interface TechnicalPlanVersion extends TechnicalStagePlanVersion {
   versionNo: string
@@ -65,7 +78,17 @@ export const INITIAL_TECHNICAL_PLANS: TechnicalPlansByKey = {
   },
 }
 
-const cloneTasks = (tasks: readonly TechnicalTemplateTask[]) => tasks.map(task => ({ ...task }))
+const cloneNestedValue = <T,>(value: T): T => {
+  if (Array.isArray(value)) return value.map(cloneNestedValue) as T
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, nested]) => [key, cloneNestedValue(nested)]),
+    ) as T
+  }
+  return value
+}
+
+const cloneTasks = (tasks: readonly TechnicalTemplateTask[]) => tasks.map(task => cloneNestedValue(task))
 const clonePlans = (plans: TechnicalPlansByKey): TechnicalPlansByKey => Object.fromEntries(
   Object.entries(plans).map(([key, plan]) => [key, {
     ...plan,
@@ -132,6 +155,42 @@ export const selectTechnicalProjectStage = (plansByKey: TechnicalPlansByKey, par
   return latestPublished ? calculateTechnicalProjectStage(latestPublished.tasks, today) : '-'
 }
 
+export interface TechnicalSharePlanQuery {
+  technical?: string | null
+  kind?: string | null
+  projectId?: string | null
+  subprojectId?: string | null
+}
+
+export type ResolveTechnicalSharePlanResult =
+  | { ok: true; scope: TechnicalPlanScope; version: TechnicalPlanVersion }
+  | { ok: false; reason: 'invalid-query' | 'missing-published' }
+
+/** Resolves a detached, read-only snapshot for a public technical-plan link. */
+export const resolveTechnicalSharePlan = (
+  plansByKey: TechnicalPlansByKey,
+  query: TechnicalSharePlanQuery,
+): ResolveTechnicalSharePlanResult => {
+  const parentProjectId = String(query.projectId || '').trim()
+  let scope: TechnicalPlanScope
+  if (query.technical !== '1' || !parentProjectId) return { ok: false, reason: 'invalid-query' }
+  if (query.kind === 'tdt') {
+    scope = { kind: 'tdt', parentProjectId }
+  } else if (query.kind === 'subproject' && typeof query.subprojectId === 'string' && query.subprojectId.trim()) {
+    scope = { kind: 'subproject', parentProjectId, subprojectId: query.subprojectId.trim() }
+  } else {
+    return { ok: false, reason: 'invalid-query' }
+  }
+  const instance = plansByKey[getTechnicalPlanKey(scope)]
+  if (!instance || instance.templateKind !== scope.kind) return { ok: false, reason: 'missing-published' }
+  const latest = instance.versions
+    .filter(version => version.status === '已发布' && version.templateType === scope.kind)
+    .sort(comparePublishedTechnicalPlanVersions)[0]
+  return latest
+    ? { ok: true, scope, version: cloneNestedValue(latest) }
+    : { ok: false, reason: 'missing-published' }
+}
+
 export interface TechnicalPlanTab {
   key: string
   label: string
@@ -157,6 +216,7 @@ export const buildTechnicalPlanTabs = (
 ]
 
 export type CreateRevisionResult = { ok: true; versionId: string } | { ok: false; reason: 'draft-exists' | 'inactive' | 'incomplete-configuration' | 'max-depth' }
+export type ClonePublishedVersionResult = { ok: true; versionId: string } | { ok: false; reason: 'missing-instance' | 'missing-source' | 'draft-exists' | 'inactive' | 'incomplete-configuration' }
 export type RevisionMutationResult = { ok: true } | { ok: false; reason: 'missing-instance' | 'missing-draft' | 'max-depth' }
 
 export interface CreateRevisionInput {
@@ -167,9 +227,16 @@ export interface CreateRevisionInput {
   subproject?: TechnicalSubproject
 }
 
+export interface ClonePublishedVersionInput {
+  scope: TechnicalPlanScope
+  sourceVersionId: string
+  subproject?: TechnicalSubproject
+}
+
 export interface TechnicalPlanState { plansByKey: TechnicalPlansByKey }
 export interface TechnicalPlanActions {
   createRevision: (input: CreateRevisionInput) => CreateRevisionResult
+  clonePublishedVersion: (input: ClonePublishedVersionInput) => ClonePublishedVersionResult
   publishRevision: (scope: TechnicalPlanScope, publishedAt?: string) => RevisionMutationResult
   cancelRevision: (scope: TechnicalPlanScope) => RevisionMutationResult
   updateCurrentTasks: (scope: TechnicalPlanScope, tasks: readonly TechnicalTemplateTask[], maxDepth?: number) => RevisionMutationResult
@@ -204,6 +271,54 @@ const createRevisionInState = (state: TechnicalPlanState, input: CreateRevisionI
   return { state: { plansByKey: { ...state.plansByKey, [key]: instance } }, result: { ok: true, versionId } }
 }
 
+const clonePublishedVersionInState = (
+  state: TechnicalPlanState,
+  input: ClonePublishedVersionInput,
+): { state: TechnicalPlanState; result: ClonePublishedVersionResult } => {
+  if (!isTechnicalPlanScope(input.scope)) return { state, result: { ok: false, reason: 'missing-instance' } }
+  if (input.scope.kind === 'subproject') {
+    if (
+      !input.subproject
+      || input.subproject.id !== input.scope.subprojectId
+      || input.subproject.parentProjectId !== input.scope.parentProjectId
+    ) return { state, result: { ok: false, reason: 'incomplete-configuration' } }
+    if (!input.subproject.active) return { state, result: { ok: false, reason: 'inactive' } }
+    if (!isTechnicalSubprojectConfigured(input.subproject)) {
+      return { state, result: { ok: false, reason: 'incomplete-configuration' } }
+    }
+  }
+  const key = getTechnicalPlanKey(input.scope)
+  const instance = state.plansByKey[key]
+  if (!instance) return { state, result: { ok: false, reason: 'missing-instance' } }
+  if (instance.versions.some(version => version.status === '修订中')) {
+    return { state, result: { ok: false, reason: 'draft-exists' } }
+  }
+  const source = instance.versions.find(version => version.id === input.sourceVersionId && version.status === '已发布')
+  if (!source) return { state, result: { ok: false, reason: 'missing-source' } }
+  const versionNo = nextVersionNo(instance.versions)
+  const versionId = `${versionNo}-draft`
+  const draft: TechnicalPlanVersion = {
+    id: versionId,
+    versionNo,
+    templateType: instance.templateKind,
+    status: '修订中',
+    tasks: cloneTasks(source.tasks),
+  }
+  return {
+    state: {
+      plansByKey: {
+        ...state.plansByKey,
+        [key]: {
+          ...instance,
+          versions: [...instance.versions, draft],
+          currentVersionId: versionId,
+        },
+      },
+    },
+    result: { ok: true, versionId },
+  }
+}
+
 const mutateDraft = (state: TechnicalPlanState, scope: TechnicalPlanScope, mutation: 'publish' | 'cancel' | 'tasks', payload?: string | readonly TechnicalTemplateTask[], maxDepth?: number) => {
   const key = getTechnicalPlanKey(scope)
   const instance = state.plansByKey[key]
@@ -234,6 +349,7 @@ export function createTechnicalPlanStore(initial: Partial<TechnicalPlanState> = 
   return {
     getState: () => ({ plansByKey: clonePlans(state.plansByKey) }),
     createRevision: (input: CreateRevisionInput) => { const output = createRevisionInState(state, input); update(output.state); return output.result },
+    clonePublishedVersion: (input: ClonePublishedVersionInput) => { const output = clonePublishedVersionInState(state, input); update(output.state); return output.result },
     publishRevision: (scope: TechnicalPlanScope, at?: string) => { const output = mutateDraft(state, scope, 'publish', at); update(output.state); return output.result },
     cancelRevision: (scope: TechnicalPlanScope) => { const output = mutateDraft(state, scope, 'cancel'); update(output.state); return output.result },
     updateCurrentTasks: (scope: TechnicalPlanScope, tasks: readonly TechnicalTemplateTask[], maxDepth?: number) => { const output = mutateDraft(state, scope, 'tasks', tasks, maxDepth); update(output.state); return output.result },
@@ -244,6 +360,7 @@ export function createTechnicalPlanStore(initial: Partial<TechnicalPlanState> = 
 
 const zustandActions = (set: (value: Partial<TechnicalPlanState> | ((state: TechnicalPlanState) => Partial<TechnicalPlanState>)) => void, get: () => TechnicalPlanState): TechnicalPlanActions => ({
   createRevision: input => { const output = createRevisionInState(get(), input); set(output.state); return output.result },
+  clonePublishedVersion: input => { const output = clonePublishedVersionInState(get(), input); set(output.state); return output.result },
   publishRevision: (scope, at) => { const output = mutateDraft(get(), scope, 'publish', at); set(output.state); return output.result },
   cancelRevision: scope => { const output = mutateDraft(get(), scope, 'cancel'); set(output.state); return output.result },
   updateCurrentTasks: (scope, tasks, maxDepth) => { const output = mutateDraft(get(), scope, 'tasks', tasks, maxDepth); set(output.state); return output.result },

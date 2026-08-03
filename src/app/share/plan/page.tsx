@@ -26,6 +26,7 @@ import {
   type SortableColumnSettingsValue,
 } from '@/lib/columnSettings'
 import { isMachineProjectType } from '@/constants/projectTypes'
+import { resolveTechnicalSharePlan, useTechnicalPlanStore } from '@/stores/technicalPlan'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
 
 function SharePlanContent() {
@@ -33,15 +34,32 @@ function SharePlanContent() {
   const projectId = searchParams.get('projectId')
   const level = searchParams.get('level') || 'level1'
   const planType = searchParams.get('planType') || ''
+  const technical = searchParams.get('technical')
+  const technicalKind = searchParams.get('kind')
+  const technicalSubprojectId = searchParams.get('subprojectId')
+  const technicalPlansByKey = useTechnicalPlanStore(state => state.plansByKey)
+  const isTechnicalShare = technical === '1'
+  const technicalSharePlan = useMemo(() => resolveTechnicalSharePlan(technicalPlansByKey, {
+    technical,
+    kind: technicalKind,
+    projectId,
+    subprojectId: technicalSubprojectId,
+  }), [technicalPlansByKey, technical, technicalKind, projectId, technicalSubprojectId])
 
   // Find project
   const project = initialProjects.find(p => p.id === projectId)
 
   // Versions — published only
-  const publishedVersions = VERSION_DATA.filter(v => v.status === '已发布')
-  const latestVersion = [...publishedVersions].sort((a, b) => {
+  const machinePublishedVersions = VERSION_DATA.filter(v => v.status === '已发布')
+  const machineLatestVersion = [...machinePublishedVersions].sort((a, b) => {
     return parseInt(b.versionNo.replace('V', '')) - parseInt(a.versionNo.replace('V', ''))
   })[0]
+  const latestVersion = isTechnicalShare
+    ? (technicalSharePlan.ok ? technicalSharePlan.version : undefined)
+    : machineLatestVersion
+  const publishedVersions = isTechnicalShare
+    ? (technicalSharePlan.ok ? [technicalSharePlan.version] : [])
+    : machinePublishedVersions
 
   // Is 整机产品项目 with markets?
   const isWholeMachine = isMachineProjectType(project?.type) && project?.markets && project.markets.length > 0
@@ -69,14 +87,28 @@ function SharePlanContent() {
 
   // Current tasks based on market selection
   const tasks = useMemo(() => {
+    if (isTechnicalShare) return technicalSharePlan.ok ? technicalSharePlan.version.tasks.map(task => ({ ...task })) : []
     if (isWholeMachine && allMarketData && selectedMarket) {
       return allMarketData[selectedMarket] || [...LEVEL1_TASKS]
     }
     return [...LEVEL1_TASKS]
-  }, [isWholeMachine, allMarketData, selectedMarket])
+  }, [isTechnicalShare, technicalSharePlan, isWholeMachine, allMarketData, selectedMarket])
 
   // Plan title
-  const planTitle = level === 'level1' ? '一级计划' : planType || '二级计划'
+  const planTitle = isTechnicalShare
+    ? (technicalKind === 'tdt' ? 'TDT项目计划' : '子项目计划')
+    : (level === 'level1' ? '一级计划' : planType || '二级计划')
+
+  // Technical links intentionally use one non-sensitive empty state for invalid and unpublished scopes.
+  if (isTechnicalShare && (!projectId || !project || !technicalSharePlan.ok)) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+        <Card style={{ borderRadius: 12, textAlign: 'center', padding: '60px 80px' }}>
+          <Empty description={<span style={{ color: '#9ca3af', fontSize: 14 }}>暂无可查看的已发布计划</span>} />
+        </Card>
+      </div>
+    )
+  }
 
   // Error: project not found
   if (!projectId || !project) {
