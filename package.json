@@ -21,6 +21,7 @@
     "verify:technical-project": "node scripts/verify-technical-project.mjs",
     "verify:technical-plan": "node scripts/verify-technical-plan.mjs",
     "verify:project-list-matrix": "node scripts/verify-project-list-matrix.mjs",
+    "verify:project-list-refinement": "node scripts/verify-project-list-refinement.mjs",
     "verify:project-role-sync": "node scripts/verify-project-role-sync.mjs",
     "verify:workbench-browser": "node screenshots/verify-workbench-summary-floating-panels.mjs",
     "verify:redesign-browser": "node screenshots/verify-workbench-technical-project-redesign.mjs"
