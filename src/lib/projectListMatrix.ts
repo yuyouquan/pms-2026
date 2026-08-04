@@ -164,7 +164,7 @@ const childMilestone = (label: string): ProjectListColumnDefinition => ({
 
 const STATIC_COLUMNS: Record<Exclude<ProjectListVariant, 'capability'>, ProjectListColumnDefinition[]> = {
   machine: [
-    required('productSeries', '产品系列'), required('projectName', '项目名称', 200),
+    required('productSeries', '产品系列', 160), required('projectName', '项目名称', 220),
     required('brand', '品牌'), required('chipCode', '芯片编码'),
     required('versionType', '版本类型'), required('firstSaleTosVersion', '首销tOS版本'),
     required('status', '项目状态'), required('spm', 'SPM'), required('spmDepartment', 'SPM部门', 160),
