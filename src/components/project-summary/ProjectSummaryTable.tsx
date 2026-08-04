@@ -186,6 +186,8 @@ export default function ProjectSummaryTable({
   const [filterOpen, setFilterOpen] = useState(false)
   const [columnOpen, setColumnOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
+  const [selectedRowKey, setSelectedRowKey] = useState('')
+  const compactControlSize = matrixVariant ? 'small' : 'middle'
 
   const templateTasks = useMemo(() => getLatestPublishedTemplateTasks(
     projectType,
@@ -413,6 +415,12 @@ export default function ProjectSummaryTable({
       })
   }, [collapsedGroups, fieldDefinitions, filteredRows, groupBy])
 
+  useEffect(() => {
+    if (selectedRowKey && !displayedRows.some(row => row.key === selectedRowKey)) {
+      setSelectedRowKey('')
+    }
+  }, [displayedRows, selectedRowKey])
+
   const visibleDefinitions = useMemo(() => {
     const ordered = orderVisibleDefinitions(columnDefinitions, columnSettings)
     const byKey = new Map(ordered.map(definition => [definition.key, definition]))
@@ -425,10 +433,37 @@ export default function ProjectSummaryTable({
     () => new Map(buildProjectSummaryColumns(fieldDefinitions).map(column => {
       const key = String(column.key)
       const fixed = fixedColumnKeys.has(key) ? 'left' as const : undefined
-      if (!groupBy || key !== groupBy.key) return [key, { ...column, fixed }] as const
-      return [key, {
+      const field = fieldDefinitions.find(definition => definition.key === key)
+      const fieldWidth = field?.width ?? 140
+      const lockedWidth = {
+        width: fieldWidth,
+        minWidth: fieldWidth,
+        maxWidth: fieldWidth,
+      }
+      const baseHeaderCell = column.onHeaderCell
+      const baseCell = column.onCell
+      const sizedColumn = {
         ...column,
         fixed,
+        width: fieldWidth,
+        onHeaderCell: () => {
+          const headerCell = baseHeaderCell?.() ?? {}
+          return {
+            ...headerCell,
+            style: { ...headerCell.style, ...lockedWidth },
+          }
+        },
+        onCell: (record: ProjectSummaryRow) => {
+          const cell = baseCell?.(record) ?? {}
+          return {
+            ...cell,
+            style: lockedWidth,
+          }
+        },
+      }
+      if (!groupBy || key !== groupBy.key) return [key, sizedColumn] as const
+      return [key, {
+        ...sizedColumn,
         ellipsis: false,
         render: (_value: unknown, record: ProjectSummaryRow) => {
           if (Number(record.__groupIndex) > 0) return null
@@ -438,7 +473,7 @@ export default function ProjectSummaryTable({
           return (
             <button
               type="button"
-              className="pms-project-series-toggle"
+              className={`pms-project-series-toggle ${isCollapsed ? '' : 'is-expanded'}`.trim()}
               aria-expanded={!isCollapsed}
               aria-label={`${isCollapsed ? '展开' : '收起'}产品系列 ${groupKey}`}
               onClick={event => {
@@ -453,16 +488,30 @@ export default function ProjectSummaryTable({
             >
               {isCollapsed ? <RightOutlined /> : <DownOutlined />}
               <span className="pms-project-series-copy">
-                <strong>{groupKey}</strong>
+                <Tooltip title={groupKey}>
+                  <strong>{groupKey}</strong>
+                </Tooltip>
                 <small>{groupSize}个项目</small>
               </span>
             </button>
           )
         },
-        onCell: (record: ProjectSummaryRow) => ({
-          className: 'pms-project-series-cell',
-          rowSpan: Number(record.__groupIndex) > 0 ? 0 : (collapsedGroups.has(String(record.__groupKey)) ? 1 : Number(record.__groupSize) || 1),
-        }),
+        onCell: (record: ProjectSummaryRow) => {
+          const cell = sizedColumn.onCell(record)
+          const groupKey = String(record.__groupKey ?? record[groupBy.key] ?? groupBy.fallbackLabel)
+          const isCollapsed = collapsedGroups.has(groupKey)
+          return {
+            ...cell,
+            className: [
+              cell.className,
+              'pms-project-series-cell',
+              isCollapsed ? '' : 'is-expanded',
+            ].filter(Boolean).join(' '),
+            rowSpan: Number(record.__groupIndex) > 0
+              ? 0
+              : (isCollapsed ? 1 : Number(record.__groupSize) || 1),
+          }
+        },
       }] as const
     })),
     [collapsedGroups, fieldDefinitions, fixedColumnKeys, groupBy],
@@ -519,11 +568,12 @@ export default function ProjectSummaryTable({
     if (isValuelessFilterOperator(condition.operator)) return null
     const definition = filterDefinitionByKey.get(condition.field)
     if (!definition) {
-      return <Input disabled placeholder="请先选择筛选字段" />
+      return <Input size={compactControlSize} disabled placeholder="请先选择筛选字段" />
     }
     if (definition.multiple) {
       return (
         <Select
+          size={compactControlSize}
           mode="multiple"
           aria-label={`${definition.label}筛选值`}
           allowClear
@@ -543,6 +593,7 @@ export default function ProjectSummaryTable({
         : null
       return (
         <DatePicker
+          size={compactControlSize}
           aria-label={`${definition.label}筛选值`}
           style={{ width: '100%' }}
           value={value?.isValid() ? value : null}
@@ -556,6 +607,7 @@ export default function ProjectSummaryTable({
     if (definition.kind === 'enum') {
       return (
         <Select
+          size={compactControlSize}
           aria-label={`${definition.label}筛选值`}
           allowClear
           showSearch
@@ -572,6 +624,7 @@ export default function ProjectSummaryTable({
     }
     return (
       <Input
+        size={compactControlSize}
         aria-label={`${definition.label}筛选值`}
         placeholder="输入筛选值"
         value={typeof condition.value === 'string' ? condition.value : ''}
@@ -607,7 +660,7 @@ export default function ProjectSummaryTable({
         addDisabled={tempFilters.length >= filterFieldDefinitions.length}
         onClose={() => setFilterOpen(false)}
       >
-        <div className="pms-filter-condition-list">
+        <div className={`pms-filter-condition-list ${matrixVariant ? 'is-compact' : ''}`.trim()}>
           {tempFilters.map(condition => {
             const definition = filterDefinitionByKey.get(condition.field)
             const operatorOptions = definition?.multiple
@@ -621,6 +674,7 @@ export default function ProjectSummaryTable({
                 className="pms-filter-condition-row"
               >
                 <Select
+                  size={compactControlSize}
                   aria-label="筛选字段"
                   placeholder="筛选字段"
                   value={condition.field || undefined}
@@ -635,6 +689,7 @@ export default function ProjectSummaryTable({
                   onChange={field => handleFieldChange(condition, field)}
                 />
                 <Select
+                  size={compactControlSize}
                   aria-label="筛选条件"
                   value={condition.operator}
                   options={operatorOptions as any}
@@ -648,6 +703,7 @@ export default function ProjectSummaryTable({
                   ? <span className="pms-filter-value-placeholder" aria-hidden />
                   : renderFilterValue(condition)}
                 <Button
+                  size={compactControlSize}
                   danger
                   aria-label="删除筛选条件"
                   icon={<DeleteOutlined />}
@@ -701,6 +757,7 @@ export default function ProjectSummaryTable({
         <Space size={8} wrap>
           {showQuickFilters && matrixVariant?.startsWith('technical') && (
             <Input
+              size={compactControlSize}
               allowClear
               aria-label="快捷筛选-项目名称"
               placeholder="项目名称"
@@ -718,6 +775,7 @@ export default function ProjectSummaryTable({
           )}
           {showQuickFilters && quickFilterDefinitions.map(definition => (
             <Select
+              size={compactControlSize}
               key={definition.key}
               mode="multiple"
               allowClear
@@ -755,6 +813,10 @@ export default function ProjectSummaryTable({
         rowKey="key"
         columns={columns}
         dataSource={displayedRows}
+        rowClassName={row => [
+          'pms-project-summary-row',
+          selectedRowKey === row.key ? 'is-selected' : '',
+        ].filter(Boolean).join(' ')}
         pagination={false}
         scroll={{ x: scrollWidth, y: 'calc(100vh - 260px)' }}
         locale={{
@@ -767,8 +829,10 @@ export default function ProjectSummaryTable({
         }}
         onRow={row => ({
           style: { cursor: row.__groupSummary ? 'default' : 'pointer' },
+          'aria-selected': selectedRowKey === row.key,
           onClick: () => {
             if (row.__groupSummary) return
+            setSelectedRowKey(row.key)
             if (onViewRow) onViewRow(row)
             else onViewProject(row.projectId)
           },
