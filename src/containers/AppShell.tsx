@@ -128,7 +128,7 @@ export function MainHeader() {
                 items={[
                   { key: 'workbench', label: '工作台' },
                   { key: 'projectList', label: '项目列表' },
-                  { key: 'roadmap', label: '项目视图' },
+                  { key: 'roadmap', label: 'tOS路标' },
                   { key: 'hrPipeline', label: '人力资源管道' },
                   { key: 'config', label: '配置中心' },
                 ]}
@@ -191,7 +191,7 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
   const returnLabel = projectSpaceOrigin?.module === 'projectList'
     ? '返回项目列表'
     : projectSpaceOrigin?.module === 'roadmap'
-      ? '返回项目视图'
+      ? '返回tOS路标'
       : '返回工作台'
 
   // Click outside to close search

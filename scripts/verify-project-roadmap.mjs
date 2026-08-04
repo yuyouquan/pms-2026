@@ -261,15 +261,12 @@ registerAssertion('roadmap AST analysis handles legacy and cleared-state fixture
   }
 })
 
-registerAssertion('RoadmapView retains the summary shell and mounts the rebuilt roadmap branch', () => {
-  if (!roadmapAnalysis.hasProjectViewHeader) throw new Error('missing project-view header text')
-  if (!roadmapAnalysis.hasProjectViewOptionLabels) throw new Error('missing project-view option labels')
+registerAssertion('RoadmapView exposes the rebuilt tOS roadmap as its only surface', () => {
+  if (!roadmapAnalysis.hasTosRoadmapHeader) throw new Error('missing tOS roadmap header text')
   if (!roadmapAnalysis.hasProjectRoadmapImport) throw new Error('missing rebuilt ProjectRoadmapModule import')
-  if (!roadmapAnalysis.summaryConditionals.some(conditional => (
-    conditional.mountsSummaryBoard && conditional.mountsProjectRoadmapModule
-  ))) {
-    throw new Error('summary conditional must mount ProjectPlanSummaryBoard and rebuilt ProjectRoadmapModule')
-  }
+  if (!roadmapAnalysis.mountsProjectRoadmapModule) throw new Error('rebuilt ProjectRoadmapModule is not mounted')
+  if (roadmapAnalysis.importsSummaryBoard || roadmapAnalysis.mountsSummaryBoard) throw new Error('summary board remains reachable')
+  if (roadmapAnalysis.hasProjectViewSwitcher) throw new Error('legacy project-view switcher remains')
 })
 
 registerAssertion('machine project types expose the exact supported values in order', () => {
@@ -3358,8 +3355,8 @@ registerAssertion('two-digit roadmap contracts stay canonical end to end', () =>
   }
 
   const roadmapView = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapView.tsx'), 'utf8')
-  if (!roadmapView.includes("label: 'tOS 路标视图'") || roadmapView.includes("label: '项目路标视图'")) {
-    throw new Error('project-view tab was not renamed to tOS roadmap')
+  if (!roadmapView.includes('tOS路标') || roadmapView.includes('项目计划汇总看板') || roadmapView.includes('PROJECT_VIEW_OPTIONS')) {
+    throw new Error('roadmap surface is not a single tOS roadmap entry')
   }
 
   const card = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'), 'utf8')

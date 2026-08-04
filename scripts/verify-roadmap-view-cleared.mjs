@@ -18,14 +18,11 @@ for (const legacyMount of analysis.legacyJsxMounts) {
   failures.push(`Legacy roadmap content is still mounted: <${legacyMount}>`)
 }
 
-if (!analysis.hasProjectViewHeader) failures.push('Project-view header text is missing')
-if (!analysis.hasProjectViewOptionLabels) failures.push('Project-view option labels are missing')
+if (!analysis.hasTosRoadmapHeader) failures.push('tOS roadmap header text is missing')
 if (!analysis.hasProjectRoadmapImport) failures.push('Rebuilt ProjectRoadmapModule import is missing')
-if (!analysis.summaryConditionals.some(conditional => (
-  conditional.mountsSummaryBoard && conditional.mountsProjectRoadmapModule
-))) {
-  failures.push('Project-view conditional must mount ProjectPlanSummaryBoard and rebuilt ProjectRoadmapModule')
-}
+if (!analysis.mountsProjectRoadmapModule) failures.push('Rebuilt ProjectRoadmapModule is not mounted')
+if (analysis.importsSummaryBoard || analysis.mountsSummaryBoard) failures.push('Project summary board remains reachable from RoadmapView')
+if (analysis.hasProjectViewSwitcher) failures.push('Legacy project-view switcher remains in RoadmapView')
 
 if (failures.length) {
   console.error('Roadmap cleared-state verification failed:')
@@ -33,4 +30,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Roadmap rebuilt-state verification passed.')
+console.log('tOS roadmap single-entry verification passed.')

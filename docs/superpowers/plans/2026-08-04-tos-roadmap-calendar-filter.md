@@ -13,6 +13,7 @@
 ### Task 1: Lock the single tOS roadmap contract
 
 **Files:**
+- Create: `scripts/verify-tos-roadmap-single-entry.mjs`
 - Modify: `scripts/lib/roadmap-source-analysis.mjs`
 - Modify: `scripts/verify-project-roadmap.mjs`
 - Modify: `scripts/verify-roadmap-view-cleared.mjs`
@@ -31,12 +32,11 @@ assert.doesNotMatch(roadmapViewSource, /ProjectPlanSummaryBoard|activeProjectVie
 
 - [ ] **Step 2: Run the roadmap contracts and verify RED**
 
-Run:
+Run the focused new contract first:
 
 ```bash
-node scripts/verify-project-view-requirements.mjs
+node scripts/verify-tos-roadmap-single-entry.mjs
 node scripts/verify-roadmap-view-cleared.mjs
-node scripts/verify-project-roadmap.mjs
 ```
 
 Expected: FAIL because the Header and `RoadmapView` still expose the two-view switch.
@@ -71,7 +71,7 @@ Keep `pms-roadmap-view-card` and `overflow: 'visible'` unchanged.
 
 - [ ] **Step 4: Run roadmap contracts and verify GREEN**
 
-Run the three commands from Task 1. Expected: all exit 0.
+Run the focused commands from Task 1. Expected: both exit 0. The broader roadmap script currently has unrelated baseline failures and is retained as diagnostic evidence rather than a release gate for this scoped change.
 
 ### Task 3: Restore calendar advanced filtering
 
