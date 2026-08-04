@@ -107,6 +107,8 @@ const styles = fs.readFileSync(path.join(root, 'src/styles/globals.css'), 'utf8'
 assert.match(styles, /\.pms-wide-table-toolbar\s*\{[^}]*position:\s*sticky;[^}]*top:/s)
 assert.match(styles, /\.pms-project-list-filter-grid\s*\{[^}]*height:\s*142px/s, 'category filter surface keeps one stable height across project types')
 assert.match(styles, /\.pms-project-list-view-switch\.ant-segmented\s*\{[^}]*height:\s*36px[^}]*border-radius:\s*999px[^}]*background:\s*#f1f3fb/s, 'view switch uses the pill rail')
+assert.match(styles, /\.pms-project-list-view-switch\.ant-segmented\.ant-segmented-sm \.ant-segmented-item\s*\{[^}]*border-radius:\s*999px/s, 'pill item specificity overrides Ant Design small-segment radii')
+assert.match(styles, /\.pms-project-list-view-switch\.ant-segmented\.ant-segmented-sm \.ant-segmented-thumb\s*\{[^}]*border-radius:\s*999px/s, 'animated selection thumb remains a pill')
 assert.match(styles, /\.pms-project-list-view-switch \.ant-segmented-item-selected\s*\{[^}]*color:\s*#4f46e5[^}]*background:\s*#fff[^}]*box-shadow:/s, 'selected view uses the white capsule')
 assert.match(styles, /\.pms-project-list-view-switch \.ant-segmented-item:focus-visible\s*\{[^}]*outline:/s, 'view switch retains a visible keyboard focus')
 assert.match(styles, /\.pms-project-list \.pms-project-summary-actions \.ant-btn\s*\{[^}]*height:\s*32px[^}]*min-height:\s*32px\s*!important[^}]*padding-inline:\s*12px/s, 'quick-filter actions keep the same compact height as the filter controls')
