@@ -95,6 +95,7 @@ export interface ProjectSummaryTableProps {
   groupBy?: { key: string; fallbackLabel: string }
   toolbarHost?: HTMLElement | null
   showTable?: boolean
+  showColumnSettings?: boolean
 }
 
 interface StoredProjectSummaryPreferences {
@@ -171,6 +172,7 @@ export default function ProjectSummaryTable({
   groupBy,
   toolbarHost,
   showTable = true,
+  showColumnSettings = true,
 }: ProjectSummaryTableProps) {
   const [uncontrolledFilters, setUncontrolledFilters] = useState<AnyFilterCondition[]>([])
   const isFilterControlled = controlledFilters !== undefined
@@ -734,30 +736,32 @@ export default function ProjectSummaryTable({
         </div>
       </FloatingFilterPanel>
 
-      <SortableColumnSettings
-        open={columnOpen}
-        getPopupContainer={getPopupContainer}
-        trigger={(
-          <Tooltip title="列设置">
-            <Button
-              aria-label="列设置"
-              icon={<SettingOutlined />}
-              onClick={() => {
-                setFilterOpen(false)
-                setColumnOpen(true)
-              }}
-            >列设置</Button>
-          </Tooltip>
-        )}
-        definitions={columnDefinitions}
-        value={columnSettings}
-        defaultValue={defaultColumnSettings}
-        onCancel={() => setColumnOpen(false)}
-        onApply={nextSettings => {
-          setColumnSettings(nextSettings)
-          setColumnOpen(false)
-        }}
-      />
+      {showColumnSettings && (
+        <SortableColumnSettings
+          open={columnOpen}
+          getPopupContainer={getPopupContainer}
+          trigger={(
+            <Tooltip title="列设置">
+              <Button
+                aria-label="列设置"
+                icon={<SettingOutlined />}
+                onClick={() => {
+                  setFilterOpen(false)
+                  setColumnOpen(true)
+                }}
+              >列设置</Button>
+            </Tooltip>
+          )}
+          definitions={columnDefinitions}
+          value={columnSettings}
+          defaultValue={defaultColumnSettings}
+          onCancel={() => setColumnOpen(false)}
+          onApply={nextSettings => {
+            setColumnSettings(nextSettings)
+            setColumnOpen(false)
+          }}
+        />
+      )}
     </Space>
   )
 

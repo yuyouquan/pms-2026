@@ -2,13 +2,7 @@ import ts from 'typescript'
 
 const LEGACY_COMPONENTS = new Set(['MilestoneView', 'MRTrainView'])
 const ROADMAP_MODULE = 'ProjectRoadmapModule'
-const PROJECT_VIEW_OPTION_LABELS = new Set(['项目计划汇总看板', 'tOS 路标视图'])
-
-function getPropertyName(property) {
-  return ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)
-    ? property.name.text
-    : undefined
-}
+const SUMMARY_BOARD = 'ProjectPlanSummaryBoard'
 
 function getTagName(tagName) {
   return ts.isIdentifier(tagName) ? tagName.text : undefined
@@ -28,16 +22,6 @@ function isProjectRoadmapModulePath(modulePath) {
     || normalizedPath === `@/components/roadmap/${ROADMAP_MODULE}`
 }
 
-function isSummaryConditional(node) {
-  return ts.isConditionalExpression(node)
-    && ts.isBinaryExpression(node.condition)
-    && node.condition.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
-    && ts.isIdentifier(node.condition.left)
-    && node.condition.left.text === 'activeProjectView'
-    && ts.isStringLiteral(node.condition.right)
-    && node.condition.right.text === 'summary'
-}
-
 function containsJsxTag(node, tagNames) {
   let found = false
   const visit = current => {
@@ -51,40 +35,16 @@ function containsJsxTag(node, tagNames) {
   return found
 }
 
-function collectProjectViewOptionLabels(sourceFile) {
-  const labels = new Set()
-  const visit = node => {
-    if (ts.isVariableDeclaration(node)
-      && ts.isIdentifier(node.name)
-      && node.name.text === 'PROJECT_VIEW_OPTIONS'
-      && node.initializer
-      && ts.isArrayLiteralExpression(node.initializer)) {
-      for (const element of node.initializer.elements) {
-        if (!ts.isObjectLiteralExpression(element)) continue
-        for (const property of element.properties) {
-          if (ts.isPropertyAssignment(property)
-            && getPropertyName(property) === 'label'
-            && ts.isStringLiteral(property.initializer)) {
-            labels.add(property.initializer.text)
-          }
-        }
-      }
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(sourceFile)
-  return labels
-}
-
 export function analyzeRoadmapSource(source, fileName = 'RoadmapView.tsx') {
   const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   const legacyImports = []
   const legacyJsxMounts = []
   const legacyLocalNames = new Set(LEGACY_COMPONENTS)
   const roadmapModuleLocalNames = new Set([ROADMAP_MODULE])
+  const summaryBoardLocalNames = new Set([SUMMARY_BOARD])
   let hasProjectRoadmapImport = false
+  let importsSummaryBoard = false
   const headerTexts = new Set()
-  const summaryConditionals = []
 
   const collect = node => {
     if (ts.isImportDeclaration(node)
@@ -99,14 +59,13 @@ export function analyzeRoadmapSource(source, fileName = 'RoadmapView.tsx') {
       hasProjectRoadmapImport = true
       if (node.importClause?.name) roadmapModuleLocalNames.add(node.importClause.name.text)
     }
-    if (ts.isJsxText(node) && node.text.trim()) headerTexts.add(node.text.trim())
-    if (isSummaryConditional(node)) {
-      summaryConditionals.push({
-        mountsSummaryBoard: containsJsxTag(node.whenTrue, new Set(['ProjectPlanSummaryBoard'])),
-        mountsProjectRoadmapModule: containsJsxTag(node.whenFalse, roadmapModuleLocalNames),
-        hasNullFalseBranch: node.whenFalse.kind === ts.SyntaxKind.NullKeyword,
-      })
+    if (ts.isImportDeclaration(node)
+      && ts.isStringLiteral(node.moduleSpecifier)
+      && node.moduleSpecifier.text.replace(/\.(?:ts|tsx|js|jsx)$/, '') === `./${SUMMARY_BOARD}`) {
+      importsSummaryBoard = true
+      if (node.importClause?.name) summaryBoardLocalNames.add(node.importClause.name.text)
     }
+    if (ts.isJsxText(node) && node.text.trim()) headerTexts.add(node.text.trim())
     ts.forEachChild(node, collect)
   }
   collect(sourceFile)
@@ -120,15 +79,18 @@ export function analyzeRoadmapSource(source, fileName = 'RoadmapView.tsx') {
   }
   collectJsx(sourceFile)
 
-  const projectViewOptionLabels = collectProjectViewOptionLabels(sourceFile)
   return {
     legacyImports,
     legacyJsxMounts,
-    hasProjectViewHeader: headerTexts.has('项目视图')
-      || source.includes("activeProjectView === 'roadmap' ? 'tOS 路标视图' : '项目视图'"),
-    hasProjectViewOptionLabels: [...PROJECT_VIEW_OPTION_LABELS].every(label => projectViewOptionLabels.has(label)),
+    hasTosRoadmapHeader: headerTexts.has('tOS路标'),
     hasProjectRoadmapImport,
-    summaryConditionals,
+    mountsProjectRoadmapModule: containsJsxTag(sourceFile, roadmapModuleLocalNames),
+    importsSummaryBoard,
+    mountsSummaryBoard: containsJsxTag(sourceFile, summaryBoardLocalNames),
+    hasProjectViewSwitcher: source.includes('PROJECT_VIEW_OPTIONS')
+      || source.includes('activeProjectView')
+      || source.includes('项目计划汇总看板')
+      || source.includes('tOS 路标视图'),
   }
 }
 
@@ -152,16 +114,14 @@ export function getRoadmapAnalysisFixtureFailures() {
     failures.push('commented legacy code was incorrectly detected')
   }
 
-  const wrongRoadmapBranch = analyzeRoadmapSource("const view = activeProjectView === 'summary' ? <ProjectPlanSummaryBoard /> : <RoadmapPlaceholder />")
-  if (wrongRoadmapBranch.summaryConditionals.length !== 1
-    || wrongRoadmapBranch.summaryConditionals[0].mountsProjectRoadmapModule) {
-    failures.push('wrong populated roadmap branch was not rejected')
+  const rebuiltRoadmap = analyzeRoadmapSource("import RebuiltRoadmap from './ProjectRoadmapModule.tsx'\nconst view = <RebuiltRoadmap />")
+  if (!rebuiltRoadmap.hasProjectRoadmapImport || !rebuiltRoadmap.mountsProjectRoadmapModule) {
+    failures.push('rebuilt roadmap fixture was not detected')
   }
 
-  const rebuiltRoadmapBranch = analyzeRoadmapSource("import RebuiltRoadmap from './ProjectRoadmapModule.tsx'\nconst view = activeProjectView === 'summary' ? <ProjectPlanSummaryBoard /> : <RebuiltRoadmap />")
-  if (!rebuiltRoadmapBranch.hasProjectRoadmapImport
-    || !rebuiltRoadmapBranch.summaryConditionals[0]?.mountsProjectRoadmapModule) {
-    failures.push('rebuilt roadmap branch fixture was not detected')
+  const staleSwitcher = analyzeRoadmapSource("import ProjectPlanSummaryBoard from './ProjectPlanSummaryBoard'\nconst PROJECT_VIEW_OPTIONS = []\nconst view = <ProjectPlanSummaryBoard />")
+  if (!staleSwitcher.importsSummaryBoard || !staleSwitcher.mountsSummaryBoard || !staleSwitcher.hasProjectViewSwitcher) {
+    failures.push('stale project-view switcher fixture was not detected')
   }
 
   return failures

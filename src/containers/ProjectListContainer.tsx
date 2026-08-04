@@ -635,18 +635,67 @@ export default function ProjectListContainer() {
             {projectTypeFilter === PROJECT_CATEGORY_CAPABILITY ? (
               <Empty description="该项目分类暂未配置" />
             ) : projectListView === 'calendar' ? (
-              <ProjectListCalendar
-                rows={(projectTypeFilter === PROJECT_CATEGORY_TECH ? technicalFilteredRows : standardRows.filter(row => standardFilteredProjectIds.has(row.projectId)))}
-                milestoneDefinitions={projectTypeFilter === PROJECT_CATEGORY_TECH
-                  ? (technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate).map(task => ({
-                      key: `milestone::${task.taskName}`,
-                      label: task.taskName,
-                    }))
-                  : standardFieldDefinitions
-                      .filter(definition => definition.source === 'templateTask')
-                      .map(definition => ({ key: definition.key, label: definition.title }))}
-                onOpenRow={enterSummaryRow}
-              />
+              <>
+                <ProjectListCalendar
+                  rows={(projectTypeFilter === PROJECT_CATEGORY_TECH ? technicalFilteredRows : standardRows.filter(row => standardFilteredProjectIds.has(row.projectId)))}
+                  milestoneDefinitions={projectTypeFilter === PROJECT_CATEGORY_TECH
+                    ? (technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate).map(task => ({
+                        key: `milestone::${task.taskName}`,
+                        label: task.taskName,
+                      }))
+                    : standardFieldDefinitions
+                        .filter(definition => definition.source === 'templateTask')
+                        .map(definition => ({ key: definition.key, label: definition.title }))}
+                  onOpenRow={enterSummaryRow}
+                />
+                {projectTypeFilter === PROJECT_CATEGORY_TECH ? (
+                  <ProjectSummaryTable
+                    projects={[]}
+                    optionProjects={[]}
+                    planTasksByProjectId={{}}
+                    projectType={PROJECT_CATEGORY_TECH}
+                    versions={versions}
+                    currentVersion={currentVersion}
+                    publishedSnapshots={publishedSnapshots}
+                    currentTemplateTasks={technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate}
+                    matrixTemplateTasks={technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate}
+                    matrixVariant={technicalActiveType === 'tdt' ? 'technical-tdt' : 'technical-subproject'}
+                    providedRows={technicalStatusRows}
+                    storageNamespace={`project-list-technical-${technicalActiveType}`}
+                    onViewProject={() => undefined}
+                    onViewRow={enterSummaryRow}
+                    controlledFilters={technicalFilters}
+                    onFiltersChange={setTechnicalFilters}
+                    showQuickFilters={false}
+                    showTable={false}
+                    showColumnSettings={false}
+                    toolbarHost={projectListTableToolbarHost}
+                  />
+                ) : standardMatrixVariant ? (
+                  <ProjectSummaryTable
+                    projects={workspaceFilteredProjects}
+                    optionProjects={categoryBaseProjects}
+                    planTasksByProjectId={projectSummaryPlanTasksByProjectId}
+                    projectType={projectTypeFilter}
+                    versions={versions}
+                    currentVersion={currentVersion}
+                    publishedSnapshots={publishedSnapshots}
+                    currentTemplateTasks={standardTemplateTasks}
+                    storageNamespace="workbench-project-list"
+                    matrixVariant={standardMatrixVariant}
+                    controlledFilters={summaryFilters}
+                    onFiltersChange={setSummaryFilters}
+                    showQuickFilters={false}
+                    showTable={false}
+                    showColumnSettings={false}
+                    toolbarHost={projectListTableToolbarHost}
+                    groupBy={standardMatrixVariant === 'machine'
+                      ? { key: 'productSeries', fallbackLabel: '未配置产品系列' }
+                      : undefined}
+                    onViewProject={() => undefined}
+                  />
+                ) : null}
+              </>
             ) : projectListView === 'card' ? (
               <>
                 <Row gutter={[16, 16]}>
