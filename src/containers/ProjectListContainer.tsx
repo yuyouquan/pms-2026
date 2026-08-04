@@ -5,8 +5,7 @@ import {
   Row, Col, Input, Button, Card, Checkbox, Empty, Segmented, Pagination, Select,
 } from 'antd'
 import {
-  AppstoreOutlined, CalendarOutlined, FullscreenExitOutlined, FullscreenOutlined,
-  PlusOutlined, SearchOutlined, UnorderedListOutlined,
+  FullscreenExitOutlined, FullscreenOutlined, PlusOutlined, SearchOutlined,
 } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
@@ -450,15 +449,15 @@ export default function ProjectListContainer() {
                   onChange={(value) => setProjectListView(value as ProjectListViewMode)}
                   options={[
                     {
-                      label: <span className="pms-project-list-view-option" aria-label="列表视图"><UnorderedListOutlined /><span>列表视图</span></span>,
+                      label: <span className="pms-project-list-view-option" aria-label="列表视图">列表视图</span>,
                       value: 'list',
                     },
                     {
-                      label: <span className="pms-project-list-view-option" aria-label="卡片视图"><AppstoreOutlined /><span>卡片视图</span></span>,
+                      label: <span className="pms-project-list-view-option" aria-label="卡片视图">卡片视图</span>,
                       value: 'card',
                     },
                     {
-                      label: <span className="pms-project-list-view-option" aria-label="日历视图"><CalendarOutlined /><span>日历视图</span></span>,
+                      label: <span className="pms-project-list-view-option" aria-label="日历视图">日历视图</span>,
                       value: 'calendar',
                     },
                   ]}
