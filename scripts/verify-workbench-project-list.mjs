@@ -41,6 +41,8 @@ assert.match(source, /className="pms-project-list"/, 'project list owns a scoped
 assert.match(source, /className="pms-project-list-toolbar pms-wide-table-toolbar"/, 'wide project list keeps its toolbar visible')
 assert.doesNotMatch(source, /aria-label="搜索项目名称"/, 'category row no longer carries a duplicate project-name search')
 assert.match(source, /className="pms-project-list-view-switch"/, 'card/list switch uses the dedicated labeled segmented style')
+assert.match(source, /projectListView !== 'card'[\s\S]{0,400}>全屏<\/Button>/, 'list and calendar expose a visible fullscreen action while card stays unchanged')
+assert.match(source, /aria-label="退出全屏"[\s\S]{0,180}>\s*退出全屏\s*<\/Button>/, 'fullscreen mode exposes a visible exit action')
 assert.match(source, /UnorderedListOutlined/, 'list view segment has a semantic icon')
 assert.match(source, /AppstoreOutlined/, 'card view segment has a semantic icon')
 assert.match(source, /CalendarOutlined/, 'calendar view segment has a semantic icon')
