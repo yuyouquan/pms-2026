@@ -56,6 +56,32 @@ assert.match(summarySource, /showQuickFilters\?: boolean/)
 assert.match(summarySource, /groupBy\?:/)
 assert.match(summarySource, />\s*筛选\s*<\/Button>/, 'advanced filter button exposes visible text')
 assert.match(summarySource, />\s*列设置\s*<\/Button>/, 'column settings button exposes visible text')
+assert.equal(
+  [...source.matchAll(/<Input\s+size="small"[\s\S]{0,180}aria-label="快捷筛选-项目名称"/g)].length,
+  2,
+  'machine and technical project-name quick filters use the compact input size',
+)
+assert.match(
+  source,
+  /<Select\s+size="small"[\s\S]{0,220}aria-label=\{`快捷筛选-\$\{definition\.label\}`\}/,
+  'standard project-list quick filters use compact selects',
+)
+assert.match(
+  source,
+  /<Select\s+size="small"[\s\S]{0,220}aria-label=\{`快捷筛选-\$\{label\}`\}/,
+  'technical project-list quick filters use compact selects',
+)
+assert.match(summarySource, /const compactControlSize = matrixVariant \? 'small' : 'middle'/)
+assert.match(summarySource, /const \[selectedRowKey, setSelectedRowKey\] = useState\(''\)/)
+assert.match(summarySource, /rowClassName=\{row =>/)
+assert.match(
+  summarySource,
+  /width:\s*fieldWidth[\s\S]{0,160}minWidth:\s*fieldWidth[\s\S]{0,160}maxWidth:\s*fieldWidth/,
+  'summary cells lock header and body sizing to the field-definition width',
+)
+assert.match(summarySource, /className=\{`pms-project-series-toggle \$\{isCollapsed \? '' : 'is-expanded'\}`\.trim\(\)\}/)
+assert.match(summarySource, /<Tooltip title=\{groupKey\}>/)
+assert.match(summarySource, /pms-filter-condition-list \$\{matrixVariant \? 'is-compact' : ''\}/)
 
 const styles = fs.readFileSync(path.join(root, 'src/styles/globals.css'), 'utf8')
 assert.match(styles, /\.pms-wide-table-toolbar\s*\{[^}]*position:\s*sticky;[^}]*top:/s)
@@ -68,6 +94,14 @@ assert.match(styles, /\.pms-project-list-field-filters\s*\{[^}]*padding:\s*0 4px
 assert.match(styles, /\.pms-project-summary-table[\s\S]{0,300}th\.ant-table-cell-fix-(?:left|start)[\s\S]{0,160}position:\s*sticky\s*!important/s, 'fixed summary header cells retain sticky positioning instead of relative offsets')
 assert.match(styles, /\.pms-table\.pms-project-summary-table \.ant-table-tbody\s*>\s*tr\s*>\s*td\.ant-table-cell-fix-(?:left|start)[^}]*\{[^}]*z-index:\s*3[^}]*background:\s*#fff\s*!important/s, 'fixed summary body cells stay opaque above scrolled cells')
 assert.match(styles, /\.pms-table\.pms-project-summary-table \.ant-table-tbody\s*>\s*tr:hover\s*>\s*td\.ant-table-cell-fix-(?:left|start)[^}]*\{[^}]*background:\s*#f4f4ff\s*!important/s, 'fixed summary hover cells use an opaque hover surface')
+assert.match(styles, /\.pms-project-summary-table \.pms-project-summary-row\.is-selected/)
+assert.match(styles, /\.pms-project-series-cell\.is-expanded/)
+assert.match(styles, /\.pms-project-summary-table \.ant-table-cell\s*\{[^}]*box-sizing:\s*border-box/s)
+assert.match(
+  styles,
+  /\.pms-filter-condition-list\.is-compact \.pms-filter-condition-row[\s\S]{0,900}min-height:\s*24px/s,
+  'project-list advanced filters override the legacy 40px control height',
+)
 assert.match(styles, /\.pms-table \.ant-table-tbody\s*>\s*tr\.ant-table-measure-row\s*>\s*td\s*\{[^}]*padding:\s*0\s*!important[^}]*height:\s*0\s*!important[^}]*border:\s*0\s*!important/s, 'Ant Design measurement rows stay invisible and cannot create a blank row or distort body widths')
 assert.match(styles, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.pms-project-list/s)
 

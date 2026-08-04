@@ -130,7 +130,9 @@
 .pms-table .ant-table-tbody > tr > td.pms-project-list-overdue { color: #dc2626; font-weight: 600; }
 
 @media (prefers-reduced-motion: reduce) {
-  .pms-project-filter-chip { transition: none; }
+  .pms-project-filter-chip,
+  .pms-project-series-toggle,
+  .pms-project-summary-table .ant-table-cell { transition: none !important; }
 }
 
 /* Redesigned workflow surfaces share one dense, stable interaction rhythm. */
@@ -271,6 +273,10 @@
   border-radius: 8px;
 }
 
+.pms-project-summary-table .ant-table-cell {
+  box-sizing: border-box;
+}
+
 .pms-project-summary-table .ant-table-cell-fix-start,
 .pms-project-summary-table .ant-table-cell-fix-start-shadow,
 .pms-project-summary-table .ant-table-cell-fix-left,
@@ -314,6 +320,18 @@
   background: #f4f4ff !important;
 }
 
+.pms-project-summary-table .pms-project-summary-row.is-selected > td,
+.pms-table.pms-project-summary-table .ant-table-tbody > tr.pms-project-summary-row.is-selected > td.ant-table-cell-fix-left,
+.pms-table.pms-project-summary-table .ant-table-tbody > tr.pms-project-summary-row.is-selected > td.ant-table-cell-fix-start,
+.pms-table.pms-project-summary-table .ant-table-tbody > tr.pms-project-summary-row.is-selected > td.ant-table-cell-fix-left-last,
+.pms-table.pms-project-summary-table .ant-table-tbody > tr.pms-project-summary-row.is-selected > td.ant-table-cell-fix-start-shadow {
+  background: #eef0ff !important;
+}
+
+.pms-project-summary-table .pms-project-summary-row.is-selected > td:first-child {
+  box-shadow: inset 3px 0 0 #6366f1;
+}
+
 .pms-table.pms-project-summary-table .ant-table-cell-fix-left-last::after,
 .pms-table.pms-project-summary-table .ant-table-cell-fix-start-shadow::after {
   box-shadow: 5px 0 10px -5px rgba(71, 67, 126, 0.18) !important;
@@ -322,6 +340,11 @@
 .pms-project-series-cell {
   padding: 0 !important;
   vertical-align: middle !important;
+}
+
+.pms-project-series-cell.is-expanded,
+.pms-project-series-cell.is-expanded .pms-project-series-toggle {
+  background: #f3f4ff !important;
 }
 
 .pms-project-series-toggle {
@@ -334,15 +357,30 @@
   color: #475569;
   text-align: left;
   border: 0;
-  background: #fff;
+  background: transparent;
   cursor: pointer;
   overflow: hidden;
+  transition: color 160ms ease, background-color 160ms ease;
 }
 
 .pms-project-series-toggle:hover,
 .pms-project-series-toggle:focus-visible {
   color: #4338ca;
   background: #f8f9ff;
+}
+
+.pms-project-series-toggle.is-expanded:hover,
+.pms-project-series-toggle.is-expanded:focus-visible {
+  background: #e9ebff !important;
+}
+
+.pms-project-series-toggle:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.55);
+  outline-offset: -2px;
+}
+
+.pms-project-summary-row.is-selected .pms-project-series-toggle {
+  background: #eef0ff !important;
 }
 
 .pms-project-series-copy {
@@ -1627,6 +1665,44 @@
   height: 40px;
   width: 40px;
   min-width: 40px;
+}
+
+.pms-filter-condition-list.is-compact .pms-filter-condition-row {
+  grid-template-columns: minmax(164px, 1.05fr) 104px minmax(184px, 1.05fr) 28px;
+  gap: 8px;
+}
+
+.pms-filter-condition-list.is-compact .pms-filter-condition-row .ant-select,
+.pms-filter-condition-list.is-compact .pms-filter-condition-row .ant-picker,
+.pms-filter-condition-list.is-compact .pms-filter-condition-row .ant-input,
+.pms-filter-condition-list.is-compact .pms-filter-condition-row .ant-input-affix-wrapper {
+  height: 24px;
+  min-height: 24px;
+  border-radius: 6px;
+}
+
+.pms-filter-condition-list.is-compact .pms-filter-condition-row .ant-select-single {
+  height: 24px;
+}
+
+.pms-filter-condition-list.is-compact .pms-filter-condition-row .ant-select-single .ant-select-selector {
+  height: 24px !important;
+  border-radius: 6px;
+}
+
+.pms-filter-condition-list.is-compact .pms-filter-condition-row .ant-select-single .ant-select-selection-item,
+.pms-filter-condition-list.is-compact .pms-filter-condition-row .ant-select-single .ant-select-selection-placeholder {
+  line-height: 22px !important;
+}
+
+.pms-filter-condition-list.is-compact .pms-filter-condition-row > .ant-btn {
+  width: 28px;
+  min-width: 28px;
+  height: 24px;
+}
+
+.pms-filter-condition-list.is-compact .pms-filter-value-placeholder {
+  min-height: 24px;
 }
 
 .pms-filter-value-placeholder {
