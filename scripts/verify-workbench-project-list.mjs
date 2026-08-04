@@ -56,6 +56,7 @@ assert.match(source, /showQuickFilters=\{false\}/)
 assert.match(summarySource, /getProjectListFixedColumnKeys/)
 assert.match(summarySource, /fixedColumnKeys\.has\(definition\.key\)/)
 assert.match(summarySource, /showQuickFilters\?: boolean/)
+assert.match(summarySource, /showColumnSettings\?: boolean/)
 assert.match(summarySource, /groupBy\?:/)
 assert.match(summarySource, />\s*筛选\s*<\/Button>/, 'advanced filter button exposes visible text')
 assert.match(summarySource, />\s*列设置\s*<\/Button>/, 'column settings button exposes visible text')
@@ -87,6 +88,17 @@ assert.match(summarySource, /<Tooltip title=\{groupKey\}>/)
 assert.match(summarySource, /pms-project-name-cell/, 'project-name header and body share a semantic sizing class')
 assert.match(summarySource, /pms-project-name-text/, 'project-name content has an explicit one-line text wrapper')
 assert.match(summarySource, /pms-filter-condition-list \$\{matrixVariant \? 'is-compact' : ''\}/)
+assert.match(summarySource, /showColumnSettings\s*&&\s*\(\s*<SortableColumnSettings/)
+assert.equal(
+  [...source.matchAll(/showColumnSettings=\{false\}/g)].length,
+  2,
+  'calendar mounts standard and technical filter controllers without column settings',
+)
+assert.match(
+  source,
+  /projectListView === 'calendar'[\s\S]{0,5200}showTable=\{false\}[\s\S]{0,500}showColumnSettings=\{false\}/,
+  'calendar branch mounts a hidden summary controller that keeps advanced filtering available',
+)
 assert.match(matrixSource, /required\('productSeries', '产品系列', 160\)/, 'machine product-series fixed width is 160px')
 assert.match(matrixSource, /required\('projectName', '项目名称', 220\)/, 'machine project-name fixed width is 220px')
 

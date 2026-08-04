@@ -53,19 +53,14 @@ const checks = [
     includes: 'inferSoftwareProjectTypeFromName',
   },
   {
-    name: 'Header uses 项目视图 label',
+    name: 'Header uses tOS路标 label',
     file: 'src/containers/AppShell.tsx',
-    includes: '项目视图',
+    includes: 'tOS路标',
   },
   {
-    name: 'Project view has summary board tab',
+    name: 'Project view mounts the tOS roadmap directly',
     file: 'src/components/roadmap/RoadmapView.tsx',
-    includes: '项目计划汇总看板',
-  },
-  {
-    name: 'Project view keeps old roadmap under tab',
-    file: 'src/components/roadmap/RoadmapView.tsx',
-    includes: '项目路标视图',
+    includes: '<ProjectRoadmapModule',
   },
   {
     name: 'Project view card allows sticky controls to escape card clipping',
