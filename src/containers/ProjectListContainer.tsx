@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useMemo, type CSSProperties } from 'react'
+import { useEffect, useState, useMemo, type CSSProperties } from 'react'
 import {
   Row, Col, Input, Button, Card, Checkbox, Empty, Segmented, Pagination, Select,
 } from 'antd'
 import {
-  AppstoreOutlined, CalendarOutlined, PlusOutlined, SearchOutlined, UnorderedListOutlined,
+  AppstoreOutlined, CalendarOutlined, FullscreenExitOutlined, FullscreenOutlined,
+  PlusOutlined, SearchOutlined, UnorderedListOutlined,
 } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
@@ -115,11 +116,28 @@ export default function ProjectListContainer() {
   ))
   const [projectListTableToolbarHost, setProjectListTableToolbarHost] = useState<HTMLDivElement | null>(null)
   const [aboutMineOnly, setAboutMineOnly] = useState(true)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const technicalSelectedTypes = getLinkedQuickFilterValues(technicalFilters, 'technicalProjectType')
   const technicalActiveType = resolveTechnicalProjectType(technicalSelectedTypes)
 
   const projectCardPageSize = 9
   const [addProjectOpen, setAddProjectOpen] = useState(false)
+  const fullscreenViewTitle = projectListView === 'calendar' ? '项目日历' : '项目列表'
+
+  useEffect(() => {
+    if (!isFullscreen) return
+    const previousOverflow = document.body.style.overflow
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsFullscreen(false)
+    }
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isFullscreen])
+
   const workbenchListState = useMemo(
     () => getWorkbenchListState(projectTypeFilter),
     [projectTypeFilter],
@@ -629,8 +647,39 @@ export default function ProjectListContainer() {
         </div>
       </div>
 
+      {!isFullscreen && projectListView !== 'card' && (
+        <div className="pms-project-list-content-actions">
+          <Button
+            size="small"
+            aria-label="全屏展示"
+            icon={<FullscreenOutlined />}
+            onClick={() => setIsFullscreen(true)}
+          >全屏</Button>
+        </div>
+      )}
+
       {/* Project list content */}
-      <div className="pms-project-list-content" style={{ display: 'flex', gap: 20 }}>
+      <section
+        className={`pms-project-list-content ${isFullscreen ? 'is-fullscreen' : ''}`.trim()}
+        aria-label={isFullscreen ? `${fullscreenViewTitle}全屏展示` : undefined}
+      >
+        {isFullscreen && (
+          <header className="pms-project-list-fullscreen__header">
+            <div>
+              <strong>{fullscreenViewTitle}</strong>
+              <span>当前筛选结果</span>
+            </div>
+            <Button
+              size="small"
+              aria-label="退出全屏"
+              icon={<FullscreenExitOutlined />}
+              onClick={() => setIsFullscreen(false)}
+            >
+              退出全屏
+            </Button>
+          </header>
+        )}
+        <div className="pms-project-list-content__body" style={{ display: 'flex', gap: 20 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             {projectTypeFilter === PROJECT_CATEGORY_CAPABILITY ? (
               <Empty description="该项目分类暂未配置" />
@@ -845,8 +894,8 @@ export default function ProjectListContainer() {
               )
             )}
           </div>
-
         </div>
+      </section>
       <AddProjectModal open={addProjectOpen} onCancel={() => setAddProjectOpen(false)} />
     </div>
   )
