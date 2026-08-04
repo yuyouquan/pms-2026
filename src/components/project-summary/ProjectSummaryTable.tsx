@@ -20,7 +20,7 @@ import {
   RightOutlined,
   SettingOutlined,
 } from '@ant-design/icons'
-import type { ColumnsType } from 'antd/es/table'
+import type { ColumnType, ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
@@ -430,7 +430,7 @@ export default function ProjectSummaryTable({
     ]
   }, [columnDefinitions, columnSettings, fixedColumnKeys, fixedColumnOrder])
   const tableColumnByKey = useMemo(
-    () => new Map(buildProjectSummaryColumns(fieldDefinitions).map(column => {
+    () => new Map<string, ColumnType<ProjectSummaryRow>>(buildProjectSummaryColumns(fieldDefinitions).map(column => {
       const key = String(column.key)
       const fixed = fixedColumnKeys.has(key) ? 'left' as const : undefined
       const field = fieldDefinitions.find(definition => definition.key === key)
@@ -442,14 +442,27 @@ export default function ProjectSummaryTable({
       }
       const baseHeaderCell = column.onHeaderCell
       const baseCell = column.onCell
+      const isProjectName = key === 'projectName'
       const sizedColumn = {
         ...column,
         fixed,
         width: fieldWidth,
+        ellipsis: isProjectName ? false : column.ellipsis,
+        render: isProjectName
+          ? (value: unknown, _record: ProjectSummaryRow, _index: number) => {
+              const projectName = String(value ?? '-').trim() || '-'
+              return (
+                <Tooltip title={projectName} mouseEnterDelay={0.35}>
+                  <span className="pms-project-name-text">{projectName}</span>
+                </Tooltip>
+              )
+            }
+          : undefined,
         onHeaderCell: () => {
           const headerCell = baseHeaderCell?.() ?? {}
           return {
             ...headerCell,
+            className: isProjectName ? 'pms-project-name-cell' : undefined,
             style: { ...headerCell.style, ...lockedWidth },
           }
         },
@@ -457,6 +470,9 @@ export default function ProjectSummaryTable({
           const cell = baseCell?.(record) ?? {}
           return {
             ...cell,
+            className: [cell.className, isProjectName ? 'pms-project-name-cell' : '']
+              .filter(Boolean)
+              .join(' '),
             style: lockedWidth,
           }
         },
