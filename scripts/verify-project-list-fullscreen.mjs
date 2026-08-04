@@ -23,5 +23,10 @@ assert.doesNotMatch(source, /requestFullscreen|document\.exitFullscreen/, 'fulls
 assert.match(styles, /\.pms-project-list-content\.is-fullscreen\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*0;[^}]*z-index:\s*1300;/s)
 assert.match(styles, /\.pms-project-list-fullscreen__header\s*\{[^}]*display:\s*flex;[^}]*justify-content:\s*space-between;/s)
 assert.match(styles, /\.pms-project-list-content\.is-fullscreen \.pms-project-list-content__body\s*\{[^}]*flex:\s*1;[^}]*overflow:\s*auto;/s)
+assert.doesNotMatch(
+  styles,
+  /@keyframes pms-project-list-fullscreen-enter[\s\S]{0,240}transform:/,
+  'fullscreen entry animation must not shrink the viewport overlay',
+)
 
 console.log('project list fullscreen contract passed')
