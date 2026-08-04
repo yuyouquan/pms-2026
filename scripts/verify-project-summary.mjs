@@ -328,7 +328,11 @@ registerAssertion('workbench summary keeps option projects and plan tasks indepe
 
   assert.match(
     workspaceSource,
-    /const categoryBaseProjects[\s\S]{0,500}visibleProjects[\s\S]{0,500}matchesProjectTypeFilter/,
+    /const visibleProjects[\s\S]{0,500}projectMemberMap/,
+  )
+  assert.match(
+    workspaceSource,
+    /const categoryBaseProjects[\s\S]{0,500}matchesProjectTypeFilter/,
   )
   assert.match(
     workspaceSource,

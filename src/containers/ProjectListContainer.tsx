@@ -522,6 +522,7 @@ export default function ProjectListContainer() {
                 <span className="pms-project-list-filter-label">快捷筛选</span>
                 {standardMatrixVariant === 'machine' && (
                   <Input
+                    size="small"
                     allowClear
                     aria-label="快捷筛选-项目名称"
                     placeholder="项目名称"
@@ -541,6 +542,8 @@ export default function ProjectListContainer() {
                 )}
                 {standardQuickFilterDefinitions.map(definition => (
                   <Select
+                    size="small"
+                    aria-label={`快捷筛选-${definition.label}`}
                     key={definition.key}
                     mode="multiple"
                     allowClear
@@ -548,7 +551,6 @@ export default function ProjectListContainer() {
                     maxTagCount={1}
                     optionFilterProp="label"
                     placeholder={definition.label}
-                    aria-label={`快捷筛选-${definition.label}`}
                     options={definition.options}
                     value={getLinkedQuickFilterValues(summaryFilters, definition.key)}
                     onChange={values => {
@@ -569,6 +571,7 @@ export default function ProjectListContainer() {
               <div aria-label="技术项目字段快捷筛选" className="pms-project-list-field-filters">
                 <span className="pms-project-list-filter-label">快捷筛选</span>
                 <Input
+                  size="small"
                   allowClear
                   aria-label="快捷筛选-项目名称"
                   placeholder="项目名称"
@@ -589,6 +592,8 @@ export default function ProjectListContainer() {
                   const label = key === 'technicalTrack' ? '技术赛道' : '项目阶段'
                   return (
                     <Select
+                      size="small"
+                      aria-label={`快捷筛选-${label}`}
                       key={key}
                       mode="multiple"
                       allowClear
@@ -596,7 +601,6 @@ export default function ProjectListContainer() {
                       maxTagCount={1}
                       optionFilterProp="label"
                       placeholder={label}
-                      aria-label={`快捷筛选-${label}`}
                       options={technicalFilterOptions[key]}
                       value={getLinkedQuickFilterValues(technicalFilters, key)}
                       onChange={values => {
