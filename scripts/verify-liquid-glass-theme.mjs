@@ -604,11 +604,14 @@ function primitiveRuleFailures(css) {
 
 function focusTargetsForRule(rule) {
   const whereMatch = /^:where\(([\s\S]+)\):focus-visible$/.exec(rule.selectorText)
-  if (whereMatch) return new Set(splitCssList(whereMatch[1]))
+  if (whereMatch) {
+    const targets = new Set(splitCssList(whereMatch[1]))
+    return targets.has('*') ? new Set(FOCUS_TARGETS) : targets
+  }
 
   const targets = new Set()
   for (const selector of rule.selectors) {
-    if (selector === '*:focus-visible') {
+    if (selector === ':focus-visible' || selector === '*:focus-visible') {
       for (const target of FOCUS_TARGETS) targets.add(target)
     }
     for (const target of FOCUS_TARGETS) {
@@ -777,6 +780,11 @@ function primitiveContractSelfTestFailures() {
     {
       label: 'later focus ring override',
       css: `${validCss}\nbutton:focus-visible { outline: none; box-shadow: none; }`,
+      expectedFailure: 'visible keyboard focus rule for button',
+    },
+    {
+      label: 'later global focus ring override',
+      css: `${validCss}\n:focus-visible { outline: 1px solid transparent; box-shadow: none; }`,
       expectedFailure: 'visible keyboard focus rule for button',
     },
   ]
