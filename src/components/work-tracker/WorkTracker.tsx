@@ -54,7 +54,7 @@ const MOCK_WORK_ITEMS: WorkItem[] = [
 ]
 
 const TYPE_COLORS: Record<WorkItemType, string> = {
-  '需求': '#6366f1',
+  '需求': 'var(--pms-brand)',
   '任务': '#52c41a',
   '风险': '#faad14',
   '问题': '#ff4d4f',
@@ -247,7 +247,7 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
   ]
 
   const statItems = [
-    { label: '全部', value: stats.total, color: '#6366f1', bg: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', borderColor: 'rgba(99,102,241,0.15)', iconBg: 'linear-gradient(135deg, #6366f1, #818cf8)', iconText: '全' },
+    { label: '全部', value: stats.total, color: 'var(--pms-brand-strong)', borderColor: 'color-mix(in srgb, var(--pms-brand) 18%, transparent)', iconBg: 'var(--pms-gradient-brand)', iconText: '全' },
     { label: '待办', value: stats.pending, color: '#f59e0b', bg: 'linear-gradient(135deg, #fffbeb, #fef3c7)', borderColor: 'rgba(245,158,11,0.15)', iconBg: 'linear-gradient(135deg, #f59e0b, #fbbf24)', iconText: '办' },
     { label: '逾期', value: stats.overdue, color: '#ef4444', bg: 'linear-gradient(135deg, #fef2f2, #fecaca)', borderColor: 'rgba(239,68,68,0.15)', iconBg: 'linear-gradient(135deg, #ef4444, #f87171)', iconText: '期' },
     { label: '已完成', value: stats.completed, color: '#10b981', bg: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', borderColor: 'rgba(16,185,129,0.15)', iconBg: 'linear-gradient(135deg, #10b981, #34d399)', iconText: '完' },
@@ -255,19 +255,16 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
   ]
 
   return (
-    <div>
+    <div className="pms-work-tracker">
       {/* 统计卡片 */}
-      <div style={{ display: 'flex', gap: 14, marginBottom: 20 }}>
+      <div className="pms-work-tracker-summary" style={{ display: 'flex', gap: 14, marginBottom: 20 }}>
         {statItems.map(item => (
           <div
             key={item.label}
+            className="pms-glass-surface pms-interactive-surface"
             style={{
               flex: 1, padding: '18px 20px', borderRadius: 12,
-              background: item.bg, border: `1px solid ${item.borderColor}`,
-              backdropFilter: 'blur(6px)',
               display: 'flex', alignItems: 'center', gap: 14,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-              transition: 'all 0.25s ease',
               cursor: 'default',
             }}
             onMouseEnter={(e) => {
@@ -299,8 +296,9 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
 
       {/* 筛选工具栏 */}
       <Card
+        className="pms-toolbar pms-work-tracker-toolbar"
         size="small"
-        style={{ borderRadius: 10, marginBottom: 16, border: '1px solid rgba(99,102,241,0.08)', background: 'rgba(249,250,255,0.6)' }}
+        style={{ borderRadius: 10, marginBottom: 16 }}
         styles={{ body: { padding: '12px 20px' } }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
@@ -321,7 +319,7 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
                   style={{
                     padding: '4px 14px', borderRadius: 20, cursor: 'pointer',
                     fontSize: 13, fontWeight: 500, transition: 'all 0.25s ease',
-                    background: isActive ? (f.color ? f.color : 'linear-gradient(135deg, #4338ca, #6366f1)') : 'transparent',
+                    background: isActive ? (f.color ? f.color : 'var(--pms-gradient-brand)') : 'transparent',
                     color: isActive ? '#fff' : '#4b5563',
                     border: isActive ? '1px solid transparent' : '1px solid transparent',
                     boxShadow: isActive ? (f.color ? `0 4px 12px ${f.color}40` : '0 4px 12px rgba(67,56,202,0.3)') : 'none',
@@ -383,7 +381,7 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
       </Card>
 
       {/* 数据表格 */}
-      <Card style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(99,102,241,0.08)', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }} styles={{ body: { padding: 0 } }}>
+      <Card className="pms-solid-surface pms-table" style={{ borderRadius: 12, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
         <Table
           className="pms-table"
           columns={columns}
@@ -413,7 +411,8 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
 
       {/* 实际时间修改弹窗 */}
       <Modal
-        title={<Space><FieldTimeOutlined style={{ color: '#6366f1' }} /><span>修改实际时间</span></Space>}
+        className="pms-modal"
+        title={<Space><FieldTimeOutlined style={{ color: 'var(--pms-brand)' }} /><span>修改实际时间</span></Space>}
         open={actualTimeModal.visible}
         onCancel={() => setActualTimeModal({ visible: false, item: null, startDate: '', endDate: '' })}
         onOk={() => {

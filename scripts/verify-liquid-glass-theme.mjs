@@ -4,8 +4,26 @@ import process from 'node:process'
 
 const BRAND_HEX_LITERALS = ['#5d49f6', '#7562ff', '#ad98ee', '#f5f3ff', '#dcd6ff']
 const BRAND_HEX_PATTERN = new RegExp(`(?:${BRAND_HEX_LITERALS.join('|')})\\b`, 'gi')
+const legacyBrand = /#(?:1e1b4b|312e81|3730a3|4338ca|4f46e5|5558e6|5b5cf6|6366f1|818cf8)\b/gi
 const THEME_SOURCE = 'src/theme/pmsTheme.ts'
 const CSS_SOURCE = 'src/styles/globals.css'
+
+const groups = {
+  shell: [
+    'src/app/page.tsx',
+    'src/containers/AppShell.tsx',
+  ],
+  workbench: [
+    'src/containers/WorkbenchContainer.tsx',
+    'src/containers/ProjectListContainer.tsx',
+    'src/components/work-tracker/WorkTracker.tsx',
+    'src/components/workspace/TodoCenter.tsx',
+    'src/components/workspace/WorkspaceModule.tsx',
+    'src/components/workspace/AddProjectModal.tsx',
+    'src/components/project-summary/ProjectSummaryTable.tsx',
+    'src/components/project-list/ProjectListCalendar.tsx',
+  ],
+}
 
 // Task 4 removes these migration-baseline exceptions when the roadmap is migrated.
 const ROADMAP_BASELINE_EXCEPTIONS = {
@@ -83,6 +101,22 @@ function expectNoMatches(failures, root, file, expectations) {
       failures.push(`${file} must not include ${label}`)
     }
   }
+}
+
+function expectNoLegacyBrand(failures, root, file) {
+  const matches = [...read(file, root).matchAll(legacyBrand)]
+    .map((match) => match[0].toLowerCase())
+  if (matches.length === 0) return
+
+  failures.push(`${file}: legacy brand literal(s): ${[...new Set(matches)].join(', ')}`)
+}
+
+function groupedLegacyBrandFailures(root) {
+  const failures = []
+  for (const files of Object.values(groups)) {
+    for (const file of files) expectNoLegacyBrand(failures, root, file)
+  }
+  return failures
 }
 
 function extractRootBlock(css) {
@@ -905,7 +939,11 @@ function cssContractFailures(root) {
 }
 
 function verifyContract(root) {
-  const failures = [...rawBrandFailures(root), ...cssContractFailures(root)]
+  const failures = [
+    ...rawBrandFailures(root),
+    ...groupedLegacyBrandFailures(root),
+    ...cssContractFailures(root),
+  ]
 
   expectPatterns(failures, root, 'src/theme/pmsTheme.ts', [
     { label: 'PMS_COLORS export', pattern: /^export const PMS_COLORS\s*=\s*{/m },

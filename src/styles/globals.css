@@ -152,8 +152,8 @@
 
 .pms-project-filter-chip.is-active {
   color: #fff;
-  background: #6366f1;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.24);
+  background: var(--pms-brand);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--pms-brand) 24%, transparent);
 }
 
 .pms-technical-list-panel { min-width: 0; }
@@ -238,18 +238,18 @@
 }
 
 .pms-project-list-view-switch .ant-segmented-item-selected {
-  color: #4f46e5;
+  color: var(--pms-brand-strong);
   background: #fff;
   box-shadow: 0 2px 8px rgba(67, 56, 202, 0.14);
 }
 
 .pms-project-list-view-switch .ant-segmented-item:not(.ant-segmented-item-selected):hover {
-  color: #4f46e5;
+  color: var(--pms-brand-strong);
   background: rgba(255, 255, 255, 0.72);
 }
 
 .pms-project-list-view-switch .ant-segmented-item:focus-visible {
-  outline: 2px solid rgba(79, 70, 229, 0.42);
+  outline: 2px solid color-mix(in srgb, var(--pms-brand-strong) 42%, transparent);
   outline-offset: 1px;
 }
 
@@ -374,7 +374,7 @@
 }
 
 .pms-project-summary-table .pms-project-summary-row.is-selected > td:first-child {
-  box-shadow: inset 3px 0 0 #6366f1;
+  box-shadow: inset 3px 0 0 var(--pms-brand);
 }
 
 .pms-table.pms-project-summary-table .ant-table-cell-fix-left-last::after,
@@ -410,7 +410,7 @@
 
 .pms-project-series-toggle:hover,
 .pms-project-series-toggle:focus-visible {
-  color: #4338ca;
+  color: var(--pms-brand-strong);
   background: #f8f9ff;
 }
 
@@ -420,7 +420,7 @@
 }
 
 .pms-project-series-toggle:focus-visible {
-  outline: 2px solid rgba(99, 102, 241, 0.55);
+  outline: 2px solid color-mix(in srgb, var(--pms-brand) 55%, transparent);
   outline-offset: -2px;
 }
 
@@ -502,7 +502,7 @@
   height: 32px;
   border-color: rgba(99, 102, 241, 0.22);
   border-radius: 8px;
-  color: #4f46e5;
+  color: var(--pms-brand-strong);
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 3px 10px rgba(79, 70, 229, 0.08);
 }
@@ -538,7 +538,7 @@
 }
 
 .pms-project-list-fullscreen__header strong {
-  color: #1e1b4b;
+  color: var(--pms-text-primary);
   font-size: 16px;
 }
 
@@ -585,8 +585,8 @@
 
 .pms-drag-handle:hover,
 .pms-drag-handle:focus-visible {
-  color: #4f46e5;
-  background: #eef2ff;
+  color: var(--pms-brand-strong);
+  background: var(--pms-brand-surface);
 }
 
 .pms-drag-handle:active {
@@ -601,7 +601,7 @@
 
 .pms-project-list :where(button, input, .ant-select-selector, .ant-segmented-item):focus-visible,
 .technical-project-space :where(button, input, textarea, .ant-select-selector, .ant-radio-button-wrapper):focus-visible {
-  outline: 2px solid #6366f1;
+  outline: 2px solid var(--pms-brand);
   outline-offset: 2px;
 }
 
@@ -1045,7 +1045,7 @@
 
 .pms-todo-center__eyebrow {
   margin-bottom: 4px;
-  color: #818cf8;
+  color: var(--pms-brand);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -1053,7 +1053,7 @@
 
 .pms-todo-center__title {
   margin: 0;
-  color: #1e1b4b;
+  color: var(--pms-text-primary);
   font-size: 22px;
   font-weight: 700;
   line-height: 1.25;
@@ -1072,7 +1072,7 @@
 }
 
 .pms-todo-center .ant-segmented-item-selected {
-  color: #4338ca;
+  color: var(--pms-brand-strong);
   box-shadow: 0 2px 8px rgba(67, 56, 202, 0.12);
 }
 
@@ -1109,9 +1109,9 @@
   height: 40px;
   place-items: center;
   border-radius: 12px;
-  color: #6366f1;
+  color: var(--pms-brand);
   font-size: 18px;
-  background: #eef2ff;
+  background: var(--pms-brand-surface);
 }
 
 .pms-todo-metric--orange .pms-todo-metric__icon {
@@ -1136,7 +1136,7 @@
 }
 
 .pms-todo-metric__value {
-  color: #1e1b4b;
+  color: var(--pms-text-primary);
   font-size: 24px;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
@@ -1201,7 +1201,7 @@
   width: fit-content;
   max-width: 100%;
   overflow: hidden;
-  color: #1e1b4b;
+  color: var(--pms-text-primary);
   font-weight: 600;
   text-align: left;
   text-overflow: ellipsis;
@@ -1256,7 +1256,7 @@
 .pms-todo-center__loading {
   min-height: 410px;
   padding: 24px;
-  color: #818cf8;
+  color: var(--pms-brand);
   font-size: 13px;
 }
 
@@ -4545,7 +4545,7 @@ body {
   overflow: hidden;
   border: 0;
   border-radius: 5px;
-  background: linear-gradient(135deg, #6366f1, #7c3aed);
+  background: var(--pms-gradient-brand);
   color: #fff;
   font-size: 12px;
   font-weight: 700;
@@ -4606,6 +4606,83 @@ body {
 
 .pms-interactive-surface:active {
   transform: scale(.98);
+}
+
+/* Shell and workbench material hierarchy. */
+.pms-topbar__brand-mark {
+  background: color-mix(in srgb, var(--pms-surface-solid) 20%, transparent);
+  border: 1px solid rgb(255 255 255 / 32%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 42%);
+}
+
+.pms-topbar .ant-menu-dark,
+.pms-topbar .ant-menu-dark > .ant-menu {
+  color: rgb(255 255 255 / 82%);
+  background: transparent;
+}
+
+.pms-topbar .ant-menu-dark.ant-menu-horizontal > .ant-menu-item {
+  color: rgb(255 255 255 / 82%);
+}
+
+.pms-topbar .ant-menu-dark.ant-menu-horizontal > .ant-menu-item:hover,
+.pms-topbar .ant-menu-dark.ant-menu-horizontal > .ant-menu-item-selected {
+  color: #fff;
+  background: rgb(255 255 255 / 14%);
+}
+
+.pms-topbar .pms-user-switcher.pms-glass-surface {
+  background: rgb(255 255 255 / 14%);
+  border-color: rgb(255 255 255 / 28%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 30%);
+}
+
+.pms-workbench-toolbar {
+  margin-bottom: 12px;
+  border-radius: var(--pms-radius-surface);
+}
+
+.pms-workbench-toolbar > .ant-tabs-nav {
+  margin: 0;
+}
+
+.pms-work-tracker-summary > .pms-glass-surface {
+  min-width: 0;
+}
+
+.pms-work-tracker-toolbar > .ant-card-body {
+  padding: 12px 20px;
+}
+
+.pms-todo-center__table.pms-solid-surface,
+.pms-project-summary-table-shell,
+.pms-project-list-content__body.pms-solid-surface {
+  overflow: hidden;
+  border-radius: var(--pms-radius-surface);
+}
+
+.pms-todo-center .ant-table-tbody > tr.pms-solid-surface {
+  background: var(--pms-surface-solid);
+  border: 0;
+  box-shadow: none;
+}
+
+.pms-project-list-filter-grid.pms-toolbar {
+  align-content: start;
+}
+
+.pms-project-list-fullscreen__header.pms-toolbar {
+  padding: 8px 20px;
+}
+
+@media (max-width: 900px) {
+  .pms-work-tracker-summary {
+    flex-wrap: wrap;
+  }
+
+  .pms-work-tracker-summary > .pms-glass-surface {
+    flex-basis: calc(50% - 7px) !important;
+  }
 }
 
 :where(

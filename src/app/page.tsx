@@ -66,7 +66,7 @@ export default function Home() {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
-      <div style={{ minHeight: '100vh', background: '#f5f6fa' }}>
+      <div className="pms-page-shell">
         {/* Project Space — full-screen layout with its own header */}
         {activeModule === 'projectSpace' && selectedProject ? (
           <ProjectSpaceContainer />

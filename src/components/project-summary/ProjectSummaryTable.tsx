@@ -767,7 +767,7 @@ export default function ProjectSummaryTable({
 
   return (
     <div>
-      {(!toolbarHost || showQuickFilters) && <div style={{
+      {(!toolbarHost || showQuickFilters) && <div className="pms-toolbar pms-project-summary-toolbar" style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -827,37 +827,39 @@ export default function ProjectSummaryTable({
         </Typography.Text>
       )}
 
-      {showTable && <Table<ProjectSummaryRow>
-        className="pms-table pms-project-summary-table"
-        tableLayout="fixed"
-        rowKey="key"
-        columns={columns}
-        dataSource={displayedRows}
-        rowClassName={row => [
-          'pms-project-summary-row',
-          selectedRowKey === row.key ? 'is-selected' : '',
-        ].filter(Boolean).join(' ')}
-        pagination={false}
-        scroll={{ x: scrollWidth, y: 'calc(100vh - 260px)' }}
-        locale={{
-          emptyText: (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="暂无项目数据"
-            />
-          ),
-        }}
-        onRow={row => ({
-          style: { cursor: row.__groupSummary ? 'default' : 'pointer' },
-          'aria-selected': selectedRowKey === row.key,
-          onClick: () => {
-            if (row.__groupSummary) return
-            setSelectedRowKey(row.key)
-            if (onViewRow) onViewRow(row)
-            else onViewProject(row.projectId)
-          },
-        })}
-      />}
+      {showTable && <div className="pms-solid-surface pms-project-summary-table-shell">
+        <Table<ProjectSummaryRow>
+          className="pms-table pms-project-summary-table"
+          tableLayout="fixed"
+          rowKey="key"
+          columns={columns}
+          dataSource={displayedRows}
+          rowClassName={row => [
+            'pms-project-summary-row',
+            selectedRowKey === row.key ? 'is-selected' : '',
+          ].filter(Boolean).join(' ')}
+          pagination={false}
+          scroll={{ x: scrollWidth, y: 'calc(100vh - 260px)' }}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="暂无项目数据"
+              />
+            ),
+          }}
+          onRow={row => ({
+            style: { cursor: row.__groupSummary ? 'default' : 'pointer' },
+            'aria-selected': selectedRowKey === row.key,
+            onClick: () => {
+              if (row.__groupSummary) return
+              setSelectedRowKey(row.key)
+              if (onViewRow) onViewRow(row)
+              else onViewProject(row.projectId)
+            },
+          })}
+        />
+      </div>}
     </div>
   )
 }
