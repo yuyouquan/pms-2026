@@ -4582,7 +4582,7 @@ body {
   border: 1px solid rgb(255 255 255 / 96%);
   backdrop-filter: var(--pms-glass-filter);
   -webkit-backdrop-filter: var(--pms-glass-filter);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 72%), var(--pms-shadow-glass);
+  box-shadow: inset 0 1px 0 #fff, var(--pms-shadow-glass);
 }
 
 .pms-solid-surface {
@@ -4640,10 +4640,6 @@ body {
     padding: 8px 12px;
   }
 
-  .pms-glass-surface,
-  .pms-solid-surface {
-    border-radius: var(--pms-radius-control);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

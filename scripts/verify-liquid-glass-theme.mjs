@@ -209,14 +209,72 @@ const CSS_ROOT_EXPECTATIONS = [
   { label: '--shadow-md compatibility mapping', pattern: /^\s*--shadow-md:\s*var\(--pms-shadow-glass\);$/m },
 ]
 
-function cssRuleExpectation(label, selector, declarations) {
+function cssRulePattern(selector, declarations, allowTrailingSelectors) {
   const declarationLookaheads = declarations
     .map(({ property, value }) => `(?=[^}]*${property}\\s*:\\s*${value}\\s*;)`)
     .join('')
 
+  const trailingSelectors = allowTrailingSelectors ? '(?:,\\s*[^{}]+)?' : ''
+
+  return new RegExp(`${selector}\\s*${trailingSelectors}\\{${declarationLookaheads}[\\s\\S]*?\\}`)
+}
+
+function cssRuleExpectation(label, selector, declarations) {
   return {
     label,
-    pattern: new RegExp(`${selector}\\s*(?:,\\s*[^{}]+)?\\{${declarationLookaheads}[\\s\\S]*?\\}`),
+    pattern: cssRulePattern(selector, declarations, true),
+  }
+}
+
+function cssSelectorListRuleExpectation(label, selectors, declarations) {
+  return {
+    label,
+    pattern: cssRulePattern(selectors.join('\\s*,\\s*'), declarations, false),
+  }
+}
+
+function extractBalancedCssBlock(css, openingBrace) {
+  let depth = 0
+
+  for (let index = openingBrace; index < css.length; index += 1) {
+    if (css[index] === '{') depth += 1
+    if (css[index] === '}') {
+      depth -= 1
+      if (depth === 0) return css.slice(openingBrace + 1, index)
+    }
+  }
+
+  return null
+}
+
+function extractCssBlocks(css, headerPattern) {
+  const flags = headerPattern.flags.includes('g')
+    ? headerPattern.flags
+    : `${headerPattern.flags}g`
+  const matcher = new RegExp(headerPattern.source, flags)
+  const blocks = []
+  let match
+
+  while ((match = matcher.exec(css)) !== null) {
+    const openingBrace = css.indexOf('{', match.index + match[0].length)
+    const block = openingBrace === -1 ? null : extractBalancedCssBlock(css, openingBrace)
+    if (block !== null) blocks.push(block)
+  }
+
+  return blocks
+}
+
+function expectMediaRule(failures, css, label, mediaPattern, ruleExpectation) {
+  const blocks = extractCssBlocks(css, mediaPattern)
+  if (!blocks.some((block) => ruleExpectation.pattern.test(block))) {
+    failures.push(`${CSS_SOURCE} is missing ${label}`)
+  }
+}
+
+function expectNoGlobalFocusHiding(failures, css) {
+  const globalFocusHiding = /(?:^|})\s*(?:\*|html|body|\*:focus(?:-visible)?|:focus(?:-visible)?)\s*\{[^}]*\boutline\s*:\s*(?:none|0)\b/i
+  if (globalFocusHiding.test(css)) {
+    failures.push(`${CSS_SOURCE} must not hide focus with a global outline: none rule`)
   }
 }
 
@@ -236,7 +294,7 @@ const CSS_PRIMITIVE_EXPECTATIONS = [
     { property: 'border', value: '1px\\s+solid\\s+rgb\\(255\\s+255\\s+255\\s*\\/\\s*96%\\)' },
     { property: 'backdrop-filter', value: 'var\\(--pms-glass-filter\\)' },
     { property: '-webkit-backdrop-filter', value: 'var\\(--pms-glass-filter\\)' },
-    { property: 'box-shadow', value: 'inset\\s+0\\s+1px\\s+0\\s+rgb\\(255\\s+255\\s+255\\s*\\/\\s*72%\\),\\s*var\\(--pms-shadow-glass\\)' },
+    { property: 'box-shadow', value: 'inset\\s+0\\s+1px\\s+0\\s+#fff,\\s*var\\(--pms-shadow-glass\\)' },
   ]),
   cssRuleExpectation('.pms-solid-surface primitive', '\\.pms-solid-surface', [
     { property: 'background', value: 'var\\(--pms-surface-solid\\)' },
@@ -248,7 +306,7 @@ const CSS_PRIMITIVE_EXPECTATIONS = [
     { property: 'border', value: '1px\\s+solid\\s+rgb\\(255\\s+255\\s+255\\s*\\/\\s*96%\\)' },
     { property: 'backdrop-filter', value: 'var\\(--pms-glass-filter\\)' },
     { property: '-webkit-backdrop-filter', value: 'var\\(--pms-glass-filter\\)' },
-    { property: 'box-shadow', value: 'inset\\s+0\\s+1px\\s+0\\s+rgb\\(255\\s+255\\s+255\\s*\\/\\s*72%\\),\\s*var\\(--pms-shadow-glass\\)' },
+    { property: 'box-shadow', value: 'inset\\s+0\\s+1px\\s+0\\s+#fff,\\s*var\\(--pms-shadow-glass\\)' },
   ]),
   cssRuleExpectation('.pms-interactive-surface primitive', '\\.pms-interactive-surface', [
     { property: 'transition', value: 'transform\\s+160ms\\s+cubic-bezier\\(\\.16,\\s*1,\\s*\\.3,\\s*1\\),\\s*box-shadow\\s+180ms\\s+cubic-bezier\\(\\.16,\\s*1,\\s*\\.3,\\s*1\\),\\s*border\\s+160ms\\s+ease' },
@@ -259,9 +317,157 @@ const CSS_PRIMITIVE_EXPECTATIONS = [
   cssRuleExpectation('.pms-interactive-surface active state', '\\.pms-interactive-surface:active', [
     { property: 'transform', value: 'scale\\(\\.98\\)' },
   ]),
-  { label: 'prefers-reduced-motion media query', pattern: /@media\s*\(\s*prefers-reduced-motion\s*:\s*reduce\s*\)\s*\{/ },
-  { label: 'prefers-reduced-transparency media query', pattern: /@media\s*\(\s*prefers-reduced-transparency\s*:\s*reduce\s*\)\s*\{/ },
 ]
+
+const REDUCED_MOTION_MEDIA = /@media\s*\(\s*prefers-reduced-motion\s*:\s*reduce\s*\)/
+const REDUCED_TRANSPARENCY_MEDIA = /@media\s*\(\s*prefers-reduced-transparency\s*:\s*reduce\s*\)/
+const COMPACT_MEDIA = /@media\s*\(\s*max-width\s*:\s*1024px\s*\)/
+
+const REDUCED_MOTION_RULE = cssSelectorListRuleExpectation(
+  'reduced-motion global accessibility rule',
+  ['\\*', '\\*::before', '\\*::after'],
+  [
+    { property: 'animation-duration', value: '\\.01ms\\s*!important' },
+    { property: 'animation-iteration-count', value: '1\\s*!important' },
+    { property: 'scroll-behavior', value: 'auto\\s*!important' },
+    { property: 'transition-duration', value: '\\.01ms\\s*!important' },
+  ],
+)
+
+const REDUCED_TRANSPARENCY_RULE = cssSelectorListRuleExpectation(
+  'reduced-transparency surface rule',
+  ['\\.pms-glass-surface', '\\.pms-toolbar', '\\.ant-modal-content', '\\.ant-popover-inner', '\\.ant-dropdown-menu'],
+  [
+    { property: 'background', value: 'rgb\\(255\\s+255\\s+255\\s*\\/\\s*98%\\)\\s*!important' },
+    { property: 'backdrop-filter', value: 'none\\s*!important' },
+    { property: '-webkit-backdrop-filter', value: 'none\\s*!important' },
+  ],
+)
+
+const FOCUS_VISIBLE_RULE = cssRuleExpectation(
+  'visible keyboard focus rule',
+  ':where\\([\\s\\S]*?\\):focus-visible',
+  [
+    { property: 'outline', value: '2px\\s+solid\\s+var\\(--pms-brand-strong\\)' },
+    { property: 'box-shadow', value: '0\\s+0\\s+0\\s+3px\\s+rgb\\(117\\s+98\\s+255\\s*\\/\\s*24%\\)' },
+  ],
+)
+
+const ONE_LINE_LABEL_RULE = cssSelectorListRuleExpectation(
+  'one-line button and navigation label rule',
+  ['\\.pms-topbar\\s+\\.ant-btn', '\\.pms-topbar\\s+\\.ant-menu-item', '\\.pms-toolbar\\s+\\.ant-btn', '\\.pms-toolbar\\s+\\.ant-menu-item'],
+  [{ property: 'white-space', value: 'nowrap' }],
+)
+
+const COMPACT_PAGE_SHELL_RULE = cssRuleExpectation(
+  '1024px compact page-shell spacing rule',
+  '\\.pms-page-shell',
+  [{ property: 'padding-inline', value: '12px' }],
+)
+
+const COMPACT_TOOLBAR_RULE = cssRuleExpectation(
+  '1024px compact toolbar spacing rule',
+  '\\.pms-toolbar',
+  [
+    { property: 'gap', value: '8px' },
+    { property: 'padding', value: '8px\\s+12px' },
+  ],
+)
+
+function accessibilityAndCompactFailures(css) {
+  const failures = []
+
+  expectMediaRule(failures, css, REDUCED_MOTION_RULE.label, REDUCED_MOTION_MEDIA, REDUCED_MOTION_RULE)
+  expectMediaRule(failures, css, REDUCED_TRANSPARENCY_RULE.label, REDUCED_TRANSPARENCY_MEDIA, REDUCED_TRANSPARENCY_RULE)
+  expectContentPatterns(failures, CSS_SOURCE, css, [FOCUS_VISIBLE_RULE, ONE_LINE_LABEL_RULE])
+  expectNoGlobalFocusHiding(failures, css)
+
+  const compactBlocks = extractCssBlocks(css, COMPACT_MEDIA)
+  const compactBlock = compactBlocks.find(
+    (block) => COMPACT_PAGE_SHELL_RULE.pattern.test(block) && COMPACT_TOOLBAR_RULE.pattern.test(block),
+  )
+  if (!compactBlock) {
+    failures.push(`${CSS_SOURCE} is missing 1024px compact spacing rules`)
+  } else if (/(?:^|[;{])\s*(?:border-radius|order)\s*:|(?:^|[;{])\s*display\s*:\s*none\b/m.test(compactBlock)) {
+    failures.push(`${CSS_SOURCE} 1024px compact spacing block must not change radius, order, or visibility`)
+  }
+
+  return failures
+}
+
+function primitiveContractSelfTestFailures() {
+  const focusRule = `:where(button):focus-visible {
+  outline: 2px solid var(--pms-brand-strong);
+  box-shadow: 0 0 0 3px rgb(117 98 255 / 24%);
+}`
+  const oneLineRule = `.pms-topbar .ant-btn,
+.pms-topbar .ant-menu-item,
+.pms-toolbar .ant-btn,
+.pms-toolbar .ant-menu-item {
+  white-space: nowrap;
+}`
+  const compactRule = `@media (max-width: 1024px) {
+  .pms-page-shell { padding-inline: 12px; }
+  .pms-toolbar { gap: 8px; padding: 8px 12px; }
+}`
+  const reducedMotionRule = `@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}`
+  const reducedTransparencyRule = `@media (prefers-reduced-transparency: reduce) {
+  .pms-glass-surface,
+  .pms-toolbar,
+  .ant-modal-content,
+  .ant-popover-inner,
+  .ant-dropdown-menu {
+    background: rgb(255 255 255 / 98%) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}`
+  const validCss = [focusRule, oneLineRule, compactRule, reducedMotionRule, reducedTransparencyRule].join('\n')
+  const cases = [
+    {
+      label: 'empty reduced-motion media query',
+      css: validCss.replace(reducedMotionRule, '@media (prefers-reduced-motion: reduce) {}'),
+      expectedFailure: REDUCED_MOTION_RULE.label,
+    },
+    {
+      label: 'empty reduced-transparency media query',
+      css: validCss.replace(reducedTransparencyRule, '@media (prefers-reduced-transparency: reduce) {}'),
+      expectedFailure: REDUCED_TRANSPARENCY_RULE.label,
+    },
+    {
+      label: 'removed focus-visible rule',
+      css: validCss.replace(focusRule, ''),
+      expectedFailure: FOCUS_VISIBLE_RULE.label,
+    },
+    {
+      label: 'removed one-line label rule',
+      css: validCss.replace(oneLineRule, ''),
+      expectedFailure: ONE_LINE_LABEL_RULE.label,
+    },
+    {
+      label: 'removed compact spacing rule',
+      css: validCss.replace(compactRule, '@media (max-width: 1024px) {}'),
+      expectedFailure: '1024px compact spacing rules',
+    },
+  ]
+  const failures = []
+
+  for (const testCase of cases) {
+    const mutationFailures = accessibilityAndCompactFailures(testCase.css)
+    if (!mutationFailures.some((failure) => failure.includes(testCase.expectedFailure))) {
+      failures.push(`${CSS_SOURCE} verifier self-test did not reject ${testCase.label}`)
+    }
+  }
+
+  return failures
+}
 
 function cssContractFailures(root) {
   const failures = []
@@ -274,12 +480,16 @@ function cssContractFailures(root) {
 
   expectContentPatterns(failures, CSS_SOURCE, stripCssComments(extracted.rootBlock), CSS_ROOT_EXPECTATIONS)
 
+  const outsideRoot = stripCssComments(extracted.outsideRoot)
+
   expectContentPatterns(
     failures,
     CSS_SOURCE,
-    stripCssComments(extracted.outsideRoot),
+    outsideRoot,
     CSS_PRIMITIVE_EXPECTATIONS,
   )
+  failures.push(...accessibilityAndCompactFailures(outsideRoot))
+  failures.push(...primitiveContractSelfTestFailures())
 
   const outsideLiterals = [...extracted.outsideRoot.matchAll(BRAND_HEX_PATTERN)]
     .map((match) => match[0].toLowerCase())
