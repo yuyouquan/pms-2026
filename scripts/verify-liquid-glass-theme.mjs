@@ -209,6 +209,60 @@ const CSS_ROOT_EXPECTATIONS = [
   { label: '--shadow-md compatibility mapping', pattern: /^\s*--shadow-md:\s*var\(--pms-shadow-glass\);$/m },
 ]
 
+function cssRuleExpectation(label, selector, declarations) {
+  const declarationLookaheads = declarations
+    .map(({ property, value }) => `(?=[^}]*${property}\\s*:\\s*${value}\\s*;)`)
+    .join('')
+
+  return {
+    label,
+    pattern: new RegExp(`${selector}\\s*(?:,\\s*[^{}]+)?\\{${declarationLookaheads}[\\s\\S]*?\\}`),
+  }
+}
+
+const CSS_PRIMITIVE_EXPECTATIONS = [
+  cssRuleExpectation('.pms-page-shell primitive', '\\.pms-page-shell', [
+    { property: 'min-height', value: '100dvh' },
+    { property: 'background', value: 'var\\(--pms-page\\)' },
+    { property: 'color', value: 'var\\(--pms-text-primary\\)' },
+  ]),
+  cssRuleExpectation('.pms-topbar primitive', '\\.pms-topbar', [
+    { property: 'background', value: 'var\\(--pms-gradient-brand\\)' },
+    { property: 'border-bottom', value: '1px\\s+solid\\s+rgb\\(255\\s+255\\s+255\\s*\\/\\s*24%\\)' },
+    { property: 'box-shadow', value: '0\\s+10px\\s+28px\\s+rgb\\(92\\s+73\\s+214\\s*\\/\\s*24%\\)' },
+  ]),
+  cssRuleExpectation('.pms-glass-surface primitive', '\\.pms-glass-surface', [
+    { property: 'background', value: 'var\\(--pms-surface-glass\\)' },
+    { property: 'border', value: '1px\\s+solid\\s+rgb\\(255\\s+255\\s+255\\s*\\/\\s*96%\\)' },
+    { property: 'backdrop-filter', value: 'var\\(--pms-glass-filter\\)' },
+    { property: '-webkit-backdrop-filter', value: 'var\\(--pms-glass-filter\\)' },
+    { property: 'box-shadow', value: 'inset\\s+0\\s+1px\\s+0\\s+rgb\\(255\\s+255\\s+255\\s*\\/\\s*72%\\),\\s*var\\(--pms-shadow-glass\\)' },
+  ]),
+  cssRuleExpectation('.pms-solid-surface primitive', '\\.pms-solid-surface', [
+    { property: 'background', value: 'var\\(--pms-surface-solid\\)' },
+    { property: 'border', value: '1px\\s+solid\\s+var\\(--pms-border\\)' },
+    { property: 'box-shadow', value: '0\\s+10px\\s+30px\\s+rgb\\(58\\s+45\\s+115\\s*\\/\\s*6%\\)' },
+  ]),
+  cssRuleExpectation('.pms-toolbar primitive', '\\.pms-toolbar', [
+    { property: 'background', value: 'var\\(--pms-surface-glass\\)' },
+    { property: 'border', value: '1px\\s+solid\\s+rgb\\(255\\s+255\\s+255\\s*\\/\\s*96%\\)' },
+    { property: 'backdrop-filter', value: 'var\\(--pms-glass-filter\\)' },
+    { property: '-webkit-backdrop-filter', value: 'var\\(--pms-glass-filter\\)' },
+    { property: 'box-shadow', value: 'inset\\s+0\\s+1px\\s+0\\s+rgb\\(255\\s+255\\s+255\\s*\\/\\s*72%\\),\\s*var\\(--pms-shadow-glass\\)' },
+  ]),
+  cssRuleExpectation('.pms-interactive-surface primitive', '\\.pms-interactive-surface', [
+    { property: 'transition', value: 'transform\\s+160ms\\s+cubic-bezier\\(\\.16,\\s*1,\\s*\\.3,\\s*1\\),\\s*box-shadow\\s+180ms\\s+cubic-bezier\\(\\.16,\\s*1,\\s*\\.3,\\s*1\\),\\s*border\\s+160ms\\s+ease' },
+  ]),
+  cssRuleExpectation('.pms-interactive-surface hover state', '\\.pms-interactive-surface:hover', [
+    { property: 'transform', value: 'translateY\\(-1px\\)' },
+  ]),
+  cssRuleExpectation('.pms-interactive-surface active state', '\\.pms-interactive-surface:active', [
+    { property: 'transform', value: 'scale\\(\\.98\\)' },
+  ]),
+  { label: 'prefers-reduced-motion media query', pattern: /@media\s*\(\s*prefers-reduced-motion\s*:\s*reduce\s*\)\s*\{/ },
+  { label: 'prefers-reduced-transparency media query', pattern: /@media\s*\(\s*prefers-reduced-transparency\s*:\s*reduce\s*\)\s*\{/ },
+]
+
 function cssContractFailures(root) {
   const failures = []
   const extracted = extractRootBlock(read(CSS_SOURCE, root))
@@ -219,6 +273,13 @@ function cssContractFailures(root) {
   }
 
   expectContentPatterns(failures, CSS_SOURCE, stripCssComments(extracted.rootBlock), CSS_ROOT_EXPECTATIONS)
+
+  expectContentPatterns(
+    failures,
+    CSS_SOURCE,
+    stripCssComments(extracted.outsideRoot),
+    CSS_PRIMITIVE_EXPECTATIONS,
+  )
 
   const outsideLiterals = [...extracted.outsideRoot.matchAll(BRAND_HEX_PATTERN)]
     .map((match) => match[0].toLowerCase())

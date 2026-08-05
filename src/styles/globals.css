@@ -4559,3 +4559,116 @@ body {
 
 .pms-project-list-calendar-event:hover { opacity: .86; }
 .pms-project-list-calendar .pms-project-calendar-more { color: #64748b; font-size: 12px; font-weight: 700; }
+
+/* ================================================================
+   PMS structured liquid glass layer
+   ================================================================ */
+
+.pms-page-shell {
+  min-height: 100dvh;
+  background: var(--pms-page);
+  color: var(--pms-text-primary);
+}
+
+.pms-topbar {
+  background: var(--pms-gradient-brand);
+  border-bottom: 1px solid rgb(255 255 255 / 24%);
+  box-shadow: 0 10px 28px rgb(92 73 214 / 24%);
+}
+
+.pms-glass-surface,
+.pms-toolbar {
+  background: var(--pms-surface-glass);
+  border: 1px solid rgb(255 255 255 / 96%);
+  backdrop-filter: var(--pms-glass-filter);
+  -webkit-backdrop-filter: var(--pms-glass-filter);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 72%), var(--pms-shadow-glass);
+}
+
+.pms-solid-surface {
+  background: var(--pms-surface-solid);
+  border: 1px solid var(--pms-border);
+  box-shadow: 0 10px 30px rgb(58 45 115 / 6%);
+}
+
+.pms-toolbar {
+  gap: 12px;
+  padding: 10px 16px;
+}
+
+.pms-interactive-surface {
+  transition: transform 160ms cubic-bezier(.16, 1, .3, 1), box-shadow 180ms cubic-bezier(.16, 1, .3, 1), border 160ms ease;
+}
+
+.pms-interactive-surface:hover {
+  transform: translateY(-1px);
+}
+
+.pms-interactive-surface:active {
+  transform: scale(.98);
+}
+
+:where(
+  a,
+  button,
+  input,
+  select,
+  textarea,
+  summary,
+  [role='button'],
+  [tabindex]:not([tabindex='-1'])
+):focus-visible {
+  outline: 2px solid var(--pms-brand-strong);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgb(117 98 255 / 24%);
+}
+
+.pms-topbar .ant-btn,
+.pms-topbar .ant-menu-item,
+.pms-toolbar .ant-btn,
+.pms-toolbar .ant-menu-item {
+  white-space: nowrap;
+}
+
+@media (max-width: 1024px) {
+  .pms-page-shell {
+    padding-inline: 12px;
+  }
+
+  .pms-toolbar {
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  .pms-glass-surface,
+  .pms-solid-surface {
+    border-radius: var(--pms-radius-control);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .pms-glass-surface,
+  .pms-toolbar,
+  .ant-modal-content,
+  .ant-popover-inner,
+  .ant-dropdown-menu {
+    background: rgb(255 255 255 / 98%) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
