@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { ConfigProvider, Modal, Button, Space, Card, Empty } from 'antd'
+import { Modal, Button, Space, Card, Empty } from 'antd'
 import { ExclamationCircleOutlined } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
@@ -64,7 +64,7 @@ export default function Home() {
 
   // ═══════ Render ═══════
   return (
-    <ConfigProvider button={{ autoInsertSpace: false }}>
+    <>
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
       <div style={{ minHeight: '100vh', background: '#f5f6fa' }}>
         {/* Project Space — full-screen layout with its own header */}
@@ -130,6 +130,6 @@ export default function Home() {
           您还未提交现有编辑内容，是否要离开该界面？
         </div>
       </Modal>
-    </ConfigProvider>
+    </>
   )
 }

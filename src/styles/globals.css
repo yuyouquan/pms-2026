@@ -7,14 +7,45 @@
    ================================================================ */
 
 :root {
-  /* ── Primary palette ── */
-  --primary: #4338ca;
-  --primary-hover: #3730a3;
-  --primary-deep: #312e81;
-  --primary-light: #eef2ff;
-  --accent: #6366f1;
-  --accent-light: #818cf8;
-  --accent-muted: rgba(99, 102, 241, 0.08);
+  /* ── Liquid glass semantic tokens ── */
+  --pms-brand-strong: #5d49f6;
+  --pms-brand: #7562ff;
+  --pms-brand-soft: #ad98ee;
+  --pms-brand-surface: #f5f3ff;
+  --pms-brand-border: #dcd6ff;
+  --pms-gradient-brand: linear-gradient(106deg, #5d49f6 0%, #7562ff 50%, #ad98ee 100%);
+  --pms-page: #f4f6fb;
+  --pms-surface-solid: #fff;
+  --pms-surface-glass: rgb(255 255 255 / 76%);
+  --pms-text-primary: #27243a;
+  --pms-text-secondary: #625d70;
+  --pms-text-tertiary: #817b90;
+  --pms-border: #e6e3ef;
+  --pms-radius-compact: 6px;
+  --pms-radius-control: 8px;
+  --pms-radius-surface: 12px;
+  --pms-radius-overlay: 16px;
+  --pms-glass-filter: blur(16px) saturate(140%);
+  --pms-shadow-xs: 0 1px 2px rgb(39 36 58 / 3%);
+  --pms-shadow-sm: 0 1px 3px rgb(39 36 58 / 5%), 0 1px 2px rgb(39 36 58 / 3%);
+  --pms-shadow-glass: 0 8px 24px rgb(93 73 246 / 10%), 0 2px 8px rgb(39 36 58 / 4%);
+  --pms-shadow-floating: 0 16px 48px rgb(93 73 246 / 16%), 0 4px 12px rgb(39 36 58 / 6%);
+  --pms-shadow-modal: 0 24px 64px rgb(39 36 58 / 12%), 0 0 0 1px rgb(39 36 58 / 4%), 0 0 40px rgb(93 73 246 / 8%);
+  --pms-shadow-inset: inset 0 1px 3px rgb(39 36 58 / 4%), inset 0 0 0 1px rgb(39 36 58 / 2%);
+  --pms-shadow-glow: 0 0 20px rgb(117 98 255 / 15%);
+  --pms-shadow-glow-md: 0 4px 20px rgb(117 98 255 / 20%);
+  --pms-shadow-glow-lg: 0 8px 32px rgb(117 98 255 / 25%);
+  --pms-shadow-button: 0 4px 14px rgb(93 73 246 / 40%);
+  --pms-shadow-button-hover: 0 6px 20px rgb(93 73 246 / 50%);
+
+  /* ── Compatibility palette ── */
+  --primary: var(--pms-brand-strong);
+  --primary-hover: var(--pms-brand-strong);
+  --primary-deep: var(--pms-brand-strong);
+  --primary-light: var(--pms-brand-surface);
+  --accent: var(--pms-brand);
+  --accent-light: var(--pms-brand-soft);
+  --accent-muted: color-mix(in srgb, var(--pms-brand) 8%, transparent);
 
   /* ── Semantic colors ── */
   --success: #22c55e;
@@ -27,43 +58,43 @@
   --info-light: #dbeafe;
 
   /* ── Neutral palette ── */
-  --text-primary: #111827;
-  --text-secondary: #6b7280;
-  --text-tertiary: #9ca3af;
-  --text-inverse: #ffffff;
+  --text-primary: var(--pms-text-primary);
+  --text-secondary: var(--pms-text-secondary);
+  --text-tertiary: var(--pms-text-tertiary);
+  --text-inverse: var(--pms-surface-solid);
 
-  --border: #e5e7eb;
-  --border-light: #f3f4f6;
-  --border-purple: rgba(99, 102, 241, 0.15);
+  --border: var(--pms-border);
+  --border-light: var(--pms-brand-surface);
+  --border-purple: color-mix(in srgb, var(--pms-brand) 15%, transparent);
 
-  --bg-primary: #f8fafc;
-  --bg-secondary: #ffffff;
-  --bg-glass: rgba(255, 255, 255, 0.72);
-  --bg-glass-heavy: rgba(255, 255, 255, 0.85);
-  --bg-purple-tint: rgba(99, 102, 241, 0.03);
-  --bg-hover: rgba(99, 102, 241, 0.06);
+  --bg-primary: var(--pms-page);
+  --bg-secondary: var(--pms-surface-solid);
+  --bg-glass: var(--pms-surface-glass);
+  --bg-glass-heavy: color-mix(in srgb, var(--pms-surface-solid) 85%, transparent);
+  --bg-purple-tint: color-mix(in srgb, var(--pms-brand) 3%, transparent);
+  --bg-hover: color-mix(in srgb, var(--pms-brand) 6%, transparent);
 
   /* ── Glassmorphism ── */
-  --glass-blur: blur(12px);
-  --glass-blur-heavy: blur(20px);
+  --glass-blur: var(--pms-glass-filter);
+  --glass-blur-heavy: var(--pms-glass-filter);
   --glass-border: 1px solid rgba(255, 255, 255, 0.45);
 
   /* ── Shadows ── */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
-  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.05);
-  --shadow-2xl: 0 24px 64px rgba(0, 0, 0, 0.14), 0 8px 20px rgba(0, 0, 0, 0.06);
-  --shadow-card-hover: 0 6px 24px rgba(0, 0, 0, 0.07), 0 2px 8px rgba(0, 0, 0, 0.03), 0 0 16px rgba(99, 102, 241, 0.1);
-  --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.04), inset 0 0 0 1px rgba(0, 0, 0, 0.02);
-  --shadow-inset-focus: inset 0 1px 2px rgba(99, 102, 241, 0.06);
-  --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.15);
-  --shadow-glow-md: 0 4px 20px rgba(99, 102, 241, 0.2);
-  --shadow-glow-lg: 0 8px 32px rgba(99, 102, 241, 0.25);
-  --shadow-glow-btn: 0 4px 14px rgba(67, 56, 202, 0.4);
-  --shadow-glow-btn-hover: 0 6px 20px rgba(67, 56, 202, 0.5);
-  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04), 0 0 40px rgba(99, 102, 241, 0.08);
+  --shadow-xs: var(--pms-shadow-xs);
+  --shadow-sm: var(--pms-shadow-sm);
+  --shadow-md: var(--pms-shadow-glass);
+  --shadow-lg: var(--pms-shadow-glass);
+  --shadow-xl: var(--pms-shadow-floating);
+  --shadow-2xl: var(--pms-shadow-floating);
+  --shadow-card-hover: var(--pms-shadow-glass);
+  --shadow-inset: var(--pms-shadow-inset);
+  --shadow-inset-focus: inset 0 1px 2px color-mix(in srgb, var(--pms-brand) 6%, transparent);
+  --shadow-glow: var(--pms-shadow-glow);
+  --shadow-glow-md: var(--pms-shadow-glow-md);
+  --shadow-glow-lg: var(--pms-shadow-glow-lg);
+  --shadow-glow-btn: var(--pms-shadow-button);
+  --shadow-glow-btn-hover: var(--pms-shadow-button-hover);
+  --shadow-modal: var(--pms-shadow-modal);
 
   /* ── Gradients ── */
   --bg-gradient-subtle: linear-gradient(135deg, #f0f2f8 0%, #eaecf8 25%, #e8ecf4 50%, #eef0fa 75%, #f5f7fc 100%);
@@ -77,11 +108,11 @@
   --space-2xl: 48px;
 
   /* ── Border radius ── */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-2xl: 20px;
+  --radius-sm: var(--pms-radius-compact);
+  --radius-md: var(--pms-radius-control);
+  --radius-lg: var(--pms-radius-surface);
+  --radius-xl: var(--pms-radius-overlay);
+  --radius-2xl: var(--pms-radius-overlay);
   --radius-full: 9999px;
 
   /* ── Typography ── */
