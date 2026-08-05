@@ -16,11 +16,25 @@ assert.match(source, /aria-label="退出全屏"[\s\S]{0,180}>\s*退出全屏\s*<
 assert.match(source, /event\.key === 'Escape'[\s\S]{0,100}setIsFullscreen\(false\)/)
 assert.match(source, /document\.body\.style\.overflow = 'hidden'/)
 assert.match(source, /document\.body\.style\.overflow = previousOverflow/)
-assert.match(source, /className=\{`pms-project-list-content \$\{isFullscreen \? 'is-fullscreen' : ''\}`\.trim\(\)\}/)
+assert.match(
+  source,
+  /<section\s+className=\{`pms-project-list-content \$\{isFullscreen \? 'is-fullscreen pms-page-shell' : ''\}`\.trim\(\)\}/,
+  'the fixed fullscreen section owns the semantic page shell',
+)
+assert.doesNotMatch(
+  source,
+  /pms-project-list-content__body[^\n]*pms-page-shell/,
+  'the inner fullscreen body must not own the page shell',
+)
 assert.match(source, /aria-label=\{isFullscreen \? `\$\{fullscreenViewTitle\}全屏展示` : undefined\}/)
 assert.doesNotMatch(source, /requestFullscreen|document\.exitFullscreen/, 'fullscreen stays inside the application UI')
 
 assert.match(styles, /\.pms-project-list-content\.is-fullscreen\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*0;[^}]*z-index:\s*1300;/s)
+assert.doesNotMatch(
+  styles,
+  /\.pms-project-list-content\.is-fullscreen\s*\{[^}]*background:/s,
+  'the fixed fullscreen rule must allow pms-page-shell to provide var(--pms-page)',
+)
 assert.match(styles, /\.pms-project-list-fullscreen__header\s*\{[^}]*display:\s*flex;[^}]*justify-content:\s*space-between;/s)
 assert.match(styles, /\.pms-project-list-content\.is-fullscreen \.pms-project-list-content__body\s*\{[^}]*flex:\s*1;[^}]*overflow:\s*auto;/s)
 assert.doesNotMatch(

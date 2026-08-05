@@ -655,7 +655,7 @@ export default function ProjectListContainer() {
 
       {/* Project list content */}
       <section
-        className={`pms-project-list-content ${isFullscreen ? 'is-fullscreen' : ''}`.trim()}
+        className={`pms-project-list-content ${isFullscreen ? 'is-fullscreen pms-page-shell' : ''}`.trim()}
         aria-label={isFullscreen ? `${fullscreenViewTitle}全屏展示` : undefined}
       >
         {isFullscreen && (
@@ -675,7 +675,7 @@ export default function ProjectListContainer() {
           </header>
         )}
         <div
-          className={`pms-project-list-content__body ${projectListView === 'card' ? '' : 'pms-solid-surface'} ${isFullscreen ? 'pms-page-shell' : ''}`.trim()}
+          className={`pms-project-list-content__body ${projectListView === 'card' ? '' : 'pms-solid-surface'}`.trim()}
           style={{ display: 'flex', gap: 20 }}
         >
           <div style={{ flex: 1, minWidth: 0 }}>
