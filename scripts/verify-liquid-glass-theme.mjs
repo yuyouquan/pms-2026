@@ -209,30 +209,6 @@ const CSS_ROOT_EXPECTATIONS = [
   { label: '--shadow-md compatibility mapping', pattern: /^\s*--shadow-md:\s*var\(--pms-shadow-glass\);$/m },
 ]
 
-function cssRulePattern(selector, declarations, allowTrailingSelectors) {
-  const declarationLookaheads = declarations
-    .map(({ property, value }) => `(?=[^}]*${property}\\s*:\\s*${value}\\s*;)`)
-    .join('')
-
-  const trailingSelectors = allowTrailingSelectors ? '(?:,\\s*[^{}]+)?' : ''
-
-  return new RegExp(`${selector}\\s*${trailingSelectors}\\{${declarationLookaheads}[\\s\\S]*?\\}`)
-}
-
-function cssRuleExpectation(label, selector, declarations) {
-  return {
-    label,
-    pattern: cssRulePattern(selector, declarations, true),
-  }
-}
-
-function cssSelectorListRuleExpectation(label, selectors, declarations) {
-  return {
-    label,
-    pattern: cssRulePattern(selectors.join('\\s*,\\s*'), declarations, false),
-  }
-}
-
 function extractBalancedCssBlock(css, openingBrace) {
   let depth = 0
 
@@ -264,11 +240,142 @@ function extractCssBlocks(css, headerPattern) {
   return blocks
 }
 
-function expectMediaRule(failures, css, label, mediaPattern, ruleExpectation) {
-  const blocks = extractCssBlocks(css, mediaPattern)
-  if (!blocks.some((block) => ruleExpectation.pattern.test(block))) {
-    failures.push(`${CSS_SOURCE} is missing ${label}`)
+function normalizeCssValue(value) {
+  return value.trim().replace(/\s+/g, ' ')
+}
+
+function normalizeSelector(selector) {
+  return selector.trim().replace(/\s+/g, ' ')
+}
+
+function splitCssList(value) {
+  const entries = []
+  let start = 0
+  let depth = 0
+  let quote = null
+
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index]
+    if (quote) {
+      if (character === '\\') index += 1
+      else if (character === quote) quote = null
+      continue
+    }
+
+    if (character === '"' || character === "'") quote = character
+    else if (character === '(' || character === '[') depth += 1
+    else if (character === ')' || character === ']') depth -= 1
+    else if (character === ',' && depth === 0) {
+      entries.push(value.slice(start, index))
+      start = index + 1
+    }
   }
+
+  entries.push(value.slice(start))
+  return entries.map(normalizeSelector).filter(Boolean)
+}
+
+function parseDeclarations(body) {
+  const declarations = new Map()
+  let start = 0
+  let depth = 0
+  let quote = null
+
+  function addDeclaration(entry) {
+    const separator = entry.indexOf(':')
+    if (separator === -1) return
+    const property = entry.slice(0, separator).trim().toLowerCase()
+    const value = normalizeCssValue(entry.slice(separator + 1))
+    if (property) declarations.set(property, value)
+  }
+
+  for (let index = 0; index < body.length; index += 1) {
+    const character = body[index]
+    if (quote) {
+      if (character === '\\') index += 1
+      else if (character === quote) quote = null
+      continue
+    }
+
+    if (character === '"' || character === "'") quote = character
+    else if (character === '(') depth += 1
+    else if (character === ')') depth -= 1
+    else if (character === ';' && depth === 0) {
+      addDeclaration(body.slice(start, index))
+      start = index + 1
+    }
+  }
+
+  addDeclaration(body.slice(start))
+  return declarations
+}
+
+function parseCssRules(css) {
+  const rules = []
+  let cursor = 0
+
+  while (cursor < css.length) {
+    const openingBrace = css.indexOf('{', cursor)
+    if (openingBrace === -1) break
+    const selectorText = css.slice(cursor, openingBrace).trim()
+    const body = extractBalancedCssBlock(css, openingBrace)
+    if (body === null) break
+
+    if (selectorText.startsWith('@media')) {
+      rules.push(...parseCssRules(body))
+    } else if (selectorText && !selectorText.startsWith('@')) {
+      rules.push({
+        selectorText,
+        selectors: new Set(splitCssList(selectorText)),
+        declarations: parseDeclarations(body),
+      })
+    }
+
+    let depth = 0
+    let closingBrace = openingBrace
+    for (; closingBrace < css.length; closingBrace += 1) {
+      if (css[closingBrace] === '{') depth += 1
+      if (css[closingBrace] === '}') {
+        depth -= 1
+        if (depth === 0) break
+      }
+    }
+    cursor = closingBrace + 1
+  }
+
+  return rules
+}
+
+function selectorSetMatches(selectors, expectedSelectors) {
+  return selectors.size === expectedSelectors.length
+    && expectedSelectors.every((selector) => selectors.has(normalizeSelector(selector)))
+}
+
+function declarationMatches(rule, declarations) {
+  return declarations.every(({ property, value }) => {
+    const actualValue = rule.declarations.get(property)
+    return actualValue !== undefined && new RegExp(`^${value}$`).test(actualValue)
+  })
+}
+
+function expectRuleContract(failures, rules, contract) {
+  const candidates = contract.selectors
+    ? rules.filter((rule) => selectorSetMatches(rule.selectors, contract.selectors))
+    : rules.filter((rule) => rule.selectors.has(normalizeSelector(contract.selector)))
+
+  if (!candidates.some((rule) => declarationMatches(rule, contract.declarations))) {
+    failures.push(`${CSS_SOURCE} is missing ${contract.label}`)
+  }
+}
+
+function ruleContractFailures(rules, contracts) {
+  const failures = []
+  for (const contract of contracts) expectRuleContract(failures, rules, contract)
+  return failures
+}
+
+function mediaRules(css, mediaPattern) {
+  return extractCssBlocks(css, mediaPattern).flatMap(parseCssRules)
 }
 
 function expectNoGlobalFocusHiding(failures, css) {
@@ -278,128 +385,169 @@ function expectNoGlobalFocusHiding(failures, css) {
   }
 }
 
-const CSS_PRIMITIVE_EXPECTATIONS = [
-  cssRuleExpectation('.pms-page-shell primitive', '\\.pms-page-shell', [
+const CSS_PRIMITIVE_RULES = [
+  { label: '.pms-page-shell primitive', selector: '.pms-page-shell', declarations: [
     { property: 'min-height', value: '100dvh' },
     { property: 'background', value: 'var\\(--pms-page\\)' },
     { property: 'color', value: 'var\\(--pms-text-primary\\)' },
-  ]),
-  cssRuleExpectation('.pms-topbar primitive', '\\.pms-topbar', [
+  ] },
+  { label: '.pms-topbar primitive', selector: '.pms-topbar', declarations: [
     { property: 'background', value: 'var\\(--pms-gradient-brand\\)' },
     { property: 'border-bottom', value: '1px\\s+solid\\s+rgb\\(255\\s+255\\s+255\\s*\\/\\s*24%\\)' },
     { property: 'box-shadow', value: '0\\s+10px\\s+28px\\s+rgb\\(92\\s+73\\s+214\\s*\\/\\s*24%\\)' },
-  ]),
-  cssRuleExpectation('.pms-glass-surface primitive', '\\.pms-glass-surface', [
+  ] },
+  { label: '.pms-glass-surface primitive', selector: '.pms-glass-surface', declarations: [
     { property: 'background', value: 'var\\(--pms-surface-glass\\)' },
     { property: 'border', value: '1px\\s+solid\\s+rgb\\(255\\s+255\\s+255\\s*\\/\\s*96%\\)' },
     { property: 'backdrop-filter', value: 'var\\(--pms-glass-filter\\)' },
     { property: '-webkit-backdrop-filter', value: 'var\\(--pms-glass-filter\\)' },
     { property: 'box-shadow', value: 'inset\\s+0\\s+1px\\s+0\\s+#fff,\\s*var\\(--pms-shadow-glass\\)' },
-  ]),
-  cssRuleExpectation('.pms-solid-surface primitive', '\\.pms-solid-surface', [
+  ] },
+  { label: '.pms-solid-surface primitive', selector: '.pms-solid-surface', declarations: [
     { property: 'background', value: 'var\\(--pms-surface-solid\\)' },
     { property: 'border', value: '1px\\s+solid\\s+var\\(--pms-border\\)' },
     { property: 'box-shadow', value: '0\\s+10px\\s+30px\\s+rgb\\(58\\s+45\\s+115\\s*\\/\\s*6%\\)' },
-  ]),
-  cssRuleExpectation('.pms-toolbar primitive', '\\.pms-toolbar', [
+  ] },
+  { label: '.pms-toolbar primitive', selector: '.pms-toolbar', declarations: [
     { property: 'background', value: 'var\\(--pms-surface-glass\\)' },
     { property: 'border', value: '1px\\s+solid\\s+rgb\\(255\\s+255\\s+255\\s*\\/\\s*96%\\)' },
     { property: 'backdrop-filter', value: 'var\\(--pms-glass-filter\\)' },
     { property: '-webkit-backdrop-filter', value: 'var\\(--pms-glass-filter\\)' },
     { property: 'box-shadow', value: 'inset\\s+0\\s+1px\\s+0\\s+#fff,\\s*var\\(--pms-shadow-glass\\)' },
-  ]),
-  cssRuleExpectation('.pms-interactive-surface primitive', '\\.pms-interactive-surface', [
-    { property: 'transition', value: 'transform\\s+160ms\\s+cubic-bezier\\(\\.16,\\s*1,\\s*\\.3,\\s*1\\),\\s*box-shadow\\s+180ms\\s+cubic-bezier\\(\\.16,\\s*1,\\s*\\.3,\\s*1\\),\\s*border\\s+160ms\\s+ease' },
-  ]),
-  cssRuleExpectation('.pms-interactive-surface hover state', '\\.pms-interactive-surface:hover', [
+  ] },
+  { label: '.pms-interactive-surface primitive', selector: '.pms-interactive-surface', declarations: [
+    { property: 'transition', value: 'transform\\s+160ms\\s+cubic-bezier\\(\\.16,\\s*1,\\s*\\.3,\\s*1\\),\\s*box-shadow\\s+180ms\\s+cubic-bezier\\(\\.16,\\s*1,\\s*\\.3,\\s*1\\),\\s*border-color\\s+160ms\\s+ease' },
+  ] },
+  { label: '.pms-interactive-surface hover state', selector: '.pms-interactive-surface:hover', declarations: [
     { property: 'transform', value: 'translateY\\(-1px\\)' },
-  ]),
-  cssRuleExpectation('.pms-interactive-surface active state', '\\.pms-interactive-surface:active', [
+  ] },
+  { label: '.pms-interactive-surface active state', selector: '.pms-interactive-surface:active', declarations: [
     { property: 'transform', value: 'scale\\(\\.98\\)' },
-  ]),
+  ] },
 ]
 
 const REDUCED_MOTION_MEDIA = /@media\s*\(\s*prefers-reduced-motion\s*:\s*reduce\s*\)/
 const REDUCED_TRANSPARENCY_MEDIA = /@media\s*\(\s*prefers-reduced-transparency\s*:\s*reduce\s*\)/
 const COMPACT_MEDIA = /@media\s*\(\s*max-width\s*:\s*1024px\s*\)/
 
-const REDUCED_MOTION_RULE = cssSelectorListRuleExpectation(
-  'reduced-motion global accessibility rule',
-  ['\\*', '\\*::before', '\\*::after'],
-  [
+const REDUCED_MOTION_RULE = {
+  label: 'reduced-motion global accessibility rule',
+  selectors: ['*', '*::before', '*::after'],
+  declarations: [
     { property: 'animation-duration', value: '\\.01ms\\s*!important' },
     { property: 'animation-iteration-count', value: '1\\s*!important' },
     { property: 'scroll-behavior', value: 'auto\\s*!important' },
     { property: 'transition-duration', value: '\\.01ms\\s*!important' },
   ],
-)
+}
 
-const REDUCED_TRANSPARENCY_RULE = cssSelectorListRuleExpectation(
-  'reduced-transparency surface rule',
-  ['\\.pms-glass-surface', '\\.pms-toolbar', '\\.ant-modal-content', '\\.ant-popover-inner', '\\.ant-dropdown-menu'],
-  [
+const REDUCED_TRANSPARENCY_RULE = {
+  label: 'reduced-transparency surface rule',
+  selectors: ['.pms-glass-surface', '.pms-toolbar', '.ant-modal-content', '.ant-popover-inner', '.ant-dropdown-menu'],
+  declarations: [
     { property: 'background', value: 'rgb\\(255\\s+255\\s+255\\s*\\/\\s*98%\\)\\s*!important' },
     { property: 'backdrop-filter', value: 'none\\s*!important' },
     { property: '-webkit-backdrop-filter', value: 'none\\s*!important' },
   ],
-)
+}
 
-const FOCUS_VISIBLE_RULE = cssRuleExpectation(
-  'visible keyboard focus rule',
-  ':where\\([\\s\\S]*?\\):focus-visible',
-  [
+const FOCUS_TARGETS = ['a', 'button', 'input', 'select', 'textarea', 'summary', "[role='button']", "[tabindex]:not([tabindex^='-'])"]
+const FOCUS_VISIBLE_RULE = {
+  label: 'visible keyboard focus rule',
+  declarations: [
     { property: 'outline', value: '2px\\s+solid\\s+var\\(--pms-brand-strong\\)' },
     { property: 'box-shadow', value: '0\\s+0\\s+0\\s+3px\\s+rgb\\(117\\s+98\\s+255\\s*\\/\\s*24%\\)' },
   ],
-)
+}
 
-const ONE_LINE_LABEL_RULE = cssSelectorListRuleExpectation(
-  'one-line button and navigation label rule',
-  ['\\.pms-topbar\\s+\\.ant-btn', '\\.pms-topbar\\s+\\.ant-menu-item', '\\.pms-toolbar\\s+\\.ant-btn', '\\.pms-toolbar\\s+\\.ant-menu-item'],
-  [{ property: 'white-space', value: 'nowrap' }],
-)
+const ONE_LINE_LABEL_RULE = {
+  label: 'one-line button and navigation label rule',
+  selectors: ['.pms-topbar .ant-btn', '.pms-topbar .ant-menu-item', '.pms-toolbar .ant-btn', '.pms-toolbar .ant-menu-item'],
+  declarations: [{ property: 'white-space', value: 'nowrap' }],
+}
 
-const COMPACT_PAGE_SHELL_RULE = cssRuleExpectation(
-  '1024px compact page-shell spacing rule',
-  '\\.pms-page-shell',
-  [{ property: 'padding-inline', value: '12px' }],
-)
+const COMPACT_PAGE_SHELL_RULE = {
+  label: '1024px compact page-shell spacing rule',
+  selector: '.pms-page-shell',
+  declarations: [{ property: 'padding-inline', value: '12px' }],
+}
 
-const COMPACT_TOOLBAR_RULE = cssRuleExpectation(
-  '1024px compact toolbar spacing rule',
-  '\\.pms-toolbar',
-  [
+const COMPACT_TOOLBAR_RULE = {
+  label: '1024px compact toolbar spacing rule',
+  selector: '.pms-toolbar',
+  declarations: [
     { property: 'gap', value: '8px' },
     { property: 'padding', value: '8px\\s+12px' },
   ],
-)
+}
 
-function accessibilityAndCompactFailures(css) {
+function primitiveRuleFailures(css) {
+  return ruleContractFailures(parseCssRules(css), CSS_PRIMITIVE_RULES)
+}
+
+function focusRuleFailures(rules) {
   const failures = []
+  const candidates = rules.filter((rule) => {
+    const match = /^:where\(([\s\S]+)\):focus-visible$/.exec(rule.selectorText)
+    return match && selectorSetMatches(new Set(splitCssList(match[1])), FOCUS_TARGETS)
+  })
 
-  expectMediaRule(failures, css, REDUCED_MOTION_RULE.label, REDUCED_MOTION_MEDIA, REDUCED_MOTION_RULE)
-  expectMediaRule(failures, css, REDUCED_TRANSPARENCY_RULE.label, REDUCED_TRANSPARENCY_MEDIA, REDUCED_TRANSPARENCY_RULE)
-  expectContentPatterns(failures, CSS_SOURCE, css, [FOCUS_VISIBLE_RULE, ONE_LINE_LABEL_RULE])
-  expectNoGlobalFocusHiding(failures, css)
-
-  const compactBlocks = extractCssBlocks(css, COMPACT_MEDIA)
-  const compactBlock = compactBlocks.find(
-    (block) => COMPACT_PAGE_SHELL_RULE.pattern.test(block) && COMPACT_TOOLBAR_RULE.pattern.test(block),
-  )
-  if (!compactBlock) {
-    failures.push(`${CSS_SOURCE} is missing 1024px compact spacing rules`)
-  } else if (/(?:^|[;{])\s*(?:border-radius|order)\s*:|(?:^|[;{])\s*display\s*:\s*none\b/m.test(compactBlock)) {
-    failures.push(`${CSS_SOURCE} 1024px compact spacing block must not change radius, order, or visibility`)
+  if (!candidates.some((rule) => declarationMatches(rule, FOCUS_VISIBLE_RULE.declarations))) {
+    failures.push(`${CSS_SOURCE} is missing ${FOCUS_VISIBLE_RULE.label}`)
   }
 
   return failures
 }
 
-function primitiveContractSelfTestFailures() {
-  const focusRule = `:where(button):focus-visible {
+function compactSpacingFailures(css) {
+  const failures = []
+  const compactRules = mediaRules(css, COMPACT_MEDIA)
+  const pageRule = compactRules.find(
+    (rule) => rule.selectors.has(COMPACT_PAGE_SHELL_RULE.selector) && declarationMatches(rule, COMPACT_PAGE_SHELL_RULE.declarations),
+  )
+  const toolbarRule = compactRules.find(
+    (rule) => rule.selectors.has(COMPACT_TOOLBAR_RULE.selector) && declarationMatches(rule, COMPACT_TOOLBAR_RULE.declarations),
+  )
+
+  if (!pageRule || !toolbarRule) {
+    failures.push(`${CSS_SOURCE} is missing 1024px compact spacing rules`)
+    return failures
+  }
+
+  const allowedProperties = new Set(['padding-inline', 'gap', 'padding'])
+  for (const rule of [pageRule, toolbarRule]) {
+    const unsupportedProperty = [...rule.declarations.keys()].find((property) => !allowedProperties.has(property))
+    if (unsupportedProperty) {
+      failures.push(`${CSS_SOURCE} 1024px compact spacing block allows only spacing properties; found ${unsupportedProperty}`)
+    }
+  }
+
+  return failures
+}
+
+function accessibilityAndCompactFailures(css) {
+  const failures = []
+  const rules = parseCssRules(css)
+
+  failures.push(...ruleContractFailures(mediaRules(css, REDUCED_MOTION_MEDIA), [REDUCED_MOTION_RULE]))
+  failures.push(...ruleContractFailures(mediaRules(css, REDUCED_TRANSPARENCY_MEDIA), [REDUCED_TRANSPARENCY_RULE]))
+  failures.push(...focusRuleFailures(rules))
+  failures.push(...ruleContractFailures(rules, [ONE_LINE_LABEL_RULE]))
+  expectNoGlobalFocusHiding(failures, css)
+  failures.push(...compactSpacingFailures(css))
+
+  return failures
+}
+
+function focusRuleFor(targets) {
+  return `:where(${targets.join(', ')}):focus-visible {
   outline: 2px solid var(--pms-brand-strong);
   box-shadow: 0 0 0 3px rgb(117 98 255 / 24%);
 }`
+}
+
+function primitiveContractSelfTestFailures() {
+  const focusRule = focusRuleFor(FOCUS_TARGETS)
   const oneLineRule = `.pms-topbar .ant-btn,
 .pms-topbar .ant-menu-item,
 .pms-toolbar .ant-btn,
@@ -429,7 +577,14 @@ function primitiveContractSelfTestFailures() {
     -webkit-backdrop-filter: none !important;
   }
 }`
-  const validCss = [focusRule, oneLineRule, compactRule, reducedMotionRule, reducedTransparencyRule].join('\n')
+  const primitiveRules = `.pms-page-shell { min-height: 100dvh; background: var(--pms-page); color: var(--pms-text-primary); }
+.pms-topbar { background: var(--pms-gradient-brand); border-bottom: 1px solid rgb(255 255 255 / 24%); box-shadow: 0 10px 28px rgb(92 73 214 / 24%); }
+.pms-glass-surface, .pms-toolbar { background: var(--pms-surface-glass); border: 1px solid rgb(255 255 255 / 96%); backdrop-filter: var(--pms-glass-filter); -webkit-backdrop-filter: var(--pms-glass-filter); box-shadow: inset 0 1px 0 #fff, var(--pms-shadow-glass); }
+.pms-solid-surface { background: var(--pms-surface-solid); border: 1px solid var(--pms-border); box-shadow: 0 10px 30px rgb(58 45 115 / 6%); }
+.pms-interactive-surface { transition: transform 160ms cubic-bezier(.16, 1, .3, 1), box-shadow 180ms cubic-bezier(.16, 1, .3, 1), border-color 160ms ease; }
+.pms-interactive-surface:hover { transform: translateY(-1px); }
+.pms-interactive-surface:active { transform: scale(.98); }`
+  const validCss = [primitiveRules, focusRule, oneLineRule, compactRule, reducedMotionRule, reducedTransparencyRule].join('\n')
   const cases = [
     {
       label: 'empty reduced-motion media query',
@@ -442,25 +597,92 @@ function primitiveContractSelfTestFailures() {
       expectedFailure: REDUCED_TRANSPARENCY_RULE.label,
     },
     {
-      label: 'removed focus-visible rule',
-      css: validCss.replace(focusRule, ''),
-      expectedFailure: FOCUS_VISIBLE_RULE.label,
+      label: 'removed standard backdrop-filter declaration',
+      css: validCss.replace(' backdrop-filter: var(--pms-glass-filter);', ''),
+      expectedFailure: '.pms-glass-surface primitive',
     },
     {
-      label: 'removed one-line label rule',
-      css: validCss.replace(oneLineRule, ''),
-      expectedFailure: ONE_LINE_LABEL_RULE.label,
+      label: 'comment-only standard backdrop-filter declaration',
+      css: validCss.replace(' backdrop-filter: var(--pms-glass-filter);', ' /* backdrop-filter: var(--pms-glass-filter); */'),
+      expectedFailure: '.pms-glass-surface primitive',
     },
+    {
+      label: 'removed WebKit backdrop-filter declaration',
+      css: validCss.replace(' -webkit-backdrop-filter: var(--pms-glass-filter);', ''),
+      expectedFailure: '.pms-glass-surface primitive',
+    },
+    {
+      label: 'removed topbar brand gradient declaration',
+      css: validCss.replace(' background: var(--pms-gradient-brand);', ''),
+      expectedFailure: '.pms-topbar primitive',
+    },
+  ]
+  const focusCases = FOCUS_TARGETS.map((target) => ({
+    label: `removed focus target ${target}`,
+    css: validCss.replace(focusRule, focusRuleFor(FOCUS_TARGETS.filter((candidate) => candidate !== target))),
+    expectedFailure: FOCUS_VISIBLE_RULE.label,
+  }))
+  const compactCases = [
     {
       label: 'removed compact spacing rule',
       css: validCss.replace(compactRule, '@media (max-width: 1024px) {}'),
       expectedFailure: '1024px compact spacing rules',
     },
+    {
+      label: 'compact position mutation',
+      css: validCss.replace('padding-inline: 12px;', 'padding-inline: 12px; position: fixed;'),
+      expectedFailure: '1024px compact spacing block allows only spacing properties',
+    },
+    {
+      label: 'compact width mutation',
+      css: validCss.replace('gap: 8px;', 'gap: 8px; width: 100%;'),
+      expectedFailure: '1024px compact spacing block allows only spacing properties',
+    },
+    {
+      label: 'compact transform mutation',
+      css: validCss.replace('padding: 8px 12px;', 'padding: 8px 12px; transform: translateY(1px);'),
+      expectedFailure: '1024px compact spacing block allows only spacing properties',
+    },
   ]
   const failures = []
 
-  for (const testCase of cases) {
-    const mutationFailures = accessibilityAndCompactFailures(testCase.css)
+  const commentedValidCss = validCss.replace('.pms-topbar {', '/* normal formatting comment */\n.pms-topbar {')
+  const commentedValidFailures = [
+    ...primitiveRuleFailures(stripCssComments(commentedValidCss)),
+    ...accessibilityAndCompactFailures(stripCssComments(commentedValidCss)),
+  ]
+  if (commentedValidFailures.length > 0) {
+    failures.push(`${CSS_SOURCE} verifier self-test does not tolerate normal CSS comments`)
+  }
+
+  const reorderedTransparencyRule = `@media (prefers-reduced-transparency: reduce) {
+  .ant-dropdown-menu,
+  .ant-popover-inner,
+  .ant-modal-content,
+  .pms-toolbar,
+  .pms-glass-surface {
+    background: rgb(255 255 255 / 98%) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}`
+  const reorderedCss = validCss
+    .replace(focusRule, focusRuleFor([...FOCUS_TARGETS].reverse()))
+    .replace(reducedTransparencyRule, reorderedTransparencyRule)
+  const reorderedFailures = [
+    ...primitiveRuleFailures(stripCssComments(reorderedCss)),
+    ...accessibilityAndCompactFailures(stripCssComments(reorderedCss)),
+  ]
+  if (reorderedFailures.length > 0) {
+    failures.push(`${CSS_SOURCE} verifier self-test does not tolerate selector-list reordering`)
+  }
+
+  for (const testCase of [...cases, ...focusCases, ...compactCases]) {
+    const testCss = stripCssComments(testCase.css)
+    const mutationFailures = [
+      ...primitiveRuleFailures(testCss),
+      ...accessibilityAndCompactFailures(testCss),
+    ]
     if (!mutationFailures.some((failure) => failure.includes(testCase.expectedFailure))) {
       failures.push(`${CSS_SOURCE} verifier self-test did not reject ${testCase.label}`)
     }
@@ -482,12 +704,7 @@ function cssContractFailures(root) {
 
   const outsideRoot = stripCssComments(extracted.outsideRoot)
 
-  expectContentPatterns(
-    failures,
-    CSS_SOURCE,
-    outsideRoot,
-    CSS_PRIMITIVE_EXPECTATIONS,
-  )
+  failures.push(...primitiveRuleFailures(outsideRoot))
   failures.push(...accessibilityAndCompactFailures(outsideRoot))
   failures.push(...primitiveContractSelfTestFailures())
 
