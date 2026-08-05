@@ -35,12 +35,24 @@ const groups = {
     'src/components/project-summary/ProjectSummaryTable.tsx',
     'src/components/project-list/ProjectListCalendar.tsx',
   ],
-}
-
-// Task 4 removes these migration-baseline exceptions when the roadmap is migrated.
-const ROADMAP_BASELINE_EXCEPTIONS = {
-  'src/components/roadmap/MilestoneView.tsx': { literal: '#f5f3ff', count: 1 },
-  'src/components/roadmap/ProjectPlanSummaryBoard.tsx': { literal: '#f5f3ff', count: 2 },
+  roadmap: [
+    'src/components/roadmap/MRTrainView.tsx',
+    'src/components/roadmap/MilestoneView.tsx',
+    'src/components/roadmap/PlannedProjectModal.tsx',
+    'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
+    'src/components/roadmap/ProjectRoadmapModule.tsx',
+    'src/components/roadmap/RoadmapChangeLogDrawer.tsx',
+    'src/components/roadmap/RoadmapColumnSettingsDrawer.tsx',
+    'src/components/roadmap/RoadmapConflictDrawer.tsx',
+    'src/components/roadmap/RoadmapEvolutionView.tsx',
+    'src/components/roadmap/RoadmapFilterDrawer.tsx',
+    'src/components/roadmap/RoadmapProjectCard.tsx',
+    'src/components/roadmap/RoadmapTableView.tsx',
+    'src/components/roadmap/RoadmapToolbar.tsx',
+    'src/components/roadmap/RoadmapView.tsx',
+    'src/components/roadmap/TosTargetEditor.tsx',
+    'src/components/roadmap/utils.ts',
+  ],
 }
 
 function read(file, root) {
@@ -77,18 +89,7 @@ function rawBrandFailures(root) {
     if (literals.length === 0) continue
 
     const uniqueLiterals = [...new Set(literals)]
-    const exception = ROADMAP_BASELINE_EXCEPTIONS[normalizedFile]
-    if (!exception) {
-      failures.push(`${normalizedFile}: forbidden raw PMS brand literal(s): ${uniqueLiterals.join(', ')}`)
-      continue
-    }
-
-    const invalidLiteral = uniqueLiterals.some((literal) => literal !== exception.literal)
-    if (invalidLiteral || literals.length !== exception.count) {
-      failures.push(
-        `${normalizedFile}: baseline allows exactly ${exception.count} ${exception.literal}; found ${literals.length} (${uniqueLiterals.join(', ')})`,
-      )
-    }
+    failures.push(`${normalizedFile}: forbidden raw PMS brand literal(s): ${uniqueLiterals.join(', ')}`)
   }
 
   return failures
@@ -177,6 +178,77 @@ function groupedLegacyBrandFailures(root) {
   const failures = []
   for (const files of Object.values(groups)) {
     for (const file of files) expectNoLegacyBrand(failures, root, file)
+  }
+  return failures
+}
+
+const ROADMAP_MATERIAL_EXPECTATIONS = {
+  'src/components/roadmap/RoadmapView.tsx': [
+    { label: 'glass roadmap heading', pattern: /className=["'][^"']*pms-roadmap-view-header[^"']*pms-glass-surface[^"']*["']/ },
+    { label: 'solid roadmap data card', pattern: /<Card\s+[\s\S]{0,180}className=["']pms-roadmap-view-card["'][\s\S]{0,180}rootClassName=["']pms-solid-surface["']/ },
+  ],
+  'src/components/roadmap/RoadmapToolbar.tsx': [
+    { label: 'shared glass toolbar material', pattern: /className=["'][^"']*roadmap-toolbar-glass[^"']*pms-toolbar[^"']*["']/ },
+  ],
+  'src/components/roadmap/RoadmapProjectCard.tsx': [
+    { label: 'interactive glass project card', pattern: /pms-roadmap-evolution-card[^`"']*pms-glass-surface[^`"']*pms-interactive-surface/ },
+  ],
+  'src/components/roadmap/RoadmapEvolutionView.tsx': [
+    { label: 'opaque evolution timeline shell', pattern: /className=["'][^"']*pms-roadmap-evolution-shell[^"']*pms-solid-surface[^"']*["']/ },
+    { label: 'glass version target summary', pattern: /className=["'][^"']*pms-roadmap-evolution-target[^"']*pms-glass-surface[^"']*["']/ },
+  ],
+  'src/components/roadmap/RoadmapTableView.tsx': [
+    { label: 'glass table controls', pattern: /className=["'][^"']*roadmap-table-controls[^"']*pms-toolbar[^"']*["']/ },
+    { label: 'glass target summary card', pattern: /className=["'][^"']*roadmap-target-card[^"']*pms-glass-surface[^"']*pms-interactive-surface[^"']*["']/ },
+    { label: 'opaque roadmap table', pattern: /className=["'][^"']*pms-table[^"']*roadmap-table[^"']*pms-solid-surface[^"']*["']/ },
+  ],
+  'src/components/roadmap/MRTrainView.tsx': [
+    { label: 'glass MR train toolbar', pattern: /className=["'][^"']*mr-train-toolbar[^"']*pms-toolbar[^"']*["']/ },
+    { label: 'opaque MR train table', pattern: /className=["'][^"']*pms-table[^"']*mr-train-table[^"']*pms-solid-surface[^"']*["']/ },
+  ],
+  'src/components/roadmap/MilestoneView.tsx': [
+    { label: 'glass milestone saved-view controls', pattern: /pms-summary-control-shell[^"']*pms-glass-surface/ },
+    { label: 'glass milestone toolbar', pattern: /pms-summary-toolbar[^"']*pms-toolbar/ },
+    { label: 'opaque milestone table', pattern: /pms-roadmap-milestone-table[^"']*pms-solid-surface/ },
+    { label: 'opaque milestone calendar', pattern: /pms-project-calendar[^"']*pms-solid-surface/ },
+    { label: 'shared milestone modal material', pattern: /<Modal\s+[\s\S]{0,180}className=["']pms-modal["']/ },
+  ],
+  'src/components/roadmap/ProjectPlanSummaryBoard.tsx': [
+    { label: 'glass summary saved-view controls', pattern: /pms-summary-control-shell[^"']*pms-glass-surface/ },
+    { label: 'glass summary toolbar', pattern: /pms-summary-toolbar[^"']*pms-toolbar/ },
+    { label: 'opaque project summary table', pattern: /className=["'][^"']*pms-summary-board[^"']*pms-solid-surface[^"']*["']/ },
+    { label: 'opaque project summary calendar', pattern: /pms-project-calendar[^"']*pms-solid-surface/ },
+    { label: 'shared project summary modal material', pattern: /<Modal\s+[\s\S]{0,180}className=["']pms-modal["']/ },
+  ],
+  'src/components/roadmap/PlannedProjectModal.tsx': [
+    { label: 'shared planned-project modal material', pattern: /<Modal\s+[\s\S]{0,180}className=["']pms-modal["']/ },
+    { label: 'solid planned-project form body', pattern: /<Form\s+[\s\S]{0,180}className=["'][^"']*pms-roadmap-overlay-body[^"']*pms-solid-surface[^"']*["']/ },
+  ],
+  'src/components/roadmap/TosTargetEditor.tsx': [
+    { label: 'shared target-editor modal material', pattern: /<Modal\s+[\s\S]{0,180}className=["']pms-modal["']/ },
+    { label: 'solid target-editor form body', pattern: /<Form\s+[\s\S]{0,180}className=["'][^"']*pms-roadmap-overlay-body[^"']*pms-solid-surface[^"']*["']/ },
+  ],
+  'src/components/roadmap/RoadmapConflictDrawer.tsx': [
+    { label: 'shared conflict drawer material', pattern: /<Drawer\s+[\s\S]{0,220}rootClassName=["'][^"']*pms-modal[^"']*["']/ },
+    { label: 'solid conflict data group', pattern: /className=["'][^"']*pms-roadmap-conflict-group[^"']*pms-solid-surface[^"']*["']/ },
+  ],
+  'src/components/roadmap/RoadmapChangeLogDrawer.tsx': [
+    { label: 'shared change-log drawer material', pattern: /<Drawer\s+[\s\S]{0,220}rootClassName=["'][^"']*pms-modal[^"']*["']/ },
+    { label: 'glass change-log filters', pattern: /pms-roadmap-change-log-filters-compact[^"']*pms-toolbar/ },
+    { label: 'interactive glass change-log card', pattern: /pms-roadmap-change-log-card[^"']*pms-glass-surface[^"']*pms-interactive-surface/ },
+  ],
+  'src/components/roadmap/RoadmapFilterDrawer.tsx': [
+    { label: 'solid filter popover body', pattern: /pms-roadmap-filter-body[^"']*pms-solid-surface/ },
+  ],
+  'src/components/roadmap/RoadmapColumnSettingsDrawer.tsx': [
+    { label: 'shared column-settings popover', pattern: /<SortableColumnSettings\b/ },
+  ],
+}
+
+function roadmapMaterialFailures(root) {
+  const failures = []
+  for (const [file, expectations] of Object.entries(ROADMAP_MATERIAL_EXPECTATIONS)) {
+    expectPatterns(failures, root, file, expectations)
   }
   return failures
 }
@@ -1015,6 +1087,7 @@ function verifyContract(root) {
   const failures = [
     ...rawBrandFailures(root),
     ...groupedLegacyBrandFailures(root),
+    ...roadmapMaterialFailures(root),
     ...cssContractFailures(root),
   ]
 

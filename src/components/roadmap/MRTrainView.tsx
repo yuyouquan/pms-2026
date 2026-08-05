@@ -443,7 +443,7 @@ export default function MRTrainView({ onViewProject }: MRTrainViewProps) {
         }
       `}</style>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+      <div className="mr-train-toolbar pms-toolbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <Tabs
           activeKey={dimension}
           onChange={setDimension}
@@ -470,7 +470,7 @@ export default function MRTrainView({ onViewProject }: MRTrainViewProps) {
       </div>
 
       <Table
-        className="pms-table mr-train-table"
+        className="pms-table mr-train-table pms-solid-surface"
         columns={columns}
         dataSource={sortedData}
         scroll={{ x: 'max-content' }}

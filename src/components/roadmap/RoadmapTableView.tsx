@@ -287,7 +287,7 @@ export default function RoadmapTableView({
 
   return (
     <div className="roadmap-table-shell" style={{ width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
-      <Flex align="center" gap={10} style={{ marginBottom: 8 }} wrap>
+      <Flex className="roadmap-table-controls pms-toolbar" align="center" gap={10} style={{ marginBottom: 8 }} wrap>
         <Flex align="center" gap={10} wrap>
           <Select
             aria-label="表单视图 tOS 版本"
@@ -314,13 +314,12 @@ export default function RoadmapTableView({
 
       {version ? (
         <section
-          className="pms-glass-panel roadmap-target-card"
+          className="pms-glass-panel roadmap-target-card pms-glass-surface pms-interactive-surface"
           data-roadmap-target-card
           aria-label={`${formatTosVersionDisplay(version)} 目标`}
           style={{
             marginBottom: 16,
-            borderColor: 'var(--border-purple)',
-            background: 'linear-gradient(135deg, rgba(238, 242, 255, 0.96), rgba(250, 245, 255, 0.92))',
+            borderColor: 'var(--pms-brand-border)',
           }}
         >
           <Flex
@@ -366,7 +365,7 @@ export default function RoadmapTableView({
       ) : null}
 
       <Table<RoadmapProjectRow>
-        className="pms-table roadmap-table"
+        className="pms-table roadmap-table pms-solid-surface"
         aria-label={`${version ? formatTosVersionDisplay(version) : '全部 tOS'} 项目表`}
         rowKey={row => `${row.source}:${row.id}`}
         columns={columns}

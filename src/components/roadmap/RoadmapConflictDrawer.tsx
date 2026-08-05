@@ -18,13 +18,8 @@ const DRAWER_Z_INDEX = 1300
 
 const groupStyle: CSSProperties = {
   padding: 'var(--space-md)',
-  border: '1px solid var(--border-purple)',
   borderLeft: '4px solid var(--warning)',
   borderRadius: 'var(--radius-lg)',
-  background: 'var(--bg-glass)',
-  backdropFilter: 'var(--glass-blur)',
-  WebkitBackdropFilter: 'var(--glass-blur)',
-  boxShadow: 'var(--shadow-sm)',
   scrollMarginTop: 'var(--space-md)',
 }
 
@@ -198,6 +193,8 @@ export default function RoadmapConflictDrawer({
   return (
     <Drawer
       className="pms-roadmap-conflict-drawer"
+      rootClassName="pms-modal pms-roadmap-conflict-drawer-root"
+      classNames={{ header: 'pms-glass-surface', body: 'pms-solid-surface' }}
       title={(
         <Space size={8}>
           <WarningOutlined aria-hidden="true" style={{ color: 'var(--warning)' }} />
@@ -208,12 +205,11 @@ export default function RoadmapConflictDrawer({
       open={open}
       onClose={onClose}
       placement="right"
-      width="min(720px, 100vw)"
+      size="min(720px, 100vw)"
       zIndex={DRAWER_Z_INDEX}
       styles={{
         body: {
           padding: 'var(--space-md)',
-          background: 'var(--bg-purple-tint)',
         },
       }}
     >
@@ -237,6 +233,7 @@ export default function RoadmapConflictDrawer({
                 }}
                 tabIndex={-1}
                 aria-labelledby={headingId}
+                className="pms-roadmap-conflict-group pms-solid-surface"
                 style={groupStyle}
               >
                 <Flex id={headingId} gap={8} wrap style={{ marginBottom: 12 }}>

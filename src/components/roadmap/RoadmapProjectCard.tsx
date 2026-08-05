@@ -84,7 +84,7 @@ export default function RoadmapProjectCard({
 
   return (
     <article
-      className={`pms-roadmap-evolution-card${conflictKey && isPlanned ? ' is-conflict' : ''}`}
+      className={`pms-roadmap-evolution-card pms-glass-surface pms-interactive-surface${conflictKey && isPlanned ? ' is-conflict' : ''}`}
       aria-label={`${title}，${isPlanned ? '待规划项目' : '正常项目，只读'}`}
     >
       <Flex className="pms-roadmap-evolution-card-header" justify="space-between" align="center" gap={8} wrap={false}>

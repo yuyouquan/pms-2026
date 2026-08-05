@@ -171,8 +171,8 @@ const CATEGORY_THEME: Record<string, { key: string; label?: string; color: strin
   tOS版本: { key: 'tos', color: '#0891b2', accent: '#06b6d4' },
   独立软件产品: { key: 'independent', color: '#0f766e', accent: '#14b8a6' },
   CAMON: { key: 'camon', color: '#2563eb', accent: '#3b82f6' },
-  Note: { key: 'note', label: 'NOTE', color: '#7c3aed', accent: '#8b5cf6' },
-  NOTE: { key: 'note', label: 'NOTE', color: '#7c3aed', accent: '#8b5cf6' },
+  Note: { key: 'note', label: 'NOTE', color: 'var(--pms-brand-strong)', accent: 'var(--pms-brand)' },
+  NOTE: { key: 'note', label: 'NOTE', color: 'var(--pms-brand-strong)', accent: 'var(--pms-brand)' },
   SPARK: { key: 'spark', color: '#059669', accent: '#10b981' },
   POVA: { key: 'pova', color: '#d97706', accent: '#f59e0b' },
   技术项目: { key: 'tech', color: '#0f766e', accent: '#14b8a6' },
@@ -1569,7 +1569,7 @@ export default function MilestoneView({
   }, [sourceRows])
 
   const renderCalendarView = () => (
-    <div className="pms-project-calendar">
+    <div className="pms-project-calendar pms-solid-surface">
       <div className="pms-project-calendar-header">
         <div className="pms-project-calendar-title">{calendarMonth.format('YYYY年M月')}</div>
         <Space size={6}>
@@ -1622,7 +1622,7 @@ export default function MilestoneView({
 
   const renderMilestoneTable = () => (
     <Table
-      className="pms-table pms-summary-board pms-roadmap-milestone-table"
+      className="pms-table pms-summary-board pms-roadmap-milestone-table pms-solid-surface"
       columns={columns}
       dataSource={rows}
       rowKey="key"
@@ -1959,7 +1959,7 @@ export default function MilestoneView({
 	        }
 	        .pms-roadmap-snapshot-item-active {
 	          background: #eef2ff;
-	          color: #4f46e5;
+	          color: var(--pms-brand-strong);
 	          font-weight: 700;
 	        }
 	        .pms-roadmap-snapshot-item-main {
@@ -2256,7 +2256,7 @@ export default function MilestoneView({
         }
         .pms-summary-category-note,
         .pms-summary-row-note > td.pms-summary-category-cell {
-          background: #f5f3ff !important;
+          background: var(--pms-brand-surface) !important;
         }
         .pms-summary-series-note,
         .pms-summary-row-note > td.pms-summary-series-cell {
@@ -2469,7 +2469,7 @@ export default function MilestoneView({
         }
       `}</style>
 
-	      <div className="pms-summary-control-shell pms-summary-control-shell-static">
+	      <div className="pms-summary-control-shell pms-summary-control-shell-static pms-glass-surface">
 	        {!hideProjectTypeTabs && (
 	          <div className="pms-summary-scope-row">
 	            <Tabs
@@ -2504,7 +2504,7 @@ export default function MilestoneView({
 	        const renderToolbar = () => (
 	          <div className="pms-summary-sticky-region pms-summary-sticky-offset" style={stickyRegionStyle}>
 	        <div className="pms-summary-toolbar-shell">
-		        <div className="pms-summary-toolbar">
+		        <div className="pms-summary-toolbar pms-toolbar">
 		          <div className="pms-summary-status-group">
 			            <span className="pms-summary-status-label">状态</span>
 		            {STATUS_FILTERS.map(item => {
@@ -2669,6 +2669,7 @@ export default function MilestoneView({
 	              }}
 	            />
 		            <Popover
+		              classNames={{ root: 'pms-popover' }}
 		              title="快照"
 		              content={snapshotPopoverContent}
 		              trigger="hover"
@@ -2771,6 +2772,8 @@ export default function MilestoneView({
 	      {!isFullscreen && renderCurrentView()}
 
 	      <Modal
+	        className="pms-modal"
+	        classNames={{ header: 'pms-glass-surface', body: 'pms-solid-surface', footer: 'pms-glass-surface' }}
 	        title={(
 	          <Space>
 	            <span>项目路标里程碑视图</span>
@@ -2796,6 +2799,8 @@ export default function MilestoneView({
 	      })()}
 
 	      <Modal
+	        className="pms-modal"
+	        classNames={{ header: 'pms-glass-surface', body: 'pms-solid-surface', footer: 'pms-glass-surface' }}
 	        title="新建视图"
 	        open={showSaveProjectViewModal}
 	        onCancel={() => setShowSaveProjectViewModal(false)}
@@ -2819,6 +2824,8 @@ export default function MilestoneView({
 	      </Modal>
 
 	      <Modal
+	        className="pms-modal"
+	        classNames={{ header: 'pms-glass-surface', body: 'pms-solid-surface', footer: 'pms-glass-surface' }}
 	        title="分享视图"
 	        open={showProjectViewShareModal}
 	        onCancel={() => setShowProjectViewShareModal(false)}
@@ -2842,6 +2849,8 @@ export default function MilestoneView({
 	      </Modal>
 
 	      <Modal
+	        className="pms-modal"
+	        classNames={{ header: 'pms-glass-surface', body: 'pms-solid-surface', footer: 'pms-glass-surface' }}
 	        title="快照对比"
 	        open={showCompareModal}
 	        onCancel={() => setShowCompareModal(false)}

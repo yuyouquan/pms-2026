@@ -11,7 +11,6 @@ const verifier = path.join(scriptsDir, 'verify-liquid-glass-theme.mjs')
 const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pms-liquid-glass-theme-'))
 const fixtureFile = path.join(fixtureRoot, 'src/components/BrandLiteralFixture.ts')
 const cssFixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pms-liquid-glass-css-'))
-const roadmapFixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pms-liquid-glass-roadmap-'))
 
 const validRootTokens = `:root {
   --pms-brand-strong: #5d49f6;
@@ -69,25 +68,16 @@ try {
     /src\/styles\/globals\.css: raw PMS brand literal\(s\) outside :root: #5d49f6/i,
   )
 
-  const milestoneFixture = path.join(roadmapFixtureRoot, 'src/components/roadmap/MilestoneView.tsx')
-  const summaryFixture = path.join(roadmapFixtureRoot, 'src/components/roadmap/ProjectPlanSummaryBoard.tsx')
-  fs.mkdirSync(path.dirname(milestoneFixture), { recursive: true })
-  fs.writeFileSync(milestoneFixture, "const note = '#f5f3ff'\n")
-  fs.writeFileSync(summaryFixture, "const first = '#f5f3ff'\nconst second = '#f5f3ff'\n")
-
-  assert.equal(runVerifier(['--scan-root', roadmapFixtureRoot]).status, 0)
-  fs.appendFileSync(milestoneFixture, "const extra = '#F5F3FF'\n")
-
-  const baselineResult = runVerifier(['--scan-root', roadmapFixtureRoot])
-  assert.notEqual(baselineResult.status, 0, 'The roadmap baseline must reject an added literal')
+  fs.writeFileSync(fixtureFile, "export const roadmapBrand = '#f5f3ff'\n")
+  const baselineResult = runVerifier(['--scan-root', fixtureRoot])
+  assert.notEqual(baselineResult.status, 0, 'The raw-brand scanner must reject the former roadmap baseline literal')
   assert.match(
     baselineResult.stderr,
-    /src\/components\/roadmap\/MilestoneView\.tsx: baseline allows exactly 1 #f5f3ff; found 2 \(#f5f3ff\)/i,
+    /src\/components\/BrandLiteralFixture\.ts: forbidden raw PMS brand literal\(s\): #f5f3ff/i,
   )
 } finally {
   fs.rmSync(fixtureRoot, { recursive: true, force: true })
   fs.rmSync(cssFixtureRoot, { recursive: true, force: true })
-  fs.rmSync(roadmapFixtureRoot, { recursive: true, force: true })
 }
 
 console.log('Liquid glass theme verifier self-test passed')

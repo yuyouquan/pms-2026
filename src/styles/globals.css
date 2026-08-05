@@ -4686,6 +4686,188 @@ body {
   padding: 8px 20px;
 }
 
+/* Roadmap and project-view material hierarchy. */
+.pms-roadmap-view,
+.pms-roadmap-shell,
+.roadmap-table-shell,
+.pms-summary-control-shell,
+.pms-summary-sticky-region,
+.pms-project-calendar {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pms-roadmap-view-header.pms-glass-surface {
+  position: relative;
+  z-index: 1;
+  border-bottom-color: color-mix(in srgb, var(--pms-brand) 18%, transparent);
+}
+
+.pms-roadmap-view-card.pms-solid-surface,
+.pms-roadmap-evolution-shell.pms-solid-surface,
+.roadmap-table.pms-solid-surface,
+.mr-train-table.pms-solid-surface,
+.pms-summary-board.pms-solid-surface,
+.pms-project-calendar.pms-solid-surface {
+  background: var(--pms-surface-solid);
+  border-color: var(--pms-border);
+}
+
+.pms-roadmap-view-card.pms-solid-surface,
+.roadmap-table.pms-solid-surface,
+.mr-train-table.pms-solid-surface,
+.pms-summary-board.pms-solid-surface,
+.pms-project-calendar.pms-solid-surface {
+  overflow: hidden;
+  border-radius: var(--pms-radius-surface);
+}
+
+.roadmap-toolbar-glass.pms-toolbar,
+.roadmap-table-controls.pms-toolbar,
+.mr-train-toolbar.pms-toolbar,
+.pms-summary-toolbar.pms-toolbar,
+.pms-summary-control-shell.pms-glass-surface,
+.pms-roadmap-change-log-filters-compact.pms-toolbar {
+  background: var(--pms-surface-glass);
+  border: 1px solid rgb(255 255 255 / 96%);
+  backdrop-filter: var(--pms-glass-filter);
+  -webkit-backdrop-filter: var(--pms-glass-filter);
+  box-shadow: inset 0 1px 0 #fff, var(--pms-shadow-glass);
+}
+
+.roadmap-table-controls.pms-toolbar,
+.mr-train-toolbar.pms-toolbar,
+.pms-summary-toolbar.pms-toolbar,
+.pms-summary-control-shell.pms-glass-surface,
+.pms-roadmap-change-log-filters-compact.pms-toolbar {
+  border-radius: var(--pms-radius-surface);
+}
+
+.pms-summary-control-shell.pms-glass-surface {
+  padding: 8px 12px;
+}
+
+.pms-summary-toolbar.pms-toolbar {
+  padding: 8px 10px;
+}
+
+.pms-roadmap-evolution-shell.pms-solid-surface,
+.pms-roadmap-evolution-shell.pms-solid-surface .pms-roadmap-evolution-grid-cell,
+.pms-roadmap-evolution-shell.pms-solid-surface .pms-roadmap-evolution-separator,
+.pms-roadmap-evolution-shell.pms-solid-surface .pms-roadmap-evolution-version-cell {
+  background: var(--pms-surface-solid);
+}
+
+.pms-roadmap-evolution-shell.pms-solid-surface .pms-roadmap-evolution-version-cell {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body .pms-roadmap-evolution-card.pms-glass-surface {
+  background: var(--pms-surface-glass);
+  border-color: rgb(255 255 255 / 96%);
+  backdrop-filter: var(--pms-glass-filter);
+  -webkit-backdrop-filter: var(--pms-glass-filter);
+  box-shadow: inset 0 1px 0 #fff, var(--pms-shadow-glass);
+}
+
+body .pms-roadmap-evolution-card.pms-glass-surface.is-conflict {
+  border-color: color-mix(in srgb, var(--warning) 55%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--warning-light) 72%, transparent),
+    var(--pms-surface-glass) 26%
+  );
+  box-shadow: inset 4px 0 0 var(--warning), var(--pms-shadow-xs);
+}
+
+.pms-roadmap-evolution-target.pms-glass-surface,
+.roadmap-target-card.pms-glass-surface,
+.pms-roadmap-change-log-card.pms-glass-surface {
+  background: var(--pms-surface-glass);
+  border-color: rgb(255 255 255 / 96%);
+}
+
+.pms-roadmap-evolution-target.pms-glass-surface {
+  color: var(--pms-text-primary);
+}
+
+.roadmap-table.pms-solid-surface .ant-table,
+.roadmap-table.pms-solid-surface .ant-table-container,
+.roadmap-table.pms-solid-surface .ant-table-content,
+.mr-train-table.pms-solid-surface .ant-table,
+.mr-train-table.pms-solid-surface .ant-table-container,
+.mr-train-table.pms-solid-surface .ant-table-content,
+.pms-summary-board.pms-solid-surface .ant-table,
+.pms-summary-board.pms-solid-surface .ant-table-container,
+.pms-summary-board.pms-solid-surface .ant-table-content,
+.pms-project-calendar.pms-solid-surface .pms-project-calendar-cell {
+  background: var(--pms-surface-solid);
+}
+
+.pms-roadmap-filter-body.pms-solid-surface,
+.pms-roadmap-overlay-body.pms-solid-surface {
+  padding: 12px;
+  border-radius: var(--pms-radius-surface);
+}
+
+.pms-modal.ant-drawer .ant-drawer-content {
+  background: var(--pms-surface-solid);
+}
+
+.pms-modal.ant-drawer .ant-drawer-header.pms-glass-surface {
+  border-bottom: 1px solid var(--pms-border);
+}
+
+.pms-modal.ant-drawer .ant-drawer-body.pms-solid-surface {
+  box-shadow: none;
+}
+
+.pms-modal .ant-modal-header.pms-glass-surface,
+.pms-modal .ant-modal-footer.pms-glass-surface {
+  background: var(--pms-surface-glass) !important;
+  border-color: var(--pms-border) !important;
+  backdrop-filter: var(--pms-glass-filter) !important;
+  -webkit-backdrop-filter: var(--pms-glass-filter) !important;
+}
+
+.pms-modal .ant-modal-body.pms-solid-surface {
+  background: var(--pms-surface-solid);
+  border: 0;
+  box-shadow: none;
+}
+
+.pms-floating-config-popover .ant-popover-inner,
+.pms-floating-config-popover .ant-popover-container,
+.pms-popover .ant-popover-inner,
+.pms-popover .ant-popover-container {
+  background: var(--pms-surface-glass) !important;
+  border-color: rgb(255 255 255 / 96%);
+  backdrop-filter: var(--pms-glass-filter) !important;
+  -webkit-backdrop-filter: var(--pms-glass-filter) !important;
+  box-shadow: inset 0 1px 0 #fff, var(--pms-shadow-floating) !important;
+}
+
+.pms-floating-config-panel,
+.pms-floating-config-body {
+  background: var(--pms-surface-solid);
+}
+
+.pms-floating-config-header,
+.pms-floating-config-footer {
+  background: var(--pms-surface-glass);
+  border-color: var(--pms-border);
+}
+
+.pms-roadmap-conflict-group.pms-solid-surface {
+  overflow: hidden;
+  box-shadow: var(--pms-shadow-sm);
+}
+
+.pms-roadmap-change-log-card.pms-interactive-surface {
+  border-radius: var(--pms-radius-surface);
+}
+
 @media (max-width: 900px) {
   .pms-work-tracker-summary {
     flex-wrap: wrap;
@@ -4783,6 +4965,39 @@ body {
     margin-left: auto;
   }
 
+  .pms-roadmap-view-card > .ant-card-body {
+    padding: 12px !important;
+  }
+
+  .roadmap-toolbar-glass.pms-toolbar,
+  .roadmap-table-controls.pms-toolbar,
+  .mr-train-toolbar.pms-toolbar,
+  .pms-summary-toolbar.pms-toolbar,
+  .pms-summary-control-shell.pms-glass-surface {
+    max-width: 100%;
+  }
+
+  .roadmap-toolbar-glass.pms-toolbar,
+  .pms-summary-toolbar.pms-toolbar {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .roadmap-table-controls.pms-toolbar,
+  .mr-train-toolbar.pms-toolbar,
+  .pms-summary-control-shell.pms-glass-surface,
+  .pms-roadmap-change-log-filters-compact.pms-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .pms-roadmap-change-log-filters-compact > div:first-child {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .pms-roadmap-evolution-shell.pms-solid-surface {
+    max-height: calc(100dvh - 220px);
+  }
+
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4806,6 +5021,13 @@ body {
   .ant-modal-content,
   .ant-popover-inner,
   .ant-dropdown-menu {
+    background: rgb(255 255 255 / 98%) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .pms-floating-config-popover .ant-popover-container,
+  .pms-popover .ant-popover-container {
     background: rgb(255 255 255 / 98%) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
