@@ -16,10 +16,10 @@ const LEGACY_BRAND_RGB = new Set([
   '99,102,241',
   '129,140,248',
 ])
-const ROADMAP_CONTROL_LEGACY_HEX = new Set(['eaf1ff', '2563eb', '4f6df5'])
-const ROADMAP_CONTROL_LEGACY_RGB = new Set(['234,241,255', '37,99,235', '79,109,245'])
+const ROADMAP_CONTROL_LEGACY_HEX = new Set(['eaf1ff', 'eef2ff', '2563eb', '4f6df5'])
+const ROADMAP_CONTROL_LEGACY_RGB = new Set(['234,241,255', '238,242,255', '37,99,235', '79,109,245'])
 const COLOR_LITERAL_PATTERN = /#(?:[\da-f]{8}|[\da-f]{6})\b|\brgba?\([^)]*\)/gi
-const ROADMAP_CONTROL_RULE_PATTERN = /\.(?:pms-summary-status-pill:hover|pms-summary-status-pill-active)\s*\{[^}]*\}/gi
+const ROADMAP_CONTROL_RULE_PATTERN = /(?:\.pms-summary-status-pill(?::hover|-active)|\.pms-project-view-tabs\s+\.ant-tabs-tab-active|\.pms-roadmap-snapshot-item(?::hover|-active))\s*\{[^}]*\}/gi
 const THEME_SOURCE = 'src/theme/pmsTheme.ts'
 const CSS_SOURCE = 'src/styles/globals.css'
 
@@ -196,10 +196,17 @@ function roadmapControlScannerSelfTestFailures() {
     '.pms-summary-status-pill:hover { background: rgb(234 241 255); }',
     '.pms-summary-status-pill-active { background: #4F6DF580; }',
     '.pms-summary-status-pill-active { box-shadow: 0 4px 10px rgba(79,109,245,.22); }',
+    '.pms-project-view-tabs .ant-tabs-tab-active { background: #EEF2FF; }',
+    '.pms-project-view-tabs .ant-tabs-tab-active { background: rgb(238 242 255); }',
+    '.pms-roadmap-snapshot-item:hover { color: #2563EB80; }',
+    '.pms-roadmap-snapshot-item:hover { color: rgba(37,99,235,.22); }',
+    '.pms-roadmap-snapshot-item-active { background: #eef2ff80; }',
   ]
   const safeFixtures = [
     '.pms-summary-status-pill:hover { background: #eaf0ff; }',
     '.pms-summary-status-dot { background: #2563eb; }',
+    '.pms-summary-series-hidden { color: #2563eb; }',
+    "const CATEGORY_THEME = { CAMON: { color: '#2563eb' } }",
     '.pms-summary-status-pill-active { background: var(--pms-brand); }',
   ]
 
@@ -257,6 +264,9 @@ const ROADMAP_MATERIAL_EXPECTATIONS = {
     { label: 'shared milestone modal material', pattern: /<Modal\s+[\s\S]{0,180}className=["']pms-modal["']/ },
     { label: 'semantic status hover surface', pattern: /\.pms-summary-status-pill:hover\s*\{[\s\S]{0,160}background:\s*var\(--pms-brand-surface\);[\s\S]{0,160}color:\s*var\(--pms-brand-strong\);/ },
     { label: 'semantic status active surface', pattern: /\.pms-summary-status-pill-active\s*\{[\s\S]{0,180}background:\s*var\(--pms-brand\);[\s\S]{0,180}box-shadow:\s*[^;]*color-mix\(in srgb, var\(--pms-brand\) 22%, transparent\);/ },
+    { label: 'semantic saved-view active tab', pattern: /\.pms-project-view-tabs\s+\.ant-tabs-tab-active\s*\{[\s\S]{0,100}background:\s*var\(--pms-brand-surface\);/ },
+    { label: 'semantic snapshot hover control', pattern: /\.pms-roadmap-snapshot-item:hover\s*\{[\s\S]{0,160}background:\s*color-mix\(in srgb, var\(--pms-brand-surface\) 72%, var\(--pms-surface-solid\)\);[\s\S]{0,100}color:\s*var\(--pms-brand-strong\);/ },
+    { label: 'semantic snapshot active control', pattern: /\.pms-roadmap-snapshot-item-active\s*\{[\s\S]{0,120}background:\s*var\(--pms-brand-surface\);[\s\S]{0,100}color:\s*var\(--pms-brand-strong\);/ },
   ],
   'src/components/roadmap/ProjectPlanSummaryBoard.tsx': [
     { label: 'glass summary saved-view controls', pattern: /pms-summary-control-shell[^"']*pms-glass-surface/ },
@@ -266,6 +276,7 @@ const ROADMAP_MATERIAL_EXPECTATIONS = {
     { label: 'shared project summary modal material', pattern: /<Modal\s+[\s\S]{0,180}className=["']pms-modal["']/ },
     { label: 'semantic status hover surface', pattern: /\.pms-summary-status-pill:hover\s*\{[\s\S]{0,160}background:\s*var\(--pms-brand-surface\);[\s\S]{0,160}color:\s*var\(--pms-brand-strong\);/ },
     { label: 'semantic status active surface', pattern: /\.pms-summary-status-pill-active\s*\{[\s\S]{0,180}background:\s*var\(--pms-brand\);[\s\S]{0,180}box-shadow:\s*[^;]*color-mix\(in srgb, var\(--pms-brand\) 22%, transparent\);/ },
+    { label: 'semantic saved-view active tab', pattern: /\.pms-project-view-tabs\s+\.ant-tabs-tab-active\s*\{[\s\S]{0,100}background:\s*var\(--pms-brand-surface\);/ },
   ],
   'src/components/roadmap/PlannedProjectModal.tsx': [
     { label: 'shared planned-project modal material', pattern: /<Modal\s+[\s\S]{0,180}className=["']pms-modal["']/ },

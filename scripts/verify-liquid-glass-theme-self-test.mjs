@@ -12,6 +12,7 @@ const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pms-liquid-glass-them
 const fixtureFile = path.join(fixtureRoot, 'src/components/BrandLiteralFixture.ts')
 const roadmapFixtureFile = path.join(fixtureRoot, 'src/components/roadmap/RoadmapView.tsx')
 const cssFixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pms-liquid-glass-css-'))
+const repositoryCss = fs.readFileSync(path.join(scriptsDir, '../src/styles/globals.css'), 'utf8')
 
 const validRootTokens = `:root {
   --pms-brand-strong: #5d49f6;
@@ -67,6 +68,14 @@ try {
   assert.match(
     cssResult.stderr,
     /src\/styles\/globals\.css: raw PMS brand literal\(s\) outside :root: #5d49f6/i,
+  )
+
+  fs.writeFileSync(cssFixture, repositoryCss)
+  const validCssResult = runVerifier(['--css-root', cssFixtureRoot])
+  assert.equal(
+    validCssResult.status,
+    0,
+    `The verifier's built-in mutation suite must pass for valid CSS:\n${validCssResult.stderr}`,
   )
 
   fs.writeFileSync(fixtureFile, "export const roadmapBrand = '#f5f3ff'\n")

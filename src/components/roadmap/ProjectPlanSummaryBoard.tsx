@@ -1750,7 +1750,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
           transition: background-color 0.18s ease, color 0.18s ease;
         }
         .pms-project-view-tabs .ant-tabs-tab-active {
-          background: #eef2ff;
+          background: var(--pms-brand-surface);
         }
         .pms-project-view-tab-label {
           display: inline-flex;

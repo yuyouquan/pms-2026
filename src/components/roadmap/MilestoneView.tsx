@@ -1863,7 +1863,7 @@ export default function MilestoneView({
 	          transition: background-color 0.18s ease, color 0.18s ease;
 	        }
 	        .pms-project-view-tabs .ant-tabs-tab-active {
-	          background: #eef2ff;
+	          background: var(--pms-brand-surface);
 	        }
 	        .pms-project-view-tab-label {
 	          display: inline-flex;
@@ -1950,15 +1950,15 @@ export default function MilestoneView({
 	          transition: background-color 0.18s ease, color 0.18s ease;
 	        }
 	        .pms-roadmap-snapshot-item:hover {
-	          background: #f1f5f9;
-	          color: #2563eb;
+	          background: color-mix(in srgb, var(--pms-brand-surface) 72%, var(--pms-surface-solid));
+	          color: var(--pms-brand-strong);
 	        }
 	        .pms-roadmap-snapshot-item:disabled {
 	          cursor: not-allowed;
 	          opacity: 0.55;
 	        }
 	        .pms-roadmap-snapshot-item-active {
-	          background: #eef2ff;
+	          background: var(--pms-brand-surface);
 	          color: var(--pms-brand-strong);
 	          font-weight: 700;
 	        }
