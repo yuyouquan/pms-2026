@@ -16,7 +16,10 @@ const LEGACY_BRAND_RGB = new Set([
   '99,102,241',
   '129,140,248',
 ])
-const LEGACY_BRAND_LITERAL_PATTERN = /#(?:[\da-f]{6})\b|\brgba?\([^)]*\)/gi
+const ROADMAP_CONTROL_LEGACY_HEX = new Set(['eaf1ff', '2563eb', '4f6df5'])
+const ROADMAP_CONTROL_LEGACY_RGB = new Set(['234,241,255', '37,99,235', '79,109,245'])
+const COLOR_LITERAL_PATTERN = /#(?:[\da-f]{8}|[\da-f]{6})\b|\brgba?\([^)]*\)/gi
+const ROADMAP_CONTROL_RULE_PATTERN = /\.(?:pms-summary-status-pill:hover|pms-summary-status-pill-active)\s*\{[^}]*\}/gi
 const THEME_SOURCE = 'src/theme/pmsTheme.ts'
 const CSS_SOURCE = 'src/styles/globals.css'
 
@@ -123,12 +126,12 @@ function expectNoLegacyBrand(failures, root, file) {
   failures.push(`${file}: legacy brand literal(s): ${[...new Set(matches)].join(', ')}`)
 }
 
-function legacyBrandMatches(contents) {
-  return [...contents.matchAll(LEGACY_BRAND_LITERAL_PATTERN)]
+function colorLiteralMatches(contents, hexValues, rgbValues) {
+  return [...contents.matchAll(COLOR_LITERAL_PATTERN)]
     .filter((match) => {
       const sourceLiteral = match[0]
       if (sourceLiteral.startsWith('#')) {
-        return LEGACY_BRAND_HEX.has(sourceLiteral.slice(1).toLowerCase())
+        return hexValues.has(sourceLiteral.slice(1, 7).toLowerCase())
       }
 
       const inner = sourceLiteral.slice(sourceLiteral.indexOf('(') + 1, -1).trim()
@@ -138,15 +141,26 @@ function legacyBrandMatches(contents) {
 
       const components = colorSource.map((component) => Number(component.trim()))
       if (components.some((component) => !Number.isFinite(component) || component < 0 || component > 255)) return false
-      return LEGACY_BRAND_RGB.has(components.join(','))
+      return rgbValues.has(components.join(','))
     })
     .map((match) => match[0])
+}
+
+function legacyBrandMatches(contents) {
+  return colorLiteralMatches(contents, LEGACY_BRAND_HEX, LEGACY_BRAND_RGB)
+}
+
+function roadmapControlLegacyMatches(contents) {
+  return [...contents.matchAll(ROADMAP_CONTROL_RULE_PATTERN)]
+    .flatMap((match) => colorLiteralMatches(match[0], ROADMAP_CONTROL_LEGACY_HEX, ROADMAP_CONTROL_LEGACY_RGB))
 }
 
 function legacyBrandScannerSelfTestFailures() {
   const failures = []
   const legacyFixtures = [
     '#6366F1',
+    '#6366F180',
+    '#4338ca0A',
     'rgb(99, 102, 241)',
     'RGB(99 102 241)',
     'rgba(99,102,241,.04)',
@@ -154,6 +168,7 @@ function legacyBrandScannerSelfTestFailures() {
     'rgb(67 56 202 / .3)',
   ]
   const safeFixtures = [
+    '#6365F180',
     'rgb(98 102 241)',
     'rgba(99 101 241 / .3)',
     'rgb(255 77 79)',
@@ -168,6 +183,34 @@ function legacyBrandScannerSelfTestFailures() {
   for (const fixture of safeFixtures) {
     if (legacyBrandMatches(`const fixture = '${fixture}'`).length > 0) {
       failures.push(`legacy brand scanner self-test incorrectly detected ${fixture}`)
+    }
+  }
+
+  return failures
+}
+
+function roadmapControlScannerSelfTestFailures() {
+  const failures = []
+  const legacyFixtures = [
+    '.pms-summary-status-pill:hover { background: #EAF1FF; }',
+    '.pms-summary-status-pill:hover { background: rgb(234 241 255); }',
+    '.pms-summary-status-pill-active { background: #4F6DF580; }',
+    '.pms-summary-status-pill-active { box-shadow: 0 4px 10px rgba(79,109,245,.22); }',
+  ]
+  const safeFixtures = [
+    '.pms-summary-status-pill:hover { background: #eaf0ff; }',
+    '.pms-summary-status-dot { background: #2563eb; }',
+    '.pms-summary-status-pill-active { background: var(--pms-brand); }',
+  ]
+
+  for (const fixture of legacyFixtures) {
+    if (roadmapControlLegacyMatches(fixture).length === 0) {
+      failures.push(`roadmap control scanner self-test did not detect ${fixture}`)
+    }
+  }
+  for (const fixture of safeFixtures) {
+    if (roadmapControlLegacyMatches(fixture).length > 0) {
+      failures.push(`roadmap control scanner self-test incorrectly detected ${fixture}`)
     }
   }
 
@@ -212,6 +255,8 @@ const ROADMAP_MATERIAL_EXPECTATIONS = {
     { label: 'opaque milestone table', pattern: /pms-roadmap-milestone-table[^"']*pms-solid-surface/ },
     { label: 'opaque milestone calendar', pattern: /pms-project-calendar[^"']*pms-solid-surface/ },
     { label: 'shared milestone modal material', pattern: /<Modal\s+[\s\S]{0,180}className=["']pms-modal["']/ },
+    { label: 'semantic status hover surface', pattern: /\.pms-summary-status-pill:hover\s*\{[\s\S]{0,160}background:\s*var\(--pms-brand-surface\);[\s\S]{0,160}color:\s*var\(--pms-brand-strong\);/ },
+    { label: 'semantic status active surface', pattern: /\.pms-summary-status-pill-active\s*\{[\s\S]{0,180}background:\s*var\(--pms-brand\);[\s\S]{0,180}box-shadow:\s*[^;]*color-mix\(in srgb, var\(--pms-brand\) 22%, transparent\);/ },
   ],
   'src/components/roadmap/ProjectPlanSummaryBoard.tsx': [
     { label: 'glass summary saved-view controls', pattern: /pms-summary-control-shell[^"']*pms-glass-surface/ },
@@ -219,6 +264,8 @@ const ROADMAP_MATERIAL_EXPECTATIONS = {
     { label: 'opaque project summary table', pattern: /className=["'][^"']*pms-summary-board[^"']*pms-solid-surface[^"']*["']/ },
     { label: 'opaque project summary calendar', pattern: /pms-project-calendar[^"']*pms-solid-surface/ },
     { label: 'shared project summary modal material', pattern: /<Modal\s+[\s\S]{0,180}className=["']pms-modal["']/ },
+    { label: 'semantic status hover surface', pattern: /\.pms-summary-status-pill:hover\s*\{[\s\S]{0,160}background:\s*var\(--pms-brand-surface\);[\s\S]{0,160}color:\s*var\(--pms-brand-strong\);/ },
+    { label: 'semantic status active surface', pattern: /\.pms-summary-status-pill-active\s*\{[\s\S]{0,180}background:\s*var\(--pms-brand\);[\s\S]{0,180}box-shadow:\s*[^;]*color-mix\(in srgb, var\(--pms-brand\) 22%, transparent\);/ },
   ],
   'src/components/roadmap/PlannedProjectModal.tsx': [
     { label: 'shared planned-project modal material', pattern: /<Modal\s+[\s\S]{0,180}className=["']pms-modal["']/ },
@@ -243,12 +290,21 @@ const ROADMAP_MATERIAL_EXPECTATIONS = {
   'src/components/roadmap/RoadmapColumnSettingsDrawer.tsx': [
     { label: 'shared column-settings popover', pattern: /<SortableColumnSettings\b/ },
   ],
+  [CSS_SOURCE]: [
+    { label: 'opaque locally scrollable roadmap calendar', pattern: /\.pms-project-calendar\.pms-solid-surface\s*\{[\s\S]{0,220}background:\s*var\(--pms-surface-solid\);[\s\S]{0,220}overflow-x:\s*auto;[\s\S]{0,100}overflow-y:\s*hidden;/ },
+  ],
 }
 
 function roadmapMaterialFailures(root) {
   const failures = []
   for (const [file, expectations] of Object.entries(ROADMAP_MATERIAL_EXPECTATIONS)) {
     expectPatterns(failures, root, file, expectations)
+  }
+  for (const file of ['src/components/roadmap/MilestoneView.tsx', 'src/components/roadmap/ProjectPlanSummaryBoard.tsx']) {
+    const matches = roadmapControlLegacyMatches(read(file, root))
+    if (matches.length > 0) {
+      failures.push(`${file}: legacy decorative roadmap control literal(s): ${[...new Set(matches)].join(', ')}`)
+    }
   }
   return failures
 }
@@ -1071,6 +1127,7 @@ function cssContractFailures(root) {
   failures.push(...accessibilityAndCompactFailures(outsideRoot))
   failures.push(...primitiveContractSelfTestFailures())
   failures.push(...legacyBrandScannerSelfTestFailures())
+  failures.push(...roadmapControlScannerSelfTestFailures())
 
   const outsideLiterals = [...extracted.outsideRoot.matchAll(BRAND_HEX_PATTERN)]
     .map((match) => match[0].toLowerCase())
@@ -1175,7 +1232,11 @@ if (cssRoot !== null) {
     process.exit(1)
   }
 
-  finish(rawBrandFailures(path.resolve(scanRoot)), 'Liquid glass raw-brand scanner passed')
+  const resolvedScanRoot = path.resolve(scanRoot)
+  finish(
+    [...rawBrandFailures(resolvedScanRoot), ...groupedLegacyBrandFailures(resolvedScanRoot)],
+    'Liquid glass raw-brand scanner passed',
+  )
 } else {
   finish(verifyContract(process.cwd()), 'Liquid glass core theme contract passed')
 }

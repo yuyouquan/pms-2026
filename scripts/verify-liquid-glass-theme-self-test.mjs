@@ -10,6 +10,7 @@ const scriptsDir = path.dirname(fileURLToPath(import.meta.url))
 const verifier = path.join(scriptsDir, 'verify-liquid-glass-theme.mjs')
 const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pms-liquid-glass-theme-'))
 const fixtureFile = path.join(fixtureRoot, 'src/components/BrandLiteralFixture.ts')
+const roadmapFixtureFile = path.join(fixtureRoot, 'src/components/roadmap/RoadmapView.tsx')
 const cssFixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pms-liquid-glass-css-'))
 
 const validRootTokens = `:root {
@@ -74,6 +75,23 @@ try {
   assert.match(
     baselineResult.stderr,
     /src\/components\/BrandLiteralFixture\.ts: forbidden raw PMS brand literal\(s\): #f5f3ff/i,
+  )
+
+  fs.mkdirSync(path.dirname(roadmapFixtureFile), { recursive: true })
+  fs.writeFileSync(roadmapFixtureFile, "export const legacyAlphaBrand = '#6366F180'\n")
+  const alphaHexResult = runVerifier(['--scan-root', fixtureRoot])
+  assert.notEqual(alphaHexResult.status, 0, 'The legacy scanner must reject an eight-digit hex literal')
+  assert.match(
+    alphaHexResult.stderr,
+    /src\/components\/roadmap\/RoadmapView\.tsx: legacy brand literal\(s\): #6366F180/,
+  )
+
+  fs.writeFileSync(roadmapFixtureFile, "export const safeAlphaBrand = '#6365F180'\n")
+  const safeAlphaHexResult = runVerifier(['--scan-root', fixtureRoot])
+  assert.doesNotMatch(
+    safeAlphaHexResult.stderr,
+    /src\/components\/roadmap\/RoadmapView\.tsx: legacy brand literal/,
+    'The legacy scanner must not reject a neighboring non-legacy eight-digit hex literal',
   )
 } finally {
   fs.rmSync(fixtureRoot, { recursive: true, force: true })

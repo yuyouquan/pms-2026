@@ -4716,9 +4716,16 @@ body {
 .pms-roadmap-view-card.pms-solid-surface,
 .roadmap-table.pms-solid-surface,
 .mr-train-table.pms-solid-surface,
-.pms-summary-board.pms-solid-surface,
-.pms-project-calendar.pms-solid-surface {
+.pms-summary-board.pms-solid-surface {
   overflow: hidden;
+  border-radius: var(--pms-radius-surface);
+}
+
+.pms-project-calendar.pms-solid-surface {
+  background: var(--pms-surface-solid);
+  border-color: var(--pms-border);
+  overflow-x: auto;
+  overflow-y: hidden;
   border-radius: var(--pms-radius-surface);
 }
 

@@ -2043,13 +2043,13 @@ export default function MilestoneView({
           transition: all 0.18s ease;
         }
         .pms-summary-status-pill:hover {
-          background: #eaf1ff;
-          color: #2563eb;
+          background: var(--pms-brand-surface);
+          color: var(--pms-brand-strong);
         }
         .pms-summary-status-pill-active {
-          background: #4f6df5;
+          background: var(--pms-brand);
           color: #fff;
-          box-shadow: 0 4px 10px rgba(79,109,245,0.22);
+          box-shadow: 0 4px 10px color-mix(in srgb, var(--pms-brand) 22%, transparent);
         }
         .pms-summary-status-dot {
           width: 6px;
