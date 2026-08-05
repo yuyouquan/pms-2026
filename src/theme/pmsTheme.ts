@@ -23,11 +23,11 @@ export const pmsTheme: ThemeConfig = {
     colorTextSecondary: PMS_COLORS.textSecondary,
     colorTextTertiary: PMS_COLORS.textTertiary,
     colorBorder: PMS_COLORS.border,
-    colorBorderSecondary: PMS_COLORS.brandBorder,
+    colorBorderSecondary: '#EFEDF4',
     borderRadius: 8,
     borderRadiusLG: 12,
     controlHeight: 32,
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif",
+    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
   },
   components: {
     Button: {

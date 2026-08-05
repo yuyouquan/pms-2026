@@ -25,11 +25,11 @@
   --pms-radius-control: 8px;
   --pms-radius-surface: 12px;
   --pms-radius-overlay: 16px;
-  --pms-glass-filter: blur(16px) saturate(140%);
+  --pms-glass-filter: blur(14px) saturate(145%);
   --pms-shadow-xs: 0 1px 2px rgb(39 36 58 / 3%);
   --pms-shadow-sm: 0 1px 3px rgb(39 36 58 / 5%), 0 1px 2px rgb(39 36 58 / 3%);
-  --pms-shadow-glass: 0 8px 24px rgb(93 73 246 / 10%), 0 2px 8px rgb(39 36 58 / 4%);
-  --pms-shadow-floating: 0 16px 48px rgb(93 73 246 / 16%), 0 4px 12px rgb(39 36 58 / 6%);
+  --pms-shadow-glass: 0 12px 32px rgb(75 59 148 / 8%);
+  --pms-shadow-floating: 0 22px 60px rgb(79 62 158 / 12%);
   --pms-shadow-modal: 0 24px 64px rgb(39 36 58 / 12%), 0 0 0 1px rgb(39 36 58 / 4%), 0 0 40px rgb(93 73 246 / 8%);
   --pms-shadow-inset: inset 0 1px 3px rgb(39 36 58 / 4%), inset 0 0 0 1px rgb(39 36 58 / 2%);
   --pms-shadow-glow: 0 0 20px rgb(117 98 255 / 15%);

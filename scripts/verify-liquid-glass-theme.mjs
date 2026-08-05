@@ -38,6 +38,8 @@ expectIncludes('src/theme/pmsTheme.ts', [
   "brandSoft: '#AD98EE'",
   "brandSurface: '#F5F3FF'",
   'export const pmsTheme',
+  "colorBorderSecondary: '#EFEDF4'",
+  "fontFamily: '-apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif'",
 ])
 expectIncludes('src/components/shared/PmsThemeProvider.tsx', [
   "'use client'",
@@ -55,6 +57,9 @@ expectIncludes('src/styles/globals.css', [
   '--pms-brand-soft: #ad98ee;',
   '--pms-brand-surface: #f5f3ff;',
   '--pms-gradient-brand:',
+  '--pms-glass-filter: blur(14px) saturate(145%);',
+  '--pms-shadow-glass: 0 12px 32px rgb(75 59 148 / 8%);',
+  '--pms-shadow-floating: 0 22px 60px rgb(79 62 158 / 12%);',
 ])
 
 if (failures.length > 0) {
