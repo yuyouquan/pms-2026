@@ -178,7 +178,43 @@ function extractRootBlock(css) {
 }
 
 function stripCssComments(css) {
-  return css.replace(/\/\*[\s\S]*?\*\//g, '')
+  let output = ''
+  let quote = null
+  let inComment = false
+
+  for (let index = 0; index < css.length; index += 1) {
+    const character = css[index]
+    const nextCharacter = css[index + 1]
+
+    if (inComment) {
+      if (character === '*' && nextCharacter === '/') {
+        inComment = false
+        index += 1
+      }
+      continue
+    }
+
+    if (quote) {
+      output += character
+      if (character === '\\' && nextCharacter) {
+        output += nextCharacter
+        index += 1
+      } else if (character === quote) {
+        quote = null
+      }
+      continue
+    }
+
+    if (character === '/' && nextCharacter === '*') {
+      inComment = true
+      index += 1
+    } else {
+      output += character
+      if (character === '"' || character === "'") quote = character
+    }
+  }
+
+  return output
 }
 
 const CSS_ROOT_EXPECTATIONS = [
@@ -209,21 +245,87 @@ const CSS_ROOT_EXPECTATIONS = [
   { label: '--shadow-md compatibility mapping', pattern: /^\s*--shadow-md:\s*var\(--pms-shadow-glass\);$/m },
 ]
 
-function extractBalancedCssBlock(css, openingBrace) {
-  let depth = 0
+function findCssCharacter(css, target, start = 0) {
+  let quote = null
+  let inComment = false
 
-  for (let index = openingBrace; index < css.length; index += 1) {
-    if (css[index] === '{') depth += 1
-    if (css[index] === '}') {
-      depth -= 1
-      if (depth === 0) return css.slice(openingBrace + 1, index)
+  for (let index = start; index < css.length; index += 1) {
+    const character = css[index]
+    const nextCharacter = css[index + 1]
+
+    if (inComment) {
+      if (character === '*' && nextCharacter === '/') {
+        inComment = false
+        index += 1
+      }
+      continue
+    }
+
+    if (quote) {
+      if (character === '\\') index += 1
+      else if (character === quote) quote = null
+      continue
+    }
+
+    if (character === '/' && nextCharacter === '*') {
+      inComment = true
+      index += 1
+    } else if (character === '"' || character === "'") {
+      quote = character
+    } else if (character === target) {
+      return index
     }
   }
 
-  return null
+  return -1
+}
+
+function findCssBlockEnd(css, openingBrace) {
+  let depth = 0
+  let quote = null
+  let inComment = false
+
+  for (let index = openingBrace; index < css.length; index += 1) {
+    const character = css[index]
+    const nextCharacter = css[index + 1]
+
+    if (inComment) {
+      if (character === '*' && nextCharacter === '/') {
+        inComment = false
+        index += 1
+      }
+      continue
+    }
+
+    if (quote) {
+      if (character === '\\') index += 1
+      else if (character === quote) quote = null
+      continue
+    }
+
+    if (character === '/' && nextCharacter === '*') {
+      inComment = true
+      index += 1
+    } else if (character === '"' || character === "'") {
+      quote = character
+    } else if (character === '{') {
+      depth += 1
+    } else if (character === '}') {
+      depth -= 1
+      if (depth === 0) return index
+    }
+  }
+
+  return -1
+}
+
+function extractBalancedCssBlock(css, openingBrace) {
+  const closingBrace = findCssBlockEnd(css, openingBrace)
+  return closingBrace === -1 ? null : css.slice(openingBrace + 1, closingBrace)
 }
 
 function extractCssBlocks(css, headerPattern) {
+  const source = stripCssComments(css)
   const flags = headerPattern.flags.includes('g')
     ? headerPattern.flags
     : `${headerPattern.flags}g`
@@ -231,9 +333,9 @@ function extractCssBlocks(css, headerPattern) {
   const blocks = []
   let match
 
-  while ((match = matcher.exec(css)) !== null) {
-    const openingBrace = css.indexOf('{', match.index + match[0].length)
-    const block = openingBrace === -1 ? null : extractBalancedCssBlock(css, openingBrace)
+  while ((match = matcher.exec(source)) !== null) {
+    const openingBrace = findCssCharacter(source, '{', match.index + match[0].length)
+    const block = openingBrace === -1 ? null : extractBalancedCssBlock(source, openingBrace)
     if (block !== null) blocks.push(block)
   }
 
@@ -310,36 +412,30 @@ function parseDeclarations(body) {
   return declarations
 }
 
-function parseCssRules(css) {
-  const rules = []
+function parseCssRules(css, rules = [], inMedia = false) {
+  const source = stripCssComments(css)
   let cursor = 0
 
-  while (cursor < css.length) {
-    const openingBrace = css.indexOf('{', cursor)
+  while (cursor < source.length) {
+    const openingBrace = findCssCharacter(source, '{', cursor)
     if (openingBrace === -1) break
-    const selectorText = css.slice(cursor, openingBrace).trim()
-    const body = extractBalancedCssBlock(css, openingBrace)
+    const selectorText = source.slice(cursor, openingBrace).trim()
+    const closingBrace = findCssBlockEnd(source, openingBrace)
+    const body = closingBrace === -1 ? null : source.slice(openingBrace + 1, closingBrace)
     if (body === null) break
 
     if (selectorText.startsWith('@media')) {
-      rules.push(...parseCssRules(body))
+      parseCssRules(body, rules, true)
     } else if (selectorText && !selectorText.startsWith('@')) {
       rules.push({
+        order: rules.length,
+        inMedia,
         selectorText,
         selectors: new Set(splitCssList(selectorText)),
         declarations: parseDeclarations(body),
       })
     }
 
-    let depth = 0
-    let closingBrace = openingBrace
-    for (; closingBrace < css.length; closingBrace += 1) {
-      if (css[closingBrace] === '{') depth += 1
-      if (css[closingBrace] === '}') {
-        depth -= 1
-        if (depth === 0) break
-      }
-    }
     cursor = closingBrace + 1
   }
 
@@ -351,19 +447,38 @@ function selectorSetMatches(selectors, expectedSelectors) {
     && expectedSelectors.every((selector) => selectors.has(normalizeSelector(selector)))
 }
 
-function declarationMatches(rule, declarations) {
-  return declarations.every(({ property, value }) => {
-    const actualValue = rule.declarations.get(property)
+function declarationMapMatches(declarations, expectedDeclarations) {
+  return expectedDeclarations.every(({ property, value }) => {
+    const actualValue = declarations.get(property)
     return actualValue !== undefined && new RegExp(`^${value}$`).test(actualValue)
   })
 }
 
-function expectRuleContract(failures, rules, contract) {
-  const candidates = contract.selectors
+function matchingRules(rules, contract) {
+  return contract.selectors
     ? rules.filter((rule) => selectorSetMatches(rule.selectors, contract.selectors))
     : rules.filter((rule) => rule.selectors.has(normalizeSelector(contract.selector)))
+}
 
-  if (!candidates.some((rule) => declarationMatches(rule, contract.declarations))) {
+function effectiveDeclarations(rules) {
+  const effective = new Map()
+  for (const rule of rules) {
+    for (const [property, value] of rule.declarations) effective.set(property, value)
+  }
+  return effective
+}
+
+function expectRuleContract(failures, rules, contract) {
+  const candidates = matchingRules(rules, contract)
+  const hasBaseline = candidates.length > 0
+  const declarationsMatch = contract.selectors
+    ? contract.selectors.every((selector) => declarationMapMatches(
+      effectiveDeclarations(rules.filter((rule) => rule.selectors.has(normalizeSelector(selector)))),
+      contract.declarations,
+    ))
+    : declarationMapMatches(effectiveDeclarations(candidates), contract.declarations)
+
+  if (!hasBaseline || !declarationsMatch) {
     failures.push(`${CSS_SOURCE} is missing ${contract.label}`)
   }
 }
@@ -375,7 +490,9 @@ function ruleContractFailures(rules, contracts) {
 }
 
 function mediaRules(css, mediaPattern) {
-  return extractCssBlocks(css, mediaPattern).flatMap(parseCssRules)
+  const rules = []
+  for (const block of extractCssBlocks(css, mediaPattern)) parseCssRules(block, rules)
+  return rules
 }
 
 function expectNoGlobalFocusHiding(failures, css) {
@@ -482,18 +599,42 @@ const COMPACT_TOOLBAR_RULE = {
 }
 
 function primitiveRuleFailures(css) {
-  return ruleContractFailures(parseCssRules(css), CSS_PRIMITIVE_RULES)
+  return ruleContractFailures(parseCssRules(css).filter((rule) => !rule.inMedia), CSS_PRIMITIVE_RULES)
+}
+
+function focusTargetsForRule(rule) {
+  const whereMatch = /^:where\(([\s\S]+)\):focus-visible$/.exec(rule.selectorText)
+  if (whereMatch) return new Set(splitCssList(whereMatch[1]))
+
+  const targets = new Set()
+  for (const selector of rule.selectors) {
+    if (selector === '*:focus-visible') {
+      for (const target of FOCUS_TARGETS) targets.add(target)
+    }
+    for (const target of FOCUS_TARGETS) {
+      if (selector === `${target}:focus-visible`) targets.add(target)
+    }
+  }
+  return targets
 }
 
 function focusRuleFailures(rules) {
   const failures = []
-  const candidates = rules.filter((rule) => {
+  const sharedCandidates = rules.filter((rule) => {
     const match = /^:where\(([\s\S]+)\):focus-visible$/.exec(rule.selectorText)
     return match && selectorSetMatches(new Set(splitCssList(match[1])), FOCUS_TARGETS)
   })
 
-  if (!candidates.some((rule) => declarationMatches(rule, FOCUS_VISIBLE_RULE.declarations))) {
+  if (sharedCandidates.length === 0) {
     failures.push(`${CSS_SOURCE} is missing ${FOCUS_VISIBLE_RULE.label}`)
+    return failures
+  }
+
+  for (const target of FOCUS_TARGETS) {
+    const effective = effectiveDeclarations(rules.filter((rule) => focusTargetsForRule(rule).has(target)))
+    if (!declarationMapMatches(effective, FOCUS_VISIBLE_RULE.declarations)) {
+      failures.push(`${CSS_SOURCE} is missing ${FOCUS_VISIBLE_RULE.label} for ${target}`)
+    }
   }
 
   return failures
@@ -502,23 +643,30 @@ function focusRuleFailures(rules) {
 function compactSpacingFailures(css) {
   const failures = []
   const compactRules = mediaRules(css, COMPACT_MEDIA)
-  const pageRule = compactRules.find(
-    (rule) => rule.selectors.has(COMPACT_PAGE_SHELL_RULE.selector) && declarationMatches(rule, COMPACT_PAGE_SHELL_RULE.declarations),
-  )
-  const toolbarRule = compactRules.find(
-    (rule) => rule.selectors.has(COMPACT_TOOLBAR_RULE.selector) && declarationMatches(rule, COMPACT_TOOLBAR_RULE.declarations),
-  )
+  const contracts = [COMPACT_PAGE_SHELL_RULE, COMPACT_TOOLBAR_RULE]
+  const protectedRules = compactRules.filter((rule) => contracts.some(
+    (contract) => rule.selectors.has(contract.selector),
+  ))
 
-  if (!pageRule || !toolbarRule) {
+  if (protectedRules.length === 0) {
     failures.push(`${CSS_SOURCE} is missing 1024px compact spacing rules`)
     return failures
   }
 
   const allowedProperties = new Set(['padding-inline', 'gap', 'padding'])
-  for (const rule of [pageRule, toolbarRule]) {
+  for (const rule of protectedRules) {
     const unsupportedProperty = [...rule.declarations.keys()].find((property) => !allowedProperties.has(property))
     if (unsupportedProperty) {
       failures.push(`${CSS_SOURCE} 1024px compact spacing block allows only spacing properties; found ${unsupportedProperty}`)
+    }
+  }
+
+  for (const contract of contracts) {
+    const effective = effectiveDeclarations(compactRules.filter(
+      (rule) => rule.selectors.has(contract.selector),
+    ))
+    if (!declarationMapMatches(effective, contract.declarations)) {
+      failures.push(`${CSS_SOURCE} is missing ${contract.label}`)
     }
   }
 
@@ -527,7 +675,7 @@ function compactSpacingFailures(css) {
 
 function accessibilityAndCompactFailures(css) {
   const failures = []
-  const rules = parseCssRules(css)
+  const rules = parseCssRules(css).filter((rule) => !rule.inMedia)
 
   failures.push(...ruleContractFailures(mediaRules(css, REDUCED_MOTION_MEDIA), [REDUCED_MOTION_RULE]))
   failures.push(...ruleContractFailures(mediaRules(css, REDUCED_TRANSPARENCY_MEDIA), [REDUCED_TRANSPARENCY_RULE]))
@@ -616,6 +764,21 @@ function primitiveContractSelfTestFailures() {
       css: validCss.replace(' background: var(--pms-gradient-brand);', ''),
       expectedFailure: '.pms-topbar primitive',
     },
+    {
+      label: 'later interactive transition override',
+      css: `${validCss}\n.pms-interactive-surface { transition: all 2s linear; }`,
+      expectedFailure: '.pms-interactive-surface primitive',
+    },
+    {
+      label: 'later glass backdrop override',
+      css: `${validCss}\n.pms-glass-surface { backdrop-filter: none; }`,
+      expectedFailure: '.pms-glass-surface primitive',
+    },
+    {
+      label: 'later focus ring override',
+      css: `${validCss}\nbutton:focus-visible { outline: none; box-shadow: none; }`,
+      expectedFailure: 'visible keyboard focus rule for button',
+    },
   ]
   const focusCases = FOCUS_TARGETS.map((target) => ({
     label: `removed focus target ${target}`,
@@ -643,6 +806,11 @@ function primitiveContractSelfTestFailures() {
       css: validCss.replace('padding: 8px 12px;', 'padding: 8px 12px; transform: translateY(1px);'),
       expectedFailure: '1024px compact spacing block allows only spacing properties',
     },
+    {
+      label: 'later compact position override',
+      css: `${validCss}\n@media (max-width: 1024px) { .pms-page-shell { position: fixed; } }`,
+      expectedFailure: '1024px compact spacing block allows only spacing properties',
+    },
   ]
   const failures = []
 
@@ -653,6 +821,15 @@ function primitiveContractSelfTestFailures() {
   ]
   if (commentedValidFailures.length > 0) {
     failures.push(`${CSS_SOURCE} verifier self-test does not tolerate normal CSS comments`)
+  }
+
+  const quotedBraceCss = `.fixture { content: "}"; }\n${validCss}`
+  const quotedBraceFailures = [
+    ...primitiveRuleFailures(stripCssComments(quotedBraceCss)),
+    ...accessibilityAndCompactFailures(stripCssComments(quotedBraceCss)),
+  ]
+  if (quotedBraceFailures.length > 0) {
+    failures.push(`${CSS_SOURCE} verifier self-test does not tolerate quoted braces`)
   }
 
   const reorderedTransparencyRule = `@media (prefers-reduced-transparency: reduce) {
