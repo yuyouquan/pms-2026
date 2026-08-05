@@ -7,6 +7,7 @@ const root = process.cwd()
 const projectListPath = path.join(root, 'src/containers/ProjectListContainer.tsx')
 const source = fs.readFileSync(projectListPath, 'utf8')
 const summarySource = fs.readFileSync(path.join(root, 'src/components/project-summary/ProjectSummaryTable.tsx'), 'utf8')
+const workTrackerSource = fs.readFileSync(path.join(root, 'src/components/work-tracker/WorkTracker.tsx'), 'utf8')
 const matrixSource = fs.readFileSync(path.join(root, 'src/lib/projectListMatrix.ts'), 'utf8')
 
 assert.match(source, /ProjectSummaryTable/)
@@ -48,6 +49,7 @@ assert.match(source, /aria-label="列表视图">列表视图<\/span>[\s\S]{0,80}
 assert.match(source, /aria-label="卡片视图">卡片视图<\/span>[\s\S]{0,80}value: 'card'/, 'card is the second text-only option')
 assert.match(source, /aria-label="日历视图">日历视图<\/span>[\s\S]{0,80}value: 'calendar'/, 'calendar is the third text-only option')
 assert.match(source, /className="pms-project-list-category-actions"/, 'project-list actions share the category row')
+assert.match(source, /className="pms-project-list-category-row"/, 'category filters expose a stable responsive row')
 assert.match(source, /className="pms-project-list-table-actions"/, 'filter and column controls have a host at the right edge of quick filters')
 assert.match(source, /toolbarHost=\{projectListTableToolbarHost\}/, 'summary controls render into the quick-filter action host')
 assert.match(source, /aria-label="快捷筛选-项目名称"[\s\S]{0,180}placeholder="项目名称"/, 'machine quick filters start with a project-name input')
@@ -55,6 +57,9 @@ assert.doesNotMatch(source, /projectListView === 'card'[^\n]*workbenchListState\
 assert.match(source, /projectTypeFilter === PROJECT_TYPE_TOS_VERSION \|\| projectTypeFilter === PROJECT_CATEGORY_TECH[\s\S]{0,260}进行中[\s\S]{0,120}已完成/)
 assert.match(source, /showQuickFilters=\{false\}/)
 assert.match(summarySource, /getProjectListFixedColumnKeys/)
+assert.match(workTrackerSource, /className="pms-work-tracker-toolbar__content"/, 'work tracker toolbar exposes a stable content wrapper')
+assert.match(workTrackerSource, /className="pms-work-tracker-toolbar__lists"/, 'work tracker lists expose a stable responsive wrapper')
+assert.match(workTrackerSource, /className="pms-work-tracker-toolbar__controls"/, 'work tracker controls expose a stable responsive wrapper')
 assert.match(summarySource, /fixedColumnKeys\.has\(definition\.key\)/)
 assert.match(summarySource, /showQuickFilters\?: boolean/)
 assert.match(summarySource, /showColumnSettings\?: boolean/)
@@ -130,5 +135,20 @@ assert.match(
 )
 assert.match(styles, /\.pms-table \.ant-table-tbody\s*>\s*tr\.ant-table-measure-row\s*>\s*td\s*\{[^}]*padding:\s*0\s*!important[^}]*height:\s*0\s*!important[^}]*border:\s*0\s*!important/s, 'Ant Design measurement rows stay invisible and cannot create a blank row or distort body widths')
 assert.match(styles, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.pms-project-list/s)
+
+const compactStyles = styles.slice(styles.lastIndexOf('@media (max-width: 1024px)'))
+assert.match(compactStyles, /\.pms-work-tracker-toolbar\.pms-toolbar\s*\{[^}]*padding:\s*0/s, 'Ant Card toolbar root cannot double-pad at 1024px')
+assert.match(compactStyles, /\.pms-work-tracker-toolbar__content\s*\{[^}]*display:\s*grid/s, 'work tracker toolbar stacks into a stable compact grid')
+assert.match(compactStyles, /\.pms-work-tracker-toolbar__lists\s*\{[^}]*flex-wrap:\s*wrap/s, 'work tracker list chips wrap without vertical text')
+assert.match(compactStyles, /\.pms-work-tracker-toolbar__controls\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:/s, 'work tracker controls keep readable compact columns')
+assert.match(compactStyles, /\.pms-project-list-filter-grid\.pms-toolbar\s*\{[^}]*height:\s*auto/s, 'project-list compact filters release the desktop fixed height')
+assert.match(compactStyles, /\.pms-project-list-category-row\s*\{[^}]*min-width:\s*0/s, 'project-list category row remains contained')
+assert.match(compactStyles, /\.pms-project-list-field-filters\s*\{[^}]*flex-wrap:\s*wrap/s, 'project-list field filters wrap instead of overflowing the page')
+assert.match(compactStyles, /\.pms-project-list-table-actions\s*\{[^}]*margin-left:\s*auto/s, 'filter and column actions remain at the responsive row edge')
+assert.doesNotMatch(
+  compactStyles,
+  /\.pms-(?:work-tracker|project-list)[^{]*\{[^}]*(?:display\s*:\s*none|\border\s*:)/s,
+  'compact workbench rules must not hide or reorder existing controls',
+)
 
 console.log('workbench project-list contract passed')

@@ -248,10 +248,10 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
 
   const statItems = [
     { label: '全部', value: stats.total, color: 'var(--pms-brand-strong)', borderColor: 'color-mix(in srgb, var(--pms-brand) 18%, transparent)', iconBg: 'var(--pms-gradient-brand)', iconText: '全' },
-    { label: '待办', value: stats.pending, color: '#f59e0b', bg: 'linear-gradient(135deg, #fffbeb, #fef3c7)', borderColor: 'rgba(245,158,11,0.15)', iconBg: 'linear-gradient(135deg, #f59e0b, #fbbf24)', iconText: '办' },
-    { label: '逾期', value: stats.overdue, color: '#ef4444', bg: 'linear-gradient(135deg, #fef2f2, #fecaca)', borderColor: 'rgba(239,68,68,0.15)', iconBg: 'linear-gradient(135deg, #ef4444, #f87171)', iconText: '期' },
-    { label: '已完成', value: stats.completed, color: '#10b981', bg: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', borderColor: 'rgba(16,185,129,0.15)', iconBg: 'linear-gradient(135deg, #10b981, #34d399)', iconText: '完' },
-    { label: '其他', value: stats.other, color: '#6b7280', bg: 'linear-gradient(135deg, #f9fafb, #f3f4f6)', borderColor: 'rgba(107,114,128,0.15)', iconBg: 'linear-gradient(135deg, #6b7280, #9ca3af)', iconText: '他' },
+    { label: '待办', value: stats.pending, color: '#f59e0b', borderColor: 'rgba(245,158,11,0.15)', iconBg: 'linear-gradient(135deg, #f59e0b, #fbbf24)', iconText: '办' },
+    { label: '逾期', value: stats.overdue, color: '#ef4444', borderColor: 'rgba(239,68,68,0.15)', iconBg: 'linear-gradient(135deg, #ef4444, #f87171)', iconText: '期' },
+    { label: '已完成', value: stats.completed, color: '#10b981', borderColor: 'rgba(16,185,129,0.15)', iconBg: 'linear-gradient(135deg, #10b981, #34d399)', iconText: '完' },
+    { label: '其他', value: stats.other, color: '#6b7280', borderColor: 'rgba(107,114,128,0.15)', iconBg: 'linear-gradient(135deg, #6b7280, #9ca3af)', iconText: '他' },
   ]
 
   return (
@@ -301,9 +301,9 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
         style={{ borderRadius: 10, marginBottom: 16 }}
         styles={{ body: { padding: '12px 20px' } }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div className="pms-work-tracker-toolbar__content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           {/* 左侧: 列表清单标签 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div className="pms-work-tracker-toolbar__lists" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {[
               { key: 'all' as const, label: '全部', count: filteredItems.length },
               { key: 'pending' as const, label: '待办', count: stats.pending },
@@ -322,7 +322,7 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
                     background: isActive ? (f.color ? f.color : 'var(--pms-gradient-brand)') : 'transparent',
                     color: isActive ? '#fff' : '#4b5563',
                     border: isActive ? '1px solid transparent' : '1px solid transparent',
-                    boxShadow: isActive ? (f.color ? `0 4px 12px ${f.color}40` : '0 4px 12px rgba(67,56,202,0.3)') : 'none',
+                    boxShadow: isActive ? (f.color ? `0 4px 12px ${f.color}40` : '0 4px 12px color-mix(in srgb, var(--pms-brand-strong) 30%, transparent)') : 'none',
                   }}
                   onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = '#f3f4f6' }}
                   onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
@@ -333,7 +333,7 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
             })}
           </div>
           {/* 右侧: 搜索 + 筛选 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="pms-work-tracker-toolbar__controls" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Input
               placeholder="搜索名称/项目..."
               prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
@@ -397,7 +397,7 @@ export default function WorkTracker({ currentLoginUser, projects, onNavigateToPr
             },
             onMouseEnter: (e) => {
               if (record.status !== '逾期' && !isNearDeadline(record)) {
-                (e.currentTarget as HTMLElement).style.background = 'rgba(99,102,241,0.04)'
+                (e.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--pms-brand) 4%, transparent)'
               }
             },
             onMouseLeave: (e) => {

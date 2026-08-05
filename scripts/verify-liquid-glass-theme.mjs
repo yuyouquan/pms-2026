@@ -4,7 +4,19 @@ import process from 'node:process'
 
 const BRAND_HEX_LITERALS = ['#5d49f6', '#7562ff', '#ad98ee', '#f5f3ff', '#dcd6ff']
 const BRAND_HEX_PATTERN = new RegExp(`(?:${BRAND_HEX_LITERALS.join('|')})\\b`, 'gi')
-const legacyBrand = /#(?:1e1b4b|312e81|3730a3|4338ca|4f46e5|5558e6|5b5cf6|6366f1|818cf8)\b/gi
+const LEGACY_BRAND_HEX = new Set(['1e1b4b', '312e81', '3730a3', '4338ca', '4f46e5', '5558e6', '5b5cf6', '6366f1', '818cf8'])
+const LEGACY_BRAND_RGB = new Set([
+  '30,27,75',
+  '49,46,129',
+  '55,48,163',
+  '67,56,202',
+  '79,70,229',
+  '85,88,230',
+  '91,92,246',
+  '99,102,241',
+  '129,140,248',
+])
+const LEGACY_BRAND_LITERAL_PATTERN = /#(?:[\da-f]{6})\b|\brgba?\([^)]*\)/gi
 const THEME_SOURCE = 'src/theme/pmsTheme.ts'
 const CSS_SOURCE = 'src/styles/globals.css'
 
@@ -104,11 +116,61 @@ function expectNoMatches(failures, root, file, expectations) {
 }
 
 function expectNoLegacyBrand(failures, root, file) {
-  const matches = [...read(file, root).matchAll(legacyBrand)]
-    .map((match) => match[0].toLowerCase())
+  const matches = legacyBrandMatches(read(file, root))
   if (matches.length === 0) return
 
   failures.push(`${file}: legacy brand literal(s): ${[...new Set(matches)].join(', ')}`)
+}
+
+function legacyBrandMatches(contents) {
+  return [...contents.matchAll(LEGACY_BRAND_LITERAL_PATTERN)]
+    .filter((match) => {
+      const sourceLiteral = match[0]
+      if (sourceLiteral.startsWith('#')) {
+        return LEGACY_BRAND_HEX.has(sourceLiteral.slice(1).toLowerCase())
+      }
+
+      const inner = sourceLiteral.slice(sourceLiteral.indexOf('(') + 1, -1).trim()
+      const commaSyntax = inner.includes(',')
+      const colorSource = commaSyntax ? inner.split(',').slice(0, 3) : inner.split('/')[0].trim().split(/\s+/)
+      if (colorSource.length !== 3) return false
+
+      const components = colorSource.map((component) => Number(component.trim()))
+      if (components.some((component) => !Number.isFinite(component) || component < 0 || component > 255)) return false
+      return LEGACY_BRAND_RGB.has(components.join(','))
+    })
+    .map((match) => match[0])
+}
+
+function legacyBrandScannerSelfTestFailures() {
+  const failures = []
+  const legacyFixtures = [
+    '#6366F1',
+    'rgb(99, 102, 241)',
+    'RGB(99 102 241)',
+    'rgba(99,102,241,.04)',
+    'rgba(99 102 241 / 4%)',
+    'rgb(67 56 202 / .3)',
+  ]
+  const safeFixtures = [
+    'rgb(98 102 241)',
+    'rgba(99 101 241 / .3)',
+    'rgb(255 77 79)',
+  ]
+
+  for (const fixture of legacyFixtures) {
+    const matches = legacyBrandMatches(`const fixture = '${fixture}'`)
+    if (!matches.includes(fixture)) {
+      failures.push(`legacy brand scanner self-test did not detect source literal ${fixture}`)
+    }
+  }
+  for (const fixture of safeFixtures) {
+    if (legacyBrandMatches(`const fixture = '${fixture}'`).length > 0) {
+      failures.push(`legacy brand scanner self-test incorrectly detected ${fixture}`)
+    }
+  }
+
+  return failures
 }
 
 function groupedLegacyBrandFailures(root) {
@@ -566,6 +628,16 @@ const CSS_PRIMITIVE_RULES = [
     { property: '-webkit-backdrop-filter', value: 'var\\(--pms-glass-filter\\)' },
     { property: 'box-shadow', value: 'inset\\s+0\\s+1px\\s+0\\s+#fff,\\s*var\\(--pms-shadow-glass\\)' },
   ] },
+  { label: 'calendar header cascade-resilient glass material', selector: '.pms-project-list-calendar .pms-project-calendar-header.pms-toolbar', declarations: [
+    { property: 'background', value: 'var\\(--pms-surface-glass\\)' },
+    { property: 'border', value: '1px\\s+solid\\s+rgb\\(255\\s+255\\s+255\\s*\\/\\s*96%\\)' },
+    { property: 'backdrop-filter', value: 'var\\(--pms-glass-filter\\)' },
+    { property: '-webkit-backdrop-filter', value: 'var\\(--pms-glass-filter\\)' },
+    { property: 'box-shadow', value: 'inset\\s+0\\s+1px\\s+0\\s+#fff,\\s*var\\(--pms-shadow-glass\\)' },
+  ] },
+  { label: 'calendar cell opaque material', selector: '.pms-project-list-calendar .pms-project-calendar-cell', declarations: [
+    { property: 'background', value: 'var\\(--pms-surface-solid\\)' },
+  ] },
   { label: '.pms-interactive-surface primitive', selector: '.pms-interactive-surface', declarations: [
     { property: 'transition', value: 'transform\\s+160ms\\s+cubic-bezier\\(\\.16,\\s*1,\\s*\\.3,\\s*1\\),\\s*box-shadow\\s+180ms\\s+cubic-bezier\\(\\.16,\\s*1,\\s*\\.3,\\s*1\\),\\s*border-color\\s+160ms\\s+ease' },
   ] },
@@ -615,12 +687,6 @@ const ONE_LINE_LABEL_RULE = {
   label: 'one-line button and navigation label rule',
   selectors: ['.pms-topbar .ant-btn', '.pms-topbar .ant-menu-item', '.pms-toolbar .ant-btn', '.pms-toolbar .ant-menu-item'],
   declarations: [{ property: 'white-space', value: 'nowrap' }],
-}
-
-const COMPACT_PAGE_SHELL_RULE = {
-  label: '1024px compact page-shell spacing rule',
-  selector: '.pms-page-shell',
-  declarations: [{ property: 'padding-inline', value: '12px' }],
 }
 
 const COMPACT_TOOLBAR_RULE = {
@@ -680,7 +746,12 @@ function focusRuleFailures(rules) {
 function compactSpacingFailures(css) {
   const failures = []
   const compactRules = mediaRules(css, COMPACT_MEDIA)
-  const contracts = [COMPACT_PAGE_SHELL_RULE, COMPACT_TOOLBAR_RULE]
+  const pageShellRules = compactRules.filter((rule) => rule.selectors.has('.pms-page-shell'))
+  if (pageShellRules.length > 0) {
+    failures.push(`${CSS_SOURCE} 1024px rules must not change .pms-page-shell geometry`)
+  }
+
+  const contracts = [COMPACT_TOOLBAR_RULE]
   const protectedRules = compactRules.filter((rule) => contracts.some(
     (contract) => rule.selectors.has(contract.selector),
   ))
@@ -690,7 +761,7 @@ function compactSpacingFailures(css) {
     return failures
   }
 
-  const allowedProperties = new Set(['padding-inline', 'gap', 'padding'])
+  const allowedProperties = new Set(['gap', 'padding'])
   for (const rule of protectedRules) {
     const unsupportedProperty = [...rule.declarations.keys()].find((property) => !allowedProperties.has(property))
     if (unsupportedProperty) {
@@ -740,7 +811,6 @@ function primitiveContractSelfTestFailures() {
   white-space: nowrap;
 }`
   const compactRule = `@media (max-width: 1024px) {
-  .pms-page-shell { padding-inline: 12px; }
   .pms-toolbar { gap: 8px; padding: 8px 12px; }
 }`
   const reducedMotionRule = `@media (prefers-reduced-motion: reduce) {
@@ -765,6 +835,8 @@ function primitiveContractSelfTestFailures() {
   const primitiveRules = `.pms-page-shell { min-height: 100dvh; background: var(--pms-page); color: var(--pms-text-primary); }
 .pms-topbar { background: var(--pms-gradient-brand); border-bottom: 1px solid rgb(255 255 255 / 24%); box-shadow: 0 10px 28px rgb(92 73 214 / 24%); }
 .pms-glass-surface, .pms-toolbar { background: var(--pms-surface-glass); border: 1px solid rgb(255 255 255 / 96%); backdrop-filter: var(--pms-glass-filter); -webkit-backdrop-filter: var(--pms-glass-filter); box-shadow: inset 0 1px 0 #fff, var(--pms-shadow-glass); }
+.pms-project-list-calendar .pms-project-calendar-header.pms-toolbar { background: var(--pms-surface-glass); border: 1px solid rgb(255 255 255 / 96%); backdrop-filter: var(--pms-glass-filter); -webkit-backdrop-filter: var(--pms-glass-filter); box-shadow: inset 0 1px 0 #fff, var(--pms-shadow-glass); }
+.pms-project-list-calendar .pms-project-calendar-cell { background: var(--pms-surface-solid); }
 .pms-solid-surface { background: var(--pms-surface-solid); border: 1px solid var(--pms-border); box-shadow: 0 10px 30px rgb(58 45 115 / 6%); }
 .pms-interactive-surface { transition: transform 160ms cubic-bezier(.16, 1, .3, 1), box-shadow 180ms cubic-bezier(.16, 1, .3, 1), border-color 160ms ease; }
 .pms-interactive-surface:hover { transform: translateY(-1px); }
@@ -834,9 +906,9 @@ function primitiveContractSelfTestFailures() {
       expectedFailure: '1024px compact spacing rules',
     },
     {
-      label: 'compact position mutation',
-      css: validCss.replace('padding-inline: 12px;', 'padding-inline: 12px; position: fixed;'),
-      expectedFailure: '1024px compact spacing block allows only spacing properties',
+      label: 'compact page-shell padding mutation',
+      css: validCss.replace('.pms-toolbar { gap: 8px;', '.pms-page-shell { padding-inline: 12px; }\n  .pms-toolbar { gap: 8px;'),
+      expectedFailure: 'must not change .pms-page-shell geometry',
     },
     {
       label: 'compact width mutation',
@@ -851,7 +923,7 @@ function primitiveContractSelfTestFailures() {
     {
       label: 'later compact position override',
       css: `${validCss}\n@media (max-width: 1024px) { .pms-page-shell { position: fixed; } }`,
-      expectedFailure: '1024px compact spacing block allows only spacing properties',
+      expectedFailure: 'must not change .pms-page-shell geometry',
     },
   ]
   const failures = []
@@ -926,6 +998,7 @@ function cssContractFailures(root) {
   failures.push(...primitiveRuleFailures(outsideRoot))
   failures.push(...accessibilityAndCompactFailures(outsideRoot))
   failures.push(...primitiveContractSelfTestFailures())
+  failures.push(...legacyBrandScannerSelfTestFailures())
 
   const outsideLiterals = [...extracted.outsideRoot.matchAll(BRAND_HEX_PATTERN)]
     .map((match) => match[0].toLowerCase())

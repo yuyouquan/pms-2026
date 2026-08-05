@@ -286,7 +286,7 @@ export const TodoList: React.FC<TodoListProps> = ({
                   borderRadius: 6,
                   cursor: 'pointer',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(99,102,241,0.08)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.15)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 12px color-mix(in srgb, var(--pms-brand) 8%, transparent)'; e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--pms-brand) 15%, transparent)' }}
                 onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = '#e5e7eb' }}
                 onClick={() => {
                   const proj = projects.find(p => p.id === todo.projectId)
@@ -313,7 +313,7 @@ export const TodoList: React.FC<TodoListProps> = ({
                           rows[i].scrollIntoView({ behavior: 'smooth', block: 'center' })
                           const row = rows[i] as HTMLElement
                           row.style.transition = 'background 0.3s'
-                          row.style.background = 'rgba(99,102,241,0.06)'
+                          row.style.background = 'color-mix(in srgb, var(--pms-brand) 6%, transparent)'
                           setTimeout(() => { row.style.background = '' }, 2000)
                           return
                         }

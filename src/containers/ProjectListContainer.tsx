@@ -407,7 +407,7 @@ export default function ProjectListContainer() {
       {/* Unified toolbar */}
       <div className="pms-project-list-toolbar pms-wide-table-toolbar" style={{ ...WORKSPACE_FILTER_TOOLBAR_STYLE, flexDirection: 'column', alignItems: 'stretch' }}>
         <div className="pms-project-list-filter-grid pms-toolbar" style={{ display: 'grid', gap: 4, padding: '5px 8px', borderRadius: 10 }}>
-            <div aria-label="项目分类筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+            <div className="pms-project-list-category-row" aria-label="项目分类筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
               <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目分类</span>
               {PROJECT_CATEGORIES.map(value => ({ label: value, value })).map(item => {
                 const isActive = projectTypeFilter === item.value
