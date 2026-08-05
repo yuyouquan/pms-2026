@@ -10,22 +10,84 @@ const scriptsDir = path.dirname(fileURLToPath(import.meta.url))
 const verifier = path.join(scriptsDir, 'verify-liquid-glass-theme.mjs')
 const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pms-liquid-glass-theme-'))
 const fixtureFile = path.join(fixtureRoot, 'src/components/BrandLiteralFixture.ts')
+const cssFixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pms-liquid-glass-css-'))
+const roadmapFixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pms-liquid-glass-roadmap-'))
+
+const validRootTokens = `:root {
+  --pms-brand-strong: #5d49f6;
+  --pms-brand: #7562ff;
+  --pms-brand-soft: #ad98ee;
+  --pms-brand-surface: #f5f3ff;
+  --pms-brand-border: #dcd6ff;
+  --pms-gradient-brand: linear-gradient(106deg, #5d49f6 0%, #7562ff 50%, #ad98ee 100%);
+  --pms-page: #f4f6fb;
+  --pms-surface-solid: #fff;
+  --pms-surface-glass: rgb(255 255 255 / 76%);
+  --pms-text-primary: #27243a;
+  --pms-text-secondary: #625d70;
+  --pms-text-tertiary: #817b90;
+  --pms-border: #e6e3ef;
+  --pms-radius-control: 8px;
+  --pms-radius-surface: 12px;
+  --pms-glass-filter: blur(14px) saturate(145%);
+  --pms-shadow-glass: 0 12px 32px rgb(75 59 148 / 8%);
+  --pms-shadow-floating: 0 22px 60px rgb(79 62 158 / 12%);
+  --primary: var(--pms-brand-strong);
+  --accent: var(--pms-brand);
+  --text-primary: var(--pms-text-primary);
+  --bg-primary: var(--pms-page);
+  --border: var(--pms-border);
+  --radius-md: var(--pms-radius-control);
+  --shadow-md: var(--pms-shadow-glass);
+}
+`
+
+function runVerifier(args) {
+  return spawnSync(process.execPath, [verifier, ...args], { encoding: 'utf8' })
+}
 
 try {
   fs.mkdirSync(path.dirname(fixtureFile), { recursive: true })
   fs.writeFileSync(fixtureFile, "export const fixtureBrand = '#5D49F6'\n")
 
-  const result = spawnSync(process.execPath, [verifier, '--scan-root', fixtureRoot], {
-    encoding: 'utf8',
-  })
+  const result = runVerifier(['--scan-root', fixtureRoot])
 
   assert.notEqual(result.status, 0, 'The raw-brand scanner must reject a fixture literal')
   assert.match(
     result.stderr,
     /src\/components\/BrandLiteralFixture\.ts: forbidden raw PMS brand literal\(s\): #5d49f6/i,
   )
+
+  const cssFixture = path.join(cssFixtureRoot, 'src/styles/globals.css')
+  fs.mkdirSync(path.dirname(cssFixture), { recursive: true })
+  fs.writeFileSync(cssFixture, `${validRootTokens}.fixture { background: #5D49F6; }\n`)
+
+  const cssResult = runVerifier(['--css-root', cssFixtureRoot])
+  assert.notEqual(cssResult.status, 0, 'The CSS scanner must reject a brand literal outside :root')
+  assert.match(
+    cssResult.stderr,
+    /src\/styles\/globals\.css: raw PMS brand literal\(s\) outside :root: #5d49f6/i,
+  )
+
+  const milestoneFixture = path.join(roadmapFixtureRoot, 'src/components/roadmap/MilestoneView.tsx')
+  const summaryFixture = path.join(roadmapFixtureRoot, 'src/components/roadmap/ProjectPlanSummaryBoard.tsx')
+  fs.mkdirSync(path.dirname(milestoneFixture), { recursive: true })
+  fs.writeFileSync(milestoneFixture, "const note = '#f5f3ff'\n")
+  fs.writeFileSync(summaryFixture, "const first = '#f5f3ff'\nconst second = '#f5f3ff'\n")
+
+  assert.equal(runVerifier(['--scan-root', roadmapFixtureRoot]).status, 0)
+  fs.appendFileSync(milestoneFixture, "const extra = '#F5F3FF'\n")
+
+  const baselineResult = runVerifier(['--scan-root', roadmapFixtureRoot])
+  assert.notEqual(baselineResult.status, 0, 'The roadmap baseline must reject an added literal')
+  assert.match(
+    baselineResult.stderr,
+    /src\/components\/roadmap\/MilestoneView\.tsx: baseline allows exactly 1 #f5f3ff; found 2 \(#f5f3ff\)/i,
+  )
 } finally {
   fs.rmSync(fixtureRoot, { recursive: true, force: true })
+  fs.rmSync(cssFixtureRoot, { recursive: true, force: true })
+  fs.rmSync(roadmapFixtureRoot, { recursive: true, force: true })
 }
 
-console.log('Liquid glass raw-brand scanner self-test passed')
+console.log('Liquid glass theme verifier self-test passed')
