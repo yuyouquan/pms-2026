@@ -48,7 +48,7 @@ export default function TargetProjectInformationView({
   const health = HEALTH_CONFIG[String(project.healthStatus || 'normal')] || HEALTH_CONFIG.normal
   const showCancelPauseDate = ['暂停', '已暂停', '已取消'].includes(status)
   const coreFields = isWholeMachine ? [
-    { label: '项目名称', value: project.name, accent: '#4f46e5' },
+    { label: '项目名称', value: project.name, accent: 'var(--pms-brand-strong)' },
     { label: '市场名', value: String(project.marketName || '-'), accent: '#8b5cf6' },
     { label: '品牌', value: String(project.brand || '-'), accent: '#06b6d4' },
     { label: '产品线', value: String(project.productLine || '-'), accent: '#0ea5e9' },
@@ -58,7 +58,7 @@ export default function TargetProjectInformationView({
     { label: '健康状态', value: health.label, accent: health.color },
     { label: '下一个节点', value: String(project.currentNode || '-'), accent: '#f43f5e' },
   ] : [
-    { label: '项目名称', value: project.name, accent: '#4f46e5' },
+    { label: '项目名称', value: project.name, accent: 'var(--pms-brand-strong)' },
     { label: '项目状态', value: status, accent: '#f59e0b' },
     { label: '项目分类', value: classificationLabel, accent: '#14b8a6' },
     { label: '健康状态', value: health.label, accent: health.color },

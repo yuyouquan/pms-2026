@@ -55,11 +55,11 @@ function UserSwitcher() {
             return {
               key: u,
               label: <div className="pms-user-menu__row" style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: isActive ? 600 : 400 }}>
-                <Avatar size="small" style={{ background: isActive ? '#4338ca' : '#e0e0e0', fontSize: 12 }}>{u.slice(-1)}</Avatar>
+                <Avatar size="small" style={{ background: isActive ? 'var(--pms-brand-strong)' : '#e0e0e0', fontSize: 12 }}>{u.slice(-1)}</Avatar>
                 <span className="pms-user-menu__name">{u}</span>
                 {isAdmin && <Tag color="red" style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>管理组</Tag>}
                 <span className="pms-user-menu__count" style={{ color: '#9ca3af', fontSize: 11, marginLeft: 'auto' }}>{projectCount}个项目</span>
-                {isActive && <CheckCircleOutlined style={{ color: '#4338ca' }} />}
+                {isActive && <CheckCircleOutlined style={{ color: 'var(--pms-brand-strong)' }} />}
               </div>,
               onClick: () => { setCurrentLoginUser(u); setProjectCardPage(1) },
             }
@@ -79,11 +79,11 @@ function UserSwitcher() {
       }}
     >
       <Button
-        className="pms-user-switcher"
+        className="pms-user-switcher pms-glass-surface pms-interactive-surface"
         type="text"
         aria-label="切换当前用户"
         data-current-user={currentLoginUser}
-        style={{ display: 'flex', alignItems: 'center', gap: 8, height: 'auto', cursor: 'pointer', padding: '5px 14px', borderRadius: 24, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', transition: 'all 0.25s', backdropFilter: 'blur(8px)' }}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, height: 'auto', cursor: 'pointer', padding: '5px 14px', borderRadius: 24 }}
       >
         <Avatar size={28} style={{ background: 'rgba(255,255,255,0.25)', fontSize: 13, fontWeight: 600 }}>{currentLoginUser.slice(-1)}</Avatar>
         <span style={{ color: '#fff', fontSize: 13, fontWeight: 500 }}>{currentLoginUser}</span>
@@ -104,12 +104,12 @@ export function MainHeader() {
   const isCurrentDraft = versions.find(version => version.id === currentVersion)?.status === '修订中'
 
   return (
-    <div className="pms-main-header" style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)', padding: '0 32px', boxShadow: '0 4px 20px rgba(30,27,75,0.4)', position: 'sticky', top: 0, zIndex: 100, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+    <div className="pms-main-header pms-topbar" style={{ padding: '0 32px', position: 'sticky', top: 0, zIndex: 100 }}>
       <Row className="pms-main-header__row" align="middle" justify="space-between" style={{ height: 56 }}>
         <Col className="pms-main-header__primary">
           <Space className="pms-main-header__content" size={32} align="center">
             <Space className="pms-main-header__brand" size={10}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: 'linear-gradient(135deg, #818cf8 0%, #6366f1 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(129,140,248,0.4)' }}>
+              <div className="pms-topbar__brand-mark" style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <AppstoreOutlined style={{ color: '#fff', fontSize: 16 }} />
               </div>
               <span className="pms-main-header__brand-title" style={{ fontSize: 17, fontWeight: 700, color: '#fff', letterSpacing: 1.5, textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>项目管理系统</span>
@@ -208,7 +208,7 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
   }, [showProjectSearch])
 
   return (
-    <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)', padding: '0 24px', boxShadow: '0 4px 20px rgba(30,27,75,0.4)', position: 'sticky', top: 0, zIndex: 100, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+    <div className="pms-project-space-header pms-topbar" style={{ padding: '0 24px', position: 'sticky', top: 0, zIndex: 100 }}>
       <Row align="middle" style={{ height: 56 }}>
         <Col flex="none">
           <Button
@@ -262,7 +262,7 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
                         key={p.id}
                         style={{
                           padding: '8px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                          background: selectedProject?.id === p.id ? 'rgba(99,102,241,0.06)' : 'transparent',
+                          background: selectedProject?.id === p.id ? 'color-mix(in srgb, var(--pms-brand) 8%, transparent)' : 'transparent',
                           transition: 'background 0.15s',
                         }}
                         onMouseEnter={(e) => { if (selectedProject?.id !== p.id) (e.currentTarget as HTMLElement).style.background = '#fafafa' }}

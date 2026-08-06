@@ -97,19 +97,14 @@ export default function RoadmapToolbar({
 
   return (
     <div
-      className="roadmap-toolbar-glass"
+      className="roadmap-toolbar-glass pms-toolbar"
       style={{
         position: 'sticky',
         top: isFullscreen ? 0 : 'var(--pms-main-header-height, 56px)',
         zIndex: 30,
         padding: '8px 10px',
         margin: '0 0 10px',
-        border: '1px solid var(--border-purple)',
         borderRadius: 'var(--radius-lg)',
-        background: 'rgba(255, 255, 255, 0.94)',
-        backdropFilter: 'blur(18px) saturate(145%)',
-        WebkitBackdropFilter: 'blur(18px) saturate(145%)',
-        boxShadow: 'var(--shadow-sm)',
         overflowX: 'auto',
         overflowY: 'hidden',
         scrollbarWidth: 'thin',

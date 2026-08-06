@@ -194,7 +194,7 @@ export default function Level2PlanTemplatePage() {
     }
 
     return (
-      <span className="inline-flex rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+      <span className="pms-template-version-tag inline-flex rounded px-2 py-1 text-xs font-medium">
         {task.responsible || 'SPM'}
       </span>
     )
@@ -216,9 +216,9 @@ export default function Level2PlanTemplatePage() {
   const rootTasks = displayTasks.filter(t => !t.parentId)
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="pms-template-page pms-page-shell min-h-screen">
       {/* 顶部导航栏 */}
-      <header className="bg-white border-b border-gray-200 h-16">
+      <header className="pms-topbar h-16">
         <div className="h-full px-6 flex items-center justify-between">
           <div className="flex items-center gap-8">
             <h1 className="text-xl font-bold text-gray-800">项目管理系统</h1>
@@ -226,13 +226,13 @@ export default function Level2PlanTemplatePage() {
               <button className="text-sm font-medium text-gray-600 hover:text-gray-900">
                 工作台
               </button>
-              <button className="text-sm font-medium text-blue-600 border-b-2 border-blue-600 h-16 flex items-center">
+              <button className="pms-template-header-active text-sm font-medium border-b-2 h-16 flex items-center">
                 配置中心
               </button>
             </nav>
           </div>
           <div className="flex items-center gap-4">
-            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm">
+            <div className="pms-template-avatar w-8 h-8 rounded-full flex items-center justify-center text-white text-sm">
               用
             </div>
           </div>
@@ -241,25 +241,25 @@ export default function Level2PlanTemplatePage() {
 
       <div className="flex">
         {/* 侧边栏 */}
-        <aside className="w-60 bg-gray-50 border-r border-gray-200 min-h-[calc(100vh-64px)]">
+        <aside className="pms-glass-surface w-60 border-r min-h-[calc(100vh-64px)]">
           <nav className="p-4">
             <div className="mb-2">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2">
                 计划管理
               </h3>
             </div>
-            <a href="/config/level1-template" className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 rounded-md hover:bg-blue-50 hover:text-blue-600"
+            <a href="/config/level1-template" className="pms-template-nav flex items-center gap-3 px-3 py-2 text-sm text-gray-700 rounded-md"
               onClick={(e) => { if (isEditing) { e.preventDefault(); navigateWithEditGuard(() => { window.location.href = '/config/level1-template' }) } }}>
               <span>一级计划模板</span>
             </a>
-            <a href="/config/level2-template" className="flex items-center gap-3 px-3 py-2 text-sm text-blue-600 bg-blue-50 rounded-md">
+            <a href="/config/level2-template" className="pms-template-nav-active flex items-center gap-3 px-3 py-2 text-sm rounded-md">
               <span>二级计划模板</span>
             </a>
           </nav>
         </aside>
 
         {/* 主内容区 */}
-        <main className="flex-1 p-6">
+        <main className="pms-solid-surface flex-1 p-6">
           <div className="max-w-7xl mx-auto">
             {/* 页面标题 */}
             <div className="mb-6">
@@ -441,7 +441,7 @@ export default function Level2PlanTemplatePage() {
                             <td className="text-center">
                               <span className={`px-2 py-1 rounded text-xs font-medium ${
                                 rootTask.status === '已完成' ? 'bg-green-100 text-green-700' :
-                                rootTask.status === '进行中' ? 'bg-blue-100 text-blue-700' :
+                                rootTask.status === '进行中' ? 'pms-status-progress' :
                                 'bg-gray-100 text-gray-700'
                               }`}>
                                 {rootTask.status}
@@ -452,7 +452,7 @@ export default function Level2PlanTemplatePage() {
                                 <div className="flex items-center justify-center gap-1">
                                   <button
                                     onClick={() => handleAddTask(rootTask.id)}
-                                    className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                    className="pms-template-icon-button p-1 rounded"
                                     title="添加子项"
                                   >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -503,7 +503,7 @@ export default function Level2PlanTemplatePage() {
                                 <td className="text-center">
                                   <span className={`px-2 py-1 rounded text-xs font-medium ${
                                     childTask.status === '已完成' ? 'bg-green-100 text-green-700' :
-                                    childTask.status === '进行中' ? 'bg-blue-100 text-blue-700' :
+                                    childTask.status === '进行中' ? 'pms-status-progress' :
                                     'bg-gray-100 text-gray-700'
                                   }`}>
                                     {childTask.status}

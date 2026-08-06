@@ -110,7 +110,7 @@ export default function TodoCenter({ todos, today, loading = false, error, onRet
       : '暂无符合条件的待办'
 
   return (
-    <section className="pms-todo-center" aria-label="分类待办中心">
+    <section className="pms-todo-center pms-glass-surface" aria-label="分类待办中心">
       <div className="pms-todo-center__source-row">
         <div>
           <div className="pms-todo-center__eyebrow">个人工作台</div>
@@ -140,7 +140,7 @@ export default function TodoCenter({ todos, today, loading = false, error, onRet
         ))}
       </div>
 
-      <div className="pms-todo-center__filters" aria-label="待办筛选条">
+      <div className="pms-todo-center__filters pms-toolbar" aria-label="待办筛选条">
         <Input
           allowClear
           aria-label="搜索待办"
@@ -195,7 +195,7 @@ export default function TodoCenter({ todos, today, loading = false, error, onRet
         {loading ? '待办加载中' : error ? '待办加载失败' : `当前显示 ${filteredTodos.length} 条待办`}
       </div>
 
-      <div className="pms-todo-center__table">
+      <div className="pms-todo-center__table pms-solid-surface pms-table">
         {loading ? (
           <div className="pms-todo-center__loading" aria-label="待办加载中">
             <Skeleton active title={false} paragraph={{ rows: 8, width: ['96%', '92%', '98%', '88%', '95%', '90%', '97%', '86%'] }} />
@@ -215,6 +215,7 @@ export default function TodoCenter({ todos, today, loading = false, error, onRet
             size="small"
             sticky
             rowKey={record => `${record.source}:${record.id}`}
+            rowClassName="pms-solid-surface"
             dataSource={filteredTodos}
             pagination={false}
             scroll={{ x: 1080, y: 360 }}

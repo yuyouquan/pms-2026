@@ -173,7 +173,7 @@ export default function RoadmapFilterDrawer({
       addDisabled={draftConditions.length >= fieldDefinitions.length}
       onClose={onClose}
     >
-      <div className="pms-filter-condition-list">
+      <div className="pms-filter-condition-list pms-roadmap-filter-body pms-solid-surface">
         {draftConditions.length ? draftConditions.map(condition => {
           const definition = definitionsByKey.get(condition.field)
           const operatorOptions = getRoadmapFilterOperators(condition.field, definition?.kind ?? 'text')

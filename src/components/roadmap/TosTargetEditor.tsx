@@ -66,6 +66,7 @@ export default function TosTargetEditor({
   return (
     <Modal
       className="pms-modal"
+      classNames={{ header: 'pms-glass-surface', body: 'pms-solid-surface', footer: 'pms-glass-surface' }}
       title={version ? `维护 ${version.name} 目标` : '维护版本目标'}
       open={open}
       onCancel={onCancel}
@@ -86,7 +87,7 @@ export default function TosTargetEditor({
       <Typography.Paragraph type="secondary">
         版本目标将完全按照多行文本的换行格式展示。
       </Typography.Paragraph>
-      <Form form={form} layout="vertical" preserve={false} disabled={!canEdit}>
+      <Form className="pms-roadmap-overlay-body pms-solid-surface" form={form} layout="vertical" preserve={false} disabled={!canEdit}>
         <Form.Item
           label="版本目标"
           name="targetText"

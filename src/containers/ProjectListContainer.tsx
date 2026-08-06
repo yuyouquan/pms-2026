@@ -63,13 +63,9 @@ import ProjectListCalendar from '@/components/project-list/ProjectListCalendar'
 import type { ProjectListViewMode } from '@/stores/project'
 
 const WORKSPACE_FILTER_TOOLBAR_STYLE: CSSProperties = {
-  background: 'rgba(255,255,255,0.8)',
-  backdropFilter: 'blur(8px)',
   borderRadius: 12,
   padding: '8px 20px',
   marginBottom: 16,
-  border: '1px solid rgba(99,102,241,0.08)',
-  boxShadow: '0 2px 8px rgba(99,102,241,0.04)',
   display: 'flex',
   flexWrap: 'wrap',
   alignItems: 'center',
@@ -410,8 +406,8 @@ export default function ProjectListContainer() {
     <div className="pms-project-list">
       {/* Unified toolbar */}
       <div className="pms-project-list-toolbar pms-wide-table-toolbar" style={{ ...WORKSPACE_FILTER_TOOLBAR_STYLE, flexDirection: 'column', alignItems: 'stretch' }}>
-        <div className="pms-project-list-filter-grid" style={{ display: 'grid', gap: 4, padding: '5px 8px', background: 'rgba(99,102,241,0.04)', borderRadius: 10, border: '1px solid rgba(99,102,241,0.06)' }}>
-            <div aria-label="项目分类筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+        <div className="pms-project-list-filter-grid pms-toolbar" style={{ display: 'grid', gap: 4, padding: '5px 8px', borderRadius: 10 }}>
+            <div className="pms-project-list-category-row" aria-label="项目分类筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
               <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目分类</span>
               {PROJECT_CATEGORIES.map(value => ({ label: value, value })).map(item => {
                 const isActive = projectTypeFilter === item.value
@@ -431,8 +427,8 @@ export default function ProjectListContainer() {
                       padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
                       fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
                       background: isActive ? '#fff' : 'transparent',
-                      color: isActive ? '#6366f1' : '#6b7280',
-                      boxShadow: isActive ? '0 2px 6px rgba(99,102,241,0.15)' : 'none',
+                      color: isActive ? 'var(--pms-brand-strong)' : '#6b7280',
+                      boxShadow: isActive ? 'var(--pms-shadow-xs)' : 'none',
                       border: 0,
                     }}
                   >
@@ -485,8 +481,8 @@ export default function ProjectListContainer() {
                         padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
                         fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
                         background: isActive ? '#fff' : 'transparent',
-                        color: isActive ? '#6366f1' : '#6b7280',
-                        boxShadow: isActive ? '0 2px 6px rgba(99,102,241,0.15)' : 'none',
+                        color: isActive ? 'var(--pms-brand-strong)' : '#6b7280',
+                        boxShadow: isActive ? 'var(--pms-shadow-xs)' : 'none',
                         border: 0,
                       }}
                     >
@@ -511,7 +507,7 @@ export default function ProjectListContainer() {
                         ...WORKSPACE_FILTER_CHIP_STYLE,
                         padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
                         fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
-                        background: isActive ? '#6366f1' : 'transparent',
+                        background: isActive ? 'var(--pms-brand)' : 'transparent',
                         color: isActive ? '#fff' : '#6b7280',
                         border: 0,
                       }}
@@ -659,11 +655,11 @@ export default function ProjectListContainer() {
 
       {/* Project list content */}
       <section
-        className={`pms-project-list-content ${isFullscreen ? 'is-fullscreen' : ''}`.trim()}
+        className={`pms-project-list-content ${isFullscreen ? 'is-fullscreen pms-page-shell' : ''}`.trim()}
         aria-label={isFullscreen ? `${fullscreenViewTitle}全屏展示` : undefined}
       >
         {isFullscreen && (
-          <header className="pms-project-list-fullscreen__header">
+          <header className="pms-project-list-fullscreen__header pms-toolbar">
             <div>
               <strong>{fullscreenViewTitle}</strong>
               <span>当前筛选结果</span>
@@ -678,7 +674,10 @@ export default function ProjectListContainer() {
             </Button>
           </header>
         )}
-        <div className="pms-project-list-content__body" style={{ display: 'flex', gap: 20 }}>
+        <div
+          className={`pms-project-list-content__body ${projectListView === 'card' ? '' : 'pms-solid-surface'}`.trim()}
+          style={{ display: 'flex', gap: 20 }}
+        >
           <div style={{ flex: 1, minWidth: 0 }}>
             {projectTypeFilter === PROJECT_CATEGORY_CAPABILITY ? (
               <Empty description="该项目分类暂未配置" />
@@ -760,7 +759,7 @@ export default function ProjectListContainer() {
                           <Col xs={24} sm={12} lg={8} key={technicalRow.key}>
                             <Card
                               hoverable
-                              className="pms-technical-project-card"
+                              className="pms-technical-project-card pms-glass-surface pms-interactive-surface"
                               onClick={() => enterSummaryRow(technicalRow as ProjectSummaryRow & { targetProjectId: string })}
                             >
                               <div className="pms-technical-project-card-title">{String(technicalRow.projectName)}</div>

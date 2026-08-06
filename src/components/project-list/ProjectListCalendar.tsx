@@ -51,8 +51,8 @@ export default function ProjectListCalendar({
   }, [milestoneDefinitions, rows])
 
   return (
-    <div className="pms-project-calendar pms-project-list-calendar" aria-label="项目日历视图">
-      <div className="pms-project-calendar-header">
+    <div className="pms-project-calendar pms-project-list-calendar pms-solid-surface" aria-label="项目日历视图">
+      <div className="pms-project-calendar-header pms-toolbar">
         <div className="pms-project-calendar-title">{calendarMonth.format('YYYY年M月')}</div>
         <Space size={6}>
           <Button size="small" shape="circle" aria-label="上个月" onClick={() => setCalendarMonth(month => month.subtract(1, 'month'))}>‹</Button>

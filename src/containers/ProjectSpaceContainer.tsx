@@ -2382,7 +2382,7 @@ export default function ProjectSpaceContainer() {
               </span>
             )}
             {expandEnabled && !hasChildren(record.id, tableTasks) && <span style={{ display: 'inline-block', width: 14 }} />}
-            {canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} style={{ color: '#6366f1' }} onClick={(e) => { e.stopPropagation(); handleAddSubTask(record.id) }} /></Tooltip>}
+            {canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} style={{ color: 'var(--pms-brand)' }} onClick={(e) => { e.stopPropagation(); handleAddSubTask(record.id) }} /></Tooltip>}
             <span style={{ fontWeight: depth === 0 ? 600 : 500, color: depth === 0 ? '#111827' : '#4b5563', fontSize: 13 }}>{id}</span>
           </div>
         )
@@ -2398,7 +2398,7 @@ export default function ProjectSpaceContainer() {
         )
       } })
       // 责任人/前置任务是结构性字段，仅 canFullyEdit 可改（避免责任人改完自己丢权限的循环）
-      if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => canFullyEdit ? <Input className="pms-edit-input" value={val} size="small" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Space size={4}><Avatar size={18} style={{ background: 'linear-gradient(135deg, #4338ca, #6366f1)', fontSize: 10 }}>{val[0]}</Avatar><span style={{ fontSize: 13 }}>{val}</span></Space> : <span style={{ color: '#e5e7eb' }}>-</span>) })
+      if (visibleColumns.includes('responsible')) cols.push({ title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => canFullyEdit ? <Input className="pms-edit-input" value={val} size="small" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, responsible: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Space size={4}><Avatar size={18} style={{ background: 'var(--pms-gradient-brand)', fontSize: 10 }}>{val[0]}</Avatar><span style={{ fontSize: 13 }}>{val}</span></Space> : <span style={{ color: '#e5e7eb' }}>-</span>) })
       if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => canFullyEdit ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>) })
       if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 170, onCell: (record: any) => ({ className: (invalidFields.get(record.id)?.start.length ?? 0) > 0 ? 'pms-cell-invalid' : '' }), render: (val: string, record: any) => {
         const reasons = invalidFields.get(record.id)?.start || []
@@ -2431,7 +2431,7 @@ export default function ProjectSpaceContainer() {
       if (visibleColumns.includes('status')) cols.push({ title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={s === '已完成' ? 'success' : s === '进行中' ? 'processing' : 'default'} style={{ borderRadius: 4, fontSize: 12 }}>{s}</Tag> })
       if (visibleColumns.includes('progress')) cols.push({ title: '进度', dataIndex: 'progress', key: 'progress', width: 130, render: (p: number) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Progress percent={p} size="small" showInfo={false} strokeColor={p === 100 ? '#52c41a' : '#6366f1'} style={{ flex: 1, marginBottom: 0 }} />
+          <Progress percent={p} size="small" showInfo={false} strokeColor={p === 100 ? '#52c41a' : 'var(--pms-brand)'} style={{ flex: 1, marginBottom: 0 }} />
           <span style={{ fontSize: 11, color: p === 100 ? '#52c41a' : '#4b5563', fontWeight: 500, minWidth: 32 }}>{p}%</span>
         </div>
       ) })
@@ -2642,7 +2642,7 @@ export default function ProjectSpaceContainer() {
               const isLatest = version.id === latestDisplayVersionId
               return (
                 <tr key={version.id} style={isLatest ? { background: '#fafffe' } : undefined}>
-                  <td style={{ ...versionTdStyle, color: isLatest ? '#6366f1' : '#111827', background: isLatest ? '#f0f9ff' : '#fff' }}>{version.versionNo}</td>
+                  <td style={{ ...versionTdStyle, color: isLatest ? 'var(--pms-brand)' : '#111827', background: isLatest ? 'var(--pms-brand-surface)' : '#fff' }}>{version.versionNo}</td>
                   <td style={{ ...cycleTdStyle, background: isLatest ? '#f0f9ff' : '#fff' }}><Tooltip title="最早计划开始到最晚计划完成的天数"><span>{devCycle}</span></Tooltip></td>
                   {vMilestones.map((m: any, mi: number) => (<td key={mi} style={tdStyle}>{m.planEndDate || '-'}</td>))}
                 </tr>
@@ -2929,7 +2929,7 @@ export default function ProjectSpaceContainer() {
     const renderWholeMachinePlanInfo = () => {
       if (markets.length === 0) {
         return (
-          <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#6366f1' }} />, '计划信息', '#6366f1')}>
+          <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: 'var(--pms-brand)' }} />, '计划信息', 'var(--pms-brand)')}>
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description="尚未配置市场"
@@ -2940,7 +2940,7 @@ export default function ProjectSpaceContainer() {
         )
       }
       return (
-        <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: '#6366f1' }} />, '计划信息', '#6366f1')}>
+        <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<CalendarOutlined style={{ color: 'var(--pms-brand)' }} />, '计划信息', 'var(--pms-brand)')}>
           <Tabs activeKey={selectedMarketTab} onChange={setSelectedMarketTab} type="card"
             tabBarExtraContent={{
               right: (
@@ -3007,12 +3007,12 @@ export default function ProjectSpaceContainer() {
       <div style={{ maxWidth: 1200, margin: '0 auto', paddingRight: 170 }}>
         {/* Anchor navigation */}
         <div style={{ position: 'fixed', right: 32, top: 130, zIndex: 50, width: 150 }}>
-          <div style={{ background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(12px)', borderRadius: 14, border: '1px solid rgba(99,102,241,0.1)', padding: '16px 0 12px', boxShadow: '0 4px 16px rgba(99,102,241,0.08)' }}>
+          <div className="pms-glass-surface" style={{ padding: '16px 0 12px' }}>
             <div style={{ padding: '0 16px 10px', fontSize: 10, fontWeight: 700, color: '#a5b4fc', letterSpacing: 3, textTransform: 'uppercase' as const }}>导航</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {anchorSections.map((section) => (
                 <div key={section.id} onClick={() => scrollToSection(section.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 12, color: '#64748b', transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)', borderLeft: '2px solid transparent' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(90deg, rgba(99,102,241,0.08) 0%, transparent 100%)'; e.currentTarget.style.color = '#6366f1'; e.currentTarget.style.borderLeftColor = '#6366f1' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--pms-brand-surface) 72%, transparent)'; e.currentTarget.style.color = 'var(--pms-brand)'; e.currentTarget.style.borderLeftColor = 'var(--pms-brand)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748b'; e.currentTarget.style.borderLeftColor = 'transparent' }}
                 >
                   <span style={{ fontSize: 13, opacity: 0.7 }}>{section.icon}</span>
@@ -3036,11 +3036,11 @@ export default function ProjectSpaceContainer() {
         ) : (
           <>
         {/* Header card */}
-        <Card id="section-header" style={{ marginBottom: 20, borderRadius: 8, overflow: 'hidden' }} styles={{ header: { background: 'linear-gradient(135deg, #312e81 0%, #4338ca 100%)', borderBottom: 'none', padding: '16px 24px' }, body: { padding: 0 } }}
-          title={<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, rgba(129,140,248,0.3) 0%, rgba(99,102,241,0.4) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 16px rgba(99,102,241,0.3)' }}><ProjectOutlined style={{ color: '#fff', fontSize: 18 }} /></div><div><div style={{ color: '#fff', fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}>{headerExtra}</div></div></div>}
-          extra={<Space size={8}><Tag color={statusConf.tagColor} style={{ margin: 0, borderRadius: 4, fontWeight: 500 }}>{p.status}</Tag><Tag style={{ margin: 0, borderRadius: 4, background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag>{isTech && canEditBasicInfo && <Button ghost icon={<EditOutlined />} onClick={() => setShowProjectInfoEditor(true)}>编辑项目信息</Button>}{isWholeMachine && <Button type="primary" icon={<SendOutlined />} style={{ background: '#4338ca', borderColor: '#4338ca' }} onClick={() => transfer.setTransferView('apply')}>申请转维</Button>}</Space>}
+        <Card id="section-header" className="pms-glass-surface" style={{ marginBottom: 20, borderRadius: 8, overflow: 'hidden' }} styles={{ header: { background: 'var(--pms-gradient-brand)', borderBottom: 'none', padding: '16px 24px' }, body: { padding: 0 } }}
+          title={<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div style={{ width: 36, height: 36, borderRadius: 10, background: 'color-mix(in srgb, var(--pms-surface-solid) 26%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 16px color-mix(in srgb, var(--pms-brand) 30%, transparent)' }}><ProjectOutlined style={{ color: '#fff', fontSize: 18 }} /></div><div><div style={{ color: '#fff', fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}>{headerExtra}</div></div></div>}
+          extra={<Space size={8}><Tag color={statusConf.tagColor} style={{ margin: 0, borderRadius: 4, fontWeight: 500 }}>{p.status}</Tag><Tag style={{ margin: 0, borderRadius: 4, background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag>{isTech && canEditBasicInfo && <Button ghost icon={<EditOutlined />} onClick={() => setShowProjectInfoEditor(true)}>编辑项目信息</Button>}{isWholeMachine && <Button type="primary" icon={<SendOutlined />} style={{ background: 'var(--pms-brand-strong)', borderColor: 'var(--pms-brand-strong)' }} onClick={() => transfer.setTransferView('apply')}>申请转维</Button>}</Space>}
         >
-          <div style={{ display: 'flex', background: 'linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)', borderBottom: '1px solid rgba(99,102,241,0.08)' }}>
+          <div style={{ display: 'flex', background: 'linear-gradient(180deg, var(--pms-surface-solid) 0%, var(--pms-brand-surface) 100%)', borderBottom: '1px solid var(--pms-brand-border)' }}>
             {[
               { label: '项目分类', value: p.type, editable: false },
               { label: '项目状态', value: p.status, editable: true, key: 'status', editNode: <Select size="small" value={ef.status} onChange={(v: string) => setEf('status', v)} style={{ width: 110 }} options={getProjectStatusOptions(p)} /> },
@@ -3055,7 +3055,7 @@ export default function ProjectSpaceContainer() {
           </div>
         </Card>
         {/* Section: Basic info */}
-        <Card id="section-basic" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: '#6366f1' }} />, '基本信息', '#6366f1')} extra={
+        <Card id="section-basic" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: 'var(--pms-brand)' }} />, '基本信息', 'var(--pms-brand)')} extra={
           basicInfoEditMode ? (<Space><Button size="small" onClick={() => setBasicInfoEditMode(false)}>取消</Button><Button size="small" type="primary" onClick={saveBasicInfoEdit}>保存</Button></Space>) : (
             canEditBasicInfo
               ? <Button aria-label="编辑项目信息" size="small" icon={<EditOutlined />} onClick={startBasicInfoEdit}>编辑</Button>
@@ -3090,7 +3090,7 @@ export default function ProjectSpaceContainer() {
                   ) : (
                     p.versionFiveRoles && typeof p.versionFiveRoles === 'object' ? (
                       Object.entries(p.versionFiveRoles).map(([role, name]: [string, any]) => (
-                        <Col key={role} span={Math.floor(24 / 5)}><div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f3f4f6' }}><Avatar size={28} style={{ background: 'linear-gradient(135deg, #4338ca, #6366f1)', fontSize: 12, flexShrink: 0 }}>{String(name)[0]}</Avatar><div><div style={{ fontSize: 13, fontWeight: 500, color: '#111827', lineHeight: 1.3 }}>{String(name)}</div><div style={{ fontSize: 11, color: '#9ca3af' }}>{role}</div></div></div></Col>
+                        <Col key={role} span={Math.floor(24 / 5)}><div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f3f4f6' }}><Avatar size={28} style={{ background: 'var(--pms-gradient-brand)', fontSize: 12, flexShrink: 0 }}>{String(name)[0]}</Avatar><div><div style={{ fontSize: 13, fontWeight: 500, color: '#111827', lineHeight: 1.3 }}>{String(name)}</div><div style={{ fontSize: 11, color: '#9ca3af' }}>{role}</div></div></div></Col>
                       ))
                     ) : (<Col><span style={{ color: '#9ca3af', fontSize: 13 }}>-</span></Col>)
                   )}
@@ -3142,7 +3142,7 @@ export default function ProjectSpaceContainer() {
                   <Space wrap>
                     {(p.teamMembers || p.spm || '').split(',').filter(Boolean).map((name: string, i: number) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f3f4f6' }}>
-                        <Avatar size={24} style={{ background: 'linear-gradient(135deg, #4338ca, #6366f1)', fontSize: 11 }}>{name.trim()[0]}</Avatar>
+                        <Avatar size={24} style={{ background: 'var(--pms-gradient-brand)', fontSize: 11 }}>{name.trim()[0]}</Avatar>
                         <span style={{ fontSize: 13 }}>{name.trim()}</span>
                       </div>
                     ))}
@@ -3168,7 +3168,7 @@ export default function ProjectSpaceContainer() {
             id="section-transfer"
             style={{ marginBottom: 20, borderRadius: 8 }}
             styles={{ body: transferInfoCollapsed ? { display: 'none', padding: 0 } : undefined }}
-            title={sectionTitle(<DeploymentUnitOutlined style={{ color: '#6366f1' }} />, '转维信息', '#6366f1')}
+            title={sectionTitle(<DeploymentUnitOutlined style={{ color: 'var(--pms-brand)' }} />, '转维信息', 'var(--pms-brand)')}
             extra={(
               <Button
                 type="text"
@@ -3188,7 +3188,7 @@ export default function ProjectSpaceContainer() {
               columns={[
                 { title: '项目名称', dataIndex: 'projectName', width: 200, render: (_: unknown, r: TransferApplication) => (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Avatar size={32} style={{ background: `linear-gradient(135deg, ${ROLE_COLORS[r.team.research[0]?.role] || '#4338ca'} 0%, #6366f1 100%)`, fontSize: 12, flexShrink: 0 }}>{r.applicant.slice(-1)}</Avatar>
+                    <Avatar size={32} style={{ background: `linear-gradient(135deg, ${ROLE_COLORS[r.team.research[0]?.role] || 'var(--pms-brand-strong)'} 0%, var(--pms-brand) 100%)`, fontSize: 12, flexShrink: 0 }}>{r.applicant.slice(-1)}</Avatar>
                     <div><div style={{ fontSize: 13, fontWeight: 500 }}>{r.projectName}</div><div style={{ fontSize: 11, color: '#9ca3af' }}>{r.applicant} · {r.createdAt.slice(0, 10)}</div></div>
                   </div>
                 ) },
@@ -3205,7 +3205,7 @@ export default function ProjectSpaceContainer() {
                 { title: '操作', width: 220, render: (_: unknown, r: TransferApplication) => (
                   <Space size={4}>
                     <Button size="small" type="text" icon={<FileTextOutlined />} style={{ color: '#666' }} onClick={() => { transfer.setSelectedTransferAppId(r.id); transfer.setTransferView('detail') }}>详情</Button>
-                    {r.status === 'in_progress' && r.pipeline.dataEntry !== 'success' && <Button size="small" type="text" icon={<EditOutlined />} style={{ color: '#6366f1' }} onClick={() => { transfer.setSelectedTransferAppId(r.id); transfer.setTransferView('entry') }}>录入</Button>}
+                    {r.status === 'in_progress' && r.pipeline.dataEntry !== 'success' && <Button size="small" type="text" icon={<EditOutlined />} style={{ color: 'var(--pms-brand)' }} onClick={() => { transfer.setSelectedTransferAppId(r.id); transfer.setTransferView('entry') }}>录入</Button>}
                     {r.status === 'in_progress' && r.pipeline.maintenanceReview === 'in_progress' && <Button size="small" type="text" icon={<AuditOutlined />} style={{ color: '#52c41a' }} onClick={() => { transfer.setSelectedTransferAppId(r.id); transfer.setTransferView('review') }}>评审</Button>}
                     {r.status === 'in_progress' && r.pipeline.sqaReview === 'in_progress' && <Button size="small" type="text" icon={<SafetyOutlined />} style={{ color: '#faad14' }} onClick={() => { transfer.setSelectedTransferAppId(r.id); transfer.setTransferView('sqa-review') }}>SQA审核</Button>}
                     {r.status === 'in_progress' && <Button size="small" type="text" danger icon={<CloseCircleOutlined />} onClick={() => { transfer.setTmCloseAppId(r.id); transfer.setTmCloseReason(''); transfer.setTmCloseModalVisible(true) }}>关闭</Button>}
@@ -3299,7 +3299,7 @@ export default function ProjectSpaceContainer() {
         {!isTosVersionProject && (
           <>
             <Row gutter={[24, 16]}>
-              <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划开始时间</span>} value={displayedPlanStartDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />} /></Col>
+              <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划开始时间</span>} value={displayedPlanStartDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: 'var(--pms-brand)', fontSize: 14 }} />} /></Col>
               <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划结束时间</span>} value={displayedPlanEndDate || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} prefix={<CalendarOutlined style={{ color: '#faad14', fontSize: 14 }} />} /></Col>
               <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>开发周期（工作日）</span>} value={displayedDevelopCycle || '-'} valueStyle={{ fontSize: 16, fontWeight: 600 }} suffix={displayedDevelopCycle ? <span style={{ fontSize: 12, color: '#9ca3af' }}>天</span> : undefined} /></Col>
               <Col span={6}><Statistic title={<span style={{ fontSize: 12, color: '#9ca3af' }}>健康状态</span>} value={displayedHealthLabel} valueStyle={{ fontSize: 16, fontWeight: 600, color: tosPlanHealth === 'normal' ? '#52c41a' : tosPlanHealth === 'warning' ? '#faad14' : tosPlanHealth === 'risk' ? '#ff4d4f' : '#9ca3af' }} /></Col>
@@ -3314,7 +3314,7 @@ export default function ProjectSpaceContainer() {
       </>
     )
     return (
-      <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={<Space><CalendarOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>计划信息</span></Space>}>
+      <Card id="section-plan" style={{ marginBottom: 20, borderRadius: 8 }} title={<Space><CalendarOutlined style={{ color: 'var(--pms-brand)' }} /><span style={{ fontWeight: 600 }}>计划信息</span></Space>}>
         {isTosVersionProject ? (
           <Tabs
             activeKey={summaryActiveType}
@@ -3345,7 +3345,7 @@ export default function ProjectSpaceContainer() {
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <Space size={8} align="center">
-                <BarChartOutlined style={{ color: '#6366f1', fontSize: 16 }} />
+                <BarChartOutlined style={{ color: 'var(--pms-brand)', fontSize: 16 }} />
                 <span style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>计划总览</span>
                 <Tag color="blue" style={{ fontSize: 11, borderRadius: 4 }}>融合模式</Tag>
               </Space>
@@ -3365,7 +3365,7 @@ export default function ProjectSpaceContainer() {
 
   // Market color mapping
   const marketColors: Record<string, string> = { 'OP': '#1890ff', 'TR': '#52c41a', 'RU': '#faad14', 'FR': '#722ed1', 'IN': '#eb2f96', 'BR': '#13c2c2' }
-  const tosTypeColors: Record<string, string> = { Full: '#6366f1', Slim: '#13c2c2', PAD: '#722ed1', GO: '#fa8c16' }
+  const tosTypeColors: Record<string, string> = { Full: 'var(--pms-brand)', Slim: '#13c2c2', PAD: '#722ed1', GO: '#fa8c16' }
 
   // ═══════ renderProjectPlan ═══════
   const renderProjectPlan = () => {
@@ -3485,10 +3485,10 @@ export default function ProjectSpaceContainer() {
           </Card>
         )}
         {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1' && level2PlanMeta[activeLevel2Plan]?.planType === '1+N MR版本火车计划' && (
-          <Card size="small" style={{ marginBottom: 16, borderRadius: 8, border: '1px solid rgba(99,102,241,0.06)' }} styles={{ body: { padding: 0 } }}>
+          <Card size="small" style={{ marginBottom: 16, borderRadius: 8, border: '1px solid var(--pms-brand-border)' }} styles={{ body: { padding: 0 } }}>
             <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }} onClick={() => setPlanMetaCollapsed(!planMetaCollapsed)}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 3, height: 16, background: '#6366f1', borderRadius: 2 }} />
+                <div style={{ width: 3, height: 16, background: 'var(--pms-brand)', borderRadius: 2 }} />
                 <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>计划基本信息</span>
                 <Tag color="blue" style={{ marginLeft: 4, fontSize: 11 }}>{level2PlanMeta[activeLevel2Plan]?.planType}</Tag>
               </div>
@@ -3849,13 +3849,13 @@ export default function ProjectSpaceContainer() {
   // The actual body rendering for each module (basic, plan, etc.) is delegated to sub-functions that were defined above.
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #f0f2f8 0%, #e8ecf4 100%)' }}>
+    <div className="pms-project-space pms-page-shell">
       {/* Header */}
       <ProjectSpaceHeader navigateWithEditGuard={navigateWithEditGuard} />
 
       <div style={{ display: 'flex', height: 'calc(100vh - 56px)' }}>
         {/* Sidebar */}
-        <div className="pms-sidebar" style={{ width: 200, background: 'linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.9) 100%)', borderRight: '1px solid rgba(99,102,241,0.06)', paddingTop: 12, overflowY: 'auto', flexShrink: 0 }}>
+        <div className="pms-sidebar pms-glass-surface" style={{ width: 200, paddingTop: 12, overflowY: 'auto', flexShrink: 0 }}>
           <Menu
             mode="inline"
             selectedKeys={[projectSpaceModule]}
@@ -3869,7 +3869,7 @@ export default function ProjectSpaceContainer() {
         </div>
 
         {/* Content area */}
-        <div id="basic-info-scroll-container" style={{ flex: 1, padding: 24, overflow: 'auto' }}>
+        <div id="basic-info-scroll-container" className="pms-project-section pms-solid-surface" style={{ flex: 1, padding: 24, overflow: 'auto' }}>
           {transfer.transferView === 'apply' && <TransferApply {...transferProps} />}
           {transfer.transferView === 'detail' && <TransferDetail {...transferProps} />}
           {transfer.transferView === 'entry' && <TransferEntry {...transferProps} />}

@@ -1,8 +1,6 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import '@/styles/globals.css'
-
-const inter = Inter({ subsets: ['latin'] })
+import PmsThemeProvider from '@/components/shared/PmsThemeProvider'
 
 export const metadata: Metadata = {
   title: '项目管理系统',
@@ -16,7 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN">
-      <body className={inter.className}>{children}</body>
+      <body><PmsThemeProvider>{children}</PmsThemeProvider></body>
     </html>
   )
 }

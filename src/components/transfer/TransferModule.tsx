@@ -149,7 +149,7 @@ function MiniPipeline({ app }: { app: TransferApplication }) {
   const label = getCurrentNodeLabel(app)
   const pct = getPipelinePercent(app)
   const nodeStatus = getCurrentNodeStatus(app)
-  const strokeColor = nodeStatus === 'success' ? '#52c41a' : nodeStatus === 'failed' ? '#ff4d4f' : '#6366f1'
+  const strokeColor = nodeStatus === 'success' ? '#52c41a' : nodeStatus === 'failed' ? '#ff4d4f' : 'var(--pms-brand)'
   const tagConfig = NODE_STATUS_CONFIG[nodeStatus] || NODE_STATUS_CONFIG['not_started']
   if (app.status === 'cancelled') {
     return <Tag color="default" icon={<StopOutlined />}>已关闭</Tag>
@@ -198,13 +198,13 @@ function renderEntryContent(record: { entryContent?: string; deliverables?: { id
   return (
     <div style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden', fontSize: 12 }}>
       {segments.map((seg, i) => {
-        if (seg.type === 'feishu') return <a key={i} href={seg.url} target="_blank" rel="noopener noreferrer" style={{ color: '#4338ca', display: 'inline-flex', alignItems: 'center', gap: 2 }}><FileTextOutlined style={{ fontSize: 11 }} />飞书文档</a>
-        if (seg.type === 'link') return <a key={i} href={seg.url} target="_blank" rel="noopener noreferrer" style={{ color: '#6366f1', display: 'inline-flex', alignItems: 'center', gap: 2 }}><LinkOutlined style={{ fontSize: 11 }} />{seg.text}</a>
+        if (seg.type === 'feishu') return <a key={i} href={seg.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--pms-brand-strong)', display: 'inline-flex', alignItems: 'center', gap: 2 }}><FileTextOutlined style={{ fontSize: 11 }} />飞书文档</a>
+        if (seg.type === 'link') return <a key={i} href={seg.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--pms-brand)', display: 'inline-flex', alignItems: 'center', gap: 2 }}><LinkOutlined style={{ fontSize: 11 }} />{seg.text}</a>
         if (seg.type === 'samba') return <span key={i} style={{ color: '#d97706', display: 'inline-flex', alignItems: 'center', gap: 2 }}><FolderOpenOutlined style={{ fontSize: 11 }} />{seg.text}</span>
         return <span key={i}>{seg.text} </span>
       })}
       {record.deliverables && record.deliverables.length > 0 && record.deliverables.map(d => (
-        <a key={d.id} href={d.url} target="_blank" rel="noopener noreferrer" style={{ color: '#4338ca', display: 'inline-flex', alignItems: 'center', gap: 2, marginLeft: 4 }}><FileTextOutlined style={{ fontSize: 11 }} />{d.name}</a>
+        <a key={d.id} href={d.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--pms-brand-strong)', display: 'inline-flex', alignItems: 'center', gap: 2, marginLeft: 4 }}><FileTextOutlined style={{ fontSize: 11 }} />{d.name}</a>
       ))}
     </div>
   )
@@ -319,8 +319,8 @@ export interface TransferModuleProps {
 export function TransferConfig(props: TransferModuleProps) {
   if (props.transferConfigView === 'home') {
     const cards = [
-      { key: 'checklist', icon: <FileTextOutlined style={{ fontSize: 28, color: '#4338ca' }} />, title: '转维材料配置', count: MOCK_CHECKLIST_TEMPLATES.length, desc: '管理转维CheckList模板，包括检查项、交接资料等' },
-      { key: 'review', icon: <AuditOutlined style={{ fontSize: 28, color: '#4338ca' }} />, title: '评审要素配置', count: MOCK_REVIEW_ELEMENT_TEMPLATES.length, desc: '管理评审要素模板，包括各角色评审标准' },
+      { key: 'checklist', icon: <FileTextOutlined style={{ fontSize: 28, color: 'var(--pms-brand-strong)' }} />, title: '转维材料配置', count: MOCK_CHECKLIST_TEMPLATES.length, desc: '管理转维CheckList模板，包括检查项、交接资料等' },
+      { key: 'review', icon: <AuditOutlined style={{ fontSize: 28, color: 'var(--pms-brand-strong)' }} />, title: '评审要素配置', count: MOCK_REVIEW_ELEMENT_TEMPLATES.length, desc: '管理评审要素模板，包括各角色评审标准' },
     ]
     return (
       <div>
@@ -340,7 +340,7 @@ export function TransferConfig(props: TransferModuleProps) {
                     <div style={{ fontSize: 13, color: '#9ca3af' }}>{c.desc}</div>
                   </div>
                 </div>
-                <Button type="primary" style={{ background: '#4338ca', borderColor: '#4338ca' }} onClick={() => props.setTransferConfigView(c.key as 'checklist' | 'review')}>管理</Button>
+                <Button type="primary" style={{ background: 'var(--pms-brand-strong)', borderColor: 'var(--pms-brand-strong)' }} onClick={() => props.setTransferConfigView(c.key as 'checklist' | 'review')}>管理</Button>
               </Card>
             </Col>
           ))}
@@ -424,8 +424,8 @@ export function TransferConfig(props: TransferModuleProps) {
 export function TransferWorkbench(props: TransferModuleProps) {
   const apps = props.transferApplications.filter(a => a.projectName === props.selectedProject?.name)
   const stats = [
-    { label: '总计', value: apps.length, color: '#4338ca' },
-    { label: '进行中', value: apps.filter(a => a.status === 'in_progress').length, color: '#6366f1' },
+    { label: '总计', value: apps.length, color: 'var(--pms-brand-strong)' },
+    { label: '进行中', value: apps.filter(a => a.status === 'in_progress').length, color: 'var(--pms-brand)' },
     { label: '已完成', value: apps.filter(a => a.status === 'completed').length, color: '#52c41a' },
     { label: '已关闭', value: apps.filter(a => a.status === 'cancelled').length, color: '#e5e7eb' },
   ]
@@ -433,7 +433,7 @@ export function TransferWorkbench(props: TransferModuleProps) {
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
       <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 18, fontWeight: 600 }}>转维管理</span>
-        <Button type="primary" icon={<PlusOutlined />} style={{ background: '#4338ca' }} onClick={() => props.setTransferView('apply')}>申请转维</Button>
+        <Button type="primary" icon={<PlusOutlined />} style={{ background: 'var(--pms-brand-strong)' }} onClick={() => props.setTransferView('apply')}>申请转维</Button>
       </div>
       <Row gutter={16} style={{ marginBottom: 20 }}>
         {stats.map(s => (
@@ -449,7 +449,7 @@ export function TransferWorkbench(props: TransferModuleProps) {
           columns={[
             { title: '项目名称', dataIndex: 'projectName', width: 240, render: (_: unknown, r: TransferApplication) => (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Avatar size={32} style={{ background: `linear-gradient(135deg, ${ROLE_COLORS[r.team.research[0]?.role] || '#4338ca'} 0%, #6366f1 100%)`, fontSize: 12 }}>{r.applicant.slice(-1)}</Avatar>
+                <Avatar size={32} style={{ background: `linear-gradient(135deg, ${ROLE_COLORS[r.team.research[0]?.role] || 'var(--pms-brand-strong)'} 0%, var(--pms-brand) 100%)`, fontSize: 12 }}>{r.applicant.slice(-1)}</Avatar>
                 <div><div style={{ fontSize: 13, fontWeight: 500 }}>{r.projectName}</div><div style={{ fontSize: 11, color: '#9ca3af' }}>{r.applicant} · {r.createdAt.slice(0, 10)}</div></div>
               </div>
             )},
@@ -465,7 +465,7 @@ export function TransferWorkbench(props: TransferModuleProps) {
             { title: '操作', width: 260, fixed: 'right' as const, render: (_: unknown, r: TransferApplication) => (
               <Space size={4}>
                 <Button size="small" type="text" icon={<FileTextOutlined />} style={{ color: '#666' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('detail'); }}>详情</Button>
-                {r.status === 'in_progress' && r.pipeline.dataEntry !== 'success' && <Button size="small" type="text" icon={<EditOutlined />} style={{ color: '#6366f1' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('entry'); }}>录入</Button>}
+                {r.status === 'in_progress' && r.pipeline.dataEntry !== 'success' && <Button size="small" type="text" icon={<EditOutlined />} style={{ color: 'var(--pms-brand)' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('entry'); }}>录入</Button>}
                 {r.status === 'in_progress' && r.pipeline.maintenanceReview === 'in_progress' && <Button size="small" type="text" icon={<AuditOutlined />} style={{ color: '#52c41a' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('review'); }}>评审</Button>}
                 {r.status === 'in_progress' && r.pipeline.sqaReview === 'in_progress' && <Button size="small" type="text" icon={<SafetyOutlined />} style={{ color: '#faad14' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('sqa-review'); }}>SQA审核</Button>}
                 {r.status === 'in_progress' && <Button size="small" type="text" danger icon={<CloseCircleOutlined />} onClick={() => { props.setTmCloseAppId(r.id); props.setTmCloseReason(''); props.setTmCloseModalVisible(true); }}>关闭</Button>}
@@ -493,9 +493,9 @@ export function TransferApply(props: TransferModuleProps) {
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
       <div style={{ marginBottom: 20 }}>
-        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => props.setTransferView(null)} style={{ color: '#4338ca', fontWeight: 500, padding: 0 }}>返回</Button>
+        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => props.setTransferView(null)} style={{ color: 'var(--pms-brand-strong)', fontWeight: 500, padding: 0 }}>返回</Button>
       </div>
-      <Card style={{ borderRadius: 10 }} title={<Space><SwapOutlined style={{ color: '#4338ca' }} /><span style={{ fontWeight: 600 }}>申请转维</span></Space>}>
+      <Card className="pms-solid-surface" style={{ borderRadius: 10 }} title={<Space><SwapOutlined style={{ color: 'var(--pms-brand-strong)' }} /><span style={{ fontWeight: 600 }}>申请转维</span></Space>}>
         <Form layout="vertical">
           <Form.Item label="项目名称" required>
             <Select value={props.selectedProject?.name || ''} disabled style={{ width: '100%' }}>
@@ -554,7 +554,7 @@ export function TransferApply(props: TransferModuleProps) {
             ].map((g, i) => (
               <Col span={8} key={i}>
                 <Card size="small" hoverable style={{ borderRadius: 8, textAlign: 'center' }}>
-                  <div style={{ fontSize: 24, color: '#4338ca', marginBottom: 8 }}>{g.icon}</div>
+                  <div style={{ fontSize: 24, color: 'var(--pms-brand-strong)', marginBottom: 8 }}>{g.icon}</div>
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{g.title}</div>
                   <div style={{ fontSize: 12, color: '#9ca3af' }}>{g.desc}</div>
                 </Card>
@@ -566,7 +566,7 @@ export function TransferApply(props: TransferModuleProps) {
         <div style={{ marginTop: 24, textAlign: 'right' }}>
           <Space>
             <Button onClick={() => props.setTransferView(null)}>取消</Button>
-            <Button type="primary" style={{ background: '#4338ca' }} onClick={() => {
+            <Button type="primary" style={{ background: 'var(--pms-brand-strong)' }} onClick={() => {
               if (!props.tmApplyDate) { message.warning('请选择计划评审日期'); return; }
               const newApp: TransferApplication = {
                 id: `app-new-${Date.now()}`,
@@ -626,11 +626,11 @@ export function TransferDetail(props: TransferModuleProps) {
   ]
 
   const getTimelineIcon = (action: string) => {
-    if (action.includes('创建')) return <ExclamationCircleOutlined style={{ color: '#6366f1' }} />
+    if (action.includes('创建')) return <ExclamationCircleOutlined style={{ color: 'var(--pms-brand)' }} />
     if (action.includes('通过')) return <CheckCircleOutlined style={{ color: '#52c41a' }} />
     if (action.includes('Block') || action.includes('不通过')) return <CloseCircleOutlined style={{ color: '#ff4d4f' }} />
     if (action.includes('录入')) return <ClockCircleOutlined style={{ color: '#faad14' }} />
-    return <ClockCircleOutlined style={{ color: '#6366f1' }} />
+    return <ClockCircleOutlined style={{ color: 'var(--pms-brand)' }} />
   }
 
   const renderEntryStatusTag = (status: string) => {
@@ -794,7 +794,7 @@ export function TransferDetail(props: TransferModuleProps) {
             {ANCHOR_SECTIONS.map(section => (
               <div key={section.id} onClick={() => { const el = document.getElementById(section.id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 16px', cursor: 'pointer', fontSize: 13, color: '#666', borderLeft: '3px solid transparent', transition: 'all 0.2s ease' }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#f0edff'; e.currentTarget.style.color = '#4338ca'; e.currentTarget.style.borderLeftColor = '#4338ca' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--pms-brand-surface)'; e.currentTarget.style.color = 'var(--pms-brand-strong)'; e.currentTarget.style.borderLeftColor = 'var(--pms-brand-strong)' }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#666'; e.currentTarget.style.borderLeftColor = 'transparent' }}
               >
                 <span style={{ fontSize: 14, lineHeight: 1 }}>{section.icon}</span>
@@ -867,8 +867,8 @@ export function TransferEntry(props: TransferModuleProps) {
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-      <div style={{ marginBottom: 20 }}><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => props.setTransferView(null)} style={{ color: '#4338ca', fontWeight: 500, padding: 0 }}>返回</Button></div>
-      <Card style={{ marginBottom: 20, borderRadius: 10 }} title={<Space><SwapOutlined style={{ color: '#4338ca' }} /><span style={{ fontWeight: 600 }}>{app.projectName} - 资料录入</span></Space>}>
+      <div style={{ marginBottom: 20 }}><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => props.setTransferView(null)} style={{ color: 'var(--pms-brand-strong)', fontWeight: 500, padding: 0 }}>返回</Button></div>
+      <Card className="pms-solid-surface" style={{ marginBottom: 20, borderRadius: 10 }} title={<Space><SwapOutlined style={{ color: 'var(--pms-brand-strong)' }} /><span style={{ fontWeight: 600 }}>{app.projectName} - 资料录入</span></Space>}>
         <PipelineProgress pipeline={app.pipeline} />
       </Card>
 
@@ -887,7 +887,7 @@ export function TransferEntry(props: TransferModuleProps) {
         footer={[
           <Button key="cancel" onClick={() => props.setTmEntryModalOpen(false)}>取消</Button>,
           <Button key="draft" onClick={() => saveEntry('draft')}>暂存</Button>,
-          <Button key="confirm" type="primary" style={{ background: '#4338ca' }} onClick={() => saveEntry('confirm')}>确认提交</Button>,
+          <Button key="confirm" type="primary" style={{ background: 'var(--pms-brand-strong)' }} onClick={() => saveEntry('confirm')}>确认提交</Button>,
         ]}>
         {props.tmEntryModalRecord && (
           <div>
@@ -959,8 +959,8 @@ export function TransferReview(props: TransferModuleProps) {
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-      <div style={{ marginBottom: 20 }}><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => props.setTransferView(null)} style={{ color: '#4338ca', fontWeight: 500, padding: 0 }}>返回</Button></div>
-      <Card style={{ marginBottom: 20, borderRadius: 10 }} title={<Space><SwapOutlined style={{ color: '#4338ca' }} /><span style={{ fontWeight: 600 }}>{app.projectName} - 维护审核</span></Space>}>
+      <div style={{ marginBottom: 20 }}><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => props.setTransferView(null)} style={{ color: 'var(--pms-brand-strong)', fontWeight: 500, padding: 0 }}>返回</Button></div>
+      <Card className="pms-solid-surface" style={{ marginBottom: 20, borderRadius: 10 }} title={<Space><SwapOutlined style={{ color: 'var(--pms-brand-strong)' }} /><span style={{ fontWeight: 600 }}>{app.projectName} - 维护审核</span></Space>}>
         <PipelineProgress pipeline={app.pipeline} />
       </Card>
       <Card style={{ borderRadius: 10 }}>
@@ -1005,8 +1005,8 @@ export function TransferSqaReview(props: TransferModuleProps) {
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-      <div style={{ marginBottom: 20 }}><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => props.setTransferView(null)} style={{ color: '#4338ca', fontWeight: 500, padding: 0 }}>返回</Button></div>
-      <Card style={{ marginBottom: 20, borderRadius: 10 }} title={<Space><SafetyOutlined style={{ color: '#4338ca' }} /><span style={{ fontWeight: 600 }}>{app.projectName} - SQA审核</span></Space>}>
+      <div style={{ marginBottom: 20 }}><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => props.setTransferView(null)} style={{ color: 'var(--pms-brand-strong)', fontWeight: 500, padding: 0 }}>返回</Button></div>
+      <Card className="pms-solid-surface" style={{ marginBottom: 20, borderRadius: 10 }} title={<Space><SafetyOutlined style={{ color: 'var(--pms-brand-strong)' }} /><span style={{ fontWeight: 600 }}>{app.projectName} - SQA审核</span></Space>}>
         <PipelineProgress pipeline={app.pipeline} />
       </Card>
 

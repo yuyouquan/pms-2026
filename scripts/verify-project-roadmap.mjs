@@ -2850,15 +2850,20 @@ registerAssertion('version evolution uses one aligned shared scroll grid', () =>
 registerAssertion('evolution old-product divider and planned actions use compact progressive disclosure', () => {
   const evolutionSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapEvolutionView.tsx'), 'utf8')
   const cardSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'), 'utf8')
+  const globalStyles = fs.readFileSync(path.join(root, 'src/styles/globals.css'), 'utf8')
   for (const contract of [
     '.pms-roadmap-evolution-separator',
-    'background: rgba(238, 242, 255, 0.54)',
+    'className="pms-roadmap-evolution-shell pms-solid-surface"',
+    'background: var(--pms-surface-solid)',
     'box-shadow: inset 0 1px 0',
   ]) {
     if (!evolutionSource.includes(contract)) throw new Error(`old-product divider is missing ${contract}`)
   }
-  if (/\.pms-roadmap-evolution-separator\s*\{[\s\S]*?background:\s*rgba\(255,\s*255,\s*255/.test(evolutionSource)) {
-    throw new Error('old-product divider still uses a white raised surface')
+  if (!/\.pms-roadmap-evolution-shell\.pms-solid-surface\s+\.pms-roadmap-evolution-separator,[\s\S]{0,220}\{[\s\S]{0,160}background:\s*var\(--pms-surface-solid\);/.test(globalStyles)) {
+    throw new Error('old-product divider is missing the opaque semantic material override')
+  }
+  if (evolutionSource.includes('background: rgba(238, 242, 255, 0.54)')) {
+    throw new Error('old-product divider still uses the translucent legacy fill')
   }
   for (const contract of [
     'MoreOutlined',

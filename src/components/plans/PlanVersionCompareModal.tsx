@@ -74,7 +74,7 @@ export function PlanVersionCompareModal({
         <Tooltip title={<div style={{ fontSize: 12 }}><div>修改人: {row.modifier}</div><div>修改时间: {row.modifyTime}</div></div>}>
           <div style={{ lineHeight: 1.6 }}>
             <div style={{ color: '#ff4d4f', fontSize: 11, textDecoration: 'line-through', opacity: 0.7 }}>{diff.oldValue}</div>
-            <div style={{ color: '#6366f1', fontWeight: 600, fontSize: 12 }}>{diff.newValue}</div>
+            <div style={{ color: 'var(--pms-brand)', fontWeight: 600, fontSize: 12 }}>{diff.newValue}</div>
           </div>
         </Tooltip>
       )
@@ -84,8 +84,8 @@ export function PlanVersionCompareModal({
     return <span style={{ color: '#4b5563' }}>{String(value || '-')}</span>
   }
   const columns = [
-    { title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, render: (value: string, row: CompareTableRow) => <span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? '#6366f1' : '#9ca3af' }}>{value}</span> },
-    { title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, render: (value: CompareTableRow['changeType']) => { const config = { 新增: { color: '#52c41a', bg: '#f6ffed' }, 删除: { color: '#ff4d4f', bg: '#fff2f0' }, 修改: { color: '#6366f1', bg: 'rgba(99,102,241,0.06)' }, 未变更: { color: '#9ca3af', bg: '#fafafa' } }[value]; return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: config.color, background: config.bg, border: `1px solid ${config.color}20` }}>{value}</span> } },
+    { title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, render: (value: string, row: CompareTableRow) => <span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? 'var(--pms-brand)' : '#9ca3af' }}>{value}</span> },
+    { title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, render: (value: CompareTableRow['changeType']) => { const config = { 新增: { color: '#52c41a', bg: '#f6ffed' }, 删除: { color: '#ff4d4f', bg: '#fff2f0' }, 修改: { color: 'var(--pms-brand)', bg: 'var(--pms-brand-surface)' }, 未变更: { color: '#9ca3af', bg: '#fafafa' } }[value]; return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: config.color, background: config.bg, border: value === '修改' ? '1px solid var(--pms-brand-border)' : `1px solid ${config.color}20` }}>{value}</span> } },
     { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, ellipsis: true, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', value) },
     { title: '责任人', dataIndex: 'responsible', key: 'responsible', width: 80, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', value) },
     { title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 80, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'predecessor', value) },
@@ -102,7 +102,7 @@ export function PlanVersionCompareModal({
   return (
     <Modal
       className="pms-modal"
-      title={<Space><HistoryOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
+      title={<Space><HistoryOutlined style={{ color: 'var(--pms-brand)' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
       open={open}
       onCancel={handleCancel}
       footer={null}
@@ -130,9 +130,9 @@ export function PlanVersionCompareModal({
         <div style={{ marginTop: 16 }}>
           <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
             {[
-              { label: '变更总计', value: changedRows.length, color: '#6366f1', filter: 'all' as const },
+              { label: '变更总计', value: changedRows.length, color: 'var(--pms-brand)', filter: 'all' as const },
               { label: '新增', value: stats.added, color: '#52c41a', filter: '新增' as const },
-              { label: '修改', value: stats.modified, color: '#6366f1', filter: '修改' as const },
+              { label: '修改', value: stats.modified, color: 'var(--pms-brand)', filter: '修改' as const },
               { label: '删除', value: stats.deleted, color: '#ff4d4f', filter: '删除' as const },
             ].map(item => <button type="button" key={item.filter} onClick={() => setFilterType(item.filter)} style={{ flex: 1, padding: '10px 16px', borderRadius: 8, cursor: 'pointer', textAlign: 'left', background: filterType === item.filter ? `${item.color}10` : '#fafafa', border: filterType === item.filter ? `1px solid ${item.color}` : '1px solid #f3f4f6' }}><div style={{ fontSize: 20, fontWeight: 700, color: item.color }}>{item.value}</div><div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{item.label}</div></button>)}
           </div>
@@ -140,7 +140,7 @@ export function PlanVersionCompareModal({
             <span style={{ fontSize: 12, color: '#9ca3af' }}>共 {filteredRows.length} 条记录</span>
             <Checkbox checked={showUnchanged} onChange={event => setShowUnchanged(event.target.checked)}><span style={{ fontSize: 12 }}>显示未变更项</span></Checkbox>
           </div>
-          <Table<CompareTableRow> className="pms-table" columns={columns} dataSource={filteredRows} size="small" bordered pagination={filteredRows.length > 15 ? { pageSize: 15, size: 'small', showTotal: total => `共 ${total} 条` } : false} scroll={{ x: 1200, y: 420 }} rowKey="key" onRow={record => ({ style: { background: record.changeType === '新增' ? '#f6ffed' : record.changeType === '删除' ? '#fff2f0' : record.changeType === '修改' ? 'rgba(99,102,241,0.06)' : undefined } })} />
+          <Table<CompareTableRow> className="pms-table" columns={columns} dataSource={filteredRows} size="small" bordered pagination={filteredRows.length > 15 ? { pageSize: 15, size: 'small', showTotal: total => `共 ${total} 条` } : false} scroll={{ x: 1200, y: 420 }} rowKey="key" onRow={record => ({ style: { background: record.changeType === '新增' ? '#f6ffed' : record.changeType === '删除' ? '#fff2f0' : record.changeType === '修改' ? 'var(--pms-brand-surface)' : undefined } })} />
         </div>
       )}
     </Modal>

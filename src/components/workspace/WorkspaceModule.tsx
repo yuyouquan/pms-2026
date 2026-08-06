@@ -112,7 +112,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
 
   // Status tag gradient styles
   const statusTagStyle: Record<string, React.CSSProperties> = {
-    '进行中': { background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', color: '#4338ca', border: 'none' },
+    '进行中': { background: 'var(--info-light)', color: '#1d4ed8', border: 'none' },
     '已完成': { background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', color: '#065f46', border: 'none' },
     '筹备中': { background: 'linear-gradient(135deg, #fffbeb, #fef3c7)', color: '#92400e', border: 'none' },
   }
@@ -129,15 +129,12 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       tabIndex={0}
       aria-label={`打开项目 ${project.sourceBid || project.id}`}
       hoverable
-      className="pms-card-hover"
+      className="pms-card-hover pms-glass-surface pms-interactive-surface"
       style={{
         borderRadius: 10,
-        border: '1px solid #e5e7eb',
         height: '100%',
-        background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.9) 100%)',
-        borderLeft: hovered ? '3px solid #6366f1' : '1px solid #e5e7eb',
-        boxShadow: hovered ? '0 12px 28px rgba(99,102,241,0.12)' : '0 2px 8px rgba(0,0,0,0.04)',
-        transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
+        borderLeft: hovered ? '3px solid var(--pms-brand)' : '1px solid var(--pms-border)',
+        boxShadow: hovered ? 'var(--pms-shadow-glass)' : 'var(--pms-shadow-xs)',
       }}
       styles={{ body: { padding: '16px 20px', height: '100%', display: 'flex', flexDirection: 'column' as const } }}
       onMouseEnter={() => setHovered(true)}
@@ -188,7 +185,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       {!isCapability && (project.planStartDate || project.planEndDate) && (
         <div style={{ display: 'flex', gap: 12, marginBottom: 10, fontSize: 12, color: '#9ca3af' }}>
           {project.planStartDate && (
-            <span><CalendarOutlined style={{ marginRight: 4, color: '#6366f1' }} />{project.planStartDate}</span>
+            <span><CalendarOutlined style={{ marginRight: 4, color: 'var(--pms-brand)' }} />{project.planStartDate}</span>
           )}
           {project.planEndDate && (
             <span>→ {project.planEndDate}</span>
@@ -199,7 +196,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       {/* 底部: 项目经理 + 更新时间 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
         <Space size={6}>
-          <Avatar size={20} style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)', fontSize: 10 }}>{project.spm[0]}</Avatar>
+          <Avatar size={20} style={{ background: 'var(--pms-gradient-brand)', fontSize: 10 }}>{project.spm[0]}</Avatar>
           <span style={{ fontSize: 12, color: '#4b5563' }}>{project.spm}</span>
         </Space>
         <span style={{ fontSize: 11, color: '#bfbfbf' }}>{project.updatedAt}</span>
@@ -244,7 +241,7 @@ export const TodoList: React.FC<TodoListProps> = ({
   const priorityConfig: Record<string, { color: string; text: string; dotColor: string; gradientBg: string }> = {
     high: { color: 'red', text: '高', dotColor: '#ff4d4f', gradientBg: 'linear-gradient(135deg, #fff1f0, #ffccc7)' },
     medium: { color: 'orange', text: '中', dotColor: '#faad14', gradientBg: 'linear-gradient(135deg, #fffbe6, #ffe58f)' },
-    low: { color: 'blue', text: '低', dotColor: '#6366f1', gradientBg: 'linear-gradient(135deg, #eef2ff, #e0e7ff)' },
+    low: { color: 'blue', text: '低', dotColor: 'var(--info)', gradientBg: 'var(--info-light)' },
   }
 
   // 按 项目+计划级别+计划类型+版本 去重合并
@@ -283,15 +280,13 @@ export const TodoList: React.FC<TodoListProps> = ({
             return (
               <div
                 key={todo.id}
+                className="pms-solid-surface pms-interactive-surface"
                 style={{
                   padding: '12px 14px',
-                  background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.85) 100%)',
                   borderRadius: 6,
-                  border: '1px solid #e5e7eb',
                   cursor: 'pointer',
-                  transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(99,102,241,0.08)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.15)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 12px color-mix(in srgb, var(--pms-brand) 8%, transparent)'; e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--pms-brand) 15%, transparent)' }}
                 onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = '#e5e7eb' }}
                 onClick={() => {
                   const proj = projects.find(p => p.id === todo.projectId)
@@ -318,7 +313,7 @@ export const TodoList: React.FC<TodoListProps> = ({
                           rows[i].scrollIntoView({ behavior: 'smooth', block: 'center' })
                           const row = rows[i] as HTMLElement
                           row.style.transition = 'background 0.3s'
-                          row.style.background = 'rgba(99,102,241,0.06)'
+                          row.style.background = 'color-mix(in srgb, var(--pms-brand) 6%, transparent)'
                           setTimeout(() => { row.style.background = '' }, 2000)
                           return
                         }
@@ -334,7 +329,7 @@ export const TodoList: React.FC<TodoListProps> = ({
                     <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {todo.planLevel === 'level1' ? '一级计划' : '二级计划'}
                       {todo.planLevel === 'level2' && todo.planType && <> · {todo.planType}</>}
-                      {' · '}<span style={{ color: '#6366f1', fontWeight: 500 }}>{todo.versionNo}</span>
+                      {' · '}<span style={{ color: 'var(--pms-brand)', fontWeight: 500 }}>{todo.versionNo}</span>
                       {todo.market && <> · <span style={{ color: '#13c2c2' }}>{todo.market}</span></>}
                     </div>
                     {(todo as any).mergedCount > 1 && (

@@ -359,10 +359,16 @@ export default function WorkbenchContainer() {
 
   return (
     <Tabs
+      className="pms-workbench"
       activeKey={workbenchTab}
       onChange={(key) => navigateWithEditGuard(
         () => setWorkbenchTab(key as WorkbenchTab),
         isCurrentDraft,
+      )}
+      renderTabBar={(props, DefaultTabBar) => (
+        <div className="pms-toolbar pms-workbench-toolbar">
+          <DefaultTabBar {...props} />
+        </div>
       )}
       items={[
         { key: 'todo', label: <span><CheckSquareOutlined /> 待办中心</span>, children: todoContent },

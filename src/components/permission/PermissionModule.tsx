@@ -149,8 +149,8 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
   const maxProjectPermissionColumns = Math.max(...PROJECT_PERMISSION_GROUPS.map(group => group.permissions.length))
 
   return (
-    <Card style={{ borderRadius: 8 }}>
-      <Tabs activeKey={permConfigTab} onChange={(k) => setPermConfigTab(k as any)} items={[
+    <Card className="pms-permission-workspace pms-solid-surface" style={{ borderRadius: 8 }}>
+      <Tabs className="pms-toolbar" activeKey={permConfigTab} onChange={(k) => setPermConfigTab(k as any)} items={[
         { key: 'roles', label: <Space><TeamOutlined />角色人员配置</Space> },
         { key: 'perms', label: <Space><SafetyCertificateOutlined />权限配置</Space> },
       ]} />
@@ -162,6 +162,7 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
             <Button type="primary" icon={<PlusOutlined />} disabled={!canManageRoles} onClick={() => setShowAddRoleModal(true)}>新增角色</Button>
           </div>
           <Table
+            className="pms-table"
             dataSource={roles}
             rowKey="name"
             pagination={false}
@@ -378,8 +379,8 @@ export const GlobalPermissionConfig: React.FC<GlobalPermissionConfigProps> = ({
   const maxGlobalPermissionColumns = Math.max(...GLOBAL_PERMISSION_GROUPS.map(group => group.permissions.length))
 
   return (
-    <Card style={{ borderRadius: 8 }}>
-      <Tabs activeKey={globalPermTab} onChange={(k) => setGlobalPermTab(k as any)} items={[
+    <Card className="pms-permission-workspace pms-solid-surface" style={{ borderRadius: 8 }}>
+      <Tabs className="pms-toolbar" activeKey={globalPermTab} onChange={(k) => setGlobalPermTab(k as any)} items={[
         { key: 'roles', label: <Space><TeamOutlined />角色配置</Space> },
         { key: 'perms', label: <Space><SafetyCertificateOutlined />权限配置</Space> },
       ]} />
@@ -391,6 +392,7 @@ export const GlobalPermissionConfig: React.FC<GlobalPermissionConfigProps> = ({
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowGlobalAddRole(true)}>新增角色</Button>
           </div>
           <Table
+            className="pms-table"
             dataSource={globalRoles}
             rowKey="name"
             pagination={false}

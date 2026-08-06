@@ -288,6 +288,7 @@ export default function PlannedProjectModal({
   return (
     <Modal
       className="pms-modal"
+      classNames={{ header: 'pms-glass-surface', body: 'pms-solid-surface', footer: 'pms-glass-surface' }}
       title={editingProject ? '编辑待规划项目' : '创建待规划项目'}
       open={open}
       onCancel={requestClose}
@@ -322,6 +323,7 @@ export default function PlannedProjectModal({
       )}
     >
       <Form
+        className="pms-roadmap-overlay-body pms-solid-surface"
         form={form}
         layout="vertical"
         preserve={false}

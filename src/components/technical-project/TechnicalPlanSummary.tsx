@@ -21,7 +21,7 @@ export default function TechnicalPlanSummary({ scope, label }: TechnicalPlanSumm
   const planCard = (content: ReactNode) => (
     <Card
       className="pms-project-info-plan-card"
-      title={<Space size={8}><CalendarOutlined style={{ color: '#6366f1' }} /><span>计划信息</span></Space>}
+      title={<Space size={8}><CalendarOutlined style={{ color: 'var(--pms-brand)' }} /><span>计划信息</span></Space>}
     >
       {content}
     </Card>

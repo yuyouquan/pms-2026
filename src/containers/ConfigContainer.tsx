@@ -295,7 +295,7 @@ export default function ConfigContainer() {
               </span>
             )}
             {expandEnabled && !hasChildren(record.id, tableTasks) && <span style={{ display: 'inline-block', width: 14 }} />}
-            {canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} style={{ color: '#6366f1' }} onClick={(e) => { e.stopPropagation(); handleAddSubTask(record.id) }} /></Tooltip>}
+            {canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} style={{ color: 'var(--pms-brand)' }} onClick={(e) => { e.stopPropagation(); handleAddSubTask(record.id) }} /></Tooltip>}
             <span style={{ fontWeight: depth === 0 ? 600 : 500, color: depth === 0 ? '#111827' : '#4b5563', fontSize: 13 }}>{id}</span>
           </div>
         )
@@ -318,7 +318,7 @@ export default function ConfigContainer() {
       if (visibleColumns.includes('status')) cols.push({ title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (s: string) => <Tag color={s === '已完成' ? 'success' : s === '进行中' ? 'processing' : 'default'} style={{ borderRadius: 4, fontSize: 12 }}>{s}</Tag> })
       if (visibleColumns.includes('progress')) cols.push({ title: '进度', dataIndex: 'progress', key: 'progress', width: 130, render: (p: number) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Progress percent={p} size="small" showInfo={false} strokeColor={p === 100 ? '#52c41a' : '#6366f1'} style={{ flex: 1, marginBottom: 0 }} />
+          <Progress percent={p} size="small" showInfo={false} strokeColor={p === 100 ? '#52c41a' : 'var(--pms-brand)'} style={{ flex: 1, marginBottom: 0 }} />
           <span style={{ fontSize: 11, color: p === 100 ? '#52c41a' : '#4b5563', fontWeight: 500, minWidth: 32 }}>{p}%</span>
         </div>
       ) })
@@ -605,19 +605,19 @@ export default function ConfigContainer() {
     const stats = { total: compareResult.length, added: changedRows.filter(r => r.changeType === '新增').length, deleted: changedRows.filter(r => r.changeType === '删除').length, modified: changedRows.filter(r => r.changeType === '修改').length, unchanged: compareResult.filter(r => r.changeType === '未变更').length }
     let filteredData = compareShowUnchanged ? compareResult : changedRows
     if (compareFilterType !== 'all') filteredData = filteredData.filter(r => r.changeType === compareFilterType)
-    const getRowBg = (type: string) => { if (type === '新增') return '#f6ffed'; if (type === '删除') return '#fff2f0'; if (type === '修改') return 'rgba(99,102,241,0.06)'; return undefined }
+    const getRowBg = (type: string) => { if (type === '新增') return '#f6ffed'; if (type === '删除') return '#fff2f0'; if (type === '修改') return 'var(--pms-brand-surface)'; return undefined }
     const renderDiffCell = (row: CompareTableRow, fieldKey: string, value: any) => {
       const diff = row.fieldDiffs.find((d: FieldDiff) => d.field === fieldKey)
       if (row.changeType === '修改' && diff) {
-        return (<Tooltip title={<div style={{ fontSize: 12 }}><div>修改人: {row.modifier}</div><div>修改时间: {row.modifyTime}</div></div>}><div style={{ lineHeight: 1.6 }}><div style={{ color: '#ff4d4f', fontSize: 11, textDecoration: 'line-through', opacity: 0.7 }}>{diff.oldValue}</div><div style={{ color: '#6366f1', fontWeight: 600, fontSize: 12 }}>{diff.newValue}</div></div></Tooltip>)
+        return (<Tooltip title={<div style={{ fontSize: 12 }}><div>修改人: {row.modifier}</div><div>修改时间: {row.modifyTime}</div></div>}><div style={{ lineHeight: 1.6 }}><div style={{ color: '#ff4d4f', fontSize: 11, textDecoration: 'line-through', opacity: 0.7 }}>{diff.oldValue}</div><div style={{ color: 'var(--pms-brand)', fontWeight: 600, fontSize: 12 }}>{diff.newValue}</div></div></Tooltip>)
       }
       if (row.changeType === '新增') return <span style={{ color: '#52c41a', fontWeight: 500 }}>{value || '-'}</span>
       if (row.changeType === '删除') return <span style={{ color: '#ff4d4f', textDecoration: 'line-through', opacity: 0.7 }}>{value || '-'}</span>
       return <span style={{ color: '#4b5563' }}>{value || '-'}</span>
     }
     const compareColumns: any[] = [
-      { title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, render: (val: string, row: CompareTableRow) => (<span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? '#6366f1' : '#9ca3af' }}>{val}</span>) },
-      { title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, render: (val: string) => { const conf: Record<string, { color: string; bg: string }> = { '新增': { color: '#52c41a', bg: '#f6ffed' }, '删除': { color: '#ff4d4f', bg: '#fff2f0' }, '修改': { color: '#6366f1', bg: 'rgba(99,102,241,0.06)' }, '未变更': { color: '#9ca3af', bg: '#fafafa' } }; const c = conf[val]; return c ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: c.color, background: c.bg, border: `1px solid ${c.color}20` }}>{val}</span> : null } },
+      { title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, render: (val: string, row: CompareTableRow) => (<span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? 'var(--pms-brand)' : '#9ca3af' }}>{val}</span>) },
+      { title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, render: (val: string) => { const conf: Record<string, { color: string; bg: string }> = { '新增': { color: '#52c41a', bg: '#f6ffed' }, '删除': { color: '#ff4d4f', bg: '#fff2f0' }, '修改': { color: 'var(--pms-brand)', bg: 'var(--pms-brand-surface)' }, '未变更': { color: '#9ca3af', bg: '#fafafa' } }; const c = conf[val]; return c ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: c.color, background: c.bg, border: val === '修改' ? '1px solid var(--pms-brand-border)' : `1px solid ${c.color}20` }}>{val}</span> : null } },
       { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, ellipsis: true, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
       { title: '角色', dataIndex: 'responsible', key: 'responsible', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) },
       { title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'predecessor', val) },
@@ -631,9 +631,9 @@ export default function ConfigContainer() {
       <div style={{ marginTop: 16 }}>
         <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
           {[
-            { label: '变更总计', value: changedRows.length, color: '#6366f1', filterVal: 'all' },
+            { label: '变更总计', value: changedRows.length, color: 'var(--pms-brand)', filterVal: 'all' },
             { label: '新增', value: stats.added, color: '#52c41a', filterVal: '新增' },
-            { label: '修改', value: stats.modified, color: '#6366f1', filterVal: '修改' },
+            { label: '修改', value: stats.modified, color: 'var(--pms-brand)', filterVal: '修改' },
             { label: '删除', value: stats.deleted, color: '#ff4d4f', filterVal: '删除' },
           ].map(item => {
             const isActive = compareFilterType === item.filterVal
@@ -650,9 +650,9 @@ export default function ConfigContainer() {
   }
 
   return (
-    <div>
+    <div className="pms-admin-workspace pms-page-shell">
       {/* Config tab navigation */}
-      <Card size="small" style={{ marginBottom: 20, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
+      <Card className="pms-toolbar" size="small" style={{ marginBottom: 20, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
         <Tabs
           activeKey={configTab}
           onChange={(key) => { setConfigTab(key); if (key === 'transfer') setTransferConfigView('home'); }}
@@ -676,6 +676,7 @@ export default function ConfigContainer() {
         <Row gutter={20}>
           <Col span={sidebarCollapsed ? 1 : 4}>
             <Card
+              className="pms-glass-surface"
               size="small"
               style={{ borderRadius: 8, position: 'sticky', top: 24 }}
               styles={{
@@ -690,12 +691,12 @@ export default function ConfigContainer() {
           </Col>
           <Col span={sidebarCollapsed ? 23 : 20}>
             {/* Config header */}
-            <Card size="small" style={{ marginBottom: 16, borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
+            <Card className="pms-glass-surface" size="small" style={{ marginBottom: 16, borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
               <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%)', borderBottom: '1px solid #e5e7eb' }}>
                 <Row justify="space-between" align="middle">
                   <Col>
                     <Space size={8} align="center">
-                      <CalendarOutlined style={{ color: '#6366f1', fontSize: 16 }} />
+                      <CalendarOutlined style={{ color: 'var(--pms-brand)', fontSize: 16 }} />
                       <span style={{ fontSize: 16, fontWeight: 600, color: '#111827' }}>{selectedTemplateType}</span>
                       <Divider type="vertical" style={{ height: 16, margin: '0 4px' }} />
                       <span style={{ fontSize: 14, color: '#4b5563' }}>计划模板配置</span>
@@ -724,7 +725,7 @@ export default function ConfigContainer() {
 
             {/* L2 plan type selector */}
             {planLevel === 'level2' && (
-              <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '10px 16px' } }}>
+              <Card className="pms-toolbar" size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '10px 16px' } }}>
                 <Space wrap size={[8, 8]}>
                   <span style={{ color: '#9ca3af', fontSize: 13, fontWeight: 500 }}>模板类型</span>
                   <Divider type="vertical" style={{ height: 16, margin: '0 4px' }} />
@@ -761,7 +762,7 @@ export default function ConfigContainer() {
             )}
 
             {/* Version control + toolbar */}
-            <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '10px 16px' } }}>
+            <Card className="pms-toolbar" size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '10px 16px' } }}>
               <Row justify="space-between" align="middle">
                 <Col>
                   <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
@@ -802,7 +803,7 @@ export default function ConfigContainer() {
             </Card>
 
             {/* Table / Gantt content */}
-            <Card style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
+            <Card className="pms-solid-surface" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
               {viewMode === 'gantt' ? renderGanttChart() : renderTaskTable()}
             </Card>
           </Col>
@@ -839,7 +840,7 @@ export default function ConfigContainer() {
 
       {/* Version compare modal */}
       <Modal className="pms-modal"
-        title={<Space><HistoryOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
+        title={<Space><HistoryOutlined style={{ color: 'var(--pms-brand)' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
         open={showVersionCompare}
         onCancel={() => { setShowVersionCompare(false); setCompareResult([]); setCompareFilterType('all'); setCompareShowUnchanged(false) }}
         footer={null} width={1200}

@@ -219,7 +219,7 @@ export default function RoadmapEvolutionView({
   return (
     <div
       ref={scrollRef}
-      className="pms-roadmap-evolution-shell"
+      className="pms-roadmap-evolution-shell pms-solid-surface"
       aria-label="tOS 版本演进视图"
       tabIndex={0}
     >
@@ -247,7 +247,7 @@ export default function RoadmapEvolutionView({
               ) : null}
               {version.targets.length ? (
                 <section
-                  className="pms-roadmap-evolution-target"
+                  className="pms-roadmap-evolution-target pms-glass-surface"
                   aria-label={`${formatTosVersionDisplay(version)} 目标`}
                 >
                   <Flex
@@ -350,7 +350,7 @@ export default function RoadmapEvolutionView({
           scrollbar-gutter: stable;
           border: 1px solid var(--border-purple);
           border-radius: var(--radius-xl);
-          background: rgba(238, 242, 255, 0.5);
+          background: var(--pms-surface-solid);
           box-shadow: var(--shadow-sm);
         }
 
@@ -381,7 +381,7 @@ export default function RoadmapEvolutionView({
           border: 1px solid var(--border-purple);
           border-top: 0;
           border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-          background: rgba(255, 255, 255, 0.96);
+          background: var(--pms-surface-solid);
           box-shadow: var(--shadow-md);
           backdrop-filter: blur(18px) saturate(150%);
         }
@@ -408,7 +408,7 @@ export default function RoadmapEvolutionView({
         .pms-roadmap-evolution-grid-cell {
           min-width: 0;
           border-inline: 1px solid var(--border-purple);
-          background: rgba(238, 242, 255, 0.54);
+          background: var(--pms-surface-solid);
         }
 
         .pms-roadmap-evolution-product-cell {
@@ -433,8 +433,8 @@ export default function RoadmapEvolutionView({
           min-height: 40px;
           padding: 8px 12px;
           border-inline: 1px solid var(--border-purple);
-          background: rgba(238, 242, 255, 0.54);
-          box-shadow: inset 0 1px 0 rgba(99, 102, 241, 0.12);
+          background: var(--pms-surface-solid);
+          box-shadow: inset 0 1px 0 color-mix(in srgb, var(--pms-brand) 12%, transparent);
         }
 
         .pms-roadmap-evolution-brand-section + .pms-roadmap-evolution-brand-section {
@@ -452,7 +452,7 @@ export default function RoadmapEvolutionView({
           flex: none;
           border-radius: var(--radius-full);
           background: var(--primary);
-          box-shadow: 0 0 0 3px rgba(67, 56, 202, 0.1);
+          box-shadow: 0 0 0 3px color-mix(in srgb, var(--pms-brand-strong) 10%, transparent);
         }
 
         .pms-roadmap-evolution-brand-dot.brand-tecno {
@@ -531,7 +531,7 @@ export default function RoadmapEvolutionView({
         .pms-roadmap-evolution-action-toggle:hover,
         .pms-roadmap-evolution-action-toggle[aria-expanded='true'] {
           color: var(--primary);
-          background: rgba(79, 70, 229, 0.08);
+          background: color-mix(in srgb, var(--pms-brand) 8%, transparent);
         }
 
         .pms-roadmap-evolution-action-toggle[aria-expanded='true'] {

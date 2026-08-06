@@ -125,7 +125,7 @@ const CATEGORY_ORDER = ['CAMON', 'Note', 'SPARK', 'POVA', 'tOS版本', '技术�
 
 const CATEGORY_THEME: Record<string, { key: string; label?: string; color: string; bg: string; seriesBg: string; accent: string }> = {
   CAMON: { key: 'camon', color: '#2563eb', bg: '#eff6ff', seriesBg: '#f8fbff', accent: '#3b82f6' },
-  Note: { key: 'note', label: 'NOTE', color: '#7c3aed', bg: '#f5f3ff', seriesBg: '#faf7ff', accent: '#8b5cf6' },
+  Note: { key: 'note', label: 'NOTE', color: 'var(--pms-brand-strong)', bg: 'var(--pms-brand-surface)', seriesBg: 'color-mix(in srgb, var(--pms-brand) 4%, var(--pms-surface-solid))', accent: 'var(--pms-brand)' },
   SPARK: { key: 'spark', color: '#059669', bg: '#ecfdf5', seriesBg: '#f4fff9', accent: '#10b981' },
   POVA: { key: 'pova', color: '#d97706', bg: '#fffbeb', seriesBg: '#fffdf2', accent: '#f59e0b' },
   tOS版本: { key: 'tos', color: '#0891b2', bg: '#ecfeff', seriesBg: '#f0fdfa', accent: '#06b6d4' },
@@ -1542,7 +1542,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   }, [activeMilestoneDateRange, projectSummaryDefinitionsByScope, statusRows])
 
   const renderCalendarView = () => (
-    <div className="pms-project-calendar">
+    <div className="pms-project-calendar pms-solid-surface">
       <div className="pms-project-calendar-header">
         <div className="pms-project-calendar-title">{calendarMonth.format('YYYY年M月')}</div>
         <Space size={6}>
@@ -1595,7 +1595,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
 
   const renderSummaryTable = () => (
     <Table
-      className="pms-table pms-summary-board"
+      className="pms-table pms-summary-board pms-solid-surface"
       columns={columns}
       dataSource={rows}
       rowKey="key"
@@ -1750,7 +1750,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
           transition: background-color 0.18s ease, color 0.18s ease;
         }
         .pms-project-view-tabs .ant-tabs-tab-active {
-          background: #eef2ff;
+          background: var(--pms-brand-surface);
         }
         .pms-project-view-tab-label {
           display: inline-flex;
@@ -1807,13 +1807,13 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
           transition: all 0.18s ease;
         }
         .pms-summary-status-pill:hover {
-          background: #eaf1ff;
-          color: #2563eb;
+          background: var(--pms-brand-surface);
+          color: var(--pms-brand-strong);
         }
         .pms-summary-status-pill-active {
-          background: #4f6df5;
+          background: var(--pms-brand);
           color: #fff;
-          box-shadow: 0 4px 10px rgba(79,109,245,0.22);
+          box-shadow: 0 4px 10px color-mix(in srgb, var(--pms-brand) 22%, transparent);
         }
         .pms-summary-status-dot {
           width: 6px;
@@ -2020,7 +2020,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         }
         .pms-summary-category-note,
         .pms-summary-row-note > td.pms-summary-category-cell {
-          background: #f5f3ff !important;
+          background: var(--pms-brand-surface) !important;
         }
         .pms-summary-series-note,
         .pms-summary-row-note > td.pms-summary-series-cell {
@@ -2254,7 +2254,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         }
       `}</style>
 
-      <div className="pms-summary-control-shell pms-summary-control-shell-static">
+      <div className="pms-summary-control-shell pms-summary-control-shell-static pms-glass-surface">
         <Tabs
           className="pms-summary-scope-tabs"
           activeKey={scope}
@@ -2284,7 +2284,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
         const renderToolbar = () => (
           <div className="pms-summary-sticky-region pms-summary-sticky-offset" style={stickyRegionStyle}>
         <div className="pms-summary-toolbar-shell">
-	        <div className="pms-summary-toolbar">
+	        <div className="pms-summary-toolbar pms-toolbar">
 	          <div className="pms-summary-status-group">
 	            <span className="pms-summary-status-label">状态</span>
 	            {STATUS_FILTERS.map(item => {
@@ -2495,6 +2495,8 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       {!isFullscreen && renderCurrentView()}
 
       <Modal
+        className="pms-modal"
+        classNames={{ header: 'pms-glass-surface', body: 'pms-solid-surface', footer: 'pms-glass-surface' }}
         title={(
           <Space>
             <span>项目计划汇总看板</span>
@@ -2520,6 +2522,8 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       })()}
 
 	      <Modal
+	        className="pms-modal"
+	        classNames={{ header: 'pms-glass-surface', body: 'pms-solid-surface', footer: 'pms-glass-surface' }}
 	        title="新建视图"
 	        open={showSaveProjectViewModal}
 	        onCancel={() => setShowSaveProjectViewModal(false)}
@@ -2543,6 +2547,8 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
 	      </Modal>
 
 	      <Modal
+	        className="pms-modal"
+	        classNames={{ header: 'pms-glass-surface', body: 'pms-solid-surface', footer: 'pms-glass-surface' }}
 	        title="分享视图"
 	        open={showProjectViewShareModal}
 	        onCancel={() => setShowProjectViewShareModal(false)}

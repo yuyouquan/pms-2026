@@ -52,7 +52,7 @@ function ProjectInformationAnchorNav({ items }: { items: ProjectInformationAncho
       aria-label="项目信息导航"
       style={{ position: 'fixed', right: 32, top: 130, zIndex: 50, width: 150 }}
     >
-      <div style={{ background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(12px)', borderRadius: 14, border: '1px solid rgba(99,102,241,0.1)', padding: '16px 0 12px', boxShadow: '0 4px 16px rgba(99,102,241,0.08)' }}>
+      <div className="pms-project-info-anchor pms-glass-surface" style={{ padding: '16px 0 12px' }}>
         <div style={{ padding: '0 16px 10px', fontSize: 10, fontWeight: 700, color: '#a5b4fc', letterSpacing: 3, textTransform: 'uppercase' }}>导航</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {items.map(item => (
@@ -62,9 +62,9 @@ function ProjectInformationAnchorNav({ items }: { items: ProjectInformationAncho
               onClick={() => scrollToSection(item.id)}
               style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 16px', color: '#64748b', fontSize: 12, fontFamily: 'inherit', textAlign: 'left', cursor: 'pointer', border: 0, borderLeft: '2px solid transparent', background: 'transparent', transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)' }}
               onMouseEnter={(event) => {
-                event.currentTarget.style.background = 'linear-gradient(90deg, rgba(99,102,241,0.08) 0%, transparent 100%)'
-                event.currentTarget.style.color = '#6366f1'
-                event.currentTarget.style.borderLeftColor = '#6366f1'
+                event.currentTarget.style.background = 'color-mix(in srgb, var(--pms-brand-surface) 72%, transparent)'
+                event.currentTarget.style.color = 'var(--pms-brand)'
+                event.currentTarget.style.borderLeftColor = 'var(--pms-brand)'
               }}
               onMouseLeave={(event) => {
                 event.currentTarget.style.background = 'transparent'
@@ -127,7 +127,7 @@ function ProjectCoreFieldsCard({
 
 function ProjectInformationSlot({ anchorId, children }: { anchorId: string; children: ReactNode }) {
   return (
-    <section id={anchorId} className="pms-project-information-slot">
+    <section id={anchorId} className="pms-project-information-slot pms-project-section pms-solid-surface">
       {children}
     </section>
   )

@@ -55,9 +55,7 @@ const SOURCE_COLORS: Record<RoadmapSource, string> = {
 
 const filterPanelStyle: CSSProperties = {
   padding: 10,
-  border: '1px solid var(--border-purple)',
   borderRadius: 'var(--radius-md)',
-  background: 'var(--bg-purple-tint)',
 }
 
 const logCardStyle: CSSProperties = {
@@ -348,6 +346,8 @@ export default function RoadmapChangeLogDrawer({
 
   return (
     <Drawer
+      rootClassName="pms-modal pms-roadmap-change-log-drawer"
+      classNames={{ header: 'pms-glass-surface', body: 'pms-solid-surface' }}
       title={(
         <Flex align="center" gap={8}>
           <HistoryOutlined aria-hidden />
@@ -360,15 +360,14 @@ export default function RoadmapChangeLogDrawer({
         if (visible) requestAnimationFrame(() => searchInputRef.current?.focus())
       }}
       placement="right"
-      width="min(960px, 100vw)"
+      size="min(960px, 100vw)"
       zIndex={DRAWER_Z_INDEX}
       styles={{
-        body: { padding: 12, background: 'var(--bg-primary)' },
-        header: { background: 'var(--bg-glass-heavy)', backdropFilter: 'var(--glass-blur)' },
+        body: { padding: 12 },
       }}
     >
       <Flex vertical gap={12}>
-        <section aria-label="修改记录筛选" className="pms-roadmap-change-log-filters-compact" style={filterPanelStyle}>
+        <section aria-label="修改记录筛选" className="pms-roadmap-change-log-filters-compact pms-toolbar" style={filterPanelStyle}>
           <div
             style={{
               display: 'grid',
@@ -463,7 +462,7 @@ export default function RoadmapChangeLogDrawer({
                   key={log.id}
                   role="listitem"
                   aria-label={`${log.actor}${ACTION_LABELS[log.action]}${log.projectDisplayName}`}
-                  className="pms-glass-panel"
+                  className="pms-roadmap-change-log-card pms-glass-surface pms-interactive-surface"
                   style={logCardStyle}
                 >
                   <Flex justify="space-between" align="flex-start" gap={12} wrap>
