@@ -77,6 +77,20 @@ const groups = {
     'src/components/project-info/TargetProjectInformationView.tsx',
     'src/components/project-info/TosTypeEditorModal.tsx',
   ],
+  adminFlows: [
+    'src/components/transfer/TransferModule.tsx',
+    'src/containers/ConfigContainer.tsx',
+    'src/containers/GlobalPermissionContainer.tsx',
+    'src/components/config/EnumConfig.tsx',
+    'src/components/permission/PermissionModule.tsx',
+    'src/components/technical-project/SubprojectConfigModal.tsx',
+    'src/components/technical-project/TechnicalPlanModule.tsx',
+    'src/components/technical-project/TechnicalPlanSummary.tsx',
+    'src/components/technical-project/TechnicalProjectBasicInfo.tsx',
+    'src/components/technical-project/TechnicalProjectCreateFields.tsx',
+    'src/components/technical-project/TechnicalProjectInformationView.tsx',
+    'src/components/technical-project/TechnicalProjectOverview.tsx',
+  ],
 }
 
 function read(file, root) {

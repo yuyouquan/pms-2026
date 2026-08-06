@@ -69,7 +69,7 @@ const renderDeliverable = (value: unknown) => {
   }
   return (
     <Space size={8} wrap>
-      <FileOutlined style={{ color: '#6366f1' }} aria-hidden />
+      <FileOutlined style={{ color: 'var(--pms-brand)' }} aria-hidden />
       <Text ellipsis={{ tooltip: deliverable.name }} style={{ maxWidth: 220 }}>{deliverable.name}</Text>
       <Tag color="geekblue">{Math.max(1, Math.ceil(deliverable.size / 1024))} KB</Tag>
     </Space>
@@ -144,7 +144,7 @@ export default function TechnicalProjectInformationView({
     ...normalizedCustomRoles.map(role => ({ ...role, fixed: false })),
   ]
   const coreFields = [
-    { label: '项目名称', value: displayText(project.name), accent: '#4f46e5' },
+    { label: '项目名称', value: displayText(project.name), accent: 'var(--pms-brand-strong)' },
     { label: '项目分类', value: displayText(project.secondaryCategory), accent: '#14b8a6' },
     { label: '技术赛道', value: displayText(valueOf(project, 'technicalTrack')), accent: '#0891b2' },
     { label: 'TMG及技术领域', value: displayText(valueOf(project, 'tmg')), accent: '#7c3aed' },
@@ -184,7 +184,7 @@ export default function TechnicalProjectInformationView({
   ]
 
   return (
-    <div className="technical-project-space" aria-label="技术项目基础信息">
+    <div className="technical-project-space pms-project-space" aria-label="技术项目基础信息">
       <ProjectInformationFrame
         projectName={project.name}
         coreFields={coreFields}
@@ -196,8 +196,8 @@ export default function TechnicalProjectInformationView({
           </div>
         )}
         planInformation={(
-          <div className="technical-information-plan">
-            <div className="technical-information-tabs" aria-label="技术信息分类">
+          <div className="technical-information-plan pms-solid-surface">
+            <div className="technical-information-tabs pms-toolbar" aria-label="技术信息分类">
               <Tabs activeKey={activeKey} onChange={setActiveKey} items={tabItems} />
             </div>
             {modules.plan && <TechnicalPlanSummary scope={activeScope} label={activeLabel} />}

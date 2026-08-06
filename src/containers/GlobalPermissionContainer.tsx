@@ -16,7 +16,8 @@ export default function GlobalPermissionContainer() {
   } = usePermissionStore()
 
   return (
-    <GlobalPermissionConfig
+    <div className="pms-admin-workspace pms-page-shell">
+      <GlobalPermissionConfig
       globalRoles={globalRoles}
       setGlobalRoles={setGlobalRoles}
       globalRolePerms={globalRolePerms}
@@ -33,6 +34,7 @@ export default function GlobalPermissionContainer() {
       setGlobalEditRoleValue={setGlobalEditRoleValue}
       globalPermActiveRole={globalPermActiveRole}
       setGlobalPermActiveRole={setGlobalPermActiveRole}
-    />
+      />
+    </div>
   )
 }

@@ -245,8 +245,8 @@ export default function EnumConfig() {
   }
 
   return (
-    <section className="pms-enum-config" aria-label="枚举值配置">
-      <Card className="pms-enum-type-card" title="枚举类型">
+    <section className="pms-enum-config pms-solid-surface" aria-label="枚举值配置">
+      <Card className="pms-enum-type-card pms-glass-surface" title="枚举类型">
         <div className="pms-enum-type-list" role="list" aria-label="固定枚举类型">
           {TOS_ENUM_TYPE_KEYS.map(type => {
             const definition = TOS_ENUM_REGISTRY[type]
@@ -271,7 +271,7 @@ export default function EnumConfig() {
       </Card>
 
       <Card
-        className="pms-enum-values-card"
+        className="pms-enum-values-card pms-solid-surface"
         title={(
           <div className="pms-enum-card-heading">
             <span>{selectedDefinition.label}</span>

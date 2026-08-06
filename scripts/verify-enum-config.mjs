@@ -135,7 +135,7 @@ assert.match(projectStoreSource, /allowedFirstSaleTosValues/, 'project mutations
 assert.match(projectStoreSource, /valuesByType\[['"]tos-3-part['"]\]/, 'project validation falls back only to the hydrated three-part enum')
 assert.match(appShell, /styles=\{\{\s*root:/, 'user dropdown uses the Ant Design 6 popup styling API')
 assert.doesNotMatch(appShell, /overlayStyle=/, 'deprecated dropdown overlayStyle is removed')
-assert.match(appShell, /className="pms-main-header"[\s\S]*className="pms-main-header__row"/, 'main header exposes responsive layout hooks')
+assert.match(appShell, /className="[^"]*pms-main-header[^"]*"[\s\S]*className="pms-main-header__row"/, 'main header exposes responsive layout hooks')
 assert.match(appShell, /className="pms-main-header__nav-scroll"[\s\S]*className="pms-main-header__menu"/, 'main navigation has its own scroll container')
 assert.match(globalStyles, /@media\s*\(max-width:\s*768px\)[\s\S]*\.pms-main-header__row[\s\S]*flex-wrap:\s*nowrap/, 'narrow header must stay on one row')
 assert.match(globalStyles, /\.pms-main-header__nav-scroll[\s\S]*overflow-x:\s*auto[\s\S]*touch-action:\s*pan-x/, 'narrow navigation supports horizontal touch scrolling')

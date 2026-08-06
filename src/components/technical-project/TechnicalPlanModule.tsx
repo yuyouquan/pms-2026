@@ -595,10 +595,10 @@ export default function TechnicalPlanModule({
   }
 
   return (
-    <div className="technical-project-space" aria-label="技术项目计划">
+    <div className="technical-project-space pms-plan-workspace" aria-label="技术项目计划">
       <PlanWorkspaceShell
         scopeTabs={(
-          <Card className="technical-space-card technical-plan-scope-card" aria-label={FIXED_TDT_LABEL} styles={{ body: { padding: '4px 16px 12px' } }}>
+          <Card className="technical-space-card technical-plan-scope-card pms-glass-surface" aria-label={FIXED_TDT_LABEL} styles={{ body: { padding: '4px 16px 12px' } }}>
             <Row justify="space-between" align="middle" wrap={false}>
               <Tabs
                 activeKey={tab?.key}
@@ -813,7 +813,7 @@ export default function TechnicalPlanModule({
         {!currentVersion ? (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无计划版本，请创建修订" />
         ) : viewMode === 'vertical' ? (
-          <div className="technical-plan-vertical-table-shell">
+          <div className="technical-plan-vertical-table-shell pms-solid-surface">
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={visibleTasks.map(task => task.id)} strategy={verticalListSortingStrategy}>
                 <Table<TechnicalTemplateTask>
