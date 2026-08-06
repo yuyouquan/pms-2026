@@ -51,6 +51,90 @@ export const PROJECT_STATUS_CONFIG: Record<string, { color: string; tagColor: st
 }
 
 // 项目数据
+const PAGINATION_MACHINE_SERIES = [
+  { name: 'SPARK 40', code: 'SP40', brand: 'TECNO', platform: 'MT6890' },
+  { name: 'HOT 60', code: 'HT60', brand: 'Infinix', platform: 'MT6878' },
+  { name: 'NOTE 60', code: 'NT60', brand: 'Infinix', platform: 'SD7Gen4' },
+] as const
+
+const PAGINATION_MACHINE_STATUSES = ['待立项', '在研', '上市', '转维', '规划中'] as const
+const PAGINATION_MACHINE_VERSION_TYPES = ['Full', 'Slim', 'GO'] as const
+
+export const ADDITIONAL_MACHINE_PROJECTS = PAGINATION_MACHINE_SERIES.flatMap((series, seriesIndex) => (
+  Array.from({ length: 5 }, (_, itemIndex) => {
+    const sequence = itemIndex + 1
+    const projectCode = `${series.code}-${sequence}`
+    const projectId = `mock-machine-${seriesIndex + 1}-${sequence}`
+    const month = String(5 + seriesIndex).padStart(2, '0')
+    const day = String(8 + itemIndex * 3).padStart(2, '0')
+    return {
+      id: projectId,
+      name: `${projectCode}-D${8600 + seriesIndex * 100 + sequence}_H${1100 + seriesIndex * 10 + sequence}`,
+      type: PROJECT_CATEGORY_MACHINE,
+      secondaryCategory: PROJECT_TYPE_MACHINE_PHONE,
+      status: PAGINATION_MACHINE_STATUSES[itemIndex],
+      progress: 28 + itemIndex * 16,
+      leader: itemIndex % 2 === 0 ? '张三' : '李四',
+      responsiblePersons: ['张三', '李四'],
+      markets: ['OP', 'TR'],
+      androidVersion: 'Android 16',
+      chipPlatform: series.platform.startsWith('SD') ? 'QCOM' : 'MTK',
+      spm: itemIndex % 2 === 0 ? '张三' : '李白',
+      updatedAt: `${sequence}小时前`,
+      productLine: series.name.split(' ')[0],
+      productCategory: series.name.split(' ')[0],
+      productSeries: series.name,
+      tosVersion: 'tOS16.3',
+      tosVersionName: 'tOS16.3',
+      marketName: `${series.name} ${sequence}`,
+      brand: series.brand,
+      developMode: itemIndex % 2 === 0 ? 'ODC' : '联合开发',
+      firstSaleTosVersionId: 'tos-16-3',
+      projectCode,
+      platform: series.platform,
+      startRam: '8GB' as const,
+      str5Date: `2026-${month}-${day}`,
+      remark: `${series.name} 分页与筛选联动 Mock 项目。`,
+      planStartDate: `2026-0${2 + seriesIndex}-01`,
+      planEndDate: `2026-${month}-28`,
+      developCycle: 110 + itemIndex * 5,
+      healthStatus: 'normal' as const,
+      model: projectCode,
+      mainboard: `H${1100 + seriesIndex * 10 + sequence}`,
+      born: 'B2026Q2',
+      cpu: series.platform,
+      memory: '8GB+256GB',
+      lcd: '6.78" FHD+',
+      frontCamera: '32MP',
+      primaryCamera: '108MP+8MP',
+      operatingSystem: 'Android 16',
+      version: `V0.${sequence}.0`,
+      buildAddress: `https://build.example.com/${projectCode}`,
+      productType: '新品',
+      versionType: PAGINATION_MACHINE_VERSION_TYPES[itemIndex % PAGINATION_MACHINE_VERSION_TYPES.length],
+      cooperationForm: '联合开发',
+      bom: `BOM-${projectCode}`,
+      market: 'OP,TR',
+      ppm: '王明',
+      tpm: '刘洋',
+      projectLevel: 'A',
+      androidMajorUpgrade: '否',
+      systemType: '64bit',
+      isGo: '否',
+      isTwoStage: '是',
+      isSlimVersion: '否',
+      isOutsourcedMini: '否',
+      currentNode: itemIndex < 2 ? 'STR2' : 'STR3',
+      launchDate: `2026-${month}-${day}`,
+      buildOption: projectCode.toLowerCase(),
+      buildMarket: 'op',
+      projectDescription: `${series.name} 系列 Mock 项目，用于验证列表和卡片分页。`,
+      branchInfo: `main_dev_${projectCode.toLowerCase()}`,
+      jenkinsUrl: `https://jenkins.example.com/job/${projectCode}`,
+    }
+  })
+))
+
 export const initialProjects = [
   {
     id: '1', name: 'X6877-D8400_H991', type: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_PHONE,
@@ -467,6 +551,7 @@ export const initialProjects = [
     branchInfo: 'main_dev_image_1', jenkinsUrl: 'https://jenkins.example.com/job/image-1',
     teamMembers: '王五,孙七,李白',
   },
+  ...ADDITIONAL_MACHINE_PROJECTS,
 ]
 
 // 构建市场计划数据

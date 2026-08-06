@@ -2,17 +2,16 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import {
-  Card, Tabs, Table, Row, Col, Space, Divider, Tag, Menu, Button, Select,
+  Card, Tabs, Table, Row, Col, Space, Divider, Tag, Menu, Button, Select, Segmented,
   Input, Tooltip, Modal, Form, Checkbox, message, Progress, Popconfirm,
   DatePicker, Avatar, Dropdown,
 } from 'antd'
 import type { MenuProps } from 'antd'
 import {
-  CalendarOutlined, SwapOutlined, PlusOutlined, SaveOutlined,
+  CalendarOutlined, PlusOutlined, SaveOutlined,
   HistoryOutlined, SearchOutlined, AppstoreOutlined, EditOutlined,
   PlusSquareOutlined, MinusSquareOutlined,
   DeleteOutlined, CaretDownOutlined, StopOutlined,
-  NumberOutlined,
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -651,19 +650,24 @@ export default function ConfigContainer() {
 
   return (
     <div className="pms-admin-workspace pms-page-shell pms-config-center">
-      {/* Config tab navigation */}
-      <Card className="pms-toolbar" size="small" style={{ marginBottom: 20, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
-        <Tabs
-          activeKey={configTab}
-          onChange={(key) => { setConfigTab(key); if (key === 'transfer' && transferConfigView === 'home') setTransferConfigView('checklist'); }}
-          style={{ marginBottom: 0 }}
-          items={[
-            { key: 'plan', label: <Space size={6}><CalendarOutlined />计划模板配置</Space> },
-            { key: 'transfer', label: <Space size={6}><SwapOutlined />转维材料模板配置</Space> },
-            { key: 'enum', label: <Space size={6}><NumberOutlined />枚举值配置</Space> },
+      <header className="pms-workbench-header pms-config-center-header pms-glass-surface">
+        <h1>配置中心</h1>
+        <Segmented
+          className="pms-workbench-switch pms-config-center-switch"
+          aria-label="配置中心模块"
+          value={configTab}
+          onChange={(key) => {
+            const nextKey = String(key)
+            setConfigTab(nextKey)
+            if (nextKey === 'transfer' && transferConfigView === 'home') setTransferConfigView('checklist')
+          }}
+          options={[
+            { value: 'plan', label: '计划模板配置' },
+            { value: 'transfer', label: '转维材料模板配置' },
+            { value: 'enum', label: '枚举值配置' },
           ]}
         />
-      </Card>
+      </header>
 
       {/* Transfer config */}
       {configTab === 'transfer' && <TransferConfig {...transferProps} />}

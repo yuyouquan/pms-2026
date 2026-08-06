@@ -97,6 +97,7 @@ export interface ProjectSummaryTableProps {
   showTable?: boolean
   showColumnSettings?: boolean
   toolbarTrailingAction?: ReactNode
+  tablePageSize?: number
 }
 
 interface StoredProjectSummaryPreferences {
@@ -175,6 +176,7 @@ export default function ProjectSummaryTable({
   showTable = true,
   showColumnSettings = true,
   toolbarTrailingAction,
+  tablePageSize,
 }: ProjectSummaryTableProps) {
   const [uncontrolledFilters, setUncontrolledFilters] = useState<AnyFilterCondition[]>([])
   const isFilterControlled = controlledFilters !== undefined
@@ -191,6 +193,7 @@ export default function ProjectSummaryTable({
   const [columnOpen, setColumnOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const [selectedRowKey, setSelectedRowKey] = useState('')
+  const [tablePage, setTablePage] = useState(1)
   const compactControlSize = matrixVariant ? 'small' : 'middle'
 
   const templateTasks = useMemo(() => getLatestPublishedTemplateTasks(
@@ -418,6 +421,16 @@ export default function ProjectSummaryTable({
         }))
       })
   }, [collapsedGroups, fieldDefinitions, filteredRows, groupBy])
+
+  useEffect(() => {
+    setTablePage(1)
+  }, [filters, matrixVariant, projectType, tablePageSize])
+
+  useEffect(() => {
+    if (!tablePageSize) return
+    const maxPage = Math.max(1, Math.ceil(displayedRows.length / tablePageSize))
+    if (tablePage > maxPage) setTablePage(maxPage)
+  }, [displayedRows.length, tablePage, tablePageSize])
 
   useEffect(() => {
     if (selectedRowKey && !displayedRows.some(row => row.key === selectedRowKey)) {
@@ -840,7 +853,15 @@ export default function ProjectSummaryTable({
             'pms-project-summary-row',
             selectedRowKey === row.key ? 'is-selected' : '',
           ].filter(Boolean).join(' ')}
-          pagination={false}
+          pagination={tablePageSize ? {
+            current: tablePage,
+            pageSize: tablePageSize,
+            total: displayedRows.length,
+            size: 'small',
+            showSizeChanger: false,
+            showTotal: total => `共 ${total} 个项目`,
+            onChange: page => setTablePage(page),
+          } : false}
           scroll={{ x: scrollWidth, y: 'calc(100vh - 260px)' }}
           locale={{
             emptyText: (
