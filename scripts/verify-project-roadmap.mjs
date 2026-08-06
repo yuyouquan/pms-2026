@@ -2274,8 +2274,21 @@ registerAssertion('tOS-version maintenance stays in the roadmap and uses the sha
   if (!moduleSource.includes('<TosVersionMaintenanceModal')) {
     throw new Error('roadmap module does not render the maintenance modal')
   }
-  for (const contract of ["useTosEnumOptions('tos-2-part'", 'name="name"', '<Select']) {
+  for (const contract of [
+    "useTosEnumOptions('tos-2-part'",
+    'name="name"',
+    '<Select',
+    'setTosVersionDetails',
+    'deleteTosVersionDetails',
+    '项目周期',
+    '版本目标',
+    '引用',
+  ]) {
     if (!modalSource.includes(contract)) throw new Error(`tOS maintenance modal is missing ${contract}`)
+  }
+  const roadmapTypes = fs.readFileSync(path.join(root, 'src/types/roadmap.ts'), 'utf8')
+  for (const contract of ['setTosVersionDetails:', 'deleteTosVersionDetails:']) {
+    if (!roadmapTypes.includes(contract)) throw new Error(`roadmap metadata actions are missing ${contract}`)
   }
 })
 
