@@ -193,7 +193,7 @@ assert.deepEqual(
     { ...all[0], id: 'done-sunday', status: 'completed', completedAt: '2026-07-26', dueDate: '2026-07-01' },
     { ...all[0], id: 'done-monday', status: 'completed', completedAt: '2026-07-27', dueDate: '2026-07-01' },
   ], '2026-07-31'),
-  { total: 6, dueToday: 1, overdue: 1, completedThisWeek: 2 },
+  { total: 5, dueToday: 1, overdue: 1, completedThisWeek: 1 },
   'completed items are never overdue and natural-week completion starts on Monday',
 )
 

@@ -194,6 +194,7 @@ import {
 } from '@/components/shared/PlanHelpers'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
+import { CollapsibleSidebarShell } from '@/components/shared/CollapsibleWorkspace'
 import {
   getDefaultColumnSettings,
   normalizeColumnSettings,
@@ -364,7 +365,7 @@ export default function ProjectSpaceContainer() {
     showProjectSearch, setShowProjectSearch, projectSearchText, setProjectSearchText,
     handleConfirmLeave, handleCancelLeave, showLeaveConfirm,
     setPendingNavigation, setShowLeaveConfirm: setShowLeaveConfirmFn,
-    sidebarCollapsed,
+    projectSpaceSidebarCollapsed, setProjectSpaceSidebarCollapsed,
     planNavigationIntent, setPlanNavigationIntent,
   } = ui
 
@@ -3853,23 +3854,33 @@ export default function ProjectSpaceContainer() {
       {/* Header */}
       <ProjectSpaceHeader navigateWithEditGuard={navigateWithEditGuard} />
 
-      <div style={{ display: 'flex', height: 'calc(100vh - 56px)' }}>
+      <div className="pms-project-space__body" style={{ display: 'flex', height: 'calc(100vh - 56px)' }}>
         {/* Sidebar */}
-        <div className="pms-sidebar pms-glass-surface" style={{ width: 200, paddingTop: 12, overflowY: 'auto', flexShrink: 0 }}>
+        <CollapsibleSidebarShell
+          className="pms-sidebar pms-project-space-sidebar pms-glass-surface"
+          collapsed={projectSpaceSidebarCollapsed}
+          onCollapsedChange={setProjectSpaceSidebarCollapsed}
+          title="项目导航"
+          ariaLabel="项目空间导航"
+          expandedWidth={200}
+          collapsedWidth={64}
+        >
           <Menu
             mode="inline"
+            inlineCollapsed={projectSpaceSidebarCollapsed}
             selectedKeys={[projectSpaceModule]}
-            style={{ border: 'none', fontSize: 13 }}
+            style={{ border: 'none', fontSize: 13, width: '100%', background: 'transparent' }}
             items={menuItems.map(item => ({
               ...item,
+              title: item.label,
               label: <span style={{ fontWeight: projectSpaceModule === item.key ? 500 : 400 }}>{item.label}</span>,
             }))}
             onClick={({ key }) => navigateWithEditGuard(() => { setProjectSpaceModule(key); transfer.setTransferView(null); })}
           />
-        </div>
+        </CollapsibleSidebarShell>
 
         {/* Content area */}
-        <div id="basic-info-scroll-container" className="pms-project-section pms-solid-surface" style={{ flex: 1, padding: 24, overflow: 'auto' }}>
+        <div id="basic-info-scroll-container" className="pms-project-section pms-solid-surface" style={{ flex: 1, minWidth: 0, padding: 24, overflow: 'auto' }}>
           {transfer.transferView === 'apply' && <TransferApply {...transferProps} />}
           {transfer.transferView === 'detail' && <TransferDetail {...transferProps} />}
           {transfer.transferView === 'entry' && <TransferEntry {...transferProps} />}

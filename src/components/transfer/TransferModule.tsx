@@ -25,6 +25,7 @@ import {
   Segmented,
   Timeline,
   Tabs,
+  Menu,
 } from 'antd'
 import {
   PlusOutlined,
@@ -74,6 +75,7 @@ import {
   type EntryStatus,
   type ReviewStatus,
 } from '@/mock/transfer-maintenance'
+import { ConfigWorkspaceShell } from '@/components/shared/CollapsibleWorkspace'
 
 const { Option } = Select
 const { TextArea } = Input
@@ -228,6 +230,8 @@ export interface TransferModuleProps {
   // Transfer config
   transferConfigView: 'home' | 'checklist' | 'review'
   setTransferConfigView: (v: 'home' | 'checklist' | 'review') => void
+  configSidebarCollapsed?: boolean
+  setConfigSidebarCollapsed?: (value: boolean) => void
   tmConfigSearchText: string
   setTmConfigSearchText: (v: string) => void
   tmConfigSelectedVersion: string
@@ -317,39 +321,10 @@ export interface TransferModuleProps {
 
 // ========== TransferConfig ==========
 export function TransferConfig(props: TransferModuleProps) {
-  if (props.transferConfigView === 'home') {
-    const cards = [
-      { key: 'checklist', icon: <FileTextOutlined style={{ fontSize: 28, color: 'var(--pms-brand-strong)' }} />, title: '转维材料配置', count: MOCK_CHECKLIST_TEMPLATES.length, desc: '管理转维CheckList模板，包括检查项、交接资料等' },
-      { key: 'review', icon: <AuditOutlined style={{ fontSize: 28, color: 'var(--pms-brand-strong)' }} />, title: '评审要素配置', count: MOCK_REVIEW_ELEMENT_TEMPLATES.length, desc: '管理评审要素模板，包括各角色评审标准' },
-    ]
-    return (
-      <div>
-        <Breadcrumb items={[{ title: '配置中心' }]} style={{ marginBottom: 16 }} />
-        <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 24, color: '#111827' }}>配置中心</div>
-        <Row gutter={24}>
-          {cards.map(c => (
-            <Col span={12} key={c.key}>
-              <Card hoverable style={{ borderRadius: 10 }} styles={{ body: { padding: 24 } }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 16 }}>
-                  <div style={{ width: 56, height: 56, borderRadius: 12, background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{c.icon}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <span style={{ fontSize: 16, fontWeight: 600 }}>{c.title}</span>
-                      <Tag color="blue" style={{ borderRadius: 4 }}>{c.count} 条</Tag>
-                    </div>
-                    <div style={{ fontSize: 13, color: '#9ca3af' }}>{c.desc}</div>
-                  </div>
-                </div>
-                <Button type="primary" style={{ background: 'var(--pms-brand-strong)', borderColor: 'var(--pms-brand-strong)' }} onClick={() => props.setTransferConfigView(c.key as 'checklist' | 'review')}>管理</Button>
-              </Card>
-            </Col>
-          ))}
-        </Row>
-      </div>
-    )
-  }
-
-  const isChecklist = props.transferConfigView === 'checklist'
+  const configSidebarCollapsed = props.configSidebarCollapsed ?? false
+  const setConfigSidebarCollapsed = props.setConfigSidebarCollapsed ?? (() => undefined)
+  const effectiveView = props.transferConfigView === 'review' ? 'review' : 'checklist'
+  const isChecklist = effectiveView === 'checklist'
   const title = isChecklist ? '转维材料配置' : '评审要素配置'
   const templates = isChecklist ? MOCK_CHECKLIST_TEMPLATES : MOCK_REVIEW_ELEMENT_TEMPLATES
   const versions = isChecklist ? MOCK_CHECKLIST_VERSIONS : MOCK_RE_VERSIONS
@@ -381,9 +356,14 @@ export function TransferConfig(props: TransferModuleProps) {
   ]
 
   return (
-    <div>
-      <Breadcrumb items={[{ title: <a onClick={() => props.setTransferConfigView('home')}>配置中心</a> }, { title }]} style={{ marginBottom: 16 }} />
-      <Card
+    <ConfigWorkspaceShell
+      collapsed={configSidebarCollapsed}
+      onCollapsedChange={setConfigSidebarCollapsed}
+      title="配置类型"
+      ariaLabel="转维材料模板配置类型"
+      content={(
+        <Card
+        className="pms-config-workspace-card pms-solid-surface"
         title={<span style={{ fontWeight: 600 }}>{title}</span>}
         extra={
           <Space size={8}>
@@ -395,13 +375,26 @@ export function TransferConfig(props: TransferModuleProps) {
             <Tooltip title="版本对比"><Button icon={<DiffOutlined />} onClick={() => props.setTmConfigDiffOpen(true)} /></Tooltip>
           </Space>
         }
-        style={{ borderRadius: 10 }}
+        style={{ borderRadius: 12 }}
       >
         <div style={{ marginBottom: 16 }}>
           <Input placeholder="搜索..." prefix={<SearchOutlined />} allowClear value={props.tmConfigSearchText} onChange={e => props.setTmConfigSearchText(e.target.value)} style={{ width: 300 }} />
         </div>
         <Table dataSource={filtered as any[]} columns={columns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
-      </Card>
+        </Card>
+      )}
+    >
+      <Menu
+        className="pms-config-sidebar-menu"
+        mode="inline"
+        inlineCollapsed={configSidebarCollapsed}
+        selectedKeys={[effectiveView]}
+        items={[
+          { key: 'checklist', icon: <FileTextOutlined />, label: '转维材料', title: '转维材料' },
+          { key: 'review', icon: <AuditOutlined />, label: '评审要素', title: '评审要素' },
+        ]}
+        onClick={({ key }) => props.setTransferConfigView(key as 'checklist' | 'review')}
+      />
       <Modal title="版本对比" open={props.tmConfigDiffOpen} onCancel={() => props.setTmConfigDiffOpen(false)} width={800} footer={<Button onClick={() => props.setTmConfigDiffOpen(false)}>关闭</Button>}>
         <Space style={{ marginBottom: 16 }}>
           <span>从</span>
@@ -416,7 +409,7 @@ export function TransferConfig(props: TransferModuleProps) {
           { title: '变更内容', dataIndex: 'change', ellipsis: true },
         ]} />
       </Modal>
-    </div>
+    </ConfigWorkspaceShell>
   )
 }
 

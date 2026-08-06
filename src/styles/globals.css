@@ -1107,7 +1107,7 @@
 
 /* ─── Workbench classified todo center ───────────────────────────── */
 .pms-todo-center {
-  min-height: 592px;
+  min-height: 520px;
   padding: 24px;
   overflow: hidden;
   border: 1px solid rgba(99, 102, 241, 0.1);
@@ -1230,7 +1230,7 @@
 
 .pms-todo-center__filters {
   display: grid;
-  grid-template-columns: minmax(180px, 1.6fr) minmax(148px, 1fr) 128px 132px 132px auto;
+  grid-template-columns: minmax(180px, 1.5fr) minmax(148px, 1fr) minmax(160px, 1fr) minmax(230px, 1.35fr) auto;
   gap: 8px;
   align-items: center;
   min-height: 48px;
@@ -1622,6 +1622,33 @@
   outline-offset: 2px;
 }
 
+.pms-config-sidebar-menu {
+  width: 100% !important;
+  border-inline-end: 0 !important;
+  background: transparent !important;
+}
+
+.pms-config-sidebar-menu.ant-menu-inline-collapsed {
+  width: 100% !important;
+}
+
+.pms-config-sidebar-menu .ant-menu-item {
+  width: auto !important;
+  min-height: 40px;
+  margin: 4px 0 !important;
+  border-radius: 9px !important;
+}
+
+.pms-config-sidebar-menu.ant-menu-inline-collapsed .ant-menu-item {
+  padding-inline: calc(50% - 7px) !important;
+}
+
+.pms-config-sidebar-menu .ant-menu-item-selected {
+  color: #4338ca !important;
+  background: rgba(99, 102, 241, 0.1) !important;
+  box-shadow: inset 3px 0 0 #6366f1;
+}
+
 .pms-enum-config {
   display: grid;
   grid-template-columns: minmax(224px, 280px) minmax(0, 1fr);
@@ -1666,6 +1693,41 @@
   border-radius: 9px;
   background: transparent;
   cursor: pointer;
+}
+
+.pms-enum-category-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  color: #6366f1;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.pms-enum-category-copy,
+.pms-enum-type-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.pms-collapsible-sidebar.is-collapsed .pms-enum-category-item,
+.pms-collapsible-sidebar.is-collapsed .pms-enum-type-item {
+  min-height: 44px;
+  padding: 6px;
+  justify-content: center;
+}
+
+.pms-collapsible-sidebar.is-collapsed .pms-enum-category-copy,
+.pms-collapsible-sidebar.is-collapsed .pms-enum-type-copy {
+  display: none;
+}
+
+.pms-collapsible-sidebar.is-collapsed .pms-enum-category-group .pms-enum-type-list {
+  padding-left: 0;
+  border-left: 0;
 }
 
 .pms-enum-category-item small {
@@ -3076,6 +3138,33 @@ body {
   width: 3px;
   border-radius: 0 3px 3px 0;
   background: linear-gradient(180deg, var(--primary), var(--accent));
+}
+
+.pms-project-space-sidebar {
+  flex: 0 0 auto;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  border-right: 1px solid rgba(99, 102, 241, 0.1);
+}
+
+.pms-project-space-sidebar .pms-collapsible-sidebar__content {
+  max-height: calc(100dvh - 120px);
+  padding: 10px 0 12px;
+}
+
+.pms-project-space-sidebar .ant-menu-inline-collapsed {
+  width: 100%;
+}
+
+.pms-project-space-sidebar.is-collapsed .ant-menu-item {
+  width: 44px !important;
+  margin-inline: 10px !important;
+  padding-inline: 14px !important;
+}
+
+.pms-project-space__body > .pms-project-section {
+  min-width: 0;
 }
 
 
@@ -4875,6 +4964,68 @@ body {
 .pms-workbench-toolbar {
   margin-bottom: 12px;
   border-radius: var(--pms-radius-surface);
+}
+
+.pms-workbench-header {
+  display: flex;
+  min-height: 64px;
+  margin-bottom: 12px;
+  padding: 10px 14px 10px 20px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid rgba(99, 102, 241, 0.1);
+  border-radius: var(--pms-radius-surface);
+}
+
+.pms-workbench-header h1 {
+  margin: 0;
+  color: var(--pms-text-primary);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.pms-workbench-switch.ant-segmented {
+  padding: 4px;
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  border-radius: 999px;
+  background: rgba(238, 242, 255, 0.74);
+}
+
+.pms-workbench-switch .ant-segmented-item {
+  min-width: 88px;
+  min-height: 32px;
+  border-radius: 999px;
+  color: #64748b;
+}
+
+.pms-workbench-switch .ant-segmented-item-selected {
+  color: #4338ca;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.12);
+}
+
+.pms-workbench-content {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .pms-workbench-header {
+    min-height: auto;
+    padding: 12px;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pms-workbench-switch {
+    width: 100%;
+  }
+
+  .pms-workbench-switch .ant-segmented-group,
+  .pms-workbench-switch .ant-segmented-item {
+    flex: 1;
+  }
 }
 
 .pms-workbench-toolbar > .ant-tabs-nav {
