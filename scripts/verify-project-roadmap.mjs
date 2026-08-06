@@ -2260,9 +2260,23 @@ registerAssertion('planned-project overlay exposes the complete accessible maint
   if (missingHeaders.length) throw new Error(`history table is missing exact columns: ${missingHeaders.join(', ')}`)
 })
 
-registerAssertion('retired tOS-version compatibility overlay is deleted', () => {
+registerAssertion('tOS-version maintenance stays in the roadmap and uses the shared enum', () => {
   const maintenancePath = path.join(root, 'src/components/roadmap/TosVersionMaintenanceModal.tsx')
-  if (fs.existsSync(maintenancePath)) throw new Error('unused tOS compatibility shell still exists')
+  if (!fs.existsSync(maintenancePath)) throw new Error('tOS version maintenance modal is missing')
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  const modalSource = fs.readFileSync(maintenancePath, 'utf8')
+  if (!/import TosVersionMaintenanceModal from ['"]\.\/TosVersionMaintenanceModal['"]/.test(moduleSource)) {
+    throw new Error('roadmap module does not import the maintenance modal')
+  }
+  if (!/onOpenTosMaintenance=\{\(\) => setTosMaintenanceOpen\(true\)\}/.test(moduleSource)) {
+    throw new Error('normal tOS maintenance action does not open the roadmap modal')
+  }
+  if (!moduleSource.includes('<TosVersionMaintenanceModal')) {
+    throw new Error('roadmap module does not render the maintenance modal')
+  }
+  for (const contract of ["useTosEnumOptions('tos-2-part'", 'name="name"', '<Select']) {
+    if (!modalSource.includes(contract)) throw new Error(`tOS maintenance modal is missing ${contract}`)
+  }
 })
 
 registerAssertion('roadmap version choices come only from the shared two-part enum', () => {

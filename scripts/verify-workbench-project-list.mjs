@@ -65,7 +65,9 @@ assert.match(summarySource, /showQuickFilters\?: boolean/)
 assert.match(summarySource, /showColumnSettings\?: boolean/)
 assert.match(summarySource, /groupBy\?:/)
 assert.match(summarySource, />\s*筛选\s*<\/Button>/, 'advanced filter button exposes visible text')
-assert.match(summarySource, />\s*列设置\s*<\/Button>/, 'column settings button exposes visible text')
+assert.match(summarySource, />\s*字段配置\s*<\/Button>/, 'field configuration button exposes visible text')
+assert.match(summarySource, /字段配置[\s\S]{0,900}toolbarTrailingAction/, 'fullscreen renders immediately after field configuration')
+assert.match(source, /toolbarTrailingAction=\{projectListFullscreenAction\}/, 'project list passes fullscreen into the shared action row')
 assert.equal(
   [...source.matchAll(/<Input\s+size="small"[\s\S]{0,180}aria-label="快捷筛选-项目名称"/g)].length,
   2,
