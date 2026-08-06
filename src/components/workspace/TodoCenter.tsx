@@ -89,6 +89,7 @@ export default function TodoCenter({ todos, loading = false, error, onRetry, onO
     <section className="pms-todo-center pms-glass-surface" aria-label="待办中心">
       <div className="pms-todo-center__filters pms-toolbar" aria-label="待办筛选条">
         <Input
+          className="pms-todo-filter--search"
           allowClear
           size="small"
           aria-label="搜索待办"
@@ -98,6 +99,7 @@ export default function TodoCenter({ todos, loading = false, error, onRetry, onO
           onChange={event => updateFilter('search', event.target.value)}
         />
         <Select
+          className="pms-todo-filter--project"
           allowClear
           size="small"
           aria-label="项目筛选"
@@ -107,6 +109,7 @@ export default function TodoCenter({ todos, loading = false, error, onRetry, onO
           options={projectOptions}
         />
         <Select<TodoSource[]>
+          className="pms-todo-filter--category"
           mode="multiple"
           allowClear
           maxTagCount="responsive"
@@ -118,21 +121,23 @@ export default function TodoCenter({ todos, loading = false, error, onRetry, onO
           options={Object.entries(SOURCE_LABELS).map(([value, label]) => ({ value, label }))}
         />
         <RangePicker
+          className="pms-todo-filter--date"
           allowClear
           size="small"
           aria-label="生成时间"
           value={generatedRange}
           placeholder={['生成开始日期', '生成结束日期']}
           onChange={values => {
-            updateFilter('generatedDateFrom', values?.[0]?.format('YYYY-MM-DD') || '')
             setFilters(current => ({
               ...current,
               generatedDateFrom: values?.[0]?.format('YYYY-MM-DD') || '',
               generatedDateTo: values?.[1]?.format('YYYY-MM-DD') || '',
             }))
+            setCurrentPage(1)
           }}
         />
         <Button
+          className="pms-todo-filter--clear"
           size="small"
           aria-label="清空筛选"
           disabled={filtersAreEmpty}
@@ -183,7 +188,7 @@ export default function TodoCenter({ todos, loading = false, error, onRetry, onO
                 setPageSize(nextPageSize)
               },
             }}
-            scroll={{ x: 980, y: 420 }}
+            scroll={{ x: 1120, y: 420 }}
             locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyDescription} /> }}
             columns={[
               {
@@ -206,14 +211,24 @@ export default function TodoCenter({ todos, loading = false, error, onRetry, onO
                 render: (projectName: string) => projectName || '未关联项目',
               },
               {
-                title: '任务',
+                title: '任务来源',
                 dataIndex: 'source',
                 key: 'source',
-                width: 260,
-                render: (source: TodoSource, record) => (
+                width: 130,
+                render: (source: TodoSource) => (
                   <div className="pms-todo-center__source">
                     <Tag color={source === 'plan' ? 'purple' : 'cyan'}>{SOURCE_LABELS[source]}</Tag>
-                    <span>{record.sourceLabel || SOURCE_LABELS[source]}</span>
+                  </div>
+                ),
+              },
+              {
+                title: '任务节点',
+                dataIndex: 'sourceLabel',
+                key: 'sourceLabel',
+                width: 240,
+                render: (sourceLabel: string, record) => (
+                  <div className="pms-todo-center__node">
+                    <span>{sourceLabel || SOURCE_LABELS[record.source]}</span>
                     {record.context && <span className="pms-todo-center__context">{record.context}</span>}
                   </div>
                 ),

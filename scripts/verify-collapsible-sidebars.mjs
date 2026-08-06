@@ -25,6 +25,11 @@ assert.match(enumConfig, /<ConfigWorkspaceShell/, 'enum configuration uses the s
 assert.match(projectSpace, /projectSpaceSidebarCollapsed/, 'project-space navigation uses its independent state')
 assert.match(projectSpace, /inlineCollapsed=\{projectSpaceSidebarCollapsed\}/, 'project-space menu switches to icon-only mode')
 assert.match(styles, /\.pms-config-workspace[\s\S]*align-items:\s*stretch/, 'configuration columns stretch to equal height')
+assert.match(styles, /\.pms-config-workspace[\s\S]*height:\s*calc\(100dvh\s*-\s*217px\)/, 'configuration workspace stays within the desktop viewport')
+assert.match(configContainer, /pms-config-center/, 'configuration center exposes a viewport boundary hook')
+assert.match(styles, /\.pms-admin-workspace\.pms-config-center[\s\S]*height:\s*calc\(100dvh\s*-\s*105px\)[\s\S]*overflow:\s*hidden/, 'configuration center stays inside the page viewport')
+assert.match(styles, /\.pms-config-workspace__content[\s\S]*overflow:\s*auto/, 'configuration content scrolls inside its bounded viewport')
+assert.match(styles, /\.pms-config-workspace__content[\s\S]*\.ant-card-body[\s\S]*overflow:\s*auto/, 'configuration card bodies scroll internally')
 assert.match(styles, /\.pms-collapsible-sidebar__toggle[\s\S]*bottom:\s*12px/, 'toggle stays at the sidebar bottom-right')
 assert.match(styles, /@media\s*\(prefers-reduced-motion:\s*reduce\)/, 'sidebar motion respects reduced-motion preferences')
 

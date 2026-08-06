@@ -652,7 +652,7 @@ export default function ConfigContainer() {
   }
 
   return (
-    <div className="pms-admin-workspace pms-page-shell">
+    <div className="pms-admin-workspace pms-page-shell pms-config-center">
       {/* Config tab navigation */}
       <Card className="pms-toolbar" size="small" style={{ marginBottom: 20, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
         <Tabs

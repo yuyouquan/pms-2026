@@ -198,6 +198,7 @@ assert.deepEqual(
 )
 
 const todoCenterSource = readSource(root, 'src/components/workspace/TodoCenter.tsx')
+const globalStyles = readSource(root, 'src/styles/globals.css')
 const aggregationSource = readSource(root, 'src/lib/todoAggregation.ts')
 const workbenchSource = readSource(root, 'src/containers/WorkbenchContainer.tsx')
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
@@ -214,6 +215,11 @@ assert.match(workbenchSource, /个人工作台/, 'workbench exposes the single p
 assert.match(workbenchSource, /aria-label="个人工作台模块"/, 'capsule switch exposes an accessible label')
 assert.match(todoCenterSource, /mode="multiple"/, 'task classification uses a multiple selector')
 assert.match(todoCenterSource, /RangePicker/, 'generation time uses one date-range picker')
+for (const className of ['pms-todo-filter--search', 'pms-todo-filter--project', 'pms-todo-filter--category', 'pms-todo-filter--date', 'pms-todo-filter--clear']) {
+  assert.match(todoCenterSource, new RegExp(className), `todo filter bar missing sizing hook: ${className}`)
+}
+assert.match(globalStyles, /\.pms-todo-center__filters[\s\S]*display:\s*flex[\s\S]*flex-wrap:\s*wrap/, 'todo filters use one compact wrapping row')
+assert.match(globalStyles, /\.pms-todo-center__filters[\s\S]*height:\s*32px\s*!important/, 'todo filter controls share one compact height')
 assert.match(todoCenterSource, /pagination=\{\{/, 'todo table exposes pagination')
 requireSource(root, 'src/containers/WorkbenchContainer.tsx', /<TodoCenter\b/, 'workbench must render the classified TodoCenter')
 requireSource(root, 'src/containers/WorkbenchContainer.tsx', /useActivateProject\(\)/, 'todo navigation must reuse shared project activation')
@@ -226,7 +232,7 @@ assert.doesNotMatch(workbenchSource, /\.find\(meta => typeof meta\?\.projectName
 assert.match(uiStoreSource, /planNavigationIntent/, 'todo navigation requires a typed one-shot intent')
 assert.match(projectSpaceSource, /setPlanNavigationIntent\(null\)/, 'project space must consume and clear todo navigation intent')
 assert.doesNotMatch(projectSpaceSource, /explicitMarketVersion/, 'historical market selection must not masquerade as explicit todo navigation')
-for (const column of ['任务名称', '所属项目', '任务', '处理人', '生成时间', '操作']) assert.match(todoCenterSource, new RegExp(column), `todo table missing ${column} column`)
+for (const column of ['任务名称', '所属项目', '任务来源', '任务节点', '处理人', '生成时间', '操作']) assert.match(todoCenterSource, new RegExp(column), `todo table missing ${column} column`)
 assert.doesNotMatch(todoCenterSource, /title:\s*['"]状态['"]/, 'todo table removes the status column')
 assert.doesNotMatch(todoCenterSource, /title:\s*['"]截止日期['"]/, 'todo table removes the due-date column')
 assert.doesNotMatch(todoCenterSource, /onRow=/, 'todo table rows are not interactive controls')
