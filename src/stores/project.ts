@@ -53,6 +53,9 @@ export const INITIAL_PROJECT_MEMBER_MAP: Record<string, string[]> = {
   '9': ['李四', '张三', '赵六', '孙七'],
   '10': ['孙七', '周八', '李白', '杜甫', '王五'],
   '11': ['王五', '李白', '张三', '赵六'],
+  ...Object.fromEntries(initialProjects
+    .filter(project => project.id.startsWith('mock-machine-'))
+    .map(project => [project.id, ['张三', '李四', '李白']])),
 }
 
 export const kanbanColumns = [
@@ -384,7 +387,13 @@ export function migrateProjectState(persistedState: unknown, _version: number): 
   if (persistedState.projects.length > 0 && projects.length === 0) {
     return { projects: initialProjectState, projectListView }
   }
-  return { projects, projectListView }
+  const migratedProjects = _version < 6
+    ? [
+        ...projects,
+        ...initialProjectState.filter(seed => !seenIds.has(seed.id)),
+      ]
+    : projects
+  return { projects: migratedProjects, projectListView }
 }
 
 export function partializeProjectState(state: ProjectState & ProjectActions): PersistedProjectState {
@@ -686,7 +695,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
   }),
   {
     name: PROJECT_STORAGE_KEY,
-    version: 5,
+    version: 6,
     storage: createJSONStorage(() => safeProjectStorage),
     migrate: migrateProjectState,
     partialize: partializeProjectState,
