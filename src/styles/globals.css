@@ -136,6 +136,13 @@
   --duration-fast: 0.15s;
   --duration-normal: 0.25s;
   --duration-slow: 0.4s;
+
+  /* Compact enterprise density */
+  --pms-font-size-compact: 12px;
+  --pms-control-height: 28px;
+  --pms-table-head-height: 32px;
+  --pms-table-row-height: 34px;
+  --pms-density-gap: 6px;
 }
 
 /* PMS project space and plan workspace */
@@ -5644,5 +5651,372 @@ body .pms-roadmap-evolution-card.pms-glass-surface.is-conflict {
     background: rgb(255 255 255 / 98%) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
+  }
+}
+
+/* ================================================================
+   PMS compact density layer
+   ================================================================ */
+
+body,
+.ant-app {
+  font-size: var(--pms-font-size-compact);
+}
+
+.pms-main-content {
+  padding: 8px 12px 12px !important;
+}
+
+.ant-btn,
+.ant-btn-sm,
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-input-number,
+.ant-picker,
+.ant-select,
+.ant-select-item,
+.ant-dropdown-menu-item,
+.ant-pagination,
+.ant-checkbox-wrapper,
+.ant-radio-wrapper {
+  font-size: var(--pms-font-size-compact) !important;
+}
+
+.ant-btn:not(.ant-btn-link):not(.ant-btn-text),
+.ant-btn-sm:not(.ant-btn-link):not(.ant-btn-text) {
+  height: var(--pms-control-height);
+  min-height: var(--pms-control-height);
+  padding-inline: 9px;
+}
+
+.ant-input-affix-wrapper:not(.ant-input-textarea-affix-wrapper),
+.ant-picker,
+.ant-input-number,
+.ant-select-single,
+.ant-select-single .ant-select-selector,
+.ant-select-multiple .ant-select-selector {
+  min-height: var(--pms-control-height) !important;
+}
+
+.ant-input-affix-wrapper:not(.ant-input-textarea-affix-wrapper),
+.ant-picker,
+.ant-input-number,
+.ant-select-single .ant-select-selector {
+  height: var(--pms-control-height) !important;
+}
+
+.ant-select-single .ant-select-selector .ant-select-selection-item,
+.ant-select-single .ant-select-selector .ant-select-selection-placeholder,
+.ant-select-single .ant-select-selector .ant-select-selection-search-input {
+  line-height: 26px !important;
+}
+
+.ant-input-number-input,
+.ant-picker-input > input,
+.ant-input-affix-wrapper > input.ant-input {
+  height: 26px;
+  font-size: var(--pms-font-size-compact) !important;
+}
+
+.ant-table-wrapper .ant-table,
+.ant-table-wrapper .ant-table-cell,
+.pms-table .ant-table-cell {
+  font-size: var(--pms-font-size-compact) !important;
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th,
+.pms-table .ant-table-thead > tr > th {
+  box-sizing: border-box;
+  height: var(--pms-table-head-height) !important;
+  min-height: var(--pms-table-head-height) !important;
+  padding: 5px 10px !important;
+  font-size: var(--pms-font-size-compact) !important;
+  line-height: 20px !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td,
+.pms-table .ant-table-tbody > tr > td {
+  box-sizing: border-box;
+  height: var(--pms-table-row-height);
+  min-height: var(--pms-table-row-height);
+  padding: 6px 10px !important;
+  font-size: var(--pms-font-size-compact) !important;
+  line-height: 20px !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr.ant-table-measure-row > td,
+.pms-table .ant-table-tbody > tr.ant-table-measure-row > td {
+  height: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  line-height: 0 !important;
+}
+
+.ant-table-wrapper .ant-table-pagination.ant-pagination {
+  min-height: var(--pms-control-height);
+  margin: 8px 0 0;
+}
+
+.ant-pagination .ant-pagination-item,
+.ant-pagination .ant-pagination-prev,
+.ant-pagination .ant-pagination-next,
+.ant-pagination .ant-pagination-jump-prev,
+.ant-pagination .ant-pagination-jump-next {
+  min-width: var(--pms-control-height);
+  height: var(--pms-control-height);
+  line-height: 26px;
+}
+
+.pms-toolbar {
+  gap: var(--pms-density-gap);
+  padding: 6px 8px;
+}
+
+.pms-project-list {
+  font-size: var(--pms-font-size-compact);
+}
+
+.pms-wide-table-toolbar {
+  top: 62px;
+}
+
+.pms-project-list-toolbar {
+  gap: 0 !important;
+  margin-bottom: 8px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.pms-project-list-filter-grid,
+.pms-project-list-filter-grid.pms-toolbar {
+  box-sizing: border-box;
+  height: 116px;
+  gap: 2px !important;
+  padding: 6px 8px !important;
+  border-radius: 8px !important;
+}
+
+.pms-project-list-filter-grid > [aria-label] {
+  min-height: 20px;
+  line-height: 20px;
+}
+
+.pms-project-list-filter-grid .pms-project-filter-chip,
+.pms-project-list-filter-grid button[type='button']:not(.ant-btn) {
+  min-height: 20px;
+  padding: 0 8px !important;
+  font-size: var(--pms-font-size-compact) !important;
+  line-height: 20px;
+}
+
+.pms-project-list-category-actions {
+  gap: 6px;
+}
+
+.pms-project-list-category-actions > .ant-btn {
+  height: var(--pms-control-height);
+  min-height: var(--pms-control-height);
+  padding-inline: 9px;
+  border-radius: 7px;
+  font-size: var(--pms-font-size-compact);
+}
+
+.pms-project-list-view-switch.ant-segmented {
+  height: var(--pms-control-height);
+  padding: 2px;
+}
+
+.pms-project-list-view-switch.ant-segmented.ant-segmented-sm .ant-segmented-item,
+.pms-project-list-view-switch .ant-segmented-item-label {
+  min-height: 22px;
+  height: 22px;
+  line-height: 22px;
+}
+
+.pms-project-list-view-switch .ant-segmented-item-label {
+  padding-inline: 9px;
+}
+
+.pms-project-list-view-option {
+  gap: 4px;
+  font-size: var(--pms-font-size-compact);
+  line-height: 22px;
+}
+
+.pms-project-list-field-filters {
+  gap: 6px;
+  padding: 0;
+}
+
+.pms-project-list-field-filters > :where(.ant-input-affix-wrapper, .ant-select) {
+  width: 150px;
+  min-width: 112px;
+  max-width: 150px;
+}
+
+.pms-project-list-filter-label {
+  flex-basis: 92px;
+  font-size: var(--pms-font-size-compact);
+}
+
+.pms-project-list-table-actions {
+  min-width: auto;
+  gap: 4px;
+}
+
+.pms-project-list .pms-project-summary-actions {
+  gap: 4px !important;
+}
+
+.pms-project-list .pms-project-summary-actions .ant-btn {
+  min-width: auto;
+  height: var(--pms-control-height);
+  min-height: var(--pms-control-height) !important;
+  padding-inline: 9px;
+  border-radius: 7px;
+  font-size: var(--pms-font-size-compact);
+}
+
+.pms-project-list .pms-project-list-icon-action.ant-btn {
+  width: var(--pms-control-height);
+  min-width: var(--pms-control-height);
+  padding: 0;
+}
+
+.pms-project-list-content__body {
+  gap: 8px !important;
+}
+
+@media (min-width: 1440px) {
+  .ant-col.pms-project-list-card-column {
+    flex: 0 0 20%;
+    max-width: 20%;
+  }
+}
+
+.pms-project-card,
+.pms-technical-project-card {
+  min-height: 126px;
+  border-radius: 8px;
+}
+
+.pms-technical-project-card > .ant-card-body {
+  height: 100%;
+  padding: 10px;
+}
+
+.pms-technical-project-card-title {
+  margin-bottom: 3px;
+  font-size: var(--pms-font-size-compact);
+}
+
+.pms-technical-project-card-parent {
+  margin-bottom: 6px;
+  font-size: var(--pms-font-size-compact);
+}
+
+.pms-technical-project-card-grid {
+  gap: 5px 8px;
+}
+
+.pms-technical-project-card-grid span,
+.pms-technical-project-card-grid strong {
+  font-size: var(--pms-font-size-compact);
+}
+
+.pms-project-list-calendar {
+  display: grid;
+  grid-template-rows: 36px 28px minmax(0, 1fr);
+  height: calc(100dvh - 197px);
+  min-height: 520px;
+  border-radius: 8px;
+}
+
+.pms-project-list-calendar .pms-project-calendar-header,
+.pms-project-list-calendar .pms-project-calendar-header.pms-toolbar {
+  min-height: 36px;
+  height: 36px;
+  padding: 4px 8px;
+}
+
+.pms-project-list-calendar .pms-project-calendar-title {
+  font-size: 16px;
+}
+
+.pms-project-list-calendar .pms-project-calendar-weekdays {
+  min-height: 28px;
+}
+
+.pms-project-list-calendar .pms-project-calendar-weekdays > div {
+  padding: 4px 8px;
+  font-size: var(--pms-font-size-compact);
+  line-height: 20px;
+}
+
+.pms-project-list-calendar .pms-project-calendar-grid {
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  min-height: 0;
+}
+
+.pms-project-list-calendar .pms-project-calendar-cell {
+  min-height: 0;
+  padding: 3px 5px;
+  overflow: hidden;
+}
+
+.pms-project-list-calendar .pms-project-calendar-dayline {
+  margin-bottom: 2px;
+  font-size: var(--pms-font-size-compact);
+  line-height: 18px;
+}
+
+.pms-project-list-calendar .pms-project-calendar-events {
+  gap: 2px;
+}
+
+.pms-project-list-calendar-event {
+  height: 20px;
+  padding: 0 5px;
+  font-size: var(--pms-font-size-compact);
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.pms-floating-config-popover .ant-popover-inner,
+.pms-floating-config-popover .ant-popover-container {
+  padding-bottom: 8px;
+}
+
+.pms-floating-config-popover .pms-sortable-column-row {
+  min-height: 30px;
+}
+
+@media (max-width: 720px) {
+  .pms-main-content {
+    padding: 8px !important;
+  }
+
+  .ant-btn:not(.ant-btn-link):not(.ant-btn-text),
+  .ant-input-affix-wrapper:not(.ant-input-textarea-affix-wrapper),
+  .ant-picker,
+  .ant-input-number,
+  .ant-select-single,
+  .ant-select-single .ant-select-selector,
+  .ant-select-multiple .ant-select-selector {
+    min-height: 32px !important;
+  }
+
+  .pms-project-list-filter-grid,
+  .pms-project-list-filter-grid.pms-toolbar {
+    height: auto;
+  }
+
+  .pms-project-list-calendar {
+    height: auto;
+    min-height: 620px;
   }
 }

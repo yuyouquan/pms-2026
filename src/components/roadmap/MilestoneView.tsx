@@ -2665,7 +2665,6 @@ export default function MilestoneView({
 	                setColumnSettings(nextSettings)
 	                setActiveSavedViewId(null)
 	                setSharedRowsOverride(null)
-	                setShowColumnDrawer(false)
 	              }}
 	            />
 		            <Popover

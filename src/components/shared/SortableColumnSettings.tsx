@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactElement } from 'react'
-import { Button, Checkbox, Empty, Input, Space, Tooltip } from 'antd'
+import { Button, Checkbox, Empty, Input, Tooltip } from 'antd'
 import { HolderOutlined, SearchOutlined } from '@ant-design/icons'
 import {
   closestCenter,
@@ -120,7 +120,6 @@ export function SortableColumnSettings<Key extends string>({
   value,
   defaultValue,
   minVisible = 1,
-  applyLabel = '确定',
   onApply,
   onCancel,
   getPopupContainer,
@@ -162,52 +161,49 @@ export function SortableColumnSettings<Key extends string>({
     .filter(definition => visibleKeys.has(definition.key))
     .length
   const minimum = Math.max(0, minVisible)
-  const applyDisabled = hideableDefinitions.length > 0 && visibleHideableCount < minimum
+  const commitDraft = (nextValue: SortableColumnSettingsValue<Key>) => {
+    const normalized = normalizeColumnSettings(definitions, nextValue)
+    setDraft(normalized)
+    onApply(normalized)
+  }
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return
-    setDraft(current => ({
-      ...current,
+    commitDraft({
+      ...draft,
       order: moveColumnSetting(
         definitions,
-        current.order,
+        draft.order,
         String(active.id) as Key,
         String(over.id) as Key,
       ),
-    }))
+    })
   }
 
   const handleVisibilityChange = (key: Key, checked: boolean) => {
-    setDraft(current => {
-      const definition = definitionByKey.get(key)
-      if (!definition || definition.hideable === false) return current
+    const definition = definitionByKey.get(key)
+    if (!definition || definition.hideable === false) return
 
-      const currentVisible = new Set(current.visible)
-      const currentHideableCount = hideableDefinitions
-        .filter(item => currentVisible.has(item.key))
-        .length
-      if (!checked && currentHideableCount <= minimum) return current
+    const currentVisible = new Set(draft.visible)
+    const currentHideableCount = hideableDefinitions
+      .filter(item => currentVisible.has(item.key))
+      .length
+    if (!checked && currentHideableCount <= minimum) return
 
-      if (checked) currentVisible.add(key)
-      else currentVisible.delete(key)
+    if (checked) currentVisible.add(key)
+    else currentVisible.delete(key)
 
-      return {
-        ...current,
-        visible: current.order.filter(item => currentVisible.has(item)),
-      }
+    commitDraft({
+      ...draft,
+      visible: draft.order.filter(item => currentVisible.has(item)),
     })
   }
 
   const handleReset = () => {
-    setDraft(normalizeColumnSettings(
+    commitDraft(normalizeColumnSettings(
       definitions,
       defaultValue ?? getDefaultColumnSettings(definitions),
     ))
-  }
-
-  const handleApply = () => {
-    if (applyDisabled) return
-    onApply(normalizeColumnSettings(definitions, draft))
   }
 
   const normalizedSearchText = searchText.trim().toLocaleLowerCase('zh-CN')
@@ -251,14 +247,7 @@ export function SortableColumnSettings<Key extends string>({
           <Button type="link" danger size="small" onClick={handleReset}>重置</Button>
         </div>
       )}
-      footer={(
-        <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
-          <Button onClick={onCancel}>取消</Button>
-          <Button type="primary" disabled={applyDisabled} onClick={handleApply}>
-            {applyLabel}
-          </Button>
-        </Space>
-      )}
+      footer={null}
     >
       <Input
         allowClear

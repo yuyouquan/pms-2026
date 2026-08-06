@@ -1532,8 +1532,6 @@ export default function ProjectSpaceContainer() {
   ), [orderedVisibleColumns])
   const applyColumnSettings = (nextSettings: typeof columnSettings) => {
     setColumnSettingsByView(previous => ({ ...previous, [currentViewKey]: nextSettings }))
-    setShowColumnModal(false)
-    message.success('列配置已保存')
   }
 
   // Scope key for collapse

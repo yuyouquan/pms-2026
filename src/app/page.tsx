@@ -75,7 +75,7 @@ export default function Home() {
             {/* Main header (logo + nav + user switcher) */}
             <MainHeader />
 
-            <div style={{ padding: 24 }}>
+            <div className="pms-main-content" style={{ padding: 24 }}>
               {/* Workbench (todo center + work tracker) */}
               {activeModule === 'workbench' && <WorkbenchContainer />}
 

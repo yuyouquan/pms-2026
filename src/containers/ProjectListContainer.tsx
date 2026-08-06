@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useMemo, type CSSProperties } from 'react'
 import {
-  Row, Col, Input, Button, Card, Checkbox, Empty, Segmented, Pagination, Select,
+  Row, Col, Input, Button, Card, Checkbox, Empty, Segmented, Pagination, Select, Tooltip,
 } from 'antd'
 import {
-  FullscreenExitOutlined, FullscreenOutlined, PlusOutlined, SearchOutlined,
+  AppstoreOutlined, CalendarOutlined, FullscreenExitOutlined, FullscreenOutlined,
+  PlusOutlined, SearchOutlined, UnorderedListOutlined,
 } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
@@ -115,7 +116,7 @@ export default function ProjectListContainer() {
   const technicalSelectedTypes = getLinkedQuickFilterValues(technicalFilters, 'technicalProjectType')
   const technicalActiveType = resolveTechnicalProjectType(technicalSelectedTypes)
 
-  const projectCardPageSize = 9
+  const projectCardPageSize = 15
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const fullscreenViewTitle = projectListView === 'calendar' ? '项目日历' : '项目列表'
 
@@ -402,12 +403,15 @@ export default function ProjectListContainer() {
     projectCardPage * projectCardPageSize,
   )
   const projectListFullscreenAction = !isFullscreen && projectListView !== 'card' ? (
-    <Button
-      size="small"
-      aria-label="全屏展示"
-      icon={<FullscreenOutlined />}
-      onClick={() => setIsFullscreen(true)}
-    >全屏</Button>
+    <Tooltip title="全屏">
+      <Button
+        className="pms-project-list-icon-action"
+        size="small"
+        aria-label="全屏展示"
+        icon={<FullscreenOutlined />}
+        onClick={() => setIsFullscreen(true)}
+      />
+    </Tooltip>
   ) : null
 
   return (
@@ -453,15 +457,15 @@ export default function ProjectListContainer() {
                   onChange={(value) => setProjectListView(value as ProjectListViewMode)}
                   options={[
                     {
-                      label: <span className="pms-project-list-view-option" aria-label="列表视图">列表视图</span>,
+                      label: <span className="pms-project-list-view-option" aria-label="列表视图"><UnorderedListOutlined />列表视图</span>,
                       value: 'list',
                     },
                     {
-                      label: <span className="pms-project-list-view-option" aria-label="卡片视图">卡片视图</span>,
+                      label: <span className="pms-project-list-view-option" aria-label="卡片视图"><AppstoreOutlined />卡片视图</span>,
                       value: 'card',
                     },
                     {
-                      label: <span className="pms-project-list-view-option" aria-label="日历视图">日历视图</span>,
+                      label: <span className="pms-project-list-view-option" aria-label="日历视图"><CalendarOutlined />日历视图</span>,
                       value: 'calendar',
                     },
                   ]}
@@ -661,14 +665,15 @@ export default function ProjectListContainer() {
               <strong>{fullscreenViewTitle}</strong>
               <span>当前筛选结果</span>
             </div>
-            <Button
-              size="small"
-              aria-label="退出全屏"
-              icon={<FullscreenExitOutlined />}
-              onClick={() => setIsFullscreen(false)}
-            >
-              退出全屏
-            </Button>
+            <Tooltip title="退出全屏">
+              <Button
+                className="pms-project-list-icon-action"
+                size="small"
+                aria-label="退出全屏"
+                icon={<FullscreenExitOutlined />}
+                onClick={() => setIsFullscreen(false)}
+              />
+            </Tooltip>
           </header>
         )}
         <div
@@ -744,18 +749,18 @@ export default function ProjectListContainer() {
               </>
             ) : projectListView === 'card' ? (
               <>
-                <Row gutter={[16, 16]}>
+                <Row gutter={[8, 8]}>
                   {projectTypeFilter === PROJECT_CATEGORY_TECH
                     ? pagedCardRows.map(row => {
                         const technicalRow = row as ProjectSummaryRow
                         if (technicalActiveType === 'tdt') {
                           const project = visibleProjects.find(item => item.id === technicalRow.targetProjectId)
                           return project
-                            ? <Col xs={24} sm={12} lg={8} key={technicalRow.key}>{renderProjectCard(project)}</Col>
+                            ? <Col className="pms-project-list-card-column" xs={24} sm={12} md={8} xl={6} key={technicalRow.key}>{renderProjectCard(project)}</Col>
                             : null
                         }
                         return (
-                          <Col xs={24} sm={12} lg={8} key={technicalRow.key}>
+                          <Col className="pms-project-list-card-column" xs={24} sm={12} md={8} xl={6} key={technicalRow.key}>
                             <Card
                               hoverable
                               className="pms-technical-project-card pms-glass-surface pms-interactive-surface"
@@ -775,11 +780,11 @@ export default function ProjectListContainer() {
                       })
                     : pagedCardRows.map(project => {
                         const item = project as typeof projects[number]
-                        return <Col xs={24} sm={12} lg={8} key={item.id}>{renderProjectCard(item)}</Col>
+                        return <Col className="pms-project-list-card-column" xs={24} sm={12} md={8} xl={6} key={item.id}>{renderProjectCard(item)}</Col>
                       })}
                 </Row>
                 {cardRows.length > projectCardPageSize && (
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
                     <Pagination
                       current={projectCardPage}
                       pageSize={projectCardPageSize}
