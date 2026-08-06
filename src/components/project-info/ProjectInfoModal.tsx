@@ -110,7 +110,7 @@ const HEALTH_OPTIONS = [
 ]
 
 const GROUP_COLORS: Record<ProjectInfoGroupKey, string> = {
-  basic: '#6366f1',
+  basic: 'var(--pms-brand)',
   extended: '#f59e0b',
   team: '#14b8a6',
 }

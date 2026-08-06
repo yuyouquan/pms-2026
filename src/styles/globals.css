@@ -138,6 +138,46 @@
   --duration-slow: 0.4s;
 }
 
+/* PMS project space and plan workspace */
+.pms-project-space {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pms-project-space > div:last-child {
+  min-width: 0;
+}
+
+.pms-project-section {
+  border-radius: var(--pms-radius-surface);
+}
+
+.pms-project-information-slot {
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.pms-project-info-anchor {
+  border-radius: var(--pms-radius-surface);
+  overflow: hidden;
+}
+
+.pms-plan-workspace {
+  min-width: 0;
+}
+
+.pms-plan-toolbar {
+  margin-bottom: 16px;
+}
+
+.pms-plan-toolbar.ant-card .ant-card-body {
+  padding: 12px 16px;
+}
+
+.pms-plan-content {
+  overflow: hidden;
+}
+
 .pms-project-filter-chip {
   border: 0;
   border-radius: 16px;

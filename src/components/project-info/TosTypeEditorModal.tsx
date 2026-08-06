@@ -123,7 +123,7 @@ export default function TosTypeEditorModal({
   return (
     <DimensionMatrixEditor<TosTypeMatrixField, TosTypeConfigRow>
       open={open}
-      title={<Space><EditOutlined style={{ color: '#6366f1' }} /><span>类型编辑</span></Space>}
+      title={<Space><EditOutlined style={{ color: 'var(--pms-brand)' }} /><span>类型编辑</span></Space>}
       fields={TOS_TYPE_MATRIX_FIELDS}
       dimensions={rows}
       toolbar={toolbar}

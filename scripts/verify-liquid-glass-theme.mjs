@@ -56,6 +56,27 @@ const groups = {
     'src/components/roadmap/TosTargetEditor.tsx',
     'src/components/roadmap/utils.ts',
   ],
+  projectSpace: [
+    'src/containers/ProjectSpaceContainer.tsx',
+    'src/components/plan/PlanModule.tsx',
+    'src/components/shared/PlanHelpers.tsx',
+    'src/components/plans/PlanVersionCompareModal.tsx',
+    'src/components/plans/PlanViewModeSwitcher.tsx',
+    'src/components/plans/PlanWorkspaceShell.tsx',
+    'src/components/plans/RequirementDevPlan.tsx',
+    'src/components/plans/VersionTrainPlan.tsx',
+    'src/components/project-info/CollapsibleInformationSection.tsx',
+    'src/components/project-info/DimensionMatrixEditor.tsx',
+    'src/components/project-info/FieldVisibilityPicker.tsx',
+    'src/components/project-info/MarketEditorModal.tsx',
+    'src/components/project-info/ProjectInfoFieldInput.tsx',
+    'src/components/project-info/ProjectInfoModal.tsx',
+    'src/components/project-info/ProjectInfoSections.tsx',
+    'src/components/project-info/ProjectInformationFrame.tsx',
+    'src/components/project-info/ProjectPlanInfoGrid.tsx',
+    'src/components/project-info/TargetProjectInformationView.tsx',
+    'src/components/project-info/TosTypeEditorModal.tsx',
+  ],
 }
 
 function read(file, root) {
@@ -316,6 +337,37 @@ function roadmapMaterialFailures(root) {
     if (matches.length > 0) {
       failures.push(`${file}: legacy decorative roadmap control literal(s): ${[...new Set(matches)].join(', ')}`)
     }
+  }
+  return failures
+}
+
+const PROJECT_SPACE_MATERIAL_EXPECTATIONS = {
+  'src/containers/ProjectSpaceContainer.tsx': [
+    { label: 'project-space root material', pattern: /className=["']pms-project-space pms-page-shell["']/ },
+    { label: 'glass project-space sidebar', pattern: /className=["'][^"']*pms-sidebar[^"']*pms-glass-surface[^"']*["']/ },
+    { label: 'solid project-space content', pattern: /id=["']basic-info-scroll-container["'][^>]*className=["']pms-project-section pms-solid-surface["']/ },
+  ],
+  'src/components/plans/PlanWorkspaceShell.tsx': [
+    { label: 'plan workspace shell', pattern: /className=["']pms-plan-workspace["']/ },
+    { label: 'glass plan toolbar', pattern: /className=["']pms-plan-toolbar pms-toolbar["']/ },
+    { label: 'solid plan data surface', pattern: /className=["']pms-plan-content pms-solid-surface["']/ },
+  ],
+  'src/components/project-info/ProjectInformationFrame.tsx': [
+    { label: 'project information glass navigation', pattern: /className=["']pms-project-info-anchor pms-glass-surface["']/ },
+    { label: 'solid information section', pattern: /className=["']pms-project-information-slot pms-project-section pms-solid-surface["']/ },
+  ],
+  [CSS_SOURCE]: [
+    { label: 'project-space selector', pattern: /\.pms-project-space\s*\{/ },
+    { label: 'project-section selector', pattern: /\.pms-project-section\s*\{/ },
+    { label: 'plan-workspace selector', pattern: /\.pms-plan-workspace\s*\{/ },
+    { label: 'plan-toolbar selector', pattern: /\.pms-plan-toolbar\s*\{/ },
+  ],
+}
+
+function projectSpaceMaterialFailures(root) {
+  const failures = []
+  for (const [file, expectations] of Object.entries(PROJECT_SPACE_MATERIAL_EXPECTATIONS)) {
+    expectPatterns(failures, root, file, expectations)
   }
   return failures
 }
@@ -1156,6 +1208,7 @@ function verifyContract(root) {
     ...rawBrandFailures(root),
     ...groupedLegacyBrandFailures(root),
     ...roadmapMaterialFailures(root),
+    ...projectSpaceMaterialFailures(root),
     ...cssContractFailures(root),
   ]
 

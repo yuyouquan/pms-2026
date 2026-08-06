@@ -501,11 +501,11 @@ export function HorizontalTable({ tasks, versions }: HorizontalTableProps) {
             const devCycle = calcDevCycle(vTasks)
             const isLatest = idx === 0
             return (
-              <tr key={version.id} style={isLatest ? { background: 'rgba(99,102,241,0.03)' } : undefined}>
-                <td style={{ ...versionTdStyle, color: isLatest ? '#6366f1' : '#111827', background: isLatest ? 'rgba(99,102,241,0.06)' : '#fff' }}>
+              <tr key={version.id} style={isLatest ? { background: 'color-mix(in srgb, var(--pms-brand-surface) 45%, transparent)' } : undefined}>
+                <td style={{ ...versionTdStyle, color: isLatest ? 'var(--pms-brand)' : '#111827', background: isLatest ? 'var(--pms-brand-surface)' : '#fff' }}>
                   {version.versionNo}
                 </td>
-                <td style={{ ...cycleTdStyle, background: isLatest ? 'rgba(99,102,241,0.06)' : '#fff' }}>
+                <td style={{ ...cycleTdStyle, background: isLatest ? 'var(--pms-brand-surface)' : '#fff' }}>
                   <Tooltip title="最早计划开始到最晚计划完成的天数">
                     <span>{devCycle}</span>
                   </Tooltip>
@@ -608,7 +608,7 @@ function ActualDateCell({ value, onChange }: { value: string; onChange: (val: st
         border: '1px dashed transparent', transition: 'all 0.2s',
         minHeight: 28, display: 'flex', alignItems: 'center',
       }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'; e.currentTarget.style.background = 'rgba(99,102,241,0.06)' }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--pms-brand-border)'; e.currentTarget.style.background = 'var(--pms-brand-surface)' }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = 'transparent' }}
     >
       {value || '点击填写'}
@@ -700,7 +700,7 @@ export function TaskTable({
       return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: depth * 20 }}>
           {isEditMode && <DragHandle />}
-          {canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} style={{ color: '#6366f1' }} onClick={(e) => { e.stopPropagation(); handleAddSubTask(record.id) }} /></Tooltip>}
+          {canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} style={{ color: 'var(--pms-brand)' }} onClick={(e) => { e.stopPropagation(); handleAddSubTask(record.id) }} /></Tooltip>}
           <span style={{ fontWeight: depth === 0 ? 600 : 500, color: depth === 0 ? '#111827' : '#4b5563', fontSize: 13 }}>{id}</span>
         </div>
       )
@@ -1151,7 +1151,7 @@ export function PlanInfo({ selectedProject }: { selectedProject: any }) {
     <Card
       id="section-plan"
       style={{ marginBottom: 20, borderRadius: 8 }}
-      title={<Space><CalendarOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>计划信息</span></Space>}
+      title={<Space><CalendarOutlined style={{ color: 'var(--pms-brand)' }} /><span style={{ fontWeight: 600 }}>计划信息</span></Space>}
     >
       <Row gutter={[24, 16]}>
         <Col span={6}>
@@ -1159,7 +1159,7 @@ export function PlanInfo({ selectedProject }: { selectedProject: any }) {
             title={<span style={{ fontSize: 12, color: '#9ca3af' }}>计划开始时间</span>}
             value={p.planStartDate || '-'}
             valueStyle={{ fontSize: 16, fontWeight: 600 }}
-            prefix={<CalendarOutlined style={{ color: '#6366f1', fontSize: 14 }} />}
+            prefix={<CalendarOutlined style={{ color: 'var(--pms-brand)', fontSize: 14 }} />}
           />
         </Col>
         <Col span={6}>
@@ -1308,7 +1308,7 @@ export function PlanOverview({
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <Space size={8} align="center">
-              <BarChartOutlined style={{ color: '#6366f1', fontSize: 16 }} />
+              <BarChartOutlined style={{ color: 'var(--pms-brand)', fontSize: 16 }} />
               <span style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>计划总览</span>
               <Tag color="blue" style={{ fontSize: 11, borderRadius: 4 }}>融合模式</Tag>
             </Space>
@@ -1614,11 +1614,11 @@ export function ProjectPlan({
       {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1' && level2PlanMeta[activeLevel2Plan]?.planType === '1+N MR版本火车计划' && (
         <Card
           size="small"
-          style={{ marginBottom: 16, borderRadius: 8, border: '1px solid rgba(99,102,241,0.15)' }}
+          style={{ marginBottom: 16, borderRadius: 8, border: '1px solid var(--pms-brand-border)' }}
           styles={{ body: { padding: '16px 20px' } }}
         >
           <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 3, height: 16, background: '#6366f1', borderRadius: 2 }} />
+            <div style={{ width: 3, height: 16, background: 'var(--pms-brand)', borderRadius: 2 }} />
             <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>计划基本信息</span>
             <Tag color="blue" style={{ marginLeft: 8, fontSize: 11 }}>{level2PlanMeta[activeLevel2Plan]?.planType}</Tag>
           </div>
@@ -1791,7 +1791,7 @@ export function ProjectPlan({
       {/* 版本对比Modal */}
       <Modal
         className="pms-modal"
-        title={<Space><HistoryOutlined style={{ color: '#6366f1' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
+        title={<Space><HistoryOutlined style={{ color: 'var(--pms-brand)' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
         open={showVersionCompare}
         onCancel={() => { setShowVersionCompare(false); setCompareResult([]); setCompareFilterType('all'); setCompareShowUnchanged(false) }}
         footer={null}

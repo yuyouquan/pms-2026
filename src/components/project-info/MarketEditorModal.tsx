@@ -361,7 +361,7 @@ export default function MarketEditorModal({
   return (
     <DimensionMatrixEditor<MarketMatrixField, MarketConfigRow>
       open={open}
-      title={<Space><EditOutlined style={{ color: '#6366f1' }} /><span>市场编辑</span></Space>}
+      title={<Space><EditOutlined style={{ color: 'var(--pms-brand)' }} /><span>市场编辑</span></Space>}
       fields={MARKET_MATRIX_FIELDS}
       dimensions={rows}
       notice={notice}

@@ -29,10 +29,11 @@ export function PlanWorkspaceShell({
   children,
 }: PlanWorkspaceShellProps) {
   return (
-    <div>
+    <div className="pms-plan-workspace">
       {scopeTabs && <div aria-label="计划作用域">{scopeTabs}</div>}
       {notices && <div aria-label="计划通知">{notices}</div>}
       <Card
+        className="pms-plan-toolbar pms-toolbar"
         size="small"
         style={{ marginBottom: 16, borderRadius: 8 }}
         styles={{ body: { padding: '12px 16px' } }}
@@ -57,7 +58,7 @@ export function PlanWorkspaceShell({
           </Col>
         </Row>
       </Card>
-      <Card style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
+      <Card className="pms-plan-content pms-solid-surface" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
         <div aria-label="计划内容">{children}</div>
       </Card>
     </div>
