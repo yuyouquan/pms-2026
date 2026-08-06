@@ -13,6 +13,7 @@ import {
   Space,
   Table,
   Tooltip,
+  Tree,
   Typography,
   message,
 } from 'antd'
@@ -20,7 +21,6 @@ import {
   DeleteOutlined,
   EditOutlined,
   GlobalOutlined,
-  NumberOutlined,
   PlusOutlined,
   TeamOutlined,
 } from '@ant-design/icons'
@@ -92,6 +92,25 @@ export default function EnumConfig({ collapsed, onCollapsedChange }: EnumConfigP
     () => valuesByType[selectedType].map(value => ({ key: value, value })),
     [selectedType, valuesByType],
   )
+  const enumTreeData = useMemo(() => ENUM_CONFIG_CATEGORIES.map(category => ({
+    key: `category:${category.key}`,
+    title: (
+      <span className="pms-enum-tree-node pms-enum-tree-node--category">
+        <span className="pms-enum-tree-node__label">{category.label}</span>
+        <span className="pms-enum-tree-node__count">{category.types.length}</span>
+      </span>
+    ),
+    children: category.types.map(type => ({
+      key: `type:${type}`,
+      title: (
+        <span className="pms-enum-tree-node">
+          <span className="pms-enum-tree-node__label">{TOS_ENUM_REGISTRY[type].label}</span>
+          <span className="pms-enum-tree-node__count">{valuesByType[type].length}</span>
+        </span>
+      ),
+      isLeaf: true,
+    })),
+  })), [valuesByType])
 
   const restoreEnumTriggerFocus = () => {
     restoreTriggerFocus(() => {
@@ -304,54 +323,41 @@ export default function EnumConfig({ collapsed, onCollapsedChange }: EnumConfigP
           </Card>
         )}
       >
-        <div className="pms-enum-category-list" role="list" aria-label="枚举分类">
-          {ENUM_CONFIG_CATEGORIES.map(category => (
-            <div key={category.key} className="pms-enum-category-group">
-              <Tooltip title={collapsed ? category.label : undefined} placement="right">
+        {collapsed ? (
+          <div className="pms-enum-collapsed-categories" aria-label="枚举分类快捷入口">
+            {ENUM_CONFIG_CATEGORIES.map(category => (
+              <Tooltip key={category.key} title={category.label} placement="right">
                 <button
                   type="button"
-                  className={`pms-enum-category-item${selectedCategory === category.key ? ' is-active' : ''}`}
+                  className={`pms-enum-collapsed-category${selectedCategory === category.key ? ' is-active' : ''}`}
                   aria-label={category.label}
                   aria-pressed={selectedCategory === category.key}
                   onClick={() => setSelectedCategory(category.key)}
                 >
-                  <span className="pms-enum-category-icon">
-                    {category.key === 'general' ? <GlobalOutlined /> : <TeamOutlined />}
-                  </span>
-                  <span className="pms-enum-category-copy">
-                    <strong>{category.label}</strong>
-                    <small>{category.types.length} 个枚举类型</small>
-                  </span>
+                  {category.key === 'general' ? <GlobalOutlined /> : <TeamOutlined />}
                 </button>
               </Tooltip>
-              {selectedCategory === category.key && category.key === 'general' ? (
-                <div className="pms-enum-type-list" role="list" aria-label="固定枚举类型">
-                  {TOS_ENUM_TYPE_KEYS.map(type => {
-                    const definition = TOS_ENUM_REGISTRY[type]
-                    const active = selectedType === type
-                    return (
-                      <Tooltip key={type} title={collapsed ? definition.label : undefined} placement="right">
-                        <button
-                          type="button"
-                          className={`pms-enum-type-item${active ? ' is-active' : ''}`}
-                          aria-label={definition.label}
-                          aria-pressed={active}
-                          onClick={() => setSelectedType(type)}
-                        >
-                          <span className="pms-enum-type-icon"><NumberOutlined /></span>
-                          <span className="pms-enum-type-copy">
-                            <strong>{definition.label}</strong>
-                            <small>{valuesByType[type].length} 个配置值</small>
-                          </span>
-                        </button>
-                      </Tooltip>
-                    )
-                  })}
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <Tree
+            className="pms-enum-tree"
+            aria-label="枚举分类树"
+            blockNode
+            defaultExpandAll
+            selectedKeys={[selectedCategory === 'general' ? `type:${selectedType}` : 'category:hr-pipeline']}
+            treeData={enumTreeData}
+            onSelect={keys => {
+              const key = String(keys[0] || '')
+              if (key.startsWith('type:')) {
+                setSelectedCategory('general')
+                setSelectedType(key.slice(5) as EnumTypeKey)
+                return
+              }
+              if (key.startsWith('category:')) setSelectedCategory(key.slice(9) as EnumConfigCategoryKey)
+            }}
+          />
+        )}
       </ConfigWorkspaceShell>
 
       <Modal
