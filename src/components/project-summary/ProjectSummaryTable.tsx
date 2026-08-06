@@ -760,7 +760,6 @@ export default function ProjectSummaryTable({
           onCancel={() => setColumnOpen(false)}
           onApply={nextSettings => {
             setColumnSettings(nextSettings)
-            setColumnOpen(false)
           }}
         />
       )}

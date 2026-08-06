@@ -1709,8 +1709,6 @@ export function ProjectPlan({
                   onCancel={() => setShowColumnModal(false)}
                   onApply={(nextSettings) => {
                     setColumnSettings(nextSettings)
-                    setShowColumnModal(false)
-                    message.success('列配置已保存')
                   }}
                 />
                 <Radio.Group

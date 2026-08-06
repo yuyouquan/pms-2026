@@ -42,7 +42,6 @@ export default function RoadmapColumnSettingsDrawer({
       applyLabel="应用"
       onApply={nextValue => {
         onChange(nextValue)
-        onClose()
       }}
       onCancel={onClose}
     />

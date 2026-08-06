@@ -365,7 +365,6 @@ export default function RequirementDevPlan({ isEditMode = false }: RequirementDe
                     onApply={(nextSettings) => {
                       if (activeTab === 'ir') setIrColumnSettings(nextSettings)
                       else if (activeTab === 'sr') setSrColumnSettings(nextSettings)
-                      setShowColumnModal(false)
                     }}
                   />
                 )}

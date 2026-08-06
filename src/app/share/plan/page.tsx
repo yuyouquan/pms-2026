@@ -225,7 +225,6 @@ function SharePlanContent() {
                   onCancel={() => setShowColumnModal(false)}
                   onApply={(nextSettings) => {
                     setColumnSettings(nextSettings)
-                    setShowColumnModal(false)
                   }}
                 />
               )}

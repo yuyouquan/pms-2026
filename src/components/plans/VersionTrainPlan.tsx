@@ -431,7 +431,6 @@ export default function VersionTrainPlan({ data: controlledData, onDataChange, c
               onCancel={() => setShowColumnModal(false)}
               onApply={(nextSettings) => {
                 setColumnSettings(nextSettings)
-                setShowColumnModal(false)
               }}
             />
           </Space>

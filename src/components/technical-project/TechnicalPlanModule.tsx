@@ -790,7 +790,7 @@ export default function TechnicalPlanModule({
                 )}
                 definitions={TECHNICAL_COLUMN_DEFINITIONS}
                 value={instance?.columnSettings || { order: Object.keys(COLUMN_LABELS), visible: Object.keys(COLUMN_LABELS) }}
-                onApply={value => { setColumns(scope, value); setColumnsOpen(false); message.success('字段配置已保存') }}
+                onApply={value => setColumns(scope, value)}
                 onCancel={() => setColumnsOpen(false)}
               />
             )}

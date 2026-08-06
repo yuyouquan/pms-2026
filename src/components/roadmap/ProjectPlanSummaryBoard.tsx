@@ -2447,7 +2447,6 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
                 setColumnSettings(nextSettings)
                 setActiveSavedViewId(null)
                 setSharedRowsOverride(null)
-                setShowColumnDrawer(false)
               }}
             />
             <Dropdown

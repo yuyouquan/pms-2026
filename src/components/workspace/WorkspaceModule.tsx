@@ -129,14 +129,14 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       tabIndex={0}
       aria-label={`打开项目 ${project.sourceBid || project.id}`}
       hoverable
-      className="pms-card-hover pms-glass-surface pms-interactive-surface"
+      className="pms-card-hover pms-project-card pms-glass-surface pms-interactive-surface"
       style={{
         borderRadius: 10,
         height: '100%',
         borderLeft: hovered ? '3px solid var(--pms-brand)' : '1px solid var(--pms-border)',
         boxShadow: hovered ? 'var(--pms-shadow-glass)' : 'var(--pms-shadow-xs)',
       }}
-      styles={{ body: { padding: '16px 20px', height: '100%', display: 'flex', flexDirection: 'column' as const } }}
+      styles={{ body: { padding: 10, height: '100%', display: 'flex', flexDirection: 'column' as const } }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={openProject}
@@ -148,13 +148,13 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       }}
     >
       {/* 头部: 项目名 + 状态 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#111827', letterSpacing: 0.3, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#111827', letterSpacing: 0.2, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {project.name}
           </div>
           {isWholeMachine && project.marketName && (
-            <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>市场名: {project.marketName}</div>
+            <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>市场名: {project.marketName}</div>
           )}
           <Tag
             color="default"
@@ -171,7 +171,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       </div>
 
       {/* 中间: 类型差异化字段 */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
         {isWholeMachine && (
           <>
             {fieldItem('品牌', project.brand)}
@@ -183,7 +183,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
 
       {/* 计划时间 - 软件产品/整机产品/技术项目显示 */}
       {!isCapability && (project.planStartDate || project.planEndDate) && (
-        <div style={{ display: 'flex', gap: 12, marginBottom: 10, fontSize: 12, color: '#9ca3af' }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 6, fontSize: 12, color: '#9ca3af' }}>
           {project.planStartDate && (
             <span><CalendarOutlined style={{ marginRight: 4, color: 'var(--pms-brand)' }} />{project.planStartDate}</span>
           )}
