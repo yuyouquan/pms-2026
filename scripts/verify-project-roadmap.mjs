@@ -2688,7 +2688,7 @@ registerAssertion('roadmap module composes controls and overlays without standal
     }
   }
   const toolbarSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
-  for (const label of ['表单视图', '版本演进视图', '记录', 'tOS 版本维护', '创建项目', '筛选', '列设置']) {
+  for (const label of ['表单视图', '版本演进视图', '记录', 'tOS 版本维护', '创建项目', '筛选', '字段配置']) {
     if (!toolbarSource.includes(label)) throw new Error(`Roadmap toolbar is missing ${label}`)
   }
   if (/placeholder=["'][^"']*搜索/.test(toolbarSource)) throw new Error('Roadmap must not add a standalone search input')
@@ -3539,7 +3539,7 @@ registerAssertion('roadmap defers enum policy until hydration and preserves save
   }
 })
 
-registerAssertion('roadmap tOS maintenance routes to the shared two-part enum configuration', () => {
+registerAssertion('roadmap tOS maintenance opens locally while recovery can reach shared enum configuration', () => {
   const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
   for (const token of [
     'useEnumStore',
@@ -3551,8 +3551,8 @@ registerAssertion('roadmap tOS maintenance routes to the shared two-part enum co
   ]) {
     if (!moduleSource.includes(token)) throw new Error(`shared enum navigation is missing ${token}`)
   }
-  if (moduleSource.includes('setTosMaintenanceOpen(true)')) {
-    throw new Error('roadmap still opens an independent tOS directory')
+  if (!moduleSource.includes('setTosMaintenanceOpen(true)') || !moduleSource.includes('<TosVersionMaintenanceModal')) {
+    throw new Error('roadmap maintenance no longer opens its local business editor')
   }
   const plannedModalSource = fs.readFileSync(path.join(root, 'src/components/roadmap/PlannedProjectModal.tsx'), 'utf8')
   for (const token of ['buildRoadmapTosSelectOptions', '（已停用）', 'disabled']) {

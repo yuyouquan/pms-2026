@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Button,
@@ -96,6 +96,7 @@ export interface ProjectSummaryTableProps {
   toolbarHost?: HTMLElement | null
   showTable?: boolean
   showColumnSettings?: boolean
+  toolbarTrailingAction?: ReactNode
 }
 
 interface StoredProjectSummaryPreferences {
@@ -173,6 +174,7 @@ export default function ProjectSummaryTable({
   toolbarHost,
   showTable = true,
   showColumnSettings = true,
+  toolbarTrailingAction,
 }: ProjectSummaryTableProps) {
   const [uncontrolledFilters, setUncontrolledFilters] = useState<AnyFilterCondition[]>([])
   const isFilterControlled = controlledFilters !== undefined
@@ -741,15 +743,15 @@ export default function ProjectSummaryTable({
           open={columnOpen}
           getPopupContainer={getPopupContainer}
           trigger={(
-            <Tooltip title="列设置">
+            <Tooltip title="字段配置">
               <Button
-                aria-label="列设置"
+                aria-label="字段配置"
                 icon={<SettingOutlined />}
                 onClick={() => {
                   setFilterOpen(false)
                   setColumnOpen(true)
                 }}
-              >列设置</Button>
+              >字段配置</Button>
             </Tooltip>
           )}
           definitions={columnDefinitions}
@@ -762,6 +764,7 @@ export default function ProjectSummaryTable({
           }}
         />
       )}
+      {toolbarTrailingAction}
     </Space>
   )
 

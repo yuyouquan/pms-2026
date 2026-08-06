@@ -394,7 +394,7 @@ const shellCapabilities = [
   ['创建修订', 'primaryActions'],
   ['计划克隆', 'primaryActions'],
   ['筛选', 'utilityActions'],
-  ['列设置', 'utilityActions'],
+  ['字段配置', 'utilityActions'],
   ['全部展开', 'utilityActions'],
   ['全部收起', 'utilityActions'],
   ['版本对比', 'utilityActions'],

@@ -29,6 +29,16 @@ import type { EnumActionResult, EnumTypeKey } from '@/types/enums'
 import { useOverlayInteraction } from '@/hooks/useOverlayInteraction'
 
 type ModalMode = 'add' | 'edit'
+type EnumConfigCategoryKey = 'general' | 'hr-pipeline'
+
+const ENUM_CONFIG_CATEGORIES: Array<{
+  key: EnumConfigCategoryKey
+  label: string
+  types: readonly EnumTypeKey[]
+}> = [
+  { key: 'general', label: '通用', types: TOS_ENUM_TYPE_KEYS },
+  { key: 'hr-pipeline', label: '人力资源管道', types: [] },
+]
 
 const FORMAT_HINT: Record<EnumTypeKey, string> = {
   'tos-2-part': '格式要求：数字.数字，例如 18.0',
@@ -55,6 +65,7 @@ export default function EnumConfig() {
   const hydrateEnumStore = useEnumStore(state => state.hydrateEnumStore)
   const resetLocalConfig = useEnumStore(state => state.resetLocalConfig)
   const [modalOpen, setModalOpen] = useState(false)
+  const [selectedCategory, setSelectedCategory] = useState<EnumConfigCategoryKey>('general')
   const [modalMode, setModalMode] = useState<ModalMode>('add')
   const [editingValue, setEditingValue] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
@@ -246,31 +257,48 @@ export default function EnumConfig() {
 
   return (
     <section className="pms-enum-config pms-solid-surface" aria-label="枚举值配置">
-      <Card className="pms-enum-type-card pms-glass-surface" title="枚举类型">
-        <div className="pms-enum-type-list" role="list" aria-label="固定枚举类型">
-          {TOS_ENUM_TYPE_KEYS.map(type => {
-            const definition = TOS_ENUM_REGISTRY[type]
-            const active = selectedType === type
-            return (
+      <Card className="pms-enum-type-card pms-glass-surface" title="枚举分类">
+        <div className="pms-enum-category-list" role="list" aria-label="枚举分类">
+          {ENUM_CONFIG_CATEGORIES.map(category => (
+            <div key={category.key} className="pms-enum-category-group">
               <button
-                key={type}
                 type="button"
-                className={`pms-enum-type-item${active ? ' is-active' : ''}`}
-                aria-pressed={active}
-                onClick={() => setSelectedType(type)}
+                className={`pms-enum-category-item${selectedCategory === category.key ? ' is-active' : ''}`}
+                aria-pressed={selectedCategory === category.key}
+                onClick={() => setSelectedCategory(category.key)}
               >
-                <span className="pms-enum-type-icon"><NumberOutlined /></span>
-                <span>
-                  <strong>{definition.label}</strong>
-                  <small>{valuesByType[type].length} 个配置值</small>
-                </span>
+                <strong>{category.label}</strong>
+                <small>{category.types.length} 个枚举类型</small>
               </button>
-            )
-          })}
+              {selectedCategory === category.key && category.key === 'general' ? (
+                <div className="pms-enum-type-list" role="list" aria-label="固定枚举类型">
+                  {TOS_ENUM_TYPE_KEYS.map(type => {
+                    const definition = TOS_ENUM_REGISTRY[type]
+                    const active = selectedType === type
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        className={`pms-enum-type-item${active ? ' is-active' : ''}`}
+                        aria-pressed={active}
+                        onClick={() => setSelectedType(type)}
+                      >
+                        <span className="pms-enum-type-icon"><NumberOutlined /></span>
+                        <span>
+                          <strong>{definition.label}</strong>
+                          <small>{valuesByType[type].length} 个配置值</small>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : null}
+            </div>
+          ))}
         </div>
       </Card>
 
-      <Card
+      {selectedCategory === 'general' ? <Card
         className="pms-enum-values-card pms-solid-surface"
         title={(
           <div className="pms-enum-card-heading">
@@ -293,7 +321,14 @@ export default function EnumConfig() {
           scroll={{ y: 440 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无枚举值" /> }}
         />
-      </Card>
+      </Card> : (
+        <Card
+          className="pms-enum-values-card pms-solid-surface"
+          title="人力资源管道"
+        >
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无枚举类型" />
+        </Card>
+      )}
 
       <Modal
         className="pms-scroll-modal"

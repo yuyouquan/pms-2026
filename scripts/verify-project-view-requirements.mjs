@@ -160,7 +160,7 @@ const checks = [
   {
     name: 'Summary board provides column settings drawer',
     file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
-    includes: '列设置',
+    includes: '字段配置',
   },
   {
     name: 'Summary board reuses roadmap project info columns',

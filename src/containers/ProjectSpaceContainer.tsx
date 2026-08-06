@@ -3731,7 +3731,7 @@ export default function ProjectSpaceContainer() {
                     <SortableColumnSettings
                       open={showColumnModal}
                       trigger={(
-                        <Tooltip title="列设置">
+                        <Tooltip title="字段配置">
                           <Button
                             icon={projectPlanLevel === 'level1' ? <SettingOutlined /> : <AppstoreOutlined />}
                             style={{ borderRadius: 6 }}
@@ -3739,7 +3739,7 @@ export default function ProjectSpaceContainer() {
                               setShowLevel1PlanFilterDrawer(false)
                               setShowColumnModal(true)
                             }}
-                            aria-label="列设置"
+                            aria-label="字段配置"
                           />
                         </Tooltip>
                       )}

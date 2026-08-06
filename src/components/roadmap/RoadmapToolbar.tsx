@@ -263,16 +263,16 @@ export default function RoadmapToolbar({
             </Tooltip>,
           )}
           {renderColumnSettings(
-            <Tooltip title="列设置">
+            <Tooltip title="字段配置">
               <Button
                 className="roadmap-toolbar-icon-action"
-                aria-label="列设置"
+                aria-label="字段配置"
                 icon={<SettingOutlined />}
                 disabled={!canView}
                 onClick={onOpenColumnSettings}
                 style={compactControlStyle}
               >
-                列设置
+                字段配置
               </Button>
             </Tooltip>,
           )}
