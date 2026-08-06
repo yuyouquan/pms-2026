@@ -1358,5 +1358,5 @@ if (cssRoot !== null) {
     'Liquid glass raw-brand scanner passed',
   )
 } else {
-  finish(verifyContract(process.cwd()), 'Liquid glass core theme contract passed')
+  finish(verifyContract(process.cwd()), 'Liquid glass theme contract passed for all interface groups')
 }

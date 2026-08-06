@@ -924,7 +924,7 @@ registerAssertion('roadmap per-target controls stay inside compact target-card h
 
   for (const [label, source, cardToken] of [
     ['table', table, 'data-roadmap-target-card'],
-    ['evolution', evolution, 'className="pms-roadmap-evolution-target"'],
+    ['evolution', evolution, 'className="pms-roadmap-evolution-target pms-glass-surface"'],
   ]) {
     assertRoadmapTargetControlNesting(label, source, cardToken)
   }
