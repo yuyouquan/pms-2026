@@ -178,6 +178,52 @@
   overflow: hidden;
 }
 
+/* Standalone template and read-only share routes */
+.pms-template-page,
+.pms-share-page {
+  color: var(--pms-text-primary);
+}
+
+.pms-template-page .pms-topbar h1,
+.pms-template-page .pms-topbar button {
+  color: #fff;
+}
+
+.pms-template-header-active {
+  border-color: rgb(255 255 255 / 72%);
+  background: rgb(255 255 255 / 12%);
+}
+
+.pms-template-avatar {
+  background: rgb(255 255 255 / 22%);
+  border: 1px solid rgb(255 255 255 / 36%);
+}
+
+.pms-template-nav {
+  transition: color 150ms ease, background 150ms ease;
+}
+
+.pms-template-nav:hover,
+.pms-template-icon-button:hover {
+  color: var(--pms-brand-strong);
+  background: var(--pms-brand-surface);
+}
+
+.pms-template-nav-active,
+.pms-template-version-tag {
+  color: var(--pms-brand-strong);
+  background: var(--pms-brand-surface);
+}
+
+.pms-template-icon-button {
+  color: var(--pms-brand);
+}
+
+.pms-status-progress {
+  color: var(--info);
+  background: var(--info-light);
+}
+
 .pms-project-filter-chip {
   border: 0;
   border-radius: 16px;

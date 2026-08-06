@@ -137,15 +137,12 @@ function SharePlanContent() {
   const typeColor = PROJECT_TYPE_COLORS[project.type] || { bg: 'rgba(140,140,140,0.08)', color: '#8c8c8c' }
 
   return (
-    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '24px 32px' }}>
+    <div className="pms-share-page pms-page-shell" style={{ maxWidth: 1400, margin: '0 auto', padding: '24px 32px' }}>
       {/* Header Info Bar */}
       <Card
         size="small"
-        style={{
-          marginBottom: 16, borderRadius: 12,
-          background: 'linear-gradient(135deg, rgba(255,255,255,0.9), rgba(238,242,255,0.8))',
-          border: '1px solid rgba(99,102,241,0.1)',
-        }}
+        className="pms-glass-surface"
+        style={{ marginBottom: 16, borderRadius: 12 }}
         styles={{ body: { padding: '16px 24px' } }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
@@ -156,10 +153,10 @@ function SharePlanContent() {
             <span style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>
               {isMachineProjectType(project.type) && project.marketName ? project.marketName : project.name}
               <span style={{ color: '#9ca3af', fontWeight: 400, marginLeft: 8 }}>·</span>
-              <span style={{ color: '#6366f1', marginLeft: 8 }}>{planTitle}</span>
+              <span style={{ color: 'var(--pms-brand)', marginLeft: 8 }}>{planTitle}</span>
             </span>
           </Space>
-          <Space size={16} split={<Divider type="vertical" style={{ margin: 0, borderColor: 'rgba(99,102,241,0.15)' }} />}>
+          <Space size={16} split={<Divider type="vertical" style={{ margin: 0, borderColor: 'var(--pms-brand-border)' }} />}>
             <Space size={4}>
               <Tag color="green" style={{ fontSize: 12 }}>{latestVersion.versionNo}</Tag>
               <Tag color="success" style={{ fontSize: 11 }}>已发布</Tag>
@@ -171,6 +168,7 @@ function SharePlanContent() {
 
       {/* Toolbar */}
       <Card
+        className="pms-toolbar"
         size="small"
         style={{ marginBottom: 16, borderRadius: 10 }}
         styles={{ body: { padding: '8px 16px' } }}
@@ -181,7 +179,7 @@ function SharePlanContent() {
               {/* Market tabs for 整机产品项目 */}
               {isWholeMachine && markets.length > 0 && (
                 <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '2px 3px', background: 'rgba(99,102,241,0.05)', borderRadius: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '2px 3px', background: 'var(--pms-brand-surface)', borderRadius: 8 }}>
                     {markets.map(m => (
                       <div
                         key={m}
@@ -191,7 +189,7 @@ function SharePlanContent() {
                           fontSize: 13, fontWeight: selectedMarket === m ? 600 : 400,
                           transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
                           background: selectedMarket === m ? '#fff' : 'transparent',
-                          color: selectedMarket === m ? '#4338ca' : '#9ca3af',
+                          color: selectedMarket === m ? 'var(--pms-brand-strong)' : '#9ca3af',
                           boxShadow: selectedMarket === m ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                         }}
                       >
@@ -199,7 +197,7 @@ function SharePlanContent() {
                       </div>
                     ))}
                   </div>
-                  <Divider type="vertical" style={{ margin: '0 4px', borderColor: 'rgba(99,102,241,0.12)' }} />
+                  <Divider type="vertical" style={{ margin: '0 4px', borderColor: 'var(--pms-brand-border)' }} />
                 </>
               )}
               <Input
@@ -249,7 +247,7 @@ function SharePlanContent() {
       </Card>
 
       {/* Content Area */}
-      <Card style={{ borderRadius: 10 }} styles={{ body: { padding: viewMode === 'horizontal' ? 0 : undefined } }}>
+      <Card className="pms-solid-surface" style={{ borderRadius: 10 }} styles={{ body: { padding: viewMode === 'horizontal' ? 0 : undefined } }}>
         {viewMode === 'table' && (
           <TaskTable
             tasks={tasks}

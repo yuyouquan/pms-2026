@@ -19,6 +19,7 @@ const LEGACY_BRAND_RGB = new Set([
 const ROADMAP_CONTROL_LEGACY_HEX = new Set(['eaf1ff', 'eef2ff', '2563eb', '4f6df5'])
 const ROADMAP_CONTROL_LEGACY_RGB = new Set(['234,241,255', '238,242,255', '37,99,235', '79,109,245'])
 const COLOR_LITERAL_PATTERN = /#(?:[\da-f]{8}|[\da-f]{6})\b|\brgba?\([^)]*\)/gi
+const LEGACY_BLUE_UTILITY_PATTERN = /(?:text|bg|border|hover:text|hover:bg)-blue-(?:50|100|500|600|700)\b/g
 const ROADMAP_CONTROL_RULE_PATTERN = /(?:\.pms-summary-status-pill(?::hover|-active)|\.pms-project-view-tabs\s+\.ant-tabs-tab-active|\.pms-roadmap-snapshot-item(?::hover|-active))\s*\{[^}]*\}/gi
 const THEME_SOURCE = 'src/theme/pmsTheme.ts'
 const CSS_SOURCE = 'src/styles/globals.css'
@@ -90,6 +91,11 @@ const groups = {
     'src/components/technical-project/TechnicalProjectCreateFields.tsx',
     'src/components/technical-project/TechnicalProjectInformationView.tsx',
     'src/components/technical-project/TechnicalProjectOverview.tsx',
+  ],
+  standalone: [
+    'src/app/config/level1-template/page.tsx',
+    'src/app/config/level2-template/page.tsx',
+    'src/app/share/plan/page.tsx',
   ],
 }
 
@@ -264,6 +270,10 @@ function groupedLegacyBrandFailures(root) {
   for (const files of Object.values(groups)) {
     for (const file of files) expectNoLegacyBrand(failures, root, file)
   }
+  for (const file of groups.standalone) {
+    const matches = read(file, root).match(LEGACY_BLUE_UTILITY_PATTERN)
+    if (matches?.length) failures.push(`${file}: legacy decorative blue utility(s): ${[...new Set(matches)].join(', ')}`)
+  }
   return failures
 }
 
@@ -381,6 +391,37 @@ const PROJECT_SPACE_MATERIAL_EXPECTATIONS = {
 function projectSpaceMaterialFailures(root) {
   const failures = []
   for (const [file, expectations] of Object.entries(PROJECT_SPACE_MATERIAL_EXPECTATIONS)) {
+    expectPatterns(failures, root, file, expectations)
+  }
+  return failures
+}
+
+const STANDALONE_MATERIAL_EXPECTATIONS = {
+  'src/app/config/level1-template/page.tsx': [
+    { label: 'level-one template page shell', pattern: /pms-template-page pms-page-shell/ },
+    { label: 'level-one template topbar', pattern: /<header className="pms-topbar/ },
+    { label: 'level-one solid work area', pattern: /<main className="pms-solid-surface/ },
+  ],
+  'src/app/config/level2-template/page.tsx': [
+    { label: 'level-two template page shell', pattern: /pms-template-page pms-page-shell/ },
+    { label: 'level-two template topbar', pattern: /<header className="pms-topbar/ },
+    { label: 'level-two solid work area', pattern: /<main className="pms-solid-surface/ },
+  ],
+  'src/app/share/plan/page.tsx': [
+    { label: 'share page shell', pattern: /pms-share-page pms-page-shell/ },
+    { label: 'share page glass header', pattern: /<Card[\s\S]{0,100}className="pms-glass-surface"/ },
+    { label: 'share page glass toolbar', pattern: /<Card[\s\S]{0,100}className="pms-toolbar"/ },
+    { label: 'share page solid plan data', pattern: /<Card className="pms-solid-surface"/ },
+  ],
+  [CSS_SOURCE]: [
+    { label: 'template page selector', pattern: /\.pms-template-page/ },
+    { label: 'share page selector', pattern: /\.pms-share-page/ },
+  ],
+}
+
+function standaloneMaterialFailures(root) {
+  const failures = []
+  for (const [file, expectations] of Object.entries(STANDALONE_MATERIAL_EXPECTATIONS)) {
     expectPatterns(failures, root, file, expectations)
   }
   return failures
@@ -1223,6 +1264,7 @@ function verifyContract(root) {
     ...groupedLegacyBrandFailures(root),
     ...roadmapMaterialFailures(root),
     ...projectSpaceMaterialFailures(root),
+    ...standaloneMaterialFailures(root),
     ...cssContractFailures(root),
   ]
 
