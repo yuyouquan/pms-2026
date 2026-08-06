@@ -116,7 +116,7 @@ export default function ProjectListContainer() {
   const technicalSelectedTypes = getLinkedQuickFilterValues(technicalFilters, 'technicalProjectType')
   const technicalActiveType = resolveTechnicalProjectType(technicalSelectedTypes)
 
-  const projectCardPageSize = 15
+  const projectListPageSize = 15
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const fullscreenViewTitle = projectListView === 'calendar' ? '项目日历' : '项目列表'
 
@@ -399,8 +399,8 @@ export default function ProjectListContainer() {
     [projectTypeFilter]: cardRows.length,
   }
   const pagedCardRows = cardRows.slice(
-    (projectCardPage - 1) * projectCardPageSize,
-    projectCardPage * projectCardPageSize,
+    (projectCardPage - 1) * projectListPageSize,
+    projectCardPage * projectListPageSize,
   )
   const projectListFullscreenAction = !isFullscreen && projectListView !== 'card' ? (
     <Tooltip title="全屏">
@@ -454,7 +454,10 @@ export default function ProjectListContainer() {
                   size="small"
                   className="pms-project-list-view-switch"
                   value={projectListView}
-                  onChange={(value) => setProjectListView(value as ProjectListViewMode)}
+                  onChange={(value) => {
+                    setProjectListView(value as ProjectListViewMode)
+                    setProjectCardPage(1)
+                  }}
                   options={[
                     {
                       label: <span className="pms-project-list-view-option" aria-label="列表视图"><UnorderedListOutlined />列表视图</span>,
@@ -783,19 +786,17 @@ export default function ProjectListContainer() {
                         return <Col className="pms-project-list-card-column" xs={24} sm={12} md={8} xl={6} key={item.id}>{renderProjectCard(item)}</Col>
                       })}
                 </Row>
-                {cardRows.length > projectCardPageSize && (
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                    <Pagination
-                      current={projectCardPage}
-                      pageSize={projectCardPageSize}
-                      total={cardRows.length}
-                      onChange={(page) => setProjectCardPage(page)}
-                      showTotal={(total) => `共 ${total} 个项目`}
-                      showSizeChanger={false}
-                      size="small"
-                    />
-                  </div>
-                )}
+                <div className="pms-project-list-pagination">
+                  <Pagination
+                    current={projectCardPage}
+                    pageSize={projectListPageSize}
+                    total={cardRows.length}
+                    onChange={(page) => setProjectCardPage(page)}
+                    showTotal={(total) => `共 ${total} 个项目`}
+                    showSizeChanger={false}
+                    size="small"
+                  />
+                </div>
                 {projectTypeFilter === PROJECT_CATEGORY_TECH ? (
                   <ProjectSummaryTable
                     projects={[]}
@@ -867,6 +868,7 @@ export default function ProjectListContainer() {
                     showQuickFilters={false}
                     toolbarHost={projectListTableToolbarHost}
                     toolbarTrailingAction={projectListFullscreenAction}
+                    tablePageSize={projectListPageSize}
                   />
                 </div>
               ) : (
@@ -886,6 +888,7 @@ export default function ProjectListContainer() {
                   showQuickFilters={false}
                   toolbarHost={projectListTableToolbarHost}
                   toolbarTrailingAction={projectListFullscreenAction}
+                  tablePageSize={projectListPageSize}
                   groupBy={standardMatrixVariant === 'machine'
                     ? { key: 'productSeries', fallbackLabel: '未配置产品系列' }
                     : undefined}

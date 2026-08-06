@@ -102,7 +102,7 @@ const addProjectSource = readSource(root, 'src/components/workspace/AddProjectMo
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 const projectStoreSource = readSource(root, 'src/stores/project.ts')
 const roadmapModuleSource = readSource(root, 'src/components/roadmap/ProjectRoadmapModule.tsx')
-assert.match(configUi, /key:\s*['"]enum['"][\s\S]*枚举值配置/, 'configuration center exposes the enum-value tab')
+assert.match(configUi, /value:\s*['"]enum['"][\s\S]*label:\s*['"]枚举值配置['"]/, 'configuration center exposes the enum-value capsule option')
 assert.match(configUi, /configTab\s*===\s*['"]enum['"][\s\S]*<EnumConfig/, 'enum tab renders EnumConfig')
 assert.match(enumUi, /<Tree\b/, 'enum categories use a scalable tree control')
 assert.match(enumUi, /aria-label="枚举分类树"/, 'enum tree exposes an accessible label')
