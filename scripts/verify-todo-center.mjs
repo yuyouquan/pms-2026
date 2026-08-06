@@ -24,23 +24,26 @@ const input = {
   currentUser: '张三',
   today: '2026-07-31',
   planTodos: [
-    { id: 'plan-overdue', assignee: '张三', dueDate: '2026-07-30', title: '逾期任务', projectId: 'p1', projectName: '项目 A', planLevel: 'level1', planKey: 'level1', versionId: 'v4', market: 'OP', marketKey: 'project::p1::OP::level1::versions' },
+    { id: 'plan-overdue', assignee: '张三', dueDate: '2026-07-30', generatedAt: '2026-07-30 09:30:00', title: '逾期任务', projectId: 'p1', projectName: '项目 A', planLevel: 'level1', planKey: 'level1', versionId: 'v4', market: 'OP', marketKey: 'project::p1::OP::level1::versions' },
     { id: 'plan-today', assignee: '张三', dueDate: '2026-07-31', title: '今日任务', projectId: 'p2', projectName: '项目 B', planLevel: 'level2', planKey: 'plan2', versionId: 'v1', status: 'in_progress' },
     { id: 'plan-done', assignee: '张三', completedAt: '2026-07-30', title: '已完成任务', projectId: 'p1', projectName: '项目 A', planLevel: 'level1', planKey: 'level1', versionId: 'v4' },
     { id: 'plan-other', assignee: '李四' },
   ],
   transferApplications: [
-    { id: 'transfer-mine', projectId: 'p1', projectName: '项目 A', activeOwner: '张三', completed: false, title: '转维录入', view: 'entry', checklist: [{ id: 'checklist' }] },
+    { id: 'transfer-mine', projectId: 'p1', projectName: '项目 A', activeOwner: '张三', generatedAt: '2026-07-29 08:10:00', completed: false, title: '转维录入', view: 'entry', checklist: [{ id: 'checklist' }] },
     { id: 'transfer-done', activeOwner: '张三', completed: true },
     { id: 'transfer-other', activeOwner: '李四', completed: false },
   ],
 }
 const all = todos.aggregateWorkbenchTodos(input)
-assert.deepEqual(all.map(item => item.id), ['plan-overdue', 'plan-today', 'plan-done', 'transfer-mine'], 'aggregate excludes other users, completed transfers, and nested checklists')
-assert.deepEqual(todos.filterWorkbenchTodos(all, { source: 'transfer' }).map(item => item.id), ['transfer-mine'], 'filters operate on aggregate output')
-assert.deepEqual(todos.filterWorkbenchTodos(all, { source: 'plan' }).map(item => item.id), ['plan-overdue', 'plan-today', 'plan-done'], 'source filter counts plan todos separately')
-assert.deepEqual(todos.summarizeWorkbenchTodos(all, '2026-07-31'), { total: 4, dueToday: 1, overdue: 1, completedThisWeek: 1 }, 'summary derives today, overdue, and this-week completion from aggregate output')
-assert.equal(all[0].route.marketKey, 'project::p1::OP::level1::versions', 'market plan routes preserve their validated market scope key')
+assert.deepEqual(all.map(item => item.id), ['plan-today', 'plan-overdue', 'transfer-mine'], 'aggregate keeps pending/in-progress work and excludes every completed or other-user item')
+assert.equal(all.every(item => item.status !== 'completed'), true, 'the todo center never receives completed rows')
+assert.equal(all.find(item => item.id === 'plan-today')?.generatedAt, '2026-07-31', 'missing plan generation dates use the explicit aggregation date')
+assert.equal(all.find(item => item.id === 'transfer-mine')?.generatedAt, '2026-07-29', 'transfer generation timestamps normalize to a date key')
+assert.deepEqual(todos.filterWorkbenchTodos(all, { categories: ['transfer'] }).map(item => item.id), ['transfer-mine'], 'multi-category filters operate on aggregate output')
+assert.deepEqual(todos.filterWorkbenchTodos(all, { categories: ['plan'] }).map(item => item.id), ['plan-today', 'plan-overdue'], 'plan category counts pending and in-progress work')
+assert.deepEqual(todos.summarizeWorkbenchTodos(all, '2026-07-31'), { total: 3, dueToday: 1, overdue: 1, completedThisWeek: 0 }, 'summary remains compatible with the pending-only aggregate output')
+assert.equal(all.find(item => item.id === 'plan-overdue')?.route.marketKey, 'project::p1::OP::level1::versions', 'market plan routes preserve their validated market scope key')
 assert.deepEqual(
   todos.aggregateWorkbenchTodos({ ...input, currentUser: '   ', planTodos: [{ ...input.planTodos[0], assignee: '' }] }),
   [],
@@ -98,7 +101,7 @@ assert.equal(todos.resolveVisiblePlanVersion(versions, undefined, true), 'v4', '
 const transferFixtures = todos.buildTransferTodoCandidates({
   projects: [{ id: 'p1', name: '项目 A' }],
   applications: [
-    { id: 'review', projectId: 'p1', projectName: '项目 A', status: 'in_progress', applicantId: 'u001', applicant: '张明辉', plannedReviewDate: '2026-08-01', pipeline: { dataEntry: 'success', maintenanceReview: 'in_progress', sqaReview: 'not_started' }, team: { maintenance: [{ id: 'u003', name: '王建国', role: 'SPM' }], research: [] } },
+    { id: 'review', projectId: 'p1', projectName: '项目 A', status: 'in_progress', createdAt: '2026-07-28 10:00:00', applicantId: 'u001', applicant: '张明辉', plannedReviewDate: '2026-08-01', pipeline: { dataEntry: 'success', maintenanceReview: 'in_progress', sqaReview: 'not_started' }, team: { maintenance: [{ id: 'u003', name: '王建国', role: 'SPM' }], research: [] } },
     { id: 'sqa', projectId: 'p1', projectName: '项目 A', status: 'in_progress', applicantId: 'u001', applicant: '张明辉', plannedReviewDate: '2026-08-02', pipeline: { dataEntry: 'success', maintenanceReview: 'success', sqaReview: 'in_progress' }, team: { maintenance: [], research: [{ id: 'u007', name: '陈晓峰', role: 'SQA' }] } },
   ],
 })
@@ -106,6 +109,7 @@ assert.deepEqual(transferFixtures.map(item => [item.view, item.activeOwner, item
   ['review', '王五', '转维维护审核'],
   ['sqa-review', '李白', '转维 SQA 审核'],
 ], 'review and SQA nodes use their current authoritative owner identities')
+assert.equal(transferFixtures[0].generatedAt, '2026-07-28 10:00:00', 'transfer candidates preserve the application creation timestamp')
 
 const crossDayCandidates = {
   currentUser: '张三',
@@ -115,16 +119,8 @@ const crossDayCandidates = {
   ],
   transferApplications: [],
 }
-assert.deepEqual(
-  todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-07-30' }).map(item => item.id),
-  ['completed-earlier', 'pending-later'],
-  'before the due date, stable due-date sorting applies without hidden wall-clock reads',
-)
-assert.deepEqual(
-  todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-08-01' }).map(item => item.id),
-  ['pending-later', 'completed-earlier'],
-  'after the due date, explicit today moves overdue work first',
-)
+assert.deepEqual(todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-07-30' }).map(item => item.id), ['pending-later'], 'completed work is excluded before pagination')
+assert.deepEqual(todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-08-01' }).map(item => item.id), ['pending-later'], 'pending work remains deterministic across aggregation dates')
 assert.deepEqual(
   todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-08-01' }),
   todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-08-01' }),
@@ -144,7 +140,7 @@ const resolvedMarketNavigation = todos.resolvePlanTodoNavigation({
   projectId: 'p1',
   projectMarkets: ['OP', 'TR'],
   todoMarket: 'OP',
-  route: all[0].route,
+  route: all.find(item => item.id === 'plan-overdue').route,
   baseVersions: [
     { id: 'v1', versionNo: 'V1', status: '已发布' },
     { id: 'v4', versionNo: 'V4', status: '修订中' },
@@ -168,7 +164,7 @@ assert.equal(todos.resolvePlanTodoNavigation({
   projectId: 'p1',
   projectMarkets: ['OP', 'TR'],
   todoMarket: 'TR',
-  route: all[0].route,
+  route: all.find(item => item.id === 'plan-overdue').route,
   baseVersions: [],
   marketVersionsByKey: {},
   marketCurrentVersionByKey: {},
@@ -177,20 +173,19 @@ assert.equal(todos.resolvePlanTodoNavigation({
 
 assert.deepEqual(
   todos.filterWorkbenchTodos(all, {
-    source: 'all',
     search: '项目 a',
     projectId: 'p1',
-    status: 'all',
-    dueDateFrom: '2026-07-30',
-    dueDateTo: '2026-08-01',
+    categories: ['plan'],
+    generatedDateFrom: '2026-07-30',
+    generatedDateTo: '2026-07-31',
   }).map(item => item.id),
   ['plan-overdue'],
-  'search, project, and inclusive date filters compose on the same dataset',
+  'search, project, category, and inclusive generation-date filters compose on the same dataset',
 )
 assert.deepEqual(
-  todos.filterWorkbenchTodos(all, { status: 'completed' }).map(item => item.id),
-  ['plan-done'],
-  'status filtering includes completed plan work without treating completed transfers as active todos',
+  todos.filterWorkbenchTodos(all, { categories: ['plan', 'transfer'] }).map(item => item.id),
+  all.map(item => item.id),
+  'selecting every task category preserves the full pending dataset',
 )
 assert.deepEqual(
   todos.summarizeWorkbenchTodos([
@@ -209,13 +204,17 @@ const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContaine
 const uiStoreSource = readSource(root, 'src/stores/ui.ts')
 const todayHookSource = readSource(root, 'src/hooks/useLocalToday.ts')
 const browserSource = readSource(root, 'screenshots/verify-workbench-summary-floating-panels.mjs')
-for (const label of [
-  '全部', '计划待办', '转维待办',
-  '待办总数', '今日到期', '已逾期', '本周完成',
-  '搜索待办', '项目筛选', '状态筛选', '开始日期', '结束日期', '清空筛选',
-]) {
+for (const label of ['计划待办', '转维待办', '搜索待办', '项目筛选', '任务分类', '生成时间', '清空筛选', '前往处理']) {
   assert.match(todoCenterSource, new RegExp(label), `todo center missing visible or accessible contract: ${label}`)
 }
+for (const removedLabel of ['待办总数', '今日到期', '已逾期', '本周完成', '状态筛选']) {
+  assert.doesNotMatch(todoCenterSource, new RegExp(removedLabel), `todo center must remove ${removedLabel}`)
+}
+assert.match(workbenchSource, /个人工作台/, 'workbench exposes the single personal-workbench title')
+assert.match(workbenchSource, /aria-label="个人工作台模块"/, 'capsule switch exposes an accessible label')
+assert.match(todoCenterSource, /mode="multiple"/, 'task classification uses a multiple selector')
+assert.match(todoCenterSource, /RangePicker/, 'generation time uses one date-range picker')
+assert.match(todoCenterSource, /pagination=\{\{/, 'todo table exposes pagination')
 requireSource(root, 'src/containers/WorkbenchContainer.tsx', /<TodoCenter\b/, 'workbench must render the classified TodoCenter')
 requireSource(root, 'src/containers/WorkbenchContainer.tsx', /useActivateProject\(\)/, 'todo navigation must reuse shared project activation')
 assert.doesNotMatch(aggregationSource, /new Date\(\)/, 'todo aggregation must not read the process wall clock')
@@ -227,14 +226,16 @@ assert.doesNotMatch(workbenchSource, /\.find\(meta => typeof meta\?\.projectName
 assert.match(uiStoreSource, /planNavigationIntent/, 'todo navigation requires a typed one-shot intent')
 assert.match(projectSpaceSource, /setPlanNavigationIntent\(null\)/, 'project space must consume and clear todo navigation intent')
 assert.doesNotMatch(projectSpaceSource, /explicitMarketVersion/, 'historical market selection must not masquerade as explicit todo navigation')
-for (const column of ['所属项目', '来源', '操作']) assert.match(todoCenterSource, new RegExp(column), `todo table missing ${column} column`)
+for (const column of ['任务名称', '所属项目', '任务', '处理人', '生成时间', '操作']) assert.match(todoCenterSource, new RegExp(column), `todo table missing ${column} column`)
+assert.doesNotMatch(todoCenterSource, /title:\s*['"]状态['"]/, 'todo table removes the status column')
+assert.doesNotMatch(todoCenterSource, /title:\s*['"]截止日期['"]/, 'todo table removes the due-date column')
 assert.doesNotMatch(todoCenterSource, /onRow=/, 'todo table rows are not interactive controls')
 assert.match(todoCenterSource, /role="status"/, 'todo results expose a dedicated polite status region')
 assert.match(todoCenterSource, /error\?:\s*string/, 'todo center exposes a contextual error state')
 assert.match(todoCenterSource, /onRetry\?:\s*\(\)\s*=>\s*void/, 'todo error offers a recovery action')
 assert.match(todoCenterSource, /<Skeleton\b/, 'todo loading state reserves the final table footprint')
 assert.match(todoCenterSource, /role="alert"/, 'todo load errors are announced')
-assert.match(todoCenterSource, /aria-label={`打开待办/, 'todo actions expose explicit accessible buttons')
+assert.match(todoCenterSource, /aria-label={`前往处理/, 'todo actions expose explicit accessible buttons')
 assert.match(todayHookSource, /setTimeout/, 'local today hook schedules the next midnight refresh')
 assert.match(todayHookSource, /clearTimeout/, 'local today hook cleans up its midnight timer')
 assert.match(browserSource, /unexpectedBrowserErrors/, 'browser verification must retain unexpected errors')
