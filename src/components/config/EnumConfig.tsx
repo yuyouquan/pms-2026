@@ -19,17 +19,25 @@ import {
 import {
   DeleteOutlined,
   EditOutlined,
+  GlobalOutlined,
   NumberOutlined,
   PlusOutlined,
+  TeamOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { normalizeEnumValue, TOS_ENUM_REGISTRY, TOS_ENUM_TYPE_KEYS } from '@/lib/enumValues'
 import { useEnumStore } from '@/stores/enums'
 import type { EnumActionResult, EnumTypeKey } from '@/types/enums'
 import { useOverlayInteraction } from '@/hooks/useOverlayInteraction'
+import { ConfigWorkspaceShell } from '@/components/shared/CollapsibleWorkspace'
 
 type ModalMode = 'add' | 'edit'
 type EnumConfigCategoryKey = 'general' | 'hr-pipeline'
+
+interface EnumConfigProps {
+  collapsed: boolean
+  onCollapsedChange: (collapsed: boolean) => void
+}
 
 const ENUM_CONFIG_CATEGORIES: Array<{
   key: EnumConfigCategoryKey
@@ -53,7 +61,7 @@ function resultMessage(result: EnumActionResult): string {
   return '格式不正确，请按当前枚举类型的格式输入'
 }
 
-export default function EnumConfig() {
+export default function EnumConfig({ collapsed, onCollapsedChange }: EnumConfigProps) {
   const valuesByType = useEnumStore(state => state.valuesByType)
   const selectedType = useEnumStore(state => state.selectedType)
   const setSelectedType = useEnumStore(state => state.setSelectedType)
@@ -256,39 +264,87 @@ export default function EnumConfig() {
   }
 
   return (
-    <section className="pms-enum-config pms-solid-surface" aria-label="枚举值配置">
-      <Card className="pms-enum-type-card pms-glass-surface" title="枚举分类">
+    <>
+      <ConfigWorkspaceShell
+        collapsed={collapsed}
+        onCollapsedChange={onCollapsedChange}
+        title="枚举分类"
+        ariaLabel="枚举值配置分类"
+        content={selectedCategory === 'general' ? (
+          <Card
+            className="pms-enum-values-card pms-config-workspace-card pms-solid-surface"
+            title={(
+              <div className="pms-enum-card-heading">
+                <span>{selectedDefinition.label}</span>
+                <small>仅维护可选值，枚举类型固定不可变更</small>
+              </div>
+            )}
+            extra={(
+              <Button data-enum-add-value type="primary" icon={<PlusOutlined />} onClick={event => openAddModal(event.currentTarget)}>
+                新增枚举值
+              </Button>
+            )}
+          >
+            <Table
+              className="pms-table pms-enum-table"
+              columns={columns}
+              dataSource={rows}
+              pagination={false}
+              size="middle"
+              scroll={{ y: 440 }}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无枚举值" /> }}
+            />
+          </Card>
+        ) : (
+          <Card
+            className="pms-enum-values-card pms-config-workspace-card pms-solid-surface"
+            title="人力资源管道"
+          >
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无枚举类型" />
+          </Card>
+        )}
+      >
         <div className="pms-enum-category-list" role="list" aria-label="枚举分类">
           {ENUM_CONFIG_CATEGORIES.map(category => (
             <div key={category.key} className="pms-enum-category-group">
-              <button
-                type="button"
-                className={`pms-enum-category-item${selectedCategory === category.key ? ' is-active' : ''}`}
-                aria-pressed={selectedCategory === category.key}
-                onClick={() => setSelectedCategory(category.key)}
-              >
-                <strong>{category.label}</strong>
-                <small>{category.types.length} 个枚举类型</small>
-              </button>
+              <Tooltip title={collapsed ? category.label : undefined} placement="right">
+                <button
+                  type="button"
+                  className={`pms-enum-category-item${selectedCategory === category.key ? ' is-active' : ''}`}
+                  aria-label={category.label}
+                  aria-pressed={selectedCategory === category.key}
+                  onClick={() => setSelectedCategory(category.key)}
+                >
+                  <span className="pms-enum-category-icon">
+                    {category.key === 'general' ? <GlobalOutlined /> : <TeamOutlined />}
+                  </span>
+                  <span className="pms-enum-category-copy">
+                    <strong>{category.label}</strong>
+                    <small>{category.types.length} 个枚举类型</small>
+                  </span>
+                </button>
+              </Tooltip>
               {selectedCategory === category.key && category.key === 'general' ? (
                 <div className="pms-enum-type-list" role="list" aria-label="固定枚举类型">
                   {TOS_ENUM_TYPE_KEYS.map(type => {
                     const definition = TOS_ENUM_REGISTRY[type]
                     const active = selectedType === type
                     return (
-                      <button
-                        key={type}
-                        type="button"
-                        className={`pms-enum-type-item${active ? ' is-active' : ''}`}
-                        aria-pressed={active}
-                        onClick={() => setSelectedType(type)}
-                      >
-                        <span className="pms-enum-type-icon"><NumberOutlined /></span>
-                        <span>
-                          <strong>{definition.label}</strong>
-                          <small>{valuesByType[type].length} 个配置值</small>
-                        </span>
-                      </button>
+                      <Tooltip key={type} title={collapsed ? definition.label : undefined} placement="right">
+                        <button
+                          type="button"
+                          className={`pms-enum-type-item${active ? ' is-active' : ''}`}
+                          aria-label={definition.label}
+                          aria-pressed={active}
+                          onClick={() => setSelectedType(type)}
+                        >
+                          <span className="pms-enum-type-icon"><NumberOutlined /></span>
+                          <span className="pms-enum-type-copy">
+                            <strong>{definition.label}</strong>
+                            <small>{valuesByType[type].length} 个配置值</small>
+                          </span>
+                        </button>
+                      </Tooltip>
                     )
                   })}
                 </div>
@@ -296,39 +352,7 @@ export default function EnumConfig() {
             </div>
           ))}
         </div>
-      </Card>
-
-      {selectedCategory === 'general' ? <Card
-        className="pms-enum-values-card pms-solid-surface"
-        title={(
-          <div className="pms-enum-card-heading">
-            <span>{selectedDefinition.label}</span>
-            <small>仅维护可选值，枚举类型固定不可变更</small>
-          </div>
-        )}
-        extra={(
-          <Button data-enum-add-value type="primary" icon={<PlusOutlined />} onClick={event => openAddModal(event.currentTarget)}>
-            新增枚举值
-          </Button>
-        )}
-      >
-        <Table
-          className="pms-table pms-enum-table"
-          columns={columns}
-          dataSource={rows}
-          pagination={false}
-          size="middle"
-          scroll={{ y: 440 }}
-          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无枚举值" /> }}
-        />
-      </Card> : (
-        <Card
-          className="pms-enum-values-card pms-solid-surface"
-          title="人力资源管道"
-        >
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无枚举类型" />
-        </Card>
-      )}
+      </ConfigWorkspaceShell>
 
       <Modal
         className="pms-scroll-modal"
@@ -368,6 +392,6 @@ export default function EnumConfig() {
           </div>
         </div>
       </Modal>
-    </section>
+    </>
   )
 }

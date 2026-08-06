@@ -1,0 +1,31 @@
+#!/usr/bin/env node
+import assert from 'node:assert/strict'
+import { projectRoot, readSource } from './lib/source-contract.mjs'
+
+const root = projectRoot(import.meta.url)
+const uiStore = readSource(root, 'src/stores/ui.ts')
+const sharedShell = readSource(root, 'src/components/shared/CollapsibleWorkspace.tsx')
+const configContainer = readSource(root, 'src/containers/ConfigContainer.tsx')
+const transferModule = readSource(root, 'src/components/transfer/TransferModule.tsx')
+const enumConfig = readSource(root, 'src/components/config/EnumConfig.tsx')
+const projectSpace = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
+const styles = readSource(root, 'src/styles/globals.css')
+
+assert.match(uiStore, /configSidebarCollapsed:\s*boolean/, 'configuration center owns a dedicated collapsed state')
+assert.match(uiStore, /projectSpaceSidebarCollapsed:\s*boolean/, 'project space owns an independent collapsed state')
+assert.match(sharedShell, /aria-expanded=\{!collapsed\}/, 'toggle exposes the expanded state')
+assert.match(sharedShell, /pms-collapsible-sidebar__toggle/, 'shared sidebar owns the fixed toggle')
+assert.match(sharedShell, /ConfigWorkspaceShell/, 'configuration center uses a reusable workspace shell')
+assert.match(configContainer, /<ConfigWorkspaceShell/, 'plan templates use the shared workspace shell')
+assert.match(configContainer, /configSidebarCollapsed/, 'configuration tabs share one collapsed state')
+assert.match(transferModule, /转维材料/, 'transfer configuration exposes the material navigation item')
+assert.match(transferModule, /评审要素/, 'transfer configuration exposes the review navigation item')
+assert.doesNotMatch(transferModule, /管理转维CheckList模板/, 'transfer configuration removes the launcher-card homepage')
+assert.match(enumConfig, /<ConfigWorkspaceShell/, 'enum configuration uses the shared workspace shell')
+assert.match(projectSpace, /projectSpaceSidebarCollapsed/, 'project-space navigation uses its independent state')
+assert.match(projectSpace, /inlineCollapsed=\{projectSpaceSidebarCollapsed\}/, 'project-space menu switches to icon-only mode')
+assert.match(styles, /\.pms-config-workspace[\s\S]*align-items:\s*stretch/, 'configuration columns stretch to equal height')
+assert.match(styles, /\.pms-collapsible-sidebar__toggle[\s\S]*bottom:\s*12px/, 'toggle stays at the sidebar bottom-right')
+assert.match(styles, /@media\s*\(prefers-reduced-motion:\s*reduce\)/, 'sidebar motion respects reduced-motion preferences')
+
+console.log('collapsible sidebar contract passed')

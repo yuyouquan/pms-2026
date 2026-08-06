@@ -10,7 +10,7 @@ import type { MenuProps } from 'antd'
 import {
   CalendarOutlined, SwapOutlined, PlusOutlined, SaveOutlined,
   HistoryOutlined, SearchOutlined, AppstoreOutlined, EditOutlined,
-  MenuFoldOutlined, MenuUnfoldOutlined, PlusSquareOutlined, MinusSquareOutlined,
+  PlusSquareOutlined, MinusSquareOutlined,
   DeleteOutlined, CaretDownOutlined, StopOutlined,
   NumberOutlined,
 } from '@ant-design/icons'
@@ -26,6 +26,7 @@ import { TransferConfig } from '@/components/transfer/TransferModule'
 import { PROJECT_CATEGORY_TECH, PROJECT_TEMPLATE_TYPES, getProjectTypeFamilyKey } from '@/constants/projectTypes'
 import { DHTMLXGantt, DragHandle, SortableRow, DragHandleContext, ClickToEditDate, getTaskDepth, hasChildren, filterByCollapsed, getAllExpandableIds, type DHTMLXGanttColumn } from '@/components/shared/PlanHelpers'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
+import { ConfigWorkspaceShell } from '@/components/shared/CollapsibleWorkspace'
 import {
   getDefaultColumnSettings,
   normalizeColumnSettings,
@@ -61,7 +62,7 @@ const PLAN_REVISION_KIND_OPTIONS: Array<{ key: PlanRevisionKind; label: string }
 
 export default function ConfigContainer() {
   const {
-    configTab, setConfigTab, sidebarCollapsed, setSidebarCollapsed,
+    configTab, setConfigTab, configSidebarCollapsed, setConfigSidebarCollapsed,
     selectedProjectType, setSelectedProjectType,
     isEditMode, setIsEditMode, showVersionCompare, setShowVersionCompare,
     showColumnModal, setShowColumnModal, showAddCustomType, setShowAddCustomType,
@@ -530,6 +531,7 @@ export default function ConfigContainer() {
     selectedProject, currentUser: transferCurrentUser,
     transferView: transferStore.transferView, setTransferView: transferStore.setTransferView,
     transferConfigView, setTransferConfigView,
+    configSidebarCollapsed, setConfigSidebarCollapsed,
     tmConfigSearchText: transferStore.tmConfigSearchText, setTmConfigSearchText: transferStore.setTmConfigSearchText,
     tmConfigSelectedVersion: transferStore.tmConfigSelectedVersion, setTmConfigSelectedVersion: transferStore.setTmConfigSelectedVersion,
     tmConfigDiffOpen: transferStore.tmConfigDiffOpen, setTmConfigDiffOpen: transferStore.setTmConfigDiffOpen,
@@ -655,7 +657,7 @@ export default function ConfigContainer() {
       <Card className="pms-toolbar" size="small" style={{ marginBottom: 20, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
         <Tabs
           activeKey={configTab}
-          onChange={(key) => { setConfigTab(key); if (key === 'transfer') setTransferConfigView('home'); }}
+          onChange={(key) => { setConfigTab(key); if (key === 'transfer' && transferConfigView === 'home') setTransferConfigView('checklist'); }}
           style={{ marginBottom: 0 }}
           items={[
             { key: 'plan', label: <Space size={6}><CalendarOutlined />计划模板配置</Space> },
@@ -669,27 +671,22 @@ export default function ConfigContainer() {
       {configTab === 'transfer' && <TransferConfig {...transferProps} />}
 
       {/* Fixed tOS enum value config */}
-      {configTab === 'enum' && <EnumConfig />}
+      {configTab === 'enum' && (
+        <EnumConfig
+          collapsed={configSidebarCollapsed}
+          onCollapsedChange={setConfigSidebarCollapsed}
+        />
+      )}
 
       {/* Plan config */}
       {configTab === 'plan' && (
-        <Row gutter={20}>
-          <Col span={sidebarCollapsed ? 1 : 4}>
-            <Card
-              className="pms-glass-surface"
-              size="small"
-              style={{ borderRadius: 8, position: 'sticky', top: 24 }}
-              styles={{
-                header: { background: '#f8fafc', borderBottom: '1px solid #f3f4f6', padding: '8px 12px', minHeight: 40 },
-                body: { padding: sidebarCollapsed ? '8px 4px' : '8px' },
-              }}
-              title={!sidebarCollapsed && <span style={{ fontSize: 13, fontWeight: 600, color: '#4b5563' }}>项目分类</span>}
-              extra={<Button type="text" size="small" icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} />}
-            >
-              {!sidebarCollapsed && <Menu mode="inline" selectedKeys={[selectedTemplateType]} style={{ border: 'none', fontSize: 13 }} items={PROJECT_TEMPLATE_TYPES.map(t => ({ key: t, label: <span style={{ fontWeight: selectedTemplateType === t ? 500 : 400 }}>{t}</span>, onClick: () => navigateWithEditGuard(() => { setSelectedProjectType(t); setPlanLevel(t === PROJECT_CATEGORY_TECH ? 'tdt' : 'level1') }) }))} />}
-            </Card>
-          </Col>
-          <Col span={sidebarCollapsed ? 23 : 20}>
+        <ConfigWorkspaceShell
+          collapsed={configSidebarCollapsed}
+          onCollapsedChange={setConfigSidebarCollapsed}
+          title="项目分类"
+          ariaLabel="计划模板项目分类"
+          content={(
+            <div className="pms-config-workspace-card">
             {/* Config header */}
             <Card className="pms-glass-surface" size="small" style={{ marginBottom: 16, borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
               <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%)', borderBottom: '1px solid #e5e7eb' }}>
@@ -806,8 +803,26 @@ export default function ConfigContainer() {
             <Card className="pms-solid-surface" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
               {viewMode === 'gantt' ? renderGanttChart() : renderTaskTable()}
             </Card>
-          </Col>
-        </Row>
+            </div>
+          )}
+        >
+          <Menu
+            className="pms-config-sidebar-menu"
+            mode="inline"
+            inlineCollapsed={configSidebarCollapsed}
+            selectedKeys={[selectedTemplateType]}
+            items={PROJECT_TEMPLATE_TYPES.map(t => ({
+              key: t,
+              icon: <AppstoreOutlined />,
+              label: <span style={{ fontWeight: selectedTemplateType === t ? 500 : 400 }}>{t}</span>,
+              title: t,
+              onClick: () => navigateWithEditGuard(() => {
+                setSelectedProjectType(t)
+                setPlanLevel(t === PROJECT_CATEGORY_TECH ? 'tdt' : 'level1')
+              }),
+            }))}
+          />
+        </ConfigWorkspaceShell>
       )}
 
       {/* Custom type modal */}

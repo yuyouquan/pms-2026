@@ -35,7 +35,8 @@ export interface UiState {
   workbenchTab: WorkbenchTab
   projectSpaceOrigin: ProjectSpaceOrigin
   configTab: string
-  sidebarCollapsed: boolean
+  configSidebarCollapsed: boolean
+  projectSpaceSidebarCollapsed: boolean
   selectedProjectType: string
   projectSpaceModule: string
   planNavigationIntent: PlanNavigationIntent | null
@@ -60,7 +61,8 @@ export interface UiActions {
   enterProjectSpace: (origin: NonNullable<ProjectSpaceOrigin>) => void
   returnFromProjectSpace: () => void
   setConfigTab: (v: string) => void
-  setSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
+  setConfigSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
+  setProjectSpaceSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
   setSelectedProjectType: (v: string) => void
   setProjectSpaceModule: (v: string) => void
   setPlanNavigationIntent: (v: PlanNavigationIntent | null) => void
@@ -88,7 +90,8 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   workbenchTab: 'todo',
   projectSpaceOrigin: null,
   configTab: 'plan',
-  sidebarCollapsed: false,
+  configSidebarCollapsed: false,
+  projectSpaceSidebarCollapsed: false,
   selectedProjectType: PROJECT_CATEGORY_MACHINE,
   projectSpaceModule: 'basic',
   planNavigationIntent: null,
@@ -143,7 +146,12 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
     })
   },
   setConfigTab: (v) => set({ configTab: v }),
-  setSidebarCollapsed: (v) => set((s) => ({ sidebarCollapsed: typeof v === 'function' ? v(s.sidebarCollapsed) : v })),
+  setConfigSidebarCollapsed: (v) => set((s) => ({
+    configSidebarCollapsed: typeof v === 'function' ? v(s.configSidebarCollapsed) : v,
+  })),
+  setProjectSpaceSidebarCollapsed: (v) => set((s) => ({
+    projectSpaceSidebarCollapsed: typeof v === 'function' ? v(s.projectSpaceSidebarCollapsed) : v,
+  })),
   setSelectedProjectType: (v) => set({ selectedProjectType: v }),
   setProjectSpaceModule: (v) => set({ projectSpaceModule: v }),
   setPlanNavigationIntent: (v) => set({ planNavigationIntent: v }),

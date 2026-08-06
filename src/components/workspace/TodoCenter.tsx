@@ -1,38 +1,31 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
-  Badge,
   Alert,
   Button,
   DatePicker,
   Empty,
   Input,
-  Segmented,
   Select,
   Skeleton,
   Table,
   Tag,
+  Tooltip,
 } from 'antd'
-import {
-  CalendarOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  FolderOpenOutlined,
-  SearchOutlined,
-} from '@ant-design/icons'
+import { SearchOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import {
   filterWorkbenchTodos,
-  summarizeWorkbenchTodos,
   type TodoFilters,
   type TodoSource,
   type WorkbenchTodo,
 } from '@/lib/todoAggregation'
 
+const { RangePicker } = DatePicker
+
 export interface TodoCenterProps {
   todos: WorkbenchTodo[]
-  today: string
   loading?: boolean
   error?: string
   onRetry?: () => void
@@ -40,48 +33,26 @@ export interface TodoCenterProps {
 }
 
 const EMPTY_FILTERS: TodoFilters = {
-  source: 'all',
   search: '',
   projectId: '',
-  status: 'all',
-  dueDateFrom: '',
-  dueDateTo: '',
+  categories: [],
+  generatedDateFrom: '',
+  generatedDateTo: '',
 }
 
-const STATUS_LABELS = {
-  pending: '待处理',
-  in_progress: '进行中',
-  completed: '已完成',
-} as const
-
-const SOURCE_LABELS = {
+const SOURCE_LABELS: Record<TodoSource, string> = {
   plan: '计划待办',
   transfer: '转维待办',
-} as const
-
-function getDueBadge(todo: WorkbenchTodo, today: string) {
-  if (todo.status === 'completed') {
-    return { status: 'success' as const, text: '已完成', className: 'is-completed' }
-  }
-  if (todo.dueDate && todo.dueDate < today) {
-    return { status: 'error' as const, text: '已逾期', className: 'is-overdue' }
-  }
-  if (todo.dueDate === today) {
-    return { status: 'warning' as const, text: '今日到期', className: 'is-due-today' }
-  }
-  return { status: 'default' as const, text: todo.dueDate ? '按期' : '未设日期', className: '' }
 }
 
-export default function TodoCenter({ todos, today, loading = false, error, onRetry, onOpenTodo }: TodoCenterProps) {
+export default function TodoCenter({ todos, loading = false, error, onRetry, onOpenTodo }: TodoCenterProps) {
   const [filters, setFilters] = useState<TodoFilters>(EMPTY_FILTERS)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
 
   const filteredTodos = useMemo(
     () => filterWorkbenchTodos(todos, filters),
     [filters, todos],
-  )
-  const summary = useMemo(
-    () => summarizeWorkbenchTodos(filteredTodos, today),
-    [filteredTodos, today],
   )
   const projectOptions = useMemo(() => {
     const projects = new Map<string, string>()
@@ -92,57 +63,34 @@ export default function TodoCenter({ todos, today, loading = false, error, onRet
       .sort((left, right) => left.label.localeCompare(right.label, 'zh-CN'))
   }, [todos])
 
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(filteredTodos.length / pageSize))
+    if (currentPage > maxPage) setCurrentPage(maxPage)
+  }, [currentPage, filteredTodos.length, pageSize])
+
   const updateFilter = <Key extends keyof TodoFilters>(key: Key, value: TodoFilters[Key]) => {
     setFilters(current => ({ ...current, [key]: value }))
+    setCurrentPage(1)
   }
 
-  const metrics = [
-    { key: 'total', label: '待办总数', value: summary.total, icon: <FolderOpenOutlined />, tone: 'purple' },
-    { key: 'today', label: '今日到期', value: summary.dueToday, icon: <CalendarOutlined />, tone: 'orange' },
-    { key: 'overdue', label: '已逾期', value: summary.overdue, icon: <ClockCircleOutlined />, tone: 'red' },
-    { key: 'completed', label: '本周完成', value: summary.completedThisWeek, icon: <CheckCircleOutlined />, tone: 'green' },
-  ]
-
-  const emptyDescription = filters.source === 'plan'
-    ? '暂无计划待办'
-    : filters.source === 'transfer'
-      ? '暂无转维待办'
-      : '暂无符合条件的待办'
+  const generatedRange: [Dayjs, Dayjs] | null = filters.generatedDateFrom && filters.generatedDateTo
+    ? [dayjs(filters.generatedDateFrom), dayjs(filters.generatedDateTo)]
+    : null
+  const emptyDescription = filters.categories.length === 1
+    ? `暂无${SOURCE_LABELS[filters.categories[0]]}`
+    : '暂无符合条件的待办'
+  const filtersAreEmpty = !filters.search
+    && !filters.projectId
+    && filters.categories.length === 0
+    && !filters.generatedDateFrom
+    && !filters.generatedDateTo
 
   return (
-    <section className="pms-todo-center pms-glass-surface" aria-label="分类待办中心">
-      <div className="pms-todo-center__source-row">
-        <div>
-          <div className="pms-todo-center__eyebrow">个人工作台</div>
-          <h2 className="pms-todo-center__title">分类待办</h2>
-        </div>
-        <Segmented
-          aria-label="待办来源"
-          value={filters.source}
-          onChange={value => updateFilter('source', value as 'all' | TodoSource)}
-          options={[
-            { label: '全部', value: 'all' },
-            { label: '计划待办', value: 'plan' },
-            { label: '转维待办', value: 'transfer' },
-          ]}
-        />
-      </div>
-
-      <div className="pms-todo-center__metrics" aria-label="待办指标">
-        {metrics.map(metric => (
-          <div key={metric.key} className={`pms-todo-metric pms-todo-metric--${metric.tone}`}>
-            <div className="pms-todo-metric__icon" aria-hidden="true">{metric.icon}</div>
-            <div>
-              <div className="pms-todo-metric__label">{metric.label}</div>
-              <div className="pms-todo-metric__value" aria-label={`${metric.label} ${metric.value}`}>{metric.value}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
+    <section className="pms-todo-center pms-glass-surface" aria-label="待办中心">
       <div className="pms-todo-center__filters pms-toolbar" aria-label="待办筛选条">
         <Input
           allowClear
+          size="small"
           aria-label="搜索待办"
           prefix={<SearchOutlined />}
           placeholder="搜索任务或项目"
@@ -151,48 +99,54 @@ export default function TodoCenter({ todos, today, loading = false, error, onRet
         />
         <Select
           allowClear
+          size="small"
           aria-label="项目筛选"
           placeholder="全部项目"
           value={filters.projectId || undefined}
           onChange={value => updateFilter('projectId', value || '')}
           options={projectOptions}
         />
-        <Select
-          aria-label="状态筛选"
-          value={filters.status}
-          onChange={value => updateFilter('status', value)}
-          options={[
-            { label: '全部状态', value: 'all' },
-            { label: '待处理', value: 'pending' },
-            { label: '进行中', value: 'in_progress' },
-            { label: '已完成', value: 'completed' },
-          ]}
-        />
-        <DatePicker
+        <Select<TodoSource[]>
+          mode="multiple"
           allowClear
-          aria-label="开始日期"
-          placeholder="开始日期"
-          value={filters.dueDateFrom ? dayjs(filters.dueDateFrom) : null}
-          onChange={(value: Dayjs | null) => updateFilter('dueDateFrom', value?.format('YYYY-MM-DD') || '')}
+          maxTagCount="responsive"
+          size="small"
+          aria-label="任务分类"
+          placeholder="任务分类"
+          value={filters.categories}
+          onChange={value => updateFilter('categories', value)}
+          options={Object.entries(SOURCE_LABELS).map(([value, label]) => ({ value, label }))}
         />
-        <DatePicker
+        <RangePicker
           allowClear
-          aria-label="结束日期"
-          placeholder="结束日期"
-          value={filters.dueDateTo ? dayjs(filters.dueDateTo) : null}
-          onChange={(value: Dayjs | null) => updateFilter('dueDateTo', value?.format('YYYY-MM-DD') || '')}
+          size="small"
+          aria-label="生成时间"
+          value={generatedRange}
+          placeholder={['生成开始日期', '生成结束日期']}
+          onChange={values => {
+            updateFilter('generatedDateFrom', values?.[0]?.format('YYYY-MM-DD') || '')
+            setFilters(current => ({
+              ...current,
+              generatedDateFrom: values?.[0]?.format('YYYY-MM-DD') || '',
+              generatedDateTo: values?.[1]?.format('YYYY-MM-DD') || '',
+            }))
+          }}
         />
         <Button
+          size="small"
           aria-label="清空筛选"
-          disabled={Object.entries(filters).every(([key, value]) => key === 'source' ? value === 'all' : !value || value === 'all')}
-          onClick={() => setFilters(EMPTY_FILTERS)}
+          disabled={filtersAreEmpty}
+          onClick={() => {
+            setFilters(EMPTY_FILTERS)
+            setCurrentPage(1)
+          }}
         >
           清空筛选
         </Button>
       </div>
 
       <div className="pms-todo-center__result-status" role="status" aria-live="polite" aria-atomic="true">
-        {loading ? '待办加载中' : error ? '待办加载失败' : `当前显示 ${filteredTodos.length} 条待办`}
+        {loading ? '待办加载中' : error ? '待办加载失败' : `共 ${filteredTodos.length} 条待处理任务`}
       </div>
 
       <div className="pms-todo-center__table pms-solid-surface pms-table">
@@ -217,18 +171,32 @@ export default function TodoCenter({ todos, today, loading = false, error, onRet
             rowKey={record => `${record.source}:${record.id}`}
             rowClassName="pms-solid-surface"
             dataSource={filteredTodos}
-            pagination={false}
-            scroll={{ x: 1080, y: 360 }}
-            locale={{
-              emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyDescription} />,
+            pagination={{
+              current: currentPage,
+              pageSize,
+              total: filteredTodos.length,
+              showSizeChanger: true,
+              pageSizeOptions: [10, 20, 50],
+              showTotal: total => `共 ${total} 条`,
+              onChange: (page, nextPageSize) => {
+                setCurrentPage(nextPageSize !== pageSize ? 1 : page)
+                setPageSize(nextPageSize)
+              },
             }}
+            scroll={{ x: 980, y: 420 }}
+            locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyDescription} /> }}
             columns={[
               {
-                title: '任务',
+                title: '任务名称',
                 dataIndex: 'title',
                 key: 'title',
                 width: 260,
-                render: (title: string) => <span className="pms-todo-center__task-title">{title}</span>,
+                ellipsis: true,
+                render: (title: string) => (
+                  <Tooltip title={title} placement="topLeft">
+                    <span className="pms-todo-center__task-title">{title}</span>
+                  </Tooltip>
+                ),
               },
               {
                 title: '所属项目',
@@ -238,10 +206,10 @@ export default function TodoCenter({ todos, today, loading = false, error, onRet
                 render: (projectName: string) => projectName || '未关联项目',
               },
               {
-                title: '来源',
+                title: '任务',
                 dataIndex: 'source',
                 key: 'source',
-                width: 230,
+                width: 260,
                 render: (source: TodoSource, record) => (
                   <div className="pms-todo-center__source">
                     <Tag color={source === 'plan' ? 'purple' : 'cyan'}>{SOURCE_LABELS[source]}</Tag>
@@ -254,43 +222,28 @@ export default function TodoCenter({ todos, today, loading = false, error, onRet
                 title: '处理人',
                 dataIndex: 'assignee',
                 key: 'assignee',
-                width: 100,
+                width: 110,
               },
               {
-                title: '状态',
-                dataIndex: 'status',
-                key: 'status',
-                width: 100,
-                render: (status: WorkbenchTodo['status']) => <Tag color={status === 'completed' ? 'success' : status === 'in_progress' ? 'processing' : 'default'}>{STATUS_LABELS[status]}</Tag>,
-              },
-              {
-                title: '截止日期',
-                dataIndex: 'dueDate',
-                key: 'dueDate',
-                width: 190,
-                render: (dueDate: string, record) => {
-                  const badge = getDueBadge(record, today)
-                  return (
-                    <div className={`pms-todo-center__due ${badge.className}`}>
-                      <span>{dueDate || '未设置'}</span>
-                      <Badge status={badge.status} text={badge.text} />
-                    </div>
-                  )
-                },
+                title: '生成时间',
+                dataIndex: 'generatedAt',
+                key: 'generatedAt',
+                width: 130,
+                render: (generatedAt: string) => generatedAt || '未记录',
               },
               {
                 title: '操作',
                 key: 'action',
                 fixed: 'right',
-                width: 88,
+                width: 110,
                 render: (_value, record) => (
                   <Button
                     type="link"
                     size="small"
-                    aria-label={`打开待办 ${record.title}`}
+                    aria-label={`前往处理 ${record.title}`}
                     onClick={() => onOpenTodo(record)}
                   >
-                    打开
+                    前往处理
                   </Button>
                 ),
               },

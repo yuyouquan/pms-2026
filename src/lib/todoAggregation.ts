@@ -34,6 +34,7 @@ export interface WorkbenchTodo {
   projectName: string
   assignee: string
   dueDate: string
+  generatedAt: string
   status: TodoStatus
   completedAt?: string
   market?: string
@@ -49,6 +50,7 @@ export interface PlanTodoCandidate {
   projectName: string
   assignee: string
   dueDate: string
+  generatedAt?: string
   completed: boolean
   completedAt?: string
   market?: string
@@ -72,6 +74,7 @@ export interface TransferTodoCandidate {
   projectName: string
   activeOwner: string
   dueDate: string
+  generatedAt?: string
   completed: boolean
   completedAt?: string
   title: string
@@ -86,6 +89,7 @@ export interface PlanTodoTaskLike {
   responsible?: string
   planEndDate?: string
   actualEndDate?: string
+  generatedAt?: string
   status?: string
   progress?: number
 }
@@ -182,6 +186,7 @@ export function buildPlanTodoCandidates({
         projectName: project.name,
         assignee: task.responsible || '',
         dueDate: task.planEndDate || '',
+        generatedAt: task.generatedAt,
         completed: status === 'completed',
         completedAt: task.actualEndDate || undefined,
         status,
@@ -210,6 +215,7 @@ interface TransferApplicationLike {
   applicantId: string
   applicant: string
   plannedReviewDate?: string
+  createdAt?: string
   pipeline: { dataEntry: string; maintenanceReview: string; sqaReview: string }
   team: {
     maintenance: Array<{ id: string; name: string; role: string }>
@@ -248,6 +254,7 @@ export function buildTransferTodoCandidates({
       projectName: project.name,
       activeOwner,
       dueDate: application.plannedReviewDate || '',
+      generatedAt: application.createdAt,
       completed: false,
       title: sourceLabel,
       sourceLabel,
@@ -285,12 +292,11 @@ export function filterTodoCandidatesByAccess({
 }
 
 export interface TodoFilters {
-  source: 'all' | TodoSource
   search: string
   projectId: string
-  status: 'all' | TodoStatus
-  dueDateFrom: string
-  dueDateTo: string
+  categories: TodoSource[]
+  generatedDateFrom: string
+  generatedDateTo: string
 }
 
 export interface TodoSummary {
@@ -419,15 +425,10 @@ function isOverdue(todo: WorkbenchTodo, today: string): boolean {
     && toDateKey(todo.dueDate) < today
 }
 
-function sortTodos(todos: WorkbenchTodo[], today: string): WorkbenchTodo[] {
+function sortTodos(todos: WorkbenchTodo[]): WorkbenchTodo[] {
   return todos.sort((left, right) => {
-    const overdueDelta = Number(isOverdue(right, today)) - Number(isOverdue(left, today))
-    if (overdueDelta) return overdueDelta
-
-    const leftDue = toDateKey(left.dueDate)
-    const rightDue = toDateKey(right.dueDate)
-    if (leftDue && rightDue && leftDue !== rightDue) return leftDue.localeCompare(rightDue)
-    if (leftDue !== rightDue) return leftDue ? -1 : 1
+    const generatedDelta = toDateKey(right.generatedAt).localeCompare(toDateKey(left.generatedAt))
+    if (generatedDelta) return generatedDelta
 
     const titleDelta = left.title.localeCompare(right.title, 'zh-CN')
     return titleDelta || left.id.localeCompare(right.id)
@@ -442,9 +443,15 @@ export function aggregateWorkbenchTodos({
 }: AggregateWorkbenchTodosInput): WorkbenchTodo[] {
   const normalizedUser = currentUser.trim()
   if (!normalizedUser) return []
+  const aggregationDate = toDateKey(today)
 
   const planItems = planTodos
-    .filter(candidate => candidate.assignee?.trim() === normalizedUser)
+    .filter(candidate => (
+      candidate.assignee?.trim() === normalizedUser
+      && !candidate.completed
+      && !candidate.completedAt
+      && candidate.status !== 'completed'
+    ))
     .map((candidate): WorkbenchTodo => {
       const completed = Boolean(candidate.completed || candidate.completedAt || candidate.status === 'completed')
       const status: TodoStatus = completed
@@ -458,6 +465,7 @@ export function aggregateWorkbenchTodos({
         projectName: candidate.projectName || '',
         assignee: candidate.assignee,
         dueDate: toDateKey(candidate.dueDate),
+        generatedAt: toDateKey(candidate.generatedAt) || aggregationDate,
         status,
         completedAt: toDateKey(candidate.completedAt) || undefined,
         market: candidate.market,
@@ -488,6 +496,7 @@ export function aggregateWorkbenchTodos({
         projectName: candidate.projectName || '',
         assignee: candidate.activeOwner,
         dueDate: toDateKey(candidate.dueDate),
+        generatedAt: toDateKey(candidate.generatedAt) || aggregationDate,
         status: 'in_progress',
         completedAt: undefined,
         sourceLabel: candidate.sourceLabel,
@@ -500,31 +509,30 @@ export function aggregateWorkbenchTodos({
       }
     })
 
-  return sortTodos([...planItems, ...transferItems], toDateKey(today))
+  return sortTodos([...planItems, ...transferItems])
 }
 
 export function filterWorkbenchTodos(
   todos: readonly WorkbenchTodo[],
   filters: Partial<TodoFilters> = {},
 ): WorkbenchTodo[] {
-  const source = filters.source ?? 'all'
   const search = (filters.search ?? '').trim().toLocaleLowerCase('zh-CN')
   const projectId = filters.projectId ?? ''
-  const status = filters.status ?? 'all'
-  const dueDateFrom = toDateKey(filters.dueDateFrom)
-  const dueDateTo = toDateKey(filters.dueDateTo)
+  const categories = filters.categories ?? []
+  const generatedDateFrom = toDateKey(filters.generatedDateFrom)
+  const generatedDateTo = toDateKey(filters.generatedDateTo)
 
   return todos.filter(todo => {
-    if (source !== 'all' && todo.source !== source) return false
+    if (todo.status === 'completed') return false
+    if (categories.length > 0 && !categories.includes(todo.source)) return false
     if (projectId && todo.projectId !== projectId) return false
-    if (status !== 'all' && todo.status !== status) return false
     if (search) {
       const haystack = `${todo.title} ${todo.projectName} ${todo.sourceLabel || ''} ${todo.context || ''}`.toLocaleLowerCase('zh-CN')
       if (!haystack.includes(search)) return false
     }
-    const dueDate = toDateKey(todo.dueDate)
-    if (dueDateFrom && (!dueDate || dueDate < dueDateFrom)) return false
-    if (dueDateTo && (!dueDate || dueDate > dueDateTo)) return false
+    const generatedAt = toDateKey(todo.generatedAt)
+    if (generatedDateFrom && (!generatedAt || generatedAt < generatedDateFrom)) return false
+    if (generatedDateTo && (!generatedAt || generatedAt > generatedDateTo)) return false
     return true
   })
 }

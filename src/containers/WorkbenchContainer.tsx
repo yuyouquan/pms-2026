@@ -1,8 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { message, Tabs } from 'antd'
-import { CheckSquareOutlined, ClockCircleOutlined } from '@ant-design/icons'
+import { message, Segmented } from 'antd'
 import { useUiStore, type WorkbenchTab } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
@@ -332,7 +331,7 @@ export default function WorkbenchContainer() {
   }
 
   const todoContent = (
-    <TodoCenter todos={todos} today={today} onOpenTodo={openTodo} />
+    <TodoCenter todos={todos} onOpenTodo={openTodo} />
   )
 
   const workTrackerContent = (
@@ -358,22 +357,26 @@ export default function WorkbenchContainer() {
   )
 
   return (
-    <Tabs
-      className="pms-workbench"
-      activeKey={workbenchTab}
-      onChange={(key) => navigateWithEditGuard(
-        () => setWorkbenchTab(key as WorkbenchTab),
-        isCurrentDraft,
-      )}
-      renderTabBar={(props, DefaultTabBar) => (
-        <div className="pms-toolbar pms-workbench-toolbar">
-          <DefaultTabBar {...props} />
-        </div>
-      )}
-      items={[
-        { key: 'todo', label: <span><CheckSquareOutlined /> 待办中心</span>, children: todoContent },
-        { key: 'workTracker', label: <span><ClockCircleOutlined /> 工作跟踪</span>, children: workTrackerContent },
-      ]}
-    />
+    <section className="pms-workbench">
+      <header className="pms-workbench-header pms-glass-surface">
+        <h1>个人工作台</h1>
+        <Segmented
+          className="pms-workbench-switch"
+          aria-label="个人工作台模块"
+          value={workbenchTab}
+          options={[
+            { label: '待办中心', value: 'todo' },
+            { label: '工作跟踪', value: 'workTracker' },
+          ]}
+          onChange={key => navigateWithEditGuard(
+            () => setWorkbenchTab(key as WorkbenchTab),
+            isCurrentDraft,
+          )}
+        />
+      </header>
+      <div className="pms-workbench-content">
+        {workbenchTab === 'todo' ? todoContent : workTrackerContent}
+      </div>
+    </section>
   )
 }
