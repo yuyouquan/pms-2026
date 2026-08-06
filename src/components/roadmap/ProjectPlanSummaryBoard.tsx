@@ -2428,7 +2428,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
               trigger={(
                 <Tooltip title={scope === 'overall' ? '整体视图保留产品分类维度；其它视图不显示产品分类。' : '当前视图不显示产品分类。'}>
                   <Button
-                    aria-label="列设置"
+                    aria-label="字段配置"
                     className="pms-summary-icon-button"
                     size="small"
                     icon={<SettingOutlined />}
@@ -2541,7 +2541,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
 	            onPressEnter={handleSaveProjectView}
 	          />
 	          <div style={{ color: '#64748b', fontSize: 12 }}>
-	            将以当前分类、视图模式、状态筛选、字段筛选条件、列设置和折叠状态创建视图，名称不可重复。
+	            将以当前分类、视图模式、状态筛选、字段筛选条件、字段配置和折叠状态创建视图，名称不可重复。
 	          </div>
 	        </Space>
 	      </Modal>

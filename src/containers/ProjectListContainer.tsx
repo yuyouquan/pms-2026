@@ -401,6 +401,14 @@ export default function ProjectListContainer() {
     (projectCardPage - 1) * projectCardPageSize,
     projectCardPage * projectCardPageSize,
   )
+  const projectListFullscreenAction = !isFullscreen && projectListView !== 'card' ? (
+    <Button
+      size="small"
+      aria-label="全屏展示"
+      icon={<FullscreenOutlined />}
+      onClick={() => setIsFullscreen(true)}
+    >全屏</Button>
+  ) : null
 
   return (
     <div className="pms-project-list">
@@ -642,17 +650,6 @@ export default function ProjectListContainer() {
         </div>
       </div>
 
-      {!isFullscreen && projectListView !== 'card' && (
-        <div className="pms-project-list-content-actions">
-          <Button
-            size="small"
-            aria-label="全屏展示"
-            icon={<FullscreenOutlined />}
-            onClick={() => setIsFullscreen(true)}
-          >全屏</Button>
-        </div>
-      )}
-
       {/* Project list content */}
       <section
         className={`pms-project-list-content ${isFullscreen ? 'is-fullscreen pms-page-shell' : ''}`.trim()}
@@ -717,6 +714,7 @@ export default function ProjectListContainer() {
                     showTable={false}
                     showColumnSettings={false}
                     toolbarHost={projectListTableToolbarHost}
+                    toolbarTrailingAction={projectListFullscreenAction}
                   />
                 ) : standardMatrixVariant ? (
                   <ProjectSummaryTable
@@ -736,6 +734,7 @@ export default function ProjectListContainer() {
                     showTable={false}
                     showColumnSettings={false}
                     toolbarHost={projectListTableToolbarHost}
+                    toolbarTrailingAction={projectListFullscreenAction}
                     groupBy={standardMatrixVariant === 'machine'
                       ? { key: 'productSeries', fallbackLabel: '未配置产品系列' }
                       : undefined}
@@ -813,6 +812,7 @@ export default function ProjectListContainer() {
                     showQuickFilters={false}
                     showTable={false}
                     toolbarHost={projectListTableToolbarHost}
+                    toolbarTrailingAction={projectListFullscreenAction}
                   />
                 ) : standardMatrixVariant ? (
                   <ProjectSummaryTable
@@ -831,6 +831,7 @@ export default function ProjectListContainer() {
                     showQuickFilters={false}
                     showTable={false}
                     toolbarHost={projectListTableToolbarHost}
+                    toolbarTrailingAction={projectListFullscreenAction}
                     groupBy={standardMatrixVariant === 'machine'
                       ? { key: 'productSeries', fallbackLabel: '未配置产品系列' }
                       : undefined}
@@ -860,6 +861,7 @@ export default function ProjectListContainer() {
                     onFiltersChange={setTechnicalFilters}
                     showQuickFilters={false}
                     toolbarHost={projectListTableToolbarHost}
+                    toolbarTrailingAction={projectListFullscreenAction}
                   />
                 </div>
               ) : (
@@ -878,6 +880,7 @@ export default function ProjectListContainer() {
                   onFiltersChange={setSummaryFilters}
                   showQuickFilters={false}
                   toolbarHost={projectListTableToolbarHost}
+                  toolbarTrailingAction={projectListFullscreenAction}
                   groupBy={standardMatrixVariant === 'machine'
                     ? { key: 'productSeries', fallbackLabel: '未配置产品系列' }
                     : undefined}

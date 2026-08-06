@@ -118,7 +118,7 @@ const sortableColumnSettingsSource = readFileSync(sortableColumnSettingsPath, 'u
 if (!/FloatingConfigPopover/.test(sortableColumnSettingsSource)) {
   throw new Error('SortableColumnSettings must use FloatingConfigPopover');
 }
-if (!/ariaLabel="列设置"/.test(sortableColumnSettingsSource)) {
+if (!/ariaLabel="字段配置"/.test(sortableColumnSettingsSource)) {
   throw new Error('SortableColumnSettings must provide an accessible panel label');
 }
 if (/<Drawer\b/.test(sortableColumnSettingsSource)) {

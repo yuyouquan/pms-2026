@@ -1114,6 +1114,51 @@ export const useRoadmapStore = create<RoadmapStore>()(
         }))
         return { ok: true }
       },
+      setTosVersionDetails: (currentId, rawInput) => {
+        const versionId = normalizeRoadmapTosValue(rawInput.versionId)
+        if (!versionId || !currentTosEnumValues().includes(versionId)) {
+          return mutationFailure({ versionId: '请选择配置中心中有效的 tOS 版本（2位）' })
+        }
+        const period = normalizeTosPeriod(rawInput.periodStartDate, rawInput.periodEndDate)
+        const periodErrors = validateTosPeriod(period.periodStartDate, period.periodEndDate)
+        if (Object.keys(periodErrors).length) return mutationFailure(periodErrors)
+        const existing = currentId
+          ? get().tosVersions.find(version => version.id === normalizeRoadmapTosValue(currentId))
+          : undefined
+        if (currentId && !existing) return { ok: false, reason: 'not-found' }
+        if (get().tosVersions.some(version => version.id === versionId && version.id !== existing?.id)) {
+          return { ok: false, reason: 'duplicate' }
+        }
+        const occurredAt = nowIso()
+        const [major, minor] = versionId.split('.').map(Number)
+        const nextVersion: TosVersionConfig = {
+          id: versionId,
+          name: formatRoadmapTosValue(versionId),
+          major,
+          minor,
+          periodStartDate: period.periodStartDate,
+          periodEndDate: period.periodEndDate,
+          targets: normalizeTargets(rawInput.targets),
+          createdAt: existing?.createdAt ?? occurredAt,
+          updatedAt: occurredAt,
+        }
+        set(state => ({
+          tosVersions: sortTosVersions(existing
+            ? state.tosVersions.map(version => version.id === existing.id ? nextVersion : version)
+            : [...state.tosVersions, nextVersion]),
+        }))
+        return { ok: true }
+      },
+      deleteTosVersionDetails: id => {
+        const normalizedId = normalizeRoadmapTosValue(id)
+        if (!get().tosVersions.some(version => version.id === normalizedId)) {
+          return { ok: false, reason: 'not-found' }
+        }
+        set(state => ({
+          tosVersions: state.tosVersions.filter(version => version.id !== normalizedId),
+        }))
+        return { ok: true }
+      },
       setTosTargets: (id, targets) => {
         const normalizedId = normalizeRoadmapTosReference(id, get().tosVersions)
         const existing = get().tosVersions.find(version => version.id === normalizedId)

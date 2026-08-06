@@ -784,13 +784,13 @@ export default function TechnicalPlanModule({
               <SortableColumnSettings
                 open={columnsOpen}
                 trigger={(
-                  <Tooltip title="列设置">
-                    <Button icon={<SettingOutlined />} style={{ borderRadius: 6 }} disabled={!instance} onClick={() => { setFilterOpen(false); setColumnsOpen(true) }} aria-label="列设置" />
+                  <Tooltip title="字段配置">
+                    <Button icon={<SettingOutlined />} style={{ borderRadius: 6 }} disabled={!instance} onClick={() => { setFilterOpen(false); setColumnsOpen(true) }} aria-label="字段配置" />
                   </Tooltip>
                 )}
                 definitions={TECHNICAL_COLUMN_DEFINITIONS}
                 value={instance?.columnSettings || { order: Object.keys(COLUMN_LABELS), visible: Object.keys(COLUMN_LABELS) }}
-                onApply={value => { setColumns(scope, value); setColumnsOpen(false); message.success('列设置已保存') }}
+                onApply={value => { setColumns(scope, value); setColumnsOpen(false); message.success('字段配置已保存') }}
                 onCancel={() => setColumnsOpen(false)}
               />
             )}

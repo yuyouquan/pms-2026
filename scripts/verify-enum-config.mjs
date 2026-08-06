@@ -105,6 +105,10 @@ const roadmapModuleSource = readSource(root, 'src/components/roadmap/ProjectRoad
 assert.match(configUi, /key:\s*['"]enum['"][\s\S]*枚举值配置/, 'configuration center exposes the enum-value tab')
 assert.match(configUi, /configTab\s*===\s*['"]enum['"][\s\S]*<EnumConfig/, 'enum tab renders EnumConfig')
 assert.match(enumUi, /TOS_ENUM_TYPE_KEYS\.map[\s\S]*TOS_ENUM_REGISTRY\[type\]/, 'fixed registry drives the two visible enum type labels')
+assert.match(enumUi, /ENUM_CONFIG_CATEGORIES/, 'enum configuration exposes category navigation')
+assert.match(enumUi, /通用/, 'existing tOS enum types belong to the common category')
+assert.match(enumUi, /人力资源管道/, 'human-resource pipeline category is available')
+assert.match(enumUi, /暂无枚举类型/, 'empty enum categories expose a clear empty state')
 assert.match(enumUi, /useEnumStore\(state\s*=>\s*state\.selectedType\)/, 'enum type focus is shared for cross-module navigation')
 assert.match(enumUi, /useEnumStore\(state\s*=>\s*state\.setSelectedType\)/, 'enum type focus exposes one non-persisted action')
 for (const copy of ['新增枚举值', '历史已保存字符串不受影响', '格式要求', '加载枚举值失败', '暂无枚举值']) {

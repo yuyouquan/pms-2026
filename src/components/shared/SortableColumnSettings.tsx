@@ -242,12 +242,12 @@ export function SortableColumnSettings<Key extends string>({
       open={open}
       trigger={trigger}
       width={400}
-      ariaLabel="列设置"
+      ariaLabel="字段配置"
       onCancel={onCancel}
       getPopupContainer={getPopupContainer}
       title={(
         <div className="pms-floating-config-title-row">
-          <span>列设置</span>
+          <span>字段配置</span>
           <Button type="link" danger size="small" onClick={handleReset}>重置</Button>
         </div>
       )}
@@ -265,7 +265,7 @@ export function SortableColumnSettings<Key extends string>({
         value={searchText}
         prefix={<SearchOutlined />}
         placeholder="搜索字段"
-        aria-label="搜索列设置字段"
+        aria-label="搜索字段配置"
         onChange={event => setSearchText(event.target.value)}
         style={{ marginBottom: 10 }}
       />

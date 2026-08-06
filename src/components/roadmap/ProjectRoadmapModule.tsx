@@ -48,6 +48,7 @@ import RoadmapEvolutionView from './RoadmapEvolutionView'
 import RoadmapFilterDrawer from './RoadmapFilterDrawer'
 import RoadmapTableView from './RoadmapTableView'
 import RoadmapToolbar from './RoadmapToolbar'
+import TosVersionMaintenanceModal from './TosVersionMaintenanceModal'
 
 const isPresent = <T,>(value: T | null): value is T => value !== null
 
@@ -182,6 +183,7 @@ export default function ProjectRoadmapModule({
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [columnDrawerOpen, setColumnDrawerOpen] = useState(false)
   const [changeLogOpen, setChangeLogOpen] = useState(false)
+  const [tosMaintenanceOpen, setTosMaintenanceOpen] = useState(false)
   const [conflictDrawerOpen, setConflictDrawerOpen] = useState(false)
   const [collapsedTargetVersionIds, setCollapsedTargetVersionIds] = useState<Set<string>>(
     () => new Set(versions.filter(version => version.targets.length > 0).map(version => version.id)),
@@ -517,7 +519,7 @@ export default function ProjectRoadmapModule({
         isFullscreen={isFullscreen}
         onToggleFullscreen={() => void toggleFullscreen()}
         onOpenChangeLog={requestChangeLog}
-        onOpenTosMaintenance={openSharedTosEnumConfig}
+        onOpenTosMaintenance={() => setTosMaintenanceOpen(true)}
         onCreatePlannedProject={openCreatePlannedProject}
         onOpenFilters={() => {
           setColumnDrawerOpen(false)
@@ -569,6 +571,13 @@ export default function ProjectRoadmapModule({
         currentUser={currentLoginUser}
         canEdit={canEdit}
         onDeletePlannedProject={projectId => requestDeletePlannedProject(projectId, closePlannedProjectModal)}
+      />
+      <TosVersionMaintenanceModal
+        open={tosMaintenanceOpen}
+        onCancel={() => setTosMaintenanceOpen(false)}
+        normalProjects={projects}
+        plannedProjects={plannedProjects}
+        canEdit={canEdit}
       />
       <RoadmapConflictDrawer
         open={conflictDrawerOpen}

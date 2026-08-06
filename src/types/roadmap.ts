@@ -78,6 +78,13 @@ export interface TosVersionConfig {
   selectable?: boolean
 }
 
+export interface TosVersionDetailsInput {
+  versionId: string
+  periodStartDate: string
+  periodEndDate: string
+  targets: string[]
+}
+
 export interface RoadmapPlanningConflictGroup {
   key: string
   normalProjects: RoadmapProjectRow[]
@@ -282,6 +289,8 @@ export interface RoadmapStoreActions {
     comparison?: RoadmapDuplicateComparison,
   ) => RoadmapMutationResult
   deletePlannedProject: (id: string, actor: string) => RoadmapMutationResult
+  setTosVersionDetails: (currentId: string | null, input: TosVersionDetailsInput) => RoadmapMutationResult
+  deleteTosVersionDetails: (id: string) => RoadmapMutationResult
   setTosTargets: (id: string, targets: string[]) => RoadmapMutationResult
   recordNormalProjectChange: (input: RoadmapNormalChangeInput) => RoadmapMutationResult
 }
