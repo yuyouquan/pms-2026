@@ -612,7 +612,7 @@ registerAssertion('shared column-settings helper implements normalization, movem
       visible: ['owner'],
     }),
     {
-      order: ['id', 'select', 'owner', 'name'],
+      order: ['select', 'id', 'owner', 'name'],
       visible: ['id', 'select', 'name', 'owner'],
     },
   )
@@ -625,6 +625,10 @@ registerAssertion('shared column-settings helper implements normalization, movem
   assert.deepEqual(
     moveColumnSetting(multipleFixedDefinitions, multipleFixedOrder, 'select', 'owner'),
     multipleFixedOrder,
+  )
+  assert.deepEqual(
+    moveColumnSetting(multipleFixedDefinitions, multipleFixedOrder, 'select', 'id'),
+    ['select', 'id', 'name', 'owner'],
   )
   assert.deepEqual(
     moveColumnSetting(multipleFixedDefinitions, multipleFixedOrder, 'owner', 'id'),
@@ -679,6 +683,14 @@ registerAssertion('shared SortableColumnSettings component exists', () => {
   )
   assert.match(source, /<FloatingConfigPopover\b/)
   assert.match(source, /\bKeyboardSensor\b/)
+  assert.match(source, /选择要显示的字段/)
+  assert.match(source, /重置默认/)
+  assert.match(source, /placeholder="搜索字段"/)
+  assert.match(source, /必显/)
+  assert.match(source, /EyeOutlined/)
+  assert.match(source, /EyeInvisibleOutlined/)
+  assert.match(source, /footer=\{null\}/)
+  assert.doesNotMatch(source, /disabled=\{fixed\}/, 'required and fixed fields remain draggable')
   assert.doesNotMatch(source, /<Drawer\b/)
   assert.doesNotMatch(source, /<Modal\b/)
 })

@@ -46,8 +46,8 @@ for (const token of [
 
 assert.match(globalStyles, /grid-template-rows:\s*repeat\(6, minmax\(0, 1fr\)\)/, 'calendar divides the viewport into six weeks')
 assert.match(globalStyles, /\.pms-project-list-card-column/, 'card columns expose a stable five-column hook')
-assert.match(globalStyles, /\.pms-project-list-filter-label\s*\{[^}]*padding-left:\s*4px[^}]*flex:\s*0 0 96px/s, 'quick-filter label aligns with the category label column')
-assert.match(globalStyles, /\.pms-project-list-field-filters\s*>\s*:where\([^}]*flex:\s*0 0 150px/s, 'project-name and select controls keep equal widths')
+assert.match(globalStyles, /\.pms-active-filter-conditions\s*\{[^}]*display:\s*flex/s, 'active filters use a compact shared condition rail')
+assert.match(globalStyles, /\.pms-active-filter-chip\s*\{[^}]*height:\s*24px/s, 'active filter chips keep the compact control height')
 assert.match(globalStyles, /\.pms-workbench-header h1\s*\{[^}]*font-size:\s*16px/s, 'workspace titles stay compact while remaining larger than navigation text')
 assert.match(globalStyles, /\.pms-workbench-switch\.ant-segmented\s*\{[^}]*height:\s*28px/s, 'workbench and config capsules match the project-list switch height')
 assert.match(globalStyles, /\.pms-workbench-switch \.ant-segmented-group,[\s\S]{0,120}display:\s*flex/s, 'shared capsule items remain on one line')

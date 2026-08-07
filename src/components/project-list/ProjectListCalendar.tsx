@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from 'react'
 import { Button, Space, Tooltip } from 'antd'
+import { LeftOutlined, RightOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 
-const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 export interface ProjectListCalendarRow extends Record<string, unknown> {
@@ -27,7 +28,8 @@ export interface ProjectListCalendarProps {
 }
 
 const getCalendarDays = (month: dayjs.Dayjs) => {
-  const start = month.startOf('month').startOf('week')
+  const firstDay = month.startOf('month')
+  const start = firstDay.subtract((firstDay.day() + 6) % 7, 'day')
   return Array.from({ length: 42 }, (_, index) => start.add(index, 'day'))
 }
 
@@ -53,12 +55,13 @@ export default function ProjectListCalendar({
   return (
     <div className="pms-project-calendar pms-project-list-calendar pms-solid-surface" aria-label="项目日历视图">
       <div className="pms-project-calendar-header pms-toolbar">
-        <div className="pms-project-calendar-title">{calendarMonth.format('YYYY年M月')}</div>
-        <Space size={6}>
-          <Button size="small" shape="circle" aria-label="上个月" onClick={() => setCalendarMonth(month => month.subtract(1, 'month'))}>‹</Button>
+        <Space size={6} className="pms-project-calendar-navigation">
           <Button size="small" onClick={() => setCalendarMonth(dayjs().startOf('month'))}>今天</Button>
-          <Button size="small" shape="circle" aria-label="下个月" onClick={() => setCalendarMonth(month => month.add(1, 'month'))}>›</Button>
+          <Button size="small" type="text" aria-label="上个月" icon={<LeftOutlined />} onClick={() => setCalendarMonth(month => month.subtract(1, 'month'))} />
+          <Button size="small" type="text" aria-label="下个月" icon={<RightOutlined />} onClick={() => setCalendarMonth(month => month.add(1, 'month'))} />
+          <div className="pms-project-calendar-title">{calendarMonth.format('YYYY年M月')}</div>
         </Space>
+        <span className="pms-project-calendar-month-mode" aria-label="当前视图：月">月</span>
       </div>
       <div className="pms-project-calendar-weekdays">
         {WEEKDAYS.map(day => <div key={day}>{day}</div>)}
@@ -67,14 +70,20 @@ export default function ProjectListCalendar({
         {calendarDays.map(day => {
           const dayKey = day.format('YYYY-MM-DD')
           const events = eventsByDay.get(dayKey) || []
+          const isToday = day.isSame(dayjs(), 'day')
+          const dayLabel = day.date() === 1
+            ? day.format('M月D日')
+            : day.format('D')
           return (
             <div
               key={dayKey}
               className={`pms-project-calendar-cell${day.month() !== calendarMonth.month() ? ' pms-project-calendar-cell-muted' : ''}`}
             >
-              <div className="pms-project-calendar-dayline"><span>{day.format('D日')}</span></div>
+              <div className="pms-project-calendar-dayline">
+                <span className={isToday ? 'pms-project-calendar-today' : undefined}>{dayLabel}</span>
+              </div>
               <div className="pms-project-calendar-events">
-                {events.slice(0, 4).map(({ row, nodeName }) => {
+                {events.slice(0, 3).map(({ row, nodeName }) => {
                   const title = `${nodeName} · ${row.projectName}`
                   return (
                     <Tooltip title={title} key={`${row.key}-${nodeName}-${dayKey}`}>
@@ -88,7 +97,7 @@ export default function ProjectListCalendar({
                     </Tooltip>
                   )
                 })}
-                {events.length > 4 && <div className="pms-project-calendar-more">+{events.length - 4} 个节点</div>}
+                {events.length > 3 && <div className="pms-project-calendar-more">还有 {events.length - 3} 条记录</div>}
               </div>
             </div>
           )
