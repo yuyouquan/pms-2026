@@ -46,13 +46,13 @@ assert.match(source, /projectListView !== 'card'[\s\S]{0,500}aria-label="全屏�
 assert.match(source, /aria-label="退出全屏"[\s\S]{0,120}<FullscreenExitOutlined/, 'fullscreen mode exposes an accessible icon-only exit action')
 assert.match(source, /AppstoreOutlined|CalendarOutlined|UnorderedListOutlined/, 'view switch uses icons with text labels')
 assert.match(source, /aria-label="列表视图"><UnorderedListOutlined \/>列表视图<\/span>[\s\S]{0,80}value: 'list'/, 'list is the first icon-and-text option')
-assert.match(source, /aria-label="卡片视图"><AppstoreOutlined \/>卡片视图<\/span>[\s\S]{0,80}value: 'card'/, 'card is the second icon-and-text option')
-assert.match(source, /aria-label="日历视图"><CalendarOutlined \/>日历视图<\/span>[\s\S]{0,80}value: 'calendar'/, 'calendar is the third icon-and-text option')
+assert.match(source, /aria-label="日历视图"><CalendarOutlined \/>日历视图<\/span>[\s\S]{0,80}value: 'calendar'/, 'calendar is the second icon-and-text option')
+assert.match(source, /aria-label="卡片视图"><AppstoreOutlined \/>卡片视图<\/span>[\s\S]{0,80}value: 'card'/, 'card is the final icon-and-text option')
 assert.match(source, /className="pms-project-list-category-actions"/, 'project-list actions share the category row')
 assert.match(source, /className="pms-project-list-category-row"/, 'category filters expose a stable responsive row')
-assert.match(source, /className="pms-project-list-table-actions"/, 'filter and column controls have a host at the right edge of quick filters')
-assert.match(source, /toolbarHost=\{projectListTableToolbarHost\}/, 'summary controls render into the quick-filter action host')
-assert.match(source, /aria-label="快捷筛选-项目名称"[\s\S]{0,180}placeholder="项目名称"/, 'machine quick filters start with a project-name input')
+assert.match(source, /className="pms-project-list-table-actions"/, 'filter and column controls share the category action rail')
+assert.match(source, /toolbarHost=\{projectListTableToolbarHost\}/, 'summary controls render into the category action rail')
+assert.match(source, /aria-label="新增项目"[\s\S]{0,220}icon=\{<PlusOutlined \/>\}[\s\S]{0,120}\/\>/, 'add project is an accessible icon-only action')
 assert.doesNotMatch(source, /projectListView === 'card'[^\n]*workbenchListState\.showSecondaryCategory/)
 assert.match(source, /projectTypeFilter === PROJECT_TYPE_TOS_VERSION \|\| projectTypeFilter === PROJECT_CATEGORY_TECH[\s\S]{0,260}进行中[\s\S]{0,120}已完成/)
 assert.match(source, /showQuickFilters=\{false\}/)
@@ -68,21 +68,7 @@ assert.match(summarySource, />\s*筛选\s*<\/Button>/, 'advanced filter button e
 assert.match(summarySource, />\s*字段配置\s*<\/Button>/, 'field configuration button exposes visible text')
 assert.match(summarySource, /字段配置[\s\S]{0,900}toolbarTrailingAction/, 'fullscreen renders immediately after field configuration')
 assert.match(source, /toolbarTrailingAction=\{projectListFullscreenAction\}/, 'project list passes fullscreen into the shared action row')
-assert.equal(
-  [...source.matchAll(/<Input\s+size="small"[\s\S]{0,180}aria-label="快捷筛选-项目名称"/g)].length,
-  2,
-  'machine and technical project-name quick filters use the compact input size',
-)
-assert.match(
-  source,
-  /<Select\s+size="small"[\s\S]{0,220}aria-label=\{`快捷筛选-\$\{definition\.label\}`\}/,
-  'standard project-list quick filters use compact selects',
-)
-assert.match(
-  source,
-  /<Select\s+size="small"[\s\S]{0,220}aria-label=\{`快捷筛选-\$\{label\}`\}/,
-  'technical project-list quick filters use compact selects',
-)
+assert.doesNotMatch(source, /aria-label="快捷筛选-项目名称"/, 'project list no longer renders quick-filter inputs')
 assert.match(summarySource, /const compactControlSize = matrixVariant \? 'small' : 'middle'/)
 assert.match(summarySource, /const \[selectedRowKey, setSelectedRowKey\] = useState\(''\)/)
 assert.match(summarySource, /rowClassName=\{row =>/)
@@ -99,13 +85,13 @@ assert.match(summarySource, /pms-filter-condition-list \$\{matrixVariant \? 'is-
 assert.match(summarySource, /showColumnSettings\s*&&\s*\(\s*<SortableColumnSettings/)
 assert.equal(
   [...source.matchAll(/showColumnSettings=\{false\}/g)].length,
-  2,
-  'calendar mounts standard and technical filter controllers without column settings',
+  0,
+  'calendar keeps the shared field configuration available',
 )
 assert.match(
   source,
-  /projectListView === 'calendar'[\s\S]{0,5200}showTable=\{false\}[\s\S]{0,500}showColumnSettings=\{false\}/,
-  'calendar branch mounts a hidden summary controller that keeps advanced filtering available',
+  /projectListView === 'calendar'[\s\S]{0,5200}showTable=\{false\}[\s\S]{0,700}filterSummaryHost=\{projectListFilterSummaryHost\}/,
+  'calendar branch mounts a hidden summary controller that keeps filtering and field configuration available',
 )
 assert.match(matrixSource, /required\('productSeries', '产品系列', 160\)/, 'machine product-series fixed width is 160px')
 assert.match(matrixSource, /required\('projectName', '项目名称', 220\)/, 'machine project-name fixed width is 220px')
@@ -119,7 +105,7 @@ assert.match(styles, /\.pms-project-list-view-switch\.ant-segmented\.ant-segment
 assert.match(styles, /\.pms-project-list-view-switch \.ant-segmented-item-selected\s*\{[^}]*color:\s*var\(--pms-brand-strong\)[^}]*background:\s*#fff[^}]*box-shadow:/s, 'selected view uses the tokenized white capsule')
 assert.match(styles, /\.pms-project-list-view-switch \.ant-segmented-item:focus-visible\s*\{[^}]*outline:/s, 'view switch retains a visible keyboard focus')
 assert.match(styles, /\.pms-project-list \.pms-project-summary-actions \.ant-btn\s*\{[^}]*height:\s*32px[^}]*min-height:\s*32px\s*!important[^}]*padding-inline:\s*12px/s, 'quick-filter actions keep the same compact height as the filter controls')
-assert.match(styles, /\.pms-project-list-field-filters\s*\{[^}]*padding:\s*0 4px/s, 'quick-filter row does not add vertical padding that overflows the fixed filter surface')
+assert.match(styles, /\.pms-active-filter-conditions\s*\{/, 'active filters have a dedicated compact surface')
 assert.match(styles, /\.pms-project-summary-table[\s\S]{0,300}th\.ant-table-cell-fix-(?:left|start)[\s\S]{0,160}position:\s*sticky\s*!important/s, 'fixed summary header cells retain sticky positioning instead of relative offsets')
 assert.match(styles, /\.pms-table\.pms-project-summary-table \.ant-table-tbody\s*>\s*tr\s*>\s*td\.ant-table-cell-fix-(?:left|start)[^}]*\{[^}]*z-index:\s*3[^}]*background:\s*#fff\s*!important/s, 'fixed summary body cells stay opaque above scrolled cells')
 assert.match(styles, /\.pms-table\.pms-project-summary-table \.ant-table-tbody\s*>\s*tr:hover\s*>\s*td\.ant-table-cell-fix-(?:left|start)[^}]*\{[^}]*background:\s*#f4f4ff\s*!important/s, 'fixed summary hover cells use an opaque hover surface')

@@ -24,6 +24,7 @@ import type { ColumnType, ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
+import ActiveFilterConditions from '@/components/project-list/ActiveFilterConditions'
 import {
   getDefaultColumnSettings,
   normalizeColumnSettings,
@@ -94,6 +95,7 @@ export interface ProjectSummaryTableProps {
   showQuickFilters?: boolean
   groupBy?: { key: string; fallbackLabel: string }
   toolbarHost?: HTMLElement | null
+  filterSummaryHost?: HTMLElement | null
   showTable?: boolean
   showColumnSettings?: boolean
   toolbarTrailingAction?: ReactNode
@@ -173,6 +175,7 @@ export default function ProjectSummaryTable({
   showQuickFilters = true,
   groupBy,
   toolbarHost,
+  filterSummaryHost,
   showTable = true,
   showColumnSettings = true,
   toolbarTrailingAction,
@@ -190,11 +193,22 @@ export default function ProjectSummaryTable({
     createFilterCondition(),
   ])
   const [filterOpen, setFilterOpen] = useState(false)
+  const [editingConditionId, setEditingConditionId] = useState<string | null>(null)
   const [columnOpen, setColumnOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const [selectedRowKey, setSelectedRowKey] = useState('')
   const [tablePage, setTablePage] = useState(1)
   const compactControlSize = matrixVariant ? 'small' : 'middle'
+
+  useEffect(() => {
+    if (!filterOpen || !editingConditionId) return
+    const timeout = window.setTimeout(() => {
+      const row = document.querySelector<HTMLElement>(`[data-filter-condition-id="${editingConditionId}"]`)
+      row?.scrollIntoView({ block: 'nearest' })
+      row?.querySelector<HTMLElement>('.ant-select-selector, input, button')?.focus()
+    }, 180)
+    return () => window.clearTimeout(timeout)
+  }, [editingConditionId, filterOpen])
 
   const templateTasks = useMemo(() => getLatestPublishedTemplateTasks(
     projectType,
@@ -666,6 +680,15 @@ export default function ProjectSummaryTable({
     )
   }
 
+  const openFilterPanel = (conditionId?: string) => {
+    setColumnOpen(false)
+    setEditingConditionId(conditionId ?? null)
+    setTempFilters(filters.length
+      ? cloneConditions(filters)
+      : [createFilterCondition()])
+    setFilterOpen(true)
+  }
+
   const toolbarActions = (
     <Space size={8} className="pms-project-summary-actions">
       <FloatingFilterPanel
@@ -678,20 +701,17 @@ export default function ProjectSummaryTable({
               aria-label="筛选"
               icon={<FilterOutlined />}
               type={filters.length ? 'primary' : 'default'}
-              onClick={() => {
-                setColumnOpen(false)
-                setTempFilters(filters.length
-                  ? cloneConditions(filters)
-                  : [createFilterCondition()])
-                setFilterOpen(true)
-              }}
+              onClick={() => openFilterPanel()}
             >筛选</Button>
           </Tooltip>
         )}
         onReset={() => commitTempFilters([createFilterCondition()])}
         onAdd={() => commitTempFilters([...tempFilters, createFilterCondition()])}
         addDisabled={tempFilters.length >= filterFieldDefinitions.length}
-        onClose={() => setFilterOpen(false)}
+        onClose={() => {
+          setFilterOpen(false)
+          setEditingConditionId(null)
+        }}
       >
         <div className={`pms-filter-condition-list ${matrixVariant ? 'is-compact' : ''}`.trim()}>
           {tempFilters.map(condition => {
@@ -705,6 +725,7 @@ export default function ProjectSummaryTable({
               <div
                 key={condition.id}
                 className="pms-filter-condition-row"
+                data-filter-condition-id={condition.id}
               >
                 <Select
                   size={compactControlSize}
@@ -835,6 +856,19 @@ export default function ProjectSummaryTable({
       </div>}
 
       {toolbarHost && createPortal(toolbarActions, toolbarHost)}
+
+      {filterSummaryHost && createPortal((
+        <ActiveFilterConditions
+          conditions={matrixVariant?.startsWith('technical')
+            ? filters.filter(condition => condition.field !== 'technicalProjectType')
+            : filters}
+          definitions={filterFieldDefinitions}
+          onEdit={conditionId => openFilterPanel(conditionId)}
+          onRemove={conditionId => setFilters(current => (
+            current.filter(condition => condition.id !== conditionId)
+          ))}
+        />
+      ), filterSummaryHost)}
 
       {showTable && templateTasks.length === 0 && (
         <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>

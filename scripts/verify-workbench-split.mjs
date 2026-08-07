@@ -33,8 +33,9 @@ requireSource(root, 'src/app/page.tsx', /['"]projectList['"]/, 'missing project-
 requireSource(root, 'src/app/page.tsx', /enterProjectSpace\(\{\s*module:\s*['"]roadmap['"]\s*\}\)/, 'roadmap project entry must record its origin')
 
 const workbenchSource = readSource(root, 'src/containers/WorkbenchContainer.tsx')
-assert.match(workbenchSource, /<Tabs\b/, 'workbench must use Ant Tabs')
-assert.match(workbenchSource, /key:\s*['"]todo['"][\s\S]*?key:\s*['"]workTracker['"]/, 'workbench tab order must be todo then work tracker')
+assert.match(workbenchSource, /<Segmented\b/, 'workbench must use the approved Ant Segmented capsule')
+assert.doesNotMatch(workbenchSource, /<Tabs\b/, 'workbench no longer uses the legacy tab rail')
+assert.match(workbenchSource, /value:\s*['"]todo['"][\s\S]*?value:\s*['"]workTracker['"]/, 'workbench switch order must be todo then work tracker')
 assert.match(workbenchSource, /待办中心[\s\S]*?工作跟踪/, 'workbench tab labels must be todo center then work tracker')
 assert.doesNotMatch(workbenchSource, /项目列表视图|todoCollapsed|MenuFoldOutlined|MenuUnfoldOutlined|ProjectSummaryTable/, 'workbench must not contain project-list view controls or a collapsible todo rail')
 assert.match(workbenchSource, /module:\s*['"]workbench['"],\s*workbenchTab:\s*['"]todo['"]/, 'todo project entry must record its workbench tab')

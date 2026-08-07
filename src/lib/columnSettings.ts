@@ -59,10 +59,17 @@ function normalizeOrder<Key extends string>(
   order: readonly Key[] | undefined,
 ): Key[] {
   const knownKeys = new Set(definitions.map(definition => definition.key))
-  const fixedKeys = definitions
+  const defaultFixedKeys = definitions
     .filter(definition => definition.fixed === 'left')
     .map(definition => definition.key)
-  const fixedKeySet = new Set(fixedKeys)
+  const fixedKeySet = new Set(defaultFixedKeys)
+  const requestedFixedKeys = (order ?? [])
+    .filter((key, index, source) => fixedKeySet.has(key) && source.indexOf(key) === index)
+  const requestedFixedKeySet = new Set(requestedFixedKeys)
+  const fixedKeys = [
+    ...requestedFixedKeys,
+    ...defaultFixedKeys.filter(key => !requestedFixedKeySet.has(key)),
+  ]
   const normalizedNonFixed: Key[] = []
   const seen = new Set<Key>()
 
@@ -159,7 +166,7 @@ export function moveColumnSetting<Key extends string>(
   const activeDefinition = definitionByKey.get(activeKey)
   const overDefinition = definitionByKey.get(overKey)
 
-  if (!activeDefinition || !overDefinition || activeDefinition.fixed === 'left') {
+  if (!activeDefinition || !overDefinition) {
     return normalizedOrder
   }
 
@@ -172,6 +179,13 @@ export function moveColumnSetting<Key extends string>(
   const fixedCount = definitions.filter(definition => definition.fixed === 'left').length
   const nextOrder = [...normalizedOrder]
   nextOrder.splice(activeIndex, 1)
+
+  if (activeDefinition.fixed === 'left') {
+    if (overDefinition.fixed !== 'left') return normalizedOrder
+    const targetIndex = nextOrder.indexOf(overKey)
+    nextOrder.splice(Math.max(0, targetIndex + (activeIndex < overIndex ? 1 : 0)), 0, activeKey)
+    return normalizeOrder(definitions, nextOrder)
+  }
 
   if (overDefinition.fixed === 'left') {
     nextOrder.splice(fixedCount, 0, activeKey)
