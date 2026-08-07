@@ -9,9 +9,17 @@ const source = fs.readFileSync(projectListPath, 'utf8')
 const summarySource = fs.readFileSync(path.join(root, 'src/components/project-summary/ProjectSummaryTable.tsx'), 'utf8')
 const workTrackerSource = fs.readFileSync(path.join(root, 'src/components/work-tracker/WorkTracker.tsx'), 'utf8')
 const matrixSource = fs.readFileSync(path.join(root, 'src/lib/projectListMatrix.ts'), 'utf8')
+const calendarMockPath = path.join(root, 'src/data/projectListPlanMocks.ts')
 
 assert.match(source, /ProjectSummaryTable/)
 assert.match(source, /getWorkbenchListState/)
+assert.ok(fs.existsSync(calendarMockPath), 'project-list calendar has project-scoped plan mock data')
+assert.match(source, /buildProjectListMockPlanTasks/)
+assert.match(
+  source,
+  /const mockPlanTasks = buildProjectListMockPlanTasks[\s\S]{0,1200}publishedTasks\.length\s*\?\s*publishedTasks\s*:\s*mockPlanTasks/,
+  'calendar/list milestone rows fall back to project-scoped mock plans when no published snapshot exists',
+)
 assert.match(source, /该项目分类暂未配置/)
 assert.doesNotMatch(source, /label:\s*'全部',\s*value:\s*'all'\s*\},\s*\.\.\.PROJECT_CATEGORIES/)
 assert.match(source, /technicalActiveType === 'tdt'/)
@@ -51,6 +59,22 @@ assert.match(source, /aria-label="卡片视图"><AppstoreOutlined \/>卡片视�
 assert.match(source, /className="pms-project-list-category-actions"/, 'project-list actions share the category row')
 assert.match(source, /className="pms-project-list-category-row"/, 'category filters expose a stable responsive row')
 assert.match(source, /className="pms-project-list-table-actions"/, 'filter and column controls share the category action rail')
+assert.match(
+  source,
+  /className="pms-project-list-secondary-row"[\s\S]{0,1800}\{aboutMineControl\}/,
+  'whole-product and tOS categories keep about-mine in the secondary-category row',
+)
+assert.match(
+  source,
+  /className="pms-project-list-technical-type-row"[\s\S]{0,1200}\{aboutMineControl\}/,
+  'technical projects keep about-mine in the project-type row',
+)
+assert.doesNotMatch(source, /pms-project-list-about-mine-row/, 'about-mine is no longer rendered on a standalone row')
+const statusRowIndex = source.indexOf('aria-label="状态快捷筛选"')
+const filterSummaryIndex = source.indexOf('className="pms-project-list-filter-summary-row"')
+const technicalTypeRowIndex = source.indexOf('aria-label="技术项目类型快捷筛选"')
+assert.ok(statusRowIndex >= 0 && filterSummaryIndex > statusRowIndex, 'active filters follow the status row')
+assert.ok(technicalTypeRowIndex < 0 || filterSummaryIndex < technicalTypeRowIndex, 'active filters precede the technical project-type row')
 assert.match(source, /toolbarHost=\{projectListTableToolbarHost\}/, 'summary controls render into the category action rail')
 assert.match(source, /aria-label="新增项目"[\s\S]{0,220}icon=\{<PlusOutlined \/>\}[\s\S]{0,120}\/\>/, 'add project is an accessible icon-only action')
 assert.doesNotMatch(source, /projectListView === 'card'[^\n]*workbenchListState\.showSecondaryCategory/)

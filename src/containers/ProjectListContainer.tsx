@@ -62,6 +62,7 @@ import {
 } from '@/lib/projectListFilters'
 import ProjectListCalendar from '@/components/project-list/ProjectListCalendar'
 import type { ProjectListViewMode } from '@/stores/project'
+import { buildProjectListMockPlanTasks } from '@/data/projectListPlanMocks'
 
 const WORKSPACE_FILTER_TOOLBAR_STYLE: CSSProperties = {
   borderRadius: 12,
@@ -173,6 +174,10 @@ export default function ProjectListContainer() {
 
   const projectSummaryPlanTasksByProjectId = useMemo(() => (
     Object.fromEntries(categoryBaseProjects.map(project => {
+      const mockPlanTasks = buildProjectListMockPlanTasks(
+        project.id,
+        getTemplateTasksForProjectType(configTemplateTasksByType, project.type) || [],
+      )
       if (isMachineProjectType(project.type)) {
         const marketRows = buildMarketRowsFromMarkets(
           project.markets || [],
@@ -180,11 +185,12 @@ export default function ProjectListContainer() {
         )
         const mainMarket = getMainMarket(marketRows)
         const scopedVersions = marketVersionsByKey[getMarketPlanVersionKey(project.id, mainMarket)] || []
-        return [project.id, selectLatestPublishedScopedSnapshot(
+        const publishedTasks = selectLatestPublishedScopedSnapshot(
           scopedVersions,
           publishedSnapshots,
           versionId => getProjectMarketSnapshotKey(project.id, mainMarket, versionId),
-        )]
+        )
+        return [project.id, publishedTasks.length ? publishedTasks : mockPlanTasks]
       }
       if (project.type === PROJECT_TYPE_TOS_VERSION) {
         const typeRows = buildTosTypeRows(
@@ -194,16 +200,18 @@ export default function ProjectListContainer() {
         )
         const mainType = getMainTosType(typeRows)
         const scopedVersions = tosTypeVersionsByKey[getTosTypeVersionKey(project.id, mainType, 'level1')] || []
-        return [project.id, selectLatestPublishedScopedSnapshot(
+        const publishedTasks = selectLatestPublishedScopedSnapshot(
           scopedVersions,
           publishedSnapshots,
           versionId => getTosTypeSnapshotKey(project.id, mainType, 'level1', versionId),
-        )]
+        )
+        return [project.id, publishedTasks.length ? publishedTasks : mockPlanTasks]
       }
-      return [project.id, []]
+      return [project.id, mockPlanTasks]
     }))
   ), [
     categoryBaseProjects,
+    configTemplateTasksByType,
     marketConfigsByProjectId,
     marketVersionsByKey,
     publishedSnapshots,
@@ -402,6 +410,16 @@ export default function ProjectListContainer() {
       />
     </Tooltip>
   ) : null
+  const aboutMineControl = (
+    <Checkbox
+      className="pms-project-list-about-mine"
+      checked={aboutMineOnly}
+      onChange={event => {
+        setAboutMineOnly(event.target.checked)
+        setProjectCardPage(1)
+      }}
+    >关于我的</Checkbox>
+  )
 
   return (
     <div className="pms-project-list">
@@ -479,7 +497,7 @@ export default function ProjectListContainer() {
             </div>
 
             {workbenchListState.kind !== 'select-category' && (workbenchListState.showSecondaryCategory || projectTypeFilter === PROJECT_TYPE_TOS_VERSION) && (
-              <div aria-label="项目二级分类快捷筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+              <div className="pms-project-list-secondary-row" aria-label="项目二级分类快捷筛选">
                 <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>二级分类</span>
                 {secondaryCategoryOptions.map(item => {
                   const isActive = projectSecondaryCategoryFilter === item.value
@@ -502,6 +520,7 @@ export default function ProjectListContainer() {
                     </button>
                   )
                 })}
+                {aboutMineControl}
               </div>
             )}
 
@@ -531,8 +550,13 @@ export default function ProjectListContainer() {
               </div>
             )}
 
+            <div
+              className="pms-project-list-filter-summary-row"
+              ref={setProjectListFilterSummaryHost}
+            />
+
             {projectTypeFilter === PROJECT_CATEGORY_TECH && (
-              <div aria-label="技术项目类型快捷筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+              <div className="pms-project-list-technical-type-row" aria-label="技术项目类型快捷筛选">
                 <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目类型</span>
                 {TECHNICAL_PROJECT_TYPE_OPTIONS.map(item => (
                   <button
@@ -548,22 +572,9 @@ export default function ProjectListContainer() {
                       : 'pms-project-filter-chip'}
                   >{item.label}</button>
                 ))}
+                {aboutMineControl}
               </div>
             )}
-
-            {workbenchListState.kind !== 'select-category' && (
-              <div className="pms-project-list-about-mine-row">
-                <Checkbox
-                  checked={aboutMineOnly}
-                  onChange={event => { setAboutMineOnly(event.target.checked); setProjectCardPage(1) }}
-                >关于我的</Checkbox>
-              </div>
-            )}
-
-            <div
-              className="pms-project-list-filter-summary-row"
-              ref={setProjectListFilterSummaryHost}
-            />
         </div>
       </div>
 
