@@ -693,6 +693,18 @@ registerAssertion('shared SortableColumnSettings component exists', () => {
   assert.doesNotMatch(source, /disabled=\{fixed\}/, 'required and fixed fields remain draggable')
   assert.doesNotMatch(source, /<Drawer\b/)
   assert.doesNotMatch(source, /<Modal\b/)
+
+  const styles = fs.readFileSync(path.join(root, 'src/styles/globals.css'), 'utf8')
+  assert.match(
+    styles,
+    /\.pms-sortable-column-required\s*\{[^}]*grid-column:\s*3/s,
+    'required badges occupy the fixed third grid column',
+  )
+  assert.match(
+    styles,
+    /\.pms-sortable-column-visibility\s*\{[^}]*grid-column:\s*4/s,
+    'visibility controls occupy the fixed rightmost grid column',
+  )
 })
 
 registerAssertion('roadmap store normalizes and persists independent ordered column settings', () => {

@@ -6050,18 +6050,27 @@ body,
 }
 
 /* Project-list active conditions replace the legacy quick-filter controls. */
-.pms-project-list-about-mine-row {
+.pms-project-list-secondary-row,
+.pms-project-list-technical-type-row {
   display: flex;
-  justify-content: flex-end;
   align-items: center;
-  min-height: 24px;
-  padding-inline: 4px;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pms-project-list-about-mine {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-inline: 8px 4px;
+  white-space: nowrap;
 }
 
 .pms-project-list-filter-summary-row {
+  box-sizing: border-box;
   min-width: 0;
-  min-height: 0;
-  padding-inline: 4px;
+  min-height: 24px;
+  padding-right: 4px;
+  padding-left: 96px;
 }
 
 .pms-active-filter-conditions {
@@ -6191,6 +6200,7 @@ body,
 }
 .pms-sortable-column-title { font-size: 13px; color: #4b5563; }
 .pms-sortable-column-required {
+  grid-column: 3;
   padding: 1px 6px;
   border-radius: 5px;
   background: #e9f4ff;
@@ -6200,6 +6210,8 @@ body,
   white-space: nowrap;
 }
 .pms-sortable-column-visibility {
+  grid-column: 4;
+  justify-self: end;
   display: inline-flex;
   align-items: center;
   justify-content: center;
