@@ -61,14 +61,10 @@ assert.match(source, /className="pms-project-list-category-row"/, 'category filt
 assert.match(source, /className="pms-project-list-table-actions"/, 'filter and column controls share the category action rail')
 assert.match(
   source,
-  /className="pms-project-list-secondary-row"[\s\S]{0,1800}\{aboutMineControl\}/,
-  'whole-product and tOS categories keep about-mine in the secondary-category row',
+  /const projectListToolbarTrailingActions = \([\s\S]{0,240}\{aboutMineAction\}[\s\S]{0,120}\{projectListFullscreenAction\}/,
+  'the mine/all icon toggle sits immediately before fullscreen in the action rail',
 )
-assert.match(
-  source,
-  /className="pms-project-list-technical-type-row"[\s\S]{0,1200}\{aboutMineControl\}/,
-  'technical projects keep about-mine in the project-type row',
-)
+assert.doesNotMatch(source, /\{aboutMineControl\}/, 'about-mine is no longer rendered inside filter rows')
 assert.doesNotMatch(source, /pms-project-list-about-mine-row/, 'about-mine is no longer rendered on a standalone row')
 const statusRowIndex = source.indexOf('aria-label="状态快捷筛选"')
 const filterSummaryIndex = source.indexOf('className="pms-project-list-filter-summary-row"')
@@ -91,7 +87,7 @@ assert.match(summarySource, /groupBy\?:/)
 assert.match(summarySource, />\s*筛选\s*<\/Button>/, 'advanced filter button exposes visible text')
 assert.match(summarySource, />\s*字段配置\s*<\/Button>/, 'field configuration button exposes visible text')
 assert.match(summarySource, /字段配置[\s\S]{0,900}toolbarTrailingAction/, 'fullscreen renders immediately after field configuration')
-assert.match(source, /toolbarTrailingAction=\{projectListFullscreenAction\}/, 'project list passes fullscreen into the shared action row')
+assert.match(source, /toolbarTrailingAction=\{projectListToolbarTrailingActions\}/, 'project list passes mine/all and fullscreen into the shared action row')
 assert.doesNotMatch(source, /aria-label="快捷筛选-项目名称"/, 'project list no longer renders quick-filter inputs')
 assert.match(summarySource, /const compactControlSize = matrixVariant \? 'small' : 'middle'/)
 assert.match(summarySource, /const \[selectedRowKey, setSelectedRowKey\] = useState\(''\)/)

@@ -84,6 +84,8 @@ export interface ProjectCardProps {
   setProjectSpaceModule: (module: string) => void
   setActiveModule: (module: string) => void
   PROJECT_STATUS_CONFIG: Record<string, { color: string; tagColor: string }>
+  canOpen?: boolean
+  onOpenDenied?: () => void
 }
 
 export const ProjectCard: React.FC<ProjectCardProps> = ({
@@ -92,6 +94,8 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   setProjectSpaceModule,
   setActiveModule,
   PROJECT_STATUS_CONFIG,
+  canOpen = true,
+  onOpenDenied,
 }) => {
   const [hovered, setHovered] = useState(false)
   const statusConf = PROJECT_STATUS_CONFIG[project.status] || { color: '#8c8c8c', tagColor: 'default' }
@@ -105,6 +109,10 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   // Project classification color mapping
   const typeColor = PROJECT_TYPE_COLORS[classification.projectCategory] || { bg: 'rgba(140,140,140,0.08)', color: '#8c8c8c' }
   const openProject = () => {
+    if (!canOpen) {
+      onOpenDenied?.()
+      return
+    }
     setSelectedProject(project)
     setProjectSpaceModule('basic')
     setActiveModule('projectSpace')
@@ -127,9 +135,10 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
     <Card
       role="button"
       tabIndex={0}
+      aria-disabled={!canOpen}
       aria-label={`打开项目 ${project.sourceBid || project.id}`}
       hoverable
-      className="pms-card-hover pms-project-card pms-glass-surface pms-interactive-surface"
+      className={`pms-card-hover pms-project-card pms-glass-surface pms-interactive-surface${canOpen ? '' : ' is-access-denied'}`}
       style={{
         borderRadius: 10,
         height: '100%',

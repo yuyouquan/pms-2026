@@ -5829,7 +5829,8 @@ body,
 .pms-project-list-filter-grid,
 .pms-project-list-filter-grid.pms-toolbar {
   box-sizing: border-box;
-  height: 116px;
+  height: auto;
+  min-height: 0;
   gap: 2px !important;
   padding: 6px 8px !important;
   border-radius: 8px !important;
@@ -5958,6 +5959,10 @@ body,
   border-radius: 8px;
 }
 
+.pms-project-card.is-access-denied {
+  cursor: not-allowed;
+}
+
 .pms-technical-project-card > .ant-card-body {
   height: 100%;
   padding: 10px;
@@ -6058,11 +6063,16 @@ body,
   min-width: 0;
 }
 
-.pms-project-list-about-mine {
-  flex: 0 0 auto;
-  margin-left: auto;
-  padding-inline: 8px 4px;
-  white-space: nowrap;
+.pms-project-list-scope-actions {
+  display: inline-flex;
+  align-items: center;
+}
+
+.pms-project-list .pms-project-list-scope-action.ant-btn[aria-pressed='true'] {
+  color: #fff;
+  background: var(--pms-gradient-brand);
+  border-color: transparent;
+  box-shadow: 0 4px 10px rgb(79 70 229 / 18%);
 }
 
 .pms-project-list-filter-summary-row {
