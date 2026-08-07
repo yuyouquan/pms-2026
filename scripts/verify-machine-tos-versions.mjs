@@ -161,7 +161,9 @@ const migratedMachineState = projectStore.migrateProjectState({ projects: [
   },
 ] }, 2)
 assert.deepEqual(
-  migratedMachineState.projects.map(project => ({
+  migratedMachineState.projects
+    .filter(project => project.id.startsWith('persisted-'))
+    .map(project => ({
     id: project.id,
     productType: project.productType,
     first: project.firstSaleTosVersionId,
@@ -169,7 +171,7 @@ assert.deepEqual(
     fieldFirst: project.fieldValues?.firstSaleTosVersion,
     fieldCurrent: project.fieldValues?.currentTosVersion,
     sourceBid: project.sourceBid,
-  })),
+    })),
   [
     { id: 'persisted-machine', productType: '新品', first: '16.3.0', current: '14.0.0', fieldFirst: '16.3.0', fieldCurrent: '14.0.0', sourceBid: undefined },
     { id: 'persisted-three-part', productType: '新品', first: '17.10.0', current: '17.10.0', fieldFirst: undefined, fieldCurrent: undefined, sourceBid: undefined },

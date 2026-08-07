@@ -5829,7 +5829,8 @@ body,
 .pms-project-list-filter-grid,
 .pms-project-list-filter-grid.pms-toolbar {
   box-sizing: border-box;
-  height: 116px;
+  height: auto;
+  min-height: 0;
   gap: 2px !important;
   padding: 6px 8px !important;
   border-radius: 8px !important;
@@ -5958,6 +5959,10 @@ body,
   border-radius: 8px;
 }
 
+.pms-project-card.is-access-denied {
+  cursor: not-allowed;
+}
+
 .pms-technical-project-card > .ant-card-body {
   height: 100%;
   padding: 10px;
@@ -6048,6 +6053,190 @@ body,
 .pms-floating-config-popover .pms-sortable-column-row {
   min-height: 30px;
 }
+
+/* Project-list active conditions replace the legacy quick-filter controls. */
+.pms-project-list-secondary-row,
+.pms-project-list-technical-type-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pms-project-list-scope-actions {
+  display: inline-flex;
+  align-items: center;
+}
+
+.pms-project-list .pms-project-list-scope-action.ant-btn[aria-pressed='true'] {
+  color: #fff;
+  background: var(--pms-gradient-brand);
+  border-color: transparent;
+  box-shadow: 0 4px 10px rgb(79 70 229 / 18%);
+}
+
+.pms-project-list-filter-summary-row {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 24px;
+  padding-right: 4px;
+  padding-left: 96px;
+}
+
+.pms-active-filter-conditions {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding-block: 2px;
+}
+
+.pms-active-filter-conditions__chips {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pms-active-filter-conditions.is-expanded .pms-active-filter-conditions__chips {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+.pms-active-filter-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  height: 24px;
+  overflow: hidden;
+  border: 1px solid #e6e8fa;
+  border-radius: 999px;
+  background: #f7f7ff;
+  color: #5b5f76;
+  white-space: nowrap;
+}
+
+.pms-active-filter-chip__content,
+.pms-active-filter-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pms-active-filter-chip__content { gap: 4px; padding-left: 8px; }
+.pms-active-filter-chip__field { color: var(--pms-brand-strong); font-weight: 600; }
+.pms-active-filter-chip__value { color: #111827; }
+.pms-active-filter-chip__remove { padding: 0 7px 0 5px; color: #ff5c68; }
+.pms-active-filter-chip__content:focus-visible,
+.pms-active-filter-chip__remove:focus-visible { outline: 2px solid var(--pms-brand); outline-offset: -2px; }
+.pms-active-filter-overflow { flex: 0 0 auto; color: var(--pms-brand-strong); font-size: 12px; font-weight: 600; }
+.pms-active-filter-toggle.ant-btn { flex: 0 0 auto; height: 24px; padding-inline: 8px; }
+.pms-active-filter-measure {
+  position: absolute;
+  inset: 0 auto auto 0;
+  display: flex;
+  gap: 6px;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* UI-issued month calendar: one viewport, Monday first, three events per day. */
+.pms-project-list-calendar .pms-project-calendar-navigation { display: flex; align-items: center; }
+.pms-project-list-calendar .pms-project-calendar-navigation .ant-btn { box-shadow: none; }
+.pms-project-list-calendar .pms-project-calendar-title { margin-left: 6px; font-size: 14px; }
+.pms-project-calendar-month-mode {
+  min-width: 36px;
+  height: 24px;
+  padding-inline: 10px;
+  border: 1px solid #dfe3f5;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
+  line-height: 22px;
+  text-align: center;
+}
+.pms-project-list-calendar .pms-project-calendar-cell-muted { background: #fcfcfd; }
+.pms-project-list-calendar .pms-project-calendar-dayline { justify-content: flex-start; }
+.pms-project-calendar-today {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding-inline: 4px;
+  border-radius: 999px;
+  background: #1677ff;
+  color: #fff;
+}
+.pms-project-list-calendar-event {
+  border-left: 2px solid #6f7cff;
+  border-radius: 2px;
+  background: #eef2ff;
+  color: #334155;
+  font-weight: 500;
+}
+.pms-project-list-calendar-event:hover { background: #e1e7ff; opacity: 1; }
+.pms-project-list-calendar .pms-project-calendar-more { padding-left: 4px; font-weight: 500; line-height: 18px; }
+
+/* Shared immediate field configuration. Mandatory fields stay visible but draggable. */
+.pms-floating-config-popover .pms-sortable-column-list { gap: 0; }
+.pms-floating-config-popover .pms-sortable-column-row {
+  grid-template-columns: 18px minmax(0, 1fr) auto 28px;
+  gap: 6px;
+  min-height: 34px;
+  padding: 3px 2px;
+  border: 0;
+  border-bottom: 1px solid #f0f1f7;
+  border-radius: 0;
+  background: #fff;
+}
+.pms-floating-config-popover .pms-sortable-column-handle {
+  width: 18px;
+  height: 28px;
+  color: #707384;
+}
+.pms-sortable-column-title { font-size: 13px; color: #4b5563; }
+.pms-sortable-column-required {
+  grid-column: 3;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: #e9f4ff;
+  color: #1677ff;
+  font-size: 11px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.pms-sortable-column-visibility {
+  grid-column: 4;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #5d57ff;
+  font-size: 17px;
+  cursor: pointer;
+}
+.pms-sortable-column-visibility:disabled { color: #5d57ff; cursor: not-allowed; opacity: 1; }
+.pms-sortable-column-visibility:not(.is-visible) { color: #9ca3af; }
+.pms-sortable-column-visibility:focus-visible { outline: 2px solid #7c72ff; border-radius: 5px; }
 
 @media (max-width: 720px) {
   .pms-main-content {

@@ -2,11 +2,11 @@
 
 import { useEffect, useState, useMemo, type CSSProperties } from 'react'
 import {
-  Row, Col, Input, Button, Card, Checkbox, Empty, Segmented, Pagination, Select, Tooltip,
+  Row, Col, Button, Card, Empty, Segmented, Pagination, Space, Tooltip, message,
 } from 'antd'
 import {
   AppstoreOutlined, CalendarOutlined, FullscreenExitOutlined, FullscreenOutlined,
-  PlusOutlined, SearchOutlined, UnorderedListOutlined,
+  PlusOutlined, TeamOutlined, UnorderedListOutlined, UserOutlined,
 } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
@@ -53,15 +53,22 @@ import {
   TECHNICAL_PROJECT_TYPE_OPTIONS,
 } from '@/lib/projectListMatrix'
 import { getTemplateConfigScopeKey } from '@/lib/technicalPlanRules'
-import { applyFilterConditions, type AnyFilterCondition, type FilterFieldDefinition } from '@/lib/filterConditions'
+import {
+  applyFilterConditions,
+  isFilterConditionActive,
+  type AnyFilterCondition,
+  type FilterFieldDefinition,
+} from '@/lib/filterConditions'
 import {
   countProjectsByCategory,
   filterProjectsForList,
+  matchesAboutMine,
   matchesAggregateProjectStatus,
   type AggregateProjectStatus,
 } from '@/lib/projectListFilters'
 import ProjectListCalendar from '@/components/project-list/ProjectListCalendar'
 import type { ProjectListViewMode } from '@/stores/project'
+import { buildProjectListMockPlanTasks } from '@/data/projectListPlanMocks'
 
 const WORKSPACE_FILTER_TOOLBAR_STYLE: CSSProperties = {
   borderRadius: 12,
@@ -88,7 +95,6 @@ export default function ProjectListContainer() {
   const {
     projects,
     currentLoginUser,
-    projectMemberMap,
     projectStatusFilter, setProjectStatusFilter,
     projectTypeFilter, setProjectTypeFilter,
     projectSecondaryCategoryFilter, setProjectSecondaryCategoryFilter,
@@ -111,6 +117,7 @@ export default function ProjectListContainer() {
     updateLinkedQuickFilterCondition([], 'technicalProjectType', ['tdt'])
   ))
   const [projectListTableToolbarHost, setProjectListTableToolbarHost] = useState<HTMLDivElement | null>(null)
+  const [projectListFilterSummaryHost, setProjectListFilterSummaryHost] = useState<HTMLDivElement | null>(null)
   const [aboutMineOnly, setAboutMineOnly] = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const technicalSelectedTypes = getLinkedQuickFilterValues(technicalFilters, 'technicalProjectType')
@@ -144,13 +151,16 @@ export default function ProjectListContainer() {
     return adminGroup ? adminGroup.members.includes(currentLoginUser) : false
   }, [globalRoles, currentLoginUser])
 
-  const visibleProjects = useMemo(() => {
-    if (isAdminUser) return projects
-    return projects.filter(p => {
-      const members = projectMemberMap[p.id] || []
-      return members.includes(currentLoginUser)
-    })
-  }, [projects, isAdminUser, currentLoginUser, projectMemberMap])
+  const visibleProjects = projects
+  const canEnterProject = (projectId: string) => matchesAboutMine(
+    projectId,
+    currentLoginUser,
+    rolesByProject,
+  )
+  const showProjectAccessDenied = () => message.warning({
+    key: 'project-space-access-denied',
+    content: '当前用户未配置该项目空间角色，无法进入项目空间',
+  })
 
   const aboutMineProjects = useMemo(() => filterProjectsForList({
     projects: visibleProjects,
@@ -172,6 +182,10 @@ export default function ProjectListContainer() {
 
   const projectSummaryPlanTasksByProjectId = useMemo(() => (
     Object.fromEntries(categoryBaseProjects.map(project => {
+      const mockPlanTasks = buildProjectListMockPlanTasks(
+        project.id,
+        getTemplateTasksForProjectType(configTemplateTasksByType, project.type) || [],
+      )
       if (isMachineProjectType(project.type)) {
         const marketRows = buildMarketRowsFromMarkets(
           project.markets || [],
@@ -179,11 +193,12 @@ export default function ProjectListContainer() {
         )
         const mainMarket = getMainMarket(marketRows)
         const scopedVersions = marketVersionsByKey[getMarketPlanVersionKey(project.id, mainMarket)] || []
-        return [project.id, selectLatestPublishedScopedSnapshot(
+        const publishedTasks = selectLatestPublishedScopedSnapshot(
           scopedVersions,
           publishedSnapshots,
           versionId => getProjectMarketSnapshotKey(project.id, mainMarket, versionId),
-        )]
+        )
+        return [project.id, publishedTasks.length ? publishedTasks : mockPlanTasks]
       }
       if (project.type === PROJECT_TYPE_TOS_VERSION) {
         const typeRows = buildTosTypeRows(
@@ -193,16 +208,18 @@ export default function ProjectListContainer() {
         )
         const mainType = getMainTosType(typeRows)
         const scopedVersions = tosTypeVersionsByKey[getTosTypeVersionKey(project.id, mainType, 'level1')] || []
-        return [project.id, selectLatestPublishedScopedSnapshot(
+        const publishedTasks = selectLatestPublishedScopedSnapshot(
           scopedVersions,
           publishedSnapshots,
           versionId => getTosTypeSnapshotKey(project.id, mainType, 'level1', versionId),
-        )]
+        )
+        return [project.id, publishedTasks.length ? publishedTasks : mockPlanTasks]
       }
-      return [project.id, []]
+      return [project.id, mockPlanTasks]
     }))
   ), [
     categoryBaseProjects,
+    configTemplateTasksByType,
     marketConfigsByProjectId,
     marketVersionsByKey,
     publishedSnapshots,
@@ -355,22 +372,14 @@ export default function ProjectListContainer() {
   const technicalFilteredRows = useMemo(() => (
     applyFilterConditions(technicalStatusRows, technicalFilters)
   ), [technicalFilters, technicalStatusRows])
-  const technicalFilterOptions = useMemo(() => {
-    const optionsFor = (key: string) => [...new Set(technicalActiveRows
-      .map(row => String(row[key] ?? '').trim())
-      .filter(value => value && value !== '-'))]
-      .sort((left, right) => left.localeCompare(right, 'zh-CN', { numeric: true }))
-      .map(value => ({ label: value, value }))
-    return {
-      technicalTrack: optionsFor('technicalTrack'),
-      projectStage: optionsFor('projectStage'),
-    }
-  }, [technicalActiveRows])
-
   const enterSummaryRow = (row: { targetProjectId?: unknown; targetSubprojectId?: unknown; projectId: string }) => {
     const targetProjectId = String(row.targetProjectId || row.projectId)
     const project = visibleProjects.find(item => item.id === targetProjectId)
     if (!project) return
+    if (!canEnterProject(targetProjectId)) {
+      showProjectAccessDenied()
+      return
+    }
     if (row.targetSubprojectId) {
       window.sessionStorage.setItem('pms:technical-project-list-target-child', String(row.targetSubprojectId))
     }
@@ -388,6 +397,8 @@ export default function ProjectListContainer() {
         if (module === 'projectSpace') enterProjectSpace({ module: 'projectList' })
       }}
       PROJECT_STATUS_CONFIG={PROJECT_STATUS_CONFIG}
+      canOpen={canEnterProject(project.id)}
+      onOpenDenied={showProjectAccessDenied}
     />
   )
 
@@ -413,12 +424,44 @@ export default function ProjectListContainer() {
       />
     </Tooltip>
   ) : null
+  const aboutMineAction = (
+    <Tooltip title={aboutMineOnly ? '当前仅显示我的项目，点击查看全部' : '当前显示全部项目，点击仅看我的'}>
+      <Button
+        className="pms-project-list-icon-action pms-project-list-scope-action"
+        size="small"
+        type={aboutMineOnly ? 'primary' : 'default'}
+        aria-label={aboutMineOnly ? '切换为全部项目' : '切换为我的项目'}
+        aria-pressed={aboutMineOnly}
+        icon={aboutMineOnly ? <UserOutlined /> : <TeamOutlined />}
+        onClick={() => {
+          setAboutMineOnly(current => !current)
+          setProjectCardPage(1)
+        }}
+      />
+    </Tooltip>
+  )
+  const projectListToolbarTrailingActions = (
+    <Space size={4} className="pms-project-list-scope-actions">
+      {aboutMineAction}
+      {projectListFullscreenAction}
+    </Space>
+  )
+  const hasActiveFilterConditions = (
+    projectTypeFilter === PROJECT_CATEGORY_TECH
+      ? technicalFilters.some(condition => (
+          condition.field !== 'technicalProjectType' && isFilterConditionActive(condition)
+        ))
+      : summaryFilters.some(isFilterConditionActive)
+  )
 
   return (
     <div className="pms-project-list">
       {/* Unified toolbar */}
       <div className="pms-project-list-toolbar pms-wide-table-toolbar" style={{ ...WORKSPACE_FILTER_TOOLBAR_STYLE, flexDirection: 'column', alignItems: 'stretch' }}>
-        <div className="pms-project-list-filter-grid pms-toolbar" style={{ display: 'grid', gap: 4, padding: '5px 8px', borderRadius: 10 }}>
+        <div
+          className={`pms-project-list-filter-grid pms-toolbar${hasActiveFilterConditions ? ' has-active-filters' : ''}`}
+          style={{ display: 'grid', gap: 4, padding: '5px 8px', borderRadius: 10 }}
+        >
             <div className="pms-project-list-category-row" aria-label="项目分类筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
               <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目分类</span>
               {PROJECT_CATEGORIES.map(value => ({ label: value, value })).map(item => {
@@ -432,6 +475,7 @@ export default function ProjectListContainer() {
                       setProjectSecondaryCategoryFilter('all')
                       setProjectStatusFilter('all')
                       setSummaryFilters([])
+                      setTechnicalFilters(updateLinkedQuickFilterCondition([], 'technicalProjectType', ['tdt']))
                       setProjectCardPage(1)
                     }}
                     style={{
@@ -464,25 +508,32 @@ export default function ProjectListContainer() {
                       value: 'list',
                     },
                     {
-                      label: <span className="pms-project-list-view-option" aria-label="卡片视图"><AppstoreOutlined />卡片视图</span>,
-                      value: 'card',
-                    },
-                    {
                       label: <span className="pms-project-list-view-option" aria-label="日历视图"><CalendarOutlined />日历视图</span>,
                       value: 'calendar',
                     },
+                    {
+                      label: <span className="pms-project-list-view-option" aria-label="卡片视图"><AppstoreOutlined />卡片视图</span>,
+                      value: 'card',
+                    },
                   ]}
                 />
+                <div className="pms-project-list-table-actions" ref={setProjectListTableToolbarHost} />
                 {isAdminUser && (
-                  <Button aria-label="新增项目" type="primary" icon={<PlusOutlined />} onClick={() => setAddProjectOpen(true)}>
-                    新增项目
-                  </Button>
+                  <Tooltip title="新增项目">
+                    <Button
+                      className="pms-project-list-icon-action"
+                      aria-label="新增项目"
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      onClick={() => setAddProjectOpen(true)}
+                    />
+                  </Tooltip>
                 )}
               </div>
             </div>
 
             {workbenchListState.kind !== 'select-category' && (workbenchListState.showSecondaryCategory || projectTypeFilter === PROJECT_TYPE_TOS_VERSION) && (
-              <div aria-label="项目二级分类快捷筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+              <div className="pms-project-list-secondary-row" aria-label="项目二级分类快捷筛选">
                 <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>二级分类</span>
                 {secondaryCategoryOptions.map(item => {
                   const isActive = projectSecondaryCategoryFilter === item.value
@@ -534,8 +585,15 @@ export default function ProjectListContainer() {
               </div>
             )}
 
+            {hasActiveFilterConditions && (
+              <div
+                className="pms-project-list-filter-summary-row"
+                ref={setProjectListFilterSummaryHost}
+              />
+            )}
+
             {projectTypeFilter === PROJECT_CATEGORY_TECH && (
-              <div aria-label="技术项目类型快捷筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+              <div className="pms-project-list-technical-type-row" aria-label="技术项目类型快捷筛选">
                 <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目类型</span>
                 {TECHNICAL_PROJECT_TYPE_OPTIONS.map(item => (
                   <button
@@ -551,107 +609,6 @@ export default function ProjectListContainer() {
                       : 'pms-project-filter-chip'}
                   >{item.label}</button>
                 ))}
-              </div>
-            )}
-
-            {standardMatrixVariant && (
-              <div aria-label="项目字段快捷筛选" className="pms-project-list-field-filters">
-                <span className="pms-project-list-filter-label">快捷筛选</span>
-                {standardMatrixVariant === 'machine' && (
-                  <Input
-                    size="small"
-                    allowClear
-                    aria-label="快捷筛选-项目名称"
-                    placeholder="项目名称"
-                    prefix={<SearchOutlined />}
-                    value={typeof summaryFilters.find(item => item.field === 'projectName')?.value === 'string'
-                      ? String(summaryFilters.find(item => item.field === 'projectName')?.value)
-                      : ''}
-                    onChange={event => {
-                      const value = event.target.value
-                      setSummaryFilters(current => [
-                        ...current.filter(condition => condition.field !== 'projectName'),
-                        ...(value ? [{ id: 'quick-projectName', field: 'projectName', operator: 'contains' as const, value }] : []),
-                      ])
-                      setProjectCardPage(1)
-                    }}
-                  />
-                )}
-                {standardQuickFilterDefinitions.map(definition => (
-                  <Select
-                    size="small"
-                    aria-label={`快捷筛选-${definition.label}`}
-                    key={definition.key}
-                    mode="multiple"
-                    allowClear
-                    showSearch
-                    maxTagCount={1}
-                    optionFilterProp="label"
-                    placeholder={definition.label}
-                    options={definition.options}
-                    value={getLinkedQuickFilterValues(summaryFilters, definition.key)}
-                    onChange={values => {
-                      setSummaryFilters(current => updateLinkedQuickFilterCondition(current, definition.key, values))
-                      setProjectCardPage(1)
-                    }}
-                  />
-                ))}
-                <Checkbox
-                  checked={aboutMineOnly}
-                  onChange={event => { setAboutMineOnly(event.target.checked); setProjectCardPage(1) }}
-                >关于我的</Checkbox>
-                <div className="pms-project-list-table-actions" ref={setProjectListTableToolbarHost} />
-              </div>
-            )}
-
-            {projectTypeFilter === PROJECT_CATEGORY_TECH && (
-              <div aria-label="技术项目字段快捷筛选" className="pms-project-list-field-filters">
-                <span className="pms-project-list-filter-label">快捷筛选</span>
-                <Input
-                  size="small"
-                  allowClear
-                  aria-label="快捷筛选-项目名称"
-                  placeholder="项目名称"
-                  prefix={<SearchOutlined />}
-                  value={typeof technicalFilters.find(item => item.field === 'projectName')?.value === 'string'
-                    ? String(technicalFilters.find(item => item.field === 'projectName')?.value)
-                    : ''}
-                  onChange={event => {
-                    const value = event.target.value
-                    setTechnicalFilters(current => [
-                      ...current.filter(condition => condition.field !== 'projectName'),
-                      ...(value ? [{ id: 'quick-projectName', field: 'projectName', operator: 'contains' as const, value }] : []),
-                    ])
-                    setProjectCardPage(1)
-                  }}
-                />
-                {(['technicalTrack', 'projectStage'] as const).map(key => {
-                  const label = key === 'technicalTrack' ? '技术赛道' : '项目阶段'
-                  return (
-                    <Select
-                      size="small"
-                      aria-label={`快捷筛选-${label}`}
-                      key={key}
-                      mode="multiple"
-                      allowClear
-                      showSearch
-                      maxTagCount={1}
-                      optionFilterProp="label"
-                      placeholder={label}
-                      options={technicalFilterOptions[key]}
-                      value={getLinkedQuickFilterValues(technicalFilters, key)}
-                      onChange={values => {
-                        setTechnicalFilters(current => updateLinkedQuickFilterCondition(current, key, values))
-                        setProjectCardPage(1)
-                      }}
-                    />
-                  )
-                })}
-                <Checkbox
-                  checked={aboutMineOnly}
-                  onChange={event => { setAboutMineOnly(event.target.checked); setProjectCardPage(1) }}
-                >关于我的</Checkbox>
-                <div className="pms-project-list-table-actions" ref={setProjectListTableToolbarHost} />
               </div>
             )}
         </div>
@@ -720,9 +677,9 @@ export default function ProjectListContainer() {
                     onFiltersChange={setTechnicalFilters}
                     showQuickFilters={false}
                     showTable={false}
-                    showColumnSettings={false}
                     toolbarHost={projectListTableToolbarHost}
-                    toolbarTrailingAction={projectListFullscreenAction}
+                    filterSummaryHost={projectListFilterSummaryHost}
+                    toolbarTrailingAction={projectListToolbarTrailingActions}
                   />
                 ) : standardMatrixVariant ? (
                   <ProjectSummaryTable
@@ -740,9 +697,9 @@ export default function ProjectListContainer() {
                     onFiltersChange={setSummaryFilters}
                     showQuickFilters={false}
                     showTable={false}
-                    showColumnSettings={false}
                     toolbarHost={projectListTableToolbarHost}
-                    toolbarTrailingAction={projectListFullscreenAction}
+                    filterSummaryHost={projectListFilterSummaryHost}
+                    toolbarTrailingAction={projectListToolbarTrailingActions}
                     groupBy={standardMatrixVariant === 'machine'
                       ? { key: 'productSeries', fallbackLabel: '未配置产品系列' }
                       : undefined}
@@ -818,7 +775,8 @@ export default function ProjectListContainer() {
                     showQuickFilters={false}
                     showTable={false}
                     toolbarHost={projectListTableToolbarHost}
-                    toolbarTrailingAction={projectListFullscreenAction}
+                    filterSummaryHost={projectListFilterSummaryHost}
+                    toolbarTrailingAction={projectListToolbarTrailingActions}
                   />
                 ) : standardMatrixVariant ? (
                   <ProjectSummaryTable
@@ -837,7 +795,8 @@ export default function ProjectListContainer() {
                     showQuickFilters={false}
                     showTable={false}
                     toolbarHost={projectListTableToolbarHost}
-                    toolbarTrailingAction={projectListFullscreenAction}
+                    filterSummaryHost={projectListFilterSummaryHost}
+                    toolbarTrailingAction={projectListToolbarTrailingActions}
                     groupBy={standardMatrixVariant === 'machine'
                       ? { key: 'productSeries', fallbackLabel: '未配置产品系列' }
                       : undefined}
@@ -867,7 +826,8 @@ export default function ProjectListContainer() {
                     onFiltersChange={setTechnicalFilters}
                     showQuickFilters={false}
                     toolbarHost={projectListTableToolbarHost}
-                    toolbarTrailingAction={projectListFullscreenAction}
+                    filterSummaryHost={projectListFilterSummaryHost}
+                    toolbarTrailingAction={projectListToolbarTrailingActions}
                     tablePageSize={projectListPageSize}
                   />
                 </div>
@@ -887,7 +847,8 @@ export default function ProjectListContainer() {
                   onFiltersChange={setSummaryFilters}
                   showQuickFilters={false}
                   toolbarHost={projectListTableToolbarHost}
-                  toolbarTrailingAction={projectListFullscreenAction}
+                  filterSummaryHost={projectListFilterSummaryHost}
+                  toolbarTrailingAction={projectListToolbarTrailingActions}
                   tablePageSize={projectListPageSize}
                   groupBy={standardMatrixVariant === 'machine'
                     ? { key: 'productSeries', fallbackLabel: '未配置产品系列' }

@@ -1,8 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactElement } from 'react'
-import { Button, Checkbox, Empty, Input, Tooltip } from 'antd'
-import { HolderOutlined, SearchOutlined } from '@ant-design/icons'
+import { Button, Empty, Input, Tooltip } from 'antd'
+import {
+  EyeInvisibleOutlined,
+  EyeOutlined,
+  HolderOutlined,
+  SearchOutlined,
+} from '@ant-design/icons'
 import {
   closestCenter,
   DndContext,
@@ -57,7 +62,6 @@ function SortableColumnRow<Key extends string>({
   checkboxDisabled,
   onCheckedChange,
 }: SortableColumnRowProps<Key>) {
-  const fixed = definition.fixed === 'left'
   const {
     attributes,
     listeners,
@@ -65,21 +69,15 @@ function SortableColumnRow<Key extends string>({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: definition.key, disabled: fixed })
+  } = useSortable({ id: definition.key })
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
   }
   const accessibilityLabel = getSortableColumnAccessibilityLabel(definition)
-  const unavailableReason = definition.disabledReason || '不可取消'
-  const checkbox = (
-    <Checkbox
-      checked={checked}
-      disabled={definition.hideable === false || checkboxDisabled}
-      onChange={event => onCheckedChange(event.target.checked)}
-      aria-label={`${accessibilityLabel}列${checked ? '已显示' : '已隐藏'}`}
-    />
-  )
+  const required = definition.hideable === false
+  const unavailableReason = definition.disabledReason || '必显字段不可隐藏'
+  const visibilityDisabled = required || checkboxDisabled
 
   return (
     <div
@@ -89,26 +87,28 @@ function SortableColumnRow<Key extends string>({
       className={`pms-sortable-column-row${isDragging ? ' is-dragging' : ''}`}
       style={style}
     >
-      {fixed ? (
-        <span aria-hidden="true" />
-      ) : (
+      <button
+        type="button"
+        className="pms-sortable-column-handle"
+        aria-label={`拖动${accessibilityLabel}调整顺序`}
+        {...attributes}
+        {...listeners}
+      >
+        <HolderOutlined />
+      </button>
+      <span className="pms-sortable-column-title">{definition.title}</span>
+      {required && <span className="pms-sortable-column-required">必显</span>}
+      <Tooltip title={visibilityDisabled ? unavailableReason : checked ? '隐藏字段' : '显示字段'}>
         <button
           type="button"
-          className="pms-sortable-column-handle"
-          aria-label={`拖动${accessibilityLabel}调整顺序`}
-          {...attributes}
-          {...listeners}
+          className={`pms-sortable-column-visibility${checked ? ' is-visible' : ''}`}
+          disabled={visibilityDisabled}
+          aria-label={`${accessibilityLabel}列${checked ? '已显示' : '已隐藏'}`}
+          onClick={() => onCheckedChange(!checked)}
         >
-          <HolderOutlined />
+          {checked ? <EyeOutlined /> : <EyeInvisibleOutlined />}
         </button>
-      )}
-      {definition.hideable === false ? (
-        <Tooltip title={unavailableReason}>{checkbox}</Tooltip>
-      ) : checkbox}
-      <span className="pms-sortable-column-title">{definition.title}</span>
-      <span className="pms-sortable-column-fixed">
-        {fixed ? '固定左侧' : definition.hideable === false ? unavailableReason : null}
-      </span>
+      </Tooltip>
     </div>
   )
 }
@@ -237,14 +237,14 @@ export function SortableColumnSettings<Key extends string>({
     <FloatingConfigPopover
       open={open}
       trigger={trigger}
-      width={400}
+      width={340}
       ariaLabel="字段配置"
       onCancel={onCancel}
       getPopupContainer={getPopupContainer}
       title={(
         <div className="pms-floating-config-title-row">
-          <span>字段配置</span>
-          <Button type="link" danger size="small" onClick={handleReset}>重置</Button>
+          <span>选择要显示的字段</span>
+          <Button type="link" danger size="small" onClick={handleReset}>重置默认</Button>
         </div>
       )}
       footer={null}
