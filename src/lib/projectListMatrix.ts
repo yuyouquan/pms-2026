@@ -150,6 +150,120 @@ export function groupProjectListRows<T extends Record<string, unknown>>(
   return groups
 }
 
+export interface MachineProjectHierarchyMetadata {
+  __brandKey: string
+  __brandLabel: string
+  __brandRowSpan: number
+  __productLineKey: string
+  __productLineLabel: string
+  __productLineRowSpan: number
+  __productSeriesKey: string
+  __productSeriesLabel: string
+  __productSeriesRowSpan: number
+  __productSeriesProjectCount: number
+  __productSeriesCollapsed: boolean
+}
+
+const normalizeHierarchyLabel = (value: unknown, fallback: string) => {
+  const label = String(value ?? '').trim()
+  return !label || label === '-' || label === '—' ? fallback : label
+}
+
+interface MachineHierarchyKeys {
+  brandKey: string
+  brandLabel: string
+  productLineKey: string
+  productLineLabel: string
+  productSeriesKey: string
+  productSeriesLabel: string
+}
+
+const getMachineHierarchyKeys = (row: Record<string, unknown>): MachineHierarchyKeys => {
+  const brandLabel = normalizeHierarchyLabel(row.brand, '未配置品牌')
+  const productLineLabel = normalizeHierarchyLabel(row.productLine, '未配置产品线')
+  const productSeriesLabel = normalizeHierarchyLabel(row.productSeries, '未配置产品系列')
+  const productLineKey = `${brandLabel}::${productLineLabel}`
+  return {
+    brandKey: brandLabel,
+    brandLabel,
+    productLineKey,
+    productLineLabel,
+    productSeriesKey: `${productLineKey}::${productSeriesLabel}`,
+    productSeriesLabel,
+  }
+}
+
+const calculateConsecutiveRowSpans = (keys: readonly string[]) => {
+  const spans = Array.from({ length: keys.length }, () => 0)
+  for (let start = 0; start < keys.length;) {
+    let end = start + 1
+    while (end < keys.length && keys[end] === keys[start]) end += 1
+    spans[start] = end - start
+    start = end
+  }
+  return spans
+}
+
+export function buildMachineProjectHierarchyPage<T extends Record<string, unknown>>(
+  allFilteredRows: readonly T[],
+  pageRows: readonly T[],
+  collapsedSeries: ReadonlySet<string>,
+): Array<T & MachineProjectHierarchyMetadata> {
+  const hierarchyOrder = new Map<string, number>()
+  const projectOrder = new Map<unknown, number>()
+  const productSeriesCounts = new Map<string, number>()
+  allFilteredRows.forEach((row, index) => {
+    const keys = getMachineHierarchyKeys(row)
+    for (const key of [keys.brandKey, keys.productLineKey, keys.productSeriesKey]) {
+      if (!hierarchyOrder.has(key)) hierarchyOrder.set(key, hierarchyOrder.size)
+    }
+    projectOrder.set(row.key ?? row.projectId ?? row, index)
+    productSeriesCounts.set(
+      keys.productSeriesKey,
+      (productSeriesCounts.get(keys.productSeriesKey) ?? 0) + 1,
+    )
+  })
+
+  const sortedRows = pageRows
+    .map((row, pageIndex) => ({ row, pageIndex, keys: getMachineHierarchyKeys(row) }))
+    .sort((left, right) => (
+      (hierarchyOrder.get(left.keys.brandKey) ?? Number.MAX_SAFE_INTEGER)
+        - (hierarchyOrder.get(right.keys.brandKey) ?? Number.MAX_SAFE_INTEGER)
+      || (hierarchyOrder.get(left.keys.productLineKey) ?? Number.MAX_SAFE_INTEGER)
+        - (hierarchyOrder.get(right.keys.productLineKey) ?? Number.MAX_SAFE_INTEGER)
+      || (hierarchyOrder.get(left.keys.productSeriesKey) ?? Number.MAX_SAFE_INTEGER)
+        - (hierarchyOrder.get(right.keys.productSeriesKey) ?? Number.MAX_SAFE_INTEGER)
+      || (projectOrder.get(left.row.key ?? left.row.projectId ?? left.row) ?? left.pageIndex)
+        - (projectOrder.get(right.row.key ?? right.row.projectId ?? right.row) ?? right.pageIndex)
+    ))
+
+  const visibleSeries = new Set<string>()
+  const visibleRows = sortedRows.filter(({ keys }) => {
+    if (!collapsedSeries.has(keys.productSeriesKey)) return true
+    if (visibleSeries.has(keys.productSeriesKey)) return false
+    visibleSeries.add(keys.productSeriesKey)
+    return true
+  })
+  const brandSpans = calculateConsecutiveRowSpans(visibleRows.map(item => item.keys.brandKey))
+  const productLineSpans = calculateConsecutiveRowSpans(visibleRows.map(item => item.keys.productLineKey))
+  const productSeriesSpans = calculateConsecutiveRowSpans(visibleRows.map(item => item.keys.productSeriesKey))
+
+  return visibleRows.map(({ row, keys }, index) => ({
+    ...row,
+    __brandKey: keys.brandKey,
+    __brandLabel: keys.brandLabel,
+    __brandRowSpan: brandSpans[index],
+    __productLineKey: keys.productLineKey,
+    __productLineLabel: keys.productLineLabel,
+    __productLineRowSpan: productLineSpans[index],
+    __productSeriesKey: keys.productSeriesKey,
+    __productSeriesLabel: keys.productSeriesLabel,
+    __productSeriesRowSpan: productSeriesSpans[index],
+    __productSeriesProjectCount: productSeriesCounts.get(keys.productSeriesKey) ?? 0,
+    __productSeriesCollapsed: collapsedSeries.has(keys.productSeriesKey),
+  }))
+}
+
 const GROUP_COLORS = ['#e8f3ff', '#fff0e6', '#fff8db', '#edf6dc', '#f2e8ff'] as const
 
 const required = (key: string, label: string, width = 132): ProjectListColumnDefinition => ({

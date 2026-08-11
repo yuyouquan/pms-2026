@@ -37,6 +37,34 @@ assert.deepEqual(seriesGroups.map(group => [group.key, group.rows.map(row => row
   ['P', ['2']],
   ['未配置产品系列', ['4']],
 ])
+const hierarchyRows = [
+  { key: '1', projectId: '1', brand: 'TECNO', productLine: 'CAMON', productSeries: 'CAMON 60' },
+  { key: '3', projectId: '3', brand: 'TECNO', productLine: 'CAMON', productSeries: 'CAMON 70' },
+  { key: '2', projectId: '2', brand: 'TECNO', productLine: 'CAMON', productSeries: 'CAMON 60' },
+  { key: '4', projectId: '4', brand: 'Infinix', productLine: '-', productSeries: '' },
+  { key: '5', projectId: '5', brand: 'Infinix', productLine: 'CAMON', productSeries: 'CAMON 60' },
+]
+const hierarchy = matrix.buildMachineProjectHierarchyPage(hierarchyRows, hierarchyRows, new Set())
+assert.deepEqual(hierarchy.map(row => [
+  row.projectId, row.__brandRowSpan, row.__productLineRowSpan,
+  row.__productSeriesRowSpan, row.__productSeriesProjectCount,
+]), [
+  ['1', 3, 3, 2, 2],
+  ['2', 0, 0, 0, 2],
+  ['3', 0, 0, 1, 1],
+  ['4', 2, 1, 1, 1],
+  ['5', 0, 1, 1, 1],
+])
+assert.equal(hierarchy[3].__productLineLabel, '未配置产品线')
+assert.equal(hierarchy[3].__productSeriesLabel, '未配置产品系列')
+assert.notEqual(hierarchy[0].__productSeriesKey, hierarchy[4].__productSeriesKey, 'same series under a different brand must not merge')
+const collapsed = matrix.buildMachineProjectHierarchyPage(
+  hierarchyRows,
+  hierarchyRows,
+  new Set(['TECNO::CAMON::CAMON 60']),
+)
+assert.deepEqual(collapsed.map(row => row.projectId), ['1', '3', '4', '5'])
+assert.equal(collapsed[0].__productSeriesProjectCount, 2)
 const expected = {
   tos: ['tOS版本', '版本类型', '项目状态', 'SPM'],
   'technical-tdt': ['TDT项目名称', '技术赛道', 'TMG及技术领域', '子领域', '技术项目负责人', '技术项目经理', '项目阶段'],
