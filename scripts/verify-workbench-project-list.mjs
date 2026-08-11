@@ -124,6 +124,9 @@ assert.match(matrixSource, /required\('productSeries', '产品系列', 148\)/, '
 assert.match(matrixSource, /required\('projectName', '项目名', 200\)/, 'machine project-name width is 200px')
 
 const styles = fs.readFileSync(path.join(root, 'src/styles/globals.css'), 'utf8')
+assert.match(styles, /\.pms-machine-hierarchy-cell/)
+assert.match(styles, /\.pms-machine-series-toggle/)
+assert.match(styles, /\.pms-machine-hierarchy-label\s*\{[^}]*white-space:\s*nowrap/s)
 assert.match(styles, /\.pms-wide-table-toolbar\s*\{[^}]*position:\s*sticky;[^}]*top:/s)
 assert.match(styles, /\.pms-project-list-filter-grid\s*\{[^}]*height:\s*142px/s, 'category filter surface keeps one stable height across project types')
 assert.match(styles, /\.pms-project-list-view-switch\.ant-segmented\s*\{[^}]*height:\s*36px[^}]*border-radius:\s*999px[^}]*background:\s*#f1f3fb/s, 'view switch uses the pill rail')
