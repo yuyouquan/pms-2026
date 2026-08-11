@@ -77,6 +77,13 @@ assert.doesNotMatch(source, /projectListView === 'card'[^\n]*workbenchListState\
 assert.match(source, /projectTypeFilter === PROJECT_TYPE_TOS_VERSION \|\| projectTypeFilter === PROJECT_CATEGORY_TECH[\s\S]{0,260}进行中[\s\S]{0,120}已完成/)
 assert.match(source, /showQuickFilters=\{false\}/)
 assert.match(summarySource, /getProjectListFixedColumnKeys/)
+assert.match(summarySource, /buildMachineProjectHierarchyPage/)
+assert.match(summarySource, /__brandRowSpan/)
+assert.match(summarySource, /__productLineRowSpan/)
+assert.match(summarySource, /__productSeriesRowSpan/)
+assert.match(summarySource, /__productSeriesProjectCount/)
+assert.match(summarySource, /collapsedMachineSeries/)
+assert.match(source, /machineHierarchy=\{standardMatrixVariant === 'machine'\}/)
 assert.match(workTrackerSource, /className="pms-work-tracker-toolbar__content"/, 'work tracker toolbar exposes a stable content wrapper')
 assert.match(workTrackerSource, /className="pms-work-tracker-toolbar__lists"/, 'work tracker lists expose a stable responsive wrapper')
 assert.match(workTrackerSource, /className="pms-work-tracker-toolbar__controls"/, 'work tracker controls expose a stable responsive wrapper')
@@ -113,8 +120,8 @@ assert.match(
   /projectListView === 'calendar'[\s\S]{0,5200}showTable=\{false\}[\s\S]{0,700}filterSummaryHost=\{projectListFilterSummaryHost\}/,
   'calendar branch mounts a hidden summary controller that keeps filtering and field configuration available',
 )
-assert.match(matrixSource, /required\('productSeries', '产品系列', 160\)/, 'machine product-series fixed width is 160px')
-assert.match(matrixSource, /required\('projectName', '项目名称', 220\)/, 'machine project-name fixed width is 220px')
+assert.match(matrixSource, /required\('productSeries', '产品系列', 148\)/, 'machine product-series width is 148px')
+assert.match(matrixSource, /required\('projectName', '项目名', 200\)/, 'machine project-name width is 200px')
 
 const styles = fs.readFileSync(path.join(root, 'src/styles/globals.css'), 'utf8')
 assert.match(styles, /\.pms-wide-table-toolbar\s*\{[^}]*position:\s*sticky;[^}]*top:/s)

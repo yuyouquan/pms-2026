@@ -7,6 +7,7 @@ import {
   DatePicker,
   Empty,
   Input,
+  Pagination,
   Select,
   Space,
   Table,
@@ -62,6 +63,7 @@ import {
   type ProjectSummaryTemplateTask,
 } from '@/lib/projectSummary'
 import {
+  buildMachineProjectHierarchyPage,
   buildStableGroupSegments,
   getProjectListFixedColumnKeys,
   groupProjectListRows,
@@ -94,6 +96,7 @@ export interface ProjectSummaryTableProps {
   onFiltersChange?: (filters: AnyFilterCondition[]) => void
   showQuickFilters?: boolean
   groupBy?: { key: string; fallbackLabel: string }
+  machineHierarchy?: boolean
   toolbarHost?: HTMLElement | null
   filterSummaryHost?: HTMLElement | null
   showTable?: boolean
@@ -174,6 +177,7 @@ export default function ProjectSummaryTable({
   onFiltersChange,
   showQuickFilters = true,
   groupBy,
+  machineHierarchy = false,
   toolbarHost,
   filterSummaryHost,
   showTable = true,
@@ -196,6 +200,7 @@ export default function ProjectSummaryTable({
   const [editingConditionId, setEditingConditionId] = useState<string | null>(null)
   const [columnOpen, setColumnOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
+  const [collapsedMachineSeries, setCollapsedMachineSeries] = useState<Set<string>>(() => new Set())
   const [selectedRowKey, setSelectedRowKey] = useState('')
   const [tablePage, setTablePage] = useState(1)
   const compactControlSize = matrixVariant ? 'small' : 'middle'
@@ -407,7 +412,23 @@ export default function ProjectSummaryTable({
     [baseRows, filterFieldDefinitions, filters],
   )
 
+  const machineOrderedRows = useMemo<ProjectSummaryRow[]>(() => (
+    machineHierarchy
+      ? buildMachineProjectHierarchyPage(filteredRows, filteredRows, new Set())
+      : filteredRows
+  ), [filteredRows, machineHierarchy])
+
   const displayedRows = useMemo<ProjectSummaryRow[]>(() => {
+    if (machineHierarchy) {
+      const pageRows = tablePageSize
+        ? machineOrderedRows.slice((tablePage - 1) * tablePageSize, tablePage * tablePageSize)
+        : machineOrderedRows
+      return buildMachineProjectHierarchyPage(
+        filteredRows,
+        pageRows,
+        collapsedMachineSeries,
+      )
+    }
     if (!groupBy) return filteredRows
     return groupProjectListRows(filteredRows, groupBy.key, groupBy.fallbackLabel)
       .flatMap(group => {
@@ -434,7 +455,17 @@ export default function ProjectSummaryTable({
           __groupSummary: false,
         }))
       })
-  }, [collapsedGroups, fieldDefinitions, filteredRows, groupBy])
+  }, [
+    collapsedGroups,
+    collapsedMachineSeries,
+    fieldDefinitions,
+    filteredRows,
+    groupBy,
+    machineHierarchy,
+    machineOrderedRows,
+    tablePage,
+    tablePageSize,
+  ])
 
   useEffect(() => {
     setTablePage(1)
@@ -442,9 +473,10 @@ export default function ProjectSummaryTable({
 
   useEffect(() => {
     if (!tablePageSize) return
-    const maxPage = Math.max(1, Math.ceil(displayedRows.length / tablePageSize))
+    const totalRows = machineHierarchy ? filteredRows.length : displayedRows.length
+    const maxPage = Math.max(1, Math.ceil(totalRows / tablePageSize))
     if (tablePage > maxPage) setTablePage(maxPage)
-  }, [displayedRows.length, tablePage, tablePageSize])
+  }, [displayedRows.length, filteredRows.length, machineHierarchy, tablePage, tablePageSize])
 
   useEffect(() => {
     if (selectedRowKey && !displayedRows.some(row => row.key === selectedRowKey)) {
@@ -508,6 +540,64 @@ export default function ProjectSummaryTable({
           }
         },
       }
+      if (machineHierarchy && ['brand', 'productLine', 'productSeries', 'projectCount'].includes(key)) {
+        const spanField = key === 'brand'
+          ? '__brandRowSpan'
+          : key === 'productLine'
+            ? '__productLineRowSpan'
+            : '__productSeriesRowSpan'
+        const labelField = key === 'brand'
+          ? '__brandLabel'
+          : key === 'productLine'
+            ? '__productLineLabel'
+            : '__productSeriesLabel'
+        return [key, {
+          ...sizedColumn,
+          ellipsis: false,
+          render: (_value: unknown, record: ProjectSummaryRow) => {
+            if (Number(record[spanField]) === 0) return null
+            if (key === 'projectCount') return record.__productSeriesProjectCount ?? 0
+            const label = String(record[labelField] ?? '-')
+            if (key !== 'productSeries') {
+              return <Tooltip title={label}><span className="pms-machine-hierarchy-label">{label}</span></Tooltip>
+            }
+            const seriesKey = String(record.__productSeriesKey ?? label)
+            const isCollapsed = Boolean(record.__productSeriesCollapsed)
+            const projectCount = Number(record.__productSeriesProjectCount) || 0
+            return (
+              <button
+                type="button"
+                className={`pms-machine-series-toggle ${isCollapsed ? '' : 'is-expanded'}`.trim()}
+                aria-expanded={!isCollapsed}
+                aria-label={`${isCollapsed ? '展开' : '收起'}产品系列 ${label}`}
+                onClick={event => {
+                  event.stopPropagation()
+                  setCollapsedMachineSeries(current => {
+                    const next = new Set(current)
+                    if (next.has(seriesKey)) next.delete(seriesKey)
+                    else next.add(seriesKey)
+                    return next
+                  })
+                }}
+              >
+                {isCollapsed ? <RightOutlined /> : <DownOutlined />}
+                <Tooltip title={label}><strong>{label}</strong></Tooltip>
+                <small>{projectCount}个项目</small>
+              </button>
+            )
+          },
+          onCell: (record: ProjectSummaryRow) => {
+            const cell = sizedColumn.onCell(record)
+            return {
+              ...cell,
+              className: [cell.className, 'pms-machine-hierarchy-cell', `is-${key}`]
+                .filter(Boolean)
+                .join(' '),
+              rowSpan: Number(record[spanField]) || 0,
+            }
+          },
+        }] as const
+      }
       if (!groupBy || key !== groupBy.key) return [key, sizedColumn] as const
       return [key, {
         ...sizedColumn,
@@ -561,7 +651,7 @@ export default function ProjectSummaryTable({
         },
       }] as const
     })),
-    [collapsedGroups, fieldDefinitions, fixedColumnKeys, groupBy],
+    [collapsedGroups, fieldDefinitions, fixedColumnKeys, groupBy, machineHierarchy],
   )
   const columns = useMemo<ColumnsType<ProjectSummaryRow>>(() => {
     const result: ColumnsType<ProjectSummaryRow> = []
@@ -887,7 +977,7 @@ export default function ProjectSummaryTable({
             'pms-project-summary-row',
             selectedRowKey === row.key ? 'is-selected' : '',
           ].filter(Boolean).join(' ')}
-          pagination={tablePageSize ? {
+          pagination={tablePageSize && !machineHierarchy ? {
             current: tablePage,
             pageSize: tablePageSize,
             total: displayedRows.length,
@@ -916,6 +1006,19 @@ export default function ProjectSummaryTable({
             },
           })}
         />
+        {tablePageSize && machineHierarchy && (
+          <div className="pms-project-list-pagination">
+            <Pagination
+              current={tablePage}
+              pageSize={tablePageSize}
+              total={filteredRows.length}
+              size="small"
+              showSizeChanger={false}
+              showTotal={total => `共 ${total} 个项目`}
+              onChange={page => setTablePage(page)}
+            />
+          </div>
+        )}
       </div>}
     </div>
   )
