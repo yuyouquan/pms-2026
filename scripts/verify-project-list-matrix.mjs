@@ -22,7 +22,7 @@ assert.deepEqual(matrix.TECHNICAL_PROJECT_TYPE_OPTIONS, [
 assert.equal(matrix.resolveTechnicalProjectType([]), 'tdt')
 assert.equal(matrix.resolveTechnicalProjectType(['tdt']), 'tdt')
 assert.equal(matrix.resolveTechnicalProjectType(['subproject']), 'subproject')
-assert.deepEqual(matrix.getProjectListFixedColumnKeys('machine'), ['productSeries', 'projectName'])
+assert.deepEqual(matrix.getProjectListFixedColumnKeys('machine'), [])
 assert.deepEqual(matrix.getProjectListFixedColumnKeys('tos'), ['tosVersion'])
 assert.deepEqual(matrix.getProjectListFixedColumnKeys('technical-tdt'), ['projectName'])
 assert.deepEqual(matrix.getProjectListFixedColumnKeys('technical-subproject'), ['projectName'])
@@ -38,7 +38,6 @@ assert.deepEqual(seriesGroups.map(group => [group.key, group.rows.map(row => row
   ['未配置产品系列', ['4']],
 ])
 const expected = {
-  machine: ['产品系列', '项目名称', '品牌', '芯片编码', '版本类型', '首销tOS版本', '项目状态', 'SPM', 'SPM部门'],
   tos: ['tOS版本', '版本类型', '项目状态', 'SPM'],
   'technical-tdt': ['TDT项目名称', '技术赛道', 'TMG及技术领域', '子领域', '技术项目负责人', '技术项目经理', '项目阶段'],
   'technical-subproject': ['子任务名称', '所属TDT项目名称', '核心价值', '开发模式', '首导tOS', '首导整机产品', '项目阶段', '第1版转测', '第2版转测', '第X版转测', 'TDR3'],
@@ -51,6 +50,23 @@ for (const [variant, labels] of Object.entries(expected)) {
     { required: true, hideable: false, reorderable: true },
   ))
 }
+const machineRequiredLabels = [
+  '品牌', '产品线', '产品系列', '项目数', '市场名', '项目名',
+  '版本类型', '首销tOS版本', '产品类型', '研发模式', '安卓版本', '芯片编码',
+]
+const machineTailLabels = ['SPM', 'SPM部门（二级部门）']
+const machineColumns = matrix.getProjectListMatrix('machine', {
+  templateTasks: [
+    { id: 'concept', taskName: '概念', order: 1 },
+    { id: 'concept-start', parentId: 'concept', taskName: '概念启动', order: 1 },
+    { id: 'str1', parentId: 'concept', taskName: 'STR1', order: 2 },
+  ],
+})
+assert.deepEqual(
+  machineColumns.map(column => column.label),
+  [...machineRequiredLabels, '概念启动', 'STR1', ...machineTailLabels],
+)
+assert.ok(machineColumns.every(column => column.required && column.hideable === false))
 assert.ok(matrix.getProjectListMatrix('machine', { milestones: ['最新一级模板节点'] }).some(column => column.label === '最新一级模板节点'), 'machine dynamic milestone column')
 assert.ok(matrix.getProjectListMatrix('tos', { milestones: ['最新已发布一级模板节点'] }).some(column => column.label === '最新已发布一级模板节点'), 'tOS latest published L1 milestone column')
 assert.ok(matrix.getProjectListMatrix('technical-tdt', { templateStages: ['阶段'], directLevel2Nodes: ['直属二级'] }).some(column => column.label === '直属二级'), 'TDT dynamic direct level-two column')

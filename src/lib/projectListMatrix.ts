@@ -113,7 +113,7 @@ export function resolveTechnicalProjectType(values: readonly string[]): Technica
 }
 
 const PROJECT_LIST_FIXED_COLUMN_KEYS: Record<ProjectListVariant, readonly string[]> = {
-  machine: ['productSeries', 'projectName'],
+  machine: [],
   tos: ['tosVersion'],
   'technical-tdt': ['projectName'],
   'technical-subproject': ['projectName'],
@@ -164,10 +164,13 @@ const childMilestone = (label: string): ProjectListColumnDefinition => ({
 
 const STATIC_COLUMNS: Record<Exclude<ProjectListVariant, 'capability'>, ProjectListColumnDefinition[]> = {
   machine: [
-    required('productSeries', '产品系列', 160), required('projectName', '项目名称', 220),
-    required('brand', '品牌'), required('chipCode', '芯片编码'),
-    required('versionType', '版本类型'), required('firstSaleTosVersion', '首销tOS版本'),
-    required('status', '项目状态'), required('spm', 'SPM'), required('spmDepartment', 'SPM部门', 160),
+    required('brand', '品牌', 112), required('productLine', '产品线', 120),
+    required('productSeries', '产品系列', 148), required('projectCount', '项目数', 88),
+    required('marketName', '市场名', 150), required('projectName', '项目名', 200),
+    required('versionType', '版本类型', 112), required('firstSaleTosVersion', '首销tOS版本', 128),
+    required('productType', '产品类型', 112), required('developMode', '研发模式', 112),
+    required('androidVersion', '安卓版本', 112), required('chipCode', '芯片编码', 120),
+    required('spm', 'SPM', 112), required('spmDepartment', 'SPM部门（二级部门）', 180),
   ],
   tos: [
     required('tosVersion', 'tOS版本'), required('versionType', '版本类型'),
@@ -269,11 +272,11 @@ export function getProjectListMatrix(
       reorderable: true,
       source: 'projectInfo' as const,
     }))
-  const beforeTail = variant === 'machine' ? base.slice(0, 7)
+  const beforeTail = variant === 'machine' ? base.slice(0, 12)
     : variant === 'tos' ? base.slice(0, 3)
       : variant === 'technical-tdt' ? base
         : base.slice(0, 7)
-  const tail = variant === 'machine' ? base.slice(7)
+  const tail = variant === 'machine' ? base.slice(12)
     : variant === 'tos' ? base.slice(3)
       : variant === 'technical-subproject' ? base.slice(7)
         : []
