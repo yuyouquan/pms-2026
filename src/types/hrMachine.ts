@@ -17,6 +17,14 @@ export type VersionLockState = 'unlocked' | 'locked'
 /** 项目状态 */
 export type MachineProjectStatus = 'active' | 'cancelled'
 
+/** IPM正式项目 */
+export interface IpmProject {
+  /** 正式项目编码 */
+  code: string
+  /** IPM项目名称 */
+  name: string
+}
+
 /** 里程碑节点 */
 export interface MilestoneNodes {
   /** 概念启动 */
@@ -72,6 +80,12 @@ export interface HrMachineProject {
   levelCoefficient: number
   /** 人力模型版本（来源配置中心） */
   hrModelVersion: string
+  /** 项目年份（来源配置中心） */
+  projectYear: string
+  /** 正式项目编码（来源IPM系统） */
+  ipmProjectCode: string | null
+  /** 正式项目名称（来源IPM系统） */
+  ipmProjectName: string | null
   /** 项目状态 */
   status: MachineProjectStatus
   /** 年度预算 */
@@ -101,6 +115,8 @@ export interface MonthlyInvestment {
   budgetType: BudgetType
   /** 版本号 */
   versionNumber: string
+  /** 版本锁定状态 */
+  versionLockState: VersionLockState
   /** 预估合计 */
   estimatedTotal: number
   /** 月度投入：key = 'YYYY-MM' → value = 人月 */
@@ -114,6 +130,7 @@ export interface ProjectListFilters {
   brand: MachineBrand | 'all'
   productLine: MachineProductLine | 'all'
   projectName: string
+  projectYear: string | 'all'
   showCancelled: boolean
 }
 
@@ -125,6 +142,7 @@ export interface NewProjectForm {
   projectLevel: string
   levelCoefficient: number
   hrModelVersion: string
+  projectYear: string
 }
 
 /** 新建版本表单 */

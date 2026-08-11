@@ -8,6 +8,7 @@ import {
   MACHINE_PRODUCT_LINES,
   PROJECT_LEVELS,
   HR_MODEL_VERSIONS,
+  PROJECT_YEARS,
 } from '@/constants/hrMachine'
 import type { MachineBrand, MachineProductLine } from '@/types/hrMachine'
 
@@ -30,6 +31,7 @@ export default function NewProjectModal({ open, onCancel }: NewProjectModalProps
         projectLevel: 'S',
         levelCoefficient: 1,
         hrModelVersion: HR_MODEL_VERSIONS[0],
+        projectYear: PROJECT_YEARS[0],
       })
     }
   }, [open, form])
@@ -123,6 +125,17 @@ export default function NewProjectModal({ open, onCancel }: NewProjectModalProps
           <Select
             options={HR_MODEL_VERSIONS.map(v => ({ value: v, label: v }))}
             placeholder="请选择人力模型版本"
+          />
+        </Form.Item>
+
+        <Form.Item
+          name="projectYear"
+          label="项目年份"
+          rules={[{ required: true, message: '请选择项目年份' }]}
+        >
+          <Select
+            options={PROJECT_YEARS.map(y => ({ value: y, label: y }))}
+            placeholder="请选择项目年份"
           />
         </Form.Item>
       </Form>

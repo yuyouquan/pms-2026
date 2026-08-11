@@ -4,6 +4,7 @@ import type {
   MachineBrand,
   MachineProductLine,
   BudgetType,
+  IpmProject,
 } from '@/types/hrMachine'
 
 /** 品牌选项 */
@@ -46,6 +47,25 @@ export const PROJECT_LEVELS = ['S', 'A', 'B', 'C', 'D']
 
 /** 人力模型版本选项（来源配置中心，此处为占位） */
 export const HR_MODEL_VERSIONS = ['V2026.1', 'V2026.2', 'V2025.4']
+
+/** 项目年份选项（来源配置中心） */
+export const PROJECT_YEARS = [
+  '25年立项26年结项',
+  '26年立项26年结项',
+  '26年立项27年结项',
+]
+
+/** IPM正式项目列表（mock，来源IPM系统） */
+export const IPM_PROJECTS: IpmProject[] = [
+  { code: 'IPM-2025-001', name: 'CO9m-X6895 整机项目' },
+  { code: 'IPM-2025-002', name: 'NOTE40-Pro 整机项目' },
+  { code: 'IPM-2025-003', name: 'SPARK30-Lite 整机项目' },
+  { code: 'IPM-2026-001', name: 'GT30-Ultra 整机项目' },
+  { code: 'IPM-2026-002', name: 'HOT50-Play 整机项目' },
+  { code: 'IPM-2026-003', name: 'CAMON30-Pro 整机项目' },
+  { code: 'IPM-2026-004', name: 'S25-X6920 整机项目' },
+  { code: 'IPM-2026-005', name: 'P40-Pro 整机项目' },
+]
 
 /** 里程碑字段定义 */
 export const MILESTONE_FIELDS = [
@@ -114,6 +134,7 @@ export const DEFAULT_PROJECT_FILTERS = {
   brand: 'all' as const,
   productLine: 'all' as const,
   projectName: '',
+  projectYear: 'all' as const,
   showCancelled: false,
 }
 

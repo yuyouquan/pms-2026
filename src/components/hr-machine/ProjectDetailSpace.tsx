@@ -1,12 +1,43 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Card, Table, Button, Space, Checkbox, Tag, Modal, message, Popconfirm, Tooltip } from 'antd'
-import { ArrowLeftOutlined, PlusOutlined, LockOutlined, DeleteOutlined, ExportOutlined, StopOutlined } from '@ant-design/icons'
+import {
+  Card,
+  Table,
+  Button,
+  Space,
+  Checkbox,
+  Tag,
+  Modal,
+  message,
+  Popconfirm,
+  Tooltip,
+  InputNumber,
+  DatePicker,
+  Select,
+  Popover,
+  Alert,
+} from 'antd'
+import {
+  ArrowLeftOutlined,
+  PlusOutlined,
+  LockOutlined,
+  DeleteOutlined,
+  ExportOutlined,
+  StopOutlined,
+  LinkOutlined,
+} from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
+import dayjs from 'dayjs'
 import { useHrMachineStore } from '@/stores/hrMachine'
-import { BUDGET_TYPES, BUDGET_TYPE_LABELS, formatPersonMonth, MILESTONE_FIELDS } from '@/constants/hrMachine'
-import type { HrMachineVersion, BudgetType } from '@/types/hrMachine'
+import {
+  BUDGET_TYPES,
+  BUDGET_TYPE_LABELS,
+  formatPersonMonth,
+  MILESTONE_FIELDS,
+  IPM_PROJECTS,
+} from '@/constants/hrMachine'
+import type { HrMachineVersion, BudgetType, MilestoneNodes } from '@/types/hrMachine'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 
 interface ProjectDetailSpaceProps {
@@ -18,6 +49,120 @@ interface ProjectDetailSpaceProps {
 /** 预算类型筛选选项（由常量派生，无需每次渲染重建） */
 const BUDGET_TYPE_OPTIONS = BUDGET_TYPES.map((t) => ({ label: t.label, value: t.value }))
 
+// ── 行内编辑：数字单元格（预估投入） ──────────────────────────────────
+// 点击进入编辑模式，Enter / blur 保存，Escape 取消
+function EditableNumberCell({
+  value,
+  editable,
+  onSave,
+}: {
+  value: number
+  editable: boolean
+  onSave: (v: number) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [localValue, setLocalValue] = useState(value)
+
+  if (!editable) {
+    return <span style={{ fontWeight: 600 }}>{formatPersonMonth(value)}</span>
+  }
+
+  if (editing) {
+    return (
+      <InputNumber
+        size="small"
+        value={localValue}
+        min={0}
+        step={0.1}
+        precision={1}
+        autoFocus
+        style={{ width: '100%' }}
+        onChange={(v) => setLocalValue(v ?? 0)}
+        onPressEnter={() => {
+          onSave(localValue)
+          setEditing(false)
+        }}
+        onBlur={() => {
+          onSave(localValue)
+          setEditing(false)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            setEditing(false)
+          }
+        }}
+      />
+    )
+  }
+
+  return (
+    <span
+      className="pms-inline-editable"
+      onClick={() => {
+        setLocalValue(value)
+        setEditing(true)
+      }}
+      style={{ fontWeight: 600 }}
+    >
+      {formatPersonMonth(value)}
+    </span>
+  )
+}
+
+// ── 行内编辑：日期单元格（里程碑节点） ────────────────────────────────
+// 点击进入编辑模式，选择日期即保存，关闭弹层则取消
+function EditableDateCell({
+  value,
+  editable,
+  onSave,
+}: {
+  value: string | null
+  editable: boolean
+  onSave: (v: string | null) => void
+}) {
+  const [editing, setEditing] = useState(false)
+
+  if (!editable) {
+    return value ? (
+      <span style={{ color: 'var(--pms-text-primary)' }}>{value}</span>
+    ) : (
+      <span style={{ color: 'var(--pms-text-tertiary)' }}>-</span>
+    )
+  }
+
+  if (editing) {
+    return (
+      <DatePicker
+        size="small"
+        format="YYYY-MM-DD"
+        value={value ? dayjs(value) : null}
+        open
+        onChange={(date) => {
+          onSave(date ? date.format('YYYY-MM-DD') : null)
+          setEditing(false)
+        }}
+        onOpenChange={(open) => {
+          if (!open) setEditing(false)
+        }}
+        style={{ width: '100%' }}
+      />
+    )
+  }
+
+  return (
+    <span
+      className="pms-inline-editable"
+      onClick={() => setEditing(true)}
+    >
+      {value ? (
+        <span style={{ color: 'var(--pms-text-primary)' }}>{value}</span>
+      ) : (
+        <span style={{ color: 'var(--pms-text-tertiary)' }}>-</span>
+      )}
+    </span>
+  )
+}
+
 export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: ProjectDetailSpaceProps) {
   // ── Store：读取项目、预算类型筛选与版本操作 ──────────────────────────
   const projects = useHrMachineStore((s) => s.projects)
@@ -28,6 +173,8 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
   const cancelProject = useHrMachineStore((s) => s.cancelProject)
   const restoreProject = useHrMachineStore((s) => s.restoreProject)
   const deleteProject = useHrMachineStore((s) => s.deleteProject)
+  const updateVersion = useHrMachineStore((s) => s.updateVersion)
+  const bindIpmProject = useHrMachineStore((s) => s.bindIpmProject)
 
   // ── 当前项目 ────────────────────────────────────────────────────────
   const project = useMemo(
@@ -49,35 +196,28 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
       })
   }, [project, selectedBudgetTypes])
 
-  // ── 版本可锁 / 可编辑判定 ───────────────────────────────────────────
-  // 规则（来自飞书文档 3.1）：
-  //  1. 已锁定版本：不可编辑、不可再锁。
-  //  2. 当某预算类型存在更高主版本的已锁定版本时，旧主版本的草稿（即便未锁定）
-  //     也转为只读 —— 对应"V1.0 锁定后 V0.X 不可编辑、锁定按钮消失"。
-  //  3. 所有当前主版本的未锁定版本均可执行锁定（"按钮形式"）。
-  const { lockableIds, editableIds } = useMemo(() => {
+  // ── 可锁定版本判定（需求 3.2） ──────────────────────────────────────
+  // 规则：每个预算类型下，仅最新版本（minorVersion 最高）且未锁定时可锁定。
+  // 当最新版本被删除后，锁定按钮自动转移到新的最新版本（自然重算）。
+  const lockableIds = useMemo(() => {
     const lockable = new Set<string>()
-    const editable = new Set<string>()
-    if (!project) return { lockableIds: lockable, editableIds: editable }
-
-    // 计算每个预算类型下最高已锁定主版本号
-    const maxLockedMajorByType = new Map<BudgetType, number>()
-    for (const v of project.versions) {
-      if (v.lockState === 'locked') {
-        const lockedMajor = maxLockedMajorByType.get(v.budgetType) ?? -1
-        if (v.majorVersion > lockedMajor) maxLockedMajorByType.set(v.budgetType, v.majorVersion)
+    if (!project) return lockable
+    const budgetTypes: BudgetType[] = ['annual', 'projectEstimate', 'projectBudget']
+    for (const bt of budgetTypes) {
+      const versionsOfType = project.versions
+        .filter((v) => v.budgetType === bt)
+        .sort((a, b) => b.minorVersion - a.minorVersion)
+      const latest = versionsOfType[0]
+      if (latest && latest.lockState === 'unlocked') {
+        lockable.add(latest.id)
       }
     }
-
-    for (const v of project.versions) {
-      const maxLockedMajor = maxLockedMajorByType.get(v.budgetType) ?? -1
-      // 可编辑/可锁：未锁定，且主版本 >= 该预算类型下最高已锁定主版本
-      const isEditable = v.lockState === 'unlocked' && v.majorVersion >= maxLockedMajor
-      if (isEditable) editable.add(v.id)
-      if (isEditable) lockable.add(v.id)
-    }
-    return { lockableIds: lockable, editableIds: editable }
+    return lockable
   }, [project])
+
+  // ── IPM 绑定弹层状态 ────────────────────────────────────────────────
+  const [ipmPopoverOpen, setIpmPopoverOpen] = useState(false)
+  const [ipmSelectValue, setIpmSelectValue] = useState<string | undefined>(undefined)
 
   // ── 项目状态切换弹窗 ────────────────────────────────────────────────
   const [statusModalOpen, setStatusModalOpen] = useState(false)
@@ -86,20 +226,23 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
   const columns = useMemo<ColumnsType<HrMachineVersion>>(() => {
     if (!project) return []
 
-    // 里程碑列：由 MILESTONE_FIELDS 动态生成
+    // 里程碑列：由 MILESTONE_FIELDS 动态生成，支持行内编辑
     const milestoneColumns: ColumnsType<HrMachineVersion> = MILESTONE_FIELDS.map((field) => ({
       title: field.label,
       key: field.key,
       width: 120,
       align: 'center',
-      render: (_value: unknown, record: HrMachineVersion) => {
-        const value = record.milestones[field.key]
-        return value ? (
-          <span style={{ color: 'var(--pms-text-primary)' }}>{value}</span>
-        ) : (
-          <span style={{ color: 'var(--pms-text-tertiary)' }}>-</span>
-        )
-      },
+      render: (_value: unknown, record: HrMachineVersion) => (
+        <EditableDateCell
+          value={record.milestones[field.key]}
+          editable={record.lockState === 'unlocked'}
+          onSave={(v) =>
+            updateVersion(project.id, record.id, {
+              milestones: { [field.key]: v } as Partial<MilestoneNodes>,
+            })
+          }
+        />
+      ),
     }))
 
     return [
@@ -153,10 +296,14 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
       {
         title: '预估投入',
         key: 'estimatedInvestment',
-        width: 100,
+        width: 110,
         align: 'right',
         render: (_value: unknown, record: HrMachineVersion) => (
-          <span style={{ fontWeight: 600 }}>{formatPersonMonth(record.estimatedInvestment)}</span>
+          <EditableNumberCell
+            value={record.estimatedInvestment}
+            editable={record.lockState === 'unlocked'}
+            onSave={(v) => updateVersion(project.id, record.id, { estimatedInvestment: v })}
+          />
         ),
       },
       ...milestoneColumns,
@@ -193,30 +340,27 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
               </Tag>
             )
           }
-          if (editableIds.has(record.id)) {
-            return <Tag color="processing">编辑中</Tag>
-          }
-          return <Tag color="default">只读</Tag>
+          return <Tag color="processing">编辑中</Tag>
         },
       },
       {
         title: '操作',
         key: 'action',
         fixed: 'right',
-        width: 150,
+        width: 170,
         align: 'center',
         render: (_value: unknown, record: HrMachineVersion) => (
           <Space size={4}>
             {lockableIds.has(record.id) && project.status === 'active' ? (
-              <Tooltip title="锁定后版本号升为正式版，该预算类型下的历史草稿版本将变为只读">
+              <Tooltip title="锁定后该版本将变为只读，不可再编辑">
                 <Button
-                  type="link"
+                  type="primary"
                   size="small"
                   icon={<LockOutlined />}
                   onClick={(e) => {
                     e.stopPropagation()
                     lockVersion(project.id, record.id)
-                    message.success('版本已锁定，已升为正式版')
+                    message.success('版本已锁定')
                   }}
                 >
                   锁定
@@ -243,7 +387,6 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
               }}
             >
               <Button
-                type="link"
                 danger
                 size="small"
                 icon={<DeleteOutlined />}
@@ -256,7 +399,7 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
         ),
       },
     ]
-  }, [project, lockableIds, editableIds, lockVersion, deleteVersion, deleteProject, onBack])
+  }, [project, lockableIds, lockVersion, deleteVersion, deleteProject, onBack, updateVersion])
 
   // ── 项目不存在的兜底 ────────────────────────────────────────────────
   if (!project) {
@@ -334,9 +477,20 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
     setStatusModalOpen(false)
   }
 
+  // ── IPM 绑定确认 ────────────────────────────────────────────────────
+  const handleIpmBind = () => {
+    if (!ipmSelectValue) return
+    bindIpmProject(project.id, ipmSelectValue)
+    message.success('IPM编码绑定成功')
+    setIpmSelectValue(undefined)
+    setIpmPopoverOpen(false)
+  }
+
+  const hasIpm = !!project.ipmProjectCode
+
   return (
     <div className="pms-hr-machine-project-detail">
-      {/* 顶部：返回 + 项目标题 + 状态 */}
+      {/* 顶部：返回 + 项目标题 + 状态 + IPM */}
       <div
         style={{
           display: 'flex',
@@ -360,7 +514,84 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
         <span style={{ color: 'var(--pms-text-secondary)', fontSize: 13 }}>
           {project.brand} · {project.productLine} · 等级 {project.projectLevel}
         </span>
+
+        {/* IPM 编码展示 / 绑定 */}
+        {hasIpm ? (
+          <Space size={4}>
+            <Tag color="blue" icon={<LinkOutlined />}>
+              {project.ipmProjectCode}
+            </Tag>
+            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 13 }}>
+              {project.ipmProjectName}
+            </span>
+          </Space>
+        ) : (
+          <Popover
+            open={ipmPopoverOpen}
+            onOpenChange={(open) => {
+              setIpmPopoverOpen(open)
+              if (!open) setIpmSelectValue(undefined)
+            }}
+            trigger="click"
+            placement="bottomLeft"
+            content={
+              <div style={{ width: 320 }}>
+                <p style={{ marginBottom: 8, fontSize: 13, color: 'var(--pms-text-secondary)' }}>
+                  选择 IPM 正式项目进行绑定：
+                </p>
+                <Select
+                  showSearch
+                  placeholder="搜索 IPM 项目编码或名称"
+                  style={{ width: '100%' }}
+                  value={ipmSelectValue}
+                  onChange={setIpmSelectValue}
+                  options={IPM_PROJECTS.map((p) => ({
+                    value: p.code,
+                    label: `${p.code} - ${p.name}`,
+                  }))}
+                  optionFilterProp="label"
+                />
+                <div style={{ marginTop: 8, textAlign: 'right' }}>
+                  <Space size={8}>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setIpmPopoverOpen(false)
+                        setIpmSelectValue(undefined)
+                      }}
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      size="small"
+                      type="primary"
+                      disabled={!ipmSelectValue}
+                      onClick={handleIpmBind}
+                    >
+                      确认绑定
+                    </Button>
+                  </Space>
+                </div>
+              </div>
+            }
+          >
+            <Button size="small" icon={<LinkOutlined />}>
+              绑定IPM编码
+            </Button>
+          </Popover>
+        )}
       </div>
+
+      {/* IPM 未绑定警告 */}
+      {!hasIpm && (
+        <Alert
+          type="warning"
+          showIcon
+          message="该项目未绑定 IPM 编码"
+          description="仅可创建「年度预算」类型版本。创建「项目概算」或「项目预算」版本前需先绑定 IPM 编码。"
+          style={{ marginBottom: 12, borderRadius: 8 }}
+        />
+      )}
 
       {/* 工具条：预算类型筛选 + 操作按钮 */}
       <Card
@@ -448,7 +679,7 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
       </Modal>
 
       <style jsx global>{`
-        /* 已锁定版本：整行高亮（紫科技玻璃态品牌色） */
+        /* 已锁定版本：整行高亮（品牌色玻璃态） */
         .pms-hr-machine-project-detail .pms-table .ant-table-tbody > tr.hr-machine-version-locked > td {
           background: var(--pms-brand-surface) !important;
           color: var(--pms-brand-strong);
@@ -456,6 +687,29 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
         }
         .pms-hr-machine-project-detail .pms-table .ant-table-tbody > tr.hr-machine-version-locked:hover > td {
           background: color-mix(in srgb, var(--pms-brand-surface) 72%, #ffffff) !important;
+        }
+
+        /* 行内可编辑单元格：悬停反馈 */
+        .pms-hr-machine-project-detail .pms-inline-editable {
+          cursor: pointer;
+          padding: 2px 6px;
+          border-radius: 4px;
+          transition: background 0.2s, color 0.2s;
+          display: inline-block;
+          min-width: 24px;
+          text-align: center;
+        }
+        .pms-hr-machine-project-detail .pms-inline-editable:hover {
+          background: var(--pms-brand-surface);
+          color: var(--pms-brand-strong);
+        }
+
+        /* 行内编辑输入框：紧凑样式 */
+        .pms-hr-machine-project-detail .pms-table .ant-inputnumber {
+          width: 100%;
+        }
+        .pms-hr-machine-project-detail .pms-table .ant-picker {
+          width: 100%;
         }
       `}</style>
     </div>
