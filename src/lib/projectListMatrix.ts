@@ -365,6 +365,7 @@ export function getProjectListMatrix(
   if (variant === 'capability') return []
   const base = STATIC_COLUMNS[variant].map(column => ({ ...column }))
   const existingLabels = new Set(base.map(column => column.label))
+  const existingKeys = new Set(base.map(column => column.key))
   const dynamic = options.templateTasks?.length
     ? buildGroupedMilestoneColumns(options.templateTasks, variant)
     : [...(options.directLevel2Nodes || options.milestones || [])].map((label, index) => ({
@@ -376,7 +377,7 @@ export function getProjectListMatrix(
         taskId: `dynamic-${index}`,
       }))
   const optional = (options.optionalFields || [])
-    .filter(field => !existingLabels.has(field.label) && !dynamic.some(item => item.label === field.label))
+    .filter(field => !existingKeys.has(field.key) && !dynamic.some(item => item.key === field.key))
     .map(field => ({
       key: field.key,
       label: field.label,

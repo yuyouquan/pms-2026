@@ -95,6 +95,19 @@ assert.deepEqual(
   [...machineRequiredLabels, '概念启动', 'STR1', ...machineTailLabels],
 )
 assert.ok(machineColumns.every(column => column.required && column.hideable === false))
+const machineColumnsWithAliasedOptionalFields = matrix.getProjectListMatrix('machine', {
+  templateTasks: machineColumns.filter(column => column.source === 'templateTask'),
+  optionalFields: [
+    { key: 'firstSaleTosVersion', label: '首销 tOS 版本' },
+    { key: 'developMode', label: '开发模式' },
+    { key: 'remark', label: '备注' },
+  ],
+})
+assert.equal(machineColumnsWithAliasedOptionalFields.filter(column => column.key === 'firstSaleTosVersion').length, 1)
+assert.equal(machineColumnsWithAliasedOptionalFields.find(column => column.key === 'firstSaleTosVersion')?.hideable, false)
+assert.equal(machineColumnsWithAliasedOptionalFields.filter(column => column.key === 'developMode').length, 1)
+assert.equal(machineColumnsWithAliasedOptionalFields.find(column => column.key === 'developMode')?.hideable, false)
+assert.equal(machineColumnsWithAliasedOptionalFields.find(column => column.key === 'remark')?.hideable, true)
 assert.ok(matrix.getProjectListMatrix('machine', { milestones: ['最新一级模板节点'] }).some(column => column.label === '最新一级模板节点'), 'machine dynamic milestone column')
 assert.ok(matrix.getProjectListMatrix('tos', { milestones: ['最新已发布一级模板节点'] }).some(column => column.label === '最新已发布一级模板节点'), 'tOS latest published L1 milestone column')
 assert.ok(matrix.getProjectListMatrix('technical-tdt', { templateStages: ['阶段'], directLevel2Nodes: ['直属二级'] }).some(column => column.label === '直属二级'), 'TDT dynamic direct level-two column')
