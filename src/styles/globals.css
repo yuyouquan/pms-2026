@@ -6263,3 +6263,462 @@ body,
     min-height: 620px;
   }
 }
+
+/* ================================================================
+   HR Pipeline Module — Purple Glassmorphism Sidebar
+   ================================================================ */
+
+.pms-hr-pipeline {
+  min-width: 0;
+}
+
+.pms-hr-main-content {
+  padding: 8px;
+}
+
+/* ── Workspace layout: sidebar + content ──────────────────────────── */
+
+.pms-hr-workspace {
+  display: flex;
+  gap: 12px;
+  min-height: calc(100vh - 100px);
+  align-items: stretch;
+}
+
+.pms-hr-workspace__content {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ── Sidebar shell ─────────────────────────────────────────────────── */
+
+.pms-hr-sidebar.pms-collapsible-sidebar {
+  flex: 0 0 var(--pms-hr-sidebar-width, 240px);
+  display: flex;
+  flex-direction: column;
+  background: var(--pms-surface-glass);
+  backdrop-filter: var(--pms-glass-filter);
+  border: 0.8px solid rgba(99, 102, 241, 0.1);
+  border-radius: var(--pms-radius-surface);
+  box-shadow: var(--pms-shadow-glass);
+  overflow: hidden;
+  transition: flex-basis var(--duration-normal) var(--ease-out),
+              width var(--duration-normal) var(--ease-out);
+}
+
+.pms-hr-sidebar .pms-collapsible-sidebar__title {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--pms-border);
+}
+
+.pms-hr-sidebar-title {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pms-text-primary);
+}
+
+.pms-hr-sidebar .pms-collapsible-sidebar__content {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 0 48px;
+}
+
+/* ── Sidebar tree — expanded mode ──────────────────────────────────── */
+
+.pms-hr-sidebar-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 6px;
+}
+
+/* Group header (parent item) */
+.pms-hr-sidebar-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--pms-radius-control);
+  background: transparent;
+  color: var(--pms-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+  text-align: left;
+}
+
+.pms-hr-sidebar-group-header:hover {
+  background: var(--bg-hover);
+  color: var(--pms-text-primary);
+}
+
+.pms-hr-sidebar-group-header.has-active-child {
+  color: var(--pms-brand-strong);
+}
+
+.pms-hr-sidebar-group-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-size: 15px;
+  color: var(--pms-brand);
+  flex-shrink: 0;
+}
+
+.pms-hr-sidebar-group-label {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pms-hr-sidebar-group-arrow {
+  font-size: 10px;
+  color: var(--pms-text-tertiary);
+  flex-shrink: 0;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+/* Children container */
+.pms-hr-sidebar-children {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: 18px;
+  margin-left: 14px;
+  border-left: 1.5px solid var(--pms-border);
+}
+
+/* Leaf item (child) */
+.pms-hr-sidebar-leaf {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: var(--pms-radius-control);
+  background: transparent;
+  color: var(--pms-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+  text-align: left;
+  position: relative;
+}
+
+.pms-hr-sidebar-leaf:hover {
+  background: var(--bg-hover);
+  color: var(--pms-text-primary);
+}
+
+.pms-hr-sidebar-leaf.is-active {
+  background: var(--pms-brand-surface);
+  color: var(--pms-brand-strong);
+  font-weight: 600;
+}
+
+.pms-hr-sidebar-leaf.is-active::before {
+  content: '';
+  position: absolute;
+  left: -19px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  border-radius: 0 3px 3px 0;
+  background: var(--pms-brand);
+}
+
+.pms-hr-sidebar-leaf-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pms-border);
+  flex-shrink: 0;
+  transition: background var(--duration-fast) ease;
+}
+
+.pms-hr-sidebar-leaf:hover .pms-hr-sidebar-leaf-dot {
+  background: var(--pms-brand-soft);
+}
+
+.pms-hr-sidebar-leaf.is-active .pms-hr-sidebar-leaf-dot {
+  background: var(--pms-brand);
+}
+
+.pms-hr-sidebar-leaf-label {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Sidebar tree — collapsed mode ─────────────────────────────────── */
+
+.pms-hr-sidebar-tree--collapsed {
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+.pms-hr-sidebar-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: var(--pms-radius-control);
+  background: transparent;
+  color: var(--pms-text-secondary);
+  font-size: 18px;
+  cursor: pointer;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+  position: relative;
+}
+
+.pms-hr-sidebar-icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--pms-text-primary);
+}
+
+.pms-hr-sidebar-icon-btn.is-active {
+  background: var(--pms-brand-surface);
+  color: var(--pms-brand-strong);
+}
+
+.pms-hr-sidebar-icon-btn.is-active::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 24px;
+  border-radius: 0 3px 3px 0;
+  background: var(--pms-brand);
+}
+
+/* ── Collapsed sidebar adjustments ────────────────────────────────── */
+
+.pms-hr-workspace.is-collapsed .pms-hr-sidebar.pms-collapsible-sidebar {
+  flex: 0 0 64px;
+}
+
+.pms-hr-workspace.is-collapsed .pms-hr-sidebar .pms-collapsible-sidebar__content {
+  padding: 8px 8px 48px;
+}
+
+/* ── Content area ──────────────────────────────────────────────────── */
+
+.pms-hr-content-card {
+  border-radius: var(--pms-radius-surface);
+  background: var(--pms-surface-solid);
+  box-shadow: var(--pms-shadow-glass);
+  border: 0.8px solid var(--pms-border);
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pms-hr-content-card .ant-card-body {
+  width: 100%;
+  padding: 48px 24px;
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .pms-hr-sidebar.pms-collapsible-sidebar,
+  .pms-hr-sidebar-group-header,
+  .pms-hr-sidebar-leaf,
+  .pms-hr-sidebar-icon-btn,
+  .pms-hr-sidebar-group-arrow {
+    transition: none !important;
+  }
+}
+
+/* ================================================================
+   HR Machine Project Module — Styles
+   ================================================================ */
+
+/* ── Main content container ─────────────────────────────────────── */
+
+.pms-hr-machine-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.pms-hr-machine-tab-bar {
+  margin-bottom: 12px;
+}
+
+.pms-hr-machine-tab-bar .ant-segmented {
+  background: var(--pms-surface-glass);
+  border: 0.8px solid var(--pms-border);
+  border-radius: var(--pms-radius-control);
+  padding: 2px;
+}
+
+.pms-hr-machine-tab-content {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Cancelled project row ───────────────────────────────────────── */
+
+.pms-table .pms-row-cancelled > td {
+  background: #f0f0f0 !important;
+  opacity: 0.7;
+}
+
+/* ── Locked version row highlight ────────────────────────────────── */
+
+.pms-table .pms-row-locked > td {
+  background: var(--pms-brand-surface) !important;
+  color: var(--pms-brand-strong) !important;
+  font-weight: 500;
+}
+
+.pms-table .pms-row-locked:hover > td {
+  background: rgba(117, 98, 255, 0.12) !important;
+}
+
+/* ── Summary row positioning ──────────────────────────────────────── */
+
+.pms-table tfoot.ant-table-summary {
+  display: table-header-group;
+}
+
+.pms-table .ant-table-summary td {
+  background: var(--pms-brand-surface);
+  font-weight: 600;
+  color: var(--pms-brand-strong);
+  border-top: 2px solid var(--pms-brand-border) !important;
+}
+
+/* ── Budget type filter chips ────────────────────────────────────── */
+
+.pms-hr-budget-type-filter .ant-checkbox-group-item {
+  margin-right: 12px;
+}
+
+/* ── Version lock tag ────────────────────────────────────────────── */
+
+.pms-version-lock-tag {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pms-version-lock-tag--locked {
+  background: var(--pms-brand-surface);
+  color: var(--pms-brand-strong);
+  border: 1px solid var(--pms-brand-border);
+}
+
+.pms-version-lock-tag--editing {
+  background: #fff7e6;
+  color: #d48806;
+  border: 1px solid #ffe0a3;
+}
+
+.pms-version-lock-tag--readonly {
+  background: #f5f5f5;
+  color: var(--pms-text-tertiary);
+  border: 1px solid var(--pms-border);
+}
+
+/* ── Project level badge ──────────────────────────────────────────── */
+
+.pms-project-level-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--pms-brand-surface);
+  color: var(--pms-brand-strong);
+  border: 1px solid var(--pms-brand-border);
+}
+
+.pms-project-level-badge--s {
+  background: var(--pms-brand);
+  color: #fff;
+  border-color: var(--pms-brand-strong);
+}
+
+.pms-project-level-badge--a {
+  background: rgba(117, 98, 255, 0.15);
+  color: var(--pms-brand-strong);
+}
+
+/* ── Monthly investment edited tag ────────────────────────────────── */
+
+.pms-monthly-edited-tag {
+  font-size: 11px;
+  margin-left: 6px;
+  border-radius: 8px;
+}
+
+/* ── Detail space header ──────────────────────────────────────────── */
+
+.pms-hr-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.pms-hr-detail-header__title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--pms-text-primary);
+}
+
+.pms-hr-detail-header__subtitle {
+  font-size: 13px;
+  color: var(--pms-text-secondary);
+}
+
+/* ── Monthly edit modal ───────────────────────────────────────────── */
+
+.pms-monthly-edit-grid {
+  display: flex;
+  overflow-x: auto;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+.pms-monthly-edit-cell {
+  min-width: 100px;
+  flex: 0 0 auto;
+}
+
+.pms-monthly-edit-cell__label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--pms-text-tertiary);
+  text-align: center;
+}
+
