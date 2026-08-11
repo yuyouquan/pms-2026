@@ -256,6 +256,7 @@
 @media (prefers-reduced-motion: reduce) {
   .pms-project-filter-chip,
   .pms-project-series-toggle,
+  .pms-machine-series-toggle,
   .pms-project-summary-table .ant-table-cell { transition: none !important; }
 }
 
@@ -540,6 +541,72 @@
 .pms-project-series-copy small {
   color: #94a3b8;
   font-size: 12px;
+}
+
+.pms-table.pms-project-summary-table .ant-table-tbody > tr > td.pms-machine-hierarchy-cell {
+  vertical-align: middle !important;
+  text-align: center;
+}
+
+.pms-table.pms-project-summary-table .ant-table-tbody > tr > td.pms-machine-hierarchy-cell.is-productSeries {
+  padding: 0 !important;
+}
+
+.pms-machine-hierarchy-label {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pms-machine-series-toggle {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--pms-table-row-height);
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  color: #475569;
+  text-align: left;
+  white-space: nowrap;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.pms-machine-series-toggle strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #9a3412;
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pms-machine-series-toggle small {
+  flex: 0 0 auto;
+  color: #94a3b8;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pms-machine-series-toggle:hover,
+.pms-machine-series-toggle:focus-visible {
+  color: var(--pms-brand-strong);
+  background: #f4f4ff;
+}
+
+.pms-machine-series-toggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--pms-brand) 55%, transparent);
+  outline-offset: -2px;
 }
 
 .pms-technical-project-card {

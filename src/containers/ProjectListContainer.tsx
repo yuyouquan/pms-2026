@@ -700,9 +700,7 @@ export default function ProjectListContainer() {
                     toolbarHost={projectListTableToolbarHost}
                     filterSummaryHost={projectListFilterSummaryHost}
                     toolbarTrailingAction={projectListToolbarTrailingActions}
-                    groupBy={standardMatrixVariant === 'machine'
-                      ? { key: 'productSeries', fallbackLabel: '未配置产品系列' }
-                      : undefined}
+                    machineHierarchy={standardMatrixVariant === 'machine'}
                     onViewProject={() => undefined}
                   />
                 ) : null}
@@ -797,9 +795,7 @@ export default function ProjectListContainer() {
                     toolbarHost={projectListTableToolbarHost}
                     filterSummaryHost={projectListFilterSummaryHost}
                     toolbarTrailingAction={projectListToolbarTrailingActions}
-                    groupBy={standardMatrixVariant === 'machine'
-                      ? { key: 'productSeries', fallbackLabel: '未配置产品系列' }
-                      : undefined}
+                    machineHierarchy={standardMatrixVariant === 'machine'}
                     onViewProject={() => undefined}
                   />
                 ) : null}
@@ -850,9 +846,7 @@ export default function ProjectListContainer() {
                   filterSummaryHost={projectListFilterSummaryHost}
                   toolbarTrailingAction={projectListToolbarTrailingActions}
                   tablePageSize={projectListPageSize}
-                  groupBy={standardMatrixVariant === 'machine'
-                    ? { key: 'productSeries', fallbackLabel: '未配置产品系列' }
-                    : undefined}
+                  machineHierarchy={standardMatrixVariant === 'machine'}
                   onViewProject={(projectId) => {
                     const project = workspaceFilteredProjects.find(item => item.id === projectId)
                     if (!project) return

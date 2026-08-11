@@ -113,7 +113,7 @@ export function resolveTechnicalProjectType(values: readonly string[]): Technica
 }
 
 const PROJECT_LIST_FIXED_COLUMN_KEYS: Record<ProjectListVariant, readonly string[]> = {
-  machine: ['productSeries', 'projectName'],
+  machine: [],
   tos: ['tosVersion'],
   'technical-tdt': ['projectName'],
   'technical-subproject': ['projectName'],
@@ -150,6 +150,120 @@ export function groupProjectListRows<T extends Record<string, unknown>>(
   return groups
 }
 
+export interface MachineProjectHierarchyMetadata {
+  __brandKey: string
+  __brandLabel: string
+  __brandRowSpan: number
+  __productLineKey: string
+  __productLineLabel: string
+  __productLineRowSpan: number
+  __productSeriesKey: string
+  __productSeriesLabel: string
+  __productSeriesRowSpan: number
+  __productSeriesProjectCount: number
+  __productSeriesCollapsed: boolean
+}
+
+const normalizeHierarchyLabel = (value: unknown, fallback: string) => {
+  const label = String(value ?? '').trim()
+  return !label || label === '-' || label === '—' ? fallback : label
+}
+
+interface MachineHierarchyKeys {
+  brandKey: string
+  brandLabel: string
+  productLineKey: string
+  productLineLabel: string
+  productSeriesKey: string
+  productSeriesLabel: string
+}
+
+const getMachineHierarchyKeys = (row: Record<string, unknown>): MachineHierarchyKeys => {
+  const brandLabel = normalizeHierarchyLabel(row.brand, '未配置品牌')
+  const productLineLabel = normalizeHierarchyLabel(row.productLine, '未配置产品线')
+  const productSeriesLabel = normalizeHierarchyLabel(row.productSeries, '未配置产品系列')
+  const productLineKey = `${brandLabel}::${productLineLabel}`
+  return {
+    brandKey: brandLabel,
+    brandLabel,
+    productLineKey,
+    productLineLabel,
+    productSeriesKey: `${productLineKey}::${productSeriesLabel}`,
+    productSeriesLabel,
+  }
+}
+
+const calculateConsecutiveRowSpans = (keys: readonly string[]) => {
+  const spans = Array.from({ length: keys.length }, () => 0)
+  for (let start = 0; start < keys.length;) {
+    let end = start + 1
+    while (end < keys.length && keys[end] === keys[start]) end += 1
+    spans[start] = end - start
+    start = end
+  }
+  return spans
+}
+
+export function buildMachineProjectHierarchyPage<T extends Record<string, unknown>>(
+  allFilteredRows: readonly T[],
+  pageRows: readonly T[],
+  collapsedSeries: ReadonlySet<string>,
+): Array<T & MachineProjectHierarchyMetadata> {
+  const hierarchyOrder = new Map<string, number>()
+  const projectOrder = new Map<unknown, number>()
+  const productSeriesCounts = new Map<string, number>()
+  allFilteredRows.forEach((row, index) => {
+    const keys = getMachineHierarchyKeys(row)
+    for (const key of [keys.brandKey, keys.productLineKey, keys.productSeriesKey]) {
+      if (!hierarchyOrder.has(key)) hierarchyOrder.set(key, hierarchyOrder.size)
+    }
+    projectOrder.set(row.key ?? row.projectId ?? row, index)
+    productSeriesCounts.set(
+      keys.productSeriesKey,
+      (productSeriesCounts.get(keys.productSeriesKey) ?? 0) + 1,
+    )
+  })
+
+  const sortedRows = pageRows
+    .map((row, pageIndex) => ({ row, pageIndex, keys: getMachineHierarchyKeys(row) }))
+    .sort((left, right) => (
+      (hierarchyOrder.get(left.keys.brandKey) ?? Number.MAX_SAFE_INTEGER)
+        - (hierarchyOrder.get(right.keys.brandKey) ?? Number.MAX_SAFE_INTEGER)
+      || (hierarchyOrder.get(left.keys.productLineKey) ?? Number.MAX_SAFE_INTEGER)
+        - (hierarchyOrder.get(right.keys.productLineKey) ?? Number.MAX_SAFE_INTEGER)
+      || (hierarchyOrder.get(left.keys.productSeriesKey) ?? Number.MAX_SAFE_INTEGER)
+        - (hierarchyOrder.get(right.keys.productSeriesKey) ?? Number.MAX_SAFE_INTEGER)
+      || (projectOrder.get(left.row.key ?? left.row.projectId ?? left.row) ?? left.pageIndex)
+        - (projectOrder.get(right.row.key ?? right.row.projectId ?? right.row) ?? right.pageIndex)
+    ))
+
+  const visibleSeries = new Set<string>()
+  const visibleRows = sortedRows.filter(({ keys }) => {
+    if (!collapsedSeries.has(keys.productSeriesKey)) return true
+    if (visibleSeries.has(keys.productSeriesKey)) return false
+    visibleSeries.add(keys.productSeriesKey)
+    return true
+  })
+  const brandSpans = calculateConsecutiveRowSpans(visibleRows.map(item => item.keys.brandKey))
+  const productLineSpans = calculateConsecutiveRowSpans(visibleRows.map(item => item.keys.productLineKey))
+  const productSeriesSpans = calculateConsecutiveRowSpans(visibleRows.map(item => item.keys.productSeriesKey))
+
+  return visibleRows.map(({ row, keys }, index) => ({
+    ...row,
+    __brandKey: keys.brandKey,
+    __brandLabel: keys.brandLabel,
+    __brandRowSpan: brandSpans[index],
+    __productLineKey: keys.productLineKey,
+    __productLineLabel: keys.productLineLabel,
+    __productLineRowSpan: productLineSpans[index],
+    __productSeriesKey: keys.productSeriesKey,
+    __productSeriesLabel: keys.productSeriesLabel,
+    __productSeriesRowSpan: productSeriesSpans[index],
+    __productSeriesProjectCount: productSeriesCounts.get(keys.productSeriesKey) ?? 0,
+    __productSeriesCollapsed: collapsedSeries.has(keys.productSeriesKey),
+  }))
+}
+
 const GROUP_COLORS = ['#e8f3ff', '#fff0e6', '#fff8db', '#edf6dc', '#f2e8ff'] as const
 
 const required = (key: string, label: string, width = 132): ProjectListColumnDefinition => ({
@@ -164,10 +278,13 @@ const childMilestone = (label: string): ProjectListColumnDefinition => ({
 
 const STATIC_COLUMNS: Record<Exclude<ProjectListVariant, 'capability'>, ProjectListColumnDefinition[]> = {
   machine: [
-    required('productSeries', '产品系列', 160), required('projectName', '项目名称', 220),
-    required('brand', '品牌'), required('chipCode', '芯片编码'),
-    required('versionType', '版本类型'), required('firstSaleTosVersion', '首销tOS版本'),
-    required('status', '项目状态'), required('spm', 'SPM'), required('spmDepartment', 'SPM部门', 160),
+    required('brand', '品牌', 112), required('productLine', '产品线', 120),
+    required('productSeries', '产品系列', 148), required('projectCount', '项目数', 88),
+    required('marketName', '市场名', 150), required('projectName', '项目名', 200),
+    required('versionType', '版本类型', 112), required('firstSaleTosVersion', '首销tOS版本', 128),
+    required('productType', '产品类型', 112), required('developMode', '研发模式', 112),
+    required('androidVersion', '安卓版本', 112), required('chipCode', '芯片编码', 120),
+    required('spm', 'SPM', 112), required('spmDepartment', 'SPM部门（二级部门）', 180),
   ],
   tos: [
     required('tosVersion', 'tOS版本'), required('versionType', '版本类型'),
@@ -248,6 +365,7 @@ export function getProjectListMatrix(
   if (variant === 'capability') return []
   const base = STATIC_COLUMNS[variant].map(column => ({ ...column }))
   const existingLabels = new Set(base.map(column => column.label))
+  const existingKeys = new Set(base.map(column => column.key))
   const dynamic = options.templateTasks?.length
     ? buildGroupedMilestoneColumns(options.templateTasks, variant)
     : [...(options.directLevel2Nodes || options.milestones || [])].map((label, index) => ({
@@ -259,7 +377,7 @@ export function getProjectListMatrix(
         taskId: `dynamic-${index}`,
       }))
   const optional = (options.optionalFields || [])
-    .filter(field => !existingLabels.has(field.label) && !dynamic.some(item => item.label === field.label))
+    .filter(field => !existingKeys.has(field.key) && !dynamic.some(item => item.key === field.key))
     .map(field => ({
       key: field.key,
       label: field.label,
@@ -269,11 +387,11 @@ export function getProjectListMatrix(
       reorderable: true,
       source: 'projectInfo' as const,
     }))
-  const beforeTail = variant === 'machine' ? base.slice(0, 7)
+  const beforeTail = variant === 'machine' ? base.slice(0, 12)
     : variant === 'tos' ? base.slice(0, 3)
       : variant === 'technical-tdt' ? base
         : base.slice(0, 7)
-  const tail = variant === 'machine' ? base.slice(7)
+  const tail = variant === 'machine' ? base.slice(12)
     : variant === 'tos' ? base.slice(3)
       : variant === 'technical-subproject' ? base.slice(7)
         : []
