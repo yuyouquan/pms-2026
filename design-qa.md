@@ -134,3 +134,34 @@ final result: passed
 - Browser console warnings/errors: 0.
 
 final result: passed
+
+---
+
+# tOS Roadmap Design QA
+
+## Compared states
+
+- Table reference: `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-b42d885a-ae88-4995-baf4-d10e250c81a8.png`
+- Table implementation: `output/roadmap-qa/tos-roadmap-table.jpg`
+- Evolution reference: `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-46d66fe9-4315-456c-85a2-cab746ab7c3f.png`
+- Evolution implementation: `output/roadmap-qa/tos-roadmap-evolution.jpg`
+- Detail reference: `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-5befc8f9-b269-4b0c-a0a5-88f8f75d9913.png`
+- Detail implementation: `output/roadmap-qa/tos-roadmap-detail.jpg`
+
+## Findings
+
+- P0: none.
+- P1: none after fixing the filter draft feedback loop and forcing the new three-field evolution defaults through store migration version 7.
+- P2: none after separating the compact view switch, reducing toolbar density, aligning card tags, and adding the full-field details modal.
+- P3: the implementation uses the repository's current mock versions and projects rather than duplicating the screenshot's sample rows. The details modal is slightly taller because the approved behavior now exposes every roadmap field.
+
+## Interaction verification
+
+- Advanced filter field selection remains visible while its value is incomplete.
+- Selecting a product-line value immediately changed tOS16.3 from 21 projects to 4 and displayed `筛选 1`.
+- Reset cleared the applied condition.
+- Evolution cards default to platform, STR5 date, and launch date only.
+- Clicking `NOTE 50 Pro（X6877）` opened all roadmap fields; embedded project actions remain independently clickable.
+- Table and evolution view switching remained functional.
+
+final result: passed

@@ -46,8 +46,9 @@ import RoadmapChangeLogDrawer from './RoadmapChangeLogDrawer'
 import RoadmapConflictDrawer from './RoadmapConflictDrawer'
 import RoadmapEvolutionView from './RoadmapEvolutionView'
 import RoadmapFilterDrawer from './RoadmapFilterDrawer'
+import RoadmapProjectDetailsModal from './RoadmapProjectDetailsModal'
 import RoadmapTableView from './RoadmapTableView'
-import RoadmapToolbar from './RoadmapToolbar'
+import RoadmapToolbar, { RoadmapViewModeSwitch } from './RoadmapToolbar'
 import TosVersionMaintenanceModal from './TosVersionMaintenanceModal'
 
 const isPresent = <T,>(value: T | null): value is T => value !== null
@@ -68,6 +69,7 @@ export interface RoadmapViewRenderContext {
   onSelectedTosVersionChange: (id: string | null) => void
   onSortChange: (sort: RoadmapSortState) => void
   onOpenProjectHistory: (projectId: string) => void
+  onOpenProjectDetails: (row: RoadmapProjectRow) => void
   onOpenConflict: (conflictKey: string) => void
   onEditPlannedProject: (projectId: string) => void
   onDeletePlannedProject: (projectId: string) => void
@@ -182,6 +184,7 @@ export default function ProjectRoadmapModule({
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [columnDrawerOpen, setColumnDrawerOpen] = useState(false)
   const [changeLogOpen, setChangeLogOpen] = useState(false)
+  const [detailsProject, setDetailsProject] = useState<RoadmapProjectRow | null>(null)
   const [activeProjectLogId, setActiveProjectLogId] = useState<string | null>(null)
   const [tosMaintenanceOpen, setTosMaintenanceOpen] = useState(false)
   const [conflictDrawerOpen, setConflictDrawerOpen] = useState(false)
@@ -498,6 +501,7 @@ export default function ProjectRoadmapModule({
     onSelectedTosVersionChange: setSelectedTosVersionId,
     onSortChange: setSort,
     onOpenProjectHistory: openProjectHistory,
+    onOpenProjectDetails: setDetailsProject,
     onOpenConflict: openConflictDrawer,
     onEditPlannedProject: openPlannedProjectEditor,
     onDeletePlannedProject: requestDeletePlannedProject,
@@ -517,11 +521,12 @@ export default function ProjectRoadmapModule({
       aria-label="tOS 路标视图"
       style={{ width: '100%', minWidth: 0 }}
     >
+      <RoadmapViewModeSwitch value={viewMode} onChange={handleViewModeChange} />
+      <div className="pms-roadmap-content-panel pms-solid-surface">
       <RoadmapToolbar
         canView={canView}
         canEdit={canEdit}
         viewMode={viewMode}
-        onViewModeChange={handleViewModeChange}
         brandFilter={brandFilter}
         onBrandFilterChange={value => updateQuickFilter('brand', value)}
         productTypeFilter={productTypeFilter}
@@ -593,6 +598,7 @@ export default function ProjectRoadmapModule({
           />
         </div>
       )}
+      </div>
 
       <PlannedProjectModal
         open={plannedModalOpen}
@@ -634,6 +640,12 @@ export default function ProjectRoadmapModule({
         changeLogs={scopedChangeLogs}
         projectScopeLabel={activeProjectLogLabel}
         tosVersions={versions}
+      />
+      <RoadmapProjectDetailsModal
+        open={detailsProject !== null}
+        row={detailsProject}
+        versions={versions}
+        onClose={() => setDetailsProject(null)}
       />
     </section>
   )

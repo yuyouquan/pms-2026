@@ -45,6 +45,7 @@ export interface RoadmapEvolutionViewProps {
   collapsedTargetVersionIds: ReadonlySet<string>
   onToggleTarget: (versionId: string) => void
   onOpenProjectHistory: (projectId: string) => void
+  onOpenProjectDetails: (row: RoadmapProjectRow) => void
   onOpenConflict: (conflictKey: string) => void
   onEditPlannedProject: (projectId: string) => void
   onDeletePlannedProject: (projectId: string) => void
@@ -166,6 +167,7 @@ export default function RoadmapEvolutionView({
   collapsedTargetVersionIds,
   onToggleTarget,
   onOpenProjectHistory,
+  onOpenProjectDetails,
   onOpenConflict,
   onEditPlannedProject,
   onDeletePlannedProject,
@@ -187,6 +189,7 @@ export default function RoadmapEvolutionView({
       conflictKey={conflictKeyByIdentity.get(`${row.source}:${row.id}`)}
       canEdit={canEdit}
       onOpenProjectHistory={onOpenProjectHistory}
+      onOpenProjectDetails={onOpenProjectDetails}
       onOpenConflict={onOpenConflict}
       onEditPlannedProject={onEditPlannedProject}
       onDeletePlannedProject={onDeletePlannedProject}
@@ -351,10 +354,10 @@ export default function RoadmapEvolutionView({
           overflow: auto;
           overscroll-behavior: contain;
           scrollbar-gutter: stable;
-          border: 1px solid var(--border-purple);
-          border-radius: var(--radius-xl);
+          border: 0;
+          border-radius: 0 0 11px 11px;
           background: var(--pms-surface-solid);
-          box-shadow: var(--shadow-sm);
+          box-shadow: none;
         }
 
         .pms-roadmap-evolution-shell:focus-visible {
@@ -364,29 +367,28 @@ export default function RoadmapEvolutionView({
 
         .pms-roadmap-evolution-grid {
           display: grid;
-          grid-template-columns: repeat(var(--roadmap-version-count), minmax(292px, 1fr));
+          grid-template-columns: repeat(var(--roadmap-version-count), minmax(258px, 1fr));
           grid-template-rows: auto minmax(min-content, max-content) auto minmax(min-content, max-content);
           align-items: stretch;
           width: 100%;
-          min-width: calc(var(--roadmap-version-count) * 300px + 16px);
+          min-width: calc(var(--roadmap-version-count) * 266px + 16px);
           box-sizing: border-box;
           gap: 0 8px;
-          padding: 0 8px 12px;
+          padding: 0 6px 10px;
         }
 
         .pms-roadmap-evolution-version-cell {
           position: sticky;
           top: 0;
           z-index: 4;
-          min-height: 112px;
+          min-height: 78px;
           margin-inline: -1px;
-          padding: 14px;
-          border: 1px solid var(--border-purple);
+          padding: 9px 10px;
+          border: 1px solid #e8e8f5;
           border-top: 0;
-          border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-          background: var(--pms-surface-solid);
-          box-shadow: var(--shadow-md);
-          backdrop-filter: blur(18px) saturate(150%);
+          border-radius: 0;
+          background: #f7f6ff;
+          box-shadow: none;
         }
 
         .pms-roadmap-evolution-version-cell .ant-typography {
@@ -394,12 +396,12 @@ export default function RoadmapEvolutionView({
         }
 
         .pms-roadmap-evolution-target {
-          margin-top: 10px;
-          padding: 9px 10px;
-          border: 1px solid rgba(245, 158, 11, 0.34);
-          border-radius: var(--radius-md);
-          background: linear-gradient(135deg, rgba(254, 249, 195, 0.92), rgba(255, 247, 237, 0.9));
-          color: #713f12;
+          margin-top: 4px;
+          padding: 4px 6px;
+          border: 0;
+          border-radius: 4px;
+          background: rgba(111, 91, 255, 0.05);
+          color: var(--text-secondary);
         }
 
         .pms-roadmap-evolution-target-text {
@@ -416,7 +418,7 @@ export default function RoadmapEvolutionView({
 
         .pms-roadmap-evolution-product-cell {
           min-height: 100%;
-          padding: 12px 9px;
+          padding: 8px 8px 10px;
         }
 
         .pms-roadmap-evolution-product-heading,
@@ -428,13 +430,13 @@ export default function RoadmapEvolutionView({
         }
 
         .pms-roadmap-evolution-product-heading {
-          min-height: 32px;
-          padding: 0 2px 8px;
+          min-height: 28px;
+          padding: 0 2px 6px;
         }
 
         .pms-roadmap-evolution-separator {
-          min-height: 40px;
-          padding: 8px 12px;
+          min-height: 34px;
+          padding: 6px 10px;
           border-inline: 1px solid var(--border-purple);
           background: var(--pms-surface-solid);
           box-shadow: inset 0 1px 0 color-mix(in srgb, var(--pms-brand) 12%, transparent);
@@ -445,8 +447,8 @@ export default function RoadmapEvolutionView({
         }
 
         .pms-roadmap-evolution-brand-heading {
-          min-height: 28px;
-          padding: 0 3px 6px;
+          min-height: 24px;
+          padding: 0 3px 5px;
         }
 
         .pms-roadmap-evolution-brand-dot {
@@ -491,20 +493,22 @@ export default function RoadmapEvolutionView({
         }
 
         .pms-roadmap-evolution-card {
+          position: relative;
           min-width: 0;
-          padding: 11px;
-          border: 1px solid var(--border);
-          border-radius: var(--radius-lg);
-          background: #fff;
+          padding: 8px 9px;
+          border: 1px solid transparent;
+          border-radius: 10px;
+          background: #f8f8fa;
           box-shadow: var(--shadow-xs);
+          cursor: pointer;
           transition: border-color var(--duration-fast) var(--ease-out),
             box-shadow var(--duration-fast) var(--ease-out),
             transform var(--duration-fast) var(--ease-out);
         }
 
         .pms-roadmap-evolution-card:hover {
-          border-color: var(--border-purple);
-          box-shadow: var(--shadow-card-hover);
+          border-color: rgba(99, 74, 255, 0.32);
+          box-shadow: 0 5px 14px rgba(54, 41, 124, 0.12);
           transform: translateY(-1px);
         }
 
@@ -565,8 +569,18 @@ export default function RoadmapEvolutionView({
         }
 
         .pms-roadmap-evolution-action-trigger-row {
+          position: absolute;
+          right: 4px;
+          bottom: 1px;
           height: 20px;
-          margin-top: 2px;
+          margin: 0;
+          opacity: 0;
+          transition: opacity 160ms ease;
+        }
+
+        .pms-roadmap-evolution-card:hover .pms-roadmap-evolution-action-trigger-row,
+        .pms-roadmap-evolution-card:focus-within .pms-roadmap-evolution-action-trigger-row {
+          opacity: 1;
         }
 
         .pms-roadmap-evolution-card-title {
@@ -585,11 +599,11 @@ export default function RoadmapEvolutionView({
 
         .pms-roadmap-evolution-card-details {
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 7px 10px;
-          margin: 10px 0 0;
-          padding-top: 9px;
-          border-top: 1px solid var(--border-light);
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 5px 8px;
+          margin: 7px 0 0;
+          padding-top: 0;
+          border-top: 0;
         }
 
         .pms-roadmap-evolution-card-detail {
@@ -598,15 +612,15 @@ export default function RoadmapEvolutionView({
 
         .pms-roadmap-evolution-card-detail dt {
           color: var(--text-secondary);
-          font-size: var(--text-xs);
+          font-size: 10px;
           line-height: 1.35;
         }
 
         .pms-roadmap-evolution-card-detail dd {
           overflow: hidden;
-          margin: 2px 0 0;
+          margin: 1px 0 0;
           color: var(--text-primary);
-          font-size: var(--text-sm);
+          font-size: 11px;
           line-height: 1.4;
           text-overflow: ellipsis;
           white-space: nowrap;
@@ -638,8 +652,8 @@ export default function RoadmapEvolutionView({
         }
 
         .pms-roadmap-evolution-card-actions {
-          margin-top: 8px;
-          padding-top: 7px;
+          margin-top: 6px;
+          padding-top: 6px;
           border-top: 1px solid var(--border-light);
         }
 

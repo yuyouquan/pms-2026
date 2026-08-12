@@ -59,7 +59,7 @@ import { useEnumStore } from '@/stores/enums'
 
 const INITIAL_TIMESTAMP = '2026-01-01T00:00:00.000Z'
 const ROADMAP_STORAGE_KEY = 'pms-project-roadmap'
-export const ROADMAP_STORE_VERSION = 6
+export const ROADMAP_STORE_VERSION = 7
 
 const KNOWN_COLUMN_KEYS = new Set<RoadmapColumnKey>(ROADMAP_COLUMNS.map(column => column.key))
 const ROADMAP_BRANDS = new Set<RoadmapBrand>(['TECNO', 'Infinix', 'itel', '待定', '其他品牌'])
@@ -666,13 +666,8 @@ function normalizeRoadmapState(persistedState: unknown, fromVersion: number | nu
     migratedEvolutionVisibleColumns,
     ROADMAP_EVOLUTION_LOCKED_COLUMNS,
   )
-  if (fromVersion !== null && fromVersion < 4) {
+  if (fromVersion !== null && fromVersion < 7) {
     evolutionVisibleColumns = [...DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS]
-  } else if (fromVersion !== null && fromVersion < 5 && !evolutionVisibleColumns.includes('developMode')) {
-    evolutionVisibleColumns = ensureRoadmapLockedColumns(
-      [...evolutionVisibleColumns, 'developMode'],
-      ROADMAP_EVOLUTION_LOCKED_COLUMNS,
-    )
   }
   const visibleColumnsByView = {
     table: normalizeRoadmapColumnSettings('table', {

@@ -371,7 +371,7 @@ export default function RoadmapTableView({
           }
           return classNames.join(' ')
         }}
-        pagination={{ pageSize: 20, showSizeChanger: true, showTotal: total => `共 ${total} 条` }}
+        pagination={{ defaultPageSize: 10, showSizeChanger: true, showTotal: total => `共 ${total} 条` }}
         locale={{
           emptyText: (
             <Empty
