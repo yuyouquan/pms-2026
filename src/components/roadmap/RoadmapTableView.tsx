@@ -11,10 +11,10 @@ import {
   UpOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
-import { Button, Empty, Flex, Select, Table, Tooltip, Typography, type TableProps } from 'antd'
+import { Button, Empty, Flex, Table, Tooltip, Typography, type TableProps } from 'antd'
 import { orderVisibleDefinitions } from '@/lib/columnSettings'
 import { getRoadmapSortableColumnDefinitions } from '@/lib/roadmapFilters'
-import { compareRoadmapValues, compareSemanticTos } from '@/lib/roadmapSorting'
+import { compareRoadmapValues } from '@/lib/roadmapSorting'
 import { formatTosVersionDisplay, formatTosVersionFull } from '@/lib/roadmapValidation'
 import {
   ROADMAP_COLUMNS,
@@ -34,7 +34,6 @@ interface RoadmapTableViewProps {
   visibleColumns: readonly RoadmapColumnKey[]
   sort: RoadmapSortState
   canEdit: boolean
-  onSelectedTosVersionChange: (id: string | null) => void
   onSortChange: (sort: RoadmapSortState) => void
   onOpenProjectHistory: (projectId: string) => void
   onOpenConflict: (conflictKey: string) => void
@@ -101,7 +100,6 @@ export default function RoadmapTableView({
   visibleColumns,
   sort,
   canEdit,
-  onSelectedTosVersionChange,
   onSortChange,
   onOpenProjectHistory,
   onOpenConflict,
@@ -128,10 +126,6 @@ export default function RoadmapTableView({
     }
     return keys
   }, [conflicts])
-  const descendingVersions = useMemo(
-    () => [...versions].sort((left, right) => compareSemanticTos(right, left)),
-    [versions],
-  )
   const targetCollapsed = version ? collapsedTargetVersionIds.has(version.id) : false
 
   const orderedDefinitions = orderVisibleDefinitions(
@@ -279,31 +273,6 @@ export default function RoadmapTableView({
 
   return (
     <div className="roadmap-table-shell" style={{ width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
-      <Flex className="roadmap-table-controls pms-toolbar" align="center" gap={10} style={{ marginBottom: 8 }} wrap>
-        <Flex align="center" gap={10} wrap>
-          <Select
-            aria-label="表单视图 tOS 版本"
-            value={selectedTosVersionId ?? 'all'}
-            placeholder="选择 tOS 版本"
-            options={[
-              { label: '全部', value: 'all' },
-              ...descendingVersions.map(item => ({
-                label: (
-                  <Tooltip title={formatTosVersionFull(item)}>
-                    {formatTosVersionDisplay(item)}
-                  </Tooltip>
-                ),
-                value: item.id,
-                disabled: item.selectable === false,
-              })),
-            ]}
-            onChange={selectedId => onSelectedTosVersionChange(selectedId === 'all' ? null : selectedId)}
-            style={{ width: 156 }}
-          />
-          <Typography.Text type="secondary">共 {versionRows.length} 个项目</Typography.Text>
-        </Flex>
-      </Flex>
-
       {version ? (
         <section
           className="pms-glass-panel roadmap-target-card pms-glass-surface pms-interactive-surface"
@@ -371,7 +340,7 @@ export default function RoadmapTableView({
           }
           return classNames.join(' ')
         }}
-        pagination={{ pageSize: 20, showSizeChanger: true, showTotal: total => `共 ${total} 条` }}
+        pagination={{ defaultPageSize: 10, showSizeChanger: true, showTotal: total => `共 ${total} 条` }}
         locale={{
           emptyText: (
             <Empty

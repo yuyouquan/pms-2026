@@ -46,8 +46,9 @@ import RoadmapChangeLogDrawer from './RoadmapChangeLogDrawer'
 import RoadmapConflictDrawer from './RoadmapConflictDrawer'
 import RoadmapEvolutionView from './RoadmapEvolutionView'
 import RoadmapFilterDrawer from './RoadmapFilterDrawer'
+import RoadmapProjectDetailsModal from './RoadmapProjectDetailsModal'
 import RoadmapTableView from './RoadmapTableView'
-import RoadmapToolbar from './RoadmapToolbar'
+import RoadmapToolbar, { RoadmapViewModeSwitch } from './RoadmapToolbar'
 import TosVersionMaintenanceModal from './TosVersionMaintenanceModal'
 
 const isPresent = <T,>(value: T | null): value is T => value !== null
@@ -68,6 +69,7 @@ export interface RoadmapViewRenderContext {
   onSelectedTosVersionChange: (id: string | null) => void
   onSortChange: (sort: RoadmapSortState) => void
   onOpenProjectHistory: (projectId: string) => void
+  onOpenProjectDetails: (row: RoadmapProjectRow) => void
   onOpenConflict: (conflictKey: string) => void
   onEditPlannedProject: (projectId: string) => void
   onDeletePlannedProject: (projectId: string) => void
@@ -133,9 +135,7 @@ export default function ProjectRoadmapModule({
         project.tosVersionName,
         project.tosVersion,
       ]),
-      ...storedVersionDetails.flatMap(version => (
-        version.targets.length || version.periodStartDate || version.periodEndDate ? [version.id] : []
-      )),
+      ...storedVersionDetails.map(version => version.id),
       selectedTosVersionId,
       ...getRoadmapSelectedTosVersionIds(filters),
     ].map(value => normalizeRoadmapTosReference(value, storedVersionDetails)).filter(Boolean)
@@ -168,6 +168,10 @@ export default function ProjectRoadmapModule({
     () => versions.filter(version => version.selectable !== false),
     [versions],
   )
+  const maintainedVersions = useMemo(() => {
+    const maintainedIds = new Set(storedVersionDetails.map(version => normalizeRoadmapTosValue(version.id)))
+    return versions.filter(version => maintainedIds.has(version.id))
+  }, [storedVersionDetails, versions])
   const normalizedFilters = useMemo(
     () => sanitizeRoadmapFilterConditions(filters, versions),
     [filters, versions],
@@ -182,6 +186,7 @@ export default function ProjectRoadmapModule({
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [columnDrawerOpen, setColumnDrawerOpen] = useState(false)
   const [changeLogOpen, setChangeLogOpen] = useState(false)
+  const [detailsProject, setDetailsProject] = useState<RoadmapProjectRow | null>(null)
   const [activeProjectLogId, setActiveProjectLogId] = useState<string | null>(null)
   const [tosMaintenanceOpen, setTosMaintenanceOpen] = useState(false)
   const [conflictDrawerOpen, setConflictDrawerOpen] = useState(false)
@@ -498,16 +503,21 @@ export default function ProjectRoadmapModule({
     onSelectedTosVersionChange: setSelectedTosVersionId,
     onSortChange: setSort,
     onOpenProjectHistory: openProjectHistory,
+    onOpenProjectDetails: setDetailsProject,
     onOpenConflict: openConflictDrawer,
     onEditPlannedProject: openPlannedProjectEditor,
     onDeletePlannedProject: requestDeletePlannedProject,
     collapsedTargetVersionIds,
     onToggleTarget: toggleTarget,
   }
+  const evolutionRenderContext: RoadmapViewRenderContext = {
+    ...renderContext,
+    versions: maintainedVersions,
+  }
 
   const content = viewMode === 'table'
     ? renderTableView?.(renderContext) ?? <RoadmapTableView {...renderContext} />
-    : renderEvolutionView?.(renderContext) ?? <RoadmapEvolutionView {...renderContext} />
+    : renderEvolutionView?.(evolutionRenderContext) ?? <RoadmapEvolutionView {...evolutionRenderContext} />
 
   return (
     <section
@@ -517,11 +527,15 @@ export default function ProjectRoadmapModule({
       aria-label="tOS 路标视图"
       style={{ width: '100%', minWidth: 0 }}
     >
+      <RoadmapViewModeSwitch value={viewMode} onChange={handleViewModeChange} />
+      <div className="pms-roadmap-content-panel pms-solid-surface">
       <RoadmapToolbar
         canView={canView}
         canEdit={canEdit}
         viewMode={viewMode}
-        onViewModeChange={handleViewModeChange}
+        versions={maintainedVersions}
+        selectedTosVersionId={selectedTosVersionId}
+        onSelectedTosVersionChange={setSelectedTosVersionId}
         brandFilter={brandFilter}
         onBrandFilterChange={value => updateQuickFilter('brand', value)}
         productTypeFilter={productTypeFilter}
@@ -593,6 +607,7 @@ export default function ProjectRoadmapModule({
           />
         </div>
       )}
+      </div>
 
       <PlannedProjectModal
         open={plannedModalOpen}
@@ -634,6 +649,12 @@ export default function ProjectRoadmapModule({
         changeLogs={scopedChangeLogs}
         projectScopeLabel={activeProjectLogLabel}
         tosVersions={versions}
+      />
+      <RoadmapProjectDetailsModal
+        open={detailsProject !== null}
+        row={detailsProject}
+        versions={versions}
+        onClose={() => setDetailsProject(null)}
       />
     </section>
   )

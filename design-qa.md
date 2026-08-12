@@ -98,6 +98,41 @@ final result: passed
 
 ---
 
+# tOS 路标顶部版本筛选与维护版本列 QA（2026-08-12）
+
+- Source visual truth: `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-f739b39f-a2f3-4f10-822f-0238766c1e7e.png`（277 × 46 px）。
+- Table implementation: `output/roadmap-qa/tos-roadmap-table-filter-2026-08-12.png`（1280 × 720 px，CSS viewport 1280 × 720，deviceScaleFactor 1）。
+- Evolution implementation: `output/roadmap-qa/tos-roadmap-evolution-maintained-versions-2026-08-12.png`（1280 × 720 px，CSS viewport 1280 × 720，deviceScaleFactor 1）。
+- Focused comparison: `output/roadmap-qa/tos-roadmap-filter-comparison-2026-08-12.png`（1250 × 200 px）。源图放大至 554 × 92 后与实现顶部筛选区域同画布比较，未拉伸实现区域。
+- State: 表单视图 tOS 下拉展开；版本演进视图无 tOS 高级筛选。
+
+## Findings
+
+- P0: none.
+- P1: none. 表单视图的 tOS 版本筛选已移动到顶部快捷筛选首位，并位于品牌之前。
+- P2: none. 已增加 `tOS版本` 标题，原筛选旁的 `共 21 个项目` 已移除；分页中的 `共 21 条` 保留为分页总数，不属于被删除区域。
+- P2: none. 演进视图以 tOS 版本维护记录作为纵列目录，16.1、16.2、16.3、17.0、17.1、17.2、18.0 均显示；无项目版本保留空列。
+- P3: Ant Design 仍输出项目已有的 `Card bordered` 弃用警告，与本次筛选及版本列改动无关。
+
+## Required fidelity surfaces
+
+- Fonts and typography: 复用现有 PMS 12px 快捷筛选标题与控件字号，单行显示无换行。
+- Spacing and layout rhythm: tOS、品牌、产品类型保持同一工具栏和 6px 内部间距，30px 控件高度一致。
+- Colors and tokens: 沿用现有紫色液态玻璃主题和 Ant Design 选择态，不新增颜色。
+- Image quality and assets: 本次无新增图片资产或自绘图标。
+- Copy and content: `tOS版本`、`全部` 和维护版本文案与业务要求一致；原项目数副文案已删除。
+
+## Interaction verification
+
+- 表单视图 tOS 下拉可打开，选项为全部及 7 个维护版本，未显示“已停用”状态。
+- 表单 / 版本演进切换正常。
+- 演进视图完整展示 7 个维护版本，其中 tOS16.3 聚合 21 个项目，其余无数据版本仍展示。
+- 页面仅观察到既有 Ant Design 弃用警告，无本次功能错误。
+
+final result: passed
+
+---
+
 # tOS 路标项目级操作与筛选摘要 QA（2026-08-12）
 
 - Source visual truth:
@@ -132,5 +167,36 @@ final result: passed
 
 - Verified table history/edit/conflict/delete, card operation expand/collapse, scoped history, scoped conflict, quick-filter chip removal, clear-all, and view switching.
 - Browser console warnings/errors: 0.
+
+final result: passed
+
+---
+
+# tOS Roadmap Design QA
+
+## Compared states
+
+- Table reference: `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-b42d885a-ae88-4995-baf4-d10e250c81a8.png`
+- Table implementation: `output/roadmap-qa/tos-roadmap-table.jpg`
+- Evolution reference: `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-46d66fe9-4315-456c-85a2-cab746ab7c3f.png`
+- Evolution implementation: `output/roadmap-qa/tos-roadmap-evolution.jpg`
+- Detail reference: `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-5befc8f9-b269-4b0c-a0a5-88f8f75d9913.png`
+- Detail implementation: `output/roadmap-qa/tos-roadmap-detail.jpg`
+
+## Findings
+
+- P0: none.
+- P1: none after fixing the filter draft feedback loop and forcing the new three-field evolution defaults through store migration version 7.
+- P2: none after separating the compact view switch, reducing toolbar density, aligning card tags, and adding the full-field details modal.
+- P3: the implementation uses the repository's current mock versions and projects rather than duplicating the screenshot's sample rows. The details modal is slightly taller because the approved behavior now exposes every roadmap field.
+
+## Interaction verification
+
+- Advanced filter field selection remains visible while its value is incomplete.
+- Selecting a product-line value immediately changed tOS16.3 from 21 projects to 4 and displayed `筛选 1`.
+- Reset cleared the applied condition.
+- Evolution cards default to platform, STR5 date, and launch date only.
+- Clicking `NOTE 50 Pro（X6877）` opened all roadmap fields; embedded project actions remain independently clickable.
+- Table and evolution view switching remained functional.
 
 final result: passed

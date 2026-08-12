@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { DeleteOutlined } from '@ant-design/icons'
 import { Button, DatePicker, Empty, Input, Select, Tooltip } from 'antd'
 import dayjs from 'dayjs'
@@ -12,6 +12,7 @@ import {
   type FilterFieldDefinition,
 } from '@/lib/filterConditions'
 import { getRoadmapFilterOperators } from '@/lib/roadmapFilters'
+import { resolveRoadmapFilterDraft } from '@/lib/roadmapFilterDraft'
 import type { RoadmapFilterCondition, RoadmapFilterOperator } from '@/types/roadmap'
 
 const ROADMAP_FILTER_CONTROL_HEIGHT = 32
@@ -42,11 +43,24 @@ export default function RoadmapFilterDrawer({
   const [draftConditions, setDraftConditions] = useState<RoadmapFilterCondition[]>([
     createRoadmapFilterCondition(),
   ])
+  const previousOpenRef = useRef(false)
+  const latestAppliedConditionsRef = useRef(conditions)
+  latestAppliedConditionsRef.current = conditions
 
   useEffect(() => {
-    if (!open) return
-    setDraftConditions(conditions.length ? [...conditions] : [createRoadmapFilterCondition()])
-  }, [conditions, open])
+    const wasOpen = previousOpenRef.current
+    previousOpenRef.current = open
+    if (!open || wasOpen) return
+    setDraftConditions(current => {
+      const hydrated = resolveRoadmapFilterDraft({
+        wasOpen,
+        open,
+        draft: current,
+        applied: latestAppliedConditionsRef.current,
+      })
+      return hydrated.length ? hydrated : [createRoadmapFilterCondition()]
+    })
+  }, [open])
 
   const definitionsByKey = useMemo(
     () => new Map(fieldDefinitions.map(definition => [definition.key, definition])),
@@ -166,14 +180,15 @@ export default function RoadmapFilterDrawer({
     <FloatingFilterPanel
       open={open}
       trigger={trigger}
-      title="路标筛选"
+      title="条件筛选"
+      width={432}
       getPopupContainer={getPopupContainer}
       onReset={resetAdvancedFilters}
       onAdd={() => commitRoadmapFilters([...draftConditions, createRoadmapFilterCondition()])}
       addDisabled={draftConditions.length >= fieldDefinitions.length}
       onClose={onClose}
     >
-      <div className="pms-filter-condition-list pms-roadmap-filter-body pms-solid-surface">
+      <div className="pms-filter-condition-list is-compact pms-roadmap-filter-body pms-solid-surface">
         {draftConditions.length ? draftConditions.map(condition => {
           const definition = definitionsByKey.get(condition.field)
           const operatorOptions = getRoadmapFilterOperators(condition.field, definition?.kind ?? 'text')
@@ -182,7 +197,7 @@ export default function RoadmapFilterDrawer({
                 <Select
                   aria-label="筛选字段"
                   size="small"
-                  placeholder="字段"
+                  placeholder="筛选字段"
                   value={condition.field || undefined}
                   options={getFieldOptionsWithDuplicateDisabled(
                     fieldOptions,

@@ -41,9 +41,7 @@ export const ROADMAP_EVOLUTION_LOCKED_COLUMNS: RoadmapColumnKey[] = [
 export const DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS: RoadmapColumnKey[] = ensureRoadmapLockedColumns([
   'marketName',
   'platform',
-  'startRam',
   'versionType',
-  'developMode',
   'str5Date',
   'launchDate',
 ], ROADMAP_EVOLUTION_LOCKED_COLUMNS)

@@ -699,7 +699,10 @@ registerAssertion('roadmap persistence migrates the envelope once and current-st
     throw new Error(`current custom evolution columns replayed a legacy upgrade: ${JSON.stringify(hydrated.visibleColumnsByView.evolution)}`)
   }
   const legacy = store.migrateRoadmapState(store.partializeRoadmapState(currentState), 1)
-  if (JSON.stringify(legacy.visibleColumnsByView.evolution) === JSON.stringify(expected) || !legacy.visibleColumnsByView.evolution.includes('developMode')) {
+  if (JSON.stringify(legacy.visibleColumnsByView.evolution) === JSON.stringify(expected)
+    || !legacy.visibleColumnsByView.evolution.includes('platform')
+    || !legacy.visibleColumnsByView.evolution.includes('str5Date')
+    || !legacy.visibleColumnsByView.evolution.includes('launchDate')) {
     throw new Error('legacy version 1 no longer receives the evolution-column upgrades')
   }
   const once = store.sanitizeRoadmapCurrentState(store.partializeRoadmapState(currentState))
@@ -922,7 +925,7 @@ function createPlannedInput(overrides = {}) {
 
 registerAssertion('roadmap store declares the exact persistence boundary', () => {
   const source = fs.readFileSync(roadmapStorePath, 'utf8')
-  for (const token of ['persist(', "name: 'pms-project-roadmap'", 'ROADMAP_STORE_VERSION = 6', 'version: ROADMAP_STORE_VERSION', 'migrate:', 'partialize:']) {
+  for (const token of ['persist(', "name: 'pms-project-roadmap'", 'ROADMAP_STORE_VERSION = 7', 'version: ROADMAP_STORE_VERSION', 'migrate:', 'partialize:']) {
     if (!source.includes(token)) throw new Error(`Roadmap store is missing ${token}`)
   }
   const mergeBody = source.slice(source.indexOf('export function mergeRoadmapPersistedState'), source.indexOf('const safeRoadmapStorage'))
@@ -1106,7 +1109,7 @@ registerAssertion('roadmap migration repairs legacy names, references, UI contro
     || JSON.stringify(migrated.filters.find(condition => condition.field === 'brand')?.value) !== JSON.stringify(['TECNO'])
     || JSON.stringify(migrated.filters.find(condition => condition.field === 'productType')?.value) !== JSON.stringify(['老品'])
     || JSON.stringify(migrated.visibleColumns) !== JSON.stringify([
-      'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate', 'developMode',
+      'marketName', 'displayName', 'platform', 'versionType', 'str5Date', 'launchDate',
     ])
   ) throw new Error(`filters/columns were not sanitized or synchronized: ${JSON.stringify({
     filters: migrated.filters,
@@ -2654,24 +2657,22 @@ registerAssertion('roadmap text-filter debouncer removes stale conditions before
   debouncer.dispose()
 })
 
-registerAssertion('roadmap filter drawer resets draft state without mutating applied filters', () => {
+registerAssertion('roadmap filter drawer preserves editing drafts while publishing complete filters', () => {
   const drawerSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapFilterDrawer.tsx'), 'utf8')
-  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
-  if (moduleSource.includes('onReset={() => setFilters([])}')) {
-    throw new Error('filter reset still mutates the applied store before Apply')
-  }
   const resetBody = drawerSource.match(/const resetAdvancedFilters = \(\) => \{([\s\S]*?)\n  \}/)?.[1] ?? ''
-  if (!resetBody.includes('setDraftConditions') || resetBody.includes('onApply')) {
-    throw new Error('filter reset is not draft-only')
+  if (!resetBody.includes('commitRoadmapFilters([createRoadmapFilterCondition()])')) {
+    throw new Error('filter reset does not immediately clear the applied result')
   }
   if (!drawerSource.includes('onReset={resetAdvancedFilters}')) {
-    throw new Error('floating filter reset is not wired to the draft-only reset handler')
+    throw new Error('floating filter reset is not wired to the shared reset handler')
+  }
+  if (!drawerSource.includes('resolveRoadmapFilterDraft')
+    || !drawerSource.includes('latestAppliedConditionsRef')
+    || !drawerSource.includes('if (!open || wasOpen) return')) {
+    throw new Error('open filter editing can still be overwritten by applied-state feedback')
   }
   if ((drawerSource.match(/onApply\(/g) ?? []).length !== 1) {
-    throw new Error('only the Apply action may submit drawer conditions')
-  }
-  if (!drawerSource.includes('if (!open) return') || !drawerSource.includes('setDraftConditions(conditions.length')) {
-    throw new Error('cancel/reopen does not restore the original applied filters')
+    throw new Error('filter updates must publish through one normalization boundary')
   }
 })
 
@@ -2932,7 +2933,7 @@ registerAssertion('evolution cards keep locked titles and approved colors', () =
     throw new Error('evolution structural columns are not locked')
   }
   const expectedEvolution = [
-    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate', 'developMode',
+    'marketName', 'displayName', 'platform', 'versionType', 'str5Date', 'launchDate',
   ]
   if (JSON.stringify(filters.DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS) !== JSON.stringify(expectedEvolution)) {
     throw new Error('evolution defaults do not include both structural title fields')
@@ -3028,13 +3029,17 @@ registerAssertion('roadmap change history filters, sorts, and renders fixed audi
 
 registerAssertion('roadmap filter conditions use one compact row per condition', () => {
   const source = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapFilterDrawer.tsx'), 'utf8')
+  const styles = fs.readFileSync(path.join(root, 'src/styles/globals.css'), 'utf8')
   for (const contract of [
     'ROADMAP_FILTER_CONTROL_HEIGHT = 32',
-    'conditionRowStyle',
-    "gridTemplateColumns: 'minmax(108px, 1fr) minmax(86px, .8fr) minmax(132px, 1.2fr) 32px'",
-    'pms-roadmap-filter-condition-row',
+    'title="条件筛选"',
+    'width={432}',
+    'pms-filter-condition-list is-compact pms-roadmap-filter-body',
   ]) {
     if (!source.includes(contract)) throw new Error(`roadmap filter drawer is missing compact row contract ${contract}`)
+  }
+  if (!styles.includes('grid-template-columns: 138px 68px minmax(130px, 1fr) 28px')) {
+    throw new Error('roadmap filter condition does not use the approved one-line compact grid')
   }
   if (source.includes('>值</Typography.Text>')) throw new Error('filter value label must not occupy a second row')
 })
@@ -3215,7 +3220,7 @@ registerAssertion('table and evolution views keep the approved independent defau
     'developMode', 'remark',
   ]
   const expectedEvolution = [
-    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate', 'developMode',
+    'marketName', 'displayName', 'platform', 'versionType', 'str5Date', 'launchDate',
   ]
   if (JSON.stringify(filterModule.DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS) !== JSON.stringify(expectedTable)) {
     throw new Error('table default columns do not match the approved matrix')
@@ -3258,7 +3263,7 @@ registerAssertion('roadmap migration canonicalizes locked evolution columns with
     },
   }, 1)
   const expectedEvolution = [
-    'marketName', 'displayName', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate', 'developMode',
+    'marketName', 'displayName', 'platform', 'versionType', 'str5Date', 'launchDate',
   ]
   if (JSON.stringify(migrated.visibleColumns) !== JSON.stringify(expectedEvolution)
     || JSON.stringify(migrated.visibleColumnsByView.evolution) !== JSON.stringify(expectedEvolution)) {
@@ -3303,7 +3308,7 @@ registerAssertion('roadmap supports compact fullscreen controls', () => {
   for (const token of ['FullscreenOutlined', 'FullscreenExitOutlined', 'onToggleFullscreen', 'isFullscreen']) {
     if (!toolbar.includes(token)) throw new Error(`compact toolbar is missing ${token}`)
   }
-  if (toolbar.includes('表单视图 tOS 版本')) throw new Error('table tOS selector still lives in the toolbar')
+  if (!toolbar.includes('表单视图 tOS 版本')) throw new Error('table tOS selector is missing from the toolbar')
   if (!moduleSource.includes("event.key === 'Escape'") || !moduleSource.includes('pms-roadmap-shell-fullscreen')) {
     throw new Error('module fullscreen lifecycle is incomplete')
   }
@@ -3316,20 +3321,20 @@ registerAssertion('roadmap supports compact fullscreen controls', () => {
   if (!styles.includes('.pms-roadmap-shell-fullscreen')) throw new Error('fullscreen shell styles are missing')
 })
 
-registerAssertion('roadmap table owns the tOS selector and fixed columns', () => {
+registerAssertion('roadmap toolbar owns the table tOS selector and table keeps fixed columns', () => {
   const table = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
-  for (const token of ['<Select', '表单视图 tOS 版本', "fixed: column.key === 'firstSaleTosVersionId' ? 'left'", "fixed: 'right'"]) {
+  const toolbar = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
+  for (const token of ["fixed: column.key === 'firstSaleTosVersionId' ? 'left'", "fixed: 'right'"]) {
     if (!table.includes(token)) throw new Error(`roadmap table is missing ${token}`)
   }
   for (const contract of [
     "{ label: '全部', value: 'all' }",
     "value={selectedTosVersionId ?? 'all'}",
     "selectedId === 'all' ? null : selectedId",
-    ': rows',
   ]) {
-    if (!table.includes(contract)) throw new Error(`roadmap all-tOS table scope is missing ${contract}`)
+    if (!toolbar.includes(contract)) throw new Error(`roadmap all-tOS toolbar scope is missing ${contract}`)
   }
-  if (table.indexOf("{ label: '全部', value: 'all' }") > table.indexOf('descendingVersions.map')) {
+  if (toolbar.indexOf("{ label: '全部', value: 'all' }") > toolbar.indexOf('descendingVersions.map')) {
     throw new Error('all must be the first tOS selector option')
   }
   if (table.includes('>只读</Typography.Text>')) throw new Error('normal project action still renders read-only text')
@@ -3585,6 +3590,37 @@ registerAssertion('roadmap exposes project-scoped history conflict filters and c
   }
   for (const token of ['pms-roadmap-card-header-tags', 'New', 'Old', 'onOpenProjectHistory']) {
     if (!cardSource.includes(token)) throw new Error(`roadmap card is missing ${token}`)
+  }
+})
+
+registerAssertion('roadmap table tOS filter lives in the top toolbar and evolution uses maintained versions', () => {
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  const toolbarSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
+  const tableSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
+
+  for (const token of [
+    "viewMode === 'table'",
+    'aria-label="表单视图 tOS 版本"',
+    '>tOS版本</Typography.Text>',
+    'onSelectedTosVersionChange',
+  ]) {
+    if (!toolbarSource.includes(token)) throw new Error(`top toolbar is missing ${token}`)
+  }
+  const tosFilterIndex = toolbarSource.indexOf('aria-label="表单视图 tOS 版本"')
+  const brandFilterIndex = toolbarSource.indexOf('aria-label="品牌快捷筛选"')
+  if (tosFilterIndex < 0 || brandFilterIndex < 0 || tosFilterIndex > brandFilterIndex) {
+    throw new Error('table tOS filter is not placed before the brand quick filter')
+  }
+  if (tableSource.includes('roadmap-table-controls') || /共\s*\{versionRows\.length\}\s*个项目/.test(tableSource)) {
+    throw new Error('table view still renders the legacy selector or project count row')
+  }
+  for (const token of [
+    'const maintainedVersions',
+    'storedVersionDetails.map(version => version.id)',
+    'versions: maintainedVersions',
+    '<RoadmapEvolutionView {...evolutionRenderContext}',
+  ]) {
+    if (!moduleSource.includes(token)) throw new Error(`maintained evolution catalog is missing ${token}`)
   }
 })
 

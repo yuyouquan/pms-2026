@@ -15,6 +15,7 @@ interface FloatingFilterPanelProps {
   onClose: () => void
   addDisabled?: boolean
   getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
+  width?: number
 }
 
 export function FloatingFilterPanel({
@@ -27,6 +28,7 @@ export function FloatingFilterPanel({
   onClose,
   addDisabled,
   getPopupContainer,
+  width = 720,
 }: FloatingFilterPanelProps) {
   return (
     <FloatingConfigPopover
@@ -59,7 +61,7 @@ export function FloatingFilterPanel({
           </Space>
         </div>
       )}
-      width={720}
+      width={width}
       ariaLabel="筛选"
       onCancel={onClose}
       getPopupContainer={getPopupContainer}

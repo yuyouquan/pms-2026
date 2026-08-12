@@ -37,6 +37,7 @@ export interface RoadmapProjectCardProps {
   conflictKey?: string
   canEdit: boolean
   onOpenProjectHistory: (projectId: string) => void
+  onOpenProjectDetails: (row: RoadmapProjectRow) => void
   onOpenConflict: (conflictKey: string) => void
   onEditPlannedProject: (projectId: string) => void
   onDeletePlannedProject: (projectId: string) => void
@@ -69,6 +70,7 @@ export default function RoadmapProjectCard({
   conflictKey,
   canEdit,
   onOpenProjectHistory,
+  onOpenProjectDetails,
   onOpenConflict,
   onEditPlannedProject,
   onDeletePlannedProject,
@@ -94,6 +96,13 @@ export default function RoadmapProjectCard({
     <article
       className={`pms-roadmap-evolution-card pms-glass-surface pms-interactive-surface${conflictKey && isPlanned ? ' is-conflict' : ''}`}
       aria-label={`${title}，${isPlanned ? '待规划项目' : '正式项目，只读'}`}
+      tabIndex={0}
+      onClick={() => onOpenProjectDetails(row)}
+      onKeyDown={event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        onOpenProjectDetails(row)
+      }}
     >
       <Flex className="pms-roadmap-evolution-card-header" justify="space-between" align="center" gap={8} wrap={false}>
         <Typography.Text className="pms-roadmap-evolution-card-title" title={title} strong>
@@ -160,7 +169,10 @@ export default function RoadmapProjectCard({
             aria-label={actionsExpanded ? '收起项目操作' : '展开项目操作'}
             aria-expanded={actionsExpanded}
             aria-controls={actionsId}
-            onClick={() => setActionsExpanded(expanded => !expanded)}
+            onClick={event => {
+              event.stopPropagation()
+              setActionsExpanded(expanded => !expanded)
+            }}
           />
         </Tooltip>
       </Flex>
@@ -176,7 +188,8 @@ export default function RoadmapProjectCard({
               type="link"
               size="small"
               icon={<HistoryOutlined aria-hidden />}
-              onClick={() => {
+              onClick={event => {
+                event.stopPropagation()
                 setActionsExpanded(false)
                 onOpenProjectHistory(row.id)
               }}
@@ -189,7 +202,8 @@ export default function RoadmapProjectCard({
                 danger
                 size="small"
                 icon={<WarningOutlined aria-hidden />}
-                onClick={() => {
+                onClick={event => {
+                  event.stopPropagation()
                   setActionsExpanded(false)
                   onOpenConflict(conflictKey)
                 }}
@@ -203,7 +217,8 @@ export default function RoadmapProjectCard({
                 type="link"
                 size="small"
                 icon={<EditOutlined aria-hidden />}
-                onClick={() => {
+                onClick={event => {
+                  event.stopPropagation()
                   setActionsExpanded(false)
                   onEditPlannedProject(row.id)
                 }}
@@ -215,7 +230,8 @@ export default function RoadmapProjectCard({
                 danger
                 size="small"
                 icon={<DeleteOutlined aria-hidden />}
-                onClick={() => {
+                onClick={event => {
+                  event.stopPropagation()
                   setActionsExpanded(false)
                   onDeletePlannedProject(row.id)
                 }}
