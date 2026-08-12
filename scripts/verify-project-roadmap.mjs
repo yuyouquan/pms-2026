@@ -2688,7 +2688,7 @@ registerAssertion('roadmap module composes controls and overlays without standal
     }
   }
   const toolbarSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
-  for (const label of ['表单视图', '版本演进视图', '记录', 'tOS 版本维护', '创建项目', '筛选', '字段配置']) {
+  for (const label of ['表单视图', '版本演进视图', 'tOS 版本维护', '创建项目', '筛选', '字段配置']) {
     if (!toolbarSource.includes(label)) throw new Error(`Roadmap toolbar is missing ${label}`)
   }
   if (/placeholder=["'][^"']*搜索/.test(toolbarSource)) throw new Error('Roadmap must not add a standalone search input')
@@ -2794,7 +2794,8 @@ registerAssertion('single-version roadmap table preserves sorting, targets, sour
     "formatRoadmapTableValue",
     "rowKey={row => `${row.source}:${row.id}`}",
     'version.targets.length',
-    '已存在正式项目',
+    'HistoryOutlined',
+    'onOpenProjectHistory',
     'roadmap-conflict-row',
     'onOpenConflict',
     'onEditPlannedProject',
@@ -2803,7 +2804,7 @@ registerAssertion('single-version roadmap table preserves sorting, targets, sour
   ]) {
     if (!source.includes(contract)) throw new Error(`RoadmapTableView is missing ${contract}`)
   }
-  if (!source.includes("row.source !== 'planned'")) {
+  if (!source.includes("const isPlanned = row.source === 'planned'") || !source.includes('isPlanned && canEdit')) {
     throw new Error('normal roadmap rows are not explicitly excluded from planned edit/delete actions')
   }
   if (source.includes("key: 'action'\n") && source.includes('ROADMAP_COLUMNS.push')) {
@@ -2841,9 +2842,10 @@ registerAssertion('roadmap table hides planned labels and uses opaque fixed colu
     '.ant-table-cell-fix-end',
     'position: sticky !important',
     'background: var(--bg-secondary) !important',
-    'tr.roadmap-planned-row:hover .roadmap-table-row-actions',
-    'tr.roadmap-planned-row:focus-within .roadmap-table-row-actions',
-    '已存在正式项目',
+    'tr:hover .roadmap-table-row-actions',
+    'tr:focus-within .roadmap-table-row-actions',
+    'onOpenProjectHistory',
+    '解决${row.displayName}冲突',
   ]) {
     if (!source.includes(contract)) throw new Error(`roadmap table refinement is missing ${contract}`)
   }
@@ -2869,7 +2871,7 @@ registerAssertion('version evolution uses one aligned shared scroll grid', () =>
   if (evolutionSource.includes("overflowY: 'auto'") || evolutionSource.includes('最新')) {
     throw new Error('evolution columns must share scrolling and must not mark a latest version')
   }
-  for (const contract of ['待规划', '已存在正常项目', 'onEditPlannedProject', 'onDeletePlannedProject']) {
+  for (const contract of ['待规划', 'onOpenProjectHistory', 'onOpenConflict', 'onEditPlannedProject', 'onDeletePlannedProject']) {
     if (!cardSource.includes(contract)) throw new Error(`RoadmapProjectCard is missing ${contract}`)
   }
 })
@@ -2972,7 +2974,7 @@ registerAssertion('evolution cards keep locked titles and approved colors', () =
   }
 })
 
-registerAssertion('global roadmap conflicts stay visible and actionable until resolved', () => {
+registerAssertion('project-scoped roadmap conflicts stay visible and actionable until resolved', () => {
   const alertPath = path.join(root, 'src/components/roadmap/RoadmapConflictAlert.tsx')
   const drawerSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapConflictDrawer.tsx'), 'utf8')
   const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
@@ -2980,14 +2982,14 @@ registerAssertion('global roadmap conflicts stay visible and actionable until re
   if (fs.existsSync(alertPath) || moduleSource.includes('RoadmapConflictAlert')) {
     throw new Error('full-width conflict alert remains mounted')
   }
-  for (const contract of ['查看正常项目', '删除待规划项目', 'selectedConflictKey', 'scrollIntoView']) {
+  for (const contract of ['查看正式项目', '删除待规划项目', 'selectedConflictKey', 'scrollIntoView']) {
     if (!drawerSource.includes(contract)) throw new Error(`conflict drawer is missing ${contract}`)
   }
-  for (const contract of ['RoadmapConflictDrawer', 'openConflictDrawer', 'countConflictingPlannedProjects']) {
+  for (const contract of ['RoadmapConflictDrawer', 'openConflictDrawer', 'scopedConflicts']) {
     if (!moduleSource.includes(contract)) throw new Error(`conflict integration is missing ${contract}`)
   }
-  for (const contract of ['冲突', 'count={conflictCount}', 'onClick={onResolveConflicts}']) {
-    if (!toolbarSource.includes(contract)) throw new Error(`compact conflict action is missing ${contract}`)
+  for (const obsoleteContract of ['count={conflictCount}', 'onClick={onResolveConflicts}', 'onResolveConflicts']) {
+    if (toolbarSource.includes(obsoleteContract)) throw new Error(`global conflict action remains in toolbar: ${obsoleteContract}`)
   }
   if (!moduleSource.includes('删除后，该待规划项目会立即从 tOS 路标中移除；修改记录仍保留删除前快照。确认删除？')) {
     throw new Error('planned deletion must use the approved shared confirmation copy')
@@ -3006,13 +3008,13 @@ registerAssertion('roadmap change history filters, sorts, and renders fixed audi
   if (projectNameEntries[0]?.before !== 'CN6(Android 16)' || projectNameEntries[0]?.after !== 'CN7(Android 16)') {
     throw new Error(`project-name audit lost its canonical Android suffix: ${JSON.stringify(projectNameEntries)}`)
   }
-  for (const label of ['项目标识', '来源', '动作', '日期范围', '正常项目', '待规划项目', '创建', '修改', '删除']) {
+  for (const label of ['项目标识', '来源', '动作', '日期范围', '正式项目', '待规划项目', '创建', '修改', '删除']) {
     if (!logSource.includes(label)) throw new Error(`change log drawer is missing ${label}`)
   }
   for (const contract of ['ROADMAP_AUDIT_FIELDS', 'occurredAt', 'Pagination', '→']) {
     if (!logSource.includes(contract)) throw new Error(`change log drawer is missing ${contract}`)
   }
-  if (!moduleSource.includes('RoadmapChangeLogDrawer') || !moduleSource.includes('changeLogs={changeLogs}')) {
+  if (!moduleSource.includes('RoadmapChangeLogDrawer') || !moduleSource.includes('changeLogs={scopedChangeLogs}') || !moduleSource.includes('projectScopeLabel=')) {
     throw new Error('change log drawer is not connected to persisted roadmap logs')
   }
   for (const compactContract of [
@@ -3379,8 +3381,11 @@ registerAssertion('two-digit roadmap contracts stay canonical end to end', () =>
   }
 
   const toolbar = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
-  for (const token of ['展开目标', '收起目标', '冲突', '记录', '创建项目']) {
+  for (const token of ['展开目标', '收起目标', '创建项目']) {
     if (!toolbar.includes(token)) throw new Error(`compact tOS roadmap toolbar is missing ${token}`)
+  }
+  for (const removedGlobalAction of ['onResolveConflicts', 'onOpenChangeLog']) {
+    if (toolbar.includes(removedGlobalAction)) throw new Error(`compact toolbar still contains ${removedGlobalAction}`)
   }
   for (const oldText of ['展开全部目标', '收起全部目标', '修改记录', '创建待规划项目']) {
     if (toolbar.includes(oldText)) throw new Error(`compact toolbar still contains ${oldText}`)
@@ -3560,6 +3565,26 @@ registerAssertion('roadmap tOS maintenance opens locally while recovery can reac
   }
   for (const token of ['forceRender', 'form.setFieldsValue(nextValues)', 'clearDraftAndClose']) {
     if (!plannedModalSource.includes(token)) throw new Error(`planned-project create/edit lifecycle is missing ${token}`)
+  }
+})
+
+registerAssertion('roadmap exposes project-scoped history conflict filters and card tags', () => {
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  const toolbarSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
+  const tableSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
+  const cardSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'), 'utf8')
+
+  for (const token of ['activeProjectLogId', 'onOpenProjectHistory', 'ActiveFilterConditions']) {
+    if (!moduleSource.includes(token)) throw new Error(`roadmap module is missing ${token}`)
+  }
+  if (toolbarSource.includes('onResolveConflicts') || toolbarSource.includes('onOpenChangeLog')) {
+    throw new Error('roadmap toolbar still exposes global conflict/history actions')
+  }
+  for (const token of ['HistoryOutlined', 'onOpenProjectHistory', 'onOpenConflict']) {
+    if (!tableSource.includes(token)) throw new Error(`roadmap table is missing ${token}`)
+  }
+  for (const token of ['pms-roadmap-card-header-tags', 'New', 'Old', 'onOpenProjectHistory']) {
+    if (!cardSource.includes(token)) throw new Error(`roadmap card is missing ${token}`)
   }
 })
 

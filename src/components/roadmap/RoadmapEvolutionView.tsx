@@ -44,6 +44,7 @@ export interface RoadmapEvolutionViewProps {
   canEdit: boolean
   collapsedTargetVersionIds: ReadonlySet<string>
   onToggleTarget: (versionId: string) => void
+  onOpenProjectHistory: (projectId: string) => void
   onOpenConflict: (conflictKey: string) => void
   onEditPlannedProject: (projectId: string) => void
   onDeletePlannedProject: (projectId: string) => void
@@ -164,6 +165,7 @@ export default function RoadmapEvolutionView({
   canEdit,
   collapsedTargetVersionIds,
   onToggleTarget,
+  onOpenProjectHistory,
   onOpenConflict,
   onEditPlannedProject,
   onDeletePlannedProject,
@@ -184,6 +186,7 @@ export default function RoadmapEvolutionView({
       visibleColumns={visibleColumns}
       conflictKey={conflictKeyByIdentity.get(`${row.source}:${row.id}`)}
       canEdit={canEdit}
+      onOpenProjectHistory={onOpenProjectHistory}
       onOpenConflict={onOpenConflict}
       onEditPlannedProject={onEditPlannedProject}
       onDeletePlannedProject={onDeletePlannedProject}
@@ -516,10 +519,33 @@ export default function RoadmapEvolutionView({
           flex-wrap: nowrap;
         }
 
+        .pms-roadmap-card-header-actions,
+        .pms-roadmap-card-header-tags {
+          min-width: max-content;
+          flex: none;
+          white-space: nowrap;
+        }
+
+        .pms-roadmap-card-header-actions {
+          gap: 2px !important;
+        }
+
+        .pms-roadmap-card-header-tags {
+          gap: 3px !important;
+        }
+
+        .pms-roadmap-card-header-tags .ant-tag {
+          margin-inline-end: 0;
+          padding-inline: 3px;
+          font-size: 9px;
+          line-height: 16px;
+          border-radius: 4px;
+        }
+
         .pms-roadmap-evolution-action-toggle {
-          width: 28px;
-          min-width: 28px;
-          height: 28px;
+          width: 24px;
+          min-width: 24px;
+          height: 24px;
           flex: none;
           color: var(--text-secondary);
           border-radius: var(--radius-md);
@@ -538,6 +564,11 @@ export default function RoadmapEvolutionView({
           transform: rotate(90deg);
         }
 
+        .pms-roadmap-evolution-action-trigger-row {
+          height: 20px;
+          margin-top: 2px;
+        }
+
         .pms-roadmap-evolution-card-title {
           display: block;
           min-width: 0;
@@ -548,14 +579,8 @@ export default function RoadmapEvolutionView({
         }
 
         .pms-roadmap-evolution-card-title {
-          font-size: var(--text-md);
+          font-size: 13px;
           color: var(--text-primary);
-        }
-
-        .pms-roadmap-evolution-source-tag {
-          flex: none;
-          margin-inline-end: 0;
-          white-space: nowrap;
         }
 
         .pms-roadmap-evolution-card-details {
@@ -585,15 +610,6 @@ export default function RoadmapEvolutionView({
           line-height: 1.4;
           text-overflow: ellipsis;
           white-space: nowrap;
-        }
-
-        .pms-roadmap-evolution-conflict-action {
-          height: auto;
-          min-height: 34px;
-          margin-top: 6px;
-          padding: 2px 0;
-          white-space: normal;
-          text-align: start;
         }
 
         .pms-roadmap-evolution-actions-collapse {

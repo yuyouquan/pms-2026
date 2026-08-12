@@ -81,7 +81,7 @@ function ConflictProjectCard({
           <Space size={8} wrap>
             <Typography.Text strong>{projectDisplayName}</Typography.Text>
             <Tag color={isNormal ? 'blue' : 'purple'} style={{ marginInlineEnd: 0 }}>
-              {isNormal ? '正常项目' : '待规划项目'}
+              {isNormal ? '正式项目' : '待规划项目'}
             </Tag>
           </Space>
           <Typography.Text
@@ -104,7 +104,7 @@ function ConflictProjectCard({
             onClick={() => onViewProject(project.id)}
             style={{ minHeight: 44, paddingInline: 8 }}
           >
-            查看正常项目
+            查看正式项目
           </Button>
         ) : canEdit ? (
           <Button
@@ -216,7 +216,7 @@ export default function RoadmapConflictDrawer({
       {groups.length ? (
         <Flex vertical gap={16}>
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            正常项目为只读数据。请核对重复项，并删除对应的待规划项目。
+            正式项目为只读数据。请核对重复项，并删除对应的待规划项目。
           </Typography.Paragraph>
 
           {groups.map(group => {
@@ -245,7 +245,7 @@ export default function RoadmapConflictDrawer({
                 <Flex vertical gap={12}>
                   <div>
                     <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
-                      正常项目（{group.normalProjects.length}）
+                      正式项目（{group.normalProjects.length}）
                     </Typography.Text>
                     <Flex vertical gap={8}>
                       {group.normalProjects.map(project => (

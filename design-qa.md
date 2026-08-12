@@ -95,3 +95,42 @@ The filter panel was measured and exercised directly in the in-app browser:
 - [x] Browser interaction and combined visual comparison
 
 final result: passed
+
+---
+
+# tOS 路标项目级操作与筛选摘要 QA（2026-08-12）
+
+- Source visual truth:
+  - `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-988594c0-9a14-4b67-850f-9e1c3c9d2f64.png`
+  - `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-351ceafc-7f08-4ebb-baa4-4e27f1aa99e3.png`
+  - `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-0d7d3467-25a7-433a-ad98-3ef417979245.png`
+- Implementation screenshots:
+  - `output/playwright/tos-roadmap-project-actions-table.png` (1280 × 720)
+  - `output/playwright/tos-roadmap-project-actions-evolution.png` (1275 × 717)
+  - `output/playwright/tos-roadmap-project-actions-filters.png` (1275 × 717)
+- Combined comparisons: `output/playwright/table-comparison.png`, `output/playwright/evolution-comparison.png`.
+- Viewport: approximately 1280 × 720 CSS px, deviceScaleFactor 1. Source and implementation captures were normalized to 720px height without stretching before side-by-side comparison.
+- State: conflicting planned table row hovered; evolution cards in default collapsed-operation state; brand quick filter applied; project-scoped history and conflict drawers opened.
+
+## Findings and iteration
+
+1. Initial evolution-card capture showed the tags and action trigger compressing long titles (P2). Tags were compacted and the action trigger moved below the detail grid.
+2. Post-fix capture shows the full `NOTE 50 Pro（X6877）` title, right-aligned `Full/Slim/Go + New/Old` tags, and no duplicate type values in details.
+3. Table capture shows four non-wrapping actions only on the hovered conflicting planned row. Formal rows expose only their own history action.
+4. Filter capture shows the synchronized quick-filter condition as a removable chip with a separate clear action.
+5. No actionable P0/P1/P2 difference remains. Mock tOS/project counts and the existing page title region differ from the interaction drafts but do not affect this scoped change.
+
+## Required fidelity surfaces
+
+- Fonts and typography: existing PMS font hierarchy retained; card titles use a compact 13px weight and remain single-line.
+- Spacing and layout rhythm: 28px table icon controls, compact non-wrapping card tags, and existing glass-surface spacing retained.
+- Colors and tokens: existing PMS purple and warning tokens plus Ant Design tag colors are reused.
+- Image quality and assets: no new raster assets; all icons come from `@ant-design/icons`.
+- Copy and content: global conflict/history actions are removed; project-level copy uses `历史`, `冲突`, and `正式项目`.
+
+## Interactions and runtime
+
+- Verified table history/edit/conflict/delete, card operation expand/collapse, scoped history, scoped conflict, quick-filter chip removal, clear-all, and view switching.
+- Browser console warnings/errors: 0.
+
+final result: passed
