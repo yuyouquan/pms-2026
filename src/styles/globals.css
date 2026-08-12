@@ -6150,6 +6150,22 @@ body,
   padding-left: 96px;
 }
 
+.pms-roadmap-filter-summary-row {
+  min-width: 0;
+  margin: -2px 0 10px;
+  padding: 0 10px;
+}
+
+.pms-roadmap-filter-summary-row .pms-active-filter-conditions {
+  min-width: 0;
+  flex: 1;
+}
+
+.pms-roadmap-filter-clear {
+  flex: none;
+  white-space: nowrap;
+}
+
 .pms-active-filter-conditions {
   position: relative;
   display: flex;

@@ -7,6 +7,7 @@ import {
   DeleteOutlined,
   DownOutlined,
   EditOutlined,
+  HistoryOutlined,
   UpOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
@@ -35,6 +36,7 @@ interface RoadmapTableViewProps {
   canEdit: boolean
   onSelectedTosVersionChange: (id: string | null) => void
   onSortChange: (sort: RoadmapSortState) => void
+  onOpenProjectHistory: (projectId: string) => void
   onOpenConflict: (conflictKey: string) => void
   onEditPlannedProject: (projectId: string) => void
   onDeletePlannedProject: (projectId: string) => void
@@ -101,6 +103,7 @@ export default function RoadmapTableView({
   canEdit,
   onSelectedTosVersionChange,
   onSortChange,
+  onOpenProjectHistory,
   onOpenConflict,
   onEditPlannedProject,
   onDeletePlannedProject,
@@ -125,7 +128,6 @@ export default function RoadmapTableView({
     }
     return keys
   }, [conflicts])
-  const displayNameVisible = visibleColumns.includes('displayName')
   const descendingVersions = useMemo(
     () => [...versions].sort((left, right) => compareSemanticTos(right, left)),
     [versions],
@@ -189,30 +191,10 @@ export default function RoadmapTableView({
           )
         }
         if (column.key !== 'displayName') return formattedValue
-        const conflictKey = row.source === 'planned'
-          ? conflictKeyByPlannedIdentity.get(`planned:${row.id}`)
-          : undefined
         return (
-          <Flex vertical gap={4} align="flex-start" style={{ minWidth: 0 }}>
-            <Flex className="roadmap-table-project-name-row" align="center" gap={6} wrap={false}>
-              <Typography.Text className="roadmap-table-project-name" title={formattedValue} strong>
-                {formattedValue}
-              </Typography.Text>
-            </Flex>
-            {conflictKey ? (
-              <Button
-                className="roadmap-conflict-link"
-                type="link"
-                danger
-                size="small"
-                icon={<WarningOutlined aria-hidden />}
-                onClick={() => onOpenConflict(conflictKey)}
-                style={{ height: 'auto', minHeight: 28, padding: 0, whiteSpace: 'normal', textAlign: 'start' }}
-              >
-                已存在正式项目
-              </Button>
-            ) : null}
-          </Flex>
+          <Typography.Text className="roadmap-table-project-name" title={formattedValue} strong>
+            {formattedValue}
+          </Typography.Text>
         )
       },
     }))
@@ -223,47 +205,57 @@ export default function RoadmapTableView({
       title: '操作',
       key: 'action',
       fixed: 'right',
-      width: displayNameVisible ? 172 : 230,
+      width: 136,
       render: (_value, row) => {
-        if (row.source !== 'planned') {
-          return null
-        }
-        const conflictKey = conflictKeyByPlannedIdentity.get(`planned:${row.id}`)
+        const isPlanned = row.source === 'planned'
+        const conflictKey = isPlanned
+          ? conflictKeyByPlannedIdentity.get(`planned:${row.id}`)
+          : undefined
         return (
-          <Flex vertical gap={6} align="flex-start">
-            {!displayNameVisible && conflictKey ? (
-              <Button
-                className="roadmap-conflict-link"
-                type="link"
-                danger
-                size="small"
-                icon={<WarningOutlined aria-hidden />}
-                onClick={() => onOpenConflict(conflictKey)}
-                style={{ height: 'auto', minHeight: 28, padding: 0, whiteSpace: 'normal', textAlign: 'start' }}
-              >
-                已存在正式项目
-              </Button>
-            ) : null}
-            {canEdit ? (
-              <Flex className="roadmap-table-row-actions" gap={4} wrap>
+          <Flex className="roadmap-table-row-actions" align="center" gap={2} wrap={false}>
+            {isPlanned && canEdit ? (
+              <Tooltip title="编辑项目">
                 <Button
-                  type="link"
+                  type="text"
                   size="small"
+                  aria-label={`编辑${row.displayName}`}
                   icon={<EditOutlined aria-hidden />}
                   onClick={() => onEditPlannedProject(row.id)}
-                >
-                  编辑
-                </Button>
+                />
+              </Tooltip>
+            ) : null}
+            <Tooltip title="历史记录">
+              <Button
+                type="text"
+                size="small"
+                aria-label={`查看${row.displayName}历史记录`}
+                icon={<HistoryOutlined aria-hidden />}
+                onClick={() => onOpenProjectHistory(row.id)}
+              />
+            </Tooltip>
+            {conflictKey ? (
+              <Tooltip title="解决冲突">
                 <Button
-                  type="link"
+                  type="text"
                   danger
                   size="small"
+                  aria-label={`解决${row.displayName}冲突`}
+                  icon={<WarningOutlined aria-hidden />}
+                  onClick={() => onOpenConflict(conflictKey)}
+                />
+              </Tooltip>
+            ) : null}
+            {isPlanned && canEdit ? (
+              <Tooltip title="删除项目">
+                <Button
+                  type="text"
+                  danger
+                  size="small"
+                  aria-label={`删除${row.displayName}`}
                   icon={<DeleteOutlined aria-hidden />}
                   onClick={() => onDeletePlannedProject(row.id)}
-                >
-                  删除
-                </Button>
-              </Flex>
+                />
+              </Tooltip>
             ) : null}
           </Flex>
         )
@@ -433,11 +425,17 @@ export default function RoadmapTableView({
           transition: opacity 160ms var(--ease-out),
             transform 180ms var(--ease-out);
         }
-        .roadmap-table-shell .pms-table .ant-table-tbody > tr.roadmap-planned-row:hover .roadmap-table-row-actions,
-        .roadmap-table-shell .pms-table .ant-table-tbody > tr.roadmap-planned-row:focus-within .roadmap-table-row-actions {
+        .roadmap-table-shell .pms-table .ant-table-tbody > tr:hover .roadmap-table-row-actions,
+        .roadmap-table-shell .pms-table .ant-table-tbody > tr:focus-within .roadmap-table-row-actions {
           opacity: 1;
           pointer-events: auto;
           transform: translateY(0);
+        }
+        .roadmap-table-shell .roadmap-table-row-actions .ant-btn {
+          width: 28px;
+          min-width: 28px;
+          height: 28px;
+          padding: 0;
         }
         .roadmap-table-shell .pms-table .ant-table-tbody > tr.roadmap-conflict-row > td {
           background: color-mix(in srgb, var(--warning-light) 78%, white) !important;
@@ -448,11 +446,6 @@ export default function RoadmapTableView({
         }
         .roadmap-table-shell .pms-table .ant-table-tbody > tr.roadmap-conflict-row:hover > td {
           background: var(--warning-light) !important;
-        }
-        .roadmap-table-shell .roadmap-conflict-link:focus-visible {
-          outline: 2px solid var(--primary);
-          outline-offset: 2px;
-          border-radius: var(--radius-sm);
         }
         @media (prefers-reduced-motion: reduce) {
           .roadmap-table-shell .pms-table .ant-table-tbody > tr.roadmap-conflict-row > td,

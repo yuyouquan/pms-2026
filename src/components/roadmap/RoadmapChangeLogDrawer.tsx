@@ -44,7 +44,7 @@ const ACTION_COLORS: Record<RoadmapChangeAction, string> = {
 }
 
 const SOURCE_LABELS: Record<RoadmapSource, string> = {
-  normal: '正常项目',
+  normal: '正式项目',
   planned: '待规划项目',
 }
 
@@ -96,6 +96,7 @@ export interface RoadmapChangeLogDrawerProps {
   onClose: () => void
   changeLogs: readonly RoadmapChangeLog[]
   tosVersions: readonly TosVersionConfig[]
+  projectScopeLabel?: string
   pageSize?: number
 }
 
@@ -279,6 +280,7 @@ export default function RoadmapChangeLogDrawer({
   onClose,
   changeLogs,
   tosVersions,
+  projectScopeLabel,
   pageSize = DEFAULT_PAGE_SIZE,
 }: RoadmapChangeLogDrawerProps) {
   const searchInputRef = useRef<InputRef>(null)
@@ -351,13 +353,13 @@ export default function RoadmapChangeLogDrawer({
       title={(
         <Flex align="center" gap={8}>
           <HistoryOutlined aria-hidden />
-          <span>修改记录</span>
+          <span>{projectScopeLabel ? `${projectScopeLabel} · 历史记录` : '历史记录'}</span>
         </Flex>
       )}
       open={open}
       onClose={onClose}
       afterOpenChange={visible => {
-        if (visible) requestAnimationFrame(() => searchInputRef.current?.focus())
+        if (visible && !projectScopeLabel) requestAnimationFrame(() => searchInputRef.current?.focus())
       }}
       placement="right"
       size="min(960px, 100vw)"
@@ -371,11 +373,11 @@ export default function RoadmapChangeLogDrawer({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              gridTemplateColumns: `repeat(${projectScopeLabel ? 3 : 4}, minmax(0, 1fr))`,
               gap: 8,
             }}
           >
-            <Flex vertical gap={2}>
+            {!projectScopeLabel ? <Flex vertical gap={2}>
               <Typography.Text strong style={{ fontSize: 12 }}>项目标识</Typography.Text>
               <Input
                 ref={searchInputRef}
@@ -391,7 +393,7 @@ export default function RoadmapChangeLogDrawer({
                 }}
                 style={{ height: CHANGE_LOG_FILTER_CONTROL_HEIGHT }}
               />
-            </Flex>
+            </Flex> : null}
             <Flex vertical gap={2}>
               <Typography.Text strong style={{ fontSize: 12 }}>来源</Typography.Text>
               <Select<RoadmapChangeLogSourceFilter>
@@ -400,7 +402,7 @@ export default function RoadmapChangeLogDrawer({
                 value={source}
                 options={[
                   { label: '全部来源', value: 'all' },
-                  { label: '正常项目', value: 'normal' },
+                  { label: '正式项目', value: 'normal' },
                   { label: '待规划项目', value: 'planned' },
                 ]}
                 onChange={value => {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Alert, Button, Card, Empty, Modal, Result, Skeleton, Space, Typography, message } from 'antd'
+import { Alert, Button, Card, Empty, Flex, Modal, Result, Skeleton, Space, Typography, message } from 'antd'
 import {
   applyRoadmapFilters,
   buildRoadmapFilterFieldDefinitions,
@@ -15,9 +15,9 @@ import {
 import {
   adaptNormalProject,
   adaptPlannedProject,
-  countConflictingPlannedProjects,
   deriveRoadmapPlanningConflicts,
 } from '@/lib/roadmapProjectAdapter'
+import ActiveFilterConditions from '@/components/project-list/ActiveFilterConditions'
 import { useHasGlobalPermission } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
 import { useRoadmapStore } from '@/stores/roadmap'
@@ -67,6 +67,7 @@ export interface RoadmapViewRenderContext {
   onViewProject: (projectId: string, market?: string) => void
   onSelectedTosVersionChange: (id: string | null) => void
   onSortChange: (sort: RoadmapSortState) => void
+  onOpenProjectHistory: (projectId: string) => void
   onOpenConflict: (conflictKey: string) => void
   onEditPlannedProject: (projectId: string) => void
   onDeletePlannedProject: (projectId: string) => void
@@ -77,7 +78,6 @@ export interface RoadmapViewRenderContext {
 interface ProjectRoadmapModuleProps {
   projects: readonly ProjectItem[]
   onViewProject: (projectId: string, market?: string) => void
-  onOpenChangeLog?: () => void
   renderTableView?: (context: RoadmapViewRenderContext) => ReactNode
   renderEvolutionView?: (context: RoadmapViewRenderContext) => ReactNode
 }
@@ -85,7 +85,6 @@ interface ProjectRoadmapModuleProps {
 export default function ProjectRoadmapModule({
   projects,
   onViewProject,
-  onOpenChangeLog,
   renderTableView,
   renderEvolutionView,
 }: ProjectRoadmapModuleProps) {
@@ -183,6 +182,7 @@ export default function ProjectRoadmapModule({
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [columnDrawerOpen, setColumnDrawerOpen] = useState(false)
   const [changeLogOpen, setChangeLogOpen] = useState(false)
+  const [activeProjectLogId, setActiveProjectLogId] = useState<string | null>(null)
   const [tosMaintenanceOpen, setTosMaintenanceOpen] = useState(false)
   const [conflictDrawerOpen, setConflictDrawerOpen] = useState(false)
   const [collapsedTargetVersionIds, setCollapsedTargetVersionIds] = useState<Set<string>>(
@@ -222,10 +222,25 @@ export default function ProjectRoadmapModule({
     () => deriveRoadmapPlanningConflicts(normalRows, plannedRows),
     [normalRows, plannedRows],
   )
-  const conflictCount = countConflictingPlannedProjects([...conflicts])
   const allRows = useMemo(
     () => [...normalRows, ...plannedRows],
     [normalRows, plannedRows],
+  )
+  const scopedChangeLogs = useMemo(
+    () => activeProjectLogId
+      ? changeLogs.filter(log => log.projectId === activeProjectLogId)
+      : [],
+    [activeProjectLogId, changeLogs],
+  )
+  const activeProjectLogLabel = useMemo(
+    () => allRows.find(row => row.id === activeProjectLogId)?.displayName ?? '',
+    [activeProjectLogId, allRows],
+  )
+  const scopedConflicts = useMemo(
+    () => selectedConflictKey
+      ? conflicts.filter(conflict => conflict.key === selectedConflictKey)
+      : [],
+    [conflicts, selectedConflictKey],
   )
 
   const brandFilter = getRoadmapQuickFilterValue(normalizedFilters, 'brand')
@@ -378,10 +393,10 @@ export default function ProjectRoadmapModule({
     }
     setViewMode(nextViewMode)
   }
-  const requestChangeLog = () => {
+  const openProjectHistory = (projectId: string) => {
     if (!canView) return
-    if (onOpenChangeLog) onOpenChangeLog()
-    else setChangeLogOpen(true)
+    setActiveProjectLogId(projectId)
+    setChangeLogOpen(true)
   }
   const openSharedTosEnumConfig = () => {
     navigateWithEditGuard(() => {
@@ -390,10 +405,10 @@ export default function ProjectRoadmapModule({
       setActiveModule('config')
     }, false)
   }
-  const openConflictDrawer = (conflictKey?: string) => {
-    const nextKey = conflictKey ?? conflicts[0]?.key ?? null
-    setSelectedConflictKey(nextKey)
-    setConflictDrawerOpen(Boolean(nextKey))
+  const openConflictDrawer = (conflictKey: string) => {
+    if (!conflicts.some(conflict => conflict.key === conflictKey)) return
+    setSelectedConflictKey(conflictKey)
+    setConflictDrawerOpen(true)
   }
   const requestDeletePlannedProject = (projectId: string, onDeleted?: () => void) => {
     if (!canEdit) return
@@ -482,6 +497,7 @@ export default function ProjectRoadmapModule({
     onViewProject,
     onSelectedTosVersionChange: setSelectedTosVersionId,
     onSortChange: setSort,
+    onOpenProjectHistory: openProjectHistory,
     onOpenConflict: openConflictDrawer,
     onEditPlannedProject: openPlannedProjectEditor,
     onDeletePlannedProject: requestDeletePlannedProject,
@@ -511,14 +527,11 @@ export default function ProjectRoadmapModule({
         productTypeFilter={productTypeFilter}
         onProductTypeFilterChange={value => updateQuickFilter('productType', value)}
         filterCount={configuredFilterCount}
-        conflictCount={conflictCount}
-        onResolveConflicts={() => openConflictDrawer()}
         hasTargetVersions={targetVersionIds.length > 0}
         allTargetsCollapsed={allTargetsCollapsed}
         onToggleAllTargets={toggleAllTargets}
         isFullscreen={isFullscreen}
         onToggleFullscreen={() => void toggleFullscreen()}
-        onOpenChangeLog={requestChangeLog}
         onOpenTosMaintenance={() => setTosMaintenanceOpen(true)}
         onCreatePlannedProject={openCreatePlannedProject}
         onOpenFilters={() => {
@@ -553,6 +566,25 @@ export default function ProjectRoadmapModule({
         )}
       />
 
+      {normalizedFilters.length ? (
+        <Flex className="pms-roadmap-filter-summary-row" align="center" gap={8} wrap={false}>
+          <ActiveFilterConditions
+            conditions={normalizedFilters}
+            definitions={filterFieldDefinitions}
+            onEdit={() => {
+              setColumnDrawerOpen(false)
+              setFilterDrawerOpen(true)
+            }}
+            onRemove={conditionId => setFilters(
+              normalizedFilters.filter(condition => condition.id !== conditionId),
+            )}
+          />
+          <Button className="pms-roadmap-filter-clear" type="text" danger size="small" onClick={() => setFilters([])}>
+            清空
+          </Button>
+        </Flex>
+      ) : null}
+
       {content ?? (
         <div style={{ padding: '48px 16px' }}>
           <Empty
@@ -581,19 +613,26 @@ export default function ProjectRoadmapModule({
       />
       <RoadmapConflictDrawer
         open={conflictDrawerOpen}
-        groups={conflicts}
+        groups={scopedConflicts}
         tosVersions={versions}
         selectedConflictKey={selectedConflictKey}
         canEdit={canEdit}
-        onClose={() => setConflictDrawerOpen(false)}
+        onClose={() => {
+          setConflictDrawerOpen(false)
+          setSelectedConflictKey(null)
+        }}
         onSelectedConflictKeyChange={setSelectedConflictKey}
         onViewProject={projectId => onViewProject(projectId)}
         onDeletePlannedProject={project => requestDeletePlannedProject(project.id)}
       />
       <RoadmapChangeLogDrawer
         open={changeLogOpen}
-        onClose={() => setChangeLogOpen(false)}
-        changeLogs={changeLogs}
+        onClose={() => {
+          setChangeLogOpen(false)
+          setActiveProjectLogId(null)
+        }}
+        changeLogs={scopedChangeLogs}
+        projectScopeLabel={activeProjectLogLabel}
         tosVersions={versions}
       />
     </section>
