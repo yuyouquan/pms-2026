@@ -11,8 +11,10 @@ import {
   SlidersOutlined,
   UpOutlined,
 } from '@ant-design/icons'
-import { Button, Flex, Segmented, Tooltip, Typography } from 'antd'
-import type { RoadmapBrand, RoadmapProductType, RoadmapViewMode } from '@/types/roadmap'
+import { Button, Flex, Segmented, Select, Tooltip, Typography } from 'antd'
+import { compareSemanticTos } from '@/lib/roadmapSorting'
+import { formatTosVersionDisplay, formatTosVersionFull } from '@/lib/roadmapValidation'
+import type { RoadmapBrand, RoadmapProductType, RoadmapViewMode, TosVersionConfig } from '@/types/roadmap'
 
 const compactControlStyle: CSSProperties = { minHeight: 30, height: 30, borderRadius: 6 }
 
@@ -20,6 +22,9 @@ interface RoadmapToolbarProps {
   canView: boolean
   canEdit: boolean
   viewMode: RoadmapViewMode
+  versions: readonly TosVersionConfig[]
+  selectedTosVersionId: string | null
+  onSelectedTosVersionChange: (id: string | null) => void
   brandFilter: 'all' | 'custom' | RoadmapBrand
   onBrandFilterChange: (brand: 'all' | RoadmapBrand) => void
   productTypeFilter: 'all' | 'custom' | RoadmapProductType
@@ -64,6 +69,9 @@ export default function RoadmapToolbar({
   canView,
   canEdit,
   viewMode,
+  versions,
+  selectedTosVersionId,
+  onSelectedTosVersionChange,
   brandFilter,
   onBrandFilterChange,
   productTypeFilter,
@@ -96,6 +104,8 @@ export default function RoadmapToolbar({
   ]
   if (productTypeFilter === 'custom') productTypeOptions.push({ label: '自定义', value: 'custom', disabled: true })
 
+  const descendingVersions = [...versions].sort((left, right) => compareSemanticTos(right, left))
+
   return (
     <div
       className="roadmap-toolbar-glass pms-toolbar"
@@ -113,6 +123,26 @@ export default function RoadmapToolbar({
     >
       <Flex justify="space-between" align="center" gap={8} wrap={false} style={{ minWidth: 'max-content' }}>
         <Flex align="center" gap={12} wrap={false} style={{ minWidth: 'max-content', flex: '0 0 auto' }}>
+          {viewMode === 'table' ? (
+            <Flex data-roadmap-quick-filter align="center" gap={6} wrap={false}>
+              <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>tOS版本</Typography.Text>
+              <Select
+                aria-label="表单视图 tOS 版本"
+                value={selectedTosVersionId ?? 'all'}
+                options={[
+                  { label: '全部', value: 'all' },
+                  ...descendingVersions.map(version => ({
+                    label: formatTosVersionDisplay(version),
+                    title: formatTosVersionFull(version),
+                    value: version.id,
+                  })),
+                ]}
+                onChange={selectedId => onSelectedTosVersionChange(selectedId === 'all' ? null : selectedId)}
+                style={{ width: 150 }}
+              />
+            </Flex>
+          ) : null}
+
           <Flex data-roadmap-quick-filter align="center" gap={6} wrap={false}>
             <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>品牌</Typography.Text>
             <Segmented<'all' | 'custom' | RoadmapBrand>
@@ -201,6 +231,10 @@ export default function RoadmapToolbar({
         .roadmap-toolbar-glass .ant-segmented {
           padding: 2px;
           background: #f5f5f7;
+        }
+        .roadmap-toolbar-glass .ant-select-selector {
+          min-height: 30px !important;
+          border-radius: 6px !important;
         }
         .roadmap-toolbar-glass .ant-segmented-item,
         .roadmap-toolbar-glass .ant-segmented-item-label {

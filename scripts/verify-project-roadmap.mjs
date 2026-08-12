@@ -3308,7 +3308,7 @@ registerAssertion('roadmap supports compact fullscreen controls', () => {
   for (const token of ['FullscreenOutlined', 'FullscreenExitOutlined', 'onToggleFullscreen', 'isFullscreen']) {
     if (!toolbar.includes(token)) throw new Error(`compact toolbar is missing ${token}`)
   }
-  if (toolbar.includes('表单视图 tOS 版本')) throw new Error('table tOS selector still lives in the toolbar')
+  if (!toolbar.includes('表单视图 tOS 版本')) throw new Error('table tOS selector is missing from the toolbar')
   if (!moduleSource.includes("event.key === 'Escape'") || !moduleSource.includes('pms-roadmap-shell-fullscreen')) {
     throw new Error('module fullscreen lifecycle is incomplete')
   }
@@ -3321,20 +3321,20 @@ registerAssertion('roadmap supports compact fullscreen controls', () => {
   if (!styles.includes('.pms-roadmap-shell-fullscreen')) throw new Error('fullscreen shell styles are missing')
 })
 
-registerAssertion('roadmap table owns the tOS selector and fixed columns', () => {
+registerAssertion('roadmap toolbar owns the table tOS selector and table keeps fixed columns', () => {
   const table = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
-  for (const token of ['<Select', '表单视图 tOS 版本', "fixed: column.key === 'firstSaleTosVersionId' ? 'left'", "fixed: 'right'"]) {
+  const toolbar = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
+  for (const token of ["fixed: column.key === 'firstSaleTosVersionId' ? 'left'", "fixed: 'right'"]) {
     if (!table.includes(token)) throw new Error(`roadmap table is missing ${token}`)
   }
   for (const contract of [
     "{ label: '全部', value: 'all' }",
     "value={selectedTosVersionId ?? 'all'}",
     "selectedId === 'all' ? null : selectedId",
-    ': rows',
   ]) {
-    if (!table.includes(contract)) throw new Error(`roadmap all-tOS table scope is missing ${contract}`)
+    if (!toolbar.includes(contract)) throw new Error(`roadmap all-tOS toolbar scope is missing ${contract}`)
   }
-  if (table.indexOf("{ label: '全部', value: 'all' }") > table.indexOf('descendingVersions.map')) {
+  if (toolbar.indexOf("{ label: '全部', value: 'all' }") > toolbar.indexOf('descendingVersions.map')) {
     throw new Error('all must be the first tOS selector option')
   }
   if (table.includes('>只读</Typography.Text>')) throw new Error('normal project action still renders read-only text')
@@ -3590,6 +3590,37 @@ registerAssertion('roadmap exposes project-scoped history conflict filters and c
   }
   for (const token of ['pms-roadmap-card-header-tags', 'New', 'Old', 'onOpenProjectHistory']) {
     if (!cardSource.includes(token)) throw new Error(`roadmap card is missing ${token}`)
+  }
+})
+
+registerAssertion('roadmap table tOS filter lives in the top toolbar and evolution uses maintained versions', () => {
+  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  const toolbarSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
+  const tableSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
+
+  for (const token of [
+    "viewMode === 'table'",
+    'aria-label="表单视图 tOS 版本"',
+    '>tOS版本</Typography.Text>',
+    'onSelectedTosVersionChange',
+  ]) {
+    if (!toolbarSource.includes(token)) throw new Error(`top toolbar is missing ${token}`)
+  }
+  const tosFilterIndex = toolbarSource.indexOf('aria-label="表单视图 tOS 版本"')
+  const brandFilterIndex = toolbarSource.indexOf('aria-label="品牌快捷筛选"')
+  if (tosFilterIndex < 0 || brandFilterIndex < 0 || tosFilterIndex > brandFilterIndex) {
+    throw new Error('table tOS filter is not placed before the brand quick filter')
+  }
+  if (tableSource.includes('roadmap-table-controls') || /共\s*\{versionRows\.length\}\s*个项目/.test(tableSource)) {
+    throw new Error('table view still renders the legacy selector or project count row')
+  }
+  for (const token of [
+    'const maintainedVersions',
+    'storedVersionDetails.map(version => version.id)',
+    'versions: maintainedVersions',
+    '<RoadmapEvolutionView {...evolutionRenderContext}',
+  ]) {
+    if (!moduleSource.includes(token)) throw new Error(`maintained evolution catalog is missing ${token}`)
   }
 })
 

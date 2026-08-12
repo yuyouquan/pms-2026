@@ -135,9 +135,7 @@ export default function ProjectRoadmapModule({
         project.tosVersionName,
         project.tosVersion,
       ]),
-      ...storedVersionDetails.flatMap(version => (
-        version.targets.length || version.periodStartDate || version.periodEndDate ? [version.id] : []
-      )),
+      ...storedVersionDetails.map(version => version.id),
       selectedTosVersionId,
       ...getRoadmapSelectedTosVersionIds(filters),
     ].map(value => normalizeRoadmapTosReference(value, storedVersionDetails)).filter(Boolean)
@@ -170,6 +168,10 @@ export default function ProjectRoadmapModule({
     () => versions.filter(version => version.selectable !== false),
     [versions],
   )
+  const maintainedVersions = useMemo(() => {
+    const maintainedIds = new Set(storedVersionDetails.map(version => normalizeRoadmapTosValue(version.id)))
+    return versions.filter(version => maintainedIds.has(version.id))
+  }, [storedVersionDetails, versions])
   const normalizedFilters = useMemo(
     () => sanitizeRoadmapFilterConditions(filters, versions),
     [filters, versions],
@@ -508,10 +510,14 @@ export default function ProjectRoadmapModule({
     collapsedTargetVersionIds,
     onToggleTarget: toggleTarget,
   }
+  const evolutionRenderContext: RoadmapViewRenderContext = {
+    ...renderContext,
+    versions: maintainedVersions,
+  }
 
   const content = viewMode === 'table'
     ? renderTableView?.(renderContext) ?? <RoadmapTableView {...renderContext} />
-    : renderEvolutionView?.(renderContext) ?? <RoadmapEvolutionView {...renderContext} />
+    : renderEvolutionView?.(evolutionRenderContext) ?? <RoadmapEvolutionView {...evolutionRenderContext} />
 
   return (
     <section
@@ -527,6 +533,9 @@ export default function ProjectRoadmapModule({
         canView={canView}
         canEdit={canEdit}
         viewMode={viewMode}
+        versions={maintainedVersions}
+        selectedTosVersionId={selectedTosVersionId}
+        onSelectedTosVersionChange={setSelectedTosVersionId}
         brandFilter={brandFilter}
         onBrandFilterChange={value => updateQuickFilter('brand', value)}
         productTypeFilter={productTypeFilter}
