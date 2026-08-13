@@ -1,12 +1,11 @@
 'use client'
 
 import { useMemo } from 'react'
-import { message, Segmented } from 'antd'
-import { useUiStore, type WorkbenchTab } from '@/stores/ui'
+import { message } from 'antd'
+import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
 import TodoCenter from '@/components/workspace/TodoCenter'
-import WorkTracker from '@/components/work-tracker/WorkTracker'
 import { useActivateProject } from '@/hooks/useActivateProject'
 import { useLocalToday } from '@/hooks/useLocalToday'
 import { useTransferStore } from '@/stores/transfer'
@@ -158,8 +157,6 @@ function adaptPlanTasks(
 
 export default function WorkbenchContainer() {
   const {
-    workbenchTab,
-    setWorkbenchTab,
     enterProjectSpace,
     setProjectSpaceModule,
     navigateWithEditGuard,
@@ -175,8 +172,6 @@ export default function WorkbenchContainer() {
   const {
     setProjectPlanLevel,
     setProjectPlanViewMode,
-    setActiveLevel2Plan,
-    createdLevel2Plans,
     versions,
     currentVersion,
     tasks,
@@ -324,58 +319,16 @@ export default function WorkbenchContainer() {
       } else if (route.kind === 'transfer') {
         setProjectSpaceModule('basic')
         setSelectedTransferAppId(route.applicationId)
-        setTransferView(route.view)
+        setTransferView(route.view === 'detail' ? 'detail' : route.view)
       }
       enterProjectSpace({ module: 'workbench', workbenchTab: 'todo' })
     }, isCurrentDraft)
   }
 
-  const todoContent = (
-    <TodoCenter todos={todos} onOpenTodo={openTodo} />
-  )
-
-  const workTrackerContent = (
-    <WorkTracker
-      currentLoginUser={currentLoginUser}
-      projects={projects}
-      onNavigateToProject={(projectId, module, planLevel, planType) => {
-        const project = projects.find(item => item.id === projectId)
-        if (!project) return
-        activateProject(project)
-        setProjectSpaceModule(module)
-        if (module === 'plan' && planLevel) {
-          if (planLevel === 'level2') setProjectPlanViewMode('table')
-          setProjectPlanLevel(planLevel)
-          if (planLevel === 'level2' && planType) {
-            const plan = createdLevel2Plans.find(item => item.name === planType)
-            if (plan) setActiveLevel2Plan(plan.id)
-          }
-        }
-        enterProjectSpace({ module: 'workbench', workbenchTab: 'workTracker' })
-      }}
-    />
-  )
-
   return (
     <section className="pms-workbench">
-      <header className="pms-workbench-header pms-glass-surface">
-        <h1>个人工作台</h1>
-        <Segmented
-          className="pms-workbench-switch"
-          aria-label="个人工作台模块"
-          value={workbenchTab}
-          options={[
-            { label: '待办中心', value: 'todo' },
-            { label: '工作跟踪', value: 'workTracker' },
-          ]}
-          onChange={key => navigateWithEditGuard(
-            () => setWorkbenchTab(key as WorkbenchTab),
-            isCurrentDraft,
-          )}
-        />
-      </header>
       <div className="pms-workbench-content">
-        {workbenchTab === 'todo' ? todoContent : workTrackerContent}
+        <TodoCenter key={currentLoginUser} todos={todos} onOpenTodo={openTodo} />
       </div>
     </section>
   )

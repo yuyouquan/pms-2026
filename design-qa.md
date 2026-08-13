@@ -98,6 +98,48 @@ final result: passed
 
 ---
 
+# 个人工作台目录任务表 QA（2026-08-13）
+
+- Source visual truth:
+  - `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-285d47d8-f9b7-4167-a106-bb3788710401.png`
+  - `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-ff3e0fa4-56c0-4b7a-8623-b3804047a94b.png`
+- Implementation screenshots:
+  - `output/workbench-directory-desktop.png`（1702 × 894）
+  - `output/workbench-directory-narrow-v2.png`（720 × 900）
+- Combined comparisons:
+  - `output/workbench-directory-comparison-full.png`
+  - `output/workbench-directory-comparison-focused.png`
+- Viewports: desktop 1702 × 894 CSS px; narrow 720 × 900 CSS px.
+- State: 张三登录；计划无待处理、转维护有 1 条待处理，因此默认选中“转维护 / 待处理”。
+
+## Findings and iteration
+
+1. 首版窄屏下筛选器与分页空间不足（P2）；将筛选区改为 2 列网格，搜索占整行，520px 以下降为单列，并禁止分页换行。
+2. 桌面版保留参考图“左目录 + 右状态与表格”的信息架构，同时沿用 PMS 紫色玻璃拟态、现有标题栏和 Ant Design 表格体系。
+3. 表格固定为 8 个业务表头，待处理使用“前往处理”，已完成使用“查看详情”，没有增加任务详情弹窗。
+4. 完成态转维护任务使用真实申请 ID 跳转；聚合行 ID 与业务路由 ID 分离，避免历史节点无法打开申请详情。
+5. 最终浏览器控制台 warning/error 为 0；无剩余 P0/P1/P2 差异。
+
+## Required fidelity surfaces
+
+- Fonts and typography: 保留 PMS 现有中文字号与表格密度；标题、目录和状态标签层级清楚。
+- Spacing and layout rhythm: 176px 左目录、紧凑状态页签、单行筛选工具栏和高密度表格；窄屏自动纵向排列。
+- Colors and tokens: 复用系统紫色主色、淡紫选中态、橙色待处理与绿色已完成标签。
+- Image quality and assets: 未引入位图素材；目录和操作图标来自 `@ant-design/icons`。
+- Copy and content: 目录仅“计划 / 转维护”；状态仅“全部 / 待处理 / 已完成”；八列表头与需求一致。
+
+## Interaction verification
+
+- 验证默认选中规则：存在转维护待处理时进入“转维护 / 待处理”。
+- 验证计划、转维护目录切换，以及全部、待处理、已完成页签切换。
+- 验证搜索无结果、清空筛选、项目与生成日期筛选控件状态。
+- 验证待处理任务“前往处理”打开对应转维护资料录入页面，并可返回工作台。
+- 验证桌面与 720px 窄屏无页面横向溢出。
+
+final result: passed
+
+---
+
 # tOS 路标顶部版本筛选与维护版本列 QA（2026-08-12）
 
 - Source visual truth: `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-f739b39f-a2f3-4f10-822f-0238766c1e7e.png`（277 × 46 px）。

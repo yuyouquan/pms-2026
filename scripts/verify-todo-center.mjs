@@ -19,6 +19,7 @@ for (const name of [
   'filterTodoCandidatesByAccess',
   'resolveVisiblePlanVersion',
   'resolvePlanTodoNavigation',
+  'resolveWorkbenchDefaultSelection',
 ]) assert.equal(typeof todos[name], 'function', `missing ${name}`)
 const input = {
   currentUser: '张三',
@@ -36,13 +37,33 @@ const input = {
   ],
 }
 const all = todos.aggregateWorkbenchTodos(input)
-assert.deepEqual(all.map(item => item.id), ['plan-today', 'plan-overdue', 'transfer-mine'], 'aggregate keeps pending/in-progress work and excludes every completed or other-user item')
-assert.equal(all.every(item => item.status !== 'completed'), true, 'the todo center never receives completed rows')
-assert.equal(all.find(item => item.id === 'plan-today')?.generatedAt, '2026-07-31', 'missing plan generation dates use the explicit aggregation date')
+assert.deepEqual(all.map(item => [item.id, item.status]), [
+  ['plan-overdue', 'pending'],
+  ['transfer-mine', 'pending'],
+  ['plan-today', 'pending'],
+  ['transfer-done', 'completed'],
+  ['plan-done', 'completed'],
+], 'aggregate exposes only pending and completed work for the current user')
+assert.equal(all.find(item => item.id === 'plan-today')?.generatedAt, '', 'missing plan generation dates remain unrecorded')
 assert.equal(all.find(item => item.id === 'transfer-mine')?.generatedAt, '2026-07-29', 'transfer generation timestamps normalize to a date key')
-assert.deepEqual(todos.filterWorkbenchTodos(all, { categories: ['transfer'] }).map(item => item.id), ['transfer-mine'], 'multi-category filters operate on aggregate output')
-assert.deepEqual(todos.filterWorkbenchTodos(all, { categories: ['plan'] }).map(item => item.id), ['plan-today', 'plan-overdue'], 'plan category counts pending and in-progress work')
-assert.deepEqual(todos.summarizeWorkbenchTodos(all, '2026-07-31'), { total: 3, dueToday: 1, overdue: 1, completedThisWeek: 0 }, 'summary remains compatible with the pending-only aggregate output')
+assert.deepEqual(
+  todos.resolveWorkbenchDefaultSelection(all),
+  { source: 'plan', status: 'pending' },
+  'plan wins when both directories have pending work',
+)
+assert.deepEqual(
+  todos.resolveWorkbenchDefaultSelection([{ source: 'plan', status: 'completed' }, { source: 'transfer', status: 'pending' }]),
+  { source: 'transfer', status: 'pending' },
+  'transfer is selected when it is the first directory with pending work',
+)
+assert.deepEqual(
+  todos.resolveWorkbenchDefaultSelection([{ source: 'plan', status: 'completed' }]),
+  { source: 'plan', status: 'all' },
+  'plan/all is the fallback when neither directory has pending work',
+)
+assert.deepEqual(todos.filterWorkbenchTodos(all, { source: 'transfer', status: 'all' }).map(item => item.id), ['transfer-mine', 'transfer-done'], 'directory filtering includes pending and completed work')
+assert.deepEqual(todos.filterWorkbenchTodos(all, { source: 'plan', status: 'pending' }).map(item => item.id), ['plan-overdue', 'plan-today'], 'status filtering collapses every unfinished plan state into pending')
+assert.deepEqual(todos.summarizeWorkbenchTodos(all, '2026-07-31'), { total: 5, dueToday: 1, overdue: 1, completedThisWeek: 1 }, 'summary remains compatible with the two-state aggregate output')
 assert.equal(all.find(item => item.id === 'plan-overdue')?.route.marketKey, 'project::p1::OP::level1::versions', 'market plan routes preserve their validated market scope key')
 assert.deepEqual(
   todos.aggregateWorkbenchTodos({ ...input, currentUser: '   ', planTodos: [{ ...input.planTodos[0], assignee: '' }] }),
@@ -106,10 +127,14 @@ const transferFixtures = todos.buildTransferTodoCandidates({
   ],
 })
 assert.deepEqual(transferFixtures.map(item => [item.view, item.activeOwner, item.sourceLabel]), [
+  ['detail', '张三', '转维资料录入'],
   ['review', '王五', '转维维护审核'],
+  ['detail', '张三', '转维资料录入'],
   ['sqa-review', '李白', '转维 SQA 审核'],
-], 'review and SQA nodes use their current authoritative owner identities')
+], 'completed history and active nodes use their authoritative owner identities')
 assert.equal(transferFixtures[0].generatedAt, '2026-07-28 10:00:00', 'transfer candidates preserve the application creation timestamp')
+assert.equal(transferFixtures[1].applicationId, 'review', 'transfer routes preserve the real application id rather than the row id')
+assert.equal(transferFixtures[1].id, 'review:review', 'each transfer node keeps a unique workbench row id')
 
 const crossDayCandidates = {
   currentUser: '张三',
@@ -119,8 +144,8 @@ const crossDayCandidates = {
   ],
   transferApplications: [],
 }
-assert.deepEqual(todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-07-30' }).map(item => item.id), ['pending-later'], 'completed work is excluded before pagination')
-assert.deepEqual(todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-08-01' }).map(item => item.id), ['pending-later'], 'pending work remains deterministic across aggregation dates')
+assert.deepEqual(todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-07-30' }).map(item => item.id), ['pending-later', 'completed-earlier'], 'completed work remains available after pending work')
+assert.deepEqual(todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-08-01' }).map(item => item.id), ['pending-later', 'completed-earlier'], 'two-state work remains deterministic across aggregation dates')
 assert.deepEqual(
   todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-08-01' }),
   todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-08-01' }),
@@ -175,17 +200,18 @@ assert.deepEqual(
   todos.filterWorkbenchTodos(all, {
     search: '项目 a',
     projectId: 'p1',
-    categories: ['plan'],
+    source: 'plan',
+    status: 'pending',
     generatedDateFrom: '2026-07-30',
     generatedDateTo: '2026-07-31',
   }).map(item => item.id),
   ['plan-overdue'],
-  'search, project, category, and inclusive generation-date filters compose on the same dataset',
+  'search, project, directory, status, and inclusive generation-date filters compose on the same dataset',
 )
 assert.deepEqual(
-  todos.filterWorkbenchTodos(all, { categories: ['plan', 'transfer'] }).map(item => item.id),
+  todos.filterWorkbenchTodos(all, { status: 'all' }).map(item => item.id),
   all.map(item => item.id),
-  'selecting every task category preserves the full pending dataset',
+  'the all status preserves the complete two-state dataset',
 )
 assert.deepEqual(
   todos.summarizeWorkbenchTodos([
@@ -193,7 +219,7 @@ assert.deepEqual(
     { ...all[0], id: 'done-sunday', status: 'completed', completedAt: '2026-07-26', dueDate: '2026-07-01' },
     { ...all[0], id: 'done-monday', status: 'completed', completedAt: '2026-07-27', dueDate: '2026-07-01' },
   ], '2026-07-31'),
-  { total: 5, dueToday: 1, overdue: 1, completedThisWeek: 1 },
+  { total: 7, dueToday: 1, overdue: 1, completedThisWeek: 2 },
   'completed items are never overdue and natural-week completion starts on Monday',
 )
 
@@ -205,21 +231,27 @@ const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContaine
 const uiStoreSource = readSource(root, 'src/stores/ui.ts')
 const todayHookSource = readSource(root, 'src/hooks/useLocalToday.ts')
 const browserSource = readSource(root, 'screenshots/verify-workbench-summary-floating-panels.mjs')
-for (const label of ['计划待办', '转维待办', '搜索待办', '项目筛选', '任务分类', '生成时间', '清空筛选', '前往处理']) {
+for (const label of ['任务目录', '计划', '转维', '全部', '待处理', '已完成', '搜索待办', '项目筛选', '生成时间', '清空筛选', '前往处理']) {
   assert.match(todoCenterSource, new RegExp(label), `todo center missing visible or accessible contract: ${label}`)
 }
+assert.doesNotMatch(todoCenterSource, /转维护/, 'workbench directory uses the canonical 转维 label')
+assert.doesNotMatch(aggregationSource, /nodeLabel: candidate\.sourceLabel \|\| '转维护'/, 'transfer task fallback uses the canonical 转维 label')
 for (const removedLabel of ['待办总数', '今日到期', '已逾期', '本周完成', '状态筛选']) {
   assert.doesNotMatch(todoCenterSource, new RegExp(removedLabel), `todo center must remove ${removedLabel}`)
 }
-assert.match(workbenchSource, /个人工作台/, 'workbench exposes the single personal-workbench title')
-assert.match(workbenchSource, /aria-label="个人工作台模块"/, 'capsule switch exposes an accessible label')
-assert.match(todoCenterSource, /mode="multiple"/, 'task classification uses a multiple selector')
+assert.doesNotMatch(workbenchSource, /pms-workbench-header|个人工作台/, 'workbench starts directly with the task directory')
+assert.doesNotMatch(todoCenterSource, /mode="multiple"/, 'directory replaces the task-classification multi-select')
 assert.match(todoCenterSource, /RangePicker/, 'generation time uses one date-range picker')
-for (const className of ['pms-todo-filter--search', 'pms-todo-filter--project', 'pms-todo-filter--category', 'pms-todo-filter--date', 'pms-todo-filter--clear']) {
+for (const className of ['pms-todo-filter--search', 'pms-todo-filter--project', 'pms-todo-filter--date', 'pms-todo-filter--clear']) {
   assert.match(todoCenterSource, new RegExp(className), `todo filter bar missing sizing hook: ${className}`)
 }
+assert.match(todoCenterSource, /resolveWorkbenchDefaultSelection/, 'initial source and status use the pure default selector')
+assert.match(todoCenterSource, /role="tablist"/, 'status filters expose a tab list')
+assert.match(todoCenterSource, /aria-selected=/, 'status tabs expose their selected state')
 assert.match(globalStyles, /\.pms-todo-center__filters[\s\S]*display:\s*flex[\s\S]*flex-wrap:\s*wrap/, 'todo filters use one compact wrapping row')
 assert.match(globalStyles, /\.pms-todo-center__filters[\s\S]*height:\s*32px\s*!important/, 'todo filter controls share one compact height')
+assert.match(globalStyles, /grid-template-columns:\s*176px minmax\(0, 1fr\)/, 'desktop uses directory and data columns')
+assert.match(globalStyles, /@media \(max-width: 760px\)[\s\S]*grid-template-columns:\s*1fr/, 'narrow layout stacks the directory above the table')
 assert.match(todoCenterSource, /pagination=\{\{/, 'todo table exposes pagination')
 requireSource(root, 'src/containers/WorkbenchContainer.tsx', /<TodoCenter\b/, 'workbench must render the classified TodoCenter')
 requireSource(root, 'src/containers/WorkbenchContainer.tsx', /useActivateProject\(\)/, 'todo navigation must reuse shared project activation')
@@ -232,8 +264,8 @@ assert.doesNotMatch(workbenchSource, /\.find\(meta => typeof meta\?\.projectName
 assert.match(uiStoreSource, /planNavigationIntent/, 'todo navigation requires a typed one-shot intent')
 assert.match(projectSpaceSource, /setPlanNavigationIntent\(null\)/, 'project space must consume and clear todo navigation intent')
 assert.doesNotMatch(projectSpaceSource, /explicitMarketVersion/, 'historical market selection must not masquerade as explicit todo navigation')
-for (const column of ['任务名称', '所属项目', '任务来源', '任务节点', '处理人', '生成时间', '操作']) assert.match(todoCenterSource, new RegExp(column), `todo table missing ${column} column`)
-assert.doesNotMatch(todoCenterSource, /title:\s*['"]状态['"]/, 'todo table removes the status column')
+for (const column of ['任务名称', '所属项目', '状态', '任务节点', '任务内容', '处理人', '生成时间', '操作']) assert.match(todoCenterSource, new RegExp(`title:\\s*['"]${column}['"]`), `todo table missing ${column} column`)
+assert.doesNotMatch(todoCenterSource, /title:\s*['"]任务来源['"]/, 'task source is represented by the directory')
 assert.doesNotMatch(todoCenterSource, /title:\s*['"]截止日期['"]/, 'todo table removes the due-date column')
 assert.doesNotMatch(todoCenterSource, /onRow=/, 'todo table rows are not interactive controls')
 assert.match(todoCenterSource, /role="status"/, 'todo results expose a dedicated polite status region')
@@ -241,7 +273,8 @@ assert.match(todoCenterSource, /error\?:\s*string/, 'todo center exposes a conte
 assert.match(todoCenterSource, /onRetry\?:\s*\(\)\s*=>\s*void/, 'todo error offers a recovery action')
 assert.match(todoCenterSource, /<Skeleton\b/, 'todo loading state reserves the final table footprint')
 assert.match(todoCenterSource, /role="alert"/, 'todo load errors are announced')
-assert.match(todoCenterSource, /aria-label={`前往处理/, 'todo actions expose explicit accessible buttons')
+assert.doesNotMatch(todoCenterSource, /查看详情/, 'completed tasks do not expose an operation')
+assert.match(todoCenterSource, /if \(record\.status === ['"]completed['"]\) return null/, 'completed task operation cells remain empty')
 assert.match(todayHookSource, /setTimeout/, 'local today hook schedules the next midnight refresh')
 assert.match(todayHookSource, /clearTimeout/, 'local today hook cleans up its midnight timer')
 assert.match(browserSource, /unexpectedBrowserErrors/, 'browser verification must retain unexpected errors')
