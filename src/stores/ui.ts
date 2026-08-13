@@ -9,7 +9,7 @@ export type MainModule =
   | 'config'
   | 'projectSpace'
 
-export type WorkbenchTab = 'todo' | 'workTracker'
+export type WorkbenchTab = 'todo'
 
 export interface PlanNavigationIntent {
   source: 'todo'
