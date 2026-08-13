@@ -313,9 +313,8 @@ export function filterTodoCandidatesByAccess({
 export interface TodoFilters {
   search: string
   projectId: string
-  categories: TodoSource[]
-  source?: TodoSource
-  status?: TodoStatusFilter
+  source: TodoSource
+  status: TodoStatusFilter
   generatedDateFrom: string
   generatedDateTo: string
 }
@@ -549,7 +548,6 @@ export function filterWorkbenchTodos(
 ): WorkbenchTodo[] {
   const search = (filters.search ?? '').trim().toLocaleLowerCase('zh-CN')
   const projectId = filters.projectId ?? ''
-  const categories = filters.categories ?? []
   const source = filters.source
   const status = filters.status ?? 'all'
   const generatedDateFrom = toDateKey(filters.generatedDateFrom)
@@ -558,7 +556,6 @@ export function filterWorkbenchTodos(
   return todos.filter(todo => {
     if (source && todo.source !== source) return false
     if (status !== 'all' && todo.status !== status) return false
-    if (categories.length > 0 && !categories.includes(todo.source)) return false
     if (projectId && todo.projectId !== projectId) return false
     if (search) {
       const haystack = `${todo.title} ${todo.projectName} ${todo.nodeLabel} ${todo.taskContent} ${todo.assignee}`.toLocaleLowerCase('zh-CN')

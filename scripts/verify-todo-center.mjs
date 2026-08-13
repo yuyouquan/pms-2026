@@ -229,21 +229,25 @@ const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContaine
 const uiStoreSource = readSource(root, 'src/stores/ui.ts')
 const todayHookSource = readSource(root, 'src/hooks/useLocalToday.ts')
 const browserSource = readSource(root, 'screenshots/verify-workbench-summary-floating-panels.mjs')
-for (const label of ['计划待办', '转维待办', '搜索待办', '项目筛选', '任务分类', '生成时间', '清空筛选', '前往处理']) {
+for (const label of ['任务目录', '计划', '转维护', '全部', '待处理', '已完成', '搜索待办', '项目筛选', '生成时间', '清空筛选', '前往处理', '查看详情']) {
   assert.match(todoCenterSource, new RegExp(label), `todo center missing visible or accessible contract: ${label}`)
 }
 for (const removedLabel of ['待办总数', '今日到期', '已逾期', '本周完成', '状态筛选']) {
   assert.doesNotMatch(todoCenterSource, new RegExp(removedLabel), `todo center must remove ${removedLabel}`)
 }
 assert.match(workbenchSource, /个人工作台/, 'workbench exposes the single personal-workbench title')
-assert.match(workbenchSource, /aria-label="个人工作台模块"/, 'capsule switch exposes an accessible label')
-assert.match(todoCenterSource, /mode="multiple"/, 'task classification uses a multiple selector')
+assert.doesNotMatch(todoCenterSource, /mode="multiple"/, 'directory replaces the task-classification multi-select')
 assert.match(todoCenterSource, /RangePicker/, 'generation time uses one date-range picker')
-for (const className of ['pms-todo-filter--search', 'pms-todo-filter--project', 'pms-todo-filter--category', 'pms-todo-filter--date', 'pms-todo-filter--clear']) {
+for (const className of ['pms-todo-filter--search', 'pms-todo-filter--project', 'pms-todo-filter--date', 'pms-todo-filter--clear']) {
   assert.match(todoCenterSource, new RegExp(className), `todo filter bar missing sizing hook: ${className}`)
 }
+assert.match(todoCenterSource, /resolveWorkbenchDefaultSelection/, 'initial source and status use the pure default selector')
+assert.match(todoCenterSource, /role="tablist"/, 'status filters expose a tab list')
+assert.match(todoCenterSource, /aria-selected=/, 'status tabs expose their selected state')
 assert.match(globalStyles, /\.pms-todo-center__filters[\s\S]*display:\s*flex[\s\S]*flex-wrap:\s*wrap/, 'todo filters use one compact wrapping row')
 assert.match(globalStyles, /\.pms-todo-center__filters[\s\S]*height:\s*32px\s*!important/, 'todo filter controls share one compact height')
+assert.match(globalStyles, /grid-template-columns:\s*176px minmax\(0, 1fr\)/, 'desktop uses directory and data columns')
+assert.match(globalStyles, /@media \(max-width: 760px\)[\s\S]*grid-template-columns:\s*1fr/, 'narrow layout stacks the directory above the table')
 assert.match(todoCenterSource, /pagination=\{\{/, 'todo table exposes pagination')
 requireSource(root, 'src/containers/WorkbenchContainer.tsx', /<TodoCenter\b/, 'workbench must render the classified TodoCenter')
 requireSource(root, 'src/containers/WorkbenchContainer.tsx', /useActivateProject\(\)/, 'todo navigation must reuse shared project activation')
@@ -256,8 +260,8 @@ assert.doesNotMatch(workbenchSource, /\.find\(meta => typeof meta\?\.projectName
 assert.match(uiStoreSource, /planNavigationIntent/, 'todo navigation requires a typed one-shot intent')
 assert.match(projectSpaceSource, /setPlanNavigationIntent\(null\)/, 'project space must consume and clear todo navigation intent')
 assert.doesNotMatch(projectSpaceSource, /explicitMarketVersion/, 'historical market selection must not masquerade as explicit todo navigation')
-for (const column of ['任务名称', '所属项目', '任务来源', '任务节点', '处理人', '生成时间', '操作']) assert.match(todoCenterSource, new RegExp(column), `todo table missing ${column} column`)
-assert.doesNotMatch(todoCenterSource, /title:\s*['"]状态['"]/, 'todo table removes the status column')
+for (const column of ['任务名称', '所属项目', '状态', '任务节点', '任务内容', '处理人', '生成时间', '操作']) assert.match(todoCenterSource, new RegExp(`title:\\s*['"]${column}['"]`), `todo table missing ${column} column`)
+assert.doesNotMatch(todoCenterSource, /title:\s*['"]任务来源['"]/, 'task source is represented by the directory')
 assert.doesNotMatch(todoCenterSource, /title:\s*['"]截止日期['"]/, 'todo table removes the due-date column')
 assert.doesNotMatch(todoCenterSource, /onRow=/, 'todo table rows are not interactive controls')
 assert.match(todoCenterSource, /role="status"/, 'todo results expose a dedicated polite status region')
@@ -265,7 +269,7 @@ assert.match(todoCenterSource, /error\?:\s*string/, 'todo center exposes a conte
 assert.match(todoCenterSource, /onRetry\?:\s*\(\)\s*=>\s*void/, 'todo error offers a recovery action')
 assert.match(todoCenterSource, /<Skeleton\b/, 'todo loading state reserves the final table footprint')
 assert.match(todoCenterSource, /role="alert"/, 'todo load errors are announced')
-assert.match(todoCenterSource, /aria-label={`前往处理/, 'todo actions expose explicit accessible buttons')
+assert.match(todoCenterSource, /record\.status === ['"]completed['"] \? ['"]查看详情['"] : ['"]前往处理['"]/, 'todo actions match their two-state purpose')
 assert.match(todayHookSource, /setTimeout/, 'local today hook schedules the next midnight refresh')
 assert.match(todayHookSource, /clearTimeout/, 'local today hook cleans up its midnight timer')
 assert.match(browserSource, /unexpectedBrowserErrors/, 'browser verification must retain unexpected errors')
