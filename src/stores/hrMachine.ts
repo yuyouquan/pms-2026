@@ -8,15 +8,13 @@ import type {
   BudgetType,
   NewProjectForm,
   MilestoneNodes,
-  VersionLockState,
 } from '@/types/hrMachine'
 import {
   DEFAULT_PROJECT_FILTERS,
-  BUDGET_TYPE_LABELS,
-  PHASE_SPLIT_RULES,
-  calcPhaseDuration,
   IPM_PROJECTS,
 } from '@/constants/hrMachine'
+import { calcEstimatedInvestment, calcDepartmentMonthlySplit, type DepartmentMonthlySplit } from '@/constants/hrConfig'
+import { useHrConfigStore } from '@/stores/hrConfig'
 
 /* ── Mock Data ──────────────────────────────────────────────────────── */
 
@@ -39,6 +37,7 @@ function emptyMilestones(): MilestoneNodes {
 function createMockVersions(
   projectId: string,
   investments: { annual: number; projectEstimate: number; projectBudget: number },
+  versionMeta: { projectLevel: string; levelCoefficient: number; hrModelVersion: string },
   dateOffsets?: { conceptStart: string; productLaunch: string },
   lockConfig?: { annual?: boolean; projectEstimate?: boolean; projectBudget?: boolean },
   extraVersions?: { budgetType: BudgetType; count: number }[],
@@ -66,6 +65,9 @@ function createMockVersions(
       lockState: isLocked ? 'locked' : 'unlocked',
       majorVersion: 0,
       minorVersion: i,
+      projectLevel: versionMeta.projectLevel,
+      levelCoefficient: versionMeta.levelCoefficient,
+      hrModelVersion: versionMeta.hrModelVersion,
       milestones: { ...milestones },
       estimatedInvestment: investments.annual,
       createdAt: baseDate,
@@ -85,6 +87,9 @@ function createMockVersions(
       lockState: isLocked ? 'locked' : 'unlocked',
       majorVersion: 0,
       minorVersion: i,
+      projectLevel: versionMeta.projectLevel,
+      levelCoefficient: versionMeta.levelCoefficient,
+      hrModelVersion: versionMeta.hrModelVersion,
       milestones: { ...milestones },
       estimatedInvestment: investments.projectEstimate,
       createdAt: baseDate,
@@ -104,6 +109,9 @@ function createMockVersions(
       lockState: isLocked ? 'locked' : 'unlocked',
       majorVersion: 0,
       minorVersion: i,
+      projectLevel: versionMeta.projectLevel,
+      levelCoefficient: versionMeta.levelCoefficient,
+      hrModelVersion: versionMeta.hrModelVersion,
       milestones: { ...milestones },
       estimatedInvestment: investments.projectBudget,
       createdAt: baseDate,
@@ -114,134 +122,69 @@ function createMockVersions(
   return versions
 }
 
-function createMockMonthlyData(
-  startDate: string,
-  endDate: string,
-  totalInvestment: number,
-): Record<string, number> {
-  const start = new Date(startDate)
-  const end = new Date(endDate)
-  const totalDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)))
-  const dailyRate = totalInvestment / totalDays
+/**
+ * 使用配置中心数据，按部门拆分版本月度预估投入。
+ * 每个匹配的部门生成一条独立的月度记录。
+ */
+function generateDepartmentMonthlyRecords(
+  projectId: string,
+  version: HrMachineVersion,
+): MonthlyInvestment[] {
+  const configRecords = useHrConfigStore.getState().data.hrModel ?? []
+  const splits = calcDepartmentMonthlySplit(
+    configRecords,
+    version.projectLevel,
+    version.hrModelVersion,
+    version.levelCoefficient,
+    version.milestones,
+  )
 
-  const result: Record<string, number> = {}
-  const current = new Date(start)
-  while (current <= end) {
-    const monthStart = new Date(current.getFullYear(), current.getMonth(), 1)
-    const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0)
-    const periodStart = current < monthStart ? monthStart : current
-    const periodEnd = end < monthEnd ? end : monthEnd
-    const daysInPeriod = Math.ceil((periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
-    const key = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`
-    result[key] = Math.round(dailyRate * daysInPeriod * 10) / 10
-
-    current.setMonth(current.getMonth() + 1)
-    current.setDate(1)
-  }
-  return result
+  return splits.map((split: DepartmentMonthlySplit, idx: number) => ({
+    id: `mi-${projectId}-${version.id}-dept${idx}`,
+    projectId,
+    versionId: version.id,
+    primaryDepartment: split.primaryDepartment,
+    secondaryDepartment: split.secondaryDepartment,
+    budgetType: version.budgetType,
+    versionNumber: version.versionNumber,
+    versionLockState: version.lockState,
+    estimatedTotal: split.estimatedTotal,
+    monthlyData: split.monthlyData,
+    isEdited: false,
+  }))
 }
 
 const MOCK_PROJECTS: HrMachineProject[] = [
   {
-    id: 'mp-001',
-    name: 'CO9m-X6895',
+    id: 'mp-kp5',
+    name: 'KP5',
     brand: 'TECNO',
-    productLine: 'CAMON',
+    productLine: 'SPARK',
     projectLevel: 'S',
     levelCoefficient: 1,
     hrModelVersion: 'V2026.1',
-    projectYear: '25年立项26年结项',
-    ipmProjectCode: 'IPM-2025-001',
-    ipmProjectName: 'CO9m-X6895 整机项目',
-    status: 'active',
-    annualBudget: 120,
-    projectEstimate: 115,
-    projectBudget: 110,
-    projectAccounting: 80,
-    versions: createMockVersions('mp-001', { annual: 120, projectEstimate: 115, projectBudget: 110 }),
-    createdAt: '2026-01-02',
-  },
-  {
-    id: 'mp-002',
-    name: 'NOTE40-Pro',
-    brand: 'Infinix',
-    productLine: 'NOTE',
-    projectLevel: 'A',
-    levelCoefficient: 0.8,
-    hrModelVersion: 'V2026.1',
     projectYear: '26年立项26年结项',
-    ipmProjectCode: 'IPM-2025-002',
-    ipmProjectName: 'NOTE40-Pro 整机项目',
+    ipmProjectCode: 'IPM-2026-KP5',
+    ipmProjectName: 'KP5 整机项目',
     status: 'active',
-    annualBudget: 96,
-    projectEstimate: 92,
-    projectBudget: 88,
-    projectAccounting: 45,
-    versions: createMockVersions('mp-002', { annual: 96, projectEstimate: 92, projectBudget: 88 }, { conceptStart: '2026-02-01', productLaunch: '2026-12-15' }, { annual: false, projectEstimate: true, projectBudget: true }),
-    createdAt: '2026-02-01',
-  },
-  {
-    id: 'mp-003',
-    name: 'SPARK30-Lite',
-    brand: 'TECNO',
-    productLine: 'SPARK',
-    projectLevel: 'B',
-    levelCoefficient: 0.6,
-    hrModelVersion: 'V2025.4',
-    projectYear: '25年立项26年结项',
-    ipmProjectCode: null,
-    ipmProjectName: null,
-    status: 'cancelled',
-    annualBudget: 72,
-    projectEstimate: 69,
-    projectBudget: 66,
-    projectAccounting: 30,
-    versions: createMockVersions('mp-003', { annual: 72, projectEstimate: 69, projectBudget: 66 }, { conceptStart: '2026-01-15', productLaunch: '2026-10-30' }, { annual: true, projectEstimate: false, projectBudget: false }),
+    annualBudget: 100,
+    projectEstimate: 100,
+    projectBudget: 100,
+    projectAccounting: 0,
+    versions: createMockVersions(
+      'mp-kp5',
+      { annual: 100, projectEstimate: 100, projectBudget: 100 },
+      { projectLevel: 'S', levelCoefficient: 1, hrModelVersion: 'V2026.1' },
+      { conceptStart: '2026-01-15', productLaunch: '2026-11-30' },
+      { annual: false, projectEstimate: false, projectBudget: false },
+    ),
     createdAt: '2026-01-15',
-  },
-  {
-    id: 'mp-004',
-    name: 'GT30-Ultra',
-    brand: 'Infinix',
-    productLine: 'GT',
-    projectLevel: 'S',
-    levelCoefficient: 1.2,
-    hrModelVersion: 'V2026.2',
-    projectYear: '26年立项27年结项',
-    ipmProjectCode: 'IPM-2026-001',
-    ipmProjectName: 'GT30-Ultra 整机项目',
-    status: 'active',
-    annualBudget: 144,
-    projectEstimate: 138,
-    projectBudget: 132,
-    projectAccounting: 95,
-    versions: createMockVersions('mp-004', { annual: 144, projectEstimate: 138, projectBudget: 132 }, { conceptStart: '2026-01-10', productLaunch: '2026-11-20' }, { annual: true, projectEstimate: true, projectBudget: true }, [{ budgetType: 'annual', count: 2 }]),
-    createdAt: '2026-01-10',
-  },
-  {
-    id: 'mp-005',
-    name: 'HOT50-Play',
-    brand: 'itel',
-    productLine: 'HOT',
-    projectLevel: 'C',
-    levelCoefficient: 0.4,
-    hrModelVersion: 'V2025.4',
-    projectYear: '26年立项26年结项',
-    ipmProjectCode: null,
-    ipmProjectName: null,
-    status: 'active',
-    annualBudget: 48,
-    projectEstimate: 46,
-    projectBudget: 44,
-    projectAccounting: 20,
-    versions: createMockVersions('mp-005', { annual: 48, projectEstimate: 46, projectBudget: 44 }, { conceptStart: '2026-03-01', productLaunch: '2026-12-20' }, { annual: false, projectEstimate: false, projectBudget: false }),
-    createdAt: '2026-03-01',
   },
 ]
 
 /**
  * 为所有项目生成月度预估投入数据。
- * 规则：每个预算类型下取最新版本（无论是否锁定），做数据拆分。
+ * 规则：每个预算类型下取最新版本，按配置中心部门拆分。
  */
 function createMockMonthlyInvestments(projects: HrMachineProject[]): MonthlyInvestment[] {
   const investments: MonthlyInvestment[] = []
@@ -255,24 +198,9 @@ function createMockMonthlyInvestments(projects: HrMachineProject[]): MonthlyInve
       }
     }
     for (const [, version] of typeMap) {
-      const monthlyData = createMockMonthlyData(
-        version.milestones.conceptStart || '2026-01-01',
-        version.milestones.productLaunch || '2026-11-30',
-        version.estimatedInvestment,
-      )
-      investments.push({
-        id: `mi-${project.id}-${version.id}`,
-        projectId: project.id,
-        versionId: version.id,
-        primaryDepartment: '研发中心',
-        secondaryDepartment: '产品部',
-        budgetType: version.budgetType,
-        versionNumber: version.versionNumber,
-        versionLockState: version.lockState,
-        estimatedTotal: version.estimatedInvestment,
-        monthlyData,
-        isEdited: false,
-      })
+      // 按部门拆分，生成多条记录
+      const deptRecords = generateDepartmentMonthlyRecords(project.id, version)
+      investments.push(...deptRecords)
     }
   }
   return investments
@@ -300,46 +228,40 @@ function getLatestVersions(project: HrMachineProject): HrMachineVersion[] {
 
 /**
  * 同步月度预估投入：每个预算类型只保留最新版本的数据。
- * 保留用户已编辑的月度数据（通过 versionId 匹配）。
+ * 按配置中心部门拆分，每个部门一条记录。
+ * 保留用户已编辑的月度数据（通过 versionId + 部门匹配）。
  */
 function syncMonthlyInvestments(
   projects: HrMachineProject[],
   existingMonthly: MonthlyInvestment[],
 ): MonthlyInvestment[] {
   const result: MonthlyInvestment[] = []
-  const existingMap = new Map(existingMonthly.map(m => [m.versionId, m]))
+
+  // 构建已有数据的查找表：key = versionId + primaryDept + secondaryDept
+  const existingMap = new Map<string, MonthlyInvestment>()
+  for (const m of existingMonthly) {
+    const key = `${m.versionId}|${m.primaryDepartment}|${m.secondaryDepartment}`
+    existingMap.set(key, m)
+  }
 
   for (const project of projects) {
     const latestVersions = getLatestVersions(project)
     for (const version of latestVersions) {
-      const existing = existingMap.get(version.id)
-      if (existing) {
-        // 保留已有数据，但更新锁定状态和版本号
-        result.push({
-          ...existing,
-          versionLockState: version.lockState,
-          versionNumber: version.versionNumber,
-        })
-      } else {
-        // 新建月度数据
-        const monthlyData = createMockMonthlyData(
-          version.milestones.conceptStart || '2026-01-01',
-          version.milestones.productLaunch || '2026-11-30',
-          version.estimatedInvestment,
-        )
-        result.push({
-          id: `mi-${project.id}-${version.id}`,
-          projectId: project.id,
-          versionId: version.id,
-          primaryDepartment: '研发中心',
-          secondaryDepartment: '产品部',
-          budgetType: version.budgetType,
-          versionNumber: version.versionNumber,
-          versionLockState: version.lockState,
-          estimatedTotal: version.estimatedInvestment,
-          monthlyData,
-          isEdited: false,
-        })
+      // 生成该版本的部门拆分记录
+      const deptRecords = generateDepartmentMonthlyRecords(project.id, version)
+      for (const record of deptRecords) {
+        const key = `${record.versionId}|${record.primaryDepartment}|${record.secondaryDepartment}`
+        const existing = existingMap.get(key)
+        if (existing && existing.isEdited) {
+          // 保留用户已编辑的月度数据，但更新锁定状态和版本号
+          result.push({
+            ...existing,
+            versionLockState: version.lockState,
+            versionNumber: version.versionNumber,
+          })
+        } else {
+          result.push(record)
+        }
       }
     }
   }
@@ -381,15 +303,21 @@ export interface HrMachineActions {
   /** 绑定IPM正式项目编码 */
   bindIpmProject: (projectId: string, ipmCode: string) => void
 
-  addVersion: (projectId: string, budgetType: BudgetType) => void
+  addVersion: (projectId: string, budgetType: BudgetType, versionMeta: { projectLevel: string; levelCoefficient: number; hrModelVersion: string }) => void
   deleteVersion: (projectId: string, versionId: string) => void
   lockVersion: (projectId: string, versionId: string) => void
 
-  /** 行内编辑版本数据（预估投入、里程碑） */
+  /** 行内编辑版本数据（预估投入、里程碑、项目等级、等级系数、人力模型版本号） */
   updateVersion: (
     projectId: string,
     versionId: string,
-    updates: { estimatedInvestment?: number; milestones?: Partial<MilestoneNodes> },
+    updates: {
+      estimatedInvestment?: number
+      milestones?: Partial<MilestoneNodes>
+      projectLevel?: string
+      levelCoefficient?: number
+      hrModelVersion?: string
+    },
   ) => void
 
   updateMonthlyInvestment: (monthlyId: string, monthlyData: Record<string, number>) => void
@@ -398,8 +326,8 @@ export interface HrMachineActions {
   /** 获取指定项目所有预算类型的最新版本 */
   getLatestVersions: (projectId: string) => HrMachineVersion[]
 
-  /** 计算月度拆分 */
-  calculateMonthlySplit: (version: HrMachineVersion) => Record<string, number>
+  /** 计算指定版本的部门拆分月度数据 */
+  calculateMonthlySplit: (version: HrMachineVersion) => DepartmentMonthlySplit[]
 }
 
 /* ── Store ─────────────────────────────────────────────────────────── */
@@ -438,9 +366,9 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
           name: form.name,
           brand: form.brand,
           productLine: form.productLine,
-          projectLevel: form.projectLevel,
-          levelCoefficient: form.levelCoefficient,
-          hrModelVersion: form.hrModelVersion,
+          projectLevel: '',
+          levelCoefficient: 0,
+          hrModelVersion: '',
           projectYear: form.projectYear,
           ipmProjectCode: null,
           ipmProjectName: null,
@@ -493,7 +421,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
         }
       }),
 
-      addVersion: (projectId, budgetType) => set((s) => {
+      addVersion: (projectId, budgetType, versionMeta) => set((s) => {
         const project = s.projects.find(p => p.id === projectId)
         if (!project) return s
 
@@ -504,6 +432,15 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
         ) {
           return s
         }
+
+        // 从配置中心获取人力模型数据，计算预估投入
+        const configRecords = useHrConfigStore.getState().data.hrModel ?? []
+        const estimatedInvestment = calcEstimatedInvestment(
+          configRecords,
+          versionMeta.projectLevel,
+          versionMeta.hrModelVersion,
+          versionMeta.levelCoefficient,
+        )
 
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
@@ -525,8 +462,11 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
             lockState: 'unlocked',
             majorVersion: 0,
             minorVersion,
+            projectLevel: versionMeta.projectLevel,
+            levelCoefficient: versionMeta.levelCoefficient,
+            hrModelVersion: versionMeta.hrModelVersion,
             milestones,
-            estimatedInvestment: latest?.estimatedInvestment ?? 0,
+            estimatedInvestment,
             createdAt: new Date().toISOString().split('T')[0],
             lockedAt: null,
           }
@@ -574,15 +514,37 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
       }),
 
       updateVersion: (projectId, versionId, updates) => set((s) => {
+        const configRecords = useHrConfigStore.getState().data.hrModel ?? []
+
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
           const newVersions = p.versions.map(v => {
             if (v.id !== versionId) return v
-            return {
+
+            const updated: HrMachineVersion = {
               ...v,
               estimatedInvestment: updates.estimatedInvestment ?? v.estimatedInvestment,
               milestones: updates.milestones ? { ...v.milestones, ...updates.milestones } : v.milestones,
+              projectLevel: updates.projectLevel ?? v.projectLevel,
+              levelCoefficient: updates.levelCoefficient ?? v.levelCoefficient,
+              hrModelVersion: updates.hrModelVersion ?? v.hrModelVersion,
             }
+
+            // 如果项目等级/等级系数/人力模型版本号发生变化，自动重算预估投入
+            if (
+              updates.projectLevel !== undefined ||
+              updates.levelCoefficient !== undefined ||
+              updates.hrModelVersion !== undefined
+            ) {
+              updated.estimatedInvestment = calcEstimatedInvestment(
+                configRecords,
+                updated.projectLevel,
+                updated.hrModelVersion,
+                updated.levelCoefficient,
+              )
+            }
+
+            return updated
           })
           return { ...p, versions: newVersions }
         })
@@ -611,33 +573,16 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
       },
 
       calculateMonthlySplit: (version) => {
-        const result: Record<string, number> = {}
-        for (const rule of PHASE_SPLIT_RULES) {
-          const startVal = version.milestones[rule.startField as keyof MilestoneNodes]
-          const endVal = version.milestones[rule.endField as keyof MilestoneNodes]
-          if (!startVal || !endVal) continue
-          const duration = calcPhaseDuration(startVal, endVal)
-          if (duration <= 0) continue
-          const phaseInvestment = version.estimatedInvestment / PHASE_SPLIT_RULES.length
-          const dailyRate = phaseInvestment / duration
-          const start = new Date(startVal)
-          const end = new Date(endVal)
-          const current = new Date(start)
-          while (current <= end) {
-            const monthStart = new Date(current.getFullYear(), current.getMonth(), 1)
-            const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0)
-            const periodStart = current < monthStart ? monthStart : current
-            const periodEnd = end < monthEnd ? end : monthEnd
-            const daysInPeriod = Math.ceil((periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
-            const key = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`
-            result[key] = (result[key] || 0) + Math.round(dailyRate * daysInPeriod * 10) / 10
-            current.setMonth(current.getMonth() + 1)
-            current.setDate(1)
-          }
-        }
-        return result
+        const configRecords = useHrConfigStore.getState().data.hrModel ?? []
+        return calcDepartmentMonthlySplit(
+          configRecords,
+          version.projectLevel,
+          version.hrModelVersion,
+          version.levelCoefficient,
+          version.milestones,
+        )
       },
     }),
-    { name: 'pms-hr-machine', version: 4 },
+    { name: 'pms-hr-machine', version: 8 },
   ),
 )

@@ -6722,3 +6722,55 @@ body,
   text-align: center;
 }
 
+/* ================================================================
+   HR Pipeline Configuration Center — Styles
+   ================================================================ */
+
+.pms-hr-config-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.pms-hr-config-header {
+  border-radius: var(--pms-radius-surface);
+  background: var(--pms-surface-glass);
+  backdrop-filter: var(--pms-glass-filter);
+  border: 0.8px solid rgba(99, 102, 241, 0.1);
+  box-shadow: var(--pms-shadow-glass);
+}
+
+.pms-hr-config-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+.pms-hr-config-table-card {
+  border-radius: var(--pms-radius-surface);
+  background: var(--pms-surface-solid);
+  box-shadow: var(--pms-shadow-glass);
+  border: 0.8px solid var(--pms-border);
+  overflow: hidden;
+}
+
+.pms-hr-config-table-card .ant-table-wrapper {
+  border-radius: var(--pms-radius-surface);
+}
+
+.pms-hr-config-table-card .ant-table-thead > tr > th {
+  background: var(--pms-surface-glass);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--pms-text-primary);
+  border-bottom: 1px solid var(--pms-border);
+}
+
+.pms-hr-config-table-card .ant-table-tbody > tr > td {
+  font-size: 13px;
+  color: var(--pms-text-primary);
+}
+
+.pms-hr-config-table-card .ant-table-tbody > tr:hover > td {
+  background: var(--bg-hover) !important;
+}
+

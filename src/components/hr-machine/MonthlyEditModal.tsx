@@ -69,10 +69,12 @@ export default function MonthlyEditModal({ open, monthlyId, onCancel }: MonthlyE
       width={Math.max(640, months.length * 100 + 200)}
     >
       <div style={{ marginTop: 16 }}>
-        <div style={{ marginBottom: 12, display: 'flex', gap: 24, fontSize: 13, color: 'var(--pms-text-secondary)' }}>
+        <div style={{ marginBottom: 12, display: 'flex', gap: 24, fontSize: 13, color: 'var(--pms-text-secondary)', flexWrap: 'wrap' }}>
           <span>项目名称：<strong style={{ color: 'var(--pms-text-primary)' }}>{project?.name || '-'}</strong></span>
           <span>预算类型：<strong style={{ color: 'var(--pms-text-primary)' }}>{BUDGET_TYPE_LABELS[investment.budgetType]}</strong></span>
           <span>版本号：<strong style={{ color: 'var(--pms-text-primary)' }}>{investment.versionNumber}</strong></span>
+          <span>一级部门：<strong style={{ color: 'var(--pms-text-primary)' }}>{investment.primaryDepartment || '-'}</strong></span>
+          <span>二级部门：<strong style={{ color: 'var(--pms-text-primary)' }}>{investment.secondaryDepartment || '-'}</strong></span>
         </div>
 
         <Alert

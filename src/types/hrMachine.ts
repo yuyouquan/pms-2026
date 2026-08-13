@@ -55,9 +55,15 @@ export interface HrMachineVersion {
   majorVersion: number
   /** 小版本号 */
   minorVersion: number
+  /** 项目等级（来源配置中心，版本级别） */
+  projectLevel: string
+  /** 等级系数（版本级别） */
+  levelCoefficient: number
+  /** 人力模型版本号（来源配置中心，版本级别） */
+  hrModelVersion: string
   /** 里程碑节点 */
   milestones: MilestoneNodes
-  /** 预估投入（人月） */
+  /** 预估投入（人月）= 配置中心模型综合 * 等级系数 */
   estimatedInvestment: number
   /** 创建时间 */
   createdAt: string
@@ -125,12 +131,12 @@ export interface MonthlyInvestment {
   isEdited: boolean
 }
 
-/** 项目列表筛选器 */
+/** 项目列表筛选器（多选，空数组表示不筛选） */
 export interface ProjectListFilters {
-  brand: MachineBrand | 'all'
-  productLine: MachineProductLine | 'all'
+  brand: MachineBrand[]
+  productLine: MachineProductLine[]
   projectName: string
-  projectYear: string | 'all'
+  projectYear: string[]
   showCancelled: boolean
 }
 
@@ -139,15 +145,15 @@ export interface NewProjectForm {
   name: string
   brand: MachineBrand
   productLine: MachineProductLine
-  projectLevel: string
-  levelCoefficient: number
-  hrModelVersion: string
   projectYear: string
 }
 
 /** 新建版本表单 */
 export interface NewVersionForm {
   budgetType: BudgetType
+  projectLevel: string
+  levelCoefficient: number
+  hrModelVersion: string
 }
 
 /** 月度编辑表单 */

@@ -94,14 +94,14 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
   const bindIpmProject = useHrMachineStore(s => s.bindIpmProject)
   const getLatestVersions = useHrMachineStore(s => s.getLatestVersions)
 
-  // 1. 按品牌 / 产品线 / 项目名称（子串）/ 项目年份 / 是否取消暂停 过滤
+  // 1. 按品牌 / 产品线 / 项目名称（子串）/ 项目年份 / 是否取消暂停 过滤（多选，空数组=不筛选）
   const filteredProjects = useMemo(() => {
     const keyword = filters.projectName.trim().toLowerCase()
     return projects.filter(p => {
-      if (filters.brand !== 'all' && p.brand !== filters.brand) return false
-      if (filters.productLine !== 'all' && p.productLine !== filters.productLine) return false
+      if (filters.brand.length > 0 && !filters.brand.includes(p.brand)) return false
+      if (filters.productLine.length > 0 && !filters.productLine.includes(p.productLine)) return false
       if (keyword && !p.name.toLowerCase().includes(keyword)) return false
-      if (filters.projectYear !== 'all' && p.projectYear !== filters.projectYear) return false
+      if (filters.projectYear.length > 0 && !filters.projectYear.includes(p.projectYear)) return false
       if (!filters.showCancelled && p.status === 'cancelled') return false
       return true
     })
@@ -121,6 +121,21 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
     }
     return map
   }, [filteredProjects, getLatestVersions])
+
+  // 2b. 为每个项目计算跨预算类型的最新版本（不区分预算类型，取 minorVersion 最高）
+  const projectLatestVersionAll = useMemo(() => {
+    const map = new Map<string, HrMachineVersion | null>()
+    for (const p of filteredProjects) {
+      const byType = projectLatestVersions.get(p.id)
+      const candidates: HrMachineVersion[] = []
+      if (byType?.annual) candidates.push(byType.annual)
+      if (byType?.projectEstimate) candidates.push(byType.projectEstimate)
+      if (byType?.projectBudget) candidates.push(byType.projectBudget)
+      candidates.sort((a, b) => b.minorVersion - a.minorVersion)
+      map.set(p.id, candidates[0] ?? null)
+    }
+    return map
+  }, [filteredProjects, projectLatestVersions])
 
   // 3. 合计行：三预算列取最新版本 estimatedInvestment 之和；项目核算取项目字段之和
   const totals = useMemo(() => {
@@ -191,27 +206,32 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
       },
       {
         title: '项目等级',
-        dataIndex: 'projectLevel',
         key: 'projectLevel',
         width: 100,
         align: 'center',
-        render: (text: string) => (
-          <span
-            style={{
-              display: 'inline-block',
-              minWidth: 28,
-              padding: '2px 10px',
-              borderRadius: 10,
-              background: 'var(--pms-brand-surface)',
-              color: 'var(--pms-brand-strong)',
-              fontSize: 12,
-              fontWeight: 600,
-              border: '1px solid var(--pms-brand-border)',
-            }}
-          >
-            {text}
-          </span>
-        ),
+        render: (_v: unknown, record: HrMachineProject) => {
+          // 项目等级来自单项目空间最新版本（不区分预算类型）
+          const latestVersion = projectLatestVersionAll.get(record.id)
+          const level = latestVersion?.projectLevel ?? ''
+          if (!level) return <span style={{ color: 'var(--pms-text-tertiary)' }}>-</span>
+          return (
+            <span
+              style={{
+                display: 'inline-block',
+                minWidth: 28,
+                padding: '2px 10px',
+                borderRadius: 10,
+                background: 'var(--pms-brand-surface)',
+                color: 'var(--pms-brand-strong)',
+                fontSize: 12,
+                fontWeight: 600,
+                border: '1px solid var(--pms-brand-border)',
+              }}
+            >
+              {level}
+            </span>
+          )
+        },
       },
       {
         title: '年度预算',
@@ -284,23 +304,19 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
           formatPercent(record.projectAccounting, record.projectBudget),
       },
     ]
-  }, [projectLatestVersions, bindIpmProject])
+  }, [projectLatestVersions, projectLatestVersionAll, bindIpmProject])
 
-  // 5. 筛选器选项
+  // 5. 筛选器选项（多选，不含"全部"选项，空数组=不筛选）
   const brandOptions = useMemo(
-    () => [{ value: 'all' as const, label: '全部品牌' }, ...MACHINE_BRANDS],
+    () => MACHINE_BRANDS.map(b => ({ value: b.value, label: b.label })),
     [],
   )
   const productLineOptions = useMemo(
-    () => [{ value: 'all' as const, label: '全部产品线' }, ...MACHINE_PRODUCT_LINES],
+    () => MACHINE_PRODUCT_LINES.map(p => ({ value: p.value, label: p.label })),
     [],
   )
   const yearOptions = useMemo(
-    () =>
-      [
-        { value: 'all' as const, label: '全部年份' },
-        ...PROJECT_YEARS.map(y => ({ value: y, label: y })),
-      ],
+    () => PROJECT_YEARS.map(y => ({ value: y, label: y })),
     [],
   )
 
@@ -316,7 +332,15 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
       },
       { key: 'brand', title: '品牌', width: 10 },
       { key: 'productLine', title: '产品线', width: 10 },
-      { key: 'projectLevel', title: '项目等级', width: 10 },
+      {
+        key: 'projectLevel',
+        title: '项目等级',
+        width: 10,
+        formatter: (_v: any, row: any) => {
+          const latestVersion = projectLatestVersionAll.get(row.id)
+          return latestVersion?.projectLevel || '-'
+        },
+      },
       {
         key: 'annualBudget',
         title: '年度预算',
@@ -368,7 +392,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
       `项目列表_${exportTimestamp()}.xlsx`,
       '项目列表',
     )
-  }, [filteredProjects, projectLatestVersions])
+  }, [filteredProjects, projectLatestVersions, projectLatestVersionAll])
 
   return (
     <div className="pms-hr-machine-project-list">
@@ -400,10 +424,13 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
                 品牌
               </span>
               <Select
-                style={{ width: 140 }}
+                mode="multiple"
+                maxTagCount="responsive"
+                style={{ minWidth: 140, maxWidth: 220 }}
+                placeholder="全部品牌"
                 value={filters.brand}
                 options={brandOptions}
-                onChange={value => setFilters({ brand: value })}
+                onChange={value => setFilters({ brand: value as HrMachineProject['brand'][] })}
               />
             </Space>
 
@@ -418,10 +445,13 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
                 产品线
               </span>
               <Select
-                style={{ width: 140 }}
+                mode="multiple"
+                maxTagCount="responsive"
+                style={{ minWidth: 140, maxWidth: 220 }}
+                placeholder="全部产品线"
                 value={filters.productLine}
                 options={productLineOptions}
-                onChange={value => setFilters({ productLine: value })}
+                onChange={value => setFilters({ productLine: value as HrMachineProject['productLine'][] })}
               />
             </Space>
 
@@ -445,10 +475,13 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
                 项目年份
               </span>
               <Select
-                style={{ width: 180 }}
+                mode="multiple"
+                maxTagCount="responsive"
+                style={{ minWidth: 180, maxWidth: 260 }}
+                placeholder="全部年份"
                 value={filters.projectYear}
                 options={yearOptions}
-                onChange={value => setFilters({ projectYear: value })}
+                onChange={value => setFilters({ projectYear: value as string[] })}
               />
             </Space>
 

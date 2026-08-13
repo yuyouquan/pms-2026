@@ -1,6 +1,6 @@
 /* ── HR Pipeline sidebar navigation definition ──────────────────────── */
 
-export type HrSidebarGroupKey = 'overview' | 'investment' | 'non-human'
+export type HrSidebarGroupKey = 'overview' | 'investment' | 'non-human' | 'config'
 
 export interface HrSidebarLeafItem {
   key: string
@@ -47,6 +47,19 @@ export const HR_SIDEBAR_NAV: HrSidebarGroup[] = [
     children: [
       { key: 'non-human/expense-budget', label: '费用预算' },
       { key: 'non-human/asset-budget', label: '资产预算' },
+    ],
+  },
+  {
+    key: 'config',
+    label: '配置中心',
+    icon: 'SettingOutlined',
+    children: [
+      { key: 'config/hr-model', label: '人力模型', description: '整机产品 — 人力模型配置' },
+      { key: 'config/tos-phase-ratio', label: 'tOS阶段投入比', description: 'tOS项目 — 阶段投入比' },
+      { key: 'config/tos-brand-allocation', label: '品牌&产品线分摊比', description: 'tOS项目 — 品牌分摊比' },
+      { key: 'config/tech-module-dept', label: '模块与部门', description: '技术项目 — 模块与部门' },
+      { key: 'config/tech-tmg', label: 'TMG及技术领域', description: '技术项目 — TMG及领域' },
+      { key: 'config/tech-phase-ratio', label: '技术阶段投入比', description: '技术项目 — 阶段投入比' },
     ],
   },
 ]

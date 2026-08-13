@@ -82,28 +82,13 @@ export default function MachineProjectContent() {
           />
         )}
 
-        {activeTab === 'monthlyInvestment' && (
-          <MonthlyInvestmentTab
-            onEditMonthly={(id) => {
-              setEditingMonthlyId(id)
-              setShowMonthlyEditModal(true)
-            }}
-          />
-        )}
+        {activeTab === 'monthlyInvestment' && <MonthlyInvestmentTab />}
       </div>
 
       {/* Modals */}
       <NewProjectModal
         open={showNewProjectModal}
         onCancel={() => setShowNewProjectModal(false)}
-      />
-      <MonthlyEditModal
-        open={showMonthlyEditModal}
-        monthlyId={editingMonthlyId}
-        onCancel={() => {
-          setShowMonthlyEditModal(false)
-          setEditingMonthlyId(null)
-        }}
       />
     </div>
   )

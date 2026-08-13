@@ -15,10 +15,7 @@ import {
 import type { MonthlyInvestment, BudgetType } from '@/types/hrMachine'
 import { exportSheet, exportTimestamp } from '@/utils/exportExcel'
 import type { ExportColumn } from '@/utils/exportExcel'
-
-interface MonthlyInvestmentTabProps {
-  onEditMonthly: (monthlyId: string) => void
-}
+import MonthlyEditModal from './MonthlyEditModal'
 
 /** 表格行：在月度投入记录上附加项目信息，便于直接渲染 */
 interface MonthlyInvestmentRow extends MonthlyInvestment {
@@ -33,15 +30,24 @@ function formatMonthLabel(monthKey: string): string {
   return `${year}年${month}月`
 }
 
-export default function MonthlyInvestmentTab({ onEditMonthly }: MonthlyInvestmentTabProps) {
+export default function MonthlyInvestmentTab() {
   const monthlyInvestments = useHrMachineStore((s) => s.monthlyInvestments)
   const projects = useHrMachineStore((s) => s.projects)
 
-  // ── 筛选状态 ──────────────────────────────────────────────
+  // ── 编辑弹框：组件内部管理，直接弹出 ──────────────────────
+  const [editingMonthlyId, setEditingMonthlyId] = useState<string | null>(null)
+  const [showEditModal, setShowEditModal] = useState(false)
+
+  const handleEdit = (id: string) => {
+    setEditingMonthlyId(id)
+    setShowEditModal(true)
+  }
+
+  // ── 筛选状态（多选，空数组=不筛选） ──────────────────────
   const ALL_BUDGET_TYPES: BudgetType[] = BUDGET_TYPES.map((t) => t.value)
   const [selectedBudgetTypes, setSelectedBudgetTypes] = useState<BudgetType[]>(ALL_BUDGET_TYPES)
-  const [selectedYear, setSelectedYear] = useState<string>('all')
-  const [selectedBrand, setSelectedBrand] = useState<string>('all')
+  const [selectedYears, setSelectedYears] = useState<string[]>([])
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([])
   const [projectNameSearch, setProjectNameSearch] = useState<string>('')
 
   const budgetTypeOptions = useMemo(
@@ -49,15 +55,11 @@ export default function MonthlyInvestmentTab({ onEditMonthly }: MonthlyInvestmen
     [],
   )
   const yearOptions = useMemo(
-    () =>
-      [{ value: 'all', label: '全部年份' }, ...PROJECT_YEARS.map((y) => ({ value: y, label: y }))],
+    () => PROJECT_YEARS.map((y) => ({ value: y, label: y })),
     [],
   )
   const brandOptions = useMemo(
-    () => [
-      { value: 'all', label: '全部品牌' },
-      ...MACHINE_BRANDS.map((b) => ({ value: b.value, label: b.label })),
-    ],
+    () => MACHINE_BRANDS.map((b) => ({ value: b.value, label: b.label })),
     [],
   )
 
@@ -89,12 +91,12 @@ export default function MonthlyInvestmentTab({ onEditMonthly }: MonthlyInvestmen
         }
       })
       .filter((row) => {
-        if (selectedYear !== 'all' && row.projectYear !== selectedYear) return false
-        if (selectedBrand !== 'all' && row.brand !== selectedBrand) return false
+        if (selectedYears.length > 0 && !selectedYears.includes(row.projectYear)) return false
+        if (selectedBrands.length > 0 && !selectedBrands.includes(row.brand)) return false
         if (keyword && !row.projectName.toLowerCase().includes(keyword)) return false
         return true
       })
-  }, [monthlyInvestments, projectMap, selectedBudgetTypes, selectedYear, selectedBrand, projectNameSearch])
+  }, [monthlyInvestments, projectMap, selectedBudgetTypes, selectedYears, selectedBrands, projectNameSearch])
 
   // ── 收集筛选后所有出现过的月份 key，并按时间正序排列 ────────
   const sortedMonths = useMemo(() => {
@@ -103,6 +105,19 @@ export default function MonthlyInvestmentTab({ onEditMonthly }: MonthlyInvestmen
       Object.keys(mi.monthlyData).forEach((key) => monthSet.add(key))
     })
     return [...monthSet].sort((a, b) => a.localeCompare(b))
+  }, [dataSource])
+
+  // ── 合计行数据：预估合计 + 各月汇总 ────────────────────────
+  const totalRow = useMemo(() => {
+    let totalEstimated = 0
+    const monthlyTotals: Record<string, number> = {}
+    for (const row of dataSource) {
+      totalEstimated += row.estimatedTotal || 0
+      for (const monthKey of Object.keys(row.monthlyData)) {
+        monthlyTotals[monthKey] = (monthlyTotals[monthKey] || 0) + (row.monthlyData[monthKey] || 0)
+      }
+    }
+    return { totalEstimated, monthlyTotals }
   }, [dataSource])
 
   // ── 构建列：固定左侧基础列 + 动态月度列 + 固定右侧操作列 ────
@@ -222,7 +237,7 @@ export default function MonthlyInvestmentTab({ onEditMonthly }: MonthlyInvestmen
               icon={<EditOutlined />}
               onClick={(e) => {
                 e.stopPropagation()
-                onEditMonthly(record.id)
+                handleEdit(record.id)
               }}
             />
           </Tooltip>
@@ -231,7 +246,7 @@ export default function MonthlyInvestmentTab({ onEditMonthly }: MonthlyInvestmen
     ]
 
     return [...baseColumns, ...monthColumns, ...actionColumn]
-  }, [sortedMonths, onEditMonthly])
+  }, [sortedMonths])
 
   // ── 导出：遵循当前筛选结果 ─────────────────────────────────
   const handleExport = () => {
@@ -307,6 +322,21 @@ export default function MonthlyInvestmentTab({ onEditMonthly }: MonthlyInvestmen
             >
               预算类型
             </span>
+            <Checkbox
+              checked={
+                selectedBudgetTypes.length > 0 &&
+                selectedBudgetTypes.length === ALL_BUDGET_TYPES.length
+              }
+              indeterminate={
+                selectedBudgetTypes.length > 0 &&
+                selectedBudgetTypes.length < ALL_BUDGET_TYPES.length
+              }
+              onChange={(e) =>
+                setSelectedBudgetTypes(e.target.checked ? [...ALL_BUDGET_TYPES] : [])
+              }
+            >
+              全选
+            </Checkbox>
             <Checkbox.Group
               options={budgetTypeOptions}
               value={selectedBudgetTypes}
@@ -326,10 +356,13 @@ export default function MonthlyInvestmentTab({ onEditMonthly }: MonthlyInvestmen
                 项目年份
               </span>
               <Select
-                style={{ width: 170 }}
-                value={selectedYear}
+                mode="multiple"
+                maxTagCount="responsive"
+                style={{ minWidth: 170, maxWidth: 240 }}
+                placeholder="全部年份"
+                value={selectedYears}
                 options={yearOptions}
-                onChange={(value) => setSelectedYear(value)}
+                onChange={(value) => setSelectedYears(value as string[])}
               />
             </Space>
 
@@ -344,10 +377,13 @@ export default function MonthlyInvestmentTab({ onEditMonthly }: MonthlyInvestmen
                 品牌
               </span>
               <Select
-                style={{ width: 120 }}
-                value={selectedBrand}
+                mode="multiple"
+                maxTagCount="responsive"
+                style={{ minWidth: 120, maxWidth: 200 }}
+                placeholder="全部品牌"
+                value={selectedBrands}
                 options={brandOptions}
-                onChange={(value) => setSelectedBrand(value)}
+                onChange={(value) => setSelectedBrands(value as string[])}
               />
             </Space>
 
@@ -385,7 +421,7 @@ export default function MonthlyInvestmentTab({ onEditMonthly }: MonthlyInvestmen
             }}
           >
             投入记录：{dataSource.length} 条 · 月度列：{sortedMonths.length} 列 ·
-            仅展示各预算类型最新版本的月度投入
+            按配置中心部门拆分，仅展示各预算类型最新版本
           </span>
 
           <Space size={16}>
@@ -448,14 +484,60 @@ export default function MonthlyInvestmentTab({ onEditMonthly }: MonthlyInvestmen
           }
           onRow={(record) => ({
             style: { cursor: 'pointer' },
-            onClick: () => onEditMonthly(record.id),
+            onClick: () => handleEdit(record.id),
           })}
+          summary={() => (
+            <Table.Summary fixed>
+              <Table.Summary.Row className="pms-summary-row">
+                <Table.Summary.Cell index={0}>
+                  <span style={{ fontWeight: 700 }}>合计</span>
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={1} />
+                <Table.Summary.Cell index={2} />
+                <Table.Summary.Cell index={3} />
+                <Table.Summary.Cell index={4} />
+                <Table.Summary.Cell index={5} />
+                <Table.Summary.Cell index={6} />
+                <Table.Summary.Cell index={7} align="right">
+                  <span style={{ fontWeight: 700 }}>{formatPersonMonth(totalRow.totalEstimated)}</span>
+                </Table.Summary.Cell>
+                {sortedMonths.map((monthKey, idx) => (
+                  <Table.Summary.Cell key={`total-${monthKey}`} index={8 + idx} align="right">
+                    <span style={{ fontWeight: 600 }}>
+                      {formatPersonMonth(totalRow.monthlyTotals[monthKey] || 0)}
+                    </span>
+                  </Table.Summary.Cell>
+                ))}
+                <Table.Summary.Cell index={8 + sortedMonths.length} />
+              </Table.Summary.Row>
+            </Table.Summary>
+          )}
         />
       </div>
+
+      {/* 编辑弹框：直接在本组件内弹出，不跳转单项目空间 */}
+      <MonthlyEditModal
+        open={showEditModal}
+        monthlyId={editingMonthlyId}
+        onCancel={() => {
+          setShowEditModal(false)
+          setEditingMonthlyId(null)
+        }}
+      />
 
       <style jsx global>{`
         .pms-monthly-investment-tab .pms-table {
           font-variant-numeric: tabular-nums;
+        }
+        /* 合计行：品牌色背景突出显示 */
+        .pms-monthly-investment-tab .pms-table .pms-summary-row > td {
+          background: var(--pms-brand-surface) !important;
+          color: var(--pms-brand-strong);
+          font-weight: 600;
+          border-top: 2px solid var(--pms-brand-border);
+        }
+        .pms-monthly-investment-tab .pms-table .pms-summary-row:hover > td {
+          background: var(--pms-brand-surface) !important;
         }
         /* 已锁定版本：绿色背景 */
         .pms-monthly-investment-tab .pms-table .pms-row-locked > td {

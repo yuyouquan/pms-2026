@@ -129,12 +129,12 @@ export const PHASE_SPLIT_RULES = [
   { phase: 'launch', startField: 'str5', endField: 'productLaunch', label: '上市阶段' },
 ] as const
 
-/** 默认筛选器 */
+/** 默认筛选器（空数组表示不筛选） */
 export const DEFAULT_PROJECT_FILTERS = {
-  brand: 'all' as const,
-  productLine: 'all' as const,
+  brand: [] as import('@/types/hrMachine').MachineBrand[],
+  productLine: [] as import('@/types/hrMachine').MachineProductLine[],
   projectName: '',
-  projectYear: 'all' as const,
+  projectYear: [] as string[],
   showCancelled: false,
 }
 
@@ -155,11 +155,11 @@ export function formatPercent(numerator: number, denominator: number): string {
   return `${((numerator / denominator) * 100).toFixed(1)}%`
 }
 
-/** 计算阶段工期（天数） */
+/** 计算阶段工期（天数，包含首尾日期） */
 export function calcPhaseDuration(startDate: string | null, endDate: string | null): number {
   if (!startDate || !endDate) return 0
   const start = new Date(startDate)
   const end = new Date(endDate)
   const diff = end.getTime() - start.getTime()
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
+  return Math.max(0, Math.round(diff / (1000 * 60 * 60 * 24)) + 1) // +1 包含首尾
 }

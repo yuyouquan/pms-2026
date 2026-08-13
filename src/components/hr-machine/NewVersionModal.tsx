@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { Modal, Select, message, Tooltip, Tag } from 'antd'
+import { Modal, Select, InputNumber, Form, message, Tooltip, Tag, Alert } from 'antd'
 import { useHrMachineStore } from '@/stores/hrMachine'
+import { useHrConfigStore } from '@/stores/hrConfig'
 import { BUDGET_TYPES } from '@/constants/hrMachine'
+import { getConfigProjectLevels, getConfigModelVersions, calcEstimatedInvestment } from '@/constants/hrConfig'
 import type { BudgetType } from '@/types/hrMachine'
 
 interface NewVersionModalProps {
@@ -20,7 +22,11 @@ const IPM_REQUIRED_TIP = '需要先绑定正式项目编码才能创建此类型
 
 export default function NewVersionModal({ open, projectId, onCancel }: NewVersionModalProps) {
   const { projects, addVersion } = useHrMachineStore()
+  const configData = useHrConfigStore(s => s.data)
   const [budgetType, setBudgetType] = useState<BudgetType>('annual')
+  const [projectLevel, setProjectLevel] = useState<string>('')
+  const [levelCoefficient, setLevelCoefficient] = useState<number>(1)
+  const [hrModelVersion, setHrModelVersion] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
 
   const project = useMemo(
@@ -33,15 +39,41 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     [project],
   )
 
+  // 从配置中心获取项目等级和模型版本号选项
+  const hrModelRecords = configData.hrModel ?? []
+  const projectLevelOptions = useMemo(
+    () => getConfigProjectLevels(hrModelRecords).map(l => ({ value: l, label: l })),
+    [hrModelRecords],
+  )
+  const hrModelVersionOptions = useMemo(
+    () => getConfigModelVersions(hrModelRecords).map(v => ({ value: v, label: v })),
+    [hrModelRecords],
+  )
+
+  // 预估投入预览
+  const estimatedPreview = useMemo(() => {
+    if (!projectLevel || !hrModelVersion) return 0
+    return calcEstimatedInvestment(hrModelRecords, projectLevel, hrModelVersion, levelCoefficient)
+  }, [hrModelRecords, projectLevel, hrModelVersion, levelCoefficient])
+
   useEffect(() => {
     if (open) {
-      // 年度预算始终可选，作为默认值
+      // 默认值：年度预算 + 配置中心第一个等级 + 系数1 + 第一个版本号
+      const firstLevel = getConfigProjectLevels(hrModelRecords)[0] ?? ''
+      const firstVersion = getConfigModelVersions(hrModelRecords)[0] ?? ''
       setBudgetType('annual')
+      setProjectLevel(firstLevel)
+      setLevelCoefficient(1)
+      setHrModelVersion(firstVersion)
     }
-  }, [open])
+  }, [open, hrModelRecords])
 
   const handleOk = async () => {
     if (!projectId) return
+    if (!projectLevel || !hrModelVersion) {
+      message.warning('请选择项目等级和人力模型版本号')
+      return
+    }
     // 前端兜底校验：未绑定 IPM 时不允许创建需要 IPM 的版本
     if (!hasIpm && IPM_REQUIRED_TYPES.includes(budgetType)) {
       message.warning(IPM_REQUIRED_TIP)
@@ -49,7 +81,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     }
     try {
       setSubmitting(true)
-      addVersion(projectId, budgetType)
+      addVersion(projectId, budgetType, { projectLevel, levelCoefficient, hrModelVersion })
       message.success('版本创建成功')
       onCancel()
     } finally {
@@ -82,7 +114,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       confirmLoading={submitting}
       okText="创建"
       cancelText="取消"
-      width={460}
+      width={520}
     >
       <div style={{ marginTop: 16 }}>
         {/* 项目信息 */}
@@ -118,21 +150,64 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
           </div>
         </div>
 
-        {/* 预算类型选择 */}
-        <p style={{ marginBottom: 8, color: 'var(--pms-text-secondary)', fontSize: 13 }}>
-          选择预算类型以创建新版本：
-        </p>
-        <Select
-          value={budgetType}
-          onChange={(v) => setBudgetType(v)}
-          style={{ width: '100%' }}
-          options={budgetOptions}
-        />
+        {/* 表单字段 */}
+        <Form layout="vertical">
+          <Form.Item label="预算类型" required>
+            <Select
+              value={budgetType}
+              onChange={(v) => setBudgetType(v)}
+              style={{ width: '100%' }}
+              options={budgetOptions}
+            />
+          </Form.Item>
+
+          <Form.Item label="项目等级" required tooltip="下拉值来自配置中心-人力模型">
+            <Select
+              value={projectLevel || undefined}
+              onChange={(v) => setProjectLevel(v)}
+              style={{ width: '100%' }}
+              options={projectLevelOptions}
+              placeholder="请选择项目等级"
+            />
+          </Form.Item>
+
+          <Form.Item label="等级系数" required>
+            <InputNumber
+              value={levelCoefficient}
+              onChange={(v) => setLevelCoefficient(v ?? 1)}
+              min={0}
+              step={0.1}
+              precision={2}
+              style={{ width: '100%' }}
+              placeholder="请输入等级系数"
+            />
+          </Form.Item>
+
+          <Form.Item label="人力模型版本号" required tooltip="下拉值来自配置中心-人力模型">
+            <Select
+              value={hrModelVersion || undefined}
+              onChange={(v) => setHrModelVersion(v)}
+              style={{ width: '100%' }}
+              options={hrModelVersionOptions}
+              placeholder="请选择人力模型版本号"
+            />
+          </Form.Item>
+        </Form>
+
+        {/* 预估投入预览 */}
+        {projectLevel && hrModelVersion && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12, borderRadius: 8 }}
+            message={`预估投入 = 模型综合 × 等级系数 = ${estimatedPreview} 人月`}
+            description="预估投入根据配置中心人力模型数据自动计算"
+          />
+        )}
 
         {/* 版本规则说明 */}
         <div
           style={{
-            marginTop: 12,
             padding: '8px 12px',
             background: 'var(--pms-brand-surface)',
             borderRadius: 8,

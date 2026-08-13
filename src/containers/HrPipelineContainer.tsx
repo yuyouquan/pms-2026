@@ -7,6 +7,7 @@ import {
   DashboardOutlined,
   TeamOutlined,
   FundOutlined,
+  SettingOutlined,
   RightOutlined,
   DownOutlined,
   AppstoreOutlined,
@@ -20,7 +21,9 @@ import {
   resolveLeafLabel,
   type HrSidebarGroupKey,
 } from '@/constants/hrPipeline'
+import { resolveConfigModule } from '@/constants/hrConfig'
 import MachineProjectContent from '@/components/hr-machine/MachineProjectContent'
+import ConfigContent from '@/components/hr-config/ConfigContent'
 
 /* ── Icon resolver ─────────────────────────────────────────────────── */
 
@@ -28,6 +31,7 @@ const ICON_MAP: Record<string, ReactNode> = {
   DashboardOutlined: <DashboardOutlined />,
   TeamOutlined: <TeamOutlined />,
   FundOutlined: <FundOutlined />,
+  SettingOutlined: <SettingOutlined />,
 }
 
 /* ── Sidebar tree item ────────────────────────────────────────────── */
@@ -139,6 +143,12 @@ function HrContentRouter({ leafKey }: { leafKey: string }) {
   // Route to specific content based on active leaf
   if (leafKey === 'investment/machine') {
     return <MachineProjectContent />
+  }
+
+  // 配置中心路由
+  const configModule = resolveConfigModule(leafKey)
+  if (configModule) {
+    return <ConfigContent moduleKey={configModule} />
   }
 
   // Default: placeholder for unimplemented sections

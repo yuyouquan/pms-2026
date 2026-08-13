@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import {
   Card,
   Table,
@@ -39,6 +39,8 @@ import {
 } from '@/constants/hrMachine'
 import type { HrMachineVersion, BudgetType, MilestoneNodes } from '@/types/hrMachine'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
+import { useHrConfigStore } from '@/stores/hrConfig'
+import { getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
 
 interface ProjectDetailSpaceProps {
   projectId: string
@@ -49,22 +51,27 @@ interface ProjectDetailSpaceProps {
 /** 预算类型筛选选项（由常量派生，无需每次渲染重建） */
 const BUDGET_TYPE_OPTIONS = BUDGET_TYPES.map((t) => ({ label: t.label, value: t.value }))
 
-// ── 行内编辑：数字单元格（预估投入） ──────────────────────────────────
+/** 全部预算类型值（用于全选） */
+const ALL_BUDGET_TYPE_VALUES = BUDGET_TYPE_OPTIONS.map((o) => o.value) as BudgetType[]
+
+// ── 行内编辑：数字单元格（等级系数等） ──────────────────────────────────
 // 点击进入编辑模式，Enter / blur 保存，Escape 取消
 function EditableNumberCell({
   value,
   editable,
   onSave,
+  formatter = formatPersonMonth,
 }: {
   value: number
   editable: boolean
   onSave: (v: number) => void
+  formatter?: (v: number) => string
 }) {
   const [editing, setEditing] = useState(false)
   const [localValue, setLocalValue] = useState(value)
 
   if (!editable) {
-    return <span style={{ fontWeight: 600 }}>{formatPersonMonth(value)}</span>
+    return <span style={{ fontWeight: 600 }}>{formatter(value)}</span>
   }
 
   if (editing) {
@@ -104,7 +111,7 @@ function EditableNumberCell({
       }}
       style={{ fontWeight: 600 }}
     >
-      {formatPersonMonth(value)}
+      {formatter(value)}
     </span>
   )
 }
@@ -163,6 +170,61 @@ function EditableDateCell({
   )
 }
 
+// ── 行内编辑：下拉选择单元格（项目等级、人力模型版本号） ────────────────
+// 点击进入编辑模式，选择后自动保存，关闭弹层则取消
+function EditableSelectCell({
+  value,
+  editable,
+  options,
+  onSave,
+  renderDisplay,
+}: {
+  value: string
+  editable: boolean
+  options: { label: string; value: string }[]
+  onSave: (v: string) => void
+  renderDisplay?: (value: string) => ReactNode
+}) {
+  const [editing, setEditing] = useState(false)
+
+  if (!editable) {
+    if (renderDisplay) return <>{renderDisplay(value)}</>
+    return <span style={{ color: 'var(--pms-text-primary)' }}>{value || '-'}</span>
+  }
+
+  if (editing) {
+    return (
+      <Select
+        size="small"
+        value={value || undefined}
+        open
+        autoFocus
+        style={{ width: '100%' }}
+        options={options}
+        onChange={(v) => {
+          onSave(v)
+          setEditing(false)
+        }}
+        onDropdownVisibleChange={(visible) => {
+          if (!visible) setEditing(false)
+        }}
+        onBlur={() => setEditing(false)}
+      />
+    )
+  }
+
+  return (
+    <span
+      className="pms-inline-editable"
+      onClick={() => setEditing(true)}
+    >
+      {renderDisplay
+        ? renderDisplay(value)
+        : value || <span style={{ color: 'var(--pms-text-tertiary)' }}>-</span>}
+    </span>
+  )
+}
+
 export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: ProjectDetailSpaceProps) {
   // ── Store：读取项目、预算类型筛选与版本操作 ──────────────────────────
   const projects = useHrMachineStore((s) => s.projects)
@@ -176,13 +238,24 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
   const updateVersion = useHrMachineStore((s) => s.updateVersion)
   const bindIpmProject = useHrMachineStore((s) => s.bindIpmProject)
 
+  // ── 配置中心：项目等级 / 人力模型版本号选项 ──────────────────────────
+  const hrModelRecords = useHrConfigStore((s) => s.data.hrModel ?? [])
+  const projectLevelOptions = useMemo(
+    () => getConfigProjectLevels(hrModelRecords).map((v) => ({ label: v, value: v })),
+    [hrModelRecords],
+  )
+  const modelVersionOptions = useMemo(
+    () => getConfigModelVersions(hrModelRecords).map((v) => ({ label: v, value: v })),
+    [hrModelRecords],
+  )
+
   // ── 当前项目 ────────────────────────────────────────────────────────
   const project = useMemo(
     () => projects.find((p) => p.id === projectId) ?? null,
     [projects, projectId],
   )
 
-  // ── 按预算类型筛选版本，并按 预算类型 → 主版本 → 小版本 排序 ──────────
+  // ── 按预算类型筛选版本，并按 预算类型 → 版本号降序 排序 ──────────────
   const filteredVersions = useMemo<HrMachineVersion[]>(() => {
     if (!project) return []
     const typeOrder = (bt: BudgetType) => BUDGET_TYPES.findIndex((t) => t.value === bt)
@@ -191,8 +264,9 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
       .sort((a, b) => {
         const byType = typeOrder(a.budgetType) - typeOrder(b.budgetType)
         if (byType !== 0) return byType
-        if (a.majorVersion !== b.majorVersion) return a.majorVersion - b.majorVersion
-        return a.minorVersion - b.minorVersion
+        // 同一预算类型下按版本号降序（最新版本在最前）
+        if (a.majorVersion !== b.majorVersion) return b.majorVersion - a.majorVersion
+        return b.minorVersion - a.minorVersion
       })
   }, [project, selectedBudgetTypes])
 
@@ -262,22 +336,34 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
         key: 'projectLevel',
         width: 90,
         align: 'center',
-        render: () => (
-          <span
-            style={{
-              display: 'inline-block',
-              minWidth: 28,
-              padding: '2px 10px',
-              borderRadius: 10,
-              background: 'var(--pms-brand-surface)',
-              color: 'var(--pms-brand-strong)',
-              fontSize: 12,
-              fontWeight: 600,
-              border: '1px solid var(--pms-brand-border)',
-            }}
-          >
-            {project.projectLevel}
-          </span>
+        render: (_value: unknown, record: HrMachineVersion) => (
+          <EditableSelectCell
+            value={record.projectLevel}
+            editable={record.lockState === 'unlocked'}
+            options={projectLevelOptions}
+            onSave={(v) => updateVersion(project.id, record.id, { projectLevel: v })}
+            renderDisplay={(v) =>
+              v ? (
+                <span
+                  style={{
+                    display: 'inline-block',
+                    minWidth: 28,
+                    padding: '2px 10px',
+                    borderRadius: 10,
+                    background: 'var(--pms-brand-surface)',
+                    color: 'var(--pms-brand-strong)',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    border: '1px solid var(--pms-brand-border)',
+                  }}
+                >
+                  {v}
+                </span>
+              ) : (
+                <span style={{ color: 'var(--pms-text-tertiary)' }}>-</span>
+              )
+            }
+          />
         ),
       },
       {
@@ -285,13 +371,27 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
         key: 'levelCoefficient',
         width: 90,
         align: 'right',
-        render: () => project.levelCoefficient,
+        render: (_value: unknown, record: HrMachineVersion) => (
+          <EditableNumberCell
+            value={record.levelCoefficient}
+            editable={record.lockState === 'unlocked'}
+            formatter={(v) => v.toFixed(1)}
+            onSave={(v) => updateVersion(project.id, record.id, { levelCoefficient: v })}
+          />
+        ),
       },
       {
         title: '人力模型版本',
         key: 'hrModelVersion',
         width: 120,
-        render: () => project.hrModelVersion,
+        render: (_value: unknown, record: HrMachineVersion) => (
+          <EditableSelectCell
+            value={record.hrModelVersion}
+            editable={record.lockState === 'unlocked'}
+            options={modelVersionOptions}
+            onSave={(v) => updateVersion(project.id, record.id, { hrModelVersion: v })}
+          />
+        ),
       },
       {
         title: '预估投入',
@@ -299,11 +399,7 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
         width: 110,
         align: 'right',
         render: (_value: unknown, record: HrMachineVersion) => (
-          <EditableNumberCell
-            value={record.estimatedInvestment}
-            editable={record.lockState === 'unlocked'}
-            onSave={(v) => updateVersion(project.id, record.id, { estimatedInvestment: v })}
-          />
+          <span style={{ fontWeight: 600 }}>{formatPersonMonth(record.estimatedInvestment)}</span>
         ),
       },
       ...milestoneColumns,
@@ -399,7 +495,7 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
         ),
       },
     ]
-  }, [project, lockableIds, lockVersion, deleteVersion, deleteProject, onBack, updateVersion])
+  }, [project, lockableIds, lockVersion, deleteVersion, deleteProject, onBack, updateVersion, projectLevelOptions, modelVersionOptions])
 
   // ── 项目不存在的兜底 ────────────────────────────────────────────────
   if (!project) {
@@ -428,9 +524,9 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
       { key: 'name', title: '项目名称', formatter: () => project.name },
       { key: 'brand', title: '品牌', formatter: () => project.brand },
       { key: 'productLine', title: '产品线', formatter: () => project.productLine },
-      { key: 'projectLevel', title: '项目等级', formatter: () => project.projectLevel },
-      { key: 'levelCoefficient', title: '等级系数', formatter: () => project.levelCoefficient },
-      { key: 'hrModelVersion', title: '人力模型版本', formatter: () => project.hrModelVersion },
+      { key: 'projectLevel', title: '项目等级', formatter: (_v, row: HrMachineVersion) => row.projectLevel },
+      { key: 'levelCoefficient', title: '等级系数', formatter: (_v, row: HrMachineVersion) => row.levelCoefficient },
+      { key: 'hrModelVersion', title: '人力模型版本', formatter: (_v, row: HrMachineVersion) => row.hrModelVersion },
       {
         key: 'estimatedInvestment',
         title: '预估投入(人月)',
@@ -615,6 +711,21 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
             >
               预算类型
             </span>
+            <Checkbox
+              checked={
+                selectedBudgetTypes.length > 0 &&
+                selectedBudgetTypes.length === ALL_BUDGET_TYPE_VALUES.length
+              }
+              indeterminate={
+                selectedBudgetTypes.length > 0 &&
+                selectedBudgetTypes.length < ALL_BUDGET_TYPE_VALUES.length
+              }
+              onChange={(e) =>
+                setSelectedBudgetTypes(e.target.checked ? [...ALL_BUDGET_TYPE_VALUES] : [])
+              }
+            >
+              全选
+            </Checkbox>
             <Checkbox.Group
               options={BUDGET_TYPE_OPTIONS}
               value={selectedBudgetTypes}
@@ -709,6 +820,9 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
           width: 100%;
         }
         .pms-hr-machine-project-detail .pms-table .ant-picker {
+          width: 100%;
+        }
+        .pms-hr-machine-project-detail .pms-table .ant-select {
           width: 100%;
         }
       `}</style>
