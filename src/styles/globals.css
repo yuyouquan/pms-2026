@@ -5624,6 +5624,40 @@ body {
   .pms-todo-status-tabs {
     gap: 18px;
   }
+
+  .pms-todo-center__filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .pms-todo-center__filters .pms-todo-filter--search {
+    grid-column: 1 / -1;
+  }
+
+  .pms-todo-center__filters > :where(.ant-input-affix-wrapper, .ant-select, .ant-picker, .ant-btn) {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    flex-basis: auto;
+  }
+
+  .pms-todo-center__table .ant-pagination {
+    min-height: 32px;
+    align-items: center;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 520px) {
+  .pms-todo-center__filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pms-todo-center__filters .pms-todo-filter--search {
+    grid-column: auto;
+  }
 }
 
 /* Roadmap and project-view material hierarchy. */
