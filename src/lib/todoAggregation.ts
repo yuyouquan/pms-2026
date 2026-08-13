@@ -8,7 +8,8 @@ import {
 } from '@/lib/marketRules'
 
 export type TodoSource = 'plan' | 'transfer'
-export type TodoStatus = 'pending' | 'in_progress' | 'completed'
+export type TodoStatus = 'pending' | 'completed'
+export type TodoStatusFilter = 'all' | TodoStatus
 
 export type WorkbenchTodoRoute =
   | {
@@ -23,7 +24,7 @@ export type WorkbenchTodoRoute =
   | {
     kind: 'transfer'
     applicationId: string
-    view: 'entry' | 'review' | 'sqa-review'
+    view: 'entry' | 'review' | 'sqa-review' | 'detail'
   }
 
 export interface WorkbenchTodo {
@@ -41,6 +42,8 @@ export interface WorkbenchTodo {
   tosType?: string
   sourceLabel?: string
   context?: string
+  nodeLabel: string
+  taskContent: string
   route: WorkbenchTodoRoute
 }
 
@@ -78,7 +81,7 @@ export interface TransferTodoCandidate {
   completed: boolean
   completedAt?: string
   title: string
-  view: 'entry' | 'review' | 'sqa-review'
+  view: 'entry' | 'review' | 'sqa-review' | 'detail'
   sourceLabel?: string
   context?: string
 }
@@ -151,7 +154,6 @@ export function resolveVisiblePlanVersion(
 
 function resolvePlanTodoStatus(task: PlanTodoTaskLike): TodoStatus {
   if (task.status === '已完成' || Number(task.progress) >= 100) return 'completed'
-  if (task.status === '进行中' || Number(task.progress) > 0) return 'in_progress'
   return 'pending'
 }
 
@@ -216,6 +218,8 @@ interface TransferApplicationLike {
   applicant: string
   plannedReviewDate?: string
   createdAt?: string
+  updatedAt?: string
+  remark?: string
   pipeline: { dataEntry: string; maintenanceReview: string; sqaReview: string }
   team: {
     maintenance: Array<{ id: string; name: string; role: string }>
@@ -231,36 +235,51 @@ export function buildTransferTodoCandidates({
   projects: readonly { id: string; name: string }[]
 }): TransferTodoCandidate[] {
   return applications.flatMap(application => {
-    if (application.status !== 'in_progress') return []
-    const view = ['in_progress', 'failed'].includes(application.pipeline.sqaReview)
-      ? 'sqa-review'
-      : ['in_progress', 'failed'].includes(application.pipeline.maintenanceReview)
-        ? 'review'
-        : ['in_progress', 'failed'].includes(application.pipeline.dataEntry) ? 'entry' : null
-    if (!view) return []
+    if (application.status === 'cancelled') return []
     const project = projects.find(candidate => candidate.id === application.projectId || candidate.name === application.projectName)
     if (!project) return []
-    const externalOwner = view === 'entry'
-      ? { id: application.applicantId, name: application.applicant }
-      : view === 'review'
-        ? application.team.maintenance.find(member => member.role === 'SPM')
-        : application.team.research.find(member => member.role === 'SQA')
-    const activeOwner = mapTransferOwnerToPmsUser(externalOwner?.id, externalOwner?.name)
-    if (!activeOwner) return []
-    const sourceLabel = view === 'entry' ? '转维资料录入' : view === 'review' ? '转维维护审核' : '转维 SQA 审核'
-    return [{
-      applicationId: application.id,
-      projectId: project.id,
-      projectName: project.name,
-      activeOwner,
-      dueDate: application.plannedReviewDate || '',
-      generatedAt: application.createdAt,
-      completed: false,
-      title: sourceLabel,
-      sourceLabel,
-      context: '当前活动节点',
-      view,
-    }]
+    const nodes = [
+      {
+        key: 'entry',
+        state: application.pipeline.dataEntry,
+        label: '转维资料录入',
+        owner: { id: application.applicantId, name: application.applicant },
+      },
+      {
+        key: 'review',
+        state: application.pipeline.maintenanceReview,
+        label: '转维维护审核',
+        owner: application.team.maintenance.find(member => member.role === 'SPM'),
+      },
+      {
+        key: 'sqa-review',
+        state: application.pipeline.sqaReview,
+        label: '转维 SQA 审核',
+        owner: application.team.research.find(member => member.role === 'SQA'),
+      },
+    ] as const
+
+    return nodes.flatMap(node => {
+      if (node.state === 'not_started') return []
+      const activeOwner = mapTransferOwnerToPmsUser(node.owner?.id, node.owner?.name)
+      if (!activeOwner) return []
+      const completed = node.state === 'success'
+      return [{
+        applicationId: `${application.id}:${node.key}`,
+        id: application.id,
+        projectId: project.id,
+        projectName: project.name,
+        activeOwner,
+        dueDate: application.plannedReviewDate || '',
+        generatedAt: application.createdAt,
+        completed,
+        completedAt: completed ? application.updatedAt : undefined,
+        title: node.label,
+        sourceLabel: node.label,
+        context: application.remark || '',
+        view: completed ? 'detail' as const : node.key,
+      }]
+    })
   })
 }
 
@@ -295,6 +314,8 @@ export interface TodoFilters {
   search: string
   projectId: string
   categories: TodoSource[]
+  source?: TodoSource
+  status?: TodoStatusFilter
   generatedDateFrom: string
   generatedDateTo: string
 }
@@ -427,6 +448,7 @@ function isOverdue(todo: WorkbenchTodo, today: string): boolean {
 
 function sortTodos(todos: WorkbenchTodo[]): WorkbenchTodo[] {
   return todos.sort((left, right) => {
+    if (left.status !== right.status) return left.status === 'pending' ? -1 : 1
     const generatedDelta = toDateKey(right.generatedAt).localeCompare(toDateKey(left.generatedAt))
     if (generatedDelta) return generatedDelta
 
@@ -437,26 +459,19 @@ function sortTodos(todos: WorkbenchTodo[]): WorkbenchTodo[] {
 
 export function aggregateWorkbenchTodos({
   currentUser,
-  today,
   planTodos,
   transferApplications,
 }: AggregateWorkbenchTodosInput): WorkbenchTodo[] {
   const normalizedUser = currentUser.trim()
   if (!normalizedUser) return []
-  const aggregationDate = toDateKey(today)
 
   const planItems = planTodos
-    .filter(candidate => (
-      candidate.assignee?.trim() === normalizedUser
-      && !candidate.completed
-      && !candidate.completedAt
-      && candidate.status !== 'completed'
-    ))
+    .filter(candidate => candidate.assignee?.trim() === normalizedUser)
     .map((candidate): WorkbenchTodo => {
       const completed = Boolean(candidate.completed || candidate.completedAt || candidate.status === 'completed')
-      const status: TodoStatus = completed
-        ? 'completed'
-        : candidate.status === 'in_progress' ? 'in_progress' : 'pending'
+      const status: TodoStatus = completed ? 'completed' : 'pending'
+      const nodeLabel = candidate.sourceLabel || (candidate.planLevel === 'level1' ? '一级计划' : candidate.planKey)
+      const taskContent = candidate.context || ''
       return {
         id: candidate.id,
         source: 'plan',
@@ -465,13 +480,15 @@ export function aggregateWorkbenchTodos({
         projectName: candidate.projectName || '',
         assignee: candidate.assignee,
         dueDate: toDateKey(candidate.dueDate),
-        generatedAt: toDateKey(candidate.generatedAt) || aggregationDate,
+        generatedAt: toDateKey(candidate.generatedAt),
         status,
         completedAt: toDateKey(candidate.completedAt) || undefined,
         market: candidate.market,
         tosType: candidate.tosType,
         sourceLabel: candidate.sourceLabel,
         context: candidate.context,
+        nodeLabel,
+        taskContent,
         route: {
           kind: 'plan',
           planLevel: candidate.planLevel === 'level2' ? 'level2' : 'level1',
@@ -485,9 +502,10 @@ export function aggregateWorkbenchTodos({
     })
 
   const transferItems = transferApplications
-    .filter(candidate => !candidate.completed && candidate.activeOwner?.trim() === normalizedUser)
+    .filter(candidate => candidate.activeOwner?.trim() === normalizedUser)
     .map((candidate): WorkbenchTodo => {
       const applicationId = candidate.applicationId || candidate.id || ''
+      const status: TodoStatus = candidate.completed ? 'completed' : 'pending'
       return {
         id: applicationId,
         source: 'transfer',
@@ -496,11 +514,13 @@ export function aggregateWorkbenchTodos({
         projectName: candidate.projectName || '',
         assignee: candidate.activeOwner,
         dueDate: toDateKey(candidate.dueDate),
-        generatedAt: toDateKey(candidate.generatedAt) || aggregationDate,
-        status: 'in_progress',
-        completedAt: undefined,
+        generatedAt: toDateKey(candidate.generatedAt),
+        status,
+        completedAt: toDateKey(candidate.completedAt) || undefined,
         sourceLabel: candidate.sourceLabel,
         context: candidate.context,
+        nodeLabel: candidate.sourceLabel || '转维护',
+        taskContent: candidate.context || '',
         route: {
           kind: 'transfer',
           applicationId,
@@ -512,6 +532,17 @@ export function aggregateWorkbenchTodos({
   return sortTodos([...planItems, ...transferItems])
 }
 
+export function resolveWorkbenchDefaultSelection(
+  todos: readonly Pick<WorkbenchTodo, 'source' | 'status'>[],
+): { source: TodoSource; status: TodoStatusFilter } {
+  for (const source of ['plan', 'transfer'] as const) {
+    if (todos.some(todo => todo.source === source && todo.status === 'pending')) {
+      return { source, status: 'pending' }
+    }
+  }
+  return { source: 'plan', status: 'all' }
+}
+
 export function filterWorkbenchTodos(
   todos: readonly WorkbenchTodo[],
   filters: Partial<TodoFilters> = {},
@@ -519,15 +550,18 @@ export function filterWorkbenchTodos(
   const search = (filters.search ?? '').trim().toLocaleLowerCase('zh-CN')
   const projectId = filters.projectId ?? ''
   const categories = filters.categories ?? []
+  const source = filters.source
+  const status = filters.status ?? 'all'
   const generatedDateFrom = toDateKey(filters.generatedDateFrom)
   const generatedDateTo = toDateKey(filters.generatedDateTo)
 
   return todos.filter(todo => {
-    if (todo.status === 'completed') return false
+    if (source && todo.source !== source) return false
+    if (status !== 'all' && todo.status !== status) return false
     if (categories.length > 0 && !categories.includes(todo.source)) return false
     if (projectId && todo.projectId !== projectId) return false
     if (search) {
-      const haystack = `${todo.title} ${todo.projectName} ${todo.sourceLabel || ''} ${todo.context || ''}`.toLocaleLowerCase('zh-CN')
+      const haystack = `${todo.title} ${todo.projectName} ${todo.nodeLabel} ${todo.taskContent} ${todo.assignee}`.toLocaleLowerCase('zh-CN')
       if (!haystack.includes(search)) return false
     }
     const generatedAt = toDateKey(todo.generatedAt)

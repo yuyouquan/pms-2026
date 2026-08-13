@@ -19,6 +19,7 @@ for (const name of [
   'filterTodoCandidatesByAccess',
   'resolveVisiblePlanVersion',
   'resolvePlanTodoNavigation',
+  'resolveWorkbenchDefaultSelection',
 ]) assert.equal(typeof todos[name], 'function', `missing ${name}`)
 const input = {
   currentUser: '张三',
@@ -36,13 +37,33 @@ const input = {
   ],
 }
 const all = todos.aggregateWorkbenchTodos(input)
-assert.deepEqual(all.map(item => item.id), ['plan-today', 'plan-overdue', 'transfer-mine'], 'aggregate keeps pending/in-progress work and excludes every completed or other-user item')
-assert.equal(all.every(item => item.status !== 'completed'), true, 'the todo center never receives completed rows')
-assert.equal(all.find(item => item.id === 'plan-today')?.generatedAt, '2026-07-31', 'missing plan generation dates use the explicit aggregation date')
+assert.deepEqual(all.map(item => [item.id, item.status]), [
+  ['plan-overdue', 'pending'],
+  ['transfer-mine', 'pending'],
+  ['plan-today', 'pending'],
+  ['plan-done', 'completed'],
+  ['transfer-done', 'completed'],
+], 'aggregate exposes only pending and completed work for the current user')
+assert.equal(all.find(item => item.id === 'plan-today')?.generatedAt, '', 'missing plan generation dates remain unrecorded')
 assert.equal(all.find(item => item.id === 'transfer-mine')?.generatedAt, '2026-07-29', 'transfer generation timestamps normalize to a date key')
-assert.deepEqual(todos.filterWorkbenchTodos(all, { categories: ['transfer'] }).map(item => item.id), ['transfer-mine'], 'multi-category filters operate on aggregate output')
-assert.deepEqual(todos.filterWorkbenchTodos(all, { categories: ['plan'] }).map(item => item.id), ['plan-today', 'plan-overdue'], 'plan category counts pending and in-progress work')
-assert.deepEqual(todos.summarizeWorkbenchTodos(all, '2026-07-31'), { total: 3, dueToday: 1, overdue: 1, completedThisWeek: 0 }, 'summary remains compatible with the pending-only aggregate output')
+assert.deepEqual(
+  todos.resolveWorkbenchDefaultSelection(all),
+  { source: 'plan', status: 'pending' },
+  'plan wins when both directories have pending work',
+)
+assert.deepEqual(
+  todos.resolveWorkbenchDefaultSelection([{ source: 'plan', status: 'completed' }, { source: 'transfer', status: 'pending' }]),
+  { source: 'transfer', status: 'pending' },
+  'transfer is selected when it is the first directory with pending work',
+)
+assert.deepEqual(
+  todos.resolveWorkbenchDefaultSelection([{ source: 'plan', status: 'completed' }]),
+  { source: 'plan', status: 'all' },
+  'plan/all is the fallback when neither directory has pending work',
+)
+assert.deepEqual(todos.filterWorkbenchTodos(all, { source: 'transfer', status: 'all' }).map(item => item.id), ['transfer-mine', 'transfer-done'], 'directory filtering includes pending and completed work')
+assert.deepEqual(todos.filterWorkbenchTodos(all, { source: 'plan', status: 'pending' }).map(item => item.id), ['plan-overdue', 'plan-today'], 'status filtering collapses every unfinished plan state into pending')
+assert.deepEqual(todos.summarizeWorkbenchTodos(all, '2026-07-31'), { total: 5, dueToday: 1, overdue: 1, completedThisWeek: 1 }, 'summary remains compatible with the two-state aggregate output')
 assert.equal(all.find(item => item.id === 'plan-overdue')?.route.marketKey, 'project::p1::OP::level1::versions', 'market plan routes preserve their validated market scope key')
 assert.deepEqual(
   todos.aggregateWorkbenchTodos({ ...input, currentUser: '   ', planTodos: [{ ...input.planTodos[0], assignee: '' }] }),
@@ -106,9 +127,11 @@ const transferFixtures = todos.buildTransferTodoCandidates({
   ],
 })
 assert.deepEqual(transferFixtures.map(item => [item.view, item.activeOwner, item.sourceLabel]), [
+  ['detail', '张三', '转维资料录入'],
   ['review', '王五', '转维维护审核'],
+  ['detail', '张三', '转维资料录入'],
   ['sqa-review', '李白', '转维 SQA 审核'],
-], 'review and SQA nodes use their current authoritative owner identities')
+], 'completed history and active nodes use their authoritative owner identities')
 assert.equal(transferFixtures[0].generatedAt, '2026-07-28 10:00:00', 'transfer candidates preserve the application creation timestamp')
 
 const crossDayCandidates = {
@@ -119,8 +142,8 @@ const crossDayCandidates = {
   ],
   transferApplications: [],
 }
-assert.deepEqual(todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-07-30' }).map(item => item.id), ['pending-later'], 'completed work is excluded before pagination')
-assert.deepEqual(todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-08-01' }).map(item => item.id), ['pending-later'], 'pending work remains deterministic across aggregation dates')
+assert.deepEqual(todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-07-30' }).map(item => item.id), ['pending-later', 'completed-earlier'], 'completed work remains available after pending work')
+assert.deepEqual(todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-08-01' }).map(item => item.id), ['pending-later', 'completed-earlier'], 'two-state work remains deterministic across aggregation dates')
 assert.deepEqual(
   todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-08-01' }),
   todos.aggregateWorkbenchTodos({ ...crossDayCandidates, today: '2026-08-01' }),
@@ -175,17 +198,18 @@ assert.deepEqual(
   todos.filterWorkbenchTodos(all, {
     search: '项目 a',
     projectId: 'p1',
-    categories: ['plan'],
+    source: 'plan',
+    status: 'pending',
     generatedDateFrom: '2026-07-30',
     generatedDateTo: '2026-07-31',
   }).map(item => item.id),
   ['plan-overdue'],
-  'search, project, category, and inclusive generation-date filters compose on the same dataset',
+  'search, project, directory, status, and inclusive generation-date filters compose on the same dataset',
 )
 assert.deepEqual(
-  todos.filterWorkbenchTodos(all, { categories: ['plan', 'transfer'] }).map(item => item.id),
+  todos.filterWorkbenchTodos(all, { status: 'all' }).map(item => item.id),
   all.map(item => item.id),
-  'selecting every task category preserves the full pending dataset',
+  'the all status preserves the complete two-state dataset',
 )
 assert.deepEqual(
   todos.summarizeWorkbenchTodos([
@@ -193,7 +217,7 @@ assert.deepEqual(
     { ...all[0], id: 'done-sunday', status: 'completed', completedAt: '2026-07-26', dueDate: '2026-07-01' },
     { ...all[0], id: 'done-monday', status: 'completed', completedAt: '2026-07-27', dueDate: '2026-07-01' },
   ], '2026-07-31'),
-  { total: 5, dueToday: 1, overdue: 1, completedThisWeek: 1 },
+  { total: 7, dueToday: 1, overdue: 1, completedThisWeek: 2 },
   'completed items are never overdue and natural-week completion starts on Monday',
 )
 
