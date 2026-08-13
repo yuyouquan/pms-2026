@@ -41,8 +41,8 @@ assert.deepEqual(all.map(item => [item.id, item.status]), [
   ['plan-overdue', 'pending'],
   ['transfer-mine', 'pending'],
   ['plan-today', 'pending'],
-  ['plan-done', 'completed'],
   ['transfer-done', 'completed'],
+  ['plan-done', 'completed'],
 ], 'aggregate exposes only pending and completed work for the current user')
 assert.equal(all.find(item => item.id === 'plan-today')?.generatedAt, '', 'missing plan generation dates remain unrecorded')
 assert.equal(all.find(item => item.id === 'transfer-mine')?.generatedAt, '2026-07-29', 'transfer generation timestamps normalize to a date key')
@@ -133,6 +133,8 @@ assert.deepEqual(transferFixtures.map(item => [item.view, item.activeOwner, item
   ['sqa-review', '李白', '转维 SQA 审核'],
 ], 'completed history and active nodes use their authoritative owner identities')
 assert.equal(transferFixtures[0].generatedAt, '2026-07-28 10:00:00', 'transfer candidates preserve the application creation timestamp')
+assert.equal(transferFixtures[1].applicationId, 'review', 'transfer routes preserve the real application id rather than the row id')
+assert.equal(transferFixtures[1].id, 'review:review', 'each transfer node keeps a unique workbench row id')
 
 const crossDayCandidates = {
   currentUser: '张三',

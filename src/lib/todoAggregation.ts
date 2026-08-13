@@ -265,8 +265,8 @@ export function buildTransferTodoCandidates({
       if (!activeOwner) return []
       const completed = node.state === 'success'
       return [{
-        applicationId: `${application.id}:${node.key}`,
-        id: application.id,
+        applicationId: application.id,
+        id: `${application.id}:${node.key}`,
         projectId: project.id,
         projectName: project.name,
         activeOwner,
@@ -503,10 +503,11 @@ export function aggregateWorkbenchTodos({
   const transferItems = transferApplications
     .filter(candidate => candidate.activeOwner?.trim() === normalizedUser)
     .map((candidate): WorkbenchTodo => {
-      const applicationId = candidate.applicationId || candidate.id || ''
+      const applicationId = candidate.applicationId || ''
+      const rowId = candidate.id || applicationId
       const status: TodoStatus = candidate.completed ? 'completed' : 'pending'
       return {
-        id: applicationId,
+        id: rowId,
         source: 'transfer',
         title: candidate.title || applicationId,
         projectId: candidate.projectId || '',
