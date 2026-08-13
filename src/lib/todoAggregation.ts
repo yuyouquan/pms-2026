@@ -519,7 +519,7 @@ export function aggregateWorkbenchTodos({
         completedAt: toDateKey(candidate.completedAt) || undefined,
         sourceLabel: candidate.sourceLabel,
         context: candidate.context,
-        nodeLabel: candidate.sourceLabel || '转维护',
+        nodeLabel: candidate.sourceLabel || '转维',
         taskContent: candidate.context || '',
         route: {
           kind: 'transfer',

@@ -327,9 +327,6 @@ export default function WorkbenchContainer() {
 
   return (
     <section className="pms-workbench">
-      <header className="pms-workbench-header pms-glass-surface">
-        <h1>个人工作台</h1>
-      </header>
       <div className="pms-workbench-content">
         <TodoCenter key={currentLoginUser} todos={todos} onOpenTodo={openTodo} />
       </div>

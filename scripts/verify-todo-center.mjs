@@ -231,13 +231,15 @@ const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContaine
 const uiStoreSource = readSource(root, 'src/stores/ui.ts')
 const todayHookSource = readSource(root, 'src/hooks/useLocalToday.ts')
 const browserSource = readSource(root, 'screenshots/verify-workbench-summary-floating-panels.mjs')
-for (const label of ['任务目录', '计划', '转维护', '全部', '待处理', '已完成', '搜索待办', '项目筛选', '生成时间', '清空筛选', '前往处理', '查看详情']) {
+for (const label of ['任务目录', '计划', '转维', '全部', '待处理', '已完成', '搜索待办', '项目筛选', '生成时间', '清空筛选', '前往处理']) {
   assert.match(todoCenterSource, new RegExp(label), `todo center missing visible or accessible contract: ${label}`)
 }
+assert.doesNotMatch(todoCenterSource, /转维护/, 'workbench directory uses the canonical 转维 label')
+assert.doesNotMatch(aggregationSource, /nodeLabel: candidate\.sourceLabel \|\| '转维护'/, 'transfer task fallback uses the canonical 转维 label')
 for (const removedLabel of ['待办总数', '今日到期', '已逾期', '本周完成', '状态筛选']) {
   assert.doesNotMatch(todoCenterSource, new RegExp(removedLabel), `todo center must remove ${removedLabel}`)
 }
-assert.match(workbenchSource, /个人工作台/, 'workbench exposes the single personal-workbench title')
+assert.doesNotMatch(workbenchSource, /pms-workbench-header|个人工作台/, 'workbench starts directly with the task directory')
 assert.doesNotMatch(todoCenterSource, /mode="multiple"/, 'directory replaces the task-classification multi-select')
 assert.match(todoCenterSource, /RangePicker/, 'generation time uses one date-range picker')
 for (const className of ['pms-todo-filter--search', 'pms-todo-filter--project', 'pms-todo-filter--date', 'pms-todo-filter--clear']) {
@@ -271,7 +273,8 @@ assert.match(todoCenterSource, /error\?:\s*string/, 'todo center exposes a conte
 assert.match(todoCenterSource, /onRetry\?:\s*\(\)\s*=>\s*void/, 'todo error offers a recovery action')
 assert.match(todoCenterSource, /<Skeleton\b/, 'todo loading state reserves the final table footprint')
 assert.match(todoCenterSource, /role="alert"/, 'todo load errors are announced')
-assert.match(todoCenterSource, /record\.status === ['"]completed['"] \? ['"]查看详情['"] : ['"]前往处理['"]/, 'todo actions match their two-state purpose')
+assert.doesNotMatch(todoCenterSource, /查看详情/, 'completed tasks do not expose an operation')
+assert.match(todoCenterSource, /if \(record\.status === ['"]completed['"]\) return null/, 'completed task operation cells remain empty')
 assert.match(todayHookSource, /setTimeout/, 'local today hook schedules the next midnight refresh')
 assert.match(todayHookSource, /clearTimeout/, 'local today hook cleans up its midnight timer')
 assert.match(browserSource, /unexpectedBrowserErrors/, 'browser verification must retain unexpected errors')

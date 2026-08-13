@@ -45,7 +45,7 @@ const EMPTY_FIELD_FILTERS: FieldFilters = {
 
 const SOURCE_LABELS: Record<TodoSource, string> = {
   plan: '计划',
-  transfer: '转维护',
+  transfer: '转维',
 }
 
 const STATUS_LABELS: Record<TodoStatusFilter, string> = {
@@ -335,15 +335,15 @@ export default function TodoCenter({ todos, loading = false, error, onRetry, onO
                   fixed: 'right',
                   width: 110,
                   render: (_value, record) => {
-                    const actionLabel = record.status === 'completed' ? '查看详情' : '前往处理'
+                    if (record.status === 'completed') return null
                     return (
                       <Button
                         type="link"
                         size="small"
-                        aria-label={`${actionLabel} ${record.title}`}
+                        aria-label={`前往处理 ${record.title}`}
                         onClick={() => onOpenTodo(record)}
                       >
-                        {actionLabel}
+                        前往处理
                       </Button>
                     )
                   },
