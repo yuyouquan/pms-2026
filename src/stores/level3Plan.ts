@@ -1,0 +1,370 @@
+import { create } from 'zustand'
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
+import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
+import {
+  deleteLevel3ActivityTree,
+  forkLevel3ScopeData,
+  moveLevel3Activity,
+  numberLevel3Activities,
+} from '@/lib/level3PlanRules'
+import {
+  LEVEL3_COLUMN_KEYS,
+  type Level3Activity,
+  type Level3ChangeLog,
+  type Level3ColumnKey,
+  type Level3FieldChange,
+  type Level3MoveResult,
+  type Level3ScopeData,
+} from '@/types/level3Plan'
+
+export const LEVEL3_PLAN_STORAGE_KEY = 'pms-level3-plan-store'
+export const LEVEL3_PLAN_STORE_VERSION = 1
+
+const DEFAULT_COLUMN_SETTINGS: SortableColumnSettingsValue<Level3ColumnKey> = {
+  order: [...LEVEL3_COLUMN_KEYS],
+  visible: [...LEVEL3_COLUMN_KEYS],
+}
+
+const FIELD_LABELS: Partial<Record<keyof Level3Activity, string>> = {
+  activityName: '活动名称',
+  responsible: '责任人',
+  responsibleDepartment: '责任部门',
+  planStartDate: '计划开始时间',
+  planEndDate: '计划完成时间',
+  actualStartDate: '实际开始时间',
+  actualEndDate: '实际完成时间',
+  milestoneName: '关键节点',
+  status: '状态',
+  risk: '任务风险',
+  remark: '备注',
+}
+
+const cloneActivities = (activities: Level3Activity[]) => activities.map(activity => ({ ...activity }))
+const cloneHistory = (history: Level3ChangeLog[]) => history.map(log => ({
+  ...log,
+  changes: log.changes.map(change => ({ ...change })),
+}))
+
+const formatNow = () => new Intl.DateTimeFormat('sv-SE', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+}).format(new Date()).replace('T', ' ')
+
+const createId = (prefix: string) => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `${prefix}-${crypto.randomUUID()}`
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+const getActivityNumber = (activities: Level3Activity[], activityId: string) => (
+  numberLevel3Activities(activities).find(activity => activity.id === activityId)?.number || ''
+)
+
+const buildFieldChanges = (
+  previous: Level3Activity,
+  next: Level3Activity,
+): Level3FieldChange[] => Object.entries(FIELD_LABELS).flatMap(([field, label]) => {
+  const before = String(previous[field as keyof Level3Activity] ?? '')
+  const after = String(next[field as keyof Level3Activity] ?? '')
+  return before === after ? [] : [{ field, label: label || field, before, after }]
+})
+
+const safeStorage: StateStorage = {
+  getItem(name) {
+    if (typeof window === 'undefined') return null
+    try {
+      return window.localStorage.getItem(name)
+    } catch (error) {
+      console.error(`Failed to read ${LEVEL3_PLAN_STORAGE_KEY}.`, error)
+      return null
+    }
+  },
+  setItem(name, value) {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(name, value)
+    } catch (error) {
+      console.error(`Failed to persist ${LEVEL3_PLAN_STORAGE_KEY}.`, error)
+    }
+  },
+  removeItem(name) {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.removeItem(name)
+    } catch (error) {
+      console.error(`Failed to remove ${LEVEL3_PLAN_STORAGE_KEY}.`, error)
+    }
+  },
+}
+
+interface Level3PlanState {
+  activitiesByScope: Record<string, Level3Activity[]>
+  historyByScope: Record<string, Level3ChangeLog[]>
+  collapsedIdsByScope: Record<string, string[]>
+  columnSettingsByScope: Record<string, SortableColumnSettingsValue<Level3ColumnKey>>
+}
+
+interface Level3PlanActions {
+  getScopeData: (scopeKey: string) => Level3ScopeData
+  createActivity: (scopeKey: string, activity: Level3Activity, actor: string) => boolean
+  updateActivity: (
+    scopeKey: string,
+    activityId: string,
+    patch: Partial<Level3Activity>,
+    actor: string,
+  ) => boolean
+  moveActivity: (scopeKey: string, activeId: string, overId: string, actor: string) => Level3MoveResult
+  deleteActivity: (scopeKey: string, activityId: string, actor: string) => boolean
+  forkFollowScope: (sourceScopeKey: string, targetScopeKey: string) => boolean
+  setCollapsedIds: (scopeKey: string, collapsedIds: string[]) => void
+  setColumnSettings: (
+    scopeKey: string,
+    value: SortableColumnSettingsValue<Level3ColumnKey>,
+  ) => void
+}
+
+const initialState: Level3PlanState = {
+  activitiesByScope: {},
+  historyByScope: {},
+  collapsedIdsByScope: {},
+  columnSettingsByScope: {},
+}
+
+export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(persist(
+  (set, get) => ({
+    ...initialState,
+    getScopeData: (scopeKey) => ({
+      activities: cloneActivities(get().activitiesByScope[scopeKey] || []),
+      history: cloneHistory(get().historyByScope[scopeKey] || []),
+      collapsedIds: [...(get().collapsedIdsByScope[scopeKey] || [])],
+      columnSettings: get().columnSettingsByScope[scopeKey]
+        ? {
+            order: [...get().columnSettingsByScope[scopeKey].order],
+            visible: [...get().columnSettingsByScope[scopeKey].visible],
+          }
+        : { order: [...DEFAULT_COLUMN_SETTINGS.order], visible: [...DEFAULT_COLUMN_SETTINGS.visible] },
+    }),
+    createActivity: (scopeKey, activity, actor) => {
+      if (!scopeKey || !activity.id || !actor) return false
+      let created = false
+      set(state => {
+        const previousActivities = state.activitiesByScope[scopeKey] || []
+        if (previousActivities.some(item => item.id === activity.id)) return state
+        const siblings = previousActivities.filter(item => item.parentId === activity.parentId)
+        const nextActivity = { ...activity, order: siblings.length }
+        const nextActivities = [...previousActivities.map(item => ({ ...item })), nextActivity]
+        const log: Level3ChangeLog = {
+          id: createId('level3-log'),
+          action: activity.parentId ? 'create-child' : 'create-parent',
+          actor,
+          occurredAt: nextActivity.createdAt || formatNow(),
+          activityId: nextActivity.id,
+          activityName: nextActivity.activityName,
+          activityNumber: getActivityNumber(nextActivities, nextActivity.id),
+          summary: activity.parentId ? '新增二级活动' : '新增一级活动',
+          changes: [],
+        }
+        created = true
+        return {
+          activitiesByScope: { ...state.activitiesByScope, [scopeKey]: nextActivities },
+          historyByScope: {
+            ...state.historyByScope,
+            [scopeKey]: [log, ...(state.historyByScope[scopeKey] || [])],
+          },
+        }
+      })
+      return created
+    },
+    updateActivity: (scopeKey, activityId, patch, actor) => {
+      if (!scopeKey || !activityId || !actor) return false
+      let updated = false
+      set(state => {
+        const previousActivities = state.activitiesByScope[scopeKey] || []
+        const previousActivity = previousActivities.find(activity => activity.id === activityId)
+        if (!previousActivity) return state
+        const nextActivity: Level3Activity = {
+          ...previousActivity,
+          ...patch,
+          id: previousActivity.id,
+          parentId: previousActivity.parentId,
+          order: previousActivity.order,
+          creator: previousActivity.creator,
+          createdAt: previousActivity.createdAt,
+          updatedBy: actor,
+          updatedAt: formatNow(),
+        }
+        const changes = buildFieldChanges(previousActivity, nextActivity)
+        if (changes.length === 0) return state
+        const nextActivities = previousActivities.map(activity => (
+          activity.id === activityId ? nextActivity : { ...activity }
+        ))
+        const log: Level3ChangeLog = {
+          id: createId('level3-log'),
+          action: 'edit',
+          actor,
+          occurredAt: nextActivity.updatedAt,
+          activityId,
+          activityName: nextActivity.activityName,
+          activityNumber: getActivityNumber(nextActivities, activityId),
+          summary: `编辑活动：${changes.map(change => change.label).join('、')}`,
+          changes,
+        }
+        updated = true
+        return {
+          activitiesByScope: { ...state.activitiesByScope, [scopeKey]: nextActivities },
+          historyByScope: {
+            ...state.historyByScope,
+            [scopeKey]: [log, ...(state.historyByScope[scopeKey] || [])],
+          },
+        }
+      })
+      return updated
+    },
+    moveActivity: (scopeKey, activeId, overId, actor) => {
+      const previousActivities = get().activitiesByScope[scopeKey] || []
+      const beforeNumber = getActivityNumber(previousActivities, activeId)
+      const result = moveLevel3Activity(previousActivities, activeId, overId)
+      if (!result.ok) return result
+      const movedActivity = result.activities.find(activity => activity.id === activeId)
+      if (!movedActivity) return { ok: false, activities: previousActivities, reason: '拖动活动不存在' }
+      const afterNumber = getActivityNumber(result.activities, activeId)
+      const log: Level3ChangeLog = {
+        id: createId('level3-log'),
+        action: 'move',
+        actor,
+        occurredAt: formatNow(),
+        activityId: activeId,
+        activityName: movedActivity.activityName,
+        activityNumber: afterNumber,
+        summary: `拖动活动：${beforeNumber || '—'} → ${afterNumber || '—'}`,
+        changes: [
+          {
+            field: 'parentId',
+            label: '所属一级活动',
+            before: result.fromParentId || '一级活动',
+            after: result.toParentId || '一级活动',
+          },
+          {
+            field: 'number',
+            label: '序号',
+            before: beforeNumber,
+            after: afterNumber,
+          },
+        ],
+      }
+      set(state => ({
+        activitiesByScope: { ...state.activitiesByScope, [scopeKey]: result.activities },
+        historyByScope: {
+          ...state.historyByScope,
+          [scopeKey]: [log, ...(state.historyByScope[scopeKey] || [])],
+        },
+      }))
+      return result
+    },
+    deleteActivity: (scopeKey, activityId, actor) => {
+      if (!scopeKey || !activityId || !actor) return false
+      const previousActivities = get().activitiesByScope[scopeKey] || []
+      const activity = previousActivities.find(item => item.id === activityId)
+      if (!activity) return false
+      const activityNumber = getActivityNumber(previousActivities, activityId)
+      const result = deleteLevel3ActivityTree(previousActivities, activityId)
+      if (!result.ok) return false
+      const deletedChildCount = result.deletedActivities.filter(item => item.parentId === activityId).length
+      const log: Level3ChangeLog = {
+        id: createId('level3-log'),
+        action: 'delete',
+        actor,
+        occurredAt: formatNow(),
+        activityId,
+        activityName: activity.activityName,
+        activityNumber,
+        summary: activity.parentId
+          ? '删除二级活动'
+          : `删除一级活动${deletedChildCount > 0 ? `（含 ${deletedChildCount} 个二级活动）` : ''}`,
+        changes: [],
+      }
+      set(state => ({
+        activitiesByScope: { ...state.activitiesByScope, [scopeKey]: result.activities },
+        historyByScope: { ...state.historyByScope, [scopeKey]: [log, ...(state.historyByScope[scopeKey] || [])] },
+        collapsedIdsByScope: {
+          ...state.collapsedIdsByScope,
+          [scopeKey]: (state.collapsedIdsByScope[scopeKey] || []).filter(id => id !== activityId),
+        },
+      }))
+      return true
+    },
+    forkFollowScope: (sourceScopeKey, targetScopeKey) => {
+      if (!sourceScopeKey || !targetScopeKey || sourceScopeKey === targetScopeKey) return false
+      const state = get()
+      const hasSource = sourceScopeKey in state.activitiesByScope
+        || sourceScopeKey in state.historyByScope
+        || sourceScopeKey in state.collapsedIdsByScope
+        || sourceScopeKey in state.columnSettingsByScope
+      if (!hasSource) return false
+      const source: Level3ScopeData = {
+        activities: cloneActivities(state.activitiesByScope[sourceScopeKey] || []),
+        history: cloneHistory(state.historyByScope[sourceScopeKey] || []),
+        collapsedIds: [...(state.collapsedIdsByScope[sourceScopeKey] || [])],
+        columnSettings: state.columnSettingsByScope[sourceScopeKey]
+          ? {
+              order: [...state.columnSettingsByScope[sourceScopeKey].order],
+              visible: [...state.columnSettingsByScope[sourceScopeKey].visible],
+            }
+          : { order: [...DEFAULT_COLUMN_SETTINGS.order], visible: [...DEFAULT_COLUMN_SETTINGS.visible] },
+      }
+      const hasTarget = targetScopeKey in state.activitiesByScope
+        || targetScopeKey in state.historyByScope
+        || targetScopeKey in state.collapsedIdsByScope
+        || targetScopeKey in state.columnSettingsByScope
+      const target: Level3ScopeData | undefined = hasTarget ? {
+        activities: cloneActivities(state.activitiesByScope[targetScopeKey] || []),
+        history: cloneHistory(state.historyByScope[targetScopeKey] || []),
+        collapsedIds: [...(state.collapsedIdsByScope[targetScopeKey] || [])],
+        columnSettings: state.columnSettingsByScope[targetScopeKey]
+          ? {
+              order: [...state.columnSettingsByScope[targetScopeKey].order],
+              visible: [...state.columnSettingsByScope[targetScopeKey].visible],
+            }
+          : { order: [...DEFAULT_COLUMN_SETTINGS.order], visible: [...DEFAULT_COLUMN_SETTINGS.visible] },
+      } : undefined
+      const forked = forkLevel3ScopeData(source, target)
+      set(current => ({
+        activitiesByScope: { ...current.activitiesByScope, [targetScopeKey]: forked.activities },
+        historyByScope: { ...current.historyByScope, [targetScopeKey]: forked.history },
+        collapsedIdsByScope: { ...current.collapsedIdsByScope, [targetScopeKey]: forked.collapsedIds },
+        columnSettingsByScope: { ...current.columnSettingsByScope, [targetScopeKey]: forked.columnSettings },
+      }))
+      return true
+    },
+    setCollapsedIds: (scopeKey, collapsedIds) => set(state => ({
+      collapsedIdsByScope: {
+        ...state.collapsedIdsByScope,
+        [scopeKey]: [...new Set(collapsedIds)],
+      },
+    })),
+    setColumnSettings: (scopeKey, value) => set(state => ({
+      columnSettingsByScope: {
+        ...state.columnSettingsByScope,
+        [scopeKey]: { order: [...value.order], visible: [...value.visible] },
+      },
+    })),
+  }),
+  {
+    name: LEVEL3_PLAN_STORAGE_KEY,
+    version: LEVEL3_PLAN_STORE_VERSION,
+    storage: createJSONStorage(() => safeStorage),
+    partialize: state => ({
+      activitiesByScope: state.activitiesByScope,
+      historyByScope: state.historyByScope,
+      collapsedIdsByScope: state.collapsedIdsByScope,
+      columnSettingsByScope: state.columnSettingsByScope,
+    }),
+  },
+))

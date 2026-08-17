@@ -257,7 +257,7 @@ export function renderEntryContent(record: { entryContent?: string; deliverables
 }
 
 // ─── ClickToEditDate ────────────────────────────────────────────────
-export function ClickToEditDate({ value, onChange, disabledDate }: { value: string; onChange: (val: string) => void; disabledDate?: (current: dayjs.Dayjs) => boolean }) {
+export function ClickToEditDate({ value, onChange, disabledDate, onSaved }: { value: string; onChange: (val: string) => void; disabledDate?: (current: dayjs.Dayjs) => boolean; onSaved?: () => void }) {
   const [editing, setEditing] = useState(false)
   if (editing) {
     return (
@@ -271,7 +271,8 @@ export function ClickToEditDate({ value, onChange, disabledDate }: { value: stri
         onChange={(date) => {
           onChange(date ? date.format('YYYY-MM-DD') : '')
           setEditing(false)
-          message.success('已保存')
+          if (onSaved) onSaved()
+          else message.success('已保存')
         }}
         onOpenChange={(open) => { if (!open) setEditing(false) }}
       />
