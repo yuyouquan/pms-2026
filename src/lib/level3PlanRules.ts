@@ -212,6 +212,9 @@ export function filterLevel3ActivitiesWithParents(
   const includedIds = new Set(matchedIds)
   rows.forEach(row => {
     if (matchedIds.has(row.id) && row.parentId) includedIds.add(row.parentId)
+    if (matchedIds.has(row.id) && !row.parentId) {
+      rows.filter(child => child.parentId === row.id).forEach(child => includedIds.add(child.id))
+    }
   })
   return rows.filter(row => includedIds.has(row.id))
 }

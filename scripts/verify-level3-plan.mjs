@@ -107,4 +107,29 @@ for (const token of [
   assert.ok(storeSource.includes(token), `level3 plan store is missing ${token}`)
 }
 
+const componentPath = path.join(root, 'src/components/plans/Level3PlanModule.tsx')
+assert.ok(fs.existsSync(componentPath), 'src/components/plans/Level3PlanModule.tsx does not exist')
+const componentSource = fs.readFileSync(componentPath, 'utf8')
+const assertInOrder = (text, tokens) => {
+  let cursor = -1
+  tokens.forEach(token => {
+    const next = text.indexOf(token, cursor + 1)
+    assert.ok(next > cursor, `expected ${token} after the previous toolbar token`)
+    cursor = next
+  })
+}
+assertInOrder(componentSource, ['筛选', '导出', '字段配置', '全部展开', '全部收起', '历史修改记录'])
+for (const label of [
+  '活动名称', '责任人', '责任部门', '计划开始时间', '计划完成时间',
+  '关键节点', '状态', '任务风险', '备注',
+]) {
+  assert.ok(componentSource.includes(label), `missing form label ${label}`)
+}
+for (const token of [
+  'DndContext', 'SortableColumnSettings', 'FloatingFilterPanel', 'exportSheet',
+  'pms-level3-parent-row', 'pms-level3-row-actions', '历史修改记录',
+]) {
+  assert.ok(componentSource.includes(token), `level3 plan component is missing ${token}`)
+}
+
 console.log(`Level 3 plan rule verification passed (${pathToFileURL(rulesPath).pathname})`)
