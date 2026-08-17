@@ -11,7 +11,6 @@ import {
   type ReactNode,
 } from 'react'
 import {
-  Alert,
   Badge,
   Button,
   DatePicker,
@@ -21,6 +20,7 @@ import {
   Form,
   Input,
   Modal,
+  Popconfirm,
   Select,
   Space,
   Table,
@@ -31,9 +31,9 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
-  DeleteOutlined,
   CaretDownOutlined,
   CaretRightOutlined,
+  DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
   FilterOutlined,
@@ -62,6 +62,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import dayjs, { type Dayjs } from 'dayjs'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
+import { ClickToEditDate } from '@/components/shared/PlanHelpers'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
 import {
   getDefaultColumnSettings,
@@ -82,8 +83,11 @@ import {
 } from '@/lib/filterConditions'
 import {
   applyLevel3Rollups,
+  canInlineEditLevel3ActualDate,
   filterLevel3ActivitiesWithParents,
   getLevel3ActivityPermissions,
+  getLevel3NumberIndent,
+  shouldShowLevel3CreateButton,
   validateLevel3ChildDates,
 } from '@/lib/level3PlanRules'
 import { useLevel3PlanStore } from '@/stores/level3Plan'
@@ -163,7 +167,6 @@ interface Level3PlanModuleProps {
   projectName: string
   scopeKey: string
   scopeLabel: string
-  sourceLabel?: string
   readOnly: boolean
   currentUser: string
   administratorUsers: string[]
@@ -236,7 +239,6 @@ export default function Level3PlanModule({
   projectName,
   scopeKey,
   scopeLabel,
-  sourceLabel,
   readOnly,
   currentUser,
   administratorUsers,
@@ -252,6 +254,7 @@ export default function Level3PlanModule({
   const createActivity = useLevel3PlanStore(state => state.createActivity)
   const updateActivity = useLevel3PlanStore(state => state.updateActivity)
   const moveActivity = useLevel3PlanStore(state => state.moveActivity)
+  const deleteActivity = useLevel3PlanStore(state => state.deleteActivity)
   const setCollapsedIds = useLevel3PlanStore(state => state.setCollapsedIds)
   const setColumnSettings = useLevel3PlanStore(state => state.setColumnSettings)
   const [form] = Form.useForm()
@@ -533,10 +536,43 @@ export default function Level3PlanModule({
                 />
               </Tooltip>
             )}
+            {permissions.canDelete && (
+              <Popconfirm
+                title="确认删除活动？"
+                description={row.parentId
+                  ? `删除后无法恢复。确认删除「${row.activityName}」？`
+                  : `删除后将同时删除所有二级活动。确认删除「${row.activityName}」？`}
+                okText="确认删除"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => {
+                  if (deleteActivity(scopeKey, row.id, currentUser)) void messageApi.success('活动已删除')
+                }}
+              >
+                <Tooltip title="删除活动">
+                  <Button
+                    type="text"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    aria-label={`删除活动 ${row.activityName}`}
+                  />
+                </Tooltip>
+              </Popconfirm>
+            )}
           </Space>
         )}
       </div>
     )
+  }
+
+  const handleInlineActualDateChange = (
+    row: Level3ActivityViewRow,
+    field: 'actualStartDate' | 'actualEndDate',
+    value: string,
+  ) => {
+    if (!canInlineEditLevel3ActualDate(row, activities, permissionContext, readOnly)) return
+    updateActivity(scopeKey, row.id, { [field]: value }, currentUser)
   }
 
   const columns: ColumnsType<Level3ActivityViewRow> = visibleDefinitions.map(definition => {
@@ -552,7 +588,11 @@ export default function Level3PlanModule({
       return {
         ...base,
         render: (_: unknown, row: Level3ActivityViewRow) => (
-          <Space size={5}>
+          <Space
+            size={5}
+            className="pms-level3-number-cell"
+            style={{ paddingLeft: getLevel3NumberIndent(row.depth) }}
+          >
             {dragPermissions[row.id] && <HolderOutlined style={{ color: '#9ca3af' }} />}
             {!row.parentId && activities.some(activity => activity.parentId === row.id) && (
               <Button
@@ -578,6 +618,33 @@ export default function Level3PlanModule({
     if (definition.key === 'activityName') return { ...base, render: (_: unknown, row: Level3ActivityViewRow) => renderActivityName(row) }
     if (definition.key === 'estimatedDays') return { ...base, render: (value: number | null) => formatDuration(value) }
     if (definition.key === 'actualDays') return { ...base, render: (value: number | null) => formatDuration(value) }
+    if (definition.key === 'actualStartDate' || definition.key === 'actualEndDate') {
+      const actualField = definition.key
+      return {
+        ...base,
+        ellipsis: false,
+        render: (value: string, row: Level3ActivityViewRow) => {
+          if (!canInlineEditLevel3ActualDate(row, activities, permissionContext, readOnly)) return formatCell(value)
+          const isStart = actualField === 'actualStartDate'
+          return (
+            <div
+              className="pms-level3-inline-date"
+              onPointerDown={event => event.stopPropagation()}
+              onDoubleClick={event => event.stopPropagation()}
+            >
+              <ClickToEditDate
+                value={value}
+                onChange={nextValue => handleInlineActualDateChange(row, actualField, nextValue)}
+                disabledDate={current => isStart
+                  ? Boolean(row.actualEndDate && current.isAfter(dayjs(row.actualEndDate), 'day'))
+                  : Boolean(row.actualStartDate && current.isBefore(dayjs(row.actualStartDate), 'day'))}
+                onSaved={() => void messageApi.success('已保存')}
+              />
+            </div>
+          )
+        },
+      }
+    }
     if (definition.key === 'status') return { ...base, render: (value: string) => <Tag color={STATUS_COLORS[value]}>{value}</Tag> }
     if (definition.key === 'risk') return { ...base, render: (value: string) => <Tag color={RISK_COLORS[value]}>{value}</Tag> }
     return { ...base, render: (value: string) => formatCell(value) }
@@ -602,22 +669,15 @@ export default function Level3PlanModule({
   return (
     <div className="pms-level3-plan">
       {messageContextHolder}
-      {readOnly && (
-        <Alert
-          showIcon
-          type="info"
-          style={{ marginBottom: 16, borderRadius: 8 }}
-          title={`当前${scopeLabel}跟随 ${sourceLabel || '主范围'}`}
-          description={`三级计划来自 ${sourceLabel || '主范围'}；如需维护，请切换到数据源范围。`}
-        />
-      )}
       <div className="pms-level3-toolbar pms-toolbar">
         <div>
-          <Tooltip title={canCreateParent ? '新增一级活动' : readOnly ? '跟随范围不可编辑' : '仅SPM和管理员可新增一级活动'}>
-            <span>
-              <Button type="primary" icon={<PlusOutlined />} disabled={!canCreateParent} onClick={openCreateParent}>新增活动</Button>
-            </span>
-          </Tooltip>
+          {shouldShowLevel3CreateButton(readOnly) && (
+            <Tooltip title={canCreateParent ? '新增一级活动' : '仅SPM和管理员可新增一级活动'}>
+              <span>
+                <Button type="primary" icon={<PlusOutlined />} disabled={!canCreateParent} onClick={openCreateParent}>新增活动</Button>
+              </span>
+            </Tooltip>
+          )}
         </div>
         <Space size={6} wrap>
           <FloatingFilterPanel

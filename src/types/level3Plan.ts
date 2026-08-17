@@ -104,6 +104,11 @@ export interface Level3ScopeResolution {
   readOnly: boolean
 }
 
+export interface Level3ScopeFork {
+  sourceScopeKey: string
+  targetScopeKey: string
+}
+
 export interface Level3PermissionContext {
   currentUser: string
   administratorUsers: string[]
@@ -115,6 +120,7 @@ export interface Level3ActivityPermissions {
   canEdit: boolean
   canAddChild: boolean
   canDrag: boolean
+  canDelete: boolean
 }
 
 export interface Level3ValidationResult {
@@ -133,6 +139,13 @@ export interface Level3MoveResult {
   toIndex?: number
 }
 
+export interface Level3DeleteResult {
+  ok: boolean
+  activities: Level3Activity[]
+  deletedActivities: Level3Activity[]
+  reason?: string
+}
+
 export interface Level3FieldChange {
   field: string
   label: string
@@ -140,7 +153,7 @@ export interface Level3FieldChange {
   after: string
 }
 
-export type Level3ChangeAction = 'create-parent' | 'create-child' | 'edit' | 'move'
+export type Level3ChangeAction = 'create-parent' | 'create-child' | 'edit' | 'move' | 'delete'
 
 export interface Level3ChangeLog {
   id: string

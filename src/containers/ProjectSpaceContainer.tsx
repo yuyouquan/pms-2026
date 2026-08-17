@@ -40,7 +40,7 @@ import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrate
 import type { MenuProps } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { compareVersionsForTable } from '@/lib/versionCompare'
-import { resolveLevel3Scope } from '@/lib/level3PlanRules'
+import { resolveLevel3DetachedScopeFork, resolveLevel3Scope } from '@/lib/level3PlanRules'
 import type { Level3Milestone } from '@/types/level3Plan'
 import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
 import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareModal'
@@ -146,6 +146,7 @@ import {
 
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
+import { useLevel3PlanStore } from '@/stores/level3Plan'
 import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, INITIAL_LEVEL2_PLAN_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
 import { selectTechnicalProjectStage, useTechnicalPlanStore } from '@/stores/technicalPlan'
@@ -372,6 +373,7 @@ export default function ProjectSpaceContainer() {
   const ui = useUiStore()
   const proj = useProjectStore()
   const plan = usePlanStore()
+  const forkFollowScope = useLevel3PlanStore(state => state.forkFollowScope)
   const transfer = useTransferStore()
   const perm = usePermissionStore()
 
@@ -1514,6 +1516,28 @@ export default function ProjectSpaceContainer() {
       message.error('整机项目的路标必填信息不完整或取值不合法，无法保存')
       return
     }
+    unfollowedMarkets.forEach(market => {
+      const previousRow = previousRows.find(row => row.market === market)
+      const nextRow = normalizedRows.find(row => row.market === market)
+      if (!previousRow || !nextRow) return
+      const fork = resolveLevel3DetachedScopeFork(
+        {
+          projectId: selectedProject.id,
+          kind: 'market',
+          value: market,
+          mainValue: previousMainMarket,
+          followsMain: previousRow.followsMain,
+        },
+        {
+          projectId: selectedProject.id,
+          kind: 'market',
+          value: market,
+          mainValue: nextMainMarket,
+          followsMain: nextRow.followsMain,
+        },
+      )
+      if (fork) forkFollowScope(fork.sourceScopeKey, fork.targetScopeKey)
+    })
     setMarketPlanData(syncedMarketPlanData)
     setSelectedMarketTab(getConfiguredMarketSelection(normalizedRows, selectedMarketTab))
     if (unfollowedMarkets.length > 0) {
@@ -3688,7 +3712,6 @@ export default function ProjectSpaceContainer() {
             projectName={selectedProject.name}
             scopeKey={level3ScopeResolution.scopeKey}
             scopeLabel={level3ScopeResolution.selectedValue}
-            sourceLabel={level3ScopeResolution.sourceValue}
             readOnly={level3ScopeResolution.readOnly}
             currentUser={currentLoginUser}
             administratorUsers={level3AdministratorUsers}

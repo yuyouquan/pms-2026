@@ -61,6 +61,36 @@ assert.deepEqual(rules.resolveLevel3Scope({
   sourceValue: 'OP',
   readOnly: true,
 })
+assert.deepEqual(rules.resolveLevel3DetachedScopeFork(
+  { projectId: 'project-1', kind: 'market', value: 'TR', mainValue: 'OP', followsMain: true },
+  { projectId: 'project-1', kind: 'market', value: 'TR', mainValue: 'OP', followsMain: false },
+), {
+  sourceScopeKey: 'project-1::market::OP',
+  targetScopeKey: 'project-1::market::TR',
+})
+assert.equal(rules.resolveLevel3DetachedScopeFork(
+  { projectId: 'project-1', kind: 'market', value: 'TR', mainValue: 'OP', followsMain: false },
+  { projectId: 'project-1', kind: 'market', value: 'TR', mainValue: 'OP', followsMain: false },
+), null)
+
+const sourceHistory = [{
+  id: 'source-log', action: 'edit', actor: '张三', occurredAt: '2026-08-17 10:00:00',
+  activityId: 'c1', activityName: '子活动A', activityNumber: '1.1', summary: '编辑活动', changes: [],
+}]
+const targetHistory = [{
+  ...sourceHistory[0], id: 'target-log', occurredAt: '2026-08-16 10:00:00', summary: '历史独立编辑',
+}]
+const forkedScope = rules.forkLevel3ScopeData({
+  activities: [parent, childA], history: sourceHistory, collapsedIds: ['p1'],
+  columnSettings: { order: ['number', 'activityName'], visible: ['number', 'activityName'] },
+}, {
+  activities: [], history: targetHistory, collapsedIds: [],
+  columnSettings: { order: ['activityName', 'number'], visible: ['number'] },
+})
+assert.deepEqual(forkedScope.activities.map(item => item.id), ['p1', 'c1'])
+assert.deepEqual(forkedScope.history.map(item => item.id), ['source-log', 'target-log'])
+assert.deepEqual(forkedScope.columnSettings, { order: ['activityName', 'number'], visible: ['number'] })
+assert.notEqual(forkedScope.activities[0], parent)
 
 const parent2 = { ...parent, id: 'p2', order: 1, activityName: '父活动2', responsible: '李四' }
 const childC = { ...childA, id: 'c3', parentId: 'p2', order: 0, activityName: '子活动C' }
@@ -76,14 +106,31 @@ assert.deepEqual(
   movedChild.activities.filter(item => item.parentId === 'p2').map(item => item.id),
   ['c3', 'c2'],
 )
+const deletedChild = rules.deleteLevel3ActivityTree([parent, childA, childB, parent2, childC], 'c1')
+assert.equal(deletedChild.ok, true)
+assert.deepEqual(deletedChild.deletedActivities.map(item => item.id), ['c1'])
+assert.deepEqual(deletedChild.activities.map(item => item.id), ['p1', 'c2', 'p2', 'c3'])
+const deletedParent = rules.deleteLevel3ActivityTree([parent, childA, childB, parent2, childC], 'p1')
+assert.equal(deletedParent.ok, true)
+assert.deepEqual(deletedParent.deletedActivities.map(item => item.id), ['p1', 'c1', 'c2'])
+assert.deepEqual(deletedParent.activities.map(item => item.id), ['p2', 'c3'])
 
 const baseContext = { currentUser: '张三', administratorUsers: [], spmUsers: [] }
 assert.equal(rules.getLevel3ActivityPermissions(parent, [parent, childA], { ...baseContext, administratorUsers: ['张三'] }).canEdit, true)
 assert.equal(rules.getLevel3ActivityPermissions(parent, [parent, childA], { ...baseContext, spmUsers: ['张三'] }).canAddChild, true)
+assert.equal(rules.getLevel3ActivityPermissions(parent, [parent, childA], baseContext).canDelete, true)
 assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], baseContext).canEdit, true)
 assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], { ...baseContext, currentUser: '李四' }).canEdit, true)
 assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], { ...baseContext, currentUser: '李四' }).canDrag, false)
 assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], { ...baseContext, currentUser: '赵六' }).canEdit, false)
+assert.equal(rules.getLevel3NumberIndent(0), 0)
+assert.equal(rules.getLevel3NumberIndent(1), 32)
+assert.equal(rules.canInlineEditLevel3ActualDate(childA, [parent, childA], baseContext, false), true)
+assert.equal(rules.canInlineEditLevel3ActualDate(parent, [parent, childA], baseContext, false), false)
+assert.equal(rules.canInlineEditLevel3ActualDate(childA, [parent, childA], { ...baseContext, currentUser: '赵六' }, false), false)
+assert.equal(rules.canInlineEditLevel3ActualDate(childA, [parent, childA], baseContext, true), false)
+assert.equal(rules.shouldShowLevel3CreateButton(false), true)
+assert.equal(rules.shouldShowLevel3CreateButton(true), false)
 
 const filtered = rules.filterLevel3ActivitiesWithParents(
   rules.numberLevel3Activities([parent, childA, childB]),
@@ -101,6 +148,8 @@ for (const token of [
   'moveActivity',
   'setCollapsedIds',
   'setColumnSettings',
+  'forkFollowScope',
+  'deleteActivity',
   'activitiesByScope',
   'historyByScope',
 ]) {
@@ -110,6 +159,8 @@ for (const token of [
 const componentPath = path.join(root, 'src/components/plans/Level3PlanModule.tsx')
 assert.ok(fs.existsSync(componentPath), 'src/components/plans/Level3PlanModule.tsx does not exist')
 const componentSource = fs.readFileSync(componentPath, 'utf8')
+assert.ok(!componentSource.includes('<Alert'), '跟随范围不应显示提示条')
+assert.ok(componentSource.includes('shouldShowLevel3CreateButton(readOnly)'), '新增活动按钮未按跟随状态隐藏')
 const assertInOrder = (text, tokens) => {
   let cursor = -1
   tokens.forEach(token => {
@@ -127,7 +178,8 @@ for (const label of [
 }
 for (const token of [
   'DndContext', 'SortableColumnSettings', 'FloatingFilterPanel', 'exportSheet',
-  'pms-level3-parent-row', 'pms-level3-row-actions', '历史修改记录',
+  'ClickToEditDate', 'handleInlineActualDateChange', 'pms-level3-number-cell',
+  'Popconfirm', '删除活动', 'pms-level3-parent-row', 'pms-level3-row-actions', '历史修改记录',
 ]) {
   assert.ok(componentSource.includes(token), `level3 plan component is missing ${token}`)
 }
@@ -140,6 +192,8 @@ for (const token of [
   '<Level3PlanModule',
   'latestPublishedLevel1Milestones',
   'level3ScopeResolution',
+  'resolveLevel3DetachedScopeFork',
+  'forkFollowScope',
 ]) {
   assert.ok(containerSource.includes(token), `project-space Level 3 integration is missing ${token}`)
 }

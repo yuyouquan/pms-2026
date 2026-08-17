@@ -1,7 +1,12 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
-import { moveLevel3Activity, numberLevel3Activities } from '@/lib/level3PlanRules'
+import {
+  deleteLevel3ActivityTree,
+  forkLevel3ScopeData,
+  moveLevel3Activity,
+  numberLevel3Activities,
+} from '@/lib/level3PlanRules'
 import {
   LEVEL3_COLUMN_KEYS,
   type Level3Activity,
@@ -116,6 +121,8 @@ interface Level3PlanActions {
     actor: string,
   ) => boolean
   moveActivity: (scopeKey: string, activeId: string, overId: string, actor: string) => Level3MoveResult
+  deleteActivity: (scopeKey: string, activityId: string, actor: string) => boolean
+  forkFollowScope: (sourceScopeKey: string, targetScopeKey: string) => boolean
   setCollapsedIds: (scopeKey: string, collapsedIds: string[]) => void
   setColumnSettings: (
     scopeKey: string,
@@ -260,6 +267,81 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
         },
       }))
       return result
+    },
+    deleteActivity: (scopeKey, activityId, actor) => {
+      if (!scopeKey || !activityId || !actor) return false
+      const previousActivities = get().activitiesByScope[scopeKey] || []
+      const activity = previousActivities.find(item => item.id === activityId)
+      if (!activity) return false
+      const activityNumber = getActivityNumber(previousActivities, activityId)
+      const result = deleteLevel3ActivityTree(previousActivities, activityId)
+      if (!result.ok) return false
+      const deletedChildCount = result.deletedActivities.filter(item => item.parentId === activityId).length
+      const log: Level3ChangeLog = {
+        id: createId('level3-log'),
+        action: 'delete',
+        actor,
+        occurredAt: formatNow(),
+        activityId,
+        activityName: activity.activityName,
+        activityNumber,
+        summary: activity.parentId
+          ? '删除二级活动'
+          : `删除一级活动${deletedChildCount > 0 ? `（含 ${deletedChildCount} 个二级活动）` : ''}`,
+        changes: [],
+      }
+      set(state => ({
+        activitiesByScope: { ...state.activitiesByScope, [scopeKey]: result.activities },
+        historyByScope: { ...state.historyByScope, [scopeKey]: [log, ...(state.historyByScope[scopeKey] || [])] },
+        collapsedIdsByScope: {
+          ...state.collapsedIdsByScope,
+          [scopeKey]: (state.collapsedIdsByScope[scopeKey] || []).filter(id => id !== activityId),
+        },
+      }))
+      return true
+    },
+    forkFollowScope: (sourceScopeKey, targetScopeKey) => {
+      if (!sourceScopeKey || !targetScopeKey || sourceScopeKey === targetScopeKey) return false
+      const state = get()
+      const hasSource = sourceScopeKey in state.activitiesByScope
+        || sourceScopeKey in state.historyByScope
+        || sourceScopeKey in state.collapsedIdsByScope
+        || sourceScopeKey in state.columnSettingsByScope
+      if (!hasSource) return false
+      const source: Level3ScopeData = {
+        activities: cloneActivities(state.activitiesByScope[sourceScopeKey] || []),
+        history: cloneHistory(state.historyByScope[sourceScopeKey] || []),
+        collapsedIds: [...(state.collapsedIdsByScope[sourceScopeKey] || [])],
+        columnSettings: state.columnSettingsByScope[sourceScopeKey]
+          ? {
+              order: [...state.columnSettingsByScope[sourceScopeKey].order],
+              visible: [...state.columnSettingsByScope[sourceScopeKey].visible],
+            }
+          : { order: [...DEFAULT_COLUMN_SETTINGS.order], visible: [...DEFAULT_COLUMN_SETTINGS.visible] },
+      }
+      const hasTarget = targetScopeKey in state.activitiesByScope
+        || targetScopeKey in state.historyByScope
+        || targetScopeKey in state.collapsedIdsByScope
+        || targetScopeKey in state.columnSettingsByScope
+      const target: Level3ScopeData | undefined = hasTarget ? {
+        activities: cloneActivities(state.activitiesByScope[targetScopeKey] || []),
+        history: cloneHistory(state.historyByScope[targetScopeKey] || []),
+        collapsedIds: [...(state.collapsedIdsByScope[targetScopeKey] || [])],
+        columnSettings: state.columnSettingsByScope[targetScopeKey]
+          ? {
+              order: [...state.columnSettingsByScope[targetScopeKey].order],
+              visible: [...state.columnSettingsByScope[targetScopeKey].visible],
+            }
+          : { order: [...DEFAULT_COLUMN_SETTINGS.order], visible: [...DEFAULT_COLUMN_SETTINGS.visible] },
+      } : undefined
+      const forked = forkLevel3ScopeData(source, target)
+      set(current => ({
+        activitiesByScope: { ...current.activitiesByScope, [targetScopeKey]: forked.activities },
+        historyByScope: { ...current.historyByScope, [targetScopeKey]: forked.history },
+        collapsedIdsByScope: { ...current.collapsedIdsByScope, [targetScopeKey]: forked.collapsedIds },
+        columnSettingsByScope: { ...current.columnSettingsByScope, [targetScopeKey]: forked.columnSettings },
+      }))
+      return true
     },
     setCollapsedIds: (scopeKey, collapsedIds) => set(state => ({
       collapsedIdsByScope: {
