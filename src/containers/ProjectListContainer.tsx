@@ -41,6 +41,7 @@ import {
   type ProjectSummaryTemplateTask,
 } from '@/lib/projectSummary'
 import { getTemplateTasksForProjectType } from '@/lib/projectTemplateCompatibility'
+import { TOS_PROJECT_LIST_STATUS_OPTIONS } from '@/lib/projectStatus'
 import { buildTosTypeRows, getMainTosType, getTosTypeSnapshotKey, getTosTypeVersionKey } from '@/lib/tosTypeRules'
 import { buildMarketRowsFromMarkets, getMainMarket, getMarketPlanVersionKey, getProjectMarketSnapshotKey } from '@/lib/marketRules'
 import { useActivateProject } from '@/hooks/useActivateProject'
@@ -256,7 +257,7 @@ export default function ProjectListContainer() {
     projectStatusFilter === 'all'
       ? categoryAndSecondaryFilteredProjects
       : categoryAndSecondaryFilteredProjects.filter(project => (
-          projectTypeFilter === PROJECT_TYPE_TOS_VERSION || projectTypeFilter === PROJECT_CATEGORY_TECH
+          projectTypeFilter === PROJECT_CATEGORY_TECH
             ? matchesAggregateProjectStatus(project.status, projectStatusFilter as AggregateProjectStatus)
             : project.status === projectStatusFilter
         ))
@@ -270,7 +271,9 @@ export default function ProjectListContainer() {
   }, [projectTypeFilter])
 
   const statusOptions = useMemo(() => (
-    projectTypeFilter === PROJECT_TYPE_TOS_VERSION || projectTypeFilter === PROJECT_CATEGORY_TECH
+    projectTypeFilter === PROJECT_TYPE_TOS_VERSION
+      ? TOS_PROJECT_LIST_STATUS_OPTIONS
+      : projectTypeFilter === PROJECT_CATEGORY_TECH
       ? [
           { label: '全部', value: 'all' },
           { label: '进行中', value: 'inProgress' },

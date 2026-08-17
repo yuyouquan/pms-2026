@@ -168,6 +168,7 @@ import {
   synchronizeTechnicalProjectRecord,
 } from '@/lib/technicalProjectRules'
 import { deriveProjectTosVersion } from '@/lib/projectInfoRules'
+import { TOS_PROJECT_STATUS_OPTIONS } from '@/lib/projectStatus'
 import {
   getTemplateSnapshotForProjectType,
   getTemplateTasksForProjectType,
@@ -222,7 +223,9 @@ const PROJECT_SPACE_TECH_STATUS_OPTIONS = [
   { label: '已迁移', value: '已迁移' },
 ]
 const getProjectStatusOptions = (p: any) => (
-  p.type === PROJECT_TYPE_TECH ? PROJECT_SPACE_TECH_STATUS_OPTIONS : PROJECT_SPACE_STATUS_OPTIONS
+  p.type === PROJECT_TYPE_TOS_VERSION ? TOS_PROJECT_STATUS_OPTIONS
+    : p.type === PROJECT_TYPE_TECH ? PROJECT_SPACE_TECH_STATUS_OPTIONS
+      : PROJECT_SPACE_STATUS_OPTIONS
 )
 
 const getSoftwareProductSeriesValue = (project: any) => {
@@ -2141,6 +2144,7 @@ export default function ProjectSpaceContainer() {
         selectedProject.tosVersion || '',
       ),
       healthStatus: payload.healthStatus,
+      status: payload.projectStatus,
       updatedAt: '刚刚',
     }
     const merged = mergeProjectInfoValues(
