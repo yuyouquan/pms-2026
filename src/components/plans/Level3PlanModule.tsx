@@ -3,6 +3,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type CSSProperties,
@@ -19,7 +20,6 @@ import {
   Empty,
   Form,
   Input,
-  List,
   Modal,
   Select,
   Space,
@@ -205,7 +205,7 @@ function SortableTableRow(props: SortableTableRowProps) {
       ref={setNodeRef}
       style={style}
       className={`${props.className || ''}${isDragging ? ' pms-level3-dragging' : ''}`.trim()}
-      {...attributes}
+      {...(enabled ? attributes : {})}
       {...(enabled ? listeners : {})}
     />
   )
@@ -255,6 +255,7 @@ export default function Level3PlanModule({
   const setCollapsedIds = useLevel3PlanStore(state => state.setCollapsedIds)
   const setColumnSettings = useLevel3PlanStore(state => state.setColumnSettings)
   const [form] = Form.useForm()
+  const [messageApi, messageContextHolder] = message.useMessage()
   const selectedMilestoneId = Form.useWatch('milestoneId', form)
   const [modalMode, setModalMode] = useState<ActivityModalMode>(null)
   const [filterOpen, setFilterOpen] = useState(false)
@@ -301,23 +302,41 @@ export default function Level3PlanModule({
     : undefined
   const modalIsChild = modalMode?.kind === 'create-child' || Boolean(editingActivity?.parentId)
 
+  useEffect(() => {
+    if (!modalMode) return
+    form.resetFields()
+    const values = modalMode.kind !== 'edit' || !editingActivity
+      ? { status: '待启动', risk: '无', responsibleDepartment: '' }
+      : {
+          activityName: editingActivity.activityName,
+          responsible: editingActivity.responsible,
+          responsibleDepartment: editingActivity.responsibleDepartment,
+          planStartDate: editingActivity.planStartDate ? dayjs(editingActivity.planStartDate) : null,
+          planEndDate: editingActivity.planEndDate ? dayjs(editingActivity.planEndDate) : null,
+          actualStartDate: editingActivity.actualStartDate ? dayjs(editingActivity.actualStartDate) : null,
+          actualEndDate: editingActivity.actualEndDate ? dayjs(editingActivity.actualEndDate) : null,
+          milestoneId: editingActivity.milestoneId || undefined,
+          status: editingActivity.status,
+          risk: editingActivity.risk,
+          remark: editingActivity.remark,
+        }
+    const timer = window.setTimeout(() => form.setFieldsValue(values), 0)
+    return () => window.clearTimeout(timer)
+  }, [editingActivity, form, modalMode])
+
   const resolveDepartment = (responsible: string) => userDepartments[responsible] || '待补充'
 
   const openCreateParent = () => {
     if (!canCreateParent) return
-    form.resetFields()
-    form.setFieldsValue({ status: '待启动', risk: '无', responsibleDepartment: '' })
     setModalMode({ kind: 'create-parent' })
   }
 
   const openCreateChild = (parentId: string) => {
     if (readOnly) return
     if (!milestones.some(milestone => milestone.planEndDate)) {
-      void message.warning('请先发布一级计划后再新增二级活动')
+      void messageApi.warning('请先发布一级计划后再新增二级活动')
       return
     }
-    form.resetFields()
-    form.setFieldsValue({ status: '待启动', risk: '无', responsibleDepartment: '' })
     setModalMode({ kind: 'create-child', parentId })
   }
 
@@ -325,20 +344,6 @@ export default function Level3PlanModule({
     if (readOnly) return
     const permissions = getLevel3ActivityPermissions(activity, activities, permissionContext)
     if (!permissions.canEdit) return
-    form.resetFields()
-    form.setFieldsValue({
-      activityName: activity.activityName,
-      responsible: activity.responsible,
-      responsibleDepartment: activity.responsibleDepartment,
-      planStartDate: activity.planStartDate ? dayjs(activity.planStartDate) : null,
-      planEndDate: activity.planEndDate ? dayjs(activity.planEndDate) : null,
-      actualStartDate: activity.actualStartDate ? dayjs(activity.actualStartDate) : null,
-      actualEndDate: activity.actualEndDate ? dayjs(activity.actualEndDate) : null,
-      milestoneId: activity.milestoneId || undefined,
-      status: activity.status,
-      risk: activity.risk,
-      remark: activity.remark,
-    })
     setModalMode({ kind: 'edit', activityId: activity.id })
   }
 
@@ -367,11 +372,11 @@ export default function Level3PlanModule({
     if (modalIsChild) {
       const validation = validateLevel3ChildDates(values, milestone)
       if (!validation.ok) {
-        void message.error(validation.errors[0])
+        void messageApi.error(validation.errors[0])
         return
       }
       if (!milestone) {
-        void message.error('关键节点已失效，请重新选择')
+        void messageApi.error('关键节点已失效，请重新选择')
         return
       }
     }
@@ -398,7 +403,7 @@ export default function Level3PlanModule({
         })
       }
       if (updateActivity(scopeKey, activity.id, patch, currentUser)) {
-        void message.success('活动已更新')
+        void messageApi.success('活动已更新')
         closeModal()
       }
       return
@@ -428,7 +433,7 @@ export default function Level3PlanModule({
       updatedAt: now,
     }
     if (createActivity(scopeKey, nextActivity, currentUser)) {
-      void message.success(parentId ? '二级活动已新增' : '一级活动已新增')
+      void messageApi.success(parentId ? '二级活动已新增' : '一级活动已新增')
       closeModal()
     }
   }
@@ -451,7 +456,7 @@ export default function Level3PlanModule({
   const handleExport = (mode: 'current' | 'all') => {
     const exportRows = mode === 'current' ? filteredRows : rows
     if (exportRows.length === 0) {
-      void message.warning('暂无可导出数据')
+      void messageApi.warning('暂无可导出数据')
       return
     }
     const definitions = mode === 'current' ? visibleDefinitions : LEVEL3_COLUMN_DEFINITIONS
@@ -474,7 +479,7 @@ export default function Level3PlanModule({
     if (!activeActivity || !overActivity) return
     const activePermissions = getLevel3ActivityPermissions(activeActivity, activities, permissionContext)
     if (!activePermissions.canDrag) {
-      void message.warning('无权限拖动该活动')
+      void messageApi.warning('无权限拖动该活动')
       return
     }
     const elevated = administratorUsers.includes(currentUser) || spmUsers.includes(currentUser)
@@ -482,16 +487,16 @@ export default function Level3PlanModule({
       const sourceParent = activities.find(activity => activity.id === activeActivity.parentId)
       const targetParent = activities.find(activity => activity.id === overActivity.parentId)
       if (sourceParent?.responsible !== currentUser || targetParent?.responsible !== currentUser) {
-        void message.warning('跨组拖动需要同时管理来源和目标一级活动')
+        void messageApi.warning('跨组拖动需要同时管理来源和目标一级活动')
         return
       }
     }
     const result = moveActivity(scopeKey, activeActivity.id, overActivity.id, currentUser)
     if (!result.ok) {
-      void message.warning(result.reason || '拖动失败')
+      void messageApi.warning(result.reason || '拖动失败')
       return
     }
-    void message.success('活动顺序已更新')
+    void messageApi.success('活动顺序已更新')
   }
 
   const dragPermissions = useMemo(() => Object.fromEntries(rows.map(row => [
@@ -596,12 +601,13 @@ export default function Level3PlanModule({
 
   return (
     <div className="pms-level3-plan">
+      {messageContextHolder}
       {readOnly && (
         <Alert
           showIcon
           type="info"
           style={{ marginBottom: 16, borderRadius: 8 }}
-          message={`当前${scopeLabel}跟随 ${sourceLabel || '主范围'}`}
+          title={`当前${scopeLabel}跟随 ${sourceLabel || '主范围'}`}
           description={`三级计划来自 ${sourceLabel || '主范围'}；如需维护，请切换到数据源范围。`}
         />
       )}
@@ -758,7 +764,7 @@ export default function Level3PlanModule({
         okText="确认"
         cancelText="取消"
         width={modalIsChild ? 760 : 620}
-        destroyOnClose
+        forceRender
       >
         <Form form={form} layout="vertical" onFinish={saveActivity} preserve={false}>
           <Form.Item label="活动名称" name="activityName" rules={[{ required: true, whitespace: true, message: '请输入活动名称' }]}>
@@ -821,41 +827,34 @@ export default function Level3PlanModule({
 
       <Drawer
         title="历史修改记录"
-        width={520}
+        size={520}
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
       >
         {history.length === 0 ? (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史修改记录" />
         ) : (
-          <List
-            dataSource={history}
-            renderItem={item => (
-              <List.Item className="pms-level3-history-item">
-                <List.Item.Meta
-                  title={(
-                    <Space size={8} wrap>
-                      <Tag color={item.action === 'move' ? 'purple' : item.action === 'edit' ? 'blue' : 'green'}>{item.summary}</Tag>
-                      <Text strong>{item.activityNumber} {item.activityName}</Text>
-                    </Space>
-                  )}
-                  description={(
-                    <div>
-                      <div style={{ marginBottom: item.changes.length ? 8 : 0 }}>{item.actor} · {item.occurredAt}</div>
-                      {item.changes.map(change => (
-                        <div key={`${item.id}-${change.field}`} className="pms-level3-history-change">
-                          <span>{change.label}</span>
-                          <Text type="secondary" delete>{change.before || '—'}</Text>
-                          <span>→</span>
-                          <Text>{change.after || '—'}</Text>
-                        </div>
-                      ))}
+          <div className="pms-level3-history-list">
+            {history.map(item => (
+              <div key={item.id} className="pms-level3-history-item">
+                <Space size={8} wrap>
+                  <Tag color={item.action === 'move' ? 'purple' : item.action === 'edit' ? 'blue' : 'green'}>{item.summary}</Tag>
+                  <Text strong>{item.activityNumber} {item.activityName}</Text>
+                </Space>
+                <div className="pms-level3-history-description">
+                  <div style={{ marginBottom: item.changes.length ? 8 : 0 }}>{item.actor} · {item.occurredAt}</div>
+                  {item.changes.map(change => (
+                    <div key={`${item.id}-${change.field}`} className="pms-level3-history-change">
+                      <span>{change.label}</span>
+                      <Text type="secondary" delete>{change.before || '—'}</Text>
+                      <span>→</span>
+                      <Text>{change.after || '—'}</Text>
                     </div>
-                  )}
-                />
-              </List.Item>
-            )}
-          />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </Drawer>
     </div>

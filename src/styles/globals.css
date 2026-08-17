@@ -6797,7 +6797,10 @@ body,
 .pms-level3-parent-row:hover > td { background: #eeebff !important; }
 .pms-level3-dragging > td { box-shadow: inset 0 0 0 1px var(--pms-brand); }
 .pms-level3-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.pms-level3-history-item { align-items: flex-start !important; }
+.pms-level3-history-list { display: grid; }
+.pms-level3-history-item { padding: 12px 0; border-bottom: 1px solid var(--pms-border); }
+.pms-level3-history-item:last-child { border-bottom: 0; }
+.pms-level3-history-description { margin-top: 8px; color: var(--pms-text-secondary); }
 .pms-level3-history-change { display: grid; grid-template-columns: 100px minmax(0, 1fr) 18px minmax(0, 1fr); gap: 6px; align-items: start; margin-top: 4px; }
 
 @media (max-width: 720px) {

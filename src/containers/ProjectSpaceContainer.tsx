@@ -225,6 +225,17 @@ const PROJECT_SPACE_TECH_STATUS_OPTIONS = [
   ...PROJECT_SPACE_STATUS_OPTIONS,
   { label: '已迁移', value: '已迁移' },
 ]
+// 前端 mock 环境暂无通讯录接口，责任人选中后从同一用户字典自动带出部门。
+const LEVEL3_MOCK_USER_DEPARTMENTS: Record<string, string> = {
+  '张三': '项目管理部',
+  '李白': '项目管理部',
+  '李四': '产品研发部',
+  '王五': '软件开发部',
+  '赵六': '测试管理部',
+  '孙七': '质量保证部',
+  '周八': '系统开发部',
+  '杜甫': '产品规划部',
+}
 const getProjectStatusOptions = (p: any) => (
   p.type === PROJECT_TYPE_TOS_VERSION ? TOS_PROJECT_STATUS_OPTIONS
     : p.type === PROJECT_TYPE_TECH ? PROJECT_SPACE_TECH_STATUS_OPTIONS
@@ -356,6 +367,7 @@ function getInvalidTaskFields(tasks: any[]): Map<string, InvalidFields> {
 }
 
 export default function ProjectSpaceContainer() {
+  const [containerMessageApi, containerMessageContextHolder] = message.useMessage()
   // ═══════ Store hooks ═══════
   const ui = useUiStore()
   const proj = useProjectStore()
@@ -888,7 +900,7 @@ export default function ProjectSpaceContainer() {
     .map(user => user.trim())
     .filter(Boolean), [selectedProject?.spm])
   const level3UserDepartments = useMemo(() => {
-    if (!selectedProject) return {}
+    if (!selectedProject) return LEVEL3_MOCK_USER_DEPARTMENTS
     const projectRecord = selectedProject as typeof selectedProject & {
       spmDepartment?: string
       fieldValues?: Record<string, unknown>
@@ -899,8 +911,11 @@ export default function ProjectSpaceContainer() {
       || projectRecord.fieldValues?.spmDepartment
       || '',
     ).trim()
-    if (!department) return {}
-    return Object.fromEntries(level3SpmUsers.map(user => [user, department]))
+    if (!department) return LEVEL3_MOCK_USER_DEPARTMENTS
+    return {
+      ...LEVEL3_MOCK_USER_DEPARTMENTS,
+      ...Object.fromEntries(level3SpmUsers.map(user => [user, department])),
+    }
   }, [level3SpmUsers, selectedProject])
   const latestPublishedLevel1Milestones = useMemo<Level3Milestone[]>(() => {
     if (!selectedProject || !level3ScopeResolution || !level3ScopeAvailable) return []
@@ -1321,7 +1336,7 @@ export default function ProjectSpaceContainer() {
 
   const openTosTypeEditor = () => {
     if (!canEditBasicInfo) {
-      message.warning('无基本信息编辑权限')
+      void containerMessageApi.warning('无基本信息编辑权限')
       return
     }
     const rows = getCurrentTosTypeRows()
@@ -1336,13 +1351,13 @@ export default function ProjectSpaceContainer() {
 
   const saveTosTypeConfig = () => {
     if (!canEditBasicInfo) {
-      message.error('无基本信息编辑权限')
+      void containerMessageApi.error('无基本信息编辑权限')
       return
     }
     if (!selectedProject || selectedProject.type !== PROJECT_TYPE_TOS_VERSION) return
     const normalizedRows = normalizeTosTypeRows(tosTypeDraftRows)
     if (normalizedRows.length === 0) {
-      message.error('请至少配置一个类型')
+      void containerMessageApi.error('请至少配置一个类型')
       return
     }
 
@@ -1362,12 +1377,12 @@ export default function ProjectSpaceContainer() {
       tosTypeSeedEntry,
     ))
     if (!updateProject(selectedProject.id, updatedProject, currentLoginUser)) {
-      message.error('类型配置保存失败')
+      void containerMessageApi.error('类型配置保存失败')
       return
     }
     if (!nextTypes.includes(selectedTosTypeTab as TosPlanType)) setSelectedTosTypeTab(mainType || nextTypes[0])
     setShowTosTypeEditor(false)
-    message.success('类型配置已保存')
+    void containerMessageApi.success('类型配置已保存')
   }
 
   const getCurrentMarketRows = () => (
@@ -3976,6 +3991,7 @@ export default function ProjectSpaceContainer() {
 
   return (
     <div className="pms-project-space pms-page-shell">
+      {containerMessageContextHolder}
       {/* Header */}
       <ProjectSpaceHeader navigateWithEditGuard={navigateWithEditGuard} />
 
