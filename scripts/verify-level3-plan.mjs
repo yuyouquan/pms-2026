@@ -132,4 +132,18 @@ for (const token of [
   assert.ok(componentSource.includes(token), `level3 plan component is missing ${token}`)
 }
 
+const containerPath = path.join(root, 'src/containers/ProjectSpaceContainer.tsx')
+const containerSource = fs.readFileSync(containerPath, 'utf8')
+for (const token of [
+  "import Level3PlanModule from '@/components/plans/Level3PlanModule'",
+  "{ key: 'level3', label: '三级计划' }",
+  '<Level3PlanModule',
+  'latestPublishedLevel1Milestones',
+  'level3ScopeResolution',
+]) {
+  assert.ok(containerSource.includes(token), `project-space Level 3 integration is missing ${token}`)
+}
+assert.ok(!containerSource.includes("{ key: 'level2', label: '二级计划' }"), 'project-space still exposes the Level 2 plan tab')
+assert.ok(!containerSource.includes("{ key: 'overview', label: '计划总览' }"), 'project-space still exposes the overview plan tab')
+
 console.log(`Level 3 plan rule verification passed (${pathToFileURL(rulesPath).pathname})`)
