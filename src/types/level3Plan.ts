@@ -7,21 +7,24 @@ export type Level3ScopeKind = 'market' | 'tosType'
 export const LEVEL3_ACTIVITY_STATUSES: Level3ActivityStatus[] = ['待启动', '进行中', '已完成']
 export const LEVEL3_ACTIVITY_RISKS: Level3ActivityRisk[] = ['无', '高', '中', '低']
 
-export type Level3ColumnKey =
-  | 'number'
-  | 'activityName'
-  | 'responsible'
-  | 'responsibleDepartment'
-  | 'planStartDate'
-  | 'planEndDate'
-  | 'estimatedDays'
-  | 'milestoneName'
-  | 'actualStartDate'
-  | 'actualEndDate'
-  | 'actualDays'
-  | 'status'
-  | 'risk'
-  | 'creator'
+export const LEVEL3_COLUMN_KEYS = [
+  'number',
+  'activityName',
+  'responsible',
+  'responsibleDepartment',
+  'planStartDate',
+  'planEndDate',
+  'estimatedDays',
+  'milestoneName',
+  'actualStartDate',
+  'actualEndDate',
+  'actualDays',
+  'status',
+  'risk',
+  'creator',
+] as const
+
+export type Level3ColumnKey = typeof LEVEL3_COLUMN_KEYS[number]
 
 export interface Level3Activity {
   id: string

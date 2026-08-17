@@ -91,4 +91,20 @@ const filtered = rules.filterLevel3ActivitiesWithParents(
 )
 assert.deepEqual(filtered.map(item => item.id), ['p1', 'c2'])
 
+const storePath = path.join(root, 'src/stores/level3Plan.ts')
+assert.ok(fs.existsSync(storePath), 'src/stores/level3Plan.ts does not exist')
+const storeSource = fs.readFileSync(storePath, 'utf8')
+for (const token of [
+  'getScopeData',
+  'createActivity',
+  'updateActivity',
+  'moveActivity',
+  'setCollapsedIds',
+  'setColumnSettings',
+  'activitiesByScope',
+  'historyByScope',
+]) {
+  assert.ok(storeSource.includes(token), `level3 plan store is missing ${token}`)
+}
+
 console.log(`Level 3 plan rule verification passed (${pathToFileURL(rulesPath).pathname})`)
