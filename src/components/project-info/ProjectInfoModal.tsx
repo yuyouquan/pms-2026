@@ -36,6 +36,7 @@ import {
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
 import { normalizeTosEnumReference } from '@/lib/tosEnumOptions'
+import { mapIpmProjectStatus, TOS_PROJECT_STATUS_OPTIONS } from '@/lib/projectStatus'
 import { normalizeMachineFamilyName, resolveMachineTosUpdate } from '@/lib/machineTosVersions'
 import { normalizeTechnicalProjectValues, TechnicalProjectValidationError, validateTechnicalProject } from '@/lib/technicalProjectRules'
 import {
@@ -73,6 +74,7 @@ export interface ProjectInfoSubmitPayload {
   projectSecondaryCategory: string
   responsiblePersons: string[]
   healthStatus: string
+  projectStatus: string
   infoValues: ProjectInfoValues
   sourceEntry?: ExternalProjectEntry
   sourceValues: ReturnType<typeof fetchByBid>
@@ -406,7 +408,9 @@ export default function ProjectInfoModal({
       marketName: sourceValues.marketName || '',
       brand: sourceValues.brand || '',
       productLine: sourceValues.productLine || '',
-      status: '待立项',
+      status: type === PROJECT_TYPE_TOS_VERSION
+        ? mapIpmProjectStatus(entry.ipmStatus || '', type)
+        : '待立项',
       technicalTrack: entry.technicalTrack || '',
       ipmProjectType: entry.ipmProjectCategoryName,
     })
@@ -802,6 +806,7 @@ export default function ProjectInfoModal({
           Array.isArray(values.responsiblePersons) ? values.responsiblePersons : [],
         ),
         healthStatus: String(values.healthStatus || 'normal'),
+        projectStatus: String(values.status || ''),
         infoValues,
         sourceEntry,
         sourceValues: values.bid ? fetchByBid(values.bid) : {},
@@ -908,6 +913,11 @@ export default function ProjectInfoModal({
           <Form.Item label="项目二级分类" name="secondaryCategory" rules={[{ required: true, message: '请选择项目二级分类' }]}>
             <Select disabled options={secondaryCategoryOptions} />
           </Form.Item>
+          {projectType === PROJECT_TYPE_TOS_VERSION && (
+            <Form.Item label="项目状态" name="status" rules={[{ required: true, message: 'IPM 项目状态不能为空' }]}>
+              <Select disabled={mode === 'create'} options={TOS_PROJECT_STATUS_OPTIONS} />
+            </Form.Item>
+          )}
           {projectType !== PROJECT_TYPE_TOS_VERSION && !isMachineProjectType(projectType) && !isTechnicalProject && (
             <Form.Item label="项目责任人" name="responsiblePersons" extra="负责项目可见范围，并作为权限中心的系统管理员" rules={[{ required: true, type: 'array', min: 1, message: '请选择项目责任人' }]}>
               <Select mode="multiple" showSearch optionFilterProp="label" options={ALL_USERS.map(user => ({ label: user, value: user }))} />

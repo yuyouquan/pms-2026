@@ -103,7 +103,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       name: entry.name,
       type: projectType,
       secondaryCategory: payload.projectSecondaryCategory,
-      status: '待立项',
+      status: payload.projectStatus,
       progress: 0,
       leader: derivedResponsiblePersons[0] || '',
       responsiblePersons: derivedResponsiblePersons,

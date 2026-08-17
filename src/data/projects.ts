@@ -9,27 +9,13 @@ import {
   PROJECT_TYPES,
   isMachineProjectType,
 } from '@/constants/projectTypes'
+import { mapIpmProjectStatus } from '@/lib/projectStatus'
 
 // 项目类型选项
 export { PROJECT_TYPES, PROJECT_TYPE_COLORS }
 
 // IPM状态 → PMS展示状态 映射
-export const mapIpmStatus = (ipmStatus: string, projectType: string): string => {
-  const mapping: Record<string, string> = {
-    '筹备中': '待立项',
-    '进行中': '在研',
-    '已完成': '转维',
-    '已取消': '已取消',
-    '维护期': '转维',
-    '已上市': '上市',
-    '维护': '转维',
-  }
-  if (isMachineProjectType(projectType) && ipmStatus === '已上市') return '上市'
-  if (projectType === '技术项目' && ipmStatus === '已迁移') return '已迁移'
-  if (projectType === '技术项目' && ipmStatus === '待立议') return '待立议'
-  if (projectType === '技术项目' && ipmStatus === '待验') return '待验'
-  return mapping[ipmStatus] || ipmStatus
-}
+export const mapIpmStatus = mapIpmProjectStatus
 
 // 项目状态颜色配置
 export const PROJECT_STATUS_CONFIG: Record<string, { color: string; tagColor: string }> = {
@@ -203,7 +189,7 @@ export const initialProjects = [
   },
   {
     id: '2', name: 'tOS16.1', type: PROJECT_TYPE_TOS_VERSION, secondaryCategory: PROJECT_TYPE_TOS_VERSION,
-    status: '待立项', progress: 55, leader: '李四',
+    status: '在研', progress: 55, leader: '李四',
     markets: [], androidVersion: 'Android 15', chipPlatform: 'MTK',
     spm: '张三', updatedAt: '1天前', productLine: 'tOS', productSeries: '16.X', osSeries: '16.X', tosVersion: 'tOS16.1',
     planStartDate: '2026-01-15', planEndDate: '2026-05-30',
@@ -216,7 +202,7 @@ export const initialProjects = [
   },
   {
     id: '6', name: 'tOS17.1', type: PROJECT_TYPE_TOS_VERSION, secondaryCategory: PROJECT_TYPE_TOS_VERSION,
-    status: 'EOS', progress: 82, leader: '赵六',
+    status: '已完成', progress: 82, leader: '赵六',
     markets: [], androidVersion: 'Android 16', chipPlatform: 'QCOM',
     spm: '李四', updatedAt: '3小时前', productLine: 'tOS', productSeries: '17.X', osSeries: '17.X', tosVersion: 'tOS16.3',
     planStartDate: '2026-03-01', planEndDate: '2026-09-30',

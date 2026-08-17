@@ -7,6 +7,7 @@ export interface ExternalProjectEntry {
   name: string
   spm: string
   ipmProjectCategoryName: string
+  ipmStatus?: string
   technicalTrack?: string
   subprojects?: Array<{
     id: string
@@ -18,8 +19,8 @@ export interface ExternalProjectEntry {
 export const EXTERNAL_PROJECT_POOL: ExternalProjectEntry[] = [
   { bid: 'EXT-001', name: 'X6900-D8600_H1100', spm: '李白', ipmProjectCategoryName: '整机产品-基线IPD' },
   { bid: 'EXT-002', name: 'X6901-D8700_H1102', spm: '张三', ipmProjectCategoryName: '整机产品-模块化IPD' },
-  { bid: 'EXT-003', name: 'tOS19.0', spm: '李四', ipmProjectCategoryName: '软件产品项目' },
-  { bid: 'EXT-004', name: 'tOS19.1', spm: '王五', ipmProjectCategoryName: '软件产品项目' },
+  { bid: 'EXT-003', name: 'tOS19.0', spm: '李四', ipmProjectCategoryName: '软件产品项目', ipmStatus: '进行中' },
+  { bid: 'EXT-004', name: 'tOS19.1', spm: '王五', ipmProjectCategoryName: '软件产品项目', ipmStatus: '维护期' },
   { bid: 'EXT-005', name: 'X6912_H1208', spm: '赵六', ipmProjectCategoryName: '其他-平板--整机产品项目' },
   {
     bid: 'EXT-006', name: 'AI-Engine-V3', spm: '张三', ipmProjectCategoryName: '研发级-基础研究-重点项目', technicalTrack: 'AIOS',

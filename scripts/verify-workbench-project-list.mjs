@@ -74,7 +74,7 @@ assert.ok(technicalTypeRowIndex < 0 || filterSummaryIndex < technicalTypeRowInde
 assert.match(source, /toolbarHost=\{projectListTableToolbarHost\}/, 'summary controls render into the category action rail')
 assert.match(source, /aria-label="新增项目"[\s\S]{0,220}icon=\{<PlusOutlined \/>\}[\s\S]{0,120}\/\>/, 'add project is an accessible icon-only action')
 assert.doesNotMatch(source, /projectListView === 'card'[^\n]*workbenchListState\.showSecondaryCategory/)
-assert.match(source, /projectTypeFilter === PROJECT_TYPE_TOS_VERSION \|\| projectTypeFilter === PROJECT_CATEGORY_TECH[\s\S]{0,260}进行中[\s\S]{0,120}已完成/)
+assert.match(source, /projectTypeFilter === PROJECT_TYPE_TOS_VERSION[\s\S]{0,120}TOS_PROJECT_LIST_STATUS_OPTIONS[\s\S]{0,180}projectTypeFilter === PROJECT_CATEGORY_TECH[\s\S]{0,180}进行中[\s\S]{0,120}已完成/)
 assert.match(source, /showQuickFilters=\{false\}/)
 assert.match(summarySource, /getProjectListFixedColumnKeys/)
 assert.match(summarySource, /buildMachineProjectHierarchyPage/)
