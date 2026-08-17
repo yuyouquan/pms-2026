@@ -3652,7 +3652,7 @@ export default function ProjectSpaceContainer() {
             type="info"
             showIcon
             style={{ marginBottom: 16, borderRadius: 8 }}
-            message={`当前类型跟随 ${effectiveTosLevel1Type}`}
+            title={`当前类型跟随 ${effectiveTosLevel1Type}`}
             description={`一级计划来自 ${effectiveTosLevel1Type}；如需创建修订、编辑或发布，请切换到 ${effectiveTosLevel1Type}。`}
           />
         )
