@@ -3,6 +3,7 @@ import type {
   Level3ActivityFormValue,
   Level3ActivityPermissions,
   Level3ActivityViewRow,
+  Level3ChangeLog,
   Level3ActualDateOverride,
   Level3ActualDateOverrideMap,
   Level3DeleteResult,
@@ -89,26 +90,33 @@ export function resolveLevel3DetachedScopeFork(
   }
 }
 
+export function mergeLevel3Histories(
+  sourceHistory: Level3ChangeLog[],
+  selectedScopeHistory: Level3ChangeLog[] = [],
+): Level3ChangeLog[] {
+  const historyById = new Map([
+    ...sourceHistory.map(log => [log.id, log] as const),
+    ...selectedScopeHistory.map(log => [log.id, log] as const),
+  ])
+  return [...historyById.values()]
+    .sort((left, right) => (
+      right.occurredAt.localeCompare(left.occurredAt) || left.id.localeCompare(right.id)
+    ))
+    .map(log => ({
+      ...log,
+      changes: log.changes.map(change => ({ ...change })),
+    }))
+}
+
 export function forkLevel3ScopeData(
   source: Level3ScopeData,
   target?: Level3ScopeData,
   overrides: Level3ActualDateOverrideMap = {},
 ): Level3ScopeData {
-  const historyById = new Map([
-    ...source.history.map(log => [log.id, log] as const),
-    ...(target?.history || []).map(log => [log.id, log] as const),
-  ])
   const targetColumnSettings = target?.columnSettings
   return {
     activities: mergeLevel3ActualDateOverrides(source.activities, overrides),
-    history: [...historyById.values()]
-      .sort((left, right) => (
-        right.occurredAt.localeCompare(left.occurredAt) || left.id.localeCompare(right.id)
-      ))
-      .map(log => ({
-        ...log,
-        changes: log.changes.map(change => ({ ...change })),
-      })),
+    history: mergeLevel3Histories(source.history, target?.history),
     collapsedIds: [...source.collapsedIds],
     columnSettings: {
       order: [...(targetColumnSettings?.order || source.columnSettings.order)],

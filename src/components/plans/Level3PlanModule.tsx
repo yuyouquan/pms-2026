@@ -87,6 +87,8 @@ import {
   filterLevel3ActivitiesWithParents,
   getLevel3ActivityPermissions,
   getLevel3NumberIndent,
+  mergeLevel3ActualDateOverrides,
+  mergeLevel3Histories,
   shouldShowLevel3CreateButton,
   validateLevel3ChildDates,
 } from '@/lib/level3PlanRules'
@@ -166,6 +168,7 @@ type ActivityModalMode =
 interface Level3PlanModuleProps {
   projectName: string
   scopeKey: string
+  selectedScopeKey: string
   scopeLabel: string
   readOnly: boolean
   currentUser: string
@@ -238,6 +241,7 @@ const toDateString = (value: Dayjs | string | null | undefined) => {
 export default function Level3PlanModule({
   projectName,
   scopeKey,
+  selectedScopeKey,
   scopeLabel,
   readOnly,
   currentUser,
@@ -247,12 +251,15 @@ export default function Level3PlanModule({
   userDepartments,
   milestones,
 }: Level3PlanModuleProps) {
-  const activities = useLevel3PlanStore(state => state.activitiesByScope[scopeKey] || EMPTY_ACTIVITIES)
-  const history = useLevel3PlanStore(state => state.historyByScope[scopeKey] || EMPTY_HISTORY)
+  const sourceActivities = useLevel3PlanStore(state => state.activitiesByScope[scopeKey] || EMPTY_ACTIVITIES)
+  const sourceHistory = useLevel3PlanStore(state => state.historyByScope[scopeKey] || EMPTY_HISTORY)
+  const actualOverrides = useLevel3PlanStore(state => state.actualOverridesByScope[selectedScopeKey] || {})
+  const selectedScopeHistory = useLevel3PlanStore(state => state.historyByScope[selectedScopeKey] || EMPTY_HISTORY)
   const collapsedIds = useLevel3PlanStore(state => state.collapsedIdsByScope[scopeKey] || EMPTY_STRINGS)
   const storedColumnSettings = useLevel3PlanStore(state => state.columnSettingsByScope[scopeKey])
   const createActivity = useLevel3PlanStore(state => state.createActivity)
   const updateActivity = useLevel3PlanStore(state => state.updateActivity)
+  const updateFollowActualDates = useLevel3PlanStore(state => state.updateFollowActualDates)
   const moveActivity = useLevel3PlanStore(state => state.moveActivity)
   const deleteActivity = useLevel3PlanStore(state => state.deleteActivity)
   const setCollapsedIds = useLevel3PlanStore(state => state.setCollapsedIds)
@@ -276,9 +283,17 @@ export default function Level3PlanModule({
     administratorUsers,
     spmUsers,
   }), [administratorUsers, currentUser, spmUsers])
+  const effectiveActivities = useMemo(
+    () => mergeLevel3ActualDateOverrides(sourceActivities, actualOverrides),
+    [actualOverrides, sourceActivities],
+  )
+  const history = useMemo(
+    () => readOnly ? mergeLevel3Histories(sourceHistory, selectedScopeHistory) : sourceHistory,
+    [readOnly, selectedScopeHistory, sourceHistory],
+  )
   const canCreateParent = !readOnly
-    && getLevel3ActivityPermissions(undefined, activities, permissionContext).canCreateParent
-  const rows = useMemo(() => applyLevel3Rollups(activities), [activities])
+    && getLevel3ActivityPermissions(undefined, effectiveActivities, permissionContext).canCreateParent
+  const rows = useMemo(() => applyLevel3Rollups(effectiveActivities), [effectiveActivities])
   const activeFilters = useMemo(
     () => normalizeFilterConditions(filters, FILTER_FIELDS),
     [filters],
@@ -301,7 +316,7 @@ export default function Level3PlanModule({
   )
   const selectedMilestone = milestones.find(item => item.id === selectedMilestoneId)
   const editingActivity = modalMode?.kind === 'edit'
-    ? activities.find(activity => activity.id === modalMode.activityId)
+    ? effectiveActivities.find(activity => activity.id === modalMode.activityId)
     : undefined
   const modalIsChild = modalMode?.kind === 'create-child' || Boolean(editingActivity?.parentId)
 
@@ -345,7 +360,7 @@ export default function Level3PlanModule({
 
   const openEdit = (activity: Level3Activity) => {
     if (readOnly) return
-    const permissions = getLevel3ActivityPermissions(activity, activities, permissionContext)
+    const permissions = getLevel3ActivityPermissions(activity, effectiveActivities, permissionContext)
     if (!permissions.canEdit) return
     setModalMode({ kind: 'edit', activityId: activity.id })
   }
@@ -384,7 +399,7 @@ export default function Level3PlanModule({
       }
     }
     if (modalMode.kind === 'edit') {
-      const activity = activities.find(item => item.id === modalMode.activityId)
+      const activity = effectiveActivities.find(item => item.id === modalMode.activityId)
       if (!activity) return
       const patch: Partial<Level3Activity> = {
         activityName: values.activityName || '',
@@ -477,18 +492,18 @@ export default function Level3PlanModule({
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (readOnly || !over || active.id === over.id) return
-    const activeActivity = activities.find(activity => activity.id === String(active.id))
-    const overActivity = activities.find(activity => activity.id === String(over.id))
+    const activeActivity = effectiveActivities.find(activity => activity.id === String(active.id))
+    const overActivity = effectiveActivities.find(activity => activity.id === String(over.id))
     if (!activeActivity || !overActivity) return
-    const activePermissions = getLevel3ActivityPermissions(activeActivity, activities, permissionContext)
+    const activePermissions = getLevel3ActivityPermissions(activeActivity, effectiveActivities, permissionContext)
     if (!activePermissions.canDrag) {
       void messageApi.warning('无权限拖动该活动')
       return
     }
     const elevated = administratorUsers.includes(currentUser) || spmUsers.includes(currentUser)
     if (activeActivity.parentId && overActivity.parentId && activeActivity.parentId !== overActivity.parentId && !elevated) {
-      const sourceParent = activities.find(activity => activity.id === activeActivity.parentId)
-      const targetParent = activities.find(activity => activity.id === overActivity.parentId)
+      const sourceParent = effectiveActivities.find(activity => activity.id === activeActivity.parentId)
+      const targetParent = effectiveActivities.find(activity => activity.id === overActivity.parentId)
       if (sourceParent?.responsible !== currentUser || targetParent?.responsible !== currentUser) {
         void messageApi.warning('跨组拖动需要同时管理来源和目标一级活动')
         return
@@ -504,11 +519,11 @@ export default function Level3PlanModule({
 
   const dragPermissions = useMemo(() => Object.fromEntries(rows.map(row => [
     row.id,
-    !readOnly && getLevel3ActivityPermissions(row, activities, permissionContext).canDrag,
-  ])), [activities, permissionContext, readOnly, rows])
+    !readOnly && getLevel3ActivityPermissions(row, effectiveActivities, permissionContext).canDrag,
+  ])), [effectiveActivities, permissionContext, readOnly, rows])
 
   const renderActivityName = (row: Level3ActivityViewRow): ReactNode => {
-    const permissions = getLevel3ActivityPermissions(row, activities, permissionContext)
+    const permissions = getLevel3ActivityPermissions(row, effectiveActivities, permissionContext)
     return (
       <div className="pms-level3-activity-cell" style={{ paddingLeft: row.depth ? 18 : 0 }}>
         <span className="pms-level3-activity-title">{row.activityName}</span>
@@ -571,8 +586,16 @@ export default function Level3PlanModule({
     field: 'actualStartDate' | 'actualEndDate',
     value: string,
   ) => {
-    if (!canInlineEditLevel3ActualDate(row, activities, permissionContext, readOnly)) return
-    updateActivity(scopeKey, row.id, { [field]: value }, currentUser)
+    if (!canInlineEditLevel3ActualDate(row, effectiveActivities, permissionContext, false)) return
+    if (readOnly) {
+      if (updateFollowActualDates(scopeKey, selectedScopeKey, row.id, { [field]: value }, currentUser)) {
+        void messageApi.success('已保存')
+      }
+      return
+    }
+    if (updateActivity(scopeKey, row.id, { [field]: value }, currentUser)) {
+      void messageApi.success('已保存')
+    }
   }
 
   const columns: ColumnsType<Level3ActivityViewRow> = visibleDefinitions.map(definition => {
@@ -594,7 +617,7 @@ export default function Level3PlanModule({
             style={{ paddingLeft: getLevel3NumberIndent(row.depth) }}
           >
             {dragPermissions[row.id] && <HolderOutlined style={{ color: '#9ca3af' }} />}
-            {!row.parentId && activities.some(activity => activity.parentId === row.id) && (
+            {!row.parentId && effectiveActivities.some(activity => activity.parentId === row.id) && (
               <Button
                 type="text"
                 size="small"
@@ -624,7 +647,7 @@ export default function Level3PlanModule({
         ...base,
         ellipsis: false,
         render: (value: string, row: Level3ActivityViewRow) => {
-          if (!canInlineEditLevel3ActualDate(row, activities, permissionContext, readOnly)) return formatCell(value)
+          if (!canInlineEditLevel3ActualDate(row, effectiveActivities, permissionContext, false)) return formatCell(value)
           const isStart = actualField === 'actualStartDate'
           return (
             <div
@@ -638,7 +661,7 @@ export default function Level3PlanModule({
                 disabledDate={current => isStart
                   ? Boolean(row.actualEndDate && current.isAfter(dayjs(row.actualEndDate), 'day'))
                   : Boolean(row.actualStartDate && current.isBefore(dayjs(row.actualStartDate), 'day'))}
-                onSaved={() => void messageApi.success('已保存')}
+                onSaved={() => undefined}
               />
             </div>
           )
@@ -807,7 +830,7 @@ export default function Level3PlanModule({
               components={{ body: { row: SortableTableRow } }}
               onRow={row => ({
                 onDoubleClick: () => {
-                  if (!readOnly && getLevel3ActivityPermissions(row, activities, permissionContext).canEdit) openEdit(row)
+                  if (!readOnly && getLevel3ActivityPermissions(row, effectiveActivities, permissionContext).canEdit) openEdit(row)
                 },
               })}
             />

@@ -3711,6 +3711,7 @@ export default function ProjectSpaceContainer() {
           <Level3PlanModule
             projectName={selectedProject.name}
             scopeKey={level3ScopeResolution.scopeKey}
+            selectedScopeKey={level3ScopeResolution.selectedScopeKey}
             scopeLabel={level3ScopeResolution.selectedValue}
             readOnly={level3ScopeResolution.readOnly}
             currentUser={currentLoginUser}

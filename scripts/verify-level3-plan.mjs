@@ -241,6 +241,12 @@ assert.notEqual(forkedScope.activities[0], parent)
 assert.deepEqual(childA.actualStartDate, '2026-01-04')
 assert.deepEqual(childA.actualEndDate, '2026-01-07')
 
+assert.deepEqual(
+  rules.mergeLevel3Histories(sourceHistory, targetHistory).map(log => log.id),
+  ['target-log', 'tie-a', 'tie-b', 'source-log'],
+  '跟随范围历史应合并来源和当前范围，并沿用脱离跟随时的稳定排序规则',
+)
+
 const parent2 = { ...parent, id: 'p2', order: 1, activityName: '父活动2', responsible: '李四' }
 const childC = { ...childA, id: 'c3', parentId: 'p2', order: 0, activityName: '子活动C' }
 const movedParent = rules.moveLevel3Activity([parent, childA, childB, parent2, childC], 'p2', 'p1')
@@ -497,6 +503,15 @@ assert.ok(fs.existsSync(componentPath), 'src/components/plans/Level3PlanModule.t
 const componentSource = fs.readFileSync(componentPath, 'utf8')
 assert.ok(!componentSource.includes('<Alert'), '跟随范围不应显示提示条')
 assert.ok(componentSource.includes('shouldShowLevel3CreateButton(readOnly)'), '新增活动按钮未按跟随状态隐藏')
+assert.ok(componentSource.includes('selectedScopeKey: string'), '三级计划组件必须接收当前选中范围键')
+assert.ok(componentSource.includes('mergeLevel3ActualDateOverrides(sourceActivities, actualOverrides)'), '展示活动必须先合并跟随范围实际日期覆盖')
+assert.ok(componentSource.includes('const rows = useMemo(() => applyLevel3Rollups(effectiveActivities)'), '汇总必须基于合并后的展示活动')
+assert.ok(componentSource.includes('updateFollowActualDates(scopeKey, selectedScopeKey, row.id, { [field]: value }, currentUser)'), '跟随范围的内联实际日期编辑必须写入当前范围覆盖')
+assert.ok(componentSource.includes('if (readOnly) {'), '内联实际日期变更必须显式区分跟随范围')
+assert.ok(componentSource.includes('mergeLevel3Histories(sourceHistory, selectedScopeHistory)'), '跟随范围历史抽屉必须合并来源和当前范围历史')
+assert.ok(componentSource.includes('canInlineEditLevel3ActualDate(row, effectiveActivities, permissionContext, false)'), '跟随范围授权子活动实际日期应保持可编辑')
+assert.ok(componentSource.includes('!readOnly && (permissions.canEdit || permissions.canAddChild)'), '跟随范围仍须隐藏结构性行操作')
+assert.ok(componentSource.includes('!readOnly && getLevel3ActivityPermissions(row, effectiveActivities, permissionContext).canDrag'), '跟随范围仍须禁用拖动排序')
 const assertInOrder = (text, tokens) => {
   let cursor = -1
   tokens.forEach(token => {
@@ -530,6 +545,7 @@ for (const token of [
   'level3ScopeResolution',
   'resolveLevel3DetachedScopeFork',
   'forkFollowScope',
+  'selectedScopeKey={level3ScopeResolution.selectedScopeKey}',
 ]) {
   assert.ok(containerSource.includes(token), `project-space Level 3 integration is missing ${token}`)
 }
