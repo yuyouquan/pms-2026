@@ -388,6 +388,7 @@ export default function Level3PlanModule({
     const values: Level3ActivityFormValue = {
       ...rawValues,
       activityName: rawValues.activityName?.trim(),
+      remark: rawValues.remark?.trim(),
       responsibleDepartment: resolveDepartment(rawValues.responsible || ''),
       planStartDate: toDateString(rawValues.planStartDate),
       planEndDate: toDateString(rawValues.planEndDate),
@@ -696,9 +697,14 @@ export default function Level3PlanModule({
     if (definition.key === 'remark') {
       return {
         ...base,
-        render: (value: string) => value ? (
-          <Tooltip title={value}><span className="pms-level3-remark-cell">{value}</span></Tooltip>
-        ) : '-',
+        render: (value: string) => {
+          const remark = typeof value === 'string' ? value.trim() : ''
+          return remark ? (
+            <Tooltip title={remark}>
+              <span className="pms-level3-remark-cell" tabIndex={0} aria-label={remark} title={remark}>{remark}</span>
+            </Tooltip>
+          ) : '-'
+        },
       }
     }
     return { ...base, render: (value: string) => formatCell(value) }
