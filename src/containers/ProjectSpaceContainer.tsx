@@ -1357,11 +1357,20 @@ export default function ProjectSpaceContainer() {
       return
     }
     if (!selectedProject || selectedProject.type !== PROJECT_TYPE_TOS_VERSION) return
-    const normalizedRows = normalizeTosTypeRows(tosTypeDraftRows)
+    const previousTosTypeRows = getCurrentTosTypeRows()
+    const previousMainTosType = getMainTosType(previousTosTypeRows)
+    const normalizedRows = normalizeTosTypeRows(tosTypeDraftRows, previousMainTosType)
     if (normalizedRows.length === 0) {
       void containerMessageApi.error('请至少配置一个类型')
       return
     }
+
+    const detachedTosTypes = normalizedRows
+      .filter(row => {
+        const previousRow = previousTosTypeRows.find(item => item.type === row.type)
+        return previousRow?.followsMain && !row.isMain && !row.followsMain
+      })
+      .map(row => row.type)
 
     const nextTypes = normalizedRows.map(row => row.type)
     const mainType = getMainTosType(normalizedRows) as TosPlanType
@@ -1382,6 +1391,28 @@ export default function ProjectSpaceContainer() {
       void containerMessageApi.error('类型配置保存失败')
       return
     }
+    detachedTosTypes.forEach(type => {
+      const previousRow = previousTosTypeRows.find(row => row.type === type)
+      const nextRow = normalizedRows.find(row => row.type === type)
+      if (!previousRow || !nextRow) return
+      const fork = resolveLevel3DetachedScopeFork(
+        {
+          projectId: selectedProject.id,
+          kind: 'tosType',
+          value: type,
+          mainValue: previousMainTosType,
+          followsMain: previousRow.followsMain,
+        },
+        {
+          projectId: selectedProject.id,
+          kind: 'tosType',
+          value: type,
+          mainValue: mainType,
+          followsMain: nextRow.followsMain,
+        },
+      )
+      if (fork) forkFollowScope(fork.sourceScopeKey, fork.targetScopeKey)
+    })
     if (!nextTypes.includes(selectedTosTypeTab as TosPlanType)) setSelectedTosTypeTab(mainType || nextTypes[0])
     setShowTosTypeEditor(false)
     void containerMessageApi.success('类型配置已保存')

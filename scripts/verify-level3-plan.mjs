@@ -550,6 +550,33 @@ for (const token of [
 ]) {
   assert.ok(containerSource.includes(token), `project-space Level 3 integration is missing ${token}`)
 }
+const saveTosTypeConfigStart = containerSource.indexOf('  const saveTosTypeConfig = () => {')
+const saveMarketConfigStart = containerSource.indexOf('  const getCurrentMarketRows = () => (')
+assert.ok(saveTosTypeConfigStart >= 0, 'tOS type save handler is missing')
+assert.ok(saveMarketConfigStart > saveTosTypeConfigStart, 'tOS type save handler boundary is missing')
+const saveTosTypeConfigSource = containerSource.slice(saveTosTypeConfigStart, saveMarketConfigStart)
+for (const token of [
+  'const previousTosTypeRows = getCurrentTosTypeRows()',
+  'const previousMainTosType = getMainTosType(previousTosTypeRows)',
+  'const detachedTosTypes = normalizedRows',
+  "kind: 'tosType'",
+  'resolveLevel3DetachedScopeFork',
+  'forkFollowScope(fork.sourceScopeKey, fork.targetScopeKey)',
+]) {
+  assert.ok(saveTosTypeConfigSource.includes(token), `tOS type detach integration is missing ${token}`)
+}
+assert.ok(
+  saveTosTypeConfigSource.includes('normalizeTosTypeRows(tosTypeDraftRows, previousMainTosType)'),
+  'tOS type save must normalize candidate rows against the previous main type',
+)
+assert.ok(
+  saveTosTypeConfigSource.includes('previousRow?.followsMain && !row.isMain && !row.followsMain'),
+  'tOS type detach detection must only include followed rows becoming independent',
+)
+assert.ok(
+  saveTosTypeConfigSource.indexOf('if (!updateProject(') < saveTosTypeConfigSource.indexOf('detachedTosTypes.forEach'),
+  'tOS type Level 3 forks must run only after the project update succeeds',
+)
 assert.ok(!containerSource.includes("{ key: 'level2', label: '二级计划' }"), 'project-space still exposes the Level 2 plan tab')
 assert.ok(!containerSource.includes("{ key: 'overview', label: '计划总览' }"), 'project-space still exposes the overview plan tab')
 assert.ok(
