@@ -62,8 +62,8 @@ import {
 } from '@/lib/filterConditions'
 import {
   countProjectsByCategory,
+  canEnterProjectSpace,
   filterProjectsForList,
-  matchesAboutMine,
   matchesAggregateProjectStatus,
   type AggregateProjectStatus,
 } from '@/lib/projectListFilters'
@@ -153,10 +153,11 @@ export default function ProjectListContainer() {
   }, [globalRoles, currentLoginUser])
 
   const visibleProjects = projects
-  const canEnterProject = (projectId: string) => matchesAboutMine(
+  const canEnterProject = (projectId: string) => canEnterProjectSpace(
     projectId,
     currentLoginUser,
     rolesByProject,
+    isAdminUser,
   )
   const showProjectAccessDenied = () => message.warning({
     key: 'project-space-access-denied',
@@ -853,6 +854,10 @@ export default function ProjectListContainer() {
                   onViewProject={(projectId) => {
                     const project = workspaceFilteredProjects.find(item => item.id === projectId)
                     if (!project) return
+                    if (!canEnterProject(projectId)) {
+                      showProjectAccessDenied()
+                      return
+                    }
                     activateProject(project)
                     setProjectSpaceModule('basic')
                     enterProjectSpace({ module: 'projectList' })

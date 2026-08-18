@@ -24,6 +24,15 @@ export function matchesAboutMine(
   return (rolesByProject[projectId] || []).some(role => role.members.includes(user))
 }
 
+export function canEnterProjectSpace(
+  projectId: string,
+  currentLoginUser: string,
+  rolesByProject: ProjectPermissionRolesByProject,
+  isGlobalAdmin: boolean,
+) {
+  return isGlobalAdmin || matchesAboutMine(projectId, currentLoginUser, rolesByProject)
+}
+
 export function matchesAggregateProjectStatus(
   status: unknown,
   aggregateStatus: AggregateProjectStatus | string,
