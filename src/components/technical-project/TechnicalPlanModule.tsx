@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   Alert, Avatar, Badge, Button, Card, DatePicker, Dropdown, Empty, Input, Modal, Popconfirm, Progress,
   Row, Select, Space, Table, Tabs, Tag, Tooltip, Typography, Upload, message,
@@ -20,7 +20,7 @@ import SubprojectConfigModal from '@/components/technical-project/SubprojectConf
 import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareModal'
 import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
-import { DHTMLXGantt, DragHandle, SortableRow } from '@/components/shared/PlanHelpers'
+import { ClickToEditDate, DHTMLXGantt, DragHandle, SortableRow } from '@/components/shared/PlanHelpers'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
 import {
   applyPlanWorkspaceFilters,
@@ -41,7 +41,7 @@ import { compareVersionsForTable } from '@/lib/versionCompare'
 import type { PlanRevisionKind } from '@/lib/planVersioning'
 import { getTemplateSnapshotForProjectType } from '@/lib/projectTemplateCompatibility'
 import { comparePublishedTechnicalPlanVersions } from '@/lib/technicalProjectRules'
-import { projectLevel1Plan, validateLevel1MilestoneDates } from '@/lib/level1PlanRules'
+import { projectLevel1Plan, sumLevel1EstimatedDays, validateLevel1MilestoneDates } from '@/lib/level1PlanRules'
 import {
   createFilterCondition,
   getFieldOptionsWithDuplicateDisabled,
@@ -74,6 +74,7 @@ import type { SortableColumnDefinition } from '@/lib/columnSettings'
 
 const { Text } = Typography
 const FIXED_TDT_LABEL = 'TDT项目计划'
+const TECHNICAL_STAGE_COLORS = ['#1890ff', '#52c41a', '#722ed1', '#faad14', '#eb2f96', '#13c2c2'] as const
 const PLAN_REVISION_KIND_OPTIONS: Array<{ key: PlanRevisionKind; label: string }> = [
   { key: 'gray', label: '创建非正式版本' },
   { key: 'formal', label: '创建正式版本' },
@@ -126,7 +127,7 @@ function TechnicalHorizontalPlanTable({
         colSpan: Math.max(1, currentProjection.rows.length),
       }]
   if (!tasks.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无横版计划数据" />
-  const milestoneTasks = groups.flatMap(group => group.milestones)
+  const milestoneTasks = groups.flatMap(group => group.milestones.length > 0 ? group.milestones : [group.stage])
   type TechnicalHorizontalRow = {
     id: string
     versionNo: string
@@ -137,77 +138,155 @@ function TechnicalHorizontalPlanTable({
   }
   const rows: TechnicalHorizontalRow[] = versions.map(version => {
     const versionProjection = projectLevel1Plan(version.tasks, { mode })
-    const firstStage = versionProjection.rows.find(row => !row.parentId && row.planStartDate)
-    const lastStage = [...versionProjection.rows].reverse().find(row => !row.parentId && row.planEndDate)
-    const cycleDays = firstStage?.planStartDate && lastStage?.planEndDate
-      ? dayjs(lastStage.planEndDate).diff(dayjs(firstStage.planStartDate), 'day')
-      : null
     return {
       id: version.id,
       versionNo: version.versionNo,
       status: version.status,
       rowType: 'version' as const,
       endDatesByTaskId: Object.fromEntries(versionProjection.rows.map(row => [row.id, row.planEndDate || ''])),
-      cycleDays,
+      cycleDays: sumLevel1EstimatedDays(versionProjection.rows),
     }
   })
+  const actualStarts = currentProjection.rows.map(row => Date.parse(row.actualStartDate)).filter(Number.isFinite)
+  const actualEnds = currentProjection.rows.map(row => Date.parse(row.actualEndDate)).filter(Number.isFinite)
   rows.push({
     id: 'actual',
     versionNo: '实际',
     status: '',
     rowType: 'actual',
     endDatesByTaskId: Object.fromEntries(currentProjection.rows.map(row => [row.id, row.actualEndDate || ''])),
-    cycleDays: null,
+    cycleDays: actualStarts.length > 0 && actualEnds.length > 0
+      ? Math.max(0, Math.ceil((Math.max(...actualEnds) - Math.min(...actualStarts)) / 86_400_000))
+      : null,
   })
-  const columns: ColumnsType<(typeof rows)[number]> = [
-    {
-      key: 'versionNo', title: '版本', dataIndex: 'versionNo', width: 110, fixed: 'left',
-      render: (value, row) => <Space size={4}><strong>{value}</strong>{row.status === '修订中' && <Tag color="green">修订中</Tag>}</Space>,
-    },
-    {
-      key: 'cycleDays', title: '开发周期', dataIndex: 'cycleDays', width: 100, fixed: 'left',
-      render: value => value == null ? '-' : `${value}天`,
-    },
-    ...groups.map(group => ({
-      key: group.stage.id,
-      title: (
-        <div style={{ textAlign: 'left' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-            <span>{group.stage.taskName}</span>
-            {'manpowerPercent' in group.stage && <Tag color="blue" style={{ margin: 0 }}>{group.stage.manpowerPercent == null ? '-' : `${group.stage.manpowerPercent}%`}</Tag>}
-          </div>
-          <div style={{ marginTop: 2, color: '#64748b', fontSize: 11, fontWeight: 400 }}>{group.stage.planStartDate && group.stage.planEndDate ? `${group.stage.planStartDate} ~ ${group.stage.planEndDate}` : '-'}</div>
-        </div>
-      ),
-      children: (group.milestones.length ? group.milestones : [group.stage]).map(milestone => ({
-        key: milestone.id,
-        title: milestone.taskName,
-        width: 136,
-        align: 'center' as const,
-        render: (_: unknown, row: (typeof rows)[number]) => {
-          const value = row.endDatesByTaskId[milestone.id] || ''
-          const editable = row.rowType === 'actual'
-            ? canEditActualEnd
-            : row.id === currentVersionId && canEditPlanEnd
-          return editable
-            ? <DatePicker size="small" value={value ? dayjs(value) : null} onChange={date => onDateChange(milestone.id, row.rowType === 'actual' ? 'actualEndDate' : 'planEndDate', date?.format('YYYY-MM-DD') || '')} />
-            : value || '-'
-        },
-      })),
-    })),
-  ]
+
+  const thStyle: CSSProperties = {
+    background: '#f8fafc', fontWeight: 600, fontSize: 13, color: '#4b5563', padding: '10px 12px',
+    border: '1px solid #e5e7eb', whiteSpace: 'nowrap', textAlign: 'center',
+  }
+  const tdStyle: CSSProperties = {
+    padding: '8px 12px', fontSize: 13, textAlign: 'center', whiteSpace: 'nowrap', minWidth: 100,
+    border: '1px solid #e5e7eb',
+  }
+  const versionThStyle: CSSProperties = {
+    ...thStyle, position: 'sticky', left: 0, zIndex: 2, minWidth: 80, background: '#f8fafc', borderBottom: 'none',
+  }
+  const cycleThStyle: CSSProperties = {
+    ...thStyle, position: 'sticky', left: 80, zIndex: 2, minWidth: 80, background: '#f8fafc', borderBottom: 'none',
+  }
+  const versionTdStyle: CSSProperties = {
+    ...tdStyle, position: 'sticky', left: 0, zIndex: 1, fontWeight: 600, background: '#fff', minWidth: 80,
+  }
+  const cycleTdStyle: CSSProperties = {
+    ...tdStyle, position: 'sticky', left: 80, zIndex: 1, background: '#fff', minWidth: 80,
+  }
+
   return (
-    <Table
-      className="pms-table technical-horizontal-plan-table"
-      rowKey="id"
-      size="middle"
-      bordered
-      pagination={false}
-      columns={columns}
-      dataSource={rows}
-      rowClassName={row => row.rowType === 'actual' ? 'technical-plan-summary-actual' : ''}
-      scroll={{ x: Math.max(960, groups.reduce((total, group) => total + group.colSpan * 136, 210)) }}
-    />
+    <div
+      className="technical-horizontal-plan-scroll"
+      style={{ overflow: 'auto' }}
+      role="region"
+      aria-label="技术项目横版计划"
+      tabIndex={0}
+    >
+      <table
+        className="pms-level1-horizontal-table technical-horizontal-plan-table"
+        aria-label="技术项目横版计划表"
+        style={{ width: '100%', borderCollapse: 'collapse' }}
+      >
+        <thead>
+          <tr>
+            <th style={versionThStyle} rowSpan={2}>版本</th>
+            <th style={cycleThStyle} rowSpan={2}>开发周期</th>
+            {groups.map(({ stage, colSpan }, index) => {
+              const stageColor = TECHNICAL_STAGE_COLORS[index % TECHNICAL_STAGE_COLORS.length]
+              return (
+                <th
+                  key={stage.id}
+                  colSpan={colSpan}
+                  style={{ ...thStyle, background: `${stageColor}10`, color: stageColor, borderBottom: `2px solid ${stageColor}` }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, textAlign: 'left' }}>
+                    <div>
+                      <div>{stage.taskName}</div>
+                      <div style={{ marginTop: 3, color: '#64748b', fontSize: 11, fontWeight: 400 }}>
+                        {stage.planStartDate && stage.planEndDate ? `${stage.planStartDate} ~ ${stage.planEndDate}` : '-'}
+                      </div>
+                    </div>
+                    <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
+                      {stage.manpowerPercent == null ? '-' : `${stage.manpowerPercent}%`}
+                    </Tag>
+                  </div>
+                </th>
+              )
+            })}
+          </tr>
+          <tr>
+            {groups.flatMap(({ stage, milestones }) => (
+              milestones.length > 0
+                ? milestones.map(milestone => <th key={milestone.id} style={thStyle}>{milestone.taskName}</th>)
+                : [<th key={stage.id} style={{ ...thStyle, color: '#bfbfbf' }}>{stage.taskName}</th>]
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.filter(row => row.rowType === 'version').map(row => {
+            const isCurrent = row.id === currentVersionId
+            return (
+              <tr
+                key={row.id}
+                className={isCurrent ? 'technical-horizontal-current' : undefined}
+                style={isCurrent ? { background: '#fafffe' } : undefined}
+              >
+                <td style={{ ...versionTdStyle, color: isCurrent ? 'var(--pms-brand)' : '#111827', background: isCurrent ? 'var(--pms-brand-surface)' : '#fff' }}>
+                  <Space size={5} style={{ justifyContent: 'center', width: '100%' }}>
+                    <span>{row.versionNo}</span>
+                    {row.status === '修订中' && (
+                      <Tooltip title="修订中">
+                        <EditOutlined aria-label="修订中" style={{ color: '#722ed1', fontSize: 13 }} />
+                      </Tooltip>
+                    )}
+                  </Space>
+                </td>
+                <td style={{ ...cycleTdStyle, background: isCurrent ? '#f0f9ff' : '#fff' }}>
+                  <Tooltip title="所有一级活动的预估工期总和"><span>{row.cycleDays ?? '-'}</span></Tooltip>
+                </td>
+                {milestoneTasks.map(milestone => {
+                  const value = row.endDatesByTaskId[milestone.id] || ''
+                  return (
+                    <td key={milestone.id} style={tdStyle}>
+                      {isCurrent && canEditPlanEnd
+                        ? <ClickToEditDate align="center" value={value} onChange={nextValue => onDateChange(milestone.id, 'planEndDate', nextValue)} />
+                        : value || '-'}
+                    </td>
+                  )
+                })}
+              </tr>
+            )
+          })}
+          {rows.filter(row => row.rowType === 'actual').map(row => (
+            <tr key={row.id} className="technical-horizontal-actual" style={{ background: '#fffbe6' }}>
+              <td style={{ ...versionTdStyle, color: '#d48806', background: '#fffbe6', fontSize: 12 }}>
+                <Tooltip title="最近已发布版本的实际完成数据"><span>{row.versionNo}</span></Tooltip>
+              </td>
+              <td style={{ ...cycleTdStyle, background: '#fffbe6' }}>
+                <Tooltip title="最早实际开始到最晚实际完成的天数"><span>{row.cycleDays ?? '-'}</span></Tooltip>
+              </td>
+              {milestoneTasks.map(milestone => {
+                const value = row.endDatesByTaskId[milestone.id] || ''
+                return (
+                  <td key={milestone.id} style={{ ...tdStyle, color: '#d48806' }}>
+                    {canEditActualEnd
+                      ? <ClickToEditDate align="center" value={value} onChange={nextValue => onDateChange(milestone.id, 'actualEndDate', nextValue)} />
+                      : value || '-'}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 

@@ -1006,6 +1006,21 @@
   background: #f8fafc;
 }
 
+.technical-plan-summary-stage-content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+}
+
+.technical-plan-summary-stage-range {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 400;
+}
+
 .technical-plan-summary th.technical-plan-summary-sticky-version,
 .technical-plan-summary td.technical-plan-summary-sticky-version {
   position: sticky;
@@ -5084,11 +5099,6 @@ body {
   border-radius: 6px;
 }
 
-.technical-horizontal-plan-table .ant-table-thead > tr:first-child > th:not(:first-child) {
-  color: #4338ca;
-  background: #eef2ff;
-  text-align: center;
-}
 .pms-project-list-calendar {
   overflow-x: auto;
   overflow-y: hidden;

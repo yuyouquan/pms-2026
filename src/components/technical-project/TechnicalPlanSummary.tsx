@@ -1,8 +1,9 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Card, Empty, Space } from 'antd'
+import { Card, Empty, Space, Tag } from 'antd'
 import { CalendarOutlined } from '@ant-design/icons'
+import { projectLevel1Plan } from '@/lib/level1PlanRules'
 import { resolveTechnicalPlanSummary } from '@/lib/technicalProjectRules'
 import { getTechnicalPlanKey, useTechnicalPlanStore, type TechnicalPlanScope } from '@/stores/technicalPlan'
 
@@ -35,15 +36,28 @@ export default function TechnicalPlanSummary({ scope, label }: TechnicalPlanSumm
     return planCard(<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无计划数据" />)
   }
 
-  const stages = summary.latestVersion.tasks
-    .filter(task => !task.parentId)
-    .sort((left, right) => left.order - right.order)
-  const groups = stages.map(stage => {
-    const milestones = summary.latestVersion!.tasks
-      .filter(task => task.parentId === stage.id)
-      .sort((left, right) => left.order - right.order)
-    return { stage, milestones, width: Math.max(1, milestones.length) }
-  })
+  const normalizedTasks = summary.latestVersion.tasks.map(task => ({
+    ...task,
+    taskName: String(task.taskName || task.name || ''),
+    planEndDate: String(task.planEndDate || ''),
+    actualEndDate: String(task.actualEndDate || ''),
+  }))
+  const projectionMode = normalizedTasks.some(task => task.parentId) ? 'standard' : 'technical-subproject'
+  const latestProjection = projectLevel1Plan(normalizedTasks, { mode: projectionMode })
+  const groups = latestProjection.stageGroups.length > 0
+    ? latestProjection.stageGroups.map(group => ({ ...group, width: Math.max(1, group.milestones.length) }))
+    : [{
+        stage: {
+          ...latestProjection.rows[0],
+          id: 'technical-subproject',
+          taskName: '子项目计划',
+          planStartDate: '',
+          planEndDate: '',
+          manpowerPercent: null,
+        },
+        milestones: latestProjection.rows,
+        width: Math.max(1, latestProjection.rows.length),
+      }]
   const columns = groups.flatMap(group => group.milestones.length ? group.milestones : [group.stage])
 
   return planCard(
@@ -66,7 +80,19 @@ export default function TechnicalPlanSummary({ scope, label }: TechnicalPlanSumm
                       borderBottom: `2px solid ${stageColor}`,
                     }}
                   >
-                    {group.stage.taskName}
+                    <div className="technical-plan-summary-stage-content">
+                      <div>
+                        <div>{group.stage.taskName}</div>
+                        <div className="technical-plan-summary-stage-range">
+                          {group.stage.planStartDate && group.stage.planEndDate
+                            ? `${group.stage.planStartDate} ~ ${group.stage.planEndDate}`
+                            : '-'}
+                        </div>
+                      </div>
+                      <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
+                        {group.stage.manpowerPercent == null ? '-' : `${group.stage.manpowerPercent}%`}
+                      </Tag>
+                    </div>
                   </th>
                 )
               })}

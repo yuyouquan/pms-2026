@@ -478,6 +478,21 @@ assert.match(technicalModuleSource, /className=[^\n]*technical-plan-vertical-tab
 assert.match(technicalModuleSource, /technical-plan-add-task[\s\S]{0,320}handleAddTopLevelTask/, 'top-level task creation follows the whole-machine table footer interaction')
 assert.match(technicalModuleSource, /icon=\{<CopyOutlined\s*\/>\}[^>]*aria-label="计划克隆"[^>]*\/>/, 'technical plan clone uses the same icon-only draft action as whole-machine plans')
 assert.match(technicalModuleSource, /icon=\{<SaveOutlined\s*\/>\}[^>]*aria-label="发布"[^>]*\/>/, 'technical plan publish uses the same icon-only draft action as whole-machine plans')
+assert.doesNotMatch(
+  technicalModuleSource,
+  /<Table[\s\S]{0,260}technical-horizontal-plan-table/,
+  'technical horizontal plans no longer use the divergent Ant Design table renderer',
+)
+assert.match(
+  technicalModuleSource,
+  /<table[^>]*className="pms-level1-horizontal-table technical-horizontal-plan-table"/,
+  'technical horizontal plans reuse the whole-machine two-row table visual contract',
+)
+assert.match(technicalModuleSource, /TECHNICAL_STAGE_COLORS/, 'technical horizontal stages use the same ordered color accents as whole-machine plans')
+assert.match(technicalModuleSource, /<EditOutlined[^>]*aria-label="修订中"/, 'technical revisions use the same compact edit icon as whole-machine plans')
+assert.equal((technicalModuleSource.match(/<ClickToEditDate\s+align="center"/g) || []).length >= 2, true, 'technical planned and actual completion dates use the same centered click-to-edit treatment')
+assert.match(technicalModuleSource, /technical-horizontal-current/, 'the latest technical version uses the same highlighted-row treatment')
+assert.match(technicalModuleSource, /technical-horizontal-actual/, 'the technical actual row uses the same highlighted-row treatment')
 const globalStylesSource = readSource(root, 'src/styles/globals.css')
 assert.match(globalStylesSource, /\.pms-table \.ant-table-thead\s*>\s*tr\s*>\s*th\.ant-table-cell-fix-(?:start|end)[\s\S]{0,900}position:\s*sticky\s*!important/s, 'fixed technical-plan headers remain aligned with fixed body cells')
 for (const label of ['预估工期', '实际工期', '是否延期']) {
@@ -517,7 +532,20 @@ const horizontalRows = technicalWorkspace.buildTechnicalHorizontalRows([{
 }], 'v1')
 assert.equal(horizontalRows[0].rowType, 'version', 'horizontal plan includes a version row')
 assert.equal(horizontalRows.at(-1).rowType, 'actual', 'horizontal plan includes a final actual row')
-assert.equal(typeof horizontalRows[0].cycleDays, 'number', 'horizontal version rows include development cycle')
+assert.equal(horizontalRows[0].cycleDays, null, 'single-level subproject plans do not invent a governed stage development cycle')
+const governedCycleRows = technicalWorkspace.buildTechnicalHorizontalRows([{
+  ...publishedVersion,
+  id: 'governed-cycle',
+  tasks: [
+    { id: 'stage-1', order: 1, taskName: '阶段1' },
+    { id: 'stage-1-a', parentId: 'stage-1', order: 1, taskName: '节点1', planEndDate: '2026-01-01' },
+    { id: 'stage-1-b', parentId: 'stage-1', order: 2, taskName: '节点2', planEndDate: '2026-01-11' },
+    { id: 'stage-2', order: 2, taskName: '阶段2' },
+    { id: 'stage-2-a', parentId: 'stage-2', order: 1, taskName: '节点3', planEndDate: '2026-01-20' },
+    { id: 'stage-2-b', parentId: 'stage-2', order: 2, taskName: '节点4', planEndDate: '2026-02-01' },
+  ],
+}], 'governed-cycle')
+assert.equal(governedCycleRows[0].cycleDays, 30, 'technical horizontal development cycle sums the governed stage estimated durations')
 assert.throws(
   () => technicalWorkspace.parseTechnicalPlanImportRows([{ ID: 'same', '任务名称': 'A' }, { ID: 'same', '任务名称': 'B' }]),
   /duplicate-id/,
