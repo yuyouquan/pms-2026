@@ -126,6 +126,7 @@ import {
 import {
   buildTosTypeRows,
   createTosTypePlanEntry,
+  deriveDetachedTosTypes,
   ensureTosTypePlanDataForRows,
   getMainTosType,
   getTosTypePlanSourceType,
@@ -137,6 +138,7 @@ import {
   isFollowTosType,
   isTosTypeLevel1ReadOnly,
   normalizeTosTypeRows,
+  planDetachedTosTypeTransitions,
   setTosTypeCurrentVersion,
   setTosTypeVersions,
   type TosPlanType,
@@ -1357,11 +1359,15 @@ export default function ProjectSpaceContainer() {
       return
     }
     if (!selectedProject || selectedProject.type !== PROJECT_TYPE_TOS_VERSION) return
-    const normalizedRows = normalizeTosTypeRows(tosTypeDraftRows)
+    const previousTosTypeRows = getCurrentTosTypeRows()
+    const previousMainTosType = getMainTosType(previousTosTypeRows)
+    const normalizedRows = normalizeTosTypeRows(tosTypeDraftRows, previousMainTosType)
     if (normalizedRows.length === 0) {
       void containerMessageApi.error('请至少配置一个类型')
       return
     }
+
+    const detachedTosTypes = deriveDetachedTosTypes(previousTosTypeRows, normalizedRows)
 
     const nextTypes = normalizedRows.map(row => row.type)
     const mainType = getMainTosType(normalizedRows) as TosPlanType
@@ -1371,6 +1377,43 @@ export default function ProjectSpaceContainer() {
       versionType: mainType,
     } as typeof selectedProject
 
+    const detachedTosTypeTransitions = planDetachedTosTypeTransitions(previousTosTypeRows, normalizedRows)
+    const detachedScopeForks = detachedTosTypeTransitions.flatMap(transition => {
+      const fork = resolveLevel3DetachedScopeFork(
+        {
+          projectId: selectedProject.id,
+          kind: 'tosType',
+          value: transition.type,
+          mainValue: previousMainTosType,
+          followsMain: transition.previousRow.followsMain,
+        },
+        {
+          projectId: selectedProject.id,
+          kind: 'tosType',
+          value: transition.type,
+          mainValue: mainType,
+          followsMain: transition.nextRow.followsMain,
+        },
+      )
+      return fork ? [fork] : []
+    })
+    const detachedScopeForkKeys = new Set(
+      detachedScopeForks.map(fork => `${fork.sourceScopeKey}=>${fork.targetScopeKey}`),
+    )
+    if (
+      detachedTosTypeTransitions.length !== detachedTosTypes.length
+      || detachedScopeForks.length !== detachedTosTypeTransitions.length
+      || detachedScopeForkKeys.size !== detachedScopeForks.length
+    ) {
+      void containerMessageApi.error('类型配置保存失败，三级计划脱离范围无效')
+      return
+    }
+
+    if (!updateProject(selectedProject.id, updatedProject, currentLoginUser)) {
+      void containerMessageApi.error('类型配置保存失败')
+      return
+    }
+
     setTosTypeConfigForProject(selectedProject.id, normalizedRows)
     setTosTypePlanDataByProjectId(previous => ensureTosTypePlanDataForRows(
       previous,
@@ -1378,10 +1421,7 @@ export default function ProjectSpaceContainer() {
       normalizedRows,
       tosTypeSeedEntry,
     ))
-    if (!updateProject(selectedProject.id, updatedProject, currentLoginUser)) {
-      void containerMessageApi.error('类型配置保存失败')
-      return
-    }
+    detachedScopeForks.forEach(fork => forkFollowScope(fork.sourceScopeKey, fork.targetScopeKey))
     if (!nextTypes.includes(selectedTosTypeTab as TosPlanType)) setSelectedTosTypeTab(mainType || nextTypes[0])
     setShowTosTypeEditor(false)
     void containerMessageApi.success('类型配置已保存')
@@ -3709,8 +3749,10 @@ export default function ProjectSpaceContainer() {
         {!usesSharedPlanWorkspace && planWorkspaceNotices}
         {projectPlanLevel === 'level3' && level3ScopeResolution && selectedProject && (
           <Level3PlanModule
+            key={`${level3ScopeResolution.scopeKey}:${level3ScopeResolution.selectedScopeKey}:${level3ScopeResolution.readOnly}`}
             projectName={selectedProject.name}
             scopeKey={level3ScopeResolution.scopeKey}
+            selectedScopeKey={level3ScopeResolution.selectedScopeKey}
             scopeLabel={level3ScopeResolution.selectedValue}
             readOnly={level3ScopeResolution.readOnly}
             currentUser={currentLoginUser}

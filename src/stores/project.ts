@@ -4,6 +4,7 @@ import { initialProjects } from '@/data/projects'
 import { EXTERNAL_PROJECT_POOL } from '@/data/externalProjectPool'
 import {
   PROJECT_CATEGORY_MACHINE,
+  PROJECT_CATEGORY_TECH,
   PROJECT_TYPE_TOS_VERSION,
   isMachineProjectType,
   resolveProjectClassification,
@@ -65,7 +66,7 @@ export const kanbanColumns = [
   { title: '发布阶段', key: 'released', color: '#722ed1' },
 ]
 
-type Project = Omit<typeof initialProjects[number], 'type'> & {
+type Project = ProjectItem & {
   type: PersistedProjectTypeName
   secondaryCategory?: string
   versionTypes?: string[]
@@ -80,6 +81,8 @@ type ProjectPatch = Partial<Omit<ProjectItem, 'type' | 'secondaryCategory'>> & {
 type ProjectUpdate = ProjectPatch | ((project: Project) => Project)
 export type ProjectListViewMode = 'list' | 'card' | 'calendar'
 type PersistedProjectState = { projects: Project[]; projectListView: ProjectListViewMode }
+
+export const PROJECT_STORE_VERSION = 7
 
 export function synchronizeTechnicalRoleMembers(
   existing: Record<string, string[]>,
@@ -161,7 +164,7 @@ function migrateMachineTosHistory(project: Project): Project {
     migrated.productType = '老品'
   }
   MACHINE_TOS_VERSION_KEYS.forEach(key => {
-    if (key in migrated) migrated[key] = migrateMachineThreePartReference(migrated[key])
+    if (key in migrated) migrated[key] = migrateMachineThreePartReference(migrated[key]) as string
   })
   if (project.fieldValues && typeof project.fieldValues === 'object') {
     const fieldValues = { ...project.fieldValues }
@@ -351,9 +354,55 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-export function migrateProjectState(persistedState: unknown, _version: number): PersistedProjectState {
+const cloneProjectSeedValue = <T,>(value: T): T => {
+  if (Array.isArray(value)) return value.map(cloneProjectSeedValue) as T
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, nested]) => [key, cloneProjectSeedValue(nested)]),
+    ) as T
+  }
+  return value
+}
+
+const cloneProjectSeed = (project: Project): Project => cloneProjectSeedValue(project)
+
+const isMissingSeedValue = (value: unknown) => (
+  value === undefined
+  || value === null
+  || (typeof value === 'string' && !value.trim())
+  || (Array.isArray(value) && value.length === 0)
+)
+
+const fillMissingSeedProjectFields = (persisted: Project, seed: Project): Project => {
+  const next = { ...persisted }
+  const supportsTechnicalFieldValues = persisted.type === PROJECT_CATEGORY_TECH
+  const fieldValues = supportsTechnicalFieldValues
+    ? cloneProjectSeedValue(persisted.fieldValues || {})
+    : undefined
+  Object.entries(seed).forEach(([key, value]) => {
+    const rootValue = next[key]
+    const nestedValue = fieldValues?.[key]
+    const rootMissing = isMissingSeedValue(rootValue)
+    const nestedMissing = isMissingSeedValue(nestedValue)
+    if (supportsTechnicalFieldValues && rootMissing && !nestedMissing) {
+      next[key] = cloneProjectSeedValue(nestedValue)
+    } else if (supportsTechnicalFieldValues && !rootMissing && nestedMissing) {
+      fieldValues![key] = cloneProjectSeedValue(rootValue)
+    }
+    if (isMissingSeedValue(next[key]) && (nestedMissing || !supportsTechnicalFieldValues)) {
+      next[key] = cloneProjectSeedValue(value)
+    }
+    if (supportsTechnicalFieldValues && isMissingSeedValue(fieldValues![key]) && !isMissingSeedValue(next[key])) {
+      fieldValues![key] = cloneProjectSeedValue(next[key])
+    }
+  })
+  if (fieldValues) next.fieldValues = fieldValues
+  return next
+}
+
+export function migrateProjectState(persistedState: unknown, version: number): PersistedProjectState {
   if (!isRecord(persistedState) || !Array.isArray(persistedState.projects)) {
-    return { projects: initialProjectState, projectListView: 'list' }
+    return { projects: initialProjectState.map(cloneProjectSeed), projectListView: 'list' }
   }
 
   const projectListView: ProjectListViewMode = persistedState.projectListView === 'card'
@@ -385,13 +434,20 @@ export function migrateProjectState(persistedState: unknown, _version: number): 
   })
 
   if (persistedState.projects.length > 0 && projects.length === 0) {
-    return { projects: initialProjectState, projectListView }
+    return { projects: initialProjectState.map(cloneProjectSeed), projectListView }
   }
-  const migratedProjects = _version < 6
-    ? [
-        ...projects,
-        ...initialProjectState.filter(seed => !seenIds.has(seed.id)),
-      ]
+  const migratedProjects = version < PROJECT_STORE_VERSION
+    ? (() => {
+        const seedById = new Map(initialProjectState.map(seed => [seed.id, seed]))
+        const merged = projects.map(project => {
+          const seed = seedById.get(project.id)
+          return seed ? migrateProjectHistory(fillMissingSeedProjectFields(project, seed)) : project
+        })
+        return [
+          ...merged,
+          ...initialProjectState.filter(seed => !seenIds.has(seed.id)).map(cloneProjectSeed),
+        ]
+      })()
     : projects
   return { projects: migratedProjects, projectListView }
 }
@@ -695,13 +751,13 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
   }),
   {
     name: PROJECT_STORAGE_KEY,
-    version: 6,
+    version: PROJECT_STORE_VERSION,
     storage: createJSONStorage(() => safeProjectStorage),
     migrate: migrateProjectState,
     partialize: partializeProjectState,
     merge: (persistedState, currentState) => ({
       ...currentState,
-      ...migrateProjectState(persistedState, 5),
+      ...migrateProjectState(persistedState, PROJECT_STORE_VERSION),
     }),
     onRehydrateStorage: () => (state) => {
       if (state) usePermissionStore.getState().ensureProjectPermissions(state.projects)

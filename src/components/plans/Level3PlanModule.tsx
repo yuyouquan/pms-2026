@@ -83,10 +83,16 @@ import {
 } from '@/lib/filterConditions'
 import {
   applyLevel3Rollups,
+  canInlineEditLevel3ChildField,
   canInlineEditLevel3ActualDate,
   filterLevel3ActivitiesWithParents,
   getLevel3ActivityPermissions,
   getLevel3NumberIndent,
+  getLevel3RemarkDisplay,
+  mergeLevel3ActualDateOverrides,
+  mergeLevel3WorkflowOverrides,
+  mergeLevel3Histories,
+  normalizeLevel3Remark,
   shouldShowLevel3CreateButton,
   validateLevel3ChildDates,
 } from '@/lib/level3PlanRules'
@@ -95,6 +101,8 @@ import {
   LEVEL3_ACTIVITY_RISKS,
   LEVEL3_ACTIVITY_STATUSES,
   type Level3Activity,
+  type Level3ActualDateOverrideMap,
+  type Level3WorkflowOverrideMap,
   type Level3ChangeLog,
   type Level3ActivityFormValue,
   type Level3ActivityViewRow,
@@ -108,6 +116,8 @@ const { Text } = Typography
 const EMPTY_ACTIVITIES: Level3Activity[] = []
 const EMPTY_HISTORY: Level3ChangeLog[] = []
 const EMPTY_STRINGS: string[] = []
+const EMPTY_OVERRIDES: Level3ActualDateOverrideMap = {}
+const EMPTY_WORKFLOW_OVERRIDES: Level3WorkflowOverrideMap = {}
 
 const LEVEL3_COLUMN_DEFINITIONS: Array<SortableColumnDefinition<Level3ColumnKey> & { width: number }> = [
   { key: 'number', title: '序号', defaultVisible: true, hideable: false, fixed: 'left', width: 92 },
@@ -123,6 +133,7 @@ const LEVEL3_COLUMN_DEFINITIONS: Array<SortableColumnDefinition<Level3ColumnKey>
   { key: 'actualDays', title: '实际工期', defaultVisible: true, width: 100 },
   { key: 'status', title: '状态', defaultVisible: true, width: 100 },
   { key: 'risk', title: '任务风险', defaultVisible: true, width: 100 },
+  { key: 'remark', title: '备注', defaultVisible: true, width: 220 },
   { key: 'creator', title: '创建者', defaultVisible: true, width: 110 },
 ]
 
@@ -140,6 +151,7 @@ const FILTER_FIELDS: FilterFieldDefinition[] = [
   { key: 'actualDays', label: '实际工期', kind: 'text' },
   { key: 'status', label: '状态', kind: 'enum', options: LEVEL3_ACTIVITY_STATUSES.map(value => ({ label: value, value })) },
   { key: 'risk', label: '任务风险', kind: 'enum', options: LEVEL3_ACTIVITY_RISKS.map(value => ({ label: value, value })) },
+  { key: 'remark', label: '备注', kind: 'text' },
   { key: 'creator', label: '创建者', kind: 'text' },
 ]
 const FILTER_FIELD_OPTIONS = FILTER_FIELDS.map(field => ({ label: field.label, value: field.key }))
@@ -166,6 +178,7 @@ type ActivityModalMode =
 interface Level3PlanModuleProps {
   projectName: string
   scopeKey: string
+  selectedScopeKey: string
   scopeLabel: string
   readOnly: boolean
   currentUser: string
@@ -238,6 +251,7 @@ const toDateString = (value: Dayjs | string | null | undefined) => {
 export default function Level3PlanModule({
   projectName,
   scopeKey,
+  selectedScopeKey,
   scopeLabel,
   readOnly,
   currentUser,
@@ -247,12 +261,17 @@ export default function Level3PlanModule({
   userDepartments,
   milestones,
 }: Level3PlanModuleProps) {
-  const activities = useLevel3PlanStore(state => state.activitiesByScope[scopeKey] || EMPTY_ACTIVITIES)
-  const history = useLevel3PlanStore(state => state.historyByScope[scopeKey] || EMPTY_HISTORY)
+  const sourceActivities = useLevel3PlanStore(state => state.activitiesByScope[scopeKey] || EMPTY_ACTIVITIES)
+  const sourceHistory = useLevel3PlanStore(state => state.historyByScope[scopeKey] || EMPTY_HISTORY)
+  const actualOverrides = useLevel3PlanStore(state => state.actualOverridesByScope[selectedScopeKey] || EMPTY_OVERRIDES)
+  const workflowOverrides = useLevel3PlanStore(state => state.workflowOverridesByScope[selectedScopeKey] || EMPTY_WORKFLOW_OVERRIDES)
+  const selectedScopeHistory = useLevel3PlanStore(state => state.historyByScope[selectedScopeKey] || EMPTY_HISTORY)
   const collapsedIds = useLevel3PlanStore(state => state.collapsedIdsByScope[scopeKey] || EMPTY_STRINGS)
   const storedColumnSettings = useLevel3PlanStore(state => state.columnSettingsByScope[scopeKey])
   const createActivity = useLevel3PlanStore(state => state.createActivity)
   const updateActivity = useLevel3PlanStore(state => state.updateActivity)
+  const updateFollowActualDates = useLevel3PlanStore(state => state.updateFollowActualDates)
+  const updateFollowWorkflowFields = useLevel3PlanStore(state => state.updateFollowWorkflowFields)
   const moveActivity = useLevel3PlanStore(state => state.moveActivity)
   const deleteActivity = useLevel3PlanStore(state => state.deleteActivity)
   const setCollapsedIds = useLevel3PlanStore(state => state.setCollapsedIds)
@@ -276,9 +295,20 @@ export default function Level3PlanModule({
     administratorUsers,
     spmUsers,
   }), [administratorUsers, currentUser, spmUsers])
+  const effectiveActivities = useMemo(
+    () => mergeLevel3WorkflowOverrides(
+      mergeLevel3ActualDateOverrides(sourceActivities, actualOverrides),
+      workflowOverrides,
+    ),
+    [actualOverrides, sourceActivities, workflowOverrides],
+  )
+  const history = useMemo(
+    () => readOnly ? mergeLevel3Histories(sourceHistory, selectedScopeHistory) : sourceHistory,
+    [readOnly, selectedScopeHistory, sourceHistory],
+  )
   const canCreateParent = !readOnly
-    && getLevel3ActivityPermissions(undefined, activities, permissionContext).canCreateParent
-  const rows = useMemo(() => applyLevel3Rollups(activities), [activities])
+    && getLevel3ActivityPermissions(undefined, effectiveActivities, permissionContext).canCreateParent
+  const rows = useMemo(() => applyLevel3Rollups(effectiveActivities), [effectiveActivities])
   const activeFilters = useMemo(
     () => normalizeFilterConditions(filters, FILTER_FIELDS),
     [filters],
@@ -301,7 +331,7 @@ export default function Level3PlanModule({
   )
   const selectedMilestone = milestones.find(item => item.id === selectedMilestoneId)
   const editingActivity = modalMode?.kind === 'edit'
-    ? activities.find(activity => activity.id === modalMode.activityId)
+    ? effectiveActivities.find(activity => activity.id === modalMode.activityId)
     : undefined
   const modalIsChild = modalMode?.kind === 'create-child' || Boolean(editingActivity?.parentId)
 
@@ -309,18 +339,14 @@ export default function Level3PlanModule({
     if (!modalMode) return
     form.resetFields()
     const values = modalMode.kind !== 'edit' || !editingActivity
-      ? { status: '待启动', risk: '无', responsibleDepartment: '' }
+      ? { responsibleDepartment: '' }
       : {
           activityName: editingActivity.activityName,
           responsible: editingActivity.responsible,
           responsibleDepartment: editingActivity.responsibleDepartment,
           planStartDate: editingActivity.planStartDate ? dayjs(editingActivity.planStartDate) : null,
           planEndDate: editingActivity.planEndDate ? dayjs(editingActivity.planEndDate) : null,
-          actualStartDate: editingActivity.actualStartDate ? dayjs(editingActivity.actualStartDate) : null,
-          actualEndDate: editingActivity.actualEndDate ? dayjs(editingActivity.actualEndDate) : null,
           milestoneId: editingActivity.milestoneId || undefined,
-          status: editingActivity.status,
-          risk: editingActivity.risk,
           remark: editingActivity.remark,
         }
     const timer = window.setTimeout(() => form.setFieldsValue(values), 0)
@@ -345,7 +371,7 @@ export default function Level3PlanModule({
 
   const openEdit = (activity: Level3Activity) => {
     if (readOnly) return
-    const permissions = getLevel3ActivityPermissions(activity, activities, permissionContext)
+    const permissions = getLevel3ActivityPermissions(activity, effectiveActivities, permissionContext)
     if (!permissions.canEdit) return
     setModalMode({ kind: 'edit', activityId: activity.id })
   }
@@ -358,19 +384,16 @@ export default function Level3PlanModule({
   const saveActivity = async (rawValues: Level3ActivityFormValue & {
     planStartDate?: Dayjs
     planEndDate?: Dayjs
-    actualStartDate?: Dayjs
-    actualEndDate?: Dayjs
   }) => {
     if (!modalMode || readOnly) return
     const milestone = milestones.find(item => item.id === rawValues.milestoneId)
     const values: Level3ActivityFormValue = {
       ...rawValues,
       activityName: rawValues.activityName?.trim(),
+      remark: normalizeLevel3Remark(rawValues.remark),
       responsibleDepartment: resolveDepartment(rawValues.responsible || ''),
       planStartDate: toDateString(rawValues.planStartDate),
       planEndDate: toDateString(rawValues.planEndDate),
-      actualStartDate: toDateString(rawValues.actualStartDate),
-      actualEndDate: toDateString(rawValues.actualEndDate),
     }
     if (modalIsChild) {
       const validation = validateLevel3ChildDates(values, milestone)
@@ -384,22 +407,18 @@ export default function Level3PlanModule({
       }
     }
     if (modalMode.kind === 'edit') {
-      const activity = activities.find(item => item.id === modalMode.activityId)
+      const activity = effectiveActivities.find(item => item.id === modalMode.activityId)
       if (!activity) return
       const patch: Partial<Level3Activity> = {
         activityName: values.activityName || '',
         responsible: values.responsible || '',
         responsibleDepartment: values.responsibleDepartment || '待补充',
-        status: values.status || '待启动',
-        risk: values.risk || '无',
         remark: values.remark || '',
       }
       if (activity.parentId) {
         Object.assign(patch, {
           planStartDate: values.planStartDate || '',
           planEndDate: values.planEndDate || '',
-          actualStartDate: values.actualStartDate || '',
-          actualEndDate: values.actualEndDate || '',
           milestoneId: milestone?.id || '',
           milestoneName: milestone?.name || '',
           milestonePlanEndDate: milestone?.planEndDate || '',
@@ -422,13 +441,13 @@ export default function Level3PlanModule({
       responsibleDepartment: values.responsibleDepartment || '待补充',
       planStartDate: parentId ? values.planStartDate || '' : '',
       planEndDate: parentId ? values.planEndDate || '' : '',
-      actualStartDate: parentId ? values.actualStartDate || '' : '',
-      actualEndDate: parentId ? values.actualEndDate || '' : '',
+      actualStartDate: '',
+      actualEndDate: '',
       milestoneId: parentId ? milestone?.id || '' : '',
       milestoneName: parentId ? milestone?.name || '' : '',
       milestonePlanEndDate: parentId ? milestone?.planEndDate || '' : '',
-      status: values.status || '待启动',
-      risk: values.risk || '无',
+      status: '待启动',
+      risk: '无',
       remark: values.remark || '',
       creator: currentUser,
       createdAt: now,
@@ -477,18 +496,18 @@ export default function Level3PlanModule({
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (readOnly || !over || active.id === over.id) return
-    const activeActivity = activities.find(activity => activity.id === String(active.id))
-    const overActivity = activities.find(activity => activity.id === String(over.id))
+    const activeActivity = effectiveActivities.find(activity => activity.id === String(active.id))
+    const overActivity = effectiveActivities.find(activity => activity.id === String(over.id))
     if (!activeActivity || !overActivity) return
-    const activePermissions = getLevel3ActivityPermissions(activeActivity, activities, permissionContext)
+    const activePermissions = getLevel3ActivityPermissions(activeActivity, effectiveActivities, permissionContext)
     if (!activePermissions.canDrag) {
       void messageApi.warning('无权限拖动该活动')
       return
     }
     const elevated = administratorUsers.includes(currentUser) || spmUsers.includes(currentUser)
     if (activeActivity.parentId && overActivity.parentId && activeActivity.parentId !== overActivity.parentId && !elevated) {
-      const sourceParent = activities.find(activity => activity.id === activeActivity.parentId)
-      const targetParent = activities.find(activity => activity.id === overActivity.parentId)
+      const sourceParent = effectiveActivities.find(activity => activity.id === activeActivity.parentId)
+      const targetParent = effectiveActivities.find(activity => activity.id === overActivity.parentId)
       if (sourceParent?.responsible !== currentUser || targetParent?.responsible !== currentUser) {
         void messageApi.warning('跨组拖动需要同时管理来源和目标一级活动')
         return
@@ -504,11 +523,11 @@ export default function Level3PlanModule({
 
   const dragPermissions = useMemo(() => Object.fromEntries(rows.map(row => [
     row.id,
-    !readOnly && getLevel3ActivityPermissions(row, activities, permissionContext).canDrag,
-  ])), [activities, permissionContext, readOnly, rows])
+    !readOnly && getLevel3ActivityPermissions(row, effectiveActivities, permissionContext).canDrag,
+  ])), [effectiveActivities, permissionContext, readOnly, rows])
 
   const renderActivityName = (row: Level3ActivityViewRow): ReactNode => {
-    const permissions = getLevel3ActivityPermissions(row, activities, permissionContext)
+    const permissions = getLevel3ActivityPermissions(row, effectiveActivities, permissionContext)
     return (
       <div className="pms-level3-activity-cell" style={{ paddingLeft: row.depth ? 18 : 0 }}>
         <span className="pms-level3-activity-title">{row.activityName}</span>
@@ -571,8 +590,29 @@ export default function Level3PlanModule({
     field: 'actualStartDate' | 'actualEndDate',
     value: string,
   ) => {
-    if (!canInlineEditLevel3ActualDate(row, activities, permissionContext, readOnly)) return
-    updateActivity(scopeKey, row.id, { [field]: value }, currentUser)
+    if (!canInlineEditLevel3ActualDate(row, effectiveActivities, permissionContext, false)) return
+    if (readOnly) {
+      if (updateFollowActualDates(scopeKey, selectedScopeKey, row.id, { [field]: value }, currentUser)) {
+        void messageApi.success('已保存')
+      }
+      return
+    }
+    if (updateActivity(scopeKey, row.id, { [field]: value }, currentUser)) {
+      void messageApi.success('已保存')
+    }
+  }
+
+  const handleInlineWorkflowChange = (
+    row: Level3ActivityViewRow,
+    field: 'status' | 'risk',
+    value: Level3Activity['status'] | Level3Activity['risk'],
+  ) => {
+    if (!canInlineEditLevel3ChildField(row, effectiveActivities, permissionContext)) return
+    if (readOnly) {
+      if (updateFollowWorkflowFields(scopeKey, selectedScopeKey, row.id, { [field]: value }, currentUser)) void messageApi.success('已保存')
+      return
+    }
+    if (updateActivity(scopeKey, row.id, { [field]: value }, currentUser)) void messageApi.success('已保存')
   }
 
   const columns: ColumnsType<Level3ActivityViewRow> = visibleDefinitions.map(definition => {
@@ -594,7 +634,7 @@ export default function Level3PlanModule({
             style={{ paddingLeft: getLevel3NumberIndent(row.depth) }}
           >
             {dragPermissions[row.id] && <HolderOutlined style={{ color: '#9ca3af' }} />}
-            {!row.parentId && activities.some(activity => activity.parentId === row.id) && (
+            {!row.parentId && effectiveActivities.some(activity => activity.parentId === row.id) && (
               <Button
                 type="text"
                 size="small"
@@ -624,7 +664,7 @@ export default function Level3PlanModule({
         ...base,
         ellipsis: false,
         render: (value: string, row: Level3ActivityViewRow) => {
-          if (!canInlineEditLevel3ActualDate(row, activities, permissionContext, readOnly)) return formatCell(value)
+          if (!canInlineEditLevel3ActualDate(row, effectiveActivities, permissionContext, false)) return formatCell(value)
           const isStart = actualField === 'actualStartDate'
           return (
             <div
@@ -638,15 +678,37 @@ export default function Level3PlanModule({
                 disabledDate={current => isStart
                   ? Boolean(row.actualEndDate && current.isAfter(dayjs(row.actualEndDate), 'day'))
                   : Boolean(row.actualStartDate && current.isBefore(dayjs(row.actualStartDate), 'day'))}
-                onSaved={() => void messageApi.success('已保存')}
+                onSaved={() => undefined}
               />
             </div>
           )
         },
       }
     }
-    if (definition.key === 'status') return { ...base, render: (value: string) => <Tag color={STATUS_COLORS[value]}>{value}</Tag> }
-    if (definition.key === 'risk') return { ...base, render: (value: string) => <Tag color={RISK_COLORS[value]}>{value}</Tag> }
+    if (definition.key === 'status' || definition.key === 'risk') {
+      const field = definition.key
+      const options = field === 'status' ? LEVEL3_ACTIVITY_STATUSES : LEVEL3_ACTIVITY_RISKS
+      const colors = field === 'status' ? STATUS_COLORS : RISK_COLORS
+      return {
+        ...base,
+        render: (value: string, row: Level3ActivityViewRow) => canInlineEditLevel3ChildField(row, effectiveActivities, permissionContext)
+          ? <div onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}><Select size="small" bordered value={value} options={options.map(item => ({ label: item, value: item }))} onChange={nextValue => handleInlineWorkflowChange(row, field, nextValue as Level3Activity['status'] | Level3Activity['risk'])} /></div>
+          : <Tag color={colors[value]}>{value}</Tag>,
+      }
+    }
+    if (definition.key === 'remark') {
+      return {
+        ...base,
+        render: (value: string) => {
+          const { value: remark, empty } = getLevel3RemarkDisplay(value)
+          return empty ? '-' : (
+            <Tooltip title={remark}>
+              <span className="pms-level3-remark-cell" tabIndex={0} aria-label={remark} title={remark}>{remark}</span>
+            </Tooltip>
+          )
+        },
+      }
+    }
     return { ...base, render: (value: string) => formatCell(value) }
   })
 
@@ -807,7 +869,7 @@ export default function Level3PlanModule({
               components={{ body: { row: SortableTableRow } }}
               onRow={row => ({
                 onDoubleClick: () => {
-                  if (!readOnly && getLevel3ActivityPermissions(row, activities, permissionContext).canEdit) openEdit(row)
+                  if (!readOnly && getLevel3ActivityPermissions(row, effectiveActivities, permissionContext).canEdit) openEdit(row)
                 },
               })}
             />
@@ -816,7 +878,7 @@ export default function Level3PlanModule({
       </DragPermissionContext.Provider>
 
       <Modal
-        className="pms-modal"
+        className="pms-modal pms-level3-activity-modal"
         title={modalMode?.kind === 'create-parent' ? '新增活动' : modalMode?.kind === 'create-child' ? '新增二级活动' : '编辑活动'}
         open={modalMode !== null}
         onCancel={closeModal}
@@ -858,29 +920,13 @@ export default function Level3PlanModule({
                   />
                 </Form.Item>
               </div>
-              <div className="pms-level3-form-grid">
-                <Form.Item label="实际开始时间" name="actualStartDate">
-                  <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-                </Form.Item>
-                <Form.Item label="实际完成时间" name="actualEndDate">
-                  <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-                </Form.Item>
-              </div>
               <Form.Item label="关键节点" name="milestoneId" rules={[{ required: true, message: '请选择关键节点' }]}>
                 <Select showSearch optionFilterProp="label" options={milestoneOptions} placeholder="请选择最新已发布一级计划的二级任务" />
               </Form.Item>
             </>
           )}
-          <div className="pms-level3-form-grid">
-            <Form.Item label="状态" name="status" rules={[{ required: true, message: '请选择状态' }]}>
-              <Select options={LEVEL3_ACTIVITY_STATUSES.map(value => ({ label: value, value }))} />
-            </Form.Item>
-            <Form.Item label="任务风险" name="risk" rules={[{ required: true, message: '请选择任务风险' }]}>
-              <Select options={LEVEL3_ACTIVITY_RISKS.map(value => ({ label: value, value }))} />
-            </Form.Item>
-          </div>
           <Form.Item label="备注" name="remark">
-            <Input.TextArea rows={4} maxLength={500} showCount placeholder="请输入备注" />
+            <Input.TextArea autoSize={{ minRows: 1, maxRows: 4 }} maxLength={500} showCount placeholder="请输入备注" />
           </Form.Item>
         </Form>
       </Modal>

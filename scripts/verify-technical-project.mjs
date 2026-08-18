@@ -164,13 +164,15 @@ const migrated = technicalStoreModule.migrateTechnicalProjectState({ subprojects
   { id: '', parentProjectId: 'parent', name: 'Broken', active: true, ipmOrder: 1 },
   { id: 'legacy', parentProjectId: 'parent', name: 'Legacy', ipmOrder: 'bad', config: { coreValue: '人有我有', developmentMode: 'SoC合作', firstTosVersion: '17.2', firstMachineProjectId: '1' } },
 ] }, 1)
-assert.deepEqual(migrated.subprojects.map(item => item.id), ['good', 'legacy'], 'migration trims stable IDs, removes malformed/duplicate records, and keeps valid legacy rows')
-assert.equal(migrated.subprojects[0].configuration.firstTosVersion, '99.9', 'migration preserves historical enum string references')
-assert.equal(migrated.subprojects[0].planInstanceId, 'plan-1', 'migration preserves valid plan references')
-assert.deepEqual(migrated.subprojects[1].configuration, { coreValue: '人有我有', developmentMode: 'SoC合作', firstTosVersion: '17.2', firstMachineProjectId: '1' }, 'migration upgrades the legacy config shape')
+assert.deepEqual(migrated.subprojects.filter(item => ['good', 'legacy'].includes(item.id)).map(item => item.id), ['good', 'legacy'], 'migration trims stable IDs, removes malformed/duplicate records, and keeps valid legacy rows')
+assert.equal(migrated.subprojects.length, 13, 'skipped v1 migration appends every missing current child seed')
+assert.equal(migrated.subprojects.find(item => item.id === 'good')?.configuration.firstTosVersion, '99.9', 'migration preserves historical enum string references')
+assert.equal(migrated.subprojects.find(item => item.id === 'good')?.planInstanceId, 'plan-1', 'migration preserves valid plan references')
+assert.deepEqual(migrated.subprojects.find(item => item.id === 'legacy')?.configuration, { coreValue: '人有我有', developmentMode: 'SoC合作', firstTosVersion: '17.2', firstMachineProjectId: '1' }, 'migration upgrades the legacy config shape')
 localStorage.setItem(technicalStoreModule.TECHNICAL_PROJECT_STORAGE_KEY, JSON.stringify({ state: { subprojects: [{ id: 'rehydrated', parentProjectId: 'tech-r', name: 'Recovered', active: true, ipmOrder: null, configuration: { coreValue: 'invalid', developmentMode: '自研', firstTosVersion: 16, firstMachineProjectId: null } }] }, version: 1 }))
 await liveStore.persist.rehydrate()
-assert.deepEqual(liveStore.getState().subprojects, [{ id: 'rehydrated', parentProjectId: 'tech-r', name: 'Recovered', active: true, ipmOrder: 1, configuration: { coreValue: '', developmentMode: '自研', firstTosVersion: '', firstMachineProjectId: '' } }], 'persist rehydrate sanitizes malformed fields without throwing or replacing the stable ID')
+assert.equal(liveStore.getState().subprojects.length, 12, 'persist rehydrate applies skipped-version seed expansion')
+assert.deepEqual(liveStore.getState().subprojects.find(item => item.id === 'rehydrated'), { id: 'rehydrated', parentProjectId: 'tech-r', name: 'Recovered', active: true, ipmOrder: 1, configuration: { coreValue: '', developmentMode: '自研', firstTosVersion: '', firstMachineProjectId: '' } }, 'persist rehydrate sanitizes malformed fields without replacing the stable ID')
 const modal = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 assert.match(modal, /TechnicalProjectCreateFields/, 'project modal renders focused technical fields')
 assert.doesNotMatch(modal, /projectType === ['"]技术项目['"][\s\S]{0,200}name="responsiblePersons"/, 'technical project must not render the generic owner input')
@@ -483,4 +485,74 @@ assert.equal(technicalPlanStore.getTechnicalPlanKey({ kind: 'tdt', parentProject
 const latestTdt = technicalPlanStore.selectLatestPublishedTechnicalPlanVersion(technicalPlanStore.INITIAL_TECHNICAL_PLANS, '9')
 assert.equal(latestTdt?.status, '已发布', 'selector exposes a representative real published TDT plan')
 assert.notEqual(technicalPlanStore.selectTechnicalProjectStage(technicalPlanStore.INITIAL_TECHNICAL_PLANS, '9', '2026-07-15'), '-', 'real keyed plan state drives a visible stage')
+
+const projectData = loadTypeScriptModule(root, 'src/data/projects.ts')
+assert.match(readSource(root, 'src/data/projects.ts'), /export const initialProjects: ProjectSeed\[\]/, 'project seed collection keeps the project domain type instead of widening to an anonymous union')
+const technicalSeeds = projectData.initialProjects.filter(project => project.type === '技术项目')
+assert.equal(technicalSeeds.length, 8, 'technical mock roots contain the required eight TDT projects')
+assert.equal(new Set(technicalSeeds.map(project => project.id)).size, 8, 'technical root IDs are unique')
+const expectedTechnicalFields = {
+  '4': ['芯片平台前瞻', '基础架构TMG', '芯片适配', '孙七', '李四'],
+  '9': ['AIOS', '系统应用', '端侧AI引擎', '李四', '张三'],
+  '20': ['基础架构', '基础架构TMG', '系统框架', '李四', '赵六'],
+  '21': ['计算影像', '系统应用', '影像算法', '王五', '孙七'],
+}
+for (const [id, expected] of Object.entries(expectedTechnicalFields)) {
+  const project = technicalSeeds.find(item => item.id === id)
+  assert.deepEqual(
+    [project?.technicalTrack, project?.tmg, project?.subdomain, project?.technicalLead, project?.technicalProjectManager],
+    expected,
+    `existing technical root ${id} has its configured technical fields`,
+  )
+}
+for (const id of ['mock-tech-aios-v3', 'mock-tech-perf-power', 'mock-tech-system-experience', 'mock-tech-6g-prestudy']) {
+  const project = technicalSeeds.find(item => item.id === id)
+  assert.ok(project && ['status', 'progress', 'leader', 'spm', 'planStartDate', 'planEndDate', 'productLine', 'domain', 'tosVersions', 'projectDescription', 'teamMembers', 'technicalTrack', 'tmg', 'subdomain', 'technicalLead', 'technicalProjectManager', 'testRepresentative', 'qualityRepresentative', 'productRepresentative', 'standardizationRepresentative'].every(key => String(project[key] ?? '').trim()), `${id} is a complete technical root seed with all fixed technical team fields`)
+}
+const seededChildren = technicalStoreModule.INITIAL_TECHNICAL_SUBPROJECTS
+assert.equal(seededChildren.filter(item => item.active).length, 10, 'ten active technical child seeds are configured')
+assert.equal(seededChildren.filter(item => !item.active).length, 1, 'one inactive historical technical child is retained')
+assert.equal(new Set(seededChildren.map(item => item.id)).size, 11, 'technical child IDs are unique')
+assert.ok(seededChildren.filter(item => item.active).every(item => item.configuration.coreValue && item.configuration.developmentMode && item.configuration.firstTosVersion && item.configuration.firstMachineProjectId), 'every active technical child has complete allowed configuration')
+const migratedV2TechnicalChildren = technicalStoreModule.migrateTechnicalProjectState({ subprojects: [{
+  ...seededChildren[0], name: '自定义子项目', configuration: { ...seededChildren[0].configuration, coreValue: '人无我有' },
+}] }, 2)
+assert.equal(migratedV2TechnicalChildren.subprojects.length, 11, 'v2 technical child migration appends missing seed children')
+assert.deepEqual(migratedV2TechnicalChildren.subprojects.find(item => item.id === 'IPM-AI-001')?.configuration.coreValue, '人无我有', 'v2 technical child migration preserves same-ID custom configuration')
+assert.equal(technicalStoreModule.migrateTechnicalProjectState({ subprojects: [{ ...seededChildren[0], name: 'v1 preserved' }] }, 1).subprojects.length, 11, 'skipped v1 technical child migration appends missing seeds')
+assert.equal(technicalStoreModule.migrateTechnicalProjectState({ subprojects: [{ ...seededChildren[0], name: 'current only' }] }, 3).subprojects.length, 1, 'current technical child migration is idempotent')
+const projectStoreModule = loadTypeScriptModule(root, 'src/stores/project.ts')
+const migratedV6Projects = projectStoreModule.migrateProjectState({ projects: [
+  { ...technicalSeeds.find(item => item.id === '9'), technicalTrack: '用户自定义赛道' },
+  { id: 'user-created-tech', name: '用户自建技术项目', type: '技术项目', status: '在研' },
+] }, 6)
+assert.equal(migratedV6Projects.projects.filter(project => project.type === '技术项目').length, 9, 'v6 project migration appends the missing four technical roots')
+assert.equal(migratedV6Projects.projects.find(project => project.id === '9')?.technicalTrack, '用户自定义赛道', 'v6 project migration preserves non-empty custom technical fields')
+assert.ok(migratedV6Projects.projects.some(project => project.id === 'user-created-tech'), 'v6 project migration preserves user-created projects')
+const nestedTechnicalValue = projectStoreModule.migrateProjectState({ projects: [{
+  ...technicalSeeds.find(project => project.id === '9'), technicalTrack: '', fieldValues: { technicalTrack: '字段自定义赛道' },
+}] }, 6).projects.find(project => project.id === '9')
+assert.equal(nestedTechnicalValue?.technicalTrack, '字段自定义赛道', 'migration promotes the non-empty nested technical field instead of replacing it with a seed')
+assert.equal(nestedTechnicalValue?.fieldValues?.technicalTrack, '字段自定义赛道', 'migration retains the promoted nested technical field value')
+const conflictingTechnicalValues = projectStoreModule.migrateProjectState({ projects: [{
+  ...technicalSeeds.find(project => project.id === '9'), technicalTrack: '根字段自定义赛道', fieldValues: { technicalTrack: '嵌套字段自定义赛道' },
+}] }, 6).projects.find(project => project.id === '9')
+assert.equal(conflictingTechnicalValues?.technicalTrack, '根字段自定义赛道', 'root technical field deterministically remains primary on legacy conflict')
+assert.equal(conflictingTechnicalValues?.fieldValues?.technicalTrack, '嵌套字段自定义赛道', 'legacy conflict does not destroy the nested technical field value')
+const permissionModule = loadTypeScriptModule(root, 'src/stores/permission.ts')
+const blankManagerValues = projectStoreModule.migrateProjectState({ projects: [{
+  ...technicalSeeds.find(project => project.id === '9'), technicalProjectManager: '', fieldValues: { technicalProjectManager: '' },
+}] }, 6).projects.find(project => project.id === '9')
+assert.equal(blankManagerValues?.technicalProjectManager, '张三', 'blank root technical manager is seeded during migration')
+assert.equal(blankManagerValues?.fieldValues?.technicalProjectManager, '张三', 'blank nested technical manager is seeded alongside the root representation')
+permissionModule.usePermissionStore.setState({ rolesByProject: {}, rolePermissionsByProject: {} })
+permissionModule.usePermissionStore.getState().ensureProjectPermissions([blankManagerValues])
+assert.deepEqual(permissionModule.usePermissionStore.getState().rolesByProject['9'].find(role => role.name === '技术项目经理')?.members, ['张三'], 'permission hydration reads the seeded nested technical manager membership')
+permissionModule.usePermissionStore.setState({ rolesByProject: {}, rolePermissionsByProject: {} })
+permissionModule.usePermissionStore.getState().ensureProjectPermissions(technicalSeeds.filter(project => project.id.startsWith('mock-tech-')))
+for (const project of technicalSeeds.filter(project => project.id.startsWith('mock-tech-'))) {
+  const roles = permissionModule.usePermissionStore.getState().rolesByProject[project.id]
+  assert.deepEqual(roles.map(role => role.name), Object.keys(permissionModule.TECHNICAL_TEAM_PERMISSION_MAPPING), `${project.id} hydrates every fixed technical role`)
+  assert.ok(roles.every(role => role.members.length === 1 && role.members[0] === project[permissionModule.TECHNICAL_TEAM_PERMISSION_MAPPING[role.name]]), `${project.id} hydrates fixed-role membership from every technical team field`)
+}
 console.log('technical project contract passed')
