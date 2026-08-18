@@ -191,6 +191,21 @@ const childState = instanceStore.getState().plansByKey['9:subproject:IPM-AI-001'
 assert.equal(childState.versions[0].tasks[0].taskName, childV1.tasks[0].taskName, 'template edits never mutate existing versions')
 assert.equal(childState.versions[1].tasks[0].taskName, '后改模板', 'new draft uses latest matching template snapshot')
 assert.notStrictEqual(childState.versions[0].tasks, childState.versions[1].tasks, 'version task snapshots are isolated')
+const editedDraftTasks = childState.versions[1].tasks.map((task, index) => index === 0 ? { ...task, actualEndDate: '2026-08-08' } : task)
+assert.equal(instanceStore.updateCurrentTasks(childPlanScope, editedDraftTasks, 1).ok, true, 'draft actual completion can be updated')
+assert.equal(instanceStore.getState().plansByKey['9:subproject:IPM-AI-001'].versions[0].tasks[0].actualEndDate, '2026-08-08', 'draft actual completion synchronizes to paired published version')
+assert.equal(instanceStore.publishRevision(childPlanScope, '2026-08-09T00:00:00Z').ok, true)
+const laterTemplate = editedTemplate.map((task, index) => ({ ...task, taskName: index === 0 ? '不应同步的后续模板' : task.taskName }))
+assert.equal(instanceStore.createRevision({ scope: childPlanScope, templateKind: 'subproject', templateTasks: laterTemplate, subproject: configuredChild }).ok, true)
+const childV3 = instanceStore.getState().plansByKey['9:subproject:IPM-AI-001'].versions.at(-1)
+assert.equal(childV3.tasks[0].taskName, '后改模板', 'later revisions copy the previous published version instead of syncing the latest template')
+const publishedV2 = instanceStore.getState().plansByKey['9:subproject:IPM-AI-001'].versions.find(version => version.versionNo === 'V2')
+assert.equal(instanceStore.setCurrentVersion(childPlanScope, publishedV2.id), true)
+const publishedWrite = publishedV2.tasks.map((task, index) => index === 0 ? { ...task, taskName: '禁止修改名称', actualEndDate: '2026-08-18' } : task)
+assert.equal(instanceStore.updateCurrentTasks(childPlanScope, publishedWrite, 1).ok, true)
+const afterPublishedWrite = instanceStore.getState().plansByKey['9:subproject:IPM-AI-001']
+assert.equal(afterPublishedWrite.versions.find(version => version.versionNo === 'V2').tasks[0].taskName, '后改模板', 'published writes only accept actual completion changes')
+assert.equal(afterPublishedWrite.versions.find(version => version.status === '修订中').tasks[0].actualEndDate, '2026-08-18', 'published actual completion synchronizes back to the paired draft')
 assert.deepEqual(instanceStore.getState().plansByKey['9:tdt'].versions.map(version => version.versionNo), ['V1'], 'child actions do not change TDT sequence')
 instanceStore.setColumns(childPlanScope, { order: ['taskName'], visible: ['taskName'] })
 instanceStore.setCollapsed(childPlanScope, ['subproject-1'])
@@ -465,9 +480,10 @@ assert.match(technicalModuleSource, /icon=\{<CopyOutlined\s*\/>\}[^>]*aria-label
 assert.match(technicalModuleSource, /icon=\{<SaveOutlined\s*\/>\}[^>]*aria-label="发布"[^>]*\/>/, 'technical plan publish uses the same icon-only draft action as whole-machine plans')
 const globalStylesSource = readSource(root, 'src/styles/globals.css')
 assert.match(globalStylesSource, /\.pms-table \.ant-table-thead\s*>\s*tr\s*>\s*th\.ant-table-cell-fix-(?:start|end)[\s\S]{0,900}position:\s*sticky\s*!important/s, 'fixed technical-plan headers remain aligned with fixed body cells')
-for (const label of ['预估工期', '实际工期', '进度']) {
+for (const label of ['预估工期', '实际工期', '是否延期']) {
   assert.match(technicalModuleSource, new RegExp(`TECHNICAL_FILTER_FIELDS[\\s\\S]*${label}`), `technical filters include ${label}`)
 }
+assert.doesNotMatch(technicalModuleSource.match(/const TECHNICAL_FILTER_FIELDS[\s\S]*?\n\]/)?.[0] || '', /进度|责任人|状态/, 'governed technical filters omit removed legacy fields')
 assert.match(readSource(root, 'src/stores/technicalPlan.ts'), /DEFAULT_COLUMNS[\s\S]{0,420}actualStartDate[\s\S]{0,120}actualEndDate[\s\S]{0,120}actualDays/, 'technical plan persisted defaults include actual-date columns')
 
 const publishedVersion = { id: 'v1', versionNo: 'V1', status: '已发布', templateType: 'tdt', tasks: [] }
@@ -489,8 +505,11 @@ const imported = technicalWorkspace.parseTechnicalPlanImportRows([
   { ID: 'c1', '父任务ID': 'p1', '任务名称': '节点', '责任人': '乙', '前置任务': 'p1', '计划开始': '2026-01-02', '计划完成': '2026-01-08', '预估工期': 7, '实际开始': '2026-01-03', '实际完成': '2026-01-07', '实际工期': 5, '状态': '进行中', '进度': 80 },
 ])
 assert.deepEqual(imported.map(task => [task.id, task.parentId, task.actualEndDate, task.actualDays, task.progress]), [['p1', undefined, '2026-01-09', 8, 100], ['c1', 'p1', '2026-01-07', 5, 80]], 'technical import preserves hierarchy and every exported actual/progress field')
-for (const title of ['ID', '父任务ID', '任务名称', '预估工期', '实际开始', '实际完成', '实际工期', '状态', '进度']) {
+for (const title of ['序号', '阶段/里程碑节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际结束时间', '实际工期', '是否延期']) {
   assert.equal(technicalWorkspace.TECHNICAL_PLAN_EXPORT_COLUMNS.some(column => column.title === title), true, `technical export includes ${title}`)
+}
+for (const title of ['责任人', '前置任务', '状态', '进度']) {
+  assert.equal(technicalWorkspace.TECHNICAL_PLAN_EXPORT_COLUMNS.some(column => column.title === title), false, `technical export omits ${title}`)
 }
 const horizontalRows = technicalWorkspace.buildTechnicalHorizontalRows([{
   ...publishedVersion,
@@ -532,9 +551,9 @@ assert.ok(projectSpaceComponent, 'whole-machine project space resolves to its ex
 assert.ok(findJsxMount(collectReachableNodes(projectSpaceSourceFile, projectSpaceComponent), projectSpaceSourceFile, 'PlanWorkspaceShell'), 'whole-machine project space mounts the imported shared shell in its live return tree')
 assert.match(projectSpaceSource, /canDo\('plan:导入'\)/, 'project space passes technical import permission')
 assert.match(projectSpaceSource, /canDo\('plan:导出'\)/, 'project space passes technical export permission')
-assert.match(projectSpaceSource, /<TechnicalPlanModule[\s\S]{0,420}canViewTechnicalPlan=\{canViewLevel1Plan\}/, 'project space passes only the technical L1 view capability')
+assert.match(projectSpaceSource, /<TechnicalPlanModule[\s\S]{0,620}canViewTechnicalPlan=\{canViewLevel1Plan\}/, 'project space passes only the technical L1 view capability')
 assert.match(projectSpaceSource, /const canShareTechnicalPlan = canDo\('plan:一级计划-分享'\)/, 'project space resolves the dedicated L1 share capability')
-assert.match(projectSpaceSource, /<TechnicalPlanModule[\s\S]{0,420}canShareTechnicalPlan=\{canShareTechnicalPlan\}/, 'project space passes the technical L1 share capability')
+assert.match(projectSpaceSource, /<TechnicalPlanModule[\s\S]{0,620}canShareTechnicalPlan=\{canShareTechnicalPlan\}/, 'project space passes the technical L1 share capability')
 assert.doesNotMatch(projectSpaceSource.match(/<TechnicalPlanModule[\s\S]{0,520}\/>/)?.[0] || '', /canViewDraft|effectiveTasks|level2PlanTasks|projectPlanLevel/, 'technical draft access never depends on whole-machine or level-2 plan state')
 
 const machineScope = rules.getTemplateConfigScopeKey('整机产品项目', 'level1')
@@ -585,5 +604,6 @@ const migratedV5Plans = technicalPlanModule.migrateTechnicalPlanState({ plansByK
 assert.equal(Object.keys(migratedV5Plans.plansByKey).length, 18, 'v5 technical plan migration appends missing seed instances')
 assert.match(migratedV5Plans.plansByKey['9:tdt'].versions[0].tasks[0].taskName, /自定义$/, 'v5 technical plan migration preserves customized same-key plan instances')
 assert.equal(Object.keys(technicalPlanModule.migrateTechnicalPlanState({ plansByKey: { '9:tdt': customizedPlanSeed } }, 4).plansByKey).length, 18, 'skipped v4 technical plan migration appends every missing seed instance')
-assert.deepEqual(Object.keys(technicalPlanModule.migrateTechnicalPlanState({ plansByKey: { 'custom:tdt': { ...customizedPlanSeed, planKey: 'custom:tdt' } } }, 6).plansByKey), ['custom:tdt'], 'current technical plan migration remains idempotent')
+assert.equal(Object.keys(technicalPlanModule.migrateTechnicalPlanState({ plansByKey: { 'custom:tdt': { ...customizedPlanSeed, planKey: 'custom:tdt' } } }, 6).plansByKey).length, 19, 'v6 governance migration appends refreshed seed instances')
+assert.deepEqual(Object.keys(technicalPlanModule.migrateTechnicalPlanState({ plansByKey: { 'custom:tdt': { ...customizedPlanSeed, planKey: 'custom:tdt' } } }, technicalPlanModule.TECHNICAL_PLAN_STORE_VERSION).plansByKey), ['custom:tdt'], 'current technical plan migration remains idempotent')
 console.log('technical plan contract passed')

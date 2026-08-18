@@ -39,6 +39,7 @@ export interface CompareTableRow {
   actualStartDate: string;
   actualEndDate: string;
   actualDays: number;
+  delayStatus: string;
   status: string;
   progress: number;
   // 字段级差异明细（修改时有值）
@@ -80,6 +81,7 @@ export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask
         actualStartDate: (newTask.actualStartDate as any) || '',
         actualEndDate: (newTask.actualEndDate as any) || '',
         actualDays: (newTask as any).actualDays || 0,
+        delayStatus: (newTask as any).delayStatus || '',
         status: newTask.status,
         progress: newTask.progress,
         fieldDiffs: [],
@@ -102,6 +104,7 @@ export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask
         actualStartDate: (oldTask.actualStartDate as any) || '',
         actualEndDate: (oldTask.actualEndDate as any) || '',
         actualDays: (oldTask as any).actualDays || 0,
+        delayStatus: (oldTask as any).delayStatus || '',
         status: oldTask.status,
         progress: oldTask.progress,
         fieldDiffs: [],
@@ -156,6 +159,11 @@ export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask
       if (oldActDays !== newActDays) {
         fieldDiffs.push({ field: 'actualDays', oldValue: `${oldActDays}天`, newValue: `${newActDays}天` });
       }
+      const oldDelayStatus = (oldTask as any).delayStatus || '';
+      const newDelayStatus = (newTask as any).delayStatus || '';
+      if (oldDelayStatus !== newDelayStatus) {
+        fieldDiffs.push({ field: 'delayStatus', oldValue: oldDelayStatus || '-', newValue: newDelayStatus || '-' });
+      }
       if (oldTask.status !== newTask.status) {
         fieldDiffs.push({ field: 'status', oldValue: oldTask.status, newValue: newTask.status });
       }
@@ -176,6 +184,7 @@ export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask
         actualStartDate: newActStart,
         actualEndDate: newActEnd,
         actualDays: newActDays,
+        delayStatus: newDelayStatus,
         status: newTask.status,
         progress: newTask.progress,
         fieldDiffs,

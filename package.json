@@ -20,6 +20,7 @@
     "verify:collapsible-sidebars": "node scripts/verify-collapsible-sidebars.mjs",
     "verify:compact-ui-density": "node scripts/verify-compact-ui-density.mjs",
     "verify:level3-plan": "node scripts/verify-level3-plan.mjs",
+    "verify:level1-plan-governance": "node scripts/verify-level1-plan-governance.mjs",
     "verify:enum-browser": "node screenshots/verify-enum-config-browser.mjs",
     "verify:machine-tos": "node scripts/verify-machine-tos-versions.mjs",
     "verify:technical-project": "node scripts/verify-technical-project.mjs",

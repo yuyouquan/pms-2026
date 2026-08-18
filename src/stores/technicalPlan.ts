@@ -11,6 +11,7 @@ import { getNextPlanRevisionVersionNo, type PlanRevisionKind } from '@/lib/planV
 import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
 import type { TechnicalTemplateKind, TechnicalTemplateTask } from '@/types/technicalPlan'
 import type { TechnicalSubproject } from '@/types/technicalProject'
+import { buildFirstLevel1RevisionTasks, buildNextLevel1RevisionTasks } from '@/lib/level1PlanRules'
 
 export type TechnicalPlanScope =
   | { kind: 'tdt'; parentProjectId: string }
@@ -40,8 +41,8 @@ export interface TechnicalPlanVersion extends TechnicalStagePlanVersion {
 }
 
 const DEFAULT_COLUMNS: SortableColumnSettingsValue<string> = {
-  order: ['id', 'taskName', 'responsible', 'predecessor', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'status', 'progress'],
-  visible: ['id', 'taskName', 'responsible', 'predecessor', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'status', 'progress'],
+  order: ['id', 'taskName', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'delayStatus'],
+  visible: ['id', 'taskName', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'delayStatus'],
 }
 
 export interface TechnicalPlanInstance {
@@ -173,7 +174,7 @@ const clonePlans = (plans: TechnicalPlansByKey): TechnicalPlansByKey => Object.f
   }]),
 )
 
-export const TECHNICAL_PLAN_STORE_VERSION = 6
+export const TECHNICAL_PLAN_STORE_VERSION = 7
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
@@ -215,8 +216,13 @@ export const migrateTechnicalPlanState = (persistedState: unknown, fromVersion: 
     const priorVisible = fromVersion < 3
       ? [...storedVisible, ...actualColumnKeys.filter(key => !storedVisible.includes(key))]
       : storedVisible
-    const order = priorOrder.includes('id') ? priorOrder : ['id', ...priorOrder]
-    const visible = priorVisible.includes('id') ? priorVisible : ['id', ...priorVisible]
+    const allowedColumns = new Set(DEFAULT_COLUMNS.order)
+    const order = fromVersion < 7
+      ? [...DEFAULT_COLUMNS.order]
+      : (priorOrder.includes('id') ? priorOrder : ['id', ...priorOrder]).filter(key => allowedColumns.has(key))
+    const visible = fromVersion < 7
+      ? [...DEFAULT_COLUMNS.visible]
+      : (priorVisible.includes('id') ? priorVisible : ['id', ...priorVisible]).filter(key => allowedColumns.has(key))
     plansByKey[key] = {
       planKey: key, templateKind, versions, currentVersionId,
       columnSettings: {
@@ -354,9 +360,16 @@ const createRevisionInState = (state: TechnicalPlanState, input: CreateRevisionI
   if (current?.versions.some(version => version.status === '修订中')) return { state, result: { ok: false, reason: 'draft-exists' } }
   const versionNo = getNextPlanRevisionVersionNo([...(current?.versions || [])], input.revisionKind || 'formal')
   const versionId = `${versionNo}-draft`
+  const publishedVersions = (current?.versions || []).filter(version => version.status === '已发布').sort(comparePublishedTechnicalPlanVersions)
+  const previousPublished = publishedVersions[0]
+  const revisionTasks = previousPublished
+    ? (publishedVersions.length <= 1
+        ? buildFirstLevel1RevisionTasks(previousPublished.tasks, [...input.templateTasks])
+        : buildNextLevel1RevisionTasks(previousPublished.tasks)) as TechnicalTemplateTask[]
+    : cloneTasks(input.templateTasks)
   const instance: TechnicalPlanInstance = current
-    ? { ...current, versions: [...current.versions, { id: versionId, versionNo, templateType: input.templateKind, status: '修订中', tasks: cloneTasks(input.templateTasks) }], currentVersionId: versionId }
-    : { planKey: key, templateKind: input.templateKind, versions: [{ id: versionId, versionNo, templateType: input.templateKind, status: '修订中', tasks: cloneTasks(input.templateTasks) }], currentVersionId: versionId, columnSettings: { order: [...DEFAULT_COLUMNS.order], visible: [...DEFAULT_COLUMNS.visible] }, collapsedRows: [] }
+    ? { ...current, versions: [...current.versions, { id: versionId, versionNo, templateType: input.templateKind, status: '修订中', tasks: cloneTasks(revisionTasks) }], currentVersionId: versionId }
+    : { planKey: key, templateKind: input.templateKind, versions: [{ id: versionId, versionNo, templateType: input.templateKind, status: '修订中', tasks: cloneTasks(revisionTasks) }], currentVersionId: versionId, columnSettings: { order: [...DEFAULT_COLUMNS.order], visible: [...DEFAULT_COLUMNS.visible] }, collapsedRows: [] }
   return { state: { plansByKey: { ...state.plansByKey, [key]: instance } }, result: { ok: true, versionId } }
 }
 
@@ -419,15 +432,42 @@ const mutateDraft = (state: TechnicalPlanState, scope: TechnicalPlanScope, mutat
   const key = getTechnicalPlanKey(scope)
   const instance = state.plansByKey[key]
   if (!instance) return { state, result: { ok: false as const, reason: 'missing-instance' as const } }
-  const draft = instance.versions.find(version => version.status === '修订中')
-  if (!draft) return { state, result: { ok: false as const, reason: 'missing-draft' as const } }
   if (mutation === 'tasks') {
+    const currentVersion = instance.versions.find(version => version.id === instance.currentVersionId)
+    if (!currentVersion) return { state, result: { ok: false as const, reason: 'missing-draft' as const } }
     try {
       validateTechnicalPlanInstanceDepth(instance.templateKind, payload as readonly TechnicalTemplateTask[], maxDepth ?? (instance.templateKind === 'tdt' ? 2 : 1))
     } catch {
       return { state, result: { ok: false as const, reason: 'max-depth' as const } }
     }
+    const requestedTasks = cloneTasks(payload as readonly TechnicalTemplateTask[])
+    const requestedByStableId = new Map(requestedTasks.map(task => [task.stableId || task.id, task]))
+    const nextCurrentTasks = currentVersion.status === '已发布'
+      ? currentVersion.tasks.map(task => ({
+          ...task,
+          actualEndDate: requestedByStableId.get(task.stableId || task.id)?.actualEndDate || '',
+        }))
+      : requestedTasks
+    const previousByStableId = new Map(currentVersion.tasks.map(task => [task.stableId || task.id, task]))
+    const changedActualEnds = new Map<string, string>()
+    nextCurrentTasks.forEach(task => {
+      const stableId = task.stableId || task.id
+      if ((previousByStableId.get(stableId)?.actualEndDate || '') !== (task.actualEndDate || '')) changedActualEnds.set(stableId, task.actualEndDate || '')
+    })
+    const latestPublished = instance.versions.filter(version => version.status === '已发布').sort(comparePublishedTechnicalPlanVersions)[0]
+    const pairedVersionId = currentVersion.status === '修订中' ? latestPublished?.id : instance.versions.find(version => version.status === '修订中')?.id
+    const versions = instance.versions.map(version => {
+      if (version.id === currentVersion.id) return { ...version, tasks: nextCurrentTasks }
+      if (version.id !== pairedVersionId || changedActualEnds.size === 0) return version
+      return { ...version, tasks: version.tasks.map(task => {
+        const value = changedActualEnds.get(task.stableId || task.id)
+        return value === undefined ? task : { ...task, actualEndDate: value }
+      }) }
+    })
+    return { state: { plansByKey: { ...state.plansByKey, [key]: { ...instance, versions } } }, result: { ok: true as const } }
   }
+  const draft = instance.versions.find(version => version.status === '修订中')
+  if (!draft) return { state, result: { ok: false as const, reason: 'missing-draft' as const } }
   let versions: TechnicalPlanVersion[]
   if (mutation === 'cancel') versions = instance.versions.filter(version => version.id !== draft.id)
   else versions = instance.versions.map(version => version.id !== draft.id ? version : mutation === 'publish'
@@ -449,6 +489,7 @@ export function createTechnicalPlanStore(initial: Partial<TechnicalPlanState> = 
     publishRevision: (scope: TechnicalPlanScope, at?: string) => { const output = mutateDraft(state, scope, 'publish', at); update(output.state); return output.result },
     cancelRevision: (scope: TechnicalPlanScope) => { const output = mutateDraft(state, scope, 'cancel'); update(output.state); return output.result },
     updateCurrentTasks: (scope: TechnicalPlanScope, tasks: readonly TechnicalTemplateTask[], maxDepth?: number) => { const output = mutateDraft(state, scope, 'tasks', tasks, maxDepth); update(output.state); return output.result },
+    setCurrentVersion: (scope: TechnicalPlanScope, versionId: string) => { const key = getTechnicalPlanKey(scope); const item = state.plansByKey[key]; if (!item?.versions.some(version => version.id === versionId)) return false; update({ plansByKey: { ...state.plansByKey, [key]: { ...item, currentVersionId: versionId } } }); return true },
     setColumns: (scope: TechnicalPlanScope, columns: SortableColumnSettingsValue<string>) => { const key = getTechnicalPlanKey(scope); const item = state.plansByKey[key]; if (item) update({ plansByKey: { ...state.plansByKey, [key]: { ...item, columnSettings: { order: [...columns.order], visible: [...columns.visible] } } } }) },
     setCollapsed: (scope: TechnicalPlanScope, ids: readonly string[]) => { const key = getTechnicalPlanKey(scope); const item = state.plansByKey[key]; if (item) update({ plansByKey: { ...state.plansByKey, [key]: { ...item, collapsedRows: [...ids] } } }) },
   }

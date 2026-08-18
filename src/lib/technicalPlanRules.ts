@@ -35,6 +35,9 @@ const createTask = (
   parentId?: string,
 ): TechnicalTemplateTask => ({
   id,
+  stableId: `${parentId ? `${parentId}-` : ''}${taskName}`,
+  source: 'template',
+  role: '技术项目负责人',
   order,
   taskName,
   ...(parentId ? { parentId } : {}),

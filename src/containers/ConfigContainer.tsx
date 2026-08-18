@@ -308,7 +308,12 @@ export default function ConfigContainer() {
           </div>
         )
       } })
-      if (visibleColumns.includes('responsible')) cols.push({ title: '角色', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Select className="pms-edit-input" value={val || 'SPM'} size="small" style={{ width: '100%' }} options={PLAN_TEMPLATE_ROLE_OPTIONS} onChange={(value) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, responsible: value } : t); currentSetTasks(updated) }} /> : (val ? <Tag color="processing" style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>) })
+      if (visibleColumns.includes('responsible')) cols.push({ title: '角色', dataIndex: 'role', key: 'responsible', width: 100, render: (val: string, record: any) => {
+        const role = val || record.responsible || ''
+        return isEditMode
+          ? <Select className="pms-edit-input" value={role || 'SPM'} size="small" style={{ width: '100%' }} options={PLAN_TEMPLATE_ROLE_OPTIONS} onChange={(value) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, role: value, responsible: value } : t); currentSetTasks(updated) }} />
+          : (role ? <Tag color="processing" style={{ borderRadius: 4, fontSize: 12 }}>{role}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>)
+      } })
       if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>) })
       if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 130, render: (val: string) => <span style={{ fontSize: 12, color: '#e5e7eb' }}>{val || '-'}</span> })
       if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 130, render: (val: string) => <span style={{ fontSize: 12, color: '#e5e7eb' }}>{val || '-'}</span> })
@@ -619,12 +624,6 @@ export default function ConfigContainer() {
       { title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, render: (val: string) => { const conf: Record<string, { color: string; bg: string }> = { '新增': { color: '#52c41a', bg: '#f6ffed' }, '删除': { color: '#ff4d4f', bg: '#fff2f0' }, '修改': { color: 'var(--pms-brand)', bg: 'var(--pms-brand-surface)' }, '未变更': { color: '#9ca3af', bg: '#fafafa' } }; const c = conf[val]; return c ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: c.color, background: c.bg, border: val === '修改' ? '1px solid var(--pms-brand-border)' : `1px solid ${c.color}20` }}>{val}</span> : null } },
       { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, ellipsis: true, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
       { title: '角色', dataIndex: 'responsible', key: 'responsible', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) },
-      { title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'predecessor', val) },
-      { title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 105, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'planStartDate', val) },
-      { title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 105, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'planEndDate', val) },
-      { title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 80, render: (val: number, row: CompareTableRow) => renderDiffCell(row, 'estimatedDays', val ? `${val}天` : '-') },
-      { title: '状态', dataIndex: 'status', key: 'status', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'status', val) },
-      { title: '进度', dataIndex: 'progress', key: 'progress', width: 70, render: (val: number, row: CompareTableRow) => renderDiffCell(row, 'progress', `${val}%`) },
     ]
     return (
       <div style={{ marginTop: 16 }}>
@@ -716,7 +715,6 @@ export default function ConfigContainer() {
                     ]
                     : [
                       { key: 'level1', label: <span style={{ fontWeight: 500 }}>一级计划</span> },
-                      { key: 'level2', label: <span style={{ fontWeight: 500 }}>二级计划</span> },
                     ]}
                 />
               </div>
