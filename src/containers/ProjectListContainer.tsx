@@ -69,7 +69,7 @@ import {
 } from '@/lib/projectListFilters'
 import ProjectListCalendar from '@/components/project-list/ProjectListCalendar'
 import type { ProjectListViewMode } from '@/stores/project'
-import { buildProjectListMockPlanTasks } from '@/data/projectListPlanMocks'
+import { buildProjectListMockPlanTasks, getProjectLevel1MockSnapshotKey } from '@/data/projectListPlanMocks'
 
 const WORKSPACE_FILTER_TOOLBAR_STYLE: CSSProperties = {
   borderRadius: 12,
@@ -217,7 +217,12 @@ export default function ProjectListContainer() {
         )
         return [project.id, publishedTasks.length ? publishedTasks : mockPlanTasks]
       }
-      return [project.id, mockPlanTasks]
+      const publishedTasks = selectLatestPublishedScopedSnapshot(
+        versions,
+        publishedSnapshots,
+        versionId => getProjectLevel1MockSnapshotKey(project.id, versionId),
+      )
+      return [project.id, publishedTasks.length ? publishedTasks : mockPlanTasks]
     }))
   ), [
     categoryBaseProjects,
@@ -227,6 +232,7 @@ export default function ProjectListContainer() {
     publishedSnapshots,
     tosTypeConfigsByProjectId,
     tosTypeVersionsByKey,
+    versions,
   ])
 
   const categoryCounts = useMemo(() => {

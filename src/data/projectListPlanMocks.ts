@@ -12,6 +12,7 @@ export interface ProjectListMockTemplateTask {
   order?: number
   planStartDate?: string
   planEndDate?: string
+  actualEndDate?: string
   [key: string]: unknown
 }
 
@@ -22,6 +23,10 @@ const projectOffset = (projectId: string) => (
 )
 
 const formatAugustDate = (day: number) => `2026-08-${String(day).padStart(2, '0')}`
+
+export const getProjectLevel1MockSnapshotKey = (projectId: string, versionId: string) => (
+  `project::${projectId}::level1::${versionId}`
+)
 
 export function buildProjectListMockPlanTasks<T extends ProjectListMockTemplateTask>(
   projectId: string,
@@ -35,6 +40,9 @@ export function buildProjectListMockPlanTasks<T extends ProjectListMockTemplateT
       ...task,
       planStartDate: formatAugustDate(AUGUST_2026_MILESTONE_DAYS[startIndex]),
       planEndDate: formatAugustDate(AUGUST_2026_MILESTONE_DAYS[endIndex]),
+      actualEndDate: index % 4 === 3
+        ? ''
+        : formatAugustDate(AUGUST_2026_MILESTONE_DAYS[Math.min(endIndex + (index % 3 === 0 ? 1 : 0), AUGUST_2026_MILESTONE_DAYS.length - 1)]),
     }
   })
 }

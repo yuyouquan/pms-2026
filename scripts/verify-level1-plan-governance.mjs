@@ -5,6 +5,8 @@ import ts from 'typescript'
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const rulesPath = path.join(root, 'src/lib/level1PlanRules.ts')
+const versioningPath = path.join(root, 'src/lib/planVersioning.ts')
+const projectMockPath = path.join(root, 'src/data/projectListPlanMocks.ts')
 
 if (!fs.existsSync(rulesPath)) throw new Error('src/lib/level1PlanRules.ts does not exist')
 
@@ -14,6 +16,47 @@ const transpiled = ts.transpileModule(source, {
   fileName: rulesPath,
 }).outputText
 const rules = await import(`data:text/javascript;base64,${Buffer.from(transpiled).toString('base64')}`)
+const loadTypescriptModule = async modulePath => {
+  const moduleSource = fs.readFileSync(modulePath, 'utf8')
+  const moduleOutput = ts.transpileModule(moduleSource, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+    fileName: modulePath,
+  }).outputText
+  return import(`data:text/javascript;base64,${Buffer.from(moduleOutput).toString('base64')}`)
+}
+const versioning = await loadTypescriptModule(versioningPath)
+const projectMocks = await loadTypescriptModule(projectMockPath)
+
+const horizontalVersions = [
+  { id: 'v1', versionNo: 'V1', status: '已发布' },
+  { id: 'v2', versionNo: 'V2', status: '已发布' },
+  { id: 'v3', versionNo: 'V3', status: '修订中' },
+]
+assert.deepEqual(
+  versioning.getDisplayPlanVersionsForHorizontalPlan(horizontalVersions).map(version => version.id),
+  ['v1', 'v2'],
+  'read-only horizontal plans only expose published versions',
+)
+assert.deepEqual(
+  versioning.getDisplayPlanVersionsForHorizontalPlan(horizontalVersions, { includeDraft: true }).map(version => version.id),
+  ['v1', 'v2', 'v3'],
+  'maintainers can see the current revision in the horizontal plan',
+)
+
+const linkedMockTemplate = [
+  { id: 'stage', taskName: '阶段', order: 0 },
+  { id: 'node-a', parentId: 'stage', taskName: '节点A', order: 0 },
+  { id: 'node-b', parentId: 'stage', taskName: '节点B', order: 1 },
+]
+const linkedMockA = projectMocks.buildProjectListMockPlanTasks('project-a', linkedMockTemplate)
+const linkedMockB = projectMocks.buildProjectListMockPlanTasks('project-b', linkedMockTemplate)
+assert.equal(linkedMockA.length, linkedMockTemplate.length)
+assert.equal(linkedMockA.every(task => task.planEndDate), true, 'project mock plans contain dates')
+assert.notDeepEqual(
+  linkedMockA.map(task => task.planEndDate),
+  linkedMockB.map(task => task.planEndDate),
+  'project mock plans are scoped by project id',
+)
 
 assert.deepEqual(
   rules.STANDARD_LEVEL1_TEMPLATE_TASKS.map(task => [task.id, task.parentId || null, task.taskName]),
@@ -172,5 +215,8 @@ assert.match(technicalStoreSource, /changedActualEnds[\s\S]*pairedVersionId/, 't
 assert.match(compareModalSource, /fieldMode === 'governed'[\s\S]*governedKeys/, 'version comparison supports the governed field set')
 assert.match(projectSpaceSource, /fieldMode=\{projectPlanLevel === 'level1' \? 'governed' : 'legacy'\}/, 'project level1 comparison selects governed fields')
 assert.match(technicalModuleSource, /fieldMode="governed"/, 'technical comparison selects governed fields')
+assert.match(projectSpaceSource, /buildProjectListMockPlanTasks\(selectedProject\.id,/, 'project space consumes the same project-scoped mock plan source as the project list')
+assert.match(projectSpaceSource, /planEndDate:\s*task\.planEndDate\s*\|\|\s*''/, 'tOS project initialization preserves project-linked mock plan dates')
+assert.match(projectSpaceSource, /getDisplayPlanVersionsForHorizontalPlan\(horizontalVersions,\s*\{\s*includeDraft:\s*canMaintainCurrentPlan\s*\}\)/, 'horizontal plan exposes drafts to maintainers')
 
 console.log('level1 plan governance rule verification passed')
