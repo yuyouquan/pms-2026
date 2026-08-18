@@ -72,6 +72,43 @@ export const STANDARD_LEVEL1_TEMPLATE_TASKS: Level1PlanTask[] = [
   templateTask('milestone-close', 'stage-launch', 0, '收编完成', 'SPM'),
 ]
 
+const STANDARD_DISPLAY_IDS = ['1', '1.1', '1.2', '2', '2.1', '2.2', '3', '3.1', '3.2', '3.3', '4', '4.1']
+const STANDARD_MOCK_DATES: Record<string, { planEndDate: string; actualEndDate: string }> = {
+  'milestone-concept-start': { planEndDate: '2026-02-26', actualEndDate: '2026-02-27' },
+  'milestone-str1': { planEndDate: '2026-03-17', actualEndDate: '2026-03-18' },
+  'milestone-str2': { planEndDate: '2026-04-28', actualEndDate: '2026-04-28' },
+  'milestone-str3': { planEndDate: '2026-05-22', actualEndDate: '2026-05-22' },
+  'milestone-str4': { planEndDate: '2026-07-31', actualEndDate: '2026-07-31' },
+  'milestone-str4a': { planEndDate: '2026-10-12', actualEndDate: '2026-10-12' },
+  'milestone-str5': { planEndDate: '2026-12-15', actualEndDate: '2026-12-15' },
+  'milestone-close': { planEndDate: '2027-03-01', actualEndDate: '2027-03-01' },
+}
+
+export const buildStandardLevel1Tasks = (withMockDates = true): Level1PlanTask[] => {
+  const idByStableId = new Map(STANDARD_LEVEL1_TEMPLATE_TASKS.map((task, index) => [task.id, STANDARD_DISPLAY_IDS[index]]))
+  return STANDARD_LEVEL1_TEMPLATE_TASKS.map((task, index) => {
+    const mockDates = withMockDates ? STANDARD_MOCK_DATES[task.id] : undefined
+    return {
+      ...task,
+      id: STANDARD_DISPLAY_IDS[index],
+      stableId: task.id,
+      parentId: task.parentId ? idByStableId.get(task.parentId) || null : null,
+      role: task.role || '',
+      responsible: task.role || '',
+      predecessor: '',
+      planStartDate: '',
+      planEndDate: mockDates?.planEndDate || '',
+      estimatedDays: 0,
+      actualStartDate: '',
+      actualEndDate: mockDates?.actualEndDate || '',
+      actualDays: 0,
+      status: '未开始',
+      progress: 0,
+      defaultRoadmap: Boolean(task.parentId),
+    }
+  })
+}
+
 const sortByOrder = <T extends { order: number }>(items: T[]) => (
   [...items].sort((left, right) => left.order - right.order)
 )

@@ -12,6 +12,7 @@ import type {
   TosTypeVersionsState,
 } from '@/lib/tosTypeRules'
 import type { CompareTableRow } from '@/lib/versionCompare'
+import { buildStandardLevel1Tasks } from '@/lib/level1PlanRules'
 import { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 import {
   getDefaultColumnSettings,
@@ -36,7 +37,7 @@ import type {
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
-export const PLAN_STORE_VERSION = 3
+export const PLAN_STORE_VERSION = 4
 export const PLAN_STORE_STORAGE_KEY = 'pms-plan-store'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -81,22 +82,14 @@ const createInitialConfigTemplateCompareScopes = () => Object.fromEntries(
   ]),
 ) as Record<string, ConfigTemplateCompareScope>
 
-export const LEVEL1_TASKS = [
-  { id: '1', order: 1, taskName: '概念', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-01-15', estimatedDays: 15, actualStartDate: '2026-01-01', actualEndDate: '2026-01-14', actualDays: 14 },
-  { id: '1.1', parentId: '1', order: 1, taskName: '概念启动', status: '已完成', progress: 100, responsible: '张三', predecessor: '', planStartDate: '2026-01-01', planEndDate: '2026-01-07', estimatedDays: 7, actualStartDate: '2026-01-01', actualEndDate: '2026-01-07', actualDays: 7 },
-  { id: '1.2', parentId: '1', order: 2, taskName: 'STR1', status: '已完成', progress: 100, responsible: '李四', predecessor: '1.1', planStartDate: '2026-01-08', planEndDate: '2026-01-15', estimatedDays: 8, actualStartDate: '2026-01-08', actualEndDate: '2026-01-14', actualDays: 7 },
-  { id: '2', order: 2, taskName: '计划', status: '进行中', progress: 60, responsible: '王五', predecessor: '1.2', planStartDate: '2026-01-16', planEndDate: '2026-02-15', estimatedDays: 30, actualStartDate: '2026-01-16', actualEndDate: '', actualDays: 18 },
-  { id: '2.1', parentId: '2', order: 1, taskName: 'STR2', status: '进行中', progress: 60, responsible: '王五', predecessor: '1.2', planStartDate: '2026-01-16', planEndDate: '2026-01-31', estimatedDays: 15, actualStartDate: '2026-01-16', actualEndDate: '', actualDays: 12 },
-  { id: '2.2', parentId: '2', order: 2, taskName: 'STR3', status: '未开始', progress: 0, responsible: '赵六', predecessor: '2.1', planStartDate: '2026-02-01', planEndDate: '2026-02-15', estimatedDays: 15, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-  { id: '3', order: 3, taskName: '开发验证', status: '未开始', progress: 0, responsible: '', predecessor: '2.2', planStartDate: '2026-02-16', planEndDate: '2026-03-15', estimatedDays: 28, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-  { id: '4', order: 4, taskName: '上市保障', status: '未开始', progress: 0, responsible: '', predecessor: '3', planStartDate: '2026-03-16', planEndDate: '2026-04-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-]
+export const LEVEL1_TASKS = buildStandardLevel1Tasks(true)
 
 // 配置中心模板专用：只保留结构字段，清空日期/工期/实际/状态/进度
-export const LEVEL1_TEMPLATE_TASKS = LEVEL1_TASKS.map(t => ({
+export const LEVEL1_TEMPLATE_TASKS = buildStandardLevel1Tasks(false).map(t => ({
   ...t,
   defaultRoadmap: !!t.parentId,
-  responsible: 'SPM',
+  role: t.parentId ? 'SPM' : '',
+  responsible: t.parentId ? 'SPM' : '',
   planStartDate: '', planEndDate: '', estimatedDays: 0,
   actualStartDate: '', actualEndDate: '', actualDays: 0,
   status: '未开始', progress: 0,
@@ -140,6 +133,28 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
   const migrated = persistedVersion < 3
     ? migrateTechnicalTemplateNumberingState(legacyMigrated)
     : legacyMigrated
+  const standardTemplateTypes = PROJECT_TEMPLATE_TYPES.filter(projectType => projectType !== PROJECT_CATEGORY_TECH)
+  const shouldReplaceLegacyStandardTasks = (tasks: unknown) => (
+    Array.isArray(tasks)
+    && tasks.some(task => ['概念', '计划', '开发验证', '上市保障'].includes(String(task?.taskName || '')))
+  )
+  const migrateStandardTasks = (tasks: unknown, withMockDates: boolean) => {
+    if (!shouldReplaceLegacyStandardTasks(tasks)) return tasks
+    const customTasks = (tasks as any[]).filter(task => task?.source === 'custom')
+    return [...buildStandardLevel1Tasks(withMockDates), ...customTasks.map(task => ({ ...task, source: 'custom' }))]
+  }
+  const migratedConfigTemplates = { ...(migrated.configTemplateTasksByType || {}) }
+  standardTemplateTypes.forEach(projectType => {
+    migratedConfigTemplates[projectType] = migrateStandardTasks(migratedConfigTemplates[projectType], false) || cloneLevel1TemplateTasks()
+  })
+  const migratedSnapshots = Object.fromEntries(Object.entries(migrated.publishedSnapshots || {}).map(([key, value]) => [
+    key,
+    key.includes(PROJECT_CATEGORY_TECH) ? value : migrateStandardTasks(value, key.startsWith('project::')),
+  ]))
+  const migratedMarketPlanData = Object.fromEntries(Object.entries(migrated.marketPlanData || {}).map(([market, value]) => {
+    const planData = value as Record<string, any>
+    return [market, { ...planData, tasks: migrateStandardTasks(planData.tasks, true) }]
+  }))
   const initialScopes = createInitialConfigTemplateVersionScopes()
   const legacyVersions = Array.isArray(migrated.versions)
     ? migrated.versions.map((version: any) => ({ ...version }))
@@ -159,6 +174,10 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
   }))
   return {
     ...migrated,
+    tasks: migrateStandardTasks(migrated.tasks, true) || buildStandardLevel1Tasks(true),
+    marketPlanData: migratedMarketPlanData,
+    publishedSnapshots: migratedSnapshots,
+    configTemplateTasksByType: migratedConfigTemplates,
     configTemplateVersionScopes,
     configTemplateCompareScopes: {
       ...createInitialConfigTemplateCompareScopes(),
@@ -189,7 +208,7 @@ export const ALL_COLUMNS: PlanColumnDefinition[] = [
 
 export const TABLE_COLUMNS = ALL_COLUMNS
 export const CONFIG_TABLE_COLUMNS = TABLE_COLUMNS.filter(column => (
-  !['actualStartDate', 'actualEndDate', 'actualDays'].includes(column.key)
+  ['id', 'taskName', 'responsible'].includes(column.key)
 ))
 
 export const GANTT_COLUMNS: PlanColumnDefinition[] = [
@@ -443,7 +462,7 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
 
   // Project-space plan
   projectPlanLevel: 'level1',
-  projectPlanViewMode: 'table',
+  projectPlanViewMode: 'horizontal',
   projectPlanGanttScaleMode: 'month',
   projectPlanOverviewTab: 'overview',
   planMetaCollapsed: false,

@@ -308,7 +308,12 @@ export default function ConfigContainer() {
           </div>
         )
       } })
-      if (visibleColumns.includes('responsible')) cols.push({ title: '角色', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, record: any) => isEditMode ? <Select className="pms-edit-input" value={val || 'SPM'} size="small" style={{ width: '100%' }} options={PLAN_TEMPLATE_ROLE_OPTIONS} onChange={(value) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, responsible: value } : t); currentSetTasks(updated) }} /> : (val ? <Tag color="processing" style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>) })
+      if (visibleColumns.includes('responsible')) cols.push({ title: '角色', dataIndex: 'role', key: 'responsible', width: 100, render: (val: string, record: any) => {
+        const role = val || record.responsible || ''
+        return isEditMode
+          ? <Select className="pms-edit-input" value={role || 'SPM'} size="small" style={{ width: '100%' }} options={PLAN_TEMPLATE_ROLE_OPTIONS} onChange={(value) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, role: value, responsible: value } : t); currentSetTasks(updated) }} />
+          : (role ? <Tag color="processing" style={{ borderRadius: 4, fontSize: 12 }}>{role}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>)
+      } })
       if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>) })
       if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 130, render: (val: string) => <span style={{ fontSize: 12, color: '#e5e7eb' }}>{val || '-'}</span> })
       if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 130, render: (val: string) => <span style={{ fontSize: 12, color: '#e5e7eb' }}>{val || '-'}</span> })
@@ -716,7 +721,6 @@ export default function ConfigContainer() {
                     ]
                     : [
                       { key: 'level1', label: <span style={{ fontWeight: 500 }}>一级计划</span> },
-                      { key: 'level2', label: <span style={{ fontWeight: 500 }}>二级计划</span> },
                     ]}
                 />
               </div>
