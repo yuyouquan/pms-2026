@@ -36,8 +36,10 @@ const childB = {
   planStartDate: '2026-01-01', planEndDate: '2026-01-10', actualStartDate: '2026-01-02', actualEndDate: '2026-01-09',
 }
 
+const displayedActivity = { ...childA, actualStartDate: '2026-08-01', actualEndDate: '2026-08-05' }
+const displayedActivitySnapshot = structuredClone(displayedActivity)
 const override = rules.createLevel3ActualDateOverride(
-  { ...childA, actualStartDate: '2026-08-01', actualEndDate: '2026-08-05' },
+  displayedActivity,
   undefined,
   { actualStartDate: '2026-08-02' },
   '李四',
@@ -50,13 +52,15 @@ assert.deepEqual(override, {
   detachedBy: '李四',
   detachedAt: '2026-08-17 12:00:00',
 })
+assert.deepEqual(displayedActivity, displayedActivitySnapshot)
 
 const sourceChildA = { ...childA, actualStartDate: '2026-08-03', actualEndDate: '2026-08-08' }
-const sourceChildASnapshot = structuredClone(sourceChildA)
+const mergeInput = [sourceChildA, childB]
+const mergeInputSnapshot = structuredClone(mergeInput)
 const overrides = { c1: override }
 const overridesSnapshot = structuredClone(overrides)
 const merged = rules.mergeLevel3ActualDateOverrides(
-  [sourceChildA, childB],
+  mergeInput,
   overrides,
 )
 assert.equal(merged[0].actualStartDate, '2026-08-02')
@@ -64,12 +68,14 @@ assert.equal(merged[0].actualEndDate, '2026-08-05')
 assert.notEqual(merged[0], sourceChildA)
 assert.notEqual(merged[1], childB)
 assert.equal(merged[1].actualStartDate, childB.actualStartDate)
-assert.deepEqual(sourceChildA, sourceChildASnapshot)
+assert.deepEqual(mergeInput, mergeInputSnapshot)
 assert.deepEqual(overrides, overridesSnapshot)
 
 const overrideSnapshot = structuredClone(override)
+const secondDisplayedActivity = { ...sourceChildA, actualEndDate: '2026-08-20' }
+const secondDisplayedActivitySnapshot = structuredClone(secondDisplayedActivity)
 const secondEdit = rules.createLevel3ActualDateOverride(
-  { ...sourceChildA, actualEndDate: '2026-08-20' },
+  secondDisplayedActivity,
   override,
   { actualStartDate: '2026-08-04' },
   '王五',
@@ -83,6 +89,7 @@ assert.deepEqual(secondEdit, {
   detachedAt: '2026-08-17 12:02:00',
 })
 assert.deepEqual(override, overrideSnapshot)
+assert.deepEqual(secondDisplayedActivity, secondDisplayedActivitySnapshot)
 
 const rollupRows = rules.applyLevel3Rollups(rules.mergeLevel3ActualDateOverrides(
   [parent, sourceChildA, { ...childB, actualStartDate: '2026-08-06', actualEndDate: '2026-08-15' }],
@@ -100,8 +107,10 @@ assert.deepEqual(rollupRows.find(row => row.id === 'p1'), {
   actualDays: 11,
 })
 
+const clearedDisplayedActivity = { ...childA, actualStartDate: '2026-08-01', actualEndDate: '2026-08-05' }
+const clearedDisplayedActivitySnapshot = structuredClone(clearedDisplayedActivity)
 const cleared = rules.createLevel3ActualDateOverride(
-  { ...childA, actualStartDate: '2026-08-01', actualEndDate: '2026-08-05' },
+  clearedDisplayedActivity,
   undefined,
   { actualEndDate: '' },
   '李四',
@@ -109,9 +118,12 @@ const cleared = rules.createLevel3ActualDateOverride(
 )
 assert.equal(cleared.actualStartDate, '2026-08-01')
 assert.equal(cleared.actualEndDate, '')
+assert.deepEqual(clearedDisplayedActivity, clearedDisplayedActivitySnapshot)
 
+const undefinedPatchDisplayedActivity = { ...childA, actualStartDate: '2026-08-01', actualEndDate: '2026-08-05' }
+const undefinedPatchDisplayedActivitySnapshot = structuredClone(undefinedPatchDisplayedActivity)
 const undefinedPatch = rules.createLevel3ActualDateOverride(
-  { ...childA, actualStartDate: '2026-08-01', actualEndDate: '2026-08-05' },
+  undefinedPatchDisplayedActivity,
   undefined,
   { actualStartDate: undefined, actualEndDate: undefined },
   '李四',
@@ -124,6 +136,7 @@ assert.deepEqual(undefinedPatch, {
   detachedBy: '李四',
   detachedAt: '2026-08-17 12:03:00',
 })
+assert.deepEqual(undefinedPatchDisplayedActivity, undefinedPatchDisplayedActivitySnapshot)
 
 assert.deepEqual(
   rules.numberLevel3Activities([parent, childA, childB]).map(row => row.number),
