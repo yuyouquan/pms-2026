@@ -21,6 +21,7 @@ export const LEVEL3_COLUMN_KEYS = [
   'actualDays',
   'status',
   'risk',
+  'remark',
   'creator',
 ] as const
 

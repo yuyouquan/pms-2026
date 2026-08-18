@@ -6790,6 +6790,7 @@ body,
 }
 .pms-level3-activity-cell { display: flex; align-items: center; min-width: 0; gap: 6px; }
 .pms-level3-activity-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pms-level3-remark-cell { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pms-level3-row-actions { margin-left: auto; opacity: 0; transition: opacity .16s ease; }
 .ant-table-row:hover .pms-level3-row-actions,
 .pms-level3-row-actions:focus-within { opacity: 1; }
@@ -6797,6 +6798,8 @@ body,
 .pms-level3-parent-row:hover > td { background: #eeebff !important; }
 .pms-level3-dragging > td { box-shadow: inset 0 0 0 1px var(--pms-brand); }
 .pms-level3-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.pms-level3-activity-modal .ant-form-item { margin-bottom: 12px; }
+.pms-level3-activity-modal .pms-level3-form-grid { gap: 12px; }
 .pms-level3-history-list { display: grid; }
 .pms-level3-history-item { padding: 12px 0; border-bottom: 1px solid var(--pms-border); }
 .pms-level3-history-item:last-child { border-bottom: 0; }
@@ -6830,4 +6833,5 @@ body,
 
   .pms-level3-toolbar { align-items: flex-start; flex-direction: column; }
   .pms-level3-form-grid { grid-template-columns: 1fr; gap: 0; }
+  .pms-level3-activity-modal .pms-level3-form-grid { gap: 0; }
 }

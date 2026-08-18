@@ -131,6 +131,7 @@ const LEVEL3_COLUMN_DEFINITIONS: Array<SortableColumnDefinition<Level3ColumnKey>
   { key: 'actualDays', title: '实际工期', defaultVisible: true, width: 100 },
   { key: 'status', title: '状态', defaultVisible: true, width: 100 },
   { key: 'risk', title: '任务风险', defaultVisible: true, width: 100 },
+  { key: 'remark', title: '备注', defaultVisible: true, width: 220 },
   { key: 'creator', title: '创建者', defaultVisible: true, width: 110 },
 ]
 
@@ -148,6 +149,7 @@ const FILTER_FIELDS: FilterFieldDefinition[] = [
   { key: 'actualDays', label: '实际工期', kind: 'text' },
   { key: 'status', label: '状态', kind: 'enum', options: LEVEL3_ACTIVITY_STATUSES.map(value => ({ label: value, value })) },
   { key: 'risk', label: '任务风险', kind: 'enum', options: LEVEL3_ACTIVITY_RISKS.map(value => ({ label: value, value })) },
+  { key: 'remark', label: '备注', kind: 'text' },
   { key: 'creator', label: '创建者', kind: 'text' },
 ]
 const FILTER_FIELD_OPTIONS = FILTER_FIELDS.map(field => ({ label: field.label, value: field.key }))
@@ -691,6 +693,14 @@ export default function Level3PlanModule({
           : <Tag color={colors[value]}>{value}</Tag>,
       }
     }
+    if (definition.key === 'remark') {
+      return {
+        ...base,
+        render: (value: string) => value ? (
+          <Tooltip title={value}><span className="pms-level3-remark-cell">{value}</span></Tooltip>
+        ) : '-',
+      }
+    }
     return { ...base, render: (value: string) => formatCell(value) }
   })
 
@@ -860,7 +870,7 @@ export default function Level3PlanModule({
       </DragPermissionContext.Provider>
 
       <Modal
-        className="pms-modal"
+        className="pms-modal pms-level3-activity-modal"
         title={modalMode?.kind === 'create-parent' ? '新增活动' : modalMode?.kind === 'create-child' ? '新增二级活动' : '编辑活动'}
         open={modalMode !== null}
         onCancel={closeModal}
@@ -908,7 +918,7 @@ export default function Level3PlanModule({
             </>
           )}
           <Form.Item label="备注" name="remark">
-            <Input.TextArea rows={4} maxLength={500} showCount placeholder="请输入备注" />
+            <Input.TextArea autoSize={{ minRows: 1, maxRows: 4 }} maxLength={500} showCount placeholder="请输入备注" />
           </Form.Item>
         </Form>
       </Modal>
