@@ -126,6 +126,7 @@ import {
 import {
   buildTosTypeRows,
   createTosTypePlanEntry,
+  deriveDetachedTosTypes,
   ensureTosTypePlanDataForRows,
   getMainTosType,
   getTosTypePlanSourceType,
@@ -1365,12 +1366,7 @@ export default function ProjectSpaceContainer() {
       return
     }
 
-    const detachedTosTypes = normalizedRows
-      .filter(row => {
-        const previousRow = previousTosTypeRows.find(item => item.type === row.type)
-        return previousRow?.followsMain && !row.isMain && !row.followsMain
-      })
-      .map(row => row.type)
+    const detachedTosTypes = deriveDetachedTosTypes(previousTosTypeRows, normalizedRows)
 
     const nextTypes = normalizedRows.map(row => row.type)
     const mainType = getMainTosType(normalizedRows) as TosPlanType
@@ -1380,6 +1376,12 @@ export default function ProjectSpaceContainer() {
       versionType: mainType,
     } as typeof selectedProject
 
+    if (!updateProject(selectedProject.id, updatedProject, currentLoginUser)) {
+      void containerMessageApi.error('类型配置保存失败')
+      return
+    }
+
+    const previousTosTypePlanData = tosTypePlanDataByProjectId[selectedProject.id]
     setTosTypeConfigForProject(selectedProject.id, normalizedRows)
     setTosTypePlanDataByProjectId(previous => ensureTosTypePlanDataForRows(
       previous,
@@ -1387,14 +1389,10 @@ export default function ProjectSpaceContainer() {
       normalizedRows,
       tosTypeSeedEntry,
     ))
-    if (!updateProject(selectedProject.id, updatedProject, currentLoginUser)) {
-      void containerMessageApi.error('类型配置保存失败')
-      return
-    }
-    detachedTosTypes.forEach(type => {
+    const forkSucceeded = detachedTosTypes.every(type => {
       const previousRow = previousTosTypeRows.find(row => row.type === type)
       const nextRow = normalizedRows.find(row => row.type === type)
-      if (!previousRow || !nextRow) return
+      if (!previousRow || !nextRow) return true
       const fork = resolveLevel3DetachedScopeFork(
         {
           projectId: selectedProject.id,
@@ -1411,8 +1409,20 @@ export default function ProjectSpaceContainer() {
           followsMain: nextRow.followsMain,
         },
       )
-      if (fork) forkFollowScope(fork.sourceScopeKey, fork.targetScopeKey)
+      return !fork || forkFollowScope(fork.sourceScopeKey, fork.targetScopeKey)
     })
+    if (!forkSucceeded) {
+      setTosTypeConfigForProject(selectedProject.id, previousTosTypeRows)
+      setTosTypePlanDataByProjectId(previous => {
+        const next = { ...previous }
+        if (previousTosTypePlanData) next[selectedProject.id] = previousTosTypePlanData
+        else delete next[selectedProject.id]
+        return next
+      })
+      updateProject(selectedProject.id, selectedProject, currentLoginUser)
+      void containerMessageApi.error('类型配置保存失败，三级计划脱离跟随未完成')
+      return
+    }
     if (!nextTypes.includes(selectedTosTypeTab as TosPlanType)) setSelectedTosTypeTab(mainType || nextTypes[0])
     setShowTosTypeEditor(false)
     void containerMessageApi.success('类型配置已保存')

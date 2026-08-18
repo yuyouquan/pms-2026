@@ -174,6 +174,23 @@ export const isFollowTosType = (rows: TosTypeConfigRow[], type: string) => (
   normalizeTosTypeRows(rows).some(row => row.type === type && !row.isMain && row.followsMain)
 )
 
+export const deriveDetachedTosTypes = (
+  previousRows: TosTypeConfigRow[],
+  nextRows: TosTypeConfigRow[],
+): TosPlanType[] => {
+  const previousFollowTypes = new Set(
+    normalizeTosTypeRows(previousRows)
+      .filter(row => row.followsMain)
+      .map(row => row.type),
+  )
+  const nextFollowTypes = new Set(
+    normalizeTosTypeRows(nextRows)
+      .filter(row => row.followsMain)
+      .map(row => row.type),
+  )
+  return [...previousFollowTypes].filter(type => !nextFollowTypes.has(type))
+}
+
 export const getTosTypePlanSourceType = (
   rows: TosTypeConfigRow[],
   type: string,

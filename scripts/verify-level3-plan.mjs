@@ -7,6 +7,7 @@ import ts from 'typescript'
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const rulesPath = path.join(root, 'src/lib/level3PlanRules.ts')
+const tosTypeRulesPath = path.join(root, 'src/lib/tosTypeRules.ts')
 const rootRequire = createRequire(path.join(root, 'package.json'))
 
 const loadCommonJsTypeScriptModule = (filePath, moduleOverrides = {}) => {
@@ -43,6 +44,7 @@ const transpiled = ts.transpileModule(source, {
   fileName: rulesPath,
 }).outputText
 const rules = await import(`data:text/javascript;base64,${Buffer.from(transpiled).toString('base64')}`)
+const tosTypeRules = loadCommonJsTypeScriptModule(tosTypeRulesPath)
 
 const parent = {
   id: 'p1', parentId: null, order: 0, activityName: '父活动', responsible: '张三',
@@ -197,6 +199,45 @@ assert.equal(rules.resolveLevel3DetachedScopeFork(
   { projectId: 'project-1', kind: 'market', value: 'TR', mainValue: 'OP', followsMain: false },
   { projectId: 'project-1', kind: 'market', value: 'TR', mainValue: 'OP', followsMain: false },
 ), null)
+assert.deepEqual(rules.resolveLevel3DetachedScopeFork(
+  { projectId: 'project-1', kind: 'tosType', value: 'GO', mainValue: 'Full', followsMain: true },
+  { projectId: 'project-1', kind: 'tosType', value: 'GO', mainValue: 'GO', followsMain: false },
+), {
+  sourceScopeKey: 'project-1::tosType::Full',
+  targetScopeKey: 'project-1::tosType::GO',
+}, 'a promoted tOS type must fork from its previous main scope')
+
+const tosTypeRowsBeforeDetach = [
+  { id: 'full', type: 'Full', isMain: true, followsMain: false },
+  { id: 'go', type: 'GO', isMain: false, followsMain: true },
+  { id: 'pad', type: 'PAD', isMain: false, followsMain: true },
+  { id: 'slim', type: 'Slim', isMain: false, followsMain: false },
+]
+assert.deepEqual(
+  tosTypeRules.deriveDetachedTosTypes(tosTypeRowsBeforeDetach, [
+    { id: 'full', type: 'Full', isMain: true, followsMain: false },
+    { id: 'go', type: 'GO', isMain: false, followsMain: false },
+    { id: 'pad', type: 'PAD', isMain: false, followsMain: true },
+    { id: 'slim', type: 'Slim', isMain: false, followsMain: false },
+  ]),
+  ['GO'],
+  'direct tOS unfollow should materialize only the detached type',
+)
+assert.deepEqual(
+  tosTypeRules.deriveDetachedTosTypes(tosTypeRowsBeforeDetach, [
+    { id: 'full', type: 'Full', isMain: false, followsMain: false },
+    { id: 'go', type: 'GO', isMain: true, followsMain: false },
+    { id: 'pad', type: 'PAD', isMain: false, followsMain: false },
+    { id: 'slim', type: 'Slim', isMain: false, followsMain: false },
+  ]),
+  ['GO', 'PAD'],
+  'promoted and remaining former followers should both materialize from the previous main',
+)
+assert.deepEqual(
+  tosTypeRules.deriveDetachedTosTypes(tosTypeRowsBeforeDetach, tosTypeRowsBeforeDetach),
+  [],
+  'unchanged tOS followers should not materialize',
+)
 
 const sourceHistory = [{
   id: 'source-log', action: 'edit', actor: '张三', occurredAt: '2026-08-17 10:00:00',
@@ -433,6 +474,15 @@ assert.deepEqual(persisted.historyByScope[storeSourceScope], sourceHistorySnapsh
 assert.deepEqual(store.persist.getOptions().partialize(persisted).actualOverridesByScope, {
   [storeOtherScope]: { c2: override },
 })
+const failedForkState = structuredClone({
+  activitiesByScope: store.getState().activitiesByScope,
+  historyByScope: store.getState().historyByScope,
+  actualOverridesByScope: store.getState().actualOverridesByScope,
+})
+assert.equal(store.getState().forkFollowScope('project-1::market::missing', storeFollowerScope), false)
+assert.deepEqual(store.getState().activitiesByScope, failedForkState.activitiesByScope)
+assert.deepEqual(store.getState().historyByScope, failedForkState.historyByScope)
+assert.deepEqual(store.getState().actualOverridesByScope, failedForkState.actualOverridesByScope)
 const migrate = store.persist.getOptions().migrate
 const migrated = await migrate({
   activitiesByScope: { legacy: [parent] },
@@ -558,7 +608,7 @@ const saveTosTypeConfigSource = containerSource.slice(saveTosTypeConfigStart, sa
 for (const token of [
   'const previousTosTypeRows = getCurrentTosTypeRows()',
   'const previousMainTosType = getMainTosType(previousTosTypeRows)',
-  'const detachedTosTypes = normalizedRows',
+  'const detachedTosTypes = deriveDetachedTosTypes(previousTosTypeRows, normalizedRows)',
   "kind: 'tosType'",
   'resolveLevel3DetachedScopeFork',
   'forkFollowScope(fork.sourceScopeKey, fork.targetScopeKey)',
@@ -566,16 +616,25 @@ for (const token of [
   assert.ok(saveTosTypeConfigSource.includes(token), `tOS type detach integration is missing ${token}`)
 }
 assert.ok(
+  saveTosTypeConfigSource.includes('deriveDetachedTosTypes(previousTosTypeRows, normalizedRows)'),
+  'tOS type save must derive detached types from previous and next follow sets',
+)
+assert.ok(
   saveTosTypeConfigSource.includes('normalizeTosTypeRows(tosTypeDraftRows, previousMainTosType)'),
   'tOS type save must normalize candidate rows against the previous main type',
 )
 assert.ok(
-  saveTosTypeConfigSource.includes('previousRow?.followsMain && !row.isMain && !row.followsMain'),
-  'tOS type detach detection must only include followed rows becoming independent',
+  saveTosTypeConfigSource.indexOf('if (!updateProject(') < saveTosTypeConfigSource.indexOf('detachedTosTypes.every'),
+  'tOS type Level 3 forks must run only after the project update succeeds',
 )
 assert.ok(
-  saveTosTypeConfigSource.indexOf('if (!updateProject(') < saveTosTypeConfigSource.indexOf('detachedTosTypes.forEach'),
-  'tOS type Level 3 forks must run only after the project update succeeds',
+  saveTosTypeConfigSource.indexOf('if (!updateProject(') < saveTosTypeConfigSource.indexOf('setTosTypeConfigForProject('),
+  'tOS type auxiliary stores must not mutate before the project update succeeds',
+)
+assert.ok(
+  saveTosTypeConfigSource.includes('if (!forkSucceeded) {')
+    && saveTosTypeConfigSource.includes("void containerMessageApi.error('类型配置保存失败，三级计划脱离跟随未完成')"),
+  'tOS type save must handle a failed Level 3 fork without reporting success',
 )
 assert.ok(!containerSource.includes("{ key: 'level2', label: '二级计划' }"), 'project-space still exposes the Level 2 plan tab')
 assert.ok(!containerSource.includes("{ key: 'overview', label: '计划总览' }"), 'project-space still exposes the overview plan tab')
