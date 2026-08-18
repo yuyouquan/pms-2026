@@ -49,6 +49,16 @@ export interface Level3Activity {
   updatedAt: string
 }
 
+export interface Level3ActualDateOverride {
+  activityId: string
+  actualStartDate: string
+  actualEndDate: string
+  detachedBy: string
+  detachedAt: string
+}
+
+export type Level3ActualDateOverrideMap = Record<string, Level3ActualDateOverride>
+
 export interface Level3ActivityFormValue {
   activityName?: string
   responsible?: string

@@ -36,6 +36,73 @@ const childB = {
   planStartDate: '2026-01-01', planEndDate: '2026-01-10', actualStartDate: '2026-01-02', actualEndDate: '2026-01-09',
 }
 
+const override = rules.createLevel3ActualDateOverride(
+  { ...childA, actualStartDate: '2026-08-01', actualEndDate: '2026-08-05' },
+  undefined,
+  { actualStartDate: '2026-08-02' },
+  '李四',
+  '2026-08-17 12:00:00',
+)
+assert.deepEqual(override, {
+  activityId: 'c1',
+  actualStartDate: '2026-08-02',
+  actualEndDate: '2026-08-05',
+  detachedBy: '李四',
+  detachedAt: '2026-08-17 12:00:00',
+})
+
+const sourceChildA = { ...childA, actualStartDate: '2026-08-03', actualEndDate: '2026-08-08' }
+const merged = rules.mergeLevel3ActualDateOverrides(
+  [sourceChildA, childB],
+  { c1: override },
+)
+assert.equal(merged[0].actualStartDate, '2026-08-02')
+assert.equal(merged[0].actualEndDate, '2026-08-05')
+assert.notEqual(merged[0], sourceChildA)
+assert.notEqual(merged[1], childB)
+assert.equal(merged[1].actualStartDate, childB.actualStartDate)
+
+const secondEdit = rules.createLevel3ActualDateOverride(
+  { ...sourceChildA, actualEndDate: '2026-08-20' },
+  override,
+  { actualStartDate: '2026-08-04' },
+  '王五',
+  '2026-08-17 12:02:00',
+)
+assert.deepEqual(secondEdit, {
+  activityId: 'c1',
+  actualStartDate: '2026-08-04',
+  actualEndDate: '2026-08-05',
+  detachedBy: '王五',
+  detachedAt: '2026-08-17 12:02:00',
+})
+
+const rollupRows = rules.applyLevel3Rollups(rules.mergeLevel3ActualDateOverrides(
+  [parent, sourceChildA, { ...childB, actualStartDate: '2026-08-06', actualEndDate: '2026-08-15' }],
+  { c1: secondEdit },
+))
+assert.deepEqual(rollupRows.find(row => row.id === 'p1'), {
+  ...parent,
+  number: '1',
+  depth: 0,
+  planStartDate: '2026-01-01',
+  planEndDate: '2026-01-10',
+  estimatedDays: 9,
+  actualStartDate: '2026-08-04',
+  actualEndDate: '2026-08-15',
+  actualDays: 11,
+})
+
+const cleared = rules.createLevel3ActualDateOverride(
+  { ...childA, actualStartDate: '2026-08-01', actualEndDate: '2026-08-05' },
+  undefined,
+  { actualEndDate: '' },
+  '李四',
+  '2026-08-17 12:01:00',
+)
+assert.equal(cleared.actualStartDate, '2026-08-01')
+assert.equal(cleared.actualEndDate, '')
+
 assert.deepEqual(
   rules.numberLevel3Activities([parent, childA, childB]).map(row => row.number),
   ['1', '1.1', '1.2'],

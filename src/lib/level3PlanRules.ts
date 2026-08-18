@@ -3,6 +3,8 @@ import type {
   Level3ActivityFormValue,
   Level3ActivityPermissions,
   Level3ActivityViewRow,
+  Level3ActualDateOverride,
+  Level3ActualDateOverrideMap,
   Level3DeleteResult,
   Level3Milestone,
   Level3MoveResult,
@@ -149,6 +151,41 @@ export function getLevel3ParentRollup(parentId: string, activities: Level3Activi
     actualEndDate,
     actualDays: dateDifference(actualStartDate, actualEndDate),
   }
+}
+
+export function createLevel3ActualDateOverride(
+  displayedActivity: Level3Activity,
+  existing: Level3ActualDateOverride | undefined,
+  patch: Pick<Partial<Level3Activity>, 'actualStartDate' | 'actualEndDate'>,
+  actor: string,
+  occurredAt: string,
+): Level3ActualDateOverride {
+  const frozen = existing || {
+    activityId: displayedActivity.id,
+    actualStartDate: displayedActivity.actualStartDate,
+    actualEndDate: displayedActivity.actualEndDate,
+    detachedBy: actor,
+    detachedAt: occurredAt,
+  }
+  return {
+    ...frozen,
+    ...patch,
+    activityId: displayedActivity.id,
+    detachedBy: actor,
+    detachedAt: occurredAt,
+  }
+}
+
+export function mergeLevel3ActualDateOverrides(
+  activities: Level3Activity[],
+  overrides: Level3ActualDateOverrideMap,
+): Level3Activity[] {
+  return activities.map(activity => {
+    const override = overrides[activity.id]
+    return override
+      ? { ...activity, actualStartDate: override.actualStartDate, actualEndDate: override.actualEndDate }
+      : { ...activity }
+  })
 }
 
 export function applyLevel3Rollups(activities: Level3Activity[]): Level3ActivityViewRow[] {
