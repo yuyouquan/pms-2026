@@ -504,6 +504,7 @@ const componentSource = fs.readFileSync(componentPath, 'utf8')
 assert.ok(!componentSource.includes('<Alert'), '跟随范围不应显示提示条')
 assert.ok(componentSource.includes('shouldShowLevel3CreateButton(readOnly)'), '新增活动按钮未按跟随状态隐藏')
 assert.ok(componentSource.includes('selectedScopeKey: string'), '三级计划组件必须接收当前选中范围键')
+assert.ok(componentSource.includes('const EMPTY_OVERRIDES: Level3ActualDateOverrideMap = {}'), '三级计划组件必须使用稳定的空实际日期覆盖对象')
 assert.ok(componentSource.includes('mergeLevel3ActualDateOverrides(sourceActivities, actualOverrides)'), '展示活动必须先合并跟随范围实际日期覆盖')
 assert.ok(componentSource.includes('const rows = useMemo(() => applyLevel3Rollups(effectiveActivities)'), '汇总必须基于合并后的展示活动')
 assert.ok(componentSource.includes('updateFollowActualDates(scopeKey, selectedScopeKey, row.id, { [field]: value }, currentUser)'), '跟随范围的内联实际日期编辑必须写入当前范围覆盖')
@@ -551,5 +552,9 @@ for (const token of [
 }
 assert.ok(!containerSource.includes("{ key: 'level2', label: '二级计划' }"), 'project-space still exposes the Level 2 plan tab')
 assert.ok(!containerSource.includes("{ key: 'overview', label: '计划总览' }"), 'project-space still exposes the overview plan tab')
+assert.ok(
+  containerSource.includes('key={`${level3ScopeResolution.scopeKey}:${level3ScopeResolution.selectedScopeKey}:${level3ScopeResolution.readOnly}`}'),
+  '切换三级计划来源、当前范围或跟随状态时必须重新挂载，避免跨范围保留弹窗草稿',
+)
 
 console.log(`Level 3 plan rule verification passed (${pathToFileURL(rulesPath).pathname})`)

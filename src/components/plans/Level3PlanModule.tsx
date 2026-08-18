@@ -97,6 +97,7 @@ import {
   LEVEL3_ACTIVITY_RISKS,
   LEVEL3_ACTIVITY_STATUSES,
   type Level3Activity,
+  type Level3ActualDateOverrideMap,
   type Level3ChangeLog,
   type Level3ActivityFormValue,
   type Level3ActivityViewRow,
@@ -110,6 +111,7 @@ const { Text } = Typography
 const EMPTY_ACTIVITIES: Level3Activity[] = []
 const EMPTY_HISTORY: Level3ChangeLog[] = []
 const EMPTY_STRINGS: string[] = []
+const EMPTY_OVERRIDES: Level3ActualDateOverrideMap = {}
 
 const LEVEL3_COLUMN_DEFINITIONS: Array<SortableColumnDefinition<Level3ColumnKey> & { width: number }> = [
   { key: 'number', title: '序号', defaultVisible: true, hideable: false, fixed: 'left', width: 92 },
@@ -253,7 +255,7 @@ export default function Level3PlanModule({
 }: Level3PlanModuleProps) {
   const sourceActivities = useLevel3PlanStore(state => state.activitiesByScope[scopeKey] || EMPTY_ACTIVITIES)
   const sourceHistory = useLevel3PlanStore(state => state.historyByScope[scopeKey] || EMPTY_HISTORY)
-  const actualOverrides = useLevel3PlanStore(state => state.actualOverridesByScope[selectedScopeKey] || {})
+  const actualOverrides = useLevel3PlanStore(state => state.actualOverridesByScope[selectedScopeKey] || EMPTY_OVERRIDES)
   const selectedScopeHistory = useLevel3PlanStore(state => state.historyByScope[selectedScopeKey] || EMPTY_HISTORY)
   const collapsedIds = useLevel3PlanStore(state => state.collapsedIdsByScope[scopeKey] || EMPTY_STRINGS)
   const storedColumnSettings = useLevel3PlanStore(state => state.columnSettingsByScope[scopeKey])

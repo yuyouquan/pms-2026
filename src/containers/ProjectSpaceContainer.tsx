@@ -3709,6 +3709,7 @@ export default function ProjectSpaceContainer() {
         {!usesSharedPlanWorkspace && planWorkspaceNotices}
         {projectPlanLevel === 'level3' && level3ScopeResolution && selectedProject && (
           <Level3PlanModule
+            key={`${level3ScopeResolution.scopeKey}:${level3ScopeResolution.selectedScopeKey}:${level3ScopeResolution.readOnly}`}
             projectName={selectedProject.name}
             scopeKey={level3ScopeResolution.scopeKey}
             selectedScopeKey={level3ScopeResolution.selectedScopeKey}
