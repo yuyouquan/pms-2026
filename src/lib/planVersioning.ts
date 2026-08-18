@@ -57,10 +57,16 @@ export const getNextPlanRevisionVersionNo = (
   return `V${grayMajor}.${maxGrayMinor + 1}`
 }
 
-export const getDisplayPlanVersionsForHorizontalPlan = <T extends PlanVersionLike>(versions: T[]): T[] => {
+export const getDisplayPlanVersionsForHorizontalPlan = <T extends PlanVersionLike>(
+  versions: T[],
+  options: { includeDraft?: boolean } = {},
+): T[] => {
   const releasedVersions = versions
     .filter(version => !version.status || version.status === '已发布')
     .filter(version => parsePlanVersionNo(version.versionNo))
+  const draftVersions = options.includeDraft
+    ? versions.filter(version => version.status === '修订中' && parsePlanVersionNo(version.versionNo))
+    : []
 
   const latestFormalMajor = releasedVersions
     .map(version => parsePlanVersionNo(version.versionNo))
@@ -68,10 +74,10 @@ export const getDisplayPlanVersionsForHorizontalPlan = <T extends PlanVersionLik
     .reduce((max, version) => Math.max(max, version.major), 0)
 
   if (latestFormalMajor === 0) {
-    return [...releasedVersions].sort(comparePlanVersions)
+    return [...releasedVersions, ...draftVersions].sort(comparePlanVersions)
   }
 
-  return releasedVersions
+  const visibleReleasedVersions = releasedVersions
     .filter(version => {
       const parsed = parsePlanVersionNo(version.versionNo)
       if (!parsed) return false
@@ -79,7 +85,8 @@ export const getDisplayPlanVersionsForHorizontalPlan = <T extends PlanVersionLik
       const isLatestFormalGray = parsed.major === latestFormalMajor && parsed.minor !== null
       return isFormalVersion || isLatestFormalGray
     })
-    .sort(comparePlanVersions)
+
+  return [...visibleReleasedVersions, ...draftVersions].sort(comparePlanVersions)
 }
 
 export const getRevisionKindForLatestPublishedVersion = (
