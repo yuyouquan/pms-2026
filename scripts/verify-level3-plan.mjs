@@ -643,6 +643,41 @@ assert.deepEqual(persisted.columnSettingsByScope[targetOnlyScope], {
 })
 assert.equal(persisted.actualOverridesByScope[targetOnlyScope], undefined)
 assert.equal(persisted.workflowOverridesByScope[targetOnlyScope], undefined)
+const explicitlyEmptySourceScope = 'project-1::tosType::Full'
+const populatedFallbackTargetScope = 'project-1::tosType::Slim'
+store.setState({
+  activitiesByScope: {
+    [explicitlyEmptySourceScope]: [],
+    [populatedFallbackTargetScope]: [parent, childA],
+  },
+  historyByScope: {
+    [explicitlyEmptySourceScope]: [],
+    [populatedFallbackTargetScope]: targetHistory,
+  },
+  collapsedIdsByScope: {
+    [explicitlyEmptySourceScope]: [],
+    [populatedFallbackTargetScope]: ['p1'],
+  },
+  columnSettingsByScope: {
+    [explicitlyEmptySourceScope]: { order: [], visible: [] },
+    [populatedFallbackTargetScope]: { order: ['activityName', 'number'], visible: ['number'] },
+  },
+  actualOverridesByScope: { [populatedFallbackTargetScope]: { c1: secondEdit } },
+  workflowOverridesByScope: { [populatedFallbackTargetScope]: { c1: secondWorkflowOverride } },
+})
+assert.equal(store.getState().forkFollowScope(explicitlyEmptySourceScope, populatedFallbackTargetScope), true)
+persisted = store.getState()
+assert.deepEqual(persisted.activitiesByScope[populatedFallbackTargetScope].find(item => item.id === 'c1'), {
+  ...childA,
+  actualStartDate: secondEdit.actualStartDate,
+  actualEndDate: secondEdit.actualEndDate,
+  status: '已完成', risk: '低',
+}, 'an explicitly empty source must fall back to populated target data')
+assert.deepEqual(persisted.columnSettingsByScope[populatedFallbackTargetScope], {
+  order: ['activityName', 'number'], visible: ['number'],
+})
+assert.equal(persisted.actualOverridesByScope[populatedFallbackTargetScope], undefined)
+assert.equal(persisted.workflowOverridesByScope[populatedFallbackTargetScope], undefined)
 const orphanOverride = { c1: secondEdit }
 store.setState({
   activitiesByScope: {}, historyByScope: {}, collapsedIdsByScope: {}, columnSettingsByScope: {},
@@ -687,6 +722,14 @@ assert.deepEqual(migrated, {
   actualOverridesByScope: {},
   workflowOverridesByScope: {},
 })
+const migratedV1WithActualOverrides = await migrate({
+  activitiesByScope: { legacy: [parent] },
+  historyByScope: { legacy: sourceHistory },
+  collapsedIdsByScope: { legacy: ['p1'] },
+  columnSettingsByScope: { legacy: { order: ['number'], visible: ['number'] } },
+  actualOverridesByScope: { legacy: { c1: override } },
+}, 1)
+assert.deepEqual(migratedV1WithActualOverrides.actualOverridesByScope, { legacy: { c1: override } })
 const migratedV2 = await migrate({
   activitiesByScope: { legacy: [parent] },
   historyByScope: { legacy: sourceHistory },

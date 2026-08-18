@@ -177,6 +177,19 @@ const initialState: Level3PlanState = {
   workflowOverridesByScope: {},
 }
 
+const hasMaterializableScopeData = (state: Level3PlanState, scopeKey: string) => {
+  const columnSettings = state.columnSettingsByScope[scopeKey]
+  return (state.activitiesByScope[scopeKey]?.length || 0) > 0
+    || (state.historyByScope[scopeKey]?.length || 0) > 0
+    || (state.collapsedIdsByScope[scopeKey]?.length || 0) > 0
+    || (Array.isArray(columnSettings?.order) && columnSettings.order.length > 0)
+    || (Array.isArray(columnSettings?.visible) && columnSettings.visible.length > 0)
+}
+
+const persistedRecordOrEmpty = <T,>(value: unknown): Record<string, T> => (
+  value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, T> : {}
+)
+
 export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(persist(
   (set, get) => ({
     ...initialState,
@@ -459,14 +472,8 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
     forkFollowScope: (sourceScopeKey, targetScopeKey) => {
       if (!sourceScopeKey || !targetScopeKey || sourceScopeKey === targetScopeKey) return false
       const state = get()
-      const hasSource = sourceScopeKey in state.activitiesByScope
-        || sourceScopeKey in state.historyByScope
-        || sourceScopeKey in state.collapsedIdsByScope
-        || sourceScopeKey in state.columnSettingsByScope
-      const hasTarget = targetScopeKey in state.activitiesByScope
-        || targetScopeKey in state.historyByScope
-        || targetScopeKey in state.collapsedIdsByScope
-        || targetScopeKey in state.columnSettingsByScope
+      const hasSource = hasMaterializableScopeData(state, sourceScopeKey)
+      const hasTarget = hasMaterializableScopeData(state, targetScopeKey)
       if (!hasSource && !hasTarget) return true
       const source: Level3ScopeData = {
         activities: cloneActivities(state.activitiesByScope[sourceScopeKey] || []),
@@ -563,7 +570,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           historyByScope: legacyState.historyByScope || {},
           collapsedIdsByScope: legacyState.collapsedIdsByScope || {},
           columnSettingsByScope: legacyState.columnSettingsByScope || {},
-          actualOverridesByScope: {},
+          actualOverridesByScope: persistedRecordOrEmpty<Level3ActualDateOverrideMap>(legacyState.actualOverridesByScope),
           workflowOverridesByScope: {},
         }
       }
@@ -572,8 +579,10 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
         historyByScope: legacyState.historyByScope || {},
         collapsedIdsByScope: legacyState.collapsedIdsByScope || {},
         columnSettingsByScope: legacyState.columnSettingsByScope || {},
-        actualOverridesByScope: legacyState.actualOverridesByScope || {},
-        workflowOverridesByScope: version >= 3 ? legacyState.workflowOverridesByScope || {} : {},
+        actualOverridesByScope: persistedRecordOrEmpty<Level3ActualDateOverrideMap>(legacyState.actualOverridesByScope),
+        workflowOverridesByScope: version >= 3
+          ? persistedRecordOrEmpty<Level3WorkflowOverrideMap>(legacyState.workflowOverridesByScope)
+          : {},
       }
     },
   },
