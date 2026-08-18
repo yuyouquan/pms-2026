@@ -30,7 +30,9 @@ export function canEnterProjectSpace(
   rolesByProject: ProjectPermissionRolesByProject,
   isGlobalAdmin: boolean,
 ) {
-  return isGlobalAdmin || matchesAboutMine(projectId, currentLoginUser, rolesByProject)
+  const user = currentLoginUser.trim()
+  if (!user) return false
+  return isGlobalAdmin || matchesAboutMine(projectId, user, rolesByProject)
 }
 
 export function matchesAggregateProjectStatus(
