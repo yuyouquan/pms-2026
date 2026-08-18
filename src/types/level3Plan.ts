@@ -21,6 +21,7 @@ export const LEVEL3_COLUMN_KEYS = [
   'actualDays',
   'status',
   'risk',
+  'remark',
   'creator',
 ] as const
 
@@ -59,6 +60,16 @@ export interface Level3ActualDateOverride {
 
 export type Level3ActualDateOverrideMap = Partial<Record<string, Level3ActualDateOverride>>
 
+export interface Level3WorkflowOverride {
+  activityId: string
+  status?: Level3ActivityStatus
+  risk?: Level3ActivityRisk
+  detachedBy: string
+  detachedAt: string
+}
+
+export type Level3WorkflowOverrideMap = Partial<Record<string, Level3WorkflowOverride>>
+
 export interface Level3ActivityFormValue {
   activityName?: string
   responsible?: string
@@ -91,6 +102,8 @@ export interface Level3ParentRollup {
   actualStartDate: string
   actualEndDate: string
   actualDays: number | null
+  status: Level3ActivityStatus
+  risk: Level3ActivityRisk
 }
 
 export interface Level3ActivityViewRow extends NumberedLevel3Activity {

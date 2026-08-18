@@ -61,6 +61,124 @@ const childB = {
   planStartDate: '2026-01-01', planEndDate: '2026-01-10', actualStartDate: '2026-01-02', actualEndDate: '2026-01-09',
 }
 
+const parentRollupCases = [
+  {
+    name: 'no children',
+    children: [],
+    expected: { status: '待启动', risk: '无' },
+  },
+  {
+    name: 'all pending uses highest child risk',
+    children: [
+      { ...childA, status: '待启动', risk: '低' },
+      { ...childB, status: '待启动', risk: '高' },
+    ],
+    expected: { status: '待启动', risk: '高' },
+  },
+  {
+    name: 'all completed uses highest child risk',
+    children: [
+      { ...childA, status: '已完成', risk: '无' },
+      { ...childB, status: '已完成', risk: '中' },
+    ],
+    expected: { status: '已完成', risk: '中' },
+  },
+  {
+    name: 'pending and completed is in progress',
+    children: [
+      { ...childA, status: '待启动', risk: '无' },
+      { ...childB, status: '已完成', risk: '低' },
+    ],
+    expected: { status: '进行中', risk: '低' },
+  },
+  {
+    name: 'any in progress is in progress',
+    children: [
+      { ...childA, status: '待启动', risk: '无' },
+      { ...childB, status: '进行中', risk: '中' },
+    ],
+    expected: { status: '进行中', risk: '中' },
+  },
+  {
+    name: 'risk priority is high over medium, low, and none',
+    children: [
+      { ...childA, status: '待启动', risk: '无' },
+      { ...childB, status: '待启动', risk: '低' },
+      { ...childA, id: 'c3', status: '待启动', risk: '中' },
+      { ...childB, id: 'c4', status: '待启动', risk: '高' },
+    ],
+    expected: { status: '待启动', risk: '高' },
+  },
+]
+for (const testCase of parentRollupCases) {
+  const activities = [parent, ...testCase.children]
+  const rollup = rules.getLevel3ParentRollup('p1', activities)
+  const rows = rules.applyLevel3Rollups(activities)
+  assert.deepEqual(
+    {
+      status: rollup.status,
+      risk: rollup.risk,
+    },
+    testCase.expected,
+    testCase.name,
+  )
+  assert.deepEqual(
+    {
+      status: rows.find(row => row.id === 'p1').status,
+      risk: rows.find(row => row.id === 'p1').risk,
+    },
+    testCase.expected,
+    `${testCase.name} through applyLevel3Rollups`,
+  )
+}
+
+const followerSourceActivities = [
+  { ...parent, status: '已完成', risk: '高' },
+  { ...childA, status: '待启动', risk: '低' },
+  { ...childB, status: '进行中', risk: '中' },
+]
+const followerActualOverrides = {
+  c1: {
+    activityId: 'c1', actualStartDate: '2026-08-02', actualEndDate: '2026-08-06',
+    detachedBy: '李四', detachedAt: '2026-08-17 12:20:00',
+  },
+}
+const followerWorkflowOverrides = {
+  c1: {
+    activityId: 'c1', status: '已完成', risk: '高',
+    detachedBy: '李四', detachedAt: '2026-08-17 12:21:00',
+  },
+  c2: {
+    activityId: 'c2', status: '待启动', risk: '低',
+    detachedBy: '李四', detachedAt: '2026-08-17 12:21:00',
+  },
+}
+const followerSourceSnapshot = structuredClone(followerSourceActivities)
+const followerActualSnapshot = structuredClone(followerActualOverrides)
+const followerWorkflowSnapshot = structuredClone(followerWorkflowOverrides)
+const followerEffectiveActivities = rules.mergeLevel3WorkflowOverrides(
+  rules.mergeLevel3ActualDateOverrides(followerSourceActivities, followerActualOverrides),
+  followerWorkflowOverrides,
+)
+const followerRows = rules.applyLevel3Rollups(followerEffectiveActivities)
+const followerParent = followerRows.find(row => row.id === 'p1')
+assert.deepEqual(
+  { status: followerParent.status, risk: followerParent.risk },
+  { status: '进行中', risk: '高' },
+  'rollup follows effective child status and risk rather than source or stored parent values',
+)
+assert.deepEqual(
+  followerRows.filter(row => row.parentId === 'p1').map(row => ({ id: row.id, status: row.status, risk: row.risk })),
+  [
+    { id: 'c1', status: '已完成', risk: '高' },
+    { id: 'c2', status: '待启动', risk: '低' },
+  ],
+  'rollup does not override child status or risk',
+)
+assert.deepEqual(followerSourceActivities, followerSourceSnapshot)
+assert.deepEqual(followerActualOverrides, followerActualSnapshot)
+assert.deepEqual(followerWorkflowOverrides, followerWorkflowSnapshot)
+
 const displayedActivity = { ...childA, actualStartDate: '2026-08-01', actualEndDate: '2026-08-05' }
 const displayedActivitySnapshot = structuredClone(displayedActivity)
 const override = rules.createLevel3ActualDateOverride(
@@ -96,6 +214,48 @@ assert.equal(merged[1].actualStartDate, childB.actualStartDate)
 assert.deepEqual(mergeInput, mergeInputSnapshot)
 assert.deepEqual(overrides, overridesSnapshot)
 
+const displayedWorkflowActivity = { ...childA, status: '进行中', risk: '中' }
+const displayedWorkflowActivitySnapshot = structuredClone(displayedWorkflowActivity)
+const workflowOverride = rules.createLevel3WorkflowOverride(
+  displayedWorkflowActivity,
+  undefined,
+  { status: '已完成', risk: undefined },
+  '李四',
+  '2026-08-17 12:04:00',
+)
+assert.deepEqual(workflowOverride, {
+  activityId: 'c1', status: '已完成', detachedBy: '李四', detachedAt: '2026-08-17 12:04:00',
+})
+assert.deepEqual(displayedWorkflowActivity, displayedWorkflowActivitySnapshot)
+const workflowOverrideSnapshot = structuredClone(workflowOverride)
+const secondWorkflowOverride = rules.createLevel3WorkflowOverride(
+  { ...childA, status: '待启动', risk: '高' },
+  workflowOverride,
+  { risk: '低' },
+  '王五',
+  '2026-08-17 12:05:00',
+)
+assert.deepEqual(secondWorkflowOverride, {
+  activityId: 'c1', status: '已完成', risk: '低', detachedBy: '王五', detachedAt: '2026-08-17 12:05:00',
+})
+assert.deepEqual(workflowOverride, workflowOverrideSnapshot)
+assert.deepEqual(
+  rules.mergeLevel3WorkflowOverrides([{ ...childA, status: '待启动', risk: '高' }], { c1: workflowOverride }),
+  [{ ...childA, status: '已完成', risk: '高' }],
+  'a status-only override must continue following later source risk changes',
+)
+const workflowMergeInput = [{ ...childA, status: '待启动', risk: '高' }, childB]
+const workflowMergeInputSnapshot = structuredClone(workflowMergeInput)
+const workflowOverrides = { c1: secondWorkflowOverride }
+const workflowOverridesSnapshot = structuredClone(workflowOverrides)
+const workflowMerged = rules.mergeLevel3WorkflowOverrides(workflowMergeInput, workflowOverrides)
+assert.deepEqual(workflowMerged[0], { ...childA, status: '已完成', risk: '低' })
+assert.deepEqual(workflowMerged[1], childB)
+assert.notEqual(workflowMerged[0], workflowMergeInput[0])
+assert.notEqual(workflowMerged[1], childB)
+assert.deepEqual(workflowMergeInput, workflowMergeInputSnapshot)
+assert.deepEqual(workflowOverrides, workflowOverridesSnapshot)
+
 const overrideSnapshot = structuredClone(override)
 const secondDisplayedActivity = { ...sourceChildA, actualEndDate: '2026-08-20' }
 const secondDisplayedActivitySnapshot = structuredClone(secondDisplayedActivity)
@@ -130,6 +290,8 @@ assert.deepEqual(rollupRows.find(row => row.id === 'p1'), {
   actualStartDate: '2026-08-04',
   actualEndDate: '2026-08-15',
   actualDays: 11,
+  status: '待启动',
+  risk: '无',
 })
 
 const clearedDisplayedActivity = { ...childA, actualStartDate: '2026-08-01', actualEndDate: '2026-08-05' }
@@ -174,6 +336,8 @@ assert.deepEqual(rules.getLevel3ParentRollup('p1', [parent, childA, childB]), {
   actualStartDate: '2026-01-02',
   actualEndDate: '2026-01-09',
   actualDays: 7,
+  status: '待启动',
+  risk: '无',
 })
 assert.equal(rules.validateLevel3ChildDates(
   { planStartDate: '2026-01-06', planEndDate: '2026-01-11' },
@@ -277,12 +441,16 @@ const forkedScope = rules.forkLevel3ScopeData({
     activityId: 'c1', actualStartDate: '2026-08-04', actualEndDate: '2026-08-06',
     detachedBy: '李四', detachedAt: '2026-08-17 12:10:00',
   },
+}, {
+  c1: secondWorkflowOverride,
 })
 assert.deepEqual(forkedScope.activities.map(item => item.id), ['p1', 'c1'])
 assert.deepEqual(forkedScope.activities.find(item => item.id === 'c1'), {
   ...childA,
   actualStartDate: '2026-08-04',
   actualEndDate: '2026-08-06',
+  status: '已完成',
+  risk: '低',
 })
 assert.deepEqual(forkedScope.history.map(item => item.id), ['target-log', 'tie-a', 'tie-b', 'source-log'])
 assert.equal(new Set(forkedScope.history.map(item => item.id)).size, forkedScope.history.length)
@@ -333,6 +501,9 @@ assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], { ...b
 assert.equal(rules.getLevel3NumberIndent(0), 0)
 assert.equal(rules.getLevel3NumberIndent(1), 32)
 assert.equal(rules.canInlineEditLevel3ActualDate(childA, [parent, childA], baseContext, false), true)
+assert.equal(rules.canInlineEditLevel3ChildField(childA, [parent, childA], baseContext), true)
+assert.equal(rules.canInlineEditLevel3ChildField(parent, [parent, childA], baseContext), false)
+assert.equal(rules.canInlineEditLevel3ChildField(childA, [parent, childA], { ...baseContext, currentUser: '赵六' }), false)
 assert.equal(rules.canInlineEditLevel3ActualDate(parent, [parent, childA], baseContext, false), false)
 assert.equal(rules.canInlineEditLevel3ActualDate(childA, [parent, childA], { ...baseContext, currentUser: '赵六' }, false), false)
 assert.equal(rules.canInlineEditLevel3ActualDate(childA, [parent, childA], baseContext, true), false)
@@ -360,9 +531,12 @@ for (const token of [
   'activitiesByScope',
   'historyByScope',
   'actualOverridesByScope',
+  'workflowOverridesByScope',
   'updateFollowActualDates',
+  'updateFollowWorkflowFields',
   'mergeLevel3ActualDateOverrides',
-  'LEVEL3_PLAN_STORE_VERSION = 2',
+  'mergeLevel3WorkflowOverrides',
+  'LEVEL3_PLAN_STORE_VERSION = 3',
 ]) {
   assert.ok(storeSource.includes(token), `level3 plan store is missing ${token}`)
 }
@@ -382,7 +556,77 @@ store.setState({
   collapsedIdsByScope: {},
   columnSettingsByScope: {},
   actualOverridesByScope: { [storeOtherScope]: { c2: override } },
+  workflowOverridesByScope: { [storeOtherScope]: { c2: workflowOverride } },
 })
+assert.equal(
+  store.getState().updateFollowWorkflowFields(
+    storeSourceScope,
+    storeFollowerScope,
+    'c1',
+    { status: '已完成' },
+    '李四',
+  ),
+  true,
+)
+let workflowPersisted = store.getState()
+assert.deepEqual(workflowPersisted.workflowOverridesByScope[storeFollowerScope].c1, {
+  activityId: 'c1', status: '已完成', detachedBy: '李四',
+  detachedAt: workflowPersisted.workflowOverridesByScope[storeFollowerScope].c1.detachedAt,
+})
+assert.deepEqual(workflowPersisted.historyByScope[storeFollowerScope][0].changes, [{
+  field: 'status', label: '状态', before: '待启动', after: '已完成',
+}])
+store.setState(state => ({
+  activitiesByScope: {
+    ...state.activitiesByScope,
+    [storeSourceScope]: state.activitiesByScope[storeSourceScope].map(activity => (
+      activity.id === 'c1' ? { ...activity, risk: '中' } : { ...activity }
+    )),
+  },
+}))
+assert.equal(
+  store.getState().updateFollowWorkflowFields(
+    storeSourceScope,
+    storeFollowerScope,
+    'c1',
+    { risk: '高' },
+    '王五',
+  ),
+  true,
+)
+workflowPersisted = store.getState()
+assert.deepEqual(workflowPersisted.workflowOverridesByScope[storeFollowerScope].c1, {
+  activityId: 'c1', status: '已完成', risk: '高', detachedBy: '王五',
+  detachedAt: workflowPersisted.workflowOverridesByScope[storeFollowerScope].c1.detachedAt,
+})
+assert.deepEqual(workflowPersisted.historyByScope[storeFollowerScope][0].changes, [{
+  field: 'risk', label: '任务风险', before: '中', after: '高',
+}])
+const workflowHistoryLength = workflowPersisted.historyByScope[storeFollowerScope].length
+for (const { sourceScopeKey, selectedScopeKey, activityId, patch, actor } of [
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: storeFollowerScope, activityId: 'p1', patch: { status: '进行中' }, actor: '李四' },
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: storeFollowerScope, activityId: 'missing', patch: { status: '进行中' }, actor: '李四' },
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: storeFollowerScope, activityId: 'c1', patch: { status: '无效状态' }, actor: '李四' },
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: storeFollowerScope, activityId: 'c1', patch: { risk: '无效风险' }, actor: '李四' },
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: storeFollowerScope, activityId: 'c1', patch: { status: '已完成' }, actor: '李四' },
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: storeFollowerScope, activityId: 'c1', patch: { status: undefined, risk: undefined }, actor: '李四' },
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: storeFollowerScope, activityId: 'c1', patch: { status: '进行中' }, actor: '' },
+  { sourceScopeKey: '', selectedScopeKey: storeFollowerScope, activityId: 'c1', patch: { status: '进行中' }, actor: '李四' },
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: '', activityId: 'c1', patch: { status: '进行中' }, actor: '李四' },
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: storeSourceScope, activityId: 'c1', patch: { status: '进行中' }, actor: '李四' },
+]) {
+  assert.equal(
+    store.getState().updateFollowWorkflowFields(
+      sourceScopeKey,
+      selectedScopeKey,
+      activityId,
+      patch,
+      actor,
+    ),
+    false,
+  )
+}
+assert.equal(store.getState().historyByScope[storeFollowerScope].length, workflowHistoryLength)
 assert.equal(
   store.getState().updateFollowActualDates(
     storeSourceScope,
@@ -394,7 +638,7 @@ assert.equal(
   true,
 )
 let persisted = store.getState()
-assert.deepEqual(persisted.activitiesByScope[storeSourceScope].find(item => item.id === 'c1'), childA)
+assert.deepEqual(persisted.activitiesByScope[storeSourceScope].find(item => item.id === 'c1'), { ...childA, risk: '中' })
 assert.deepEqual(persisted.actualOverridesByScope[storeFollowerScope].c1, {
   activityId: 'c1', actualStartDate: '2026-01-05', actualEndDate: '2026-01-07',
   detachedBy: '李四', detachedAt: persisted.actualOverridesByScope[storeFollowerScope].c1.detachedAt,
@@ -477,13 +721,19 @@ persisted = store.getState()
 assert.deepEqual(persisted.activitiesByScope[storeFollowerScope].find(item => item.id === 'c1'), {
   ...childA,
   actualStartDate: '2026-01-05', actualEndDate: '2026-01-08',
+  status: '已完成', risk: '高',
 })
 assert.equal(persisted.actualOverridesByScope[storeFollowerScope], undefined)
+assert.equal(persisted.workflowOverridesByScope[storeFollowerScope], undefined)
 assert.deepEqual(persisted.actualOverridesByScope[storeOtherScope], { c2: override })
-assert.deepEqual(persisted.activitiesByScope[storeSourceScope], sourceActivitiesSnapshot)
+assert.deepEqual(persisted.workflowOverridesByScope[storeOtherScope], { c2: workflowOverride })
+assert.deepEqual(persisted.activitiesByScope[storeSourceScope], [parent, { ...childA, risk: '中' }])
 assert.deepEqual(persisted.historyByScope[storeSourceScope], sourceHistorySnapshot)
 assert.deepEqual(store.persist.getOptions().partialize(persisted).actualOverridesByScope, {
   [storeOtherScope]: { c2: override },
+})
+assert.deepEqual(store.persist.getOptions().partialize(persisted).workflowOverridesByScope, {
+  [storeOtherScope]: { c2: workflowOverride },
 })
 const failedForkState = structuredClone({
   activitiesByScope: store.getState().activitiesByScope,
@@ -502,6 +752,7 @@ store.setState({
   collapsedIdsByScope: { [targetOnlyScope]: ['p1'] },
   columnSettingsByScope: { [targetOnlyScope]: { order: ['activityName', 'number'], visible: ['number'] } },
   actualOverridesByScope: { [targetOnlyScope]: { c1: secondEdit } },
+  workflowOverridesByScope: { [targetOnlyScope]: { c1: secondWorkflowOverride } },
 })
 assert.equal(store.getState().forkFollowScope('project-1::tosType::Full', targetOnlyScope), true)
 persisted = store.getState()
@@ -509,19 +760,58 @@ assert.deepEqual(persisted.activitiesByScope[targetOnlyScope].find(item => item.
   ...childA,
   actualStartDate: secondEdit.actualStartDate,
   actualEndDate: secondEdit.actualEndDate,
+  status: '已完成', risk: '低',
 })
 assert.deepEqual(persisted.historyByScope[targetOnlyScope].map(log => log.id), ['target-log', 'tie-a', 'source-log'])
 assert.deepEqual(persisted.columnSettingsByScope[targetOnlyScope], {
   order: ['activityName', 'number'], visible: ['number'],
 })
 assert.equal(persisted.actualOverridesByScope[targetOnlyScope], undefined)
+assert.equal(persisted.workflowOverridesByScope[targetOnlyScope], undefined)
+const explicitlyEmptySourceScope = 'project-1::tosType::Full'
+const populatedFallbackTargetScope = 'project-1::tosType::Slim'
+store.setState({
+  activitiesByScope: {
+    [explicitlyEmptySourceScope]: [],
+    [populatedFallbackTargetScope]: [parent, childA],
+  },
+  historyByScope: {
+    [explicitlyEmptySourceScope]: [],
+    [populatedFallbackTargetScope]: targetHistory,
+  },
+  collapsedIdsByScope: {
+    [explicitlyEmptySourceScope]: [],
+    [populatedFallbackTargetScope]: ['p1'],
+  },
+  columnSettingsByScope: {
+    [explicitlyEmptySourceScope]: { order: [], visible: [] },
+    [populatedFallbackTargetScope]: { order: ['activityName', 'number'], visible: ['number'] },
+  },
+  actualOverridesByScope: { [populatedFallbackTargetScope]: { c1: secondEdit } },
+  workflowOverridesByScope: { [populatedFallbackTargetScope]: { c1: secondWorkflowOverride } },
+})
+assert.equal(store.getState().forkFollowScope(explicitlyEmptySourceScope, populatedFallbackTargetScope), true)
+persisted = store.getState()
+assert.deepEqual(persisted.activitiesByScope[populatedFallbackTargetScope].find(item => item.id === 'c1'), {
+  ...childA,
+  actualStartDate: secondEdit.actualStartDate,
+  actualEndDate: secondEdit.actualEndDate,
+  status: '已完成', risk: '低',
+}, 'an explicitly empty source must fall back to populated target data')
+assert.deepEqual(persisted.columnSettingsByScope[populatedFallbackTargetScope], {
+  order: ['activityName', 'number'], visible: ['number'],
+})
+assert.equal(persisted.actualOverridesByScope[populatedFallbackTargetScope], undefined)
+assert.equal(persisted.workflowOverridesByScope[populatedFallbackTargetScope], undefined)
 const orphanOverride = { c1: secondEdit }
 store.setState({
   activitiesByScope: {}, historyByScope: {}, collapsedIdsByScope: {}, columnSettingsByScope: {},
   actualOverridesByScope: { [targetOnlyScope]: orphanOverride },
+  workflowOverridesByScope: { [targetOnlyScope]: { missing: secondWorkflowOverride } },
 })
 assert.equal(store.getState().forkFollowScope('project-1::tosType::Full', targetOnlyScope), true)
 assert.deepEqual(store.getState().actualOverridesByScope[targetOnlyScope], orphanOverride)
+assert.deepEqual(store.getState().workflowOverridesByScope[targetOnlyScope], { missing: secondWorkflowOverride })
 const sourceWithOrphanOverrideScope = 'project-1::tosType::PAD'
 const targetWithOrphanOverrideScope = 'project-1::tosType::GO'
 const orphanActivityOverride = { missing: secondEdit }
@@ -529,12 +819,18 @@ store.setState({
   activitiesByScope: { [sourceWithOrphanOverrideScope]: [parent] },
   historyByScope: {}, collapsedIdsByScope: {}, columnSettingsByScope: {},
   actualOverridesByScope: { [targetWithOrphanOverrideScope]: orphanActivityOverride },
+  workflowOverridesByScope: { [targetWithOrphanOverrideScope]: { missing: secondWorkflowOverride } },
 })
 assert.equal(store.getState().forkFollowScope(sourceWithOrphanOverrideScope, targetWithOrphanOverrideScope), true)
 assert.deepEqual(
   store.getState().actualOverridesByScope[targetWithOrphanOverrideScope],
   orphanActivityOverride,
   'unmaterializable target overrides must survive a source fork',
+)
+assert.deepEqual(
+  store.getState().workflowOverridesByScope[targetWithOrphanOverrideScope],
+  { missing: secondWorkflowOverride },
+  'unmaterializable target workflow overrides must survive a source fork',
 )
 const migrate = store.persist.getOptions().migrate
 const migrated = await migrate({
@@ -549,13 +845,63 @@ assert.deepEqual(migrated, {
   collapsedIdsByScope: { legacy: ['p1'] },
   columnSettingsByScope: { legacy: { order: ['number'], visible: ['number'] } },
   actualOverridesByScope: {},
+  workflowOverridesByScope: {},
 })
+const migratedV1WithActualOverrides = await migrate({
+  activitiesByScope: { legacy: [parent] },
+  historyByScope: { legacy: sourceHistory },
+  collapsedIdsByScope: { legacy: ['p1'] },
+  columnSettingsByScope: { legacy: { order: ['number'], visible: ['number'] } },
+  actualOverridesByScope: { legacy: { c1: override } },
+}, 1)
+assert.deepEqual(migratedV1WithActualOverrides.actualOverridesByScope, { legacy: { c1: override } })
+const migratedV2 = await migrate({
+  activitiesByScope: { legacy: [parent] },
+  historyByScope: { legacy: sourceHistory },
+  collapsedIdsByScope: { legacy: ['p1'] },
+  columnSettingsByScope: { legacy: { order: ['number'], visible: ['number'] } },
+  actualOverridesByScope: { legacy: { c1: override } },
+}, 2)
+assert.deepEqual(migratedV2.actualOverridesByScope, { legacy: { c1: override } })
+assert.deepEqual(migratedV2.workflowOverridesByScope, {})
+const migratedV3 = await migrate({
+  activitiesByScope: { legacy: [parent] },
+  historyByScope: { legacy: sourceHistory },
+  collapsedIdsByScope: { legacy: ['p1'] },
+  columnSettingsByScope: { legacy: { order: ['number'], visible: ['number'] } },
+  actualOverridesByScope: { legacy: { c1: override } },
+  workflowOverridesByScope: { legacy: { c1: secondWorkflowOverride } },
+}, 3)
+assert.deepEqual(migratedV3.actualOverridesByScope, { legacy: { c1: override } })
+assert.deepEqual(migratedV3.workflowOverridesByScope, { legacy: { c1: secondWorkflowOverride } })
 
 const roundTripOverrides = {
   persisted: {
     c1: {
       activityId: 'c1', actualStartDate: '2026-01-05', actualEndDate: '2026-01-08',
       detachedBy: '王五', detachedAt: '2026-08-18 10:00:00',
+    },
+  },
+}
+const roundTripWorkflowOverrides = {
+  persisted: {
+    c1: {
+      activityId: 'c1', status: '已完成', risk: '高',
+      detachedBy: '王五', detachedAt: '2026-08-18 10:00:00',
+    },
+  },
+}
+const malformedOverrideScopes = {
+  actualOverridesByScope: {
+    malformed: {
+      c1: { activityId: 'wrong', actualStartDate: '2026-01-01', actualEndDate: '2026-01-02', detachedBy: '李四', detachedAt: '2026-08-18 10:00:00' },
+      c2: { activityId: 'c2', actualStartDate: 'bad-date', actualEndDate: '', detachedBy: '李四', detachedAt: '2026-08-18 10:00:00' },
+    },
+  },
+  workflowOverridesByScope: {
+    malformed: {
+      c1: { activityId: 'c1', status: '坏状态', risk: '坏风险', detachedBy: '李四', detachedAt: '2026-08-18 10:00:00' },
+      wrongKey: { activityId: 'c2', status: '已完成', detachedBy: '李四', detachedAt: '2026-08-18 10:00:00' },
     },
   },
 }
@@ -578,7 +924,8 @@ try {
     historyByScope: { [storeSourceScope]: sourceHistory },
     collapsedIdsByScope: { [storeSourceScope]: ['p1'] },
     columnSettingsByScope: { [storeSourceScope]: { order: ['number'], visible: ['number'] } },
-    actualOverridesByScope: roundTripOverrides,
+    actualOverridesByScope: { ...roundTripOverrides, ...malformedOverrideScopes.actualOverridesByScope },
+    workflowOverridesByScope: { ...roundTripWorkflowOverrides, ...malformedOverrideScopes.workflowOverridesByScope },
   }
   memoryStorage.setItem(hydratedStoreModule.LEVEL3_PLAN_STORAGE_KEY, JSON.stringify({
     state: roundTripState,
@@ -586,16 +933,57 @@ try {
   }))
   await hydratedStoreModule.useLevel3PlanStore.persist.rehydrate()
   assert.deepEqual(hydratedStoreModule.useLevel3PlanStore.getState().actualOverridesByScope, roundTripOverrides)
+  assert.deepEqual(hydratedStoreModule.useLevel3PlanStore.getState().workflowOverridesByScope, roundTripWorkflowOverrides)
+  assert.equal(hydratedStoreModule.useLevel3PlanStore.getState().forkFollowScope(storeSourceScope, 'malformed'), true)
+  assert.deepEqual(
+    hydratedStoreModule.useLevel3PlanStore.getState().activitiesByScope.malformed.find(item => item.id === 'c1'),
+    childA,
+    'invalid follower workflow values must not materialize into detached activities',
+  )
+  const originalDateNow = Date.now
+  Date.now = () => 1_786_752_000_000
+  try {
+    hydratedStoreModule.useLevel3PlanStore.getState().updateFollowWorkflowFields(storeSourceScope, 'rapid', 'c1', { status: '已完成' }, '李四')
+    hydratedStoreModule.useLevel3PlanStore.getState().updateFollowWorkflowFields(storeSourceScope, 'rapid', 'c1', { risk: '高' }, '李四')
+  } finally {
+    Date.now = originalDateNow
+  }
+  const rapidHistory = hydratedStoreModule.useLevel3PlanStore.getState().historyByScope.rapid
+  assert.equal(rapidHistory[0].changes[0].field, 'risk')
+  assert.equal(rapidHistory[1].changes[0].field, 'status')
+  assert.ok(rapidHistory[0].occurredAt > rapidHistory[1].occurredAt)
   hydratedStoreModule.useLevel3PlanStore.getState().setCollapsedIds(storeSourceScope, ['p1', 'c1'])
   const storedRoundTrip = JSON.parse(memoryStorage.getItem(hydratedStoreModule.LEVEL3_PLAN_STORAGE_KEY))
-  assert.equal(storedRoundTrip.version, 2)
+  assert.equal(storedRoundTrip.version, 3)
   assert.deepEqual(storedRoundTrip.state.actualOverridesByScope, roundTripOverrides)
+  assert.deepEqual(storedRoundTrip.state.workflowOverridesByScope.persisted, roundTripWorkflowOverrides.persisted)
   const reloadedStoreModule = loadCommonJsTypeScriptModule(storePath, {
     '@/lib/level3PlanRules': loadCommonJsTypeScriptModule(rulesPath),
     '@/types/level3Plan': loadCommonJsTypeScriptModule(path.join(root, 'src/types/level3Plan.ts')),
   })
   await reloadedStoreModule.useLevel3PlanStore.persist.rehydrate()
   assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().actualOverridesByScope, roundTripOverrides)
+  assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().workflowOverridesByScope.persisted, roundTripWorkflowOverrides.persisted)
+  assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().historyByScope.rapid.map(log => log.changes[0].field), ['risk', 'status'])
+  const reloadedDateNow = Date.now
+  Date.now = () => 1_786_752_000_000
+  try {
+    assert.equal(reloadedStoreModule.useLevel3PlanStore.getState().updateFollowWorkflowFields(
+      storeSourceScope, 'rapid', 'c1', { status: '进行中' }, '赵六',
+    ), true)
+  } finally {
+    Date.now = reloadedDateNow
+  }
+  const rebasedRapidHistory = reloadedStoreModule.useLevel3PlanStore.getState().historyByScope.rapid
+  assert.deepEqual(rebasedRapidHistory.map(log => log.changes[0].field), ['status', 'risk', 'status'])
+  assert.ok(rebasedRapidHistory[0].occurredAt > rebasedRapidHistory[1].occurredAt)
+  assert.deepEqual(rules.mergeLevel3Histories([], rebasedRapidHistory).map(log => log.changes[0].field), ['status', 'risk', 'status'])
+  const clockRebasedReloadModule = loadCommonJsTypeScriptModule(storePath, {
+    '@/lib/level3PlanRules': loadCommonJsTypeScriptModule(rulesPath),
+    '@/types/level3Plan': loadCommonJsTypeScriptModule(path.join(root, 'src/types/level3Plan.ts')),
+  })
+  await clockRebasedReloadModule.useLevel3PlanStore.persist.rehydrate()
+  assert.deepEqual(clockRebasedReloadModule.useLevel3PlanStore.getState().historyByScope.rapid.map(log => log.changes[0].field), ['status', 'risk', 'status'])
 } finally {
   if (hadWindow) globalThis.window = originalWindow
   else delete globalThis.window
@@ -604,11 +992,40 @@ try {
 const componentPath = path.join(root, 'src/components/plans/Level3PlanModule.tsx')
 assert.ok(fs.existsSync(componentPath), 'src/components/plans/Level3PlanModule.tsx does not exist')
 const componentSource = fs.readFileSync(componentPath, 'utf8')
+const level3PlanTypeSource = fs.readFileSync(path.join(root, 'src/types/level3Plan.ts'), 'utf8')
+const riskColumnIndex = level3PlanTypeSource.indexOf("  'risk',")
+const remarkColumnIndex = level3PlanTypeSource.indexOf("  'remark',")
+const creatorColumnIndex = level3PlanTypeSource.indexOf("  'creator',")
+assert.ok(riskColumnIndex >= 0 && riskColumnIndex < remarkColumnIndex && remarkColumnIndex < creatorColumnIndex, '三级计划备注列必须位于任务风险和创建者之间')
 assert.ok(!componentSource.includes('<Alert'), '跟随范围不应显示提示条')
 assert.ok(componentSource.includes('shouldShowLevel3CreateButton(readOnly)'), '新增活动按钮未按跟随状态隐藏')
 assert.ok(componentSource.includes('selectedScopeKey: string'), '三级计划组件必须接收当前选中范围键')
 assert.ok(componentSource.includes('const EMPTY_OVERRIDES: Level3ActualDateOverrideMap = {}'), '三级计划组件必须使用稳定的空实际日期覆盖对象')
 assert.ok(componentSource.includes('mergeLevel3ActualDateOverrides(sourceActivities, actualOverrides)'), '展示活动必须先合并跟随范围实际日期覆盖')
+assert.ok(componentSource.includes('mergeLevel3WorkflowOverrides('), '展示活动必须在实际日期覆盖后合并状态和风险覆盖')
+assert.ok(componentSource.includes('handleInlineWorkflowChange'), '状态和风险必须支持内联保存')
+assert.ok(componentSource.includes('updateFollowWorkflowFields(scopeKey, selectedScopeKey, row.id, { [field]: value }, currentUser)'), '跟随范围状态和风险编辑必须写入当前范围覆盖')
+assert.ok(componentSource.includes('canInlineEditLevel3ChildField(row, effectiveActivities, permissionContext)'), '状态和风险内联编辑必须受子活动权限控制')
+assert.ok(componentSource.includes('onDoubleClick={event => event.stopPropagation()}><Select size="small"'), '状态和风险内联选择器必须阻止双击打开编辑弹窗')
+const activityModalStart = componentSource.indexOf('      <Modal')
+const activityModalEnd = componentSource.indexOf('      <Drawer', activityModalStart)
+assert.ok(activityModalStart >= 0 && activityModalEnd > activityModalStart, '三级活动编辑弹窗边界缺失')
+const activityModalSource = componentSource.slice(activityModalStart, activityModalEnd)
+for (const label of ['实际开始时间', '实际完成时间', '状态', '任务风险']) {
+  assert.ok(!activityModalSource.includes(`label="${label}"`), `活动弹窗不应包含${label}`)
+}
+const editPatchStart = componentSource.indexOf('      const patch: Partial<Level3Activity> = {')
+const editPatchEnd = componentSource.indexOf('      if (activity.parentId)', editPatchStart)
+const editPatchSource = componentSource.slice(editPatchStart, editPatchEnd)
+for (const field of ['actualStartDate', 'actualEndDate', 'status', 'risk']) {
+  assert.ok(!editPatchSource.includes(`${field}:`), `活动编辑补丁不应包含${field}`)
+}
+const createActivityStart = componentSource.indexOf('    const nextActivity: Level3Activity = {')
+const createActivityEnd = componentSource.indexOf('    if (createActivity(', createActivityStart)
+const createActivitySource = componentSource.slice(createActivityStart, createActivityEnd)
+for (const token of ["actualStartDate: ''", "actualEndDate: ''", "status: '待启动'", "risk: '无'"]) {
+  assert.ok(createActivitySource.includes(token), `新增活动必须默认${token}`)
+}
 assert.ok(componentSource.includes('const rows = useMemo(() => applyLevel3Rollups(effectiveActivities)'), '汇总必须基于合并后的展示活动')
 assert.ok(componentSource.includes('updateFollowActualDates(scopeKey, selectedScopeKey, row.id, { [field]: value }, currentUser)'), '跟随范围的内联实际日期编辑必须写入当前范围覆盖')
 assert.ok(componentSource.includes('if (readOnly) {'), '内联实际日期变更必须显式区分跟随范围')
@@ -616,6 +1033,43 @@ assert.ok(componentSource.includes('mergeLevel3Histories(sourceHistory, selected
 assert.ok(componentSource.includes('canInlineEditLevel3ActualDate(row, effectiveActivities, permissionContext, false)'), '跟随范围授权子活动实际日期应保持可编辑')
 assert.ok(componentSource.includes('!readOnly && (permissions.canEdit || permissions.canAddChild)'), '跟随范围仍须隐藏结构性行操作')
 assert.ok(componentSource.includes('!readOnly && getLevel3ActivityPermissions(row, effectiveActivities, permissionContext).canDrag'), '跟随范围仍须禁用拖动排序')
+assert.ok(componentSource.includes("{ key: 'remark', title: '备注'"), '三级计划列定义必须包含备注')
+assert.ok(componentSource.includes("{ key: 'remark', label: '备注', kind: 'text'"), '三级计划筛选字段必须包含备注')
+assert.ok(componentSource.includes("definition.key === 'remark'"), '三级计划必须单独渲染备注单元格')
+assert.equal(typeof rules.normalizeLevel3Remark, 'function', '备注规范化必须由规则模块提供纯函数')
+assert.equal(typeof rules.getLevel3RemarkDisplay, 'function', '备注展示判断必须由规则模块提供纯函数')
+assert.equal(rules.normalizeLevel3Remark('  正常备注  '), '正常备注')
+assert.equal(rules.normalizeLevel3Remark('   '), '')
+assert.equal(rules.normalizeLevel3Remark(null), '')
+assert.deepEqual(rules.getLevel3RemarkDisplay('  正常备注  '), { value: '正常备注', empty: false })
+assert.deepEqual(rules.getLevel3RemarkDisplay('   '), { value: '', empty: true })
+const filterFieldsStart = componentSource.indexOf('const FILTER_FIELDS: FilterFieldDefinition[] = [')
+const filterFieldsEnd = componentSource.indexOf('const FILTER_FIELD_OPTIONS =', filterFieldsStart)
+assert.ok(filterFieldsStart >= 0 && filterFieldsEnd > filterFieldsStart, '筛选字段定义边界缺失')
+assert.ok(componentSource.slice(filterFieldsStart, filterFieldsEnd).includes("{ key: 'remark', label: '备注', kind: 'text'"), '备注必须参与筛选字段定义')
+const remarkRenderStart = componentSource.indexOf("if (definition.key === 'remark')")
+const remarkRenderEnd = componentSource.indexOf('    return { ...base, render:', remarkRenderStart)
+assert.ok(remarkRenderStart >= 0 && remarkRenderEnd > remarkRenderStart, '备注渲染分支边界缺失')
+const remarkRenderSource = componentSource.slice(remarkRenderStart, remarkRenderEnd)
+for (const token of ['getLevel3RemarkDisplay(value)', 'Tooltip title={remark}', 'aria-label={remark}', 'title={remark}', 'tabIndex={0}', 'empty ?']) {
+  assert.ok(remarkRenderSource.includes(token), `备注渲染分支缺少${token}`)
+}
+assert.ok(componentSource.includes('remark: normalizeLevel3Remark(rawValues.remark)'), '新增和编辑保存必须先去除备注首尾空格')
+assert.ok(componentSource.includes("remark: values.remark || ''"), '编辑补丁必须保存去除空格后的备注')
+assert.ok(componentSource.includes('const exportColumns: ExportColumn[] = definitions.map'), '导出必须沿用可见列定义')
+const exportHandlerStart = componentSource.indexOf('  const handleExport = (mode: \'current\' | \'all\') => {')
+const exportHandlerEnd = componentSource.indexOf('  const handleDragEnd =', exportHandlerStart)
+assert.ok(exportHandlerStart >= 0 && exportHandlerEnd > exportHandlerStart, '导出处理函数边界缺失')
+const exportHandlerSource = componentSource.slice(exportHandlerStart, exportHandlerEnd)
+assert.ok(exportHandlerSource.includes("const exportRows = mode === 'current' ? filteredRows : rows"), '导出必须按当前筛选或全部行取数')
+assert.ok(exportHandlerSource.includes("const definitions = mode === 'current' ? visibleDefinitions : LEVEL3_COLUMN_DEFINITIONS"), '当前导出必须使用可见列、全部导出必须使用完整列')
+assert.ok(componentSource.includes("className=\"pms-modal pms-level3-activity-modal\""), '三级计划活动弹窗必须使用专属样式类')
+assert.ok(componentSource.includes('autoSize={{ minRows: 1, maxRows: 4 }}'), '备注输入框必须使用紧凑自动高度')
+const stylesSource = fs.readFileSync(path.join(root, 'src/styles/globals.css'), 'utf8')
+assert.ok(stylesSource.includes('.pms-level3-activity-modal .ant-form-item { margin-bottom: 12px; }'), '三级计划弹窗表单项间距必须为12px')
+assert.ok(stylesSource.includes('.pms-level3-activity-modal .pms-level3-form-grid { gap: 12px; }'), '三级计划弹窗双列间距必须为12px')
+assert.ok(stylesSource.includes('.pms-level3-form-grid { grid-template-columns: 1fr; gap: 0; }'), '三级计划弹窗必须保留响应式单列规则')
+assert.ok(stylesSource.includes('.pms-level3-activity-modal .pms-level3-form-grid { gap: 0; }'), '三级计划弹窗移动端必须保留单列间距约束')
 const assertInOrder = (text, tokens) => {
   let cursor = -1
   tokens.forEach(token => {
