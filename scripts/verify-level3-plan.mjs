@@ -840,6 +840,25 @@ try {
   assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().actualOverridesByScope, roundTripOverrides)
   assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().workflowOverridesByScope.persisted, roundTripWorkflowOverrides.persisted)
   assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().historyByScope.rapid.map(log => log.changes[0].field), ['risk', 'status'])
+  const reloadedDateNow = Date.now
+  Date.now = () => 1_786_752_000_000
+  try {
+    assert.equal(reloadedStoreModule.useLevel3PlanStore.getState().updateFollowWorkflowFields(
+      storeSourceScope, 'rapid', 'c1', { status: '进行中' }, '赵六',
+    ), true)
+  } finally {
+    Date.now = reloadedDateNow
+  }
+  const rebasedRapidHistory = reloadedStoreModule.useLevel3PlanStore.getState().historyByScope.rapid
+  assert.deepEqual(rebasedRapidHistory.map(log => log.changes[0].field), ['status', 'risk', 'status'])
+  assert.ok(rebasedRapidHistory[0].occurredAt > rebasedRapidHistory[1].occurredAt)
+  assert.deepEqual(rules.mergeLevel3Histories([], rebasedRapidHistory).map(log => log.changes[0].field), ['status', 'risk', 'status'])
+  const clockRebasedReloadModule = loadCommonJsTypeScriptModule(storePath, {
+    '@/lib/level3PlanRules': loadCommonJsTypeScriptModule(rulesPath),
+    '@/types/level3Plan': loadCommonJsTypeScriptModule(path.join(root, 'src/types/level3Plan.ts')),
+  })
+  await clockRebasedReloadModule.useLevel3PlanStore.persist.rehydrate()
+  assert.deepEqual(clockRebasedReloadModule.useLevel3PlanStore.getState().historyByScope.rapid.map(log => log.changes[0].field), ['status', 'risk', 'status'])
 } finally {
   if (hadWindow) globalThis.window = originalWindow
   else delete globalThis.window

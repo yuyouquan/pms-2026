@@ -225,6 +225,27 @@ const initialState: Level3PlanState = {
   workflowOverridesByScope: {},
 }
 
+const parsePersistedTimestamp = (value: unknown) => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{3})?$/.test(value)) return null
+  const timestamp = Date.parse(`${value.replace(' ', 'T')}+08:00`)
+  return Number.isFinite(timestamp) ? timestamp : null
+}
+
+const rebaseHistoryClock = (state: Partial<Level3PlanState>) => {
+  let maximum = lastFormattedTimestamp
+  const consider = (value: unknown) => {
+    const timestamp = parsePersistedTimestamp(value)
+    if (timestamp !== null) maximum = Math.max(maximum, timestamp)
+  }
+  Object.values(state.historyByScope || {}).flat().forEach(log => consider(log.occurredAt))
+  for (const overrideMaps of [state.actualOverridesByScope, state.workflowOverridesByScope]) {
+    Object.values(overrideMaps || {}).forEach(activityMap => {
+      Object.values(activityMap || {}).forEach(override => consider((override as { detachedAt?: unknown } | undefined)?.detachedAt))
+    })
+  }
+  lastFormattedTimestamp = maximum
+}
+
 const hasMaterializableScopeData = (state: Level3PlanState, scopeKey: string) => {
   const columnSettings = state.columnSettingsByScope[scopeKey]
   return (state.activitiesByScope[scopeKey]?.length || 0) > 0
@@ -609,7 +630,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
       if (!persistedState || typeof persistedState !== 'object') return initialState
       const legacyState = persistedState as Partial<Level3PlanState>
       if (version <= 1) {
-        return {
+        const migrated = {
           activitiesByScope: legacyState.activitiesByScope || {},
           historyByScope: legacyState.historyByScope || {},
           collapsedIdsByScope: legacyState.collapsedIdsByScope || {},
@@ -617,8 +638,10 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           actualOverridesByScope: sanitizeActualOverridesByScope(legacyState.actualOverridesByScope),
           workflowOverridesByScope: {},
         }
+        rebaseHistoryClock(migrated)
+        return migrated
       }
-      return {
+      const migrated = {
         activitiesByScope: legacyState.activitiesByScope || {},
         historyByScope: legacyState.historyByScope || {},
         collapsedIdsByScope: legacyState.collapsedIdsByScope || {},
@@ -628,17 +651,21 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           ? sanitizeWorkflowOverridesByScope(legacyState.workflowOverridesByScope)
           : {},
       }
+      rebaseHistoryClock(migrated)
+      return migrated
     },
     merge: (persistedState, currentState) => {
       const persisted = persistedState && typeof persistedState === 'object' && !Array.isArray(persistedState)
         ? persistedState as Partial<Level3PlanState>
         : {}
-      return {
+      const merged = {
         ...currentState,
         ...persisted,
         actualOverridesByScope: sanitizeActualOverridesByScope(persisted.actualOverridesByScope),
         workflowOverridesByScope: sanitizeWorkflowOverridesByScope(persisted.workflowOverridesByScope),
       }
+      rebaseHistoryClock(merged)
+      return merged
     },
   },
 ))
