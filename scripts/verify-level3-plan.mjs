@@ -541,10 +541,29 @@ for (const token of [
   assert.ok(storeSource.includes(token), `level3 plan store is missing ${token}`)
 }
 
-const store = loadCommonJsTypeScriptModule(storePath, {
+const storeModule = loadCommonJsTypeScriptModule(storePath, {
   '@/lib/level3PlanRules': loadCommonJsTypeScriptModule(rulesPath),
   '@/types/level3Plan': loadCommonJsTypeScriptModule(path.join(root, 'src/types/level3Plan.ts')),
-}).useLevel3PlanStore
+})
+const store = storeModule.useLevel3PlanStore
+const mockActivities = storeModule.buildLevel3MockActivities([
+  { id: 'str1', name: 'STR1', planEndDate: '2026-02-26' },
+  { id: 'str4', name: 'STR4', planEndDate: '2026-12-15' },
+])
+assert.equal(mockActivities.filter(activity => activity.parentId === null).length, 4)
+assert.equal(mockActivities.filter(activity => activity.parentId !== null).length, 23)
+assert.deepEqual(
+  rules.numberLevel3Activities(mockActivities).map(activity => `${activity.number}:${activity.activityName}`),
+  [
+    '1:IR计划输出', '1.1:原始IR输出', '1.2:需求串讲', '1.3:IR锁定', '1.4:PD/UX/概设/测试方案锁定',
+    '1.5:SR分解', '1.6:需求反串讲', '1.7:IR排期', '1.8:IR开发', '1.9:IR验收',
+    '2:tOS子系统概要设计', '2.1:概要设计启动', '2.2:SDRB评审', '2.3:子系统概要设计终审',
+    '3:测试计划', '3.1:测试范围 & 需求拆解', '3.2:测试用例设计评审', '3.3:测试策略&计划评审',
+    '3.4:版本测试-STR4', '3.5:版本测试-STR4A', '3.6:STR5版本归档',
+    '4:Beta NPS调研计划', '4.1:调研问卷设计', '4.2:Beta版本发布', '4.3:用户反馈收集',
+    '4.4:NPS数据统计', '4.5:调研报告输出',
+  ],
+)
 const storeSourceScope = 'project-1::market::OP'
 const storeFollowerScope = 'project-1::market::TR'
 const storeOtherScope = 'project-1::market::RU'

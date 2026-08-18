@@ -268,6 +268,7 @@ export default function Level3PlanModule({
   const selectedScopeHistory = useLevel3PlanStore(state => state.historyByScope[selectedScopeKey] || EMPTY_HISTORY)
   const collapsedIds = useLevel3PlanStore(state => state.collapsedIdsByScope[scopeKey] || EMPTY_STRINGS)
   const storedColumnSettings = useLevel3PlanStore(state => state.columnSettingsByScope[scopeKey])
+  const ensureScopeMockData = useLevel3PlanStore(state => state.ensureScopeMockData)
   const createActivity = useLevel3PlanStore(state => state.createActivity)
   const updateActivity = useLevel3PlanStore(state => state.updateActivity)
   const updateFollowActualDates = useLevel3PlanStore(state => state.updateFollowActualDates)
@@ -334,6 +335,10 @@ export default function Level3PlanModule({
     ? effectiveActivities.find(activity => activity.id === modalMode.activityId)
     : undefined
   const modalIsChild = modalMode?.kind === 'create-child' || Boolean(editingActivity?.parentId)
+
+  useEffect(() => {
+    ensureScopeMockData(scopeKey, milestones)
+  }, [ensureScopeMockData, milestones, scopeKey])
 
   useEffect(() => {
     if (!modalMode) return
@@ -692,7 +697,7 @@ export default function Level3PlanModule({
       return {
         ...base,
         render: (value: string, row: Level3ActivityViewRow) => canInlineEditLevel3ChildField(row, effectiveActivities, permissionContext)
-          ? <div onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}><Select size="small" bordered value={value} options={options.map(item => ({ label: item, value: item }))} onChange={nextValue => handleInlineWorkflowChange(row, field, nextValue as Level3Activity['status'] | Level3Activity['risk'])} /></div>
+          ? <div onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}><Select size="small" value={value} options={options.map(item => ({ label: item, value: item }))} onChange={nextValue => handleInlineWorkflowChange(row, field, nextValue as Level3Activity['status'] | Level3Activity['risk'])} /></div>
           : <Tag color={colors[value]}>{value}</Tag>,
       }
     }

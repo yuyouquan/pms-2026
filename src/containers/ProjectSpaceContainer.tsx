@@ -176,6 +176,7 @@ import {
   buildNextLevel1RevisionTasks,
   canMaintainLevel1Plan,
   projectLevel1Plan,
+  sumLevel1EstimatedDays,
   synchronizeLevel1ActualEndDate,
   validateLevel1MilestoneDates,
 } from '@/lib/level1PlanRules'
@@ -3019,14 +3020,6 @@ export default function ProjectSpaceContainer() {
       colSpan: Math.max(group.milestones.length, 1),
     }))
     const allMilestones = stageGroups.flatMap(group => group.milestones)
-    const calcDevCycle = (taskList: any[]) => {
-      const starts = taskList.map((t: any) => t.planStartDate).filter(Boolean).map((d: string) => new Date(d).getTime())
-      const ends = taskList.map((t: any) => t.planEndDate).filter(Boolean).map((d: string) => new Date(d).getTime())
-      if (starts.length === 0 || ends.length === 0) return '-'
-      const earliest = Math.min(...starts); const latest = Math.max(...ends)
-      const days = Math.ceil((latest - earliest) / (1000 * 60 * 60 * 24))
-      return days > 0 ? days : '-'
-    }
     const displayVersions = getDisplayPlanVersionsForHorizontalPlan(horizontalVersions, { includeDraft: canMaintainCurrentPlan })
     const recencyVersions = [...displayVersions].sort((a, b) => comparePlanVersions(b, a))
     const latestDisplayVersionId = recencyVersions[0]?.id
@@ -3092,16 +3085,25 @@ export default function ProjectSpaceContainer() {
                 if (ms.length > 0) return ms.map((m: any) => vProjection.rows.find((t: any) => t.id === m.id) || m)
                 const vt = vProjection.rows.find((t: any) => t.id === stage.id); return [vt || stage]
               })
-              const devCycle = calcDevCycle(vTasks as any[])
+              const devCycle = sumLevel1EstimatedDays(vProjection.rows)
               const isLatest = version.id === latestDisplayVersionId
               return (
                 <tr key={version.id} style={isLatest ? { background: '#fafffe' } : undefined}>
-                  <td style={{ ...versionTdStyle, color: isLatest ? 'var(--pms-brand)' : '#111827', background: isLatest ? 'var(--pms-brand-surface)' : '#fff' }}>{version.versionNo}</td>
-                  <td style={{ ...cycleTdStyle, background: isLatest ? '#f0f9ff' : '#fff' }}><Tooltip title="最早计划开始到最晚计划完成的天数"><span>{devCycle}</span></Tooltip></td>
+                  <td style={{ ...versionTdStyle, color: isLatest ? 'var(--pms-brand)' : '#111827', background: isLatest ? 'var(--pms-brand-surface)' : '#fff' }}>
+                    <Space size={5} style={{ justifyContent: 'center', width: '100%' }}>
+                      <span>{version.versionNo}</span>
+                      {version.status === '修订中' && (
+                        <Tooltip title="修订中">
+                          <EditOutlined aria-label="修订中" style={{ color: '#722ed1', fontSize: 13 }} />
+                        </Tooltip>
+                      )}
+                    </Space>
+                  </td>
+                  <td style={{ ...cycleTdStyle, background: isLatest ? '#f0f9ff' : '#fff' }}><Tooltip title="所有一级活动的预估工期总和"><span>{devCycle ?? '-'}</span></Tooltip></td>
                   {vMilestones.map((m: any, mi: number) => (
                     <td key={mi} style={tdStyle}>
                       {version.id === horizontalCurrentVersion && isCurrentDraft && canMaintainCurrentPlan
-                        ? <ClickToEditDate value={m.planEndDate || ''} onChange={(nextValue) => setEffectiveTasks(effectiveTasks.map((task: any) => task.id === m.id ? { ...task, planEndDate: nextValue } : task))} />
+                        ? <ClickToEditDate align="center" value={m.planEndDate || ''} onChange={(nextValue) => setEffectiveTasks(effectiveTasks.map((task: any) => task.id === m.id ? { ...task, planEndDate: nextValue } : task))} />
                         : m.planEndDate || '-'}
                     </td>
                   ))}
@@ -3120,7 +3122,7 @@ export default function ProjectSpaceContainer() {
               {allMilestones.map((m: any, mi: number) => (
                 <td key={mi} style={{ ...tdStyle, color: '#d48806' }}>
                   {canMaintainCurrentPlan && (isCurrentDraft || isLatestPublished)
-                    ? <ClickToEditDate value={m.actualEndDate || ''} onChange={(nextValue) => updateActualDateForTask(effectiveTasks, (tasks) => setEffectiveTasks(tasks), m, 'actualEndDate', nextValue, false)} />
+                    ? <ClickToEditDate align="center" value={m.actualEndDate || ''} onChange={(nextValue) => updateActualDateForTask(effectiveTasks, (tasks) => setEffectiveTasks(tasks), m, 'actualEndDate', nextValue, false)} />
                     : m.actualEndDate || '-'}
                 </td>
               ))}

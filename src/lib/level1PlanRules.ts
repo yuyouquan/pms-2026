@@ -130,6 +130,17 @@ export const getLevel1DateDifference = (start: string, end: string): number | nu
   return Math.round((endTime - startTime) / 86_400_000)
 }
 
+export const sumLevel1EstimatedDays = (
+  rows: readonly Pick<Level1PlanViewRow, 'estimatedDays'>[],
+): number | null => {
+  const durations = rows
+    .map(row => row.estimatedDays)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0)
+  return durations.length > 0
+    ? durations.reduce((total, duration) => total + duration, 0)
+    : null
+}
+
 export const addLevel1Days = (value: string, days: number): string => {
   const timestamp = parseStrictDate(value)
   if (timestamp === null) return ''

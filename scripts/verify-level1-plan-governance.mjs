@@ -136,6 +136,16 @@ assert.deepEqual(
   [null, 24, 76],
   'manpower percentages use the sum of effective stage estimated durations',
 )
+assert.equal(
+  rules.sumLevel1EstimatedDays(projection.rows),
+  271,
+  'horizontal development cycle sums every populated stage estimated duration',
+)
+assert.equal(
+  rules.sumLevel1EstimatedDays(projection.rows.map(row => ({ ...row, estimatedDays: null }))),
+  null,
+  'horizontal development cycle stays empty when no estimated duration exists',
+)
 
 const invalid = rules.validateLevel1MilestoneDates([
   makeTask('p1', null, 0, '阶段1'),
@@ -218,5 +228,8 @@ assert.match(technicalModuleSource, /fieldMode="governed"/, 'technical compariso
 assert.match(projectSpaceSource, /buildProjectListMockPlanTasks\(selectedProject\.id,/, 'project space consumes the same project-scoped mock plan source as the project list')
 assert.match(projectSpaceSource, /planEndDate:\s*task\.planEndDate\s*\|\|\s*''/, 'tOS project initialization preserves project-linked mock plan dates')
 assert.match(projectSpaceSource, /getDisplayPlanVersionsForHorizontalPlan\(horizontalVersions,\s*\{\s*includeDraft:\s*canMaintainCurrentPlan\s*\}\)/, 'horizontal plan exposes drafts to maintainers')
+assert.match(projectSpaceSource, /sumLevel1EstimatedDays\(vProjection\.rows\)/, 'horizontal development cycle uses the estimated-duration total')
+assert.match(projectSpaceSource, /version\.status === '修订中'[\s\S]{0,240}aria-label="修订中"/, 'draft version numbers carry a revision-state icon')
+assert.equal((projectSpaceSource.match(/<ClickToEditDate\s+align="center"/g) || []).length >= 2, true, 'editable horizontal dates align with read-only date text')
 
 console.log('level1 plan governance rule verification passed')

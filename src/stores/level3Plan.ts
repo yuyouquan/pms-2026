@@ -21,6 +21,7 @@ import {
   type Level3ColumnKey,
   type Level3FieldChange,
   type Level3MoveResult,
+  type Level3Milestone,
   type Level3ScopeData,
   type Level3WorkflowOverrideMap,
 } from '@/types/level3Plan'
@@ -75,6 +76,98 @@ const createId = (prefix: string) => {
     return `${prefix}-${crypto.randomUUID()}`
   }
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+const addCalendarDays = (value: string, days: number) => {
+  const date = new Date(`${value}T00:00:00.000Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
+const LEVEL3_MOCK_SECTIONS = [
+  {
+    name: 'IR计划输出', fallbackEndDate: '2026-02-26', milestoneIndex: 1,
+    children: ['原始IR输出', '需求串讲', 'IR锁定', 'PD/UX/概设/测试方案锁定', 'SR分解', '需求反串讲', 'IR排期', 'IR开发', 'IR验收'],
+  },
+  {
+    name: 'tOS子系统概要设计', fallbackEndDate: '2026-05-22', milestoneIndex: 3,
+    children: ['概要设计启动', 'SDRB评审', '子系统概要设计终审'],
+  },
+  {
+    name: '测试计划', fallbackEndDate: '2026-12-15', milestoneIndex: 6,
+    children: ['测试范围 & 需求拆解', '测试用例设计评审', '测试策略&计划评审', '版本测试-STR4', '版本测试-STR4A', 'STR5版本归档'],
+  },
+  {
+    name: 'Beta NPS调研计划', fallbackEndDate: '2027-03-01', milestoneIndex: 7,
+    children: ['调研问卷设计', 'Beta版本发布', '用户反馈收集', 'NPS数据统计', '调研报告输出'],
+  },
+] as const
+
+export const buildLevel3MockActivities = (milestones: Level3Milestone[]): Level3Activity[] => {
+  const owners = [
+    { name: '张三', department: '项目管理部' },
+    { name: '李四', department: '产品规划部' },
+    { name: '王五', department: '测试部' },
+    { name: '赵六', department: '用户研究部' },
+  ]
+  const createdAt = '2026-08-18 09:00:00'
+  return LEVEL3_MOCK_SECTIONS.flatMap((section, sectionIndex) => {
+    const parentId = `level3-mock-parent-${sectionIndex + 1}`
+    const owner = owners[sectionIndex]
+    const milestone = milestones[Math.min(section.milestoneIndex, Math.max(milestones.length - 1, 0))]
+    const sectionEndDate = milestone?.planEndDate || section.fallbackEndDate
+    const parent: Level3Activity = {
+      id: parentId,
+      parentId: null,
+      order: sectionIndex,
+      activityName: section.name,
+      responsible: owner.name,
+      responsibleDepartment: owner.department,
+      planStartDate: '',
+      planEndDate: '',
+      actualStartDate: '',
+      actualEndDate: '',
+      milestoneId: '',
+      milestoneName: '',
+      milestonePlanEndDate: '',
+      status: '待启动',
+      risk: '无',
+      remark: `三级计划示例：${section.name}`,
+      creator: '系统管理员',
+      createdAt,
+      updatedBy: '系统管理员',
+      updatedAt: createdAt,
+    }
+    const children = section.children.map((activityName, childIndex): Level3Activity => {
+      const planEndDate = addCalendarDays(sectionEndDate, -(section.children.length - childIndex - 1) * 7)
+      const planStartDate = addCalendarDays(planEndDate, -4)
+      const completed = childIndex < Math.min(2, section.children.length)
+      const progressing = !completed && childIndex === Math.min(2, section.children.length - 1)
+      return {
+        id: `level3-mock-${sectionIndex + 1}-${childIndex + 1}`,
+        parentId,
+        order: childIndex,
+        activityName,
+        responsible: owner.name,
+        responsibleDepartment: owner.department,
+        planStartDate,
+        planEndDate,
+        actualStartDate: completed || progressing ? planStartDate : '',
+        actualEndDate: completed ? planEndDate : '',
+        milestoneId: milestone?.id || '',
+        milestoneName: milestone?.name || '',
+        milestonePlanEndDate: milestone?.planEndDate || sectionEndDate,
+        status: completed ? '已完成' : progressing ? '进行中' : '待启动',
+        risk: childIndex === 2 ? '中' : childIndex === 4 ? '低' : '无',
+        remark: childIndex === 0 ? '示例数据，可直接在表格中维护执行信息' : '',
+        creator: '系统管理员',
+        createdAt,
+        updatedBy: '系统管理员',
+        updatedAt: createdAt,
+      }
+    })
+    return [parent, ...children]
+  })
 }
 
 const getActivityNumber = (activities: Level3Activity[], activityId: string) => (
@@ -185,6 +278,7 @@ interface Level3PlanState {
 
 interface Level3PlanActions {
   getScopeData: (scopeKey: string) => Level3ScopeData
+  ensureScopeMockData: (scopeKey: string, milestones: Level3Milestone[]) => void
   createActivity: (scopeKey: string, activity: Level3Activity, actor: string) => boolean
   updateActivity: (
     scopeKey: string,
@@ -258,6 +352,15 @@ const hasMaterializableScopeData = (state: Level3PlanState, scopeKey: string) =>
 export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(persist(
   (set, get) => ({
     ...initialState,
+    ensureScopeMockData: (scopeKey, milestones) => set(state => {
+      if (!scopeKey || Object.prototype.hasOwnProperty.call(state.activitiesByScope, scopeKey)) return state
+      return {
+        activitiesByScope: {
+          ...state.activitiesByScope,
+          [scopeKey]: buildLevel3MockActivities(milestones),
+        },
+      }
+    }),
     getScopeData: (scopeKey) => ({
       activities: cloneActivities(get().activitiesByScope[scopeKey] || []),
       history: cloneHistory(get().historyByScope[scopeKey] || []),
