@@ -1,7 +1,9 @@
 import type {
   Level3Activity,
   Level3ActivityFormValue,
+  Level3ActivityRisk,
   Level3ActivityPermissions,
+  Level3ActivityStatus,
   Level3ActivityViewRow,
   Level3ChangeLog,
   Level3ActualDateOverride,
@@ -57,6 +59,25 @@ const dateDifference = (start: string, end: string): number | null => {
 
 const dateMin = (values: string[]) => values.filter(Boolean).sort()[0] || ''
 const dateMax = (values: string[]) => values.filter(Boolean).sort().at(-1) || ''
+
+const LEVEL3_RISK_PRIORITY: Record<Level3ActivityRisk, number> = {
+  无: 0,
+  低: 1,
+  中: 2,
+  高: 3,
+}
+
+const getParentStatus = (children: Level3Activity[]): Level3ActivityStatus => {
+  if (children.length === 0 || children.every(child => child.status === '待启动')) return '待启动'
+  if (children.every(child => child.status === '已完成')) return '已完成'
+  return '进行中'
+}
+
+const getParentRisk = (children: Level3Activity[]): Level3ActivityRisk => (
+  children.reduce<Level3ActivityRisk>((highest, child) => (
+    LEVEL3_RISK_PRIORITY[child.risk] > LEVEL3_RISK_PRIORITY[highest] ? child.risk : highest
+  ), '无')
+)
 
 export function getLevel3ScopeKey(projectId: string, kind: Level3ScopeKind, value: string): string {
   return `${projectId}::${kind}::${value}`
@@ -169,6 +190,8 @@ export function getLevel3ParentRollup(parentId: string, activities: Level3Activi
     actualStartDate,
     actualEndDate,
     actualDays: dateDifference(actualStartDate, actualEndDate),
+    status: getParentStatus(children),
+    risk: getParentRisk(children),
   }
 }
 

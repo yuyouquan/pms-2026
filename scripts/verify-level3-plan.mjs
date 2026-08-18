@@ -61,6 +61,124 @@ const childB = {
   planStartDate: '2026-01-01', planEndDate: '2026-01-10', actualStartDate: '2026-01-02', actualEndDate: '2026-01-09',
 }
 
+const parentRollupCases = [
+  {
+    name: 'no children',
+    children: [],
+    expected: { status: '待启动', risk: '无' },
+  },
+  {
+    name: 'all pending uses highest child risk',
+    children: [
+      { ...childA, status: '待启动', risk: '低' },
+      { ...childB, status: '待启动', risk: '高' },
+    ],
+    expected: { status: '待启动', risk: '高' },
+  },
+  {
+    name: 'all completed uses highest child risk',
+    children: [
+      { ...childA, status: '已完成', risk: '无' },
+      { ...childB, status: '已完成', risk: '中' },
+    ],
+    expected: { status: '已完成', risk: '中' },
+  },
+  {
+    name: 'pending and completed is in progress',
+    children: [
+      { ...childA, status: '待启动', risk: '无' },
+      { ...childB, status: '已完成', risk: '低' },
+    ],
+    expected: { status: '进行中', risk: '低' },
+  },
+  {
+    name: 'any in progress is in progress',
+    children: [
+      { ...childA, status: '待启动', risk: '无' },
+      { ...childB, status: '进行中', risk: '中' },
+    ],
+    expected: { status: '进行中', risk: '中' },
+  },
+  {
+    name: 'risk priority is high over medium, low, and none',
+    children: [
+      { ...childA, status: '待启动', risk: '无' },
+      { ...childB, status: '待启动', risk: '低' },
+      { ...childA, id: 'c3', status: '待启动', risk: '中' },
+      { ...childB, id: 'c4', status: '待启动', risk: '高' },
+    ],
+    expected: { status: '待启动', risk: '高' },
+  },
+]
+for (const testCase of parentRollupCases) {
+  const activities = [parent, ...testCase.children]
+  const rollup = rules.getLevel3ParentRollup('p1', activities)
+  const rows = rules.applyLevel3Rollups(activities)
+  assert.deepEqual(
+    {
+      status: rollup.status,
+      risk: rollup.risk,
+    },
+    testCase.expected,
+    testCase.name,
+  )
+  assert.deepEqual(
+    {
+      status: rows.find(row => row.id === 'p1').status,
+      risk: rows.find(row => row.id === 'p1').risk,
+    },
+    testCase.expected,
+    `${testCase.name} through applyLevel3Rollups`,
+  )
+}
+
+const followerSourceActivities = [
+  { ...parent, status: '已完成', risk: '高' },
+  { ...childA, status: '待启动', risk: '低' },
+  { ...childB, status: '进行中', risk: '中' },
+]
+const followerActualOverrides = {
+  c1: {
+    activityId: 'c1', actualStartDate: '2026-08-02', actualEndDate: '2026-08-06',
+    detachedBy: '李四', detachedAt: '2026-08-17 12:20:00',
+  },
+}
+const followerWorkflowOverrides = {
+  c1: {
+    activityId: 'c1', status: '已完成', risk: '高',
+    detachedBy: '李四', detachedAt: '2026-08-17 12:21:00',
+  },
+  c2: {
+    activityId: 'c2', status: '待启动', risk: '低',
+    detachedBy: '李四', detachedAt: '2026-08-17 12:21:00',
+  },
+}
+const followerSourceSnapshot = structuredClone(followerSourceActivities)
+const followerActualSnapshot = structuredClone(followerActualOverrides)
+const followerWorkflowSnapshot = structuredClone(followerWorkflowOverrides)
+const followerEffectiveActivities = rules.mergeLevel3WorkflowOverrides(
+  rules.mergeLevel3ActualDateOverrides(followerSourceActivities, followerActualOverrides),
+  followerWorkflowOverrides,
+)
+const followerRows = rules.applyLevel3Rollups(followerEffectiveActivities)
+const followerParent = followerRows.find(row => row.id === 'p1')
+assert.deepEqual(
+  { status: followerParent.status, risk: followerParent.risk },
+  { status: '进行中', risk: '高' },
+  'rollup follows effective child status and risk rather than source or stored parent values',
+)
+assert.deepEqual(
+  followerRows.filter(row => row.parentId === 'p1').map(row => ({ id: row.id, status: row.status, risk: row.risk })),
+  [
+    { id: 'c1', status: '已完成', risk: '高' },
+    { id: 'c2', status: '待启动', risk: '低' },
+  ],
+  'rollup does not override child status or risk',
+)
+assert.deepEqual(followerSourceActivities, followerSourceSnapshot)
+assert.deepEqual(followerActualOverrides, followerActualSnapshot)
+assert.deepEqual(followerWorkflowOverrides, followerWorkflowSnapshot)
+
 const displayedActivity = { ...childA, actualStartDate: '2026-08-01', actualEndDate: '2026-08-05' }
 const displayedActivitySnapshot = structuredClone(displayedActivity)
 const override = rules.createLevel3ActualDateOverride(
@@ -172,6 +290,8 @@ assert.deepEqual(rollupRows.find(row => row.id === 'p1'), {
   actualStartDate: '2026-08-04',
   actualEndDate: '2026-08-15',
   actualDays: 11,
+  status: '待启动',
+  risk: '无',
 })
 
 const clearedDisplayedActivity = { ...childA, actualStartDate: '2026-08-01', actualEndDate: '2026-08-05' }
@@ -216,6 +336,8 @@ assert.deepEqual(rules.getLevel3ParentRollup('p1', [parent, childA, childB]), {
   actualStartDate: '2026-01-02',
   actualEndDate: '2026-01-09',
   actualDays: 7,
+  status: '待启动',
+  risk: '无',
 })
 assert.equal(rules.validateLevel3ChildDates(
   { planStartDate: '2026-01-06', planEndDate: '2026-01-11' },

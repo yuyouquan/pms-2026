@@ -101,6 +101,8 @@ export interface Level3ParentRollup {
   actualStartDate: string
   actualEndDate: string
   actualDays: number | null
+  status: Level3ActivityStatus
+  risk: Level3ActivityRisk
 }
 
 export interface Level3ActivityViewRow extends NumberedLevel3Activity {
