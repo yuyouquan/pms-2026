@@ -101,10 +101,14 @@ export function forkLevel3ScopeData(
   const targetColumnSettings = target?.columnSettings
   return {
     activities: mergeLevel3ActualDateOverrides(source.activities, overrides),
-    history: [...historyById.values()].map(log => ({
-      ...log,
-      changes: log.changes.map(change => ({ ...change })),
-    })),
+    history: [...historyById.values()]
+      .sort((left, right) => (
+        right.occurredAt.localeCompare(left.occurredAt) || left.id.localeCompare(right.id)
+      ))
+      .map(log => ({
+        ...log,
+        changes: log.changes.map(change => ({ ...change })),
+      })),
     collapsedIds: [...source.collapsedIds],
     columnSettings: {
       order: [...(targetColumnSettings?.order || source.columnSettings.order)],

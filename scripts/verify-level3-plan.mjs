@@ -201,10 +201,19 @@ assert.equal(rules.resolveLevel3DetachedScopeFork(
 const sourceHistory = [{
   id: 'source-log', action: 'edit', actor: '张三', occurredAt: '2026-08-17 10:00:00',
   activityId: 'c1', activityName: '子活动A', activityNumber: '1.1', summary: '编辑活动', changes: [],
+}, {
+  id: 'tie-b', action: 'edit', actor: '张三', occurredAt: '2026-08-17 11:00:00',
+  activityId: 'c1', activityName: '子活动A', activityNumber: '1.1', summary: '同一时刻的源历史', changes: [],
 }]
 const targetHistory = [{
-  ...sourceHistory[0], id: 'target-log', occurredAt: '2026-08-16 10:00:00', summary: '历史独立编辑',
+  ...sourceHistory[0], id: 'target-log', occurredAt: '2026-08-18 10:00:00', summary: '历史独立编辑',
+}, {
+  ...sourceHistory[0], id: 'tie-a', occurredAt: '2026-08-17 11:00:00', summary: '同一时刻的跟随历史',
+}, {
+  ...sourceHistory[0],
 }]
+const sourceHistoryInputSnapshot = structuredClone(sourceHistory)
+const targetHistoryInputSnapshot = structuredClone(targetHistory)
 const forkedScope = rules.forkLevel3ScopeData({
   activities: [parent, childA], history: sourceHistory, collapsedIds: ['p1'],
   columnSettings: { order: ['number', 'activityName'], visible: ['number', 'activityName'] },
@@ -223,7 +232,10 @@ assert.deepEqual(forkedScope.activities.find(item => item.id === 'c1'), {
   actualStartDate: '2026-08-04',
   actualEndDate: '2026-08-06',
 })
-assert.deepEqual(forkedScope.history.map(item => item.id), ['source-log', 'target-log'])
+assert.deepEqual(forkedScope.history.map(item => item.id), ['target-log', 'tie-a', 'tie-b', 'source-log'])
+assert.equal(new Set(forkedScope.history.map(item => item.id)).size, forkedScope.history.length)
+assert.deepEqual(sourceHistory, sourceHistoryInputSnapshot)
+assert.deepEqual(targetHistory, targetHistoryInputSnapshot)
 assert.deepEqual(forkedScope.columnSettings, { order: ['activityName', 'number'], visible: ['number'] })
 assert.notEqual(forkedScope.activities[0], parent)
 assert.deepEqual(childA.actualStartDate, '2026-01-04')
@@ -346,6 +358,8 @@ assert.equal(
 persisted = store.getState()
 assert.equal(persisted.actualOverridesByScope[storeFollowerScope].c1.actualStartDate, '2026-01-05')
 assert.equal(persisted.actualOverridesByScope[storeFollowerScope].c1.actualEndDate, '2026-01-08')
+const followerHistoryIds = persisted.historyByScope[storeFollowerScope].map(log => log.id)
+assert.equal(new Set(followerHistoryIds).size, followerHistoryIds.length)
 const historyLengthBeforeRejectedUpdate = persisted.historyByScope[storeFollowerScope].length
 assert.equal(
   store.getState().updateFollowActualDates(
@@ -353,6 +367,28 @@ assert.equal(
     storeFollowerScope,
     'c1',
     { actualStartDate: '2026-01-09' },
+    '李四',
+  ),
+  false,
+)
+for (const malformedDate of ['2026-2-03', '2026-02-30', '2026-13-01']) {
+  assert.equal(
+    store.getState().updateFollowActualDates(
+      storeSourceScope,
+      storeFollowerScope,
+      'c1',
+      { actualStartDate: malformedDate },
+      '李四',
+    ),
+    false,
+  )
+}
+assert.equal(
+  store.getState().updateFollowActualDates(
+    storeSourceScope,
+    storeFollowerScope,
+    'c1',
+    { actualEndDate: '2026-2-03' },
     '李四',
   ),
   false,
@@ -405,6 +441,56 @@ assert.deepEqual(migrated, {
   columnSettingsByScope: { legacy: { order: ['number'], visible: ['number'] } },
   actualOverridesByScope: {},
 })
+
+const roundTripOverrides = {
+  persisted: {
+    c1: {
+      activityId: 'c1', actualStartDate: '2026-01-05', actualEndDate: '2026-01-08',
+      detachedBy: '王五', detachedAt: '2026-08-18 10:00:00',
+    },
+  },
+}
+const memoryStorageData = new Map()
+const memoryStorage = {
+  getItem: key => memoryStorageData.get(key) || null,
+  setItem: (key, value) => memoryStorageData.set(key, value),
+  removeItem: key => memoryStorageData.delete(key),
+}
+const hadWindow = Object.prototype.hasOwnProperty.call(globalThis, 'window')
+const originalWindow = globalThis.window
+globalThis.window = { localStorage: memoryStorage }
+try {
+  const hydratedStoreModule = loadCommonJsTypeScriptModule(storePath, {
+    '@/lib/level3PlanRules': loadCommonJsTypeScriptModule(rulesPath),
+    '@/types/level3Plan': loadCommonJsTypeScriptModule(path.join(root, 'src/types/level3Plan.ts')),
+  })
+  const roundTripState = {
+    activitiesByScope: { [storeSourceScope]: [parent, childA] },
+    historyByScope: { [storeSourceScope]: sourceHistory },
+    collapsedIdsByScope: { [storeSourceScope]: ['p1'] },
+    columnSettingsByScope: { [storeSourceScope]: { order: ['number'], visible: ['number'] } },
+    actualOverridesByScope: roundTripOverrides,
+  }
+  memoryStorage.setItem(hydratedStoreModule.LEVEL3_PLAN_STORAGE_KEY, JSON.stringify({
+    state: roundTripState,
+    version: hydratedStoreModule.LEVEL3_PLAN_STORE_VERSION,
+  }))
+  await hydratedStoreModule.useLevel3PlanStore.persist.rehydrate()
+  assert.deepEqual(hydratedStoreModule.useLevel3PlanStore.getState().actualOverridesByScope, roundTripOverrides)
+  hydratedStoreModule.useLevel3PlanStore.getState().setCollapsedIds(storeSourceScope, ['p1', 'c1'])
+  const storedRoundTrip = JSON.parse(memoryStorage.getItem(hydratedStoreModule.LEVEL3_PLAN_STORAGE_KEY))
+  assert.equal(storedRoundTrip.version, 2)
+  assert.deepEqual(storedRoundTrip.state.actualOverridesByScope, roundTripOverrides)
+  const reloadedStoreModule = loadCommonJsTypeScriptModule(storePath, {
+    '@/lib/level3PlanRules': loadCommonJsTypeScriptModule(rulesPath),
+    '@/types/level3Plan': loadCommonJsTypeScriptModule(path.join(root, 'src/types/level3Plan.ts')),
+  })
+  await reloadedStoreModule.useLevel3PlanStore.persist.rehydrate()
+  assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().actualOverridesByScope, roundTripOverrides)
+} finally {
+  if (hadWindow) globalThis.window = originalWindow
+  else delete globalThis.window
+}
 
 const componentPath = path.join(root, 'src/components/plans/Level3PlanModule.tsx')
 assert.ok(fs.existsSync(componentPath), 'src/components/plans/Level3PlanModule.tsx does not exist')
