@@ -239,6 +239,7 @@ export const initialProjects = [
     currentNode: 'STR5', projectDescription: '平台技术预研项目，探索新一代芯片平台的适配与优化方案',
     branchInfo: 'main_dev_x6876', jenkinsUrl: 'https://jenkins.example.com/job/X6876',
     teamMembers: '孙七,李四,张三',
+    technicalTrack: '芯片平台前瞻', tmg: '基础架构TMG', subdomain: '芯片适配', technicalLead: '孙七', technicalProjectManager: '李四',
   },
   {
     id: '5', name: 'X6873_H972', type: PROJECT_TYPE_CAPABILITY, secondaryCategory: PROJECT_TYPE_CAPABILITY,
@@ -309,6 +310,7 @@ export const initialProjects = [
     currentNode: 'STR3', projectDescription: 'AI推理引擎V2版本，提升端侧大模型推理性能，支持多模态输入输出',
     branchInfo: 'main_dev_ai_engine_v2', jenkinsUrl: 'https://jenkins.example.com/job/ai-engine-v2',
     teamMembers: '李四,张三,赵六,孙七',
+    technicalTrack: 'AIOS', tmg: '系统应用', subdomain: '端侧AI引擎', technicalLead: '李四', technicalProjectManager: '张三',
   },
   {
     id: '10', name: 'DevOps-Platform', type: PROJECT_TYPE_CAPABILITY, secondaryCategory: PROJECT_TYPE_CAPABILITY,
@@ -523,6 +525,7 @@ export const initialProjects = [
     currentNode: 'TDR2', projectDescription: '基础架构第二个技术项目，用于体现技术项目领域聚合。',
     branchInfo: 'main_dev_infra_2', jenkinsUrl: 'https://jenkins.example.com/job/infra-2',
     teamMembers: '张三,李四,赵六',
+    technicalTrack: '基础架构', tmg: '基础架构TMG', subdomain: '系统框架', technicalLead: '李四', technicalProjectManager: '赵六',
   },
   {
     id: '21', name: '影像-项目1', type: PROJECT_TYPE_TECH, secondaryCategory: PROJECT_TYPE_TECH,
@@ -536,6 +539,39 @@ export const initialProjects = [
     currentNode: 'TDR4', projectDescription: '影像技术转维项目，用于体现技术项目不同领域分组。',
     branchInfo: 'main_dev_image_1', jenkinsUrl: 'https://jenkins.example.com/job/image-1',
     teamMembers: '王五,孙七,李白',
+    technicalTrack: '计算影像', tmg: '系统应用', subdomain: '影像算法', technicalLead: '王五', technicalProjectManager: '孙七',
+  },
+  {
+    id: 'mock-tech-aios-v3', name: 'AIOS架构演进V3', type: PROJECT_TYPE_TECH, secondaryCategory: PROJECT_TYPE_TECH,
+    status: '在研', progress: 68, leader: '李四', markets: [], androidVersion: 'Android 16', chipPlatform: 'MTK', spm: '张三', updatedAt: '30分钟前', productLine: 'AIOS', domain: '系统应用', tosVersions: 'tOS16.3,tOS17.1', tosVersion: 'tOS16.3',
+    planStartDate: '2026-01-15', planEndDate: '2026-08-31', developCycle: 160, healthStatus: 'normal' as const, operatingSystem: 'Android 16',
+    buildAddress: 'https://build.example.com/aios-v3', currentNode: 'TDR3', projectDescription: '推进 AIOS 核心架构演进，形成可复用的端侧智能服务底座。',
+    branchInfo: 'main_dev_aios_v3', jenkinsUrl: 'https://jenkins.example.com/job/aios-v3', teamMembers: '李四,张三,王五,赵六',
+    technicalTrack: 'AIOS', tmg: '系统应用', subdomain: 'AIOS', technicalLead: '李四', technicalProjectManager: '张三',
+  },
+  {
+    id: 'mock-tech-perf-power', name: '端侧性能功耗协同优化', type: PROJECT_TYPE_TECH, secondaryCategory: PROJECT_TYPE_TECH,
+    status: '在研', progress: 56, leader: '孙七', markets: [], androidVersion: 'Android 16', chipPlatform: 'QCOM', spm: '李四', updatedAt: '1小时前', productLine: '基础架构', domain: '性能功耗', tosVersions: 'tOS16.3,tOS17.1', tosVersion: 'tOS16.3',
+    planStartDate: '2026-02-01', planEndDate: '2026-09-15', developCycle: 170, healthStatus: 'normal' as const, operatingSystem: 'Android 16',
+    buildAddress: 'https://build.example.com/perf-power', currentNode: 'TDR2', projectDescription: '围绕端侧算力与功耗建立跨芯片平台的协同优化能力。',
+    branchInfo: 'main_dev_perf_power', jenkinsUrl: 'https://jenkins.example.com/job/perf-power', teamMembers: '孙七,李四,赵六,张三',
+    technicalTrack: '性能功耗', tmg: '性能TMG', subdomain: '无', technicalLead: '孙七', technicalProjectManager: '李四',
+  },
+  {
+    id: 'mock-tech-system-experience', name: '下一代系统体验', type: PROJECT_TYPE_TECH, secondaryCategory: PROJECT_TYPE_TECH,
+    status: '筹备中', progress: 35, leader: '王五', markets: [], androidVersion: 'Android 17', chipPlatform: 'MTK', spm: '赵六', updatedAt: '2小时前', productLine: '系统体验', domain: 'UX', tosVersions: 'tOS17.1,tOS17.2', tosVersion: 'tOS17.1',
+    planStartDate: '2026-03-01', planEndDate: '2026-10-31', developCycle: 180, healthStatus: 'warning' as const, operatingSystem: 'Android 17',
+    buildAddress: 'https://build.example.com/system-experience', currentNode: '规划启动', projectDescription: '探索高帧交互、动效和系统反馈的一体化下一代体验。',
+    branchInfo: 'main_dev_system_experience', jenkinsUrl: 'https://jenkins.example.com/job/system-experience', teamMembers: '王五,赵六,孙七,李白',
+    technicalTrack: '系统体验', tmg: 'UX TMG', subdomain: '无', technicalLead: '王五', technicalProjectManager: '赵六',
+  },
+  {
+    id: 'mock-tech-6g-prestudy', name: '6G通信预研', type: PROJECT_TYPE_TECH, secondaryCategory: PROJECT_TYPE_TECH,
+    status: '在研', progress: 42, leader: '赵六', markets: [], androidVersion: 'Android 17', chipPlatform: 'QCOM', spm: '孙七', updatedAt: '4小时前', productLine: '通信技术', domain: '底软通信', tosVersions: 'tOS17.1,tOS17.2', tosVersion: 'tOS17.1',
+    planStartDate: '2026-04-01', planEndDate: '2026-12-31', developCycle: 210, healthStatus: 'normal' as const, operatingSystem: 'Android 17',
+    buildAddress: 'https://build.example.com/6g-prestudy', currentNode: 'TDR1', projectDescription: '开展 6G 协议与端侧通信能力预研，验证未来网络演进路径。',
+    branchInfo: 'main_dev_6g_prestudy', jenkinsUrl: 'https://jenkins.example.com/job/6g-prestudy', teamMembers: '赵六,孙七,李四,王五',
+    technicalTrack: '通信预研', tmg: '底软通信', subdomain: '蜂窝', technicalLead: '赵六', technicalProjectManager: '孙七',
   },
   ...ADDITIONAL_MACHINE_PROJECTS,
 ]

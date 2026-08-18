@@ -81,6 +81,8 @@ type ProjectUpdate = ProjectPatch | ((project: Project) => Project)
 export type ProjectListViewMode = 'list' | 'card' | 'calendar'
 type PersistedProjectState = { projects: Project[]; projectListView: ProjectListViewMode }
 
+export const PROJECT_STORE_VERSION = 7
+
 export function synchronizeTechnicalRoleMembers(
   existing: Record<string, string[]>,
   incoming: Record<string, string[]>,
@@ -351,9 +353,36 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-export function migrateProjectState(persistedState: unknown, _version: number): PersistedProjectState {
+const cloneProjectSeedValue = <T,>(value: T): T => {
+  if (Array.isArray(value)) return value.map(cloneProjectSeedValue) as T
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, nested]) => [key, cloneProjectSeedValue(nested)]),
+    ) as T
+  }
+  return value
+}
+
+const cloneProjectSeed = (project: Project): Project => cloneProjectSeedValue(project)
+
+const isMissingSeedValue = (value: unknown) => (
+  value === undefined
+  || value === null
+  || (typeof value === 'string' && !value.trim())
+  || (Array.isArray(value) && value.length === 0)
+)
+
+const fillMissingSeedProjectFields = (persisted: Project, seed: Project): Project => {
+  const next = { ...persisted }
+  Object.entries(seed).forEach(([key, value]) => {
+    if (isMissingSeedValue(next[key])) next[key] = cloneProjectSeedValue(value)
+  })
+  return next
+}
+
+export function migrateProjectState(persistedState: unknown, version: number): PersistedProjectState {
   if (!isRecord(persistedState) || !Array.isArray(persistedState.projects)) {
-    return { projects: initialProjectState, projectListView: 'list' }
+    return { projects: initialProjectState.map(cloneProjectSeed), projectListView: 'list' }
   }
 
   const projectListView: ProjectListViewMode = persistedState.projectListView === 'card'
@@ -385,13 +414,20 @@ export function migrateProjectState(persistedState: unknown, _version: number): 
   })
 
   if (persistedState.projects.length > 0 && projects.length === 0) {
-    return { projects: initialProjectState, projectListView }
+    return { projects: initialProjectState.map(cloneProjectSeed), projectListView }
   }
-  const migratedProjects = _version < 6
-    ? [
-        ...projects,
-        ...initialProjectState.filter(seed => !seenIds.has(seed.id)),
-      ]
+  const migratedProjects = version < PROJECT_STORE_VERSION
+    ? (() => {
+        const seedById = new Map(initialProjectState.map(seed => [seed.id, seed]))
+        const merged = projects.map(project => {
+          const seed = seedById.get(project.id)
+          return seed ? migrateProjectHistory(fillMissingSeedProjectFields(project, seed)) : project
+        })
+        return [
+          ...merged,
+          ...initialProjectState.filter(seed => !seenIds.has(seed.id)).map(cloneProjectSeed),
+        ]
+      })()
     : projects
   return { projects: migratedProjects, projectListView }
 }
@@ -695,13 +731,13 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
   }),
   {
     name: PROJECT_STORAGE_KEY,
-    version: 6,
+    version: PROJECT_STORE_VERSION,
     storage: createJSONStorage(() => safeProjectStorage),
     migrate: migrateProjectState,
     partialize: partializeProjectState,
     merge: (persistedState, currentState) => ({
       ...currentState,
-      ...migrateProjectState(persistedState, 5),
+      ...migrateProjectState(persistedState, PROJECT_STORE_VERSION),
     }),
     onRehydrateStorage: () => (state) => {
       if (state) usePermissionStore.getState().ensureProjectPermissions(state.projects)

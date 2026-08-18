@@ -17,7 +17,7 @@ import type {
 } from '@/types/technicalProject'
 
 export const TECHNICAL_PROJECT_STORAGE_KEY = 'pms-technical-projects'
-export const TECHNICAL_PROJECT_STORE_VERSION = 2
+export const TECHNICAL_PROJECT_STORE_VERSION = 3
 
 export const TECHNICAL_CORE_VALUES: readonly Exclude<TechnicalSubprojectCoreValue, ''>[] = [
   '追赶', '人无我有', '人有我有',
@@ -34,12 +34,20 @@ export const INITIAL_TECHNICAL_SUBPROJECTS: TechnicalSubproject[] = [
   },
   {
     id: 'IPM-AI-002', parentProjectId: '9', name: '多模态子项目', active: true, ipmOrder: 2,
-    configuration: { ...EMPTY_SUBPROJECT_CONFIGURATION },
+    configuration: { coreValue: '人无我有', developmentMode: '谷歌合作', firstTosVersion: '16.3', firstMachineProjectId: '7' },
   },
   {
     id: 'IPM-AI-003', parentProjectId: '9', name: '端侧训练子项目', active: false, ipmOrder: 3,
     configuration: { coreValue: '人无我有', developmentMode: '高校合作', firstTosVersion: '', firstMachineProjectId: '' },
   },
+  { id: 'IPM-BASE-001', parentProjectId: '20', name: '新一代任务调度', active: true, ipmOrder: 1, configuration: { coreValue: '人有我有', developmentMode: '自研', firstTosVersion: '16.3', firstMachineProjectId: '1' } },
+  { id: 'IPM-BASE-002', parentProjectId: '20', name: '系统服务治理', active: true, ipmOrder: 2, configuration: { coreValue: '追赶', developmentMode: 'SoC合作', firstTosVersion: '17.1', firstMachineProjectId: '7' } },
+  { id: 'IPM-IMAGE-001', parentProjectId: '21', name: '夜景计算摄影', active: true, ipmOrder: 1, configuration: { coreValue: '人有我有', developmentMode: '自研', firstTosVersion: '16.3', firstMachineProjectId: '12' } },
+  { id: 'IPM-IMAGE-002', parentProjectId: '21', name: '端侧视频增强', active: true, ipmOrder: 2, configuration: { coreValue: '人无我有', developmentMode: '谷歌合作', firstTosVersion: '17.1', firstMachineProjectId: '7' } },
+  { id: 'IPM-AIOS-001', parentProjectId: 'mock-tech-aios-v3', name: '分布式服务框架', active: true, ipmOrder: 1, configuration: { coreValue: '人无我有', developmentMode: '自研', firstTosVersion: '17.1', firstMachineProjectId: '1' } },
+  { id: 'IPM-POWER-001', parentProjectId: 'mock-tech-perf-power', name: '智能能效调度', active: true, ipmOrder: 1, configuration: { coreValue: '人有我有', developmentMode: 'SoC合作', firstTosVersion: '17.1', firstMachineProjectId: '12' } },
+  { id: 'IPM-UX-001', parentProjectId: 'mock-tech-system-experience', name: '高帧动效引擎', active: true, ipmOrder: 1, configuration: { coreValue: '追赶', developmentMode: '自研', firstTosVersion: '17.2', firstMachineProjectId: '7' } },
+  { id: 'IPM-6G-001', parentProjectId: 'mock-tech-6g-prestudy', name: '6G协议验证平台', active: true, ipmOrder: 1, configuration: { coreValue: '人无我有', developmentMode: '高校合作', firstTosVersion: '17.2', firstMachineProjectId: '1' } },
 ]
 
 type ConfigurationUpdateResult = { ok: true } | { ok: false; reason: 'missing' | 'inactive' | 'invalid' }
@@ -122,11 +130,23 @@ export function sanitizeTechnicalSubprojects(value: unknown): TechnicalSubprojec
 
 export function migrateTechnicalProjectState(
   persistedState: unknown,
-  _fromVersion: number,
+  fromVersion: number,
 ): PersistedTechnicalProjectState {
   const source = isRecord(persistedState) ? persistedState.subprojects : undefined
   const sanitized = sanitizeTechnicalSubprojects(source)
-  return { subprojects: sanitized ?? cloneSubprojects(INITIAL_TECHNICAL_SUBPROJECTS) }
+  if (!sanitized) return { subprojects: cloneSubprojects(INITIAL_TECHNICAL_SUBPROJECTS) }
+  if (fromVersion !== TECHNICAL_PROJECT_STORE_VERSION - 1) return { subprojects: sanitized }
+  const knownIds = new Set(sanitized.map(item => item.id))
+  return {
+    subprojects: [
+      ...sanitized,
+      ...cloneSubprojects(INITIAL_TECHNICAL_SUBPROJECTS).filter(item => !knownIds.has(item.id)),
+    ].sort((left, right) => (
+      left.parentProjectId.localeCompare(right.parentProjectId)
+      || left.ipmOrder - right.ipmOrder
+      || left.id.localeCompare(right.id)
+    )),
+  }
 }
 
 export function mergeTechnicalProjectState(

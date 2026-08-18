@@ -6,7 +6,7 @@ import {
   isTechnicalSubprojectConfigured,
   type TechnicalStagePlanVersion,
 } from '@/lib/technicalProjectRules'
-import { buildTdtTemplateTasks, renumberTechnicalTasks, validateTechnicalPlanInstanceDepth } from '@/lib/technicalPlanRules'
+import { buildSubprojectTemplateTasks, buildTdtTemplateTasks, renumberTechnicalTasks, validateTechnicalPlanInstanceDepth } from '@/lib/technicalPlanRules'
 import { getNextPlanRevisionVersionNo, type PlanRevisionKind } from '@/lib/planVersioning'
 import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
 import type { TechnicalTemplateKind, TechnicalTemplateTask } from '@/types/technicalPlan'
@@ -68,16 +68,75 @@ const buildInitialTdtTasks = () => buildTdtTemplateTasks().map(task => {
   return { ...task, planStartDate, planEndDate }
 })
 
-export const INITIAL_TECHNICAL_PLANS: TechnicalPlansByKey = {
-  '9:tdt': {
-    planKey: '9:tdt', templateKind: 'tdt', currentVersionId: 'tech-9-v2-draft',
-    columnSettings: { order: [...DEFAULT_COLUMNS.order], visible: [...DEFAULT_COLUMNS.visible] }, collapsedRows: [],
-    versions: [
-      { id: 'tech-9-v1', versionNo: 'V1', templateType: 'tdt', status: '已发布', publishedAt: '2026-01-05T00:00:00Z', tasks: buildInitialTdtTasks() },
-      { id: 'tech-9-v2-draft', versionNo: 'V2', templateType: 'tdt', status: '修订中', tasks: buildInitialTdtTasks() },
-    ],
-  },
+const buildInitialSubprojectTasks = (childIndex: number) => buildSubprojectTemplateTasks().map((task, taskIndex) => {
+  const startMonth = String(taskIndex + 1).padStart(2, '0')
+  const endMonth = String(taskIndex + 2).padStart(2, '0')
+  const startDay = String(childIndex + 1).padStart(2, '0')
+  return {
+    ...task,
+    planStartDate: `2026-${startMonth}-${startDay}`,
+    planEndDate: `2026-${endMonth}-20`,
+  }
+})
+
+const TDT_PLAN_PROJECT_IDS = [
+  '4', '9', '20', '21',
+  'mock-tech-aios-v3', 'mock-tech-perf-power', 'mock-tech-system-experience', 'mock-tech-6g-prestudy',
+] as const
+
+const SUBPROJECT_PLAN_SCOPES = [
+  ['9', 'IPM-AI-001'], ['9', 'IPM-AI-002'],
+  ['20', 'IPM-BASE-001'], ['20', 'IPM-BASE-002'],
+  ['21', 'IPM-IMAGE-001'], ['21', 'IPM-IMAGE-002'],
+  ['mock-tech-aios-v3', 'IPM-AIOS-001'], ['mock-tech-perf-power', 'IPM-POWER-001'],
+  ['mock-tech-system-experience', 'IPM-UX-001'], ['mock-tech-6g-prestudy', 'IPM-6G-001'],
+] as const
+
+const createPublishedTdtPlan = (parentProjectId: string, index: number): TechnicalPlanInstance => {
+  const publishedId = `tech-${parentProjectId}-v1`
+  const published = {
+    id: publishedId,
+    versionNo: 'V1',
+    templateType: 'tdt' as const,
+    status: '已发布',
+    publishedAt: `2026-01-${String(index + 5).padStart(2, '0')}T00:00:00Z`,
+    tasks: buildInitialTdtTasks(),
+  }
+  return parentProjectId === '9'
+    ? {
+        planKey: '9:tdt', templateKind: 'tdt', currentVersionId: 'tech-9-v2-draft',
+        columnSettings: { order: [...DEFAULT_COLUMNS.order], visible: [...DEFAULT_COLUMNS.visible] }, collapsedRows: [],
+        versions: [published, { id: 'tech-9-v2-draft', versionNo: 'V2', templateType: 'tdt', status: '修订中', tasks: buildInitialTdtTasks() }],
+      }
+    : {
+        planKey: `${parentProjectId}:tdt`, templateKind: 'tdt', currentVersionId: publishedId,
+        columnSettings: { order: [...DEFAULT_COLUMNS.order], visible: [...DEFAULT_COLUMNS.visible] }, collapsedRows: [], versions: [published],
+      }
 }
+
+const createPublishedSubprojectPlan = (parentProjectId: string, subprojectId: string, index: number): TechnicalPlanInstance => {
+  const planKey = `${parentProjectId}:subproject:${subprojectId}`
+  const versionId = `tech-${subprojectId.toLowerCase()}-v1`
+  return {
+    planKey, templateKind: 'subproject', currentVersionId: versionId,
+    columnSettings: { order: [...DEFAULT_COLUMNS.order], visible: [...DEFAULT_COLUMNS.visible] }, collapsedRows: [],
+    versions: [{
+      id: versionId, versionNo: 'V1', templateType: 'subproject', status: '已发布',
+      publishedAt: `2026-02-${String(index + 1).padStart(2, '0')}T00:00:00Z`, tasks: buildInitialSubprojectTasks(index),
+    }],
+  }
+}
+
+export const INITIAL_TECHNICAL_PLANS: TechnicalPlansByKey = Object.fromEntries([
+  ...TDT_PLAN_PROJECT_IDS.map((parentProjectId, index) => {
+    const plan = createPublishedTdtPlan(parentProjectId, index)
+    return [plan.planKey, plan]
+  }),
+  ...SUBPROJECT_PLAN_SCOPES.map(([parentProjectId, subprojectId], index) => {
+    const plan = createPublishedSubprojectPlan(parentProjectId, subprojectId, index)
+    return [plan.planKey, plan]
+  }),
+])
 
 const cloneNestedValue = <T,>(value: T): T => {
   if (Array.isArray(value)) return value.map(cloneNestedValue) as T
@@ -99,7 +158,7 @@ const clonePlans = (plans: TechnicalPlansByKey): TechnicalPlansByKey => Object.f
   }]),
 )
 
-export const TECHNICAL_PLAN_STORE_VERSION = 5
+export const TECHNICAL_PLAN_STORE_VERSION = 6
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
@@ -119,7 +178,7 @@ export const migrateTechnicalPlanState = (persistedState: unknown, fromVersion: 
     const templateKind: TechnicalTemplateKind = candidate.templateKind === 'subproject' ? 'subproject' : 'tdt'
     const versions = candidate.versions.flatMap((version): TechnicalPlanVersion[] => {
       if (!isRecord(version) || !Array.isArray(version.tasks)) return []
-      const storedTasks = version.tasks.filter(isRecord).map(task => ({ ...task })) as unknown as TechnicalTemplateTask[]
+      const storedTasks = version.tasks.filter(isRecord).map(task => cloneNestedValue(task)) as unknown as TechnicalTemplateTask[]
       const tasks = fromVersion < 4 ? renumberTechnicalTasks(storedTasks) : storedTasks
       try { validateTechnicalPlanInstanceDepth(templateKind, tasks, templateKind === 'tdt' ? 2 : 1) } catch { return [] }
       return [{
@@ -152,6 +211,12 @@ export const migrateTechnicalPlanState = (persistedState: unknown, fromVersion: 
       collapsedRows: fromVersion < 4 ? [] : (Array.isArray(candidate.collapsedRows) ? candidate.collapsedRows.map(String) : []),
     }
   })
+  if (fromVersion === TECHNICAL_PLAN_STORE_VERSION - 1) {
+    const seedPlans = clonePlans(INITIAL_TECHNICAL_PLANS)
+    Object.entries(seedPlans).forEach(([key, plan]) => {
+      if (!plansByKey[key]) plansByKey[key] = plan
+    })
+  }
   return { plansByKey }
 }
 

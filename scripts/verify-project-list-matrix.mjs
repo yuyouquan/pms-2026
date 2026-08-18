@@ -199,4 +199,20 @@ const segments = matrix.buildStableGroupSegments([
   { key: 'b', group: { key: 'phase', label: '阶段', color: '#fff' } },
 ])
 assert.deepEqual(segments.map(segment => segment.key), ['phase::segment-0', 'plain::plain', 'phase::segment-2'])
+
+const seedRoot = projectRoot(import.meta.url)
+const seedData = loadTypeScriptModule(seedRoot, 'src/data/projects.ts')
+const seedChildren = loadTypeScriptModule(seedRoot, 'src/stores/technicalProject.ts').INITIAL_TECHNICAL_SUBPROJECTS
+const seedPlans = loadTypeScriptModule(seedRoot, 'src/stores/technicalPlan.ts').INITIAL_TECHNICAL_PLANS
+const seedRows = matrix.buildTechnicalProjectListRows({
+  projects: seedData.initialProjects,
+  subprojects: seedChildren,
+  plansByKey: seedPlans,
+  machineProjects: seedData.initialProjects.filter(project => project.type === '整机产品项目'),
+  today: '2026-06-01',
+})
+assert.equal(seedRows.tdt.length, 8, 'matrix projection exposes eight TDT roots')
+assert.equal(seedRows.children.length, 10, 'matrix projection exposes ten active configured children')
+assert.ok(seedRows.tdt.every(row => row.technicalTrack && row.tmg && row.subdomain && row.technicalLead && row.technicalProjectManager && row.projectStage !== '-'), 'matrix roots expose configured technical fields and published-plan stages')
+assert.ok(seedRows.children.every(row => Object.entries(row).some(([key, value]) => key.startsWith('milestone::') && value)), 'matrix child rows expose published-plan node values')
 console.log('project list matrix contract passed')

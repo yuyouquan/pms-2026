@@ -170,7 +170,10 @@ const childPlanScope = { kind: 'subproject', parentProjectId: '9', subprojectId:
 const incompleteChildScope = { kind: 'subproject', parentProjectId: '9', subprojectId: 'IPM-AI-002' }
 const inactiveChildScope = { kind: 'subproject', parentProjectId: '9', subprojectId: 'IPM-AI-003' }
 const configuredChild = technicalProjectModule.INITIAL_TECHNICAL_SUBPROJECTS[0]
-const incompleteChild = technicalProjectModule.INITIAL_TECHNICAL_SUBPROJECTS[1]
+const incompleteChild = {
+  ...technicalProjectModule.INITIAL_TECHNICAL_SUBPROJECTS[1],
+  configuration: { coreValue: '', developmentMode: '', firstTosVersion: '', firstMachineProjectId: '' },
+}
 const inactiveChild = technicalProjectModule.INITIAL_TECHNICAL_SUBPROJECTS[2]
 assert.deepEqual(instanceStore.createRevision({ scope: tdtPlanScope, templateKind: 'tdt', templateTasks: tdtTasks }), { ok: true, versionId: 'V1-draft' }, 'TDT creates its own first draft')
 assert.deepEqual(instanceStore.createRevision({ scope: tdtPlanScope, templateKind: 'tdt', templateTasks: tdtTasks }), { ok: false, reason: 'draft-exists' }, 'one instance allows at most one draft')
@@ -566,4 +569,16 @@ assert.match(configSource, /TDT项目计划/, 'technical config exposes TDT proj
 assert.match(configSource, /子项目计划/, 'technical config exposes subproject plan tab')
 assert.match(configSource, /isTechnicalTemplate/, 'technical config branches from generic templates')
 assert.match(configSource, /setTechnicalTemplateTasks/, 'technical config writes through validated store action')
+const seededTechnicalPlans = technicalPlanModule.INITIAL_TECHNICAL_PLANS
+assert.equal(Object.keys(seededTechnicalPlans).filter(key => key.endsWith(':tdt')).length, 8, 'technical plan seeds include eight TDT instances')
+assert.equal(Object.keys(seededTechnicalPlans).filter(key => key.includes(':subproject:')).length, 10, 'technical plan seeds include ten active child instances')
+assert.ok(Object.values(seededTechnicalPlans).every(plan => plan.versions.some(version => version.status === '已发布')), 'every seeded technical plan instance has a published version')
+assert.equal(seededTechnicalPlans['9:tdt'].currentVersionId, 'tech-9-v2-draft', 'AI TDT seed keeps its V2 draft selected')
+assert.ok(Object.entries(seededTechnicalPlans).filter(([key]) => key !== '9:tdt').every(([, plan]) => plan.versions.find(version => version.id === plan.currentVersionId)?.status === '已发布'), 'non-AI seeds select their published version')
+const customizedPlanSeed = seededTechnicalPlans['9:tdt']
+const migratedV5Plans = technicalPlanModule.migrateTechnicalPlanState({ plansByKey: {
+  '9:tdt': { ...customizedPlanSeed, versions: customizedPlanSeed.versions.map(version => ({ ...version, tasks: version.tasks.map(task => ({ ...task, taskName: `${task.taskName}-自定义` })) })) },
+} }, 5)
+assert.equal(Object.keys(migratedV5Plans.plansByKey).length, 18, 'v5 technical plan migration appends missing seed instances')
+assert.match(migratedV5Plans.plansByKey['9:tdt'].versions[0].tasks[0].taskName, /自定义$/, 'v5 technical plan migration preserves customized same-key plan instances')
 console.log('technical plan contract passed')
