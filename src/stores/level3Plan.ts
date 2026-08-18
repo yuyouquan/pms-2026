@@ -381,7 +381,11 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
         || sourceScopeKey in state.historyByScope
         || sourceScopeKey in state.collapsedIdsByScope
         || sourceScopeKey in state.columnSettingsByScope
-      if (!hasSource) return false
+      const hasTarget = targetScopeKey in state.activitiesByScope
+        || targetScopeKey in state.historyByScope
+        || targetScopeKey in state.collapsedIdsByScope
+        || targetScopeKey in state.columnSettingsByScope
+      if (!hasSource && !hasTarget) return true
       const source: Level3ScopeData = {
         activities: cloneActivities(state.activitiesByScope[sourceScopeKey] || []),
         history: cloneHistory(state.historyByScope[sourceScopeKey] || []),
@@ -393,10 +397,6 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
             }
           : { order: [...DEFAULT_COLUMN_SETTINGS.order], visible: [...DEFAULT_COLUMN_SETTINGS.visible] },
       }
-      const hasTarget = targetScopeKey in state.activitiesByScope
-        || targetScopeKey in state.historyByScope
-        || targetScopeKey in state.collapsedIdsByScope
-        || targetScopeKey in state.columnSettingsByScope
       const target: Level3ScopeData | undefined = hasTarget ? {
         activities: cloneActivities(state.activitiesByScope[targetScopeKey] || []),
         history: cloneHistory(state.historyByScope[targetScopeKey] || []),
@@ -409,19 +409,30 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           : { order: [...DEFAULT_COLUMN_SETTINGS.order], visible: [...DEFAULT_COLUMN_SETTINGS.visible] },
       } : undefined
       const forked = forkLevel3ScopeData(
-        source,
+        hasSource ? source : target!,
         target,
         state.actualOverridesByScope[targetScopeKey] || {},
       )
-      set(current => ({
-        activitiesByScope: { ...current.activitiesByScope, [targetScopeKey]: forked.activities },
-        historyByScope: { ...current.historyByScope, [targetScopeKey]: forked.history },
-        collapsedIdsByScope: { ...current.collapsedIdsByScope, [targetScopeKey]: forked.collapsedIds },
-        columnSettingsByScope: { ...current.columnSettingsByScope, [targetScopeKey]: forked.columnSettings },
-        actualOverridesByScope: Object.fromEntries(
+      const forkedActivityIds = new Set(forked.activities.map(activity => activity.id))
+      set(current => {
+        const orphanOverrides = Object.fromEntries(
+          Object.entries(current.actualOverridesByScope[targetScopeKey] || {})
+            .filter(([activityId]) => !forkedActivityIds.has(activityId)),
+        )
+        const nextOverridesByScope = Object.fromEntries(
           Object.entries(current.actualOverridesByScope).filter(([scopeKey]) => scopeKey !== targetScopeKey),
-        ),
-      }))
+        )
+        if (Object.keys(orphanOverrides).length > 0) {
+          nextOverridesByScope[targetScopeKey] = orphanOverrides
+        }
+        return {
+          activitiesByScope: { ...current.activitiesByScope, [targetScopeKey]: forked.activities },
+          historyByScope: { ...current.historyByScope, [targetScopeKey]: forked.history },
+          collapsedIdsByScope: { ...current.collapsedIdsByScope, [targetScopeKey]: forked.collapsedIds },
+          columnSettingsByScope: { ...current.columnSettingsByScope, [targetScopeKey]: forked.columnSettings },
+          actualOverridesByScope: nextOverridesByScope,
+        }
+      })
       return true
     },
     setCollapsedIds: (scopeKey, collapsedIds) => set(state => ({

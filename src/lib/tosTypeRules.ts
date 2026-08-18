@@ -177,6 +177,7 @@ export const isFollowTosType = (rows: TosTypeConfigRow[], type: string) => (
 export const deriveDetachedTosTypes = (
   previousRows: TosTypeConfigRow[],
   nextRows: TosTypeConfigRow[],
+  previousMainType = getMainTosType(previousRows),
 ): TosPlanType[] => {
   const previousFollowTypes = new Set(
     normalizeTosTypeRows(previousRows)
@@ -184,11 +185,40 @@ export const deriveDetachedTosTypes = (
       .map(row => row.type),
   )
   const nextFollowTypes = new Set(
-    normalizeTosTypeRows(nextRows)
+    normalizeTosTypeRows(nextRows, previousMainType)
       .filter(row => row.followsMain)
       .map(row => row.type),
   )
   return [...previousFollowTypes].filter(type => !nextFollowTypes.has(type))
+}
+
+export type TosTypeDetachTransition = {
+  type: TosPlanType
+  previousRow: TosTypeConfigRow
+  nextRow: TosTypeConfigRow
+}
+
+export const planDetachedTosTypeTransitions = (
+  previousRows: TosTypeConfigRow[],
+  nextRows: TosTypeConfigRow[],
+): TosTypeDetachTransition[] => {
+  const normalizedPreviousRows = normalizeTosTypeRows(previousRows)
+  const previousMainType = getMainTosType(normalizedPreviousRows)
+  const normalizedNextRows = normalizeTosTypeRows(nextRows, previousMainType)
+  return deriveDetachedTosTypes(normalizedPreviousRows, normalizedNextRows, previousMainType).flatMap(type => {
+    const previousRow = normalizedPreviousRows.find(row => row.type === type)
+    if (!previousRow) return []
+    return [{
+      type,
+      previousRow,
+      nextRow: normalizedNextRows.find(row => row.type === type) || {
+        id: `tos-type-detached-${type}`,
+        type,
+        isMain: false,
+        followsMain: false,
+      },
+    }]
+  })
 }
 
 export const getTosTypePlanSourceType = (

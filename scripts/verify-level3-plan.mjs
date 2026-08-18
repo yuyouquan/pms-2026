@@ -238,6 +238,17 @@ assert.deepEqual(
   [],
   'unchanged tOS followers should not materialize',
 )
+const removedFollowerTransitions = tosTypeRules.planDetachedTosTypeTransitions(
+  tosTypeRowsBeforeDetach,
+  tosTypeRowsBeforeDetach.filter(row => row.type !== 'GO'),
+)
+assert.deepEqual(removedFollowerTransitions.map(item => ({
+  type: item.type,
+  nextRow: item.nextRow,
+})), [{
+  type: 'GO',
+  nextRow: { id: 'tos-type-detached-GO', type: 'GO', isMain: false, followsMain: false },
+}], 'removed followers must retain a synthetic independent target state')
 
 const sourceHistory = [{
   id: 'source-log', action: 'edit', actor: '张三', occurredAt: '2026-08-17 10:00:00',
@@ -479,10 +490,52 @@ const failedForkState = structuredClone({
   historyByScope: store.getState().historyByScope,
   actualOverridesByScope: store.getState().actualOverridesByScope,
 })
-assert.equal(store.getState().forkFollowScope('project-1::market::missing', storeFollowerScope), false)
+assert.equal(store.getState().forkFollowScope('', storeFollowerScope), false)
 assert.deepEqual(store.getState().activitiesByScope, failedForkState.activitiesByScope)
 assert.deepEqual(store.getState().historyByScope, failedForkState.historyByScope)
 assert.deepEqual(store.getState().actualOverridesByScope, failedForkState.actualOverridesByScope)
+const targetOnlyScope = 'project-1::tosType::GO'
+const targetOnlyActivities = [parent, childA]
+store.setState({
+  activitiesByScope: { [targetOnlyScope]: targetOnlyActivities },
+  historyByScope: { [targetOnlyScope]: targetHistory },
+  collapsedIdsByScope: { [targetOnlyScope]: ['p1'] },
+  columnSettingsByScope: { [targetOnlyScope]: { order: ['activityName', 'number'], visible: ['number'] } },
+  actualOverridesByScope: { [targetOnlyScope]: { c1: secondEdit } },
+})
+assert.equal(store.getState().forkFollowScope('project-1::tosType::Full', targetOnlyScope), true)
+persisted = store.getState()
+assert.deepEqual(persisted.activitiesByScope[targetOnlyScope].find(item => item.id === 'c1'), {
+  ...childA,
+  actualStartDate: secondEdit.actualStartDate,
+  actualEndDate: secondEdit.actualEndDate,
+})
+assert.deepEqual(persisted.historyByScope[targetOnlyScope].map(log => log.id), ['target-log', 'tie-a', 'source-log'])
+assert.deepEqual(persisted.columnSettingsByScope[targetOnlyScope], {
+  order: ['activityName', 'number'], visible: ['number'],
+})
+assert.equal(persisted.actualOverridesByScope[targetOnlyScope], undefined)
+const orphanOverride = { c1: secondEdit }
+store.setState({
+  activitiesByScope: {}, historyByScope: {}, collapsedIdsByScope: {}, columnSettingsByScope: {},
+  actualOverridesByScope: { [targetOnlyScope]: orphanOverride },
+})
+assert.equal(store.getState().forkFollowScope('project-1::tosType::Full', targetOnlyScope), true)
+assert.deepEqual(store.getState().actualOverridesByScope[targetOnlyScope], orphanOverride)
+const sourceWithOrphanOverrideScope = 'project-1::tosType::PAD'
+const targetWithOrphanOverrideScope = 'project-1::tosType::GO'
+const orphanActivityOverride = { missing: secondEdit }
+store.setState({
+  activitiesByScope: { [sourceWithOrphanOverrideScope]: [parent] },
+  historyByScope: {}, collapsedIdsByScope: {}, columnSettingsByScope: {},
+  actualOverridesByScope: { [targetWithOrphanOverrideScope]: orphanActivityOverride },
+})
+assert.equal(store.getState().forkFollowScope(sourceWithOrphanOverrideScope, targetWithOrphanOverrideScope), true)
+assert.deepEqual(
+  store.getState().actualOverridesByScope[targetWithOrphanOverrideScope],
+  orphanActivityOverride,
+  'unmaterializable target overrides must survive a source fork',
+)
 const migrate = store.persist.getOptions().migrate
 const migrated = await migrate({
   activitiesByScope: { legacy: [parent] },
@@ -620,11 +673,20 @@ assert.ok(
   'tOS type save must derive detached types from previous and next follow sets',
 )
 assert.ok(
+  saveTosTypeConfigSource.includes('planDetachedTosTypeTransitions('),
+  'tOS type save must plan removed follower target states before persistence',
+)
+assert.ok(
+  saveTosTypeConfigSource.includes('detachedScopeForks')
+    && saveTosTypeConfigSource.includes('detachedScopeForks.length !== detachedTosTypeTransitions.length'),
+  'tOS type save must preflight every detached source/target pair before updating the project',
+)
+assert.ok(
   saveTosTypeConfigSource.includes('normalizeTosTypeRows(tosTypeDraftRows, previousMainTosType)'),
   'tOS type save must normalize candidate rows against the previous main type',
 )
 assert.ok(
-  saveTosTypeConfigSource.indexOf('if (!updateProject(') < saveTosTypeConfigSource.indexOf('detachedTosTypes.every'),
+  saveTosTypeConfigSource.indexOf('if (!updateProject(') < saveTosTypeConfigSource.indexOf('detachedScopeForks.forEach'),
   'tOS type Level 3 forks must run only after the project update succeeds',
 )
 assert.ok(
@@ -632,9 +694,12 @@ assert.ok(
   'tOS type auxiliary stores must not mutate before the project update succeeds',
 )
 assert.ok(
-  saveTosTypeConfigSource.includes('if (!forkSucceeded) {')
-    && saveTosTypeConfigSource.includes("void containerMessageApi.error('类型配置保存失败，三级计划脱离跟随未完成')"),
-  'tOS type save must handle a failed Level 3 fork without reporting success',
+  saveTosTypeConfigSource.includes('detachedScopeForks.forEach(fork => forkFollowScope('),
+  'tOS type save must apply only preflighted Level 3 forks after project persistence',
+)
+assert.ok(
+  !saveTosTypeConfigSource.includes('updateProject(selectedProject.id, selectedProject, currentLoginUser)'),
+  'tOS type save must not roll back through a second audited project update',
 )
 assert.ok(!containerSource.includes("{ key: 'level2', label: '二级计划' }"), 'project-space still exposes the Level 2 plan tab')
 assert.ok(!containerSource.includes("{ key: 'overview', label: '计划总览' }"), 'project-space still exposes the overview plan tab')

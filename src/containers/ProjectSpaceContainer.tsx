@@ -138,6 +138,7 @@ import {
   isFollowTosType,
   isTosTypeLevel1ReadOnly,
   normalizeTosTypeRows,
+  planDetachedTosTypeTransitions,
   setTosTypeCurrentVersion,
   setTosTypeVersions,
   type TosPlanType,
@@ -1376,12 +1377,43 @@ export default function ProjectSpaceContainer() {
       versionType: mainType,
     } as typeof selectedProject
 
+    const detachedTosTypeTransitions = planDetachedTosTypeTransitions(previousTosTypeRows, normalizedRows)
+    const detachedScopeForks = detachedTosTypeTransitions.flatMap(transition => {
+      const fork = resolveLevel3DetachedScopeFork(
+        {
+          projectId: selectedProject.id,
+          kind: 'tosType',
+          value: transition.type,
+          mainValue: previousMainTosType,
+          followsMain: transition.previousRow.followsMain,
+        },
+        {
+          projectId: selectedProject.id,
+          kind: 'tosType',
+          value: transition.type,
+          mainValue: mainType,
+          followsMain: transition.nextRow.followsMain,
+        },
+      )
+      return fork ? [fork] : []
+    })
+    const detachedScopeForkKeys = new Set(
+      detachedScopeForks.map(fork => `${fork.sourceScopeKey}=>${fork.targetScopeKey}`),
+    )
+    if (
+      detachedTosTypeTransitions.length !== detachedTosTypes.length
+      || detachedScopeForks.length !== detachedTosTypeTransitions.length
+      || detachedScopeForkKeys.size !== detachedScopeForks.length
+    ) {
+      void containerMessageApi.error('类型配置保存失败，三级计划脱离范围无效')
+      return
+    }
+
     if (!updateProject(selectedProject.id, updatedProject, currentLoginUser)) {
       void containerMessageApi.error('类型配置保存失败')
       return
     }
 
-    const previousTosTypePlanData = tosTypePlanDataByProjectId[selectedProject.id]
     setTosTypeConfigForProject(selectedProject.id, normalizedRows)
     setTosTypePlanDataByProjectId(previous => ensureTosTypePlanDataForRows(
       previous,
@@ -1389,40 +1421,7 @@ export default function ProjectSpaceContainer() {
       normalizedRows,
       tosTypeSeedEntry,
     ))
-    const forkSucceeded = detachedTosTypes.every(type => {
-      const previousRow = previousTosTypeRows.find(row => row.type === type)
-      const nextRow = normalizedRows.find(row => row.type === type)
-      if (!previousRow || !nextRow) return true
-      const fork = resolveLevel3DetachedScopeFork(
-        {
-          projectId: selectedProject.id,
-          kind: 'tosType',
-          value: type,
-          mainValue: previousMainTosType,
-          followsMain: previousRow.followsMain,
-        },
-        {
-          projectId: selectedProject.id,
-          kind: 'tosType',
-          value: type,
-          mainValue: mainType,
-          followsMain: nextRow.followsMain,
-        },
-      )
-      return !fork || forkFollowScope(fork.sourceScopeKey, fork.targetScopeKey)
-    })
-    if (!forkSucceeded) {
-      setTosTypeConfigForProject(selectedProject.id, previousTosTypeRows)
-      setTosTypePlanDataByProjectId(previous => {
-        const next = { ...previous }
-        if (previousTosTypePlanData) next[selectedProject.id] = previousTosTypePlanData
-        else delete next[selectedProject.id]
-        return next
-      })
-      updateProject(selectedProject.id, selectedProject, currentLoginUser)
-      void containerMessageApi.error('类型配置保存失败，三级计划脱离跟随未完成')
-      return
-    }
+    detachedScopeForks.forEach(fork => forkFollowScope(fork.sourceScopeKey, fork.targetScopeKey))
     if (!nextTypes.includes(selectedTosTypeTab as TosPlanType)) setSelectedTosTypeTab(mainType || nextTypes[0])
     setShowTosTypeEditor(false)
     void containerMessageApi.success('类型配置已保存')
