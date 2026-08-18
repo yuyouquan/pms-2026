@@ -169,7 +169,8 @@ export function createLevel3ActualDateOverride(
   }
   return {
     ...frozen,
-    ...patch,
+    ...(patch.actualStartDate !== undefined ? { actualStartDate: patch.actualStartDate } : {}),
+    ...(patch.actualEndDate !== undefined ? { actualEndDate: patch.actualEndDate } : {}),
     activityId: displayedActivity.id,
     detachedBy: actor,
     detachedAt: occurredAt,

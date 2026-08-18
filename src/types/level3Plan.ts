@@ -57,7 +57,7 @@ export interface Level3ActualDateOverride {
   detachedAt: string
 }
 
-export type Level3ActualDateOverrideMap = Record<string, Level3ActualDateOverride>
+export type Level3ActualDateOverrideMap = Partial<Record<string, Level3ActualDateOverride>>
 
 export interface Level3ActivityFormValue {
   activityName?: string
