@@ -53,7 +53,11 @@ const cloneHistory = (history: Level3ChangeLog[]) => history.map(log => ({
   changes: log.changes.map(change => ({ ...change })),
 }))
 
-const formatNow = () => new Intl.DateTimeFormat('sv-SE', {
+let lastFormattedTimestamp = 0
+const formatNow = () => {
+  const timestamp = Math.max(Date.now(), lastFormattedTimestamp + 1)
+  lastFormattedTimestamp = timestamp
+  return new Intl.DateTimeFormat('sv-SE', {
   timeZone: 'Asia/Shanghai',
   year: 'numeric',
   month: '2-digit',
@@ -61,8 +65,10 @@ const formatNow = () => new Intl.DateTimeFormat('sv-SE', {
   hour: '2-digit',
   minute: '2-digit',
   second: '2-digit',
+  fractionalSecondDigits: 3,
   hour12: false,
-}).format(new Date()).replace('T', ' ')
+  }).format(new Date(timestamp)).replace('T', ' ').replace(',', '.')
+}
 
 const createId = (prefix: string) => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -97,6 +103,48 @@ const isValidWorkflowStatus = (value: unknown): value is Level3Activity['status'
 const isValidWorkflowRisk = (value: unknown): value is Level3Activity['risk'] => (
   typeof value === 'string' && LEVEL3_ACTIVITY_RISKS.includes(value as Level3Activity['risk'])
 )
+
+const isNonEmptyString = (value: unknown): value is string => (
+  typeof value === 'string' && value.trim().length > 0
+)
+
+const sanitizeActualOverridesByScope = (value: unknown): Record<string, Level3ActualDateOverrideMap> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return Object.fromEntries(Object.entries(value).flatMap(([scopeKey, activityMap]) => {
+    if (!scopeKey || !activityMap || typeof activityMap !== 'object' || Array.isArray(activityMap)) return []
+    const valid = Object.fromEntries(Object.entries(activityMap).flatMap(([activityId, record]) => {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) return []
+      const item = record as Record<string, unknown>
+      if (
+        activityId !== item.activityId || !isNonEmptyString(item.activityId)
+        || typeof item.actualStartDate !== 'string' || typeof item.actualEndDate !== 'string'
+        || (item.actualStartDate && !isValidActualDate(item.actualStartDate))
+        || (item.actualEndDate && !isValidActualDate(item.actualEndDate))
+        || (item.actualStartDate && item.actualEndDate && item.actualStartDate > item.actualEndDate)
+        || !isNonEmptyString(item.detachedBy) || !isNonEmptyString(item.detachedAt)
+      ) return []
+      return [[activityId, { activityId, actualStartDate: item.actualStartDate, actualEndDate: item.actualEndDate, detachedBy: item.detachedBy, detachedAt: item.detachedAt }]]
+    }))
+    return Object.keys(valid).length ? [[scopeKey, valid]] : []
+  }))
+}
+
+const sanitizeWorkflowOverridesByScope = (value: unknown): Record<string, Level3WorkflowOverrideMap> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return Object.fromEntries(Object.entries(value).flatMap(([scopeKey, activityMap]) => {
+    if (!scopeKey || !activityMap || typeof activityMap !== 'object' || Array.isArray(activityMap)) return []
+    const valid = Object.fromEntries(Object.entries(activityMap).flatMap(([activityId, record]) => {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) return []
+      const item = record as Record<string, unknown>
+      if (activityId !== item.activityId || !isNonEmptyString(item.activityId) || !isNonEmptyString(item.detachedBy) || !isNonEmptyString(item.detachedAt)) return []
+      const status = isValidWorkflowStatus(item.status) ? item.status : undefined
+      const risk = isValidWorkflowRisk(item.risk) ? item.risk : undefined
+      if (status === undefined && risk === undefined) return []
+      return [[activityId, { activityId, ...(status !== undefined ? { status } : {}), ...(risk !== undefined ? { risk } : {}), detachedBy: item.detachedBy, detachedAt: item.detachedAt }]]
+    }))
+    return Object.keys(valid).length ? [[scopeKey, valid]] : []
+  }))
+}
 
 const safeStorage: StateStorage = {
   getItem(name) {
@@ -185,10 +233,6 @@ const hasMaterializableScopeData = (state: Level3PlanState, scopeKey: string) =>
     || (Array.isArray(columnSettings?.order) && columnSettings.order.length > 0)
     || (Array.isArray(columnSettings?.visible) && columnSettings.visible.length > 0)
 }
-
-const persistedRecordOrEmpty = <T,>(value: unknown): Record<string, T> => (
-  value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, T> : {}
-)
 
 export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(persist(
   (set, get) => ({
@@ -570,7 +614,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           historyByScope: legacyState.historyByScope || {},
           collapsedIdsByScope: legacyState.collapsedIdsByScope || {},
           columnSettingsByScope: legacyState.columnSettingsByScope || {},
-          actualOverridesByScope: persistedRecordOrEmpty<Level3ActualDateOverrideMap>(legacyState.actualOverridesByScope),
+          actualOverridesByScope: sanitizeActualOverridesByScope(legacyState.actualOverridesByScope),
           workflowOverridesByScope: {},
         }
       }
@@ -579,10 +623,21 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
         historyByScope: legacyState.historyByScope || {},
         collapsedIdsByScope: legacyState.collapsedIdsByScope || {},
         columnSettingsByScope: legacyState.columnSettingsByScope || {},
-        actualOverridesByScope: persistedRecordOrEmpty<Level3ActualDateOverrideMap>(legacyState.actualOverridesByScope),
+        actualOverridesByScope: sanitizeActualOverridesByScope(legacyState.actualOverridesByScope),
         workflowOverridesByScope: version >= 3
-          ? persistedRecordOrEmpty<Level3WorkflowOverrideMap>(legacyState.workflowOverridesByScope)
+          ? sanitizeWorkflowOverridesByScope(legacyState.workflowOverridesByScope)
           : {},
+      }
+    },
+    merge: (persistedState, currentState) => {
+      const persisted = persistedState && typeof persistedState === 'object' && !Array.isArray(persistedState)
+        ? persistedState as Partial<Level3PlanState>
+        : {}
+      return {
+        ...currentState,
+        ...persisted,
+        actualOverridesByScope: sanitizeActualOverridesByScope(persisted.actualOverridesByScope),
+        workflowOverridesByScope: sanitizeWorkflowOverridesByScope(persisted.workflowOverridesByScope),
       }
     },
   },

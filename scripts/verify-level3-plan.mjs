@@ -766,6 +766,20 @@ const roundTripWorkflowOverrides = {
     },
   },
 }
+const malformedOverrideScopes = {
+  actualOverridesByScope: {
+    malformed: {
+      c1: { activityId: 'wrong', actualStartDate: '2026-01-01', actualEndDate: '2026-01-02', detachedBy: '李四', detachedAt: '2026-08-18 10:00:00' },
+      c2: { activityId: 'c2', actualStartDate: 'bad-date', actualEndDate: '', detachedBy: '李四', detachedAt: '2026-08-18 10:00:00' },
+    },
+  },
+  workflowOverridesByScope: {
+    malformed: {
+      c1: { activityId: 'c1', status: '坏状态', risk: '坏风险', detachedBy: '李四', detachedAt: '2026-08-18 10:00:00' },
+      wrongKey: { activityId: 'c2', status: '已完成', detachedBy: '李四', detachedAt: '2026-08-18 10:00:00' },
+    },
+  },
+}
 const memoryStorageData = new Map()
 const memoryStorage = {
   getItem: key => memoryStorageData.get(key) || null,
@@ -785,8 +799,8 @@ try {
     historyByScope: { [storeSourceScope]: sourceHistory },
     collapsedIdsByScope: { [storeSourceScope]: ['p1'] },
     columnSettingsByScope: { [storeSourceScope]: { order: ['number'], visible: ['number'] } },
-    actualOverridesByScope: roundTripOverrides,
-    workflowOverridesByScope: roundTripWorkflowOverrides,
+    actualOverridesByScope: { ...roundTripOverrides, ...malformedOverrideScopes.actualOverridesByScope },
+    workflowOverridesByScope: { ...roundTripWorkflowOverrides, ...malformedOverrideScopes.workflowOverridesByScope },
   }
   memoryStorage.setItem(hydratedStoreModule.LEVEL3_PLAN_STORAGE_KEY, JSON.stringify({
     state: roundTripState,
@@ -795,18 +809,37 @@ try {
   await hydratedStoreModule.useLevel3PlanStore.persist.rehydrate()
   assert.deepEqual(hydratedStoreModule.useLevel3PlanStore.getState().actualOverridesByScope, roundTripOverrides)
   assert.deepEqual(hydratedStoreModule.useLevel3PlanStore.getState().workflowOverridesByScope, roundTripWorkflowOverrides)
+  assert.equal(hydratedStoreModule.useLevel3PlanStore.getState().forkFollowScope(storeSourceScope, 'malformed'), true)
+  assert.deepEqual(
+    hydratedStoreModule.useLevel3PlanStore.getState().activitiesByScope.malformed.find(item => item.id === 'c1'),
+    childA,
+    'invalid follower workflow values must not materialize into detached activities',
+  )
+  const originalDateNow = Date.now
+  Date.now = () => 1_786_752_000_000
+  try {
+    hydratedStoreModule.useLevel3PlanStore.getState().updateFollowWorkflowFields(storeSourceScope, 'rapid', 'c1', { status: '已完成' }, '李四')
+    hydratedStoreModule.useLevel3PlanStore.getState().updateFollowWorkflowFields(storeSourceScope, 'rapid', 'c1', { risk: '高' }, '李四')
+  } finally {
+    Date.now = originalDateNow
+  }
+  const rapidHistory = hydratedStoreModule.useLevel3PlanStore.getState().historyByScope.rapid
+  assert.equal(rapidHistory[0].changes[0].field, 'risk')
+  assert.equal(rapidHistory[1].changes[0].field, 'status')
+  assert.ok(rapidHistory[0].occurredAt > rapidHistory[1].occurredAt)
   hydratedStoreModule.useLevel3PlanStore.getState().setCollapsedIds(storeSourceScope, ['p1', 'c1'])
   const storedRoundTrip = JSON.parse(memoryStorage.getItem(hydratedStoreModule.LEVEL3_PLAN_STORAGE_KEY))
   assert.equal(storedRoundTrip.version, 3)
   assert.deepEqual(storedRoundTrip.state.actualOverridesByScope, roundTripOverrides)
-  assert.deepEqual(storedRoundTrip.state.workflowOverridesByScope, roundTripWorkflowOverrides)
+  assert.deepEqual(storedRoundTrip.state.workflowOverridesByScope.persisted, roundTripWorkflowOverrides.persisted)
   const reloadedStoreModule = loadCommonJsTypeScriptModule(storePath, {
     '@/lib/level3PlanRules': loadCommonJsTypeScriptModule(rulesPath),
     '@/types/level3Plan': loadCommonJsTypeScriptModule(path.join(root, 'src/types/level3Plan.ts')),
   })
   await reloadedStoreModule.useLevel3PlanStore.persist.rehydrate()
   assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().actualOverridesByScope, roundTripOverrides)
-  assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().workflowOverridesByScope, roundTripWorkflowOverrides)
+  assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().workflowOverridesByScope.persisted, roundTripWorkflowOverrides.persisted)
+  assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().historyByScope.rapid.map(log => log.changes[0].field), ['risk', 'status'])
 } finally {
   if (hadWindow) globalThis.window = originalWindow
   else delete globalThis.window
