@@ -687,7 +687,7 @@ export default function Level3PlanModule({
       return {
         ...base,
         render: (value: string, row: Level3ActivityViewRow) => canInlineEditLevel3ChildField(row, effectiveActivities, permissionContext)
-          ? <div onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}><Select size="small" bordered value={value} options={options.map(item => ({ label: item, value: item }))} onChange={nextValue => handleInlineWorkflowChange(row, field, nextValue as Level3Activity['status'] | Level3Activity['risk'])} /></div>
+          ? <div onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}><Select size="small" bordered value={value} options={options.map(item => ({ label: item, value: item }))} onChange={nextValue => handleInlineWorkflowChange(row, field, nextValue as Level3Activity['status'] | Level3Activity['risk'])} /></div>
           : <Tag color={colors[value]}>{value}</Tag>,
       }
     }

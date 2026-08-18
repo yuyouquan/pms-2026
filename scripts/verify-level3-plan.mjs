@@ -1001,6 +1001,26 @@ assert.ok(componentSource.includes('mergeLevel3WorkflowOverrides('), '展示活�
 assert.ok(componentSource.includes('handleInlineWorkflowChange'), '状态和风险必须支持内联保存')
 assert.ok(componentSource.includes('updateFollowWorkflowFields(scopeKey, selectedScopeKey, row.id, { [field]: value }, currentUser)'), '跟随范围状态和风险编辑必须写入当前范围覆盖')
 assert.ok(componentSource.includes('canInlineEditLevel3ChildField(row, effectiveActivities, permissionContext)'), '状态和风险内联编辑必须受子活动权限控制')
+assert.ok(componentSource.includes('onDoubleClick={event => event.stopPropagation()}><Select size="small"'), '状态和风险内联选择器必须阻止双击打开编辑弹窗')
+const activityModalStart = componentSource.indexOf('      <Modal')
+const activityModalEnd = componentSource.indexOf('      <Drawer', activityModalStart)
+assert.ok(activityModalStart >= 0 && activityModalEnd > activityModalStart, '三级活动编辑弹窗边界缺失')
+const activityModalSource = componentSource.slice(activityModalStart, activityModalEnd)
+for (const label of ['实际开始时间', '实际完成时间', '状态', '任务风险']) {
+  assert.ok(!activityModalSource.includes(`label="${label}"`), `活动弹窗不应包含${label}`)
+}
+const editPatchStart = componentSource.indexOf('      const patch: Partial<Level3Activity> = {')
+const editPatchEnd = componentSource.indexOf('      if (activity.parentId)', editPatchStart)
+const editPatchSource = componentSource.slice(editPatchStart, editPatchEnd)
+for (const field of ['actualStartDate', 'actualEndDate', 'status', 'risk']) {
+  assert.ok(!editPatchSource.includes(`${field}:`), `活动编辑补丁不应包含${field}`)
+}
+const createActivityStart = componentSource.indexOf('    const nextActivity: Level3Activity = {')
+const createActivityEnd = componentSource.indexOf('    if (createActivity(', createActivityStart)
+const createActivitySource = componentSource.slice(createActivityStart, createActivityEnd)
+for (const token of ["actualStartDate: ''", "actualEndDate: ''", "status: '待启动'", "risk: '无'"]) {
+  assert.ok(createActivitySource.includes(token), `新增活动必须默认${token}`)
+}
 assert.ok(componentSource.includes('const rows = useMemo(() => applyLevel3Rollups(effectiveActivities)'), '汇总必须基于合并后的展示活动')
 assert.ok(componentSource.includes('updateFollowActualDates(scopeKey, selectedScopeKey, row.id, { [field]: value }, currentUser)'), '跟随范围的内联实际日期编辑必须写入当前范围覆盖')
 assert.ok(componentSource.includes('if (readOnly) {'), '内联实际日期变更必须显式区分跟随范围')
