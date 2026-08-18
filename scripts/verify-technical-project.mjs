@@ -267,6 +267,18 @@ assert.deepEqual(publishedSummary.versions.map(version => version.id), ['publish
 assert.equal(publishedSummary.latestVersion.id, 'published-v2-latest', 'the latest published version owns summary headers and actual data')
 assert.equal(publishedSummary.actualRow.cycleDays, 18, 'actual cycle spans the latest published actual start and completion dates')
 assert.equal(publishedSummary.actualRow.endDatesByTaskId['child-ignored'], '2026-01-20', 'actual row exposes milestone actual completion dates')
+const governedSummary = rules.resolveTechnicalPlanSummary([{
+  id: 'governed-summary', templateType: 'tdt', status: '已发布', versionNo: 'V1',
+  tasks: [
+    { id: 'stage-1', name: '阶段1', parentId: null, order: 1, planStartDate: '', planEndDate: '' },
+    { id: 'stage-1-a', name: '节点1', parentId: 'stage-1', order: 1, planStartDate: '', planEndDate: '2026-01-01' },
+    { id: 'stage-1-b', name: '节点2', parentId: 'stage-1', order: 2, planStartDate: '', planEndDate: '2026-01-11' },
+    { id: 'stage-2', name: '阶段2', parentId: null, order: 2, planStartDate: '', planEndDate: '' },
+    { id: 'stage-2-a', name: '节点3', parentId: 'stage-2', order: 1, planStartDate: '', planEndDate: '2026-01-20' },
+    { id: 'stage-2-b', name: '节点4', parentId: 'stage-2', order: 2, planStartDate: '', planEndDate: '2026-02-01' },
+  ],
+}])
+assert.equal(governedSummary.versionRows[0].cycleDays, 30, 'technical information development cycle sums governed stage estimated durations')
 assert.equal(rules.resolveTechnicalPlanSummary([{ id: 'empty', templateType: 'tdt', status: '已发布', versionNo: 'V1', tasks: [] }]).hasTaskData, false, 'published versions without tasks produce the no-plan-data state')
 assert.equal(rules.resolveTechnicalPlanSummary([{ id: 'draft-only', templateType: 'tdt', status: '修订中', versionNo: 'V9', tasks: validStages }]).latestVersion, undefined, 'draft-only scopes produce the no-published-version state')
 
@@ -422,8 +434,10 @@ assert.match(technicalPlanSummary, /暂无计划版本/, 'technical plan summary
 assert.match(technicalPlanSummary, /暂无计划数据/, 'technical plan summary does not render an empty milestone table')
 assert.match(technicalPlanSummary, /actualRow[\s\S]*actualEndDate|actualEndDate[\s\S]*actualRow/, 'technical plan summary renders the published actual completion row')
 assert.match(technicalPlanSummary, /TECHNICAL_STAGE_COLORS[\s\S]*borderBottom:[\s\S]*stageColor/, 'technical plan summary reuses the whole-machine colored stage header treatment')
+assert.match(technicalPlanSummary, /stage\.planStartDate[\s\S]{0,180}stage\.planEndDate[\s\S]{0,180}~/, 'technical plan summary shows the same stage date range as whole-machine plan information')
+assert.match(technicalPlanSummary, /stage\.manpowerPercent[\s\S]{0,180}%/, 'technical plan summary shows the same stage manpower percentage as whole-machine plan information')
 assert.match(technicalPlanSummary, /technical-plan-summary-sticky-version[\s\S]*technical-plan-summary-sticky-cycle/, 'technical plan summary keeps version and cycle columns fixed like whole-machine plan information')
-assert.doesNotMatch(technicalPlanSummary, /<Tag|已发布<\/Tag>/, 'technical plan summary does not add status tags absent from the whole-machine summary')
+assert.doesNotMatch(technicalPlanSummary, /<Tag[^>]*color="green"|已发布<\/Tag>/, 'technical plan summary does not add status tags absent from the whole-machine summary')
 assert.match(technicalPlanSummary, /const displayCycle = \(days: number \| null\) => days === null \? '-' : days/, 'technical plan summary displays cycle values without a divergent unit suffix')
 assert.doesNotMatch(technicalPlanSummary, /createRevision|创建修订|编辑/, 'technical plan summary is read-only and cannot create or edit plans')
 const projectInformationFrame = readSource(root, 'src/components/project-info/ProjectInformationFrame.tsx')

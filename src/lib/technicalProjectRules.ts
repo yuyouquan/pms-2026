@@ -1,4 +1,5 @@
 import { NO_SUBDOMAIN_DOMAINS, SUBDOMAINS_BY_DOMAIN, TECHNICAL_DELIVERABLE_FIELDS, TECHNICAL_STRING_FIELD_KEYS } from '@/constants/technicalProject'
+import { projectLevel1Plan, sumLevel1EstimatedDays } from '@/lib/level1PlanRules'
 import { comparePlanVersions } from '@/lib/planVersioning'
 import type {
   DeliverableValue,
@@ -105,6 +106,17 @@ const taskDatesById = (tasks: readonly TechnicalStageTask[], key: 'planEndDate' 
   Object.fromEntries(tasks.map(task => [task.id, String(task[key] || '')]))
 )
 
+const projectTechnicalLevel1Tasks = (tasks: readonly TechnicalStageTask[]) => {
+  const normalizedTasks = tasks.map(task => ({
+    ...task,
+    taskName: String(task.taskName || task.name || ''),
+    planEndDate: String(task.planEndDate || ''),
+    actualEndDate: String(task.actualEndDate || ''),
+  }))
+  const mode = normalizedTasks.some(task => task.parentId) ? 'standard' : 'technical-subproject'
+  return projectLevel1Plan(normalizedTasks, { mode })
+}
+
 export const resolvePublishedTechnicalPlanVersions = (
   versions: readonly TechnicalStagePlanVersion[],
 ) => versions
@@ -119,11 +131,14 @@ export const resolveTechnicalPlanSummary = (versions: readonly TechnicalStagePla
     versions: publishedVersions,
     latestVersion,
     hasTaskData: latestTasks.length > 0,
-    versionRows: publishedVersions.map(version => ({
-      version,
-      cycleDays: calculateTechnicalCycleDays(version.tasks, 'planStartDate', 'planEndDate'),
-      endDatesByTaskId: taskDatesById(version.tasks, 'planEndDate'),
-    })),
+    versionRows: publishedVersions.map(version => {
+      const projection = projectTechnicalLevel1Tasks(version.tasks)
+      return {
+        version,
+        cycleDays: sumLevel1EstimatedDays(projection.rows),
+        endDatesByTaskId: Object.fromEntries(projection.rows.map(task => [task.id, task.planEndDate || ''])),
+      }
+    }),
     actualRow: {
       cycleDays: calculateTechnicalCycleDays(latestTasks, 'actualStartDate', 'actualEndDate'),
       endDatesByTaskId: taskDatesById(latestTasks, 'actualEndDate'),

@@ -1,4 +1,5 @@
 import type { TechnicalTemplateTask } from '@/types/technicalPlan'
+import { projectLevel1Plan, sumLevel1EstimatedDays } from '@/lib/level1PlanRules'
 
 export const TECHNICAL_PLAN_EXPORT_COLUMNS = [
   { key: 'id', title: '序号' },
@@ -146,6 +147,11 @@ const cycleDays = (
   return Math.max(0, Math.ceil((Math.max(...ends) - Math.min(...starts)) / 86_400_000))
 }
 
+const sumTechnicalEstimatedDays = (tasks: readonly TechnicalTemplateTask[]): number | null => {
+  const mode = tasks.some(task => task.parentId) ? 'standard' : 'technical-subproject'
+  return sumLevel1EstimatedDays(projectLevel1Plan(tasks, { mode }).rows)
+}
+
 export type TechnicalHorizontalRow = {
   id: string
   rowType: 'version' | 'actual'
@@ -164,7 +170,7 @@ export function buildTechnicalHorizontalRows(
     rowType: 'version' as const,
     versionNo: version.versionNo,
     status: version.status,
-    cycleDays: cycleDays(version.tasks, 'planStartDate', 'planEndDate'),
+    cycleDays: sumTechnicalEstimatedDays(version.tasks),
     endDatesByTaskId: Object.fromEntries(version.tasks.map(task => [task.id, task.planEndDate || ''])),
   }))
   const currentVersion = versions.find(version => version.id === currentVersionId)
