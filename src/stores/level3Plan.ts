@@ -2,14 +2,17 @@ import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
 import {
+  createLevel3ActualDateOverride,
   deleteLevel3ActivityTree,
   forkLevel3ScopeData,
+  mergeLevel3ActualDateOverrides,
   moveLevel3Activity,
   numberLevel3Activities,
 } from '@/lib/level3PlanRules'
 import {
   LEVEL3_COLUMN_KEYS,
   type Level3Activity,
+  type Level3ActualDateOverrideMap,
   type Level3ChangeLog,
   type Level3ColumnKey,
   type Level3FieldChange,
@@ -18,7 +21,7 @@ import {
 } from '@/types/level3Plan'
 
 export const LEVEL3_PLAN_STORAGE_KEY = 'pms-level3-plan-store'
-export const LEVEL3_PLAN_STORE_VERSION = 1
+export const LEVEL3_PLAN_STORE_VERSION = 2
 
 const DEFAULT_COLUMN_SETTINGS: SortableColumnSettingsValue<Level3ColumnKey> = {
   order: [...LEVEL3_COLUMN_KEYS],
@@ -109,6 +112,7 @@ interface Level3PlanState {
   historyByScope: Record<string, Level3ChangeLog[]>
   collapsedIdsByScope: Record<string, string[]>
   columnSettingsByScope: Record<string, SortableColumnSettingsValue<Level3ColumnKey>>
+  actualOverridesByScope: Record<string, Level3ActualDateOverrideMap>
 }
 
 interface Level3PlanActions {
@@ -118,6 +122,13 @@ interface Level3PlanActions {
     scopeKey: string,
     activityId: string,
     patch: Partial<Level3Activity>,
+    actor: string,
+  ) => boolean
+  updateFollowActualDates: (
+    sourceScopeKey: string,
+    selectedScopeKey: string,
+    activityId: string,
+    patch: Pick<Partial<Level3Activity>, 'actualStartDate' | 'actualEndDate'>,
     actor: string,
   ) => boolean
   moveActivity: (scopeKey: string, activeId: string, overId: string, actor: string) => Level3MoveResult
@@ -135,6 +146,7 @@ const initialState: Level3PlanState = {
   historyByScope: {},
   collapsedIdsByScope: {},
   columnSettingsByScope: {},
+  actualOverridesByScope: {},
 }
 
 export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(persist(
@@ -222,6 +234,58 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           historyByScope: {
             ...state.historyByScope,
             [scopeKey]: [log, ...(state.historyByScope[scopeKey] || [])],
+          },
+        }
+      })
+      return updated
+    },
+    updateFollowActualDates: (sourceScopeKey, selectedScopeKey, activityId, patch, actor) => {
+      if (!sourceScopeKey || !selectedScopeKey || !activityId || !actor) return false
+      let updated = false
+      set(state => {
+        const sourceActivities = state.activitiesByScope[sourceScopeKey] || []
+        const currentOverrides = state.actualOverridesByScope[selectedScopeKey] || {}
+        const displayedActivities = mergeLevel3ActualDateOverrides(sourceActivities, currentOverrides)
+        const previousActivity = displayedActivities.find(activity => activity.id === activityId)
+        if (!previousActivity) return state
+        const nextOverride = createLevel3ActualDateOverride(
+          previousActivity,
+          currentOverrides[activityId],
+          patch,
+          actor,
+          formatNow(),
+        )
+        if (
+          nextOverride.actualStartDate
+          && nextOverride.actualEndDate
+          && nextOverride.actualStartDate > nextOverride.actualEndDate
+        ) return state
+        const nextOverrides = { ...currentOverrides, [activityId]: nextOverride }
+        const nextActivities = mergeLevel3ActualDateOverrides(sourceActivities, nextOverrides)
+        const nextActivity = nextActivities.find(activity => activity.id === activityId)
+        if (!nextActivity) return state
+        const changes = buildFieldChanges(previousActivity, nextActivity)
+        if (changes.length === 0) return state
+        const log: Level3ChangeLog = {
+          id: createId('level3-log'),
+          action: 'edit',
+          actor,
+          occurredAt: nextOverride.detachedAt,
+          activityId,
+          activityName: nextActivity.activityName,
+          activityNumber: getActivityNumber(nextActivities, activityId),
+          summary: `编辑活动：${changes.map(change => change.label).join('、')}`,
+          changes,
+        }
+        updated = true
+        return {
+          actualOverridesByScope: {
+            ...state.actualOverridesByScope,
+            [selectedScopeKey]: nextOverrides,
+          },
+          historyByScope: {
+            ...state.historyByScope,
+            [selectedScopeKey]: [log, ...(state.historyByScope[selectedScopeKey] || [])],
           },
         }
       })
@@ -334,12 +398,19 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
             }
           : { order: [...DEFAULT_COLUMN_SETTINGS.order], visible: [...DEFAULT_COLUMN_SETTINGS.visible] },
       } : undefined
-      const forked = forkLevel3ScopeData(source, target)
+      const forked = forkLevel3ScopeData(
+        source,
+        target,
+        state.actualOverridesByScope[targetScopeKey] || {},
+      )
       set(current => ({
         activitiesByScope: { ...current.activitiesByScope, [targetScopeKey]: forked.activities },
         historyByScope: { ...current.historyByScope, [targetScopeKey]: forked.history },
         collapsedIdsByScope: { ...current.collapsedIdsByScope, [targetScopeKey]: forked.collapsedIds },
         columnSettingsByScope: { ...current.columnSettingsByScope, [targetScopeKey]: forked.columnSettings },
+        actualOverridesByScope: Object.fromEntries(
+          Object.entries(current.actualOverridesByScope).filter(([scopeKey]) => scopeKey !== targetScopeKey),
+        ),
       }))
       return true
     },
@@ -365,6 +436,27 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
       historyByScope: state.historyByScope,
       collapsedIdsByScope: state.collapsedIdsByScope,
       columnSettingsByScope: state.columnSettingsByScope,
+      actualOverridesByScope: state.actualOverridesByScope,
     }),
+    migrate: (persistedState, version) => {
+      if (!persistedState || typeof persistedState !== 'object') return initialState
+      const legacyState = persistedState as Partial<Level3PlanState>
+      if (version <= 1) {
+        return {
+          activitiesByScope: legacyState.activitiesByScope || {},
+          historyByScope: legacyState.historyByScope || {},
+          collapsedIdsByScope: legacyState.collapsedIdsByScope || {},
+          columnSettingsByScope: legacyState.columnSettingsByScope || {},
+          actualOverridesByScope: {},
+        }
+      }
+      return {
+        activitiesByScope: legacyState.activitiesByScope || {},
+        historyByScope: legacyState.historyByScope || {},
+        collapsedIdsByScope: legacyState.collapsedIdsByScope || {},
+        columnSettingsByScope: legacyState.columnSettingsByScope || {},
+        actualOverridesByScope: legacyState.actualOverridesByScope || {},
+      }
+    },
   },
 ))

@@ -1,11 +1,34 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const rulesPath = path.join(root, 'src/lib/level3PlanRules.ts')
+const rootRequire = createRequire(path.join(root, 'package.json'))
+
+const loadCommonJsTypeScriptModule = (filePath, moduleOverrides = {}) => {
+  const sourceText = fs.readFileSync(filePath, 'utf8')
+  const compiled = ts.transpileModule(sourceText, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: filePath,
+  }).outputText
+  const module = { exports: {} }
+  const localRequire = (specifier) => moduleOverrides[specifier] || rootRequire(specifier)
+  new Function('exports', 'require', 'module', '__filename', '__dirname', compiled)(
+    module.exports,
+    localRequire,
+    module,
+    filePath,
+    path.dirname(filePath),
+  )
+  return module.exports
+}
 
 if (!fs.existsSync(rulesPath)) {
   throw new Error('src/lib/level3PlanRules.ts does not exist')
@@ -188,11 +211,23 @@ const forkedScope = rules.forkLevel3ScopeData({
 }, {
   activities: [], history: targetHistory, collapsedIds: [],
   columnSettings: { order: ['activityName', 'number'], visible: ['number'] },
+}, {
+  c1: {
+    activityId: 'c1', actualStartDate: '2026-08-04', actualEndDate: '2026-08-06',
+    detachedBy: '李四', detachedAt: '2026-08-17 12:10:00',
+  },
 })
 assert.deepEqual(forkedScope.activities.map(item => item.id), ['p1', 'c1'])
+assert.deepEqual(forkedScope.activities.find(item => item.id === 'c1'), {
+  ...childA,
+  actualStartDate: '2026-08-04',
+  actualEndDate: '2026-08-06',
+})
 assert.deepEqual(forkedScope.history.map(item => item.id), ['source-log', 'target-log'])
 assert.deepEqual(forkedScope.columnSettings, { order: ['activityName', 'number'], visible: ['number'] })
 assert.notEqual(forkedScope.activities[0], parent)
+assert.deepEqual(childA.actualStartDate, '2026-01-04')
+assert.deepEqual(childA.actualEndDate, '2026-01-07')
 
 const parent2 = { ...parent, id: 'p2', order: 1, activityName: '父活动2', responsible: '李四' }
 const childC = { ...childA, id: 'c3', parentId: 'p2', order: 0, activityName: '子活动C' }
@@ -254,9 +289,122 @@ for (const token of [
   'deleteActivity',
   'activitiesByScope',
   'historyByScope',
+  'actualOverridesByScope',
+  'updateFollowActualDates',
+  'mergeLevel3ActualDateOverrides',
+  'LEVEL3_PLAN_STORE_VERSION = 2',
 ]) {
   assert.ok(storeSource.includes(token), `level3 plan store is missing ${token}`)
 }
+
+const store = loadCommonJsTypeScriptModule(storePath, {
+  '@/lib/level3PlanRules': loadCommonJsTypeScriptModule(rulesPath),
+  '@/types/level3Plan': loadCommonJsTypeScriptModule(path.join(root, 'src/types/level3Plan.ts')),
+}).useLevel3PlanStore
+const storeSourceScope = 'project-1::market::OP'
+const storeFollowerScope = 'project-1::market::TR'
+const storeOtherScope = 'project-1::market::RU'
+const sourceActivitiesSnapshot = structuredClone([parent, childA])
+const sourceHistorySnapshot = structuredClone(sourceHistory)
+store.setState({
+  activitiesByScope: { [storeSourceScope]: [parent, childA] },
+  historyByScope: { [storeSourceScope]: sourceHistory, [storeFollowerScope]: targetHistory },
+  collapsedIdsByScope: {},
+  columnSettingsByScope: {},
+  actualOverridesByScope: { [storeOtherScope]: { c2: override } },
+})
+assert.equal(
+  store.getState().updateFollowActualDates(
+    storeSourceScope,
+    storeFollowerScope,
+    'c1',
+    { actualStartDate: '2026-01-05' },
+    '李四',
+  ),
+  true,
+)
+let persisted = store.getState()
+assert.deepEqual(persisted.activitiesByScope[storeSourceScope].find(item => item.id === 'c1'), childA)
+assert.deepEqual(persisted.actualOverridesByScope[storeFollowerScope].c1, {
+  activityId: 'c1', actualStartDate: '2026-01-05', actualEndDate: '2026-01-07',
+  detachedBy: '李四', detachedAt: persisted.actualOverridesByScope[storeFollowerScope].c1.detachedAt,
+})
+assert.equal(persisted.historyByScope[storeFollowerScope][0].actor, '李四')
+assert.deepEqual(persisted.historyByScope[storeFollowerScope][0].changes, [{
+  field: 'actualStartDate', label: '实际开始时间', before: '2026-01-04', after: '2026-01-05',
+}])
+assert.equal(
+  store.getState().updateFollowActualDates(
+    storeSourceScope,
+    storeFollowerScope,
+    'c1',
+    { actualEndDate: '2026-01-08' },
+    '王五',
+  ),
+  true,
+)
+persisted = store.getState()
+assert.equal(persisted.actualOverridesByScope[storeFollowerScope].c1.actualStartDate, '2026-01-05')
+assert.equal(persisted.actualOverridesByScope[storeFollowerScope].c1.actualEndDate, '2026-01-08')
+const historyLengthBeforeRejectedUpdate = persisted.historyByScope[storeFollowerScope].length
+assert.equal(
+  store.getState().updateFollowActualDates(
+    storeSourceScope,
+    storeFollowerScope,
+    'c1',
+    { actualStartDate: '2026-01-09' },
+    '李四',
+  ),
+  false,
+)
+assert.equal(
+  store.getState().updateFollowActualDates(
+    storeSourceScope,
+    storeFollowerScope,
+    'missing',
+    { actualStartDate: '2026-01-05' },
+    '李四',
+  ),
+  false,
+)
+assert.equal(
+  store.getState().updateFollowActualDates(
+    storeSourceScope,
+    storeFollowerScope,
+    'c1',
+    { actualEndDate: '2026-01-08' },
+    '李四',
+  ),
+  false,
+)
+assert.equal(store.getState().historyByScope[storeFollowerScope].length, historyLengthBeforeRejectedUpdate)
+assert.equal(store.getState().forkFollowScope(storeSourceScope, storeFollowerScope), true)
+persisted = store.getState()
+assert.deepEqual(persisted.activitiesByScope[storeFollowerScope].find(item => item.id === 'c1'), {
+  ...childA,
+  actualStartDate: '2026-01-05', actualEndDate: '2026-01-08',
+})
+assert.equal(persisted.actualOverridesByScope[storeFollowerScope], undefined)
+assert.deepEqual(persisted.actualOverridesByScope[storeOtherScope], { c2: override })
+assert.deepEqual(persisted.activitiesByScope[storeSourceScope], sourceActivitiesSnapshot)
+assert.deepEqual(persisted.historyByScope[storeSourceScope], sourceHistorySnapshot)
+assert.deepEqual(store.persist.getOptions().partialize(persisted).actualOverridesByScope, {
+  [storeOtherScope]: { c2: override },
+})
+const migrate = store.persist.getOptions().migrate
+const migrated = await migrate({
+  activitiesByScope: { legacy: [parent] },
+  historyByScope: { legacy: sourceHistory },
+  collapsedIdsByScope: { legacy: ['p1'] },
+  columnSettingsByScope: { legacy: { order: ['number'], visible: ['number'] } },
+}, 1)
+assert.deepEqual(migrated, {
+  activitiesByScope: { legacy: [parent] },
+  historyByScope: { legacy: sourceHistory },
+  collapsedIdsByScope: { legacy: ['p1'] },
+  columnSettingsByScope: { legacy: { order: ['number'], visible: ['number'] } },
+  actualOverridesByScope: {},
+})
 
 const componentPath = path.join(root, 'src/components/plans/Level3PlanModule.tsx')
 assert.ok(fs.existsSync(componentPath), 'src/components/plans/Level3PlanModule.tsx does not exist')

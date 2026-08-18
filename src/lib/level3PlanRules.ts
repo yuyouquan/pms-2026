@@ -92,6 +92,7 @@ export function resolveLevel3DetachedScopeFork(
 export function forkLevel3ScopeData(
   source: Level3ScopeData,
   target?: Level3ScopeData,
+  overrides: Level3ActualDateOverrideMap = {},
 ): Level3ScopeData {
   const historyById = new Map([
     ...source.history.map(log => [log.id, log] as const),
@@ -99,7 +100,7 @@ export function forkLevel3ScopeData(
   ])
   const targetColumnSettings = target?.columnSettings
   return {
-    activities: source.activities.map(activity => ({ ...activity })),
+    activities: mergeLevel3ActualDateOverrides(source.activities, overrides),
     history: [...historyById.values()].map(log => ({
       ...log,
       changes: log.changes.map(change => ({ ...change })),
