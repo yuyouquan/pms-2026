@@ -55,29 +55,44 @@ export interface TechnicalPlanInstance {
 
 export type TechnicalPlansByKey = Record<string, TechnicalPlanInstance>
 
-const TDT_PHASE_DATES: Record<string, [string, string]> = {
-  '1': ['2026-01-01', '2026-01-31'],
-  '2': ['2026-02-01', '2026-02-28'],
-  '3': ['2026-03-01', '2026-03-31'],
-  '4': ['2026-04-01', '2026-06-30'],
-  '5': ['2026-07-01', '2026-08-31'],
+type TechnicalRootPlanSchedule = {
+  planStartDate: string
+  planEndDate: string
+  phaseDates: Record<string, [string, string]>
 }
 
-const buildInitialTdtTasks = () => buildTdtTemplateTasks().map(task => {
-  const [planStartDate, planEndDate] = TDT_PHASE_DATES[task.parentId || task.id]
+export const TECHNICAL_ROOT_PLAN_SCHEDULES: Record<string, TechnicalRootPlanSchedule> = {
+  '4': { planStartDate: '2025-10-01', planEndDate: '2026-02-28', phaseDates: { '1': ['2025-10-01', '2025-10-21'], '2': ['2025-10-22', '2025-11-15'], '3': ['2025-11-16', '2025-12-15'], '4': ['2025-12-16', '2026-02-01'], '5': ['2026-02-02', '2026-02-28'] } },
+  '9': { planStartDate: '2026-02-01', planEndDate: '2026-07-15', phaseDates: { '1': ['2026-02-01', '2026-02-15'], '2': ['2026-02-16', '2026-03-10'], '3': ['2026-03-11', '2026-04-05'], '4': ['2026-04-06', '2026-06-15'], '5': ['2026-06-16', '2026-07-15'] } },
+  '20': { planStartDate: '2026-02-10', planEndDate: '2026-08-30', phaseDates: { '1': ['2026-02-10', '2026-03-05'], '2': ['2026-03-06', '2026-04-05'], '3': ['2026-04-06', '2026-05-19'], '4': ['2026-05-20', '2026-07-25'], '5': ['2026-07-26', '2026-08-30'] } },
+  '21': { planStartDate: '2026-03-01', planEndDate: '2026-09-15', phaseDates: { '1': ['2026-03-01', '2026-03-20'], '2': ['2026-03-21', '2026-04-15'], '3': ['2026-04-16', '2026-05-19'], '4': ['2026-05-20', '2026-07-25'], '5': ['2026-07-26', '2026-09-15'] } },
+  'mock-tech-aios-v3': { planStartDate: '2026-01-15', planEndDate: '2026-08-31', phaseDates: { '1': ['2026-01-15', '2026-02-10'], '2': ['2026-02-11', '2026-03-15'], '3': ['2026-03-16', '2026-04-30'], '4': ['2026-05-01', '2026-07-14'], '5': ['2026-07-15', '2026-08-31'] } },
+  'mock-tech-perf-power': { planStartDate: '2026-02-01', planEndDate: '2026-09-15', phaseDates: { '1': ['2026-02-01', '2026-02-28'], '2': ['2026-03-01', '2026-03-31'], '3': ['2026-04-01', '2026-05-15'], '4': ['2026-05-16', '2026-07-31'], '5': ['2026-08-01', '2026-09-15'] } },
+  'mock-tech-system-experience': { planStartDate: '2026-03-01', planEndDate: '2026-10-31', phaseDates: { '1': ['2026-03-01', '2026-03-31'], '2': ['2026-04-01', '2026-04-30'], '3': ['2026-05-01', '2026-05-19'], '4': ['2026-05-20', '2026-08-31'], '5': ['2026-09-01', '2026-10-31'] } },
+  'mock-tech-6g-prestudy': { planStartDate: '2026-04-01', planEndDate: '2026-12-31', phaseDates: { '1': ['2026-04-01', '2026-05-01'], '2': ['2026-05-02', '2026-06-25'], '3': ['2026-06-26', '2026-08-31'], '4': ['2026-09-01', '2026-10-31'], '5': ['2026-11-01', '2026-12-31'] } },
+}
+
+const buildInitialTdtTasks = (parentProjectId: string) => buildTdtTemplateTasks().map(task => {
+  const [planStartDate, planEndDate] = TECHNICAL_ROOT_PLAN_SCHEDULES[parentProjectId].phaseDates[task.parentId || task.id]
   return { ...task, planStartDate, planEndDate }
 })
 
-const buildInitialSubprojectTasks = (childIndex: number) => buildSubprojectTemplateTasks().map((task, taskIndex) => {
-  const startMonth = String(taskIndex + 1).padStart(2, '0')
-  const endMonth = String(taskIndex + 2).padStart(2, '0')
-  const startDay = String(childIndex + 1).padStart(2, '0')
-  return {
-    ...task,
-    planStartDate: `2026-${startMonth}-${startDay}`,
-    planEndDate: `2026-${endMonth}-20`,
-  }
-})
+const toIsoDate = (timestamp: number) => new Date(timestamp).toISOString().slice(0, 10)
+
+const buildInitialSubprojectTasks = (parentProjectId: string, childIndex: number) => {
+  const schedule = TECHNICAL_ROOT_PLAN_SCHEDULES[parentProjectId]
+  const start = Date.parse(`${schedule.planStartDate}T00:00:00Z`)
+  const end = Date.parse(`${schedule.planEndDate}T00:00:00Z`)
+  const totalDays = Math.round((end - start) / 86_400_000) + 1
+  return buildSubprojectTemplateTasks().map((task, taskIndex) => {
+    const rangeStart = Math.floor(totalDays * taskIndex / 4)
+    const rangeEnd = Math.floor(totalDays * (taskIndex + 1) / 4) - 1
+    const offset = Math.min(childIndex, Math.max(0, rangeEnd - rangeStart))
+    const planStartDate = toIsoDate(start + (rangeStart + offset) * 86_400_000)
+    const planEndDate = toIsoDate(start + rangeEnd * 86_400_000)
+    return { ...task, planStartDate, planEndDate }
+  })
+}
 
 const TDT_PLAN_PROJECT_IDS = [
   '4', '9', '20', '21',
@@ -100,13 +115,13 @@ const createPublishedTdtPlan = (parentProjectId: string, index: number): Technic
     templateType: 'tdt' as const,
     status: '已发布',
     publishedAt: `2026-01-${String(index + 5).padStart(2, '0')}T00:00:00Z`,
-    tasks: buildInitialTdtTasks(),
+    tasks: buildInitialTdtTasks(parentProjectId),
   }
   return parentProjectId === '9'
     ? {
         planKey: '9:tdt', templateKind: 'tdt', currentVersionId: 'tech-9-v2-draft',
         columnSettings: { order: [...DEFAULT_COLUMNS.order], visible: [...DEFAULT_COLUMNS.visible] }, collapsedRows: [],
-        versions: [published, { id: 'tech-9-v2-draft', versionNo: 'V2', templateType: 'tdt', status: '修订中', tasks: buildInitialTdtTasks() }],
+        versions: [published, { id: 'tech-9-v2-draft', versionNo: 'V2', templateType: 'tdt', status: '修订中', tasks: buildInitialTdtTasks(parentProjectId) }],
       }
     : {
         planKey: `${parentProjectId}:tdt`, templateKind: 'tdt', currentVersionId: publishedId,
@@ -122,7 +137,7 @@ const createPublishedSubprojectPlan = (parentProjectId: string, subprojectId: st
     columnSettings: { order: [...DEFAULT_COLUMNS.order], visible: [...DEFAULT_COLUMNS.visible] }, collapsedRows: [],
     versions: [{
       id: versionId, versionNo: 'V1', templateType: 'subproject', status: '已发布',
-      publishedAt: `2026-02-${String(index + 1).padStart(2, '0')}T00:00:00Z`, tasks: buildInitialSubprojectTasks(index),
+      publishedAt: `2026-02-${String(index + 1).padStart(2, '0')}T00:00:00Z`, tasks: buildInitialSubprojectTasks(parentProjectId, index),
     }],
   }
 }
@@ -211,7 +226,7 @@ export const migrateTechnicalPlanState = (persistedState: unknown, fromVersion: 
       collapsedRows: fromVersion < 4 ? [] : (Array.isArray(candidate.collapsedRows) ? candidate.collapsedRows.map(String) : []),
     }
   })
-  if (fromVersion === TECHNICAL_PLAN_STORE_VERSION - 1) {
+  if (fromVersion < TECHNICAL_PLAN_STORE_VERSION) {
     const seedPlans = clonePlans(INITIAL_TECHNICAL_PLANS)
     Object.entries(seedPlans).forEach(([key, plan]) => {
       if (!plansByKey[key]) plansByKey[key] = plan

@@ -215,4 +215,26 @@ assert.equal(seedRows.tdt.length, 8, 'matrix projection exposes eight TDT roots'
 assert.equal(seedRows.children.length, 10, 'matrix projection exposes ten active configured children')
 assert.ok(seedRows.tdt.every(row => row.technicalTrack && row.tmg && row.subdomain && row.technicalLead && row.technicalProjectManager && row.projectStage !== '-'), 'matrix roots expose configured technical fields and published-plan stages')
 assert.ok(seedRows.children.every(row => Object.entries(row).some(([key, value]) => key.startsWith('milestone::') && value)), 'matrix child rows expose published-plan node values')
+const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value
+const rootDateSets = []
+for (const project of seedData.initialProjects.filter(project => project.type === '技术项目')) {
+  const plan = seedPlans[`${project.id}:tdt`]
+  const published = plan.versions.find(version => version.status === '已发布')
+  const phases = published.tasks.filter(task => !task.parentId)
+  rootDateSets.push(phases.map(task => `${task.planStartDate}/${task.planEndDate}`).join('|'))
+  published.tasks.forEach(task => {
+    assert.ok(validDate(task.planStartDate) && validDate(task.planEndDate) && task.planStartDate <= task.planEndDate, `${project.id} root tasks keep valid ordered ISO plan dates`)
+    assert.ok(task.planStartDate >= project.planStartDate && task.planEndDate <= project.planEndDate, `${project.id} root task dates are contained by the root project schedule`)
+  })
+}
+assert.ok(new Set(rootDateSets).size > 2, 'root plan seeds use multiple distinct deterministic phase date sets')
+assert.ok(new Set(seedRows.tdt.map(row => row.projectStage)).size > 2, 'root plan seeds expose diverse current stages')
+for (const child of seedChildren.filter(child => child.active)) {
+  const parent = seedData.initialProjects.find(project => project.id === child.parentProjectId)
+  const published = seedPlans[`${child.parentProjectId}:subproject:${child.id}`].versions.find(version => version.status === '已发布')
+  published.tasks.forEach(task => {
+    assert.ok(validDate(task.planStartDate) && validDate(task.planEndDate) && task.planStartDate <= task.planEndDate, `${child.id} child tasks keep valid ordered ISO plan dates`)
+    assert.ok(task.planStartDate >= parent.planStartDate && task.planEndDate <= parent.planEndDate, `${child.id} child task dates are contained by the parent schedule`)
+  })
+}
 console.log('project list matrix contract passed')

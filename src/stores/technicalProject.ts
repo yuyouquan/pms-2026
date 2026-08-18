@@ -135,7 +135,7 @@ export function migrateTechnicalProjectState(
   const source = isRecord(persistedState) ? persistedState.subprojects : undefined
   const sanitized = sanitizeTechnicalSubprojects(source)
   if (!sanitized) return { subprojects: cloneSubprojects(INITIAL_TECHNICAL_SUBPROJECTS) }
-  if (fromVersion !== TECHNICAL_PROJECT_STORE_VERSION - 1) return { subprojects: sanitized }
+  if (fromVersion >= TECHNICAL_PROJECT_STORE_VERSION) return { subprojects: sanitized }
   const knownIds = new Set(sanitized.map(item => item.id))
   return {
     subprojects: [

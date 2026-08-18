@@ -4,6 +4,7 @@ import { initialProjects } from '@/data/projects'
 import { EXTERNAL_PROJECT_POOL } from '@/data/externalProjectPool'
 import {
   PROJECT_CATEGORY_MACHINE,
+  PROJECT_CATEGORY_TECH,
   PROJECT_TYPE_TOS_VERSION,
   isMachineProjectType,
   resolveProjectClassification,
@@ -65,7 +66,7 @@ export const kanbanColumns = [
   { title: '发布阶段', key: 'released', color: '#722ed1' },
 ]
 
-type Project = Omit<typeof initialProjects[number], 'type'> & {
+type Project = ProjectItem & {
   type: PersistedProjectTypeName
   secondaryCategory?: string
   versionTypes?: string[]
@@ -163,7 +164,7 @@ function migrateMachineTosHistory(project: Project): Project {
     migrated.productType = '老品'
   }
   MACHINE_TOS_VERSION_KEYS.forEach(key => {
-    if (key in migrated) migrated[key] = migrateMachineThreePartReference(migrated[key])
+    if (key in migrated) migrated[key] = migrateMachineThreePartReference(migrated[key]) as string
   })
   if (project.fieldValues && typeof project.fieldValues === 'object') {
     const fieldValues = { ...project.fieldValues }
@@ -374,9 +375,25 @@ const isMissingSeedValue = (value: unknown) => (
 
 const fillMissingSeedProjectFields = (persisted: Project, seed: Project): Project => {
   const next = { ...persisted }
+  const supportsTechnicalFieldValues = persisted.type === PROJECT_CATEGORY_TECH
+  const fieldValues = supportsTechnicalFieldValues
+    ? cloneProjectSeedValue(persisted.fieldValues || {})
+    : undefined
   Object.entries(seed).forEach(([key, value]) => {
-    if (isMissingSeedValue(next[key])) next[key] = cloneProjectSeedValue(value)
+    const rootValue = next[key]
+    const nestedValue = fieldValues?.[key]
+    const rootMissing = isMissingSeedValue(rootValue)
+    const nestedMissing = isMissingSeedValue(nestedValue)
+    if (supportsTechnicalFieldValues && rootMissing && !nestedMissing) {
+      next[key] = cloneProjectSeedValue(nestedValue)
+    } else if (supportsTechnicalFieldValues && !rootMissing && nestedMissing) {
+      fieldValues![key] = cloneProjectSeedValue(rootValue)
+    }
+    if (isMissingSeedValue(next[key]) && (nestedMissing || !supportsTechnicalFieldValues)) {
+      next[key] = cloneProjectSeedValue(value)
+    }
   })
+  if (fieldValues) next.fieldValues = fieldValues
   return next
 }
 

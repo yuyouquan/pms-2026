@@ -572,6 +572,9 @@ assert.match(configSource, /setTechnicalTemplateTasks/, 'technical config writes
 const seededTechnicalPlans = technicalPlanModule.INITIAL_TECHNICAL_PLANS
 assert.equal(Object.keys(seededTechnicalPlans).filter(key => key.endsWith(':tdt')).length, 8, 'technical plan seeds include eight TDT instances')
 assert.equal(Object.keys(seededTechnicalPlans).filter(key => key.includes(':subproject:')).length, 10, 'technical plan seeds include ten active child instances')
+assert.ok(Object.entries(seededTechnicalPlans).every(([key, plan]) => key === plan.planKey), 'technical plan seed keys match their stable instance keys')
+const seededVersionIds = Object.values(seededTechnicalPlans).flatMap(plan => plan.versions.map(version => version.id))
+assert.equal(new Set(seededVersionIds).size, seededVersionIds.length, 'technical plan version IDs are unique across seed instances')
 assert.ok(Object.values(seededTechnicalPlans).every(plan => plan.versions.some(version => version.status === '已发布')), 'every seeded technical plan instance has a published version')
 assert.equal(seededTechnicalPlans['9:tdt'].currentVersionId, 'tech-9-v2-draft', 'AI TDT seed keeps its V2 draft selected')
 assert.ok(Object.entries(seededTechnicalPlans).filter(([key]) => key !== '9:tdt').every(([, plan]) => plan.versions.find(version => version.id === plan.currentVersionId)?.status === '已发布'), 'non-AI seeds select their published version')
@@ -581,4 +584,6 @@ const migratedV5Plans = technicalPlanModule.migrateTechnicalPlanState({ plansByK
 } }, 5)
 assert.equal(Object.keys(migratedV5Plans.plansByKey).length, 18, 'v5 technical plan migration appends missing seed instances')
 assert.match(migratedV5Plans.plansByKey['9:tdt'].versions[0].tasks[0].taskName, /自定义$/, 'v5 technical plan migration preserves customized same-key plan instances')
+assert.equal(Object.keys(technicalPlanModule.migrateTechnicalPlanState({ plansByKey: { '9:tdt': customizedPlanSeed } }, 4).plansByKey).length, 18, 'skipped v4 technical plan migration appends every missing seed instance')
+assert.deepEqual(Object.keys(technicalPlanModule.migrateTechnicalPlanState({ plansByKey: { 'custom:tdt': { ...customizedPlanSeed, planKey: 'custom:tdt' } } }, 6).plansByKey), ['custom:tdt'], 'current technical plan migration remains idempotent')
 console.log('technical plan contract passed')

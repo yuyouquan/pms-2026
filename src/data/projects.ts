@@ -10,6 +10,9 @@ import {
   isMachineProjectType,
 } from '@/constants/projectTypes'
 import { mapIpmProjectStatus } from '@/lib/projectStatus'
+import type { ProjectItem } from '@/types/app'
+
+type ProjectSeed = ProjectItem & Record<string, unknown>
 
 // 项目类型选项
 export { PROJECT_TYPES, PROJECT_TYPE_COLORS }
@@ -121,7 +124,7 @@ export const ADDITIONAL_MACHINE_PROJECTS = PAGINATION_MACHINE_SERIES.flatMap((se
   })
 ))
 
-export const initialProjects = [
+export const initialProjects: ProjectSeed[] = [
   {
     id: '1', name: 'X6877-D8400_H991', type: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_PHONE,
     status: '在研', progress: 65, leader: '张三',
@@ -547,7 +550,7 @@ export const initialProjects = [
     planStartDate: '2026-01-15', planEndDate: '2026-08-31', developCycle: 160, healthStatus: 'normal' as const, operatingSystem: 'Android 16',
     buildAddress: 'https://build.example.com/aios-v3', currentNode: 'TDR3', projectDescription: '推进 AIOS 核心架构演进，形成可复用的端侧智能服务底座。',
     branchInfo: 'main_dev_aios_v3', jenkinsUrl: 'https://jenkins.example.com/job/aios-v3', teamMembers: '李四,张三,王五,赵六',
-    technicalTrack: 'AIOS', tmg: '系统应用', subdomain: 'AIOS', technicalLead: '李四', technicalProjectManager: '张三',
+    technicalTrack: 'AIOS', tmg: '系统应用', subdomain: 'AIOS', technicalLead: '李四', technicalProjectManager: '张三', testRepresentative: '王五', qualityRepresentative: '赵六', productRepresentative: '孙七', standardizationRepresentative: '李白',
   },
   {
     id: 'mock-tech-perf-power', name: '端侧性能功耗协同优化', type: PROJECT_TYPE_TECH, secondaryCategory: PROJECT_TYPE_TECH,
@@ -555,7 +558,7 @@ export const initialProjects = [
     planStartDate: '2026-02-01', planEndDate: '2026-09-15', developCycle: 170, healthStatus: 'normal' as const, operatingSystem: 'Android 16',
     buildAddress: 'https://build.example.com/perf-power', currentNode: 'TDR2', projectDescription: '围绕端侧算力与功耗建立跨芯片平台的协同优化能力。',
     branchInfo: 'main_dev_perf_power', jenkinsUrl: 'https://jenkins.example.com/job/perf-power', teamMembers: '孙七,李四,赵六,张三',
-    technicalTrack: '性能功耗', tmg: '性能TMG', subdomain: '无', technicalLead: '孙七', technicalProjectManager: '李四',
+    technicalTrack: '性能功耗', tmg: '性能TMG', subdomain: '无', technicalLead: '孙七', technicalProjectManager: '李四', testRepresentative: '赵六', qualityRepresentative: '张三', productRepresentative: '王五', standardizationRepresentative: '李白',
   },
   {
     id: 'mock-tech-system-experience', name: '下一代系统体验', type: PROJECT_TYPE_TECH, secondaryCategory: PROJECT_TYPE_TECH,
@@ -563,7 +566,7 @@ export const initialProjects = [
     planStartDate: '2026-03-01', planEndDate: '2026-10-31', developCycle: 180, healthStatus: 'warning' as const, operatingSystem: 'Android 17',
     buildAddress: 'https://build.example.com/system-experience', currentNode: '规划启动', projectDescription: '探索高帧交互、动效和系统反馈的一体化下一代体验。',
     branchInfo: 'main_dev_system_experience', jenkinsUrl: 'https://jenkins.example.com/job/system-experience', teamMembers: '王五,赵六,孙七,李白',
-    technicalTrack: '系统体验', tmg: 'UX TMG', subdomain: '无', technicalLead: '王五', technicalProjectManager: '赵六',
+    technicalTrack: '系统体验', tmg: 'UX TMG', subdomain: '无', technicalLead: '王五', technicalProjectManager: '赵六', testRepresentative: '孙七', qualityRepresentative: '李白', productRepresentative: '张三', standardizationRepresentative: '李四',
   },
   {
     id: 'mock-tech-6g-prestudy', name: '6G通信预研', type: PROJECT_TYPE_TECH, secondaryCategory: PROJECT_TYPE_TECH,
@@ -571,7 +574,7 @@ export const initialProjects = [
     planStartDate: '2026-04-01', planEndDate: '2026-12-31', developCycle: 210, healthStatus: 'normal' as const, operatingSystem: 'Android 17',
     buildAddress: 'https://build.example.com/6g-prestudy', currentNode: 'TDR1', projectDescription: '开展 6G 协议与端侧通信能力预研，验证未来网络演进路径。',
     branchInfo: 'main_dev_6g_prestudy', jenkinsUrl: 'https://jenkins.example.com/job/6g-prestudy', teamMembers: '赵六,孙七,李四,王五',
-    technicalTrack: '通信预研', tmg: '底软通信', subdomain: '蜂窝', technicalLead: '赵六', technicalProjectManager: '孙七',
+    technicalTrack: '通信预研', tmg: '底软通信', subdomain: '蜂窝', technicalLead: '赵六', technicalProjectManager: '孙七', testRepresentative: '李四', qualityRepresentative: '王五', productRepresentative: '张三', standardizationRepresentative: '李白',
   },
   ...ADDITIONAL_MACHINE_PROJECTS,
 ]
