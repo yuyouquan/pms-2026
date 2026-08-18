@@ -1,11 +1,15 @@
 import type {
   Level3Activity,
   Level3ActivityFormValue,
+  Level3ActivityRisk,
   Level3ActivityPermissions,
+  Level3ActivityStatus,
   Level3ActivityViewRow,
   Level3ChangeLog,
   Level3ActualDateOverride,
   Level3ActualDateOverrideMap,
+  Level3WorkflowOverride,
+  Level3WorkflowOverrideMap,
   Level3DeleteResult,
   Level3Milestone,
   Level3MoveResult,
@@ -55,6 +59,34 @@ const dateDifference = (start: string, end: string): number | null => {
 
 const dateMin = (values: string[]) => values.filter(Boolean).sort()[0] || ''
 const dateMax = (values: string[]) => values.filter(Boolean).sort().at(-1) || ''
+
+export function normalizeLevel3Remark(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+export function getLevel3RemarkDisplay(value: unknown): { value: string; empty: boolean } {
+  const normalized = normalizeLevel3Remark(value)
+  return { value: normalized, empty: normalized.length === 0 }
+}
+
+const LEVEL3_RISK_PRIORITY: Record<Level3ActivityRisk, number> = {
+  无: 0,
+  低: 1,
+  中: 2,
+  高: 3,
+}
+
+const getParentStatus = (children: Level3Activity[]): Level3ActivityStatus => {
+  if (children.length === 0 || children.every(child => child.status === '待启动')) return '待启动'
+  if (children.every(child => child.status === '已完成')) return '已完成'
+  return '进行中'
+}
+
+const getParentRisk = (children: Level3Activity[]): Level3ActivityRisk => (
+  children.reduce<Level3ActivityRisk>((highest, child) => (
+    LEVEL3_RISK_PRIORITY[child.risk] > LEVEL3_RISK_PRIORITY[highest] ? child.risk : highest
+  ), '无')
+)
 
 export function getLevel3ScopeKey(projectId: string, kind: Level3ScopeKind, value: string): string {
   return `${projectId}::${kind}::${value}`
@@ -111,11 +143,15 @@ export function mergeLevel3Histories(
 export function forkLevel3ScopeData(
   source: Level3ScopeData,
   target?: Level3ScopeData,
-  overrides: Level3ActualDateOverrideMap = {},
+  actualOverrides: Level3ActualDateOverrideMap = {},
+  workflowOverrides: Level3WorkflowOverrideMap = {},
 ): Level3ScopeData {
   const targetColumnSettings = target?.columnSettings
   return {
-    activities: mergeLevel3ActualDateOverrides(source.activities, overrides),
+    activities: mergeLevel3WorkflowOverrides(
+      mergeLevel3ActualDateOverrides(source.activities, actualOverrides),
+      workflowOverrides,
+    ),
     history: mergeLevel3Histories(source.history, target?.history),
     collapsedIds: [...source.collapsedIds],
     columnSettings: {
@@ -163,6 +199,8 @@ export function getLevel3ParentRollup(parentId: string, activities: Level3Activi
     actualStartDate,
     actualEndDate,
     actualDays: dateDifference(actualStartDate, actualEndDate),
+    status: getParentStatus(children),
+    risk: getParentRisk(children),
   }
 }
 
@@ -199,6 +237,37 @@ export function mergeLevel3ActualDateOverrides(
     return override
       ? { ...activity, actualStartDate: override.actualStartDate, actualEndDate: override.actualEndDate }
       : { ...activity }
+  })
+}
+
+export function createLevel3WorkflowOverride(
+  displayedActivity: Level3Activity,
+  existing: Level3WorkflowOverride | undefined,
+  patch: Pick<Partial<Level3Activity>, 'status' | 'risk'>,
+  actor: string,
+  occurredAt: string,
+): Level3WorkflowOverride {
+  return {
+    ...(existing || { activityId: displayedActivity.id, detachedBy: actor, detachedAt: occurredAt }),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.risk !== undefined ? { risk: patch.risk } : {}),
+    activityId: displayedActivity.id,
+    detachedBy: actor,
+    detachedAt: occurredAt,
+  }
+}
+
+export function mergeLevel3WorkflowOverrides(
+  activities: Level3Activity[],
+  overrides: Level3WorkflowOverrideMap,
+): Level3Activity[] {
+  return activities.map(activity => {
+    const override = overrides[activity.id]
+    return {
+      ...activity,
+      ...(override?.status !== undefined ? { status: override.status } : {}),
+      ...(override?.risk !== undefined ? { risk: override.risk } : {}),
+    }
   })
 }
 
@@ -348,6 +417,14 @@ export function canInlineEditLevel3ActualDate(
 ): boolean {
   if (readOnly || !activity?.parentId) return false
   return getLevel3ActivityPermissions(activity, activities, context).canEdit
+}
+
+export function canInlineEditLevel3ChildField(
+  activity: Level3Activity | undefined,
+  activities: Level3Activity[],
+  context: Level3PermissionContext,
+): boolean {
+  return Boolean(activity?.parentId && getLevel3ActivityPermissions(activity, activities, context).canEdit)
 }
 
 export function shouldShowLevel3CreateButton(readOnly: boolean): boolean {
