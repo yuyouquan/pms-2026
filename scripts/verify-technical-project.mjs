@@ -540,6 +540,14 @@ const conflictingTechnicalValues = projectStoreModule.migrateProjectState({ proj
 assert.equal(conflictingTechnicalValues?.technicalTrack, '根字段自定义赛道', 'root technical field deterministically remains primary on legacy conflict')
 assert.equal(conflictingTechnicalValues?.fieldValues?.technicalTrack, '嵌套字段自定义赛道', 'legacy conflict does not destroy the nested technical field value')
 const permissionModule = loadTypeScriptModule(root, 'src/stores/permission.ts')
+const blankManagerValues = projectStoreModule.migrateProjectState({ projects: [{
+  ...technicalSeeds.find(project => project.id === '9'), technicalProjectManager: '', fieldValues: { technicalProjectManager: '' },
+}] }, 6).projects.find(project => project.id === '9')
+assert.equal(blankManagerValues?.technicalProjectManager, '张三', 'blank root technical manager is seeded during migration')
+assert.equal(blankManagerValues?.fieldValues?.technicalProjectManager, '张三', 'blank nested technical manager is seeded alongside the root representation')
+permissionModule.usePermissionStore.setState({ rolesByProject: {}, rolePermissionsByProject: {} })
+permissionModule.usePermissionStore.getState().ensureProjectPermissions([blankManagerValues])
+assert.deepEqual(permissionModule.usePermissionStore.getState().rolesByProject['9'].find(role => role.name === '技术项目经理')?.members, ['张三'], 'permission hydration reads the seeded nested technical manager membership')
 permissionModule.usePermissionStore.setState({ rolesByProject: {}, rolePermissionsByProject: {} })
 permissionModule.usePermissionStore.getState().ensureProjectPermissions(technicalSeeds.filter(project => project.id.startsWith('mock-tech-')))
 for (const project of technicalSeeds.filter(project => project.id.startsWith('mock-tech-'))) {

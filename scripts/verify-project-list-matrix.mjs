@@ -215,6 +215,11 @@ assert.equal(seedRows.tdt.length, 8, 'matrix projection exposes eight TDT roots'
 assert.equal(seedRows.children.length, 10, 'matrix projection exposes ten active configured children')
 assert.ok(seedRows.tdt.every(row => row.technicalTrack && row.tmg && row.subdomain && row.technicalLead && row.technicalProjectManager && row.projectStage !== '-'), 'matrix roots expose configured technical fields and published-plan stages')
 assert.ok(seedRows.children.every(row => Object.entries(row).some(([key, value]) => key.startsWith('milestone::') && value)), 'matrix child rows expose published-plan node values')
+const isProjected = value => typeof value === 'string' && value.trim() !== '' && value !== '-'
+const rootRequiredProjectionFields = ['projectName', 'technicalTrack', 'tmg', 'subdomain', 'technicalLead', 'technicalProjectManager', 'projectStage']
+const childRequiredProjectionFields = ['projectName', 'parentProjectName', 'coreValue', 'developmentMode', 'firstTosVersion', 'firstMachineProject', 'projectStage']
+assert.ok(seedRows.tdt.every(row => rootRequiredProjectionFields.every(field => isProjected(row[field])) && Object.entries(row).filter(([key]) => key.startsWith('milestone::')).every(([, value]) => isProjected(value))), 'every required root technical field and milestone projects a non-placeholder value')
+assert.ok(seedRows.children.every(row => childRequiredProjectionFields.every(field => isProjected(row[field])) && Object.entries(row).filter(([key]) => key.startsWith('milestone::')).every(([, value]) => isProjected(value))), 'every required child technical field and milestone projects a non-placeholder value')
 const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value
 const rootDateSets = []
 for (const project of seedData.initialProjects.filter(project => project.type === '技术项目')) {

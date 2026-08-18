@@ -392,6 +392,9 @@ const fillMissingSeedProjectFields = (persisted: Project, seed: Project): Projec
     if (isMissingSeedValue(next[key]) && (nestedMissing || !supportsTechnicalFieldValues)) {
       next[key] = cloneProjectSeedValue(value)
     }
+    if (supportsTechnicalFieldValues && isMissingSeedValue(fieldValues![key]) && !isMissingSeedValue(next[key])) {
+      fieldValues![key] = cloneProjectSeedValue(next[key])
+    }
   })
   if (fieldValues) next.fieldValues = fieldValues
   return next
