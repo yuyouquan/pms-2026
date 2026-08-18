@@ -171,6 +171,14 @@ import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
 import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import {
+  buildFirstLevel1RevisionTasks,
+  buildNextLevel1RevisionTasks,
+  canMaintainLevel1Plan,
+  projectLevel1Plan,
+  synchronizeLevel1ActualEndDate,
+  validateLevel1MilestoneDates,
+} from '@/lib/level1PlanRules'
+import {
   synchronizeTechnicalProjectRecord,
 } from '@/lib/technicalProjectRules'
 import { deriveProjectTosVersion } from '@/lib/projectInfoRules'
@@ -509,7 +517,25 @@ export default function ProjectSpaceContainer() {
   const canShareTechnicalPlan = canDo('plan:一级计划-分享')
   const canImportTechnicalPlan = canDo('plan:导入')
   const canExportTechnicalPlan = canDo('plan:导出')
-  const canEditCurrentPlan = projectPlanLevel === 'level2' ? canEditLevel2Plan : canEditLevel1Plan
+  const level1GlobalAdmins = perm.globalRoles.find(role => role.name === '管理组')?.members || []
+  const level1SpmUsers = Array.from(new Set([
+    ...String(selectedProject?.spm || '').split(/[,，、]/).map(user => user.trim()).filter(Boolean),
+    ...(roles.find(role => role.name === '项目经理')?.members || []),
+  ]))
+  const level1TechnicalLead = String(
+    (selectedProject as any)?.technicalLead
+    || (selectedProject as any)?.fieldValues?.technicalLead
+    || roles.find(role => role.name === '技术项目负责人')?.members?.[0]
+    || '',
+  ).trim()
+  const canGovernLevel1Plan = selectedProject ? canMaintainLevel1Plan({
+    projectType: selectedProject.type,
+    currentUser: currentLoginUser,
+    spmUsers: level1SpmUsers,
+    technicalLead: level1TechnicalLead,
+    globalAdmins: level1GlobalAdmins,
+  }) : false
+  const canEditCurrentPlan = projectPlanLevel === 'level2' ? canEditLevel2Plan : canGovernLevel1Plan
   const currentPlanPermissionLabel = projectPlanLevel === 'level2' ? '二级计划' : '一级计划'
   const {
     visibleFieldKeys: visiblePlanInfoFieldKeys,
@@ -1159,7 +1185,7 @@ export default function ProjectSpaceContainer() {
 
   const initializeProjectPlanTasksFromTemplate = (templateTasks: any[]) => (
     JSON.parse(JSON.stringify(templateTasks || [])).map((task: any) => {
-      const templateRole = task.responsibleRole || task.responsible || ''
+      const templateRole = task.role || task.responsibleRole || task.responsible || ''
       const projectRole = PLAN_TEMPLATE_ROLE_TO_PROJECT_PERMISSION_ROLE[templateRole as keyof typeof PLAN_TEMPLATE_ROLE_TO_PROJECT_PERMISSION_ROLE]
       const roleMembers = getProjectRoleMembers(templateRole)
       return {
@@ -1686,7 +1712,7 @@ export default function ProjectSpaceContainer() {
   }, [effectiveTasks, level2PlanTasks, currentLoginUser])
   // 用户能否查看修订版：先有当前计划查看权，再满足编辑权或任务责任人条件。
   const canViewCurrentPlan = projectPlanLevel === 'level2' ? canViewLevel2Plan : canViewLevel1Plan
-  const canViewDraft = canViewCurrentPlan && (canEditLevel1Plan || canEditLevel2Plan || isResponsibleForAnyTask)
+  const canViewDraft = canViewCurrentPlan && (canGovernLevel1Plan || canEditLevel2Plan)
 
   // View columns
   const getViewKey = () => `project-${projectPlanLevel}-${projectPlanViewMode}`
@@ -1750,7 +1776,6 @@ export default function ProjectSpaceContainer() {
   useEffect(() => {
     if (isCurrentDraft && !followedTosLevel1ReadOnly) {
       setIsEditMode(true)
-      if (projectPlanViewMode === 'horizontal') setProjectPlanViewMode('table')
     } else {
       setIsEditMode(false)
     }
@@ -1888,7 +1913,10 @@ export default function ProjectSpaceContainer() {
   const updateLevel1PlanFilter = (id: string, patch: Partial<PlanFilterCondition>) => {
     commitLevel1PlanFilters(tempLevel1PlanFilters.map(item => item.id === id ? { ...item, ...patch } : item))
   }
-  const filteredLevel1PlanTasks = applyPlanWorkspaceFilters(effectiveTasks as any[], level1PlanFilters)
+  const filteredLevel1PlanTasks = applyPlanWorkspaceFilters(
+    projectLevel1Plan(effectiveTasks as any[], { mode: 'standard' }).rows,
+    level1PlanFilters,
+  )
   const filterBySearchText = (taskList: any[]) => taskList.filter((task: any) => {
     if (!searchText) return true
     const s = searchText.toLowerCase()
@@ -2042,7 +2070,20 @@ export default function ProjectSpaceContainer() {
     const nid = getPlanVersionId(versionNo)
     const projectType = getProjectTypeFamilyKey(selectedProject?.type || selectedPlanType)
     const templateTasks = getTemplateTasksForProjectType(configTemplateTasksByType, projectType) || LEVEL1_TEMPLATE_TASKS
-    const clonedTasks = initializeProjectPlanTasksFromTemplate(templateTasks)
+    const initializedTemplateTasks = initializeProjectPlanTasksFromTemplate(templateTasks)
+    const isFirstLevel1Revision = projectPlanLevel === 'level1'
+      && versions.filter(version => version.status === '已发布').length <= 1
+    let clonedTasks = initializedTemplateTasks
+    try {
+      if (projectPlanLevel === 'level1') {
+        clonedTasks = isFirstLevel1Revision
+          ? buildFirstLevel1RevisionTasks(effectiveTasks, initializedTemplateTasks)
+          : buildNextLevel1RevisionTasks(effectiveTasks)
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '模板同步失败，请检查稳定任务ID')
+      return
+    }
     const kindLabel = getPlanRevisionKindLabel(revisionKind)
     setVersions([...versions, { id: nid, versionNo, status: '修订中' }])
     setCurrentVersion(nid)
@@ -2069,7 +2110,12 @@ export default function ProjectSpaceContainer() {
       : projectPlanLevel === 'level2' && activeLevel2Plan && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1'
       ? level2PlanTasks.filter((t: any) => t.planId === activeLevel2Plan)
       : effectiveTasks
-    const invalidFields = getInvalidTaskFields(tasksToValidate as any[])
+    const level1DateValidation = projectPlanLevel === 'level1'
+      ? validateLevel1MilestoneDates(tasksToValidate as any[])
+      : null
+    const invalidFields = level1DateValidation
+      ? new Map(level1DateValidation.violations.map(violation => [violation.taskId, new Set([violation.field])]))
+      : getInvalidTaskFields(tasksToValidate as any[])
     if (invalidFields.size > 0) {
       message.error('任务校验不通过，无法发布')
       const firstInvalid = (tasksToValidate as any[]).find((t: any) => invalidFields.has(t.id))
@@ -2171,6 +2217,31 @@ export default function ProjectSpaceContainer() {
     const updatedTasks = tableTasks.map((task: any) => (
       task.id === record.id ? { ...task, [field]: value } : task
     ))
+    if (!isLevel2Custom && projectPlanLevel === 'level1' && field === 'actualEndDate') {
+      const pairedVersion = isCurrentDraft
+        ? latestPublishedVersion
+        : isLatestPublished
+          ? versions.find(version => version.status === '修订中')
+          : undefined
+      if (pairedVersion) {
+        const getScopedSnapshotKey = (versionId: string) => selectedProject && isTosTypeScoped
+          ? getTosTypeSnapshotKey(selectedProject.id, effectiveTosLevel1Type, 'level1', versionId)
+          : selectedProject && isMarketScopedLevel1
+            ? getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, versionId)
+            : versionId
+        setPublishedSnapshots(previous => {
+          const currentKey = getScopedSnapshotKey(currentVersion)
+          const pairedKey = getScopedSnapshotKey(pairedVersion.id)
+          const pairedTasks = previous[pairedKey] || tableTasks
+          const synced = synchronizeLevel1ActualEndDate(updatedTasks, pairedTasks, record.id, value)
+          return {
+            ...previous,
+            [currentKey]: synced.sourceTasks,
+            [pairedKey]: synced.pairedTasks,
+          }
+        })
+      }
+    }
 
     if (isLevel1MarketTable && selectedMarketTab === primaryMarket) {
       setMarketPlanData((prev: any) => {
@@ -2420,7 +2491,10 @@ export default function ProjectSpaceContainer() {
     const cols = scope === 'current' ? TABLE_COLUMNS.filter(c => visibleColumns.includes(c.key)) : TABLE_COLUMNS
     const exportCols: ExportColumn[] = cols.map(c => ({ key: c.key, title: c.title }))
     let rows: any[] = []
-    if (projectPlanLevel === 'level1') { rows = scope === 'current' ? filteredLevel1PlanTasks : effectiveTasks }
+    if (projectPlanLevel === 'level1') {
+      const projectedRows = projectLevel1Plan(effectiveTasks, { mode: 'standard' }).rows
+      rows = scope === 'current' ? applyPlanWorkspaceFilters(projectedRows, level1PlanFilters) : projectedRows
+    }
     else if (projectPlanLevel === 'level2' && activeLevel2Plan && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1') {
       const l2 = level2PlanTasks.filter((t: any) => t.planId === activeLevel2Plan); rows = scope === 'current' && searchText ? l2.filter((t: any) => (t.taskName || '').toLowerCase().includes(searchText.toLowerCase())) : l2
     }
@@ -2429,22 +2503,22 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleExportHorizontalPlan = (_scope: 'current' | 'all') => {
-    const stages = (effectiveTasks as any[]).filter(t => !t.parentId).sort((a, b) => a.order - b.order)
-    const stageGroups = stages.map(stage => { const ms = (effectiveTasks as any[]).filter(t => t.parentId === stage.id).sort((a, b) => a.order - b.order); return { stage, milestones: ms, colSpan: ms.length || 1 } })
+    const projected = projectLevel1Plan(effectiveTasks, { mode: 'standard' })
+    const stageGroups = projected.stageGroups.map(group => ({ ...group, colSpan: group.milestones.length || 1 }))
     const allMilestones = stageGroups.flatMap(({ stage, milestones }) => milestones.length > 0 ? milestones : [stage])
     if (allMilestones.length === 0) { message.warning('暂无可导出数据'); return }
     const headerRow0: (string | null)[] = ['版本', '开发周期']; const headerRow1: (string | null)[] = [null, null]
     const merges: any[] = [{ s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } }]
     let colCursor = 2
-    for (const { stage, milestones, colSpan } of stageGroups) { headerRow0.push(stage.taskName); for (let i = 1; i < colSpan; i++) headerRow0.push(null); if (milestones.length > 0) { for (const m of milestones) headerRow1.push(m.taskName) } else headerRow1.push('-'); merges.push({ s: { r: 0, c: colCursor }, e: { r: 0, c: colCursor + colSpan - 1 } }); colCursor += colSpan }
+    for (const { stage, milestones, colSpan } of stageGroups) { headerRow0.push(`${stage.taskName}\n${stage.planStartDate && stage.planEndDate ? `${stage.planStartDate} ~ ${stage.planEndDate}` : '-'}\n${stage.manpowerPercent === null ? '-' : `${stage.manpowerPercent}%`}`); for (let i = 1; i < colSpan; i++) headerRow0.push(null); if (milestones.length > 0) { for (const m of milestones) headerRow1.push(m.taskName) } else headerRow1.push('-'); merges.push({ s: { r: 0, c: colCursor }, e: { r: 0, c: colCursor + colSpan - 1 } }); colCursor += colSpan }
     const displayVersions = getDisplayPlanVersionsForHorizontalPlan(versions)
     const recencyVersions = [...displayVersions].sort((a, b) => comparePlanVersions(b, a))
     const versionOffsetIndex = new Map(recencyVersions.map((version, index) => [version.versionNo, index]))
     const getVersionTasks = (versionNo: string) => { const offsetIndex = versionOffsetIndex.get(versionNo) || 0; if (offsetIndex === 0) return effectiveTasks as any[]; const offsetDays = offsetIndex * 3; return (effectiveTasks as any[]).map(t => ({ ...t, planStartDate: t.planStartDate ? shiftDateStrForExport(t.planStartDate, -offsetDays) : '', planEndDate: t.planEndDate ? shiftDateStrForExport(t.planEndDate, -offsetDays) : '' })) }
     const calcCycleDays = (list: any[], sk: string, ek: string) => { const starts = list.map(t => t[sk]).filter(Boolean).map((d: string) => new Date(d).getTime()); const ends = list.map(t => t[ek]).filter(Boolean).map((d: string) => new Date(d).getTime()); if (starts.length === 0 || ends.length === 0) return '-'; const days = Math.ceil((Math.max(...ends) - Math.min(...starts)) / (1000 * 60 * 60 * 24)); return days > 0 ? days : '-' }
     const dataMatrix: (string | number)[][] = []
-    for (const v of displayVersions) { const vt = getVersionTasks(v.versionNo); const row: (string | number)[] = [v.versionNo, calcCycleDays(vt, 'planStartDate', 'planEndDate')]; for (const m of allMilestones) { const match = vt.find((t: any) => t.id === m.id); row.push(match?.planEndDate || '-') }; dataMatrix.push(row) }
-    const actualRow: (string | number)[] = ['实际', calcCycleDays(effectiveTasks as any[], 'actualStartDate', 'actualEndDate')]; for (const m of allMilestones) { const t = (effectiveTasks as any[]).find((x: any) => x.id === m.id); actualRow.push(t?.actualEndDate || '-') }; dataMatrix.push(actualRow)
+    for (const v of displayVersions) { const vt = projectLevel1Plan(getVersionTasks(v.versionNo), { mode: 'standard' }).rows; const row: (string | number)[] = [v.versionNo, calcCycleDays(vt, 'planStartDate', 'planEndDate')]; for (const m of allMilestones) { const match = vt.find((t: any) => t.id === m.id); row.push(match?.planEndDate || '-') }; dataMatrix.push(row) }
+    const actualRow: (string | number)[] = ['实际', calcCycleDays(projected.rows, 'actualStartDate', 'actualEndDate')]; for (const m of allMilestones) { const t = projected.rows.find((x: any) => x.id === m.id); actualRow.push(t?.actualEndDate || '-') }; dataMatrix.push(actualRow)
     const colWidths = [10, 10, ...allMilestones.map(() => 14)]
     exportMergedSheet([headerRow0, headerRow1], merges, dataMatrix, colWidths, `项目空间计划_${selectedProject?.name || '项目'}_一级计划_横版_${exportTimestamp()}.xlsx`, '一级计划横版')
   }
@@ -2517,6 +2591,11 @@ export default function ProjectSpaceContainer() {
   const renderTaskTable = (customTasks?: any[]) => {
     const isLevel2Custom = !!customTasks
     const tableTasks = customTasks || effectiveTasks
+    const isGovernedLevel1Table = !isLevel2Custom && projectPlanLevel === 'level1'
+    const level1Projection = isGovernedLevel1Table
+      ? projectLevel1Plan(tableTasks, { mode: 'standard' })
+      : null
+    const projectedTableTasks = level1Projection?.rows || tableTasks
     const isFollowReadOnlyTable = followedTosLevel1ReadOnly && (!isLevel2Custom || isFollowReadOnlyOverview)
     const writeTableTasks = isLevel2Custom ? (newTasks: any[]) => {
       const planId = customTasks?.[0]?.planId
@@ -2534,7 +2613,7 @@ export default function ProjectSpaceContainer() {
     const displayTasks = isLevel2Custom
       ? filterBySearchText(tableTasks)
       : projectPlanLevel === 'level1'
-        ? applyPlanWorkspaceFilters(tableTasks, level1PlanFilters)
+        ? applyPlanWorkspaceFilters(projectedTableTasks, level1PlanFilters)
         : filterBySearchText(tableTasks)
     const flatTasks = displayTasks.map((task: any) => ({ ...task, indentLevel: getTaskDepth(task, tableTasks) }))
     const scopeKey = getScopeKey()
@@ -2546,10 +2625,120 @@ export default function ProjectSpaceContainer() {
     // 编辑权限分级：
     //   canFullyEdit  — 编辑模式下且用户有相应级别的计划编辑权 → 拖拽/新增/删除/改任意单元格
     //   isRowEditable — 编辑模式下用户有编辑权 OR 是该行责任人 → 只能改自己负责的行的单元格
-    const editPerm = isLevel2Custom ? canEditLevel2Plan : canEditLevel1Plan
+    const editPerm = isLevel2Custom ? canEditLevel2Plan : projectPlanLevel === 'level1' ? canGovernLevel1Plan : canEditLevel1Plan
     const canFullyEdit = isEditMode && editPerm && !isFollowReadOnlyTable
     const isRowEditable = (record: any) => isEditMode && !isFollowReadOnlyTable && (editPerm || isResponsibleNameMatched(record.responsible, currentLoginUser))
     const getColumns = (): ColumnsType<any> => {
+      if (isGovernedLevel1Table && level1Projection) {
+        const isGlobalLevel1Admin = level1GlobalAdmins.includes(currentLoginUser)
+        const isGovernedDraft = isCurrentDraft && canMaintainCurrentPlan && !isFollowReadOnlyTable
+        const isLaunchStage = (record: any) => record.stableId === 'stage-launch' || record.taskName === '上市收编阶段'
+        const launchStageIds = new Set(tableTasks.filter(isLaunchStage).map((task: any) => task.id))
+        const canAddGovernedChild = (record: any) => isGovernedDraft && !record.parentId && (
+          isGlobalLevel1Admin || (isWholeMachineProject && isLaunchStage(record))
+        )
+        const canDeleteGovernedTask = (record: any) => isGovernedDraft && (
+          isGlobalLevel1Admin || (isWholeMachineProject && record.parentId && launchStageIds.has(record.parentId) && record.source === 'custom')
+        )
+        const renumberGovernedTasks = (tasks: any[]) => {
+          const roots = tasks.filter(task => !task.parentId).sort((a, b) => a.order - b.order)
+          const next: any[] = []
+          roots.forEach((root, rootIndex) => {
+            const rootId = String(rootIndex + 1)
+            next.push({ ...root, id: rootId, order: rootIndex })
+            tasks.filter(task => task.parentId === root.id).sort((a, b) => a.order - b.order).forEach((child, childIndex) => {
+              next.push({ ...child, id: `${rootId}.${childIndex + 1}`, parentId: rootId, order: childIndex })
+            })
+          })
+          return next
+        }
+        const addGovernedChild = (record: any) => {
+          if (!canAddGovernedChild(record)) return
+          let taskName = ''
+          Modal.confirm({
+            title: '新增子活动',
+            content: <Input autoFocus placeholder="请输入活动名称" onChange={event => { taskName = event.target.value }} />,
+            okText: '确认', cancelText: '取消',
+            onOk: () => {
+              if (!taskName.trim()) { message.error('请输入活动名称'); return Promise.reject() }
+              const siblings = tableTasks.filter((task: any) => task.parentId === record.id)
+              const newTask = {
+                id: `${record.id}.${siblings.length + 1}`,
+                stableId: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                parentId: record.id,
+                order: siblings.length,
+                taskName: taskName.trim(),
+                role: '',
+                source: 'custom',
+                planEndDate: '',
+                actualEndDate: '',
+              }
+              currentSetTasks(renumberGovernedTasks([...tableTasks, newTask]))
+              message.success('已新增子活动')
+            },
+          })
+        }
+        const deleteGovernedTask = (record: any) => {
+          if (!canDeleteGovernedTask(record)) return
+          currentSetTasks(renumberGovernedTasks(tableTasks.filter((task: any) => task.id !== record.id && task.parentId !== record.id)))
+          message.success('已删除活动')
+        }
+        const getReasons = (record: any, field: 'planEndDate' | 'actualEndDate') => (
+          level1Projection.validation.byTaskId[record.id]?.[field] || []
+        )
+        const renderDateValue = (value: string, record: any, field: 'planEndDate' | 'actualEndDate') => {
+          const reasons = getReasons(record, field)
+          const content = <span style={{ fontSize: 12, color: value ? '#4b5563' : '#bfbfbf' }}>{value || '-'}</span>
+          return reasons.length > 0 ? <Tooltip color="red" title={reasons.join('；')}>{content}</Tooltip> : content
+        }
+        return [
+          {
+            title: '序号', dataIndex: 'id', key: 'id', width: 90, fixed: 'left',
+            render: (id: string, record: any) => <span style={{ display: 'inline-block', paddingLeft: record.parentId ? 24 : 0, fontWeight: record.parentId ? 400 : 600 }}>{id}</span>,
+          },
+          {
+            title: '阶段/里程碑节点', dataIndex: 'taskName', key: 'taskName', width: 220, fixed: 'left',
+            render: (name: string, record: any) => (
+              <Space size={4}>
+                <span style={{ fontWeight: record.parentId ? 400 : 600, color: record.parentId ? '#4b5563' : '#111827' }}>{name}</span>
+                {canAddGovernedChild(record) && <Tooltip title="新增子活动"><Button type="text" size="small" aria-label={`新增子活动 ${name}`} icon={<PlusOutlined />} onClick={() => addGovernedChild(record)} /></Tooltip>}
+              </Space>
+            ),
+          },
+          { title: '计划开始时间', dataIndex: 'planStartDate', key: 'planStartDate', width: 130, render: (value: string) => value || '-' },
+          {
+            title: '计划完成时间', dataIndex: 'planEndDate', key: 'planEndDate', width: 130,
+            onCell: (record: any) => ({ className: getReasons(record, 'planEndDate').length > 0 ? 'pms-cell-invalid' : '' }),
+            render: (value: string, record: any) => record.parentId && canMaintainCurrentPlan && isCurrentDraft
+              ? <ClickToEditDate value={value} onChange={(nextValue) => currentSetTasks(tableTasks.map((task: any) => task.id === record.id ? { ...task, planEndDate: nextValue } : task))} />
+              : renderDateValue(value, record, 'planEndDate'),
+          },
+          { title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 100, render: (value: number | null, record: any) => record.parentId || value === null ? '-' : `${value}天` },
+          { title: '实际开始时间', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 130, render: (value: string) => value || '-' },
+          {
+            title: '实际结束时间', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 130,
+            onCell: (record: any) => ({ className: getReasons(record, 'actualEndDate').length > 0 ? 'pms-cell-invalid' : '' }),
+            render: (value: string, record: any) => record.parentId && canMaintainCurrentPlan && (isCurrentDraft || isLatestPublished)
+              ? <ClickToEditDate value={value} onChange={(nextValue) => updateActualDateForTask(tableTasks, currentSetTasks, record, 'actualEndDate', nextValue, false)} />
+              : renderDateValue(value, record, 'actualEndDate'),
+          },
+          { title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 100, render: (value: number | null, record: any) => record.parentId || value === null ? '-' : `${value}天` },
+          {
+            title: '是否延期', dataIndex: 'delayStatus', key: 'delayStatus', width: 100,
+            render: (value: string, record: any) => record.parentId
+              ? <Tag color={value === '延期' ? 'error' : value === '按时' ? 'success' : 'default'}>{value || '-'}</Tag>
+              : '-',
+          },
+          {
+            title: '操作', key: 'actions', width: 70, fixed: 'right',
+            render: (_: unknown, record: any) => canDeleteGovernedTask(record) ? (
+              <Popconfirm title="确认删除该活动？" description={record.parentId ? undefined : '删除一级活动会同时删除其子活动。'} onConfirm={() => deleteGovernedTask(record)} okText="确认" cancelText="取消">
+                <Button type="text" danger size="small" aria-label={`删除活动 ${record.taskName}`} icon={<DeleteOutlined />} />
+              </Popconfirm>
+            ) : null,
+          },
+        ]
+      }
       const cols: ColumnsType<any> = []
       if (visibleColumns.includes('id')) cols.push({ title: '序号', dataIndex: 'id', key: 'id', width: 130, fixed: 'left', render: (id: string, record: any) => {
         const depth = record.indentLevel || 0
@@ -2695,7 +2884,7 @@ export default function ProjectSpaceContainer() {
     }
 
     // 仅在 canFullyEdit 时启用 SortableRow（拖拽）；否则用普通 <tr>
-    const TableComponents = canFullyEdit ? { body: { row: SortableRow } } : undefined
+    const TableComponents = canFullyEdit && !isGovernedLevel1Table ? { body: { row: SortableRow } } : undefined
     const tableClassName = `pms-table ${isEditMode ? 'pms-table-edit' : ''}`
     return (
       <div>
@@ -2711,7 +2900,7 @@ export default function ProjectSpaceContainer() {
           </div>
         )}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTableDragEnd}><SortableContext items={visibleTasks.map((t: any) => t.id)} strategy={verticalListSortingStrategy}><Table className={tableClassName} dataSource={visibleTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} size="middle" /></SortableContext></DndContext>
-        {canFullyEdit && (
+        {canFullyEdit && !isGovernedLevel1Table && (
           <div style={{ padding: '12px 16px', borderTop: '1px solid #f3f4f6', background: '#f8fafc' }}>
             <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%', borderRadius: 6, height: 36 }} onClick={() => {
               const parentTasks = tableTasks.filter((t: any) => !t.parentId)
@@ -2722,6 +2911,27 @@ export default function ProjectSpaceContainer() {
               currentSetTasks([...tableTasks, newTask])
               message.success(`已添加一级活动: ${newId}`)
             }}>添加新活动</Button>
+          </div>
+        )}
+        {isGovernedLevel1Table && isCurrentDraft && canMaintainCurrentPlan && level1GlobalAdmins.includes(currentLoginUser) && !isFollowReadOnlyTable && (
+          <div style={{ padding: '12px 16px', borderTop: '1px solid #f3f4f6', background: '#f8fafc' }}>
+            <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%', borderRadius: 6, height: 36 }} onClick={() => {
+              let taskName = ''
+              Modal.confirm({
+                title: '新增一级活动',
+                content: <Input autoFocus placeholder="请输入活动名称" onChange={event => { taskName = event.target.value }} />,
+                okText: '确认', cancelText: '取消',
+                onOk: () => {
+                  if (!taskName.trim()) { message.error('请输入活动名称'); return Promise.reject() }
+                  const roots = tableTasks.filter((task: any) => !task.parentId)
+                  currentSetTasks([...tableTasks, {
+                    id: String(roots.length + 1), stableId: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                    order: roots.length, taskName: taskName.trim(), role: '', source: 'custom', planEndDate: '', actualEndDate: '',
+                  }])
+                  message.success('已新增一级活动')
+                },
+              })
+            }}>添加一级活动</Button>
           </div>
         )}
       </div>
@@ -2760,8 +2970,12 @@ export default function ProjectSpaceContainer() {
             baseCurrentVersion,
           )
         : currentVersion
-    const stageGroups = buildPlanHorizontalStageGroups(effectiveTasks)
-    const allMilestones = buildPlanHorizontalMilestones(stageGroups)
+    const level1HorizontalProjection = projectLevel1Plan(effectiveTasks, { mode: 'standard' })
+    const stageGroups = level1HorizontalProjection.stageGroups.map(group => ({
+      ...group,
+      colSpan: Math.max(group.milestones.length, 1),
+    }))
+    const allMilestones = stageGroups.flatMap(group => group.milestones)
     const calcDevCycle = (taskList: any[]) => {
       const starts = taskList.map((t: any) => t.planStartDate).filter(Boolean).map((d: string) => new Date(d).getTime())
       const ends = taskList.map((t: any) => t.planEndDate).filter(Boolean).map((d: string) => new Date(d).getTime())
@@ -2806,7 +3020,15 @@ export default function ProjectSpaceContainer() {
               <th style={{ ...versionThStyle, borderBottom: 'none' }} rowSpan={2}>版本</th>
               <th style={{ ...cycleThStyle, borderBottom: 'none' }} rowSpan={2}>开发周期</th>
               {stageGroups.map(({ stage, colSpan }, i) => (
-                <th key={stage.id} colSpan={colSpan} style={{ ...thStyle, background: `${stageColors[i % stageColors.length]}10`, color: stageColors[i % stageColors.length], borderBottom: `2px solid ${stageColors[i % stageColors.length]}` }}>{stage.taskName}</th>
+                <th key={stage.id} colSpan={colSpan} style={{ ...thStyle, background: `${stageColors[i % stageColors.length]}10`, color: stageColors[i % stageColors.length], borderBottom: `2px solid ${stageColors[i % stageColors.length]}` }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, textAlign: 'left' }}>
+                    <div>
+                      <div>{stage.taskName}</div>
+                      <div style={{ marginTop: 3, color: '#64748b', fontSize: 11, fontWeight: 400 }}>{stage.planStartDate && stage.planEndDate ? `${stage.planStartDate} ~ ${stage.planEndDate}` : '-'}</div>
+                    </div>
+                    <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>{stage.manpowerPercent === null ? '-' : `${stage.manpowerPercent}%`}</Tag>
+                  </div>
+                </th>
               ))}
             </tr>
             <tr>
@@ -2820,9 +3042,10 @@ export default function ProjectSpaceContainer() {
           <tbody>
             {displayVersions.map((version) => {
               const vTasks = getVersionTasks(version.id)
+              const vProjection = projectLevel1Plan(vTasks as any[], { mode: 'standard' })
               const vMilestones = stageGroups.flatMap(({ stage, milestones: ms }) => {
-                if (ms.length > 0) return ms.map((m: any) => { const vt = (vTasks as any[]).find((t: any) => t.id === m.id); return vt || m })
-                const vt = (vTasks as any[]).find((t: any) => t.id === stage.id); return [vt || stage]
+                if (ms.length > 0) return ms.map((m: any) => vProjection.rows.find((t: any) => t.id === m.id) || m)
+                const vt = vProjection.rows.find((t: any) => t.id === stage.id); return [vt || stage]
               })
               const devCycle = calcDevCycle(vTasks as any[])
               const isLatest = version.id === latestDisplayVersionId
@@ -2830,7 +3053,13 @@ export default function ProjectSpaceContainer() {
                 <tr key={version.id} style={isLatest ? { background: '#fafffe' } : undefined}>
                   <td style={{ ...versionTdStyle, color: isLatest ? 'var(--pms-brand)' : '#111827', background: isLatest ? 'var(--pms-brand-surface)' : '#fff' }}>{version.versionNo}</td>
                   <td style={{ ...cycleTdStyle, background: isLatest ? '#f0f9ff' : '#fff' }}><Tooltip title="最早计划开始到最晚计划完成的天数"><span>{devCycle}</span></Tooltip></td>
-                  {vMilestones.map((m: any, mi: number) => (<td key={mi} style={tdStyle}>{m.planEndDate || '-'}</td>))}
+                  {vMilestones.map((m: any, mi: number) => (
+                    <td key={mi} style={tdStyle}>
+                      {version.id === horizontalCurrentVersion && isCurrentDraft && canMaintainCurrentPlan
+                        ? <ClickToEditDate value={m.planEndDate || ''} onChange={(nextValue) => setEffectiveTasks(effectiveTasks.map((task: any) => task.id === m.id ? { ...task, planEndDate: nextValue } : task))} />
+                        : m.planEndDate || '-'}
+                    </td>
+                  ))}
                 </tr>
               )
             })}
@@ -2843,7 +3072,13 @@ export default function ProjectSpaceContainer() {
                 const days = Math.ceil((Math.max(...ends) - Math.min(...starts)) / (1000 * 60 * 60 * 24))
                 return days > 0 ? days : '-'
               })()}</span></Tooltip></td>
-              {allMilestones.map((m: any, mi: number) => (<td key={mi} style={{ ...tdStyle, color: '#d48806' }}>{m.actualEndDate || '-'}</td>))}
+              {allMilestones.map((m: any, mi: number) => (
+                <td key={mi} style={{ ...tdStyle, color: '#d48806' }}>
+                  {canMaintainCurrentPlan && (isCurrentDraft || isLatestPublished)
+                    ? <ClickToEditDate value={m.actualEndDate || ''} onChange={(nextValue) => updateActualDateForTask(effectiveTasks, (tasks) => setEffectiveTasks(tasks), m, 'actualEndDate', nextValue, false)} />
+                    : m.actualEndDate || '-'}
+                </td>
+              ))}
             </tr>
           </tbody>
         </table>
@@ -3982,7 +4217,7 @@ export default function ProjectSpaceContainer() {
             )}
             viewMode={(projectPlanViewMode === 'table' ? 'vertical' : projectPlanViewMode) as PlanWorkspaceViewMode}
             onViewModeChange={(viewMode) => setProjectPlanViewMode(viewMode === 'vertical' ? 'table' : viewMode)}
-            horizontalDisabled={projectPlanLevel !== 'level1' || isEditMode}
+            horizontalDisabled={projectPlanLevel !== 'level1'}
           >
             {projectPlanLevel === 'level1' && (projectPlanViewMode === 'gantt' ? renderGanttChart() : projectPlanViewMode === 'horizontal' ? renderHorizontalTable() : renderTaskTable())}
           </PlanWorkspaceShell>
@@ -4035,7 +4270,7 @@ export default function ProjectSpaceContainer() {
     let newTasks = isTosTypeScoped
       ? getTosVersionTasks(versionB.id)
       : versionB.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
-    if (!isTosTypeScoped && comparePlanVersions(versionA, versionB) !== 0) {
+    if (projectPlanLevel !== 'level1' && !isTosTypeScoped && comparePlanVersions(versionA, versionB) !== 0) {
       newTasks = [
         ...effectiveTasks.map(task => {
           if (task.id === '2.1') return { ...task, taskName: 'STR2(更新)', status: '已完成', progress: 100 }
@@ -4045,7 +4280,9 @@ export default function ProjectSpaceContainer() {
         { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
       ]
     }
-    setCompareResult(compareVersionsForTable(oldTasks as any, newTasks as any))
+    const governedOldTasks = projectPlanLevel === 'level1' ? projectLevel1Plan(oldTasks as any, { mode: 'standard' }).rows : oldTasks
+    const governedNewTasks = projectPlanLevel === 'level1' ? projectLevel1Plan(newTasks as any, { mode: 'standard' }).rows : newTasks
+    setCompareResult(compareVersionsForTable(governedOldTasks as any, governedNewTasks as any))
     message.success('对比完成')
   }
 
@@ -4081,7 +4318,14 @@ export default function ProjectSpaceContainer() {
               title: item.label,
               label: <span style={{ fontWeight: projectSpaceModule === item.key ? 500 : 400 }}>{item.label}</span>,
             }))}
-            onClick={({ key }) => navigateWithEditGuard(() => { setProjectSpaceModule(key); transfer.setTransferView(null); })}
+            onClick={({ key }) => navigateWithEditGuard(() => {
+              setProjectSpaceModule(key)
+              if (key === 'plan') {
+                setProjectPlanLevel('level1')
+                setProjectPlanViewMode('horizontal')
+              }
+              transfer.setTransferView(null)
+            })}
           />
         </CollapsibleSidebarShell>
 
@@ -4109,8 +4353,9 @@ export default function ProjectSpaceContainer() {
               ? <TechnicalPlanModule
                   projectId={selectedProject.id}
                   currentLoginUser={currentLoginUser}
-                  canEdit={canEditLevel1Plan}
-                  canPublish={canEditLevel1Plan}
+                  canEdit={canGovernLevel1Plan}
+                  canPublish={canGovernLevel1Plan}
+                  canManageStructure={level1GlobalAdmins.includes(currentLoginUser)}
                   canImport={canImportTechnicalPlan}
                   canExport={canExportTechnicalPlan}
                   canViewTechnicalPlan={canViewLevel1Plan}
@@ -4169,6 +4414,7 @@ export default function ProjectSpaceContainer() {
       </Modal>
       {/* Version compare modal */}
       <PlanVersionCompareModal
+        fieldMode={projectPlanLevel === 'level1' ? 'governed' : 'legacy'}
         open={showVersionCompare}
         rows={compareResult}
         versions={versions}

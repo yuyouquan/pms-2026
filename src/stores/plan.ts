@@ -178,6 +178,12 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
     marketPlanData: migratedMarketPlanData,
     publishedSnapshots: migratedSnapshots,
     configTemplateTasksByType: migratedConfigTemplates,
+    columnSettingsByView: {
+      ...(migrated.columnSettingsByView || {}),
+      'project-level1-table': getDefaultColumnSettings(TABLE_COLUMNS),
+      'config-level1-table': getDefaultColumnSettings(CONFIG_TABLE_COLUMNS),
+      'config-level2-table': getDefaultColumnSettings(CONFIG_TABLE_COLUMNS),
+    },
     configTemplateVersionScopes,
     configTemplateCompareScopes: {
       ...createInitialConfigTemplateCompareScopes(),
@@ -193,23 +199,22 @@ type PlanColumnDefinition = Omit<SortableColumnDefinition<string>, 'title'> & {
 
 export const ALL_COLUMNS: PlanColumnDefinition[] = [
   { key: 'id', title: '序号', default: true, defaultVisible: true, hideable: false, fixed: 'left' },
-  { key: 'taskName', title: '任务名称', default: true, defaultVisible: true, hideable: false },
-  { key: 'responsible', title: '责任人', default: true, defaultVisible: true },
-  { key: 'predecessor', title: '前置任务', default: true, defaultVisible: true },
-  { key: 'planStartDate', title: '计划开始', default: true, defaultVisible: true },
-  { key: 'planEndDate', title: '计划完成', default: true, defaultVisible: true },
+  { key: 'taskName', title: '阶段/里程碑节点', default: true, defaultVisible: true, hideable: false },
+  { key: 'planStartDate', title: '计划开始时间', default: true, defaultVisible: true },
+  { key: 'planEndDate', title: '计划完成时间', default: true, defaultVisible: true },
   { key: 'estimatedDays', title: '预估工期', default: true, defaultVisible: true },
-  { key: 'actualStartDate', title: '实际开始', default: true, defaultVisible: true },
-  { key: 'actualEndDate', title: '实际完成', default: true, defaultVisible: true },
+  { key: 'actualStartDate', title: '实际开始时间', default: true, defaultVisible: true },
+  { key: 'actualEndDate', title: '实际结束时间', default: true, defaultVisible: true },
   { key: 'actualDays', title: '实际工期', default: true, defaultVisible: true },
-  { key: 'status', title: '状态', default: true, defaultVisible: true },
-  { key: 'progress', title: '进度', default: true, defaultVisible: true },
+  { key: 'delayStatus', title: '是否延期', default: true, defaultVisible: true },
 ]
 
 export const TABLE_COLUMNS = ALL_COLUMNS
-export const CONFIG_TABLE_COLUMNS = TABLE_COLUMNS.filter(column => (
-  ['id', 'taskName', 'responsible'].includes(column.key)
-))
+export const CONFIG_TABLE_COLUMNS: PlanColumnDefinition[] = [
+  { key: 'id', title: '序号', default: true, defaultVisible: true, hideable: false, fixed: 'left' },
+  { key: 'taskName', title: '任务名称', default: true, defaultVisible: true, hideable: false },
+  { key: 'responsible', title: '角色', default: true, defaultVisible: true },
+]
 
 export const GANTT_COLUMNS: PlanColumnDefinition[] = [
   { key: 'taskName', title: '任务名称', default: true, defaultVisible: true, hideable: false },

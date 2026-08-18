@@ -12,7 +12,6 @@ export interface Level1PlanTask {
   source?: Level1TaskSource
   planEndDate?: string
   actualEndDate?: string
-  [key: string]: unknown
 }
 
 export interface Level1PlanViewRow extends Level1PlanTask {
@@ -145,7 +144,7 @@ const cloneTask = (task: Level1PlanTask): Level1PlanTask => ({
   actualEndDate: typeof task.actualEndDate === 'string' ? task.actualEndDate : '',
 })
 
-export const getOrderedLevel1Tasks = (tasks: Level1PlanTask[]): Level1PlanTask[] => {
+export const getOrderedLevel1Tasks = (tasks: readonly Level1PlanTask[]): Level1PlanTask[] => {
   const cloned = tasks.map(cloneTask)
   const roots = sortByOrder(cloned.filter(task => !task.parentId))
   const flattened = roots.flatMap(root => [
@@ -156,7 +155,7 @@ export const getOrderedLevel1Tasks = (tasks: Level1PlanTask[]): Level1PlanTask[]
   return [...flattened, ...sortByOrder(cloned.filter(task => !included.has(task.id)))]
 }
 
-const getMilestoneSequence = (tasks: Level1PlanTask[]): Level1PlanTask[] => {
+const getMilestoneSequence = (tasks: readonly Level1PlanTask[]): Level1PlanTask[] => {
   const ordered = getOrderedLevel1Tasks(tasks)
   const hasChildren = ordered.some(task => Boolean(task.parentId))
   return hasChildren ? ordered.filter(task => Boolean(task.parentId)) : ordered
@@ -174,7 +173,7 @@ export const getLevel1DelayStatus = (
   return comparisonTime > planTime ? '延期' : '按时'
 }
 
-export const validateLevel1MilestoneDates = (tasks: Level1PlanTask[]): Level1DateValidationResult => {
+export const validateLevel1MilestoneDates = (tasks: readonly Level1PlanTask[]): Level1DateValidationResult => {
   const sequence = getMilestoneSequence(tasks)
   const violations: Level1DateViolation[] = []
   const byTaskId: Level1DateValidationResult['byTaskId'] = {}
@@ -210,7 +209,7 @@ export const validateLevel1MilestoneDates = (tasks: Level1PlanTask[]): Level1Dat
 }
 
 export const projectLevel1Plan = (
-  tasks: Level1PlanTask[],
+  tasks: readonly Level1PlanTask[],
   options: { mode?: Level1ProjectionMode; today?: string } = {},
 ): { rows: Level1PlanViewRow[]; stageGroups: Array<{ stage: Level1PlanViewRow; milestones: Level1PlanViewRow[] }>; validation: Level1DateValidationResult } => {
   const mode = options.mode || 'standard'
@@ -320,4 +319,59 @@ export const canMaintainLevel1Plan = (input: {
   if (input.globalAdmins.includes(input.currentUser)) return true
   if (input.projectType === '技术项目') return input.technicalLead === input.currentUser
   return input.spmUsers.includes(input.currentUser)
+}
+
+const getStableId = (task: Level1PlanTask) => task.stableId || task.id
+
+const assertUniqueStableIds = (tasks: Level1PlanTask[], label: string) => {
+  const seen = new Set<string>()
+  tasks.forEach(task => {
+    const stableId = getStableId(task)
+    if (!stableId || seen.has(stableId)) throw new Error(`${label}存在未知或重复稳定任务ID: ${stableId || '-'}`)
+    seen.add(stableId)
+  })
+}
+
+export const buildFirstLevel1RevisionTasks = (
+  previousPublishedTasks: Level1PlanTask[],
+  latestTemplateTasks: Level1PlanTask[],
+): Level1PlanTask[] => {
+  assertUniqueStableIds(previousPublishedTasks, '上一正式版本')
+  assertUniqueStableIds(latestTemplateTasks, '最新模板')
+  const previousByStableId = new Map(previousPublishedTasks.map(task => [getStableId(task), task]))
+  const syncedTemplate = latestTemplateTasks.map(templateTaskValue => {
+    const stableId = getStableId(templateTaskValue)
+    const previous = previousByStableId.get(stableId)
+    return {
+      ...cloneTask(templateTaskValue),
+      stableId,
+      source: 'template' as const,
+      planEndDate: previous?.planEndDate || '',
+      actualEndDate: previous?.actualEndDate || '',
+    }
+  })
+  const customTasks = previousPublishedTasks
+    .filter(task => task.source === 'custom')
+    .map(task => ({ ...cloneTask(task), source: 'custom' as const }))
+  return [...syncedTemplate, ...customTasks]
+}
+
+export const buildNextLevel1RevisionTasks = (previousPublishedTasks: Level1PlanTask[]): Level1PlanTask[] => {
+  assertUniqueStableIds(previousPublishedTasks, '上一正式版本')
+  return previousPublishedTasks.map(cloneTask)
+}
+
+export const synchronizeLevel1ActualEndDate = (
+  sourceTasks: Level1PlanTask[],
+  pairedTasks: Level1PlanTask[],
+  taskId: string,
+  actualEndDate: string,
+): { sourceTasks: Level1PlanTask[]; pairedTasks: Level1PlanTask[] } => {
+  const sourceTask = sourceTasks.find(task => task.id === taskId)
+  if (!sourceTask) return { sourceTasks: sourceTasks.map(cloneTask), pairedTasks: pairedTasks.map(cloneTask) }
+  const stableId = getStableId(sourceTask)
+  const update = (tasks: Level1PlanTask[]) => tasks.map(task => (
+    getStableId(task) === stableId ? { ...cloneTask(task), actualEndDate } : cloneTask(task)
+  ))
+  return { sourceTasks: update(sourceTasks), pairedTasks: update(pairedTasks) }
 }

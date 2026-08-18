@@ -121,4 +121,56 @@ assert.equal(rules.canMaintainLevel1Plan({ projectType: '技术项目', currentU
 assert.equal(rules.canMaintainLevel1Plan({ projectType: '技术项目', currentUser: '张三', spmUsers: [], technicalLead: '张三', globalAdmins: [] }), true)
 assert.equal(rules.canMaintainLevel1Plan({ projectType: '能力建设项目', currentUser: '管理员', spmUsers: [], technicalLead: '', globalAdmins: ['管理员'] }), true)
 
+const prior = [
+  { ...makeTask('old-root', null, 0, '旧阶段'), stableId: 'stage-concept' },
+  { ...makeTask('old-a', 'old-root', 0, '旧名称', '2026-02-20', '2026-02-21'), stableId: 'milestone-concept-start' },
+  { ...makeTask('custom-a', 'old-root', 1, '项目自定义', '2026-02-25', ''), stableId: 'custom-a', source: 'custom' },
+]
+const latestTemplate = rules.buildStandardLevel1Tasks(false).slice(0, 3)
+const firstRevision = rules.buildFirstLevel1RevisionTasks(prior, latestTemplate)
+assert.equal(firstRevision.find(task => task.stableId === 'milestone-concept-start').taskName, '概念启动')
+assert.equal(firstRevision.find(task => task.stableId === 'milestone-concept-start').planEndDate, '2026-02-20')
+assert.equal(firstRevision.find(task => task.stableId === 'milestone-concept-start').actualEndDate, '2026-02-21')
+assert.equal(firstRevision.find(task => task.stableId === 'custom-a').source, 'custom')
+assert.equal(firstRevision.some(task => task.stableId === 'milestone-str1'), true)
+
+const nextRevision = rules.buildNextLevel1RevisionTasks(firstRevision)
+nextRevision[0].taskName = '仅修改副本'
+assert.notEqual(firstRevision[0].taskName, nextRevision[0].taskName)
+
+const synced = rules.synchronizeLevel1ActualEndDate(firstRevision, nextRevision, firstRevision[1].id, '2026-03-01')
+assert.equal(synced.sourceTasks.find(task => task.stableId === 'milestone-concept-start').actualEndDate, '2026-03-01')
+assert.equal(synced.pairedTasks.find(task => task.stableId === 'milestone-concept-start').actualEndDate, '2026-03-01')
+assert.equal(synced.pairedTasks.find(task => task.stableId === 'custom-a').actualEndDate, '')
+assert.throws(
+  () => rules.buildFirstLevel1RevisionTasks(prior, [...latestTemplate, { ...latestTemplate[0] }]),
+  /重复稳定任务ID/,
+)
+
+const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8')
+const planStoreSource = read('src/stores/plan.ts')
+const technicalStoreSource = read('src/stores/technicalPlan.ts')
+const configSource = read('src/containers/ConfigContainer.tsx')
+const projectSpaceSource = read('src/containers/ProjectSpaceContainer.tsx')
+const technicalModuleSource = read('src/components/technical-project/TechnicalPlanModule.tsx')
+const compareModalSource = read('src/components/plans/PlanVersionCompareModal.tsx')
+
+assert.match(planStoreSource, /projectPlanViewMode:\s*'horizontal'/, 'project plans default to horizontal view')
+assert.match(planStoreSource, /CONFIG_TABLE_COLUMNS[\s\S]*序号[\s\S]*任务名称[\s\S]*角色/, 'template configuration keeps sequence, task name, and role')
+assert.match(configSource, /isTechnicalTemplate[\s\S]*TDT项目计划[\s\S]*子项目计划/, 'technical configuration retains TDT and subproject templates')
+assert.match(configSource, /items=\{isTechnicalTemplate[\s\S]*key: 'level1'[\s\S]*一级计划[\s\S]*\]\}/, 'standard project configuration only exposes the level1 tab')
+for (const label of ['阶段/里程碑节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际结束时间', '实际工期', '是否延期']) {
+  assert.match(projectSpaceSource, new RegExp(label), `project level1 table contains ${label}`)
+  assert.match(technicalModuleSource, new RegExp(label), `technical governed table contains ${label}`)
+}
+assert.match(projectSpaceSource, /上市收编阶段/, 'launch stage is identified for special whole-machine structure permissions')
+assert.match(projectSpaceSource, /canAddGovernedChild[\s\S]{0,260}isWholeMachineProject[\s\S]{0,120}isLaunchStage/, 'whole-machine SPM structure changes are restricted to the launch stage')
+assert.match(projectSpaceSource, /record\.source === 'custom'/, 'SPM can only delete project-created launch children')
+assert.match(projectSpaceSource, /level1GlobalAdmins\.includes\(currentLoginUser\)[\s\S]*添加一级活动/, 'global administrators can add top-level activities')
+assert.match(technicalStoreSource, /publishedVersions\.length <= 1[\s\S]*buildFirstLevel1RevisionTasks[\s\S]*buildNextLevel1RevisionTasks/, 'technical first and later revisions follow different synchronization rules')
+assert.match(technicalStoreSource, /changedActualEnds[\s\S]*pairedVersionId/, 'technical draft and published actual completion dates stay synchronized')
+assert.match(compareModalSource, /fieldMode === 'governed'[\s\S]*governedKeys/, 'version comparison supports the governed field set')
+assert.match(projectSpaceSource, /fieldMode=\{projectPlanLevel === 'level1' \? 'governed' : 'legacy'\}/, 'project level1 comparison selects governed fields')
+assert.match(technicalModuleSource, /fieldMode="governed"/, 'technical comparison selects governed fields')
+
 console.log('level1 plan governance rule verification passed')

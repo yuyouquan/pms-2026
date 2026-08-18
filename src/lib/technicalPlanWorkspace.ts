@@ -1,19 +1,15 @@
 import type { TechnicalTemplateTask } from '@/types/technicalPlan'
 
 export const TECHNICAL_PLAN_EXPORT_COLUMNS = [
-  { key: 'id', title: 'ID' },
-  { key: 'parentId', title: '父任务ID' },
-  { key: 'taskName', title: '任务名称' },
-  { key: 'responsible', title: '责任人' },
-  { key: 'predecessor', title: '前置任务' },
-  { key: 'planStartDate', title: '计划开始' },
-  { key: 'planEndDate', title: '计划完成' },
+  { key: 'id', title: '序号' },
+  { key: 'taskName', title: '阶段/里程碑节点' },
+  { key: 'planStartDate', title: '计划开始时间' },
+  { key: 'planEndDate', title: '计划完成时间' },
   { key: 'estimatedDays', title: '预估工期' },
-  { key: 'actualStartDate', title: '实际开始' },
-  { key: 'actualEndDate', title: '实际完成' },
+  { key: 'actualStartDate', title: '实际开始时间' },
+  { key: 'actualEndDate', title: '实际结束时间' },
   { key: 'actualDays', title: '实际工期' },
-  { key: 'status', title: '状态' },
-  { key: 'progress', title: '进度' },
+  { key: 'delayStatus', title: '是否延期' },
 ] as const
 
 export function selectVisibleTechnicalPlanVersions<T extends { status: string }>(

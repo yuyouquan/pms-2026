@@ -18,6 +18,9 @@ export interface ConfigTemplateCompareScope {
 
 export interface TechnicalTemplateTask {
   id: string
+  stableId?: string
+  source?: 'template' | 'custom'
+  role?: string
   order: number
   taskName: string
   parentId?: string

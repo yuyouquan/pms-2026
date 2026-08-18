@@ -21,6 +21,7 @@ export interface PlanVersionCompareModalProps {
   onTargetVersionChange: (versionId: string) => void
   onCompare: () => void
   onCancel: () => void
+  fieldMode?: 'legacy' | 'governed'
 }
 
 type CompareFilterType = 'all' | CompareTableRow['changeType']
@@ -35,6 +36,7 @@ export function PlanVersionCompareModal({
   onTargetVersionChange,
   onCompare,
   onCancel,
+  fieldMode = 'legacy',
 }: PlanVersionCompareModalProps) {
   const [filterType, setFilterType] = useState<CompareFilterType>('all')
   const [showUnchanged, setShowUnchanged] = useState(false)
@@ -83,7 +85,7 @@ export function PlanVersionCompareModal({
     if (row.changeType === '删除') return <span style={{ color: '#ff4d4f', textDecoration: 'line-through', opacity: 0.7 }}>{String(value || '-')}</span>
     return <span style={{ color: '#4b5563' }}>{String(value || '-')}</span>
   }
-  const columns = [
+  const legacyColumns = [
     { title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, render: (value: string, row: CompareTableRow) => <span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? 'var(--pms-brand)' : '#9ca3af' }}>{value}</span> },
     { title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, render: (value: CompareTableRow['changeType']) => { const config = { 新增: { color: '#52c41a', bg: '#f6ffed' }, 删除: { color: '#ff4d4f', bg: '#fff2f0' }, 修改: { color: 'var(--pms-brand)', bg: 'var(--pms-brand-surface)' }, 未变更: { color: '#9ca3af', bg: '#fafafa' } }[value]; return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: config.color, background: config.bg, border: value === '修改' ? '1px solid var(--pms-brand-border)' : `1px solid ${config.color}20` }}>{value}</span> } },
     { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, ellipsis: true, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', value) },
@@ -95,9 +97,14 @@ export function PlanVersionCompareModal({
     { title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 105, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'actualStartDate', value) },
     { title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 105, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'actualEndDate', value) },
     { title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 80, render: (value: number, row: CompareTableRow) => renderDiffCell(row, 'actualDays', value ? `${value}天` : '-') },
+    { title: '是否延期', dataIndex: 'delayStatus', key: 'delayStatus', width: 80, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'delayStatus', value) },
     { title: '状态', dataIndex: 'status', key: 'status', width: 80, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'status', value) },
     { title: '进度', dataIndex: 'progress', key: 'progress', width: 70, render: (value: number, row: CompareTableRow) => renderDiffCell(row, 'progress', `${value}%`) },
   ]
+  const governedKeys = new Set(['taskId', 'changeType', 'taskName', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'delayStatus'])
+  const columns = fieldMode === 'governed'
+    ? legacyColumns.filter(column => governedKeys.has(column.key))
+    : legacyColumns
 
   return (
     <Modal
