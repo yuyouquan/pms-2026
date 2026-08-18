@@ -410,6 +410,14 @@ export function canInlineEditLevel3ActualDate(
   return getLevel3ActivityPermissions(activity, activities, context).canEdit
 }
 
+export function canInlineEditLevel3ChildField(
+  activity: Level3Activity | undefined,
+  activities: Level3Activity[],
+  context: Level3PermissionContext,
+): boolean {
+  return Boolean(activity?.parentId && getLevel3ActivityPermissions(activity, activities, context).canEdit)
+}
+
 export function shouldShowLevel3CreateButton(readOnly: boolean): boolean {
   return !readOnly
 }
