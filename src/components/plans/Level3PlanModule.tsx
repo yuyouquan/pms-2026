@@ -88,9 +88,11 @@ import {
   filterLevel3ActivitiesWithParents,
   getLevel3ActivityPermissions,
   getLevel3NumberIndent,
+  getLevel3RemarkDisplay,
   mergeLevel3ActualDateOverrides,
   mergeLevel3WorkflowOverrides,
   mergeLevel3Histories,
+  normalizeLevel3Remark,
   shouldShowLevel3CreateButton,
   validateLevel3ChildDates,
 } from '@/lib/level3PlanRules'
@@ -388,7 +390,7 @@ export default function Level3PlanModule({
     const values: Level3ActivityFormValue = {
       ...rawValues,
       activityName: rawValues.activityName?.trim(),
-      remark: rawValues.remark?.trim(),
+      remark: normalizeLevel3Remark(rawValues.remark),
       responsibleDepartment: resolveDepartment(rawValues.responsible || ''),
       planStartDate: toDateString(rawValues.planStartDate),
       planEndDate: toDateString(rawValues.planEndDate),
@@ -698,12 +700,12 @@ export default function Level3PlanModule({
       return {
         ...base,
         render: (value: string) => {
-          const remark = typeof value === 'string' ? value.trim() : ''
-          return remark ? (
+          const { value: remark, empty } = getLevel3RemarkDisplay(value)
+          return empty ? '-' : (
             <Tooltip title={remark}>
               <span className="pms-level3-remark-cell" tabIndex={0} aria-label={remark} title={remark}>{remark}</span>
             </Tooltip>
-          ) : '-'
+          )
         },
       }
     }

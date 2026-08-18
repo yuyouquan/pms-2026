@@ -60,6 +60,15 @@ const dateDifference = (start: string, end: string): number | null => {
 const dateMin = (values: string[]) => values.filter(Boolean).sort()[0] || ''
 const dateMax = (values: string[]) => values.filter(Boolean).sort().at(-1) || ''
 
+export function normalizeLevel3Remark(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+export function getLevel3RemarkDisplay(value: unknown): { value: string; empty: boolean } {
+  const normalized = normalizeLevel3Remark(value)
+  return { value: normalized, empty: normalized.length === 0 }
+}
+
 const LEVEL3_RISK_PRIORITY: Record<Level3ActivityRisk, number> = {
   无: 0,
   低: 1,
