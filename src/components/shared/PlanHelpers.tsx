@@ -257,25 +257,27 @@ export function renderEntryContent(record: { entryContent?: string; deliverables
 }
 
 // ─── ClickToEditDate ────────────────────────────────────────────────
-export function ClickToEditDate({ value, onChange, disabledDate, onSaved }: { value: string; onChange: (val: string) => void; disabledDate?: (current: dayjs.Dayjs) => boolean; onSaved?: () => void }) {
+export function ClickToEditDate({ value, onChange, disabledDate, onSaved, align = 'left' }: { value: string; onChange: (val: string) => void; disabledDate?: (current: dayjs.Dayjs) => boolean; onSaved?: () => void; align?: 'left' | 'center' }) {
   const [editing, setEditing] = useState(false)
   if (editing) {
     return (
-      <DatePicker
-        size="small"
-        autoFocus
-        open
-        value={value ? dayjs(value) : null}
-        style={{ width: 120 }}
-        disabledDate={disabledDate}
-        onChange={(date) => {
-          onChange(date ? date.format('YYYY-MM-DD') : '')
-          setEditing(false)
-          if (onSaved) onSaved()
-          else message.success('已保存')
-        }}
-        onOpenChange={(open) => { if (!open) setEditing(false) }}
-      />
+      <div style={{ display: 'flex', justifyContent: align === 'center' ? 'center' : 'flex-start', width: '100%' }}>
+        <DatePicker
+          size="small"
+          autoFocus
+          open
+          value={value ? dayjs(value) : null}
+          style={{ width: 120 }}
+          disabledDate={disabledDate}
+          onChange={(date) => {
+            onChange(date ? date.format('YYYY-MM-DD') : '')
+            setEditing(false)
+            if (onSaved) onSaved()
+            else message.success('已保存')
+          }}
+          onOpenChange={(open) => { if (!open) setEditing(false) }}
+        />
+      </div>
     )
   }
   return (
@@ -286,6 +288,7 @@ export function ClickToEditDate({ value, onChange, disabledDate, onSaved }: { va
         cursor: 'pointer', padding: '4px 8px', borderRadius: 4,
         border: '1px dashed transparent', transition: 'all 0.2s',
         minHeight: 28, display: 'flex', alignItems: 'center',
+        justifyContent: align === 'center' ? 'center' : 'flex-start', width: '100%',
       }}
       onMouseEnter={e => { e.currentTarget.style.borderColor = '#91caff'; e.currentTarget.style.background = '#f0f7ff' }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = 'transparent' }}
