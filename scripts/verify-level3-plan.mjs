@@ -96,6 +96,48 @@ assert.equal(merged[1].actualStartDate, childB.actualStartDate)
 assert.deepEqual(mergeInput, mergeInputSnapshot)
 assert.deepEqual(overrides, overridesSnapshot)
 
+const displayedWorkflowActivity = { ...childA, status: '进行中', risk: '中' }
+const displayedWorkflowActivitySnapshot = structuredClone(displayedWorkflowActivity)
+const workflowOverride = rules.createLevel3WorkflowOverride(
+  displayedWorkflowActivity,
+  undefined,
+  { status: '已完成', risk: undefined },
+  '李四',
+  '2026-08-17 12:04:00',
+)
+assert.deepEqual(workflowOverride, {
+  activityId: 'c1', status: '已完成', detachedBy: '李四', detachedAt: '2026-08-17 12:04:00',
+})
+assert.deepEqual(displayedWorkflowActivity, displayedWorkflowActivitySnapshot)
+const workflowOverrideSnapshot = structuredClone(workflowOverride)
+const secondWorkflowOverride = rules.createLevel3WorkflowOverride(
+  { ...childA, status: '待启动', risk: '高' },
+  workflowOverride,
+  { risk: '低' },
+  '王五',
+  '2026-08-17 12:05:00',
+)
+assert.deepEqual(secondWorkflowOverride, {
+  activityId: 'c1', status: '已完成', risk: '低', detachedBy: '王五', detachedAt: '2026-08-17 12:05:00',
+})
+assert.deepEqual(workflowOverride, workflowOverrideSnapshot)
+assert.deepEqual(
+  rules.mergeLevel3WorkflowOverrides([{ ...childA, status: '待启动', risk: '高' }], { c1: workflowOverride }),
+  [{ ...childA, status: '已完成', risk: '高' }],
+  'a status-only override must continue following later source risk changes',
+)
+const workflowMergeInput = [{ ...childA, status: '待启动', risk: '高' }, childB]
+const workflowMergeInputSnapshot = structuredClone(workflowMergeInput)
+const workflowOverrides = { c1: secondWorkflowOverride }
+const workflowOverridesSnapshot = structuredClone(workflowOverrides)
+const workflowMerged = rules.mergeLevel3WorkflowOverrides(workflowMergeInput, workflowOverrides)
+assert.deepEqual(workflowMerged[0], { ...childA, status: '已完成', risk: '低' })
+assert.deepEqual(workflowMerged[1], childB)
+assert.notEqual(workflowMerged[0], workflowMergeInput[0])
+assert.notEqual(workflowMerged[1], childB)
+assert.deepEqual(workflowMergeInput, workflowMergeInputSnapshot)
+assert.deepEqual(workflowOverrides, workflowOverridesSnapshot)
+
 const overrideSnapshot = structuredClone(override)
 const secondDisplayedActivity = { ...sourceChildA, actualEndDate: '2026-08-20' }
 const secondDisplayedActivitySnapshot = structuredClone(secondDisplayedActivity)
@@ -277,12 +319,16 @@ const forkedScope = rules.forkLevel3ScopeData({
     activityId: 'c1', actualStartDate: '2026-08-04', actualEndDate: '2026-08-06',
     detachedBy: '李四', detachedAt: '2026-08-17 12:10:00',
   },
+}, {
+  c1: secondWorkflowOverride,
 })
 assert.deepEqual(forkedScope.activities.map(item => item.id), ['p1', 'c1'])
 assert.deepEqual(forkedScope.activities.find(item => item.id === 'c1'), {
   ...childA,
   actualStartDate: '2026-08-04',
   actualEndDate: '2026-08-06',
+  status: '已完成',
+  risk: '低',
 })
 assert.deepEqual(forkedScope.history.map(item => item.id), ['target-log', 'tie-a', 'tie-b', 'source-log'])
 assert.equal(new Set(forkedScope.history.map(item => item.id)).size, forkedScope.history.length)
@@ -360,9 +406,12 @@ for (const token of [
   'activitiesByScope',
   'historyByScope',
   'actualOverridesByScope',
+  'workflowOverridesByScope',
   'updateFollowActualDates',
+  'updateFollowWorkflowFields',
   'mergeLevel3ActualDateOverrides',
-  'LEVEL3_PLAN_STORE_VERSION = 2',
+  'mergeLevel3WorkflowOverrides',
+  'LEVEL3_PLAN_STORE_VERSION = 3',
 ]) {
   assert.ok(storeSource.includes(token), `level3 plan store is missing ${token}`)
 }
@@ -382,7 +431,77 @@ store.setState({
   collapsedIdsByScope: {},
   columnSettingsByScope: {},
   actualOverridesByScope: { [storeOtherScope]: { c2: override } },
+  workflowOverridesByScope: { [storeOtherScope]: { c2: workflowOverride } },
 })
+assert.equal(
+  store.getState().updateFollowWorkflowFields(
+    storeSourceScope,
+    storeFollowerScope,
+    'c1',
+    { status: '已完成' },
+    '李四',
+  ),
+  true,
+)
+let workflowPersisted = store.getState()
+assert.deepEqual(workflowPersisted.workflowOverridesByScope[storeFollowerScope].c1, {
+  activityId: 'c1', status: '已完成', detachedBy: '李四',
+  detachedAt: workflowPersisted.workflowOverridesByScope[storeFollowerScope].c1.detachedAt,
+})
+assert.deepEqual(workflowPersisted.historyByScope[storeFollowerScope][0].changes, [{
+  field: 'status', label: '状态', before: '待启动', after: '已完成',
+}])
+store.setState(state => ({
+  activitiesByScope: {
+    ...state.activitiesByScope,
+    [storeSourceScope]: state.activitiesByScope[storeSourceScope].map(activity => (
+      activity.id === 'c1' ? { ...activity, risk: '中' } : { ...activity }
+    )),
+  },
+}))
+assert.equal(
+  store.getState().updateFollowWorkflowFields(
+    storeSourceScope,
+    storeFollowerScope,
+    'c1',
+    { risk: '高' },
+    '王五',
+  ),
+  true,
+)
+workflowPersisted = store.getState()
+assert.deepEqual(workflowPersisted.workflowOverridesByScope[storeFollowerScope].c1, {
+  activityId: 'c1', status: '已完成', risk: '高', detachedBy: '王五',
+  detachedAt: workflowPersisted.workflowOverridesByScope[storeFollowerScope].c1.detachedAt,
+})
+assert.deepEqual(workflowPersisted.historyByScope[storeFollowerScope][0].changes, [{
+  field: 'risk', label: '任务风险', before: '中', after: '高',
+}])
+const workflowHistoryLength = workflowPersisted.historyByScope[storeFollowerScope].length
+for (const { sourceScopeKey, selectedScopeKey, activityId, patch, actor } of [
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: storeFollowerScope, activityId: 'p1', patch: { status: '进行中' }, actor: '李四' },
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: storeFollowerScope, activityId: 'missing', patch: { status: '进行中' }, actor: '李四' },
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: storeFollowerScope, activityId: 'c1', patch: { status: '无效状态' }, actor: '李四' },
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: storeFollowerScope, activityId: 'c1', patch: { risk: '无效风险' }, actor: '李四' },
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: storeFollowerScope, activityId: 'c1', patch: { status: '已完成' }, actor: '李四' },
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: storeFollowerScope, activityId: 'c1', patch: { status: undefined, risk: undefined }, actor: '李四' },
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: storeFollowerScope, activityId: 'c1', patch: { status: '进行中' }, actor: '' },
+  { sourceScopeKey: '', selectedScopeKey: storeFollowerScope, activityId: 'c1', patch: { status: '进行中' }, actor: '李四' },
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: '', activityId: 'c1', patch: { status: '进行中' }, actor: '李四' },
+  { sourceScopeKey: storeSourceScope, selectedScopeKey: storeSourceScope, activityId: 'c1', patch: { status: '进行中' }, actor: '李四' },
+]) {
+  assert.equal(
+    store.getState().updateFollowWorkflowFields(
+      sourceScopeKey,
+      selectedScopeKey,
+      activityId,
+      patch,
+      actor,
+    ),
+    false,
+  )
+}
+assert.equal(store.getState().historyByScope[storeFollowerScope].length, workflowHistoryLength)
 assert.equal(
   store.getState().updateFollowActualDates(
     storeSourceScope,
@@ -394,7 +513,7 @@ assert.equal(
   true,
 )
 let persisted = store.getState()
-assert.deepEqual(persisted.activitiesByScope[storeSourceScope].find(item => item.id === 'c1'), childA)
+assert.deepEqual(persisted.activitiesByScope[storeSourceScope].find(item => item.id === 'c1'), { ...childA, risk: '中' })
 assert.deepEqual(persisted.actualOverridesByScope[storeFollowerScope].c1, {
   activityId: 'c1', actualStartDate: '2026-01-05', actualEndDate: '2026-01-07',
   detachedBy: '李四', detachedAt: persisted.actualOverridesByScope[storeFollowerScope].c1.detachedAt,
@@ -477,13 +596,19 @@ persisted = store.getState()
 assert.deepEqual(persisted.activitiesByScope[storeFollowerScope].find(item => item.id === 'c1'), {
   ...childA,
   actualStartDate: '2026-01-05', actualEndDate: '2026-01-08',
+  status: '已完成', risk: '高',
 })
 assert.equal(persisted.actualOverridesByScope[storeFollowerScope], undefined)
+assert.equal(persisted.workflowOverridesByScope[storeFollowerScope], undefined)
 assert.deepEqual(persisted.actualOverridesByScope[storeOtherScope], { c2: override })
-assert.deepEqual(persisted.activitiesByScope[storeSourceScope], sourceActivitiesSnapshot)
+assert.deepEqual(persisted.workflowOverridesByScope[storeOtherScope], { c2: workflowOverride })
+assert.deepEqual(persisted.activitiesByScope[storeSourceScope], [parent, { ...childA, risk: '中' }])
 assert.deepEqual(persisted.historyByScope[storeSourceScope], sourceHistorySnapshot)
 assert.deepEqual(store.persist.getOptions().partialize(persisted).actualOverridesByScope, {
   [storeOtherScope]: { c2: override },
+})
+assert.deepEqual(store.persist.getOptions().partialize(persisted).workflowOverridesByScope, {
+  [storeOtherScope]: { c2: workflowOverride },
 })
 const failedForkState = structuredClone({
   activitiesByScope: store.getState().activitiesByScope,
@@ -502,6 +627,7 @@ store.setState({
   collapsedIdsByScope: { [targetOnlyScope]: ['p1'] },
   columnSettingsByScope: { [targetOnlyScope]: { order: ['activityName', 'number'], visible: ['number'] } },
   actualOverridesByScope: { [targetOnlyScope]: { c1: secondEdit } },
+  workflowOverridesByScope: { [targetOnlyScope]: { c1: secondWorkflowOverride } },
 })
 assert.equal(store.getState().forkFollowScope('project-1::tosType::Full', targetOnlyScope), true)
 persisted = store.getState()
@@ -509,19 +635,23 @@ assert.deepEqual(persisted.activitiesByScope[targetOnlyScope].find(item => item.
   ...childA,
   actualStartDate: secondEdit.actualStartDate,
   actualEndDate: secondEdit.actualEndDate,
+  status: '已完成', risk: '低',
 })
 assert.deepEqual(persisted.historyByScope[targetOnlyScope].map(log => log.id), ['target-log', 'tie-a', 'source-log'])
 assert.deepEqual(persisted.columnSettingsByScope[targetOnlyScope], {
   order: ['activityName', 'number'], visible: ['number'],
 })
 assert.equal(persisted.actualOverridesByScope[targetOnlyScope], undefined)
+assert.equal(persisted.workflowOverridesByScope[targetOnlyScope], undefined)
 const orphanOverride = { c1: secondEdit }
 store.setState({
   activitiesByScope: {}, historyByScope: {}, collapsedIdsByScope: {}, columnSettingsByScope: {},
   actualOverridesByScope: { [targetOnlyScope]: orphanOverride },
+  workflowOverridesByScope: { [targetOnlyScope]: { missing: secondWorkflowOverride } },
 })
 assert.equal(store.getState().forkFollowScope('project-1::tosType::Full', targetOnlyScope), true)
 assert.deepEqual(store.getState().actualOverridesByScope[targetOnlyScope], orphanOverride)
+assert.deepEqual(store.getState().workflowOverridesByScope[targetOnlyScope], { missing: secondWorkflowOverride })
 const sourceWithOrphanOverrideScope = 'project-1::tosType::PAD'
 const targetWithOrphanOverrideScope = 'project-1::tosType::GO'
 const orphanActivityOverride = { missing: secondEdit }
@@ -529,12 +659,18 @@ store.setState({
   activitiesByScope: { [sourceWithOrphanOverrideScope]: [parent] },
   historyByScope: {}, collapsedIdsByScope: {}, columnSettingsByScope: {},
   actualOverridesByScope: { [targetWithOrphanOverrideScope]: orphanActivityOverride },
+  workflowOverridesByScope: { [targetWithOrphanOverrideScope]: { missing: secondWorkflowOverride } },
 })
 assert.equal(store.getState().forkFollowScope(sourceWithOrphanOverrideScope, targetWithOrphanOverrideScope), true)
 assert.deepEqual(
   store.getState().actualOverridesByScope[targetWithOrphanOverrideScope],
   orphanActivityOverride,
   'unmaterializable target overrides must survive a source fork',
+)
+assert.deepEqual(
+  store.getState().workflowOverridesByScope[targetWithOrphanOverrideScope],
+  { missing: secondWorkflowOverride },
+  'unmaterializable target workflow overrides must survive a source fork',
 )
 const migrate = store.persist.getOptions().migrate
 const migrated = await migrate({
@@ -549,12 +685,40 @@ assert.deepEqual(migrated, {
   collapsedIdsByScope: { legacy: ['p1'] },
   columnSettingsByScope: { legacy: { order: ['number'], visible: ['number'] } },
   actualOverridesByScope: {},
+  workflowOverridesByScope: {},
 })
+const migratedV2 = await migrate({
+  activitiesByScope: { legacy: [parent] },
+  historyByScope: { legacy: sourceHistory },
+  collapsedIdsByScope: { legacy: ['p1'] },
+  columnSettingsByScope: { legacy: { order: ['number'], visible: ['number'] } },
+  actualOverridesByScope: { legacy: { c1: override } },
+}, 2)
+assert.deepEqual(migratedV2.actualOverridesByScope, { legacy: { c1: override } })
+assert.deepEqual(migratedV2.workflowOverridesByScope, {})
+const migratedV3 = await migrate({
+  activitiesByScope: { legacy: [parent] },
+  historyByScope: { legacy: sourceHistory },
+  collapsedIdsByScope: { legacy: ['p1'] },
+  columnSettingsByScope: { legacy: { order: ['number'], visible: ['number'] } },
+  actualOverridesByScope: { legacy: { c1: override } },
+  workflowOverridesByScope: { legacy: { c1: secondWorkflowOverride } },
+}, 3)
+assert.deepEqual(migratedV3.actualOverridesByScope, { legacy: { c1: override } })
+assert.deepEqual(migratedV3.workflowOverridesByScope, { legacy: { c1: secondWorkflowOverride } })
 
 const roundTripOverrides = {
   persisted: {
     c1: {
       activityId: 'c1', actualStartDate: '2026-01-05', actualEndDate: '2026-01-08',
+      detachedBy: '王五', detachedAt: '2026-08-18 10:00:00',
+    },
+  },
+}
+const roundTripWorkflowOverrides = {
+  persisted: {
+    c1: {
+      activityId: 'c1', status: '已完成', risk: '高',
       detachedBy: '王五', detachedAt: '2026-08-18 10:00:00',
     },
   },
@@ -579,6 +743,7 @@ try {
     collapsedIdsByScope: { [storeSourceScope]: ['p1'] },
     columnSettingsByScope: { [storeSourceScope]: { order: ['number'], visible: ['number'] } },
     actualOverridesByScope: roundTripOverrides,
+    workflowOverridesByScope: roundTripWorkflowOverrides,
   }
   memoryStorage.setItem(hydratedStoreModule.LEVEL3_PLAN_STORAGE_KEY, JSON.stringify({
     state: roundTripState,
@@ -586,16 +751,19 @@ try {
   }))
   await hydratedStoreModule.useLevel3PlanStore.persist.rehydrate()
   assert.deepEqual(hydratedStoreModule.useLevel3PlanStore.getState().actualOverridesByScope, roundTripOverrides)
+  assert.deepEqual(hydratedStoreModule.useLevel3PlanStore.getState().workflowOverridesByScope, roundTripWorkflowOverrides)
   hydratedStoreModule.useLevel3PlanStore.getState().setCollapsedIds(storeSourceScope, ['p1', 'c1'])
   const storedRoundTrip = JSON.parse(memoryStorage.getItem(hydratedStoreModule.LEVEL3_PLAN_STORAGE_KEY))
-  assert.equal(storedRoundTrip.version, 2)
+  assert.equal(storedRoundTrip.version, 3)
   assert.deepEqual(storedRoundTrip.state.actualOverridesByScope, roundTripOverrides)
+  assert.deepEqual(storedRoundTrip.state.workflowOverridesByScope, roundTripWorkflowOverrides)
   const reloadedStoreModule = loadCommonJsTypeScriptModule(storePath, {
     '@/lib/level3PlanRules': loadCommonJsTypeScriptModule(rulesPath),
     '@/types/level3Plan': loadCommonJsTypeScriptModule(path.join(root, 'src/types/level3Plan.ts')),
   })
   await reloadedStoreModule.useLevel3PlanStore.persist.rehydrate()
   assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().actualOverridesByScope, roundTripOverrides)
+  assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().workflowOverridesByScope, roundTripWorkflowOverrides)
 } finally {
   if (hadWindow) globalThis.window = originalWindow
   else delete globalThis.window

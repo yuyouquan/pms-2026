@@ -3,14 +3,18 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
 import {
   createLevel3ActualDateOverride,
+  createLevel3WorkflowOverride,
   deleteLevel3ActivityTree,
   forkLevel3ScopeData,
   mergeLevel3ActualDateOverrides,
+  mergeLevel3WorkflowOverrides,
   moveLevel3Activity,
   numberLevel3Activities,
 } from '@/lib/level3PlanRules'
 import {
   LEVEL3_COLUMN_KEYS,
+  LEVEL3_ACTIVITY_RISKS,
+  LEVEL3_ACTIVITY_STATUSES,
   type Level3Activity,
   type Level3ActualDateOverrideMap,
   type Level3ChangeLog,
@@ -18,10 +22,11 @@ import {
   type Level3FieldChange,
   type Level3MoveResult,
   type Level3ScopeData,
+  type Level3WorkflowOverrideMap,
 } from '@/types/level3Plan'
 
 export const LEVEL3_PLAN_STORAGE_KEY = 'pms-level3-plan-store'
-export const LEVEL3_PLAN_STORE_VERSION = 2
+export const LEVEL3_PLAN_STORE_VERSION = 3
 
 const DEFAULT_COLUMN_SETTINGS: SortableColumnSettingsValue<Level3ColumnKey> = {
   order: [...LEVEL3_COLUMN_KEYS],
@@ -85,6 +90,14 @@ const isValidActualDate = (value: string) => {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
 }
 
+const isValidWorkflowStatus = (value: unknown): value is Level3Activity['status'] => (
+  typeof value === 'string' && LEVEL3_ACTIVITY_STATUSES.includes(value as Level3Activity['status'])
+)
+
+const isValidWorkflowRisk = (value: unknown): value is Level3Activity['risk'] => (
+  typeof value === 'string' && LEVEL3_ACTIVITY_RISKS.includes(value as Level3Activity['risk'])
+)
+
 const safeStorage: StateStorage = {
   getItem(name) {
     if (typeof window === 'undefined') return null
@@ -119,6 +132,7 @@ interface Level3PlanState {
   collapsedIdsByScope: Record<string, string[]>
   columnSettingsByScope: Record<string, SortableColumnSettingsValue<Level3ColumnKey>>
   actualOverridesByScope: Record<string, Level3ActualDateOverrideMap>
+  workflowOverridesByScope: Record<string, Level3WorkflowOverrideMap>
 }
 
 interface Level3PlanActions {
@@ -137,6 +151,13 @@ interface Level3PlanActions {
     patch: Pick<Partial<Level3Activity>, 'actualStartDate' | 'actualEndDate'>,
     actor: string,
   ) => boolean
+  updateFollowWorkflowFields: (
+    sourceScopeKey: string,
+    selectedScopeKey: string,
+    activityId: string,
+    patch: Pick<Partial<Level3Activity>, 'status' | 'risk'>,
+    actor: string,
+  ) => boolean
   moveActivity: (scopeKey: string, activeId: string, overId: string, actor: string) => Level3MoveResult
   deleteActivity: (scopeKey: string, activityId: string, actor: string) => boolean
   forkFollowScope: (sourceScopeKey: string, targetScopeKey: string) => boolean
@@ -153,6 +174,7 @@ const initialState: Level3PlanState = {
   collapsedIdsByScope: {},
   columnSettingsByScope: {},
   actualOverridesByScope: {},
+  workflowOverridesByScope: {},
 }
 
 export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(persist(
@@ -301,6 +323,66 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
       })
       return updated
     },
+    updateFollowWorkflowFields: (sourceScopeKey, selectedScopeKey, activityId, patch, actor) => {
+      if (!sourceScopeKey || !selectedScopeKey || sourceScopeKey === selectedScopeKey || !activityId || !actor) return false
+      if (
+        (patch.status !== undefined && !isValidWorkflowStatus(patch.status))
+        || (patch.risk !== undefined && !isValidWorkflowRisk(patch.risk))
+        || (patch.status === undefined && patch.risk === undefined)
+      ) return false
+      let updated = false
+      set(state => {
+        const sourceActivities = state.activitiesByScope[sourceScopeKey] || []
+        const actualOverrides = state.actualOverridesByScope[selectedScopeKey] || {}
+        const currentOverrides = state.workflowOverridesByScope[selectedScopeKey] || {}
+        const displayedActivities = mergeLevel3WorkflowOverrides(
+          mergeLevel3ActualDateOverrides(sourceActivities, actualOverrides),
+          currentOverrides,
+        )
+        const previousActivity = displayedActivities.find(activity => activity.id === activityId)
+        if (!previousActivity || !previousActivity.parentId) return state
+        const nextOverride = createLevel3WorkflowOverride(
+          previousActivity,
+          currentOverrides[activityId],
+          patch,
+          actor,
+          formatNow(),
+        )
+        const nextOverrides = { ...currentOverrides, [activityId]: nextOverride }
+        const nextActivities = mergeLevel3WorkflowOverrides(
+          mergeLevel3ActualDateOverrides(sourceActivities, actualOverrides),
+          nextOverrides,
+        )
+        const nextActivity = nextActivities.find(activity => activity.id === activityId)
+        if (!nextActivity) return state
+        const changes = buildFieldChanges(previousActivity, nextActivity)
+          .filter(change => change.field === 'status' || change.field === 'risk')
+        if (changes.length === 0) return state
+        const log: Level3ChangeLog = {
+          id: createId('level3-log'),
+          action: 'edit',
+          actor,
+          occurredAt: nextOverride.detachedAt,
+          activityId,
+          activityName: nextActivity.activityName,
+          activityNumber: getActivityNumber(nextActivities, activityId),
+          summary: `编辑活动：${changes.map(change => change.label).join('、')}`,
+          changes,
+        }
+        updated = true
+        return {
+          workflowOverridesByScope: {
+            ...state.workflowOverridesByScope,
+            [selectedScopeKey]: nextOverrides,
+          },
+          historyByScope: {
+            ...state.historyByScope,
+            [selectedScopeKey]: [log, ...(state.historyByScope[selectedScopeKey] || [])],
+          },
+        }
+      })
+      return updated
+    },
     moveActivity: (scopeKey, activeId, overId, actor) => {
       const previousActivities = get().activitiesByScope[scopeKey] || []
       const beforeNumber = getActivityNumber(previousActivities, activeId)
@@ -412,6 +494,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
         hasSource ? source : target!,
         target,
         state.actualOverridesByScope[targetScopeKey] || {},
+        state.workflowOverridesByScope[targetScopeKey] || {},
       )
       const forkedActivityIds = new Set(forked.activities.map(activity => activity.id))
       set(current => {
@@ -425,12 +508,23 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
         if (Object.keys(orphanOverrides).length > 0) {
           nextOverridesByScope[targetScopeKey] = orphanOverrides
         }
+        const orphanWorkflowOverrides = Object.fromEntries(
+          Object.entries(current.workflowOverridesByScope[targetScopeKey] || {})
+            .filter(([activityId]) => !forkedActivityIds.has(activityId)),
+        )
+        const nextWorkflowOverridesByScope = Object.fromEntries(
+          Object.entries(current.workflowOverridesByScope).filter(([scopeKey]) => scopeKey !== targetScopeKey),
+        )
+        if (Object.keys(orphanWorkflowOverrides).length > 0) {
+          nextWorkflowOverridesByScope[targetScopeKey] = orphanWorkflowOverrides
+        }
         return {
           activitiesByScope: { ...current.activitiesByScope, [targetScopeKey]: forked.activities },
           historyByScope: { ...current.historyByScope, [targetScopeKey]: forked.history },
           collapsedIdsByScope: { ...current.collapsedIdsByScope, [targetScopeKey]: forked.collapsedIds },
           columnSettingsByScope: { ...current.columnSettingsByScope, [targetScopeKey]: forked.columnSettings },
           actualOverridesByScope: nextOverridesByScope,
+          workflowOverridesByScope: nextWorkflowOverridesByScope,
         }
       })
       return true
@@ -458,6 +552,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
       collapsedIdsByScope: state.collapsedIdsByScope,
       columnSettingsByScope: state.columnSettingsByScope,
       actualOverridesByScope: state.actualOverridesByScope,
+      workflowOverridesByScope: state.workflowOverridesByScope,
     }),
     migrate: (persistedState, version) => {
       if (!persistedState || typeof persistedState !== 'object') return initialState
@@ -469,6 +564,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           collapsedIdsByScope: legacyState.collapsedIdsByScope || {},
           columnSettingsByScope: legacyState.columnSettingsByScope || {},
           actualOverridesByScope: {},
+          workflowOverridesByScope: {},
         }
       }
       return {
@@ -477,6 +573,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
         collapsedIdsByScope: legacyState.collapsedIdsByScope || {},
         columnSettingsByScope: legacyState.columnSettingsByScope || {},
         actualOverridesByScope: legacyState.actualOverridesByScope || {},
+        workflowOverridesByScope: version >= 3 ? legacyState.workflowOverridesByScope || {} : {},
       }
     },
   },

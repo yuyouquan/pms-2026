@@ -6,6 +6,8 @@ import type {
   Level3ChangeLog,
   Level3ActualDateOverride,
   Level3ActualDateOverrideMap,
+  Level3WorkflowOverride,
+  Level3WorkflowOverrideMap,
   Level3DeleteResult,
   Level3Milestone,
   Level3MoveResult,
@@ -111,11 +113,15 @@ export function mergeLevel3Histories(
 export function forkLevel3ScopeData(
   source: Level3ScopeData,
   target?: Level3ScopeData,
-  overrides: Level3ActualDateOverrideMap = {},
+  actualOverrides: Level3ActualDateOverrideMap = {},
+  workflowOverrides: Level3WorkflowOverrideMap = {},
 ): Level3ScopeData {
   const targetColumnSettings = target?.columnSettings
   return {
-    activities: mergeLevel3ActualDateOverrides(source.activities, overrides),
+    activities: mergeLevel3WorkflowOverrides(
+      mergeLevel3ActualDateOverrides(source.activities, actualOverrides),
+      workflowOverrides,
+    ),
     history: mergeLevel3Histories(source.history, target?.history),
     collapsedIds: [...source.collapsedIds],
     columnSettings: {
@@ -199,6 +205,37 @@ export function mergeLevel3ActualDateOverrides(
     return override
       ? { ...activity, actualStartDate: override.actualStartDate, actualEndDate: override.actualEndDate }
       : { ...activity }
+  })
+}
+
+export function createLevel3WorkflowOverride(
+  displayedActivity: Level3Activity,
+  existing: Level3WorkflowOverride | undefined,
+  patch: Pick<Partial<Level3Activity>, 'status' | 'risk'>,
+  actor: string,
+  occurredAt: string,
+): Level3WorkflowOverride {
+  return {
+    ...(existing || { activityId: displayedActivity.id, detachedBy: actor, detachedAt: occurredAt }),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.risk !== undefined ? { risk: patch.risk } : {}),
+    activityId: displayedActivity.id,
+    detachedBy: actor,
+    detachedAt: occurredAt,
+  }
+}
+
+export function mergeLevel3WorkflowOverrides(
+  activities: Level3Activity[],
+  overrides: Level3WorkflowOverrideMap,
+): Level3Activity[] {
+  return activities.map(activity => {
+    const override = overrides[activity.id]
+    return {
+      ...activity,
+      ...(override?.status !== undefined ? { status: override.status } : {}),
+      ...(override?.risk !== undefined ? { risk: override.risk } : {}),
+    }
   })
 }
 

@@ -59,6 +59,16 @@ export interface Level3ActualDateOverride {
 
 export type Level3ActualDateOverrideMap = Partial<Record<string, Level3ActualDateOverride>>
 
+export interface Level3WorkflowOverride {
+  activityId: string
+  status?: Level3ActivityStatus
+  risk?: Level3ActivityRisk
+  detachedBy: string
+  detachedAt: string
+}
+
+export type Level3WorkflowOverrideMap = Partial<Record<string, Level3WorkflowOverride>>
+
 export interface Level3ActivityFormValue {
   activityName?: string
   responsible?: string
