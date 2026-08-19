@@ -6898,6 +6898,11 @@ body,
 .pms-level3-history-description { margin-top: 8px; color: var(--pms-text-secondary); }
 .pms-level3-history-change { display: grid; grid-template-columns: 100px minmax(0, 1fr) 18px minmax(0, 1fr); gap: 6px; align-items: start; margin-top: 4px; }
 
+/* Governed level-one plans stay flat in the table while retaining hierarchy in the Gantt. */
+.pms-level1-flat-milestone-table .ant-table-cell { vertical-align: middle; }
+.pms-level1-flat-date-invalid { display: inline-block; }
+.pms-level1-flat-gantt { border: 1px solid #f3f4f6; border-radius: 8px; overflow: hidden; background: #fff; }
+
 @media (max-width: 720px) {
   .pms-main-content {
     padding: 8px !important;

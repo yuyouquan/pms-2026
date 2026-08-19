@@ -729,5 +729,12 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
     level3TemplateTasksByType: state.level3TemplateTasksByType,
     configTemplateVersionScopes: state.configTemplateVersionScopes,
     configTemplateCompareScopes: state.configTemplateCompareScopes,
+    marketPlanData: state.marketPlanData,
+    marketFollowVersionMeta: state.marketFollowVersionMeta,
+    marketVersionsByKey: state.marketVersionsByKey,
+    marketCurrentVersionByKey: state.marketCurrentVersionByKey,
+    tosTypePlanDataByProjectId: state.tosTypePlanDataByProjectId,
+    tosTypeVersionsByKey: state.tosTypeVersionsByKey,
+    tosTypeCurrentVersionByKey: state.tosTypeCurrentVersionByKey,
   }),
 }))

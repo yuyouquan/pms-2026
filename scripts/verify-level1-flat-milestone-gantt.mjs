@@ -381,4 +381,15 @@ const globallyReadonlyController = ganttRules.createPlanGanttInteractionControll
 assert.equal(globallyReadonlyController.beforeDrag(editableTask), false, 'global readonly blocks drags')
 assert.equal(globallyReadonlyController.canOpenLightbox(editableTask), false, 'global readonly blocks lightbox editing')
 
+const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8')
+const projectSpaceSource = read('src/containers/ProjectSpaceContainer.tsx')
+for (const label of ['阶段', '里程碑点', '计划开发周期', '实际开发周期', '添加上市阶段 MR 里程碑']) {
+  assert.match(projectSpaceSource, new RegExp(label), `project-space flat table contains ${label}`)
+}
+assert.match(projectSpaceSource, /insertNextMachineMrMilestone/, 'project-space adds controlled whole-machine MR milestones')
+assert.match(projectSpaceSource, /projectLevel1FlatMilestones/, 'project-space projects governed plans into flat milestones')
+assert.match(projectSpaceSource, /buildPlanGanttTasks/, 'project-space builds typed Gantt tasks')
+assert.match(projectSpaceSource, /onTaskDateChange/, 'project-space persists accepted Gantt date changes')
+assert.match(projectSpaceSource, /aria-label="计划版本"/, 'project-space version selector has an accessible plan-version label')
+
 console.log('PASS level1 flat milestone and gantt rules')

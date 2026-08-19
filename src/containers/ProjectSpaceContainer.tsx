@@ -178,11 +178,19 @@ import {
   canAddLevel1CustomChild,
   canMaintainLevel1Plan,
   canMutateLevel1TaskStructure,
+  insertNextMachineMrMilestone,
+  projectLevel1FlatMilestones,
   projectLevel1Plan,
+  renumberLevel1Tasks,
   sumLevel1EstimatedDays,
   synchronizeLevel1ActualEndDate,
   validateLevel1MilestoneDates,
 } from '@/lib/level1PlanRules'
+import {
+  applyPlanGanttDateChange,
+  applyPlanTaskDatePatch,
+  buildPlanGanttTasks,
+} from '@/lib/planGanttRules'
 import {
   synchronizeTechnicalProjectRecord,
 } from '@/lib/technicalProjectRules'
@@ -230,6 +238,16 @@ import { ProjectSpaceHeader } from '@/containers/AppShell'
 
 const { Option } = Select
 const TOS_VERSION_TRAIN_SNAPSHOT_LEVEL = 'level2-version-train'
+const LEVEL1_FLAT_EXPORT_COLUMNS: ExportColumn[] = [
+  { key: 'sequence', title: '序号' },
+  { key: 'stageName', title: '阶段' },
+  { key: 'milestoneName', title: '里程碑点' },
+  { key: 'status', title: '状态' },
+  { key: 'planEndDate', title: '计划完成时间' },
+  { key: 'estimatedDays', title: '计划开发周期' },
+  { key: 'actualEndDate', title: '实际完成时间' },
+  { key: 'actualDays', title: '实际开发周期' },
+]
 const PROJECT_SPACE_STATUS_OPTIONS = [
   { label: '待立项', value: '待立项' },
   { label: '在研', value: '在研' },
@@ -2321,9 +2339,14 @@ export default function ProjectSpaceContainer() {
       return
     }
 
-    const updatedTasks = tableTasks.map((task: any) => (
-      task.id === record.id ? { ...task, [field]: value } : task
-    ))
+    const updatedTasks = applyPlanTaskDatePatch(tableTasks, {
+      taskId: record.id,
+      patch: { [field]: value },
+    })
+    if (updatedTasks.find(task => task.id === record.id)?.[field] !== value) {
+      void message.error('日期格式或范围无效，未保存修改')
+      return
+    }
     if (!isLevel2Custom && projectPlanLevel === 'level1' && field === 'actualEndDate') {
       const pairedVersion = isCurrentDraft
         ? latestPublishedVersion
@@ -2598,12 +2621,20 @@ export default function ProjectSpaceContainer() {
 
   // Export functions
   const handleExportVerticalPlan = (scope: 'current' | 'all') => {
+    const isGovernedLevel1Export = projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject)
     const cols = scope === 'current' ? TABLE_COLUMNS.filter(c => visibleColumns.includes(c.key)) : TABLE_COLUMNS
-    const exportCols: ExportColumn[] = cols.map(c => ({ key: c.key, title: c.title }))
+    const exportCols: ExportColumn[] = isGovernedLevel1Export
+      ? LEVEL1_FLAT_EXPORT_COLUMNS
+      : cols.map(c => ({ key: c.key, title: c.title }))
     let rows: any[] = []
     if (projectPlanLevel === 'level1') {
-      const projectedRows = projectLevel1Plan(effectiveTasks, { mode: 'standard' }).rows
-      rows = scope === 'current' ? applyPlanWorkspaceFilters(projectedRows, level1PlanFilters) : projectedRows
+      if (isGovernedLevel1Export) {
+        const projectedRows = projectLevel1FlatMilestones(effectiveTasks)
+        rows = scope === 'current' ? applyPlanWorkspaceFilters(projectedRows, level1PlanFilters) : projectedRows
+      } else {
+        const projectedRows = projectLevel1Plan(effectiveTasks, { mode: 'standard' }).rows
+        rows = scope === 'current' ? applyPlanWorkspaceFilters(projectedRows, level1PlanFilters) : projectedRows
+      }
     }
     else if (projectPlanLevel === 'level2' && activeLevel2Plan && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1') {
       const l2 = level2PlanTasks.filter((t: any) => t.planId === activeLevel2Plan); rows = scope === 'current' && searchText ? l2.filter((t: any) => (t.taskName || '').toLowerCase().includes(searchText.toLowerCase())) : l2
@@ -2682,11 +2713,82 @@ export default function ProjectSpaceContainer() {
     setProjectSpaceModule,
   }
 
+  const renderMachineMrMilestoneButton = () => {
+    if (!selectedProject
+      || !isMachineProjectType(selectedProject.type)
+      || !isCurrentDraft
+      || !isEditMode
+      || !canMaintainCurrentPlan
+      || followedTosLevel1ReadOnly) return null
+    return (
+      <Button
+        icon={<PlusOutlined />}
+        onClick={() => Modal.confirm({
+          title: '确认添加上市阶段 MR 里程碑？',
+          content: '系统将自动生成下一个 MR 编号，名称不可修改。',
+          okText: '确认',
+          cancelText: '取消',
+          onOk: () => {
+            const result = insertNextMachineMrMilestone(effectiveTasks)
+            if (!result.ok) {
+              void message.error(result.reason === 'launch-stage-missing' ? '未找到上市阶段' : 'MR 编号已存在')
+              return
+            }
+            setEffectiveTasks(result.tasks)
+            void message.success(`已添加 ${result.task.taskName}`)
+          },
+        })}
+      >
+        添加上市阶段 MR 里程碑
+      </Button>
+    )
+  }
+
   // ═══════ Render helpers — renderGanttChart ═══════
   const renderGanttChart = (customTasks?: any[]) => {
+    const isGovernedLevel1Gantt = !customTasks
+      && projectPlanLevel === 'level1'
+      && (isWholeMachineProject || isTosVersionProject)
     const ganttTasks = customTasks || filteredTasks
     const key = getScopeKey()
     const collapsedSet = key ? (collapsedNodes[key] || new Set<string>()) : new Set<string>()
+    if (isGovernedLevel1Gantt) {
+      const ganttEditable = isEditMode
+        && isCurrentDraft
+        && canMaintainCurrentPlan
+        && !followedTosLevel1ReadOnly
+      return (
+        <div className="pms-level1-flat-gantt">
+          <DHTMLXGantt
+            tasks={buildPlanGanttTasks(effectiveTasks, { mode: 'hierarchical', editable: ganttEditable })}
+            columns={ganttColumns}
+            onTaskClick={(task) => message.info(`点击任务: ${task.text}`)}
+            readOnly={!ganttEditable}
+            collapsedIds={collapsedSet}
+            scaleMode={projectPlanGanttScaleMode}
+            onCollapsedChange={(updater) => {
+              if (!key) return
+              setCollapsedNodes(prev => {
+                const current = prev[key] || new Set<string>()
+                return { ...prev, [key]: updater(current) }
+              })
+            }}
+            onTaskDateChange={change => {
+              if (change.nodeType !== 'milestone') return false
+              const next = applyPlanGanttDateChange(effectiveTasks, { ...change, mode: 'milestone' })
+              const validation = validateLevel1MilestoneDates(next)
+              if (!validation.valid) {
+                void message.error(validation.violations[0]?.message || '里程碑日期不符合顺序要求')
+                return false
+              }
+              setEffectiveTasks(next)
+              void message.success('计划完成时间已更新')
+              return true
+            }}
+          />
+        </div>
+      )
+    }
     return (
       <div style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
         <DHTMLXGantt tasks={ganttTasks} columns={ganttColumns} onTaskClick={(task) => message.info(`点击任务: ${task.text}`)} readOnly={!isEditMode || followedTosLevel1ReadOnly || isFollowReadOnlyOverview} collapsedIds={collapsedSet}
@@ -2701,7 +2803,9 @@ export default function ProjectSpaceContainer() {
   const renderTaskTable = (customTasks?: any[]) => {
     const isLevel2Custom = !!customTasks
     const tableTasks = customTasks || effectiveTasks
-    const isGovernedLevel1Table = !isLevel2Custom && projectPlanLevel === 'level1'
+    const isGovernedLevel1Table = !isLevel2Custom
+      && projectPlanLevel === 'level1'
+      && (isWholeMachineProject || isTosVersionProject)
     const level1Projection = isGovernedLevel1Table
       ? projectLevel1Plan(tableTasks, { mode: 'standard' })
       : null
@@ -2719,6 +2823,115 @@ export default function ProjectSpaceContainer() {
         return
       }
       writeTableTasks(newTasks)
+    }
+    if (isGovernedLevel1Table) {
+      const flatRows = projectLevel1FlatMilestones(tableTasks)
+      const visibleFlatRows = applyPlanWorkspaceFilters(flatRows, level1PlanFilters)
+      const validation = validateLevel1MilestoneDates(tableTasks)
+      const canDeleteFlatMilestone = (record: any) => Boolean(
+        record.source === 'custom'
+        && record.stableId
+        && isCurrentDraft
+        && canMaintainCurrentPlan
+        && !followedTosLevel1ReadOnly
+        && selectedProject
+        && canMutateLevel1TaskStructure({
+          projectType: selectedProject.type,
+          task: record,
+          parent: tableTasks.find((task: any) => task.id === record.parentId),
+          action: 'delete',
+        }),
+      )
+      const patchFlatMilestoneDate = (
+        record: any,
+        field: 'planEndDate' | 'actualEndDate',
+        value: string,
+      ) => {
+        const nextTasks = applyPlanTaskDatePatch(tableTasks, {
+          taskId: record.id,
+          patch: { [field]: value },
+        })
+        if (nextTasks.find(task => task.id === record.id)?.[field] !== value) {
+          void message.error('日期格式或范围无效，未保存修改')
+          return
+        }
+        const nextValidation = validateLevel1MilestoneDates(nextTasks)
+        if (!nextValidation.valid) {
+          void message.error(nextValidation.violations[0]?.message || '里程碑日期不符合顺序要求')
+          return
+        }
+        if (field === 'actualEndDate') {
+          updateActualDateForTask(tableTasks, currentSetTasks, record, field, value, false)
+          return
+        }
+        currentSetTasks(nextTasks)
+      }
+      const renderFlatDate = (
+        value: string,
+        record: any,
+        field: 'planEndDate' | 'actualEndDate',
+      ) => {
+        const reasons = validation.byTaskId[record.id]?.[field] || []
+        const canEditPlanEnd = field === 'planEndDate'
+          && isEditMode
+          && isCurrentDraft
+          && canMaintainCurrentPlan
+          && !followedTosLevel1ReadOnly
+          && Boolean(record.parentId)
+        const canEditActualEnd = field === 'actualEndDate'
+          && canMaintainCurrentPlan
+          && (isCurrentDraft || isLatestPublished)
+          && Boolean(record.parentId)
+        const content = canEditPlanEnd || canEditActualEnd
+          ? <ClickToEditDate value={value} onChange={nextValue => patchFlatMilestoneDate(record, field, nextValue)} />
+          : <span style={{ fontSize: 12, color: value ? '#4b5563' : '#bfbfbf' }}>{value || '-'}</span>
+        return reasons.length > 0
+          ? <Tooltip color="red" title={reasons.join('；')}><span className="pms-level1-flat-date-invalid">{content}</span></Tooltip>
+          : content
+      }
+      const flatColumns: ColumnsType<any> = [
+        { title: '序号', dataIndex: 'sequence', key: 'sequence', width: 72, fixed: 'left' },
+        { title: '阶段', dataIndex: 'stageName', key: 'stageName', width: 160, fixed: 'left' },
+        { title: '里程碑点', dataIndex: 'milestoneName', key: 'milestoneName', width: 160, fixed: 'left' },
+        { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (value: string) => value || '-' },
+        {
+          title: '计划完成时间', dataIndex: 'planEndDate', key: 'planEndDate', width: 145,
+          onCell: (record: any) => ({ className: (validation.byTaskId[record.id]?.planEndDate || []).length > 0 ? 'pms-cell-invalid' : '' }),
+          render: (value: string, record: any) => renderFlatDate(value, record, 'planEndDate'),
+        },
+        { title: '计划开发周期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 120, render: (value: number | null) => value == null ? '-' : `${value}天` },
+        {
+          title: '实际完成时间', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 145,
+          onCell: (record: any) => ({ className: (validation.byTaskId[record.id]?.actualEndDate || []).length > 0 ? 'pms-cell-invalid' : '' }),
+          render: (value: string, record: any) => renderFlatDate(value, record, 'actualEndDate'),
+        },
+        { title: '实际开发周期', dataIndex: 'actualDays', key: 'actualDays', width: 120, render: (value: number | null) => value == null ? '-' : `${value}天` },
+      ]
+      if (flatRows.some(canDeleteFlatMilestone)) {
+        flatColumns.push({
+          title: '操作', key: 'action', width: 64, fixed: 'right',
+          render: (_: unknown, record: any) => canDeleteFlatMilestone(record) ? (
+            <Popconfirm title="确认删除该里程碑？" onConfirm={() => {
+              const stableId = record.stableId
+              currentSetTasks(renumberLevel1Tasks(tableTasks.filter((task: any) => (task.stableId || task.id) !== stableId)))
+              void message.success('已删除里程碑')
+            }} okText="确认" cancelText="取消">
+              <Button type="text" danger size="small" aria-label={`删除里程碑 ${record.milestoneName}`} icon={<DeleteOutlined />} />
+            </Popconfirm>
+          ) : null,
+        })
+      }
+      return (
+        <Table
+          className={`pms-table pms-level1-flat-milestone-table ${isEditMode ? 'pms-table-edit' : ''}`}
+          dataSource={visibleFlatRows}
+          columns={flatColumns}
+          rowKey="id"
+          pagination={false}
+          scroll={{ x: 1020 }}
+          size="middle"
+        />
+      )
     }
     const displayTasks = isLevel2Custom
       ? filterBySearchText(tableTasks)
@@ -4189,7 +4402,7 @@ export default function ProjectSpaceContainer() {
             versionControls={(
               <Space size={6}>
                 <span style={{ color: '#9ca3af', fontSize: 13 }}>版本</span>
-                <Select value={currentVersion} onChange={(val) => navigateWithEditGuard(() => { setCurrentVersion(val); setIsEditMode(false) })} style={{ width: versionSelectWidth }} size="middle">
+                <Select aria-label="计划版本" value={currentVersion} onChange={(val) => navigateWithEditGuard(() => { setCurrentVersion(val); setIsEditMode(false) })} style={{ width: versionSelectWidth }} size="middle">
                   {versions
                     .filter(v => v.status !== '修订中' || canViewDraft)
                     .map(v => <Option key={v.id} value={v.id}>{renderVersionLabel(v)}</Option>)}
@@ -4199,6 +4412,7 @@ export default function ProjectSpaceContainer() {
             )}
             primaryActions={(
               <Space size={6}>
+                {projectPlanLevel === 'level1' && renderMachineMrMilestoneButton()}
                 {(followedTosLevel1ReadOnly || !hasDraftVersion) && (canEditCurrentPlan
                   ? renderCreateRevisionButton({ borderRadius: 6 })
                   : <Tooltip title={`无${currentPlanPermissionLabel}编辑权限`}><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled aria-label="创建修订">创建修订</Button></Tooltip>)}
