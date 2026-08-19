@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
+import { loadTypeScriptModule } from './lib/source-contract.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -445,5 +446,65 @@ const persistedScopes = projectSpaceLevel1Rules.pickScopedPlanPersistence({ mark
 assert.deepEqual(Object.keys(persistedScopes).sort(), ['marketCurrentVersionByKey', 'marketFollowVersionMeta', 'marketPlanData', 'marketVersionsByKey', 'tosTypeCurrentVersionByKey', 'tosTypePlanDataByProjectId', 'tosTypeVersionsByKey'], 'scoped plan persistence includes every live market and tOS scope field only')
 assert.match(projectSpaceSource, /projectSpaceLevel1Rules|mergeActualFieldsByStableId/, 'project space wires the tested level-one helpers')
 assert.match(projectSpaceSource, /rowKey=\{record => record\.stableId \|\| record\.id\}/, 'flat rows use stable IDs for React identity')
+
+const technicalModuleSource = read('src/components/technical-project/TechnicalPlanModule.tsx')
+const technicalWorkspaceSource = read('src/lib/technicalPlanWorkspace.ts')
+
+const technicalPlanStoreModule = loadTypeScriptModule(root, 'src/stores/technicalPlan.ts')
+const technicalWorkspaceModule = loadTypeScriptModule(root, 'src/lib/technicalPlanWorkspace.ts')
+assert.deepEqual(technicalWorkspaceModule.getTechnicalPlanExportColumns('tdt').map(column => column.key), ['sequence', 'stageName', 'milestoneName', 'status', 'planEndDate', 'estimatedDays', 'actualEndDate', 'actualDays'], 'TDT export uses exactly the flat milestone columns')
+assert.deepEqual(technicalWorkspaceModule.getTechnicalPlanExportColumns('subproject').map(column => column.key), ['sequence', 'activityName', 'status', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays'], 'subproject export uses exactly the activity columns')
+const technicalTdtRows = technicalWorkspaceModule.projectTechnicalPlanRows('tdt', flatHierarchy)
+assert.deepEqual(technicalTdtRows.map(row => [row.stageName, row.milestoneName]), [['概念阶段', '概念启动'], ['计划阶段', 'STR1']], 'TDT row projection is flat milestones')
+const technicalSubprojectRows = technicalWorkspaceModule.projectTechnicalPlanRows('subproject', seededSubprojectTasks)
+assert.deepEqual(technicalSubprojectRows.map(row => [row.activityName, row.stageName]), [['第1版转测', ''], ['第2版转测', ''], ['TDR3', '']], 'subproject row projection never creates stage columns')
+assert.deepEqual(technicalWorkspaceModule.filterTechnicalPlanGanttTasks(flatHierarchy, 'tdt', [technicalTdtRows[1]]).map(task => task.stableId), ['stage-2', 'plan-str'], 'TDT Gantt filtering retains the matched milestone and its parent stage')
+assert.deepEqual(technicalWorkspaceModule.filterTechnicalPlanGanttTasks(seededSubprojectTasks, 'subproject', [technicalSubprojectRows[1]]).map(task => task.stableId), [seededSubprojectTasks[1].stableId], 'subproject Gantt filtering stays one-level')
+const publishedActualStore = technicalPlanStoreModule.createTechnicalPlanStore({ plansByKey: {} })
+const publishedActualScope = { kind: 'tdt', parentProjectId: 'published-actual' }
+const publishedActualTasks = technicalRules.buildTdtTemplateTasks()
+assert.equal(publishedActualStore.createRevision({ scope: publishedActualScope, templateKind: 'tdt', templateTasks: publishedActualTasks }).ok, true, 'published-actual fixture creates V1')
+assert.equal(publishedActualStore.publishRevision(publishedActualScope, '2026-01-01T00:00:00Z').ok, true, 'published-actual fixture publishes V1')
+assert.equal(publishedActualStore.createRevision({ scope: publishedActualScope, templateKind: 'tdt', templateTasks: publishedActualTasks }).ok, true, 'published-actual fixture creates a paired draft')
+const publishedActualInstance = publishedActualStore.getState().plansByKey['published-actual:tdt']
+const pairedDraft = publishedActualInstance.versions.find(version => version.status === '修订中')
+const latestPublished = publishedActualInstance.versions.find(version => version.status === '已发布')
+const targetStableId = pairedDraft.tasks[1].stableId
+const divergentDraft = [
+  ...pairedDraft.tasks.map(task => task.stableId === targetStableId ? { ...task, taskName: '草稿保留名称', planEndDate: '2026-10-01' } : task),
+  { ...pairedDraft.tasks[1], id: 'custom-draft', stableId: 'custom-draft', source: 'custom', order: 999, taskName: '草稿自定义节点', parentId: pairedDraft.tasks[0].id },
+]
+assert.equal(publishedActualStore.updateCurrentTasks(publishedActualScope, divergentDraft, 2).ok, true, 'paired draft accepts divergent plan and custom-task values')
+assert.equal(publishedActualStore.setCurrentVersion(publishedActualScope, latestPublished.id), true, 'published-actual fixture selects latest published V1')
+const publishedActualWrite = latestPublished.tasks.map(task => task.stableId === targetStableId
+  ? { ...task, taskName: '不可覆盖的发布名称', planEndDate: '2026-09-01', actualStartDate: '2026-08-02', actualEndDate: '2026-08-09', actualDays: 999 }
+  : task)
+assert.equal(publishedActualStore.updateCurrentTasks(publishedActualScope, publishedActualWrite, 2).ok, true, 'latest published version accepts actual-date-only updates')
+const afterPublishedActualWrite = publishedActualStore.getState().plansByKey['published-actual:tdt']
+const afterPublishedTarget = afterPublishedActualWrite.versions.find(version => version.id === latestPublished.id).tasks.find(task => task.stableId === targetStableId)
+const afterDraftTarget = afterPublishedActualWrite.versions.find(version => version.status === '修订中').tasks.find(task => task.stableId === targetStableId)
+const afterDraftCustom = afterPublishedActualWrite.versions.find(version => version.status === '修订中').tasks.find(task => task.stableId === 'custom-draft')
+assert.deepEqual([afterPublishedTarget.taskName, afterPublishedTarget.planEndDate, afterPublishedTarget.actualStartDate, afterPublishedTarget.actualEndDate, afterPublishedTarget.actualDays], [latestPublished.tasks.find(task => task.stableId === targetStableId).taskName, latestPublished.tasks.find(task => task.stableId === targetStableId).planEndDate, '2026-08-02', '2026-08-09', 7], 'published writes preserve plan fields and recompute actual duration')
+assert.deepEqual([afterDraftTarget.taskName, afterDraftTarget.planEndDate, afterDraftTarget.actualStartDate, afterDraftTarget.actualEndDate, afterDraftTarget.actualDays], ['草稿保留名称', '2026-10-01', '2026-08-02', '2026-08-09', 7], 'published writes merge actual fields by stable ID into the paired draft without replacing draft plan fields')
+assert.equal(afterDraftCustom?.taskName, '草稿自定义节点', 'published writes retain paired-draft custom tasks')
+assert.equal(publishedActualStore.publishRevision(publishedActualScope, '2026-02-01T00:00:00Z').ok, true, 'published-actual fixture publishes V2')
+const historicalVersionId = afterPublishedActualWrite.versions.find(version => version.id === latestPublished.id).id
+assert.equal(publishedActualStore.setCurrentVersion(publishedActualScope, historicalVersionId), true, 'published-actual fixture selects historical V1')
+assert.deepEqual(publishedActualStore.updateCurrentTasks(publishedActualScope, publishedActualWrite, 2), { ok: false, reason: 'historical-published' }, 'historical published versions are immutable')
+
+for (const label of ['阶段', '里程碑点', '活动名称', '添加转测版本', '实际开始时间', '实际完成时间']) {
+  assert.match(technicalModuleSource, new RegExp(label), `technical plan contains ${label}`)
+}
+assert.match(technicalModuleSource, /insertNextTechnicalSubprojectTransfer/, 'technical plan inserts controlled transfer versions')
+assert.match(technicalModuleSource, /projectTechnicalSubprojectRows/, 'technical plan projects subproject activities without a fake stage tree')
+assert.match(technicalModuleSource, /buildPlanGanttTasks/, 'technical plan builds typed Gantt tasks')
+assert.match(technicalModuleSource, /onTaskDateChange/, 'technical plan persists accepted Gantt date changes')
+assert.match(technicalModuleSource, /applyPlanTaskDatePatch/, 'technical plan recomputes date durations through the shared patch helper')
+assert.match(technicalWorkspaceSource, /TECHNICAL_TDT_EXPORT_COLUMNS/, 'technical workspace exposes TDT export columns')
+assert.match(technicalWorkspaceSource, /TECHNICAL_SUBPROJECT_EXPORT_COLUMNS/, 'technical workspace exposes subproject export columns')
+
+const technicalStoreSource = read('src/stores/technicalPlan.ts')
+assert.match(technicalStoreSource, /actualStartDate/, 'technical store safely supports published actual-start updates')
+assert.match(technicalStoreSource, /actualDays/, 'technical store synchronizes actual duration when actual dates change')
 
 console.log('PASS level1 flat milestone and gantt rules')

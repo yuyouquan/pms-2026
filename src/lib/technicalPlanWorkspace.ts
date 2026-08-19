@@ -1,5 +1,34 @@
-import type { TechnicalTemplateTask } from '@/types/technicalPlan'
-import { projectLevel1Plan, sumLevel1EstimatedDays } from '@/lib/level1PlanRules'
+import type { TechnicalTemplateKind, TechnicalTemplateTask } from '@/types/technicalPlan'
+import {
+  projectLevel1FlatMilestones,
+  projectLevel1Plan,
+  projectTechnicalSubprojectRows,
+  sumLevel1EstimatedDays,
+  type Level1FlatMilestoneRow,
+} from '@/lib/level1PlanRules'
+
+export const TECHNICAL_TDT_EXPORT_COLUMNS = [
+  { key: 'sequence', title: '序号' },
+  { key: 'stageName', title: '阶段' },
+  { key: 'milestoneName', title: '里程碑点' },
+  { key: 'status', title: '状态' },
+  { key: 'planEndDate', title: '计划完成时间' },
+  { key: 'estimatedDays', title: '计划开发周期' },
+  { key: 'actualEndDate', title: '实际完成时间' },
+  { key: 'actualDays', title: '实际开发周期' },
+] as const
+
+export const TECHNICAL_SUBPROJECT_EXPORT_COLUMNS = [
+  { key: 'sequence', title: '序号' },
+  { key: 'activityName', title: '活动名称' },
+  { key: 'status', title: '状态' },
+  { key: 'planStartDate', title: '计划开始时间' },
+  { key: 'planEndDate', title: '计划完成时间' },
+  { key: 'estimatedDays', title: '计划周期' },
+  { key: 'actualStartDate', title: '实际开始时间' },
+  { key: 'actualEndDate', title: '实际完成时间' },
+  { key: 'actualDays', title: '实际周期' },
+] as const
 
 export const TECHNICAL_PLAN_EXPORT_COLUMNS = [
   { key: 'id', title: '序号' },
@@ -12,6 +41,32 @@ export const TECHNICAL_PLAN_EXPORT_COLUMNS = [
   { key: 'actualDays', title: '实际工期' },
   { key: 'delayStatus', title: '是否延期' },
 ] as const
+
+export const getTechnicalPlanExportColumns = (templateKind: TechnicalTemplateKind) => (
+  templateKind === 'subproject' ? TECHNICAL_SUBPROJECT_EXPORT_COLUMNS : TECHNICAL_TDT_EXPORT_COLUMNS
+)
+
+export const projectTechnicalPlanRows = (
+  templateKind: TechnicalTemplateKind,
+  tasks: readonly TechnicalTemplateTask[],
+): Level1FlatMilestoneRow[] => (
+  templateKind === 'subproject'
+    ? projectTechnicalSubprojectRows(tasks)
+    : projectLevel1FlatMilestones(tasks)
+)
+
+export const filterTechnicalPlanGanttTasks = <T extends { id: string; parentId?: string }>(
+  tasks: readonly T[],
+  templateKind: TechnicalTemplateKind,
+  rows: readonly Pick<Level1FlatMilestoneRow, 'id' | 'stageId'>[],
+): T[] => {
+  const visibleIds = new Set(rows.map(row => row.id))
+  if (templateKind === 'subproject') return tasks.filter(task => visibleIds.has(task.id))
+  rows.forEach(row => {
+    if (row.stageId) visibleIds.add(row.stageId)
+  })
+  return tasks.filter(task => visibleIds.has(task.id))
+}
 
 export function selectVisibleTechnicalPlanVersions<T extends { status: string }>(
   versions: readonly T[],
