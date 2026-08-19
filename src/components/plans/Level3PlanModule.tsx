@@ -62,7 +62,8 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import dayjs, { type Dayjs } from 'dayjs'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
-import { ClickToEditDate } from '@/components/shared/PlanHelpers'
+import { ClickToEditDate, DHTMLXGantt, type DHTMLXGanttColumn } from '@/components/shared/PlanHelpers'
+import { PlanViewModeSwitcher } from '@/components/plans/PlanViewModeSwitcher'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
 import {
   getDefaultColumnSettings,
@@ -111,6 +112,7 @@ import {
   type Level3PermissionContext,
 } from '@/types/level3Plan'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
+import type { PlanWorkspaceViewMode } from '@/lib/planWorkspace'
 
 const { Text } = Typography
 const EMPTY_ACTIVITIES: Level3Activity[] = []
@@ -286,6 +288,7 @@ export default function Level3PlanModule({
   const [draftFilters, setDraftFilters] = useState<FilterCondition[]>([createFilterCondition()])
   const [columnSettingsOpen, setColumnSettingsOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<PlanWorkspaceViewMode>('vertical')
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -330,6 +333,23 @@ export default function Level3PlanModule({
     () => orderVisibleDefinitions(LEVEL3_COLUMN_DEFINITIONS, columnSettings),
     [columnSettings],
   )
+  const ganttTasks = useMemo(() => filteredRows.map(row => ({
+    id: row.id,
+    parentId: row.parentId || undefined,
+    taskName: row.activityName,
+    planStartDate: row.planStartDate,
+    planEndDate: row.planEndDate,
+    actualStartDate: row.actualStartDate,
+    actualEndDate: row.actualEndDate,
+    estimatedDays: row.estimatedDays || undefined,
+  })), [filteredRows])
+  const ganttColumns = useMemo<DHTMLXGanttColumn[]>(() => [
+    { name: 'text', label: '活动名称', width: 220, tree: true },
+    { name: 'start_date', label: '计划开始', align: 'center', width: 96 },
+    { name: 'end_date', label: '计划完成', align: 'center', width: 96 },
+    { name: 'actualStartDate', label: '实际开始', align: 'center', width: 96, template: task => task.actualStartDate || '-' },
+    { name: 'actualEndDate', label: '实际完成', align: 'center', width: 96, template: task => task.actualEndDate || '-' },
+  ], [])
   const selectedMilestone = milestones.find(item => item.id === selectedMilestoneId)
   const editingActivity = modalMode?.kind === 'edit'
     ? effectiveActivities.find(activity => activity.id === modalMode.activityId)
@@ -855,10 +875,23 @@ export default function Level3PlanModule({
           <Tooltip title="全部展开"><Button icon={<PlusSquareOutlined />} aria-label="全部展开" onClick={() => setCollapsedIds(scopeKey, [])} /></Tooltip>
           <Tooltip title="全部收起"><Button icon={<MinusSquareOutlined />} aria-label="全部收起" onClick={() => setCollapsedIds(scopeKey, rows.filter(row => !row.parentId).map(row => row.id))} /></Tooltip>
           <Tooltip title="历史修改记录"><Button icon={<HistoryOutlined />} aria-label="历史修改记录" onClick={() => setHistoryOpen(true)} /></Tooltip>
+          <PlanViewModeSwitcher
+            viewMode={viewMode}
+            onViewModeChange={next => setViewMode(next === 'gantt' ? 'gantt' : 'vertical')}
+            horizontalDisabled
+          />
         </Space>
       </div>
 
-      <DragPermissionContext.Provider value={dragPermissions}>
+      {viewMode === 'gantt' ? (
+        <DHTMLXGantt
+          tasks={ganttTasks}
+          columns={ganttColumns}
+          readOnly
+          collapsedIds={new Set(collapsedIds)}
+          onCollapsedChange={updater => setCollapsedIds(scopeKey, [...updater(new Set(collapsedIds))])}
+        />
+      ) : <DragPermissionContext.Provider value={dragPermissions}>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={visibleRows.map(row => row.id)} strategy={verticalListSortingStrategy}>
             <Table<Level3ActivityViewRow>
@@ -880,7 +913,7 @@ export default function Level3PlanModule({
             />
           </SortableContext>
         </DndContext>
-      </DragPermissionContext.Provider>
+      </DragPermissionContext.Provider>}
 
       <Modal
         className="pms-modal pms-level3-activity-modal"

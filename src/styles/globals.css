@@ -1723,6 +1723,53 @@
   overflow: hidden;
 }
 
+.pms-config-template-header-card,
+.pms-config-template-toolbar {
+  flex: 0 0 auto;
+}
+
+.pms-config-template-tabs .ant-tabs-nav {
+  min-height: 44px;
+  margin-bottom: 0;
+}
+
+.pms-config-template-content-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pms-level3-template-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pms-level3-template-name-cell > .ant-input,
+.pms-level3-template-name-cell > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.pms-level3-template-row-actions {
+  flex: 0 0 auto;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.ant-table-row:hover .pms-level3-template-row-actions,
+.pms-level3-template-row-actions:focus-within {
+  opacity: 1;
+}
+
+@media (max-width: 760px) {
+  .pms-config-template-content-card {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+}
+
 .pms-config-workspace__content > .ant-card > .ant-card-body,
 .pms-config-workspace__content > .pms-config-workspace-card > .ant-card-body {
   min-height: 0;

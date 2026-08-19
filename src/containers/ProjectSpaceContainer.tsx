@@ -41,6 +41,7 @@ import type { MenuProps } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { compareVersionsForTable } from '@/lib/versionCompare'
 import { resolveLevel3DetachedScopeFork, resolveLevel3Scope } from '@/lib/level3PlanRules'
+import { getAddedDimensionValues, materializeLevel3Template } from '@/lib/level3TemplateRules'
 import type { Level3Milestone } from '@/types/level3Plan'
 import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
 import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareModal'
@@ -195,6 +196,8 @@ import {
   mergeResponsiblePersonsIntoVisibleMembers,
   replaceProjectSystemAdministrators,
 } from '@/lib/projectResponsibility'
+import { getTemplateConfigScopeKey } from '@/lib/technicalPlanRules'
+import type { Level3TemplateActivity } from '@/types/level3Template'
 import { PROJECT_STATUS_CONFIG } from '@/data/projects'
 import {
   TECH_DOMAIN_OPTIONS,
@@ -386,6 +389,7 @@ export default function ProjectSpaceContainer() {
   const proj = useProjectStore()
   const plan = usePlanStore()
   const forkFollowScope = useLevel3PlanStore(state => state.forkFollowScope)
+  const initializeScopeFromTemplate = useLevel3PlanStore(state => state.initializeScopeFromTemplate)
   const transfer = useTransferStore()
   const perm = usePermissionStore()
 
@@ -448,7 +452,7 @@ export default function ProjectSpaceContainer() {
     selectedLevel2PlanType, setSelectedLevel2PlanType,
     selectedMilestones, setSelectedMilestones, selectedMRVersion, setSelectedMRVersion,
     columnSettingsByView, setColumnSettingsByView, collapsedNodes, setCollapsedNodes,
-    publishedSnapshots, setPublishedSnapshots, configTemplateTasksByType,
+    publishedSnapshots, setPublishedSnapshots, configTemplateTasksByType, configTemplateVersionScopes,
     compareVersionA, setCompareVersionA, compareVersionB, setCompareVersionB,
     compareResult, setCompareResult,
     marketPlanData, setMarketPlanData,
@@ -1017,7 +1021,7 @@ export default function ProjectSpaceContainer() {
     return sourceTasks
       .filter((task: any) => Boolean(task.parentId))
       .map((task: any) => ({
-        id: String(task.id),
+        id: String(task.stableId || task.id),
         name: String(task.taskName || ''),
         planEndDate: String(task.planEndDate || ''),
       }))
@@ -1035,6 +1039,48 @@ export default function ProjectSpaceContainer() {
     tosTypeSeedEntry,
     tosTypeVersionsByKey,
   ])
+
+  const initializeNewLevel3Dimension = (
+    kind: 'market' | 'tosType',
+    value: string,
+    milestoneTasks: any[],
+  ) => {
+    if (!selectedProject) return 'missing' as const
+    const scope = resolveLevel3Scope({
+      projectId: selectedProject.id,
+      kind,
+      value,
+      mainValue: value,
+      followsMain: false,
+    })
+    const projectType = getProjectTypeFamilyKey(selectedProject.type)
+    const templateScope = configTemplateVersionScopes[getTemplateConfigScopeKey(projectType, 'level3')]
+    const publishedTemplateVersion = templateScope?.versions
+      .filter(version => version.status === '已发布')
+      .sort((left, right) => comparePlanVersions(right, left))[0]
+    if (!publishedTemplateVersion) {
+      initializeScopeFromTemplate(scope.selectedScopeKey, [])
+      return 'missing' as const
+    }
+    const template = getTemplateSnapshotForProjectType(
+      publishedSnapshots,
+      projectType,
+      publishedTemplateVersion.id,
+      'level3',
+    ) as Level3TemplateActivity[] | undefined
+    if (!template) {
+      initializeScopeFromTemplate(scope.selectedScopeKey, [])
+      return 'missing' as const
+    }
+    const milestones: Level3Milestone[] = milestoneTasks
+      .filter(task => Boolean(task.parentId && task.id && task.taskName))
+      .map(task => ({ id: String(task.stableId || task.id), name: String(task.taskName), planEndDate: String(task.planEndDate || '') }))
+    return initializeScopeFromTemplate(scope.selectedScopeKey, materializeLevel3Template(template, {
+      actor: '系统管理员',
+      initializedAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      projectMilestones: milestones,
+    })) ? 'initialized' as const : 'exists' as const
+  }
 
   const effectiveLevel2PlanTasks = currentTosTypeData
     ? (tosLevel2PublishedSnapshot ?? currentTosTypeData.level2PlanTasks)
@@ -1433,6 +1479,7 @@ export default function ProjectSpaceContainer() {
     const detachedTosTypes = deriveDetachedTosTypes(previousTosTypeRows, normalizedRows)
 
     const nextTypes = normalizedRows.map(row => row.type)
+    const addedTypes = getAddedDimensionValues(previousTosTypeRows.map(row => row.type), nextTypes)
     const mainType = getMainTosType(normalizedRows) as TosPlanType
     const updatedProject = {
       ...selectedProject,
@@ -1485,9 +1532,15 @@ export default function ProjectSpaceContainer() {
       tosTypeSeedEntry,
     ))
     detachedScopeForks.forEach(fork => forkFollowScope(fork.sourceScopeKey, fork.targetScopeKey))
+    const level3InitializationResults = addedTypes.map(type => (
+      initializeNewLevel3Dimension('tosType', type, tosTypeSeedEntry.level1Tasks)
+    ))
     if (!nextTypes.includes(selectedTosTypeTab as TosPlanType)) setSelectedTosTypeTab(mainType || nextTypes[0])
     setShowTosTypeEditor(false)
     void containerMessageApi.success('类型配置已保存')
+    if (level3InitializationResults.includes('missing')) {
+      void containerMessageApi.warning('类型已保存，但暂无已发布的三级计划模板，本次未初始化活动')
+    }
   }
 
   const getCurrentMarketRows = () => (
@@ -1564,6 +1617,7 @@ export default function ProjectSpaceContainer() {
     }
 
     const nextMarkets = normalizedRows.map(row => row.market)
+    const addedMarkets = getAddedDimensionValues(previousRows.map(row => row.market), nextMarkets)
     const mainMarket = nextMainMarket
     const previousFollowMarkets = new Set(
       previousRows
@@ -1642,6 +1696,9 @@ export default function ProjectSpaceContainer() {
       if (fork) forkFollowScope(fork.sourceScopeKey, fork.targetScopeKey)
     })
     setMarketPlanData(syncedMarketPlanData)
+    const level3InitializationResults = addedMarkets.map(market => (
+      initializeNewLevel3Dimension('market', market, syncedMarketPlanData[market]?.tasks || [])
+    ))
     setSelectedMarketTab(getConfiguredMarketSelection(normalizedRows, selectedMarketTab))
     if (unfollowedMarkets.length > 0) {
       setMarketFollowVersionMeta(prev => removeFollowVersionMetaForMarkets(prev, {
@@ -1686,6 +1743,9 @@ export default function ProjectSpaceContainer() {
       } else {
         message.success('市场配置已保存')
       }
+    }
+    if (level3InitializationResults.includes('missing')) {
+      message.warning('市场已保存，但暂无已发布的三级计划模板，本次未初始化活动')
     }
     setShowMarketEditor(false)
   }
