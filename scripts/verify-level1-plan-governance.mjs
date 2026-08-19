@@ -51,6 +51,7 @@ const linkedMockTemplate = [
 ]
 const linkedMockA = projectMocks.buildProjectListMockPlanTasks('project-a', linkedMockTemplate)
 const linkedMockB = projectMocks.buildProjectListMockPlanTasks('project-b', linkedMockTemplate)
+const linkedPrimaryProject = projectMocks.buildProjectListMockPlanTasks('1', linkedMockTemplate)
 assert.equal(linkedMockA.length, linkedMockTemplate.length)
 const linkedMockParent = linkedMockA.find(task => task.id === 'stage')
 const linkedMockEmptyParent = linkedMockA.find(task => task.id === 'empty-stage')
@@ -71,6 +72,11 @@ assert.equal(
   linkedMockChildren.every((task, index) => index === 0 || task.planEndDate > linkedMockChildren[index - 1].planEndDate),
   true,
   'second-level mock completion dates are strictly increasing',
+)
+assert.deepEqual(
+  linkedPrimaryProject.filter(task => task.parentId === 'stage').map(task => task.planEndDate),
+  ['2026-02-26', '2026-03-17'],
+  'the primary X6877 project uses the same baseline milestone dates as its project-space plan',
 )
 assert.notDeepEqual(
   linkedMockChildren.map(task => task.planEndDate),

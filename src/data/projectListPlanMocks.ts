@@ -28,7 +28,7 @@ const LEVEL1_MOCK_MILESTONE_DATES = [
 ] as const
 
 const projectOffset = (projectId: string) => (
-  [...projectId].reduce((total, character) => total + character.charCodeAt(0), 0) % 3
+  ([...projectId].reduce((total, character) => total + character.charCodeAt(0), 0) + 2) % 3
 )
 
 const shiftIsoDate = (value: string, days: number) => {
