@@ -523,6 +523,11 @@ assert.match(compareModalSource, /technical-subproject/, 'version compare modal 
 for (const label of ['阶段', '里程碑点', '活动名称']) {
   assert.match(compareModalSource, new RegExp(label), `version compare modal contains ${label}`)
 }
+assert.match(compareModalSource, /const renderLegacyDaysCell[\s\S]*value > 0/, 'legacy history keeps a zero-day duration as a dash')
+assert.match(compareModalSource, /legacyColumns[\s\S]*renderLegacyDaysCell/, 'legacy duration columns use the legacy zero-day formatter')
+assert.match(compareModalSource, /const renderFlatDaysCell[\s\S]*typeof value === 'number'/, 'flat history formats zero-day durations as 0天')
+assert.match(compareModalSource, /hierarchicalFlatColumns[\s\S]*renderFlatDaysCell/, 'hierarchical-flat duration columns use the flat formatter')
+assert.match(compareModalSource, /technicalSubprojectColumns[\s\S]*renderFlatDaysCell/, 'technical-subproject duration columns use the flat formatter')
 const compareModule = loadTypeScriptModule(root, 'src/lib/versionCompare.ts')
 const stableCompare = compareModule.compareVersionsForTable(
   [{ ...milestones[1], id: '1.2', stableId: 'str1', sequence: 2, planEndDate: '2026-01-16' }],

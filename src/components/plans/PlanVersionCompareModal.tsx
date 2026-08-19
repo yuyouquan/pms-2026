@@ -90,7 +90,8 @@ export function PlanVersionCompareModal({
     const config = { 新增: { color: '#52c41a', bg: '#f6ffed' }, 删除: { color: '#ff4d4f', bg: '#fff2f0' }, 修改: { color: 'var(--pms-brand)', bg: 'var(--pms-brand-surface)' }, 未变更: { color: '#9ca3af', bg: '#fafafa' } }[value]
     return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: config.color, background: config.bg, border: value === '修改' ? '1px solid var(--pms-brand-border)' : `1px solid ${config.color}20` }}>{value}</span>
   }
-  const renderDaysCell = (row: CompareTableRow, fieldKey: 'estimatedDays' | 'actualDays', value: number | null) => renderDiffCell(row, fieldKey, typeof value === 'number' ? `${value}天` : '-')
+  const renderLegacyDaysCell = (row: CompareTableRow, fieldKey: 'estimatedDays' | 'actualDays', value: number | null) => renderDiffCell(row, fieldKey, typeof value === 'number' && value > 0 ? `${value}天` : '-')
+  const renderFlatDaysCell = (row: CompareTableRow, fieldKey: 'estimatedDays' | 'actualDays', value: number | null) => renderDiffCell(row, fieldKey, typeof value === 'number' ? `${value}天` : '-')
   const legacyColumns = [
     { title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, render: (value: string, row: CompareTableRow) => <span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? 'var(--pms-brand)' : '#9ca3af' }}>{value}</span> },
     { title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, render: renderChangeType },
@@ -99,10 +100,10 @@ export function PlanVersionCompareModal({
     { title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 80, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'predecessor', value) },
     { title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 105, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'planStartDate', value) },
     { title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 105, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'planEndDate', value) },
-    { title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 80, render: (value: number | null, row: CompareTableRow) => renderDaysCell(row, 'estimatedDays', value) },
+    { title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 80, render: (value: number | null, row: CompareTableRow) => renderLegacyDaysCell(row, 'estimatedDays', value) },
     { title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 105, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'actualStartDate', value) },
     { title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 105, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'actualEndDate', value) },
-    { title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 80, render: (value: number | null, row: CompareTableRow) => renderDaysCell(row, 'actualDays', value) },
+    { title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 80, render: (value: number | null, row: CompareTableRow) => renderLegacyDaysCell(row, 'actualDays', value) },
     { title: '是否延期', dataIndex: 'delayStatus', key: 'delayStatus', width: 80, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'delayStatus', value) },
     { title: '状态', dataIndex: 'status', key: 'status', width: 80, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'status', value) },
     { title: '进度', dataIndex: 'progress', key: 'progress', width: 70, render: (value: number, row: CompareTableRow) => renderDiffCell(row, 'progress', `${value}%`) },
@@ -114,9 +115,9 @@ export function PlanVersionCompareModal({
     { title: '里程碑点', dataIndex: 'milestoneName', key: 'milestoneName', width: 150, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'milestoneName', value) },
     { title: '状态', dataIndex: 'status', key: 'status', width: 80, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'status', value) },
     { title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 105, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'planEndDate', value) },
-    { title: '计划开发周期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 110, render: (value: number | null, row: CompareTableRow) => renderDaysCell(row, 'estimatedDays', value) },
+    { title: '计划开发周期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 110, render: (value: number | null, row: CompareTableRow) => renderFlatDaysCell(row, 'estimatedDays', value) },
     { title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 105, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'actualEndDate', value) },
-    { title: '实际开发周期', dataIndex: 'actualDays', key: 'actualDays', width: 110, render: (value: number | null, row: CompareTableRow) => renderDaysCell(row, 'actualDays', value) },
+    { title: '实际开发周期', dataIndex: 'actualDays', key: 'actualDays', width: 110, render: (value: number | null, row: CompareTableRow) => renderFlatDaysCell(row, 'actualDays', value) },
   ]
   const technicalSubprojectColumns = [
     { title: '序号', dataIndex: 'sequence', key: 'sequence', width: 70, render: renderSequenceCell },
@@ -125,10 +126,10 @@ export function PlanVersionCompareModal({
     { title: '状态', dataIndex: 'status', key: 'status', width: 80, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'status', value) },
     { title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 105, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'planStartDate', value) },
     { title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 105, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'planEndDate', value) },
-    { title: '计划周期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (value: number | null, row: CompareTableRow) => renderDaysCell(row, 'estimatedDays', value) },
+    { title: '计划周期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (value: number | null, row: CompareTableRow) => renderFlatDaysCell(row, 'estimatedDays', value) },
     { title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 105, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'actualStartDate', value) },
     { title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 105, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'actualEndDate', value) },
-    { title: '实际周期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (value: number | null, row: CompareTableRow) => renderDaysCell(row, 'actualDays', value) },
+    { title: '实际周期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (value: number | null, row: CompareTableRow) => renderFlatDaysCell(row, 'actualDays', value) },
   ]
   const columns = fieldMode === 'hierarchical-flat'
     ? hierarchicalFlatColumns
