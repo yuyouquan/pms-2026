@@ -4471,6 +4471,7 @@ export default function ProjectSpaceContainer() {
                   customRoles={roles.filter(role => !role.isFixed)}
                   currentLoginUser={currentLoginUser}
                   canEdit={canEditBasicInfo}
+                  canEditPlan={canGovernLevel1Plan}
                   onEdit={() => setShowProjectInfoEditor(true)}
                 />
               : renderProjectBasicInfo()

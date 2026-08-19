@@ -123,7 +123,14 @@ function TechnicalHorizontalPlanTable({
   const groups = currentProjection.stageGroups.length > 0
     ? currentProjection.stageGroups.map(group => ({ ...group, colSpan: Math.max(1, group.milestones.length) }))
     : [{
-        stage: { id: 'technical-subproject', taskName: '子项目计划', planStartDate: '', planEndDate: '', manpowerPercent: null },
+        stage: {
+          id: 'technical-subproject',
+          taskName: '子项目计划',
+          planStartDate: '',
+          planEndDate: '',
+          estimatedDays: sumLevel1EstimatedDays(currentProjection.rows),
+          manpowerPercent: null,
+        },
         milestones: currentProjection.rows,
         colSpan: Math.max(1, currentProjection.rows.length),
       }]
@@ -207,15 +214,10 @@ function TechnicalHorizontalPlanTable({
                   colSpan={colSpan}
                   style={{ ...thStyle, background: `${stageColor}10`, color: stageColor, borderBottom: `2px solid ${stageColor}` }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, textAlign: 'left' }}>
-                    <div>
-                      <div>{stage.taskName}</div>
-                      <div style={{ marginTop: 3, color: '#64748b', fontSize: 11, fontWeight: 400 }}>
-                        {stage.planStartDate && stage.planEndDate ? `${stage.planStartDate} ~ ${stage.planEndDate}` : '-'}
-                      </div>
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, textAlign: 'left' }}>
+                    <span>{stage.taskName}</span>
                     <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
-                      {stage.manpowerPercent == null ? '-' : `${stage.manpowerPercent}%`}
+                      {stage.estimatedDays == null ? '-' : `${stage.estimatedDays}天`}
                     </Tag>
                   </div>
                 </th>
@@ -814,7 +816,7 @@ export default function TechnicalPlanModule({
               options={visibleVersions.map(version => ({ value: version.id, label: `${version.versionNo}${version.status === '修订中' ? '（修订中）' : ''}` }))}
             />
             {isDraft && viewMode === 'vertical' && <Tag color="green">自动保存</Tag>}
-            {isDraft && viewMode !== 'vertical' && <Tag>{viewMode === 'gantt' ? '甘特图只读' : '横版只读'}</Tag>}
+            {isDraft && viewMode === 'gantt' && <Tag>甘特图只读</Tag>}
           </Space>
         )}
         primaryActions={(
