@@ -289,7 +289,7 @@ export default function Level3PlanModule({
   const [draftFilters, setDraftFilters] = useState<FilterCondition[]>([createFilterCondition()])
   const [columnSettingsOpen, setColumnSettingsOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [selectedHistoryActivity, setSelectedHistoryActivity] = useState<Level3ActivityViewRow | null>(null)
+  const [selectedHistoryActivityId, setSelectedHistoryActivityId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<PlanWorkspaceViewMode>('vertical')
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -311,6 +311,12 @@ export default function Level3PlanModule({
   const history = useMemo(
     () => readOnly ? mergeLevel3Histories(sourceHistory, selectedScopeHistory) : sourceHistory,
     [readOnly, selectedScopeHistory, sourceHistory],
+  )
+  const selectedHistoryActivity = useMemo(
+    () => selectedHistoryActivityId
+      ? effectiveActivities.find(activity => activity.id === selectedHistoryActivityId)
+      : undefined,
+    [effectiveActivities, selectedHistoryActivityId],
   )
   const selectedActivityHistory = useMemo(() => (
     selectedHistoryActivity
@@ -366,6 +372,10 @@ export default function Level3PlanModule({
   useEffect(() => {
     ensureScopeMockData(scopeKey, milestones)
   }, [ensureScopeMockData, milestones, scopeKey])
+
+  useEffect(() => {
+    if (selectedHistoryActivityId && !selectedHistoryActivity) setSelectedHistoryActivityId(null)
+  }, [selectedHistoryActivity, selectedHistoryActivityId])
 
   useEffect(() => {
     if (!modalMode) return
@@ -550,7 +560,12 @@ export default function Level3PlanModule({
     return (
       <div className="pms-level3-activity-cell" style={{ paddingLeft: row.depth ? 18 : 0 }}>
         <span className="pms-level3-activity-title">{row.activityName}</span>
-        <Space size={2} className="pms-level3-row-actions" onPointerDown={event => event.stopPropagation()}>
+        <Space
+          size={2}
+          className="pms-level3-row-actions"
+          onPointerDown={event => event.stopPropagation()}
+          onKeyDown={event => event.stopPropagation()}
+        >
           <Tooltip title="查看历史">
             <Button
               type="text"
@@ -559,7 +574,7 @@ export default function Level3PlanModule({
               aria-label={`查看活动历史 ${row.activityName}`}
               onClick={event => {
                 event.stopPropagation()
-                setSelectedHistoryActivity(row)
+                setSelectedHistoryActivityId(row.id)
               }}
               onDoubleClick={event => event.stopPropagation()}
             />
@@ -1020,7 +1035,7 @@ export default function Level3PlanModule({
           title={`活动历史记录 · ${selectedHistoryActivity.activityName}`}
           size={520}
           open
-          onClose={() => setSelectedHistoryActivity(null)}
+          onClose={() => setSelectedHistoryActivityId(null)}
         >
           {selectedActivityHistory.length === 0 ? (
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无该活动历史记录" />

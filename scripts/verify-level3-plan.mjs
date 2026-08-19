@@ -1324,7 +1324,9 @@ assert.ok(componentSource.includes('!readOnly && getLevel3ActivityPermissions(ro
 // the checks describe the row action and drag-end behaviour rather than matching
 // unrelated history or permission tokens elsewhere in the component.
 assert.ok(componentSource.includes('filterLevel3HistoryForActivity'), '活动历史必须使用 filterLevel3HistoryForActivity')
-assert.ok(componentSource.includes('const [selectedHistoryActivity, setSelectedHistoryActivity] = useState<Level3ActivityViewRow | null>(null)'), '活动历史必须保存当前选中活动')
+assert.ok(componentSource.includes('const [selectedHistoryActivityId, setSelectedHistoryActivityId] = useState<string | null>(null)'), '活动历史必须保存当前选中活动 ID，而非行快照')
+assert.ok(componentSource.includes('effectiveActivities.find(activity => activity.id === selectedHistoryActivityId)'), '活动历史必须从当前有效活动中解析选中活动')
+assert.ok(componentSource.includes('if (selectedHistoryActivityId && !selectedHistoryActivity) setSelectedHistoryActivityId(null)'), '已删除活动的历史抽屉必须自动关闭')
 assert.ok(componentSource.includes('title={`活动历史记录 · ${selectedHistoryActivity.activityName}`}'), '活动历史抽屉标题必须包含活动名称')
 assert.ok(componentSource.includes('暂无该活动历史记录'), '活动历史抽屉必须提供空态')
 assert.ok(componentSource.includes('aria-label={`查看活动历史 ${row.activityName}`}'), '每行必须提供可访问的查看活动历史按钮')
@@ -1336,7 +1338,8 @@ const historyButtonIndex = activityNameSource.indexOf('查看活动历史 ${row.
 const structuralBranchIndex = activityNameSource.indexOf('!readOnly && (permissions.canEdit || permissions.canAddChild)')
 assert.ok(historyButtonIndex >= 0 && (structuralBranchIndex < 0 || historyButtonIndex < structuralBranchIndex), '查看历史按钮不能置于只读隐藏的结构操作分支内')
 assert.ok(activityNameSource.includes('onPointerDown={event => event.stopPropagation()}'), '活动行操作必须阻止指针事件触发拖动')
-assert.ok(activityNameSource.includes('event.stopPropagation()\n                setSelectedHistoryActivity(row)'), '查看历史按钮必须阻止点击冒泡')
+assert.ok(activityNameSource.includes('onKeyDown={event => event.stopPropagation()}'), '活动行操作必须阻止键盘事件冒泡到拖动传感器')
+assert.ok(activityNameSource.includes('event.stopPropagation()\n                setSelectedHistoryActivityId(row.id)'), '查看历史按钮必须阻止点击冒泡')
 assert.ok(activityNameSource.includes('onDoubleClick={event => event.stopPropagation()}'), '查看历史按钮必须阻止双击触发编辑')
 assert.ok(componentSource.includes('const renderHistoryItems = (items: Level3ChangeLog[])'), '全局和活动历史必须复用同一渲染函数')
 assert.ok(componentSource.includes('renderHistoryItems(history)'), '全局历史抽屉必须复用历史渲染函数')
