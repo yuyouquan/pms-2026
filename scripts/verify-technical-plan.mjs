@@ -444,7 +444,6 @@ const shellCapabilities = [
   ['全部展开', 'utilityActions'],
   ['全部收起', 'utilityActions'],
   ['版本对比', 'utilityActions'],
-  ['分享计划', 'utilityActions'],
 ]
 for (const slot of ['primaryActions', 'utilityActions']) assert.equal(technicalShellProps.has(slot), true, `technical plan fills the shared shell ${slot} slot`)
 for (const [label, slot] of shellCapabilities) {
@@ -452,6 +451,12 @@ for (const [label, slot] of shellCapabilities) {
   assert.ok(slotAttribute?.initializer && ts.isJsxExpression(slotAttribute.initializer) && slotAttribute.initializer.expression, `technical plan passes a live ${slot} expression for ${label}`)
   const slotNodes = collectReachableFromRoots(technicalSourceFile, [slotAttribute.initializer.expression])
   assert.equal(rendersLiveCapabilityControl(slotNodes, technicalSourceFile, label), true, `technical plan's ${slot} slot renders an actual ${label} control`)
+}
+const utilitySlotAttribute = jsxAttribute(technicalShellMount, 'utilityActions')
+assert.ok(utilitySlotAttribute?.initializer && ts.isJsxExpression(utilitySlotAttribute.initializer) && utilitySlotAttribute.initializer.expression, 'technical plan exposes live utility actions')
+const utilitySlotNodes = collectReachableFromRoots(technicalSourceFile, [utilitySlotAttribute.initializer.expression])
+for (const hiddenLabel of ['导入', '分享计划']) {
+  assert.equal(rendersLiveCapabilityControl(utilitySlotNodes, technicalSourceFile, hiddenLabel), false, `technical projects hide the ${hiddenLabel} control in project space`)
 }
 const viewSwitcherSource = readSource(root, 'src/components/plans/PlanViewModeSwitcher.tsx')
 const viewSwitcherSourceFile = parseTsx(viewSwitcherSource, 'PlanViewModeSwitcher.tsx')
@@ -495,7 +500,6 @@ assert.match(technicalModuleSource, /if \(invalid\.size\)[\s\S]{0,320}setCollaps
 assert.match(technicalModuleSource, /const publishedVersions = useMemo\([\s\S]{0,160}canViewTechnicalPlan/, 'published versions remain inaccessible without technical-plan view permission')
 assert.match(technicalModuleSource, /canShareTechnicalPlan/, 'technical plan sharing accepts its dedicated L1 share capability')
 assert.match(technicalModuleSource, /const handleShare = \(\) => \{\s*if \(!canViewTechnicalPlan \|\| !canShareTechnicalPlan\) return/, 'sharing has strict view and share permission guards')
-assert.match(technicalModuleSource, /disabled=\{!canViewTechnicalPlan \|\| !canShareTechnicalPlan \|\| !publishedVersions\.length\}[^>]*aria-label="分享计划"/, 'sharing is disabled without technical-plan view or share permission')
 assert.match(technicalModuleSource, /编辑模式[\s\S]{0,180}自动保存/, 'technical drafts expose the same edit-mode guidance as whole-machine plans')
 assert.match(technicalModuleSource, /key:\s*['"]id['"][^\n]*fixed:\s*['"]left['"]/, 'the technical sequence column stays fixed on horizontal scroll')
 assert.match(technicalModuleSource, /key:\s*['"]taskName['"][^\n]*fixed:\s*['"]left['"]/, 'the technical task-name column stays fixed on horizontal scroll')
