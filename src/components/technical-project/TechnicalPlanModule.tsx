@@ -991,7 +991,9 @@ export default function TechnicalPlanModule({
             </DndContext>
             {canEditTaskStructure && (
               <div className="technical-plan-add-task">
-                <Button type="dashed" icon={<PlusOutlined />} onClick={handleAddTopLevelTask}>添加新活动</Button>
+                <Tooltip title="新增一级活动">
+                  <Button type="dashed" icon={<PlusOutlined />} aria-label="新增一级活动" onClick={handleAddTopLevelTask}>添加新活动</Button>
+                </Tooltip>
               </div>
             )}
           </div>
