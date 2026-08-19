@@ -7,7 +7,7 @@ import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-cont
 const root = projectRoot(import.meta.url)
 const rules = loadTypeScriptModule(root, 'src/lib/technicalPlanRules.ts')
 assert.deepEqual(rules.TDT_TEMPLATE_SEED, [['规划阶段', ['规划启动', 'charter DCP']], ['概念阶段', ['TDR1']], ['计划阶段', ['TDR2', 'PDCP']], ['开发验证阶段', ['TDR3_X', 'TDCP_X']], ['迁移阶段', ['TDR4', 'EDCP']]], 'TDT seed is complete and ordered')
-assert.deepEqual(rules.SUBPROJECT_TEMPLATE_SEED, ['第1版转测', '第2版转测', '第X版转测', 'TDR3'], 'subproject seed is ordered')
+assert.deepEqual(rules.SUBPROJECT_TEMPLATE_SEED, ['第1版转测', '第2版转测', 'TDR3'], 'subproject seed is ordered')
 assert.throws(() => rules.validateTechnicalTemplateDepth('tdt', [{ children: [{ children: [{ children: [] }] }] }]), /depth/i)
 assert.throws(() => rules.validateTechnicalTemplateDepth('subproject', [{ children: [{}] }]), /child/i)
 
@@ -26,7 +26,7 @@ for (const [phase, children] of rules.TDT_TEMPLATE_SEED) {
 assert.equal(rules.validateTechnicalTemplateDepth('tdt', tdtTasks), true, 'TDT seed is valid')
 
 const subprojectTasks = rules.buildSubprojectTemplateTasks()
-assert.deepEqual(subprojectTasks.map(task => task.id), ['1', '2', '3', '4'], 'subproject template uses numeric root numbering')
+assert.deepEqual(subprojectTasks.map(task => task.id), ['1', '2', '3'], 'subproject template uses numeric root numbering')
 assert.deepEqual(subprojectTasks.map(task => task.taskName), rules.SUBPROJECT_TEMPLATE_SEED, 'subproject seed task order is exact')
 assert.ok(subprojectTasks.every(task => !task.parentId), 'subproject seed is single-level')
 assert.equal(rules.validateTechnicalTemplateDepth('subproject', subprojectTasks), true, 'subproject seed is valid')
@@ -66,7 +66,7 @@ assert.deepEqual(migrated.publishedSnapshots['template::技术项目::level1::v3
 const planSource = readSource(root, 'src/stores/plan.ts')
 const configSource = readSource(root, 'src/containers/ConfigContainer.tsx')
 assert.match(planSource, /PLAN_STORE_VERSION\s*=\s*\d+/, 'plan store declares a persistence version')
-assert.ok(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]) >= 3, 'plan store migrates persisted technical template numbering')
+assert.equal(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]), 6, 'plan store migrates the controlled subproject transfer seed exactly once')
 assert.match(planSource, /setTechnicalTemplateTasks/, 'plan store exposes a validating technical-template setter')
 assert.match(planSource, /validateTechnicalTemplateDepth/, 'plan store enforces technical template depth')
 assert.doesNotMatch(configSource, /publishedSnapshots\[versionId\]/, 'config snapshots never fall back across template scopes')
@@ -147,7 +147,7 @@ assert.equal(compare.compareVersionsForTable(subprojectTasks, subprojectPublishe
 
 const technicalProjectModule = loadTypeScriptModule(root, 'src/stores/technicalProject.ts')
 const technicalPlanModule = loadTypeScriptModule(root, 'src/stores/technicalPlan.ts')
-assert.ok(technicalPlanModule.TECHNICAL_PLAN_STORE_VERSION >= 2, 'technical plan persistence declares a migration version')
+assert.equal(technicalPlanModule.TECHNICAL_PLAN_STORE_VERSION, 8, 'technical plan persistence declares the controlled-transfer migration version')
 const migratedLegacyPlan = technicalPlanModule.migrateTechnicalPlanState({
   plansByKey: {
     '9:tdt': {
@@ -262,14 +262,14 @@ const numberedSubprojectTasks = technicalWorkspace.renumberTechnicalSubprojectTa
     taskName: '新建一级任务',
   },
 ])
-assert.deepEqual(numberedSubprojectTasks.map(task => task.id), ['1', '2', '3', '4', '5'], 'technical subproject activities always expose continuous numeric sequence values')
+assert.deepEqual(numberedSubprojectTasks.map(task => task.id), ['1', '2', '3', '4'], 'technical subproject activities always expose continuous numeric sequence values')
 assert.equal(numberedSubprojectTasks.at(-1).stableId, 'technical-custom-1', 'renumbering keeps the stable identity used for version synchronization')
 const reorderedSubprojectTasks = technicalWorkspace.reorderTechnicalSubprojectCustomTasks([
   ...numberedSubprojectTasks,
-  { ...numberedSubprojectTasks.at(-1), id: '6', stableId: 'technical-custom-2', order: 5, taskName: '第二个自定义任务' },
-], '6', '5')
+  { ...numberedSubprojectTasks.at(-1), id: '5', stableId: 'technical-custom-2', order: 5, taskName: '第二个自定义任务' },
+], '5', '4')
 assert.deepEqual(reorderedSubprojectTasks.slice(-2).map(task => task.stableId), ['technical-custom-2', 'technical-custom-1'], 'custom subproject roots can reorder among themselves')
-assert.deepEqual(technicalWorkspace.reorderTechnicalSubprojectCustomTasks(reorderedSubprojectTasks, '1', '5'), reorderedSubprojectTasks, 'template roots cannot be reordered')
+assert.deepEqual(technicalWorkspace.reorderTechnicalSubprojectCustomTasks(reorderedSubprojectTasks, '1', '4'), reorderedSubprojectTasks, 'template roots cannot be reordered')
 const planWorkspaceShellPath = 'src/components/plans/PlanWorkspaceShell.tsx'
 assert.equal(fs.existsSync(`${root}/${planWorkspaceShellPath}`), true, 'plan workspace provides a shared shell for whole-machine and technical projects')
 const planWorkspaceShell = readSource(root, planWorkspaceShellPath)
@@ -657,6 +657,22 @@ const migratedFromTask10 = planModule.migratePlanStoreState({
 }, 1)
 assert.deepEqual(migratedFromTask10.configTemplateTasksByType[rules.TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt], editedTdt, 'v1 to v2 migration preserves edited TDT templates')
 assert.deepEqual(migratedFromTask10.publishedSnapshots['template::技术项目::tdt::v5'], editedTdt, 'v1 to v2 migration preserves technical publications')
+const legacySubprojectTemplate = [
+  { ...subprojectTasks[0], taskName: '第1版转测' },
+  { ...subprojectTasks[1], taskName: '第2版转测' },
+  { ...subprojectTasks[2], taskName: '第X版转测' },
+  { ...subprojectTasks[2], id: '4', stableId: 'TDR3', order: 4, taskName: 'TDR3' },
+]
+const historicalSubprojectSnapshots = { 'template::技术项目::subproject::v3': legacySubprojectTemplate }
+const historicalSubprojectScopes = { [subprojectScope]: { versions: [{ id: 'v3', versionNo: 'V3', status: '已发布' }], currentVersion: 'v3' } }
+const migratedControlledSubprojectSeed = planModule.migratePlanStoreState({
+  configTemplateTasksByType: { [rules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject]: legacySubprojectTemplate },
+  publishedSnapshots: historicalSubprojectSnapshots,
+  configTemplateVersionScopes: historicalSubprojectScopes,
+}, 5)
+assert.deepEqual(migratedControlledSubprojectSeed.configTemplateTasksByType[rules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject].map(task => task.taskName), ['第1版转测', '第2版转测', 'TDR3'], 'v5 migrates only the untouched subproject template seed')
+assert.deepEqual(migratedControlledSubprojectSeed.publishedSnapshots['template::技术项目::subproject::v3'], historicalSubprojectSnapshots['template::技术项目::subproject::v3'], 'v5 controlled seed migration preserves published snapshots')
+assert.deepEqual(migratedControlledSubprojectSeed.configTemplateVersionScopes[subprojectScope], historicalSubprojectScopes[subprojectScope], 'v5 controlled seed migration preserves config version history')
 delete globalThis.localStorage
 
 assert.match(configSource, /TDT项目计划/, 'technical config exposes TDT project plan tab')
@@ -671,6 +687,14 @@ const seededVersionIds = Object.values(seededTechnicalPlans).flatMap(plan => pla
 assert.equal(new Set(seededVersionIds).size, seededVersionIds.length, 'technical plan version IDs are unique across seed instances')
 assert.ok(Object.values(seededTechnicalPlans).every(plan => plan.versions.some(version => version.status === '已发布')), 'every seeded technical plan instance has a published version')
 assert.equal(seededTechnicalPlans['9:tdt'].currentVersionId, 'tech-9-v2-draft', 'AI TDT seed keeps its V2 draft selected')
+assert.equal(seededTechnicalPlans['9:subproject:IPM-AI-001'].versions.find(version => version.status === '已发布').tasks.at(-1).planEndDate, '2026-07-15', 'subproject mock scheduling reaches the project end after the three-item seed change')
+const preservedLegacySubprojectVersion = technicalPlanModule.migrateTechnicalPlanState({ plansByKey: {
+  'custom:subproject:legacy': {
+    planKey: 'custom:subproject:legacy', templateKind: 'subproject', currentVersionId: 'legacy-v1',
+    versions: [{ id: 'legacy-v1', versionNo: 'V1', templateType: 'subproject', status: '已发布', tasks: legacySubprojectTemplate }],
+  },
+} }, 7)
+assert.deepEqual(preservedLegacySubprojectVersion.plansByKey['custom:subproject:legacy'].versions[0].tasks.map(task => task.taskName), ['第1版转测', '第2版转测', '第X版转测', 'TDR3'], 'v7 existing valid subproject versions retain the historical transfer seed')
 assert.ok(Object.entries(seededTechnicalPlans).filter(([key]) => key !== '9:tdt').every(([, plan]) => plan.versions.find(version => version.id === plan.currentVersionId)?.status === '已发布'), 'non-AI seeds select their published version')
 const customizedPlanSeed = seededTechnicalPlans['9:tdt']
 const migratedV5Plans = technicalPlanModule.migrateTechnicalPlanState({ plansByKey: {

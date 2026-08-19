@@ -15,7 +15,6 @@ export const TDT_TEMPLATE_SEED = [
 export const SUBPROJECT_TEMPLATE_SEED = [
   '第1版转测',
   '第2版转测',
-  '第X版转测',
   'TDR3',
 ] as const
 
@@ -71,6 +70,50 @@ export const buildSubprojectTemplateTasks = (): TechnicalTemplateTask[] => (
     createTask(String(index + 1), index + 1, taskName)
   ))
 )
+
+export type InsertNextTechnicalSubprojectTransferResult =
+  | { ok: true; tasks: TechnicalTemplateTask[]; task: TechnicalTemplateTask }
+  | { ok: false; reason: 'tdr3-missing' | 'duplicate-name' }
+
+export const insertNextTechnicalSubprojectTransfer = (
+  tasks: readonly TechnicalTemplateTask[],
+): InsertNextTechnicalSubprojectTransferResult => {
+  const ordered = tasks
+    .map((task, index) => ({ task: { ...task }, index }))
+    .sort((left, right) => left.task.order - right.task.order || left.index - right.index)
+  const tdr3Index = ordered.findIndex(({ task }) => task.taskName === 'TDR3')
+  if (tdr3Index < 0) return { ok: false, reason: 'tdr3-missing' }
+  const maximumTransferVersion = ordered.reduce((maximum, { task }) => {
+    const match = /^第(\d+)版转测$/.exec(task.taskName)
+    return match ? Math.max(maximum, Number(match[1])) : maximum
+  }, 0)
+  const taskName = `第${maximumTransferVersion + 1}版转测`
+  if (ordered.some(({ task }) => task.taskName === taskName)) return { ok: false, reason: 'duplicate-name' }
+  const nonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const stableId = `custom-subproject-transfer-${nonce}`
+  const next = ordered.map(({ task }) => task)
+  next.splice(tdr3Index, 0, {
+    id: stableId,
+    stableId,
+    source: 'custom',
+    role: '技术项目负责人',
+    order: tdr3Index + 1,
+    taskName,
+    responsible: '技术项目负责人',
+    predecessor: '',
+    planStartDate: '',
+    planEndDate: '',
+    estimatedDays: 0,
+    actualStartDate: '',
+    actualEndDate: '',
+    actualDays: 0,
+    status: '未开始',
+    progress: 0,
+    defaultRoadmap: false,
+  })
+  const renumbered = next.map((task, index) => ({ ...task, id: String(index + 1), order: index + 1 }))
+  return { ok: true, tasks: renumbered, task: renumbered.find(task => task.stableId === stableId)! }
+}
 
 /** Keeps task content intact while aligning technical templates with the shared 1 / 1.1 numbering contract. */
 export const renumberTechnicalTasks = <Task extends TechnicalTemplateTaskInput>(
@@ -345,5 +388,21 @@ export const migrateTechnicalTemplateNumberingState = <T extends Record<string, 
       key,
       key.startsWith('template::技术项目::') && Array.isArray(value) ? renumberTechnicalTasks(value) : value,
     ])),
+  }
+}
+
+export const migrateTechnicalSubprojectSeedState = <T extends Record<string, any>>(state: T): T => {
+  const templates = state.configTemplateTasksByType && typeof state.configTemplateTasksByType === 'object'
+    ? state.configTemplateTasksByType as Record<string, unknown>
+    : undefined
+  const current = templates?.[TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject]
+  const legacySeed = ['第1版转测', '第2版转测', '第X版转测', 'TDR3']
+  if (!Array.isArray(current) || current.map(task => String(task?.taskName || '')).join('|') !== legacySeed.join('|')) return state
+  return {
+    ...state,
+    configTemplateTasksByType: {
+      ...templates,
+      [TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject]: buildSubprojectTemplateTasks(),
+    },
   }
 }

@@ -20,6 +20,74 @@ const loadTypescriptModule = async relativePath => {
 const level1Rules = await loadTypescriptModule('src/lib/level1PlanRules.ts')
 const technicalRules = await loadTypescriptModule('src/lib/technicalPlanRules.ts')
 
+const launchStage = { id: 'launch', stableId: 'stage-launch', order: 2, taskName: '上市阶段', source: 'template' }
+const machineMrTasks = [
+  { id: '1', stableId: 'stage-concept', order: 1, taskName: '概念阶段', source: 'template' },
+  { id: '1.1', stableId: 'mr-1', parentId: '1', order: 1, taskName: 'MR1', source: 'template' },
+  { ...launchStage },
+  { id: '2.1', stableId: 'mr-2', parentId: 'launch', order: 1, taskName: 'MR2', source: 'template' },
+]
+assert.equal(level1Rules.canAddLevel1CustomChild('整机产品项目', launchStage), false, 'launch-stage additions are reserved for controlled MR insertion')
+const firstMrInsert = level1Rules.insertNextMachineMrMilestone(machineMrTasks)
+assert.equal(firstMrInsert.ok, true, 'a machine launch stage accepts controlled MR insertion')
+assert.equal(firstMrInsert.task.taskName, 'MR4', 'controlled MR insertion starts after MR3 even when only MR1 and MR2 exist')
+assert.deepEqual(firstMrInsert.tasks.filter(task => task.parentId === firstMrInsert.tasks.find(task => task.stableId === 'stage-launch').id).map(task => task.taskName), ['MR2', 'MR4'], 'the inserted MR remains a launch-stage sibling')
+assert.equal(firstMrInsert.task.source, 'custom', 'controlled MR insertion marks the task custom')
+assert.equal(firstMrInsert.task.planStartDate, '', 'controlled MR starts without schedule dates')
+assert.equal(firstMrInsert.task.estimatedDays, null, 'controlled MR has no preset duration')
+assert.equal(firstMrInsert.task.status, '未开始', 'controlled MR begins unstarted')
+assert.equal(firstMrInsert.task.progress, 0, 'controlled MR begins at zero progress')
+assert.strictEqual(firstMrInsert.tasks.find(task => task.stableId === firstMrInsert.task.stableId), firstMrInsert.task, 'controlled MR result points into the renumbered output')
+assert.equal(level1Rules.canMutateLevel1TaskStructure({ projectType: '整机产品项目', task: firstMrInsert.task, parent: firstMrInsert.tasks.find(task => task.id === firstMrInsert.task.parentId), action: 'rename' }), false, 'controlled MR cannot be renamed')
+assert.equal(level1Rules.canMutateLevel1TaskStructure({ projectType: '整机产品项目', task: firstMrInsert.task, parent: firstMrInsert.tasks.find(task => task.id === firstMrInsert.task.parentId), action: 'reorder' }), false, 'controlled MR cannot be reordered')
+assert.equal(level1Rules.canMutateLevel1TaskStructure({ projectType: '整机产品项目', task: firstMrInsert.task, parent: firstMrInsert.tasks.find(task => task.id === firstMrInsert.task.parentId), action: 'delete' }), true, 'controlled MR can be deleted')
+const secondMrInsert = level1Rules.insertNextMachineMrMilestone(firstMrInsert.tasks)
+assert.equal(secondMrInsert.ok, true, 'a second controlled MR can be inserted')
+assert.equal(secondMrInsert.task.taskName, 'MR5', 'controlled MR insertion increments the highest existing MR')
+const repeatedMrInsert = level1Rules.insertNextMachineMrMilestone(secondMrInsert.tasks.filter(task => task.stableId !== secondMrInsert.task.stableId))
+assert.equal(repeatedMrInsert.ok, true, 'deleting a controlled MR permits replacement')
+assert.equal(repeatedMrInsert.task.taskName, 'MR5', 'deleting MR5 makes the next controlled insertion MR5 again')
+assert.deepEqual(level1Rules.insertNextMachineMrMilestone(machineMrTasks.filter(task => task.stableId !== 'stage-launch')), { ok: false, reason: 'launch-stage-missing' }, 'controlled MR insertion requires a launch stage')
+assert.deepEqual(level1Rules.insertNextMachineMrMilestone([...machineMrTasks, { id: 'other.1', stableId: 'existing-mr4', parentId: '1', order: 2, taskName: 'MR4', source: 'custom' }]), { ok: false, reason: 'duplicate-name' }, 'a computed MR name already used outside the launch stage is rejected')
+
+assert.deepEqual(technicalRules.SUBPROJECT_TEMPLATE_SEED, ['第1版转测', '第2版转测', 'TDR3'], 'subproject seed contains only the two fixed transfer versions and TDR3')
+const seededSubprojectTasks = technicalRules.buildSubprojectTemplateTasks()
+const firstTransferInsert = technicalRules.insertNextTechnicalSubprojectTransfer(seededSubprojectTasks)
+assert.equal(firstTransferInsert.ok, true, 'a configured subproject accepts a controlled transfer version')
+assert.equal(firstTransferInsert.task.taskName, '第3版转测', 'the first controlled transfer version is 第3版转测')
+assert.deepEqual(firstTransferInsert.tasks.map(task => task.taskName), ['第1版转测', '第2版转测', '第3版转测', 'TDR3'], 'the transfer version is inserted before TDR3')
+assert.equal(firstTransferInsert.task.source, 'custom', 'controlled transfer version marks the task custom')
+assert.equal(firstTransferInsert.task.responsible, '技术项目负责人', 'controlled transfer version has the technical-project owner')
+assert.equal(firstTransferInsert.task.estimatedDays, 0, 'controlled transfer version starts with zero duration')
+assert.strictEqual(firstTransferInsert.tasks.find(task => task.stableId === firstTransferInsert.task.stableId), firstTransferInsert.task, 'controlled transfer result points into the renumbered output')
+const secondTransferInsert = technicalRules.insertNextTechnicalSubprojectTransfer(firstTransferInsert.tasks)
+assert.equal(secondTransferInsert.ok, true, 'a second controlled transfer version can be inserted')
+assert.equal(secondTransferInsert.task.taskName, '第4版转测', 'the second controlled transfer version is 第4版转测')
+const repeatedTransferInsert = technicalRules.insertNextTechnicalSubprojectTransfer(secondTransferInsert.tasks.filter(task => task.stableId !== secondTransferInsert.task.stableId))
+assert.equal(repeatedTransferInsert.ok, true, 'deleting a controlled transfer version permits replacement')
+assert.equal(repeatedTransferInsert.task.taskName, '第4版转测', 'deleting 第4版转测 makes the next controlled insertion 第4版转测 again')
+assert.deepEqual(technicalRules.insertNextTechnicalSubprojectTransfer(seededSubprojectTasks.filter(task => task.taskName !== 'TDR3')), { ok: false, reason: 'tdr3-missing' }, 'controlled transfer insertion requires TDR3')
+const historicalSubprojectSeed = [
+  { id: '1', stableId: 'first', order: 1, taskName: '第1版转测' },
+  { id: '2', stableId: 'second', order: 2, taskName: '第2版转测' },
+  { id: '3', stableId: 'third', order: 3, taskName: '第X版转测' },
+  { id: '4', stableId: 'tdr3', order: 4, taskName: 'TDR3' },
+]
+const historicalSnapshots = { 'template::技术项目::subproject::v3': historicalSubprojectSeed }
+const historicalScopes = { 'config-template::技术项目::subproject': { versions: [{ id: 'v3' }], currentVersion: 'v3' } }
+const migratedSubprojectSeed = technicalRules.migrateTechnicalSubprojectSeedState({
+  configTemplateTasksByType: { [technicalRules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject]: historicalSubprojectSeed },
+  publishedSnapshots: historicalSnapshots,
+  configTemplateVersionScopes: historicalScopes,
+})
+assert.deepEqual(migratedSubprojectSeed.configTemplateTasksByType[technicalRules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject].map(task => task.taskName), ['第1版转测', '第2版转测', 'TDR3'], 'only an untouched legacy subproject config seed migrates')
+assert.strictEqual(migratedSubprojectSeed.publishedSnapshots, historicalSnapshots, 'subproject seed migration leaves published snapshots untouched')
+assert.strictEqual(migratedSubprojectSeed.configTemplateVersionScopes, historicalScopes, 'subproject seed migration leaves configuration history untouched')
+const customizedSubprojectSeed = technicalRules.migrateTechnicalSubprojectSeedState({
+  configTemplateTasksByType: { [technicalRules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject]: [{ ...historicalSubprojectSeed[0], taskName: '自定义第1版转测' }] },
+})
+assert.equal(customizedSubprojectSeed.configTemplateTasksByType[technicalRules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject][0].taskName, '自定义第1版转测', 'customized subproject config templates remain untouched')
+
 const hierarchy = [
   { id: 'concept', stableId: 'concept', order: 1, taskName: '概念阶段' },
   { id: 'concept-start', stableId: 'concept-start', parentId: 'concept', order: 1, taskName: '概念启动', planStartDate: '2026-01-01', planEndDate: '2026-01-05' },

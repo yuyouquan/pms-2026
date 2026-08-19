@@ -26,6 +26,7 @@ import {
   buildSubprojectTemplateTasks,
   buildTdtTemplateTasks,
   getTemplateConfigScopeKey,
+  migrateTechnicalSubprojectSeedState,
   migrateTechnicalTemplateNumberingState,
   migrateTechnicalTemplateState,
   renumberTechnicalTasks,
@@ -41,7 +42,7 @@ import type { Level3TemplateActivity } from '@/types/level3Template'
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
-export const PLAN_STORE_VERSION = 5
+export const PLAN_STORE_VERSION = 6
 export const PLAN_STORE_STORAGE_KEY = 'pms-plan-store'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -143,9 +144,12 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
   const legacyMigrated = persistedVersion < 1
     ? migrateTechnicalTemplateState(persistedState as Record<string, any>)
     : persistedState as Record<string, any>
-  const migrated = persistedVersion < 3
+  const numberedMigrated = persistedVersion < 3
     ? migrateTechnicalTemplateNumberingState(legacyMigrated)
     : legacyMigrated
+  const migrated = persistedVersion < 6
+    ? migrateTechnicalSubprojectSeedState(numberedMigrated)
+    : numberedMigrated
   const standardTemplateTypes = PROJECT_TEMPLATE_TYPES.filter(projectType => projectType !== PROJECT_CATEGORY_TECH)
   const shouldReplaceLegacyStandardTasks = (tasks: unknown) => (
     Array.isArray(tasks)

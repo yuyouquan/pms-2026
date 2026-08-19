@@ -204,14 +204,14 @@ const launchStage = { ...makeTask('4', null, 3, '上市收编阶段'), stableId:
 const templateLaunchChild = { ...makeTask('4.1', '4', 0, '收编完成'), stableId: 'milestone-close' }
 const customLaunchChild = { ...makeTask('4.2', '4', 1, '项目自定义节点'), stableId: 'custom-launch-1', source: 'custom' }
 const customOutsideLaunch = { ...makeTask('3.4', '3', 3, '错误阶段自定义节点'), stableId: 'custom-development-1', source: 'custom' }
-assert.equal(rules.canAddLevel1CustomChild('整机产品项目', launchStage), true, 'whole-machine launch stages accept custom children')
+assert.equal(rules.canAddLevel1CustomChild('整机产品项目', launchStage), false, 'whole-machine launch stages reserve additions for controlled MR insertion')
 assert.equal(rules.canAddLevel1CustomChild('tOS版本项目', launchStage), false, 'non-whole-machine projects cannot add launch children')
 assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '整机产品项目', task: templateLaunchChild, parent: launchStage, action: 'delete' }), false, 'template launch children stay locked')
 assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '整机产品项目', task: customLaunchChild, parent: launchStage, action: 'delete' }), true, 'custom launch children can be deleted')
-assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '整机产品项目', task: customLaunchChild, parent: launchStage, action: 'rename' }), true, 'custom launch children can be renamed')
+assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '整机产品项目', task: customLaunchChild, parent: launchStage, action: 'rename' }), false, 'custom launch children cannot be renamed')
 assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '整机产品项目', task: customOutsideLaunch, parent: { ...launchStage, id: '3', stableId: 'stage-development', taskName: '开发验证阶段' }, action: 'reorder' }), false, 'custom children outside launch stay locked')
 assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '技术项目', technicalKind: 'tdt', task: { ...customLaunchChild, parentId: undefined }, action: 'rename' }), false, 'TDT structure stays locked')
-assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '技术项目', technicalKind: 'subproject', task: { ...customLaunchChild, parentId: undefined }, action: 'rename' }), true, 'technical subproject custom roots can be renamed')
+assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '技术项目', technicalKind: 'subproject', task: { ...customLaunchChild, parentId: undefined }, action: 'rename' }), false, 'technical subproject custom roots cannot be renamed')
 assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '技术项目', technicalKind: 'subproject', task: { ...templateLaunchChild, parentId: undefined }, action: 'delete' }), false, 'technical subproject template roots stay locked')
 
 const prior = [

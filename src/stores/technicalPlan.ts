@@ -85,9 +85,11 @@ const buildInitialSubprojectTasks = (parentProjectId: string, childIndex: number
   const start = Date.parse(`${schedule.planStartDate}T00:00:00Z`)
   const end = Date.parse(`${schedule.planEndDate}T00:00:00Z`)
   const totalDays = Math.round((end - start) / 86_400_000) + 1
-  return buildSubprojectTemplateTasks().map((task, taskIndex) => {
-    const rangeStart = Math.floor(totalDays * taskIndex / 4)
-    const rangeEnd = Math.floor(totalDays * (taskIndex + 1) / 4) - 1
+  const templateTasks = buildSubprojectTemplateTasks()
+  const taskCount = templateTasks.length
+  return templateTasks.map((task, taskIndex) => {
+    const rangeStart = Math.floor(totalDays * taskIndex / taskCount)
+    const rangeEnd = Math.floor(totalDays * (taskIndex + 1) / taskCount) - 1
     const offset = Math.min(childIndex, Math.max(0, rangeEnd - rangeStart))
     const planStartDate = toIsoDate(start + (rangeStart + offset) * 86_400_000)
     const planEndDate = toIsoDate(start + rangeEnd * 86_400_000)
@@ -174,7 +176,7 @@ const clonePlans = (plans: TechnicalPlansByKey): TechnicalPlansByKey => Object.f
   }]),
 )
 
-export const TECHNICAL_PLAN_STORE_VERSION = 7
+export const TECHNICAL_PLAN_STORE_VERSION = 8
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 

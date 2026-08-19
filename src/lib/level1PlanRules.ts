@@ -441,24 +441,99 @@ export const canMaintainLevel1Plan = (input: {
   return input.spmUsers.includes(input.currentUser)
 }
 
-const isLaunchStageTask = (task?: Level1PlanTask) => Boolean(
-  task && (task.stableId === 'stage-launch' || task.taskName === '上市收编阶段'),
+export const renumberLevel1Tasks = (tasks: readonly Level1PlanTask[]): Level1PlanTask[] => {
+  const indexed = tasks.map((task, index) => ({ task: cloneTask(task), index }))
+  const knownIds = new Set(indexed.map(({ task }) => task.id))
+  const sortSiblings = (items: typeof indexed) => [...items].sort((left, right) => (
+    left.task.order - right.task.order || left.index - right.index
+  ))
+  const roots = sortSiblings(indexed.filter(({ task }) => !task.parentId || !knownIds.has(task.parentId)))
+  const childrenByParent = new Map<string, typeof indexed>()
+  indexed.forEach(item => {
+    if (!item.task.parentId || !knownIds.has(item.task.parentId)) return
+    childrenByParent.set(item.task.parentId, [...(childrenByParent.get(item.task.parentId) || []), item])
+  })
+  const numbered: Level1PlanTask[] = []
+  const included = new Set<number>()
+  const addRoot = (item: (typeof indexed)[number], rootIndex: number) => {
+    if (included.has(item.index)) return
+    included.add(item.index)
+    const rootId = String(rootIndex + 1)
+    const { parentId: _parentId, ...root } = item.task
+    numbered.push({ ...root, id: rootId, order: rootIndex + 1 })
+    sortSiblings(childrenByParent.get(item.task.id) || []).forEach((child, childIndex) => {
+      if (included.has(child.index)) return
+      included.add(child.index)
+      numbered.push({ ...child.task, id: `${rootId}.${childIndex + 1}`, parentId: rootId, order: childIndex + 1 })
+    })
+  }
+  roots.forEach((root, rootIndex) => addRoot(root, rootIndex))
+  indexed.filter(item => !included.has(item.index)).forEach(item => addRoot(item, numbered.filter(task => !task.parentId).length))
+  return numbered
+}
+
+export const isLaunchStageTask = (task?: Level1PlanTask) => Boolean(
+  task && (task.stableId === 'stage-launch' || task.taskName === '上市阶段' || task.taskName === '上市收编阶段'),
 )
 
 export const canAddLevel1CustomChild = (
-  projectType: string,
-  parent: Level1PlanTask,
-): boolean => projectType === '整机产品项目' && !parent.parentId && isLaunchStageTask(parent)
+  _projectType: string,
+  _parent: Level1PlanTask,
+): boolean => false
 
 export const canMutateLevel1TaskStructure = (
   input: Level1StructureMutationInput,
 ): boolean => {
   if (input.task.source !== 'custom') return false
+  if (input.action !== 'delete') return false
   if (input.technicalKind === 'tdt') return false
   if (input.technicalKind === 'subproject') return !input.task.parentId
   return input.projectType === '整机产品项目'
     && Boolean(input.task.parentId)
     && isLaunchStageTask(input.parent)
+}
+
+export type InsertNextMachineMrMilestoneResult =
+  | { ok: true; tasks: Level1PlanTask[]; task: Level1PlanTask }
+  | { ok: false; reason: 'launch-stage-missing' | 'duplicate-name' }
+
+export const insertNextMachineMrMilestone = (
+  tasks: readonly Level1PlanTask[],
+): InsertNextMachineMrMilestoneResult => {
+  const launchStage = tasks.find(task => !task.parentId && isLaunchStageTask(task))
+  if (!launchStage) return { ok: false, reason: 'launch-stage-missing' }
+  const maximumMr = tasks
+    .filter(task => task.parentId === launchStage.id)
+    .reduce((maximum, task) => {
+      const match = /^MR(\d+)$/.exec(task.taskName)
+      return match ? Math.max(maximum, Number(match[1])) : maximum
+    }, 3)
+  const taskName = `MR${maximumMr + 1}`
+  if (tasks.some(task => task.taskName === taskName)) return { ok: false, reason: 'duplicate-name' }
+  const nonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const stableId = `custom-mr-${nonce}`
+  const renumbered = renumberLevel1Tasks([
+    ...tasks,
+    {
+      id: stableId,
+      stableId,
+      parentId: launchStage.id,
+      order: Math.max(0, ...tasks.filter(task => task.parentId === launchStage.id).map(task => task.order)) + 1,
+      taskName,
+      source: 'custom',
+      responsible: '',
+      predecessor: '',
+      planStartDate: '',
+      planEndDate: '',
+      estimatedDays: null,
+      actualStartDate: '',
+      actualEndDate: '',
+      actualDays: null,
+      status: '未开始',
+      progress: 0,
+    },
+  ])
+  return { ok: true, tasks: renumbered, task: renumbered.find(task => task.stableId === stableId)! }
 }
 
 const getStableId = (task: Level1PlanTask) => task.stableId || task.id
