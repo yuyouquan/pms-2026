@@ -968,6 +968,10 @@ export default function ProjectSpaceContainer() {
     ...(perm.globalRoles.find(role => role.name === '管理组')?.members || []),
     ...roles.filter(role => role.name === '系统管理员').flatMap(role => role.members),
   ])), [perm.globalRoles, roles])
+  const level3StructuralAdministratorUsers = useMemo(
+    () => perm.globalRoles.find(role => role.name === '管理组')?.members || [],
+    [perm.globalRoles],
+  )
   const level3SpmUsers = useMemo(() => String(selectedProject?.spm || '')
     .split(/[,，、]/)
     .map(user => user.trim())
@@ -4119,6 +4123,7 @@ export default function ProjectSpaceContainer() {
             readOnly={level3ScopeResolution.readOnly}
             currentUser={currentLoginUser}
             administratorUsers={level3AdministratorUsers}
+            structuralAdministratorUsers={level3StructuralAdministratorUsers}
             spmUsers={level3SpmUsers}
             users={ALL_USERS}
             userDepartments={level3UserDepartments}

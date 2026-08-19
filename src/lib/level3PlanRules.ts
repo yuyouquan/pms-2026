@@ -352,8 +352,15 @@ export function moveLevel3Activity(
     }
   }
   const targetSiblings = sortByOrder(next.filter(activity => activity.parentId === toParentId && activity.id !== active.id))
-  const insertionIndex = activeIsParent
-    ? targetSiblings.findIndex(activity => activity.id === over.id)
+  const reorderingWithinSameSiblings = fromParentId === toParentId && (activeIsParent || !overIsParent)
+  const overIndex = fromSiblings.findIndex(activity => activity.id === over.id)
+  const insertionIndex = reorderingWithinSameSiblings
+    ? (() => {
+      const targetIndex = targetSiblings.findIndex(activity => activity.id === over.id)
+      return fromIndex < overIndex ? targetIndex + 1 : targetIndex
+    })()
+    : activeIsParent
+      ? targetSiblings.findIndex(activity => activity.id === over.id)
     : (overIsParent ? targetSiblings.length : targetSiblings.findIndex(activity => activity.id === over.id))
   if (insertionIndex < 0) return { ok: false, activities: cloneActivities(activities), reason: '无法确定拖动位置' }
   targetSiblings.splice(insertionIndex, 0, active)
@@ -401,7 +408,7 @@ export function getLevel3MovePermission(
   if (!sourceParent || sourceParent.parentId || !targetParent || targetParent.parentId) {
     return { allowed: false, reason: '父子层级无效' }
   }
-  const isElevated = context.administratorUsers.includes(context.currentUser)
+  const isElevated = context.structuralAdministratorUsers.includes(context.currentUser)
     || context.spmUsers.includes(context.currentUser)
   if (isElevated) return { allowed: true }
   if (sourceParent.responsible !== context.currentUser) return { allowed: false, reason: '仅父活动责任人可拖动子活动' }
@@ -472,6 +479,7 @@ export function getLevel3ActivityPermissions(
   context: Level3PermissionContext,
 ): Level3ActivityPermissions {
   const isAdministrator = context.administratorUsers.includes(context.currentUser)
+  const isStructuralAdministrator = context.structuralAdministratorUsers.includes(context.currentUser)
   const isSpm = context.spmUsers.includes(context.currentUser)
   const isElevated = isAdministrator || isSpm
   if (!activity) {
@@ -487,7 +495,7 @@ export function getLevel3ActivityPermissions(
     canCreateParent: isElevated,
     canEdit,
     canAddChild: !activity.parentId && (isElevated || isParentOwner),
-    canDrag: isElevated || isParentOwner,
+    canDrag: isStructuralAdministrator || isSpm || isParentOwner,
     canDelete: canEdit,
   }
 }

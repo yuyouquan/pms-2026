@@ -473,7 +473,7 @@ const childC = { ...childA, id: 'c3', parentId: 'p2', order: 0, activityName: '�
 const parent3 = { ...parent, id: 'p3', order: 2, activityName: '父活动3', responsible: '王五' }
 const childD = { ...childA, id: 'c4', parentId: 'p2', order: 1, activityName: '子活动D' }
 const dragActivities = [parent, childA, childB, parent2, childC, childD, parent3]
-const dragContext = { currentUser: '张三', administratorUsers: [], spmUsers: [] }
+const dragContext = { currentUser: '张三', administratorUsers: [], structuralAdministratorUsers: [], spmUsers: [] }
 
 assert.deepEqual(
   rules.getLevel3MovePermission('c1', 'p2', dragActivities, dragContext, true),
@@ -481,9 +481,9 @@ assert.deepEqual(
   'read-only scope must deny structural dragging',
 )
 assert.equal(
-  rules.getLevel3MovePermission('c1', 'p3', dragActivities, { ...dragContext, administratorUsers: ['张三'] }, false).allowed,
+  rules.getLevel3MovePermission('c1', 'p3', dragActivities, { ...dragContext, structuralAdministratorUsers: ['张三'] }, false).allowed,
   true,
-  'administrator can move any child across parents',
+  'global administrator can move any child across parents',
 )
 assert.equal(
   rules.getLevel3MovePermission('c1', 'p3', dragActivities, { ...dragContext, spmUsers: ['张三'] }, false).allowed,
@@ -513,7 +513,7 @@ assert.equal(
 )
 const malformedTargetActivities = [parent, childA, { ...childB, parentId: 'c1' }]
 assert.equal(
-  rules.getLevel3MovePermission('c1', 'c2', malformedTargetActivities, { ...dragContext, administratorUsers: ['张三'] }, false).allowed,
+  rules.getLevel3MovePermission('c1', 'c2', malformedTargetActivities, { ...dragContext, structuralAdministratorUsers: ['张三'] }, false).allowed,
   false,
   'a child target whose parent is another child is never authorized',
 )
@@ -523,7 +523,7 @@ assert.equal(rejectedMalformedMove.activities.find(item => item.id === 'c1').par
 assert.equal(rejectedMalformedMove.activities.some(item => item.id === 'c1' && item.parentId === item.id), false)
 const malformedSourceActivities = [parent, { ...childA, parentId: 'c2' }, childB]
 assert.equal(
-  rules.getLevel3MovePermission('c1', 'p1', malformedSourceActivities, { ...dragContext, administratorUsers: ['张三'] }, false).allowed,
+  rules.getLevel3MovePermission('c1', 'p1', malformedSourceActivities, { ...dragContext, structuralAdministratorUsers: ['张三'] }, false).allowed,
   false,
   'a third-level source child is never authorized for structural dragging',
 )
@@ -551,14 +551,17 @@ assert.equal(rootReorder.changed, true, 'root reordering carries its children in
 const noOpMove = rules.moveLevel3Activity(dragActivities, 'c1', 'c1')
 assert.equal(noOpMove.ok, true)
 assert.equal(noOpMove.changed, false, 'dropping an activity over itself is a no-op')
-const unchangedChildInsert = rules.moveLevel3Activity([parent, childA, childB], 'c1', 'c2')
-assert.equal(unchangedChildInsert.ok, true)
-assert.equal(unchangedChildInsert.changed, false, 'inserting a child before its current next sibling is a no-op')
+const downwardChildReorder = rules.moveLevel3Activity([parent, childA, childB], 'c1', 'c2')
+assert.equal(downwardChildReorder.ok, true)
+assert.equal(downwardChildReorder.changed, true, 'dragging a child down over its next sibling changes order')
 assert.deepEqual(
-  { fromParentId: unchangedChildInsert.fromParentId, toParentId: unchangedChildInsert.toParentId, fromIndex: unchangedChildInsert.fromIndex, toIndex: unchangedChildInsert.toIndex },
-  { fromParentId: 'p1', toParentId: 'p1', fromIndex: 0, toIndex: 0 },
-  'unchanged child insertion retains source and target metadata',
+  rules.numberLevel3Activities(downwardChildReorder.activities).map(row => `${row.number}:${row.id}`),
+  ['1:p1', '1.1:c2', '1.2:c1'],
+  'dragging a child down uses arrayMove ordering',
 )
+const upwardChildReorder = rules.moveLevel3Activity([parent, childA, childB], 'c2', 'c1')
+assert.equal(upwardChildReorder.changed, true, 'dragging a child up over its previous sibling changes order')
+assert.deepEqual(rules.numberLevel3Activities(upwardChildReorder.activities).map(row => `${row.number}:${row.id}`), ['1:p1', '1.1:c2', '1.2:c1'])
 const unchangedParentAppend = rules.moveLevel3Activity([parent, childA, childB], 'c2', 'p1')
 assert.equal(unchangedParentAppend.ok, true)
 assert.equal(unchangedParentAppend.changed, false, 'appending the current last child to its parent is a no-op')
@@ -567,14 +570,17 @@ assert.deepEqual(
   { fromParentId: 'p1', toParentId: 'p1', fromIndex: 1, toIndex: 1 },
   'unchanged parent append retains source and target metadata',
 )
-const unchangedRootReorder = rules.moveLevel3Activity([parent, childA, parent2, childC], 'p1', 'p2')
-assert.equal(unchangedRootReorder.ok, true)
-assert.equal(unchangedRootReorder.changed, false, 'reordering a root immediately before its target is a no-op')
+const downwardRootReorder = rules.moveLevel3Activity([parent, childA, parent2, childC], 'p1', 'p2')
+assert.equal(downwardRootReorder.ok, true)
+assert.equal(downwardRootReorder.changed, true, 'dragging a root down over its next root changes order')
 assert.deepEqual(
-  { fromParentId: unchangedRootReorder.fromParentId, toParentId: unchangedRootReorder.toParentId, fromIndex: unchangedRootReorder.fromIndex, toIndex: unchangedRootReorder.toIndex },
-  { fromParentId: null, toParentId: null, fromIndex: 0, toIndex: 0 },
-  'unchanged root reordering retains source and target metadata',
+  rules.numberLevel3Activities(downwardRootReorder.activities).map(row => `${row.number}:${row.id}`),
+  ['1:p2', '1.1:c3', '2:p1', '2.1:c1'],
+  'dragging a root down uses arrayMove ordering',
 )
+const upwardRootReorder = rules.moveLevel3Activity([parent, childA, parent2, childC], 'p2', 'p1')
+assert.equal(upwardRootReorder.changed, true, 'dragging a root up over its previous root changes order')
+assert.deepEqual(rules.numberLevel3Activities(upwardRootReorder.activities).map(row => `${row.number}:${row.id}`), ['1:p2', '1.1:c3', '2:p1', '2.1:c1'])
 
 const parentHistory = [
   { id: 'moved-away', action: 'move', actor: '张三', occurredAt: '2026-08-19 10:03:00', activityId: 'c1', activityName: '子活动A', activityNumber: '1.1', summary: '移出父活动', changes: [], sourceParentActivityId: 'p1', sourceParentActivityName: '父活动' },
@@ -619,7 +625,7 @@ assert.equal(deletedParent.ok, true)
 assert.deepEqual(deletedParent.deletedActivities.map(item => item.id), ['p1', 'c1', 'c2'])
 assert.deepEqual(deletedParent.activities.map(item => item.id), ['p2', 'c3'])
 
-const baseContext = { currentUser: '张三', administratorUsers: [], spmUsers: [] }
+const baseContext = { currentUser: '张三', administratorUsers: [], structuralAdministratorUsers: [], spmUsers: [] }
 assert.equal(rules.getLevel3ActivityPermissions(parent, [parent, childA], { ...baseContext, administratorUsers: ['张三'] }).canEdit, true)
 assert.equal(rules.getLevel3ActivityPermissions(parent, [parent, childA], { ...baseContext, spmUsers: ['张三'] }).canAddChild, true)
 assert.equal(rules.getLevel3ActivityPermissions(parent, [parent, childA], baseContext).canDelete, true)
@@ -627,6 +633,12 @@ assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], baseCo
 assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], { ...baseContext, currentUser: '李四' }).canEdit, true)
 assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], { ...baseContext, currentUser: '李四' }).canDrag, false)
 assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], { ...baseContext, currentUser: '赵六' }).canEdit, false)
+const projectAdministratorContext = { ...baseContext, currentUser: '系统管理员', administratorUsers: ['系统管理员'] }
+assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], projectAdministratorContext).canEdit, true)
+assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], projectAdministratorContext).canDelete, true)
+assert.equal(rules.getLevel3ActivityPermissions(undefined, [parent, childA], projectAdministratorContext).canCreateParent, true)
+assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], projectAdministratorContext).canDrag, false)
+assert.equal(rules.getLevel3MovePermission('c1', 'p2', dragActivities, projectAdministratorContext, false).allowed, false)
 assert.equal(rules.getLevel3NumberIndent(0), 0)
 assert.equal(rules.getLevel3NumberIndent(1), 32)
 assert.equal(rules.canInlineEditLevel3ActualDate(childA, [parent, childA], baseContext, false), true)
@@ -1147,28 +1159,28 @@ const storeParentA = { ...parent, id: 'store-p1', activityName: '来源父活动
 const storeParentB = { ...parent, id: 'store-p2', order: 1, activityName: '目标父活动', responsible: '王五' }
 const storeChildA = { ...childA, id: 'store-c1', parentId: 'store-p1', activityName: '待移动子活动', responsible: '李四' }
 const storeChildB = { ...childB, id: 'store-c2', parentId: 'store-p2', activityName: '目标下子活动', responsible: '赵六' }
-const storeContext = (currentUser, administratorUsers = [], spmUsers = []) => ({ currentUser, administratorUsers, spmUsers })
+const storeContext = (currentUser, administratorUsers, structuralAdministratorUsers, spmUsers) => ({ currentUser, administratorUsers, structuralAdministratorUsers, spmUsers })
 store.setState({
   activitiesByScope: { [storeMoveScope]: [storeParentA, storeChildA, storeParentB, storeChildB] },
   historyByScope: { [storeMoveScope]: [] },
   collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
 })
 const deniedActivities = structuredClone(store.getState().activitiesByScope[storeMoveScope])
-assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('张三'), false).ok, false,
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('张三', [], [], []), false).ok, false,
   'different-responsible target is denied by the store')
 assert.deepEqual(store.getState().activitiesByScope[storeMoveScope], deniedActivities)
 assert.deepEqual(store.getState().historyByScope[storeMoveScope], [])
-assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('李四'), false).ok, false,
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('李四', [], [], []), false).ok, false,
   'child responsible alone cannot drag')
-assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('张三'), true).ok, false,
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('张三', [], [], []), true).ok, false,
   'read-only scope is denied by the store')
-assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c1', storeContext('张三'), false).ok, false,
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c1', storeContext('张三', [], [], []), false).ok, false,
   'self drop produces no store mutation')
 assert.deepEqual(store.getState().activitiesByScope[storeMoveScope], deniedActivities)
 assert.deepEqual(store.getState().historyByScope[storeMoveScope], [])
 
-const elevatedMove = store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('管理员', ['管理员']), false)
-assert.equal(elevatedMove.ok, true, 'administrator can cross-parent move through store')
+const elevatedMove = store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('管理员', ['管理员'], ['管理员'], []), false)
+assert.equal(elevatedMove.ok, true, 'global administrator can cross-parent move through store')
 assert.equal(elevatedMove.changed, true)
 let storeMoveLog = store.getState().historyByScope[storeMoveScope][0]
 assert.deepEqual(
@@ -1179,7 +1191,7 @@ assert.deepEqual(storeMoveLog.changes.map(change => change.before), ['来源父�
 assert.deepEqual(storeMoveLog.changes.map(change => change.after), ['目标父活动', '2.1'])
 assert.equal(store.getState().historyByScope[storeMoveScope].length, 1)
 const noOpActivities = structuredClone(store.getState().activitiesByScope[storeMoveScope])
-assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('管理员', ['管理员']), false).changed, false)
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c2', 'store-p2', storeContext('管理员', ['管理员'], ['管理员'], []), false).changed, false)
 assert.deepEqual(store.getState().activitiesByScope[storeMoveScope], noOpActivities)
 assert.equal(store.getState().historyByScope[storeMoveScope].length, 1)
 
@@ -1187,19 +1199,19 @@ store.setState({
   activitiesByScope: { [storeMoveScope]: [storeParentA, storeChildA, { ...storeParentB, responsible: '张三' }, storeChildB] },
   historyByScope: { [storeMoveScope]: [] }, collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
 })
-assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('张三'), false).ok, true,
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('张三', [], [], []), false).ok, true,
   'parent owner can move between parents they both own')
 store.setState({
   activitiesByScope: { [storeMoveScope]: [storeParentA, storeChildA, storeParentB, storeChildB] },
   historyByScope: { [storeMoveScope]: [] }, collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
 })
-assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('SPM', [], ['SPM']), false).ok, true,
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('SPM', [], [], ['SPM']), false).ok, true,
   'SPM can cross-parent move through store')
 store.setState({
   activitiesByScope: { [storeMoveScope]: [storeParentA, storeParentB] }, historyByScope: { [storeMoveScope]: [] },
   collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
 })
-assert.equal(store.getState().moveActivity(storeMoveScope, 'store-p2', 'store-p1', storeContext('管理员', ['管理员']), false).ok, true)
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-p2', 'store-p1', storeContext('管理员', ['管理员'], ['管理员'], []), false).ok, true)
 storeMoveLog = store.getState().historyByScope[storeMoveScope][0]
 assert.equal(storeMoveLog.sourceParentActivityId, undefined, 'root reorder has no fake parent snapshot')
 assert.deepEqual(storeMoveLog.changes.map(change => change.field), ['number'])
@@ -1265,7 +1277,7 @@ store.setState({
   activitiesByScope: { [aliasMoveScope]: [storeParentA, storeChildA, storeParentB, storeChildB] }, historyByScope: { [aliasMoveScope]: [] },
   collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
 })
-const aliasMove = store.getState().moveActivity(aliasMoveScope, 'store-c1', 'store-c2', storeContext('管理员', ['管理员']), false)
+const aliasMove = store.getState().moveActivity(aliasMoveScope, 'store-c1', 'store-c2', storeContext('管理员', ['管理员'], ['管理员'], []), false)
 assert.equal(aliasMove.ok, true)
 const aliasStoredHistory = structuredClone(store.getState().historyByScope[aliasMoveScope])
 aliasMove.activities.find(activity => activity.id === 'store-c1').activityName = '篡改返回值'

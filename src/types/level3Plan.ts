@@ -153,6 +153,7 @@ export interface Level3ScopeFork {
 export interface Level3PermissionContext {
   currentUser: string
   administratorUsers: string[]
+  structuralAdministratorUsers: string[]
   spmUsers: string[]
 }
 

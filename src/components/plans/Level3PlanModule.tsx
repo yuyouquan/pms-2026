@@ -186,6 +186,7 @@ interface Level3PlanModuleProps {
   readOnly: boolean
   currentUser: string
   administratorUsers: string[]
+  structuralAdministratorUsers: string[]
   spmUsers: string[]
   users: string[]
   userDepartments: Record<string, string>
@@ -259,6 +260,7 @@ export default function Level3PlanModule({
   readOnly,
   currentUser,
   administratorUsers,
+  structuralAdministratorUsers,
   spmUsers,
   users,
   userDepartments,
@@ -299,8 +301,9 @@ export default function Level3PlanModule({
   const permissionContext: Level3PermissionContext = useMemo(() => ({
     currentUser,
     administratorUsers,
+    structuralAdministratorUsers,
     spmUsers,
-  }), [administratorUsers, currentUser, spmUsers])
+  }), [administratorUsers, currentUser, spmUsers, structuralAdministratorUsers])
   const effectiveActivities = useMemo(
     () => mergeLevel3WorkflowOverrides(
       mergeLevel3ActualDateOverrides(sourceActivities, actualOverrides),
