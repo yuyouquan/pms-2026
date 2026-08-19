@@ -26,6 +26,7 @@ import {
 } from '@/lib/planWorkspace'
 import {
   buildTechnicalHorizontalRows,
+  canConfirmTechnicalSubprojectTransfer,
   filterTechnicalPlanGanttTasks,
   getTechnicalPlanExportColumns,
   isResponsibleForTechnicalPlanTasks,
@@ -38,7 +39,7 @@ import { compareVersionsForTable } from '@/lib/versionCompare'
 import type { PlanRevisionKind } from '@/lib/planVersioning'
 import { getTemplateSnapshotForProjectType } from '@/lib/projectTemplateCompatibility'
 import { comparePublishedTechnicalPlanVersions } from '@/lib/technicalProjectRules'
-import { canMutateLevel1TaskStructure, projectLevel1Plan, projectTechnicalSubprojectRows, sumLevel1EstimatedDays, validateLevel1MilestoneDates } from '@/lib/level1PlanRules'
+import { canMaintainLevel1Plan, canMutateLevel1TaskStructure, projectLevel1Plan, projectTechnicalSubprojectRows, sumLevel1EstimatedDays, validateLevel1MilestoneDates } from '@/lib/level1PlanRules'
 import { applyPlanGanttDateChange, applyPlanTaskDatePatch, buildPlanGanttTasks } from '@/lib/planGanttRules'
 import {
   createFilterCondition,
@@ -60,6 +61,8 @@ import {
 } from '@/lib/technicalPlanRules'
 import { exportMergedSheet, exportSheet, exportTimestamp } from '@/utils/exportExcel'
 import { usePlanStore } from '@/stores/plan'
+import { useProjectStore } from '@/stores/project'
+import { usePermissionStore } from '@/stores/permission'
 import { useTechnicalProjectStore } from '@/stores/technicalProject'
 import { useUiStore } from '@/stores/ui'
 import {
@@ -509,7 +512,7 @@ export default function TechnicalPlanModule({
 
   const confirmAddTechnicalSubprojectTransfer = () => {
     if (!tab || tab.templateKind !== 'subproject' || !canMaintain) return
-    const opening = { activeKey, scopeKey: getTechnicalPlanKey(scope), versionId: currentVersion?.id, user: currentLoginUser }
+    const opening = { projectId, tabId: activeKey, scopeKey: getTechnicalPlanKey(scope), versionId: currentVersion?.id || '', user: currentLoginUser || '' }
     Modal.confirm({
       title: '确认添加转测版本？',
       content: '系统将在 TDR3 前自动生成下一个转测版本，名称不可修改。',
@@ -517,19 +520,27 @@ export default function TechnicalPlanModule({
       cancelText: '取消',
       onOk: () => {
         const latestTabs = buildTechnicalPlanTabs(projectId, useTechnicalProjectStore.getState().subprojects, false)
-        const latestTab = latestTabs.find(item => item.key === opening.activeKey)
+        const latestTab = latestTabs.find(item => item.key === opening.tabId)
         const latestInstance = useTechnicalPlanStore.getState().plansByKey[opening.scopeKey]
         const latestVersion = latestInstance?.versions.find(version => version.id === latestInstance.currentVersionId)
+        const projectState = useProjectStore.getState()
+        const permissionState = usePermissionStore.getState()
+        const latestProject = projectState.projects.find(project => project.id === projectId)
+        const latestUser = projectState.currentLoginUser
+        const globalAdmins = permissionState.globalRoles.find(role => role.name === '管理组')?.members || []
+        const technicalRoleUsers = permissionState.rolesByProject[projectId]?.find(role => role.name === '技术项目负责人')?.members || []
+        if (!latestTab || !latestVersion) { message.error('计划状态已变化，请重新操作'); return }
+        const latestCanMaintain = Boolean(latestProject && (
+          canMaintainLevel1Plan({
+            projectType: '技术项目', currentUser: latestUser,
+            spmUsers: [], technicalLead: String((latestProject as any).technicalLead || ''), globalAdmins,
+          }) || technicalRoleUsers.includes(latestUser)
+        ))
+        const current = { projectId, tabId: activeKeyRef.current, scopeKey: getTechnicalPlanKey(latestTab.scope), versionId: latestVersion.id, user: latestUser }
         if (
-          activeKeyRef.current !== opening.activeKey
-          || !latestTab
-          || getTechnicalPlanKey(latestTab.scope) !== opening.scopeKey
-          || latestTab.templateKind !== 'subproject'
-          || latestVersion?.id !== opening.versionId
+          latestTab.templateKind !== 'subproject'
           || latestVersion.status !== '修订中'
-          || !useUiStore.getState().isEditMode
-          || currentLoginUser !== opening.user
-          || !canMaintain
+          || !canConfirmTechnicalSubprojectTransfer({ opening, current, isCurrentDraft: latestVersion.status === '修订中', isEditMode: useUiStore.getState().isEditMode, canMaintain: latestCanMaintain })
         ) {
           message.error('当前计划状态已变化，请重新操作')
           return
@@ -574,9 +585,13 @@ export default function TechnicalPlanModule({
     return byTaskId[row.id]?.[field] || []
   }
   const renderDate = (field: 'planStartDate' | 'planEndDate' | 'actualStartDate' | 'actualEndDate', editable: (row: any) => boolean) => (
-    (value: string, row: any) => editable(row)
-      ? <Tooltip title={dateErrors(row, field).join('；')}><DatePicker value={value ? dayjs(value) : null} onChange={date => updateTask(row.id, { [field]: date?.format('YYYY-MM-DD') || '' })} /></Tooltip>
-      : value || '-'
+    (value: string, row: any) => {
+      const reasons = dateErrors(row, field)
+      const content = editable(row)
+        ? <DatePicker value={value ? dayjs(value) : null} onChange={date => updateTask(row.id, { [field]: date?.format('YYYY-MM-DD') || '' })} />
+        : value || '-'
+      return reasons.length ? <Tooltip title={reasons.join('；')}>{content}</Tooltip> : content
+    }
   )
   const tdtColumns: ColumnsType<any> = [
     { title: '序号', dataIndex: 'sequence', key: 'sequence', width: 72, fixed: 'left' },
@@ -604,7 +619,7 @@ export default function TechnicalPlanModule({
     key: 'actions', title: '操作', fixed: 'right', width: 88,
     render: (_: unknown, row: any) => canMutateTechnicalTaskStructure(row, 'delete') && (
       <Popconfirm title="确认删除该活动？" onConfirm={() => handleDeleteTask(row.id)}>
-        <Button type="text" danger size="small" aria-label={`删除活动 ${row.activityName}`} icon={<DeleteOutlined />} />
+        <Tooltip title="删除活动"><Button type="text" danger size="small" aria-label={`删除活动 ${row.activityName}`} icon={<DeleteOutlined />} /></Tooltip>
       </Popconfirm>
     ),
   })
@@ -802,7 +817,7 @@ export default function TechnicalPlanModule({
               </Tooltip>
             )}
             {tab?.templateKind === 'subproject' && canMaintain && (
-              <Button icon={<PlusOutlined />} onClick={confirmAddTechnicalSubprojectTransfer}>添加转测版本</Button>
+              <Tooltip title="添加转测版本"><Button icon={<PlusOutlined />} aria-label="添加转测版本" onClick={confirmAddTechnicalSubprojectTransfer}>添加转测版本</Button></Tooltip>
             )}
             {isDraft && (
               <Tooltip title={!canPublish ? '无计划发布权限' : !canMaintain ? readOnlyReason : '发布'}>

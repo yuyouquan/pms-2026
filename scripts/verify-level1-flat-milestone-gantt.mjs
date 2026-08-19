@@ -460,6 +460,12 @@ const technicalSubprojectRows = technicalWorkspaceModule.projectTechnicalPlanRow
 assert.deepEqual(technicalSubprojectRows.map(row => [row.activityName, row.stageName]), [['第1版转测', ''], ['第2版转测', ''], ['TDR3', '']], 'subproject row projection never creates stage columns')
 assert.deepEqual(technicalWorkspaceModule.filterTechnicalPlanGanttTasks(flatHierarchy, 'tdt', [technicalTdtRows[1]]).map(task => task.stableId), ['stage-2', 'plan-str'], 'TDT Gantt filtering retains the matched milestone and its parent stage')
 assert.deepEqual(technicalWorkspaceModule.filterTechnicalPlanGanttTasks(seededSubprojectTasks, 'subproject', [technicalSubprojectRows[1]]).map(task => task.stableId), [seededSubprojectTasks[1].stableId], 'subproject Gantt filtering stays one-level')
+const transferOpening = { projectId: 'p1', tabId: 'p1:subproject:s1', scopeKey: 'p1:subproject:s1', versionId: 'v2', user: '技术负责人' }
+assert.equal(technicalWorkspaceModule.canConfirmTechnicalSubprojectTransfer({ opening: transferOpening, current: { ...transferOpening }, isCurrentDraft: true, isEditMode: true, canMaintain: true }), true, 'a matching technical lead can confirm a transfer insertion')
+assert.equal(technicalWorkspaceModule.canConfirmTechnicalSubprojectTransfer({ opening: transferOpening, current: { ...transferOpening, user: '已换用户' }, isCurrentDraft: true, isEditMode: true, canMaintain: true }), false, 'switching users rejects a stale transfer confirmation')
+assert.equal(technicalWorkspaceModule.canConfirmTechnicalSubprojectTransfer({ opening: transferOpening, current: { ...transferOpening, tabId: 'p1:subproject:s2' }, isCurrentDraft: true, isEditMode: true, canMaintain: true }), false, 'switching tabs rejects a stale transfer confirmation')
+assert.equal(technicalWorkspaceModule.canConfirmTechnicalSubprojectTransfer({ opening: transferOpening, current: { ...transferOpening, versionId: 'v3' }, isCurrentDraft: true, isEditMode: true, canMaintain: true }), false, 'switching versions rejects a stale transfer confirmation')
+assert.equal(technicalWorkspaceModule.canConfirmTechnicalSubprojectTransfer({ opening: transferOpening, current: { ...transferOpening }, isCurrentDraft: true, isEditMode: true, canMaintain: false }), false, 'revoked maintainer access rejects a stale transfer confirmation')
 const publishedActualStore = technicalPlanStoreModule.createTechnicalPlanStore({ plansByKey: {} })
 const publishedActualScope = { kind: 'tdt', parentProjectId: 'published-actual' }
 const publishedActualTasks = technicalRules.buildTdtTemplateTasks()

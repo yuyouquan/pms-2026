@@ -68,6 +68,35 @@ export const filterTechnicalPlanGanttTasks = <T extends { id: string; parentId?:
   return tasks.filter(task => visibleIds.has(task.id))
 }
 
+export interface TechnicalSubprojectTransferScopeToken {
+  projectId: string
+  tabId: string
+  scopeKey: string
+  versionId: string
+  user: string
+}
+
+export const canConfirmTechnicalSubprojectTransfer = ({
+  opening,
+  current,
+  isCurrentDraft,
+  isEditMode,
+  canMaintain,
+}: {
+  opening: TechnicalSubprojectTransferScopeToken
+  current: TechnicalSubprojectTransferScopeToken
+  isCurrentDraft: boolean
+  isEditMode: boolean
+  canMaintain: boolean
+}) => isCurrentDraft
+  && isEditMode
+  && canMaintain
+  && opening.projectId === current.projectId
+  && opening.tabId === current.tabId
+  && opening.scopeKey === current.scopeKey
+  && opening.versionId === current.versionId
+  && opening.user === current.user
+
 export function selectVisibleTechnicalPlanVersions<T extends { status: string }>(
   versions: readonly T[],
   canViewDraft: boolean,

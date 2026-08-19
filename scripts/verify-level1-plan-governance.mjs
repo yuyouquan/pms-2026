@@ -254,8 +254,8 @@ assert.match(configSource, /isTechnicalTemplate[\s\S]*TDT项目计划[\s\S]*子�
 assert.match(configSource, /items=\{isTechnicalTemplate[\s\S]*key: 'level1'[\s\S]*一级计划[\s\S]*\]\}/, 'standard project configuration only exposes the level1 tab')
 for (const label of ['阶段/里程碑节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际结束时间', '实际工期', '是否延期']) {
   assert.match(projectSpaceSource, new RegExp(label), `project level1 table contains ${label}`)
-  assert.match(technicalModuleSource, new RegExp(label), `technical governed table contains ${label}`)
 }
+for (const label of ['阶段', '里程碑点', '活动名称', '实际开始时间', '实际完成时间']) assert.match(technicalModuleSource, new RegExp(label), `technical flat table contains ${label}`)
 assert.match(projectSpaceSource, /canAddLevel1CustomChild/, 'whole-machine structure additions use the source-aware launch-stage rule')
 assert.match(projectSpaceSource, /canMutateLevel1TaskStructure/, 'rename, delete and reorder share the source-aware structure rule')
 assert.doesNotMatch(projectSpaceSource, /isGlobalLevel1Admin\s*\|\|/, 'global administrators do not bypass template structure locks')
@@ -263,7 +263,7 @@ assert.doesNotMatch(projectSpaceSource, /level1GlobalAdmins\.includes\(currentLo
 assert.match(projectSpaceSource, /canRenameGovernedTask[\s\S]{0,420}<Input/, 'approved custom launch children can edit their names inline')
 assert.match(projectSpaceSource, /handleGovernedDragEnd/, 'approved custom launch children have a dedicated safe reorder path')
 assert.match(technicalStoreSource, /publishedVersions\.length <= 1[\s\S]*buildFirstLevel1RevisionTasks[\s\S]*buildNextLevel1RevisionTasks/, 'technical first and later revisions follow different synchronization rules')
-assert.match(technicalStoreSource, /changedActualEnds[\s\S]*pairedVersionId/, 'technical draft and published actual completion dates stay synchronized')
+assert.match(technicalStoreSource, /changedActualDatePatches[\s\S]*actualStartDate[\s\S]*actualEndDate[\s\S]*pairedVersionId/, 'technical draft and published actual dates synchronize by stable ID')
 assert.match(compareModalSource, /fieldMode === 'governed'[\s\S]*governedKeys/, 'version comparison supports the governed field set')
 assert.match(projectSpaceSource, /fieldMode=\{projectPlanLevel === 'level1' \? 'governed' : 'legacy'\}/, 'project level1 comparison selects governed fields')
 assert.match(technicalModuleSource, /fieldMode="governed"/, 'technical comparison selects governed fields')

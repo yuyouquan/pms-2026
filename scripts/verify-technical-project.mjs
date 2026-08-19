@@ -474,7 +474,7 @@ const planHelpers = readSource(root, 'src/components/shared/PlanHelpers.tsx')
 assert.match(planHelpers, /<Tooltip\s+title="拖拽排序"/, 'drag icon exposes its action in a tooltip')
 assert.match(planHelpers, /<button[^>]*aria-label="拖拽排序"/, 'drag icon is a named native control')
 assert.match(technicalPlan, /event\.preventDefault\(\)[\s\S]{0,100}event\.stopPropagation\(\)[\s\S]{0,120}setConfiguringChild/, 'plan tab configuration is isolated from tab activation')
-for (const label of ['新增一级活动', '删除任务', '版本对比']) {
+for (const label of ['添加转测版本', '删除活动', '版本对比']) {
   assert.match(technicalPlan, new RegExp(`aria-label=[^\\n]{0,80}${label}`), `${label} icon control has an accessible name`)
   assert.match(technicalPlan, new RegExp(`<Tooltip\\s+title=[^\\n]{0,80}${label}`), `${label} icon control has a tooltip`)
 }
