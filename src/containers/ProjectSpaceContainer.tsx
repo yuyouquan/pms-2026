@@ -183,7 +183,6 @@ import {
   projectLevel1Plan,
   renumberLevel1Tasks,
   sumLevel1EstimatedDays,
-  synchronizeLevel1ActualEndDate,
   validateLevel1MilestoneDates,
 } from '@/lib/level1PlanRules'
 import {
@@ -191,6 +190,14 @@ import {
   applyPlanTaskDatePatch,
   buildPlanGanttTasks,
 } from '@/lib/planGanttRules'
+import {
+  LEVEL1_FLAT_FILTER_FIELDS,
+  canConfirmMachineMrInsertion,
+  filterFlatLevel1Rows,
+  mergeActualFieldsByStableId,
+  selectFlatGanttHierarchy,
+  type ProjectSpaceLevel1ScopeToken,
+} from '@/lib/projectSpaceLevel1Rules'
 import {
   synchronizeTechnicalProjectRecord,
 } from '@/lib/technicalProjectRules'
@@ -2025,7 +2032,10 @@ export default function ProjectSpaceContainer() {
     setCollapsedNodes(prev => ({ ...prev, [key]: new Set(getAllExpandableIds(scopeTasks)) }))
   }
 
-  const planFilterFieldOptions = TABLE_COLUMNS.map(c => ({ label: c.title, value: c.key }))
+  const usesFlatLevel1Filters = projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject)
+  const planFilterFieldOptions = usesFlatLevel1Filters
+    ? LEVEL1_FLAT_FILTER_FIELDS.map(field => ({ label: field.label, value: field.key }))
+    : TABLE_COLUMNS.map(field => ({ label: field.title, value: field.key }))
   const hasActiveLevel1PlanFilters = level1PlanFilters.some(isFilterConditionActive)
   const commitLevel1PlanFilters = (next: PlanFilterCondition[]) => {
     setTempLevel1PlanFilters(next)
@@ -2036,6 +2046,10 @@ export default function ProjectSpaceContainer() {
   }
   const filteredLevel1PlanTasks = applyPlanWorkspaceFilters(
     projectLevel1Plan(effectiveTasks as any[], { mode: 'standard' }).rows,
+    level1PlanFilters,
+  )
+  const getFlatLevel1FilteredRows = (taskList: any[]) => filterFlatLevel1Rows(
+    projectLevel1FlatMilestones(taskList),
     level1PlanFilters,
   )
   const filterBySearchText = (taskList: any[]) => taskList.filter((task: any) => {
@@ -2333,12 +2347,6 @@ export default function ProjectSpaceContainer() {
     }
     const patch = { [field]: value }
     const isLevel1MarketTable = !isLevel2Custom && isMarketScopedLevel1
-
-    if (isLevel1MarketTable && currentMarketIsFollow) {
-      currentSetTasks(markTaskActualTimeDetachedFromMain(tableTasks, record.id, patch))
-      return
-    }
-
     const updatedTasks = applyPlanTaskDatePatch(tableTasks, {
       taskId: record.id,
       patch: { [field]: value },
@@ -2347,6 +2355,9 @@ export default function ProjectSpaceContainer() {
       void message.error('日期格式或范围无效，未保存修改')
       return
     }
+    const scopedUpdatedTasks = isLevel1MarketTable && currentMarketIsFollow
+      ? markTaskActualTimeDetachedFromMain(updatedTasks, record.id, patch)
+      : updatedTasks
     if (!isLevel2Custom && projectPlanLevel === 'level1' && field === 'actualEndDate') {
       const pairedVersion = isCurrentDraft
         ? latestPublishedVersion
@@ -2360,20 +2371,48 @@ export default function ProjectSpaceContainer() {
           : selectedProject && !isTechnicalProject
             ? getProjectLevel1MockSnapshotKey(selectedProject.id, versionId)
             : versionId
+      const targetStableId = record.stableId || record.id
+      const mergePublishedActualIntoLiveScope = () => {
+        if (currentTosLevel1Data) {
+          updateCurrentTosTypeData(effectiveTosLevel1Type, previous => ({
+            ...previous,
+            level1Tasks: mergeActualFieldsByStableId(previous.level1Tasks, scopedUpdatedTasks, targetStableId),
+          }))
+          return
+        }
+        if (currentMarketData) {
+          setMarketPlanData(previous => ({
+            ...previous,
+            [selectedMarketTab]: {
+              ...(previous[selectedMarketTab] || { level2Tasks: [], createdLevel2Plans: [] }),
+              tasks: mergeActualFieldsByStableId(previous[selectedMarketTab]?.tasks || [], scopedUpdatedTasks, targetStableId),
+            },
+          }))
+          return
+        }
+        setTasks(previous => mergeActualFieldsByStableId(previous, scopedUpdatedTasks, targetStableId))
+      }
       setPublishedSnapshots(previous => {
         const currentKey = getScopedSnapshotKey(currentVersion)
+        if (isLatestPublished) return {
+          ...previous,
+          [currentKey]: scopedUpdatedTasks,
+        }
         if (pairedVersion) {
           const pairedKey = getScopedSnapshotKey(pairedVersion.id)
           const pairedTasks = previous[pairedKey] || tableTasks
-          const synced = synchronizeLevel1ActualEndDate(updatedTasks, pairedTasks, record.id, value)
           return {
             ...previous,
-            [currentKey]: synced.sourceTasks,
-            [pairedKey]: synced.pairedTasks,
+            [currentKey]: scopedUpdatedTasks,
+            [pairedKey]: mergeActualFieldsByStableId(pairedTasks, scopedUpdatedTasks, targetStableId),
           }
         }
-        return { ...previous, [currentKey]: JSON.parse(JSON.stringify(updatedTasks)) }
+        return { ...previous, [currentKey]: JSON.parse(JSON.stringify(scopedUpdatedTasks)) }
       })
+      if (isLatestPublished && pairedVersion) {
+        mergePublishedActualIntoLiveScope()
+        return
+      }
     }
 
     if (isLevel1MarketTable && selectedMarketTab === primaryMarket) {
@@ -2382,7 +2421,7 @@ export default function ProjectSpaceContainer() {
           ...prev,
           [selectedMarketTab]: {
             ...(prev[selectedMarketTab] || { level2Tasks: [], createdLevel2Plans: [] }),
-            tasks: updatedTasks,
+            tasks: scopedUpdatedTasks,
           },
         }
         return syncFollowMarketPlans(nextMarketPlanData, marketConfigRows)
@@ -2390,7 +2429,7 @@ export default function ProjectSpaceContainer() {
       return
     }
 
-    currentSetTasks(updatedTasks)
+    currentSetTasks(scopedUpdatedTasks)
   }
 
   const handleCancelRevision = () => {
@@ -2630,7 +2669,7 @@ export default function ProjectSpaceContainer() {
     if (projectPlanLevel === 'level1') {
       if (isGovernedLevel1Export) {
         const projectedRows = projectLevel1FlatMilestones(effectiveTasks)
-        rows = scope === 'current' ? applyPlanWorkspaceFilters(projectedRows, level1PlanFilters) : projectedRows
+        rows = scope === 'current' ? getFlatLevel1FilteredRows(effectiveTasks) : projectedRows
       } else {
         const projectedRows = projectLevel1Plan(effectiveTasks, { mode: 'standard' }).rows
         rows = scope === 'current' ? applyPlanWorkspaceFilters(projectedRows, level1PlanFilters) : projectedRows
@@ -2720,6 +2759,13 @@ export default function ProjectSpaceContainer() {
       || !isEditMode
       || !canMaintainCurrentPlan
       || followedTosLevel1ReadOnly) return null
+    const openingScope: ProjectSpaceLevel1ScopeToken = {
+      projectId: selectedProject.id,
+      scopeKind: 'market',
+      scopeValue: selectedMarketTab,
+      versionId: currentVersion,
+      currentUser: currentLoginUser,
+    }
     return (
       <Button
         icon={<PlusOutlined />}
@@ -2729,12 +2775,64 @@ export default function ProjectSpaceContainer() {
           okText: '确认添加',
           cancelText: '取消',
           onOk: () => {
-            const result = insertNextMachineMrMilestone(effectiveTasks)
+            const latestPlan = usePlanStore.getState()
+            const latestProjectState = useProjectStore.getState()
+            const latestPermissionState = usePermissionStore.getState()
+            const latestUi = useUiStore.getState()
+            const latestProject = latestProjectState.selectedProject
+            const latestMarket = latestProjectState.selectedMarketTab
+            const latestVersions = latestProject
+              ? getMarketVersions(latestPlan.marketVersionsByKey, latestProject.id, latestMarket, latestPlan.versions)
+              : []
+            const latestVersion = latestProject
+              ? getMarketCurrentVersion(latestPlan.marketCurrentVersionByKey, latestProject.id, latestMarket, latestVersions, latestPlan.currentVersion)
+              : ''
+            const latestVersionData = latestVersions.find(version => version.id === latestVersion)
+            const latestGlobalAdmins = latestPermissionState.globalRoles.find(role => role.name === '管理组')?.members || []
+            const latestSpmUsers = String(latestProject?.spm || '').split(/[,，、]/).map(user => user.trim()).filter(Boolean)
+            const latestCanMaintain = Boolean(latestProject && canMaintainLevel1Plan({
+              projectType: latestProject.type,
+              currentUser: latestProjectState.currentLoginUser,
+              spmUsers: latestSpmUsers,
+              technicalLead: String(latestProject.technicalLead || latestProject.leader || ''),
+              globalAdmins: latestGlobalAdmins,
+            }))
+            const latestScope: ProjectSpaceLevel1ScopeToken = {
+              projectId: latestProject?.id || '',
+              scopeKind: 'market',
+              scopeValue: latestMarket,
+              versionId: latestVersion,
+              currentUser: latestProjectState.currentLoginUser,
+            }
+            const latestFollowed = isFollowMarket(
+              latestProjectState.marketConfigsByProjectId[latestProject?.id || ''] || [],
+              latestMarket,
+            )
+            if (!canConfirmMachineMrInsertion({
+              openingScope,
+              currentScope: latestScope,
+              isMachineProject: Boolean(latestProject && isMachineProjectType(latestProject.type)),
+              isCurrentDraft: latestVersionData?.status === '修订中',
+              isEditMode: latestUi.isEditMode && latestPlan.projectPlanLevel === 'level1',
+              canMaintain: latestCanMaintain,
+              followedReadOnly: latestFollowed,
+            })) {
+              void message.warning('计划状态已变化，请重新操作')
+              return
+            }
+            const latestTasks = latestPlan.marketPlanData[latestMarket]?.tasks || []
+            const result = insertNextMachineMrMilestone(latestTasks)
             if (!result.ok) {
               void message.error(result.reason === 'launch-stage-missing' ? '未找到上市阶段' : 'MR 编号已存在')
               return
             }
-            setEffectiveTasks(result.tasks)
+            latestPlan.setMarketPlanData(previous => ({
+              ...previous,
+              [latestMarket]: {
+                ...(previous[latestMarket] || { level2Tasks: [], createdLevel2Plans: [] }),
+                tasks: result.tasks,
+              },
+            }))
             void message.success(`已添加 ${result.task.taskName}`)
           },
         })}
@@ -2757,10 +2855,14 @@ export default function ProjectSpaceContainer() {
         && isCurrentDraft
         && canMaintainCurrentPlan
         && !followedTosLevel1ReadOnly
+      const filteredHierarchy = selectFlatGanttHierarchy(
+        effectiveTasks,
+        getFlatLevel1FilteredRows(effectiveTasks),
+      )
       return (
         <div className="pms-level1-flat-gantt">
           <DHTMLXGantt
-            tasks={buildPlanGanttTasks(effectiveTasks, { mode: 'hierarchical', editable: ganttEditable })}
+            tasks={buildPlanGanttTasks(filteredHierarchy, { mode: 'hierarchical', editable: ganttEditable })}
             columns={ganttColumns}
             onTaskClick={(task) => message.info(`点击任务: ${task.text}`)}
             readOnly={!ganttEditable}
@@ -2826,7 +2928,7 @@ export default function ProjectSpaceContainer() {
     }
     if (isFlatGovernedLevel1Table) {
       const flatRows = projectLevel1FlatMilestones(tableTasks)
-      const visibleFlatRows = applyPlanWorkspaceFilters(flatRows, level1PlanFilters)
+      const visibleFlatRows = getFlatLevel1FilteredRows(tableTasks)
       const validation = validateLevel1MilestoneDates(tableTasks)
       const canDeleteFlatMilestone = (record: any) => Boolean(
         record.source === 'custom'
@@ -2921,7 +3023,7 @@ export default function ProjectSpaceContainer() {
           className={`pms-table pms-level1-flat-milestone-table ${isEditMode ? 'pms-table-edit' : ''}`}
           dataSource={visibleFlatRows}
           columns={flatColumns}
-          rowKey="id"
+          rowKey={record => record.stableId || record.id}
           pagination={false}
           scroll={{ x: 1020 }}
           size="middle"

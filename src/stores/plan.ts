@@ -15,6 +15,7 @@ import type {
 } from '@/lib/tosTypeRules'
 import type { CompareTableRow } from '@/lib/versionCompare'
 import { buildStandardLevel1Tasks } from '@/lib/level1PlanRules'
+import { pickScopedPlanPersistence } from '@/lib/projectSpaceLevel1Rules'
 import { cloneDefaultLevel3TemplateActivities, resolveTemplateVersionScopeForMigration } from '@/lib/level3TemplateRules'
 import { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 import {
@@ -729,12 +730,6 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
     level3TemplateTasksByType: state.level3TemplateTasksByType,
     configTemplateVersionScopes: state.configTemplateVersionScopes,
     configTemplateCompareScopes: state.configTemplateCompareScopes,
-    marketPlanData: state.marketPlanData,
-    marketFollowVersionMeta: state.marketFollowVersionMeta,
-    marketVersionsByKey: state.marketVersionsByKey,
-    marketCurrentVersionByKey: state.marketCurrentVersionByKey,
-    tosTypePlanDataByProjectId: state.tosTypePlanDataByProjectId,
-    tosTypeVersionsByKey: state.tosTypeVersionsByKey,
-    tosTypeCurrentVersionByKey: state.tosTypeCurrentVersionByKey,
+    ...pickScopedPlanPersistence(state),
   }),
 }))

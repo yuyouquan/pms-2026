@@ -20,6 +20,7 @@ const loadTypescriptModule = async relativePath => {
 const level1Rules = await loadTypescriptModule('src/lib/level1PlanRules.ts')
 const technicalRules = await loadTypescriptModule('src/lib/technicalPlanRules.ts')
 const ganttRules = await loadTypescriptModule('src/lib/planGanttRules.ts')
+const projectSpaceLevel1Rules = await loadTypescriptModule('src/lib/projectSpaceLevel1Rules.ts')
 
 const level1RenumberInput = [
   { id: 'root-b', stableId: 'stable-root-b', order: 9, taskName: '阶段B' },
@@ -400,5 +401,47 @@ const flatDatePatchEnd = projectSpaceSource.indexOf('const renderFlatDate', flat
 assert.ok(flatDatePatchStart >= 0 && flatDatePatchEnd > flatDatePatchStart, 'flat table exposes a bounded date-patch path')
 assert.doesNotMatch(projectSpaceSource.slice(flatDatePatchStart, flatDatePatchEnd), /validateLevel1MilestoneDates/, 'flat table date patches do not block partial repairs on full-sequence validation')
 assert.match(projectSpaceSource, /okText: '确认添加'/, 'controlled MR confirmation uses the required action label')
+
+const liveDraftTasks = [
+  { id: '1', stableId: 'stage', order: 1, taskName: '阶段', planEndDate: '2026-01-01' },
+  { id: '1.1', stableId: 'target', parentId: '1', order: 1, taskName: '目标', planEndDate: '2026-04-01', actualStartDate: '2026-03-01', actualEndDate: '', actualDays: null },
+  { id: '1.2', stableId: 'custom-mr', parentId: '1', order: 2, taskName: 'MR4', source: 'custom', planEndDate: '2026-05-01' },
+]
+const publishedUpdatedTasks = [
+  { id: '1', stableId: 'stage', order: 1, taskName: '阶段', planEndDate: '2026-01-01' },
+  { id: '1.1', stableId: 'target', parentId: '1', order: 1, taskName: '目标', planEndDate: '2026-02-01', actualStartDate: '2026-03-02', actualEndDate: '2026-03-09', actualDays: 7 },
+]
+const mergedActualDraft = projectSpaceLevel1Rules.mergeActualFieldsByStableId(liveDraftTasks, publishedUpdatedTasks, 'target')
+assert.deepEqual(mergedActualDraft.map(task => [task.stableId, task.planEndDate, task.actualStartDate || '', task.actualEndDate || '', task.actualDays ?? null]), [
+  ['stage', '2026-01-01', '', '', null],
+  ['target', '2026-04-01', '2026-03-02', '2026-03-09', 7],
+  ['custom-mr', '2026-05-01', '', '', null],
+], 'published actual updates merge only actual fields into the divergent live draft and retain custom MR order')
+assert.deepEqual(projectSpaceLevel1Rules.mergeActualFieldsByStableId(liveDraftTasks, publishedUpdatedTasks, 'missing'), liveDraftTasks, 'a missing stable ID leaves live draft values unchanged')
+assert.equal(liveDraftTasks[1].actualEndDate, '', 'actual-field merge never mutates the live draft input')
+
+const flatFilterRows = [
+  { id: '1.1', stableId: 'concept-start', parentId: '1', stageId: '1', sequence: 1, stageName: '概念阶段', milestoneName: '概念启动', status: '未开始', planEndDate: '2026-01-10', estimatedDays: 9, actualEndDate: '', actualDays: null },
+  { id: '2.1', stableId: 'plan-str', parentId: '2', stageId: '2', sequence: 2, stageName: '计划阶段', milestoneName: 'STR1', status: '进行中', planEndDate: '2026-02-10', estimatedDays: 8, actualEndDate: '2026-02-11', actualDays: 9 },
+]
+assert.deepEqual(projectSpaceLevel1Rules.filterFlatLevel1Rows(flatFilterRows, [{ field: 'stageName', operator: 'contains', value: '概念' }]).map(row => row.id), ['1.1'], 'flat filters match displayed stage names')
+assert.deepEqual(projectSpaceLevel1Rules.filterFlatLevel1Rows(flatFilterRows, [{ field: 'milestoneName', operator: 'contains', value: 'STR' }]).map(row => row.id), ['2.1'], 'flat filters match displayed milestone names')
+assert.deepEqual(projectSpaceLevel1Rules.filterFlatLevel1Rows(flatFilterRows, [{ field: 'sequence', operator: 'equals', value: '2' }]).map(row => row.id), ['2.1'], 'flat filters match displayed sequence values')
+const flatHierarchy = [
+  { id: '1', stableId: 'stage-1', order: 1, taskName: '概念阶段' },
+  { id: '1.1', stableId: 'concept-start', parentId: '1', order: 1, taskName: '概念启动' },
+  { id: '2', stableId: 'stage-2', order: 2, taskName: '计划阶段' },
+  { id: '2.1', stableId: 'plan-str', parentId: '2', order: 1, taskName: 'STR1' },
+]
+assert.deepEqual(projectSpaceLevel1Rules.selectFlatGanttHierarchy(flatHierarchy, [flatFilterRows[1]]).map(task => task.stableId), ['stage-2', 'plan-str'], 'flat Gantt filtering keeps matched milestones and their stages in original hierarchy order')
+assert.deepEqual(projectSpaceLevel1Rules.selectFlatGanttHierarchy(flatHierarchy, []).map(task => task.id), [], 'flat Gantt filtering returns no hierarchy for no rows')
+const openingScope = { projectId: 'machine', scopeKind: 'market', scopeValue: 'OP', versionId: 'v4', currentUser: '张三' }
+assert.equal(projectSpaceLevel1Rules.canConfirmMachineMrInsertion({ openingScope, currentScope: openingScope, isMachineProject: true, isCurrentDraft: true, isEditMode: true, canMaintain: true, followedReadOnly: false }), true, 'fresh machine draft scope can insert MR')
+assert.equal(projectSpaceLevel1Rules.canConfirmMachineMrInsertion({ openingScope, currentScope: { ...openingScope, scopeValue: 'TR' }, isMachineProject: true, isCurrentDraft: true, isEditMode: true, canMaintain: true, followedReadOnly: false }), false, 'a changed MR scope is rejected before writing')
+assert.equal(projectSpaceLevel1Rules.canConfirmMachineMrInsertion({ openingScope, currentScope: openingScope, isMachineProject: true, isCurrentDraft: false, isEditMode: true, canMaintain: true, followedReadOnly: false }), false, 'a no-longer-draft MR scope is rejected before writing')
+const persistedScopes = projectSpaceLevel1Rules.pickScopedPlanPersistence({ marketPlanData: { OP: {} }, marketFollowVersionMeta: { a: {} }, marketVersionsByKey: { a: [] }, marketCurrentVersionByKey: { a: 'v4' }, tosTypePlanDataByProjectId: { p: {} }, tosTypeVersionsByKey: { a: [] }, tosTypeCurrentVersionByKey: { a: 'v4' }, ignored: true })
+assert.deepEqual(Object.keys(persistedScopes).sort(), ['marketCurrentVersionByKey', 'marketFollowVersionMeta', 'marketPlanData', 'marketVersionsByKey', 'tosTypeCurrentVersionByKey', 'tosTypePlanDataByProjectId', 'tosTypeVersionsByKey'], 'scoped plan persistence includes every live market and tOS scope field only')
+assert.match(projectSpaceSource, /projectSpaceLevel1Rules|mergeActualFieldsByStableId/, 'project space wires the tested level-one helpers')
+assert.match(projectSpaceSource, /rowKey=\{record => record\.stableId \|\| record\.id\}/, 'flat rows use stable IDs for React identity')
 
 console.log('PASS level1 flat milestone and gantt rules')
