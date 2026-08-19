@@ -87,6 +87,7 @@ import {
   canInlineEditLevel3ChildField,
   canInlineEditLevel3ActualDate,
   filterLevel3ActivitiesWithParents,
+  filterLevel3HistoryForActivity,
   getLevel3ActivityPermissions,
   getLevel3NumberIndent,
   getLevel3RemarkDisplay,
@@ -288,6 +289,7 @@ export default function Level3PlanModule({
   const [draftFilters, setDraftFilters] = useState<FilterCondition[]>([createFilterCondition()])
   const [columnSettingsOpen, setColumnSettingsOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [selectedHistoryActivity, setSelectedHistoryActivity] = useState<Level3ActivityViewRow | null>(null)
   const [viewMode, setViewMode] = useState<PlanWorkspaceViewMode>('vertical')
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -310,6 +312,11 @@ export default function Level3PlanModule({
     () => readOnly ? mergeLevel3Histories(sourceHistory, selectedScopeHistory) : sourceHistory,
     [readOnly, selectedScopeHistory, sourceHistory],
   )
+  const selectedActivityHistory = useMemo(() => (
+    selectedHistoryActivity
+      ? filterLevel3HistoryForActivity(history, selectedHistoryActivity, effectiveActivities)
+      : EMPTY_HISTORY
+  ), [effectiveActivities, history, selectedHistoryActivity])
   const canCreateParent = !readOnly
     && getLevel3ActivityPermissions(undefined, effectiveActivities, permissionContext).canCreateParent
   const rows = useMemo(() => applyLevel3Rollups(effectiveActivities), [effectiveActivities])
@@ -521,28 +528,15 @@ export default function Level3PlanModule({
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (readOnly || !over || active.id === over.id) return
-    const activeActivity = effectiveActivities.find(activity => activity.id === String(active.id))
-    const overActivity = effectiveActivities.find(activity => activity.id === String(over.id))
-    if (!activeActivity || !overActivity) return
-    const activePermissions = getLevel3ActivityPermissions(activeActivity, effectiveActivities, permissionContext)
-    if (!activePermissions.canDrag) {
-      void messageApi.warning('无权限拖动该活动')
-      return
-    }
-    const elevated = administratorUsers.includes(currentUser) || spmUsers.includes(currentUser)
-    if (activeActivity.parentId && overActivity.parentId && activeActivity.parentId !== overActivity.parentId && !elevated) {
-      const sourceParent = effectiveActivities.find(activity => activity.id === activeActivity.parentId)
-      const targetParent = effectiveActivities.find(activity => activity.id === overActivity.parentId)
-      if (sourceParent?.responsible !== currentUser || targetParent?.responsible !== currentUser) {
-        void messageApi.warning('跨组拖动需要同时管理来源和目标一级活动')
-        return
-      }
-    }
-    const result = moveActivity(scopeKey, activeActivity.id, overActivity.id, permissionContext, readOnly)
+    const activeId = String(active.id)
+    const overId = String(over.id)
+    if (!effectiveActivities.some(activity => activity.id === activeId) || !effectiveActivities.some(activity => activity.id === overId)) return
+    const result = moveActivity(scopeKey, activeId, overId, permissionContext, readOnly)
     if (!result.ok) {
       void messageApi.warning(result.reason || '拖动失败')
       return
     }
+    if (!result.changed) return
     void messageApi.success('活动顺序已更新')
   }
 
@@ -556,8 +550,22 @@ export default function Level3PlanModule({
     return (
       <div className="pms-level3-activity-cell" style={{ paddingLeft: row.depth ? 18 : 0 }}>
         <span className="pms-level3-activity-title">{row.activityName}</span>
+        <Space size={2} className="pms-level3-row-actions" onPointerDown={event => event.stopPropagation()}>
+          <Tooltip title="查看历史">
+            <Button
+              type="text"
+              size="small"
+              icon={<HistoryOutlined />}
+              aria-label={`查看活动历史 ${row.activityName}`}
+              onClick={event => {
+                event.stopPropagation()
+                setSelectedHistoryActivity(row)
+              }}
+              onDoubleClick={event => event.stopPropagation()}
+            />
+          </Tooltip>
         {!readOnly && (permissions.canEdit || permissions.canAddChild) && (
-          <Space size={2} className="pms-level3-row-actions" onPointerDown={event => event.stopPropagation()}>
+          <>
             {permissions.canEdit && (
               <Tooltip title="编辑活动">
                 <Button
@@ -604,11 +612,36 @@ export default function Level3PlanModule({
                 </Tooltip>
               </Popconfirm>
             )}
-          </Space>
+          </>
         )}
+        </Space>
       </div>
     )
   }
+
+  const renderHistoryItems = (items: Level3ChangeLog[]) => (
+    <div className="pms-level3-history-list">
+      {items.map(item => (
+        <div key={item.id} className="pms-level3-history-item">
+          <Space size={8} wrap>
+            <Tag color={item.action === 'move' ? 'purple' : item.action === 'edit' ? 'blue' : 'green'}>{item.summary}</Tag>
+            <Text strong>{item.activityNumber} {item.activityName}</Text>
+          </Space>
+          <div className="pms-level3-history-description">
+            <div style={{ marginBottom: item.changes.length ? 8 : 0 }}>{item.actor} · {item.occurredAt}</div>
+            {item.changes.map(change => (
+              <div key={`${item.id}-${change.field}`} className="pms-level3-history-change">
+                <span>{change.label}</span>
+                <Text type="secondary" delete>{change.before || '—'}</Text>
+                <span>→</span>
+                <Text>{change.after || '—'}</Text>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 
   const handleInlineActualDateChange = (
     row: Level3ActivityViewRow,
@@ -978,29 +1011,24 @@ export default function Level3PlanModule({
         {history.length === 0 ? (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史修改记录" />
         ) : (
-          <div className="pms-level3-history-list">
-            {history.map(item => (
-              <div key={item.id} className="pms-level3-history-item">
-                <Space size={8} wrap>
-                  <Tag color={item.action === 'move' ? 'purple' : item.action === 'edit' ? 'blue' : 'green'}>{item.summary}</Tag>
-                  <Text strong>{item.activityNumber} {item.activityName}</Text>
-                </Space>
-                <div className="pms-level3-history-description">
-                  <div style={{ marginBottom: item.changes.length ? 8 : 0 }}>{item.actor} · {item.occurredAt}</div>
-                  {item.changes.map(change => (
-                    <div key={`${item.id}-${change.field}`} className="pms-level3-history-change">
-                      <span>{change.label}</span>
-                      <Text type="secondary" delete>{change.before || '—'}</Text>
-                      <span>→</span>
-                      <Text>{change.after || '—'}</Text>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+          renderHistoryItems(history)
         )}
       </Drawer>
+
+      {selectedHistoryActivity && (
+        <Drawer
+          title={`活动历史记录 · ${selectedHistoryActivity.activityName}`}
+          size={520}
+          open
+          onClose={() => setSelectedHistoryActivity(null)}
+        >
+          {selectedActivityHistory.length === 0 ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无该活动历史记录" />
+          ) : (
+            renderHistoryItems(selectedActivityHistory)
+          )}
+        </Drawer>
+      )}
     </div>
   )
 }
