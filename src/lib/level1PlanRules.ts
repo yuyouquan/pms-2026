@@ -10,8 +10,32 @@ export interface Level1PlanTask {
   taskName: string
   role?: string
   source?: Level1TaskSource
+  status?: string
+  progress?: number
+  responsible?: string
+  predecessor?: string
+  planStartDate?: string
   planEndDate?: string
+  estimatedDays?: number | null
+  actualStartDate?: string
   actualEndDate?: string
+  actualDays?: number | null
+}
+
+export interface Level1FlatMilestoneRow extends Level1PlanTask {
+  sequence: number
+  stageId: string
+  stageStableId: string
+  stageName: string
+  milestoneName: string
+  activityName: string
+  planStartDate: string
+  planEndDate: string
+  estimatedDays: number | null
+  actualStartDate: string
+  actualEndDate: string
+  actualDays: number | null
+  delayStatus: Level1DelayStatus
 }
 
 export interface Level1PlanViewRow extends Level1PlanTask {
@@ -140,6 +164,24 @@ export const getLevel1DateDifference = (start: string, end: string): number | nu
   return Math.round((endTime - startTime) / 86_400_000)
 }
 
+const getLevel1ScheduleDate = (value: unknown): string => typeof value === 'string' ? value : ''
+
+const getNonNegativeLevel1Duration = (value: unknown): number | null => (
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+)
+
+/** Uses current date pairs first so changed dates never retain a stale stored duration. */
+export const getLevel1ProjectedDuration = (
+  startDate: unknown,
+  endDate: unknown,
+  storedDuration: unknown,
+): number | null => {
+  const start = getLevel1ScheduleDate(startDate)
+  const end = getLevel1ScheduleDate(endDate)
+  const calculated = getLevel1DateDifference(start, end)
+  return calculated ?? getNonNegativeLevel1Duration(storedDuration)
+}
+
 export const sumLevel1EstimatedDays = (
   rows: readonly Pick<Level1PlanViewRow, 'estimatedDays'>[],
 ): number | null => {
@@ -194,6 +236,70 @@ export const getLevel1DelayStatus = (
   return comparisonTime > planTime ? '延期' : '按时'
 }
 
+export const projectLevel1FlatMilestones = (
+  tasks: readonly Level1PlanTask[],
+  options: { today?: string } = {},
+): Level1FlatMilestoneRow[] => {
+  const today = options.today || new Date().toISOString().slice(0, 10)
+  const ordered = getOrderedLevel1Tasks(tasks)
+  const stagesById = new Map(ordered.filter(task => !task.parentId).map(task => [task.id, task]))
+
+  return ordered
+    .filter(task => Boolean(task.parentId))
+    .map((task, index) => {
+      const stage = stagesById.get(task.parentId!)
+      const planStartDate = getLevel1ScheduleDate(task.planStartDate)
+      const planEndDate = getLevel1ScheduleDate(task.planEndDate)
+      const actualStartDate = getLevel1ScheduleDate(task.actualStartDate)
+      const actualEndDate = getLevel1ScheduleDate(task.actualEndDate)
+      return {
+        ...task,
+        sequence: index + 1,
+        stageId: stage?.id || '',
+        stageStableId: stage?.stableId || stage?.id || '',
+        stageName: stage?.taskName || '',
+        milestoneName: task.taskName,
+        activityName: task.taskName,
+        planStartDate,
+        planEndDate,
+        estimatedDays: getLevel1ProjectedDuration(planStartDate, planEndDate, task.estimatedDays),
+        actualStartDate,
+        actualEndDate,
+        actualDays: getLevel1ProjectedDuration(actualStartDate, actualEndDate, task.actualDays),
+        delayStatus: getLevel1DelayStatus(planEndDate, actualEndDate, today),
+      }
+    })
+}
+
+export const projectTechnicalSubprojectRows = (
+  tasks: readonly Level1PlanTask[],
+  options: { today?: string } = {},
+): Level1FlatMilestoneRow[] => {
+  const today = options.today || new Date().toISOString().slice(0, 10)
+  return getOrderedLevel1Tasks(tasks).map((task, index) => {
+    const planStartDate = getLevel1ScheduleDate(task.planStartDate)
+    const planEndDate = getLevel1ScheduleDate(task.planEndDate)
+    const actualStartDate = getLevel1ScheduleDate(task.actualStartDate)
+    const actualEndDate = getLevel1ScheduleDate(task.actualEndDate)
+    return {
+      ...task,
+      sequence: index + 1,
+      stageId: '',
+      stageStableId: '',
+      stageName: '',
+      milestoneName: '',
+      activityName: task.taskName,
+      planStartDate,
+      planEndDate,
+      estimatedDays: getLevel1ProjectedDuration(planStartDate, planEndDate, task.estimatedDays),
+      actualStartDate,
+      actualEndDate,
+      actualDays: getLevel1ProjectedDuration(actualStartDate, actualEndDate, task.actualDays),
+      delayStatus: getLevel1DelayStatus(planEndDate, actualEndDate, today),
+    }
+  })
+}
+
 export const validateLevel1MilestoneDates = (tasks: readonly Level1PlanTask[]): Level1DateValidationResult => {
   const sequence = getMilestoneSequence(tasks)
   const violations: Level1DateViolation[] = []
@@ -239,15 +345,8 @@ export const projectLevel1Plan = (
   const validation = validateLevel1MilestoneDates(ordered)
 
   if (mode === 'technical-subproject') {
-    const rows = ordered.map(task => ({
-      ...task,
-      planStartDate: '',
-      planEndDate: task.planEndDate || '',
-      estimatedDays: null,
-      actualStartDate: '',
-      actualEndDate: task.actualEndDate || '',
-      actualDays: null,
-      delayStatus: getLevel1DelayStatus(task.planEndDate || '', task.actualEndDate || '', today),
+    const rows = projectTechnicalSubprojectRows(ordered, { today }).map(row => ({
+      ...row,
       manpowerPercent: null,
       isMilestone: true,
     }))

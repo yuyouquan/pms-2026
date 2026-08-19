@@ -579,7 +579,7 @@ const horizontalRows = technicalWorkspace.buildTechnicalHorizontalRows([{
 }], 'v1')
 assert.equal(horizontalRows[0].rowType, 'version', 'horizontal plan includes a version row')
 assert.equal(horizontalRows.at(-1).rowType, 'actual', 'horizontal plan includes a final actual row')
-assert.equal(horizontalRows[0].cycleDays, null, 'single-level subproject plans do not invent a governed stage development cycle')
+assert.equal(horizontalRows[0].cycleDays, 9, 'single-level subproject plans preserve their date-derived development cycle')
 const governedCycleRows = technicalWorkspace.buildTechnicalHorizontalRows([{
   ...publishedVersion,
   id: 'governed-cycle',

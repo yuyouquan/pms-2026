@@ -221,6 +221,44 @@ export interface InvalidTechnicalTaskFields {
   end?: string[]
 }
 
+export type TechnicalSubprojectDateField = 'planStartDate' | 'planEndDate' | 'actualStartDate' | 'actualEndDate'
+
+export interface TechnicalSubprojectDateValidationResult {
+  valid: boolean
+  byTaskId: Record<string, Partial<Record<TechnicalSubprojectDateField, string[]>>>
+}
+
+export const validateTechnicalSubprojectDates = (
+  tasks: readonly TechnicalTemplateTaskInput[],
+): TechnicalSubprojectDateValidationResult => {
+  const byTaskId: TechnicalSubprojectDateValidationResult['byTaskId'] = {}
+  const add = (taskId: string, field: TechnicalSubprojectDateField, message: string) => {
+    byTaskId[taskId] = byTaskId[taskId] || {}
+    byTaskId[taskId][field] = [...(byTaskId[taskId][field] || []), message]
+  }
+
+  tasks.forEach(task => {
+    if (!task.id) return
+    const validatePair = (
+      startField: 'planStartDate' | 'actualStartDate',
+      endField: 'planEndDate' | 'actualEndDate',
+      startMessage: string,
+      endMessage: string,
+    ) => {
+      const start = typeof task[startField] === 'string' ? task[startField] : ''
+      const end = typeof task[endField] === 'string' ? task[endField] : ''
+      if (start && end && start > end) {
+        add(task.id!, startField, startMessage)
+        add(task.id!, endField, endMessage)
+      }
+    }
+    validatePair('planStartDate', 'planEndDate', '计划开始时间不得晚于计划完成时间', '计划完成时间不得早于计划开始时间')
+    validatePair('actualStartDate', 'actualEndDate', '实际开始时间不得晚于实际完成时间', '实际完成时间不得早于实际开始时间')
+  })
+
+  return { valid: Object.keys(byTaskId).length === 0, byTaskId }
+}
+
 /** Same-row and parent-range date checks used by technical plan drafts. Empty dates stay valid. */
 export const getInvalidTechnicalTaskFields = (
   tasks: readonly TechnicalTemplateTaskInput[],

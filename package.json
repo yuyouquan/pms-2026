@@ -23,6 +23,8 @@
     "verify:level3-template": "node scripts/verify-level3-template-config.mjs",
     "verify:level3-template-browser": "node screenshots/verify-level3-template-config-browser.mjs",
     "verify:level1-plan-governance": "node scripts/verify-level1-plan-governance.mjs",
+    "verify:level1-flat-gantt": "node scripts/verify-level1-flat-milestone-gantt.mjs",
+    "verify:level1-flat-gantt-browser": "node screenshots/verify-level1-flat-milestone-gantt-browser.mjs",
     "verify:enum-browser": "node screenshots/verify-enum-config-browser.mjs",
     "verify:machine-tos": "node scripts/verify-machine-tos-versions.mjs",
     "verify:technical-project": "node scripts/verify-technical-project.mjs",
