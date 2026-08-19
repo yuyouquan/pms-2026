@@ -91,32 +91,17 @@ const getCompareDisplayFields = (task: CompareTask) => ({
  */
 export function compareVersionsForTable(oldTasks: CompareTask[], newTasks: CompareTask[]): CompareTableRow[] {
   const rows: CompareTableRow[] = [];
-  const countStableIds = (tasks: CompareTask[]) => tasks.reduce((counts, task) => {
-    if (task.stableId) counts.set(task.stableId, (counts.get(task.stableId) || 0) + 1)
-    return counts
-  }, new Map<string, number>())
-  const oldStableIdCounts = countStableIds(oldTasks)
-  const newStableIdCounts = countStableIds(newTasks)
   const identity = (task: CompareTask) => task.stableId
-    && oldStableIdCounts.get(task.stableId) === 1
-    && newStableIdCounts.get(task.stableId) === 1
-    ? task.stableId
-    : task.id
-  const countIdentities = (tasks: CompareTask[]) => tasks.reduce((counts, task) => {
-    const id = identity(task)
-    counts.set(id, (counts.get(id) || 0) + 1)
-    return counts
-  }, new Map<string, number>())
-  const oldIdentityCounts = countIdentities(oldTasks)
-  const newIdentityCounts = countIdentities(newTasks)
+    ? ['stable', task.stableId] as const
+    : ['id', task.id] as const
   const toUniqueMap = (tasks: CompareTask[]) => {
     const occurrences = new Map<string, number>()
     return new Map(tasks.map(task => {
       const baseIdentity = identity(task)
-      const occurrence = (occurrences.get(baseIdentity) || 0) + 1
-      occurrences.set(baseIdentity, occurrence)
-      const duplicateIdentity = Math.max(oldIdentityCounts.get(baseIdentity) || 0, newIdentityCounts.get(baseIdentity) || 0) > 1
-      return [duplicateIdentity ? `${baseIdentity}#${occurrence}` : baseIdentity, task]
+      const baseKey = JSON.stringify(baseIdentity)
+      const occurrence = (occurrences.get(baseKey) || 0) + 1
+      occurrences.set(baseKey, occurrence)
+      return [JSON.stringify([...baseIdentity, occurrence]), task]
     }))
   }
   const oldMap = toUniqueMap(oldTasks)

@@ -542,7 +542,7 @@ const renumberedOnlyCompare = compareModule.compareVersionsForTable(
   [{ ...milestones[1], id: '1.1', stableId: 'str1', sequence: 1 }],
 )
 assert.equal(renumberedOnlyCompare[0].changeType, '未变更', 'display-ID and sequence renumbering alone are not content changes')
-assert.equal(renumberedOnlyCompare[0].key, 'str1', 'stable task identity is used as the React comparison key')
+assert.equal(renumberedOnlyCompare[0].key, JSON.stringify(['stable', 'str1', 1]), 'stable task identity uses a namespaced React comparison key')
 const flatNameCompare = compareModule.compareVersionsForTable(
   [{ ...milestones[1], stableId: 'flat-name', stageName: '旧阶段', milestoneName: '旧里程碑', activityName: '旧活动' }],
   [{ ...milestones[1], stableId: 'flat-name', stageName: '新阶段', milestoneName: '新里程碑', activityName: '新活动' }],
@@ -565,9 +565,9 @@ const nullToZeroDurationCompare = compareModule.compareVersionsForTable(
 )
 assert.deepEqual(nullToZeroDurationCompare[0].fieldDiffs.filter(diff => ['estimatedDays', 'actualDays'].includes(diff.field)).map(diff => [diff.field, diff.oldValue, diff.newValue]), [['estimatedDays', '-', '0天'], ['actualDays', '-', '0天']], 'null-to-zero duration changes remain visible for planned and actual durations')
 const addedFlatRow = compareModule.compareVersionsForTable([], [{ ...milestones[1], id: 'added-flat', stableId: 'added-flat', sequence: 7, stageName: '新增阶段', milestoneName: '新增里程碑', activityName: '新增活动' }])[0]
-assert.deepEqual([addedFlatRow.key, addedFlatRow.taskId, addedFlatRow.sequence, addedFlatRow.stageName, addedFlatRow.milestoneName, addedFlatRow.activityName], ['added-flat', 'added-flat', 7, '新增阶段', '新增里程碑', '新增活动'], 'added flat rows retain stable keys and every display field')
+assert.deepEqual([addedFlatRow.key, addedFlatRow.taskId, addedFlatRow.sequence, addedFlatRow.stageName, addedFlatRow.milestoneName, addedFlatRow.activityName], [JSON.stringify(['stable', 'added-flat', 1]), 'added-flat', 7, '新增阶段', '新增里程碑', '新增活动'], 'added flat rows retain stable keys and every display field')
 const deletedFlatRow = compareModule.compareVersionsForTable([{ ...milestones[1], id: 'deleted-flat', stableId: 'deleted-flat', sequence: 8, stageName: '删除阶段', milestoneName: '删除里程碑', activityName: '删除活动' }], [])[0]
-assert.deepEqual([deletedFlatRow.key, deletedFlatRow.taskId, deletedFlatRow.sequence, deletedFlatRow.stageName, deletedFlatRow.milestoneName, deletedFlatRow.activityName], ['deleted-flat', 'deleted-flat', 8, '删除阶段', '删除里程碑', '删除活动'], 'deleted flat rows retain stable keys and every display field')
+assert.deepEqual([deletedFlatRow.key, deletedFlatRow.taskId, deletedFlatRow.sequence, deletedFlatRow.stageName, deletedFlatRow.milestoneName, deletedFlatRow.activityName], [JSON.stringify(['stable', 'deleted-flat', 1]), 'deleted-flat', 8, '删除阶段', '删除里程碑', '删除活动'], 'deleted flat rows retain stable keys and every display field')
 const duplicateStableSameIdCompare = compareModule.compareVersionsForTable(
   [{ ...milestones[1], id: 'duplicate-id', stableId: 'duplicate-stable', taskName: '任务A' }, { ...milestones[1], id: 'duplicate-id', stableId: 'duplicate-stable', taskName: '任务B' }],
   [{ ...milestones[1], id: 'duplicate-id', stableId: 'duplicate-stable', taskName: '任务A' }, { ...milestones[1], id: 'duplicate-id', stableId: 'duplicate-stable', taskName: '任务B' }],
@@ -578,7 +578,26 @@ const duplicateStableDifferentIdCompare = compareModule.compareVersionsForTable(
   [{ ...milestones[1], id: 'old-1', stableId: 'duplicate-stable' }, { ...milestones[1], id: 'old-2', stableId: 'duplicate-stable' }],
   [{ ...milestones[1], id: 'new-1', stableId: 'duplicate-stable' }, { ...milestones[1], id: 'new-2', stableId: 'duplicate-stable' }],
 )
-assert.equal(duplicateStableDifferentIdCompare.length, 4, 'duplicate stable IDs fall back to display IDs so unmatched rows are not dropped')
-assert.deepEqual(duplicateStableDifferentIdCompare.map(row => row.changeType).sort(), ['删除', '删除', '新增', '新增'], 'different fallback IDs remain explicit additions and deletions')
+assert.equal(duplicateStableDifferentIdCompare.length, 2, 'duplicate stable IDs pair by occurrence even when display IDs are renumbered')
+assert.deepEqual(duplicateStableDifferentIdCompare.map(row => row.taskId), ['new-1', 'new-2'], 'duplicate stable-ID matches display each new task ID')
+const changedStableSameIdCompare = compareModule.compareVersionsForTable(
+  [{ ...milestones[1], id: '1.1', stableId: 'old-stable' }],
+  [{ ...milestones[1], id: '1.1', stableId: 'new-stable' }],
+)
+assert.deepEqual(changedStableSameIdCompare.map(row => row.changeType).sort(), ['删除', '新增'], 'different stable IDs never match solely because their display IDs match')
+const collidingDisplayIdCompare = compareModule.compareVersionsForTable(
+  [
+    { ...milestones[1], id: 'x#1', stableId: undefined },
+    { ...milestones[1], id: 'x', stableId: undefined },
+    { ...milestones[1], id: 'x', stableId: undefined },
+  ],
+  [
+    { ...milestones[1], id: 'x#1', stableId: undefined },
+    { ...milestones[1], id: 'x', stableId: undefined },
+    { ...milestones[1], id: 'x', stableId: undefined },
+  ],
+)
+assert.equal(collidingDisplayIdCompare.length, 3, 'a literal x#1 ID cannot collide with repeated x identities')
+assert.equal(new Set(collidingDisplayIdCompare.map(row => row.key)).size, 3, 'namespaced indexed ID keys remain unique for collision-prone display IDs')
 
 console.log('PASS level1 flat milestone and gantt rules')
