@@ -83,7 +83,8 @@ export const insertNextTechnicalSubprojectTransfer = (
     .sort((left, right) => left.task.order - right.task.order || left.index - right.index)
   const tdr3Index = ordered.findIndex(({ task }) => task.taskName === 'TDR3')
   if (tdr3Index < 0) return { ok: false, reason: 'tdr3-missing' }
-  const maximumTransferVersion = ordered.reduce((maximum, { task }) => {
+  // Only activities before TDR3 belong to the controlled transfer sequence.
+  const maximumTransferVersion = ordered.slice(0, tdr3Index).reduce((maximum, { task }) => {
     const match = /^第(\d+)版转测$/.exec(task.taskName)
     return match ? Math.max(maximum, Number(match[1])) : maximum
   }, 0)
@@ -397,7 +398,10 @@ export const migrateTechnicalSubprojectSeedState = <T extends Record<string, any
     : undefined
   const current = templates?.[TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject]
   const legacySeed = ['第1版转测', '第2版转测', '第X版转测', 'TDR3']
-  if (!Array.isArray(current) || current.map(task => String(task?.taskName || '')).join('|') !== legacySeed.join('|')) return state
+  const isExactLegacySeed = Array.isArray(current)
+    && current.length === legacySeed.length
+    && current.every((task, index) => task?.taskName === legacySeed[index])
+  if (!isExactLegacySeed) return state
   return {
     ...state,
     configTemplateTasksByType: {

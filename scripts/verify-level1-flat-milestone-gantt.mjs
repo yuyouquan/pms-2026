@@ -20,6 +20,20 @@ const loadTypescriptModule = async relativePath => {
 const level1Rules = await loadTypescriptModule('src/lib/level1PlanRules.ts')
 const technicalRules = await loadTypescriptModule('src/lib/technicalPlanRules.ts')
 
+const level1RenumberInput = [
+  { id: 'root-b', stableId: 'stable-root-b', order: 9, taskName: '阶段B' },
+  { id: 'child-b', stableId: 'stable-child-b', parentId: 'root-b', order: 5, taskName: '节点B' },
+  { id: 'root-a', stableId: 'stable-root-a', order: 1, taskName: '阶段A' },
+  { id: 'child-a', stableId: 'stable-child-a', parentId: 'root-a', order: 7, taskName: '节点A' },
+]
+const level1RenumberSnapshot = JSON.parse(JSON.stringify(level1RenumberInput))
+const level1Renumbered = level1Rules.renumberLevel1Tasks(level1RenumberInput)
+assert.deepEqual(level1Renumbered.map(task => [task.id, task.parentId || null, task.order, task.stableId]), [
+  ['1', null, 1, 'stable-root-a'], ['1.1', '1', 1, 'stable-child-a'],
+  ['2', null, 2, 'stable-root-b'], ['2.1', '2', 1, 'stable-child-b'],
+], 'level1 renumbering assigns 1-based IDs, sibling orders, and rewritten parent IDs without changing stable IDs')
+assert.deepEqual(level1RenumberInput, level1RenumberSnapshot, 'level1 renumbering does not mutate its input')
+
 const launchStage = { id: 'launch', stableId: 'stage-launch', order: 2, taskName: '上市阶段', source: 'template' }
 const machineMrTasks = [
   { id: '1', stableId: 'stage-concept', order: 1, taskName: '概念阶段', source: 'template' },
@@ -49,6 +63,15 @@ assert.equal(repeatedMrInsert.ok, true, 'deleting a controlled MR permits replac
 assert.equal(repeatedMrInsert.task.taskName, 'MR5', 'deleting MR5 makes the next controlled insertion MR5 again')
 assert.deepEqual(level1Rules.insertNextMachineMrMilestone(machineMrTasks.filter(task => task.stableId !== 'stage-launch')), { ok: false, reason: 'launch-stage-missing' }, 'controlled MR insertion requires a launch stage')
 assert.deepEqual(level1Rules.insertNextMachineMrMilestone([...machineMrTasks, { id: 'other.1', stableId: 'existing-mr4', parentId: '1', order: 2, taskName: 'MR4', source: 'custom' }]), { ok: false, reason: 'duplicate-name' }, 'a computed MR name already used outside the launch stage is rejected')
+const originalDateNow = Date.now
+let machineNonceCalls = 0
+Date.now = () => { machineNonceCalls += 1; return 1_700_000_000_000 }
+try {
+  assert.equal(level1Rules.insertNextMachineMrMilestone(machineMrTasks).ok, true, 'controlled MR insertion works with a fixed nonce clock')
+} finally {
+  Date.now = originalDateNow
+}
+assert.equal(machineNonceCalls, 1, 'controlled MR insertion reads Date.now exactly once per nonce')
 
 assert.deepEqual(technicalRules.SUBPROJECT_TEMPLATE_SEED, ['第1版转测', '第2版转测', 'TDR3'], 'subproject seed contains only the two fixed transfer versions and TDR3')
 const seededSubprojectTasks = technicalRules.buildSubprojectTemplateTasks()
@@ -67,6 +90,20 @@ const repeatedTransferInsert = technicalRules.insertNextTechnicalSubprojectTrans
 assert.equal(repeatedTransferInsert.ok, true, 'deleting a controlled transfer version permits replacement')
 assert.equal(repeatedTransferInsert.task.taskName, '第4版转测', 'deleting 第4版转测 makes the next controlled insertion 第4版转测 again')
 assert.deepEqual(technicalRules.insertNextTechnicalSubprojectTransfer(seededSubprojectTasks.filter(task => task.taskName !== 'TDR3')), { ok: false, reason: 'tdr3-missing' }, 'controlled transfer insertion requires TDR3')
+const duplicateTechnicalTransfer = technicalRules.insertNextTechnicalSubprojectTransfer([
+  ...seededSubprojectTasks,
+  { ...seededSubprojectTasks[0], id: 'after-tdr3', stableId: 'after-tdr3', order: 4, taskName: '第3版转测' },
+])
+assert.deepEqual(duplicateTechnicalTransfer, { ok: false, reason: 'duplicate-name' }, 'a transfer name duplicated outside the controlled TDR3 insertion segment is rejected')
+const originalTechnicalDateNow = Date.now
+let technicalNonceCalls = 0
+Date.now = () => { technicalNonceCalls += 1; return 1_700_000_000_001 }
+try {
+  assert.equal(technicalRules.insertNextTechnicalSubprojectTransfer(seededSubprojectTasks).ok, true, 'controlled transfer insertion works with a fixed nonce clock')
+} finally {
+  Date.now = originalTechnicalDateNow
+}
+assert.equal(technicalNonceCalls, 1, 'controlled transfer insertion reads Date.now exactly once per nonce')
 const historicalSubprojectSeed = [
   { id: '1', stableId: 'first', order: 1, taskName: '第1版转测' },
   { id: '2', stableId: 'second', order: 2, taskName: '第2版转测' },
@@ -83,6 +120,13 @@ const migratedSubprojectSeed = technicalRules.migrateTechnicalSubprojectSeedStat
 assert.deepEqual(migratedSubprojectSeed.configTemplateTasksByType[technicalRules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject].map(task => task.taskName), ['第1版转测', '第2版转测', 'TDR3'], 'only an untouched legacy subproject config seed migrates')
 assert.strictEqual(migratedSubprojectSeed.publishedSnapshots, historicalSnapshots, 'subproject seed migration leaves published snapshots untouched')
 assert.strictEqual(migratedSubprojectSeed.configTemplateVersionScopes, historicalScopes, 'subproject seed migration leaves configuration history untouched')
+const pipeNamedCustomSubprojectSeed = [
+  { id: '1', stableId: 'custom-first', order: 1, taskName: '第1版转测' },
+  { id: '2', stableId: 'custom-second', order: 2, taskName: '第2版转测|第X版转测' },
+  { id: '3', stableId: 'custom-tdr3', order: 3, taskName: 'TDR3' },
+]
+const pipeNamedCustomState = { configTemplateTasksByType: { [technicalRules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject]: pipeNamedCustomSubprojectSeed } }
+assert.strictEqual(technicalRules.migrateTechnicalSubprojectSeedState(pipeNamedCustomState).configTemplateTasksByType[technicalRules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject], pipeNamedCustomSubprojectSeed, 'a custom three-item template containing a seed separator remains untouched')
 const customizedSubprojectSeed = technicalRules.migrateTechnicalSubprojectSeedState({
   configTemplateTasksByType: { [technicalRules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject]: [{ ...historicalSubprojectSeed[0], taskName: '自定义第1版转测' }] },
 })

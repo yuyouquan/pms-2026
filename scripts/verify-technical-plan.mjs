@@ -6,6 +6,7 @@ import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-cont
 
 const root = projectRoot(import.meta.url)
 const rules = loadTypeScriptModule(root, 'src/lib/technicalPlanRules.ts')
+const level1Rules = loadTypeScriptModule(root, 'src/lib/level1PlanRules.ts')
 assert.deepEqual(rules.TDT_TEMPLATE_SEED, [['规划阶段', ['规划启动', 'charter DCP']], ['概念阶段', ['TDR1']], ['计划阶段', ['TDR2', 'PDCP']], ['开发验证阶段', ['TDR3_X', 'TDCP_X']], ['迁移阶段', ['TDR4', 'EDCP']]], 'TDT seed is complete and ordered')
 assert.deepEqual(rules.SUBPROJECT_TEMPLATE_SEED, ['第1版转测', '第2版转测', 'TDR3'], 'subproject seed is ordered')
 assert.throws(() => rules.validateTechnicalTemplateDepth('tdt', [{ children: [{ children: [{ children: [] }] }] }]), /depth/i)
@@ -264,12 +265,10 @@ const numberedSubprojectTasks = technicalWorkspace.renumberTechnicalSubprojectTa
 ])
 assert.deepEqual(numberedSubprojectTasks.map(task => task.id), ['1', '2', '3', '4'], 'technical subproject activities always expose continuous numeric sequence values')
 assert.equal(numberedSubprojectTasks.at(-1).stableId, 'technical-custom-1', 'renumbering keeps the stable identity used for version synchronization')
-const reorderedSubprojectTasks = technicalWorkspace.reorderTechnicalSubprojectCustomTasks([
-  ...numberedSubprojectTasks,
-  { ...numberedSubprojectTasks.at(-1), id: '5', stableId: 'technical-custom-2', order: 5, taskName: '第二个自定义任务' },
-], '5', '4')
-assert.deepEqual(reorderedSubprojectTasks.slice(-2).map(task => task.stableId), ['technical-custom-2', 'technical-custom-1'], 'custom subproject roots can reorder among themselves')
-assert.deepEqual(technicalWorkspace.reorderTechnicalSubprojectCustomTasks(reorderedSubprojectTasks, '1', '4'), reorderedSubprojectTasks, 'template roots cannot be reordered')
+const controlledSubprojectRoot = numberedSubprojectTasks.at(-1)
+assert.equal(level1Rules.canMutateLevel1TaskStructure({ projectType: '技术项目', technicalKind: 'subproject', task: controlledSubprojectRoot, action: 'delete' }), true, 'custom subproject roots remain deletable')
+assert.equal(level1Rules.canMutateLevel1TaskStructure({ projectType: '技术项目', technicalKind: 'subproject', task: controlledSubprojectRoot, action: 'rename' }), false, 'custom subproject roots cannot be renamed')
+assert.equal(level1Rules.canMutateLevel1TaskStructure({ projectType: '技术项目', technicalKind: 'subproject', task: controlledSubprojectRoot, action: 'reorder' }), false, 'custom subproject roots cannot be reordered')
 const planWorkspaceShellPath = 'src/components/plans/PlanWorkspaceShell.tsx'
 assert.equal(fs.existsSync(`${root}/${planWorkspaceShellPath}`), true, 'plan workspace provides a shared shell for whole-machine and technical projects')
 const planWorkspaceShell = readSource(root, planWorkspaceShellPath)
