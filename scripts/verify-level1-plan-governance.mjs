@@ -47,14 +47,34 @@ const linkedMockTemplate = [
   { id: 'stage', taskName: '阶段', order: 0 },
   { id: 'node-a', parentId: 'stage', taskName: '节点A', order: 0 },
   { id: 'node-b', parentId: 'stage', taskName: '节点B', order: 1 },
+  { id: 'empty-stage', taskName: '空阶段', order: 1 },
 ]
 const linkedMockA = projectMocks.buildProjectListMockPlanTasks('project-a', linkedMockTemplate)
 const linkedMockB = projectMocks.buildProjectListMockPlanTasks('project-b', linkedMockTemplate)
 assert.equal(linkedMockA.length, linkedMockTemplate.length)
-assert.equal(linkedMockA.every(task => task.planEndDate), true, 'project mock plans contain dates')
+const linkedMockParent = linkedMockA.find(task => task.id === 'stage')
+const linkedMockEmptyParent = linkedMockA.find(task => task.id === 'empty-stage')
+const linkedMockChildren = linkedMockA.filter(task => task.parentId === 'stage')
+assert.deepEqual(
+  [linkedMockParent.planStartDate, linkedMockParent.planEndDate, linkedMockParent.actualEndDate],
+  ['', '', ''],
+  'project mock parent dates remain empty so the Level 1 projection can aggregate them',
+)
+assert.deepEqual(
+  [linkedMockEmptyParent.planStartDate, linkedMockEmptyParent.planEndDate, linkedMockEmptyParent.actualEndDate],
+  ['', '', ''],
+  'an empty top-level activity also remains aggregation-only mock data',
+)
+assert.equal(linkedMockChildren.every(task => task.planStartDate === ''), true, 'second-level mock tasks do not invent plan start dates')
+assert.equal(linkedMockChildren.every(task => task.planEndDate), true, 'second-level mock tasks contain plan completion dates')
+assert.equal(
+  linkedMockChildren.every((task, index) => index === 0 || task.planEndDate > linkedMockChildren[index - 1].planEndDate),
+  true,
+  'second-level mock completion dates are strictly increasing',
+)
 assert.notDeepEqual(
-  linkedMockA.map(task => task.planEndDate),
-  linkedMockB.map(task => task.planEndDate),
+  linkedMockChildren.map(task => task.planEndDate),
+  linkedMockB.filter(task => task.parentId === 'stage').map(task => task.planEndDate),
   'project mock plans are scoped by project id',
 )
 

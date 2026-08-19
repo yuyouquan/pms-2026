@@ -16,13 +16,33 @@ export interface ProjectListMockTemplateTask {
   [key: string]: unknown
 }
 
-const AUGUST_2026_MILESTONE_DAYS = [3, 5, 7, 10, 12, 14, 17, 19, 21, 24, 26, 28, 31] as const
+const LEVEL1_MOCK_MILESTONE_DATES = [
+  '2026-02-26',
+  '2026-03-17',
+  '2026-04-28',
+  '2026-05-22',
+  '2026-07-31',
+  '2026-10-12',
+  '2026-12-15',
+  '2027-03-01',
+] as const
 
 const projectOffset = (projectId: string) => (
   [...projectId].reduce((total, character) => total + character.charCodeAt(0), 0) % 3
 )
 
-const formatAugustDate = (day: number) => `2026-08-${String(day).padStart(2, '0')}`
+const shiftIsoDate = (value: string, days: number) => {
+  const date = new Date(`${value}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
+const getMilestoneDate = (index: number, offset: number) => {
+  const lastIndex = LEVEL1_MOCK_MILESTONE_DATES.length - 1
+  const baseDate = LEVEL1_MOCK_MILESTONE_DATES[Math.min(index, lastIndex)]
+  const overflowDays = Math.max(0, index - lastIndex) * 45
+  return shiftIsoDate(baseDate, offset + overflowDays)
+}
 
 export const getProjectLevel1MockSnapshotKey = (projectId: string, versionId: string) => (
   `project::${projectId}::level1::${versionId}`
@@ -33,16 +53,26 @@ export function buildProjectListMockPlanTasks<T extends ProjectListMockTemplateT
   templateTasks: readonly T[],
 ): T[] {
   const offset = projectOffset(projectId)
-  return templateTasks.map((task, index) => {
-    const endIndex = Math.min(index + offset, AUGUST_2026_MILESTONE_DAYS.length - 1)
-    const startIndex = Math.max(0, endIndex - 1)
+  let milestoneIndex = 0
+  return templateTasks.map(task => {
+    if (!task.parentId) {
+      return {
+        ...task,
+        planStartDate: '',
+        planEndDate: '',
+        actualStartDate: '',
+        actualEndDate: '',
+      }
+    }
+    const currentMilestoneIndex = milestoneIndex
+    milestoneIndex += 1
+    const planEndDate = getMilestoneDate(currentMilestoneIndex, offset)
     return {
       ...task,
-      planStartDate: formatAugustDate(AUGUST_2026_MILESTONE_DAYS[startIndex]),
-      planEndDate: formatAugustDate(AUGUST_2026_MILESTONE_DAYS[endIndex]),
-      actualEndDate: index % 4 === 3
-        ? ''
-        : formatAugustDate(AUGUST_2026_MILESTONE_DAYS[Math.min(endIndex + (index % 3 === 0 ? 1 : 0), AUGUST_2026_MILESTONE_DAYS.length - 1)]),
+      planStartDate: '',
+      planEndDate,
+      actualStartDate: '',
+      actualEndDate: shiftIsoDate(planEndDate, currentMilestoneIndex < 2 ? 1 : 0),
     }
   })
 }

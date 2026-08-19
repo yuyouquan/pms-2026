@@ -6851,6 +6851,41 @@ body,
 .pms-level3-row-actions { margin-left: auto; opacity: 0; transition: opacity .16s ease; }
 .ant-table-row:hover .pms-level3-row-actions,
 .pms-level3-row-actions:focus-within { opacity: 1; }
+.pms-table.pms-level3-table .ant-table-tbody > tr > td.ant-table-cell-fix-start,
+.pms-table.pms-level3-table .ant-table-tbody > tr > td.ant-table-cell-fix-start-shadow,
+.pms-table.pms-level3-table .ant-table-tbody > tr > td.ant-table-cell-fix-left,
+.pms-table.pms-level3-table .ant-table-tbody > tr > td.ant-table-cell-fix-left-last {
+  background: #fff !important;
+  z-index: 3;
+}
+.pms-table.pms-level3-table .ant-table-tbody > tr:nth-child(even) > td.ant-table-cell-fix-start,
+.pms-table.pms-level3-table .ant-table-tbody > tr:nth-child(even) > td.ant-table-cell-fix-start-shadow,
+.pms-table.pms-level3-table .ant-table-tbody > tr:nth-child(even) > td.ant-table-cell-fix-left,
+.pms-table.pms-level3-table .ant-table-tbody > tr:nth-child(even) > td.ant-table-cell-fix-left-last {
+  background: #fdfdff !important;
+}
+.pms-table.pms-level3-table .pms-level3-child-row:hover > td.ant-table-cell-fix-start,
+.pms-table.pms-level3-table .pms-level3-child-row:hover > td.ant-table-cell-fix-start-shadow,
+.pms-table.pms-level3-table .pms-level3-child-row:hover > td.ant-table-cell-fix-left,
+.pms-table.pms-level3-table .pms-level3-child-row:hover > td.ant-table-cell-fix-left-last {
+  background: #f5f4ff !important;
+}
+.pms-table.pms-level3-table .pms-level3-parent-row > td.ant-table-cell-fix-start,
+.pms-table.pms-level3-table .pms-level3-parent-row > td.ant-table-cell-fix-start-shadow,
+.pms-table.pms-level3-table .pms-level3-parent-row > td.ant-table-cell-fix-left,
+.pms-table.pms-level3-table .pms-level3-parent-row > td.ant-table-cell-fix-left-last {
+  background: var(--pms-brand-surface) !important;
+}
+.pms-table.pms-level3-table .pms-level3-parent-row:hover > td.ant-table-cell-fix-start,
+.pms-table.pms-level3-table .pms-level3-parent-row:hover > td.ant-table-cell-fix-start-shadow,
+.pms-table.pms-level3-table .pms-level3-parent-row:hover > td.ant-table-cell-fix-left,
+.pms-table.pms-level3-table .pms-level3-parent-row:hover > td.ant-table-cell-fix-left-last {
+  background: #eeebff !important;
+}
+.pms-table.pms-level3-table .ant-table-cell-fix-left-last::after,
+.pms-table.pms-level3-table .ant-table-cell-fix-start-shadow::after {
+  box-shadow: 4px 0 9px -6px rgba(71, 67, 126, 0.28) !important;
+}
 .pms-level3-parent-row > td { background: var(--pms-brand-surface) !important; font-weight: 600; }
 .pms-level3-parent-row:hover > td { background: #eeebff !important; }
 .pms-level3-dragging > td { box-shadow: inset 0 0 0 1px var(--pms-brand); }
