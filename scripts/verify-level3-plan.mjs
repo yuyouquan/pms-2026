@@ -1224,6 +1224,32 @@ assertChildParentSnapshot(store.getState().historyByScope['store-history-follow'
 assert.equal(store.getState().deleteActivity(storeHistoryScope, 'store-c3', '张三'), true)
 assertChildParentSnapshot(store.getState().historyByScope[storeHistoryScope][0])
 
+const malformedChild = { ...storeChildA, id: 'store-orphan', parentId: 'missing-root', activityName: '孤儿子活动' }
+const nestedParent = { ...storeChildA, id: 'store-nested-parent', parentId: 'store-p1', activityName: '非根父级' }
+const invalidChildState = () => structuredClone({
+  activitiesByScope: store.getState().activitiesByScope,
+  historyByScope: store.getState().historyByScope,
+  actualOverridesByScope: store.getState().actualOverridesByScope,
+  workflowOverridesByScope: store.getState().workflowOverridesByScope,
+})
+assert.equal(store.getState().createActivity(storeHistoryScope, malformedChild, '张三'), false,
+  'create rejects a child whose parent is absent')
+store.setState(state => ({
+  activitiesByScope: { ...state.activitiesByScope, [storeHistoryScope]: [storeParentA, nestedParent] },
+}))
+assert.equal(store.getState().createActivity(storeHistoryScope, { ...malformedChild, id: 'store-nested-child', parentId: 'store-nested-parent' }, '张三'), false,
+  'create rejects a child whose parent is not root')
+store.setState({
+  activitiesByScope: { [storeHistoryScope]: [storeParentA, malformedChild] }, historyByScope: { [storeHistoryScope]: [] },
+  collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
+})
+const malformedBefore = invalidChildState()
+assert.equal(store.getState().updateActivity(storeHistoryScope, 'store-orphan', { remark: '拒绝编辑' }, '张三'), false)
+assert.equal(store.getState().updateFollowActualDates(storeHistoryScope, 'store-malformed-follow', 'store-orphan', { actualStartDate: '2026-01-01' }, '张三'), false)
+assert.equal(store.getState().updateFollowWorkflowFields(storeHistoryScope, 'store-malformed-follow', 'store-orphan', { status: '进行中' }, '张三'), false)
+assert.equal(store.getState().deleteActivity(storeHistoryScope, 'store-orphan', '张三'), false)
+assert.deepEqual(invalidChildState(), malformedBefore, 'malformed child operations leave activities, history, and overrides untouched')
+
 const componentPath = path.join(root, 'src/components/plans/Level3PlanModule.tsx')
 assert.ok(fs.existsSync(componentPath), 'src/components/plans/Level3PlanModule.tsx does not exist')
 const componentSource = fs.readFileSync(componentPath, 'utf8')

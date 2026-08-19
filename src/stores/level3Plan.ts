@@ -59,7 +59,7 @@ const cloneHistory = (history: Level3ChangeLog[]) => history.map(log => ({
 const getParentHistorySnapshot = (activity: Level3Activity, activities: Level3Activity[]) => {
   if (!activity.parentId) return {}
   const parent = activities.find(item => item.id === activity.parentId)
-  if (!parent || parent.parentId) return {}
+  if (!parent || parent.parentId) return null
   return { parentActivityId: parent.id, parentActivityName: parent.activityName }
 }
 
@@ -409,6 +409,8 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
       set(state => {
         const previousActivities = state.activitiesByScope[scopeKey] || []
         if (previousActivities.some(item => item.id === activity.id)) return state
+        const parentSnapshot = getParentHistorySnapshot(activity, previousActivities)
+        if (!parentSnapshot) return state
         const siblings = previousActivities.filter(item => item.parentId === activity.parentId)
         const nextActivity = { ...activity, order: siblings.length }
         const nextActivities = [...previousActivities.map(item => ({ ...item })), nextActivity]
@@ -422,7 +424,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           activityNumber: getActivityNumber(nextActivities, nextActivity.id),
           summary: activity.parentId ? '新增二级活动' : '新增一级活动',
           changes: [],
-          ...getParentHistorySnapshot(nextActivity, nextActivities),
+          ...parentSnapshot,
         }
         created = true
         return {
@@ -442,6 +444,8 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
         const previousActivities = state.activitiesByScope[scopeKey] || []
         const previousActivity = previousActivities.find(activity => activity.id === activityId)
         if (!previousActivity) return state
+        const parentSnapshot = getParentHistorySnapshot(previousActivity, previousActivities)
+        if (!parentSnapshot) return state
         const nextActivity: Level3Activity = {
           ...previousActivity,
           ...patch,
@@ -468,7 +472,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           activityNumber: getActivityNumber(nextActivities, activityId),
           summary: `编辑活动：${changes.map(change => change.label).join('、')}`,
           changes,
-          ...getParentHistorySnapshot(nextActivity, nextActivities),
+          ...parentSnapshot,
         }
         updated = true
         return {
@@ -490,6 +494,8 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
         const displayedActivities = mergeLevel3ActualDateOverrides(sourceActivities, currentOverrides)
         const previousActivity = displayedActivities.find(activity => activity.id === activityId)
         if (!previousActivity) return state
+        const parentSnapshot = getParentHistorySnapshot(previousActivity, displayedActivities)
+        if (!parentSnapshot) return state
         const nextOverride = createLevel3ActualDateOverride(
           previousActivity,
           currentOverrides[activityId],
@@ -522,7 +528,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           activityNumber: getActivityNumber(nextActivities, activityId),
           summary: `编辑活动：${changes.map(change => change.label).join('、')}`,
           changes,
-          ...getParentHistorySnapshot(nextActivity, nextActivities),
+          ...parentSnapshot,
         }
         updated = true
         return {
@@ -556,6 +562,8 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
         )
         const previousActivity = displayedActivities.find(activity => activity.id === activityId)
         if (!previousActivity || !previousActivity.parentId) return state
+        const parentSnapshot = getParentHistorySnapshot(previousActivity, displayedActivities)
+        if (!parentSnapshot) return state
         const nextOverride = createLevel3WorkflowOverride(
           previousActivity,
           currentOverrides[activityId],
@@ -583,7 +591,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           activityNumber: getActivityNumber(nextActivities, activityId),
           summary: `编辑活动：${changes.map(change => change.label).join('、')}`,
           changes,
-          ...getParentHistorySnapshot(nextActivity, nextActivities),
+          ...parentSnapshot,
         }
         updated = true
         return {
@@ -613,8 +621,8 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
       const movedActivity = result.activities.find(activity => activity.id === activeId)
       if (!previousActivity || !movedActivity) return { ok: false, activities: cloneActivities(previousActivities), reason: '拖动活动不存在' }
       const afterNumber = getActivityNumber(result.activities, activeId)
-      const sourceParent = getParentHistorySnapshot(previousActivity, previousActivities)
-      const targetParent = getParentHistorySnapshot(movedActivity, result.activities)
+      const sourceParent = getParentHistorySnapshot(previousActivity, previousActivities) || {}
+      const targetParent = getParentHistorySnapshot(movedActivity, result.activities) || {}
       const log: Level3ChangeLog = {
         id: createId('level3-log'),
         action: 'move',
@@ -661,6 +669,8 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
       const previousActivities = get().activitiesByScope[scopeKey] || []
       const activity = previousActivities.find(item => item.id === activityId)
       if (!activity) return false
+      const parentSnapshot = getParentHistorySnapshot(activity, previousActivities)
+      if (!parentSnapshot) return false
       const activityNumber = getActivityNumber(previousActivities, activityId)
       const result = deleteLevel3ActivityTree(previousActivities, activityId)
       if (!result.ok) return false
@@ -677,7 +687,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           ? '删除二级活动'
           : `删除一级活动${deletedChildCount > 0 ? `（含 ${deletedChildCount} 个二级活动）` : ''}`,
         changes: [],
-        ...getParentHistorySnapshot(activity, previousActivities),
+        ...parentSnapshot,
       }
       set(state => ({
         activitiesByScope: { ...state.activitiesByScope, [scopeKey]: result.activities },
