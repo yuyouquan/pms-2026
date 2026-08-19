@@ -513,4 +513,30 @@ const technicalStoreSource = read('src/stores/technicalPlan.ts')
 assert.match(technicalStoreSource, /actualStartDate/, 'technical store safely supports published actual-start updates')
 assert.match(technicalStoreSource, /actualDays/, 'technical store synchronizes actual duration when actual dates change')
 
+const versionCompareSource = read('src/lib/versionCompare.ts')
+const compareModalSource = read('src/components/plans/PlanVersionCompareModal.tsx')
+assert.match(versionCompareSource, /stageName/, 'version compare preserves flat stage names')
+assert.match(versionCompareSource, /milestoneName/, 'version compare preserves flat milestone names')
+assert.match(versionCompareSource, /activityName/, 'version compare preserves technical activity names')
+assert.match(compareModalSource, /hierarchical-flat/, 'version compare modal supports flat hierarchy columns')
+assert.match(compareModalSource, /technical-subproject/, 'version compare modal supports technical subproject columns')
+for (const label of ['阶段', '里程碑点', '活动名称']) {
+  assert.match(compareModalSource, new RegExp(label), `version compare modal contains ${label}`)
+}
+const compareModule = loadTypeScriptModule(root, 'src/lib/versionCompare.ts')
+const stableCompare = compareModule.compareVersionsForTable(
+  [{ ...milestones[1], id: '1.2', stableId: 'str1', sequence: 2, planEndDate: '2026-01-16' }],
+  [{ ...milestones[1], id: '1.1', stableId: 'str1', sequence: 1, planEndDate: '2026-01-20' }],
+)
+assert.equal(stableCompare.length, 1, 'stable task identity produces one comparison row after display-id renumbering')
+assert.equal(stableCompare[0].changeType, '修改', 'a stable task with a changed milestone date is modified, not added or deleted')
+assert.equal(stableCompare[0].taskId, '1.1', 'matched comparisons display the new task ID')
+assert.equal(stableCompare[0].stageName, '概念阶段', 'matched comparisons retain the flat stage name')
+const renumberedOnlyCompare = compareModule.compareVersionsForTable(
+  [{ ...milestones[1], id: '1.2', stableId: 'str1', sequence: 2 }],
+  [{ ...milestones[1], id: '1.1', stableId: 'str1', sequence: 1 }],
+)
+assert.equal(renumberedOnlyCompare[0].changeType, '未变更', 'display-ID and sequence renumbering alone are not content changes')
+assert.equal(renumberedOnlyCompare[0].key, 'str1', 'stable task identity is used as the React comparison key')
+
 console.log('PASS level1 flat milestone and gantt rules')

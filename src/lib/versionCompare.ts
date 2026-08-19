@@ -1,6 +1,6 @@
 // 版本对比工具函数
 
-import { PlanTask, VersionDiff } from '@/types';
+import type { PlanTask, VersionDiff } from '@/types';
 
 // 辅助函数：转换为Date
 const toDate = (d: Date | string | undefined): Date | undefined => {
@@ -28,6 +28,11 @@ export interface FieldDiff {
 export interface CompareTableRow {
   key: string;
   taskId: string;
+  stableId?: string;
+  stageName?: string;
+  milestoneName?: string;
+  activityName?: string;
+  sequence?: number;
   changeType: '新增' | '删除' | '修改' | '未变更';
   // 当前各字段值（新版本优先，删除时取旧版本）
   taskName: string;
@@ -35,10 +40,10 @@ export interface CompareTableRow {
   predecessor: string;
   planStartDate: string;
   planEndDate: string;
-  estimatedDays: number;
+  estimatedDays: number | null;
   actualStartDate: string;
   actualEndDate: string;
-  actualDays: number;
+  actualDays: number | null;
   delayStatus: string;
   status: string;
   progress: number;
@@ -49,13 +54,43 @@ export interface CompareTableRow {
   modifyTime: string;
 }
 
+type CompareTask = PlanTask & {
+  stableId?: string;
+  stageName?: string;
+  milestoneName?: string;
+  activityName?: string;
+  sequence?: number;
+  delayStatus?: string;
+}
+
+const getCompareDisplayFields = (task: CompareTask) => ({
+  taskName: task.taskName,
+  responsible: task.responsible || task.responsibleUser || '',
+  predecessor: task.predecessor || '',
+  planStartDate: (task.planStartDate as any) || '',
+  planEndDate: (task.planEndDate as any) || '',
+  estimatedDays: task.estimatedDays ?? null,
+  actualStartDate: (task.actualStartDate as any) || '',
+  actualEndDate: (task.actualEndDate as any) || '',
+  actualDays: task.actualDays ?? null,
+  delayStatus: task.delayStatus || '',
+  status: task.status,
+  progress: task.progress,
+  stableId: task.stableId,
+  stageName: task.stageName,
+  milestoneName: task.milestoneName,
+  activityName: task.activityName,
+  sequence: task.sequence,
+})
+
 /**
  * 比较两个版本，生成表格行数据
  */
-export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask[]): CompareTableRow[] {
+export function compareVersionsForTable(oldTasks: CompareTask[], newTasks: CompareTask[]): CompareTableRow[] {
   const rows: CompareTableRow[] = [];
-  const oldMap = new Map(oldTasks.map(t => [t.id, t]));
-  const newMap = new Map(newTasks.map(t => [t.id, t]));
+  const identity = (task: CompareTask) => task.stableId || task.id
+  const oldMap = new Map(oldTasks.map(task => [identity(task), task]));
+  const newMap = new Map(newTasks.map(task => [identity(task), task]));
   const allIds = new Set([...oldMap.keys(), ...newMap.keys()]);
 
   const mockModifiers = ['张三', '李四', '王五', '赵六'];
@@ -65,25 +100,17 @@ export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask
   for (const id of allIds) {
     const oldTask = oldMap.get(id);
     const newTask = newMap.get(id);
+    const displayTask = newTask || oldTask!
+    const taskId = displayTask.id
+    const key = identity(displayTask)
 
     if (newTask && !oldTask) {
       // 新增
       rows.push({
-        key: id,
-        taskId: id,
+        key,
+        taskId,
         changeType: '新增',
-        taskName: newTask.taskName,
-        responsible: (newTask as any).responsible || newTask.responsibleUser || '',
-        predecessor: (newTask as any).predecessor || '',
-        planStartDate: (newTask.planStartDate as any) || '',
-        planEndDate: (newTask.planEndDate as any) || '',
-        estimatedDays: (newTask as any).estimatedDays || 0,
-        actualStartDate: (newTask.actualStartDate as any) || '',
-        actualEndDate: (newTask.actualEndDate as any) || '',
-        actualDays: (newTask as any).actualDays || 0,
-        delayStatus: (newTask as any).delayStatus || '',
-        status: newTask.status,
-        progress: newTask.progress,
+        ...getCompareDisplayFields(newTask),
         fieldDiffs: [],
         modifier: mockModifiers[mockIdx % mockModifiers.length],
         modifyTime: mockTimes[mockIdx % mockTimes.length],
@@ -92,21 +119,10 @@ export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask
     } else if (oldTask && !newTask) {
       // 删除
       rows.push({
-        key: id,
-        taskId: id,
+        key,
+        taskId,
         changeType: '删除',
-        taskName: oldTask.taskName,
-        responsible: (oldTask as any).responsible || oldTask.responsibleUser || '',
-        predecessor: (oldTask as any).predecessor || '',
-        planStartDate: (oldTask.planStartDate as any) || '',
-        planEndDate: (oldTask.planEndDate as any) || '',
-        estimatedDays: (oldTask as any).estimatedDays || 0,
-        actualStartDate: (oldTask.actualStartDate as any) || '',
-        actualEndDate: (oldTask.actualEndDate as any) || '',
-        actualDays: (oldTask as any).actualDays || 0,
-        delayStatus: (oldTask as any).delayStatus || '',
-        status: oldTask.status,
-        progress: oldTask.progress,
+        ...getCompareDisplayFields(oldTask),
         fieldDiffs: [],
         modifier: mockModifiers[mockIdx % mockModifiers.length],
         modifyTime: mockTimes[mockIdx % mockTimes.length],
@@ -139,8 +155,8 @@ export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask
       if (oldEnd !== newEnd) {
         fieldDiffs.push({ field: 'planEndDate', oldValue: oldEnd || '-', newValue: newEnd || '-' });
       }
-      const oldEstDays = (oldTask as any).estimatedDays || 0;
-      const newEstDays = (newTask as any).estimatedDays || 0;
+      const oldEstDays = oldTask.estimatedDays ?? 0;
+      const newEstDays = newTask.estimatedDays ?? 0;
       if (oldEstDays !== newEstDays) {
         fieldDiffs.push({ field: 'estimatedDays', oldValue: `${oldEstDays}天`, newValue: `${newEstDays}天` });
       }
@@ -154,8 +170,8 @@ export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask
       if (oldActEnd !== newActEnd) {
         fieldDiffs.push({ field: 'actualEndDate', oldValue: oldActEnd || '-', newValue: newActEnd || '-' });
       }
-      const oldActDays = (oldTask as any).actualDays || 0;
-      const newActDays = (newTask as any).actualDays || 0;
+      const oldActDays = oldTask.actualDays ?? 0;
+      const newActDays = newTask.actualDays ?? 0;
       if (oldActDays !== newActDays) {
         fieldDiffs.push({ field: 'actualDays', oldValue: `${oldActDays}天`, newValue: `${newActDays}天` });
       }
@@ -172,21 +188,10 @@ export function compareVersionsForTable(oldTasks: PlanTask[], newTasks: PlanTask
       }
 
       rows.push({
-        key: id,
-        taskId: id,
+        key,
+        taskId,
         changeType: fieldDiffs.length > 0 ? '修改' : '未变更',
-        taskName: newTask.taskName,
-        responsible: newResp,
-        predecessor: newPred,
-        planStartDate: newStart,
-        planEndDate: newEnd,
-        estimatedDays: newEstDays,
-        actualStartDate: newActStart,
-        actualEndDate: newActEnd,
-        actualDays: newActDays,
-        delayStatus: newDelayStatus,
-        status: newTask.status,
-        progress: newTask.progress,
+        ...getCompareDisplayFields(newTask),
         fieldDiffs,
         modifier: fieldDiffs.length > 0 ? mockModifiers[mockIdx % mockModifiers.length] : '',
         modifyTime: fieldDiffs.length > 0 ? mockTimes[mockIdx % mockTimes.length] : '',

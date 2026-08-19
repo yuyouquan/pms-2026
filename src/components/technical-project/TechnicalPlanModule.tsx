@@ -41,7 +41,7 @@ import { compareVersionsForTable } from '@/lib/versionCompare'
 import type { PlanRevisionKind } from '@/lib/planVersioning'
 import { getTemplateSnapshotForProjectType } from '@/lib/projectTemplateCompatibility'
 import { comparePublishedTechnicalPlanVersions } from '@/lib/technicalProjectRules'
-import { canMaintainLevel1Plan, canMutateLevel1TaskStructure, projectLevel1Plan, projectTechnicalSubprojectRows, sumLevel1EstimatedDays, validateLevel1MilestoneDates, type Level1FlatMilestoneRow, type Level1PlanViewRow } from '@/lib/level1PlanRules'
+import { canMaintainLevel1Plan, canMutateLevel1TaskStructure, projectLevel1FlatMilestones, projectLevel1Plan, projectTechnicalSubprojectRows, sumLevel1EstimatedDays, validateLevel1MilestoneDates, type Level1FlatMilestoneRow } from '@/lib/level1PlanRules'
 import { applyPlanGanttDateChange, applyPlanTaskDatePatch, buildPlanGanttTasks } from '@/lib/planGanttRules'
 import {
   createFilterCondition,
@@ -70,7 +70,7 @@ import {
   buildTechnicalPlanTabs, getTechnicalPlanKey, useTechnicalPlanStore,
 } from '@/stores/technicalPlan'
 import type { TechnicalTemplateKind, TechnicalTemplateTask } from '@/types/technicalPlan'
-import type { PlanStatus, PlanTask } from '@/types'
+import type { PlanStatus } from '@/types'
 import type { TechnicalSubprojectTransferScopeToken } from '@/lib/technicalPlanWorkspace'
 import type { TechnicalSubproject } from '@/types/technicalProject'
 
@@ -97,22 +97,6 @@ const toPlanStatus = (value: unknown): PlanStatus => {
   }
 }
 
-const toComparePlanTask = (row: Level1PlanViewRow): PlanTask => ({
-  id: row.id,
-  parentId: row.parentId || undefined,
-  order: row.order,
-  taskName: row.taskName,
-  responsible: row.responsible,
-  predecessor: row.predecessor,
-  planStartDate: row.planStartDate ? new Date(row.planStartDate) : undefined,
-  planEndDate: row.planEndDate ? new Date(row.planEndDate) : undefined,
-  estimatedDays: row.estimatedDays ?? undefined,
-  actualStartDate: row.actualStartDate ? new Date(row.actualStartDate) : undefined,
-  actualEndDate: row.actualEndDate ? new Date(row.actualEndDate) : undefined,
-  actualDays: row.actualDays ?? undefined,
-  status: toPlanStatus(row.status),
-  progress: row.progress ?? 0,
-})
 function TechnicalHorizontalPlanTable({
   tasks,
   versions,
@@ -793,10 +777,10 @@ export default function TechnicalPlanModule({
     const left = visibleVersions.find(version => version.id === compareBaseId)
     const right = visibleVersions.find(version => version.id === compareTargetId)
     if (!left || !right) return []
-    const mode = tab?.templateKind === 'subproject' ? 'technical-subproject' : 'standard'
+    const isSubproject = tab?.templateKind === 'subproject'
     return compareVersionsForTable(
-      projectLevel1Plan(left.tasks, { mode }).rows.map(toComparePlanTask),
-      projectLevel1Plan(right.tasks, { mode }).rows.map(toComparePlanTask),
+      (isSubproject ? projectTechnicalSubprojectRows(left.tasks) : projectLevel1FlatMilestones(left.tasks)) as any,
+      (isSubproject ? projectTechnicalSubprojectRows(right.tasks) : projectLevel1FlatMilestones(right.tasks)) as any,
     )
   }, [compareBaseId, compareTargetId, hasCompared, instance, tab?.templateKind, visibleVersions])
 
@@ -1085,7 +1069,7 @@ export default function TechnicalPlanModule({
       </PlanWorkspaceShell>
 
       <PlanVersionCompareModal
-        fieldMode="governed"
+        fieldMode={tab?.templateKind === 'subproject' ? 'technical-subproject' : 'hierarchical-flat'}
         open={compareOpen}
         rows={compareRows}
         versions={visibleVersions.map(version => ({ id: version.id, versionNo: version.versionNo, status: version.status }))}

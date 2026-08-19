@@ -4728,8 +4728,13 @@ export default function ProjectSpaceContainer() {
         { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
       ]
     }
-    const governedOldTasks = projectPlanLevel === 'level1' ? projectLevel1Plan(oldTasks as any, { mode: 'standard' }).rows : oldTasks
-    const governedNewTasks = projectPlanLevel === 'level1' ? projectLevel1Plan(newTasks as any, { mode: 'standard' }).rows : newTasks
+    const usesFlatLevel1Comparison = projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject)
+    const governedOldTasks = usesFlatLevel1Comparison
+      ? projectLevel1FlatMilestones(oldTasks as any)
+      : projectPlanLevel === 'level1' ? projectLevel1Plan(oldTasks as any, { mode: 'standard' }).rows : oldTasks
+    const governedNewTasks = usesFlatLevel1Comparison
+      ? projectLevel1FlatMilestones(newTasks as any)
+      : projectPlanLevel === 'level1' ? projectLevel1Plan(newTasks as any, { mode: 'standard' }).rows : newTasks
     setCompareResult(compareVersionsForTable(governedOldTasks as any, governedNewTasks as any))
     message.success('对比完成')
   }
@@ -4862,7 +4867,7 @@ export default function ProjectSpaceContainer() {
       </Modal>
       {/* Version compare modal */}
       <PlanVersionCompareModal
-        fieldMode={projectPlanLevel === 'level1' ? 'governed' : 'legacy'}
+        fieldMode={projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject) ? 'hierarchical-flat' : 'legacy'}
         open={showVersionCompare}
         rows={compareResult}
         versions={versions}
