@@ -50,6 +50,14 @@ const flattenActivityTree = (activities: Level3Activity[]) => {
   return result
 }
 
+const hasSameLevel3ActivityStructure = (left: Level3Activity[], right: Level3Activity[]) => {
+  const leftTree = flattenActivityTree(left)
+  const rightTree = flattenActivityTree(right)
+  return leftTree.length === rightTree.length && leftTree.every((activity, index) => (
+    activity.id === rightTree[index]?.id && activity.parentId === rightTree[index]?.parentId
+  ))
+}
+
 const dateDifference = (start: string, end: string): number | null => {
   if (!start || !end) return null
   const startTime = Date.parse(`${start}T00:00:00Z`)
@@ -349,10 +357,11 @@ export function moveLevel3Activity(
   })
   normalizeSiblingOrders(next, toParentId)
 
+  const resultActivities = flattenActivityTree(next)
   return {
     ok: true,
-    changed: true,
-    activities: flattenActivityTree(next),
+    changed: !hasSameLevel3ActivityStructure(activities, resultActivities),
+    activities: resultActivities,
     activeId,
     fromParentId,
     toParentId,

@@ -523,6 +523,30 @@ assert.equal(rootReorder.changed, true, 'root reordering carries its children in
 const noOpMove = rules.moveLevel3Activity(dragActivities, 'c1', 'c1')
 assert.equal(noOpMove.ok, true)
 assert.equal(noOpMove.changed, false, 'dropping an activity over itself is a no-op')
+const unchangedChildInsert = rules.moveLevel3Activity([parent, childA, childB], 'c1', 'c2')
+assert.equal(unchangedChildInsert.ok, true)
+assert.equal(unchangedChildInsert.changed, false, 'inserting a child before its current next sibling is a no-op')
+assert.deepEqual(
+  { fromParentId: unchangedChildInsert.fromParentId, toParentId: unchangedChildInsert.toParentId, fromIndex: unchangedChildInsert.fromIndex, toIndex: unchangedChildInsert.toIndex },
+  { fromParentId: 'p1', toParentId: 'p1', fromIndex: 0, toIndex: 0 },
+  'unchanged child insertion retains source and target metadata',
+)
+const unchangedParentAppend = rules.moveLevel3Activity([parent, childA, childB], 'c2', 'p1')
+assert.equal(unchangedParentAppend.ok, true)
+assert.equal(unchangedParentAppend.changed, false, 'appending the current last child to its parent is a no-op')
+assert.deepEqual(
+  { fromParentId: unchangedParentAppend.fromParentId, toParentId: unchangedParentAppend.toParentId, fromIndex: unchangedParentAppend.fromIndex, toIndex: unchangedParentAppend.toIndex },
+  { fromParentId: 'p1', toParentId: 'p1', fromIndex: 1, toIndex: 1 },
+  'unchanged parent append retains source and target metadata',
+)
+const unchangedRootReorder = rules.moveLevel3Activity([parent, childA, parent2, childC], 'p1', 'p2')
+assert.equal(unchangedRootReorder.ok, true)
+assert.equal(unchangedRootReorder.changed, false, 'reordering a root immediately before its target is a no-op')
+assert.deepEqual(
+  { fromParentId: unchangedRootReorder.fromParentId, toParentId: unchangedRootReorder.toParentId, fromIndex: unchangedRootReorder.fromIndex, toIndex: unchangedRootReorder.toIndex },
+  { fromParentId: null, toParentId: null, fromIndex: 0, toIndex: 0 },
+  'unchanged root reordering retains source and target metadata',
+)
 
 const parentHistory = [
   { id: 'moved-away', action: 'move', actor: '张三', occurredAt: '2026-08-19 10:03:00', activityId: 'c1', activityName: '子活动A', activityNumber: '1.1', summary: '移出父活动', changes: [], sourceParentActivityId: 'p1', sourceParentActivityName: '父活动' },
