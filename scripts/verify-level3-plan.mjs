@@ -485,6 +485,16 @@ assert.equal(
   'administrator can move any child across parents',
 )
 assert.equal(
+  rules.getLevel3MovePermission('c1', 'p3', dragActivities, { ...dragContext, spmUsers: ['张三'] }, false).allowed,
+  true,
+  'SPM can move any child across parents',
+)
+assert.deepEqual(
+  rules.getLevel3MovePermission('c1', 'c1', dragActivities, { ...dragContext, currentUser: '赵六' }, false),
+  { allowed: false, reason: '拖动位置未变化' },
+  'self-drop is denied regardless of the user permission',
+)
+assert.equal(
   rules.getLevel3MovePermission('c1', 'c2', dragActivities, { ...dragContext, currentUser: '李四' }, false).allowed,
   false,
   'child owner alone cannot structurally drag',
@@ -500,6 +510,23 @@ assert.equal(
   false,
   'parent owner cannot move a child into another owner\'s parent',
 )
+const malformedTargetActivities = [parent, childA, { ...childB, parentId: 'c1' }]
+assert.equal(
+  rules.getLevel3MovePermission('c1', 'c2', malformedTargetActivities, { ...dragContext, administratorUsers: ['张三'] }, false).allowed,
+  false,
+  'a child target whose parent is another child is never authorized',
+)
+const rejectedMalformedMove = rules.moveLevel3Activity(malformedTargetActivities, 'c1', 'c2')
+assert.equal(rejectedMalformedMove.ok, false)
+assert.equal(rejectedMalformedMove.activities.find(item => item.id === 'c1').parentId, 'p1')
+assert.equal(rejectedMalformedMove.activities.some(item => item.id === 'c1' && item.parentId === item.id), false)
+const malformedSourceActivities = [parent, { ...childA, parentId: 'c2' }, childB]
+assert.equal(
+  rules.getLevel3MovePermission('c1', 'p1', malformedSourceActivities, { ...dragContext, administratorUsers: ['张三'] }, false).allowed,
+  false,
+  'a third-level source child is never authorized for structural dragging',
+)
+assert.equal(rules.moveLevel3Activity(malformedSourceActivities, 'c1', 'p1').ok, false)
 
 const appendedToParent = rules.moveLevel3Activity(dragActivities, 'c1', 'p2')
 assert.equal(appendedToParent.ok, true)
@@ -563,6 +590,12 @@ assert.deepEqual(
   rules.filterLevel3HistoryForActivity(parentHistory, childB, dragActivities).map(log => log.id),
   ['current-child'],
   'child history is always exact to the child id',
+)
+const movedToParent2 = { ...childA, parentId: 'p2' }
+assert.deepEqual(
+  rules.filterLevel3HistoryForActivity(parentHistory, parent2, [parent, parent2, movedToParent2]).map(log => log.id),
+  [],
+  'operation-time parent snapshots prevent old child history appearing under its current parent',
 )
 const movedParent = rules.moveLevel3Activity([parent, childA, childB, parent2, childC], 'p2', 'p1')
 assert.equal(movedParent.ok, true)

@@ -344,6 +344,13 @@ export function moveLevel3Activity(
   if (!activeIsParent && !toParentId) {
     return { ok: false, activities: cloneActivities(activities), reason: '未找到目标父活动' }
   }
+  if (!activeIsParent) {
+    const sourceParent = next.find(activity => activity.id === fromParentId)
+    const targetParent = next.find(activity => activity.id === toParentId)
+    if (!sourceParent || sourceParent.parentId || !targetParent || targetParent.parentId) {
+      return { ok: false, activities: cloneActivities(activities), reason: '父子层级无效' }
+    }
+  }
   const targetSiblings = sortByOrder(next.filter(activity => activity.parentId === toParentId && activity.id !== active.id))
   const insertionIndex = activeIsParent
     ? targetSiblings.findIndex(activity => activity.id === over.id)
@@ -381,7 +388,7 @@ export function getLevel3MovePermission(
   const active = activities.find(activity => activity.id === activeId)
   const over = activities.find(activity => activity.id === overId)
   if (!active || !over) return { allowed: false, reason: '未找到拖动活动' }
-  if (activeId === overId) return { allowed: true }
+  if (activeId === overId) return { allowed: false, reason: '拖动位置未变化' }
   const activeIsParent = !active.parentId
   const overIsParent = !over.parentId
   if (activeIsParent) {
@@ -391,7 +398,9 @@ export function getLevel3MovePermission(
   }
   const sourceParent = activities.find(activity => activity.id === active.parentId)
   const targetParent = overIsParent ? over : activities.find(activity => activity.id === over.parentId)
-  if (!sourceParent || !targetParent) return { allowed: false, reason: '未找到目标父活动' }
+  if (!sourceParent || sourceParent.parentId || !targetParent || targetParent.parentId) {
+    return { allowed: false, reason: '父子层级无效' }
+  }
   const isElevated = context.administratorUsers.includes(context.currentUser)
     || context.spmUsers.includes(context.currentUser)
   if (isElevated) return { allowed: true }
@@ -411,10 +420,15 @@ export function filterLevel3HistoryForActivity(
   const currentChildIds = new Set(activities.filter(item => item.parentId === activity.id).map(item => item.id))
   return history.filter(log => (
     log.activityId === activity.id
-    || currentChildIds.has(log.activityId)
     || log.parentActivityId === activity.id
     || log.sourceParentActivityId === activity.id
     || log.targetParentActivityId === activity.id
+    || (
+      currentChildIds.has(log.activityId)
+      && !log.parentActivityId
+      && !log.sourceParentActivityId
+      && !log.targetParentActivityId
+    )
   ))
 }
 
