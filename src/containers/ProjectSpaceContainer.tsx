@@ -2726,7 +2726,7 @@ export default function ProjectSpaceContainer() {
         onClick={() => Modal.confirm({
           title: '确认添加上市阶段 MR 里程碑？',
           content: '系统将自动生成下一个 MR 编号，名称不可修改。',
-          okText: '确认',
+          okText: '确认添加',
           cancelText: '取消',
           onOk: () => {
             const result = insertNextMachineMrMilestone(effectiveTasks)
@@ -2803,8 +2803,8 @@ export default function ProjectSpaceContainer() {
   const renderTaskTable = (customTasks?: any[]) => {
     const isLevel2Custom = !!customTasks
     const tableTasks = customTasks || effectiveTasks
-    const isGovernedLevel1Table = !isLevel2Custom
-      && projectPlanLevel === 'level1'
+    const isGovernedLevel1Table = !isLevel2Custom && projectPlanLevel === 'level1'
+    const isFlatGovernedLevel1Table = isGovernedLevel1Table
       && (isWholeMachineProject || isTosVersionProject)
     const level1Projection = isGovernedLevel1Table
       ? projectLevel1Plan(tableTasks, { mode: 'standard' })
@@ -2824,7 +2824,7 @@ export default function ProjectSpaceContainer() {
       }
       writeTableTasks(newTasks)
     }
-    if (isGovernedLevel1Table) {
+    if (isFlatGovernedLevel1Table) {
       const flatRows = projectLevel1FlatMilestones(tableTasks)
       const visibleFlatRows = applyPlanWorkspaceFilters(flatRows, level1PlanFilters)
       const validation = validateLevel1MilestoneDates(tableTasks)
@@ -2853,11 +2853,6 @@ export default function ProjectSpaceContainer() {
         })
         if (nextTasks.find(task => task.id === record.id)?.[field] !== value) {
           void message.error('日期格式或范围无效，未保存修改')
-          return
-        }
-        const nextValidation = validateLevel1MilestoneDates(nextTasks)
-        if (!nextValidation.valid) {
-          void message.error(nextValidation.violations[0]?.message || '里程碑日期不符合顺序要求')
           return
         }
         if (field === 'actualEndDate') {
