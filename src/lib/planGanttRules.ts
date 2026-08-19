@@ -23,6 +23,28 @@ export interface PlanGanttTask extends Level1PlanTask {
   duration: number
 }
 
+export interface PlanGanttTaskDateChange {
+  taskId: string
+  nodeType: 'milestone' | 'task'
+  startDate: string
+  endDate: string
+}
+
+export interface PlanGanttInteractionTask {
+  id: string | number
+  type?: string
+  readonly?: boolean
+  start_date?: unknown
+  end_date?: unknown
+}
+
+export interface PlanGanttInteractionControllerOptions {
+  readOnly: boolean
+  getOnTaskDateChange: () => ((change: PlanGanttTaskDateChange) => boolean | undefined) | undefined
+  formatDate: (value: unknown) => string
+  updateTask: (task: PlanGanttInteractionTask) => void
+}
+
 const sortByOrder = <T extends { order: number }>(items: readonly T[]) => (
   [...items].sort((left, right) => left.order - right.order)
 )
@@ -114,20 +136,20 @@ const areValidDatePair = (startDate: string, endDate: string): boolean => (
   getDateDifference(startDate, endDate) !== null
 )
 
-export const applyPlanGanttDateChange = (
-  tasks: readonly Level1PlanTask[],
+export const applyPlanGanttDateChange = <Task extends Level1PlanTask>(
+  tasks: readonly Task[],
   change: PlanGanttDateChange,
-): Level1PlanTask[] => {
-  if (!areValidDatePair(change.startDate, change.endDate)) return tasks as Level1PlanTask[]
+): Task[] => {
+  if (!areValidDatePair(change.startDate, change.endDate)) return tasks as Task[]
   const target = tasks.find(task => task.id === change.taskId)
-  if (!target) return tasks as Level1PlanTask[]
+  if (!target) return tasks as Task[]
 
   if (change.mode === 'milestone') {
     const planStartDate = target.planStartDate || ''
     const estimatedDays = parseUtcDate(planStartDate) !== null
       ? getDateDifference(planStartDate, change.endDate)
       : target.estimatedDays
-    if (estimatedDays === null) return tasks as Level1PlanTask[]
+    if (estimatedDays === null) return tasks as Task[]
     return tasks.map(task => task.id === change.taskId
       ? { ...task, planEndDate: change.endDate, ...(estimatedDays === null ? {} : { estimatedDays }) }
       : task)
@@ -146,6 +168,10 @@ const hasOwnDateKey = (patch: PlanTaskDatePatch['patch'], key: DateKey): boolean
   Object.prototype.hasOwnProperty.call(patch, key)
 )
 
+const cloneTasks = <Task extends Level1PlanTask>(tasks: readonly Task[]): Task[] => (
+  tasks.map(task => ({ ...task }))
+)
+
 const getPatchedDuration = (
   startDate: string,
   endDate: string,
@@ -155,23 +181,75 @@ const getPatchedDuration = (
   return getDateDifference(startDate, endDate)
 }
 
-export const applyPlanTaskDatePatch = (
-  tasks: readonly Level1PlanTask[],
+export const applyPlanTaskDatePatch = <Task extends Level1PlanTask>(
+  tasks: readonly Task[],
   input: PlanTaskDatePatch,
-): Level1PlanTask[] => {
+): Task[] => {
   const target = tasks.find(task => task.id === input.taskId)
   const patchKeys = dateKeys.filter(key => hasOwnDateKey(input.patch, key))
-  if (!target || patchKeys.length === 0 || patchKeys.some(key => typeof input.patch[key] !== 'string')) return tasks as Level1PlanTask[]
+  if (!target || patchKeys.length === 0 || patchKeys.some(key => {
+    const value = input.patch[key]
+    return typeof value !== 'string' || (value !== '' && parseUtcDate(value) === null)
+  })) return cloneTasks(tasks)
 
   const patched = { ...target, ...input.patch }
   const planChanged = hasOwnDateKey(input.patch, 'planStartDate') || hasOwnDateKey(input.patch, 'planEndDate')
   const actualChanged = hasOwnDateKey(input.patch, 'actualStartDate') || hasOwnDateKey(input.patch, 'actualEndDate')
   const estimatedDays = getPatchedDuration(patched.planStartDate || '', patched.planEndDate || '', target.estimatedDays)
   const actualDays = getPatchedDuration(patched.actualStartDate || '', patched.actualEndDate || '', target.actualDays)
-  if (planChanged && estimatedDays === null) return tasks as Level1PlanTask[]
-  if (actualChanged && actualDays === null) return tasks as Level1PlanTask[]
+  if (planChanged && estimatedDays === null) return cloneTasks(tasks)
+  if (actualChanged && actualDays === null) return cloneTasks(tasks)
   if (planChanged) patched.estimatedDays = estimatedDays
   if (actualChanged) patched.actualDays = actualDays
 
   return tasks.map(task => task.id === input.taskId ? patched : task)
+}
+
+const cloneScheduleValue = (value: unknown): unknown => value instanceof Date ? new Date(value.getTime()) : value
+
+export const createPlanGanttInteractionController = ({
+  readOnly,
+  getOnTaskDateChange,
+  formatDate,
+  updateTask,
+}: PlanGanttInteractionControllerOptions) => {
+  let dragSnapshot: { taskId: string; startDate: unknown; endDate: unknown } | null = null
+  const canEdit = (task: PlanGanttInteractionTask): boolean => !(readOnly || task.readonly || task.type === 'project')
+
+  return {
+    beforeDrag(task: PlanGanttInteractionTask): boolean {
+      dragSnapshot = null
+      if (!canEdit(task)) return false
+      dragSnapshot = {
+        taskId: String(task.id),
+        startDate: cloneScheduleValue(task.start_date),
+        endDate: cloneScheduleValue(task.end_date),
+      }
+      return true
+    },
+    afterDrag(task: PlanGanttInteractionTask): void {
+      const snapshot = dragSnapshot
+      try {
+        const accepted = getOnTaskDateChange()?.({
+          taskId: String(task.id),
+          nodeType: task.type === 'milestone' ? 'milestone' : 'task',
+          startDate: formatDate(task.start_date),
+          endDate: formatDate(task.end_date),
+        })
+        if (accepted === false && snapshot?.taskId === String(task.id)) {
+          task.start_date = snapshot.startDate
+          task.end_date = snapshot.endDate
+          updateTask(task)
+        }
+      } finally {
+        dragSnapshot = null
+      }
+    },
+    canOpenLightbox(task: PlanGanttInteractionTask): boolean {
+      return canEdit(task)
+    },
+    clear(): void {
+      dragSnapshot = null
+    },
+  }
 }

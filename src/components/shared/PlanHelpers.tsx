@@ -8,6 +8,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { gantt } from 'dhtmlx-gantt'
 import { getGanttScaleConfig, type GanttScaleMode } from '@/lib/ganttScale'
+import { createPlanGanttInteractionController, type PlanGanttTaskDateChange } from '@/lib/planGanttRules'
 import {
   getCurrentNodeIndex,
   getCurrentNodeLabel,
@@ -57,11 +58,8 @@ export interface DHTMLXGanttColumn {
   template?: (task: any) => string
 }
 
-export interface DHTMLXGanttDateChange {
-  taskId: string
+export interface DHTMLXGanttDateChange extends PlanGanttTaskDateChange {
   nodeType: 'milestone' | 'task'
-  startDate: string
-  endDate: string
 }
 
 const DEFAULT_GANTT_COLUMNS: DHTMLXGanttColumn[] = [
@@ -170,41 +168,22 @@ export function DHTMLXGantt({
       onCollapsedChange?.((prev) => { const s = new Set(prev); s.add(String(id)); return s })
     })
 
-    let dragSnapshot: { startDate: Date; endDate: Date } | null = null
+    const formatDate = gantt.date.date_to_str('%Y-%m-%d')
+    const interactionController = createPlanGanttInteractionController({
+      readOnly,
+      getOnTaskDateChange: () => onTaskDateChangeRef.current,
+      formatDate: value => formatDate(value as Date),
+      updateTask: task => gantt.updateTask(task.id),
+    })
     const beforeDragHandler = gantt.attachEvent('onBeforeTaskDrag', (id: string | number) => {
-      const task = gantt.getTask(id)
-      dragSnapshot = null
-      if (readOnly || task.readonly || task.type === 'project') return false
-      if (!(task.start_date instanceof Date) || !(task.end_date instanceof Date)) return false
-      dragSnapshot = {
-        startDate: new Date(task.start_date.getTime()),
-        endDate: new Date(task.end_date.getTime()),
-      }
-      return true
+      return interactionController.beforeDrag(gantt.getTask(id))
     })
     const afterDragHandler = gantt.attachEvent('onAfterTaskDrag', (id: string | number) => {
-      const task = gantt.getTask(id)
-      try {
-        const formatDate = gantt.date.date_to_str('%Y-%m-%d')
-        const accepted = onTaskDateChangeRef.current?.({
-          taskId: String(id),
-          nodeType: task.type === 'milestone' ? 'milestone' : 'task',
-          startDate: formatDate(task.start_date),
-          endDate: formatDate(task.end_date),
-        })
-        if (accepted === false && dragSnapshot) {
-          task.start_date = dragSnapshot.startDate
-          task.end_date = dragSnapshot.endDate
-          gantt.updateTask(id)
-        }
-      } finally {
-        dragSnapshot = null
-      }
+      interactionController.afterDrag(gantt.getTask(id))
       return true
     })
     const beforeLightboxHandler = gantt.attachEvent('onBeforeLightbox', (id: string | number) => {
-      const task = gantt.getTask(id)
-      return !(readOnly || task.readonly || task.type === 'project')
+      return interactionController.canOpenLightbox(gantt.getTask(id))
     })
 
     const clickHandler = onTaskClickRef.current
@@ -222,7 +201,7 @@ export function DHTMLXGantt({
       gantt.detachEvent(afterDragHandler)
       gantt.detachEvent(beforeLightboxHandler)
       if (clickHandler) gantt.detachEvent(clickHandler)
-      dragSnapshot = null
+      interactionController.clear()
       gantt.clearAll()
     }
   }, [columns, tasks, readOnly, scaleMode])

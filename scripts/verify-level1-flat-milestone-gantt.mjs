@@ -270,9 +270,19 @@ const actualDatePatched = ganttRules.applyPlanTaskDatePatch(datePatchSource, {
 assert.deepEqual(actualDatePatched[0], {
   ...datePatchSource[0], actualStartDate: '2026-04-03', actualEndDate: '2026-04-08', actualDays: 5,
 }, 'date patches recalculate actual duration from valid actual date pairs')
-assert.strictEqual(ganttRules.applyPlanTaskDatePatch(datePatchSource, {
+const invalidActualPatch = ganttRules.applyPlanTaskDatePatch(datePatchSource, {
   taskId: 'patch-1', patch: { actualEndDate: 'invalid-date' },
-}), datePatchSource, 'invalid date patches leave task inputs unchanged')
+})
+assert.notStrictEqual(invalidActualPatch, datePatchSource, 'invalid non-empty date patches return a cloned result')
+assert.notStrictEqual(invalidActualPatch[0], datePatchSource[0], 'invalid non-empty date patches clone the target task')
+assert.deepEqual(invalidActualPatch, datePatchSource, 'invalid non-empty date patches leave every target value unchanged')
+const invalidDateWithEmptyOtherSide = [{ id: 'invalid-empty', order: 1, taskName: '空端无效日期', actualStartDate: '', actualEndDate: '', actualDays: 7 }]
+assert.deepEqual(ganttRules.applyPlanTaskDatePatch(invalidDateWithEmptyOtherSide, {
+  taskId: 'invalid-empty', patch: { actualEndDate: 'not-a-date' },
+}), invalidDateWithEmptyOtherSide, 'an invalid non-empty date is rejected even when its other date is empty')
+assert.deepEqual(ganttRules.applyPlanTaskDatePatch(invalidDateWithEmptyOtherSide, {
+  taskId: 'invalid-empty', patch: { actualEndDate: '2026-02-30' },
+}), invalidDateWithEmptyOtherSide, 'calendar-impossible ISO dates are rejected even when their other date is empty')
 const datePatchSnapshot = JSON.parse(JSON.stringify(datePatchSource))
 assert.deepEqual(ganttRules.applyPlanTaskDatePatch(datePatchSource, {
   taskId: 'patch-1', patch: { actualEndDate: '' },
@@ -281,11 +291,24 @@ assert.deepEqual(ganttRules.applyPlanTaskDatePatch(datePatchSource, {
 }, 'partial actual date patches apply the entered value while preserving the existing actual duration')
 assert.deepEqual(datePatchSource, datePatchSnapshot, 'partial date patches do not mutate source tasks')
 
+const extendedTaskSource = [{
+  id: 'extended', order: 1, taskName: '扩展字段任务', defaultRoadmap: true,
+  planStartDate: '2026-05-01', planEndDate: '2026-05-03', estimatedDays: 2,
+}]
+const extendedTaskDrag = ganttRules.applyPlanGanttDateChange(extendedTaskSource, {
+  taskId: 'extended', mode: 'task', startDate: '2026-05-02', endDate: '2026-05-05',
+})
+assert.equal(extendedTaskDrag[0].defaultRoadmap, true, 'gantt date changes preserve task extension fields')
+const extendedTaskPatch = ganttRules.applyPlanTaskDatePatch(extendedTaskSource, {
+  taskId: 'extended', patch: { planEndDate: '2026-05-04' },
+})
+assert.equal(extendedTaskPatch[0].defaultRoadmap, true, 'date patches preserve task extension fields')
+
 const ganttHelperSource = fs.readFileSync(path.join(root, 'src/components/shared/PlanHelpers.tsx'), 'utf8')
 assert.match(ganttHelperSource, /export interface DHTMLXGanttDateChange/, 'gantt exposes a typed date-change callback contract')
 assert.match(ganttHelperSource, /onTaskDateChange\?: \(change: DHTMLXGanttDateChange\) => boolean/, 'gantt accepts an explicit accept-or-revert callback')
 assert.match(ganttHelperSource, /nodeType: 'milestone' \| 'task'/, 'gantt date changes expose the dragged node type')
-assert.match(ganttHelperSource, /nodeType: task\.type === 'milestone' \? 'milestone' : 'task'/, 'gantt drag payload uses its typed node type')
+assert.match(ganttHelperSource, /getOnTaskDateChange: \(\) => onTaskDateChangeRef\.current/, 'gantt supplies the controller with the latest date-change callback')
 assert.match(ganttHelperSource, /gantt\.config\.readonly_property = 'readonly'/, 'gantt honors per-task readonly state')
 assert.match(ganttHelperSource, /type: t\.type \|\| \(t\.parentId \? 'task' : 'project'\)/, 'gantt locks legacy root rows when they do not carry an explicit type')
 assert.match(ganttHelperSource, /pms-gantt-\$\{task\.type \|\| 'task'\}/, 'gantt emits a stable class for every task type')
@@ -295,7 +318,57 @@ assert.match(ganttHelperSource, /onBeforeLightbox/, 'gantt blocks project and re
 assert.match(ganttHelperSource, /gantt\.detachEvent\(beforeDragHandler\)/, 'gantt detaches date-drag guards during cleanup')
 assert.match(ganttHelperSource, /gantt\.detachEvent\(afterDragHandler\)/, 'gantt detaches date-drag callbacks during cleanup')
 assert.match(ganttHelperSource, /gantt\.detachEvent\(beforeLightboxHandler\)/, 'gantt detaches lightbox guards during cleanup')
-assert.match(ganttHelperSource, /let dragSnapshot: \{ startDate: Date; endDate: Date \} \| null = null/, 'gantt keeps one drag snapshot local to each initialized event set')
-assert.match(ganttHelperSource, /dragSnapshot = null/, 'gantt clears drag snapshots after a drag and on cleanup')
+assert.match(ganttHelperSource, /createPlanGanttInteractionController/, 'gantt delegates drag decisions to the tested pure interaction controller')
+assert.match(ganttHelperSource, /interactionController\.clear\(\)/, 'gantt clears the controller snapshot during cleanup')
+assert.match(fs.readFileSync(path.join(root, 'src/lib/planGanttRules.ts'), 'utf8'), /<Task extends Level1PlanTask>/, 'date updates retain generic task extension types')
+
+const asYmd = value => value instanceof Date ? value.toISOString().slice(0, 10) : String(value)
+const updates = []
+let currentDateChangeCallback = () => true
+const interactionController = ganttRules.createPlanGanttInteractionController({
+  readOnly: false,
+  getOnTaskDateChange: () => currentDateChangeCallback,
+  formatDate: asYmd,
+  updateTask: task => updates.push({ id: task.id, start: asYmd(task.start_date), end: asYmd(task.end_date) }),
+})
+const rootTask = { id: 1, type: 'project', readonly: false, start_date: new Date('2026-06-01T00:00:00Z'), end_date: new Date('2026-06-02T00:00:00Z') }
+const readonlyTask = { id: 'readonly', type: 'task', readonly: true, start_date: new Date('2026-06-01T00:00:00Z'), end_date: new Date('2026-06-02T00:00:00Z') }
+const editableTask = { id: 'editable', type: 'milestone', readonly: false, start_date: new Date('2026-06-01T00:00:00Z'), end_date: new Date('2026-06-01T00:00:00Z') }
+assert.equal(interactionController.beforeDrag(rootTask), false, 'project roots cannot start a drag')
+assert.equal(interactionController.beforeDrag(readonlyTask), false, 'readonly tasks cannot start a drag')
+assert.equal(interactionController.beforeDrag(editableTask), true, 'editable leaf tasks can start a drag')
+let latestCallbackPayload
+currentDateChangeCallback = change => { latestCallbackPayload = change; return false }
+editableTask.start_date = new Date('2026-06-04T00:00:00Z')
+editableTask.end_date = new Date('2026-06-04T00:00:00Z')
+interactionController.afterDrag(editableTask)
+assert.deepEqual(latestCallbackPayload, { taskId: 'editable', nodeType: 'milestone', startDate: '2026-06-04', endDate: '2026-06-04' }, 'after drag reads the latest callback from its getter and formats controller dates')
+assert.equal(asYmd(editableTask.start_date), '2026-06-01', 'a false callback restores the start snapshot')
+assert.equal(asYmd(editableTask.end_date), '2026-06-01', 'a false callback restores the end snapshot')
+assert.equal(updates.length, 1, 'a false callback updates the restored task exactly once')
+currentDateChangeCallback = () => true
+assert.equal(interactionController.beforeDrag(editableTask), true, 'a later drag stores a fresh snapshot')
+editableTask.start_date = new Date('2026-06-05T00:00:00Z')
+editableTask.end_date = new Date('2026-06-05T00:00:00Z')
+interactionController.afterDrag(editableTask)
+assert.equal(asYmd(editableTask.start_date), '2026-06-05', 'a true callback keeps dragged dates')
+assert.equal(updates.length, 1, 'a true callback does not issue a restore update')
+currentDateChangeCallback = () => false
+editableTask.start_date = new Date('2026-06-06T00:00:00Z')
+interactionController.afterDrag(editableTask)
+assert.equal(asYmd(editableTask.start_date), '2026-06-06', 'completed drags do not reuse an old snapshot')
+assert.equal(updates.length, 1, 'completed drags do not restore a second time')
+assert.equal(interactionController.beforeDrag(editableTask), true, 'a drag before clear records a snapshot')
+editableTask.start_date = new Date('2026-06-07T00:00:00Z')
+interactionController.clear()
+interactionController.afterDrag(editableTask)
+assert.equal(asYmd(editableTask.start_date), '2026-06-07', 'clear prevents stale snapshots from being restored')
+assert.equal(updates.length, 1, 'clear prevents stale restore updates')
+assert.equal(interactionController.canOpenLightbox(rootTask), false, 'project roots cannot open the lightbox')
+assert.equal(interactionController.canOpenLightbox(readonlyTask), false, 'readonly tasks cannot open the lightbox')
+assert.equal(interactionController.canOpenLightbox(editableTask), true, 'editable leaves can open the lightbox')
+const globallyReadonlyController = ganttRules.createPlanGanttInteractionController({ readOnly: true, getOnTaskDateChange: () => currentDateChangeCallback, formatDate: asYmd, updateTask: () => {} })
+assert.equal(globallyReadonlyController.beforeDrag(editableTask), false, 'global readonly blocks drags')
+assert.equal(globallyReadonlyController.canOpenLightbox(editableTask), false, 'global readonly blocks lightbox editing')
 
 console.log('PASS level1 flat milestone and gantt rules')
