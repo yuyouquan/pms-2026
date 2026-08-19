@@ -33,7 +33,8 @@ import {
   includeTechnicalPlanAncestors,
   isResponsibleForTechnicalPlanTasks,
   parseTechnicalPlanImportRows,
-  reorderTechnicalTasksWithinParent,
+  renumberTechnicalSubprojectTasks,
+  reorderTechnicalSubprojectCustomTasks,
   selectVisibleTechnicalPlanVersions,
   TECHNICAL_PLAN_EXPORT_COLUMNS,
 } from '@/lib/technicalPlanWorkspace'
@@ -41,7 +42,7 @@ import { compareVersionsForTable } from '@/lib/versionCompare'
 import type { PlanRevisionKind } from '@/lib/planVersioning'
 import { getTemplateSnapshotForProjectType } from '@/lib/projectTemplateCompatibility'
 import { comparePublishedTechnicalPlanVersions } from '@/lib/technicalProjectRules'
-import { projectLevel1Plan, sumLevel1EstimatedDays, validateLevel1MilestoneDates } from '@/lib/level1PlanRules'
+import { canMutateLevel1TaskStructure, projectLevel1Plan, sumLevel1EstimatedDays, validateLevel1MilestoneDates } from '@/lib/level1PlanRules'
 import {
   createFilterCondition,
   getFieldOptionsWithDuplicateDisabled,
@@ -122,7 +123,14 @@ function TechnicalHorizontalPlanTable({
   const groups = currentProjection.stageGroups.length > 0
     ? currentProjection.stageGroups.map(group => ({ ...group, colSpan: Math.max(1, group.milestones.length) }))
     : [{
-        stage: { id: 'technical-subproject', taskName: '子项目计划', planStartDate: '', planEndDate: '', manpowerPercent: null },
+        stage: {
+          id: 'technical-subproject',
+          taskName: '子项目计划',
+          planStartDate: '',
+          planEndDate: '',
+          estimatedDays: sumLevel1EstimatedDays(currentProjection.rows),
+          manpowerPercent: null,
+        },
         milestones: currentProjection.rows,
         colSpan: Math.max(1, currentProjection.rows.length),
       }]
@@ -206,15 +214,10 @@ function TechnicalHorizontalPlanTable({
                   colSpan={colSpan}
                   style={{ ...thStyle, background: `${stageColor}10`, color: stageColor, borderBottom: `2px solid ${stageColor}` }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, textAlign: 'left' }}>
-                    <div>
-                      <div>{stage.taskName}</div>
-                      <div style={{ marginTop: 3, color: '#64748b', fontSize: 11, fontWeight: 400 }}>
-                        {stage.planStartDate && stage.planEndDate ? `${stage.planStartDate} ~ ${stage.planEndDate}` : '-'}
-                      </div>
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, textAlign: 'left' }}>
+                    <span>{stage.taskName}</span>
                     <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
-                      {stage.manpowerPercent == null ? '-' : `${stage.manpowerPercent}%`}
+                      {stage.estimatedDays == null ? '-' : `${stage.estimatedDays}天`}
                     </Tag>
                   </div>
                 </th>
@@ -295,7 +298,6 @@ export interface TechnicalPlanModuleProps {
   currentLoginUser?: string
   canEdit: boolean
   canPublish: boolean
-  canManageStructure: boolean
   canImport: boolean
   canExport: boolean
   canViewTechnicalPlan: boolean
@@ -317,7 +319,7 @@ const latestPublishedTemplate = (
 }
 
 export default function TechnicalPlanModule({
-  projectId, currentLoginUser, canEdit, canPublish, canManageStructure, canImport, canExport, canViewTechnicalPlan, canShareTechnicalPlan,
+  projectId, currentLoginUser, canEdit, canPublish, canImport, canExport, canViewTechnicalPlan, canShareTechnicalPlan,
   maxDepthByKind = DEFAULT_MAX_DEPTH,
 }: TechnicalPlanModuleProps) {
   const [activeKey, setActiveKey] = useState(`${projectId}:tdt`)
@@ -412,7 +414,17 @@ export default function TechnicalPlanModule({
     [canViewTechnicalPlan, instance?.versions],
   )
   const hasDraft = Boolean(instance?.versions.some(version => version.status === '修订中'))
-  const canEditTaskStructure = canManageStructure && canMaintain && viewMode === 'vertical'
+  const canEditTaskStructure = canMaintain && tab?.templateKind === 'subproject' && viewMode === 'vertical'
+  const canMutateTechnicalTaskStructure = (task: TechnicalTemplateTask, action: 'rename' | 'delete' | 'reorder') => Boolean(
+    canEditTaskStructure
+    && canMutateLevel1TaskStructure({
+      projectType: '技术项目',
+      technicalKind: tab?.templateKind,
+      task,
+      action,
+    }),
+  )
+  const canRenameTechnicalTask = (task: TechnicalTemplateTask) => canMutateTechnicalTaskStructure(task, 'rename')
   const canDrag = canEditTaskStructure && !hasActiveFilters
 
   useEffect(() => {
@@ -492,6 +504,12 @@ export default function TechnicalPlanModule({
 
   const updateTask = (id: string, patch: Partial<TechnicalTemplateTask>) => {
     const fields = Object.keys(patch)
+    const task = tasks.find(item => item.id === id)
+    if (fields.length === 1 && fields[0] === 'taskName') {
+      if (!task || !canRenameTechnicalTask(task)) return
+      updateCurrentTasks(scope, tasks.map(item => item.id === id ? { ...item, taskName: String(patch.taskName || '') } : item), maxDepth)
+      return
+    }
     const canUpdatePlanEnd = isDraft && canEditTechnicalPlan
     const canUpdateActualEnd = canEditTechnicalPlan && (isDraft || currentVersion?.id === latestPublishedVersion?.id)
     if (fields.some(field => field !== 'planEndDate' && field !== 'actualEndDate')) return
@@ -513,20 +531,15 @@ export default function TechnicalPlanModule({
 
   const handleAddTopLevelTask = () => {
     if (!canEditTaskStructure) return
-    const result = updateCurrentTasks(scope, insertTechnicalPlanTask(tasks, createTask(), tab?.templateKind || 'tdt', maxDepth), maxDepth)
-    if (!result.ok) message.error('新增任务超出允许层级')
-  }
-
-  const handleAddChildTask = (parentId: string) => {
-    if (!canEditTaskStructure || maxDepth < 2 || tasks.find(task => task.id === parentId)?.parentId) return
-    const next = insertTechnicalPlanTask(tasks, createTask(parentId), tab?.templateKind || 'tdt', maxDepth)
-    const result = updateCurrentTasks(scope, next, maxDepth)
+    const inserted = insertTechnicalPlanTask(tasks, createTask(), 'subproject', maxDepth)
+    const result = updateCurrentTasks(scope, renumberTechnicalSubprojectTasks(inserted), maxDepth)
     if (!result.ok) message.error('新增任务超出允许层级')
   }
 
   const handleDeleteTask = (taskId: string) => {
-    if (!canEditTaskStructure) return
-    const next = deleteTechnicalPlanTaskCascade(tasks, taskId)
+    const task = tasks.find(item => item.id === taskId)
+    if (!task || !canMutateTechnicalTaskStructure(task, 'delete')) return
+    const next = renumberTechnicalSubprojectTasks(deleteTechnicalPlanTaskCascade(tasks, taskId))
     updateCurrentTasks(scope, next, maxDepth)
     const removedCount = tasks.length - next.length
     message.success(removedCount > 1 ? `已级联删除 ${removedCount} 项任务` : '已删除任务')
@@ -534,7 +547,10 @@ export default function TechnicalPlanModule({
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id || !canDrag) return
-    const moved = reorderTechnicalTasksWithinParent(tasks, String(active.id), String(over.id))
+    const activeTask = tasks.find(task => task.id === String(active.id))
+    const overTask = tasks.find(task => task.id === String(over.id))
+    if (!activeTask || !overTask || !canMutateTechnicalTaskStructure(activeTask, 'reorder') || !canMutateTechnicalTaskStructure(overTask, 'reorder')) return
+    const moved = reorderTechnicalSubprojectCustomTasks(tasks, String(active.id), String(over.id))
     updateCurrentTasks(scope, moved, maxDepth)
   }
 
@@ -566,7 +582,7 @@ export default function TechnicalPlanModule({
       key: 'id', title: '序号', dataIndex: 'id', width: 130, fixed: 'left',
       render: (value, row) => (
         <div className="technical-plan-sequence-cell" style={{ paddingLeft: row.parentId ? 20 : 0 }}>
-          {canDrag && <DragHandle />}
+          {canDrag && canMutateTechnicalTaskStructure(row, 'reorder') && <DragHandle />}
           {tasks.some(child => child.parentId === row.id) ? (
             <Tooltip title={collapsedIds.has(row.id) ? '展开一级任务' : '收起一级任务'}>
               <Button
@@ -583,9 +599,6 @@ export default function TechnicalPlanModule({
               />
             </Tooltip>
           ) : <span className="technical-plan-collapse-placeholder" aria-hidden />}
-          {canEditTaskStructure && tab?.templateKind === 'tdt' && !row.parentId && maxDepth >= 2 && (
-            <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} onClick={() => handleAddChildTask(row.id)} /></Tooltip>
-          )}
           <span>{value}</span>
         </div>
       ),
@@ -594,7 +607,9 @@ export default function TechnicalPlanModule({
       key: 'taskName', title: '阶段/里程碑节点', dataIndex: 'taskName', width: 260, fixed: 'left',
       render: (value, row) => (
         <div className="technical-plan-task-name-cell" style={{ paddingLeft: row.parentId ? 16 : 0 }}>
-          <><span aria-hidden style={{ color: '#e5e7eb' }}>{row.parentId ? '├' : ''}</span><span className="technical-plan-task-name-text">{value}</span></>
+          {canRenameTechnicalTask(row)
+            ? <Input className="pms-edit-input" value={value} aria-label={`修改活动名称 ${value}`} onChange={event => updateTask(row.id, { taskName: event.target.value })} />
+            : <><span aria-hidden style={{ color: '#e5e7eb' }}>{row.parentId ? '├' : ''}</span><span className="technical-plan-task-name-text">{value}</span></>}
         </div>
       ),
     },
@@ -609,16 +624,13 @@ export default function TechnicalPlanModule({
       key: 'actions', title: '操作', fixed: 'right', width: 105,
       render: (_, row) => (
         <Space size={2}>
-          {tab?.templateKind === 'tdt' && !row.parentId && (
-            <Tooltip title="新增二级任务">
-              <Button type="text" size="small" aria-label={`新增二级任务 ${row.taskName}`} icon={<PlusOutlined />} disabled={!canEditTaskStructure || maxDepth < 2} onClick={() => handleAddChildTask(row.id)} />
-            </Tooltip>
+          {canMutateTechnicalTaskStructure(row, 'delete') && (
+            <Popconfirm title="确认删除该任务？" onConfirm={() => handleDeleteTask(row.id)}>
+              <Tooltip title="删除任务">
+                <Button type="text" danger size="small" aria-label={`删除任务 ${row.taskName}`} icon={<DeleteOutlined />} />
+              </Tooltip>
+            </Popconfirm>
           )}
-          <Popconfirm title={tasks.some(task => task.parentId === row.id) ? '删除一级任务将同时删除其下所有二级任务，是否继续？' : '确认删除该任务？'} onConfirm={() => handleDeleteTask(row.id)}>
-            <Tooltip title="删除任务">
-              <Button type="text" danger size="small" aria-label={`删除任务 ${row.taskName}`} icon={<DeleteOutlined />} disabled={!canEditTaskStructure} />
-            </Tooltip>
-          </Popconfirm>
         </Space>
       ),
     },
@@ -787,7 +799,9 @@ export default function TechnicalPlanModule({
               <div className="technical-plan-edit-notice" role="status">
                 <EditOutlined />
                 <strong>编辑模式</strong>
-                <span>- 拖拽手柄排序，点击单元格编辑，修改内容自动保存</span>
+                <span>{canEditTaskStructure
+                  ? '- 自定义活动可拖拽排序和修改名称，日期修改自动保存'
+                  : '- 仅计划完成时间和实际完成时间可编辑，修改自动保存'}</span>
               </div>
             )}
           </>
@@ -804,7 +818,7 @@ export default function TechnicalPlanModule({
               options={visibleVersions.map(version => ({ value: version.id, label: `${version.versionNo}${version.status === '修订中' ? '（修订中）' : ''}` }))}
             />
             {isDraft && viewMode === 'vertical' && <Tag color="green">自动保存</Tag>}
-            {isDraft && viewMode !== 'vertical' && <Tag>{viewMode === 'gantt' ? '甘特图只读' : '横版只读'}</Tag>}
+            {isDraft && viewMode === 'gantt' && <Tag>甘特图只读</Tag>}
           </Space>
         )}
         primaryActions={(
@@ -979,7 +993,9 @@ export default function TechnicalPlanModule({
             </DndContext>
             {canEditTaskStructure && (
               <div className="technical-plan-add-task">
-                <Button type="dashed" icon={<PlusOutlined />} onClick={handleAddTopLevelTask}>添加新活动</Button>
+                <Tooltip title="新增一级活动">
+                  <Button type="dashed" icon={<PlusOutlined />} aria-label="新增一级活动" onClick={handleAddTopLevelTask}>添加新活动</Button>
+                </Tooltip>
               </div>
             )}
           </div>

@@ -175,7 +175,9 @@ import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectIn
 import {
   buildFirstLevel1RevisionTasks,
   buildNextLevel1RevisionTasks,
+  canAddLevel1CustomChild,
   canMaintainLevel1Plan,
+  canMutateLevel1TaskStructure,
   projectLevel1Plan,
   sumLevel1EstimatedDays,
   synchronizeLevel1ActualEndDate,
@@ -2732,61 +2734,95 @@ export default function ProjectSpaceContainer() {
     const editPerm = isLevel2Custom ? canEditLevel2Plan : projectPlanLevel === 'level1' ? canGovernLevel1Plan : canEditLevel1Plan
     const canFullyEdit = isEditMode && editPerm && !isFollowReadOnlyTable
     const isRowEditable = (record: any) => isEditMode && !isFollowReadOnlyTable && (editPerm || isResponsibleNameMatched(record.responsible, currentLoginUser))
+    const isGovernedDraft = isGovernedLevel1Table && isCurrentDraft && canMaintainCurrentPlan && !isFollowReadOnlyTable
+    const parentForGovernedTask = (record: any) => record.parentId
+      ? tableTasks.find((task: any) => task.id === record.parentId)
+      : undefined
+    const canAddGovernedChild = (record: any) => Boolean(
+      isGovernedDraft
+      && selectedProject
+      && canAddLevel1CustomChild(selectedProject.type, record),
+    )
+    const canMutateGovernedTask = (record: any, action: 'rename' | 'delete' | 'reorder') => Boolean(
+      isGovernedDraft
+      && selectedProject
+      && canMutateLevel1TaskStructure({
+        projectType: selectedProject.type,
+        task: record,
+        parent: parentForGovernedTask(record),
+        action,
+      }),
+    )
+    const canRenameGovernedTask = (record: any) => canMutateGovernedTask(record, 'rename')
+    const canDeleteGovernedTask = (record: any) => canMutateGovernedTask(record, 'delete')
+    const canReorderGovernedTask = (record: any) => canMutateGovernedTask(record, 'reorder')
+    const renumberGovernedTasks = (tasks: any[]) => {
+      const roots = tasks.filter(task => !task.parentId).sort((a, b) => a.order - b.order)
+      const next: any[] = []
+      roots.forEach((root, rootIndex) => {
+        const rootId = String(rootIndex + 1)
+        next.push({ ...root, id: rootId, order: rootIndex })
+        tasks.filter(task => task.parentId === root.id).sort((a, b) => a.order - b.order).forEach((child, childIndex) => {
+          next.push({ ...child, id: `${rootId}.${childIndex + 1}`, parentId: rootId, order: childIndex })
+        })
+      })
+      return next
+    }
+    const addGovernedChild = (record: any) => {
+      if (!canAddGovernedChild(record)) return
+      let taskName = ''
+      Modal.confirm({
+        title: '新增子活动',
+        content: <Input autoFocus placeholder="请输入活动名称" onChange={event => { taskName = event.target.value }} />,
+        okText: '确认', cancelText: '取消',
+        onOk: () => {
+          if (!taskName.trim()) { message.error('请输入活动名称'); return Promise.reject() }
+          const siblings = tableTasks.filter((task: any) => task.parentId === record.id)
+          const newTask = {
+            id: `${record.id}.${siblings.length + 1}`,
+            stableId: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            parentId: record.id,
+            order: siblings.length,
+            taskName: taskName.trim(),
+            role: '',
+            source: 'custom',
+            planEndDate: '',
+            actualEndDate: '',
+          }
+          currentSetTasks(renumberGovernedTasks([...tableTasks, newTask]))
+          message.success('已新增子活动')
+        },
+      })
+    }
+    const deleteGovernedTask = (record: any) => {
+      if (!canDeleteGovernedTask(record)) return
+      currentSetTasks(renumberGovernedTasks(tableTasks.filter((task: any) => task.id !== record.id && task.parentId !== record.id)))
+      message.success('已删除活动')
+    }
+    const handleGovernedDragEnd = ({ active, over }: DragEndEvent) => {
+      if (!over || active.id === over.id) return
+      const activeTask = tableTasks.find((task: any) => task.id === String(active.id))
+      const overTask = tableTasks.find((task: any) => task.id === String(over.id))
+      if (!activeTask || !overTask || activeTask.parentId !== overTask.parentId) return
+      if (!canReorderGovernedTask(activeTask) || !canReorderGovernedTask(overTask)) return
+      const siblings = tableTasks.filter((task: any) => task.parentId === activeTask.parentId).sort((a: any, b: any) => a.order - b.order)
+      const customSlots = siblings.flatMap((task: any, index: number) => canReorderGovernedTask(task) ? [index] : [])
+      const customTasks = customSlots.map((index: number) => siblings[index])
+      const oldIndex = customTasks.findIndex((task: any) => task.id === activeTask.id)
+      const newIndex = customTasks.findIndex((task: any) => task.id === overTask.id)
+      if (oldIndex < 0 || newIndex < 0) return
+      const reorderedCustomTasks = [...customTasks]
+      const [moved] = reorderedCustomTasks.splice(oldIndex, 1)
+      reorderedCustomTasks.splice(newIndex, 0, moved)
+      const nextSiblings = [...siblings]
+      customSlots.forEach((slot: number, index: number) => { nextSiblings[slot] = reorderedCustomTasks[index] })
+      const siblingByStableId = new Map(nextSiblings.map((task: any, index: number) => [task.stableId || task.id, { ...task, order: index }]))
+      const nextTasks = tableTasks.map((task: any) => siblingByStableId.get(task.stableId || task.id) || task)
+      currentSetTasks(renumberGovernedTasks(nextTasks))
+      message.success('任务顺序已更新，序号已重新生成')
+    }
     const getColumns = (): ColumnsType<any> => {
       if (isGovernedLevel1Table && level1Projection) {
-        const isGlobalLevel1Admin = level1GlobalAdmins.includes(currentLoginUser)
-        const isGovernedDraft = isCurrentDraft && canMaintainCurrentPlan && !isFollowReadOnlyTable
-        const isLaunchStage = (record: any) => record.stableId === 'stage-launch' || record.taskName === '上市收编阶段'
-        const launchStageIds = new Set(tableTasks.filter(isLaunchStage).map((task: any) => task.id))
-        const canAddGovernedChild = (record: any) => isGovernedDraft && !record.parentId && (
-          isGlobalLevel1Admin || (isWholeMachineProject && isLaunchStage(record))
-        )
-        const canDeleteGovernedTask = (record: any) => isGovernedDraft && (
-          isGlobalLevel1Admin || (isWholeMachineProject && record.parentId && launchStageIds.has(record.parentId) && record.source === 'custom')
-        )
-        const renumberGovernedTasks = (tasks: any[]) => {
-          const roots = tasks.filter(task => !task.parentId).sort((a, b) => a.order - b.order)
-          const next: any[] = []
-          roots.forEach((root, rootIndex) => {
-            const rootId = String(rootIndex + 1)
-            next.push({ ...root, id: rootId, order: rootIndex })
-            tasks.filter(task => task.parentId === root.id).sort((a, b) => a.order - b.order).forEach((child, childIndex) => {
-              next.push({ ...child, id: `${rootId}.${childIndex + 1}`, parentId: rootId, order: childIndex })
-            })
-          })
-          return next
-        }
-        const addGovernedChild = (record: any) => {
-          if (!canAddGovernedChild(record)) return
-          let taskName = ''
-          Modal.confirm({
-            title: '新增子活动',
-            content: <Input autoFocus placeholder="请输入活动名称" onChange={event => { taskName = event.target.value }} />,
-            okText: '确认', cancelText: '取消',
-            onOk: () => {
-              if (!taskName.trim()) { message.error('请输入活动名称'); return Promise.reject() }
-              const siblings = tableTasks.filter((task: any) => task.parentId === record.id)
-              const newTask = {
-                id: `${record.id}.${siblings.length + 1}`,
-                stableId: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                parentId: record.id,
-                order: siblings.length,
-                taskName: taskName.trim(),
-                role: '',
-                source: 'custom',
-                planEndDate: '',
-                actualEndDate: '',
-              }
-              currentSetTasks(renumberGovernedTasks([...tableTasks, newTask]))
-              message.success('已新增子活动')
-            },
-          })
-        }
-        const deleteGovernedTask = (record: any) => {
-          if (!canDeleteGovernedTask(record)) return
-          currentSetTasks(renumberGovernedTasks(tableTasks.filter((task: any) => task.id !== record.id && task.parentId !== record.id)))
-          message.success('已删除活动')
-        }
         const getReasons = (record: any, field: 'planEndDate' | 'actualEndDate') => (
           level1Projection.validation.byTaskId[record.id]?.[field] || []
         )
@@ -2798,13 +2834,20 @@ export default function ProjectSpaceContainer() {
         return [
           {
             title: '序号', dataIndex: 'id', key: 'id', width: 90, fixed: 'left',
-            render: (id: string, record: any) => <span style={{ display: 'inline-block', paddingLeft: record.parentId ? 24 : 0, fontWeight: record.parentId ? 400 : 600 }}>{id}</span>,
+            render: (id: string, record: any) => (
+              <Space size={6} style={{ paddingLeft: record.parentId ? 24 : 0 }}>
+                {canReorderGovernedTask(record) && <DragHandle />}
+                <span style={{ fontWeight: record.parentId ? 400 : 600 }}>{id}</span>
+              </Space>
+            ),
           },
           {
             title: '阶段/里程碑节点', dataIndex: 'taskName', key: 'taskName', width: 220, fixed: 'left',
             render: (name: string, record: any) => (
               <Space size={4}>
-                <span style={{ fontWeight: record.parentId ? 400 : 600, color: record.parentId ? '#4b5563' : '#111827' }}>{name}</span>
+                {canRenameGovernedTask(record)
+                  ? <Input className="pms-edit-input" size="small" value={name} aria-label={`修改活动名称 ${name}`} onChange={event => currentSetTasks(tableTasks.map((task: any) => task.id === record.id ? { ...task, taskName: event.target.value } : task))} />
+                  : <span style={{ fontWeight: record.parentId ? 400 : 600, color: record.parentId ? '#4b5563' : '#111827' }}>{name}</span>}
                 {canAddGovernedChild(record) && <Tooltip title="新增子活动"><Button type="text" size="small" aria-label={`新增子活动 ${name}`} icon={<PlusOutlined />} onClick={() => addGovernedChild(record)} /></Tooltip>}
               </Space>
             ),
@@ -2987,8 +3030,9 @@ export default function ProjectSpaceContainer() {
       message.success('任务顺序已更新，序号已重新生成')
     }
 
-    // 仅在 canFullyEdit 时启用 SortableRow（拖拽）；否则用普通 <tr>
-    const TableComponents = canFullyEdit && !isGovernedLevel1Table ? { body: { row: SortableRow } } : undefined
+    // 仅普通可编辑表格或含可排序自定义任务的治理表格启用 SortableRow。
+    const governedHasSortableTasks = isGovernedLevel1Table && visibleTasks.some((task: any) => canReorderGovernedTask(task))
+    const TableComponents = (canFullyEdit && !isGovernedLevel1Table) || governedHasSortableTasks ? { body: { row: SortableRow } } : undefined
     const tableClassName = `pms-table ${isEditMode ? 'pms-table-edit' : ''}`
     return (
       <div>
@@ -3003,7 +3047,7 @@ export default function ProjectSpaceContainer() {
             </span>
           </div>
         )}
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTableDragEnd}><SortableContext items={visibleTasks.map((t: any) => t.id)} strategy={verticalListSortingStrategy}><Table className={tableClassName} dataSource={visibleTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} size="middle" /></SortableContext></DndContext>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={isGovernedLevel1Table ? handleGovernedDragEnd : handleTableDragEnd}><SortableContext items={visibleTasks.map((t: any) => t.id)} strategy={verticalListSortingStrategy}><Table className={tableClassName} dataSource={visibleTasks} columns={getColumns()} rowKey="id" pagination={false} scroll={{ x: visibleColumns.length * 100 + 200 }} components={TableComponents} size="middle" /></SortableContext></DndContext>
         {canFullyEdit && !isGovernedLevel1Table && (
           <div style={{ padding: '12px 16px', borderTop: '1px solid #f3f4f6', background: '#f8fafc' }}>
             <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%', borderRadius: 6, height: 36 }} onClick={() => {
@@ -3015,27 +3059,6 @@ export default function ProjectSpaceContainer() {
               currentSetTasks([...tableTasks, newTask])
               message.success(`已添加一级活动: ${newId}`)
             }}>添加新活动</Button>
-          </div>
-        )}
-        {isGovernedLevel1Table && isCurrentDraft && canMaintainCurrentPlan && level1GlobalAdmins.includes(currentLoginUser) && !isFollowReadOnlyTable && (
-          <div style={{ padding: '12px 16px', borderTop: '1px solid #f3f4f6', background: '#f8fafc' }}>
-            <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%', borderRadius: 6, height: 36 }} onClick={() => {
-              let taskName = ''
-              Modal.confirm({
-                title: '新增一级活动',
-                content: <Input autoFocus placeholder="请输入活动名称" onChange={event => { taskName = event.target.value }} />,
-                okText: '确认', cancelText: '取消',
-                onOk: () => {
-                  if (!taskName.trim()) { message.error('请输入活动名称'); return Promise.reject() }
-                  const roots = tableTasks.filter((task: any) => !task.parentId)
-                  currentSetTasks([...tableTasks, {
-                    id: String(roots.length + 1), stableId: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                    order: roots.length, taskName: taskName.trim(), role: '', source: 'custom', planEndDate: '', actualEndDate: '',
-                  }])
-                  message.success('已新增一级活动')
-                },
-              })
-            }}>添加一级活动</Button>
           </div>
         )}
       </div>
@@ -3119,12 +3142,9 @@ export default function ProjectSpaceContainer() {
               <th style={{ ...cycleThStyle, borderBottom: 'none' }} rowSpan={2}>开发周期</th>
               {stageGroups.map(({ stage, colSpan }, i) => (
                 <th key={stage.id} colSpan={colSpan} style={{ ...thStyle, background: `${stageColors[i % stageColors.length]}10`, color: stageColors[i % stageColors.length], borderBottom: `2px solid ${stageColors[i % stageColors.length]}` }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, textAlign: 'left' }}>
-                    <div>
-                      <div>{stage.taskName}</div>
-                      <div style={{ marginTop: 3, color: '#64748b', fontSize: 11, fontWeight: 400 }}>{stage.planStartDate && stage.planEndDate ? `${stage.planStartDate} ~ ${stage.planEndDate}` : '-'}</div>
-                    </div>
-                    <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>{stage.manpowerPercent === null ? '-' : `${stage.manpowerPercent}%`}</Tag>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, textAlign: 'left' }}>
+                    <span>{stage.taskName}</span>
+                    <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>{stage.estimatedDays === null ? '-' : `${stage.estimatedDays}天`}</Tag>
                   </div>
                 </th>
               ))}
@@ -4451,6 +4471,7 @@ export default function ProjectSpaceContainer() {
                   customRoles={roles.filter(role => !role.isFixed)}
                   currentLoginUser={currentLoginUser}
                   canEdit={canEditBasicInfo}
+                  canEditPlan={canGovernLevel1Plan}
                   onEdit={() => setShowProjectInfoEditor(true)}
                 />
               : renderProjectBasicInfo()
@@ -4462,7 +4483,6 @@ export default function ProjectSpaceContainer() {
                   currentLoginUser={currentLoginUser}
                   canEdit={canGovernLevel1Plan}
                   canPublish={canGovernLevel1Plan}
-                  canManageStructure={level1GlobalAdmins.includes(currentLoginUser)}
                   canImport={canImportTechnicalPlan}
                   canExport={canExportTechnicalPlan}
                   canViewTechnicalPlan={canViewLevel1Plan}

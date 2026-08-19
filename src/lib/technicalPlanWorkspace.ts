@@ -88,6 +88,34 @@ export function reorderTechnicalTasksWithinParent<T extends { id: string; parent
     .map((task, index) => ({ ...task, order: index + 1 }))
 }
 
+export function renumberTechnicalSubprojectTasks<T extends { id: string; stableId?: string; parentId?: string; order: number }>(
+  tasks: readonly T[],
+): T[] {
+  return tasks.map((task, index) => ({ ...task, id: String(index + 1), order: index }))
+}
+
+export function reorderTechnicalSubprojectCustomTasks<
+  T extends { id: string; stableId?: string; source?: 'template' | 'custom'; parentId?: string; order: number },
+>(tasks: readonly T[], activeId: string, overId: string): T[] {
+  const ordered = [...tasks].sort((left, right) => left.order - right.order)
+  const activeIndex = ordered.findIndex(task => task.id === activeId)
+  const overIndex = ordered.findIndex(task => task.id === overId)
+  const active = ordered[activeIndex]
+  const over = ordered[overIndex]
+  if (
+    activeIndex < 0
+    || overIndex < 0
+    || active?.source !== 'custom'
+    || over?.source !== 'custom'
+    || active.parentId
+    || over.parentId
+  ) return tasks.map(task => ({ ...task }))
+  const next = [...ordered]
+  const [moved] = next.splice(activeIndex, 1)
+  next.splice(overIndex, 0, moved)
+  return renumberTechnicalSubprojectTasks(next)
+}
+
 const stringValue = (value: unknown) => value == null ? '' : String(value)
 const optionalStringValue = (value: unknown) => {
   const text = stringValue(value).trim()

@@ -41,6 +41,7 @@ export interface TechnicalProjectInformationViewProps {
   currentLoginUser?: string
   onEdit?: () => void
   canEdit?: boolean
+  canEditPlan?: boolean
 }
 
 const valueOf = (project: ProjectItem, key: string) => (
@@ -83,6 +84,7 @@ export default function TechnicalProjectInformationView({
   currentLoginUser,
   onEdit,
   canEdit = false,
+  canEditPlan = false,
 }: TechnicalProjectInformationViewProps) {
   const tdtKey = getTechnicalPlanKey({ kind: 'tdt', parentProjectId: project.id })
   const [activeKey, setActiveKey] = useState(tdtKey)
@@ -200,7 +202,7 @@ export default function TechnicalProjectInformationView({
             <div className="technical-information-tabs pms-toolbar" aria-label="技术信息分类">
               <Tabs activeKey={activeKey} onChange={setActiveKey} items={tabItems} />
             </div>
-            {modules.plan && <TechnicalPlanSummary scope={activeScope} label={activeLabel} />}
+            {modules.plan && <TechnicalPlanSummary scope={activeScope} label={activeLabel} canEditPlan={canEditPlan} />}
             {activeTab.kind === 'subproject' && (
               <div className="technical-information-subproject-basic">
                 <TechnicalProjectBasicInfo

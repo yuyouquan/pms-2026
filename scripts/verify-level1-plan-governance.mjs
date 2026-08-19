@@ -200,6 +200,20 @@ assert.equal(rules.canMaintainLevel1Plan({ projectType: '技术项目', currentU
 assert.equal(rules.canMaintainLevel1Plan({ projectType: '技术项目', currentUser: '张三', spmUsers: [], technicalLead: '张三', globalAdmins: [] }), true)
 assert.equal(rules.canMaintainLevel1Plan({ projectType: '能力建设项目', currentUser: '管理员', spmUsers: [], technicalLead: '', globalAdmins: ['管理员'] }), true)
 
+const launchStage = { ...makeTask('4', null, 3, '上市收编阶段'), stableId: 'stage-launch' }
+const templateLaunchChild = { ...makeTask('4.1', '4', 0, '收编完成'), stableId: 'milestone-close' }
+const customLaunchChild = { ...makeTask('4.2', '4', 1, '项目自定义节点'), stableId: 'custom-launch-1', source: 'custom' }
+const customOutsideLaunch = { ...makeTask('3.4', '3', 3, '错误阶段自定义节点'), stableId: 'custom-development-1', source: 'custom' }
+assert.equal(rules.canAddLevel1CustomChild('整机产品项目', launchStage), true, 'whole-machine launch stages accept custom children')
+assert.equal(rules.canAddLevel1CustomChild('tOS版本项目', launchStage), false, 'non-whole-machine projects cannot add launch children')
+assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '整机产品项目', task: templateLaunchChild, parent: launchStage, action: 'delete' }), false, 'template launch children stay locked')
+assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '整机产品项目', task: customLaunchChild, parent: launchStage, action: 'delete' }), true, 'custom launch children can be deleted')
+assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '整机产品项目', task: customLaunchChild, parent: launchStage, action: 'rename' }), true, 'custom launch children can be renamed')
+assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '整机产品项目', task: customOutsideLaunch, parent: { ...launchStage, id: '3', stableId: 'stage-development', taskName: '开发验证阶段' }, action: 'reorder' }), false, 'custom children outside launch stay locked')
+assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '技术项目', technicalKind: 'tdt', task: { ...customLaunchChild, parentId: undefined }, action: 'rename' }), false, 'TDT structure stays locked')
+assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '技术项目', technicalKind: 'subproject', task: { ...customLaunchChild, parentId: undefined }, action: 'rename' }), true, 'technical subproject custom roots can be renamed')
+assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '技术项目', technicalKind: 'subproject', task: { ...templateLaunchChild, parentId: undefined }, action: 'delete' }), false, 'technical subproject template roots stay locked')
+
 const prior = [
   { ...makeTask('old-root', null, 0, '旧阶段'), stableId: 'stage-concept' },
   { ...makeTask('old-a', 'old-root', 0, '旧名称', '2026-02-20', '2026-02-21'), stableId: 'milestone-concept-start' },
@@ -242,10 +256,12 @@ for (const label of ['阶段/里程碑节点', '计划开始时间', '计划完�
   assert.match(projectSpaceSource, new RegExp(label), `project level1 table contains ${label}`)
   assert.match(technicalModuleSource, new RegExp(label), `technical governed table contains ${label}`)
 }
-assert.match(projectSpaceSource, /上市收编阶段/, 'launch stage is identified for special whole-machine structure permissions')
-assert.match(projectSpaceSource, /canAddGovernedChild[\s\S]{0,260}isWholeMachineProject[\s\S]{0,120}isLaunchStage/, 'whole-machine SPM structure changes are restricted to the launch stage')
-assert.match(projectSpaceSource, /record\.source === 'custom'/, 'SPM can only delete project-created launch children')
-assert.match(projectSpaceSource, /level1GlobalAdmins\.includes\(currentLoginUser\)[\s\S]*添加一级活动/, 'global administrators can add top-level activities')
+assert.match(projectSpaceSource, /canAddLevel1CustomChild/, 'whole-machine structure additions use the source-aware launch-stage rule')
+assert.match(projectSpaceSource, /canMutateLevel1TaskStructure/, 'rename, delete and reorder share the source-aware structure rule')
+assert.doesNotMatch(projectSpaceSource, /isGlobalLevel1Admin\s*\|\|/, 'global administrators do not bypass template structure locks')
+assert.doesNotMatch(projectSpaceSource, /level1GlobalAdmins\.includes\(currentLoginUser\)[\s\S]{0,500}添加一级活动/, 'project revisions cannot add top-level template activities')
+assert.match(projectSpaceSource, /canRenameGovernedTask[\s\S]{0,420}<Input/, 'approved custom launch children can edit their names inline')
+assert.match(projectSpaceSource, /handleGovernedDragEnd/, 'approved custom launch children have a dedicated safe reorder path')
 assert.match(technicalStoreSource, /publishedVersions\.length <= 1[\s\S]*buildFirstLevel1RevisionTasks[\s\S]*buildNextLevel1RevisionTasks/, 'technical first and later revisions follow different synchronization rules')
 assert.match(technicalStoreSource, /changedActualEnds[\s\S]*pairedVersionId/, 'technical draft and published actual completion dates stay synchronized')
 assert.match(compareModalSource, /fieldMode === 'governed'[\s\S]*governedKeys/, 'version comparison supports the governed field set')
@@ -255,6 +271,12 @@ assert.match(projectSpaceSource, /buildProjectListMockPlanTasks\(selectedProject
 assert.match(projectSpaceSource, /planEndDate:\s*task\.planEndDate\s*\|\|\s*''/, 'tOS project initialization preserves project-linked mock plan dates')
 assert.match(projectSpaceSource, /getDisplayPlanVersionsForHorizontalPlan\(horizontalVersions,\s*\{\s*includeDraft:\s*canMaintainCurrentPlan\s*\}\)/, 'horizontal plan exposes drafts to maintainers')
 assert.match(projectSpaceSource, /sumLevel1EstimatedDays\(vProjection\.rows\)/, 'horizontal development cycle uses the estimated-duration total')
+const horizontalHeaderStart = projectSpaceSource.indexOf('{stageGroups.map(({ stage, colSpan }, i) => (')
+const horizontalHeaderEnd = projectSpaceSource.indexOf('</thead>', horizontalHeaderStart)
+assert.ok(horizontalHeaderStart >= 0 && horizontalHeaderEnd > horizontalHeaderStart, 'horizontal stage header slice is present')
+const horizontalHeaderSource = projectSpaceSource.slice(horizontalHeaderStart, horizontalHeaderEnd)
+assert.match(horizontalHeaderSource, /stage\.estimatedDays === null \? '-' : `\$\{stage\.estimatedDays\}天`/, 'horizontal stages show estimated duration')
+assert.doesNotMatch(horizontalHeaderSource, /manpowerPercent|planStartDate|planEndDate|~/, 'horizontal stage headers omit percentages and date ranges')
 assert.match(projectSpaceSource, /version\.status === '修订中'[\s\S]{0,240}aria-label="修订中"/, 'draft version numbers carry a revision-state icon')
 assert.equal((projectSpaceSource.match(/<ClickToEditDate\s+align="center"/g) || []).length >= 2, true, 'editable horizontal dates align with read-only date text')
 

@@ -76,9 +76,18 @@ assert.match(configSource, /创建非正式版本/, 'config template revisions o
 assert.match(configSource, /创建正式版本/, 'config template revisions offer formal versions')
 
 const technicalPlanUiSource = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
+const technicalSummarySource = readSource(root, 'src/components/technical-project/TechnicalPlanSummary.tsx')
+const technicalInformationSource = readSource(root, 'src/components/technical-project/TechnicalProjectInformationView.tsx')
+const projectSpaceContainerSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 assert.match(technicalPlanUiSource, /创建非正式版本/, 'technical project plans offer nonformal revisions')
 assert.match(technicalPlanUiSource, /创建正式版本/, 'technical project plans offer formal revisions')
 assert.match(technicalPlanUiSource, /revisionKind/, 'technical project plan passes revision kind into its store')
+assert.match(technicalSummarySource, /canEditPlan/, 'technical basic-information summary accepts plan-maintenance permission')
+assert.match(technicalSummarySource, /updateCurrentTasks/, 'technical basic-information summary writes to the shared plan store')
+assert.match(technicalSummarySource, /const activeDraft = canEditPlan[\s\S]{0,220}const currentVersion = activeDraft/, 'authorized technical basic-information views prioritize the active revision even after another version was selected')
+assert.equal((technicalSummarySource.match(/<ClickToEditDate/g) || []).length >= 2, true, 'technical basic-information summary edits draft and actual completion dates inline')
+assert.match(technicalInformationSource, /<TechnicalPlanSummary[\s\S]{0,220}canEditPlan=/, 'technical information forwards plan-maintenance permission to the summary')
+assert.match(projectSpaceContainerSource, /<TechnicalProjectInformationView[\s\S]{0,420}canEditPlan=\{canGovernLevel1Plan\}/, 'project space uses technical plan permission instead of basic-information permission for plan dates')
 
 const memoryStorage = new Map()
 globalThis.localStorage = {
@@ -242,6 +251,25 @@ assert.deepEqual(
 
 const technicalModuleSource = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
 const technicalWorkspace = loadTypeScriptModule(root, 'src/lib/technicalPlanWorkspace.ts')
+const numberedSubprojectTasks = technicalWorkspace.renumberTechnicalSubprojectTasks([
+  ...subprojectTasks,
+  {
+    ...subprojectTasks[0],
+    id: 'technical-task-1787125461',
+    stableId: 'technical-custom-1',
+    source: 'custom',
+    order: 4,
+    taskName: '新建一级任务',
+  },
+])
+assert.deepEqual(numberedSubprojectTasks.map(task => task.id), ['1', '2', '3', '4', '5'], 'technical subproject activities always expose continuous numeric sequence values')
+assert.equal(numberedSubprojectTasks.at(-1).stableId, 'technical-custom-1', 'renumbering keeps the stable identity used for version synchronization')
+const reorderedSubprojectTasks = technicalWorkspace.reorderTechnicalSubprojectCustomTasks([
+  ...numberedSubprojectTasks,
+  { ...numberedSubprojectTasks.at(-1), id: '6', stableId: 'technical-custom-2', order: 5, taskName: '第二个自定义任务' },
+], '6', '5')
+assert.deepEqual(reorderedSubprojectTasks.slice(-2).map(task => task.stableId), ['technical-custom-2', 'technical-custom-1'], 'custom subproject roots can reorder among themselves')
+assert.deepEqual(technicalWorkspace.reorderTechnicalSubprojectCustomTasks(reorderedSubprojectTasks, '1', '5'), reorderedSubprojectTasks, 'template roots cannot be reordered')
 const planWorkspaceShellPath = 'src/components/plans/PlanWorkspaceShell.tsx'
 assert.equal(fs.existsSync(`${root}/${planWorkspaceShellPath}`), true, 'plan workspace provides a shared shell for whole-machine and technical projects')
 const planWorkspaceShell = readSource(root, planWorkspaceShellPath)
@@ -444,12 +472,12 @@ assert.match(technicalModuleSource, /exportSheet/, 'technical plans reuse Excel 
 assert.match(technicalModuleSource, /SortableRow/, 'technical plans reuse sortable task rows')
 assert.match(technicalModuleSource, /getInvalidTechnicalTaskFields/, 'technical plans enforce plan date validation')
 assert.match(technicalModuleSource, /maxDepthByKind/, 'technical plan depth is a component input')
-assert.match(technicalModuleSource, /handleAddTopLevelTask/, 'drafts can add top-level tasks')
-assert.match(technicalModuleSource, /handleAddChildTask/, 'TDT drafts can add second-level tasks')
+assert.match(technicalModuleSource, /handleAddTopLevelTask/, 'technical subproject drafts can add top-level tasks')
+assert.doesNotMatch(technicalModuleSource, /handleAddChildTask/, 'TDT drafts cannot add second-level tasks')
 assert.match(technicalModuleSource, /CaretDownOutlined/, 'technical top-level tasks expose the same row collapse affordance as whole-machine plans')
 assert.match(technicalModuleSource, /toggleCollapsedTask/, 'technical top-level tasks can toggle their own persisted collapsed state')
 assert.match(technicalModuleSource, /aria-expanded=\{!collapsedIds\.has\(row\.id\)\}/, 'the row collapse control exposes its current expanded state')
-assert.match(technicalModuleSource, /handleDeleteTask/, 'drafts can delete tasks with cascade handling')
+assert.match(technicalModuleSource, /handleDeleteTask/, 'custom subproject activities can be deleted')
 assert.match(technicalModuleSource, /SortableColumnSettings/, 'column settings reuse sortable staged apply/cancel interaction')
 assert.match(technicalModuleSource, /canImport/, 'technical plan import has a dedicated permission input')
 assert.match(technicalModuleSource, /canExport/, 'technical plan export has a dedicated permission input')
@@ -472,10 +500,16 @@ assert.match(technicalModuleSource, /编辑模式[\s\S]{0,180}自动保存/, 'te
 assert.match(technicalModuleSource, /key:\s*['"]id['"][^\n]*fixed:\s*['"]left['"]/, 'the technical sequence column stays fixed on horizontal scroll')
 assert.match(technicalModuleSource, /key:\s*['"]taskName['"][^\n]*fixed:\s*['"]left['"]/, 'the technical task-name column stays fixed on horizontal scroll')
 assert.doesNotMatch(technicalModuleSource, /key:\s*['"]drag['"]/, 'task name remains the first technical-plan column instead of following an empty drag column')
-assert.match(technicalModuleSource, /technical-plan-sequence-cell[\s\S]{0,260}<DragHandle\s*\/>/, 'the drag handle lives inside the fixed sequence column, matching whole-machine plans')
+assert.match(technicalModuleSource, /canMutateTechnicalTaskStructure\(row, 'reorder'\)[\s\S]{0,120}<DragHandle\s*\/>/, 'only approved custom subproject activities expose drag handles')
 assert.match(technicalModuleSource, /key:\s*['"]actions['"][^\n]*fixed:\s*['"]right['"]/, 'the technical operation column stays fixed on horizontal scroll')
 assert.match(technicalModuleSource, /className=[^\n]*technical-plan-vertical-table/, 'the technical vertical plan table has a stable layout scope')
-assert.match(technicalModuleSource, /technical-plan-add-task[\s\S]{0,320}handleAddTopLevelTask/, 'top-level task creation follows the whole-machine table footer interaction')
+assert.match(technicalModuleSource, /technical-plan-add-task[\s\S]{0,320}handleAddTopLevelTask/, 'subproject top-level task creation follows the whole-machine table footer interaction')
+assert.match(technicalModuleSource, /const canEditTaskStructure = canMaintain && tab\?\.templateKind === 'subproject' && viewMode === 'vertical'/, 'only authorized technical subproject revisions expose structure editing')
+assert.match(technicalModuleSource, /renumberTechnicalSubprojectTasks/, 'technical subproject additions and reorders normalize visible sequence numbers')
+assert.match(technicalModuleSource, /reorderTechnicalSubprojectCustomTasks/, 'technical subproject custom tasks use the guarded reorder helper')
+assert.match(technicalModuleSource, /canRenameTechnicalTask[\s\S]{0,300}<Input/, 'custom subproject activity names are editable')
+assert.doesNotMatch(technicalModuleSource, /canManageStructure/, 'technical structure rules no longer depend on the former global-admin-only prop')
+assert.doesNotMatch(readSource(root, 'src/containers/ProjectSpaceContainer.tsx'), /canManageStructure=\{level1GlobalAdmins\.includes/, 'the project container no longer grants a global structure bypass')
 assert.match(technicalModuleSource, /icon=\{<CopyOutlined\s*\/>\}[^>]*aria-label="计划克隆"[^>]*\/>/, 'technical plan clone uses the same icon-only draft action as whole-machine plans')
 assert.match(technicalModuleSource, /icon=\{<SaveOutlined\s*\/>\}[^>]*aria-label="发布"[^>]*\/>/, 'technical plan publish uses the same icon-only draft action as whole-machine plans')
 assert.doesNotMatch(
@@ -493,6 +527,19 @@ assert.match(technicalModuleSource, /<EditOutlined[^>]*aria-label="修订中"/, 
 assert.equal((technicalModuleSource.match(/<ClickToEditDate\s+align="center"/g) || []).length >= 2, true, 'technical planned and actual completion dates use the same centered click-to-edit treatment')
 assert.match(technicalModuleSource, /technical-horizontal-current/, 'the latest technical version uses the same highlighted-row treatment')
 assert.match(technicalModuleSource, /technical-horizontal-actual/, 'the technical actual row uses the same highlighted-row treatment')
+assert.doesNotMatch(technicalModuleSource, /横版只读/, 'technical horizontal revisions do not show the redundant read-only label')
+const technicalHorizontalHeaderStart = technicalModuleSource.indexOf('{groups.map(({ stage, colSpan }, index) => {')
+const technicalHorizontalHeaderEnd = technicalModuleSource.indexOf('</thead>', technicalHorizontalHeaderStart)
+assert.ok(technicalHorizontalHeaderStart >= 0 && technicalHorizontalHeaderEnd > technicalHorizontalHeaderStart, 'technical horizontal stage header slice is present')
+const technicalHorizontalHeaderSource = technicalModuleSource.slice(technicalHorizontalHeaderStart, technicalHorizontalHeaderEnd)
+assert.match(technicalHorizontalHeaderSource, /stage\.estimatedDays == null \? '-' : `\$\{stage\.estimatedDays\}天`/, 'technical horizontal stages show estimated duration')
+assert.doesNotMatch(technicalHorizontalHeaderSource, /manpowerPercent|planStartDate|planEndDate|~/, 'technical horizontal stage headers omit percentages and date ranges')
+const technicalSummaryHeaderStart = technicalSummarySource.indexOf('{groups.map((group, index) => {')
+const technicalSummaryHeaderEnd = technicalSummarySource.indexOf('</thead>', technicalSummaryHeaderStart)
+assert.ok(technicalSummaryHeaderStart >= 0 && technicalSummaryHeaderEnd > technicalSummaryHeaderStart, 'technical summary stage header slice is present')
+const technicalSummaryHeaderSource = technicalSummarySource.slice(technicalSummaryHeaderStart, technicalSummaryHeaderEnd)
+assert.match(technicalSummaryHeaderSource, /group\.stage\.estimatedDays == null \? '-' : `\$\{group\.stage\.estimatedDays\}天`/, 'technical basic-information stages show estimated duration')
+assert.doesNotMatch(technicalSummaryHeaderSource, /manpowerPercent|planStartDate|planEndDate|~/, 'technical basic-information stage headers omit percentages and date ranges')
 const globalStylesSource = readSource(root, 'src/styles/globals.css')
 assert.match(globalStylesSource, /\.pms-table \.ant-table-thead\s*>\s*tr\s*>\s*th\.ant-table-cell-fix-(?:start|end)[\s\S]{0,900}position:\s*sticky\s*!important/s, 'fixed technical-plan headers remain aligned with fixed body cells')
 for (const label of ['预估工期', '实际工期', '是否延期']) {
