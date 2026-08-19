@@ -194,6 +194,7 @@ import {
   LEVEL1_FLAT_FILTER_FIELDS,
   canConfirmMachineMrInsertion,
   filterFlatLevel1Rows,
+  getLevel1MaintainerUsers,
   mergeActualFieldsByStableId,
   selectFlatGanttHierarchy,
   type ProjectSpaceLevel1ScopeToken,
@@ -551,10 +552,7 @@ export default function ProjectSpaceContainer() {
   const canImportTechnicalPlan = canDo('plan:导入')
   const canExportTechnicalPlan = canDo('plan:导出')
   const level1GlobalAdmins = perm.globalRoles.find(role => role.name === '管理组')?.members || []
-  const level1SpmUsers = Array.from(new Set([
-    ...String(selectedProject?.spm || '').split(/[,，、]/).map(user => user.trim()).filter(Boolean),
-    ...(roles.find(role => role.name === '项目经理')?.members || []),
-  ]))
+  const level1SpmUsers = getLevel1MaintainerUsers(selectedProject?.spm, roles)
   const level1TechnicalLead = String(
     (selectedProject as any)?.technicalLead
     || (selectedProject as any)?.fieldValues?.technicalLead
@@ -2789,7 +2787,14 @@ export default function ProjectSpaceContainer() {
               : ''
             const latestVersionData = latestVersions.find(version => version.id === latestVersion)
             const latestGlobalAdmins = latestPermissionState.globalRoles.find(role => role.name === '管理组')?.members || []
-            const latestSpmUsers = String(latestProject?.spm || '').split(/[,，、]/).map(user => user.trim()).filter(Boolean)
+            const latestPermissionProjectId = resolvePermissionProjectId(
+              latestProject?.id || '',
+              typeof latestProject?.parentProjectId === 'string' ? latestProject.parentProjectId : undefined,
+            )
+            const latestSpmUsers = getLevel1MaintainerUsers(
+              latestProject?.spm,
+              latestPermissionState.rolesByProject[latestPermissionProjectId] || [],
+            )
             const latestCanMaintain = Boolean(latestProject && canMaintainLevel1Plan({
               projectType: latestProject.type,
               currentUser: latestProjectState.currentLoginUser,

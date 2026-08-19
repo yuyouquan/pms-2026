@@ -135,6 +135,14 @@ export const canConfirmMachineMrInsertion = ({
   && openingScope.versionId === currentScope.versionId
   && openingScope.currentUser === currentScope.currentUser
 
+export const getLevel1MaintainerUsers = (
+  spm: unknown,
+  roles: readonly { name?: string; members?: readonly string[] }[],
+) => Array.from(new Set([
+  ...String(spm || '').split(/[,，、]/).map(user => user.trim()).filter(Boolean),
+  ...(roles.find(role => role.name === '项目经理')?.members || []),
+]))
+
 const SCOPED_PLAN_PERSISTENCE_KEYS = [
   'marketPlanData',
   'marketFollowVersionMeta',
