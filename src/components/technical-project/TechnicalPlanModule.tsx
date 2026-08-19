@@ -31,6 +31,7 @@ import {
   filterTechnicalPlanGanttTasks,
   getTechnicalPlanExportColumns,
   getTechnicalPlanFilterFields,
+  getTechnicalPlanRowKey,
   parseTechnicalPlanImportRows,
   projectTechnicalPlanRows,
   renumberTechnicalSubprojectTasks,
@@ -40,7 +41,7 @@ import { compareVersionsForTable } from '@/lib/versionCompare'
 import type { PlanRevisionKind } from '@/lib/planVersioning'
 import { getTemplateSnapshotForProjectType } from '@/lib/projectTemplateCompatibility'
 import { comparePublishedTechnicalPlanVersions } from '@/lib/technicalProjectRules'
-import { canMaintainLevel1Plan, canMutateLevel1TaskStructure, projectLevel1Plan, projectTechnicalSubprojectRows, sumLevel1EstimatedDays, validateLevel1MilestoneDates, type Level1FlatMilestoneRow } from '@/lib/level1PlanRules'
+import { canMaintainLevel1Plan, canMutateLevel1TaskStructure, projectLevel1Plan, projectTechnicalSubprojectRows, sumLevel1EstimatedDays, validateLevel1MilestoneDates, type Level1FlatMilestoneRow, type Level1PlanViewRow } from '@/lib/level1PlanRules'
 import { applyPlanGanttDateChange, applyPlanTaskDatePatch, buildPlanGanttTasks } from '@/lib/planGanttRules'
 import {
   createFilterCondition,
@@ -69,6 +70,7 @@ import {
   buildTechnicalPlanTabs, getTechnicalPlanKey, useTechnicalPlanStore,
 } from '@/stores/technicalPlan'
 import type { TechnicalTemplateKind, TechnicalTemplateTask } from '@/types/technicalPlan'
+import type { PlanStatus, PlanTask } from '@/types'
 import type { TechnicalSubprojectTransferScopeToken } from '@/lib/technicalPlanWorkspace'
 import type { TechnicalSubproject } from '@/types/technicalProject'
 
@@ -82,6 +84,35 @@ const PLAN_REVISION_KIND_OPTIONS: Array<{ key: PlanRevisionKind; label: string }
 
 const DEFAULT_MAX_DEPTH: Readonly<Record<TechnicalTemplateKind, number>> = { tdt: 2, subproject: 1 }
 type TechnicalPlanRow = Level1FlatMilestoneRow & TechnicalTemplateTask
+
+const toPlanStatus = (value: unknown): PlanStatus => {
+  switch (value) {
+    case '未开始':
+    case '进行中':
+    case '已完成':
+    case '已取消':
+      return value
+    default:
+      return '未开始'
+  }
+}
+
+const toComparePlanTask = (row: Level1PlanViewRow): PlanTask => ({
+  id: row.id,
+  parentId: row.parentId || undefined,
+  order: row.order,
+  taskName: row.taskName,
+  responsible: row.responsible,
+  predecessor: row.predecessor,
+  planStartDate: row.planStartDate ? new Date(row.planStartDate) : undefined,
+  planEndDate: row.planEndDate ? new Date(row.planEndDate) : undefined,
+  estimatedDays: row.estimatedDays ?? undefined,
+  actualStartDate: row.actualStartDate ? new Date(row.actualStartDate) : undefined,
+  actualEndDate: row.actualEndDate ? new Date(row.actualEndDate) : undefined,
+  actualDays: row.actualDays ?? undefined,
+  status: toPlanStatus(row.status),
+  progress: row.progress ?? 0,
+})
 function TechnicalHorizontalPlanTable({
   tasks,
   versions,
@@ -373,7 +404,10 @@ export default function TechnicalPlanModule({
       : projectTechnicalPlanRows('tdt', tasks) as TechnicalPlanRow[],
     [tab?.templateKind, tasks],
   )
-  const filterFields = getTechnicalPlanFilterFields(tab?.templateKind || 'tdt')
+  const filterFields = useMemo(
+    () => getTechnicalPlanFilterFields(tab?.templateKind || 'tdt', projectedTasks),
+    [projectedTasks, tab?.templateKind],
+  )
   const milestoneValidation = useMemo(() => validateLevel1MilestoneDates(tasks), [tasks])
   const subprojectValidation = useMemo(() => validateTechnicalSubprojectDates(tasks), [tasks])
   const collapsedIds = useMemo(() => new Set(instance?.collapsedRows || []), [instance?.collapsedRows])
@@ -383,6 +417,10 @@ export default function TechnicalPlanModule({
   )
   const hasActiveFilters = filters.some(isFilterConditionActive)
   const filteredTasks = useMemo(() => hasActiveFilters ? directlyFilteredTasks : [...projectedTasks], [directlyFilteredTasks, hasActiveFilters, projectedTasks])
+  const filteredHierarchyTasks = useMemo(
+    () => filterTechnicalPlanGanttTasks(tasks, tab?.templateKind || 'tdt', filteredTasks),
+    [filteredTasks, tab?.templateKind, tasks],
+  )
   const visibleTasks = filteredTasks
   const publishedVersions = useMemo(
     () => canViewTechnicalPlan
@@ -522,6 +560,8 @@ export default function TechnicalPlanModule({
       : milestoneValidation.byTaskId
     const firstInvalidTaskId = Object.keys(invalidByTaskId)[0]
     if (firstInvalidTaskId) {
+      const invalidTask = tasks.find(task => task.id === firstInvalidTaskId)
+      const firstInvalidRowKey = invalidTask ? getTechnicalPlanRowKey(invalidTask) : firstInvalidTaskId
       setCollapsed(scope, [])
       setFilters([])
       setTempFilters([createFilterCondition()])
@@ -529,7 +569,7 @@ export default function TechnicalPlanModule({
       setViewMode('vertical')
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          document.querySelector(`[data-row-key="${CSS.escape(String(firstInvalidTaskId))}"]`)
+          document.querySelector(`[data-row-key="${CSS.escape(firstInvalidRowKey)}"]`)
             ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
         })
       })
@@ -631,7 +671,7 @@ export default function TechnicalPlanModule({
   }
 
   const expandAll = () => setCollapsed(scope, [])
-  const collapseAll = () => setCollapsed(scope, filterTechnicalPlanGanttTasks(tasks, tab?.templateKind || 'tdt', filteredTasks)
+  const collapseAll = () => setCollapsed(scope, filteredHierarchyTasks
     .filter(task => tasks.some(child => child.parentId === task.id))
     .map(task => task.id))
   const dateErrors = (row: TechnicalPlanRow, field: string) => {
@@ -687,7 +727,7 @@ export default function TechnicalPlanModule({
 
   const exportHorizontalPlan = () => {
     const groups = buildPlanHorizontalStageGroups(
-      tasks.map(task => ({ ...task })),
+      filteredHierarchyTasks.map(task => ({ ...task })),
     )
     const milestoneTasks = groups.flatMap(group => group.milestones.length ? group.milestones : [group.stage])
     const headerMatrix: (string | null)[][] = [
@@ -755,8 +795,8 @@ export default function TechnicalPlanModule({
     if (!left || !right) return []
     const mode = tab?.templateKind === 'subproject' ? 'technical-subproject' : 'standard'
     return compareVersionsForTable(
-      projectLevel1Plan(left.tasks, { mode }).rows as any,
-      projectLevel1Plan(right.tasks, { mode }).rows as any,
+      projectLevel1Plan(left.tasks, { mode }).rows.map(toComparePlanTask),
+      projectLevel1Plan(right.tasks, { mode }).rows.map(toComparePlanTask),
     )
   }, [compareBaseId, compareTargetId, hasCompared, instance, tab?.templateKind, visibleVersions])
 
@@ -935,7 +975,7 @@ export default function TechnicalPlanModule({
                       <Select
                         aria-label="筛选条件"
                         value={condition.operator}
-                        options={getFilterOperatorsForKind(definition?.kind || 'text') as any}
+                        options={[...getFilterOperatorsForKind(definition?.kind || 'text')]}
                         onChange={(operator: FilterOperator) => updateTechnicalFilter(condition.id, { operator, value: isValuelessFilterOperator(operator) ? '' : condition.value })}
                       />
                       {!isValuelessFilterOperator(condition.operator) && definition?.kind === 'enum' ? (
@@ -1003,7 +1043,7 @@ export default function TechnicalPlanModule({
             <Table<TechnicalPlanRow>
                   className={`pms-table technical-plan-vertical-table ${canMaintain ? 'pms-table-edit' : ''}`}
                   tableLayout="fixed"
-                  rowKey={record => record.stableId || record.id}
+                  rowKey={getTechnicalPlanRowKey}
                   size="middle"
                   pagination={false}
                   scroll={{ x: verticalTableScrollX }}
@@ -1014,7 +1054,7 @@ export default function TechnicalPlanModule({
           </div>
         ) : viewMode === 'horizontal' ? (
           <TechnicalHorizontalPlanTable
-            tasks={tasks}
+            tasks={filteredHierarchyTasks}
             versions={visibleVersions}
             currentVersionId={currentVersion.id}
             canEditPlanEnd={isDraft && canEditTechnicalPlan}
@@ -1023,7 +1063,7 @@ export default function TechnicalPlanModule({
           />
         ) : viewMode === 'gantt' ? (
           <DHTMLXGantt
-            tasks={buildPlanGanttTasks(filterTechnicalPlanGanttTasks(tasks, tab?.templateKind || 'tdt', filteredTasks), {
+            tasks={buildPlanGanttTasks(filteredHierarchyTasks, {
               mode: tab?.templateKind === 'subproject' ? 'technical-subproject' : 'hierarchical',
               editable: canMaintain,
             })}

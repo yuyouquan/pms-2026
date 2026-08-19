@@ -539,8 +539,9 @@ assert.match(technicalSummaryHeaderSource, /group\.stage\.estimatedDays == null 
 assert.doesNotMatch(technicalSummaryHeaderSource, /manpowerPercent|planStartDate|planEndDate|~/, 'technical basic-information stage headers omit percentages and date ranges')
 const globalStylesSource = readSource(root, 'src/styles/globals.css')
 assert.match(globalStylesSource, /\.pms-table \.ant-table-thead\s*>\s*tr\s*>\s*th\.ant-table-cell-fix-(?:start|end)[\s\S]{0,900}position:\s*sticky\s*!important/s, 'fixed technical-plan headers remain aligned with fixed body cells')
-assert.match(technicalModuleSource, /rowKey=\{record => record\.stableId \|\| record\.id\}/, 'flat technical rows use stable IDs so renumbering cannot remount edited rows')
-assert.match(technicalModuleSource, /getTechnicalPlanFilterFields\(tab\?\.templateKind \|\| 'tdt'\)/, 'table filters select the visible columns for the active technical template kind')
+assert.match(technicalModuleSource, /rowKey=\{getTechnicalPlanRowKey\}/, 'flat technical rows use the shared stable row-key helper')
+assert.match(technicalModuleSource, /getTechnicalPlanRowKey\(invalidTask\)/, 'publish validation scrolls with the same row-key helper as the table')
+assert.match(technicalModuleSource, /getTechnicalPlanFilterFields\(tab\?\.templateKind \|\| 'tdt',\s*projectedTasks\)/, 'table filters select the visible columns and current rows for the active technical template kind')
 assert.doesNotMatch(technicalModuleSource, /const TECHNICAL_FILTER_FIELDS/, 'technical filters are not a one-size-fits-all legacy field list')
 assert.match(technicalModuleSource, /hasPermission\(latestUser, latestProject\.id, 'plan:一级计划-查看'\)/, 'transfer confirmation rechecks current view permission')
 assert.match(technicalModuleSource, /hasPermission\(latestUser, latestProject\.id, 'plan:一级计划-编辑'\)/, 'transfer confirmation rechecks current edit permission')
@@ -548,6 +549,9 @@ assert.match(technicalModuleSource, /selectedProject/, 'transfer confirmation re
 assert.match(technicalModuleSource, /onOpenChange=\{open => \{ if \(open\) setDeleteOpening/, 'delete confirmation captures an opening token before the popconfirm can become stale')
 assert.match(technicalModuleSource, /if \(!updated\.ok\) \{ message\.error\('删除活动失败，请重试'\); return \}/, 'delete reports success only after the latest write succeeds')
 assert.match(technicalModuleSource, /viewMode === 'gantt' && tab\?\.templateKind === 'tdt'/, 'expand and collapse controls only appear for hierarchical TDT gantt')
+assert.match(technicalModuleSource, /const filteredHierarchyTasks = useMemo\([\s\S]{0,260}filterTechnicalPlanGanttTasks/, 'all plan visualizations derive a single filtered task hierarchy')
+assert.match(technicalModuleSource, /<TechnicalHorizontalPlanTable[\s\S]{0,120}tasks=\{filteredHierarchyTasks\}/, 'horizontal plan columns use the current filtered hierarchy')
+assert.match(technicalModuleSource, /buildPlanHorizontalStageGroups\([\s\S]{0,120}filteredHierarchyTasks/, 'current horizontal export uses the same filtered hierarchy')
 assert.doesNotMatch(technicalModuleSource, /technicalDraft|isResponsibleForTechnicalPlanTasks|toggleCollapsedTask/, 'obsolete technical-plan state and helpers are removed')
 assert.match(readSource(root, 'src/stores/technicalPlan.ts'), /DEFAULT_COLUMNS[\s\S]{0,420}actualStartDate[\s\S]{0,120}actualEndDate[\s\S]{0,120}actualDays/, 'technical plan persisted defaults include actual-date columns')
 
@@ -564,6 +568,17 @@ assert.deepEqual(
   ['sequence', 'activityName', 'status', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays'],
   'subproject filters expose exactly the nine visible flat columns',
 )
+assert.equal(technicalWorkspace.getTechnicalPlanRowKey({ id: '2', stableId: 'custom-transfer' }), 'custom-transfer', 'table and validation scrolling share the stable technical row key')
+assert.equal(technicalWorkspace.getTechnicalPlanRowKey({ id: '2' }), '2', 'row-key helper falls back to the visible ID when stable ID is absent')
+const tdtStatusOptions = technicalWorkspace.getTechnicalPlanFilterFields('tdt', [
+  { status: '进行中' }, { status: '已完成' }, { status: '进行中' }, { status: '' },
+]).find(field => field.key === 'status').options
+assert.deepEqual(tdtStatusOptions, [{ label: '进行中', value: '进行中' }, { label: '已完成', value: '已完成' }], 'TDT status filter options are current nonempty unique row statuses')
+const subprojectStatusOptions = technicalWorkspace.getTechnicalPlanFilterFields('subproject', [
+  { status: '未开始' }, { status: '进行中' },
+]).find(field => field.key === 'status').options
+assert.deepEqual(subprojectStatusOptions, [{ label: '未开始', value: '未开始' }, { label: '进行中', value: '进行中' }], 'subproject status filter options are current nonempty unique row statuses')
+assert.ok(technicalWorkspace.getTechnicalPlanFilterFields('subproject', []).find(field => field.key === 'status').options.length > 0, 'status filter has a nonempty fallback when the current projection has no status values')
 const tdtFilteredRows = planWorkspace.applyPlanWorkspaceFilters([
   { id: 'row-1', sequence: 1, stageName: '规划阶段', milestoneName: '规划启动', status: '进行中', planEndDate: '2026-01-01', estimatedDays: 1, actualEndDate: '', actualDays: null },
   { id: 'row-2', sequence: 2, stageName: '概念阶段', milestoneName: 'TDR1', status: '已完成', planEndDate: '2026-02-01', estimatedDays: 2, actualEndDate: '2026-02-02', actualDays: 1 },
@@ -573,6 +588,11 @@ const tdtFilteredRows = planWorkspace.applyPlanWorkspaceFilters([
   { id: 'filter-status', field: 'status', operator: 'equals', value: '进行中' },
 ], technicalWorkspace.getTechnicalPlanFilterFields('tdt'))
 assert.deepEqual(tdtFilteredRows.map(row => row.id), ['row-1'], 'TDT stage, milestone, and status filters share the flat row projection')
+const subprojectFilteredRows = planWorkspace.applyPlanWorkspaceFilters([
+  { id: 'activity-1', sequence: 1, activityName: '第1版转测', status: '未开始', planStartDate: '', planEndDate: '2026-01-01', estimatedDays: 1, actualStartDate: '', actualEndDate: '', actualDays: null },
+  { id: 'activity-2', sequence: 2, activityName: 'TDR3', status: '进行中', planStartDate: '2026-01-02', planEndDate: '2026-01-03', estimatedDays: 2, actualStartDate: '', actualEndDate: '', actualDays: null },
+], [{ id: 'filter-subproject-status', field: 'status', operator: 'equals', value: '进行中' }], technicalWorkspace.getTechnicalPlanFilterFields('subproject'))
+assert.deepEqual(subprojectFilteredRows.map(row => row.id), ['activity-2'], 'subproject status filtering uses the same dynamic visible-column definitions')
 assert.equal(technicalWorkspace.getTechnicalPlanFilterFields('tdt').some(field => field.key === 'planStartDate' || field.key === 'actualStartDate' || field.key === 'delayStatus'), false, 'TDT filter menu excludes hidden start and delay fields')
 assert.equal(technicalWorkspace.getTechnicalPlanFilterFields('subproject').some(field => field.key === 'stageName' || field.key === 'milestoneName' || field.key === 'delayStatus'), false, 'subproject filter menu excludes hidden stage, milestone, and delay fields')
 const technicalMutationOpening = { projectId: 'p1', tabId: 'p1:subproject:s1', scopeKey: 'p1:subproject:s1', versionId: 'v2-draft', user: '技术负责人' }

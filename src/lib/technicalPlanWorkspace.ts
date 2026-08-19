@@ -70,8 +70,24 @@ export const getTechnicalPlanExportColumns = (templateKind: TechnicalTemplateKin
   templateKind === 'subproject' ? TECHNICAL_SUBPROJECT_EXPORT_COLUMNS : TECHNICAL_TDT_EXPORT_COLUMNS
 )
 
-export const getTechnicalPlanFilterFields = (templateKind: TechnicalTemplateKind) => (
-  templateKind === 'subproject' ? TECHNICAL_SUBPROJECT_FILTER_FIELDS : TECHNICAL_TDT_FILTER_FIELDS
+const DEFAULT_TECHNICAL_STATUS_OPTIONS = ['未开始', '进行中', '已完成'].map(value => ({ label: value, value }))
+
+export const getTechnicalPlanFilterFields = (
+  templateKind: TechnicalTemplateKind,
+  rows: readonly { status?: unknown }[] = [],
+): FilterFieldDefinition[] => {
+  const statusOptions = Array.from(new Set(rows
+    .map(row => typeof row.status === 'string' ? row.status.trim() : '')
+    .filter(Boolean)))
+    .map(value => ({ label: value, value }))
+  const fields = templateKind === 'subproject' ? TECHNICAL_SUBPROJECT_FILTER_FIELDS : TECHNICAL_TDT_FILTER_FIELDS
+  return fields.map(field => field.key === 'status'
+    ? { ...field, options: statusOptions.length ? statusOptions : DEFAULT_TECHNICAL_STATUS_OPTIONS.map(option => ({ ...option })) }
+    : { ...field })
+}
+
+export const getTechnicalPlanRowKey = (task: Pick<TechnicalTemplateTask, 'id' | 'stableId'>) => (
+  task.stableId || task.id
 )
 
 export const projectTechnicalPlanRows = (
@@ -110,16 +126,16 @@ export const canConfirmTechnicalSubprojectTransfer = ({
   isCurrentDraft,
   isEditMode,
   canMaintain,
-  canView = true,
-  canEdit = true,
+  canView,
+  canEdit,
 }: {
   opening: TechnicalSubprojectTransferScopeToken
   current: TechnicalSubprojectTransferScopeToken
   isCurrentDraft: boolean
   isEditMode: boolean
   canMaintain: boolean
-  canView?: boolean
-  canEdit?: boolean
+  canView: boolean
+  canEdit: boolean
 }) => isCurrentDraft
   && isEditMode
   && canView
