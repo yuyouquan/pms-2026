@@ -6,6 +6,7 @@ import {
   createLevel3WorkflowOverride,
   deleteLevel3ActivityTree,
   forkLevel3ScopeData,
+  getLevel3MovePermission,
   mergeLevel3ActualDateOverrides,
   mergeLevel3WorkflowOverrides,
   moveLevel3Activity,
@@ -22,6 +23,7 @@ import {
   type Level3FieldChange,
   type Level3MoveResult,
   type Level3Milestone,
+  type Level3PermissionContext,
   type Level3ScopeData,
   type Level3WorkflowOverrideMap,
 } from '@/types/level3Plan'
@@ -53,6 +55,13 @@ const cloneHistory = (history: Level3ChangeLog[]) => history.map(log => ({
   ...log,
   changes: log.changes.map(change => ({ ...change })),
 }))
+
+const getParentHistorySnapshot = (activity: Level3Activity, activities: Level3Activity[]) => {
+  if (!activity.parentId) return {}
+  const parent = activities.find(item => item.id === activity.parentId)
+  if (!parent || parent.parentId) return {}
+  return { parentActivityId: parent.id, parentActivityName: parent.activityName }
+}
 
 let lastFormattedTimestamp = 0
 const formatNow = () => {
@@ -301,7 +310,13 @@ interface Level3PlanActions {
     patch: Pick<Partial<Level3Activity>, 'status' | 'risk'>,
     actor: string,
   ) => boolean
-  moveActivity: (scopeKey: string, activeId: string, overId: string, actor: string) => Level3MoveResult
+  moveActivity: (
+    scopeKey: string,
+    activeId: string,
+    overId: string,
+    context: Level3PermissionContext,
+    readOnly: boolean,
+  ) => Level3MoveResult
   deleteActivity: (scopeKey: string, activityId: string, actor: string) => boolean
   forkFollowScope: (sourceScopeKey: string, targetScopeKey: string) => boolean
   setCollapsedIds: (scopeKey: string, collapsedIds: string[]) => void
@@ -407,6 +422,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           activityNumber: getActivityNumber(nextActivities, nextActivity.id),
           summary: activity.parentId ? '新增二级活动' : '新增一级活动',
           changes: [],
+          ...getParentHistorySnapshot(nextActivity, nextActivities),
         }
         created = true
         return {
@@ -452,6 +468,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           activityNumber: getActivityNumber(nextActivities, activityId),
           summary: `编辑活动：${changes.map(change => change.label).join('、')}`,
           changes,
+          ...getParentHistorySnapshot(nextActivity, nextActivities),
         }
         updated = true
         return {
@@ -505,6 +522,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           activityNumber: getActivityNumber(nextActivities, activityId),
           summary: `编辑活动：${changes.map(change => change.label).join('、')}`,
           changes,
+          ...getParentHistorySnapshot(nextActivity, nextActivities),
         }
         updated = true
         return {
@@ -565,6 +583,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           activityNumber: getActivityNumber(nextActivities, activityId),
           summary: `编辑活动：${changes.map(change => change.label).join('、')}`,
           changes,
+          ...getParentHistorySnapshot(nextActivity, nextActivities),
         }
         updated = true
         return {
@@ -580,30 +599,38 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
       })
       return updated
     },
-    moveActivity: (scopeKey, activeId, overId, actor) => {
+    moveActivity: (scopeKey, activeId, overId, context, readOnly) => {
       const previousActivities = get().activitiesByScope[scopeKey] || []
+      const permission = getLevel3MovePermission(activeId, overId, previousActivities, context, readOnly)
+      if (!permission.allowed) {
+        return { ok: false, activities: cloneActivities(previousActivities), reason: permission.reason }
+      }
       const beforeNumber = getActivityNumber(previousActivities, activeId)
       const result = moveLevel3Activity(previousActivities, activeId, overId)
       if (!result.ok) return result
+      if (!result.changed) return result
+      const previousActivity = previousActivities.find(activity => activity.id === activeId)
       const movedActivity = result.activities.find(activity => activity.id === activeId)
-      if (!movedActivity) return { ok: false, activities: previousActivities, reason: '拖动活动不存在' }
+      if (!previousActivity || !movedActivity) return { ok: false, activities: cloneActivities(previousActivities), reason: '拖动活动不存在' }
       const afterNumber = getActivityNumber(result.activities, activeId)
+      const sourceParent = getParentHistorySnapshot(previousActivity, previousActivities)
+      const targetParent = getParentHistorySnapshot(movedActivity, result.activities)
       const log: Level3ChangeLog = {
         id: createId('level3-log'),
         action: 'move',
-        actor,
+        actor: context.currentUser,
         occurredAt: formatNow(),
         activityId: activeId,
         activityName: movedActivity.activityName,
         activityNumber: afterNumber,
         summary: `拖动活动：${beforeNumber || '—'} → ${afterNumber || '—'}`,
         changes: [
-          {
+          ...(sourceParent.parentActivityId || targetParent.parentActivityId ? [{
             field: 'parentId',
             label: '所属一级活动',
-            before: result.fromParentId || '一级活动',
-            after: result.toParentId || '一级活动',
-          },
+            before: sourceParent.parentActivityName || '—',
+            after: targetParent.parentActivityName || '—',
+          }] : []),
           {
             field: 'number',
             label: '序号',
@@ -611,6 +638,14 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
             after: afterNumber,
           },
         ],
+        ...(sourceParent.parentActivityId ? {
+          sourceParentActivityId: sourceParent.parentActivityId,
+          sourceParentActivityName: sourceParent.parentActivityName,
+        } : {}),
+        ...(targetParent.parentActivityId ? {
+          targetParentActivityId: targetParent.parentActivityId,
+          targetParentActivityName: targetParent.parentActivityName,
+        } : {}),
       }
       set(state => ({
         activitiesByScope: { ...state.activitiesByScope, [scopeKey]: result.activities },
@@ -642,6 +677,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
           ? '删除二级活动'
           : `删除一级活动${deletedChildCount > 0 ? `（含 ${deletedChildCount} 个二级活动）` : ''}`,
         changes: [],
+        ...getParentHistorySnapshot(activity, previousActivities),
       }
       set(state => ({
         activitiesByScope: { ...state.activitiesByScope, [scopeKey]: result.activities },

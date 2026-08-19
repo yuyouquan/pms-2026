@@ -538,7 +538,7 @@ export default function Level3PlanModule({
         return
       }
     }
-    const result = moveActivity(scopeKey, activeActivity.id, overActivity.id, currentUser)
+    const result = moveActivity(scopeKey, activeActivity.id, overActivity.id, permissionContext, readOnly)
     if (!result.ok) {
       void messageApi.warning(result.reason || '拖动失败')
       return

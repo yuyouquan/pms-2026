@@ -417,6 +417,7 @@ assert.deepEqual(removedFollowerTransitions.map(item => ({
 const sourceHistory = [{
   id: 'source-log', action: 'edit', actor: '张三', occurredAt: '2026-08-17 10:00:00',
   activityId: 'c1', activityName: '子活动A', activityNumber: '1.1', summary: '编辑活动', changes: [],
+  parentActivityId: 'p1', parentActivityName: '父活动',
 }, {
   id: 'tie-b', action: 'edit', actor: '张三', occurredAt: '2026-08-17 11:00:00',
   activityId: 'c1', activityName: '子活动A', activityNumber: '1.1', summary: '同一时刻的源历史', changes: [],
@@ -1079,6 +1080,8 @@ try {
     version: hydratedStoreModule.LEVEL3_PLAN_STORE_VERSION,
   }))
   await hydratedStoreModule.useLevel3PlanStore.persist.rehydrate()
+  assert.deepEqual(hydratedStoreModule.useLevel3PlanStore.getState().historyByScope[storeSourceScope], sourceHistory,
+    'optional parent snapshots survive JSON persistence and hydration')
   assert.deepEqual(hydratedStoreModule.useLevel3PlanStore.getState().actualOverridesByScope, roundTripOverrides)
   assert.deepEqual(hydratedStoreModule.useLevel3PlanStore.getState().workflowOverridesByScope, roundTripWorkflowOverrides)
   assert.equal(hydratedStoreModule.useLevel3PlanStore.getState().forkFollowScope(storeSourceScope, 'malformed'), true)
@@ -1109,6 +1112,7 @@ try {
     '@/types/level3Plan': loadCommonJsTypeScriptModule(path.join(root, 'src/types/level3Plan.ts')),
   })
   await reloadedStoreModule.useLevel3PlanStore.persist.rehydrate()
+  assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().historyByScope[storeSourceScope], sourceHistory)
   assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().actualOverridesByScope, roundTripOverrides)
   assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().workflowOverridesByScope.persisted, roundTripWorkflowOverrides.persisted)
   assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().historyByScope.rapid.map(log => log.changes[0].field), ['risk', 'status'])
@@ -1135,6 +1139,90 @@ try {
   if (hadWindow) globalThis.window = originalWindow
   else delete globalThis.window
 }
+
+// Store boundary: callers must not be able to bypass drag permissions, and
+// history must describe the tree as it existed at the operation time.
+const storeMoveScope = 'project-1::market::store-move'
+const storeParentA = { ...parent, id: 'store-p1', activityName: '来源父活动', responsible: '张三' }
+const storeParentB = { ...parent, id: 'store-p2', order: 1, activityName: '目标父活动', responsible: '王五' }
+const storeChildA = { ...childA, id: 'store-c1', parentId: 'store-p1', activityName: '待移动子活动', responsible: '李四' }
+const storeChildB = { ...childB, id: 'store-c2', parentId: 'store-p2', activityName: '目标下子活动', responsible: '赵六' }
+const storeContext = (currentUser, administratorUsers = [], spmUsers = []) => ({ currentUser, administratorUsers, spmUsers })
+store.setState({
+  activitiesByScope: { [storeMoveScope]: [storeParentA, storeChildA, storeParentB, storeChildB] },
+  historyByScope: { [storeMoveScope]: [] },
+  collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
+})
+const deniedActivities = structuredClone(store.getState().activitiesByScope[storeMoveScope])
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('张三'), false).ok, false,
+  'different-responsible target is denied by the store')
+assert.deepEqual(store.getState().activitiesByScope[storeMoveScope], deniedActivities)
+assert.deepEqual(store.getState().historyByScope[storeMoveScope], [])
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('李四'), false).ok, false,
+  'child responsible alone cannot drag')
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('张三'), true).ok, false,
+  'read-only scope is denied by the store')
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c1', storeContext('张三'), false).ok, false,
+  'self drop produces no store mutation')
+assert.deepEqual(store.getState().activitiesByScope[storeMoveScope], deniedActivities)
+assert.deepEqual(store.getState().historyByScope[storeMoveScope], [])
+
+const elevatedMove = store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('管理员', ['管理员']), false)
+assert.equal(elevatedMove.ok, true, 'administrator can cross-parent move through store')
+assert.equal(elevatedMove.changed, true)
+let storeMoveLog = store.getState().historyByScope[storeMoveScope][0]
+assert.deepEqual(
+  [storeMoveLog.sourceParentActivityId, storeMoveLog.sourceParentActivityName, storeMoveLog.targetParentActivityId, storeMoveLog.targetParentActivityName],
+  ['store-p1', '来源父活动', 'store-p2', '目标父活动'],
+)
+assert.deepEqual(storeMoveLog.changes.map(change => change.before), ['来源父活动', '1.1'])
+assert.deepEqual(storeMoveLog.changes.map(change => change.after), ['目标父活动', '2.1'])
+assert.equal(store.getState().historyByScope[storeMoveScope].length, 1)
+const noOpActivities = structuredClone(store.getState().activitiesByScope[storeMoveScope])
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('管理员', ['管理员']), false).changed, false)
+assert.deepEqual(store.getState().activitiesByScope[storeMoveScope], noOpActivities)
+assert.equal(store.getState().historyByScope[storeMoveScope].length, 1)
+
+store.setState({
+  activitiesByScope: { [storeMoveScope]: [storeParentA, storeChildA, { ...storeParentB, responsible: '张三' }, storeChildB] },
+  historyByScope: { [storeMoveScope]: [] }, collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
+})
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('张三'), false).ok, true,
+  'parent owner can move between parents they both own')
+store.setState({
+  activitiesByScope: { [storeMoveScope]: [storeParentA, storeChildA, storeParentB, storeChildB] },
+  historyByScope: { [storeMoveScope]: [] }, collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
+})
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('SPM', [], ['SPM']), false).ok, true,
+  'SPM can cross-parent move through store')
+store.setState({
+  activitiesByScope: { [storeMoveScope]: [storeParentA, storeParentB] }, historyByScope: { [storeMoveScope]: [] },
+  collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
+})
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-p2', 'store-p1', storeContext('管理员', ['管理员']), false).ok, true)
+storeMoveLog = store.getState().historyByScope[storeMoveScope][0]
+assert.equal(storeMoveLog.sourceParentActivityId, undefined, 'root reorder has no fake parent snapshot')
+assert.deepEqual(storeMoveLog.changes.map(change => change.field), ['number'])
+
+const storeHistoryScope = 'project-1::market::store-history'
+store.setState({
+  activitiesByScope: { [storeHistoryScope]: [storeParentA, storeChildA] }, historyByScope: { [storeHistoryScope]: [] },
+  collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
+})
+const storeNewChild = { ...storeChildA, id: 'store-c3', activityName: '新子活动', creator: '张三', createdAt: '2026-08-19 10:00:00' }
+assert.equal(store.getState().createActivity(storeHistoryScope, storeNewChild, '张三'), true)
+const assertChildParentSnapshot = log => assert.deepEqual(
+  [log.parentActivityId, log.parentActivityName], ['store-p1', '来源父活动'],
+)
+assertChildParentSnapshot(store.getState().historyByScope[storeHistoryScope][0])
+assert.equal(store.getState().updateActivity(storeHistoryScope, 'store-c3', { remark: '已编辑' }, '张三'), true)
+assertChildParentSnapshot(store.getState().historyByScope[storeHistoryScope][0])
+assert.equal(store.getState().updateFollowActualDates(storeHistoryScope, 'store-history-follow', 'store-c3', { actualStartDate: '2026-01-01' }, '张三'), true)
+assertChildParentSnapshot(store.getState().historyByScope['store-history-follow'][0])
+assert.equal(store.getState().updateFollowWorkflowFields(storeHistoryScope, 'store-history-follow', 'store-c3', { status: '进行中' }, '张三'), true)
+assertChildParentSnapshot(store.getState().historyByScope['store-history-follow'][0])
+assert.equal(store.getState().deleteActivity(storeHistoryScope, 'store-c3', '张三'), true)
+assertChildParentSnapshot(store.getState().historyByScope[storeHistoryScope][0])
 
 const componentPath = path.join(root, 'src/components/plans/Level3PlanModule.tsx')
 assert.ok(fs.existsSync(componentPath), 'src/components/plans/Level3PlanModule.tsx does not exist')
