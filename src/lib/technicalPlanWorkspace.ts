@@ -1,4 +1,5 @@
 import type { TechnicalTemplateKind, TechnicalTemplateTask } from '@/types/technicalPlan'
+import type { FilterFieldDefinition } from '@/lib/filterConditions'
 import {
   projectLevel1FlatMilestones,
   projectLevel1Plan,
@@ -30,6 +31,29 @@ export const TECHNICAL_SUBPROJECT_EXPORT_COLUMNS = [
   { key: 'actualDays', title: '实际周期' },
 ] as const
 
+export const TECHNICAL_TDT_FILTER_FIELDS: readonly FilterFieldDefinition[] = [
+  { key: 'sequence', label: '序号', kind: 'text' },
+  { key: 'stageName', label: '阶段', kind: 'text' },
+  { key: 'milestoneName', label: '里程碑点', kind: 'text' },
+  { key: 'status', label: '状态', kind: 'enum' },
+  { key: 'planEndDate', label: '计划完成时间', kind: 'date' },
+  { key: 'estimatedDays', label: '计划开发周期', kind: 'text' },
+  { key: 'actualEndDate', label: '实际完成时间', kind: 'date' },
+  { key: 'actualDays', label: '实际开发周期', kind: 'text' },
+]
+
+export const TECHNICAL_SUBPROJECT_FILTER_FIELDS: readonly FilterFieldDefinition[] = [
+  { key: 'sequence', label: '序号', kind: 'text' },
+  { key: 'activityName', label: '活动名称', kind: 'text' },
+  { key: 'status', label: '状态', kind: 'enum' },
+  { key: 'planStartDate', label: '计划开始时间', kind: 'date' },
+  { key: 'planEndDate', label: '计划完成时间', kind: 'date' },
+  { key: 'estimatedDays', label: '计划周期', kind: 'text' },
+  { key: 'actualStartDate', label: '实际开始时间', kind: 'date' },
+  { key: 'actualEndDate', label: '实际完成时间', kind: 'date' },
+  { key: 'actualDays', label: '实际周期', kind: 'text' },
+]
+
 export const TECHNICAL_PLAN_EXPORT_COLUMNS = [
   { key: 'id', title: '序号' },
   { key: 'taskName', title: '阶段/里程碑节点' },
@@ -44,6 +68,10 @@ export const TECHNICAL_PLAN_EXPORT_COLUMNS = [
 
 export const getTechnicalPlanExportColumns = (templateKind: TechnicalTemplateKind) => (
   templateKind === 'subproject' ? TECHNICAL_SUBPROJECT_EXPORT_COLUMNS : TECHNICAL_TDT_EXPORT_COLUMNS
+)
+
+export const getTechnicalPlanFilterFields = (templateKind: TechnicalTemplateKind) => (
+  templateKind === 'subproject' ? TECHNICAL_SUBPROJECT_FILTER_FIELDS : TECHNICAL_TDT_FILTER_FIELDS
 )
 
 export const projectTechnicalPlanRows = (
@@ -82,20 +110,28 @@ export const canConfirmTechnicalSubprojectTransfer = ({
   isCurrentDraft,
   isEditMode,
   canMaintain,
+  canView = true,
+  canEdit = true,
 }: {
   opening: TechnicalSubprojectTransferScopeToken
   current: TechnicalSubprojectTransferScopeToken
   isCurrentDraft: boolean
   isEditMode: boolean
   canMaintain: boolean
+  canView?: boolean
+  canEdit?: boolean
 }) => isCurrentDraft
   && isEditMode
+  && canView
+  && canEdit
   && canMaintain
   && opening.projectId === current.projectId
   && opening.tabId === current.tabId
   && opening.scopeKey === current.scopeKey
   && opening.versionId === current.versionId
   && opening.user === current.user
+
+export const canConfirmTechnicalSubprojectMutation = canConfirmTechnicalSubprojectTransfer
 
 export function selectVisibleTechnicalPlanVersions<T extends { status: string }>(
   versions: readonly T[],

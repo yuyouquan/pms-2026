@@ -484,11 +484,11 @@ assert.match(technicalModuleSource, /handleDeleteTask/, 'custom subproject activ
 assert.doesNotMatch(technicalModuleSource, /handleAddTopLevelTask|reorderTechnicalSubprojectCustomTasks|canRenameTechnicalTask/, 'technical flat plans do not allow generic add, reorder, or rename')
 assert.match(technicalModuleSource, /canImport/, 'technical plan import has a dedicated permission input')
 assert.match(technicalModuleSource, /canExport/, 'technical plan export has a dedicated permission input')
-for (const label of ['实际开始', '实际完成', '实际工期']) {
-  assert.match(technicalModuleSource, new RegExp(label), `technical plan vertical table exposes the whole-machine ${label} field`)
+for (const field of ['actualStartDate', 'actualEndDate', 'actualDays']) {
+  assert.match(technicalModuleSource, new RegExp(`dataIndex: '${field}'`), `technical plan vertical table exposes its visible ${field} field`)
 }
 assert.match(technicalModuleSource, /canViewTechnicalPlan/, 'technical plan accepts only its L1 technical view capability')
-assert.match(technicalModuleSource, /isResponsibleForTechnicalPlanTasks/, 'technical draft visibility derives responsibility from the active technical scope')
+assert.doesNotMatch(technicalModuleSource, /isResponsibleForTechnicalPlanTasks/, 'technical draft visibility does not retain the obsolete task-responsibility shortcut')
 assert.doesNotMatch(technicalModuleSource, /effectiveTasks|level2PlanTasks|projectPlanLevel/, 'technical plan never reads whole-machine or level-2 plan state')
 assert.match(technicalModuleSource, /visibleVersions/, 'all technical plan version surfaces share one visible-version selector')
 assert.match(technicalModuleSource, /navigateWithEditGuard\([^,]+,\s*Boolean\(isDraft\)\)/s, 'scope and version switches use the current draft state for edit guarding')
@@ -539,14 +539,60 @@ assert.match(technicalSummaryHeaderSource, /group\.stage\.estimatedDays == null 
 assert.doesNotMatch(technicalSummaryHeaderSource, /manpowerPercent|planStartDate|planEndDate|~/, 'technical basic-information stage headers omit percentages and date ranges')
 const globalStylesSource = readSource(root, 'src/styles/globals.css')
 assert.match(globalStylesSource, /\.pms-table \.ant-table-thead\s*>\s*tr\s*>\s*th\.ant-table-cell-fix-(?:start|end)[\s\S]{0,900}position:\s*sticky\s*!important/s, 'fixed technical-plan headers remain aligned with fixed body cells')
-for (const label of ['预估工期', '实际工期', '是否延期']) {
-  assert.match(technicalModuleSource, new RegExp(`TECHNICAL_FILTER_FIELDS[\\s\\S]*${label}`), `technical filters include ${label}`)
-}
-assert.doesNotMatch(technicalModuleSource.match(/const TECHNICAL_FILTER_FIELDS[\s\S]*?\n\]/)?.[0] || '', /进度|责任人|状态/, 'governed technical filters omit removed legacy fields')
+assert.match(technicalModuleSource, /rowKey=\{record => record\.stableId \|\| record\.id\}/, 'flat technical rows use stable IDs so renumbering cannot remount edited rows')
+assert.match(technicalModuleSource, /getTechnicalPlanFilterFields\(tab\?\.templateKind \|\| 'tdt'\)/, 'table filters select the visible columns for the active technical template kind')
+assert.doesNotMatch(technicalModuleSource, /const TECHNICAL_FILTER_FIELDS/, 'technical filters are not a one-size-fits-all legacy field list')
+assert.match(technicalModuleSource, /hasPermission\(latestUser, latestProject\.id, 'plan:一级计划-查看'\)/, 'transfer confirmation rechecks current view permission')
+assert.match(technicalModuleSource, /hasPermission\(latestUser, latestProject\.id, 'plan:一级计划-编辑'\)/, 'transfer confirmation rechecks current edit permission')
+assert.match(technicalModuleSource, /selectedProject/, 'transfer confirmation resolves the currently selected project rather than a stale project closure')
+assert.match(technicalModuleSource, /onOpenChange=\{open => \{ if \(open\) setDeleteOpening/, 'delete confirmation captures an opening token before the popconfirm can become stale')
+assert.match(technicalModuleSource, /if \(!updated\.ok\) \{ message\.error\('删除活动失败，请重试'\); return \}/, 'delete reports success only after the latest write succeeds')
+assert.match(technicalModuleSource, /viewMode === 'gantt' && tab\?\.templateKind === 'tdt'/, 'expand and collapse controls only appear for hierarchical TDT gantt')
+assert.doesNotMatch(technicalModuleSource, /technicalDraft|isResponsibleForTechnicalPlanTasks|toggleCollapsedTask/, 'obsolete technical-plan state and helpers are removed')
 assert.match(readSource(root, 'src/stores/technicalPlan.ts'), /DEFAULT_COLUMNS[\s\S]{0,420}actualStartDate[\s\S]{0,120}actualEndDate[\s\S]{0,120}actualDays/, 'technical plan persisted defaults include actual-date columns')
 
 const publishedVersion = { id: 'v1', versionNo: 'V1', status: '已发布', templateType: 'tdt', tasks: [] }
 const draftVersion = { id: 'v2', versionNo: 'V2', status: '修订中', templateType: 'tdt', tasks: [] }
+const planWorkspace = loadTypeScriptModule(root, 'src/lib/planWorkspace.ts')
+assert.deepEqual(
+  technicalWorkspace.getTechnicalPlanFilterFields('tdt').map(field => field.key),
+  ['sequence', 'stageName', 'milestoneName', 'status', 'planEndDate', 'estimatedDays', 'actualEndDate', 'actualDays'],
+  'TDT filters expose exactly the eight visible flat columns',
+)
+assert.deepEqual(
+  technicalWorkspace.getTechnicalPlanFilterFields('subproject').map(field => field.key),
+  ['sequence', 'activityName', 'status', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays'],
+  'subproject filters expose exactly the nine visible flat columns',
+)
+const tdtFilteredRows = planWorkspace.applyPlanWorkspaceFilters([
+  { id: 'row-1', sequence: 1, stageName: '规划阶段', milestoneName: '规划启动', status: '进行中', planEndDate: '2026-01-01', estimatedDays: 1, actualEndDate: '', actualDays: null },
+  { id: 'row-2', sequence: 2, stageName: '概念阶段', milestoneName: 'TDR1', status: '已完成', planEndDate: '2026-02-01', estimatedDays: 2, actualEndDate: '2026-02-02', actualDays: 1 },
+], [
+  { id: 'filter-stage', field: 'stageName', operator: 'equals', value: '规划阶段' },
+  { id: 'filter-milestone', field: 'milestoneName', operator: 'contains', value: '启动' },
+  { id: 'filter-status', field: 'status', operator: 'equals', value: '进行中' },
+], technicalWorkspace.getTechnicalPlanFilterFields('tdt'))
+assert.deepEqual(tdtFilteredRows.map(row => row.id), ['row-1'], 'TDT stage, milestone, and status filters share the flat row projection')
+assert.equal(technicalWorkspace.getTechnicalPlanFilterFields('tdt').some(field => field.key === 'planStartDate' || field.key === 'actualStartDate' || field.key === 'delayStatus'), false, 'TDT filter menu excludes hidden start and delay fields')
+assert.equal(technicalWorkspace.getTechnicalPlanFilterFields('subproject').some(field => field.key === 'stageName' || field.key === 'milestoneName' || field.key === 'delayStatus'), false, 'subproject filter menu excludes hidden stage, milestone, and delay fields')
+const technicalMutationOpening = { projectId: 'p1', tabId: 'p1:subproject:s1', scopeKey: 'p1:subproject:s1', versionId: 'v2-draft', user: '技术负责人' }
+const canConfirmTechnicalMutation = overrides => technicalWorkspace.canConfirmTechnicalSubprojectMutation({
+  opening: technicalMutationOpening,
+  current: { ...technicalMutationOpening, ...(overrides.current || {}) },
+  isCurrentDraft: true,
+  isEditMode: true,
+  canView: true,
+  canEdit: true,
+  canMaintain: true,
+  ...overrides,
+})
+assert.equal(canConfirmTechnicalMutation({}), true, 'matching latest subproject context can mutate')
+assert.equal(canConfirmTechnicalMutation({ canView: false }), false, 'revoked latest view permission rejects a stale mutation')
+assert.equal(canConfirmTechnicalMutation({ canEdit: false }), false, 'revoked latest edit permission rejects a stale mutation')
+assert.equal(canConfirmTechnicalMutation({ current: { projectId: 'p2' } }), false, 'a changed selected project rejects a stale mutation')
+assert.equal(canConfirmTechnicalMutation({ current: { tabId: 'p1:subproject:s2' } }), false, 'a changed tab rejects a stale deletion')
+assert.equal(canConfirmTechnicalMutation({ current: { versionId: 'v3-draft' } }), false, 'a changed version rejects a stale deletion')
+assert.equal(canConfirmTechnicalMutation({ canMaintain: false }), false, 'lost maintainability rejects a stale deletion before any update')
 assert.deepEqual(technicalWorkspace.selectVisibleTechnicalPlanVersions([publishedVersion, draftVersion], false).map(version => version.id), ['v1'], 'read-only users never receive a draft technical version')
 assert.deepEqual(technicalWorkspace.selectVisibleTechnicalPlanVersions([publishedVersion, draftVersion], true).map(version => version.id), ['v1', 'v2'], 'draft-capable users retain technical drafts')
 
