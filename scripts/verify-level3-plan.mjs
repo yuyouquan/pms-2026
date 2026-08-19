@@ -469,6 +469,77 @@ assert.deepEqual(
 
 const parent2 = { ...parent, id: 'p2', order: 1, activityName: '父活动2', responsible: '李四' }
 const childC = { ...childA, id: 'c3', parentId: 'p2', order: 0, activityName: '子活动C' }
+const parent3 = { ...parent, id: 'p3', order: 2, activityName: '父活动3', responsible: '王五' }
+const childD = { ...childA, id: 'c4', parentId: 'p2', order: 1, activityName: '子活动D' }
+const dragActivities = [parent, childA, childB, parent2, childC, childD, parent3]
+const dragContext = { currentUser: '张三', administratorUsers: [], spmUsers: [] }
+
+assert.deepEqual(
+  rules.getLevel3MovePermission('c1', 'p2', dragActivities, dragContext, true),
+  { allowed: false, reason: '跟随范围不支持拖动' },
+  'read-only scope must deny structural dragging',
+)
+assert.equal(
+  rules.getLevel3MovePermission('c1', 'p3', dragActivities, { ...dragContext, administratorUsers: ['张三'] }, false).allowed,
+  true,
+  'administrator can move any child across parents',
+)
+assert.equal(
+  rules.getLevel3MovePermission('c1', 'c2', dragActivities, { ...dragContext, currentUser: '李四' }, false).allowed,
+  false,
+  'child owner alone cannot structurally drag',
+)
+const sameOwnerTarget = { ...parent2, responsible: '张三' }
+assert.equal(
+  rules.getLevel3MovePermission('c1', 'p2', [parent, childA, childB, sameOwnerTarget, childC], dragContext, false).allowed,
+  true,
+  'parent owner may move children between parents they also own',
+)
+assert.equal(
+  rules.getLevel3MovePermission('c1', 'p2', dragActivities, dragContext, false).allowed,
+  false,
+  'parent owner cannot move a child into another owner\'s parent',
+)
+
+const appendedToParent = rules.moveLevel3Activity(dragActivities, 'c1', 'p2')
+assert.equal(appendedToParent.ok, true)
+assert.equal(appendedToParent.changed, true)
+assert.deepEqual(
+  appendedToParent.activities.filter(item => item.parentId === 'p2').map(item => item.id),
+  ['c3', 'c4', 'c1'],
+  'dropping a child on a parent appends it to that parent',
+)
+const insertedAtChild = rules.moveLevel3Activity(dragActivities, 'c1', 'c4')
+assert.equal(insertedAtChild.ok, true)
+assert.deepEqual(
+  insertedAtChild.activities.filter(item => item.parentId === 'p2').map(item => item.id),
+  ['c3', 'c1', 'c4'],
+  'dropping a child on another child inserts at the target position',
+)
+const rootReorder = rules.moveLevel3Activity(dragActivities, 'p2', 'p1')
+assert.equal(rootReorder.ok, true)
+assert.deepEqual(rootReorder.activities.map(item => item.id), ['p2', 'c3', 'c4', 'p1', 'c1', 'c2', 'p3'])
+assert.equal(rootReorder.changed, true, 'root reordering carries its children in flattened output')
+const noOpMove = rules.moveLevel3Activity(dragActivities, 'c1', 'c1')
+assert.equal(noOpMove.ok, true)
+assert.equal(noOpMove.changed, false, 'dropping an activity over itself is a no-op')
+
+const parentHistory = [
+  { id: 'moved-away', action: 'move', actor: '张三', occurredAt: '2026-08-19 10:03:00', activityId: 'c1', activityName: '子活动A', activityNumber: '1.1', summary: '移出父活动', changes: [], sourceParentActivityId: 'p1', sourceParentActivityName: '父活动' },
+  { id: 'deleted-child', action: 'delete', actor: '张三', occurredAt: '2026-08-19 10:02:00', activityId: 'deleted', activityName: '已删除子活动', activityNumber: '1.3', summary: '删除活动', changes: [], parentActivityId: 'p1', parentActivityName: '父活动' },
+  { id: 'current-child', action: 'edit', actor: '张三', occurredAt: '2026-08-19 10:01:00', activityId: 'c2', activityName: '子活动B', activityNumber: '1.2', summary: '编辑活动', changes: [] },
+  { id: 'other', action: 'edit', actor: '李四', occurredAt: '2026-08-19 10:00:00', activityId: 'c3', activityName: '子活动C', activityNumber: '2.1', summary: '其他活动', changes: [] },
+]
+assert.deepEqual(
+  rules.filterLevel3HistoryForActivity(parentHistory, parent, [parent, childB, parent2, childC]).map(log => log.id),
+  ['moved-away', 'deleted-child', 'current-child'],
+  'parent history includes current children and child snapshots after moves or deletion',
+)
+assert.deepEqual(
+  rules.filterLevel3HistoryForActivity(parentHistory, childB, dragActivities).map(log => log.id),
+  ['current-child'],
+  'child history is always exact to the child id',
+)
 const movedParent = rules.moveLevel3Activity([parent, childA, childB, parent2, childC], 'p2', 'p1')
 assert.equal(movedParent.ok, true)
 assert.deepEqual(rules.numberLevel3Activities(movedParent.activities).map(row => `${row.number}:${row.id}`), [
@@ -479,7 +550,7 @@ assert.equal(movedChild.ok, true)
 assert.equal(movedChild.activities.find(item => item.id === 'c2').parentId, 'p2')
 assert.deepEqual(
   movedChild.activities.filter(item => item.parentId === 'p2').map(item => item.id),
-  ['c3', 'c2'],
+  ['c2', 'c3'],
 )
 const deletedChild = rules.deleteLevel3ActivityTree([parent, childA, childB, parent2, childC], 'c1')
 assert.equal(deletedChild.ok, true)
