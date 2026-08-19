@@ -70,7 +70,6 @@ import {
   buildTechnicalPlanTabs, getTechnicalPlanKey, useTechnicalPlanStore,
 } from '@/stores/technicalPlan'
 import type { TechnicalTemplateKind, TechnicalTemplateTask } from '@/types/technicalPlan'
-import type { PlanStatus } from '@/types'
 import type { TechnicalSubprojectTransferScopeToken } from '@/lib/technicalPlanWorkspace'
 import type { TechnicalSubproject } from '@/types/technicalProject'
 
@@ -84,18 +83,6 @@ const PLAN_REVISION_KIND_OPTIONS: Array<{ key: PlanRevisionKind; label: string }
 
 const DEFAULT_MAX_DEPTH: Readonly<Record<TechnicalTemplateKind, number>> = { tdt: 2, subproject: 1 }
 type TechnicalPlanRow = Level1FlatMilestoneRow & TechnicalTemplateTask
-
-const toPlanStatus = (value: unknown): PlanStatus => {
-  switch (value) {
-    case '未开始':
-    case '进行中':
-    case '已完成':
-    case '已取消':
-      return value
-    default:
-      return '未开始'
-  }
-}
 
 function TechnicalHorizontalPlanTable({
   tasks,

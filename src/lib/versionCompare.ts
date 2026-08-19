@@ -54,7 +54,7 @@ export interface CompareTableRow {
   modifyTime: string;
 }
 
-type CompareTask = PlanTask & {
+export type CompareTask = PlanTask & {
   stableId?: string;
   stageName?: string;
   milestoneName?: string;
@@ -62,6 +62,9 @@ type CompareTask = PlanTask & {
   sequence?: number;
   delayStatus?: string;
 }
+
+const formatDuration = (value: number | null) => value === null ? '-' : `${value}天`
+const normalizeDuration = (value: number | null | undefined): number | null => typeof value === 'number' ? value : null
 
 const getCompareDisplayFields = (task: CompareTask) => ({
   taskName: task.taskName,
@@ -88,21 +91,47 @@ const getCompareDisplayFields = (task: CompareTask) => ({
  */
 export function compareVersionsForTable(oldTasks: CompareTask[], newTasks: CompareTask[]): CompareTableRow[] {
   const rows: CompareTableRow[] = [];
-  const identity = (task: CompareTask) => task.stableId || task.id
-  const oldMap = new Map(oldTasks.map(task => [identity(task), task]));
-  const newMap = new Map(newTasks.map(task => [identity(task), task]));
+  const countStableIds = (tasks: CompareTask[]) => tasks.reduce((counts, task) => {
+    if (task.stableId) counts.set(task.stableId, (counts.get(task.stableId) || 0) + 1)
+    return counts
+  }, new Map<string, number>())
+  const oldStableIdCounts = countStableIds(oldTasks)
+  const newStableIdCounts = countStableIds(newTasks)
+  const identity = (task: CompareTask) => task.stableId
+    && oldStableIdCounts.get(task.stableId) === 1
+    && newStableIdCounts.get(task.stableId) === 1
+    ? task.stableId
+    : task.id
+  const countIdentities = (tasks: CompareTask[]) => tasks.reduce((counts, task) => {
+    const id = identity(task)
+    counts.set(id, (counts.get(id) || 0) + 1)
+    return counts
+  }, new Map<string, number>())
+  const oldIdentityCounts = countIdentities(oldTasks)
+  const newIdentityCounts = countIdentities(newTasks)
+  const toUniqueMap = (tasks: CompareTask[]) => {
+    const occurrences = new Map<string, number>()
+    return new Map(tasks.map(task => {
+      const baseIdentity = identity(task)
+      const occurrence = (occurrences.get(baseIdentity) || 0) + 1
+      occurrences.set(baseIdentity, occurrence)
+      const duplicateIdentity = Math.max(oldIdentityCounts.get(baseIdentity) || 0, newIdentityCounts.get(baseIdentity) || 0) > 1
+      return [duplicateIdentity ? `${baseIdentity}#${occurrence}` : baseIdentity, task]
+    }))
+  }
+  const oldMap = toUniqueMap(oldTasks)
+  const newMap = toUniqueMap(newTasks)
   const allIds = new Set([...oldMap.keys(), ...newMap.keys()]);
 
   const mockModifiers = ['张三', '李四', '王五', '赵六'];
   const mockTimes = ['2026-03-10 14:30', '2026-03-11 09:15', '2026-03-11 16:42', '2026-03-12 10:08'];
   let mockIdx = 0;
 
-  for (const id of allIds) {
-    const oldTask = oldMap.get(id);
-    const newTask = newMap.get(id);
+  for (const key of allIds) {
+    const oldTask = oldMap.get(key);
+    const newTask = newMap.get(key);
     const displayTask = newTask || oldTask!
     const taskId = displayTask.id
-    const key = identity(displayTask)
 
     if (newTask && !oldTask) {
       // 新增
@@ -135,6 +164,11 @@ export function compareVersionsForTable(oldTasks: CompareTask[], newTasks: Compa
       if (oldTask.taskName !== newTask.taskName) {
         fieldDiffs.push({ field: 'taskName', oldValue: oldTask.taskName, newValue: newTask.taskName });
       }
+      ;(['stageName', 'milestoneName', 'activityName'] as const).forEach(field => {
+        const oldValue = oldTask[field] || ''
+        const newValue = newTask[field] || ''
+        if (oldValue !== newValue) fieldDiffs.push({ field, oldValue: oldValue || '-', newValue: newValue || '-' })
+      })
       const oldResp = (oldTask as any).responsible || oldTask.responsibleUser || '';
       const newResp = (newTask as any).responsible || newTask.responsibleUser || '';
       if (oldResp !== newResp) {
@@ -155,10 +189,10 @@ export function compareVersionsForTable(oldTasks: CompareTask[], newTasks: Compa
       if (oldEnd !== newEnd) {
         fieldDiffs.push({ field: 'planEndDate', oldValue: oldEnd || '-', newValue: newEnd || '-' });
       }
-      const oldEstDays = oldTask.estimatedDays ?? 0;
-      const newEstDays = newTask.estimatedDays ?? 0;
+      const oldEstDays = normalizeDuration(oldTask.estimatedDays);
+      const newEstDays = normalizeDuration(newTask.estimatedDays);
       if (oldEstDays !== newEstDays) {
-        fieldDiffs.push({ field: 'estimatedDays', oldValue: `${oldEstDays}天`, newValue: `${newEstDays}天` });
+        fieldDiffs.push({ field: 'estimatedDays', oldValue: formatDuration(oldEstDays), newValue: formatDuration(newEstDays) });
       }
       const oldActStart = (oldTask.actualStartDate as any) || '';
       const newActStart = (newTask.actualStartDate as any) || '';
@@ -170,10 +204,10 @@ export function compareVersionsForTable(oldTasks: CompareTask[], newTasks: Compa
       if (oldActEnd !== newActEnd) {
         fieldDiffs.push({ field: 'actualEndDate', oldValue: oldActEnd || '-', newValue: newActEnd || '-' });
       }
-      const oldActDays = oldTask.actualDays ?? 0;
-      const newActDays = newTask.actualDays ?? 0;
+      const oldActDays = normalizeDuration(oldTask.actualDays);
+      const newActDays = normalizeDuration(newTask.actualDays);
       if (oldActDays !== newActDays) {
-        fieldDiffs.push({ field: 'actualDays', oldValue: `${oldActDays}天`, newValue: `${newActDays}天` });
+        fieldDiffs.push({ field: 'actualDays', oldValue: formatDuration(oldActDays), newValue: formatDuration(newActDays) });
       }
       const oldDelayStatus = (oldTask as any).delayStatus || '';
       const newDelayStatus = (newTask as any).delayStatus || '';

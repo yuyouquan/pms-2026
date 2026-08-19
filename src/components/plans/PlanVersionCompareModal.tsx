@@ -21,7 +21,7 @@ export interface PlanVersionCompareModalProps {
   onTargetVersionChange: (versionId: string) => void
   onCompare: () => void
   onCancel: () => void
-  fieldMode?: 'legacy' | 'hierarchical-flat' | 'technical-subproject'
+  fieldMode?: 'legacy' | 'governed' | 'hierarchical-flat' | 'technical-subproject'
 }
 
 type CompareFilterType = 'all' | CompareTableRow['changeType']
@@ -131,11 +131,14 @@ export function PlanVersionCompareModal({
     { title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 105, render: (value: string, row: CompareTableRow) => renderDiffCell(row, 'actualEndDate', value) },
     { title: '实际周期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (value: number | null, row: CompareTableRow) => renderFlatDaysCell(row, 'actualDays', value) },
   ]
+  const governedKeys = new Set(['taskId', 'changeType', 'taskName', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'delayStatus'])
   const columns = fieldMode === 'hierarchical-flat'
     ? hierarchicalFlatColumns
     : fieldMode === 'technical-subproject'
       ? technicalSubprojectColumns
-      : legacyColumns
+      : fieldMode === 'governed'
+        ? legacyColumns.filter(column => governedKeys.has(column.key))
+        : legacyColumns
 
   return (
     <Modal

@@ -601,6 +601,7 @@ export default function ProjectSpaceContainer() {
   // ═══════ Derived ═══════
   const isWholeMachineProject = isMachineProjectType(selectedProject?.type)
   const isTosVersionProject = selectedProject?.type === PROJECT_TYPE_TOS_VERSION
+  const usesFlatLevel1Comparison = projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject)
   const supportsLevel3Plan = isWholeMachineProject || isTosVersionProject
   const legacyBuildFields = selectedProject as NonNullable<typeof selectedProject> & {
     buildOption?: string
@@ -4728,7 +4729,6 @@ export default function ProjectSpaceContainer() {
         { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
       ]
     }
-    const usesFlatLevel1Comparison = projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject)
     const governedOldTasks = usesFlatLevel1Comparison
       ? projectLevel1FlatMilestones(oldTasks as any)
       : projectPlanLevel === 'level1' ? projectLevel1Plan(oldTasks as any, { mode: 'standard' }).rows : oldTasks
@@ -4867,7 +4867,7 @@ export default function ProjectSpaceContainer() {
       </Modal>
       {/* Version compare modal */}
       <PlanVersionCompareModal
-        fieldMode={projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject) ? 'hierarchical-flat' : 'legacy'}
+        fieldMode={usesFlatLevel1Comparison ? 'hierarchical-flat' : projectPlanLevel === 'level1' ? 'governed' : 'legacy'}
         open={showVersionCompare}
         rows={compareResult}
         versions={versions}
