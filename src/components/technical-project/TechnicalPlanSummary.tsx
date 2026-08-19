@@ -34,7 +34,9 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
   const latestPublishedVersion = [...visibleVersions]
     .filter(version => version.status === '已发布')
     .sort(comparePublishedTechnicalPlanVersions)[0]
-  const currentVersion = visibleVersions.find(version => version.id === instance?.currentVersionId)
+  const activeDraft = canEditPlan ? visibleVersions.find(version => version.status === '修订中') : undefined
+  const currentVersion = activeDraft
+    || visibleVersions.find(version => version.id === instance?.currentVersionId)
     || latestPublishedVersion
     || visibleVersions[0]
   const planCard = (content: ReactNode) => (

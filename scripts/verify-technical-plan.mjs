@@ -84,6 +84,7 @@ assert.match(technicalPlanUiSource, /创建正式版本/, 'technical project pla
 assert.match(technicalPlanUiSource, /revisionKind/, 'technical project plan passes revision kind into its store')
 assert.match(technicalSummarySource, /canEditPlan/, 'technical basic-information summary accepts plan-maintenance permission')
 assert.match(technicalSummarySource, /updateCurrentTasks/, 'technical basic-information summary writes to the shared plan store')
+assert.match(technicalSummarySource, /const activeDraft = canEditPlan[\s\S]{0,220}const currentVersion = activeDraft/, 'authorized technical basic-information views prioritize the active revision even after another version was selected')
 assert.equal((technicalSummarySource.match(/<ClickToEditDate/g) || []).length >= 2, true, 'technical basic-information summary edits draft and actual completion dates inline')
 assert.match(technicalInformationSource, /<TechnicalPlanSummary[\s\S]{0,220}canEditPlan=/, 'technical information forwards plan-maintenance permission to the summary')
 assert.match(projectSpaceContainerSource, /<TechnicalProjectInformationView[\s\S]{0,420}canEditPlan=\{canGovernLevel1Plan\}/, 'project space uses technical plan permission instead of basic-information permission for plan dates')
