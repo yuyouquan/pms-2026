@@ -57,6 +57,13 @@ export interface DHTMLXGanttColumn {
   template?: (task: any) => string
 }
 
+export interface DHTMLXGanttDateChange {
+  taskId: string
+  mode: 'milestone' | 'task'
+  startDate: string
+  endDate: string
+}
+
 const DEFAULT_GANTT_COLUMNS: DHTMLXGanttColumn[] = [
   { name: 'text', label: '任务名称', width: 180, tree: true },
   { name: 'predecessor', label: '前置任务', align: 'center', width: 70 },
@@ -74,6 +81,7 @@ export function DHTMLXGantt({
   collapsedIds,
   onCollapsedChange,
   columns = DEFAULT_GANTT_COLUMNS,
+  onTaskDateChange,
 }: {
   tasks: any[]
   onTaskClick?: (task: any) => void
@@ -82,14 +90,21 @@ export function DHTMLXGantt({
   collapsedIds?: Set<string>
   onCollapsedChange?: (updater: (prev: Set<string>) => Set<string>) => void
   columns?: DHTMLXGanttColumn[]
+  onTaskDateChange?: (change: DHTMLXGanttDateChange) => boolean
 }) {
   const ganttContainer = useRef<HTMLDivElement>(null)
   const suppressFeedback = useRef(false)
   const onTaskClickRef = useRef(onTaskClick)
+  const onTaskDateChangeRef = useRef(onTaskDateChange)
+  const dragSnapshots = useRef(new Map<string, { startDate: Date; endDate: Date }>())
 
   useEffect(() => {
     onTaskClickRef.current = onTaskClick
   }, [onTaskClick])
+
+  useEffect(() => {
+    onTaskDateChangeRef.current = onTaskDateChange
+  }, [onTaskDateChange])
 
   useEffect(() => {
     if (!ganttContainer.current) return
@@ -108,6 +123,11 @@ export function DHTMLXGantt({
     gantt.config.auto_scheduling_strict = true
     gantt.config.open_tree_initial = true
     gantt.config.readonly = readOnly
+    gantt.config.readonly_property = 'readonly'
+    gantt.templates.task_class = (_start: Date, _end: Date, task: any) => [
+      `pms-gantt-${task.type || 'task'}`,
+      `pms-gantt-task-${task.readonly ? 'readonly' : 'editable'}`,
+    ].join(' ')
 
     gantt.init(ganttContainer.current)
 
@@ -116,9 +136,11 @@ export function DHTMLXGantt({
         ...t,
         id: t.id,
         text: t.taskName,
-        start_date: t.planStartDate || '',
-        end_date: t.planEndDate || '',
-        duration: t.estimatedDays || 1,
+        start_date: t.start_date ?? t.planStartDate ?? '',
+        end_date: t.end_date ?? t.planEndDate ?? '',
+        duration: t.duration ?? t.estimatedDays ?? 1,
+        type: t.type ?? 'task',
+        readonly: readOnly || Boolean(t.readonly),
         progress: (t.progress || 0) / 100,
         parent: t.parentId || 0,
         open: true,
@@ -149,6 +171,39 @@ export function DHTMLXGantt({
       onCollapsedChange?.((prev) => { const s = new Set(prev); s.add(String(id)); return s })
     })
 
+    const beforeDragHandler = gantt.attachEvent('onBeforeTaskDrag', (id: string | number) => {
+      const task = gantt.getTask(id)
+      if (readOnly || task.readonly || task.type === 'project') return false
+      if (!(task.start_date instanceof Date) || !(task.end_date instanceof Date)) return false
+      dragSnapshots.current.set(String(id), {
+        startDate: new Date(task.start_date.getTime()),
+        endDate: new Date(task.end_date.getTime()),
+      })
+      return true
+    })
+    const afterDragHandler = gantt.attachEvent('onAfterTaskDrag', (id: string | number) => {
+      const task = gantt.getTask(id)
+      const snapshot = dragSnapshots.current.get(String(id))
+      const formatDate = gantt.date.date_to_str('%Y-%m-%d')
+      const accepted = onTaskDateChangeRef.current?.({
+        taskId: String(id),
+        mode: task.type === 'milestone' ? 'milestone' : 'task',
+        startDate: formatDate(task.start_date),
+        endDate: formatDate(task.end_date),
+      })
+      if (accepted === false && snapshot) {
+        task.start_date = snapshot.startDate
+        task.end_date = snapshot.endDate
+        gantt.updateTask(id)
+      }
+      dragSnapshots.current.delete(String(id))
+      return true
+    })
+    const beforeLightboxHandler = gantt.attachEvent('onBeforeLightbox', (id: string | number) => {
+      const task = gantt.getTask(id)
+      return !(readOnly || task.readonly || task.type === 'project')
+    })
+
     const clickHandler = onTaskClickRef.current
       ? gantt.attachEvent('onTaskClick', (id: number) => {
         const task = gantt.getTask(id)
@@ -160,6 +215,9 @@ export function DHTMLXGantt({
     return () => {
       gantt.detachEvent(openHandler)
       gantt.detachEvent(closeHandler)
+      gantt.detachEvent(beforeDragHandler)
+      gantt.detachEvent(afterDragHandler)
+      gantt.detachEvent(beforeLightboxHandler)
       if (clickHandler) gantt.detachEvent(clickHandler)
       gantt.clearAll()
     }

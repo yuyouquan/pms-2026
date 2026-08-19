@@ -19,6 +19,7 @@ const loadTypescriptModule = async relativePath => {
 
 const level1Rules = await loadTypescriptModule('src/lib/level1PlanRules.ts')
 const technicalRules = await loadTypescriptModule('src/lib/technicalPlanRules.ts')
+const ganttRules = await loadTypescriptModule('src/lib/planGanttRules.ts')
 
 const level1RenumberInput = [
   { id: 'root-b', stableId: 'stable-root-b', order: 9, taskName: '阶段B' },
@@ -205,5 +206,76 @@ const emptyDates = technicalRules.validateTechnicalSubprojectDates([
 ])
 assert.equal(emptyDates.valid, true, 'empty and partial date pairs remain valid')
 assert.deepEqual(emptyDates.byTaskId, {}, 'empty and partial date pairs add no field errors')
+
+const ganttHierarchy = [
+  { id: 'stage-1', stableId: 'stage-1', order: 1, taskName: '概念阶段' },
+  { id: 'milestone-1', stableId: 'milestone-1', parentId: 'stage-1', order: 1, taskName: '概念启动', planStartDate: '2026-01-01', planEndDate: '2026-01-05', actualEndDate: '2026-01-06' },
+  { id: 'milestone-2', stableId: 'milestone-2', parentId: 'stage-1', order: 2, taskName: 'STR1', planEndDate: '2026-01-16' },
+  { id: 'stage-2', stableId: 'stage-2', order: 2, taskName: '计划阶段' },
+  { id: 'milestone-3', stableId: 'milestone-3', parentId: 'stage-2', order: 1, taskName: 'STR2', planEndDate: '2026-02-10' },
+]
+const ganttHierarchySnapshot = JSON.parse(JSON.stringify(ganttHierarchy))
+const hierarchicalGanttTasks = ganttRules.buildPlanGanttTasks(ganttHierarchy, { mode: 'hierarchical', editable: true })
+assert.deepEqual(hierarchicalGanttTasks.map(task => [task.id, task.type, task.readonly, task.start_date, task.end_date, task.duration]), [
+  ['stage-1', 'project', true, '2026-01-01', '2026-01-16', 15],
+  ['milestone-1', 'milestone', false, '2026-01-05', '2026-01-05', 0],
+  ['milestone-2', 'milestone', false, '2026-01-16', '2026-01-16', 0],
+  ['stage-2', 'project', true, '2026-01-17', '2026-02-10', 24],
+  ['milestone-3', 'milestone', false, '2026-02-10', '2026-02-10', 0],
+], 'hierarchical gantt locks stage projects, renders editable children as zero-day milestones, derives stage ranges, and fills a missing next-stage start')
+assert.deepEqual(ganttHierarchy, ganttHierarchySnapshot, 'hierarchical gantt construction does not mutate source tasks')
+
+const technicalGanttTasks = ganttRules.buildPlanGanttTasks([
+  { id: 'technical-1', order: 1, taskName: '第1版转测', planStartDate: '2026-03-01', planEndDate: '2026-03-15', estimatedDays: 14 },
+], { mode: 'technical-subproject', editable: true })
+assert.deepEqual(technicalGanttTasks.map(task => [task.type, task.readonly, task.start_date, task.end_date, task.duration]), [
+  ['task', false, '2026-03-01', '2026-03-15', 14],
+], 'technical subproject gantt keeps schedule ranges as editable task bars')
+assert.equal(ganttRules.buildPlanGanttTasks(ganttHierarchy, { mode: 'hierarchical', editable: false }).find(task => task.id === 'milestone-1')?.readonly, true, 'non-editable gantts lock milestone nodes')
+
+const milestoneDateChanged = ganttRules.applyPlanGanttDateChange(ganttHierarchy, {
+  taskId: 'milestone-1', mode: 'milestone', startDate: '2026-01-12', endDate: '2026-01-12',
+})
+assert.deepEqual(milestoneDateChanged.find(task => task.id === 'milestone-1'), {
+  ...ganttHierarchy[1], planEndDate: '2026-01-12', estimatedDays: 11,
+}, 'milestone dragging updates only its plan end and recalculates exclusive estimated days')
+assert.deepEqual(ganttHierarchy, ganttHierarchySnapshot, 'milestone dragging does not mutate source tasks or actual dates')
+
+const taskDateChanged = ganttRules.applyPlanGanttDateChange(technicalGanttTasks, {
+  taskId: 'technical-1', mode: 'task', startDate: '2026-03-05', endDate: '2026-03-20',
+})
+assert.deepEqual(taskDateChanged.find(task => task.id === 'technical-1'), {
+  ...technicalGanttTasks[0], planStartDate: '2026-03-05', planEndDate: '2026-03-20', estimatedDays: 15,
+}, 'task dragging updates both plan dates and recalculates exclusive estimated days')
+
+const datePatchSource = [{
+  id: 'patch-1', order: 1, taskName: '日期修订',
+  planStartDate: '2026-04-01', planEndDate: '2026-04-10', estimatedDays: 9,
+  actualStartDate: '2026-04-02', actualEndDate: '2026-04-06', actualDays: 4,
+}]
+const actualDatePatched = ganttRules.applyPlanTaskDatePatch(datePatchSource, {
+  taskId: 'patch-1', patch: { actualStartDate: '2026-04-03', actualEndDate: '2026-04-08' },
+})
+assert.deepEqual(actualDatePatched[0], {
+  ...datePatchSource[0], actualStartDate: '2026-04-03', actualEndDate: '2026-04-08', actualDays: 5,
+}, 'date patches recalculate actual duration from valid actual date pairs')
+assert.strictEqual(ganttRules.applyPlanTaskDatePatch(datePatchSource, {
+  taskId: 'patch-1', patch: { actualEndDate: 'invalid-date' },
+}), datePatchSource, 'invalid date patches leave task inputs unchanged')
+assert.strictEqual(ganttRules.applyPlanTaskDatePatch(datePatchSource, {
+  taskId: 'patch-1', patch: { actualEndDate: '' },
+}), datePatchSource, 'partial actual date patches leave task inputs unchanged rather than producing negative durations')
+
+const ganttHelperSource = fs.readFileSync(path.join(root, 'src/components/shared/PlanHelpers.tsx'), 'utf8')
+assert.match(ganttHelperSource, /export interface DHTMLXGanttDateChange/, 'gantt exposes a typed date-change callback contract')
+assert.match(ganttHelperSource, /onTaskDateChange\?: \(change: DHTMLXGanttDateChange\) => boolean/, 'gantt accepts an explicit accept-or-revert callback')
+assert.match(ganttHelperSource, /gantt\.config\.readonly_property = 'readonly'/, 'gantt honors per-task readonly state')
+assert.match(ganttHelperSource, /pms-gantt-\$\{task\.type \|\| 'task'\}/, 'gantt emits a stable class for every task type')
+assert.match(ganttHelperSource, /onBeforeTaskDrag/, 'gantt blocks forbidden drag attempts before they change task dates')
+assert.match(ganttHelperSource, /onAfterTaskDrag/, 'gantt reports accepted task-date drags')
+assert.match(ganttHelperSource, /onBeforeLightbox/, 'gantt blocks project and readonly task editing in the lightbox')
+assert.match(ganttHelperSource, /gantt\.detachEvent\(beforeDragHandler\)/, 'gantt detaches date-drag guards during cleanup')
+assert.match(ganttHelperSource, /gantt\.detachEvent\(afterDragHandler\)/, 'gantt detaches date-drag callbacks during cleanup')
+assert.match(ganttHelperSource, /gantt\.detachEvent\(beforeLightboxHandler\)/, 'gantt detaches lightbox guards during cleanup')
 
 console.log('PASS level1 flat milestone and gantt rules')

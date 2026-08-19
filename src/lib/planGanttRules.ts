@@ -1,0 +1,180 @@
+import type { Level1PlanTask } from '@/lib/level1PlanRules'
+
+export type PlanGanttMode = 'hierarchical' | 'technical-subproject'
+export type PlanGanttNodeType = 'project' | 'milestone' | 'task'
+
+export interface PlanGanttDateChange {
+  taskId: string
+  mode: 'milestone' | 'task'
+  startDate: string
+  endDate: string
+}
+
+export interface PlanTaskDatePatch {
+  taskId: string
+  patch: Partial<Pick<Level1PlanTask, 'planStartDate' | 'planEndDate' | 'actualStartDate' | 'actualEndDate'>>
+}
+
+export interface PlanGanttTask extends Level1PlanTask {
+  type: PlanGanttNodeType
+  readonly: boolean
+  start_date: string
+  end_date: string
+  duration: number
+}
+
+const sortByOrder = <T extends { order: number }>(items: readonly T[]) => (
+  [...items].sort((left, right) => left.order - right.order)
+)
+
+const parseUtcDate = (value: unknown): number | null => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const [year, month, day] = value.split('-').map(Number)
+  const timestamp = Date.UTC(year, month - 1, day)
+  const date = new Date(timestamp)
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+    ? timestamp
+    : null
+}
+
+const getDateDifference = (startDate: string, endDate: string): number | null => {
+  const start = parseUtcDate(startDate)
+  const end = parseUtcDate(endDate)
+  return start === null || end === null || end < start ? null : (end - start) / 86_400_000
+}
+
+const addDay = (date: string): string => {
+  const timestamp = parseUtcDate(date)
+  return timestamp === null ? '' : new Date(timestamp + 86_400_000).toISOString().slice(0, 10)
+}
+
+const getProjectedDuration = (task: Level1PlanTask): number => {
+  const calculated = getDateDifference(task.planStartDate || '', task.planEndDate || '')
+  return calculated ?? (typeof task.estimatedDays === 'number' && task.estimatedDays >= 0 ? task.estimatedDays : 0)
+}
+
+const asDate = (value: unknown): string => parseUtcDate(value) === null ? '' : value as string
+
+const minDate = (dates: string[]): string => dates.length > 0 ? [...dates].sort()[0] : ''
+const maxDate = (dates: string[]): string => dates.length > 0 ? [...dates].sort().at(-1) || '' : ''
+
+const getStageRange = (stage: Level1PlanTask, children: Level1PlanTask[], previousEnd: string) => {
+  const childStarts = children.map(task => asDate(task.planStartDate)).filter(Boolean)
+  const childEnds = children.flatMap(task => [asDate(task.planEndDate), asDate(task.planStartDate)]).filter(Boolean)
+  const ownStart = asDate(stage.planStartDate)
+  const ownEnd = asDate(stage.planEndDate)
+  const startDate = ownStart || minDate(childStarts) || (previousEnd ? addDay(previousEnd) : '')
+  const endDate = ownEnd || maxDate(childEnds)
+
+  if (!startDate || !endDate || getDateDifference(startDate, endDate) === null) {
+    return { startDate: '', endDate: '', duration: 0 }
+  }
+
+  return { startDate, endDate, duration: getDateDifference(startDate, endDate) || 0 }
+}
+
+export const buildPlanGanttTasks = (
+  tasks: readonly Level1PlanTask[],
+  { mode, editable }: { mode: PlanGanttMode; editable: boolean },
+): PlanGanttTask[] => {
+  if (mode === 'technical-subproject') {
+    return sortByOrder(tasks).map(task => ({
+      ...task,
+      type: 'task',
+      readonly: !editable,
+      start_date: typeof task.planStartDate === 'string' ? task.planStartDate : '',
+      end_date: typeof task.planEndDate === 'string' ? task.planEndDate : '',
+      duration: getProjectedDuration(task),
+    }))
+  }
+
+  const childrenByParent = new Map<string, Level1PlanTask[]>()
+  tasks.forEach(task => {
+    if (!task.parentId) return
+    const children = childrenByParent.get(task.parentId) || []
+    children.push(task)
+    childrenByParent.set(task.parentId, children)
+  })
+
+  let previousStageEnd = ''
+  const result: PlanGanttTask[] = []
+  sortByOrder(tasks.filter(task => !task.parentId)).forEach(stage => {
+    const children = sortByOrder(childrenByParent.get(stage.id) || [])
+    const range = getStageRange(stage, children, previousStageEnd)
+    if (range.endDate) previousStageEnd = range.endDate
+    result.push({ ...stage, type: 'project', readonly: true, start_date: range.startDate, end_date: range.endDate, duration: range.duration })
+    children.forEach(task => {
+      const date = asDate(task.planEndDate) || asDate(task.planStartDate)
+      result.push({ ...task, type: 'milestone', readonly: !editable, start_date: date, end_date: date, duration: 0 })
+    })
+  })
+
+  return result
+}
+
+const areValidDatePair = (startDate: string, endDate: string): boolean => (
+  getDateDifference(startDate, endDate) !== null
+)
+
+export const applyPlanGanttDateChange = (
+  tasks: readonly Level1PlanTask[],
+  change: PlanGanttDateChange,
+): Level1PlanTask[] => {
+  if (!areValidDatePair(change.startDate, change.endDate)) return tasks as Level1PlanTask[]
+  const target = tasks.find(task => task.id === change.taskId)
+  if (!target) return tasks as Level1PlanTask[]
+
+  if (change.mode === 'milestone') {
+    const planStartDate = target.planStartDate || ''
+    const estimatedDays = parseUtcDate(planStartDate) !== null
+      ? getDateDifference(planStartDate, change.endDate)
+      : target.estimatedDays
+    if (estimatedDays === null) return tasks as Level1PlanTask[]
+    return tasks.map(task => task.id === change.taskId
+      ? { ...task, planEndDate: change.endDate, ...(estimatedDays === null ? {} : { estimatedDays }) }
+      : task)
+  }
+
+  const estimatedDays = getDateDifference(change.startDate, change.endDate)
+  return tasks.map(task => task.id === change.taskId
+    ? { ...task, planStartDate: change.startDate, planEndDate: change.endDate, estimatedDays }
+    : task)
+}
+
+const dateKeys = ['planStartDate', 'planEndDate', 'actualStartDate', 'actualEndDate'] as const
+type DateKey = typeof dateKeys[number]
+
+const hasOwnDateKey = (patch: PlanTaskDatePatch['patch'], key: DateKey): boolean => (
+  Object.prototype.hasOwnProperty.call(patch, key)
+)
+
+const isValidPairUpdate = (
+  task: Level1PlanTask,
+  patch: PlanTaskDatePatch['patch'],
+  startKey: 'planStartDate' | 'actualStartDate',
+  endKey: 'planEndDate' | 'actualEndDate',
+): boolean => {
+  if (!hasOwnDateKey(patch, startKey) && !hasOwnDateKey(patch, endKey)) return true
+  const startDate = patch[startKey] ?? task[startKey] ?? ''
+  const endDate = patch[endKey] ?? task[endKey] ?? ''
+  return typeof startDate === 'string' && typeof endDate === 'string' && areValidDatePair(startDate, endDate)
+}
+
+export const applyPlanTaskDatePatch = (
+  tasks: readonly Level1PlanTask[],
+  input: PlanTaskDatePatch,
+): Level1PlanTask[] => {
+  const target = tasks.find(task => task.id === input.taskId)
+  const patchKeys = dateKeys.filter(key => hasOwnDateKey(input.patch, key))
+  if (!target || patchKeys.length === 0 || patchKeys.some(key => typeof input.patch[key] !== 'string')) return tasks as Level1PlanTask[]
+  if (!isValidPairUpdate(target, input.patch, 'planStartDate', 'planEndDate')) return tasks as Level1PlanTask[]
+  if (!isValidPairUpdate(target, input.patch, 'actualStartDate', 'actualEndDate')) return tasks as Level1PlanTask[]
+
+  const patched = { ...target, ...input.patch }
+  const planChanged = hasOwnDateKey(input.patch, 'planStartDate') || hasOwnDateKey(input.patch, 'planEndDate')
+  const actualChanged = hasOwnDateKey(input.patch, 'actualStartDate') || hasOwnDateKey(input.patch, 'actualEndDate')
+  if (planChanged) patched.estimatedDays = getDateDifference(patched.planStartDate || '', patched.planEndDate || '')
+  if (actualChanged) patched.actualDays = getDateDifference(patched.actualStartDate || '', patched.actualEndDate || '')
+
+  return tasks.map(task => task.id === input.taskId ? patched : task)
+}
