@@ -220,10 +220,21 @@ assert.deepEqual(hierarchicalGanttTasks.map(task => [task.id, task.type, task.re
   ['stage-1', 'project', true, '2026-01-01', '2026-01-16', 15],
   ['milestone-1', 'milestone', false, '2026-01-05', '2026-01-05', 0],
   ['milestone-2', 'milestone', false, '2026-01-16', '2026-01-16', 0],
-  ['stage-2', 'project', true, '2026-02-10', '2026-02-10', 0],
+  ['stage-2', 'project', true, '2026-01-17', '2026-02-10', 24],
   ['milestone-3', 'milestone', false, '2026-02-10', '2026-02-10', 0],
-], 'hierarchical gantt locks stage projects, renders editable children as zero-day milestones, and uses the first and last child schedule values for stage bounds')
+], 'hierarchical gantt locks stage projects, renders editable children as zero-day milestones, and carries the previous stage end into later stage bounds')
 assert.deepEqual(ganttHierarchy, ganttHierarchySnapshot, 'hierarchical gantt construction does not mutate source tasks')
+
+const sparseStageGanttTasks = ganttRules.buildPlanGanttTasks([
+  { id: 'sparse-stage', order: 1, taskName: '空白边界阶段' },
+  { id: 'sparse-first', parentId: 'sparse-stage', order: 1, taskName: '空白首节点' },
+  { id: 'sparse-date', parentId: 'sparse-stage', order: 2, taskName: '中间里程碑', planEndDate: '2026-01-10' },
+  { id: 'sparse-last', parentId: 'sparse-stage', order: 3, taskName: '空白尾节点' },
+], { mode: 'hierarchical', editable: true })
+assert.deepEqual(sparseStageGanttTasks.find(task => task.id === 'sparse-stage'), {
+  id: 'sparse-stage', order: 1, taskName: '空白边界阶段',
+  type: 'project', readonly: true, start_date: '2026-01-10', end_date: '2026-01-10', duration: 0,
+}, 'stage bounds skip empty edge children and use the first and last scheduled child values')
 
 const technicalGanttTasks = ganttRules.buildPlanGanttTasks([
   { id: 'technical-1', order: 1, taskName: '第1版转测', planStartDate: '2026-03-01', planEndDate: '2026-03-15', estimatedDays: 14 },

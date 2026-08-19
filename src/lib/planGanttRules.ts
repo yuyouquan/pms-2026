@@ -56,11 +56,12 @@ const getProjectedDuration = (task: Level1PlanTask): number => {
 const asDate = (value: unknown): string => parseUtcDate(value) === null ? '' : value as string
 
 const getStageRange = (stage: Level1PlanTask, children: Level1PlanTask[], previousEnd: string) => {
-  const firstChild = children[0]
-  const lastChild = children.at(-1)
+  const hasScheduleDate = (task: Level1PlanTask): boolean => Boolean(asDate(task.planStartDate) || asDate(task.planEndDate))
+  const firstChild = children.find(hasScheduleDate)
+  const lastChild = [...children].reverse().find(hasScheduleDate)
   const ownStart = asDate(stage.planStartDate)
   const ownEnd = asDate(stage.planEndDate)
-  const startDate = ownStart || asDate(firstChild?.planStartDate) || asDate(firstChild?.planEndDate) || (previousEnd ? addDay(previousEnd) : '')
+  const startDate = ownStart || (previousEnd ? addDay(previousEnd) : '') || asDate(firstChild?.planStartDate) || asDate(firstChild?.planEndDate)
   const endDate = ownEnd || asDate(lastChild?.planEndDate) || asDate(lastChild?.planStartDate)
 
   if (!startDate || !endDate || getDateDifference(startDate, endDate) === null) {
