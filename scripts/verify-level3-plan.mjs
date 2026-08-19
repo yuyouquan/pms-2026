@@ -1085,6 +1085,14 @@ assert.ok(exportHandlerSource.includes("const definitions = mode === 'current' ?
 assert.ok(componentSource.includes("className=\"pms-modal pms-level3-activity-modal\""), '三级计划活动弹窗必须使用专属样式类')
 assert.ok(componentSource.includes('autoSize={{ minRows: 1, maxRows: 4 }}'), '备注输入框必须使用紧凑自动高度')
 const stylesSource = fs.readFileSync(path.join(root, 'src/styles/globals.css'), 'utf8')
+for (const token of [
+  '.pms-table.pms-level3-table .ant-table-tbody > tr > td.ant-table-cell-fix-left',
+  'background: #fff !important;',
+  'z-index: 3;',
+  '.pms-table.pms-level3-table .pms-level3-parent-row > td.ant-table-cell-fix-left',
+]) {
+  assert.ok(stylesSource.includes(token), `三级计划固定列防重合样式缺少 ${token}`)
+}
 assert.ok(stylesSource.includes('.pms-level3-activity-modal .ant-form-item { margin-bottom: 12px; }'), '三级计划弹窗表单项间距必须为12px')
 assert.ok(stylesSource.includes('.pms-level3-activity-modal .pms-level3-form-grid { gap: 12px; }'), '三级计划弹窗双列间距必须为12px')
 assert.ok(stylesSource.includes('.pms-level3-form-grid { grid-template-columns: 1fr; gap: 0; }'), '三级计划弹窗必须保留响应式单列规则')
