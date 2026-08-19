@@ -4482,7 +4482,6 @@ export default function ProjectSpaceContainer() {
                   currentLoginUser={currentLoginUser}
                   canEdit={canGovernLevel1Plan}
                   canPublish={canGovernLevel1Plan}
-                  canManageStructure={level1GlobalAdmins.includes(currentLoginUser)}
                   canImport={canImportTechnicalPlan}
                   canExport={canExportTechnicalPlan}
                   canViewTechnicalPlan={canViewLevel1Plan}
