@@ -27,6 +27,24 @@ export const LEVEL3_COLUMN_KEYS = [
 
 export type Level3ColumnKey = typeof LEVEL3_COLUMN_KEYS[number]
 
+export const LEVEL3_COLUMN_TITLES: Record<Level3ColumnKey, string> = {
+  number: '序号',
+  activityName: '活动名称',
+  responsible: '责任人',
+  responsibleDepartment: '责任部门',
+  planStartDate: '计划开始时间',
+  planEndDate: '计划结束时间',
+  estimatedDays: '预估工期',
+  milestoneName: '关键节点',
+  actualStartDate: '实际开始时间',
+  actualEndDate: '实际完成时间',
+  actualDays: '实际工期',
+  status: '状态',
+  risk: '任务风险',
+  remark: '备注',
+  creator: '创建者',
+}
+
 export interface Level3Activity {
   id: string
   parentId: string | null

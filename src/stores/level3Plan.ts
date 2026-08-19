@@ -279,6 +279,7 @@ interface Level3PlanState {
 interface Level3PlanActions {
   getScopeData: (scopeKey: string) => Level3ScopeData
   ensureScopeMockData: (scopeKey: string, milestones: Level3Milestone[]) => void
+  initializeScopeFromTemplate: (scopeKey: string, activities: Level3Activity[]) => boolean
   createActivity: (scopeKey: string, activity: Level3Activity, actor: string) => boolean
   updateActivity: (
     scopeKey: string,
@@ -361,6 +362,21 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
         },
       }
     }),
+    initializeScopeFromTemplate: (scopeKey, activities) => {
+      if (!scopeKey) return false
+      let initialized = false
+      set(state => {
+        if (Object.prototype.hasOwnProperty.call(state.activitiesByScope, scopeKey)) return state
+        initialized = true
+        return {
+          activitiesByScope: {
+            ...state.activitiesByScope,
+            [scopeKey]: cloneActivities(activities),
+          },
+        }
+      })
+      return initialized
+    },
     getScopeData: (scopeKey) => ({
       activities: cloneActivities(get().activitiesByScope[scopeKey] || []),
       history: cloneHistory(get().historyByScope[scopeKey] || []),

@@ -113,6 +113,7 @@ export function DHTMLXGantt({
 
     const ganttData = {
       data: tasks.map(t => ({
+        ...t,
         id: t.id,
         text: t.taskName,
         start_date: t.planStartDate || '',
@@ -124,6 +125,8 @@ export function DHTMLXGantt({
         status: t.status,
         responsible: t.responsible,
         predecessor: t.predecessor || '',
+        actualStartDate: t.actualStartDate || '',
+        actualEndDate: t.actualEndDate || '',
       })),
       links: tasks.filter(t => t.predecessor).map((t, i) => ({
         id: i + 1,

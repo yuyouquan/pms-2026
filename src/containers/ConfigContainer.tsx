@@ -20,8 +20,9 @@ import { useUiStore } from '@/stores/ui'
 import { usePlanStore, LEVEL2_PLAN_TYPES, LEVEL1_TEMPLATE_TASKS, VERSION_DATA, getConfigColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
 import { useProjectStore } from '@/stores/project'
-import { usePermissionStore } from '@/stores/permission'
+import { useHasGlobalPermission } from '@/stores/permission'
 import { TransferConfig } from '@/components/transfer/TransferModule'
+import Level3TemplateTable from '@/components/plans/Level3TemplateTable'
 import { PROJECT_CATEGORY_TECH, PROJECT_TEMPLATE_TYPES, getProjectTypeFamilyKey } from '@/constants/projectTypes'
 import { DHTMLXGantt, DragHandle, SortableRow, DragHandleContext, ClickToEditDate, getTaskDepth, hasChildren, filterByCollapsed, getAllExpandableIds, type DHTMLXGanttColumn } from '@/components/shared/PlanHelpers'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
@@ -47,6 +48,8 @@ import {
   TECHNICAL_TEMPLATE_STORAGE_KEYS,
 } from '@/lib/technicalPlanRules'
 import type { TechnicalTemplateKind } from '@/types/technicalPlan'
+import type { Level3TemplateActivity } from '@/types/level3Template'
+import { getLevel3TemplateMilestoneOptions, supportsLevel3Template, validateLevel3TemplateForPublish } from '@/lib/level3TemplateRules'
 import dayjs from 'dayjs'
 
 const { Option } = Select
@@ -84,6 +87,7 @@ export default function ConfigContainer() {
     level2PlanTasks, setLevel2PlanTasks,
     activeLevel2Plan,
     configTemplateTasksByType, setConfigTemplateTasksByType, setTechnicalTemplateTasks,
+    level3TemplateTasksByType, setLevel3TemplateTasks,
     configTemplateVersionScopes, setConfigTemplateVersions, setConfigTemplateCurrentVersion,
     configTemplateCompareScopes, setConfigTemplateCompareVersions,
   } = usePlanStore()
@@ -92,6 +96,9 @@ export default function ConfigContainer() {
   const { transferConfigView, setTransferConfigView } = transferStore
 
   const { selectedProject, currentLoginUser } = useProjectStore()
+  const hasGlobalPermission = useHasGlobalPermission(currentLoginUser)
+  const canEditPlanTemplate = hasGlobalPermission('configCenter:planEdit')
+  const canPublishPlanTemplate = hasGlobalPermission('configCenter:planPublish')
 
   // Derive the transfer-module current user from the logged-in user so it
   // tracks the user switcher instead of being pinned to MOCK_TM_USERS[0].
@@ -108,6 +115,7 @@ export default function ConfigContainer() {
   // 配置中心使用模板数据（按项目分类隔离，无日期/工期）
   const selectedTemplateType = getProjectTypeFamilyKey(selectedProjectType)
   const isTechnicalTemplate = selectedTemplateType === PROJECT_CATEGORY_TECH
+  const isLevel3Template = !isTechnicalTemplate && planLevel === 'level3'
   const technicalTemplateKind: TechnicalTemplateKind = planLevel === 'subproject' ? 'subproject' : 'tdt'
   const templatePlanLevel = isTechnicalTemplate ? technicalTemplateKind : planLevel
   const templateVersionScope = getTemplateConfigScopeKey(selectedTemplateType, templatePlanLevel)
@@ -141,6 +149,24 @@ export default function ConfigContainer() {
   const hasDraftVersion = versions.some(v => v.status === '修订中')
   const currentVersionData = versions.find(v => v.id === currentVersion)
   const isCurrentDraft = currentVersionData?.status === '修订中'
+  const level1TemplateVersionScope = configTemplateVersionScopes[
+    getTemplateConfigScopeKey(selectedTemplateType, 'level1')
+  ]
+  const latestPublishedLevel1TemplateVersion = level1TemplateVersionScope?.versions
+    .filter(version => version.status === '已发布')
+    .sort((left, right) => comparePlanVersions(right, left))[0]
+  const level1TemplateSnapshot = latestPublishedLevel1TemplateVersion
+    ? getTemplateSnapshotForProjectType(
+      publishedSnapshots,
+      selectedTemplateType,
+      latestPublishedLevel1TemplateVersion.id,
+      'level1',
+    ) || []
+    : []
+  const level3MilestoneOptions = useMemo(
+    () => getLevel3TemplateMilestoneOptions(level1TemplateSnapshot),
+    [level1TemplateSnapshot],
+  )
 
   const navigateWithEditGuard = (action: () => void) => {
     if (isEditMode && !isCurrentDraft) {
@@ -152,11 +178,28 @@ export default function ConfigContainer() {
   }
 
   const technicalTemplateKey = TECHNICAL_TEMPLATE_STORAGE_KEYS[technicalTemplateKind]
-  const configTasks = isTechnicalTemplate
+  const level3DraftKey = `${selectedTemplateType}::${currentVersion}`
+  const selectedLevel3PublishedSnapshot = isLevel3Template && !isCurrentDraft
+    ? getTemplateSnapshotForProjectType(
+      publishedSnapshots,
+      selectedTemplateType,
+      currentVersion,
+      'level3',
+    ) as Level3TemplateActivity[] | undefined
+    : undefined
+  const configTasks = isLevel3Template
+    ? isCurrentDraft
+      ? level3TemplateTasksByType[level3DraftKey] || level3TemplateTasksByType[selectedTemplateType] || []
+      : selectedLevel3PublishedSnapshot || level3TemplateTasksByType[selectedTemplateType] || []
+    : isTechnicalTemplate
     ? configTemplateTasksByType[technicalTemplateKey] || []
     : getTemplateTasksForProjectType(configTemplateTasksByType, selectedTemplateType)
       || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
   const setConfigTasks = (next: any[] | ((prev: any[]) => any[])) => {
+    if (isLevel3Template) {
+      setLevel3TemplateTasks(isCurrentDraft ? level3DraftKey : selectedTemplateType, next as Level3TemplateActivity[] | ((prev: Level3TemplateActivity[]) => Level3TemplateActivity[]))
+      return
+    }
     if (isTechnicalTemplate) {
       setTechnicalTemplateTasks(technicalTemplateKind, next)
       return
@@ -171,17 +214,18 @@ export default function ConfigContainer() {
 
   useEffect(() => {
     if (isTechnicalTemplate && planLevel !== 'tdt' && planLevel !== 'subproject') setPlanLevel('tdt')
-    if (!isTechnicalTemplate && planLevel !== 'level1' && planLevel !== 'level2') setPlanLevel('level1')
-  }, [isTechnicalTemplate, planLevel, setPlanLevel])
+    if (!isTechnicalTemplate && planLevel !== 'level1' && planLevel !== 'level2' && planLevel !== 'level3') setPlanLevel('level1')
+    if (!isTechnicalTemplate && planLevel === 'level3' && !supportsLevel3Template(selectedTemplateType)) setPlanLevel('level1')
+  }, [isTechnicalTemplate, planLevel, selectedTemplateType, setPlanLevel])
 
   // 修订版本自动进入编辑状态，已发布版本退出编辑
   useEffect(() => {
-    if (isCurrentDraft) {
+    if (isCurrentDraft && canEditPlanTemplate) {
       setIsEditMode(true)
     } else {
       setIsEditMode(false)
     }
-  }, [currentVersion, isCurrentDraft])
+  }, [canEditPlanTemplate, currentVersion, isCurrentDraft, setIsEditMode])
 
   // View columns
   const getViewKey = () => `config-${planLevel}-${viewMode}`
@@ -221,6 +265,7 @@ export default function ConfigContainer() {
     if (isTechnicalTemplate) return `config::${PROJECT_CATEGORY_TECH}::${technicalTemplateKind}`
     if (planLevel === 'level1') return `config::${selectedProjectType}::level1`
     if (planLevel === 'level2') return `config::${selectedProjectType}::level2::${selectedPlanType}`
+    if (planLevel === 'level3') return `config::${selectedTemplateType}::level3`
     return null
   }
 
@@ -251,8 +296,8 @@ export default function ConfigContainer() {
     if (!searchText) return true
     const searchLower = searchText.toLowerCase()
     return (
-      task.id.toLowerCase().includes(searchLower) ||
-      task.taskName.toLowerCase().includes(searchLower) ||
+      String(task.id || '').toLowerCase().includes(searchLower) ||
+      String(task.taskName || task.activityName || '').toLowerCase().includes(searchLower) ||
       (task.responsible && task.responsible.toLowerCase().includes(searchLower)) ||
       (task.status && task.status.toLowerCase().includes(searchLower))
     )
@@ -449,15 +494,22 @@ export default function ConfigContainer() {
 
   // Action buttons
   const handleCreateRevision = (revisionKind: PlanRevisionKind) => {
+    if (!canEditPlanTemplate) {
+      message.error('无计划模板编辑权限')
+      return
+    }
     const newVersionNo = getNextPlanRevisionVersionNo(versions, revisionKind)
     const newVersionId = getPlanVersionId(newVersionNo)
-    const clonedTasks = isTechnicalTemplate
+    const clonedTasks = isLevel3Template
+      ? configTasks.map(task => ({ ...task }))
+      : isTechnicalTemplate
       ? configTasks.map(task => ({ ...task }))
       : LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
     const newVersion = { id: newVersionId, versionNo: newVersionNo, status: '修订中' }
     setVersions([...versions, newVersion])
+    if (isLevel3Template) setLevel3TemplateTasks(`${selectedTemplateType}::${newVersionId}`, clonedTasks as Level3TemplateActivity[])
     setCurrentVersion(newVersionId)
-    setConfigTasks(clonedTasks)
+    if (!isLevel3Template) setConfigTasks(clonedTasks)
     message.success(`已创建${revisionKind === 'gray' ? '非正式' : '正式'}修订版本 ${newVersionNo}`)
   }
 
@@ -466,6 +518,17 @@ export default function ConfigContainer() {
   }
 
   const handlePublish = () => {
+    if (!canPublishPlanTemplate) {
+      message.error('无计划模板发布权限')
+      return
+    }
+    if (isLevel3Template) {
+      const errors = validateLevel3TemplateForPublish(configTasks as Level3TemplateActivity[], level3MilestoneOptions)
+      if (errors.length > 0) {
+        message.error(errors[0])
+        return
+      }
+    }
     const prevPublished = versions
       .filter(v => v.status === '已发布' && v.id !== currentVersion)
       .sort((a, b) => comparePlanVersions(b, a))[0]
@@ -478,12 +541,13 @@ export default function ConfigContainer() {
     const baselineMap = new Map<string, any>(baselineTasks.map(t => [t.id, t]))
     for (const curr of configTasks) {
       const prev = baselineMap.get(curr.id)
-      if (!prev) { changes.push({ kind: 'created', task: curr }); continue }
+      const notifyTask = isLevel3Template ? { ...curr, taskName: curr.activityName } : curr
+      if (!prev) { changes.push({ kind: 'created', task: notifyTask }); continue }
       const changedFields: string[] = []
       for (const f of NOTIFY_DIFF_FIELDS) {
-        if ((prev[f] ?? '') !== (curr[f] ?? '')) changedFields.push(f)
+        if ((prev[f] ?? prev.activityName ?? '') !== (curr[f] ?? curr.activityName ?? '')) changedFields.push(f)
       }
-      if (changedFields.length > 0) changes.push({ kind: 'modified', task: curr, previous: prev, changedFields })
+      if (changedFields.length > 0) changes.push({ kind: 'modified', task: notifyTask, previous: isLevel3Template ? { ...prev, taskName: prev.activityName } : prev, changedFields })
     }
 
     const publishedVersionId = currentVersion
@@ -497,6 +561,7 @@ export default function ConfigContainer() {
         ? { [getTemplateSnapshotKey(selectedProjectType, publishedVersionId)]: JSON.parse(JSON.stringify(snapshot)) }
         : {}),
     }))
+    if (isLevel3Template) setLevel3TemplateTasks(selectedTemplateType, snapshot)
 
     const versionNo = publishedVersion?.versionNo || publishedVersionId
     if (changes.length > 0) {
@@ -506,6 +571,10 @@ export default function ConfigContainer() {
   }
 
   const handleCancelRevision = () => {
+    if (!canEditPlanTemplate) {
+      message.error('无计划模板编辑权限')
+      return
+    }
     if (!isCurrentDraft || !currentVersionData) return
     Modal.confirm({
       title: '取消修订版本',
@@ -524,8 +593,8 @@ export default function ConfigContainer() {
   }
 
   const renderActionButtons = () => {
-    if (isCurrentDraft) return (<Space><Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{currentVersionData?.versionNo}({currentVersionData?.status})</Tag><Tag color="green" style={{ fontSize: 12 }}>自动保存</Tag><Button type="primary" icon={<SaveOutlined />} onClick={handlePublish}>发布</Button><Button danger icon={<StopOutlined />} onClick={handleCancelRevision}>取消修订</Button><Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
-    return (<Space>{!hasDraftVersion && <Dropdown menu={{ items: PLAN_REVISION_KIND_OPTIONS, onClick: handleCreateRevisionMenuClick }} trigger={['click']} placement="bottomLeft"><Button type="primary" icon={<PlusOutlined />}>创建修订</Button></Dropdown>}<Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
+    if (isCurrentDraft) return (<Space><Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{currentVersionData?.versionNo}({currentVersionData?.status})</Tag>{canEditPlanTemplate && <Tag color="green" style={{ fontSize: 12 }}>自动保存</Tag>}{canPublishPlanTemplate && <Button type="primary" icon={<SaveOutlined />} onClick={handlePublish}>发布</Button>}{canEditPlanTemplate && <Button danger icon={<StopOutlined />} onClick={handleCancelRevision}>取消修订</Button>}<Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
+    return (<Space>{canEditPlanTemplate && !hasDraftVersion && <Dropdown menu={{ items: PLAN_REVISION_KIND_OPTIONS, onClick: handleCreateRevisionMenuClick }} trigger={['click']} placement="bottomLeft"><Button type="primary" icon={<PlusOutlined />}>创建修订</Button></Dropdown>}<Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
   }
 
   // Build transferProps for TransferConfig
@@ -622,8 +691,9 @@ export default function ConfigContainer() {
     const compareColumns: any[] = [
       { title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, render: (val: string, row: CompareTableRow) => (<span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? 'var(--pms-brand)' : '#9ca3af' }}>{val}</span>) },
       { title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, render: (val: string) => { const conf: Record<string, { color: string; bg: string }> = { '新增': { color: '#52c41a', bg: '#f6ffed' }, '删除': { color: '#ff4d4f', bg: '#fff2f0' }, '修改': { color: 'var(--pms-brand)', bg: 'var(--pms-brand-surface)' }, '未变更': { color: '#9ca3af', bg: '#fafafa' } }; const c = conf[val]; return c ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: c.color, background: c.bg, border: val === '修改' ? '1px solid var(--pms-brand-border)' : `1px solid ${c.color}20` }}>{val}</span> : null } },
-      { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, ellipsis: true, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
-      { title: '角色', dataIndex: 'responsible', key: 'responsible', width: 80, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) },
+      { title: isLevel3Template ? '活动名称' : '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, ellipsis: true, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
+      { title: isLevel3Template ? '关键节点' : '角色', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) },
+      ...(isLevel3Template ? [{ title: '同级顺序', dataIndex: 'predecessor', key: 'predecessor', width: 110, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'predecessor', val) }] : []),
     ]
     return (
       <div style={{ marginTop: 16 }}>
@@ -689,7 +759,7 @@ export default function ConfigContainer() {
           content={(
             <div className="pms-config-workspace-card">
             {/* Config header */}
-            <Card className="pms-glass-surface" size="small" style={{ marginBottom: 16, borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
+            <Card className="pms-glass-surface pms-config-template-header-card" size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
               <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%)', borderBottom: '1px solid #e5e7eb' }}>
                 <Row justify="space-between" align="middle">
                   <Col>
@@ -705,6 +775,7 @@ export default function ConfigContainer() {
               </div>
               <div style={{ padding: '4px 16px' }}>
                 <Tabs
+                  className="pms-config-template-tabs"
                   activeKey={planLevel}
                   onChange={(key) => navigateWithEditGuard(() => setPlanLevel(key))}
                   style={{ marginBottom: 0 }}
@@ -715,6 +786,9 @@ export default function ConfigContainer() {
                     ]
                     : [
                       { key: 'level1', label: <span style={{ fontWeight: 500 }}>一级计划</span> },
+                      ...(supportsLevel3Template(selectedTemplateType)
+                        ? [{ key: 'level3', label: <span style={{ fontWeight: 500 }}>三级计划</span> }]
+                        : []),
                     ]}
                 />
               </div>
@@ -759,7 +833,7 @@ export default function ConfigContainer() {
             )}
 
             {/* Version control + toolbar */}
-            <Card className="pms-toolbar" size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '10px 16px' } }}>
+            <Card className="pms-toolbar pms-config-template-toolbar" size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '10px 16px' } }}>
               <Row justify="space-between" align="middle">
                 <Col>
                   <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
@@ -775,7 +849,7 @@ export default function ConfigContainer() {
                 <Col>
                   <Space size={6}>
                     <Input placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
-                    <SortableColumnSettings
+                    {!isLevel3Template && <SortableColumnSettings
                       open={showColumnModal}
                       trigger={(
                         <Tooltip title="自定义列">
@@ -787,7 +861,7 @@ export default function ConfigContainer() {
                       defaultValue={getDefaultColumnSettings(currentViewColumns)}
                       onApply={applyColumnSettings}
                       onCancel={() => setShowColumnModal(false)}
-                    />
+                    />}
                     {getScopeKey() !== null && (
                       <>
                         <Tooltip title="全部展开"><Button icon={<PlusSquareOutlined />} style={{ borderRadius: 6 }} onClick={expandAll} /></Tooltip>
@@ -800,8 +874,22 @@ export default function ConfigContainer() {
             </Card>
 
             {/* Table / Gantt content */}
-            <Card className="pms-solid-surface" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
-              {viewMode === 'gantt' ? renderGanttChart() : renderTaskTable()}
+            <Card className="pms-solid-surface pms-config-template-content-card" style={{ borderRadius: 8 }} styles={{ body: { padding: isLevel3Template ? 12 : 0, height: '100%', overflow: 'auto' } }}>
+              {isLevel3Template ? (
+                <Level3TemplateTable
+                  activities={configTasks as Level3TemplateActivity[]}
+                  editable={Boolean(isCurrentDraft && canEditPlanTemplate)}
+                  milestoneOptions={level3MilestoneOptions}
+                  searchText={searchText}
+                  collapsedIds={[...(collapsedNodes[getScopeKey() || ''] || new Set<string>())]}
+                  onActivitiesChange={next => setConfigTasks(next)}
+                  onCollapsedIdsChange={ids => {
+                    const key = getScopeKey()
+                    if (!key) return
+                    setCollapsedNodes(previous => ({ ...previous, [key]: new Set(ids) }))
+                  }}
+                />
+              ) : viewMode === 'gantt' ? renderGanttChart() : renderTaskTable()}
             </Card>
             </div>
           )}
@@ -891,7 +979,17 @@ export default function ConfigContainer() {
               )
               const oldTasks = getVersionTasks(versionA)
               const newTasks = getVersionTasks(versionB)
-              const result = compareVersionsForTable(oldTasks as any, newTasks as any)
+              const toComparableTasks = (tasks: any[]) => isLevel3Template
+                ? tasks.map(task => ({
+                    ...task,
+                    taskName: task.activityName || '',
+                    responsible: task.milestoneName || '',
+                    predecessor: `${task.parentId ? `父活动 ${task.parentId}` : '一级活动'} / 第${Number(task.order || 0) + 1}位`,
+                    status: task.status || '待启动',
+                    progress: task.progress || 0,
+                  }))
+                : tasks
+              const result = compareVersionsForTable(toComparableTasks(oldTasks) as any, toComparableTasks(newTasks) as any)
               setCompareResult(result as CompareTableRow[])
               setCompareFilterType('all')
               message.success('对比完成')
