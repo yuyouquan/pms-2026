@@ -497,6 +497,17 @@ export type InsertNextMachineMrMilestoneResult =
   | { ok: true; tasks: Level1PlanTask[]; task: Level1PlanTask }
   | { ok: false; reason: 'launch-stage-missing' | 'duplicate-name' }
 
+const createUniqueLevel1StableId = (tasks: readonly Level1PlanTask[], candidate: string): string => {
+  const existingStableIds = new Set(tasks.map(task => task.stableId || task.id))
+  let stableId = candidate
+  let suffix = 2
+  while (existingStableIds.has(stableId)) {
+    stableId = `${candidate}-${suffix}`
+    suffix += 1
+  }
+  return stableId
+}
+
 export const insertNextMachineMrMilestone = (
   tasks: readonly Level1PlanTask[],
 ): InsertNextMachineMrMilestoneResult => {
@@ -511,7 +522,7 @@ export const insertNextMachineMrMilestone = (
   const taskName = `MR${maximumMr + 1}`
   if (tasks.some(task => task.taskName === taskName)) return { ok: false, reason: 'duplicate-name' }
   const nonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-  const stableId = `custom-mr-${nonce}`
+  const stableId = createUniqueLevel1StableId(tasks, `custom-mr-${nonce}`)
   const renumbered = renumberLevel1Tasks([
     ...tasks,
     {

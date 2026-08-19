@@ -64,14 +64,22 @@ assert.equal(repeatedMrInsert.task.taskName, 'MR5', 'deleting MR5 makes the next
 assert.deepEqual(level1Rules.insertNextMachineMrMilestone(machineMrTasks.filter(task => task.stableId !== 'stage-launch')), { ok: false, reason: 'launch-stage-missing' }, 'controlled MR insertion requires a launch stage')
 assert.deepEqual(level1Rules.insertNextMachineMrMilestone([...machineMrTasks, { id: 'other.1', stableId: 'existing-mr4', parentId: '1', order: 2, taskName: 'MR4', source: 'custom' }]), { ok: false, reason: 'duplicate-name' }, 'a computed MR name already used outside the launch stage is rejected')
 const originalDateNow = Date.now
+const originalMathRandom = Math.random
 let machineNonceCalls = 0
 Date.now = () => { machineNonceCalls += 1; return 1_700_000_000_000 }
+Math.random = () => 0.5
 try {
-  assert.equal(level1Rules.insertNextMachineMrMilestone(machineMrTasks).ok, true, 'controlled MR insertion works with a fixed nonce clock')
+  const fixedClockMrFirst = level1Rules.insertNextMachineMrMilestone(machineMrTasks)
+  const fixedClockMrSecond = fixedClockMrFirst.ok && level1Rules.insertNextMachineMrMilestone(fixedClockMrFirst.tasks)
+  assert.equal(fixedClockMrFirst.ok, true, 'controlled MR insertion works with a fixed nonce clock')
+  assert.equal(fixedClockMrSecond.ok, true, 'a second controlled MR insertion works with the same fixed clock')
+  assert.notEqual(fixedClockMrFirst.task.stableId, fixedClockMrSecond.task.stableId, 'fixed-clock MR insertions still produce unique stable IDs')
+  assert.strictEqual(fixedClockMrSecond.tasks.find(task => task.stableId === fixedClockMrSecond.task.stableId), fixedClockMrSecond.task, 'the second fixed-clock MR result points into its returned tasks')
 } finally {
   Date.now = originalDateNow
+  Math.random = originalMathRandom
 }
-assert.equal(machineNonceCalls, 1, 'controlled MR insertion reads Date.now exactly once per nonce')
+assert.equal(machineNonceCalls, 2, 'each controlled MR nonce reads Date.now exactly once')
 
 assert.deepEqual(technicalRules.SUBPROJECT_TEMPLATE_SEED, ['第1版转测', '第2版转测', 'TDR3'], 'subproject seed contains only the two fixed transfer versions and TDR3')
 const seededSubprojectTasks = technicalRules.buildSubprojectTemplateTasks()
@@ -90,22 +98,33 @@ const repeatedTransferInsert = technicalRules.insertNextTechnicalSubprojectTrans
 assert.equal(repeatedTransferInsert.ok, true, 'deleting a controlled transfer version permits replacement')
 assert.equal(repeatedTransferInsert.task.taskName, '第4版转测', 'deleting 第4版转测 makes the next controlled insertion 第4版转测 again')
 assert.deepEqual(technicalRules.insertNextTechnicalSubprojectTransfer(seededSubprojectTasks.filter(task => task.taskName !== 'TDR3')), { ok: false, reason: 'tdr3-missing' }, 'controlled transfer insertion requires TDR3')
-const duplicateTechnicalTransfer = technicalRules.insertNextTechnicalSubprojectTransfer([
+assert.deepEqual(technicalRules.insertNextTechnicalSubprojectTransfer([
   ...seededSubprojectTasks,
-  { ...seededSubprojectTasks[0], id: 'after-tdr3', stableId: 'after-tdr3', order: 4, taskName: '第3版转测' },
-])
-assert.deepEqual(duplicateTechnicalTransfer, { ok: false, reason: 'duplicate-name' }, 'a transfer name duplicated outside the controlled TDR3 insertion segment is rejected')
+  { ...seededSubprojectTasks[2], id: 'duplicate-tdr3', stableId: 'duplicate-tdr3', order: 4 },
+]), { ok: false, reason: 'tdr3-invalid-position' }, 'duplicate TDR3 milestones reject controlled transfer insertion')
+assert.deepEqual(technicalRules.insertNextTechnicalSubprojectTransfer([
+  ...seededSubprojectTasks,
+  { ...seededSubprojectTasks[0], id: 'after-tdr3', stableId: 'after-tdr3', order: 4, taskName: '第9版转测' },
+]), { ok: false, reason: 'tdr3-invalid-position' }, 'a TDR3 tail activity rejects insertion instead of restarting transfer numbering')
 const originalTechnicalDateNow = Date.now
+const originalTechnicalMathRandom = Math.random
 let technicalNonceCalls = 0
 Date.now = () => { technicalNonceCalls += 1; return 1_700_000_000_001 }
+Math.random = () => 0.5
 try {
-  assert.equal(technicalRules.insertNextTechnicalSubprojectTransfer(seededSubprojectTasks).ok, true, 'controlled transfer insertion works with a fixed nonce clock')
+  const fixedClockTransferFirst = technicalRules.insertNextTechnicalSubprojectTransfer(seededSubprojectTasks)
+  const fixedClockTransferSecond = fixedClockTransferFirst.ok && technicalRules.insertNextTechnicalSubprojectTransfer(fixedClockTransferFirst.tasks)
+  assert.equal(fixedClockTransferFirst.ok, true, 'controlled transfer insertion works with a fixed nonce clock')
+  assert.equal(fixedClockTransferSecond.ok, true, 'a second controlled transfer insertion works with the same fixed clock')
+  assert.notEqual(fixedClockTransferFirst.task.stableId, fixedClockTransferSecond.task.stableId, 'fixed-clock transfer insertions still produce unique stable IDs')
+  assert.strictEqual(fixedClockTransferSecond.tasks.find(task => task.stableId === fixedClockTransferSecond.task.stableId), fixedClockTransferSecond.task, 'the second fixed-clock transfer result points into its returned tasks')
 } finally {
   Date.now = originalTechnicalDateNow
+  Math.random = originalTechnicalMathRandom
 }
-assert.equal(technicalNonceCalls, 1, 'controlled transfer insertion reads Date.now exactly once per nonce')
+assert.equal(technicalNonceCalls, 2, 'each controlled transfer nonce reads Date.now exactly once')
 const historicalSubprojectSeed = [
-  { id: '1', stableId: 'first', order: 1, taskName: '第1版转测' },
+  { id: '1', stableId: 'first', order: 1, taskName: '第1版转测', role: '自定义角色', responsible: '自定义负责人', planStartDate: '2027-01-02', planEndDate: '2027-01-03' },
   { id: '2', stableId: 'second', order: 2, taskName: '第2版转测' },
   { id: '3', stableId: 'third', order: 3, taskName: '第X版转测' },
   { id: '4', stableId: 'tdr3', order: 4, taskName: 'TDR3' },
@@ -118,6 +137,11 @@ const migratedSubprojectSeed = technicalRules.migrateTechnicalSubprojectSeedStat
   configTemplateVersionScopes: historicalScopes,
 })
 assert.deepEqual(migratedSubprojectSeed.configTemplateTasksByType[technicalRules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject].map(task => task.taskName), ['第1版转测', '第2版转测', 'TDR3'], 'only an untouched legacy subproject config seed migrates')
+assert.strictEqual(migratedSubprojectSeed.configTemplateTasksByType[technicalRules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject][0], historicalSubprojectSeed[0], 'conservative seed migration keeps the first transfer object and its stable ID')
+assert.strictEqual(migratedSubprojectSeed.configTemplateTasksByType[technicalRules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject][1], historicalSubprojectSeed[1], 'conservative seed migration keeps the second transfer object and its stable ID')
+assert.deepEqual({ ...migratedSubprojectSeed.configTemplateTasksByType[technicalRules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject][2], id: '4', order: 4 }, historicalSubprojectSeed[3], 'conservative seed migration keeps every TDR3 field except normalized display ID and order')
+assert.deepEqual(migratedSubprojectSeed.configTemplateTasksByType[technicalRules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject][0], historicalSubprojectSeed[0], 'conservative seed migration preserves user-owned fields on matching seed tasks')
+assert.equal(migratedSubprojectSeed.configTemplateTasksByType[technicalRules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject].some(task => task.taskName === '第X版转测'), false, 'conservative seed migration removes only the obsolete transfer placeholder')
 assert.strictEqual(migratedSubprojectSeed.publishedSnapshots, historicalSnapshots, 'subproject seed migration leaves published snapshots untouched')
 assert.strictEqual(migratedSubprojectSeed.configTemplateVersionScopes, historicalScopes, 'subproject seed migration leaves configuration history untouched')
 const pipeNamedCustomSubprojectSeed = [

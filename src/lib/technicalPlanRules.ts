@@ -73,7 +73,18 @@ export const buildSubprojectTemplateTasks = (): TechnicalTemplateTask[] => (
 
 export type InsertNextTechnicalSubprojectTransferResult =
   | { ok: true; tasks: TechnicalTemplateTask[]; task: TechnicalTemplateTask }
-  | { ok: false; reason: 'tdr3-missing' | 'duplicate-name' }
+  | { ok: false; reason: 'tdr3-missing' | 'tdr3-invalid-position' }
+
+const createUniqueTechnicalStableId = (tasks: readonly TechnicalTemplateTask[], candidate: string): string => {
+  const existingStableIds = new Set(tasks.map(task => task.stableId || task.id))
+  let stableId = candidate
+  let suffix = 2
+  while (existingStableIds.has(stableId)) {
+    stableId = `${candidate}-${suffix}`
+    suffix += 1
+  }
+  return stableId
+}
 
 export const insertNextTechnicalSubprojectTransfer = (
   tasks: readonly TechnicalTemplateTask[],
@@ -83,15 +94,16 @@ export const insertNextTechnicalSubprojectTransfer = (
     .sort((left, right) => left.task.order - right.task.order || left.index - right.index)
   const tdr3Index = ordered.findIndex(({ task }) => task.taskName === 'TDR3')
   if (tdr3Index < 0) return { ok: false, reason: 'tdr3-missing' }
-  // Only activities before TDR3 belong to the controlled transfer sequence.
-  const maximumTransferVersion = ordered.slice(0, tdr3Index).reduce((maximum, { task }) => {
+  if (tdr3Index !== ordered.length - 1 || ordered.filter(({ task }) => task.taskName === 'TDR3').length !== 1) {
+    return { ok: false, reason: 'tdr3-invalid-position' }
+  }
+  const maximumTransferVersion = ordered.reduce((maximum, { task }) => {
     const match = /^第(\d+)版转测$/.exec(task.taskName)
     return match ? Math.max(maximum, Number(match[1])) : maximum
   }, 0)
   const taskName = `第${maximumTransferVersion + 1}版转测`
-  if (ordered.some(({ task }) => task.taskName === taskName)) return { ok: false, reason: 'duplicate-name' }
   const nonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-  const stableId = `custom-subproject-transfer-${nonce}`
+  const stableId = createUniqueTechnicalStableId(tasks, `custom-subproject-transfer-${nonce}`)
   const next = ordered.map(({ task }) => task)
   next.splice(tdr3Index, 0, {
     id: stableId,
@@ -402,11 +414,18 @@ export const migrateTechnicalSubprojectSeedState = <T extends Record<string, any
     && current.length === legacySeed.length
     && current.every((task, index) => task?.taskName === legacySeed[index])
   if (!isExactLegacySeed) return state
+  const migratedTasks = current
+    .filter(task => task.taskName !== '第X版转测')
+    .map((task, index) => (
+      task.id === String(index + 1) && task.order === index + 1
+        ? task
+        : { ...task, id: String(index + 1), order: index + 1 }
+    ))
   return {
     ...state,
     configTemplateTasksByType: {
       ...templates,
-      [TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject]: buildSubprojectTemplateTasks(),
+      [TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject]: migratedTasks,
     },
   }
 }
