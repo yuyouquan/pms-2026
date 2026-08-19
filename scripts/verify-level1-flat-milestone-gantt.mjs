@@ -220,9 +220,9 @@ assert.deepEqual(hierarchicalGanttTasks.map(task => [task.id, task.type, task.re
   ['stage-1', 'project', true, '2026-01-01', '2026-01-16', 15],
   ['milestone-1', 'milestone', false, '2026-01-05', '2026-01-05', 0],
   ['milestone-2', 'milestone', false, '2026-01-16', '2026-01-16', 0],
-  ['stage-2', 'project', true, '2026-01-17', '2026-02-10', 24],
+  ['stage-2', 'project', true, '2026-02-10', '2026-02-10', 0],
   ['milestone-3', 'milestone', false, '2026-02-10', '2026-02-10', 0],
-], 'hierarchical gantt locks stage projects, renders editable children as zero-day milestones, derives stage ranges, and fills a missing next-stage start')
+], 'hierarchical gantt locks stage projects, renders editable children as zero-day milestones, and uses the first and last child schedule values for stage bounds')
 assert.deepEqual(ganttHierarchy, ganttHierarchySnapshot, 'hierarchical gantt construction does not mutate source tasks')
 
 const technicalGanttTasks = ganttRules.buildPlanGanttTasks([
@@ -262,14 +262,21 @@ assert.deepEqual(actualDatePatched[0], {
 assert.strictEqual(ganttRules.applyPlanTaskDatePatch(datePatchSource, {
   taskId: 'patch-1', patch: { actualEndDate: 'invalid-date' },
 }), datePatchSource, 'invalid date patches leave task inputs unchanged')
-assert.strictEqual(ganttRules.applyPlanTaskDatePatch(datePatchSource, {
+const datePatchSnapshot = JSON.parse(JSON.stringify(datePatchSource))
+assert.deepEqual(ganttRules.applyPlanTaskDatePatch(datePatchSource, {
   taskId: 'patch-1', patch: { actualEndDate: '' },
-}), datePatchSource, 'partial actual date patches leave task inputs unchanged rather than producing negative durations')
+})[0], {
+  ...datePatchSource[0], actualEndDate: '', actualDays: 4,
+}, 'partial actual date patches apply the entered value while preserving the existing actual duration')
+assert.deepEqual(datePatchSource, datePatchSnapshot, 'partial date patches do not mutate source tasks')
 
 const ganttHelperSource = fs.readFileSync(path.join(root, 'src/components/shared/PlanHelpers.tsx'), 'utf8')
 assert.match(ganttHelperSource, /export interface DHTMLXGanttDateChange/, 'gantt exposes a typed date-change callback contract')
 assert.match(ganttHelperSource, /onTaskDateChange\?: \(change: DHTMLXGanttDateChange\) => boolean/, 'gantt accepts an explicit accept-or-revert callback')
+assert.match(ganttHelperSource, /nodeType: 'milestone' \| 'task'/, 'gantt date changes expose the dragged node type')
+assert.match(ganttHelperSource, /nodeType: task\.type === 'milestone' \? 'milestone' : 'task'/, 'gantt drag payload uses its typed node type')
 assert.match(ganttHelperSource, /gantt\.config\.readonly_property = 'readonly'/, 'gantt honors per-task readonly state')
+assert.match(ganttHelperSource, /type: t\.type \|\| \(t\.parentId \? 'task' : 'project'\)/, 'gantt locks legacy root rows when they do not carry an explicit type')
 assert.match(ganttHelperSource, /pms-gantt-\$\{task\.type \|\| 'task'\}/, 'gantt emits a stable class for every task type')
 assert.match(ganttHelperSource, /onBeforeTaskDrag/, 'gantt blocks forbidden drag attempts before they change task dates')
 assert.match(ganttHelperSource, /onAfterTaskDrag/, 'gantt reports accepted task-date drags')
@@ -277,5 +284,7 @@ assert.match(ganttHelperSource, /onBeforeLightbox/, 'gantt blocks project and re
 assert.match(ganttHelperSource, /gantt\.detachEvent\(beforeDragHandler\)/, 'gantt detaches date-drag guards during cleanup')
 assert.match(ganttHelperSource, /gantt\.detachEvent\(afterDragHandler\)/, 'gantt detaches date-drag callbacks during cleanup')
 assert.match(ganttHelperSource, /gantt\.detachEvent\(beforeLightboxHandler\)/, 'gantt detaches lightbox guards during cleanup')
+assert.match(ganttHelperSource, /let dragSnapshot: \{ startDate: Date; endDate: Date \} \| null = null/, 'gantt keeps one drag snapshot local to each initialized event set')
+assert.match(ganttHelperSource, /dragSnapshot = null/, 'gantt clears drag snapshots after a drag and on cleanup')
 
 console.log('PASS level1 flat milestone and gantt rules')

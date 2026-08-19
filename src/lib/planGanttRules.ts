@@ -55,16 +55,13 @@ const getProjectedDuration = (task: Level1PlanTask): number => {
 
 const asDate = (value: unknown): string => parseUtcDate(value) === null ? '' : value as string
 
-const minDate = (dates: string[]): string => dates.length > 0 ? [...dates].sort()[0] : ''
-const maxDate = (dates: string[]): string => dates.length > 0 ? [...dates].sort().at(-1) || '' : ''
-
 const getStageRange = (stage: Level1PlanTask, children: Level1PlanTask[], previousEnd: string) => {
-  const childStarts = children.map(task => asDate(task.planStartDate)).filter(Boolean)
-  const childEnds = children.flatMap(task => [asDate(task.planEndDate), asDate(task.planStartDate)]).filter(Boolean)
+  const firstChild = children[0]
+  const lastChild = children.at(-1)
   const ownStart = asDate(stage.planStartDate)
   const ownEnd = asDate(stage.planEndDate)
-  const startDate = ownStart || minDate(childStarts) || (previousEnd ? addDay(previousEnd) : '')
-  const endDate = ownEnd || maxDate(childEnds)
+  const startDate = ownStart || asDate(firstChild?.planStartDate) || asDate(firstChild?.planEndDate) || (previousEnd ? addDay(previousEnd) : '')
+  const endDate = ownEnd || asDate(lastChild?.planEndDate) || asDate(lastChild?.planStartDate)
 
   if (!startDate || !endDate || getDateDifference(startDate, endDate) === null) {
     return { startDate: '', endDate: '', duration: 0 }
@@ -148,16 +145,13 @@ const hasOwnDateKey = (patch: PlanTaskDatePatch['patch'], key: DateKey): boolean
   Object.prototype.hasOwnProperty.call(patch, key)
 )
 
-const isValidPairUpdate = (
-  task: Level1PlanTask,
-  patch: PlanTaskDatePatch['patch'],
-  startKey: 'planStartDate' | 'actualStartDate',
-  endKey: 'planEndDate' | 'actualEndDate',
-): boolean => {
-  if (!hasOwnDateKey(patch, startKey) && !hasOwnDateKey(patch, endKey)) return true
-  const startDate = patch[startKey] ?? task[startKey] ?? ''
-  const endDate = patch[endKey] ?? task[endKey] ?? ''
-  return typeof startDate === 'string' && typeof endDate === 'string' && areValidDatePair(startDate, endDate)
+const getPatchedDuration = (
+  startDate: string,
+  endDate: string,
+  currentDuration: number | null | undefined,
+): number | null | undefined => {
+  if (!startDate || !endDate) return currentDuration
+  return getDateDifference(startDate, endDate)
 }
 
 export const applyPlanTaskDatePatch = (
@@ -167,14 +161,16 @@ export const applyPlanTaskDatePatch = (
   const target = tasks.find(task => task.id === input.taskId)
   const patchKeys = dateKeys.filter(key => hasOwnDateKey(input.patch, key))
   if (!target || patchKeys.length === 0 || patchKeys.some(key => typeof input.patch[key] !== 'string')) return tasks as Level1PlanTask[]
-  if (!isValidPairUpdate(target, input.patch, 'planStartDate', 'planEndDate')) return tasks as Level1PlanTask[]
-  if (!isValidPairUpdate(target, input.patch, 'actualStartDate', 'actualEndDate')) return tasks as Level1PlanTask[]
 
   const patched = { ...target, ...input.patch }
   const planChanged = hasOwnDateKey(input.patch, 'planStartDate') || hasOwnDateKey(input.patch, 'planEndDate')
   const actualChanged = hasOwnDateKey(input.patch, 'actualStartDate') || hasOwnDateKey(input.patch, 'actualEndDate')
-  if (planChanged) patched.estimatedDays = getDateDifference(patched.planStartDate || '', patched.planEndDate || '')
-  if (actualChanged) patched.actualDays = getDateDifference(patched.actualStartDate || '', patched.actualEndDate || '')
+  const estimatedDays = getPatchedDuration(patched.planStartDate || '', patched.planEndDate || '', target.estimatedDays)
+  const actualDays = getPatchedDuration(patched.actualStartDate || '', patched.actualEndDate || '', target.actualDays)
+  if (planChanged && estimatedDays === null) return tasks as Level1PlanTask[]
+  if (actualChanged && actualDays === null) return tasks as Level1PlanTask[]
+  if (planChanged) patched.estimatedDays = estimatedDays
+  if (actualChanged) patched.actualDays = actualDays
 
   return tasks.map(task => task.id === input.taskId ? patched : task)
 }

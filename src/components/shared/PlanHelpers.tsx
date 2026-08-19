@@ -59,7 +59,7 @@ export interface DHTMLXGanttColumn {
 
 export interface DHTMLXGanttDateChange {
   taskId: string
-  mode: 'milestone' | 'task'
+  nodeType: 'milestone' | 'task'
   startDate: string
   endDate: string
 }
@@ -96,7 +96,6 @@ export function DHTMLXGantt({
   const suppressFeedback = useRef(false)
   const onTaskClickRef = useRef(onTaskClick)
   const onTaskDateChangeRef = useRef(onTaskDateChange)
-  const dragSnapshots = useRef(new Map<string, { startDate: Date; endDate: Date }>())
 
   useEffect(() => {
     onTaskClickRef.current = onTaskClick
@@ -139,7 +138,7 @@ export function DHTMLXGantt({
         start_date: t.start_date ?? t.planStartDate ?? '',
         end_date: t.end_date ?? t.planEndDate ?? '',
         duration: t.duration ?? t.estimatedDays ?? 1,
-        type: t.type ?? 'task',
+        type: t.type || (t.parentId ? 'task' : 'project'),
         readonly: readOnly || Boolean(t.readonly),
         progress: (t.progress || 0) / 100,
         parent: t.parentId || 0,
@@ -171,32 +170,36 @@ export function DHTMLXGantt({
       onCollapsedChange?.((prev) => { const s = new Set(prev); s.add(String(id)); return s })
     })
 
+    let dragSnapshot: { startDate: Date; endDate: Date } | null = null
     const beforeDragHandler = gantt.attachEvent('onBeforeTaskDrag', (id: string | number) => {
       const task = gantt.getTask(id)
+      dragSnapshot = null
       if (readOnly || task.readonly || task.type === 'project') return false
       if (!(task.start_date instanceof Date) || !(task.end_date instanceof Date)) return false
-      dragSnapshots.current.set(String(id), {
+      dragSnapshot = {
         startDate: new Date(task.start_date.getTime()),
         endDate: new Date(task.end_date.getTime()),
-      })
+      }
       return true
     })
     const afterDragHandler = gantt.attachEvent('onAfterTaskDrag', (id: string | number) => {
       const task = gantt.getTask(id)
-      const snapshot = dragSnapshots.current.get(String(id))
-      const formatDate = gantt.date.date_to_str('%Y-%m-%d')
-      const accepted = onTaskDateChangeRef.current?.({
-        taskId: String(id),
-        mode: task.type === 'milestone' ? 'milestone' : 'task',
-        startDate: formatDate(task.start_date),
-        endDate: formatDate(task.end_date),
-      })
-      if (accepted === false && snapshot) {
-        task.start_date = snapshot.startDate
-        task.end_date = snapshot.endDate
-        gantt.updateTask(id)
+      try {
+        const formatDate = gantt.date.date_to_str('%Y-%m-%d')
+        const accepted = onTaskDateChangeRef.current?.({
+          taskId: String(id),
+          nodeType: task.type === 'milestone' ? 'milestone' : 'task',
+          startDate: formatDate(task.start_date),
+          endDate: formatDate(task.end_date),
+        })
+        if (accepted === false && dragSnapshot) {
+          task.start_date = dragSnapshot.startDate
+          task.end_date = dragSnapshot.endDate
+          gantt.updateTask(id)
+        }
+      } finally {
+        dragSnapshot = null
       }
-      dragSnapshots.current.delete(String(id))
       return true
     })
     const beforeLightboxHandler = gantt.attachEvent('onBeforeLightbox', (id: string | number) => {
@@ -219,6 +222,7 @@ export function DHTMLXGantt({
       gantt.detachEvent(afterDragHandler)
       gantt.detachEvent(beforeLightboxHandler)
       if (clickHandler) gantt.detachEvent(clickHandler)
+      dragSnapshot = null
       gantt.clearAll()
     }
   }, [columns, tasks, readOnly, scaleMode])
