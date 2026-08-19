@@ -1250,6 +1250,31 @@ assert.equal(store.getState().updateFollowWorkflowFields(storeHistoryScope, 'sto
 assert.equal(store.getState().deleteActivity(storeHistoryScope, 'store-orphan', '张三'), false)
 assert.deepEqual(invalidChildState(), malformedBefore, 'malformed child operations leave activities, history, and overrides untouched')
 
+const rootFollowScope = 'project-1::market::root-follow'
+store.setState({
+  activitiesByScope: { [storeHistoryScope]: [storeParentA, storeChildA] }, historyByScope: { [storeHistoryScope]: [] },
+  collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
+})
+const rootFollowBefore = invalidChildState()
+assert.equal(store.getState().updateFollowActualDates(storeHistoryScope, rootFollowScope, 'store-p1', { actualStartDate: '2026-01-01' }, '张三'), false,
+  'follow actual-date overrides reject root activities')
+assert.deepEqual(invalidChildState(), rootFollowBefore, 'root follow rejection leaves overrides and history untouched')
+
+const aliasMoveScope = 'project-1::market::move-alias'
+store.setState({
+  activitiesByScope: { [aliasMoveScope]: [storeParentA, storeChildA, storeParentB, storeChildB] }, historyByScope: { [aliasMoveScope]: [] },
+  collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
+})
+const aliasMove = store.getState().moveActivity(aliasMoveScope, 'store-c1', 'store-c2', storeContext('管理员', ['管理员']), false)
+assert.equal(aliasMove.ok, true)
+const aliasStoredHistory = structuredClone(store.getState().historyByScope[aliasMoveScope])
+aliasMove.activities.find(activity => activity.id === 'store-c1').activityName = '篡改返回值'
+aliasMove.activities.push({ ...storeParentA, id: 'returned-only' })
+assert.equal(store.getState().activitiesByScope[aliasMoveScope].find(activity => activity.id === 'store-c1').activityName, '待移动子活动',
+  'mutating a successful move result cannot mutate stored activity objects')
+assert.equal(store.getState().activitiesByScope[aliasMoveScope].some(activity => activity.id === 'returned-only'), false)
+assert.deepEqual(store.getState().historyByScope[aliasMoveScope], aliasStoredHistory)
+
 const componentPath = path.join(root, 'src/components/plans/Level3PlanModule.tsx')
 assert.ok(fs.existsSync(componentPath), 'src/components/plans/Level3PlanModule.tsx does not exist')
 const componentSource = fs.readFileSync(componentPath, 'utf8')

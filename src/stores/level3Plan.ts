@@ -493,7 +493,7 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
         const currentOverrides = state.actualOverridesByScope[selectedScopeKey] || {}
         const displayedActivities = mergeLevel3ActualDateOverrides(sourceActivities, currentOverrides)
         const previousActivity = displayedActivities.find(activity => activity.id === activityId)
-        if (!previousActivity) return state
+        if (!previousActivity || !previousActivity.parentId) return state
         const parentSnapshot = getParentHistorySnapshot(previousActivity, displayedActivities)
         if (!parentSnapshot) return state
         const nextOverride = createLevel3ActualDateOverride(
@@ -656,13 +656,13 @@ export const useLevel3PlanStore = create<Level3PlanState & Level3PlanActions>()(
         } : {}),
       }
       set(state => ({
-        activitiesByScope: { ...state.activitiesByScope, [scopeKey]: result.activities },
+        activitiesByScope: { ...state.activitiesByScope, [scopeKey]: cloneActivities(result.activities) },
         historyByScope: {
           ...state.historyByScope,
           [scopeKey]: [log, ...(state.historyByScope[scopeKey] || [])],
         },
       }))
-      return result
+      return { ...result, activities: cloneActivities(result.activities) }
     },
     deleteActivity: (scopeKey, activityId, actor) => {
       if (!scopeKey || !activityId || !actor) return false
