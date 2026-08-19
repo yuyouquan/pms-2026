@@ -102,8 +102,8 @@ export const buildPlanGanttTasks = (
       ...task,
       type: 'task',
       readonly: !editable,
-      start_date: typeof task.planStartDate === 'string' ? task.planStartDate : '',
-      end_date: typeof task.planEndDate === 'string' ? task.planEndDate : '',
+      start_date: asDate(task.planStartDate),
+      end_date: asDate(task.planEndDate),
       duration: getProjectedDuration(task),
     }))
   }

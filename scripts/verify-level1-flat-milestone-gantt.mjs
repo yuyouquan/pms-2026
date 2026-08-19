@@ -242,6 +242,16 @@ const technicalGanttTasks = ganttRules.buildPlanGanttTasks([
 assert.deepEqual(technicalGanttTasks.map(task => [task.type, task.readonly, task.start_date, task.end_date, task.duration]), [
   ['task', false, '2026-03-01', '2026-03-15', 14],
 ], 'technical subproject gantt keeps schedule ranges as editable task bars')
+const sanitizedTechnicalGanttTasks = ganttRules.buildPlanGanttTasks([
+  { id: 'technical-invalid', order: 1, taskName: '非法日期', planStartDate: '2026-02-30', planEndDate: 'bad-date' },
+  { id: 'technical-leap', order: 2, taskName: '闰日半空', planStartDate: '2024-02-29', planEndDate: '' },
+  { id: 'technical-end-only', order: 3, taskName: '结束半空', planStartDate: '', planEndDate: '2026-03-01' },
+], { mode: 'technical-subproject', editable: true })
+assert.deepEqual(sanitizedTechnicalGanttTasks.map(task => [task.start_date, task.end_date]), [
+  ['', ''],
+  ['2024-02-29', ''],
+  ['', '2026-03-01'],
+], 'technical gantt sanitizes invalid date strings while retaining valid partial schedule dates')
 assert.equal(ganttRules.buildPlanGanttTasks(ganttHierarchy, { mode: 'hierarchical', editable: false }).find(task => task.id === 'milestone-1')?.readonly, true, 'non-editable gantts lock milestone nodes')
 
 const milestoneDateChanged = ganttRules.applyPlanGanttDateChange(ganttHierarchy, {
