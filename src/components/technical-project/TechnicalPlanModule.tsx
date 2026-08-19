@@ -799,7 +799,9 @@ export default function TechnicalPlanModule({
               <div className="technical-plan-edit-notice" role="status">
                 <EditOutlined />
                 <strong>编辑模式</strong>
-                <span>- 拖拽手柄排序，点击单元格编辑，修改内容自动保存</span>
+                <span>{canEditTaskStructure
+                  ? '- 自定义活动可拖拽排序和修改名称，日期修改自动保存'
+                  : '- 仅计划完成时间和实际完成时间可编辑，修改自动保存'}</span>
               </div>
             )}
           </>
