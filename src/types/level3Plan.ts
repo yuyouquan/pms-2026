@@ -153,6 +153,7 @@ export interface Level3ScopeFork {
 export interface Level3PermissionContext {
   currentUser: string
   administratorUsers: string[]
+  structuralAdministratorUsers: string[]
   spmUsers: string[]
 }
 
@@ -172,12 +173,18 @@ export interface Level3ValidationResult {
 export interface Level3MoveResult {
   ok: boolean
   activities: Level3Activity[]
+  changed?: boolean
   reason?: string
   activeId?: string
   fromParentId?: string | null
   toParentId?: string | null
   fromIndex?: number
   toIndex?: number
+}
+
+export interface Level3MovePermission {
+  allowed: boolean
+  reason?: string
 }
 
 export interface Level3DeleteResult {
@@ -206,6 +213,12 @@ export interface Level3ChangeLog {
   activityNumber: string
   summary: string
   changes: Level3FieldChange[]
+  parentActivityId?: string
+  parentActivityName?: string
+  sourceParentActivityId?: string
+  sourceParentActivityName?: string
+  targetParentActivityId?: string
+  targetParentActivityName?: string
 }
 
 export interface Level3ScopeData {

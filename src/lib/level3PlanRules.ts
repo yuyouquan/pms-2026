@@ -12,6 +12,7 @@ import type {
   Level3WorkflowOverrideMap,
   Level3DeleteResult,
   Level3Milestone,
+  Level3MovePermission,
   Level3MoveResult,
   Level3ParentRollup,
   Level3PermissionContext,
@@ -47,6 +48,14 @@ const flattenActivityTree = (activities: Level3Activity[]) => {
   const included = new Set(result.map(activity => activity.id))
   result.push(...sortByOrder(activities.filter(activity => !included.has(activity.id))))
   return result
+}
+
+const hasSameLevel3ActivityStructure = (left: Level3Activity[], right: Level3Activity[]) => {
+  const leftTree = flattenActivityTree(left)
+  const rightTree = flattenActivityTree(right)
+  return leftTree.length === rightTree.length && leftTree.every((activity, index) => (
+    activity.id === rightTree[index]?.id && activity.parentId === rightTree[index]?.parentId
+  ))
 }
 
 const dateDifference = (start: string, end: string): number | null => {
@@ -312,41 +321,122 @@ export function moveLevel3Activity(
   if (!active || !over) return { ok: false, activities: cloneActivities(activities), reason: '未找到拖动活动' }
   const activeIsParent = !active.parentId
   const overIsParent = !over.parentId
-  if (activeIsParent !== overIsParent) {
-    return { ok: false, activities: cloneActivities(activities), reason: '仅支持同级活动拖动' }
-  }
-
   const fromParentId = active.parentId
-  const toParentId = over.parentId
   const fromSiblings = sortByOrder(next.filter(activity => activity.parentId === fromParentId))
   const fromIndex = fromSiblings.findIndex(activity => activity.id === active.id)
-  const targetSiblings = sortByOrder(next.filter(activity => activity.parentId === toParentId && activity.id !== active.id))
-  const overIndex = targetSiblings.findIndex(activity => activity.id === over.id)
-  if (fromIndex < 0 || overIndex < 0) {
-    return { ok: false, activities: cloneActivities(activities), reason: '无法确定拖动位置' }
+  if (fromIndex < 0) return { ok: false, activities: cloneActivities(activities), reason: '无法确定拖动位置' }
+  if (activeId === overId) {
+    return {
+      ok: true,
+      changed: false,
+      activities: flattenActivityTree(next),
+      activeId,
+      fromParentId,
+      toParentId: fromParentId,
+      fromIndex,
+      toIndex: fromIndex,
+    }
   }
-
-  const sameParent = fromParentId === toParentId
-  const insertionIndex = sameParent
-    ? (fromIndex < over.order ? overIndex + 1 : overIndex)
-    : overIndex + 1
-  targetSiblings.splice(Math.max(0, insertionIndex), 0, active)
+  if (activeIsParent && !overIsParent) {
+    return { ok: false, activities: cloneActivities(activities), reason: '父活动仅支持拖动到父活动' }
+  }
+  const toParentId = activeIsParent ? null : (overIsParent ? over.id : over.parentId)
+  if (!activeIsParent && !toParentId) {
+    return { ok: false, activities: cloneActivities(activities), reason: '未找到目标父活动' }
+  }
+  if (!activeIsParent) {
+    const sourceParent = next.find(activity => activity.id === fromParentId)
+    const targetParent = next.find(activity => activity.id === toParentId)
+    if (!sourceParent || sourceParent.parentId || !targetParent || targetParent.parentId) {
+      return { ok: false, activities: cloneActivities(activities), reason: '父子层级无效' }
+    }
+  }
+  const targetSiblings = sortByOrder(next.filter(activity => activity.parentId === toParentId && activity.id !== active.id))
+  const reorderingWithinSameSiblings = fromParentId === toParentId && (activeIsParent || !overIsParent)
+  const overIndex = fromSiblings.findIndex(activity => activity.id === over.id)
+  const insertionIndex = reorderingWithinSameSiblings
+    ? (() => {
+      const targetIndex = targetSiblings.findIndex(activity => activity.id === over.id)
+      return fromIndex < overIndex ? targetIndex + 1 : targetIndex
+    })()
+    : activeIsParent
+      ? targetSiblings.findIndex(activity => activity.id === over.id)
+    : (overIsParent ? targetSiblings.length : targetSiblings.findIndex(activity => activity.id === over.id))
+  if (insertionIndex < 0) return { ok: false, activities: cloneActivities(activities), reason: '无法确定拖动位置' }
+  targetSiblings.splice(insertionIndex, 0, active)
   active.parentId = toParentId
-  normalizeSiblingOrders(next, fromParentId)
+  if (fromParentId !== toParentId) normalizeSiblingOrders(next, fromParentId)
   targetSiblings.forEach((activity, order) => {
     activity.order = order
   })
   normalizeSiblingOrders(next, toParentId)
 
+  const resultActivities = flattenActivityTree(next)
   return {
     ok: true,
-    activities: flattenActivityTree(next),
+    changed: !hasSameLevel3ActivityStructure(activities, resultActivities),
+    activities: resultActivities,
     activeId,
     fromParentId,
     toParentId,
     fromIndex,
     toIndex: targetSiblings.findIndex(activity => activity.id === active.id),
   }
+}
+
+export function getLevel3MovePermission(
+  activeId: string,
+  overId: string,
+  activities: Level3Activity[],
+  context: Level3PermissionContext,
+  readOnly: boolean,
+): Level3MovePermission {
+  if (readOnly) return { allowed: false, reason: '跟随范围不支持拖动' }
+  const active = activities.find(activity => activity.id === activeId)
+  const over = activities.find(activity => activity.id === overId)
+  if (!active || !over) return { allowed: false, reason: '未找到拖动活动' }
+  if (activeId === overId) return { allowed: false, reason: '拖动位置未变化' }
+  const activeIsParent = !active.parentId
+  const overIsParent = !over.parentId
+  if (activeIsParent) {
+    if (!overIsParent) return { allowed: false, reason: '父活动仅支持拖动到父活动' }
+    const permissions = getLevel3ActivityPermissions(active, activities, context)
+    return permissions.canDrag ? { allowed: true } : { allowed: false, reason: '无拖动权限' }
+  }
+  const sourceParent = activities.find(activity => activity.id === active.parentId)
+  const targetParent = overIsParent ? over : activities.find(activity => activity.id === over.parentId)
+  if (!sourceParent || sourceParent.parentId || !targetParent || targetParent.parentId) {
+    return { allowed: false, reason: '父子层级无效' }
+  }
+  const isElevated = context.structuralAdministratorUsers.includes(context.currentUser)
+    || context.spmUsers.includes(context.currentUser)
+  if (isElevated) return { allowed: true }
+  if (sourceParent.responsible !== context.currentUser) return { allowed: false, reason: '仅父活动责任人可拖动子活动' }
+  if (sourceParent.id !== targetParent.id && targetParent.responsible !== context.currentUser) {
+    return { allowed: false, reason: '仅可拖动到本人负责的父活动' }
+  }
+  return { allowed: true }
+}
+
+export function filterLevel3HistoryForActivity(
+  history: Level3ChangeLog[],
+  activity: Level3Activity,
+  activities: Level3Activity[],
+): Level3ChangeLog[] {
+  if (activity.parentId) return history.filter(log => log.activityId === activity.id)
+  const currentChildIds = new Set(activities.filter(item => item.parentId === activity.id).map(item => item.id))
+  return history.filter(log => (
+    log.activityId === activity.id
+    || log.parentActivityId === activity.id
+    || log.sourceParentActivityId === activity.id
+    || log.targetParentActivityId === activity.id
+    || (
+      currentChildIds.has(log.activityId)
+      && !log.parentActivityId
+      && !log.sourceParentActivityId
+      && !log.targetParentActivityId
+    )
+  ))
 }
 
 export function deleteLevel3ActivityTree(
@@ -389,6 +479,7 @@ export function getLevel3ActivityPermissions(
   context: Level3PermissionContext,
 ): Level3ActivityPermissions {
   const isAdministrator = context.administratorUsers.includes(context.currentUser)
+  const isStructuralAdministrator = context.structuralAdministratorUsers.includes(context.currentUser)
   const isSpm = context.spmUsers.includes(context.currentUser)
   const isElevated = isAdministrator || isSpm
   if (!activity) {
@@ -404,7 +495,7 @@ export function getLevel3ActivityPermissions(
     canCreateParent: isElevated,
     canEdit,
     canAddChild: !activity.parentId && (isElevated || isParentOwner),
-    canDrag: isElevated || isParentOwner,
+    canDrag: isStructuralAdministrator || isSpm || isParentOwner,
     canDelete: canEdit,
   }
 }

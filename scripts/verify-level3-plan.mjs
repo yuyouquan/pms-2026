@@ -417,6 +417,7 @@ assert.deepEqual(removedFollowerTransitions.map(item => ({
 const sourceHistory = [{
   id: 'source-log', action: 'edit', actor: '张三', occurredAt: '2026-08-17 10:00:00',
   activityId: 'c1', activityName: '子活动A', activityNumber: '1.1', summary: '编辑活动', changes: [],
+  parentActivityId: 'p1', parentActivityName: '父活动',
 }, {
   id: 'tie-b', action: 'edit', actor: '张三', occurredAt: '2026-08-17 11:00:00',
   activityId: 'c1', activityName: '子活动A', activityNumber: '1.1', summary: '同一时刻的源历史', changes: [],
@@ -469,6 +470,140 @@ assert.deepEqual(
 
 const parent2 = { ...parent, id: 'p2', order: 1, activityName: '父活动2', responsible: '李四' }
 const childC = { ...childA, id: 'c3', parentId: 'p2', order: 0, activityName: '子活动C' }
+const parent3 = { ...parent, id: 'p3', order: 2, activityName: '父活动3', responsible: '王五' }
+const childD = { ...childA, id: 'c4', parentId: 'p2', order: 1, activityName: '子活动D' }
+const dragActivities = [parent, childA, childB, parent2, childC, childD, parent3]
+const dragContext = { currentUser: '张三', administratorUsers: [], structuralAdministratorUsers: [], spmUsers: [] }
+
+assert.deepEqual(
+  rules.getLevel3MovePermission('c1', 'p2', dragActivities, dragContext, true),
+  { allowed: false, reason: '跟随范围不支持拖动' },
+  'read-only scope must deny structural dragging',
+)
+assert.equal(
+  rules.getLevel3MovePermission('c1', 'p3', dragActivities, { ...dragContext, structuralAdministratorUsers: ['张三'] }, false).allowed,
+  true,
+  'global administrator can move any child across parents',
+)
+assert.equal(
+  rules.getLevel3MovePermission('c1', 'p3', dragActivities, { ...dragContext, spmUsers: ['张三'] }, false).allowed,
+  true,
+  'SPM can move any child across parents',
+)
+assert.deepEqual(
+  rules.getLevel3MovePermission('c1', 'c1', dragActivities, { ...dragContext, currentUser: '赵六' }, false),
+  { allowed: false, reason: '拖动位置未变化' },
+  'self-drop is denied regardless of the user permission',
+)
+assert.equal(
+  rules.getLevel3MovePermission('c1', 'c2', dragActivities, { ...dragContext, currentUser: '李四' }, false).allowed,
+  false,
+  'child owner alone cannot structurally drag',
+)
+const sameOwnerTarget = { ...parent2, responsible: '张三' }
+assert.equal(
+  rules.getLevel3MovePermission('c1', 'p2', [parent, childA, childB, sameOwnerTarget, childC], dragContext, false).allowed,
+  true,
+  'parent owner may move children between parents they also own',
+)
+assert.equal(
+  rules.getLevel3MovePermission('c1', 'p2', dragActivities, dragContext, false).allowed,
+  false,
+  'parent owner cannot move a child into another owner\'s parent',
+)
+const malformedTargetActivities = [parent, childA, { ...childB, parentId: 'c1' }]
+assert.equal(
+  rules.getLevel3MovePermission('c1', 'c2', malformedTargetActivities, { ...dragContext, structuralAdministratorUsers: ['张三'] }, false).allowed,
+  false,
+  'a child target whose parent is another child is never authorized',
+)
+const rejectedMalformedMove = rules.moveLevel3Activity(malformedTargetActivities, 'c1', 'c2')
+assert.equal(rejectedMalformedMove.ok, false)
+assert.equal(rejectedMalformedMove.activities.find(item => item.id === 'c1').parentId, 'p1')
+assert.equal(rejectedMalformedMove.activities.some(item => item.id === 'c1' && item.parentId === item.id), false)
+const malformedSourceActivities = [parent, { ...childA, parentId: 'c2' }, childB]
+assert.equal(
+  rules.getLevel3MovePermission('c1', 'p1', malformedSourceActivities, { ...dragContext, structuralAdministratorUsers: ['张三'] }, false).allowed,
+  false,
+  'a third-level source child is never authorized for structural dragging',
+)
+assert.equal(rules.moveLevel3Activity(malformedSourceActivities, 'c1', 'p1').ok, false)
+
+const appendedToParent = rules.moveLevel3Activity(dragActivities, 'c1', 'p2')
+assert.equal(appendedToParent.ok, true)
+assert.equal(appendedToParent.changed, true)
+assert.deepEqual(
+  appendedToParent.activities.filter(item => item.parentId === 'p2').map(item => item.id),
+  ['c3', 'c4', 'c1'],
+  'dropping a child on a parent appends it to that parent',
+)
+const insertedAtChild = rules.moveLevel3Activity(dragActivities, 'c1', 'c4')
+assert.equal(insertedAtChild.ok, true)
+assert.deepEqual(
+  insertedAtChild.activities.filter(item => item.parentId === 'p2').map(item => item.id),
+  ['c3', 'c1', 'c4'],
+  'dropping a child on another child inserts at the target position',
+)
+const rootReorder = rules.moveLevel3Activity(dragActivities, 'p2', 'p1')
+assert.equal(rootReorder.ok, true)
+assert.deepEqual(rootReorder.activities.map(item => item.id), ['p2', 'c3', 'c4', 'p1', 'c1', 'c2', 'p3'])
+assert.equal(rootReorder.changed, true, 'root reordering carries its children in flattened output')
+const noOpMove = rules.moveLevel3Activity(dragActivities, 'c1', 'c1')
+assert.equal(noOpMove.ok, true)
+assert.equal(noOpMove.changed, false, 'dropping an activity over itself is a no-op')
+const downwardChildReorder = rules.moveLevel3Activity([parent, childA, childB], 'c1', 'c2')
+assert.equal(downwardChildReorder.ok, true)
+assert.equal(downwardChildReorder.changed, true, 'dragging a child down over its next sibling changes order')
+assert.deepEqual(
+  rules.numberLevel3Activities(downwardChildReorder.activities).map(row => `${row.number}:${row.id}`),
+  ['1:p1', '1.1:c2', '1.2:c1'],
+  'dragging a child down uses arrayMove ordering',
+)
+const upwardChildReorder = rules.moveLevel3Activity([parent, childA, childB], 'c2', 'c1')
+assert.equal(upwardChildReorder.changed, true, 'dragging a child up over its previous sibling changes order')
+assert.deepEqual(rules.numberLevel3Activities(upwardChildReorder.activities).map(row => `${row.number}:${row.id}`), ['1:p1', '1.1:c2', '1.2:c1'])
+const unchangedParentAppend = rules.moveLevel3Activity([parent, childA, childB], 'c2', 'p1')
+assert.equal(unchangedParentAppend.ok, true)
+assert.equal(unchangedParentAppend.changed, false, 'appending the current last child to its parent is a no-op')
+assert.deepEqual(
+  { fromParentId: unchangedParentAppend.fromParentId, toParentId: unchangedParentAppend.toParentId, fromIndex: unchangedParentAppend.fromIndex, toIndex: unchangedParentAppend.toIndex },
+  { fromParentId: 'p1', toParentId: 'p1', fromIndex: 1, toIndex: 1 },
+  'unchanged parent append retains source and target metadata',
+)
+const downwardRootReorder = rules.moveLevel3Activity([parent, childA, parent2, childC], 'p1', 'p2')
+assert.equal(downwardRootReorder.ok, true)
+assert.equal(downwardRootReorder.changed, true, 'dragging a root down over its next root changes order')
+assert.deepEqual(
+  rules.numberLevel3Activities(downwardRootReorder.activities).map(row => `${row.number}:${row.id}`),
+  ['1:p2', '1.1:c3', '2:p1', '2.1:c1'],
+  'dragging a root down uses arrayMove ordering',
+)
+const upwardRootReorder = rules.moveLevel3Activity([parent, childA, parent2, childC], 'p2', 'p1')
+assert.equal(upwardRootReorder.changed, true, 'dragging a root up over its previous root changes order')
+assert.deepEqual(rules.numberLevel3Activities(upwardRootReorder.activities).map(row => `${row.number}:${row.id}`), ['1:p2', '1.1:c3', '2:p1', '2.1:c1'])
+
+const parentHistory = [
+  { id: 'moved-away', action: 'move', actor: '张三', occurredAt: '2026-08-19 10:03:00', activityId: 'c1', activityName: '子活动A', activityNumber: '1.1', summary: '移出父活动', changes: [], sourceParentActivityId: 'p1', sourceParentActivityName: '父活动' },
+  { id: 'deleted-child', action: 'delete', actor: '张三', occurredAt: '2026-08-19 10:02:00', activityId: 'deleted', activityName: '已删除子活动', activityNumber: '1.3', summary: '删除活动', changes: [], parentActivityId: 'p1', parentActivityName: '父活动' },
+  { id: 'current-child', action: 'edit', actor: '张三', occurredAt: '2026-08-19 10:01:00', activityId: 'c2', activityName: '子活动B', activityNumber: '1.2', summary: '编辑活动', changes: [] },
+  { id: 'other', action: 'edit', actor: '李四', occurredAt: '2026-08-19 10:00:00', activityId: 'c3', activityName: '子活动C', activityNumber: '2.1', summary: '其他活动', changes: [] },
+]
+assert.deepEqual(
+  rules.filterLevel3HistoryForActivity(parentHistory, parent, [parent, childB, parent2, childC]).map(log => log.id),
+  ['moved-away', 'deleted-child', 'current-child'],
+  'parent history includes current children and child snapshots after moves or deletion',
+)
+assert.deepEqual(
+  rules.filterLevel3HistoryForActivity(parentHistory, childB, dragActivities).map(log => log.id),
+  ['current-child'],
+  'child history is always exact to the child id',
+)
+const movedToParent2 = { ...childA, parentId: 'p2' }
+assert.deepEqual(
+  rules.filterLevel3HistoryForActivity(parentHistory, parent2, [parent, parent2, movedToParent2]).map(log => log.id),
+  [],
+  'operation-time parent snapshots prevent old child history appearing under its current parent',
+)
 const movedParent = rules.moveLevel3Activity([parent, childA, childB, parent2, childC], 'p2', 'p1')
 assert.equal(movedParent.ok, true)
 assert.deepEqual(rules.numberLevel3Activities(movedParent.activities).map(row => `${row.number}:${row.id}`), [
@@ -479,7 +614,7 @@ assert.equal(movedChild.ok, true)
 assert.equal(movedChild.activities.find(item => item.id === 'c2').parentId, 'p2')
 assert.deepEqual(
   movedChild.activities.filter(item => item.parentId === 'p2').map(item => item.id),
-  ['c3', 'c2'],
+  ['c2', 'c3'],
 )
 const deletedChild = rules.deleteLevel3ActivityTree([parent, childA, childB, parent2, childC], 'c1')
 assert.equal(deletedChild.ok, true)
@@ -490,7 +625,7 @@ assert.equal(deletedParent.ok, true)
 assert.deepEqual(deletedParent.deletedActivities.map(item => item.id), ['p1', 'c1', 'c2'])
 assert.deepEqual(deletedParent.activities.map(item => item.id), ['p2', 'c3'])
 
-const baseContext = { currentUser: '张三', administratorUsers: [], spmUsers: [] }
+const baseContext = { currentUser: '张三', administratorUsers: [], structuralAdministratorUsers: [], spmUsers: [] }
 assert.equal(rules.getLevel3ActivityPermissions(parent, [parent, childA], { ...baseContext, administratorUsers: ['张三'] }).canEdit, true)
 assert.equal(rules.getLevel3ActivityPermissions(parent, [parent, childA], { ...baseContext, spmUsers: ['张三'] }).canAddChild, true)
 assert.equal(rules.getLevel3ActivityPermissions(parent, [parent, childA], baseContext).canDelete, true)
@@ -498,6 +633,12 @@ assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], baseCo
 assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], { ...baseContext, currentUser: '李四' }).canEdit, true)
 assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], { ...baseContext, currentUser: '李四' }).canDrag, false)
 assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], { ...baseContext, currentUser: '赵六' }).canEdit, false)
+const projectAdministratorContext = { ...baseContext, currentUser: '系统管理员', administratorUsers: ['系统管理员'] }
+assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], projectAdministratorContext).canEdit, true)
+assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], projectAdministratorContext).canDelete, true)
+assert.equal(rules.getLevel3ActivityPermissions(undefined, [parent, childA], projectAdministratorContext).canCreateParent, true)
+assert.equal(rules.getLevel3ActivityPermissions(childA, [parent, childA], projectAdministratorContext).canDrag, false)
+assert.equal(rules.getLevel3MovePermission('c1', 'p2', dragActivities, projectAdministratorContext, false).allowed, false)
 assert.equal(rules.getLevel3NumberIndent(0), 0)
 assert.equal(rules.getLevel3NumberIndent(1), 32)
 assert.equal(rules.canInlineEditLevel3ActualDate(childA, [parent, childA], baseContext, false), true)
@@ -951,6 +1092,8 @@ try {
     version: hydratedStoreModule.LEVEL3_PLAN_STORE_VERSION,
   }))
   await hydratedStoreModule.useLevel3PlanStore.persist.rehydrate()
+  assert.deepEqual(hydratedStoreModule.useLevel3PlanStore.getState().historyByScope[storeSourceScope], sourceHistory,
+    'optional parent snapshots survive JSON persistence and hydration')
   assert.deepEqual(hydratedStoreModule.useLevel3PlanStore.getState().actualOverridesByScope, roundTripOverrides)
   assert.deepEqual(hydratedStoreModule.useLevel3PlanStore.getState().workflowOverridesByScope, roundTripWorkflowOverrides)
   assert.equal(hydratedStoreModule.useLevel3PlanStore.getState().forkFollowScope(storeSourceScope, 'malformed'), true)
@@ -981,6 +1124,7 @@ try {
     '@/types/level3Plan': loadCommonJsTypeScriptModule(path.join(root, 'src/types/level3Plan.ts')),
   })
   await reloadedStoreModule.useLevel3PlanStore.persist.rehydrate()
+  assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().historyByScope[storeSourceScope], sourceHistory)
   assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().actualOverridesByScope, roundTripOverrides)
   assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().workflowOverridesByScope.persisted, roundTripWorkflowOverrides.persisted)
   assert.deepEqual(reloadedStoreModule.useLevel3PlanStore.getState().historyByScope.rapid.map(log => log.changes[0].field), ['risk', 'status'])
@@ -1007,6 +1151,141 @@ try {
   if (hadWindow) globalThis.window = originalWindow
   else delete globalThis.window
 }
+
+// Store boundary: callers must not be able to bypass drag permissions, and
+// history must describe the tree as it existed at the operation time.
+const storeMoveScope = 'project-1::market::store-move'
+const storeParentA = { ...parent, id: 'store-p1', activityName: '来源父活动', responsible: '张三' }
+const storeParentB = { ...parent, id: 'store-p2', order: 1, activityName: '目标父活动', responsible: '王五' }
+const storeChildA = { ...childA, id: 'store-c1', parentId: 'store-p1', activityName: '待移动子活动', responsible: '李四' }
+const storeChildB = { ...childB, id: 'store-c2', parentId: 'store-p2', activityName: '目标下子活动', responsible: '赵六' }
+const storeContext = (currentUser, administratorUsers, structuralAdministratorUsers, spmUsers) => ({ currentUser, administratorUsers, structuralAdministratorUsers, spmUsers })
+store.setState({
+  activitiesByScope: { [storeMoveScope]: [storeParentA, storeChildA, storeParentB, storeChildB] },
+  historyByScope: { [storeMoveScope]: [] },
+  collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
+})
+const deniedActivities = structuredClone(store.getState().activitiesByScope[storeMoveScope])
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('张三', [], [], []), false).ok, false,
+  'different-responsible target is denied by the store')
+assert.deepEqual(store.getState().activitiesByScope[storeMoveScope], deniedActivities)
+assert.deepEqual(store.getState().historyByScope[storeMoveScope], [])
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('李四', [], [], []), false).ok, false,
+  'child responsible alone cannot drag')
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('张三', [], [], []), true).ok, false,
+  'read-only scope is denied by the store')
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c1', storeContext('张三', [], [], []), false).ok, false,
+  'self drop produces no store mutation')
+assert.deepEqual(store.getState().activitiesByScope[storeMoveScope], deniedActivities)
+assert.deepEqual(store.getState().historyByScope[storeMoveScope], [])
+
+const elevatedMove = store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('管理员', ['管理员'], ['管理员'], []), false)
+assert.equal(elevatedMove.ok, true, 'global administrator can cross-parent move through store')
+assert.equal(elevatedMove.changed, true)
+let storeMoveLog = store.getState().historyByScope[storeMoveScope][0]
+assert.deepEqual(
+  [storeMoveLog.sourceParentActivityId, storeMoveLog.sourceParentActivityName, storeMoveLog.targetParentActivityId, storeMoveLog.targetParentActivityName],
+  ['store-p1', '来源父活动', 'store-p2', '目标父活动'],
+)
+assert.deepEqual(storeMoveLog.changes.map(change => change.before), ['来源父活动', '1.1'])
+assert.deepEqual(storeMoveLog.changes.map(change => change.after), ['目标父活动', '2.1'])
+assert.equal(store.getState().historyByScope[storeMoveScope].length, 1)
+const noOpActivities = structuredClone(store.getState().activitiesByScope[storeMoveScope])
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c2', 'store-p2', storeContext('管理员', ['管理员'], ['管理员'], []), false).changed, false)
+assert.deepEqual(store.getState().activitiesByScope[storeMoveScope], noOpActivities)
+assert.equal(store.getState().historyByScope[storeMoveScope].length, 1)
+
+store.setState({
+  activitiesByScope: { [storeMoveScope]: [storeParentA, storeChildA, { ...storeParentB, responsible: '张三' }, storeChildB] },
+  historyByScope: { [storeMoveScope]: [] }, collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
+})
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('张三', [], [], []), false).ok, true,
+  'parent owner can move between parents they both own')
+store.setState({
+  activitiesByScope: { [storeMoveScope]: [storeParentA, storeChildA, storeParentB, storeChildB] },
+  historyByScope: { [storeMoveScope]: [] }, collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
+})
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-c1', 'store-c2', storeContext('SPM', [], [], ['SPM']), false).ok, true,
+  'SPM can cross-parent move through store')
+store.setState({
+  activitiesByScope: { [storeMoveScope]: [storeParentA, storeParentB] }, historyByScope: { [storeMoveScope]: [] },
+  collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
+})
+assert.equal(store.getState().moveActivity(storeMoveScope, 'store-p2', 'store-p1', storeContext('管理员', ['管理员'], ['管理员'], []), false).ok, true)
+storeMoveLog = store.getState().historyByScope[storeMoveScope][0]
+assert.equal(storeMoveLog.sourceParentActivityId, undefined, 'root reorder has no fake parent snapshot')
+assert.deepEqual(storeMoveLog.changes.map(change => change.field), ['number'])
+
+const storeHistoryScope = 'project-1::market::store-history'
+store.setState({
+  activitiesByScope: { [storeHistoryScope]: [storeParentA, storeChildA] }, historyByScope: { [storeHistoryScope]: [] },
+  collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
+})
+const storeNewChild = { ...storeChildA, id: 'store-c3', activityName: '新子活动', creator: '张三', createdAt: '2026-08-19 10:00:00' }
+assert.equal(store.getState().createActivity(storeHistoryScope, storeNewChild, '张三'), true)
+const assertChildParentSnapshot = log => assert.deepEqual(
+  [log.parentActivityId, log.parentActivityName], ['store-p1', '来源父活动'],
+)
+assertChildParentSnapshot(store.getState().historyByScope[storeHistoryScope][0])
+assert.equal(store.getState().updateActivity(storeHistoryScope, 'store-c3', { remark: '已编辑' }, '张三'), true)
+assertChildParentSnapshot(store.getState().historyByScope[storeHistoryScope][0])
+assert.equal(store.getState().updateFollowActualDates(storeHistoryScope, 'store-history-follow', 'store-c3', { actualStartDate: '2026-01-01' }, '张三'), true)
+assertChildParentSnapshot(store.getState().historyByScope['store-history-follow'][0])
+assert.equal(store.getState().updateFollowWorkflowFields(storeHistoryScope, 'store-history-follow', 'store-c3', { status: '进行中' }, '张三'), true)
+assertChildParentSnapshot(store.getState().historyByScope['store-history-follow'][0])
+assert.equal(store.getState().deleteActivity(storeHistoryScope, 'store-c3', '张三'), true)
+assertChildParentSnapshot(store.getState().historyByScope[storeHistoryScope][0])
+
+const malformedChild = { ...storeChildA, id: 'store-orphan', parentId: 'missing-root', activityName: '孤儿子活动' }
+const nestedParent = { ...storeChildA, id: 'store-nested-parent', parentId: 'store-p1', activityName: '非根父级' }
+const invalidChildState = () => structuredClone({
+  activitiesByScope: store.getState().activitiesByScope,
+  historyByScope: store.getState().historyByScope,
+  actualOverridesByScope: store.getState().actualOverridesByScope,
+  workflowOverridesByScope: store.getState().workflowOverridesByScope,
+})
+assert.equal(store.getState().createActivity(storeHistoryScope, malformedChild, '张三'), false,
+  'create rejects a child whose parent is absent')
+store.setState(state => ({
+  activitiesByScope: { ...state.activitiesByScope, [storeHistoryScope]: [storeParentA, nestedParent] },
+}))
+assert.equal(store.getState().createActivity(storeHistoryScope, { ...malformedChild, id: 'store-nested-child', parentId: 'store-nested-parent' }, '张三'), false,
+  'create rejects a child whose parent is not root')
+store.setState({
+  activitiesByScope: { [storeHistoryScope]: [storeParentA, malformedChild] }, historyByScope: { [storeHistoryScope]: [] },
+  collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
+})
+const malformedBefore = invalidChildState()
+assert.equal(store.getState().updateActivity(storeHistoryScope, 'store-orphan', { remark: '拒绝编辑' }, '张三'), false)
+assert.equal(store.getState().updateFollowActualDates(storeHistoryScope, 'store-malformed-follow', 'store-orphan', { actualStartDate: '2026-01-01' }, '张三'), false)
+assert.equal(store.getState().updateFollowWorkflowFields(storeHistoryScope, 'store-malformed-follow', 'store-orphan', { status: '进行中' }, '张三'), false)
+assert.equal(store.getState().deleteActivity(storeHistoryScope, 'store-orphan', '张三'), false)
+assert.deepEqual(invalidChildState(), malformedBefore, 'malformed child operations leave activities, history, and overrides untouched')
+
+const rootFollowScope = 'project-1::market::root-follow'
+store.setState({
+  activitiesByScope: { [storeHistoryScope]: [storeParentA, storeChildA] }, historyByScope: { [storeHistoryScope]: [] },
+  collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
+})
+const rootFollowBefore = invalidChildState()
+assert.equal(store.getState().updateFollowActualDates(storeHistoryScope, rootFollowScope, 'store-p1', { actualStartDate: '2026-01-01' }, '张三'), false,
+  'follow actual-date overrides reject root activities')
+assert.deepEqual(invalidChildState(), rootFollowBefore, 'root follow rejection leaves overrides and history untouched')
+
+const aliasMoveScope = 'project-1::market::move-alias'
+store.setState({
+  activitiesByScope: { [aliasMoveScope]: [storeParentA, storeChildA, storeParentB, storeChildB] }, historyByScope: { [aliasMoveScope]: [] },
+  collapsedIdsByScope: {}, columnSettingsByScope: {}, actualOverridesByScope: {}, workflowOverridesByScope: {},
+})
+const aliasMove = store.getState().moveActivity(aliasMoveScope, 'store-c1', 'store-c2', storeContext('管理员', ['管理员'], ['管理员'], []), false)
+assert.equal(aliasMove.ok, true)
+const aliasStoredHistory = structuredClone(store.getState().historyByScope[aliasMoveScope])
+aliasMove.activities.find(activity => activity.id === 'store-c1').activityName = '篡改返回值'
+aliasMove.activities.push({ ...storeParentA, id: 'returned-only' })
+assert.equal(store.getState().activitiesByScope[aliasMoveScope].find(activity => activity.id === 'store-c1').activityName, '待移动子活动',
+  'mutating a successful move result cannot mutate stored activity objects')
+assert.equal(store.getState().activitiesByScope[aliasMoveScope].some(activity => activity.id === 'returned-only'), false)
+assert.deepEqual(store.getState().historyByScope[aliasMoveScope], aliasStoredHistory)
 
 const componentPath = path.join(root, 'src/components/plans/Level3PlanModule.tsx')
 assert.ok(fs.existsSync(componentPath), 'src/components/plans/Level3PlanModule.tsx does not exist')
@@ -1052,6 +1331,39 @@ assert.ok(componentSource.includes('mergeLevel3Histories(sourceHistory, selected
 assert.ok(componentSource.includes('canInlineEditLevel3ActualDate(row, effectiveActivities, permissionContext, false)'), '跟随范围授权子活动实际日期应保持可编辑')
 assert.ok(componentSource.includes('!readOnly && (permissions.canEdit || permissions.canAddChild)'), '跟随范围仍须隐藏结构性行操作')
 assert.ok(componentSource.includes('!readOnly && getLevel3ActivityPermissions(row, effectiveActivities, permissionContext).canDrag'), '跟随范围仍须禁用拖动排序')
+
+// Per-activity history and drag delegation contracts. Keep these slices narrow so
+// the checks describe the row action and drag-end behaviour rather than matching
+// unrelated history or permission tokens elsewhere in the component.
+assert.ok(componentSource.includes('filterLevel3HistoryForActivity'), '活动历史必须使用 filterLevel3HistoryForActivity')
+assert.ok(componentSource.includes('const [selectedHistoryActivityId, setSelectedHistoryActivityId] = useState<string | null>(null)'), '活动历史必须保存当前选中活动 ID，而非行快照')
+assert.ok(componentSource.includes('effectiveActivities.find(activity => activity.id === selectedHistoryActivityId)'), '活动历史必须从当前有效活动中解析选中活动')
+assert.ok(componentSource.includes('if (selectedHistoryActivityId && !selectedHistoryActivity) setSelectedHistoryActivityId(null)'), '已删除活动的历史抽屉必须自动关闭')
+assert.ok(componentSource.includes('title={`活动历史记录 · ${selectedHistoryActivity.activityName}`}'), '活动历史抽屉标题必须包含活动名称')
+assert.ok(componentSource.includes('暂无该活动历史记录'), '活动历史抽屉必须提供空态')
+assert.ok(componentSource.includes('aria-label={`查看活动历史 ${row.activityName}`}'), '每行必须提供可访问的查看活动历史按钮')
+const activityNameStart = componentSource.indexOf('  const renderActivityName = (row: Level3ActivityViewRow): ReactNode => {')
+const activityNameEnd = componentSource.indexOf('  const handleInlineActualDateChange', activityNameStart)
+assert.ok(activityNameStart >= 0 && activityNameEnd > activityNameStart, '活动名称渲染边界缺失')
+const activityNameSource = componentSource.slice(activityNameStart, activityNameEnd)
+const historyButtonIndex = activityNameSource.indexOf('查看活动历史 ${row.activityName}')
+const structuralBranchIndex = activityNameSource.indexOf('!readOnly && (permissions.canEdit || permissions.canAddChild)')
+assert.ok(historyButtonIndex >= 0 && (structuralBranchIndex < 0 || historyButtonIndex < structuralBranchIndex), '查看历史按钮不能置于只读隐藏的结构操作分支内')
+assert.ok(activityNameSource.includes('onPointerDown={event => event.stopPropagation()}'), '活动行操作必须阻止指针事件触发拖动')
+assert.ok(activityNameSource.includes('onKeyDown={event => event.stopPropagation()}'), '活动行操作必须阻止键盘事件冒泡到拖动传感器')
+assert.ok(activityNameSource.includes('event.stopPropagation()\n                setSelectedHistoryActivityId(row.id)'), '查看历史按钮必须阻止点击冒泡')
+assert.ok(activityNameSource.includes('onDoubleClick={event => event.stopPropagation()}'), '查看历史按钮必须阻止双击触发编辑')
+assert.ok(componentSource.includes('const renderHistoryItems = (items: Level3ChangeLog[])'), '全局和活动历史必须复用同一渲染函数')
+assert.ok(componentSource.includes('renderHistoryItems(history)'), '全局历史抽屉必须复用历史渲染函数')
+assert.ok(componentSource.includes('renderHistoryItems(selectedActivityHistory)'), '活动历史抽屉必须复用历史渲染函数')
+const dragStart = componentSource.indexOf('  const handleDragEnd = ({ active, over }: DragEndEvent) => {')
+const dragEnd = componentSource.indexOf('  const dragPermissions =', dragStart)
+assert.ok(dragStart >= 0 && dragEnd > dragStart, '拖动结束处理边界缺失')
+const dragSource = componentSource.slice(dragStart, dragEnd)
+assert.ok(dragSource.includes('moveActivity(scopeKey, activeId, overId, permissionContext, readOnly)'), '拖动结束必须把范围、活动、权限上下文和只读状态交给 store')
+assert.ok(!dragSource.includes('const elevated'), '组件不得重复维护 elevated 拖动权限')
+assert.ok(!dragSource.includes('responsible !== currentUser'), '组件不得重复比较父活动责任人')
+assert.ok(dragSource.includes('if (!result.changed) return'), '无变化的成功拖动不得显示成功提示')
 assert.ok(componentSource.includes("{ key: 'remark', title: '备注'"), '三级计划列定义必须包含备注')
 assert.ok(componentSource.includes("{ key: 'remark', label: '备注', kind: 'text'"), '三级计划筛选字段必须包含备注')
 assert.ok(componentSource.includes("definition.key === 'remark'"), '三级计划必须单独渲染备注单元格')
