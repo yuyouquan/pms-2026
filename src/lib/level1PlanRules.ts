@@ -26,6 +26,16 @@ export interface Level1PlanViewRow extends Level1PlanTask {
   isMilestone: boolean
 }
 
+export type Level1StructureAction = 'rename' | 'delete' | 'reorder'
+
+export interface Level1StructureMutationInput {
+  projectType: string
+  technicalKind?: 'tdt' | 'subproject'
+  task: Level1PlanTask
+  parent?: Level1PlanTask
+  action: Level1StructureAction
+}
+
 export interface Level1DateViolation {
   taskId: string
   field: 'planEndDate' | 'actualEndDate'
@@ -330,6 +340,26 @@ export const canMaintainLevel1Plan = (input: {
   if (input.globalAdmins.includes(input.currentUser)) return true
   if (input.projectType === '技术项目') return input.technicalLead === input.currentUser
   return input.spmUsers.includes(input.currentUser)
+}
+
+const isLaunchStageTask = (task?: Level1PlanTask) => Boolean(
+  task && (task.stableId === 'stage-launch' || task.taskName === '上市收编阶段'),
+)
+
+export const canAddLevel1CustomChild = (
+  projectType: string,
+  parent: Level1PlanTask,
+): boolean => projectType === '整机产品项目' && !parent.parentId && isLaunchStageTask(parent)
+
+export const canMutateLevel1TaskStructure = (
+  input: Level1StructureMutationInput,
+): boolean => {
+  if (input.task.source !== 'custom') return false
+  if (input.technicalKind === 'tdt') return false
+  if (input.technicalKind === 'subproject') return !input.task.parentId
+  return input.projectType === '整机产品项目'
+    && Boolean(input.task.parentId)
+    && isLaunchStageTask(input.parent)
 }
 
 const getStableId = (task: Level1PlanTask) => task.stableId || task.id

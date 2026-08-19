@@ -242,6 +242,25 @@ assert.deepEqual(
 
 const technicalModuleSource = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
 const technicalWorkspace = loadTypeScriptModule(root, 'src/lib/technicalPlanWorkspace.ts')
+const numberedSubprojectTasks = technicalWorkspace.renumberTechnicalSubprojectTasks([
+  ...subprojectTasks,
+  {
+    ...subprojectTasks[0],
+    id: 'technical-task-1787125461',
+    stableId: 'technical-custom-1',
+    source: 'custom',
+    order: 4,
+    taskName: '新建一级任务',
+  },
+])
+assert.deepEqual(numberedSubprojectTasks.map(task => task.id), ['1', '2', '3', '4', '5'], 'technical subproject activities always expose continuous numeric sequence values')
+assert.equal(numberedSubprojectTasks.at(-1).stableId, 'technical-custom-1', 'renumbering keeps the stable identity used for version synchronization')
+const reorderedSubprojectTasks = technicalWorkspace.reorderTechnicalSubprojectCustomTasks([
+  ...numberedSubprojectTasks,
+  { ...numberedSubprojectTasks.at(-1), id: '6', stableId: 'technical-custom-2', order: 5, taskName: '第二个自定义任务' },
+], '6', '5')
+assert.deepEqual(reorderedSubprojectTasks.slice(-2).map(task => task.stableId), ['technical-custom-2', 'technical-custom-1'], 'custom subproject roots can reorder among themselves')
+assert.deepEqual(technicalWorkspace.reorderTechnicalSubprojectCustomTasks(reorderedSubprojectTasks, '1', '5'), reorderedSubprojectTasks, 'template roots cannot be reordered')
 const planWorkspaceShellPath = 'src/components/plans/PlanWorkspaceShell.tsx'
 assert.equal(fs.existsSync(`${root}/${planWorkspaceShellPath}`), true, 'plan workspace provides a shared shell for whole-machine and technical projects')
 const planWorkspaceShell = readSource(root, planWorkspaceShellPath)
