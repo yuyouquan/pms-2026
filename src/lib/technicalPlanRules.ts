@@ -315,6 +315,31 @@ export const validateTechnicalSubprojectDates = (
   return { valid: Object.keys(byTaskId).length === 0, byTaskId }
 }
 
+/**
+ * TDT stages are immutable summary rows while their child milestones may share
+ * a completion day.  The generic level-one validator treats both as one
+ * strictly serial milestone stream, which makes every TDT drag invalid.
+ */
+export const validateTechnicalTdtMilestoneDates = (
+  tasks: readonly TechnicalTemplateTaskInput[],
+): TechnicalSubprojectDateValidationResult => {
+  const byTaskId: TechnicalSubprojectDateValidationResult['byTaskId'] = {}
+  const add = (taskId: string, field: TechnicalSubprojectDateField, message: string) => {
+    byTaskId[taskId] = byTaskId[taskId] || {}
+    byTaskId[taskId][field] = [...(byTaskId[taskId][field] || []), message]
+  }
+  const byId = new Map(tasks.filter(task => task.id).map(task => [task.id!, task]))
+  tasks.filter(task => task.id && task.parentId).forEach(task => {
+    const parent = byId.get(task.parentId!)
+    const planEnd = typeof task.planEndDate === 'string' ? task.planEndDate : ''
+    const parentStart = typeof parent?.planStartDate === 'string' ? parent.planStartDate : ''
+    const parentEnd = typeof parent?.planEndDate === 'string' ? parent.planEndDate : ''
+    if (planEnd && parentStart && planEnd < parentStart) add(task.id!, 'planEndDate', '计划完成时间不得早于所属阶段开始时间')
+    if (planEnd && parentEnd && planEnd > parentEnd) add(task.id!, 'planEndDate', '计划完成时间不得晚于所属阶段完成时间')
+  })
+  return { valid: Object.keys(byTaskId).length === 0, byTaskId }
+}
+
 /** Same-row and parent-range date checks used by technical plan drafts. Empty dates stay valid. */
 export const getInvalidTechnicalTaskFields = (
   tasks: readonly TechnicalTemplateTaskInput[],

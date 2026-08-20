@@ -86,6 +86,18 @@ assert.equal(machineNonceCalls, 2, 'each controlled MR nonce reads Date.now exac
 
 assert.deepEqual(technicalRules.SUBPROJECT_TEMPLATE_SEED, ['第1版转测', '第2版转测', 'TDR3'], 'subproject seed contains only the two fixed transfer versions and TDR3')
 const seededSubprojectTasks = technicalRules.buildSubprojectTemplateTasks()
+const tdtDateFixture = [
+  { id: 'phase', order: 1, taskName: '概念阶段', planStartDate: '2026-02-11', planEndDate: '2026-03-15' },
+  { id: 'tdr1', parentId: 'phase', order: 1, taskName: 'TDR1', planStartDate: '2026-02-11', planEndDate: '2026-03-01' },
+  { id: 'tdr1-peer', parentId: 'phase', order: 2, taskName: '同日节点', planStartDate: '2026-02-11', planEndDate: '2026-03-01' },
+]
+assert.equal(technicalRules.validateTechnicalTdtMilestoneDates(tdtDateFixture).valid, true, 'TDT permits same-day child milestones inside their readonly stage range')
+assert.equal(technicalRules.validateTechnicalTdtMilestoneDates(tdtDateFixture.map(task => task.id === 'tdr1' ? { ...task, planEndDate: '2026-02-10' } : task)).valid, false, 'TDT rejects a milestone before its parent stage range')
+assert.equal(technicalRules.validateTechnicalTdtMilestoneDates(tdtDateFixture.map(task => task.id === 'tdr1' ? { ...task, planEndDate: '2026-03-16' } : task)).valid, false, 'TDT rejects a milestone after its parent stage range')
+const emptyTdtMilestone = [{ ...tdtDateFixture[1], planStartDate: '', planEndDate: '' }]
+const emptyTdtMilestoneBeforeValidation = structuredClone(emptyTdtMilestone)
+assert.equal(technicalRules.validateTechnicalTdtMilestoneDates(emptyTdtMilestone).valid, true, 'TDT permits an empty milestone date')
+assert.deepEqual(emptyTdtMilestone, emptyTdtMilestoneBeforeValidation, 'TDT validation leaves an empty-date input unchanged')
 const firstTransferInsert = technicalRules.insertNextTechnicalSubprojectTransfer(seededSubprojectTasks)
 assert.equal(firstTransferInsert.ok, true, 'a configured subproject accepts a controlled transfer version')
 assert.equal(firstTransferInsert.task.taskName, '第3版转测', 'the first controlled transfer version is 第3版转测')
@@ -317,11 +329,13 @@ const extendedTaskPatch = ganttRules.applyPlanTaskDatePatch(extendedTaskSource, 
 assert.equal(extendedTaskPatch[0].defaultRoadmap, true, 'date patches preserve task extension fields')
 
 const ganttHelperSource = fs.readFileSync(path.join(root, 'src/components/shared/PlanHelpers.tsx'), 'utf8')
+const ganttStyles = fs.readFileSync(path.join(root, 'src/styles/globals.css'), 'utf8')
 assert.match(ganttHelperSource, /export interface DHTMLXGanttDateChange/, 'gantt exposes a typed date-change callback contract')
 assert.match(ganttHelperSource, /onTaskDateChange\?: \(change: DHTMLXGanttDateChange\) => boolean/, 'gantt accepts an explicit accept-or-revert callback')
 assert.match(ganttHelperSource, /nodeType: 'milestone' \| 'task'/, 'gantt date changes expose the dragged node type')
 assert.match(ganttHelperSource, /getOnTaskDateChange: \(\) => onTaskDateChangeRef\.current/, 'gantt supplies the controller with the latest date-change callback')
 assert.match(ganttHelperSource, /gantt\.config\.readonly_property = 'readonly'/, 'gantt honors per-task readonly state')
+assert.match(ganttHelperSource, /gantt\.config\.drag_links = false/, 'plan gantt disables dependency-link dragging so milestone hit targets are not covered')
 assert.match(ganttHelperSource, /type: t\.type \|\| \(t\.parentId \? 'task' : 'project'\)/, 'gantt locks legacy root rows when they do not carry an explicit type')
 assert.match(ganttHelperSource, /pms-gantt-\$\{task\.type \|\| 'task'\}/, 'gantt emits a stable class for every task type')
 assert.match(ganttHelperSource, /onBeforeTaskDrag/, 'gantt blocks forbidden drag attempts before they change task dates')
@@ -332,6 +346,9 @@ assert.match(ganttHelperSource, /gantt\.detachEvent\(afterDragHandler\)/, 'gantt
 assert.match(ganttHelperSource, /gantt\.detachEvent\(beforeLightboxHandler\)/, 'gantt detaches lightbox guards during cleanup')
 assert.match(ganttHelperSource, /createPlanGanttInteractionController/, 'gantt delegates drag decisions to the tested pure interaction controller')
 assert.match(ganttHelperSource, /interactionController\.clear\(\)/, 'gantt clears the controller snapshot during cleanup')
+assert.match(ganttStyles, /\.gantt_task_line\.pms-gantt-milestone\s*\{[^}]*width:\s*14px !important;[^}]*transform:\s*rotate\(45deg\)/s, 'milestones render a 14px diamond hitbox')
+assert.match(ganttStyles, /\.gantt_task_line\.pms-gantt-milestone\s+\.gantt_task_content\s*\{[^}]*display:\s*none/s, 'milestone hitbox does not render task-bar content')
+assert.doesNotMatch(ganttStyles, /\.gantt_task_line\.pms-gantt-task-editable\s*\{[^}]*pointer-events:\s*none/s, 'task bars retain pointer interactions for move and resize')
 assert.match(fs.readFileSync(path.join(root, 'src/lib/planGanttRules.ts'), 'utf8'), /<Task extends Level1PlanTask>/, 'date updates retain generic task extension types')
 
 const asYmd = value => value instanceof Date ? value.toISOString().slice(0, 10) : String(value)

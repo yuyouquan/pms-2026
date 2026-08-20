@@ -366,9 +366,28 @@ const createRevisionInState = (state: TechnicalPlanState, input: CreateRevisionI
   const publishedVersions = (current?.versions || []).filter(version => version.status === '已发布').sort(comparePublishedTechnicalPlanVersions)
   const previousPublished = publishedVersions[0]
   const revisionTasks = previousPublished
-    ? (publishedVersions.length <= 1
-        ? buildFirstLevel1RevisionTasks(previousPublished.tasks, [...input.templateTasks])
-        : buildNextLevel1RevisionTasks(previousPublished.tasks)) as TechnicalTemplateTask[]
+    ? (input.templateKind === 'subproject' && publishedVersions.length <= 1
+        // Keep the current template's structure and labels for the first
+        // subproject revision, while retaining the published task-bar dates.
+        ? (() => {
+            const synchronized = buildFirstLevel1RevisionTasks(previousPublished.tasks, [...input.templateTasks]) as TechnicalTemplateTask[]
+            const previousByStableId = new Map(previousPublished.tasks.map(task => [task.stableId || task.id, task]))
+            return synchronized.map(task => {
+              const previous = previousByStableId.get(task.stableId || task.id)
+              return previous ? {
+                ...task,
+                planStartDate: previous.planStartDate,
+                planEndDate: previous.planEndDate,
+                estimatedDays: previous.estimatedDays,
+                actualStartDate: previous.actualStartDate,
+                actualEndDate: previous.actualEndDate,
+                actualDays: previous.actualDays,
+              } : task
+            })
+          })()
+        : (publishedVersions.length <= 1
+            ? buildFirstLevel1RevisionTasks(previousPublished.tasks, [...input.templateTasks])
+            : buildNextLevel1RevisionTasks(previousPublished.tasks))) as TechnicalTemplateTask[]
     : cloneTasks(input.templateTasks)
   const instance: TechnicalPlanInstance = current
     ? { ...current, versions: [...current.versions, { id: versionId, versionNo, templateType: input.templateKind, status: '修订中', tasks: cloneTasks(revisionTasks) }], currentVersionId: versionId }

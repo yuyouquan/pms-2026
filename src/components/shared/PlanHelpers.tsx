@@ -118,6 +118,9 @@ export function DHTMLXGantt({
     gantt.config.fit_tasks = true
     gantt.config.auto_scheduling = true
     gantt.config.auto_scheduling_strict = true
+    // This plan surface does not expose dependency authoring.  Link handles
+    // otherwise cover zero-width milestone diamonds and prevent date dragging.
+    gantt.config.drag_links = false
     gantt.config.open_tree_initial = true
     gantt.config.readonly = readOnly
     gantt.config.readonly_property = 'readonly'

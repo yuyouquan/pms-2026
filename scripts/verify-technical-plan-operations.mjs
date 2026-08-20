@@ -126,6 +126,21 @@ const childOnlyPlans = {
     version('child-published', 'V1', 'subproject', '已发布', [task('child-task', '子项目发布任务')]),
   ]),
 }
+const subprojectRevisionStore = technicalPlan.createTechnicalPlanStore({ plansByKey: childOnlyPlans })
+assert.deepEqual(
+  subprojectRevisionStore.createRevision({
+    scope: { kind: 'subproject', parentProjectId: 'project-a', subprojectId: 'child-1' },
+    templateKind: 'subproject', templateTasks: [task('child-task', '模板任务')], subproject: configuredChild,
+  }),
+  { ok: true, versionId: 'V2-draft' },
+  'subproject creates a draft from its latest published version',
+)
+const subprojectDraft = subprojectRevisionStore.getState().plansByKey['project-a:subproject:child-1'].versions.find(item => item.id === 'V2-draft')
+assert.deepEqual(
+  [subprojectDraft.tasks[0].planStartDate, subprojectDraft.tasks[0].planEndDate],
+  ['2026-01-01', '2026-01-02'],
+  'subproject revision retains planned start and end dates for gantt task move and resize',
+)
 assert.deepEqual(
   technicalPlan.createTechnicalPlanStore({ plansByKey: childOnlyPlans }).clonePublishedVersion({
     scope: { kind: 'subproject', parentProjectId: 'project-a', subprojectId: 'child-1' },

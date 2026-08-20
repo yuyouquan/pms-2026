@@ -41,7 +41,7 @@ import { compareVersionsForTable } from '@/lib/versionCompare'
 import type { PlanRevisionKind } from '@/lib/planVersioning'
 import { getTemplateSnapshotForProjectType } from '@/lib/projectTemplateCompatibility'
 import { comparePublishedTechnicalPlanVersions } from '@/lib/technicalProjectRules'
-import { canMaintainLevel1Plan, canMutateLevel1TaskStructure, projectLevel1FlatMilestones, projectLevel1Plan, projectTechnicalSubprojectRows, sumLevel1EstimatedDays, validateLevel1MilestoneDates, type Level1FlatMilestoneRow } from '@/lib/level1PlanRules'
+import { canMaintainLevel1Plan, canMutateLevel1TaskStructure, projectLevel1FlatMilestones, projectLevel1Plan, projectTechnicalSubprojectRows, sumLevel1EstimatedDays, type Level1FlatMilestoneRow } from '@/lib/level1PlanRules'
 import { applyPlanGanttDateChange, applyPlanTaskDatePatch, buildPlanGanttTasks } from '@/lib/planGanttRules'
 import {
   createFilterCondition,
@@ -56,7 +56,7 @@ import {
 import {
   getTemplateConfigScopeKey,
   insertNextTechnicalSubprojectTransfer,
-  TECHNICAL_TEMPLATE_STORAGE_KEYS,
+  TECHNICAL_TEMPLATE_STORAGE_KEYS, validateTechnicalTdtMilestoneDates,
   validateTechnicalSubprojectDates,
   validateTechnicalTemplateDepth,
 } from '@/lib/technicalPlanRules'
@@ -379,7 +379,7 @@ export default function TechnicalPlanModule({
     () => getTechnicalPlanFilterFields(tab?.templateKind || 'tdt', projectedTasks),
     [projectedTasks, tab?.templateKind],
   )
-  const milestoneValidation = useMemo(() => validateLevel1MilestoneDates(tasks), [tasks])
+  const milestoneValidation = useMemo(() => validateTechnicalTdtMilestoneDates(tasks), [tasks])
   const subprojectValidation = useMemo(() => validateTechnicalSubprojectDates(tasks), [tasks])
   const collapsedIds = useMemo(() => new Set(instance?.collapsedRows || []), [instance?.collapsedRows])
   const directlyFilteredTasks = useMemo(
@@ -869,16 +869,16 @@ export default function TechnicalPlanModule({
         primaryActions={(
           <Space size={6}>
             {!hasDraft && (
-              <Tooltip title={!canEditTechnicalPlan ? '无计划编辑权限' : readOnlyReason}>
-                <Dropdown
-                  menu={{ items: PLAN_REVISION_KIND_OPTIONS, onClick: handleCreateRevisionMenuClick }}
-                  trigger={['click']}
-                  placement="bottomLeft"
-                  disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)}
-                >
+              <Dropdown
+                menu={{ items: PLAN_REVISION_KIND_OPTIONS, onClick: handleCreateRevisionMenuClick }}
+                trigger={['click']}
+                placement="bottomLeft"
+                disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)}
+              >
+                <Tooltip title={!canEditTechnicalPlan ? '无计划编辑权限' : readOnlyReason}>
                   <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)} aria-label="创建修订">创建修订</Button>
-                </Dropdown>
-              </Tooltip>
+                </Tooltip>
+              </Dropdown>
             )}
             {isDraft && (
               <Tooltip title={!canMaintain ? readOnlyReason || '无计划编辑权限' : !publishedVersions.length ? '暂无已发布版本' : '计划克隆'}>
@@ -1047,7 +1047,7 @@ export default function TechnicalPlanModule({
               const next = applyPlanGanttDateChange(tasks, { ...change, mode })
               const valid = tab?.templateKind === 'subproject'
                 ? validateTechnicalSubprojectDates(next).valid
-                : validateLevel1MilestoneDates(next).violations.length === 0
+                : validateTechnicalTdtMilestoneDates(next).valid
               if (!valid) { message.error('拖动后的日期不符合计划规则'); return false }
               return updateCurrentTasks(scope, next, maxDepth).ok
             }}
