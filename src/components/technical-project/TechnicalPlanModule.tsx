@@ -3,14 +3,14 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   Alert, Avatar, Badge, Button, Card, DatePicker, Dropdown, Empty, Input, Modal, Popconfirm, Progress,
-  Row, Select, Space, Table, Tabs, Tag, Tooltip, Typography, Upload, message,
+  Row, Select, Space, Table, Tabs, Tag, Tooltip, Typography, message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { MenuProps } from 'antd'
 import {
   CopyOutlined, DeleteOutlined, DownloadOutlined, HistoryOutlined, PlusOutlined, SaveOutlined,
-  EditOutlined, FilterOutlined, MinusSquareOutlined, PlusSquareOutlined, SettingOutlined, ShareAltOutlined,
-  StopOutlined, UploadOutlined,
+  EditOutlined, FilterOutlined, MinusSquareOutlined, PlusSquareOutlined, SettingOutlined,
+  StopOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
@@ -967,14 +967,6 @@ export default function TechnicalPlanModule({
               <Tooltip title="全部收起"><Button icon={<MinusSquareOutlined />} size="small" style={{ borderRadius: 6 }} onClick={collapseAll} aria-label="全部收起" /></Tooltip>
             </>}
             <Tooltip title="版本对比"><Button aria-label="版本对比" icon={<HistoryOutlined />} style={{ borderRadius: 6 }} disabled={visibleVersions.length < 2} onClick={openVersionCompare} /></Tooltip>
-            <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={importWorkbook} disabled={!canImport || !canMaintain}>
-              <Tooltip title={!canImport ? '无计划导入权限' : !canMaintain ? readOnlyReason || '仅修订中版本可导入' : '导入'}>
-                <Button icon={<UploadOutlined />} style={{ borderRadius: 6 }} disabled={!canImport || !canMaintain} aria-label="导入" />
-              </Tooltip>
-            </Upload>
-            <Tooltip title={!canViewTechnicalPlan ? '无技术项目一级计划查看权限' : !canShareTechnicalPlan ? '无技术项目一级计划分享权限' : publishedVersions.length ? '复制精确作用域分享链接' : '暂无已发布版本'}>
-              <Button icon={<ShareAltOutlined />} style={{ borderRadius: 6 }} disabled={!canViewTechnicalPlan || !canShareTechnicalPlan || !publishedVersions.length} onClick={handleShare} aria-label="分享计划" />
-            </Tooltip>
           </Space>
         )}
         viewMode={viewMode}

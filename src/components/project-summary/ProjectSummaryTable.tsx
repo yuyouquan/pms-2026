@@ -563,7 +563,6 @@ export default function ProjectSummaryTable({
             }
             const seriesKey = String(record.__productSeriesKey ?? label)
             const isCollapsed = Boolean(record.__productSeriesCollapsed)
-            const projectCount = Number(record.__productSeriesProjectCount) || 0
             return (
               <button
                 type="button"
@@ -582,7 +581,6 @@ export default function ProjectSummaryTable({
               >
                 {isCollapsed ? <RightOutlined /> : <DownOutlined />}
                 <Tooltip title={label}><strong>{label}</strong></Tooltip>
-                <small>{projectCount}个项目</small>
               </button>
             )
           },
