@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,6 +23,13 @@ const level1Rules = await loadTypescriptModule('src/lib/level1PlanRules.ts')
 const technicalRules = await loadTypescriptModule('src/lib/technicalPlanRules.ts')
 const ganttRules = await loadTypescriptModule('src/lib/planGanttRules.ts')
 const projectSpaceLevel1Rules = await loadTypescriptModule('src/lib/projectSpaceLevel1Rules.ts')
+
+const unknownBrowserCase = spawnSync(process.execPath, ['screenshots/verify-level1-flat-milestone-gantt-browser.mjs'], {
+  cwd: root,
+  encoding: 'utf8',
+  env: { ...process.env, PMS_BROWSER_CASE: '__typo__' },
+})
+assert.notEqual(unknownBrowserCase.status, 0, 'an unknown browser case exits nonzero instead of reporting an empty PASS matrix')
 
 const level1RenumberInput = [
   { id: 'root-b', stableId: 'stable-root-b', order: 9, taskName: '阶段B' },
@@ -88,12 +96,35 @@ assert.deepEqual(technicalRules.SUBPROJECT_TEMPLATE_SEED, ['第1版转测', '第
 const seededSubprojectTasks = technicalRules.buildSubprojectTemplateTasks()
 const tdtDateFixture = [
   { id: 'phase', order: 1, taskName: '概念阶段', planStartDate: '2026-02-11', planEndDate: '2026-03-15' },
-  { id: 'tdr1', parentId: 'phase', order: 1, taskName: 'TDR1', planStartDate: '2026-02-11', planEndDate: '2026-03-01' },
-  { id: 'tdr1-peer', parentId: 'phase', order: 2, taskName: '同日节点', planStartDate: '2026-02-11', planEndDate: '2026-03-01' },
+  { id: 'tdr1', parentId: 'phase', order: 1, taskName: 'TDR1', planStartDate: '2026-02-11', planEndDate: '2026-03-01', actualEndDate: '2026-03-01' },
+  { id: 'tdr1-peer', parentId: 'phase', order: 2, taskName: '同日节点', planStartDate: '2026-02-11', planEndDate: '2026-03-01', actualEndDate: '2026-03-01' },
 ]
-assert.equal(technicalRules.validateTechnicalTdtMilestoneDates(tdtDateFixture).valid, true, 'TDT permits same-day child milestones inside their readonly stage range')
+const tdtDateFixtureSnapshot = structuredClone(tdtDateFixture)
+assert.equal(technicalRules.validateTechnicalTdtMilestoneDates(tdtDateFixture).valid, true, 'TDT permits same-day child planned and actual completion dates inside their readonly stage range')
+assert.deepEqual(tdtDateFixture, tdtDateFixtureSnapshot, 'TDT validation leaves a valid input unchanged')
 assert.equal(technicalRules.validateTechnicalTdtMilestoneDates(tdtDateFixture.map(task => task.id === 'tdr1' ? { ...task, planEndDate: '2026-02-10' } : task)).valid, false, 'TDT rejects a milestone before its parent stage range')
 assert.equal(technicalRules.validateTechnicalTdtMilestoneDates(tdtDateFixture.map(task => task.id === 'tdr1' ? { ...task, planEndDate: '2026-03-16' } : task)).valid, false, 'TDT rejects a milestone after its parent stage range')
+const outOfOrderTdt = tdtDateFixture.map(task => task.id === 'tdr1' ? { ...task, taskName: 'TDR2', planEndDate: '2026-03-20' } : task.id === 'tdr1-peer' ? { ...task, taskName: 'PDCP', planEndDate: '2026-03-10' } : { ...task, planEndDate: '2026-03-31' })
+const outOfOrderTdtValidation = technicalRules.validateTechnicalTdtMilestoneDates(outOfOrderTdt)
+assert.equal(outOfOrderTdtValidation.valid, false, 'TDT rejects a later sibling whose planned completion is earlier than the preceding milestone')
+assert.ok(outOfOrderTdtValidation.byTaskId['tdr1-peer']?.planEndDate?.some(message => message.includes('不得早于前序')), 'the out-of-order TDT milestone identifies its planned completion field')
+const outOfOrderTdtActual = tdtDateFixture.map(task => task.id === 'tdr1' ? { ...task, actualEndDate: '2026-03-10' } : task.id === 'tdr1-peer' ? { ...task, actualEndDate: '2026-03-05' } : task)
+const outOfOrderTdtActualValidation = technicalRules.validateTechnicalTdtMilestoneDates(outOfOrderTdtActual)
+assert.equal(outOfOrderTdtActualValidation.valid, false, 'TDT rejects a later sibling whose actual completion is earlier than the preceding milestone')
+assert.ok(outOfOrderTdtActualValidation.byTaskId['tdr1-peer']?.actualEndDate?.some(message => message.includes('不得早于前序')), 'the out-of-order TDT milestone identifies its actual completion field')
+const crossStageOutOfOrderTdt = [
+  { id: 'phase-1', order: 1, taskName: '阶段一', planStartDate: '2026-02-01', planEndDate: '2026-03-31' },
+  { id: 'phase-1.1', parentId: 'phase-1', order: 1, taskName: '阶段一节点', planEndDate: '2026-03-20', actualEndDate: '2026-03-20' },
+  { id: 'phase-2', order: 2, taskName: '阶段二', planStartDate: '2026-04-01', planEndDate: '2026-05-31' },
+  { id: 'phase-2.1', parentId: 'phase-2', order: 1, taskName: '阶段二节点', planEndDate: '2026-04-10', actualEndDate: '2026-03-10' },
+]
+const crossStageOutOfOrderValidation = technicalRules.validateTechnicalTdtMilestoneDates(crossStageOutOfOrderTdt)
+assert.equal(crossStageOutOfOrderValidation.valid, false, 'TDT rejects a later-stage milestone whose actual completion is earlier in the global display sequence')
+assert.ok(crossStageOutOfOrderValidation.byTaskId['phase-2.1']?.actualEndDate?.some(message => message.includes('不得早于前序')), 'cross-stage actual ordering identifies the later milestone field')
+const invalidTdtActualDate = tdtDateFixture.map(task => task.id === 'tdr1-peer' ? { ...task, actualEndDate: 'not-a-date' } : task)
+const invalidTdtActualValidation = technicalRules.validateTechnicalTdtMilestoneDates(invalidTdtActualDate)
+assert.equal(invalidTdtActualValidation.valid, false, 'TDT rejects an invalid actual completion date format')
+assert.ok(invalidTdtActualValidation.byTaskId['tdr1-peer']?.actualEndDate?.some(message => message.includes('格式')), 'invalid actual completion dates identify the actual field')
 const emptyTdtMilestone = [{ ...tdtDateFixture[1], planStartDate: '', planEndDate: '' }]
 const emptyTdtMilestoneBeforeValidation = structuredClone(emptyTdtMilestone)
 assert.equal(technicalRules.validateTechnicalTdtMilestoneDates(emptyTdtMilestone).valid, true, 'TDT permits an empty milestone date')
@@ -418,7 +449,7 @@ const flatDatePatchStart = projectSpaceSource.indexOf('const patchFlatMilestoneD
 const flatDatePatchEnd = projectSpaceSource.indexOf('const renderFlatDate', flatDatePatchStart)
 assert.ok(flatDatePatchStart >= 0 && flatDatePatchEnd > flatDatePatchStart, 'flat table exposes a bounded date-patch path')
 assert.doesNotMatch(projectSpaceSource.slice(flatDatePatchStart, flatDatePatchEnd), /validateLevel1MilestoneDates/, 'flat table date patches do not block partial repairs on full-sequence validation')
-assert.match(projectSpaceSource, /okText: '确认添加'/, 'controlled MR confirmation uses the required action label')
+assert.match(projectSpaceSource, /okText="确认添加"/, 'controlled MR confirmation uses the required action label')
 
 const liveDraftTasks = [
   { id: '1', stableId: 'stage', order: 1, taskName: '阶段', planEndDate: '2026-01-01' },
@@ -518,6 +549,9 @@ assert.deepEqual(publishedActualStore.updateCurrentTasks(publishedActualScope, p
 for (const label of ['阶段', '里程碑点', '活动名称', '添加转测版本', '实际开始时间', '实际完成时间']) {
   assert.match(technicalModuleSource, new RegExp(label), `technical plan contains ${label}`)
 }
+assert.match(technicalModuleSource, /transferConfirmation && \(/, 'technical transfer confirmation is controlled by component state')
+assert.match(technicalModuleSource, /title="确认添加转测版本？"/, 'technical transfer confirmation uses the required title')
+assert.match(technicalModuleSource, /okText="确认添加"/, 'technical transfer confirmation uses the required action label')
 assert.match(technicalModuleSource, /insertNextTechnicalSubprojectTransfer/, 'technical plan inserts controlled transfer versions')
 assert.match(technicalModuleSource, /projectTechnicalSubprojectRows/, 'technical plan projects subproject activities without a fake stage tree')
 assert.match(technicalModuleSource, /buildPlanGanttTasks/, 'technical plan builds typed Gantt tasks')
@@ -532,6 +566,9 @@ assert.match(technicalStoreSource, /actualDays/, 'technical store synchronizes a
 
 const versionCompareSource = read('src/lib/versionCompare.ts')
 const compareModalSource = read('src/components/plans/PlanVersionCompareModal.tsx')
+const comparisonSnapshotsSource = read('src/lib/versionComparisonSnapshots.ts')
+assert.match(comparisonSnapshotsSource, /getProjectMarketSnapshotKey/, 'published comparisons resolve a whole-machine version through its market snapshot key')
+assert.match(comparisonSnapshotsSource, /if \(scope\.kind === 'market'\) \{\s*return publishedSnapshots\[comparisonSnapshotKey\(scope, version\.id\)\] \|\| effectiveTasks/, 'market comparison never falls through to an unscoped or another-market snapshot')
 assert.match(versionCompareSource, /stageName/, 'version compare preserves flat stage names')
 assert.match(versionCompareSource, /milestoneName/, 'version compare preserves flat milestone names')
 assert.match(versionCompareSource, /activityName/, 'version compare preserves technical activity names')
@@ -546,6 +583,49 @@ assert.match(compareModalSource, /const renderFlatDaysCell[\s\S]*typeof value ==
 assert.match(compareModalSource, /hierarchicalFlatColumns[\s\S]*renderFlatDaysCell/, 'hierarchical-flat duration columns use the flat formatter')
 assert.match(compareModalSource, /technicalSubprojectColumns[\s\S]*renderFlatDaysCell/, 'technical-subproject duration columns use the flat formatter')
 const compareModule = loadTypeScriptModule(root, 'src/lib/versionCompare.ts')
+const comparisonSnapshotsModule = loadTypeScriptModule(root, 'src/lib/versionComparisonSnapshots.ts')
+const marketRulesModule = loadTypeScriptModule(root, 'src/lib/marketRules.ts')
+const marketComparisonEffective = [{ id: 'effective', taskName: '当前市场', planEndDate: '2026-03-20' }]
+const marketComparisonV2 = [{ id: 'concept', taskName: '概念启动', actualEndDate: '2026-02-26' }]
+const marketComparisonOtherMarket = [{ id: 'concept', taskName: '概念启动', actualEndDate: '2099-12-31' }]
+const marketComparisonSnapshots = {
+  [marketRulesModule.getProjectMarketSnapshotKey('machine', 'OP', 'v2')]: marketComparisonV2,
+  [marketRulesModule.getProjectMarketSnapshotKey('machine', 'TR', 'v2')]: marketComparisonOtherMarket,
+  v2: marketComparisonOtherMarket,
+}
+assert.equal(comparisonSnapshotsModule.resolveComparisonVersionTasks({
+  version: { id: 'v2', status: '已发布' },
+  effectiveTasks: marketComparisonEffective,
+  publishedSnapshots: marketComparisonSnapshots,
+  scope: { kind: 'market', projectId: 'machine', market: 'OP' },
+}), marketComparisonV2, 'market comparison reads only the selected market published snapshot')
+assert.equal(comparisonSnapshotsModule.resolveComparisonVersionTasks({
+  version: { id: 'v2', status: '修订中' },
+  effectiveTasks: marketComparisonEffective,
+  publishedSnapshots: marketComparisonSnapshots,
+  scope: { kind: 'market', projectId: 'machine', market: 'OP' },
+}), marketComparisonEffective, 'draft comparison remains on the current live scope')
+const marketComparisonSeeded = comparisonSnapshotsModule.ensurePublishedComparisonSnapshots({
+  publishedSnapshots: {
+    [marketRulesModule.getProjectMarketSnapshotKey('machine', 'TR', 'v2')]: marketComparisonOtherMarket,
+  },
+  versions: [{ id: 'v1', status: '已发布' }, { id: 'v2', status: '已发布' }, { id: 'v3', status: '修订中' }],
+  scope: { kind: 'market', projectId: 'machine', market: 'OP' },
+  seedTasks: marketComparisonV2,
+})
+assert.equal(marketComparisonSeeded[marketRulesModule.getProjectMarketSnapshotKey('machine', 'OP', 'v1')]?.[0]?.actualEndDate, '2026-02-26', 'missing historical snapshots are seeded in the selected market scope')
+assert.equal(marketComparisonSeeded[marketRulesModule.getProjectMarketSnapshotKey('machine', 'OP', 'v2')]?.[0]?.actualEndDate, '2026-02-26', 'every published selected-market version receives its own baseline snapshot')
+assert.equal(marketComparisonSeeded[marketRulesModule.getProjectMarketSnapshotKey('machine', 'TR', 'v2')], marketComparisonOtherMarket, 'seeding the selected market never replaces another market snapshot')
+const publishedBaselineWithoutMr4 = [{ id: 'concept', taskName: '概念启动' }]
+const currentDraftWithMr4 = [...publishedBaselineWithoutMr4, { id: 'mr4', taskName: 'MR4' }]
+const historicalSeed = comparisonSnapshotsModule.ensurePublishedComparisonSnapshots({
+  publishedSnapshots: {},
+  versions: [{ id: 'v1', status: '已发布' }, { id: 'v2', status: '已发布' }],
+  scope: { kind: 'market', projectId: 'machine', market: 'OP' },
+  seedTasks: publishedBaselineWithoutMr4,
+})
+assert.equal(historicalSeed[marketRulesModule.getProjectMarketSnapshotKey('machine', 'OP', 'v2')]?.some(task => task.id === 'mr4'), false, 'missing historical snapshots seed from the published baseline, never the current draft')
+assert.equal(currentDraftWithMr4.some(task => task.id === 'mr4'), true, 'draft fixture retains MR4 so the baseline assertion cannot pass vacuously')
 const stableCompare = compareModule.compareVersionsForTable(
   [{ ...milestones[1], id: '1.2', stableId: 'str1', sequence: 2, planEndDate: '2026-01-16' }],
   [{ ...milestones[1], id: '1.1', stableId: 'str1', sequence: 1, planEndDate: '2026-01-20' }],

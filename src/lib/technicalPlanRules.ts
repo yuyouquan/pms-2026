@@ -317,8 +317,9 @@ export const validateTechnicalSubprojectDates = (
 
 /**
  * TDT stages are immutable summary rows while their child milestones may share
- * a completion day.  The generic level-one validator treats both as one
- * strictly serial milestone stream, which makes every TDT drag invalid.
+ * a completion day. Their completion dates must nevertheless stay ordered in
+ * the global displayed milestone stream, while empty partial inputs remain
+ * editable.
  */
 export const validateTechnicalTdtMilestoneDates = (
   tasks: readonly TechnicalTemplateTaskInput[],
@@ -328,14 +329,52 @@ export const validateTechnicalTdtMilestoneDates = (
     byTaskId[taskId] = byTaskId[taskId] || {}
     byTaskId[taskId][field] = [...(byTaskId[taskId][field] || []), message]
   }
+  const isStrictDate = (value: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+    const [year, month, day] = value.split('-').map(Number)
+    const parsed = new Date(Date.UTC(year, month - 1, day))
+    return parsed.getUTCFullYear() === year
+      && parsed.getUTCMonth() === month - 1
+      && parsed.getUTCDate() === day
+  }
   const byId = new Map(tasks.filter(task => task.id).map(task => [task.id!, task]))
+  const indexedTasks = tasks.map((task, index) => ({ task, index }))
+  const byDisplayOrder = (left: { task: TechnicalTemplateTaskInput; index: number }, right: { task: TechnicalTemplateTaskInput; index: number }) => (
+    Number(left.task.order ?? left.index + 1) - Number(right.task.order ?? right.index + 1)
+    || left.index - right.index
+  )
+  const rootDisplayIndex = new Map(
+    indexedTasks.filter(({ task }) => task.id && !task.parentId).sort(byDisplayOrder)
+      .map(({ task }, index) => [task.id!, index]),
+  )
+  const milestones = indexedTasks.filter(({ task }) => task.id && task.parentId).sort((left, right) => (
+    (rootDisplayIndex.get(left.task.parentId!) ?? Number.MAX_SAFE_INTEGER)
+      - (rootDisplayIndex.get(right.task.parentId!) ?? Number.MAX_SAFE_INTEGER)
+    || byDisplayOrder(left, right)
+  ))
+  let priorPlanEnd = ''
+  let priorActualEnd = ''
+  milestones.forEach(({ task }) => {
+    const planEnd = typeof task.planEndDate === 'string' ? task.planEndDate : ''
+    const actualEnd = typeof task.actualEndDate === 'string' ? task.actualEndDate : ''
+    if (planEnd && !isStrictDate(planEnd)) add(task.id!, 'planEndDate', '计划完成时间格式无效')
+    if (actualEnd && !isStrictDate(actualEnd)) add(task.id!, 'actualEndDate', '实际完成时间格式无效')
+    if (planEnd && isStrictDate(planEnd)) {
+      if (priorPlanEnd && planEnd < priorPlanEnd) add(task.id!, 'planEndDate', '计划完成时间不得早于前序里程碑')
+      priorPlanEnd = planEnd
+    }
+    if (actualEnd && isStrictDate(actualEnd)) {
+      if (priorActualEnd && actualEnd < priorActualEnd) add(task.id!, 'actualEndDate', '实际完成时间不得早于前序里程碑')
+      priorActualEnd = actualEnd
+    }
+  })
   tasks.filter(task => task.id && task.parentId).forEach(task => {
     const parent = byId.get(task.parentId!)
     const planEnd = typeof task.planEndDate === 'string' ? task.planEndDate : ''
     const parentStart = typeof parent?.planStartDate === 'string' ? parent.planStartDate : ''
     const parentEnd = typeof parent?.planEndDate === 'string' ? parent.planEndDate : ''
-    if (planEnd && parentStart && planEnd < parentStart) add(task.id!, 'planEndDate', '计划完成时间不得早于所属阶段开始时间')
-    if (planEnd && parentEnd && planEnd > parentEnd) add(task.id!, 'planEndDate', '计划完成时间不得晚于所属阶段完成时间')
+    if (planEnd && isStrictDate(planEnd) && parentStart && isStrictDate(parentStart) && planEnd < parentStart) add(task.id!, 'planEndDate', '计划完成时间不得早于所属阶段开始时间')
+    if (planEnd && isStrictDate(planEnd) && parentEnd && isStrictDate(parentEnd) && planEnd > parentEnd) add(task.id!, 'planEndDate', '计划完成时间不得晚于所属阶段完成时间')
   })
   return { valid: Object.keys(byTaskId).length === 0, byTaskId }
 }

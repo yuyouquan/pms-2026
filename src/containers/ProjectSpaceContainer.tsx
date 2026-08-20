@@ -40,6 +40,7 @@ import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrate
 import type { MenuProps } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { compareVersionsForTable } from '@/lib/versionCompare'
+import { ensurePublishedComparisonSnapshots, resolveComparisonVersionTasks } from '@/lib/versionComparisonSnapshots'
 import { resolveLevel3DetachedScopeFork, resolveLevel3Scope } from '@/lib/level3PlanRules'
 import { getAddedDimensionValues, materializeLevel3Template } from '@/lib/level3TemplateRules'
 import type { Level3Milestone } from '@/types/level3Plan'
@@ -593,6 +594,7 @@ export default function ProjectSpaceContainer() {
   const [tosTypeDraftRows, setTosTypeDraftRows] = useState<TosTypeConfigRow[]>([])
   const [showProjectInfoEditor, setShowProjectInfoEditor] = useState(false)
   const [transferInfoCollapsed, setTransferInfoCollapsed] = useState(false)
+  const [machineMrConfirmation, setMachineMrConfirmation] = useState<ProjectSpaceLevel1ScopeToken | null>(null)
 
   useEffect(() => {
     setTransferInfoCollapsed(false)
@@ -959,6 +961,18 @@ export default function ProjectSpaceContainer() {
         ? []
         : currentStandardPublishedSnapshot
           ?? (isCurrentDraft && hasExecutionDates(tasks) ? tasks : projectLinkedLevel1MockTasks)
+
+  useEffect(() => {
+    if (!selectedProject || !isMarketScopedLevel1 || !projectLinkedLevel1MockTasks.length) return
+    const scope = { kind: 'market' as const, projectId: selectedProject.id, market: selectedMarketTab }
+    setPublishedSnapshots(previous => ensurePublishedComparisonSnapshots({
+      publishedSnapshots: previous,
+      versions,
+      scope,
+      seedTasks: projectLinkedLevel1MockTasks,
+    }))
+  }, [isMarketScopedLevel1, projectLinkedLevel1MockTasks, selectedMarketTab, selectedProject?.id, setPublishedSnapshots, versions])
+
   const setEffectiveTasks = currentTosLevel1Data
     ? (newTasks: any[] | ((prev: any[]) => any[])) => {
         if (currentTosTypeIsFollow) {
@@ -2766,14 +2780,18 @@ export default function ProjectSpaceContainer() {
       currentUser: currentLoginUser,
     }
     return (
-      <Button
-        icon={<PlusOutlined />}
-        onClick={() => Modal.confirm({
-          title: '确认添加上市阶段 MR 里程碑？',
-          content: '系统将自动生成下一个 MR 编号，名称不可修改。',
-          okText: '确认添加',
-          cancelText: '取消',
-          onOk: () => {
+      <>
+        <Button aria-label="添加上市阶段 MR 里程碑" icon={<PlusOutlined />} onClick={() => setMachineMrConfirmation(openingScope)}>
+          添加上市阶段 MR 里程碑
+        </Button>
+        {machineMrConfirmation && <Modal
+          open
+          title="确认添加上市阶段 MR 里程碑？"
+          okText="确认添加"
+          cancelText="取消"
+          onCancel={() => setMachineMrConfirmation(null)}
+          onOk={() => {
+            if (!machineMrConfirmation) return
             const latestPlan = usePlanStore.getState()
             const latestProjectState = useProjectStore.getState()
             const latestPermissionState = usePermissionStore.getState()
@@ -2815,7 +2833,7 @@ export default function ProjectSpaceContainer() {
               latestMarket,
             )
             if (!canConfirmMachineMrInsertion({
-              openingScope,
+              openingScope: machineMrConfirmation,
               currentScope: latestScope,
               isMachineProject: Boolean(latestProject && isMachineProjectType(latestProject.type)),
               isCurrentDraft: latestVersionData?.status === '修订中',
@@ -2823,15 +2841,18 @@ export default function ProjectSpaceContainer() {
               canMaintain: latestCanMaintain,
               followedReadOnly: latestFollowed,
             })) {
+              setMachineMrConfirmation(null)
               void message.warning('计划状态已变化，请重新操作')
               return
             }
             const latestTasks = latestPlan.marketPlanData[latestMarket]?.tasks || []
             const result = insertNextMachineMrMilestone(latestTasks)
             if (!result.ok) {
+              setMachineMrConfirmation(null)
               void message.error(result.reason === 'launch-stage-missing' ? '未找到上市阶段' : 'MR 编号已存在')
               return
             }
+            setMachineMrConfirmation(null)
             latestPlan.setMarketPlanData(previous => ({
               ...previous,
               [latestMarket]: {
@@ -2840,11 +2861,11 @@ export default function ProjectSpaceContainer() {
               },
             }))
             void message.success(`已添加 ${result.task.taskName}`)
-          },
-        })}
-      >
-        添加上市阶段 MR 里程碑
-      </Button>
+          }}
+        >
+          系统将自动生成下一个 MR 编号，名称不可修改。
+        </Modal>}
+      </>
     )
   }
 
@@ -4713,12 +4734,19 @@ export default function ProjectSpaceContainer() {
         ? versionTrainRecordsToCompareTasks(snapshot as VersionTrainRecord[])
         : snapshot
     }
-    const oldTasks = isTosTypeScoped
-      ? getTosVersionTasks(versionA.id)
-      : versionA.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
-    let newTasks = isTosTypeScoped
-      ? getTosVersionTasks(versionB.id)
-      : versionB.status === '已发布' ? LEVEL1_TASKS : effectiveTasks
+    const comparisonSnapshotScope = selectedProject && isMarketScopedLevel1
+      ? { kind: 'market' as const, projectId: selectedProject.id, market: selectedMarketTab }
+      : selectedProject && !isTechnicalProject
+        ? { kind: 'project' as const, projectId: selectedProject.id }
+        : { kind: 'global' as const }
+    const resolveComparisonTasks = (version: typeof versionA) => resolveComparisonVersionTasks({
+      version,
+      effectiveTasks: currentScopedTasks,
+      publishedSnapshots,
+      scope: comparisonSnapshotScope,
+    })
+    const oldTasks = isTosTypeScoped ? getTosVersionTasks(versionA.id) : resolveComparisonTasks(versionA)
+    let newTasks = isTosTypeScoped ? getTosVersionTasks(versionB.id) : resolveComparisonTasks(versionB)
     if (projectPlanLevel !== 'level1' && !isTosTypeScoped && comparePlanVersions(versionA, versionB) !== 0) {
       newTasks = [
         ...effectiveTasks.map(task => {

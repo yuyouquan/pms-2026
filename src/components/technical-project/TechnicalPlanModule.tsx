@@ -315,6 +315,7 @@ export default function TechnicalPlanModule({
   const [configuringChild, setConfiguringChild] = useState<TechnicalSubproject | null>(null)
   const [configTrigger, setConfigTrigger] = useState<HTMLElement | null>(null)
   const [deleteOpening, setDeleteOpening] = useState<TechnicalSubprojectTransferScopeToken | null>(null)
+  const [transferConfirmation, setTransferConfirmation] = useState<TechnicalSubprojectTransferScopeToken | null>(null)
   const activeKeyRef = useRef(activeKey)
 
   const subprojects = useTechnicalProjectStore(state => state.subprojects)
@@ -485,6 +486,7 @@ export default function TechnicalPlanModule({
     setViewMode('horizontal')
     setCompareOpen(false)
     setHasCompared(false)
+    setTransferConfirmation(null)
   }, [activeKey])
 
   const handleCreateRevision = (revisionKind: PlanRevisionKind) => {
@@ -598,36 +600,7 @@ export default function TechnicalPlanModule({
 
   const confirmAddTechnicalSubprojectTransfer = () => {
     if (!tab || tab.templateKind !== 'subproject' || !canMaintain) return
-    const opening = createSubprojectActionOpening()
-    Modal.confirm({
-      title: '确认添加转测版本？',
-      content: '系统将在 TDR3 前自动生成下一个转测版本，名称不可修改。',
-      okText: '确认添加',
-      cancelText: '取消',
-      onOk: () => {
-        const latest = resolveLatestSubprojectActionContext(opening)
-        if (!latest || latest.tab.templateKind !== 'subproject' || !canConfirmTechnicalSubprojectTransfer({
-          opening,
-          current: latest.current,
-          isCurrentDraft: latest.version.status === '修订中',
-          isEditMode: useUiStore.getState().isEditMode,
-          canView: latest.canView,
-          canEdit: latest.canEdit,
-          canMaintain: latest.canMaintain,
-        })) {
-          message.error('当前计划状态已变化，请重新操作')
-          return
-        }
-        const result = insertNextTechnicalSubprojectTransfer(latest.version.tasks)
-        if (!result.ok) {
-          message.error(result.reason === 'tdr3-missing' ? '未找到 TDR3，无法添加转测版本' : 'TDR3 位置无效，无法添加转测版本')
-          return
-        }
-        const updated = useTechnicalPlanStore.getState().updateCurrentTasks(latest.tab.scope, result.tasks, 1)
-        if (!updated.ok) { message.error('添加转测版本失败，请重试'); return }
-        message.success(`已添加 ${result.task.taskName}`)
-      },
-    })
+    setTransferConfirmation(createSubprojectActionOpening())
   }
 
   const handleScopeChange = (nextKey: string) => {
@@ -1054,6 +1027,43 @@ export default function TechnicalPlanModule({
           />
         ) : null}
       </PlanWorkspaceShell>
+
+      {transferConfirmation && (
+        <Modal
+          open
+          title="确认添加转测版本？"
+          okText="确认添加"
+          cancelText="取消"
+          onCancel={() => setTransferConfirmation(null)}
+          onOk={() => {
+            const opening = transferConfirmation
+            setTransferConfirmation(null)
+            const latest = resolveLatestSubprojectActionContext(opening)
+            if (!latest || latest.tab.templateKind !== 'subproject' || !canConfirmTechnicalSubprojectTransfer({
+              opening,
+              current: latest.current,
+              isCurrentDraft: latest.version.status === '修订中',
+              isEditMode: useUiStore.getState().isEditMode,
+              canView: latest.canView,
+              canEdit: latest.canEdit,
+              canMaintain: latest.canMaintain,
+            })) {
+              message.error('当前计划状态已变化，请重新操作')
+              return
+            }
+            const result = insertNextTechnicalSubprojectTransfer(latest.version.tasks)
+            if (!result.ok) {
+              message.error(result.reason === 'tdr3-missing' ? '未找到 TDR3，无法添加转测版本' : 'TDR3 位置无效，无法添加转测版本')
+              return
+            }
+            const updated = useTechnicalPlanStore.getState().updateCurrentTasks(latest.tab.scope, result.tasks, 1)
+            if (!updated.ok) { message.error('添加转测版本失败，请重试'); return }
+            message.success(`已添加 ${result.task.taskName}`)
+          }}
+        >
+          系统将在 TDR3 前自动生成下一个转测版本，名称不可修改。
+        </Modal>
+      )}
 
       <PlanVersionCompareModal
         fieldMode={tab?.templateKind === 'subproject' ? 'technical-subproject' : 'hierarchical-flat'}
