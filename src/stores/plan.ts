@@ -43,7 +43,7 @@ import type { Level3TemplateActivity } from '@/types/level3Template'
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
-export const PLAN_STORE_VERSION = 6
+export const PLAN_STORE_VERSION = 7
 export const PLAN_STORE_STORAGE_KEY = 'pms-plan-store'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -151,23 +151,35 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
   const migrated = persistedVersion < 6
     ? migrateTechnicalSubprojectSeedState(numberedMigrated)
     : numberedMigrated
+  const shouldRepairEmptyLevel1Mocks = persistedVersion < 7
   const standardTemplateTypes = PROJECT_TEMPLATE_TYPES.filter(projectType => projectType !== PROJECT_CATEGORY_TECH)
   const shouldReplaceLegacyStandardTasks = (tasks: unknown) => (
     Array.isArray(tasks)
     && tasks.some(task => ['概念', '计划', '开发验证', '上市保障'].includes(String(task?.taskName || '')))
   )
-  const migrateStandardTasks = (tasks: unknown, withMockDates: boolean) => {
+  const migrateStandardTasks = (tasks: unknown, withMockDates: boolean, repairEmpty = false) => {
+    if (repairEmpty && Array.isArray(tasks) && tasks.length === 0) return buildStandardLevel1Tasks(withMockDates)
     if (!shouldReplaceLegacyStandardTasks(tasks)) return tasks
     const customTasks = (tasks as any[]).filter(task => task?.source === 'custom')
     return [...buildStandardLevel1Tasks(withMockDates), ...customTasks.map(task => ({ ...task, source: 'custom' }))]
   }
   const migratedConfigTemplates = { ...(migrated.configTemplateTasksByType || {}) }
   standardTemplateTypes.forEach(projectType => {
-    migratedConfigTemplates[projectType] = migrateStandardTasks(migratedConfigTemplates[projectType], false) || cloneLevel1TemplateTasks()
+    migratedConfigTemplates[projectType] = migrateStandardTasks(
+      migratedConfigTemplates[projectType],
+      false,
+      shouldRepairEmptyLevel1Mocks,
+    ) || cloneLevel1TemplateTasks()
   })
   const migratedSnapshots = Object.fromEntries(Object.entries(migrated.publishedSnapshots || {}).map(([key, value]) => [
     key,
-    key.includes(PROJECT_CATEGORY_TECH) ? value : migrateStandardTasks(value, key.startsWith('project::')),
+    key.includes(PROJECT_CATEGORY_TECH)
+      ? value
+      : migrateStandardTasks(
+          value,
+          key.startsWith('project::'),
+          shouldRepairEmptyLevel1Mocks && key.includes('::level1::'),
+        ),
   ])) as Record<string, any[]>
   const initialPublishedSnapshots = createInitialTemplatePublishedSnapshots()
   Object.entries(initialPublishedSnapshots).forEach(([key, value]) => {
@@ -182,9 +194,20 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
       level3TemplateTasksByType[projectType] = defaults.map(item => ({ ...item }))
     }
   })
-  const migratedMarketPlanData = Object.fromEntries(Object.entries(migrated.marketPlanData || {}).map(([market, value]) => {
+  const fallbackMarketPlanData = Object.fromEntries(['OP', 'TR', 'RU'].map(market => [market, {
+    tasks: buildStandardLevel1Tasks(true),
+    level2Tasks: [],
+    createdLevel2Plans: [...FIXED_LEVEL2_PLANS],
+  }]))
+  const marketPlanSource = shouldRepairEmptyLevel1Mocks
+    ? { ...fallbackMarketPlanData, ...(migrated.marketPlanData || {}) }
+    : (migrated.marketPlanData || {})
+  const migratedMarketPlanData = Object.fromEntries(Object.entries(marketPlanSource).map(([market, value]) => {
     const planData = value as Record<string, any>
-    return [market, { ...planData, tasks: migrateStandardTasks(planData.tasks, true) }]
+    return [market, {
+      ...planData,
+      tasks: migrateStandardTasks(planData.tasks, true, shouldRepairEmptyLevel1Mocks),
+    }]
   }))
   const initialScopes = createInitialConfigTemplateVersionScopes()
   const legacyVersions = Array.isArray(migrated.versions)
@@ -207,7 +230,7 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
   }))
   return {
     ...migrated,
-    tasks: migrateStandardTasks(migrated.tasks, true) || buildStandardLevel1Tasks(true),
+    tasks: migrateStandardTasks(migrated.tasks, true, shouldRepairEmptyLevel1Mocks) || buildStandardLevel1Tasks(true),
     marketPlanData: migratedMarketPlanData,
     publishedSnapshots: migratedSnapshots,
     configTemplateTasksByType: migratedConfigTemplates,

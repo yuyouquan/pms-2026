@@ -67,7 +67,7 @@ assert.deepEqual(migrated.publishedSnapshots['template::技术项目::level1::v3
 const planSource = readSource(root, 'src/stores/plan.ts')
 const configSource = readSource(root, 'src/containers/ConfigContainer.tsx')
 assert.match(planSource, /PLAN_STORE_VERSION\s*=\s*\d+/, 'plan store declares a persistence version')
-assert.equal(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]), 6, 'plan store migrates the controlled subproject transfer seed exactly once')
+assert.equal(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]), 7, 'plan store migrates empty persisted level-one mock scopes exactly once')
 assert.match(planSource, /setTechnicalTemplateTasks/, 'plan store exposes a validating technical-template setter')
 assert.match(planSource, /validateTechnicalTemplateDepth/, 'plan store enforces technical template depth')
 assert.doesNotMatch(configSource, /publishedSnapshots\[versionId\]/, 'config snapshots never fall back across template scopes')
@@ -716,6 +716,35 @@ assert.deepEqual(migratedPlan.configTemplateVersionScopes[machineScope], {
   versions: [{ id: 'machine-v', versionNo: 'V99', status: '已发布' }],
   currentVersion: 'machine-v',
 }, 'migration preserves an existing nontechnical version scope')
+const repairedEmptyLevel1Mocks = planModule.migratePlanStoreState({
+  tasks: [],
+  configTemplateTasksByType: {
+    '整机产品项目': [],
+    'tOS版本项目': [],
+  },
+  publishedSnapshots: {
+    'template::整机产品项目::level1::v3': [],
+    'project::mock-machine::OP::level1::v3': [],
+  },
+  marketPlanData: {},
+}, 6)
+assert.ok(repairedEmptyLevel1Mocks.tasks.length > 0, 'v6 empty global level-one tasks recover the standard mock plan')
+assert.ok(repairedEmptyLevel1Mocks.configTemplateTasksByType['整机产品项目'].length > 0, 'v6 empty machine template recovers its standard milestones')
+assert.ok(repairedEmptyLevel1Mocks.configTemplateTasksByType['tOS版本项目'].length > 0, 'v6 empty tOS template recovers its standard milestones')
+assert.ok(repairedEmptyLevel1Mocks.publishedSnapshots['template::整机产品项目::level1::v3'].length > 0, 'v6 empty standard template snapshot is repaired')
+assert.ok(repairedEmptyLevel1Mocks.publishedSnapshots['project::mock-machine::OP::level1::v3'].length > 0, 'v6 empty project-market snapshot is repaired')
+assert.deepEqual(Object.keys(repairedEmptyLevel1Mocks.marketPlanData).sort(), ['OP', 'RU', 'TR'], 'v6 missing market scopes recover the three demo market plans')
+assert.ok(Object.values(repairedEmptyLevel1Mocks.marketPlanData).every(entry => entry.tasks.length > 0), 'every recovered demo market has visible level-one tasks')
+const preservedNonemptyLevel1Mocks = planModule.migratePlanStoreState({
+  tasks: [{ id: 'custom-global', taskName: '自定义全局计划' }],
+  configTemplateTasksByType: { '整机产品项目': [{ id: 'custom-template', taskName: '自定义模板' }] },
+  publishedSnapshots: { 'project::mock-machine::OP::level1::v3': [{ id: 'custom-snapshot', taskName: '自定义快照' }] },
+  marketPlanData: { OP: { tasks: [{ id: 'custom-market', taskName: '自定义市场计划' }], level2Tasks: [], createdLevel2Plans: [] } },
+}, 6)
+assert.equal(preservedNonemptyLevel1Mocks.tasks[0].taskName, '自定义全局计划', 'nonempty global plans remain user-owned')
+assert.equal(preservedNonemptyLevel1Mocks.configTemplateTasksByType['整机产品项目'][0].taskName, '自定义模板', 'nonempty standard templates remain user-owned')
+assert.equal(preservedNonemptyLevel1Mocks.publishedSnapshots['project::mock-machine::OP::level1::v3'][0].taskName, '自定义快照', 'nonempty project snapshots remain user-owned')
+assert.equal(preservedNonemptyLevel1Mocks.marketPlanData.OP.tasks[0].taskName, '自定义市场计划', 'nonempty market plans remain user-owned')
 const editedTdt = [{ ...tdtTasks[0], taskName: '用户已编辑TDT模板' }]
 const migratedFromTask10 = planModule.migratePlanStoreState({
   configTemplateTasksByType: {
