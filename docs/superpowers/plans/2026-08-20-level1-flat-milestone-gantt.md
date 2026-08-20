@@ -36,7 +36,7 @@
 - Modify: `src/lib/technicalPlanRules.ts`
 - Modify: `package.json`
 
-- [ ] **Step 1: Write the failing flat-projection and date-validation test**
+- [x] **Step 1: Write the failing flat-projection and date-validation test**
 
 Create `scripts/verify-level1-flat-milestone-gantt.mjs` with a TypeScript loader and assertions that require the new APIs:
 
@@ -103,13 +103,13 @@ Add package commands:
 "verify:level1-flat-gantt-browser": "node screenshots/verify-level1-flat-milestone-gantt-browser.mjs"
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run: `npm run verify:level1-flat-gantt`
 
 Expected: FAIL because `projectLevel1FlatMilestones`, `projectTechnicalSubprojectRows`, or `validateTechnicalSubprojectDates` is missing.
 
-- [ ] **Step 3: Implement flat rows and four-date validation**
+- [x] **Step 3: Implement flat rows and four-date validation**
 
 In `src/lib/level1PlanRules.ts`, extend `Level1PlanTask` with the existing schedule fields and add these exported row contracts and projectors:
 
@@ -240,13 +240,13 @@ export const validateTechnicalSubprojectDates = (tasks: readonly TechnicalTempla
 }
 ```
 
-- [ ] **Step 4: Run the focused and existing governance tests**
+- [x] **Step 4: Run the focused and existing governance tests**
 
 Run: `npm run verify:level1-flat-gantt && npm run verify:level1-plan-governance && npm run verify:technical-plan`
 
 Expected: all three commands print PASS and exit 0. Update old assertions that expected subproject projected start/duration to be empty so they now expect retained dates and durations.
 
-- [ ] **Step 5: Commit the projection rules**
+- [x] **Step 5: Commit the projection rules**
 
 ```bash
 git add package.json scripts/verify-level1-flat-milestone-gantt.mjs src/lib/level1PlanRules.ts src/lib/technicalPlanRules.ts
@@ -261,7 +261,7 @@ git commit -m "feat: add flat level1 plan projections"
 - Modify: `src/lib/technicalPlanRules.ts`
 - Modify: `src/stores/technicalPlan.ts`
 
-- [ ] **Step 1: Add failing command assertions**
+- [x] **Step 1: Add failing command assertions**
 
 Append assertions that lock names/order and prove only generated nodes can be deleted:
 
@@ -297,13 +297,13 @@ const transferAfterDelete = technical.insertNextTechnicalSubprojectTransfer(
 assert.deepEqual(transferAfterDelete.tasks.map(task => task.taskName), ['第1版转测', '第2版转测', '第3版转测', '第4版转测', 'TDR3'])
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run: `npm run verify:level1-flat-gantt`
 
 Expected: FAIL because the insertion commands do not exist and the seed still contains `第X版转测`.
 
-- [ ] **Step 3: Implement machine MR insertion and delete-only permission**
+- [x] **Step 3: Implement machine MR insertion and delete-only permission**
 
 In `src/lib/level1PlanRules.ts`, export a stable-ID-preserving renumber helper, a discriminated command result, and the insertion command:
 
@@ -385,7 +385,7 @@ export const canMutateLevel1TaskStructure = (input: Level1StructureMutationInput
 
 Use `renumberLevel1Tasks` after deleting a custom MR as well as after insertion. Stable IDs must never change when display IDs are regenerated.
 
-- [ ] **Step 4: Implement the subproject seed, command, and Mock migration**
+- [x] **Step 4: Implement the subproject seed, command, and Mock migration**
 
 In `src/lib/technicalPlanRules.ts`, set the exact template and add insertion before `TDR3`:
 
@@ -445,13 +445,13 @@ Use `seedMigrated` for the remainder of `migratePlanStoreState`; do not modify e
 
 In `src/stores/technicalPlan.ts`, calculate subproject Mock ranges using `const segmentCount = buildSubprojectTemplateTasks().length` instead of the literal `4` in both division expressions. Bump `TECHNICAL_PLAN_STORE_VERSION` to `8` so missing default scopes use the new three-row seed, but keep all valid stored `versions[].tasks` unchanged so historical published plans are never rewritten solely because they contain `第X版转测`.
 
-- [ ] **Step 5: Run focused and store regression tests**
+- [x] **Step 5: Run focused and store regression tests**
 
 Run: `npm run verify:level1-flat-gantt && npm run verify:level1-plan-governance && npm run verify:technical-plan && npm run verify:technical-project`
 
 Expected: all commands exit 0; old assertions that custom nodes can rename/reorder are replaced with delete-only assertions.
 
-- [ ] **Step 6: Commit automatic structure commands**
+- [x] **Step 6: Commit automatic structure commands**
 
 ```bash
 git add scripts/verify-level1-flat-milestone-gantt.mjs src/lib/level1PlanRules.ts src/lib/technicalPlanRules.ts src/stores/plan.ts src/stores/technicalPlan.ts
@@ -465,7 +465,7 @@ git commit -m "feat: add controlled MR and transfer milestones"
 - Modify: `scripts/verify-level1-flat-milestone-gantt.mjs`
 - Modify: `src/components/shared/PlanHelpers.tsx`
 
-- [ ] **Step 1: Add failing Gantt policy assertions**
+- [x] **Step 1: Add failing Gantt policy assertions**
 
 Load `src/lib/planGanttRules.ts` in the verification script and assert the three node modes:
 
@@ -507,13 +507,13 @@ const movedActual = ganttRules.applyPlanTaskDatePatch(subproject, {
 assert.equal(movedActual[0].actualDays, 15)
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run: `npm run verify:level1-flat-gantt`
 
 Expected: FAIL with `ENOENT` for `src/lib/planGanttRules.ts`.
 
-- [ ] **Step 3: Implement pure Gantt rules**
+- [x] **Step 3: Implement pure Gantt rules**
 
 Create `src/lib/planGanttRules.ts` with explicit modes and immutable updates:
 
@@ -606,7 +606,7 @@ export const applyPlanGanttDateChange = <Task extends Level1PlanTask>(
 })
 ```
 
-- [ ] **Step 4: Extend `DHTMLXGantt` with per-task editability and rollback**
+- [x] **Step 4: Extend `DHTMLXGantt` with per-task editability and rollback**
 
 Add this callback contract to `PlanHelpers.tsx`:
 
@@ -679,13 +679,13 @@ const beforeLightboxHandler = gantt.attachEvent('onBeforeLightbox', (id: string 
 
 Keep the callback in `onTaskDateChangeRef`, update the ref in a separate effect, detach `beforeDragHandler`, `afterDragHandler`, and `beforeLightboxHandler` during cleanup, and do not add the callback itself to the parse effect dependency list. Restore the drag snapshot and call `gantt.updateTask(id)` whenever the callback returns `false`.
 
-- [ ] **Step 5: Run rules, type-check, and build**
+- [x] **Step 5: Run rules, type-check, and build**
 
 Run: `npm run verify:level1-flat-gantt && npx tsc --noEmit && npm run build`
 
 Expected: all commands exit 0; build prints `Compiled successfully`.
 
-- [ ] **Step 6: Commit shared Gantt behavior**
+- [x] **Step 6: Commit shared Gantt behavior**
 
 ```bash
 git add scripts/verify-level1-flat-milestone-gantt.mjs src/lib/planGanttRules.ts src/components/shared/PlanHelpers.tsx
@@ -700,7 +700,7 @@ git commit -m "feat: support typed gantt task editing"
 - Modify: `src/stores/plan.ts`
 - Modify: `src/styles/globals.css`
 
-- [ ] **Step 1: Add failing project-space UI contract checks**
+- [x] **Step 1: Add failing project-space UI contract checks**
 
 Append source checks that require the new labels and forbid the old editable tree affordances inside the governed table branch:
 
@@ -716,13 +716,13 @@ assert.match(projectSpaceSource, /buildPlanGanttTasks/)
 assert.match(projectSpaceSource, /onTaskDateChange/)
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run: `npm run verify:level1-flat-gantt`
 
 Expected: FAIL because the project-space component does not contain the new table labels and commands.
 
-- [ ] **Step 3: Replace the governed tree table with the flat milestone table**
+- [x] **Step 3: Replace the governed tree table with the flat milestone table**
 
 In `renderTaskTable`, compute `flatRows = projectLevel1FlatMilestones(tableTasks)` and feed those rows directly to Ant Design Table. The governed columns must be exactly:
 
@@ -756,7 +756,7 @@ const canEditActualEnd = (record: Level1FlatMilestoneRow) => (
 )
 ```
 
-- [ ] **Step 4: Add the confirmed MR button and delete-only interaction**
+- [x] **Step 4: Add the confirmed MR button and delete-only interaction**
 
 Render the button only for whole-machine draft scopes with maintenance permission:
 
@@ -796,7 +796,7 @@ canMutateLevel1TaskStructure({
 })
 ```
 
-- [ ] **Step 5: Wire typed Gantt tasks and milestone persistence**
+- [x] **Step 5: Wire typed Gantt tasks and milestone persistence**
 
 Build tasks with `mode: 'hierarchical'` and set `editable` only for an editable current draft. Handle the callback synchronously:
 
@@ -825,7 +825,7 @@ Build tasks with `mode: 'hierarchical'` and set `editable` only for an editable 
 
 Pass `editable: isEditMode && isCurrentDraft && canMaintainCurrentPlan && !followedTosLevel1ReadOnly` and the matching global `readOnly` value so entering a draft without edit mode cannot accidentally unlock the chart. Build from the unprojected hierarchy; `buildPlanGanttTasks` derives read-only stage spans and milestone points.
 
-- [ ] **Step 6: Align export and persisted current-scope data**
+- [x] **Step 6: Align export and persisted current-scope data**
 
 Change `handleExportVerticalPlan` to use `projectLevel1FlatMilestones(effectiveTasks)` and these exact export fields for governed level-one plans:
 
@@ -863,13 +863,13 @@ partialize: state => ({
 })
 ```
 
-- [ ] **Step 7: Run focused and existing project regressions**
+- [x] **Step 7: Run focused and existing project regressions**
 
 Run: `npm run verify:level1-flat-gantt && npm run verify:level1-plan-governance && npm run verify:machine-tos && npx tsc --noEmit`
 
 Expected: all commands exit 0.
 
-- [ ] **Step 8: Commit project-space UI**
+- [x] **Step 8: Commit project-space UI**
 
 ```bash
 git add scripts/verify-level1-flat-milestone-gantt.mjs src/containers/ProjectSpaceContainer.tsx src/stores/plan.ts src/styles/globals.css
@@ -884,7 +884,7 @@ git commit -m "feat: flatten whole-machine and tOS milestones"
 - Modify: `src/lib/technicalPlanWorkspace.ts`
 - Modify: `src/styles/globals.css`
 
-- [ ] **Step 1: Add failing technical UI and export assertions**
+- [x] **Step 1: Add failing technical UI and export assertions**
 
 Append checks for both technical modes:
 
@@ -900,13 +900,13 @@ assert.match(technicalModuleSource, /onTaskDateChange/)
 assert.match(technicalWorkspaceSource, /TECHNICAL_SUBPROJECT_EXPORT_COLUMNS/)
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run: `npm run verify:level1-flat-gantt`
 
 Expected: FAIL because technical tables and export modes are not split.
 
-- [ ] **Step 3: Split TDT and subproject table projections**
+- [x] **Step 3: Split TDT and subproject table projections**
 
 Use `projectLevel1FlatMilestones(tasks)` for TDT and `projectTechnicalSubprojectRows(tasks)` for subprojects. TDT uses the same eight business columns as Task 4. Subproject uses this complete column contract:
 
@@ -926,7 +926,7 @@ const subprojectColumns: ColumnsType<Level1FlatMilestoneRow> = [
 
 Append the operation column only when the current subproject draft has at least one `source: 'custom'` activity for which `canMutateLevel1TaskStructure({ projectType: '技术项目', technicalKind: 'subproject', task: record, action: 'delete' })` returns true. Plan dates edit only in a maintainable draft. Actual dates edit in a maintainable draft or the latest published version under existing technical-plan permission. Every date editor writes through `applyPlanTaskDatePatch`, then calls `updateCurrentTasks`, so `estimatedDays` and `actualDays` stay synchronized. Use `validateTechnicalSubprojectDates` for per-cell error classes and in `handlePublish`; when invalid, scroll to the first invalid row, show its first reason, and do not call `publishRevision`. Remove all drag-sort and rename inputs from technical project tables.
 
-- [ ] **Step 4: Add transfer insertion and delete-only controls**
+- [x] **Step 4: Add transfer insertion and delete-only controls**
 
 Render this confirmed action only in a maintainable subproject draft:
 
@@ -957,7 +957,7 @@ Render this confirmed action only in a maintainable subproject draft:
 
 Delete only `source: 'custom'` activities after `Popconfirm`, validate the action with `canMutateLevel1TaskStructure({ projectType: '技术项目', technicalKind: 'subproject', task, action: 'delete' })`, and renumber display IDs without changing stable IDs. Template rows never receive an action button.
 
-- [ ] **Step 5: Wire TDT milestone and subproject bar Gantt saves**
+- [x] **Step 5: Wire TDT milestone and subproject bar Gantt saves**
 
 Choose mode from `tab.templateKind` and validate before store writes:
 
@@ -986,7 +986,7 @@ Choose mode from `tab.templateKind` and validate before store writes:
 />
 ```
 
-- [ ] **Step 6: Split technical export labels by plan kind**
+- [x] **Step 6: Split technical export labels by plan kind**
 
 In `technicalPlanWorkspace.ts`, replace the single governed export array with these exact projections:
 
@@ -1017,13 +1017,13 @@ export const TECHNICAL_SUBPROJECT_EXPORT_COLUMNS = [
 
 Select both the projection and its column array from `tab.templateKind` in `TechnicalPlanModule`; do not export a blank stage column for subprojects.
 
-- [ ] **Step 7: Run focused and technical regressions**
+- [x] **Step 7: Run focused and technical regressions**
 
 Run: `npm run verify:level1-flat-gantt && npm run verify:technical-plan && npm run verify:technical-project && npx tsc --noEmit`
 
 Expected: all commands exit 0.
 
-- [ ] **Step 8: Commit technical plan UI**
+- [x] **Step 8: Commit technical plan UI**
 
 ```bash
 git add scripts/verify-level1-flat-milestone-gantt.mjs src/components/technical-project/TechnicalPlanModule.tsx src/lib/technicalPlanWorkspace.ts src/styles/globals.css
@@ -1039,7 +1039,7 @@ git commit -m "feat: add flat technical plan interactions"
 - Modify: `src/containers/ProjectSpaceContainer.tsx`
 - Modify: `src/components/technical-project/TechnicalPlanModule.tsx`
 
-- [ ] **Step 1: Add failing flat-history assertions**
+- [x] **Step 1: Add failing flat-history assertions**
 
 Append source and behavior checks:
 
@@ -1066,13 +1066,13 @@ assert.equal(stableCompare[0].taskId, '1.1')
 assert.equal(stableCompare[0].stageName, '概念阶段')
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run: `npm run verify:level1-flat-gantt`
 
 Expected: FAIL because compare rows and modal modes do not expose the new fields.
 
-- [ ] **Step 3: Preserve flat display fields in stable-ID comparison**
+- [x] **Step 3: Preserve flat display fields in stable-ID comparison**
 
 In `versionCompare.ts`, use type-only imports, extend its local comparison task input with `stableId` plus the flat display fields, add the same optional fields to `CompareTableRow`, and copy them from the selected old/new task in every added/deleted/modified row:
 
@@ -1097,7 +1097,7 @@ const taskId = displayTask.id
 const key = identity(displayTask)
 ```
 
-- [ ] **Step 4: Add two explicit compare column modes**
+- [x] **Step 4: Add two explicit compare column modes**
 
 Change the prop to:
 
@@ -1107,17 +1107,17 @@ fieldMode?: 'legacy' | 'hierarchical-flat' | 'technical-subproject'
 
 For `hierarchical-flat`, render `序号、变更类型、阶段、里程碑点、状态、计划完成、计划开发周期、实际完成、实际开发周期`. For `technical-subproject`, render `序号、变更类型、活动名称、状态、计划开始、计划完成、计划周期、实际开始、实际完成、实际周期`. The first column uses `sequence`, not the hierarchical `taskId`; additions/deletions keep the sequence from their source row.
 
-- [ ] **Step 5: Project versions before comparison and pass the correct mode**
+- [x] **Step 5: Project versions before comparison and pass the correct mode**
 
 In project space, call `compareVersionsForTable(projectLevel1FlatMilestones(old.tasks), projectLevel1FlatMilestones(new.tasks))` and pass `fieldMode="hierarchical-flat"` for level 1. In the technical module, use flat milestone rows for TDT and activity rows for subprojects, then pass the matching field mode.
 
-- [ ] **Step 6: Run all focused compare regressions**
+- [x] **Step 6: Run all focused compare regressions**
 
 Run: `npm run verify:level1-flat-gantt && npm run verify:level1-plan-governance && npm run verify:technical-plan && npx tsc --noEmit`
 
 Expected: all commands exit 0.
 
-- [ ] **Step 7: Commit flat version history**
+- [x] **Step 7: Commit flat version history**
 
 ```bash
 git add scripts/verify-level1-flat-milestone-gantt.mjs src/lib/versionCompare.ts src/components/plans/PlanVersionCompareModal.tsx src/containers/ProjectSpaceContainer.tsx src/components/technical-project/TechnicalPlanModule.tsx
@@ -1130,7 +1130,7 @@ git commit -m "feat: align plan history with flat tables"
 - Create: `screenshots/verify-level1-flat-milestone-gantt-browser.mjs`
 - Modify: `docs/superpowers/plans/2026-08-20-level1-flat-milestone-gantt.md`
 
-- [ ] **Step 1: Write the failing browser verification**
+- [x] **Step 1: Write the failing browser verification**
 
 Create `screenshots/verify-level1-flat-milestone-gantt-browser.mjs` with the complete navigation and interaction matrix below. It reuses the repository's current visible labels (`项目列表`, category buttons, project names, `计划`, scope tabs and view aria labels) and DHTMLX's stable `task_id` attribute:
 
@@ -1437,7 +1437,7 @@ await browser.close()
 console.log('PASS browser level1 flat milestone and gantt flows')
 ```
 
-- [ ] **Step 2: Run the browser test and verify RED**
+- [x] **Step 2: Run the browser test and verify RED**
 
 Start the app: `npm run dev -- -p 3004`
 
@@ -1445,11 +1445,11 @@ Run in another terminal: `PMS_BASE_URL=http://localhost:3004 npm run verify:leve
 
 Expected before final selector/interaction implementation: FAIL at the first missing target or persistence assertion.
 
-- [ ] **Step 3: Fix only failures exposed by the concrete browser matrix**
+- [x] **Step 3: Fix only failures exposed by the concrete browser matrix**
 
 If the RED run exposes a missing accessible production control, add only the semantic label used above (`计划版本`, existing view labels, or existing scope labels). Keep the DHTMLX selectors based on its public `task_id` DOM attribute and the `pms-gantt-*` policy classes from Task 3; do not add hidden test hooks.
 
-- [ ] **Step 4: Run the focused automated suite**
+- [x] **Step 4: Run the focused automated suite**
 
 Run:
 
@@ -1463,7 +1463,7 @@ npm run verify:technical-project
 
 Expected: every command exits 0 and prints PASS.
 
-- [ ] **Step 5: Run repository gates**
+- [x] **Step 5: Run repository gates**
 
 Run:
 
@@ -1474,13 +1474,13 @@ npm run build
 
 Expected: TypeScript exits 0 with no output; Next.js build exits 0 and prints `Compiled successfully`.
 
-- [ ] **Step 6: Run the final browser matrix**
+- [x] **Step 6: Run the final browser matrix**
 
 Run: `PMS_BASE_URL=http://localhost:3004 npm run verify:level1-flat-gantt-browser`
 
 Expected: `PASS browser level1 flat milestone and gantt flows` with no browser console errors caused by the feature.
 
-- [ ] **Step 7: Record verification evidence and commit**
+- [x] **Step 7: Record verification evidence and commit**
 
 Mark completed checkboxes in this plan only after the matching commands have fresh successful output. Then commit the browser verifier and plan evidence:
 
@@ -1489,17 +1489,25 @@ git add screenshots/verify-level1-flat-milestone-gantt-browser.mjs docs/superpow
 git commit -m "test: verify flat plan and gantt workflows"
 ```
 
+### Verification evidence — 2026-08-20
+
+- Focused contracts passed: `npm run verify:level1-flat-gantt`, `npm run verify:level1-plan-governance`, `npm run verify:machine-tos`, `npm run verify:technical-plan`, `npm run verify:technical-project`, `npm run verify:technical-plan-operations`, and `npm run verify:workbench-split`.
+- Related version/type contracts passed: `node scripts/verify-market-version-rules.mjs`, `node scripts/verify-plan-versioning.mjs`, `node scripts/verify-machine-project-type-integration.mjs`, `node scripts/verify-tos-type-rules.mjs`, and `node scripts/verify-tos-type-integration.mjs`.
+- Repository gates passed: `npx tsc --noEmit` and `npm run build`; the build emitted only the non-blocking Browserslist database-age reminder.
+- Final real-browser matrix passed against the freshly restarted current-worktree server on port 3004: `PMS_BROWSER_TIMEOUT=30000 node screenshots/verify-level1-flat-milestone-gantt-browser.mjs`. It recorded machine milestone `2026-02-26 → 2026-03-01`, rejected `STR1` rollback `2026-03-17 → 2026-03-17`, tOS `2026-02-27 → 2026-03-01`, TDT `2026-03-15 → 2026-03-01`, and subproject move/resize `2026-01-21/2026-03-31 → 2026-02-01/2026-04-11 → 2026-02-01/2026-05-01`; each applicable date was retained after same-context new-page re-entry.
+- `scripts/verify-project-view-milestone-mock-rules.mjs`, `scripts/verify-project-view-tos-mock-values.mjs`, and `scripts/verify-whole-machine-project-fields.mjs` are not registered package gates and cover independent roadmap/basic-info mock contracts. The last still expects an obsolete 21-field basic-info list while the current source defines 27 fields, so it was not used to certify this plan and was left unchanged.
+
 ## Final requirement audit
 
-- [ ] Whole-machine, tOS, and TDT lists contain no tree rows or expand/collapse controls.
-- [ ] Stage names repeat per milestone row and sequences are continuous.
-- [ ] Technical subprojects use only `活动名称`, not blank stage/milestone columns.
-- [ ] Template tasks cannot be added, deleted, renamed, or reordered.
-- [ ] Machine MR names start at MR4 and are delete-only.
-- [ ] Subproject transfer names start at 第3版转测, remain before TDR3, and are delete-only.
-- [ ] Stages are locked summary bars; milestone diamonds persist plan completion after drag.
-- [ ] Subproject bars persist plan start/end after move or resize.
-- [ ] Subproject list edits all four requested date fields with validation.
-- [ ] Latest published actual-time editing and historical-version read-only behavior remain intact.
-- [ ] Version history uses the same flat columns as the current plan type.
-- [ ] Type-check, production build, focused scripts, and browser matrix all pass with fresh evidence.
+- [x] Whole-machine, tOS, and TDT lists contain no tree rows or expand/collapse controls.
+- [x] Stage names repeat per milestone row and sequences are continuous.
+- [x] Technical subprojects use only `活动名称`, not blank stage/milestone columns.
+- [x] Template tasks cannot be added, deleted, renamed, or reordered.
+- [x] Machine MR names start at MR4 and are delete-only.
+- [x] Subproject transfer names start at 第3版转测, remain before TDR3, and are delete-only.
+- [x] Stages are locked summary bars; milestone diamonds persist plan completion after drag.
+- [x] Subproject bars persist plan start/end after move or resize.
+- [x] Subproject list edits all four requested date fields with validation.
+- [x] Latest published actual-time editing and historical-version read-only behavior remain intact.
+- [x] Version history uses the same flat columns as the current plan type.
+- [x] Type-check, production build, focused scripts, and browser matrix all pass with fresh evidence.
