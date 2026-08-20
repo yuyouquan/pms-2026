@@ -2781,8 +2781,8 @@ export default function ProjectSpaceContainer() {
     }
     return (
       <>
-        <Button aria-label="添加上市阶段 MR 里程碑" icon={<PlusOutlined />} onClick={() => setMachineMrConfirmation(openingScope)}>
-          添加上市阶段 MR 里程碑
+        <Button aria-label="添加MR里程碑" icon={<PlusOutlined />} onClick={() => setMachineMrConfirmation(openingScope)}>
+          添加MR里程碑
         </Button>
         {machineMrConfirmation && <Modal
           open

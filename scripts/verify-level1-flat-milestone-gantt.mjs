@@ -438,7 +438,7 @@ assert.equal(globallyReadonlyController.canOpenLightbox(editableTask), false, 'g
 
 const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8')
 const projectSpaceSource = read('src/containers/ProjectSpaceContainer.tsx')
-for (const label of ['阶段', '里程碑点', '计划开发周期', '实际开发周期', '添加上市阶段 MR 里程碑']) {
+for (const label of ['阶段', '里程碑点', '计划开发周期', '实际开发周期', '添加MR里程碑']) {
   assert.match(projectSpaceSource, new RegExp(label), `project-space flat table contains ${label}`)
 }
 assert.match(projectSpaceSource, /insertNextMachineMrMilestone/, 'project-space adds controlled whole-machine MR milestones')
