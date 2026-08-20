@@ -204,10 +204,10 @@ assert.equal(customizedSubprojectSeed.configTemplateTasksByType[technicalRules.T
 
 const hierarchy = [
   { id: 'concept', stableId: 'concept', order: 1, taskName: '概念阶段' },
-  { id: 'concept-start', stableId: 'concept-start', parentId: 'concept', order: 1, taskName: '概念启动', planStartDate: '2026-01-01', planEndDate: '2026-01-05' },
-  { id: 'str1', stableId: 'str1', parentId: 'concept', order: 2, taskName: 'STR1', planStartDate: '2026-01-02', planEndDate: '2026-01-17', estimatedDays: 99 },
+  { id: 'concept-start', stableId: 'concept-start', parentId: 'concept', order: 1, taskName: '概念启动', planStartDate: '2026-01-01', planEndDate: '2026-01-05', actualStartDate: '2026-01-02', actualEndDate: '2026-01-06' },
+  { id: 'str1', stableId: 'str1', parentId: 'concept', order: 2, taskName: 'STR1', planStartDate: '2026-01-02', planEndDate: '2026-01-17', estimatedDays: 99, actualStartDate: '2026-01-03', actualEndDate: '2026-01-20', actualDays: 99 },
   { id: 'plan', stableId: 'plan', order: 2, taskName: '计划阶段' },
-  { id: 'str2', stableId: 'str2', parentId: 'plan', order: 1, taskName: 'STR2', planStartDate: '2026-02-01', planEndDate: '2026-02-10' },
+  { id: 'str2', stableId: 'str2', parentId: 'plan', order: 1, taskName: 'STR2', planStartDate: '2026-02-01', planEndDate: '2026-02-10', actualStartDate: '2026-02-02', actualEndDate: '' },
 ]
 const milestones = level1Rules.projectLevel1FlatMilestones(hierarchy, { today: '2026-01-20' })
 assert.deepEqual(
@@ -215,7 +215,12 @@ assert.deepEqual(
   [[1, '概念阶段', '概念启动'], [2, '概念阶段', 'STR1'], [3, '计划阶段', 'STR2']],
   'flat milestone projection repeats its stage and excludes stage roots',
 )
-assert.equal(milestones.find(row => row.id === 'str1')?.estimatedDays, 15, 'valid date pairs override a stale stored milestone duration')
+assert.equal(milestones.find(row => row.id === 'concept-start')?.estimatedDays, 4, 'the first milestone retains its own start-to-completion duration fallback')
+assert.equal(milestones.find(row => row.id === 'concept-start')?.actualDays, 4, 'the first milestone retains its own actual start-to-completion duration fallback')
+assert.equal(milestones.find(row => row.id === 'str1')?.estimatedDays, 12, 'a milestone planned duration is its completion date minus the previous milestone completion date')
+assert.equal(milestones.find(row => row.id === 'str1')?.actualDays, 14, 'a milestone actual duration is its actual completion date minus the previous milestone actual completion date')
+assert.equal(milestones.find(row => row.id === 'str2')?.estimatedDays, 24, 'milestone duration continues across stage boundaries in the flat display order')
+assert.equal(milestones.find(row => row.id === 'str2')?.actualDays, null, 'an actual duration remains empty when the current adjacent milestone has no actual completion date')
 
 const technicalRows = level1Rules.projectTechnicalSubprojectRows([
   {

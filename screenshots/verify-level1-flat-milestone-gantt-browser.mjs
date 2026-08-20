@@ -221,6 +221,12 @@ const flatMilestoneDate = async (page, table, name) => page.$eval(table, (elemen
   ))
   return cells[4] || null
 }, name)
+const flatMilestoneCycles = async (page, table, name) => page.$eval(table, (element, taskName) => {
+  const row = [...element.querySelectorAll('tbody tr')].find(item => item.textContent?.includes(taskName))
+  if (!row) return null
+  const cells = [...row.querySelectorAll('td')].map(cell => cell.textContent?.trim() || '')
+  return { planned: cells[5] || '', actual: cells[7] || '' }
+}, name)
 const flatActualEnd = async (page, table, name) => page.$eval(table, (element, taskName) => {
   const row = [...element.querySelectorAll('tbody tr')].find(item => item.textContent?.includes(taskName))
   if (!row) return null
@@ -641,6 +647,7 @@ try {
     await page.waitForSelector(table, { timeout: TIMEOUT })
     await assertHeaders(page, table, ['序号', '阶段', '里程碑点', '状态', '计划完成时间', '计划开发周期', '实际完成时间', '实际开发周期'])
     assert.equal(await page.$(`${table} .ant-table-row-expand-icon`), null, 'flat table must not render a tree expander')
+    assert.deepEqual(await flatMilestoneCycles(page, table, 'STR1'), { planned: '19天', actual: '19天' }, 'flat table derives planned and actual cycles from adjacent milestone completion dates')
     console.log('browser machine flat table contract passed')
 
     await clickButtonText(page, '添加上市阶段 MR 里程碑')

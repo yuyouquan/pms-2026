@@ -182,6 +182,15 @@ export const getLevel1ProjectedDuration = (
   return calculated ?? getNonNegativeLevel1Duration(storedDuration)
 }
 
+/** Flat milestone cycles are the interval between adjacent completion points. */
+export const getLevel1AdjacentMilestoneDuration = (
+  previousEndDate: unknown,
+  currentEndDate: unknown,
+): number | null => getLevel1DateDifference(
+  getLevel1ScheduleDate(previousEndDate),
+  getLevel1ScheduleDate(currentEndDate),
+)
+
 export const sumLevel1EstimatedDays = (
   rows: readonly Pick<Level1PlanViewRow, 'estimatedDays'>[],
 ): number | null => {
@@ -243,32 +252,36 @@ export const projectLevel1FlatMilestones = (
   const today = options.today || new Date().toISOString().slice(0, 10)
   const ordered = getOrderedLevel1Tasks(tasks)
   const stagesById = new Map(ordered.filter(task => !task.parentId).map(task => [task.id, task]))
+  const milestones = ordered.filter(task => Boolean(task.parentId))
 
-  return ordered
-    .filter(task => Boolean(task.parentId))
-    .map((task, index) => {
-      const stage = stagesById.get(task.parentId!)
-      const planStartDate = getLevel1ScheduleDate(task.planStartDate)
-      const planEndDate = getLevel1ScheduleDate(task.planEndDate)
-      const actualStartDate = getLevel1ScheduleDate(task.actualStartDate)
-      const actualEndDate = getLevel1ScheduleDate(task.actualEndDate)
-      return {
-        ...task,
-        sequence: index + 1,
-        stageId: stage?.id || '',
-        stageStableId: stage?.stableId || stage?.id || '',
-        stageName: stage?.taskName || '',
-        milestoneName: task.taskName,
-        activityName: task.taskName,
-        planStartDate,
-        planEndDate,
-        estimatedDays: getLevel1ProjectedDuration(planStartDate, planEndDate, task.estimatedDays),
-        actualStartDate,
-        actualEndDate,
-        actualDays: getLevel1ProjectedDuration(actualStartDate, actualEndDate, task.actualDays),
-        delayStatus: getLevel1DelayStatus(planEndDate, actualEndDate, today),
-      }
-    })
+  return milestones.map((task, index) => {
+    const stage = stagesById.get(task.parentId!)
+    const previousMilestone = milestones[index - 1]
+    const planStartDate = getLevel1ScheduleDate(task.planStartDate)
+    const planEndDate = getLevel1ScheduleDate(task.planEndDate)
+    const actualStartDate = getLevel1ScheduleDate(task.actualStartDate)
+    const actualEndDate = getLevel1ScheduleDate(task.actualEndDate)
+    return {
+      ...task,
+      sequence: index + 1,
+      stageId: stage?.id || '',
+      stageStableId: stage?.stableId || stage?.id || '',
+      stageName: stage?.taskName || '',
+      milestoneName: task.taskName,
+      activityName: task.taskName,
+      planStartDate,
+      planEndDate,
+      estimatedDays: previousMilestone
+        ? getLevel1AdjacentMilestoneDuration(previousMilestone.planEndDate, planEndDate)
+        : getLevel1ProjectedDuration(planStartDate, planEndDate, task.estimatedDays),
+      actualStartDate,
+      actualEndDate,
+      actualDays: previousMilestone
+        ? getLevel1AdjacentMilestoneDuration(previousMilestone.actualEndDate, actualEndDate)
+        : getLevel1ProjectedDuration(actualStartDate, actualEndDate, task.actualDays),
+      delayStatus: getLevel1DelayStatus(planEndDate, actualEndDate, today),
+    }
+  })
 }
 
 export const projectTechnicalSubprojectRows = (
