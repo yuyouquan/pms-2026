@@ -2,10 +2,9 @@ import {
   ENUM_TYPE_KEYS,
   type EnumFieldErrors,
   type EnumFieldKey,
-  type EnumRow,
   type EnumRowByType,
-  type EnumRowDraft,
   type EnumRowDraftByType,
+  type EnumFieldKeyByType,
   type EnumRowValidationResult,
   type EnumTypeDefinition,
   type EnumTypeKey,
@@ -16,16 +15,18 @@ import {
 
 export { ENUM_TYPE_KEYS }
 
-const singleDefinition = (
-  key: EnumTypeKey,
-  label: string,
-  scopeLabel: string,
-): EnumTypeDefinition => ({
+type SingleEnumTypeKey = Exclude<EnumTypeKey, 'tmg-subdomain-mapping' | 'chip-mapping' | 'project-category-mapping'>
+
+const singleDefinition = <K extends SingleEnumTypeKey, L extends string, S extends string>(
+  key: K,
+  label: L,
+  scopeLabel: S,
+) => ({
   key,
   label,
   scopeLabel,
-  kind: 'single',
-  columns: [{ key: 'value', label }],
+  kind: 'single' as const,
+  columns: [{ key: 'value' as const, label }] as const,
 })
 
 export const ENUM_DEFINITIONS = {
@@ -101,9 +102,9 @@ export function isLegacyTosEnumTypeKey(value: unknown): value is LegacyTosEnumTy
     && LEGACY_TOS_ENUM_TYPE_KEYS.includes(value as LegacyTosEnumTypeKey)
 }
 
-export function normalizeEnumFieldValue(
-  type: EnumTypeKey,
-  field: EnumFieldKey,
+export function normalizeEnumFieldValue<K extends EnumTypeKey>(
+  type: K,
+  field: EnumFieldKeyByType<K>,
   input: string,
 ): string {
   const value = input.trim()
@@ -113,23 +114,26 @@ export function normalizeEnumFieldValue(
   return value
 }
 
-export function formatEnumCellValue(
-  type: EnumTypeKey,
-  field: EnumFieldKey,
+export function formatEnumCellValue<K extends EnumTypeKey>(
+  type: K,
+  field: EnumFieldKeyByType<K>,
   input: string,
 ): string {
-  const value = input.trim()
+  const value = normalizeEnumFieldValue(type, field, input)
   return field === 'value' && TOS_PREFIXED_TYPES.has(type) ? `tOS${value}` : value
 }
 
-const normalizedDraft = (type: EnumTypeKey, draft: EnumRowDraft): Record<string, string> => {
+const normalizedDraft = <K extends EnumTypeKey>(
+  type: K,
+  draft: EnumRowDraftByType[K],
+): EnumRowDraftByType[K] => {
   const source = draft as Record<string, string>
   return Object.fromEntries(
     ENUM_DEFINITIONS[type].columns.map(column => [
       column.key,
-      normalizeEnumFieldValue(type, column.key, source[column.key] ?? ''),
+      normalizeEnumFieldValue(type, column.key as EnumFieldKeyByType<K>, source[column.key] ?? ''),
     ]),
-  )
+  ) as EnumRowDraftByType[K]
 }
 
 const duplicateFieldErrors = (fields: readonly EnumFieldKey[], message: string): EnumFieldErrors =>
@@ -140,9 +144,9 @@ export function validateAndNormalizeEnumRow<K extends EnumTypeKey>(
   draft: EnumRowDraftByType[K],
   existingRows: readonly EnumRowByType<K>[] = [],
   excludeId?: string,
-): EnumRowValidationResult {
+): EnumRowValidationResult<K> {
   const definition = ENUM_DEFINITIONS[type]
-  const row = normalizedDraft(type, draft)
+  const row = normalizedDraft(type, draft) as Record<string, string>
 
   if (definition.kind === 'project-category-map' && row.pmsProjectCategory !== '整机产品项目') {
     row.pmsSecondaryCategory = ''
@@ -171,7 +175,7 @@ export function validateAndNormalizeEnumRow<K extends EnumTypeKey>(
   if (definition.kind === 'single') {
     const duplicate = comparableRows.some(existing =>
       'value' in existing
-      && normalizeEnumFieldValue(type, 'value', existing.value) === row.value,
+      && normalizeEnumFieldValue(type, 'value' as EnumFieldKeyByType<K>, existing.value) === row.value,
     )
     if (duplicate) {
       return {
@@ -183,7 +187,7 @@ export function validateAndNormalizeEnumRow<K extends EnumTypeKey>(
   } else if (definition.kind === 'project-category-map') {
     const duplicate = comparableRows.some(existing =>
       'ipmProjectCategory' in existing
-      && normalizeEnumFieldValue(type, 'ipmProjectCategory', existing.ipmProjectCategory) === row.ipmProjectCategory,
+      && normalizeEnumFieldValue(type, 'ipmProjectCategory' as EnumFieldKeyByType<K>, existing.ipmProjectCategory) === row.ipmProjectCategory,
     )
     if (duplicate) {
       return {
@@ -196,7 +200,7 @@ export function validateAndNormalizeEnumRow<K extends EnumTypeKey>(
     const fields = definition.columns.map(column => column.key)
     const duplicate = comparableRows.some(existing => {
       const existingValues = existing as unknown as Record<string, string>
-      return fields.every(field => normalizeEnumFieldValue(type, field, existingValues[field] ?? '') === row[field])
+      return fields.every(field => normalizeEnumFieldValue(type, field as EnumFieldKeyByType<K>, existingValues[field] ?? '') === row[field])
     })
     if (duplicate) {
       return {
@@ -207,16 +211,16 @@ export function validateAndNormalizeEnumRow<K extends EnumTypeKey>(
     }
   }
 
-  return { ok: true, row: row as EnumRowDraft }
+  return { ok: true, row: row as EnumRowDraftByType[K] }
 }
 
-export function getEnumRowSummary(type: EnumTypeKey, row: EnumRow): string {
+export function getEnumRowSummary<K extends EnumTypeKey>(type: K, row: EnumRowByType<K>): string {
   const values = row as unknown as Record<string, string>
   return ENUM_DEFINITIONS[type].columns
     .map(column => formatEnumCellValue(
       type,
-      column.key,
-      normalizeEnumFieldValue(type, column.key, values[column.key] ?? ''),
+      column.key as EnumFieldKeyByType<K>,
+      values[column.key] ?? '',
     ))
     .join(' / ')
 }

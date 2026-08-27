@@ -72,28 +72,23 @@ export type EnumRowDraftByType = {
 
 export type EnumRowDraft = EnumRowDraftByType[EnumTypeKey]
 
-export type EnumFieldKey =
-  | 'value'
-  | 'domain'
-  | 'subdomain'
-  | 'chipCode'
-  | 'chipModel'
-  | 'chipPlatform'
-  | 'ipmProjectCategory'
-  | 'pmsProjectCategory'
-  | 'pmsSecondaryCategory'
+export type EnumFieldKeyByType<K extends EnumTypeKey> = K extends EnumTypeKey
+  ? Extract<keyof EnumRowDraftByType[K], string>
+  : never
 
-export interface EnumColumnDefinition {
-  key: EnumFieldKey
+export type EnumFieldKey = EnumFieldKeyByType<EnumTypeKey>
+
+export interface EnumColumnDefinition<K extends EnumTypeKey = EnumTypeKey> {
+  key: EnumFieldKeyByType<K>
   label: string
 }
 
-export interface EnumTypeDefinition {
-  key: EnumTypeKey
+export interface EnumTypeDefinition<K extends EnumTypeKey = EnumTypeKey> {
+  key: K
   label: string
   scopeLabel: string
   kind: EnumKind
-  columns: readonly EnumColumnDefinition[]
+  columns: readonly EnumColumnDefinition<K>[]
 }
 
 export type EnumFieldErrors = Partial<Record<EnumFieldKey, string>>
@@ -106,8 +101,8 @@ export type EnumActionResult =
       fieldErrors?: EnumFieldErrors
     }
 
-export type EnumRowValidationResult =
-  | { ok: true; row: EnumRowDraft }
+export type EnumRowValidationResult<K extends EnumTypeKey = EnumTypeKey> =
+  | { ok: true; row: EnumRowDraftByType[K] }
   | {
       ok: false
       reason: 'invalid' | 'duplicate'

@@ -73,6 +73,7 @@ assert.equal(values.isLegacyTosEnumTypeKey('tos-2-part'), true, 'the separately 
 assert.equal(values.isLegacyTosEnumTypeKey('first-sale-tos'), false, 'the legacy guard does not claim flat registry keys')
 
 assert.equal(values.formatEnumCellValue('first-sale-tos', 'value', '18.0'), 'tOS18.0', 'first-sale tOS display adds the tOS prefix')
+assert.equal(values.formatEnumCellValue('first-sale-tos', 'value', ' tOS18.0 '), 'tOS18.0', 'display normalizes an existing tOS prefix exactly once')
 assert.equal(values.formatEnumCellValue('roadmap-tos', 'value', 'alpha'), 'tOSalpha', 'roadmap tOS display adds the tOS prefix')
 assert.equal(values.formatEnumCellValue('machine-project-status', 'value', '进行中'), '进行中', 'other single values do not gain a tOS prefix')
 assert.equal(values.formatEnumCellValue('chip-mapping', 'chipModel', 'tOS9000'), 'tOS9000', 'mapping cells do not gain a tOS prefix')
@@ -91,6 +92,10 @@ assert.deepEqual(values.validateAndNormalizeEnumRow('core-value', { value: ' alp
   reason: 'duplicate',
   fieldErrors: { value: '枚举值不能重复' },
 }, 'single rows reject an exact normalized duplicate')
+assert.deepEqual(values.validateAndNormalizeEnumRow('core-value', { value: ' alpha ' }, [{ id: 'one', value: 'alpha' }], 'one'), {
+  ok: true,
+  row: { value: 'alpha' },
+}, 'self-updates exclude the current row from duplicate detection')
 assert.deepEqual(values.validateAndNormalizeEnumRow('chip-mapping', { chipCode: 'C1', chipModel: 'M2', chipPlatform: 'P1' }, [{ id: 'one', chipCode: 'C1', chipModel: 'M1', chipPlatform: 'P1' }]), {
   ok: true,
   row: { chipCode: 'C1', chipModel: 'M2', chipPlatform: 'P1' },
@@ -109,6 +114,11 @@ assert.deepEqual(values.validateAndNormalizeEnumRow('tmg-subdomain-mapping', { d
   reason: 'duplicate',
   fieldErrors: { domain: '该行已存在', subdomain: '该行已存在' },
 }, 'TMG mappings reject a fully identical normalized row')
+assert.deepEqual(values.validateAndNormalizeEnumRow('tmg-subdomain-mapping', { domain: ' 平台 ', subdomain: '   ' }, []), {
+  ok: false,
+  reason: 'invalid',
+  fieldErrors: { subdomain: '不能为空' },
+}, 'mapping rows report each missing required column')
 assert.deepEqual(values.validateAndNormalizeEnumRow('project-category-mapping', {
   ipmProjectCategory: ' 技术平台 ',
   pmsProjectCategory: ' 技术项目 ',
@@ -145,6 +155,7 @@ assert.deepEqual(values.validateAndNormalizeEnumRow('project-category-mapping', 
   fieldErrors: { ipmProjectCategory: 'IPM项目分类不能重复' },
 }, 'IPM project category names are unique across mappings')
 assert.equal(values.getEnumRowSummary('chip-mapping', { id: 'one', chipCode: ' C1 ', chipModel: ' M1 ', chipPlatform: ' P1 ' }), 'C1 / M1 / P1', 'row summaries use normalized field values')
+assert.equal(values.getEnumRowSummary('first-sale-tos', { id: 'one', value: ' tOS18.0 ' }), 'tOS18.0', 'row summaries format prefixed tOS values exactly once')
 console.log('[registry-contract] passed')
 
 console.log('[legacy-consumers] verifying pre-migration helpers and UI source contracts')
@@ -189,6 +200,8 @@ const addProjectSource = readSource(root, 'src/components/workspace/AddProjectMo
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 const projectStoreSource = readSource(root, 'src/stores/project.ts')
 const roadmapModuleSource = readSource(root, 'src/components/roadmap/ProjectRoadmapModule.tsx')
+// Task 2 owns store CRUD and migration behavior after the store moves to EnumRowsByType.
+console.log('[task-2-deferred] enum store CRUD and migration behavior is intentionally verified by Task 2')
 assert.match(configUi, /value:\s*['"]enum['"][\s\S]*label:\s*['"]枚举值配置['"]/, 'configuration center exposes the enum-value capsule option')
 assert.match(configUi, /configTab\s*===\s*['"]enum['"][\s\S]*<EnumConfig/, 'enum tab renders EnumConfig')
 assert.match(enumUi, /<Tree\b/, 'enum categories use a scalable tree control')
