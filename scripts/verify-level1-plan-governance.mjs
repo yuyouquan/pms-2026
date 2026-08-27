@@ -84,23 +84,72 @@ assert.notDeepEqual(
   'project mock plans are scoped by project id',
 )
 
+const describeTemplate = tasks => {
+  const stableIdById = new Map(tasks.map(task => [task.id, task.stableId]))
+  return tasks.map(task => [
+    task.stableId,
+    task.parentId ? stableIdById.get(task.parentId) : null,
+    task.taskName,
+    task.nodeKind,
+  ])
+}
+
+const machineTemplateTasks = rules.buildLevel1TasksForProjectType('整机产品项目', true)
 assert.deepEqual(
-  rules.STANDARD_LEVEL1_TEMPLATE_TASKS.map(task => [task.id, task.parentId || null, task.taskName]),
+  describeTemplate(machineTemplateTasks),
   [
-    ['stage-concept', null, '概念阶段'],
-    ['milestone-concept-start', 'stage-concept', '概念启动'],
-    ['milestone-str1', 'stage-concept', 'STR1'],
-    ['stage-plan', null, '计划阶段'],
-    ['milestone-str2', 'stage-plan', 'STR2'],
-    ['milestone-str3', 'stage-plan', 'STR3'],
-    ['stage-development', null, '开发验证阶段'],
-    ['milestone-str4', 'stage-development', 'STR4'],
-    ['milestone-str4a', 'stage-development', 'STR4A'],
-    ['milestone-str5', 'stage-development', 'STR5'],
-    ['stage-launch', null, '上市收编阶段'],
-    ['milestone-close', 'stage-launch', '收编完成'],
+    ['machine-stage-concept', null, '概念阶段', 'stage'],
+    ['machine-ms-concept-kickoff', 'machine-stage-concept', '概念启动', 'fixed-milestone'],
+    ['machine-ms-str1', 'machine-stage-concept', 'STR1', 'fixed-milestone'],
+    ['machine-stage-planning', null, '计划阶段', 'stage'],
+    ['machine-ms-str2', 'machine-stage-planning', 'STR2', 'fixed-milestone'],
+    ['machine-ms-str3', 'machine-stage-planning', 'STR3', 'fixed-milestone'],
+    ['machine-stage-development', null, '开发阶段', 'stage'],
+    ['machine-ms-str4', 'machine-stage-development', 'STR4', 'fixed-milestone'],
+    ['machine-ms-str4a', 'machine-stage-development', 'STR4A', 'fixed-milestone'],
+    ['machine-stage-validation', null, '验证阶段', 'stage'],
+    ['machine-ms-str5', 'machine-stage-validation', 'STR5', 'fixed-milestone'],
+    ['machine-stage-launch', null, '上市阶段', 'stage'],
+    ['machine-stage-lifecycle', null, '生命周期阶段', 'stage'],
   ],
+  'whole-machine templates keep explicit stable IDs, parent links, names, and node kinds',
 )
+assert.equal(
+  machineTemplateTasks.some(task => ['上市阶段', '生命周期阶段'].includes(task.taskName)
+    && machineTemplateTasks.some(child => child.parentId === task.id)),
+  false,
+  'whole-machine business stages start empty',
+)
+
+const tosTemplateTasks = rules.buildLevel1TasksForProjectType('tOS版本项目', true)
+assert.deepEqual(
+  describeTemplate(tosTemplateTasks),
+  [
+    ['tos-stage-planning', null, '规划阶段', 'stage'],
+    ['tos-ms-planning-ko', 'tos-stage-planning', '规划KO', 'fixed-milestone'],
+    ['tos-ms-cdcp', 'tos-stage-planning', 'CDCP', 'fixed-milestone'],
+    ['tos-stage-concept', null, '概念阶段', 'stage'],
+    ['tos-ms-concept-kickoff', 'tos-stage-concept', '概念启动', 'fixed-milestone'],
+    ['tos-ms-str1', 'tos-stage-concept', 'STR1', 'fixed-milestone'],
+    ['tos-stage-plan', null, '计划阶段', 'stage'],
+    ['tos-ms-str2', 'tos-stage-plan', 'STR2', 'fixed-milestone'],
+    ['tos-ms-str3', 'tos-stage-plan', 'STR3', 'fixed-milestone'],
+    ['tos-stage-development-validation', null, '开发验证阶段', 'stage'],
+    ['tos-ms-str4', 'tos-stage-development-validation', 'STR4', 'fixed-milestone'],
+    ['tos-ms-str4a', 'tos-stage-development-validation', 'STR4A', 'fixed-milestone'],
+    ['tos-ms-str5', 'tos-stage-development-validation', 'STR5', 'fixed-milestone'],
+    ['tos-stage-launch-iteration', null, '上市迭代阶段', 'stage'],
+    ['tos-stage-maintenance', null, '维护阶段', 'stage'],
+  ],
+  'tOS templates keep explicit stable IDs, parent links, names, and node kinds',
+)
+assert.equal(
+  tosTemplateTasks.some(task => ['上市迭代阶段', '维护阶段'].includes(task.taskName)
+    && tosTemplateTasks.some(child => child.parentId === task.id)),
+  false,
+  'tOS business stages start empty',
+)
+assert.deepEqual(rules.buildStandardLevel1Tasks(true), machineTemplateTasks, 'the standard builder remains a whole-machine compatibility alias')
 
 const makeTask = (id, parentId, order, taskName, planEndDate = '', actualEndDate = '') => ({
   id,
@@ -139,17 +188,17 @@ assert.deepEqual(
 )
 assert.deepEqual(
   [planStage.planStartDate, planStage.planEndDate, planStage.estimatedDays],
-  ['2026-03-18', '2026-05-22', 65],
+  ['2026-03-18', '2026-05-22', 66],
   'the first effective stage starts at its first populated milestone',
 )
 assert.deepEqual(
   [devStage.planStartDate, devStage.planEndDate, devStage.estimatedDays],
-  ['2026-05-23', '2026-12-15', 206],
+  ['2026-05-23', '2026-12-15', 207],
   'later effective stages begin one day after the previous effective stage',
 )
 assert.deepEqual(
   [planStage.actualStartDate, planStage.actualEndDate, planStage.actualDays],
-  ['2026-03-19', '2026-05-22', 64],
+  ['2026-03-19', '2026-05-22', 65],
 )
 assert.equal(str2.planStartDate, '')
 assert.equal(str2.actualStartDate, '')
@@ -159,12 +208,12 @@ assert.equal(str2.delayStatus, '延期')
 assert.equal(projection.rows.find(row => row.id === 'p3c1').delayStatus, '延期')
 assert.deepEqual(
   projection.rows.filter(row => !row.parentId).map(row => row.manpowerPercent),
-  [null, 24, 76],
+  [null, 24.2, 75.8],
   'manpower percentages use the sum of effective stage estimated durations',
 )
 assert.equal(
   rules.sumLevel1EstimatedDays(projection.rows),
-  271,
+  273,
   'horizontal development cycle sums every populated stage estimated duration',
 )
 assert.equal(
@@ -215,25 +264,25 @@ assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '技术项目', t
 assert.equal(rules.canMutateLevel1TaskStructure({ projectType: '技术项目', technicalKind: 'subproject', task: { ...templateLaunchChild, parentId: undefined }, action: 'delete' }), false, 'technical subproject template roots stay locked')
 
 const prior = [
-  { ...makeTask('old-root', null, 0, '旧阶段'), stableId: 'stage-concept' },
-  { ...makeTask('old-a', 'old-root', 0, '旧名称', '2026-02-20', '2026-02-21'), stableId: 'milestone-concept-start' },
+  { ...makeTask('old-root', null, 0, '旧阶段'), stableId: 'machine-stage-concept' },
+  { ...makeTask('old-a', 'old-root', 0, '旧名称', '2026-02-20', '2026-02-21'), stableId: 'machine-ms-concept-kickoff' },
   { ...makeTask('custom-a', 'old-root', 1, '项目自定义', '2026-02-25', ''), stableId: 'custom-a', source: 'custom' },
 ]
 const latestTemplate = rules.buildStandardLevel1Tasks(false).slice(0, 3)
 const firstRevision = rules.buildFirstLevel1RevisionTasks(prior, latestTemplate)
-assert.equal(firstRevision.find(task => task.stableId === 'milestone-concept-start').taskName, '概念启动')
-assert.equal(firstRevision.find(task => task.stableId === 'milestone-concept-start').planEndDate, '2026-02-20')
-assert.equal(firstRevision.find(task => task.stableId === 'milestone-concept-start').actualEndDate, '2026-02-21')
+assert.equal(firstRevision.find(task => task.stableId === 'machine-ms-concept-kickoff').taskName, '概念启动')
+assert.equal(firstRevision.find(task => task.stableId === 'machine-ms-concept-kickoff').planEndDate, '2026-02-20')
+assert.equal(firstRevision.find(task => task.stableId === 'machine-ms-concept-kickoff').actualEndDate, '2026-02-21')
 assert.equal(firstRevision.find(task => task.stableId === 'custom-a').source, 'custom')
-assert.equal(firstRevision.some(task => task.stableId === 'milestone-str1'), true)
+assert.equal(firstRevision.some(task => task.stableId === 'machine-ms-str1'), true)
 
 const nextRevision = rules.buildNextLevel1RevisionTasks(firstRevision)
 nextRevision[0].taskName = '仅修改副本'
 assert.notEqual(firstRevision[0].taskName, nextRevision[0].taskName)
 
 const synced = rules.synchronizeLevel1ActualEndDate(firstRevision, nextRevision, firstRevision[1].id, '2026-03-01')
-assert.equal(synced.sourceTasks.find(task => task.stableId === 'milestone-concept-start').actualEndDate, '2026-03-01')
-assert.equal(synced.pairedTasks.find(task => task.stableId === 'milestone-concept-start').actualEndDate, '2026-03-01')
+assert.equal(synced.sourceTasks.find(task => task.stableId === 'machine-ms-concept-kickoff').actualEndDate, '2026-03-01')
+assert.equal(synced.pairedTasks.find(task => task.stableId === 'machine-ms-concept-kickoff').actualEndDate, '2026-03-01')
 assert.equal(synced.pairedTasks.find(task => task.stableId === 'custom-a').actualEndDate, '')
 assert.throws(
   () => rules.buildFirstLevel1RevisionTasks(prior, [...latestTemplate, { ...latestTemplate[0] }]),

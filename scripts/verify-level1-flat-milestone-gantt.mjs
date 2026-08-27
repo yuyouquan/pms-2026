@@ -24,6 +24,46 @@ const technicalRules = await loadTypescriptModule('src/lib/technicalPlanRules.ts
 const ganttRules = await loadTypescriptModule('src/lib/planGanttRules.ts')
 const projectSpaceLevel1Rules = await loadTypescriptModule('src/lib/projectSpaceLevel1Rules.ts')
 
+const machineTemplate = level1Rules.buildMachineLevel1Tasks(true)
+const machineProjection = level1Rules.projectLevel1Plan(machineTemplate, { mode: 'standard', today: '2026-08-27' })
+assert.equal(machineProjection.rows.length, machineTemplate.length, 'the nine-column tree projection preserves every whole-machine task')
+assert.deepEqual(
+  machineProjection.rows.find(row => row.taskName === '概念启动'),
+  {
+    ...machineTemplate.find(task => task.taskName === '概念启动'),
+    planStartDate: '',
+    estimatedDays: null,
+    actualStartDate: '',
+    actualDays: null,
+    delayStatus: '延期',
+    manpowerPercent: null,
+    isMilestone: true,
+  },
+  'fixed milestones expose completion points without start dates or durations',
+)
+assert.equal(machineProjection.rows.find(row => row.taskName === '概念阶段').isMilestone, false, 'stage rows are not milestones')
+
+const businessProjection = level1Rules.projectLevel1Plan([
+  { id: 'stage', stableId: 'stage', parentId: null, order: 1, taskName: '业务阶段', nodeKind: 'stage' },
+  {
+    id: 'period', stableId: 'period', parentId: 'stage', order: 1, taskName: 'MR1', nodeKind: 'business-period',
+    planStartDate: '2026-09-01', planEndDate: '2026-09-03', estimatedDays: 99,
+    actualStartDate: '2026-09-02', actualEndDate: '2026-09-05', actualDays: 99,
+  },
+], { mode: 'standard', today: '2026-09-06' })
+const businessStage = businessProjection.rows.find(row => row.id === 'stage')
+const businessPeriod = businessProjection.rows.find(row => row.id === 'period')
+assert.deepEqual(
+  [businessPeriod.planStartDate, businessPeriod.planEndDate, businessPeriod.estimatedDays, businessPeriod.actualStartDate, businessPeriod.actualEndDate, businessPeriod.actualDays, businessPeriod.isMilestone],
+  ['2026-09-01', '2026-09-03', 3, '2026-09-02', '2026-09-05', 4, false],
+  'business periods preserve ranges and use inclusive planned and actual durations',
+)
+assert.deepEqual(
+  [businessStage.planStartDate, businessStage.planEndDate, businessStage.estimatedDays, businessStage.actualStartDate, businessStage.actualEndDate, businessStage.actualDays, businessStage.isMilestone],
+  ['2026-09-01', '2026-09-03', 3, '2026-09-02', '2026-09-05', 4, false],
+  'stages derive inclusive schedule ranges from their children',
+)
+
 const unknownBrowserCase = spawnSync(process.execPath, ['screenshots/verify-level1-flat-milestone-gantt-browser.mjs'], {
   cwd: root,
   encoding: 'utf8',

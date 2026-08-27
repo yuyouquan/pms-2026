@@ -1,6 +1,8 @@
 export type Level1TaskSource = 'template' | 'custom'
 export type Level1ProjectionMode = 'standard' | 'technical-subproject'
 export type Level1DelayStatus = '延期' | '按时' | '-'
+export type Level1ProjectKind = 'machine' | 'tos'
+export type Level1NodeKind = 'stage' | 'fixed-milestone' | 'business-period'
 
 export interface Level1PlanTask {
   id: string
@@ -10,6 +12,7 @@ export interface Level1PlanTask {
   taskName: string
   role?: string
   source?: Level1TaskSource
+  nodeKind?: Level1NodeKind
   status?: string
   progress?: number
   responsible?: string
@@ -77,6 +80,7 @@ const templateTask = (
   parentId: string | null,
   order: number,
   taskName: string,
+  nodeKind: Level1NodeKind,
   role = '',
 ): Level1PlanTask => ({
   id,
@@ -86,44 +90,98 @@ const templateTask = (
   taskName,
   role,
   source: 'template',
+  nodeKind,
+  planStartDate: '',
   planEndDate: '',
+  estimatedDays: null,
+  actualStartDate: '',
   actualEndDate: '',
+  actualDays: null,
 })
 
-export const STANDARD_LEVEL1_TEMPLATE_TASKS: Level1PlanTask[] = [
-  templateTask('stage-concept', null, 0, '概念阶段'),
-  templateTask('milestone-concept-start', 'stage-concept', 0, '概念启动', 'SPM'),
-  templateTask('milestone-str1', 'stage-concept', 1, 'STR1', 'SPM'),
-  templateTask('stage-plan', null, 1, '计划阶段'),
-  templateTask('milestone-str2', 'stage-plan', 0, 'STR2', 'SPM'),
-  templateTask('milestone-str3', 'stage-plan', 1, 'STR3', 'SPM'),
-  templateTask('stage-development', null, 2, '开发验证阶段'),
-  templateTask('milestone-str4', 'stage-development', 0, 'STR4', 'SPM'),
-  templateTask('milestone-str4a', 'stage-development', 1, 'STR4A', 'SPM'),
-  templateTask('milestone-str5', 'stage-development', 2, 'STR5', 'SPM'),
-  templateTask('stage-launch', null, 3, '上市收编阶段'),
-  templateTask('milestone-close', 'stage-launch', 0, '收编完成', 'SPM'),
+export const MACHINE_LEVEL1_TEMPLATE_TASKS: Level1PlanTask[] = [
+  templateTask('machine-stage-concept', null, 0, '概念阶段', 'stage'),
+  templateTask('machine-ms-concept-kickoff', 'machine-stage-concept', 0, '概念启动', 'fixed-milestone', 'SPM'),
+  templateTask('machine-ms-str1', 'machine-stage-concept', 1, 'STR1', 'fixed-milestone', 'SPM'),
+  templateTask('machine-stage-planning', null, 1, '计划阶段', 'stage'),
+  templateTask('machine-ms-str2', 'machine-stage-planning', 0, 'STR2', 'fixed-milestone', 'SPM'),
+  templateTask('machine-ms-str3', 'machine-stage-planning', 1, 'STR3', 'fixed-milestone', 'SPM'),
+  templateTask('machine-stage-development', null, 2, '开发阶段', 'stage'),
+  templateTask('machine-ms-str4', 'machine-stage-development', 0, 'STR4', 'fixed-milestone', 'SPM'),
+  templateTask('machine-ms-str4a', 'machine-stage-development', 1, 'STR4A', 'fixed-milestone', 'SPM'),
+  templateTask('machine-stage-validation', null, 3, '验证阶段', 'stage'),
+  templateTask('machine-ms-str5', 'machine-stage-validation', 0, 'STR5', 'fixed-milestone', 'SPM'),
+  templateTask('machine-stage-launch', null, 4, '上市阶段', 'stage'),
+  templateTask('machine-stage-lifecycle', null, 5, '生命周期阶段', 'stage'),
 ]
 
-const STANDARD_DISPLAY_IDS = ['1', '1.1', '1.2', '2', '2.1', '2.2', '3', '3.1', '3.2', '3.3', '4', '4.1']
-const STANDARD_MOCK_DATES: Record<string, { planEndDate: string; actualEndDate: string }> = {
-  'milestone-concept-start': { planEndDate: '2026-02-26', actualEndDate: '2026-02-27' },
-  'milestone-str1': { planEndDate: '2026-03-17', actualEndDate: '2026-03-18' },
-  'milestone-str2': { planEndDate: '2026-04-28', actualEndDate: '2026-04-28' },
-  'milestone-str3': { planEndDate: '2026-05-22', actualEndDate: '2026-05-22' },
-  'milestone-str4': { planEndDate: '2026-07-31', actualEndDate: '2026-07-31' },
-  'milestone-str4a': { planEndDate: '2026-10-12', actualEndDate: '2026-10-12' },
-  'milestone-str5': { planEndDate: '2026-12-15', actualEndDate: '2026-12-15' },
-  'milestone-close': { planEndDate: '2027-03-01', actualEndDate: '2027-03-01' },
+export const TOS_LEVEL1_TEMPLATE_TASKS: Level1PlanTask[] = [
+  templateTask('tos-stage-planning', null, 0, '规划阶段', 'stage'),
+  templateTask('tos-ms-planning-ko', 'tos-stage-planning', 0, '规划KO', 'fixed-milestone', 'SPM'),
+  templateTask('tos-ms-cdcp', 'tos-stage-planning', 1, 'CDCP', 'fixed-milestone', 'SPM'),
+  templateTask('tos-stage-concept', null, 1, '概念阶段', 'stage'),
+  templateTask('tos-ms-concept-kickoff', 'tos-stage-concept', 0, '概念启动', 'fixed-milestone', 'SPM'),
+  templateTask('tos-ms-str1', 'tos-stage-concept', 1, 'STR1', 'fixed-milestone', 'SPM'),
+  templateTask('tos-stage-plan', null, 2, '计划阶段', 'stage'),
+  templateTask('tos-ms-str2', 'tos-stage-plan', 0, 'STR2', 'fixed-milestone', 'SPM'),
+  templateTask('tos-ms-str3', 'tos-stage-plan', 1, 'STR3', 'fixed-milestone', 'SPM'),
+  templateTask('tos-stage-development-validation', null, 3, '开发验证阶段', 'stage'),
+  templateTask('tos-ms-str4', 'tos-stage-development-validation', 0, 'STR4', 'fixed-milestone', 'SPM'),
+  templateTask('tos-ms-str4a', 'tos-stage-development-validation', 1, 'STR4A', 'fixed-milestone', 'SPM'),
+  templateTask('tos-ms-str5', 'tos-stage-development-validation', 2, 'STR5', 'fixed-milestone', 'SPM'),
+  templateTask('tos-stage-launch-iteration', null, 4, '上市迭代阶段', 'stage'),
+  templateTask('tos-stage-maintenance', null, 5, '维护阶段', 'stage'),
+]
+
+/** Compatibility export for callers that have not yet selected a project-specific template. */
+export const STANDARD_LEVEL1_TEMPLATE_TASKS = MACHINE_LEVEL1_TEMPLATE_TASKS
+
+const MACHINE_MOCK_DATES: Record<string, { planEndDate: string; actualEndDate: string }> = {
+  'machine-ms-concept-kickoff': { planEndDate: '2026-02-26', actualEndDate: '2026-02-27' },
+  'machine-ms-str1': { planEndDate: '2026-03-17', actualEndDate: '2026-03-18' },
+  'machine-ms-str2': { planEndDate: '2026-04-28', actualEndDate: '2026-04-28' },
+  'machine-ms-str3': { planEndDate: '2026-05-22', actualEndDate: '2026-05-22' },
+  'machine-ms-str4': { planEndDate: '2026-07-31', actualEndDate: '2026-07-31' },
+  'machine-ms-str4a': { planEndDate: '2026-10-12', actualEndDate: '2026-10-12' },
+  'machine-ms-str5': { planEndDate: '2026-12-15', actualEndDate: '2026-12-15' },
 }
 
-export const buildStandardLevel1Tasks = (withMockDates = true): Level1PlanTask[] => {
-  const idByStableId = new Map(STANDARD_LEVEL1_TEMPLATE_TASKS.map((task, index) => [task.id, STANDARD_DISPLAY_IDS[index]]))
-  return STANDARD_LEVEL1_TEMPLATE_TASKS.map((task, index) => {
-    const mockDates = withMockDates ? STANDARD_MOCK_DATES[task.id] : undefined
+const TOS_MOCK_DATES: Record<string, { planEndDate: string; actualEndDate: string }> = {
+  'tos-ms-planning-ko': { planEndDate: '2026-01-15', actualEndDate: '2026-01-16' },
+  'tos-ms-cdcp': { planEndDate: '2026-02-05', actualEndDate: '2026-02-05' },
+  'tos-ms-concept-kickoff': { planEndDate: '2026-02-26', actualEndDate: '2026-02-27' },
+  'tos-ms-str1': { planEndDate: '2026-03-17', actualEndDate: '2026-03-18' },
+  'tos-ms-str2': { planEndDate: '2026-04-28', actualEndDate: '2026-04-28' },
+  'tos-ms-str3': { planEndDate: '2026-05-22', actualEndDate: '2026-05-22' },
+  'tos-ms-str4': { planEndDate: '2026-07-31', actualEndDate: '2026-07-31' },
+  'tos-ms-str4a': { planEndDate: '2026-10-12', actualEndDate: '2026-10-12' },
+  'tos-ms-str5': { planEndDate: '2026-12-15', actualEndDate: '2026-12-15' },
+}
+
+const buildTemplateTasks = (
+  template: readonly Level1PlanTask[],
+  mockDatesByStableId: Readonly<Record<string, { planEndDate: string; actualEndDate: string }>>,
+  withMockDates: boolean,
+): Level1PlanTask[] => {
+  const idByStableId = new Map<string, string>()
+  const childCountByParent = new Map<string, number>()
+  let rootCount = 0
+  template.forEach(task => {
+    if (!task.parentId) {
+      rootCount += 1
+      idByStableId.set(task.id, String(rootCount))
+      return
+    }
+    const childCount = (childCountByParent.get(task.parentId) || 0) + 1
+    childCountByParent.set(task.parentId, childCount)
+    idByStableId.set(task.id, `${idByStableId.get(task.parentId)}.${childCount}`)
+  })
+
+  return template.map(task => {
+    const mockDates = withMockDates ? mockDatesByStableId[task.id] : undefined
     return {
       ...task,
-      id: STANDARD_DISPLAY_IDS[index],
+      id: idByStableId.get(task.id)!,
       stableId: task.id,
       parentId: task.parentId ? idByStableId.get(task.parentId) || null : null,
       role: task.role || '',
@@ -131,16 +189,34 @@ export const buildStandardLevel1Tasks = (withMockDates = true): Level1PlanTask[]
       predecessor: '',
       planStartDate: '',
       planEndDate: mockDates?.planEndDate || '',
-      estimatedDays: 0,
+      estimatedDays: null,
       actualStartDate: '',
       actualEndDate: mockDates?.actualEndDate || '',
-      actualDays: 0,
+      actualDays: null,
       status: '未开始',
       progress: 0,
       defaultRoadmap: Boolean(task.parentId),
     }
   })
 }
+
+export const buildMachineLevel1Tasks = (withMockDates = true): Level1PlanTask[] => (
+  buildTemplateTasks(MACHINE_LEVEL1_TEMPLATE_TASKS, MACHINE_MOCK_DATES, withMockDates)
+)
+
+export const buildTosLevel1Tasks = (withMockDates = true): Level1PlanTask[] => (
+  buildTemplateTasks(TOS_LEVEL1_TEMPLATE_TASKS, TOS_MOCK_DATES, withMockDates)
+)
+
+export const buildLevel1TasksForProjectType = (
+  projectType: string,
+  withMockDates = true,
+): Level1PlanTask[] => projectType === 'tOS版本项目'
+  ? buildTosLevel1Tasks(withMockDates)
+  : buildMachineLevel1Tasks(withMockDates)
+
+/** Whole-machine compatibility alias for legacy callers pending scoped migration. */
+export const buildStandardLevel1Tasks = buildMachineLevel1Tasks
 
 const sortByOrder = <T extends { order: number }>(items: T[]) => (
   [...items].sort((left, right) => left.order - right.order)
@@ -162,6 +238,11 @@ export const getLevel1DateDifference = (start: string, end: string): number | nu
   const endTime = parseStrictDate(end)
   if (startTime === null || endTime === null || endTime < startTime) return null
   return Math.round((endTime - startTime) / 86_400_000)
+}
+
+export const getLevel1InclusiveDuration = (start: string, end: string): number | null => {
+  const difference = getLevel1DateDifference(start, end)
+  return difference === null ? null : difference + 1
 }
 
 const getLevel1ScheduleDate = (value: unknown): string => typeof value === 'string' ? value : ''
@@ -371,46 +452,74 @@ export const projectLevel1Plan = (
   let previousPlanEnd = ''
   let previousActualEnd = ''
 
+  const getNodeKind = (task: Level1PlanTask): Level1NodeKind => (
+    task.nodeKind || (task.parentId ? 'fixed-milestone' : 'stage')
+  )
+  const getStageRange = (
+    children: readonly Level1PlanTask[],
+    startField: 'planStartDate' | 'actualStartDate',
+    endField: 'planEndDate' | 'actualEndDate',
+    previousStageEnd: string,
+  ): { startDate: string; endDate: string; duration: number | null } => {
+    const scheduled = children.filter(child => (
+      isValidLevel1Date(child[startField]) || isValidLevel1Date(child[endField])
+    ))
+    const first = scheduled[0]
+    const endDate = [...children].reverse().find(child => isValidLevel1Date(child[endField]))?.[endField] || ''
+    if (!first || !endDate) return { startDate: '', endDate, duration: null }
+    const explicitStart = isValidLevel1Date(first[startField]) ? first[startField] : ''
+    const firstCompletion = isValidLevel1Date(first[endField]) ? first[endField] : ''
+    const startDate = explicitStart || (previousStageEnd ? addLevel1Days(previousStageEnd, 1) : firstCompletion)
+    return {
+      startDate,
+      endDate,
+      duration: getLevel1InclusiveDuration(startDate, endDate),
+    }
+  }
+
   roots.forEach(root => {
-    const milestones = sortByOrder(ordered.filter(task => task.parentId === root.id))
-    const planned = milestones.filter(task => isValidLevel1Date(task.planEndDate))
-    const actual = milestones.filter(task => isValidLevel1Date(task.actualEndDate))
-    const planEndDate = planned.at(-1)?.planEndDate || ''
-    const actualEndDate = actual.at(-1)?.actualEndDate || ''
-    const planStartDate = planEndDate
-      ? (previousPlanEnd ? addLevel1Days(previousPlanEnd, 1) : planned[0]?.planEndDate || '')
-      : ''
-    const actualStartDate = actualEndDate
-      ? (previousActualEnd ? addLevel1Days(previousActualEnd, 1) : actual[0]?.actualEndDate || '')
-      : ''
+    const children = sortByOrder(ordered.filter(task => task.parentId === root.id))
+    const planned = getStageRange(children, 'planStartDate', 'planEndDate', previousPlanEnd)
+    const actual = getStageRange(children, 'actualStartDate', 'actualEndDate', previousActualEnd)
 
     const stage: Level1PlanViewRow = {
       ...root,
-      planStartDate,
-      planEndDate,
-      estimatedDays: getLevel1DateDifference(planStartDate, planEndDate),
-      actualStartDate,
-      actualEndDate,
-      actualDays: getLevel1DateDifference(actualStartDate, actualEndDate),
+      planStartDate: planned.startDate,
+      planEndDate: planned.endDate,
+      estimatedDays: planned.duration,
+      actualStartDate: actual.startDate,
+      actualEndDate: actual.endDate,
+      actualDays: actual.duration,
       delayStatus: '',
       manpowerPercent: null,
       isMilestone: false,
     }
     computedById.set(root.id, stage)
-    milestones.forEach(task => computedById.set(task.id, {
-      ...task,
-      planStartDate: '',
-      planEndDate: task.planEndDate || '',
-      estimatedDays: null,
-      actualStartDate: '',
-      actualEndDate: task.actualEndDate || '',
-      actualDays: null,
-      delayStatus: getLevel1DelayStatus(task.planEndDate || '', task.actualEndDate || '', today),
-      manpowerPercent: null,
-      isMilestone: true,
-    }))
-    if (planEndDate) previousPlanEnd = planEndDate
-    if (actualEndDate) previousActualEnd = actualEndDate
+    children.forEach(task => {
+      const nodeKind = getNodeKind(task)
+      const planStartDate = nodeKind === 'business-period' ? getLevel1ScheduleDate(task.planStartDate) : ''
+      const planEndDate = getLevel1ScheduleDate(task.planEndDate)
+      const actualStartDate = nodeKind === 'business-period' ? getLevel1ScheduleDate(task.actualStartDate) : ''
+      const actualEndDate = getLevel1ScheduleDate(task.actualEndDate)
+      computedById.set(task.id, {
+        ...task,
+        planStartDate,
+        planEndDate,
+        estimatedDays: nodeKind === 'business-period'
+          ? getLevel1InclusiveDuration(planStartDate, planEndDate)
+          : null,
+        actualStartDate,
+        actualEndDate,
+        actualDays: nodeKind === 'business-period'
+          ? getLevel1InclusiveDuration(actualStartDate, actualEndDate)
+          : null,
+        delayStatus: getLevel1DelayStatus(planEndDate, actualEndDate, today),
+        manpowerPercent: null,
+        isMilestone: nodeKind === 'fixed-milestone',
+      })
+    })
+    if (planned.endDate) previousPlanEnd = planned.endDate
+    if (actual.endDate) previousActualEnd = actual.endDate
   })
 
   ordered.filter(task => !computedById.has(task.id)).forEach(task => computedById.set(task.id, {
@@ -423,7 +532,7 @@ export const projectLevel1Plan = (
     actualDays: null,
     delayStatus: getLevel1DelayStatus(task.planEndDate || '', task.actualEndDate || '', today),
     manpowerPercent: null,
-    isMilestone: true,
+    isMilestone: getNodeKind(task) === 'fixed-milestone',
   }))
 
   const totalEstimatedDays = roots.reduce((sum, root) => sum + (computedById.get(root.id)?.estimatedDays || 0), 0)
