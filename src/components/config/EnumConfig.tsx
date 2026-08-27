@@ -101,6 +101,7 @@ export default function EnumConfig({
   const canEditEnums = hasGlobalPermission('configCenter:enumEdit')
   const [searchText, setSearchText] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
+  const [editorType, setEditorType] = useState<EnumTypeKey | null>(null)
   const [modalMode, setModalMode] = useState<ModalMode>('add')
   const [editingRowId, setEditingRowId] = useState<string | null>(null)
   const [draft, setDraft] = useState<DraftValues>(() => emptyDraft('first-sale-tos'))
@@ -114,6 +115,7 @@ export default function EnumConfig({
   }, [hasHydrated, hydrateEnumStore])
 
   const selectedDefinition = ENUM_DEFINITIONS[selectedType]
+  const editorDefinition = editorType ? ENUM_DEFINITIONS[editorType] : null
   const rows = rowsByType[selectedType] as EnumRow[]
   const filteredTypes = useMemo(() => {
     const query = searchText.trim()
@@ -144,6 +146,7 @@ export default function EnumConfig({
   const clearModal = () => {
     setModalOpen(false)
     setDraft(emptyDraft(selectedType))
+    setEditorType(null)
     setEditingRowId(null)
     setFieldErrors({})
     setSubmitting(false)
@@ -158,6 +161,7 @@ export default function EnumConfig({
   const openAddModal = (trigger: HTMLElement) => {
     if (!canEditEnums) return
     captureTrigger(trigger)
+    setEditorType(selectedType)
     setModalMode('add')
     setEditingRowId(null)
     setDraft(emptyDraft(selectedType))
@@ -168,6 +172,7 @@ export default function EnumConfig({
   const openEditModal = (row: EnumRow, trigger: HTMLElement) => {
     if (!canEditEnums) return
     captureTrigger(trigger)
+    setEditorType(selectedType)
     setModalMode('edit')
     setEditingRowId(row.id)
     setDraft(rowDraft(selectedType, row))
@@ -177,14 +182,18 @@ export default function EnumConfig({
 
   const submit = () => {
     if (!tryBeginSubmit()) return
+    if (!editorType || !editorDefinition) {
+      releaseSubmission()
+      return
+    }
     setSubmitting(true)
     setFieldErrors({})
     const storeDraft = Object.fromEntries(
-      selectedDefinition.columns.map(column => [column.key, draft[column.key] ?? '']),
+      editorDefinition.columns.map(column => [column.key, draft[column.key] ?? '']),
     ) as EnumRowDraft
     const result = modalMode === 'add'
-      ? addEnumRow(selectedType, storeDraft)
-      : updateEnumRow(selectedType, editingRowId ?? '', storeDraft)
+      ? addEnumRow(editorType, storeDraft)
+      : updateEnumRow(editorType, editingRowId ?? '', storeDraft)
 
     if (!result.ok) {
       setFieldErrors(result.fieldErrors ?? {})
@@ -205,7 +214,8 @@ export default function EnumConfig({
   const confirmDelete = (row: EnumRow, trigger: HTMLElement) => {
     if (!canEditEnums) return
     captureTrigger(trigger)
-    const summary = getEnumRowSummary(selectedType, row)
+    const deleteType = selectedType
+    const summary = getEnumRowSummary(deleteType, row)
     Modal.confirm({
       title: '删除配置值？',
       content: `确认删除“${summary}”吗？删除后无法恢复。`,
@@ -213,7 +223,7 @@ export default function EnumConfig({
       okButtonProps: { danger: true },
       cancelText: '取消',
       onOk: () => {
-        const result = deleteEnumRow(selectedType, row.id)
+        const result = deleteEnumRow(deleteType, row.id)
         if (!result.ok) {
           message.error(resultMessage(result))
           return Promise.reject(new Error(result.reason))
@@ -316,10 +326,11 @@ export default function EnumConfig({
   )
 
   const renderDraftFields = () => {
-    if (selectedDefinition.kind === 'single') {
-      return fieldItem('value', selectedDefinition.label)
+    if (!editorDefinition) return null
+    if (editorDefinition.kind === 'single') {
+      return fieldItem('value', editorDefinition.label)
     }
-    if (selectedDefinition.kind === 'chip-map') {
+    if (editorDefinition.kind === 'chip-map') {
       return (
         <>
           {fieldItem('chipCode', '芯片编码')}
@@ -328,7 +339,7 @@ export default function EnumConfig({
         </>
       )
     }
-    if (selectedDefinition.kind === 'project-category-map') {
+    if (editorDefinition.kind === 'project-category-map') {
       const isWholeMachine = draft.pmsProjectCategory === '整机产品项目'
       return (
         <>
@@ -372,7 +383,9 @@ export default function EnumConfig({
 
   const editorModal = (
     <Modal
-      title={modalMode === 'add' ? `新增${selectedDefinition.label}` : `编辑${selectedDefinition.label}`}
+      title={editorDefinition
+        ? `${modalMode === 'add' ? '新增' : '编辑'}${editorDefinition.label}`
+        : ''}
       open={modalOpen}
       okText={modalMode === 'add' ? '新增' : '保存'}
       cancelText="取消"

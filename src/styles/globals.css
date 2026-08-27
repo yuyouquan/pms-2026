@@ -1888,10 +1888,17 @@
   margin-bottom: 10px;
 }
 
-.pms-enum-workspace-shell,
+.pms-enum-workspace-shell {
+  min-width: 0;
+  min-height: 0;
+  height: calc(100dvh - 217px);
+  max-height: calc(100dvh - 217px);
+  overflow: hidden;
+}
+
 .pms-enum-workspace-shell > .pms-config-workspace {
   min-width: 0;
-  height: 100%;
+  min-height: 0;
 }
 
 .pms-enum-values-card {
@@ -1960,14 +1967,15 @@
 @media (max-width: 900px) {
   .pms-enum-workspace-shell > .pms-config-workspace {
     grid-template-columns: 1fr;
-    height: auto;
-    max-height: none;
-    overflow: visible;
+    grid-template-rows: minmax(160px, 280px) minmax(0, 1fr);
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
   }
 
   .pms-enum-workspace-shell .pms-enum-sidebar {
     width: 100%;
-    height: auto;
+    height: 100%;
     max-height: 280px;
     padding-bottom: 12px;
   }
@@ -1983,12 +1991,23 @@
 
   .pms-enum-workspace-shell .pms-config-workspace__content,
   .pms-enum-workspace-shell .pms-enum-values-card {
-    height: auto;
+    min-height: 0;
+    height: 100%;
     overflow: hidden;
+  }
+
+  .pms-enum-workspace-shell .pms-config-workspace__content {
+    overflow-y: auto;
   }
 }
 
 @media (max-width: 760px) {
+  .pms-enum-workspace-shell {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
   .pms-config-workspace {
     grid-template-columns: 1fr;
     height: auto;
