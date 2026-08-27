@@ -65,6 +65,11 @@ const getDateDifference = (startDate: string, endDate: string): number | null =>
   return start === null || end === null || end < start ? null : (end - start) / 86_400_000
 }
 
+const getInclusiveDateDuration = (startDate: string, endDate: string): number | null => {
+  const difference = getDateDifference(startDate, endDate)
+  return difference === null ? null : difference + 1
+}
+
 const addDay = (date: string): string => {
   const timestamp = parseUtcDate(date)
   return timestamp === null ? '' : new Date(timestamp + 86_400_000).toISOString().slice(0, 10)
@@ -78,13 +83,24 @@ const getProjectedDuration = (task: Level1PlanTask): number => {
 const asDate = (value: unknown): string => parseUtcDate(value) === null ? '' : value as string
 
 const getStageRange = (stage: Level1PlanTask, children: Level1PlanTask[], previousEnd: string) => {
-  const hasScheduleDate = (task: Level1PlanTask): boolean => Boolean(asDate(task.planStartDate) || asDate(task.planEndDate))
-  const firstChild = children.find(hasScheduleDate)
-  const lastChild = [...children].reverse().find(hasScheduleDate)
+  const scheduledChildren = children.flatMap(task => {
+    const startDate = asDate(task.planStartDate)
+    const endDate = asDate(task.planEndDate)
+    if (task.nodeKind === 'business-period') {
+      return getInclusiveDateDuration(startDate, endDate) === null ? [] : [{ startDate, endDate }]
+    }
+    if (task.nodeKind === 'fixed-milestone') {
+      return endDate ? [{ startDate: endDate, endDate }] : []
+    }
+    const legacyDate = endDate || startDate
+    return legacyDate ? [{ startDate: startDate || legacyDate, endDate: endDate || legacyDate }] : []
+  })
+  const firstChild = scheduledChildren[0]
+  const lastChild = scheduledChildren.at(-1)
   const ownStart = asDate(stage.planStartDate)
   const ownEnd = asDate(stage.planEndDate)
-  const startDate = ownStart || (previousEnd ? addDay(previousEnd) : '') || asDate(firstChild?.planStartDate) || asDate(firstChild?.planEndDate)
-  const endDate = ownEnd || asDate(lastChild?.planEndDate) || asDate(lastChild?.planStartDate)
+  const startDate = ownStart || (previousEnd && firstChild ? addDay(previousEnd) : '') || firstChild?.startDate || ''
+  const endDate = ownEnd || lastChild?.endDate || ''
 
   if (!startDate || !endDate || getDateDifference(startDate, endDate) === null) {
     return { startDate: '', endDate: '', duration: 0 }
@@ -124,7 +140,21 @@ export const buildPlanGanttTasks = (
     if (range.endDate) previousStageEnd = range.endDate
     result.push({ ...stage, type: 'project', readonly: true, start_date: range.startDate, end_date: range.endDate, duration: range.duration })
     children.forEach(task => {
-      const date = asDate(task.planEndDate) || asDate(task.planStartDate)
+      if (task.nodeKind === 'business-period') {
+        const startDate = asDate(task.planStartDate)
+        const endDate = asDate(task.planEndDate)
+        const duration = getInclusiveDateDuration(startDate, endDate)
+        result.push({
+          ...task,
+          type: 'task',
+          readonly: !editable,
+          start_date: duration === null ? '' : startDate,
+          end_date: duration === null ? '' : endDate,
+          duration: duration ?? 0,
+        })
+        return
+      }
+      const date = asDate(task.planEndDate) || (task.nodeKind ? '' : asDate(task.planStartDate))
       result.push({ ...task, type: 'milestone', readonly: !editable, start_date: date, end_date: date, duration: 0 })
     })
   })
@@ -143,6 +173,20 @@ export const applyPlanGanttDateChange = <Task extends Level1PlanTask>(
   if (!areValidDatePair(change.startDate, change.endDate)) return tasks as Task[]
   const target = tasks.find(task => task.id === change.taskId)
   if (!target) return tasks as Task[]
+
+  if (target.nodeKind === 'stage') return tasks as Task[]
+  if (target.nodeKind === 'fixed-milestone') {
+    return tasks.map(task => task.id === change.taskId
+      ? { ...task, planEndDate: change.endDate }
+      : task)
+  }
+  if (target.nodeKind === 'business-period') {
+    const estimatedDays = getInclusiveDateDuration(change.startDate, change.endDate)
+    if (estimatedDays === null) return tasks as Task[]
+    return tasks.map(task => task.id === change.taskId
+      ? { ...task, planStartDate: change.startDate, planEndDate: change.endDate, estimatedDays }
+      : task)
+  }
 
   if (change.mode === 'milestone') {
     const planStartDate = target.planStartDate || ''
@@ -176,9 +220,12 @@ const getPatchedDuration = (
   startDate: string,
   endDate: string,
   currentDuration: number | null | undefined,
+  inclusive: boolean,
 ): number | null | undefined => {
   if (!startDate || !endDate) return currentDuration
-  return getDateDifference(startDate, endDate)
+  return inclusive
+    ? getInclusiveDateDuration(startDate, endDate)
+    : getDateDifference(startDate, endDate)
 }
 
 export const applyPlanTaskDatePatch = <Task extends Level1PlanTask>(
@@ -195,8 +242,9 @@ export const applyPlanTaskDatePatch = <Task extends Level1PlanTask>(
   const patched = { ...target, ...input.patch }
   const planChanged = hasOwnDateKey(input.patch, 'planStartDate') || hasOwnDateKey(input.patch, 'planEndDate')
   const actualChanged = hasOwnDateKey(input.patch, 'actualStartDate') || hasOwnDateKey(input.patch, 'actualEndDate')
-  const estimatedDays = getPatchedDuration(patched.planStartDate || '', patched.planEndDate || '', target.estimatedDays)
-  const actualDays = getPatchedDuration(patched.actualStartDate || '', patched.actualEndDate || '', target.actualDays)
+  const inclusive = target.nodeKind === 'business-period'
+  const estimatedDays = getPatchedDuration(patched.planStartDate || '', patched.planEndDate || '', target.estimatedDays, inclusive)
+  const actualDays = getPatchedDuration(patched.actualStartDate || '', patched.actualEndDate || '', target.actualDays, inclusive)
   if (planChanged && estimatedDays === null) return cloneTasks(tasks)
   if (actualChanged && actualDays === null) return cloneTasks(tasks)
   if (planChanged) patched.estimatedDays = estimatedDays

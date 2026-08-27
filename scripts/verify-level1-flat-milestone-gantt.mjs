@@ -338,6 +338,149 @@ const emptyDates = technicalRules.validateTechnicalSubprojectDates([
 assert.equal(emptyDates.valid, true, 'empty and partial date pairs remain valid')
 assert.deepEqual(emptyDates.byTaskId, {}, 'empty and partial date pairs add no field errors')
 
+const equalFixedDates = [
+  { id: 'equal-stage', order: 1, taskName: '同日阶段', nodeKind: 'stage' },
+  { id: 'equal-a', parentId: 'equal-stage', order: 1, taskName: '同日节点A', nodeKind: 'fixed-milestone', planEndDate: '2026-03-10', actualEndDate: '2026-03-11' },
+  { id: 'equal-b', parentId: 'equal-stage', order: 2, taskName: '同日节点B', nodeKind: 'fixed-milestone', planEndDate: '2026-03-10', actualEndDate: '2026-03-11' },
+]
+assert.equal(level1Rules.validateLevel1ScheduleDates(equalFixedDates).valid, true, 'fixed milestones permit equal planned and actual completion dates')
+
+const reversedFixedDates = [
+  { id: 'fixed-stage-1', order: 1, taskName: '固定阶段一', nodeKind: 'stage' },
+  { id: 'fixed-a', parentId: 'fixed-stage-1', order: 1, taskName: '固定节点A', nodeKind: 'fixed-milestone', planEndDate: '2026-03-10', actualEndDate: '2026-03-10' },
+  { id: 'fixed-b', parentId: 'fixed-stage-1', order: 2, taskName: '固定节点B', nodeKind: 'fixed-milestone', planEndDate: '2026-03-10', actualEndDate: '2026-03-09' },
+  { id: 'fixed-stage-2', order: 2, taskName: '固定阶段二', nodeKind: 'stage' },
+  { id: 'fixed-c', parentId: 'fixed-stage-2', order: 1, taskName: '固定节点C', nodeKind: 'fixed-milestone', planEndDate: '2026-03-09', actualEndDate: '2026-03-11' },
+]
+const reversedFixedValidation = level1Rules.validateLevel1ScheduleDates(reversedFixedDates)
+assert.equal(reversedFixedValidation.valid, false, 'fixed milestones reject planned and actual reversals in global display order')
+assert.ok(reversedFixedValidation.byTaskId['fixed-b']?.actualEndDate?.some(message => message.includes('不得早于上一节点')), 'same-stage actual reversal identifies the later fixed milestone')
+assert.ok(reversedFixedValidation.byTaskId['fixed-c']?.planEndDate?.some(message => message.includes('不得早于上一节点')), 'cross-stage planned reversal identifies the later fixed milestone')
+
+const invalidBusinessRange = [{
+  id: 'invalid-period', order: 1, taskName: '倒序业务节点', nodeKind: 'business-period',
+  planStartDate: '2026-04-10', planEndDate: '2026-04-01',
+  actualStartDate: '2026-04-12', actualEndDate: '2026-04-02',
+}]
+const invalidBusinessRangeValidation = level1Rules.validateLevel1ScheduleDates(invalidBusinessRange)
+assert.equal(invalidBusinessRangeValidation.valid, false, 'business periods reject inverted planned and actual ranges')
+assert.equal(invalidBusinessRangeValidation.byTaskId['invalid-period'].planStartDate.length > 0, true, 'an inverted planned range marks its start field')
+assert.equal(invalidBusinessRangeValidation.byTaskId['invalid-period'].planEndDate.length > 0, true, 'an inverted planned range marks its completion field')
+assert.equal(invalidBusinessRangeValidation.byTaskId['invalid-period'].actualStartDate.length > 0, true, 'an inverted actual range marks its start field')
+assert.equal(invalidBusinessRangeValidation.byTaskId['invalid-period'].actualEndDate.length > 0, true, 'an inverted actual range marks its completion field')
+
+const overlappingBusinessPeriods = [
+  { id: 'period-stage', order: 1, taskName: '业务阶段', nodeKind: 'stage' },
+  {
+    id: 'period-a', parentId: 'period-stage', order: 1, taskName: '业务节点A', nodeKind: 'business-period',
+    planStartDate: '2026-04-01', planEndDate: '2026-04-10',
+    actualStartDate: '2026-04-02', actualEndDate: '2026-04-11',
+  },
+  {
+    id: 'period-b', parentId: 'period-stage', order: 2, taskName: '业务节点B', nodeKind: 'business-period',
+    planStartDate: '2026-04-10', planEndDate: '2026-04-20',
+    actualStartDate: '2026-04-10', actualEndDate: '2026-04-21',
+  },
+]
+const overlappingBusinessValidation = level1Rules.validateLevel1ScheduleDates(overlappingBusinessPeriods)
+assert.ok(overlappingBusinessValidation.byTaskId['period-b']?.planStartDate?.some(message => message.includes('重叠')), 'same-day planned business boundaries count as overlap')
+assert.ok(overlappingBusinessValidation.byTaskId['period-b']?.actualStartDate?.some(message => message.includes('重叠')), 'actual business periods validate independently from planned periods')
+
+const overlappingStages = [
+  { id: 'overlap-stage-1', order: 1, taskName: '重叠阶段一', nodeKind: 'stage' },
+  { id: 'overlap-period-1', parentId: 'overlap-stage-1', order: 1, taskName: '阶段一业务节点', nodeKind: 'business-period', planStartDate: '2026-05-01', planEndDate: '2026-05-10' },
+  { id: 'overlap-stage-2', order: 2, taskName: '重叠阶段二', nodeKind: 'stage' },
+  { id: 'overlap-period-2', parentId: 'overlap-stage-2', order: 1, taskName: '阶段二业务节点', nodeKind: 'business-period', planStartDate: '2026-05-10', planEndDate: '2026-05-20' },
+]
+const overlappingStageValidation = level1Rules.validateLevel1ScheduleDates(overlappingStages)
+assert.ok(overlappingStageValidation.byTaskId['overlap-period-2']?.planStartDate?.some(message => message.includes('阶段') && message.includes('重叠')), 'derived stage overlap maps to the editable child boundary field')
+assert.equal(overlappingStageValidation.byTaskId['overlap-stage-2'], undefined, 'derived stage overlap does not mark the readonly stage row')
+
+const strictInvalidDates = [
+  { id: 'strict-stage', order: 1, taskName: '严格日期阶段', nodeKind: 'stage' },
+  { id: 'strict-fixed', parentId: 'strict-stage', order: 1, taskName: '非法固定节点', nodeKind: 'fixed-milestone', planEndDate: '2026-02-30' },
+  { id: 'strict-period', parentId: 'strict-stage', order: 2, taskName: '非法业务节点', nodeKind: 'business-period', actualStartDate: 'not-a-date' },
+]
+const strictInvalidValidation = level1Rules.validateLevel1ScheduleDates(strictInvalidDates)
+assert.ok(strictInvalidValidation.byTaskId['strict-fixed']?.planEndDate?.some(message => message.includes('格式')), 'calendar-impossible ISO dates are rejected')
+assert.ok(strictInvalidValidation.byTaskId['strict-period']?.actualStartDate?.some(message => message.includes('格式')), 'non-ISO actual dates are rejected')
+
+const partialScheduleDates = [
+  { id: 'partial-neutral-stage', order: 1, taskName: '半填阶段', nodeKind: 'stage' },
+  { id: 'partial-neutral-fixed', parentId: 'partial-neutral-stage', order: 1, taskName: '空固定节点', nodeKind: 'fixed-milestone' },
+  { id: 'partial-neutral-plan', parentId: 'partial-neutral-stage', order: 2, taskName: '仅计划开始', nodeKind: 'business-period', planStartDate: '2026-06-01' },
+  { id: 'partial-neutral-actual', parentId: 'partial-neutral-stage', order: 3, taskName: '仅实际完成', nodeKind: 'business-period', actualEndDate: '2026-06-10' },
+]
+const partialScheduleSnapshot = structuredClone(partialScheduleDates)
+const partialScheduleValidation = level1Rules.validateLevel1ScheduleDates(partialScheduleDates)
+assert.equal(partialScheduleValidation.valid, true, 'empty and partial schedule input remains neutral')
+assert.deepEqual(partialScheduleValidation.byTaskId, {}, 'empty and partial schedule input adds no field errors')
+assert.deepEqual(partialScheduleDates, partialScheduleSnapshot, 'unified schedule validation leaves nested task input unchanged')
+assert.deepEqual(level1Rules.validateLevel1MilestoneDates(equalFixedDates), level1Rules.validateLevel1ScheduleDates(equalFixedDates), 'the milestone validator remains a compatibility alias for unified schedule validation')
+
+const mixedGanttSource = [
+  { id: 'mixed-stage', stableId: 'mixed-stage', order: 1, taskName: '混合阶段', nodeKind: 'stage' },
+  {
+    id: 'mixed-fixed', stableId: 'mixed-fixed', parentId: 'mixed-stage', order: 1, taskName: '固定点', nodeKind: 'fixed-milestone',
+    planStartDate: '2026-03-01', planEndDate: '2026-03-31', estimatedDays: 99,
+  },
+  {
+    id: 'mixed-period', stableId: 'mixed-period', parentId: 'mixed-stage', order: 2, taskName: 'MR1', nodeKind: 'business-period',
+    planStartDate: '2026-04-01', planEndDate: '2026-04-10', estimatedDays: 99,
+    actualStartDate: '2026-04-02', actualEndDate: '2026-04-11', actualDays: 99,
+  },
+  { id: 'partial-gantt-stage', stableId: 'partial-gantt-stage', order: 2, taskName: '半填阶段', nodeKind: 'stage' },
+  {
+    id: 'partial-gantt-period', stableId: 'partial-gantt-period', parentId: 'partial-gantt-stage', order: 1, taskName: '半填业务条', nodeKind: 'business-period',
+    planStartDate: '2026-04-15', planEndDate: '',
+  },
+]
+const mixedGanttSnapshot = structuredClone(mixedGanttSource)
+const mixedGanttTasks = ganttRules.buildPlanGanttTasks(mixedGanttSource, { mode: 'hierarchical', editable: true })
+assert.equal(mixedGanttTasks.find(task => task.id === 'mixed-stage')?.type, 'project', 'hierarchical gantt emits readonly project stages')
+assert.equal(mixedGanttTasks.find(task => task.id === 'mixed-stage')?.readonly, true, 'hierarchical gantt stages remain readonly')
+assert.deepEqual(
+  mixedGanttTasks.filter(task => ['mixed-fixed', 'mixed-period'].includes(task.id)).map(task => [task.id, task.type, task.start_date, task.end_date, task.duration]),
+  [
+    ['mixed-fixed', 'milestone', '2026-03-31', '2026-03-31', 0],
+    ['mixed-period', 'task', '2026-04-01', '2026-04-10', 10],
+  ],
+  'hierarchical gantt emits fixed completion points and inclusive business-period bars',
+)
+assert.deepEqual(
+  mixedGanttTasks.find(task => task.id === 'partial-gantt-period'),
+  { ...mixedGanttSource[4], type: 'task', readonly: false, start_date: '', end_date: '', duration: 0 },
+  'an incomplete business period does not fabricate a gantt bar',
+)
+assert.deepEqual(mixedGanttSource, mixedGanttSnapshot, 'mixed gantt construction leaves source tasks deeply unchanged')
+
+const fixedPointMoved = ganttRules.applyPlanGanttDateChange(mixedGanttSource, {
+  taskId: 'mixed-fixed', mode: 'milestone', startDate: '2026-04-05', endDate: '2026-04-05',
+})
+assert.deepEqual(fixedPointMoved.find(task => task.id === 'mixed-fixed'), {
+  ...mixedGanttSource[1], planEndDate: '2026-04-05',
+}, 'fixed-point dragging patches only its planned completion field')
+
+const businessPeriodMoved = ganttRules.applyPlanGanttDateChange(mixedGanttSource, {
+  taskId: 'mixed-period', mode: 'task', startDate: '2026-04-02', endDate: '2026-04-11',
+})
+assert.deepEqual(businessPeriodMoved.find(task => task.id === 'mixed-period'), {
+  ...mixedGanttSource[2], planStartDate: '2026-04-02', planEndDate: '2026-04-11', estimatedDays: 10,
+}, 'business-period dragging patches both planned boundaries and recalculates an inclusive duration')
+const businessActualPatched = ganttRules.applyPlanTaskDatePatch(mixedGanttSource, {
+  taskId: 'mixed-period', patch: { actualStartDate: '2026-04-03', actualEndDate: '2026-04-12' },
+})
+assert.deepEqual(businessActualPatched.find(task => task.id === 'mixed-period'), {
+  ...mixedGanttSource[2], actualStartDate: '2026-04-03', actualEndDate: '2026-04-12', actualDays: 10,
+}, 'business-period actual patches retain actual semantics and recalculate an inclusive duration')
+assert.strictEqual(ganttRules.applyPlanGanttDateChange(mixedGanttSource, {
+  taskId: 'mixed-period', mode: 'task', startDate: '2026-04-12', endDate: '2026-04-11',
+}), mixedGanttSource, 'an inverted gantt change returns the original input unchanged')
+assert.strictEqual(ganttRules.applyPlanGanttDateChange(mixedGanttSource, {
+  taskId: 'mixed-period', mode: 'task', startDate: '', endDate: '',
+}), mixedGanttSource, 'an empty gantt change returns the original input unchanged')
+assert.deepEqual(mixedGanttSource, mixedGanttSnapshot, 'mixed gantt date changes leave source tasks deeply unchanged')
+
 const ganttHierarchy = [
   { id: 'stage-1', stableId: 'stage-1', order: 1, taskName: '概念阶段' },
   { id: 'milestone-1', stableId: 'milestone-1', parentId: 'stage-1', order: 1, taskName: '概念启动', planStartDate: '2026-01-01', planEndDate: '2026-01-05', actualEndDate: '2026-01-06' },

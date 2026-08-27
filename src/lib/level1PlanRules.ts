@@ -3,6 +3,7 @@ export type Level1ProjectionMode = 'standard' | 'technical-subproject'
 export type Level1DelayStatus = '延期' | '按时' | '-'
 export type Level1ProjectKind = 'machine' | 'tos'
 export type Level1NodeKind = 'stage' | 'fixed-milestone' | 'business-period'
+export type Level1DateField = 'planStartDate' | 'planEndDate' | 'actualStartDate' | 'actualEndDate'
 
 export interface Level1PlanTask {
   id: string
@@ -65,14 +66,14 @@ export interface Level1StructureMutationInput {
 
 export interface Level1DateViolation {
   taskId: string
-  field: 'planEndDate' | 'actualEndDate'
+  field: Level1DateField
   message: string
 }
 
 export interface Level1DateValidationResult {
   valid: boolean
   violations: Level1DateViolation[]
-  byTaskId: Record<string, Partial<Record<'planEndDate' | 'actualEndDate', string[]>>>
+  byTaskId: Record<string, Partial<Record<Level1DateField, string[]>>>
 }
 
 const templateTask = (
@@ -325,12 +326,6 @@ export const getOrderedLevel1Tasks = (tasks: readonly Level1PlanTask[]): Level1P
   return [...flattened, ...sortByOrder(cloned.filter(task => !included.has(task.id)))]
 }
 
-const getMilestoneSequence = (tasks: readonly Level1PlanTask[]): Level1PlanTask[] => {
-  const ordered = getOrderedLevel1Tasks(tasks)
-  const hasChildren = ordered.some(task => Boolean(task.parentId))
-  return hasChildren ? ordered.filter(task => Boolean(task.parentId)) : ordered
-}
-
 export const getLevel1DelayStatus = (
   planEndDate: string,
   actualEndDate: string,
@@ -411,40 +406,167 @@ export const projectTechnicalSubprojectRows = (
   })
 }
 
-export const validateLevel1MilestoneDates = (tasks: readonly Level1PlanTask[]): Level1DateValidationResult => {
-  const sequence = getMilestoneSequence(tasks)
+const LEVEL1_DATE_FIELDS: readonly Level1DateField[] = [
+  'planStartDate',
+  'planEndDate',
+  'actualStartDate',
+  'actualEndDate',
+]
+
+const LEVEL1_DATE_FIELD_LABELS: Record<Level1DateField, string> = {
+  planStartDate: '计划开始时间',
+  planEndDate: '计划完成时间',
+  actualStartDate: '实际开始时间',
+  actualEndDate: '实际完成时间',
+}
+
+const LEVEL1_DATE_AXES = [
+  { startField: 'planStartDate', endField: 'planEndDate', label: '计划' },
+  { startField: 'actualStartDate', endField: 'actualEndDate', label: '实际' },
+] as const
+
+export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): Level1DateValidationResult => {
+  const ordered = getOrderedLevel1Tasks(tasks)
+  const usesExplicitNodeModel = ordered.some(task => task.nodeKind !== undefined)
+  const parentIds = new Set(ordered.flatMap(task => task.parentId ? [task.parentId] : []))
+  const getNodeKind = (task: Level1PlanTask): Level1NodeKind => (
+    task.nodeKind || (parentIds.has(task.id) ? 'stage' : 'fixed-milestone')
+  )
   const violations: Level1DateViolation[] = []
   const byTaskId: Level1DateValidationResult['byTaskId'] = {}
 
-  ;(['planEndDate', 'actualEndDate'] as const).forEach(field => {
-    let previous: Level1PlanTask | null = null
-    sequence.forEach(task => {
-      const value = typeof task[field] === 'string' ? task[field] as string : ''
-      if (!value) return
-      const timestamp = parseStrictDate(value)
-      if (timestamp === null) {
-        const message = `${field === 'planEndDate' ? '计划完成时间' : '实际结束时间'}格式无效`
-        violations.push({ taskId: task.id, field, message })
-        byTaskId[task.id] = byTaskId[task.id] || {}
-        byTaskId[task.id][field] = [...(byTaskId[task.id][field] || []), message]
-        return
+  const addViolation = (task: Level1PlanTask, field: Level1DateField, message: string) => {
+    const fieldMessages = byTaskId[task.id]?.[field] || []
+    if (fieldMessages.includes(message)) return
+    violations.push({ taskId: task.id, field, message })
+    byTaskId[task.id] = byTaskId[task.id] || {}
+    byTaskId[task.id][field] = [...fieldMessages, message]
+  }
+
+  const getValidTime = (task: Level1PlanTask, field: Level1DateField): number | null => (
+    parseStrictDate(task[field])
+  )
+
+  ordered.forEach(task => {
+    const nodeKind = getNodeKind(task)
+    const editableFields = nodeKind === 'business-period'
+      ? LEVEL1_DATE_FIELDS
+      : nodeKind === 'fixed-milestone'
+        ? (['planEndDate', 'actualEndDate'] as const)
+        : []
+    editableFields.forEach(field => {
+      const value = task[field]
+      if (value === undefined || value === null || value === '') return
+      if (parseStrictDate(value) === null) {
+        addViolation(task, field, `${LEVEL1_DATE_FIELD_LABELS[field]}格式无效`)
       }
+    })
+
+    if (nodeKind !== 'business-period') return
+    LEVEL1_DATE_AXES.forEach(({ startField, endField, label }) => {
+      const start = getValidTime(task, startField)
+      const end = getValidTime(task, endField)
+      if (start === null || end === null || start <= end) return
+      addViolation(task, startField, `${label}开始时间不得晚于完成时间`)
+      addViolation(task, endField, `${label}完成时间不得早于开始时间`)
+    })
+  })
+
+  LEVEL1_DATE_AXES.forEach(({ endField }) => {
+    let previous: Level1PlanTask | null = null
+    ordered.filter(task => getNodeKind(task) === 'fixed-milestone').forEach(task => {
+      const timestamp = getValidTime(task, endField)
+      if (timestamp === null) return
       if (previous) {
-        const previousValue = previous[field] as string
-        const previousTimestamp = parseStrictDate(previousValue)
-        if (previousTimestamp !== null && timestamp <= previousTimestamp) {
-          const message = `${field === 'planEndDate' ? '计划完成时间' : '实际结束时间'}必须晚于上一节点“${previous.taskName}”的${previousValue}`
-          violations.push({ taskId: task.id, field, message })
-          byTaskId[task.id] = byTaskId[task.id] || {}
-          byTaskId[task.id][field] = [...(byTaskId[task.id][field] || []), message]
+        const previousTimestamp = getValidTime(previous, endField)
+        const violatesOrder = previousTimestamp !== null
+          && (usesExplicitNodeModel ? timestamp < previousTimestamp : timestamp <= previousTimestamp)
+        if (violatesOrder) {
+          addViolation(
+            task,
+            endField,
+            usesExplicitNodeModel
+              ? `${LEVEL1_DATE_FIELD_LABELS[endField]}不得早于上一节点“${previous.taskName}”`
+              : `${LEVEL1_DATE_FIELD_LABELS[endField]}必须晚于上一节点“${previous.taskName}”的${previous[endField]}`,
+          )
         }
       }
       previous = task
     })
   })
 
+  const roots = sortByOrder(ordered.filter(task => getNodeKind(task) === 'stage'))
+  const childrenByParent = new Map<string, Level1PlanTask[]>()
+  ordered.forEach(task => {
+    if (!task.parentId) return
+    const children = childrenByParent.get(task.parentId) || []
+    children.push(task)
+    childrenByParent.set(task.parentId, children)
+  })
+
+  roots.forEach(stage => {
+    const businessPeriods = sortByOrder((childrenByParent.get(stage.id) || [])
+      .filter(task => getNodeKind(task) === 'business-period'))
+    LEVEL1_DATE_AXES.forEach(({ startField, endField, label }) => {
+      let previous: Level1PlanTask | null = null
+      businessPeriods.forEach(task => {
+        const start = getValidTime(task, startField)
+        const end = getValidTime(task, endField)
+        if (start === null || end === null || start > end) return
+        if (previous) {
+          const previousEnd = getValidTime(previous, endField)
+          if (previousEnd !== null && start <= previousEnd) {
+            addViolation(task, startField, `${label}时间段不得与上一业务节点“${previous.taskName}”重叠`)
+          }
+        }
+        previous = task
+      })
+    })
+  })
+
+  type Level1StageBoundary = {
+    start: number
+    end: number
+    startTask: Level1PlanTask
+    startField: Level1DateField
+  }
+
+  LEVEL1_DATE_AXES.forEach(({ startField, endField, label }) => {
+    let previousStage: { stage: Level1PlanTask; end: number } | null = null
+    roots.forEach(stage => {
+      const scheduled = sortByOrder(childrenByParent.get(stage.id) || []).flatMap<Level1StageBoundary>(task => {
+        const nodeKind = getNodeKind(task)
+        const end = getValidTime(task, endField)
+        if (nodeKind === 'fixed-milestone') {
+          return end === null
+            ? []
+            : [{ start: end, end, startTask: task, startField: endField }]
+        }
+        if (nodeKind !== 'business-period') return []
+        const start = getValidTime(task, startField)
+        return start === null || end === null || start > end
+          ? []
+          : [{ start, end, startTask: task, startField }]
+      })
+      const first = scheduled[0]
+      const last = scheduled.at(-1)
+      if (!first || !last || first.start > last.end) return
+      if (previousStage && first.start <= previousStage.end) {
+        addViolation(
+          first.startTask,
+          first.startField,
+          `${label}阶段时间不得与上一阶段“${previousStage.stage.taskName}”重叠`,
+        )
+      }
+      previousStage = { stage, end: last.end }
+    })
+  })
+
   return { valid: violations.length === 0, violations, byTaskId }
 }
+
+/** Compatibility alias for callers that still use the milestone-specific name. */
+export const validateLevel1MilestoneDates = validateLevel1ScheduleDates
 
 export const projectLevel1Plan = (
   tasks: readonly Level1PlanTask[],
