@@ -43,6 +43,7 @@ import {
   PROJECT_TYPE_TOS_VERSION,
 } from '@/constants/projectTypes'
 import type { FilterCondition } from '@/lib/filterConditions'
+import { formatTosSnapshot } from '@/lib/enumConsumers'
 import {
   getDefaultColumnSettings,
   normalizeColumnSettings,
@@ -310,10 +311,7 @@ const normalizeStatus = (status: any): RoadmapStatus | null => {
 const normalizeTosVersion = (value: any) => {
   const raw = String(value || '').trim()
   if (!raw || raw === '-') return '未归属'
-  const compact = raw.replace(/\s+/g, '')
-  if (/^tOS/i.test(compact)) return compact.replace(/^tos/i, 'tOS')
-  const match = compact.match(/\d+(?:\.\d+)?/)
-  return match ? `tOS${match[0]}` : compact
+  return formatTosSnapshot(raw)
 }
 
 const getMainMarket = (project: any) => {

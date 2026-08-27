@@ -6,7 +6,7 @@ import { CalendarOutlined, EditOutlined, ProjectOutlined, SendOutlined, SettingO
 import ProjectInfoSections from '@/components/project-info/ProjectInfoSections'
 import ProjectInformationFrame from '@/components/project-info/ProjectInformationFrame'
 import type { ProjectInfoGroupKey } from '@/constants/projectInfoSchema'
-import { isMachineProjectType, resolveProjectClassification } from '@/constants/projectTypes'
+import { PROJECT_CATEGORY_MACHINE, isMachineProjectType, resolveProjectClassification } from '@/constants/projectTypes'
 import { formatProjectInfoValue, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
 
 interface TargetProjectInformationViewProps {
@@ -20,10 +20,17 @@ interface TargetProjectInformationViewProps {
   visibleGroupKeys?: ProjectInfoGroupKey[]
 }
 
-const HEALTH_CONFIG: Record<string, { label: string; color: string }> = {
-  normal: { label: '正常', color: '#10b981' },
-  warning: { label: '关注', color: '#f59e0b' },
-  risk: { label: '风险', color: '#ef4444' },
+export interface HealthPresentation {
+  label: string
+  color: string
+}
+
+export function getHealthPresentation(value: unknown): HealthPresentation {
+  const snapshot = String(value || '').trim()
+  if (['normal', '正常'].includes(snapshot)) return { label: '正常', color: '#10b981' }
+  if (['warning', '关注', '预警'].includes(snapshot)) return { label: '关注', color: '#f59e0b' }
+  if (['risk', '风险'].includes(snapshot)) return { label: '风险', color: '#ef4444' }
+  return { label: snapshot || '-', color: '#94a3b8' }
 }
 
 export default function TargetProjectInformationView({
@@ -41,11 +48,11 @@ export default function TargetProjectInformationView({
     project.type,
     typeof project.secondaryCategory === 'string' ? project.secondaryCategory : undefined,
   )
-  const classificationLabel = classification.secondaryCategory
+  const classificationLabel = classification.projectCategory === PROJECT_CATEGORY_MACHINE && classification.secondaryCategory
     ? `${classification.projectCategory} · ${classification.secondaryCategory}`
     : classification.projectCategory
   const status = String(project.status || '-')
-  const health = HEALTH_CONFIG[String(project.healthStatus || 'normal')] || HEALTH_CONFIG.normal
+  const health = getHealthPresentation(project.healthStatus)
   const showCancelPauseDate = ['暂停', '已暂停', '已取消'].includes(status)
   const coreFields = isWholeMachine ? [
     { label: '项目名称', value: project.name, accent: 'var(--pms-brand-strong)' },

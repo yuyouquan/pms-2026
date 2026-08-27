@@ -5,7 +5,7 @@ import type {
 } from '@/types/roadmap'
 import { normalizeLegacyTosVersionName } from '@/lib/roadmapValidation'
 
-type SemanticTos = Pick<TosVersionConfig, 'major' | 'minor'>
+type SemanticTos = { major: number; minor: number }
 type ComparableRoadmapRecord = Partial<Record<RoadmapColumnKey, unknown>>
 
 const APPROVED_RAM_VALUES = new Map([

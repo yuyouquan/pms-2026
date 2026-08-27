@@ -421,9 +421,9 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
     { name: '查看组', members: ['孙七', '周八', '杜甫'], isFixed: true },
   ],
   globalRolePerms: {
-    '管理组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': true, 'roadmap:export': true, 'configCenter:planEdit': true, 'configCenter:planPublish': true, 'configCenter:transferEdit': true, 'permissionCenter:manageRoles': true },
-    '编辑组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'permissionCenter:manageRoles': false },
-    '查看组': { 'roadmap:view': true, 'roadmap:edit': false, 'roadmap:baseline': false, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'permissionCenter:manageRoles': false },
+    '管理组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': true, 'roadmap:export': true, 'configCenter:planEdit': true, 'configCenter:planPublish': true, 'configCenter:transferEdit': true, 'configCenter:enumEdit': true, 'permissionCenter:manageRoles': true },
+    '编辑组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'configCenter:enumEdit': false, 'permissionCenter:manageRoles': false },
+    '查看组': { 'roadmap:view': true, 'roadmap:edit': false, 'roadmap:baseline': false, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'configCenter:enumEdit': false, 'permissionCenter:manageRoles': false },
   },
   globalPermTab: 'roles',
   showGlobalAddRole: false,

@@ -7,6 +7,7 @@ const rules = loadTypeScriptModule(root, 'src/lib/machineTosVersions.ts')
 const projectInfoRules = loadTypeScriptModule(root, 'src/lib/projectInfoRules.ts')
 const projectStore = loadTypeScriptModule(root, 'src/stores/project.ts')
 const roadmapStore = loadTypeScriptModule(root, 'src/stores/roadmap.ts')
+const roadmapAdapter = loadTypeScriptModule(root, 'src/lib/roadmapProjectAdapter.ts')
 
 const newMachine = {
   id: 'new',
@@ -27,8 +28,20 @@ const oldMachine = {
 
 assert.equal(rules.normalizeMachineFamilyName('  X6870  '), 'X6870', 'family matching trims surrounding whitespace')
 assert.notEqual(rules.normalizeMachineFamilyName('x6870'), rules.normalizeMachineFamilyName('X6870'), 'family matching remains case-sensitive')
-assert.ok(rules.compareThreePartVersions('17.10.0', '17.2.0') > 0, 'three-part versions sort numerically')
-assert.ok(Number.isNaN(rules.compareThreePartVersions('14.0', '14.0.0')), 'two-part versions are invalid')
+assert.equal(rules.normalizeMachineTosVersion(' tOS18.preview '), '18.preview', 'arbitrary tOS bodies normalize one prefix')
+assert.equal(rules.normalizeMachineTosVersion('TOS 16.0'), 'TOS 16.0', 'uppercase TOS remains part of a valid snapshot body')
+assert.ok(rules.compareMachineTosVersions('17.10.0', '17.2.0') > 0, 'numeric version bodies sort naturally')
+assert.ok(rules.compareMachineTosVersions('18.preview', '16.0') > 0, 'arbitrary non-empty version bodies remain comparable')
+
+const arbitraryNewMachine = {
+  ...newMachine,
+  firstSaleTosVersion: 'tOS18.preview',
+}
+assert.deepEqual(rules.resolveMachineTosUpdate([], arbitraryNewMachine), {
+  ok: true,
+  candidate: { ...arbitraryNewMachine, firstSaleTosVersion: '18.preview', currentTosVersion: '18.preview' },
+  updates: [],
+}, 'machine linkage accepts an arbitrary non-empty configured tOS body')
 
 assert.deepEqual(rules.resolveMachineTosUpdate([], newMachine), {
   ok: true,
@@ -60,7 +73,7 @@ assert.deepEqual(
   'creating a duplicate same-name new machine is rejected',
 )
 assert.deepEqual(
-  rules.resolveMachineTosUpdate([], { ...newMachine, firstSaleTosVersion: 'bad' }),
+  rules.resolveMachineTosUpdate([], { ...newMachine, firstSaleTosVersion: '   ' }),
   { ok: false, reason: 'invalid-version' },
 )
 
@@ -183,7 +196,7 @@ assert.deepEqual(
   'persisted two-part references migrate to canonical three-part values without clearing unknown display history',
 )
 assert.deepEqual(
-  projectStore.migrateProjectState(migratedMachineState, 3),
+  projectStore.migrateProjectState(migratedMachineState, projectStore.PROJECT_STORE_VERSION),
   migratedMachineState,
   'machine version persistence migration is idempotent',
 )
@@ -298,17 +311,24 @@ const unknownRemainingLegacy = {
   id: 'remaining-unknown-legacy',
   currentTosVersion: 'future-current',
 }
-const invalidHistoryProjects = [deleteNew, auditedLegacyToDelete, unknownRemainingLegacy]
-const invalidHistoryDelete = deleteFixture(
-  invalidHistoryProjects,
+const arbitraryHistoryProjects = [deleteNew, auditedLegacyToDelete, unknownRemainingLegacy]
+const arbitraryHistoryDelete = deleteFixture(
+  arbitraryHistoryProjects,
   auditedLegacyToDelete.id,
   deleteNew,
 )
-assert.equal(invalidHistoryDelete.deleted, false, 'legacy deletion fails when required family recompute contains unknown history')
-assert.equal(invalidHistoryDelete.projects, invalidHistoryProjects, 'failed legacy deletion preserves the original project collection')
-assert.equal(invalidHistoryDelete.selectedProject, deleteNew, 'failed legacy deletion preserves selected project identity')
-assert.equal(invalidHistoryDelete.auditLogsAfter, invalidHistoryDelete.auditLogsBefore, 'failed legacy deletion writes no audit log')
-assert.equal(invalidHistoryDelete.projectStoreNotifications, 0, 'failed legacy deletion emits no project-store transaction')
+assert.equal(arbitraryHistoryDelete.deleted, true, 'legacy deletion accepts an arbitrary non-empty historical tOS body')
+assert.deepEqual(
+  arbitraryHistoryDelete.projects.map(project => ({ id: project.id, current: project.currentTosVersion })),
+  [
+    { id: deleteNew.id, current: 'future-current' },
+    { id: unknownRemainingLegacy.id, current: 'future-current' },
+  ],
+  'arbitrary history remains usable while recomputing the linked new machine',
+)
+assert.equal(arbitraryHistoryDelete.selectedProject?.currentTosVersion, 'future-current', 'selected new project receives the recomputed arbitrary snapshot')
+assert.equal(arbitraryHistoryDelete.auditLogsAfter.length, arbitraryHistoryDelete.auditLogsBefore.length + 1, 'successful arbitrary-history deletion writes one audit log')
+assert.equal(arbitraryHistoryDelete.projectStoreNotifications, 1, 'arbitrary-history deletion emits one project-store transaction')
 
 const validMachineFields = {
   type: '整机产品项目',
@@ -407,6 +427,118 @@ assert.equal(duplicateFamilyDelete.selectedProject, deleteNew, 'duplicate-new de
 assert.equal(duplicateFamilyDelete.auditLogsAfter, duplicateFamilyDelete.auditLogsBefore, 'duplicate-new deletion failure writes no audit')
 assert.equal(duplicateFamilyDelete.projectStoreNotifications, 0, 'duplicate-new deletion failure emits no project-store transaction')
 
+const configurableSnapshotProject = {
+  ...validSourceNew,
+  id: 'configurable-snapshot-project',
+  sourceBid: 'BID-CONFIG-SNAPSHOT',
+  name: 'CONFIG-X',
+  projectCode: 'CONFIG-X',
+  versionType: '配置版本型',
+  developMode: '实验室联合开发',
+}
+assert.deepEqual(
+  {
+    versionType: roadmapAdapter.adaptNormalProject(configurableSnapshotProject, [])?.versionType,
+    developMode: roadmapAdapter.adaptNormalProject(configurableSnapshotProject, [])?.developMode,
+  },
+  { versionType: '配置版本型', developMode: '实验室联合开发' },
+  'roadmap adaptation accepts current configured strings without a compile-time membership gate',
+)
+projectStore.useProjectStore.setState({ projects: [], selectedProject: null })
+assert.equal(
+  projectStore.useProjectStore.getState().addProject(configurableSnapshotProject, '张三', { allowedFirstSaleTosValues: ['14.0.0'] }),
+  true,
+  'machine create persists current configured version and development strings through the actual project store gate',
+)
+assert.deepEqual(
+  projectStore.useProjectStore.getState().projects.map(project => ({ versionType: project.versionType, developMode: project.developMode })),
+  [{ versionType: '配置版本型', developMode: '实验室联合开发' }],
+  'machine create stores configured string snapshots unchanged',
+)
+const retiredSnapshotUpdate = projectStore.useProjectStore.getState().updateProject(
+  configurableSnapshotProject.id,
+  { versionType: '已停用版本型', developMode: '已停用开发模式' },
+  '张三',
+  { allowedFirstSaleTosValues: ['14.0.0'] },
+)
+assert.deepEqual(
+  retiredSnapshotUpdate && {
+    versionType: retiredSnapshotUpdate.versionType,
+    developMode: retiredSnapshotUpdate.developMode,
+  },
+  { versionType: '已停用版本型', developMode: '已停用开发模式' },
+  'machine update preserves unchanged retired string snapshots through the actual project store gate',
+)
+assert.deepEqual(
+  retiredSnapshotUpdate && {
+    versionType: roadmapAdapter.adaptNormalProject(retiredSnapshotUpdate, [])?.versionType,
+    developMode: roadmapAdapter.adaptNormalProject(retiredSnapshotUpdate, [])?.developMode,
+  },
+  { versionType: '已停用版本型', developMode: '已停用开发模式' },
+  'roadmap adaptation does not silently rewrite retired custom strings',
+)
+const unrelatedRetiredUpdate = projectStore.useProjectStore.getState().updateProject(
+  configurableSnapshotProject.id,
+  { projectManager: '李四' },
+  '张三',
+  { allowedFirstSaleTosValues: ['14.0.0'] },
+)
+assert.deepEqual(
+  unrelatedRetiredUpdate && {
+    versionType: unrelatedRetiredUpdate.versionType,
+    developMode: unrelatedRetiredUpdate.developMode,
+  },
+  { versionType: '已停用版本型', developMode: '已停用开发模式' },
+  'an unrelated update saves unchanged retired snapshots without a membership gate',
+)
+assert.equal(
+  roadmapAdapter.adaptNormalProject({ ...configurableSnapshotProject, versionType: '   ' }, []),
+  null,
+  'widening version snapshots does not loosen the nonempty requirement',
+)
+assert.equal(
+  roadmapAdapter.adaptNormalProject({ ...configurableSnapshotProject, developMode: '' }, []),
+  null,
+  'widening development snapshots does not loosen the nonempty requirement',
+)
+for (const [index, configuredDevelopMode] of ['联合开发', '外研'].entries()) {
+  const exactDevelopModeProject = {
+    ...configurableSnapshotProject,
+    id: `exact-develop-mode-${index}`,
+    sourceBid: `BID-EXACT-DEVELOP-${index}`,
+    name: `EXACT-DEVELOP-${index}`,
+    projectCode: `EXACT-DEVELOP-${index}`,
+    developMode: configuredDevelopMode,
+  }
+  assert.equal(
+    roadmapAdapter.adaptNormalProject(exactDevelopModeProject, [])?.developMode,
+    configuredDevelopMode,
+    `roadmap adaptation preserves the configured ${configuredDevelopMode} snapshot exactly`,
+  )
+  projectStore.useProjectStore.setState({ projects: [], selectedProject: null })
+  assert.equal(
+    projectStore.useProjectStore.getState().addProject(exactDevelopModeProject, '张三', { allowedFirstSaleTosValues: ['14.0.0'] }),
+    true,
+    `machine create accepts the configured ${configuredDevelopMode} snapshot through the actual store gate`,
+  )
+  assert.equal(
+    roadmapAdapter.adaptNormalProject(projectStore.useProjectStore.getState().projects[0], [])?.developMode,
+    configuredDevelopMode,
+    `machine create keeps ${configuredDevelopMode} unchanged when the saved snapshot re-enters the runtime adapter`,
+  )
+  const exactDevelopModeUpdate = projectStore.useProjectStore.getState().updateProject(
+    exactDevelopModeProject.id,
+    { developMode: configuredDevelopMode },
+    '张三',
+    { allowedFirstSaleTosValues: ['14.0.0'] },
+  )
+  assert.equal(
+    exactDevelopModeUpdate?.developMode,
+    configuredDevelopMode,
+    `machine update persists the configured ${configuredDevelopMode} snapshot exactly`,
+  )
+}
+
 const modalSource = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 const addSource = readSource(root, 'src/components/workspace/AddProjectModal.tsx')
 const storeSource = readSource(root, 'src/stores/project.ts')
@@ -414,19 +546,57 @@ const fieldInputSource = readSource(root, 'src/components/project-info/ProjectIn
 const infoSectionsSource = readSource(root, 'src/components/project-info/ProjectInfoSections.tsx')
 const externalPoolSource = readSource(root, 'src/data/externalProjectPool.ts')
 const machineRulesSource = readSource(root, 'src/lib/machineTosVersions.ts')
+const schemaSource = readSource(root, 'src/constants/projectInfoSchema.ts')
+const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
+const roadmapPlannedModalSource = readSource(root, 'src/components/roadmap/PlannedProjectModal.tsx')
 assert.match(modalSource, /projectType\s*!==\s*PROJECT_TYPE_TOS_VERSION[\s\S]*!isMachineProjectType\(projectType\)/, 'machine and tOS forms omit the independent owner input')
 assert.match(addSource, /deriveProjectResponsiblePersons/, 'create derives responsibility from category fields')
 assert.match(addSource, /deriveProjectTosVersion/, 'tOS create reads version from project name')
 assert.match(storeSource, /resolveMachineTosUpdate/, 'project store resolves machine families before committing')
 assert.match(storeSource, /set\(state\s*=>[\s\S]*resolution\.updates/, 'candidate and related new-machine patches share one state transaction')
-assert.match(fieldInputSource, /formatTosEnumValue/, 'read-only machine version fields display the tOS prefix')
-assert.match(infoSectionsSource, /formatTosEnumValue/, 'machine version information displays the tOS prefix')
+assert.match(fieldInputSource, /formatTosSnapshot/, 'read-only machine version fields display the tOS prefix')
+assert.match(infoSectionsSource, /formatTosSnapshot/, 'machine version information displays the tOS prefix')
 assert.match(addSource, /sourceBid:\s*payload\.bid/, 'created projects retain their external source identity')
 assert.match(addSource, /existingBids/, 'candidate filtering permits distinct source records with the same project name')
 assert.doesNotMatch(addSource, /legacyExistingNames/, 'unlinked historical names do not reserve every external source BID in that family')
 assert.match(modalSource, /mode\s*===\s*'create'[\s\S]*currentTosVersion/, 'new-machine create initializes current from first sale without applying that rule to edit mode')
 assert.match(modalSource, /resolveMachineTosUpdate/, 'new-machine edit resolves its linked current version from the complete existing family')
 assert.match(machineRulesSource, /readonly\s+T\[\]/, 'machine family resolver accepts readonly project arrays')
+assert.doesNotMatch(machineRulesSource, /THREE_PART|ThreePart|three-part|\\d\+\\\.\\d\+\\\.\\d\+/, 'machine tOS linkage has no segment-count contract')
+assert.doesNotMatch(modalSource, /严格的三段|三段数字/, 'project info no longer rejects arbitrary tOS bodies by segment count')
+assert.doesNotMatch(addSource, /严格的三段|三段数字/, 'project create no longer reports a segment-count restriction')
+assert.doesNotMatch(projectSpaceSource, /严格的三段|三段数字/, 'project-space save no longer reports a segment-count restriction')
+assert.doesNotMatch(roadmapPlannedModalSource, /两位\s*tOS|[23]位\s*tOS/, 'planned roadmap history copy has no segment-count wording')
 assert.ok((externalPoolSource.match(/name:\s*'X6870'/g) || []).length >= 3, 'browser fixtures expose one new and two same-name legacy projects')
+
+const expectedMachineEnumTypes = {
+  firstSaleTosVersion: 'first-sale-tos', currentTosVersion: 'first-sale-tos',
+  healthStatus: 'machine-health-status', versionType: 'version-type',
+  softwareProjectLevel: 'software-project-level', productSeries: 'product-series',
+  researchMode: 'research-mode', developmentMode: 'machine-development-mode',
+  dimensionUpgradeStrategy: 'upgrade-strategy', systemType: 'system-type',
+  kernelVersion: 'kernel-version', memorySize: 'memory-size',
+}
+for (const [field, type] of Object.entries(expectedMachineEnumTypes)) {
+  assert.match(modalSource, new RegExp(`${field}[\\s\\S]{0,260}['"]${type}['"]|['"]${type}['"][\\s\\S]{0,260}${field}`), `${field} consumes ${type} rows`)
+}
+assert.doesNotMatch(schemaSource, /const softwareProjectLevels|const dimensionUpgradeStrategies|options:\s*\['Full',\s*'Slim'|options:\s*\['32bit'/, 'configured machine fields have no schema-local option registry')
+assert.doesNotMatch(fieldInputSource, /FREE_TEXT_OPTIONS/, 'configured select suggestions have no component-local fallback registry')
+assert.doesNotMatch(addSource, /useTosEnumOptions|versionType:\s*\['Full'|developmentMode:\s*\['自研'/, 'create delegates all machine enum options to the self-contained form')
+assert.match(modalSource, /buildChipOptions|useChipOptions/, 'chip code selects one atomic configured row')
+assert.match(modalSource, /resolveChipRow/, 'chip selection resolves all three snapshots from one row ID')
+assert.match(modalSource, /setFieldsValue\(\{\s*chipCode[^}]*chipModel[^}]*chipPlatform/s, 'one form update writes the complete chip tuple')
+assert.doesNotMatch(projectSpaceSource, /const versionTypeChoices\s*=\s*\['Full'|const systemTypeChoices\s*=\s*\[/, 'project-space editing has no hard-coded machine option arrays')
+for (const roadmapConsumerPath of [
+  'src/components/roadmap/RoadmapProjectCard.tsx',
+  'src/components/roadmap/RoadmapProjectDetailsModal.tsx',
+]) {
+  const roadmapConsumerSource = readSource(root, roadmapConsumerPath)
+  assert.match(
+    roadmapConsumerSource,
+    /VERSION_TYPE_TAG_COLORS\[[^\]]+\]\s*\?\?\s*['"]default['"]|VERSION_TYPE_TAG_COLORS\[[^\]]+\]\s*\|\|\s*['"]default['"]/,
+    `${roadmapConsumerPath} keeps known colors and gives configurable snapshots a neutral fallback`,
+  )
+}
 
 console.log('machine tOS versions contract passed')

@@ -10,7 +10,7 @@ import type { DeliverableValue } from '@/types/technicalProject'
 export type ProjectCategory = PersistedProjectTypeName;
 
 /** Health status for project cards */
-export type HealthStatus = 'normal' | 'warning' | 'risk';
+export type HealthStatus = string;
 
 /** Version five roles (版本五大员) - used in software projects */
 export interface VersionFiveRoles {

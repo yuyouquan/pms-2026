@@ -1,12 +1,4 @@
-export type TechnicalDomain =
-  | '基础架构TMG'
-  | '性能TMG'
-  | 'DFX TMG'
-  | 'UX TMG'
-  | '系统应用'
-  | '底软通信'
-  | '集成维护'
-  | '其他'
+export type TechnicalDomain = string
 
 export interface TechnicalTeam {
   technicalLead: string
@@ -49,8 +41,8 @@ export interface TechnicalProjectValues extends TechnicalTeam {
   deliverables: Partial<TechnicalDeliverables>
 }
 
-export type TechnicalSubprojectCoreValue = '' | '追赶' | '人无我有' | '人有我有'
-export type TechnicalSubprojectDevelopmentMode = '' | '自研' | '谷歌合作' | 'SoC合作' | '高校合作'
+export type TechnicalSubprojectCoreValue = string
+export type TechnicalSubprojectDevelopmentMode = string
 
 export interface TechnicalSubprojectConfiguration {
   coreValue: TechnicalSubprojectCoreValue

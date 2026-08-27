@@ -1,14 +1,10 @@
-export const TOS_PROJECT_STATUS_VALUES = ['在研', '已完成', '暂停', '已取消'] as const
+import type { SingleEnumTypeKey } from '@/lib/enumConsumers'
 
-export const TOS_PROJECT_STATUS_OPTIONS = TOS_PROJECT_STATUS_VALUES.map(value => ({
-  label: value,
-  value,
-}))
-
-export const TOS_PROJECT_LIST_STATUS_OPTIONS = [
-  { label: '全部', value: 'all' },
-  ...TOS_PROJECT_STATUS_OPTIONS,
-]
+export function getProjectStatusEnumType(category: string): SingleEnumTypeKey {
+  if (category === '整机产品项目') return 'machine-project-status'
+  if (category === '技术项目') return 'technical-project-status'
+  return 'tos-capability-project-status'
+}
 
 const TOS_IPM_STATUS_MAP: Readonly<Record<string, string>> = {
   '暂停': '暂停',
@@ -38,3 +34,56 @@ export const mapIpmProjectStatus = (ipmStatus: string, projectType: string): str
   if (projectType === '技术项目' && normalizedStatus === '待验') return '待验'
   return DEFAULT_IPM_STATUS_MAP[normalizedStatus] || normalizedStatus
 }
+
+export interface ConfiguredProjectStatusInput {
+  projectType: string
+  configuredValues: readonly string[]
+  submittedStatus?: string
+  ipmStatus?: string
+  mode?: 'create' | 'edit'
+  originalStatus?: string
+}
+
+export const resolveConfiguredProjectStatus = ({
+  projectType,
+  configuredValues,
+  submittedStatus = '',
+  ipmStatus = '',
+  mode = 'create',
+  originalStatus = '',
+}: ConfiguredProjectStatusInput): string => {
+  const liveValues = [...new Set(configuredValues.map(value => value.trim()).filter(Boolean))]
+  const submitted = submittedStatus.trim()
+  if (submitted) {
+    if (liveValues.includes(submitted)) return submitted
+    if (mode === 'edit' && submitted === originalStatus.trim()) return submitted
+    return ''
+  }
+  if (projectType === 'tOS版本项目') {
+    return mapIpmProjectStatus(ipmStatus, projectType)
+  }
+  return liveValues[0] || ''
+}
+
+export interface InitialProjectStatusPatchInput {
+  initialize: boolean
+  projectType: string
+  configuredValues: readonly string[]
+  ipmStatus?: string
+}
+
+/** Source refreshes may initialize status once, but must never overwrite a user selection. */
+export const buildInitialProjectStatusPatch = ({
+  initialize,
+  projectType,
+  configuredValues,
+  ipmStatus = '',
+}: InitialProjectStatusPatchInput): { status?: string } => initialize
+  ? {
+      status: resolveConfiguredProjectStatus({
+        projectType,
+        configuredValues,
+        ipmStatus,
+      }),
+    }
+  : {}

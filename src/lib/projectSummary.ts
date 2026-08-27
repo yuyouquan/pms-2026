@@ -21,6 +21,7 @@ import {
 } from '@/lib/projectInfoValues'
 import { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 import { comparePlanVersions } from '@/lib/planVersioning'
+import { formatTosSnapshot } from '@/lib/enumConsumers'
 import {
   getProjectListMatrix,
   isOverdueProjectListDate,
@@ -272,11 +273,9 @@ const getQuickFilterValue = (project: ProjectInfoProject, field: string) => {
   const value = getProjectInfoValue(project, field)
   if (typeof value !== 'string') return ''
   const normalized = value.trim()
-  if (
-    ['firstSaleTosVersion', 'currentTosVersion'].includes(field)
-    && normalized
-    && !normalized.toLowerCase().startsWith('tos')
-  ) return `tOS${normalized}`
+  if (['firstSaleTosVersion', 'currentTosVersion'].includes(field) && normalized) {
+    return formatTosSnapshot(normalized)
+  }
   return normalized
 }
 
@@ -462,8 +461,8 @@ export function buildProjectSummaryRow(
         ? '-'
         : formatProjectInfoValue(raw as never)
       row[definition.key] = ['firstSaleTosVersion', 'currentTosVersion', 'tosVersion'].includes(definition.key)
-        && formatted !== '-' && !String(formatted).toLowerCase().startsWith('tos')
-        ? `tOS${formatted}`
+        && formatted !== '-'
+        ? formatTosSnapshot(String(formatted))
         : formatted
     }
   })

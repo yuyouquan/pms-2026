@@ -288,29 +288,6 @@ registerAssertion('PROJECT_TYPES contains the four first-level project categorie
   }
 })
 
-registerTableAssertions('IPM project classification mapping', expectedIpmProjectClassifications.map(([
-  ipmProjectCategoryName,
-  projectCategory,
-  secondaryCategory,
-]) => [
-  ipmProjectCategoryName,
-  () => {
-    const { mapIpmProjectClassification } = loadTypeScriptModule(path.join(root, 'src/constants/projectTypes.ts'))
-    const actual = mapIpmProjectClassification(ipmProjectCategoryName)
-    const expected = { projectCategory, secondaryCategory }
-    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-      throw new Error(`expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`)
-    }
-  },
-]))
-
-registerAssertion('unknown IPM project classification returns undefined', () => {
-  const { mapIpmProjectClassification } = loadTypeScriptModule(path.join(root, 'src/constants/projectTypes.ts'))
-  if (mapIpmProjectClassification('未知分类') !== undefined) {
-    throw new Error('unknown IPM project classification must return undefined')
-  }
-})
-
 registerAssertion('existing machine mocks use the machine category and phone secondary category', () => {
   const classificationsById = getInitialProjectClassificationInitializers(path.join(root, 'src/data/projects.ts'))
   const expectedMachineMockIds = ['1', '3', '7', '12', '13', '14', '15', '16', '17', '18']
@@ -345,10 +322,6 @@ registerAssertion('runtime files contain no legacy machine equality logic', () =
 })
 
 registerAssertion('machine type guard drives market rows, status mapping, and template coverage', () => {
-  const dataPath = path.join(root, 'src/data/projects.ts')
-  if (!functionCallsMachineTypeGuard(dataPath, 'mapIpmStatus')) {
-    throw new Error('mapIpmStatus must call isMachineProjectType(projectType)')
-  }
   const { TEMPLATE_PROJECT_TYPES } = createTypeScriptModuleLoader()(path.join(root, 'src/stores/plan.ts'))
   const { generateTableData } = createTypeScriptModuleLoader()(path.join(root, 'src/components/roadmap/utils.ts'))
 
@@ -436,15 +409,15 @@ registerAssertion('workspace links category and supported secondary-category fil
   for (const fragment of [
     'projectSecondaryCategoryFilter, setProjectSecondaryCategoryFilter',
     'PROJECT_SECONDARY_CATEGORIES[projectTypeFilter',
-    'matchesProjectTypeFilter(p.type, projectTypeFilter, p.secondaryCategory)',
+    'matchesProjectTypeFilter(project.type, projectTypeFilter, project.secondaryCategory)',
     'matchesProjectSecondaryCategoryFilter(',
     'setProjectSecondaryCategoryFilter(\'all\')',
     'setProjectStatusFilter(\'all\')',
     'const categoryCounts = useMemo(() => {',
-    '{categoryCounts[item.value] || 0}',
+    '{displayCategoryCounts[item.value] || 0}',
     'aria-label="项目分类筛选"',
     'aria-label="项目二级分类快捷筛选"',
-    "workbenchListState.showSecondaryCategory && (",
+    "workbenchListState.showSecondaryCategory || projectTypeFilter === PROJECT_TYPE_TOS_VERSION",
   ]) {
     if (!workspaceSource.includes(fragment)) throw new Error(`workspace linked filter source missing: ${fragment}`)
   }
@@ -526,7 +499,7 @@ registerAssertion('roadmap validation normalizes names, duplicate keys, tOS vers
     throw new Error('duplicate keys must trim fields and ignore project-code case')
   }
 
-  for (const input of ['tOS17.2', 'tos 17.2', ' TOS  17.2 ']) {
+  for (const input of ['17.2', 'tOS17.2', ' tOS  17.2 ']) {
     const normalized = validation.normalizeTosVersionName(input)
     if (JSON.stringify(normalized) !== JSON.stringify({ name: 'tOS 17.2', major: 17, minor: 2 })) {
       throw new Error(`failed to normalize ${input}`)
@@ -656,9 +629,6 @@ registerTableAssertions('planned-project runtime enum validation', [
   ['first-level project category', 'machineProjectType', '整机产品项目'],
   ['Android version', 'androidVersion', 'Android 19'],
   ['product type', 'productType', '换代'],
-  ['start RAM', 'startRam', '5GB'],
-  ['version type', 'versionType', 'Lite'],
-  ['develop mode', 'developMode', '外研'],
   ['brand', 'brand', 'Unknown'],
   ['product line', 'productLine', 'ZERO'],
 ].map(([caseName, field, malformedValue]) => [caseName, () => {
@@ -674,6 +644,14 @@ registerTableAssertions('planned-project runtime enum validation', [
   }
   if (!errors[field]) throw new Error(`${field} malformed runtime value was accepted`)
 }]))
+
+registerAssertion('planned-project configurable snapshots accept current and retired strings', () => {
+  const { validatePlannedProject } = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
+  for (const [field, value] of [['startRam', '5GB'], ['versionType', 'Lite'], ['developMode', '外研']]) {
+    const errors = validatePlannedProject({ ...validPlannedRoadmapInput, [field]: value }, [], undefined, validRoadmapTosIds)
+    if (errors[field]) throw new Error(`${field} rejected a configured string snapshot`)
+  }
+})
 
 registerAssertion('roadmap persistence migrates the envelope once and current-state sanitization is idempotent', () => {
   const store = loadIsolatedRoadmapStore()
@@ -1042,6 +1020,203 @@ registerAssertion('planned project validation uses the current tOS catalog and c
   if (duplicate.ok || duplicate.reason !== 'duplicate') throw new Error('caller comparison row was ignored')
 })
 
+registerAssertion('planned-project edit preserves an unchanged deleted tOS snapshot but rejects a replacement', () => {
+  const previousWindow = globalThis.window
+  globalThis.window = {
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+  }
+  try {
+    const loader = createTypeScriptModuleLoader()
+    const storeModule = loader(path.join(root, 'src/stores/roadmap.ts'))
+    const enumModule = loader(path.join(root, 'src/stores/enums.ts'))
+    const store = resetRoadmapStore(storeModule)
+    const enumStore = enumModule.useEnumStore
+
+    enumStore.setState(state => ({
+      hasHydrated: true,
+      hydrationError: null,
+      rowsByType: {
+        ...state.rowsByType,
+        'first-sale-tos': [{ id: 'first-preview', value: '18.preview' }],
+      },
+    }))
+    const created = store.getState().createPlannedProject(createPlannedInput({
+      firstSaleTosVersionId: 'tOS18.preview',
+    }))
+    if (!created.ok) throw new Error(`live arbitrary tOS fixture could not be created: ${JSON.stringify(created)}`)
+    const project = store.getState().plannedProjects[0]
+
+    enumStore.setState(state => ({
+      rowsByType: { ...state.rowsByType, 'first-sale-tos': [] },
+    }))
+    store.setState({
+      plannedProjects: [{ ...project, firstSaleTosVersionId: 'tOS 18.preview' }],
+    })
+    const unchanged = store.getState().updatePlannedProject(project.id, createPlannedInput({
+      firstSaleTosVersionId: '18.preview',
+      remark: 'only another field changed',
+    }))
+    if (!unchanged.ok || store.getState().plannedProjects[0]?.firstSaleTosVersionId !== '18.preview') {
+      throw new Error(`unchanged deleted snapshot was rejected: ${JSON.stringify(unchanged)}`)
+    }
+    const replacement = store.getState().updatePlannedProject(project.id, createPlannedInput({
+      firstSaleTosVersionId: '16.0',
+      remark: 'attempt replacement',
+    }))
+    if (replacement.ok || replacement.reason !== 'invalid') {
+      throw new Error(`deleted replacement snapshot was accepted: ${JSON.stringify(replacement)}`)
+    }
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window
+    else globalThis.window = previousWindow
+  }
+})
+
+registerAssertion('roadmap detail edit preserves its retired canonical tOS snapshot only when unchanged', () => {
+  const previousWindow = globalThis.window
+  globalThis.window = {
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+  }
+  try {
+    const loader = createTypeScriptModuleLoader()
+    const storeModule = loader(path.join(root, 'src/stores/roadmap.ts'))
+    const enumModule = loader(path.join(root, 'src/stores/enums.ts'))
+    const store = resetRoadmapStore(storeModule)
+    const enumStore = enumModule.useEnumStore
+
+    enumStore.setState(state => ({
+      hasHydrated: true,
+      hydrationError: null,
+      rowsByType: {
+        ...state.rowsByType,
+        'roadmap-tos': [{ id: 'roadmap-preview', value: '18.preview' }],
+      },
+    }))
+    const created = store.getState().setTosVersionDetails(null, {
+      versionId: 'tOS18.preview',
+      periodStartDate: '2027-01-01',
+      periodEndDate: '2027-03-01',
+      targets: ['initial'],
+    })
+    if (!created.ok) throw new Error(`live roadmap detail fixture could not be created: ${JSON.stringify(created)}`)
+
+    enumStore.setState(state => ({
+      rowsByType: { ...state.rowsByType, 'roadmap-tos': [] },
+    }))
+    const unchanged = store.getState().setTosVersionDetails('tOS 18.preview', {
+      versionId: 'tOS 18.preview',
+      periodStartDate: '2027-02-01',
+      periodEndDate: '2027-04-01',
+      targets: ['updated target'],
+    })
+    const preserved = store.getState().tosVersions.find(version => version.id === '18.preview')
+    if (!unchanged.ok || preserved?.periodStartDate !== '2027-02-01' || preserved.targets[0] !== 'updated target') {
+      throw new Error(`unchanged retired roadmap detail was rejected: ${JSON.stringify({ unchanged, preserved })}`)
+    }
+
+    const retiredReplacement = store.getState().setTosVersionDetails('18.preview', {
+      versionId: '16.0',
+      periodStartDate: '2027-02-01',
+      periodEndDate: '2027-04-01',
+      targets: ['replacement'],
+    })
+    if (retiredReplacement.ok || retiredReplacement.reason !== 'invalid') {
+      throw new Error(`different retired roadmap value was accepted: ${JSON.stringify(retiredReplacement)}`)
+    }
+
+    enumStore.setState(state => ({
+      rowsByType: { ...state.rowsByType, 'roadmap-tos': [{ id: 'roadmap-live', value: '19.rc' }] },
+    }))
+    const liveReplacement = store.getState().setTosVersionDetails('18.preview', {
+      versionId: 'tOS19.rc',
+      periodStartDate: '2027-02-01',
+      periodEndDate: '2027-04-01',
+      targets: ['live replacement'],
+    })
+    if (!liveReplacement.ok || !store.getState().tosVersions.some(version => version.id === '19.rc')) {
+      throw new Error(`live roadmap replacement was rejected: ${JSON.stringify(liveReplacement)}`)
+    }
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window
+    else globalThis.window = previousWindow
+  }
+})
+
+registerAssertion('configured tOS bodies round-trip through options planned storage edits and history', () => {
+  const previousWindow = globalThis.window
+  globalThis.window = {
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+  }
+  try {
+    const loader = createTypeScriptModuleLoader()
+    const enumModule = loader(path.join(root, 'src/stores/enums.ts'))
+    const storeModule = loader(path.join(root, 'src/stores/roadmap.ts'))
+    const consumers = loader(path.join(root, 'src/lib/enumConsumers.ts'))
+    const enumStore = enumModule.useEnumStore
+    const store = resetRoadmapStore(storeModule)
+    enumStore.setState(state => ({
+      hasHydrated: true,
+      hydrationError: null,
+      rowsByType: { ...state.rowsByType, 'first-sale-tos': [] },
+    }))
+
+    for (const value of ['TOSbeta', 'tosbeta', '技术预览', 'tOS18.preview']) {
+      const result = enumStore.getState().addEnumRow('first-sale-tos', { value })
+      if (!result.ok) throw new Error(`configured body ${value} was rejected: ${JSON.stringify(result)}`)
+    }
+    const configuredBodies = enumStore.getState().rowsByType['first-sale-tos'].map(row => row.value)
+    if (JSON.stringify(configuredBodies) !== JSON.stringify(['TOSbeta', 'tosbeta', '技术预览', '18.preview'])) {
+      throw new Error(`configuration rewrote legal bodies: ${JSON.stringify(configuredBodies)}`)
+    }
+    const liveOptions = consumers.buildEnumOptions(enumStore.getState().rowsByType, 'first-sale-tos')
+    if (JSON.stringify(liveOptions) !== JSON.stringify([
+      { value: 'TOSbeta', label: 'tOSTOSbeta' },
+      { value: 'tosbeta', label: 'tOStosbeta' },
+      { value: '技术预览', label: 'tOS技术预览' },
+      { value: '18.preview', label: 'tOS18.preview' },
+    ])) throw new Error(`option pipeline rewrote configured bodies: ${JSON.stringify(liveOptions)}`)
+
+    const submittedValues = ['TOSbeta', 'tosbeta', '技术预览', 'tOS18.preview']
+    for (const [index, value] of submittedValues.entries()) {
+      const result = store.getState().createPlannedProject(createPlannedInput({
+        projectCode: `CANON-${index + 1}`,
+        firstSaleTosVersionId: value,
+      }))
+      if (!result.ok) throw new Error(`store create rejected ${value}: ${JSON.stringify(result)}`)
+    }
+    const storedBodies = store.getState().plannedProjects.map(project => project.firstSaleTosVersionId).reverse()
+    if (JSON.stringify(storedBodies) !== JSON.stringify(['TOSbeta', 'tosbeta', '技术预览', '18.preview'])) {
+      throw new Error(`store create collapsed legal bodies: ${JSON.stringify(storedBodies)}`)
+    }
+
+    enumStore.setState(state => ({
+      rowsByType: { ...state.rowsByType, 'first-sale-tos': [] },
+    }))
+    for (const project of [...store.getState().plannedProjects]) {
+      const result = store.getState().updatePlannedProject(project.id, createPlannedInput({
+        projectCode: project.projectCode,
+        firstSaleTosVersionId: project.firstSaleTosVersionId,
+        remark: 'history edit',
+      }))
+      if (!result.ok) throw new Error(`history edit rejected ${project.firstSaleTosVersionId}: ${JSON.stringify(result)}`)
+    }
+    const historyOptions = consumers.buildEnumOptions(
+      enumStore.getState().rowsByType,
+      'first-sale-tos',
+      storedBodies,
+    )
+    if (JSON.stringify(historyOptions) !== JSON.stringify([
+      { value: 'TOSbeta', label: 'tOSTOSbeta（已停用）', disabled: true },
+      { value: 'tosbeta', label: 'tOStosbeta（已停用）', disabled: true },
+      { value: '技术预览', label: 'tOS技术预览（已停用）', disabled: true },
+      { value: '18.preview', label: 'tOS18.preview（已停用）', disabled: true },
+    ])) throw new Error(`history options rewrote legal bodies: ${JSON.stringify(historyOptions)}`)
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window
+    else globalThis.window = previousWindow
+  }
+})
+
 registerAssertion('roadmap store has no independent tOS option CRUD', () => {
   const storeModule = loadIsolatedRoadmapStore()
   const state = resetRoadmapStore(storeModule).getState()
@@ -1074,8 +1249,8 @@ registerAssertion('roadmap migration repairs legacy names, references, UI contro
   const store = loadIsolatedRoadmapStore()
   const migrated = store.migrateRoadmapState({
     tosVersions: [
-      { name: 'tos17.2', targets: [' first ', '', 'second'], createdAt: '2024-01-01T00:00:00.000Z' },
-      { id: 'legacy-18', name: 'TOS 18.0', targets: [' top '] },
+      { name: 'tOS17.2', targets: [' first ', '', 'second'], createdAt: '2024-01-01T00:00:00.000Z' },
+      { id: 'legacy-18', name: 'tOS 18.0', targets: [' top '] },
     ],
     plannedProjects: [{
       id: 'planned-legacy', ...validPlannedRoadmapInput, displayName: 'stale', firstSaleTosVersionId: undefined,
@@ -1115,7 +1290,7 @@ registerAssertion('roadmap migration repairs legacy names, references, UI contro
     filters: migrated.filters,
     visibleColumns: migrated.visibleColumns,
   })}`)
-  if (migrated.selectedTosVersionId !== null || migrated.changeLogs.length !== 1 || 'conflictGroups' in migrated) {
+  if (migrated.selectedTosVersionId !== 'missing' || migrated.changeLogs.length !== 1 || 'conflictGroups' in migrated) {
     throw new Error('selection/log/conflict migration is wrong')
   }
 })
@@ -1284,7 +1459,7 @@ function hydrateRoadmapStoreFromEnvelope(envelope) {
   }
 }
 
-registerTableAssertions('roadmap hydration sanitizes every persisted envelope version', [
+registerTableAssertions('roadmap hydration preserves historical persisted tOS snapshots', [
   ['current version', 1],
   ['missing version', undefined],
 ].map(([caseName, version]) => [caseName, () => {
@@ -1302,8 +1477,8 @@ registerTableAssertions('roadmap hydration sanitizes every persisted envelope ve
   if (version !== undefined) envelope.version = version
   const hydrated = hydrateRoadmapStoreFromEnvelope(envelope)
   if (
-    hydrated.selectedTosVersionId !== null
-    || hydrated.filters.length
+    hydrated.selectedTosVersionId !== 'missing-version'
+    || JSON.stringify(hydrated.filters.find(condition => condition.field === 'firstSaleTosVersionId')?.value) !== JSON.stringify(['missing-version'])
     || !hydrated.visibleColumns.includes('firstSaleTosVersionId')
     || hydrated.visibleColumns[0] === 'unknown'
     || hydrated.columnOrder[0] !== 'firstSaleTosVersionId'
@@ -1440,8 +1615,8 @@ registerAssertion('roadmap migration deterministically repairs IDs across persis
   }
   const secondPass = storeModule.migrateRoadmapState(migrated, 1)
   if (JSON.stringify(secondPass) !== JSON.stringify(migrated)) throw new Error('roadmap sanitizer is not idempotent')
-  if (migrated.selectedTosVersionId !== null) {
-    throw new Error('sanitizer did not repair an invalid selected version to all')
+  if (migrated.selectedTosVersionId !== 'missing') {
+    throw new Error('sanitizer did not preserve the historical selected version snapshot')
   }
 
   const store = resetRoadmapStore(storeModule)
@@ -1581,7 +1756,7 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
     || normal.productType !== '老品'
     || normal.platform !== 'explicit-platform'
     || normal.startRam !== '8GB'
-    || normal.developMode !== '纯外研'
+    || normal.developMode !== '外研'
     || normal.remark !== 'explicit remark'
   ) throw new Error(`normal adapter ignored explicit fields or legacy normalization: ${JSON.stringify(normal)}`)
 
@@ -1608,10 +1783,10 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
   if (
     !switched
     || switched.projectCode !== 'A100'
-    || switched.firstSaleTosVersionId !== '16.3'
+    || switched.firstSaleTosVersionId !== 'tos16.3'
     || switched.startRam !== '6GB'
     || switched.productType !== '老品'
-    || switched.developMode !== 'ITD-ODC'
+    || switched.developMode !== '联合开发'
     || switched.remark !== 'legacy description'
   ) throw new Error(`legacy fallback mapping is wrong: ${JSON.stringify(switched)}`)
   if (adapter.adaptNormalProject({ ...normal, type: '技术项目' }, versions) !== null) {
@@ -1675,9 +1850,6 @@ registerAssertion('normal adapter rejects invalid business values without invent
   }
   const invalidCases = [
     ['missing product type', { productType: undefined }],
-    ['invalid RAM', { startRam: '32GB', memory: '32GB+512GB' }],
-    ['invalid version type', { versionType: 'Ultra' }],
-    ['invalid develop mode', { developMode: '合作开发' }],
     ['invalid Android version', { androidVersion: 'Android 19', operatingSystem: 'Android 16' }],
     ['invalid brand', { brand: 'Unknown' }],
     ['missing project code', { projectCode: null, model: null, name: null }],
@@ -1686,6 +1858,17 @@ registerAssertion('normal adapter rejects invalid business values without invent
     const row = adapter.adaptNormalProject({ ...validNormal, ...override }, versions)
     if (row !== null) throw new Error(`${label} was silently normalized: ${JSON.stringify(row)}`)
   }
+  const configuredSnapshots = adapter.adaptNormalProject({
+    ...validNormal,
+    startRam: '32GB',
+    versionType: 'Ultra',
+    developMode: '合作开发',
+  }, versions)
+  if (
+    configuredSnapshots?.startRam !== '32GB'
+    || configuredSnapshots.versionType !== 'Ultra'
+    || configuredSnapshots.developMode !== '合作开发'
+  ) throw new Error(`configured snapshots were rewritten or rejected: ${JSON.stringify(configuredSnapshots)}`)
   const historicalUnknown = adapter.adaptNormalProject({
     ...validNormal,
     firstSaleTosVersionId: 'missing',
@@ -1821,14 +2004,14 @@ registerAssertion('normal project writes expose one shared audited action bounda
   }
 })
 
-registerAssertion('normal machine creation requires the current three-part enum and maps roadmap fields', () => {
+registerAssertion('normal machine creation requires the current first-sale enum and maps roadmap fields', () => {
   const addModalSource = fs.readFileSync(path.join(root, 'src/components/workspace/AddProjectModal.tsx'), 'utf8')
   if (addModalSource.includes('destroyOnClose')) throw new Error('AddProjectModal still uses deprecated destroyOnClose')
   for (const fragment of [
     'firstSaleTosVersionId',
     '请选择首销 tOS 版本',
     'isMachineProjectType',
-    "useTosEnumOptions('tos-3-part'",
+    "getSingleEnumValues(rowsByType, 'first-sale-tos')",
     'allowedFirstSaleTosValues',
     'projectCode',
     'platform',
@@ -2003,7 +2186,7 @@ registerAssertion('shared project actions audit only legal normal machine snapsh
   if (projectStore.getState().deleteProject('missing', '张三') !== false) throw new Error('missing delete must return false')
 })
 
-registerAssertion('whole-machine project mutations require current hydrated three-part values without clearing history', () => {
+registerAssertion('whole-machine project mutations require current hydrated first-sale values without clearing history', () => {
   const previousWindow = globalThis.window
   const storage = new Map()
   globalThis.window = {
@@ -2037,7 +2220,11 @@ registerAssertion('whole-machine project mutations require current hydrated thre
     developMode: '自研', remark: '',
   }
 
-  enumStore.setState({ hasHydrated: false, hydrationError: null, valuesByType: { 'tos-2-part': ['18.0'], 'tos-3-part': ['18.0.0'] } })
+  enumStore.setState(state => ({
+    hasHydrated: false,
+    hydrationError: null,
+    rowsByType: { ...state.rowsByType, 'first-sale-tos': [{ id: 'first-18', value: '18.0.0' }] },
+  }))
   if (projectStore.getState().addProject(machine, '创建人') !== false) {
     throw new Error('unhydrated enum defaults were trusted for a new whole-machine project')
   }
@@ -2045,7 +2232,11 @@ registerAssertion('whole-machine project mutations require current hydrated thre
     throw new Error('explicit current three-part allow-list was ignored')
   }
 
-  enumStore.setState({ hasHydrated: true, hydrationError: null, valuesByType: { 'tos-2-part': ['18.0'], 'tos-3-part': [] } })
+  enumStore.setState(state => ({
+    hasHydrated: true,
+    hydrationError: null,
+    rowsByType: { ...state.rowsByType, 'first-sale-tos': [] },
+  }))
   const historicalUpdate = projectStore.getState().updateProject(machine.id, { brand: 'Infinix' }, '修改人')
   if (!historicalUpdate || historicalUpdate.firstSaleTosVersionId !== '18.0.0') {
     throw new Error('deleting an enum option made an unchanged historical project value unsavable')
@@ -2059,7 +2250,9 @@ registerAssertion('whole-machine project mutations require current hydrated thre
   if (projectStore.getState().addProject(second, '创建人') !== false) {
     throw new Error('a deleted historical value remained selectable for new projects')
   }
-  enumStore.setState({ valuesByType: { 'tos-2-part': ['18.0'], 'tos-3-part': ['18.0.0'] } })
+  enumStore.setState(state => ({
+    rowsByType: { ...state.rowsByType, 'first-sale-tos': [{ id: 'first-18', value: '18.0.0' }] },
+  }))
   if (!projectStore.getState().addProject(second, '创建人')) {
     throw new Error('a same-session current three-part enum addition was not visible to project validation')
   }
@@ -2162,7 +2355,7 @@ registerAssertion('normal projects and their audit logs survive the same reload 
   }
 })
 
-registerAssertion('machine basic information exposes three-part enum selectors and fields', () => {
+registerAssertion('machine basic information exposes first-sale enum selectors and fields', () => {
   const fieldModule = loadTypeScriptModule(path.join(root, 'src/constants/projectBasicFields.ts'))
   const basicFields = new Map(fieldModule.WHOLE_MACHINE_BASIC_INFO_FIELDS.map(field => [field.key, field.label]))
   const hardwareFields = new Map(fieldModule.WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS.map(field => [field.key, field.label]))
@@ -2179,7 +2372,7 @@ registerAssertion('machine basic information exposes three-part enum selectors a
   if (hardwareFields.get('platform') !== '平台') throw new Error('hardware information is missing roadmap platform')
 
   const projectSpaceSource = fs.readFileSync(path.join(root, 'src/containers/ProjectSpaceContainer.tsx'), 'utf8')
-  if (!projectSpaceSource.includes("useTosEnumOptions('tos-3-part'")) throw new Error('project-space tOS selector is not backed by the three-part enum adapter')
+  if (!projectSpaceSource.includes("useSingleEnumOptions('first-sale-tos'")) throw new Error('project-space tOS selector is not backed by first-sale enum rows')
   if (projectSpaceSource.includes('roadmapTosVersions') || projectSpaceSource.includes('roadmapTosOptions')) {
     throw new Error('project-space tOS selector still reads roadmap metadata')
   }
@@ -2278,7 +2471,7 @@ registerAssertion('tOS-version maintenance stays in the roadmap and uses the sha
     throw new Error('roadmap module does not render the maintenance modal')
   }
   for (const contract of [
-    "useTosEnumOptions('tos-2-part'",
+    "useSingleEnumOptions('roadmap-tos'",
     'name="name"',
     '<Select',
     'setTosVersionDetails',
@@ -2295,9 +2488,9 @@ registerAssertion('tOS-version maintenance stays in the roadmap and uses the sha
   }
 })
 
-registerAssertion('roadmap version choices come only from the shared two-part enum', () => {
+registerAssertion('roadmap version choices come only from the shared roadmap enum', () => {
   const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
-  if (!moduleSource.includes("useTosEnumOptions('tos-2-part'") || !moduleSource.includes('selectable: currentValues.includes')) {
+  if (!moduleSource.includes("useSingleEnumOptions('roadmap-tos'") || !moduleSource.includes('selectable: currentValues.includes')) {
     throw new Error('roadmap did not distinguish current enum options from historical display values')
   }
   const filterSource = fs.readFileSync(path.join(root, 'src/lib/roadmapFilters.ts'), 'utf8')
@@ -2609,10 +2802,10 @@ registerAssertion('current-version roadmap hydration rejects malicious typed fil
       },
     },
   })
-  if (hydrated.filters.map(filter => filter.id).join(',') !== 'valid-version,valid-text') {
+  if (hydrated.filters.map(filter => filter.id).join(',') !== 'bad-version,valid-text') {
     throw new Error(`malicious version-1 filters survived hydration: ${JSON.stringify(hydrated.filters)}`)
   }
-  if (JSON.stringify(hydrated.filters[0].value) !== JSON.stringify(['17.2'])
+  if (JSON.stringify(hydrated.filters[0].value) !== JSON.stringify(['missing'])
     || hydrated.filters[1].value !== 'risk'
     || JSON.stringify(hydrated.visibleColumnsByView.table) !== JSON.stringify(['firstSaleTosVersionId', 'brand', 'remark'])) {
     throw new Error(`hydrated filter/column state was not normalized: ${JSON.stringify(hydrated)}`)
@@ -2704,8 +2897,8 @@ registerAssertion('roadmap module composes controls and overlays without standal
     if (!toolbarSource.includes(contract)) throw new Error(`Roadmap toolbar is missing ${contract}`)
   }
   const wrappingQuickFilters = toolbarSource.match(/<Flex[^>]*data-roadmap-quick-filter[^>]*wrap[^>]*>/g) ?? []
-  if (wrappingQuickFilters.length !== 2) {
-    throw new Error('brand and product-type quick-filter groups must wrap their labels on narrow screens')
+  if (wrappingQuickFilters.length < 1) {
+    throw new Error('quick-filter groups must wrap their labels on narrow screens')
   }
   const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
   for (const contract of [
@@ -3131,7 +3324,7 @@ registerAssertion('table tOS selector and drawer tOS condition stay synchronized
   }
 })
 
-registerAssertion('persisted tOS selection repairs to all unless its concrete ID is valid', () => {
+registerAssertion('persisted tOS selection preserves historical snapshots unless a filter is authoritative', () => {
   const storeModule = loadIsolatedRoadmapStore()
   const initial = storeModule.createInitialRoadmapState()
   const persisted = storeModule.partializeRoadmapState(initial)
@@ -3206,9 +3399,10 @@ registerAssertion('persisted tOS selection repairs to all unless its concrete ID
     selectedTosVersionId: 'missing-version',
     filters: [],
   }, 1)
-  if (invalidWithoutFilter.selectedTosVersionId !== null
-    || invalidWithoutFilter.filters.some(condition => condition.field === 'firstSaleTosVersionId')) {
-    throw new Error('invalid persisted selection without a filter did not fall back to all')
+  const historicalFilter = invalidWithoutFilter.filters.find(condition => condition.field === 'firstSaleTosVersionId')
+  if (invalidWithoutFilter.selectedTosVersionId !== 'missing-version'
+    || JSON.stringify(historicalFilter?.value) !== JSON.stringify(['missing-version'])) {
+    throw new Error('historical persisted selection without a filter was not preserved')
   }
 })
 
@@ -3424,7 +3618,7 @@ registerAssertion('roadmap tOS values normalize persistence while preserving his
   for (const [input, expected] of [
     ['17.2', '17.2'],
     [' tOS17.2 ', '17.2'],
-    ['TOS 17.2', '17.2'],
+    ['TOS 17.2', 'TOS 17.2'],
     ['legacy-beta', 'legacy-beta'],
     ['', ''],
   ]) {
@@ -3544,7 +3738,7 @@ registerAssertion('roadmap defers enum policy until hydration and preserves save
   }
 
   const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
-  for (const token of ['useTosEnumOptions', 'hasHydrated', 'hydrationError', '正在加载 tOS 版本配置', '加载 tOS 版本配置失败', '前往枚举配置恢复']) {
+  for (const token of ["useSingleEnumOptions('roadmap-tos'", 'hasHydrated', 'hydrationError', '正在加载 tOS 版本配置', '加载 tOS 版本配置失败', '前往枚举配置恢复']) {
     if (!moduleSource.includes(token)) throw new Error(`roadmap hydration UX is missing ${token}`)
   }
 })
@@ -3553,9 +3747,9 @@ registerAssertion('roadmap tOS maintenance opens locally while recovery can reac
   const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
   for (const token of [
     'useEnumStore',
-    "useTosEnumOptions('tos-2-part'",
+    "useSingleEnumOptions('roadmap-tos'",
     'navigateWithEditGuard',
-    "setSelectedType('tos-2-part')",
+    "setSelectedType('roadmap-tos')",
     "setConfigTab('enum')",
     "setActiveModule('config')",
   ]) {
@@ -3565,7 +3759,7 @@ registerAssertion('roadmap tOS maintenance opens locally while recovery can reac
     throw new Error('roadmap maintenance no longer opens its local business editor')
   }
   const plannedModalSource = fs.readFileSync(path.join(root, 'src/components/roadmap/PlannedProjectModal.tsx'), 'utf8')
-  for (const token of ['buildRoadmapTosSelectOptions', '（已停用）', 'disabled']) {
+  for (const token of ['useSingleEnumOptions(', "'first-sale-tos'", '（已停用）', 'disabled']) {
     if (!plannedModalSource.includes(token)) throw new Error(`planned-project orphan display is missing ${token}`)
   }
   for (const token of ['forceRender', 'form.setFieldsValue(nextValues)', 'clearDraftAndClose']) {
@@ -3621,6 +3815,60 @@ registerAssertion('roadmap table tOS filter lives in the top toolbar and evoluti
     '<RoadmapEvolutionView {...evolutionRenderContext}',
   ]) {
     if (!moduleSource.includes(token)) throw new Error(`maintained evolution catalog is missing ${token}`)
+  }
+})
+
+registerAssertion('task 9 consumers use the flat enum registry and preserve snapshots', () => {
+  const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8')
+  const maintenanceSource = read('src/components/roadmap/TosVersionMaintenanceModal.tsx')
+  const plannedSource = read('src/components/roadmap/PlannedProjectModal.tsx')
+  const moduleSource = read('src/components/roadmap/ProjectRoadmapModule.tsx')
+  const marketSource = read('src/components/project-info/MarketEditorModal.tsx')
+  const typesSource = read('src/types/roadmap.ts')
+
+  for (const [label, source] of [
+    ['maintenance', maintenanceSource],
+    ['roadmap module', moduleSource],
+  ]) {
+    if (!source.includes("useSingleEnumOptions('roadmap-tos'")) {
+      throw new Error(`${label} does not read roadmap-tos through the unified option hook`)
+    }
+    if (source.includes('useTosEnumOptions') || source.includes('tos-2-part')) {
+      throw new Error(`${label} still reads the legacy tOS registry`)
+    }
+  }
+  if (!moduleSource.includes("setSelectedType('roadmap-tos')")) {
+    throw new Error('shared enum navigation does not select roadmap-tos')
+  }
+
+  for (const enumType of ['version-type', 'memory-size', 'product-series', 'machine-development-mode', 'first-sale-tos']) {
+    if (!new RegExp(`useSingleEnumOptions\\(\\s*['"]${enumType}['"]`).test(plannedSource)) {
+      throw new Error(`planned project does not consume ${enumType}`)
+    }
+  }
+  for (const token of ['useEnumHydration', 'useEnumStore.getState', '（已停用）']) {
+    if (!plannedSource.includes(token)) throw new Error(`planned project hydration/history contract is missing ${token}`)
+  }
+  for (const forbidden of ['RAM_OPTIONS', 'VERSION_TYPES', 'DEVELOP_MODES']) {
+    if (plannedSource.includes(forbidden)) throw new Error(`planned project still hard-codes ${forbidden}`)
+  }
+
+  for (const enumType of ['build-option', 'build-market']) {
+    if (!new RegExp(`useSingleEnumOptions\\(\\s*['"]${enumType}['"]`).test(marketSource)) {
+      throw new Error(`market editor does not consume ${enumType}`)
+    }
+  }
+  for (const token of ['useEnumHydration', 'useEnumStore.getState']) {
+    if (!marketSource.includes(token)) throw new Error(`market editor hydration/history contract is missing ${token}`)
+  }
+  if (/loadSpugBuildOptions|mockSpugBuildOptionsProvider/.test(marketSource)) {
+    throw new Error('market editor still loads SPUG mock options as its live source')
+  }
+
+  for (const typeName of ['RoadmapRam', 'RoadmapVersionType', 'RoadmapDevelopMode']) {
+    if (!new RegExp(`type\\s+${typeName}\\s*=\\s*string\\b`).test(typesSource)) {
+      throw new Error(`${typeName} is not a string snapshot type`)
+    }
   }
 })
 

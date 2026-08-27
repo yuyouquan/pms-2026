@@ -77,7 +77,9 @@ export default function RoadmapProjectDetailsModal({
         <div className="pms-roadmap-project-detail-body pms-solid-surface">
           <Flex className="pms-roadmap-project-detail-heading" align="center" gap={8} wrap>
             <Typography.Text strong>{title}</Typography.Text>
-            <Tag color={VERSION_TYPE_TAG_COLORS[row.versionType]}>{row.versionType}</Tag>
+            <Tag color={VERSION_TYPE_TAG_COLORS[row.versionType as keyof typeof VERSION_TYPE_TAG_COLORS] ?? 'default'}>
+              {row.versionType}
+            </Tag>
             <Tag color={row.productType === '新品' ? 'volcano' : 'default'}>
               {row.productType === '新品' ? 'New' : 'Old'}
             </Tag>
