@@ -199,7 +199,12 @@ assert.doesNotThrow(() => {
 console.log('[enum-consumers] verifying thin hook and compatibility contracts')
 const hookSource = readSource(root, 'src/hooks/useEnumOptions.ts')
 assert.match(hookSource, /useEnumStore\(state\s*=>\s*state\.rowsByType\)/, 'hooks subscribe only to rowsByType')
-assert.doesNotMatch(hookSource, /valuesByType|hasHydrated|hydrationError|ensureEnumHydrated/, 'new option hooks do not subscribe to legacy or action state')
+assert.doesNotMatch(hookSource, /valuesByType/, 'new option hooks do not subscribe to the legacy value projection')
+assert.match(hookSource, /export function useEnumHydration\b/, 'one reusable hydration hook owns enum readiness')
+assert.match(hookSource, /ensureEnumHydrated/, 'the hydration hook delegates to the store-level deduplicated hydrator')
+assert.match(hookSource, /enabled\s*&&\s*!hasHydrated/, 'the hydration hook starts persisted loading only for an enabled consumer that is not hydrated')
+assert.match(hookSource, /hasHydrated\s*&&\s*!hydrationError/, 'the hydration hook exposes readiness only after successful persisted loading')
+assert.match(hookSource, /if\s*\(\s*!isReady\s*\)\s*return\s*\[\]/, 'single-value options never expose seed rows before persisted hydration')
 for (const hook of ['useSingleEnumOptions', 'useChipOptions', 'useProjectCategoryMapping', 'useTmgOptions']) {
   assert.match(hookSource, new RegExp(`export function ${hook}\\b`), `${hook} is exported`)
 }
@@ -218,6 +223,26 @@ const legacyHookSource = readSource(root, 'src/hooks/useTosEnumOptions.ts')
 assert.match(legacyLibSource, /buildEnumOptions/, 'deprecated tOS option builder delegates to the unified consumer helper')
 assert.match(legacyHookSource, /roadmap-tos/, 'legacy two-part hook maps to roadmap tOS rows')
 assert.match(legacyHookSource, /first-sale-tos/, 'legacy three-part hook maps to first-sale tOS rows')
+
+const projectInfoModalSource = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
+assert.match(projectInfoModalSource, /useEnumHydration\(open\)/, 'project information create/edit starts enum hydration only while its modal is relevant')
+assert.match(projectInfoModalSource, /handleSubmit[\s\S]*useEnumStore\.getState\(\)[\s\S]*!enumState\.hasHydrated\s*\|\|\s*enumState\.hydrationError[\s\S]*return/, 'project information submit reads current store state and rejects incomplete or failed enum hydration')
+assert.match(projectInfoModalSource, /okButtonProps=\{\{[^}]*!enumReady/s, 'project information disables OK until persisted enum configuration is authoritative')
+assert.match(projectInfoModalSource, /Skeleton[\s\S]*hydrationError[\s\S]*retryHydration/, 'project information visibly gates loading and exposes hydration retry guidance')
+
+const addProjectModalSource = readSource(root, 'src/components/workspace/AddProjectModal.tsx')
+assert.match(addProjectModalSource, /useEnumHydration\(open\)/, 'the create wrapper shares the central hydration state')
+assert.match(addProjectModalSource, /handleSubmit[\s\S]*useEnumStore\.getState\(\)[\s\S]*!enumState\.hasHydrated\s*\|\|\s*enumState\.hydrationError[\s\S]*return false/, 'the create wrapper rejects a bypassed submit using current store hydration state')
+
+const subprojectConfigSource = readSource(root, 'src/components/technical-project/SubprojectConfigModal.tsx')
+assert.match(subprojectConfigSource, /useEnumHydration\(open\)/, 'standalone technical configuration hydrates when opened')
+assert.match(subprojectConfigSource, /save[\s\S]*useEnumStore\.getState\(\)[\s\S]*!enumState\.hasHydrated\s*\|\|\s*enumState\.hydrationError[\s\S]*return/, 'standalone technical configuration defensively blocks save using current hydration state')
+assert.match(subprojectConfigSource, /okButtonProps=\{\{[^}]*!enumReady/s, 'standalone technical configuration disables OK before hydration')
+assert.match(subprojectConfigSource, /hydrationError[\s\S]*retryHydration/, 'standalone technical configuration exposes hydration recovery')
+
+const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
+assert.match(projectSpaceSource, /useEnumHydration\(true\)/, 'project space starts enum hydration on mount')
+assert.match(projectSpaceSource, /saveBasicInfoEdit[\s\S]*useEnumStore\.getState\(\)[\s\S]*!enumState\.hasHydrated\s*\|\|\s*enumState\.hydrationError[\s\S]*return/, 'project-space direct editing cannot save enum fields before hydration')
 
 assert.doesNotMatch(
   projectTypesSource,

@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Form, Modal, Select, Space, Tag, Typography, message } from 'antd'
+import { Alert, Button, Form, Modal, Select, Skeleton, Space, Tag, Typography, message } from 'antd'
 import { isMachineProjectType } from '@/constants/projectTypes'
-import { useSingleEnumOptions } from '@/hooks/useEnumOptions'
+import { useEnumHydration, useSingleEnumOptions } from '@/hooks/useEnumOptions'
 import { isTechnicalSubprojectConfigured } from '@/lib/technicalProjectRules'
 import { useHasPermission } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
+import { useEnumStore } from '@/stores/enums'
 import { useTechnicalProjectStore } from '@/stores/technicalProject'
 import type { TechnicalSubproject, TechnicalSubprojectConfiguration } from '@/types/technicalProject'
 import { useOverlayInteraction } from '@/hooks/useOverlayInteraction'
@@ -40,6 +41,7 @@ export default function SubprojectConfigModal({
   const [submitting, setSubmitting] = useState(false)
   const submissionSequenceRef = useRef(0)
   const { captureTrigger, restoreTriggerFocus, tryBeginSubmit, releaseSubmission } = useOverlayInteraction()
+  const { hasHydrated, hydrationError, isReady: enumReady, retryHydration } = useEnumHydration(open)
 
   useEffect(() => {
     if (!open || !subproject) return
@@ -50,9 +52,9 @@ export default function SubprojectConfigModal({
   const coreHistory = useMemo(() => subproject?.configuration.coreValue ? [subproject.configuration.coreValue] : [], [subproject?.configuration.coreValue])
   const developmentHistory = useMemo(() => subproject?.configuration.developmentMode ? [subproject.configuration.developmentMode] : [], [subproject?.configuration.developmentMode])
   const tosHistory = useMemo(() => subproject?.configuration.firstTosVersion ? [subproject.configuration.firstTosVersion] : [], [subproject?.configuration.firstTosVersion])
-  const coreOptions = useSingleEnumOptions('core-value', coreHistory)
-  const developmentOptions = useSingleEnumOptions('technical-development-mode', developmentHistory)
-  const tosOptions = useSingleEnumOptions('first-sale-tos', tosHistory)
+  const coreOptions = useSingleEnumOptions('core-value', coreHistory, open)
+  const developmentOptions = useSingleEnumOptions('technical-development-mode', developmentHistory, open)
+  const tosOptions = useSingleEnumOptions('first-sale-tos', tosHistory, open)
 
   const machineOptions = useMemo(() => projects
     .filter(project => isMachineProjectType(project.type))
@@ -68,6 +70,11 @@ export default function SubprojectConfigModal({
   }
 
   const save = async () => {
+    const enumState = useEnumStore.getState()
+    if (!enumState.hasHydrated || enumState.hydrationError) {
+      message.error(enumState.hydrationError || '枚举配置正在加载，请稍后重试')
+      return
+    }
     if (!subproject || !canEdit) return
     if (!tryBeginSubmit()) return
     const submissionSequence = ++submissionSequenceRef.current
@@ -123,13 +130,24 @@ export default function SubprojectConfigModal({
       )}
       okText="确认"
       cancelText="取消"
-      okButtonProps={{ disabled: !canEdit || submitting }}
+      okButtonProps={{ disabled: !enumReady || !canEdit || submitting }}
       confirmLoading={submitting}
       onOk={() => void save()}
       onCancel={closeWithoutSaving}
       destroyOnHidden
       width={560}
     >
+      {!hasHydrated ? (
+        <Skeleton active paragraph={{ rows: 4 }} />
+      ) : hydrationError ? (
+        <Alert
+          type="error"
+          showIcon
+          title="枚举配置加载失败"
+          description={<span>{hydrationError} 请重试加载，成功后才能继续填写和保存。</span>}
+          action={<Button size="small" onClick={() => void retryHydration()}>重试</Button>}
+        />
+      ) : (<>
       <Text type="secondary">子项目由 IPM 同步，此处仅维护 PMS 内的交付配置。</Text>
       <Form form={form} layout="vertical" requiredMark="optional" style={{ marginTop: 20 }}>
         <Form.Item name="coreValue" label="核心价值" rules={[{ required: true, message: '请选择核心价值' }]}>
@@ -168,6 +186,7 @@ export default function SubprojectConfigModal({
       {!canEdit && subproject?.active && (
         <Text type="secondary">当前账号无基础信息编辑权限。</Text>
       )}
+      </>)}
     </Modal>
   )
 }

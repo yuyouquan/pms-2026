@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReloadOutlined } from '@ant-design/icons'
-import { Alert, Button, Collapse, Form, Input, Modal, Select, Space, Spin, Tag, message } from 'antd'
+import { Alert, Button, Collapse, Form, Input, Modal, Select, Skeleton, Space, Spin, Tag, message } from 'antd'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import ProjectInfoFieldInput from '@/components/project-info/ProjectInfoFieldInput'
 import TechnicalProjectCreateFields from '@/components/technical-project/TechnicalProjectCreateFields'
@@ -51,6 +51,7 @@ import { TECHNICAL_DELIVERABLE_FIELDS } from '@/constants/technicalProject'
 import { useProjectStore } from '@/stores/project'
 import { useEnumStore } from '@/stores/enums'
 import { useOverlayInteraction } from '@/hooks/useOverlayInteraction'
+import { useEnumHydration } from '@/hooks/useEnumOptions'
 import {
   buildChipOptions,
   buildEnumOptions,
@@ -145,6 +146,7 @@ export default function ProjectInfoModal({
 }: ProjectInfoModalProps) {
   const [form] = Form.useForm<ProjectInfoFormState>()
   const rowsByType = useEnumStore(state => state.rowsByType)
+  const { hasHydrated, hydrationError, isReady: enumReady, retryHydration } = useEnumHydration(open)
   const syncTechnicalTeamPermissionMembers = useProjectStore(state => state.syncTechnicalTeamPermissionMembers)
   const syncTosTeamPermissionMembers = useProjectStore(state => state.syncTosTeamPermissionMembers)
   const [submitting, setSubmitting] = useState(false)
@@ -171,10 +173,10 @@ export default function ProjectInfoModal({
   const selectedCandidate = mode === 'create'
     ? candidateProjects.find(item => item.bid === watchedBid)
     : undefined
-  const selectedIpmClassification = selectedCandidate
+  const selectedIpmClassification = enumReady && selectedCandidate
     ? findProjectCategoryMapping(rowsByType, selectedCandidate.ipmProjectCategoryName)
     : undefined
-  const isIpmClassificationMissing = Boolean(selectedCandidate && !selectedIpmClassification)
+  const isIpmClassificationMissing = Boolean(enumReady && selectedCandidate && !selectedIpmClassification)
   const machineProductType = String(watchedValues.productType || '')
   const isLegacyMachine = isMachineProjectType(projectType) && machineProductType === '老品'
   const isTechnicalProject = projectType === PROJECT_CATEGORY_TECH
@@ -194,15 +196,15 @@ export default function ProjectInfoModal({
     .map(key => mode === 'edit' ? String(watchedValues[key] || '') : '')
     .join('\u001f')
   const machineFieldOptions = useMemo(() => Object.fromEntries(
-    Object.entries(MACHINE_FIELD_ENUM_TYPES).map(([fieldKey, type]) => {
+    enumReady ? Object.entries(MACHINE_FIELD_ENUM_TYPES).map(([fieldKey, type]) => {
       const historicalValue = machineHistorySignature.split('\u001f')[Object.keys(MACHINE_FIELD_ENUM_TYPES).indexOf(fieldKey)] || ''
       return [fieldKey, buildEnumOptions(rowsByType, type as SingleEnumTypeKey, historicalValue ? [historicalValue] : [])]
-    }),
-  ), [machineHistorySignature, rowsByType])
+    }) : [],
+  ), [enumReady, machineHistorySignature, rowsByType])
   const healthSnapshot = String(watchedValues.healthStatus || '')
   const healthOptions = useMemo(
-    () => buildEnumOptions(rowsByType, 'machine-health-status', healthSnapshot ? [healthSnapshot] : []),
-    [healthSnapshot, rowsByType],
+    () => enumReady ? buildEnumOptions(rowsByType, 'machine-health-status', healthSnapshot ? [healthSnapshot] : []) : [],
+    [enumReady, healthSnapshot, rowsByType],
   )
   const chipSnapshot = useMemo(() => ({
     chipCode: String(watchedValues.chipCode || ''),
@@ -210,19 +212,21 @@ export default function ProjectInfoModal({
     chipPlatform: String(watchedValues.chipPlatform || ''),
   }), [watchedValues.chipCode, watchedValues.chipModel, watchedValues.chipPlatform])
   const chipOptions = useMemo(
-    () => buildChipOptions(rowsByType, Object.values(chipSnapshot).some(Boolean) ? [chipSnapshot] : []),
-    [chipSnapshot, rowsByType],
+    () => enumReady ? buildChipOptions(rowsByType, Object.values(chipSnapshot).some(Boolean) ? [chipSnapshot] : []) : [],
+    [chipSnapshot, enumReady, rowsByType],
   )
   const selectedChipOptionId = useMemo(() => {
+    if (!enumReady) return undefined
     const live = rowsByType['chip-mapping'].find(row => (
       row.chipCode === chipSnapshot.chipCode
       && row.chipModel === chipSnapshot.chipModel
       && row.chipPlatform === chipSnapshot.chipPlatform
     ))
     return live?.id || chipOptions.find(option => option.historical)?.value
-  }, [chipOptions, chipSnapshot, rowsByType])
+  }, [chipOptions, chipSnapshot, enumReady, rowsByType])
   const isDraftHydrating = mode === 'create'
     && open
+    && enumReady
     && (
       draftReadStatus === 'idle'
       || draftReadStatus === 'loading'
@@ -371,7 +375,7 @@ export default function ProjectInfoModal({
   }, [existingProjects, form, mode, open, project, responsiblePersons])
 
   useEffect(() => {
-    if (!open || mode !== 'create') {
+    if (!open || mode !== 'create' || !enumReady) {
       invalidateCreateDraftSession()
       setDraftReadStatus('idle')
       return
@@ -439,7 +443,7 @@ export default function ProjectInfoModal({
         invalidateCreateDraftSession()
       }
     }
-  }, [draftHydrationAttempt, draftOwnerId, draftRepository, enqueueDraftMutation, form, invalidateCreateDraftSession, isCurrentCreateDraftSession, mode, open, resetCreateForm, rowsByType, setDraftReadStatus, startCreateDraftSession])
+  }, [draftHydrationAttempt, draftOwnerId, draftRepository, enqueueDraftMutation, enumReady, form, invalidateCreateDraftSession, isCurrentCreateDraftSession, mode, open, resetCreateForm, rowsByType, setDraftReadStatus, startCreateDraftSession])
 
   const clearTypeFields = (type: string) => {
     const fieldNames = getProjectInfoFields(type).map(field => field.key)
@@ -447,6 +451,7 @@ export default function ProjectInfoModal({
   }
 
   const applySourceValues = (bid: string, nextType?: string) => {
+    if (!enumReady) return
     const entry = candidateProjects.find(item => item.bid === bid)
     if (!entry) return
     const sourceValues = fetchByBid(bid)
@@ -485,6 +490,7 @@ export default function ProjectInfoModal({
   }
 
   const handleCandidateChange = (bid: string) => {
+    if (!enumReady) return
     const entry = candidateProjects.find(item => item.bid === bid)
     if (!entry) return
     const classification = findProjectCategoryMapping(rowsByType, entry.ipmProjectCategoryName)
@@ -535,7 +541,7 @@ export default function ProjectInfoModal({
     : ''
 
   useEffect(() => {
-    if (!open || mode !== 'create' || !watchedBid) return
+    if (!open || mode !== 'create' || !enumReady || !watchedBid) return
     const sourceKey = `${watchedBid}::${projectType}`
     if (lastAppliedSourceRef.current === sourceKey) return
     const previousBid = lastAppliedSourceRef.current.split('::')[0]
@@ -551,7 +557,7 @@ export default function ProjectInfoModal({
       setAggregateWarnings(aggregateResult.missingSources)
     }
     lastAppliedSourceRef.current = sourceKey
-  }, [candidateProjects, existingProjects, form, mode, open, projectType, watchedBid])
+  }, [candidateProjects, enumReady, existingProjects, form, mode, open, projectType, watchedBid])
 
   useEffect(() => {
     if (!open || projectType !== PROJECT_TYPE_TOS_VERSION) return
@@ -667,6 +673,11 @@ export default function ProjectInfoModal({
   const requestClose = async () => {
     if (mode === 'create') {
       if (submitting) return
+      if (!enumReady) {
+        invalidateCreateDraftSession()
+        onCancel()
+        return
+      }
       if (draftReadStatusRef.current === 'loading' || draftReadStatusRef.current === 'idle') {
         return
       }
@@ -746,6 +757,11 @@ export default function ProjectInfoModal({
     if (!tryBeginSubmit()) return
     setSubmitting(true)
     try {
+    const enumState = useEnumStore.getState()
+    if (!enumState.hasHydrated || enumState.hydrationError) {
+      message.error(enumState.hydrationError || '枚举配置正在加载，请稍后重试')
+      return
+    }
     const selectedBid = String(form.getFieldValue('bid') || '')
     const sourceEntry = mode === 'create'
       ? candidateProjects.find(item => item.bid === selectedBid)
@@ -915,7 +931,7 @@ export default function ProjectInfoModal({
       title={mode === 'create' ? (
         <div className="pms-project-info-modal-title-row">
           <span>新增项目</span>
-          <Button type="text" danger size="small" icon={<ReloadOutlined />} disabled={isDraftInteractionLocked} onClick={requestResetCreateDraft}>
+          <Button type="text" danger size="small" icon={<ReloadOutlined />} disabled={!enumReady || isDraftInteractionLocked} onClick={requestResetCreateDraft}>
             重新填写
           </Button>
         </div>
@@ -929,13 +945,24 @@ export default function ProjectInfoModal({
       keyboard={!isDraftInteractionLocked}
       okText={mode === 'create' ? '创建' : '保存'}
       cancelText="取消"
-      confirmLoading={submitting || isDraftHydrating}
+      confirmLoading={submitting || isDraftHydrating || (open && !hasHydrated)}
       cancelButtonProps={{ disabled: isDraftInteractionLocked }}
-      okButtonProps={{ disabled: isCreateDraftInteractionBlocked || isIpmClassificationMissing }}
+      okButtonProps={{ disabled: !enumReady || isCreateDraftInteractionBlocked || isIpmClassificationMissing }}
       destroyOnHidden
       className="pms-modal pms-project-info-modal"
       styles={{ body: { maxHeight: '72vh', overflowY: 'auto', paddingRight: 24 } }}
     >
+      {!hasHydrated ? (
+        <Skeleton active paragraph={{ rows: 8 }} />
+      ) : hydrationError ? (
+        <Alert
+          type="error"
+          showIcon
+          title="枚举配置加载失败"
+          description={<span>{hydrationError} 请重试加载，成功后才能继续填写和保存。</span>}
+          action={<Button size="small" onClick={() => void retryHydration()}>重试</Button>}
+        />
+      ) : (<>
       {isCreateDraftReadFailed && (
         <Alert
           type="error"
@@ -1098,6 +1125,7 @@ export default function ProjectInfoModal({
         )}
       </Form>
       </Spin>
+      </>)}
     </Modal>
   )
 }

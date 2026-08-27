@@ -21,6 +21,7 @@ import { normalizeTargetMarkets } from '@/lib/marketRules'
 import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
 import { normalizeTosEnumReference, resolveCurrentTosEnumValue } from '@/lib/tosEnumOptions'
 import { useActivateProject } from '@/hooks/useActivateProject'
+import { useEnumHydration } from '@/hooks/useEnumOptions'
 import { getSingleEnumValues } from '@/lib/enumConsumers'
 import { useEnumStore } from '@/stores/enums'
 import { synchronizeTechnicalProjectRecord } from '@/lib/technicalProjectRules'
@@ -41,6 +42,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
   const activateProject = useActivateProject()
   const initProjectPermissions = usePermissionStore(state => state.initProjectPermissions)
   const rowsByType = useEnumStore(state => state.rowsByType)
+  useEnumHydration(open)
   const machineTosValues = useMemo(() => getSingleEnumValues(rowsByType, 'first-sale-tos'), [rowsByType])
 
   const candidatePool = useMemo<ExternalProjectEntry[]>(() => {
@@ -51,6 +53,11 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
   }, [projects])
 
   const handleSubmit = async (payload: ProjectInfoSubmitPayload) => {
+    const enumState = useEnumStore.getState()
+    if (!enumState.hasHydrated || enumState.hydrationError) {
+      message.error(enumState.hydrationError || '枚举配置正在加载，请稍后重试')
+      return false
+    }
     const entry = payload.sourceEntry
     if (!entry) {
       message.error('未找到外部项目条目')

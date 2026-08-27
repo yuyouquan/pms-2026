@@ -169,8 +169,9 @@ import TechnicalProjectInformationView from '@/components/technical-project/Tech
 import TechnicalPlanModule from '@/components/technical-project/TechnicalPlanModule'
 import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
 import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
+import { useEnumHydration } from '@/hooks/useEnumOptions'
 import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
-import { buildEnumOptions } from '@/lib/enumConsumers'
+import { buildEnumOptions, type EnumOption } from '@/lib/enumConsumers'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import {
   synchronizeTechnicalProjectRecord,
@@ -412,7 +413,27 @@ export default function ProjectSpaceContainer() {
       : '-'
   ))
   const enumRowsByType = useEnumStore(state => state.rowsByType)
-  const machineProjectSpaceOptions = useMemo(() => {
+  const {
+    hasHydrated: enumHasHydrated,
+    hydrationError: enumHydrationError,
+    isReady: enumReady,
+    retryHydration: retryEnumHydration,
+  } = useEnumHydration(true)
+  const machineProjectSpaceOptions = useMemo<Record<string, EnumOption[]>>(() => {
+    if (!enumReady) {
+      return Object.fromEntries(Object.keys({
+        healthStatus: true,
+        versionType: true,
+        softwareProjectLevel: true,
+        productSeries: true,
+        researchMode: true,
+        developmentMode: true,
+        dimensionUpgradeStrategy: true,
+        systemType: true,
+        kernelVersion: true,
+        memorySize: true,
+      }).map(key => [key, []]))
+    }
     const project = selectedProject as Record<string, any> | null
     const history = (fieldKey: string, fallbackKey?: string) => {
       const value = project?.fieldValues?.[fieldKey] ?? project?.[fieldKey] ?? (fallbackKey ? project?.[fallbackKey] : '')
@@ -430,7 +451,7 @@ export default function ProjectSpaceContainer() {
       kernelVersion: buildEnumOptions(enumRowsByType, 'kernel-version', history('kernelVersion')),
       memorySize: buildEnumOptions(enumRowsByType, 'memory-size', history('memorySize', 'memory')),
     }
-  }, [enumRowsByType, selectedProject])
+  }, [enumReady, enumRowsByType, selectedProject])
 
   const machineTosHistory = useMemo(() => selectedProject ? [
     selectedProject.firstSaleTosVersionId,
@@ -2310,6 +2331,11 @@ export default function ProjectSpaceContainer() {
     setBasicInfoEditMode(true)
   }
   const saveBasicInfoEdit = () => {
+    const enumState = useEnumStore.getState()
+    if (!enumState.hasHydrated || enumState.hydrationError) {
+      message.error(enumState.hydrationError || '枚举配置正在加载，请稍后重试')
+      return
+    }
     if (!selectedProject) return
     const updatedFields = {
       ...editingProjectFields,
@@ -3262,12 +3288,22 @@ export default function ProjectSpaceContainer() {
         </Card>
         {/* Section: Basic info */}
         <Card id="section-basic" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: 'var(--pms-brand)' }} />, '基本信息', 'var(--pms-brand)')} extra={
-          basicInfoEditMode ? (<Space><Button size="small" onClick={() => setBasicInfoEditMode(false)}>取消</Button><Button size="small" type="primary" onClick={saveBasicInfoEdit}>保存</Button></Space>) : (
+          basicInfoEditMode ? (<Space><Button size="small" onClick={() => setBasicInfoEditMode(false)}>取消</Button><Button size="small" type="primary" loading={!enumHasHydrated} disabled={!enumReady} onClick={saveBasicInfoEdit}>保存</Button></Space>) : (
             canEditBasicInfo
               ? <Button aria-label="编辑项目信息" size="small" icon={<EditOutlined />} onClick={startBasicInfoEdit}>编辑</Button>
               : <Tooltip title="无基本信息编辑权限"><Button aria-label="编辑项目信息" size="small" icon={<EditOutlined />} disabled>编辑</Button></Tooltip>
           )
         }>
+          {basicInfoEditMode && enumHydrationError && (
+            <Alert
+              type="error"
+              showIcon
+              title="枚举配置加载失败"
+              description={<span>{enumHydrationError} 请重试加载，成功后才能继续保存。</span>}
+              action={<Button size="small" onClick={() => void retryEnumHydration()}>重试</Button>}
+              style={{ margin: 16 }}
+            />
+          )}
           {isSoftware && (
             <div>
               <Descriptions bordered size="small" column={4} labelStyle={descLabelStyle} contentStyle={descContentStyle}>

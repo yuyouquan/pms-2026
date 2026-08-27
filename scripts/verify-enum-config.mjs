@@ -513,6 +513,48 @@ try {
   assert.equal(enumStore.useEnumStore.getState().hasHydrated, true, 'delayed hydrate/reset finishes with hydration complete')
   assert.equal(enumStore.useEnumStore.getState().hydrationError, null, 'delayed hydrate/reset finishes without an error')
   assertOfficialLegacyProjection('legacy bridge equals the flat-row projection after delayed hydrate/reset')
+
+  const freshPersistedRows = values.createInitialEnumRows()
+  freshPersistedRows['product-series'] = [{ id: 'persisted-custom-series', value: '持久化自定义系列' }]
+  freshPersistedRows['version-type'] = []
+  let releaseFreshSessionHydration
+  let freshSessionReadCount = 0
+  enumStore.useEnumStore.persist.setOptions({
+    storage: {
+      getItem: () => {
+        freshSessionReadCount += 1
+        return new Promise(resolve => { releaseFreshSessionHydration = resolve })
+      },
+      setItem: () => undefined,
+      removeItem: () => undefined,
+    },
+  })
+  enumStore.useEnumStore.setState({ hasHydrated: false, hydrationError: null })
+  const firstFreshSessionHydration = enumStore.ensureEnumHydrated()
+  const duplicateFreshSessionHydration = enumStore.ensureEnumHydrated()
+  assert.equal(enumStore.useEnumStore.getState().hasHydrated, false, 'fresh session remains gated while persisted enum loading is delayed')
+  assert.notDeepEqual(
+    enumStore.useEnumStore.getState().rowsByType['product-series'],
+    freshPersistedRows['product-series'],
+    'seed memory is observably stale until delayed persisted rows arrive',
+  )
+  releaseFreshSessionHydration({ state: { rowsByType: freshPersistedRows }, version: 2 })
+  assert.deepEqual(
+    await Promise.all([firstFreshSessionHydration, duplicateFreshSessionHydration]),
+    [true, true],
+    'all relevant consumers observe successful completion of the shared hydration',
+  )
+  assert.equal(freshSessionReadCount, 1, 'concurrent form hydration requests deduplicate to one persisted read')
+  assert.deepEqual(
+    enumStore.useEnumStore.getState().rowsByType['product-series'],
+    freshPersistedRows['product-series'],
+    'fresh-session custom persisted rows replace seeds before forms can become ready',
+  )
+  assert.deepEqual(
+    enumStore.useEnumStore.getState().rowsByType['version-type'],
+    [],
+    'fresh-session persisted empty configuration replaces seeded options before forms can become ready',
+  )
 } finally {
   enumStore.useEnumStore.persist.setOptions({ storage: officialPersistStorage })
   if (previousWindow === undefined) delete globalThis.window
