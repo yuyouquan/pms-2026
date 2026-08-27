@@ -827,6 +827,28 @@ legacySharedTosSeed.push({
   ownerMemo: 'keep-custom-fields',
 })
 const legacySharedTosInput = structuredClone(legacySharedTosSeed)
+const legacySharedV7RoadmapTasks = legacySharedTosInput
+  .filter(task => task.source !== 'custom')
+  .map(task => ({ ...task, defaultRoadmap: Boolean(task.parentId) }))
+const legacySharedV7RoadmapState = {
+  publishedSnapshots: {
+    'project::2::level1::v7': legacySharedV7RoadmapTasks,
+  },
+}
+const legacySharedV7RoadmapStateInput = structuredClone(legacySharedV7RoadmapState)
+const migratedLegacySharedV7RoadmapState = plan.migratePlanStoreState(legacySharedV7RoadmapState, 7)
+const migratedLegacySharedV7RoadmapTasks = migratedLegacySharedV7RoadmapState.publishedSnapshots['project::2::level1::v7']
+assert.deepEqual(
+  rootNames(migratedLegacySharedV7RoadmapTasks),
+  rootNames(plan.TOS_LEVEL1_TASKS),
+  'a real V4-V7 shared stable seed with explicit roadmap flags migrates to the tOS plan',
+)
+assert.equal(
+  migratedLegacySharedV7RoadmapTasks.every(task => task.defaultRoadmap === Boolean(task.parentId)),
+  true,
+  'the exact historical roadmap structure remains explicit after migration',
+)
+assert.deepEqual(legacySharedV7RoadmapState, legacySharedV7RoadmapStateInput, 'the V7 roadmap-shaped migration leaves its input untouched')
 const migratedSharedTosSeed = plan.migrateLevel1TasksForProjectType(legacySharedTosSeed, 'tOS版本项目', true)
 assert.deepEqual(legacySharedTosSeed, legacySharedTosInput, 'level-one task migration never mutates its input')
 assert.equal(migratedSharedTosSeed.find(task => task.stableId === 'tos-ms-str2').planEndDate, '2031-04-08', 'fixed dates map by stable ID before names')

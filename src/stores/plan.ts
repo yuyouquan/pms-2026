@@ -281,10 +281,18 @@ const LEGACY_SHARED_LEVEL1_STABLE_SIGNATURE: StableLevel1SeedSignature = new Map
   ['milestone-close', { index: 11, parentStableId: 'stage-launch', taskName: '收编完成', order: 0, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
 ])
 
+const LEGACY_SHARED_V4_V7_LEVEL1_STABLE_SIGNATURE: StableLevel1SeedSignature = new Map(
+  [...LEGACY_SHARED_LEVEL1_STABLE_SIGNATURE].map(([stableId, entry]) => [
+    stableId,
+    { ...entry, defaultRoadmap: entry.parentStableId !== null },
+  ]),
+)
+
 const STABLE_LEVEL1_SEED_SIGNATURES: readonly StableLevel1SeedSignature[] = [
   buildStableLevel1SeedSignature(MACHINE_LEVEL1_TEMPLATE_TASKS),
   buildStableLevel1SeedSignature(TOS_LEVEL1_TEMPLATE_TASKS),
   LEGACY_SHARED_LEVEL1_STABLE_SIGNATURE,
+  LEGACY_SHARED_V4_V7_LEVEL1_STABLE_SIGNATURE,
 ]
 
 const LEGACY_SIMPLE_LEVEL1_SIGNATURE = [
