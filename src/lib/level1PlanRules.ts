@@ -218,6 +218,23 @@ export const buildLevel1TasksForProjectType = (
 /** Whole-machine compatibility alias for legacy callers pending scoped migration. */
 export const buildStandardLevel1Tasks = buildMachineLevel1Tasks
 
+export const parseTosProjectVersionPrefix = (projectName: string) => {
+  const match = /tOS\s*(\d+)\.(\d+)/i.exec(projectName)
+  return match
+    ? { major: match[1], minor: match[2], prefix: `${match[1]}.${match[2]}.0` }
+    : null
+}
+
+export const validateTosBusinessVersionName = (projectName: string, taskName: string) => {
+  const parsed = parseTosProjectVersionPrefix(projectName)
+  if (!parsed) return { valid: false, message: '无法从项目名称解析 tOS 版本前缀' }
+  const valid = new RegExp(`^${parsed.major}\\.${parsed.minor}\\.0\\.\\d{2}[05]$`).test(taskName)
+  return {
+    valid,
+    message: valid ? '' : `版本号必须符合 ${parsed.prefix}.XXX，且尾号最后一位为0或5`,
+  }
+}
+
 const sortByOrder = <T extends { order: number }>(items: T[]) => (
   [...items].sort((left, right) => left.order - right.order)
 )
@@ -664,6 +681,90 @@ export const canMutateLevel1TaskStructure = (
     && isLaunchStageTask(input.parent)
 }
 
+const BUSINESS_STAGE_IDS: Record<Level1ProjectKind, ReadonlySet<string>> = {
+  machine: new Set(['machine-stage-launch', 'machine-stage-lifecycle']),
+  tos: new Set(['tos-stage-launch-iteration', 'tos-stage-maintenance']),
+}
+
+const getLevel1ProjectKind = (projectType: string): Level1ProjectKind | null => {
+  if (projectType === '整机产品项目') return 'machine'
+  if (projectType === 'tOS版本项目') return 'tos'
+  return null
+}
+
+export const isBusinessStage = (projectType: string, task?: Level1PlanTask): boolean => {
+  const projectKind = getLevel1ProjectKind(projectType)
+  return Boolean(
+    projectKind
+    && task
+    && !task.parentId
+    && task.nodeKind === 'stage'
+    && task.stableId
+    && BUSINESS_STAGE_IDS[projectKind].has(task.stableId),
+  )
+}
+
+export interface Level1StructurePermissionInput {
+  projectType: string
+  isDraft: boolean
+  isSuperAdmin: boolean
+  isSpm: boolean
+  task?: Level1PlanTask
+  parent?: Level1PlanTask
+}
+
+export interface Level1StructurePermissions {
+  canAddStage: boolean
+  canAddChild: boolean
+  canDelete: boolean
+  canReorder: boolean
+}
+
+const denyLevel1StructurePermissions = (): Level1StructurePermissions => ({
+  canAddStage: false,
+  canAddChild: false,
+  canDelete: false,
+  canReorder: false,
+})
+
+export const getLevel1StructurePermissions = (
+  input: Level1StructurePermissionInput,
+): Level1StructurePermissions => {
+  if (!input.isDraft) return denyLevel1StructurePermissions()
+  if (input.isSuperAdmin) {
+    return { canAddStage: true, canAddChild: true, canDelete: true, canReorder: true }
+  }
+  if (!input.isSpm) return denyLevel1StructurePermissions()
+
+  const businessParent = isBusinessStage(input.projectType, input.parent)
+  const businessTask = input.task?.nodeKind === 'business-period'
+    && input.task.parentId === input.parent?.id
+  return {
+    canAddStage: false,
+    canAddChild: businessParent,
+    canDelete: Boolean(businessParent && businessTask),
+    canReorder: Boolean(businessParent && businessTask),
+  }
+}
+
+export interface InsertLevel1BusinessNodeInput {
+  projectType: string
+  projectName?: string
+  parentStableId: string
+  taskName: string
+  now: number
+}
+
+export type InsertLevel1BusinessNodeFailureCode =
+  | 'parent-missing'
+  | 'parent-not-business-stage'
+  | 'invalid-name'
+  | 'duplicate-name'
+
+export type InsertLevel1BusinessNodeResult =
+  | { ok: true; tasks: Level1PlanTask[]; task: Level1PlanTask; parent: Level1PlanTask }
+  | { ok: false; code: InsertLevel1BusinessNodeFailureCode; message: string }
+
 export type InsertNextMachineMrMilestoneResult =
   | { ok: true; tasks: Level1PlanTask[]; task: Level1PlanTask }
   | { ok: false; reason: 'launch-stage-missing' | 'duplicate-name' }
@@ -677,6 +778,69 @@ const createUniqueLevel1StableId = (tasks: readonly Level1PlanTask[], candidate:
     suffix += 1
   }
   return stableId
+}
+
+export const insertLevel1BusinessNode = (
+  tasks: readonly Level1PlanTask[],
+  input: InsertLevel1BusinessNodeInput,
+): InsertLevel1BusinessNodeResult => {
+  const parent = tasks.find(task => task.stableId === input.parentStableId)
+  if (!parent) {
+    return { ok: false, code: 'parent-missing', message: '未找到指定的一级计划父阶段' }
+  }
+  if (!isBusinessStage(input.projectType, parent)) {
+    return { ok: false, code: 'parent-not-business-stage', message: '只能在当前项目类型允许的业务阶段下新增节点' }
+  }
+
+  if (input.projectType === '整机产品项目') {
+    if (!/^MR[1-9]\d*$/.test(input.taskName)) {
+      return {
+        ok: false,
+        code: 'invalid-name',
+        message: '整机业务节点名称必须为 MR 加正整数（例如 MR1），且不允许小写、空格或前导零',
+      }
+    }
+  } else {
+    const validation = validateTosBusinessVersionName(input.projectName || '', input.taskName)
+    if (!validation.valid) return { ok: false, code: 'invalid-name', message: validation.message }
+  }
+
+  if (tasks.some(task => task.parentId === parent.id && task.taskName === input.taskName)) {
+    return { ok: false, code: 'duplicate-name', message: '同一父阶段下已存在同名业务节点' }
+  }
+
+  const stableId = createUniqueLevel1StableId(tasks, `business-period-${input.now}`)
+  const siblingOrder = tasks
+    .filter(task => task.parentId === parent.id)
+    .reduce((maximum, task) => Math.max(maximum, task.order), 0)
+  const renumbered = renumberLevel1Tasks([
+    ...tasks,
+    {
+      id: stableId,
+      stableId,
+      parentId: parent.id,
+      order: siblingOrder + 1,
+      taskName: input.taskName,
+      source: 'custom',
+      nodeKind: 'business-period',
+      responsible: '',
+      predecessor: '',
+      planStartDate: '',
+      planEndDate: '',
+      estimatedDays: null,
+      actualStartDate: '',
+      actualEndDate: '',
+      actualDays: null,
+      status: '未开始',
+      progress: 0,
+    },
+  ])
+  return {
+    ok: true,
+    tasks: renumbered,
+    task: renumbered.find(task => task.stableId === stableId)!,
+    parent: renumbered.find(task => task.stableId === parent.stableId)!,
+  }
 }
 
 export const insertNextMachineMrMilestone = (
