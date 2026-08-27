@@ -83,6 +83,7 @@ export const ENUM_DEFINITIONS = {
 } as const satisfies Record<EnumTypeKey, EnumTypeDefinition>
 
 const TOS_PREFIXED_TYPES = new Set<EnumTypeKey>(['first-sale-tos', 'roadmap-tos'])
+const LEGACY_TOS_ENUM_TYPE_KEYS = ['tos-2-part', 'tos-3-part'] as const satisfies readonly LegacyTosEnumTypeKey[]
 const PROJECT_CATEGORIES = new Set([
   '整机产品项目',
   'tOS版本项目',
@@ -90,8 +91,12 @@ const PROJECT_CATEGORIES = new Set([
   '能力建设项目',
 ])
 
-export function isEnumTypeKey(value: unknown): value is EnumTypeKey {
-  return typeof value === 'string' && ENUM_TYPE_KEYS.includes(value as EnumTypeKey)
+export function isEnumTypeKey(value: unknown): value is EnumTypeKey | LegacyTosEnumTypeKey {
+  return typeof value === 'string'
+    && (
+      ENUM_TYPE_KEYS.includes(value as EnumTypeKey)
+      || LEGACY_TOS_ENUM_TYPE_KEYS.includes(value as LegacyTosEnumTypeKey)
+    )
 }
 
 export function normalizeEnumFieldValue(
@@ -230,9 +235,8 @@ export const TOS_ENUM_REGISTRY: Record<LegacyTosEnumTypeKey, LegacyTosEnumTypeDe
 
 /** @deprecated Temporary compatibility keys for consumers migrated in later tasks. */
 export const TOS_ENUM_TYPE_KEYS = Object.freeze([
-  'tos-2-part',
-  'tos-3-part',
-] as const satisfies readonly LegacyTosEnumTypeKey[])
+  ...LEGACY_TOS_ENUM_TYPE_KEYS,
+])
 
 const FORMAT_BY_TYPE: Record<LegacyTosEnumTypeKey, RegExp> = {
   'tos-2-part': /^\d+\.\d+$/,

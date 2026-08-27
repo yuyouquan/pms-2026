@@ -67,7 +67,8 @@ for (const definition of Object.values(values.ENUM_DEFINITIONS)) {
   assert.deepEqual(definition.columns, expectedColumnsByKind[definition.kind](definition), `${definition.key} exposes the exact columns for ${definition.kind}`)
 }
 assert.equal(values.isEnumTypeKey('core-value'), true, 'registered enum keys are recognized')
-assert.equal(values.isEnumTypeKey('tos-2-part'), false, 'removed legacy enum keys are not part of the flat registry')
+assert.equal(values.isEnumTypeKey('tos-2-part'), true, 'legacy tOS keys remain temporarily recognized by the compatibility guard')
+assert.equal(values.isEnumTypeKey('unknown'), false, 'unknown enum keys are rejected')
 
 assert.equal(values.formatEnumCellValue('first-sale-tos', 'value', '18.0'), 'tOS18.0', 'first-sale tOS display adds the tOS prefix')
 assert.equal(values.formatEnumCellValue('roadmap-tos', 'value', 'alpha'), 'tOSalpha', 'roadmap tOS display adds the tOS prefix')
@@ -145,7 +146,7 @@ assert.equal(values.getEnumRowSummary('chip-mapping', { id: 'one', chipCode: ' C
 console.log('[registry-contract] passed')
 
 console.log('[legacy-consumers] verifying pre-migration store and UI contracts')
-assert.deepEqual(getStringUnionTypeMembers(readSource(root, 'src/types/enums.ts'), 'EnumTypeKey').sort(), ['tos-2-part', 'tos-3-part'], 'EnumTypeKey must be exactly the two fixed tOS string literals')
+assert.deepEqual(getStringUnionTypeMembers(readSource(root, 'src/types/enums.ts'), 'LegacyTosEnumTypeKey').sort(), ['tos-2-part', 'tos-3-part'], 'temporary compatibility keeps the two legacy tOS string literals isolated from EnumTypeKey')
 const options = loadTypeScriptModule(root, 'src/lib/tosEnumOptions.ts')
 const store = loadTypeScriptModule(root, 'src/stores/enums.ts')
 assert.deepEqual(Object.keys(values.TOS_ENUM_REGISTRY).sort(), ['tos-2-part', 'tos-3-part'], 'only two tOS enum registries are registered')
