@@ -428,6 +428,30 @@ const overlappingStageValidation = level1Rules.validateLevel1ScheduleDates(overl
 assert.ok(overlappingStageValidation.byTaskId['overlap-period-2']?.planStartDate?.some(message => message.includes('阶段') && message.includes('重叠')), 'derived stage overlap maps to the editable child boundary field')
 assert.equal(overlappingStageValidation.byTaskId['overlap-stage-2'], undefined, 'derived stage overlap does not mark the readonly stage row')
 
+const longRunningStageOverlap = [
+  { id: 'long-stage-a', order: 1, taskName: '长阶段A', nodeKind: 'stage' },
+  {
+    id: 'long-stage-period-a', parentId: 'long-stage-a', order: 1, taskName: '阶段A业务节点', nodeKind: 'business-period',
+    planStartDate: '2026-01-01', planEndDate: '2026-01-30',
+    actualStartDate: '2026-02-01', actualEndDate: '2026-02-28',
+  },
+  { id: 'short-stage-b', order: 2, taskName: '短阶段B', nodeKind: 'stage' },
+  {
+    id: 'short-stage-period-b', parentId: 'short-stage-b', order: 1, taskName: '阶段B业务节点', nodeKind: 'business-period',
+    planStartDate: '2026-01-02', planEndDate: '2026-01-03',
+    actualStartDate: '2026-02-02', actualEndDate: '2026-02-03',
+  },
+  { id: 'short-stage-c', order: 3, taskName: '仍在A内的阶段C', nodeKind: 'stage' },
+  {
+    id: 'short-stage-period-c', parentId: 'short-stage-c', order: 1, taskName: '阶段C业务节点', nodeKind: 'business-period',
+    planStartDate: '2026-01-04', planEndDate: '2026-01-05',
+    actualStartDate: '2026-02-04', actualEndDate: '2026-02-05',
+  },
+]
+const longRunningStageValidation = level1Rules.validateLevel1ScheduleDates(longRunningStageOverlap)
+assert.ok(longRunningStageValidation.byTaskId['short-stage-period-c']?.planStartDate?.some(message => message.includes('阶段') && message.includes('重叠')), 'planned stage overlap retains an earlier long-running stage beyond its immediate neighbor')
+assert.ok(longRunningStageValidation.byTaskId['short-stage-period-c']?.actualStartDate?.some(message => message.includes('阶段') && message.includes('重叠')), 'actual stage overlap retains an earlier long-running stage beyond its immediate neighbor')
+
 const strictInvalidDates = [
   { id: 'strict-stage', order: 1, taskName: '严格日期阶段', nodeKind: 'stage' },
   { id: 'strict-fixed', parentId: 'strict-stage', order: 1, taskName: '非法固定节点', nodeKind: 'fixed-milestone', planEndDate: '2026-02-30' },
