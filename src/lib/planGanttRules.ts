@@ -82,25 +82,41 @@ const getProjectedDuration = (task: Level1PlanTask): number => {
 
 const asDate = (value: unknown): string => parseUtcDate(value) === null ? '' : value as string
 
+type StageScheduleChild = {
+  startDate: string
+  endDate: string
+  nodeKind: 'fixed-milestone' | 'business-period' | 'legacy'
+}
+
 const getStageRange = (stage: Level1PlanTask, children: Level1PlanTask[], previousEnd: string) => {
-  const scheduledChildren = children.flatMap(task => {
+  const scheduledChildren = children.flatMap<StageScheduleChild>(task => {
     const startDate = asDate(task.planStartDate)
     const endDate = asDate(task.planEndDate)
     if (task.nodeKind === 'business-period') {
-      return getInclusiveDateDuration(startDate, endDate) === null ? [] : [{ startDate, endDate }]
+      return getInclusiveDateDuration(startDate, endDate) === null ? [] : [{ startDate, endDate, nodeKind: task.nodeKind }]
     }
     if (task.nodeKind === 'fixed-milestone') {
-      return endDate ? [{ startDate: endDate, endDate }] : []
+      return endDate ? [{ startDate: endDate, endDate, nodeKind: task.nodeKind }] : []
     }
     const legacyDate = endDate || startDate
-    return legacyDate ? [{ startDate: startDate || legacyDate, endDate: endDate || legacyDate }] : []
+    return legacyDate ? [{ startDate: startDate || legacyDate, endDate: endDate || legacyDate, nodeKind: 'legacy' as const }] : []
   })
-  const firstChild = scheduledChildren[0]
-  const lastChild = scheduledChildren.at(-1)
-  const ownStart = asDate(stage.planStartDate)
-  const ownEnd = asDate(stage.planEndDate)
-  const startDate = ownStart || (previousEnd && firstChild ? addDay(previousEnd) : '') || firstChild?.startDate || ''
-  const endDate = ownEnd || lastChild?.endDate || ''
+  const earliestChild = scheduledChildren.reduce<(typeof scheduledChildren)[number] | null>((earliest, child) => (
+    !earliest || child.startDate < earliest.startDate ? child : earliest
+  ), null)
+  const latestChild = scheduledChildren.reduce<(typeof scheduledChildren)[number] | null>((latest, child) => (
+    !latest || child.endDate > latest.endDate ? child : latest
+  ), null)
+  const hasBusinessPeriod = scheduledChildren.some(child => child.nodeKind === 'business-period')
+  const usesDerivedStageRange = stage.nodeKind === 'stage'
+  const ownStart = usesDerivedStageRange ? '' : asDate(stage.planStartDate)
+  const ownEnd = usesDerivedStageRange ? '' : asDate(stage.planEndDate)
+  const naturalStart = earliestChild?.startDate || ''
+  const startDate = ownStart
+    || (hasBusinessPeriod ? naturalStart : '')
+    || (previousEnd && earliestChild ? addDay(previousEnd) : '')
+    || naturalStart
+  const endDate = ownEnd || latestChild?.endDate || ''
 
   if (!startDate || !endDate || getDateDifference(startDate, endDate) === null) {
     return { startDate: '', endDate: '', duration: 0 }

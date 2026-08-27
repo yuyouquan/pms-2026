@@ -550,24 +550,28 @@ export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): L
           ? []
           : [{ start, end, startTask: task, startField, nodeKind }]
       })
-      const first = scheduled[0]
-      const last = scheduled.at(-1)
-      if (!first || !last || first.start > last.end) return
+      const stageStart = scheduled.reduce<Level1StageBoundary | null>((earliest, boundary) => (
+        !earliest || boundary.start < earliest.start ? boundary : earliest
+      ), null)
+      const stageEnd = scheduled.reduce<number | null>((latest, boundary) => (
+        latest === null || boundary.end > latest ? boundary.end : latest
+      ), null)
+      if (!stageStart || stageEnd === null || stageStart.start > stageEnd) return
       const onlyFixedMilestones = scheduled.every(boundary => boundary.nodeKind === 'fixed-milestone')
       const equalFixedPointStages = blockingStage
         && blockingStage.onlyFixedMilestones
         && onlyFixedMilestones
-        && first.start === blockingStage.end
-      if (blockingStage && first.start <= blockingStage.end && !equalFixedPointStages) {
+        && stageStart.start === blockingStage.end
+      if (blockingStage && stageStart.start <= blockingStage.end && !equalFixedPointStages) {
         addViolation(
-          first.startTask,
-          first.startField,
+          stageStart.startTask,
+          stageStart.startField,
           `${label}阶段时间不得与上一阶段“${blockingStage.stage.taskName}”重叠`,
         )
       }
-      if (!blockingStage || last.end > blockingStage.end) {
-        blockingStage = { stage, end: last.end, onlyFixedMilestones }
-      } else if (last.end === blockingStage.end) {
+      if (!blockingStage || stageEnd > blockingStage.end) {
+        blockingStage = { stage, end: stageEnd, onlyFixedMilestones }
+      } else if (stageEnd === blockingStage.end) {
         blockingStage.onlyFixedMilestones = blockingStage.onlyFixedMilestones && onlyFixedMilestones
       }
     })

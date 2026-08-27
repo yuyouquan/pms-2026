@@ -452,6 +452,28 @@ const longRunningStageValidation = level1Rules.validateLevel1ScheduleDates(longR
 assert.ok(longRunningStageValidation.byTaskId['short-stage-period-c']?.planStartDate?.some(message => message.includes('阶段') && message.includes('重叠')), 'planned stage overlap retains an earlier long-running stage beyond its immediate neighbor')
 assert.ok(longRunningStageValidation.byTaskId['short-stage-period-c']?.actualStartDate?.some(message => message.includes('阶段') && message.includes('重叠')), 'actual stage overlap retains an earlier long-running stage beyond its immediate neighbor')
 
+const unorderedStageBoundaryTasks = [
+  { id: 'unordered-stage-a', order: 1, taskName: '乱序边界阶段A', nodeKind: 'stage' },
+  {
+    id: 'unordered-long-period', parentId: 'unordered-stage-a', order: 1, taskName: '长业务区间', nodeKind: 'business-period',
+    planStartDate: '2026-01-01', planEndDate: '2026-01-30',
+    actualStartDate: '2026-02-01', actualEndDate: '2026-02-28',
+  },
+  {
+    id: 'unordered-later-fixed', parentId: 'unordered-stage-a', order: 2, taskName: '后置较早固定点', nodeKind: 'fixed-milestone',
+    planEndDate: '2026-01-10', actualEndDate: '2026-02-10',
+  },
+  { id: 'unordered-stage-b', order: 2, taskName: '乱序边界阶段B', nodeKind: 'stage' },
+  {
+    id: 'unordered-next-period', parentId: 'unordered-stage-b', order: 1, taskName: '仍落在A内的后阶段', nodeKind: 'business-period',
+    planStartDate: '2026-01-20', planEndDate: '2026-01-25',
+    actualStartDate: '2026-02-20', actualEndDate: '2026-02-25',
+  },
+]
+const unorderedStageBoundaryValidation = level1Rules.validateLevel1ScheduleDates(unorderedStageBoundaryTasks)
+assert.ok(unorderedStageBoundaryValidation.byTaskId['unordered-next-period']?.planStartDate?.some(message => message.includes('阶段') && message.includes('重叠')), 'planned stage overlap uses the maximum valid child end instead of the last displayed child')
+assert.ok(unorderedStageBoundaryValidation.byTaskId['unordered-next-period']?.actualStartDate?.some(message => message.includes('阶段') && message.includes('重叠')), 'actual stage overlap uses the maximum valid child end instead of the last displayed child')
+
 const strictInvalidDates = [
   { id: 'strict-stage', order: 1, taskName: '严格日期阶段', nodeKind: 'stage' },
   { id: 'strict-fixed', parentId: 'strict-stage', order: 1, taskName: '非法固定节点', nodeKind: 'fixed-milestone', planEndDate: '2026-02-30' },
@@ -536,6 +558,28 @@ assert.strictEqual(ganttRules.applyPlanGanttDateChange(mixedGanttSource, {
   taskId: 'mixed-period', mode: 'task', startDate: '', endDate: '',
 }), mixedGanttSource, 'an empty gantt change returns the original input unchanged')
 assert.deepEqual(mixedGanttSource, mixedGanttSnapshot, 'mixed gantt date changes leave source tasks deeply unchanged')
+
+const separatedBusinessStages = [
+  { id: 'business-stage-a', order: 1, taskName: '业务阶段A', nodeKind: 'stage' },
+  {
+    id: 'business-stage-a-period', parentId: 'business-stage-a', order: 1, taskName: '业务阶段A区间', nodeKind: 'business-period',
+    planStartDate: '2026-01-01', planEndDate: '2026-01-10',
+  },
+  { id: 'business-stage-b', order: 2, taskName: '业务阶段B', nodeKind: 'stage' },
+  {
+    id: 'business-stage-b-period', parentId: 'business-stage-b', order: 1, taskName: '业务阶段B区间', nodeKind: 'business-period',
+    planStartDate: '2026-01-20', planEndDate: '2026-01-25',
+  },
+]
+const separatedBusinessGantt = ganttRules.buildPlanGanttTasks(separatedBusinessStages, { mode: 'hierarchical', editable: true })
+assert.equal(separatedBusinessGantt.find(task => task.id === 'business-stage-b')?.start_date, '2026-01-20', 'a later stage with a complete business interval keeps its own natural planned start')
+
+const unorderedStageBoundaryGantt = ganttRules.buildPlanGanttTasks(unorderedStageBoundaryTasks, { mode: 'hierarchical', editable: true })
+assert.deepEqual(
+  unorderedStageBoundaryGantt.filter(task => task.id === 'unordered-stage-a').map(task => [task.start_date, task.end_date]),
+  [['2026-01-01', '2026-01-30']],
+  'a gantt parent stage spans the minimum valid child start through the maximum valid child end',
+)
 
 const ganttHierarchy = [
   { id: 'stage-1', stableId: 'stage-1', order: 1, taskName: '概念阶段' },
