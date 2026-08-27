@@ -677,6 +677,7 @@ export default function ConfigContainer() {
         <EnumConfig
           collapsed={configSidebarCollapsed}
           onCollapsedChange={setConfigSidebarCollapsed}
+          currentLoginUser={currentLoginUser}
         />
       )}
 
