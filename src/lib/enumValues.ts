@@ -6,6 +6,7 @@ import {
   type EnumRowDraftByType,
   type EnumFieldKeyByType,
   type EnumRowValidationResult,
+  type EnumRowsByType,
   type EnumTypeDefinition,
   type EnumTypeKey,
   type EnumValuesByType,
@@ -223,6 +224,88 @@ export function getEnumRowSummary<K extends EnumTypeKey>(type: K, row: EnumRowBy
       values[column.key] ?? '',
     ))
     .join(' / ')
+}
+
+const seededRows = <K extends EnumTypeKey>(
+  type: K,
+  drafts: readonly EnumRowDraftByType[K][],
+): EnumRowByType<K>[] => drafts.map((draft, index) => ({
+  id: `seed-${type}-${index + 1}`,
+  ...draft,
+}) as EnumRowByType<K>)
+
+const singleSeedRows = <K extends SingleEnumTypeKey>(type: K, enumValues: readonly string[]) =>
+  seededRows(type, enumValues.map(value => ({ value })) as EnumRowDraftByType[K][])
+
+export function createInitialEnumRows(): EnumRowsByType {
+  return {
+    'first-sale-tos': singleSeedRows('first-sale-tos', ['16.0.1', '16.0.2', '17.2.0', '16.0', '17.2']),
+    'roadmap-tos': singleSeedRows('roadmap-tos', ['16.0', '17.2']),
+    'machine-project-status': singleSeedRows('machine-project-status', ['待立项', '在研', '上市', '转维', 'EOS', '暂停', '已取消', '规划中']),
+    'technical-project-status': singleSeedRows('technical-project-status', ['待立项', '在研', '上市', 'EOS', '暂停', '已取消', '规划中', '已迁移']),
+    'tos-capability-project-status': singleSeedRows('tos-capability-project-status', ['在研', '已完成', '暂停', '已取消']),
+    'machine-health-status': singleSeedRows('machine-health-status', ['正常', '关注', '风险']),
+    'version-type': singleSeedRows('version-type', ['Full', 'Slim', 'PAD', 'GO']),
+    'software-project-level': singleSeedRows('software-project-level', ['S', 'A', 'B', 'C', 'D']),
+    'product-series': [],
+    'research-mode': [],
+    'machine-development-mode': singleSeedRows('machine-development-mode', ['自研', '联合开发', 'ODC', '外研', 'ITD-ODC', 'ODM', '纯外研', 'JDM']),
+    'technical-development-mode': singleSeedRows('technical-development-mode', ['自研', '谷歌合作', 'SoC合作', '高校合作']),
+    'upgrade-strategy': singleSeedRows('upgrade-strategy', ['不维护', 'EWP维护', '维1', '维2', 'EWP维护+tOS升级', '维1+tOS升级', '维2+tOS升级', '升1维2', '升2维3', '升3维5']),
+    'system-type': singleSeedRows('system-type', ['32bit', '64bit', '64only']),
+    'kernel-version': singleSeedRows('kernel-version', ['5.10', '5.15', '6.1', '6.6']),
+    'chip-mapping': [],
+    'memory-size': singleSeedRows('memory-size', ['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB']),
+    'project-category-mapping': seededRows('project-category-mapping', [
+      { ipmProjectCategory: '整机产品-基线IPD', pmsProjectCategory: '整机产品项目', pmsSecondaryCategory: '整机-手机' },
+      { ipmProjectCategory: '整机产品-模块化IPD', pmsProjectCategory: '整机产品项目', pmsSecondaryCategory: '整机-手机' },
+      { ipmProjectCategory: '整机产品-非IPD', pmsProjectCategory: '整机产品项目', pmsSecondaryCategory: '整机-手机' },
+      { ipmProjectCategory: '手机整机产品-大版本升级', pmsProjectCategory: '整机产品项目', pmsSecondaryCategory: '整机-手机' },
+      { ipmProjectCategory: '其他-平板--整机产品项目', pmsProjectCategory: '整机产品项目', pmsSecondaryCategory: '整机-平板' },
+      { ipmProjectCategory: '其他-笔电/移动互联及其他--整机产品项目', pmsProjectCategory: '整机产品项目', pmsSecondaryCategory: '整机-笔电' },
+      { ipmProjectCategory: '其他-笔电', pmsProjectCategory: '整机产品项目', pmsSecondaryCategory: '整机-笔电' },
+      { ipmProjectCategory: '移动互联及其他--整机产品项目', pmsProjectCategory: '整机产品项目', pmsSecondaryCategory: '整机-笔电' },
+      { ipmProjectCategory: '其他-功能机', pmsProjectCategory: '整机产品项目', pmsSecondaryCategory: '整机-功能机' },
+      { ipmProjectCategory: '其他-AIOT', pmsProjectCategory: '整机产品项目', pmsSecondaryCategory: '整机-AIOT扩品类' },
+      { ipmProjectCategory: '基线项目', pmsProjectCategory: '整机产品项目', pmsSecondaryCategory: '整机-基线项目' },
+      { ipmProjectCategory: 'N+1项目', pmsProjectCategory: '整机产品项目', pmsSecondaryCategory: '整机-N+1项目' },
+      { ipmProjectCategory: '预研类项目', pmsProjectCategory: '整机产品项目', pmsSecondaryCategory: '整机-预研项目' },
+      { ipmProjectCategory: '软件产品项目', pmsProjectCategory: 'tOS版本项目', pmsSecondaryCategory: '' },
+      { ipmProjectCategory: '研发级-基础研究-重点项目', pmsProjectCategory: '技术项目', pmsSecondaryCategory: '' },
+      { ipmProjectCategory: '研发级-基础研究-非重点项目', pmsProjectCategory: '技术项目', pmsSecondaryCategory: '' },
+      { ipmProjectCategory: '部门级-基础研究', pmsProjectCategory: '技术项目', pmsSecondaryCategory: '' },
+      { ipmProjectCategory: '研发级-技术研发-重点项目', pmsProjectCategory: '技术项目', pmsSecondaryCategory: '' },
+      { ipmProjectCategory: '研发级-技术研发-非重点项目', pmsProjectCategory: '技术项目', pmsSecondaryCategory: '' },
+      { ipmProjectCategory: '部门级-技术研发', pmsProjectCategory: '技术项目', pmsSecondaryCategory: '' },
+      { ipmProjectCategory: '技术项目前置工作', pmsProjectCategory: '技术项目', pmsSecondaryCategory: '' },
+      { ipmProjectCategory: '部门级能力建设', pmsProjectCategory: '能力建设项目', pmsSecondaryCategory: '' },
+      { ipmProjectCategory: '公司级/研发级能力建设', pmsProjectCategory: '能力建设项目', pmsSecondaryCategory: '' },
+      { ipmProjectCategory: '公司级能力建设', pmsProjectCategory: '能力建设项目', pmsSecondaryCategory: '' },
+      { ipmProjectCategory: '研发级能力建设', pmsProjectCategory: '能力建设项目', pmsSecondaryCategory: '' },
+    ]),
+    'build-option': singleSeedRows('build-option', ['ko2_sl303', 'ko2', 'a681l_sm386', 'lj8k_h781', 'lj8_h781', 'lj7_h782', 'x1103b']),
+    'build-market': singleSeedRows('build-market', ['op', 'tr']),
+    'tmg-subdomain-mapping': seededRows('tmg-subdomain-mapping', [
+      { domain: '基础架构TMG', subdomain: '无' },
+      { domain: '性能TMG', subdomain: '无' },
+      { domain: 'DFX TMG', subdomain: '无' },
+      { domain: 'UX TMG', subdomain: '无' },
+      { domain: '系统应用', subdomain: 'AIOS' },
+      { domain: '系统应用', subdomain: '应用' },
+      { domain: '系统应用', subdomain: '图形' },
+      { domain: '系统应用', subdomain: '内核' },
+      { domain: '系统应用', subdomain: '多媒体' },
+      { domain: '底软通信', subdomain: '器件' },
+      { domain: '底软通信', subdomain: '蜂窝' },
+      { domain: '底软通信', subdomain: '短距' },
+      { domain: '底软通信', subdomain: '功耗' },
+      { domain: '集成维护', subdomain: '三方体验' },
+      { domain: '集成维护', subdomain: 'GMS' },
+      { domain: '其他', subdomain: '安全' },
+      { domain: '其他', subdomain: 'AIOT' },
+    ]),
+    'core-value': singleSeedRows('core-value', ['追赶', '人无我有', '人有我有']),
+  }
 }
 
 /** @deprecated Temporary compatibility registry for consumers migrated in later tasks. */

@@ -1,17 +1,30 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import type { StateStorage } from 'zustand/middleware'
 import {
-  createInitialEnumValues,
+  createInitialEnumRows,
+  ENUM_DEFINITIONS,
   isEnumTypeKey,
+  isLegacyTosEnumTypeKey,
   isValidEnumValue,
   normalizeEnumValue,
   sortEnumValues,
   TOS_ENUM_TYPE_KEYS,
+  validateAndNormalizeEnumRow,
 } from '@/lib/enumValues'
-import type { EnumActionResult, EnumTypeKey, EnumValuesByType } from '@/types/enums'
+import {
+  ENUM_TYPE_KEYS,
+  type EnumActionResult,
+  type EnumRowByType,
+  type EnumRowDraftByType,
+  type EnumRowsByType,
+  type EnumTypeKey,
+  type EnumValuesByType,
+  type LegacyTosEnumTypeKey,
+} from '@/types/enums'
 
 export interface EnumState {
+  rowsByType: EnumRowsByType
+  /** @deprecated Derived compatibility view; rowsByType remains the only source of truth. */
   valuesByType: EnumValuesByType
   selectedType: EnumTypeKey
   hasHydrated: boolean
@@ -20,21 +33,34 @@ export interface EnumState {
 
 export interface EnumActions {
   setSelectedType: (type: EnumTypeKey) => void
-  addEnumValue: (type: EnumTypeKey, input: string) => EnumActionResult
-  updateEnumValue: (type: EnumTypeKey, currentValue: string, input: string) => EnumActionResult
-  deleteEnumValue: (type: EnumTypeKey, value: string) => EnumActionResult
+  addEnumRow: <K extends EnumTypeKey>(type: K, draft: EnumRowDraftByType[K]) => EnumActionResult
+  updateEnumRow: <K extends EnumTypeKey>(type: K, rowId: string, draft: EnumRowDraftByType[K]) => EnumActionResult
+  deleteEnumRow: (type: EnumTypeKey, rowId: string) => EnumActionResult
+  /** @deprecated Use addEnumRow with a flat registry key. */
+  addEnumValue: (type: LegacyTosEnumTypeKey, input: string) => EnumActionResult
+  /** @deprecated Use updateEnumRow with a flat registry key and row ID. */
+  updateEnumValue: (type: LegacyTosEnumTypeKey, currentValue: string, input: string) => EnumActionResult
+  /** @deprecated Use deleteEnumRow with a flat registry key and row ID. */
+  deleteEnumValue: (type: LegacyTosEnumTypeKey, value: string) => EnumActionResult
   hydrateEnumStore: () => Promise<boolean>
   resetLocalConfig: () => Promise<boolean>
   completeHydration: (error?: unknown) => void
 }
 
 export type EnumStore = EnumState & EnumActions
-export type PersistedEnumState = Pick<EnumState, 'valuesByType'>
+export type PersistedEnumState = Pick<EnumState, 'rowsByType'>
 
 export const ENUM_STORAGE_KEY = 'pms-enum-values'
-const ENUM_STORE_VERSION = 1
+const ENUM_STORE_VERSION = 2
 
-const enumStateStorage: StateStorage = {
+interface SynchronousStateStorage {
+  getItem: (name: string) => string | null
+  setItem: (name: string, value: string) => void
+  removeItem: (name: string) => void
+}
+
+/** Production durability is backed only by the browser's synchronous localStorage API. */
+const enumStateStorage: SynchronousStateStorage = {
   getItem(name) {
     if (typeof window === 'undefined') throw new Error('localStorage unavailable')
     return window.localStorage.getItem(name)
@@ -61,134 +87,339 @@ function hydrationErrorMessage(error: unknown): string {
   return '本地枚举配置加载失败，请重试或重置本地配置。'
 }
 
-function cloneValues(values: EnumValuesByType): EnumValuesByType {
+function cloneRows(rowsByType: EnumRowsByType): EnumRowsByType {
+  return Object.fromEntries(ENUM_TYPE_KEYS.map(type => [
+    type,
+    rowsByType[type].map(row => ({ ...row })),
+  ])) as EnumRowsByType
+}
+
+function legacyValuesFromRows(rowsByType: EnumRowsByType): EnumValuesByType {
   return {
-    'tos-2-part': [...values['tos-2-part']],
-    'tos-3-part': [...values['tos-3-part']],
+    'tos-2-part': rowsByType['roadmap-tos'].map(row => row.value),
+    'tos-3-part': rowsByType['first-sale-tos'].map(row => row.value),
   }
 }
 
-function mergeInitialValues(input?: Partial<PersistedEnumState>): EnumValuesByType {
-  const defaults = createInitialEnumValues()
-  const source = input?.valuesByType
-  if (!source) return defaults
-  return {
-    'tos-2-part': Array.isArray(source['tos-2-part']) ? [...source['tos-2-part']] : defaults['tos-2-part'],
-    'tos-3-part': Array.isArray(source['tos-3-part']) ? [...source['tos-3-part']] : defaults['tos-3-part'],
-  }
+/** Keeps the legacy values view synchronized without persisting a second source. */
+function withLegacyValues(rowsByType: EnumRowsByType): Pick<EnumState, 'rowsByType' | 'valuesByType'> {
+  return { rowsByType, valuesByType: legacyValuesFromRows(rowsByType) }
 }
 
-function addValue(valuesByType: EnumValuesByType, type: EnumTypeKey, input: string) {
-  if (!isEnumTypeKey(type) || !isValidEnumValue(type, input)) {
-    return { result: { ok: false, reason: 'invalid' } as const, valuesByType }
-  }
-  const value = normalizeEnumValue(input)
-  if (valuesByType[type].includes(value)) {
-    return { result: { ok: false, reason: 'duplicate' } as const, valuesByType }
-  }
-  return {
-    result: { ok: true } as const,
-    valuesByType: { ...valuesByType, [type]: sortEnumValues([...valuesByType[type], value]) },
-  }
+function migratedRows<K extends 'roadmap-tos' | 'first-sale-tos'>(
+  type: K,
+  enumValues: readonly string[],
+): EnumRowByType<K>[] {
+  return enumValues.map((value, index) => ({
+    id: `migrated-${type}-${index + 1}`,
+    value,
+  })) as EnumRowByType<K>[]
 }
 
-function updateValue(valuesByType: EnumValuesByType, type: EnumTypeKey, currentValue: string, input: string) {
-  if (!isEnumTypeKey(type) || !isValidEnumValue(type, input)) {
-    return { result: { ok: false, reason: 'invalid' } as const, valuesByType }
+function sanitizeLegacyValues(input: unknown) {
+  if (!Array.isArray(input)) return { usable: false, values: [] as string[] }
+  const uniqueValues: string[] = []
+  for (const candidate of input) {
+    if (typeof candidate !== 'string') continue
+    const trimmed = candidate.trim()
+    const value = (trimmed.startsWith('tOS') ? trimmed.slice(3) : trimmed).trim()
+    if (!value) continue
+    if (!uniqueValues.includes(value)) uniqueValues.push(value)
   }
-  const currentIndex = valuesByType[type].indexOf(currentValue)
-  if (currentIndex < 0) {
-    return { result: { ok: false, reason: 'missing' } as const, valuesByType }
-  }
-  const value = normalizeEnumValue(input)
-  if (valuesByType[type].some((candidate, index) => index !== currentIndex && candidate === value)) {
-    return { result: { ok: false, reason: 'duplicate' } as const, valuesByType }
-  }
-  const next = [...valuesByType[type]]
-  next[currentIndex] = value
-  return {
-    result: { ok: true } as const,
-    valuesByType: { ...valuesByType, [type]: sortEnumValues(next) },
-  }
+  return { usable: input.length === 0 || uniqueValues.length > 0, values: uniqueValues }
 }
 
-function deleteValue(valuesByType: EnumValuesByType, type: EnumTypeKey, value: string) {
-  if (!isEnumTypeKey(type) || !valuesByType[type].includes(value)) {
-    return { result: { ok: false, reason: 'missing' } as const, valuesByType }
-  }
-  return {
-    result: { ok: true } as const,
-    valuesByType: { ...valuesByType, [type]: valuesByType[type].filter(candidate => candidate !== value) },
-  }
-}
-
-function sanitizeCategory(type: EnumTypeKey, input: unknown, fallback: string[]): string[] {
-  if (!Array.isArray(input)) return fallback
-  const unique = new Set<string>()
-  input.forEach(candidate => {
-    if (isValidEnumValue(type, candidate)) unique.add(normalizeEnumValue(candidate))
-  })
-  return sortEnumValues([...unique])
-}
-
-export function migrateEnumState(persistedState: unknown, _fromVersion: number): PersistedEnumState {
-  const defaults = createInitialEnumValues()
+function migrateLegacyState(persistedState: unknown): PersistedEnumState {
+  const seeds = createInitialEnumRows()
   const values = persistedState && typeof persistedState === 'object' && 'valuesByType' in persistedState
     ? (persistedState as { valuesByType?: unknown }).valuesByType
     : undefined
   const source = values && typeof values === 'object' ? values as Record<string, unknown> : {}
+  const twoPart = sanitizeLegacyValues(source['tos-2-part'])
+  const threePart = sanitizeLegacyValues(source['tos-3-part'])
+
+  if (twoPart.usable) {
+    seeds['roadmap-tos'] = migratedRows('roadmap-tos', twoPart.values)
+  }
+  const firstSaleValues = [...threePart.values]
+  for (const value of twoPart.values) {
+    if (!firstSaleValues.includes(value)) firstSaleValues.push(value)
+  }
+  if (threePart.usable || twoPart.usable) {
+    seeds['first-sale-tos'] = migratedRows('first-sale-tos', firstSaleValues)
+  }
+
+  return { rowsByType: seeds }
+}
+
+function migratedId(type: EnumTypeKey, sourceIndex: number, usedIds: ReadonlySet<string>): string {
+  let suffix = sourceIndex + 1
+  let candidate = `migrated-${type}-${suffix}`
+  while (usedIds.has(candidate)) {
+    suffix += 1
+    candidate = `migrated-${type}-${suffix}`
+  }
+  return candidate
+}
+
+function sanitizeRowsForType<K extends EnumTypeKey>(
+  type: K,
+  input: unknown,
+  fallback: readonly EnumRowByType<K>[],
+): EnumRowByType<K>[] {
+  if (!Array.isArray(input)) return fallback.map(row => ({ ...row }))
+  if (input.length === 0) return []
+
+  const validatedRows: EnumRowByType<K>[] = []
+  const candidates: Array<{
+    sourceIndex: number
+    suppliedId: string | null
+    row: EnumRowDraftByType[K]
+  }> = []
+  input.forEach((candidate, sourceIndex) => {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return
+    const source = candidate as Record<string, unknown>
+    const draft = Object.fromEntries(ENUM_DEFINITIONS[type].columns.map(({ key }) => [
+      key,
+      typeof source[key] === 'string' ? source[key] : '',
+    ])) as EnumRowDraftByType[K]
+    const validation = validateAndNormalizeEnumRow(type, draft, validatedRows)
+    if (!validation.ok) return
+
+    const suppliedId = typeof source.id === 'string' && source.id.trim() ? source.id : null
+    candidates.push({ sourceIndex, suppliedId, row: validation.row })
+    validatedRows.push({ id: `validated-${sourceIndex}`, ...validation.row } as EnumRowByType<K>)
+  })
+
+  if (candidates.length === 0) return fallback.map(row => ({ ...row }))
+
+  const reservedIds = new Set(candidates.flatMap(candidate => candidate.suppliedId ? [candidate.suppliedId] : []))
+  const claimedIds = new Set<string>()
+  return candidates.map(candidate => {
+    const id = candidate.suppliedId && !claimedIds.has(candidate.suppliedId)
+      ? candidate.suppliedId
+      : migratedId(type, candidate.sourceIndex, new Set([...reservedIds, ...claimedIds]))
+    claimedIds.add(id)
+    return { id, ...candidate.row } as EnumRowByType<K>
+  })
+}
+
+function sanitizeV2State(persistedState: unknown): PersistedEnumState {
+  const seeds = createInitialEnumRows()
+  const rows = persistedState && typeof persistedState === 'object' && 'rowsByType' in persistedState
+    ? (persistedState as { rowsByType?: unknown }).rowsByType
+    : undefined
+  const source = rows && typeof rows === 'object' ? rows as Record<string, unknown> : {}
+  const entries = ENUM_TYPE_KEYS.map(type => [
+    type,
+    sanitizeRowsForType(type, source[type], seeds[type]),
+  ])
+  return { rowsByType: Object.fromEntries(entries) as EnumRowsByType }
+}
+
+export function migrateEnumState(persistedState: unknown, fromVersion: number): PersistedEnumState {
+  return fromVersion >= 2 ? sanitizeV2State(persistedState) : migrateLegacyState(persistedState)
+}
+
+export function partializeEnumState(state: Pick<EnumState, 'rowsByType'>): PersistedEnumState {
+  return { rowsByType: cloneRows(state.rowsByType) }
+}
+
+function mergeInitialRows(input?: Partial<PersistedEnumState>): EnumRowsByType {
+  return input ? sanitizeV2State(input).rowsByType : createInitialEnumRows()
+}
+
+type IdFactory = () => string
+
+const defaultIdFactory: IdFactory = () => {
+  if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID()
+  return `enum-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function allocateUserId(type: EnumTypeKey, rows: readonly { id: string }[], idFactory: IdFactory): string {
+  const existingIds = new Set(rows.map(row => row.id))
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const candidate = idFactory()
+    if (typeof candidate === 'string' && candidate.trim() && !existingIds.has(candidate)) return candidate
+  }
+  let candidate = defaultIdFactory()
+  while (existingIds.has(candidate)) candidate = defaultIdFactory()
+  return candidate || `enum-${type}-${Date.now()}`
+}
+
+interface RowMutation {
+  result: EnumActionResult
+  rowsByType: EnumRowsByType
+}
+
+function addRow<K extends EnumTypeKey>(
+  rowsByType: EnumRowsByType,
+  type: K,
+  draft: EnumRowDraftByType[K],
+  idFactory: IdFactory,
+): RowMutation {
+  if (!isEnumTypeKey(type)) return { result: { ok: false, reason: 'invalid' }, rowsByType }
+  const existingRows = rowsByType[type]
+  const validation = validateAndNormalizeEnumRow(type, draft, existingRows)
+  if (!validation.ok) return { result: validation, rowsByType }
+  const row = {
+    id: allocateUserId(type, existingRows, idFactory),
+    ...validation.row,
+  } as EnumRowByType<K>
+  return {
+    result: { ok: true },
+    rowsByType: { ...rowsByType, [type]: [...existingRows, row] } as EnumRowsByType,
+  }
+}
+
+function updateRow<K extends EnumTypeKey>(
+  rowsByType: EnumRowsByType,
+  type: K,
+  rowId: string,
+  draft: EnumRowDraftByType[K],
+): RowMutation {
+  if (!isEnumTypeKey(type)) return { result: { ok: false, reason: 'invalid' }, rowsByType }
+  const existingRows = rowsByType[type]
+  const rowIndex = existingRows.findIndex(row => row.id === rowId)
+  if (rowIndex < 0) return { result: { ok: false, reason: 'missing' }, rowsByType }
+  const validation = validateAndNormalizeEnumRow(type, draft, existingRows, rowId)
+  if (!validation.ok) return { result: validation, rowsByType }
+  const nextRows = [...existingRows]
+  nextRows[rowIndex] = { id: rowId, ...validation.row } as EnumRowByType<K>
+  return {
+    result: { ok: true },
+    rowsByType: { ...rowsByType, [type]: nextRows } as EnumRowsByType,
+  }
+}
+
+function deleteRow(rowsByType: EnumRowsByType, type: EnumTypeKey, rowId: string): RowMutation {
+  if (!isEnumTypeKey(type)) return { result: { ok: false, reason: 'invalid' }, rowsByType }
+  const existingRows = rowsByType[type]
+  const rowIndex = existingRows.findIndex(row => row.id === rowId)
+  if (rowIndex < 0) return { result: { ok: false, reason: 'missing' }, rowsByType }
+  return {
+    result: { ok: true },
+    rowsByType: {
+      ...rowsByType,
+      [type]: existingRows.filter(row => row.id !== rowId),
+    } as EnumRowsByType,
+  }
+}
+
+const legacyFlatType = (type: LegacyTosEnumTypeKey) =>
+  type === 'tos-2-part' ? 'roadmap-tos' as const : 'first-sale-tos' as const
+
+function sortedLegacyRows(rowsByType: EnumRowsByType, type: LegacyTosEnumTypeKey): EnumRowsByType {
+  const flatType = legacyFlatType(type)
+  const position = new Map(sortEnumValues(rowsByType[flatType].map(row => row.value)).map((value, index) => [value, index]))
+  return {
+    ...rowsByType,
+    [flatType]: [...rowsByType[flatType]].sort((left, right) => (position.get(left.value) ?? 0) - (position.get(right.value) ?? 0)),
+  } as EnumRowsByType
+}
+
+function legacyFailure(result: EnumActionResult): EnumActionResult {
+  return result.ok ? result : { ok: false, reason: result.reason }
+}
+
+function addLegacyValue(rowsByType: EnumRowsByType, type: LegacyTosEnumTypeKey, input: string, idFactory: IdFactory): RowMutation {
+  if (!isLegacyTosEnumTypeKey(type) || !isValidEnumValue(type, input)) {
+    return { result: { ok: false, reason: 'invalid' }, rowsByType }
+  }
+  const next = addRow(rowsByType, legacyFlatType(type), { value: normalizeEnumValue(input) }, idFactory)
+  return next.result.ok
+    ? { result: next.result, rowsByType: sortedLegacyRows(next.rowsByType, type) }
+    : { result: legacyFailure(next.result), rowsByType }
+}
+
+function updateLegacyValue(rowsByType: EnumRowsByType, type: LegacyTosEnumTypeKey, currentValue: string, input: string): RowMutation {
+  if (!isLegacyTosEnumTypeKey(type) || !isValidEnumValue(type, input)) {
+    return { result: { ok: false, reason: 'invalid' }, rowsByType }
+  }
+  const flatType = legacyFlatType(type)
+  const row = rowsByType[flatType].find(candidate => candidate.value === currentValue)
+  if (!row) return { result: { ok: false, reason: 'missing' }, rowsByType }
+  const next = updateRow(rowsByType, flatType, row.id, { value: normalizeEnumValue(input) })
+  return next.result.ok
+    ? { result: next.result, rowsByType: sortedLegacyRows(next.rowsByType, type) }
+    : { result: legacyFailure(next.result), rowsByType }
+}
+
+function deleteLegacyValue(rowsByType: EnumRowsByType, type: LegacyTosEnumTypeKey, value: string): RowMutation {
+  if (!isLegacyTosEnumTypeKey(type)) return { result: { ok: false, reason: 'invalid' }, rowsByType }
+  const flatType = legacyFlatType(type)
+  const row = rowsByType[flatType].find(candidate => candidate.value === value)
+  return row ? deleteRow(rowsByType, flatType, row.id) : { result: { ok: false, reason: 'missing' }, rowsByType }
+}
+
+export function createEnumStore(initial?: Partial<PersistedEnumState>, idFactory: IdFactory = defaultIdFactory) {
+  let rowsByType = mergeInitialRows(initial)
+  let selectedType: EnumTypeKey = 'first-sale-tos'
+  let hasHydrated = false
+  let hydrationError: string | null = null
+
+  const apply = (mutation: RowMutation) => {
+    if (mutation.result.ok) rowsByType = mutation.rowsByType
+    return mutation.result
+  }
 
   return {
-    valuesByType: {
-      'tos-2-part': sanitizeCategory('tos-2-part', source['tos-2-part'], defaults['tos-2-part']),
-      'tos-3-part': sanitizeCategory('tos-3-part', source['tos-3-part'], defaults['tos-3-part']),
+    getState: () => ({
+      ...withLegacyValues(cloneRows(rowsByType)),
+      selectedType,
+      hasHydrated,
+      hydrationError,
+    }),
+    getRows: <K extends EnumTypeKey>(type: K): EnumRowByType<K>[] =>
+      rowsByType[type].map(row => ({ ...row })) as EnumRowByType<K>[],
+    /** @deprecated Use getRows with a flat registry key. */
+    getValues: (type: LegacyTosEnumTypeKey): string[] =>
+      [...legacyValuesFromRows(rowsByType)[type]],
+    setSelectedType: (type: EnumTypeKey) => {
+      if (isEnumTypeKey(type)) selectedType = type
+    },
+    addEnumRow: <K extends EnumTypeKey>(type: K, draft: EnumRowDraftByType[K]) =>
+      apply(addRow(rowsByType, type, draft, idFactory)),
+    updateEnumRow: <K extends EnumTypeKey>(type: K, rowId: string, draft: EnumRowDraftByType[K]) =>
+      apply(updateRow(rowsByType, type, rowId, draft)),
+    deleteEnumRow: (type: EnumTypeKey, rowId: string) => apply(deleteRow(rowsByType, type, rowId)),
+    addEnumValue: (type: LegacyTosEnumTypeKey, input: string) => apply(addLegacyValue(rowsByType, type, input, idFactory)),
+    updateEnumValue: (type: LegacyTosEnumTypeKey, currentValue: string, input: string) => apply(updateLegacyValue(rowsByType, type, currentValue, input)),
+    deleteEnumValue: (type: LegacyTosEnumTypeKey, value: string) => apply(deleteLegacyValue(rowsByType, type, value)),
+    hydrateEnumStore: async () => {
+      hasHydrated = true
+      hydrationError = null
+      return true
+    },
+    resetLocalConfig: () => {
+      rowsByType = createInitialEnumRows()
+      hydrationError = null
+      return true
+    },
+    completeHydration: (error?: unknown) => {
+      hasHydrated = true
+      hydrationError = error ? hydrationErrorMessage(error) : null
     },
   }
-}
-
-export function partializeEnumState(state: Pick<EnumState, 'valuesByType'>): PersistedEnumState {
-  return { valuesByType: cloneValues(state.valuesByType) }
-}
-
-export function createEnumStore(initial?: Partial<PersistedEnumState>) {
-  let valuesByType = mergeInitialValues(initial)
-  const fixture = {
-    getState: (): PersistedEnumState => ({ valuesByType: cloneValues(valuesByType) }),
-    getValues: (type: EnumTypeKey): string[] => [...valuesByType[type]],
-    addEnumValue: (type: EnumTypeKey, input: string): EnumActionResult => {
-      const next = addValue(valuesByType, type, input)
-      valuesByType = next.valuesByType
-      return next.result
-    },
-    updateEnumValue: (type: EnumTypeKey, currentValue: string, input: string): EnumActionResult => {
-      const next = updateValue(valuesByType, type, currentValue, input)
-      valuesByType = next.valuesByType
-      return next.result
-    },
-    deleteEnumValue: (type: EnumTypeKey, value: string): EnumActionResult => {
-      const next = deleteValue(valuesByType, type, value)
-      valuesByType = next.valuesByType
-      return next.result
-    },
-  }
-  return fixture
 }
 
 export const useEnumStore = create<EnumStore>()((rawSet, get, api) => {
   let hydrationInFlight: Promise<boolean> | null = null
+  let resetInFlight: Promise<boolean> | null = null
 
   const persistedCreator = persist<EnumStore, [], [], PersistedEnumState>(
     (set) => {
-      const commitValues = (
-        previousValues: EnumValuesByType,
-        nextValues: EnumValuesByType,
+      const commitRows = (
+        previousRows: EnumRowsByType,
+        nextRows: EnumRowsByType,
       ): EnumActionResult => {
         try {
-          set({ valuesByType: nextValues })
+          set(withLegacyValues(nextRows))
           return { ok: true }
         } catch (error) {
           rawSet({
-            valuesByType: cloneValues(previousValues),
+            rowsByType: cloneRows(previousRows),
+            valuesByType: legacyValuesFromRows(previousRows),
             hasHydrated: true,
             hydrationError: hydrationErrorMessage(error),
           })
@@ -202,31 +433,50 @@ export const useEnumStore = create<EnumStore>()((rawSet, get, api) => {
         }
       ).persist
 
+      const seeds = createInitialEnumRows()
       return {
-        valuesByType: createInitialEnumValues(),
-        selectedType: 'tos-2-part',
+        ...withLegacyValues(seeds),
+        selectedType: 'first-sale-tos',
         hasHydrated: false,
         hydrationError: null,
         setSelectedType: type => {
           if (isEnumTypeKey(type)) rawSet({ selectedType: type })
         },
-        addEnumValue: (type, input) => {
-          const previousValues = get().valuesByType
-          const next = addValue(previousValues, type, input)
+        addEnumRow: (type, draft) => {
+          const previousRows = get().rowsByType
+          const next = addRow(previousRows, type, draft, defaultIdFactory)
           if (!next.result.ok) return next.result
-          return commitValues(previousValues, next.valuesByType)
+          return commitRows(previousRows, next.rowsByType)
+        },
+        updateEnumRow: (type, rowId, draft) => {
+          const previousRows = get().rowsByType
+          const next = updateRow(previousRows, type, rowId, draft)
+          if (!next.result.ok) return next.result
+          return commitRows(previousRows, next.rowsByType)
+        },
+        deleteEnumRow: (type, rowId) => {
+          const previousRows = get().rowsByType
+          const next = deleteRow(previousRows, type, rowId)
+          if (!next.result.ok) return next.result
+          return commitRows(previousRows, next.rowsByType)
+        },
+        addEnumValue: (type, input) => {
+          const previousRows = get().rowsByType
+          const next = addLegacyValue(previousRows, type, input, defaultIdFactory)
+          if (!next.result.ok) return next.result
+          return commitRows(previousRows, next.rowsByType)
         },
         updateEnumValue: (type, currentValue, input) => {
-          const previousValues = get().valuesByType
-          const next = updateValue(previousValues, type, currentValue, input)
+          const previousRows = get().rowsByType
+          const next = updateLegacyValue(previousRows, type, currentValue, input)
           if (!next.result.ok) return next.result
-          return commitValues(previousValues, next.valuesByType)
+          return commitRows(previousRows, next.rowsByType)
         },
         deleteEnumValue: (type, value) => {
-          const previousValues = get().valuesByType
-          const next = deleteValue(previousValues, type, value)
+          const previousRows = get().rowsByType
+          const next = deleteLegacyValue(previousRows, type, value)
           if (!next.result.ok) return next.result
-          return commitValues(previousValues, next.valuesByType)
+          return commitRows(previousRows, next.rowsByType)
         },
         completeHydration: (error) => {
           rawSet({
@@ -258,22 +508,47 @@ export const useEnumStore = create<EnumStore>()((rawSet, get, api) => {
           return hydrationInFlight
         },
         resetLocalConfig: async () => {
-          try {
-            enumStateStorage.removeItem(ENUM_STORAGE_KEY)
-          } catch (error) {
-            rawSet({ hasHydrated: true, hydrationError: hydrationErrorMessage(error) })
-            return false
+          if (resetInFlight) return resetInFlight
+
+          const reset = async () => {
+            const activeHydration = hydrationInFlight
+            if (activeHydration) await activeHydration.catch(() => false)
+
+            try {
+              enumStateStorage.removeItem(ENUM_STORAGE_KEY)
+            } catch (error) {
+              rawSet({ hasHydrated: true, hydrationError: hydrationErrorMessage(error) })
+              return false
+            }
+
+            const nextSeeds = createInitialEnumRows()
+            rawSet({ ...withLegacyValues(nextSeeds), hasHydrated: false, hydrationError: null })
+            try {
+              set(withLegacyValues(nextSeeds))
+            } catch (error) {
+              rawSet({ ...withLegacyValues(nextSeeds), hasHydrated: true, hydrationError: hydrationErrorMessage(error) })
+              return false
+            }
+
+            try {
+              const hydrated = await get().hydrateEnumStore()
+              if (!get().hasHydrated) {
+                rawSet({
+                  hasHydrated: true,
+                  hydrationError: hydrated ? null : '本地枚举配置加载失败，请重试或重置本地配置。',
+                })
+              }
+              return hydrated
+            } catch (error) {
+              rawSet({ hasHydrated: true, hydrationError: hydrationErrorMessage(error) })
+              return false
+            }
           }
 
-          const seeds = createInitialEnumValues()
-          rawSet({ valuesByType: seeds, hasHydrated: false, hydrationError: null })
-          try {
-            set({ valuesByType: seeds })
-          } catch (error) {
-            rawSet({ valuesByType: seeds, hasHydrated: true, hydrationError: hydrationErrorMessage(error) })
-            return false
-          }
-          return get().hydrateEnumStore()
+          resetInFlight = reset().finally(() => {
+            resetInFlight = null
+          })
+          return resetInFlight
         },
       }
     },
@@ -285,7 +560,7 @@ export const useEnumStore = create<EnumStore>()((rawSet, get, api) => {
       partialize: partializeEnumState,
       merge: (persistedState, currentState) => ({
         ...currentState,
-        ...migrateEnumState(persistedState, ENUM_STORE_VERSION),
+        ...withLegacyValues(migrateEnumState(persistedState, ENUM_STORE_VERSION).rowsByType),
       }),
       onRehydrateStorage: state => (_hydratedState, error) => {
         state.completeHydration(error)
