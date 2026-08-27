@@ -7,6 +7,7 @@ const rules = loadTypeScriptModule(root, 'src/lib/machineTosVersions.ts')
 const projectInfoRules = loadTypeScriptModule(root, 'src/lib/projectInfoRules.ts')
 const projectStore = loadTypeScriptModule(root, 'src/stores/project.ts')
 const roadmapStore = loadTypeScriptModule(root, 'src/stores/roadmap.ts')
+const roadmapAdapter = loadTypeScriptModule(root, 'src/lib/roadmapProjectAdapter.ts')
 
 const newMachine = {
   id: 'new',
@@ -407,6 +408,81 @@ assert.equal(duplicateFamilyDelete.selectedProject, deleteNew, 'duplicate-new de
 assert.equal(duplicateFamilyDelete.auditLogsAfter, duplicateFamilyDelete.auditLogsBefore, 'duplicate-new deletion failure writes no audit')
 assert.equal(duplicateFamilyDelete.projectStoreNotifications, 0, 'duplicate-new deletion failure emits no project-store transaction')
 
+const configurableSnapshotProject = {
+  ...validSourceNew,
+  id: 'configurable-snapshot-project',
+  sourceBid: 'BID-CONFIG-SNAPSHOT',
+  name: 'CONFIG-X',
+  projectCode: 'CONFIG-X',
+  versionType: '配置版本型',
+  developMode: '实验室联合开发',
+}
+assert.deepEqual(
+  {
+    versionType: roadmapAdapter.adaptNormalProject(configurableSnapshotProject, [])?.versionType,
+    developMode: roadmapAdapter.adaptNormalProject(configurableSnapshotProject, [])?.developMode,
+  },
+  { versionType: '配置版本型', developMode: '实验室联合开发' },
+  'roadmap adaptation accepts current configured strings without a compile-time membership gate',
+)
+projectStore.useProjectStore.setState({ projects: [], selectedProject: null })
+assert.equal(
+  projectStore.useProjectStore.getState().addProject(configurableSnapshotProject, '张三', { allowedFirstSaleTosValues: ['14.0.0'] }),
+  true,
+  'machine create persists current configured version and development strings through the actual project store gate',
+)
+assert.deepEqual(
+  projectStore.useProjectStore.getState().projects.map(project => ({ versionType: project.versionType, developMode: project.developMode })),
+  [{ versionType: '配置版本型', developMode: '实验室联合开发' }],
+  'machine create stores configured string snapshots unchanged',
+)
+const retiredSnapshotUpdate = projectStore.useProjectStore.getState().updateProject(
+  configurableSnapshotProject.id,
+  { versionType: '已停用版本型', developMode: '已停用开发模式' },
+  '张三',
+  { allowedFirstSaleTosValues: ['14.0.0'] },
+)
+assert.deepEqual(
+  retiredSnapshotUpdate && {
+    versionType: retiredSnapshotUpdate.versionType,
+    developMode: retiredSnapshotUpdate.developMode,
+  },
+  { versionType: '已停用版本型', developMode: '已停用开发模式' },
+  'machine update preserves unchanged retired string snapshots through the actual project store gate',
+)
+assert.deepEqual(
+  retiredSnapshotUpdate && {
+    versionType: roadmapAdapter.adaptNormalProject(retiredSnapshotUpdate, [])?.versionType,
+    developMode: roadmapAdapter.adaptNormalProject(retiredSnapshotUpdate, [])?.developMode,
+  },
+  { versionType: '已停用版本型', developMode: '已停用开发模式' },
+  'roadmap adaptation does not silently rewrite retired custom strings',
+)
+const unrelatedRetiredUpdate = projectStore.useProjectStore.getState().updateProject(
+  configurableSnapshotProject.id,
+  { projectManager: '李四' },
+  '张三',
+  { allowedFirstSaleTosValues: ['14.0.0'] },
+)
+assert.deepEqual(
+  unrelatedRetiredUpdate && {
+    versionType: unrelatedRetiredUpdate.versionType,
+    developMode: unrelatedRetiredUpdate.developMode,
+  },
+  { versionType: '已停用版本型', developMode: '已停用开发模式' },
+  'an unrelated update saves unchanged retired snapshots without a membership gate',
+)
+assert.equal(
+  roadmapAdapter.adaptNormalProject({ ...configurableSnapshotProject, versionType: '   ' }, []),
+  null,
+  'widening version snapshots does not loosen the nonempty requirement',
+)
+assert.equal(
+  roadmapAdapter.adaptNormalProject({ ...configurableSnapshotProject, developMode: '' }, []),
+  null,
+  'widening development snapshots does not loosen the nonempty requirement',
+)
+
 const modalSource = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 const addSource = readSource(root, 'src/components/workspace/AddProjectModal.tsx')
 const storeSource = readSource(root, 'src/stores/project.ts')
@@ -449,5 +525,16 @@ assert.match(modalSource, /buildChipOptions|useChipOptions/, 'chip code selects 
 assert.match(modalSource, /resolveChipRow/, 'chip selection resolves all three snapshots from one row ID')
 assert.match(modalSource, /setFieldsValue\(\{\s*chipCode[^}]*chipModel[^}]*chipPlatform/s, 'one form update writes the complete chip tuple')
 assert.doesNotMatch(projectSpaceSource, /const versionTypeChoices\s*=\s*\['Full'|const systemTypeChoices\s*=\s*\[/, 'project-space editing has no hard-coded machine option arrays')
+for (const roadmapConsumerPath of [
+  'src/components/roadmap/RoadmapProjectCard.tsx',
+  'src/components/roadmap/RoadmapProjectDetailsModal.tsx',
+]) {
+  const roadmapConsumerSource = readSource(root, roadmapConsumerPath)
+  assert.match(
+    roadmapConsumerSource,
+    /VERSION_TYPE_TAG_COLORS\[[^\]]+\]\s*\?\?\s*['"]default['"]|VERSION_TYPE_TAG_COLORS\[[^\]]+\]\s*\|\|\s*['"]default['"]/,
+    `${roadmapConsumerPath} keeps known colors and gives configurable snapshots a neutral fallback`,
+  )
+}
 
 console.log('machine tOS versions contract passed')
