@@ -180,7 +180,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
             ? machineProductType === '新品'
               ? '已存在项目名完全相同的新品项目，无法重复创建'
               : '存在多个项目名完全相同的新品项目，无法创建老品项目'
-            : 'tOS 版本必须是严格的三段数字，例如 14.0.0'
+            : 'tOS 版本不能为空，请从当前配置中选择有效值'
         message.error(reasonMessage)
         return false
       }

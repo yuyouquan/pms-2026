@@ -28,8 +28,20 @@ const oldMachine = {
 
 assert.equal(rules.normalizeMachineFamilyName('  X6870  '), 'X6870', 'family matching trims surrounding whitespace')
 assert.notEqual(rules.normalizeMachineFamilyName('x6870'), rules.normalizeMachineFamilyName('X6870'), 'family matching remains case-sensitive')
-assert.ok(rules.compareThreePartVersions('17.10.0', '17.2.0') > 0, 'three-part versions sort numerically')
-assert.ok(Number.isNaN(rules.compareThreePartVersions('14.0', '14.0.0')), 'two-part versions are invalid')
+assert.equal(rules.normalizeMachineTosVersion(' tOS18.preview '), '18.preview', 'arbitrary tOS bodies normalize one prefix')
+assert.equal(rules.normalizeMachineTosVersion('TOS 16.0'), '16.0', 'two-part tOS bodies remain valid snapshots')
+assert.ok(rules.compareMachineTosVersions('17.10.0', '17.2.0') > 0, 'numeric version bodies sort naturally')
+assert.ok(rules.compareMachineTosVersions('18.preview', '16.0') > 0, 'arbitrary non-empty version bodies remain comparable')
+
+const arbitraryNewMachine = {
+  ...newMachine,
+  firstSaleTosVersion: 'tOS18.preview',
+}
+assert.deepEqual(rules.resolveMachineTosUpdate([], arbitraryNewMachine), {
+  ok: true,
+  candidate: { ...arbitraryNewMachine, firstSaleTosVersion: '18.preview', currentTosVersion: '18.preview' },
+  updates: [],
+}, 'machine linkage accepts an arbitrary non-empty configured tOS body')
 
 assert.deepEqual(rules.resolveMachineTosUpdate([], newMachine), {
   ok: true,
@@ -61,7 +73,7 @@ assert.deepEqual(
   'creating a duplicate same-name new machine is rejected',
 )
 assert.deepEqual(
-  rules.resolveMachineTosUpdate([], { ...newMachine, firstSaleTosVersion: 'bad' }),
+  rules.resolveMachineTosUpdate([], { ...newMachine, firstSaleTosVersion: '   ' }),
   { ok: false, reason: 'invalid-version' },
 )
 
@@ -299,17 +311,24 @@ const unknownRemainingLegacy = {
   id: 'remaining-unknown-legacy',
   currentTosVersion: 'future-current',
 }
-const invalidHistoryProjects = [deleteNew, auditedLegacyToDelete, unknownRemainingLegacy]
-const invalidHistoryDelete = deleteFixture(
-  invalidHistoryProjects,
+const arbitraryHistoryProjects = [deleteNew, auditedLegacyToDelete, unknownRemainingLegacy]
+const arbitraryHistoryDelete = deleteFixture(
+  arbitraryHistoryProjects,
   auditedLegacyToDelete.id,
   deleteNew,
 )
-assert.equal(invalidHistoryDelete.deleted, false, 'legacy deletion fails when required family recompute contains unknown history')
-assert.equal(invalidHistoryDelete.projects, invalidHistoryProjects, 'failed legacy deletion preserves the original project collection')
-assert.equal(invalidHistoryDelete.selectedProject, deleteNew, 'failed legacy deletion preserves selected project identity')
-assert.equal(invalidHistoryDelete.auditLogsAfter, invalidHistoryDelete.auditLogsBefore, 'failed legacy deletion writes no audit log')
-assert.equal(invalidHistoryDelete.projectStoreNotifications, 0, 'failed legacy deletion emits no project-store transaction')
+assert.equal(arbitraryHistoryDelete.deleted, true, 'legacy deletion accepts an arbitrary non-empty historical tOS body')
+assert.deepEqual(
+  arbitraryHistoryDelete.projects.map(project => ({ id: project.id, current: project.currentTosVersion })),
+  [
+    { id: deleteNew.id, current: 'future-current' },
+    { id: unknownRemainingLegacy.id, current: 'future-current' },
+  ],
+  'arbitrary history remains usable while recomputing the linked new machine',
+)
+assert.equal(arbitraryHistoryDelete.selectedProject?.currentTosVersion, 'future-current', 'selected new project receives the recomputed arbitrary snapshot')
+assert.equal(arbitraryHistoryDelete.auditLogsAfter.length, arbitraryHistoryDelete.auditLogsBefore.length + 1, 'successful arbitrary-history deletion writes one audit log')
+assert.equal(arbitraryHistoryDelete.projectStoreNotifications, 1, 'arbitrary-history deletion emits one project-store transaction')
 
 const validMachineFields = {
   type: '整机产品项目',
@@ -542,6 +561,9 @@ assert.doesNotMatch(addSource, /legacyExistingNames/, 'unlinked historical names
 assert.match(modalSource, /mode\s*===\s*'create'[\s\S]*currentTosVersion/, 'new-machine create initializes current from first sale without applying that rule to edit mode')
 assert.match(modalSource, /resolveMachineTosUpdate/, 'new-machine edit resolves its linked current version from the complete existing family')
 assert.match(machineRulesSource, /readonly\s+T\[\]/, 'machine family resolver accepts readonly project arrays')
+assert.doesNotMatch(machineRulesSource, /THREE_PART|ThreePart|three-part|\\d\+\\\.\\d\+\\\.\\d\+/, 'machine tOS linkage has no segment-count contract')
+assert.doesNotMatch(modalSource, /严格的三段|三段数字/, 'project info no longer rejects arbitrary tOS bodies by segment count')
+assert.doesNotMatch(addSource, /严格的三段|三段数字/, 'project create no longer reports a segment-count restriction')
 assert.ok((externalPoolSource.match(/name:\s*'X6870'/g) || []).length >= 3, 'browser fixtures expose one new and two same-name legacy projects')
 
 const expectedMachineEnumTypes = {

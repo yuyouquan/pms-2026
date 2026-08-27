@@ -15,6 +15,7 @@ import {
   PROJECT_SECONDARY_CATEGORIES,
   PROJECT_TYPES,
   PROJECT_TYPE_TOS_VERSION,
+  PROJECT_CATEGORY_CAPABILITY,
   PROJECT_CATEGORY_MACHINE,
   PROJECT_CATEGORY_TECH,
   isMachineProjectType,
@@ -34,7 +35,7 @@ import {
   buildProjectInfoValues,
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
-import { getProjectStatusEnumType, mapIpmProjectStatus } from '@/lib/projectStatus'
+import { getProjectStatusEnumType, resolveConfiguredProjectStatus } from '@/lib/projectStatus'
 import { normalizeMachineFamilyName, resolveMachineTosUpdate } from '@/lib/machineTosVersions'
 import { normalizeTechnicalProjectValues, TechnicalProjectValidationError, validateTechnicalProject } from '@/lib/technicalProjectRules'
 import {
@@ -106,7 +107,7 @@ export const PROJECT_CREATION_DRAFT_SAVE_DELAY_MS = 300
 
 const CREATE_FORM_DEFAULTS: ProjectInfoFormState = {
   responsiblePersons: [],
-  status: '待立项',
+  status: '',
 }
 
 type DraftReadStatus = 'idle' | 'loading' | 'ready' | 'failed'
@@ -465,12 +466,17 @@ export default function ProjectInfoModal({
     if (!entry) return
     const sourceValues = fetchByBid(bid)
     const type = nextType || String(form.getFieldValue('type') || '')
+    const configuredStatusValues = rowsByType[getProjectStatusEnumType(type)].map(row => row.value)
     form.setFieldsValue({
       marketName: sourceValues.marketName || '',
       brand: sourceValues.brand || '',
       productLine: sourceValues.productLine || '',
-      status: type === PROJECT_TYPE_TOS_VERSION
-        ? mapIpmProjectStatus(entry.ipmStatus || '', type)
+      status: type === PROJECT_TYPE_TOS_VERSION || type === PROJECT_CATEGORY_CAPABILITY
+        ? resolveConfiguredProjectStatus({
+            projectType: type,
+            configuredValues: configuredStatusValues,
+            ipmStatus: entry.ipmStatus || '',
+          })
         : '待立项',
       technicalTrack: entry.technicalTrack || '',
       ipmProjectType: entry.ipmProjectCategoryName,
@@ -608,7 +614,7 @@ export default function ProjectInfoModal({
       if (!resolution.ok) {
         setMachineFamilyError(resolution.reason === 'duplicate-new-product'
           ? '已存在项目名完全相同的新品项目，不能重复创建或保存'
-          : 'tOS 版本必须是严格的三段数字，例如 14.0.0')
+          : 'tOS 版本不能为空，请从当前配置中选择有效值')
         return
       }
       setMachineFamilyError('')
@@ -805,11 +811,14 @@ export default function ProjectInfoModal({
       : resolveProjectClassification(projectType, String(values.secondaryCategory || '')).projectCategory
     const submittedStatus = String(values.status || '').trim()
     const currentStatusRows = enumState.rowsByType[getProjectStatusEnumType(normalizedProjectType)]
-    if (
-      submittedStatus
-      && !currentStatusRows.some(row => row.value === submittedStatus)
-      && !(mode === 'edit' && project?.status === submittedStatus)
-    ) {
+    const resolvedProjectStatus = resolveConfiguredProjectStatus({
+      projectType: normalizedProjectType,
+      configuredValues: currentStatusRows.map(row => row.value),
+      submittedStatus,
+      mode,
+      originalStatus: typeof project?.status === 'string' ? project.status : '',
+    })
+    if (submittedStatus && !resolvedProjectStatus) {
       form.setFields([{ name: 'status', errors: ['项目状态不在当前配置中，请重新选择'] }])
       message.error('项目状态不在当前配置中，请重新选择')
       return
@@ -906,7 +915,7 @@ export default function ProjectInfoModal({
           Array.isArray(values.responsiblePersons) ? values.responsiblePersons : [],
         ),
         healthStatus: String(values.healthStatus || ''),
-        projectStatus: String(values.status || ''),
+        projectStatus: resolvedProjectStatus,
         infoValues,
         sourceEntry,
         sourceValues: values.bid ? fetchByBid(values.bid) : {},
@@ -1026,9 +1035,9 @@ export default function ProjectInfoModal({
               <Select disabled options={secondaryCategoryOptions} />
             </Form.Item>
           )}
-          {projectType === PROJECT_TYPE_TOS_VERSION && (
-            <Form.Item label="项目状态" name="status" rules={[{ required: true, message: 'IPM 项目状态不能为空' }]}>
-              <Select disabled={mode === 'create'} options={projectStatusOptions} />
+          {(projectType === PROJECT_TYPE_TOS_VERSION || projectType === PROJECT_CATEGORY_CAPABILITY) && (
+            <Form.Item label="项目状态" name="status" rules={[{ required: true, message: '项目状态不能为空' }]}>
+              <Select disabled={mode === 'create' && projectType === PROJECT_TYPE_TOS_VERSION} options={projectStatusOptions} />
             </Form.Item>
           )}
           {projectType !== PROJECT_TYPE_TOS_VERSION && !isMachineProjectType(projectType) && !isTechnicalProject && (

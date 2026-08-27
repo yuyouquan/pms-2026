@@ -1063,7 +1063,8 @@ export const useRoadmapStore = create<RoadmapStore>()(
         if (!existing) return { ok: false, reason: 'not-found' }
         const input = normalizeProjectInput(rawInput)
         const allowedTosValues = new Set(currentFirstSaleTosEnumValues())
-        allowedTosValues.add(existing.firstSaleTosVersionId)
+        const existingTosSnapshot = normalizeRoadmapTosReference(existing.firstSaleTosVersionId)
+        if (existingTosSnapshot) allowedTosValues.add(existingTosSnapshot)
         const errors = validatePlannedProject(input, [], undefined, allowedTosValues)
         if (!input.actor) errors.actor = '操作人不能为空'
         if (Object.keys(errors).length) return mutationFailure(errors)

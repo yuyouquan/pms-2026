@@ -34,3 +34,34 @@ export const mapIpmProjectStatus = (ipmStatus: string, projectType: string): str
   if (projectType === '技术项目' && normalizedStatus === '待验') return '待验'
   return DEFAULT_IPM_STATUS_MAP[normalizedStatus] || normalizedStatus
 }
+
+export interface ConfiguredProjectStatusInput {
+  projectType: string
+  configuredValues: readonly string[]
+  submittedStatus?: string
+  ipmStatus?: string
+  mode?: 'create' | 'edit'
+  originalStatus?: string
+}
+
+export const resolveConfiguredProjectStatus = ({
+  projectType,
+  configuredValues,
+  submittedStatus = '',
+  ipmStatus = '',
+  mode = 'create',
+  originalStatus = '',
+}: ConfiguredProjectStatusInput): string => {
+  const liveValues = [...new Set(configuredValues.map(value => value.trim()).filter(Boolean))]
+  const submitted = submittedStatus.trim()
+  if (submitted) {
+    if (liveValues.includes(submitted)) return submitted
+    if (mode === 'edit' && submitted === originalStatus.trim()) return submitted
+    return ''
+  }
+  if (projectType === 'tOS版本项目') {
+    const synchronized = mapIpmProjectStatus(ipmStatus, projectType)
+    if (liveValues.includes(synchronized)) return synchronized
+  }
+  return liveValues[0] || ''
+}

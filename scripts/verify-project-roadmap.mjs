@@ -1020,6 +1020,58 @@ registerAssertion('planned project validation uses the current tOS catalog and c
   if (duplicate.ok || duplicate.reason !== 'duplicate') throw new Error('caller comparison row was ignored')
 })
 
+registerAssertion('planned-project edit preserves an unchanged deleted tOS snapshot but rejects a replacement', () => {
+  const previousWindow = globalThis.window
+  globalThis.window = {
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+  }
+  try {
+    const loader = createTypeScriptModuleLoader()
+    const storeModule = loader(path.join(root, 'src/stores/roadmap.ts'))
+    const enumModule = loader(path.join(root, 'src/stores/enums.ts'))
+    const store = resetRoadmapStore(storeModule)
+    const enumStore = enumModule.useEnumStore
+
+    enumStore.setState(state => ({
+      hasHydrated: true,
+      hydrationError: null,
+      rowsByType: {
+        ...state.rowsByType,
+        'first-sale-tos': [{ id: 'first-preview', value: '18.preview' }],
+      },
+    }))
+    const created = store.getState().createPlannedProject(createPlannedInput({
+      firstSaleTosVersionId: 'tOS18.preview',
+    }))
+    if (!created.ok) throw new Error(`live arbitrary tOS fixture could not be created: ${JSON.stringify(created)}`)
+    const project = store.getState().plannedProjects[0]
+
+    enumStore.setState(state => ({
+      rowsByType: { ...state.rowsByType, 'first-sale-tos': [] },
+    }))
+    store.setState({
+      plannedProjects: [{ ...project, firstSaleTosVersionId: 'tOS 18.preview' }],
+    })
+    const unchanged = store.getState().updatePlannedProject(project.id, createPlannedInput({
+      firstSaleTosVersionId: '18.preview',
+      remark: 'only another field changed',
+    }))
+    if (!unchanged.ok || store.getState().plannedProjects[0]?.firstSaleTosVersionId !== '18.preview') {
+      throw new Error(`unchanged deleted snapshot was rejected: ${JSON.stringify(unchanged)}`)
+    }
+    const replacement = store.getState().updatePlannedProject(project.id, createPlannedInput({
+      firstSaleTosVersionId: '16.0',
+      remark: 'attempt replacement',
+    }))
+    if (replacement.ok || replacement.reason !== 'invalid') {
+      throw new Error(`deleted replacement snapshot was accepted: ${JSON.stringify(replacement)}`)
+    }
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window
+    else globalThis.window = previousWindow
+  }
+})
+
 registerAssertion('roadmap store has no independent tOS option CRUD', () => {
   const storeModule = loadIsolatedRoadmapStore()
   const state = resetRoadmapStore(storeModule).getState()

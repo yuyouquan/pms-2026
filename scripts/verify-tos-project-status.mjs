@@ -15,7 +15,7 @@ const compiled = ts.transpileModule(fs.readFileSync(statusModulePath, 'utf8'), {
 const statusModule = { exports: {} }
 vm.runInNewContext(compiled, { module: statusModule, exports: statusModule.exports }, { filename: statusModulePath })
 
-const { getProjectStatusEnumType, mapIpmProjectStatus } = statusModule.exports
+const { getProjectStatusEnumType, mapIpmProjectStatus, resolveConfiguredProjectStatus } = statusModule.exports
 assert.equal(getProjectStatusEnumType('整机产品项目'), 'machine-project-status')
 assert.equal(getProjectStatusEnumType('技术项目'), 'technical-project-status')
 assert.equal(getProjectStatusEnumType('tOS版本项目'), 'tos-capability-project-status')
@@ -25,6 +25,27 @@ assert.equal(mapIpmProjectStatus('已取消', 'tOS版本项目'), '已取消')
 assert.equal(mapIpmProjectStatus('进行中', 'tOS版本项目'), '在研')
 assert.equal(mapIpmProjectStatus('已完成', 'tOS版本项目'), '已完成')
 assert.equal(mapIpmProjectStatus('维护期', 'tOS版本项目'), '已完成')
+assert.equal(typeof resolveConfiguredProjectStatus, 'function', 'configured status submission resolver must exist')
+assert.equal(resolveConfiguredProjectStatus({
+  projectType: 'tOS版本项目',
+  configuredValues: ['规划中', '在研'],
+  ipmStatus: '进行中',
+}), '在研', 'tOS create keeps the existing IPM status synchronization when it is live')
+assert.equal(resolveConfiguredProjectStatus({
+  projectType: '能力建设项目',
+  configuredValues: ['规划中', '在研'],
+  ipmStatus: '进行中',
+}), '规划中', 'capability create chooses the first live configured status instead of a hard-coded default')
+assert.equal(resolveConfiguredProjectStatus({
+  projectType: '能力建设项目',
+  configuredValues: ['规划中', '在研'],
+  submittedStatus: '规划中',
+}), '规划中', 'capability create submission preserves a live selected status')
+assert.equal(resolveConfiguredProjectStatus({
+  projectType: '能力建设项目',
+  configuredValues: ['规划中', '在研'],
+  submittedStatus: '待立项',
+}), '', 'capability create submission rejects a stale hard-coded status')
 
 const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8')
 const externalPool = read('src/data/externalProjectPool.ts')
@@ -34,10 +55,13 @@ const projectList = read('src/containers/ProjectListContainer.tsx')
 const projectSpace = read('src/containers/ProjectSpaceContainer.tsx')
 
 assert.match(externalPool, /ipmStatus\?: string/)
-assert.match(projectInfoModal, /mapIpmProjectStatus\(entry\.ipmStatus/)
+assert.match(projectInfoModal, /resolveConfiguredProjectStatus\([\s\S]*ipmStatus:\s*entry\.ipmStatus/)
 assert.match(projectInfoModal, /getProjectStatusEnumType/)
 assert.match(projectInfoModal, /buildEnumOptions/)
 assert.match(projectInfoModal, /useEnumHydration/)
+assert.match(projectInfoModal, /projectType === PROJECT_CATEGORY_CAPABILITY/, 'capability create/edit renders the configured status selector')
+assert.match(projectInfoModal, /resolveConfiguredProjectStatus/, 'project submission uses the runtime configured-status boundary')
+assert.doesNotMatch(projectInfoModal, /CREATE_FORM_DEFAULTS[^}]*status:\s*'待立项'/s, 'project create no longer injects the stale status default')
 assert.match(addProjectModal, /status: payload\.projectStatus/)
 assert.match(projectList, /getProjectStatusEnumType/)
 assert.match(projectList, /useSingleEnumOptions/)

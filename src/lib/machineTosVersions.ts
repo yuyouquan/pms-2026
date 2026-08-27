@@ -1,3 +1,5 @@
+import { normalizeTosSnapshot } from '@/lib/enumConsumers'
+
 export type MachineTosErrorReason =
   | 'missing-new-product'
   | 'duplicate-new-product'
@@ -37,34 +39,18 @@ export type MachineTosResolution<T extends MachineTosProjectLike = MachineTosPro
       reason: MachineTosErrorReason
     }
 
-const THREE_PART_VERSION_PATTERN = /^\d+\.\d+\.\d+$/
-
 export const normalizeMachineFamilyName = (name: unknown): string => (
   typeof name === 'string' ? name.trim() : ''
 )
 
-const normalizeThreePartVersion = (value: unknown): string => {
-  if (typeof value !== 'string') return ''
-  return value.trim().replace(/^tOS\s*/i, '').replace(/（已停用）$/, '').trim()
-}
+export const normalizeMachineTosVersion = (value: unknown): string => normalizeTosSnapshot(value)
 
-const parseThreePartVersion = (value: unknown): [number, number, number] | null => {
-  const normalized = normalizeThreePartVersion(value)
-  if (!THREE_PART_VERSION_PATTERN.test(normalized)) return null
-  const parts = normalized.split('.').map(Number)
-  return parts.every(Number.isSafeInteger)
-    ? parts as [number, number, number]
-    : null
-}
+const machineTosCollator = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' })
 
-export const compareThreePartVersions = (left: unknown, right: unknown): number => {
-  const leftParts = parseThreePartVersion(left)
-  const rightParts = parseThreePartVersion(right)
-  if (!leftParts || !rightParts) return Number.NaN
-  for (let index = 0; index < 3; index += 1) {
-    if (leftParts[index] !== rightParts[index]) return leftParts[index] - rightParts[index]
-  }
-  return 0
+export const compareMachineTosVersions = (left: unknown, right: unknown): number => {
+  const leftValue = normalizeMachineTosVersion(left)
+  const rightValue = normalizeMachineTosVersion(right)
+  return leftValue && rightValue ? machineTosCollator.compare(leftValue, rightValue) : Number.NaN
 }
 
 const getMachineKind = (project: MachineTosProjectLike): 'new' | 'legacy' | null => {
@@ -73,26 +59,26 @@ const getMachineKind = (project: MachineTosProjectLike): 'new' | 'legacy' | null
   return null
 }
 
-const getFirstSaleVersion = (project: MachineTosProjectLike): string => normalizeThreePartVersion(
+const getFirstSaleVersion = (project: MachineTosProjectLike): string => normalizeMachineTosVersion(
   project.firstSaleTosVersionId
   || project.firstSaleTosVersion
   || project.fieldValues?.firstSaleTosVersion
   || project.tosVersionName,
 )
 
-const getCurrentVersion = (project: MachineTosProjectLike): string => normalizeThreePartVersion(
+const getCurrentVersion = (project: MachineTosProjectLike): string => normalizeMachineTosVersion(
   project.currentTosVersionId
   || project.currentTosVersion
   || project.fieldValues?.currentTosVersion
   || project.tosVersion,
 )
 
-const isValidVersion = (version: string) => parseThreePartVersion(version) !== null
+const isValidVersion = (version: string) => Boolean(normalizeMachineTosVersion(version))
 
 const maximumVersion = (versions: string[]): string | null => {
   if (!versions.length || versions.some(version => !isValidVersion(version))) return null
   return versions.reduce((maximum, version) => (
-    compareThreePartVersions(version, maximum) > 0 ? version : maximum
+    compareMachineTosVersions(version, maximum) > 0 ? version : maximum
   ))
 }
 
