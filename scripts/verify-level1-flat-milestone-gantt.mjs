@@ -64,6 +64,47 @@ assert.deepEqual(
   'stages derive inclusive schedule ranges from their children',
 )
 
+const fixedLegacyStartProjection = level1Rules.projectLevel1Plan([
+  { id: 'fixed-stage', stableId: 'fixed-stage', parentId: null, order: 1, taskName: '固定节点阶段', nodeKind: 'stage' },
+  {
+    id: 'fixed-a', stableId: 'fixed-a', parentId: 'fixed-stage', order: 1, taskName: '固定节点A', nodeKind: 'fixed-milestone',
+    planStartDate: '2026-01-01', planEndDate: '2026-01-10', actualStartDate: '2026-01-02', actualEndDate: '2026-01-11',
+  },
+  {
+    id: 'fixed-b', stableId: 'fixed-b', parentId: 'fixed-stage', order: 2, taskName: '固定节点B', nodeKind: 'fixed-milestone',
+    planEndDate: '2026-01-20', actualEndDate: '2026-01-21',
+  },
+], { mode: 'standard', today: '2026-01-22' })
+const fixedLegacyStartStage = fixedLegacyStartProjection.rows.find(row => row.id === 'fixed-stage')
+assert.deepEqual(
+  [fixedLegacyStartStage.planStartDate, fixedLegacyStartStage.planEndDate, fixedLegacyStartStage.estimatedDays, fixedLegacyStartStage.actualStartDate, fixedLegacyStartStage.actualEndDate, fixedLegacyStartStage.actualDays],
+  ['2026-01-10', '2026-01-20', 11, '2026-01-11', '2026-01-21', 11],
+  'fixed milestone stages ignore legacy source starts and aggregate their completion points',
+)
+
+const partialBusinessProjection = level1Rules.projectLevel1Plan([
+  { id: 'partial-stage', stableId: 'partial-stage', parentId: null, order: 1, taskName: '半填业务阶段', nodeKind: 'stage' },
+  {
+    id: 'end-only', stableId: 'end-only', parentId: 'partial-stage', order: 1, taskName: '仅完成时间', nodeKind: 'business-period',
+    planEndDate: '2026-09-03', actualEndDate: '2026-09-05',
+  },
+  {
+    id: 'start-only', stableId: 'start-only', parentId: 'partial-stage', order: 2, taskName: '仅开始时间', nodeKind: 'business-period',
+    planStartDate: '2026-09-07', actualStartDate: '2026-09-08',
+  },
+], { mode: 'standard', today: '2026-09-10' })
+const partialBusinessStage = partialBusinessProjection.rows.find(row => row.id === 'partial-stage')
+assert.deepEqual(
+  [partialBusinessStage.planStartDate, partialBusinessStage.planEndDate, partialBusinessStage.estimatedDays, partialBusinessStage.actualStartDate, partialBusinessStage.actualEndDate, partialBusinessStage.actualDays],
+  ['', '', null, '', '', null],
+  'partial business periods do not create a stage range without any complete interval',
+)
+assert.deepEqual(
+  partialBusinessProjection.rows.filter(row => row.parentId).map(row => [row.estimatedDays, row.actualDays]),
+  [[null, null], [null, null]],
+  'partial business periods keep their own planned and actual durations empty',
+)
+
 const unknownBrowserCase = spawnSync(process.execPath, ['screenshots/verify-level1-flat-milestone-gantt-browser.mjs'], {
   cwd: root,
   encoding: 'utf8',

@@ -462,15 +462,22 @@ export const projectLevel1Plan = (
     endField: 'planEndDate' | 'actualEndDate',
     previousStageEnd: string,
   ): { startDate: string; endDate: string; duration: number | null } => {
-    const scheduled = children.filter(child => (
-      isValidLevel1Date(child[startField]) || isValidLevel1Date(child[endField])
-    ))
+    const scheduled = children.flatMap(child => {
+      const nodeKind = getNodeKind(child)
+      const startDate = isValidLevel1Date(child[startField]) ? child[startField] : ''
+      const endDate = isValidLevel1Date(child[endField]) ? child[endField] : ''
+      if (nodeKind === 'fixed-milestone') {
+        return endDate ? [{ startDate: '', endDate }] : []
+      }
+      if (nodeKind === 'business-period' && getLevel1InclusiveDuration(startDate, endDate) !== null) {
+        return [{ startDate, endDate }]
+      }
+      return []
+    })
     const first = scheduled[0]
-    const endDate = [...children].reverse().find(child => isValidLevel1Date(child[endField]))?.[endField] || ''
+    const endDate = scheduled.at(-1)?.endDate || ''
     if (!first || !endDate) return { startDate: '', endDate, duration: null }
-    const explicitStart = isValidLevel1Date(first[startField]) ? first[startField] : ''
-    const firstCompletion = isValidLevel1Date(first[endField]) ? first[endField] : ''
-    const startDate = explicitStart || (previousStageEnd ? addLevel1Days(previousStageEnd, 1) : firstCompletion)
+    const startDate = first.startDate || (previousStageEnd ? addLevel1Days(previousStageEnd, 1) : first.endDate)
     return {
       startDate,
       endDate,
