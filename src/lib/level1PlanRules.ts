@@ -451,6 +451,7 @@ export const projectLevel1Plan = (
   const computedById = new Map<string, Level1PlanViewRow>()
   let previousPlanEnd = ''
   let previousActualEnd = ''
+  const usesProjectSpecificNodeModel = ordered.some(task => task.nodeKind !== undefined)
 
   const getNodeKind = (task: Level1PlanTask): Level1NodeKind => (
     task.nodeKind || (task.parentId ? 'fixed-milestone' : 'stage')
@@ -479,6 +480,47 @@ export const projectLevel1Plan = (
 
   roots.forEach(root => {
     const children = sortByOrder(ordered.filter(task => task.parentId === root.id))
+    if (!usesProjectSpecificNodeModel) {
+      const plannedChildren = children.filter(task => isValidLevel1Date(task.planEndDate))
+      const actualChildren = children.filter(task => isValidLevel1Date(task.actualEndDate))
+      const planEndDate = plannedChildren.at(-1)?.planEndDate || ''
+      const actualEndDate = actualChildren.at(-1)?.actualEndDate || ''
+      const planStartDate = planEndDate
+        ? (previousPlanEnd ? addLevel1Days(previousPlanEnd, 1) : plannedChildren[0]?.planEndDate || '')
+        : ''
+      const actualStartDate = actualEndDate
+        ? (previousActualEnd ? addLevel1Days(previousActualEnd, 1) : actualChildren[0]?.actualEndDate || '')
+        : ''
+
+      computedById.set(root.id, {
+        ...root,
+        planStartDate,
+        planEndDate,
+        estimatedDays: getLevel1DateDifference(planStartDate, planEndDate),
+        actualStartDate,
+        actualEndDate,
+        actualDays: getLevel1DateDifference(actualStartDate, actualEndDate),
+        delayStatus: '',
+        manpowerPercent: null,
+        isMilestone: false,
+      })
+      children.forEach(task => computedById.set(task.id, {
+        ...task,
+        planStartDate: '',
+        planEndDate: task.planEndDate || '',
+        estimatedDays: null,
+        actualStartDate: '',
+        actualEndDate: task.actualEndDate || '',
+        actualDays: null,
+        delayStatus: getLevel1DelayStatus(task.planEndDate || '', task.actualEndDate || '', today),
+        manpowerPercent: null,
+        isMilestone: true,
+      }))
+      if (planEndDate) previousPlanEnd = planEndDate
+      if (actualEndDate) previousActualEnd = actualEndDate
+      return
+    }
+
     const planned = getStageRange(children, 'planStartDate', 'planEndDate', previousPlanEnd)
     const actual = getStageRange(children, 'actualStartDate', 'actualEndDate', previousActualEnd)
 

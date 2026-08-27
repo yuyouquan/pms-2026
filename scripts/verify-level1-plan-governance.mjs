@@ -163,6 +163,34 @@ const makeTask = (id, parentId, order, taskName, planEndDate = '', actualEndDate
   actualEndDate,
 })
 
+const technicalTdtProjection = rules.projectLevel1Plan([
+  makeTask('tdt-stage', null, 0, '开发验证阶段'),
+  {
+    ...makeTask('tdt-a', 'tdt-stage', 0, 'TDR1', '2026-01-10', '2026-01-11'),
+    planStartDate: '2026-01-02', actualStartDate: '2026-01-03', estimatedDays: 8, actualDays: 8,
+  },
+  {
+    ...makeTask('tdt-b', 'tdt-stage', 1, 'TDR2', '2026-01-20', '2026-01-21'),
+    planStartDate: '2026-01-12', actualStartDate: '2026-01-13', estimatedDays: 8, actualDays: 8,
+  },
+], { mode: 'standard', today: '2026-01-22' })
+const technicalTdtStage = technicalTdtProjection.rows.find(row => row.id === 'tdt-stage')
+assert.deepEqual(
+  [technicalTdtStage.planStartDate, technicalTdtStage.planEndDate, technicalTdtStage.estimatedDays],
+  ['2026-01-10', '2026-01-20', 10],
+  'legacy TDT stages keep completion-point planned aggregation with exclusive duration',
+)
+assert.deepEqual(
+  [technicalTdtStage.actualStartDate, technicalTdtStage.actualEndDate, technicalTdtStage.actualDays],
+  ['2026-01-11', '2026-01-21', 10],
+  'legacy TDT stages keep completion-point actual aggregation with exclusive duration',
+)
+assert.deepEqual(
+  technicalTdtProjection.rows.filter(row => row.parentId).map(row => [row.planStartDate, row.estimatedDays, row.actualStartDate, row.actualDays, row.isMilestone]),
+  [['', null, '', null, true], ['', null, '', null, true]],
+  'legacy TDT children remain completion points even when their source contains start dates and stored durations',
+)
+
 const tasks = [
   makeTask('p1', null, 0, '空阶段'),
   makeTask('p1c1', 'p1', 0, '空节点'),
@@ -188,17 +216,17 @@ assert.deepEqual(
 )
 assert.deepEqual(
   [planStage.planStartDate, planStage.planEndDate, planStage.estimatedDays],
-  ['2026-03-18', '2026-05-22', 66],
+  ['2026-03-18', '2026-05-22', 65],
   'the first effective stage starts at its first populated milestone',
 )
 assert.deepEqual(
   [devStage.planStartDate, devStage.planEndDate, devStage.estimatedDays],
-  ['2026-05-23', '2026-12-15', 207],
+  ['2026-05-23', '2026-12-15', 206],
   'later effective stages begin one day after the previous effective stage',
 )
 assert.deepEqual(
   [planStage.actualStartDate, planStage.actualEndDate, planStage.actualDays],
-  ['2026-03-19', '2026-05-22', 65],
+  ['2026-03-19', '2026-05-22', 64],
 )
 assert.equal(str2.planStartDate, '')
 assert.equal(str2.actualStartDate, '')
@@ -208,12 +236,12 @@ assert.equal(str2.delayStatus, '延期')
 assert.equal(projection.rows.find(row => row.id === 'p3c1').delayStatus, '延期')
 assert.deepEqual(
   projection.rows.filter(row => !row.parentId).map(row => row.manpowerPercent),
-  [null, 24.2, 75.8],
+  [null, 24, 76],
   'manpower percentages use the sum of effective stage estimated durations',
 )
 assert.equal(
   rules.sumLevel1EstimatedDays(projection.rows),
-  273,
+  271,
   'horizontal development cycle sums every populated stage estimated duration',
 )
 assert.equal(
