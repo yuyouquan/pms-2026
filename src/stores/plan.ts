@@ -238,12 +238,92 @@ const getLevel1Semantic = (task: any) => (
   getStableLevel1Semantic(task) || getNamedLevel1Semantic(task)
 )
 
+type StableLevel1SeedSignature = ReadonlyMap<string, string | null>
+
+const buildStableLevel1SeedSignature = (tasks: readonly any[]): StableLevel1SeedSignature => {
+  const stableIdById = new Map(tasks.map(task => [task.id, task.stableId]))
+  return new Map(tasks.map(task => [
+    task.stableId,
+    task.parentId ? stableIdById.get(task.parentId) || null : null,
+  ]))
+}
+
+const LEGACY_SHARED_LEVEL1_STABLE_SIGNATURE: StableLevel1SeedSignature = new Map([
+  ['stage-concept', null],
+  ['milestone-concept-start', 'stage-concept'],
+  ['milestone-str1', 'stage-concept'],
+  ['stage-plan', null],
+  ['milestone-str2', 'stage-plan'],
+  ['milestone-str3', 'stage-plan'],
+  ['stage-development', null],
+  ['milestone-str4', 'stage-development'],
+  ['milestone-str4a', 'stage-development'],
+  ['milestone-str5', 'stage-development'],
+  ['stage-launch', null],
+  ['milestone-close', 'stage-launch'],
+])
+
+const STABLE_LEVEL1_SEED_SIGNATURES: readonly StableLevel1SeedSignature[] = [
+  buildStableLevel1SeedSignature(MACHINE_LEVEL1_TEMPLATE_TASKS),
+  buildStableLevel1SeedSignature(TOS_LEVEL1_TEMPLATE_TASKS),
+  LEGACY_SHARED_LEVEL1_STABLE_SIGNATURE,
+]
+
+const LEGACY_SIMPLE_LEVEL1_SIGNATURE = [
+  { id: '1', parentId: null, order: 1, taskName: '概念' },
+  { id: '1.1', parentId: '1', order: 1, taskName: '概念启动' },
+  { id: '1.2', parentId: '1', order: 2, taskName: 'STR1' },
+  { id: '2', parentId: null, order: 2, taskName: '计划' },
+  { id: '2.1', parentId: '2', order: 1, taskName: 'STR2' },
+  { id: '2.2', parentId: '2', order: 2, taskName: 'STR3' },
+  { id: '3', parentId: null, order: 3, taskName: '开发验证' },
+  { id: '4', parentId: null, order: 4, taskName: '上市保障' },
+] as const
+
+const matchesStableLevel1SeedSignature = (
+  fixedTasks: any[],
+  signature: StableLevel1SeedSignature,
+) => {
+  if (fixedTasks.length !== signature.size) return false
+  const taskById = new Map(fixedTasks.map(task => [task.id, task]))
+  const stableIds = new Set(fixedTasks.map(task => task.stableId))
+  if (taskById.size !== fixedTasks.length || stableIds.size !== signature.size) return false
+  return fixedTasks.every(task => {
+    if (!signature.has(task.stableId)) return false
+    const parentStableId = task.parentId ? taskById.get(task.parentId)?.stableId : null
+    return parentStableId === signature.get(task.stableId)
+  })
+}
+
+const matchesLegacySimpleLevel1SeedSignature = (fixedTasks: any[]) => {
+  if (fixedTasks.length !== LEGACY_SIMPLE_LEVEL1_SIGNATURE.length) return false
+  const taskById = new Map(fixedTasks.map(task => [task.id, task]))
+  if (taskById.size !== fixedTasks.length) return false
+  return LEGACY_SIMPLE_LEVEL1_SIGNATURE.every(expected => {
+    const task = taskById.get(expected.id)
+    return task
+      && (task.parentId || null) === expected.parentId
+      && task.order === expected.order
+      && normalizeLevel1MigrationName(task.taskName) === normalizeLevel1MigrationName(expected.taskName)
+  })
+}
+
 const isRecognizedLevel1Seed = (tasks: any[]) => {
+  if (!tasks.every(task => task?.source === undefined || task?.source === 'template' || task?.source === 'custom')) {
+    return false
+  }
+  const ids = tasks.map(task => task?.id)
+  if (ids.some(id => typeof id !== 'string' || !id) || new Set(ids).size !== ids.length) return false
   const fixedTasks = tasks.filter(task => task?.source !== 'custom')
-  if (fixedTasks.length < 8 || fixedTasks.some(task => !getLevel1Semantic(task))) return false
-  const semantics = new Set(fixedTasks.map(getLevel1Semantic))
-  return ['stage-concept', 'stage-plan', 'stage-development', 'stage-launch', 'ms-concept-kickoff', 'ms-str1', 'ms-str2', 'ms-str3']
-    .every(semantic => semantics.has(semantic))
+  if (!fixedTasks.every(task => task.source === undefined || task.source === 'template')) return false
+  const hasStableIds = fixedTasks.some(task => Boolean(task?.stableId))
+  if (hasStableIds) {
+    if (!fixedTasks.every(task => typeof task?.stableId === 'string' && task.stableId)) return false
+    return STABLE_LEVEL1_SEED_SIGNATURES.some(signature => (
+      matchesStableLevel1SeedSignature(fixedTasks, signature)
+    ))
+  }
+  return matchesLegacySimpleLevel1SeedSignature(fixedTasks)
 }
 
 const LEVEL1_DATE_FIELDS = ['planStartDate', 'planEndDate', 'actualStartDate', 'actualEndDate'] as const
@@ -304,6 +384,12 @@ const INITIAL_LEVEL1_PROJECT_TYPES_BY_ID = Object.fromEntries(initialProjects.ma
   getProjectTypeFamilyKey(project.type),
 ])) as Record<string, string>
 
+const INITIAL_MACHINE_MARKETS_BY_PROJECT_ID = Object.fromEntries(initialProjects
+  .filter(project => getProjectTypeFamilyKey(project.type) === PROJECT_CATEGORY_MACHINE)
+  .map(project => [String(project.id), new Set(Array.isArray(project.markets) ? project.markets : [])])) as Record<string, Set<string>>
+
+const RESERVED_NON_MARKET_LEVEL1_SCOPES = new Set(['technical', 'tdt', 'subproject', 'tos-type'])
+
 const migratePublishedLevel1Snapshot = (key: string, value: unknown) => {
   if (!Array.isArray(value)) return value
   const templateMatch = /^template::([^:]+)::level1::([^:]+)$/.exec(key)
@@ -323,8 +409,12 @@ const migratePublishedLevel1Snapshot = (key: string, value: unknown) => {
     if (knownProjectType && knownProjectType !== PROJECT_CATEGORY_TOS_VERSION) return value
     return migrateLevel1TasksForProjectType(value, PROJECT_CATEGORY_TOS_VERSION, true)
   }
-  if (/^project::[^:]+::[^:]+::level1::[^:]+$/.test(key)) {
-    if (knownProjectType && knownProjectType !== PROJECT_CATEGORY_MACHINE) return value
+  const marketSnapshotMatch = /^project::([^:]+)::([^:]+)::level1::([^:]+)$/.exec(key)
+  if (marketSnapshotMatch) {
+    const [, projectId, market] = marketSnapshotMatch
+    if (RESERVED_NON_MARKET_LEVEL1_SCOPES.has(market)) return value
+    if (knownProjectType !== PROJECT_CATEGORY_MACHINE) return value
+    if (!INITIAL_MACHINE_MARKETS_BY_PROJECT_ID[projectId]?.has(market)) return value
     return migrateLevel1TasksForProjectType(value, PROJECT_CATEGORY_MACHINE, true)
   }
   const ordinaryProjectMatch = /^project::([^:]+)::level1::[^:]+$/.exec(key)

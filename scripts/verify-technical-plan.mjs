@@ -724,7 +724,7 @@ const repairedEmptyLevel1Mocks = planModule.migratePlanStoreState({
   },
   publishedSnapshots: {
     'template::整机产品项目::level1::v3': [],
-    'project::mock-machine::OP::level1::v3': [],
+    'project::1::OP::level1::v3': [],
   },
   marketPlanData: {},
 }, 6)
@@ -732,7 +732,7 @@ assert.ok(repairedEmptyLevel1Mocks.tasks.length > 0, 'v6 empty global level-one 
 assert.ok(repairedEmptyLevel1Mocks.configTemplateTasksByType['整机产品项目'].length > 0, 'v6 empty machine template recovers its standard milestones')
 assert.ok(repairedEmptyLevel1Mocks.configTemplateTasksByType['tOS版本项目'].length > 0, 'v6 empty tOS template recovers its standard milestones')
 assert.ok(repairedEmptyLevel1Mocks.publishedSnapshots['template::整机产品项目::level1::v3'].length > 0, 'v6 empty standard template snapshot is repaired')
-assert.ok(repairedEmptyLevel1Mocks.publishedSnapshots['project::mock-machine::OP::level1::v3'].length > 0, 'v6 empty project-market snapshot is repaired')
+assert.ok(repairedEmptyLevel1Mocks.publishedSnapshots['project::1::OP::level1::v3'].length > 0, 'v6 empty known project-market snapshot is repaired')
 assert.deepEqual(Object.keys(repairedEmptyLevel1Mocks.marketPlanData).sort(), ['OP', 'RU', 'TR'], 'v6 missing market scopes recover the three demo market plans')
 assert.ok(Object.values(repairedEmptyLevel1Mocks.marketPlanData).every(entry => entry.tasks.length > 0), 'every recovered demo market has visible level-one tasks')
 const preservedNonemptyLevel1Mocks = planModule.migratePlanStoreState({
@@ -751,6 +751,7 @@ const v8TechnicalState = {
     'template::技术项目::level1::v9': v8TechnicalSnapshot,
     'template::技术项目::tdt::v9': v8TechnicalSnapshot,
     'project::9::technical::level1::v9': v8TechnicalSnapshot,
+    'project::user-created-tech::technical::level1::v9': planModule.TOS_LEVEL1_TASKS,
   },
   configTemplateTasksByType: {
     [rules.TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt]: v8TechnicalSnapshot,
@@ -760,6 +761,7 @@ const migratedV8TechnicalState = planModule.migratePlanStoreState(v8TechnicalSta
 assert.deepEqual(migratedV8TechnicalState.publishedSnapshots['template::技术项目::level1::v9'], v8TechnicalSnapshot, 'V8 migration leaves technical compatibility snapshots exact')
 assert.deepEqual(migratedV8TechnicalState.publishedSnapshots['template::技术项目::tdt::v9'], v8TechnicalSnapshot, 'V8 migration leaves scoped technical snapshots exact')
 assert.deepEqual(migratedV8TechnicalState.publishedSnapshots['project::9::technical::level1::v9'], v8TechnicalSnapshot, 'V8 migration leaves technical project snapshots exact')
+assert.deepEqual(migratedV8TechnicalState.publishedSnapshots['project::user-created-tech::technical::level1::v9'], planModule.TOS_LEVEL1_TASKS, 'unknown user-created technical snapshot keys remain exact instead of defaulting to machine markets')
 assert.deepEqual(migratedV8TechnicalState.configTemplateTasksByType[rules.TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt], v8TechnicalSnapshot, 'V8 migration does not rewrite technical store template data')
 assert.deepEqual(v8TechnicalState.publishedSnapshots['template::技术项目::tdt::v9'], v8TechnicalSnapshot, 'V8 technical migration does not mutate its input')
 const editedTdt = [{ ...tdtTasks[0], taskName: '用户已编辑TDT模板' }]
