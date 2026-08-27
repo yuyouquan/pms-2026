@@ -345,6 +345,16 @@ const equalFixedDates = [
 ]
 assert.equal(level1Rules.validateLevel1ScheduleDates(equalFixedDates).valid, true, 'fixed milestones permit equal planned and actual completion dates')
 
+const equalCrossStageFixedDates = [
+  { id: 'equal-stage-1', order: 1, taskName: '同日阶段一', nodeKind: 'stage' },
+  { id: 'equal-stage-1-fixed', parentId: 'equal-stage-1', order: 1, taskName: '阶段一固定点', nodeKind: 'fixed-milestone', planEndDate: '2026-03-10', actualEndDate: '2026-03-11' },
+  { id: 'equal-stage-2', order: 2, taskName: '同日阶段二', nodeKind: 'stage' },
+  { id: 'equal-stage-2-fixed', parentId: 'equal-stage-2', order: 1, taskName: '阶段二固定点', nodeKind: 'fixed-milestone', planEndDate: '2026-03-10', actualEndDate: '2026-03-11' },
+]
+const equalCrossStageFixedValidation = level1Rules.validateLevel1ScheduleDates(equalCrossStageFixedDates)
+assert.equal(equalCrossStageFixedValidation.valid, true, 'fixed milestones permit equal planned and actual completion points across stage boundaries')
+assert.deepEqual(equalCrossStageFixedValidation.byTaskId, {}, 'cross-stage equal fixed points add no derived-stage errors')
+
 const reversedFixedDates = [
   { id: 'fixed-stage-1', order: 1, taskName: '固定阶段一', nodeKind: 'stage' },
   { id: 'fixed-a', parentId: 'fixed-stage-1', order: 1, taskName: '固定节点A', nodeKind: 'fixed-milestone', planEndDate: '2026-03-10', actualEndDate: '2026-03-10' },
@@ -385,6 +395,28 @@ const overlappingBusinessPeriods = [
 const overlappingBusinessValidation = level1Rules.validateLevel1ScheduleDates(overlappingBusinessPeriods)
 assert.ok(overlappingBusinessValidation.byTaskId['period-b']?.planStartDate?.some(message => message.includes('重叠')), 'same-day planned business boundaries count as overlap')
 assert.ok(overlappingBusinessValidation.byTaskId['period-b']?.actualStartDate?.some(message => message.includes('重叠')), 'actual business periods validate independently from planned periods')
+
+const longRunningBusinessOverlap = [
+  { id: 'long-period-stage', order: 1, taskName: '长区间阶段', nodeKind: 'stage' },
+  {
+    id: 'long-period-a', parentId: 'long-period-stage', order: 1, taskName: '长区间A', nodeKind: 'business-period',
+    planStartDate: '2026-04-01', planEndDate: '2026-04-20',
+    actualStartDate: '2026-04-02', actualEndDate: '2026-04-21',
+  },
+  {
+    id: 'long-period-b', parentId: 'long-period-stage', order: 2, taskName: '短区间B', nodeKind: 'business-period',
+    planStartDate: '2026-04-02', planEndDate: '2026-04-03',
+    actualStartDate: '2026-04-03', actualEndDate: '2026-04-04',
+  },
+  {
+    id: 'long-period-c', parentId: 'long-period-stage', order: 3, taskName: '仍在A内的区间C', nodeKind: 'business-period',
+    planStartDate: '2026-04-10', planEndDate: '2026-04-11',
+    actualStartDate: '2026-04-11', actualEndDate: '2026-04-12',
+  },
+]
+const longRunningBusinessValidation = level1Rules.validateLevel1ScheduleDates(longRunningBusinessOverlap)
+assert.ok(longRunningBusinessValidation.byTaskId['long-period-c']?.planStartDate?.some(message => message.includes('重叠')), 'planned overlap detection retains an earlier long-running interval beyond its immediate neighbor')
+assert.ok(longRunningBusinessValidation.byTaskId['long-period-c']?.actualStartDate?.some(message => message.includes('重叠')), 'actual overlap detection retains an earlier long-running interval beyond its immediate neighbor')
 
 const overlappingStages = [
   { id: 'overlap-stage-1', order: 1, taskName: '重叠阶段一', nodeKind: 'stage' },

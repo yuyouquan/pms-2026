@@ -508,18 +508,19 @@ export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): L
     const businessPeriods = sortByOrder((childrenByParent.get(stage.id) || [])
       .filter(task => getNodeKind(task) === 'business-period'))
     LEVEL1_DATE_AXES.forEach(({ startField, endField, label }) => {
-      let previous: Level1PlanTask | null = null
+      let blockingPeriod: Level1PlanTask | null = null
       businessPeriods.forEach(task => {
         const start = getValidTime(task, startField)
         const end = getValidTime(task, endField)
         if (start === null || end === null || start > end) return
-        if (previous) {
-          const previousEnd = getValidTime(previous, endField)
-          if (previousEnd !== null && start <= previousEnd) {
-            addViolation(task, startField, `${label}时间段不得与上一业务节点“${previous.taskName}”重叠`)
+        if (blockingPeriod) {
+          const blockingEnd = getValidTime(blockingPeriod, endField)
+          if (blockingEnd !== null && start <= blockingEnd) {
+            addViolation(task, startField, `${label}时间段不得与上一业务节点“${blockingPeriod.taskName}”重叠`)
           }
+          if (blockingEnd !== null && end <= blockingEnd) return
         }
-        previous = task
+        blockingPeriod = task
       })
     })
   })
@@ -529,10 +530,11 @@ export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): L
     end: number
     startTask: Level1PlanTask
     startField: Level1DateField
+    nodeKind: 'fixed-milestone' | 'business-period'
   }
 
   LEVEL1_DATE_AXES.forEach(({ startField, endField, label }) => {
-    let previousStage: { stage: Level1PlanTask; end: number } | null = null
+    let previousStage: { stage: Level1PlanTask; end: number; onlyFixedMilestones: boolean } | null = null
     roots.forEach(stage => {
       const scheduled = sortByOrder(childrenByParent.get(stage.id) || []).flatMap<Level1StageBoundary>(task => {
         const nodeKind = getNodeKind(task)
@@ -540,25 +542,30 @@ export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): L
         if (nodeKind === 'fixed-milestone') {
           return end === null
             ? []
-            : [{ start: end, end, startTask: task, startField: endField }]
+            : [{ start: end, end, startTask: task, startField: endField, nodeKind }]
         }
         if (nodeKind !== 'business-period') return []
         const start = getValidTime(task, startField)
         return start === null || end === null || start > end
           ? []
-          : [{ start, end, startTask: task, startField }]
+          : [{ start, end, startTask: task, startField, nodeKind }]
       })
       const first = scheduled[0]
       const last = scheduled.at(-1)
       if (!first || !last || first.start > last.end) return
-      if (previousStage && first.start <= previousStage.end) {
+      const onlyFixedMilestones = scheduled.every(boundary => boundary.nodeKind === 'fixed-milestone')
+      const equalFixedPointStages = previousStage
+        && previousStage.onlyFixedMilestones
+        && onlyFixedMilestones
+        && first.start === previousStage.end
+      if (previousStage && first.start <= previousStage.end && !equalFixedPointStages) {
         addViolation(
           first.startTask,
           first.startField,
           `${label}阶段时间不得与上一阶段“${previousStage.stage.taskName}”重叠`,
         )
       }
-      previousStage = { stage, end: last.end }
+      previousStage = { stage, end: last.end, onlyFixedMilestones }
     })
   })
 
