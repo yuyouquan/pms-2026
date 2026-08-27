@@ -64,3 +64,26 @@ export const resolveConfiguredProjectStatus = ({
   }
   return liveValues[0] || ''
 }
+
+export interface InitialProjectStatusPatchInput {
+  initialize: boolean
+  projectType: string
+  configuredValues: readonly string[]
+  ipmStatus?: string
+}
+
+/** Source refreshes may initialize status once, but must never overwrite a user selection. */
+export const buildInitialProjectStatusPatch = ({
+  initialize,
+  projectType,
+  configuredValues,
+  ipmStatus = '',
+}: InitialProjectStatusPatchInput): { status?: string } => initialize
+  ? {
+      status: resolveConfiguredProjectStatus({
+        projectType,
+        configuredValues,
+        ipmStatus,
+      }),
+    }
+  : {}

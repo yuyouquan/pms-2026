@@ -499,7 +499,7 @@ registerAssertion('roadmap validation normalizes names, duplicate keys, tOS vers
     throw new Error('duplicate keys must trim fields and ignore project-code case')
   }
 
-  for (const input of ['tOS17.2', 'tos 17.2', ' TOS  17.2 ']) {
+  for (const input of ['17.2', 'tOS17.2', ' tOS  17.2 ']) {
     const normalized = validation.normalizeTosVersionName(input)
     if (JSON.stringify(normalized) !== JSON.stringify({ name: 'tOS 17.2', major: 17, minor: 2 })) {
       throw new Error(`failed to normalize ${input}`)
@@ -1103,7 +1103,7 @@ registerAssertion('roadmap detail edit preserves its retired canonical tOS snaps
     enumStore.setState(state => ({
       rowsByType: { ...state.rowsByType, 'roadmap-tos': [] },
     }))
-    const unchanged = store.getState().setTosVersionDetails('TOS 18.preview', {
+    const unchanged = store.getState().setTosVersionDetails('tOS 18.preview', {
       versionId: 'tOS 18.preview',
       periodStartDate: '2027-02-01',
       periodEndDate: '2027-04-01',
@@ -1142,6 +1142,81 @@ registerAssertion('roadmap detail edit preserves its retired canonical tOS snaps
   }
 })
 
+registerAssertion('configured tOS bodies round-trip through options planned storage edits and history', () => {
+  const previousWindow = globalThis.window
+  globalThis.window = {
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+  }
+  try {
+    const loader = createTypeScriptModuleLoader()
+    const enumModule = loader(path.join(root, 'src/stores/enums.ts'))
+    const storeModule = loader(path.join(root, 'src/stores/roadmap.ts'))
+    const consumers = loader(path.join(root, 'src/lib/enumConsumers.ts'))
+    const enumStore = enumModule.useEnumStore
+    const store = resetRoadmapStore(storeModule)
+    enumStore.setState(state => ({
+      hasHydrated: true,
+      hydrationError: null,
+      rowsByType: { ...state.rowsByType, 'first-sale-tos': [] },
+    }))
+
+    for (const value of ['TOSbeta', 'tosbeta', '技术预览', 'tOS18.preview']) {
+      const result = enumStore.getState().addEnumRow('first-sale-tos', { value })
+      if (!result.ok) throw new Error(`configured body ${value} was rejected: ${JSON.stringify(result)}`)
+    }
+    const configuredBodies = enumStore.getState().rowsByType['first-sale-tos'].map(row => row.value)
+    if (JSON.stringify(configuredBodies) !== JSON.stringify(['TOSbeta', 'tosbeta', '技术预览', '18.preview'])) {
+      throw new Error(`configuration rewrote legal bodies: ${JSON.stringify(configuredBodies)}`)
+    }
+    const liveOptions = consumers.buildEnumOptions(enumStore.getState().rowsByType, 'first-sale-tos')
+    if (JSON.stringify(liveOptions) !== JSON.stringify([
+      { value: 'TOSbeta', label: 'tOSTOSbeta' },
+      { value: 'tosbeta', label: 'tOStosbeta' },
+      { value: '技术预览', label: 'tOS技术预览' },
+      { value: '18.preview', label: 'tOS18.preview' },
+    ])) throw new Error(`option pipeline rewrote configured bodies: ${JSON.stringify(liveOptions)}`)
+
+    const submittedValues = ['TOSbeta', 'tosbeta', '技术预览', 'tOS18.preview']
+    for (const [index, value] of submittedValues.entries()) {
+      const result = store.getState().createPlannedProject(createPlannedInput({
+        projectCode: `CANON-${index + 1}`,
+        firstSaleTosVersionId: value,
+      }))
+      if (!result.ok) throw new Error(`store create rejected ${value}: ${JSON.stringify(result)}`)
+    }
+    const storedBodies = store.getState().plannedProjects.map(project => project.firstSaleTosVersionId).reverse()
+    if (JSON.stringify(storedBodies) !== JSON.stringify(['TOSbeta', 'tosbeta', '技术预览', '18.preview'])) {
+      throw new Error(`store create collapsed legal bodies: ${JSON.stringify(storedBodies)}`)
+    }
+
+    enumStore.setState(state => ({
+      rowsByType: { ...state.rowsByType, 'first-sale-tos': [] },
+    }))
+    for (const project of [...store.getState().plannedProjects]) {
+      const result = store.getState().updatePlannedProject(project.id, createPlannedInput({
+        projectCode: project.projectCode,
+        firstSaleTosVersionId: project.firstSaleTosVersionId,
+        remark: 'history edit',
+      }))
+      if (!result.ok) throw new Error(`history edit rejected ${project.firstSaleTosVersionId}: ${JSON.stringify(result)}`)
+    }
+    const historyOptions = consumers.buildEnumOptions(
+      enumStore.getState().rowsByType,
+      'first-sale-tos',
+      storedBodies,
+    )
+    if (JSON.stringify(historyOptions) !== JSON.stringify([
+      { value: 'TOSbeta', label: 'tOSTOSbeta（已停用）', disabled: true },
+      { value: 'tosbeta', label: 'tOStosbeta（已停用）', disabled: true },
+      { value: '技术预览', label: 'tOS技术预览（已停用）', disabled: true },
+      { value: '18.preview', label: 'tOS18.preview（已停用）', disabled: true },
+    ])) throw new Error(`history options rewrote legal bodies: ${JSON.stringify(historyOptions)}`)
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window
+    else globalThis.window = previousWindow
+  }
+})
+
 registerAssertion('roadmap store has no independent tOS option CRUD', () => {
   const storeModule = loadIsolatedRoadmapStore()
   const state = resetRoadmapStore(storeModule).getState()
@@ -1174,8 +1249,8 @@ registerAssertion('roadmap migration repairs legacy names, references, UI contro
   const store = loadIsolatedRoadmapStore()
   const migrated = store.migrateRoadmapState({
     tosVersions: [
-      { name: 'tos17.2', targets: [' first ', '', 'second'], createdAt: '2024-01-01T00:00:00.000Z' },
-      { id: 'legacy-18', name: 'TOS 18.0', targets: [' top '] },
+      { name: 'tOS17.2', targets: [' first ', '', 'second'], createdAt: '2024-01-01T00:00:00.000Z' },
+      { id: 'legacy-18', name: 'tOS 18.0', targets: [' top '] },
     ],
     plannedProjects: [{
       id: 'planned-legacy', ...validPlannedRoadmapInput, displayName: 'stale', firstSaleTosVersionId: undefined,
@@ -1708,7 +1783,7 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
   if (
     !switched
     || switched.projectCode !== 'A100'
-    || switched.firstSaleTosVersionId !== '16.3'
+    || switched.firstSaleTosVersionId !== 'tos16.3'
     || switched.startRam !== '6GB'
     || switched.productType !== '老品'
     || switched.developMode !== '联合开发'
@@ -3543,7 +3618,7 @@ registerAssertion('roadmap tOS values normalize persistence while preserving his
   for (const [input, expected] of [
     ['17.2', '17.2'],
     [' tOS17.2 ', '17.2'],
-    ['TOS 17.2', '17.2'],
+    ['TOS 17.2', 'TOS 17.2'],
     ['legacy-beta', 'legacy-beta'],
     ['', ''],
   ]) {

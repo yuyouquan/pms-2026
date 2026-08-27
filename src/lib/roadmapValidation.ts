@@ -11,7 +11,7 @@ import type {
   RoadmapValidationErrors,
   TosVersionConfig,
 } from '@/types/roadmap'
-import { normalizeTosSnapshot } from '@/lib/enumConsumers'
+import { formatTosSnapshot, normalizeTosSnapshot } from '@/lib/enumConsumers'
 
 export const PRODUCT_LINES_BY_BRAND = {
   TECNO: ['PHANTOM', 'CAMON', 'POVA', 'SPARK', 'POP'],
@@ -77,7 +77,7 @@ export function buildRoadmapDuplicateKey(
 }
 
 export function normalizeTosVersionName(input: string): NormalizedTosVersion | null {
-  const match = input.trim().match(/^(?:tos\s*)?(\d+)\.(\d+)$/i)
+  const match = normalizeTosSnapshot(input).match(/^(\d+)\.(\d+)$/)
   if (!match) return null
   const major = Number(match[1])
   const minor = Number(match[2])
@@ -93,7 +93,7 @@ export function normalizeTosVersionName(input: string): NormalizedTosVersion | n
 export function normalizeLegacyTosVersionName(input: string): NormalizedTosVersion | null {
   const normalized = normalizeTosVersionName(input)
   if (normalized) return normalized
-  const match = input.trim().match(/^(?:tos\s*)?(\d+)\.(\d+)\.\d+$/i)
+  const match = normalizeTosSnapshot(input).match(/^(\d+)\.(\d+)\.\d+$/)
   if (!match) return null
   return normalizeTosVersionName(`${match[1]}.${match[2]}`)
 }
@@ -124,8 +124,7 @@ export function normalizeRoadmapTosReference(
 }
 
 export function formatRoadmapTosValue(input: unknown): string {
-  if (typeof input !== 'string' || !input.trim()) return '-'
-  return `tOS${input.trim().replace(/^tOS\s*/i, '')}`
+  return formatTosSnapshot(input) || '-'
 }
 
 export function buildRoadmapTosSelectOptions(

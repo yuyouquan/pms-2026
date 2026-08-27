@@ -29,7 +29,7 @@ const oldMachine = {
 assert.equal(rules.normalizeMachineFamilyName('  X6870  '), 'X6870', 'family matching trims surrounding whitespace')
 assert.notEqual(rules.normalizeMachineFamilyName('x6870'), rules.normalizeMachineFamilyName('X6870'), 'family matching remains case-sensitive')
 assert.equal(rules.normalizeMachineTosVersion(' tOS18.preview '), '18.preview', 'arbitrary tOS bodies normalize one prefix')
-assert.equal(rules.normalizeMachineTosVersion('TOS 16.0'), '16.0', 'two-part tOS bodies remain valid snapshots')
+assert.equal(rules.normalizeMachineTosVersion('TOS 16.0'), 'TOS 16.0', 'uppercase TOS remains part of a valid snapshot body')
 assert.ok(rules.compareMachineTosVersions('17.10.0', '17.2.0') > 0, 'numeric version bodies sort naturally')
 assert.ok(rules.compareMachineTosVersions('18.preview', '16.0') > 0, 'arbitrary non-empty version bodies remain comparable')
 

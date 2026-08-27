@@ -35,7 +35,11 @@ import {
   buildProjectInfoValues,
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
-import { getProjectStatusEnumType, resolveConfiguredProjectStatus } from '@/lib/projectStatus'
+import {
+  buildInitialProjectStatusPatch,
+  getProjectStatusEnumType,
+  resolveConfiguredProjectStatus,
+} from '@/lib/projectStatus'
 import { normalizeMachineFamilyName, resolveMachineTosUpdate } from '@/lib/machineTosVersions'
 import { normalizeTechnicalProjectValues, TechnicalProjectValidationError, validateTechnicalProject } from '@/lib/technicalProjectRules'
 import {
@@ -181,6 +185,10 @@ export default function ProjectInfoModal({
   const machineProductType = String(watchedValues.productType || '')
   const isLegacyMachine = isMachineProjectType(projectType) && machineProductType === '老品'
   const isTechnicalProject = projectType === PROJECT_CATEGORY_TECH
+  const showConfiguredProjectStatus = isMachineProjectType(projectType)
+    || projectType === PROJECT_CATEGORY_TECH
+    || projectType === PROJECT_CATEGORY_CAPABILITY
+    || projectType === PROJECT_TYPE_TOS_VERSION
   const fields = useMemo(() => getProjectInfoModalFields(projectType), [projectType])
   const editableFields = useMemo(() => fields.filter(field => !field.readOnly), [fields])
   const groups = useMemo(() => getProjectInfoModalGroups(projectType), [projectType])
@@ -460,7 +468,7 @@ export default function ProjectInfoModal({
     if (fieldNames.length) form.setFields(fieldNames.map(name => ({ name, value: undefined, errors: [] })))
   }
 
-  const applySourceValues = (bid: string, nextType?: string) => {
+  const applySourceValues = (bid: string, nextType?: string, initializeStatus = false) => {
     if (!enumReady) return
     const entry = candidateProjects.find(item => item.bid === bid)
     if (!entry) return
@@ -471,13 +479,12 @@ export default function ProjectInfoModal({
       marketName: sourceValues.marketName || '',
       brand: sourceValues.brand || '',
       productLine: sourceValues.productLine || '',
-      status: type === PROJECT_TYPE_TOS_VERSION || type === PROJECT_CATEGORY_CAPABILITY
-        ? resolveConfiguredProjectStatus({
-            projectType: type,
-            configuredValues: configuredStatusValues,
-            ipmStatus: entry.ipmStatus || '',
-          })
-        : '待立项',
+      ...buildInitialProjectStatusPatch({
+        initialize: initializeStatus,
+        projectType: type,
+        configuredValues: configuredStatusValues,
+        ipmStatus: entry.ipmStatus || '',
+      }),
       technicalTrack: entry.technicalTrack || '',
       ipmProjectType: entry.ipmProjectCategoryName,
     })
@@ -530,7 +537,8 @@ export default function ProjectInfoModal({
     if (!classification) {
       message.error('该 IPM 项目分类尚未配置映射，请联系管理员维护')
     }
-    applySourceValues(bid, mappedType)
+    lastAppliedSourceRef.current = `${bid}::${mappedType}`
+    applySourceValues(bid, mappedType, true)
     if (isMappedTos && previousFirstLaunchProjectIds.length > 0) {
       form.setFieldValue('firstLaunchProjects', previousFirstLaunchProjectIds)
       const aggregateResult = deriveTosProjectAggregates(previousFirstLaunchProjectIds, existingProjects, entry.name)
@@ -564,7 +572,7 @@ export default function ProjectInfoModal({
       ? (form.getFieldValue('firstLaunchProjects') as unknown[]).filter((item): item is string => typeof item === 'string')
       : []
     if (previousBid && previousBid !== watchedBid && projectType) clearTypeFields(projectType)
-    applySourceValues(watchedBid, projectType)
+    applySourceValues(watchedBid, projectType, true)
     if (projectType === PROJECT_TYPE_TOS_VERSION && selectedFirstLaunchIds.length > 0) {
       const entry = candidateProjects.find(item => item.bid === watchedBid)
       const aggregateResult = deriveTosProjectAggregates(selectedFirstLaunchIds, existingProjects, entry?.name || '')
@@ -1038,9 +1046,13 @@ export default function ProjectInfoModal({
               <Select disabled options={secondaryCategoryOptions} />
             </Form.Item>
           )}
-          {(projectType === PROJECT_TYPE_TOS_VERSION || projectType === PROJECT_CATEGORY_CAPABILITY) && (
+          {showConfiguredProjectStatus && (
             <Form.Item label="项目状态" name="status" rules={[{ required: true, message: '项目状态不能为空' }]}>
-              <Select disabled={mode === 'create' && projectType === PROJECT_TYPE_TOS_VERSION} options={projectStatusOptions} />
+              <Select
+                disabled={projectType === PROJECT_TYPE_TOS_VERSION}
+                options={projectStatusOptions}
+                placeholder={projectStatusOptions.length ? '请选择项目状态' : '暂无可用状态配置，请先在配置中心维护'}
+              />
             </Form.Item>
           )}
           {projectType !== PROJECT_TYPE_TOS_VERSION && !isMachineProjectType(projectType) && !isTechnicalProject && (

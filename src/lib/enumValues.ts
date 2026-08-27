@@ -93,15 +93,26 @@ export function isEnumTypeKey(value: unknown): value is EnumTypeKey {
   return typeof value === 'string' && ENUM_TYPE_KEYS.includes(value as EnumTypeKey)
 }
 
+/**
+ * Persist the tOS body while treating only the exact display prefix `tOS` as
+ * decoration. Bodies such as `TOSbeta` and `tosbeta` are business values and
+ * must not be rewritten.
+ */
+export function normalizeTosValue(input: unknown): string {
+  if (typeof input !== 'string') return ''
+  const value = input.trim().replace(/（已停用）$/, '').trim()
+  const legacyId = /^tos-(\d+)-(\d+)(?:-(\d+))?$/i.exec(value)
+  if (legacyId) return legacyId.slice(1).filter(Boolean).join('.')
+  return value.startsWith('tOS') ? value.slice(3).trim() : value
+}
+
 export function normalizeEnumFieldValue<K extends EnumTypeKey>(
   type: K,
   field: EnumFieldKeyByType<K>,
   input: string,
 ): string {
   const value = input.trim()
-  if (field === 'value' && TOS_PREFIXED_TYPES.has(type) && value.startsWith('tOS')) {
-    return value.slice(3)
-  }
+  if (field === 'value' && TOS_PREFIXED_TYPES.has(type)) return normalizeTosValue(value)
   return value
 }
 

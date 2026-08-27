@@ -77,6 +77,13 @@ assert.equal(values.formatEnumCellValue('machine-project-status', 'value', '进�
 assert.equal(values.formatEnumCellValue('chip-mapping', 'chipModel', 'tOS9000'), 'tOS9000', 'mapping cells do not gain a tOS prefix')
 assert.equal(values.normalizeEnumFieldValue('first-sale-tos', 'value', ' tOS18.0 '), '18.0', 'one literal leading tOS prefix is removed from first-sale values')
 assert.equal(values.normalizeEnumFieldValue('roadmap-tos', 'value', ' tOStOS18.0 '), 'tOS18.0', 'normalization removes only one literal tOS prefix')
+assert.equal(typeof values.normalizeTosValue, 'function', 'one canonical tOS body helper is exported')
+assert.equal(values.normalizeTosValue(' TOSbeta '), 'TOSbeta', 'uppercase TOS is a legal body, not a display prefix')
+assert.equal(values.normalizeTosValue(' tosbeta '), 'tosbeta', 'lowercase tos is a legal body, not a display prefix')
+assert.equal(values.normalizeTosValue(' 技术预览 '), '技术预览', 'Unicode tOS bodies are preserved')
+assert.equal(values.normalizeTosValue(' tOS 18.preview '), '18.preview', 'only the exact tOS display prefix is removed with following spaces')
+assert.equal(values.formatEnumCellValue('roadmap-tos', 'value', 'TOSbeta'), 'tOSTOSbeta', 'uppercase TOS bodies receive one display prefix')
+assert.equal(values.formatEnumCellValue('roadmap-tos', 'value', 'tosbeta'), 'tOStosbeta', 'lowercase tos bodies receive one display prefix')
 assert.equal(values.normalizeEnumFieldValue('machine-project-status', 'value', ' tOS18.0 '), 'tOS18.0', 'non-tOS types only trim strings')
 assert.deepEqual(values.validateAndNormalizeEnumRow('first-sale-tos', { value: ' alpha ' }, []), { ok: true, row: { value: 'alpha' } }, 'arbitrary nonempty single strings are valid')
 assert.deepEqual(values.validateAndNormalizeEnumRow('roadmap-tos', { value: '   ' }, []), {

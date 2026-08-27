@@ -85,19 +85,23 @@ assert.deepEqual(consumers.buildEnumOptions(rowsByType, 'roadmap-tos'), [
 assert.equal(consumers.normalizeTosSnapshot(' tOSbeta '), 'beta', 'tOS snapshots persist an arbitrary nonempty body without a prefix')
 assert.equal(consumers.formatTosSnapshot('tOSbeta'), 'tOSbeta', 'tOS snapshot presentation adds the prefix exactly once')
 assert.equal(consumers.resolveCurrentTosSnapshot('tOS18.0', ['beta', '18.0']), '18.0', 'current tOS snapshot resolution uses unified configured values')
+assert.equal(consumers.normalizeTosSnapshot('TOSbeta'), 'TOSbeta', 'uppercase TOS remains part of the configured body')
+assert.equal(consumers.normalizeTosSnapshot('tosbeta'), 'tosbeta', 'lowercase tos remains part of the configured body')
+assert.equal(consumers.normalizeTosSnapshot('技术预览'), '技术预览', 'Unicode configured bodies round-trip unchanged')
+assert.equal(consumers.normalizeTosSnapshot('tOS 18.preview'), '18.preview', 'the exact display prefix normalizes once')
+assert.equal(consumers.formatTosSnapshot('TOSbeta'), 'tOSTOSbeta', 'uppercase TOS body presentation adds one exact display prefix')
 
 console.log('[enum-consumers] verifying historical single-value snapshots')
 assert.deepEqual(consumers.buildEnumOptions(rowsByType, 'roadmap-tos', ['17.2', '18.0', 'tOS19.0', '17.2']), [
   { value: 'beta', label: 'tOSbeta' },
   { value: '18.0', label: 'tOS18.0' },
   { value: '17.2', label: 'tOS17.2（已停用）', disabled: true },
-  { value: 'tOS19.0', label: 'tOS19.0（已停用）', disabled: true },
-], 'missing history appends once, preserves its stored value, and formats one tOS prefix')
+  { value: '19.0', label: 'tOS19.0（已停用）', disabled: true },
+], 'missing history appends once in canonical body form and formats one tOS prefix')
 assert.deepEqual(consumers.buildEnumOptions(rowsByType, 'roadmap-tos', ['tOS18.0']), [
   { value: 'beta', label: 'tOSbeta' },
   { value: '18.0', label: 'tOS18.0' },
-  { value: 'tOS18.0', label: 'tOS18.0（已停用）', disabled: true },
-], 'tOS history preserves its raw snapshot value and de-duplicates only exact current values')
+], 'tOS history canonicalizes before de-duplicating current values')
 assert.deepEqual(consumers.buildEnumOptions(rowsByType, 'core-value', ['旧值', '第二项', '旧值']), [
   { value: '第二项', label: '第二项' },
   { value: '第一项', label: '第一项' },

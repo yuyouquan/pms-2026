@@ -1,4 +1,4 @@
-import { formatEnumCellValue } from '@/lib/enumValues'
+import { formatEnumCellValue, normalizeTosValue } from '@/lib/enumValues'
 import type {
   EnumRowByType,
   EnumRowsByType,
@@ -50,10 +50,7 @@ const nonemptyString = (input: unknown): string => typeof input === 'string' ? i
 
 /** Project snapshots persist the tOS body; presentation owns the single prefix. */
 export function normalizeTosSnapshot(input: unknown): string {
-  const value = nonemptyString(input).replace(/（已停用）$/, '').trim()
-  const legacyId = /^tos-(\d+)-(\d+)(?:-(\d+))?$/i.exec(value)
-  if (legacyId) return legacyId.slice(1).filter(Boolean).join('.')
-  return value.replace(/^tOS\s*/i, '').trim()
+  return normalizeTosValue(input)
 }
 
 export function formatTosSnapshot(input: unknown): string {
@@ -77,7 +74,10 @@ export function getSingleEnumValues(
   rowsByType: EnumRowsByType,
   type: SingleEnumTypeKey,
 ): string[] {
-  return rowsByType[type].map(row => row.value)
+  const normalize = type === 'first-sale-tos' || type === 'roadmap-tos'
+    ? normalizeTosSnapshot
+    : nonemptyString
+  return rowsByType[type].map(row => normalize(row.value)).filter(Boolean)
 }
 
 export function buildEnumOptions(
@@ -91,10 +91,12 @@ export function buildEnumOptions(
     label: formatEnumCellValue(type, 'value', value),
   }))
   const seen = new Set(currentValues)
+  const normalizeHistory = type === 'first-sale-tos' || type === 'roadmap-tos'
+    ? normalizeTosSnapshot
+    : nonemptyString
 
   for (const input of historicalValues) {
-    // Snapshot identity is exact after trimming: `18.0` and `tOS18.0` must not collapse.
-    const value = nonemptyString(input)
+    const value = normalizeHistory(input)
     if (!value || seen.has(value)) continue
     seen.add(value)
     options.push(historyOption(value, formatEnumCellValue(type, 'value', value)))
