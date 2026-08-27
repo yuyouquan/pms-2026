@@ -17,6 +17,7 @@ import {
   type InputRef,
 } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
+import { normalizeTosSnapshot } from '@/lib/enumConsumers'
 import { ROADMAP_AUDIT_FIELDS, ROADMAP_AUDIT_FIELD_LABELS } from '@/lib/roadmapAudit'
 import { formatTosVersionDisplay, formatTosVersionFull } from '@/lib/roadmapValidation'
 import type {
@@ -200,12 +201,15 @@ export function getRoadmapAuditDisplayEntries(log: RoadmapChangeLog): RoadmapAud
 }
 
 function findMaintainedTosVersion(value: string, tosVersions: readonly TosVersionConfig[]): TosVersionConfig | null {
-  const candidate = value.trim()
+  const candidate = normalizeTosSnapshot(value)
   if (!candidate) return null
-  const directMatch = tosVersions.find(version => version.id === candidate || version.name === candidate)
+  const directMatch = tosVersions.find(version => (
+    normalizeTosSnapshot(version.id) === candidate
+    || normalizeTosSnapshot(version.name) === candidate
+  ))
   if (directMatch) return directMatch
 
-  const semanticMatch = candidate.match(/^tos\s*(\d+)\.(\d+)$/i)
+  const semanticMatch = candidate.match(/^(\d+)\.(\d+)$/)
   if (!semanticMatch) return null
   const major = Number(semanticMatch[1])
   const minor = Number(semanticMatch[2])

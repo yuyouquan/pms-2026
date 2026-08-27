@@ -54,20 +54,6 @@ export const PROJECT_INFO_SCHEMA_VERSION = 2
 export const LEGACY_PROJECT_INFO_SCHEMA_VERSION = 0
 
 const yesNo = ['是', '否'] as const
-const softwareProjectLevels = ['S', 'A', 'B', 'C', 'D'] as const
-const dimensionUpgradeStrategies = [
-  '不维护',
-  'EWP维护',
-  '维1',
-  '维2',
-  'EWP维护+tOS升级',
-  '维1+tOS升级',
-  '维2+tOS升级',
-  '升1维2',
-  '升2维3',
-  '升3维5',
-] as const
-
 const defineFields = (
   fields: ProjectInfoFieldConfig[],
   requiredByDefault = false,
@@ -99,28 +85,28 @@ export const MACHINE_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineF
   { key: 'developmentMode', label: '开发模式', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, placeholder: '请选择或输入开发模式' },
   { key: 'firstSaleTosVersion', label: '首销 tOS 版本', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'isFirstLaunchProject', label: '是否首发项目', group: 'basic', inputType: 'boolean', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: yesNo },
-  { key: 'softwareProjectLevel', label: '软件项目等级', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: softwareProjectLevels },
-  { key: 'versionType', label: '版本类型', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: ['Full', 'Slim', 'PAD', 'GO'] },
-  { key: 'dimensionUpgradeStrategy', label: '升维策略', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: dimensionUpgradeStrategies },
+  { key: 'softwareProjectLevel', label: '软件项目等级', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
+  { key: 'versionType', label: '版本类型', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
+  { key: 'dimensionUpgradeStrategy', label: '升维策略', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'projectModel', label: '项目名', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
   { key: 'mainboardName', label: '主板名', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
   { key: 'androidMajorUpgrade', label: '是否大版本升级', group: 'basic', inputType: 'boolean', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true, options: yesNo },
   { key: 'productType', label: '产品类型', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
   { key: 'targetMarkets', label: '目标市场', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
-  { key: 'systemType', label: '系统类型', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true, options: ['32bit', '64bit', '64only'] },
+  { key: 'systemType', label: '系统类型', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true },
   { key: 'kernelVersion', label: 'Kernel 版本', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true, placeholder: '请选择或输入 Kernel 版本' },
   { key: 'confidentialityLevel', label: '保密级别', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
   { key: 'androidVersion', label: '安卓版本', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
-  { key: 'productSeries', label: '产品系列', group: 'basic', inputType: 'text', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true },
+  { key: 'productSeries', label: '产品系列', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true },
   { key: 'modelCategory', label: '机型分类', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'currentTosVersion', label: '当前 tOS 版本', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true },
   { key: 'launchDate', label: '上市时间', group: 'basic', inputType: 'date', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
   { key: 'productionForbiddenDate', label: '禁止生产时间', group: 'basic', inputType: 'date', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
 
   // 扩展信息
-  { key: 'chipCode', label: '芯片编码', group: 'extended', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
-  { key: 'chipModel', label: '芯片型号', group: 'extended', inputType: 'text', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
-  { key: 'chipPlatform', label: '芯片平台', group: 'extended', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: ['MTK', 'UNISOC', 'QCOM'] },
+  { key: 'chipCode', label: '芯片编码', group: 'extended', inputType: 'select', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'chipModel', label: '芯片型号', group: 'extended', inputType: 'text', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, readOnly: true },
+  { key: 'chipPlatform', label: '芯片平台', group: 'extended', inputType: 'text', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'memorySize', label: '内存大小', group: 'extended', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'startingRam', label: '起步 RAM', group: 'extended', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'wholeMachinePd', label: '整机 PD', group: 'extended', inputType: 'link', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, placeholder: '请输入链接或 Excel 文件地址' },

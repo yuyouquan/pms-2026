@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReloadOutlined } from '@ant-design/icons'
-import { Alert, Button, Collapse, Form, Input, Modal, Select, Space, Spin, Tag, message } from 'antd'
+import { Alert, Button, Collapse, Form, Input, Modal, Select, Skeleton, Space, Spin, Tag, message } from 'antd'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import ProjectInfoFieldInput from '@/components/project-info/ProjectInfoFieldInput'
 import TechnicalProjectCreateFields from '@/components/technical-project/TechnicalProjectCreateFields'
@@ -15,10 +15,10 @@ import {
   PROJECT_SECONDARY_CATEGORIES,
   PROJECT_TYPES,
   PROJECT_TYPE_TOS_VERSION,
+  PROJECT_CATEGORY_CAPABILITY,
+  PROJECT_CATEGORY_MACHINE,
   PROJECT_CATEGORY_TECH,
   isMachineProjectType,
-  mapIpmProjectClassification,
-  normalizeMachineProjectType,
   resolveProjectClassification,
 } from '@/constants/projectTypes'
 import { fetchByBid, type ExternalProjectEntry } from '@/data/externalProjectPool'
@@ -35,8 +35,11 @@ import {
   buildProjectInfoValues,
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
-import { normalizeTosEnumReference } from '@/lib/tosEnumOptions'
-import { mapIpmProjectStatus, TOS_PROJECT_STATUS_OPTIONS } from '@/lib/projectStatus'
+import {
+  buildInitialProjectStatusPatch,
+  getProjectStatusEnumType,
+  resolveConfiguredProjectStatus,
+} from '@/lib/projectStatus'
 import { normalizeMachineFamilyName, resolveMachineTosUpdate } from '@/lib/machineTosVersions'
 import { normalizeTechnicalProjectValues, TechnicalProjectValidationError, validateTechnicalProject } from '@/lib/technicalProjectRules'
 import {
@@ -50,7 +53,17 @@ import {
 import type { ProjectInfoValues } from '@/types/app'
 import { TECHNICAL_DELIVERABLE_FIELDS } from '@/constants/technicalProject'
 import { useProjectStore } from '@/stores/project'
+import { useEnumStore } from '@/stores/enums'
 import { useOverlayInteraction } from '@/hooks/useOverlayInteraction'
+import { useEnumHydration } from '@/hooks/useEnumOptions'
+import {
+  buildChipOptions,
+  buildEnumOptions,
+  findProjectCategoryMapping,
+  normalizeTosSnapshot,
+  resolveChipRow,
+  type SingleEnumTypeKey,
+} from '@/lib/enumConsumers'
 
 type ProjectInfoFormState = ProjectInfoValues & {
   bid?: string
@@ -92,24 +105,30 @@ interface ProjectInfoModalProps {
   onCancel: () => void
   onSubmit: (payload: ProjectInfoSubmitPayload) => Promise<boolean | void> | boolean | void
   onAfterCreate?: () => void
-  fieldOptionOverrides?: Partial<Record<string, readonly (string | { label: string; value: string; disabled?: boolean })[]>>
 }
 
 export const PROJECT_CREATION_DRAFT_SAVE_DELAY_MS = 300
 
 const CREATE_FORM_DEFAULTS: ProjectInfoFormState = {
   responsiblePersons: [],
-  healthStatus: 'normal',
-  status: '待立项',
+  status: '',
 }
 
 type DraftReadStatus = 'idle' | 'loading' | 'ready' | 'failed'
 
-const HEALTH_OPTIONS = [
-  { label: '正常', value: 'normal' },
-  { label: '预警', value: 'warning' },
-  { label: '风险', value: 'risk' },
-]
+const MACHINE_FIELD_ENUM_TYPES: Partial<Record<string, SingleEnumTypeKey>> = {
+  firstSaleTosVersion: 'first-sale-tos',
+  currentTosVersion: 'first-sale-tos',
+  versionType: 'version-type',
+  softwareProjectLevel: 'software-project-level',
+  productSeries: 'product-series',
+  researchMode: 'research-mode',
+  developmentMode: 'machine-development-mode',
+  dimensionUpgradeStrategy: 'upgrade-strategy',
+  systemType: 'system-type',
+  kernelVersion: 'kernel-version',
+  memorySize: 'memory-size',
+}
 
 const GROUP_COLORS: Record<ProjectInfoGroupKey, string> = {
   basic: 'var(--pms-brand)',
@@ -129,9 +148,10 @@ export default function ProjectInfoModal({
   onCancel,
   onSubmit,
   onAfterCreate,
-  fieldOptionOverrides,
 }: ProjectInfoModalProps) {
   const [form] = Form.useForm<ProjectInfoFormState>()
+  const rowsByType = useEnumStore(state => state.rowsByType)
+  const { hasHydrated, hydrationError, isReady: enumReady, retryHydration } = useEnumHydration(open)
   const syncTechnicalTeamPermissionMembers = useProjectStore(state => state.syncTechnicalTeamPermissionMembers)
   const syncTosTeamPermissionMembers = useProjectStore(state => state.syncTosTeamPermissionMembers)
   const [submitting, setSubmitting] = useState(false)
@@ -158,13 +178,17 @@ export default function ProjectInfoModal({
   const selectedCandidate = mode === 'create'
     ? candidateProjects.find(item => item.bid === watchedBid)
     : undefined
-  const selectedIpmClassification = selectedCandidate
-    ? mapIpmProjectClassification(selectedCandidate.ipmProjectCategoryName)
+  const selectedIpmClassification = enumReady && selectedCandidate
+    ? findProjectCategoryMapping(rowsByType, selectedCandidate.ipmProjectCategoryName)
     : undefined
-  const isIpmClassificationMissing = Boolean(selectedCandidate && !selectedIpmClassification)
+  const isIpmClassificationMissing = Boolean(enumReady && selectedCandidate && !selectedIpmClassification)
   const machineProductType = String(watchedValues.productType || '')
   const isLegacyMachine = isMachineProjectType(projectType) && machineProductType === '老品'
   const isTechnicalProject = projectType === PROJECT_CATEGORY_TECH
+  const showConfiguredProjectStatus = isMachineProjectType(projectType)
+    || projectType === PROJECT_CATEGORY_TECH
+    || projectType === PROJECT_CATEGORY_CAPABILITY
+    || projectType === PROJECT_TYPE_TOS_VERSION
   const fields = useMemo(() => getProjectInfoModalFields(projectType), [projectType])
   const editableFields = useMemo(() => fields.filter(field => !field.readOnly), [fields])
   const groups = useMemo(() => getProjectInfoModalGroups(projectType), [projectType])
@@ -177,8 +201,50 @@ export default function ProjectInfoModal({
     ] as readonly string[] | undefined
     return (values || []).map(value => ({ label: value, value }))
   }, [projectType])
+  const machineHistorySignature = Object.keys(MACHINE_FIELD_ENUM_TYPES)
+    .map(key => mode === 'edit' ? String(watchedValues[key] || '') : '')
+    .join('\u001f')
+  const machineFieldOptions = useMemo(() => Object.fromEntries(
+    enumReady ? Object.entries(MACHINE_FIELD_ENUM_TYPES).map(([fieldKey, type]) => {
+      const historicalValue = machineHistorySignature.split('\u001f')[Object.keys(MACHINE_FIELD_ENUM_TYPES).indexOf(fieldKey)] || ''
+      return [fieldKey, buildEnumOptions(rowsByType, type as SingleEnumTypeKey, historicalValue ? [historicalValue] : [])]
+    }) : [],
+  ), [enumReady, machineHistorySignature, rowsByType])
+  const healthSnapshot = String(watchedValues.healthStatus || '')
+  const healthOptions = useMemo(
+    () => enumReady ? buildEnumOptions(rowsByType, 'machine-health-status', healthSnapshot ? [healthSnapshot] : []) : [],
+    [enumReady, healthSnapshot, rowsByType],
+  )
+  const projectStatusSnapshot = String(watchedValues.status || '')
+  const projectStatusOptions = useMemo(
+    () => enumReady ? buildEnumOptions(
+      rowsByType,
+      getProjectStatusEnumType(projectType),
+      projectStatusSnapshot ? [projectStatusSnapshot] : [],
+    ) : [],
+    [enumReady, projectStatusSnapshot, projectType, rowsByType],
+  )
+  const chipSnapshot = useMemo(() => ({
+    chipCode: String(watchedValues.chipCode || ''),
+    chipModel: String(watchedValues.chipModel || ''),
+    chipPlatform: String(watchedValues.chipPlatform || ''),
+  }), [watchedValues.chipCode, watchedValues.chipModel, watchedValues.chipPlatform])
+  const chipOptions = useMemo(
+    () => enumReady ? buildChipOptions(rowsByType, Object.values(chipSnapshot).some(Boolean) ? [chipSnapshot] : []) : [],
+    [chipSnapshot, enumReady, rowsByType],
+  )
+  const selectedChipOptionId = useMemo(() => {
+    if (!enumReady) return undefined
+    const live = rowsByType['chip-mapping'].find(row => (
+      row.chipCode === chipSnapshot.chipCode
+      && row.chipModel === chipSnapshot.chipModel
+      && row.chipPlatform === chipSnapshot.chipPlatform
+    ))
+    return live?.id || chipOptions.find(option => option.historical)?.value
+  }, [chipOptions, chipSnapshot, enumReady, rowsByType])
   const isDraftHydrating = mode === 'create'
     && open
+    && enumReady
     && (
       draftReadStatus === 'idle'
       || draftReadStatus === 'loading'
@@ -290,8 +356,8 @@ export default function ProjectInfoModal({
     let infoValues = isMachineProjectType(project.type)
       ? {
           ...storedInfoValues,
-          firstSaleTosVersion: normalizeTosEnumReference(storedInfoValues.firstSaleTosVersion),
-          currentTosVersion: normalizeTosEnumReference(storedInfoValues.currentTosVersion),
+          firstSaleTosVersion: normalizeTosSnapshot(storedInfoValues.firstSaleTosVersion),
+          currentTosVersion: normalizeTosSnapshot(storedInfoValues.currentTosVersion),
         }
       : storedInfoValues
     if (project.type === PROJECT_TYPE_TOS_VERSION) {
@@ -306,9 +372,11 @@ export default function ProjectInfoModal({
       ...infoValues,
       projectName: project.name,
       type: normalizedProjectType,
-      secondaryCategory: classification.secondaryCategory || '',
+      secondaryCategory: normalizedProjectType === PROJECT_CATEGORY_MACHINE
+        ? classification.secondaryCategory || ''
+        : '',
       responsiblePersons,
-      healthStatus: typeof project.healthStatus === 'string' ? project.healthStatus : 'normal',
+      healthStatus: typeof project.healthStatus === 'string' ? project.healthStatus : '',
       status: typeof project.status === 'string' ? project.status : '',
       currentNode: typeof project.currentNode === 'string' ? project.currentNode : '',
       cancelPauseDate: typeof project.cancelPauseDate === 'string' ? project.cancelPauseDate : '',
@@ -325,7 +393,7 @@ export default function ProjectInfoModal({
   }, [existingProjects, form, mode, open, project, responsiblePersons])
 
   useEffect(() => {
-    if (!open || mode !== 'create') {
+    if (!open || mode !== 'create' || !enumReady) {
       invalidateCreateDraftSession()
       setDraftReadStatus('idle')
       return
@@ -366,14 +434,15 @@ export default function ProjectInfoModal({
         if (!isCurrentCreateDraftSession(session)) return
       } else if (draft) {
         const restoredEntry = candidateProjectsRef.current.find(item => item.bid === restoredBid)
-        const restoredClassification = mapIpmProjectClassification(
-          restoredEntry?.ipmProjectCategoryName,
+        const restoredClassification = findProjectCategoryMapping(
+          rowsByType,
+          restoredEntry?.ipmProjectCategoryName || '',
         )
-        const restoredType = restoredClassification?.projectCategory || ''
+        const restoredType = restoredClassification?.pmsProjectCategory || ''
         form.setFieldsValue({
           ...draft.values,
           type: restoredType || undefined,
-          secondaryCategory: restoredClassification?.secondaryCategory,
+          secondaryCategory: restoredClassification?.pmsSecondaryCategory,
         } as ProjectInfoFormState)
         lastAppliedSourceRef.current = `${restoredBid}::${restoredType}`
         const modalGroupKeys = new Set<string>(getProjectInfoModalGroups(restoredType).map(group => group.key))
@@ -392,30 +461,50 @@ export default function ProjectInfoModal({
         invalidateCreateDraftSession()
       }
     }
-  }, [draftHydrationAttempt, draftOwnerId, draftRepository, enqueueDraftMutation, form, invalidateCreateDraftSession, isCurrentCreateDraftSession, mode, open, resetCreateForm, setDraftReadStatus, startCreateDraftSession])
+  }, [draftHydrationAttempt, draftOwnerId, draftRepository, enqueueDraftMutation, enumReady, form, invalidateCreateDraftSession, isCurrentCreateDraftSession, mode, open, resetCreateForm, rowsByType, setDraftReadStatus, startCreateDraftSession])
 
   const clearTypeFields = (type: string) => {
     const fieldNames = getProjectInfoFields(type).map(field => field.key)
     if (fieldNames.length) form.setFields(fieldNames.map(name => ({ name, value: undefined, errors: [] })))
   }
 
-  const applySourceValues = (bid: string, nextType?: string) => {
+  const applySourceValues = (bid: string, nextType?: string, initializeStatus = false) => {
+    if (!enumReady) return
     const entry = candidateProjects.find(item => item.bid === bid)
     if (!entry) return
     const sourceValues = fetchByBid(bid)
     const type = nextType || String(form.getFieldValue('type') || '')
+    const configuredStatusValues = rowsByType[getProjectStatusEnumType(type)].map(row => row.value)
     form.setFieldsValue({
       marketName: sourceValues.marketName || '',
       brand: sourceValues.brand || '',
       productLine: sourceValues.productLine || '',
-      status: type === PROJECT_TYPE_TOS_VERSION
-        ? mapIpmProjectStatus(entry.ipmStatus || '', type)
-        : '待立项',
+      ...buildInitialProjectStatusPatch({
+        initialize: initializeStatus,
+        projectType: type,
+        configuredValues: configuredStatusValues,
+        ipmStatus: entry.ipmStatus || '',
+      }),
       technicalTrack: entry.technicalTrack || '',
       ipmProjectType: entry.ipmProjectCategoryName,
     })
     if (isMachineProjectType(type)) {
-      form.setFieldsValue(deriveMachineProjectInfoValues({ ...entry, ...sourceValues }))
+      const derivedValues = deriveMachineProjectInfoValues({ ...entry, ...sourceValues })
+      const keepConfiguredValue = (fieldKey: string, enumType: SingleEnumTypeKey) => {
+        const rawValue = String(derivedValues[fieldKey] || '')
+        const value = enumType === 'first-sale-tos' ? normalizeTosSnapshot(rawValue) : rawValue
+        return rowsByType[enumType].some(row => row.value === value) ? value : ''
+      }
+      form.setFieldsValue({
+        ...derivedValues,
+        firstSaleTosVersion: keepConfiguredValue('firstSaleTosVersion', 'first-sale-tos'),
+        currentTosVersion: keepConfiguredValue('currentTosVersion', 'first-sale-tos'),
+        versionType: keepConfiguredValue('versionType', 'version-type'),
+        productSeries: keepConfiguredValue('productSeries', 'product-series'),
+        chipCode: '',
+        chipModel: '',
+        chipPlatform: '',
+      })
     }
     if (type === 'tOS版本项目') {
       form.setFieldsValue({ newProductProjectList: '', legacyProductProjectList: '' })
@@ -423,10 +512,11 @@ export default function ProjectInfoModal({
   }
 
   const handleCandidateChange = (bid: string) => {
+    if (!enumReady) return
     const entry = candidateProjects.find(item => item.bid === bid)
     if (!entry) return
-    const classification = mapIpmProjectClassification(entry.ipmProjectCategoryName)
-    const mappedType = classification?.projectCategory || ''
+    const classification = findProjectCategoryMapping(rowsByType, entry.ipmProjectCategoryName)
+    const mappedType = classification?.pmsProjectCategory || ''
     const isMappedTos = mappedType === PROJECT_TYPE_TOS_VERSION
     const previousType = String(form.getFieldValue('type') || '')
     const previousFirstLaunchProjectIds = previousType === PROJECT_TYPE_TOS_VERSION
@@ -438,7 +528,7 @@ export default function ProjectInfoModal({
     if (previousType) clearTypeFields(previousType)
     form.setFieldsValue({
       type: mappedType || undefined,
-      secondaryCategory: classification?.secondaryCategory,
+      secondaryCategory: classification?.pmsSecondaryCategory,
     })
     activeGroupsRef.current = mappedType
       ? getProjectInfoModalGroups(mappedType).map(group => group.key)
@@ -447,7 +537,8 @@ export default function ProjectInfoModal({
     if (!classification) {
       message.error('该 IPM 项目分类尚未配置映射，请联系管理员维护')
     }
-    applySourceValues(bid, mappedType)
+    lastAppliedSourceRef.current = `${bid}::${mappedType}`
+    applySourceValues(bid, mappedType, true)
     if (isMappedTos && previousFirstLaunchProjectIds.length > 0) {
       form.setFieldValue('firstLaunchProjects', previousFirstLaunchProjectIds)
       const aggregateResult = deriveTosProjectAggregates(previousFirstLaunchProjectIds, existingProjects, entry.name)
@@ -473,7 +564,7 @@ export default function ProjectInfoModal({
     : ''
 
   useEffect(() => {
-    if (!open || mode !== 'create' || !watchedBid) return
+    if (!open || mode !== 'create' || !enumReady || !watchedBid) return
     const sourceKey = `${watchedBid}::${projectType}`
     if (lastAppliedSourceRef.current === sourceKey) return
     const previousBid = lastAppliedSourceRef.current.split('::')[0]
@@ -481,7 +572,7 @@ export default function ProjectInfoModal({
       ? (form.getFieldValue('firstLaunchProjects') as unknown[]).filter((item): item is string => typeof item === 'string')
       : []
     if (previousBid && previousBid !== watchedBid && projectType) clearTypeFields(projectType)
-    applySourceValues(watchedBid, projectType)
+    applySourceValues(watchedBid, projectType, true)
     if (projectType === PROJECT_TYPE_TOS_VERSION && selectedFirstLaunchIds.length > 0) {
       const entry = candidateProjects.find(item => item.bid === watchedBid)
       const aggregateResult = deriveTosProjectAggregates(selectedFirstLaunchIds, existingProjects, entry?.name || '')
@@ -489,7 +580,7 @@ export default function ProjectInfoModal({
       setAggregateWarnings(aggregateResult.missingSources)
     }
     lastAppliedSourceRef.current = sourceKey
-  }, [candidateProjects, existingProjects, form, mode, open, projectType, watchedBid])
+  }, [candidateProjects, enumReady, existingProjects, form, mode, open, projectType, watchedBid])
 
   useEffect(() => {
     if (!open || projectType !== PROJECT_TYPE_TOS_VERSION) return
@@ -512,7 +603,7 @@ export default function ProjectInfoModal({
       return
     }
     if (!isLegacyMachine) {
-      const normalizedFirstSale = normalizeTosEnumReference(watchedFirstSaleTosVersion)
+      const normalizedFirstSale = normalizeTosSnapshot(watchedFirstSaleTosVersion)
       if (!normalizedFirstSale) {
         setMachineFamilyError('')
         return
@@ -531,7 +622,7 @@ export default function ProjectInfoModal({
       if (!resolution.ok) {
         setMachineFamilyError(resolution.reason === 'duplicate-new-product'
           ? '已存在项目名完全相同的新品项目，不能重复创建或保存'
-          : 'tOS 版本必须是严格的三段数字，例如 14.0.0')
+          : 'tOS 版本不能为空，请从当前配置中选择有效值')
         return
       }
       setMachineFamilyError('')
@@ -561,7 +652,7 @@ export default function ProjectInfoModal({
     const inheritedValues = buildProjectInfoValues(matchingNewProjects[0], ['firstSaleTosVersion'])
     form.setFieldValue(
       'firstSaleTosVersion',
-      normalizeTosEnumReference(inheritedValues.firstSaleTosVersion),
+      normalizeTosSnapshot(inheritedValues.firstSaleTosVersion),
     )
     setMachineFamilyError('')
   }, [existingProjects, form, isLegacyMachine, machineProjectName, mode, open, project?.id, projectType, watchedFirstSaleTosVersion])
@@ -605,6 +696,11 @@ export default function ProjectInfoModal({
   const requestClose = async () => {
     if (mode === 'create') {
       if (submitting) return
+      if (!enumReady) {
+        invalidateCreateDraftSession()
+        onCancel()
+        return
+      }
       if (draftReadStatusRef.current === 'loading' || draftReadStatusRef.current === 'idle') {
         return
       }
@@ -684,12 +780,17 @@ export default function ProjectInfoModal({
     if (!tryBeginSubmit()) return
     setSubmitting(true)
     try {
+    const enumState = useEnumStore.getState()
+    if (!enumState.hasHydrated || enumState.hydrationError) {
+      message.error(enumState.hydrationError || '枚举配置正在加载，请稍后重试')
+      return
+    }
     const selectedBid = String(form.getFieldValue('bid') || '')
     const sourceEntry = mode === 'create'
       ? candidateProjects.find(item => item.bid === selectedBid)
       : undefined
     const ipmClassification = sourceEntry
-      ? mapIpmProjectClassification(sourceEntry.ipmProjectCategoryName)
+      ? findProjectCategoryMapping(rowsByType, sourceEntry.ipmProjectCategoryName)
       : undefined
     if (mode === 'create' && sourceEntry && !ipmClassification) {
       const mappingMessage = '该 IPM 项目分类尚未配置映射，请联系管理员维护'
@@ -714,13 +815,32 @@ export default function ProjectInfoModal({
     }
 
     const normalizedProjectType = mode === 'create'
-      ? ipmClassification?.projectCategory || ''
-      : normalizeMachineProjectType(projectType)
-    const projectSecondaryCategory = mode === 'create'
-      ? ipmClassification?.secondaryCategory || ''
-      : String(values.secondaryCategory || '')
-    if (!normalizedProjectType || !projectSecondaryCategory) {
-      message.error('项目分类和项目二级分类均为必填项')
+      ? ipmClassification?.pmsProjectCategory || ''
+      : resolveProjectClassification(projectType, String(values.secondaryCategory || '')).projectCategory
+    const submittedStatus = String(values.status || '').trim()
+    const currentStatusRows = enumState.rowsByType[getProjectStatusEnumType(normalizedProjectType)]
+    const resolvedProjectStatus = resolveConfiguredProjectStatus({
+      projectType: normalizedProjectType,
+      configuredValues: currentStatusRows.map(row => row.value),
+      submittedStatus,
+      mode,
+      originalStatus: typeof project?.status === 'string' ? project.status : '',
+    })
+    if (submittedStatus && !resolvedProjectStatus) {
+      const statusError = mode === 'create' && normalizedProjectType === PROJECT_TYPE_TOS_VERSION
+        ? `IPM 映射状态“${submittedStatus}”不在当前配置中，请先维护项目状态配置`
+        : '项目状态不在当前配置中，请重新选择'
+      form.setFields([{ name: 'status', errors: [statusError] }])
+      message.error(statusError)
+      return
+    }
+    const projectSecondaryCategory = normalizedProjectType === PROJECT_CATEGORY_MACHINE
+      ? mode === 'create'
+        ? ipmClassification?.pmsSecondaryCategory || ''
+        : String(values.secondaryCategory || '')
+      : ''
+    if (!normalizedProjectType || (normalizedProjectType === PROJECT_CATEGORY_MACHINE && !projectSecondaryCategory)) {
+      message.error(normalizedProjectType === PROJECT_CATEGORY_MACHINE ? '项目分类和项目二级分类均为必填项' : '项目分类为必填项')
       return
     }
     const infoValues = normalizedProjectType === PROJECT_CATEGORY_TECH
@@ -805,8 +925,8 @@ export default function ProjectInfoModal({
           infoValues,
           Array.isArray(values.responsiblePersons) ? values.responsiblePersons : [],
         ),
-        healthStatus: String(values.healthStatus || 'normal'),
-        projectStatus: String(values.status || ''),
+        healthStatus: String(values.healthStatus || ''),
+        projectStatus: resolvedProjectStatus,
         infoValues,
         sourceEntry,
         sourceValues: values.bid ? fetchByBid(values.bid) : {},
@@ -851,7 +971,7 @@ export default function ProjectInfoModal({
       title={mode === 'create' ? (
         <div className="pms-project-info-modal-title-row">
           <span>新增项目</span>
-          <Button type="text" danger size="small" icon={<ReloadOutlined />} disabled={isDraftInteractionLocked} onClick={requestResetCreateDraft}>
+          <Button type="text" danger size="small" icon={<ReloadOutlined />} disabled={!enumReady || isDraftInteractionLocked} onClick={requestResetCreateDraft}>
             重新填写
           </Button>
         </div>
@@ -865,13 +985,24 @@ export default function ProjectInfoModal({
       keyboard={!isDraftInteractionLocked}
       okText={mode === 'create' ? '创建' : '保存'}
       cancelText="取消"
-      confirmLoading={submitting || isDraftHydrating}
+      confirmLoading={submitting || isDraftHydrating || (open && !hasHydrated)}
       cancelButtonProps={{ disabled: isDraftInteractionLocked }}
-      okButtonProps={{ disabled: isCreateDraftInteractionBlocked || isIpmClassificationMissing }}
+      okButtonProps={{ disabled: !enumReady || isCreateDraftInteractionBlocked || isIpmClassificationMissing }}
       destroyOnHidden
       className="pms-modal pms-project-info-modal"
       styles={{ body: { maxHeight: '72vh', overflowY: 'auto', paddingRight: 24 } }}
     >
+      {!hasHydrated ? (
+        <Skeleton active paragraph={{ rows: 8 }} />
+      ) : hydrationError ? (
+        <Alert
+          type="error"
+          showIcon
+          title="枚举配置加载失败"
+          description={<span>{hydrationError} 请重试加载，成功后才能继续填写和保存。</span>}
+          action={<Button size="small" onClick={() => void retryHydration()}>重试</Button>}
+        />
+      ) : (<>
       {isCreateDraftReadFailed && (
         <Alert
           type="error"
@@ -910,12 +1041,18 @@ export default function ProjectInfoModal({
           <Form.Item label="项目分类" name="type" rules={[{ required: true, message: '请选择项目分类' }]}>
             <Select disabled options={PROJECT_TYPES.map(type => ({ label: type, value: type }))} />
           </Form.Item>
-          <Form.Item label="项目二级分类" name="secondaryCategory" rules={[{ required: true, message: '请选择项目二级分类' }]}>
-            <Select disabled options={secondaryCategoryOptions} />
-          </Form.Item>
-          {projectType === PROJECT_TYPE_TOS_VERSION && (
-            <Form.Item label="项目状态" name="status" rules={[{ required: true, message: 'IPM 项目状态不能为空' }]}>
-              <Select disabled={mode === 'create'} options={TOS_PROJECT_STATUS_OPTIONS} />
+          {projectType === PROJECT_CATEGORY_MACHINE && (
+            <Form.Item label="项目二级分类" name="secondaryCategory" rules={[{ required: true, message: '请选择项目二级分类' }]}>
+              <Select disabled options={secondaryCategoryOptions} />
+            </Form.Item>
+          )}
+          {showConfiguredProjectStatus && (
+            <Form.Item label="项目状态" name="status" rules={[{ required: true, message: '项目状态不能为空' }]}>
+              <Select
+                disabled={projectType === PROJECT_TYPE_TOS_VERSION}
+                options={projectStatusOptions}
+                placeholder={projectStatusOptions.length ? '请选择项目状态' : '暂无可用状态配置，请先在配置中心维护'}
+              />
             </Form.Item>
           )}
           {projectType !== PROJECT_TYPE_TOS_VERSION && !isMachineProjectType(projectType) && !isTechnicalProject && (
@@ -924,8 +1061,11 @@ export default function ProjectInfoModal({
             </Form.Item>
           )}
           {isTargetProjectInfoType(projectType) && (
-            <Form.Item label="健康状态" name="healthStatus" initialValue="normal" rules={[{ required: true, message: '请选择健康状态' }]}>
-              <Select options={HEALTH_OPTIONS} />
+            <Form.Item label="健康状态" name="healthStatus" rules={[{ required: true, message: '请选择健康状态' }]}>
+              <Select
+                options={healthOptions}
+                placeholder={healthOptions.length ? '请选择健康状态' : '暂无可用配置，请先在配置中心维护'}
+              />
             </Form.Item>
           )}
         </div>
@@ -945,6 +1085,8 @@ export default function ProjectInfoModal({
             currentProjectId={project?.id}
             ipmProjectType={mode === 'create' ? selectedCandidate?.ipmProjectCategoryName || '' : String(watchedValues.ipmProjectType || project?.fieldValues?.ipmProjectType || project?.ipmProjectType || '')}
             technicalTrack={mode === 'create' ? selectedCandidate?.technicalTrack || '' : String(watchedValues.technicalTrack || project?.fieldValues?.technicalTrack || '')}
+            historicalDomain={mode === 'edit' ? String(project?.fieldValues?.tmg || project?.tmg || '') : undefined}
+            historicalSubdomain={mode === 'edit' ? String(project?.fieldValues?.subdomain || project?.subdomain || '') : undefined}
           />
         )}
 
@@ -959,7 +1101,10 @@ export default function ProjectInfoModal({
               setActiveGroups(nextActiveGroups)
             }}
             items={groups.map(group => {
-              const groupFields = editableFields.filter(field => field.group === group.key)
+              const groupFields = fields.filter(field => (
+                field.group === group.key
+                && (!field.readOnly || ['chipModel', 'chipPlatform'].includes(field.key))
+              ))
               return {
                 key: group.key,
                 label: <Space><span className="pms-project-info-group-dot" style={{ background: GROUP_COLORS[group.key] }} /><strong>{group.label}</strong><Tag>{groupFields.length} 项</Tag></Space>,
@@ -979,17 +1124,40 @@ export default function ProjectInfoModal({
                           key={field.key}
                           label={field.label}
                           name={field.key}
+                          {...(field.key === 'chipCode' ? {
+                            getValueProps: () => ({ value: selectedChipOptionId }),
+                            getValueFromEvent: (rowId: string) => resolveChipRow(rowsByType, rowId)?.chipCode || '',
+                          } : {})}
                           extra={field.conditionalHint}
                           className={field.inputType === 'jira' ? 'pms-project-info-form-span' : undefined}
                           rules={isRequired
                             ? [{ required: true, message: `请填写${field.label}` }]
                             : undefined}
                         >
-                          <ProjectInfoFieldInput
-                            field={renderedField}
-                            firstLaunchProjectOptions={firstLaunchOptions}
-                            optionsOverride={isMachineProjectType(projectType) ? fieldOptionOverrides?.[field.key] : undefined}
-                          />
+                          {field.key === 'chipCode' ? (
+                            <Select
+                              value={selectedChipOptionId}
+                              options={chipOptions}
+                              showSearch
+                              optionFilterProp="label"
+                              placeholder={chipOptions.length ? '请选择芯片编码 / 型号 / 平台' : '暂无可用配置，请先在配置中心维护'}
+                              onChange={(rowId) => {
+                                const chip = resolveChipRow(rowsByType, rowId)
+                                if (!chip) return
+                                form.setFieldsValue({
+                                  chipCode: chip.chipCode,
+                                  chipModel: chip.chipModel,
+                                  chipPlatform: chip.chipPlatform,
+                                })
+                              }}
+                            />
+                          ) : (
+                            <ProjectInfoFieldInput
+                              field={renderedField}
+                              firstLaunchProjectOptions={firstLaunchOptions}
+                              optionsOverride={isMachineProjectType(projectType) ? machineFieldOptions[field.key] : undefined}
+                            />
+                          )}
                         </Form.Item>
                       )
                     })}
@@ -1001,6 +1169,7 @@ export default function ProjectInfoModal({
         )}
       </Form>
       </Spin>
+      </>)}
     </Modal>
   )
 }

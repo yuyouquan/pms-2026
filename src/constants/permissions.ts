@@ -61,6 +61,7 @@ export const GLOBAL_PERMISSION_GROUPS = [
       { key: 'configCenter:planEdit', name: '计划编辑' },
       { key: 'configCenter:planPublish', name: '计划发布' },
       { key: 'configCenter:transferEdit', name: '转维编辑' },
+      { key: 'configCenter:enumEdit', name: '枚举值新增、修改、删除' },
     ],
   },
   {

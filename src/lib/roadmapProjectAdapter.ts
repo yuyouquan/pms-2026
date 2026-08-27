@@ -28,9 +28,6 @@ import type {
 
 const ROADMAP_BRANDS = new Set<RoadmapBrand>(['TECNO', 'Infinix', 'itel', '待定', '其他品牌'])
 const ROADMAP_ANDROID_VERSIONS = new Set<RoadmapAndroidVersion>(['Android 16', 'Android 17', 'Android 18'])
-const ROADMAP_RAMS = new Set<RoadmapRam>(['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB'])
-const ROADMAP_VERSION_TYPES = new Set<RoadmapVersionType>(['Full', 'Slim', 'Go'])
-const ROADMAP_DEVELOP_MODES = new Set<RoadmapDevelopMode>(['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'])
 
 function firstNonBlank(...values: unknown[]): string {
   for (const value of values) {
@@ -47,9 +44,9 @@ function normalizeNormalProductType(value: unknown): RoadmapProductType | null {
 }
 
 function normalizeNormalDevelopMode(value: unknown): RoadmapDevelopMode | null {
-  if (value === '外研') return '纯外研'
-  if (value === '联合开发') return 'ITD-ODC'
-  return ROADMAP_DEVELOP_MODES.has(value as RoadmapDevelopMode) ? value as RoadmapDevelopMode : null
+  const snapshot = firstNonBlank(value)
+  if (!snapshot) return null
+  return snapshot
 }
 
 function normalizeBrand(value: unknown): RoadmapBrand | null {
@@ -58,14 +55,15 @@ function normalizeBrand(value: unknown): RoadmapBrand | null {
 
 function normalizeRam(explicitRam: unknown, legacyMemory: unknown): RoadmapRam | null {
   if (explicitRam !== undefined && explicitRam !== null && explicitRam !== '') {
-    return ROADMAP_RAMS.has(explicitRam as RoadmapRam) ? explicitRam as RoadmapRam : null
+    return firstNonBlank(explicitRam) || null
   }
-  const match = typeof legacyMemory === 'string' ? legacyMemory.trim().match(/^(\d+GB)(?:\+|$)/) : null
-  return match && ROADMAP_RAMS.has(match[1] as RoadmapRam) ? match[1] as RoadmapRam : null
+  const legacySnapshot = firstNonBlank(legacyMemory)
+  const legacyRam = legacySnapshot.match(/^([^+]+)(?:\+|$)/)?.[1]?.trim()
+  return legacyRam || null
 }
 
 function normalizeVersionType(value: unknown): RoadmapVersionType | null {
-  return ROADMAP_VERSION_TYPES.has(value as RoadmapVersionType) ? value as RoadmapVersionType : null
+  return firstNonBlank(value) || null
 }
 
 function normalizeAndroidVersion(explicitVersion: unknown, legacyVersion: unknown): RoadmapAndroidVersion | null {

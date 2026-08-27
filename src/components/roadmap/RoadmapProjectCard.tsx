@@ -110,7 +110,9 @@ export default function RoadmapProjectCard({
         </Typography.Text>
         <Flex className="pms-roadmap-card-header-actions" align="center" gap={4} wrap={false}>
           <Flex className="pms-roadmap-card-header-tags" align="center" gap={4} wrap={false}>
-            <Tag color={VERSION_TYPE_TAG_COLORS[row.versionType]}>{row.versionType}</Tag>
+            <Tag color={VERSION_TYPE_TAG_COLORS[row.versionType as keyof typeof VERSION_TYPE_TAG_COLORS] ?? 'default'}>
+              {row.versionType}
+            </Tag>
             <Tag color={row.productType === '新品' ? 'volcano' : 'default'}>
               {row.productType === '新品' ? 'New' : 'Old'}
             </Tag>

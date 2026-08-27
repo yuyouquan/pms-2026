@@ -11,21 +11,11 @@ import type {
   TechnicalSubproject,
   TechnicalSubprojectConfiguration,
   TechnicalSubprojectConfigurationPatch,
-  TechnicalSubprojectDevelopmentMode,
-  TechnicalSubprojectCoreValue,
   TechnicalSubprojectSyncResult,
 } from '@/types/technicalProject'
 
 export const TECHNICAL_PROJECT_STORAGE_KEY = 'pms-technical-projects'
 export const TECHNICAL_PROJECT_STORE_VERSION = 3
-
-export const TECHNICAL_CORE_VALUES: readonly Exclude<TechnicalSubprojectCoreValue, ''>[] = [
-  '追赶', '人无我有', '人有我有',
-]
-
-export const TECHNICAL_DEVELOPMENT_MODES: readonly Exclude<TechnicalSubprojectDevelopmentMode, ''>[] = [
-  '自研', '谷歌合作', 'SoC合作', '高校合作',
-]
 
 export const INITIAL_TECHNICAL_SUBPROJECTS: TechnicalSubproject[] = [
   {
@@ -73,15 +63,9 @@ const sanitizeString = (value: unknown) => typeof value === 'string' ? value.tri
 
 const sanitizeConfiguration = (value: unknown): TechnicalSubprojectConfiguration => {
   const source = isRecord(value) ? value : {}
-  const coreValue = TECHNICAL_CORE_VALUES.includes(source.coreValue as Exclude<TechnicalSubprojectCoreValue, ''>)
-    ? source.coreValue as Exclude<TechnicalSubprojectCoreValue, ''>
-    : ''
-  const developmentMode = TECHNICAL_DEVELOPMENT_MODES.includes(source.developmentMode as Exclude<TechnicalSubprojectDevelopmentMode, ''>)
-    ? source.developmentMode as Exclude<TechnicalSubprojectDevelopmentMode, ''>
-    : ''
   return {
-    coreValue,
-    developmentMode,
+    coreValue: sanitizeString(source.coreValue),
+    developmentMode: sanitizeString(source.developmentMode),
     firstTosVersion: sanitizeString(source.firstTosVersion),
     firstMachineProjectId: sanitizeString(source.firstMachineProjectId),
   }
@@ -160,8 +144,8 @@ export function mergeTechnicalProjectState(
 }
 
 const isValidConfigurationPatch = (patch: TechnicalSubprojectConfigurationPatch) => (
-  (patch.coreValue === undefined || patch.coreValue === '' || TECHNICAL_CORE_VALUES.includes(patch.coreValue))
-  && (patch.developmentMode === undefined || patch.developmentMode === '' || TECHNICAL_DEVELOPMENT_MODES.includes(patch.developmentMode))
+  (patch.coreValue === undefined || typeof patch.coreValue === 'string')
+  && (patch.developmentMode === undefined || typeof patch.developmentMode === 'string')
   && (patch.firstTosVersion === undefined || typeof patch.firstTosVersion === 'string')
   && (patch.firstMachineProjectId === undefined || typeof patch.firstMachineProjectId === 'string')
 )

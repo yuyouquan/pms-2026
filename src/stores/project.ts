@@ -20,7 +20,7 @@ import {
   resolveMachineTosUpdate,
   type MachineTosResolution,
 } from '@/lib/machineTosVersions'
-import { getCurrentTosEnumValues, normalizeTosEnumReference } from '@/lib/tosEnumOptions'
+import { currentTosSnapshotValues, normalizeTosSnapshot } from '@/lib/enumConsumers'
 import { useEnumStore } from '@/stores/enums'
 import { useRoadmapStore } from '@/stores/roadmap'
 import type { ProjectItem } from '@/types/app'
@@ -151,7 +151,7 @@ const MACHINE_TOS_VERSION_KEYS = [
 
 function migrateMachineThreePartReference(value: unknown): unknown {
   if (typeof value !== 'string') return value
-  const normalized = normalizeTosEnumReference(value)
+  const normalized = normalizeTosSnapshot(value)
   if (/^\d+\.\d+\.\d+$/.test(normalized)) return normalized
   if (/^\d+\.\d+$/.test(normalized)) return `${normalized}.0`
   return value
@@ -262,11 +262,11 @@ export interface ProjectActions {
 
 function resolveAllowedFirstSaleTosValues(options?: ProjectMutationOptions): string[] {
   if (options?.allowedFirstSaleTosValues) {
-    return getCurrentTosEnumValues('tos-3-part', options.allowedFirstSaleTosValues)
+    return currentTosSnapshotValues(options.allowedFirstSaleTosValues)
   }
   const enumState = useEnumStore.getState()
   if (!enumState.hasHydrated || enumState.hydrationError) return []
-  return getCurrentTosEnumValues('tos-3-part', enumState.valuesByType['tos-3-part'])
+  return currentTosSnapshotValues(enumState.rowsByType['first-sale-tos'].map(row => row.value))
 }
 
 function normalizeProjectSourceBid(project: Project): string {
@@ -289,7 +289,7 @@ function resolveMachineTosValue(project: Project): string {
     : [project.firstSaleTosVersionId, project.firstSaleTosVersion]
   const candidate = [...preferred, project.tosVersionName, project.tosVersion]
     .find(value => typeof value === 'string' && value.trim())
-  return normalizeTosEnumReference(candidate)
+  return normalizeTosSnapshot(candidate)
 }
 
 function isValidMachineProjectMutation(

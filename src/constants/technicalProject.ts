@@ -1,18 +1,4 @@
-import type { TechnicalDeliverableKey, TechnicalDomain, TechnicalTeam } from '@/types/technicalProject'
-
-export const SUBDOMAINS_BY_DOMAIN: Record<TechnicalDomain, readonly string[]> = {
-  基础架构TMG: ['无'],
-  性能TMG: ['无'],
-  'DFX TMG': ['无'],
-  'UX TMG': ['无'],
-  系统应用: ['AIOS', '应用', '图形', '内核', '多媒体'],
-  底软通信: ['器件', '蜂窝', '短距', '功耗'],
-  集成维护: ['三方体验', 'GMS'],
-  其他: ['安全', 'AIOT'],
-}
-
-export const TECHNICAL_DOMAINS = Object.keys(SUBDOMAINS_BY_DOMAIN) as TechnicalDomain[]
-export const NO_SUBDOMAIN_DOMAINS = TECHNICAL_DOMAINS.filter(domain => SUBDOMAINS_BY_DOMAIN[domain].length === 1 && SUBDOMAINS_BY_DOMAIN[domain][0] === '无')
+import type { TechnicalDeliverableKey, TechnicalTeam } from '@/types/technicalProject'
 
 export const TECHNICAL_TEAM_FIELDS: ReadonlyArray<{ key: keyof TechnicalTeam; label: string; required: boolean }> = [
   { key: 'technicalLead', label: '技术项目负责人', required: true },

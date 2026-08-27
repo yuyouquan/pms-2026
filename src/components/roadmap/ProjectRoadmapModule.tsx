@@ -23,11 +23,12 @@ import { useProjectStore } from '@/stores/project'
 import { useRoadmapStore } from '@/stores/roadmap'
 import { useEnumStore } from '@/stores/enums'
 import { useUiStore } from '@/stores/ui'
-import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
+import { useEnumHydration, useSingleEnumOptions } from '@/hooks/useEnumOptions'
 import {
   formatRoadmapTosValue,
   normalizeRoadmapTosReference,
   normalizeRoadmapTosValue,
+  normalizeTosVersionName,
 } from '@/lib/roadmapValidation'
 import type { ProjectItem } from '@/types/app'
 import type {
@@ -97,12 +98,23 @@ export default function ProjectRoadmapModule({
 
   const plannedProjects = useRoadmapStore(state => state.plannedProjects)
   const storedVersionDetails = useRoadmapStore(state => state.tosVersions)
+  const enumTosOptions = useSingleEnumOptions('roadmap-tos')
   const {
-    currentValues: enumTosValues,
     hasHydrated: enumHasHydrated,
     hydrationError: enumHydrationError,
     retryHydration,
-  } = useTosEnumOptions('tos-2-part')
+  } = useEnumHydration()
+  const configurableHistory = useMemo(() => ({
+    startRam: [...plannedProjects.map(project => project.startRam), ...projects.map(project => project.startRam)]
+      .filter((value): value is string => typeof value === 'string' && Boolean(value.trim())),
+    versionType: [...plannedProjects.map(project => project.versionType), ...projects.map(project => project.versionType)]
+      .filter((value): value is string => typeof value === 'string' && Boolean(value.trim())),
+    developMode: [...plannedProjects.map(project => project.developMode), ...projects.map(project => project.developMode)]
+      .filter((value): value is string => typeof value === 'string' && Boolean(value.trim())),
+  }), [plannedProjects, projects])
+  const filterRamOptions = useSingleEnumOptions('memory-size', configurableHistory.startRam)
+  const filterVersionTypeOptions = useSingleEnumOptions('version-type', configurableHistory.versionType)
+  const filterDevelopModeOptions = useSingleEnumOptions('machine-development-mode', configurableHistory.developMode)
   const setSelectedType = useEnumStore(state => state.setSelectedType)
   const setActiveModule = useUiStore(state => state.setActiveModule)
   const setConfigTab = useUiStore(state => state.setConfigTab)
@@ -124,7 +136,7 @@ export default function ProjectRoadmapModule({
   const deletePlannedProject = useRoadmapStore(state => state.deletePlannedProject)
 
   const versions = useMemo<TosVersionConfig[]>(() => {
-    const currentValues = enumTosValues.map(normalizeRoadmapTosValue).filter(Boolean)
+    const currentValues = enumTosOptions.map(option => normalizeRoadmapTosValue(option.value)).filter(Boolean)
     const historicalReferences = [
       ...plannedProjects.map(project => project.firstSaleTosVersionId),
       ...projects.flatMap(project => [
@@ -141,15 +153,13 @@ export default function ProjectRoadmapModule({
     ].map(value => normalizeRoadmapTosReference(value, storedVersionDetails)).filter(Boolean)
     const allValues = [...new Set([...currentValues, ...historicalReferences])]
     return allValues.map(normalizedValue => {
-      const [major, minor] = normalizedValue.split('.').map(Number)
-      const existing = storedVersionDetails.find(version => (
-        version.major === major && version.minor === minor
-      ))
+      const parsed = normalizeTosVersionName(normalizedValue)
+      const existing = storedVersionDetails.find(version => version.id === normalizedValue)
       return {
         id: normalizedValue,
         name: formatRoadmapTosValue(normalizedValue),
-        major,
-        minor,
+        major: parsed?.major ?? null,
+        minor: parsed?.minor ?? null,
         periodStartDate: existing?.periodStartDate ?? '',
         periodEndDate: existing?.periodEndDate ?? '',
         targets: existing?.targets ?? [],
@@ -160,10 +170,10 @@ export default function ProjectRoadmapModule({
     }).sort((left, right) => (
       Number.isFinite(left.major) && Number.isFinite(left.minor)
         && Number.isFinite(right.major) && Number.isFinite(right.minor)
-        ? right.major - left.major || right.minor - left.minor
+        ? Number(right.major) - Number(left.major) || Number(right.minor) - Number(left.minor)
         : left.name.localeCompare(right.name, 'zh-CN')
     ))
-  }, [enumTosValues, filters, plannedProjects, projects, selectedTosVersionId, storedVersionDetails])
+  }, [enumTosOptions, filters, plannedProjects, projects, selectedTosVersionId, storedVersionDetails])
   const selectableVersions = useMemo(
     () => versions.filter(version => version.selectable !== false),
     [versions],
@@ -207,8 +217,12 @@ export default function ProjectRoadmapModule({
   }, [])
 
   const filterFieldDefinitions = useMemo(
-    () => buildRoadmapFilterFieldDefinitions(versions, savedTosFilterValues),
-    [savedTosFilterValues, versions],
+    () => buildRoadmapFilterFieldDefinitions(versions, savedTosFilterValues, {
+      startRam: filterRamOptions,
+      versionType: filterVersionTypeOptions,
+      developMode: filterDevelopModeOptions,
+    }),
+    [filterDevelopModeOptions, filterRamOptions, filterVersionTypeOptions, savedTosFilterValues, versions],
   )
   const filterDefinitionsByKey = useMemo(
     () => new Map(filterFieldDefinitions.map(definition => [definition.key, definition])),
@@ -405,7 +419,7 @@ export default function ProjectRoadmapModule({
   }
   const openSharedTosEnumConfig = () => {
     navigateWithEditGuard(() => {
-      setSelectedType('tos-2-part')
+      setSelectedType('roadmap-tos')
       setConfigTab('enum')
       setActiveModule('config')
     }, false)

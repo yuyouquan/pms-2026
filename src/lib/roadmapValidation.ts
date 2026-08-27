@@ -11,6 +11,7 @@ import type {
   RoadmapValidationErrors,
   TosVersionConfig,
 } from '@/types/roadmap'
+import { formatTosSnapshot, normalizeTosSnapshot } from '@/lib/enumConsumers'
 
 export const PRODUCT_LINES_BY_BRAND = {
   TECNO: ['PHANTOM', 'CAMON', 'POVA', 'SPARK', 'POP'],
@@ -42,9 +43,6 @@ const ISO_DATE_PATTERN = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/
 
 const ROADMAP_ANDROID_VERSIONS: readonly RoadmapAndroidVersion[] = ['Android 16', 'Android 17', 'Android 18']
 const ROADMAP_PRODUCT_TYPES: readonly RoadmapProductType[] = ['新品', '老品']
-const ROADMAP_RAMS = ['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB'] as const
-const ROADMAP_VERSION_TYPES = ['Full', 'Slim', 'Go'] as const
-const ROADMAP_DEVELOP_MODES = ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'] as const
 
 export interface NormalizedTosVersion {
   name: string
@@ -79,7 +77,7 @@ export function buildRoadmapDuplicateKey(
 }
 
 export function normalizeTosVersionName(input: string): NormalizedTosVersion | null {
-  const match = input.trim().match(/^(?:tos\s*)?(\d+)\.(\d+)$/i)
+  const match = normalizeTosSnapshot(input).match(/^(\d+)\.(\d+)$/)
   if (!match) return null
   const major = Number(match[1])
   const minor = Number(match[2])
@@ -95,7 +93,7 @@ export function normalizeTosVersionName(input: string): NormalizedTosVersion | n
 export function normalizeLegacyTosVersionName(input: string): NormalizedTosVersion | null {
   const normalized = normalizeTosVersionName(input)
   if (normalized) return normalized
-  const match = input.trim().match(/^(?:tos\s*)?(\d+)\.(\d+)\.\d+$/i)
+  const match = normalizeTosSnapshot(input).match(/^(\d+)\.(\d+)\.\d+$/)
   if (!match) return null
   return normalizeTosVersionName(`${match[1]}.${match[2]}`)
 }
@@ -105,11 +103,7 @@ export function normalizeLegacyTosVersionName(input: string): NormalizedTosVersi
  * strings remain intact so removing an enum never erases business history.
  */
 export function normalizeRoadmapTosValue(input: unknown): string {
-  if (typeof input !== 'string') return ''
-  const trimmed = input.trim()
-  if (!trimmed) return ''
-  const normalized = normalizeTosVersionName(trimmed)
-  return normalized ? `${normalized.major}.${normalized.minor}` : trimmed
+  return normalizeTosSnapshot(input)
 }
 
 export function normalizeRoadmapTosReference(
@@ -122,16 +116,15 @@ export function normalizeRoadmapTosReference(
   const configured = compatibilityDirectory.find(version => (
     version.id === trimmed || version.name === trimmed
   ))
-  if (configured) return `${configured.major}.${configured.minor}`
+  if (configured) return normalizeRoadmapTosReference(configured.id)
   const legacyId = trimmed.match(/^tos-(\d+)-(\d+)(?:-\d+)?$/i)
   if (legacyId) return `${Number(legacyId[1])}.${Number(legacyId[2])}`
   const normalized = normalizeLegacyTosVersionName(trimmed)
-  return normalized ? `${normalized.major}.${normalized.minor}` : trimmed
+  return normalized ? `${normalized.major}.${normalized.minor}` : normalizeRoadmapTosValue(trimmed)
 }
 
 export function formatRoadmapTosValue(input: unknown): string {
-  if (typeof input !== 'string' || !input.trim()) return '-'
-  return `tOS${input.trim().replace(/^tOS\s*/i, '')}`
+  return formatTosSnapshot(input) || '-'
 }
 
 export function buildRoadmapTosSelectOptions(
@@ -261,10 +254,6 @@ export function validatePlannedProject(
   if (values.productType && !isAllowedValue(values.productType, ROADMAP_PRODUCT_TYPES)) {
     errors.productType = '产品类型无效'
   }
-  if (values.startRam && !isAllowedValue(values.startRam, ROADMAP_RAMS)) errors.startRam = '起步 RAM 无效'
-  if (values.versionType && !isAllowedValue(values.versionType, ROADMAP_VERSION_TYPES)) errors.versionType = '版本类型无效'
-  if (values.developMode && !isAllowedValue(values.developMode, ROADMAP_DEVELOP_MODES)) errors.developMode = '开发模式无效'
-
   if (values.brand && !isRoadmapBrand(values.brand)) {
     errors.brand = '品牌无效'
   } else if (isRoadmapBrand(values.brand) && typeof values.productLine === 'string') {

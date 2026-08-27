@@ -24,7 +24,6 @@ import {
   PROJECT_CATEGORY_TECH,
   PROJECT_SECONDARY_CATEGORIES,
   PROJECT_TYPE_TOS_VERSION,
-  getProjectStatusOptions,
   isMachineProjectType,
   matchesProjectSecondaryCategoryFilter,
   matchesProjectTypeFilter,
@@ -41,7 +40,8 @@ import {
   type ProjectSummaryTemplateTask,
 } from '@/lib/projectSummary'
 import { getTemplateTasksForProjectType } from '@/lib/projectTemplateCompatibility'
-import { TOS_PROJECT_LIST_STATUS_OPTIONS } from '@/lib/projectStatus'
+import { getProjectStatusEnumType } from '@/lib/projectStatus'
+import { useEnumHydration, useSingleEnumOptions } from '@/hooks/useEnumOptions'
 import { buildTosTypeRows, getMainTosType, getTosTypeSnapshotKey, getTosTypeVersionKey } from '@/lib/tosTypeRules'
 import { buildMarketRowsFromMarkets, getMainMarket, getMarketPlanVersionKey, getProjectMarketSnapshotKey } from '@/lib/marketRules'
 import { useActivateProject } from '@/hooks/useActivateProject'
@@ -64,8 +64,6 @@ import {
   countProjectsByCategory,
   canEnterProjectSpace,
   filterProjectsForList,
-  matchesAggregateProjectStatus,
-  type AggregateProjectStatus,
 } from '@/lib/projectListFilters'
 import ProjectListCalendar from '@/components/project-list/ProjectListCalendar'
 import type { ProjectListViewMode } from '@/stores/project'
@@ -123,6 +121,25 @@ export default function ProjectListContainer() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const technicalSelectedTypes = getLinkedQuickFilterValues(technicalFilters, 'technicalProjectType')
   const technicalActiveType = resolveTechnicalProjectType(technicalSelectedTypes)
+  const statusEnumType = getProjectStatusEnumType(projectTypeFilter)
+  const statusHistory = useMemo(() => [...new Set(projects
+    .filter(project => projectTypeFilter !== 'all' && matchesProjectTypeFilter(
+      project.type,
+      projectTypeFilter,
+      project.secondaryCategory,
+    ))
+    .map(project => project.status)
+    .filter(Boolean))], [projectTypeFilter, projects])
+  const configuredStatusOptions = useSingleEnumOptions(
+    statusEnumType,
+    statusHistory,
+    projectTypeFilter !== 'all',
+  )
+  const {
+    hasHydrated: statusHasHydrated,
+    hydrationError: statusHydrationError,
+    retryHydration: retryStatusHydration,
+  } = useEnumHydration(projectTypeFilter !== 'all')
 
   const projectListPageSize = 15
   const [addProjectOpen, setAddProjectOpen] = useState(false)
@@ -264,9 +281,7 @@ export default function ProjectListContainer() {
     projectStatusFilter === 'all'
       ? categoryAndSecondaryFilteredProjects
       : categoryAndSecondaryFilteredProjects.filter(project => (
-          projectTypeFilter === PROJECT_CATEGORY_TECH
-            ? matchesAggregateProjectStatus(project.status, projectStatusFilter as AggregateProjectStatus)
-            : project.status === projectStatusFilter
+          project.status === projectStatusFilter
         ))
   ), [categoryAndSecondaryFilteredProjects, projectStatusFilter, projectTypeFilter])
 
@@ -277,19 +292,12 @@ export default function ProjectListContainer() {
     return categoryOptions ? [{ label: '全部', value: 'all' }, ...categoryOptions.map(value => ({ label: value, value }))] : []
   }, [projectTypeFilter])
 
-  const statusOptions = useMemo(() => (
-    projectTypeFilter === PROJECT_TYPE_TOS_VERSION
-      ? TOS_PROJECT_LIST_STATUS_OPTIONS
-      : projectTypeFilter === PROJECT_CATEGORY_TECH
-      ? [
-          { label: '全部', value: 'all' },
-          { label: '进行中', value: 'inProgress' },
-          { label: '已完成', value: 'completed' },
-        ]
-      : projectTypeFilter === 'all'
-      ? [{ label: '全部', value: 'all' }]
-      : getProjectStatusOptions(projectTypeFilter)
-  ), [projectTypeFilter])
+  const statusOptions = useMemo(() => [
+    { label: '全部', value: 'all' },
+    ...(projectTypeFilter === 'all' || !statusHasHydrated || statusHydrationError
+      ? []
+      : configuredStatusOptions),
+  ], [configuredStatusOptions, projectTypeFilter, statusHasHydrated, statusHydrationError])
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { all: categoryAndSecondaryFilteredProjects.length }
@@ -377,7 +385,7 @@ export default function ProjectListContainer() {
     ? technicalRows.tdt
     : technicalRows.children) as ProjectSummaryRow[]
   const technicalStatusRows = useMemo(() => technicalActiveRows.filter(row => (
-    matchesAggregateProjectStatus(row.status, projectStatusFilter as AggregateProjectStatus)
+    projectStatusFilter === 'all' || row.status === projectStatusFilter
   )), [projectStatusFilter, technicalActiveRows])
   const technicalFilteredRows = useMemo(() => (
     applyFilterConditions(technicalStatusRows, technicalFilters)
@@ -572,6 +580,10 @@ export default function ProjectListContainer() {
             {workbenchListState.kind !== 'select-category' && (workbenchListState.showStatusQuickFilter || projectTypeFilter === PROJECT_TYPE_TOS_VERSION || projectTypeFilter === PROJECT_CATEGORY_TECH) && (
               <div aria-label="状态快捷筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
                 <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目状态</span>
+                {projectTypeFilter !== 'all' && !statusHasHydrated ? <span style={{ fontSize: 12, color: '#6b7280' }}>正在加载配置…</span> : null}
+                {statusHydrationError ? (
+                  <Button danger size="small" onClick={() => void retryStatusHydration()}>配置加载失败，重试</Button>
+                ) : null}
                 {statusOptions.map(item => {
                   const isActive = projectStatusFilter === item.value
                   return (

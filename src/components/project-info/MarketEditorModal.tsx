@@ -16,6 +16,8 @@ import {
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import DimensionMatrixEditor from '@/components/project-info/DimensionMatrixEditor'
+import { useEnumHydration, useSingleEnumOptions } from '@/hooks/useEnumOptions'
+import { useEnumStore } from '@/stores/enums'
 import {
   MARKET_OPTIONS,
   getMainMarket,
@@ -25,11 +27,7 @@ import {
 } from '@/lib/marketRules'
 import {
   formatMarketBuildSelectionIssue,
-  loadSpugBuildOptions,
-  mockSpugBuildOptionsProvider,
   validateMarketBuildSelections,
-  type SpugBuildOptions,
-  type SpugBuildOptionsProvider,
   type SpugMarketBuildValidationResult,
 } from '@/lib/spugBuildOptions'
 
@@ -61,7 +59,6 @@ export interface MarketEditorModalProps {
   onSave: () => void
   onCancel: () => void
   saving?: boolean
-  spugProvider?: SpugBuildOptionsProvider
 }
 
 const createMarketRow = (market: string, isMain: boolean): MarketConfigRow => ({
@@ -90,49 +87,22 @@ export default function MarketEditorModal({
   onSave,
   onCancel,
   saving = false,
-  spugProvider = mockSpugBuildOptionsProvider,
 }: MarketEditorModalProps) {
   const [selectedMarket, setSelectedMarket] = useState<string>()
-  const [spugOptions, setSpugOptions] = useState<SpugBuildOptions>({
-    buildOptions: [],
-    buildMarkets: [],
-  })
-  const [spugLoading, setSpugLoading] = useState(false)
-  const [spugError, setSpugError] = useState<string>()
-  const [spugLoaded, setSpugLoaded] = useState(false)
-  const [spugRetryKey, setSpugRetryKey] = useState(0)
+  const buildOptionHistory = useMemo(
+    () => rows.map(row => row.buildOption || '').filter(Boolean),
+    [rows],
+  )
+  const buildMarketHistory = useMemo(
+    () => rows.map(row => row.buildMarket || '').filter(Boolean),
+    [rows],
+  )
+  const buildOptionOptions = useSingleEnumOptions('build-option', buildOptionHistory, open)
+  const buildMarketOptions = useSingleEnumOptions('build-market', buildMarketHistory, open)
+  const { hasHydrated, hydrationError, isReady: enumReady, retryHydration } = useEnumHydration(open)
   const availableMarkets = useMemo(() => MARKET_OPTIONS.filter(market => (
     !rows.some(row => row.market === market)
   )), [rows])
-
-  useEffect(() => {
-    if (!open) {
-      setSpugLoaded(false)
-      setSpugLoading(false)
-      return
-    }
-    let active = true
-    setSpugLoading(true)
-    setSpugError(undefined)
-    setSpugLoaded(false)
-
-    void loadSpugBuildOptions(spugProvider, {
-      isActive: () => active,
-      onSuccess: options => {
-        setSpugOptions(options)
-        setSpugLoaded(true)
-      },
-      onError: () => {
-        setSpugError('SPUG 枚举获取失败，请重新获取')
-        setSpugLoaded(false)
-      },
-      onSettled: () => setSpugLoading(false),
-    })
-
-    return () => {
-      active = false
-    }
-  }, [open, spugProvider, spugRetryKey])
 
   useEffect(() => {
     if (!availableMarkets.length) {
@@ -145,10 +115,13 @@ export default function MarketEditorModal({
   }, [availableMarkets, selectedMarket])
 
   const buildValidation = useMemo<SpugMarketBuildValidationResult>(() => (
-    spugLoaded
-      ? validateMarketBuildSelections(rows, spugOptions)
+    enumReady
+      ? validateMarketBuildSelections(rows, {
+          buildOptions: buildOptionOptions.map(option => option.value),
+          buildMarkets: buildMarketOptions.map(option => option.value),
+        })
       : { unsupportedIssues: [] }
-  ), [rows, spugLoaded, spugOptions])
+  ), [buildMarketOptions, buildOptionOptions, enumReady, rows])
   const { firstRequiredIssue, unsupportedIssues } = buildValidation
   const firstUnsupportedIssue = unsupportedIssues[0]
 
@@ -229,32 +202,32 @@ export default function MarketEditorModal({
           </Checkbox>
         )
       case 'buildOption': {
-        const buildOptionUnsupported = spugLoaded
+        const buildOptionUnsupported = enumReady
           && Boolean(row.buildOption?.trim())
-          && !spugOptions.buildOptions.includes(row.buildOption || '')
+          && !buildOptionOptions.some(option => option.value === row.buildOption)
         return (
           <Select
             value={row.buildOption || undefined}
             placeholder="请选择编译选项"
-            options={spugOptions.buildOptions.map(value => ({ label: value, value }))}
-            loading={spugLoading}
-            disabled={spugLoading || Boolean(spugError) || !spugLoaded}
+            options={buildOptionOptions}
+            loading={!hasHydrated}
+            disabled={!enumReady}
             status={buildOptionUnsupported ? 'error' : undefined}
             onChange={value => updateRow(row.id, { buildOption: value })}
           />
         )
       }
       case 'buildMarket': {
-        const buildMarketUnsupported = spugLoaded
+        const buildMarketUnsupported = enumReady
           && Boolean(row.buildMarket?.trim())
-          && !spugOptions.buildMarkets.includes(row.buildMarket || '')
+          && !buildMarketOptions.some(option => option.value === row.buildMarket)
         return (
           <Select
             value={row.buildMarket || undefined}
             placeholder="请选择编译市场"
-            options={spugOptions.buildMarkets.map(value => ({ label: value, value }))}
-            loading={spugLoading}
-            disabled={spugLoading || Boolean(spugError) || !spugLoaded}
+            options={buildMarketOptions}
+            loading={!hasHydrated}
+            disabled={!enumReady}
             status={buildMarketUnsupported ? 'error' : undefined}
             onChange={value => updateRow(row.id, { buildMarket: value })}
           />
@@ -305,13 +278,14 @@ export default function MarketEditorModal({
           description="可以继续新增、删除非主市场或调整跟随主市场；如需变更主市场，请先发布或取消当前修订版本。"
         />
       )}
-      {spugError && (
+      {hydrationError && (
         <Alert
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
-          title={spugError}
-          action={<Button size="small" onClick={() => setSpugRetryKey(key => key + 1)}>重新获取</Button>}
+          title="枚举配置加载失败"
+          description={hydrationError}
+          action={<Button size="small" onClick={() => void retryHydration()}>重试</Button>}
         />
       )}
       {firstUnsupportedIssue && (
@@ -346,7 +320,11 @@ export default function MarketEditorModal({
   )
 
   const handleSave = () => {
-    if (spugLoading || spugError || !spugLoaded) return
+    const enumState = useEnumStore.getState()
+    if (!enumState.hasHydrated || enumState.hydrationError) {
+      message.error(enumState.hydrationError || '枚举配置正在加载，请稍后重试')
+      return
+    }
     if (firstRequiredIssue) {
       message.error(formatMarketBuildSelectionIssue(firstRequiredIssue))
       return
@@ -369,9 +347,7 @@ export default function MarketEditorModal({
       saving={saving}
       saveDisabled={
         rows.length === 0
-        || spugLoading
-        || Boolean(spugError)
-        || !spugLoaded
+        || !enumReady
         || unsupportedIssues.length > 0
       }
       onSave={handleSave}
