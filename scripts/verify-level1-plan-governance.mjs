@@ -236,7 +236,17 @@ assert.equal(
   'stable-ID collisions use deterministic numeric suffixes',
 )
 
-for (const invalidMrName of ['mr1', 'MR01', 'MR 1', 'MR0', '里程碑1']) {
+for (const validMrName of ['MR0', 'MR01']) {
+  const result = rules.insertLevel1BusinessNode(machineBusinessInput, {
+    projectType: '整机产品项目',
+    parentStableId: 'machine-stage-launch',
+    taskName: validMrName,
+    now: 2,
+  })
+  assert.equal(result.ok, true, `whole-machine name ${validMrName} follows the exact MR plus digits rule`)
+}
+
+for (const invalidMrName of ['mr1', 'MR 1', 'MR', '里程碑1']) {
   const result = rules.insertLevel1BusinessNode(machineBusinessInput, {
     projectType: '整机产品项目',
     parentStableId: 'machine-stage-launch',
@@ -306,7 +316,11 @@ const sameNameOtherTosStage = rules.insertLevel1BusinessNode(tosInsert.tasks, {
   taskName: '17.0.0.115',
   now: 4,
 })
-assert.equal(sameNameOtherTosStage.ok, true, 'the same business name remains valid under a different business parent')
+assert.deepEqual(
+  { ok: sameNameOtherTosStage.ok, code: sameNameOtherTosStage.code },
+  { ok: false, code: 'duplicate-name' },
+  'business names remain globally unique across different business parents',
+)
 
 const missingParentInsert = rules.insertLevel1BusinessNode(machineBusinessInput, {
   projectType: '整机产品项目',
@@ -348,6 +362,106 @@ assert.deepEqual(
   'legacy stage-launch aliases are not business stages in the refreshed template',
 )
 
+const displayOnlyRenumberInput = [
+  {
+    id: 'other-root-old',
+    parentId: undefined,
+    order: 1,
+    taskName: '其它阶段',
+    nodeKind: 'stage',
+    planStartDate: undefined,
+    planEndDate: null,
+    estimatedDays: undefined,
+    actualStartDate: null,
+    actualEndDate: undefined,
+    actualDays: null,
+  },
+  {
+    id: 'launch-old',
+    stableId: 'machine-stage-launch',
+    parentId: null,
+    order: 9,
+    taskName: '上市阶段',
+    source: null,
+    nodeKind: 'stage',
+    planEndDate: undefined,
+    estimatedDays: null,
+    actualEndDate: null,
+    actualDays: undefined,
+  },
+  {
+    id: 'existing-period-old',
+    stableId: 'existing-period-stable',
+    parentId: 'launch-old',
+    order: 7,
+    taskName: 'MR9',
+    source: undefined,
+    nodeKind: 'business-period',
+    planStartDate: null,
+    planEndDate: undefined,
+    estimatedDays: null,
+    actualStartDate: undefined,
+    actualEndDate: null,
+    actualDays: undefined,
+  },
+]
+const displayOnlyRenumberSnapshot = structuredClone(displayOnlyRenumberInput)
+const displayOnlyRenumberInsert = rules.insertLevel1BusinessNode(displayOnlyRenumberInput, {
+  projectType: '整机产品项目',
+  parentStableId: 'machine-stage-launch',
+  taskName: 'MR10',
+  now: 10,
+})
+assert.equal(displayOnlyRenumberInsert.ok, true)
+assert.deepEqual(displayOnlyRenumberInput, displayOnlyRenumberSnapshot, 'display-only renumbering leaves the source inputs untouched')
+assert.deepEqual(
+  displayOnlyRenumberInsert.tasks.filter(task => task.stableId !== displayOnlyRenumberInsert.task.stableId),
+  [
+    {
+      id: '1',
+      parentId: undefined,
+      order: 1,
+      taskName: '其它阶段',
+      nodeKind: 'stage',
+      planStartDate: undefined,
+      planEndDate: null,
+      estimatedDays: undefined,
+      actualStartDate: null,
+      actualEndDate: undefined,
+      actualDays: null,
+    },
+    {
+      id: '2',
+      stableId: 'machine-stage-launch',
+      parentId: null,
+      order: 2,
+      taskName: '上市阶段',
+      source: null,
+      nodeKind: 'stage',
+      planEndDate: undefined,
+      estimatedDays: null,
+      actualEndDate: null,
+      actualDays: undefined,
+    },
+    {
+      id: '2.1',
+      stableId: 'existing-period-stable',
+      parentId: '2',
+      order: 1,
+      taskName: 'MR9',
+      source: undefined,
+      nodeKind: 'business-period',
+      planStartDate: null,
+      planEndDate: undefined,
+      estimatedDays: null,
+      actualStartDate: undefined,
+      actualEndDate: null,
+      actualDays: undefined,
+    },
+  ],
+  'existing tasks preserve every non-display field and its missing, undefined, or null representation',
+)
+
 const denyAllStructure = { canAddStage: false, canAddChild: false, canDelete: false, canReorder: false }
 const allowAllStructure = { canAddStage: true, canAddChild: true, canDelete: true, canReorder: true }
 assert.deepEqual(
@@ -372,6 +486,29 @@ assert.deepEqual(
   }),
   allowAllStructure,
   'super administrators can mutate any stage or node in a draft',
+)
+assert.deepEqual(
+  rules.getLevel1StructurePermissions({
+    projectType: '技术项目',
+    isDraft: true,
+    isSuperAdmin: true,
+    isSpm: true,
+    task: machineBusinessInput[0],
+  }),
+  denyAllStructure,
+  'technical projects never enter the machine/tOS structure-permission path for super administrators',
+)
+assert.deepEqual(
+  rules.getLevel1StructurePermissions({
+    projectType: '技术项目',
+    isDraft: true,
+    isSuperAdmin: false,
+    isSpm: true,
+    task: machineInsert.task,
+    parent: machineInsert.parent,
+  }),
+  denyAllStructure,
+  'technical projects never enter the machine/tOS structure-permission path for SPMs',
 )
 assert.deepEqual(
   rules.getLevel1StructurePermissions({

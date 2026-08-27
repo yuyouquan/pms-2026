@@ -660,6 +660,36 @@ export const renumberLevel1Tasks = (tasks: readonly Level1PlanTask[]): Level1Pla
   return numbered
 }
 
+const renumberLevel1TaskDisplayFields = (tasks: readonly Level1PlanTask[]): Level1PlanTask[] => {
+  const indexed = tasks.map((task, index) => ({ task: { ...task }, index }))
+  const knownIds = new Set(indexed.map(({ task }) => task.id))
+  const sortSiblings = (items: typeof indexed) => [...items].sort((left, right) => (
+    left.task.order - right.task.order || left.index - right.index
+  ))
+  const roots = sortSiblings(indexed.filter(({ task }) => !task.parentId || !knownIds.has(task.parentId)))
+  const childrenByParent = new Map<string, typeof indexed>()
+  indexed.forEach(item => {
+    if (!item.task.parentId || !knownIds.has(item.task.parentId)) return
+    childrenByParent.set(item.task.parentId, [...(childrenByParent.get(item.task.parentId) || []), item])
+  })
+  const numbered: Level1PlanTask[] = []
+  const included = new Set<number>()
+  const addRoot = (item: (typeof indexed)[number], rootIndex: number) => {
+    if (included.has(item.index)) return
+    included.add(item.index)
+    const rootId = String(rootIndex + 1)
+    numbered.push({ ...item.task, id: rootId, order: rootIndex + 1 })
+    sortSiblings(childrenByParent.get(item.task.id) || []).forEach((child, childIndex) => {
+      if (included.has(child.index)) return
+      included.add(child.index)
+      numbered.push({ ...child.task, id: `${rootId}.${childIndex + 1}`, parentId: rootId, order: childIndex + 1 })
+    })
+  }
+  roots.forEach((root, rootIndex) => addRoot(root, rootIndex))
+  indexed.filter(item => !included.has(item.index)).forEach(item => addRoot(item, numbered.filter(task => !task.parentId).length))
+  return numbered
+}
+
 export const isLaunchStageTask = (task?: Level1PlanTask) => Boolean(
   task && (task.stableId === 'stage-launch' || task.taskName === '上市阶段' || task.taskName === '上市收编阶段'),
 )
@@ -730,6 +760,7 @@ const denyLevel1StructurePermissions = (): Level1StructurePermissions => ({
 export const getLevel1StructurePermissions = (
   input: Level1StructurePermissionInput,
 ): Level1StructurePermissions => {
+  if (!getLevel1ProjectKind(input.projectType)) return denyLevel1StructurePermissions()
   if (!input.isDraft) return denyLevel1StructurePermissions()
   if (input.isSuperAdmin) {
     return { canAddStage: true, canAddChild: true, canDelete: true, canReorder: true }
@@ -793,11 +824,11 @@ export const insertLevel1BusinessNode = (
   }
 
   if (input.projectType === '整机产品项目') {
-    if (!/^MR[1-9]\d*$/.test(input.taskName)) {
+    if (!/^MR\d+$/.test(input.taskName)) {
       return {
         ok: false,
         code: 'invalid-name',
-        message: '整机业务节点名称必须为 MR 加正整数（例如 MR1），且不允许小写、空格或前导零',
+        message: '整机业务节点名称必须为 MR 加数字（例如 MR0、MR01 或 MR1）',
       }
     }
   } else {
@@ -805,15 +836,15 @@ export const insertLevel1BusinessNode = (
     if (!validation.valid) return { ok: false, code: 'invalid-name', message: validation.message }
   }
 
-  if (tasks.some(task => task.parentId === parent.id && task.taskName === input.taskName)) {
-    return { ok: false, code: 'duplicate-name', message: '同一父阶段下已存在同名业务节点' }
+  if (tasks.some(task => task.taskName === input.taskName)) {
+    return { ok: false, code: 'duplicate-name', message: '一级计划中已存在同名业务节点' }
   }
 
   const stableId = createUniqueLevel1StableId(tasks, `business-period-${input.now}`)
   const siblingOrder = tasks
     .filter(task => task.parentId === parent.id)
     .reduce((maximum, task) => Math.max(maximum, task.order), 0)
-  const renumbered = renumberLevel1Tasks([
+  const renumbered = renumberLevel1TaskDisplayFields([
     ...tasks,
     {
       id: stableId,
