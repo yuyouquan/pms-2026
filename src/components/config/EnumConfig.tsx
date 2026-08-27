@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { HTMLAttributes } from 'react'
 import {
   Alert,
@@ -99,6 +99,9 @@ export default function EnumConfig({
   const resetLocalConfig = useEnumStore(state => state.resetLocalConfig)
   const hasGlobalPermission = useHasGlobalPermission(currentLoginUser)
   const canEditEnums = hasGlobalPermission('configCenter:enumEdit')
+  const canEditRef = useRef(canEditEnums)
+  canEditRef.current = canEditEnums
+  const editorTriggerRef = useRef<HTMLElement | null>(null)
   const [searchText, setSearchText] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editorType, setEditorType] = useState<EnumTypeKey | null>(null)
@@ -108,6 +111,8 @@ export default function EnumConfig({
   const [fieldErrors, setFieldErrors] = useState<EnumFieldErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [recoveryAction, setRecoveryAction] = useState<'retry' | 'reset' | null>(null)
+  const [storageWriteContext, setStorageWriteContext] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const { captureTrigger, restoreTriggerFocus, tryBeginSubmit, releaseSubmission } = useOverlayInteraction()
 
   useEffect(() => {
@@ -135,11 +140,22 @@ export default function EnumConfig({
     })
   }
 
-  const restoreEnumTriggerFocus = () => {
+  const safeFocusFallback = (type: EnumTypeKey): HTMLElement | null => {
+    const addButton = document.querySelector<HTMLElement>('[data-testid="enum-add-button"]')
+    if (addButton) return addButton
+    try {
+      if (typeof CSS === 'undefined' || typeof CSS.escape !== 'function') return null
+      return document.querySelector<HTMLElement>(`[data-testid="enum-type-${CSS.escape(type)}"]`)
+    } catch {
+      return null
+    }
+  }
+
+  const restoreEnumTriggerFocus = (fallbackType = selectedType) => {
+    const trigger = editorTriggerRef.current
+    editorTriggerRef.current = null
     restoreTriggerFocus(() => (
-      document.querySelector<HTMLElement>(`[data-testid="enum-edit-${editingRowId ?? ''}"]`)
-      ?? document.querySelector<HTMLElement>('[data-testid="enum-add-button"]')
-      ?? document.querySelector<HTMLElement>(`[data-testid="enum-type-${selectedType}"]`)
+      trigger?.isConnected ? trigger : safeFocusFallback(fallbackType)
     ))
   }
 
@@ -158,9 +174,25 @@ export default function EnumConfig({
     restoreEnumTriggerFocus()
   }
 
+  useEffect(() => {
+    canEditRef.current = canEditEnums
+    if (!canEditEnums && modalOpen) {
+      message.warning('当前用户无权限编辑枚举值')
+      setModalOpen(false)
+      setDraft(emptyDraft(selectedType))
+      setEditorType(null)
+      setEditingRowId(null)
+      setFieldErrors({})
+      setSubmitting(false)
+      releaseSubmission()
+      restoreEnumTriggerFocus()
+    }
+  }, [canEditEnums, modalOpen, releaseSubmission, selectedType])
+
   const openAddModal = (trigger: HTMLElement) => {
     if (!canEditEnums) return
     captureTrigger(trigger)
+    editorTriggerRef.current = trigger
     setEditorType(selectedType)
     setModalMode('add')
     setEditingRowId(null)
@@ -172,6 +204,7 @@ export default function EnumConfig({
   const openEditModal = (row: EnumRow, trigger: HTMLElement) => {
     if (!canEditEnums) return
     captureTrigger(trigger)
+    editorTriggerRef.current = trigger
     setEditorType(selectedType)
     setModalMode('edit')
     setEditingRowId(row.id)
@@ -188,21 +221,37 @@ export default function EnumConfig({
     }
     setSubmitting(true)
     setFieldErrors({})
+    setSaveError(null)
     const storeDraft = Object.fromEntries(
       editorDefinition.columns.map(column => [column.key, draft[column.key] ?? '']),
     ) as EnumRowDraft
+    if (!canEditRef.current) {
+      message.warning('当前用户无权限编辑枚举值')
+      clearModal()
+      releaseSubmission()
+      restoreEnumTriggerFocus(editorType)
+      return
+    }
     const result = modalMode === 'add'
       ? addEnumRow(editorType, storeDraft)
       : updateEnumRow(editorType, editingRowId ?? '', storeDraft)
 
     if (!result.ok) {
       setFieldErrors(result.fieldErrors ?? {})
-      message.error(resultMessage(result))
+      const errorMessage = resultMessage(result)
+      if (result.reason === 'storage') {
+        setStorageWriteContext(true)
+        setSaveError(errorMessage)
+        message.error(`保存枚举值失败：${errorMessage}`)
+      } else {
+        message.error(errorMessage)
+      }
       setSubmitting(false)
       releaseSubmission()
       return
     }
 
+    setSaveError(null)
     message.success(modalMode === 'add' ? '配置值已新增' : '配置值已更新')
     clearModal()
     restoreEnumTriggerFocus()
@@ -223,35 +272,78 @@ export default function EnumConfig({
       okButtonProps: { danger: true },
       cancelText: '取消',
       onOk: () => {
+        if (!canEditRef.current) {
+          message.warning('当前用户无权限编辑枚举值')
+          restoreTriggerFocus(() => (
+            trigger.isConnected ? trigger : safeFocusFallback(deleteType)
+          ))
+          return undefined
+        }
         const result = deleteEnumRow(deleteType, row.id)
         if (!result.ok) {
-          message.error(resultMessage(result))
+          const errorMessage = resultMessage(result)
+          if (result.reason === 'storage') {
+            setStorageWriteContext(true)
+            setSaveError(errorMessage)
+            message.error(`保存枚举值失败：${errorMessage}`)
+          } else {
+            message.error(errorMessage)
+          }
           return Promise.reject(new Error(result.reason))
         }
+        setSaveError(null)
         message.success('配置值已删除')
         restoreTriggerFocus(() => (
-          document.querySelector<HTMLElement>('[data-testid="enum-add-button"]')
-          ?? document.querySelector<HTMLElement>(`[data-testid="enum-type-${selectedType}"]`)
+          trigger.isConnected ? trigger : safeFocusFallback(deleteType)
         ))
         return undefined
       },
-      onCancel: () => restoreTriggerFocus(),
+      onCancel: () => restoreTriggerFocus(() => (
+        trigger.isConnected ? trigger : safeFocusFallback(deleteType)
+      )),
     })
   }
 
   const handleRetry = async () => {
     setRecoveryAction('retry')
-    await hydrateEnumStore()
+    const hydrated = await hydrateEnumStore()
+    if (hydrated) {
+      setStorageWriteContext(false)
+      setSaveError(null)
+    }
     setRecoveryAction(null)
   }
 
   const handleReset = async () => {
     setRecoveryAction('reset')
     const reset = await resetLocalConfig()
-    if (reset) message.success('本地枚举配置已重置')
-    else message.error('本地枚举配置重置失败')
+    if (reset) {
+      setStorageWriteContext(false)
+      setSaveError(null)
+      message.success('本地枚举配置已重置')
+    } else message.error('本地枚举配置重置失败')
     setRecoveryAction(null)
   }
+
+  const saveErrorAlert = saveError ? (
+    <Alert
+      className="pms-enum-save-error"
+      type="error"
+      showIcon
+      title="保存枚举值失败"
+      description={saveError}
+      action={(
+        <Space size={6} wrap>
+          <Button size="small" loading={recoveryAction === 'retry'} onClick={handleRetry}>
+            重试存储
+          </Button>
+          <Button size="small" danger loading={recoveryAction === 'reset'} onClick={handleReset}>
+            重置本地配置
+          </Button>
+        </Space>
+      )}
+    />
+  ) : null
 
   const businessColumns: ColumnsType<EnumRow> = selectedDefinition.columns.map(column => ({
     title: column.label,
@@ -397,6 +489,7 @@ export default function EnumConfig({
       onCancel={submitting ? undefined : closeModal}
       destroyOnHidden
     >
+      {saveErrorAlert}
       <Form className="pms-enum-form" layout="vertical" requiredMark="optional">
         {renderDraftFields()}
       </Form>
@@ -412,7 +505,7 @@ export default function EnumConfig({
     )
   }
 
-  if (hydrationError) {
+  if (hydrationError && !storageWriteContext) {
     return (
       <>
         <Alert
@@ -449,6 +542,7 @@ export default function EnumConfig({
         className="pms-enum-sidebar"
         content={(
           <Card className="pms-enum-values-card pms-config-workspace-card pms-solid-surface">
+            {saveErrorAlert}
             <div className="pms-enum-table-header">
               <div className="pms-enum-table-heading">
                 <Typography.Title level={4}>{selectedDefinition.label}</Typography.Title>
