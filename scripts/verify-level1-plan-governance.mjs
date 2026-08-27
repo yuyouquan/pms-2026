@@ -128,6 +128,22 @@ assert.deepEqual(
   ['概念阶段', '概念启动'],
   'enum equality keeps the matched child and its parent',
 )
+const emptyDelayStatusRows = [
+  { id: '1', stableId: 'empty-delay-stage', parentId: null, taskName: '空延期阶段', delayStatus: '' },
+  { id: '1.1', stableId: 'on-time-child', parentId: 'empty-delay-stage', taskName: '按时子节点', delayStatus: '按时' },
+  { id: '2', stableId: 'null-delay-stage', parentId: null, taskName: '空值阶段', delayStatus: null },
+  { id: '3', stableId: 'undefined-delay-stage', parentId: null, taskName: '未定义阶段' },
+]
+assert.deepEqual(
+  projectSpaceRules.filterLevel1TreeRows(emptyDelayStatusRows, [{ field: 'delayStatus', operator: 'equals', value: '-' }]).map(row => row.taskName),
+  ['空延期阶段', '按时子节点', '空值阶段', '未定义阶段'],
+  "displayed '-' delay filtering matches empty stage values and keeps a matched parent's children",
+)
+assert.deepEqual(
+  projectSpaceRules.filterLevel1TreeRows(emptyDelayStatusRows, [{ field: 'delayStatus', operator: 'contains', value: '-' }]),
+  [],
+  'delay display normalization does not change contains behavior',
+)
 assert.deepEqual(
   projectSpaceRules.filterLevel1TreeRows(treeRows, [{ field: 'taskName', operator: 'contains', value: '孤立' }]).map(row => row.taskName),
   ['孤立节点'],

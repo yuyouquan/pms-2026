@@ -73,7 +73,14 @@ const matchesFilterCondition = (
   fields: readonly { key: string }[],
 ) => {
   if (!fields.some(field => field.key === condition.field)) return true
-  const actual = String(row[condition.field] ?? '').trim().toLowerCase()
+  const actualValue = row[condition.field]
+  const usesDelayDisplayValue = condition.field === 'delayStatus'
+    && ['equals', 'notEquals', 'equalsAny'].includes(condition.operator)
+  const normalizedActualValue = usesDelayDisplayValue
+    && (actualValue == null || String(actualValue).trim() === '')
+    ? '-'
+    : actualValue
+  const actual = String(normalizedActualValue ?? '').trim().toLowerCase()
   const values = (Array.isArray(condition.value) ? condition.value : [condition.value])
     .map(value => value.trim().toLowerCase())
     .filter(Boolean)
