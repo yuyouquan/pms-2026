@@ -762,6 +762,23 @@ assert.equal(globallyReadonlyController.canOpenLightbox(editableTask), false, 'g
 
 const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8')
 const projectSpaceSource = read('src/containers/ProjectSpaceContainer.tsx')
+const loadExportedConstFromSource = async (sourceText, exportName) => {
+  const file = ts.createSourceFile('ProjectSpaceContainer.tsx', sourceText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TSX)
+  let initializer = null
+  const visit = node => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === exportName) initializer = node.initializer
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  assert.ok(initializer, `project space exports ${exportName}`)
+  const moduleSource = `export const ${exportName} = ${initializer.getText(file)}`
+  const output = ts.transpileModule(moduleSource, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+    fileName: 'ProjectSpaceContainer-helper.ts',
+  }).outputText
+  return import(`data:text/javascript;base64,${Buffer.from(output).toString('base64')}`)
+}
+const projectSpaceActualPatch = await loadExportedConstFromSource(projectSpaceSource, 'applyIncrementalActualFieldPatch')
 for (const label of ['序号', '阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期']) {
   assert.match(projectSpaceSource, new RegExp(label), `project-space tree table contains ${label}`)
 }
@@ -778,6 +795,10 @@ assert.match(projectSpaceSource, /expandedRowKeys[,}]/, 'the vertical table uses
 assert.match(projectSpaceSource, /validateLevel1ScheduleDates\(tableTasks/, 'date validation runs on unprojected tasks')
 assert.match(projectSpaceSource, /pms-level1-date-input-invalid/, 'invalid DatePickers expose the scoped red error class')
 assert.match(projectSpaceSource, /\[data-field/, 'publish focus resolves the first invalid field through a stable cell selector')
+assert.match(projectSpaceSource, /setProjectPlanViewMode\('table'\)/, 'publish failure always restores the governed vertical table')
+assert.match(projectSpaceSource, /setLevel1PlanFilters\(\[\]\)/, 'publish failure clears filters that can hide the invalid row')
+assert.match(projectSpaceSource, /focusLevel1Violation[\s\S]*remainingAttempts/, 'publish focus retries until the vertical invalid cell is mounted')
+assert.match(projectSpaceSource, /`\$\{record\.taskName\}：\$\{reason\}`/, 'invalid tooltip text prefixes every reason with the task name')
 assert.match(projectSpaceSource, /getLevel1StructurePermissions/, 'render and confirmation paths use centralized structure permissions')
 assert.doesNotMatch(projectSpaceSource, /source === 'custom'\s*&& getStructurePermissions\(record\)\.canDelete/, 'super-admin fixed-template deletion is not hidden behind a custom-source gate')
 assert.match(projectSpaceSource, /parentStableId/, 'structure confirmation tokens bind the selected parent')
@@ -785,6 +806,14 @@ for (const tokenField of ['projectId', 'scopeKind', 'scopeValue', 'versionId', '
   assert.match(projectSpaceSource, new RegExp(`${tokenField}[:;,]`), `structure token covers ${tokenField}`)
 }
 assert.match(projectSpaceSource, /getLatestLevel1MutationContext\(dialog\.token\)/, 'confirmation revalidates the full live structure token before mutation')
+assert.match(projectSpaceSource, /phase:\s*'confirm'/, 'business insertion starts with a confirmation-only phase')
+assert.match(projectSpaceSource, /是否添加 MR 里程碑？/, 'machine insertion first asks whether to add')
+assert.match(projectSpaceSource, /是否添加 tOS 版本？/, 'tOS insertion first asks whether to add')
+assert.match(projectSpaceSource, /输入 MR 里程碑名称/, 'machine insertion collects its name only in the second dialog')
+assert.match(projectSpaceSource, /输入 tOS 版本名称/, 'tOS insertion collects its name only in the second dialog')
+assert.match(projectSpaceSource, /level1ReorderDialog/, 'tree reorder is held in controlled confirmation state')
+assert.match(projectSpaceSource, /确认调整节点顺序？/, 'tree reorder requires explicit confirmation')
+assert.match(projectSpaceSource, /getLatestLevel1MutationContext\(dialog\.token\)/, 'reorder confirmation revalidates its live token')
 assert.match(projectSpaceSource, /添加MR里程碑/, 'machine plans expose the controlled MR action')
 assert.match(projectSpaceSource, /添加tOS版本/, 'tOS plans expose the controlled version action')
 assert.match(projectSpaceSource, /change\.nodeType === 'milestone' \? 'milestone' : 'task'/, 'one Gantt callback persists both fixed points and business bars')
@@ -792,21 +821,36 @@ assert.match(projectSpaceSource, /validateLevel1ScheduleDates\(next\)/, 'Gantt c
 
 const liveDraftTasks = [
   { id: '1', stableId: 'stage', order: 1, taskName: '阶段', planEndDate: '2026-01-01' },
-  { id: '1.1', stableId: 'target', parentId: '1', order: 1, taskName: '目标', planEndDate: '2026-04-01', actualStartDate: '2026-03-01', actualEndDate: '', actualDays: null },
+  { id: '1.1', stableId: 'target', parentId: '1', order: 1, taskName: '草稿保留名称', planEndDate: '2026-10-01', actualStartDate: '2026-07-20', actualEndDate: '2026-09-01', actualDays: 43 },
   { id: '1.2', stableId: 'custom-mr', parentId: '1', order: 2, taskName: 'MR4', source: 'custom', planEndDate: '2026-05-01' },
 ]
-const publishedUpdatedTasks = [
+const publishedTasks = [
   { id: '1', stableId: 'stage', order: 1, taskName: '阶段', planEndDate: '2026-01-01' },
-  { id: '1.1', stableId: 'target', parentId: '1', order: 1, taskName: '目标', planEndDate: '2026-02-01', actualStartDate: '2026-03-02', actualEndDate: '2026-03-09', actualDays: 7 },
+  { id: '1.1', stableId: 'target', parentId: '1', order: 1, taskName: '发布名称', planEndDate: '2026-02-01', actualStartDate: '2026-08-01', actualEndDate: '2026-08-10', actualDays: 9 },
 ]
-const mergedActualDraft = projectSpaceLevel1Rules.mergeActualFieldsByStableId(liveDraftTasks, publishedUpdatedTasks, 'target')
-assert.deepEqual(mergedActualDraft.map(task => [task.stableId, task.planEndDate, task.actualStartDate || '', task.actualEndDate || '', task.actualDays ?? null]), [
-  ['stage', '2026-01-01', '', '', null],
-  ['target', '2026-04-01', '2026-03-02', '2026-03-09', 7],
-  ['custom-mr', '2026-05-01', '', '', null],
-], 'published actual updates merge only actual fields into the divergent live draft and retain custom MR order')
-assert.deepEqual(projectSpaceLevel1Rules.mergeActualFieldsByStableId(liveDraftTasks, publishedUpdatedTasks, 'missing'), liveDraftTasks, 'a missing stable ID leaves live draft values unchanged')
-assert.equal(liveDraftTasks[1].actualEndDate, '', 'actual-field merge never mutates the live draft input')
+const snapshotStartPatched = projectSpaceActualPatch.applyIncrementalActualFieldPatch(publishedTasks, 'target', 'actualStartDate', '2026-08-02')
+const draftStartPatched = projectSpaceActualPatch.applyIncrementalActualFieldPatch(liveDraftTasks, 'target', 'actualStartDate', '2026-08-02')
+assert.deepEqual(snapshotStartPatched.find(task => task.stableId === 'target'), {
+  ...publishedTasks[1], actualStartDate: '2026-08-02', actualEndDate: '2026-08-10', actualDays: 8,
+}, 'published actual-start patch changes only that field and recomputes snapshot duration')
+assert.deepEqual(draftStartPatched.map(task => [task.stableId, task.taskName, task.planEndDate, task.actualStartDate || '', task.actualEndDate || '', task.actualDays ?? null]), [
+  ['stage', '阶段', '2026-01-01', '', '', null],
+  ['target', '草稿保留名称', '2026-10-01', '2026-08-02', '2026-09-01', 30],
+  ['custom-mr', 'MR4', '2026-05-01', '', '', null],
+], 'paired draft actual-start merge preserves its other actual field, plan/name/custom node/order')
+const snapshotEndPatched = projectSpaceActualPatch.applyIncrementalActualFieldPatch(publishedTasks, 'target', 'actualEndDate', '2026-08-12')
+const draftEndPatched = projectSpaceActualPatch.applyIncrementalActualFieldPatch(liveDraftTasks, 'target', 'actualEndDate', '2026-08-12')
+assert.deepEqual(snapshotEndPatched.find(task => task.stableId === 'target'), {
+  ...publishedTasks[1], actualStartDate: '2026-08-01', actualEndDate: '2026-08-12', actualDays: 11,
+}, 'published actual-end patch changes only that field and recomputes snapshot duration')
+assert.deepEqual(draftEndPatched.find(task => task.stableId === 'target'), {
+  ...liveDraftTasks[1], actualStartDate: '2026-07-20', actualEndDate: '2026-08-12', actualDays: 23,
+}, 'paired draft actual-end merge preserves its divergent actual start and non-actual fields')
+assert.deepEqual(projectSpaceActualPatch.applyIncrementalActualFieldPatch(liveDraftTasks, 'missing', 'actualEndDate', '2026-08-12'), liveDraftTasks, 'a missing stable ID leaves the draft values unchanged')
+assert.deepEqual(liveDraftTasks[1], { id: '1.1', stableId: 'target', parentId: '1', order: 1, taskName: '草稿保留名称', planEndDate: '2026-10-01', actualStartDate: '2026-07-20', actualEndDate: '2026-09-01', actualDays: 43 }, 'incremental actual patches never mutate their inputs')
+assert.doesNotMatch(projectSpaceSource, /mergeActualFieldsByStableId/, 'project-space published writes never use the legacy two-field merge')
+assert.match(projectSpaceSource, /updateCurrentTosTypeData[\s\S]{0,600}applyIncrementalActualFieldPatch/, 'tOS paired drafts receive the same single-field actual patch')
+assert.match(projectSpaceSource, /setMarketPlanData[\s\S]{0,800}applyIncrementalActualFieldPatch/, 'market paired drafts receive the same single-field actual patch')
 
 const flatFilterRows = [
   { id: '1.1', stableId: 'concept-start', parentId: '1', stageId: '1', sequence: 1, stageName: '概念阶段', milestoneName: '概念启动', status: '未开始', planEndDate: '2026-01-10', estimatedDays: 9, actualEndDate: '', actualDays: null },

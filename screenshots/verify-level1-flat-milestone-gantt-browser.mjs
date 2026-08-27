@@ -10,7 +10,7 @@ import puppeteer from 'puppeteer'
 const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const TIMEOUT = Number(process.env.PMS_BROWSER_TIMEOUT || 30_000)
 const ONLY_CASE = process.env.PMS_BROWSER_CASE || ''
-const VALID_BROWSER_CASES = new Set(['', 'all', 'machine', 'machine-structure', 'machine-permission', 'tos', 'technical'])
+const VALID_BROWSER_CASES = new Set(['', 'all', 'machine', 'machine-structure', 'machine-reorder', 'machine-invalid', 'machine-permission', 'tos', 'technical'])
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 const isAllowedConsoleMessage = message => {
   const text = message.text()
@@ -21,7 +21,7 @@ const isAllowedConsoleMessage = message => {
 }
 
 if (!VALID_BROWSER_CASES.has(ONLY_CASE)) {
-  throw new Error(`unknown PMS_BROWSER_CASE=${JSON.stringify(ONLY_CASE)}; expected all, machine, machine-structure, machine-permission, tos, or technical`)
+  throw new Error(`unknown PMS_BROWSER_CASE=${JSON.stringify(ONLY_CASE)}; expected all, machine, machine-structure, machine-reorder, machine-invalid, machine-permission, tos, or technical`)
 }
 
 const clickExact = async (page, text, selector = 'button,[role="menuitem"],[role="tab"],td,div,span,label') => {
@@ -76,6 +76,37 @@ const clickButtonText = async (page, text) => {
   // The subproject tab includes a settings button on the right; activate its
   // label side so the actual AntD tab receives the pointer event.
   await page.mouse.click(box.x + Math.min(18, box.width / 3), box.y + box.height / 2)
+  await wait(220)
+}
+
+const clickDialogButton = async (page, title, text) => {
+  await page.mouse.move(4, 4)
+  await wait(120)
+  const target = await page.evaluate(({ dialogTitle, buttonText }) => {
+    const visible = node => {
+      const rect = node.getBoundingClientRect()
+      const style = getComputedStyle(node)
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+    }
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(node => visible(node) && node.textContent?.includes(dialogTitle))
+    const button = [...(dialog?.querySelectorAll('button') || [])]
+      .find(node => visible(node) && node.textContent?.trim() === buttonText)
+    if (!(button instanceof HTMLButtonElement)) return null
+    const rect = button.getBoundingClientRect()
+    const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+    return {
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      hitButton: hit === button || Boolean(hit && button.contains(hit)),
+      hitClassName: typeof hit?.className === 'string' ? hit.className : '',
+    }
+  }, { dialogTitle: title, buttonText: text })
+  if (!target) throw new Error(`missing dialog button ${title} / ${text}`)
+  assert.ok(target.hitButton, `dialog button is pointer-accessible above drag layers: ${JSON.stringify(target)}`)
+  await page.mouse.click(target.x + target.width / 2, target.y + target.height / 2)
   await wait(220)
 }
 
@@ -162,6 +193,27 @@ const clickAriaButton = async (page, label) => {
 }
 
 const textOf = async (page, selector) => page.$eval(selector, element => element.textContent || '')
+const hoverVisibleSelector = async (page, selector) => {
+  await page.mouse.move(4, 4)
+  await wait(120)
+  const box = await page.evaluate(value => {
+    const node = [...document.querySelectorAll(value)].find(candidate => {
+      const rect = candidate.getBoundingClientRect()
+      const style = getComputedStyle(candidate)
+      return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0
+        && rect.top < window.innerHeight && rect.left < window.innerWidth
+        && style.display !== 'none' && style.visibility !== 'hidden'
+    })
+    if (!node) return null
+    const rect = node.getBoundingClientRect()
+    const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, hitTarget: hit === node || Boolean(hit && node.contains(hit)), hitClassName: typeof hit?.className === 'string' ? hit.className : '' }
+  }, selector)
+  if (!box) throw new Error(`missing visible hover target ${selector}`)
+  assert.ok(box.hitTarget, `hover target is pointer-accessible: ${JSON.stringify(box)}`)
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await wait(300)
+}
 const headers = async (page, selector) => page.$$eval(`${selector} th`, nodes => nodes.map(node => node.textContent?.trim()).filter(Boolean))
 const assertHeaders = async (page, selector, expected) => assert.deepEqual(await headers(page, selector), expected, `${selector} headers`)
 const visibleCompareDialogText = async page => page.evaluate(() => {
@@ -238,6 +290,10 @@ const treeDate = async (page, table, name, field) => page.$eval(table, (element,
   const cell = row?.querySelector(`td[data-field="${fieldName}"]`)
   return cell?.querySelector('input')?.value || cell?.textContent?.trim() || null
 }, { taskName: name, fieldName: field })
+const treeActualDays = async (page, table, name) => page.$eval(table, (element, taskName) => {
+  const row = [...element.querySelectorAll('tbody tr')].find(item => item.textContent?.includes(taskName))
+  return row?.querySelectorAll('td')[7]?.textContent?.trim() || null
+}, name)
 const editTreeDate = async (page, table, taskName, field, nextValue) => {
   const inputBox = await page.evaluate(({ selector, name, fieldName }) => {
     const root = document.querySelector(selector)
@@ -260,6 +316,42 @@ const editTreeDate = async (page, table, taskName, field, nextValue) => {
     return row?.querySelector(`td[data-field="${fieldName}"] input`)?.value === value
   }, { timeout: TIMEOUT }, { selector: table, name: taskName, fieldName: field, value: nextValue })
 }
+const editPublishedTreeDate = async (page, table, taskName, field, nextValue) => {
+  const opened = await page.$eval(table, (root, { name, fieldName }) => {
+    const row = [...root.querySelectorAll('tbody tr')].find(item => item.textContent?.includes(name))
+    const editor = row?.querySelector(`td[data-field="${fieldName}"] > div, td[data-field="${fieldName}"] span`)
+    if (!(editor instanceof HTMLElement)) return false
+    editor.click()
+    return true
+  }, { name: taskName, fieldName: field })
+  if (!opened) throw new Error(`missing latest-published ${field} editor for ${taskName}`)
+  await page.waitForFunction(({ selector, name, fieldName }) => {
+    const root = document.querySelector(selector)
+    const row = [...(root?.querySelectorAll('tbody tr') || [])].find(item => item.textContent?.includes(name))
+    return Boolean(row?.querySelector(`td[data-field="${fieldName}"] input`))
+  }, { timeout: TIMEOUT }, { selector: table, name: taskName, fieldName: field })
+  const inputBox = await page.evaluate(({ selector, name, fieldName }) => {
+    const root = document.querySelector(selector)
+    const row = [...(root?.querySelectorAll('tbody tr') || [])].find(item => item.textContent?.includes(name))
+    const input = row?.querySelector(`td[data-field="${fieldName}"] input`)
+    if (!(input instanceof HTMLElement)) return null
+    const box = input.getBoundingClientRect()
+    return { x: box.x, y: box.y, width: box.width, height: box.height }
+  }, { selector: table, name: taskName, fieldName: field })
+  if (!inputBox) throw new Error(`missing visible latest-published ${field} input for ${taskName}`)
+  await page.mouse.click(inputBox.x + inputBox.width / 2, inputBox.y + inputBox.height / 2, { clickCount: 3 })
+  await page.keyboard.down('Control')
+  await page.keyboard.press('A')
+  await page.keyboard.up('Control')
+  await page.keyboard.type(nextValue)
+  await page.keyboard.press('Enter')
+  await page.waitForFunction(({ selector, name, fieldName, value }) => {
+    const root = document.querySelector(selector)
+    const row = [...(root?.querySelectorAll('tbody tr') || [])].find(item => item.textContent?.includes(name))
+    const cell = row?.querySelector(`td[data-field="${fieldName}"]`)
+    return (cell?.querySelector('input')?.value || cell?.textContent || '').includes(value)
+  }, { timeout: TIMEOUT }, { selector: table, name: taskName, fieldName: field, value: nextValue })
+}
 const collapseTreeStage = async (page, table, stageName) => {
   const collapsed = await page.$eval(table, (root, name) => {
     const row = [...root.querySelectorAll('tbody tr')].find(item => item.querySelectorAll('td')[1]?.textContent?.trim() === name)
@@ -270,6 +362,36 @@ const collapseTreeStage = async (page, table, stageName) => {
   }, stageName)
   if (!collapsed) throw new Error(`missing expanded tree stage ${stageName}`)
   await wait(120)
+}
+const treeTaskOrder = async (page, table, names) => page.$eval(table, (root, expectedNames) => (
+  [...root.querySelectorAll('tbody tr')]
+    .map(row => expectedNames.find(name => row.querySelectorAll('td')[1]?.textContent?.includes(name)))
+    .filter(Boolean)
+), names)
+const dragTreeTask = async (page, table, sourceName, targetName) => {
+  const boxes = await page.$eval(table, (root, { source, target }) => {
+    const rows = [...root.querySelectorAll('tbody tr')]
+    const sourceRow = rows.find(row => row.querySelectorAll('td')[1]?.textContent?.includes(source))
+    const targetRow = rows.find(row => row.querySelectorAll('td')[1]?.textContent?.includes(target))
+    const handle = sourceRow?.querySelector('.pms-drag-handle')
+    if (!(handle instanceof HTMLElement) || !(targetRow instanceof HTMLElement)) return null
+    const sourceBox = handle.getBoundingClientRect()
+    const targetBox = targetRow.getBoundingClientRect()
+    return {
+      source: { x: sourceBox.x, y: sourceBox.y, width: sourceBox.width, height: sourceBox.height },
+      target: { x: targetBox.x, y: targetBox.y, width: targetBox.width, height: targetBox.height },
+    }
+  }, { source: sourceName, target: targetName })
+  if (!boxes) throw new Error(`missing tree reorder handle ${sourceName} -> ${targetName}`)
+  const startX = boxes.source.x + boxes.source.width / 2
+  const startY = boxes.source.y + boxes.source.height / 2
+  const targetY = boxes.target.y + boxes.target.height / 2
+  await page.mouse.move(startX, startY)
+  await page.mouse.down()
+  await page.mouse.move(startX, targetY, { steps: 8 })
+  await wait(180)
+  await page.mouse.up()
+  await page.waitForFunction(() => document.body.innerText.includes('确认调整节点顺序？'), { timeout: TIMEOUT })
 }
 const addIsoDays = (value, days) => {
   const date = new Date(`${value}T00:00:00Z`)
@@ -397,6 +519,7 @@ const chooseSelectOption = async (page, ariaLabel, matching, attempt = 0) => {
     const style = getComputedStyle(dropdown)
     return box.width > 0 && box.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
   }, { timeout: TIMEOUT }, dropdownId)
+  await wait(250)
   const optionBox = await page.evaluate(({ id, value }) => {
     const dropdown = document.getElementById(id)?.closest('.ant-select-dropdown')
     const option = [...(dropdown?.querySelectorAll('.ant-select-item-option') || [])]
@@ -409,6 +532,11 @@ const chooseSelectOption = async (page, ariaLabel, matching, attempt = 0) => {
     return { x: box.x, y: box.y, width: box.width, height: box.height }
   }, { id: dropdownId, value: matching })
   if (!optionBox) {
+    if (attempt < 2) {
+      await page.keyboard.press('Escape')
+      await wait(300)
+      return chooseSelectOption(page, ariaLabel, matching, attempt + 1)
+    }
     const diagnostic = await page.evaluate(({ id, label }) => {
       const control = document.querySelector(`[aria-label="${label}"]`)
       const dialog = [...document.querySelectorAll('[role="dialog"]')].find(node => {
@@ -715,7 +843,7 @@ const runCase = async (title, test) => {
 }
 
 try {
-  if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'machine' || ONLY_CASE === 'machine-structure') await runCase('machine tree table, governed business nodes and mixed gantt', async (initialPage, errors) => {
+  if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'machine' || ONLY_CASE === 'machine-structure' || ONLY_CASE === 'machine-reorder' || ONLY_CASE === 'machine-invalid') await runCase('machine tree table, governed business nodes and mixed gantt', async (initialPage, errors) => {
     let page = initialPage
     await enterProject(page, 'X6877-D8400_H991')
     assert.ok(await page.$('.pms-plan-view-mode-switcher input[aria-label="横版表格"]:checked'), 'machine level-one plan defaults to horizontal view')
@@ -727,15 +855,93 @@ try {
     console.log('browser machine tree table contract passed')
 
     await clickButtonText(page, '添加MR里程碑')
-    await page.waitForFunction(() => document.body.innerText.includes('确认添加 MR 里程碑？'), { timeout: TIMEOUT })
-    assert.match(await page.$eval('[aria-label="业务父阶段"]', node => node.closest('.ant-select')?.textContent || ''), /上市阶段|生命周期阶段/, 'machine insertion explicitly selects an allowed business parent')
+    await page.waitForFunction(() => document.body.innerText.includes('是否添加 MR 里程碑？'), { timeout: TIMEOUT })
+    assert.equal(await page.$('[aria-label="业务节点名称"]'), null, 'machine confirmation phase does not collect a name early')
+    const machineBusinessParent = await page.$eval('[aria-label="业务父阶段"]', node => node.closest('.ant-select')?.textContent?.trim() || '')
+    assert.match(machineBusinessParent, /上市阶段|生命周期阶段/, 'machine insertion explicitly selects an allowed business parent')
+    await clickButtonText(page, '下一步')
+    await page.waitForFunction(() => document.body.innerText.includes('输入 MR 里程碑名称'), { timeout: TIMEOUT })
+    assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => node.value), 'MR4', 'machine name phase offers the next validated MR name')
     await clickButtonText(page, '确认添加')
     await page.waitForFunction(() => document.body.innerText.includes('MR4'), { timeout: TIMEOUT })
-    await waitForDialogToClose(page, '确认添加 MR 里程碑？')
+    await waitForDialogToClose(page, '输入 MR 里程碑名称')
     assert.ok((await textOf(page, table)).includes('MR4'), 'confirmed MR4 is visible under its selected tree parent')
     assert.ok(await page.$('button[aria-label="删除节点 MR4"]'), 'custom business node has a delete affordance')
     assert.ok(await page.$('button[aria-label="删除节点 概念启动"]'), 'super-admin can discover the fixed-template delete exception')
     console.log('browser machine MR confirmation and structure contract passed')
+
+    if (ONLY_CASE === 'machine-invalid') {
+      await editTreeDate(page, table, 'MR4', 'planStartDate', '2028-01-04')
+      await editTreeDate(page, table, 'MR4', 'planEndDate', '2028-01-08')
+      await editTreeDate(page, table, 'MR4', 'planStartDate', '2028-01-11')
+      const invalidPicker = `${table} tr[data-row-key^="business-period-"] td[data-field="planStartDate"] .pms-level1-date-input-invalid`
+      assert.ok(await page.$(invalidPicker), 'focused invalid case renders a red DatePicker')
+      await hoverVisibleSelector(page, `${table} .pms-level1-date-tooltip-target:has(.pms-level1-date-input-invalid)`)
+      await page.waitForFunction(taskName => document.body.innerText.includes(`${taskName}：`), { timeout: TIMEOUT }, 'MR4')
+      await collapseTreeStage(page, table, machineBusinessParent)
+      await selectView(page, '横版表格')
+      await pressAriaButton(page, '发布')
+      await page.waitForFunction(() => document.body.innerText.includes('任务校验不通过，无法发布'), { timeout: TIMEOUT })
+      await page.waitForFunction(() => Boolean(document.querySelector('.pms-plan-view-mode-switcher input[aria-label="竖版表格"]:checked')), { timeout: TIMEOUT })
+      await page.waitForSelector(invalidPicker, { timeout: TIMEOUT })
+      await page.waitForFunction(() => document.activeElement?.closest('[data-field]')?.getAttribute('data-field') === 'planStartDate', { timeout: TIMEOUT })
+      const focusedRowText = await page.evaluate(() => document.activeElement?.closest('tr')?.textContent || '')
+      assert.ok(focusedRowText.includes('MR4'), 'focused invalid case resolves the stable hidden row after restoring vertical view')
+      console.log('browser machine invalid tooltip/hidden focus contract passed')
+      return
+    }
+
+    await clickButtonText(page, '添加MR里程碑')
+    await page.waitForFunction(() => document.body.innerText.includes('是否添加 MR 里程碑？'), { timeout: TIMEOUT })
+    await clickButtonText(page, '下一步')
+    await page.waitForFunction(() => document.body.innerText.includes('输入 MR 里程碑名称'), { timeout: TIMEOUT })
+    assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => node.value), 'MR5', 'second machine flow proposes MR5')
+    await clickButtonText(page, '确认添加')
+    await waitForDialogToClose(page, '输入 MR 里程碑名称')
+    await page.waitForFunction(selector => document.querySelector(selector)?.textContent?.includes('MR5'), { timeout: TIMEOUT }, table)
+    await switchUser(page, '赵六')
+    const orderBeforeReorder = await treeTaskOrder(page, table, ['MR4', 'MR5'])
+    assert.deepEqual(orderBeforeReorder, ['MR4', 'MR5'], 'SPM reorder starts from the persisted custom-node order')
+    await dragTreeTask(page, table, 'MR5', 'MR4')
+    assert.deepEqual(await treeTaskOrder(page, table, ['MR4', 'MR5']), orderBeforeReorder, 'tree order is unchanged before reorder confirmation')
+    if (ONLY_CASE === 'machine-reorder') {
+      await clickDialogButton(page, '确认调整节点顺序？', '确认调整')
+      await waitForDialogToClose(page, '确认调整节点顺序？')
+      await page.waitForFunction(({ selector, names }) => {
+        const root = document.querySelector(selector)
+        const order = [...(root?.querySelectorAll('tbody tr') || [])]
+          .map(row => names.find(name => row.querySelectorAll('td')[1]?.textContent?.includes(name)))
+          .filter(Boolean)
+        return order.join(',') === 'MR5,MR4'
+      }, { timeout: TIMEOUT }, { selector: table, names: ['MR4', 'MR5'] })
+      console.log('browser machine SPM focused reorder confirmation passed')
+      return
+    }
+    await page.keyboard.press('Escape')
+    await waitForDialogToClose(page, '确认调整节点顺序？')
+    assert.deepEqual(await treeTaskOrder(page, table, ['MR4', 'MR5']), orderBeforeReorder, 'cancelling reorder leaves the tree unchanged')
+    page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+    await selectView(page, '竖版表格')
+    if (await page.$eval('button[aria-label="切换当前用户"]', node => node.getAttribute('data-current-user')) !== '赵六') {
+      await switchUser(page, '赵六')
+    }
+    assert.deepEqual(await treeTaskOrder(page, table, ['MR4', 'MR5']), orderBeforeReorder, 'cancelled tree order survives same-context reopen')
+    await dragTreeTask(page, table, 'MR4', 'MR5')
+    await clickDialogButton(page, '确认调整节点顺序？', '确认调整')
+    await wait(600)
+    const reorderDialogTexts = await page.$$eval('[role="dialog"]', nodes => nodes
+      .filter(node => node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().height > 0)
+      .map(node => node.textContent?.trim() || ''))
+    assert.ok(!reorderDialogTexts.some(text => text.includes('确认调整节点顺序？')), `confirmed reorder dialog closes: ${JSON.stringify(reorderDialogTexts)}`)
+    await page.waitForFunction(({ selector, names }) => {
+      const root = document.querySelector(selector)
+      const order = [...(root?.querySelectorAll('tbody tr') || [])]
+        .map(row => names.find(name => row.querySelectorAll('td')[1]?.textContent?.includes(name)))
+        .filter(Boolean)
+      return order.join(',') === 'MR5,MR4'
+    }, { timeout: TIMEOUT }, { selector: table, names: ['MR4', 'MR5'] })
+    await switchUser(page, '张三')
+    console.log('browser machine SPM reorder confirmation/cancel contract passed')
 
     await editTreeDate(page, table, 'MR4', 'planStartDate', '2028-01-04')
     await editTreeDate(page, table, 'MR4', 'planEndDate', '2028-01-08')
@@ -808,9 +1014,17 @@ try {
 
     const invalidStart = addIsoDays(resizedBusinessEnd, 3)
     await editTreeDate(page, table, 'MR4', 'planStartDate', invalidStart)
-    assert.ok(await page.$(`${table} tr[data-row-key^="business-period-"] td[data-field="planStartDate"] .pms-level1-date-input-invalid`), 'invalid business range renders a red DatePicker')
+    const invalidPicker = `${table} tr[data-row-key^="business-period-"] td[data-field="planStartDate"] .pms-level1-date-input-invalid`
+    assert.ok(await page.$(invalidPicker), 'invalid business range renders a red DatePicker')
+    await hoverVisibleSelector(page, `${table} .pms-level1-date-tooltip-target:has(.pms-level1-date-input-invalid)`)
+    await page.waitForFunction(taskName => document.body.innerText.includes(`${taskName}：`), { timeout: TIMEOUT }, 'MR4')
+    await collapseTreeStage(page, table, machineBusinessParent)
+    await selectView(page, '横版表格')
     await pressAriaButton(page, '发布')
     await page.waitForFunction(() => document.body.innerText.includes('任务校验不通过，无法发布'), { timeout: TIMEOUT })
+    await page.waitForFunction(() => Boolean(document.querySelector('.pms-plan-view-mode-switcher input[aria-label="竖版表格"]:checked')), { timeout: TIMEOUT })
+    await page.waitForSelector(invalidPicker, { timeout: TIMEOUT })
+    await page.waitForFunction(() => document.activeElement?.closest('[data-field]')?.getAttribute('data-field') === 'planStartDate', { timeout: TIMEOUT })
     const focusedInvalid = await page.evaluate(() => ({
       field: document.activeElement?.closest('[data-field]')?.getAttribute('data-field'),
       row: document.activeElement?.closest('tr')?.textContent || '',
@@ -933,12 +1147,15 @@ try {
     console.log(`browser tOS draft source ${draftSource}`)
     await page.waitForSelector('button[aria-label="添加tOS版本"]', { timeout: TIMEOUT })
     await pressAriaButton(page, '添加tOS版本')
-    await page.waitForFunction(() => document.body.innerText.includes('确认添加 tOS 版本？'), { timeout: TIMEOUT })
+    await page.waitForFunction(() => document.body.innerText.includes('是否添加 tOS 版本？'), { timeout: TIMEOUT })
+    assert.equal(await page.$('[aria-label="业务节点名称"]'), null, 'tOS confirmation phase does not collect a name early')
     assert.match(await page.$eval('[aria-label="业务父阶段"]', node => node.closest('.ant-select')?.textContent || ''), /上市迭代阶段|维护阶段/, 'tOS insertion explicitly selects an allowed business parent')
+    await clickButtonText(page, '下一步')
+    await page.waitForFunction(() => document.body.innerText.includes('输入 tOS 版本名称'), { timeout: TIMEOUT })
     const tosBusinessName = await page.$eval('[aria-label="业务节点名称"]', node => node.value)
     assert.match(tosBusinessName, /^16\.1\.0\.\d{3}$/, 'tOS business version uses the project version prefix')
     await clickButtonText(page, '确认添加')
-    await waitForDialogToClose(page, '确认添加 tOS 版本？')
+    await waitForDialogToClose(page, '输入 tOS 版本名称')
     await page.waitForFunction((selector, taskName) => document.querySelector(selector)?.textContent?.includes(taskName), { timeout: TIMEOUT }, table, tosBusinessName)
     assert.ok(await page.$(`button[aria-label="删除节点 ${tosBusinessName}"]`), 'custom tOS business version has a delete affordance')
     console.log(`browser tOS inserted ${tosBusinessName}`)
@@ -1003,6 +1220,41 @@ try {
     assert.ok((await textOf(page, table)).includes(tosBusinessName), 'tOS business version survives same-context new-page persistence')
     assert.equal(await treeDate(page, table, tosBusinessName, 'planEndDate'), resizedBusinessEnd, 'tOS business resize survives same-context new-page persistence')
     console.log(`browser tOS ${tosBusinessName} persisted through ${resizedBusinessEnd}`)
+
+    await editTreeDate(page, table, tosBusinessName, 'actualStartDate', '2027-05-10')
+    await editTreeDate(page, table, tosBusinessName, 'actualEndDate', '2027-05-20')
+    assert.equal(await treeActualDays(page, table, tosBusinessName), '11天', 'draft business actual duration is derived inclusively before publish')
+    const publishedVersionNo = (await page.$eval('[aria-label="计划版本"]', control => control.closest('.ant-select')?.textContent || '')).match(/V\d+(?:\.\d+)?/)?.[0]
+    assert.ok(publishedVersionNo, 'tOS draft exposes a version number before publish')
+    await pressAriaButton(page, '发布')
+    await page.waitForFunction(() => document.querySelector('[aria-label="计划版本"]')?.closest('.ant-select')?.textContent?.includes('已发布'), { timeout: TIMEOUT })
+    assert.ok(await createFormalRevision(page), 'tOS creates a paired draft after publishing the business node')
+    const pairedDraftVersionNo = (await page.$eval('[aria-label="计划版本"]', control => control.closest('.ant-select')?.textContent || '')).match(/V\d+(?:\.\d+)?/)?.[0]
+    assert.ok(pairedDraftVersionNo && pairedDraftVersionNo !== publishedVersionNo, 'paired tOS draft has a distinct version number')
+    await selectView(page, '竖版表格')
+    await editTreeDate(page, table, tosBusinessName, 'actualEndDate', '2027-06-01')
+    await chooseVersion(page, publishedVersionNo)
+    await editPublishedTreeDate(page, table, tosBusinessName, 'actualStartDate', '2027-05-11')
+    await chooseVersion(page, pairedDraftVersionNo)
+    assert.equal(await treeDate(page, table, tosBusinessName, 'actualStartDate'), '2027-05-11', 'latest-published actual-start syncs only that field into paired tOS draft')
+    assert.equal(await treeDate(page, table, tosBusinessName, 'actualEndDate'), '2027-06-01', 'actual-start sync preserves the paired draft actual completion')
+    await editTreeDate(page, table, tosBusinessName, 'actualStartDate', '2027-05-15')
+    await chooseVersion(page, publishedVersionNo)
+    await editPublishedTreeDate(page, table, tosBusinessName, 'actualEndDate', '2027-05-22')
+    await chooseVersion(page, pairedDraftVersionNo)
+    assert.equal(await treeDate(page, table, tosBusinessName, 'actualStartDate'), '2027-05-15', 'latest-published actual-end sync preserves the paired draft actual start')
+    assert.equal(await treeDate(page, table, tosBusinessName, 'actualEndDate'), '2027-05-22', 'latest-published actual-end syncs only that field into paired tOS draft')
+    assert.equal(await treeActualDays(page, table, tosBusinessName), '8天', 'paired draft actual duration is recomputed from its preserved start and synced end')
+    page = await reopenProjectInContext(page, errors, 'tOS16.1')
+    await selectView(page, '竖版表格')
+    await chooseVersion(page, publishedVersionNo)
+    assert.equal(await treeDate(page, table, tosBusinessName, 'actualStartDate'), '2027-05-11', 'published actual start survives same-context reopen')
+    assert.equal(await treeDate(page, table, tosBusinessName, 'actualEndDate'), '2027-05-22', 'published actual end survives same-context reopen')
+    assert.equal(await treeActualDays(page, table, tosBusinessName), '12天', 'published actual duration is recomputed from both published fields')
+    await chooseVersion(page, pairedDraftVersionNo)
+    assert.equal(await treeDate(page, table, tosBusinessName, 'actualStartDate'), '2027-05-15', 'paired-draft divergent actual start survives same-context reopen')
+    assert.equal(await treeDate(page, table, tosBusinessName, 'actualEndDate'), '2027-05-22', 'paired-draft synced actual end survives same-context reopen')
+    console.log('browser tOS published actual field-level merge/reopen contract passed')
   })
 
   if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'technical') await runCase('technical TDT and subproject contracts', async (initialPage, errors) => {
