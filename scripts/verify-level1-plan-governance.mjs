@@ -816,7 +816,7 @@ const secondStableMapped = legacySharedTosSeed.find(task => task.stableId === 'm
 secondStableMapped.actualEndDate = '2031-05-09'
 secondStableMapped.ownerMemo = 'second-stable-id-date'
 legacySharedTosSeed.push({
-  id: 'legacy-custom-launch-child',
+  id: '4.2',
   stableId: 'custom-launch-child',
   parentId: legacyLaunch.id,
   order: 9,
@@ -835,11 +835,17 @@ assert.equal(migratedSharedTosSeed.find(task => task.stableId === 'tos-ms-str3')
 assert.equal(migratedSharedTosSeed.find(task => task.stableId === 'tos-ms-str3').ownerMemo, 'second-stable-id-date', 'recognized fixed-node user fields survive stable migration')
 const migratedTosLaunch = migratedSharedTosSeed.find(task => task.stableId === 'tos-stage-launch-iteration')
 assert.equal(migratedTosLaunch.taskName, '上市迭代阶段', 'legacy launch aliases map to the approved tOS launch stage')
-assert.deepEqual(
-  migratedSharedTosSeed.find(task => task.stableId === 'custom-launch-child'),
-  { ...legacySharedTosInput.at(-1), parentId: migratedTosLaunch.id },
-  'custom launch children retain their stable ID, dates, and custom fields under the mapped parent',
-)
+const migratedCustomLaunchChild = migratedSharedTosSeed.find(task => task.stableId === 'custom-launch-child')
+assert.equal(migratedCustomLaunchChild.id, `${migratedTosLaunch.id}.1`, 'the complete migrated tree receives collision-free display numbering after parent mapping')
+assert.equal(migratedCustomLaunchChild.parentId, migratedTosLaunch.id, 'the custom launch child follows its migrated business parent')
+assert.equal(migratedCustomLaunchChild.stableId, legacySharedTosInput.at(-1).stableId, 'display renumbering preserves the custom business identity')
+assert.equal(migratedCustomLaunchChild.planStartDate, legacySharedTosInput.at(-1).planStartDate, 'display renumbering preserves custom dates')
+assert.equal(migratedCustomLaunchChild.planEndDate, legacySharedTosInput.at(-1).planEndDate, 'display renumbering preserves all custom date fields')
+assert.equal(migratedCustomLaunchChild.ownerMemo, legacySharedTosInput.at(-1).ownerMemo, 'display renumbering preserves custom fields')
+const migratedDisplayIds = migratedSharedTosSeed.map(task => task.id)
+assert.equal(new Set(migratedDisplayIds).size, migratedDisplayIds.length, 'all migrated display IDs are unique even when a legacy custom ID collides with a new fixed milestone')
+const migratedDisplayIdSet = new Set(migratedDisplayIds)
+assert.equal(migratedSharedTosSeed.every(task => !task.parentId || migratedDisplayIdSet.has(task.parentId)), true, 'every migrated parent ID resolves after unified display renumbering')
 assert.deepEqual(
   plan.migrateLevel1TasksForProjectType(migratedSharedTosSeed, 'tOS版本项目', true),
   migratedSharedTosSeed,
@@ -876,6 +882,26 @@ assert.deepEqual(
 )
 assert.deepEqual(semanticCollisionManualTasks, semanticCollisionManualInput, 'rejected manual seed candidates remain untouched')
 
+const renamedStableSeed = structuredClone(plan.TOS_LEVEL1_TASKS)
+renamedStableSeed.find(task => task.stableId === 'tos-stage-concept').taskName = '用户重命名概念阶段'
+const renamedStableSeedInput = structuredClone(renamedStableSeed)
+assert.deepEqual(
+  plan.migrateLevel1TasksForProjectType(renamedStableSeed, '整机产品项目', true),
+  renamedStableSeedInput,
+  'a stable seed with a user-renamed root is not pristine and remains exact',
+)
+assert.deepEqual(renamedStableSeed, renamedStableSeedInput, 'rejecting a renamed stable seed leaves its input untouched')
+
+const reorderedStableSeed = structuredClone(plan.TOS_LEVEL1_TASKS)
+reorderedStableSeed.find(task => task.stableId === 'tos-ms-str1').order = 99
+const reorderedStableSeedInput = structuredClone(reorderedStableSeed)
+assert.deepEqual(
+  plan.migrateLevel1TasksForProjectType(reorderedStableSeed, '整机产品项目', true),
+  reorderedStableSeedInput,
+  'a stable seed with a user-reordered sibling is not pristine and remains exact',
+)
+assert.deepEqual(reorderedStableSeed, reorderedStableSeedInput, 'rejecting a reordered stable seed leaves its input untouched')
+
 const legacySimpleSeed = [
   { id: '1', order: 1, taskName: '概念', planEndDate: '2030-01-01' },
   { id: '1.1', parentId: '1', order: 1, taskName: '概念启动', planEndDate: '2030-01-02' },
@@ -893,6 +919,11 @@ assert.equal(migratedSimpleMachine.find(task => task.stableId === 'machine-ms-st
 
 const technicalSnapshot = [{ id: 'tech-keep', stableId: 'tech-keep', taskName: '技术快照不变', nested: { exact: true } }]
 const unknownSnapshot = [{ id: 'unknown-keep', taskName: '未知作用域不变' }]
+const clearedHistoricalMachineSnapshot = structuredClone(plan.MACHINE_LEVEL1_TASKS)
+const clearedHistoricalMachineMilestone = clearedHistoricalMachineSnapshot.find(task => task.stableId === 'machine-ms-str2')
+clearedHistoricalMachineMilestone.planEndDate = ''
+clearedHistoricalMachineMilestone.actualEndDate = ''
+clearedHistoricalMachineMilestone.clearedByUser = true
 const persistedV7 = {
   tasks: plan.LEVEL1_TASKS,
   configTemplateTasksByType: {
@@ -913,6 +944,7 @@ const persistedV7 = {
     'template::技术项目::tdt::v3': technicalSnapshot,
     'template::tOS版本项目::level3::v3': technicalSnapshot,
     'project::1::OP::level1::v3': plan.TOS_LEVEL1_TASKS,
+    'project::1::TR::level1::v3': clearedHistoricalMachineSnapshot,
     'project::user-created::OP::level1::v3': plan.TOS_LEVEL1_TASKS,
     'project::tos-project::tos-type::Full::level1::v3::snapshot': plan.LEVEL1_TASKS,
     'project::2::level1::v3': plan.LEVEL1_TASKS,
@@ -933,6 +965,10 @@ assert.equal(migratedV8.marketPlanData.OP.marker, 'machine-market', 'market migr
 assert.deepEqual(rootNames(migratedV8.tosTypePlanDataByProjectId['tos-project'].Full.level1Tasks), rootNames(plan.TOS_LEVEL1_TASKS), 'tOS project/type data only migrates its level-one tasks')
 assert.equal(migratedV8.tosTypePlanDataByProjectId['tos-project'].Full.marker, 'tos-type', 'tOS type migration preserves sibling plan metadata')
 assert.deepEqual(rootNames(migratedV8.publishedSnapshots['project::1::OP::level1::v3']), rootNames(plan.MACHINE_LEVEL1_TASKS), 'a known machine project and configured market migrate as a machine plan')
+const migratedClearedHistoricalMilestone = migratedV8.publishedSnapshots['project::1::TR::level1::v3'].find(task => task.stableId === 'machine-ms-str2')
+assert.equal(migratedClearedHistoricalMilestone.planEndDate, '', 'an explicitly cleared historical planned date is never filled from mock defaults')
+assert.equal(migratedClearedHistoricalMilestone.actualEndDate, '', 'an explicitly cleared historical actual date is never filled from mock defaults')
+assert.equal(migratedClearedHistoricalMilestone.clearedByUser, true, 'historical snapshot custom fields survive a confirmed pristine migration')
 assert.deepEqual(migratedV8.publishedSnapshots['project::user-created::OP::level1::v3'], plan.TOS_LEVEL1_TASKS, 'unknown project IDs never default to a machine market migration')
 assert.deepEqual(rootNames(migratedV8.publishedSnapshots['project::tos-project::tos-type::Full::level1::v3::snapshot']), rootNames(plan.TOS_LEVEL1_TASKS), 'strict tOS type snapshot keys migrate as tOS plans')
 assert.deepEqual(rootNames(migratedV8.publishedSnapshots['project::2::level1::v3']), rootNames(plan.TOS_LEVEL1_TASKS), 'known ordinary project mock snapshots resolve the project type')

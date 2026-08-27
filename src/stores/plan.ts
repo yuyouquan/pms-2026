@@ -238,29 +238,47 @@ const getLevel1Semantic = (task: any) => (
   getStableLevel1Semantic(task) || getNamedLevel1Semantic(task)
 )
 
-type StableLevel1SeedSignature = ReadonlyMap<string, string | null>
+interface StableLevel1SeedSignatureEntry {
+  index: number
+  parentStableId: string | null
+  taskName: string
+  order: number
+  source: unknown
+  nodeKind: unknown
+  defaultRoadmap: unknown
+}
+
+type StableLevel1SeedSignature = ReadonlyMap<string, StableLevel1SeedSignatureEntry>
 
 const buildStableLevel1SeedSignature = (tasks: readonly any[]): StableLevel1SeedSignature => {
   const stableIdById = new Map(tasks.map(task => [task.id, task.stableId]))
-  return new Map(tasks.map(task => [
+  return new Map(tasks.map((task, index) => [
     task.stableId,
-    task.parentId ? stableIdById.get(task.parentId) || null : null,
+    {
+      index,
+      parentStableId: task.parentId ? stableIdById.get(task.parentId) || null : null,
+      taskName: normalizeLevel1MigrationName(task.taskName),
+      order: task.order,
+      source: task.source,
+      nodeKind: task.nodeKind,
+      defaultRoadmap: task.defaultRoadmap,
+    },
   ]))
 }
 
 const LEGACY_SHARED_LEVEL1_STABLE_SIGNATURE: StableLevel1SeedSignature = new Map([
-  ['stage-concept', null],
-  ['milestone-concept-start', 'stage-concept'],
-  ['milestone-str1', 'stage-concept'],
-  ['stage-plan', null],
-  ['milestone-str2', 'stage-plan'],
-  ['milestone-str3', 'stage-plan'],
-  ['stage-development', null],
-  ['milestone-str4', 'stage-development'],
-  ['milestone-str4a', 'stage-development'],
-  ['milestone-str5', 'stage-development'],
-  ['stage-launch', null],
-  ['milestone-close', 'stage-launch'],
+  ['stage-concept', { index: 0, parentStableId: null, taskName: '概念阶段', order: 0, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['milestone-concept-start', { index: 1, parentStableId: 'stage-concept', taskName: '概念启动', order: 0, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['milestone-str1', { index: 2, parentStableId: 'stage-concept', taskName: 'STR1', order: 1, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['stage-plan', { index: 3, parentStableId: null, taskName: '计划阶段', order: 1, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['milestone-str2', { index: 4, parentStableId: 'stage-plan', taskName: 'STR2', order: 0, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['milestone-str3', { index: 5, parentStableId: 'stage-plan', taskName: 'STR3', order: 1, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['stage-development', { index: 6, parentStableId: null, taskName: '开发验证阶段', order: 2, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['milestone-str4', { index: 7, parentStableId: 'stage-development', taskName: 'STR4', order: 0, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['milestone-str4a', { index: 8, parentStableId: 'stage-development', taskName: 'STR4A', order: 1, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['milestone-str5', { index: 9, parentStableId: 'stage-development', taskName: 'STR5', order: 2, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['stage-launch', { index: 10, parentStableId: null, taskName: '上市收编阶段', order: 3, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['milestone-close', { index: 11, parentStableId: 'stage-launch', taskName: '收编完成', order: 0, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
 ])
 
 const STABLE_LEVEL1_SEED_SIGNATURES: readonly StableLevel1SeedSignature[] = [
@@ -288,10 +306,19 @@ const matchesStableLevel1SeedSignature = (
   const taskById = new Map(fixedTasks.map(task => [task.id, task]))
   const stableIds = new Set(fixedTasks.map(task => task.stableId))
   if (taskById.size !== fixedTasks.length || stableIds.size !== signature.size) return false
-  return fixedTasks.every(task => {
+  return fixedTasks.every((task, index) => {
     if (!signature.has(task.stableId)) return false
-    const parentStableId = task.parentId ? taskById.get(task.parentId)?.stableId : null
-    return parentStableId === signature.get(task.stableId)
+    const expected = signature.get(task.stableId)!
+    const parent = task.parentId ? taskById.get(task.parentId) : undefined
+    if (task.parentId && !parent) return false
+    const parentStableId = parent?.stableId || null
+    return index === expected.index
+      && parentStableId === expected.parentStableId
+      && normalizeLevel1MigrationName(task.taskName) === normalizeLevel1MigrationName(expected.taskName)
+      && task.order === expected.order
+      && task.source === expected.source
+      && task.nodeKind === expected.nodeKind
+      && task.defaultRoadmap === expected.defaultRoadmap
   })
 }
 
@@ -305,6 +332,8 @@ const matchesLegacySimpleLevel1SeedSignature = (fixedTasks: any[]) => {
       && (task.parentId || null) === expected.parentId
       && task.order === expected.order
       && normalizeLevel1MigrationName(task.taskName) === normalizeLevel1MigrationName(expected.taskName)
+      && task.source === undefined
+      && task.nodeKind === undefined
   })
 }
 
@@ -314,6 +343,8 @@ const isRecognizedLevel1Seed = (tasks: any[]) => {
   }
   const ids = tasks.map(task => task?.id)
   if (ids.some(id => typeof id !== 'string' || !id) || new Set(ids).size !== ids.length) return false
+  const idSet = new Set(ids)
+  if (tasks.some(task => task?.parentId && !idSet.has(task.parentId))) return false
   const fixedTasks = tasks.filter(task => task?.source !== 'custom')
   if (!fixedTasks.every(task => task.source === undefined || task.source === 'template')) return false
   const hasStableIds = fixedTasks.some(task => Boolean(task?.stableId))
@@ -327,6 +358,37 @@ const isRecognizedLevel1Seed = (tasks: any[]) => {
 }
 
 const LEVEL1_DATE_FIELDS = ['planStartDate', 'planEndDate', 'actualStartDate', 'actualEndDate'] as const
+
+const renumberMigratedLevel1DisplayIds = (tasks: any[]) => {
+  const indexed = tasks.map((task, index) => ({ task: { ...task }, index }))
+  const sortSiblings = (items: typeof indexed) => [...items].sort((left, right) => (
+    Number(left.task.order) - Number(right.task.order) || left.index - right.index
+  ))
+  const roots = sortSiblings(indexed.filter(({ task }) => !task.parentId))
+  const childrenByParent = new Map<string, typeof indexed>()
+  indexed.forEach(item => {
+    if (!item.task.parentId) return
+    childrenByParent.set(item.task.parentId, [
+      ...(childrenByParent.get(item.task.parentId) || []),
+      item,
+    ])
+  })
+  const numbered: any[] = []
+  const included = new Set<number>()
+  roots.forEach((root, rootIndex) => {
+    const rootId = String(rootIndex + 1)
+    included.add(root.index)
+    numbered.push({ ...root.task, id: rootId })
+    sortSiblings(childrenByParent.get(root.task.id) || []).forEach((child, childIndex) => {
+      included.add(child.index)
+      numbered.push({ ...child.task, id: `${rootId}.${childIndex + 1}`, parentId: rootId })
+    })
+  })
+  indexed.filter(item => !included.has(item.index)).forEach(item => {
+    numbered.push({ ...item.task, id: String(numbered.filter(task => !task.parentId).length + 1), parentId: null })
+  })
+  return numbered
+}
 
 /** Conservatively replaces only confirmed shared/default seeds and preserves user-owned arrays. */
 export const migrateLevel1TasksForProjectType = (
@@ -361,7 +423,7 @@ export const migrateLevel1TasksForProjectType = (
       defaultRoadmap: defaultTask.defaultRoadmap,
     }
     LEVEL1_DATE_FIELDS.forEach(field => {
-      if (!sourceTask[field] && defaultTask[field]) merged[field] = defaultTask[field]
+      if (Object.prototype.hasOwnProperty.call(sourceTask, field)) merged[field] = sourceTask[field]
     })
     return merged
   })
@@ -376,7 +438,7 @@ export const migrateLevel1TasksForProjectType = (
       ...(migratedParent ? { parentId: migratedParent.id } : {}),
     }
   })
-  return [...migratedDefaults, ...customTasks]
+  return renumberMigratedLevel1DisplayIds([...migratedDefaults, ...customTasks])
 }
 
 const INITIAL_LEVEL1_PROJECT_TYPES_BY_ID = Object.fromEntries(initialProjects.map(project => [
