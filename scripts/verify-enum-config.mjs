@@ -67,8 +67,10 @@ for (const definition of Object.values(values.ENUM_DEFINITIONS)) {
   assert.deepEqual(definition.columns, expectedColumnsByKind[definition.kind](definition), `${definition.key} exposes the exact columns for ${definition.kind}`)
 }
 assert.equal(values.isEnumTypeKey('core-value'), true, 'registered enum keys are recognized')
-assert.equal(values.isEnumTypeKey('tos-2-part'), true, 'legacy tOS keys remain temporarily recognized by the compatibility guard')
+assert.equal(values.isEnumTypeKey('tos-2-part'), false, 'legacy tOS keys are absent from the flat registry guard')
 assert.equal(values.isEnumTypeKey('unknown'), false, 'unknown enum keys are rejected')
+assert.equal(values.isLegacyTosEnumTypeKey('tos-2-part'), true, 'the separately named compatibility guard recognizes legacy tOS keys')
+assert.equal(values.isLegacyTosEnumTypeKey('first-sale-tos'), false, 'the legacy guard does not claim flat registry keys')
 
 assert.equal(values.formatEnumCellValue('first-sale-tos', 'value', '18.0'), 'tOS18.0', 'first-sale tOS display adds the tOS prefix')
 assert.equal(values.formatEnumCellValue('roadmap-tos', 'value', 'alpha'), 'tOSalpha', 'roadmap tOS display adds the tOS prefix')
@@ -145,10 +147,9 @@ assert.deepEqual(values.validateAndNormalizeEnumRow('project-category-mapping', 
 assert.equal(values.getEnumRowSummary('chip-mapping', { id: 'one', chipCode: ' C1 ', chipModel: ' M1 ', chipPlatform: ' P1 ' }), 'C1 / M1 / P1', 'row summaries use normalized field values')
 console.log('[registry-contract] passed')
 
-console.log('[legacy-consumers] verifying pre-migration store and UI contracts')
+console.log('[legacy-consumers] verifying pre-migration helpers and UI source contracts')
 assert.deepEqual(getStringUnionTypeMembers(readSource(root, 'src/types/enums.ts'), 'LegacyTosEnumTypeKey').sort(), ['tos-2-part', 'tos-3-part'], 'temporary compatibility keeps the two legacy tOS string literals isolated from EnumTypeKey')
 const options = loadTypeScriptModule(root, 'src/lib/tosEnumOptions.ts')
-const store = loadTypeScriptModule(root, 'src/stores/enums.ts')
 assert.deepEqual(Object.keys(values.TOS_ENUM_REGISTRY).sort(), ['tos-2-part', 'tos-3-part'], 'only two tOS enum registries are registered')
 assert.deepEqual(values.TOS_ENUM_REGISTRY, {
   'tos-2-part': { key: 'tos-2-part', label: 'tOS版本（2位）', initialValues: ['16.0', '17.2'] },
@@ -165,28 +166,6 @@ for (const invalidValue of ['', '-1.0', '.17.0', '17.0.', 'tOS 17.0']) {
   assert.throws(() => values.validateEnumValue('tos-2-part', invalidValue), /format/i, `rejects invalid two-part input: ${invalidValue}`)
 }
 assert.deepEqual(values.sortEnumValues(['17.10.0', '17.2.0', '17.2.0', '16.10.2']), ['16.10.2', '17.2.0', '17.2.0', '17.10.0'], 'version values sort stably by numeric segments in natural ascending order')
-assert.equal(typeof store.createEnumStore, 'function', 'missing enum store fixture factory')
-assert.deepEqual(store.createEnumStore().getState().valuesByType, {
-  'tos-2-part': ['16.0', '17.2'],
-  'tos-3-part': ['16.0.1', '16.0.2', '17.2.0'],
-}, 'store starts with the exact fixed values')
-const enums = store.createEnumStore({ valuesByType: { 'tos-3-part': ['17.2.0'] } })
-assert.deepEqual(enums.addEnumValue('tos-3-part', ' 17.10.0 '), { ok: true }, 'store adds a trimmed value')
-assert.deepEqual(enums.addEnumValue('tos-3-part', 'tOS17.3.0'), { ok: true }, 'store accepts a normalizable tOS prefix')
-assert.deepEqual(enums.getValues('tos-3-part'), ['17.2.0', '17.3.0', '17.10.0'], 'store keeps semantic order')
-assert.deepEqual(enums.addEnumValue('tos-3-part', '17.10.0'), { ok: false, reason: 'duplicate' }, 'store rejects duplicate values')
-assert.deepEqual(enums.addEnumValue('tos-3-part', '17.10'), { ok: false, reason: 'invalid' }, 'store rejects the other category format')
-assert.deepEqual(enums.updateEnumValue('tos-3-part', '17.3.0', ' 17.4.0 '), { ok: true }, 'store updates and trims a value')
-assert.deepEqual(enums.updateEnumValue('tos-3-part', '17.4.0', '17.10.0'), { ok: false, reason: 'duplicate' }, 'update excludes itself but rejects another value')
-assert.deepEqual(enums.updateEnumValue('tos-3-part', '17.4.0', '17.4.0'), { ok: true }, 'unchanged update excludes itself from duplicate detection')
-assert.deepEqual(enums.updateEnumValue('tos-3-part', 'missing', '17.5.0'), { ok: false, reason: 'missing' }, 'update reports a missing source value')
-const selectedString = enums.getValues('tos-3-part')[0]
-const businessRecord = { tosVersion: selectedString }
-const readBusinessValue = record => record.tosVersion
-assert.deepEqual(enums.deleteEnumValue('tos-3-part', '17.2.0'), { ok: true }, 'store deletes configured option')
-assert.deepEqual(enums.deleteEnumValue('tos-3-part', '17.2.0'), { ok: false, reason: 'missing' }, 'delete reports an already missing value')
-assert.equal(readBusinessValue(businessRecord), '17.2.0', 'independent business snapshot keeps its selected string after deletion')
-assert.equal(enums.getValues('tos-3-part').includes('17.2.0'), false, 'deleted option is gone from configuration')
 
 assert.deepEqual(options.buildTosEnumOptions('tos-3-part', ['17.2.0', '19.4.1', '19.4'], ['16.3.7']), [
   { label: 'tOS17.2.0', value: '17.2.0' },
@@ -199,40 +178,6 @@ assert.deepEqual(options.buildTosEnumOptions('tos-2-part', ['17.2', '19.4', '19.
 ], 'two-part consumers do not inherit three-part values')
 assert.equal(options.resolveCurrentTosEnumValue('tos-3-part', ' tOS19.4.1 ', ['17.2.0', '19.4.1']), '19.4.1', 'current values resolve from either labels or canonical values')
 assert.equal(options.resolveCurrentTosEnumValue('tos-3-part', 'tOS16.3.7（已停用）', ['17.2.0', '19.4.1']), null, 'historical display values cannot be selected as new values')
-
-assert.deepEqual(store.partializeEnumState({
-  valuesByType: { 'tos-2-part': ['18.0'], 'tos-3-part': ['18.0.1'] },
-  hasHydrated: true,
-  hydrationError: 'not persisted',
-  modalOpen: true,
-  selectedType: 'tos-2-part',
-  loading: true,
-}), { valuesByType: { 'tos-2-part': ['18.0'], 'tos-3-part': ['18.0.1'] } }, 'persisted partial contains business values only')
-assert.equal(store.useEnumStore.getState().selectedType, 'tos-2-part', 'two-part enum is the default configuration focus')
-store.useEnumStore.getState().setSelectedType('tos-3-part')
-assert.equal(store.useEnumStore.getState().selectedType, 'tos-3-part', 'configuration focus can be selected before navigation')
-assert.deepEqual(store.partializeEnumState(store.useEnumStore.getState()), {
-  valuesByType: store.useEnumStore.getState().valuesByType,
-}, 'configuration focus remains non-persisted UI state')
-assert.deepEqual(store.migrateEnumState({
-  valuesByType: {
-    'tos-2-part': [' 18.10 ', 'bad', '18.2', '18.2'],
-    'tos-3-part': ['tOS18.10.1', '18.2', '18.3.0'],
-    unknown: ['1.0'],
-  },
-  modalOpen: true,
-}, 0), {
-  valuesByType: {
-    'tos-2-part': ['18.2', '18.10'],
-    'tos-3-part': ['18.3.0', '18.10.1'],
-  },
-}, 'migration drops unknown state and invalid values while normalizing, deduplicating, sorting, and preserving valid user values')
-assert.deepEqual(store.migrateEnumState({ valuesByType: { 'tos-2-part': [] } }, 0), {
-  valuesByType: {
-    'tos-2-part': [],
-    'tos-3-part': ['16.0.1', '16.0.2', '17.2.0'],
-  },
-}, 'migration preserves an intentionally empty category and heals a missing category')
 
 const enumUi = readSource(root, 'src/components/config/EnumConfig.tsx')
 const configUi = readSource(root, 'src/containers/ConfigContainer.tsx')

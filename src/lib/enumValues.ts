@@ -91,12 +91,14 @@ const PROJECT_CATEGORIES = new Set([
   '能力建设项目',
 ])
 
-export function isEnumTypeKey(value: unknown): value is EnumTypeKey | LegacyTosEnumTypeKey {
+export function isEnumTypeKey(value: unknown): value is EnumTypeKey {
+  return typeof value === 'string' && ENUM_TYPE_KEYS.includes(value as EnumTypeKey)
+}
+
+/** @deprecated Temporary compatibility guard for consumers migrated in later tasks. */
+export function isLegacyTosEnumTypeKey(value: unknown): value is LegacyTosEnumTypeKey {
   return typeof value === 'string'
-    && (
-      ENUM_TYPE_KEYS.includes(value as EnumTypeKey)
-      || LEGACY_TOS_ENUM_TYPE_KEYS.includes(value as LegacyTosEnumTypeKey)
-    )
+    && LEGACY_TOS_ENUM_TYPE_KEYS.includes(value as LegacyTosEnumTypeKey)
 }
 
 export function normalizeEnumFieldValue(
