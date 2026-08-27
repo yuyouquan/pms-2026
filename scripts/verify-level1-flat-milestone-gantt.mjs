@@ -779,6 +779,8 @@ const loadExportedConstFromSource = async (sourceText, exportName) => {
   return import(`data:text/javascript;base64,${Buffer.from(output).toString('base64')}`)
 }
 const projectSpaceActualPatch = await loadExportedConstFromSource(projectSpaceSource, 'applyIncrementalActualFieldPatch')
+const projectSpaceFocusRetry = await loadExportedConstFromSource(projectSpaceSource, 'createLevel1FocusRetryController')
+const projectSpaceFollowSync = await loadExportedConstFromSource(projectSpaceSource, 'preserveDetachedFollowMarketActualsAfterSync')
 for (const label of ['序号', '阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期']) {
   assert.match(projectSpaceSource, new RegExp(label), `project-space tree table contains ${label}`)
 }
@@ -798,6 +800,9 @@ assert.match(projectSpaceSource, /\[data-field/, 'publish focus resolves the fir
 assert.match(projectSpaceSource, /setProjectPlanViewMode\('table'\)/, 'publish failure always restores the governed vertical table')
 assert.match(projectSpaceSource, /setLevel1PlanFilters\(\[\]\)/, 'publish failure clears filters that can hide the invalid row')
 assert.match(projectSpaceSource, /focusLevel1Violation[\s\S]*remainingAttempts/, 'publish focus retries until the vertical invalid cell is mounted')
+assert.match(projectSpaceSource, /level1FocusRetryRef/, 'publish focus keeps its retry controller in a component ref')
+assert.match(projectSpaceSource, /level1FocusRetryRef\.current\?\.stop\(\)/, 'scope changes and unmount stop pending focus retries')
+assert.match(projectSpaceSource, /readCurrentLevel1FocusToken/, 'every focus attempt re-reads the live project, scope, and version token')
 assert.match(projectSpaceSource, /`\$\{record\.taskName\}：\$\{reason\}`/, 'invalid tooltip text prefixes every reason with the task name')
 assert.match(projectSpaceSource, /getLevel1StructurePermissions/, 'render and confirmation paths use centralized structure permissions')
 assert.doesNotMatch(projectSpaceSource, /source === 'custom'\s*&& getStructurePermissions\(record\)\.canDelete/, 'super-admin fixed-template deletion is not hidden behind a custom-source gate')
@@ -848,9 +853,58 @@ assert.deepEqual(draftEndPatched.find(task => task.stableId === 'target'), {
 }, 'paired draft actual-end merge preserves its divergent actual start and non-actual fields')
 assert.deepEqual(projectSpaceActualPatch.applyIncrementalActualFieldPatch(liveDraftTasks, 'missing', 'actualEndDate', '2026-08-12'), liveDraftTasks, 'a missing stable ID leaves the draft values unchanged')
 assert.deepEqual(liveDraftTasks[1], { id: '1.1', stableId: 'target', parentId: '1', order: 1, taskName: '草稿保留名称', planEndDate: '2026-10-01', actualStartDate: '2026-07-20', actualEndDate: '2026-09-01', actualDays: 43 }, 'incremental actual patches never mutate their inputs')
+const detachedFollowPatch = projectSpaceActualPatch.applyIncrementalActualFieldPatch([
+  { ...publishedTasks[1], nodeKind: 'business-period', actualTimeDetachedFromMain: false },
+], 'target', 'actualEndDate', '2026-08-12', true)
+assert.deepEqual(detachedFollowPatch[0], {
+  ...publishedTasks[1], nodeKind: 'business-period', actualStartDate: '2026-08-01', actualEndDate: '2026-08-12', actualDays: 12, actualTimeDetachedFromMain: true,
+}, 'a follow-market live/snapshot patch recomputes duration and marks the task detached from main actual time')
 assert.doesNotMatch(projectSpaceSource, /mergeActualFieldsByStableId/, 'project-space published writes never use the legacy two-field merge')
 assert.match(projectSpaceSource, /updateCurrentTosTypeData[\s\S]{0,600}applyIncrementalActualFieldPatch/, 'tOS paired drafts receive the same single-field actual patch')
 assert.match(projectSpaceSource, /setMarketPlanData[\s\S]{0,800}applyIncrementalActualFieldPatch/, 'market paired drafts receive the same single-field actual patch')
+assert.match(projectSpaceSource, /pairedVersion\s*\|\|\s*\(isLevel1MarketTable\s*&&\s*currentMarketIsFollow\)/, 'a follow-market latest-published edit updates live scope even without a paired draft')
+
+const scheduledFocusCallbacks = new Map()
+const cancelledFocusHandles = []
+let nextFocusHandle = 0
+let currentFocusToken = { projectId: 'machine', scopeKind: 'market', scopeValue: 'OP', versionId: 'v4' }
+let focusAttempts = 0
+const focusController = projectSpaceFocusRetry.createLevel1FocusRetryController({
+  schedule: callback => {
+    const handle = ++nextFocusHandle
+    scheduledFocusCallbacks.set(handle, callback)
+    return handle
+  },
+  cancel: handle => {
+    cancelledFocusHandles.push(handle)
+    scheduledFocusCallbacks.delete(handle)
+  },
+  readCurrentToken: () => currentFocusToken,
+  tryFocus: () => {
+    focusAttempts += 1
+    return focusAttempts >= 2
+  },
+})
+const runNextFocusCallback = () => {
+  const entry = scheduledFocusCallbacks.entries().next().value
+  assert.ok(entry, 'focus retry has a scheduled callback')
+  scheduledFocusCallbacks.delete(entry[0])
+  entry[1]()
+}
+focusController.start(currentFocusToken, 3)
+runNextFocusCallback()
+assert.equal(focusAttempts, 1, 'a matching live token performs its first focus attempt')
+assert.equal(scheduledFocusCallbacks.size, 1, 'a missing DOM target schedules another bounded attempt')
+focusController.start({ ...currentFocusToken, scopeValue: 'TR' }, 3)
+assert.equal(cancelledFocusHandles.length, 1, 'a new focus round cancels the previous pending timer')
+currentFocusToken = { ...currentFocusToken, scopeValue: 'OP' }
+runNextFocusCallback()
+assert.equal(focusAttempts, 1, 'a stale scope token never focuses a same-stable-id row in the new scope')
+assert.equal(scheduledFocusCallbacks.size, 0, 'a stale token stops without another retry')
+currentFocusToken = { ...currentFocusToken, scopeValue: 'TR', versionId: 'v5' }
+focusController.start(currentFocusToken, 3)
+focusController.stop()
+assert.equal(scheduledFocusCallbacks.size, 0, 'unmount/scope cleanup cancels a pending retry timer')
 
 const flatFilterRows = [
   { id: '1.1', stableId: 'concept-start', parentId: '1', stageId: '1', sequence: 1, stageName: '概念阶段', milestoneName: '概念启动', status: '未开始', planEndDate: '2026-01-10', estimatedDays: 9, actualEndDate: '', actualDays: null },
@@ -971,6 +1025,47 @@ assert.match(compareModalSource, /technicalSubprojectColumns[\s\S]*renderFlatDay
 const compareModule = loadTypeScriptModule(root, 'src/lib/versionCompare.ts')
 const comparisonSnapshotsModule = loadTypeScriptModule(root, 'src/lib/versionComparisonSnapshots.ts')
 const marketRulesModule = loadTypeScriptModule(root, 'src/lib/marketRules.ts')
+const marketPlansBeforeMainSync = {
+  OP: {
+    tasks: [{ ...publishedTasks[1], nodeKind: 'business-period', actualStartDate: '2026-08-01', actualEndDate: '2026-08-30', actualDays: 30 }],
+    level2Tasks: [],
+    createdLevel2Plans: [],
+  },
+  TR: {
+    tasks: detachedFollowPatch,
+    level2Tasks: [],
+    createdLevel2Plans: [],
+  },
+}
+const marketRowsForMainSync = [
+  { id: 'market-op', market: 'OP', isMain: true, followsMain: false },
+  { id: 'market-tr', market: 'TR', isMain: false, followsMain: true },
+]
+const detachedFollowAfterMainSync = projectSpaceFollowSync.preserveDetachedFollowMarketActualsAfterSync(
+  marketRulesModule.syncFollowMarketPlans(marketPlansBeforeMainSync, marketRowsForMainSync),
+  marketPlansBeforeMainSync,
+  marketRowsForMainSync,
+)
+assert.deepEqual(detachedFollowAfterMainSync.TR.tasks[0], detachedFollowPatch[0], 'main-market publishing preserves a detached follow-market actual field, duration, and detach flag')
+const staleIndependentFollow = {
+  ...marketPlansBeforeMainSync,
+  TR: {
+    ...marketPlansBeforeMainSync.TR,
+    tasks: [{ ...detachedFollowPatch[0], actualEndDate: '2026-08-08', actualDays: 8, actualTimeDetachedFromMain: false }],
+  },
+}
+const restoredHistoricalFollow = projectSpaceFollowSync.preserveDetachedFollowMarketActualsAfterSync(
+  staleIndependentFollow,
+  marketPlansBeforeMainSync,
+  marketRowsForMainSync,
+)
+const detachedFollowAfterRefollow = projectSpaceFollowSync.preserveDetachedFollowMarketActualsAfterSync(
+  marketRulesModule.syncFollowMarketPlans(restoredHistoricalFollow, marketRowsForMainSync),
+  restoredHistoricalFollow,
+  marketRowsForMainSync,
+)
+assert.deepEqual(detachedFollowAfterRefollow.TR.tasks[0], detachedFollowPatch[0], 're-follow snapshot generation restores detached actual fields from the published snapshot before main-plan merging')
+assert.match(projectSpaceSource, /newlyFollowedMarkets[\s\S]{0,1800}publishedSnapshots\[getProjectMarketSnapshotKey/, 're-follow materialization consults the latest published market snapshot for detached actual fields')
 const marketComparisonEffective = [{ id: 'effective', taskName: '当前市场', planEndDate: '2026-03-20' }]
 const marketComparisonV2 = [{ id: 'concept', taskName: '概念启动', actualEndDate: '2026-02-26' }]
 const marketComparisonOtherMarket = [{ id: 'concept', taskName: '概念启动', actualEndDate: '2099-12-31' }]

@@ -10,7 +10,7 @@ import puppeteer from 'puppeteer'
 const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const TIMEOUT = Number(process.env.PMS_BROWSER_TIMEOUT || 30_000)
 const ONLY_CASE = process.env.PMS_BROWSER_CASE || ''
-const VALID_BROWSER_CASES = new Set(['', 'all', 'machine', 'machine-structure', 'machine-reorder', 'machine-invalid', 'machine-permission', 'tos', 'technical'])
+const VALID_BROWSER_CASES = new Set(['', 'all', 'machine', 'machine-structure', 'machine-reorder', 'machine-invalid', 'machine-follow-actual', 'machine-permission', 'tos', 'technical'])
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 const isAllowedConsoleMessage = message => {
   const text = message.text()
@@ -21,7 +21,7 @@ const isAllowedConsoleMessage = message => {
 }
 
 if (!VALID_BROWSER_CASES.has(ONLY_CASE)) {
-  throw new Error(`unknown PMS_BROWSER_CASE=${JSON.stringify(ONLY_CASE)}; expected all, machine, machine-structure, machine-reorder, machine-invalid, machine-permission, tos, or technical`)
+  throw new Error(`unknown PMS_BROWSER_CASE=${JSON.stringify(ONLY_CASE)}; expected all, machine, machine-structure, machine-reorder, machine-invalid, machine-follow-actual, machine-permission, tos, or technical`)
 }
 
 const clickExact = async (page, text, selector = 'button,[role="menuitem"],[role="tab"],td,div,span,label') => {
@@ -254,12 +254,16 @@ const waitForCompareChange = page => page.waitForFunction(() => [...document.que
   return box.width > 0 && box.height > 0 && node.textContent?.includes('历史版本对比')
     && /[1-9]\d*\s*变更总计/.test(node.textContent || '')
 }), { timeout: TIMEOUT })
-const waitForDialogToClose = (page, title) => page.waitForFunction(value => ![...document.querySelectorAll('[role="dialog"]')].some(node => {
+const waitForDialogToClose = (page, title, timeout = TIMEOUT) => page.waitForFunction(value => ![...document.querySelectorAll('[role="dialog"]')].some(node => {
   const box = node.getBoundingClientRect()
-  const style = getComputedStyle(node)
-  return box.width > 0 && box.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
-    && node.textContent?.includes(value)
-}), { timeout: TIMEOUT }, title)
+  let ancestor = node
+  while (ancestor) {
+    const style = getComputedStyle(ancestor)
+    if (style.display === 'none' || style.visibility === 'hidden') return false
+    ancestor = ancestor.parentElement
+  }
+  return box.width > 0 && box.height > 0 && node.textContent?.includes(value)
+}), { timeout }, title)
 const assertCompareHasChange = async (page, expectedTaskName) => {
   const content = await visibleCompareDialogText(page)
   assert.match(content, /[1-9]\d*\s*变更总计/, 'version compare reports a nonzero change total')
@@ -294,6 +298,112 @@ const treeActualDays = async (page, table, name) => page.$eval(table, (element, 
   const row = [...element.querySelectorAll('tbody tr')].find(item => item.textContent?.includes(taskName))
   return row?.querySelectorAll('td')[7]?.textContent?.trim() || null
 }, name)
+const visibleMarketScopes = async page => page.$$eval('[role="button"][aria-label^="市场 "]', nodes => nodes
+  .filter(node => {
+    const box = node.getBoundingClientRect()
+    const style = getComputedStyle(node)
+    return box.width > 0 && box.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+  })
+  .map(node => ({
+    market: node.getAttribute('aria-label')?.replace(/^市场\s+/, '') || '',
+    text: node.textContent?.replace(/\s+/g, '') || '',
+    selected: node.getAttribute('aria-pressed') === 'true',
+  })))
+const selectMarketScope = async (page, market) => {
+  const selected = await page.evaluate(value => {
+    const control = [...document.querySelectorAll(`[role="button"][aria-label="市场 ${value}"]`)]
+      .find(node => {
+        const box = node.getBoundingClientRect()
+        return box.width > 0 && box.height > 0
+      })
+    if (!(control instanceof HTMLElement)) return false
+    control.focus()
+    return document.activeElement === control
+  }, market)
+  if (!selected) throw new Error(`missing visible market scope ${market}`)
+  await page.keyboard.press('Enter')
+  await page.waitForFunction(value => document.querySelector(`[role="button"][aria-label="市场 ${value}"]`)?.getAttribute('aria-pressed') === 'true', { timeout: TIMEOUT }, market)
+  await wait(300)
+}
+const chooseFirstMarketMatrixOptions = async (page, fieldLabel) => {
+  const controlCount = await page.evaluate(label => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')].find(node => node.textContent?.includes('市场编辑'))
+    const row = [...(dialog?.querySelectorAll('.pms-dimension-matrix tbody tr') || [])]
+      .find(node => node.querySelector('td')?.textContent?.trim() === label)
+    return row?.querySelectorAll('.ant-select input[role="combobox"]').length || 0
+  }, fieldLabel)
+  for (let index = 0; index < controlCount; index += 1) {
+    const focused = await page.evaluate(({ label, controlIndex }) => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')].find(node => node.textContent?.includes('市场编辑'))
+      const row = [...(dialog?.querySelectorAll('.pms-dimension-matrix tbody tr') || [])]
+        .find(node => node.querySelector('td')?.textContent?.trim() === label)
+      const input = row?.querySelectorAll('.ant-select input[role="combobox"]')[controlIndex]
+      if (!(input instanceof HTMLElement)) return false
+      input.focus()
+      return document.activeElement === input
+    }, { label: fieldLabel, controlIndex: index })
+    if (!focused) throw new Error(`missing market matrix select ${fieldLabel}[${index}]`)
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(({ label, controlIndex }) => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')].find(node => node.textContent?.includes('市场编辑'))
+      const row = [...(dialog?.querySelectorAll('.pms-dimension-matrix tbody tr') || [])]
+        .find(node => node.querySelector('td')?.textContent?.trim() === label)
+      return row?.querySelectorAll('.ant-select input[role="combobox"]')[controlIndex]?.getAttribute('aria-expanded') === 'true'
+    }, { timeout: TIMEOUT }, { label: fieldLabel, controlIndex: index })
+    await page.keyboard.press('Home')
+    await page.keyboard.press('Enter')
+    await wait(180)
+  }
+}
+const setFollowMarketConfig = async (page, market, followsMain) => {
+  await clickButtonText(page, '市场编辑')
+  await page.waitForFunction(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => {
+    const box = dialog.getBoundingClientRect()
+    return box.width > 0 && box.height > 0 && dialog.textContent?.includes('市场编辑')
+  }), { timeout: TIMEOUT })
+  await chooseFirstMarketMatrixOptions(page, '编译选项')
+  await chooseFirstMarketMatrixOptions(page, '编译市场')
+  const marketSaveReady = await page.waitForFunction(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')].find(node => node.textContent?.includes('市场编辑'))
+    const save = [...(dialog?.querySelectorAll('button') || [])].find(button => button.textContent?.trim() === '保存')
+    return save instanceof HTMLButtonElement && !save.disabled
+  }, { timeout: 5_000 }).then(() => true).catch(() => false)
+  if (!marketSaveReady) {
+    const diagnostic = await page.evaluate(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')].find(node => node.textContent?.includes('市场编辑'))
+      const save = [...(dialog?.querySelectorAll('button') || [])].find(button => button.textContent?.trim() === '保存')
+      return { text: dialog?.textContent?.replace(/\s+/g, ' ').trim().slice(0, 1600) || '', saveDisabled: save instanceof HTMLButtonElement ? save.disabled : null }
+    })
+    throw new Error(`market editor cannot save: ${JSON.stringify(diagnostic)}`)
+  }
+  const toggled = await page.evaluate(({ marketName, checked }) => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')].find(node => node.textContent?.includes('市场编辑'))
+    const headers = [...(dialog?.querySelectorAll('.pms-dimension-matrix thead th') || [])]
+    const columnIndex = headers.findIndex(header => header.textContent?.includes(marketName))
+    const row = [...(dialog?.querySelectorAll('.pms-dimension-matrix tbody tr') || [])]
+      .find(node => node.querySelector('td')?.textContent?.trim() === '跟随主市场')
+    const input = columnIndex >= 0 ? row?.querySelectorAll('td')[columnIndex]?.querySelector('input[type="checkbox"]') : null
+    if (!(input instanceof HTMLInputElement)) return null
+    if (input.checked !== checked) (input.closest('label') || input).dispatchEvent(new MouseEvent('click', {
+      bubbles: true, cancelable: true, composed: true, view: window,
+    }))
+    return input.checked
+  }, { marketName: market, checked: followsMain })
+  if (toggled === null) throw new Error(`missing follow-market checkbox for ${market}`)
+  await page.waitForFunction(({ marketName, checked }) => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')].find(node => node.textContent?.includes('市场编辑'))
+    const headers = [...(dialog?.querySelectorAll('.pms-dimension-matrix thead th') || [])]
+    const columnIndex = headers.findIndex(header => header.textContent?.includes(marketName))
+    const row = [...(dialog?.querySelectorAll('.pms-dimension-matrix tbody tr') || [])]
+      .find(node => node.querySelector('td')?.textContent?.trim() === '跟随主市场')
+    const input = columnIndex >= 0 ? row?.querySelectorAll('td')[columnIndex]?.querySelector('input[type="checkbox"]') : null
+    return input instanceof HTMLInputElement && input.checked === checked
+  }, { timeout: TIMEOUT }, { marketName: market, checked: followsMain })
+  await clickDialogButton(page, '市场编辑', '保存')
+  await page.waitForFunction(() => [...document.querySelectorAll('.ant-message-notice-content')]
+    .some(node => node.textContent?.includes('市场配置已保存')), { timeout: TIMEOUT })
+  await wait(250)
+}
 const editTreeDate = async (page, table, taskName, field, nextValue) => {
   const inputBox = await page.evaluate(({ selector, name, fieldName }) => {
     const root = document.querySelector(selector)
@@ -605,12 +715,18 @@ const enterProject = async (page, project) => {
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: TIMEOUT })
   await wait(2_000)
   console.log(`browser entered root for ${project}`)
-  await clickRoleText(page, 'menuitem', '项目列表')
-  console.log(`browser opened list for ${project}`)
   // AntD's navigation item can retain its focus/active class without the
   // selected class during its exit animation. The public list-view control is
   // the stable, rendered proof that the destination has loaded.
-  await page.waitForSelector('[aria-label="项目列表视图"]', { timeout: TIMEOUT })
+  let projectListReady = Boolean(await page.$('[aria-label="项目列表视图"]'))
+  for (let attempt = 0; attempt < 3 && !projectListReady; attempt += 1) {
+    await clickRoleText(page, 'menuitem', '项目列表')
+    projectListReady = await page.waitForSelector('[aria-label="项目列表视图"]', { timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false)
+  }
+  if (!projectListReady) throw new Error(`project-list navigation did not hydrate for ${project}`)
+  console.log(`browser opened list for ${project}`)
   const category = project.startsWith('tOS') ? 'tOS版本项目'
     : project === 'AIOS架构演进V3' ? '技术项目'
       : null
@@ -843,7 +959,7 @@ const runCase = async (title, test) => {
 }
 
 try {
-  if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'machine' || ONLY_CASE === 'machine-structure' || ONLY_CASE === 'machine-reorder' || ONLY_CASE === 'machine-invalid') await runCase('machine tree table, governed business nodes and mixed gantt', async (initialPage, errors) => {
+  if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'machine' || ONLY_CASE === 'machine-structure' || ONLY_CASE === 'machine-reorder' || ONLY_CASE === 'machine-invalid' || ONLY_CASE === 'machine-follow-actual') await runCase('machine tree table, governed business nodes and mixed gantt', async (initialPage, errors) => {
     let page = initialPage
     await enterProject(page, 'X6877-D8400_H991')
     assert.ok(await page.$('.pms-plan-view-mode-switcher input[aria-label="横版表格"]:checked'), 'machine level-one plan defaults to horizontal view')
@@ -869,6 +985,69 @@ try {
     assert.ok(await page.$('button[aria-label="删除节点 MR4"]'), 'custom business node has a delete affordance')
     assert.ok(await page.$('button[aria-label="删除节点 概念启动"]'), 'super-admin can discover the fixed-template delete exception')
     console.log('browser machine MR confirmation and structure contract passed')
+
+    if (ONLY_CASE === 'machine-follow-actual') {
+      const marketScopes = await visibleMarketScopes(page)
+      const mainMarket = marketScopes.find(scope => scope.text.includes('主'))?.market
+      const preconfiguredFollowMarket = marketScopes.find(scope => scope.text.includes('跟随'))?.market
+      const followMarket = preconfiguredFollowMarket || marketScopes.find(scope => scope.market !== mainMarket)?.market
+      assert.ok(mainMarket && followMarket, `machine exposes a main and candidate follow market: ${JSON.stringify(marketScopes)}`)
+      assert.equal(marketScopes.find(scope => scope.selected)?.market, mainMarket, 'follow-market fixture starts in the main-market draft')
+      await editTreeDate(page, table, 'MR4', 'planStartDate', '2028-01-04')
+      await editTreeDate(page, table, 'MR4', 'planEndDate', '2028-01-08')
+      await editTreeDate(page, table, 'MR4', 'actualStartDate', '2028-01-04')
+      await editTreeDate(page, table, 'MR4', 'actualEndDate', '2028-01-08')
+      assert.equal(await treeActualDays(page, table, 'MR4'), '5天', 'main draft business actual duration is inclusive')
+
+      // Re-following through the public market editor materializes a normal
+      // published follow scope containing MR4, with no paired draft.
+      if (preconfiguredFollowMarket) {
+        await setFollowMarketConfig(page, followMarket, false)
+        page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+        await selectView(page, '竖版表格')
+        await selectMarketScope(page, mainMarket)
+      }
+      await setFollowMarketConfig(page, followMarket, true)
+      page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+      await selectView(page, '竖版表格')
+      await selectMarketScope(page, followMarket)
+      await page.waitForFunction((selector, name) => document.querySelector(selector)?.textContent?.includes(name), { timeout: TIMEOUT }, table, 'MR4')
+      const followPublishedVersion = await page.$eval('[aria-label="计划版本"]', control => control.closest('.ant-select')?.textContent || '')
+      assert.match(followPublishedVersion, /已发布/, 'follow market has a latest published version')
+      assert.equal(await page.$('button[aria-label="取消修订"]'), null, 'follow market has no paired draft before the published actual edit')
+
+      await editTreeDate(page, table, 'MR4', 'actualEndDate', '2028-01-10')
+      assert.equal(await treeDate(page, table, 'MR4', 'actualStartDate'), '2028-01-04', 'follow published field patch preserves the other actual field')
+      assert.equal(await treeActualDays(page, table, 'MR4'), '7天', 'follow published field patch recomputes inclusive actual duration')
+      page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+      await selectView(page, '竖版表格')
+      await selectMarketScope(page, followMarket)
+      assert.equal(await treeDate(page, table, 'MR4', 'actualEndDate'), '2028-01-10', 'follow latest-published actual edit survives same-context reopen')
+      assert.equal(await treeActualDays(page, table, 'MR4'), '7天', 'follow latest-published derived duration survives same-context reopen')
+
+      await selectMarketScope(page, mainMarket)
+      await pressAriaButton(page, '发布')
+      await page.waitForFunction(() => document.querySelector('[aria-label="计划版本"]')?.closest('.ant-select')?.textContent?.includes('已发布'), { timeout: TIMEOUT })
+      await selectMarketScope(page, followMarket)
+      assert.equal(await treeDate(page, table, 'MR4', 'actualEndDate'), '2028-01-10', 'main publish does not overwrite the detached follow actual completion')
+      assert.equal(await treeActualDays(page, table, 'MR4'), '7天', 'main publish does not overwrite the detached follow actual duration')
+
+      // Detach and follow again to force a new published snapshot from the
+      // live follow scope; this exposes whether the hidden live detach flag
+      // really survived the main-market sync.
+      await setFollowMarketConfig(page, followMarket, false)
+      page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+      await selectView(page, '竖版表格')
+      await selectMarketScope(page, followMarket)
+      await setFollowMarketConfig(page, followMarket, true)
+      page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+      await selectView(page, '竖版表格')
+      await selectMarketScope(page, followMarket)
+      assert.equal(await treeDate(page, table, 'MR4', 'actualEndDate'), '2028-01-10', 're-follow snapshot proves the live detached actual completion survived main sync')
+      assert.equal(await treeActualDays(page, table, 'MR4'), '7天', 're-follow snapshot proves the live detached actual duration survived main sync')
+      console.log(`browser machine follow ${followMarket} published/live detach and main-sync contract passed`)
+      return
+    }
 
     if (ONLY_CASE === 'machine-invalid') {
       await editTreeDate(page, table, 'MR4', 'planStartDate', '2028-01-04')

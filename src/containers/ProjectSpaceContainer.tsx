@@ -369,11 +369,13 @@ export const applyIncrementalActualFieldPatch = <Task extends {
   actualStartDate?: string
   actualEndDate?: string
   actualDays?: number | null
+  actualTimeDetachedFromMain?: boolean
 }>(
   tasks: readonly Task[],
   targetStableId: string,
   field: 'actualStartDate' | 'actualEndDate',
   value: string,
+  detachActualTimeFromMain = false,
 ): Task[] => {
   const parseDate = (dateValue: string | undefined) => {
     if (!dateValue || !/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return null
@@ -394,8 +396,112 @@ export const applyIncrementalActualFieldPatch = <Task extends {
     const actualDays = start !== null && end !== null && end >= start
       ? Math.round((end - start) / 86_400_000) + (task.nodeKind === 'business-period' ? 1 : 0)
       : null
-    return { ...next, actualDays }
+    return {
+      ...next,
+      actualDays,
+      ...(detachActualTimeFromMain ? { actualTimeDetachedFromMain: true } : {}),
+    }
   })
+}
+
+export const preserveDetachedFollowMarketActualsAfterSync = <PlanEntry extends { tasks?: any[] }>(
+  syncedPlanData: Record<string, PlanEntry>,
+  previousPlanData: Record<string, PlanEntry>,
+  rows: readonly { market: string; isMain?: boolean; followsMain?: boolean }[],
+): Record<string, PlanEntry> => {
+  const nextPlanData = { ...syncedPlanData }
+  rows.forEach(row => {
+    if (!row.market || row.isMain || !row.followsMain) return
+    const previousTasks = previousPlanData[row.market]?.tasks || []
+    const previousByStableKey = new Map<string, any>()
+    const previousByName = new Map<string, any>()
+    previousTasks.forEach(task => {
+      if (!task?.actualTimeDetachedFromMain) return
+      const stableKey = String(task.stableId || task.id || '')
+      const taskName = String(task.taskName || '').trim()
+      if (stableKey) previousByStableKey.set(stableKey, task)
+      if (taskName) previousByName.set(taskName, task)
+    })
+    const syncedEntry = syncedPlanData[row.market]
+    if (!syncedEntry) return
+    nextPlanData[row.market] = {
+      ...syncedEntry,
+      tasks: (syncedEntry.tasks || []).map(task => {
+        const stableKey = String(task.stableId || task.id || '')
+        const taskName = String(task.taskName || '').trim()
+        const previousTask = previousByStableKey.get(stableKey) || previousByName.get(taskName)
+        if (!previousTask) return task
+        return {
+          ...task,
+          actualStartDate: previousTask.actualStartDate || '',
+          actualEndDate: previousTask.actualEndDate || '',
+          actualDays: previousTask.actualDays ?? null,
+          actualTimeDetachedFromMain: true,
+        }
+      }),
+    }
+  })
+  return nextPlanData
+}
+
+type Level1FocusScopeToken = {
+  projectId: string
+  scopeKind: 'market' | 'tos'
+  scopeValue: string
+  versionId: string
+}
+
+type Level1FocusRetryControllerOptions<TimerHandle> = {
+  schedule: (callback: () => void, delayMs: number) => TimerHandle
+  cancel: (handle: TimerHandle) => void
+  readCurrentToken: () => Level1FocusScopeToken | null
+  tryFocus: () => boolean
+  delayMs?: number
+}
+
+export const createLevel1FocusRetryController = <TimerHandle,>({
+  schedule,
+  cancel,
+  readCurrentToken,
+  tryFocus,
+  delayMs = 50,
+}: Level1FocusRetryControllerOptions<TimerHandle>) => {
+  let timer: TimerHandle | null = null
+  let activeToken: Level1FocusScopeToken | null = null
+  const sameToken = (left: Level1FocusScopeToken | null, right: Level1FocusScopeToken | null) => (
+    !!left
+    && !!right
+    && left.projectId === right.projectId
+    && left.scopeKind === right.scopeKind
+    && left.scopeValue === right.scopeValue
+    && left.versionId === right.versionId
+  )
+  const stop = () => {
+    if (timer !== null) cancel(timer)
+    timer = null
+    activeToken = null
+  }
+  const start = (token: Level1FocusScopeToken, remainingAttempts = 20) => {
+    stop()
+    activeToken = { ...token }
+    const retry = (remaining: number) => {
+      timer = schedule(() => {
+        timer = null
+        if (!sameToken(activeToken, token) || !sameToken(readCurrentToken(), token)) {
+          activeToken = null
+          return
+        }
+        if (tryFocus()) {
+          activeToken = null
+          return
+        }
+        if (remaining > 0) retry(remaining - 1)
+        else activeToken = null
+      }, delayMs)
+    }
+    retry(remainingAttempts)
+  }
+  return { start, stop }
 }
 
 const versionTrainRecordsToCompareTasks = (records: VersionTrainRecord[]) => records.map(record => ({
@@ -653,6 +759,10 @@ export default function ProjectSpaceContainer() {
   const [transferInfoCollapsed, setTransferInfoCollapsed] = useState(false)
   const [level1InsertionDialog, setLevel1InsertionDialog] = useState<Level1InsertionDialog | null>(null)
   const [level1ReorderDialog, setLevel1ReorderDialog] = useState<Level1ReorderDialog | null>(null)
+  const level1FocusRetryRef = useRef<{
+    start: (token: Level1FocusScopeToken, remainingAttempts?: number) => void
+    stop: () => void
+  } | null>(null)
 
   useEffect(() => {
     setTransferInfoCollapsed(false)
@@ -917,6 +1027,20 @@ export default function ProjectSpaceContainer() {
   const isCurrentDraft = currentVersionData?.status === '修订中'
   const latestPublishedVersion = versions.filter(v => v.status === '已发布').sort((a, b) => comparePlanVersions(b, a))[0]
   const isLatestPublished = !isCurrentDraft && currentVersion === latestPublishedVersion?.id
+  useEffect(() => {
+    level1FocusRetryRef.current?.stop()
+    level1FocusRetryRef.current = null
+    return () => {
+      level1FocusRetryRef.current?.stop()
+      level1FocusRetryRef.current = null
+    }
+  }, [
+    currentVersion,
+    projectPlanLevel,
+    selectedMarketTab,
+    selectedProject?.id,
+    selectedTosTypeTab,
+  ])
   const tosLevel1Versions = selectedProject && isTosTypeScoped
     ? getTosTypeVersions(tosTypeVersionsByKey, selectedProject.id, effectiveTosLevel1Type, 'level1', VERSION_DATA)
     : []
@@ -1739,13 +1863,36 @@ export default function ProjectSpaceContainer() {
     const followRevisionKind = getPlanRevisionKindFromVersion(mainSourceVersion)
     const ensuredMarketPlanData = ensureMarketPlanDataForRows(marketPlanData, normalizedRows, LEVEL1_TASKS, FIXED_LEVEL2_PLANS)
     const mainTasksForFollow = mainMarket ? (ensuredMarketPlanData[mainMarket]?.tasks || LEVEL1_TASKS) : LEVEL1_TASKS
-    const syncedMarketPlanData = newlyFollowedMarkets.reduce((acc, market) => ({
-      ...acc,
-      [market]: {
-        ...(acc[market] || { level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] }),
-        tasks: mergeFollowMarketActualDates(mainTasksForFollow, acc[market]?.tasks || []),
-      },
-    }), ensuredMarketPlanData)
+    const syncedMarketPlanData = newlyFollowedMarkets.reduce((acc, market) => {
+      const existing = acc[market] || { tasks: [], level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] }
+      const latestFollowPublished = getLatestPublishedPlanVersion(getVersionsForMarket(market))
+      const latestFollowSnapshot = selectedProject && latestFollowPublished
+        ? publishedSnapshots[getProjectMarketSnapshotKey(selectedProject.id, market, latestFollowPublished.id)]
+        : undefined
+      const restoredHistoricalPlanData = latestFollowSnapshot
+        ? preserveDetachedFollowMarketActualsAfterSync(
+            { [market]: existing },
+            { [market]: { ...existing, tasks: latestFollowSnapshot } },
+            [{ market, followsMain: true }],
+          )
+        : { [market]: existing }
+      const mergedEntry = {
+        ...existing,
+        tasks: mergeFollowMarketActualDates(
+          mainTasksForFollow,
+          restoredHistoricalPlanData[market]?.tasks || existing.tasks || [],
+        ),
+      }
+      const preservedMergedEntry = preserveDetachedFollowMarketActualsAfterSync(
+        { [market]: mergedEntry },
+        restoredHistoricalPlanData,
+        [{ market, followsMain: true }],
+      )[market] || mergedEntry
+      return {
+        ...acc,
+        [market]: preservedMergedEntry,
+      }
+    }, ensuredMarketPlanData)
     const followPublishPlans = selectedProject && mainMarket && mainSourceVersion && followRevisionKind
       ? newlyFollowedMarkets.map(market => {
           const followMarketVersions = getVersionsForMarket(market)
@@ -2307,23 +2454,92 @@ export default function ProjectSpaceContainer() {
     message.success(`已创建${kindLabel}修订版本 ${versionNo}`)
   }
 
+  const readCurrentLevel1FocusToken = (): Level1FocusScopeToken | null => {
+    const latestPlan = usePlanStore.getState()
+    const latestProjectState = useProjectStore.getState()
+    const latestProject = latestProjectState.selectedProject
+    if (!latestProject || latestPlan.projectPlanLevel !== 'level1') return null
+    if (isMachineProjectType(latestProject.type)) {
+      const market = latestProjectState.selectedMarketTab
+      const latestVersions = getMarketVersions(
+        latestPlan.marketVersionsByKey,
+        latestProject.id,
+        market,
+        latestPlan.versions,
+      )
+      return {
+        projectId: latestProject.id,
+        scopeKind: 'market',
+        scopeValue: market,
+        versionId: getMarketCurrentVersion(
+          latestPlan.marketCurrentVersionByKey,
+          latestProject.id,
+          market,
+          latestVersions,
+          latestPlan.currentVersion,
+        ),
+      }
+    }
+    if (latestProject.type !== PROJECT_TYPE_TOS_VERSION) return null
+    const selectedType = latestProjectState.selectedTosTypeTab
+    const latestTypeRows = buildTosTypeRows(
+      latestProject.versionTypes || [],
+      latestProject.versionType || '',
+      latestProjectState.tosTypeConfigsByProjectId[latestProject.id],
+    )
+    const sourceType = getTosTypePlanSourceType(latestTypeRows, selectedType, 'level1')
+    const latestVersions = getTosTypeVersions(
+      latestPlan.tosTypeVersionsByKey,
+      latestProject.id,
+      sourceType,
+      'level1',
+      VERSION_DATA,
+    )
+    return {
+      projectId: latestProject.id,
+      scopeKind: 'tos',
+      scopeValue: selectedType,
+      versionId: getTosTypeCurrentVersion(
+        latestPlan.tosTypeCurrentVersionByKey,
+        latestProject.id,
+        sourceType,
+        'level1',
+        latestVersions,
+        INITIAL_TOS_CURRENT_VERSION,
+      ),
+    }
+  }
+
   const focusLevel1Violation = (
     stableRowKey: string,
     field: string,
     remainingAttempts = 20,
   ) => {
-    window.setTimeout(() => {
-      const row = [...document.querySelectorAll('.pms-level1-tree-table .ant-table-tbody tr.ant-table-row')]
-        .find(candidate => candidate.getAttribute('data-row-key') === stableRowKey)
-      const cell = row?.querySelector(`[data-field="${field}"]`) as HTMLElement | null
-      if (!row || !cell) {
-        if (remainingAttempts > 0) focusLevel1Violation(stableRowKey, field, remainingAttempts - 1)
-        return
-      }
-      row.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      const focusTarget = cell.querySelector('input') as HTMLElement | null
-      ;(focusTarget || cell).focus()
-    }, 50)
+    if (!selectedProject) return
+    const token: Level1FocusScopeToken = {
+      projectId: selectedProject.id,
+      scopeKind: isTosVersionProject ? 'tos' : 'market',
+      scopeValue: isTosVersionProject ? selectedTosTypeTab : selectedMarketTab,
+      versionId: currentVersion,
+    }
+    level1FocusRetryRef.current?.stop()
+    const controller = createLevel1FocusRetryController({
+      schedule: (callback, delayMs) => window.setTimeout(callback, delayMs),
+      cancel: handle => window.clearTimeout(handle),
+      readCurrentToken: readCurrentLevel1FocusToken,
+      tryFocus: () => {
+        const row = [...document.querySelectorAll('.pms-level1-tree-table .ant-table-tbody tr.ant-table-row')]
+          .find(candidate => candidate.getAttribute('data-row-key') === stableRowKey)
+        const cell = row?.querySelector(`[data-field="${field}"]`) as HTMLElement | null
+        if (!row || !cell) return false
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        const focusTarget = cell.querySelector('input') as HTMLElement | null
+        ;(focusTarget || cell).focus()
+        return true
+      },
+    })
+    level1FocusRetryRef.current = controller
+    controller.start(token, remainingAttempts)
   }
 
   const handlePublish = () => {
@@ -2387,7 +2603,13 @@ export default function ProjectSpaceContainer() {
     const publishedVersionId = currentVersion; const publishedVersion = versions.find(v => v.id === publishedVersionId)
     const mainMarket = getMainMarket(marketConfigRows)
     const shouldSyncFollowMarkets = isMarketScopedLevel1 && selectedMarketTab === mainMarket
-    const nextMarketPlanData = shouldSyncFollowMarkets ? syncFollowMarketPlans(marketPlanData, marketConfigRows) : marketPlanData
+    const nextMarketPlanData = shouldSyncFollowMarkets
+      ? preserveDetachedFollowMarketActualsAfterSync(
+          syncFollowMarketPlans(marketPlanData, marketConfigRows),
+          marketPlanData,
+          marketConfigRows,
+        )
+      : marketPlanData
     const versionNo = publishedVersion?.versionNo || publishedVersionId
     setVersions(versions.map(v => v.id === publishedVersionId ? { ...v, status: '已发布' } : v))
     if (shouldSyncFollowMarkets) setMarketPlanData(nextMarketPlanData)
@@ -2480,7 +2702,13 @@ export default function ProjectSpaceContainer() {
             ...previous,
             [selectedMarketTab]: {
               ...(previous[selectedMarketTab] || { level2Tasks: [], createdLevel2Plans: [] }),
-              tasks: applyIncrementalActualFieldPatch(previous[selectedMarketTab]?.tasks || [], targetStableId, field, value),
+              tasks: applyIncrementalActualFieldPatch(
+                previous[selectedMarketTab]?.tasks || [],
+                targetStableId,
+                field,
+                value,
+                currentMarketIsFollow,
+              ),
             },
           }))
           return
@@ -2492,10 +2720,16 @@ export default function ProjectSpaceContainer() {
         const currentSnapshot = previous[currentKey] || tableTasks
         return {
           ...previous,
-          [currentKey]: applyIncrementalActualFieldPatch(currentSnapshot, targetStableId, field, value),
+          [currentKey]: applyIncrementalActualFieldPatch(
+            currentSnapshot,
+            targetStableId,
+            field,
+            value,
+            isLevel1MarketTable && currentMarketIsFollow,
+          ),
         }
       })
-      if (pairedVersion) mergePublishedActualIntoLiveScope()
+      if (pairedVersion || (isLevel1MarketTable && currentMarketIsFollow)) mergePublishedActualIntoLiveScope()
       return
     }
 
