@@ -17,6 +17,7 @@
     "verify:todo-center": "node scripts/verify-todo-center.mjs",
     "verify:tos-project-status": "node scripts/verify-tos-project-status.mjs",
     "verify:enum-config": "node scripts/verify-enum-config.mjs",
+    "verify:enum-consumers": "node scripts/verify-enum-consumers.mjs",
     "verify:collapsible-sidebars": "node scripts/verify-collapsible-sidebars.mjs",
     "verify:compact-ui-density": "node scripts/verify-compact-ui-density.mjs",
     "verify:level3-plan": "node scripts/verify-level3-plan.mjs",

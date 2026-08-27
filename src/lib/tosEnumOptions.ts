@@ -1,5 +1,14 @@
-import { isValidEnumValue, normalizeEnumValue, sortEnumValues } from '@/lib/enumValues'
-import type { EnumTypeKey } from '@/types/enums'
+import { buildEnumOptions, getSingleEnumValues } from '@/lib/enumConsumers'
+import {
+  createInitialEnumRows,
+  formatEnumCellValue,
+  isValidEnumValue,
+  normalizeEnumValue,
+  sortEnumValues,
+} from '@/lib/enumValues'
+import type { LegacyTosEnumTypeKey } from '@/types/enums'
+
+// Deprecated compatibility adapter. Remove after all callers use the flat enum consumer APIs.
 
 export interface TosEnumOption {
   label: string
@@ -15,7 +24,10 @@ export function normalizeTosEnumReference(input: unknown): string {
   return normalizeEnumValue(withoutStatus.replace(/^tOS\s+/i, 'tOS'))
 }
 
-function currentValuesFor(type: EnumTypeKey, values: readonly string[]): string[] {
+const flatTosType = (type: LegacyTosEnumTypeKey) =>
+  type === 'tos-2-part' ? 'roadmap-tos' as const : 'first-sale-tos' as const
+
+function currentValuesFor(type: LegacyTosEnumTypeKey, values: readonly string[]): string[] {
   const unique = new Set<string>()
   for (const candidate of values) {
     if (!isValidEnumValue(type, candidate)) continue
@@ -26,32 +38,33 @@ function currentValuesFor(type: EnumTypeKey, values: readonly string[]): string[
 
 export function formatTosEnumValue(input: unknown): string {
   const value = normalizeTosEnumReference(input)
-  return value ? `tOS${value}` : ''
+  return value ? formatEnumCellValue('first-sale-tos', 'value', value) : ''
 }
 
+/** @deprecated Use buildEnumOptions with rowsByType and a flat enum key. */
 export function buildTosEnumOptions(
-  type: EnumTypeKey,
+  type: LegacyTosEnumTypeKey,
   configuredValues: readonly string[],
   historicalValues: readonly unknown[] = [],
 ): TosEnumOption[] {
   const currentValues = currentValuesFor(type, configuredValues)
-  const currentSet = new Set(currentValues)
-  const historicalOptions: TosEnumOption[] = []
-  const historicalSet = new Set<string>()
+  const normalizedHistory: string[] = []
   for (const input of historicalValues) {
     const value = normalizeTosEnumReference(input)
-    if (!value || currentSet.has(value) || historicalSet.has(value)) continue
-    historicalSet.add(value)
-    historicalOptions.push({ label: `${formatTosEnumValue(value)}（已停用）`, value, disabled: true })
+    if (value) normalizedHistory.push(value)
   }
-  return [
-    ...currentValues.map(value => ({ label: formatTosEnumValue(value), value })),
-    ...historicalOptions,
-  ]
+  const rowsByType = createInitialEnumRows()
+  const flatType = flatTosType(type)
+  rowsByType[flatType] = currentValues.map((value, index) => ({
+    id: `legacy-tos-option-${index + 1}`,
+    value,
+  }))
+  return buildEnumOptions(rowsByType, flatType, normalizedHistory)
 }
 
+/** @deprecated Use getSingleEnumValues with rowsByType and a flat enum key. */
 export function resolveCurrentTosEnumValue(
-  type: EnumTypeKey,
+  type: LegacyTosEnumTypeKey,
   input: unknown,
   configuredValues: readonly string[],
 ): string | null {
@@ -59,6 +72,13 @@ export function resolveCurrentTosEnumValue(
   return currentValuesFor(type, configuredValues).includes(value) ? value : null
 }
 
-export function getCurrentTosEnumValues(type: EnumTypeKey, configuredValues: readonly string[]): string[] {
-  return currentValuesFor(type, configuredValues)
+/** @deprecated Use getSingleEnumValues with rowsByType and a flat enum key. */
+export function getCurrentTosEnumValues(type: LegacyTosEnumTypeKey, configuredValues: readonly string[]): string[] {
+  const rowsByType = createInitialEnumRows()
+  const flatType = flatTosType(type)
+  rowsByType[flatType] = currentValuesFor(type, configuredValues).map((value, index) => ({
+    id: `legacy-tos-value-${index + 1}`,
+    value,
+  }))
+  return getSingleEnumValues(rowsByType, flatType)
 }
