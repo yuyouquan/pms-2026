@@ -48,6 +48,31 @@ const historyOption = (value: string, label: string): EnumOption => ({
 
 const nonemptyString = (input: unknown): string => typeof input === 'string' ? input.trim() : ''
 
+/** Project snapshots persist the tOS body; presentation owns the single prefix. */
+export function normalizeTosSnapshot(input: unknown): string {
+  const value = nonemptyString(input).replace(/（已停用）$/, '').trim()
+  const legacyId = /^tos-(\d+)-(\d+)(?:-(\d+))?$/i.exec(value)
+  if (legacyId) return legacyId.slice(1).filter(Boolean).join('.')
+  return value.replace(/^tOS\s*/i, '').trim()
+}
+
+export function formatTosSnapshot(input: unknown): string {
+  const value = normalizeTosSnapshot(input)
+  return value ? `tOS${value}` : ''
+}
+
+export function currentTosSnapshotValues(configuredValues: readonly string[]): string[] {
+  return [...new Set(configuredValues.map(normalizeTosSnapshot).filter(Boolean))]
+}
+
+export function resolveCurrentTosSnapshot(
+  input: unknown,
+  configuredValues: readonly string[],
+): string | null {
+  const value = normalizeTosSnapshot(input)
+  return value && currentTosSnapshotValues(configuredValues).includes(value) ? value : null
+}
+
 export function getSingleEnumValues(
   rowsByType: EnumRowsByType,
   type: SingleEnumTypeKey,

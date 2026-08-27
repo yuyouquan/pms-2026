@@ -20,11 +20,12 @@ import {
   message,
 } from 'antd'
 import { isMachineProjectType } from '@/constants/projectTypes'
-import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
-import { formatTosEnumValue, normalizeTosEnumReference } from '@/lib/tosEnumOptions'
+import { useEnumHydration, useSingleEnumOptions } from '@/hooks/useEnumOptions'
+import { formatTosSnapshot, normalizeTosSnapshot } from '@/lib/enumConsumers'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
 import { normalizeLegacyRoadmapProductType } from '@/lib/roadmapValidation'
 import { useRoadmapStore } from '@/stores/roadmap'
+import { useEnumStore } from '@/stores/enums'
 import type { ProjectItem } from '@/types/app'
 import type { PlannedRoadmapProject, TosVersionConfig } from '@/types/roadmap'
 
@@ -66,7 +67,7 @@ function resolveProjectVersion(project: ProjectItem): string {
           project.tosVersionName,
           project.tosVersion,
         ]
-  return candidates.map(normalizeTosEnumReference).find(Boolean) ?? ''
+  return candidates.map(normalizeTosSnapshot).find(Boolean) ?? ''
 }
 
 export default function TosVersionMaintenanceModal({
@@ -90,12 +91,8 @@ export default function TosVersionMaintenanceModal({
     () => tosVersions.map(version => version.id),
     [tosVersions],
   )
-  const {
-    options,
-    hasHydrated,
-    hydrationError,
-    retryHydration,
-  } = useTosEnumOptions('tos-2-part', historicalValues)
+  const options = useSingleEnumOptions('roadmap-tos', historicalValues, open)
+  const { hasHydrated, hydrationError, retryHydration } = useEnumHydration(open)
 
   const descendingVersions = useMemo(
     () => [...tosVersions].sort((left, right) => compareSemanticTos(right, left)),
@@ -108,7 +105,7 @@ export default function TosVersionMaintenanceModal({
         .filter(project => resolveProjectVersion(project) === version.id)
         .map(project => project.id)).size
       const planned = new Set(plannedProjects
-        .filter(project => normalizeTosEnumReference(project.firstSaleTosVersionId) === version.id)
+        .filter(project => normalizeTosSnapshot(project.firstSaleTosVersionId) === version.id)
         .map(project => project.id)).size
       counts.set(version.id, { normal, planned, total: normal + planned })
     }
@@ -177,14 +174,18 @@ export default function TosVersionMaintenanceModal({
     if (submitLockRef.current) return
     submitLockRef.current = true
     try {
-      if (!canEdit) return
+      const enumState = useEnumStore.getState()
+      if (!canEdit || !enumState.hasHydrated || enumState.hydrationError) {
+        message.error(enumState.hydrationError || '枚举配置正在加载，请稍后重试')
+        return
+      }
       let values: TosVersionFormValues
       try {
         values = await form.validateFields()
       } catch {
         return
       }
-      const versionId = normalizeTosEnumReference(values.name)
+      const versionId = normalizeTosSnapshot(values.name)
       const periodStartDate = values.period?.[0]?.format('YYYY-MM-DD') ?? ''
       const periodEndDate = values.period?.[1]?.format('YYYY-MM-DD') ?? ''
       const targetText = values.targetText?.trim() ?? ''
@@ -223,7 +224,7 @@ export default function TosVersionMaintenanceModal({
     const count = referenceCounts.get(version.id)?.total ?? 0
     if (!canEdit || count > 0) return
     Modal.confirm({
-      title: `删除 ${formatTosEnumValue(version.id)} 的路标维护信息？`,
+      title: `删除 ${formatTosSnapshot(version.id)} 的路标维护信息？`,
       content: '仅删除路标中的周期和版本目标，不会删除配置中心的枚举值。',
       okText: '确认删除',
       cancelText: '取消',
@@ -263,7 +264,7 @@ export default function TosVersionMaintenanceModal({
             <Select
               showSearch
               optionFilterProp="label"
-              placeholder="从 tOS版本（2位）中选择"
+              placeholder="从 tOS版本-路标中选择"
               options={selectableOptions}
               loading={!hasHydrated}
               disabled={editingReferenceCount > 0}
@@ -335,7 +336,7 @@ export default function TosVersionMaintenanceModal({
                     <Card size="small" style={{ ...versionCardStyle, width: '100%' }}>
                       <Flex justify="space-between" align="center" gap={16} wrap>
                         <Flex vertical gap={4} style={{ minWidth: 0, flex: 1 }}>
-                          <Typography.Text strong>{formatTosEnumValue(version.id)}</Typography.Text>
+                          <Typography.Text strong>{formatTosSnapshot(version.id)}</Typography.Text>
                           <Typography.Text type="secondary">
                             项目周期：{version.periodStartDate && version.periodEndDate
                               ? `${version.periodStartDate} 至 ${version.periodEndDate}`

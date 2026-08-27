@@ -15,6 +15,7 @@ import {
   Row,
   Col,
   Select,
+  Skeleton,
   Table,
   message,
   type TableColumnsType,
@@ -26,12 +27,9 @@ import {
 import {
   findRoadmapHistoryMatches,
 } from '@/lib/roadmapProjectAdapter'
-import {
-  buildRoadmapTosSelectOptions,
-  buildRoadmapDuplicateKey,
-  formatRoadmapTosValue,
-  getProductLineOptions,
-} from '@/lib/roadmapValidation'
+import { buildRoadmapDuplicateKey, formatRoadmapTosValue, getProductLineOptions } from '@/lib/roadmapValidation'
+import { useEnumHydration, useSingleEnumOptions } from '@/hooks/useEnumOptions'
+import { useEnumStore } from '@/stores/enums'
 import { useRoadmapStore } from '@/stores/roadmap'
 import type {
   PlannedRoadmapProject,
@@ -49,9 +47,6 @@ import type {
 const ANDROID_VERSIONS: readonly RoadmapAndroidVersion[] = ['Android 16', 'Android 17', 'Android 18']
 const BRANDS: readonly RoadmapBrand[] = ['TECNO', 'Infinix', 'itel', '待定', '其他品牌']
 const PRODUCT_TYPES: readonly RoadmapProductType[] = ['新品', '老品']
-const RAM_OPTIONS: readonly RoadmapRam[] = ['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB']
-const VERSION_TYPES: readonly RoadmapVersionType[] = ['Full', 'Slim', 'Go']
-const DEVELOP_MODES: readonly RoadmapDevelopMode[] = ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研']
 
 const sectionStyle: CSSProperties = {
   background: 'var(--bg-purple-tint)',
@@ -106,14 +101,19 @@ export default function PlannedProjectModal({
   const productType = Form.useWatch('productType', form)
   const brand = Form.useWatch('brand', form)
 
-  const tosVersionOptions = useMemo(() => buildRoadmapTosSelectOptions(
-    tosVersions.map(version => version.id),
-    editingProject?.firstSaleTosVersionId,
-  ), [editingProject?.firstSaleTosVersionId, tosVersions])
-  const hasInactiveTosVersion = Boolean(
-    editingProject?.firstSaleTosVersionId
-    && !tosVersions.some(version => version.id === editingProject.firstSaleTosVersionId),
+  const tosVersionOptions = useSingleEnumOptions(
+    'first-sale-tos',
+    editingProject?.firstSaleTosVersionId ? [editingProject.firstSaleTosVersionId] : [],
+    open,
   )
+  const ramOptions = useSingleEnumOptions('memory-size', editingProject?.startRam ? [editingProject.startRam] : [], open)
+  const versionTypeOptions = useSingleEnumOptions('version-type', editingProject?.versionType ? [editingProject.versionType] : [], open)
+  const productSeriesOptions = useSingleEnumOptions('product-series', editingProject?.productSeries ? [editingProject.productSeries] : [], open)
+  const developModeOptions = useSingleEnumOptions('machine-development-mode', editingProject?.developMode ? [editingProject.developMode] : [], open)
+  const { hasHydrated, hydrationError, isReady: enumReady, retryHydration } = useEnumHydration(open)
+  const hasInactiveTosVersion = Boolean(tosVersionOptions.find(option => (
+    option.value === editingProject?.firstSaleTosVersionId && option.disabled
+  )))
   const productLineOptions = brand ? getProductLineOptions(brand) : []
   const historyMatches = useMemo(
     () => findRoadmapHistoryMatches([...allRows], projectCode, editingProject?.id),
@@ -194,7 +194,13 @@ export default function PlannedProjectModal({
     if (submitLockRef.current) return
     submitLockRef.current = true
     try {
-      if (!canEdit || duplicateExists) return
+      const enumState = useEnumStore.getState()
+      if (!canEdit || duplicateExists || !enumState.hasHydrated || enumState.hydrationError) {
+        if (!enumState.hasHydrated || enumState.hydrationError) {
+          message.error(enumState.hydrationError || '枚举配置正在加载，请稍后重试')
+        }
+        return
+      }
       let values: PlannedProjectFormValues
       try {
         values = await form.validateFields()
@@ -313,7 +319,7 @@ export default function PlannedProjectModal({
                 type="primary"
                 onClick={handleSubmit}
                 loading={submitting}
-                disabled={duplicateExists || submitting}
+                disabled={!enumReady || duplicateExists || submitting}
               >
                 {editingProject ? '保存修改' : '创建项目'}
               </Button>
@@ -327,13 +333,22 @@ export default function PlannedProjectModal({
         form={form}
         layout="vertical"
         preserve={false}
-        disabled={!canEdit}
+        disabled={!canEdit || !enumReady}
         requiredMark
         onValuesChange={() => {
           dirtyRef.current = true
         }}
       >
         <Flex vertical gap={16}>
+          {!hasHydrated ? <Skeleton active paragraph={{ rows: 4 }} /> : hydrationError ? (
+            <Alert
+              type="error"
+              showIcon
+              message="加载枚举配置失败"
+              description={hydrationError}
+              action={<Button size="small" onClick={() => void retryHydration()}>重试</Button>}
+            />
+          ) : null}
           <Card size="small" title="项目分类与识别" style={sectionStyle}>
             <Row gutter={[16, 0]}>
               <Col xs={24} md={8}>
@@ -430,7 +445,7 @@ export default function PlannedProjectModal({
               </Col>
               <Col xs={24} md={8}>
                 <Form.Item label="产品系列" name="productSeries" rules={[{ required: true, whitespace: true, message: '请输入产品系列' }]}>
-                  <Input placeholder="请输入产品系列" maxLength={80} />
+                  <Select showSearch optionFilterProp="label" placeholder="请选择产品系列" options={productSeriesOptions} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
@@ -445,17 +460,17 @@ export default function PlannedProjectModal({
               </Col>
               <Col xs={24} md={8}>
                 <Form.Item label="起步 RAM" name="startRam" rules={[{ required: true, message: '请选择起步 RAM' }]}>
-                  <Select options={RAM_OPTIONS.map(value => ({ label: value, value }))} />
+                  <Select options={ramOptions} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
                 <Form.Item label="版本类型" name="versionType" rules={[{ required: true, message: '请选择版本类型' }]}>
-                  <Select options={VERSION_TYPES.map(value => ({ label: value, value }))} />
+                  <Select options={versionTypeOptions} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
                 <Form.Item label="开发模式" name="developMode" rules={[{ required: true, message: '请选择开发模式' }]}>
-                  <Select options={DEVELOP_MODES.map(value => ({ label: value, value }))} />
+                  <Select options={developModeOptions} />
                 </Form.Item>
               </Col>
             </Row>

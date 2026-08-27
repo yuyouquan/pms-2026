@@ -15,16 +15,16 @@ const compiled = ts.transpileModule(fs.readFileSync(statusModulePath, 'utf8'), {
 const statusModule = { exports: {} }
 vm.runInNewContext(compiled, { module: statusModule, exports: statusModule.exports }, { filename: statusModulePath })
 
-const { mapIpmProjectStatus, TOS_PROJECT_STATUS_OPTIONS } = statusModule.exports
+const { getProjectStatusEnumType, mapIpmProjectStatus } = statusModule.exports
+assert.equal(getProjectStatusEnumType('整机产品项目'), 'machine-project-status')
+assert.equal(getProjectStatusEnumType('技术项目'), 'technical-project-status')
+assert.equal(getProjectStatusEnumType('tOS版本项目'), 'tos-capability-project-status')
+assert.equal(getProjectStatusEnumType('能力建设项目'), 'tos-capability-project-status')
 assert.equal(mapIpmProjectStatus('暂停', 'tOS版本项目'), '暂停')
 assert.equal(mapIpmProjectStatus('已取消', 'tOS版本项目'), '已取消')
 assert.equal(mapIpmProjectStatus('进行中', 'tOS版本项目'), '在研')
 assert.equal(mapIpmProjectStatus('已完成', 'tOS版本项目'), '已完成')
 assert.equal(mapIpmProjectStatus('维护期', 'tOS版本项目'), '已完成')
-assert.deepEqual(
-  Array.from(TOS_PROJECT_STATUS_OPTIONS, option => option.value),
-  ['在研', '已完成', '暂停', '已取消'],
-)
 
 const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8')
 const externalPool = read('src/data/externalProjectPool.ts')
@@ -35,9 +35,26 @@ const projectSpace = read('src/containers/ProjectSpaceContainer.tsx')
 
 assert.match(externalPool, /ipmStatus\?: string/)
 assert.match(projectInfoModal, /mapIpmProjectStatus\(entry\.ipmStatus/)
-assert.match(projectInfoModal, /label="项目状态"[\s\S]{0,220}TOS_PROJECT_STATUS_OPTIONS/)
+assert.match(projectInfoModal, /getProjectStatusEnumType/)
+assert.match(projectInfoModal, /buildEnumOptions/)
+assert.match(projectInfoModal, /useEnumHydration/)
 assert.match(addProjectModal, /status: payload\.projectStatus/)
-assert.match(projectList, /projectTypeFilter === PROJECT_TYPE_TOS_VERSION[\s\S]{0,260}TOS_PROJECT_LIST_STATUS_OPTIONS/)
-assert.match(projectSpace, /p\.type === PROJECT_TYPE_TOS_VERSION \? TOS_PROJECT_STATUS_OPTIONS/)
+assert.match(projectList, /getProjectStatusEnumType/)
+assert.match(projectList, /useSingleEnumOptions/)
+assert.match(projectList, /['"]全部['"]/)
+assert.match(projectSpace, /getProjectStatusEnumType/)
+assert.match(projectSpace, /buildEnumOptions/)
+
+const statusSource = read('src/lib/projectStatus.ts')
+const projectTypesSource = read('src/constants/projectTypes.ts')
+assert.doesNotMatch(statusSource, /TOS_PROJECT_STATUS_(?:VALUES|OPTIONS)/)
+assert.doesNotMatch(projectTypesSource, /PROJECT_STATUS_VALUES/)
+for (const [label, source] of [
+  ['project info modal', projectInfoModal],
+  ['project list', projectList],
+  ['project space', projectSpace],
+]) {
+  assert.doesNotMatch(source, /TOS_PROJECT_STATUS_OPTIONS/, `${label} still uses the legacy status array`)
+}
 
 console.log('tOS project status verification passed.')

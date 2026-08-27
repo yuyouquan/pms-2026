@@ -173,16 +173,6 @@ export function resolveProjectClassification(
   }
 }
 
-const PROJECT_STATUS_VALUES = ['全部', '待立项', '在研', '上市', 'EOS', '暂停', '已取消', '规划中'] as const
-
-export function getProjectStatusOptions(category: string | undefined | null) {
-  const projectCategory = resolveProjectClassification(category).projectCategory
-  const values = projectCategory === PROJECT_CATEGORY_MACHINE
-    ? [...PROJECT_STATUS_VALUES.slice(0, 4), '转维', ...PROJECT_STATUS_VALUES.slice(4)]
-    : [...PROJECT_STATUS_VALUES]
-  return values.map(label => ({ label, value: label === '全部' ? 'all' : label }))
-}
-
 export const PROJECT_TYPE_COLORS: Record<string, { bg: string; color: string }> = {
   [PROJECT_CATEGORY_MACHINE]: { bg: 'rgba(99,102,241,0.08)', color: '#6366f1' },
   [PROJECT_TYPE_MACHINE_PHONE]: { bg: 'rgba(99,102,241,0.08)', color: '#6366f1' },

@@ -69,8 +69,6 @@ for (const definition of Object.values(values.ENUM_DEFINITIONS)) {
 assert.equal(values.isEnumTypeKey('core-value'), true, 'registered enum keys are recognized')
 assert.equal(values.isEnumTypeKey('tos-2-part'), false, 'legacy tOS keys are absent from the flat registry guard')
 assert.equal(values.isEnumTypeKey('unknown'), false, 'unknown enum keys are rejected')
-assert.equal(values.isLegacyTosEnumTypeKey('tos-2-part'), true, 'the separately named compatibility guard recognizes legacy tOS keys')
-assert.equal(values.isLegacyTosEnumTypeKey('first-sale-tos'), false, 'the legacy guard does not claim flat registry keys')
 
 assert.equal(values.formatEnumCellValue('first-sale-tos', 'value', '18.0'), 'tOS18.0', 'first-sale tOS display adds the tOS prefix')
 assert.equal(values.formatEnumCellValue('first-sale-tos', 'value', ' tOS18.0 '), 'tOS18.0', 'display normalizes an existing tOS prefix exactly once')
@@ -358,39 +356,16 @@ assert.deepEqual(fixture.getRows('product-series'), [{ id: 'user-2', value: '系
 fixture.resetLocalConfig()
 assert.deepEqual(fixture.getRows('product-series'), [], 'reset restores exact seeds')
 
-const compatibilityFixture = enumStore.createEnumStore({ rowsByType: values.createInitialEnumRows() }, () => 'legacy-user-id')
+const compatibilityFixture = enumStore.createEnumStore({ rowsByType: values.createInitialEnumRows() }, () => 'flat-user-id')
 assert.equal(compatibilityFixture.getState().selectedType, 'first-sale-tos', 'flat first-sale tOS is the default selected type')
 compatibilityFixture.setSelectedType('core-value')
 assert.equal(compatibilityFixture.getState().selectedType, 'core-value', 'selected type changes without entering persisted state')
-assert.deepEqual(compatibilityFixture.getState().valuesByType, {
-  'tos-2-part': ['16.0', '17.2'],
-  'tos-3-part': ['16.0.1', '16.0.2', '17.2.0', '16.0', '17.2'],
-}, 'deprecated valuesByType derives from flat row state')
-assert.deepEqual(compatibilityFixture.addEnumValue('tos-2-part', '15.0'), { ok: true }, 'legacy add action remains operational')
-assert.deepEqual(compatibilityFixture.getValues('tos-2-part'), ['15.0', '16.0', '17.2'], 'legacy value reads remain derived and semantically ordered')
-assert.deepEqual(compatibilityFixture.addEnumValue('tos-2-part', '15.0'), { ok: false, reason: 'duplicate' }, 'legacy add still rejects duplicates')
-assert.deepEqual(compatibilityFixture.addEnumValue('tos-2-part', '15.0.1'), { ok: false, reason: 'invalid' }, 'legacy add still enforces its version format')
-assert.deepEqual(rowValues(compatibilityFixture.getState().rowsByType, 'roadmap-tos'), ['15.0', '16.0', '17.2'], 'legacy two-part writes update roadmap rows rather than a second source')
-assert.deepEqual(compatibilityFixture.updateEnumValue('tos-2-part', '15.0', '18.0'), { ok: true }, 'legacy update action remains operational')
-assert.deepEqual(compatibilityFixture.updateEnumValue('tos-2-part', '18.0', '18.0'), { ok: true }, 'legacy unchanged update excludes itself from duplicate detection')
-assert.deepEqual(compatibilityFixture.updateEnumValue('tos-2-part', '18.0', '17.2'), { ok: false, reason: 'duplicate' }, 'legacy update rejects another configured value')
-assert.deepEqual(compatibilityFixture.updateEnumValue('tos-2-part', 'missing', '19.0'), { ok: false, reason: 'missing' }, 'legacy update reports a missing source value')
-assert.deepEqual(compatibilityFixture.deleteEnumValue('tos-2-part', '18.0'), { ok: true }, 'legacy delete action remains operational')
-assert.deepEqual(compatibilityFixture.deleteEnumValue('tos-2-part', '18.0'), { ok: false, reason: 'missing' }, 'legacy delete reports an already missing value')
-assert.deepEqual(rowValues(compatibilityFixture.getState().rowsByType, 'roadmap-tos'), ['16.0', '17.2'], 'legacy delete is reflected in flat rows')
 
 const partialized = enumStore.partializeEnumState(compatibilityFixture.getState())
 assert.deepEqual(Object.keys(partialized), ['rowsByType'], 'only rowsByType is persisted')
 assert.notEqual(partialized.rowsByType, compatibilityFixture.getState().rowsByType, 'persisted rows are deep-cloned')
 partialized.rowsByType['roadmap-tos'][0].value = 'mutated-copy'
 assert.equal(compatibilityFixture.getRows('roadmap-tos')[0].value, '16.0', 'mutating a persistence snapshot cannot mutate store memory')
-const assertOfficialLegacyProjection = message => {
-  const state = enumStore.useEnumStore.getState()
-  assert.deepEqual(state.valuesByType, {
-    'tos-2-part': rowValues(state.rowsByType, 'roadmap-tos'),
-    'tos-3-part': rowValues(state.rowsByType, 'first-sale-tos'),
-  }, message)
-}
 assert.equal(enumStore.useEnumStore.persist.getOptions().version, 2, 'persist middleware exposes version 2 through its runtime options')
 const previousWindow = globalThis.window
 const officialPersistStorage = enumStore.useEnumStore.persist.getOptions().storage
@@ -436,16 +411,12 @@ try {
   const successfulRetry = await enumStore.useEnumStore.getState().hydrateEnumStore()
   assert.equal(successfulRetry, true, 'hydration can be retried successfully after storage recovers')
   assert.equal(enumStore.useEnumStore.getState().hydrationError, null, 'successful retry clears the prior hydration error')
-  assertOfficialLegacyProjection('legacy bridge equals the flat-row projection after hydration')
 
   assert.deepEqual(enumStore.useEnumStore.getState().addEnumRow('roadmap-tos', { value: 'bridge-added' }), { ok: true }, 'official row add succeeds before bridge projection check')
-  assertOfficialLegacyProjection('legacy bridge equals the flat-row projection after add')
   const bridgeRow = enumStore.useEnumStore.getState().rowsByType['roadmap-tos'].find(row => row.value === 'bridge-added')
   assert.ok(bridgeRow, 'official add exposes the created row ID')
   assert.deepEqual(enumStore.useEnumStore.getState().updateEnumRow('roadmap-tos', bridgeRow.id, { value: 'bridge-updated' }), { ok: true }, 'official row update succeeds before bridge projection check')
-  assertOfficialLegacyProjection('legacy bridge equals the flat-row projection after update')
   assert.deepEqual(enumStore.useEnumStore.getState().deleteEnumRow('roadmap-tos', bridgeRow.id), { ok: true }, 'official row delete succeeds before bridge projection check')
-  assertOfficialLegacyProjection('legacy bridge equals the flat-row projection after delete')
 
   shouldFailWrite = true
   const beforeWriteFailure = enumStore.useEnumStore.getState().rowsByType['product-series']
@@ -463,7 +434,6 @@ try {
   assert.deepEqual(removedKeys, [enumStore.ENUM_STORAGE_KEY], 'reset removes only the exact enum storage key')
   assert.deepEqual(enumStore.useEnumStore.getState().rowsByType, values.createInitialEnumRows(), 'reset restores all exact seed rows')
   assert.equal(enumStore.useEnumStore.getState().hydrationError, null, 'successful reset clears the recovery error')
-  assertOfficialLegacyProjection('legacy bridge equals the flat-row projection after reset')
 
   let immediateReadCount = 0
   let immediateSavedValue = null
@@ -484,7 +454,6 @@ try {
   assert.deepEqual(enumStore.useEnumStore.getState().rowsByType, values.createInitialEnumRows(), 'same-turn hydrate/reset finishes on seeds')
   assert.equal(enumStore.useEnumStore.getState().hasHydrated, true, 'same-turn hydrate/reset never finishes with hydration incomplete')
   assert.equal(enumStore.useEnumStore.getState().hydrationError, null, 'same-turn hydrate/reset finishes without an error')
-  assertOfficialLegacyProjection('legacy bridge equals the flat-row projection after same-turn hydrate/reset')
 
   const staleRows = values.createInitialEnumRows()
   staleRows['product-series'] = [{ id: 'stale-row', value: 'stale-value' }]
@@ -512,7 +481,6 @@ try {
   assert.deepEqual(enumStore.useEnumStore.getState().rowsByType, values.createInitialEnumRows(), 'stale delayed hydration cannot overwrite reset seeds')
   assert.equal(enumStore.useEnumStore.getState().hasHydrated, true, 'delayed hydrate/reset finishes with hydration complete')
   assert.equal(enumStore.useEnumStore.getState().hydrationError, null, 'delayed hydrate/reset finishes without an error')
-  assertOfficialLegacyProjection('legacy bridge equals the flat-row projection after delayed hydrate/reset')
 
   const freshPersistedRows = values.createInitialEnumRows()
   freshPersistedRows['product-series'] = [{ id: 'persisted-custom-series', value: '持久化自定义系列' }]
@@ -562,45 +530,12 @@ try {
 }
 console.log('[store-contract] passed')
 
-console.log('[legacy-consumers] verifying pre-migration helpers and UI source contracts')
-assert.deepEqual(getStringUnionTypeMembers(readSource(root, 'src/types/enums.ts'), 'LegacyTosEnumTypeKey').sort(), ['tos-2-part', 'tos-3-part'], 'temporary compatibility keeps the two legacy tOS string literals isolated from EnumTypeKey')
-const options = loadTypeScriptModule(root, 'src/lib/tosEnumOptions.ts')
-assert.deepEqual(Object.keys(values.TOS_ENUM_REGISTRY).sort(), ['tos-2-part', 'tos-3-part'], 'only two tOS enum registries are registered')
-assert.deepEqual(values.TOS_ENUM_REGISTRY, {
-  'tos-2-part': { key: 'tos-2-part', label: 'tOS版本（2位）', initialValues: ['16.0', '17.2'] },
-  'tos-3-part': { key: 'tos-3-part', label: 'tOS版本（3位）', initialValues: ['16.0.1', '16.0.2', '17.2.0'] },
-}, 'labels and initial values are fixed and exact')
-assert.equal(values.normalizeEnumValue(' 17.10.0 '), '17.10.0', 'normalization trims input')
-assert.equal(values.normalizeEnumValue(' tOS17.10.0 '), '17.10.0', 'normalization removes a valid leading tOS prefix')
-assert.equal(values.normalizeEnumValue(' tOS17.a.0 '), 'tOS17.a.0', 'normalization does not remove tOS from malformed input')
-assert.throws(() => values.validateEnumValue('tos-3-part', '17.a.0'), /format/i, 'format validation rejects nonnumeric versions')
-assert.doesNotThrow(() => values.validateEnumValue('tos-2-part', '17.10'), 'two-part values are accepted only by the two-part category')
-assert.throws(() => values.validateEnumValue('tos-2-part', '17.10.0'), /format/i, 'two-part category rejects three-part values')
-assert.throws(() => values.validateEnumValue('tos-3-part', '17.10'), /format/i, 'three-part category rejects two-part values')
-for (const invalidValue of ['', '-1.0', '.17.0', '17.0.', 'tOS 17.0']) {
-  assert.throws(() => values.validateEnumValue('tos-2-part', invalidValue), /format/i, `rejects invalid two-part input: ${invalidValue}`)
-}
-assert.deepEqual(values.sortEnumValues(['17.10.0', '17.2.0', '17.2.0', '16.10.2']), ['16.10.2', '17.2.0', '17.2.0', '17.10.0'], 'version values sort stably by numeric segments in natural ascending order')
-
-assert.deepEqual(options.buildTosEnumOptions('tos-3-part', ['beta', '19.4.1', '19.4'], ['16.3.7']), [
-  { label: 'tOSbeta', value: 'beta' },
-  { label: 'tOS19.4.1', value: '19.4.1' },
-  { label: 'tOS19.4', value: '19.4' },
-  { label: 'tOS16.3.7（已停用）', value: '16.3.7', disabled: true },
-], 'legacy consumers preserve arbitrary nonempty current strings in configured order and append their explicit historical orphan')
-assert.deepEqual(options.buildTosEnumOptions('tos-2-part', ['beta', '17.2', '19.4.1'], []), [
-  { label: 'tOSbeta', value: 'beta' },
-  { label: 'tOS17.2', value: '17.2' },
-  { label: 'tOS19.4.1', value: '19.4.1' },
-], 'legacy category names no longer filter arbitrary values by numeric segment count')
-assert.equal(options.resolveCurrentTosEnumValue('tos-3-part', ' tOS19.4.1 ', ['17.2.0', '19.4.1']), '19.4.1', 'current values resolve from either labels or canonical values')
-assert.equal(options.resolveCurrentTosEnumValue('tos-3-part', 'tOS16.3.7（已停用）', ['17.2.0', '19.4.1']), null, 'historical display values cannot be selected as new values')
-
+console.log('[flat-consumers] verifying UI source contracts')
 const enumUi = readSource(root, 'src/components/config/EnumConfig.tsx')
 const configUi = readSource(root, 'src/containers/ConfigContainer.tsx')
 const appShell = readSource(root, 'src/containers/AppShell.tsx')
 const globalStyles = readSource(root, 'src/styles/globals.css')
-const hookSource = readSource(root, 'src/hooks/useTosEnumOptions.ts')
+const hookSource = readSource(root, 'src/hooks/useEnumOptions.ts')
 const addProjectSource = readSource(root, 'src/components/workspace/AddProjectModal.tsx')
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 const projectStoreSource = readSource(root, 'src/stores/project.ts')
@@ -689,15 +624,15 @@ assert.match(storeSource, /onRehydrateStorage/, 'persist completion callback own
 assert.match(storeSource, /skipHydration:\s*true/, 'browser hydration is started explicitly after mount')
 assert.match(storeSource, /export async function ensureEnumHydrated/, 'enum hydration exposes one reusable coordinator')
 assert.match(storeSource, /ENUM_STORAGE_KEY/, 'the enum storage key is named for exact reset')
-assert.match(hookSource, /ensureEnumHydrated/, 'shared tOS option hook owns reusable enum hydration')
+assert.match(hookSource, /ensureEnumHydrated/, 'shared enum option hooks own reusable enum hydration')
 assert.match(addProjectSource, /useEnumStore\(state\s*=>\s*state\.rowsByType\)/, 'whole-machine create reads the unified row registry')
 assert.match(addProjectSource, /getSingleEnumValues\(rowsByType,\s*['"]first-sale-tos['"]\)/, 'whole-machine create consumes first-sale tOS rows without the legacy adapter')
 assert.doesNotMatch(addProjectSource, /useRoadmapStore|tosVersions/, 'whole-machine create no longer uses roadmap metadata as an option source')
-assert.match(projectSpaceSource, /useTosEnumOptions\(['"]tos-3-part['"]/, 'whole-machine edit consumes the three-part enum')
+assert.match(projectSpaceSource, /useSingleEnumOptions\(['"]first-sale-tos['"]/, 'whole-machine edit consumes first-sale tOS rows')
 assert.doesNotMatch(projectSpaceSource, /roadmapTosVersions|roadmapTosOptions/, 'whole-machine edit no longer uses roadmap metadata as an option source')
-assert.match(roadmapModuleSource, /useTosEnumOptions\(['"]tos-2-part['"]/, 'roadmap consumes only the two-part enum adapter')
+assert.match(roadmapModuleSource, /useSingleEnumOptions\(['"]roadmap-tos['"]/, 'roadmap consumes roadmap-tOS rows directly')
 assert.match(projectStoreSource, /allowedFirstSaleTosValues/, 'project mutations accept an explicit current enum allow-list')
-assert.match(projectStoreSource, /valuesByType\[['"]tos-3-part['"]\]/, 'project validation falls back only to the hydrated three-part enum')
+assert.match(projectStoreSource, /rowsByType\[['"]first-sale-tos['"]\]/, 'project validation falls back only to hydrated first-sale tOS rows')
 assert.match(appShell, /styles=\{\{\s*root:/, 'user dropdown uses the Ant Design 6 popup styling API')
 assert.doesNotMatch(appShell, /overlayStyle=/, 'deprecated dropdown overlayStyle is removed')
 assert.match(appShell, /className="[^"]*pms-main-header[^"]*"[\s\S]*className="pms-main-header__row"/, 'main header exposes responsive layout hooks')

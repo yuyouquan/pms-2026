@@ -9,9 +9,6 @@ import {
   type EnumRowsByType,
   type EnumTypeDefinition,
   type EnumTypeKey,
-  type EnumValuesByType,
-  type LegacyTosEnumTypeDefinition,
-  type LegacyTosEnumTypeKey,
 } from '@/types/enums'
 
 export { ENUM_TYPE_KEYS }
@@ -85,7 +82,6 @@ export const ENUM_DEFINITIONS = {
 } as const satisfies Record<EnumTypeKey, EnumTypeDefinition>
 
 const TOS_PREFIXED_TYPES = new Set<EnumTypeKey>(['first-sale-tos', 'roadmap-tos'])
-const LEGACY_TOS_ENUM_TYPE_KEYS = ['tos-2-part', 'tos-3-part'] as const satisfies readonly LegacyTosEnumTypeKey[]
 const PROJECT_CATEGORIES = new Set([
   '整机产品项目',
   'tOS版本项目',
@@ -95,12 +91,6 @@ const PROJECT_CATEGORIES = new Set([
 
 export function isEnumTypeKey(value: unknown): value is EnumTypeKey {
   return typeof value === 'string' && ENUM_TYPE_KEYS.includes(value as EnumTypeKey)
-}
-
-/** @deprecated Temporary compatibility guard for consumers migrated in later tasks. */
-export function isLegacyTosEnumTypeKey(value: unknown): value is LegacyTosEnumTypeKey {
-  return typeof value === 'string'
-    && LEGACY_TOS_ENUM_TYPE_KEYS.includes(value as LegacyTosEnumTypeKey)
 }
 
 export function normalizeEnumFieldValue<K extends EnumTypeKey>(
@@ -305,90 +295,5 @@ export function createInitialEnumRows(): EnumRowsByType {
       { domain: '其他', subdomain: 'AIOT' },
     ]),
     'core-value': singleSeedRows('core-value', ['追赶', '人无我有', '人有我有']),
-  }
-}
-
-/** @deprecated Temporary compatibility registry for consumers migrated in later tasks. */
-export const TOS_ENUM_REGISTRY: Record<LegacyTosEnumTypeKey, LegacyTosEnumTypeDefinition> = {
-  'tos-2-part': {
-    key: 'tos-2-part',
-    label: 'tOS版本（2位）',
-    initialValues: ['16.0', '17.2'],
-  },
-  'tos-3-part': {
-    key: 'tos-3-part',
-    label: 'tOS版本（3位）',
-    initialValues: ['16.0.1', '16.0.2', '17.2.0'],
-  },
-}
-
-/** @deprecated Temporary compatibility keys for consumers migrated in later tasks. */
-export const TOS_ENUM_TYPE_KEYS = Object.freeze([
-  ...LEGACY_TOS_ENUM_TYPE_KEYS,
-])
-
-const FORMAT_BY_TYPE: Record<LegacyTosEnumTypeKey, RegExp> = {
-  'tos-2-part': /^\d+\.\d+$/,
-  'tos-3-part': /^\d+\.\d+\.\d+$/,
-}
-
-/** @deprecated Use normalizeEnumFieldValue with a flat registry key. */
-export function normalizeEnumValue(value: string): string {
-  const trimmed = value.trim()
-  const prefixed = /^tOS(\d+\.\d+(?:\.\d+)?)$/.exec(trimmed)
-  return prefixed ? prefixed[1] : trimmed
-}
-
-/** @deprecated Use validateAndNormalizeEnumRow with a flat registry key. */
-export function validateEnumValue(type: LegacyTosEnumTypeKey, input: string): string {
-  const value = normalizeEnumValue(input)
-  if (!FORMAT_BY_TYPE[type]?.test(value)) {
-    throw new Error(`Invalid ${type} format`)
-  }
-  return value
-}
-
-/** @deprecated Use validateAndNormalizeEnumRow with a flat registry key. */
-export function isValidEnumValue(type: LegacyTosEnumTypeKey, input: unknown): input is string {
-  if (typeof input !== 'string') return false
-  try {
-    validateEnumValue(type, input)
-    return true
-  } catch {
-    return false
-  }
-}
-
-export function sortEnumValues(input: readonly string[]): string[] {
-  const compareNumericSegment = (left: string, right: string) => {
-    const normalizedLeft = left.replace(/^0+(?=\d)/, '')
-    const normalizedRight = right.replace(/^0+(?=\d)/, '')
-    if (normalizedLeft.length !== normalizedRight.length) {
-      return normalizedLeft.length - normalizedRight.length
-    }
-    if (normalizedLeft < normalizedRight) return -1
-    if (normalizedLeft > normalizedRight) return 1
-    return 0
-  }
-
-  return input
-    .map((value, index) => ({ value, index, segments: value.split('.') }))
-    .sort((left, right) => {
-      const segmentCount = Math.max(left.segments.length, right.segments.length)
-      for (let index = 0; index < segmentCount; index += 1) {
-        if (left.segments[index] === undefined) return -1
-        if (right.segments[index] === undefined) return 1
-        const segmentComparison = compareNumericSegment(left.segments[index], right.segments[index])
-        if (segmentComparison !== 0) return segmentComparison
-      }
-      return left.index - right.index
-    })
-    .map(item => item.value)
-}
-
-export function createInitialEnumValues(): EnumValuesByType {
-  return {
-    'tos-2-part': [...TOS_ENUM_REGISTRY['tos-2-part'].initialValues],
-    'tos-3-part': [...TOS_ENUM_REGISTRY['tos-3-part'].initialValues],
   }
 }

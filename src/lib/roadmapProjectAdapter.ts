@@ -28,7 +28,6 @@ import type {
 
 const ROADMAP_BRANDS = new Set<RoadmapBrand>(['TECNO', 'Infinix', 'itel', '待定', '其他品牌'])
 const ROADMAP_ANDROID_VERSIONS = new Set<RoadmapAndroidVersion>(['Android 16', 'Android 17', 'Android 18'])
-const ROADMAP_RAMS = new Set<RoadmapRam>(['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB'])
 
 function firstNonBlank(...values: unknown[]): string {
   for (const value of values) {
@@ -56,10 +55,11 @@ function normalizeBrand(value: unknown): RoadmapBrand | null {
 
 function normalizeRam(explicitRam: unknown, legacyMemory: unknown): RoadmapRam | null {
   if (explicitRam !== undefined && explicitRam !== null && explicitRam !== '') {
-    return ROADMAP_RAMS.has(explicitRam as RoadmapRam) ? explicitRam as RoadmapRam : null
+    return firstNonBlank(explicitRam) || null
   }
-  const match = typeof legacyMemory === 'string' ? legacyMemory.trim().match(/^(\d+GB)(?:\+|$)/) : null
-  return match && ROADMAP_RAMS.has(match[1] as RoadmapRam) ? match[1] as RoadmapRam : null
+  const legacySnapshot = firstNonBlank(legacyMemory)
+  const legacyRam = legacySnapshot.match(/^([^+]+)(?:\+|$)/)?.[1]?.trim()
+  return legacyRam || null
 }
 
 function normalizeVersionType(value: unknown): RoadmapVersionType | null {

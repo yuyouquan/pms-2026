@@ -108,16 +108,3 @@ export type EnumRowValidationResult<K extends EnumTypeKey = EnumTypeKey> =
       reason: 'invalid' | 'duplicate'
       fieldErrors: EnumFieldErrors
     }
-
-/** @deprecated Temporary compatibility contract for consumers migrated in later tasks. */
-export type LegacyTosEnumTypeKey = 'tos-2-part' | 'tos-3-part'
-
-/** @deprecated Temporary compatibility contract for consumers migrated in later tasks. */
-export type EnumValuesByType = Record<LegacyTosEnumTypeKey, string[]>
-
-/** @deprecated Temporary compatibility contract for consumers migrated in later tasks. */
-export interface LegacyTosEnumTypeDefinition {
-  key: LegacyTosEnumTypeKey
-  label: string
-  initialValues: readonly string[]
-}

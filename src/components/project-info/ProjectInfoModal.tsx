@@ -34,8 +34,7 @@ import {
   buildProjectInfoValues,
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
-import { normalizeTosEnumReference } from '@/lib/tosEnumOptions'
-import { mapIpmProjectStatus, TOS_PROJECT_STATUS_OPTIONS } from '@/lib/projectStatus'
+import { getProjectStatusEnumType, mapIpmProjectStatus } from '@/lib/projectStatus'
 import { normalizeMachineFamilyName, resolveMachineTosUpdate } from '@/lib/machineTosVersions'
 import { normalizeTechnicalProjectValues, TechnicalProjectValidationError, validateTechnicalProject } from '@/lib/technicalProjectRules'
 import {
@@ -56,6 +55,7 @@ import {
   buildChipOptions,
   buildEnumOptions,
   findProjectCategoryMapping,
+  normalizeTosSnapshot,
   resolveChipRow,
   type SingleEnumTypeKey,
 } from '@/lib/enumConsumers'
@@ -206,6 +206,15 @@ export default function ProjectInfoModal({
     () => enumReady ? buildEnumOptions(rowsByType, 'machine-health-status', healthSnapshot ? [healthSnapshot] : []) : [],
     [enumReady, healthSnapshot, rowsByType],
   )
+  const projectStatusSnapshot = String(watchedValues.status || '')
+  const projectStatusOptions = useMemo(
+    () => enumReady ? buildEnumOptions(
+      rowsByType,
+      getProjectStatusEnumType(projectType),
+      projectStatusSnapshot ? [projectStatusSnapshot] : [],
+    ) : [],
+    [enumReady, projectStatusSnapshot, projectType, rowsByType],
+  )
   const chipSnapshot = useMemo(() => ({
     chipCode: String(watchedValues.chipCode || ''),
     chipModel: String(watchedValues.chipModel || ''),
@@ -338,8 +347,8 @@ export default function ProjectInfoModal({
     let infoValues = isMachineProjectType(project.type)
       ? {
           ...storedInfoValues,
-          firstSaleTosVersion: normalizeTosEnumReference(storedInfoValues.firstSaleTosVersion),
-          currentTosVersion: normalizeTosEnumReference(storedInfoValues.currentTosVersion),
+          firstSaleTosVersion: normalizeTosSnapshot(storedInfoValues.firstSaleTosVersion),
+          currentTosVersion: normalizeTosSnapshot(storedInfoValues.currentTosVersion),
         }
       : storedInfoValues
     if (project.type === PROJECT_TYPE_TOS_VERSION) {
@@ -470,7 +479,7 @@ export default function ProjectInfoModal({
       const derivedValues = deriveMachineProjectInfoValues({ ...entry, ...sourceValues })
       const keepConfiguredValue = (fieldKey: string, enumType: SingleEnumTypeKey) => {
         const rawValue = String(derivedValues[fieldKey] || '')
-        const value = enumType === 'first-sale-tos' ? normalizeTosEnumReference(rawValue) : rawValue
+        const value = enumType === 'first-sale-tos' ? normalizeTosSnapshot(rawValue) : rawValue
         return rowsByType[enumType].some(row => row.value === value) ? value : ''
       }
       form.setFieldsValue({
@@ -580,7 +589,7 @@ export default function ProjectInfoModal({
       return
     }
     if (!isLegacyMachine) {
-      const normalizedFirstSale = normalizeTosEnumReference(watchedFirstSaleTosVersion)
+      const normalizedFirstSale = normalizeTosSnapshot(watchedFirstSaleTosVersion)
       if (!normalizedFirstSale) {
         setMachineFamilyError('')
         return
@@ -629,7 +638,7 @@ export default function ProjectInfoModal({
     const inheritedValues = buildProjectInfoValues(matchingNewProjects[0], ['firstSaleTosVersion'])
     form.setFieldValue(
       'firstSaleTosVersion',
-      normalizeTosEnumReference(inheritedValues.firstSaleTosVersion),
+      normalizeTosSnapshot(inheritedValues.firstSaleTosVersion),
     )
     setMachineFamilyError('')
   }, [existingProjects, form, isLegacyMachine, machineProjectName, mode, open, project?.id, projectType, watchedFirstSaleTosVersion])
@@ -794,6 +803,17 @@ export default function ProjectInfoModal({
     const normalizedProjectType = mode === 'create'
       ? ipmClassification?.pmsProjectCategory || ''
       : resolveProjectClassification(projectType, String(values.secondaryCategory || '')).projectCategory
+    const submittedStatus = String(values.status || '').trim()
+    const currentStatusRows = enumState.rowsByType[getProjectStatusEnumType(normalizedProjectType)]
+    if (
+      submittedStatus
+      && !currentStatusRows.some(row => row.value === submittedStatus)
+      && !(mode === 'edit' && project?.status === submittedStatus)
+    ) {
+      form.setFields([{ name: 'status', errors: ['项目状态不在当前配置中，请重新选择'] }])
+      message.error('项目状态不在当前配置中，请重新选择')
+      return
+    }
     const projectSecondaryCategory = normalizedProjectType === PROJECT_CATEGORY_MACHINE
       ? mode === 'create'
         ? ipmClassification?.pmsSecondaryCategory || ''
@@ -1008,7 +1028,7 @@ export default function ProjectInfoModal({
           )}
           {projectType === PROJECT_TYPE_TOS_VERSION && (
             <Form.Item label="项目状态" name="status" rules={[{ required: true, message: 'IPM 项目状态不能为空' }]}>
-              <Select disabled={mode === 'create'} options={TOS_PROJECT_STATUS_OPTIONS} />
+              <Select disabled={mode === 'create'} options={projectStatusOptions} />
             </Form.Item>
           )}
           {projectType !== PROJECT_TYPE_TOS_VERSION && !isMachineProjectType(projectType) && !isTechnicalProject && (

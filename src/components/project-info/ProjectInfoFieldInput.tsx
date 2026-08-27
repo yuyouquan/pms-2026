@@ -12,7 +12,7 @@ import {
   type JiraProjectConfig,
 } from '@/lib/jiraProject'
 import type { ProjectInfoValue } from '@/types/app'
-import { formatTosEnumValue } from '@/lib/tosEnumOptions'
+import { formatTosSnapshot } from '@/lib/enumConsumers'
 
 interface ProjectInfoFieldInputProps {
   field: ProjectInfoFieldDefinition
@@ -59,7 +59,7 @@ export default function ProjectInfoFieldInput({
 
   if (field.readOnly) {
     const displayValue = ['firstSaleTosVersion', 'currentTosVersion'].includes(field.key)
-      ? formatTosEnumValue(value)
+      ? formatTosSnapshot(value)
       : toText(value)
     return <Input value={displayValue} disabled placeholder="自动获取" />
   }

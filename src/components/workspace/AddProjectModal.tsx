@@ -19,10 +19,9 @@ import { deriveProjectResponsiblePersons, deriveProjectTosVersion } from '@/lib/
 import { resolveMachineTosUpdate } from '@/lib/machineTosVersions'
 import { normalizeTargetMarkets } from '@/lib/marketRules'
 import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
-import { normalizeTosEnumReference, resolveCurrentTosEnumValue } from '@/lib/tosEnumOptions'
 import { useActivateProject } from '@/hooks/useActivateProject'
 import { useEnumHydration } from '@/hooks/useEnumOptions'
-import { getSingleEnumValues } from '@/lib/enumConsumers'
+import { getSingleEnumValues, normalizeTosSnapshot, resolveCurrentTosSnapshot } from '@/lib/enumConsumers'
 import { useEnumStore } from '@/stores/enums'
 import { synchronizeTechnicalProjectRecord } from '@/lib/technicalProjectRules'
 
@@ -83,13 +82,12 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
     const selectedMachineTosVersion = machineProductType === '老品'
       ? selectedCurrentTosVersion
       : selectedFirstSaleTosVersion
-    const selectedMachineTosVersionId = resolveCurrentTosEnumValue(
-      'tos-3-part',
+    const selectedMachineTosVersionId = resolveCurrentTosSnapshot(
       selectedMachineTosVersion,
       machineTosValues,
     )
     const firstSaleTosVersionId = machineProductType === '老品'
-      ? normalizeTosEnumReference(selectedFirstSaleTosVersion)
+      ? normalizeTosSnapshot(selectedFirstSaleTosVersion)
       : selectedMachineTosVersionId
     const currentTosVersionId = machineProductType === '老品'
       ? selectedMachineTosVersionId

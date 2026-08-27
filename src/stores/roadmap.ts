@@ -168,9 +168,7 @@ function repairSelectedTosVersionId(
   tosVersions: readonly TosVersionConfig[],
 ): string | null {
   if (!selectedTosVersionId) return null
-  return tosVersions.some(version => version.id === selectedTosVersionId)
-    ? selectedTosVersionId
-    : null
+  return normalizeRoadmapTosReference(selectedTosVersionId, tosVersions) || null
 }
 
 export function createInitialTosVersions(): TosVersionConfig[] {
@@ -413,27 +411,27 @@ function migrateTosVersions(value: unknown): TosVersionConfig[] | null {
 
   for (const entry of value) {
     if (!isRecord(entry)) continue
-    const fromName = typeof entry.name === 'string' ? normalizeLegacyTosVersionName(entry.name) : null
-    const fromParts = Number.isSafeInteger(entry.major) && Number(entry.major) >= 0
-      && Number.isSafeInteger(entry.minor) && Number(entry.minor) >= 0
-      ? normalizeTosVersionName(`tOS ${Number(entry.major)}.${Number(entry.minor)}`)
-      : null
-    const parsed = fromName ?? fromParts
-    if (!parsed) continue
+    const rawReference = typeof entry.id === 'string' && !entry.id.startsWith('legacy-')
+      ? entry.id
+      : entry.name
+    const versionId = normalizeRoadmapTosReference(rawReference)
+    if (!versionId) continue
+    const parsed = normalizeTosVersionName(versionId)
     const period = normalizeTosPeriod(entry.periodStartDate, entry.periodEndDate)
     const migratedPeriod = Object.keys(validateTosPeriod(period.periodStartDate, period.periodEndDate)).length
       ? { periodStartDate: '', periodEndDate: '' }
       : period
     const candidate: TosVersionConfig = {
-      id: `${parsed.major}.${parsed.minor}`,
-      ...parsed,
-      name: `tOS${parsed.major}.${parsed.minor}`,
+      id: versionId,
+      name: formatRoadmapTosValue(versionId),
+      major: parsed?.major ?? null,
+      minor: parsed?.minor ?? null,
       ...migratedPeriod,
       targets: normalizeTargets(entry.targets),
       createdAt: normalizeTimestamp(entry.createdAt),
       updatedAt: normalizeTimestamp(entry.updatedAt),
     }
-    const key = `${parsed.major}.${parsed.minor}`
+    const key = versionId
     const existing = versionsByKey.get(key)
     if (!existing || Date.parse(candidate.updatedAt) >= Date.parse(existing.updatedAt)) {
       versionsByKey.set(key, candidate)
@@ -446,9 +444,7 @@ function migrateTosVersions(value: unknown): TosVersionConfig[] | null {
 }
 
 function resolveMigratedTosId(value: unknown, versions: readonly TosVersionConfig[]): string | null {
-  const normalized = normalizeRoadmapTosReference(value, versions)
-  const parsed = normalizeTosVersionName(normalized)
-  return parsed ? `${parsed.major}.${parsed.minor}` : null
+  return normalizeRoadmapTosReference(value, versions) || null
 }
 
 function trimStringValue<T>(value: T): T {
@@ -859,14 +855,20 @@ function mutationFailure(errors: Record<string, string>): RoadmapMutationResult 
   return { ok: false, reason: 'invalid', errors }
 }
 
-function currentTosEnumValues(): string[] {
-  return useEnumStore.getState().valuesByType['tos-2-part']
+function currentRoadmapTosEnumValues(): string[] {
+  return useEnumStore.getState().rowsByType['roadmap-tos'].map(row => row.value)
+    .map(normalizeRoadmapTosValue)
+    .filter(Boolean)
+}
+
+function currentFirstSaleTosEnumValues(): string[] {
+  return useEnumStore.getState().rowsByType['first-sale-tos'].map(row => row.value)
     .map(normalizeRoadmapTosValue)
     .filter(Boolean)
 }
 
 function currentTosEnumVersions(): TosVersionConfig[] {
-  return currentTosEnumValues().map(value => {
+  return currentRoadmapTosEnumValues().map(value => {
     const [major, minor] = value.split('.').map(Number)
     return {
       id: value,
@@ -1033,7 +1035,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
       setSelectedConflictKey: selectedConflictKey => set({ selectedConflictKey }),
       createPlannedProject: (rawInput, comparison) => {
         const input = normalizeProjectInput(rawInput)
-        const errors = validatePlannedProject(input, [], undefined, new Set(currentTosEnumValues()))
+        const errors = validatePlannedProject(input, [], undefined, new Set(currentFirstSaleTosEnumValues()))
         if (!input.actor) errors.actor = '操作人不能为空'
         if (Object.keys(errors).length) return mutationFailure(errors)
         const fields = toProjectFields(input)
@@ -1060,7 +1062,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
         const existing = get().plannedProjects.find(project => project.id === id)
         if (!existing) return { ok: false, reason: 'not-found' }
         const input = normalizeProjectInput(rawInput)
-        const allowedTosValues = new Set(currentTosEnumValues())
+        const allowedTosValues = new Set(currentFirstSaleTosEnumValues())
         allowedTosValues.add(existing.firstSaleTosVersionId)
         const errors = validatePlannedProject(input, [], undefined, allowedTosValues)
         if (!input.actor) errors.actor = '操作人不能为空'
@@ -1111,8 +1113,8 @@ export const useRoadmapStore = create<RoadmapStore>()(
       },
       setTosVersionDetails: (currentId, rawInput) => {
         const versionId = normalizeRoadmapTosValue(rawInput.versionId)
-        if (!versionId || !currentTosEnumValues().includes(versionId)) {
-          return mutationFailure({ versionId: '请选择配置中心中有效的 tOS 版本（2位）' })
+        if (!versionId || !currentRoadmapTosEnumValues().includes(versionId)) {
+          return mutationFailure({ versionId: '请选择配置中心中有效的 tOS 路标版本' })
         }
         const period = normalizeTosPeriod(rawInput.periodStartDate, rawInput.periodEndDate)
         const periodErrors = validateTosPeriod(period.periodStartDate, period.periodEndDate)
@@ -1125,12 +1127,12 @@ export const useRoadmapStore = create<RoadmapStore>()(
           return { ok: false, reason: 'duplicate' }
         }
         const occurredAt = nowIso()
-        const [major, minor] = versionId.split('.').map(Number)
+        const parsed = normalizeTosVersionName(versionId)
         const nextVersion: TosVersionConfig = {
           id: versionId,
           name: formatRoadmapTosValue(versionId),
-          major,
-          minor,
+          major: parsed?.major ?? null,
+          minor: parsed?.minor ?? null,
           periodStartDate: period.periodStartDate,
           periodEndDate: period.periodEndDate,
           targets: normalizeTargets(rawInput.targets),
@@ -1157,7 +1159,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
       setTosTargets: (id, targets) => {
         const normalizedId = normalizeRoadmapTosReference(id, get().tosVersions)
         const existing = get().tosVersions.find(version => version.id === normalizedId)
-        if (!existing && !currentTosEnumValues().includes(normalizedId)) return { ok: false, reason: 'not-found' }
+        if (!existing && !currentRoadmapTosEnumValues().includes(normalizedId)) return { ok: false, reason: 'not-found' }
         const normalizedTargets = normalizeTargets(targets)
         const occurredAt = nowIso()
         set(state => {
@@ -1166,13 +1168,13 @@ export const useRoadmapStore = create<RoadmapStore>()(
               ? { ...version, targets: normalizedTargets, updatedAt: occurredAt }
               : version),
           }
-          const [major, minor] = normalizedId.split('.').map(Number)
+          const parsed = normalizeTosVersionName(normalizedId)
           return {
             tosVersions: sortTosVersions([...state.tosVersions, {
               id: normalizedId,
               name: formatRoadmapTosValue(normalizedId),
-              major,
-              minor,
+              major: parsed?.major ?? null,
+              minor: parsed?.minor ?? null,
               periodStartDate: '',
               periodEndDate: '',
               targets: normalizedTargets,

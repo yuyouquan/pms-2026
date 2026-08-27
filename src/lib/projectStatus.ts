@@ -1,14 +1,10 @@
-export const TOS_PROJECT_STATUS_VALUES = ['在研', '已完成', '暂停', '已取消'] as const
+import type { SingleEnumTypeKey } from '@/lib/enumConsumers'
 
-export const TOS_PROJECT_STATUS_OPTIONS = TOS_PROJECT_STATUS_VALUES.map(value => ({
-  label: value,
-  value,
-}))
-
-export const TOS_PROJECT_LIST_STATUS_OPTIONS = [
-  { label: '全部', value: 'all' },
-  ...TOS_PROJECT_STATUS_OPTIONS,
-]
+export function getProjectStatusEnumType(category: string): SingleEnumTypeKey {
+  if (category === '整机产品项目') return 'machine-project-status'
+  if (category === '技术项目') return 'technical-project-status'
+  return 'tos-capability-project-status'
+}
 
 const TOS_IPM_STATUS_MAP: Readonly<Record<string, string>> = {
   '暂停': '暂停',

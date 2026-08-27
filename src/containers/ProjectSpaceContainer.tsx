@@ -62,7 +62,6 @@ import {
   type FilterCondition,
 } from '@/lib/filterConditions'
 import { GANTT_SCALE_OPTIONS } from '@/lib/ganttScale'
-import { formatTosEnumValue, normalizeTosEnumReference, resolveCurrentTosEnumValue } from '@/lib/tosEnumOptions'
 import { resolveMachineTosUpdate } from '@/lib/machineTosVersions'
 import { resolveVisiblePlanVersion } from '@/lib/todoAggregation'
 import {
@@ -169,15 +168,21 @@ import TechnicalProjectInformationView from '@/components/technical-project/Tech
 import TechnicalPlanModule from '@/components/technical-project/TechnicalPlanModule'
 import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
 import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
-import { useEnumHydration } from '@/hooks/useEnumOptions'
-import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
-import { buildEnumOptions, type EnumOption } from '@/lib/enumConsumers'
+import { useEnumHydration, useSingleEnumOptions } from '@/hooks/useEnumOptions'
+import {
+  buildEnumOptions,
+  formatTosSnapshot,
+  getSingleEnumValues,
+  normalizeTosSnapshot,
+  resolveCurrentTosSnapshot,
+  type EnumOption,
+} from '@/lib/enumConsumers'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import {
   synchronizeTechnicalProjectRecord,
 } from '@/lib/technicalProjectRules'
 import { deriveProjectTosVersion } from '@/lib/projectInfoRules'
-import { TOS_PROJECT_STATUS_OPTIONS } from '@/lib/projectStatus'
+import { getProjectStatusEnumType } from '@/lib/projectStatus'
 import {
   getTemplateSnapshotForProjectType,
   getTemplateTasksForProjectType,
@@ -218,19 +223,6 @@ import { ProjectSpaceHeader } from '@/containers/AppShell'
 
 const { Option } = Select
 const TOS_VERSION_TRAIN_SNAPSHOT_LEVEL = 'level2-version-train'
-const PROJECT_SPACE_STATUS_OPTIONS = [
-  { label: '待立项', value: '待立项' },
-  { label: '在研', value: '在研' },
-  { label: '上市', value: '上市' },
-  { label: '转维', value: '转维' },
-  { label: 'EOS', value: 'EOS' },
-  { label: '暂停', value: '暂停' },
-  { label: '已取消', value: '已取消' },
-]
-const PROJECT_SPACE_TECH_STATUS_OPTIONS = [
-  ...PROJECT_SPACE_STATUS_OPTIONS,
-  { label: '已迁移', value: '已迁移' },
-]
 // 前端 mock 环境暂无通讯录接口，责任人选中后从同一用户字典自动带出部门。
 const LEVEL3_MOCK_USER_DEPARTMENTS: Record<string, string> = {
   '张三': '项目管理部',
@@ -242,11 +234,15 @@ const LEVEL3_MOCK_USER_DEPARTMENTS: Record<string, string> = {
   '周八': '系统开发部',
   '杜甫': '产品规划部',
 }
-const getProjectStatusOptions = (p: any) => (
-  p.type === PROJECT_TYPE_TOS_VERSION ? TOS_PROJECT_STATUS_OPTIONS
-    : p.type === PROJECT_TYPE_TECH ? PROJECT_SPACE_TECH_STATUS_OPTIONS
-      : PROJECT_SPACE_STATUS_OPTIONS
-)
+const getConfiguredProjectStatusOptions = (
+  p: any,
+  rowsByType: Parameters<typeof buildEnumOptions>[0],
+  ready: boolean,
+) => ready ? buildEnumOptions(
+  rowsByType,
+  getProjectStatusEnumType(p.type),
+  p.status ? [p.status] : [],
+) : []
 
 const getSoftwareProductSeriesValue = (project: any) => {
   if (!project) return ''
@@ -453,18 +449,19 @@ export default function ProjectSpaceContainer() {
     }
   }, [enumReady, enumRowsByType, selectedProject])
 
-  const machineTosHistory = useMemo(() => selectedProject ? [
+  const machineTosHistory = useMemo(() => (selectedProject ? [
     selectedProject.firstSaleTosVersionId,
     selectedProject.firstSaleTosVersion,
     selectedProject.currentTosVersionId,
     selectedProject.currentTosVersion,
     selectedProject.tosVersionName,
     selectedProject.tosVersion,
-  ] : [], [selectedProject])
-  const {
-    currentValues: machineTosValues,
-    options: machineTosOptions,
-  } = useTosEnumOptions('tos-3-part', machineTosHistory)
+  ] : []).filter((value): value is string => typeof value === 'string' && Boolean(value.trim())), [selectedProject])
+  const machineTosOptions = useSingleEnumOptions('first-sale-tos', machineTosHistory)
+  const machineTosValues = useMemo(
+    () => enumReady ? getSingleEnumValues(enumRowsByType, 'first-sale-tos') : [],
+    [enumReady, enumRowsByType],
+  )
 
   const {
     projectPlanLevel, setProjectPlanLevel, projectPlanViewMode, setProjectPlanViewMode,
@@ -2288,7 +2285,7 @@ export default function ProjectSpaceContainer() {
     setEditingProjectFields({
       projectCode: p.projectCode || p.model || '',
       androidVersion: p.androidVersion || p.operatingSystem || '',
-      firstSaleTosVersionId: normalizeTosEnumReference(p.firstSaleTosVersionId || p.tosVersionName) || '',
+      firstSaleTosVersionId: normalizeTosSnapshot(p.firstSaleTosVersionId || p.tosVersionName) || '',
       brand: p.brand || '',
       productLine: p.productLine || '',
       marketName: p.marketName || '',
@@ -2337,6 +2334,18 @@ export default function ProjectSpaceContainer() {
       return
     }
     if (!selectedProject) return
+    const submittedStatus = typeof editingProjectFields.status === 'string'
+      ? editingProjectFields.status.trim()
+      : selectedProject.status
+    const currentStatusRows = enumState.rowsByType[getProjectStatusEnumType(selectedProject.type)]
+    if (
+      submittedStatus
+      && submittedStatus !== selectedProject.status
+      && !currentStatusRows.some(row => row.value === submittedStatus)
+    ) {
+      message.error('项目状态不在当前配置中，请重新选择')
+      return
+    }
     const updatedFields = {
       ...editingProjectFields,
       jiraProjects: normalizeJiraProjectRows(Array.isArray(editingProjectFields.jiraProjects) ? editingProjectFields.jiraProjects : []),
@@ -2385,24 +2394,22 @@ export default function ProjectSpaceContainer() {
     const firstSaleTosVersionName = typeof payload.infoValues.firstSaleTosVersion === 'string'
       ? payload.infoValues.firstSaleTosVersion.trim()
       : ''
-    const submittedFirstSaleTos = normalizeTosEnumReference(firstSaleTosVersionName)
-    const existingFirstSaleTos = normalizeTosEnumReference(
+    const submittedFirstSaleTos = normalizeTosSnapshot(firstSaleTosVersionName)
+    const existingFirstSaleTos = normalizeTosSnapshot(
       selectedProject.firstSaleTosVersionId || selectedProject.tosVersionName,
     )
     const currentTosVersionName = typeof payload.infoValues.currentTosVersion === 'string'
       ? payload.infoValues.currentTosVersion.trim()
       : ''
-    const submittedCurrentTos = normalizeTosEnumReference(currentTosVersionName)
-    const existingCurrentTos = normalizeTosEnumReference(
+    const submittedCurrentTos = normalizeTosSnapshot(currentTosVersionName)
+    const existingCurrentTos = normalizeTosSnapshot(
       selectedProject.currentTosVersionId || selectedProject.currentTosVersion || selectedProject.tosVersion,
     )
-    const firstSaleTosVersionId = resolveCurrentTosEnumValue(
-      'tos-3-part',
+    const firstSaleTosVersionId = resolveCurrentTosSnapshot(
       submittedFirstSaleTos,
       machineTosValues,
     ) || (submittedFirstSaleTos === existingFirstSaleTos ? existingFirstSaleTos : '')
-    const currentTosVersionId = resolveCurrentTosEnumValue(
-      'tos-3-part',
+    const currentTosVersionId = resolveCurrentTosSnapshot(
       submittedCurrentTos,
       machineTosValues,
     ) || (submittedCurrentTos === existingCurrentTos ? existingCurrentTos : '')
@@ -3109,9 +3116,9 @@ export default function ProjectSpaceContainer() {
     const renderWholeMachineBasicInfoField = (field: (typeof WHOLE_MACHINE_BASIC_INFO_FIELDS)[number]) => {
       const visibleDevelopMode = basicInfoEditMode ? ef.developMode : p.developMode
       if (field.key === 'isOutsourcedMini' && visibleDevelopMode !== '外研') return null
-      const firstSaleTosValue = normalizeTosEnumReference(p.firstSaleTosVersionId || p.tosVersionName)
+      const firstSaleTosValue = normalizeTosSnapshot(p.firstSaleTosVersionId || p.tosVersionName)
       const firstSaleTosVersionName = machineTosOptions.find(option => option.value === firstSaleTosValue)?.label
-        || formatTosEnumValue(firstSaleTosValue)
+        || formatTosSnapshot(firstSaleTosValue)
         || '-'
       let content: React.ReactNode = field.key === 'firstSaleTosVersionId'
         ? firstSaleTosVersionName
@@ -3275,7 +3282,7 @@ export default function ProjectSpaceContainer() {
           <div style={{ display: 'flex', background: 'linear-gradient(180deg, var(--pms-surface-solid) 0%, var(--pms-brand-surface) 100%)', borderBottom: '1px solid var(--pms-brand-border)' }}>
             {[
               { label: '项目分类', value: p.type, editable: false },
-              { label: '项目状态', value: p.status, editable: true, key: 'status', editNode: <Select size="small" value={ef.status} onChange={(v: string) => setEf('status', v)} style={{ width: 110 }} options={getProjectStatusOptions(p)} /> },
+              { label: '项目状态', value: p.status, editable: true, key: 'status', editNode: <Select size="small" value={ef.status} onChange={(v: string) => setEf('status', v)} style={{ width: 110 }} options={getConfiguredProjectStatusOptions(p, enumRowsByType, enumReady)} /> },
               { label: '健康状态', value: hConf.label, editable: true, key: 'healthStatus', editNode: <Select size="small" value={ef.healthStatus} onChange={(v: string) => setEf('healthStatus', v)} style={{ width: 100 }} options={healthChoices} /> },
               ...((isSoftware || isWholeMachine || isTech) ? [{ label: '当前节点', value: p.currentNode || '-', editable: true, key: 'currentNode', editNode: <Select size="small" value={ef.currentNode} onChange={(v: string) => setEf('currentNode', v)} style={{ width: 120 }} options={nodeChoices} /> }] : []),
             ].map((item, i, arr) => (
@@ -3357,7 +3364,7 @@ export default function ProjectSpaceContainer() {
                 <Descriptions.Item label="项目分类">{p.type}</Descriptions.Item>
                 <Descriptions.Item label="项目状态">
                   {basicInfoEditMode
-                    ? <Select size="small" value={ef.status} onChange={(v: string) => setEf('status', v)} style={{ width: '100%' }} options={getProjectStatusOptions(p)} />
+                    ? <Select size="small" value={ef.status} onChange={(v: string) => setEf('status', v)} style={{ width: '100%' }} options={getConfiguredProjectStatusOptions(p, enumRowsByType, enumReady)} />
                     : <Tag color={statusConf.tagColor}>{p.status}</Tag>}
                 </Descriptions.Item>
                 <Descriptions.Item label="健康状态">{basicInfoEditMode ? <Select size="small" value={ef.healthStatus} onChange={(v: string) => setEf('healthStatus', v)} style={{ width: '100%' }} options={healthChoices} /> : <Tag style={{ background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag>}</Descriptions.Item>

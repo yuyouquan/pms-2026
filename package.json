@@ -16,6 +16,7 @@
     "verify:workbench-split": "node scripts/verify-workbench-split.mjs",
     "verify:todo-center": "node scripts/verify-todo-center.mjs",
     "verify:tos-project-status": "node scripts/verify-tos-project-status.mjs",
+    "verify:project-roadmap": "node scripts/verify-project-roadmap.mjs",
     "verify:enum-config": "node scripts/verify-enum-config.mjs",
     "verify:enum-consumers": "node scripts/verify-enum-consumers.mjs",
     "verify:collapsible-sidebars": "node scripts/verify-collapsible-sidebars.mjs",

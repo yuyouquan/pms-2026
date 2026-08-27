@@ -1,11 +1,50 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
 import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
+const legacyBusinessMatches = []
+for (const relativePath of [
+  'src/components',
+  'src/constants',
+  'src/containers',
+  'src/hooks',
+  'src/lib',
+  'src/stores',
+  'src/types',
+]) {
+  const absolute = path.join(root, relativePath)
+  if (!fs.existsSync(absolute)) continue
+  const stack = [absolute]
+  while (stack.length) {
+    const current = stack.pop()
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const target = path.join(current, entry.name)
+      if (entry.isDirectory()) stack.push(target)
+      else if (/\.(?:ts|tsx)$/.test(entry.name)) {
+        const relative = path.relative(root, target)
+        const source = fs.readFileSync(target, 'utf8')
+        for (const token of ['useTosEnumOptions', 'TOS_ENUM_REGISTRY', 'tos-2-part', 'tos-3-part']) {
+          if (!source.includes(token)) continue
+          if (relative === 'src/stores/enums.ts' && (token === 'tos-2-part' || token === 'tos-3-part')) {
+            const migrationStart = source.indexOf('function migrateLegacyState')
+            const migrationEnd = source.indexOf('function migratedId', migrationStart)
+            const outsideMigration = `${source.slice(0, migrationStart)}${source.slice(migrationEnd)}`
+            if (!outsideMigration.includes(token)) continue
+          }
+          legacyBusinessMatches.push(`${relative}: ${token}`)
+        }
+      }
+    }
+  }
+}
+assert.deepEqual(legacyBusinessMatches, [], `legacy tOS business sources remain:\n${legacyBusinessMatches.join('\n')}`)
+assert.equal(fs.existsSync(path.join(root, 'src/hooks/useTosEnumOptions.ts')), false, 'legacy tOS hook is deleted')
+assert.equal(fs.existsSync(path.join(root, 'src/lib/tosEnumOptions.ts')), false, 'legacy tOS option wrapper is deleted')
 const consumers = loadTypeScriptModule(root, 'src/lib/enumConsumers.ts')
 const values = loadTypeScriptModule(root, 'src/lib/enumValues.ts')
-const legacyTos = loadTypeScriptModule(root, 'src/lib/tosEnumOptions.ts')
 const projectTypesSource = readSource(root, 'src/constants/projectTypes.ts')
 
 const rowsByType = values.createInitialEnumRows()
@@ -43,11 +82,9 @@ assert.deepEqual(consumers.buildEnumOptions(rowsByType, 'roadmap-tos'), [
   { value: 'beta', label: 'tOSbeta' },
   { value: '18.0', label: 'tOS18.0' },
 ], 'live tOS option values remain stored bodies and labels receive exactly one prefix')
-assert.deepEqual(legacyTos.buildTosEnumOptions('tos-2-part', ['beta', '18.0', '17.2']), [
-  { value: 'beta', label: 'tOSbeta' },
-  { value: '18.0', label: 'tOS18.0' },
-  { value: '17.2', label: 'tOS17.2' },
-], 'deprecated tOS adapters preserve arbitrary nonempty configured strings in input order')
+assert.equal(consumers.normalizeTosSnapshot(' tOSbeta '), 'beta', 'tOS snapshots persist an arbitrary nonempty body without a prefix')
+assert.equal(consumers.formatTosSnapshot('tOSbeta'), 'tOSbeta', 'tOS snapshot presentation adds the prefix exactly once')
+assert.equal(consumers.resolveCurrentTosSnapshot('tOS18.0', ['beta', '18.0']), '18.0', 'current tOS snapshot resolution uses unified configured values')
 
 console.log('[enum-consumers] verifying historical single-value snapshots')
 assert.deepEqual(consumers.buildEnumOptions(rowsByType, 'roadmap-tos', ['17.2', '18.0', 'tOS19.0', '17.2']), [
@@ -61,10 +98,6 @@ assert.deepEqual(consumers.buildEnumOptions(rowsByType, 'roadmap-tos', ['tOS18.0
   { value: '18.0', label: 'tOS18.0' },
   { value: 'tOS18.0', label: 'tOS18.0（已停用）', disabled: true },
 ], 'tOS history preserves its raw snapshot value and de-duplicates only exact current values')
-assert.deepEqual(legacyTos.buildTosEnumOptions('tos-2-part', ['18.0'], ['tOS18.0']), [
-  { value: '18.0', label: 'tOS18.0' },
-  { value: 'tOS18.0', label: 'tOS18.0（已停用）', disabled: true },
-], 'deprecated adapters also avoid rewriting historical tOS snapshots')
 assert.deepEqual(consumers.buildEnumOptions(rowsByType, 'core-value', ['旧值', '第二项', '旧值']), [
   { value: '第二项', label: '第二项' },
   { value: '第一项', label: '第一项' },
@@ -218,12 +251,6 @@ assert.match(
   /getTmgSubdomainState\(\s*rowsByType,\s*domain,\s*historicalSubdomain,\s*historicalDomain,?\s*\)/,
   'TMG hook passes the original domain together with its historical subdomain snapshot',
 )
-const legacyLibSource = readSource(root, 'src/lib/tosEnumOptions.ts')
-const legacyHookSource = readSource(root, 'src/hooks/useTosEnumOptions.ts')
-assert.match(legacyLibSource, /buildEnumOptions/, 'deprecated tOS option builder delegates to the unified consumer helper')
-assert.match(legacyHookSource, /roadmap-tos/, 'legacy two-part hook maps to roadmap tOS rows')
-assert.match(legacyHookSource, /first-sale-tos/, 'legacy three-part hook maps to first-sale tOS rows')
-
 const projectInfoModalSource = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 assert.match(projectInfoModalSource, /useEnumHydration\(open\)/, 'project information create/edit starts enum hydration only while its modal is relevant')
 assert.match(projectInfoModalSource, /handleSubmit[\s\S]*useEnumStore\.getState\(\)[\s\S]*!enumState\.hasHydrated\s*\|\|\s*enumState\.hydrationError[\s\S]*return/, 'project information submit reads current store state and rejects incomplete or failed enum hydration')
