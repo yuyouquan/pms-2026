@@ -482,6 +482,43 @@ assert.equal(
   null,
   'widening development snapshots does not loosen the nonempty requirement',
 )
+for (const [index, configuredDevelopMode] of ['联合开发', '外研'].entries()) {
+  const exactDevelopModeProject = {
+    ...configurableSnapshotProject,
+    id: `exact-develop-mode-${index}`,
+    sourceBid: `BID-EXACT-DEVELOP-${index}`,
+    name: `EXACT-DEVELOP-${index}`,
+    projectCode: `EXACT-DEVELOP-${index}`,
+    developMode: configuredDevelopMode,
+  }
+  assert.equal(
+    roadmapAdapter.adaptNormalProject(exactDevelopModeProject, [])?.developMode,
+    configuredDevelopMode,
+    `roadmap adaptation preserves the configured ${configuredDevelopMode} snapshot exactly`,
+  )
+  projectStore.useProjectStore.setState({ projects: [], selectedProject: null })
+  assert.equal(
+    projectStore.useProjectStore.getState().addProject(exactDevelopModeProject, '张三', { allowedFirstSaleTosValues: ['14.0.0'] }),
+    true,
+    `machine create accepts the configured ${configuredDevelopMode} snapshot through the actual store gate`,
+  )
+  assert.equal(
+    roadmapAdapter.adaptNormalProject(projectStore.useProjectStore.getState().projects[0], [])?.developMode,
+    configuredDevelopMode,
+    `machine create keeps ${configuredDevelopMode} unchanged when the saved snapshot re-enters the runtime adapter`,
+  )
+  const exactDevelopModeUpdate = projectStore.useProjectStore.getState().updateProject(
+    exactDevelopModeProject.id,
+    { developMode: configuredDevelopMode },
+    '张三',
+    { allowedFirstSaleTosValues: ['14.0.0'] },
+  )
+  assert.equal(
+    exactDevelopModeUpdate?.developMode,
+    configuredDevelopMode,
+    `machine update persists the configured ${configuredDevelopMode} snapshot exactly`,
+  )
+}
 
 const modalSource = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 const addSource = readSource(root, 'src/components/workspace/AddProjectModal.tsx')

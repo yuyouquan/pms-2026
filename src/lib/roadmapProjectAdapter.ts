@@ -47,8 +47,6 @@ function normalizeNormalProductType(value: unknown): RoadmapProductType | null {
 function normalizeNormalDevelopMode(value: unknown): RoadmapDevelopMode | null {
   const snapshot = firstNonBlank(value)
   if (!snapshot) return null
-  if (snapshot === '外研') return '纯外研'
-  if (snapshot === '联合开发') return 'ITD-ODC'
   return snapshot
 }
 
