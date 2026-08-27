@@ -215,8 +215,8 @@ export function getTmgDomains(
 export function getTmgSubdomainState(
   rowsByType: EnumRowsByType,
   domain: string,
-  historicalDomain?: string,
   historicalSubdomain?: string,
+  historicalDomain?: string,
 ): TmgSubdomainState {
   const selectedDomain = domain.trim()
   const liveSubdomains: string[] = []
@@ -229,18 +229,20 @@ export function getTmgSubdomainState(
   }
 
   const options = liveSubdomains.map(value => ({ value, label: value }))
-  const historyDomain = nonemptyString(historicalDomain)
   const history = nonemptyString(historicalSubdomain)
+  const historyMatchesDomain = historicalDomain === undefined
+    || selectedDomain === nonemptyString(historicalDomain)
   const hasOrphanSnapshot = Boolean(
     history
-    && selectedDomain === historyDomain
+    && historyMatchesDomain
     && !seen.has(history),
   )
   if (hasOrphanSnapshot) options.push(historyOption(history, history))
 
+  // This reports live configuration facts only. UI code must apply autoValue only after an
+  // explicit domain change or when the field is empty, preserving nonempty edit snapshots.
   const onlyNone = liveSubdomains.length === 1
     && liveSubdomains[0] === '无'
-    && !hasOrphanSnapshot
   return {
     options,
     ...(onlyNone ? { autoValue: '无' } : {}),

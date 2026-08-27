@@ -136,27 +136,28 @@ assert.deepEqual(consumers.getTmgDomains(rowsByType, '历史领域'), [
   { value: '性能TMG', label: '性能TMG' },
   { value: '历史领域', label: '历史领域（已停用）', disabled: true },
 ], 'TMG domains de-duplicate in first-row order and append absent history')
-assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '系统应用', '系统应用', '历史子领域'), {
+assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '系统应用', '历史子领域'), {
   options: [
     { value: 'AIOS', label: 'AIOS' },
     { value: '应用', label: '应用' },
     { value: '历史子领域', label: '历史子领域（已停用）', disabled: true },
   ],
   disabled: false,
-}, 'subdomains filter by the chosen domain, preserve row order, and append history')
-assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '基础架构TMG', '基础架构TMG', '历史子领域'), {
+}, 'the original three-argument API treats historical subdomain history as belonging to the current domain')
+assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '基础架构TMG', '历史子领域', '基础架构TMG'), {
   options: [
     { value: '无', label: '无' },
     { value: '历史子领域', label: '历史子领域（已停用）', disabled: true },
   ],
-  disabled: false,
-}, 'an orphan historical subdomain prevents sole-无 from overwriting the active snapshot')
+  autoValue: '无',
+  disabled: true,
+}, 'adapter reports live-only sole-无 auto state; consumer UI must guard its application during initial edit hydration')
 assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '基础架构TMG'), {
   options: [{ value: '无', label: '无' }],
   autoValue: '无',
   disabled: true,
 }, 'once no orphan snapshot remains, a sole live 无 auto-selects and disables')
-assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '性能TMG', '基础架构TMG', '历史子领域'), {
+assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '性能TMG', '历史子领域', '基础架构TMG'), {
   options: [{ value: '无', label: '无' }],
   autoValue: '无',
   disabled: true,
@@ -176,7 +177,7 @@ assert.doesNotThrow(() => {
   consumers.buildChipOptions(frozenRows, [retiredChip])
   consumers.findProjectCategoryMapping(frozenRows, '技术预研')
   consumers.getTmgDomains(frozenRows, '历史领域')
-  consumers.getTmgSubdomainState(frozenRows, '基础架构TMG', '基础架构TMG', '历史子领域')
+  consumers.getTmgSubdomainState(frozenRows, '基础架构TMG', '历史子领域', '基础架构TMG')
 }, 'all consumer adapters accept deeply frozen rows without mutation')
 
 console.log('[enum-consumers] verifying thin hook and compatibility contracts')
@@ -188,7 +189,12 @@ for (const hook of ['useSingleEnumOptions', 'useChipOptions', 'useProjectCategor
 }
 assert.match(
   hookSource,
-  /getTmgSubdomainState\(\s*rowsByType,\s*domain,\s*historicalDomain,\s*historicalSubdomain,?\s*\)/,
+  /useTmgOptions\(\s*domain[^,]*,\s*historicalSubdomain\?[^,]*,\s*historicalDomain\?[^,]*,/,
+  'TMG hook preserves historicalSubdomain as the second positional argument and appends historicalDomain',
+)
+assert.match(
+  hookSource,
+  /getTmgSubdomainState\(\s*rowsByType,\s*domain,\s*historicalSubdomain,\s*historicalDomain,?\s*\)/,
   'TMG hook passes the original domain together with its historical subdomain snapshot',
 )
 const legacyLibSource = readSource(root, 'src/lib/tosEnumOptions.ts')

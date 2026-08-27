@@ -46,16 +46,16 @@ export function useProjectCategoryMapping(ipmCategory?: string) {
 
 export function useTmgOptions(
   domain = '',
-  historicalDomain?: string,
   historicalSubdomain?: string,
+  historicalDomain?: string,
 ) {
   const rowsByType = useEnumStore(state => state.rowsByType)
   return useMemo(() => {
     const subdomainState = getTmgSubdomainState(
       rowsByType,
       domain,
-      historicalDomain,
       historicalSubdomain,
+      historicalDomain,
     )
     return {
       domainOptions: getTmgDomains(rowsByType, historicalDomain),
@@ -63,5 +63,5 @@ export function useTmgOptions(
       autoValue: subdomainState.autoValue,
       disabled: subdomainState.disabled,
     }
-  }, [domain, historicalDomain, historicalSubdomain, rowsByType])
+  }, [domain, historicalSubdomain, historicalDomain, rowsByType])
 }
