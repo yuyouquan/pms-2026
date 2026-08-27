@@ -779,6 +779,7 @@ const loadExportedConstFromSource = async (sourceText, exportName) => {
   return import(`data:text/javascript;base64,${Buffer.from(output).toString('base64')}`)
 }
 const projectSpaceActualPatch = await loadExportedConstFromSource(projectSpaceSource, 'applyIncrementalActualFieldPatch')
+const projectSpaceFocusToken = await loadExportedConstFromSource(projectSpaceSource, 'createLevel1FocusScopeToken')
 const projectSpaceFocusRetry = await loadExportedConstFromSource(projectSpaceSource, 'createLevel1FocusRetryController')
 const projectSpaceFollowSync = await loadExportedConstFromSource(projectSpaceSource, 'preserveDetachedFollowMarketActualsAfterSync')
 for (const label of ['序号', '阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期']) {
@@ -803,6 +804,11 @@ assert.match(projectSpaceSource, /focusLevel1Violation[\s\S]*remainingAttempts/,
 assert.match(projectSpaceSource, /level1FocusRetryRef/, 'publish focus keeps its retry controller in a component ref')
 assert.match(projectSpaceSource, /level1FocusRetryRef\.current\?\.stop\(\)/, 'scope changes and unmount stop pending focus retries')
 assert.match(projectSpaceSource, /readCurrentLevel1FocusToken/, 'every focus attempt re-reads the live project, scope, and version token')
+assert.match(projectSpaceSource, /readCurrentLevel1FocusToken[\s\S]*scopeKind:\s*'ordinary'[\s\S]*versionId:\s*latestPlan\.currentVersion/, 'ordinary L1 focus reads the live default version through the shared token builder')
+assert.match(projectSpaceSource, /focusLevel1Violation[\s\S]*createLevel1FocusScopeToken\(/, 'focus opening and live reading use the same token builder')
+for (const tokenField of ['currentUser', 'editMode', 'planLevel']) {
+  assert.match(projectSpaceSource, new RegExp(`left\\.${tokenField} === right\\.${tokenField}`), `focus retry token compares live ${tokenField}`)
+}
 assert.match(projectSpaceSource, /`\$\{record\.taskName\}：\$\{reason\}`/, 'invalid tooltip text prefixes every reason with the task name')
 assert.match(projectSpaceSource, /getLevel1StructurePermissions/, 'render and confirmation paths use centralized structure permissions')
 assert.doesNotMatch(projectSpaceSource, /source === 'custom'\s*&& getStructurePermissions\(record\)\.canDelete/, 'super-admin fixed-template deletion is not hidden behind a custom-source gate')
@@ -867,7 +873,29 @@ assert.match(projectSpaceSource, /pairedVersion\s*\|\|\s*\(isLevel1MarketTable\s
 const scheduledFocusCallbacks = new Map()
 const cancelledFocusHandles = []
 let nextFocusHandle = 0
-let currentFocusToken = { projectId: 'machine', scopeKind: 'market', scopeValue: 'OP', versionId: 'v4' }
+const capabilityFocusToken = projectSpaceFocusToken.createLevel1FocusScopeToken({
+  projectId: 'capability-project',
+  scopeKind: 'ordinary',
+  versionId: 'v4',
+  currentUser: '张三',
+  editMode: true,
+  planLevel: 'level1',
+})
+const independentSoftwareFocusToken = projectSpaceFocusToken.createLevel1FocusScopeToken({
+  projectId: 'independent-software-project',
+  scopeKind: 'ordinary',
+  versionId: 'v4',
+  currentUser: '张三',
+  editMode: true,
+  planLevel: 'level1',
+})
+assert.deepEqual(capabilityFocusToken, {
+  projectId: 'capability-project', scopeKind: 'ordinary', scopeValue: 'default', versionId: 'v4', currentUser: '张三', editMode: true, planLevel: 'level1',
+}, 'a capability-building ordinary L1 plan creates a default-scope focus token')
+assert.deepEqual(independentSoftwareFocusToken, {
+  projectId: 'independent-software-project', scopeKind: 'ordinary', scopeValue: 'default', versionId: 'v4', currentUser: '张三', editMode: true, planLevel: 'level1',
+}, 'an independent-software ordinary L1 plan creates the same default-scope token shape')
+let currentFocusToken = capabilityFocusToken
 let focusAttempts = 0
 const focusController = projectSpaceFocusRetry.createLevel1FocusRetryController({
   schedule: callback => {
@@ -893,16 +921,20 @@ const runNextFocusCallback = () => {
 }
 focusController.start(currentFocusToken, 3)
 runNextFocusCallback()
-assert.equal(focusAttempts, 1, 'a matching live token performs its first focus attempt')
+assert.equal(focusAttempts, 1, 'a matching ordinary capability-project token performs its first focus attempt')
 assert.equal(scheduledFocusCallbacks.size, 1, 'a missing DOM target schedules another bounded attempt')
-focusController.start({ ...currentFocusToken, scopeValue: 'TR' }, 3)
-assert.equal(cancelledFocusHandles.length, 1, 'a new focus round cancels the previous pending timer')
-currentFocusToken = { ...currentFocusToken, scopeValue: 'OP' }
+currentFocusToken = independentSoftwareFocusToken
 runNextFocusCallback()
-assert.equal(focusAttempts, 1, 'a stale scope token never focuses a same-stable-id row in the new scope')
-assert.equal(scheduledFocusCallbacks.size, 0, 'a stale token stops without another retry')
-currentFocusToken = { ...currentFocusToken, scopeValue: 'TR', versionId: 'v5' }
+assert.equal(focusAttempts, 1, 'switching from a capability to independent-software project cancels the stale focus attempt')
+assert.equal(scheduledFocusCallbacks.size, 0, 'a stale ordinary project token stops without another retry')
+focusController.start(independentSoftwareFocusToken, 3)
+currentFocusToken = { ...independentSoftwareFocusToken, versionId: 'v5' }
+runNextFocusCallback()
+assert.equal(focusAttempts, 1, 'switching an ordinary L1 version cancels the stale focus attempt')
+assert.equal(scheduledFocusCallbacks.size, 0, 'a stale ordinary version token stops without another retry')
 focusController.start(currentFocusToken, 3)
+focusController.start({ ...currentFocusToken, currentUser: '李四' }, 3)
+assert.equal(cancelledFocusHandles.length, 1, 'a new ordinary focus round cancels the previous pending timer')
 focusController.stop()
 assert.equal(scheduledFocusCallbacks.size, 0, 'unmount/scope cleanup cancels a pending retry timer')
 

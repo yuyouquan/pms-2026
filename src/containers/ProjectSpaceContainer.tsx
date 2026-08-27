@@ -446,9 +446,43 @@ export const preserveDetachedFollowMarketActualsAfterSync = <PlanEntry extends {
 
 type Level1FocusScopeToken = {
   projectId: string
-  scopeKind: 'market' | 'tos'
+  scopeKind: 'market' | 'tos' | 'ordinary'
   scopeValue: string
   versionId: string
+  currentUser: string
+  editMode: boolean
+  planLevel: string
+}
+
+export const createLevel1FocusScopeToken = ({
+  projectId,
+  scopeKind,
+  scopeValue,
+  versionId,
+  currentUser,
+  editMode,
+  planLevel,
+}: {
+  projectId?: string
+  scopeKind: Level1FocusScopeToken['scopeKind']
+  scopeValue?: string
+  versionId: string
+  currentUser: string
+  editMode: boolean
+  planLevel: string
+}): Level1FocusScopeToken | null => {
+  if (!projectId || planLevel !== 'level1') return null
+  const resolvedScopeValue = scopeKind === 'ordinary' ? 'default' : scopeValue
+  if (!resolvedScopeValue) return null
+  return {
+    projectId,
+    scopeKind,
+    scopeValue: resolvedScopeValue,
+    versionId,
+    currentUser,
+    editMode,
+    planLevel,
+  }
 }
 
 type Level1FocusRetryControllerOptions<TimerHandle> = {
@@ -475,6 +509,9 @@ export const createLevel1FocusRetryController = <TimerHandle,>({
     && left.scopeKind === right.scopeKind
     && left.scopeValue === right.scopeValue
     && left.versionId === right.versionId
+    && left.currentUser === right.currentUser
+    && left.editMode === right.editMode
+    && left.planLevel === right.planLevel
   )
   const stop = () => {
     if (timer !== null) cancel(timer)
@@ -1036,6 +1073,8 @@ export default function ProjectSpaceContainer() {
     }
   }, [
     currentVersion,
+    currentLoginUser,
+    isEditMode,
     projectPlanLevel,
     selectedMarketTab,
     selectedProject?.id,
@@ -2457,8 +2496,15 @@ export default function ProjectSpaceContainer() {
   const readCurrentLevel1FocusToken = (): Level1FocusScopeToken | null => {
     const latestPlan = usePlanStore.getState()
     const latestProjectState = useProjectStore.getState()
+    const latestUi = useUiStore.getState()
     const latestProject = latestProjectState.selectedProject
     if (!latestProject || latestPlan.projectPlanLevel !== 'level1') return null
+    const tokenContext = {
+      projectId: latestProject.id,
+      currentUser: latestProjectState.currentLoginUser,
+      editMode: latestUi.isEditMode,
+      planLevel: latestPlan.projectPlanLevel,
+    }
     if (isMachineProjectType(latestProject.type)) {
       const market = latestProjectState.selectedMarketTab
       const latestVersions = getMarketVersions(
@@ -2467,8 +2513,8 @@ export default function ProjectSpaceContainer() {
         market,
         latestPlan.versions,
       )
-      return {
-        projectId: latestProject.id,
+      return createLevel1FocusScopeToken({
+        ...tokenContext,
         scopeKind: 'market',
         scopeValue: market,
         versionId: getMarketCurrentVersion(
@@ -2478,36 +2524,42 @@ export default function ProjectSpaceContainer() {
           latestVersions,
           latestPlan.currentVersion,
         ),
-      }
+      })
     }
-    if (latestProject.type !== PROJECT_TYPE_TOS_VERSION) return null
-    const selectedType = latestProjectState.selectedTosTypeTab
-    const latestTypeRows = buildTosTypeRows(
-      latestProject.versionTypes || [],
-      latestProject.versionType || '',
-      latestProjectState.tosTypeConfigsByProjectId[latestProject.id],
-    )
-    const sourceType = getTosTypePlanSourceType(latestTypeRows, selectedType, 'level1')
-    const latestVersions = getTosTypeVersions(
-      latestPlan.tosTypeVersionsByKey,
-      latestProject.id,
-      sourceType,
-      'level1',
-      VERSION_DATA,
-    )
-    return {
-      projectId: latestProject.id,
-      scopeKind: 'tos',
-      scopeValue: selectedType,
-      versionId: getTosTypeCurrentVersion(
-        latestPlan.tosTypeCurrentVersionByKey,
+    if (latestProject.type === PROJECT_TYPE_TOS_VERSION) {
+      const selectedType = latestProjectState.selectedTosTypeTab
+      const latestTypeRows = buildTosTypeRows(
+        latestProject.versionTypes || [],
+        latestProject.versionType || '',
+        latestProjectState.tosTypeConfigsByProjectId[latestProject.id],
+      )
+      const sourceType = getTosTypePlanSourceType(latestTypeRows, selectedType, 'level1')
+      const latestVersions = getTosTypeVersions(
+        latestPlan.tosTypeVersionsByKey,
         latestProject.id,
         sourceType,
         'level1',
-        latestVersions,
-        INITIAL_TOS_CURRENT_VERSION,
-      ),
+        VERSION_DATA,
+      )
+      return createLevel1FocusScopeToken({
+        ...tokenContext,
+        scopeKind: 'tos',
+        scopeValue: selectedType,
+        versionId: getTosTypeCurrentVersion(
+          latestPlan.tosTypeCurrentVersionByKey,
+          latestProject.id,
+          sourceType,
+          'level1',
+          latestVersions,
+          INITIAL_TOS_CURRENT_VERSION,
+        ),
+      })
     }
+    return createLevel1FocusScopeToken({
+      ...tokenContext,
+      scopeKind: 'ordinary',
+      versionId: latestPlan.currentVersion,
+    })
   }
 
   const focusLevel1Violation = (
@@ -2516,12 +2568,16 @@ export default function ProjectSpaceContainer() {
     remainingAttempts = 20,
   ) => {
     if (!selectedProject) return
-    const token: Level1FocusScopeToken = {
+    const token = createLevel1FocusScopeToken({
       projectId: selectedProject.id,
-      scopeKind: isTosVersionProject ? 'tos' : 'market',
+      scopeKind: isTosVersionProject ? 'tos' : isWholeMachineProject ? 'market' : 'ordinary',
       scopeValue: isTosVersionProject ? selectedTosTypeTab : selectedMarketTab,
       versionId: currentVersion,
-    }
+      currentUser: currentLoginUser,
+      editMode: isEditMode,
+      planLevel: projectPlanLevel,
+    })
+    if (!token) return
     level1FocusRetryRef.current?.stop()
     const controller = createLevel1FocusRetryController({
       schedule: (callback, delayMs) => window.setTimeout(callback, delayMs),
