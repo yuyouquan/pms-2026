@@ -67,7 +67,7 @@ assert.deepEqual(migrated.publishedSnapshots['template::技术项目::level1::v3
 const planSource = readSource(root, 'src/stores/plan.ts')
 const configSource = readSource(root, 'src/containers/ConfigContainer.tsx')
 assert.match(planSource, /PLAN_STORE_VERSION\s*=\s*\d+/, 'plan store declares a persistence version')
-assert.equal(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]), 7, 'plan store migrates empty persisted level-one mock scopes exactly once')
+assert.equal(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]), 8, 'plan store migrates project-specific persisted level-one scopes exactly once')
 assert.match(planSource, /setTechnicalTemplateTasks/, 'plan store exposes a validating technical-template setter')
 assert.match(planSource, /validateTechnicalTemplateDepth/, 'plan store enforces technical template depth')
 assert.doesNotMatch(configSource, /publishedSnapshots\[versionId\]/, 'config snapshots never fall back across template scopes')
@@ -745,6 +745,23 @@ assert.equal(preservedNonemptyLevel1Mocks.tasks[0].taskName, '自定义全局计
 assert.equal(preservedNonemptyLevel1Mocks.configTemplateTasksByType['整机产品项目'][0].taskName, '自定义模板', 'nonempty standard templates remain user-owned')
 assert.equal(preservedNonemptyLevel1Mocks.publishedSnapshots['project::mock-machine::OP::level1::v3'][0].taskName, '自定义快照', 'nonempty project snapshots remain user-owned')
 assert.equal(preservedNonemptyLevel1Mocks.marketPlanData.OP.tasks[0].taskName, '自定义市场计划', 'nonempty market plans remain user-owned')
+const v8TechnicalSnapshot = [{ id: 'technical-v8-exact', taskName: '技术历史快照', nested: { keep: true } }]
+const v8TechnicalState = {
+  publishedSnapshots: {
+    'template::技术项目::level1::v9': v8TechnicalSnapshot,
+    'template::技术项目::tdt::v9': v8TechnicalSnapshot,
+    'project::9::technical::level1::v9': v8TechnicalSnapshot,
+  },
+  configTemplateTasksByType: {
+    [rules.TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt]: v8TechnicalSnapshot,
+  },
+}
+const migratedV8TechnicalState = planModule.migratePlanStoreState(v8TechnicalState, 7)
+assert.deepEqual(migratedV8TechnicalState.publishedSnapshots['template::技术项目::level1::v9'], v8TechnicalSnapshot, 'V8 migration leaves technical compatibility snapshots exact')
+assert.deepEqual(migratedV8TechnicalState.publishedSnapshots['template::技术项目::tdt::v9'], v8TechnicalSnapshot, 'V8 migration leaves scoped technical snapshots exact')
+assert.deepEqual(migratedV8TechnicalState.publishedSnapshots['project::9::technical::level1::v9'], v8TechnicalSnapshot, 'V8 migration leaves technical project snapshots exact')
+assert.deepEqual(migratedV8TechnicalState.configTemplateTasksByType[rules.TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt], v8TechnicalSnapshot, 'V8 migration does not rewrite technical store template data')
+assert.deepEqual(v8TechnicalState.publishedSnapshots['template::技术项目::tdt::v9'], v8TechnicalSnapshot, 'V8 technical migration does not mutate its input')
 const editedTdt = [{ ...tdtTasks[0], taskName: '用户已编辑TDT模板' }]
 const migratedFromTask10 = planModule.migratePlanStoreState({
   configTemplateTasksByType: {

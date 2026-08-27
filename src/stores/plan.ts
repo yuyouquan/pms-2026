@@ -1,11 +1,14 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import {
+  PROJECT_CATEGORY_CAPABILITY,
   PROJECT_CATEGORY_MACHINE,
   PROJECT_CATEGORY_TOS_VERSION,
   PROJECT_CATEGORY_TECH,
   PROJECT_TEMPLATE_TYPES,
+  getProjectTypeFamilyKey,
 } from '@/constants/projectTypes'
+import { initialProjects } from '@/data/projects'
 import type { GanttScaleMode } from '@/lib/ganttScale'
 import type { FollowVersionSource, MarketCurrentVersionState, MarketVersionsState } from '@/lib/marketRules'
 import type {
@@ -14,7 +17,7 @@ import type {
   TosTypeVersionsState,
 } from '@/lib/tosTypeRules'
 import type { CompareTableRow } from '@/lib/versionCompare'
-import { buildStandardLevel1Tasks } from '@/lib/level1PlanRules'
+import { buildLevel1TasksForProjectType } from '@/lib/level1PlanRules'
 import { pickScopedPlanPersistence } from '@/lib/projectSpaceLevel1Rules'
 import { cloneDefaultLevel3TemplateActivities, resolveTemplateVersionScopeForMigration } from '@/lib/level3TemplateRules'
 import { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
@@ -43,7 +46,7 @@ import type { Level3TemplateActivity } from '@/types/level3Template'
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
-export const PLAN_STORE_VERSION = 7
+export const PLAN_STORE_VERSION = 8
 export const PLAN_STORE_STORAGE_KEY = 'pms-plan-store'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -90,29 +93,34 @@ const createInitialConfigTemplateCompareScopes = () => Object.fromEntries(
   ]),
 ) as Record<string, ConfigTemplateCompareScope>
 
-export const LEVEL1_TASKS = buildStandardLevel1Tasks(true)
+export const MACHINE_LEVEL1_TASKS = buildLevel1TasksForProjectType(PROJECT_CATEGORY_MACHINE, true)
+export const TOS_LEVEL1_TASKS = buildLevel1TasksForProjectType(PROJECT_CATEGORY_TOS_VERSION, true)
+export const MACHINE_LEVEL1_TEMPLATE_TASKS = buildLevel1TasksForProjectType(PROJECT_CATEGORY_MACHINE, false)
+export const TOS_LEVEL1_TEMPLATE_TASKS = buildLevel1TasksForProjectType(PROJECT_CATEGORY_TOS_VERSION, false)
 
-// 配置中心模板专用：只保留结构字段，清空日期/工期/实际/状态/进度
-export const LEVEL1_TEMPLATE_TASKS = buildStandardLevel1Tasks(false).map(t => ({
-  ...t,
-  defaultRoadmap: !!t.parentId,
-  role: t.parentId ? 'SPM' : '',
-  responsible: t.parentId ? 'SPM' : '',
-  planStartDate: '', planEndDate: '', estimatedDays: 0,
-  actualStartDate: '', actualEndDate: '', actualDays: 0,
-  status: '未开始', progress: 0,
-}))
+const cloneLevel1Tasks = (tasks: readonly any[]) => tasks.map(task => ({ ...task }))
+
+export const getDefaultLevel1TasksForProjectType = (
+  projectType: string,
+  withMockDates = true,
+) => cloneLevel1Tasks(
+  getProjectTypeFamilyKey(projectType) === PROJECT_CATEGORY_TOS_VERSION
+    ? (withMockDates ? TOS_LEVEL1_TASKS : TOS_LEVEL1_TEMPLATE_TASKS)
+    : (withMockDates ? MACHINE_LEVEL1_TASKS : MACHINE_LEVEL1_TEMPLATE_TASKS),
+)
+
+// Whole-machine compatibility exports for legacy standalone surfaces.
+export const LEVEL1_TASKS = MACHINE_LEVEL1_TASKS
+export const LEVEL1_TEMPLATE_TASKS = MACHINE_LEVEL1_TEMPLATE_TASKS
 
 export const TEMPLATE_PROJECT_TYPES = PROJECT_TEMPLATE_TYPES
-
-const cloneLevel1TemplateTasks = () => LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
 
 export const createInitialTemplatePublishedSnapshots = (
   versionId = 'v3',
 ): Record<string, any[]> => {
   const snapshots = TEMPLATE_PROJECT_TYPES.reduce((result, projectType) => {
     if (projectType !== PROJECT_CATEGORY_TECH) {
-      result[getTemplateSnapshotKey(projectType, versionId)] = cloneLevel1TemplateTasks()
+      result[getTemplateSnapshotKey(projectType, versionId)] = getDefaultLevel1TasksForProjectType(projectType, false)
     }
     return result
   }, {} as Record<string, any[]>)
@@ -131,13 +139,202 @@ const createInitialLevel3TemplateTasks = (): Record<string, Level3TemplateActivi
 
 const createInitialConfigTemplateTasks = () => {
   const templates = TEMPLATE_PROJECT_TYPES.reduce((result, projectType) => {
-    if (projectType !== PROJECT_CATEGORY_TECH) result[projectType] = cloneLevel1TemplateTasks()
+    if (projectType !== PROJECT_CATEGORY_TECH) {
+      result[projectType] = getDefaultLevel1TasksForProjectType(projectType, false)
+    }
     return result
   }, {} as Record<string, any[]>)
   templates[PROJECT_CATEGORY_TECH] = buildTdtTemplateTasks()
   templates[TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt] = buildTdtTemplateTasks()
   templates[TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject] = buildSubprojectTemplateTasks()
   return templates
+}
+
+const normalizeLevel1MigrationName = (value: unknown) => String(value || '')
+  .trim()
+  .replace(/\s+/g, '')
+  .toUpperCase()
+
+const LEVEL1_STABLE_SEMANTICS: Record<string, string> = {
+  'machine-stage-concept': 'stage-concept',
+  'tos-stage-concept': 'stage-concept',
+  'stage-concept': 'stage-concept',
+  'machine-ms-concept-kickoff': 'ms-concept-kickoff',
+  'tos-ms-concept-kickoff': 'ms-concept-kickoff',
+  'milestone-concept-start': 'ms-concept-kickoff',
+  'machine-ms-str1': 'ms-str1',
+  'tos-ms-str1': 'ms-str1',
+  'milestone-str1': 'ms-str1',
+  'machine-stage-planning': 'stage-plan',
+  'tos-stage-plan': 'stage-plan',
+  'stage-plan': 'stage-plan',
+  'machine-ms-str2': 'ms-str2',
+  'tos-ms-str2': 'ms-str2',
+  'milestone-str2': 'ms-str2',
+  'machine-ms-str3': 'ms-str3',
+  'tos-ms-str3': 'ms-str3',
+  'milestone-str3': 'ms-str3',
+  'machine-stage-development': 'stage-development',
+  'tos-stage-development-validation': 'stage-development',
+  'stage-development': 'stage-development',
+  'machine-ms-str4': 'ms-str4',
+  'tos-ms-str4': 'ms-str4',
+  'milestone-str4': 'ms-str4',
+  'machine-ms-str4a': 'ms-str4a',
+  'tos-ms-str4a': 'ms-str4a',
+  'milestone-str4a': 'ms-str4a',
+  'machine-stage-validation': 'stage-validation',
+  'machine-ms-str5': 'ms-str5',
+  'tos-ms-str5': 'ms-str5',
+  'milestone-str5': 'ms-str5',
+  'machine-stage-launch': 'stage-launch',
+  'tos-stage-launch-iteration': 'stage-launch',
+  'stage-launch': 'stage-launch',
+  'machine-stage-lifecycle': 'stage-maintenance',
+  'tos-stage-maintenance': 'stage-maintenance',
+  'tos-stage-planning': 'stage-planning',
+  'tos-ms-planning-ko': 'ms-planning-ko',
+  'tos-ms-cdcp': 'ms-cdcp',
+  'milestone-close': 'legacy-close',
+}
+
+const LEVEL1_NAME_SEMANTICS: Record<string, string> = {
+  '概念': 'stage-concept',
+  '概念阶段': 'stage-concept',
+  '概念启动': 'ms-concept-kickoff',
+  STR1: 'ms-str1',
+  '计划': 'stage-plan',
+  '计划阶段': 'stage-plan',
+  STR2: 'ms-str2',
+  STR3: 'ms-str3',
+  '开发验证': 'stage-development',
+  '开发验证阶段': 'stage-development',
+  '开发阶段': 'stage-development',
+  STR4: 'ms-str4',
+  STR4A: 'ms-str4a',
+  '验证阶段': 'stage-validation',
+  STR5: 'ms-str5',
+  '上市保障': 'stage-launch',
+  '上市收编阶段': 'stage-launch',
+  '上市阶段': 'stage-launch',
+  '上市迭代阶段': 'stage-launch',
+  '生命周期阶段': 'stage-maintenance',
+  '维护阶段': 'stage-maintenance',
+  '规划阶段': 'stage-planning',
+  '规划KO': 'ms-planning-ko',
+  CDCP: 'ms-cdcp',
+  '收编完成': 'legacy-close',
+}
+
+const getStableLevel1Semantic = (task: any) => (
+  LEVEL1_STABLE_SEMANTICS[String(task?.stableId || '')]
+)
+
+const getNamedLevel1Semantic = (task: any) => (
+  LEVEL1_NAME_SEMANTICS[normalizeLevel1MigrationName(task?.taskName)]
+)
+
+const getLevel1Semantic = (task: any) => (
+  getStableLevel1Semantic(task) || getNamedLevel1Semantic(task)
+)
+
+const isRecognizedLevel1Seed = (tasks: any[]) => {
+  const fixedTasks = tasks.filter(task => task?.source !== 'custom')
+  if (fixedTasks.length < 8 || fixedTasks.some(task => !getLevel1Semantic(task))) return false
+  const semantics = new Set(fixedTasks.map(getLevel1Semantic))
+  return ['stage-concept', 'stage-plan', 'stage-development', 'stage-launch', 'ms-concept-kickoff', 'ms-str1', 'ms-str2', 'ms-str3']
+    .every(semantic => semantics.has(semantic))
+}
+
+const LEVEL1_DATE_FIELDS = ['planStartDate', 'planEndDate', 'actualStartDate', 'actualEndDate'] as const
+
+/** Conservatively replaces only confirmed shared/default seeds and preserves user-owned arrays. */
+export const migrateLevel1TasksForProjectType = (
+  tasks: unknown,
+  projectType: string,
+  withMockDates: boolean,
+): any[] => {
+  const defaults = getDefaultLevel1TasksForProjectType(projectType, withMockDates)
+  if (!Array.isArray(tasks) || tasks.length === 0) return defaults
+  const input = tasks.map(task => ({ ...task }))
+  if (!isRecognizedLevel1Seed(input)) return input
+
+  const fixedTasks = input.filter(task => task?.source !== 'custom')
+  const usedSources = new Set<any>()
+  const migratedDefaults = defaults.map(defaultTask => {
+    const semantic = getStableLevel1Semantic(defaultTask)
+    const sourceTask = fixedTasks.find(task => !usedSources.has(task) && task?.stableId === defaultTask.stableId)
+      || fixedTasks.find(task => !usedSources.has(task) && getStableLevel1Semantic(task) === semantic)
+      || fixedTasks.find(task => !usedSources.has(task) && getNamedLevel1Semantic(task) === semantic)
+    if (!sourceTask) return { ...defaultTask }
+    usedSources.add(sourceTask)
+    const merged = {
+      ...defaultTask,
+      ...sourceTask,
+      id: defaultTask.id,
+      stableId: defaultTask.stableId,
+      parentId: defaultTask.parentId,
+      order: defaultTask.order,
+      taskName: defaultTask.taskName,
+      source: defaultTask.source,
+      nodeKind: defaultTask.nodeKind,
+      defaultRoadmap: defaultTask.defaultRoadmap,
+    }
+    LEVEL1_DATE_FIELDS.forEach(field => {
+      if (!sourceTask[field] && defaultTask[field]) merged[field] = defaultTask[field]
+    })
+    return merged
+  })
+
+  const targetBySemantic = new Map(migratedDefaults.map(task => [getStableLevel1Semantic(task), task]))
+  const sourceById = new Map(input.map(task => [task?.id, task]))
+  const customTasks = input.filter(task => task?.source === 'custom').map(task => {
+    const parent = sourceById.get(task.parentId)
+    const migratedParent = parent ? targetBySemantic.get(getLevel1Semantic(parent)) : undefined
+    return {
+      ...task,
+      ...(migratedParent ? { parentId: migratedParent.id } : {}),
+    }
+  })
+  return [...migratedDefaults, ...customTasks]
+}
+
+const INITIAL_LEVEL1_PROJECT_TYPES_BY_ID = Object.fromEntries(initialProjects.map(project => [
+  String(project.id),
+  getProjectTypeFamilyKey(project.type),
+])) as Record<string, string>
+
+const migratePublishedLevel1Snapshot = (key: string, value: unknown) => {
+  if (!Array.isArray(value)) return value
+  const templateMatch = /^template::([^:]+)::level1::([^:]+)$/.exec(key)
+  if (templateMatch) {
+    const projectType = getProjectTypeFamilyKey(templateMatch[1])
+    if ([PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TOS_VERSION, PROJECT_CATEGORY_CAPABILITY].includes(projectType as any)) {
+      return migrateLevel1TasksForProjectType(value, projectType, false)
+    }
+    return value
+  }
+
+  const projectMatch = /^project::([^:]+)::/.exec(key)
+  const knownProjectType = projectMatch ? INITIAL_LEVEL1_PROJECT_TYPES_BY_ID[projectMatch[1]] : undefined
+  if (knownProjectType === PROJECT_CATEGORY_TECH) return value
+
+  if (/^project::[^:]+::tos-type::[^:]+::level1::[^:]+::snapshot$/.test(key)) {
+    if (knownProjectType && knownProjectType !== PROJECT_CATEGORY_TOS_VERSION) return value
+    return migrateLevel1TasksForProjectType(value, PROJECT_CATEGORY_TOS_VERSION, true)
+  }
+  if (/^project::[^:]+::[^:]+::level1::[^:]+$/.test(key)) {
+    if (knownProjectType && knownProjectType !== PROJECT_CATEGORY_MACHINE) return value
+    return migrateLevel1TasksForProjectType(value, PROJECT_CATEGORY_MACHINE, true)
+  }
+  const ordinaryProjectMatch = /^project::([^:]+)::level1::[^:]+$/.exec(key)
+  if (ordinaryProjectMatch) {
+    const projectType = INITIAL_LEVEL1_PROJECT_TYPES_BY_ID[ordinaryProjectMatch[1]]
+    if ([PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TOS_VERSION, PROJECT_CATEGORY_CAPABILITY].includes(projectType as any)) {
+      return migrateLevel1TasksForProjectType(value, projectType, true)
+    }
+  }
+  return value
 }
 
 export const migratePlanStoreState = (persistedState: unknown, persistedVersion = 0) => {
@@ -151,35 +348,24 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
   const migrated = persistedVersion < 6
     ? migrateTechnicalSubprojectSeedState(numberedMigrated)
     : numberedMigrated
-  const shouldRepairEmptyLevel1Mocks = persistedVersion < 7
+  const shouldMigrateProjectSpecificLevel1 = persistedVersion < 8
+  const shouldBackfillDemoMarkets = persistedVersion < 7
   const standardTemplateTypes = PROJECT_TEMPLATE_TYPES.filter(projectType => projectType !== PROJECT_CATEGORY_TECH)
-  const shouldReplaceLegacyStandardTasks = (tasks: unknown) => (
-    Array.isArray(tasks)
-    && tasks.some(task => ['概念', '计划', '开发验证', '上市保障'].includes(String(task?.taskName || '')))
-  )
-  const migrateStandardTasks = (tasks: unknown, withMockDates: boolean, repairEmpty = false) => {
-    if (repairEmpty && Array.isArray(tasks) && tasks.length === 0) return buildStandardLevel1Tasks(withMockDates)
-    if (!shouldReplaceLegacyStandardTasks(tasks)) return tasks
-    const customTasks = (tasks as any[]).filter(task => task?.source === 'custom')
-    return [...buildStandardLevel1Tasks(withMockDates), ...customTasks.map(task => ({ ...task, source: 'custom' }))]
-  }
   const migratedConfigTemplates = { ...(migrated.configTemplateTasksByType || {}) }
   standardTemplateTypes.forEach(projectType => {
-    migratedConfigTemplates[projectType] = migrateStandardTasks(
-      migratedConfigTemplates[projectType],
-      false,
-      shouldRepairEmptyLevel1Mocks,
-    ) || cloneLevel1TemplateTasks()
+    if (shouldMigrateProjectSpecificLevel1) {
+      migratedConfigTemplates[projectType] = migrateLevel1TasksForProjectType(
+        migratedConfigTemplates[projectType],
+        projectType,
+        false,
+      )
+    } else if (!Array.isArray(migratedConfigTemplates[projectType])) {
+      migratedConfigTemplates[projectType] = getDefaultLevel1TasksForProjectType(projectType, false)
+    }
   })
   const migratedSnapshots = Object.fromEntries(Object.entries(migrated.publishedSnapshots || {}).map(([key, value]) => [
     key,
-    key.includes(PROJECT_CATEGORY_TECH)
-      ? value
-      : migrateStandardTasks(
-          value,
-          key.startsWith('project::'),
-          shouldRepairEmptyLevel1Mocks && key.includes('::level1::'),
-        ),
+    shouldMigrateProjectSpecificLevel1 ? migratePublishedLevel1Snapshot(key, value) : value,
   ])) as Record<string, any[]>
   const initialPublishedSnapshots = createInitialTemplatePublishedSnapshots()
   Object.entries(initialPublishedSnapshots).forEach(([key, value]) => {
@@ -195,20 +381,38 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
     }
   })
   const fallbackMarketPlanData = Object.fromEntries(['OP', 'TR', 'RU'].map(market => [market, {
-    tasks: buildStandardLevel1Tasks(true),
+    tasks: getDefaultLevel1TasksForProjectType(PROJECT_CATEGORY_MACHINE, true),
     level2Tasks: [],
     createdLevel2Plans: [...FIXED_LEVEL2_PLANS],
   }]))
-  const marketPlanSource = shouldRepairEmptyLevel1Mocks
+  const marketPlanSource = shouldBackfillDemoMarkets
     ? { ...fallbackMarketPlanData, ...(migrated.marketPlanData || {}) }
     : (migrated.marketPlanData || {})
   const migratedMarketPlanData = Object.fromEntries(Object.entries(marketPlanSource).map(([market, value]) => {
     const planData = value as Record<string, any>
     return [market, {
       ...planData,
-      tasks: migrateStandardTasks(planData.tasks, true, shouldRepairEmptyLevel1Mocks),
+      tasks: shouldMigrateProjectSpecificLevel1
+        ? migrateLevel1TasksForProjectType(planData.tasks, PROJECT_CATEGORY_MACHINE, true)
+        : planData.tasks,
     }]
   }))
+  const migratedTosTypePlanDataByProjectId = Object.fromEntries(
+    Object.entries(migrated.tosTypePlanDataByProjectId || {}).map(([projectId, projectData]) => [
+      projectId,
+      Object.fromEntries(Object.entries(projectData as Record<string, any>).map(([type, planData]) => [
+        type,
+        planData && typeof planData === 'object'
+          ? {
+              ...planData,
+              level1Tasks: shouldMigrateProjectSpecificLevel1
+                ? migrateLevel1TasksForProjectType(planData.level1Tasks, PROJECT_CATEGORY_TOS_VERSION, true)
+                : planData.level1Tasks,
+            }
+          : planData,
+      ])),
+    ]),
+  )
   const initialScopes = createInitialConfigTemplateVersionScopes()
   const legacyVersions = Array.isArray(migrated.versions)
     ? migrated.versions.map((version: any) => ({ ...version }))
@@ -230,8 +434,11 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
   }))
   return {
     ...migrated,
-    tasks: migrateStandardTasks(migrated.tasks, true, shouldRepairEmptyLevel1Mocks) || buildStandardLevel1Tasks(true),
+    tasks: shouldMigrateProjectSpecificLevel1
+      ? migrateLevel1TasksForProjectType(migrated.tasks, PROJECT_CATEGORY_MACHINE, true)
+      : migrated.tasks,
     marketPlanData: migratedMarketPlanData,
+    tosTypePlanDataByProjectId: migratedTosTypePlanDataByProjectId,
     publishedSnapshots: migratedSnapshots,
     configTemplateTasksByType: migratedConfigTemplates,
     level3TemplateTasksByType,
@@ -578,35 +785,11 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
   compareFilterType: 'all',
 
   // Market plan data — 整机产品项目按市场维度维护独立的计划数据
-  marketPlanData: {
-    'OP': { tasks: [...LEVEL1_TASKS], level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] },
-    'TR': {
-      tasks: [
-        { id: '1', order: 1, taskName: '概念', status: '已完成', progress: 100, responsible: '赵六', predecessor: '', planStartDate: '2026-02-01', planEndDate: '2026-02-20', estimatedDays: 20, actualStartDate: '2026-02-01', actualEndDate: '2026-02-19', actualDays: 19 },
-        { id: '1.1', parentId: '1', order: 1, taskName: '概念启动', status: '已完成', progress: 100, responsible: '赵六', predecessor: '', planStartDate: '2026-02-01', planEndDate: '2026-02-10', estimatedDays: 10, actualStartDate: '2026-02-01', actualEndDate: '2026-02-10', actualDays: 10 },
-        { id: '1.2', parentId: '1', order: 2, taskName: 'STR1', status: '已完成', progress: 100, responsible: '孙七', predecessor: '1.1', planStartDate: '2026-02-11', planEndDate: '2026-02-20', estimatedDays: 10, actualStartDate: '2026-02-11', actualEndDate: '2026-02-19', actualDays: 9 },
-        { id: '2', order: 2, taskName: '计划', status: '进行中', progress: 40, responsible: '赵六', predecessor: '1.2', planStartDate: '2026-02-21', planEndDate: '2026-03-20', estimatedDays: 28, actualStartDate: '2026-02-21', actualEndDate: '', actualDays: 0 },
-        { id: '2.1', parentId: '2', order: 1, taskName: 'STR2', status: '进行中', progress: 40, responsible: '孙七', predecessor: '1.2', planStartDate: '2026-02-21', planEndDate: '2026-03-05', estimatedDays: 13, actualStartDate: '2026-02-21', actualEndDate: '', actualDays: 0 },
-        { id: '2.2', parentId: '2', order: 2, taskName: 'STR3', status: '未开始', progress: 0, responsible: '周八', predecessor: '2.1', planStartDate: '2026-03-06', planEndDate: '2026-03-20', estimatedDays: 15, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-        { id: '3', order: 3, taskName: '开发验证', status: '未开始', progress: 0, responsible: '', predecessor: '2.2', planStartDate: '2026-03-21', planEndDate: '2026-04-20', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-        { id: '4', order: 4, taskName: '上市保障', status: '未开始', progress: 0, responsible: '', predecessor: '3', planStartDate: '2026-04-21', planEndDate: '2026-05-20', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-      ],
-      level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS],
-    },
-    'RU': {
-      tasks: [
-        { id: '1', order: 1, taskName: '概念', status: '已完成', progress: 100, responsible: '周八', predecessor: '', planStartDate: '2026-03-01', planEndDate: '2026-03-15', estimatedDays: 15, actualStartDate: '2026-03-01', actualEndDate: '2026-03-14', actualDays: 14 },
-        { id: '1.1', parentId: '1', order: 1, taskName: '概念启动', status: '已完成', progress: 100, responsible: '周八', predecessor: '', planStartDate: '2026-03-01', planEndDate: '2026-03-08', estimatedDays: 8, actualStartDate: '2026-03-01', actualEndDate: '2026-03-07', actualDays: 7 },
-        { id: '1.2', parentId: '1', order: 2, taskName: 'STR1', status: '已完成', progress: 100, responsible: '吴九', predecessor: '1.1', planStartDate: '2026-03-09', planEndDate: '2026-03-15', estimatedDays: 7, actualStartDate: '2026-03-08', actualEndDate: '2026-03-14', actualDays: 7 },
-        { id: '2', order: 2, taskName: '计划', status: '未开始', progress: 0, responsible: '周八', predecessor: '1.2', planStartDate: '2026-03-16', planEndDate: '2026-04-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-        { id: '2.1', parentId: '2', order: 1, taskName: 'STR2', status: '未开始', progress: 0, responsible: '周八', predecessor: '1.2', planStartDate: '2026-03-16', planEndDate: '2026-03-31', estimatedDays: 16, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-        { id: '2.2', parentId: '2', order: 2, taskName: 'STR3', status: '未开始', progress: 0, responsible: '吴九', predecessor: '2.1', planStartDate: '2026-04-01', planEndDate: '2026-04-15', estimatedDays: 15, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-        { id: '3', order: 3, taskName: '开发验证', status: '未开始', progress: 0, responsible: '', predecessor: '2.2', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-        { id: '4', order: 4, taskName: '上市保障', status: '未开始', progress: 0, responsible: '', predecessor: '3', planStartDate: '2026-05-16', planEndDate: '2026-06-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-      ],
-      level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS],
-    },
-  },
+  marketPlanData: Object.fromEntries(['OP', 'TR', 'RU'].map(market => [market, {
+    tasks: getDefaultLevel1TasksForProjectType(PROJECT_CATEGORY_MACHINE, true),
+    level2Tasks: [],
+    createdLevel2Plans: [...FIXED_LEVEL2_PLANS],
+  }])),
   marketFollowVersionMeta: {},
   marketVersionsByKey: {},
   marketCurrentVersionByKey: {},

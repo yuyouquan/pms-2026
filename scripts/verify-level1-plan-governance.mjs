@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
+import { loadTypeScriptModule } from './lib/source-contract.mjs'
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const rulesPath = path.join(root, 'src/lib/level1PlanRules.ts')
@@ -762,6 +763,163 @@ const configSource = read('src/containers/ConfigContainer.tsx')
 const projectSpaceSource = read('src/containers/ProjectSpaceContainer.tsx')
 const technicalModuleSource = read('src/components/technical-project/TechnicalPlanModule.tsx')
 const compareModalSource = read('src/components/plans/PlanVersionCompareModal.tsx')
+const plan = loadTypeScriptModule(root, 'src/stores/plan.ts')
+
+assert.equal(plan.PLAN_STORE_VERSION, 8, 'plan persistence upgrades project-specific level-one seeds to V8')
+assert.deepEqual(plan.MACHINE_LEVEL1_TASKS, rules.buildMachineLevel1Tasks(true), 'plan store exports the dated machine seed')
+assert.deepEqual(plan.TOS_LEVEL1_TASKS, rules.buildTosLevel1Tasks(true), 'plan store exports the dated tOS seed')
+assert.deepEqual(plan.MACHINE_LEVEL1_TEMPLATE_TASKS, rules.buildMachineLevel1Tasks(false), 'plan store exports the undated machine template')
+assert.deepEqual(plan.TOS_LEVEL1_TEMPLATE_TASKS, rules.buildTosLevel1Tasks(false), 'plan store exports the undated tOS template')
+const firstDefaultTosTasks = plan.getDefaultLevel1TasksForProjectType('tOS版本项目', false)
+const secondDefaultTosTasks = plan.getDefaultLevel1TasksForProjectType('tOS版本项目', false)
+assert.notStrictEqual(firstDefaultTosTasks, secondDefaultTosTasks, 'default level-one tasks clone the array on every call')
+assert.notStrictEqual(firstDefaultTosTasks[0], secondDefaultTosTasks[0], 'default level-one tasks clone every task on every call')
+firstDefaultTosTasks[0].taskName = '仅修改副本'
+assert.equal(secondDefaultTosTasks[0].taskName, '规划阶段', 'mutating a returned default never contaminates later callers')
+
+const rootNames = tasks => tasks.filter(task => !task.parentId).map(task => task.taskName)
+assert.deepEqual(
+  rootNames(plan.getDefaultLevel1TasksForProjectType('整机产品项目', false)),
+  ['概念阶段', '计划阶段', '开发阶段', '验证阶段', '上市阶段', '生命周期阶段'],
+  'machine defaults use the approved stages',
+)
+assert.deepEqual(
+  rootNames(plan.getDefaultLevel1TasksForProjectType('tOS版本项目', false)),
+  ['规划阶段', '概念阶段', '计划阶段', '开发验证阶段', '上市迭代阶段', '维护阶段'],
+  'tOS defaults use the approved stages',
+)
+assert.deepEqual(
+  plan.migrateLevel1TasksForProjectType([], 'tOS版本项目', false),
+  plan.TOS_LEVEL1_TEMPLATE_TASKS,
+  'empty tOS templates migrate to the tOS seed',
+)
+
+const legacySharedTosSeed = structuredClone(plan.LEVEL1_TASKS)
+const legacyLaunch = legacySharedTosSeed.find(task => task.stableId === 'machine-stage-launch')
+legacyLaunch.stableId = 'stage-launch'
+legacyLaunch.taskName = '上市收编阶段'
+const stableMapped = legacySharedTosSeed.find(task => task.stableId === 'machine-ms-str2')
+stableMapped.stableId = 'milestone-str2'
+stableMapped.planEndDate = '2031-04-08'
+stableMapped.ownerMemo = 'stable-id-date'
+const nameMapped = legacySharedTosSeed.find(task => task.stableId === 'machine-ms-str3')
+delete nameMapped.stableId
+nameMapped.taskName = ' str 3 '
+nameMapped.actualEndDate = '2031-05-09'
+nameMapped.ownerMemo = 'normalized-name-date'
+legacySharedTosSeed.push({
+  id: 'legacy-custom-launch-child',
+  stableId: 'custom-launch-child',
+  parentId: legacyLaunch.id,
+  order: 9,
+  taskName: '用户上市节点',
+  source: 'custom',
+  planStartDate: '2031-06-01',
+  planEndDate: '2031-06-02',
+  ownerMemo: 'keep-custom-fields',
+})
+const legacySharedTosInput = structuredClone(legacySharedTosSeed)
+const migratedSharedTosSeed = plan.migrateLevel1TasksForProjectType(legacySharedTosSeed, 'tOS版本项目', true)
+assert.deepEqual(legacySharedTosSeed, legacySharedTosInput, 'level-one task migration never mutates its input')
+assert.equal(migratedSharedTosSeed.find(task => task.stableId === 'tos-ms-str2').planEndDate, '2031-04-08', 'fixed dates map by stable ID before names')
+assert.equal(migratedSharedTosSeed.find(task => task.stableId === 'tos-ms-str2').ownerMemo, 'stable-id-date', 'recognized fixed-node user fields survive stable-ID migration')
+assert.equal(migratedSharedTosSeed.find(task => task.stableId === 'tos-ms-str3').actualEndDate, '2031-05-09', 'fixed dates fall back to normalized task names')
+assert.equal(migratedSharedTosSeed.find(task => task.stableId === 'tos-ms-str3').ownerMemo, 'normalized-name-date', 'recognized fixed-node user fields survive name fallback')
+const migratedTosLaunch = migratedSharedTosSeed.find(task => task.stableId === 'tos-stage-launch-iteration')
+assert.equal(migratedTosLaunch.taskName, '上市迭代阶段', 'legacy launch aliases map to the approved tOS launch stage')
+assert.deepEqual(
+  migratedSharedTosSeed.find(task => task.stableId === 'custom-launch-child'),
+  { ...legacySharedTosInput.at(-1), parentId: migratedTosLaunch.id },
+  'custom launch children retain their stable ID, dates, and custom fields under the mapped parent',
+)
+assert.deepEqual(
+  plan.migrateLevel1TasksForProjectType(migratedSharedTosSeed, 'tOS版本项目', true),
+  migratedSharedTosSeed,
+  'project-specific task migration is idempotent',
+)
+
+const unknownCustomTasks = [
+  { id: 'custom-root', stableId: 'custom-root', order: 0, taskName: '概念阶段增强版', source: 'custom', nested: { keep: true } },
+  { id: 'custom-str', parentId: 'custom-root', order: 0, taskName: 'STR1', source: 'custom', planEndDate: '2032-01-01' },
+]
+const unknownCustomInput = structuredClone(unknownCustomTasks)
+assert.deepEqual(
+  plan.migrateLevel1TasksForProjectType(unknownCustomTasks, '整机产品项目', true),
+  unknownCustomInput,
+  'nonempty unknown and custom arrays remain exactly user-owned instead of matching a few names',
+)
+assert.deepEqual(unknownCustomTasks, unknownCustomInput, 'unknown custom migration also leaves the input untouched')
+
+const legacySimpleSeed = [
+  { id: '1', order: 1, taskName: '概念', planEndDate: '2030-01-01' },
+  { id: '1.1', parentId: '1', order: 1, taskName: '概念启动', planEndDate: '2030-01-02' },
+  { id: '1.2', parentId: '1', order: 2, taskName: 'STR1', planEndDate: '2030-01-03' },
+  { id: '2', order: 2, taskName: '计划' },
+  { id: '2.1', parentId: '2', order: 1, taskName: 'STR2', planEndDate: '2030-02-01' },
+  { id: '2.2', parentId: '2', order: 2, taskName: 'STR3' },
+  { id: '3', order: 3, taskName: '开发验证' },
+  { id: '4', order: 4, taskName: '上市保障' },
+]
+const migratedSimpleMachine = plan.migrateLevel1TasksForProjectType(legacySimpleSeed, '整机产品项目', true)
+assert.deepEqual(rootNames(migratedSimpleMachine), ['概念阶段', '计划阶段', '开发阶段', '验证阶段', '上市阶段', '生命周期阶段'], 'the exact legacy eight-row seed migrates to machine stages')
+assert.equal(migratedSimpleMachine.find(task => task.stableId === 'machine-ms-str2').planEndDate, '2030-02-01', 'legacy rows without stable IDs preserve fixed-node dates by name')
+
+const technicalSnapshot = [{ id: 'tech-keep', stableId: 'tech-keep', taskName: '技术快照不变', nested: { exact: true } }]
+const unknownSnapshot = [{ id: 'unknown-keep', taskName: '未知作用域不变' }]
+const persistedV7 = {
+  tasks: plan.LEVEL1_TASKS,
+  configTemplateTasksByType: {
+    '整机产品项目': plan.LEVEL1_TEMPLATE_TASKS,
+    'tOS版本项目': plan.LEVEL1_TEMPLATE_TASKS,
+  },
+  marketPlanData: {
+    OP: { tasks: plan.LEVEL1_TASKS, level2Tasks: [], createdLevel2Plans: [], marker: 'machine-market' },
+  },
+  tosTypePlanDataByProjectId: {
+    'tos-project': {
+      Full: { level1Tasks: plan.LEVEL1_TASKS, level2PlanTasks: [], level2PlanMilestones: [], createdLevel2Plans: [], activeLevel2Plan: '', level2PlanMeta: {}, versionTrainRecords: [], marker: 'tos-type' },
+    },
+  },
+  publishedSnapshots: {
+    'template::整机产品项目::level1::v3': plan.LEVEL1_TEMPLATE_TASKS,
+    'template::tOS版本项目::level1::v3': plan.LEVEL1_TEMPLATE_TASKS,
+    'template::技术项目::tdt::v3': technicalSnapshot,
+    'template::tOS版本项目::level3::v3': technicalSnapshot,
+    'project::machine-project::OP::level1::v3': plan.LEVEL1_TASKS,
+    'project::tos-project::tos-type::Full::level1::v3::snapshot': plan.LEVEL1_TASKS,
+    'project::2::level1::v3': plan.LEVEL1_TASKS,
+    'project::2::OP::level1::v3': plan.TOS_LEVEL1_TASKS,
+    'project::1::tos-type::Full::level1::v3::snapshot': plan.MACHINE_LEVEL1_TASKS,
+    'project::unknown::level1::v3': unknownSnapshot,
+    'project::tos-project::tos-type::Full::level2::v3::snapshot': technicalSnapshot,
+    'project::tos-project::tos-type::Full::level1::v3': unknownSnapshot,
+  },
+}
+const persistedV7Input = structuredClone(persistedV7)
+const migratedV8 = plan.migratePlanStoreState(persistedV7, 7)
+assert.deepEqual(persistedV7, persistedV7Input, 'V8 store migration leaves the complete persisted input untouched')
+assert.deepEqual(rootNames(migratedV8.configTemplateTasksByType['整机产品项目']), rootNames(plan.MACHINE_LEVEL1_TEMPLATE_TASKS), 'machine configuration templates use machine defaults')
+assert.deepEqual(rootNames(migratedV8.configTemplateTasksByType['tOS版本项目']), rootNames(plan.TOS_LEVEL1_TEMPLATE_TASKS), 'tOS configuration templates use tOS defaults')
+assert.deepEqual(rootNames(migratedV8.marketPlanData.OP.tasks), rootNames(plan.MACHINE_LEVEL1_TASKS), 'market data only migrates through the machine scope')
+assert.equal(migratedV8.marketPlanData.OP.marker, 'machine-market', 'market migration preserves sibling plan metadata')
+assert.deepEqual(rootNames(migratedV8.tosTypePlanDataByProjectId['tos-project'].Full.level1Tasks), rootNames(plan.TOS_LEVEL1_TASKS), 'tOS project/type data only migrates its level-one tasks')
+assert.equal(migratedV8.tosTypePlanDataByProjectId['tos-project'].Full.marker, 'tos-type', 'tOS type migration preserves sibling plan metadata')
+assert.deepEqual(rootNames(migratedV8.publishedSnapshots['project::machine-project::OP::level1::v3']), rootNames(plan.MACHINE_LEVEL1_TASKS), 'strict market snapshot keys migrate as machine plans')
+assert.deepEqual(rootNames(migratedV8.publishedSnapshots['project::tos-project::tos-type::Full::level1::v3::snapshot']), rootNames(plan.TOS_LEVEL1_TASKS), 'strict tOS type snapshot keys migrate as tOS plans')
+assert.deepEqual(rootNames(migratedV8.publishedSnapshots['project::2::level1::v3']), rootNames(plan.TOS_LEVEL1_TASKS), 'known ordinary project mock snapshots resolve the project type')
+assert.deepEqual(migratedV8.publishedSnapshots['project::2::OP::level1::v3'], plan.TOS_LEVEL1_TASKS, 'a known tOS project cannot be rewritten through a machine-market key')
+assert.deepEqual(migratedV8.publishedSnapshots['project::1::tos-type::Full::level1::v3::snapshot'], plan.MACHINE_LEVEL1_TASKS, 'a known machine project cannot be rewritten through a tOS-type key')
+assert.deepEqual(migratedV8.publishedSnapshots['template::技术项目::tdt::v3'], technicalSnapshot, 'technical template snapshots remain byte-for-data exact')
+assert.deepEqual(migratedV8.publishedSnapshots['template::tOS版本项目::level3::v3'], technicalSnapshot, 'non-level-one template snapshots remain exact')
+assert.deepEqual(migratedV8.publishedSnapshots['project::unknown::level1::v3'], unknownSnapshot, 'unknown ordinary project scopes remain exact')
+assert.deepEqual(migratedV8.publishedSnapshots['project::tos-project::tos-type::Full::level2::v3::snapshot'], technicalSnapshot, 'tOS level-two snapshot keys do not cross into level one')
+assert.deepEqual(migratedV8.publishedSnapshots['project::tos-project::tos-type::Full::level1::v3'], unknownSnapshot, 'near-match tOS snapshot keys remain exact')
+assert.deepEqual(plan.migratePlanStoreState(migratedV8, 8), migratedV8, 'the complete V8 store migration is idempotent')
+
+assert.match(configSource, /getDefaultLevel1TasksForProjectType/, 'config center imports the selected-type default helper')
+assert.doesNotMatch(configSource, /LEVEL1_TEMPLATE_TASKS/, 'config center never falls back to the generic machine template')
+assert.match(configSource, /getDefaultLevel1TasksForProjectType\(selectedTemplateType,\s*false\)/, 'config fallbacks resolve the currently selected project type')
+assert.match(configSource, /const clonedTasks = isLevel3Template[\s\S]{0,360}getDefaultLevel1TasksForProjectType\(selectedTemplateType,\s*false\)/, 'new standard revisions clone the currently selected project type')
 
 assert.match(planStoreSource, /projectPlanViewMode:\s*'horizontal'/, 'project plans default to horizontal view')
 assert.match(planStoreSource, /CONFIG_TABLE_COLUMNS[\s\S]*序号[\s\S]*任务名称[\s\S]*角色/, 'template configuration keeps sequence, task name, and role')
