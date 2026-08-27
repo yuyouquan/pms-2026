@@ -782,6 +782,44 @@ const projectSpaceActualPatch = await loadExportedConstFromSource(projectSpaceSo
 const projectSpaceFocusToken = await loadExportedConstFromSource(projectSpaceSource, 'createLevel1FocusScopeToken')
 const projectSpaceFocusRetry = await loadExportedConstFromSource(projectSpaceSource, 'createLevel1FocusRetryController')
 const projectSpaceFollowSync = await loadExportedConstFromSource(projectSpaceSource, 'preserveDetachedFollowMarketActualsAfterSync')
+const projectSpaceFollowScope = await loadExportedConstFromSource(projectSpaceSource, 'isLevel1MarketFollowActualScope')
+const projectSpaceHorizontalGroups = await loadExportedConstFromSource(projectSpaceSource, 'mergeLevel1HorizontalStageGroups')
+const mergedHorizontalGroups = projectSpaceHorizontalGroups.mergeLevel1HorizontalStageGroups([
+  {
+    stageGroups: [
+      {
+        stage: { id: '9', stableId: 'stage-launch', taskName: '上市阶段（新）' },
+        milestones: [{ id: '9.1', stableId: 'mr-1', taskName: 'MR1（新）' }],
+      },
+    ],
+  },
+  {
+    stageGroups: [
+      {
+        stage: { id: '5', stableId: 'stage-launch', taskName: '上市阶段（旧）' },
+        milestones: [
+          { id: '5.1', stableId: 'mr-1', taskName: 'MR1（旧）' },
+          { id: '5.2', stableId: 'mr-old', taskName: '历史MR' },
+        ],
+      },
+      {
+        stage: { id: '6', stableId: 'stage-lifecycle', taskName: '生命周期阶段' },
+        milestones: [],
+      },
+    ],
+  },
+])
+assert.deepEqual(
+  mergedHorizontalGroups.map(group => ({
+    stage: group.stage.taskName,
+    milestones: group.milestones.map(task => task.taskName),
+  })),
+  [
+    { stage: '上市阶段（新）', milestones: ['MR1（新）', '历史MR'] },
+    { stage: '生命周期阶段', milestones: [] },
+  ],
+  'horizontal stage columns use stable identity, prefer the newest snapshot labels, and retain historical-only stages/nodes',
+)
 for (const label of ['序号', '阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期']) {
   assert.match(projectSpaceSource, new RegExp(label), `project-space tree table contains ${label}`)
 }
@@ -1097,6 +1135,9 @@ const detachedFollowAfterRefollow = projectSpaceFollowSync.preserveDetachedFollo
   marketRowsForMainSync,
 )
 assert.deepEqual(detachedFollowAfterRefollow.TR.tasks[0], detachedFollowPatch[0], 're-follow snapshot generation restores detached actual fields from the published snapshot before main-plan merging')
+assert.equal(projectSpaceFollowScope.isLevel1MarketFollowActualScope(false, { sourceMarket: 'OP', sourceVersionId: 'v4' }), true, 'a persisted scoped follow-version source preserves follow actual semantics after same-context reopen')
+assert.equal(projectSpaceFollowScope.isLevel1MarketFollowActualScope(false, undefined), false, 'an explicitly detached market without a scoped follow-version source remains independent')
+assert.equal(projectSpaceFollowScope.isLevel1MarketFollowActualScope(true, undefined), true, 'the live market configuration remains the primary follow signal')
 assert.match(projectSpaceSource, /newlyFollowedMarkets[\s\S]{0,1800}publishedSnapshots\[getProjectMarketSnapshotKey/, 're-follow materialization consults the latest published market snapshot for detached actual fields')
 const marketComparisonEffective = [{ id: 'effective', taskName: '当前市场', planEndDate: '2026-03-20' }]
 const marketComparisonV2 = [{ id: 'concept', taskName: '概念启动', actualEndDate: '2026-02-26' }]
@@ -1209,5 +1250,46 @@ const collidingDisplayIdCompare = compareModule.compareVersionsForTable(
 )
 assert.equal(collidingDisplayIdCompare.length, 3, 'a literal x#1 ID cannot collide with repeated x identities')
 assert.equal(new Set(collidingDisplayIdCompare.map(row => row.key)).size, 3, 'namespaced indexed ID keys remain unique for collision-prone display IDs')
+
+const governedHistoryBase = {
+  ...milestones[1],
+  id: '2.3',
+  stableId: 'governed-history-node',
+  order: 3,
+  sequence: 3,
+  taskName: '旧节点',
+  planStartDate: '2026-01-01',
+  planEndDate: '2026-01-02',
+  actualStartDate: '2026-01-03',
+  actualEndDate: '2026-01-04',
+}
+const governedReorderOnly = compareModule.compareVersionsForTable(
+  [governedHistoryBase],
+  [{ ...governedHistoryBase, id: '8.9', order: 99, sequence: 99 }],
+)
+assert.deepEqual(governedReorderOnly.map(row => row.changeType), ['未变更'], 'pure display reorder is not a governed history change when stable identity is unchanged')
+const governedRenameAndDates = compareModule.compareVersionsForTable(
+  [governedHistoryBase],
+  [{
+    ...governedHistoryBase,
+    id: '1.1',
+    taskName: '新节点',
+    planStartDate: '2026-02-01',
+    planEndDate: '2026-02-02',
+    actualStartDate: '2026-02-03',
+    actualEndDate: '2026-02-04',
+  }],
+)
+assert.equal(governedRenameAndDates[0].changeType, '修改', 'a governed node rename and date edits stay on one stable history row')
+assert.deepEqual(
+  governedRenameAndDates[0].fieldDiffs.filter(diff => ['taskName', 'planStartDate', 'planEndDate', 'actualStartDate', 'actualEndDate'].includes(diff.field)).map(diff => diff.field),
+  ['taskName', 'planStartDate', 'planEndDate', 'actualStartDate', 'actualEndDate'],
+  'governed history exposes the node rename and all four date changes',
+)
+const governedAddDelete = compareModule.compareVersionsForTable(
+  [governedHistoryBase, { ...governedHistoryBase, id: 'old-only', stableId: 'old-only', taskName: '删除节点' }],
+  [governedHistoryBase, { ...governedHistoryBase, id: 'new-only', stableId: 'new-only', taskName: '新增节点' }],
+)
+assert.deepEqual(governedAddDelete.filter(row => row.changeType !== '未变更').map(row => row.changeType).sort(), ['删除', '新增'], 'governed add/delete nodes remain visible')
 
 console.log('PASS level1 flat milestone and gantt rules')

@@ -5,12 +5,16 @@
  * a fresh browser context so persisted drafts cannot hide regressions.
  */
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import puppeteer from 'puppeteer'
+import * as XLSX from 'xlsx'
 
 const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const TIMEOUT = Number(process.env.PMS_BROWSER_TIMEOUT || 30_000)
 const ONLY_CASE = process.env.PMS_BROWSER_CASE || ''
-const VALID_BROWSER_CASES = new Set(['', 'all', 'machine', 'machine-structure', 'machine-reorder', 'machine-invalid', 'machine-follow-actual', 'machine-permission', 'tos', 'technical'])
+const VALID_BROWSER_CASES = new Set(['', 'all', 'machine', 'machine-surface', 'machine-summary', 'machine-structure', 'machine-reorder', 'machine-invalid', 'machine-follow-actual', 'machine-permission', 'tos', 'tos-surface', 'technical'])
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 const isAllowedConsoleMessage = message => {
   const text = message.text()
@@ -21,7 +25,7 @@ const isAllowedConsoleMessage = message => {
 }
 
 if (!VALID_BROWSER_CASES.has(ONLY_CASE)) {
-  throw new Error(`unknown PMS_BROWSER_CASE=${JSON.stringify(ONLY_CASE)}; expected all, machine, machine-structure, machine-reorder, machine-invalid, machine-follow-actual, machine-permission, tos, or technical`)
+  throw new Error(`unknown PMS_BROWSER_CASE=${JSON.stringify(ONLY_CASE)}; expected all, machine, machine-surface, machine-summary, machine-structure, machine-reorder, machine-invalid, machine-follow-actual, machine-permission, tos, tos-surface, or technical`)
 }
 
 const clickExact = async (page, text, selector = 'button,[role="menuitem"],[role="tab"],td,div,span,label') => {
@@ -193,6 +197,84 @@ const clickAriaButton = async (page, label) => {
 }
 
 const textOf = async (page, selector) => page.$eval(selector, element => element.textContent || '')
+const readLatestPublishedSummary = async page => page.$eval('[aria-label="一级计划最新发布摘要"]', element => Object.fromEntries(
+  [...element.querySelectorAll('[data-summary-field]')].map(node => [
+    node.getAttribute('data-summary-field'),
+    node.querySelector('div:last-child')?.textContent?.trim() || '-',
+  ]),
+))
+const readTreeSummary = async (page, table) => page.$eval(table, element => {
+  const values = field => [...element.querySelectorAll(`tbody td[data-field="${field}"]`)]
+    .map(cell => cell.querySelector('input')?.value || cell.textContent?.trim() || '')
+    .filter(value => /^\d{4}-\d{2}-\d{2}$/.test(value))
+    .sort()
+  const planStarts = values('planStartDate')
+  const planEnds = values('planEndDate')
+  const actualStarts = values('actualStartDate')
+  const actualEnds = values('actualEndDate')
+  return {
+    planStartDate: planStarts[0] || '-',
+    planEndDate: planEnds.at(-1) || '-',
+    actualStartDate: actualStarts[0] || '-',
+    actualEndDate: actualEnds.at(-1) || '-',
+  }
+})
+const treeBoundaryTask = async (page, table, field, boundary) => page.$eval(table, (element, input) => {
+  const candidates = [...element.querySelectorAll('tbody tr')].flatMap(row => {
+    const cell = row.querySelector(`td[data-field="${input.field}"]`)
+    if (!cell?.querySelector('input')) return []
+    const value = cell?.querySelector('input')?.value || cell?.textContent?.trim() || ''
+    const name = row.querySelectorAll('td')[1]?.textContent?.trim() || ''
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) && name ? [{ name, value }] : []
+  }).sort((left, right) => left.value.localeCompare(right.value))
+  return input.boundary === 'min' ? candidates[0] : candidates.at(-1)
+}, { field, boundary })
+const assertHorizontalStageHeader = async (page, stageName, { dynamic }) => {
+  const stage = await page.$eval('[aria-label="一级计划横版"]', (table, input) => {
+    const header = [...table.querySelectorAll('thead tr:first-child th')]
+      .find(node => node.textContent?.includes(input.stageName))
+    const label = header?.querySelector('[data-stage-label]')
+    if (!header || !label) return null
+    return {
+      text: header.textContent?.replace(/\s+/g, '') || '',
+      tagCount: header.querySelectorAll('.ant-tag').length,
+      textAlign: getComputedStyle(label).textAlign,
+    }
+  }, { stageName })
+  assert.ok(stage, `horizontal stage ${stageName} is visible`)
+  assert.equal(stage.textAlign, 'center', `${stageName} label is centered`)
+  if (dynamic) {
+    assert.equal(stage.tagCount, 0, `${stageName} dynamic business stage omits duration badge`)
+    assert.doesNotMatch(stage.text, /\d+天/, `${stageName} dynamic business stage omits duration text`)
+  } else {
+    assert.equal(stage.tagCount, 1, `${stageName} fixed stage keeps one duration badge`)
+  }
+}
+const downloadPlanWorkbook = async (page, scopeLabel) => {
+  const downloadDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'pms-level1-export-'))
+  const session = await page.createCDPSession()
+  try {
+    await session.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: downloadDirectory })
+    await clickAriaButton(page, '导出计划')
+    await page.waitForSelector('.ant-dropdown:not(.ant-dropdown-hidden)', { timeout: TIMEOUT })
+    await clickExact(page, scopeLabel, '.ant-dropdown:not(.ant-dropdown-hidden) [role="menuitem"],.ant-dropdown:not(.ant-dropdown-hidden) li,.ant-dropdown:not(.ant-dropdown-hidden) span')
+    const downloadedPath = await (async () => {
+      const deadline = Date.now() + TIMEOUT
+      while (Date.now() < deadline) {
+        const filename = fs.readdirSync(downloadDirectory).find(name => name.endsWith('.xlsx'))
+        if (filename) return path.join(downloadDirectory, filename)
+        await wait(100)
+      }
+      throw new Error(`download timed out for ${scopeLabel}`)
+    })()
+    const workbook = XLSX.read(fs.readFileSync(downloadedPath), { type: 'buffer' })
+    const sheet = workbook.Sheets[workbook.SheetNames[0]]
+    return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+  } finally {
+    await session.detach().catch(() => {})
+    fs.rmSync(downloadDirectory, { recursive: true, force: true })
+  }
+}
 const hoverVisibleSelector = async (page, selector) => {
   await page.mouse.move(4, 4)
   await wait(120)
@@ -959,14 +1041,39 @@ const runCase = async (title, test) => {
 }
 
 try {
-  if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'machine' || ONLY_CASE === 'machine-structure' || ONLY_CASE === 'machine-reorder' || ONLY_CASE === 'machine-invalid' || ONLY_CASE === 'machine-follow-actual') await runCase('machine tree table, governed business nodes and mixed gantt', async (initialPage, errors) => {
+  if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'machine' || ONLY_CASE === 'machine-surface' || ONLY_CASE === 'machine-structure' || ONLY_CASE === 'machine-reorder' || ONLY_CASE === 'machine-invalid' || ONLY_CASE === 'machine-follow-actual') await runCase('machine tree table, governed business nodes and mixed gantt', async (initialPage, errors) => {
     let page = initialPage
     await enterProject(page, 'X6877-D8400_H991')
     assert.ok(await page.$('.pms-plan-view-mode-switcher input[aria-label="横版表格"]:checked'), 'machine level-one plan defaults to horizontal view')
+    if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'machine' || ONLY_CASE === 'machine-surface') {
+      await assertHorizontalStageHeader(page, '概念阶段', { dynamic: false })
+      await assertHorizontalStageHeader(page, '上市阶段', { dynamic: true })
+      await assertHorizontalStageHeader(page, '生命周期阶段', { dynamic: true })
+      const horizontalCurrentWorkbook = await downloadPlanWorkbook(page, '导出当前视图')
+      const horizontalAllWorkbook = await downloadPlanWorkbook(page, '导出全部')
+      for (const [scope, workbook] of [['current', horizontalCurrentWorkbook], ['all', horizontalAllWorkbook]]) {
+        assert.deepEqual(workbook[0].slice(0, 2), ['版本', '开发周期'], `machine horizontal ${scope} export keeps the version-stage matrix headers`)
+        assert.ok(workbook.flat().includes('概念阶段') && workbook.flat().includes('概念启动'), `machine horizontal ${scope} export contains scoped stage and node headers`)
+        assert.ok(workbook.slice(2).some(row => /^V\d+/.test(String(row[0]))) && workbook.slice(2).some(row => row[0] === '实际'), `machine horizontal ${scope} export contains version and actual rows`)
+      }
+    }
     await selectView(page, '竖版表格')
     const table = '.pms-level1-tree-table'
     await page.waitForSelector(table, { timeout: TIMEOUT })
     await assertHeaders(page, table, ['序号', '阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期'])
+    if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'machine' || ONLY_CASE === 'machine-surface') {
+      const verticalCurrentWorkbook = await downloadPlanWorkbook(page, '导出当前视图')
+      const verticalAllWorkbook = await downloadPlanWorkbook(page, '导出全部')
+      const expectedTreeHeaders = ['序号', '阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期']
+      assert.deepEqual(verticalCurrentWorkbook[0], expectedTreeHeaders, 'machine vertical current export uses the governed tree headers')
+      assert.deepEqual(verticalAllWorkbook[0], expectedTreeHeaders, 'machine vertical all export uses the governed tree headers')
+      assert.ok(verticalCurrentWorkbook.some(row => row.includes('概念阶段')) && verticalCurrentWorkbook.some(row => row.includes('概念启动')), 'machine vertical current export contains the projected hierarchy')
+      assert.ok(verticalAllWorkbook.some(row => row.includes('概念阶段')) && verticalAllWorkbook.some(row => row.includes('概念启动')), 'machine vertical all export contains the complete hierarchy')
+    }
+    if (ONLY_CASE === 'machine-surface') {
+      console.log('browser machine horizontal/vertical export and dynamic-stage surface contract passed')
+      return
+    }
     assert.ok(await page.$(`${table} .ant-table-row-expand-icon`), 'tree table renders real expanders')
     console.log('browser machine tree table contract passed')
 
@@ -1213,6 +1320,56 @@ try {
 
   })
 
+  if (ONLY_CASE === 'machine-summary') await runCase('machine latest-published summary and governed compare', async (initialPage, errors) => {
+    let page = initialPage
+    const table = '.pms-level1-tree-table'
+    await enterProject(page, 'X6877-D8400_H991')
+    await selectView(page, '竖版表格')
+    await chooseVersion(page, 'V3 (已发布)')
+    const summaryBefore = await readTreeSummary(page, table)
+    await clickRoleText(page, 'menuitem', '基础信息')
+    await page.waitForSelector('[aria-label="一级计划最新发布摘要"]', { timeout: TIMEOUT })
+    assert.deepEqual(await readLatestPublishedSummary(page), summaryBefore, 'machine basic information reads all four dates from the latest published market snapshot')
+
+    await clickRoleText(page, 'menuitem', '计划')
+    await selectView(page, '竖版表格')
+    await chooseVersion(page, 'V3 (已发布)')
+    const actualBoundary = await treeBoundaryTask(page, table, 'actualEndDate', 'max')
+    assert.ok(actualBoundary, 'machine latest published snapshot has an editable actual-completion boundary')
+    const changedActualEnd = addIsoDays(actualBoundary.value, 1)
+    await editTreeDate(page, table, actualBoundary.name, 'actualEndDate', changedActualEnd)
+    const summaryAfter = await readTreeSummary(page, table)
+    assert.equal(summaryAfter.actualEndDate, changedActualEnd, 'machine latest-published actual edit refreshes the actual-completion boundary')
+    assert.deepEqual({ ...summaryAfter, actualEndDate: summaryBefore.actualEndDate }, summaryBefore, 'machine latest-published single actual update preserves the other three summary fields')
+
+    page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+    await selectView(page, '竖版表格')
+    await chooseVersion(page, 'V3 (已发布)')
+    assert.equal(await treeDate(page, table, actualBoundary.name, 'actualEndDate'), changedActualEnd, 'machine latest-published actual edit survives same-context reopen')
+    await clickRoleText(page, 'menuitem', '基础信息')
+    await page.waitForSelector('[aria-label="一级计划最新发布摘要"]', { timeout: TIMEOUT })
+    assert.deepEqual(await readLatestPublishedSummary(page), summaryAfter, 'machine basic information refreshes all four latest-published fields after same-context reopen')
+
+    await clickRoleText(page, 'menuitem', '计划')
+    await selectView(page, '竖版表格')
+    await clickAriaButton(page, '版本对比')
+    await waitForVisibleCompareDialog(page)
+    await chooseSelectOption(page, '基准版本', 'V2')
+    await chooseSelectOption(page, '对比版本', 'V3')
+    await clickButtonText(page, '开始对比')
+    await waitForCompareChange(page)
+    assert.deepEqual(await visibleCompareHeaders(page), ['序号', '变更类型', '阶段/节点', '计划开始', '计划完成', '预估工期', '实际开始', '实际完成', '实际工期', '是否延期'], 'machine governed comparison exposes exactly ten tree fields')
+    assert.ok((await visibleCompareTableText(page)).includes(actualBoundary.name), 'machine governed comparison contains the changed task row')
+    await pressAriaButton(page, 'Close')
+
+    await chooseVersion(page, '修订中')
+    await selectView(page, '竖版表格')
+    await clickRoleText(page, 'menuitem', '基础信息')
+    await page.waitForSelector('[aria-label="一级计划最新发布摘要"]', { timeout: TIMEOUT })
+    assert.deepEqual(await readLatestPublishedSummary(page), summaryAfter, 'machine selecting a draft does not replace the published-only basic summary')
+    console.log(`browser machine summary ${JSON.stringify(summaryBefore)} -> ${JSON.stringify(summaryAfter)}; compare task ${actualBoundary.name}`)
+  })
+
   if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'machine' || ONLY_CASE === 'machine-permission') await runCase('machine permission, history and compare', async (initialPage, errors) => {
     let page = initialPage
     await enterProject(page, 'X6877-D8400_H991')
@@ -1283,6 +1440,13 @@ try {
     console.log(`browser machine history V2 actual ${v2ActualBefore}`)
     await chooseVersion(page, 'V3 (已发布)')
     console.log('browser machine selected V3 latest published')
+    const latestPublishedSummaryBefore = await readTreeSummary(page, table)
+    await clickRoleText(page, 'menuitem', '基础信息')
+    await page.waitForSelector('[aria-label="一级计划最新发布摘要"]', { timeout: TIMEOUT })
+    assert.deepEqual(await readLatestPublishedSummary(page), latestPublishedSummaryBefore, 'machine basic information reads all four dates from the latest published market snapshot')
+    await clickRoleText(page, 'menuitem', '计划')
+    await selectView(page, '竖版表格')
+    await chooseVersion(page, 'V3 (已发布)')
     const v3ActualBefore = await treeDate(page, table, '概念启动', 'actualEndDate')
     assert.match(v3ActualBefore || '', /^\d{4}-\d{2}-\d{2}$/, 'latest published actual completion starts as an ISO date before editing')
     const latestActualDate = addIsoDays(v3ActualBefore, 1)
@@ -1291,10 +1455,27 @@ try {
     assert.notEqual(latestActualDate, v3ActualBefore, 'latest published actual completion edit chooses a different legal date')
     assert.equal(await treeDate(page, table, '概念启动', 'actualEndDate'), latestActualDate, 'latest published actual completion saves through the public DatePicker')
     console.log(`browser machine latest actual ${v3ActualBefore} -> ${latestActualDate}`)
+    const latestActualBoundary = await treeBoundaryTask(page, table, 'actualEndDate', 'max')
+    assert.ok(latestActualBoundary, 'machine latest published snapshot has an editable actual-completion boundary')
+    const latestPublishedBoundaryDate = addIsoDays(latestActualBoundary.value, 1)
+    await editTreeDate(page, table, latestActualBoundary.name, 'actualEndDate', latestPublishedBoundaryDate)
+    const latestPublishedSummaryAfter = await readTreeSummary(page, table)
+    assert.equal(latestPublishedSummaryAfter.actualEndDate, latestPublishedBoundaryDate, 'machine latest published actual boundary updates from one public field edit')
+    assert.deepEqual(
+      { ...latestPublishedSummaryAfter, actualEndDate: latestPublishedSummaryBefore.actualEndDate },
+      latestPublishedSummaryBefore,
+      'machine latest-published single actual field update leaves the other three summary fields unchanged',
+    )
     page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
     await selectView(page, '竖版表格')
     await chooseVersion(page, 'V3 (已发布)')
     assert.equal(await treeDate(page, table, '概念启动', 'actualEndDate'), latestActualDate, 'latest published actual completion survives same-context new-page persistence before comparison')
+    await clickRoleText(page, 'menuitem', '基础信息')
+    await page.waitForSelector('[aria-label="一级计划最新发布摘要"]', { timeout: TIMEOUT })
+    assert.deepEqual(await readLatestPublishedSummary(page), latestPublishedSummaryAfter, 'machine basic information refreshes all four latest-published fields after same-context reopen')
+    await clickRoleText(page, 'menuitem', '计划')
+    await selectView(page, '竖版表格')
+    await chooseVersion(page, 'V3 (已发布)')
     await chooseVersion(page, 'V2 (已发布)')
     assert.equal(await treeDate(page, table, '概念启动', 'actualEndDate'), v2ActualBefore, 'older V2 actual completion remains unchanged after editing V3')
     assert.notEqual(v2ActualBefore, latestActualDate, 'published comparison inputs contain a real actual-completion difference')
@@ -1305,21 +1486,59 @@ try {
       .find(node => node.getBoundingClientRect().width > 0)?.closest('.ant-select')?.textContent || ''), /V3 \(已发布\)/, 'compare target is the latest published V3')
     await clickButtonText(page, '开始对比')
     await waitForCompareChange(page)
+    assert.deepEqual(await visibleCompareHeaders(page), ['序号', '变更类型', '阶段/节点', '计划开始', '计划完成', '预估工期', '实际开始', '实际完成', '实际工期', '是否延期'], 'machine governed comparison exposes exactly ten tree fields')
     const compareText = await visibleCompareTableText(page)
     const compareDialogText = await visibleCompareDialogText(page)
     assert.match(compareDialogText, /[1-9]\d*\s*变更总计/, 'published comparison reports a nonzero change total')
     assert.ok(compareText.includes('概念启动') && compareText.includes('实际完成'), 'published comparison shows the changed milestone actual completion field')
     await pressAriaButton(page, 'Close')
+    await chooseVersion(page, '修订中')
+    await selectView(page, '竖版表格')
+    const draftPlanBoundary = await treeBoundaryTask(page, table, 'planEndDate', 'max')
+    assert.ok(draftPlanBoundary, 'machine paired draft has an editable planned-completion boundary')
+    const changedDraftPlanEnd = addIsoDays(draftPlanBoundary.value, 1)
+    await editTreeDate(page, table, draftPlanBoundary.name, 'planEndDate', changedDraftPlanEnd)
+    await clickRoleText(page, 'menuitem', '基础信息')
+    await page.waitForSelector('[aria-label="一级计划最新发布摘要"]', { timeout: TIMEOUT })
+    assert.deepEqual(await readLatestPublishedSummary(page), latestPublishedSummaryAfter, 'machine draft planned-date changes never affect the published-only basic summary')
+    console.log(`browser machine summary ${JSON.stringify(latestPublishedSummaryBefore)} -> ${JSON.stringify(latestPublishedSummaryAfter)}; draft ${draftPlanBoundary.name}=${changedDraftPlanEnd}`)
   })
 
-  if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'tos') await runCase('tOS tree and business-version contract', async (initialPage, errors) => {
+  if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'tos' || ONLY_CASE === 'tos-surface') await runCase('tOS tree and business-version contract', async (initialPage, errors) => {
     let page = initialPage
     await enterProject(page, 'tOS16.1')
     assert.ok(await page.$('.pms-plan-view-mode-switcher input[aria-label="横版表格"]:checked'), 'tOS level-one plan defaults to horizontal view')
+    await assertHorizontalStageHeader(page, '规划阶段', { dynamic: false })
+    await assertHorizontalStageHeader(page, '上市迭代阶段', { dynamic: true })
+    await assertHorizontalStageHeader(page, '维护阶段', { dynamic: true })
     await selectView(page, '竖版表格')
     const table = '.pms-level1-tree-table'
     await page.waitForSelector(table, { timeout: TIMEOUT })
     await assertHeaders(page, table, ['序号', '阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期'])
+    if (ONLY_CASE === 'tos-surface') {
+      await chooseVersion(page, 'V3 (已发布)')
+      const tosConceptActualBefore = await treeDate(page, table, '概念启动', 'actualEndDate')
+      const tosConceptActualAfter = addIsoDays(tosConceptActualBefore, 1)
+      await editPublishedTreeDate(page, table, '概念启动', 'actualEndDate', tosConceptActualAfter)
+      assert.equal(await treeDate(page, table, '概念启动', 'actualEndDate'), tosConceptActualAfter, 'tOS focused comparison starts from a real latest-published actual-field update')
+      const tosPublishedSummary = await readTreeSummary(page, table)
+      await clickRoleText(page, 'menuitem', '基础信息')
+      await page.waitForSelector('[aria-label="一级计划最新发布摘要"]', { timeout: TIMEOUT })
+      assert.deepEqual(await readLatestPublishedSummary(page), tosPublishedSummary, 'tOS basic information reads all four dates from the latest published type snapshot')
+      await clickRoleText(page, 'menuitem', '计划')
+      await selectView(page, '竖版表格')
+      await clickAriaButton(page, '版本对比')
+      await waitForVisibleCompareDialog(page)
+      await chooseSelectOption(page, '基准版本', 'V2')
+      await chooseSelectOption(page, '对比版本', 'V3')
+      await clickButtonText(page, '开始对比')
+      await waitForCompareChange(page)
+      assert.deepEqual(await visibleCompareHeaders(page), ['序号', '变更类型', '阶段/节点', '计划开始', '计划完成', '预估工期', '实际开始', '实际完成', '实际工期', '是否延期'], 'tOS governed comparison exposes exactly ten tree fields')
+      assert.match(await visibleCompareDialogText(page), /[1-9]\d*\s*变更总计/, 'tOS governed comparison is nonempty')
+      assert.ok((await visibleCompareTableText(page)).includes('概念启动'), 'tOS governed comparison contains the expected milestone row')
+      console.log(`browser tOS surface summary ${JSON.stringify(tosPublishedSummary)} and governed comparison passed`)
+      return
+    }
     assert.equal(await page.$('button[aria-label="添加MR里程碑"]'), null, 'tOS does not expose MR insertion')
     assert.ok(await page.$(`${table} .ant-table-row-expand-icon`), 'tOS tree table renders real expanders')
     const draftSource = await ensureDraft(page)
@@ -1411,6 +1630,12 @@ try {
     const pairedDraftVersionNo = (await page.$eval('[aria-label="计划版本"]', control => control.closest('.ant-select')?.textContent || '')).match(/V\d+(?:\.\d+)?/)?.[0]
     assert.ok(pairedDraftVersionNo && pairedDraftVersionNo !== publishedVersionNo, 'paired tOS draft has a distinct version number')
     await selectView(page, '竖版表格')
+    const pairedDraftPlanBeforeActualSync = {
+      start: await treeDate(page, table, tosBusinessName, 'planStartDate'),
+      end: await treeDate(page, table, tosBusinessName, 'planEndDate'),
+    }
+    assert.ok(pairedDraftPlanBeforeActualSync.start && pairedDraftPlanBeforeActualSync.end, 'paired tOS draft retains the custom business node planned range')
+    assert.ok((await textOf(page, table)).includes(tosBusinessName), 'paired tOS draft retains the custom business node before actual-field synchronization')
     await editTreeDate(page, table, tosBusinessName, 'actualEndDate', '2027-06-01')
     await chooseVersion(page, publishedVersionNo)
     await editPublishedTreeDate(page, table, tosBusinessName, 'actualStartDate', '2027-05-11')
@@ -1424,6 +1649,11 @@ try {
     assert.equal(await treeDate(page, table, tosBusinessName, 'actualStartDate'), '2027-05-15', 'latest-published actual-end sync preserves the paired draft actual start')
     assert.equal(await treeDate(page, table, tosBusinessName, 'actualEndDate'), '2027-05-22', 'latest-published actual-end syncs only that field into paired tOS draft')
     assert.equal(await treeActualDays(page, table, tosBusinessName), '8天', 'paired draft actual duration is recomputed from its preserved start and synced end')
+    assert.deepEqual({
+      start: await treeDate(page, table, tosBusinessName, 'planStartDate'),
+      end: await treeDate(page, table, tosBusinessName, 'planEndDate'),
+    }, pairedDraftPlanBeforeActualSync, 'latest-published actual patches do not overwrite paired-draft planned dates')
+    assert.ok((await textOf(page, table)).includes(tosBusinessName), 'latest-published actual patches do not remove the paired-draft custom business node')
     page = await reopenProjectInContext(page, errors, 'tOS16.1')
     await selectView(page, '竖版表格')
     await chooseVersion(page, publishedVersionNo)
@@ -1433,6 +1663,11 @@ try {
     await chooseVersion(page, pairedDraftVersionNo)
     assert.equal(await treeDate(page, table, tosBusinessName, 'actualStartDate'), '2027-05-15', 'paired-draft divergent actual start survives same-context reopen')
     assert.equal(await treeDate(page, table, tosBusinessName, 'actualEndDate'), '2027-05-22', 'paired-draft synced actual end survives same-context reopen')
+    assert.deepEqual({
+      start: await treeDate(page, table, tosBusinessName, 'planStartDate'),
+      end: await treeDate(page, table, tosBusinessName, 'planEndDate'),
+    }, pairedDraftPlanBeforeActualSync, 'paired-draft planned dates survive published actual patches and same-context reopen')
+    assert.ok((await textOf(page, table)).includes(tosBusinessName), 'paired-draft custom business node survives published actual patches and same-context reopen')
     console.log('browser tOS published actual field-level merge/reopen contract passed')
   })
 
