@@ -148,6 +148,7 @@ import {
 
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
+import { useEnumStore } from '@/stores/enums'
 import { useLevel3PlanStore } from '@/stores/level3Plan'
 import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, INITIAL_LEVEL2_PLAN_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
@@ -159,7 +160,7 @@ import { TransferApply, TransferDetail, TransferEntry, TransferReview, TransferS
 import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
 import VersionTrainPlan, { INITIAL_VERSION_TRAIN_DATA } from '@/components/plans/VersionTrainPlan'
 import ProjectInfoModal, { type ProjectInfoSubmitPayload } from '@/components/project-info/ProjectInfoModal'
-import TargetProjectInformationView from '@/components/project-info/TargetProjectInformationView'
+import TargetProjectInformationView, { getHealthPresentation } from '@/components/project-info/TargetProjectInformationView'
 import MarketEditorModal from '@/components/project-info/MarketEditorModal'
 import TosTypeEditorModal from '@/components/project-info/TosTypeEditorModal'
 import ProjectPlanInfoGrid from '@/components/project-info/ProjectPlanInfoGrid'
@@ -169,6 +170,7 @@ import TechnicalPlanModule from '@/components/technical-project/TechnicalPlanMod
 import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
 import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
 import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
+import { buildEnumOptions } from '@/lib/enumConsumers'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import {
   synchronizeTechnicalProjectRecord,
@@ -409,6 +411,26 @@ export default function ProjectSpaceContainer() {
       ? selectTechnicalProjectStage(state.plansByKey, selectedProject.id, technicalToday)
       : '-'
   ))
+  const enumRowsByType = useEnumStore(state => state.rowsByType)
+  const machineProjectSpaceOptions = useMemo(() => {
+    const project = selectedProject as Record<string, any> | null
+    const history = (fieldKey: string, fallbackKey?: string) => {
+      const value = project?.fieldValues?.[fieldKey] ?? project?.[fieldKey] ?? (fallbackKey ? project?.[fallbackKey] : '')
+      return typeof value === 'string' && value.trim() ? [value] : []
+    }
+    return {
+      healthStatus: buildEnumOptions(enumRowsByType, 'machine-health-status', history('healthStatus')),
+      versionType: buildEnumOptions(enumRowsByType, 'version-type', history('versionType')),
+      softwareProjectLevel: buildEnumOptions(enumRowsByType, 'software-project-level', history('softwareProjectLevel', 'projectLevel')),
+      productSeries: buildEnumOptions(enumRowsByType, 'product-series', history('productSeries')),
+      researchMode: buildEnumOptions(enumRowsByType, 'research-mode', history('researchMode')),
+      developmentMode: buildEnumOptions(enumRowsByType, 'machine-development-mode', history('developmentMode', 'developMode')),
+      dimensionUpgradeStrategy: buildEnumOptions(enumRowsByType, 'upgrade-strategy', history('dimensionUpgradeStrategy')),
+      systemType: buildEnumOptions(enumRowsByType, 'system-type', history('systemType')),
+      kernelVersion: buildEnumOptions(enumRowsByType, 'kernel-version', history('kernelVersion')),
+      memorySize: buildEnumOptions(enumRowsByType, 'memory-size', history('memorySize', 'memory')),
+    }
+  }, [enumRowsByType, selectedProject])
 
   const machineTosHistory = useMemo(() => selectedProject ? [
     selectedProject.firstSaleTosVersionId,
@@ -2370,7 +2392,7 @@ export default function ProjectSpaceContainer() {
           currentTosVersion: submittedCurrentTos,
           projectCode: typeof payload.infoValues.projectModel === 'string' ? payload.infoValues.projectModel : selectedProject.projectCode,
           startRam: typeof payload.infoValues.startingRam === 'string' ? payload.infoValues.startingRam : selectedProject.startRam,
-          versionType: rawVersionType.toUpperCase() === 'GO' ? 'Go' : rawVersionType,
+          versionType: rawVersionType,
           developMode: typeof payload.infoValues.developmentMode === 'string' ? payload.infoValues.developmentMode : selectedProject.developMode,
         }
       : selectedProject.type === '技术项目'
@@ -2915,8 +2937,7 @@ export default function ProjectSpaceContainer() {
     const isTech = p.type === '技术项目'
     const isCapability = p.type === '能力建设项目'
     const statusConf = PROJECT_STATUS_CONFIG[p.status] || { color: '#8c8c8c', tagColor: 'default' }
-    const healthMap: Record<string, { label: string; color: string }> = { normal: { label: '正常', color: '#52c41a' }, warning: { label: '关注', color: '#faad14' }, risk: { label: '风险', color: '#ff4d4f' } }
-    const hConf = healthMap[p.healthStatus || 'normal'] || healthMap.normal
+    const hConf = getHealthPresentation(p.healthStatus)
     const marketRows = buildMarketRowsFromMarkets(
       p.markets || [],
       marketConfigsByProjectId[p.id],
@@ -2933,13 +2954,12 @@ export default function ProjectSpaceContainer() {
       return <Input size="small" value={ef[key]} onChange={e => setEf(key, e.target.value)} />
     }
     const nodeChoices = [{ label: '概念启动', value: '概念启动' }, { label: 'STR1', value: 'STR1' }, { label: 'STR2', value: 'STR2' }, { label: 'STR3', value: 'STR3' }, { label: 'STR4', value: 'STR4' }, { label: 'STR5', value: 'STR5' }, { label: 'STR6', value: 'STR6' }]
-    const healthChoices = [{ label: '正常', value: 'normal' }, { label: '关注', value: 'warning' }, { label: '风险', value: 'risk' }]
-    const developModeChoices = [{ label: 'ODC', value: 'ODC' }, { label: 'JDM', value: 'JDM' }, { label: '自研', value: '自研' }, { label: '外研', value: '外研' }]
-    const roadmapDevelopModeChoices = ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'].map(value => ({ label: value, value }))
+    const healthChoices = machineProjectSpaceOptions.healthStatus
+    const developModeChoices = machineProjectSpaceOptions.developmentMode
+    const roadmapDevelopModeChoices = machineProjectSpaceOptions.developmentMode
     const startRamChoices = ['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB'].map(value => ({ label: value, value }))
-    const versionTypeChoices = ['Full', 'Slim', 'Go'].map(value => ({ label: value, value }))
-    const projectLevelChoices = [{ label: 'S', value: 'S' }, { label: 'A', value: 'A' }, { label: 'B', value: 'B' }, { label: 'C', value: 'C' }]
-    const systemTypeChoices = [{ label: '32bit', value: '32bit' }, { label: '64bit', value: '64bit' }, { label: '64only', value: '64only' }]
+    const projectLevelChoices = machineProjectSpaceOptions.softwareProjectLevel
+    const systemTypeChoices = machineProjectSpaceOptions.systemType
     const yesNoChoices = [{ label: '是', value: '是' }, { label: '否', value: '否' }]
     const userChoices = ALL_USERS.map(u => ({ label: u, value: u }))
     const renderMultiTags = (value: any, color = 'blue') => {
@@ -3077,7 +3097,7 @@ export default function ProjectSpaceContainer() {
       if (field.key === 'productLine') content = editableField('productLine', p.productLine)
       if (field.key === 'marketName') content = editableField('marketName', p.marketName)
       if (field.key === 'productType') content = editableField('productType', p.productType, { type: 'select', choices: [{ label: '新品', value: '新品' }, { label: '老品', value: '老品' }] })
-      if (field.key === 'productSeries') content = editableField('productSeries', (p as any).productSeries)
+      if (field.key === 'productSeries') content = editableField('productSeries', (p as any).productSeries, { type: 'select', choices: machineProjectSpaceOptions.productSeries })
       if (field.key === 'startRam') content = editableField('startRam', p.startRam, { type: 'select', choices: startRamChoices })
       if (field.key === 'str5Date') content = editableField('str5Date', p.str5Date)
       if (field.key === 'launchDate') content = editableField('launchDate', p.launchDate)
@@ -3424,12 +3444,6 @@ export default function ProjectSpaceContainer() {
             responsiblePersons={getProjectResponsiblePersons(p)}
             onCancel={() => setShowProjectInfoEditor(false)}
             onSubmit={saveTargetProjectInfo}
-            fieldOptionOverrides={{
-              firstSaleTosVersion: machineTosOptions,
-              currentTosVersion: machineTosOptions,
-              versionType: ['Full', 'Slim', 'Go'],
-              developmentMode: ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'],
-            }}
           />
         )}
       </div>
@@ -4147,12 +4161,6 @@ export default function ProjectSpaceContainer() {
               responsiblePersons={getProjectResponsiblePersons(selectedProject)}
               onCancel={() => setShowProjectInfoEditor(false)}
               onSubmit={saveTargetProjectInfo}
-              fieldOptionOverrides={{
-                firstSaleTosVersion: machineTosOptions,
-                currentTosVersion: machineTosOptions,
-                versionType: ['Full', 'Slim', 'Go'],
-                developmentMode: ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'],
-              }}
             />
           )}
         </div>

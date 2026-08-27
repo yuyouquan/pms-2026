@@ -6,6 +6,7 @@ const root = projectRoot(import.meta.url)
 const consumers = loadTypeScriptModule(root, 'src/lib/enumConsumers.ts')
 const values = loadTypeScriptModule(root, 'src/lib/enumValues.ts')
 const legacyTos = loadTypeScriptModule(root, 'src/lib/tosEnumOptions.ts')
+const projectTypesSource = readSource(root, 'src/constants/projectTypes.ts')
 
 const rowsByType = values.createInitialEnumRows()
 rowsByType['core-value'] = [
@@ -128,7 +129,22 @@ assert.deepEqual(consumers.findProjectCategoryMapping(rowsByType, '技术预研'
   pmsProjectCategory: '技术项目',
   pmsSecondaryCategory: '',
 }, 'secondary categories are returned only for whole-machine project mappings')
+rowsByType['project-category-mapping'].push({
+  id: 'category-software', ipmProjectCategory: '软件产品项目', pmsProjectCategory: 'tOS版本项目', pmsSecondaryCategory: '旧二级值',
+})
+assert.deepEqual(consumers.findProjectCategoryMapping(rowsByType, '软件产品项目'), {
+  pmsProjectCategory: 'tOS版本项目',
+  pmsSecondaryCategory: '',
+}, 'software mappings normalize secondary classification to empty')
+rowsByType['project-category-mapping'].push({
+  id: 'category-3', ipmProjectCategory: '能力建设', pmsProjectCategory: '能力建设项目', pmsSecondaryCategory: '旧二级值',
+})
+assert.deepEqual(consumers.findProjectCategoryMapping(rowsByType, '能力建设'), {
+  pmsProjectCategory: '能力建设项目',
+  pmsSecondaryCategory: '',
+}, 'capability mappings normalize secondary classification to empty')
 assert.equal(consumers.findProjectCategoryMapping(rowsByType, '整机'), undefined, 'partial category matches are rejected')
+assert.equal(consumers.findProjectCategoryMapping(rowsByType, '未配置分类'), undefined, 'unknown exact categories fail closed')
 
 assert.deepEqual(consumers.getTmgDomains(rowsByType, '历史领域'), [
   { value: '系统应用', label: '系统应用' },
@@ -202,5 +218,16 @@ const legacyHookSource = readSource(root, 'src/hooks/useTosEnumOptions.ts')
 assert.match(legacyLibSource, /buildEnumOptions/, 'deprecated tOS option builder delegates to the unified consumer helper')
 assert.match(legacyHookSource, /roadmap-tos/, 'legacy two-part hook maps to roadmap tOS rows')
 assert.match(legacyHookSource, /first-sale-tos/, 'legacy three-part hook maps to first-sale tOS rows')
+
+assert.doesNotMatch(
+  projectTypesSource,
+  /IPM_PROJECT_CLASSIFICATION_MAP|mapIpmProjectClassification/,
+  'runtime project-category mapping has one source in rowsByType rather than a second hard-coded registry',
+)
+assert.match(
+  projectTypesSource,
+  /\[PROJECT_CATEGORY_TOS_VERSION\]:\s*\[\]|\[PROJECT_CATEGORY_TOS_VERSION\]:\s*undefined/,
+  'non-machine categories do not advertise a synthetic PMS secondary category',
+)
 
 console.log('[enum-consumers] all checks passed')

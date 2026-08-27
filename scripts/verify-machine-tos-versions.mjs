@@ -183,7 +183,7 @@ assert.deepEqual(
   'persisted two-part references migrate to canonical three-part values without clearing unknown display history',
 )
 assert.deepEqual(
-  projectStore.migrateProjectState(migratedMachineState, 3),
+  projectStore.migrateProjectState(migratedMachineState, projectStore.PROJECT_STORE_VERSION),
   migratedMachineState,
   'machine version persistence migration is idempotent',
 )
@@ -414,6 +414,8 @@ const fieldInputSource = readSource(root, 'src/components/project-info/ProjectIn
 const infoSectionsSource = readSource(root, 'src/components/project-info/ProjectInfoSections.tsx')
 const externalPoolSource = readSource(root, 'src/data/externalProjectPool.ts')
 const machineRulesSource = readSource(root, 'src/lib/machineTosVersions.ts')
+const schemaSource = readSource(root, 'src/constants/projectInfoSchema.ts')
+const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 assert.match(modalSource, /projectType\s*!==\s*PROJECT_TYPE_TOS_VERSION[\s\S]*!isMachineProjectType\(projectType\)/, 'machine and tOS forms omit the independent owner input')
 assert.match(addSource, /deriveProjectResponsiblePersons/, 'create derives responsibility from category fields')
 assert.match(addSource, /deriveProjectTosVersion/, 'tOS create reads version from project name')
@@ -428,5 +430,24 @@ assert.match(modalSource, /mode\s*===\s*'create'[\s\S]*currentTosVersion/, 'new-
 assert.match(modalSource, /resolveMachineTosUpdate/, 'new-machine edit resolves its linked current version from the complete existing family')
 assert.match(machineRulesSource, /readonly\s+T\[\]/, 'machine family resolver accepts readonly project arrays')
 assert.ok((externalPoolSource.match(/name:\s*'X6870'/g) || []).length >= 3, 'browser fixtures expose one new and two same-name legacy projects')
+
+const expectedMachineEnumTypes = {
+  firstSaleTosVersion: 'first-sale-tos', currentTosVersion: 'first-sale-tos',
+  healthStatus: 'machine-health-status', versionType: 'version-type',
+  softwareProjectLevel: 'software-project-level', productSeries: 'product-series',
+  researchMode: 'research-mode', developmentMode: 'machine-development-mode',
+  dimensionUpgradeStrategy: 'upgrade-strategy', systemType: 'system-type',
+  kernelVersion: 'kernel-version', memorySize: 'memory-size',
+}
+for (const [field, type] of Object.entries(expectedMachineEnumTypes)) {
+  assert.match(modalSource, new RegExp(`${field}[\\s\\S]{0,260}['"]${type}['"]|['"]${type}['"][\\s\\S]{0,260}${field}`), `${field} consumes ${type} rows`)
+}
+assert.doesNotMatch(schemaSource, /const softwareProjectLevels|const dimensionUpgradeStrategies|options:\s*\['Full',\s*'Slim'|options:\s*\['32bit'/, 'configured machine fields have no schema-local option registry')
+assert.doesNotMatch(fieldInputSource, /FREE_TEXT_OPTIONS/, 'configured select suggestions have no component-local fallback registry')
+assert.doesNotMatch(addSource, /useTosEnumOptions|versionType:\s*\['Full'|developmentMode:\s*\['自研'/, 'create delegates all machine enum options to the self-contained form')
+assert.match(modalSource, /buildChipOptions|useChipOptions/, 'chip code selects one atomic configured row')
+assert.match(modalSource, /resolveChipRow/, 'chip selection resolves all three snapshots from one row ID')
+assert.match(modalSource, /setFieldsValue\(\{\s*chipCode[^}]*chipModel[^}]*chipPlatform/s, 'one form update writes the complete chip tuple')
+assert.doesNotMatch(projectSpaceSource, /const versionTypeChoices\s*=\s*\['Full'|const systemTypeChoices\s*=\s*\[/, 'project-space editing has no hard-coded machine option arrays')
 
 console.log('machine tOS versions contract passed')

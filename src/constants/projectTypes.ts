@@ -71,9 +71,9 @@ export const PROJECT_TEMPLATE_TYPES = PROJECT_TYPES
 
 export const PROJECT_SECONDARY_CATEGORIES = {
   [PROJECT_CATEGORY_MACHINE]: MACHINE_PROJECT_TYPES,
-  [PROJECT_CATEGORY_TOS_VERSION]: [PROJECT_TYPE_TOS_VERSION],
-  [PROJECT_CATEGORY_TECH]: ['中长期技术', PROJECT_TYPE_TECH],
-  [PROJECT_CATEGORY_CAPABILITY]: [PROJECT_TYPE_CAPABILITY],
+  [PROJECT_CATEGORY_TOS_VERSION]: [],
+  [PROJECT_CATEGORY_TECH]: [],
+  [PROJECT_CATEGORY_CAPABILITY]: [],
 } as const
 
 export type MachineProjectType = typeof MACHINE_PROJECT_TYPES[number]
@@ -135,26 +135,19 @@ export function resolveProjectClassification(
   if (rawType === PROJECT_CATEGORY_TOS_VERSION) {
     return {
       projectCategory: PROJECT_CATEGORY_TOS_VERSION,
-      secondaryCategory: rawSecondaryCategory === PROJECT_TYPE_TOS_VERSION
-        ? rawSecondaryCategory
-        : PROJECT_TYPE_TOS_VERSION,
+      ...(rawSecondaryCategory ? { secondaryCategory: rawSecondaryCategory } : {}),
     }
   }
   if (rawType === PROJECT_CATEGORY_TECH) {
     return {
       projectCategory: PROJECT_CATEGORY_TECH,
-      secondaryCategory: (PROJECT_SECONDARY_CATEGORIES[PROJECT_CATEGORY_TECH] as readonly string[])
-        .includes(rawSecondaryCategory)
-        ? rawSecondaryCategory
-        : PROJECT_TYPE_TECH,
+      ...(rawSecondaryCategory ? { secondaryCategory: rawSecondaryCategory } : {}),
     }
   }
   if (rawType === PROJECT_CATEGORY_CAPABILITY) {
     return {
       projectCategory: PROJECT_CATEGORY_CAPABILITY,
-      secondaryCategory: rawSecondaryCategory === PROJECT_TYPE_CAPABILITY
-        ? rawSecondaryCategory
-        : PROJECT_TYPE_CAPABILITY,
+      ...(rawSecondaryCategory ? { secondaryCategory: rawSecondaryCategory } : {}),
     }
   }
 
@@ -172,49 +165,12 @@ export function resolveProjectClassification(
   ) {
     return {
       projectCategory: PROJECT_CATEGORY_TOS_VERSION,
-      secondaryCategory: PROJECT_TYPE_TOS_VERSION,
     }
   }
   return {
     projectCategory: rawType,
     ...(rawSecondaryCategory ? { secondaryCategory: rawSecondaryCategory } : {}),
   }
-}
-
-const IPM_PROJECT_CLASSIFICATION_MAP: Record<string, ProjectClassification> = {
-  '整机产品-基线IPD': { projectCategory: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_PHONE },
-  '整机产品-模块化IPD': { projectCategory: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_PHONE },
-  '整机产品-非IPD': { projectCategory: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_PHONE },
-  '手机整机产品-大版本升级': { projectCategory: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_PHONE },
-  '其他-平板--整机产品项目': { projectCategory: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_TABLET },
-  '其他-笔电/移动互联及其他--整机产品项目': { projectCategory: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_LAPTOP },
-  '其他-笔电': { projectCategory: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_LAPTOP },
-  '移动互联及其他--整机产品项目': { projectCategory: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_LAPTOP },
-  '其他-功能机': { projectCategory: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_FEATURE_PHONE },
-  '其他-AIOT': { projectCategory: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_AIOT },
-  '基线项目': { projectCategory: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_BASELINE },
-  'N+1项目': { projectCategory: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_N_PLUS_1 },
-  '预研类项目': { projectCategory: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_PRE_RESEARCH },
-  '软件产品项目': { projectCategory: PROJECT_CATEGORY_TOS_VERSION, secondaryCategory: PROJECT_TYPE_TOS_VERSION },
-  '研发级-基础研究-重点项目': { projectCategory: PROJECT_CATEGORY_TECH, secondaryCategory: '中长期技术' },
-  '研发级-基础研究-非重点项目': { projectCategory: PROJECT_CATEGORY_TECH, secondaryCategory: '中长期技术' },
-  '部门级-基础研究': { projectCategory: PROJECT_CATEGORY_TECH, secondaryCategory: '中长期技术' },
-  '研发级-技术研发-重点项目': { projectCategory: PROJECT_CATEGORY_TECH, secondaryCategory: PROJECT_TYPE_TECH },
-  '研发级-技术研发-非重点项目': { projectCategory: PROJECT_CATEGORY_TECH, secondaryCategory: PROJECT_TYPE_TECH },
-  '部门级-技术研发': { projectCategory: PROJECT_CATEGORY_TECH, secondaryCategory: PROJECT_TYPE_TECH },
-  '技术项目前置工作': { projectCategory: PROJECT_CATEGORY_TECH, secondaryCategory: PROJECT_TYPE_TECH },
-  '部门级能力建设': { projectCategory: PROJECT_CATEGORY_CAPABILITY, secondaryCategory: PROJECT_TYPE_CAPABILITY },
-  '公司级/研发级能力建设': { projectCategory: PROJECT_CATEGORY_CAPABILITY, secondaryCategory: PROJECT_TYPE_CAPABILITY },
-  '公司级能力建设': { projectCategory: PROJECT_CATEGORY_CAPABILITY, secondaryCategory: PROJECT_TYPE_CAPABILITY },
-  '研发级能力建设': { projectCategory: PROJECT_CATEGORY_CAPABILITY, secondaryCategory: PROJECT_TYPE_CAPABILITY },
-}
-
-export function mapIpmProjectClassification(
-  ipmProjectCategoryName: string | undefined | null,
-): ProjectClassification | undefined {
-  const value = String(ipmProjectCategoryName || '').trim()
-  const classification = IPM_PROJECT_CLASSIFICATION_MAP[value]
-  return classification ? { ...classification } : undefined
 }
 
 const PROJECT_STATUS_VALUES = ['全部', '待立项', '在研', '上市', 'EOS', '暂停', '已取消', '规划中'] as const

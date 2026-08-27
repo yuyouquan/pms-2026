@@ -21,7 +21,8 @@ import { normalizeTargetMarkets } from '@/lib/marketRules'
 import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
 import { normalizeTosEnumReference, resolveCurrentTosEnumValue } from '@/lib/tosEnumOptions'
 import { useActivateProject } from '@/hooks/useActivateProject'
-import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
+import { getSingleEnumValues } from '@/lib/enumConsumers'
+import { useEnumStore } from '@/stores/enums'
 import { synchronizeTechnicalProjectRecord } from '@/lib/technicalProjectRules'
 
 interface AddProjectModalProps {
@@ -39,7 +40,8 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
   const { enterProjectSpace, setProjectSpaceModule } = useUiStore()
   const activateProject = useActivateProject()
   const initProjectPermissions = usePermissionStore(state => state.initProjectPermissions)
-  const { currentValues: machineTosValues, options: machineTosOptions } = useTosEnumOptions('tos-3-part')
+  const rowsByType = useEnumStore(state => state.rowsByType)
+  const machineTosValues = useMemo(() => getSingleEnumValues(rowsByType, 'first-sale-tos'), [rowsByType])
 
   const candidatePool = useMemo<ExternalProjectEntry[]>(() => {
     const existingBids = new Set(projects
@@ -93,7 +95,6 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
     const rawVersionType = typeof payload.infoValues.versionType === 'string'
       ? payload.infoValues.versionType
       : extra.versionType ?? ''
-    const normalizedVersionType = rawVersionType.toUpperCase() === 'GO' ? 'Go' : rawVersionType
     const developmentMode = typeof payload.infoValues.developmentMode === 'string'
       ? payload.infoValues.developmentMode
       : extra.developMode ?? ''
@@ -126,7 +127,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       brand: extra.brand ?? undefined,
       planStartDate: extra.planStartDate ?? '',
       planEndDate: extra.planEndDate ?? '',
-      healthStatus: payload.healthStatus as 'normal' | 'warning' | 'risk',
+      healthStatus: payload.healthStatus,
       ...(isMachineProjectType(projectType) ? {
         firstSaleTosVersionId,
         firstSaleTosVersion: firstSaleTosVersionId,
@@ -136,7 +137,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
         platform: extra.platform ?? extra.chipPlatform ?? '',
         productType: machineProductType,
         startRam: extra.startRam ?? (typeof payload.infoValues.startingRam === 'string' ? payload.infoValues.startingRam : ''),
-        versionType: normalizedVersionType,
+        versionType: rawVersionType,
         str5Date: extra.str5Date ?? '',
         launchDate: extra.launchDate ?? (typeof payload.infoValues.launchDate === 'string' ? payload.infoValues.launchDate : ''),
         developMode: developmentMode,
@@ -212,12 +213,6 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       onCancel={onCancel}
       onSubmit={handleSubmit}
       onAfterCreate={handleAfterCreate}
-      fieldOptionOverrides={{
-        firstSaleTosVersion: machineTosOptions,
-        currentTosVersion: machineTosOptions,
-        versionType: ['Full', 'Slim', 'Go'],
-        developmentMode: ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'],
-      }}
     />
   )
 }

@@ -1,20 +1,20 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { FileOutlined, LinkOutlined, UploadOutlined } from '@ant-design/icons'
 import { Button, DatePicker, Form, Input, Radio, Select, Space, Tag, Upload, type FormInstance } from 'antd'
 import dayjs from 'dayjs'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import {
-  NO_SUBDOMAIN_DOMAINS,
-  SUBDOMAINS_BY_DOMAIN,
   TECHNICAL_DELIVERABLE_FIELDS,
-  TECHNICAL_DOMAINS,
   TECHNICAL_TEAM_FIELDS,
 } from '@/constants/technicalProject'
+import { useSingleEnumOptions, useTmgOptions } from '@/hooks/useEnumOptions'
+import { getTmgSubdomainState } from '@/lib/enumConsumers'
 import { getPreProjectCandidates, switchDeliverableMode } from '@/lib/technicalProjectRules'
+import { useEnumStore } from '@/stores/enums'
 import type { ProjectInfoProject } from '@/lib/projectInfoValues'
-import type { DeliverableValue, TechnicalDomain } from '@/types/technicalProject'
+import type { DeliverableValue } from '@/types/technicalProject'
 
 const personOptions = ALL_USERS.map(user => ({ label: user, value: user }))
 
@@ -86,16 +86,27 @@ export default function TechnicalProjectCreateFields({
   currentProjectId,
   ipmProjectType,
   technicalTrack,
+  historicalDomain,
+  historicalSubdomain,
 }: {
   form: FormInstance
   existingProjects: ProjectInfoProject[]
   currentProjectId?: string
   ipmProjectType: string
   technicalTrack: string
+  historicalDomain?: string
+  historicalSubdomain?: string
 }) {
-  const tmg = Form.useWatch('tmg', form) as TechnicalDomain | undefined
-  const subdomainOptions = tmg ? SUBDOMAINS_BY_DOMAIN[tmg] || [] : []
-  const subdomainDisabled = Boolean(tmg && NO_SUBDOMAIN_DOMAINS.includes(tmg))
+  const tmg = String(Form.useWatch('tmg', form) || '')
+  const projectValue = String(Form.useWatch('projectValue', form) || '')
+  const rowsByType = useEnumStore(state => state.rowsByType)
+  const { domainOptions, subdomainOptions, autoValue, disabled: subdomainDisabled } = useTmgOptions(
+    tmg,
+    historicalSubdomain,
+    historicalDomain,
+  )
+  const projectValueHistory = useMemo(() => projectValue ? [projectValue] : [], [projectValue])
+  const projectValueOptions = useSingleEnumOptions('core-value', projectValueHistory)
   const preProjectOptions = getPreProjectCandidates(existingProjects, currentProjectId).map(project => ({
     value: project.id,
     label: `${project.name}（${project.type}）`,
@@ -103,16 +114,19 @@ export default function TechnicalProjectCreateFields({
 
   useEffect(() => {
     const current = String(form.getFieldValue('subdomain') || '')
-    if (!tmg) {
-      if (current) form.setFieldValue('subdomain', undefined)
+    if (!current && autoValue) form.setFieldValue('subdomain', autoValue)
+  }, [autoValue, form])
+
+  const handleDomainChange = (nextDomain: string) => {
+    const nextState = getTmgSubdomainState(rowsByType, nextDomain)
+    const current = String(form.getFieldValue('subdomain') || '')
+    if (nextState.autoValue) {
+      form.setFieldValue('subdomain', nextState.autoValue)
       return
     }
-    if (subdomainDisabled) {
-      if (current !== '无') form.setFieldValue('subdomain', '无')
-    } else if (!subdomainOptions.includes(current)) {
-      form.setFieldValue('subdomain', undefined)
-    }
-  }, [form, subdomainDisabled, subdomainOptions, tmg])
+    const isLive = nextState.options.some(option => !option.disabled && option.value === current)
+    if (!isLive) form.setFieldValue('subdomain', undefined)
+  }
 
   return (
     <div className="pms-technical-project-fields">
@@ -120,10 +134,31 @@ export default function TechnicalProjectCreateFields({
       <div className="pms-project-info-form-grid">
         <Form.Item label="技术赛道" name="technicalTrack"><Input disabled value={technicalTrack} /></Form.Item>
         <Form.Item label="TMG 及技术领域" name="tmg" rules={[{ required: true, message: '请选择 TMG 及技术领域' }]}>
-          <Select showSearch optionFilterProp="label" placeholder="请选择技术领域" options={TECHNICAL_DOMAINS.map(value => ({ label: value, value }))} />
+          <Select
+            showSearch
+            optionFilterProp="label"
+            placeholder={domainOptions.length ? '请选择技术领域' : '暂无可用配置，请先在配置中心维护'}
+            options={domainOptions}
+            onChange={handleDomainChange}
+          />
         </Form.Item>
-        <Form.Item label="子领域" name="subdomain" rules={[{ required: true, message: '请选择子领域' }]}>
-          <Select disabled={!tmg || subdomainDisabled} showSearch optionFilterProp="label" placeholder={subdomainDisabled ? '无' : '请选择子领域'} options={subdomainOptions.map(value => ({ label: value, value }))} />
+        <Form.Item label="子领域" name="subdomain" rules={[
+          {
+            validator: async (_, value) => {
+              if (tmg && !subdomainOptions.some(option => !option.disabled) && !String(value || '').trim()) {
+                throw new Error('暂无可用配置，请先在配置中心维护')
+              }
+            },
+          },
+          { required: true, message: '请选择子领域' },
+        ]}>
+          <Select
+            disabled={!tmg || subdomainDisabled}
+            showSearch
+            optionFilterProp="label"
+            placeholder={subdomainDisabled ? '无' : subdomainOptions.length ? '请选择子领域' : '暂无可用配置，请先在配置中心维护'}
+            options={subdomainOptions}
+          />
         </Form.Item>
         <Form.Item label="前置项目" name="preProjectId">
           <Select allowClear showSearch optionFilterProp="label" placeholder="搜索全部 PMS 项目（选填）" options={preProjectOptions} />
@@ -132,12 +167,12 @@ export default function TechnicalProjectCreateFields({
           <YearControl />
         </Form.Item>
         <Form.Item label="项目价值" name="projectValue" className="pms-project-info-form-span">
-          <Input.TextArea
-            showCount
-            maxLength={2000}
-            autoSize={{ minRows: 3, maxRows: 7 }}
-            placeholder="说明项目价值（选填）"
-            onPressEnter={event => event.stopPropagation()}
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={projectValueOptions.length ? '请选择项目价值（选填）' : '暂无可用配置，请先在配置中心维护'}
+            options={projectValueOptions}
           />
         </Form.Item>
       </div>

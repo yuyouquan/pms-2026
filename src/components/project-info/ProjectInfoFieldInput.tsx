@@ -1,6 +1,6 @@
 'use client'
 
-import { AutoComplete, Button, Card, Input, Select, Space } from 'antd'
+import { Button, Card, Input, Select, Space } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import type { ProjectInfoFieldDefinition } from '@/constants/projectInfoSchema'
@@ -25,11 +25,6 @@ interface ProjectInfoFieldInputProps {
 const toText = (value: ProjectInfoValue | undefined) => (
   typeof value === 'string' ? value : ''
 )
-
-const FREE_TEXT_OPTIONS: Record<string, string[]> = {
-  developmentMode: ['自研', '联合开发', 'ODC', '外研'],
-  kernelVersion: ['5.10', '5.15', '6.1', '6.6'],
-}
 
 export default function ProjectInfoFieldInput({
   field,
@@ -108,7 +103,7 @@ export default function ProjectInfoFieldInput({
     )
   }
 
-  if (field.inputType === 'boolean' || (field.inputType === 'select' && (optionsOverride?.length || field.options?.length))) {
+  if (field.inputType === 'boolean' || (field.inputType === 'select' && (optionsOverride !== undefined || field.options !== undefined))) {
     const options = (optionsOverride || field.options || []).map(option => (
       typeof option === 'string' ? { label: option, value: option } : option
     ))
@@ -121,20 +116,9 @@ export default function ProjectInfoFieldInput({
         allowClear
         showSearch={field.inputType === 'select'}
         value={current || undefined}
-        placeholder={field.placeholder || `请选择${field.label}`}
+        placeholder={options.length === 0 ? '暂无可用配置，请先在配置中心维护' : field.placeholder || `请选择${field.label}`}
         options={options}
         onChange={next => onChange?.(next || '')}
-      />
-    )
-  }
-
-  if (field.inputType === 'select') {
-    return (
-      <AutoComplete
-        value={toText(value)}
-        options={(FREE_TEXT_OPTIONS[field.key] || []).map(option => ({ value: option }))}
-        onChange={next => onChange?.(next)}
-        placeholder={field.placeholder || `请输入${field.label}`}
       />
     )
   }
