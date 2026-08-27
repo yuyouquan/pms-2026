@@ -819,8 +819,11 @@ export default function ProjectInfoModal({
       originalStatus: typeof project?.status === 'string' ? project.status : '',
     })
     if (submittedStatus && !resolvedProjectStatus) {
-      form.setFields([{ name: 'status', errors: ['项目状态不在当前配置中，请重新选择'] }])
-      message.error('项目状态不在当前配置中，请重新选择')
+      const statusError = mode === 'create' && normalizedProjectType === PROJECT_TYPE_TOS_VERSION
+        ? `IPM 映射状态“${submittedStatus}”不在当前配置中，请先维护项目状态配置`
+        : '项目状态不在当前配置中，请重新选择'
+      form.setFields([{ name: 'status', errors: [statusError] }])
+      message.error(statusError)
       return
     }
     const projectSecondaryCategory = normalizedProjectType === PROJECT_CATEGORY_MACHINE

@@ -32,6 +32,16 @@ assert.equal(resolveConfiguredProjectStatus({
   ipmStatus: '进行中',
 }), '在研', 'tOS create keeps the existing IPM status synchronization when it is live')
 assert.equal(resolveConfiguredProjectStatus({
+  projectType: 'tOS版本项目',
+  configuredValues: ['规划中', '已完成'],
+  ipmStatus: '进行中',
+}), '在研', 'tOS create displays the mapped IPM status even when status configuration is missing it')
+assert.equal(resolveConfiguredProjectStatus({
+  projectType: 'tOS版本项目',
+  configuredValues: ['规划中', '已完成'],
+  submittedStatus: '在研',
+}), '', 'tOS create submission rejects a mapped status missing from the live configuration')
+assert.equal(resolveConfiguredProjectStatus({
   projectType: '能力建设项目',
   configuredValues: ['规划中', '在研'],
   ipmStatus: '进行中',
@@ -61,6 +71,7 @@ assert.match(projectInfoModal, /buildEnumOptions/)
 assert.match(projectInfoModal, /useEnumHydration/)
 assert.match(projectInfoModal, /projectType === PROJECT_CATEGORY_CAPABILITY/, 'capability create/edit renders the configured status selector')
 assert.match(projectInfoModal, /resolveConfiguredProjectStatus/, 'project submission uses the runtime configured-status boundary')
+assert.match(projectInfoModal, /IPM 映射状态/, 'tOS create reports a missing mapped status configuration explicitly')
 assert.doesNotMatch(projectInfoModal, /CREATE_FORM_DEFAULTS[^}]*status:\s*'待立项'/s, 'project create no longer injects the stale status default')
 assert.match(addProjectModal, /status: payload\.projectStatus/)
 assert.match(projectList, /getProjectStatusEnumType/)

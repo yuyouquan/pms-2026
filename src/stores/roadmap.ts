@@ -1114,16 +1114,20 @@ export const useRoadmapStore = create<RoadmapStore>()(
       },
       setTosVersionDetails: (currentId, rawInput) => {
         const versionId = normalizeRoadmapTosValue(rawInput.versionId)
-        if (!versionId || !currentRoadmapTosEnumValues().includes(versionId)) {
+        const currentSnapshot = normalizeRoadmapTosValue(currentId)
+        const existing = currentId
+          ? get().tosVersions.find(version => normalizeRoadmapTosValue(version.id) === currentSnapshot)
+          : undefined
+        if (currentId && !existing) return { ok: false, reason: 'not-found' }
+        const preservesExistingSnapshot = Boolean(
+          existing && normalizeRoadmapTosValue(existing.id) === versionId,
+        )
+        if (!versionId || (!preservesExistingSnapshot && !currentRoadmapTosEnumValues().includes(versionId))) {
           return mutationFailure({ versionId: '请选择配置中心中有效的 tOS 路标版本' })
         }
         const period = normalizeTosPeriod(rawInput.periodStartDate, rawInput.periodEndDate)
         const periodErrors = validateTosPeriod(period.periodStartDate, period.periodEndDate)
         if (Object.keys(periodErrors).length) return mutationFailure(periodErrors)
-        const existing = currentId
-          ? get().tosVersions.find(version => version.id === normalizeRoadmapTosValue(currentId))
-          : undefined
-        if (currentId && !existing) return { ok: false, reason: 'not-found' }
         if (get().tosVersions.some(version => version.id === versionId && version.id !== existing?.id)) {
           return { ok: false, reason: 'duplicate' }
         }

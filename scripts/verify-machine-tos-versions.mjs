@@ -548,6 +548,7 @@ const externalPoolSource = readSource(root, 'src/data/externalProjectPool.ts')
 const machineRulesSource = readSource(root, 'src/lib/machineTosVersions.ts')
 const schemaSource = readSource(root, 'src/constants/projectInfoSchema.ts')
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
+const roadmapPlannedModalSource = readSource(root, 'src/components/roadmap/PlannedProjectModal.tsx')
 assert.match(modalSource, /projectType\s*!==\s*PROJECT_TYPE_TOS_VERSION[\s\S]*!isMachineProjectType\(projectType\)/, 'machine and tOS forms omit the independent owner input')
 assert.match(addSource, /deriveProjectResponsiblePersons/, 'create derives responsibility from category fields')
 assert.match(addSource, /deriveProjectTosVersion/, 'tOS create reads version from project name')
@@ -564,6 +565,8 @@ assert.match(machineRulesSource, /readonly\s+T\[\]/, 'machine family resolver ac
 assert.doesNotMatch(machineRulesSource, /THREE_PART|ThreePart|three-part|\\d\+\\\.\\d\+\\\.\\d\+/, 'machine tOS linkage has no segment-count contract')
 assert.doesNotMatch(modalSource, /严格的三段|三段数字/, 'project info no longer rejects arbitrary tOS bodies by segment count')
 assert.doesNotMatch(addSource, /严格的三段|三段数字/, 'project create no longer reports a segment-count restriction')
+assert.doesNotMatch(projectSpaceSource, /严格的三段|三段数字/, 'project-space save no longer reports a segment-count restriction')
+assert.doesNotMatch(roadmapPlannedModalSource, /两位\s*tOS|[23]位\s*tOS/, 'planned roadmap history copy has no segment-count wording')
 assert.ok((externalPoolSource.match(/name:\s*'X6870'/g) || []).length >= 3, 'browser fixtures expose one new and two same-name legacy projects')
 
 const expectedMachineEnumTypes = {

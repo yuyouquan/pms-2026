@@ -390,7 +390,7 @@ export default function PlannedProjectModal({
                     type="warning"
                     showIcon
                     title={`${formatRoadmapTosValue(editingProject?.firstSaleTosVersionId)}（已停用）`}
-                    description="当前历史值仅用于显示；重新选择时只能使用配置中心仍启用的两位 tOS 版本。"
+                    description="当前历史值仅用于显示；重新选择时只能使用配置中心仍启用的 tOS 版本。"
                   />
                 ) : null}
               </Col>

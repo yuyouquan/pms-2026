@@ -1072,6 +1072,76 @@ registerAssertion('planned-project edit preserves an unchanged deleted tOS snaps
   }
 })
 
+registerAssertion('roadmap detail edit preserves its retired canonical tOS snapshot only when unchanged', () => {
+  const previousWindow = globalThis.window
+  globalThis.window = {
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+  }
+  try {
+    const loader = createTypeScriptModuleLoader()
+    const storeModule = loader(path.join(root, 'src/stores/roadmap.ts'))
+    const enumModule = loader(path.join(root, 'src/stores/enums.ts'))
+    const store = resetRoadmapStore(storeModule)
+    const enumStore = enumModule.useEnumStore
+
+    enumStore.setState(state => ({
+      hasHydrated: true,
+      hydrationError: null,
+      rowsByType: {
+        ...state.rowsByType,
+        'roadmap-tos': [{ id: 'roadmap-preview', value: '18.preview' }],
+      },
+    }))
+    const created = store.getState().setTosVersionDetails(null, {
+      versionId: 'tOS18.preview',
+      periodStartDate: '2027-01-01',
+      periodEndDate: '2027-03-01',
+      targets: ['initial'],
+    })
+    if (!created.ok) throw new Error(`live roadmap detail fixture could not be created: ${JSON.stringify(created)}`)
+
+    enumStore.setState(state => ({
+      rowsByType: { ...state.rowsByType, 'roadmap-tos': [] },
+    }))
+    const unchanged = store.getState().setTosVersionDetails('TOS 18.preview', {
+      versionId: 'tOS 18.preview',
+      periodStartDate: '2027-02-01',
+      periodEndDate: '2027-04-01',
+      targets: ['updated target'],
+    })
+    const preserved = store.getState().tosVersions.find(version => version.id === '18.preview')
+    if (!unchanged.ok || preserved?.periodStartDate !== '2027-02-01' || preserved.targets[0] !== 'updated target') {
+      throw new Error(`unchanged retired roadmap detail was rejected: ${JSON.stringify({ unchanged, preserved })}`)
+    }
+
+    const retiredReplacement = store.getState().setTosVersionDetails('18.preview', {
+      versionId: '16.0',
+      periodStartDate: '2027-02-01',
+      periodEndDate: '2027-04-01',
+      targets: ['replacement'],
+    })
+    if (retiredReplacement.ok || retiredReplacement.reason !== 'invalid') {
+      throw new Error(`different retired roadmap value was accepted: ${JSON.stringify(retiredReplacement)}`)
+    }
+
+    enumStore.setState(state => ({
+      rowsByType: { ...state.rowsByType, 'roadmap-tos': [{ id: 'roadmap-live', value: '19.rc' }] },
+    }))
+    const liveReplacement = store.getState().setTosVersionDetails('18.preview', {
+      versionId: 'tOS19.rc',
+      periodStartDate: '2027-02-01',
+      periodEndDate: '2027-04-01',
+      targets: ['live replacement'],
+    })
+    if (!liveReplacement.ok || !store.getState().tosVersions.some(version => version.id === '19.rc')) {
+      throw new Error(`live roadmap replacement was rejected: ${JSON.stringify(liveReplacement)}`)
+    }
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window
+    else globalThis.window = previousWindow
+  }
+})
+
 registerAssertion('roadmap store has no independent tOS option CRUD', () => {
   const storeModule = loadIsolatedRoadmapStore()
   const state = resetRoadmapStore(storeModule).getState()

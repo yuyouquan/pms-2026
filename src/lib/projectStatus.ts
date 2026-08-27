@@ -60,8 +60,7 @@ export const resolveConfiguredProjectStatus = ({
     return ''
   }
   if (projectType === 'tOS版本项目') {
-    const synchronized = mapIpmProjectStatus(ipmStatus, projectType)
-    if (liveValues.includes(synchronized)) return synchronized
+    return mapIpmProjectStatus(ipmStatus, projectType)
   }
   return liveValues[0] || ''
 }
