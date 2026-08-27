@@ -27,6 +27,7 @@ const loadTypescriptModule = async modulePath => {
 }
 const versioning = await loadTypescriptModule(versioningPath)
 const projectMocks = await loadTypescriptModule(projectMockPath)
+const projectSpaceRules = loadTypeScriptModule(root, 'src/lib/projectSpaceLevel1Rules.ts')
 
 const horizontalVersions = [
   { id: 'v1', versionNo: 'V1', status: '已发布' },
@@ -43,6 +44,181 @@ assert.deepEqual(
   ['v1', 'v2', 'v3'],
   'maintainers can see the current revision in the horizontal plan',
 )
+
+assert.deepEqual(projectSpaceRules.LEVEL1_TREE_FILTER_FIELDS.map(field => field.label), [
+  '序号',
+  '阶段/节点',
+  '计划开始时间',
+  '计划完成时间',
+  '预估工期',
+  '实际开始时间',
+  '实际完成时间',
+  '实际工期',
+  '是否延期',
+], 'tree filters expose exactly the visible nine-column workspace fields in display order')
+assert.deepEqual(
+  projectSpaceRules.LEVEL1_TREE_FILTER_FIELDS.map(field => field.key),
+  ['id', 'taskName', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'delayStatus'],
+  'tree filters use the governed row-model keys and omit hidden legacy fields',
+)
+
+const treeRows = [
+  {
+    id: '1', stableId: 'stage-concept', parentId: null, taskName: '概念阶段',
+    planStartDate: '2026-01-01', planEndDate: '2026-03-31', estimatedDays: 90,
+    actualStartDate: '2026-01-03', actualEndDate: '2026-04-01', actualDays: 89, delayStatus: '',
+  },
+  {
+    id: '1.1', stableId: 'milestone-kickoff', parentId: 'stage-concept', taskName: '概念启动',
+    planStartDate: '', planEndDate: '2026-01-15', estimatedDays: null,
+    actualStartDate: '', actualEndDate: '2026-01-15', actualDays: null, delayStatus: '按时',
+  },
+  {
+    id: '1.2', stableId: 'milestone-str1', parentId: '1', taskName: 'STR1',
+    planStartDate: '', planEndDate: '2026-03-31', estimatedDays: null,
+    actualStartDate: '', actualEndDate: '2026-04-01', actualDays: null, delayStatus: '延期',
+  },
+  {
+    id: '2', stableId: 'stage-planning', parentId: null, taskName: '计划阶段',
+    planStartDate: '2026-04-01', planEndDate: '2026-06-30', estimatedDays: 91,
+    actualStartDate: '', actualEndDate: '', actualDays: null, delayStatus: '',
+  },
+  {
+    id: '2.1', stableId: 'milestone-str2', parentId: '2', taskName: 'STR2',
+    planStartDate: '', planEndDate: '2026-05-01', estimatedDays: null,
+    actualStartDate: '', actualEndDate: '', actualDays: null, delayStatus: '-',
+  },
+  {
+    id: 'orphan', stableId: 'orphan', parentId: 'missing-parent', taskName: '孤立节点',
+    planStartDate: '2026-07-01', planEndDate: '2026-07-02', estimatedDays: 2,
+    actualStartDate: '', actualEndDate: '', actualDays: null, delayStatus: '-',
+  },
+]
+const treeRowsInput = structuredClone(treeRows)
+assert.deepEqual(
+  projectSpaceRules.filterLevel1TreeRows(treeRows, [{ field: 'taskName', operator: 'contains', value: 'STR1' }]).map(row => row.taskName),
+  ['概念阶段', 'STR1'],
+  'a matching child keeps its parent and original row order',
+)
+assert.deepEqual(
+  projectSpaceRules.filterLevel1TreeRows(treeRows, [{ field: 'taskName', operator: 'contains', value: '概念阶段' }]).map(row => row.taskName),
+  ['概念阶段', '概念启动', 'STR1'],
+  'a matching parent keeps all children linked by stable or display parent IDs',
+)
+assert.deepEqual(
+  projectSpaceRules.filterLevel1TreeRows(treeRows, [
+    { field: 'taskName', operator: 'contains', value: 'STR' },
+    { field: 'delayStatus', operator: 'equals', value: '延期' },
+  ]).map(row => row.taskName),
+  ['概念阶段', 'STR1'],
+  'multiple tree-filter conditions retain existing AND semantics across stages',
+)
+assert.deepEqual(
+  projectSpaceRules.filterLevel1TreeRows(treeRows, [{ field: 'planEndDate', operator: 'before', value: '2026-02-01' }]).map(row => row.taskName),
+  ['概念阶段', '概念启动'],
+  'date filtering reuses the strict date operator and expands a matching child hierarchy',
+)
+assert.deepEqual(
+  projectSpaceRules.filterLevel1TreeRows(treeRows, [{ field: 'estimatedDays', operator: 'equals', value: '91' }]).map(row => row.taskName),
+  ['计划阶段', 'STR2'],
+  'numeric row values remain compatible with exact text filtering',
+)
+assert.deepEqual(
+  projectSpaceRules.filterLevel1TreeRows(treeRows, [{ field: 'delayStatus', operator: 'equals', value: '按时' }]).map(row => row.taskName),
+  ['概念阶段', '概念启动'],
+  'enum equality keeps the matched child and its parent',
+)
+assert.deepEqual(
+  projectSpaceRules.filterLevel1TreeRows(treeRows, [{ field: 'taskName', operator: 'contains', value: '孤立' }]).map(row => row.taskName),
+  ['孤立节点'],
+  'a matching orphan is never dropped when its parent cannot be resolved',
+)
+const unfilteredTreeRows = projectSpaceRules.filterLevel1TreeRows(treeRows, [])
+assert.deepEqual(unfilteredTreeRows, treeRows, 'empty tree filters retain every row in original order')
+assert.equal(unfilteredTreeRows.every((row, index) => row !== treeRows[index]), true, 'empty tree filters clone every returned row')
+assert.deepEqual(treeRows, treeRowsInput, 'tree filtering never mutates its input rows')
+
+const stablePriorityRows = [
+  { id: 'display-parent', stableId: 'shared-parent', parentId: null, taskName: '稳定父节点' },
+  { id: 'shared-parent', stableId: 'other-parent', parentId: null, taskName: '显示ID冲突父节点' },
+  { id: 'child', stableId: 'stable-child', parentId: 'shared-parent', taskName: '稳定子节点' },
+]
+assert.deepEqual(
+  projectSpaceRules.filterLevel1TreeRows(stablePriorityRows, [{ field: 'taskName', operator: 'equals', value: '稳定子节点' }]).map(row => row.taskName),
+  ['稳定父节点', '稳定子节点'],
+  'stable parent identity wins over a colliding display ID',
+)
+
+const summaryVersions = [
+  { id: 'v9', versionNo: 'V9', status: '已发布' },
+  { id: 'v11', versionNo: 'V11', status: '修订中' },
+  { id: 'v10', versionNo: 'V10', status: '已发布' },
+]
+const summarySnapshots = {
+  v9: [{ planStartDate: '2025-01-01', planEndDate: '2025-12-31', actualStartDate: '2025-01-02', actualEndDate: '2026-01-02' }],
+  v10: [
+    { planStartDate: '2026-03-01', planEndDate: '2026-09-30', actualStartDate: '2026-03-03', actualEndDate: '2026-10-02' },
+    { planStartDate: '2026-01-01', planEndDate: '2026-12-31', actualStartDate: '2026-01-03', actualEndDate: '2027-01-02' },
+    { planStartDate: '2024-02-30', planEndDate: '2030-13-01', actualStartDate: 'not-a-date', actualEndDate: '2035-02-29' },
+  ],
+  v11: [{ planStartDate: '1900-01-01', planEndDate: '2099-12-31', actualStartDate: '1900-01-01', actualEndDate: '2099-12-31' }],
+}
+const summaryVersionsInput = structuredClone(summaryVersions)
+const summarySnapshotsInput = structuredClone(summarySnapshots)
+const snapshotCalls = []
+const latestPublishedSummary = projectSpaceRules.selectLatestPublishedLevel1Summary({
+  versions: summaryVersions,
+  getSnapshot: versionId => {
+    snapshotCalls.push(versionId)
+    return summarySnapshots[versionId]
+  },
+})
+assert.deepEqual(latestPublishedSummary, {
+  versionId: 'v10',
+  planStartDate: '2026-01-01',
+  planEndDate: '2026-12-31',
+  actualStartDate: '2026-01-03',
+  actualEndDate: '2027-01-02',
+}, 'the latest real published version supplies min/max valid ISO summary dates')
+assert.deepEqual(snapshotCalls, ['v10'], 'snapshot lookup only reads the selected latest published version and never a draft')
+assert.deepEqual(summaryVersions, summaryVersionsInput, 'latest-published selection never mutates versions')
+assert.deepEqual(summarySnapshots, summarySnapshotsInput, 'summary aggregation never mutates snapshots')
+latestPublishedSummary.planStartDate = 'mutated-result'
+assert.equal(projectSpaceRules.selectLatestPublishedLevel1Summary({
+  versions: summaryVersions,
+  getSnapshot: versionId => summarySnapshots[versionId],
+}).planStartDate, '2026-01-01', 'summary calls return independent result objects')
+
+const emptyLevel1Summary = {
+  versionId: null,
+  planStartDate: '',
+  planEndDate: '',
+  actualStartDate: '',
+  actualEndDate: '',
+}
+assert.deepEqual(
+  projectSpaceRules.selectLatestPublishedLevel1Summary({ versions: summaryVersions, getSnapshot: () => undefined }),
+  emptyLevel1Summary,
+  'a missing latest-published snapshot returns the empty summary without a live fallback',
+)
+assert.deepEqual(
+  projectSpaceRules.selectLatestPublishedLevel1Summary({ versions: summaryVersions, getSnapshot: () => [] }),
+  emptyLevel1Summary,
+  'an empty latest-published snapshot returns the empty summary',
+)
+let draftOnlySnapshotCalls = 0
+assert.deepEqual(
+  projectSpaceRules.selectLatestPublishedLevel1Summary({
+    versions: [{ id: 'draft', versionNo: 'V99', status: '修订中' }],
+    getSnapshot: () => {
+      draftOnlySnapshotCalls += 1
+      return summarySnapshots.v11
+    },
+  }),
+  emptyLevel1Summary,
+  'draft-only scopes return the empty summary',
+)
+assert.equal(draftOnlySnapshotCalls, 0, 'draft-only scopes never read a snapshot')
 
 const linkedMockTemplate = [
   { id: 'stage', taskName: '阶段', order: 0 },
