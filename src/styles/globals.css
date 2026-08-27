@@ -6898,10 +6898,20 @@ body,
 .pms-level3-history-description { margin-top: 8px; color: var(--pms-text-secondary); }
 .pms-level3-history-change { display: grid; grid-template-columns: 100px minmax(0, 1fr) 18px minmax(0, 1fr); gap: 6px; align-items: start; margin-top: 4px; }
 
-/* Governed level-one plans stay flat in the table while retaining hierarchy in the Gantt. */
-.pms-level1-flat-milestone-table .ant-table-cell { vertical-align: middle; }
-.pms-level1-flat-date-invalid { display: inline-block; }
-.pms-level1-flat-gantt { border: 1px solid #f3f4f6; border-radius: 8px; overflow: hidden; background: #fff; }
+/* Governed machine/tOS level-one hierarchy. Keep every override scoped so technical plans stay unchanged. */
+.pms-level1-tree-table .ant-table-cell { vertical-align: middle; }
+.pms-level1-tree-table .pms-level1-row-level-0 > td {
+  background: #f8fafc !important;
+  color: #111827;
+  font-weight: 600;
+}
+.pms-level1-tree-table .pms-level1-row-level-0:hover > td { background: #f1f5f9 !important; }
+.pms-level1-tree-table .pms-level1-date-input-invalid.ant-picker,
+.pms-level1-tree-table .pms-level1-date-input-invalid.ant-picker:hover,
+.pms-level1-tree-table .pms-level1-date-input-invalid.ant-picker-focused {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.12) !important;
+}
 
 @media (max-width: 720px) {
   .pms-main-content {

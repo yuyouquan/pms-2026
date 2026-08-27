@@ -179,12 +179,16 @@ import {
   canAddLevel1CustomChild,
   canMaintainLevel1Plan,
   canMutateLevel1TaskStructure,
-  insertNextMachineMrMilestone,
-  projectLevel1FlatMilestones,
+  getLevel1StructurePermissions,
+  insertLevel1BusinessNode,
+  isBusinessStage,
   projectLevel1Plan,
   renumberLevel1Tasks,
   sumLevel1EstimatedDays,
-  validateLevel1MilestoneDates,
+  validateLevel1ScheduleDates,
+  validateTosBusinessVersionName,
+  parseTosProjectVersionPrefix,
+  type Level1PlanTask,
 } from '@/lib/level1PlanRules'
 import {
   applyPlanGanttDateChange,
@@ -192,12 +196,10 @@ import {
   buildPlanGanttTasks,
 } from '@/lib/planGanttRules'
 import {
-  LEVEL1_FLAT_FILTER_FIELDS,
-  canConfirmMachineMrInsertion,
-  filterFlatLevel1Rows,
+  LEVEL1_TREE_FILTER_FIELDS,
+  filterLevel1TreeRows,
   getLevel1MaintainerUsers,
   mergeActualFieldsByStableId,
-  selectFlatGanttHierarchy,
   type ProjectSpaceLevel1ScopeToken,
 } from '@/lib/projectSpaceLevel1Rules'
 import {
@@ -247,16 +249,29 @@ import { ProjectSpaceHeader } from '@/containers/AppShell'
 
 const { Option } = Select
 const TOS_VERSION_TRAIN_SNAPSHOT_LEVEL = 'level2-version-train'
-const LEVEL1_FLAT_EXPORT_COLUMNS: ExportColumn[] = [
-  { key: 'sequence', title: '序号' },
-  { key: 'stageName', title: '阶段' },
-  { key: 'milestoneName', title: '里程碑点' },
-  { key: 'status', title: '状态' },
+const LEVEL1_TREE_EXPORT_COLUMNS: ExportColumn[] = [
+  { key: 'id', title: '序号' },
+  { key: 'taskName', title: '阶段/节点' },
+  { key: 'planStartDate', title: '计划开始时间' },
   { key: 'planEndDate', title: '计划完成时间' },
-  { key: 'estimatedDays', title: '计划开发周期' },
+  { key: 'estimatedDays', title: '预估工期' },
+  { key: 'actualStartDate', title: '实际开始时间' },
   { key: 'actualEndDate', title: '实际完成时间' },
-  { key: 'actualDays', title: '实际开发周期' },
+  { key: 'actualDays', title: '实际工期' },
+  { key: 'delayStatus', title: '是否延期' },
 ]
+
+type Level1StructureScopeToken = ProjectSpaceLevel1ScopeToken & {
+  parentStableId: string
+  editMode: boolean
+  draft: boolean
+}
+
+type Level1InsertionDialog = {
+  kind: 'business' | 'stage' | 'child'
+  token: Level1StructureScopeToken
+  taskName: string
+}
 const PROJECT_SPACE_STATUS_OPTIONS = [
   { label: '待立项', value: '待立项' },
   { label: '在研', value: '在研' },
@@ -594,7 +609,7 @@ export default function ProjectSpaceContainer() {
   const [tosTypeDraftRows, setTosTypeDraftRows] = useState<TosTypeConfigRow[]>([])
   const [showProjectInfoEditor, setShowProjectInfoEditor] = useState(false)
   const [transferInfoCollapsed, setTransferInfoCollapsed] = useState(false)
-  const [machineMrConfirmation, setMachineMrConfirmation] = useState<ProjectSpaceLevel1ScopeToken | null>(null)
+  const [level1InsertionDialog, setLevel1InsertionDialog] = useState<Level1InsertionDialog | null>(null)
 
   useEffect(() => {
     setTransferInfoCollapsed(false)
@@ -603,7 +618,6 @@ export default function ProjectSpaceContainer() {
   // ═══════ Derived ═══════
   const isWholeMachineProject = isMachineProjectType(selectedProject?.type)
   const isTosVersionProject = selectedProject?.type === PROJECT_TYPE_TOS_VERSION
-  const usesFlatLevel1Comparison = projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject)
   const supportsLevel3Plan = isWholeMachineProject || isTosVersionProject
   const legacyBuildFields = selectedProject as NonNullable<typeof selectedProject> & {
     buildOption?: string
@@ -2042,12 +2056,15 @@ export default function ProjectSpaceContainer() {
   const collapseAll = () => {
     const key = getScopeKey(); if (!key) return
     const scopeTasks = projectPlanLevel === 'level1' ? effectiveTasks : level2PlanTasks.filter(t => t.planId === activeLevel2Plan)
-    setCollapsedNodes(prev => ({ ...prev, [key]: new Set(getAllExpandableIds(scopeTasks)) }))
+    const expandableIds = projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject)
+      ? scopeTasks.filter((task: any) => !task.parentId && scopeTasks.some((child: any) => child.parentId === task.id)).map((task: any) => task.stableId || task.id)
+      : getAllExpandableIds(scopeTasks)
+    setCollapsedNodes(prev => ({ ...prev, [key]: new Set(expandableIds) }))
   }
 
-  const usesFlatLevel1Filters = projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject)
-  const planFilterFieldOptions = usesFlatLevel1Filters
-    ? LEVEL1_FLAT_FILTER_FIELDS.map(field => ({ label: field.label, value: field.key }))
+  const usesGovernedLevel1Filters = projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject)
+  const planFilterFieldOptions = usesGovernedLevel1Filters
+    ? LEVEL1_TREE_FILTER_FIELDS.map(field => ({ label: field.label, value: field.key }))
     : TABLE_COLUMNS.map(field => ({ label: field.title, value: field.key }))
   const hasActiveLevel1PlanFilters = level1PlanFilters.some(isFilterConditionActive)
   const commitLevel1PlanFilters = (next: PlanFilterCondition[]) => {
@@ -2061,8 +2078,8 @@ export default function ProjectSpaceContainer() {
     projectLevel1Plan(effectiveTasks as any[], { mode: 'standard' }).rows,
     level1PlanFilters,
   )
-  const getFlatLevel1FilteredRows = (taskList: any[]) => filterFlatLevel1Rows(
-    projectLevel1FlatMilestones(taskList),
+  const getLevel1FilteredTreeRows = (taskList: any[]) => filterLevel1TreeRows(
+    projectLevel1Plan(taskList, { mode: 'standard' }).rows as any[],
     level1PlanFilters,
   )
   const filterBySearchText = (taskList: any[]) => taskList.filter((task: any) => {
@@ -2259,25 +2276,28 @@ export default function ProjectSpaceContainer() {
       ? level2PlanTasks.filter((t: any) => t.planId === activeLevel2Plan)
       : effectiveTasks
     const level1DateValidation = projectPlanLevel === 'level1'
-      ? validateLevel1MilestoneDates(tasksToValidate as any[])
+      ? validateLevel1ScheduleDates(tasksToValidate as any[])
       : null
-    const invalidFields = level1DateValidation
-      ? new Map(level1DateValidation.violations.map(violation => [violation.taskId, new Set([violation.field])]))
-      : getInvalidTaskFields(tasksToValidate as any[])
-    if (invalidFields.size > 0) {
+    if (level1DateValidation && !level1DateValidation.valid) {
       message.error('任务校验不通过，无法发布')
-      const firstInvalid = (tasksToValidate as any[]).find((t: any) => invalidFields.has(t.id))
-      if (firstInvalid) {
+      const firstViolation = level1DateValidation.violations[0]
+      const firstInvalid = (tasksToValidate as any[]).find((task: any) => task.id === firstViolation?.taskId)
+      const stableRowKey = firstInvalid?.stableId || firstInvalid?.id
+      if (stableRowKey && firstViolation) {
         setTimeout(() => {
-          const rows = document.querySelectorAll('.pms-table .ant-table-tbody tr.ant-table-row')
-          for (let i = 0; i < rows.length; i++) {
-            if (rows[i].getAttribute('data-row-key') === firstInvalid.id) {
-              rows[i].scrollIntoView({ behavior: 'smooth', block: 'center' })
-              break
-            }
-          }
+          const row = [...document.querySelectorAll('.pms-level1-tree-table .ant-table-tbody tr.ant-table-row')]
+            .find(candidate => candidate.getAttribute('data-row-key') === stableRowKey)
+          const cell = row?.querySelector(`[data-field="${firstViolation.field}"]`) as HTMLElement | null
+          row?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          const focusTarget = cell?.querySelector('input') as HTMLElement | null
+          ;(focusTarget || cell)?.focus()
         }, 0)
       }
+      return
+    }
+    const invalidFields = getInvalidTaskFields(tasksToValidate as any[])
+    if (invalidFields.size > 0) {
+      message.error('任务校验不通过，无法发布')
       return
     }
     const prevPublished = versions.filter(v => v.status === '已发布' && v.id !== currentVersion).sort((a, b) => comparePlanVersions(b, a))[0]
@@ -2360,10 +2380,15 @@ export default function ProjectSpaceContainer() {
     }
     const patch = { [field]: value }
     const isLevel1MarketTable = !isLevel2Custom && isMarketScopedLevel1
-    const updatedTasks = applyPlanTaskDatePatch(tableTasks, {
-      taskId: record.id,
-      patch: { [field]: value },
-    })
+    const governedProjectLevel1Date = !isLevel2Custom
+      && projectPlanLevel === 'level1'
+      && (isWholeMachineProject || isTosVersionProject)
+    const updatedTasks = governedProjectLevel1Date
+      ? tableTasks.map(task => task.id === record.id ? { ...task, [field]: value } : { ...task })
+      : applyPlanTaskDatePatch(tableTasks, {
+          taskId: record.id,
+          patch: { [field]: value },
+        })
     if (updatedTasks.find(task => task.id === record.id)?.[field] !== value) {
       void message.error('日期格式或范围无效，未保存修改')
       return
@@ -2676,13 +2701,13 @@ export default function ProjectSpaceContainer() {
     const isGovernedLevel1Export = projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject)
     const cols = scope === 'current' ? TABLE_COLUMNS.filter(c => visibleColumns.includes(c.key)) : TABLE_COLUMNS
     const exportCols: ExportColumn[] = isGovernedLevel1Export
-      ? LEVEL1_FLAT_EXPORT_COLUMNS
+      ? LEVEL1_TREE_EXPORT_COLUMNS
       : cols.map(c => ({ key: c.key, title: c.title }))
     let rows: any[] = []
     if (projectPlanLevel === 'level1') {
       if (isGovernedLevel1Export) {
-        const projectedRows = projectLevel1FlatMilestones(effectiveTasks)
-        rows = scope === 'current' ? getFlatLevel1FilteredRows(effectiveTasks) : projectedRows
+        const projectedRows = projectLevel1Plan(effectiveTasks, { mode: 'standard' }).rows
+        rows = scope === 'current' ? getLevel1FilteredTreeRows(effectiveTasks) : projectedRows
       } else {
         const projectedRows = projectLevel1Plan(effectiveTasks, { mode: 'standard' }).rows
         rows = scope === 'current' ? applyPlanWorkspaceFilters(projectedRows, level1PlanFilters) : projectedRows
@@ -2765,106 +2790,249 @@ export default function ProjectSpaceContainer() {
     setProjectSpaceModule,
   }
 
-  const renderMachineMrMilestoneButton = () => {
-    if (!selectedProject
-      || !isMachineProjectType(selectedProject.type)
-      || !isCurrentDraft
-      || !isEditMode
-      || !canMaintainCurrentPlan
-      || followedTosLevel1ReadOnly) return null
-    const openingScope: ProjectSpaceLevel1ScopeToken = {
+  const isLevel1SuperAdmin = level1GlobalAdmins.includes(currentLoginUser)
+  const isLevel1Spm = level1SpmUsers.includes(currentLoginUser)
+
+  const createLevel1StructureToken = (parentStableId = ''): Level1StructureScopeToken | null => {
+    if (!selectedProject) return null
+    return {
       projectId: selectedProject.id,
-      scopeKind: 'market',
-      scopeValue: selectedMarketTab,
+      scopeKind: isTosVersionProject ? 'tos' : 'market',
+      scopeValue: isTosVersionProject ? selectedTosTypeTab : selectedMarketTab,
       versionId: currentVersion,
       currentUser: currentLoginUser,
+      parentStableId,
+      editMode: isEditMode,
+      draft: isCurrentDraft,
     }
+  }
+
+  const getLatestLevel1MutationContext = (token: Level1StructureScopeToken) => {
+    const latestPlan = usePlanStore.getState()
+    const latestProjectState = useProjectStore.getState()
+    const latestPermissionState = usePermissionStore.getState()
+    const latestUi = useUiStore.getState()
+    const latestProject = latestProjectState.selectedProject
+    if (!latestProject || latestProject.id !== token.projectId || latestProjectState.currentLoginUser !== token.currentUser) return null
+    if (!token.editMode || !token.draft || !latestUi.isEditMode || latestPlan.projectPlanLevel !== 'level1') return null
+    const permissionProjectId = resolvePermissionProjectId(
+      latestProject.id,
+      typeof latestProject.parentProjectId === 'string' ? latestProject.parentProjectId : undefined,
+    )
+    const latestRoles = latestPermissionState.rolesByProject[permissionProjectId] || []
+    const latestAdmins = latestPermissionState.globalRoles.find(role => role.name === '管理组')?.members || []
+    const latestSpmUsers = getLevel1MaintainerUsers(latestProject.spm, latestRoles)
+    const isSuperAdmin = latestAdmins.includes(token.currentUser)
+    const isSpm = latestSpmUsers.includes(token.currentUser)
+
+    if (isMachineProjectType(latestProject.type)) {
+      const market = latestProjectState.selectedMarketTab
+      if (token.scopeKind !== 'market' || token.scopeValue !== market) return null
+      const latestVersions = getMarketVersions(latestPlan.marketVersionsByKey, latestProject.id, market, latestPlan.versions)
+      const latestVersion = getMarketCurrentVersion(latestPlan.marketCurrentVersionByKey, latestProject.id, market, latestVersions, latestPlan.currentVersion)
+      if (latestVersion !== token.versionId || latestVersions.find(version => version.id === latestVersion)?.status !== '修订中') return null
+      const latestTasks = latestPlan.marketPlanData[market]?.tasks || []
+      return {
+        project: latestProject,
+        tasks: latestTasks as Level1PlanTask[],
+        isSuperAdmin,
+        isSpm,
+        writeTasks: (nextTasks: Level1PlanTask[]) => latestPlan.setMarketPlanData(previous => ({
+          ...previous,
+          [market]: {
+            ...(previous[market] || { level2Tasks: [], createdLevel2Plans: [] }),
+            tasks: nextTasks,
+          },
+        })),
+      }
+    }
+
+    if (latestProject.type !== PROJECT_TYPE_TOS_VERSION) return null
+    const selectedType = latestProjectState.selectedTosTypeTab
+    const typeRows = buildTosTypeRows(
+      latestProject.versionTypes || [],
+      latestProject.versionType || '',
+      latestProjectState.tosTypeConfigsByProjectId[latestProject.id],
+    )
+    const sourceType = getTosTypePlanSourceType(typeRows, selectedType, 'level1')
+    if (token.scopeKind !== 'tos' || token.scopeValue !== selectedType || sourceType !== selectedType) return null
+    const latestVersions = getTosTypeVersions(latestPlan.tosTypeVersionsByKey, latestProject.id, sourceType, 'level1', VERSION_DATA)
+    const latestVersion = getTosTypeCurrentVersion(
+      latestPlan.tosTypeCurrentVersionByKey,
+      latestProject.id,
+      sourceType,
+      'level1',
+      latestVersions,
+      INITIAL_TOS_CURRENT_VERSION,
+    )
+    if (latestVersion !== token.versionId || latestVersions.find(version => version.id === latestVersion)?.status !== '修订中') return null
+    const latestEntry = latestPlan.tosTypePlanDataByProjectId[latestProject.id]?.[sourceType]
+      || createTosTypePlanEntry(tosTypeSeedEntry)
+    const latestTasks = latestEntry.level1Tasks
+    return {
+      project: latestProject,
+      tasks: latestTasks as Level1PlanTask[],
+      isSuperAdmin,
+      isSpm,
+      writeTasks: (nextTasks: Level1PlanTask[]) => latestPlan.setTosTypePlanDataByProjectId(previous => ({
+        ...previous,
+        [latestProject.id]: {
+          ...(previous[latestProject.id] || {}),
+          [sourceType]: {
+            ...(previous[latestProject.id]?.[sourceType] || latestEntry),
+            level1Tasks: nextTasks,
+          },
+        },
+      })),
+    }
+  }
+
+  const openLevel1Insertion = (kind: Level1InsertionDialog['kind'], parentStableId = '') => {
+    const token = createLevel1StructureToken(parentStableId)
+    if (!token) return
+    const maximumMr = effectiveTasks.reduce((maximum: number, task: any) => {
+      const match = /^MR(\d+)$/.exec(task.taskName)
+      return match ? Math.max(maximum, Number(match[1])) : maximum
+    }, 3)
+    const tosPrefix = parseTosProjectVersionPrefix(selectedProject?.name || '')?.prefix
+    setLevel1InsertionDialog({
+      kind,
+      token,
+      taskName: kind === 'business'
+        ? isWholeMachineProject ? `MR${maximumMr + 1}` : tosPrefix ? `${tosPrefix}.005` : ''
+        : kind === 'stage' ? '新阶段' : '新子节点',
+    })
+  }
+
+  const businessStages = effectiveTasks.filter((task: any) => selectedProject && isBusinessStage(selectedProject.type, task))
+  const renderLevel1StructureActions = () => {
+    if (!selectedProject || !isCurrentDraft || !isEditMode || followedTosLevel1ReadOnly) return null
+    const addStagePermission = getLevel1StructurePermissions({
+      projectType: selectedProject.type,
+      isDraft: isCurrentDraft,
+      isSuperAdmin: isLevel1SuperAdmin,
+      isSpm: isLevel1Spm,
+    })
+    const defaultBusinessParent = businessStages[0]?.stableId || ''
     return (
       <>
-        <Button aria-label="添加MR里程碑" icon={<PlusOutlined />} onClick={() => setMachineMrConfirmation(openingScope)}>
-          添加MR里程碑
-        </Button>
-        {machineMrConfirmation && <Modal
-          open
-          title="确认添加上市阶段 MR 里程碑？"
-          okText="确认添加"
-          cancelText="取消"
-          onCancel={() => setMachineMrConfirmation(null)}
-          onOk={() => {
-            if (!machineMrConfirmation) return
-            const latestPlan = usePlanStore.getState()
-            const latestProjectState = useProjectStore.getState()
-            const latestPermissionState = usePermissionStore.getState()
-            const latestUi = useUiStore.getState()
-            const latestProject = latestProjectState.selectedProject
-            const latestMarket = latestProjectState.selectedMarketTab
-            const latestVersions = latestProject
-              ? getMarketVersions(latestPlan.marketVersionsByKey, latestProject.id, latestMarket, latestPlan.versions)
-              : []
-            const latestVersion = latestProject
-              ? getMarketCurrentVersion(latestPlan.marketCurrentVersionByKey, latestProject.id, latestMarket, latestVersions, latestPlan.currentVersion)
-              : ''
-            const latestVersionData = latestVersions.find(version => version.id === latestVersion)
-            const latestGlobalAdmins = latestPermissionState.globalRoles.find(role => role.name === '管理组')?.members || []
-            const latestPermissionProjectId = resolvePermissionProjectId(
-              latestProject?.id || '',
-              typeof latestProject?.parentProjectId === 'string' ? latestProject.parentProjectId : undefined,
-            )
-            const latestSpmUsers = getLevel1MaintainerUsers(
-              latestProject?.spm,
-              latestPermissionState.rolesByProject[latestPermissionProjectId] || [],
-            )
-            const latestCanMaintain = Boolean(latestProject && canMaintainLevel1Plan({
-              projectType: latestProject.type,
-              currentUser: latestProjectState.currentLoginUser,
-              spmUsers: latestSpmUsers,
-              technicalLead: String(latestProject.technicalLead || latestProject.leader || ''),
-              globalAdmins: latestGlobalAdmins,
-            }))
-            const latestScope: ProjectSpaceLevel1ScopeToken = {
-              projectId: latestProject?.id || '',
-              scopeKind: 'market',
-              scopeValue: latestMarket,
-              versionId: latestVersion,
-              currentUser: latestProjectState.currentLoginUser,
-            }
-            const latestFollowed = isFollowMarket(
-              latestProjectState.marketConfigsByProjectId[latestProject?.id || ''] || [],
-              latestMarket,
-            )
-            if (!canConfirmMachineMrInsertion({
-              openingScope: machineMrConfirmation,
-              currentScope: latestScope,
-              isMachineProject: Boolean(latestProject && isMachineProjectType(latestProject.type)),
-              isCurrentDraft: latestVersionData?.status === '修订中',
-              isEditMode: latestUi.isEditMode && latestPlan.projectPlanLevel === 'level1',
-              canMaintain: latestCanMaintain,
-              followedReadOnly: latestFollowed,
-            })) {
-              setMachineMrConfirmation(null)
-              void message.warning('计划状态已变化，请重新操作')
-              return
-            }
-            const latestTasks = latestPlan.marketPlanData[latestMarket]?.tasks || []
-            const result = insertNextMachineMrMilestone(latestTasks)
-            if (!result.ok) {
-              setMachineMrConfirmation(null)
-              void message.error(result.reason === 'launch-stage-missing' ? '未找到上市阶段' : 'MR 编号已存在')
-              return
-            }
-            setMachineMrConfirmation(null)
-            latestPlan.setMarketPlanData(previous => ({
-              ...previous,
-              [latestMarket]: {
-                ...(previous[latestMarket] || { level2Tasks: [], createdLevel2Plans: [] }),
-                tasks: result.tasks,
-              },
-            }))
-            void message.success(`已添加 ${result.task.taskName}`)
-          }}
-        >
-          系统将自动生成下一个 MR 编号，名称不可修改。
-        </Modal>}
+        {canMaintainCurrentPlan && defaultBusinessParent && (
+          <Button
+            aria-label={isWholeMachineProject ? '添加MR里程碑' : '添加tOS版本'}
+            icon={<PlusOutlined />}
+            onClick={() => openLevel1Insertion('business', defaultBusinessParent)}
+          >
+            {isWholeMachineProject ? '添加MR里程碑' : '添加tOS版本'}
+          </Button>
+        )}
+        {addStagePermission.canAddStage && (
+          <Button aria-label="添加一级阶段" icon={<PlusOutlined />} onClick={() => openLevel1Insertion('stage')}>
+            添加一级阶段
+          </Button>
+        )}
+        {level1InsertionDialog && (
+          <Modal
+            open
+            title={level1InsertionDialog.kind === 'business'
+              ? `确认${isWholeMachineProject ? '添加 MR 里程碑' : '添加 tOS 版本'}？`
+              : level1InsertionDialog.kind === 'stage' ? '确认添加一级阶段？' : '确认添加子节点？'}
+            okText="确认添加"
+            cancelText="取消"
+            onCancel={() => setLevel1InsertionDialog(null)}
+            onOk={() => {
+              const dialog = level1InsertionDialog
+              const latest = getLatestLevel1MutationContext(dialog.token)
+              if (!latest) {
+                setLevel1InsertionDialog(null)
+                void message.warning('计划状态或操作范围已变化，请重新操作')
+                return Promise.reject()
+              }
+              const parent = dialog.token.parentStableId
+                ? latest.tasks.find(task => (task.stableId || task.id) === dialog.token.parentStableId)
+                : undefined
+              const permissions = getLevel1StructurePermissions({
+                projectType: latest.project.type,
+                isDraft: true,
+                isSuperAdmin: latest.isSuperAdmin,
+                isSpm: latest.isSpm,
+                parent,
+              })
+              const canAdd = dialog.kind === 'stage' ? permissions.canAddStage : permissions.canAddChild
+              if (!canAdd || (dialog.kind !== 'stage' && !parent)) {
+                setLevel1InsertionDialog(null)
+                void message.warning('结构权限或父阶段已变化，请重新操作')
+                return Promise.reject()
+              }
+              const taskName = dialog.taskName.trim()
+              if (!taskName) {
+                void message.error('请输入节点名称')
+                return Promise.reject()
+              }
+              if (dialog.kind === 'business') {
+                const result = insertLevel1BusinessNode(latest.tasks, {
+                  projectType: latest.project.type,
+                  projectName: latest.project.name,
+                  parentStableId: dialog.token.parentStableId,
+                  taskName,
+                  now: Date.now(),
+                })
+                if (!result.ok) {
+                  void message.error(result.message)
+                  return Promise.reject()
+                }
+                latest.writeTasks(result.tasks)
+                setLevel1InsertionDialog(null)
+                void message.success(`已添加 ${result.task.taskName}`)
+                return
+              }
+              const stableId = `custom-${dialog.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+              const nextTask: Level1PlanTask = {
+                id: stableId,
+                stableId,
+                parentId: parent?.id || null,
+                order: dialog.kind === 'stage'
+                  ? latest.tasks.filter(task => !task.parentId).length + 1
+                  : latest.tasks.filter(task => task.parentId === parent?.id).length + 1,
+                taskName,
+                source: 'custom',
+                nodeKind: dialog.kind === 'stage' ? 'stage' : 'business-period',
+                planStartDate: '', planEndDate: '', estimatedDays: null,
+                actualStartDate: '', actualEndDate: '', actualDays: null,
+                status: '未开始', progress: 0,
+              }
+              latest.writeTasks(renumberLevel1Tasks([...latest.tasks, nextTask]))
+              setLevel1InsertionDialog(null)
+              void message.success(`已添加 ${taskName}`)
+            }}
+          >
+            {level1InsertionDialog.kind !== 'stage' && (
+              <Select
+                aria-label="业务父阶段"
+                value={level1InsertionDialog.token.parentStableId || undefined}
+                options={(level1InsertionDialog.kind === 'business' ? businessStages : effectiveTasks.filter((task: any) => !task.parentId))
+                  .map((stage: any) => ({ value: stage.stableId || stage.id, label: stage.taskName }))}
+                onChange={parentStableId => setLevel1InsertionDialog(previous => previous ? {
+                  ...previous,
+                  token: { ...previous.token, parentStableId },
+                } : previous)}
+                style={{ width: '100%', marginBottom: 12 }}
+              />
+            )}
+            <Input
+              aria-label="业务节点名称"
+              value={level1InsertionDialog.taskName}
+              placeholder={level1InsertionDialog.kind === 'business' && isTosVersionProject
+                ? `请输入 ${parseTosProjectVersionPrefix(selectedProject.name)?.prefix || '项目版本'}.XXX，尾号为0或5`
+                : '请输入节点名称'}
+              status={level1InsertionDialog.kind === 'business' && (
+                isWholeMachineProject
+                  ? !/^MR\d+$/.test(level1InsertionDialog.taskName)
+                  : !validateTosBusinessVersionName(selectedProject.name, level1InsertionDialog.taskName).valid
+              ) ? 'error' : undefined}
+              onChange={event => setLevel1InsertionDialog(previous => previous ? { ...previous, taskName: event.target.value } : previous)}
+            />
+          </Modal>
+        )}
       </>
     )
   }
@@ -2882,36 +3050,49 @@ export default function ProjectSpaceContainer() {
         && isCurrentDraft
         && canMaintainCurrentPlan
         && !followedTosLevel1ReadOnly
-      const filteredHierarchy = selectFlatGanttHierarchy(
-        effectiveTasks,
-        getFlatLevel1FilteredRows(effectiveTasks),
-      )
+      const filteredRows = getLevel1FilteredTreeRows(effectiveTasks)
+      const includedStableIds = new Set(filteredRows.map((task: any) => task.stableId || task.id))
+      const filteredHierarchy = effectiveTasks.filter((task: any) => includedStableIds.has(task.stableId || task.id))
+      const stableIdByDisplayId = new Map(filteredHierarchy.map((task: any) => [String(task.id), String(task.stableId || task.id)]))
+      const displayIdByStableId = new Map(filteredHierarchy.map((task: any) => [String(task.stableId || task.id), String(task.id)]))
+      const ganttCollapsedIds = new Set([...collapsedSet].map(stableId => displayIdByStableId.get(stableId) || stableId))
       return (
-        <div className="pms-level1-flat-gantt">
+        <div className="pms-level1-tree-gantt" style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
           <DHTMLXGantt
             tasks={buildPlanGanttTasks(filteredHierarchy, { mode: 'hierarchical', editable: ganttEditable })}
             columns={ganttColumns}
             onTaskClick={(task) => message.info(`点击任务: ${task.text}`)}
             readOnly={!ganttEditable}
-            collapsedIds={collapsedSet}
+            collapsedIds={ganttCollapsedIds}
             scaleMode={projectPlanGanttScaleMode}
             onCollapsedChange={(updater) => {
               if (!key) return
               setCollapsedNodes(prev => {
-                const current = prev[key] || new Set<string>()
-                return { ...prev, [key]: updater(current) }
+                const currentStableIds = prev[key] || new Set<string>()
+                const currentDisplayIds = new Set([...currentStableIds].map(stableId => displayIdByStableId.get(stableId) || stableId))
+                const nextDisplayIds = updater(currentDisplayIds)
+                return {
+                  ...prev,
+                  [key]: new Set([...nextDisplayIds].map(displayId => stableIdByDisplayId.get(displayId) || displayId)),
+                }
               })
             }}
             onTaskDateChange={change => {
-              if (change.nodeType !== 'milestone') return false
-              const next = applyPlanGanttDateChange(effectiveTasks, { ...change, mode: 'milestone' })
-              const validation = validateLevel1MilestoneDates(next)
+              const next = applyPlanGanttDateChange(effectiveTasks, {
+                ...change,
+                mode: change.nodeType === 'milestone' ? 'milestone' : 'task',
+              })
+              if (next === effectiveTasks) {
+                void message.error('日期格式或范围无效，未保存修改')
+                return false
+              }
+              const validation = validateLevel1ScheduleDates(next)
               if (!validation.valid) {
-                void message.error(validation.violations[0]?.message || '里程碑日期不符合顺序要求')
+                void message.error(validation.violations[0]?.message || '计划日期不符合顺序要求')
                 return false
               }
               setEffectiveTasks(next)
-              void message.success('计划完成时间已更新')
+              void message.success(change.nodeType === 'milestone' ? '计划完成时间已更新' : '计划时间已更新')
               return true
             }}
           />
@@ -2933,7 +3114,7 @@ export default function ProjectSpaceContainer() {
     const isLevel2Custom = !!customTasks
     const tableTasks = customTasks || effectiveTasks
     const isGovernedLevel1Table = !isLevel2Custom && projectPlanLevel === 'level1'
-    const isFlatGovernedLevel1Table = isGovernedLevel1Table
+    const isHierarchicalGovernedLevel1Table = isGovernedLevel1Table
       && (isWholeMachineProject || isTosVersionProject)
     const level1Projection = isGovernedLevel1Table
       ? projectLevel1Plan(tableTasks, { mode: 'standard' })
@@ -2953,109 +3134,237 @@ export default function ProjectSpaceContainer() {
       }
       writeTableTasks(newTasks)
     }
-    if (isFlatGovernedLevel1Table) {
-      const flatRows = projectLevel1FlatMilestones(tableTasks)
-      const visibleFlatRows = getFlatLevel1FilteredRows(tableTasks)
-      const validation = validateLevel1MilestoneDates(tableTasks)
-      const canDeleteFlatMilestone = (record: any) => Boolean(
-        record.source === 'custom'
-        && record.stableId
-        && isCurrentDraft
-        && canMaintainCurrentPlan
-        && !followedTosLevel1ReadOnly
-        && selectedProject
-        && canMutateLevel1TaskStructure({
-          projectType: selectedProject.type,
-          task: record,
-          parent: tableTasks.find((task: any) => task.id === record.parentId),
-          action: 'delete',
-        }),
-      )
-      const patchFlatMilestoneDate = (
-        record: any,
-        field: 'planEndDate' | 'actualEndDate',
-        value: string,
-      ) => {
-        const nextTasks = applyPlanTaskDatePatch(tableTasks, {
-          taskId: record.id,
-          patch: { [field]: value },
-        })
-        if (nextTasks.find(task => task.id === record.id)?.[field] !== value) {
-          void message.error('日期格式或范围无效，未保存修改')
-          return
-        }
-        if (field === 'actualEndDate') {
-          updateActualDateForTask(tableTasks, currentSetTasks, record, field, value, false)
-          return
-        }
-        currentSetTasks(nextTasks)
+    if (isHierarchicalGovernedLevel1Table && level1Projection && selectedProject) {
+      const validation = validateLevel1ScheduleDates(tableTasks)
+      const projectedRows = filterLevel1TreeRows(level1Projection.rows as any[], level1PlanFilters)
+      const rawByStableId = new Map(tableTasks.map((task: any) => [task.stableId || task.id, task]))
+      const rawByDisplayId = new Map(tableTasks.map((task: any) => [task.id, task]))
+      const getRawTask = (record: any) => rawByStableId.get(record.stableId || record.id) || rawByDisplayId.get(record.id)
+      const getRawParent = (record: any) => {
+        const rawTask = getRawTask(record)
+        return rawTask?.parentId ? rawByDisplayId.get(rawTask.parentId) : undefined
       }
-      const renderFlatDate = (
+      const getStructurePermissions = (record?: any, parent = record ? getRawParent(record) : undefined) => getLevel1StructurePermissions({
+        projectType: selectedProject.type,
+        isDraft: isCurrentDraft,
+        isSuperAdmin: isLevel1SuperAdmin,
+        isSpm: isLevel1Spm,
+        task: record ? getRawTask(record) : undefined,
+        parent,
+      })
+      const canReorderGovernedTask = (record: any) => Boolean(
+        getRawTask(record)?.source === 'custom' && getStructurePermissions(record).canReorder,
+      )
+      const canDeleteGovernedTask = (record: any) => Boolean(
+        getRawTask(record) && getStructurePermissions(record).canDelete,
+      )
+      const canAddGenericChild = (record: any) => Boolean(
+        !record.parentId && isLevel1SuperAdmin && getStructurePermissions(undefined, getRawTask(record)).canAddChild,
+      )
+      const patchGovernedDate = (
+        record: any,
+        field: 'planStartDate' | 'planEndDate' | 'actualStartDate' | 'actualEndDate',
+        value: string,
+      ) => {
+        if (value && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !dayjs(value).isValid() || dayjs(value).format('YYYY-MM-DD') !== value)) {
+          void message.error('日期格式无效，未保存修改')
+          return
+        }
+        const rawTask = getRawTask(record)
+        if (!rawTask) return
+        if (field === 'actualStartDate' || field === 'actualEndDate') {
+          updateActualDateForTask(tableTasks, currentSetTasks, rawTask, field, value, false)
+          return
+        }
+        currentSetTasks(tableTasks.map((task: any) => task.id === rawTask.id ? { ...task, [field]: value } : task))
+      }
+      const renderGovernedDate = (
         value: string,
         record: any,
-        field: 'planEndDate' | 'actualEndDate',
+        field: 'planStartDate' | 'planEndDate' | 'actualStartDate' | 'actualEndDate',
       ) => {
-        const reasons = validation.byTaskId[record.id]?.[field] || []
-        const canEditPlanEnd = field === 'planEndDate'
-          && isEditMode
-          && isCurrentDraft
+        const rawTask = getRawTask(record)
+        const nodeKind = rawTask?.nodeKind || (rawTask?.parentId ? 'fixed-milestone' : 'stage')
+        const isEditableField = nodeKind === 'business-period'
+          || (nodeKind === 'fixed-milestone' && (field === 'planEndDate' || field === 'actualEndDate'))
+        const isPlanField = field === 'planStartDate' || field === 'planEndDate'
+        const canEdit = Boolean(rawTask?.parentId)
+          && isEditableField
           && canMaintainCurrentPlan
           && !followedTosLevel1ReadOnly
-          && Boolean(record.parentId)
-        const canEditActualEnd = field === 'actualEndDate'
-          && canMaintainCurrentPlan
-          && (isCurrentDraft || isLatestPublished)
-          && Boolean(record.parentId)
-        const content = canEditPlanEnd || canEditActualEnd
-          ? <ClickToEditDate value={value} onChange={nextValue => patchFlatMilestoneDate(record, field, nextValue)} />
-          : <span style={{ fontSize: 12, color: value ? '#4b5563' : '#bfbfbf' }}>{value || '-'}</span>
-        return reasons.length > 0
-          ? <Tooltip color="red" title={reasons.join('；')}><span className="pms-level1-flat-date-invalid">{content}</span></Tooltip>
-          : content
+          && (isPlanField
+            ? isCurrentDraft && isEditMode
+            : (isCurrentDraft && isEditMode) || isLatestPublished)
+        const reasons = validation.byTaskId[rawTask?.id || record.id]?.[field] || []
+        const invalid = reasons.length > 0
+        const picker = canEdit ? (
+          <DatePicker
+            size="small"
+            aria-label={`${field} ${record.taskName}`}
+            className={invalid ? 'pms-level1-date-input-invalid' : undefined}
+            status={invalid ? 'error' : undefined}
+            value={value ? dayjs(value) : null}
+            format="YYYY-MM-DD"
+            allowClear
+            onChange={date => patchGovernedDate(record, field, date ? date.format('YYYY-MM-DD') : '')}
+          />
+        ) : <span style={{ fontSize: 12, color: invalid ? '#dc2626' : value ? '#4b5563' : '#bfbfbf' }}>{value || '-'}</span>
+        return invalid
+          ? <Tooltip color="red" title={reasons.join('；')}><span>{picker}</span></Tooltip>
+          : picker
       }
-      const flatColumns: ColumnsType<any> = [
-        { title: '序号', dataIndex: 'sequence', key: 'sequence', width: 72, fixed: 'left' },
-        { title: '阶段', dataIndex: 'stageName', key: 'stageName', width: 160, fixed: 'left' },
-        { title: '里程碑点', dataIndex: 'milestoneName', key: 'milestoneName', width: 160, fixed: 'left' },
-        { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (value: string) => value || '-' },
+      const deleteGovernedTask = (record: any) => {
+        const rawTask = getRawTask(record)
+        const parent = getRawParent(record)
+        const token = createLevel1StructureToken(parent?.stableId || parent?.id || '')
+        if (!rawTask || !token) return
+        const latest = getLatestLevel1MutationContext(token)
+        const latestTask = latest?.tasks.find(task => (task.stableId || task.id) === (rawTask.stableId || rawTask.id))
+        const latestParent = latestTask?.parentId ? latest?.tasks.find(task => task.id === latestTask.parentId) : undefined
+        const permissions = latest && latestTask ? getLevel1StructurePermissions({
+          projectType: latest.project.type,
+          isDraft: true,
+          isSuperAdmin: latest.isSuperAdmin,
+          isSpm: latest.isSpm,
+          task: latestTask,
+          parent: latestParent,
+        }) : null
+        if (!latest || !latestTask || !permissions?.canDelete) {
+          void message.warning('结构权限或计划范围已变化，请重新操作')
+          return
+        }
+        latest.writeTasks(renumberLevel1Tasks(latest.tasks.filter(task => (
+          (task.stableId || task.id) !== (latestTask.stableId || latestTask.id)
+          && task.parentId !== latestTask.id
+        ))))
+        void message.success('已删除节点')
+      }
+      const handleGovernedDragEnd = ({ active, over }: DragEndEvent) => {
+        if (!over || active.id === over.id) return
+        const activeStableId = String(active.id)
+        const overStableId = String(over.id)
+        const activeRaw = rawByStableId.get(activeStableId)
+        const activeParent = activeRaw?.parentId ? rawByDisplayId.get(activeRaw.parentId) : undefined
+        const token = createLevel1StructureToken(activeParent?.stableId || activeParent?.id || '')
+        if (!activeRaw || !token) return
+        const latest = getLatestLevel1MutationContext(token)
+        const activeTask = latest?.tasks.find(task => (task.stableId || task.id) === activeStableId)
+        const overTask = latest?.tasks.find(task => (task.stableId || task.id) === overStableId)
+        const parent = activeTask?.parentId ? latest?.tasks.find(task => task.id === activeTask.parentId) : undefined
+        const activePermissions = latest && activeTask ? getLevel1StructurePermissions({
+          projectType: latest.project.type, isDraft: true, isSuperAdmin: latest.isSuperAdmin, isSpm: latest.isSpm, task: activeTask, parent,
+        }) : null
+        const overPermissions = latest && overTask ? getLevel1StructurePermissions({
+          projectType: latest.project.type, isDraft: true, isSuperAdmin: latest.isSuperAdmin, isSpm: latest.isSpm, task: overTask,
+          parent: overTask.parentId ? latest.tasks.find(task => task.id === overTask.parentId) : undefined,
+        }) : null
+        if (!latest || !activeTask || !overTask || activeTask.parentId !== overTask.parentId
+          || activeTask.source !== 'custom' || overTask.source !== 'custom'
+          || !activePermissions?.canReorder || !overPermissions?.canReorder) return
+        const siblings = latest.tasks.filter(task => task.parentId === activeTask.parentId).sort((a, b) => a.order - b.order)
+        const movable = siblings.filter(task => task.source === 'custom')
+        const oldIndex = movable.findIndex(task => (task.stableId || task.id) === activeStableId)
+        const newIndex = movable.findIndex(task => (task.stableId || task.id) === overStableId)
+        if (oldIndex < 0 || newIndex < 0) return
+        const reordered = [...movable]
+        const [moved] = reordered.splice(oldIndex, 1)
+        reordered.splice(newIndex, 0, moved)
+        const movableSlots = siblings.flatMap((task, index) => task.source === 'custom' ? [index] : [])
+        const nextSiblings = [...siblings]
+        movableSlots.forEach((slot, index) => { nextSiblings[slot] = { ...reordered[index], order: slot + 1 } })
+        const reorderedByStable = new Map(nextSiblings.map(task => [task.stableId || task.id, task]))
+        latest.writeTasks(renumberLevel1Tasks(latest.tasks.map(task => reorderedByStable.get(task.stableId || task.id) || task)))
+        void message.success('节点顺序已更新')
+      }
+
+      const childrenByParentStableId = new Map<string, any[]>()
+      const projectedByDisplayId = new Map(projectedRows.map((row: any) => [row.id, row]))
+      const projectedByStableId = new Map(projectedRows.map((row: any) => [row.stableId || row.id, row]))
+      projectedRows.forEach((row: any) => {
+        if (!row.parentId) return
+        const parent = projectedByDisplayId.get(row.parentId) || projectedByStableId.get(row.parentId)
+        if (!parent) return
+        const parentStableId = parent.stableId || parent.id
+        childrenByParentStableId.set(parentStableId, [...(childrenByParentStableId.get(parentStableId) || []), row])
+      })
+      const treeRows = projectedRows.filter((row: any) => !row.parentId || (!projectedByDisplayId.has(row.parentId) && !projectedByStableId.has(row.parentId))).map((row: any) => {
+        const children = childrenByParentStableId.get(row.stableId || row.id)
+        return children?.length ? { ...row, children } : { ...row }
+      })
+      const scopeKey = getScopeKey()
+      const collapsedSet = scopeKey ? (collapsedNodes[scopeKey] || new Set<string>()) : new Set<string>()
+      const expandableStableIds = treeRows.filter((row: any) => row.children?.length).map((row: any) => row.stableId || row.id)
+      const expandedRowKeys = expandableStableIds.filter((stableId: string) => !collapsedSet.has(stableId))
+      const makeDateColumn = (title: string, field: 'planStartDate' | 'planEndDate' | 'actualStartDate' | 'actualEndDate', width = 150) => ({
+        title, dataIndex: field, key: field, width,
+        onCell: (record: any) => ({
+          className: (validation.byTaskId[getRawTask(record)?.id || record.id]?.[field] || []).length ? 'pms-cell-invalid' : '',
+          'data-field': field,
+          tabIndex: -1,
+        } as any),
+        render: (value: string, record: any) => renderGovernedDate(value, record, field),
+      })
+      const columns: ColumnsType<any> = [
         {
-          title: '计划完成时间', dataIndex: 'planEndDate', key: 'planEndDate', width: 145,
-          onCell: (record: any) => ({ className: (validation.byTaskId[record.id]?.planEndDate || []).length > 0 ? 'pms-cell-invalid' : '' }),
-          render: (value: string, record: any) => renderFlatDate(value, record, 'planEndDate'),
+          title: '序号', dataIndex: 'id', key: 'id', width: 100, fixed: 'left',
+          render: (value: string, record: any) => <Space size={6}>{canReorderGovernedTask(record) && <DragHandle />}<span>{value}</span></Space>,
         },
-        { title: '计划开发周期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 120, render: (value: number | null) => value == null ? '-' : `${value}天` },
         {
-          title: '实际完成时间', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 145,
-          onCell: (record: any) => ({ className: (validation.byTaskId[record.id]?.actualEndDate || []).length > 0 ? 'pms-cell-invalid' : '' }),
-          render: (value: string, record: any) => renderFlatDate(value, record, 'actualEndDate'),
+          title: '阶段/节点', dataIndex: 'taskName', key: 'taskName', width: 250, fixed: 'left',
+          render: (value: string, record: any) => (
+            <Space size={4}>
+              <span>{value}</span>
+              {canAddGenericChild(record) && (
+                <Tooltip title="添加子节点"><Button type="text" size="small" aria-label={`添加子节点 ${value}`} icon={<PlusOutlined />} onClick={() => openLevel1Insertion('child', record.stableId || record.id)} /></Tooltip>
+              )}
+              {canDeleteGovernedTask(record) && (
+                <Popconfirm title="确认删除该节点？" onConfirm={() => deleteGovernedTask(record)} okText="确认" cancelText="取消">
+                  <Button type="text" danger size="small" aria-label={`删除节点 ${value}`} icon={<DeleteOutlined />} />
+                </Popconfirm>
+              )}
+            </Space>
+          ),
         },
-        { title: '实际开发周期', dataIndex: 'actualDays', key: 'actualDays', width: 120, render: (value: number | null) => value == null ? '-' : `${value}天` },
+        makeDateColumn('计划开始时间', 'planStartDate'),
+        makeDateColumn('计划完成时间', 'planEndDate'),
+        { title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 100, render: (value: number | null) => value == null ? '-' : `${value}天` },
+        makeDateColumn('实际开始时间', 'actualStartDate'),
+        makeDateColumn('实际完成时间', 'actualEndDate'),
+        { title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 100, render: (value: number | null) => value == null ? '-' : `${value}天` },
+        { title: '是否延期', dataIndex: 'delayStatus', key: 'delayStatus', width: 100, render: (value: string, record: any) => record.parentId ? <Tag color={value === '延期' ? 'error' : value === '按时' ? 'success' : 'default'}>{value || '-'}</Tag> : '-' },
       ]
-      if (flatRows.some(canDeleteFlatMilestone)) {
-        flatColumns.push({
-          title: '操作', key: 'action', width: 64, fixed: 'right',
-          render: (_: unknown, record: any) => canDeleteFlatMilestone(record) ? (
-            <Popconfirm title="确认删除该里程碑？" onConfirm={() => {
-              const stableId = record.stableId
-              currentSetTasks(renumberLevel1Tasks(tableTasks.filter((task: any) => (task.stableId || task.id) !== stableId)))
-              void message.success('已删除里程碑')
-            }} okText="确认" cancelText="取消">
-              <Button type="text" danger size="small" aria-label={`删除里程碑 ${record.milestoneName}`} icon={<DeleteOutlined />} />
-            </Popconfirm>
-          ) : null,
-        })
-      }
-      return (
+      const sortableIds = projectedRows.map((row: any) => row.stableId || row.id)
+      const table = (
         <Table
-          className={`pms-table pms-level1-flat-milestone-table ${isEditMode ? 'pms-table-edit' : ''}`}
-          dataSource={visibleFlatRows}
-          columns={flatColumns}
+          className={`pms-table pms-level1-tree-table ${isEditMode ? 'pms-table-edit' : ''}`}
+          dataSource={treeRows}
+          columns={columns}
           rowKey={record => record.stableId || record.id}
+          rowClassName={record => record.parentId ? 'pms-level1-row-level-1' : 'pms-level1-row-level-0'}
           pagination={false}
-          scroll={{ x: 1020 }}
+          scroll={{ x: 1250 }}
+          components={projectedRows.some(canReorderGovernedTask) ? { body: { row: SortableRow } } : undefined}
+          expandable={{
+            expandedRowKeys,
+            rowExpandable: record => Boolean(record.children?.length),
+            onExpand: (expanded, record) => {
+              if (!scopeKey) return
+              const stableId = record.stableId || record.id
+              setCollapsedNodes(previous => {
+                const next = new Set(previous[scopeKey] || [])
+                if (expanded) next.delete(stableId); else next.add(stableId)
+                return { ...previous, [scopeKey]: next }
+              })
+            },
+          }}
           size="middle"
         />
       )
+      return projectedRows.some(canReorderGovernedTask) ? (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleGovernedDragEnd}>
+          <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>{table}</SortableContext>
+        </DndContext>
+      ) : table
     }
     const displayTasks = isLevel2Custom
       ? filterBySearchText(tableTasks)
@@ -4536,7 +4845,7 @@ export default function ProjectSpaceContainer() {
             )}
             primaryActions={(
               <Space size={6}>
-                {projectPlanLevel === 'level1' && renderMachineMrMilestoneButton()}
+                {projectPlanLevel === 'level1' && renderLevel1StructureActions()}
                 {(followedTosLevel1ReadOnly || !hasDraftVersion) && (canEditCurrentPlan
                   ? renderCreateRevisionButton({ borderRadius: 6 })
                   : <Tooltip title={`无${currentPlanPermissionLabel}编辑权限`}><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled aria-label="创建修订">创建修订</Button></Tooltip>)}
@@ -4757,12 +5066,8 @@ export default function ProjectSpaceContainer() {
         { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
       ]
     }
-    const governedOldTasks = usesFlatLevel1Comparison
-      ? projectLevel1FlatMilestones(oldTasks as any)
-      : projectPlanLevel === 'level1' ? projectLevel1Plan(oldTasks as any, { mode: 'standard' }).rows : oldTasks
-    const governedNewTasks = usesFlatLevel1Comparison
-      ? projectLevel1FlatMilestones(newTasks as any)
-      : projectPlanLevel === 'level1' ? projectLevel1Plan(newTasks as any, { mode: 'standard' }).rows : newTasks
+    const governedOldTasks = projectPlanLevel === 'level1' ? projectLevel1Plan(oldTasks as any, { mode: 'standard' }).rows : oldTasks
+    const governedNewTasks = projectPlanLevel === 'level1' ? projectLevel1Plan(newTasks as any, { mode: 'standard' }).rows : newTasks
     setCompareResult(compareVersionsForTable(governedOldTasks as any, governedNewTasks as any))
     message.success('对比完成')
   }
@@ -4895,7 +5200,7 @@ export default function ProjectSpaceContainer() {
       </Modal>
       {/* Version compare modal */}
       <PlanVersionCompareModal
-        fieldMode={usesFlatLevel1Comparison ? 'hierarchical-flat' : projectPlanLevel === 'level1' ? 'governed' : 'legacy'}
+        fieldMode={projectPlanLevel === 'level1' ? 'governed' : 'legacy'}
         open={showVersionCompare}
         rows={compareResult}
         versions={versions}

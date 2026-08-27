@@ -762,23 +762,33 @@ assert.equal(globallyReadonlyController.canOpenLightbox(editableTask), false, 'g
 
 const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8')
 const projectSpaceSource = read('src/containers/ProjectSpaceContainer.tsx')
-for (const label of ['阶段', '里程碑点', '计划开发周期', '实际开发周期', '添加MR里程碑']) {
-  assert.match(projectSpaceSource, new RegExp(label), `project-space flat table contains ${label}`)
+for (const label of ['序号', '阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期']) {
+  assert.match(projectSpaceSource, new RegExp(label), `project-space tree table contains ${label}`)
 }
-assert.match(projectSpaceSource, /insertNextMachineMrMilestone/, 'project-space adds controlled whole-machine MR milestones')
-assert.match(projectSpaceSource, /projectLevel1FlatMilestones/, 'project-space projects governed plans into flat milestones')
+assert.match(projectSpaceSource, /insertLevel1BusinessNode/, 'project-space adds validated machine and tOS business nodes')
+assert.match(projectSpaceSource, /projectLevel1Plan/, 'project-space projects governed plans into the standard tree rows')
 assert.match(projectSpaceSource, /buildPlanGanttTasks/, 'project-space builds typed Gantt tasks')
 assert.match(projectSpaceSource, /onTaskDateChange/, 'project-space persists accepted Gantt date changes')
 assert.match(projectSpaceSource, /aria-label="计划版本"/, 'project-space version selector has an accessible plan-version label')
 assert.match(projectSpaceSource, /const isGovernedLevel1Table = !isLevel2Custom\s*&& projectPlanLevel === 'level1'/, 'all level-one plans retain the existing governance branch')
-assert.match(projectSpaceSource, /const isFlatGovernedLevel1Table = isGovernedLevel1Table/, 'flat governed plans use a separate whole-machine/tOS predicate')
-assert.match(projectSpaceSource, /if \(isFlatGovernedLevel1Table\)/, 'only the separate flat predicate enters the flat table')
-assert.doesNotMatch(projectSpaceSource, /canFullyEdit && !isFlatGovernedLevel1Table/, 'the flat predicate never enables ordinary level-one drag sorting')
-const flatDatePatchStart = projectSpaceSource.indexOf('const patchFlatMilestoneDate')
-const flatDatePatchEnd = projectSpaceSource.indexOf('const renderFlatDate', flatDatePatchStart)
-assert.ok(flatDatePatchStart >= 0 && flatDatePatchEnd > flatDatePatchStart, 'flat table exposes a bounded date-patch path')
-assert.doesNotMatch(projectSpaceSource.slice(flatDatePatchStart, flatDatePatchEnd), /validateLevel1MilestoneDates/, 'flat table date patches do not block partial repairs on full-sequence validation')
-assert.match(projectSpaceSource, /okText="确认添加"/, 'controlled MR confirmation uses the required action label')
+assert.doesNotMatch(projectSpaceSource, /isFlatGovernedLevel1Table|pms-level1-flat-milestone-table|pms-level1-flat-date-invalid/, 'governed project plans have no special flat-table branch or naming')
+assert.match(projectSpaceSource, /filterLevel1TreeRows\(/, 'table and Gantt filtering share the hierarchy-preserving helper')
+assert.match(projectSpaceSource, /rowKey=\{record => record\.stableId \|\| record\.id\}/, 'tree rows use stable IDs for React and DOM identity')
+assert.match(projectSpaceSource, /expandedRowKeys[,}]/, 'the vertical table uses real Ant table expanders')
+assert.match(projectSpaceSource, /validateLevel1ScheduleDates\(tableTasks/, 'date validation runs on unprojected tasks')
+assert.match(projectSpaceSource, /pms-level1-date-input-invalid/, 'invalid DatePickers expose the scoped red error class')
+assert.match(projectSpaceSource, /\[data-field/, 'publish focus resolves the first invalid field through a stable cell selector')
+assert.match(projectSpaceSource, /getLevel1StructurePermissions/, 'render and confirmation paths use centralized structure permissions')
+assert.doesNotMatch(projectSpaceSource, /source === 'custom'\s*&& getStructurePermissions\(record\)\.canDelete/, 'super-admin fixed-template deletion is not hidden behind a custom-source gate')
+assert.match(projectSpaceSource, /parentStableId/, 'structure confirmation tokens bind the selected parent')
+for (const tokenField of ['projectId', 'scopeKind', 'scopeValue', 'versionId', 'currentUser', 'parentStableId', 'editMode', 'draft']) {
+  assert.match(projectSpaceSource, new RegExp(`${tokenField}[:;,]`), `structure token covers ${tokenField}`)
+}
+assert.match(projectSpaceSource, /getLatestLevel1MutationContext\(dialog\.token\)/, 'confirmation revalidates the full live structure token before mutation')
+assert.match(projectSpaceSource, /添加MR里程碑/, 'machine plans expose the controlled MR action')
+assert.match(projectSpaceSource, /添加tOS版本/, 'tOS plans expose the controlled version action')
+assert.match(projectSpaceSource, /change\.nodeType === 'milestone' \? 'milestone' : 'task'/, 'one Gantt callback persists both fixed points and business bars')
+assert.match(projectSpaceSource, /validateLevel1ScheduleDates\(next\)/, 'Gantt candidates are validated before they are written')
 
 const liveDraftTasks = [
   { id: '1', stableId: 'stage', order: 1, taskName: '阶段', planEndDate: '2026-01-01' },
@@ -822,7 +832,10 @@ assert.equal(projectSpaceLevel1Rules.getLevel1MaintainerUsers('', [{ name: '项�
 const persistedScopes = projectSpaceLevel1Rules.pickScopedPlanPersistence({ marketPlanData: { OP: {} }, marketFollowVersionMeta: { a: {} }, marketVersionsByKey: { a: [] }, marketCurrentVersionByKey: { a: 'v4' }, tosTypePlanDataByProjectId: { p: {} }, tosTypeVersionsByKey: { a: [] }, tosTypeCurrentVersionByKey: { a: 'v4' }, ignored: true })
 assert.deepEqual(Object.keys(persistedScopes).sort(), ['marketCurrentVersionByKey', 'marketFollowVersionMeta', 'marketPlanData', 'marketVersionsByKey', 'tosTypeCurrentVersionByKey', 'tosTypePlanDataByProjectId', 'tosTypeVersionsByKey'], 'scoped plan persistence includes every live market and tOS scope field only')
 assert.match(projectSpaceSource, /projectSpaceLevel1Rules|mergeActualFieldsByStableId/, 'project space wires the tested level-one helpers')
-assert.match(projectSpaceSource, /rowKey=\{record => record\.stableId \|\| record\.id\}/, 'flat rows use stable IDs for React identity')
+assert.match(projectSpaceSource, /rowKey=\{record => record\.stableId \|\| record\.id\}/, 'tree rows use stable IDs for React identity')
+assert.match(ganttStyles, /\.pms-level1-tree-table \.pms-level1-date-input-invalid/s, 'invalid picker styling is scoped to the governed tree table')
+assert.match(ganttStyles, /\.pms-level1-tree-table \.pms-level1-row-level-0/s, 'level-zero emphasis is scoped to the governed tree table')
+assert.doesNotMatch(ganttStyles, /\.pms-level1-flat-(?:milestone-table|date-invalid|gantt)/, 'legacy project-space flat CSS is removed')
 
 const technicalModuleSource = read('src/components/technical-project/TechnicalPlanModule.tsx')
 const technicalWorkspaceSource = read('src/lib/technicalPlanWorkspace.ts')

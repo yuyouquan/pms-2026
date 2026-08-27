@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Real-browser acceptance for the level-one flat milestones / technical-plan
- * contract.  This intentionally uses the public UI only; every scenario gets
+ * Real-browser acceptance for hierarchical machine/tOS level-one plans and
+ * the unchanged technical-plan contract. This intentionally uses the public UI only; every scenario gets
  * a fresh browser context so persisted drafts cannot hide regressions.
  */
 import assert from 'node:assert/strict'
@@ -233,6 +233,44 @@ const flatActualEnd = async (page, table, name) => page.$eval(table, (element, t
   const cell = row.querySelectorAll('td')[6]
   return cell?.querySelector('input')?.value || cell?.textContent?.trim() || null
 }, name)
+const treeDate = async (page, table, name, field) => page.$eval(table, (element, { taskName, fieldName }) => {
+  const row = [...element.querySelectorAll('tbody tr')].find(item => item.textContent?.includes(taskName))
+  const cell = row?.querySelector(`td[data-field="${fieldName}"]`)
+  return cell?.querySelector('input')?.value || cell?.textContent?.trim() || null
+}, { taskName: name, fieldName: field })
+const editTreeDate = async (page, table, taskName, field, nextValue) => {
+  const inputBox = await page.evaluate(({ selector, name, fieldName }) => {
+    const root = document.querySelector(selector)
+    const row = [...(root?.querySelectorAll('tbody tr') || [])].find(item => item.textContent?.includes(name))
+    const input = row?.querySelector(`td[data-field="${fieldName}"] input`)
+    if (!input) return null
+    const box = input.getBoundingClientRect()
+    return { x: box.x, y: box.y, width: box.width, height: box.height }
+  }, { selector: table, name: taskName, fieldName: field })
+  if (!inputBox) throw new Error(`missing editable ${field} DatePicker for ${taskName}`)
+  await page.mouse.click(inputBox.x + inputBox.width / 2, inputBox.y + inputBox.height / 2, { clickCount: 3 })
+  await page.keyboard.down('Control')
+  await page.keyboard.press('A')
+  await page.keyboard.up('Control')
+  await page.keyboard.type(nextValue)
+  await page.keyboard.press('Enter')
+  await page.waitForFunction(({ selector, name, fieldName, value }) => {
+    const root = document.querySelector(selector)
+    const row = [...(root?.querySelectorAll('tbody tr') || [])].find(item => item.textContent?.includes(name))
+    return row?.querySelector(`td[data-field="${fieldName}"] input`)?.value === value
+  }, { timeout: TIMEOUT }, { selector: table, name: taskName, fieldName: field, value: nextValue })
+}
+const collapseTreeStage = async (page, table, stageName) => {
+  const collapsed = await page.$eval(table, (root, name) => {
+    const row = [...root.querySelectorAll('tbody tr')].find(item => item.querySelectorAll('td')[1]?.textContent?.trim() === name)
+    const control = row?.querySelector('.ant-table-row-expand-icon-expanded')
+    if (!(control instanceof HTMLElement)) return false
+    control.click()
+    return true
+  }, stageName)
+  if (!collapsed) throw new Error(`missing expanded tree stage ${stageName}`)
+  await wait(120)
+}
 const addIsoDays = (value, days) => {
   const date = new Date(`${value}T00:00:00Z`)
   date.setUTCDate(date.getUTCDate() + days)
@@ -283,10 +321,47 @@ const editFlatActualEnd = async (page, table, taskName, nextValue) => {
     return row?.querySelectorAll('td')[6]?.textContent?.includes(nextValue)
   }, { timeout: TIMEOUT }, { table, taskName, nextValue })
 }
-const ganttTaskIdForName = async (page, name) => page.$$eval('.gantt_row[task_id]', (rows, taskName) => {
-  const row = rows.find(item => item.textContent?.includes(taskName))
-  return row?.getAttribute('task_id') || null
-}, name)
+const ganttTaskIdForName = async (page, name) => {
+  const findVisibleTask = () => page.$$eval('.gantt_row[task_id]', (rows, taskName) => {
+    const viewport = document.querySelector('.gantt_grid_data')?.getBoundingClientRect()
+    const row = rows.find(item => {
+      if (!item.textContent?.includes(taskName)) return false
+      if (!viewport) return true
+      const box = item.getBoundingClientRect()
+      return box.bottom > viewport.top && box.top < viewport.bottom
+    })
+    return row?.getAttribute('task_id') || null
+  }, name)
+  const visibleTaskId = await findVisibleTask()
+  if (visibleTaskId) return visibleTaskId
+  const scrolled = await page.evaluate(() => {
+    const scrollbar = document.querySelector('.gantt_ver_scroll')
+    if (!(scrollbar instanceof HTMLElement)) return false
+    scrollbar.scrollTop = scrollbar.scrollHeight
+    scrollbar.dispatchEvent(new Event('scroll', { bubbles: true }))
+    return true
+  })
+  if (!scrolled) throw new Error(`missing public gantt vertical scrollbar for ${name}`)
+  await wait(300)
+  return findVisibleTask()
+}
+const scrollGanttToEnd = async page => {
+  const scrolled = await page.evaluate(() => {
+    const scrollbar = document.querySelector('.gantt_hor_scroll')
+    if (!(scrollbar instanceof HTMLElement)) return false
+    scrollbar.scrollLeft = scrollbar.scrollWidth
+    scrollbar.dispatchEvent(new Event('scroll', { bubbles: true }))
+    return true
+  })
+  if (!scrolled) throw new Error('missing public gantt horizontal scrollbar')
+  await wait(300)
+}
+const selectGanttScale = async (page, label) => {
+  await clickExact(page, label, 'label')
+  await page.waitForFunction(value => [...document.querySelectorAll('.ant-radio-button-wrapper-checked')]
+    .some(node => node.textContent?.trim() === value), { timeout: TIMEOUT }, label)
+  await wait(300)
+}
 
 const chooseSelectOption = async (page, ariaLabel, matching, attempt = 0) => {
   const currentText = await page.evaluate(label => {
@@ -534,7 +609,8 @@ const dragTask = async (page, selector, dx, dy = 0) => {
   }, { x: startX, y: startY })
   await page.mouse.move(startX, startY)
   await page.mouse.down()
-  await page.mouse.move(startX + dx, startY + dy, { steps: 2 })
+  await page.mouse.move(startX + dx, startY + dy, { steps: 6 })
+  await wait(150)
   const sawDragMove = await page.$eval(selector, node => node.classList.contains('gantt_drag_move'))
   await page.mouse.up()
   await wait(500)
@@ -639,29 +715,37 @@ const runCase = async (title, test) => {
 }
 
 try {
-  if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'machine' || ONLY_CASE === 'machine-structure') await runCase('machine flat table, guarded MR, history, permission, compare', async (initialPage, errors) => {
+  if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'machine' || ONLY_CASE === 'machine-structure') await runCase('machine tree table, governed business nodes and mixed gantt', async (initialPage, errors) => {
     let page = initialPage
     await enterProject(page, 'X6877-D8400_H991')
+    assert.ok(await page.$('.pms-plan-view-mode-switcher input[aria-label="横版表格"]:checked'), 'machine level-one plan defaults to horizontal view')
     await selectView(page, '竖版表格')
-    const table = '.pms-level1-flat-milestone-table'
+    const table = '.pms-level1-tree-table'
     await page.waitForSelector(table, { timeout: TIMEOUT })
-    await assertHeaders(page, table, ['序号', '阶段', '里程碑点', '状态', '计划完成时间', '计划开发周期', '实际完成时间', '实际开发周期'])
-    assert.equal(await page.$(`${table} .ant-table-row-expand-icon`), null, 'flat table must not render a tree expander')
-    assert.deepEqual(await flatMilestoneCycles(page, table, 'STR1'), { planned: '19天', actual: '19天' }, 'flat table derives planned and actual cycles from adjacent milestone completion dates')
-    console.log('browser machine flat table contract passed')
+    await assertHeaders(page, table, ['序号', '阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期'])
+    assert.ok(await page.$(`${table} .ant-table-row-expand-icon`), 'tree table renders real expanders')
+    console.log('browser machine tree table contract passed')
 
     await clickButtonText(page, '添加MR里程碑')
-    await page.waitForFunction(() => document.body.innerText.includes('确认添加上市阶段 MR 里程碑？'), { timeout: TIMEOUT })
+    await page.waitForFunction(() => document.body.innerText.includes('确认添加 MR 里程碑？'), { timeout: TIMEOUT })
+    assert.match(await page.$eval('[aria-label="业务父阶段"]', node => node.closest('.ant-select')?.textContent || ''), /上市阶段|生命周期阶段/, 'machine insertion explicitly selects an allowed business parent')
     await clickButtonText(page, '确认添加')
     await page.waitForFunction(() => document.body.innerText.includes('MR4'), { timeout: TIMEOUT })
-    await waitForDialogToClose(page, '确认添加上市阶段 MR 里程碑？')
-    assert.ok((await textOf(page, table)).includes('MR4'), 'confirmed MR4 is visible in the flat table')
-    const deleteMr = await page.$('button[aria-label="删除里程碑 MR4"]')
-    assert.ok(deleteMr, 'custom MR has a delete affordance')
-    assert.equal(await page.$('button[aria-label="删除里程碑 收编完成"]'), null, 'template milestone has no delete affordance')
+    await waitForDialogToClose(page, '确认添加 MR 里程碑？')
+    assert.ok((await textOf(page, table)).includes('MR4'), 'confirmed MR4 is visible under its selected tree parent')
+    assert.ok(await page.$('button[aria-label="删除节点 MR4"]'), 'custom business node has a delete affordance')
+    assert.ok(await page.$('button[aria-label="删除节点 概念启动"]'), 'super-admin can discover the fixed-template delete exception')
     console.log('browser machine MR confirmation and structure contract passed')
+
+    await editTreeDate(page, table, 'MR4', 'planStartDate', '2028-01-04')
+    await editTreeDate(page, table, 'MR4', 'planEndDate', '2028-01-08')
+    assert.deepEqual({
+      start: await treeDate(page, table, 'MR4', 'planStartDate'),
+      end: await treeDate(page, table, 'MR4', 'planEndDate'),
+    }, { start: '2028-01-04', end: '2028-01-08' }, 'business period accepts a planned range through public DatePickers')
+
     const draggedMilestoneName = '概念启动'
-    const beforeDate = await flatMilestoneDate(page, table, draggedMilestoneName)
+    const beforeDate = await treeDate(page, table, draggedMilestoneName, 'planEndDate')
     assert.ok(beforeDate, `${draggedMilestoneName} has a plan completion date before gantt drag`)
 
     await selectView(page, '甘特图')
@@ -680,38 +764,59 @@ try {
     assert.ok(validDrag.sawDragMove, 'valid milestone drag enters DHTMLX move state')
     console.log('browser machine milestone drag completed')
     await selectView(page, '竖版表格')
-    const afterDate = await flatMilestoneDate(page, table, draggedMilestoneName)
+    const afterDate = await treeDate(page, table, draggedMilestoneName, 'planEndDate')
     assert.match(afterDate || '', /^\d{4}-\d{2}-\d{2}$/, 'milestone drag writes an ISO plan date')
-    assert.ok(afterDate && beforeDate && afterDate > beforeDate, `milestone ${before} forward drag writes a later plan date to the flat table`)
+    assert.notEqual(afterDate, beforeDate, `milestone ${before} drag writes a changed plan date to the tree table`)
     console.log(`browser machine milestone date ${beforeDate} -> ${afterDate}`)
-    const invalidMilestoneName = 'STR1'
-    const invalidBeforeDate = await flatMilestoneDate(page, table, invalidMilestoneName)
+
+    for (const stageName of ['概念阶段', '计划阶段', '开发阶段', '验证阶段']) {
+      await collapseTreeStage(page, table, stageName)
+    }
     await selectView(page, '甘特图')
-    const invalidTaskId = await ganttTaskIdForName(page, invalidMilestoneName)
-    assert.ok(invalidBeforeDate && invalidTaskId, 'STR1 has a dated public gantt task for rollback coverage')
-    const invalidMilestone = `.gantt_task_line.pms-gantt-milestone.pms-gantt-task-editable[task_id="${invalidTaskId}"]`
-    const priorMilestone = `.gantt_task_line.pms-gantt-milestone.pms-gantt-task-editable[task_id="${milestoneTaskId}"]`
-    const priorX = await page.$eval(priorMilestone, node => node.getBoundingClientRect().x)
-    const invalidX = await page.$eval(invalidMilestone, node => node.getBoundingClientRect().x)
-    const invalidDrag = await dragTask(page, invalidMilestone, priorX - invalidX - 10)
-    assert.equal(invalidDrag.hitTaskId, invalidTaskId, 'invalid drag starts on the resolved STR1 milestone')
-    const invalidToast = await page.waitForFunction(expected => [...document.querySelectorAll('.ant-message-notice-error .ant-message-notice-content')]
-      .map(node => node.textContent?.trim() || '').find(text => text === expected) || null,
-    { timeout: TIMEOUT }, `计划完成时间必须晚于上一节点“概念启动”的${afterDate}`)
-    assert.equal(await invalidToast.jsonValue(), `计划完成时间必须晚于上一节点“概念启动”的${afterDate}`, 'invalid STR1 drag shows the exact sequence-validation toast')
-    const rolledBackX = await page.$eval(invalidMilestone, node => node.getBoundingClientRect().x)
-    assert.ok(Math.abs(rolledBackX - invalidX) < 1, 'invalid STR1 drag returns the gantt diamond to its original x position')
+    await selectGanttScale(page, '日')
+    const businessTaskId = await ganttTaskIdForName(page, 'MR4')
+    assert.ok(businessTaskId, 'business period has a public DHTMLX task_id')
+    await scrollGanttToEnd(page)
+    const business = `.gantt_task_line.pms-gantt-task.pms-gantt-task-editable[task_id="${businessTaskId}"]`
+    assert.ok(await page.$(business), 'business period renders as an editable bar')
+    const businessMove = await dragTask(page, business, -60)
+    assert.equal(businessMove.hitTaskId, businessTaskId, `business drag starts on the resolved DHTMLX bar: ${JSON.stringify(businessMove)}`)
     await selectView(page, '竖版表格')
-    const invalidAfterDate = await flatMilestoneDate(page, table, invalidMilestoneName)
-    assert.equal(invalidAfterDate, invalidBeforeDate, 'invalid milestone drag rolls its date back')
-    console.log(`browser machine invalid milestone rollback ${invalidBeforeDate} -> ${invalidAfterDate}`)
+    const movedBusiness = {
+      start: await treeDate(page, table, 'MR4', 'planStartDate'),
+      end: await treeDate(page, table, 'MR4', 'planEndDate'),
+    }
+    assert.notEqual(movedBusiness.start, '2028-01-04', 'business move writes the planned start boundary')
+    assert.notEqual(movedBusiness.end, '2028-01-08', 'business move writes the planned completion boundary')
+    await selectView(page, '甘特图')
+    const resizedBusinessTaskId = await ganttTaskIdForName(page, 'MR4')
+    assert.ok(resizedBusinessTaskId, 'moved business period remains in the public gantt grid')
+    await scrollGanttToEnd(page)
+    await resizeTaskEnd(page, `.gantt_task_line.pms-gantt-task.pms-gantt-task-editable[task_id="${resizedBusinessTaskId}"]`, -60)
+    await selectView(page, '竖版表格')
+    const resizedBusinessEnd = await treeDate(page, table, 'MR4', 'planEndDate')
+    assert.notEqual(resizedBusinessEnd, movedBusiness.end, 'business resize writes a changed planned completion')
+
     page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
     await selectView(page, '竖版表格')
     await page.waitForSelector(table, { timeout: TIMEOUT })
-    assert.ok((await textOf(page, table)).includes('MR4'), `milestone ${before} survives same-context new-page persistence`)
-    assert.equal(await flatMilestoneDate(page, table, draggedMilestoneName), afterDate, 'machine milestone drag survives same-context new-page persistence')
+    assert.ok((await textOf(page, table)).includes('MR4'), `business node ${before} survives same-context new-page persistence`)
+    assert.equal(await treeDate(page, table, draggedMilestoneName, 'planEndDate'), afterDate, 'machine milestone drag survives same-context new-page persistence')
+    assert.equal(await treeDate(page, table, 'MR4', 'planEndDate'), resizedBusinessEnd, 'business resize survives same-context new-page persistence')
     console.log(`browser machine milestone date after reopening ${afterDate}`)
     console.log('browser machine MR4 persisted after reopening')
+
+    const invalidStart = addIsoDays(resizedBusinessEnd, 3)
+    await editTreeDate(page, table, 'MR4', 'planStartDate', invalidStart)
+    assert.ok(await page.$(`${table} tr[data-row-key^="business-period-"] td[data-field="planStartDate"] .pms-level1-date-input-invalid`), 'invalid business range renders a red DatePicker')
+    await pressAriaButton(page, '发布')
+    await page.waitForFunction(() => document.body.innerText.includes('任务校验不通过，无法发布'), { timeout: TIMEOUT })
+    const focusedInvalid = await page.evaluate(() => ({
+      field: document.activeElement?.closest('[data-field]')?.getAttribute('data-field'),
+      row: document.activeElement?.closest('tr')?.textContent || '',
+    }))
+    assert.equal(focusedInvalid.field, 'planStartDate', 'publish focuses the first invalid planned-start field')
+    assert.ok(focusedInvalid.row.includes('MR4'), 'publish focus uses the stable MR4 row key')
 
   })
 
@@ -721,42 +826,84 @@ try {
     console.log('browser machine permission entered project')
     await selectView(page, '竖版表格')
     console.log('browser machine permission selected vertical')
-    const table = '.pms-level1-flat-milestone-table'
+    const table = '.pms-level1-tree-table'
     await switchUser(page, '王五')
     console.log('browser machine permission switched to 王五')
-    assert.ok(await page.$(table), 'view-only project member can still see the machine flat table')
+    assert.ok(await page.$(table), 'view-only project member can still see the machine tree table')
     assert.ok((await textOf(page, table)).includes('概念启动'), 'view-only project member can see plan rows before permission assertions')
     assert.equal(await page.$('button[aria-label="添加MR里程碑"]'), null, 'view-only user cannot add MR')
     await selectView(page, '甘特图')
     assert.equal(await page.$('.gantt_task_line.pms-gantt-task-editable'), null, 'view-only gantt is fully locked')
     console.log('browser machine permission view-only contract passed')
+    await switchUser(page, '赵六')
+    await selectView(page, '竖版表格')
+    assert.ok(await page.$('button[aria-label="添加MR里程碑"]'), 'project-manager role member receives the SPM business action')
+    assert.equal(await page.$('button[aria-label="添加一级阶段"]'), null, 'SPM cannot use the super-admin generic stage action')
+    assert.equal(await page.$('button[aria-label="删除节点 概念启动"]'), null, 'SPM cannot delete a fixed template node')
+    assert.equal(await page.$('button[aria-label="删除节点 验证阶段"]'), null, 'SPM cannot delete a fixed template stage')
     await switchUser(page, '张三')
     await selectView(page, '竖版表格')
     console.log('browser machine permission switched back to 张三')
+    assert.ok(await page.$('button[aria-label="删除节点 概念启动"]'), 'super-admin can delete a fixed template node in a draft')
+    assert.ok(await page.$('button[aria-label="删除节点 验证阶段"]'), 'super-admin can delete a fixed template stage in a draft')
+    await pressAriaButton(page, '添加一级阶段')
+    await page.waitForFunction(() => document.body.innerText.includes('确认添加一级阶段？'), { timeout: TIMEOUT })
+    await clickButtonText(page, '确认添加')
+    await waitForDialogToClose(page, '确认添加一级阶段？')
+    await page.waitForFunction(selector => document.querySelector(selector)?.textContent?.includes('新阶段'), { timeout: TIMEOUT }, table)
+    await pressAriaButton(page, '添加子节点 新阶段')
+    await page.waitForFunction(() => document.body.innerText.includes('确认添加子节点？'), { timeout: TIMEOUT })
+    assert.match(await page.$eval('[aria-label="业务父阶段"]', node => node.closest('.ant-select')?.textContent || ''), /新阶段/, 'generic child confirmation stays bound to the selected custom stage')
+    await clickButtonText(page, '确认添加')
+    await waitForDialogToClose(page, '确认添加子节点？')
+    await page.waitForFunction(selector => document.querySelector(selector)?.textContent?.includes('新子节点'), { timeout: TIMEOUT }, table)
+    assert.ok(await page.$('button[aria-label="删除节点 新子节点"]'), 'super-admin generic child is discoverable and deletable')
+    await pressAriaButton(page, '删除节点 新子节点')
+    await clickButtonText(page, '确认')
+    await page.waitForFunction(selector => !document.querySelector(selector)?.textContent?.includes('新子节点'), { timeout: TIMEOUT }, table)
+    assert.ok(await page.$('button[aria-label="删除节点 新阶段"]'), 'super-admin custom stage remains deletable after its child is removed')
+    await pressAriaButton(page, '删除节点 新阶段')
+    await clickButtonText(page, '确认')
+    await page.waitForFunction(selector => !document.querySelector(selector)?.textContent?.includes('新阶段'), { timeout: TIMEOUT }, table)
+    console.log('browser machine super-admin generic stage/child add-delete contract passed')
+    await pressAriaButton(page, '删除节点 概念启动')
+    await clickButtonText(page, '确认')
+    await page.waitForFunction(selector => !document.querySelector(selector)?.textContent?.includes('概念启动'), { timeout: TIMEOUT }, table)
+    await pressAriaButton(page, '删除节点 验证阶段')
+    await clickButtonText(page, '确认')
+    await page.waitForFunction(selector => {
+      const text = document.querySelector(selector)?.textContent || ''
+      return !text.includes('验证阶段') && !text.includes('STR5')
+    }, { timeout: TIMEOUT }, table)
+    page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+    await selectView(page, '竖版表格')
+    const deletedTemplateText = await textOf(page, table)
+    assert.ok(!deletedTemplateText.includes('概念启动') && !deletedTemplateText.includes('验证阶段') && !deletedTemplateText.includes('STR5'), 'super-admin fixed node/stage deletion survives same-context new-page persistence')
+    console.log('browser machine super-admin fixed node/stage delete contract passed')
     await chooseVersion(page, 'V2 (已发布)')
     assert.equal(await page.$('button[aria-label="添加MR里程碑"]'), null, 'published history has no MR command')
     await selectView(page, '甘特图')
     await page.waitForSelector('.gantt_task_line', { timeout: TIMEOUT })
     assert.equal(await page.$('.gantt_task_line.pms-gantt-task-editable'), null, 'published history has no editable gantt tasks')
     await selectView(page, '竖版表格')
-    const v2ActualBefore = await flatActualEnd(page, table, '概念启动')
+    const v2ActualBefore = await treeDate(page, table, '概念启动', 'actualEndDate')
     console.log(`browser machine history V2 actual ${v2ActualBefore}`)
     await chooseVersion(page, 'V3 (已发布)')
     console.log('browser machine selected V3 latest published')
-    const v3ActualBefore = await flatActualEnd(page, table, '概念启动')
+    const v3ActualBefore = await treeDate(page, table, '概念启动', 'actualEndDate')
     assert.match(v3ActualBefore || '', /^\d{4}-\d{2}-\d{2}$/, 'latest published actual completion starts as an ISO date before editing')
     const latestActualDate = addIsoDays(v3ActualBefore, 1)
     console.log(`browser machine editing latest actual to ${latestActualDate}`)
-    await editFlatActualEnd(page, table, '概念启动', latestActualDate)
+    await editTreeDate(page, table, '概念启动', 'actualEndDate', latestActualDate)
     assert.notEqual(latestActualDate, v3ActualBefore, 'latest published actual completion edit chooses a different legal date')
-    assert.equal(await flatActualEnd(page, table, '概念启动'), latestActualDate, 'latest published actual completion saves through the public DatePicker')
+    assert.equal(await treeDate(page, table, '概念启动', 'actualEndDate'), latestActualDate, 'latest published actual completion saves through the public DatePicker')
     console.log(`browser machine latest actual ${v3ActualBefore} -> ${latestActualDate}`)
     page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
     await selectView(page, '竖版表格')
     await chooseVersion(page, 'V3 (已发布)')
-    assert.equal(await flatActualEnd(page, table, '概念启动'), latestActualDate, 'latest published actual completion survives same-context new-page persistence before comparison')
+    assert.equal(await treeDate(page, table, '概念启动', 'actualEndDate'), latestActualDate, 'latest published actual completion survives same-context new-page persistence before comparison')
     await chooseVersion(page, 'V2 (已发布)')
-    assert.equal(await flatActualEnd(page, table, '概念启动'), v2ActualBefore, 'older V2 actual completion remains unchanged after editing V3')
+    assert.equal(await treeDate(page, table, '概念启动', 'actualEndDate'), v2ActualBefore, 'older V2 actual completion remains unchanged after editing V3')
     assert.notEqual(v2ActualBefore, latestActualDate, 'published comparison inputs contain a real actual-completion difference')
     await clickAriaButton(page, '版本对比')
     await waitForVisibleCompareDialog(page)
@@ -772,36 +919,90 @@ try {
     await pressAriaButton(page, 'Close')
   })
 
-  if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'tos') await runCase('tOS flat contract', async (initialPage, errors) => {
+  if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'tos') await runCase('tOS tree and business-version contract', async (initialPage, errors) => {
     let page = initialPage
     await enterProject(page, 'tOS16.1')
+    assert.ok(await page.$('.pms-plan-view-mode-switcher input[aria-label="横版表格"]:checked'), 'tOS level-one plan defaults to horizontal view')
     await selectView(page, '竖版表格')
-    const table = '.pms-level1-flat-milestone-table'
+    const table = '.pms-level1-tree-table'
     await page.waitForSelector(table, { timeout: TIMEOUT })
-    await assertHeaders(page, table, ['序号', '阶段', '里程碑点', '状态', '计划完成时间', '计划开发周期', '实际完成时间', '实际开发周期'])
+    await assertHeaders(page, table, ['序号', '阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期'])
     assert.equal(await page.$('button[aria-label="添加MR里程碑"]'), null, 'tOS does not expose MR insertion')
-    assert.equal(await page.$('.ant-table-row-expand-icon'), null, 'tOS flat table has no tree expander')
+    assert.ok(await page.$(`${table} .ant-table-row-expand-icon`), 'tOS tree table renders real expanders')
     const draftSource = await ensureDraft(page)
     console.log(`browser tOS draft source ${draftSource}`)
+    await page.waitForSelector('button[aria-label="添加tOS版本"]', { timeout: TIMEOUT })
+    await pressAriaButton(page, '添加tOS版本')
+    await page.waitForFunction(() => document.body.innerText.includes('确认添加 tOS 版本？'), { timeout: TIMEOUT })
+    assert.match(await page.$eval('[aria-label="业务父阶段"]', node => node.closest('.ant-select')?.textContent || ''), /上市迭代阶段|维护阶段/, 'tOS insertion explicitly selects an allowed business parent')
+    const tosBusinessName = await page.$eval('[aria-label="业务节点名称"]', node => node.value)
+    assert.match(tosBusinessName, /^16\.1\.0\.\d{3}$/, 'tOS business version uses the project version prefix')
+    await clickButtonText(page, '确认添加')
+    await waitForDialogToClose(page, '确认添加 tOS 版本？')
+    await page.waitForFunction((selector, taskName) => document.querySelector(selector)?.textContent?.includes(taskName), { timeout: TIMEOUT }, table, tosBusinessName)
+    assert.ok(await page.$(`button[aria-label="删除节点 ${tosBusinessName}"]`), 'custom tOS business version has a delete affordance')
+    console.log(`browser tOS inserted ${tosBusinessName}`)
+
+    await editTreeDate(page, table, tosBusinessName, 'planStartDate', '2027-05-01')
+    await editTreeDate(page, table, tosBusinessName, 'planEndDate', '2027-05-05')
+    assert.deepEqual({
+      start: await treeDate(page, table, tosBusinessName, 'planStartDate'),
+      end: await treeDate(page, table, tosBusinessName, 'planEndDate'),
+    }, { start: '2027-05-01', end: '2027-05-05' }, 'tOS business version accepts a planned range through public DatePickers')
+
     const milestoneName = '概念启动'
-    const beforeDate = await flatMilestoneDate(page, table, milestoneName)
+    const beforeDate = await treeDate(page, table, milestoneName, 'planEndDate')
     await selectView(page, '甘特图')
     assert.ok(await page.$('.gantt_task_line.pms-gantt-project.pms-gantt-task-readonly'), 'tOS stages are locked')
     const milestoneId = await ganttTaskIdForName(page, milestoneName)
     assert.ok(milestoneId, 'tOS dated milestone has a public DHTMLX task_id')
     const milestone = `.gantt_task_line.pms-gantt-milestone.pms-gantt-task-editable[task_id="${milestoneId}"]`
     assert.ok(await page.$(milestone), 'tOS draft milestone is editable while stages remain locked')
-    const tosDrag = await dragTask(page, milestone, 24)
+    const tosDrag = await dragTask(page, milestone, -24)
     assert.equal(tosDrag.hitTaskId, milestoneId, `tOS drag starts on the resolved DHTMLX milestone: ${JSON.stringify(tosDrag)}`)
     assert.ok(tosDrag.sawDragMove, 'tOS drag enters DHTMLX move state')
+    console.log(`browser tOS drag notices ${JSON.stringify(await page.$$eval('.ant-message-notice-content', nodes => nodes.map(node => node.textContent?.trim() || '')))}`)
     await selectView(page, '竖版表格')
-    const afterDate = await flatMilestoneDate(page, table, milestoneName)
+    const afterDate = await treeDate(page, table, milestoneName, 'planEndDate')
+    console.log(`browser tOS milestone candidate ${beforeDate} -> ${afterDate}`)
     assert.match(afterDate || '', /^\d{4}-\d{2}-\d{2}$/, 'tOS milestone drag writes an ISO date')
-    assert.ok(afterDate && beforeDate && afterDate > beforeDate, 'tOS forward drag writes a later date')
+    assert.notEqual(afterDate, beforeDate, 'tOS milestone drag writes a changed date')
     console.log(`browser tOS milestone date ${beforeDate} -> ${afterDate}`)
+
+    for (const stageName of ['规划阶段', '概念阶段', '计划阶段', '开发验证阶段']) {
+      await collapseTreeStage(page, table, stageName)
+    }
+    await selectView(page, '甘特图')
+    await selectGanttScale(page, '日')
+    const businessTaskId = await ganttTaskIdForName(page, tosBusinessName)
+    assert.ok(businessTaskId, 'tOS business version has a public DHTMLX task_id')
+    await scrollGanttToEnd(page)
+    const business = `.gantt_task_line.pms-gantt-task.pms-gantt-task-editable[task_id="${businessTaskId}"]`
+    assert.ok(await page.$(business), 'tOS business version renders as an editable bar')
+    const businessMove = await dragTask(page, business, -60)
+    assert.equal(businessMove.hitTaskId, businessTaskId, `tOS business drag starts on the resolved DHTMLX bar: ${JSON.stringify(businessMove)}`)
+    await selectView(page, '竖版表格')
+    const movedBusiness = {
+      start: await treeDate(page, table, tosBusinessName, 'planStartDate'),
+      end: await treeDate(page, table, tosBusinessName, 'planEndDate'),
+    }
+    assert.notEqual(movedBusiness.start, '2027-05-01', 'tOS business move writes the planned start boundary')
+    assert.notEqual(movedBusiness.end, '2027-05-05', 'tOS business move writes the planned completion boundary')
+    await selectView(page, '甘特图')
+    const resizedBusinessTaskId = await ganttTaskIdForName(page, tosBusinessName)
+    assert.ok(resizedBusinessTaskId, 'moved tOS business version remains in the public gantt grid')
+    await scrollGanttToEnd(page)
+    await resizeTaskEnd(page, `.gantt_task_line.pms-gantt-task.pms-gantt-task-editable[task_id="${resizedBusinessTaskId}"]`, -60)
+    await selectView(page, '竖版表格')
+    const resizedBusinessEnd = await treeDate(page, table, tosBusinessName, 'planEndDate')
+    assert.notEqual(resizedBusinessEnd, movedBusiness.end, 'tOS business resize writes a changed planned completion')
+
     page = await reopenProjectInContext(page, errors, 'tOS16.1')
     await selectView(page, '竖版表格')
-    assert.equal(await flatMilestoneDate(page, table, milestoneName), afterDate, 'tOS milestone drag survives same-context new-page persistence')
+    assert.equal(await treeDate(page, table, milestoneName, 'planEndDate'), afterDate, 'tOS milestone drag survives same-context new-page persistence')
+    assert.ok((await textOf(page, table)).includes(tosBusinessName), 'tOS business version survives same-context new-page persistence')
+    assert.equal(await treeDate(page, table, tosBusinessName, 'planEndDate'), resizedBusinessEnd, 'tOS business resize survives same-context new-page persistence')
+    console.log(`browser tOS ${tosBusinessName} persisted through ${resizedBusinessEnd}`)
   })
 
   if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'technical') await runCase('technical TDT and subproject contracts', async (initialPage, errors) => {

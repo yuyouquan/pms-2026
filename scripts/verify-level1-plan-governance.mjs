@@ -1204,15 +1204,29 @@ assert.match(planStoreSource, /projectPlanViewMode:\s*'horizontal'/, 'project pl
 assert.match(planStoreSource, /CONFIG_TABLE_COLUMNS[\s\S]*序号[\s\S]*任务名称[\s\S]*角色/, 'template configuration keeps sequence, task name, and role')
 assert.match(configSource, /isTechnicalTemplate[\s\S]*TDT项目计划[\s\S]*子项目计划/, 'technical configuration retains TDT and subproject templates')
 assert.match(configSource, /items=\{isTechnicalTemplate[\s\S]*key: 'level1'[\s\S]*一级计划[\s\S]*\]\}/, 'standard project configuration only exposes the level1 tab')
-for (const label of ['阶段/里程碑节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际结束时间', '实际工期', '是否延期']) {
+for (const label of ['阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期']) {
   assert.match(projectSpaceSource, new RegExp(label), `project level1 table contains ${label}`)
 }
 for (const label of ['阶段', '里程碑点', '活动名称', '实际开始时间', '实际完成时间']) assert.match(technicalModuleSource, new RegExp(label), `technical flat table contains ${label}`)
-assert.match(projectSpaceSource, /canAddLevel1CustomChild/, 'whole-machine structure additions use the source-aware launch-stage rule')
-assert.match(projectSpaceSource, /canMutateLevel1TaskStructure/, 'rename, delete and reorder share the source-aware structure rule')
-assert.doesNotMatch(projectSpaceSource, /isGlobalLevel1Admin\s*\|\|/, 'global administrators do not bypass template structure locks')
-assert.doesNotMatch(projectSpaceSource, /level1GlobalAdmins\.includes\(currentLoginUser\)[\s\S]{0,500}添加一级活动/, 'project revisions cannot add top-level template activities')
-assert.match(projectSpaceSource, /canRenameGovernedTask[\s\S]{0,420}<Input/, 'approved custom launch children can edit their names inline')
+assert.match(projectSpaceSource, /getLevel1StructurePermissions/, 'all governed structure actions use the centralized permission matrix')
+assert.match(projectSpaceSource, /insertLevel1BusinessNode/, 'machine and tOS controlled additions use the validated business-node helper')
+for (const tokenField of ['projectId', 'scopeKind', 'scopeValue', 'versionId', 'currentUser', 'parentStableId', 'editMode', 'draft']) {
+  assert.match(projectSpaceSource, new RegExp(`${tokenField}[:;,]`), `structure confirmation token binds ${tokenField}`)
+}
+for (const storeName of ['usePlanStore', 'useProjectStore', 'usePermissionStore', 'useUiStore']) {
+  assert.match(projectSpaceSource, new RegExp(`${storeName}\\.getState\\(\\)`), `structure confirmation re-reads ${storeName}`)
+}
+assert.match(projectSpaceSource, /getLatestLevel1MutationContext\(dialog\.token\)/, 'structure confirmation rejects a changed live scope before writing')
+assert.match(projectSpaceSource, /LEVEL1_TREE_FILTER_FIELDS/, 'governed vertical filters use the visible tree-column contract')
+assert.match(projectSpaceSource, /filterLevel1TreeRows/, 'governed vertical tables retain matching tree context')
+assert.match(projectSpaceSource, /className=\{`pms-table pms-level1-tree-table/, 'machine and tOS share the scoped tree-table surface')
+assert.match(projectSpaceSource, /rowKey=\{record => record\.stableId \|\| record\.id\}/, 'governed tree rows use stable identity')
+assert.match(projectSpaceSource, /expandedRowKeys[,}]/, 'governed vertical tables expose real controlled tree expanders')
+assert.match(projectSpaceSource, /pms-level1-date-input-invalid/, 'invalid governed dates have a dedicated picker error class')
+assert.match(projectSpaceSource, /data-field/, 'governed date cells expose stable field focus targets')
+assert.match(projectSpaceSource, /添加MR里程碑/, 'whole-machine controlled insertion keeps the required action label')
+assert.match(projectSpaceSource, /添加tOS版本/, 'tOS controlled insertion exposes its own action label')
+assert.doesNotMatch(projectSpaceSource, /isFlatGovernedLevel1Table|pms-level1-flat-milestone-table/, 'project space no longer has a special flat eight-column branch')
 assert.match(projectSpaceSource, /handleGovernedDragEnd/, 'approved custom launch children have a dedicated safe reorder path')
 assert.match(technicalStoreSource, /publishedVersions\.length <= 1[\s\S]*buildFirstLevel1RevisionTasks[\s\S]*buildNextLevel1RevisionTasks/, 'technical first and later revisions follow different synchronization rules')
 assert.match(technicalStoreSource, /changedActualDatePatches[\s\S]*actualStartDate[\s\S]*actualEndDate[\s\S]*pairedVersionId/, 'technical draft and published actual dates synchronize by stable ID')
@@ -1220,8 +1234,8 @@ assert.match(compareModalSource, /fieldMode === 'hierarchical-flat'/, 'version c
 assert.match(compareModalSource, /fieldMode === 'technical-subproject'/, 'version comparison supports technical activity columns')
 assert.match(compareModalSource, /fieldMode\?: 'legacy' \| 'governed' \| 'hierarchical-flat' \| 'technical-subproject'/, 'version comparison retains the governed field mode for ordinary level-one plans')
 assert.match(compareModalSource, /const governedKeys = new Set\(\['taskId', 'changeType', 'taskName', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'delayStatus'\]\)/, 'governed mode retains the BASE compact comparison columns')
-assert.match(projectSpaceSource, /usesFlatLevel1Comparison[\s\S]{0,320}projectLevel1FlatMilestones/, 'governed project level1 comparisons project historical versions into flat milestones')
-assert.match(projectSpaceSource, /fieldMode=\{usesFlatLevel1Comparison \? 'hierarchical-flat' : projectPlanLevel === 'level1' \? 'governed' : 'legacy'\}/, 'project comparisons use flat columns only for machine or tOS level-one plans')
+assert.match(projectSpaceSource, /projectPlanLevel === 'level1' \? projectLevel1Plan\(oldTasks as any, \{ mode: 'standard' \}\)\.rows/, 'governed project comparisons use the standard tree projection')
+assert.match(projectSpaceSource, /fieldMode=\{projectPlanLevel === 'level1' \? 'governed' : 'legacy'\}/, 'project comparisons use governed fields for every project-space level-one plan')
 assert.match(technicalModuleSource, /fieldMode=\{tab\?\.templateKind === 'subproject' \? 'technical-subproject' : 'hierarchical-flat'\}/, 'technical comparison selects the matching current-table fields')
 assert.match(projectSpaceSource, /buildProjectListMockPlanTasks\(selectedProject\.id,/, 'project space consumes the same project-scoped mock plan source as the project list')
 assert.match(projectSpaceSource, /planEndDate:\s*task\.planEndDate\s*\|\|\s*''/, 'tOS project initialization preserves project-linked mock plan dates')
