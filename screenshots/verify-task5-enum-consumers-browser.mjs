@@ -4,7 +4,7 @@ import puppeteer from 'puppeteer'
 
 const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const TIMEOUT = 15_000
-const ENUM_VALUE = '19.4.1'
+const ENUM_VALUE = '19.preview'
 const ENUM_LABEL = `tOS${ENUM_VALUE}`
 const ENUM_STORAGE_KEY = 'pms-enum-values'
 const PROJECT_STORAGE_KEY = 'pms-projects'
@@ -14,18 +14,19 @@ const allowedWarnings = [
   'Warning: [antd: ConfigProvider] `autoInsertSpaceInButton` is deprecated. Please use `{ button: { autoInsertSpace: boolean }}` instead.',
   'Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.',
   'Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.',
+  'Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.',
 ]
 
-const currentEnumEnvelope = includeThreePart => JSON.stringify({
+const currentEnumEnvelope = includeFirstSale => JSON.stringify({
   state: {
-    valuesByType: {
-      'tos-2-part': ['16.0', '17.2'],
-      'tos-3-part': includeThreePart
-        ? ['16.0.1', '17.2.0', ENUM_VALUE]
-        : ['16.0.1', '17.2.0'],
+    rowsByType: {
+      'roadmap-tos': [{ id: 'fixture-roadmap-1', value: '26.alpha' }],
+      'first-sale-tos': includeFirstSale
+        ? [{ id: 'fixture-first-sale-1', value: ENUM_VALUE }]
+        : [],
     },
   },
-  version: 1,
+  version: 2,
 })
 
 const historicalProjectEnvelope = JSON.stringify({
@@ -41,15 +42,15 @@ const historicalProjectEnvelope = JSON.stringify({
       currentNode: 'STR2', fieldValues: { firstSaleTosVersion: ENUM_VALUE },
     }],
   },
-  version: 3,
+  version: 7,
 })
 
-const seedStorage = async (page, { includeThreePart, includeHistoricalProject = false }) => {
+const seedStorage = async (page, { includeFirstSale, includeHistoricalProject = false }) => {
   await page.evaluateOnNewDocument((enumKey, enumEnvelope, projectKey, projectEnvelope) => {
     localStorage.setItem(enumKey, enumEnvelope)
     if (projectEnvelope) localStorage.setItem(projectKey, projectEnvelope)
     else localStorage.removeItem(projectKey)
-  }, ENUM_STORAGE_KEY, currentEnumEnvelope(includeThreePart), PROJECT_STORAGE_KEY, includeHistoricalProject ? historicalProjectEnvelope : '')
+  }, ENUM_STORAGE_KEY, currentEnumEnvelope(includeFirstSale), PROJECT_STORAGE_KEY, includeHistoricalProject ? historicalProjectEnvelope : '')
 }
 
 const clickExactText = async (page, selector, text) => {
@@ -122,7 +123,7 @@ const selectVisibleOption = async (page, text) => {
 const openMachineCreateOptions = async page => {
   await navigateMain(page, '项目列表')
   console.log('  STEP open add-project modal')
-  await clickExactText(page, 'button', '新增项目')
+  await page.$eval('button[aria-label="新增项目"]', element => element.click())
   await page.waitForFunction(() => {
     const modal = Array.from(document.querySelectorAll('.ant-modal'))
       .find(candidate => (candidate.textContent || '').includes('新增项目'))
@@ -166,11 +167,10 @@ const openHistoricalEditOptions = async page => {
 }
 
 const openRoadmapOptions = async page => {
-  await navigateMain(page, '项目视图')
+  await navigateMain(page, 'tOS路标')
   console.log('  STEP open tOS roadmap')
-  await clickExactText(page, 'button', 'tOS 路标视图')
   await page.waitForSelector('[aria-label="tOS 路标视图"]', { visible: true })
-  console.log('  STEP open roadmap two-part select')
+  console.log('  STEP open roadmap tOS select')
   const handle = await page.evaluateHandle(() => {
     const root = document.querySelector('[aria-label="表单视图 tOS 版本"]')
     return (root?.matches('input[role="combobox"]') ? root : root?.querySelector('input[role="combobox"]')) || null
@@ -218,8 +218,8 @@ const runScenario = async (name, seed, exercise) => {
 }
 
 try {
-  await runScenario('A current three-part value appears in whole-machine create', {
-    includeThreePart: true,
+  await runScenario('A current first-sale value appears in whole-machine create', {
+    includeFirstSale: true,
   }, async page => {
     const options = await openMachineCreateOptions(page)
     if (!options.some(option => option.text === ENUM_LABEL && !option.disabled)) {
@@ -228,7 +228,7 @@ try {
   })
 
   await runScenario('B deleted historical value stays disabled in project edit', {
-    includeThreePart: false,
+    includeFirstSale: false,
     includeHistoricalProject: true,
   }, async page => {
     const options = await openHistoricalEditOptions(page)
@@ -236,8 +236,8 @@ try {
     if (!historical?.disabled) throw new Error(`historical option missing or enabled: ${JSON.stringify(options)}`)
   })
 
-  await runScenario('C deleted three-part value is absent from whole-machine create', {
-    includeThreePart: false,
+  await runScenario('C deleted first-sale value is absent from whole-machine create', {
+    includeFirstSale: false,
   }, async page => {
     const options = await openMachineCreateOptions(page)
     if (options.some(option => option.text.includes(ENUM_VALUE))) {
@@ -245,8 +245,8 @@ try {
     }
   })
 
-  await runScenario('D roadmap two-part choices ignore the three-part value', {
-    includeThreePart: true,
+  await runScenario('D roadmap choices ignore the first-sale value', {
+    includeFirstSale: true,
   }, async page => {
     const options = await openRoadmapOptions(page)
     if (options.some(option => option.text.includes(ENUM_VALUE))) {
