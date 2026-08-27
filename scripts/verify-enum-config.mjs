@@ -540,15 +540,17 @@ for (const invalidValue of ['', '-1.0', '.17.0', '17.0.', 'tOS 17.0']) {
 }
 assert.deepEqual(values.sortEnumValues(['17.10.0', '17.2.0', '17.2.0', '16.10.2']), ['16.10.2', '17.2.0', '17.2.0', '17.10.0'], 'version values sort stably by numeric segments in natural ascending order')
 
-assert.deepEqual(options.buildTosEnumOptions('tos-3-part', ['17.2.0', '19.4.1', '19.4'], ['16.3.7']), [
-  { label: 'tOS17.2.0', value: '17.2.0' },
+assert.deepEqual(options.buildTosEnumOptions('tos-3-part', ['beta', '19.4.1', '19.4'], ['16.3.7']), [
+  { label: 'tOSbeta', value: 'beta' },
   { label: 'tOS19.4.1', value: '19.4.1' },
-  { label: 'tOS16.3.7（已停用）', value: '16.3.7', disabled: true },
-], 'three-part consumers keep current values in semantic ascending order and append their explicit historical orphan')
-assert.deepEqual(options.buildTosEnumOptions('tos-2-part', ['17.2', '19.4', '19.4.1'], []), [
-  { label: 'tOS17.2', value: '17.2' },
   { label: 'tOS19.4', value: '19.4' },
-], 'two-part consumers do not inherit three-part values')
+  { label: 'tOS16.3.7（已停用）', value: '16.3.7', disabled: true },
+], 'legacy consumers preserve arbitrary nonempty current strings in configured order and append their explicit historical orphan')
+assert.deepEqual(options.buildTosEnumOptions('tos-2-part', ['beta', '17.2', '19.4.1'], []), [
+  { label: 'tOSbeta', value: 'beta' },
+  { label: 'tOS17.2', value: '17.2' },
+  { label: 'tOS19.4.1', value: '19.4.1' },
+], 'legacy category names no longer filter arbitrary values by numeric segment count')
 assert.equal(options.resolveCurrentTosEnumValue('tos-3-part', ' tOS19.4.1 ', ['17.2.0', '19.4.1']), '19.4.1', 'current values resolve from either labels or canonical values')
 assert.equal(options.resolveCurrentTosEnumValue('tos-3-part', 'tOS16.3.7（已停用）', ['17.2.0', '19.4.1']), null, 'historical display values cannot be selected as new values')
 

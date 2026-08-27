@@ -2,9 +2,7 @@ import { buildEnumOptions, getSingleEnumValues } from '@/lib/enumConsumers'
 import {
   createInitialEnumRows,
   formatEnumCellValue,
-  isValidEnumValue,
-  normalizeEnumValue,
-  sortEnumValues,
+  normalizeEnumFieldValue,
 } from '@/lib/enumValues'
 import type { LegacyTosEnumTypeKey } from '@/types/enums'
 
@@ -21,7 +19,11 @@ export function normalizeTosEnumReference(input: unknown): string {
   const withoutStatus = input.trim().replace(/（已停用）$/, '').trim()
   const legacyId = /^tos-(\d+)-(\d+)(?:-(\d+))?$/i.exec(withoutStatus)
   if (legacyId) return legacyId.slice(1).filter(Boolean).join('.')
-  return normalizeEnumValue(withoutStatus.replace(/^tOS\s+/i, 'tOS'))
+  return normalizeEnumFieldValue(
+    'first-sale-tos',
+    'value',
+    withoutStatus.replace(/^tOS\s+/i, 'tOS'),
+  )
 }
 
 const flatTosType = (type: LegacyTosEnumTypeKey) =>
@@ -30,10 +32,14 @@ const flatTosType = (type: LegacyTosEnumTypeKey) =>
 function currentValuesFor(type: LegacyTosEnumTypeKey, values: readonly string[]): string[] {
   const unique = new Set<string>()
   for (const candidate of values) {
-    if (!isValidEnumValue(type, candidate)) continue
-    unique.add(normalizeEnumValue(candidate))
+    const value = normalizeEnumFieldValue(
+      flatTosType(type),
+      'value',
+      candidate.replace(/^tOS\s+/i, 'tOS'),
+    )
+    if (value) unique.add(value)
   }
-  return sortEnumValues([...unique])
+  return [...unique]
 }
 
 export function formatTosEnumValue(input: unknown): string {

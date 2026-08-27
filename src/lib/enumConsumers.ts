@@ -25,7 +25,7 @@ export interface ChipOption extends EnumOption {
 
 export interface ProjectCategorySnapshot {
   pmsProjectCategory: string
-  pmsSecondaryCategory?: string
+  pmsSecondaryCategory: string
 }
 
 export interface TmgSubdomainState {
@@ -100,7 +100,10 @@ export function isHistoricalChipOptionValue(value: string): boolean {
 export function decodeHistoricalChipOptionValue(value: string): ProjectChipSnapshot | undefined {
   if (!isHistoricalChipOptionValue(value)) return undefined
   try {
-    const parsed: unknown = JSON.parse(decodeURIComponent(value.slice(HISTORICAL_CHIP_PREFIX.length)))
+    const encodedSnapshot = value
+      .slice(HISTORICAL_CHIP_PREFIX.length)
+      .replace(/:collision:\d+$/, '')
+    const parsed: unknown = JSON.parse(decodeURIComponent(encodedSnapshot))
     if (!Array.isArray(parsed) || parsed.length !== 3 || !parsed.every(item => typeof item === 'string')) {
       return undefined
     }
@@ -121,13 +124,22 @@ export function buildChipOptions(
     label: chipLabel(row),
   }))
   const seen = new Set(rows.map(chipSnapshotKey))
+  const usedOptionValues = new Set(rows.map(row => row.id))
 
   for (const snapshot of historical) {
     const key = chipSnapshotKey(snapshot)
     if (seen.has(key)) continue
     seen.add(key)
+    const defaultValue = encodeHistoricalChipOptionValue(snapshot)
+    let value = defaultValue
+    let collision = 1
+    while (usedOptionValues.has(value)) {
+      value = `${defaultValue}:collision:${collision}`
+      collision += 1
+    }
+    usedOptionValues.add(value)
     options.push({
-      ...historyOption(encodeHistoricalChipOptionValue(snapshot), chipLabel(snapshot)),
+      ...historyOption(value, chipLabel(snapshot)),
       historical: true,
     })
   }
@@ -139,13 +151,16 @@ export function resolveChipRow(
   rowsByType: EnumRowsByType,
   rowId: string,
 ): ProjectChipSnapshot | undefined {
-  if (isHistoricalChipOptionValue(rowId)) return undefined
   const row = rowsByType['chip-mapping'].find(candidate => candidate.id === rowId)
-  return row ? {
-    chipCode: row.chipCode,
-    chipModel: row.chipModel,
-    chipPlatform: row.chipPlatform,
-  } : undefined
+  if (row) {
+    return {
+      chipCode: row.chipCode,
+      chipModel: row.chipModel,
+      chipPlatform: row.chipPlatform,
+    }
+  }
+  if (isHistoricalChipOptionValue(rowId)) return undefined
+  return undefined
 }
 
 export function findProjectCategoryMapping(
@@ -161,9 +176,10 @@ export function findProjectCategoryMapping(
 
   const pmsProjectCategory = row.pmsProjectCategory.trim()
   const pmsSecondaryCategory = row.pmsSecondaryCategory.trim()
-  return pmsProjectCategory === '整机产品项目' && pmsSecondaryCategory
-    ? { pmsProjectCategory, pmsSecondaryCategory }
-    : { pmsProjectCategory }
+  return {
+    pmsProjectCategory,
+    pmsSecondaryCategory: pmsProjectCategory === '整机产品项目' ? pmsSecondaryCategory : '',
+  }
 }
 
 export function getTmgDomains(

@@ -5,6 +5,7 @@ import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-cont
 const root = projectRoot(import.meta.url)
 const consumers = loadTypeScriptModule(root, 'src/lib/enumConsumers.ts')
 const values = loadTypeScriptModule(root, 'src/lib/enumValues.ts')
+const legacyTos = loadTypeScriptModule(root, 'src/lib/tosEnumOptions.ts')
 
 const rowsByType = values.createInitialEnumRows()
 rowsByType['core-value'] = [
@@ -41,6 +42,11 @@ assert.deepEqual(consumers.buildEnumOptions(rowsByType, 'roadmap-tos'), [
   { value: 'beta', label: 'tOSbeta' },
   { value: '18.0', label: 'tOS18.0' },
 ], 'live tOS option values remain stored bodies and labels receive exactly one prefix')
+assert.deepEqual(legacyTos.buildTosEnumOptions('tos-2-part', ['beta', '18.0', '17.2']), [
+  { value: 'beta', label: 'tOSbeta' },
+  { value: '18.0', label: 'tOS18.0' },
+  { value: '17.2', label: 'tOS17.2' },
+], 'deprecated tOS adapters preserve arbitrary nonempty configured strings in input order')
 
 console.log('[enum-consumers] verifying historical single-value snapshots')
 assert.deepEqual(consumers.buildEnumOptions(rowsByType, 'roadmap-tos', ['17.2', '18.0', 'tOS19.0', '17.2']), [
@@ -83,12 +89,25 @@ assert.equal(consumers.isHistoricalChipOptionValue(historicalChipOptions[2].valu
 assert.deepEqual(consumers.decodeHistoricalChipOptionValue(historicalChipOptions[2].value), retiredChip, 'history markers decode to their original atomic snapshot')
 assert.equal(consumers.resolveChipRow(rowsByType, historicalChipOptions[2].value), undefined, 'history markers never resolve as live rows')
 
+const defaultHistoryMarker = consumers.encodeHistoricalChipOptionValue(retiredChip)
+const collidingLiveChip = { chipCode: 'LIVE', chipModel: 'MODEL', chipPlatform: 'PLATFORM' }
+const collisionRows = values.createInitialEnumRows()
+collisionRows['chip-mapping'] = [{ id: defaultHistoryMarker, ...collidingLiveChip }]
+const collisionOptions = consumers.buildChipOptions(collisionRows, [retiredChip, retiredChip])
+assert.equal(new Set(collisionOptions.map(option => option.value)).size, collisionOptions.length, 'live and historical chip option values remain unique when a persisted row ID occupies the default marker')
+assert.equal(collisionOptions.length, 2, 'duplicate historical chip snapshots still append only once after collision handling')
+assert.equal(collisionOptions[0].value, defaultHistoryMarker, 'persisted live row IDs remain unchanged')
+assert.notEqual(collisionOptions[1].value, defaultHistoryMarker, 'the historical marker is moved out of the live ID namespace collision')
+assert.deepEqual(consumers.decodeHistoricalChipOptionValue(collisionOptions[1].value), retiredChip, 'collision-safe history marker suffixes remain decodable')
+assert.deepEqual(consumers.resolveChipRow(collisionRows, defaultHistoryMarker), collidingLiveChip, 'live row lookup wins even when its ID resembles a historical marker')
+
 console.log('[enum-consumers] verifying project category and TMG mappings')
 assert.deepEqual(consumers.findProjectCategoryMapping(rowsByType, ' 整机基线 '), {
   pmsProjectCategory: '整机产品项目', pmsSecondaryCategory: '整机-手机',
 }, 'project category lookup uses an exact trimmed IPM match and returns its conditional secondary category')
 assert.deepEqual(consumers.findProjectCategoryMapping(rowsByType, '技术预研'), {
   pmsProjectCategory: '技术项目',
+  pmsSecondaryCategory: '',
 }, 'secondary categories are returned only for whole-machine project mappings')
 assert.equal(consumers.findProjectCategoryMapping(rowsByType, '整机'), undefined, 'partial category matches are rejected')
 
