@@ -55,6 +55,15 @@ assert.deepEqual(consumers.buildEnumOptions(rowsByType, 'roadmap-tos', ['17.2', 
   { value: '17.2', label: 'tOS17.2（已停用）', disabled: true },
   { value: 'tOS19.0', label: 'tOS19.0（已停用）', disabled: true },
 ], 'missing history appends once, preserves its stored value, and formats one tOS prefix')
+assert.deepEqual(consumers.buildEnumOptions(rowsByType, 'roadmap-tos', ['tOS18.0']), [
+  { value: 'beta', label: 'tOSbeta' },
+  { value: '18.0', label: 'tOS18.0' },
+  { value: 'tOS18.0', label: 'tOS18.0（已停用）', disabled: true },
+], 'tOS history preserves its raw snapshot value and de-duplicates only exact current values')
+assert.deepEqual(legacyTos.buildTosEnumOptions('tos-2-part', ['18.0'], ['tOS18.0']), [
+  { value: '18.0', label: 'tOS18.0' },
+  { value: 'tOS18.0', label: 'tOS18.0（已停用）', disabled: true },
+], 'deprecated adapters also avoid rewriting historical tOS snapshots')
 assert.deepEqual(consumers.buildEnumOptions(rowsByType, 'core-value', ['旧值', '第二项', '旧值']), [
   { value: '第二项', label: '第二项' },
   { value: '第一项', label: '第一项' },
@@ -85,8 +94,8 @@ assert.deepEqual(historicalChipOptions[2], {
   disabled: true,
   historical: true,
 }, 'retired chip tuples use a stable, explicitly historical option marker')
-assert.equal(consumers.isHistoricalChipOptionValue(historicalChipOptions[2].value), true, 'history option values are distinguishable from live row IDs')
-assert.deepEqual(consumers.decodeHistoricalChipOptionValue(historicalChipOptions[2].value), retiredChip, 'history markers decode to their original atomic snapshot')
+assert.equal(consumers.isHistoricalChipOptionValue(rowsByType, historicalChipOptions[2].value), true, 'history option values are distinguishable from live row IDs')
+assert.deepEqual(consumers.decodeHistoricalChipOptionValue(rowsByType, historicalChipOptions[2].value), retiredChip, 'history markers decode to their original atomic snapshot')
 assert.equal(consumers.resolveChipRow(rowsByType, historicalChipOptions[2].value), undefined, 'history markers never resolve as live rows')
 
 const defaultHistoryMarker = consumers.encodeHistoricalChipOptionValue(retiredChip)
@@ -98,8 +107,18 @@ assert.equal(new Set(collisionOptions.map(option => option.value)).size, collisi
 assert.equal(collisionOptions.length, 2, 'duplicate historical chip snapshots still append only once after collision handling')
 assert.equal(collisionOptions[0].value, defaultHistoryMarker, 'persisted live row IDs remain unchanged')
 assert.notEqual(collisionOptions[1].value, defaultHistoryMarker, 'the historical marker is moved out of the live ID namespace collision')
-assert.deepEqual(consumers.decodeHistoricalChipOptionValue(collisionOptions[1].value), retiredChip, 'collision-safe history marker suffixes remain decodable')
+assert.equal(consumers.isHistoricalChipOptionValue(collisionRows, defaultHistoryMarker), false, 'a colliding persisted live ID is not classified as historical')
+assert.equal(consumers.decodeHistoricalChipOptionValue(collisionRows, defaultHistoryMarker), undefined, 'a colliding persisted live ID is not decoded as history')
+assert.equal(consumers.isHistoricalChipOptionValue(collisionRows, collisionOptions[1].value), true, 'the allocated collision-safe option is classified as historical')
+assert.deepEqual(consumers.decodeHistoricalChipOptionValue(collisionRows, collisionOptions[1].value), retiredChip, 'collision-safe history marker suffixes remain decodable')
 assert.deepEqual(consumers.resolveChipRow(collisionRows, defaultHistoryMarker), collidingLiveChip, 'live row lookup wins even when its ID resembles a historical marker')
+
+const unicodeChip = { chipCode: '芯片-🚀', chipModel: '型号/甲', chipPlatform: '平台：一' }
+const unicodeMarker = consumers.encodeHistoricalChipOptionValue(unicodeChip)
+assert.deepEqual(consumers.decodeHistoricalChipOptionValue(rowsByType, unicodeMarker), unicodeChip, 'Unicode chip snapshots round-trip through history markers')
+const malformedMarker = `${unicodeMarker.slice(0, unicodeMarker.indexOf('%'))}%E0%A4%A`
+assert.equal(consumers.decodeHistoricalChipOptionValue(rowsByType, malformedMarker), undefined, 'malformed marker payloads fail closed')
+assert.equal(consumers.isHistoricalChipOptionValue(rowsByType, malformedMarker), false, 'malformed marker payloads are not classified as history')
 
 console.log('[enum-consumers] verifying project category and TMG mappings')
 assert.deepEqual(consumers.findProjectCategoryMapping(rowsByType, ' 整机基线 '), {
@@ -117,7 +136,7 @@ assert.deepEqual(consumers.getTmgDomains(rowsByType, '历史领域'), [
   { value: '性能TMG', label: '性能TMG' },
   { value: '历史领域', label: '历史领域（已停用）', disabled: true },
 ], 'TMG domains de-duplicate in first-row order and append absent history')
-assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '系统应用', '历史子领域'), {
+assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '系统应用', '系统应用', '历史子领域'), {
   options: [
     { value: 'AIOS', label: 'AIOS' },
     { value: '应用', label: '应用' },
@@ -125,15 +144,40 @@ assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '系统应用', '历
   ],
   disabled: false,
 }, 'subdomains filter by the chosen domain, preserve row order, and append history')
-assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '基础架构TMG', '历史子领域'), {
+assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '基础架构TMG', '基础架构TMG', '历史子领域'), {
   options: [
     { value: '无', label: '无' },
     { value: '历史子领域', label: '历史子领域（已停用）', disabled: true },
   ],
+  disabled: false,
+}, 'an orphan historical subdomain prevents sole-无 from overwriting the active snapshot')
+assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '基础架构TMG'), {
+  options: [{ value: '无', label: '无' }],
   autoValue: '无',
   disabled: true,
-}, 'a sole live 无 auto-selects and disables even when historical history is displayed')
+}, 'once no orphan snapshot remains, a sole live 无 auto-selects and disables')
+assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '性能TMG', '基础架构TMG', '历史子领域'), {
+  options: [{ value: '无', label: '无' }],
+  autoValue: '无',
+  disabled: true,
+}, 'switching domains does not leak a retired subdomain from its original domain')
 assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '不存在'), { options: [], disabled: false }, 'no configured rows exposes an empty selectable state')
+
+const deepFreeze = value => {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.values(value).forEach(deepFreeze)
+    Object.freeze(value)
+  }
+  return value
+}
+const frozenRows = deepFreeze(structuredClone(rowsByType))
+assert.doesNotThrow(() => {
+  consumers.buildEnumOptions(frozenRows, 'roadmap-tos', ['tOS18.0'])
+  consumers.buildChipOptions(frozenRows, [retiredChip])
+  consumers.findProjectCategoryMapping(frozenRows, '技术预研')
+  consumers.getTmgDomains(frozenRows, '历史领域')
+  consumers.getTmgSubdomainState(frozenRows, '基础架构TMG', '基础架构TMG', '历史子领域')
+}, 'all consumer adapters accept deeply frozen rows without mutation')
 
 console.log('[enum-consumers] verifying thin hook and compatibility contracts')
 const hookSource = readSource(root, 'src/hooks/useEnumOptions.ts')
@@ -142,6 +186,11 @@ assert.doesNotMatch(hookSource, /valuesByType|hasHydrated|hydrationError|ensureE
 for (const hook of ['useSingleEnumOptions', 'useChipOptions', 'useProjectCategoryMapping', 'useTmgOptions']) {
   assert.match(hookSource, new RegExp(`export function ${hook}\\b`), `${hook} is exported`)
 }
+assert.match(
+  hookSource,
+  /getTmgSubdomainState\(\s*rowsByType,\s*domain,\s*historicalDomain,\s*historicalSubdomain,?\s*\)/,
+  'TMG hook passes the original domain together with its historical subdomain snapshot',
+)
 const legacyLibSource = readSource(root, 'src/lib/tosEnumOptions.ts')
 const legacyHookSource = readSource(root, 'src/hooks/useTosEnumOptions.ts')
 assert.match(legacyLibSource, /buildEnumOptions/, 'deprecated tOS option builder delegates to the unified consumer helper')

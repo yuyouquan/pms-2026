@@ -68,6 +68,7 @@ export function buildEnumOptions(
   const seen = new Set(currentValues)
 
   for (const input of historicalValues) {
+    // Snapshot identity is exact after trimming: `18.0` and `tOS18.0` must not collapse.
     const value = nonemptyString(input)
     if (!value || seen.has(value)) continue
     seen.add(value)
@@ -93,12 +94,8 @@ export function encodeHistoricalChipOptionValue(snapshot: ProjectChipSnapshot): 
   return `${HISTORICAL_CHIP_PREFIX}${encodeURIComponent(chipSnapshotKey(snapshot))}`
 }
 
-export function isHistoricalChipOptionValue(value: string): boolean {
-  return value.startsWith(HISTORICAL_CHIP_PREFIX)
-}
-
-export function decodeHistoricalChipOptionValue(value: string): ProjectChipSnapshot | undefined {
-  if (!isHistoricalChipOptionValue(value)) return undefined
+function parseHistoricalChipOptionValue(value: string): ProjectChipSnapshot | undefined {
+  if (!value.startsWith(HISTORICAL_CHIP_PREFIX)) return undefined
   try {
     const encodedSnapshot = value
       .slice(HISTORICAL_CHIP_PREFIX.length)
@@ -112,6 +109,21 @@ export function decodeHistoricalChipOptionValue(value: string): ProjectChipSnaps
   } catch {
     return undefined
   }
+}
+
+export function decodeHistoricalChipOptionValue(
+  rowsByType: EnumRowsByType,
+  value: string,
+): ProjectChipSnapshot | undefined {
+  if (rowsByType['chip-mapping'].some(row => row.id === value)) return undefined
+  return parseHistoricalChipOptionValue(value)
+}
+
+export function isHistoricalChipOptionValue(
+  rowsByType: EnumRowsByType,
+  value: string,
+): boolean {
+  return decodeHistoricalChipOptionValue(rowsByType, value) !== undefined
 }
 
 export function buildChipOptions(
@@ -159,7 +171,7 @@ export function resolveChipRow(
       chipPlatform: row.chipPlatform,
     }
   }
-  if (isHistoricalChipOptionValue(rowId)) return undefined
+  if (isHistoricalChipOptionValue(rowsByType, rowId)) return undefined
   return undefined
 }
 
@@ -203,6 +215,7 @@ export function getTmgDomains(
 export function getTmgSubdomainState(
   rowsByType: EnumRowsByType,
   domain: string,
+  historicalDomain?: string,
   historicalSubdomain?: string,
 ): TmgSubdomainState {
   const selectedDomain = domain.trim()
@@ -216,10 +229,18 @@ export function getTmgSubdomainState(
   }
 
   const options = liveSubdomains.map(value => ({ value, label: value }))
+  const historyDomain = nonemptyString(historicalDomain)
   const history = nonemptyString(historicalSubdomain)
-  if (history && !seen.has(history)) options.push(historyOption(history, history))
+  const hasOrphanSnapshot = Boolean(
+    history
+    && selectedDomain === historyDomain
+    && !seen.has(history),
+  )
+  if (hasOrphanSnapshot) options.push(historyOption(history, history))
 
-  const onlyNone = liveSubdomains.length === 1 && liveSubdomains[0] === '无'
+  const onlyNone = liveSubdomains.length === 1
+    && liveSubdomains[0] === '无'
+    && !hasOrphanSnapshot
   return {
     options,
     ...(onlyNone ? { autoValue: '无' } : {}),

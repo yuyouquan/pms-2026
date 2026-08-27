@@ -54,10 +54,11 @@ export function buildTosEnumOptions(
   historicalValues: readonly unknown[] = [],
 ): TosEnumOption[] {
   const currentValues = currentValuesFor(type, configuredValues)
-  const normalizedHistory: string[] = []
+  const historicalSnapshots: string[] = []
   for (const input of historicalValues) {
-    const value = normalizeTosEnumReference(input)
-    if (value) normalizedHistory.push(value)
+    // Historical option values are exact persisted snapshots; formatting must not rewrite them.
+    const value = typeof input === 'string' ? input.trim() : ''
+    if (value) historicalSnapshots.push(value)
   }
   const rowsByType = createInitialEnumRows()
   const flatType = flatTosType(type)
@@ -65,7 +66,7 @@ export function buildTosEnumOptions(
     id: `legacy-tos-option-${index + 1}`,
     value,
   }))
-  return buildEnumOptions(rowsByType, flatType, normalizedHistory)
+  return buildEnumOptions(rowsByType, flatType, historicalSnapshots)
 }
 
 /** @deprecated Use getSingleEnumValues with rowsByType and a flat enum key. */

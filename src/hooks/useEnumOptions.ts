@@ -51,7 +51,12 @@ export function useTmgOptions(
 ) {
   const rowsByType = useEnumStore(state => state.rowsByType)
   return useMemo(() => {
-    const subdomainState = getTmgSubdomainState(rowsByType, domain, historicalSubdomain)
+    const subdomainState = getTmgSubdomainState(
+      rowsByType,
+      domain,
+      historicalDomain,
+      historicalSubdomain,
+    )
     return {
       domainOptions: getTmgDomains(rowsByType, historicalDomain),
       subdomainOptions: subdomainState.options,
