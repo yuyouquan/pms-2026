@@ -5,6 +5,7 @@
  * a fresh browser context so persisted drafts cannot hide regressions.
  */
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -15,6 +16,9 @@ const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const TIMEOUT = Number(process.env.PMS_BROWSER_TIMEOUT || 30_000)
 const ONLY_CASE = process.env.PMS_BROWSER_CASE || ''
 const VALID_BROWSER_CASES = new Set(['', 'all', 'machine', 'machine-surface', 'machine-summary', 'machine-structure', 'machine-reorder', 'machine-invalid', 'machine-follow-actual', 'machine-permission', 'tos', 'tos-surface', 'technical'])
+export const shouldRunTask7FocusedBrowserCase = (requestedCase, focusedCase) => (
+  requestedCase === 'all' || requestedCase === focusedCase
+)
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 const isAllowedConsoleMessage = message => {
   const text = message.text()
@@ -1045,7 +1049,7 @@ try {
     let page = initialPage
     await enterProject(page, 'X6877-D8400_H991')
     assert.ok(await page.$('.pms-plan-view-mode-switcher input[aria-label="横版表格"]:checked'), 'machine level-one plan defaults to horizontal view')
-    if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'machine' || ONLY_CASE === 'machine-surface') {
+    if (!ONLY_CASE || ONLY_CASE === 'machine' || shouldRunTask7FocusedBrowserCase(ONLY_CASE, 'machine-surface')) {
       await assertHorizontalStageHeader(page, '概念阶段', { dynamic: false })
       await assertHorizontalStageHeader(page, '上市阶段', { dynamic: true })
       await assertHorizontalStageHeader(page, '生命周期阶段', { dynamic: true })
@@ -1061,7 +1065,7 @@ try {
     const table = '.pms-level1-tree-table'
     await page.waitForSelector(table, { timeout: TIMEOUT })
     await assertHeaders(page, table, ['序号', '阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期'])
-    if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'machine' || ONLY_CASE === 'machine-surface') {
+    if (!ONLY_CASE || ONLY_CASE === 'machine' || shouldRunTask7FocusedBrowserCase(ONLY_CASE, 'machine-surface')) {
       const verticalCurrentWorkbook = await downloadPlanWorkbook(page, '导出当前视图')
       const verticalAllWorkbook = await downloadPlanWorkbook(page, '导出全部')
       const expectedTreeHeaders = ['序号', '阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期']
@@ -1320,7 +1324,7 @@ try {
 
   })
 
-  if (ONLY_CASE === 'machine-summary') await runCase('machine latest-published summary and governed compare', async (initialPage, errors) => {
+  if (shouldRunTask7FocusedBrowserCase(ONLY_CASE, 'machine-summary')) await runCase('machine latest-published summary and governed compare', async (initialPage, errors) => {
     let page = initialPage
     const table = '.pms-level1-tree-table'
     await enterProject(page, 'X6877-D8400_H991')
@@ -1515,7 +1519,7 @@ try {
     const table = '.pms-level1-tree-table'
     await page.waitForSelector(table, { timeout: TIMEOUT })
     await assertHeaders(page, table, ['序号', '阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期'])
-    if (ONLY_CASE === 'tos-surface') {
+    if (shouldRunTask7FocusedBrowserCase(ONLY_CASE, 'tos-surface')) {
       await chooseVersion(page, 'V3 (已发布)')
       const tosConceptActualBefore = await treeDate(page, table, '概念启动', 'actualEndDate')
       const tosConceptActualAfter = addIsoDays(tosConceptActualBefore, 1)
@@ -1537,7 +1541,9 @@ try {
       assert.match(await visibleCompareDialogText(page), /[1-9]\d*\s*变更总计/, 'tOS governed comparison is nonempty')
       assert.ok((await visibleCompareTableText(page)).includes('概念启动'), 'tOS governed comparison contains the expected milestone row')
       console.log(`browser tOS surface summary ${JSON.stringify(tosPublishedSummary)} and governed comparison passed`)
-      return
+      if (ONLY_CASE === 'tos-surface') return
+      await pressAriaButton(page, 'Close')
+      await selectView(page, '竖版表格')
     }
     assert.equal(await page.$('button[aria-label="添加MR里程碑"]'), null, 'tOS does not expose MR insertion')
     assert.ok(await page.$(`${table} .ant-table-row-expand-icon`), 'tOS tree table renders real expanders')
@@ -1773,6 +1779,18 @@ try {
     assert.deepEqual(persistedDates, afterResize, 'subproject move and resize survive same-context new-page persistence')
     console.log(`browser subproject dates after reopening ${JSON.stringify(persistedDates)}`)
   })
+
+  if (ONLY_CASE === 'all' && shouldRunTask7FocusedBrowserCase(ONLY_CASE, 'machine-follow-actual')) {
+    console.log('RUN browser all -> machine-follow-actual focused case')
+    const focusedResult = spawnSync(process.execPath, [process.argv[1]], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { ...process.env, PMS_BROWSER_CASE: 'machine-follow-actual' },
+    })
+    if (focusedResult.stdout) process.stdout.write(focusedResult.stdout)
+    if (focusedResult.stderr) process.stderr.write(focusedResult.stderr)
+    assert.equal(focusedResult.status, 0, 'browser all includes a green machine-follow-actual focused case')
+  }
 
   assert.ok(executedCases > 0, `browser matrix executed no cases for PMS_BROWSER_CASE=${JSON.stringify(ONLY_CASE)}`)
   console.log(`PASS level1 flat milestone gantt browser matrix (${BASE_URL})`)

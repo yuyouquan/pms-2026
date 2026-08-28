@@ -490,6 +490,36 @@ export const mergeLevel1HorizontalStageGroups = <Row extends {
   return merged
 }
 
+export const resolveLevel1HorizontalVersionCells = <Row extends {
+  id: string
+  stableId?: string
+}>(
+  headers: readonly Row[],
+  versionRows: readonly Row[],
+): Array<Row | null> => headers.map(header => {
+  const identity = header.stableId || header.id
+  return versionRows.find(row => (row.stableId || row.id) === identity) || null
+})
+
+export const resolveTosComparisonVersionTasks = <Task, Version extends {
+  id: string
+  status: string
+}>({
+  version,
+  currentVersionId,
+  snapshot,
+  currentScopedTasks,
+}: {
+  version: Version
+  currentVersionId: string
+  snapshot: readonly Task[] | undefined
+  currentScopedTasks: readonly Task[]
+}): Task[] => {
+  if (snapshot !== undefined) return [...snapshot]
+  if (version.id === currentVersionId && version.status === '修订中') return [...currentScopedTasks]
+  return []
+}
+
 export const createLevel1FocusScopeToken = ({
   projectId,
   scopeKind,
@@ -3179,9 +3209,7 @@ export default function ProjectSpaceContainer() {
     const dataMatrix: (string | number)[][] = []
     for (const { version, projection } of versionProjections) {
       const row: (string | number)[] = [version.versionNo, calcCycleDays(projection.rows, 'planStartDate', 'planEndDate')]
-      for (const milestone of allMilestones) {
-        const identity = milestone.stableId || milestone.id
-        const match = projection.rows.find(task => (task.stableId || task.id) === identity)
+      for (const match of resolveLevel1HorizontalVersionCells(allMilestones, projection.rows)) {
         row.push(match?.planEndDate || '-')
       }
       dataMatrix.push(row)
@@ -3189,9 +3217,7 @@ export default function ProjectSpaceContainer() {
     const actualProjection = recencyVersionProjections.find(entry => entry.version.status === '已发布')?.projection
     const actualRows = actualProjection?.rows || []
     const actualRow: (string | number)[] = ['实际', calcCycleDays(actualRows, 'actualStartDate', 'actualEndDate')]
-    for (const milestone of allMilestones) {
-      const identity = milestone.stableId || milestone.id
-      const task = actualRows.find(row => (row.stableId || row.id) === identity)
+    for (const task of resolveLevel1HorizontalVersionCells(allMilestones, actualRows)) {
       actualRow.push(task?.actualEndDate || '-')
     }
     dataMatrix.push(actualRow)
@@ -4285,15 +4311,7 @@ export default function ProjectSpaceContainer() {
           </thead>
           <tbody>
             {versionProjections.map(({ version, projection: vProjection }) => {
-              const vMilestones = stageGroups.flatMap(({ stage, milestones: ms }) => {
-                if (ms.length > 0) return ms.map((milestone: any) => {
-                  const identity = milestone.stableId || milestone.id
-                  return vProjection.rows.find(task => (task.stableId || task.id) === identity) || milestone
-                })
-                const stageIdentity = stage.stableId || stage.id
-                const versionStage = vProjection.rows.find(task => (task.stableId || task.id) === stageIdentity)
-                return [versionStage || stage]
-              })
+              const vMilestones = resolveLevel1HorizontalVersionCells(allMilestones, vProjection.rows)
               const devCycle = sumLevel1EstimatedDays(vProjection.rows)
               const isLatest = version.id === latestDisplayVersionId
               return (
@@ -4311,9 +4329,9 @@ export default function ProjectSpaceContainer() {
                   <td style={{ ...cycleTdStyle, background: isLatest ? '#f0f9ff' : '#fff' }}><Tooltip title="所有一级活动的预估工期总和"><span>{devCycle ?? '-'}</span></Tooltip></td>
                   {vMilestones.map((m: any, mi: number) => (
                     <td key={mi} style={tdStyle}>
-                      {version.id === horizontalCurrentVersion && isCurrentDraft && canMaintainCurrentPlan
+                      {m && version.id === horizontalCurrentVersion && isCurrentDraft && canMaintainCurrentPlan
                         ? <ClickToEditDate align="center" value={m.planEndDate || ''} onChange={(nextValue) => setEffectiveTasks(effectiveTasks.map((task: any) => (task.stableId || task.id) === (m.stableId || m.id) ? { ...task, planEndDate: nextValue } : task))} />
-                        : m.planEndDate || '-'}
+                        : m?.planEndDate || '-'}
                     </td>
                   ))}
                 </tr>
@@ -5514,18 +5532,25 @@ export default function ProjectSpaceContainer() {
     const currentScopedTasks = isTosVersionTrainPlan
       ? versionTrainRecordsToCompareTasks(versionTrainRecordsForCurrentVersion || [])
       : projectPlanLevel === 'level2' ? level2PlanTasks : effectiveTasks
-    const getTosVersionTasks = (versionId: string) => {
-      if (!selectedProject || !isTosTypeScoped) return currentScopedTasks
+    const getTosVersionTasks = (version: PlanVersionLike) => {
+      if (!selectedProject || !isTosTypeScoped) return []
       const snapshot = publishedSnapshots[getTosTypeSnapshotKey(
         selectedProject.id,
         scopedTosPlanType,
         isTosVersionTrainPlan ? TOS_VERSION_TRAIN_SNAPSHOT_LEVEL : scopedPlanLevel,
-        versionId,
+        version.id,
       )]
-      if (snapshot === undefined) return currentScopedTasks
-      return isTosVersionTrainPlan
-        ? versionTrainRecordsToCompareTasks(snapshot as VersionTrainRecord[])
-        : snapshot
+      const comparisonSnapshot = snapshot === undefined
+        ? undefined
+        : isTosVersionTrainPlan
+          ? versionTrainRecordsToCompareTasks(snapshot as VersionTrainRecord[])
+          : snapshot
+      return resolveTosComparisonVersionTasks({
+        version,
+        currentVersionId: currentVersion,
+        snapshot: comparisonSnapshot,
+        currentScopedTasks,
+      })
     }
     const comparisonSnapshotScope = selectedProject && isMarketScopedLevel1
       ? { kind: 'market' as const, projectId: selectedProject.id, market: selectedMarketTab }
@@ -5538,8 +5563,8 @@ export default function ProjectSpaceContainer() {
       publishedSnapshots,
       scope: comparisonSnapshotScope,
     })
-    const oldTasks = isTosTypeScoped ? getTosVersionTasks(versionA.id) : resolveComparisonTasks(versionA)
-    let newTasks = isTosTypeScoped ? getTosVersionTasks(versionB.id) : resolveComparisonTasks(versionB)
+    const oldTasks = isTosTypeScoped ? getTosVersionTasks(versionA) : resolveComparisonTasks(versionA)
+    let newTasks = isTosTypeScoped ? getTosVersionTasks(versionB) : resolveComparisonTasks(versionB)
     if (projectPlanLevel !== 'level1' && !isTosTypeScoped && comparePlanVersions(versionA, versionB) !== 0) {
       newTasks = [
         ...effectiveTasks.map(task => {

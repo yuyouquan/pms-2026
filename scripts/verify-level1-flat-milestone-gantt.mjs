@@ -23,6 +23,7 @@ const level1Rules = await loadTypescriptModule('src/lib/level1PlanRules.ts')
 const technicalRules = await loadTypescriptModule('src/lib/technicalPlanRules.ts')
 const ganttRules = await loadTypescriptModule('src/lib/planGanttRules.ts')
 const projectSpaceLevel1Rules = await loadTypescriptModule('src/lib/projectSpaceLevel1Rules.ts')
+const versionCompareRules = await loadTypescriptModule('src/lib/versionCompare.ts')
 
 const machineTemplate = level1Rules.buildMachineLevel1Tasks(true)
 const machineProjection = level1Rules.projectLevel1Plan(machineTemplate, { mode: 'standard', today: '2026-08-27' })
@@ -762,6 +763,7 @@ assert.equal(globallyReadonlyController.canOpenLightbox(editableTask), false, 'g
 
 const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8')
 const projectSpaceSource = read('src/containers/ProjectSpaceContainer.tsx')
+const browserSource = read('screenshots/verify-level1-flat-milestone-gantt-browser.mjs')
 const loadExportedConstFromSource = async (sourceText, exportName) => {
   const file = ts.createSourceFile('ProjectSpaceContainer.tsx', sourceText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TSX)
   let initializer = null
@@ -784,6 +786,9 @@ const projectSpaceFocusRetry = await loadExportedConstFromSource(projectSpaceSou
 const projectSpaceFollowSync = await loadExportedConstFromSource(projectSpaceSource, 'preserveDetachedFollowMarketActualsAfterSync')
 const projectSpaceFollowScope = await loadExportedConstFromSource(projectSpaceSource, 'isLevel1MarketFollowActualScope')
 const projectSpaceHorizontalGroups = await loadExportedConstFromSource(projectSpaceSource, 'mergeLevel1HorizontalStageGroups')
+const projectSpaceHorizontalCells = await loadExportedConstFromSource(projectSpaceSource, 'resolveLevel1HorizontalVersionCells')
+const projectSpaceTosComparisonTasks = await loadExportedConstFromSource(projectSpaceSource, 'resolveTosComparisonVersionTasks')
+const task7BrowserRouting = await loadExportedConstFromSource(browserSource, 'shouldRunTask7FocusedBrowserCase')
 const mergedHorizontalGroups = projectSpaceHorizontalGroups.mergeLevel1HorizontalStageGroups([
   {
     stageGroups: [
@@ -820,6 +825,62 @@ assert.deepEqual(
   ],
   'horizontal stage columns use stable identity, prefer the newest snapshot labels, and retain historical-only stages/nodes',
 )
+const horizontalV4Rows = [
+  { id: '4.1', stableId: 'mr-1', taskName: 'MR1（V4）', planEndDate: '2026-04-01', status: '已完成', estimatedDays: 1 },
+  { id: '4.4', stableId: 'mr-4', taskName: 'MR4', planEndDate: '2026-04-04', status: '进行中', estimatedDays: 4 },
+]
+const horizontalV3Rows = [
+  { id: '3.1', stableId: 'mr-1', taskName: 'MR1（V3）', planEndDate: '2026-03-01', status: '已完成', estimatedDays: 1 },
+]
+const horizontalHeaders = [...horizontalV4Rows]
+const horizontalV3Cells = projectSpaceHorizontalCells.resolveLevel1HorizontalVersionCells(horizontalHeaders, horizontalV3Rows)
+assert.equal(horizontalV3Cells[0], horizontalV3Rows[0], 'a historical horizontal cell resolves its own snapshot row by stable identity')
+assert.equal(horizontalV3Cells[1], null, 'V3 keeps the V4-only MR4 column empty instead of falling back to the merged header row')
+assert.deepEqual(
+  [horizontalV3Cells[1]?.planEndDate || '-', horizontalV3Cells[1]?.status || '-', horizontalV3Cells[1]?.estimatedDays ?? '-'],
+  ['-', '-', '-'],
+  'a missing historical MR4 exposes no date, status, or duration from another version',
+)
+const tosLiveV3Draft = [
+  { id: '3.1', stableId: 'tos-concept-start', taskName: '概念启动', planEndDate: '2026-03-01' },
+  { id: '3.2', stableId: 'tos-draft-only', taskName: '16.1.0.005', planEndDate: '2026-04-01' },
+]
+const missingTosV2Tasks = projectSpaceTosComparisonTasks.resolveTosComparisonVersionTasks({
+  version: { id: 'tos-v2', status: '已发布' },
+  currentVersionId: 'tos-v3',
+  snapshot: undefined,
+  currentScopedTasks: tosLiveV3Draft,
+})
+assert.deepEqual(missingTosV2Tasks, [], 'a missing V2 tOS snapshot stays empty instead of borrowing the current V3 draft')
+const currentTosV3Tasks = projectSpaceTosComparisonTasks.resolveTosComparisonVersionTasks({
+  version: { id: 'tos-v3', status: '修订中' },
+  currentVersionId: 'tos-v3',
+  snapshot: undefined,
+  currentScopedTasks: tosLiveV3Draft,
+})
+assert.deepEqual(currentTosV3Tasks, tosLiveV3Draft, 'the exact current tOS draft remains available without making it a historical fallback')
+assert.deepEqual(
+  versionCompareRules.compareVersionsForTable(missingTosV2Tasks, currentTosV3Tasks).map(row => row.changeType),
+  ['新增', '新增'],
+  'missing V2 versus current V3 draft reports additions instead of a polluted zero-difference comparison',
+)
+assert.deepEqual(
+  versionCompareRules.compareVersionsForTable(currentTosV3Tasks, missingTosV2Tasks).map(row => row.changeType),
+  ['删除', '删除'],
+  'reversing the missing-snapshot comparison reports deletions instead of a polluted zero-difference comparison',
+)
+for (const focusedCase of ['machine-surface', 'machine-summary', 'machine-follow-actual', 'tos-surface']) {
+  assert.equal(task7BrowserRouting.shouldRunTask7FocusedBrowserCase('all', focusedCase), true, `browser all routes through ${focusedCase}`)
+  assert.equal(task7BrowserRouting.shouldRunTask7FocusedBrowserCase(focusedCase, focusedCase), true, `${focusedCase} remains directly runnable`)
+}
+assert.equal(task7BrowserRouting.shouldRunTask7FocusedBrowserCase('machine-summary', 'tos-surface'), false, 'an exact focused route never selects an unrelated case')
+for (const focusedCase of ['machine-surface', 'machine-summary', 'machine-follow-actual', 'tos-surface']) {
+  assert.match(
+    browserSource,
+    new RegExp(`shouldRunTask7FocusedBrowserCase\\(ONLY_CASE, '${focusedCase}'\\)`),
+    `the live browser matrix uses the shared all-route decision for ${focusedCase}`,
+  )
+}
 for (const label of ['序号', '阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期']) {
   assert.match(projectSpaceSource, new RegExp(label), `project-space tree table contains ${label}`)
 }
