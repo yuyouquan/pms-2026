@@ -376,23 +376,28 @@ const isMissingSeedValue = (value: unknown) => (
 const fillMissingSeedProjectFields = (persisted: Project, seed: Project): Project => {
   const next = { ...persisted }
   const supportsTechnicalFieldValues = persisted.type === PROJECT_CATEGORY_TECH
-  const fieldValues = supportsTechnicalFieldValues
-    ? cloneProjectSeedValue(persisted.fieldValues || {})
+  // A missing nested snapshot is not a request to create one.  Earlier
+  // migrations only hydrate the root project fields, and materialising an
+  // empty `fieldValues` object here makes a second migration change state.
+  const hasTechnicalFieldValues = supportsTechnicalFieldValues
+    && isRecord(persisted.fieldValues)
+  const fieldValues = hasTechnicalFieldValues
+    ? cloneProjectSeedValue(persisted.fieldValues)
     : undefined
   Object.entries(seed).forEach(([key, value]) => {
     const rootValue = next[key]
     const nestedValue = fieldValues?.[key]
     const rootMissing = isMissingSeedValue(rootValue)
     const nestedMissing = isMissingSeedValue(nestedValue)
-    if (supportsTechnicalFieldValues && rootMissing && !nestedMissing) {
+    if (hasTechnicalFieldValues && rootMissing && !nestedMissing) {
       next[key] = cloneProjectSeedValue(nestedValue)
-    } else if (supportsTechnicalFieldValues && !rootMissing && nestedMissing) {
+    } else if (hasTechnicalFieldValues && !rootMissing && nestedMissing) {
       fieldValues![key] = cloneProjectSeedValue(rootValue)
     }
-    if (isMissingSeedValue(next[key]) && (nestedMissing || !supportsTechnicalFieldValues)) {
+    if (isMissingSeedValue(next[key]) && (nestedMissing || !hasTechnicalFieldValues)) {
       next[key] = cloneProjectSeedValue(value)
     }
-    if (supportsTechnicalFieldValues && isMissingSeedValue(fieldValues![key]) && !isMissingSeedValue(next[key])) {
+    if (hasTechnicalFieldValues && isMissingSeedValue(fieldValues![key]) && !isMissingSeedValue(next[key])) {
       fieldValues![key] = cloneProjectSeedValue(next[key])
     }
   })

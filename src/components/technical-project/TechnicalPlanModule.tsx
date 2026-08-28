@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   Alert, Avatar, Badge, Button, Card, DatePicker, Dropdown, Empty, Input, Modal, Popconfirm, Progress,
   Row, Select, Space, Table, Tabs, Tag, Tooltip, Typography, message,
@@ -9,40 +9,40 @@ import type { ColumnsType } from 'antd/es/table'
 import type { MenuProps } from 'antd'
 import {
   CopyOutlined, DeleteOutlined, DownloadOutlined, HistoryOutlined, PlusOutlined, SaveOutlined,
-  CaretDownOutlined, EditOutlined, FilterOutlined, MinusSquareOutlined, PlusSquareOutlined, SettingOutlined,
+  EditOutlined, FilterOutlined, MinusSquareOutlined, PlusSquareOutlined, SettingOutlined,
   StopOutlined,
 } from '@ant-design/icons'
-import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
 import SubprojectConfigModal from '@/components/technical-project/SubprojectConfigModal'
 import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareModal'
 import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
-import { ClickToEditDate, DHTMLXGantt, DragHandle, SortableRow } from '@/components/shared/PlanHelpers'
-import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
+import { ClickToEditDate, DHTMLXGantt } from '@/components/shared/PlanHelpers'
 import {
   applyPlanWorkspaceFilters,
   buildPlanHorizontalStageGroups,
-  filterPlanTasksByCollapsed,
   type PlanWorkspaceViewMode,
 } from '@/lib/planWorkspace'
 import {
   buildTechnicalHorizontalRows,
-  includeTechnicalPlanAncestors,
-  isResponsibleForTechnicalPlanTasks,
+  canConfirmTechnicalSubprojectMutation,
+  canConfirmTechnicalSubprojectTransfer,
+  filterTechnicalPlanGanttTasks,
+  getTechnicalPlanExportColumns,
+  getTechnicalPlanFilterFields,
+  getTechnicalPlanRowKey,
   parseTechnicalPlanImportRows,
+  projectTechnicalPlanRows,
   renumberTechnicalSubprojectTasks,
-  reorderTechnicalSubprojectCustomTasks,
   selectVisibleTechnicalPlanVersions,
-  TECHNICAL_PLAN_EXPORT_COLUMNS,
 } from '@/lib/technicalPlanWorkspace'
 import { compareVersionsForTable } from '@/lib/versionCompare'
 import type { PlanRevisionKind } from '@/lib/planVersioning'
 import { getTemplateSnapshotForProjectType } from '@/lib/projectTemplateCompatibility'
 import { comparePublishedTechnicalPlanVersions } from '@/lib/technicalProjectRules'
-import { canMutateLevel1TaskStructure, projectLevel1Plan, sumLevel1EstimatedDays, validateLevel1MilestoneDates } from '@/lib/level1PlanRules'
+import { canMaintainLevel1Plan, canMutateLevel1TaskStructure, projectLevel1FlatMilestones, projectLevel1Plan, projectTechnicalSubprojectRows, sumLevel1EstimatedDays, type Level1FlatMilestoneRow } from '@/lib/level1PlanRules'
+import { applyPlanGanttDateChange, applyPlanTaskDatePatch, buildPlanGanttTasks } from '@/lib/planGanttRules'
 import {
   createFilterCondition,
   getFieldOptionsWithDuplicateDisabled,
@@ -51,27 +51,27 @@ import {
   isValuelessFilterOperator,
   normalizeFilterConditions,
   type FilterCondition,
-  type FilterFieldDefinition,
   type FilterOperator,
 } from '@/lib/filterConditions'
 import {
-  getInvalidTechnicalTaskFields,
   getTemplateConfigScopeKey,
-  insertTechnicalPlanTask,
-  deleteTechnicalPlanTaskCascade,
-  TECHNICAL_TEMPLATE_STORAGE_KEYS,
+  insertNextTechnicalSubprojectTransfer,
+  TECHNICAL_TEMPLATE_STORAGE_KEYS, validateTechnicalTdtMilestoneDates,
+  validateTechnicalSubprojectDates,
   validateTechnicalTemplateDepth,
 } from '@/lib/technicalPlanRules'
 import { exportMergedSheet, exportSheet, exportTimestamp } from '@/utils/exportExcel'
 import { usePlanStore } from '@/stores/plan'
+import { useProjectStore } from '@/stores/project'
+import { hasPermission, usePermissionStore } from '@/stores/permission'
 import { useTechnicalProjectStore } from '@/stores/technicalProject'
 import { useUiStore } from '@/stores/ui'
 import {
   buildTechnicalPlanTabs, getTechnicalPlanKey, useTechnicalPlanStore,
 } from '@/stores/technicalPlan'
 import type { TechnicalTemplateKind, TechnicalTemplateTask } from '@/types/technicalPlan'
+import type { TechnicalSubprojectTransferScopeToken } from '@/lib/technicalPlanWorkspace'
 import type { TechnicalSubproject } from '@/types/technicalProject'
-import type { SortableColumnDefinition } from '@/lib/columnSettings'
 
 const { Text } = Typography
 const FIXED_TDT_LABEL = 'TDT项目计划'
@@ -81,27 +81,8 @@ const PLAN_REVISION_KIND_OPTIONS: Array<{ key: PlanRevisionKind; label: string }
   { key: 'formal', label: '创建正式版本' },
 ]
 
-const COLUMN_LABELS: Record<string, string> = {
-  id: '序号',
-  taskName: '阶段/里程碑节点',
-  planStartDate: '计划开始时间', planEndDate: '计划完成时间', estimatedDays: '预估工期',
-  actualStartDate: '实际开始时间', actualEndDate: '实际结束时间', actualDays: '实际工期',
-  delayStatus: '是否延期',
-}
-const TECHNICAL_COLUMN_DEFINITIONS: readonly SortableColumnDefinition<string>[] = Object.entries(COLUMN_LABELS).map(([key, title]) => ({
-  key, title, defaultVisible: true, hideable: key !== 'id' && key !== 'taskName', fixed: key === 'id' || key === 'taskName' ? 'left' : undefined,
-}))
 const DEFAULT_MAX_DEPTH: Readonly<Record<TechnicalTemplateKind, number>> = { tdt: 2, subproject: 1 }
-const TECHNICAL_FILTER_FIELDS: readonly FilterFieldDefinition[] = [
-  { key: 'taskName', label: '任务名称', kind: 'text' },
-  { key: 'planStartDate', label: '计划开始', kind: 'date' },
-  { key: 'planEndDate', label: '计划完成', kind: 'date' },
-  { key: 'estimatedDays', label: '预估工期', kind: 'text' },
-  { key: 'actualStartDate', label: '实际开始', kind: 'date' },
-  { key: 'actualEndDate', label: '实际完成', kind: 'date' },
-  { key: 'actualDays', label: '实际工期', kind: 'text' },
-  { key: 'delayStatus', label: '是否延期', kind: 'enum', options: ['延期', '按时'].map(value => ({ label: value, value })) },
-]
+type TechnicalPlanRow = Level1FlatMilestoneRow & TechnicalTemplateTask
 
 function TechnicalHorizontalPlanTable({
   tasks,
@@ -328,13 +309,14 @@ export default function TechnicalPlanModule({
   const [compareBaseId, setCompareBaseId] = useState('')
   const [compareTargetId, setCompareTargetId] = useState('')
   const [hasCompared, setHasCompared] = useState(false)
-  const [columnsOpen, setColumnsOpen] = useState(false)
   const [filterOpen, setFilterOpen] = useState(false)
   const [filters, setFilters] = useState<FilterCondition[]>([])
   const [tempFilters, setTempFilters] = useState<FilterCondition[]>([createFilterCondition()])
   const [configuringChild, setConfiguringChild] = useState<TechnicalSubproject | null>(null)
   const [configTrigger, setConfigTrigger] = useState<HTMLElement | null>(null)
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const [deleteOpening, setDeleteOpening] = useState<TechnicalSubprojectTransferScopeToken | null>(null)
+  const [transferConfirmation, setTransferConfirmation] = useState<TechnicalSubprojectTransferScopeToken | null>(null)
+  const activeKeyRef = useRef(activeKey)
 
   const subprojects = useTechnicalProjectStore(state => state.subprojects)
   const plansByKey = useTechnicalPlanStore(state => state.plansByKey)
@@ -343,7 +325,6 @@ export default function TechnicalPlanModule({
   const cancelRevision = useTechnicalPlanStore(state => state.cancelRevision)
   const updateCurrentTasks = useTechnicalPlanStore(state => state.updateCurrentTasks)
   const setCurrentVersion = useTechnicalPlanStore(state => state.setCurrentVersion)
-  const setColumns = useTechnicalPlanStore(state => state.setColumns)
   const setCollapsed = useTechnicalPlanStore(state => state.setCollapsed)
   const configTemplateTasksByType = usePlanStore(state => state.configTemplateTasksByType)
   const configTemplateVersionScopes = usePlanStore(state => state.configTemplateVersionScopes)
@@ -359,10 +340,10 @@ export default function TechnicalPlanModule({
     const firstKey = `${projectId}:tdt`
     setActiveKey(current => tabs.some(tab => tab.key === current) ? current : firstKey)
   }, [projectId, tabs])
+  useEffect(() => { activeKeyRef.current = activeKey }, [activeKey])
   const tab = tabs.find(item => item.key === activeKey) || tabs[0]
   const scope = tab?.scope || { kind: 'tdt' as const, parentProjectId: projectId }
   const instance = plansByKey[getTechnicalPlanKey(scope)]
-  const technicalDraft = instance?.versions.find(version => version.status === '修订中')
   const canViewTechnicalDraft = canViewTechnicalPlan && canEdit
   const visibleVersions = useMemo(
     () => canViewTechnicalPlan
@@ -389,24 +370,30 @@ export default function TechnicalPlanModule({
     configTemplateTasksByType[TECHNICAL_TEMPLATE_STORAGE_KEYS[tab?.templateKind || 'tdt']] || [],
   )
   const maxDepth = Math.min(maxDepthByKind[tab?.templateKind || 'tdt'], tab?.templateKind === 'subproject' ? 1 : 2)
-  const projectionMode = tab?.templateKind === 'subproject' ? 'technical-subproject' : 'standard'
-  const projection = useMemo(() => projectLevel1Plan(tasks, { mode: projectionMode }), [projectionMode, tasks])
-  const projectedTasks = projection.rows as unknown as Array<TechnicalTemplateTask & { isMilestone: boolean; delayStatus: string }>
-  const milestoneValidation = useMemo(() => validateLevel1MilestoneDates(tasks), [tasks])
+  const projectedTasks: TechnicalPlanRow[] = useMemo(
+    () => tab?.templateKind === 'subproject'
+      ? projectTechnicalSubprojectRows(tasks) as TechnicalPlanRow[]
+      : projectTechnicalPlanRows('tdt', tasks) as TechnicalPlanRow[],
+    [tab?.templateKind, tasks],
+  )
+  const filterFields = useMemo(
+    () => getTechnicalPlanFilterFields(tab?.templateKind || 'tdt', projectedTasks),
+    [projectedTasks, tab?.templateKind],
+  )
+  const milestoneValidation = useMemo(() => validateTechnicalTdtMilestoneDates(tasks), [tasks])
+  const subprojectValidation = useMemo(() => validateTechnicalSubprojectDates(tasks), [tasks])
   const collapsedIds = useMemo(() => new Set(instance?.collapsedRows || []), [instance?.collapsedRows])
   const directlyFilteredTasks = useMemo(
-    () => applyPlanWorkspaceFilters(projectedTasks, filters, TECHNICAL_FILTER_FIELDS),
-    [filters, projectedTasks],
+    () => applyPlanWorkspaceFilters(projectedTasks, filters, filterFields),
+    [filterFields, filters, projectedTasks],
   )
   const hasActiveFilters = filters.some(isFilterConditionActive)
-  const filteredTasks = useMemo(
-    () => hasActiveFilters ? includeTechnicalPlanAncestors(projectedTasks, directlyFilteredTasks) : [...projectedTasks],
-    [directlyFilteredTasks, hasActiveFilters, projectedTasks],
+  const filteredTasks = useMemo(() => hasActiveFilters ? directlyFilteredTasks : [...projectedTasks], [directlyFilteredTasks, hasActiveFilters, projectedTasks])
+  const filteredHierarchyTasks = useMemo(
+    () => filterTechnicalPlanGanttTasks(tasks, tab?.templateKind || 'tdt', filteredTasks),
+    [filteredTasks, tab?.templateKind, tasks],
   )
-  const visibleTasks = useMemo(
-    () => filterPlanTasksByCollapsed(filteredTasks, collapsedIds),
-    [collapsedIds, filteredTasks],
-  )
+  const visibleTasks = filteredTasks
   const publishedVersions = useMemo(
     () => canViewTechnicalPlan
       ? (instance?.versions || []).filter(version => version.status === '已发布')
@@ -424,8 +411,68 @@ export default function TechnicalPlanModule({
       action,
     }),
   )
-  const canRenameTechnicalTask = (task: TechnicalTemplateTask) => canMutateTechnicalTaskStructure(task, 'rename')
-  const canDrag = canEditTaskStructure && !hasActiveFilters
+  const canEditActualDates = canEditTechnicalPlan && (isDraft || currentVersion?.id === latestPublishedVersion?.id)
+  const hasDeletableCustomTask = tab?.templateKind === 'subproject' && tasks.some(task => canMutateTechnicalTaskStructure(task, 'delete'))
+
+  const createSubprojectActionOpening = (): TechnicalSubprojectTransferScopeToken => ({
+    projectId,
+    tabId: activeKey,
+    scopeKey: getTechnicalPlanKey(scope),
+    versionId: currentVersion?.id || '',
+    user: currentLoginUser || '',
+  })
+
+  const resolveLatestSubprojectActionContext = (opening: TechnicalSubprojectTransferScopeToken) => {
+    const latestProject = useProjectStore.getState().selectedProject
+    if (!latestProject || latestProject.id !== opening.projectId) return null
+    const latestPermissionState = usePermissionStore.getState()
+    const latestTabs = buildTechnicalPlanTabs(latestProject.id, useTechnicalProjectStore.getState().subprojects, false)
+    const latestTab = latestTabs.find(item => item.key === opening.tabId)
+    const latestInstance = useTechnicalPlanStore.getState().plansByKey[opening.scopeKey]
+    const latestVersion = latestInstance?.versions.find(version => version.id === latestInstance.currentVersionId)
+    const latestUser = useProjectStore.getState().currentLoginUser
+    if (!latestTab || !latestVersion) return null
+    const latestTechnicalRole = latestPermissionState.rolesByProject[latestProject.id]
+      ?.find(role => role.name === '技术项目负责人')
+    const latestGlobalAdmins = latestPermissionState.globalRoles.find(role => role.name === '管理组')?.members || []
+    const latestTechnicalLead = String(
+      (latestProject as { technicalLead?: string; fieldValues?: { technicalLead?: string } }).technicalLead
+      || (latestProject as { fieldValues?: { technicalLead?: string } }).fieldValues?.technicalLead
+      || latestTechnicalRole?.members?.[0]
+      || '',
+    ).trim()
+    const latestReadOnlyReason = latestTab.subproject && !latestTab.subproject.active
+      ? '已停用子项目仅可查看历史计划'
+      : latestTab.subproject && (!latestTab.subproject.configuration.coreValue || !latestTab.subproject.configuration.developmentMode)
+        ? '请先完成子项目信息配置'
+        : ''
+    const latestCanView = hasPermission(latestUser, latestProject.id, 'plan:一级计划-查看')
+    const latestCanEdit = hasPermission(latestUser, latestProject.id, 'plan:一级计划-编辑')
+    const latestCanMaintain = latestCanView
+      && latestCanEdit
+      && !latestReadOnlyReason
+      && canMaintainLevel1Plan({
+        projectType: latestProject.type,
+        currentUser: latestUser,
+        spmUsers: [],
+        technicalLead: latestTechnicalLead,
+        globalAdmins: latestGlobalAdmins,
+      })
+    return {
+      tab: latestTab,
+      version: latestVersion,
+      canView: latestCanView,
+      canEdit: latestCanEdit,
+      canMaintain: latestCanMaintain,
+      current: {
+        projectId: latestProject.id,
+        tabId: activeKeyRef.current,
+        scopeKey: getTechnicalPlanKey(latestTab.scope),
+        versionId: latestVersion.id,
+        user: latestUser,
+      },
+    }
+  }
 
   useEffect(() => {
     setIsEditMode(Boolean(canMaintain))
@@ -436,10 +483,10 @@ export default function TechnicalPlanModule({
     setFilters([])
     setTempFilters([createFilterCondition()])
     setFilterOpen(false)
-    setColumnsOpen(false)
     setViewMode('horizontal')
     setCompareOpen(false)
     setHasCompared(false)
+    setTransferConfirmation(null)
   }, [activeKey])
 
   const handleCreateRevision = (revisionKind: PlanRevisionKind) => {
@@ -481,22 +528,26 @@ export default function TechnicalPlanModule({
 
   const handlePublish = () => {
     if (!canPublish || !canMaintain) return
-    const invalid = new Set(milestoneValidation.violations.map(violation => violation.taskId))
-    if (invalid.size) {
+    const invalidByTaskId = tab?.templateKind === 'subproject'
+      ? subprojectValidation.byTaskId
+      : milestoneValidation.byTaskId
+    const firstInvalidTaskId = Object.keys(invalidByTaskId)[0]
+    if (firstInvalidTaskId) {
+      const invalidTask = tasks.find(task => task.id === firstInvalidTaskId)
+      const firstInvalidRowKey = invalidTask ? getTechnicalPlanRowKey(invalidTask) : firstInvalidTaskId
       setCollapsed(scope, [])
       setFilters([])
       setTempFilters([createFilterCondition()])
       setFilterOpen(false)
-      setColumnsOpen(false)
       setViewMode('vertical')
-      const firstInvalidTaskId = [...invalid][0]
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          document.querySelector(`[data-row-key="${CSS.escape(String(firstInvalidTaskId))}"]`)
+          document.querySelector(`[data-row-key="${CSS.escape(firstInvalidRowKey)}"]`)
             ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
         })
       })
-      message.error('请先修复计划日期冲突')
+      const firstReason = Object.values(invalidByTaskId[firstInvalidTaskId] || {}).flat()[0]
+      message.error(firstReason || '请先修复计划日期冲突')
       return
     }
     if (publishRevision(scope).ok) message.success('计划已发布')
@@ -505,59 +556,56 @@ export default function TechnicalPlanModule({
   const updateTask = (id: string, patch: Partial<TechnicalTemplateTask>) => {
     const fields = Object.keys(patch)
     const task = tasks.find(item => item.id === id)
-    if (fields.length === 1 && fields[0] === 'taskName') {
-      if (!task || !canRenameTechnicalTask(task)) return
-      updateCurrentTasks(scope, tasks.map(item => item.id === id ? { ...item, taskName: String(patch.taskName || '') } : item), maxDepth)
+    if (!task || fields.some(field => !['planStartDate', 'planEndDate', 'actualStartDate', 'actualEndDate'].includes(field))) return
+    const updatesPlan = fields.some(field => field === 'planStartDate' || field === 'planEndDate')
+    const updatesActual = fields.some(field => field === 'actualStartDate' || field === 'actualEndDate')
+    if ((updatesPlan && !canMaintain) || (updatesActual && !canEditActualDates)) return
+    const next = applyPlanTaskDatePatch(tasks, { taskId: id, patch })
+    updateCurrentTasks(scope, next, maxDepth)
+  }
+
+  const handleDeleteTask = (stableId: string, opening: TechnicalSubprojectTransferScopeToken | null) => {
+    if (!opening) { message.error('计划状态已变化，请重新操作'); return }
+    const latest = resolveLatestSubprojectActionContext(opening)
+    const latestTask = latest?.version.tasks.find(item => (item.stableId || item.id) === stableId)
+    const canDeleteLatestTask = Boolean(
+      latestTask
+      && latest?.tab.templateKind === 'subproject'
+      && viewMode === 'vertical'
+      && latest.canMaintain
+      && canMutateLevel1TaskStructure({
+        projectType: '技术项目',
+        technicalKind: latest.tab.templateKind,
+        task: latestTask,
+        action: 'delete',
+      }),
+    )
+    if (!latest || !latestTask || !canConfirmTechnicalSubprojectMutation({
+      opening,
+      current: latest.current,
+      isCurrentDraft: latest.version.status === '修订中',
+      isEditMode: useUiStore.getState().isEditMode,
+      canView: latest.canView,
+      canEdit: latest.canEdit,
+      canMaintain: canDeleteLatestTask,
+    })) {
+      message.error('计划状态已变化，请重新操作')
       return
     }
-    const canUpdatePlanEnd = isDraft && canEditTechnicalPlan
-    const canUpdateActualEnd = canEditTechnicalPlan && (isDraft || currentVersion?.id === latestPublishedVersion?.id)
-    if (fields.some(field => field !== 'planEndDate' && field !== 'actualEndDate')) return
-    if (fields.includes('planEndDate') && !canUpdatePlanEnd) return
-    if (fields.includes('actualEndDate') && !canUpdateActualEnd) return
-    updateCurrentTasks(scope, tasks.map(task => task.id === id ? { ...task, ...patch } : task), maxDepth)
+    const next = renumberTechnicalSubprojectTasks(latest.version.tasks.filter(item => (item.stableId || item.id) !== stableId))
+    const updated = useTechnicalPlanStore.getState().updateCurrentTasks(latest.tab.scope, next, 1)
+    if (!updated.ok) { message.error('删除活动失败，请重试'); return }
+    message.success('已删除活动')
   }
 
-  const createTask = (parentId?: string): TechnicalTemplateTask => ({
-    id: `technical-task-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    stableId: `technical-custom-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    source: 'custom',
-    order: tasks.length + 1,
-    taskName: parentId ? '新建二级任务' : '新建一级任务',
-    ...(parentId ? { parentId } : {}),
-    responsible: '', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0,
-    actualStartDate: '', actualEndDate: '', actualDays: 0, status: '未开始', progress: 0, defaultRoadmap: Boolean(parentId),
-  })
-
-  const handleAddTopLevelTask = () => {
-    if (!canEditTaskStructure) return
-    const inserted = insertTechnicalPlanTask(tasks, createTask(), 'subproject', maxDepth)
-    const result = updateCurrentTasks(scope, renumberTechnicalSubprojectTasks(inserted), maxDepth)
-    if (!result.ok) message.error('新增任务超出允许层级')
-  }
-
-  const handleDeleteTask = (taskId: string) => {
-    const task = tasks.find(item => item.id === taskId)
-    if (!task || !canMutateTechnicalTaskStructure(task, 'delete')) return
-    const next = renumberTechnicalSubprojectTasks(deleteTechnicalPlanTaskCascade(tasks, taskId))
-    updateCurrentTasks(scope, next, maxDepth)
-    const removedCount = tasks.length - next.length
-    message.success(removedCount > 1 ? `已级联删除 ${removedCount} 项任务` : '已删除任务')
-  }
-
-  const handleDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over || active.id === over.id || !canDrag) return
-    const activeTask = tasks.find(task => task.id === String(active.id))
-    const overTask = tasks.find(task => task.id === String(over.id))
-    if (!activeTask || !overTask || !canMutateTechnicalTaskStructure(activeTask, 'reorder') || !canMutateTechnicalTaskStructure(overTask, 'reorder')) return
-    const moved = reorderTechnicalSubprojectCustomTasks(tasks, String(active.id), String(over.id))
-    updateCurrentTasks(scope, moved, maxDepth)
+  const confirmAddTechnicalSubprojectTransfer = () => {
+    if (!tab || tab.templateKind !== 'subproject' || !canMaintain) return
+    setTransferConfirmation(createSubprojectActionOpening())
   }
 
   const handleScopeChange = (nextKey: string) => {
     navigateWithEditGuard(() => {
       setFilterOpen(false)
-      setColumnsOpen(false)
       setActiveKey(nextKey)
     }, Boolean(isDraft))
   }
@@ -567,89 +615,63 @@ export default function TechnicalPlanModule({
   }
 
   const expandAll = () => setCollapsed(scope, [])
-  const collapseAll = () => setCollapsed(scope, filteredTasks
+  const collapseAll = () => setCollapsed(scope, filteredHierarchyTasks
     .filter(task => tasks.some(child => child.parentId === task.id))
     .map(task => task.id))
-  const toggleCollapsedTask = (taskId: string) => {
-    const nextCollapsedIds = new Set(collapsedIds)
-    if (nextCollapsedIds.has(taskId)) nextCollapsedIds.delete(taskId)
-    else nextCollapsedIds.add(taskId)
-    setCollapsed(scope, [...nextCollapsedIds])
+  const dateErrors = (row: TechnicalPlanRow, field: string) => {
+    const byTaskId = (tab?.templateKind === 'subproject' ? subprojectValidation.byTaskId : milestoneValidation.byTaskId) as Record<string, Record<string, string[] | undefined>>
+    return byTaskId[row.id]?.[field] || []
   }
-
-  const baseColumns: ColumnsType<any> = [
-    {
-      key: 'id', title: '序号', dataIndex: 'id', width: 130, fixed: 'left',
-      render: (value, row) => (
-        <div className="technical-plan-sequence-cell" style={{ paddingLeft: row.parentId ? 20 : 0 }}>
-          {canDrag && canMutateTechnicalTaskStructure(row, 'reorder') && <DragHandle />}
-          {tasks.some(child => child.parentId === row.id) ? (
-            <Tooltip title={collapsedIds.has(row.id) ? '展开一级任务' : '收起一级任务'}>
-              <Button
-                type="text"
-                size="small"
-                className="technical-plan-collapse-button"
-                aria-label={`${collapsedIds.has(row.id) ? '展开' : '收起'}一级任务 ${row.taskName}`}
-                aria-expanded={!collapsedIds.has(row.id)}
-                icon={<CaretDownOutlined />}
-                onClick={event => {
-                  event.stopPropagation()
-                  toggleCollapsedTask(row.id)
-                }}
-              />
-            </Tooltip>
-          ) : <span className="technical-plan-collapse-placeholder" aria-hidden />}
-          <span>{value}</span>
-        </div>
-      ),
-    },
-    {
-      key: 'taskName', title: '阶段/里程碑节点', dataIndex: 'taskName', width: 260, fixed: 'left',
-      render: (value, row) => (
-        <div className="technical-plan-task-name-cell" style={{ paddingLeft: row.parentId ? 16 : 0 }}>
-          {canRenameTechnicalTask(row)
-            ? <Input className="pms-edit-input" value={value} aria-label={`修改活动名称 ${value}`} onChange={event => updateTask(row.id, { taskName: event.target.value })} />
-            : <><span aria-hidden style={{ color: '#e5e7eb' }}>{row.parentId ? '├' : ''}</span><span className="technical-plan-task-name-text">{value}</span></>}
-        </div>
-      ),
-    },
-    { key: 'planStartDate', title: '计划开始时间', dataIndex: 'planStartDate', width: 145, render: (value) => value || '-' },
-    { key: 'planEndDate', title: '计划完成时间', dataIndex: 'planEndDate', width: 145, onCell: row => ({ className: milestoneValidation.byTaskId[row.id]?.planEndDate?.length ? 'pms-cell-invalid' : '' }), render: (value, row) => row.isMilestone && isDraft && canEditTechnicalPlan ? <Tooltip title={milestoneValidation.byTaskId[row.id]?.planEndDate?.join('；')}><DatePicker value={value ? dayjs(value) : null} onChange={date => updateTask(row.id, { planEndDate: date?.format('YYYY-MM-DD') || '' })} /></Tooltip> : value || '-' },
-    { key: 'estimatedDays', title: '预估工期', dataIndex: 'estimatedDays', width: 100, render: (value, row) => row.isMilestone || value == null ? '-' : `${value}天` },
-    { key: 'actualStartDate', title: '实际开始时间', dataIndex: 'actualStartDate', width: 145, render: value => value || '-' },
-    { key: 'actualEndDate', title: '实际结束时间', dataIndex: 'actualEndDate', width: 145, onCell: row => ({ className: milestoneValidation.byTaskId[row.id]?.actualEndDate?.length ? 'pms-cell-invalid' : '' }), render: (value, row) => row.isMilestone && canEditTechnicalPlan && (isDraft || currentVersion?.id === latestPublishedVersion?.id) ? <Tooltip title={milestoneValidation.byTaskId[row.id]?.actualEndDate?.join('；')}><DatePicker value={value ? dayjs(value) : null} onChange={date => updateTask(row.id, { actualEndDate: date?.format('YYYY-MM-DD') || '' })} /></Tooltip> : value || '-' },
-    { key: 'actualDays', title: '实际工期', dataIndex: 'actualDays', width: 100, render: (value, row) => row.isMilestone || value == null ? '-' : `${value}天` },
-    { key: 'delayStatus', title: '是否延期', dataIndex: 'delayStatus', width: 105, render: (value, row) => row.isMilestone ? <Tag color={value === '延期' ? 'error' : value === '按时' ? 'success' : 'default'}>{value || '-'}</Tag> : '-' },
-    {
-      key: 'actions', title: '操作', fixed: 'right', width: 105,
-      render: (_, row) => (
-        <Space size={2}>
-          {canMutateTechnicalTaskStructure(row, 'delete') && (
-            <Popconfirm title="确认删除该任务？" onConfirm={() => handleDeleteTask(row.id)}>
-              <Tooltip title="删除任务">
-                <Button type="text" danger size="small" aria-label={`删除任务 ${row.taskName}`} icon={<DeleteOutlined />} />
-              </Tooltip>
-            </Popconfirm>
-          )}
-        </Space>
-      ),
-    },
+  const renderDate = (field: 'planStartDate' | 'planEndDate' | 'actualStartDate' | 'actualEndDate', editable: (row: TechnicalPlanRow) => boolean) => (
+    (value: string, row: TechnicalPlanRow) => {
+      const reasons = dateErrors(row, field)
+      const content = editable(row)
+        ? <DatePicker value={value ? dayjs(value) : null} onChange={date => updateTask(row.id, { [field]: date?.format('YYYY-MM-DD') || '' })} />
+        : value || '-'
+      return reasons.length ? <Tooltip title={reasons.join('；')}>{content}</Tooltip> : content
+    }
+  )
+  const tdtColumns: ColumnsType<TechnicalPlanRow> = [
+    { title: '序号', dataIndex: 'sequence', key: 'sequence', width: 72, fixed: 'left' },
+    { title: '阶段', dataIndex: 'stageName', key: 'stageName', width: 150, fixed: 'left' },
+    { title: '里程碑点', dataIndex: 'milestoneName', key: 'milestoneName', width: 180, fixed: 'left' },
+    { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: value => value || '-' },
+    { title: '计划完成时间', dataIndex: 'planEndDate', key: 'planEndDate', width: 145, onCell: row => ({ className: dateErrors(row, 'planEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('planEndDate', () => canMaintain) },
+    { title: '计划开发周期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 120, render: value => value == null ? '-' : `${value}天` },
+    { title: '实际完成时间', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 145, onCell: row => ({ className: dateErrors(row, 'actualEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('actualEndDate', () => canEditActualDates) },
+    { title: '实际开发周期', dataIndex: 'actualDays', key: 'actualDays', width: 120, render: value => value == null ? '-' : `${value}天` },
   ]
-  const visibleKeys = new Set(instance?.columnSettings.visible || Object.keys(COLUMN_LABELS))
-  const columnOrder = instance?.columnSettings.order || Object.keys(COLUMN_LABELS)
-  const columns = baseColumns
-    .filter(column => column.key === 'actions' ? canEditTaskStructure : visibleKeys.has(String(column.key)))
-    .sort((left, right) => {
-      const index = (key: unknown) => key === 'actions' ? Number.MAX_SAFE_INTEGER : columnOrder.indexOf(String(key))
-      return index(left.key) - index(right.key)
-    })
+  const subprojectColumns: ColumnsType<TechnicalPlanRow> = [
+    { title: '序号', dataIndex: 'sequence', key: 'sequence', width: 72, fixed: 'left' },
+    { title: '活动名称', dataIndex: 'activityName', key: 'activityName', width: 180, fixed: 'left' },
+    { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: value => value || '-' },
+    { title: '计划开始时间', dataIndex: 'planStartDate', key: 'planStartDate', width: 145, onCell: row => ({ className: dateErrors(row, 'planStartDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('planStartDate', () => canMaintain) },
+    { title: '计划完成时间', dataIndex: 'planEndDate', key: 'planEndDate', width: 145, onCell: row => ({ className: dateErrors(row, 'planEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('planEndDate', () => canMaintain) },
+    { title: '计划周期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 100, render: value => value == null ? '-' : `${value}天` },
+    { title: '实际开始时间', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 145, onCell: row => ({ className: dateErrors(row, 'actualStartDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('actualStartDate', () => canEditActualDates) },
+    { title: '实际完成时间', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 145, onCell: row => ({ className: dateErrors(row, 'actualEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('actualEndDate', () => canEditActualDates) },
+    { title: '实际周期', dataIndex: 'actualDays', key: 'actualDays', width: 100, render: value => value == null ? '-' : `${value}天` },
+  ]
+  const columns: ColumnsType<TechnicalPlanRow> = tab?.templateKind === 'subproject' ? [...subprojectColumns] : [...tdtColumns]
+  if (hasDeletableCustomTask) columns.push({
+    key: 'actions', title: '操作', fixed: 'right', width: 88,
+    render: (_: unknown, row: TechnicalPlanRow) => canMutateTechnicalTaskStructure(row, 'delete') && (
+      <Popconfirm
+        title="确认删除该活动？"
+        onOpenChange={open => { if (open) setDeleteOpening(createSubprojectActionOpening()); else setDeleteOpening(null) }}
+        onConfirm={() => handleDeleteTask(row.stableId || row.id, deleteOpening)}
+      >
+        <Tooltip title="删除活动"><Button type="text" danger size="small" aria-label={`删除活动 ${row.activityName}`} icon={<DeleteOutlined />} /></Tooltip>
+      </Popconfirm>
+    ),
+  })
   const verticalTableScrollX = columns.reduce((total, column) => (
     total + (typeof column.width === 'number' ? column.width : 140)
   ), 0)
 
   const exportHorizontalPlan = () => {
     const groups = buildPlanHorizontalStageGroups(
-      filteredTasks.map(task => ({ ...task })),
+      filteredHierarchyTasks.map(task => ({ ...task })),
     )
     const milestoneTasks = groups.flatMap(group => group.milestones.length ? group.milestones : [group.stage])
     const headerMatrix: (string | null)[][] = [
@@ -687,9 +709,7 @@ export default function TechnicalPlanModule({
       return
     }
     const exportRows = mode === 'current' ? filteredTasks : projectedTasks
-    const exportColumns = TECHNICAL_PLAN_EXPORT_COLUMNS.filter(column => (
-      mode === 'all' || column.key === 'id' || visibleKeys.has(column.key)
-    ))
+    const exportColumns = [...getTechnicalPlanExportColumns(tab?.templateKind || 'tdt')]
     exportSheet(exportRows, exportColumns, `${tab?.label || '技术计划'}_${currentVersion?.versionNo || ''}_${exportTimestamp()}.xlsx`, '计划')
   }
   const importWorkbook = async (file: File) => {
@@ -717,10 +737,10 @@ export default function TechnicalPlanModule({
     const left = visibleVersions.find(version => version.id === compareBaseId)
     const right = visibleVersions.find(version => version.id === compareTargetId)
     if (!left || !right) return []
-    const mode = tab?.templateKind === 'subproject' ? 'technical-subproject' : 'standard'
+    const isSubproject = tab?.templateKind === 'subproject'
     return compareVersionsForTable(
-      projectLevel1Plan(left.tasks, { mode }).rows as any,
-      projectLevel1Plan(right.tasks, { mode }).rows as any,
+      (isSubproject ? projectTechnicalSubprojectRows(left.tasks) : projectLevel1FlatMilestones(left.tasks)) as any,
+      (isSubproject ? projectTechnicalSubprojectRows(right.tasks) : projectLevel1FlatMilestones(right.tasks)) as any,
     )
   }, [compareBaseId, compareTargetId, hasCompared, instance, tab?.templateKind, visibleVersions])
 
@@ -746,7 +766,7 @@ export default function TechnicalPlanModule({
 
   const commitTechnicalFilters = (next: FilterCondition[]) => {
     setTempFilters(next)
-    setFilters(normalizeFilterConditions(next, TECHNICAL_FILTER_FIELDS))
+    setFilters(normalizeFilterConditions(next, filterFields))
   }
 
   const updateTechnicalFilter = (id: string, patch: Partial<FilterCondition>) => {
@@ -799,9 +819,7 @@ export default function TechnicalPlanModule({
               <div className="technical-plan-edit-notice" role="status">
                 <EditOutlined />
                 <strong>编辑模式</strong>
-                <span>{canEditTaskStructure
-                  ? '- 自定义活动可拖拽排序和修改名称，日期修改自动保存'
-                  : '- 仅计划完成时间和实际完成时间可编辑，修改自动保存'}</span>
+                <span>- 日期修改自动保存；活动名称、模板阶段和排序不可修改</span>
               </div>
             )}
           </>
@@ -818,27 +836,30 @@ export default function TechnicalPlanModule({
               options={visibleVersions.map(version => ({ value: version.id, label: `${version.versionNo}${version.status === '修订中' ? '（修订中）' : ''}` }))}
             />
             {isDraft && viewMode === 'vertical' && <Tag color="green">自动保存</Tag>}
-            {isDraft && viewMode === 'gantt' && <Tag>甘特图只读</Tag>}
+            {isDraft && viewMode === 'gantt' && <Tag>甘特图日期调整自动保存</Tag>}
           </Space>
         )}
         primaryActions={(
           <Space size={6}>
             {!hasDraft && (
-              <Tooltip title={!canEditTechnicalPlan ? '无计划编辑权限' : readOnlyReason}>
-                <Dropdown
-                  menu={{ items: PLAN_REVISION_KIND_OPTIONS, onClick: handleCreateRevisionMenuClick }}
-                  trigger={['click']}
-                  placement="bottomLeft"
-                  disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)}
-                >
+              <Dropdown
+                menu={{ items: PLAN_REVISION_KIND_OPTIONS, onClick: handleCreateRevisionMenuClick }}
+                trigger={['click']}
+                placement="bottomLeft"
+                disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)}
+              >
+                <Tooltip title={!canEditTechnicalPlan ? '无计划编辑权限' : readOnlyReason}>
                   <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)} aria-label="创建修订">创建修订</Button>
-                </Dropdown>
-              </Tooltip>
+                </Tooltip>
+              </Dropdown>
             )}
             {isDraft && (
               <Tooltip title={!canMaintain ? readOnlyReason || '无计划编辑权限' : !publishedVersions.length ? '暂无已发布版本' : '计划克隆'}>
                 <Button icon={<CopyOutlined />} style={{ borderRadius: 6 }} disabled={!canMaintain || !publishedVersions.length} onClick={handleClonePlan} aria-label="计划克隆" />
               </Tooltip>
+            )}
+            {tab?.templateKind === 'subproject' && canMaintain && (
+              <Tooltip title="添加转测版本"><Button icon={<PlusOutlined />} aria-label="添加转测版本" onClick={confirmAddTechnicalSubprojectTransfer}>添加转测版本</Button></Tooltip>
             )}
             {isDraft && (
               <Tooltip title={!canPublish ? '无计划发布权限' : !canMaintain ? readOnlyReason : '发布'}>
@@ -866,7 +887,6 @@ export default function TechnicalPlanModule({
                       icon={<FilterOutlined />}
                       style={{ borderRadius: 6 }}
                       onClick={() => {
-                        setColumnsOpen(false)
                         setTempFilters(filters.length ? filters.map(item => ({ ...item })) : [createFilterCondition()])
                         setFilterOpen(true)
                       }}
@@ -877,12 +897,12 @@ export default function TechnicalPlanModule({
               )}
               onReset={() => commitTechnicalFilters([createFilterCondition()])}
               onAdd={() => commitTechnicalFilters([...tempFilters, createFilterCondition()])}
-              addDisabled={tempFilters.length >= TECHNICAL_FILTER_FIELDS.length}
+              addDisabled={tempFilters.length >= filterFields.length}
               onClose={() => setFilterOpen(false)}
             >
               <div className="pms-filter-condition-list technical-plan-filter-list">
                 {tempFilters.map(condition => {
-                  const definition = TECHNICAL_FILTER_FIELDS.find(item => item.key === condition.field)
+                  const definition = filterFields.find(item => item.key === condition.field)
                   return (
                     <div key={condition.id} className="pms-filter-condition-row technical-plan-filter-row">
                       <Select
@@ -890,7 +910,7 @@ export default function TechnicalPlanModule({
                         placeholder="筛选字段"
                         value={condition.field || undefined}
                         options={getFieldOptionsWithDuplicateDisabled(
-                          TECHNICAL_FILTER_FIELDS.map(field => ({ value: field.key, label: field.label })),
+                          filterFields.map(field => ({ value: field.key, label: field.label })),
                           tempFilters,
                           condition.id,
                         )}
@@ -899,7 +919,7 @@ export default function TechnicalPlanModule({
                       <Select
                         aria-label="筛选条件"
                         value={condition.operator}
-                        options={getFilterOperatorsForKind(definition?.kind || 'text') as any}
+                        options={[...getFilterOperatorsForKind(definition?.kind || 'text')]}
                         onChange={(operator: FilterOperator) => updateTechnicalFilter(condition.id, { operator, value: isValuelessFilterOperator(operator) ? '' : condition.value })}
                       />
                       {!isValuelessFilterOperator(condition.operator) && definition?.kind === 'enum' ? (
@@ -941,59 +961,36 @@ export default function TechnicalPlanModule({
                 <Button icon={<DownloadOutlined />} style={{ borderRadius: 6 }} disabled={!canExport || !tasks.length} aria-label="导出" />
               </Tooltip>
             </Dropdown>
-            {viewMode === 'vertical' && (
-              <SortableColumnSettings
-                open={columnsOpen}
-                trigger={(
-                  <Tooltip title="字段配置">
-                    <Button icon={<SettingOutlined />} style={{ borderRadius: 6 }} disabled={!instance} onClick={() => { setFilterOpen(false); setColumnsOpen(true) }} aria-label="字段配置" />
-                  </Tooltip>
-                )}
-                definitions={TECHNICAL_COLUMN_DEFINITIONS}
-                value={instance?.columnSettings || { order: Object.keys(COLUMN_LABELS), visible: Object.keys(COLUMN_LABELS) }}
-                onApply={value => setColumns(scope, value)}
-                onCancel={() => setColumnsOpen(false)}
-              />
-            )}
-            <Tooltip title="全部展开"><Button icon={<PlusSquareOutlined />} size="small" style={{ borderRadius: 6 }} onClick={expandAll} aria-label="全部展开" /></Tooltip>
-            <Tooltip title="全部收起"><Button icon={<MinusSquareOutlined />} size="small" style={{ borderRadius: 6 }} onClick={collapseAll} aria-label="全部收起" /></Tooltip>
+            <Tooltip title="当前计划列固定，无法配置"><Button icon={<SettingOutlined />} style={{ borderRadius: 6 }} disabled aria-label="字段配置" /></Tooltip>
+            {viewMode === 'gantt' && tab?.templateKind === 'tdt' && <>
+              <Tooltip title="全部展开"><Button icon={<PlusSquareOutlined />} size="small" style={{ borderRadius: 6 }} onClick={expandAll} aria-label="全部展开" /></Tooltip>
+              <Tooltip title="全部收起"><Button icon={<MinusSquareOutlined />} size="small" style={{ borderRadius: 6 }} onClick={collapseAll} aria-label="全部收起" /></Tooltip>
+            </>}
             <Tooltip title="版本对比"><Button aria-label="版本对比" icon={<HistoryOutlined />} style={{ borderRadius: 6 }} disabled={visibleVersions.length < 2} onClick={openVersionCompare} /></Tooltip>
           </Space>
         )}
         viewMode={viewMode}
-        onViewModeChange={nextViewMode => { setFilterOpen(false); setColumnsOpen(false); setViewMode(nextViewMode) }}
+        onViewModeChange={nextViewMode => { setFilterOpen(false); setViewMode(nextViewMode) }}
       >
         {!currentVersion ? (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无计划版本，请创建修订" />
         ) : viewMode === 'vertical' ? (
           <div className="technical-plan-vertical-table-shell pms-solid-surface">
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={visibleTasks.map(task => task.id)} strategy={verticalListSortingStrategy}>
-                <Table<TechnicalTemplateTask>
+            <Table<TechnicalPlanRow>
                   className={`pms-table technical-plan-vertical-table ${canMaintain ? 'pms-table-edit' : ''}`}
                   tableLayout="fixed"
-                  rowKey="id"
+                  rowKey={getTechnicalPlanRowKey}
                   size="middle"
                   pagination={false}
                   scroll={{ x: verticalTableScrollX }}
                   dataSource={visibleTasks}
                   columns={columns}
-                  components={canDrag ? { body: { row: SortableRow } } : undefined}
-                  rowClassName={row => row.parentId ? 'technical-plan-child-row' : 'technical-plan-phase-row'}
+                  rowClassName={() => 'technical-plan-flat-row'}
                 />
-              </SortableContext>
-            </DndContext>
-            {canEditTaskStructure && (
-              <div className="technical-plan-add-task">
-                <Tooltip title="新增一级活动">
-                  <Button type="dashed" icon={<PlusOutlined />} aria-label="新增一级活动" onClick={handleAddTopLevelTask}>添加新活动</Button>
-                </Tooltip>
-              </div>
-            )}
           </div>
         ) : viewMode === 'horizontal' ? (
           <TechnicalHorizontalPlanTable
-            tasks={tasks}
+            tasks={filteredHierarchyTasks}
             versions={visibleVersions}
             currentVersionId={currentVersion.id}
             canEditPlanEnd={isDraft && canEditTechnicalPlan}
@@ -1002,16 +999,66 @@ export default function TechnicalPlanModule({
           />
         ) : viewMode === 'gantt' ? (
           <DHTMLXGantt
-            tasks={filteredTasks}
-            readOnly
+            tasks={buildPlanGanttTasks(filteredHierarchyTasks, {
+              mode: tab?.templateKind === 'subproject' ? 'technical-subproject' : 'hierarchical',
+              editable: canMaintain,
+            })}
+            readOnly={!canMaintain}
             collapsedIds={collapsedIds}
             onCollapsedChange={updater => setCollapsed(scope, [...updater(collapsedIds)])}
+            onTaskDateChange={change => {
+              const mode = tab?.templateKind === 'subproject' ? 'task' : 'milestone'
+              if (change.nodeType !== mode) return false
+              const next = applyPlanGanttDateChange(tasks, { ...change, mode })
+              const valid = tab?.templateKind === 'subproject'
+                ? validateTechnicalSubprojectDates(next).valid
+                : validateTechnicalTdtMilestoneDates(next).valid
+              if (!valid) { message.error('拖动后的日期不符合计划规则'); return false }
+              return updateCurrentTasks(scope, next, maxDepth).ok
+            }}
           />
         ) : null}
       </PlanWorkspaceShell>
 
+      {transferConfirmation && (
+        <Modal
+          open
+          title="确认添加转测版本？"
+          okText="确认添加"
+          cancelText="取消"
+          onCancel={() => setTransferConfirmation(null)}
+          onOk={() => {
+            const opening = transferConfirmation
+            setTransferConfirmation(null)
+            const latest = resolveLatestSubprojectActionContext(opening)
+            if (!latest || latest.tab.templateKind !== 'subproject' || !canConfirmTechnicalSubprojectTransfer({
+              opening,
+              current: latest.current,
+              isCurrentDraft: latest.version.status === '修订中',
+              isEditMode: useUiStore.getState().isEditMode,
+              canView: latest.canView,
+              canEdit: latest.canEdit,
+              canMaintain: latest.canMaintain,
+            })) {
+              message.error('当前计划状态已变化，请重新操作')
+              return
+            }
+            const result = insertNextTechnicalSubprojectTransfer(latest.version.tasks)
+            if (!result.ok) {
+              message.error(result.reason === 'tdr3-missing' ? '未找到 TDR3，无法添加转测版本' : 'TDR3 位置无效，无法添加转测版本')
+              return
+            }
+            const updated = useTechnicalPlanStore.getState().updateCurrentTasks(latest.tab.scope, result.tasks, 1)
+            if (!updated.ok) { message.error('添加转测版本失败，请重试'); return }
+            message.success(`已添加 ${result.task.taskName}`)
+          }}
+        >
+          系统将在 TDR3 前自动生成下一个转测版本，名称不可修改。
+        </Modal>
+      )}
+
       <PlanVersionCompareModal
-        fieldMode="governed"
+        fieldMode={tab?.templateKind === 'subproject' ? 'technical-subproject' : 'hierarchical-flat'}
         open={compareOpen}
         rows={compareRows}
         versions={visibleVersions.map(version => ({ id: version.id, versionNo: version.versionNo, status: version.status }))}

@@ -6,8 +6,9 @@ import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-cont
 
 const root = projectRoot(import.meta.url)
 const rules = loadTypeScriptModule(root, 'src/lib/technicalPlanRules.ts')
+const level1Rules = loadTypeScriptModule(root, 'src/lib/level1PlanRules.ts')
 assert.deepEqual(rules.TDT_TEMPLATE_SEED, [['规划阶段', ['规划启动', 'charter DCP']], ['概念阶段', ['TDR1']], ['计划阶段', ['TDR2', 'PDCP']], ['开发验证阶段', ['TDR3_X', 'TDCP_X']], ['迁移阶段', ['TDR4', 'EDCP']]], 'TDT seed is complete and ordered')
-assert.deepEqual(rules.SUBPROJECT_TEMPLATE_SEED, ['第1版转测', '第2版转测', '第X版转测', 'TDR3'], 'subproject seed is ordered')
+assert.deepEqual(rules.SUBPROJECT_TEMPLATE_SEED, ['第1版转测', '第2版转测', 'TDR3'], 'subproject seed is ordered')
 assert.throws(() => rules.validateTechnicalTemplateDepth('tdt', [{ children: [{ children: [{ children: [] }] }] }]), /depth/i)
 assert.throws(() => rules.validateTechnicalTemplateDepth('subproject', [{ children: [{}] }]), /child/i)
 
@@ -26,7 +27,7 @@ for (const [phase, children] of rules.TDT_TEMPLATE_SEED) {
 assert.equal(rules.validateTechnicalTemplateDepth('tdt', tdtTasks), true, 'TDT seed is valid')
 
 const subprojectTasks = rules.buildSubprojectTemplateTasks()
-assert.deepEqual(subprojectTasks.map(task => task.id), ['1', '2', '3', '4'], 'subproject template uses numeric root numbering')
+assert.deepEqual(subprojectTasks.map(task => task.id), ['1', '2', '3'], 'subproject template uses numeric root numbering')
 assert.deepEqual(subprojectTasks.map(task => task.taskName), rules.SUBPROJECT_TEMPLATE_SEED, 'subproject seed task order is exact')
 assert.ok(subprojectTasks.every(task => !task.parentId), 'subproject seed is single-level')
 assert.equal(rules.validateTechnicalTemplateDepth('subproject', subprojectTasks), true, 'subproject seed is valid')
@@ -66,7 +67,7 @@ assert.deepEqual(migrated.publishedSnapshots['template::技术项目::level1::v3
 const planSource = readSource(root, 'src/stores/plan.ts')
 const configSource = readSource(root, 'src/containers/ConfigContainer.tsx')
 assert.match(planSource, /PLAN_STORE_VERSION\s*=\s*\d+/, 'plan store declares a persistence version')
-assert.ok(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]) >= 3, 'plan store migrates persisted technical template numbering')
+assert.equal(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]), 9, 'plan store migrates machine and tOS persisted level-one scopes exactly once')
 assert.match(planSource, /setTechnicalTemplateTasks/, 'plan store exposes a validating technical-template setter')
 assert.match(planSource, /validateTechnicalTemplateDepth/, 'plan store enforces technical template depth')
 assert.doesNotMatch(configSource, /publishedSnapshots\[versionId\]/, 'config snapshots never fall back across template scopes')
@@ -147,7 +148,7 @@ assert.equal(compare.compareVersionsForTable(subprojectTasks, subprojectPublishe
 
 const technicalProjectModule = loadTypeScriptModule(root, 'src/stores/technicalProject.ts')
 const technicalPlanModule = loadTypeScriptModule(root, 'src/stores/technicalPlan.ts')
-assert.ok(technicalPlanModule.TECHNICAL_PLAN_STORE_VERSION >= 2, 'technical plan persistence declares a migration version')
+assert.equal(technicalPlanModule.TECHNICAL_PLAN_STORE_VERSION, 8, 'technical plan persistence declares the controlled-transfer migration version')
 const migratedLegacyPlan = technicalPlanModule.migrateTechnicalPlanState({
   plansByKey: {
     '9:tdt': {
@@ -200,8 +201,9 @@ const childState = instanceStore.getState().plansByKey['9:subproject:IPM-AI-001'
 assert.equal(childState.versions[0].tasks[0].taskName, childV1.tasks[0].taskName, 'template edits never mutate existing versions')
 assert.equal(childState.versions[1].tasks[0].taskName, '后改模板', 'new draft uses latest matching template snapshot')
 assert.notStrictEqual(childState.versions[0].tasks, childState.versions[1].tasks, 'version task snapshots are isolated')
-const editedDraftTasks = childState.versions[1].tasks.map((task, index) => index === 0 ? { ...task, actualEndDate: '2026-08-08' } : task)
-assert.equal(instanceStore.updateCurrentTasks(childPlanScope, editedDraftTasks, 1).ok, true, 'draft actual completion can be updated')
+const editedDraftTasks = childState.versions[1].tasks.map((task, index) => index === 0 ? { ...task, actualStartDate: '2026-08-07', actualEndDate: '2026-08-08' } : task)
+assert.equal(instanceStore.updateCurrentTasks(childPlanScope, editedDraftTasks, 1).ok, true, 'draft actual dates can be updated')
+assert.equal(instanceStore.getState().plansByKey['9:subproject:IPM-AI-001'].versions[0].tasks[0].actualStartDate, '2026-08-07', 'draft actual start synchronizes to paired published version')
 assert.equal(instanceStore.getState().plansByKey['9:subproject:IPM-AI-001'].versions[0].tasks[0].actualEndDate, '2026-08-08', 'draft actual completion synchronizes to paired published version')
 assert.equal(instanceStore.publishRevision(childPlanScope, '2026-08-09T00:00:00Z').ok, true)
 const laterTemplate = editedTemplate.map((task, index) => ({ ...task, taskName: index === 0 ? '不应同步的后续模板' : task.taskName }))
@@ -210,10 +212,12 @@ const childV3 = instanceStore.getState().plansByKey['9:subproject:IPM-AI-001'].v
 assert.equal(childV3.tasks[0].taskName, '后改模板', 'later revisions copy the previous published version instead of syncing the latest template')
 const publishedV2 = instanceStore.getState().plansByKey['9:subproject:IPM-AI-001'].versions.find(version => version.versionNo === 'V2')
 assert.equal(instanceStore.setCurrentVersion(childPlanScope, publishedV2.id), true)
-const publishedWrite = publishedV2.tasks.map((task, index) => index === 0 ? { ...task, taskName: '禁止修改名称', actualEndDate: '2026-08-18' } : task)
+const publishedWrite = publishedV2.tasks.map((task, index) => index === 0 ? { ...task, taskName: '禁止修改名称', planStartDate: '2026-01-01', actualStartDate: '2026-08-17', actualEndDate: '2026-08-18' } : task)
 assert.equal(instanceStore.updateCurrentTasks(childPlanScope, publishedWrite, 1).ok, true)
 const afterPublishedWrite = instanceStore.getState().plansByKey['9:subproject:IPM-AI-001']
 assert.equal(afterPublishedWrite.versions.find(version => version.versionNo === 'V2').tasks[0].taskName, '后改模板', 'published writes only accept actual completion changes')
+assert.equal(afterPublishedWrite.versions.find(version => version.versionNo === 'V2').tasks[0].planStartDate, childV1.tasks[0].planStartDate, 'published writes cannot overwrite planned start dates')
+assert.equal(afterPublishedWrite.versions.find(version => version.status === '修订中').tasks[0].actualStartDate, '2026-08-17', 'published actual start synchronizes back to the paired draft')
 assert.equal(afterPublishedWrite.versions.find(version => version.status === '修订中').tasks[0].actualEndDate, '2026-08-18', 'published actual completion synchronizes back to the paired draft')
 assert.deepEqual(instanceStore.getState().plansByKey['9:tdt'].versions.map(version => version.versionNo), ['V1'], 'child actions do not change TDT sequence')
 instanceStore.setColumns(childPlanScope, { order: ['taskName'], visible: ['taskName'] })
@@ -262,14 +266,12 @@ const numberedSubprojectTasks = technicalWorkspace.renumberTechnicalSubprojectTa
     taskName: '新建一级任务',
   },
 ])
-assert.deepEqual(numberedSubprojectTasks.map(task => task.id), ['1', '2', '3', '4', '5'], 'technical subproject activities always expose continuous numeric sequence values')
+assert.deepEqual(numberedSubprojectTasks.map(task => task.id), ['1', '2', '3', '4'], 'technical subproject activities always expose continuous numeric sequence values')
 assert.equal(numberedSubprojectTasks.at(-1).stableId, 'technical-custom-1', 'renumbering keeps the stable identity used for version synchronization')
-const reorderedSubprojectTasks = technicalWorkspace.reorderTechnicalSubprojectCustomTasks([
-  ...numberedSubprojectTasks,
-  { ...numberedSubprojectTasks.at(-1), id: '6', stableId: 'technical-custom-2', order: 5, taskName: '第二个自定义任务' },
-], '6', '5')
-assert.deepEqual(reorderedSubprojectTasks.slice(-2).map(task => task.stableId), ['technical-custom-2', 'technical-custom-1'], 'custom subproject roots can reorder among themselves')
-assert.deepEqual(technicalWorkspace.reorderTechnicalSubprojectCustomTasks(reorderedSubprojectTasks, '1', '5'), reorderedSubprojectTasks, 'template roots cannot be reordered')
+const controlledSubprojectRoot = numberedSubprojectTasks.at(-1)
+assert.equal(level1Rules.canMutateLevel1TaskStructure({ projectType: '技术项目', technicalKind: 'subproject', task: controlledSubprojectRoot, action: 'delete' }), true, 'custom subproject roots remain deletable')
+assert.equal(level1Rules.canMutateLevel1TaskStructure({ projectType: '技术项目', technicalKind: 'subproject', task: controlledSubprojectRoot, action: 'rename' }), false, 'custom subproject roots cannot be renamed')
+assert.equal(level1Rules.canMutateLevel1TaskStructure({ projectType: '技术项目', technicalKind: 'subproject', task: controlledSubprojectRoot, action: 'reorder' }), false, 'custom subproject roots cannot be reordered')
 const planWorkspaceShellPath = 'src/components/plans/PlanWorkspaceShell.tsx'
 assert.equal(fs.existsSync(`${root}/${planWorkspaceShellPath}`), true, 'plan workspace provides a shared shell for whole-machine and technical projects')
 const planWorkspaceShell = readSource(root, planWorkspaceShellPath)
@@ -474,44 +476,42 @@ assert.doesNotMatch(technicalModuleSource, /显示已停用|showInactive|Switch/
 assert.match(technicalModuleSource, /SettingOutlined/, 'child plan tabs expose configuration')
 assert.match(technicalModuleSource, /compareVersionsForTable/, 'technical plans reuse version comparison')
 assert.match(technicalModuleSource, /exportSheet/, 'technical plans reuse Excel export')
-assert.match(technicalModuleSource, /SortableRow/, 'technical plans reuse sortable task rows')
-assert.match(technicalModuleSource, /getInvalidTechnicalTaskFields/, 'technical plans enforce plan date validation')
-assert.match(technicalModuleSource, /maxDepthByKind/, 'technical plan depth is a component input')
-assert.match(technicalModuleSource, /handleAddTopLevelTask/, 'technical subproject drafts can add top-level tasks')
-assert.doesNotMatch(technicalModuleSource, /handleAddChildTask/, 'TDT drafts cannot add second-level tasks')
-assert.match(technicalModuleSource, /CaretDownOutlined/, 'technical top-level tasks expose the same row collapse affordance as whole-machine plans')
-assert.match(technicalModuleSource, /toggleCollapsedTask/, 'technical top-level tasks can toggle their own persisted collapsed state')
-assert.match(technicalModuleSource, /aria-expanded=\{!collapsedIds\.has\(row\.id\)\}/, 'the row collapse control exposes its current expanded state')
+assert.match(technicalModuleSource, /maxDepthByKind:\s*Readonly<Record<TechnicalTemplateKind, number>>/, 'technical plan exposes the max-depth input')
+assert.match(technicalModuleSource, /maxDepthByKind\[tab\?\.templateKind \|\| 'tdt'\]/, 'technical plan derives writes from the active template max depth')
+assert.doesNotMatch(technicalModuleSource, /handleAddChildTask/, 'TDT has no structure-add handler')
+assert.match(technicalModuleSource, /const canEditTaskStructure = canMaintain && tab\?\.templateKind === 'subproject' && viewMode === 'vertical'/, 'only editable subproject drafts expose custom-delete structure actions')
+const renderDateStart = technicalModuleSource.indexOf('const renderDate')
+const renderDateEnd = technicalModuleSource.indexOf('const tdtColumns', renderDateStart)
+assert.ok(renderDateStart >= 0 && renderDateEnd > renderDateStart, 'date renderer is bounded for readonly-error inspection')
+const renderDateSource = technicalModuleSource.slice(renderDateStart, renderDateEnd)
+assert.match(renderDateSource, /const content = editable\(row\)[\s\S]{0,320}return reasons\.length \? <Tooltip title=\{reasons\.join\('；'\)\}>\{content\}<\/Tooltip> : content/, 'invalid date reasons wrap both editable and readonly cells outside the editable branch')
+for (const label of ['阶段', '里程碑点', '活动名称', '添加转测版本', '实际开始时间', '实际完成时间']) assert.match(technicalModuleSource, new RegExp(label), `technical flat plan contains ${label}`)
+assert.match(technicalModuleSource, /validateTechnicalSubprojectDates/, 'subproject validates all four date fields')
+assert.match(technicalModuleSource, /insertNextTechnicalSubprojectTransfer/, 'subproject only supports controlled transfer insertion')
 assert.match(technicalModuleSource, /handleDeleteTask/, 'custom subproject activities can be deleted')
-assert.match(technicalModuleSource, /SortableColumnSettings/, 'column settings reuse sortable staged apply/cancel interaction')
+assert.doesNotMatch(technicalModuleSource, /handleAddTopLevelTask|reorderTechnicalSubprojectCustomTasks|canRenameTechnicalTask/, 'technical flat plans do not allow generic add, reorder, or rename')
 assert.match(technicalModuleSource, /canImport/, 'technical plan import has a dedicated permission input')
 assert.match(technicalModuleSource, /canExport/, 'technical plan export has a dedicated permission input')
-for (const label of ['实际开始', '实际完成', '实际工期']) {
-  assert.match(technicalModuleSource, new RegExp(label), `technical plan vertical table exposes the whole-machine ${label} field`)
+for (const field of ['actualStartDate', 'actualEndDate', 'actualDays']) {
+  assert.match(technicalModuleSource, new RegExp(`dataIndex: '${field}'`), `technical plan vertical table exposes its visible ${field} field`)
 }
 assert.match(technicalModuleSource, /canViewTechnicalPlan/, 'technical plan accepts only its L1 technical view capability')
-assert.match(technicalModuleSource, /isResponsibleForTechnicalPlanTasks/, 'technical draft visibility derives responsibility from the active technical scope')
+assert.doesNotMatch(technicalModuleSource, /isResponsibleForTechnicalPlanTasks/, 'technical draft visibility does not retain the obsolete task-responsibility shortcut')
 assert.doesNotMatch(technicalModuleSource, /effectiveTasks|level2PlanTasks|projectPlanLevel/, 'technical plan never reads whole-machine or level-2 plan state')
 assert.match(technicalModuleSource, /visibleVersions/, 'all technical plan version surfaces share one visible-version selector')
 assert.match(technicalModuleSource, /navigateWithEditGuard\([^,]+,\s*Boolean\(isDraft\)\)/s, 'scope and version switches use the current draft state for edit guarding')
-assert.match(technicalModuleSource, /<DHTMLXGantt[\s\S]{0,260}readOnly/, 'technical Gantt is explicitly read-only until write-back is implemented')
+assert.match(technicalModuleSource, /buildPlanGanttTasks[\s\S]{0,300}editable:\s*canMaintain[\s\S]{0,260}onTaskDateChange/, 'technical Gantt is typed and writes validated dates')
 assert.match(technicalModuleSource, /scrollIntoView/, 'publish validation moves focus to the first invalid row')
-assert.match(technicalModuleSource, /if \(invalid\.size\)[\s\S]{0,320}setCollapsed\(scope, \[\]\)[\s\S]{0,320}requestAnimationFrame/, 'publish validation expands the active scope before locating an invalid child task')
+assert.match(technicalModuleSource, /firstInvalidTaskId[\s\S]{0,320}setCollapsed\(scope, \[\]\)[\s\S]{0,320}requestAnimationFrame/, 'publish validation exposes the first invalid flat row')
 assert.match(technicalModuleSource, /const publishedVersions = useMemo\([\s\S]{0,160}canViewTechnicalPlan/, 'published versions remain inaccessible without technical-plan view permission')
 assert.match(technicalModuleSource, /canShareTechnicalPlan/, 'technical plan sharing accepts its dedicated L1 share capability')
 assert.match(technicalModuleSource, /const handleShare = \(\) => \{\s*if \(!canViewTechnicalPlan \|\| !canShareTechnicalPlan\) return/, 'sharing has strict view and share permission guards')
 assert.match(technicalModuleSource, /编辑模式[\s\S]{0,180}自动保存/, 'technical drafts expose the same edit-mode guidance as whole-machine plans')
-assert.match(technicalModuleSource, /key:\s*['"]id['"][^\n]*fixed:\s*['"]left['"]/, 'the technical sequence column stays fixed on horizontal scroll')
-assert.match(technicalModuleSource, /key:\s*['"]taskName['"][^\n]*fixed:\s*['"]left['"]/, 'the technical task-name column stays fixed on horizontal scroll')
-assert.doesNotMatch(technicalModuleSource, /key:\s*['"]drag['"]/, 'task name remains the first technical-plan column instead of following an empty drag column')
-assert.match(technicalModuleSource, /canMutateTechnicalTaskStructure\(row, 'reorder'\)[\s\S]{0,120}<DragHandle\s*\/>/, 'only approved custom subproject activities expose drag handles')
+assert.match(technicalModuleSource, /key:\s*['"]sequence['"][^\n]*fixed:\s*['"]left['"]/, 'the flat sequence column stays fixed')
+assert.match(technicalModuleSource, /key:\s*['"]activityName['"][^\n]*fixed:\s*['"]left['"]/, 'the subproject activity column stays fixed')
 assert.match(technicalModuleSource, /key:\s*['"]actions['"][^\n]*fixed:\s*['"]right['"]/, 'the technical operation column stays fixed on horizontal scroll')
 assert.match(technicalModuleSource, /className=[^\n]*technical-plan-vertical-table/, 'the technical vertical plan table has a stable layout scope')
-assert.match(technicalModuleSource, /technical-plan-add-task[\s\S]{0,320}handleAddTopLevelTask/, 'subproject top-level task creation follows the whole-machine table footer interaction')
-assert.match(technicalModuleSource, /const canEditTaskStructure = canMaintain && tab\?\.templateKind === 'subproject' && viewMode === 'vertical'/, 'only authorized technical subproject revisions expose structure editing')
-assert.match(technicalModuleSource, /renumberTechnicalSubprojectTasks/, 'technical subproject additions and reorders normalize visible sequence numbers')
-assert.match(technicalModuleSource, /reorderTechnicalSubprojectCustomTasks/, 'technical subproject custom tasks use the guarded reorder helper')
-assert.match(technicalModuleSource, /canRenameTechnicalTask[\s\S]{0,300}<Input/, 'custom subproject activity names are editable')
+assert.match(technicalModuleSource, /renumberTechnicalSubprojectTasks/, 'custom subproject deletes normalize visible sequence numbers')
 assert.doesNotMatch(technicalModuleSource, /canManageStructure/, 'technical structure rules no longer depend on the former global-admin-only prop')
 assert.doesNotMatch(readSource(root, 'src/containers/ProjectSpaceContainer.tsx'), /canManageStructure=\{level1GlobalAdmins\.includes/, 'the project container no longer grants a global structure bypass')
 assert.match(technicalModuleSource, /icon=\{<CopyOutlined\s*\/>\}[^>]*aria-label="计划克隆"[^>]*\/>/, 'technical plan clone uses the same icon-only draft action as whole-machine plans')
@@ -546,14 +546,80 @@ assert.match(technicalSummaryHeaderSource, /group\.stage\.estimatedDays == null 
 assert.doesNotMatch(technicalSummaryHeaderSource, /manpowerPercent|planStartDate|planEndDate|~/, 'technical basic-information stage headers omit percentages and date ranges')
 const globalStylesSource = readSource(root, 'src/styles/globals.css')
 assert.match(globalStylesSource, /\.pms-table \.ant-table-thead\s*>\s*tr\s*>\s*th\.ant-table-cell-fix-(?:start|end)[\s\S]{0,900}position:\s*sticky\s*!important/s, 'fixed technical-plan headers remain aligned with fixed body cells')
-for (const label of ['预估工期', '实际工期', '是否延期']) {
-  assert.match(technicalModuleSource, new RegExp(`TECHNICAL_FILTER_FIELDS[\\s\\S]*${label}`), `technical filters include ${label}`)
-}
-assert.doesNotMatch(technicalModuleSource.match(/const TECHNICAL_FILTER_FIELDS[\s\S]*?\n\]/)?.[0] || '', /进度|责任人|状态/, 'governed technical filters omit removed legacy fields')
+assert.match(technicalModuleSource, /rowKey=\{getTechnicalPlanRowKey\}/, 'flat technical rows use the shared stable row-key helper')
+assert.match(technicalModuleSource, /getTechnicalPlanRowKey\(invalidTask\)/, 'publish validation scrolls with the same row-key helper as the table')
+assert.match(technicalModuleSource, /getTechnicalPlanFilterFields\(tab\?\.templateKind \|\| 'tdt',\s*projectedTasks\)/, 'table filters select the visible columns and current rows for the active technical template kind')
+assert.doesNotMatch(technicalModuleSource, /const TECHNICAL_FILTER_FIELDS/, 'technical filters are not a one-size-fits-all legacy field list')
+assert.match(technicalModuleSource, /hasPermission\(latestUser, latestProject\.id, 'plan:一级计划-查看'\)/, 'transfer confirmation rechecks current view permission')
+assert.match(technicalModuleSource, /hasPermission\(latestUser, latestProject\.id, 'plan:一级计划-编辑'\)/, 'transfer confirmation rechecks current edit permission')
+assert.match(technicalModuleSource, /selectedProject/, 'transfer confirmation resolves the currently selected project rather than a stale project closure')
+assert.match(technicalModuleSource, /onOpenChange=\{open => \{ if \(open\) setDeleteOpening/, 'delete confirmation captures an opening token before the popconfirm can become stale')
+assert.match(technicalModuleSource, /if \(!updated\.ok\) \{ message\.error\('删除活动失败，请重试'\); return \}/, 'delete reports success only after the latest write succeeds')
+assert.match(technicalModuleSource, /viewMode === 'gantt' && tab\?\.templateKind === 'tdt'/, 'expand and collapse controls only appear for hierarchical TDT gantt')
+assert.match(technicalModuleSource, /const filteredHierarchyTasks = useMemo\([\s\S]{0,260}filterTechnicalPlanGanttTasks/, 'all plan visualizations derive a single filtered task hierarchy')
+assert.match(technicalModuleSource, /<TechnicalHorizontalPlanTable[\s\S]{0,120}tasks=\{filteredHierarchyTasks\}/, 'horizontal plan columns use the current filtered hierarchy')
+assert.match(technicalModuleSource, /buildPlanHorizontalStageGroups\([\s\S]{0,120}filteredHierarchyTasks/, 'current horizontal export uses the same filtered hierarchy')
+assert.doesNotMatch(technicalModuleSource, /technicalDraft|isResponsibleForTechnicalPlanTasks|toggleCollapsedTask/, 'obsolete technical-plan state and helpers are removed')
 assert.match(readSource(root, 'src/stores/technicalPlan.ts'), /DEFAULT_COLUMNS[\s\S]{0,420}actualStartDate[\s\S]{0,120}actualEndDate[\s\S]{0,120}actualDays/, 'technical plan persisted defaults include actual-date columns')
 
 const publishedVersion = { id: 'v1', versionNo: 'V1', status: '已发布', templateType: 'tdt', tasks: [] }
 const draftVersion = { id: 'v2', versionNo: 'V2', status: '修订中', templateType: 'tdt', tasks: [] }
+const planWorkspace = loadTypeScriptModule(root, 'src/lib/planWorkspace.ts')
+assert.deepEqual(
+  technicalWorkspace.getTechnicalPlanFilterFields('tdt').map(field => field.key),
+  ['sequence', 'stageName', 'milestoneName', 'status', 'planEndDate', 'estimatedDays', 'actualEndDate', 'actualDays'],
+  'TDT filters expose exactly the eight visible flat columns',
+)
+assert.deepEqual(
+  technicalWorkspace.getTechnicalPlanFilterFields('subproject').map(field => field.key),
+  ['sequence', 'activityName', 'status', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays'],
+  'subproject filters expose exactly the nine visible flat columns',
+)
+assert.equal(technicalWorkspace.getTechnicalPlanRowKey({ id: '2', stableId: 'custom-transfer' }), 'custom-transfer', 'table and validation scrolling share the stable technical row key')
+assert.equal(technicalWorkspace.getTechnicalPlanRowKey({ id: '2' }), '2', 'row-key helper falls back to the visible ID when stable ID is absent')
+const tdtStatusOptions = technicalWorkspace.getTechnicalPlanFilterFields('tdt', [
+  { status: '进行中' }, { status: '已完成' }, { status: '进行中' }, { status: '' },
+]).find(field => field.key === 'status').options
+assert.deepEqual(tdtStatusOptions, [{ label: '进行中', value: '进行中' }, { label: '已完成', value: '已完成' }], 'TDT status filter options are current nonempty unique row statuses')
+const subprojectStatusOptions = technicalWorkspace.getTechnicalPlanFilterFields('subproject', [
+  { status: '未开始' }, { status: '进行中' },
+]).find(field => field.key === 'status').options
+assert.deepEqual(subprojectStatusOptions, [{ label: '未开始', value: '未开始' }, { label: '进行中', value: '进行中' }], 'subproject status filter options are current nonempty unique row statuses')
+assert.ok(technicalWorkspace.getTechnicalPlanFilterFields('subproject', []).find(field => field.key === 'status').options.length > 0, 'status filter has a nonempty fallback when the current projection has no status values')
+const tdtFilteredRows = planWorkspace.applyPlanWorkspaceFilters([
+  { id: 'row-1', sequence: 1, stageName: '规划阶段', milestoneName: '规划启动', status: '进行中', planEndDate: '2026-01-01', estimatedDays: 1, actualEndDate: '', actualDays: null },
+  { id: 'row-2', sequence: 2, stageName: '概念阶段', milestoneName: 'TDR1', status: '已完成', planEndDate: '2026-02-01', estimatedDays: 2, actualEndDate: '2026-02-02', actualDays: 1 },
+], [
+  { id: 'filter-stage', field: 'stageName', operator: 'equals', value: '规划阶段' },
+  { id: 'filter-milestone', field: 'milestoneName', operator: 'contains', value: '启动' },
+  { id: 'filter-status', field: 'status', operator: 'equals', value: '进行中' },
+], technicalWorkspace.getTechnicalPlanFilterFields('tdt'))
+assert.deepEqual(tdtFilteredRows.map(row => row.id), ['row-1'], 'TDT stage, milestone, and status filters share the flat row projection')
+const subprojectFilteredRows = planWorkspace.applyPlanWorkspaceFilters([
+  { id: 'activity-1', sequence: 1, activityName: '第1版转测', status: '未开始', planStartDate: '', planEndDate: '2026-01-01', estimatedDays: 1, actualStartDate: '', actualEndDate: '', actualDays: null },
+  { id: 'activity-2', sequence: 2, activityName: 'TDR3', status: '进行中', planStartDate: '2026-01-02', planEndDate: '2026-01-03', estimatedDays: 2, actualStartDate: '', actualEndDate: '', actualDays: null },
+], [{ id: 'filter-subproject-status', field: 'status', operator: 'equals', value: '进行中' }], technicalWorkspace.getTechnicalPlanFilterFields('subproject'))
+assert.deepEqual(subprojectFilteredRows.map(row => row.id), ['activity-2'], 'subproject status filtering uses the same dynamic visible-column definitions')
+assert.equal(technicalWorkspace.getTechnicalPlanFilterFields('tdt').some(field => field.key === 'planStartDate' || field.key === 'actualStartDate' || field.key === 'delayStatus'), false, 'TDT filter menu excludes hidden start and delay fields')
+assert.equal(technicalWorkspace.getTechnicalPlanFilterFields('subproject').some(field => field.key === 'stageName' || field.key === 'milestoneName' || field.key === 'delayStatus'), false, 'subproject filter menu excludes hidden stage, milestone, and delay fields')
+const technicalMutationOpening = { projectId: 'p1', tabId: 'p1:subproject:s1', scopeKey: 'p1:subproject:s1', versionId: 'v2-draft', user: '技术负责人' }
+const canConfirmTechnicalMutation = overrides => technicalWorkspace.canConfirmTechnicalSubprojectMutation({
+  opening: technicalMutationOpening,
+  current: { ...technicalMutationOpening, ...(overrides.current || {}) },
+  isCurrentDraft: true,
+  isEditMode: true,
+  canView: true,
+  canEdit: true,
+  canMaintain: true,
+  ...overrides,
+})
+assert.equal(canConfirmTechnicalMutation({}), true, 'matching latest subproject context can mutate')
+assert.equal(canConfirmTechnicalMutation({ canView: false }), false, 'revoked latest view permission rejects a stale mutation')
+assert.equal(canConfirmTechnicalMutation({ canEdit: false }), false, 'revoked latest edit permission rejects a stale mutation')
+assert.equal(canConfirmTechnicalMutation({ current: { projectId: 'p2' } }), false, 'a changed selected project rejects a stale mutation')
+assert.equal(canConfirmTechnicalMutation({ current: { tabId: 'p1:subproject:s2' } }), false, 'a changed tab rejects a stale deletion')
+assert.equal(canConfirmTechnicalMutation({ current: { versionId: 'v3-draft' } }), false, 'a changed version rejects a stale deletion')
+assert.equal(canConfirmTechnicalMutation({ canMaintain: false }), false, 'lost maintainability rejects a stale deletion before any update')
 assert.deepEqual(technicalWorkspace.selectVisibleTechnicalPlanVersions([publishedVersion, draftVersion], false).map(version => version.id), ['v1'], 'read-only users never receive a draft technical version')
 assert.deepEqual(technicalWorkspace.selectVisibleTechnicalPlanVersions([publishedVersion, draftVersion], true).map(version => version.id), ['v1', 'v2'], 'draft-capable users retain technical drafts')
 
@@ -583,7 +649,7 @@ const horizontalRows = technicalWorkspace.buildTechnicalHorizontalRows([{
 }], 'v1')
 assert.equal(horizontalRows[0].rowType, 'version', 'horizontal plan includes a version row')
 assert.equal(horizontalRows.at(-1).rowType, 'actual', 'horizontal plan includes a final actual row')
-assert.equal(horizontalRows[0].cycleDays, null, 'single-level subproject plans do not invent a governed stage development cycle')
+assert.equal(horizontalRows[0].cycleDays, 9, 'single-level subproject plans preserve their date-derived development cycle')
 const governedCycleRows = technicalWorkspace.buildTechnicalHorizontalRows([{
   ...publishedVersion,
   id: 'governed-cycle',
@@ -650,6 +716,54 @@ assert.deepEqual(migratedPlan.configTemplateVersionScopes[machineScope], {
   versions: [{ id: 'machine-v', versionNo: 'V99', status: '已发布' }],
   currentVersion: 'machine-v',
 }, 'migration preserves an existing nontechnical version scope')
+const repairedEmptyLevel1Mocks = planModule.migratePlanStoreState({
+  tasks: [],
+  configTemplateTasksByType: {
+    '整机产品项目': [],
+    'tOS版本项目': [],
+  },
+  publishedSnapshots: {
+    'template::整机产品项目::level1::v3': [],
+    'project::1::OP::level1::v3': [],
+  },
+  marketPlanData: {},
+}, 6)
+assert.ok(repairedEmptyLevel1Mocks.tasks.length > 0, 'v6 empty global level-one tasks recover the standard mock plan')
+assert.ok(repairedEmptyLevel1Mocks.configTemplateTasksByType['整机产品项目'].length > 0, 'v6 empty machine template recovers its standard milestones')
+assert.ok(repairedEmptyLevel1Mocks.configTemplateTasksByType['tOS版本项目'].length > 0, 'v6 empty tOS template recovers its standard milestones')
+assert.ok(repairedEmptyLevel1Mocks.publishedSnapshots['template::整机产品项目::level1::v3'].length > 0, 'v6 empty standard template snapshot is repaired')
+assert.ok(repairedEmptyLevel1Mocks.publishedSnapshots['project::1::OP::level1::v3'].length > 0, 'v6 empty known project-market snapshot is repaired')
+assert.deepEqual(Object.keys(repairedEmptyLevel1Mocks.marketPlanData).sort(), ['OP', 'RU', 'TR'], 'v6 missing market scopes recover the three demo market plans')
+assert.ok(Object.values(repairedEmptyLevel1Mocks.marketPlanData).every(entry => entry.tasks.length > 0), 'every recovered demo market has visible level-one tasks')
+const preservedNonemptyLevel1Mocks = planModule.migratePlanStoreState({
+  tasks: [{ id: 'custom-global', taskName: '自定义全局计划' }],
+  configTemplateTasksByType: { '整机产品项目': [{ id: 'custom-template', taskName: '自定义模板' }] },
+  publishedSnapshots: { 'project::mock-machine::OP::level1::v3': [{ id: 'custom-snapshot', taskName: '自定义快照' }] },
+  marketPlanData: { OP: { tasks: [{ id: 'custom-market', taskName: '自定义市场计划' }], level2Tasks: [], createdLevel2Plans: [] } },
+}, 6)
+assert.equal(preservedNonemptyLevel1Mocks.tasks[0].taskName, '自定义全局计划', 'nonempty global plans remain user-owned')
+assert.equal(preservedNonemptyLevel1Mocks.configTemplateTasksByType['整机产品项目'][0].taskName, '自定义模板', 'nonempty standard templates remain user-owned')
+assert.equal(preservedNonemptyLevel1Mocks.publishedSnapshots['project::mock-machine::OP::level1::v3'][0].taskName, '自定义快照', 'nonempty project snapshots remain user-owned')
+assert.equal(preservedNonemptyLevel1Mocks.marketPlanData.OP.tasks[0].taskName, '自定义市场计划', 'nonempty market plans remain user-owned')
+const v8TechnicalSnapshot = [{ id: 'technical-v8-exact', taskName: '技术历史快照', nested: { keep: true } }]
+const v8TechnicalState = {
+  publishedSnapshots: {
+    'template::技术项目::level1::v9': v8TechnicalSnapshot,
+    'template::技术项目::tdt::v9': v8TechnicalSnapshot,
+    'project::9::technical::level1::v9': v8TechnicalSnapshot,
+    'project::user-created-tech::technical::level1::v9': planModule.TOS_LEVEL1_TASKS,
+  },
+  configTemplateTasksByType: {
+    [rules.TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt]: v8TechnicalSnapshot,
+  },
+}
+const migratedV8TechnicalState = planModule.migratePlanStoreState(v8TechnicalState, 7)
+assert.deepEqual(migratedV8TechnicalState.publishedSnapshots['template::技术项目::level1::v9'], v8TechnicalSnapshot, 'V8 migration leaves technical compatibility snapshots exact')
+assert.deepEqual(migratedV8TechnicalState.publishedSnapshots['template::技术项目::tdt::v9'], v8TechnicalSnapshot, 'V8 migration leaves scoped technical snapshots exact')
+assert.deepEqual(migratedV8TechnicalState.publishedSnapshots['project::9::technical::level1::v9'], v8TechnicalSnapshot, 'V8 migration leaves technical project snapshots exact')
+assert.deepEqual(migratedV8TechnicalState.publishedSnapshots['project::user-created-tech::technical::level1::v9'], planModule.TOS_LEVEL1_TASKS, 'unknown user-created technical snapshot keys remain exact instead of defaulting to machine markets')
+assert.deepEqual(migratedV8TechnicalState.configTemplateTasksByType[rules.TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt], v8TechnicalSnapshot, 'V8 migration does not rewrite technical store template data')
+assert.deepEqual(v8TechnicalState.publishedSnapshots['template::技术项目::tdt::v9'], v8TechnicalSnapshot, 'V8 technical migration does not mutate its input')
 const editedTdt = [{ ...tdtTasks[0], taskName: '用户已编辑TDT模板' }]
 const migratedFromTask10 = planModule.migratePlanStoreState({
   configTemplateTasksByType: {
@@ -661,6 +775,22 @@ const migratedFromTask10 = planModule.migratePlanStoreState({
 }, 1)
 assert.deepEqual(migratedFromTask10.configTemplateTasksByType[rules.TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt], editedTdt, 'v1 to v2 migration preserves edited TDT templates')
 assert.deepEqual(migratedFromTask10.publishedSnapshots['template::技术项目::tdt::v5'], editedTdt, 'v1 to v2 migration preserves technical publications')
+const legacySubprojectTemplate = [
+  { ...subprojectTasks[0], taskName: '第1版转测' },
+  { ...subprojectTasks[1], taskName: '第2版转测' },
+  { ...subprojectTasks[2], taskName: '第X版转测' },
+  { ...subprojectTasks[2], id: '4', stableId: 'TDR3', order: 4, taskName: 'TDR3' },
+]
+const historicalSubprojectSnapshots = { 'template::技术项目::subproject::v3': legacySubprojectTemplate }
+const historicalSubprojectScopes = { [subprojectScope]: { versions: [{ id: 'v3', versionNo: 'V3', status: '已发布' }], currentVersion: 'v3' } }
+const migratedControlledSubprojectSeed = planModule.migratePlanStoreState({
+  configTemplateTasksByType: { [rules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject]: legacySubprojectTemplate },
+  publishedSnapshots: historicalSubprojectSnapshots,
+  configTemplateVersionScopes: historicalSubprojectScopes,
+}, 5)
+assert.deepEqual(migratedControlledSubprojectSeed.configTemplateTasksByType[rules.TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject].map(task => task.taskName), ['第1版转测', '第2版转测', 'TDR3'], 'v5 migrates only the untouched subproject template seed')
+assert.deepEqual(migratedControlledSubprojectSeed.publishedSnapshots['template::技术项目::subproject::v3'], historicalSubprojectSnapshots['template::技术项目::subproject::v3'], 'v5 controlled seed migration preserves published snapshots')
+assert.deepEqual(migratedControlledSubprojectSeed.configTemplateVersionScopes[subprojectScope], historicalSubprojectScopes[subprojectScope], 'v5 controlled seed migration preserves config version history')
 delete globalThis.localStorage
 
 assert.match(configSource, /TDT项目计划/, 'technical config exposes TDT project plan tab')
@@ -675,6 +805,14 @@ const seededVersionIds = Object.values(seededTechnicalPlans).flatMap(plan => pla
 assert.equal(new Set(seededVersionIds).size, seededVersionIds.length, 'technical plan version IDs are unique across seed instances')
 assert.ok(Object.values(seededTechnicalPlans).every(plan => plan.versions.some(version => version.status === '已发布')), 'every seeded technical plan instance has a published version')
 assert.equal(seededTechnicalPlans['9:tdt'].currentVersionId, 'tech-9-v2-draft', 'AI TDT seed keeps its V2 draft selected')
+assert.equal(seededTechnicalPlans['9:subproject:IPM-AI-001'].versions.find(version => version.status === '已发布').tasks.at(-1).planEndDate, '2026-07-15', 'subproject mock scheduling reaches the project end after the three-item seed change')
+const preservedLegacySubprojectVersion = technicalPlanModule.migrateTechnicalPlanState({ plansByKey: {
+  'custom:subproject:legacy': {
+    planKey: 'custom:subproject:legacy', templateKind: 'subproject', currentVersionId: 'legacy-v1',
+    versions: [{ id: 'legacy-v1', versionNo: 'V1', templateType: 'subproject', status: '已发布', tasks: legacySubprojectTemplate }],
+  },
+} }, 7)
+assert.deepEqual(preservedLegacySubprojectVersion.plansByKey['custom:subproject:legacy'].versions[0].tasks.map(task => task.taskName), ['第1版转测', '第2版转测', '第X版转测', 'TDR3'], 'v7 existing valid subproject versions retain the historical transfer seed')
 assert.ok(Object.entries(seededTechnicalPlans).filter(([key]) => key !== '9:tdt').every(([, plan]) => plan.versions.find(version => version.id === plan.currentVersionId)?.status === '已发布'), 'non-AI seeds select their published version')
 const customizedPlanSeed = seededTechnicalPlans['9:tdt']
 const migratedV5Plans = technicalPlanModule.migrateTechnicalPlanState({ plansByKey: {

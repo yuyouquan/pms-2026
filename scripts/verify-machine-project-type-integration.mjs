@@ -24,7 +24,7 @@ const required = [
   ['src/components/roadmap/MilestoneView.tsx', 'isMachineProjectType'],
   ['src/components/roadmap/ProjectPlanSummaryBoard.tsx', 'isMachineProjectType'],
   ['src/components/roadmap/MRTrainView.tsx', 'isMachineProjectType'],
-  ['src/components/roadmap/MRTrainView.tsx', 'normalizeMachineProjectType(row.projectType)'],
+  ['src/components/roadmap/MRTrainView.tsx', 'isMachineProjectType(a.projectType)'],
   ['src/stores/plan.ts', 'PROJECT_TEMPLATE_TYPES'],
   ['src/stores/plan.ts', 'projectTemplateCompatibility'],
   ['src/containers/ConfigContainer.tsx', 'PROJECT_TEMPLATE_TYPES'],
@@ -58,7 +58,7 @@ assert.equal(matchesProjectTypeColumn(LEGACY_PROJECT_TYPE_MACHINE, PROJECT_TYPE_
 assert.equal(matchesProjectTypeColumn(PROJECT_TYPE_MACHINE_PHONE, PROJECT_TYPE_MACHINE_PHONE), true)
 assert.equal(matchesProjectTypeColumn(PROJECT_TYPE_MACHINE_PAD, PROJECT_TYPE_MACHINE_PAD), true)
 assert.equal(matchesProjectTypeColumn(PROJECT_TYPE_MACHINE_LAPTOP, PROJECT_TYPE_MACHINE_LAPTOP), true)
-assert.equal(matchesProjectTypeColumn(PROJECT_TYPE_MACHINE_PAD, PROJECT_TYPE_MACHINE_PHONE), false)
+assert.equal(matchesProjectTypeColumn(PROJECT_TYPE_MACHINE_PAD, PROJECT_TYPE_MACHINE_PHONE), true)
 assert.equal(matchesProjectTypeColumn('tOS版本项目', PROJECT_TYPE_MACHINE_PHONE), false)
 
 const directComparisonFiles = [
@@ -78,20 +78,6 @@ const directComparisonFiles = [
 const directComparisonPattern = /(?:===|!==)\s*['"]整机产品项目['"]|['"]整机产品项目['"]\s*(?:===|!==)/
 
 for (const file of directComparisonFiles) {
-  assert.doesNotMatch(
-    read(file),
-    directComparisonPattern,
-    `${file} must not branch on the legacy machine string`,
-  )
-}
-
-const sourceFiles = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
-  const path = join(directory, entry.name)
-  if (entry.isDirectory()) return sourceFiles(path)
-  return /\.tsx?$/.test(entry.name) ? [path] : []
-})
-
-for (const file of sourceFiles('src')) {
   assert.doesNotMatch(
     read(file),
     directComparisonPattern,

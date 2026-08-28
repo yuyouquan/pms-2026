@@ -111,11 +111,14 @@ const chipSnapshotKey = (snapshot: ProjectChipSnapshot): string => JSON.stringif
   snapshot.chipPlatform,
 ])
 
-const chipLabel = (snapshot: ProjectChipSnapshot): string => [
-  snapshot.chipCode,
-  snapshot.chipModel,
-  snapshot.chipPlatform,
-].join(' / ')
+export function formatPrimaryChipCode(input: unknown): string {
+  if (typeof input !== 'string') return ''
+  return input.split(/\s*\/\s*/, 1)[0].trim()
+}
+
+const chipLabel = (snapshot: ProjectChipSnapshot): string => (
+  formatPrimaryChipCode(snapshot.chipCode)
+)
 
 export function encodeHistoricalChipOptionValue(snapshot: ProjectChipSnapshot): string {
   return `${HISTORICAL_CHIP_PREFIX}${encodeURIComponent(chipSnapshotKey(snapshot))}`

@@ -1,11 +1,14 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import {
+  PROJECT_CATEGORY_CAPABILITY,
   PROJECT_CATEGORY_MACHINE,
   PROJECT_CATEGORY_TOS_VERSION,
   PROJECT_CATEGORY_TECH,
   PROJECT_TEMPLATE_TYPES,
+  getProjectTypeFamilyKey,
 } from '@/constants/projectTypes'
+import { initialProjects } from '@/data/projects'
 import type { GanttScaleMode } from '@/lib/ganttScale'
 import type { FollowVersionSource, MarketCurrentVersionState, MarketVersionsState } from '@/lib/marketRules'
 import type {
@@ -14,7 +17,8 @@ import type {
   TosTypeVersionsState,
 } from '@/lib/tosTypeRules'
 import type { CompareTableRow } from '@/lib/versionCompare'
-import { buildStandardLevel1Tasks } from '@/lib/level1PlanRules'
+import { buildLevel1TasksForProjectType } from '@/lib/level1PlanRules'
+import { pickScopedPlanPersistence } from '@/lib/projectSpaceLevel1Rules'
 import { cloneDefaultLevel3TemplateActivities, resolveTemplateVersionScopeForMigration } from '@/lib/level3TemplateRules'
 import { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 import {
@@ -26,6 +30,7 @@ import {
   buildSubprojectTemplateTasks,
   buildTdtTemplateTasks,
   getTemplateConfigScopeKey,
+  migrateTechnicalSubprojectSeedState,
   migrateTechnicalTemplateNumberingState,
   migrateTechnicalTemplateState,
   renumberTechnicalTasks,
@@ -41,7 +46,7 @@ import type { Level3TemplateActivity } from '@/types/level3Template'
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
-export const PLAN_STORE_VERSION = 5
+export const PLAN_STORE_VERSION = 9
 export const PLAN_STORE_STORAGE_KEY = 'pms-plan-store'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -88,29 +93,41 @@ const createInitialConfigTemplateCompareScopes = () => Object.fromEntries(
   ]),
 ) as Record<string, ConfigTemplateCompareScope>
 
-export const LEVEL1_TASKS = buildStandardLevel1Tasks(true)
+export const MACHINE_LEVEL1_TASKS = buildLevel1TasksForProjectType(PROJECT_CATEGORY_MACHINE, true)
+export const TOS_LEVEL1_TASKS = buildLevel1TasksForProjectType(PROJECT_CATEGORY_TOS_VERSION, true)
+export const CAPABILITY_LEVEL1_TASKS = buildLevel1TasksForProjectType(PROJECT_CATEGORY_CAPABILITY, true)
+export const MACHINE_LEVEL1_TEMPLATE_TASKS = buildLevel1TasksForProjectType(PROJECT_CATEGORY_MACHINE, false)
+export const TOS_LEVEL1_TEMPLATE_TASKS = buildLevel1TasksForProjectType(PROJECT_CATEGORY_TOS_VERSION, false)
+export const CAPABILITY_LEVEL1_TEMPLATE_TASKS = buildLevel1TasksForProjectType(PROJECT_CATEGORY_CAPABILITY, false)
 
-// 配置中心模板专用：只保留结构字段，清空日期/工期/实际/状态/进度
-export const LEVEL1_TEMPLATE_TASKS = buildStandardLevel1Tasks(false).map(t => ({
-  ...t,
-  defaultRoadmap: !!t.parentId,
-  role: t.parentId ? 'SPM' : '',
-  responsible: t.parentId ? 'SPM' : '',
-  planStartDate: '', planEndDate: '', estimatedDays: 0,
-  actualStartDate: '', actualEndDate: '', actualDays: 0,
-  status: '未开始', progress: 0,
-}))
+const cloneLevel1Tasks = (tasks: readonly any[]) => tasks.map(task => ({ ...task }))
+
+export const getDefaultLevel1TasksForProjectType = (
+  projectType: string,
+  withMockDates = true,
+) => {
+  const family = getProjectTypeFamilyKey(projectType)
+  if (family === PROJECT_CATEGORY_TOS_VERSION) {
+    return cloneLevel1Tasks(withMockDates ? TOS_LEVEL1_TASKS : TOS_LEVEL1_TEMPLATE_TASKS)
+  }
+  if (family === PROJECT_CATEGORY_CAPABILITY) {
+    return cloneLevel1Tasks(withMockDates ? CAPABILITY_LEVEL1_TASKS : CAPABILITY_LEVEL1_TEMPLATE_TASKS)
+  }
+  return cloneLevel1Tasks(withMockDates ? MACHINE_LEVEL1_TASKS : MACHINE_LEVEL1_TEMPLATE_TASKS)
+}
+
+// Whole-machine compatibility exports for legacy standalone surfaces.
+export const LEVEL1_TASKS = MACHINE_LEVEL1_TASKS
+export const LEVEL1_TEMPLATE_TASKS = MACHINE_LEVEL1_TEMPLATE_TASKS
 
 export const TEMPLATE_PROJECT_TYPES = PROJECT_TEMPLATE_TYPES
-
-const cloneLevel1TemplateTasks = () => LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
 
 export const createInitialTemplatePublishedSnapshots = (
   versionId = 'v3',
 ): Record<string, any[]> => {
   const snapshots = TEMPLATE_PROJECT_TYPES.reduce((result, projectType) => {
     if (projectType !== PROJECT_CATEGORY_TECH) {
-      result[getTemplateSnapshotKey(projectType, versionId)] = cloneLevel1TemplateTasks()
+      result[getTemplateSnapshotKey(projectType, versionId)] = getDefaultLevel1TasksForProjectType(projectType, false)
     }
     return result
   }, {} as Record<string, any[]>)
@@ -129,7 +146,9 @@ const createInitialLevel3TemplateTasks = (): Record<string, Level3TemplateActivi
 
 const createInitialConfigTemplateTasks = () => {
   const templates = TEMPLATE_PROJECT_TYPES.reduce((result, projectType) => {
-    if (projectType !== PROJECT_CATEGORY_TECH) result[projectType] = cloneLevel1TemplateTasks()
+    if (projectType !== PROJECT_CATEGORY_TECH) {
+      result[projectType] = getDefaultLevel1TasksForProjectType(projectType, false)
+    }
     return result
   }, {} as Record<string, any[]>)
   templates[PROJECT_CATEGORY_TECH] = buildTdtTemplateTasks()
@@ -138,31 +157,493 @@ const createInitialConfigTemplateTasks = () => {
   return templates
 }
 
+const normalizeLevel1MigrationName = (value: unknown) => String(value || '')
+  .trim()
+  .replace(/\s+/g, '')
+  .toUpperCase()
+
+const LEVEL1_STABLE_SEMANTICS: Record<string, string> = {
+  'machine-stage-concept': 'stage-concept',
+  'tos-stage-concept': 'stage-concept',
+  'capability-stage-concept': 'stage-concept',
+  'stage-concept': 'stage-concept',
+  'machine-ms-concept-kickoff': 'ms-concept-kickoff',
+  'tos-ms-concept-kickoff': 'ms-concept-kickoff',
+  'capability-ms-concept-kickoff': 'ms-concept-kickoff',
+  'milestone-concept-start': 'ms-concept-kickoff',
+  'machine-ms-str1': 'ms-str1',
+  'tos-ms-str1': 'ms-str1',
+  'capability-ms-str1': 'ms-str1',
+  'milestone-str1': 'ms-str1',
+  'machine-stage-planning': 'stage-plan',
+  'tos-stage-plan': 'stage-plan',
+  'capability-stage-planning': 'stage-plan',
+  'stage-plan': 'stage-plan',
+  'machine-ms-str2': 'ms-str2',
+  'tos-ms-str2': 'ms-str2',
+  'capability-ms-str2': 'ms-str2',
+  'milestone-str2': 'ms-str2',
+  'machine-ms-str3': 'ms-str3',
+  'tos-ms-str3': 'ms-str3',
+  'capability-ms-str3': 'ms-str3',
+  'milestone-str3': 'ms-str3',
+  'machine-stage-development': 'stage-development',
+  'tos-stage-development-validation': 'stage-development',
+  'capability-stage-development': 'stage-development',
+  'stage-development': 'stage-development',
+  'machine-ms-str4': 'ms-str4',
+  'tos-ms-str4': 'ms-str4',
+  'capability-ms-str4': 'ms-str4',
+  'milestone-str4': 'ms-str4',
+  'machine-ms-str4a': 'ms-str4a',
+  'tos-ms-str4a': 'ms-str4a',
+  'capability-ms-str4a': 'ms-str4a',
+  'milestone-str4a': 'ms-str4a',
+  'machine-stage-validation': 'stage-validation',
+  'capability-stage-validation': 'stage-validation',
+  'machine-ms-str5': 'ms-str5',
+  'tos-ms-str5': 'ms-str5',
+  'capability-ms-str5': 'ms-str5',
+  'milestone-str5': 'ms-str5',
+  'machine-stage-launch': 'stage-launch',
+  'tos-stage-launch-iteration': 'stage-launch',
+  'capability-stage-launch': 'stage-launch',
+  'stage-launch': 'stage-launch',
+  'machine-stage-lifecycle': 'stage-maintenance',
+  'tos-stage-maintenance': 'stage-maintenance',
+  'capability-stage-lifecycle': 'stage-maintenance',
+  'tos-stage-planning': 'stage-planning',
+  'tos-ms-planning-ko': 'ms-planning-ko',
+  'tos-ms-cdcp': 'ms-cdcp',
+  'milestone-close': 'legacy-close',
+}
+
+const LEVEL1_NAME_SEMANTICS: Record<string, string> = {
+  '概念': 'stage-concept',
+  '概念阶段': 'stage-concept',
+  '概念启动': 'ms-concept-kickoff',
+  STR1: 'ms-str1',
+  '计划': 'stage-plan',
+  '计划阶段': 'stage-plan',
+  STR2: 'ms-str2',
+  STR3: 'ms-str3',
+  '开发验证': 'stage-development',
+  '开发验证阶段': 'stage-development',
+  '开发阶段': 'stage-development',
+  STR4: 'ms-str4',
+  STR4A: 'ms-str4a',
+  '验证阶段': 'stage-validation',
+  STR5: 'ms-str5',
+  '上市保障': 'stage-launch',
+  '上市收编阶段': 'stage-launch',
+  '上市阶段': 'stage-launch',
+  '上市迭代阶段': 'stage-launch',
+  '生命周期阶段': 'stage-maintenance',
+  '维护阶段': 'stage-maintenance',
+  '规划阶段': 'stage-planning',
+  '规划KO': 'ms-planning-ko',
+  CDCP: 'ms-cdcp',
+  '收编完成': 'legacy-close',
+}
+
+const getStableLevel1Semantic = (task: any) => (
+  LEVEL1_STABLE_SEMANTICS[String(task?.stableId || '')]
+)
+
+const getNamedLevel1Semantic = (task: any) => (
+  LEVEL1_NAME_SEMANTICS[normalizeLevel1MigrationName(task?.taskName)]
+)
+
+const getLevel1Semantic = (task: any) => (
+  getStableLevel1Semantic(task) || getNamedLevel1Semantic(task)
+)
+
+interface StableLevel1SeedSignatureEntry {
+  index: number
+  parentStableId: string | null
+  taskName: string
+  order: number
+  source: unknown
+  nodeKind: unknown
+  defaultRoadmap: unknown
+}
+
+type StableLevel1SeedSignature = ReadonlyMap<string, StableLevel1SeedSignatureEntry>
+
+const buildStableLevel1SeedSignature = (tasks: readonly any[]): StableLevel1SeedSignature => {
+  const stableIdById = new Map(tasks.map(task => [task.id, task.stableId]))
+  return new Map(tasks.map((task, index) => [
+    task.stableId,
+    {
+      index,
+      parentStableId: task.parentId ? stableIdById.get(task.parentId) || null : null,
+      taskName: normalizeLevel1MigrationName(task.taskName),
+      order: task.order,
+      source: task.source,
+      nodeKind: task.nodeKind,
+      defaultRoadmap: task.defaultRoadmap,
+    },
+  ]))
+}
+
+const buildV8StableLevel1SeedSignature = (
+  descriptors: readonly (readonly [string, string | null, string, number, string])[],
+): StableLevel1SeedSignature => new Map(descriptors.map(([
+  stableId,
+  parentStableId,
+  taskName,
+  order,
+  nodeKind,
+], index) => [stableId, {
+  index,
+  parentStableId,
+  taskName: normalizeLevel1MigrationName(taskName),
+  order,
+  source: 'template',
+  nodeKind,
+  defaultRoadmap: parentStableId !== null,
+}]))
+
+const MACHINE_V8_LEVEL1_STABLE_SIGNATURE = buildV8StableLevel1SeedSignature([
+  ['machine-stage-concept', null, '概念阶段', 0, 'stage'],
+  ['machine-ms-concept-kickoff', 'machine-stage-concept', '概念启动', 0, 'fixed-milestone'],
+  ['machine-ms-str1', 'machine-stage-concept', 'STR1', 1, 'fixed-milestone'],
+  ['machine-stage-planning', null, '计划阶段', 1, 'stage'],
+  ['machine-ms-str2', 'machine-stage-planning', 'STR2', 0, 'fixed-milestone'],
+  ['machine-ms-str3', 'machine-stage-planning', 'STR3', 1, 'fixed-milestone'],
+  ['machine-stage-development', null, '开发阶段', 2, 'stage'],
+  ['machine-ms-str4', 'machine-stage-development', 'STR4', 0, 'fixed-milestone'],
+  ['machine-ms-str4a', 'machine-stage-development', 'STR4A', 1, 'fixed-milestone'],
+  ['machine-stage-validation', null, '验证阶段', 3, 'stage'],
+  ['machine-ms-str5', 'machine-stage-validation', 'STR5', 0, 'fixed-milestone'],
+  ['machine-stage-launch', null, '上市阶段', 4, 'stage'],
+  ['machine-stage-lifecycle', null, '生命周期阶段', 5, 'stage'],
+])
+
+const TOS_V8_LEVEL1_STABLE_SIGNATURE = buildV8StableLevel1SeedSignature([
+  ['tos-stage-planning', null, '规划阶段', 0, 'stage'],
+  ['tos-ms-planning-ko', 'tos-stage-planning', '规划KO', 0, 'fixed-milestone'],
+  ['tos-ms-cdcp', 'tos-stage-planning', 'CDCP', 1, 'fixed-milestone'],
+  ['tos-stage-concept', null, '概念阶段', 1, 'stage'],
+  ['tos-ms-concept-kickoff', 'tos-stage-concept', '概念启动', 0, 'fixed-milestone'],
+  ['tos-ms-str1', 'tos-stage-concept', 'STR1', 1, 'fixed-milestone'],
+  ['tos-stage-plan', null, '计划阶段', 2, 'stage'],
+  ['tos-ms-str2', 'tos-stage-plan', 'STR2', 0, 'fixed-milestone'],
+  ['tos-ms-str3', 'tos-stage-plan', 'STR3', 1, 'fixed-milestone'],
+  ['tos-stage-development-validation', null, '开发验证阶段', 3, 'stage'],
+  ['tos-ms-str4', 'tos-stage-development-validation', 'STR4', 0, 'fixed-milestone'],
+  ['tos-ms-str4a', 'tos-stage-development-validation', 'STR4A', 1, 'fixed-milestone'],
+  ['tos-ms-str5', 'tos-stage-development-validation', 'STR5', 2, 'fixed-milestone'],
+  ['tos-stage-launch-iteration', null, '上市迭代阶段', 4, 'stage'],
+  ['tos-stage-maintenance', null, '维护阶段', 5, 'stage'],
+])
+
+const LEGACY_SHARED_LEVEL1_STABLE_SIGNATURE: StableLevel1SeedSignature = new Map([
+  ['stage-concept', { index: 0, parentStableId: null, taskName: '概念阶段', order: 0, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['milestone-concept-start', { index: 1, parentStableId: 'stage-concept', taskName: '概念启动', order: 0, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['milestone-str1', { index: 2, parentStableId: 'stage-concept', taskName: 'STR1', order: 1, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['stage-plan', { index: 3, parentStableId: null, taskName: '计划阶段', order: 1, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['milestone-str2', { index: 4, parentStableId: 'stage-plan', taskName: 'STR2', order: 0, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['milestone-str3', { index: 5, parentStableId: 'stage-plan', taskName: 'STR3', order: 1, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['stage-development', { index: 6, parentStableId: null, taskName: '开发验证阶段', order: 2, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['milestone-str4', { index: 7, parentStableId: 'stage-development', taskName: 'STR4', order: 0, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['milestone-str4a', { index: 8, parentStableId: 'stage-development', taskName: 'STR4A', order: 1, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['milestone-str5', { index: 9, parentStableId: 'stage-development', taskName: 'STR5', order: 2, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['stage-launch', { index: 10, parentStableId: null, taskName: '上市收编阶段', order: 3, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+  ['milestone-close', { index: 11, parentStableId: 'stage-launch', taskName: '收编完成', order: 0, source: 'template', nodeKind: undefined, defaultRoadmap: undefined }],
+])
+
+const LEGACY_SHARED_V4_V7_LEVEL1_STABLE_SIGNATURE: StableLevel1SeedSignature = new Map(
+  [...LEGACY_SHARED_LEVEL1_STABLE_SIGNATURE].map(([stableId, entry]) => [
+    stableId,
+    { ...entry, defaultRoadmap: entry.parentStableId !== null },
+  ]),
+)
+
+const STABLE_LEVEL1_SEED_SIGNATURES: readonly StableLevel1SeedSignature[] = [
+  buildStableLevel1SeedSignature(MACHINE_LEVEL1_TEMPLATE_TASKS),
+  buildStableLevel1SeedSignature(TOS_LEVEL1_TEMPLATE_TASKS),
+  buildStableLevel1SeedSignature(CAPABILITY_LEVEL1_TEMPLATE_TASKS),
+  MACHINE_V8_LEVEL1_STABLE_SIGNATURE,
+  TOS_V8_LEVEL1_STABLE_SIGNATURE,
+  LEGACY_SHARED_LEVEL1_STABLE_SIGNATURE,
+  LEGACY_SHARED_V4_V7_LEVEL1_STABLE_SIGNATURE,
+]
+
+const LEGACY_SIMPLE_LEVEL1_SIGNATURE = [
+  { id: '1', parentId: null, order: 1, taskName: '概念' },
+  { id: '1.1', parentId: '1', order: 1, taskName: '概念启动' },
+  { id: '1.2', parentId: '1', order: 2, taskName: 'STR1' },
+  { id: '2', parentId: null, order: 2, taskName: '计划' },
+  { id: '2.1', parentId: '2', order: 1, taskName: 'STR2' },
+  { id: '2.2', parentId: '2', order: 2, taskName: 'STR3' },
+  { id: '3', parentId: null, order: 3, taskName: '开发验证' },
+  { id: '4', parentId: null, order: 4, taskName: '上市保障' },
+] as const
+
+const matchesStableLevel1SeedSignature = (
+  fixedTasks: any[],
+  signature: StableLevel1SeedSignature,
+) => {
+  if (fixedTasks.length !== signature.size) return false
+  const taskById = new Map(fixedTasks.map(task => [task.id, task]))
+  const stableIds = new Set(fixedTasks.map(task => task.stableId))
+  if (taskById.size !== fixedTasks.length || stableIds.size !== signature.size) return false
+  return fixedTasks.every((task, index) => {
+    if (!signature.has(task.stableId)) return false
+    const expected = signature.get(task.stableId)!
+    const parent = task.parentId ? taskById.get(task.parentId) : undefined
+    if (task.parentId && !parent) return false
+    const parentStableId = parent?.stableId || null
+    return index === expected.index
+      && parentStableId === expected.parentStableId
+      && normalizeLevel1MigrationName(task.taskName) === normalizeLevel1MigrationName(expected.taskName)
+      && task.order === expected.order
+      && task.source === expected.source
+      && task.nodeKind === expected.nodeKind
+      && task.defaultRoadmap === expected.defaultRoadmap
+  })
+}
+
+const matchesLegacySimpleLevel1SeedSignature = (fixedTasks: any[]) => {
+  if (fixedTasks.length !== LEGACY_SIMPLE_LEVEL1_SIGNATURE.length) return false
+  const taskById = new Map(fixedTasks.map(task => [task.id, task]))
+  if (taskById.size !== fixedTasks.length) return false
+  return LEGACY_SIMPLE_LEVEL1_SIGNATURE.every(expected => {
+    const task = taskById.get(expected.id)
+    return task
+      && (task.parentId || null) === expected.parentId
+      && task.order === expected.order
+      && normalizeLevel1MigrationName(task.taskName) === normalizeLevel1MigrationName(expected.taskName)
+      && task.source === undefined
+      && task.nodeKind === undefined
+  })
+}
+
+const isRecognizedLevel1Seed = (tasks: any[]) => {
+  if (!tasks.every(task => task?.source === undefined || task?.source === 'template' || task?.source === 'custom')) {
+    return false
+  }
+  const ids = tasks.map(task => task?.id)
+  if (ids.some(id => typeof id !== 'string' || !id) || new Set(ids).size !== ids.length) return false
+  const idSet = new Set(ids)
+  if (tasks.some(task => task?.parentId && !idSet.has(task.parentId))) return false
+  const fixedTasks = tasks.filter(task => task?.source !== 'custom')
+  if (!fixedTasks.every(task => task.source === undefined || task.source === 'template')) return false
+  const hasStableIds = fixedTasks.some(task => Boolean(task?.stableId))
+  if (hasStableIds) {
+    if (!fixedTasks.every(task => typeof task?.stableId === 'string' && task.stableId)) return false
+    return STABLE_LEVEL1_SEED_SIGNATURES.some(signature => (
+      matchesStableLevel1SeedSignature(fixedTasks, signature)
+    ))
+  }
+  return matchesLegacySimpleLevel1SeedSignature(fixedTasks)
+}
+
+const LEVEL1_DATE_FIELDS = ['planStartDate', 'planEndDate', 'actualStartDate', 'actualEndDate'] as const
+
+const renumberMigratedLevel1DisplayIds = (tasks: any[]) => {
+  const indexed = tasks.map((task, index) => ({ task: { ...task }, index }))
+  const sortSiblings = (items: typeof indexed) => [...items].sort((left, right) => (
+    Number(left.task.order) - Number(right.task.order) || left.index - right.index
+  ))
+  const roots = sortSiblings(indexed.filter(({ task }) => !task.parentId))
+  const childrenByParent = new Map<string, typeof indexed>()
+  indexed.forEach(item => {
+    if (!item.task.parentId) return
+    childrenByParent.set(item.task.parentId, [
+      ...(childrenByParent.get(item.task.parentId) || []),
+      item,
+    ])
+  })
+  const numbered: any[] = []
+  const included = new Set<number>()
+  roots.forEach((root, rootIndex) => {
+    const rootId = String(rootIndex + 1)
+    included.add(root.index)
+    numbered.push({ ...root.task, id: rootId })
+    sortSiblings(childrenByParent.get(root.task.id) || []).forEach((child, childIndex) => {
+      included.add(child.index)
+      numbered.push({ ...child.task, id: `${rootId}.${childIndex + 1}`, parentId: rootId })
+    })
+  })
+  indexed.filter(item => !included.has(item.index)).forEach(item => {
+    numbered.push({ ...item.task, id: String(numbered.filter(task => !task.parentId).length + 1), parentId: null })
+  })
+  return numbered
+}
+
+/** Conservatively replaces only confirmed shared/default seeds and preserves user-owned arrays. */
+export const migrateLevel1TasksForProjectType = (
+  tasks: unknown,
+  projectType: string,
+  withMockDates: boolean,
+): any[] => {
+  const defaults = getDefaultLevel1TasksForProjectType(projectType, withMockDates)
+  if (!Array.isArray(tasks) || tasks.length === 0) return defaults
+  const input = tasks.map(task => ({ ...task }))
+  if (!isRecognizedLevel1Seed(input)) return input
+
+  const fixedTasks = input.filter(task => task?.source !== 'custom')
+  const usedSources = new Set<any>()
+  const migratedDefaults = defaults.map(defaultTask => {
+    const semantic = getStableLevel1Semantic(defaultTask)
+    const sourceTask = fixedTasks.find(task => !usedSources.has(task) && task?.stableId === defaultTask.stableId)
+      || fixedTasks.find(task => !usedSources.has(task) && getStableLevel1Semantic(task) === semantic)
+      || fixedTasks.find(task => !usedSources.has(task) && getNamedLevel1Semantic(task) === semantic)
+    if (!sourceTask) return { ...defaultTask }
+    usedSources.add(sourceTask)
+    const merged = {
+      ...defaultTask,
+      ...sourceTask,
+      id: defaultTask.id,
+      stableId: defaultTask.stableId,
+      parentId: defaultTask.parentId,
+      order: defaultTask.order,
+      taskName: defaultTask.taskName,
+      source: defaultTask.source,
+      nodeKind: defaultTask.nodeKind,
+      defaultRoadmap: defaultTask.defaultRoadmap,
+    }
+    LEVEL1_DATE_FIELDS.forEach(field => {
+      if (Object.prototype.hasOwnProperty.call(sourceTask, field)) merged[field] = sourceTask[field]
+    })
+    return merged
+  })
+
+  const targetBySemantic = new Map(migratedDefaults.map(task => [getStableLevel1Semantic(task), task]))
+  const sourceById = new Map(input.map(task => [task?.id, task]))
+  const customSourceTasks = input.filter(task => task?.source === 'custom')
+  const customTemporaryIdBySourceId = new Map(customSourceTasks.map((task, index) => [
+    task.id,
+    `custom-${index}-${task.id}`,
+  ]))
+  const getMigratedParent = (parent: any) => {
+    const semantic = getLevel1Semantic(parent)
+    if (projectType === PROJECT_CATEGORY_MACHINE && semantic === 'stage-validation') {
+      return targetBySemantic.get('stage-development')
+    }
+    return targetBySemantic.get(semantic)
+  }
+  const compatibilityParentsById = new Map<string, any>()
+  customSourceTasks.forEach(task => {
+    const parent = sourceById.get(task.parentId)
+    if (!parent
+      || parent.source === 'custom'
+      || getMigratedParent(parent)
+      || compatibilityParentsById.has(parent.id)) return
+    compatibilityParentsById.set(parent.id, {
+      ...parent,
+      id: `compat-${parent.id}`,
+      source: 'custom',
+      nodeKind: parent.nodeKind || 'stage',
+      parentId: parent.parentId || null,
+    })
+  })
+  const customTasks = customSourceTasks.map(task => {
+    const parent = sourceById.get(task.parentId)
+    const migratedParent = parent && parent.source !== 'custom' ? getMigratedParent(parent) : undefined
+    const compatibilityParent = parent ? compatibilityParentsById.get(parent.id) : undefined
+    const customParentId = parent?.source === 'custom'
+      ? customTemporaryIdBySourceId.get(parent.id)
+      : undefined
+    const migratedParentId = migratedParent?.id || compatibilityParent?.id || customParentId
+    return {
+      ...task,
+      id: customTemporaryIdBySourceId.get(task.id)!,
+      ...(migratedParentId ? { parentId: migratedParentId } : {}),
+    }
+  })
+  return renumberMigratedLevel1DisplayIds([
+    ...migratedDefaults,
+    ...compatibilityParentsById.values(),
+    ...customTasks,
+  ])
+}
+
+const INITIAL_LEVEL1_PROJECT_TYPES_BY_ID = Object.fromEntries(initialProjects.map(project => [
+  String(project.id),
+  getProjectTypeFamilyKey(project.type),
+])) as Record<string, string>
+
+const RESERVED_NON_MARKET_LEVEL1_SCOPES = new Set(['technical', 'tdt', 'subproject', 'tos-type'])
+
+const migratePublishedLevel1Snapshot = (
+  key: string,
+  value: unknown,
+  migrateCapability: boolean,
+) => {
+  if (!Array.isArray(value)) return value
+  const templateMatch = /^template::([^:]+)::level1::([^:]+)$/.exec(key)
+  if (templateMatch) {
+    const projectType = getProjectTypeFamilyKey(templateMatch[1])
+    if ([PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TOS_VERSION].includes(projectType as any)
+      || (migrateCapability && projectType === PROJECT_CATEGORY_CAPABILITY)) {
+      return migrateLevel1TasksForProjectType(value, projectType, false)
+    }
+    return value
+  }
+
+  const projectMatch = /^project::([^:]+)::/.exec(key)
+  const knownProjectType = projectMatch ? INITIAL_LEVEL1_PROJECT_TYPES_BY_ID[projectMatch[1]] : undefined
+  if (knownProjectType === PROJECT_CATEGORY_TECH) return value
+
+  if (/^project::[^:]+::tos-type::[^:]+::level1::[^:]+::snapshot$/.test(key)) {
+    if (knownProjectType && knownProjectType !== PROJECT_CATEGORY_TOS_VERSION) return value
+    return migrateLevel1TasksForProjectType(value, PROJECT_CATEGORY_TOS_VERSION, true)
+  }
+  const marketSnapshotMatch = /^project::([^:]+)::([^:]+)::level1::([^:]+)$/.exec(key)
+  if (marketSnapshotMatch) {
+    const [, , market] = marketSnapshotMatch
+    if (RESERVED_NON_MARKET_LEVEL1_SCOPES.has(market)) return value
+    return migrateLevel1TasksForProjectType(value, PROJECT_CATEGORY_MACHINE, true)
+  }
+  const ordinaryProjectMatch = /^project::([^:]+)::level1::[^:]+$/.exec(key)
+  if (ordinaryProjectMatch) {
+    const projectType = INITIAL_LEVEL1_PROJECT_TYPES_BY_ID[ordinaryProjectMatch[1]]
+    if ([PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TOS_VERSION].includes(projectType as any)
+      || (migrateCapability && projectType === PROJECT_CATEGORY_CAPABILITY)) {
+      return migrateLevel1TasksForProjectType(value, projectType, true)
+    }
+  }
+  return value
+}
+
 export const migratePlanStoreState = (persistedState: unknown, persistedVersion = 0) => {
   if (!persistedState || typeof persistedState !== 'object') return persistedState as PlanState
   const legacyMigrated = persistedVersion < 1
     ? migrateTechnicalTemplateState(persistedState as Record<string, any>)
     : persistedState as Record<string, any>
-  const migrated = persistedVersion < 3
+  const numberedMigrated = persistedVersion < 3
     ? migrateTechnicalTemplateNumberingState(legacyMigrated)
     : legacyMigrated
+  const migrated = persistedVersion < 6
+    ? migrateTechnicalSubprojectSeedState(numberedMigrated)
+    : numberedMigrated
+  const shouldMigrateFiveStageLevel1 = persistedVersion < 9
+  const shouldMigrateCapabilityLevel1 = persistedVersion < 8
+  const shouldBackfillDemoMarkets = persistedVersion < 7
   const standardTemplateTypes = PROJECT_TEMPLATE_TYPES.filter(projectType => projectType !== PROJECT_CATEGORY_TECH)
-  const shouldReplaceLegacyStandardTasks = (tasks: unknown) => (
-    Array.isArray(tasks)
-    && tasks.some(task => ['概念', '计划', '开发验证', '上市保障'].includes(String(task?.taskName || '')))
-  )
-  const migrateStandardTasks = (tasks: unknown, withMockDates: boolean) => {
-    if (!shouldReplaceLegacyStandardTasks(tasks)) return tasks
-    const customTasks = (tasks as any[]).filter(task => task?.source === 'custom')
-    return [...buildStandardLevel1Tasks(withMockDates), ...customTasks.map(task => ({ ...task, source: 'custom' }))]
-  }
   const migratedConfigTemplates = { ...(migrated.configTemplateTasksByType || {}) }
   standardTemplateTypes.forEach(projectType => {
-    migratedConfigTemplates[projectType] = migrateStandardTasks(migratedConfigTemplates[projectType], false) || cloneLevel1TemplateTasks()
+    const shouldMigrateProjectType = projectType === PROJECT_CATEGORY_CAPABILITY
+      ? shouldMigrateCapabilityLevel1
+      : shouldMigrateFiveStageLevel1
+    if (shouldMigrateProjectType) {
+      migratedConfigTemplates[projectType] = migrateLevel1TasksForProjectType(
+        migratedConfigTemplates[projectType],
+        projectType,
+        false,
+      )
+    } else if (!Array.isArray(migratedConfigTemplates[projectType])) {
+      migratedConfigTemplates[projectType] = getDefaultLevel1TasksForProjectType(projectType, false)
+    }
   })
   const migratedSnapshots = Object.fromEntries(Object.entries(migrated.publishedSnapshots || {}).map(([key, value]) => [
     key,
-    key.includes(PROJECT_CATEGORY_TECH) ? value : migrateStandardTasks(value, key.startsWith('project::')),
+    shouldMigrateFiveStageLevel1
+      ? migratePublishedLevel1Snapshot(key, value, shouldMigrateCapabilityLevel1)
+      : value,
   ])) as Record<string, any[]>
   const initialPublishedSnapshots = createInitialTemplatePublishedSnapshots()
   Object.entries(initialPublishedSnapshots).forEach(([key, value]) => {
@@ -177,10 +658,39 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
       level3TemplateTasksByType[projectType] = defaults.map(item => ({ ...item }))
     }
   })
-  const migratedMarketPlanData = Object.fromEntries(Object.entries(migrated.marketPlanData || {}).map(([market, value]) => {
+  const fallbackMarketPlanData = Object.fromEntries(['OP', 'TR', 'RU'].map(market => [market, {
+    tasks: getDefaultLevel1TasksForProjectType(PROJECT_CATEGORY_MACHINE, true),
+    level2Tasks: [],
+    createdLevel2Plans: [...FIXED_LEVEL2_PLANS],
+  }]))
+  const marketPlanSource = shouldBackfillDemoMarkets
+    ? { ...fallbackMarketPlanData, ...(migrated.marketPlanData || {}) }
+    : (migrated.marketPlanData || {})
+  const migratedMarketPlanData = Object.fromEntries(Object.entries(marketPlanSource).map(([market, value]) => {
     const planData = value as Record<string, any>
-    return [market, { ...planData, tasks: migrateStandardTasks(planData.tasks, true) }]
+    return [market, {
+      ...planData,
+      tasks: shouldMigrateFiveStageLevel1
+        ? migrateLevel1TasksForProjectType(planData.tasks, PROJECT_CATEGORY_MACHINE, true)
+        : planData.tasks,
+    }]
   }))
+  const migratedTosTypePlanDataByProjectId = Object.fromEntries(
+    Object.entries(migrated.tosTypePlanDataByProjectId || {}).map(([projectId, projectData]) => [
+      projectId,
+      Object.fromEntries(Object.entries(projectData as Record<string, any>).map(([type, planData]) => [
+        type,
+        planData && typeof planData === 'object'
+          ? {
+              ...planData,
+              level1Tasks: shouldMigrateFiveStageLevel1
+                ? migrateLevel1TasksForProjectType(planData.level1Tasks, PROJECT_CATEGORY_TOS_VERSION, true)
+                : planData.level1Tasks,
+            }
+          : planData,
+      ])),
+    ]),
+  )
   const initialScopes = createInitialConfigTemplateVersionScopes()
   const legacyVersions = Array.isArray(migrated.versions)
     ? migrated.versions.map((version: any) => ({ ...version }))
@@ -202,8 +712,11 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
   }))
   return {
     ...migrated,
-    tasks: migrateStandardTasks(migrated.tasks, true) || buildStandardLevel1Tasks(true),
+    tasks: shouldMigrateFiveStageLevel1
+      ? migrateLevel1TasksForProjectType(migrated.tasks, PROJECT_CATEGORY_MACHINE, true)
+      : migrated.tasks,
     marketPlanData: migratedMarketPlanData,
+    tosTypePlanDataByProjectId: migratedTosTypePlanDataByProjectId,
     publishedSnapshots: migratedSnapshots,
     configTemplateTasksByType: migratedConfigTemplates,
     level3TemplateTasksByType,
@@ -550,35 +1063,11 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
   compareFilterType: 'all',
 
   // Market plan data — 整机产品项目按市场维度维护独立的计划数据
-  marketPlanData: {
-    'OP': { tasks: [...LEVEL1_TASKS], level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] },
-    'TR': {
-      tasks: [
-        { id: '1', order: 1, taskName: '概念', status: '已完成', progress: 100, responsible: '赵六', predecessor: '', planStartDate: '2026-02-01', planEndDate: '2026-02-20', estimatedDays: 20, actualStartDate: '2026-02-01', actualEndDate: '2026-02-19', actualDays: 19 },
-        { id: '1.1', parentId: '1', order: 1, taskName: '概念启动', status: '已完成', progress: 100, responsible: '赵六', predecessor: '', planStartDate: '2026-02-01', planEndDate: '2026-02-10', estimatedDays: 10, actualStartDate: '2026-02-01', actualEndDate: '2026-02-10', actualDays: 10 },
-        { id: '1.2', parentId: '1', order: 2, taskName: 'STR1', status: '已完成', progress: 100, responsible: '孙七', predecessor: '1.1', planStartDate: '2026-02-11', planEndDate: '2026-02-20', estimatedDays: 10, actualStartDate: '2026-02-11', actualEndDate: '2026-02-19', actualDays: 9 },
-        { id: '2', order: 2, taskName: '计划', status: '进行中', progress: 40, responsible: '赵六', predecessor: '1.2', planStartDate: '2026-02-21', planEndDate: '2026-03-20', estimatedDays: 28, actualStartDate: '2026-02-21', actualEndDate: '', actualDays: 0 },
-        { id: '2.1', parentId: '2', order: 1, taskName: 'STR2', status: '进行中', progress: 40, responsible: '孙七', predecessor: '1.2', planStartDate: '2026-02-21', planEndDate: '2026-03-05', estimatedDays: 13, actualStartDate: '2026-02-21', actualEndDate: '', actualDays: 0 },
-        { id: '2.2', parentId: '2', order: 2, taskName: 'STR3', status: '未开始', progress: 0, responsible: '周八', predecessor: '2.1', planStartDate: '2026-03-06', planEndDate: '2026-03-20', estimatedDays: 15, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-        { id: '3', order: 3, taskName: '开发验证', status: '未开始', progress: 0, responsible: '', predecessor: '2.2', planStartDate: '2026-03-21', planEndDate: '2026-04-20', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-        { id: '4', order: 4, taskName: '上市保障', status: '未开始', progress: 0, responsible: '', predecessor: '3', planStartDate: '2026-04-21', planEndDate: '2026-05-20', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-      ],
-      level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS],
-    },
-    'RU': {
-      tasks: [
-        { id: '1', order: 1, taskName: '概念', status: '已完成', progress: 100, responsible: '周八', predecessor: '', planStartDate: '2026-03-01', planEndDate: '2026-03-15', estimatedDays: 15, actualStartDate: '2026-03-01', actualEndDate: '2026-03-14', actualDays: 14 },
-        { id: '1.1', parentId: '1', order: 1, taskName: '概念启动', status: '已完成', progress: 100, responsible: '周八', predecessor: '', planStartDate: '2026-03-01', planEndDate: '2026-03-08', estimatedDays: 8, actualStartDate: '2026-03-01', actualEndDate: '2026-03-07', actualDays: 7 },
-        { id: '1.2', parentId: '1', order: 2, taskName: 'STR1', status: '已完成', progress: 100, responsible: '吴九', predecessor: '1.1', planStartDate: '2026-03-09', planEndDate: '2026-03-15', estimatedDays: 7, actualStartDate: '2026-03-08', actualEndDate: '2026-03-14', actualDays: 7 },
-        { id: '2', order: 2, taskName: '计划', status: '未开始', progress: 0, responsible: '周八', predecessor: '1.2', planStartDate: '2026-03-16', planEndDate: '2026-04-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-        { id: '2.1', parentId: '2', order: 1, taskName: 'STR2', status: '未开始', progress: 0, responsible: '周八', predecessor: '1.2', planStartDate: '2026-03-16', planEndDate: '2026-03-31', estimatedDays: 16, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-        { id: '2.2', parentId: '2', order: 2, taskName: 'STR3', status: '未开始', progress: 0, responsible: '吴九', predecessor: '2.1', planStartDate: '2026-04-01', planEndDate: '2026-04-15', estimatedDays: 15, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-        { id: '3', order: 3, taskName: '开发验证', status: '未开始', progress: 0, responsible: '', predecessor: '2.2', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-        { id: '4', order: 4, taskName: '上市保障', status: '未开始', progress: 0, responsible: '', predecessor: '3', planStartDate: '2026-05-16', planEndDate: '2026-06-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
-      ],
-      level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS],
-    },
-  },
+  marketPlanData: Object.fromEntries(['OP', 'TR', 'RU'].map(market => [market, {
+    tasks: getDefaultLevel1TasksForProjectType(PROJECT_CATEGORY_MACHINE, true),
+    level2Tasks: [],
+    createdLevel2Plans: [...FIXED_LEVEL2_PLANS],
+  }])),
   marketFollowVersionMeta: {},
   marketVersionsByKey: {},
   marketCurrentVersionByKey: {},
@@ -725,5 +1214,6 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
     level3TemplateTasksByType: state.level3TemplateTasksByType,
     configTemplateVersionScopes: state.configTemplateVersionScopes,
     configTemplateCompareScopes: state.configTemplateCompareScopes,
+    ...pickScopedPlanPersistence(state),
   }),
 }))

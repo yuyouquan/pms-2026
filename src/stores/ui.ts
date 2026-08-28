@@ -171,7 +171,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   navigateWithEditGuard: (action, isCurrentDraft) => {
     const { isEditMode } = get()
     if (isEditMode && !isCurrentDraft) {
-      set({ pendingNavigation: () => action, showLeaveConfirm: true })
+      set({ pendingNavigation: action, showLeaveConfirm: true })
     } else {
       action()
     }
@@ -179,11 +179,10 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
 
   handleConfirmLeave: () => {
     const { pendingNavigation } = get()
-    set({ isEditMode: false, showLeaveConfirm: false })
     if (pendingNavigation) {
       pendingNavigation()
-      set({ pendingNavigation: null })
     }
+    set({ isEditMode: false, showLeaveConfirm: false, pendingNavigation: null })
   },
 
   handleCancelLeave: () => {

@@ -12,6 +12,7 @@ import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
 import type { TechnicalTemplateKind, TechnicalTemplateTask } from '@/types/technicalPlan'
 import type { TechnicalSubproject } from '@/types/technicalProject'
 import { buildFirstLevel1RevisionTasks, buildNextLevel1RevisionTasks } from '@/lib/level1PlanRules'
+import { applyPlanTaskDatePatch } from '@/lib/planGanttRules'
 
 export type TechnicalPlanScope =
   | { kind: 'tdt'; parentProjectId: string }
@@ -85,9 +86,11 @@ const buildInitialSubprojectTasks = (parentProjectId: string, childIndex: number
   const start = Date.parse(`${schedule.planStartDate}T00:00:00Z`)
   const end = Date.parse(`${schedule.planEndDate}T00:00:00Z`)
   const totalDays = Math.round((end - start) / 86_400_000) + 1
-  return buildSubprojectTemplateTasks().map((task, taskIndex) => {
-    const rangeStart = Math.floor(totalDays * taskIndex / 4)
-    const rangeEnd = Math.floor(totalDays * (taskIndex + 1) / 4) - 1
+  const templateTasks = buildSubprojectTemplateTasks()
+  const taskCount = templateTasks.length
+  return templateTasks.map((task, taskIndex) => {
+    const rangeStart = Math.floor(totalDays * taskIndex / taskCount)
+    const rangeEnd = Math.floor(totalDays * (taskIndex + 1) / taskCount) - 1
     const offset = Math.min(childIndex, Math.max(0, rangeEnd - rangeStart))
     const planStartDate = toIsoDate(start + (rangeStart + offset) * 86_400_000)
     const planEndDate = toIsoDate(start + rangeEnd * 86_400_000)
@@ -174,7 +177,7 @@ const clonePlans = (plans: TechnicalPlansByKey): TechnicalPlansByKey => Object.f
   }]),
 )
 
-export const TECHNICAL_PLAN_STORE_VERSION = 7
+export const TECHNICAL_PLAN_STORE_VERSION = 8
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
@@ -316,7 +319,7 @@ export const buildTechnicalPlanTabs = (
 
 export type CreateRevisionResult = { ok: true; versionId: string } | { ok: false; reason: 'draft-exists' | 'inactive' | 'incomplete-configuration' | 'max-depth' }
 export type ClonePublishedVersionResult = { ok: true; versionId: string } | { ok: false; reason: 'missing-instance' | 'missing-source' | 'draft-exists' | 'inactive' | 'incomplete-configuration' }
-export type RevisionMutationResult = { ok: true } | { ok: false; reason: 'missing-instance' | 'missing-draft' | 'max-depth' }
+export type RevisionMutationResult = { ok: true } | { ok: false; reason: 'missing-instance' | 'missing-draft' | 'max-depth' | 'historical-published' }
 
 export interface CreateRevisionInput {
   scope: TechnicalPlanScope
@@ -363,9 +366,28 @@ const createRevisionInState = (state: TechnicalPlanState, input: CreateRevisionI
   const publishedVersions = (current?.versions || []).filter(version => version.status === '已发布').sort(comparePublishedTechnicalPlanVersions)
   const previousPublished = publishedVersions[0]
   const revisionTasks = previousPublished
-    ? (publishedVersions.length <= 1
-        ? buildFirstLevel1RevisionTasks(previousPublished.tasks, [...input.templateTasks])
-        : buildNextLevel1RevisionTasks(previousPublished.tasks)) as TechnicalTemplateTask[]
+    ? (input.templateKind === 'subproject' && publishedVersions.length <= 1
+        // Keep the current template's structure and labels for the first
+        // subproject revision, while retaining the published task-bar dates.
+        ? (() => {
+            const synchronized = buildFirstLevel1RevisionTasks(previousPublished.tasks, [...input.templateTasks]) as TechnicalTemplateTask[]
+            const previousByStableId = new Map(previousPublished.tasks.map(task => [task.stableId || task.id, task]))
+            return synchronized.map(task => {
+              const previous = previousByStableId.get(task.stableId || task.id)
+              return previous ? {
+                ...task,
+                planStartDate: previous.planStartDate,
+                planEndDate: previous.planEndDate,
+                estimatedDays: previous.estimatedDays,
+                actualStartDate: previous.actualStartDate,
+                actualEndDate: previous.actualEndDate,
+                actualDays: previous.actualDays,
+              } : task
+            })
+          })()
+        : (publishedVersions.length <= 1
+            ? buildFirstLevel1RevisionTasks(previousPublished.tasks, [...input.templateTasks])
+            : buildNextLevel1RevisionTasks(previousPublished.tasks))) as TechnicalTemplateTask[]
     : cloneTasks(input.templateTasks)
   const instance: TechnicalPlanInstance = current
     ? { ...current, versions: [...current.versions, { id: versionId, versionNo, templateType: input.templateKind, status: '修订中', tasks: cloneTasks(revisionTasks) }], currentVersionId: versionId }
@@ -435,6 +457,10 @@ const mutateDraft = (state: TechnicalPlanState, scope: TechnicalPlanScope, mutat
   if (mutation === 'tasks') {
     const currentVersion = instance.versions.find(version => version.id === instance.currentVersionId)
     if (!currentVersion) return { state, result: { ok: false as const, reason: 'missing-draft' as const } }
+    const latestPublished = instance.versions.filter(version => version.status === '已发布').sort(comparePublishedTechnicalPlanVersions)[0]
+    if (currentVersion.status === '已发布' && currentVersion.id !== latestPublished?.id) {
+      return { state, result: { ok: false as const, reason: 'historical-published' as const } }
+    }
     try {
       validateTechnicalPlanInstanceDepth(instance.templateKind, payload as readonly TechnicalTemplateTask[], maxDepth ?? (instance.templateKind === 'tdt' ? 2 : 1))
     } catch {
@@ -444,24 +470,37 @@ const mutateDraft = (state: TechnicalPlanState, scope: TechnicalPlanScope, mutat
     const requestedByStableId = new Map(requestedTasks.map(task => [task.stableId || task.id, task]))
     const nextCurrentTasks = currentVersion.status === '已发布'
       ? currentVersion.tasks.map(task => ({
-          ...task,
-          actualEndDate: requestedByStableId.get(task.stableId || task.id)?.actualEndDate || '',
+          ...applyPlanTaskDatePatch([task], {
+            taskId: task.id,
+            patch: {
+              actualStartDate: requestedByStableId.get(task.stableId || task.id)?.actualStartDate || '',
+              actualEndDate: requestedByStableId.get(task.stableId || task.id)?.actualEndDate || '',
+            },
+          })[0],
         }))
       : requestedTasks
     const previousByStableId = new Map(currentVersion.tasks.map(task => [task.stableId || task.id, task]))
-    const changedActualEnds = new Map<string, string>()
+    const changedActualDatePatches = new Map<string, Pick<TechnicalTemplateTask, 'actualStartDate' | 'actualEndDate'>>()
     nextCurrentTasks.forEach(task => {
       const stableId = task.stableId || task.id
-      if ((previousByStableId.get(stableId)?.actualEndDate || '') !== (task.actualEndDate || '')) changedActualEnds.set(stableId, task.actualEndDate || '')
+      const previous = previousByStableId.get(stableId)
+      if (
+        (previous?.actualStartDate || '') !== (task.actualStartDate || '')
+        || (previous?.actualEndDate || '') !== (task.actualEndDate || '')
+      ) {
+        changedActualDatePatches.set(stableId, {
+          actualStartDate: task.actualStartDate || '',
+          actualEndDate: task.actualEndDate || '',
+        })
+      }
     })
-    const latestPublished = instance.versions.filter(version => version.status === '已发布').sort(comparePublishedTechnicalPlanVersions)[0]
     const pairedVersionId = currentVersion.status === '修订中' ? latestPublished?.id : instance.versions.find(version => version.status === '修订中')?.id
     const versions = instance.versions.map(version => {
       if (version.id === currentVersion.id) return { ...version, tasks: nextCurrentTasks }
-      if (version.id !== pairedVersionId || changedActualEnds.size === 0) return version
+      if (version.id !== pairedVersionId || changedActualDatePatches.size === 0) return version
       return { ...version, tasks: version.tasks.map(task => {
-        const value = changedActualEnds.get(task.stableId || task.id)
-        return value === undefined ? task : { ...task, actualEndDate: value }
+        const patch = changedActualDatePatches.get(task.stableId || task.id)
+        return patch === undefined ? task : applyPlanTaskDatePatch([task], { taskId: task.id, patch })[0]
       }) }
     })
     return { state: { plansByKey: { ...state.plansByKey, [key]: { ...instance, versions } } }, result: { ok: true as const } }

@@ -63,7 +63,7 @@ assert.notStrictEqual(clonedDraft.tasks[0], initialPlans['project-a:tdt'].versio
 assert.notStrictEqual(clonedDraft.tasks[0].children, initialPlans['project-a:tdt'].versions[0].tasks[0].children, 'nested task data is deeply isolated')
 assert.deepEqual(clonedState.plansByKey['project-b:tdt'], untouchedProjectB, 'another TDT scope is unchanged')
 assert.deepEqual(clonedState.plansByKey['project-a:subproject:child-1'], untouchedChild, 'a child scope is unchanged')
-assert.equal(technicalPlan.TECHNICAL_PLAN_STORE_VERSION, 5, 'required sequence columns advance the persisted technical-plan shape')
+assert.equal(technicalPlan.TECHNICAL_PLAN_STORE_VERSION, 8, 'flat milestone and technical-subproject columns advance the persisted technical-plan shape')
 const migratedVersionTwoColumns = technicalPlan.migrateTechnicalPlanState({
   plansByKey: {
     'custom:tdt': {
@@ -75,8 +75,8 @@ const migratedVersionTwoColumns = technicalPlan.migrateTechnicalPlanState({
 }, 2)
 assert.deepEqual(
   migratedVersionTwoColumns.plansByKey['custom:tdt'].columnSettings.order,
-  ['id', 'taskName', 'actualStartDate', 'actualEndDate', 'actualDays'],
-  'version-2 plan columns gain the new actual-date fields without resetting the plan',
+  ['id', 'taskName', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'delayStatus'],
+  'legacy plan columns migrate to the current flat-plan column contract without resetting the plan',
 )
 assert.equal(migratedVersionTwoColumns.plansByKey['custom:tdt'].versions[0].tasks[0].taskName, '保留任务')
 
@@ -126,6 +126,21 @@ const childOnlyPlans = {
     version('child-published', 'V1', 'subproject', '已发布', [task('child-task', '子项目发布任务')]),
   ]),
 }
+const subprojectRevisionStore = technicalPlan.createTechnicalPlanStore({ plansByKey: childOnlyPlans })
+assert.deepEqual(
+  subprojectRevisionStore.createRevision({
+    scope: { kind: 'subproject', parentProjectId: 'project-a', subprojectId: 'child-1' },
+    templateKind: 'subproject', templateTasks: [task('child-task', '模板任务')], subproject: configuredChild,
+  }),
+  { ok: true, versionId: 'V2-draft' },
+  'subproject creates a draft from its latest published version',
+)
+const subprojectDraft = subprojectRevisionStore.getState().plansByKey['project-a:subproject:child-1'].versions.find(item => item.id === 'V2-draft')
+assert.deepEqual(
+  [subprojectDraft.tasks[0].planStartDate, subprojectDraft.tasks[0].planEndDate],
+  ['2026-01-01', '2026-01-02'],
+  'subproject revision retains planned start and end dates for gantt task move and resize',
+)
 assert.deepEqual(
   technicalPlan.createTechnicalPlanStore({ plansByKey: childOnlyPlans }).clonePublishedVersion({
     scope: { kind: 'subproject', parentProjectId: 'project-a', subprojectId: 'child-1' },

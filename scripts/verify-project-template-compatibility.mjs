@@ -31,40 +31,38 @@ const {
 } = compatibilityModule.exports
 
 const oldTasks = [{ id: 'legacy-task' }]
-const canonicalTasks = [{ id: 'canonical-task' }]
+const categoryTasks = [{ id: 'category-task' }]
 assert.deepEqual(
-  JSON.parse(JSON.stringify(getTemplateTasksForProjectType({ '整机产品项目': oldTasks }, '整机产品-手机'))),
+  JSON.parse(JSON.stringify(getTemplateTasksForProjectType({ '整机产品项目': oldTasks }, '整机-手机'))),
   oldTasks,
-  'a canonical phone project must still load tasks stored under the legacy machine key',
+  'a machine secondary category resolves the current shared category task key',
 )
 assert.deepEqual(
   JSON.parse(JSON.stringify(getTemplateTasksForProjectType({
     '整机产品项目': oldTasks,
-    '整机产品-手机': canonicalTasks,
-  }, '整机产品-PAD'))),
-  canonicalTasks,
-  'the canonical machine-family task key must win over the legacy key',
+    '整机-手机': categoryTasks,
+  }, '整机-平板'))),
+  oldTasks,
+  'machine templates are intentionally shared by the current project category',
 )
 
 const legacySnapshotKey = 'template::整机产品项目::level1::v1'
-const canonicalSnapshotKey = 'template::整机产品-手机::level1::v1'
 assert.deepEqual(
-  JSON.parse(JSON.stringify(getTemplateSnapshotReadKeys('整机产品-笔电', 'v1', 'level1'))),
-  [canonicalSnapshotKey, legacySnapshotKey],
-  'machine snapshot reads must try canonical then legacy keys',
+  JSON.parse(JSON.stringify(getTemplateSnapshotReadKeys('整机-笔电', 'v1', 'level1'))),
+  [legacySnapshotKey, legacySnapshotKey],
+  'machine snapshot reads retain the shared category key for every secondary category',
 )
 assert.deepEqual(
-  JSON.parse(JSON.stringify(getTemplateSnapshotForProjectType({ [legacySnapshotKey]: oldTasks }, '整机产品-手机', 'v1', 'level1'))),
+  JSON.parse(JSON.stringify(getTemplateSnapshotForProjectType({ [legacySnapshotKey]: oldTasks }, '整机-手机', 'v1', 'level1'))),
   oldTasks,
-  'a canonical phone project must still load a snapshot stored under the legacy machine key',
+  'a machine secondary category reads a category-keyed snapshot',
 )
 assert.deepEqual(
   JSON.parse(JSON.stringify(getTemplateSnapshotForProjectType({
     [legacySnapshotKey]: oldTasks,
-    [canonicalSnapshotKey]: canonicalTasks,
-  }, '整机产品-PAD', 'v1', 'level1'))),
-  canonicalTasks,
-  'the canonical machine-family snapshot key must win over the legacy key',
+  }, '整机-平板', 'v1', 'level1'))),
+  oldTasks,
+  'the shared category snapshot remains authoritative for machine secondary categories',
 )
 
 console.log('Project template compatibility verification passed.')

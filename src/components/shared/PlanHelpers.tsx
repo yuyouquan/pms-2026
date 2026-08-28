@@ -8,6 +8,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { gantt } from 'dhtmlx-gantt'
 import { getGanttScaleConfig, type GanttScaleMode } from '@/lib/ganttScale'
+import { attachPlanGanttInteractionLifecycle, createPlanGanttInteractionController, type PlanGanttTaskDateChange } from '@/lib/planGanttRules'
 import {
   getCurrentNodeIndex,
   getCurrentNodeLabel,
@@ -57,6 +58,10 @@ export interface DHTMLXGanttColumn {
   template?: (task: any) => string
 }
 
+export interface DHTMLXGanttDateChange extends PlanGanttTaskDateChange {
+  nodeType: 'milestone' | 'task'
+}
+
 const DEFAULT_GANTT_COLUMNS: DHTMLXGanttColumn[] = [
   { name: 'text', label: '任务名称', width: 180, tree: true },
   { name: 'predecessor', label: '前置任务', align: 'center', width: 70 },
@@ -74,6 +79,10 @@ export function DHTMLXGantt({
   collapsedIds,
   onCollapsedChange,
   columns = DEFAULT_GANTT_COLUMNS,
+  onTaskDateChange,
+  validateTaskDateChange,
+  allowLightbox = true,
+  allowStandaloneUpdate = true,
 }: {
   tasks: any[]
   onTaskClick?: (task: any) => void
@@ -82,14 +91,28 @@ export function DHTMLXGantt({
   collapsedIds?: Set<string>
   onCollapsedChange?: (updater: (prev: Set<string>) => Set<string>) => void
   columns?: DHTMLXGanttColumn[]
+  onTaskDateChange?: (change: DHTMLXGanttDateChange) => boolean
+  validateTaskDateChange?: (change: DHTMLXGanttDateChange) => boolean
+  allowLightbox?: boolean
+  allowStandaloneUpdate?: boolean
 }) {
   const ganttContainer = useRef<HTMLDivElement>(null)
   const suppressFeedback = useRef(false)
   const onTaskClickRef = useRef(onTaskClick)
+  const onTaskDateChangeRef = useRef(onTaskDateChange)
+  const validateTaskDateChangeRef = useRef(validateTaskDateChange)
 
   useEffect(() => {
     onTaskClickRef.current = onTaskClick
   }, [onTaskClick])
+
+  useEffect(() => {
+    onTaskDateChangeRef.current = onTaskDateChange
+  }, [onTaskDateChange])
+
+  useEffect(() => {
+    validateTaskDateChangeRef.current = validateTaskDateChange
+  }, [validateTaskDateChange])
 
   useEffect(() => {
     if (!ganttContainer.current) return
@@ -106,8 +129,16 @@ export function DHTMLXGantt({
     gantt.config.fit_tasks = true
     gantt.config.auto_scheduling = true
     gantt.config.auto_scheduling_strict = true
+    // This plan surface does not expose dependency authoring.  Link handles
+    // otherwise cover zero-width milestone diamonds and prevent date dragging.
+    gantt.config.drag_links = false
     gantt.config.open_tree_initial = true
     gantt.config.readonly = readOnly
+    gantt.config.readonly_property = 'readonly'
+    gantt.templates.task_class = (_start: Date, _end: Date, task: any) => [
+      `pms-gantt-${task.type || 'task'}`,
+      `pms-gantt-task-${task.readonly ? 'readonly' : 'editable'}`,
+    ].join(' ')
 
     gantt.init(ganttContainer.current)
 
@@ -116,9 +147,11 @@ export function DHTMLXGantt({
         ...t,
         id: t.id,
         text: t.taskName,
-        start_date: t.planStartDate || '',
-        end_date: t.planEndDate || '',
-        duration: t.estimatedDays || 1,
+        start_date: t.start_date ?? t.planStartDate ?? '',
+        end_date: t.end_date ?? t.planEndDate ?? '',
+        duration: t.duration ?? t.estimatedDays ?? 1,
+        type: t.type || (t.parentId ? 'task' : 'project'),
+        readonly: readOnly || Boolean(t.readonly),
         progress: (t.progress || 0) / 100,
         parent: t.parentId || 0,
         open: true,
@@ -149,6 +182,19 @@ export function DHTMLXGantt({
       onCollapsedChange?.((prev) => { const s = new Set(prev); s.add(String(id)); return s })
     })
 
+    const formatDate = gantt.date.date_to_str('%Y-%m-%d')
+    const interactionController = createPlanGanttInteractionController({
+      readOnly,
+      allowLightbox,
+      allowStandaloneUpdate,
+      getValidateTaskDateChange: () => validateTaskDateChangeRef.current,
+      getOnTaskDateChange: () => onTaskDateChangeRef.current,
+      formatDate: value => formatDate(value as Date),
+      updateTask: task => gantt.updateTask(task.id),
+      refreshTask: task => gantt.refreshTask(task.id),
+    })
+    const detachInteractionLifecycle = attachPlanGanttInteractionLifecycle(gantt, interactionController)
+
     const clickHandler = onTaskClickRef.current
       ? gantt.attachEvent('onTaskClick', (id: number) => {
         const task = gantt.getTask(id)
@@ -160,10 +206,12 @@ export function DHTMLXGantt({
     return () => {
       gantt.detachEvent(openHandler)
       gantt.detachEvent(closeHandler)
+      detachInteractionLifecycle()
       if (clickHandler) gantt.detachEvent(clickHandler)
+      interactionController.clear()
       gantt.clearAll()
     }
-  }, [columns, tasks, readOnly, scaleMode])
+  }, [allowLightbox, allowStandaloneUpdate, columns, tasks, readOnly, scaleMode])
 
   useEffect(() => {
     if (!ganttContainer.current) return

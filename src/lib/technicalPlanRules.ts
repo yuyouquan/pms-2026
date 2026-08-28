@@ -15,7 +15,6 @@ export const TDT_TEMPLATE_SEED = [
 export const SUBPROJECT_TEMPLATE_SEED = [
   '第1版转测',
   '第2版转测',
-  '第X版转测',
   'TDR3',
 ] as const
 
@@ -71,6 +70,63 @@ export const buildSubprojectTemplateTasks = (): TechnicalTemplateTask[] => (
     createTask(String(index + 1), index + 1, taskName)
   ))
 )
+
+export type InsertNextTechnicalSubprojectTransferResult =
+  | { ok: true; tasks: TechnicalTemplateTask[]; task: TechnicalTemplateTask }
+  | { ok: false; reason: 'tdr3-missing' | 'tdr3-invalid-position' }
+
+const createUniqueTechnicalStableId = (tasks: readonly TechnicalTemplateTask[], candidate: string): string => {
+  const existingStableIds = new Set(tasks.map(task => task.stableId || task.id))
+  let stableId = candidate
+  let suffix = 2
+  while (existingStableIds.has(stableId)) {
+    stableId = `${candidate}-${suffix}`
+    suffix += 1
+  }
+  return stableId
+}
+
+export const insertNextTechnicalSubprojectTransfer = (
+  tasks: readonly TechnicalTemplateTask[],
+): InsertNextTechnicalSubprojectTransferResult => {
+  const ordered = tasks
+    .map((task, index) => ({ task: { ...task }, index }))
+    .sort((left, right) => left.task.order - right.task.order || left.index - right.index)
+  const tdr3Index = ordered.findIndex(({ task }) => task.taskName === 'TDR3')
+  if (tdr3Index < 0) return { ok: false, reason: 'tdr3-missing' }
+  if (tdr3Index !== ordered.length - 1 || ordered.filter(({ task }) => task.taskName === 'TDR3').length !== 1) {
+    return { ok: false, reason: 'tdr3-invalid-position' }
+  }
+  const maximumTransferVersion = ordered.reduce((maximum, { task }) => {
+    const match = /^第(\d+)版转测$/.exec(task.taskName)
+    return match ? Math.max(maximum, Number(match[1])) : maximum
+  }, 0)
+  const taskName = `第${maximumTransferVersion + 1}版转测`
+  const nonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const stableId = createUniqueTechnicalStableId(tasks, `custom-subproject-transfer-${nonce}`)
+  const next = ordered.map(({ task }) => task)
+  next.splice(tdr3Index, 0, {
+    id: stableId,
+    stableId,
+    source: 'custom',
+    role: '技术项目负责人',
+    order: tdr3Index + 1,
+    taskName,
+    responsible: '技术项目负责人',
+    predecessor: '',
+    planStartDate: '',
+    planEndDate: '',
+    estimatedDays: 0,
+    actualStartDate: '',
+    actualEndDate: '',
+    actualDays: 0,
+    status: '未开始',
+    progress: 0,
+    defaultRoadmap: false,
+  })
+  const renumbered = next.map((task, index) => ({ ...task, id: String(index + 1), order: index + 1 }))
+  return { ok: true, tasks: renumbered, task: renumbered.find(task => task.stableId === stableId)! }
+}
 
 /** Keeps task content intact while aligning technical templates with the shared 1 / 1.1 numbering contract. */
 export const renumberTechnicalTasks = <Task extends TechnicalTemplateTaskInput>(
@@ -221,6 +277,108 @@ export interface InvalidTechnicalTaskFields {
   end?: string[]
 }
 
+export type TechnicalSubprojectDateField = 'planStartDate' | 'planEndDate' | 'actualStartDate' | 'actualEndDate'
+
+export interface TechnicalSubprojectDateValidationResult {
+  valid: boolean
+  byTaskId: Record<string, Partial<Record<TechnicalSubprojectDateField, string[]>>>
+}
+
+export const validateTechnicalSubprojectDates = (
+  tasks: readonly TechnicalTemplateTaskInput[],
+): TechnicalSubprojectDateValidationResult => {
+  const byTaskId: TechnicalSubprojectDateValidationResult['byTaskId'] = {}
+  const add = (taskId: string, field: TechnicalSubprojectDateField, message: string) => {
+    byTaskId[taskId] = byTaskId[taskId] || {}
+    byTaskId[taskId][field] = [...(byTaskId[taskId][field] || []), message]
+  }
+
+  tasks.forEach(task => {
+    if (!task.id) return
+    const validatePair = (
+      startField: 'planStartDate' | 'actualStartDate',
+      endField: 'planEndDate' | 'actualEndDate',
+      startMessage: string,
+      endMessage: string,
+    ) => {
+      const start = typeof task[startField] === 'string' ? task[startField] : ''
+      const end = typeof task[endField] === 'string' ? task[endField] : ''
+      if (start && end && start > end) {
+        add(task.id!, startField, startMessage)
+        add(task.id!, endField, endMessage)
+      }
+    }
+    validatePair('planStartDate', 'planEndDate', '计划开始时间不得晚于计划完成时间', '计划完成时间不得早于计划开始时间')
+    validatePair('actualStartDate', 'actualEndDate', '实际开始时间不得晚于实际完成时间', '实际完成时间不得早于实际开始时间')
+  })
+
+  return { valid: Object.keys(byTaskId).length === 0, byTaskId }
+}
+
+/**
+ * TDT stages are immutable summary rows while their child milestones may share
+ * a completion day. Their completion dates must nevertheless stay ordered in
+ * the global displayed milestone stream, while empty partial inputs remain
+ * editable.
+ */
+export const validateTechnicalTdtMilestoneDates = (
+  tasks: readonly TechnicalTemplateTaskInput[],
+): TechnicalSubprojectDateValidationResult => {
+  const byTaskId: TechnicalSubprojectDateValidationResult['byTaskId'] = {}
+  const add = (taskId: string, field: TechnicalSubprojectDateField, message: string) => {
+    byTaskId[taskId] = byTaskId[taskId] || {}
+    byTaskId[taskId][field] = [...(byTaskId[taskId][field] || []), message]
+  }
+  const isStrictDate = (value: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+    const [year, month, day] = value.split('-').map(Number)
+    const parsed = new Date(Date.UTC(year, month - 1, day))
+    return parsed.getUTCFullYear() === year
+      && parsed.getUTCMonth() === month - 1
+      && parsed.getUTCDate() === day
+  }
+  const byId = new Map(tasks.filter(task => task.id).map(task => [task.id!, task]))
+  const indexedTasks = tasks.map((task, index) => ({ task, index }))
+  const byDisplayOrder = (left: { task: TechnicalTemplateTaskInput; index: number }, right: { task: TechnicalTemplateTaskInput; index: number }) => (
+    Number(left.task.order ?? left.index + 1) - Number(right.task.order ?? right.index + 1)
+    || left.index - right.index
+  )
+  const rootDisplayIndex = new Map(
+    indexedTasks.filter(({ task }) => task.id && !task.parentId).sort(byDisplayOrder)
+      .map(({ task }, index) => [task.id!, index]),
+  )
+  const milestones = indexedTasks.filter(({ task }) => task.id && task.parentId).sort((left, right) => (
+    (rootDisplayIndex.get(left.task.parentId!) ?? Number.MAX_SAFE_INTEGER)
+      - (rootDisplayIndex.get(right.task.parentId!) ?? Number.MAX_SAFE_INTEGER)
+    || byDisplayOrder(left, right)
+  ))
+  let priorPlanEnd = ''
+  let priorActualEnd = ''
+  milestones.forEach(({ task }) => {
+    const planEnd = typeof task.planEndDate === 'string' ? task.planEndDate : ''
+    const actualEnd = typeof task.actualEndDate === 'string' ? task.actualEndDate : ''
+    if (planEnd && !isStrictDate(planEnd)) add(task.id!, 'planEndDate', '计划完成时间格式无效')
+    if (actualEnd && !isStrictDate(actualEnd)) add(task.id!, 'actualEndDate', '实际完成时间格式无效')
+    if (planEnd && isStrictDate(planEnd)) {
+      if (priorPlanEnd && planEnd < priorPlanEnd) add(task.id!, 'planEndDate', '计划完成时间不得早于前序里程碑')
+      priorPlanEnd = planEnd
+    }
+    if (actualEnd && isStrictDate(actualEnd)) {
+      if (priorActualEnd && actualEnd < priorActualEnd) add(task.id!, 'actualEndDate', '实际完成时间不得早于前序里程碑')
+      priorActualEnd = actualEnd
+    }
+  })
+  tasks.filter(task => task.id && task.parentId).forEach(task => {
+    const parent = byId.get(task.parentId!)
+    const planEnd = typeof task.planEndDate === 'string' ? task.planEndDate : ''
+    const parentStart = typeof parent?.planStartDate === 'string' ? parent.planStartDate : ''
+    const parentEnd = typeof parent?.planEndDate === 'string' ? parent.planEndDate : ''
+    if (planEnd && isStrictDate(planEnd) && parentStart && isStrictDate(parentStart) && planEnd < parentStart) add(task.id!, 'planEndDate', '计划完成时间不得早于所属阶段开始时间')
+    if (planEnd && isStrictDate(planEnd) && parentEnd && isStrictDate(parentEnd) && planEnd > parentEnd) add(task.id!, 'planEndDate', '计划完成时间不得晚于所属阶段完成时间')
+  })
+  return { valid: Object.keys(byTaskId).length === 0, byTaskId }
+}
+
 /** Same-row and parent-range date checks used by technical plan drafts. Empty dates stay valid. */
 export const getInvalidTechnicalTaskFields = (
   tasks: readonly TechnicalTemplateTaskInput[],
@@ -307,5 +465,31 @@ export const migrateTechnicalTemplateNumberingState = <T extends Record<string, 
       key,
       key.startsWith('template::技术项目::') && Array.isArray(value) ? renumberTechnicalTasks(value) : value,
     ])),
+  }
+}
+
+export const migrateTechnicalSubprojectSeedState = <T extends Record<string, any>>(state: T): T => {
+  const templates = state.configTemplateTasksByType && typeof state.configTemplateTasksByType === 'object'
+    ? state.configTemplateTasksByType as Record<string, unknown>
+    : undefined
+  const current = templates?.[TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject]
+  const legacySeed = ['第1版转测', '第2版转测', '第X版转测', 'TDR3']
+  const isExactLegacySeed = Array.isArray(current)
+    && current.length === legacySeed.length
+    && current.every((task, index) => task?.taskName === legacySeed[index])
+  if (!isExactLegacySeed) return state
+  const migratedTasks = current
+    .filter(task => task.taskName !== '第X版转测')
+    .map((task, index) => (
+      task.id === String(index + 1) && task.order === index + 1
+        ? task
+        : { ...task, id: String(index + 1), order: index + 1 }
+    ))
+  return {
+    ...state,
+    configTemplateTasksByType: {
+      ...templates,
+      [TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject]: migratedTasks,
+    },
   }
 }

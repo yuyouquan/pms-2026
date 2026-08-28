@@ -204,6 +204,7 @@ export default function ProjectListContainer() {
       const mockPlanTasks = buildProjectListMockPlanTasks(
         project.id,
         getTemplateTasksForProjectType(configTemplateTasksByType, project.type) || [],
+        { projectType: project.type, projectName: project.name },
       )
       if (isMachineProjectType(project.type)) {
         const marketRows = buildMarketRowsFromMarkets(

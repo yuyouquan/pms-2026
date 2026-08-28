@@ -17,7 +17,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { ColumnsType } from 'antd/es/table'
 import { useUiStore } from '@/stores/ui'
-import { usePlanStore, LEVEL2_PLAN_TYPES, LEVEL1_TEMPLATE_TASKS, VERSION_DATA, getConfigColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
+import { usePlanStore, LEVEL2_PLAN_TYPES, VERSION_DATA, getConfigColumnsForView, getDefaultLevel1TasksForProjectType, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
 import { useProjectStore } from '@/stores/project'
 import { useHasGlobalPermission } from '@/stores/permission'
@@ -194,7 +194,7 @@ export default function ConfigContainer() {
     : isTechnicalTemplate
     ? configTemplateTasksByType[technicalTemplateKey] || []
     : getTemplateTasksForProjectType(configTemplateTasksByType, selectedTemplateType)
-      || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
+      || getDefaultLevel1TasksForProjectType(selectedTemplateType, false)
   const setConfigTasks = (next: any[] | ((prev: any[]) => any[])) => {
     if (isLevel3Template) {
       setLevel3TemplateTasks(isCurrentDraft ? level3DraftKey : selectedTemplateType, next as Level3TemplateActivity[] | ((prev: Level3TemplateActivity[]) => Level3TemplateActivity[]))
@@ -206,7 +206,7 @@ export default function ConfigContainer() {
     }
     setConfigTemplateTasksByType(prev => {
       const current = getTemplateTasksForProjectType(prev, selectedTemplateType)
-        || LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
+        || getDefaultLevel1TasksForProjectType(selectedTemplateType, false)
       const resolved = typeof next === 'function' ? next(current) : next
       return { ...prev, [selectedTemplateType]: resolved }
     })
@@ -504,7 +504,7 @@ export default function ConfigContainer() {
       ? configTasks.map(task => ({ ...task }))
       : isTechnicalTemplate
       ? configTasks.map(task => ({ ...task }))
-      : LEVEL1_TEMPLATE_TASKS.map(t => ({ ...t }))
+      : getDefaultLevel1TasksForProjectType(selectedTemplateType, false)
     const newVersion = { id: newVersionId, versionNo: newVersionNo, status: '修订中' }
     setVersions([...versions, newVersion])
     if (isLevel3Template) setLevel3TemplateTasks(`${selectedTemplateType}::${newVersionId}`, clonedTasks as Level3TemplateActivity[])

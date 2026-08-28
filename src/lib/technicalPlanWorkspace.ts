@@ -1,5 +1,58 @@
-import type { TechnicalTemplateTask } from '@/types/technicalPlan'
-import { projectLevel1Plan, sumLevel1EstimatedDays } from '@/lib/level1PlanRules'
+import type { TechnicalTemplateKind, TechnicalTemplateTask } from '@/types/technicalPlan'
+import type { FilterFieldDefinition } from '@/lib/filterConditions'
+import {
+  projectLevel1FlatMilestones,
+  projectLevel1Plan,
+  projectTechnicalSubprojectRows,
+  sumLevel1EstimatedDays,
+  type Level1FlatMilestoneRow,
+} from '@/lib/level1PlanRules'
+
+export const TECHNICAL_TDT_EXPORT_COLUMNS = [
+  { key: 'sequence', title: '序号' },
+  { key: 'stageName', title: '阶段' },
+  { key: 'milestoneName', title: '里程碑点' },
+  { key: 'status', title: '状态' },
+  { key: 'planEndDate', title: '计划完成时间' },
+  { key: 'estimatedDays', title: '计划开发周期' },
+  { key: 'actualEndDate', title: '实际完成时间' },
+  { key: 'actualDays', title: '实际开发周期' },
+] as const
+
+export const TECHNICAL_SUBPROJECT_EXPORT_COLUMNS = [
+  { key: 'sequence', title: '序号' },
+  { key: 'activityName', title: '活动名称' },
+  { key: 'status', title: '状态' },
+  { key: 'planStartDate', title: '计划开始时间' },
+  { key: 'planEndDate', title: '计划完成时间' },
+  { key: 'estimatedDays', title: '计划周期' },
+  { key: 'actualStartDate', title: '实际开始时间' },
+  { key: 'actualEndDate', title: '实际完成时间' },
+  { key: 'actualDays', title: '实际周期' },
+] as const
+
+export const TECHNICAL_TDT_FILTER_FIELDS: readonly FilterFieldDefinition[] = [
+  { key: 'sequence', label: '序号', kind: 'text' },
+  { key: 'stageName', label: '阶段', kind: 'text' },
+  { key: 'milestoneName', label: '里程碑点', kind: 'text' },
+  { key: 'status', label: '状态', kind: 'enum' },
+  { key: 'planEndDate', label: '计划完成时间', kind: 'date' },
+  { key: 'estimatedDays', label: '计划开发周期', kind: 'text' },
+  { key: 'actualEndDate', label: '实际完成时间', kind: 'date' },
+  { key: 'actualDays', label: '实际开发周期', kind: 'text' },
+]
+
+export const TECHNICAL_SUBPROJECT_FILTER_FIELDS: readonly FilterFieldDefinition[] = [
+  { key: 'sequence', label: '序号', kind: 'text' },
+  { key: 'activityName', label: '活动名称', kind: 'text' },
+  { key: 'status', label: '状态', kind: 'enum' },
+  { key: 'planStartDate', label: '计划开始时间', kind: 'date' },
+  { key: 'planEndDate', label: '计划完成时间', kind: 'date' },
+  { key: 'estimatedDays', label: '计划周期', kind: 'text' },
+  { key: 'actualStartDate', label: '实际开始时间', kind: 'date' },
+  { key: 'actualEndDate', label: '实际完成时间', kind: 'date' },
+  { key: 'actualDays', label: '实际周期', kind: 'text' },
+]
 
 export const TECHNICAL_PLAN_EXPORT_COLUMNS = [
   { key: 'id', title: '序号' },
@@ -12,6 +65,89 @@ export const TECHNICAL_PLAN_EXPORT_COLUMNS = [
   { key: 'actualDays', title: '实际工期' },
   { key: 'delayStatus', title: '是否延期' },
 ] as const
+
+export const getTechnicalPlanExportColumns = (templateKind: TechnicalTemplateKind) => (
+  templateKind === 'subproject' ? TECHNICAL_SUBPROJECT_EXPORT_COLUMNS : TECHNICAL_TDT_EXPORT_COLUMNS
+)
+
+const DEFAULT_TECHNICAL_STATUS_OPTIONS = ['未开始', '进行中', '已完成'].map(value => ({ label: value, value }))
+
+export const getTechnicalPlanFilterFields = (
+  templateKind: TechnicalTemplateKind,
+  rows: readonly { status?: unknown }[] = [],
+): FilterFieldDefinition[] => {
+  const statusOptions = Array.from(new Set(rows
+    .map(row => typeof row.status === 'string' ? row.status.trim() : '')
+    .filter(Boolean)))
+    .map(value => ({ label: value, value }))
+  const fields = templateKind === 'subproject' ? TECHNICAL_SUBPROJECT_FILTER_FIELDS : TECHNICAL_TDT_FILTER_FIELDS
+  return fields.map(field => field.key === 'status'
+    ? { ...field, options: statusOptions.length ? statusOptions : DEFAULT_TECHNICAL_STATUS_OPTIONS.map(option => ({ ...option })) }
+    : { ...field })
+}
+
+export const getTechnicalPlanRowKey = (task: Pick<TechnicalTemplateTask, 'id' | 'stableId'>) => (
+  task.stableId || task.id
+)
+
+export const projectTechnicalPlanRows = (
+  templateKind: TechnicalTemplateKind,
+  tasks: readonly TechnicalTemplateTask[],
+): Level1FlatMilestoneRow[] => (
+  templateKind === 'subproject'
+    ? projectTechnicalSubprojectRows(tasks)
+    : projectLevel1FlatMilestones(tasks)
+)
+
+export const filterTechnicalPlanGanttTasks = <T extends { id: string; parentId?: string }>(
+  tasks: readonly T[],
+  templateKind: TechnicalTemplateKind,
+  rows: readonly Pick<Level1FlatMilestoneRow, 'id' | 'stageId'>[],
+): T[] => {
+  const visibleIds = new Set(rows.map(row => row.id))
+  if (templateKind === 'subproject') return tasks.filter(task => visibleIds.has(task.id))
+  rows.forEach(row => {
+    if (row.stageId) visibleIds.add(row.stageId)
+  })
+  return tasks.filter(task => visibleIds.has(task.id))
+}
+
+export interface TechnicalSubprojectTransferScopeToken {
+  projectId: string
+  tabId: string
+  scopeKey: string
+  versionId: string
+  user: string
+}
+
+export const canConfirmTechnicalSubprojectTransfer = ({
+  opening,
+  current,
+  isCurrentDraft,
+  isEditMode,
+  canMaintain,
+  canView,
+  canEdit,
+}: {
+  opening: TechnicalSubprojectTransferScopeToken
+  current: TechnicalSubprojectTransferScopeToken
+  isCurrentDraft: boolean
+  isEditMode: boolean
+  canMaintain: boolean
+  canView: boolean
+  canEdit: boolean
+}) => isCurrentDraft
+  && isEditMode
+  && canView
+  && canEdit
+  && canMaintain
+  && opening.projectId === current.projectId
+  && opening.tabId === current.tabId
+  && opening.scopeKey === current.scopeKey
+  && opening.versionId === current.versionId
+  && opening.user === current.user
+
+export const canConfirmTechnicalSubprojectMutation = canConfirmTechnicalSubprojectTransfer
 
 export function selectVisibleTechnicalPlanVersions<T extends { status: string }>(
   versions: readonly T[],
