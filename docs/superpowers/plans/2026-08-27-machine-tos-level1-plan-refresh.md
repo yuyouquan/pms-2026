@@ -772,7 +772,7 @@ Only add modal/compare files if RED required actual changes; do not stage untouc
 - Modify: `screenshots/verify-level1-flat-milestone-gantt-browser.mjs`
 - Modify: `docs/superpowers/plans/2026-08-27-machine-tos-level1-plan-refresh.md`
 
-- [ ] **Step 1: Audit the pre-written browser matrix against the approved design**
+- [x] **Step 1: Audit the pre-written browser matrix against the approved design**
 
 Confirm the browser tests written before Tasks 6 and 7 cover these observable contracts without using store/test hooks:
 
@@ -800,7 +800,7 @@ The pre-written real interactions must cover:
 10. vertical/horizontal exports trigger downloads with the expected header cells;
 11. existing TDT and technical-subproject cases still pass unchanged.
 
-- [ ] **Step 2: Run focused browser cases to GREEN**
+- [x] **Step 2: Run focused browser cases to GREEN**
 
 ```bash
 PMS_BROWSER_CASE=machine npm run verify:level1-flat-gantt-browser
@@ -810,7 +810,7 @@ PMS_BROWSER_CASE=technical npm run verify:level1-flat-gantt-browser
 
 Expected: all three exit 0, emit actual before/after dates, and report zero unexpected console errors/page errors.
 
-- [ ] **Step 3: Run the complete browser matrix**
+- [x] **Step 3: Run the complete browser matrix**
 
 ```bash
 PMS_BROWSER_CASE=all npm run verify:level1-flat-gantt-browser
@@ -818,9 +818,17 @@ PMS_BROWSER_CASE=all npm run verify:level1-flat-gantt-browser
 
 Expected: PASS and a nonempty executed-case list. `PMS_BROWSER_CASE=__typo__` must exit nonzero.
 
-- [ ] **Step 4: Record evidence and commit**
+- [x] **Step 4: Record evidence and commit**
 
 Check off the executed commands in this plan and record the observed date values, rejected format, red error text, and basic-info values. Then:
+
+Evidence recorded on 2026-08-28 against `0efcc01` before the Task 8 commit:
+
+- Public surface and SPM: machine and tOS both opened in horizontal mode, then rendered the governed nine-column vertical tree with expanders. Machine created a fresh revision, proposed/added `MR4` under `上市阶段`, saved plan/actual `2028-01-04..2028-01-08` (`5天`), proved the two-step confirmation, reorder-before-confirm/cancel/confirm behavior, deleted `MR5`, and retained `MR4` after reopening. tOS added launch `16.1.0.005` (`2027-05-01..2027-05-05`, `5天`) and maintenance `16.1.0.010` (`2027-06-10..2027-06-14`, `5天`). The public modal rejected `16.2.0.005`, `16.1.0.003`, and `16.1.0.05` with the exact notice `版本号必须符合 16.1.0.XXX，且尾号最后一位为0或5`; legal nodes and dates survived reopening.
+- Validation and Gantt: machine set `STR1=2026-02-25` after `概念启动=2026-02-26`; the DatePicker turned red and the Tooltip read exactly `STR1：计划完成时间不得早于上一节点“概念启动”`. Publishing was blocked and returned to the expanded vertical row with `planEndDate` focused. A fixed milestone moved `2026-02-26 -> 2026-03-01` by completion-only Gantt drag. The invalid rollback retained date `2026-03-16` and x-coordinate `810.1005249023438`, with toast `计划完成时间不得早于上一节点“概念启动”`. Business `MR4` moved `2028-01-04..2028-01-08` (`5天`) to `2028-01-03..2028-01-07` (`5天`), then resized to end `2028-01-06` (`4天`); stage bars remained read-only. tOS fixed milestone moved `2026-04-29 -> 2026-05-01`, and maintenance persisted through resized end `2027-06-12`.
+- Permission/history/latest-published: ordinary member `王五` could view but had no maintenance actions; SPM `赵六` could add business nodes but had no generic/fixed delete; super-admin `张三` added/deleted a generic stage/child and deleted a fixed node/stage with reopen persistence. Published history exposed no editing. Latest-published machine actual changed `2026-02-27 -> 2026-02-28`; its four-field summary changed from `{"planStartDate":"2026-02-26","planEndDate":"2026-12-15","actualStartDate":"2026-02-27","actualEndDate":"2026-12-15"}` to `{"planStartDate":"2026-02-26","planEndDate":"2026-12-15","actualStartDate":"2026-02-28","actualEndDate":"2026-12-16"}` after two scoped actual updates and reopen, while draft `STR4A=2026-10-13` did not replace the published summary. tOS published actual `2027-05-11..2027-05-22` (`12天`) and paired-draft `2027-05-15..2027-05-22` (`8天`) proved field-level merge: planned dates, the other actual field, and both custom nodes survived reopening. Follow market `TR` retained detached `MR4` actual `2028-01-04..2028-01-10` (`7天`) across main-market publish, cancel-follow, and re-follow.
+- Compare/export/technical: governed compare was nonempty, contained the changed milestone (`概念启动`/`STR5` as exercised), and exposed exactly `序号、变更类型、阶段/节点、计划开始、计划完成、预估工期、实际开始、实际完成、实际工期、是否延期`. Four real xlsx downloads were parsed: horizontal current/all began `版本、开发周期`, contained stage/node plus version/actual rows, and every exported cycle equalled the displayed numeric cycle; vertical current/all used the exact nine governed headers and contained `概念阶段`/`概念启动`. TDT retained its eight-column contract and moved `TDR1 2026-03-15 -> 2026-03-01`; technical subproject retained nine columns, added `第3版转测`, moved `2026-01-21..2026-03-31 -> 2026-02-01..2026-04-11`, resized to `2026-02-01..2026-05-01`, and preserved it through reopen/compare.
+- Gate results: focused `machine`, `tos`, and `technical` exited 0. Final `PMS_BROWSER_CASE=all` exited 0 after truly executing `machine`, `machine-summary`, `machine-invalid`, `machine-follow-actual`, `tos-surface`, `tos`, and `technical`; each emitted a PASS with exactly zero unexpected console errors/page errors. `PMS_BROWSER_CASE=__typo__` exited 1 with `unknown PMS_BROWSER_CASE="__typo__"`.
 
 ```bash
 git add screenshots/verify-level1-flat-milestone-gantt-browser.mjs docs/superpowers/plans/2026-08-27-machine-tos-level1-plan-refresh.md

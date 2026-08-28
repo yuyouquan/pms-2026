@@ -14,6 +14,7 @@ import * as XLSX from 'xlsx'
 
 const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const TIMEOUT = Number(process.env.PMS_BROWSER_TIMEOUT || 30_000)
+const CASE_TIMEOUT = Number(process.env.PMS_BROWSER_CASE_TIMEOUT || 360_000)
 const ONLY_CASE = process.env.PMS_BROWSER_CASE || ''
 const VALID_BROWSER_CASES = new Set(['', 'all', 'machine', 'machine-surface', 'machine-summary', 'machine-structure', 'machine-reorder', 'machine-invalid', 'machine-follow-actual', 'machine-permission', 'tos', 'tos-surface', 'technical'])
 export const shouldRunTask7FocusedBrowserCase = (requestedCase, focusedCase) => (
@@ -90,7 +91,7 @@ const clickButtonText = async (page, text) => {
 const clickDialogButton = async (page, title, text) => {
   await page.mouse.move(4, 4)
   await wait(120)
-  const target = await page.evaluate(({ dialogTitle, buttonText }) => {
+  const readTarget = () => page.evaluate(({ dialogTitle, buttonText }) => {
     const visible = node => {
       const rect = node.getBoundingClientRect()
       const style = getComputedStyle(node)
@@ -112,6 +113,12 @@ const clickDialogButton = async (page, title, text) => {
       hitClassName: typeof hit?.className === 'string' ? hit.className : '',
     }
   }, { dialogTitle: title, buttonText: text })
+  let target = await readTarget()
+  const pointerDeadline = Date.now() + TIMEOUT
+  while (target && !target.hitButton && Date.now() < pointerDeadline) {
+    await wait(250)
+    target = await readTarget()
+  }
   if (!target) throw new Error(`missing dialog button ${title} / ${text}`)
   assert.ok(target.hitButton, `dialog button is pointer-accessible above drag layers: ${JSON.stringify(target)}`)
   await page.mouse.click(target.x + target.width / 2, target.y + target.height / 2)
@@ -437,6 +444,43 @@ const treeActualDays = async (page, table, name) => page.$eval(table, (element, 
   const row = [...element.querySelectorAll('tbody tr')].find(item => item.textContent?.includes(taskName))
   return row?.querySelectorAll('td')[7]?.textContent?.trim() || null
 }, name)
+const treePlannedDays = async (page, table, name) => page.$eval(table, (element, taskName) => {
+  const row = [...element.querySelectorAll('tbody tr')].find(item => item.textContent?.includes(taskName))
+  return row?.querySelectorAll('td')[4]?.textContent?.trim() || null
+}, name)
+const replaceAriaInputValue = async (page, label, value) => {
+  const input = await page.$(`[aria-label="${label}"]`)
+  const box = await input?.boundingBox()
+  if (!box) throw new Error(`missing visible input ${label}`)
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { clickCount: 3 })
+  await page.keyboard.down('Control')
+  await page.keyboard.press('A')
+  await page.keyboard.up('Control')
+  await page.keyboard.type(value)
+  await page.waitForFunction(({ ariaLabel, expected }) => document.querySelector(`[aria-label="${ariaLabel}"]`)?.value === expected, { timeout: TIMEOUT }, { ariaLabel: label, expected: value })
+}
+const latestMessageText = page => page.$$eval('.ant-message-notice-content', nodes => nodes
+  .filter(node => node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().height > 0)
+  .at(-1)?.textContent?.trim() || '')
+const assertTosBusinessNameRejected = async (page, table, name, expectedMessage) => {
+  await replaceAriaInputValue(page, '业务节点名称', name)
+  await page.waitForFunction(text => ![...document.querySelectorAll('.ant-message-notice-content')]
+    .some(node => node.getBoundingClientRect().width > 0 && node.textContent?.trim() === text), { timeout: TIMEOUT }, expectedMessage)
+  await clickDialogButton(page, '输入 tOS 版本名称', '确认添加')
+  await page.waitForFunction(text => [...document.querySelectorAll('.ant-message-notice-content')]
+    .some(node => node.getBoundingClientRect().width > 0 && node.textContent?.trim() === text), { timeout: TIMEOUT }, expectedMessage)
+  assert.equal(await latestMessageText(page), expectedMessage, `${name} is rejected with the exact public validation message`)
+  assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => node.value), name, `${name} rejection keeps the name dialog open`)
+  assert.ok(!(await textOf(page, table)).includes(name), `${name} rejection does not insert a tOS business node`)
+}
+const openBusinessInsertion = async (page, actionLabel, parentStage) => {
+  await pressAriaButton(page, actionLabel)
+  await page.waitForFunction(label => document.body.innerText.includes(label), { timeout: TIMEOUT }, actionLabel === '添加tOS版本' ? '是否添加 tOS 版本？' : '是否添加 MR 里程碑？')
+  await chooseSelectOption(page, '业务父阶段', parentStage)
+  await clickDialogButton(page, actionLabel === '添加tOS版本' ? '是否添加 tOS 版本？' : '是否添加 MR 里程碑？', '下一步')
+  await page.waitForFunction(label => document.body.innerText.includes(label), { timeout: TIMEOUT }, actionLabel === '添加tOS版本' ? '输入 tOS 版本名称' : '输入 MR 里程碑名称')
+}
+const inclusiveDays = (start, end) => Math.round((new Date(`${end}T00:00:00Z`) - new Date(`${start}T00:00:00Z`)) / 86_400_000) + 1
 const visibleMarketScopes = async page => page.$$eval('[role="button"][aria-label^="市场 "]', nodes => nodes
   .filter(node => {
     const box = node.getBoundingClientRect()
@@ -811,7 +855,7 @@ const chooseSelectOption = async (page, ariaLabel, matching, attempt = 0) => {
     return control?.closest('.ant-select')?.textContent?.trim() || ''
   }, ariaLabel)
   if (!selectedText.includes(matching) && attempt < 1) {
-    await page.keyboard.press('Escape')
+    await clickDialogButton(page, '确认调整节点顺序？', '取消')
     await wait(250)
     return chooseSelectOption(page, ariaLabel, matching, attempt + 1)
   }
@@ -1042,6 +1086,19 @@ const ensureDraft = async page => {
   return 'existing'
 }
 
+const recreateFormalRevision = async page => {
+  if (await page.$('button[aria-label="取消修订"]')) {
+    await pressAriaButton(page, '取消修订')
+    await clickDialogButton(page, '取消修订版本', '确认取消')
+    await waitForDialogToClose(page, '取消修订版本')
+    await page.waitForFunction(() => {
+      const button = document.querySelector('button[aria-label="创建修订"]')
+      return button instanceof HTMLButtonElement && !button.disabled
+    }, { timeout: TIMEOUT })
+  }
+  assert.ok(await createFormalRevision(page), 'a new formal revision is available after cancelling any existing draft')
+}
+
 const reopenProjectInContext = async (page, errors, project, tab) => {
   const context = page.browserContext()
   await page.close()
@@ -1057,7 +1114,7 @@ const assertNoErrors = errors => assert.deepEqual(errors, [], `browser errors:\n
 
 const attachPageChecks = (page, errors) => {
   page.setDefaultTimeout(TIMEOUT)
-  page.on('pageerror', error => errors.push(`pageerror: ${error.message}`))
+  page.on('pageerror', error => errors.push(`pageerror: ${error instanceof Error ? error.message : `non-Error payload ${String(error)}`}`))
   page.on('console', message => {
     if (!['error', 'warn'].includes(message.type())) return
     if (isAllowedConsoleMessage(message)) return
@@ -1077,10 +1134,16 @@ const runCase = async (title, test) => {
     attachPageChecks(page, errors)
     try {
       await page.setViewport({ width: 1600, height: 1080 })
-      await test(page, errors)
+      let watchdog
+      await Promise.race([
+        test(page, errors),
+        new Promise((_, reject) => {
+          watchdog = setTimeout(() => reject(new Error(`case watchdog exceeded ${CASE_TIMEOUT}ms: ${title}`)), CASE_TIMEOUT)
+        }),
+      ]).finally(() => clearTimeout(watchdog))
       await wait(350)
       assertNoErrors(errors)
-      console.log(`PASS browser ${title}`)
+      console.log(`PASS browser ${title}; console/page errors 0`)
     } finally {
       try {
         await context.close()
@@ -1098,6 +1161,31 @@ const runCase = async (title, test) => {
 }
 
 try {
+  if (ONLY_CASE === 'all') {
+    const focusedCases = [
+      'machine',
+      'machine-summary',
+      'machine-invalid',
+      ...(shouldRunTask7FocusedBrowserCase(ONLY_CASE, 'machine-follow-actual') ? ['machine-follow-actual'] : []),
+      'tos-surface',
+      'tos',
+      'technical',
+    ]
+    for (const focusedCase of focusedCases) {
+      console.log(`RUN browser all -> ${focusedCase}`)
+      const focusedResult = spawnSync(process.execPath, [process.argv[1]], {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        timeout: CASE_TIMEOUT * 3,
+        maxBuffer: 32 * 1024 * 1024,
+        env: { ...process.env, PMS_BROWSER_CASE: focusedCase },
+      })
+      if (focusedResult.stdout) process.stdout.write(focusedResult.stdout)
+      if (focusedResult.stderr) process.stderr.write(focusedResult.stderr)
+      assert.equal(focusedResult.status, 0, `browser all includes a green ${focusedCase} focused case; signal=${focusedResult.signal || 'none'}`)
+      executedCases += 1
+    }
+  } else {
   if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'machine' || ONLY_CASE === 'machine-surface' || ONLY_CASE === 'machine-structure' || ONLY_CASE === 'machine-reorder' || ONLY_CASE === 'machine-invalid' || ONLY_CASE === 'machine-follow-actual') await runCase('machine tree table, governed business nodes and mixed gantt', async (initialPage, errors) => {
     let page = initialPage
     await enterProject(page, 'X6877-D8400_H991')
@@ -1138,6 +1226,8 @@ try {
     }
     assert.ok(await page.$(`${table} .ant-table-row-expand-icon`), 'tree table renders real expanders')
     console.log('browser machine tree table contract passed')
+    await recreateFormalRevision(page)
+    assert.match(await page.$eval('[aria-label="计划版本"]', control => control.closest('.ant-select')?.textContent || ''), /修订中/, 'machine SPM creates a fresh formal revision through the public revision menu')
 
     await clickButtonText(page, '添加MR里程碑')
     await page.waitForFunction(() => document.body.innerText.includes('是否添加 MR 里程碑？'), { timeout: TIMEOUT })
@@ -1153,6 +1243,20 @@ try {
     assert.ok((await textOf(page, table)).includes('MR4'), 'confirmed MR4 is visible under its selected tree parent')
     assert.ok(await page.$('button[aria-label="删除节点 MR4"]'), 'custom business node has a delete affordance')
     assert.ok(await page.$('button[aria-label="删除节点 概念启动"]'), 'super-admin can discover the fixed-template delete exception')
+    await editTreeDate(page, table, 'MR4', 'planStartDate', '2028-01-04')
+    await editTreeDate(page, table, 'MR4', 'planEndDate', '2028-01-08')
+    await editTreeDate(page, table, 'MR4', 'actualStartDate', '2028-01-04')
+    await editTreeDate(page, table, 'MR4', 'actualEndDate', '2028-01-08')
+    assert.deepEqual({
+      planStart: await treeDate(page, table, 'MR4', 'planStartDate'),
+      planEnd: await treeDate(page, table, 'MR4', 'planEndDate'),
+      actualStart: await treeDate(page, table, 'MR4', 'actualStartDate'),
+      actualEnd: await treeDate(page, table, 'MR4', 'actualEndDate'),
+      plannedDays: await treePlannedDays(page, table, 'MR4'),
+      actualDays: await treeActualDays(page, table, 'MR4'),
+    }, {
+      planStart: '2028-01-04', planEnd: '2028-01-08', actualStart: '2028-01-04', actualEnd: '2028-01-08', plannedDays: '5天', actualDays: '5天',
+    }, 'machine MR4 accepts all four dates and derives both inclusive five-day durations')
     console.log('browser machine MR confirmation and structure contract passed')
 
     if (ONLY_CASE === 'machine-follow-actual') {
@@ -1162,10 +1266,6 @@ try {
       const followMarket = preconfiguredFollowMarket || marketScopes.find(scope => scope.market !== mainMarket)?.market
       assert.ok(mainMarket && followMarket, `machine exposes a main and candidate follow market: ${JSON.stringify(marketScopes)}`)
       assert.equal(marketScopes.find(scope => scope.selected)?.market, mainMarket, 'follow-market fixture starts in the main-market draft')
-      await editTreeDate(page, table, 'MR4', 'planStartDate', '2028-01-04')
-      await editTreeDate(page, table, 'MR4', 'planEndDate', '2028-01-08')
-      await editTreeDate(page, table, 'MR4', 'actualStartDate', '2028-01-04')
-      await editTreeDate(page, table, 'MR4', 'actualEndDate', '2028-01-08')
       assert.equal(await treeActualDays(page, table, 'MR4'), '5天', 'main draft business actual duration is inclusive')
 
       // Re-following through the public market editor materializes a normal
@@ -1219,23 +1319,27 @@ try {
     }
 
     if (ONLY_CASE === 'machine-invalid') {
-      await editTreeDate(page, table, 'MR4', 'planStartDate', '2028-01-04')
-      await editTreeDate(page, table, 'MR4', 'planEndDate', '2028-01-08')
-      await editTreeDate(page, table, 'MR4', 'planStartDate', '2028-01-11')
-      const invalidPicker = `${table} tr[data-row-key^="business-period-"] td[data-field="planStartDate"] .pms-level1-date-input-invalid`
-      assert.ok(await page.$(invalidPicker), 'focused invalid case renders a red DatePicker')
-      await hoverVisibleSelector(page, `${table} .pms-level1-date-tooltip-target:has(.pms-level1-date-input-invalid)`)
-      await page.waitForFunction(taskName => document.body.innerText.includes(`${taskName}：`), { timeout: TIMEOUT }, 'MR4')
-      await collapseTreeStage(page, table, machineBusinessParent)
+      const previousFixedDate = await treeDate(page, table, '概念启动', 'planEndDate')
+      const invalidFixedDate = addIsoDays(previousFixedDate, -1)
+      await editTreeDate(page, table, 'STR1', 'planEndDate', invalidFixedDate)
+      const invalidPicker = `${table} td[data-field="planEndDate"]:has([aria-label="planEndDate STR1"]) .pms-level1-date-input-invalid`
+      assert.ok(await page.$(invalidPicker), 'focused fixed-order case renders a red DatePicker on STR1')
+      await hoverVisibleSelector(page, `${table} td[data-field="planEndDate"]:has([aria-label="planEndDate STR1"]) .pms-level1-date-tooltip-target`)
+      const exactReason = 'STR1：计划完成时间不得早于上一节点“概念启动”'
+      await page.waitForFunction(reason => [...document.querySelectorAll('.ant-tooltip')]
+        .some(node => node.getBoundingClientRect().width > 0 && node.textContent?.trim() === reason), { timeout: TIMEOUT }, exactReason)
+      assert.equal(await page.evaluate(() => [...document.querySelectorAll('.ant-tooltip')]
+        .find(node => node.getBoundingClientRect().width > 0)?.textContent?.trim() || ''), exactReason, 'fixed-order Tooltip contains the exact node name and reason')
+      await collapseTreeStage(page, table, '概念阶段')
       await selectView(page, '横版表格')
       await pressAriaButton(page, '发布')
       await page.waitForFunction(() => document.body.innerText.includes('任务校验不通过，无法发布'), { timeout: TIMEOUT })
       await page.waitForFunction(() => Boolean(document.querySelector('.pms-plan-view-mode-switcher input[aria-label="竖版表格"]:checked')), { timeout: TIMEOUT })
       await page.waitForSelector(invalidPicker, { timeout: TIMEOUT })
-      await page.waitForFunction(() => document.activeElement?.closest('[data-field]')?.getAttribute('data-field') === 'planStartDate', { timeout: TIMEOUT })
+      await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'planEndDate STR1', { timeout: TIMEOUT })
       const focusedRowText = await page.evaluate(() => document.activeElement?.closest('tr')?.textContent || '')
-      assert.ok(focusedRowText.includes('MR4'), 'focused invalid case resolves the stable hidden row after restoring vertical view')
-      console.log('browser machine invalid tooltip/hidden focus contract passed')
+      assert.ok(focusedRowText.includes('STR1'), 'focused fixed-order case resolves the stable hidden STR1 row after restoring vertical view')
+      console.log(`browser machine fixed invalid STR1=${invalidFixedDate} after 概念启动=${previousFixedDate}; tooltip=${exactReason}; publish blocked and focused`)
       return
     }
 
@@ -1288,11 +1392,18 @@ try {
         .filter(Boolean)
       return order.join(',') === 'MR5,MR4'
     }, { timeout: TIMEOUT }, { selector: table, names: ['MR4', 'MR5'] })
+    await pressAriaButton(page, '删除节点 MR5')
+    await clickButtonText(page, '确认')
+    await page.waitForFunction(selector => !document.querySelector(selector)?.textContent?.includes('MR5'), { timeout: TIMEOUT }, table)
+    page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+    await selectView(page, '竖版表格')
+    if (await page.$eval('button[aria-label="切换当前用户"]', node => node.getAttribute('data-current-user')) !== '赵六') {
+      await switchUser(page, '赵六')
+    }
+    assert.ok(!(await textOf(page, table)).includes('MR5') && (await textOf(page, table)).includes('MR4'), 'SPM business deletion survives same-context reopen without removing MR4')
     await switchUser(page, '张三')
     console.log('browser machine SPM reorder confirmation/cancel contract passed')
 
-    await editTreeDate(page, table, 'MR4', 'planStartDate', '2028-01-04')
-    await editTreeDate(page, table, 'MR4', 'planEndDate', '2028-01-08')
     assert.deepEqual({
       start: await treeDate(page, table, 'MR4', 'planStartDate'),
       end: await treeDate(page, table, 'MR4', 'planEndDate'),
@@ -1323,6 +1434,25 @@ try {
     assert.notEqual(afterDate, beforeDate, `milestone ${before} drag writes a changed plan date to the tree table`)
     console.log(`browser machine milestone date ${beforeDate} -> ${afterDate}`)
 
+    const str1Date = await treeDate(page, table, 'STR1', 'planEndDate')
+    const rollbackDate = addIsoDays(str1Date, -1)
+    await editTreeDate(page, table, draggedMilestoneName, 'planEndDate', rollbackDate)
+    await selectView(page, '甘特图')
+    await selectGanttScale(page, '日')
+    const rollbackTaskId = await ganttTaskIdForName(page, draggedMilestoneName)
+    const rollbackSelector = `.gantt_task_line.pms-gantt-milestone.pms-gantt-task-editable[task_id="${rollbackTaskId}"]`
+    const rollbackXBefore = (await page.$(rollbackSelector)) && (await page.$eval(rollbackSelector, node => node.getBoundingClientRect().x))
+    const rollbackDrag = await dragTask(page, rollbackSelector, 120)
+    assert.ok(rollbackDrag.sawDragMove, 'invalid milestone drag enters the real DHTMLX move state before rejection')
+    const rollbackToast = '计划完成时间不得早于上一节点“概念启动”'
+    await page.waitForFunction(text => [...document.querySelectorAll('.ant-message-notice-content')]
+      .some(node => node.textContent?.trim() === text), { timeout: TIMEOUT }, rollbackToast)
+    const rollbackXAfter = await page.$eval(rollbackSelector, node => node.getBoundingClientRect().x)
+    assert.ok(Math.abs(rollbackXAfter - rollbackXBefore) < 1, `invalid gantt rollback restores the public bar x coordinate: ${rollbackXBefore} -> ${rollbackXAfter}`)
+    await selectView(page, '竖版表格')
+    assert.equal(await treeDate(page, table, draggedMilestoneName, 'planEndDate'), rollbackDate, 'invalid gantt drag leaves the persisted completion date unchanged')
+    console.log(`browser machine invalid gantt rollback toast=${rollbackToast}; x=${rollbackXBefore}->${rollbackXAfter}; date=${rollbackDate}`)
+
     for (const stageName of ['概念阶段', '计划阶段', '开发阶段', '验证阶段']) {
       await collapseTreeStage(page, table, stageName)
     }
@@ -1339,9 +1469,11 @@ try {
     const movedBusiness = {
       start: await treeDate(page, table, 'MR4', 'planStartDate'),
       end: await treeDate(page, table, 'MR4', 'planEndDate'),
+      duration: await treePlannedDays(page, table, 'MR4'),
     }
     assert.notEqual(movedBusiness.start, '2028-01-04', 'business move writes the planned start boundary')
     assert.notEqual(movedBusiness.end, '2028-01-08', 'business move writes the planned completion boundary')
+    assert.equal(movedBusiness.duration, '5天', 'business move preserves the inclusive five-day duration')
     await selectView(page, '甘特图')
     const resizedBusinessTaskId = await ganttTaskIdForName(page, 'MR4')
     assert.ok(resizedBusinessTaskId, 'moved business period remains in the public gantt grid')
@@ -1349,15 +1481,19 @@ try {
     await resizeTaskEnd(page, `.gantt_task_line.pms-gantt-task.pms-gantt-task-editable[task_id="${resizedBusinessTaskId}"]`, -60)
     await selectView(page, '竖版表格')
     const resizedBusinessEnd = await treeDate(page, table, 'MR4', 'planEndDate')
+    const resizedBusinessDays = await treePlannedDays(page, table, 'MR4')
     assert.notEqual(resizedBusinessEnd, movedBusiness.end, 'business resize writes a changed planned completion')
+    assert.equal(resizedBusinessDays, `${inclusiveDays(movedBusiness.start, resizedBusinessEnd)}天`, 'business resize recomputes the inclusive planned duration from the public dates')
+    assert.notEqual(resizedBusinessDays, movedBusiness.duration, 'business resize changes the inclusive planned duration')
+    console.log(`browser machine business plan 2028-01-04..2028-01-08=5天 -> move ${JSON.stringify(movedBusiness)} -> resize end=${resizedBusinessEnd}, duration=${resizedBusinessDays}`)
 
     page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
     await selectView(page, '竖版表格')
     await page.waitForSelector(table, { timeout: TIMEOUT })
     assert.ok((await textOf(page, table)).includes('MR4'), `business node ${before} survives same-context new-page persistence`)
-    assert.equal(await treeDate(page, table, draggedMilestoneName, 'planEndDate'), afterDate, 'machine milestone drag survives same-context new-page persistence')
+    assert.equal(await treeDate(page, table, draggedMilestoneName, 'planEndDate'), rollbackDate, 'machine accepted milestone edit and rejected gantt candidate survive same-context new-page persistence')
     assert.equal(await treeDate(page, table, 'MR4', 'planEndDate'), resizedBusinessEnd, 'business resize survives same-context new-page persistence')
-    console.log(`browser machine milestone date after reopening ${afterDate}`)
+    console.log(`browser machine milestone date after reopening ${rollbackDate}`)
     console.log('browser machine MR4 persisted after reopening')
 
     const invalidStart = addIsoDays(resizedBusinessEnd, 3)
@@ -1432,6 +1568,7 @@ try {
     assert.deepEqual(await visibleCompareHeaders(page), ['序号', '变更类型', '阶段/节点', '计划开始', '计划完成', '预估工期', '实际开始', '实际完成', '实际工期', '是否延期'], 'machine governed comparison exposes exactly ten tree fields')
     assert.ok((await visibleCompareTableText(page)).includes(actualBoundary.name), 'machine governed comparison contains the changed task row')
     await pressAriaButton(page, 'Close')
+    await waitForDialogToClose(page, '历史版本对比')
 
     await chooseVersion(page, '修订中')
     await selectView(page, '竖版表格')
@@ -1525,6 +1662,13 @@ try {
     await editTreeDate(page, table, '概念启动', 'actualEndDate', latestActualDate)
     assert.notEqual(latestActualDate, v3ActualBefore, 'latest published actual completion edit chooses a different legal date')
     assert.equal(await treeDate(page, table, '概念启动', 'actualEndDate'), latestActualDate, 'latest published actual completion saves through the public DatePicker')
+    const latestPublishedSummaryAfterFirstActual = await readTreeSummary(page, table)
+    assert.equal(latestPublishedSummaryAfterFirstActual.actualStartDate, latestActualDate, 'editing the earliest fixed actual completion refreshes the derived actual-start boundary')
+    assert.deepEqual(
+      { ...latestPublishedSummaryAfterFirstActual, actualStartDate: latestPublishedSummaryBefore.actualStartDate },
+      latestPublishedSummaryBefore,
+      'earliest actual boundary edit leaves the other three latest-published summary fields unchanged',
+    )
     console.log(`browser machine latest actual ${v3ActualBefore} -> ${latestActualDate}`)
     const latestActualBoundary = await treeBoundaryTask(page, table, 'actualEndDate', 'max')
     assert.ok(latestActualBoundary, 'machine latest published snapshot has an editable actual-completion boundary')
@@ -1533,9 +1677,9 @@ try {
     const latestPublishedSummaryAfter = await readTreeSummary(page, table)
     assert.equal(latestPublishedSummaryAfter.actualEndDate, latestPublishedBoundaryDate, 'machine latest published actual boundary updates from one public field edit')
     assert.deepEqual(
-      { ...latestPublishedSummaryAfter, actualEndDate: latestPublishedSummaryBefore.actualEndDate },
-      latestPublishedSummaryBefore,
-      'machine latest-published single actual field update leaves the other three summary fields unchanged',
+      { ...latestPublishedSummaryAfter, actualEndDate: latestPublishedSummaryAfterFirstActual.actualEndDate },
+      latestPublishedSummaryAfterFirstActual,
+      'latest actual-end boundary edit leaves the other three already-updated summary fields unchanged',
     )
     page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
     await selectView(page, '竖版表格')
@@ -1563,6 +1707,7 @@ try {
     assert.match(compareDialogText, /[1-9]\d*\s*变更总计/, 'published comparison reports a nonzero change total')
     assert.ok(compareText.includes('概念启动') && compareText.includes('实际完成'), 'published comparison shows the changed milestone actual completion field')
     await pressAriaButton(page, 'Close')
+    await waitForDialogToClose(page, '历史版本对比')
     await chooseVersion(page, '修订中')
     await selectView(page, '竖版表格')
     const draftPlanBoundary = await treeBoundaryTask(page, table, 'planEndDate', 'max')
@@ -1620,23 +1765,45 @@ try {
     await pressAriaButton(page, '添加tOS版本')
     await page.waitForFunction(() => document.body.innerText.includes('是否添加 tOS 版本？'), { timeout: TIMEOUT })
     assert.equal(await page.$('[aria-label="业务节点名称"]'), null, 'tOS confirmation phase does not collect a name early')
-    assert.match(await page.$eval('[aria-label="业务父阶段"]', node => node.closest('.ant-select')?.textContent || ''), /上市迭代阶段|维护阶段/, 'tOS insertion explicitly selects an allowed business parent')
-    await clickButtonText(page, '下一步')
+    await chooseSelectOption(page, '业务父阶段', '上市迭代阶段')
+    assert.match(await page.$eval('[aria-label="业务父阶段"]', node => node.closest('.ant-select')?.textContent || ''), /上市迭代阶段/, 'tOS insertion explicitly selects the launch-iteration parent')
+    await clickDialogButton(page, '是否添加 tOS 版本？', '下一步')
     await page.waitForFunction(() => document.body.innerText.includes('输入 tOS 版本名称'), { timeout: TIMEOUT })
     const tosBusinessName = await page.$eval('[aria-label="业务节点名称"]', node => node.value)
-    assert.match(tosBusinessName, /^16\.1\.0\.\d{3}$/, 'tOS business version uses the project version prefix')
-    await clickButtonText(page, '确认添加')
+    assert.equal(tosBusinessName, '16.1.0.005', 'tOS business version proposes the first legal project-prefix tail')
+    const tosNameValidationMessage = '版本号必须符合 16.1.0.XXX，且尾号最后一位为0或5'
+    await assertTosBusinessNameRejected(page, table, '16.2.0.005', tosNameValidationMessage)
+    await assertTosBusinessNameRejected(page, table, '16.1.0.003', tosNameValidationMessage)
+    await assertTosBusinessNameRejected(page, table, '16.1.0.05', tosNameValidationMessage)
+    await replaceAriaInputValue(page, '业务节点名称', tosBusinessName)
+    await clickDialogButton(page, '输入 tOS 版本名称', '确认添加')
     await waitForDialogToClose(page, '输入 tOS 版本名称')
     await page.waitForFunction((selector, taskName) => document.querySelector(selector)?.textContent?.includes(taskName), { timeout: TIMEOUT }, table, tosBusinessName)
     assert.ok(await page.$(`button[aria-label="删除节点 ${tosBusinessName}"]`), 'custom tOS business version has a delete affordance')
-    console.log(`browser tOS inserted ${tosBusinessName}`)
+    console.log(`browser tOS rejected 16.2.0.005 / 16.1.0.003 / 16.1.0.05 with ${tosNameValidationMessage}; inserted launch ${tosBusinessName}`)
 
     await editTreeDate(page, table, tosBusinessName, 'planStartDate', '2027-05-01')
     await editTreeDate(page, table, tosBusinessName, 'planEndDate', '2027-05-05')
+    await editTreeDate(page, table, tosBusinessName, 'actualStartDate', '2027-05-01')
+    await editTreeDate(page, table, tosBusinessName, 'actualEndDate', '2027-05-05')
     assert.deepEqual({
       start: await treeDate(page, table, tosBusinessName, 'planStartDate'),
       end: await treeDate(page, table, tosBusinessName, 'planEndDate'),
     }, { start: '2027-05-01', end: '2027-05-05' }, 'tOS business version accepts a planned range through public DatePickers')
+    assert.equal(await treePlannedDays(page, table, tosBusinessName), '5天', 'tOS launch business version derives a five-day inclusive plan duration')
+
+    const tosMaintenanceName = '16.1.0.010'
+    await openBusinessInsertion(page, '添加tOS版本', '维护阶段')
+    await replaceAriaInputValue(page, '业务节点名称', tosMaintenanceName)
+    await clickDialogButton(page, '输入 tOS 版本名称', '确认添加')
+    await waitForDialogToClose(page, '输入 tOS 版本名称')
+    await page.waitForFunction((selector, taskName) => document.querySelector(selector)?.textContent?.includes(taskName), { timeout: TIMEOUT }, table, tosMaintenanceName)
+    await editTreeDate(page, table, tosMaintenanceName, 'planStartDate', '2027-06-10')
+    await editTreeDate(page, table, tosMaintenanceName, 'planEndDate', '2027-06-14')
+    await editTreeDate(page, table, tosMaintenanceName, 'actualStartDate', '2027-06-10')
+    await editTreeDate(page, table, tosMaintenanceName, 'actualEndDate', '2027-06-14')
+    assert.equal(await treePlannedDays(page, table, tosMaintenanceName), '5天', 'tOS maintenance business version derives a five-day inclusive plan duration')
+    console.log(`browser tOS inserted launch ${tosBusinessName}=2027-05-01..2027-05-05 and maintenance ${tosMaintenanceName}=2027-06-10..2027-06-14`)
 
     const milestoneName = '概念启动'
     const beforeDate = await treeDate(page, table, milestoneName, 'planEndDate')
@@ -1662,7 +1829,8 @@ try {
     }
     await selectView(page, '甘特图')
     await selectGanttScale(page, '日')
-    const businessTaskId = await ganttTaskIdForName(page, tosBusinessName)
+    const ganttBusinessName = tosMaintenanceName
+    const businessTaskId = await ganttTaskIdForName(page, ganttBusinessName)
     assert.ok(businessTaskId, 'tOS business version has a public DHTMLX task_id')
     await scrollGanttToEnd(page)
     const business = `.gantt_task_line.pms-gantt-task.pms-gantt-task-editable[task_id="${businessTaskId}"]`
@@ -1671,26 +1839,28 @@ try {
     assert.equal(businessMove.hitTaskId, businessTaskId, `tOS business drag starts on the resolved DHTMLX bar: ${JSON.stringify(businessMove)}`)
     await selectView(page, '竖版表格')
     const movedBusiness = {
-      start: await treeDate(page, table, tosBusinessName, 'planStartDate'),
-      end: await treeDate(page, table, tosBusinessName, 'planEndDate'),
+      start: await treeDate(page, table, ganttBusinessName, 'planStartDate'),
+      end: await treeDate(page, table, ganttBusinessName, 'planEndDate'),
     }
-    assert.notEqual(movedBusiness.start, '2027-05-01', 'tOS business move writes the planned start boundary')
-    assert.notEqual(movedBusiness.end, '2027-05-05', 'tOS business move writes the planned completion boundary')
+    assert.notEqual(movedBusiness.start, '2027-06-10', 'tOS business move writes the planned start boundary')
+    assert.notEqual(movedBusiness.end, '2027-06-14', 'tOS business move writes the planned completion boundary')
     await selectView(page, '甘特图')
-    const resizedBusinessTaskId = await ganttTaskIdForName(page, tosBusinessName)
+    const resizedBusinessTaskId = await ganttTaskIdForName(page, ganttBusinessName)
     assert.ok(resizedBusinessTaskId, 'moved tOS business version remains in the public gantt grid')
     await scrollGanttToEnd(page)
     await resizeTaskEnd(page, `.gantt_task_line.pms-gantt-task.pms-gantt-task-editable[task_id="${resizedBusinessTaskId}"]`, -60)
     await selectView(page, '竖版表格')
-    const resizedBusinessEnd = await treeDate(page, table, tosBusinessName, 'planEndDate')
+    const resizedBusinessEnd = await treeDate(page, table, ganttBusinessName, 'planEndDate')
     assert.notEqual(resizedBusinessEnd, movedBusiness.end, 'tOS business resize writes a changed planned completion')
 
     page = await reopenProjectInContext(page, errors, 'tOS16.1')
     await selectView(page, '竖版表格')
     assert.equal(await treeDate(page, table, milestoneName, 'planEndDate'), afterDate, 'tOS milestone drag survives same-context new-page persistence')
     assert.ok((await textOf(page, table)).includes(tosBusinessName), 'tOS business version survives same-context new-page persistence')
-    assert.equal(await treeDate(page, table, tosBusinessName, 'planEndDate'), resizedBusinessEnd, 'tOS business resize survives same-context new-page persistence')
-    console.log(`browser tOS ${tosBusinessName} persisted through ${resizedBusinessEnd}`)
+    assert.ok((await textOf(page, table)).includes(tosMaintenanceName), 'tOS maintenance business version survives same-context new-page persistence')
+    assert.equal(await treeDate(page, table, tosBusinessName, 'planEndDate'), '2027-05-05', 'tOS launch business version dates survive same-context new-page persistence')
+    assert.equal(await treeDate(page, table, tosMaintenanceName, 'planEndDate'), resizedBusinessEnd, 'tOS maintenance business resize survives same-context new-page persistence')
+    console.log(`browser tOS ${tosBusinessName} persisted through 2027-05-05; ${tosMaintenanceName} persisted through ${resizedBusinessEnd}`)
 
     await editTreeDate(page, table, tosBusinessName, 'actualStartDate', '2027-05-10')
     await editTreeDate(page, table, tosBusinessName, 'actualEndDate', '2027-05-20')
@@ -1709,6 +1879,7 @@ try {
     }
     assert.ok(pairedDraftPlanBeforeActualSync.start && pairedDraftPlanBeforeActualSync.end, 'paired tOS draft retains the custom business node planned range')
     assert.ok((await textOf(page, table)).includes(tosBusinessName), 'paired tOS draft retains the custom business node before actual-field synchronization')
+    assert.ok((await textOf(page, table)).includes(tosMaintenanceName), 'paired tOS draft retains the maintenance custom business node before actual-field synchronization')
     await editTreeDate(page, table, tosBusinessName, 'actualEndDate', '2027-06-01')
     await chooseVersion(page, publishedVersionNo)
     await editPublishedTreeDate(page, table, tosBusinessName, 'actualStartDate', '2027-05-11')
@@ -1727,6 +1898,7 @@ try {
       end: await treeDate(page, table, tosBusinessName, 'planEndDate'),
     }, pairedDraftPlanBeforeActualSync, 'latest-published actual patches do not overwrite paired-draft planned dates')
     assert.ok((await textOf(page, table)).includes(tosBusinessName), 'latest-published actual patches do not remove the paired-draft custom business node')
+    assert.ok((await textOf(page, table)).includes(tosMaintenanceName), 'latest-published actual patches do not remove the paired-draft maintenance node')
     page = await reopenProjectInContext(page, errors, 'tOS16.1')
     await selectView(page, '竖版表格')
     await chooseVersion(page, publishedVersionNo)
@@ -1741,6 +1913,7 @@ try {
       end: await treeDate(page, table, tosBusinessName, 'planEndDate'),
     }, pairedDraftPlanBeforeActualSync, 'paired-draft planned dates survive published actual patches and same-context reopen')
     assert.ok((await textOf(page, table)).includes(tosBusinessName), 'paired-draft custom business node survives published actual patches and same-context reopen')
+    assert.ok((await textOf(page, table)).includes(tosMaintenanceName), 'paired-draft maintenance business node survives published actual patches and same-context reopen')
     console.log('browser tOS published actual field-level merge/reopen contract passed')
   })
 
@@ -1847,16 +2020,6 @@ try {
     console.log(`browser subproject dates after reopening ${JSON.stringify(persistedDates)}`)
   })
 
-  if (ONLY_CASE === 'all' && shouldRunTask7FocusedBrowserCase(ONLY_CASE, 'machine-follow-actual')) {
-    console.log('RUN browser all -> machine-follow-actual focused case')
-    const focusedResult = spawnSync(process.execPath, [process.argv[1]], {
-      cwd: process.cwd(),
-      encoding: 'utf8',
-      env: { ...process.env, PMS_BROWSER_CASE: 'machine-follow-actual' },
-    })
-    if (focusedResult.stdout) process.stdout.write(focusedResult.stdout)
-    if (focusedResult.stderr) process.stderr.write(focusedResult.stderr)
-    assert.equal(focusedResult.status, 0, 'browser all includes a green machine-follow-actual focused case')
   }
 
   assert.ok(executedCases > 0, `browser matrix executed no cases for PMS_BROWSER_CASE=${JSON.stringify(ONLY_CASE)}`)
