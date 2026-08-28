@@ -200,7 +200,7 @@ import {
   type Level1PlanTask,
 } from '@/lib/level1PlanRules'
 import {
-  applyPlanGanttDateChange,
+  applyPlanGanttDateChangeResult,
   applyPlanTaskDatePatch,
   buildPlanGanttTasks,
 } from '@/lib/planGanttRules'
@@ -3772,6 +3772,8 @@ export default function ProjectSpaceContainer() {
             columns={ganttColumns}
             onTaskClick={(task) => message.info(`点击任务: ${task.text}`)}
             readOnly={!ganttEditable}
+            allowLightbox={false}
+            allowStandaloneUpdate={false}
             collapsedIds={ganttCollapsedIds}
             scaleMode={projectPlanGanttScaleMode}
             onCollapsedChange={(updater) => {
@@ -3787,20 +3789,15 @@ export default function ProjectSpaceContainer() {
               })
             }}
             onTaskDateChange={change => {
-              const next = applyPlanGanttDateChange(effectiveTasks, {
+              const result = applyPlanGanttDateChangeResult(effectiveTasks, {
                 ...change,
                 mode: change.nodeType === 'milestone' ? 'milestone' : 'task',
               })
-              if (next === effectiveTasks) {
-                void message.error('日期格式或范围无效，未保存修改')
+              if (!result.ok) {
+                void message.error(result.message)
                 return false
               }
-              const validation = validateLevel1ScheduleDates(next)
-              if (!validation.valid) {
-                void message.error(validation.violations[0]?.message || '计划日期不符合顺序要求')
-                return false
-              }
-              setEffectiveTasks(next)
+              setEffectiveTasks(result.tasks)
               void message.success(change.nodeType === 'milestone' ? '计划完成时间已更新' : '计划时间已更新')
               return true
             }}

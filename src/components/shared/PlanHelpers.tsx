@@ -80,6 +80,8 @@ export function DHTMLXGantt({
   onCollapsedChange,
   columns = DEFAULT_GANTT_COLUMNS,
   onTaskDateChange,
+  allowLightbox = true,
+  allowStandaloneUpdate = true,
 }: {
   tasks: any[]
   onTaskClick?: (task: any) => void
@@ -89,6 +91,8 @@ export function DHTMLXGantt({
   onCollapsedChange?: (updater: (prev: Set<string>) => Set<string>) => void
   columns?: DHTMLXGanttColumn[]
   onTaskDateChange?: (change: DHTMLXGanttDateChange) => boolean
+  allowLightbox?: boolean
+  allowStandaloneUpdate?: boolean
 }) {
   const ganttContainer = useRef<HTMLDivElement>(null)
   const suppressFeedback = useRef(false)
@@ -174,6 +178,8 @@ export function DHTMLXGantt({
     const formatDate = gantt.date.date_to_str('%Y-%m-%d')
     const interactionController = createPlanGanttInteractionController({
       readOnly,
+      allowLightbox,
+      allowStandaloneUpdate,
       getOnTaskDateChange: () => onTaskDateChangeRef.current,
       formatDate: value => formatDate(value as Date),
       updateTask: task => gantt.updateTask(task.id),
@@ -184,6 +190,9 @@ export function DHTMLXGantt({
     const afterDragHandler = gantt.attachEvent('onAfterTaskDrag', (id: string | number) => {
       interactionController.afterDrag(gantt.getTask(id))
       return true
+    })
+    const beforeUpdateHandler = gantt.attachEvent('onBeforeTaskUpdate', (id: string | number, task: any) => {
+      return interactionController.beforeUpdate(task || gantt.getTask(id))
     })
     const beforeLightboxHandler = gantt.attachEvent('onBeforeLightbox', (id: string | number) => {
       return interactionController.canOpenLightbox(gantt.getTask(id))
@@ -202,12 +211,13 @@ export function DHTMLXGantt({
       gantt.detachEvent(closeHandler)
       gantt.detachEvent(beforeDragHandler)
       gantt.detachEvent(afterDragHandler)
+      gantt.detachEvent(beforeUpdateHandler)
       gantt.detachEvent(beforeLightboxHandler)
       if (clickHandler) gantt.detachEvent(clickHandler)
       interactionController.clear()
       gantt.clearAll()
     }
-  }, [columns, tasks, readOnly, scaleMode])
+  }, [allowLightbox, allowStandaloneUpdate, columns, tasks, readOnly, scaleMode])
 
   useEffect(() => {
     if (!ganttContainer.current) return
