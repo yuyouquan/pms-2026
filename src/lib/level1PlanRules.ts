@@ -971,15 +971,22 @@ export const getLevel1StructurePermissions = (
 ): Level1StructurePermissions => {
   if (!getLevel1ProjectKind(input.projectType)) return denyLevel1StructurePermissions()
   if (!input.isDraft) return denyLevel1StructurePermissions()
+  const isCustomBusinessTask = input.task?.source === 'custom'
+    && input.task.nodeKind === 'business-period'
   if (input.isSuperAdmin) {
-    return { canAddStage: true, canAddChild: true, canRename: true, canDelete: true, canReorder: true }
+    return {
+      canAddStage: true,
+      canAddChild: true,
+      canRename: Boolean(isCustomBusinessTask),
+      canDelete: true,
+      canReorder: Boolean(isCustomBusinessTask),
+    }
   }
   if (!input.isSpm) return denyLevel1StructurePermissions()
 
   const businessParent = isBusinessStage(input.projectType, input.parent)
-  const businessTask = input.task?.source === 'custom'
-    && input.task.nodeKind === 'business-period'
-    && input.task.parentId === input.parent?.id
+  const businessTask = isCustomBusinessTask
+    && input.task?.parentId === input.parent?.id
   return {
     canAddStage: false,
     canAddChild: businessParent,

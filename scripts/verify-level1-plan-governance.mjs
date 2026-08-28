@@ -816,6 +816,61 @@ assert.deepEqual(
 
 const denyAllStructure = { canAddStage: false, canAddChild: false, canRename: false, canDelete: false, canReorder: false }
 const allowAllStructure = { canAddStage: true, canAddChild: true, canRename: true, canDelete: true, canReorder: true }
+const adminNonBusinessStructure = { canAddStage: true, canAddChild: true, canRename: false, canDelete: true, canReorder: false }
+const customAdminStage = {
+  ...machineInsert.parent,
+  stableId: 'custom-admin-stage',
+  source: 'custom',
+  nodeKind: 'stage',
+}
+const customAdminOrdinaryChild = {
+  ...machineInsert.task,
+  stableId: 'custom-admin-ordinary-child',
+  source: 'custom',
+  nodeKind: 'fixed-milestone',
+}
+for (const [label, task, parent] of [
+  ['custom stage', customAdminStage, undefined],
+  ['custom non-business child', customAdminOrdinaryChild, machineInsert.parent],
+]) {
+  assert.deepEqual(
+    rules.getLevel1StructurePermissions({
+      projectType: '整机产品项目',
+      isDraft: true,
+      isSuperAdmin: true,
+      isSpm: false,
+      task,
+      parent,
+    }),
+    { canAddStage: true, canAddChild: true, canRename: false, canDelete: true, canReorder: false },
+    `super administrators do not receive business rename/reorder actions for a ${label}`,
+  )
+  const helperFixture = parent
+    ? machineInsert.tasks.map(candidate => candidate.stableId === machineInsert.task.stableId ? task : candidate)
+    : [...machineInsert.tasks, task]
+  const helperSnapshot = structuredClone(helperFixture)
+  const renameResult = rules.renameLevel1BusinessNode(helperFixture, {
+    projectType: '整机产品项目',
+    taskStableId: task.stableId,
+    taskName: 'MR99',
+  })
+  assert.deepEqual({ ok: renameResult.ok, code: renameResult.code }, { ok: false, code: 'task-not-custom-business' }, `rename handler rejects a ${label}`)
+  const reorderResult = rules.reorderLevel1BusinessNodes(helperFixture, task.stableId, task.stableId)
+  assert.equal(reorderResult.ok, false, `reorder handler rejects a ${label}`)
+  assert.deepEqual(helperFixture, helperSnapshot, `rejected ${label} business actions do not mutate handler input`)
+}
+assert.deepEqual(
+  rules.getLevel1StructurePermissions({
+    projectType: '整机产品项目',
+    isDraft: true,
+    isSuperAdmin: true,
+    isSpm: false,
+    task: machineInsert.task,
+    parent: machineInsert.parent,
+  }),
+  allowAllStructure,
+  'super administrators retain rename/reorder actions for a custom business-period',
+)
 assert.deepEqual(
   rules.getLevel1StructurePermissions({
     projectType: '整机产品项目',
@@ -836,8 +891,8 @@ assert.deepEqual(
     isSpm: false,
     task: machineBusinessInput[0],
   }),
-  allowAllStructure,
-  'super administrators can mutate any stage or node in a draft',
+  adminNonBusinessStructure,
+  'super administrators retain stage add/delete without unsupported stage rename/reorder actions',
 )
 assert.deepEqual(
   rules.getLevel1StructurePermissions({
@@ -932,8 +987,8 @@ assert.deepEqual(
     task: templateBusinessPeriod,
     parent: machineInsert.parent,
   }),
-  allowAllStructure,
-  'the template business-period restriction does not reduce global super-administrator structure permissions',
+  adminNonBusinessStructure,
+  'global super administrators retain add/delete but do not receive unsupported template business rename/reorder actions',
 )
 assert.equal(typeof rules.deleteLevel1GovernedTask, 'function', 'governed deletion is exposed as an executable permission-checked handler helper')
 const templateBusinessTasks = [...machineInsert.tasks, { ...templateBusinessPeriod, id: '4.2', parentId: machineInsert.parent.id, order: 2 }]
