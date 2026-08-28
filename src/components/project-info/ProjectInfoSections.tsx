@@ -19,7 +19,7 @@ import {
   normalizeTeamMembers,
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
-import { formatTosSnapshot } from '@/lib/enumConsumers'
+import { formatPrimaryChipCode, formatTosSnapshot } from '@/lib/enumConsumers'
 
 interface ProjectInfoSectionsProps {
   project: ProjectInfoProject
@@ -53,7 +53,9 @@ const renderNormalValue = (value: ReturnType<typeof getProjectInfoValue>, inputT
   }
   const text = ['firstSaleTosVersion', 'currentTosVersion'].includes(fieldKey)
     ? formatTosSnapshot(value) || '-'
-    : formatProjectInfoValue(value)
+    : fieldKey === 'chipCode'
+      ? formatPrimaryChipCode(value) || '-'
+      : formatProjectInfoValue(value)
   if (inputType === 'link' && text !== '-') {
     const isUrl = /^https?:\/\//i.test(text)
     return isUrl ? <a href={text} target="_blank" rel="noreferrer">{text}</a> : <span>{text}</span>

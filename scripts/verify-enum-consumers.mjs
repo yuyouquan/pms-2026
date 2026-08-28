@@ -111,9 +111,13 @@ assert.deepEqual(consumers.buildEnumOptions(rowsByType, 'core-value', ['旧值',
 console.log('[enum-consumers] verifying atomic chip snapshots')
 const liveChipOptions = consumers.buildChipOptions(rowsByType)
 assert.deepEqual(liveChipOptions, [
-  { value: 'chip-a', label: 'D6300 / MT6835 / MTK' },
-  { value: 'chip-b', label: 'D6300 / MT6789 / MTK' },
-], 'rows sharing a chip code remain separate options whose values are stable row IDs')
+  { value: 'chip-a', label: 'D6300' },
+  { value: 'chip-b', label: 'D6300' },
+], 'chip options display only the chip code while stable row IDs keep duplicate-code rows distinct')
+assert.equal(consumers.formatPrimaryChipCode('MT6877 / MT6877 / MTK（已停用）'), 'MT6877', 'composite chip labels display only their first code')
+assert.equal(consumers.formatPrimaryChipCode('MT6877'), 'MT6877', 'plain chip codes remain unchanged')
+assert.equal(consumers.formatPrimaryChipCode(''), '', 'empty chip codes remain empty')
+assert.equal(consumers.formatPrimaryChipCode(undefined), '', 'non-string chip codes fail safely')
 assert.deepEqual(consumers.resolveChipRow(rowsByType, 'chip-a'), {
   chipCode: 'D6300', chipModel: 'MT6835', chipPlatform: 'MTK',
 }, 'resolving a live row ID returns the complete chip tuple atomically')
@@ -128,10 +132,10 @@ assert.equal(historicalChipOptions.length, 3, 'only absent chip tuples synthesiz
 assert.deepEqual(historicalChipOptions.slice(0, 2), liveChipOptions, 'live rows are never synthesized or cross-combined from separate columns')
 assert.deepEqual(historicalChipOptions[2], {
   value: consumers.encodeHistoricalChipOptionValue(retiredChip),
-  label: 'D6300 / MT9999 / MTK（已停用）',
+  label: 'D6300（已停用）',
   disabled: true,
   historical: true,
-}, 'retired chip tuples use a stable, explicitly historical option marker')
+}, 'retired chip tuples keep their disabled status without displaying model or platform text')
 assert.equal(consumers.isHistoricalChipOptionValue(rowsByType, historicalChipOptions[2].value), true, 'history option values are distinguishable from live row IDs')
 assert.deepEqual(consumers.decodeHistoricalChipOptionValue(rowsByType, historicalChipOptions[2].value), retiredChip, 'history markers decode to their original atomic snapshot')
 assert.equal(consumers.resolveChipRow(rowsByType, historicalChipOptions[2].value), undefined, 'history markers never resolve as live rows')
@@ -257,6 +261,8 @@ assert.match(
 )
 const projectInfoModalSource = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 assert.match(projectInfoModalSource, /useEnumHydration\(open\)/, 'project information create/edit starts enum hydration only while its modal is relevant')
+assert.match(projectInfoModalSource, /value=\{selectedChipOptionId\}[\s\S]*options=\{chipOptions\}/, 'the chip select keeps stable row IDs as the selected value while displaying chip-only option labels')
+assert.match(projectInfoModalSource, /resolveChipRow\(rowsByType, rowId\)[\s\S]*chipModel:\s*chip\.chipModel[\s\S]*chipPlatform:\s*chip\.chipPlatform/, 'selecting a chip-only label still saves the complete chip row atomically')
 assert.match(projectInfoModalSource, /handleSubmit[\s\S]*useEnumStore\.getState\(\)[\s\S]*!enumState\.hasHydrated\s*\|\|\s*enumState\.hydrationError[\s\S]*return/, 'project information submit reads current store state and rejects incomplete or failed enum hydration')
 assert.match(projectInfoModalSource, /okButtonProps=\{\{[^}]*!enumReady/s, 'project information disables OK until persisted enum configuration is authoritative')
 assert.match(projectInfoModalSource, /Skeleton[\s\S]*hydrationError[\s\S]*retryHydration/, 'project information visibly gates loading and exposes hydration retry guidance')
@@ -274,6 +280,9 @@ assert.match(subprojectConfigSource, /hydrationError[\s\S]*retryHydration/, 'sta
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 assert.match(projectSpaceSource, /useEnumHydration\(true\)/, 'project space starts enum hydration on mount')
 assert.match(projectSpaceSource, /saveBasicInfoEdit[\s\S]*useEnumStore\.getState\(\)[\s\S]*!enumState\.hasHydrated\s*\|\|\s*enumState\.hydrationError[\s\S]*return/, 'project-space direct editing cannot save enum fields before hydration')
+
+const projectInfoSectionsSource = readSource(root, 'src/components/project-info/ProjectInfoSections.tsx')
+assert.match(projectInfoSectionsSource, /fieldKey === 'chipCode'[\s\S]*formatPrimaryChipCode\(value\)/, 'read-only project information displays only the primary chip code')
 
 assert.doesNotMatch(
   projectTypesSource,
