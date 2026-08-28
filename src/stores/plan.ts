@@ -513,6 +513,11 @@ export const migrateLevel1TasksForProjectType = (
 
   const targetBySemantic = new Map(migratedDefaults.map(task => [getStableLevel1Semantic(task), task]))
   const sourceById = new Map(input.map(task => [task?.id, task]))
+  const customSourceTasks = input.filter(task => task?.source === 'custom')
+  const customTemporaryIdBySourceId = new Map(customSourceTasks.map((task, index) => [
+    task.id,
+    `custom-${index}-${task.id}`,
+  ]))
   const getMigratedParent = (parent: any) => {
     const semantic = getLevel1Semantic(parent)
     if (projectType === PROJECT_CATEGORY_MACHINE && semantic === 'stage-validation') {
@@ -521,9 +526,12 @@ export const migrateLevel1TasksForProjectType = (
     return targetBySemantic.get(semantic)
   }
   const compatibilityParentsById = new Map<string, any>()
-  input.filter(task => task?.source === 'custom').forEach(task => {
+  customSourceTasks.forEach(task => {
     const parent = sourceById.get(task.parentId)
-    if (!parent || getMigratedParent(parent) || compatibilityParentsById.has(parent.id)) return
+    if (!parent
+      || parent.source === 'custom'
+      || getMigratedParent(parent)
+      || compatibilityParentsById.has(parent.id)) return
     compatibilityParentsById.set(parent.id, {
       ...parent,
       id: `compat-${parent.id}`,
@@ -532,13 +540,18 @@ export const migrateLevel1TasksForProjectType = (
       parentId: parent.parentId || null,
     })
   })
-  const customTasks = input.filter(task => task?.source === 'custom').map(task => {
+  const customTasks = customSourceTasks.map(task => {
     const parent = sourceById.get(task.parentId)
-    const migratedParent = parent ? getMigratedParent(parent) : undefined
+    const migratedParent = parent && parent.source !== 'custom' ? getMigratedParent(parent) : undefined
     const compatibilityParent = parent ? compatibilityParentsById.get(parent.id) : undefined
+    const customParentId = parent?.source === 'custom'
+      ? customTemporaryIdBySourceId.get(parent.id)
+      : undefined
+    const migratedParentId = migratedParent?.id || compatibilityParent?.id || customParentId
     return {
       ...task,
-      ...((migratedParent || compatibilityParent) ? { parentId: (migratedParent || compatibilityParent).id } : {}),
+      id: customTemporaryIdBySourceId.get(task.id)!,
+      ...(migratedParentId ? { parentId: migratedParentId } : {}),
     }
   })
   return renumberMigratedLevel1DisplayIds([

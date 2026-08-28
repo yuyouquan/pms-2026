@@ -1184,6 +1184,14 @@ assert.deepEqual(
   ['必须保留', '2032-01-01', '规划阶段', 'custom'],
   'custom children under a removed tOS stage keep data and a compatible custom parent',
 )
+const migratedTosConfigAgain = plan.migrateLevel1TasksForProjectType(migratedTosConfig, 'tOS版本项目', true)
+assert.deepEqual(migratedTosConfigAgain, migratedTosConfig, 'direct tOS task migration remains idempotent after creating a compatibility parent')
+assert.equal(new Set(migratedTosConfigAgain.map(task => task.stableId)).size, migratedTosConfigAgain.length, 'direct re-migration keeps every stable ID globally unique')
+assert.equal(migratedTosConfigAgain.filter(task => task.stableId === 'tos-stage-planning').length, 1, 'direct re-migration keeps exactly one compatibility planning parent')
+assert.equal(migratedTosConfigAgain.filter(task => task.stableId === 'custom-tos-planning').length, 1, 'direct re-migration keeps exactly one custom planning child')
+const migratedTosCustomAgain = migratedTosConfigAgain.find(task => task.stableId === 'custom-tos-planning')
+assert.equal(migratedTosConfigAgain.some(task => task.id === migratedTosCustomAgain.parentId && task.stableId === 'tos-stage-planning'), true, 'the unique custom planning child remains attached to its compatibility parent')
+assert.equal(new Set(migratedTosConfigAgain.map(task => task.id)).size, migratedTosConfigAgain.length, 'direct re-migration keeps every display ID unique')
 for (const tasks of [migratedV9.tasks, migratedTosConfig, migratedV9.marketPlanData.OP.tasks, migratedV9.tosTypePlanDataByProjectId['2'].Full.level1Tasks]) {
   const ids = new Set(tasks.map(task => task.id))
   assert.equal(tasks.every(task => !task.parentId || ids.has(task.parentId)), true, 'every V9 migrated scope is free of orphan nodes')
