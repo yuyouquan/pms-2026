@@ -969,6 +969,15 @@ assert.match(projectSpaceSource, /是否添加 MR 里程碑？/, 'machine insert
 assert.match(projectSpaceSource, /是否添加 tOS 版本？/, 'tOS insertion first asks whether to add')
 assert.match(projectSpaceSource, /输入 MR 里程碑名称/, 'machine insertion collects its name only in the second dialog')
 assert.match(projectSpaceSource, /输入 tOS 版本名称/, 'tOS insertion collects its name only in the second dialog')
+const level1InsertionSource = projectSpaceSource.slice(
+  projectSpaceSource.indexOf('const confirmLevel1Insertion'),
+  projectSpaceSource.indexOf('const renderGanttChart'),
+)
+assert.ok(level1InsertionSource.startsWith('const confirmLevel1Insertion'), 'level-one name confirmation uses a controlled synchronous handler')
+assert.doesNotMatch(level1InsertionSource, /Promise\.reject\(/, 'invalid level-one names never reject an AntD onOk promise')
+assert.match(level1InsertionSource, /if \(!taskName\)[\s\S]{0,180}message\.error\('请输入节点名称'\)[\s\S]{0,80}return/, 'an empty level-one name leaves the controlled dialog open')
+assert.match(level1InsertionSource, /if \(!result\.ok\)[\s\S]{0,180}message\.error\(result\.message\)[\s\S]{0,80}return/, 'invalid machine/tOS business names leave the controlled dialog open')
+assert.match(level1InsertionSource, /onOk=\{confirmLevel1Insertion\}/, 'the insertion Modal delegates confirmation without an async rejection contract')
 assert.match(projectSpaceSource, /level1ReorderDialog/, 'tree reorder is held in controlled confirmation state')
 assert.match(projectSpaceSource, /确认调整节点顺序？/, 'tree reorder requires explicit confirmation')
 assert.match(projectSpaceSource, /getLatestLevel1MutationContext\(dialog\.token\)/, 'reorder confirmation revalidates its live token')

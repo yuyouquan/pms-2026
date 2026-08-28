@@ -3507,6 +3507,77 @@ export default function ProjectSpaceContainer() {
   }
 
   const businessStages = effectiveTasks.filter((task: any) => selectedProject && isBusinessStage(selectedProject.type, task))
+  const confirmLevel1Insertion = () => {
+    const dialog = level1InsertionDialog
+    if (!dialog) return
+    const latest = getLatestLevel1MutationContext(dialog.token)
+    if (!latest) {
+      setLevel1InsertionDialog(null)
+      void message.warning('计划状态或操作范围已变化，请重新操作')
+      return
+    }
+    const parent = dialog.token.parentStableId
+      ? latest.tasks.find(task => (task.stableId || task.id) === dialog.token.parentStableId)
+      : undefined
+    const permissions = getLevel1StructurePermissions({
+      projectType: latest.project.type,
+      isDraft: true,
+      isSuperAdmin: latest.isSuperAdmin,
+      isSpm: latest.isSpm,
+      parent,
+    })
+    const canAdd = dialog.kind === 'stage' ? permissions.canAddStage : permissions.canAddChild
+    if (!canAdd || (dialog.kind !== 'stage' && !parent)) {
+      setLevel1InsertionDialog(null)
+      void message.warning('结构权限或父阶段已变化，请重新操作')
+      return
+    }
+    if (dialog.phase === 'confirm') {
+      setLevel1InsertionDialog(previous => previous ? { ...previous, phase: 'name' } : previous)
+      return
+    }
+    const taskName = dialog.taskName.trim()
+    if (!taskName) {
+      void message.error('请输入节点名称')
+      return
+    }
+    if (dialog.kind === 'business') {
+      const result = insertLevel1BusinessNode(latest.tasks, {
+        projectType: latest.project.type,
+        projectName: latest.project.name,
+        parentStableId: dialog.token.parentStableId,
+        taskName,
+        now: Date.now(),
+      })
+      if (!result.ok) {
+        void message.error(result.message)
+        return
+      }
+      latest.writeTasks(result.tasks)
+      setLevel1InsertionDialog(null)
+      void message.success(`已添加 ${result.task.taskName}`)
+      return
+    }
+    const stableId = `custom-${dialog.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const nextTask: Level1PlanTask = {
+      id: stableId,
+      stableId,
+      parentId: parent?.id || null,
+      order: dialog.kind === 'stage'
+        ? latest.tasks.filter(task => !task.parentId).length + 1
+        : latest.tasks.filter(task => task.parentId === parent?.id).length + 1,
+      taskName,
+      source: 'custom',
+      nodeKind: dialog.kind === 'stage' ? 'stage' : 'business-period',
+      planStartDate: '', planEndDate: '', estimatedDays: null,
+      actualStartDate: '', actualEndDate: '', actualDays: null,
+      status: '未开始', progress: 0,
+    }
+    latest.writeTasks(renumberLevel1Tasks([...latest.tasks, nextTask]))
+    setLevel1InsertionDialog(null)
+    void message.success(`已添加 ${taskName}`)
+  }
+
   const renderLevel1StructureActions = () => {
     if (!selectedProject || !isCurrentDraft || !isEditMode || followedTosLevel1ReadOnly) return null
     const addStagePermission = getLevel1StructurePermissions({
@@ -3543,75 +3614,7 @@ export default function ProjectSpaceContainer() {
             okText={level1InsertionDialog.phase === 'confirm' ? '下一步' : '确认添加'}
             cancelText="取消"
             onCancel={() => setLevel1InsertionDialog(null)}
-            onOk={() => {
-              const dialog = level1InsertionDialog
-              const latest = getLatestLevel1MutationContext(dialog.token)
-              if (!latest) {
-                setLevel1InsertionDialog(null)
-                void message.warning('计划状态或操作范围已变化，请重新操作')
-                return Promise.reject()
-              }
-              const parent = dialog.token.parentStableId
-                ? latest.tasks.find(task => (task.stableId || task.id) === dialog.token.parentStableId)
-                : undefined
-              const permissions = getLevel1StructurePermissions({
-                projectType: latest.project.type,
-                isDraft: true,
-                isSuperAdmin: latest.isSuperAdmin,
-                isSpm: latest.isSpm,
-                parent,
-              })
-              const canAdd = dialog.kind === 'stage' ? permissions.canAddStage : permissions.canAddChild
-              if (!canAdd || (dialog.kind !== 'stage' && !parent)) {
-                setLevel1InsertionDialog(null)
-                void message.warning('结构权限或父阶段已变化，请重新操作')
-                return Promise.reject()
-              }
-              if (dialog.phase === 'confirm') {
-                setLevel1InsertionDialog(previous => previous ? { ...previous, phase: 'name' } : previous)
-                return
-              }
-              const taskName = dialog.taskName.trim()
-              if (!taskName) {
-                void message.error('请输入节点名称')
-                return Promise.reject()
-              }
-              if (dialog.kind === 'business') {
-                const result = insertLevel1BusinessNode(latest.tasks, {
-                  projectType: latest.project.type,
-                  projectName: latest.project.name,
-                  parentStableId: dialog.token.parentStableId,
-                  taskName,
-                  now: Date.now(),
-                })
-                if (!result.ok) {
-                  void message.error(result.message)
-                  return Promise.reject()
-                }
-                latest.writeTasks(result.tasks)
-                setLevel1InsertionDialog(null)
-                void message.success(`已添加 ${result.task.taskName}`)
-                return
-              }
-              const stableId = `custom-${dialog.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-              const nextTask: Level1PlanTask = {
-                id: stableId,
-                stableId,
-                parentId: parent?.id || null,
-                order: dialog.kind === 'stage'
-                  ? latest.tasks.filter(task => !task.parentId).length + 1
-                  : latest.tasks.filter(task => task.parentId === parent?.id).length + 1,
-                taskName,
-                source: 'custom',
-                nodeKind: dialog.kind === 'stage' ? 'stage' : 'business-period',
-                planStartDate: '', planEndDate: '', estimatedDays: null,
-                actualStartDate: '', actualEndDate: '', actualDays: null,
-                status: '未开始', progress: 0,
-              }
-              latest.writeTasks(renumberLevel1Tasks([...latest.tasks, nextTask]))
-              setLevel1InsertionDialog(null)
-              void message.success(`已添加 ${taskName}`)
-            }}
+            onOk={confirmLevel1Insertion}
           >
             {(level1InsertionDialog.kind === 'child'
               || (level1InsertionDialog.kind === 'business' && level1InsertionDialog.phase === 'confirm')) && (
