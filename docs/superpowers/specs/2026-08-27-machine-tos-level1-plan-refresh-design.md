@@ -1,7 +1,7 @@
 # 整机与 tOS 一级计划更新设计
 
-**日期：** 2026-08-27  
-**需求来源：** [飞书文档](https://transsioner.feishu.cn/wiki/GIK0wOTV7iIZJLkvkjnc5I9YnCe)，读取版本 `3401`  
+**日期：** 2026-08-27
+**需求来源：** [飞书文档](https://transsioner.feishu.cn/wiki/GIK0wOTV7iIZJLkvkjnc5I9YnCe)，读取版本 `3401`
 **目标分支：** `codex/level1-flat-milestones`
 
 ## 1. 目标与范围
