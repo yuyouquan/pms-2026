@@ -553,6 +553,16 @@ if (validReorder.ok) {
 }
 assert.deepEqual(reorderableFixture, [reorderFixture[0], { ...reorderFixture[2], order: 1 }, { ...reorderFixture[1], order: 2 }], 'a valid business reorder does not mutate its input')
 
+const crossParentReorderFixture = [
+  ...reorderFixture,
+  { id: '2', stableId: 'business-root-2', order: 2, taskName: '生命周期阶段', source: 'template', nodeKind: 'stage' },
+  { id: '2.1', stableId: 'mr-other-stage', parentId: '2', order: 1, taskName: 'MR3', source: 'custom', nodeKind: 'business-period', planStartDate: '2026-04-01', planEndDate: '2026-04-10' },
+]
+const crossParentReorderSnapshot = structuredClone(crossParentReorderFixture)
+const crossParentReorder = level1Rules.reorderLevel1BusinessNodes(crossParentReorderFixture, 'mr-early', 'mr-other-stage')
+assert.deepEqual(crossParentReorder, { ok: false, message: '只能在同一阶段内调整业务节点顺序' }, 'cross-stage business reorder is rejected with a clear message')
+assert.deepEqual(crossParentReorderFixture, crossParentReorderSnapshot, 'cross-stage reorder rejection never mutates or writes a candidate')
+
 const missingReorderParentFixture = [{
   id: 'missing-parent-child', stableId: 'missing-parent-child', parentId: 'missing-parent', order: 1,
   taskName: 'MR孤儿', source: 'custom', nodeKind: 'business-period',
@@ -1079,8 +1089,8 @@ assert.match(level1InsertionSource, /onOk=\{confirmLevel1Insertion\}/, 'the inse
 assert.match(projectSpaceSource, /level1ReorderDialog/, 'tree reorder is held in controlled confirmation state')
 assert.match(projectSpaceSource, /确认调整节点顺序？/, 'tree reorder requires explicit confirmation')
 assert.match(projectSpaceSource, /getLatestLevel1MutationContext\(dialog\.token\)/, 'reorder confirmation revalidates its live token')
-assert.match(projectSpaceSource, /添加MR里程碑/, 'machine plans expose the controlled MR action')
-assert.match(projectSpaceSource, /添加tOS版本/, 'tOS plans expose the controlled version action')
+assert.match(projectSpaceSource, /aria-label=\{`添加业务节点 \$\{value\}`\}/, 'each allowed business-stage row exposes the controlled insertion action')
+assert.doesNotMatch(projectSpaceSource, /businessStages\[0\]/, 'business insertion is never silently attached to the first stage')
 assert.match(projectSpaceSource, /change\.nodeType === 'milestone' \? 'milestone' : 'task'/, 'one Gantt callback persists both fixed points and business bars')
 assert.match(projectSpaceSource, /validateLevel1ScheduleDates\(next\)/, 'Gantt candidates are validated before they are written')
 

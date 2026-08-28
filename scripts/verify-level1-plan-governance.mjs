@@ -433,6 +433,7 @@ for (const invalidName of ['16.3.0.126', '16.4.0.125', '16.3.0.25', '16.3.0.1125
 
 const machineBusinessInput = rules.buildMachineLevel1Tasks(false)
 const machineBusinessSnapshot = structuredClone(machineBusinessInput)
+assert.equal(typeof rules.renameLevel1BusinessNode, 'function', 'business-node rename is exposed as an executable governance helper')
 const machineInsert = rules.insertLevel1BusinessNode(machineBusinessInput, {
   projectType: '整机产品项目',
   parentStableId: 'machine-stage-launch',
@@ -486,6 +487,55 @@ assert.equal(
   'stable-ID collisions use deterministic numeric suffixes',
 )
 
+const machineSecondInsert = rules.insertLevel1BusinessNode(machineInsert.tasks, {
+  projectType: '整机产品项目',
+  parentStableId: 'machine-stage-launch',
+  taskName: 'MR2',
+  now: 20,
+})
+assert.equal(machineSecondInsert.ok, true)
+const renameInputSnapshot = structuredClone(machineSecondInsert.tasks)
+const renamedMachineNode = rules.renameLevel1BusinessNode(machineSecondInsert.tasks, {
+  projectType: '整机产品项目',
+  taskStableId: machineSecondInsert.task.stableId,
+  taskName: 'MR20',
+})
+assert.equal(renamedMachineNode.ok, true, 'a custom machine business period accepts a valid MR name')
+assert.equal(
+  renamedMachineNode.tasks.find(task => task.stableId === machineSecondInsert.task.stableId)?.taskName,
+  'MR20',
+  'business-node rename updates only the requested stable task',
+)
+assert.deepEqual(machineSecondInsert.tasks, renameInputSnapshot, 'successful business-node rename is immutable')
+
+for (const invalidName of ['mr20', 'MR 20', 'MR', '版本20']) {
+  const snapshot = structuredClone(machineSecondInsert.tasks)
+  const result = rules.renameLevel1BusinessNode(machineSecondInsert.tasks, {
+    projectType: '整机产品项目',
+    taskStableId: machineSecondInsert.task.stableId,
+    taskName: invalidName,
+  })
+  assert.deepEqual({ ok: result.ok, code: result.code }, { ok: false, code: 'invalid-name' }, `rename rejects invalid MR name ${invalidName}`)
+  assert.deepEqual(machineSecondInsert.tasks, snapshot, 'failed MR rename leaves the input untouched')
+}
+
+const duplicateMachineRename = rules.renameLevel1BusinessNode(machineSecondInsert.tasks, {
+  projectType: '整机产品项目',
+  taskStableId: machineSecondInsert.task.stableId,
+  taskName: 'MR1',
+})
+assert.deepEqual(
+  { ok: duplicateMachineRename.ok, code: duplicateMachineRename.code },
+  { ok: false, code: 'duplicate-name' },
+  'rename rejects a duplicate name within the same business stage',
+)
+const sameNameAcrossMachineStages = rules.renameLevel1BusinessNode(collidingInsert.tasks, {
+  projectType: '整机产品项目',
+  taskStableId: collidingInsert.task.stableId,
+  taskName: 'MR1',
+})
+assert.equal(sameNameAcrossMachineStages.ok, true, 'rename duplicate validation is scoped to siblings in the same stage')
+
 for (const validMrName of ['MR0', 'MR01']) {
   const result = rules.insertLevel1BusinessNode(machineBusinessInput, {
     projectType: '整机产品项目',
@@ -519,6 +569,58 @@ const tosInsert = rules.insertLevel1BusinessNode(tosBusinessInput, {
 assert.equal(tosInsert.ok, true, 'tOS business versions can be inserted under maintenance')
 assert.equal(tosInsert.parent.stableId, 'tos-stage-maintenance')
 assert.equal(tosInsert.task.nodeKind, 'business-period')
+
+const renamedTosNode = rules.renameLevel1BusinessNode(tosInsert.tasks, {
+  projectType: 'tOS版本项目',
+  projectName: 'tOS17.0项目',
+  taskStableId: tosInsert.task.stableId,
+  taskName: '17.0.0.120',
+})
+assert.equal(renamedTosNode.ok, true, 'tOS rename accepts the project prefix and a suffix ending in 0')
+for (const invalidName of ['17.0.0.121', '17.1.0.120', '17.0.0.20']) {
+  const result = rules.renameLevel1BusinessNode(tosInsert.tasks, {
+    projectType: 'tOS版本项目',
+    projectName: 'tOS17.0项目',
+    taskStableId: tosInsert.task.stableId,
+    taskName: invalidName,
+  })
+  assert.deepEqual({ ok: result.ok, code: result.code }, { ok: false, code: 'invalid-name' }, `tOS rename rejects ${invalidName}`)
+}
+
+const renameRejectedCases = [
+  {
+    label: 'template source',
+    tasks: machineSecondInsert.tasks.map(task => task.stableId === machineSecondInsert.task.stableId ? { ...task, source: 'template' } : task),
+    code: 'task-not-custom-business',
+  },
+  {
+    label: 'non-business kind',
+    tasks: machineSecondInsert.tasks.map(task => task.stableId === machineSecondInsert.task.stableId ? { ...task, nodeKind: 'fixed-milestone' } : task),
+    code: 'task-not-custom-business',
+  },
+  {
+    label: 'dangling parent',
+    tasks: machineSecondInsert.tasks.map(task => task.stableId === machineSecondInsert.task.stableId ? { ...task, parentId: 'missing-parent' } : task),
+    code: 'parent-missing',
+  },
+  {
+    label: 'non-stage parent',
+    tasks: machineSecondInsert.tasks.map(task => task.stableId === 'machine-stage-launch'
+      ? { ...task, parentId: '1', nodeKind: 'fixed-milestone' }
+      : task),
+    code: 'parent-not-stage',
+  },
+]
+for (const testCase of renameRejectedCases) {
+  const snapshot = structuredClone(testCase.tasks)
+  const result = rules.renameLevel1BusinessNode(testCase.tasks, {
+    projectType: '整机产品项目',
+    taskStableId: machineSecondInsert.task.stableId,
+    taskName: 'MR20',
+  })
+  assert.deepEqual({ ok: result.ok, code: result.code }, { ok: false, code: testCase.code }, `rename rejects ${testCase.label}`)
+  assert.deepEqual(testCase.tasks, snapshot, `rename rejection for ${testCase.label} is immutable`)
+}
 
 const invalidTosNameInsert = rules.insertLevel1BusinessNode(tosBusinessInput, {
   projectType: 'tOS版本项目',
@@ -712,8 +814,8 @@ assert.deepEqual(
   'existing tasks preserve every non-display field and its missing, undefined, or null representation',
 )
 
-const denyAllStructure = { canAddStage: false, canAddChild: false, canDelete: false, canReorder: false }
-const allowAllStructure = { canAddStage: true, canAddChild: true, canDelete: true, canReorder: true }
+const denyAllStructure = { canAddStage: false, canAddChild: false, canRename: false, canDelete: false, canReorder: false }
+const allowAllStructure = { canAddStage: true, canAddChild: true, canRename: true, canDelete: true, canReorder: true }
 assert.deepEqual(
   rules.getLevel1StructurePermissions({
     projectType: '整机产品项目',
@@ -781,8 +883,8 @@ assert.deepEqual(
     task: machineInsert.task,
     parent: machineInsert.parent,
   }),
-  { canAddStage: false, canAddChild: true, canDelete: true, canReorder: true },
-  'SPMs can add, delete, and reorder dynamic nodes only within machine business stages',
+  { canAddStage: false, canAddChild: true, canRename: true, canDelete: true, canReorder: true },
+  'SPMs can add, rename, delete, and reorder dynamic nodes only within machine business stages',
 )
 
 const fixedBusinessChild = {
@@ -800,8 +902,8 @@ assert.deepEqual(
     task: fixedBusinessChild,
     parent: machineInsert.parent,
   }),
-  { canAddStage: false, canAddChild: true, canDelete: false, canReorder: false },
-  'SPMs cannot delete or reorder a fixed node even when its parent is a business stage',
+  { canAddStage: false, canAddChild: true, canRename: false, canDelete: false, canReorder: false },
+  'SPMs cannot rename, delete, or reorder a fixed node even when its parent is a business stage',
 )
 assert.deepEqual(
   rules.getLevel1StructurePermissions({
@@ -823,7 +925,7 @@ assert.deepEqual(
     task: tosInsert.task,
     parent: tosInsert.parent,
   }),
-  { canAddStage: false, canAddChild: true, canDelete: true, canReorder: true },
+  { canAddStage: false, canAddChild: true, canRename: true, canDelete: true, canReorder: true },
   'SPMs receive the same governed permissions under a tOS maintenance stage',
 )
 assert.deepEqual(
@@ -1424,6 +1526,8 @@ for (const label of ['阶段/节点', '计划开始时间', '计划完成时间'
 for (const label of ['阶段', '里程碑点', '活动名称', '实际开始时间', '实际完成时间']) assert.match(technicalModuleSource, new RegExp(label), `technical flat table contains ${label}`)
 assert.match(projectSpaceSource, /getLevel1StructurePermissions/, 'all governed structure actions use the centralized permission matrix')
 assert.match(projectSpaceSource, /insertLevel1BusinessNode/, 'machine and tOS controlled additions use the validated business-node helper')
+assert.match(projectSpaceSource, /renameLevel1BusinessNode/, 'business-node editing uses the validated immutable rename helper')
+assert.match(projectSpaceSource, /reorderLevel1BusinessNodes/, 'business-node dragging uses the validated immutable reorder helper')
 for (const tokenField of ['projectId', 'scopeKind', 'scopeValue', 'versionId', 'currentUser', 'parentStableId', 'editMode', 'draft']) {
   assert.match(projectSpaceSource, new RegExp(`${tokenField}[:;,]`), `structure confirmation token binds ${tokenField}`)
 }
@@ -1445,8 +1549,29 @@ assert.match(projectSpaceSource, /rowKey=\{record => record\.stableId \|\| recor
 assert.match(projectSpaceSource, /expandedRowKeys[,}]/, 'governed vertical tables expose real controlled tree expanders')
 assert.match(projectSpaceSource, /pms-level1-date-input-invalid/, 'invalid governed dates have a dedicated picker error class')
 assert.match(projectSpaceSource, /data-field/, 'governed date cells expose stable field focus targets')
-assert.match(projectSpaceSource, /添加MR里程碑/, 'whole-machine controlled insertion keeps the required action label')
-assert.match(projectSpaceSource, /添加tOS版本/, 'tOS controlled insertion exposes its own action label')
+assert.match(
+  projectSpaceSource,
+  /aria-label=\{`添加业务节点 \$\{value\}`\}[\s\S]{0,220}openLevel1Insertion\('business', record\.stableId \|\| record\.id\)/,
+  'each governed business-stage row opens insertion with that exact stage as parent',
+)
+assert.doesNotMatch(projectSpaceSource, /businessStages\[0\]/, 'business insertion never defaults to the first dynamic stage')
+assert.doesNotMatch(projectSpaceSource, /aria-label=\{isWholeMachineProject \? '添加MR里程碑' : '添加tOS版本'\}/, 'the top toolbar has no business-node insertion action')
+assert.doesNotMatch(projectSpaceSource, /aria-label="业务父阶段"/, 'stage-row business insertion no longer asks users to select a parent again')
+assert.match(
+  projectSpaceSource,
+  /const renameGovernedTask[\s\S]{0,900}getLatestLevel1MutationContext\(token\)[\s\S]{0,1200}renameLevel1BusinessNode/,
+  'rename confirmation revalidates the live draft scope and uses the governance helper before writing',
+)
+assert.match(
+  projectSpaceSource,
+  /const deleteGovernedTask[\s\S]{0,900}getLatestLevel1MutationContext\(token\)/,
+  'delete confirmation revalidates live plan and permission state before writing',
+)
+assert.match(
+  projectSpaceSource,
+  /const confirmGovernedReorder[\s\S]{0,1600}reorderLevel1BusinessNodes[\s\S]{0,350}latest\.writeTasks\(result\.tasks\)/,
+  'drag confirmation revalidates permissions and writes only a successful governed reorder result',
+)
 assert.doesNotMatch(projectSpaceSource, /isFlatGovernedLevel1Table|pms-level1-flat-milestone-table/, 'project space no longer has a special flat eight-column branch')
 assert.match(projectSpaceSource, /handleGovernedDragEnd/, 'approved custom launch children have a dedicated safe reorder path')
 assert.match(technicalStoreSource, /publishedVersions\.length <= 1[\s\S]*buildFirstLevel1RevisionTasks[\s\S]*buildNextLevel1RevisionTasks/, 'technical first and later revisions follow different synchronization rules')

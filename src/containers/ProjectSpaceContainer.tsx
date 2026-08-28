@@ -191,7 +191,9 @@ import {
   insertLevel1BusinessNode,
   isBusinessStage,
   projectLevel1Plan,
+  renameLevel1BusinessNode,
   renumberLevel1Tasks,
+  reorderLevel1BusinessNodes,
   sumLevel1EstimatedDays,
   validateLevel1ScheduleDates,
   validateTosBusinessVersionName,
@@ -3599,7 +3601,6 @@ export default function ProjectSpaceContainer() {
     })
   }
 
-  const businessStages = effectiveTasks.filter((task: any) => selectedProject && isBusinessStage(selectedProject.type, task))
   const confirmLevel1Insertion = () => {
     const dialog = level1InsertionDialog
     if (!dialog) return
@@ -3679,18 +3680,8 @@ export default function ProjectSpaceContainer() {
       isSuperAdmin: isLevel1SuperAdmin,
       isSpm: isLevel1Spm,
     })
-    const defaultBusinessParent = businessStages[0]?.stableId || ''
     return (
       <>
-        {canMaintainCurrentPlan && defaultBusinessParent && (
-          <Button
-            aria-label={isWholeMachineProject ? '添加MR里程碑' : '添加tOS版本'}
-            icon={<PlusOutlined />}
-            onClick={() => openLevel1Insertion('business', defaultBusinessParent)}
-          >
-            {isWholeMachineProject ? '添加MR里程碑' : '添加tOS版本'}
-          </Button>
-        )}
         {addStagePermission.canAddStage && (
           <Button aria-label="添加一级阶段" icon={<PlusOutlined />} onClick={() => openLevel1Insertion('stage')}>
             添加一级阶段
@@ -3709,12 +3700,11 @@ export default function ProjectSpaceContainer() {
             onCancel={() => setLevel1InsertionDialog(null)}
             onOk={confirmLevel1Insertion}
           >
-            {(level1InsertionDialog.kind === 'child'
-              || (level1InsertionDialog.kind === 'business' && level1InsertionDialog.phase === 'confirm')) && (
+            {level1InsertionDialog.kind === 'child' && (
               <Select
-                aria-label="业务父阶段"
+                aria-label="子节点父阶段"
                 value={level1InsertionDialog.token.parentStableId || undefined}
-                options={(level1InsertionDialog.kind === 'business' ? businessStages : effectiveTasks.filter((task: any) => !task.parentId))
+                options={effectiveTasks.filter((task: any) => !task.parentId)
                   .map((stage: any) => ({ value: stage.stableId || stage.id, label: stage.taskName }))}
                 onChange={parentStableId => setLevel1InsertionDialog(previous => previous ? {
                   ...previous,
@@ -3853,7 +3843,7 @@ export default function ProjectSpaceContainer() {
       }
       const getStructurePermissions = (record?: any, parent = record ? getRawParent(record) : undefined) => getLevel1StructurePermissions({
         projectType: selectedProject.type,
-        isDraft: isCurrentDraft,
+        isDraft: isCurrentDraft && isEditMode,
         isSuperAdmin: isLevel1SuperAdmin,
         isSpm: isLevel1Spm,
         task: record ? getRawTask(record) : undefined,
@@ -3865,8 +3855,22 @@ export default function ProjectSpaceContainer() {
       const canDeleteGovernedTask = (record: any) => Boolean(
         getRawTask(record) && getStructurePermissions(record).canDelete,
       )
+      const canRenameGovernedTask = (record: any) => Boolean(
+        getRawTask(record)?.source === 'custom' && getStructurePermissions(record).canRename,
+      )
+      const canAddBusinessChild = (record: any) => {
+        const rawTask = getRawTask(record)
+        return Boolean(
+          rawTask
+          && isBusinessStage(selectedProject.type, rawTask)
+          && getStructurePermissions(undefined, rawTask).canAddChild
+        )
+      }
       const canAddGenericChild = (record: any) => Boolean(
-        !record.parentId && isLevel1SuperAdmin && getStructurePermissions(undefined, getRawTask(record)).canAddChild,
+        !record.parentId
+        && isLevel1SuperAdmin
+        && !isBusinessStage(selectedProject.type, getRawTask(record))
+        && getStructurePermissions(undefined, getRawTask(record)).canAddChild,
       )
       const patchGovernedDate = (
         record: any,
@@ -3946,6 +3950,55 @@ export default function ProjectSpaceContainer() {
         ))))
         void message.success('已删除节点')
       }
+      const renameGovernedTask = (record: any) => {
+        const rawTask = getRawTask(record)
+        const parent = getRawParent(record)
+        const token = createLevel1StructureToken(parent?.stableId || parent?.id || '')
+        if (!rawTask || !token) return
+        let nextName = rawTask.taskName
+        Modal.confirm({
+          title: '修改业务节点名称',
+          content: (
+            <Input
+              autoFocus
+              defaultValue={rawTask.taskName}
+              aria-label={`业务节点新名称 ${rawTask.taskName}`}
+              onChange={event => { nextName = event.target.value }}
+            />
+          ),
+          okText: '确认修改',
+          cancelText: '取消',
+          onOk: () => {
+            const latest = getLatestLevel1MutationContext(token)
+            const latestTask = latest?.tasks.find(task => (task.stableId || task.id) === (rawTask.stableId || rawTask.id))
+            const latestParent = latestTask?.parentId ? latest?.tasks.find(task => task.id === latestTask.parentId) : undefined
+            const permissions = latest && latestTask ? getLevel1StructurePermissions({
+              projectType: latest.project.type,
+              isDraft: true,
+              isSuperAdmin: latest.isSuperAdmin,
+              isSpm: latest.isSpm,
+              task: latestTask,
+              parent: latestParent,
+            }) : null
+            if (!latest || !latestTask || !permissions?.canRename) {
+              void message.warning('结构权限或计划范围已变化，请重新操作')
+              return Promise.reject()
+            }
+            const result = renameLevel1BusinessNode(latest.tasks, {
+              projectType: latest.project.type,
+              projectName: latest.project.name,
+              taskStableId: latestTask.stableId || latestTask.id,
+              taskName: nextName,
+            })
+            if (!result.ok) {
+              void message.error(result.message)
+              return Promise.reject()
+            }
+            latest.writeTasks(result.tasks)
+            void message.success('业务节点名称已更新')
+          },
+        })
+      }
       const handleGovernedDragEnd = ({ active, over }: DragEndEvent) => {
         if (!over || active.id === over.id) return
         const activeStableId = String(active.id)
@@ -3955,9 +4008,11 @@ export default function ProjectSpaceContainer() {
         const activeParent = activeRaw?.parentId ? rawByDisplayId.get(activeRaw.parentId) : undefined
         const token = createLevel1StructureToken(activeParent?.stableId || activeParent?.id || '')
         if (!activeRaw || !overRaw || !token
-          || activeRaw.parentId !== overRaw.parentId
           || activeRaw.source !== 'custom' || overRaw.source !== 'custom'
-          || !canReorderGovernedTask(activeRaw) || !canReorderGovernedTask(overRaw)) return
+          || !canReorderGovernedTask(activeRaw) || !canReorderGovernedTask(overRaw)) {
+          void message.warning('只能调整有权限的自定义业务节点')
+          return
+        }
         setLevel1ReorderDialog({ token, activeStableId, overStableId })
       }
       const confirmGovernedReorder = () => {
@@ -3986,25 +4041,17 @@ export default function ProjectSpaceContainer() {
           parent: overParent,
         }) : null
         if (!latest || !activeTask || !overTask
-          || activeTask.parentId !== overTask.parentId
           || activeTask.source !== 'custom' || overTask.source !== 'custom'
           || !activePermissions?.canReorder || !overPermissions?.canReorder) {
           void message.warning('结构权限或计划范围已变化，请重新操作')
           return
         }
-        const siblings = latest.tasks.filter(task => task.parentId === activeTask.parentId).sort((a, b) => a.order - b.order)
-        const movable = siblings.filter(task => task.source === 'custom')
-        const oldIndex = movable.findIndex(task => (task.stableId || task.id) === dialog.activeStableId)
-        const newIndex = movable.findIndex(task => (task.stableId || task.id) === dialog.overStableId)
-        if (oldIndex < 0 || newIndex < 0) return
-        const reordered = [...movable]
-        const [moved] = reordered.splice(oldIndex, 1)
-        reordered.splice(newIndex, 0, moved)
-        const movableSlots = siblings.flatMap((task, index) => task.source === 'custom' ? [index] : [])
-        const nextSiblings = [...siblings]
-        movableSlots.forEach((slot, index) => { nextSiblings[slot] = { ...reordered[index], order: slot + 1 } })
-        const reorderedByStable = new Map(nextSiblings.map(task => [task.stableId || task.id, task]))
-        latest.writeTasks(renumberLevel1Tasks(latest.tasks.map(task => reorderedByStable.get(task.stableId || task.id) || task)))
+        const result = reorderLevel1BusinessNodes(latest.tasks, dialog.activeStableId, dialog.overStableId)
+        if (!result.ok) {
+          void message.warning(result.message)
+          return
+        }
+        latest.writeTasks(result.tasks)
         void message.success('节点顺序已更新')
       }
 
@@ -4038,21 +4085,29 @@ export default function ProjectSpaceContainer() {
       const columns: ColumnsType<any> = [
         {
           title: '序号', dataIndex: 'id', key: 'id', width: 100, fixed: 'left',
-          render: (value: string, record: any) => <Space size={6}>{canReorderGovernedTask(record) && <DragHandle />}<span>{value}</span></Space>,
+          render: (value: string, record: any) => <Space size={6}>{canReorderGovernedTask(record) && <span className="pms-level1-structure-actions"><DragHandle /></span>}<span>{value}</span></Space>,
         },
         {
           title: '阶段/节点', dataIndex: 'taskName', key: 'taskName', width: 250, fixed: 'left',
           render: (value: string, record: any) => (
             <Space size={4}>
               <span>{value}</span>
+              {canAddBusinessChild(record) && (
+                <Tooltip title="添加业务节点"><Button type="text" size="small" aria-label={`添加业务节点 ${value}`} icon={<PlusOutlined />} onClick={() => openLevel1Insertion('business', record.stableId || record.id)} /></Tooltip>
+              )}
               {canAddGenericChild(record) && (
                 <Tooltip title="添加子节点"><Button type="text" size="small" aria-label={`添加子节点 ${value}`} icon={<PlusOutlined />} onClick={() => openLevel1Insertion('child', record.stableId || record.id)} /></Tooltip>
               )}
-              {canDeleteGovernedTask(record) && (
-                <Popconfirm title="确认删除该节点？" onConfirm={() => deleteGovernedTask(record)} okText="确认" cancelText="取消">
-                  <Button type="text" danger size="small" aria-label={`删除节点 ${value}`} icon={<DeleteOutlined />} />
-                </Popconfirm>
-              )}
+              {(canRenameGovernedTask(record) || canDeleteGovernedTask(record)) && <Space size={0} className="pms-level1-structure-actions">
+                {canRenameGovernedTask(record) && (
+                  <Tooltip title="修改业务节点"><Button type="text" size="small" aria-label={`修改业务节点 ${value}`} icon={<EditOutlined />} onClick={() => renameGovernedTask(record)} /></Tooltip>
+                )}
+                {canDeleteGovernedTask(record) && (
+                  <Popconfirm title="确认删除该节点？" onConfirm={() => deleteGovernedTask(record)} okText="确认" cancelText="取消">
+                    <Button type="text" danger size="small" aria-label={`删除节点 ${value}`} icon={<DeleteOutlined />} />
+                  </Popconfirm>
+                )}
+              </Space>}
             </Space>
           ),
         },

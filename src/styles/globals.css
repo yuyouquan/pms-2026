@@ -6758,6 +6758,9 @@ body,
   font-weight: 600;
 }
 .pms-level1-tree-table .pms-level1-row-level-0:hover > td { background: #f1f5f9 !important; }
+.pms-level1-tree-table .pms-level1-structure-actions { opacity: 0; transition: opacity 0.15s ease; }
+.pms-level1-tree-table tr:hover .pms-level1-structure-actions,
+.pms-level1-tree-table .pms-level1-structure-actions:focus-within { opacity: 1; }
 .pms-level1-tree-table .pms-level1-date-input-invalid.ant-picker,
 .pms-level1-tree-table .pms-level1-date-input-invalid.ant-picker:hover,
 .pms-level1-tree-table .pms-level1-date-input-invalid.ant-picker-focused {

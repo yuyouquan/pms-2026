@@ -953,6 +953,7 @@ export interface Level1StructurePermissionInput {
 export interface Level1StructurePermissions {
   canAddStage: boolean
   canAddChild: boolean
+  canRename: boolean
   canDelete: boolean
   canReorder: boolean
 }
@@ -960,6 +961,7 @@ export interface Level1StructurePermissions {
 const denyLevel1StructurePermissions = (): Level1StructurePermissions => ({
   canAddStage: false,
   canAddChild: false,
+  canRename: false,
   canDelete: false,
   canReorder: false,
 })
@@ -970,7 +972,7 @@ export const getLevel1StructurePermissions = (
   if (!getLevel1ProjectKind(input.projectType)) return denyLevel1StructurePermissions()
   if (!input.isDraft) return denyLevel1StructurePermissions()
   if (input.isSuperAdmin) {
-    return { canAddStage: true, canAddChild: true, canDelete: true, canReorder: true }
+    return { canAddStage: true, canAddChild: true, canRename: true, canDelete: true, canReorder: true }
   }
   if (!input.isSpm) return denyLevel1StructurePermissions()
 
@@ -980,6 +982,7 @@ export const getLevel1StructurePermissions = (
   return {
     canAddStage: false,
     canAddChild: businessParent,
+    canRename: Boolean(businessParent && businessTask),
     canDelete: Boolean(businessParent && businessTask),
     canReorder: Boolean(businessParent && businessTask),
   }
@@ -1002,6 +1005,25 @@ export type InsertLevel1BusinessNodeFailureCode =
 export type InsertLevel1BusinessNodeResult =
   | { ok: true; tasks: Level1PlanTask[]; task: Level1PlanTask; parent: Level1PlanTask }
   | { ok: false; code: InsertLevel1BusinessNodeFailureCode; message: string }
+
+export interface RenameLevel1BusinessNodeInput {
+  projectType: string
+  projectName?: string
+  taskStableId: string
+  taskName: string
+}
+
+export type RenameLevel1BusinessNodeFailureCode =
+  | 'task-missing'
+  | 'task-not-custom-business'
+  | 'parent-missing'
+  | 'parent-not-stage'
+  | 'invalid-name'
+  | 'duplicate-name'
+
+export type RenameLevel1BusinessNodeResult =
+  | { ok: true; tasks: Level1PlanTask[]; task: Level1PlanTask }
+  | { ok: false; code: RenameLevel1BusinessNodeFailureCode; message: string }
 
 export type InsertNextMachineMrMilestoneResult =
   | { ok: true; tasks: Level1PlanTask[]; task: Level1PlanTask }
@@ -1079,6 +1101,42 @@ export const insertLevel1BusinessNode = (
     task: renumbered.find(task => task.stableId === stableId)!,
     parent: renumbered.find(task => task.stableId === parent.stableId)!,
   }
+}
+
+export const renameLevel1BusinessNode = (
+  tasks: readonly Level1PlanTask[],
+  input: RenameLevel1BusinessNodeInput,
+): RenameLevel1BusinessNodeResult => {
+  const task = tasks.find(candidate => (candidate.stableId || candidate.id) === input.taskStableId)
+  if (!task) return { ok: false, code: 'task-missing', message: '未找到需要修改的业务节点' }
+  if (task.source !== 'custom' || task.nodeKind !== 'business-period' || !task.parentId) {
+    return { ok: false, code: 'task-not-custom-business', message: '只能修改自定义业务节点名称' }
+  }
+  const parent = tasks.find(candidate => candidate.id === task.parentId)
+  if (!parent) return { ok: false, code: 'parent-missing', message: '未找到业务节点所属父阶段' }
+  if (parent.parentId || parent.nodeKind !== 'stage') {
+    return { ok: false, code: 'parent-not-stage', message: '业务节点父节点必须是一级阶段' }
+  }
+
+  const taskName = input.taskName.trim()
+  if (input.projectType === '整机产品项目') {
+    if (!/^MR\d+$/.test(taskName)) {
+      return { ok: false, code: 'invalid-name', message: '整机业务节点名称必须为 MR 加数字（例如 MR0、MR01 或 MR1）' }
+    }
+  } else {
+    const validation = validateTosBusinessVersionName(input.projectName || '', taskName)
+    if (!validation.valid) return { ok: false, code: 'invalid-name', message: validation.message }
+  }
+  if (tasks.some(candidate => (
+    candidate.id !== task.id
+    && candidate.parentId === task.parentId
+    && candidate.taskName === taskName
+  ))) {
+    return { ok: false, code: 'duplicate-name', message: '同一阶段中已存在同名业务节点' }
+  }
+
+  const renamedTasks = tasks.map(candidate => candidate.id === task.id ? { ...candidate, taskName } : { ...candidate })
+  return { ok: true, tasks: renamedTasks, task: renamedTasks.find(candidate => candidate.id === task.id)! }
 }
 
 export const insertNextMachineMrMilestone = (
