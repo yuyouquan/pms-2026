@@ -34,6 +34,25 @@ const horizontalVersions = [
   { id: 'v2', versionNo: 'V2', status: '已发布' },
   { id: 'v3', versionNo: 'V3', status: '修订中' },
 ]
+for (const stageName of ['上市阶段', '生命周期阶段']) {
+  assert.equal(
+    rules.isBusinessStage('整机产品项目', rules.buildMachineLevel1Tasks(true).find(task => task.taskName === stageName)),
+    true,
+    `whole-machine ${stageName} hides its horizontal duration badge`,
+  )
+}
+for (const stageName of ['上市迭代阶段', '维护阶段']) {
+  assert.equal(
+    rules.isBusinessStage('tOS版本项目', rules.buildTosLevel1Tasks(true).find(task => task.taskName === stageName)),
+    true,
+    `tOS ${stageName} hides its horizontal duration badge`,
+  )
+}
+assert.equal(
+  rules.isBusinessStage('整机产品项目', rules.buildMachineLevel1Tasks(true).find(task => task.taskName === '概念阶段')),
+  false,
+  'fixed stages retain their horizontal duration badge',
+)
 assert.deepEqual(
   versioning.getDisplayPlanVersionsForHorizontalPlan(horizontalVersions).map(version => version.id),
   ['v1', 'v2'],
@@ -43,6 +62,58 @@ assert.deepEqual(
   versioning.getDisplayPlanVersionsForHorizontalPlan(horizontalVersions, { includeDraft: true }).map(version => version.id),
   ['v1', 'v2', 'v3'],
   'maintainers can see the current revision in the horizontal plan',
+)
+assert.deepEqual(
+  projectSpaceRules.selectLevel1HorizontalVersions(horizontalVersions, { surface: 'basic-info', includeDraft: false }).map(version => version.id),
+  ['v2'],
+  'basic information exposes only the latest published level-one version',
+)
+assert.deepEqual(
+  projectSpaceRules.selectLevel1HorizontalVersions(horizontalVersions, { surface: 'basic-info', includeDraft: true }).map(version => version.id),
+  ['v2'],
+  'basic information ignores maintainer draft visibility and stays identical for every permission level',
+)
+assert.deepEqual(
+  projectSpaceRules.selectLevel1HorizontalVersions(horizontalVersions, { surface: 'project-plan', includeDraft: true }).map(version => version.id),
+  ['v1', 'v2', 'v3'],
+  'the project-plan horizontal surface retains published history and maintainer-visible revisions',
+)
+assert.deepEqual(
+  projectSpaceRules.selectLevel1HorizontalVersions([
+    { id: 'draft-only', versionNo: 'V2', status: '修订中' },
+    { id: 'broken', versionNo: 'latest', status: '已发布' },
+  ], { surface: 'basic-info', includeDraft: true }),
+  [],
+  'basic information returns a stable empty result when no valid published version exists',
+)
+assert.deepEqual(
+  projectSpaceRules.selectLevel1HorizontalVersions([
+    { id: 'v3.9', versionNo: 'V3.9', status: '已发布' },
+    { id: 'v3.10', versionNo: 'V3.10', status: '已发布' },
+  ], { surface: 'basic-info' }).map(version => version.id),
+  ['v3.10'],
+  'basic information compares numeric version segments instead of sorting them lexically',
+)
+assert.equal(
+  projectSpaceRules.sumLevel1StageEstimatedDays([
+    { id: '1', parentId: null, estimatedDays: 10 },
+    { id: '1.1', parentId: '1', estimatedDays: 500 },
+    { id: '2', estimatedDays: 70 },
+    { id: '2.1', parentId: '2', estimatedDays: 600 },
+    { id: '3', parentId: '', estimatedDays: 20 },
+  ]),
+  100,
+  'horizontal development cycle sums root-stage durations without double-counting child values',
+)
+assert.equal(
+  projectSpaceRules.sumLevel1StageEstimatedDays([
+    { id: '1', parentId: null, estimatedDays: null },
+    { id: '2', parentId: null, estimatedDays: Number.NaN },
+    { id: '3', parentId: null, estimatedDays: -1 },
+    { id: '3.1', parentId: '3', estimatedDays: 20 },
+  ]),
+  0,
+  'horizontal development cycle treats empty, negative, and invalid root-stage durations as zero',
 )
 
 assert.deepEqual(projectSpaceRules.LEVEL1_TREE_FILTER_FIELDS.map(field => field.label), [
@@ -1727,16 +1798,20 @@ assert.match(
 assert.match(projectSpaceSource, /planEndDate:\s*task\.planEndDate\s*\|\|\s*''/, 'tOS project initialization preserves project-linked mock plan dates')
 assert.match(projectSpaceSource, /actualStartDate:\s*task\.actualStartDate\s*\|\|\s*''/, 'tOS project initialization restores the project-list mock actual start date after clearing execution fields')
 assert.match(projectSpaceSource, /actualEndDate:\s*task\.actualEndDate\s*\|\|\s*''/, 'tOS project initialization restores the project-list mock actual end date after clearing execution fields')
-assert.match(projectSpaceSource, /getDisplayPlanVersionsForHorizontalPlan\(horizontalVersions,\s*\{\s*includeDraft:\s*level1SurfaceCanMaintain\s*\}\)/, 'horizontal plan exposes scoped level-one drafts to maintainers')
-assert.match(projectSpaceSource, /sumLevel1EstimatedDays\(vProjection\.rows\)/, 'horizontal development cycle uses the estimated-duration total')
+assert.match(projectSpaceSource, /selectLevel1HorizontalVersions\(horizontalVersions,\s*\{\s*surface,\s*includeDraft:\s*surface === 'project-plan' && level1SurfaceCanMaintain,?\s*\}\)/, 'horizontal surfaces select versions explicitly and only project-plan exposes drafts to maintainers')
+assert.match(projectSpaceSource, /sumLevel1StageEstimatedDays\(vProjection\.rows\)/, 'horizontal development cycle sums root-stage estimated durations only')
 assert.match(projectSpaceSource, /versionProjections\s*=\s*displayVersions\.map/, 'horizontal rows project each version from its own source tasks')
 assert.match(projectSpaceSource, /getLevel1SurfaceVersionTasks\(version\)/, 'horizontal rows resolve each version from the current project dimension')
-const horizontalTableStart = projectSpaceSource.indexOf('const renderHorizontalTable = () =>')
+const horizontalTableStart = projectSpaceSource.indexOf('const renderHorizontalTable = (surface: Level1HorizontalSurface) =>')
 const horizontalTableEnd = projectSpaceSource.indexOf('// ═══════ renderActionButtons', horizontalTableStart)
 const horizontalTableSource = projectSpaceSource.slice(horizontalTableStart, horizontalTableEnd)
+assert.ok(horizontalTableStart >= 0 && horizontalTableEnd > horizontalTableStart, 'horizontal renderer requires an explicit surface instead of inferring the current tab')
+assert.match(horizontalTableSource, /versionProjections\.map\([\s\S]*<tr key=\{version\.id\}/, 'horizontal renderer outputs one row per selected version')
+assert.equal((horizontalTableSource.match(/<tr style=\{\{ background: '#fffbe6' \}\}>/g) || []).length, 1, 'horizontal renderer appends exactly one actual row after selected versions')
 assert.match(horizontalTableSource, /const vMilestones = resolveLevel1HorizontalVersionCells\(allMilestones, vProjection\.rows\)/, 'each horizontal version row resolves cells from that version projection')
 assert.match(horizontalTableSource, /const actualMilestones = resolveLevel1HorizontalVersionCells\(allMilestones, actualRows\)/, 'the horizontal actual row resolves cells from the latest published projection')
 assert.match(horizontalTableSource, /actualMilestones\.map\(\(actualTask:/, 'the horizontal actual row renders the resolved published cells')
+assert.match(horizontalTableSource, /所有一级阶段的预估工期总和[\s\S]{0,180}sumLevel1StageEstimatedDays\(actualRows\)/, 'the actual row development cycle uses the latest published root-stage estimated-duration total')
 assert.doesNotMatch(horizontalTableSource, /actualRows\.find\([\s\S]{0,180}\)\s*\|\|\s*m/, 'a missing published actual cell never falls back to a draft/header task')
 const horizontalHeaderStart = projectSpaceSource.indexOf('{stageGroups.map(({ stage, colSpan }, i) => {')
 const horizontalHeaderEnd = projectSpaceSource.indexOf('</thead>', horizontalHeaderStart)
@@ -1746,6 +1821,16 @@ assert.match(horizontalHeaderSource, /const dynamicBusinessStage = selectedProje
 assert.match(horizontalHeaderSource, /!dynamicBusinessStage[\s\S]{0,240}stage\.estimatedDays/, 'dynamic business stages omit the duration badge while fixed stages retain it')
 assert.match(horizontalHeaderSource, /textAlign:\s*'center'/, 'horizontal stage names are centered')
 assert.doesNotMatch(horizontalHeaderSource, /manpowerPercent|planStartDate|planEndDate|~/, 'horizontal stage headers omit percentages and date ranges')
+const basicInfoHorizontalCalls = [
+  projectSpaceSource.slice(projectSpaceSource.indexOf('const renderWholeMachinePlanInfo ='), projectSpaceSource.indexOf('const anchorSections =')),
+  projectSpaceSource.slice(projectSpaceSource.indexOf('const renderProjectPlanInfo ='), projectSpaceSource.indexOf('// ═══════ renderProjectOverview')),
+]
+for (const basicInfoSource of basicInfoHorizontalCalls) {
+  assert.match(basicInfoSource, /renderHorizontalTable\('basic-info'\)/, 'each basic-information plan surface requests the two-row basic-info horizontal view explicitly')
+}
+const projectPlanHorizontalSource = projectSpaceSource.slice(projectSpaceSource.indexOf('// ═══════ renderProjectPlan ═══════'), projectSpaceSource.indexOf('// ═══════ Sidebar menu items'))
+assert.match(projectPlanHorizontalSource, /projectPlanViewMode === 'horizontal' \? renderHorizontalTable\('project-plan'\)/, 'the plan module explicitly retains the project-plan horizontal version behavior')
+assert.doesNotMatch(projectSpaceSource, /横版只读/, 'the obsolete horizontal-readonly label is absent')
 assert.match(projectSpaceSource, /version\.status === '修订中'[\s\S]{0,240}aria-label="修订中"/, 'draft version numbers carry a revision-state icon')
 assert.equal((projectSpaceSource.match(/<ClickToEditDate\s+align="center"/g) || []).length >= 2, true, 'editable horizontal dates align with read-only date text')
 const verticalExportStart = projectSpaceSource.indexOf("const handleExportVerticalPlan = (scope: 'current' | 'all') =>")
@@ -1760,7 +1845,8 @@ assert.match(horizontalExportSource, /versionProjections/, 'horizontal current/a
 assert.match(horizontalExportSource, /getLevel1SurfaceVersionTasks\(version\)/, 'horizontal export resolves every version from its own scoped snapshot')
 assert.match(horizontalExportSource, /for \(const match of resolveLevel1HorizontalVersionCells\(allMilestones, projection\.rows\)\)/, 'horizontal export version cells resolve from each version projection')
 assert.match(horizontalExportSource, /for \(const task of resolveLevel1HorizontalVersionCells\(allMilestones, actualRows\)\)/, 'horizontal export actual cells resolve from the latest published projection')
-assert.match(horizontalExportSource, /\[version\.versionNo,\s*sumLevel1EstimatedDays\(projection\.rows\)\s*\?\?\s*'-'\]/, 'horizontal export development cycle reuses the same estimated-duration sum as the page')
+assert.match(horizontalExportSource, /\[version\.versionNo,\s*sumLevel1StageEstimatedDays\(projection\.rows\)\]/, 'horizontal export development cycle reuses the same root-stage duration sum as the page')
+assert.match(horizontalExportSource, /\['实际',\s*sumLevel1StageEstimatedDays\(actualRows\)\]/, 'horizontal export actual row uses the latest published root-stage estimated-duration total')
 assert.doesNotMatch(horizontalExportSource, /calcCycleDays\(projection\.rows,\s*'planStartDate',\s*'planEndDate'\)/, 'horizontal export never derives planned development cycle from calendar min/max')
 assert.doesNotMatch(horizontalExportSource, /versionOffsetIndex|shiftDateStrForExport|projectLevel1Plan\(effectiveTasks/, 'horizontal export never fabricates historical versions from the current live plan')
 const compareHandlerStart = projectSpaceSource.indexOf('const handleComparePlanVersions = () =>')

@@ -22,7 +22,7 @@ const loadTypescriptModule = async relativePath => {
 const level1Rules = await loadTypescriptModule('src/lib/level1PlanRules.ts')
 const technicalRules = await loadTypescriptModule('src/lib/technicalPlanRules.ts')
 const ganttRules = await loadTypescriptModule('src/lib/planGanttRules.ts')
-const projectSpaceLevel1Rules = await loadTypescriptModule('src/lib/projectSpaceLevel1Rules.ts')
+const projectSpaceLevel1Rules = loadTypeScriptModule(root, 'src/lib/projectSpaceLevel1Rules.ts')
 const versionCompareRules = await loadTypescriptModule('src/lib/versionCompare.ts')
 
 const machineTemplate = level1Rules.buildMachineLevel1Tasks(true)
@@ -961,7 +961,7 @@ assert.deepEqual(
   ['-', '-', '-'],
   'a V4-draft-only MR4 leaks no actual date, status, or duration into the published V3 actual row',
 )
-const horizontalActualUiStart = projectSpaceSource.indexOf("const actualProjection = recencyVersionProjections.find(entry => entry.version.status === '已发布')?.projection", projectSpaceSource.indexOf('const renderHorizontalTable = () =>'))
+const horizontalActualUiStart = projectSpaceSource.indexOf("const actualProjection = recencyVersionProjections.find(entry => entry.version.status === '已发布')?.projection", projectSpaceSource.indexOf('const renderHorizontalTable = (surface: Level1HorizontalSurface) =>'))
 const horizontalActualUiEnd = projectSpaceSource.indexOf('// ═══════ renderActionButtons', horizontalActualUiStart)
 const horizontalActualUiSource = projectSpaceSource.slice(horizontalActualUiStart, horizontalActualUiEnd)
 assert.match(horizontalActualUiSource, /const actualMilestones = resolveLevel1HorizontalVersionCells\(allMilestones, actualRows\)/, 'horizontal UI resolves the actual row once from the latest published projection')
@@ -992,7 +992,7 @@ assert.equal(projectSpaceLevel1SurfaceState.deriveLevel1SurfaceVersionState({
   followedReadOnly: false,
   scopeUnavailable: false,
 }).isLatestPublished, true, 'V3.10 sorts after V3.9 when deciding whether scoped L1 actual dates are maintainable')
-const horizontalUiStateSource = projectSpaceSource.slice(projectSpaceSource.indexOf('const renderHorizontalTable = () =>'), projectSpaceSource.indexOf('// ═══════ renderActionButtons'))
+const horizontalUiStateSource = projectSpaceSource.slice(projectSpaceSource.indexOf('const renderHorizontalTable = (surface: Level1HorizontalSurface) =>'), projectSpaceSource.indexOf('// ═══════ renderActionButtons'))
 for (const stateName of ['level1SurfaceIsDraft', 'level1SurfaceIsLatestPublished', 'level1SurfaceCanMaintain', 'setLevel1SurfaceTasks']) {
   assert.match(horizontalUiStateSource, new RegExp(stateName), `basic-information horizontal UI uses dedicated ${stateName}`)
 }

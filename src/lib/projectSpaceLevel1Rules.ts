@@ -1,3 +1,9 @@
+import {
+  comparePlanVersions,
+  getDisplayPlanVersionsForHorizontalPlan,
+  parsePlanVersionNo,
+} from '@/lib/planVersioning'
+
 export interface ActualFieldsTask {
   id: string
   stableId?: string
@@ -25,6 +31,48 @@ export const mergeActualFieldsByStableId = <Task extends ActualFieldsTask>(
       }
     : { ...task })
 }
+
+export type Level1HorizontalSurface = 'basic-info' | 'project-plan'
+
+export interface Level1HorizontalVersion {
+  id: string
+  versionNo: string
+  status?: string
+}
+
+export const selectLevel1HorizontalVersions = <Version extends Level1HorizontalVersion>(
+  versions: readonly Version[],
+  options: {
+    surface: Level1HorizontalSurface
+    includeDraft?: boolean
+  },
+): Version[] => {
+  if (options.surface === 'project-plan') {
+    return getDisplayPlanVersionsForHorizontalPlan([...versions], {
+      includeDraft: options.includeDraft,
+    })
+  }
+
+  const latestPublished = versions
+    .filter(version => version.status === '已发布' && parsePlanVersionNo(version.versionNo))
+    .sort((left, right) => comparePlanVersions(right, left))[0]
+  return latestPublished ? [latestPublished] : []
+}
+
+export interface Level1StageDurationRow {
+  parentId?: string | null
+  estimatedDays?: unknown
+}
+
+export const sumLevel1StageEstimatedDays = (
+  rows: readonly Level1StageDurationRow[],
+): number => rows.reduce((total, row) => {
+  if (row.parentId) return total
+  const duration = row.estimatedDays
+  return typeof duration === 'number' && Number.isFinite(duration) && duration >= 0
+    ? total + duration
+    : total
+}, 0)
 
 export const LEVEL1_FLAT_FILTER_FIELDS = [
   { key: 'sequence', label: '序号', kind: 'text' },

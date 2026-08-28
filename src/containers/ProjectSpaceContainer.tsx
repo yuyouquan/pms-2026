@@ -68,7 +68,6 @@ import { resolveMachineTosUpdate } from '@/lib/machineTosVersions'
 import { resolveVisiblePlanVersion } from '@/lib/todoAggregation'
 import {
   comparePlanVersions,
-  getDisplayPlanVersionsForHorizontalPlan,
   getNextPlanRevisionVersionNo,
   getPlanVersionId,
   parsePlanVersionNo,
@@ -195,7 +194,6 @@ import {
   renameLevel1BusinessNode,
   renumberLevel1Tasks,
   reorderLevel1BusinessNodes,
-  sumLevel1EstimatedDays,
   validateLevel1ScheduleDates,
   validateTosBusinessVersionName,
   parseTosProjectVersionPrefix,
@@ -210,7 +208,10 @@ import {
   LEVEL1_TREE_FILTER_FIELDS,
   filterLevel1TreeRows,
   getLevel1MaintainerUsers,
+  selectLevel1HorizontalVersions,
   selectLatestPublishedLevel1Summary,
+  sumLevel1StageEstimatedDays,
+  type Level1HorizontalSurface,
   type ProjectSpaceLevel1ScopeToken,
 } from '@/lib/projectSpaceLevel1Rules'
 import {
@@ -3402,7 +3403,10 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleExportHorizontalPlan = (_scope: 'current' | 'all') => {
-    const displayVersions = getDisplayPlanVersionsForHorizontalPlan(level1SurfaceVersions, { includeDraft: level1SurfaceCanMaintain })
+    const displayVersions = selectLevel1HorizontalVersions(level1SurfaceVersions, {
+      surface: 'project-plan',
+      includeDraft: level1SurfaceCanMaintain,
+    })
     const versionProjections = displayVersions.map(version => ({
       version,
       projection: projectLevel1Plan(getLevel1SurfaceVersionTasks(version), { mode: 'standard' }),
@@ -3418,10 +3422,9 @@ export default function ProjectSpaceContainer() {
     const merges: any[] = [{ s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } }]
     let colCursor = 2
     for (const { stage, milestones, colSpan } of stageGroups) { headerRow0.push(stage.taskName); for (let i = 1; i < colSpan; i++) headerRow0.push(null); if (milestones.length > 0) { for (const m of milestones) headerRow1.push(m.taskName) } else headerRow1.push('-'); merges.push({ s: { r: 0, c: colCursor }, e: { r: 0, c: colCursor + colSpan - 1 } }); colCursor += colSpan }
-    const calcActualCycleDays = (list: any[]) => { const starts = list.map(t => t.actualStartDate).filter(Boolean).map((d: string) => new Date(d).getTime()); const ends = list.map(t => t.actualEndDate).filter(Boolean).map((d: string) => new Date(d).getTime()); if (starts.length === 0 || ends.length === 0) return '-'; const days = Math.ceil((Math.max(...ends) - Math.min(...starts)) / (1000 * 60 * 60 * 24)); return days > 0 ? days : '-' }
     const dataMatrix: (string | number)[][] = []
     for (const { version, projection } of versionProjections) {
-      const row: (string | number)[] = [version.versionNo, sumLevel1EstimatedDays(projection.rows) ?? '-']
+      const row: (string | number)[] = [version.versionNo, sumLevel1StageEstimatedDays(projection.rows)]
       for (const match of resolveLevel1HorizontalVersionCells(allMilestones, projection.rows)) {
         row.push(match?.planEndDate || '-')
       }
@@ -3429,7 +3432,7 @@ export default function ProjectSpaceContainer() {
     }
     const actualProjection = recencyVersionProjections.find(entry => entry.version.status === '已发布')?.projection
     const actualRows = actualProjection?.rows || []
-    const actualRow: (string | number)[] = ['实际', calcActualCycleDays(actualRows)]
+    const actualRow: (string | number)[] = ['实际', sumLevel1StageEstimatedDays(actualRows)]
     for (const task of resolveLevel1HorizontalVersionCells(allMilestones, actualRows)) {
       actualRow.push(task?.actualEndDate || '-')
     }
@@ -4523,11 +4526,14 @@ export default function ProjectSpaceContainer() {
   }
 
   // ═══════ renderHorizontalTable ═══════
-  const renderHorizontalTable = () => {
+  const renderHorizontalTable = (surface: Level1HorizontalSurface) => {
     // 基础信息里的横版计划始终展示一级计划版本，不能受用户上次停留的计划层级影响。
     const horizontalVersions = level1SurfaceVersions
     const horizontalCurrentVersion = level1SurfaceCurrentVersionData?.id || level1SurfaceCurrentVersion
-    const displayVersions = getDisplayPlanVersionsForHorizontalPlan(horizontalVersions, { includeDraft: level1SurfaceCanMaintain })
+    const displayVersions = selectLevel1HorizontalVersions(horizontalVersions, {
+      surface,
+      includeDraft: surface === 'project-plan' && level1SurfaceCanMaintain,
+    })
     const versionProjections = displayVersions.map(version => ({
       version,
       projection: projectLevel1Plan(getLevel1SurfaceVersionTasks(version), { mode: 'standard' }),
@@ -4588,7 +4594,7 @@ export default function ProjectSpaceContainer() {
           <tbody>
             {versionProjections.map(({ version, projection: vProjection }) => {
               const vMilestones = resolveLevel1HorizontalVersionCells(allMilestones, vProjection.rows)
-              const devCycle = sumLevel1EstimatedDays(vProjection.rows)
+              const devCycle = sumLevel1StageEstimatedDays(vProjection.rows)
               const isLatest = version.id === latestDisplayVersionId
               return (
                 <tr key={version.id} style={isLatest ? { background: '#fafffe' } : undefined}>
@@ -4615,13 +4621,7 @@ export default function ProjectSpaceContainer() {
             })}
             <tr style={{ background: '#fffbe6' }}>
               <td style={{ ...versionTdStyle, color: '#d48806', background: '#fffbe6', fontSize: 12 }}><Tooltip title="最近已发布版本的实际完成数据"><span>实际</span></Tooltip></td>
-              <td style={{ ...cycleTdStyle, background: '#fffbe6' }}><Tooltip title="最早实际开始到最晚实际完成的天数"><span>{(() => {
-                const starts = actualRows.map(task => task.actualStartDate).filter(Boolean).map(date => new Date(date).getTime())
-                const ends = actualRows.map(task => task.actualEndDate).filter(Boolean).map(date => new Date(date).getTime())
-                if (starts.length === 0 || ends.length === 0) return '-'
-                const days = Math.ceil((Math.max(...ends) - Math.min(...starts)) / (1000 * 60 * 60 * 24))
-                return days > 0 ? days : '-'
-              })()}</span></Tooltip></td>
+              <td style={{ ...cycleTdStyle, background: '#fffbe6' }}><Tooltip title="所有一级阶段的预估工期总和"><span>{sumLevel1StageEstimatedDays(actualRows)}</span></Tooltip></td>
               {actualMilestones.map((actualTask: any, mi: number) => (
                 <td key={mi} style={{ ...tdStyle, color: '#d48806' }}>
                   {actualTask && level1SurfaceCanMaintain && level1SurfaceIsLatestPublished
@@ -4971,7 +4971,7 @@ export default function ProjectSpaceContainer() {
                       isCancelPaused={row.isCancelPaused}
                       cancelPauseDate={row.isCancelPaused === '是' ? row.cancelPauseDate : undefined}
                     />
-                    {renderHorizontalTable()}
+                    {renderHorizontalTable('basic-info')}
                   </div>
                 ),
               }
@@ -5283,7 +5283,7 @@ export default function ProjectSpaceContainer() {
         {!isTosVersionProject && (
           <div style={{ fontSize: 13, fontWeight: 600, color: '#9ca3af', marginBottom: 12, textTransform: 'uppercase' as const, letterSpacing: 1 }}>里程碑计划（横排视图）</div>
         )}
-        {renderHorizontalTable()}
+        {renderHorizontalTable('basic-info')}
       </>
     )
     return (
@@ -5773,7 +5773,7 @@ export default function ProjectSpaceContainer() {
             onViewModeChange={(viewMode) => setProjectPlanViewMode(viewMode === 'vertical' ? 'table' : viewMode)}
             horizontalDisabled={projectPlanLevel !== 'level1'}
           >
-            {projectPlanLevel === 'level1' && (projectPlanViewMode === 'gantt' ? renderGanttChart() : projectPlanViewMode === 'horizontal' ? renderHorizontalTable() : renderTaskTable())}
+            {projectPlanLevel === 'level1' && (projectPlanViewMode === 'gantt' ? renderGanttChart() : projectPlanViewMode === 'horizontal' ? renderHorizontalTable('project-plan') : renderTaskTable())}
           </PlanWorkspaceShell>
         )}
           </>
