@@ -9,18 +9,50 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import vm from 'node:vm'
 import puppeteer from 'puppeteer'
 import * as XLSX from 'xlsx'
 
 const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const TIMEOUT = Number(process.env.PMS_BROWSER_TIMEOUT || 30_000)
+const INTERACTIVE_TIMEOUT = Number(process.env.PMS_BROWSER_INTERACTIVE_TIMEOUT || 60_000)
 const CASE_TIMEOUT = Number(process.env.PMS_BROWSER_CASE_TIMEOUT || 360_000)
 const ONLY_CASE = process.env.PMS_BROWSER_CASE || ''
-const VALID_BROWSER_CASES = new Set(['', 'all', 'templates', 'machine', 'machine-surface', 'machine-summary', 'machine-structure', 'machine-reorder', 'machine-invalid', 'machine-follow-actual', 'machine-permission', 'tos', 'tos-surface', 'technical'])
+const VALID_BROWSER_CASES = new Set(['', 'all', 'templates', 'machine', 'machine-surface', 'machine-summary', 'machine-structure', 'machine-reorder', 'machine-invalid', 'machine-follow-actual', 'machine-permission', 'tos', 'tos-surface', 'tos-name-rules', 'technical'])
 export const shouldRunTask7FocusedBrowserCase = (requestedCase, focusedCase) => (
   requestedCase === 'all' || requestedCase === focusedCase
 )
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
+let applicationBundlesReady = false
+const waitForApplicationBundlesReady = async () => {
+  if (applicationBundlesReady) return
+  const deadline = Date.now() + INTERACTIVE_TIMEOUT
+  let lastError = null
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(BASE_URL)
+      if (!response.ok) throw new Error(`root preflight returned HTTP ${response.status}`)
+      const html = await response.text()
+      const scriptUrls = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)]
+        .map(match => new URL(match[1].replaceAll('&amp;', '&'), BASE_URL).href)
+      if (!scriptUrls.length) throw new Error('root preflight found no client scripts')
+      for (const scriptUrl of scriptUrls) {
+        const scriptResponse = await fetch(scriptUrl)
+        if (!scriptResponse.ok) throw new Error(`${scriptUrl} returned HTTP ${scriptResponse.status}`)
+        const source = await scriptResponse.text()
+        if (!source.trim()) throw new Error(`${scriptUrl} returned an empty client script`)
+        new vm.Script(source, { filename: scriptUrl })
+      }
+      applicationBundlesReady = true
+      console.log(`browser preflight validated ${scriptUrls.length} client bundles`)
+      return
+    } catch (error) {
+      lastError = error
+      await wait(500)
+    }
+  }
+  throw new Error(`client bundles did not become ready within ${INTERACTIVE_TIMEOUT}ms: ${lastError?.message || lastError}`)
+}
 const isAllowedConsoleMessage = message => {
   const text = message.text()
   const location = message.location()
@@ -32,15 +64,53 @@ const isAllowedConsoleMessage = message => {
 }
 
 if (!VALID_BROWSER_CASES.has(ONLY_CASE)) {
-  throw new Error(`unknown PMS_BROWSER_CASE=${JSON.stringify(ONLY_CASE)}; expected all, templates, machine, machine-surface, machine-summary, machine-structure, machine-reorder, machine-invalid, machine-follow-actual, machine-permission, tos, tos-surface, or technical`)
+  throw new Error(`unknown PMS_BROWSER_CASE=${JSON.stringify(ONLY_CASE)}; expected all, templates, machine, machine-surface, machine-summary, machine-structure, machine-reorder, machine-invalid, machine-follow-actual, machine-permission, tos, tos-surface, tos-name-rules, or technical`)
 }
 
 const PLAYWRIGHT_OUTPUT = path.join(process.cwd(), 'output', 'playwright')
-fs.mkdirSync(PLAYWRIGHT_OUTPUT, { recursive: true })
+const UPDATE_SCREENSHOTS = process.env.PMS_BROWSER_UPDATE_SCREENSHOTS === '1'
+const EVIDENCE_OUTPUT = UPDATE_SCREENSHOTS
+  ? PLAYWRIGHT_OUTPUT
+  : fs.mkdtempSync(path.join(os.tmpdir(), 'pms-level1-playwright-'))
+fs.mkdirSync(EVIDENCE_OUTPUT, { recursive: true })
 const captureEvidence = (page, name) => page.screenshot({
-  path: path.join(PLAYWRIGHT_OUTPUT, `${name}.png`),
+  path: path.join(EVIDENCE_OUTPUT, `${name}.png`),
   fullPage: true,
 })
+
+const PAGE_ERRORS = new WeakMap()
+const waitForReactControlReady = async (page, role, text) => {
+  const waitForMountedMenu = () => page.waitForFunction(({ role, text }) => {
+    const element = [...document.querySelectorAll(`[role="${role}"]`)].find(node => {
+      const rect = node.getBoundingClientRect()
+      const style = getComputedStyle(node)
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+        && node.textContent?.trim() === text
+    })
+    // rc-menu adds its stable data-menu-id during client mounting; unlike
+    // React expando properties this is visible from Puppeteer's isolated
+    // execution world and is absent from the raw server-rendered menu item.
+    return Boolean(element?.getAttribute('data-menu-id'))
+  }, { timeout: INTERACTIVE_TIMEOUT }, { role, text })
+  try {
+    await waitForMountedMenu()
+  } catch (error) {
+    if (error?.name !== 'TimeoutError') throw error
+    const browserErrors = PAGE_ERRORS.get(page) || []
+    if (browserErrors.length) throw new Error(`client mounting failed with browser errors:\n${browserErrors.join('\n')}`, { cause: error })
+    const recoverableSsrState = await page.evaluate(({ role, text }) => {
+      const element = [...document.querySelectorAll(`[role="${role}"]`)].find(node => {
+        const rect = node.getBoundingClientRect()
+        return rect.width > 0 && rect.height > 0 && node.textContent?.trim() === text
+      })
+      return document.readyState === 'complete' && Boolean(element) && !element?.getAttribute('data-menu-id')
+    }, { role, text })
+    if (!recoverableSsrState) throw error
+    console.log(`browser detected completed SSR without client mount for ${text}; reloading once`)
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: INTERACTIVE_TIMEOUT })
+    await waitForMountedMenu()
+  }
+}
 
 const clickExact = async (page, text, selector = 'button,[role="menuitem"],[role="tab"],td,div,span,label') => {
   const activation = await page.evaluate(({ text, selector }) => {
@@ -271,6 +341,12 @@ const assertHorizontalStageHeader = async (page, stageName, { dynamic }) => {
     assert.equal(stage.tagCount, 1, `${stageName} fixed stage keeps one duration badge`)
   }
 }
+const assertHorizontalStageOrder = async (page, expected) => {
+  const actual = await page.$$eval('[aria-label="一级计划横版"] thead tr:first-child th [data-stage-label]', labels => (
+    labels.map(label => label.textContent?.trim() || '').filter(Boolean)
+  ))
+  assert.deepEqual(actual, expected, 'horizontal view renders exactly the approved five stages in order')
+}
 const readHorizontalActualDateCell = async page => page.$eval('[aria-label="一级计划横版"]', table => {
   const headers = [...table.querySelectorAll('thead tr:nth-child(2) th')]
     .map(header => header.textContent?.trim() || '')
@@ -291,6 +367,25 @@ const readHorizontalVersionCycles = async page => page.$eval('[aria-label="一�
     .filter(cells => /^V\d+/.test(cells[0] || ''))
     .map(cells => [cells[0], Number(cells[1])]),
 ))
+const readRootStageDurationSumFromTree = async page => page.$eval('.pms-level1-tree-table', table => (
+  [...table.querySelectorAll('tbody tr')].reduce((sum, row) => {
+    const sequence = row.querySelector('td')?.textContent?.trim() || ''
+    if (!/^\d+$/.test(sequence)) return sum
+    const duration = row.querySelectorAll('td')[4]?.textContent?.trim() || ''
+    const match = duration.match(/^(\d+)天$/)
+    return sum + (match ? Number(match[1]) : 0)
+  }, 0)
+))
+const assertHorizontalCyclesMatchRootStages = async (page, cycles) => {
+  for (const [versionNo, displayedCycle] of Object.entries(cycles)) {
+    await chooseVersion(page, versionNo)
+    await selectView(page, '竖版表格')
+    await page.waitForSelector('.pms-level1-tree-table tbody tr', { timeout: TIMEOUT })
+    const independentRootStageSum = await readRootStageDurationSumFromTree(page)
+    assert.equal(displayedCycle, independentRootStageSum, `${versionNo} development cycle exactly equals its root-stage estimated-duration sum`)
+    await selectView(page, '横版表格')
+  }
+}
 const readHorizontalRowLabels = async page => page.$$eval('[aria-label="一级计划横版"] tbody tr', rows => rows
   .map(row => row.querySelector('td')?.textContent?.trim() || '')
   .filter(Boolean))
@@ -453,6 +548,11 @@ const treeDate = async (page, table, name, field) => page.$eval(table, (element,
   const cell = row?.querySelector(`td[data-field="${fieldName}"]`)
   return cell?.querySelector('input')?.value || cell?.textContent?.trim() || null
 }, { taskName: name, fieldName: field })
+const readStageDateSnapshots = async (page, table, stageNames) => Object.fromEntries(await Promise.all(stageNames.map(async stageName => [
+  stageName,
+  Object.fromEntries(await Promise.all(['planStartDate', 'planEndDate', 'actualStartDate', 'actualEndDate']
+    .map(async field => [field, await treeDate(page, table, stageName, field)]))),
+])))
 const treeActualDays = async (page, table, name) => page.$eval(table, (element, taskName) => {
   const row = [...element.querySelectorAll('tbody tr')].find(item => item.textContent?.includes(taskName))
   return row?.querySelectorAll('td')[7]?.textContent?.trim() || null
@@ -479,14 +579,24 @@ const replaceAriaInputValue = async (page, label, value) => {
 const latestMessageText = page => page.$$eval('.ant-message-notice-content', nodes => nodes
   .filter(node => node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().height > 0)
   .at(-1)?.textContent?.trim() || '')
-const assertTosBusinessNameRejected = async (page, table, name, expectedMessage) => {
+const countTreeTaskName = (page, table, name) => page.$$eval(`${table} tbody tr`, (rows, taskName) => rows
+  .filter(row => row.querySelectorAll('td')[1]?.textContent?.trim() === taskName).length, name)
+const assertBusinessNameRejected = async (page, table, { dialogTitle, name, expectedMessage }) => {
+  const beforeCount = await countTreeTaskName(page, table, name)
   await replaceAriaInputValue(page, '业务节点名称', name)
-  await clickDialogButton(page, '输入 tOS 版本名称', '确认添加')
+  await clickDialogButton(page, dialogTitle, '确认添加')
   await page.waitForFunction(text => [...document.querySelectorAll('.ant-message-notice-content')]
     .some(node => node.getBoundingClientRect().width > 0 && node.textContent?.trim() === text), { timeout: TIMEOUT }, expectedMessage)
   assert.equal(await latestMessageText(page), expectedMessage, `${name} is rejected with the exact public validation message`)
   assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => node.value), name, `${name} rejection keeps the name dialog open`)
-  assert.ok(!(await textOf(page, table)).includes(name), `${name} rejection does not insert a tOS business node`)
+  assert.equal(await countTreeTaskName(page, table, name), beforeCount, `${name} rejection does not write another tree row`)
+}
+const assertTosBusinessNameRejected = async (page, table, name, expectedMessage) => {
+  await assertBusinessNameRejected(page, table, {
+    dialogTitle: '输入 tOS 版本名称',
+    name,
+    expectedMessage,
+  })
 }
 const renameBusinessNode = async (page, oldName, nextName) => {
   await pressAriaButton(page, `修改业务节点 ${oldName}`)
@@ -784,6 +894,48 @@ const ganttTaskIdForName = async (page, name) => {
   await wait(300)
   return findVisibleTask()
 }
+const ganttTaskIdAnyForName = (page, name) => page.evaluate(taskName => {
+  const api = window.gantt
+  if (!api?.eachTask) return null
+  let taskId = null
+  api.eachTask(task => {
+    if (taskId === null && task.text === taskName) taskId = String(task.id)
+  })
+  return taskId
+}, name)
+const assertAllStageProjectsReadonly = async (page, stageNames) => {
+  for (const stageName of stageNames) {
+    const taskId = await ganttTaskIdAnyForName(page, stageName)
+    assert.ok(taskId, `${stageName} exists in the public DHTMLX task model`)
+    await page.evaluate(id => window.gantt.showTask(id), taskId)
+    await wait(250)
+    const selector = `.gantt_task_line.pms-gantt-project.pms-gantt-task-readonly[task_id="${taskId}"]`
+    const before = await page.$eval(selector, (node, id) => {
+      const rect = node.getBoundingClientRect()
+      const task = window.gantt.getTask(id)
+      return {
+        x: rect.x,
+        width: rect.width,
+        start: task.start_date?.toISOString?.() || String(task.start_date),
+        end: task.end_date?.toISOString?.() || String(task.end_date),
+      }
+    }, taskId)
+    const attempted = await dragTask(page, selector, 48)
+    assert.equal(attempted.hitTaskId, taskId, `${stageName} drag attempt targets its real project bar`)
+    assert.equal(attempted.sawDragMove, false, `${stageName} never enters the DHTMLX move lifecycle`)
+    const after = await page.$eval(selector, (node, id) => {
+      const rect = node.getBoundingClientRect()
+      const task = window.gantt.getTask(id)
+      return {
+        x: rect.x,
+        width: rect.width,
+        start: task.start_date?.toISOString?.() || String(task.start_date),
+        end: task.end_date?.toISOString?.() || String(task.end_date),
+      }
+    }, taskId)
+    assert.deepEqual(after, before, `${stageName} drag attempt leaves position and DHTMLX dates unchanged`)
+  }
+}
 const scrollGanttToEnd = async page => {
   const scrolled = await page.evaluate(() => {
     const scrollbar = document.querySelector('.gantt_hor_scroll')
@@ -919,18 +1071,17 @@ const clickProjectCell = async (page, project) => {
 
 const enterProject = async (page, project) => {
   // The Next development websocket deliberately keeps the network busy.
-  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: TIMEOUT })
-  await wait(2_000)
+  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: INTERACTIVE_TIMEOUT })
+  await waitForReactControlReady(page, 'menuitem', '项目列表')
   console.log(`browser entered root for ${project}`)
   // AntD's navigation item can retain its focus/active class without the
   // selected class during its exit animation. The public list-view control is
   // the stable, rendered proof that the destination has loaded.
   let projectListReady = Boolean(await page.$('[aria-label="项目列表视图"]'))
-  for (let attempt = 0; attempt < 3 && !projectListReady; attempt += 1) {
+  if (!projectListReady) {
     await clickRoleText(page, 'menuitem', '项目列表')
-    projectListReady = await page.waitForSelector('[aria-label="项目列表视图"]', { timeout: 5_000 })
-      .then(() => true)
-      .catch(() => false)
+    await page.waitForSelector('[aria-label="项目列表视图"]', { timeout: INTERACTIVE_TIMEOUT })
+    projectListReady = true
   }
   if (!projectListReady) throw new Error(`project-list navigation did not hydrate for ${project}`)
   console.log(`browser opened list for ${project}`)
@@ -1137,6 +1288,7 @@ const reopenProjectInContext = async (page, errors, project, tab) => {
 const assertNoErrors = errors => assert.deepEqual(errors, [], `browser errors:\n${errors.join('\n')}`)
 
 const attachPageChecks = (page, errors) => {
+  PAGE_ERRORS.set(page, errors)
   page.setDefaultTimeout(TIMEOUT)
   page.on('pageerror', error => errors.push(`pageerror: ${error instanceof Error ? error.message : `non-Error payload ${String(error)}`}`))
   page.on('console', message => {
@@ -1150,6 +1302,7 @@ let executedCases = 0
 const runCase = async (title, test) => {
   executedCases += 1
   console.log(`RUN browser ${title}`)
+  await waitForApplicationBundlesReady()
   const browser = await puppeteer.launch({ headless: 'new', protocolTimeout: Math.max(60_000, TIMEOUT * 2), args: ['--no-sandbox'] })
   try {
     const context = await browser.createBrowserContext()
@@ -1186,20 +1339,10 @@ const runCase = async (title, test) => {
 
 try {
   if (!ONLY_CASE || ONLY_CASE === 'templates') await runCase('configuration templates keep the approved project families', async (page) => {
-    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: TIMEOUT })
-    await wait(2_000)
-    let configReady = false
-    for (let attempt = 0; attempt < 3 && !configReady; attempt += 1) {
-      if (attempt > 0) {
-        await page.reload({ waitUntil: 'domcontentloaded', timeout: TIMEOUT })
-        await wait(1_000)
-      }
-      await clickRoleText(page, 'menuitem', '配置中心')
-      configReady = await page.waitForSelector('[aria-label="配置中心模块"]', { timeout: 5_000 })
-        .then(() => true)
-        .catch(() => false)
-    }
-    if (!configReady) throw new Error('configuration-center navigation did not hydrate')
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: INTERACTIVE_TIMEOUT })
+    await waitForReactControlReady(page, 'menuitem', '配置中心')
+    await clickRoleText(page, 'menuitem', '配置中心')
+    await page.waitForSelector('[aria-label="配置中心模块"]', { timeout: INTERACTIVE_TIMEOUT })
     const planConfigVisible = await page.evaluate(() => document.body.innerText.includes('配置和管理项目计划模板'))
     if (!planConfigVisible) await clickExact(page, '计划模板配置', 'label,button')
     await page.waitForSelector('.pms-config-template-content-card .ant-table', { timeout: TIMEOUT })
@@ -1237,6 +1380,7 @@ try {
       ...(shouldRunTask7FocusedBrowserCase(ONLY_CASE, 'machine-follow-actual') ? ['machine-follow-actual'] : []),
       'tos-surface',
       'tos',
+      'tos-name-rules',
       'technical',
     ]
     for (const focusedCase of focusedCases) {
@@ -1259,13 +1403,14 @@ try {
     await enterProject(page, 'X6877-D8400_H991')
     assert.ok(await page.$('.pms-plan-view-mode-switcher input[aria-label="横版表格"]:checked'), 'machine level-one plan defaults to horizontal view')
     if (!ONLY_CASE || ONLY_CASE === 'machine' || shouldRunTask7FocusedBrowserCase(ONLY_CASE, 'machine-surface')) {
+      await assertHorizontalStageOrder(page, ['概念阶段', '计划阶段', '开发验证阶段', '上市阶段', '生命周期阶段'])
       await assertHorizontalStageHeader(page, '概念阶段', { dynamic: false })
       await assertHorizontalStageHeader(page, '上市阶段', { dynamic: true })
       await assertHorizontalStageHeader(page, '生命周期阶段', { dynamic: true })
       const projectPlanRows = await readHorizontalRowLabels(page)
       assert.ok(projectPlanRows.length > 2 && projectPlanRows.includes('实际'), `plan-module horizontal retains revision/history rows: ${JSON.stringify(projectPlanRows)}`)
       const horizontalVersionCycles = await readHorizontalVersionCycles(page)
-      assert.ok(Object.values(horizontalVersionCycles).every(Number.isFinite), `development cycles render the root-stage estimated-day sum: ${JSON.stringify(horizontalVersionCycles)}`)
+      await assertHorizontalCyclesMatchRootStages(page, horizontalVersionCycles)
       const horizontalCurrentWorkbook = await downloadPlanWorkbook(page, '导出当前视图')
       const horizontalAllWorkbook = await downloadPlanWorkbook(page, '导出全部')
       for (const [scope, workbook] of [['current', horizontalCurrentWorkbook], ['all', horizontalAllWorkbook]]) {
@@ -1310,6 +1455,12 @@ try {
     const machineBusinessParent = '生命周期阶段'
     await openBusinessInsertion(page, 'machine', machineBusinessParent)
     assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => node.value), 'MR4', 'machine name phase offers the next validated MR name')
+    await assertBusinessNameRejected(page, table, {
+      dialogTitle: '输入 MR 里程碑名称',
+      name: 'MRX',
+      expectedMessage: '整机业务节点名称必须为 MR 加数字（例如 MR0、MR01 或 MR1）',
+    })
+    await replaceAriaInputValue(page, '业务节点名称', 'MR4')
     await clickButtonText(page, '确认添加')
     await page.waitForFunction(() => document.body.innerText.includes('MR4'), { timeout: TIMEOUT })
     await waitForDialogToClose(page, '输入 MR 里程碑名称')
@@ -1320,6 +1471,15 @@ try {
     await page.waitForFunction(selector => document.querySelector(selector)?.textContent?.includes('MR40'), { timeout: TIMEOUT }, table)
     await renameBusinessNode(page, 'MR40', 'MR4')
     await page.waitForFunction(selector => document.querySelector(selector)?.textContent?.includes('MR4'), { timeout: TIMEOUT }, table)
+    await openBusinessInsertion(page, 'machine', machineBusinessParent)
+    await replaceAriaInputValue(page, '业务节点名称', 'MR4')
+    await assertBusinessNameRejected(page, table, {
+      dialogTitle: '输入 MR 里程碑名称',
+      name: 'MR4',
+      expectedMessage: '一级计划中已存在同名业务节点',
+    })
+    await page.keyboard.press('Escape')
+    await waitForDialogToClose(page, '输入 MR 里程碑名称')
     assert.ok(await page.$('button[aria-label="删除节点 概念启动"]'), 'super-admin can discover the fixed-template delete exception')
     await selectView(page, '甘特图')
     const undatedBusinessTaskId = await ganttTaskIdForName(page, 'MR4')
@@ -1402,7 +1562,8 @@ try {
 
     if (ONLY_CASE === 'machine-invalid') {
       const previousFixedDate = await treeDate(page, table, '概念启动', 'planEndDate')
-      const invalidFixedDate = addIsoDays(previousFixedDate, -1)
+      const publishedStr1Date = await treeDate(page, table, 'STR1', 'planEndDate')
+      const invalidFixedDate = previousFixedDate
       await editTreeDate(page, table, 'STR1', 'planEndDate', invalidFixedDate)
       const invalidPicker = `${table} td[data-field="planEndDate"]:has([aria-label="planEndDate STR1"]) .pms-level1-date-input-invalid`
       assert.ok(await page.$(invalidPicker), 'focused fixed-order case renders a red DatePicker on STR1')
@@ -1421,6 +1582,8 @@ try {
       await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'planEndDate STR1', { timeout: TIMEOUT })
       const focusedRowText = await page.evaluate(() => document.activeElement?.closest('tr')?.textContent || '')
       assert.ok(focusedRowText.includes('STR1'), 'focused fixed-order case resolves the stable hidden STR1 row after restoring vertical view')
+      await chooseVersion(page, 'V3 (已发布)')
+      assert.equal(await treeDate(page, table, 'STR1', 'planEndDate'), publishedStr1Date, 'same-day fixed-node conflict is not written into the published plan')
       console.log(`browser machine fixed invalid STR1=${invalidFixedDate} after 概念启动=${previousFixedDate}; tooltip=${exactReason}; publish blocked and focused`)
       return
     }
@@ -1494,12 +1657,18 @@ try {
     const draggedMilestoneName = '概念启动'
     const beforeDate = await treeDate(page, table, draggedMilestoneName, 'planEndDate')
     assert.ok(beforeDate, `${draggedMilestoneName} has a plan completion date before gantt drag`)
+    const machineStageNames = ['概念阶段', '计划阶段', '开发验证阶段', '上市阶段', '生命周期阶段']
+    const machineStageDatesBeforeReadonlyDrags = await readStageDateSnapshots(page, table, machineStageNames)
 
     await selectView(page, '甘特图')
     await page.waitForSelector('.gantt_task_line', { timeout: TIMEOUT })
     console.log('browser machine gantt rendered')
     assert.ok(await page.$('.gantt_task_line.pms-gantt-project.pms-gantt-task-readonly'), 'stage is rendered readonly')
     assert.ok(await page.$('.gantt_task_line.pms-gantt-milestone.pms-gantt-task-editable'), 'draft milestone is rendered editable')
+    await assertAllStageProjectsReadonly(page, machineStageNames)
+    await selectView(page, '竖版表格')
+    assert.deepEqual(await readStageDateSnapshots(page, table, machineStageNames), machineStageDatesBeforeReadonlyDrags, 'all five machine stage drag attempts leave persisted aggregate dates unchanged')
+    await selectView(page, '甘特图')
     await captureEvidence(page, 'level1-machine-gantt-milestone-period')
     console.log('browser machine gantt readonly/editable class contract passed')
     assertNoErrors(errors)
@@ -1815,6 +1984,7 @@ try {
     let page = initialPage
     await enterProject(page, 'tOS16.1')
     assert.ok(await page.$('.pms-plan-view-mode-switcher input[aria-label="横版表格"]:checked'), 'tOS level-one plan defaults to horizontal view')
+    await assertHorizontalStageOrder(page, ['概念阶段', '计划阶段', '开发验证阶段', '上市迭代阶段', '维护阶段'])
     await assertHorizontalStageHeader(page, '概念阶段', { dynamic: false })
     await assertHorizontalStageHeader(page, '上市迭代阶段', { dynamic: true })
     await assertHorizontalStageHeader(page, '维护阶段', { dynamic: true })
@@ -1872,6 +2042,11 @@ try {
     await waitForDialogToClose(page, '输入 tOS 版本名称')
     await page.waitForFunction((selector, taskName) => document.querySelector(selector)?.textContent?.includes(taskName), { timeout: TIMEOUT }, table, tosBusinessName)
     assert.ok(await page.$(`button[aria-label="删除节点 ${tosBusinessName}"]`), 'custom tOS business version has a delete affordance')
+    await openBusinessInsertion(page, 'tos', '上市迭代阶段')
+    await replaceAriaInputValue(page, '业务节点名称', tosBusinessName)
+    await assertTosBusinessNameRejected(page, table, tosBusinessName, '一级计划中已存在同名业务节点')
+    await page.keyboard.press('Escape')
+    await waitForDialogToClose(page, '输入 tOS 版本名称')
     console.log(`browser tOS rejected 16.2.0.005 / 16.1.0.003 / 16.1.0.05 with ${tosNameValidationMessage}; inserted launch ${tosBusinessName}`)
 
     await editTreeDate(page, table, tosBusinessName, 'planStartDate', '2027-05-01')
@@ -1899,8 +2074,14 @@ try {
 
     const milestoneName = '概念启动'
     const beforeDate = await treeDate(page, table, milestoneName, 'planEndDate')
+    const tosStageNames = ['概念阶段', '计划阶段', '开发验证阶段', '上市迭代阶段', '维护阶段']
+    const tosStageDatesBeforeReadonlyDrags = await readStageDateSnapshots(page, table, tosStageNames)
     await selectView(page, '甘特图')
     assert.ok(await page.$('.gantt_task_line.pms-gantt-project.pms-gantt-task-readonly'), 'tOS stages are locked')
+    await assertAllStageProjectsReadonly(page, tosStageNames)
+    await selectView(page, '竖版表格')
+    assert.deepEqual(await readStageDateSnapshots(page, table, tosStageNames), tosStageDatesBeforeReadonlyDrags, 'all five tOS stage drag attempts leave persisted aggregate dates unchanged')
+    await selectView(page, '甘特图')
     const milestoneId = await ganttTaskIdForName(page, milestoneName)
     assert.ok(milestoneId, 'tOS dated milestone has a public DHTMLX task_id')
     const milestone = `.gantt_task_line.pms-gantt-milestone.pms-gantt-task-editable[task_id="${milestoneId}"]`
@@ -2008,6 +2189,52 @@ try {
     assert.ok((await textOf(page, table)).includes(tosBusinessName), 'paired-draft custom business node survives published actual patches and same-context reopen')
     assert.ok((await textOf(page, table)).includes(tosMaintenanceName), 'paired-draft maintenance business node survives published actual patches and same-context reopen')
     console.log('browser tOS published actual field-level merge/reopen contract passed')
+  })
+
+  if (!ONLY_CASE || ONLY_CASE === 'tos-name-rules') await runCase('tOS 16.3 and controlled 17.0 project-name rules', async (page) => {
+    const table = '.pms-level1-tree-table'
+    await enterProject(page, 'tOS16.3')
+    await selectView(page, '竖版表格')
+    await ensureDraft(page)
+    await openBusinessInsertion(page, 'tos', '上市迭代阶段')
+    const tos163Message = '版本号必须符合 16.3.0.XXX，且尾号最后一位为0或5'
+    await assertTosBusinessNameRejected(page, table, '16.3.0.126', tos163Message)
+    await replaceAriaInputValue(page, '业务节点名称', '16.3.0.125')
+    await clickDialogButton(page, '输入 tOS 版本名称', '确认添加')
+    await waitForDialogToClose(page, '输入 tOS 版本名称')
+    assert.equal(await countTreeTaskName(page, table, '16.3.0.125'), 1, 'tOS16.3 accepts the legal .125 suffix through the public UI')
+    await openBusinessInsertion(page, 'tos', '上市迭代阶段')
+    await assertTosBusinessNameRejected(page, table, '16.3.0.125', '一级计划中已存在同名业务节点')
+    await page.keyboard.press('Escape')
+    await waitForDialogToClose(page, '输入 tOS 版本名称')
+
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: INTERACTIVE_TIMEOUT })
+    await waitForReactControlReady(page, 'menuitem', '项目列表')
+    await page.waitForFunction(() => Boolean(localStorage.getItem('pms-projects')), { timeout: INTERACTIVE_TIMEOUT })
+    const seeded = await page.evaluate(() => {
+      const raw = localStorage.getItem('pms-projects')
+      if (!raw) return false
+      const payload = JSON.parse(raw)
+      const project = payload?.state?.projects?.find(item => item.id === '6')
+      if (!project) return false
+      project.name = 'tOS17.0'
+      project.tosVersion = 'tOS17.0'
+      project.version = 'tOS17.0-V1'
+      localStorage.setItem('pms-projects', JSON.stringify(payload))
+      return true
+    })
+    assert.ok(seeded, 'controlled localStorage seed derives tOS17.0 from the existing tOS project without changing production mocks')
+    await enterProject(page, 'tOS17.0')
+    await selectView(page, '竖版表格')
+    await ensureDraft(page)
+    await openBusinessInsertion(page, 'tos', '上市迭代阶段')
+    const tos170Message = '版本号必须符合 17.0.0.XXX，且尾号最后一位为0或5'
+    await assertTosBusinessNameRejected(page, table, '16.3.0.126', tos170Message)
+    await replaceAriaInputValue(page, '业务节点名称', '17.0.0.125')
+    await clickDialogButton(page, '输入 tOS 版本名称', '确认添加')
+    await waitForDialogToClose(page, '输入 tOS 版本名称')
+    assert.equal(await countTreeTaskName(page, table, '17.0.0.125'), 1, 'controlled tOS17.0 project accepts 17.0.0.125 through the public UI')
+    console.log('browser tOS16.3/17.0 prefix, suffix, legal and duplicate name rules passed')
   })
 
   if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'technical') await runCase('technical TDT and subproject contracts', async (initialPage, errors) => {
