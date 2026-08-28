@@ -107,31 +107,43 @@ export const MACHINE_LEVEL1_TEMPLATE_TASKS: Level1PlanTask[] = [
   templateTask('machine-stage-planning', null, 1, '计划阶段', 'stage'),
   templateTask('machine-ms-str2', 'machine-stage-planning', 0, 'STR2', 'fixed-milestone', 'SPM'),
   templateTask('machine-ms-str3', 'machine-stage-planning', 1, 'STR3', 'fixed-milestone', 'SPM'),
-  templateTask('machine-stage-development', null, 2, '开发阶段', 'stage'),
+  templateTask('machine-stage-development', null, 2, '开发验证阶段', 'stage'),
   templateTask('machine-ms-str4', 'machine-stage-development', 0, 'STR4', 'fixed-milestone', 'SPM'),
   templateTask('machine-ms-str4a', 'machine-stage-development', 1, 'STR4A', 'fixed-milestone', 'SPM'),
-  templateTask('machine-stage-validation', null, 3, '验证阶段', 'stage'),
-  templateTask('machine-ms-str5', 'machine-stage-validation', 0, 'STR5', 'fixed-milestone', 'SPM'),
-  templateTask('machine-stage-launch', null, 4, '上市阶段', 'stage'),
-  templateTask('machine-stage-lifecycle', null, 5, '生命周期阶段', 'stage'),
+  templateTask('machine-ms-str5', 'machine-stage-development', 2, 'STR5', 'fixed-milestone', 'SPM'),
+  templateTask('machine-stage-launch', null, 3, '上市阶段', 'stage'),
+  templateTask('machine-stage-lifecycle', null, 4, '生命周期阶段', 'stage'),
 ]
 
 export const TOS_LEVEL1_TEMPLATE_TASKS: Level1PlanTask[] = [
-  templateTask('tos-stage-planning', null, 0, '规划阶段', 'stage'),
-  templateTask('tos-ms-planning-ko', 'tos-stage-planning', 0, '规划KO', 'fixed-milestone', 'SPM'),
-  templateTask('tos-ms-cdcp', 'tos-stage-planning', 1, 'CDCP', 'fixed-milestone', 'SPM'),
-  templateTask('tos-stage-concept', null, 1, '概念阶段', 'stage'),
+  templateTask('tos-stage-concept', null, 0, '概念阶段', 'stage'),
   templateTask('tos-ms-concept-kickoff', 'tos-stage-concept', 0, '概念启动', 'fixed-milestone', 'SPM'),
   templateTask('tos-ms-str1', 'tos-stage-concept', 1, 'STR1', 'fixed-milestone', 'SPM'),
-  templateTask('tos-stage-plan', null, 2, '计划阶段', 'stage'),
+  templateTask('tos-stage-plan', null, 1, '计划阶段', 'stage'),
   templateTask('tos-ms-str2', 'tos-stage-plan', 0, 'STR2', 'fixed-milestone', 'SPM'),
   templateTask('tos-ms-str3', 'tos-stage-plan', 1, 'STR3', 'fixed-milestone', 'SPM'),
-  templateTask('tos-stage-development-validation', null, 3, '开发验证阶段', 'stage'),
+  templateTask('tos-stage-development-validation', null, 2, '开发验证阶段', 'stage'),
   templateTask('tos-ms-str4', 'tos-stage-development-validation', 0, 'STR4', 'fixed-milestone', 'SPM'),
   templateTask('tos-ms-str4a', 'tos-stage-development-validation', 1, 'STR4A', 'fixed-milestone', 'SPM'),
   templateTask('tos-ms-str5', 'tos-stage-development-validation', 2, 'STR5', 'fixed-milestone', 'SPM'),
-  templateTask('tos-stage-launch-iteration', null, 4, '上市迭代阶段', 'stage'),
-  templateTask('tos-stage-maintenance', null, 5, '维护阶段', 'stage'),
+  templateTask('tos-stage-launch-iteration', null, 3, '上市迭代阶段', 'stage'),
+  templateTask('tos-stage-maintenance', null, 4, '维护阶段', 'stage'),
+]
+
+export const CAPABILITY_LEVEL1_TEMPLATE_TASKS: Level1PlanTask[] = [
+  templateTask('capability-stage-concept', null, 0, '概念阶段', 'stage'),
+  templateTask('capability-ms-concept-kickoff', 'capability-stage-concept', 0, '概念启动', 'fixed-milestone', 'SPM'),
+  templateTask('capability-ms-str1', 'capability-stage-concept', 1, 'STR1', 'fixed-milestone', 'SPM'),
+  templateTask('capability-stage-planning', null, 1, '计划阶段', 'stage'),
+  templateTask('capability-ms-str2', 'capability-stage-planning', 0, 'STR2', 'fixed-milestone', 'SPM'),
+  templateTask('capability-ms-str3', 'capability-stage-planning', 1, 'STR3', 'fixed-milestone', 'SPM'),
+  templateTask('capability-stage-development', null, 2, '开发阶段', 'stage'),
+  templateTask('capability-ms-str4', 'capability-stage-development', 0, 'STR4', 'fixed-milestone', 'SPM'),
+  templateTask('capability-ms-str4a', 'capability-stage-development', 1, 'STR4A', 'fixed-milestone', 'SPM'),
+  templateTask('capability-stage-validation', null, 3, '验证阶段', 'stage'),
+  templateTask('capability-ms-str5', 'capability-stage-validation', 0, 'STR5', 'fixed-milestone', 'SPM'),
+  templateTask('capability-stage-launch', null, 4, '上市阶段', 'stage'),
+  templateTask('capability-stage-lifecycle', null, 5, '生命周期阶段', 'stage'),
 ]
 
 /** Compatibility export for callers that have not yet selected a project-specific template. */
@@ -148,8 +160,6 @@ const MACHINE_MOCK_DATES: Record<string, { planEndDate: string; actualEndDate: s
 }
 
 const TOS_MOCK_DATES: Record<string, { planEndDate: string; actualEndDate: string }> = {
-  'tos-ms-planning-ko': { planEndDate: '2026-01-15', actualEndDate: '2026-01-16' },
-  'tos-ms-cdcp': { planEndDate: '2026-02-05', actualEndDate: '2026-02-05' },
   'tos-ms-concept-kickoff': { planEndDate: '2026-02-26', actualEndDate: '2026-02-27' },
   'tos-ms-str1': { planEndDate: '2026-03-17', actualEndDate: '2026-03-18' },
   'tos-ms-str2': { planEndDate: '2026-04-28', actualEndDate: '2026-04-28' },
@@ -157,6 +167,16 @@ const TOS_MOCK_DATES: Record<string, { planEndDate: string; actualEndDate: strin
   'tos-ms-str4': { planEndDate: '2026-07-31', actualEndDate: '2026-07-31' },
   'tos-ms-str4a': { planEndDate: '2026-10-12', actualEndDate: '2026-10-12' },
   'tos-ms-str5': { planEndDate: '2026-12-15', actualEndDate: '2026-12-15' },
+}
+
+const CAPABILITY_MOCK_DATES: Record<string, { planEndDate: string; actualEndDate: string }> = {
+  'capability-ms-concept-kickoff': MACHINE_MOCK_DATES['machine-ms-concept-kickoff'],
+  'capability-ms-str1': MACHINE_MOCK_DATES['machine-ms-str1'],
+  'capability-ms-str2': MACHINE_MOCK_DATES['machine-ms-str2'],
+  'capability-ms-str3': MACHINE_MOCK_DATES['machine-ms-str3'],
+  'capability-ms-str4': MACHINE_MOCK_DATES['machine-ms-str4'],
+  'capability-ms-str4a': MACHINE_MOCK_DATES['machine-ms-str4a'],
+  'capability-ms-str5': MACHINE_MOCK_DATES['machine-ms-str5'],
 }
 
 const buildTemplateTasks = (
@@ -209,12 +229,18 @@ export const buildTosLevel1Tasks = (withMockDates = true): Level1PlanTask[] => (
   buildTemplateTasks(TOS_LEVEL1_TEMPLATE_TASKS, TOS_MOCK_DATES, withMockDates)
 )
 
+export const buildCapabilityLevel1Tasks = (withMockDates = true): Level1PlanTask[] => (
+  buildTemplateTasks(CAPABILITY_LEVEL1_TEMPLATE_TASKS, CAPABILITY_MOCK_DATES, withMockDates)
+)
+
 export const buildLevel1TasksForProjectType = (
   projectType: string,
   withMockDates = true,
-): Level1PlanTask[] => projectType === 'tOS版本项目'
-  ? buildTosLevel1Tasks(withMockDates)
-  : buildMachineLevel1Tasks(withMockDates)
+): Level1PlanTask[] => {
+  if (projectType === 'tOS版本项目') return buildTosLevel1Tasks(withMockDates)
+  if (projectType === '能力建设项目') return buildCapabilityLevel1Tasks(withMockDates)
+  return buildMachineLevel1Tasks(withMockDates)
+}
 
 /** Whole-machine compatibility alias for legacy callers pending scoped migration. */
 export const buildStandardLevel1Tasks = buildMachineLevel1Tasks

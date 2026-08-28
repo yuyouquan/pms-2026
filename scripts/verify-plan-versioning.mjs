@@ -9,6 +9,7 @@ const ts = require('typescript')
 
 const root = process.cwd()
 const sourcePath = path.join(root, 'src/lib/planVersioning.ts')
+const planStorePath = path.join(root, 'src/stores/plan.ts')
 
 if (!fs.existsSync(sourcePath)) {
   console.error('Plan versioning helper is missing: src/lib/planVersioning.ts')
@@ -16,6 +17,8 @@ if (!fs.existsSync(sourcePath)) {
 }
 
 const source = fs.readFileSync(sourcePath, 'utf8')
+const planStoreSource = fs.readFileSync(planStorePath, 'utf8')
+const planStoreVersion = Number(planStoreSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1])
 const compiled = ts.transpileModule(source, {
   compilerOptions: {
     module: ts.ModuleKind.CommonJS,
@@ -50,6 +53,9 @@ const cases = [
 ]
 
 const failures = []
+if (planStoreVersion !== 9) {
+  failures.push(`plan persistence version should be V9: expected 9, got ${planStoreVersion}`)
+}
 for (const testCase of cases) {
   const actual = getNextPlanRevisionVersionNo(testCase.input, testCase.kind)
   if (actual !== testCase.expected) {

@@ -67,7 +67,7 @@ assert.deepEqual(migrated.publishedSnapshots['template::技术项目::level1::v3
 const planSource = readSource(root, 'src/stores/plan.ts')
 const configSource = readSource(root, 'src/containers/ConfigContainer.tsx')
 assert.match(planSource, /PLAN_STORE_VERSION\s*=\s*\d+/, 'plan store declares a persistence version')
-assert.equal(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]), 8, 'plan store migrates project-specific persisted level-one scopes exactly once')
+assert.equal(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]), 9, 'plan store migrates machine and tOS persisted level-one scopes exactly once')
 assert.match(planSource, /setTechnicalTemplateTasks/, 'plan store exposes a validating technical-template setter')
 assert.match(planSource, /validateTechnicalTemplateDepth/, 'plan store enforces technical template depth')
 assert.doesNotMatch(configSource, /publishedSnapshots\[versionId\]/, 'config snapshots never fall back across template scopes')

@@ -1084,7 +1084,10 @@ export default function ProjectSpaceContainer() {
     if (!selectedProject) return LEVEL1_TASKS
     const projectTemplateTasks = getTemplateTasksForProjectType(configTemplateTasksByType, selectedProject.type)
       || LEVEL1_TEMPLATE_TASKS
-    return buildProjectListMockPlanTasks(selectedProject.id, projectTemplateTasks)
+    return buildProjectListMockPlanTasks(selectedProject.id, projectTemplateTasks, {
+      projectType: selectedProject.type,
+      projectName: selectedProject.name,
+    })
   }, [configTemplateTasksByType, selectedProject])
   const tosTypeSeedEntry = useMemo<TosTypePlanEntry>(() => {
     const templateSnapshot = latestTemplateVersion
@@ -1099,7 +1102,10 @@ export default function ProjectSpaceContainer() {
       || getTemplateTasksForProjectType(configTemplateTasksByType, PROJECT_TYPE_TOS_VERSION)
       || LEVEL1_TEMPLATE_TASKS
     const projectSeedTasks = selectedProject
-      ? buildProjectListMockPlanTasks(selectedProject.id, templateTasks)
+      ? buildProjectListMockPlanTasks(selectedProject.id, templateTasks, {
+          projectType: selectedProject.type,
+          projectName: selectedProject.name,
+        })
       : templateTasks
     return createTosTypePlanEntry({
       level1Tasks: projectSeedTasks.map(task => {
@@ -2203,8 +2209,10 @@ export default function ProjectSpaceContainer() {
     const mainMarketVersions = mainMarket ? getVersionsForMarket(mainMarket) : versions
     const mainSourceVersion = getLatestActivePlanVersion(mainMarketVersions)
     const followRevisionKind = getPlanRevisionKindFromVersion(mainSourceVersion)
-    const ensuredMarketPlanData = ensureMarketPlanDataForRows(marketPlanData, normalizedRows, LEVEL1_TASKS, FIXED_LEVEL2_PLANS)
-    const mainTasksForFollow = mainMarket ? (ensuredMarketPlanData[mainMarket]?.tasks || LEVEL1_TASKS) : LEVEL1_TASKS
+    const ensuredMarketPlanData = ensureMarketPlanDataForRows(marketPlanData, normalizedRows, projectLinkedLevel1MockTasks, FIXED_LEVEL2_PLANS)
+    const mainTasksForFollow = mainMarket
+      ? (ensuredMarketPlanData[mainMarket]?.tasks || projectLinkedLevel1MockTasks)
+      : projectLinkedLevel1MockTasks
     const syncedMarketPlanData = newlyFollowedMarkets.reduce((acc, market) => {
       const existing = acc[market] || { tasks: [], level2Tasks: [], createdLevel2Plans: [...FIXED_LEVEL2_PLANS] }
       const latestFollowPublished = getLatestPublishedPlanVersion(getVersionsForMarket(market))

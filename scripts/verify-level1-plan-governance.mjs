@@ -297,11 +297,10 @@ assert.deepEqual(
     ['machine-stage-planning', null, '计划阶段', 'stage'],
     ['machine-ms-str2', 'machine-stage-planning', 'STR2', 'fixed-milestone'],
     ['machine-ms-str3', 'machine-stage-planning', 'STR3', 'fixed-milestone'],
-    ['machine-stage-development', null, '开发阶段', 'stage'],
+    ['machine-stage-development', null, '开发验证阶段', 'stage'],
     ['machine-ms-str4', 'machine-stage-development', 'STR4', 'fixed-milestone'],
     ['machine-ms-str4a', 'machine-stage-development', 'STR4A', 'fixed-milestone'],
-    ['machine-stage-validation', null, '验证阶段', 'stage'],
-    ['machine-ms-str5', 'machine-stage-validation', 'STR5', 'fixed-milestone'],
+    ['machine-ms-str5', 'machine-stage-development', 'STR5', 'fixed-milestone'],
     ['machine-stage-launch', null, '上市阶段', 'stage'],
     ['machine-stage-lifecycle', null, '生命周期阶段', 'stage'],
   ],
@@ -318,9 +317,6 @@ const tosTemplateTasks = rules.buildLevel1TasksForProjectType('tOS版本项目',
 assert.deepEqual(
   describeTemplate(tosTemplateTasks),
   [
-    ['tos-stage-planning', null, '规划阶段', 'stage'],
-    ['tos-ms-planning-ko', 'tos-stage-planning', '规划KO', 'fixed-milestone'],
-    ['tos-ms-cdcp', 'tos-stage-planning', 'CDCP', 'fixed-milestone'],
     ['tos-stage-concept', null, '概念阶段', 'stage'],
     ['tos-ms-concept-kickoff', 'tos-stage-concept', '概念启动', 'fixed-milestone'],
     ['tos-ms-str1', 'tos-stage-concept', 'STR1', 'fixed-milestone'],
@@ -336,6 +332,7 @@ assert.deepEqual(
   ],
   'tOS templates keep explicit stable IDs, parent links, names, and node kinds',
 )
+assert.equal(tosTemplateTasks.some(task => ['规划阶段', '规划KO', 'CDCP'].includes(task.taskName)), false, 'tOS V9 templates remove every legacy planning node')
 assert.equal(
   tosTemplateTasks.some(task => ['上市迭代阶段', '维护阶段'].includes(task.taskName)
     && tosTemplateTasks.some(child => child.parentId === task.id)),
@@ -343,6 +340,65 @@ assert.equal(
   'tOS business stages start empty',
 )
 assert.deepEqual(rules.buildStandardLevel1Tasks(true), machineTemplateTasks, 'the standard builder remains a whole-machine compatibility alias')
+
+const machineUndatedTemplate = rules.buildLevel1TasksForProjectType('整机产品项目', false)
+const tosUndatedTemplate = rules.buildLevel1TasksForProjectType('tOS版本项目', false)
+assert.equal(machineUndatedTemplate.every(task => !task.planStartDate && !task.planEndDate && !task.actualStartDate && !task.actualEndDate), true, 'machine configuration templates contain no mock dates')
+assert.equal(tosUndatedTemplate.every(task => !task.planStartDate && !task.planEndDate && !task.actualStartDate && !task.actualEndDate), true, 'tOS configuration templates contain no mock dates')
+const capabilityTemplateTasks = rules.buildLevel1TasksForProjectType('能力建设项目', false)
+assert.deepEqual(
+  capabilityTemplateTasks.filter(task => !task.parentId).map(task => task.taskName),
+  ['概念阶段', '计划阶段', '开发阶段', '验证阶段', '上市阶段', '生命周期阶段'],
+  'capability projects retain their existing six-stage structure',
+)
+assert.notDeepEqual(describeTemplate(capabilityTemplateTasks), describeTemplate(machineUndatedTemplate), 'capability projects never fall through to the machine five-stage template')
+const capabilityDatedTasks = rules.buildLevel1TasksForProjectType('能力建设项目', true)
+assert.equal(
+  capabilityDatedTasks.filter(task => task.parentId).every(task => task.planEndDate && task.actualEndDate),
+  true,
+  'capability project mocks retain the completion dates from their existing six-stage behavior',
+)
+
+const machineProjectMock = projectMocks.buildProjectListMockPlanTasks('1', machineUndatedTemplate, {
+  projectType: '整机产品项目',
+  projectName: 'X6877-D8400_H991',
+})
+const machineBusinessMocks = machineProjectMock.filter(task => task.nodeKind === 'business-period')
+assert.deepEqual(machineBusinessMocks.map(task => task.taskName), ['MR1', 'MR2'], 'machine project mocks add one launch and one lifecycle business period')
+assert.equal(machineBusinessMocks.every(task => task.source === 'custom' && task.stableId?.includes('mock-1-business-')), true, 'machine business mocks use stable project-scoped custom identities')
+assert.equal(machineBusinessMocks[0].planEndDate < machineBusinessMocks[1].planStartDate, true, 'machine planned business periods never overlap')
+assert.equal(machineBusinessMocks[0].actualEndDate < machineBusinessMocks[1].actualStartDate, true, 'machine actual business periods never overlap')
+const offsetMachineMock = projectMocks.buildProjectListMockPlanTasks('3', machineUndatedTemplate, {
+  projectType: '整机产品项目',
+  projectName: 'X6855_H8917',
+})
+const offsetMachineStr5 = offsetMachineMock.find(task => task.taskName === 'STR5')
+const offsetMachineMr1 = offsetMachineMock.find(task => task.taskName === 'MR1')
+assert.equal(offsetMachineStr5.planEndDate < offsetMachineMr1.planStartDate, true, 'project offsets never make STR5 overlap the first planned machine business period')
+assert.equal(offsetMachineStr5.actualEndDate < offsetMachineMr1.actualStartDate, true, 'project offsets never make STR5 overlap the first actual machine business period')
+
+const tosProjectMock = projectMocks.buildProjectListMockPlanTasks('19', tosUndatedTemplate, {
+  projectType: 'tOS版本项目',
+  projectName: 'tOS16.3',
+})
+const tosBusinessMocks = tosProjectMock.filter(task => task.nodeKind === 'business-period')
+assert.deepEqual(tosBusinessMocks.map(task => task.taskName), ['16.3.0.110', '16.3.0.115'], 'tOS project mocks derive both business versions from the real project name')
+assert.equal(tosBusinessMocks[0].planEndDate < tosBusinessMocks[1].planStartDate, true, 'tOS planned business periods never overlap')
+assert.equal(tosBusinessMocks[0].actualEndDate < tosBusinessMocks[1].actualStartDate, true, 'tOS actual business periods never overlap')
+const tosProjectMockAgain = projectMocks.buildProjectListMockPlanTasks('19', tosProjectMock, {
+  projectType: 'tOS版本项目',
+  projectName: 'tOS16.3',
+})
+assert.deepEqual(
+  tosProjectMockAgain.filter(task => task.nodeKind === 'business-period').map(task => task.stableId),
+  tosBusinessMocks.map(task => task.stableId),
+  'rebuilding a project mock never duplicates its business rows or changes their stable identities',
+)
+assert.deepEqual(
+  tosProjectMockAgain.filter(task => task.nodeKind === 'business-period'),
+  tosBusinessMocks,
+  'rebuilding a project mock preserves every existing business-period field',
+)
 
 assert.deepEqual(
   rules.parseTosProjectVersionPrefix('tOS17.0项目'),
@@ -962,12 +1018,13 @@ const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf
 const planStoreSource = read('src/stores/plan.ts')
 const technicalStoreSource = read('src/stores/technicalPlan.ts')
 const configSource = read('src/containers/ConfigContainer.tsx')
+const projectListSource = read('src/containers/ProjectListContainer.tsx')
 const projectSpaceSource = read('src/containers/ProjectSpaceContainer.tsx')
 const technicalModuleSource = read('src/components/technical-project/TechnicalPlanModule.tsx')
 const compareModalSource = read('src/components/plans/PlanVersionCompareModal.tsx')
 const plan = loadTypeScriptModule(root, 'src/stores/plan.ts')
 
-assert.equal(plan.PLAN_STORE_VERSION, 8, 'plan persistence upgrades project-specific level-one seeds to V8')
+assert.equal(plan.PLAN_STORE_VERSION, 9, 'plan persistence upgrades machine and tOS level-one seeds to V9')
 assert.deepEqual(plan.MACHINE_LEVEL1_TASKS, rules.buildMachineLevel1Tasks(true), 'plan store exports the dated machine seed')
 assert.deepEqual(plan.TOS_LEVEL1_TASKS, rules.buildTosLevel1Tasks(true), 'plan store exports the dated tOS seed')
 assert.deepEqual(plan.MACHINE_LEVEL1_TEMPLATE_TASKS, rules.buildMachineLevel1Tasks(false), 'plan store exports the undated machine template')
@@ -977,17 +1034,17 @@ const secondDefaultTosTasks = plan.getDefaultLevel1TasksForProjectType('tOS版�
 assert.notStrictEqual(firstDefaultTosTasks, secondDefaultTosTasks, 'default level-one tasks clone the array on every call')
 assert.notStrictEqual(firstDefaultTosTasks[0], secondDefaultTosTasks[0], 'default level-one tasks clone every task on every call')
 firstDefaultTosTasks[0].taskName = '仅修改副本'
-assert.equal(secondDefaultTosTasks[0].taskName, '规划阶段', 'mutating a returned default never contaminates later callers')
+assert.equal(secondDefaultTosTasks[0].taskName, '概念阶段', 'mutating a returned default never contaminates later callers')
 
 const rootNames = tasks => tasks.filter(task => !task.parentId).map(task => task.taskName)
 assert.deepEqual(
   rootNames(plan.getDefaultLevel1TasksForProjectType('整机产品项目', false)),
-  ['概念阶段', '计划阶段', '开发阶段', '验证阶段', '上市阶段', '生命周期阶段'],
+  ['概念阶段', '计划阶段', '开发验证阶段', '上市阶段', '生命周期阶段'],
   'machine defaults use the approved stages',
 )
 assert.deepEqual(
   rootNames(plan.getDefaultLevel1TasksForProjectType('tOS版本项目', false)),
-  ['规划阶段', '概念阶段', '计划阶段', '开发验证阶段', '上市迭代阶段', '维护阶段'],
+  ['概念阶段', '计划阶段', '开发验证阶段', '上市迭代阶段', '维护阶段'],
   'tOS defaults use the approved stages',
 )
 assert.deepEqual(
@@ -995,6 +1052,132 @@ assert.deepEqual(
   plan.TOS_LEVEL1_TEMPLATE_TASKS,
   'empty tOS templates migrate to the tOS seed',
 )
+
+const buildV8Seed = descriptors => {
+  const idByStableId = new Map()
+  const childCountByParent = new Map()
+  let rootCount = 0
+  descriptors.forEach(([stableId, parentStableId]) => {
+    if (!parentStableId) {
+      idByStableId.set(stableId, String(++rootCount))
+      return
+    }
+    const childCount = (childCountByParent.get(parentStableId) || 0) + 1
+    childCountByParent.set(parentStableId, childCount)
+    idByStableId.set(stableId, `${idByStableId.get(parentStableId)}.${childCount}`)
+  })
+  return descriptors.map(([stableId, parentStableId, order, taskName, nodeKind]) => ({
+    id: idByStableId.get(stableId),
+    stableId,
+    parentId: parentStableId ? idByStableId.get(parentStableId) : null,
+    order,
+    taskName,
+    source: 'template',
+    nodeKind,
+    defaultRoadmap: Boolean(parentStableId),
+    planStartDate: '',
+    planEndDate: '',
+    actualStartDate: '',
+    actualEndDate: '',
+  }))
+}
+
+const machineV8Seed = buildV8Seed([
+  ['machine-stage-concept', null, 0, '概念阶段', 'stage'],
+  ['machine-ms-concept-kickoff', 'machine-stage-concept', 0, '概念启动', 'fixed-milestone'],
+  ['machine-ms-str1', 'machine-stage-concept', 1, 'STR1', 'fixed-milestone'],
+  ['machine-stage-planning', null, 1, '计划阶段', 'stage'],
+  ['machine-ms-str2', 'machine-stage-planning', 0, 'STR2', 'fixed-milestone'],
+  ['machine-ms-str3', 'machine-stage-planning', 1, 'STR3', 'fixed-milestone'],
+  ['machine-stage-development', null, 2, '开发阶段', 'stage'],
+  ['machine-ms-str4', 'machine-stage-development', 0, 'STR4', 'fixed-milestone'],
+  ['machine-ms-str4a', 'machine-stage-development', 1, 'STR4A', 'fixed-milestone'],
+  ['machine-stage-validation', null, 3, '验证阶段', 'stage'],
+  ['machine-ms-str5', 'machine-stage-validation', 0, 'STR5', 'fixed-milestone'],
+  ['machine-stage-launch', null, 4, '上市阶段', 'stage'],
+  ['machine-stage-lifecycle', null, 5, '生命周期阶段', 'stage'],
+])
+machineV8Seed.find(task => task.stableId === 'machine-ms-str5').planEndDate = '2033-05-05'
+const machineV8Validation = machineV8Seed.find(task => task.stableId === 'machine-stage-validation')
+machineV8Seed.push({
+  id: `${machineV8Validation.id}.2`, stableId: 'custom-machine-validation', parentId: machineV8Validation.id,
+  order: 1, taskName: '自定义验证节点', source: 'custom', nodeKind: 'business-period',
+  planStartDate: '2033-05-06', planEndDate: '2033-05-10', actualStartDate: '2033-05-07', actualEndDate: '2033-05-11',
+})
+
+const tosV8Seed = buildV8Seed([
+  ['tos-stage-planning', null, 0, '规划阶段', 'stage'],
+  ['tos-ms-planning-ko', 'tos-stage-planning', 0, '规划KO', 'fixed-milestone'],
+  ['tos-ms-cdcp', 'tos-stage-planning', 1, 'CDCP', 'fixed-milestone'],
+  ['tos-stage-concept', null, 1, '概念阶段', 'stage'],
+  ['tos-ms-concept-kickoff', 'tos-stage-concept', 0, '概念启动', 'fixed-milestone'],
+  ['tos-ms-str1', 'tos-stage-concept', 1, 'STR1', 'fixed-milestone'],
+  ['tos-stage-plan', null, 2, '计划阶段', 'stage'],
+  ['tos-ms-str2', 'tos-stage-plan', 0, 'STR2', 'fixed-milestone'],
+  ['tos-ms-str3', 'tos-stage-plan', 1, 'STR3', 'fixed-milestone'],
+  ['tos-stage-development-validation', null, 3, '开发验证阶段', 'stage'],
+  ['tos-ms-str4', 'tos-stage-development-validation', 0, 'STR4', 'fixed-milestone'],
+  ['tos-ms-str4a', 'tos-stage-development-validation', 1, 'STR4A', 'fixed-milestone'],
+  ['tos-ms-str5', 'tos-stage-development-validation', 2, 'STR5', 'fixed-milestone'],
+  ['tos-stage-launch-iteration', null, 4, '上市迭代阶段', 'stage'],
+  ['tos-stage-maintenance', null, 5, '维护阶段', 'stage'],
+])
+const tosV8Planning = tosV8Seed.find(task => task.stableId === 'tos-stage-planning')
+tosV8Seed.push({
+  id: `${tosV8Planning.id}.3`, stableId: 'custom-tos-planning', parentId: tosV8Planning.id,
+  order: 2, taskName: '用户规划节点', source: 'custom', nodeKind: 'business-period',
+  planStartDate: '2032-01-01', planEndDate: '2032-01-05', actualStartDate: '2032-01-02', actualEndDate: '2032-01-06', ownerMemo: '必须保留',
+})
+
+const capabilityV8Seed = structuredClone(machineV8Seed.filter(task => task.source !== 'custom'))
+const persistedV8FiveStageInput = {
+  tasks: structuredClone(machineV8Seed),
+  configTemplateTasksByType: {
+    '整机产品项目': structuredClone(machineV8Seed),
+    'tOS版本项目': structuredClone(tosV8Seed),
+    '能力建设项目': structuredClone(capabilityV8Seed),
+  },
+  marketPlanData: { OP: { tasks: structuredClone(machineV8Seed), marker: 'market-v8' } },
+  tosTypePlanDataByProjectId: { '2': { Full: { level1Tasks: structuredClone(tosV8Seed), marker: 'tos-type-v8' } } },
+  publishedSnapshots: {
+    'template::整机产品项目::level1::v8': structuredClone(machineV8Seed),
+    'template::tOS版本项目::level1::v8': structuredClone(tosV8Seed),
+    'template::能力建设项目::level1::v8': structuredClone(capabilityV8Seed),
+    'project::1::OP::level1::v8': structuredClone(machineV8Seed),
+    'project::2::level1::v8': structuredClone(tosV8Seed),
+    'project::2::tos-type::Full::level1::v8::snapshot': structuredClone(tosV8Seed),
+    'project::5::level1::v8': structuredClone(capabilityV8Seed),
+  },
+}
+const persistedV8FiveStageInputCopy = structuredClone(persistedV8FiveStageInput)
+const migratedV9 = plan.migratePlanStoreState(persistedV8FiveStageInput, 8)
+assert.deepEqual(persistedV8FiveStageInput, persistedV8FiveStageInputCopy, 'V8 to V9 migration never mutates persisted input')
+assert.deepEqual(rootNames(migratedV9.tasks), ['概念阶段', '计划阶段', '开发验证阶段', '上市阶段', '生命周期阶段'], 'root tasks migrate from machine V8 to V9')
+assert.deepEqual(
+  rootNames(migratedV9.configTemplateTasksByType['tOS版本项目'].filter(task => task.source === 'template')),
+  ['概念阶段', '计划阶段', '开发验证阶段', '上市迭代阶段', '维护阶段'],
+  'tOS configuration template migrates to five governed stages while compatibility roots remain user-owned',
+)
+assert.equal(migratedV9.marketPlanData.OP.marker, 'market-v8', 'market V8 sibling metadata survives V9 migration')
+assert.equal(migratedV9.tosTypePlanDataByProjectId['2'].Full.marker, 'tos-type-v8', 'tOS type V8 sibling metadata survives V9 migration')
+assert.equal(migratedV9.publishedSnapshots['project::1::OP::level1::v8'].find(task => task.stableId === 'machine-ms-str5').planEndDate, '2033-05-05', 'historical fixed-node dates survive the machine merge')
+const migratedMachineCustom = migratedV9.tasks.find(task => task.stableId === 'custom-machine-validation')
+assert.equal(migratedV9.tasks.find(task => task.id === migratedMachineCustom.parentId)?.stableId, 'machine-stage-development', 'custom validation children move beneath the merged machine development-validation stage')
+const migratedTosConfig = migratedV9.configTemplateTasksByType['tOS版本项目']
+const migratedTosCustom = migratedTosConfig.find(task => task.stableId === 'custom-tos-planning')
+const migratedTosCompatParent = migratedTosConfig.find(task => task.id === migratedTosCustom.parentId)
+assert.deepEqual(
+  [migratedTosCustom.ownerMemo, migratedTosCustom.planStartDate, migratedTosCompatParent.taskName, migratedTosCompatParent.source],
+  ['必须保留', '2032-01-01', '规划阶段', 'custom'],
+  'custom children under a removed tOS stage keep data and a compatible custom parent',
+)
+for (const tasks of [migratedV9.tasks, migratedTosConfig, migratedV9.marketPlanData.OP.tasks, migratedV9.tosTypePlanDataByProjectId['2'].Full.level1Tasks]) {
+  const ids = new Set(tasks.map(task => task.id))
+  assert.equal(tasks.every(task => !task.parentId || ids.has(task.parentId)), true, 'every V9 migrated scope is free of orphan nodes')
+}
+assert.deepEqual(migratedV9.configTemplateTasksByType['能力建设项目'], capabilityV8Seed, 'capability configuration data skips the five-stage migration')
+assert.deepEqual(migratedV9.publishedSnapshots['project::5::level1::v8'], capabilityV8Seed, 'capability project snapshots skip the five-stage migration')
+assert.deepEqual(plan.migratePlanStoreState(migratedV9, 9), migratedV9, 'the complete V9 store migration is idempotent')
 
 const legacySharedTosSeed = [
   { id: '1', stableId: 'stage-concept', parentId: null, order: 0, taskName: '概念阶段', source: 'template' },
@@ -1137,7 +1320,7 @@ const legacySimpleSeed = [
   { id: '4', order: 4, taskName: '上市保障' },
 ]
 const migratedSimpleMachine = plan.migrateLevel1TasksForProjectType(legacySimpleSeed, '整机产品项目', true)
-assert.deepEqual(rootNames(migratedSimpleMachine), ['概念阶段', '计划阶段', '开发阶段', '验证阶段', '上市阶段', '生命周期阶段'], 'the exact legacy eight-row seed migrates to machine stages')
+assert.deepEqual(rootNames(migratedSimpleMachine), ['概念阶段', '计划阶段', '开发验证阶段', '上市阶段', '生命周期阶段'], 'the exact legacy eight-row seed migrates to machine stages')
 assert.equal(migratedSimpleMachine.find(task => task.stableId === 'machine-ms-str2').planEndDate, '2030-02-01', 'legacy rows without stable IDs preserve fixed-node dates by name')
 assert.equal(migratedSimpleMachine.find(task => task.stableId === 'machine-ms-str2').ownerMemo, 'normalized-name', 'legacy name matching is normalized only after the exact eight-row signature is confirmed')
 
@@ -1261,6 +1444,21 @@ assert.match(projectSpaceSource, /usesGovernedProjectLevel1History[\s\S]{0,420}p
 assert.match(projectSpaceSource, /fieldMode=\{usesGovernedProjectLevel1History \? 'governed' : 'legacy'\}/, 'level-one history uses governed fields while secondary levels retain legacy mode')
 assert.match(technicalModuleSource, /fieldMode=\{tab\?\.templateKind === 'subproject' \? 'technical-subproject' : 'hierarchical-flat'\}/, 'technical comparison selects the matching current-table fields')
 assert.match(projectSpaceSource, /buildProjectListMockPlanTasks\(selectedProject\.id,/, 'project space consumes the same project-scoped mock plan source as the project list')
+assert.match(
+  projectListSource,
+  /buildProjectListMockPlanTasks\([\s\S]{0,220}projectType:\s*project\.type,[\s\S]{0,80}projectName:\s*project\.name/,
+  'project list supplies the real project type and name when building dynamic mock rows',
+)
+assert.match(
+  projectSpaceSource,
+  /buildProjectListMockPlanTasks\(selectedProject\.id,[\s\S]{0,220}projectType:\s*selectedProject\.type,[\s\S]{0,100}projectName:\s*selectedProject\.name/,
+  'project space supplies the same project context when initializing standard and tOS mock rows',
+)
+assert.match(
+  projectSpaceSource,
+  /ensureMarketPlanDataForRows\(marketPlanData,\s*normalizedRows,\s*projectLinkedLevel1MockTasks,\s*FIXED_LEVEL2_PLANS\)/,
+  'new machine market scopes initialize from the project-linked mock containing MR business periods',
+)
 assert.match(projectSpaceSource, /planEndDate:\s*task\.planEndDate\s*\|\|\s*''/, 'tOS project initialization preserves project-linked mock plan dates')
 assert.match(projectSpaceSource, /getDisplayPlanVersionsForHorizontalPlan\(horizontalVersions,\s*\{\s*includeDraft:\s*level1SurfaceCanMaintain\s*\}\)/, 'horizontal plan exposes scoped level-one drafts to maintainers')
 assert.match(projectSpaceSource, /sumLevel1EstimatedDays\(vProjection\.rows\)/, 'horizontal development cycle uses the estimated-duration total')
