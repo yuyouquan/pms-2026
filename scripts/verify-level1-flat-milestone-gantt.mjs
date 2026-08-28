@@ -874,6 +874,16 @@ assert.deepEqual(projectSpaceLevel1SurfaceState.deriveLevel1SurfaceVersionState(
   isLatestPublished: true,
   canMaintain: true,
 }, 'basic-information horizontal state is derived only from the scoped L1 version and permission inputs')
+assert.equal(projectSpaceLevel1SurfaceState.deriveLevel1SurfaceVersionState({
+  versions: [
+    { id: 'market-v3.9', versionNo: 'V3.9', status: '已发布' },
+    { id: 'market-v3.10', versionNo: 'V3.10', status: '已发布' },
+  ],
+  currentVersionId: 'market-v3.10',
+  canGovern: true,
+  followedReadOnly: false,
+  scopeUnavailable: false,
+}).isLatestPublished, true, 'V3.10 sorts after V3.9 when deciding whether scoped L1 actual dates are maintainable')
 const horizontalUiStateSource = projectSpaceSource.slice(projectSpaceSource.indexOf('const renderHorizontalTable = () =>'), projectSpaceSource.indexOf('// ═══════ renderActionButtons'))
 for (const stateName of ['level1SurfaceIsDraft', 'level1SurfaceIsLatestPublished', 'level1SurfaceCanMaintain', 'setLevel1SurfaceTasks']) {
   assert.match(horizontalUiStateSource, new RegExp(stateName), `basic-information horizontal UI uses dedicated ${stateName}`)

@@ -538,13 +538,24 @@ export const deriveLevel1SurfaceVersionState = <Version extends {
   scopeUnavailable: boolean
 }) => {
   const currentVersionData = versions.find(version => version.id === currentVersionId)
-  const versionNumber = (versionNo: string) => {
-    const match = String(versionNo || '').match(/\d+(?:\.\d+)?/)
-    return match ? Number(match[0]) : Number.NEGATIVE_INFINITY
+  const compareVersionNos = (leftVersionNo: string, rightVersionNo: string) => {
+    const parseVersionNo = (versionNo: string) => {
+      const match = /^V(\d+)(?:\.(\d+))?$/i.exec(String(versionNo || '').trim())
+      return match
+        ? { major: Number(match[1]), minor: match[2] === undefined ? 0 : Number(match[2]) }
+        : null
+    }
+    const left = parseVersionNo(leftVersionNo)
+    const right = parseVersionNo(rightVersionNo)
+    if (!left && !right) return leftVersionNo.localeCompare(rightVersionNo)
+    if (!left) return -1
+    if (!right) return 1
+    if (left.major !== right.major) return left.major - right.major
+    return left.minor - right.minor
   }
   const latestPublishedVersion = versions
     .filter(version => version.status === '已发布')
-    .sort((left, right) => versionNumber(right.versionNo) - versionNumber(left.versionNo))[0]
+    .sort((left, right) => compareVersionNos(right.versionNo, left.versionNo))[0]
   const isDraft = currentVersionData?.status === '修订中'
   return {
     currentVersionData,
