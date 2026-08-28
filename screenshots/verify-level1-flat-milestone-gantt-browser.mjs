@@ -16,7 +16,7 @@ const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const TIMEOUT = Number(process.env.PMS_BROWSER_TIMEOUT || 30_000)
 const CASE_TIMEOUT = Number(process.env.PMS_BROWSER_CASE_TIMEOUT || 360_000)
 const ONLY_CASE = process.env.PMS_BROWSER_CASE || ''
-const VALID_BROWSER_CASES = new Set(['', 'all', 'machine', 'machine-surface', 'machine-summary', 'machine-structure', 'machine-reorder', 'machine-invalid', 'machine-follow-actual', 'machine-permission', 'tos', 'tos-surface', 'technical'])
+const VALID_BROWSER_CASES = new Set(['', 'all', 'templates', 'machine', 'machine-surface', 'machine-summary', 'machine-structure', 'machine-reorder', 'machine-invalid', 'machine-follow-actual', 'machine-permission', 'tos', 'tos-surface', 'technical'])
 export const shouldRunTask7FocusedBrowserCase = (requestedCase, focusedCase) => (
   requestedCase === 'all' || requestedCase === focusedCase
 )
@@ -26,12 +26,21 @@ const isAllowedConsoleMessage = message => {
   const location = message.location()
   return text.includes('Download the React DevTools')
     || location.url?.endsWith('/favicon.ico')
+    || /^Warning: \[antd: Divider\] `type` is deprecated\. Please use `orientation` instead\.$/.test(text)
+    || /^Warning: \[antd: Space\] `split` is deprecated\. Please use `separator` instead\.$/.test(text)
     || /^Warning: \[antd: (Modal|message)\] Static function can not consume context like dynamic theme\. Please use 'App' component instead\.$/.test(text)
 }
 
 if (!VALID_BROWSER_CASES.has(ONLY_CASE)) {
-  throw new Error(`unknown PMS_BROWSER_CASE=${JSON.stringify(ONLY_CASE)}; expected all, machine, machine-surface, machine-summary, machine-structure, machine-reorder, machine-invalid, machine-follow-actual, machine-permission, tos, tos-surface, or technical`)
+  throw new Error(`unknown PMS_BROWSER_CASE=${JSON.stringify(ONLY_CASE)}; expected all, templates, machine, machine-surface, machine-summary, machine-structure, machine-reorder, machine-invalid, machine-follow-actual, machine-permission, tos, tos-surface, or technical`)
 }
+
+const PLAYWRIGHT_OUTPUT = path.join(process.cwd(), 'output', 'playwright')
+fs.mkdirSync(PLAYWRIGHT_OUTPUT, { recursive: true })
+const captureEvidence = (page, name) => page.screenshot({
+  path: path.join(PLAYWRIGHT_OUTPUT, `${name}.png`),
+  fullPage: true,
+})
 
 const clickExact = async (page, text, selector = 'button,[role="menuitem"],[role="tab"],td,div,span,label') => {
   const activation = await page.evaluate(({ text, selector }) => {
@@ -254,6 +263,7 @@ const assertHorizontalStageHeader = async (page, stageName, { dynamic }) => {
   }, { stageName })
   assert.ok(stage, `horizontal stage ${stageName} is visible`)
   assert.equal(stage.textAlign, 'center', `${stageName} label is centered`)
+  assert.doesNotMatch(stage.text, /\d{4}-\d{2}-\d{2}/, `${stageName} header omits its date range`)
   if (dynamic) {
     assert.equal(stage.tagCount, 0, `${stageName} dynamic business stage omits duration badge`)
     assert.doesNotMatch(stage.text, /\d+天/, `${stageName} dynamic business stage omits duration text`)
@@ -281,6 +291,9 @@ const readHorizontalVersionCycles = async page => page.$eval('[aria-label="一�
     .filter(cells => /^V\d+/.test(cells[0] || ''))
     .map(cells => [cells[0], Number(cells[1])]),
 ))
+const readHorizontalRowLabels = async page => page.$$eval('[aria-label="一级计划横版"] tbody tr', rows => rows
+  .map(row => row.querySelector('td')?.textContent?.trim() || '')
+  .filter(Boolean))
 const editHorizontalActualDate = async (page, taskName, nextValue) => {
   const opened = await page.$eval('[aria-label="一级计划横版"]', (table, name) => {
     const headers = [...table.querySelectorAll('thead tr:nth-child(2) th')]
@@ -299,9 +312,9 @@ const editHorizontalActualDate = async (page, taskName, nextValue) => {
   const box = await input?.boundingBox()
   if (!box) throw new Error(`hidden basic-information horizontal actual editor for ${taskName}`)
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { clickCount: 3 })
-  await page.keyboard.down('Control')
+  await page.keyboard.down(process.platform === 'darwin' ? 'Meta' : 'Control')
   await page.keyboard.press('A')
-  await page.keyboard.up('Control')
+  await page.keyboard.up(process.platform === 'darwin' ? 'Meta' : 'Control')
   await page.keyboard.type(nextValue)
   await page.keyboard.press('Enter')
   await page.waitForFunction(({ name, value }) => {
@@ -452,20 +465,22 @@ const replaceAriaInputValue = async (page, label, value) => {
   const input = await page.$(`[aria-label="${label}"]`)
   const box = await input?.boundingBox()
   if (!box) throw new Error(`missing visible input ${label}`)
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { clickCount: 3 })
-  await page.keyboard.down('Control')
-  await page.keyboard.press('A')
-  await page.keyboard.up('Control')
+  await input.focus()
+  await input.evaluate(element => element.select())
   await page.keyboard.type(value)
-  await page.waitForFunction(({ ariaLabel, expected }) => document.querySelector(`[aria-label="${ariaLabel}"]`)?.value === expected, { timeout: TIMEOUT }, { ariaLabel: label, expected: value })
+  const inputState = await page.evaluate(({ ariaLabel, expected }) => ({
+    expected,
+    selected: document.querySelector(`[aria-label="${ariaLabel}"]`)?.value || '',
+    activeLabel: document.activeElement?.getAttribute('aria-label') || '',
+    activeValue: document.activeElement instanceof HTMLInputElement ? document.activeElement.value : '',
+  }), { ariaLabel: label, expected: value })
+  assert.equal(inputState.selected, value, `input ${label} accepts the public keyboard value: ${JSON.stringify(inputState)}`)
 }
 const latestMessageText = page => page.$$eval('.ant-message-notice-content', nodes => nodes
   .filter(node => node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().height > 0)
   .at(-1)?.textContent?.trim() || '')
 const assertTosBusinessNameRejected = async (page, table, name, expectedMessage) => {
   await replaceAriaInputValue(page, '业务节点名称', name)
-  await page.waitForFunction(text => ![...document.querySelectorAll('.ant-message-notice-content')]
-    .some(node => node.getBoundingClientRect().width > 0 && node.textContent?.trim() === text), { timeout: TIMEOUT }, expectedMessage)
   await clickDialogButton(page, '输入 tOS 版本名称', '确认添加')
   await page.waitForFunction(text => [...document.querySelectorAll('.ant-message-notice-content')]
     .some(node => node.getBoundingClientRect().width > 0 && node.textContent?.trim() === text), { timeout: TIMEOUT }, expectedMessage)
@@ -473,14 +488,23 @@ const assertTosBusinessNameRejected = async (page, table, name, expectedMessage)
   assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => node.value), name, `${name} rejection keeps the name dialog open`)
   assert.ok(!(await textOf(page, table)).includes(name), `${name} rejection does not insert a tOS business node`)
 }
-const openBusinessInsertion = async (page, actionLabel, parentStage) => {
-  await pressAriaButton(page, actionLabel)
+const renameBusinessNode = async (page, oldName, nextName) => {
+  await pressAriaButton(page, `修改业务节点 ${oldName}`)
+  await page.waitForSelector(`[aria-label="业务节点新名称 ${oldName}"]`, { visible: true, timeout: TIMEOUT })
+  await replaceAriaInputValue(page, `业务节点新名称 ${oldName}`, nextName)
+  await clickDialogButton(page, '修改业务节点名称', '确认修改')
+  await waitForDialogToClose(page, '修改业务节点名称')
+}
+const openBusinessInsertion = async (page, projectKind, parentStage) => {
+  await pressAriaButton(page, `添加业务节点 ${parentStage}`)
+  const isTos = projectKind === 'tos'
+  const actionLabel = isTos ? '添加tOS版本' : '添加MR里程碑'
   await page.waitForFunction(label => document.body.innerText.includes(label), { timeout: TIMEOUT }, actionLabel === '添加tOS版本' ? '是否添加 tOS 版本？' : '是否添加 MR 里程碑？')
-  await chooseSelectOption(page, '业务父阶段', parentStage)
+  assert.equal(await page.$('[aria-label="业务父阶段"]'), null, `${parentStage} row action fixes its parent without a selector`)
   await clickDialogButton(page, actionLabel === '添加tOS版本' ? '是否添加 tOS 版本？' : '是否添加 MR 里程碑？', '下一步')
   await page.waitForFunction(label => document.body.innerText.includes(label), { timeout: TIMEOUT }, actionLabel === '添加tOS版本' ? '输入 tOS 版本名称' : '输入 MR 里程碑名称')
 }
-const inclusiveDays = (start, end) => Math.round((new Date(`${end}T00:00:00Z`) - new Date(`${start}T00:00:00Z`)) / 86_400_000) + 1
+const differenceDays = (start, end) => Math.round((new Date(`${end}T00:00:00Z`) - new Date(`${start}T00:00:00Z`)) / 86_400_000)
 const visibleMarketScopes = async page => page.$$eval('[role="button"][aria-label^="市场 "]', nodes => nodes
   .filter(node => {
     const box = node.getBoundingClientRect()
@@ -1161,8 +1185,52 @@ const runCase = async (title, test) => {
 }
 
 try {
+  if (!ONLY_CASE || ONLY_CASE === 'templates') await runCase('configuration templates keep the approved project families', async (page) => {
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: TIMEOUT })
+    await wait(2_000)
+    let configReady = false
+    for (let attempt = 0; attempt < 3 && !configReady; attempt += 1) {
+      if (attempt > 0) {
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: TIMEOUT })
+        await wait(1_000)
+      }
+      await clickRoleText(page, 'menuitem', '配置中心')
+      configReady = await page.waitForSelector('[aria-label="配置中心模块"]', { timeout: 5_000 })
+        .then(() => true)
+        .catch(() => false)
+    }
+    if (!configReady) throw new Error('configuration-center navigation did not hydrate')
+    const planConfigVisible = await page.evaluate(() => document.body.innerText.includes('配置和管理项目计划模板'))
+    if (!planConfigVisible) await clickExact(page, '计划模板配置', 'label,button')
+    await page.waitForSelector('.pms-config-template-content-card .ant-table', { timeout: TIMEOUT })
+    const readNames = () => page.$$eval('.pms-config-template-content-card .ant-table tbody tr', rows => rows
+      .map(row => (row.querySelectorAll('td')[1]?.textContent?.trim() || '').replace(/^[├└]/, ''))
+      .filter(name => Boolean(name) && name !== '任务名称'))
+    const assertProjectTemplate = async (projectType, expectedNames, screenshotName) => {
+      await clickRoleText(page, 'menuitem', projectType)
+      await page.waitForFunction(value => document.querySelector('.pms-config-template-header-card')?.textContent?.includes(value), { timeout: TIMEOUT }, projectType)
+      await page.waitForSelector('.pms-config-template-content-card .ant-table tbody tr', { timeout: TIMEOUT })
+      assert.deepEqual(await readNames(), expectedNames, `${projectType} level-one template has the exact approved hierarchy`)
+      await captureEvidence(page, screenshotName)
+    }
+    const fixedNames = ['概念阶段', '概念启动', 'STR1', '计划阶段', 'STR2', 'STR3', '开发验证阶段', 'STR4', 'STR4A', 'STR5']
+    await assertProjectTemplate('整机产品项目', [...fixedNames, '上市阶段', '生命周期阶段'], 'level1-template-machine-five-stage')
+    await assertProjectTemplate('tOS版本项目', [...fixedNames, '上市迭代阶段', '维护阶段'], 'level1-template-tos-five-stage')
+    await clickRoleText(page, 'menuitem', '能力建设项目')
+    await page.waitForFunction(() => document.querySelector('.pms-config-template-header-card')?.textContent?.includes('能力建设项目'), { timeout: TIMEOUT })
+    const capabilityNames = await readNames()
+    assert.deepEqual(capabilityNames.filter(name => name.endsWith('阶段')), ['概念阶段', '计划阶段', '开发阶段', '验证阶段', '上市阶段', '生命周期阶段'], 'capability template retains its existing six stages')
+    await clickRoleText(page, 'menuitem', '技术项目')
+    await page.waitForFunction(() => document.querySelector('.pms-config-template-header-card')?.textContent?.includes('技术项目'), { timeout: TIMEOUT })
+    const technicalSurface = await page.$eval('.pms-config-template-content-card', node => node.textContent || '')
+    assert.ok(technicalSurface.includes('TDR1'), 'technical TDT template content remains available')
+    assert.deepEqual(await page.$$eval('.pms-config-template-tabs [role="tab"]', tabs => tabs.map(tab => tab.textContent?.trim() || '').filter(Boolean)), ['TDT项目计划', '子项目计划'], 'technical template tabs remain unchanged')
+    await captureEvidence(page, 'level1-template-technical-unchanged')
+  })
+
   if (ONLY_CASE === 'all') {
     const focusedCases = [
+      'templates',
       'machine',
       'machine-summary',
       'machine-invalid',
@@ -1194,7 +1262,10 @@ try {
       await assertHorizontalStageHeader(page, '概念阶段', { dynamic: false })
       await assertHorizontalStageHeader(page, '上市阶段', { dynamic: true })
       await assertHorizontalStageHeader(page, '生命周期阶段', { dynamic: true })
+      const projectPlanRows = await readHorizontalRowLabels(page)
+      assert.ok(projectPlanRows.length > 2 && projectPlanRows.includes('实际'), `plan-module horizontal retains revision/history rows: ${JSON.stringify(projectPlanRows)}`)
       const horizontalVersionCycles = await readHorizontalVersionCycles(page)
+      assert.ok(Object.values(horizontalVersionCycles).every(Number.isFinite), `development cycles render the root-stage estimated-day sum: ${JSON.stringify(horizontalVersionCycles)}`)
       const horizontalCurrentWorkbook = await downloadPlanWorkbook(page, '导出当前视图')
       const horizontalAllWorkbook = await downloadPlanWorkbook(page, '导出全部')
       for (const [scope, workbook] of [['current', horizontalCurrentWorkbook], ['all', horizontalAllWorkbook]]) {
@@ -1228,21 +1299,32 @@ try {
     console.log('browser machine tree table contract passed')
     await recreateFormalRevision(page)
     assert.match(await page.$eval('[aria-label="计划版本"]', control => control.closest('.ant-select')?.textContent || ''), /修订中/, 'machine SPM creates a fresh formal revision through the public revision menu')
+    assert.equal(await page.$eval(table, root => [...root.querySelectorAll('tbody tr')]
+      .find(row => row.querySelectorAll('td')[1]?.textContent?.trim() === '概念阶段')?.querySelectorAll('input').length || 0), 0, 'level-one stage exposes no editable date fields in a revision')
+    assert.deepEqual(await page.$eval(table, root => {
+      const row = [...root.querySelectorAll('tbody tr')].find(candidate => candidate.querySelectorAll('td')[1]?.textContent?.trim() === '概念启动')
+      return ['planStartDate', 'planEndDate', 'actualStartDate', 'actualEndDate'].map(field => Boolean(row?.querySelector(`td[data-field="${field}"] input`)))
+    }), [false, true, false, true], 'fixed milestone only exposes plan/actual completion editors')
 
-    await clickButtonText(page, '添加MR里程碑')
-    await page.waitForFunction(() => document.body.innerText.includes('是否添加 MR 里程碑？'), { timeout: TIMEOUT })
-    assert.equal(await page.$('[aria-label="业务节点名称"]'), null, 'machine confirmation phase does not collect a name early')
-    const machineBusinessParent = await page.$eval('[aria-label="业务父阶段"]', node => node.closest('.ant-select')?.textContent?.trim() || '')
-    assert.match(machineBusinessParent, /上市阶段|生命周期阶段/, 'machine insertion explicitly selects an allowed business parent')
-    await clickButtonText(page, '下一步')
-    await page.waitForFunction(() => document.body.innerText.includes('输入 MR 里程碑名称'), { timeout: TIMEOUT })
+    assert.equal(await page.$('button[aria-label="添加MR里程碑"]'), null, 'machine toolbar no longer exposes the legacy MR insertion action')
+    const machineBusinessParent = '生命周期阶段'
+    await openBusinessInsertion(page, 'machine', machineBusinessParent)
     assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => node.value), 'MR4', 'machine name phase offers the next validated MR name')
     await clickButtonText(page, '确认添加')
     await page.waitForFunction(() => document.body.innerText.includes('MR4'), { timeout: TIMEOUT })
     await waitForDialogToClose(page, '输入 MR 里程碑名称')
     assert.ok((await textOf(page, table)).includes('MR4'), 'confirmed MR4 is visible under its selected tree parent')
     assert.ok(await page.$('button[aria-label="删除节点 MR4"]'), 'custom business node has a delete affordance')
+    assert.ok(await page.$('button[aria-label="修改业务节点 MR4"]'), 'custom business node has a rename affordance')
+    await renameBusinessNode(page, 'MR4', 'MR40')
+    await page.waitForFunction(selector => document.querySelector(selector)?.textContent?.includes('MR40'), { timeout: TIMEOUT }, table)
+    await renameBusinessNode(page, 'MR40', 'MR4')
+    await page.waitForFunction(selector => document.querySelector(selector)?.textContent?.includes('MR4'), { timeout: TIMEOUT }, table)
     assert.ok(await page.$('button[aria-label="删除节点 概念启动"]'), 'super-admin can discover the fixed-template delete exception')
+    await selectView(page, '甘特图')
+    const undatedBusinessTaskId = await ganttTaskIdForName(page, 'MR4')
+    assert.equal(await page.$(`.gantt_task_line[task_id="${undatedBusinessTaskId}"]`), null, 'incomplete business interval has a grid row but no fabricated Gantt bar')
+    await selectView(page, '竖版表格')
     await editTreeDate(page, table, 'MR4', 'planStartDate', '2028-01-04')
     await editTreeDate(page, table, 'MR4', 'planEndDate', '2028-01-08')
     await editTreeDate(page, table, 'MR4', 'actualStartDate', '2028-01-04')
@@ -1255,8 +1337,8 @@ try {
       plannedDays: await treePlannedDays(page, table, 'MR4'),
       actualDays: await treeActualDays(page, table, 'MR4'),
     }, {
-      planStart: '2028-01-04', planEnd: '2028-01-08', actualStart: '2028-01-04', actualEnd: '2028-01-08', plannedDays: '5天', actualDays: '5天',
-    }, 'machine MR4 accepts all four dates and derives both inclusive five-day durations')
+      planStart: '2028-01-04', planEnd: '2028-01-08', actualStart: '2028-01-04', actualEnd: '2028-01-08', plannedDays: '4天', actualDays: '4天',
+    }, 'machine MR4 accepts all four dates and derives end-minus-start durations')
     console.log('browser machine MR confirmation and structure contract passed')
 
     if (ONLY_CASE === 'machine-follow-actual') {
@@ -1266,7 +1348,7 @@ try {
       const followMarket = preconfiguredFollowMarket || marketScopes.find(scope => scope.market !== mainMarket)?.market
       assert.ok(mainMarket && followMarket, `machine exposes a main and candidate follow market: ${JSON.stringify(marketScopes)}`)
       assert.equal(marketScopes.find(scope => scope.selected)?.market, mainMarket, 'follow-market fixture starts in the main-market draft')
-      assert.equal(await treeActualDays(page, table, 'MR4'), '5天', 'main draft business actual duration is inclusive')
+      assert.equal(await treeActualDays(page, table, 'MR4'), '4天', 'main draft business actual duration uses end-minus-start')
 
       // Re-following through the public market editor materializes a normal
       // published follow scope containing MR4, with no paired draft.
@@ -1287,19 +1369,19 @@ try {
 
       await editTreeDate(page, table, 'MR4', 'actualEndDate', '2028-01-10')
       assert.equal(await treeDate(page, table, 'MR4', 'actualStartDate'), '2028-01-04', 'follow published field patch preserves the other actual field')
-      assert.equal(await treeActualDays(page, table, 'MR4'), '7天', 'follow published field patch recomputes inclusive actual duration')
+      assert.equal(await treeActualDays(page, table, 'MR4'), '6天', 'follow published field patch recomputes end-minus-start actual duration')
       page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
       await selectView(page, '竖版表格')
       await selectMarketScope(page, followMarket)
       assert.equal(await treeDate(page, table, 'MR4', 'actualEndDate'), '2028-01-10', 'follow latest-published actual edit survives same-context reopen')
-      assert.equal(await treeActualDays(page, table, 'MR4'), '7天', 'follow latest-published derived duration survives same-context reopen')
+      assert.equal(await treeActualDays(page, table, 'MR4'), '6天', 'follow latest-published derived duration survives same-context reopen')
 
       await selectMarketScope(page, mainMarket)
       await pressAriaButton(page, '发布')
       await page.waitForFunction(() => document.querySelector('[aria-label="计划版本"]')?.closest('.ant-select')?.textContent?.includes('已发布'), { timeout: TIMEOUT })
       await selectMarketScope(page, followMarket)
       assert.equal(await treeDate(page, table, 'MR4', 'actualEndDate'), '2028-01-10', 'main publish does not overwrite the detached follow actual completion')
-      assert.equal(await treeActualDays(page, table, 'MR4'), '7天', 'main publish does not overwrite the detached follow actual duration')
+      assert.equal(await treeActualDays(page, table, 'MR4'), '6天', 'main publish does not overwrite the detached follow actual duration')
 
       // Detach and follow again to force a new published snapshot from the
       // live follow scope; this exposes whether the hidden live detach flag
@@ -1313,7 +1395,7 @@ try {
       await selectView(page, '竖版表格')
       await selectMarketScope(page, followMarket)
       assert.equal(await treeDate(page, table, 'MR4', 'actualEndDate'), '2028-01-10', 're-follow snapshot proves the live detached actual completion survived main sync')
-      assert.equal(await treeActualDays(page, table, 'MR4'), '7天', 're-follow snapshot proves the live detached actual duration survived main sync')
+      assert.equal(await treeActualDays(page, table, 'MR4'), '6天', 're-follow snapshot proves the live detached actual duration survived main sync')
       console.log(`browser machine follow ${followMarket} published/live detach and main-sync contract passed`)
       return
     }
@@ -1325,7 +1407,7 @@ try {
       const invalidPicker = `${table} td[data-field="planEndDate"]:has([aria-label="planEndDate STR1"]) .pms-level1-date-input-invalid`
       assert.ok(await page.$(invalidPicker), 'focused fixed-order case renders a red DatePicker on STR1')
       await hoverVisibleSelector(page, `${table} td[data-field="planEndDate"]:has([aria-label="planEndDate STR1"]) .pms-level1-date-tooltip-target`)
-      const exactReason = 'STR1：计划完成时间不得早于上一节点“概念启动”'
+      const exactReason = 'STR1：下一个子节点日期不允许超上一个子节点。'
       await page.waitForFunction(reason => [...document.querySelectorAll('.ant-tooltip')]
         .some(node => node.getBoundingClientRect().width > 0 && node.textContent?.trim() === reason), { timeout: TIMEOUT }, exactReason)
       assert.equal(await page.evaluate(() => [...document.querySelectorAll('.ant-tooltip')]
@@ -1343,14 +1425,17 @@ try {
       return
     }
 
-    await clickButtonText(page, '添加MR里程碑')
-    await page.waitForFunction(() => document.body.innerText.includes('是否添加 MR 里程碑？'), { timeout: TIMEOUT })
-    await clickButtonText(page, '下一步')
-    await page.waitForFunction(() => document.body.innerText.includes('输入 MR 里程碑名称'), { timeout: TIMEOUT })
+    await openBusinessInsertion(page, 'machine', machineBusinessParent)
     assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => node.value), 'MR5', 'second machine flow proposes MR5')
     await clickButtonText(page, '确认添加')
     await waitForDialogToClose(page, '输入 MR 里程碑名称')
     await page.waitForFunction(selector => document.querySelector(selector)?.textContent?.includes('MR5'), { timeout: TIMEOUT }, table)
+    // Give MR5 a valid earlier interval so moving it before MR4 is a genuine
+    // successful reorder; the later focused check separately proves rollback.
+    await editTreeDate(page, table, 'MR5', 'planStartDate', '2027-06-01')
+    await editTreeDate(page, table, 'MR5', 'planEndDate', '2027-06-05')
+    await editTreeDate(page, table, 'MR5', 'actualStartDate', '2027-06-01')
+    await editTreeDate(page, table, 'MR5', 'actualEndDate', '2027-06-05')
     await switchUser(page, '赵六')
     const orderBeforeReorder = await treeTaskOrder(page, table, ['MR4', 'MR5'])
     assert.deepEqual(orderBeforeReorder, ['MR4', 'MR5'], 'SPM reorder starts from the persisted custom-node order')
@@ -1359,13 +1444,10 @@ try {
     if (ONLY_CASE === 'machine-reorder') {
       await clickDialogButton(page, '确认调整节点顺序？', '确认调整')
       await waitForDialogToClose(page, '确认调整节点顺序？')
-      await page.waitForFunction(({ selector, names }) => {
-        const root = document.querySelector(selector)
-        const order = [...(root?.querySelectorAll('tbody tr') || [])]
-          .map(row => names.find(name => row.querySelectorAll('td')[1]?.textContent?.includes(name)))
-          .filter(Boolean)
-        return order.join(',') === 'MR5,MR4'
-      }, { timeout: TIMEOUT }, { selector: table, names: ['MR4', 'MR5'] })
+      await wait(800)
+      const reordered = await treeTaskOrder(page, table, ['MR4', 'MR5'])
+      const reorderMessages = await page.$$eval('.ant-message-notice-content', nodes => nodes.map(node => node.textContent?.trim() || ''))
+      assert.deepEqual(reordered, ['MR5', 'MR4'], `SPM reorder commits the same-stage order; messages=${JSON.stringify(reorderMessages)}`)
       console.log('browser machine SPM focused reorder confirmation passed')
       return
     }
@@ -1418,6 +1500,7 @@ try {
     console.log('browser machine gantt rendered')
     assert.ok(await page.$('.gantt_task_line.pms-gantt-project.pms-gantt-task-readonly'), 'stage is rendered readonly')
     assert.ok(await page.$('.gantt_task_line.pms-gantt-milestone.pms-gantt-task-editable'), 'draft milestone is rendered editable')
+    await captureEvidence(page, 'level1-machine-gantt-milestone-period')
     console.log('browser machine gantt readonly/editable class contract passed')
     assertNoErrors(errors)
     const milestoneTaskId = await ganttTaskIdForName(page, draggedMilestoneName)
@@ -1444,7 +1527,7 @@ try {
     const rollbackXBefore = (await page.$(rollbackSelector)) && (await page.$eval(rollbackSelector, node => node.getBoundingClientRect().x))
     const rollbackDrag = await dragTask(page, rollbackSelector, 120)
     assert.ok(rollbackDrag.sawDragMove, 'invalid milestone drag enters the real DHTMLX move state before rejection')
-    const rollbackToast = '计划完成时间不得早于上一节点“概念启动”'
+    const rollbackToast = '下一个子节点日期不允许超上一个子节点。'
     await page.waitForFunction(text => [...document.querySelectorAll('.ant-message-notice-content')]
       .some(node => node.textContent?.trim() === text), { timeout: TIMEOUT }, rollbackToast)
     const rollbackXAfter = await page.$eval(rollbackSelector, node => node.getBoundingClientRect().x)
@@ -1453,7 +1536,7 @@ try {
     assert.equal(await treeDate(page, table, draggedMilestoneName, 'planEndDate'), rollbackDate, 'invalid gantt drag leaves the persisted completion date unchanged')
     console.log(`browser machine invalid gantt rollback toast=${rollbackToast}; x=${rollbackXBefore}->${rollbackXAfter}; date=${rollbackDate}`)
 
-    for (const stageName of ['概念阶段', '计划阶段', '开发阶段', '验证阶段']) {
+    for (const stageName of ['概念阶段', '计划阶段', '开发验证阶段']) {
       await collapseTreeStage(page, table, stageName)
     }
     await selectView(page, '甘特图')
@@ -1473,7 +1556,7 @@ try {
     }
     assert.notEqual(movedBusiness.start, '2028-01-04', 'business move writes the planned start boundary')
     assert.notEqual(movedBusiness.end, '2028-01-08', 'business move writes the planned completion boundary')
-    assert.equal(movedBusiness.duration, '5天', 'business move preserves the inclusive five-day duration')
+    assert.equal(movedBusiness.duration, '4天', 'business move preserves the end-minus-start duration')
     await selectView(page, '甘特图')
     const resizedBusinessTaskId = await ganttTaskIdForName(page, 'MR4')
     assert.ok(resizedBusinessTaskId, 'moved business period remains in the public gantt grid')
@@ -1483,9 +1566,9 @@ try {
     const resizedBusinessEnd = await treeDate(page, table, 'MR4', 'planEndDate')
     const resizedBusinessDays = await treePlannedDays(page, table, 'MR4')
     assert.notEqual(resizedBusinessEnd, movedBusiness.end, 'business resize writes a changed planned completion')
-    assert.equal(resizedBusinessDays, `${inclusiveDays(movedBusiness.start, resizedBusinessEnd)}天`, 'business resize recomputes the inclusive planned duration from the public dates')
-    assert.notEqual(resizedBusinessDays, movedBusiness.duration, 'business resize changes the inclusive planned duration')
-    console.log(`browser machine business plan 2028-01-04..2028-01-08=5天 -> move ${JSON.stringify(movedBusiness)} -> resize end=${resizedBusinessEnd}, duration=${resizedBusinessDays}`)
+    assert.equal(resizedBusinessDays, `${differenceDays(movedBusiness.start, resizedBusinessEnd)}天`, 'business resize recomputes the end-minus-start planned duration from the public dates')
+    assert.notEqual(resizedBusinessDays, movedBusiness.duration, 'business resize changes the end-minus-start planned duration')
+    console.log(`browser machine business plan 2028-01-04..2028-01-08=4天 -> move ${JSON.stringify(movedBusiness)} -> resize end=${resizedBusinessEnd}, duration=${resizedBusinessDays}`)
 
     page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
     await selectView(page, '竖版表格')
@@ -1528,6 +1611,11 @@ try {
     await clickTabContaining(page, '三级计划')
     await clickRoleText(page, 'menuitem', '基础信息')
     await page.waitForSelector('[aria-label="一级计划最新发布摘要"]', { timeout: TIMEOUT })
+    const basicInfoRows = await readHorizontalRowLabels(page)
+    assert.equal(basicInfoRows.length, 2, `basic-information horizontal renders exactly latest published plus actual: ${JSON.stringify(basicInfoRows)}`)
+    assert.match(basicInfoRows[0], /^V\d+/, 'basic-information first horizontal row is the latest published version')
+    assert.equal(basicInfoRows[1], '实际', 'basic-information second horizontal row is actual')
+    await captureEvidence(page, 'level1-basic-info-latest-published-actual')
     assert.deepEqual(await readLatestPublishedSummary(page), initialSummary, 'machine basic information reads all four dates from the latest published market snapshot after entering from level three')
     const horizontalActual = await readHorizontalActualDateCell(page)
     assert.ok(horizontalActual, 'machine basic-information horizontal table exposes a published actual date')
@@ -1571,9 +1659,12 @@ try {
     await waitForDialogToClose(page, '历史版本对比')
 
     await chooseVersion(page, '修订中')
-    await selectView(page, '竖版表格')
+    await selectView(page, '横版表格')
+    const draftPlanRows = await readHorizontalRowLabels(page)
+    assert.ok(draftPlanRows.some(label => /^V\d+/.test(label)) && draftPlanRows.length > 2, `plan module still exposes draft/history horizontal rows: ${JSON.stringify(draftPlanRows)}`)
     await clickRoleText(page, 'menuitem', '基础信息')
     await page.waitForSelector('[aria-label="一级计划最新发布摘要"]', { timeout: TIMEOUT })
+    assert.equal((await readHorizontalRowLabels(page)).length, 2, 'selecting a draft never adds a third basic-information horizontal row')
     assert.deepEqual(await readLatestPublishedSummary(page), summaryAfter, 'machine selecting a draft does not replace the published-only basic summary')
     console.log(`browser machine summary ${JSON.stringify(summaryBefore)} -> ${JSON.stringify(summaryAfter)}; compare task ${actualBoundary.name}`)
   })
@@ -1589,21 +1680,21 @@ try {
     console.log('browser machine permission switched to 王五')
     assert.ok(await page.$(table), 'view-only project member can still see the machine tree table')
     assert.ok((await textOf(page, table)).includes('概念启动'), 'view-only project member can see plan rows before permission assertions')
-    assert.equal(await page.$('button[aria-label="添加MR里程碑"]'), null, 'view-only user cannot add MR')
+    assert.equal(await page.$('button[aria-label="添加业务节点 上市阶段"]'), null, 'view-only user cannot add MR from a business stage')
     await selectView(page, '甘特图')
     assert.equal(await page.$('.gantt_task_line.pms-gantt-task-editable'), null, 'view-only gantt is fully locked')
     console.log('browser machine permission view-only contract passed')
     await switchUser(page, '赵六')
     await selectView(page, '竖版表格')
-    assert.ok(await page.$('button[aria-label="添加MR里程碑"]'), 'project-manager role member receives the SPM business action')
+    assert.ok(await page.$('button[aria-label="添加业务节点 上市阶段"]'), 'project-manager role member receives the stage-bound SPM business action')
     assert.equal(await page.$('button[aria-label="添加一级阶段"]'), null, 'SPM cannot use the super-admin generic stage action')
     assert.equal(await page.$('button[aria-label="删除节点 概念启动"]'), null, 'SPM cannot delete a fixed template node')
-    assert.equal(await page.$('button[aria-label="删除节点 验证阶段"]'), null, 'SPM cannot delete a fixed template stage')
+    assert.equal(await page.$('button[aria-label="删除节点 开发验证阶段"]'), null, 'SPM cannot delete a fixed template stage')
     await switchUser(page, '张三')
     await selectView(page, '竖版表格')
     console.log('browser machine permission switched back to 张三')
     assert.ok(await page.$('button[aria-label="删除节点 概念启动"]'), 'super-admin can delete a fixed template node in a draft')
-    assert.ok(await page.$('button[aria-label="删除节点 验证阶段"]'), 'super-admin can delete a fixed template stage in a draft')
+    assert.ok(await page.$('button[aria-label="删除节点 开发验证阶段"]'), 'super-admin can delete a fixed template stage in a draft')
     await pressAriaButton(page, '添加一级阶段')
     await page.waitForFunction(() => document.body.innerText.includes('确认添加一级阶段？'), { timeout: TIMEOUT })
     await clickButtonText(page, '确认添加')
@@ -1611,7 +1702,7 @@ try {
     await page.waitForFunction(selector => document.querySelector(selector)?.textContent?.includes('新阶段'), { timeout: TIMEOUT }, table)
     await pressAriaButton(page, '添加子节点 新阶段')
     await page.waitForFunction(() => document.body.innerText.includes('确认添加子节点？'), { timeout: TIMEOUT })
-    assert.match(await page.$eval('[aria-label="业务父阶段"]', node => node.closest('.ant-select')?.textContent || ''), /新阶段/, 'generic child confirmation stays bound to the selected custom stage')
+    assert.match(await page.$eval('[aria-label="子节点父阶段"]', node => node.closest('.ant-select')?.textContent || ''), /新阶段/, 'generic child confirmation stays bound to the selected custom stage')
     await clickButtonText(page, '确认添加')
     await waitForDialogToClose(page, '确认添加子节点？')
     await page.waitForFunction(selector => document.querySelector(selector)?.textContent?.includes('新子节点'), { timeout: TIMEOUT }, table)
@@ -1627,19 +1718,19 @@ try {
     await pressAriaButton(page, '删除节点 概念启动')
     await clickButtonText(page, '确认')
     await page.waitForFunction(selector => !document.querySelector(selector)?.textContent?.includes('概念启动'), { timeout: TIMEOUT }, table)
-    await pressAriaButton(page, '删除节点 验证阶段')
+    await pressAriaButton(page, '删除节点 开发验证阶段')
     await clickButtonText(page, '确认')
     await page.waitForFunction(selector => {
       const text = document.querySelector(selector)?.textContent || ''
-      return !text.includes('验证阶段') && !text.includes('STR5')
+      return !text.includes('开发验证阶段') && !text.includes('STR5')
     }, { timeout: TIMEOUT }, table)
     page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
     await selectView(page, '竖版表格')
     const deletedTemplateText = await textOf(page, table)
-    assert.ok(!deletedTemplateText.includes('概念启动') && !deletedTemplateText.includes('验证阶段') && !deletedTemplateText.includes('STR5'), 'super-admin fixed node/stage deletion survives same-context new-page persistence')
+    assert.ok(!deletedTemplateText.includes('概念启动') && !deletedTemplateText.includes('开发验证阶段') && !deletedTemplateText.includes('STR5'), 'super-admin fixed node/stage deletion survives same-context new-page persistence')
     console.log('browser machine super-admin fixed node/stage delete contract passed')
     await chooseVersion(page, 'V2 (已发布)')
-    assert.equal(await page.$('button[aria-label="添加MR里程碑"]'), null, 'published history has no MR command')
+    assert.equal(await page.$('button[aria-label="添加业务节点 上市阶段"]'), null, 'published history has no MR command')
     await selectView(page, '甘特图')
     await page.waitForSelector('.gantt_task_line', { timeout: TIMEOUT })
     assert.equal(await page.$('.gantt_task_line.pms-gantt-task-editable'), null, 'published history has no editable gantt tasks')
@@ -1724,7 +1815,7 @@ try {
     let page = initialPage
     await enterProject(page, 'tOS16.1')
     assert.ok(await page.$('.pms-plan-view-mode-switcher input[aria-label="横版表格"]:checked'), 'tOS level-one plan defaults to horizontal view')
-    await assertHorizontalStageHeader(page, '规划阶段', { dynamic: false })
+    await assertHorizontalStageHeader(page, '概念阶段', { dynamic: false })
     await assertHorizontalStageHeader(page, '上市迭代阶段', { dynamic: true })
     await assertHorizontalStageHeader(page, '维护阶段', { dynamic: true })
     await selectView(page, '竖版表格')
@@ -1740,6 +1831,7 @@ try {
       const tosPublishedSummary = await readTreeSummary(page, table)
       await clickRoleText(page, 'menuitem', '基础信息')
       await page.waitForSelector('[aria-label="一级计划最新发布摘要"]', { timeout: TIMEOUT })
+      assert.equal((await readHorizontalRowLabels(page)).length, 2, 'tOS basic-information horizontal also renders latest published plus actual only')
       assert.deepEqual(await readLatestPublishedSummary(page), tosPublishedSummary, 'tOS basic information reads all four dates from the latest published type snapshot')
       await clickRoleText(page, 'menuitem', '计划')
       await selectView(page, '竖版表格')
@@ -1761,14 +1853,14 @@ try {
     assert.ok(await page.$(`${table} .ant-table-row-expand-icon`), 'tOS tree table renders real expanders')
     const draftSource = await ensureDraft(page)
     console.log(`browser tOS draft source ${draftSource}`)
-    await page.waitForSelector('button[aria-label="添加tOS版本"]', { timeout: TIMEOUT })
-    await pressAriaButton(page, '添加tOS版本')
-    await page.waitForFunction(() => document.body.innerText.includes('是否添加 tOS 版本？'), { timeout: TIMEOUT })
-    assert.equal(await page.$('[aria-label="业务节点名称"]'), null, 'tOS confirmation phase does not collect a name early')
-    await chooseSelectOption(page, '业务父阶段', '上市迭代阶段')
-    assert.match(await page.$eval('[aria-label="业务父阶段"]', node => node.closest('.ant-select')?.textContent || ''), /上市迭代阶段/, 'tOS insertion explicitly selects the launch-iteration parent')
-    await clickDialogButton(page, '是否添加 tOS 版本？', '下一步')
-    await page.waitForFunction(() => document.body.innerText.includes('输入 tOS 版本名称'), { timeout: TIMEOUT })
+    // Move the seeded maintenance interval after the new launch iteration so
+    // the strict cross-stage schedule remains satisfiable throughout Gantt edits.
+    for (const [field, value] of [
+      ['planStartDate', '2027-06-01'], ['planEndDate', '2027-06-05'],
+      ['actualStartDate', '2027-06-01'], ['actualEndDate', '2027-06-05'],
+    ]) await editTreeDate(page, table, '16.1.0.115', field, value)
+    assert.equal(await page.$('button[aria-label="添加tOS版本"]'), null, 'tOS toolbar no longer exposes the legacy business insertion action')
+    await openBusinessInsertion(page, 'tos', '上市迭代阶段')
     const tosBusinessName = await page.$eval('[aria-label="业务节点名称"]', node => node.value)
     assert.equal(tosBusinessName, '16.1.0.005', 'tOS business version proposes the first legal project-prefix tail')
     const tosNameValidationMessage = '版本号必须符合 16.1.0.XXX，且尾号最后一位为0或5'
@@ -1790,20 +1882,20 @@ try {
       start: await treeDate(page, table, tosBusinessName, 'planStartDate'),
       end: await treeDate(page, table, tosBusinessName, 'planEndDate'),
     }, { start: '2027-05-01', end: '2027-05-05' }, 'tOS business version accepts a planned range through public DatePickers')
-    assert.equal(await treePlannedDays(page, table, tosBusinessName), '5天', 'tOS launch business version derives a five-day inclusive plan duration')
+    assert.equal(await treePlannedDays(page, table, tosBusinessName), '4天', 'tOS launch business version derives an end-minus-start plan duration')
 
     const tosMaintenanceName = '16.1.0.010'
-    await openBusinessInsertion(page, '添加tOS版本', '维护阶段')
+    await openBusinessInsertion(page, 'tos', '维护阶段')
     await replaceAriaInputValue(page, '业务节点名称', tosMaintenanceName)
     await clickDialogButton(page, '输入 tOS 版本名称', '确认添加')
     await waitForDialogToClose(page, '输入 tOS 版本名称')
     await page.waitForFunction((selector, taskName) => document.querySelector(selector)?.textContent?.includes(taskName), { timeout: TIMEOUT }, table, tosMaintenanceName)
-    await editTreeDate(page, table, tosMaintenanceName, 'planStartDate', '2027-06-10')
-    await editTreeDate(page, table, tosMaintenanceName, 'planEndDate', '2027-06-14')
-    await editTreeDate(page, table, tosMaintenanceName, 'actualStartDate', '2027-06-10')
-    await editTreeDate(page, table, tosMaintenanceName, 'actualEndDate', '2027-06-14')
-    assert.equal(await treePlannedDays(page, table, tosMaintenanceName), '5天', 'tOS maintenance business version derives a five-day inclusive plan duration')
-    console.log(`browser tOS inserted launch ${tosBusinessName}=2027-05-01..2027-05-05 and maintenance ${tosMaintenanceName}=2027-06-10..2027-06-14`)
+    await editTreeDate(page, table, tosMaintenanceName, 'planStartDate', '2027-07-10')
+    await editTreeDate(page, table, tosMaintenanceName, 'planEndDate', '2027-07-14')
+    await editTreeDate(page, table, tosMaintenanceName, 'actualStartDate', '2027-07-10')
+    await editTreeDate(page, table, tosMaintenanceName, 'actualEndDate', '2027-07-14')
+    assert.equal(await treePlannedDays(page, table, tosMaintenanceName), '4天', 'tOS maintenance business version derives an end-minus-start plan duration')
+    console.log(`browser tOS inserted launch ${tosBusinessName}=2027-05-01..2027-05-05 and maintenance ${tosMaintenanceName}=2027-07-10..2027-07-14`)
 
     const milestoneName = '概念启动'
     const beforeDate = await treeDate(page, table, milestoneName, 'planEndDate')
@@ -1813,6 +1905,7 @@ try {
     assert.ok(milestoneId, 'tOS dated milestone has a public DHTMLX task_id')
     const milestone = `.gantt_task_line.pms-gantt-milestone.pms-gantt-task-editable[task_id="${milestoneId}"]`
     assert.ok(await page.$(milestone), 'tOS draft milestone is editable while stages remain locked')
+    await captureEvidence(page, 'level1-tos-gantt-milestone-period')
     const tosDrag = await dragTask(page, milestone, -24)
     assert.equal(tosDrag.hitTaskId, milestoneId, `tOS drag starts on the resolved DHTMLX milestone: ${JSON.stringify(tosDrag)}`)
     assert.ok(tosDrag.sawDragMove, 'tOS drag enters DHTMLX move state')
@@ -1824,7 +1917,7 @@ try {
     assert.notEqual(afterDate, beforeDate, 'tOS milestone drag writes a changed date')
     console.log(`browser tOS milestone date ${beforeDate} -> ${afterDate}`)
 
-    for (const stageName of ['规划阶段', '概念阶段', '计划阶段', '开发验证阶段']) {
+    for (const stageName of ['概念阶段', '计划阶段', '开发验证阶段']) {
       await collapseTreeStage(page, table, stageName)
     }
     await selectView(page, '甘特图')
@@ -1842,8 +1935,8 @@ try {
       start: await treeDate(page, table, ganttBusinessName, 'planStartDate'),
       end: await treeDate(page, table, ganttBusinessName, 'planEndDate'),
     }
-    assert.notEqual(movedBusiness.start, '2027-06-10', 'tOS business move writes the planned start boundary')
-    assert.notEqual(movedBusiness.end, '2027-06-14', 'tOS business move writes the planned completion boundary')
+    assert.notEqual(movedBusiness.start, '2027-07-10', 'tOS business move writes the planned start boundary')
+    assert.notEqual(movedBusiness.end, '2027-07-14', 'tOS business move writes the planned completion boundary')
     await selectView(page, '甘特图')
     const resizedBusinessTaskId = await ganttTaskIdForName(page, ganttBusinessName)
     assert.ok(resizedBusinessTaskId, 'moved tOS business version remains in the public gantt grid')
@@ -1864,7 +1957,7 @@ try {
 
     await editTreeDate(page, table, tosBusinessName, 'actualStartDate', '2027-05-10')
     await editTreeDate(page, table, tosBusinessName, 'actualEndDate', '2027-05-20')
-    assert.equal(await treeActualDays(page, table, tosBusinessName), '11天', 'draft business actual duration is derived inclusively before publish')
+    assert.equal(await treeActualDays(page, table, tosBusinessName), '10天', 'draft business actual duration is derived as end minus start before publish')
     const publishedVersionNo = (await page.$eval('[aria-label="计划版本"]', control => control.closest('.ant-select')?.textContent || '')).match(/V\d+(?:\.\d+)?/)?.[0]
     assert.ok(publishedVersionNo, 'tOS draft exposes a version number before publish')
     await pressAriaButton(page, '发布')
@@ -1892,7 +1985,7 @@ try {
     await chooseVersion(page, pairedDraftVersionNo)
     assert.equal(await treeDate(page, table, tosBusinessName, 'actualStartDate'), '2027-05-15', 'latest-published actual-end sync preserves the paired draft actual start')
     assert.equal(await treeDate(page, table, tosBusinessName, 'actualEndDate'), '2027-05-22', 'latest-published actual-end syncs only that field into paired tOS draft')
-    assert.equal(await treeActualDays(page, table, tosBusinessName), '8天', 'paired draft actual duration is recomputed from its preserved start and synced end')
+    assert.equal(await treeActualDays(page, table, tosBusinessName), '7天', 'paired draft actual duration is recomputed from its preserved start and synced end')
     assert.deepEqual({
       start: await treeDate(page, table, tosBusinessName, 'planStartDate'),
       end: await treeDate(page, table, tosBusinessName, 'planEndDate'),
@@ -1904,7 +1997,7 @@ try {
     await chooseVersion(page, publishedVersionNo)
     assert.equal(await treeDate(page, table, tosBusinessName, 'actualStartDate'), '2027-05-11', 'published actual start survives same-context reopen')
     assert.equal(await treeDate(page, table, tosBusinessName, 'actualEndDate'), '2027-05-22', 'published actual end survives same-context reopen')
-    assert.equal(await treeActualDays(page, table, tosBusinessName), '12天', 'published actual duration is recomputed from both published fields')
+    assert.equal(await treeActualDays(page, table, tosBusinessName), '11天', 'published actual duration is recomputed from both published fields')
     await chooseVersion(page, pairedDraftVersionNo)
     assert.equal(await treeDate(page, table, tosBusinessName, 'actualStartDate'), '2027-05-15', 'paired-draft divergent actual start survives same-context reopen')
     assert.equal(await treeDate(page, table, tosBusinessName, 'actualEndDate'), '2027-05-22', 'paired-draft synced actual end survives same-context reopen')
