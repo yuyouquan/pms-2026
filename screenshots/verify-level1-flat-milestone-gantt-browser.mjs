@@ -9,9 +9,12 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import vm from 'node:vm'
 import puppeteer from 'puppeteer'
 import * as XLSX from 'xlsx'
+import {
+  createEvidenceSession,
+  waitForApplicationBundles,
+} from './level1-browser-harness.mjs'
 
 const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const TIMEOUT = Number(process.env.PMS_BROWSER_TIMEOUT || 30_000)
@@ -26,32 +29,13 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 let applicationBundlesReady = false
 const waitForApplicationBundlesReady = async () => {
   if (applicationBundlesReady) return
-  const deadline = Date.now() + INTERACTIVE_TIMEOUT
-  let lastError = null
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(BASE_URL)
-      if (!response.ok) throw new Error(`root preflight returned HTTP ${response.status}`)
-      const html = await response.text()
-      const scriptUrls = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)]
-        .map(match => new URL(match[1].replaceAll('&amp;', '&'), BASE_URL).href)
-      if (!scriptUrls.length) throw new Error('root preflight found no client scripts')
-      for (const scriptUrl of scriptUrls) {
-        const scriptResponse = await fetch(scriptUrl)
-        if (!scriptResponse.ok) throw new Error(`${scriptUrl} returned HTTP ${scriptResponse.status}`)
-        const source = await scriptResponse.text()
-        if (!source.trim()) throw new Error(`${scriptUrl} returned an empty client script`)
-        new vm.Script(source, { filename: scriptUrl })
-      }
-      applicationBundlesReady = true
-      console.log(`browser preflight validated ${scriptUrls.length} client bundles`)
-      return
-    } catch (error) {
-      lastError = error
-      await wait(500)
-    }
-  }
-  throw new Error(`client bundles did not become ready within ${INTERACTIVE_TIMEOUT}ms: ${lastError?.message || lastError}`)
+  const result = await waitForApplicationBundles({
+    baseUrl: BASE_URL,
+    timeoutMs: INTERACTIVE_TIMEOUT,
+    requestTimeoutMs: Math.min(30_000, INTERACTIVE_TIMEOUT),
+  })
+  applicationBundlesReady = true
+  console.log(`browser preflight validated ${result.scriptCount} client bundles`)
 }
 const isAllowedConsoleMessage = message => {
   const text = message.text()
@@ -69,10 +53,13 @@ if (!VALID_BROWSER_CASES.has(ONLY_CASE)) {
 
 const PLAYWRIGHT_OUTPUT = path.join(process.cwd(), 'output', 'playwright')
 const UPDATE_SCREENSHOTS = process.env.PMS_BROWSER_UPDATE_SCREENSHOTS === '1'
-const EVIDENCE_OUTPUT = UPDATE_SCREENSHOTS
-  ? PLAYWRIGHT_OUTPUT
-  : fs.mkdtempSync(path.join(os.tmpdir(), 'pms-level1-playwright-'))
-fs.mkdirSync(EVIDENCE_OUTPUT, { recursive: true })
+const KEEP_ARTIFACTS = process.env.PMS_BROWSER_KEEP_ARTIFACTS === '1'
+const EVIDENCE_SESSION = createEvidenceSession({
+  trackedOutput: PLAYWRIGHT_OUTPUT,
+  updateScreenshots: UPDATE_SCREENSHOTS,
+  keepArtifacts: KEEP_ARTIFACTS,
+})
+const EVIDENCE_OUTPUT = EVIDENCE_SESSION.outputPath
 const captureEvidence = (page, name) => page.screenshot({
   path: path.join(EVIDENCE_OUTPUT, `${name}.png`),
   fullPage: true,
@@ -1337,6 +1324,7 @@ const runCase = async (title, test) => {
   }
 }
 
+let verificationSucceeded = false
 try {
   if (!ONLY_CASE || ONLY_CASE === 'templates') await runCase('configuration templates keep the approved project families', async (page) => {
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: INTERACTIVE_TIMEOUT })
@@ -2343,8 +2331,15 @@ try {
   }
 
   assert.ok(executedCases > 0, `browser matrix executed no cases for PMS_BROWSER_CASE=${JSON.stringify(ONLY_CASE)}`)
+  verificationSucceeded = true
   console.log(`PASS level1 flat milestone gantt browser matrix (${BASE_URL})`)
 } catch (error) {
   console.error(`FAIL level1 flat milestone gantt browser matrix\n${error.stack || error}`)
   process.exitCode = 1
+} finally {
+  const evidenceResult = EVIDENCE_SESSION.cleanup({ success: verificationSucceeded })
+  if (evidenceResult.kept && !UPDATE_SCREENSHOTS) {
+    const reason = verificationSucceeded ? 'explicitly retained' : 'retained after failure'
+    console.error(`browser evidence ${reason} at ${evidenceResult.path}`)
+  }
 }
