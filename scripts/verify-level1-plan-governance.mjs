@@ -94,6 +94,50 @@ assert.deepEqual(
   ['v3.10'],
   'basic information compares numeric version segments instead of sorting them lexically',
 )
+assert.deepEqual(
+  projectSpaceRules.selectLevel1HorizontalVersions([
+    { id: 'legacy-no-status', versionNo: 'V1' },
+  ], { surface: 'basic-info' }),
+  [],
+  'basic information rejects a version whose publication status is missing',
+)
+assert.deepEqual(
+  projectSpaceRules.selectLevel1HorizontalVersions([
+    { id: 'legacy-no-status', versionNo: 'V1' },
+  ], { surface: 'project-plan', includeDraft: true }),
+  [],
+  'project plan rejects a version whose publication status is missing instead of treating it differently from basic information',
+)
+assert.equal(
+  projectSpaceRules.canEditLevel1HorizontalActualProjection({
+    versions: horizontalVersions,
+    currentVersionId: 'v3',
+    actualVersionId: 'v2',
+    canMaintain: true,
+  }),
+  true,
+  'a maintainer can edit the latest published actual projection while the selected version is a revision',
+)
+assert.equal(
+  projectSpaceRules.canEditLevel1HorizontalActualProjection({
+    versions: horizontalVersions,
+    currentVersionId: 'v3',
+    actualVersionId: 'v1',
+    canMaintain: true,
+  }),
+  false,
+  'an older published actual projection is not editable while a newer publication exists',
+)
+assert.deepEqual(
+  projectSpaceRules.resolveLevel1HorizontalActualProjectionAccess({
+    versions: horizontalVersions,
+    currentVersionId: 'v3',
+    actualVersionId: 'v2',
+    canMaintain: true,
+  }),
+  { canEdit: true, targetPublishedVersionId: 'v2' },
+  'a selected revision keeps the actual row editable while explicitly targeting the latest published snapshot',
+)
 assert.equal(
   projectSpaceRules.sumLevel1StageEstimatedDays([
     { id: '1', parentId: null, estimatedDays: 10 },
@@ -112,8 +156,8 @@ assert.equal(
     { id: '3', parentId: null, estimatedDays: -1 },
     { id: '3.1', parentId: '3', estimatedDays: 20 },
   ]),
-  0,
-  'horizontal development cycle treats empty, negative, and invalid root-stage durations as zero',
+  null,
+  'horizontal development cycle stays empty when every root-stage duration is empty or invalid',
 )
 assert.equal(
   projectSpaceRules.canEditLevel1HorizontalDateCell({ id: '4', nodeKind: 'stage', parentId: null }),
@@ -1830,7 +1874,9 @@ assert.match(horizontalTableSource, /actualMilestones\.map\(\(actualTask:/, 'the
 assert.match(horizontalTableSource, /所有一级阶段的预估工期总和[\s\S]{0,180}sumLevel1StageEstimatedDays\(actualRows\)/, 'the actual row development cycle uses the latest published root-stage estimated-duration total')
 assert.doesNotMatch(horizontalTableSource, /actualRows\.find\([\s\S]{0,180}\)\s*\|\|\s*m/, 'a missing published actual cell never falls back to a draft/header task')
 assert.match(horizontalTableSource, /canEditLevel1HorizontalDateCell\(m\) && version\.id === horizontalCurrentVersion/, 'revision plan-date editing delegates stage readonly enforcement to the tested cell rule')
-assert.match(horizontalTableSource, /canEditLevel1HorizontalDateCell\(actualTask\) && level1SurfaceCanMaintain/, 'actual-date editing delegates stage readonly enforcement to the tested cell rule')
+assert.match(horizontalTableSource, /canEditLevel1HorizontalDateCell\(actualTask\) && actualProjectionAccess\.canEdit/, 'actual-date editing delegates stage readonly enforcement to the tested cell rule and rendered-projection permission')
+assert.match(horizontalTableSource, /resolveLevel1HorizontalActualProjectionAccess\(\{[\s\S]{0,220}actualVersionId:\s*actualVersionProjection\.version\.id[\s\S]{0,120}canMaintain:\s*level1SurfaceCanMaintain/, 'actual-row edit permission is based on the rendered published projection rather than the selected revision')
+assert.match(horizontalTableSource, /targetPublishedVersionId:\s*actualProjectionAccess\.targetPublishedVersionId!/, 'actual-row writes explicitly target the rendered published snapshot selected by the access rule')
 const horizontalHeaderStart = projectSpaceSource.indexOf('{stageGroups.map(({ stage, colSpan }, i) => {')
 const horizontalHeaderEnd = projectSpaceSource.indexOf('</thead>', horizontalHeaderStart)
 assert.ok(horizontalHeaderStart >= 0 && horizontalHeaderEnd > horizontalHeaderStart, 'horizontal stage header slice is present')
@@ -1863,8 +1909,9 @@ assert.match(horizontalExportSource, /versionProjections/, 'horizontal current/a
 assert.match(horizontalExportSource, /getLevel1SurfaceVersionTasks\(version\)/, 'horizontal export resolves every version from its own scoped snapshot')
 assert.match(horizontalExportSource, /for \(const match of resolveLevel1HorizontalVersionCells\(allMilestones, projection\.rows\)\)/, 'horizontal export version cells resolve from each version projection')
 assert.match(horizontalExportSource, /for \(const task of resolveLevel1HorizontalVersionCells\(allMilestones, actualRows\)\)/, 'horizontal export actual cells resolve from the latest published projection')
-assert.match(horizontalExportSource, /\[version\.versionNo,\s*sumLevel1StageEstimatedDays\(projection\.rows\)\]/, 'horizontal export development cycle reuses the same root-stage duration sum as the page')
-assert.match(horizontalExportSource, /\['实际',\s*sumLevel1StageEstimatedDays\(actualRows\)\]/, 'horizontal export actual row uses the latest published root-stage estimated-duration total')
+assert.match(horizontalExportSource, /\[version\.versionNo,\s*sumLevel1StageEstimatedDays\(projection\.rows\)\s*\?\?\s*'-'\]/, 'horizontal export development cycle reuses the same root-stage duration sum as the page and renders empty totals as a dash')
+assert.match(horizontalExportSource, /\['实际',\s*sumLevel1StageEstimatedDays\(actualRows\)\s*\?\?\s*'-'\]/, 'horizontal export actual row uses the latest published root-stage estimated-duration total and renders an empty total as a dash')
+assert.match(horizontalExportSource, /if \(actualProjection\) \{[\s\S]{0,500}dataMatrix\.push\(actualRow\)/, 'draft-only horizontal exports never append a fabricated actual row')
 assert.doesNotMatch(horizontalExportSource, /calcCycleDays\(projection\.rows,\s*'planStartDate',\s*'planEndDate'\)/, 'horizontal export never derives planned development cycle from calendar min/max')
 assert.doesNotMatch(horizontalExportSource, /versionOffsetIndex|shiftDateStrForExport|projectLevel1Plan\(effectiveTasks/, 'horizontal export never fabricates historical versions from the current live plan')
 const compareHandlerStart = projectSpaceSource.indexOf('const handleComparePlanVersions = () =>')

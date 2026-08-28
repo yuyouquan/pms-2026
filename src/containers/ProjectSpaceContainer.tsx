@@ -211,6 +211,7 @@ import {
   getLevel1MaintainerUsers,
   selectLevel1HorizontalVersions,
   selectLatestPublishedLevel1Summary,
+  resolveLevel1HorizontalActualProjectionAccess,
   sumLevel1StageEstimatedDays,
   type Level1HorizontalSurface,
   type ProjectSpaceLevel1ScopeToken,
@@ -3030,6 +3031,7 @@ export default function ProjectSpaceContainer() {
     value: string,
     isLevel2Custom: boolean,
     useLevel1SurfaceScope = false,
+    options: { targetPublishedVersionId?: string } = {},
   ) => {
     const activeScopeUnavailable = useLevel1SurfaceScope
       ? level1SurfaceScopeUnavailable
@@ -3051,8 +3053,11 @@ export default function ProjectSpaceContainer() {
       ? level1SurfaceMarketIsFollow
       : currentMarketIsFollow
     const activeVersions = useLevel1SurfaceScope ? level1SurfaceVersions : versions
-    const activeCurrentVersion = useLevel1SurfaceScope ? level1SurfaceCurrentVersion : currentVersion
-    const activeIsLatestPublished = useLevel1SurfaceScope ? level1SurfaceIsLatestPublished : isLatestPublished
+    const activeCurrentVersion = options.targetPublishedVersionId
+      || (useLevel1SurfaceScope ? level1SurfaceCurrentVersion : currentVersion)
+    const activeIsLatestPublished = options.targetPublishedVersionId
+      ? selectLevel1HorizontalVersions(level1SurfaceVersions, { surface: 'basic-info' })[0]?.id === options.targetPublishedVersionId
+      : useLevel1SurfaceScope ? level1SurfaceIsLatestPublished : isLatestPublished
     const targetStableId = record.stableId || record.id
     const updatedTasks = governedProjectLevel1Date
       ? applyIncrementalActualFieldPatch(tableTasks, targetStableId, field, value)
@@ -3425,19 +3430,21 @@ export default function ProjectSpaceContainer() {
     for (const { stage, milestones, colSpan } of stageGroups) { headerRow0.push(stage.taskName); for (let i = 1; i < colSpan; i++) headerRow0.push(null); if (milestones.length > 0) { for (const m of milestones) headerRow1.push(m.taskName) } else headerRow1.push('-'); merges.push({ s: { r: 0, c: colCursor }, e: { r: 0, c: colCursor + colSpan - 1 } }); colCursor += colSpan }
     const dataMatrix: (string | number)[][] = []
     for (const { version, projection } of versionProjections) {
-      const row: (string | number)[] = [version.versionNo, sumLevel1StageEstimatedDays(projection.rows)]
+      const row: (string | number)[] = [version.versionNo, sumLevel1StageEstimatedDays(projection.rows) ?? '-']
       for (const match of resolveLevel1HorizontalVersionCells(allMilestones, projection.rows)) {
         row.push(match?.planEndDate || '-')
       }
       dataMatrix.push(row)
     }
     const actualProjection = recencyVersionProjections.find(entry => entry.version.status === '已发布')?.projection
-    const actualRows = actualProjection?.rows || []
-    const actualRow: (string | number)[] = ['实际', sumLevel1StageEstimatedDays(actualRows)]
-    for (const task of resolveLevel1HorizontalVersionCells(allMilestones, actualRows)) {
-      actualRow.push(task?.actualEndDate || '-')
+    if (actualProjection) {
+      const actualRows = actualProjection.rows
+      const actualRow: (string | number)[] = ['实际', sumLevel1StageEstimatedDays(actualRows) ?? '-']
+      for (const task of resolveLevel1HorizontalVersionCells(allMilestones, actualRows)) {
+        actualRow.push(task?.actualEndDate || '-')
+      }
+      dataMatrix.push(actualRow)
     }
-    dataMatrix.push(actualRow)
     const colWidths = [10, 10, ...allMilestones.map(() => 14)]
     exportMergedSheet([headerRow0, headerRow1], merges, dataMatrix, colWidths, `项目空间计划_${selectedProject?.name || '项目'}_一级计划_横版_${exportTimestamp()}.xlsx`, '一级计划横版')
   }
@@ -4549,9 +4556,18 @@ export default function ProjectSpaceContainer() {
       colSpan: Math.max(group.milestones.length, 1),
     }))
     const allMilestones = stageGroups.flatMap(({ stage, milestones }) => milestones.length > 0 ? milestones : [stage])
-    const actualProjection = recencyVersionProjections.find(entry => entry.version.status === '已发布')?.projection
+    const actualVersionProjection = recencyVersionProjections.find(entry => entry.version.status === '已发布')
+    const actualProjection = actualVersionProjection?.projection
     const actualRows = actualProjection?.rows || []
     const actualMilestones = resolveLevel1HorizontalVersionCells(allMilestones, actualRows)
+    const actualProjectionAccess = actualVersionProjection
+      ? resolveLevel1HorizontalActualProjectionAccess({
+          versions: horizontalVersions,
+          currentVersionId: horizontalCurrentVersion,
+          actualVersionId: actualVersionProjection.version.id,
+          canMaintain: level1SurfaceCanMaintain,
+        })
+      : { canEdit: false, targetPublishedVersionId: null }
     const thStyle: CSSProperties = { background: '#f8fafc', fontWeight: 600, fontSize: 13, color: '#4b5563', padding: '10px 12px', border: '1px solid #e5e7eb', whiteSpace: 'nowrap', textAlign: 'center' }
     const tdStyle: CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'center', whiteSpace: 'nowrap', minWidth: 100, border: '1px solid #e5e7eb' }
     const versionThStyle: CSSProperties = { ...thStyle, position: 'sticky', left: 0, zIndex: 2, minWidth: 80, background: '#f8fafc' }
@@ -4623,11 +4639,11 @@ export default function ProjectSpaceContainer() {
             {actualProjection && (
               <tr style={{ background: '#fffbe6' }}>
                 <td style={{ ...versionTdStyle, color: '#d48806', background: '#fffbe6', fontSize: 12 }}><Tooltip title="最近已发布版本的实际完成数据"><span>实际</span></Tooltip></td>
-                <td style={{ ...cycleTdStyle, background: '#fffbe6' }}><Tooltip title="所有一级阶段的预估工期总和"><span>{sumLevel1StageEstimatedDays(actualRows)}</span></Tooltip></td>
+                <td style={{ ...cycleTdStyle, background: '#fffbe6' }}><Tooltip title="所有一级阶段的预估工期总和"><span>{sumLevel1StageEstimatedDays(actualRows) ?? '-'}</span></Tooltip></td>
                 {actualMilestones.map((actualTask: any, mi: number) => (
                   <td key={mi} style={{ ...tdStyle, color: '#d48806' }}>
-                    {canEditLevel1HorizontalDateCell(actualTask) && level1SurfaceCanMaintain && level1SurfaceIsLatestPublished
-                      ? <ClickToEditDate align="center" value={actualTask.actualEndDate || ''} onChange={(nextValue) => updateActualDateForTask(actualRows, setLevel1SurfaceTasks, actualTask, 'actualEndDate', nextValue, false, true)} />
+                    {canEditLevel1HorizontalDateCell(actualTask) && actualProjectionAccess.canEdit
+                      ? <ClickToEditDate align="center" value={actualTask.actualEndDate || ''} onChange={(nextValue) => updateActualDateForTask(actualRows, setLevel1SurfaceTasks, actualTask, 'actualEndDate', nextValue, false, true, { targetPublishedVersionId: actualProjectionAccess.targetPublishedVersionId! })} />
                       : actualTask?.actualEndDate || '-'}
                   </td>
                 ))}

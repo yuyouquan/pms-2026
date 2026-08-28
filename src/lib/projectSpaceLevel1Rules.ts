@@ -37,7 +37,7 @@ export type Level1HorizontalSurface = 'basic-info' | 'project-plan'
 export interface Level1HorizontalVersion {
   id: string
   versionNo: string
-  status?: string
+  status: string
 }
 
 export const selectLevel1HorizontalVersions = <Version extends Level1HorizontalVersion>(
@@ -48,7 +48,10 @@ export const selectLevel1HorizontalVersions = <Version extends Level1HorizontalV
   },
 ): Version[] => {
   if (options.surface === 'project-plan') {
-    return getDisplayPlanVersionsForHorizontalPlan([...versions], {
+    const recognizedVersions = versions.filter(version => (
+      version.status === '已发布' || version.status === '修订中'
+    ))
+    return getDisplayPlanVersionsForHorizontalPlan([...recognizedVersions], {
       includeDraft: options.includeDraft,
     })
   }
@@ -66,13 +69,40 @@ export interface Level1StageDurationRow {
 
 export const sumLevel1StageEstimatedDays = (
   rows: readonly Level1StageDurationRow[],
-): number => rows.reduce((total, row) => {
-  if (row.parentId) return total
-  const duration = row.estimatedDays
-  return typeof duration === 'number' && Number.isFinite(duration) && duration >= 0
-    ? total + duration
-    : total
-}, 0)
+): number | null => {
+  const durations = rows
+    .filter(row => !row.parentId)
+    .map(row => row.estimatedDays)
+    .filter((duration): duration is number => (
+      typeof duration === 'number' && Number.isFinite(duration) && duration >= 0
+    ))
+  return durations.length > 0
+    ? durations.reduce((total, duration) => total + duration, 0)
+    : null
+}
+
+export const resolveLevel1HorizontalActualProjectionAccess = (input: {
+  versions: readonly Level1HorizontalVersion[]
+  currentVersionId: string
+  actualVersionId: string
+  canMaintain: boolean
+}): { canEdit: boolean; targetPublishedVersionId: string | null } => {
+  const latestPublishedId = selectLevel1HorizontalVersions(input.versions, {
+    surface: 'basic-info',
+  })[0]?.id
+  const canEdit = input.canMaintain && latestPublishedId === input.actualVersionId
+  return {
+    canEdit,
+    targetPublishedVersionId: canEdit ? input.actualVersionId : null,
+  }
+}
+
+export const canEditLevel1HorizontalActualProjection = (input: {
+  versions: readonly Level1HorizontalVersion[]
+  currentVersionId: string
+  actualVersionId: string
+  canMaintain: boolean
+}): boolean => resolveLevel1HorizontalActualProjectionAccess(input).canEdit
 
 export const canEditLevel1HorizontalDateCell = (task?: {
   parentId?: string | null

@@ -961,7 +961,7 @@ assert.deepEqual(
   ['-', '-', '-'],
   'a V4-draft-only MR4 leaks no actual date, status, or duration into the published V3 actual row',
 )
-const horizontalActualUiStart = projectSpaceSource.indexOf("const actualProjection = recencyVersionProjections.find(entry => entry.version.status === '已发布')?.projection", projectSpaceSource.indexOf('const renderHorizontalTable = (surface: Level1HorizontalSurface) =>'))
+const horizontalActualUiStart = projectSpaceSource.indexOf("const actualVersionProjection = recencyVersionProjections.find(entry => entry.version.status === '已发布')", projectSpaceSource.indexOf('const renderHorizontalTable = (surface: Level1HorizontalSurface) =>'))
 const horizontalActualUiEnd = projectSpaceSource.indexOf('// ═══════ renderActionButtons', horizontalActualUiStart)
 const horizontalActualUiSource = projectSpaceSource.slice(horizontalActualUiStart, horizontalActualUiEnd)
 assert.match(horizontalActualUiSource, /const actualMilestones = resolveLevel1HorizontalVersionCells\(allMilestones, actualRows\)/, 'horizontal UI resolves the actual row once from the latest published projection')
@@ -993,9 +993,10 @@ assert.equal(projectSpaceLevel1SurfaceState.deriveLevel1SurfaceVersionState({
   scopeUnavailable: false,
 }).isLatestPublished, true, 'V3.10 sorts after V3.9 when deciding whether scoped L1 actual dates are maintainable')
 const horizontalUiStateSource = projectSpaceSource.slice(projectSpaceSource.indexOf('const renderHorizontalTable = (surface: Level1HorizontalSurface) =>'), projectSpaceSource.indexOf('// ═══════ renderActionButtons'))
-for (const stateName of ['level1SurfaceIsDraft', 'level1SurfaceIsLatestPublished', 'level1SurfaceCanMaintain', 'setLevel1SurfaceTasks']) {
+for (const stateName of ['level1SurfaceIsDraft', 'level1SurfaceCanMaintain', 'setLevel1SurfaceTasks']) {
   assert.match(horizontalUiStateSource, new RegExp(stateName), `basic-information horizontal UI uses dedicated ${stateName}`)
 }
+assert.doesNotMatch(horizontalUiStateSource, /level1SurfaceIsLatestPublished/, 'horizontal actual editing never depends on whether the selected version is the latest publication')
 assert.doesNotMatch(horizontalUiStateSource, /\bisCurrentDraft\b|\bisLatestPublished\b|\bcanMaintainCurrentPlan\b|\bsetEffectiveTasks\b/, 'basic-information horizontal UI never reads global plan-level version, permission, or task setters')
 const tosLiveV3Draft = [
   { id: '3.1', stableId: 'tos-concept-start', taskName: '概念启动', planEndDate: '2026-03-01' },
