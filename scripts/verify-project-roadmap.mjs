@@ -61,6 +61,7 @@ export function loadTypeScriptModule(modulePath, moduleCache = typeScriptModuleC
   }).outputText
   const localRequire = specifier => {
     const dependencyPath = resolveTypeScriptModule(specifier, resolvedPath)
+    if (/\.(?:css|less|scss|sass)$/.test(dependencyPath)) return {}
     return /\.(?:ts|tsx|js|jsx)$/.test(dependencyPath)
       ? loadTypeScriptModule(dependencyPath, moduleCache)
       : require(dependencyPath)

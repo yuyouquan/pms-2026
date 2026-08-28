@@ -57,6 +57,7 @@ function loadTypeScriptModule(modulePath) {
   }).outputText
   const localRequire = specifier => {
     const dependencyPath = resolveTypeScriptModule(specifier, resolvedPath)
+    if (/\.(?:css|less|scss|sass)$/.test(dependencyPath)) return {}
     return /\.(?:ts|tsx|js|jsx)$/.test(dependencyPath)
       ? loadTypeScriptModule(dependencyPath)
       : require(dependencyPath)
@@ -128,7 +129,7 @@ try {
   contracts = loadContracts()
 } catch (error) {
   console.error(`FAIL project summary shared contracts`)
-  console.error(`  ${error instanceof Error ? error.message : String(error)}`)
+  console.error(`  ${error instanceof Error ? error.stack || error.message : String(error)}`)
   console.error('\nProject summary contract failed: 1 assertion(s)')
   process.exit(1)
 }
