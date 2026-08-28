@@ -206,6 +206,7 @@ import {
 } from '@/lib/planGanttRules'
 import {
   LEVEL1_TREE_FILTER_FIELDS,
+  canEditLevel1HorizontalDateCell,
   filterLevel1TreeRows,
   getLevel1MaintainerUsers,
   selectLevel1HorizontalVersions,
@@ -4611,7 +4612,7 @@ export default function ProjectSpaceContainer() {
                   <td style={{ ...cycleTdStyle, background: isLatest ? '#f0f9ff' : '#fff' }}><Tooltip title="所有一级活动的预估工期总和"><span>{devCycle ?? '-'}</span></Tooltip></td>
                   {vMilestones.map((m: any, mi: number) => (
                     <td key={mi} style={tdStyle}>
-                      {m && version.id === horizontalCurrentVersion && level1SurfaceIsDraft && level1SurfaceCanMaintain
+                      {canEditLevel1HorizontalDateCell(m) && version.id === horizontalCurrentVersion && level1SurfaceIsDraft && level1SurfaceCanMaintain
                         ? <ClickToEditDate align="center" value={m.planEndDate || ''} onChange={(nextValue) => setLevel1SurfaceTasks(level1SurfaceLiveTasks.map((task: any) => (task.stableId || task.id) === (m.stableId || m.id) ? { ...task, planEndDate: nextValue } : task))} />
                         : m?.planEndDate || '-'}
                     </td>
@@ -4619,17 +4620,19 @@ export default function ProjectSpaceContainer() {
                 </tr>
               )
             })}
-            <tr style={{ background: '#fffbe6' }}>
-              <td style={{ ...versionTdStyle, color: '#d48806', background: '#fffbe6', fontSize: 12 }}><Tooltip title="最近已发布版本的实际完成数据"><span>实际</span></Tooltip></td>
-              <td style={{ ...cycleTdStyle, background: '#fffbe6' }}><Tooltip title="所有一级阶段的预估工期总和"><span>{sumLevel1StageEstimatedDays(actualRows)}</span></Tooltip></td>
-              {actualMilestones.map((actualTask: any, mi: number) => (
-                <td key={mi} style={{ ...tdStyle, color: '#d48806' }}>
-                  {actualTask && level1SurfaceCanMaintain && level1SurfaceIsLatestPublished
-                    ? <ClickToEditDate align="center" value={actualTask.actualEndDate || ''} onChange={(nextValue) => updateActualDateForTask(actualRows, setLevel1SurfaceTasks, actualTask, 'actualEndDate', nextValue, false, true)} />
-                    : actualTask?.actualEndDate || '-'}
-                </td>
-              ))}
-            </tr>
+            {actualProjection && (
+              <tr style={{ background: '#fffbe6' }}>
+                <td style={{ ...versionTdStyle, color: '#d48806', background: '#fffbe6', fontSize: 12 }}><Tooltip title="最近已发布版本的实际完成数据"><span>实际</span></Tooltip></td>
+                <td style={{ ...cycleTdStyle, background: '#fffbe6' }}><Tooltip title="所有一级阶段的预估工期总和"><span>{sumLevel1StageEstimatedDays(actualRows)}</span></Tooltip></td>
+                {actualMilestones.map((actualTask: any, mi: number) => (
+                  <td key={mi} style={{ ...tdStyle, color: '#d48806' }}>
+                    {canEditLevel1HorizontalDateCell(actualTask) && level1SurfaceCanMaintain && level1SurfaceIsLatestPublished
+                      ? <ClickToEditDate align="center" value={actualTask.actualEndDate || ''} onChange={(nextValue) => updateActualDateForTask(actualRows, setLevel1SurfaceTasks, actualTask, 'actualEndDate', nextValue, false, true)} />
+                      : actualTask?.actualEndDate || '-'}
+                  </td>
+                ))}
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

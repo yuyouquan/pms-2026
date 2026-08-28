@@ -74,6 +74,11 @@ export const sumLevel1StageEstimatedDays = (
     : total
 }, 0)
 
+export const canEditLevel1HorizontalDateCell = (task?: {
+  parentId?: string | null
+  nodeKind?: string
+} | null): boolean => Boolean(task?.parentId && task.nodeKind !== 'stage')
+
 export const LEVEL1_FLAT_FILTER_FIELDS = [
   { key: 'sequence', label: '序号', kind: 'text' },
   { key: 'stageName', label: '阶段', kind: 'text' },

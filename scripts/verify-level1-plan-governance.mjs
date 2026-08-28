@@ -115,6 +115,21 @@ assert.equal(
   0,
   'horizontal development cycle treats empty, negative, and invalid root-stage durations as zero',
 )
+assert.equal(
+  projectSpaceRules.canEditLevel1HorizontalDateCell({ id: '4', nodeKind: 'stage', parentId: null }),
+  false,
+  'an empty business-stage placeholder is never an editable horizontal date cell',
+)
+assert.equal(
+  projectSpaceRules.canEditLevel1HorizontalDateCell({ id: '4.1', nodeKind: 'business-period', parentId: '4' }),
+  true,
+  'a second-level business period remains an editable horizontal date cell',
+)
+assert.equal(
+  projectSpaceRules.canEditLevel1HorizontalDateCell({ id: 'legacy-root', parentId: null }),
+  false,
+  'a legacy root row without nodeKind also remains readonly',
+)
 
 assert.deepEqual(projectSpaceRules.LEVEL1_TREE_FILTER_FIELDS.map(field => field.label), [
   '序号',
@@ -1807,12 +1822,15 @@ const horizontalTableEnd = projectSpaceSource.indexOf('// ═══════ 
 const horizontalTableSource = projectSpaceSource.slice(horizontalTableStart, horizontalTableEnd)
 assert.ok(horizontalTableStart >= 0 && horizontalTableEnd > horizontalTableStart, 'horizontal renderer requires an explicit surface instead of inferring the current tab')
 assert.match(horizontalTableSource, /versionProjections\.map\([\s\S]*<tr key=\{version\.id\}/, 'horizontal renderer outputs one row per selected version')
-assert.equal((horizontalTableSource.match(/<tr style=\{\{ background: '#fffbe6' \}\}>/g) || []).length, 1, 'horizontal renderer appends exactly one actual row after selected versions')
+assert.equal((horizontalTableSource.match(/<tr style=\{\{ background: '#fffbe6' \}\}>/g) || []).length, 1, 'horizontal renderer owns at most one actual row after selected versions')
+assert.match(horizontalTableSource, /\{actualProjection && \([\s\S]{0,120}<tr style=\{\{ background: '#fffbe6' \}\}>/, 'horizontal renderer only adds the actual row when a valid published projection exists')
 assert.match(horizontalTableSource, /const vMilestones = resolveLevel1HorizontalVersionCells\(allMilestones, vProjection\.rows\)/, 'each horizontal version row resolves cells from that version projection')
 assert.match(horizontalTableSource, /const actualMilestones = resolveLevel1HorizontalVersionCells\(allMilestones, actualRows\)/, 'the horizontal actual row resolves cells from the latest published projection')
 assert.match(horizontalTableSource, /actualMilestones\.map\(\(actualTask:/, 'the horizontal actual row renders the resolved published cells')
 assert.match(horizontalTableSource, /所有一级阶段的预估工期总和[\s\S]{0,180}sumLevel1StageEstimatedDays\(actualRows\)/, 'the actual row development cycle uses the latest published root-stage estimated-duration total')
 assert.doesNotMatch(horizontalTableSource, /actualRows\.find\([\s\S]{0,180}\)\s*\|\|\s*m/, 'a missing published actual cell never falls back to a draft/header task')
+assert.match(horizontalTableSource, /canEditLevel1HorizontalDateCell\(m\) && version\.id === horizontalCurrentVersion/, 'revision plan-date editing delegates stage readonly enforcement to the tested cell rule')
+assert.match(horizontalTableSource, /canEditLevel1HorizontalDateCell\(actualTask\) && level1SurfaceCanMaintain/, 'actual-date editing delegates stage readonly enforcement to the tested cell rule')
 const horizontalHeaderStart = projectSpaceSource.indexOf('{stageGroups.map(({ stage, colSpan }, i) => {')
 const horizontalHeaderEnd = projectSpaceSource.indexOf('</thead>', horizontalHeaderStart)
 assert.ok(horizontalHeaderStart >= 0 && horizontalHeaderEnd > horizontalHeaderStart, 'horizontal stage header slice is present')
