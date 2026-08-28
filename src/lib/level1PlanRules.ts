@@ -858,6 +858,13 @@ export const reorderLevel1BusinessNodes = (
   if (active.parentId !== over.parentId) {
     return { ok: false, message: '只能在同一阶段内调整业务节点顺序' }
   }
+  const parent = tasks.find(task => task.id === active.parentId)
+  if (!parent) {
+    return { ok: false, message: '未找到业务节点所属父阶段' }
+  }
+  if (parent.parentId || parent.nodeKind !== 'stage') {
+    return { ok: false, message: '业务节点父节点必须是一级阶段' }
+  }
   if (activeStableId === overStableId) {
     return { ok: true, tasks: tasks.map(task => ({ ...task })) }
   }

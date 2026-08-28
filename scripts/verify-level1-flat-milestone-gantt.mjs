@@ -553,6 +553,27 @@ if (validReorder.ok) {
 }
 assert.deepEqual(reorderableFixture, [reorderFixture[0], { ...reorderFixture[2], order: 1 }, { ...reorderFixture[1], order: 2 }], 'a valid business reorder does not mutate its input')
 
+const missingReorderParentFixture = [{
+  id: 'missing-parent-child', stableId: 'missing-parent-child', parentId: 'missing-parent', order: 1,
+  taskName: 'MR孤儿', source: 'custom', nodeKind: 'business-period',
+}]
+const missingReorderParentSnapshot = structuredClone(missingReorderParentFixture)
+const missingReorderParent = level1Rules.reorderLevel1BusinessNodes(missingReorderParentFixture, 'missing-parent-child', 'missing-parent-child')
+assert.equal(missingReorderParent.ok, false, 'a business reorder rejects a missing parent before accepting a self-drop')
+assert.match(missingReorderParent.message, /父阶段/, 'a missing reorder parent returns a clear structural message')
+assert.deepEqual(missingReorderParentFixture, missingReorderParentSnapshot, 'a missing-parent reorder failure leaves its input unchanged')
+
+const nestedReorderParentFixture = [
+  { id: 'nested-root', stableId: 'nested-root', order: 1, taskName: '真正一级阶段', source: 'template', nodeKind: 'stage' },
+  { id: 'nested-parent', stableId: 'nested-parent', parentId: 'nested-root', order: 1, taskName: '嵌套阶段', source: 'custom', nodeKind: 'stage' },
+  { id: 'nested-child', stableId: 'nested-child', parentId: 'nested-parent', order: 1, taskName: 'MR嵌套', source: 'custom', nodeKind: 'business-period' },
+]
+const nestedReorderParentSnapshot = structuredClone(nestedReorderParentFixture)
+const nestedReorderParent = level1Rules.reorderLevel1BusinessNodes(nestedReorderParentFixture, 'nested-child', 'nested-child')
+assert.equal(nestedReorderParent.ok, false, 'a business reorder rejects a parent that is not a top-level stage before accepting a self-drop')
+assert.match(nestedReorderParent.message, /一级阶段/, 'a non-root reorder parent returns a clear structural message')
+assert.deepEqual(nestedReorderParentFixture, nestedReorderParentSnapshot, 'a nested-parent reorder failure leaves its input unchanged')
+
 const mixedGanttSource = [
   { id: 'mixed-stage', stableId: 'mixed-stage', order: 1, taskName: '混合阶段', nodeKind: 'stage' },
   {
