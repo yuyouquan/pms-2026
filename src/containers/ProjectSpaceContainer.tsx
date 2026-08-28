@@ -501,6 +501,22 @@ export const resolveLevel1HorizontalVersionCells = <Row extends {
   return versionRows.find(row => (row.stableId || row.id) === identity) || null
 })
 
+export const createLevel1HorizontalHeaderKey = <
+  Stage extends { id: string; stableId?: string },
+  Milestone extends { id: string; stableId?: string },
+>(
+  stage: Stage,
+  milestone: Milestone | null,
+  stageIndex: number,
+  milestoneIndex: number,
+): string => JSON.stringify([
+  'level1-horizontal-header',
+  stage.stableId || stage.id,
+  stageIndex,
+  milestone?.stableId || milestone?.id || 'empty',
+  milestoneIndex,
+])
+
 export const resolveTosComparisonVersionTasks = <Task, Version extends {
   id: string
   status: string
@@ -4423,10 +4439,12 @@ export default function ProjectSpaceContainer() {
               })}
             </tr>
             <tr>
-              {stageGroups.flatMap(({ stage, milestones }) =>
+              {stageGroups.flatMap(({ stage, milestones }, stageIndex) =>
                 milestones.length > 0
-                  ? milestones.map((m: any) => <th key={m.id} style={thStyle}>{m.taskName}</th>)
-                  : [<th key={stage.id} style={{ ...thStyle, color: '#bfbfbf' }}>-</th>]
+                  ? milestones.map((m: any, milestoneIndex: number) => (
+                    <th key={createLevel1HorizontalHeaderKey(stage, m, stageIndex, milestoneIndex)} style={thStyle}>{m.taskName}</th>
+                  ))
+                  : [<th key={createLevel1HorizontalHeaderKey(stage, null, stageIndex, 0)} style={{ ...thStyle, color: '#bfbfbf' }}>-</th>]
               )}
             </tr>
           </thead>

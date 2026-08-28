@@ -787,9 +787,30 @@ const projectSpaceFollowSync = await loadExportedConstFromSource(projectSpaceSou
 const projectSpaceFollowScope = await loadExportedConstFromSource(projectSpaceSource, 'isLevel1MarketFollowActualScope')
 const projectSpaceHorizontalGroups = await loadExportedConstFromSource(projectSpaceSource, 'mergeLevel1HorizontalStageGroups')
 const projectSpaceHorizontalCells = await loadExportedConstFromSource(projectSpaceSource, 'resolveLevel1HorizontalVersionCells')
+const projectSpaceHorizontalHeaderKey = await loadExportedConstFromSource(projectSpaceSource, 'createLevel1HorizontalHeaderKey')
 const projectSpaceTosComparisonTasks = await loadExportedConstFromSource(projectSpaceSource, 'resolveTosComparisonVersionTasks')
 const projectSpaceLevel1SurfaceState = await loadExportedConstFromSource(projectSpaceSource, 'deriveLevel1SurfaceVersionState')
 const task7BrowserRouting = await loadExportedConstFromSource(browserSource, 'shouldRunTask7FocusedBrowserCase')
+const repeatedDisplayIdHeaderKeys = [
+  projectSpaceHorizontalHeaderKey.createLevel1HorizontalHeaderKey(
+    { id: '1', stableId: 'stage-concept' },
+    { id: '1.1', stableId: 'concept-start' },
+    0,
+    0,
+  ),
+  projectSpaceHorizontalHeaderKey.createLevel1HorizontalHeaderKey(
+    { id: '2', stableId: 'stage-plan' },
+    { id: '1.1', stableId: 'str1' },
+    1,
+    0,
+  ),
+]
+assert.equal(new Set(repeatedDisplayIdHeaderKeys).size, 2, 'horizontal milestone headers stay unique when display IDs repeat across stages')
+assert.notEqual(
+  projectSpaceHorizontalHeaderKey.createLevel1HorizontalHeaderKey({ id: '1' }, { id: '1.1' }, 0, 0),
+  projectSpaceHorizontalHeaderKey.createLevel1HorizontalHeaderKey({ id: '1' }, { id: '1.1' }, 0, 1),
+  'horizontal milestone header keys remain unique when legacy identities are duplicated within a stage',
+)
 const mergedHorizontalGroups = projectSpaceHorizontalGroups.mergeLevel1HorizontalStageGroups([
   {
     stageGroups: [
