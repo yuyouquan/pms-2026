@@ -4,6 +4,7 @@ export type Level1DelayStatus = '延期' | '按时' | '-'
 export type Level1ProjectKind = 'machine' | 'tos'
 export type Level1NodeKind = 'stage' | 'fixed-milestone' | 'business-period'
 export type Level1DateField = 'planStartDate' | 'planEndDate' | 'actualStartDate' | 'actualEndDate'
+export type Level1ScheduleAxis = 'plan' | 'actual'
 
 export interface Level1PlanTask {
   id: string
@@ -453,11 +454,17 @@ const LEVEL1_DATE_FIELD_LABELS: Record<Level1DateField, string> = {
 }
 
 const LEVEL1_DATE_AXES = [
-  { startField: 'planStartDate', endField: 'planEndDate', label: '计划' },
-  { startField: 'actualStartDate', endField: 'actualEndDate', label: '实际' },
+  { axis: 'plan', startField: 'planStartDate', endField: 'planEndDate', label: '计划' },
+  { axis: 'actual', startField: 'actualStartDate', endField: 'actualEndDate', label: '实际' },
 ] as const
 
-export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): Level1DateValidationResult => {
+export const validateLevel1ScheduleDates = (
+  tasks: readonly Level1PlanTask[],
+  options: { axes?: readonly Level1ScheduleAxis[] } = {},
+): Level1DateValidationResult => {
+  const enabledAxes = new Set<Level1ScheduleAxis>(options.axes || ['plan', 'actual'])
+  const dateAxes = LEVEL1_DATE_AXES.filter(({ axis }) => enabledAxes.has(axis))
+  const enabledFields = new Set<Level1DateField>(dateAxes.flatMap(({ startField, endField }) => [startField, endField]))
   const ordered = getOrderedLevel1Tasks(tasks)
   const parentIds = new Set(ordered.flatMap(task => task.parentId ? [task.parentId] : []))
   const getNodeKind = (task: Level1PlanTask): Level1NodeKind => (
@@ -485,7 +492,7 @@ export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): L
       : nodeKind === 'fixed-milestone'
         ? (['planEndDate', 'actualEndDate'] as const)
         : []
-    editableFields.forEach(field => {
+    editableFields.filter(field => enabledFields.has(field)).forEach(field => {
       const value = task[field]
       if (value === undefined || value === null || value === '') return
       if (parseStrictDate(value) === null) {
@@ -494,7 +501,7 @@ export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): L
     })
 
     if (nodeKind !== 'business-period') return
-    LEVEL1_DATE_AXES.forEach(({ startField, endField, label }) => {
+    dateAxes.forEach(({ startField, endField, label }) => {
       const start = getValidTime(task, startField)
       const end = getValidTime(task, endField)
       if (start === null || end === null || start <= end) return
@@ -503,7 +510,7 @@ export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): L
     })
   })
 
-  LEVEL1_DATE_AXES.forEach(({ endField }) => {
+  dateAxes.forEach(({ endField }) => {
     let previous: Level1PlanTask | null = null
     ordered.filter(task => getNodeKind(task) === 'fixed-milestone').forEach(task => {
       const timestamp = getValidTime(task, endField)
@@ -531,7 +538,7 @@ export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): L
   roots.forEach(stage => {
     const businessPeriods = sortByOrder((childrenByParent.get(stage.id) || [])
       .filter(task => getNodeKind(task) === 'business-period'))
-    LEVEL1_DATE_AXES.forEach(({ startField, endField }) => {
+    dateAxes.forEach(({ startField, endField }) => {
       let blockingPeriod: Level1PlanTask | null = null
       businessPeriods.forEach(task => {
         const start = getValidTime(task, startField)
@@ -556,7 +563,7 @@ export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): L
     startField: Level1DateField
   }
 
-  LEVEL1_DATE_AXES.forEach(({ startField, endField }) => {
+  dateAxes.forEach(({ startField, endField }) => {
     let blockingStageEnd: number | null = null
     roots.forEach(stage => {
       const scheduled = sortByOrder(childrenByParent.get(stage.id) || []).flatMap<Level1StageBoundary>(task => {

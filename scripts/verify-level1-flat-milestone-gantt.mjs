@@ -659,6 +659,17 @@ assert.deepEqual(ganttRules.applyPlanGanttDateChangeResult(invalidFixedSequenceS
   ok: false,
   message: '下一个子节点日期不允许超上一个子节点。',
 }, 'a rejected gantt update exposes the exact shared schedule-order message')
+const actualConflictDoesNotBlockPlanSource = [
+  { id: 'axis-stage', order: 1, taskName: '概念阶段', nodeKind: 'stage' },
+  { id: 'axis-fixed-a', parentId: 'axis-stage', order: 1, taskName: '概念启动', nodeKind: 'fixed-milestone', planEndDate: '2026-04-05', actualEndDate: '2026-04-10' },
+  { id: 'axis-fixed-b', parentId: 'axis-stage', order: 2, taskName: 'STR1', nodeKind: 'fixed-milestone', planEndDate: '2026-04-10', actualEndDate: '2026-04-10' },
+]
+const isolatedPlanAxisChange = ganttRules.applyPlanGanttDateChangeResult(actualConflictDoesNotBlockPlanSource, {
+  taskId: 'axis-fixed-b', mode: 'milestone', startDate: '2026-04-11', endDate: '2026-04-11',
+})
+assert.equal(isolatedPlanAxisChange.ok, true, 'an existing actual-axis conflict does not block a valid planned gantt change')
+assert.equal(isolatedPlanAxisChange.ok && isolatedPlanAxisChange.tasks.find(task => task.id === 'axis-fixed-b')?.planEndDate, '2026-04-11', 'the valid planned change is retained while actual values stay untouched')
+assert.deepEqual(actualConflictDoesNotBlockPlanSource.map(task => task.actualEndDate), [undefined, '2026-04-10', '2026-04-10'], 'planned validation never clears or rewrites the conflicting actual axis')
 const invalidCrossStageSource = [
   { id: 'cross-stage-a', order: 1, taskName: '概念阶段', nodeKind: 'stage' },
   { id: 'cross-fixed-a', parentId: 'cross-stage-a', order: 1, taskName: 'STR1', nodeKind: 'fixed-milestone', planEndDate: '2026-04-10' },
@@ -771,6 +782,23 @@ const invalidActualPatch = ganttRules.applyPlanTaskDatePatch(datePatchSource, {
 assert.notStrictEqual(invalidActualPatch, datePatchSource, 'invalid non-empty date patches return a cloned result')
 assert.notStrictEqual(invalidActualPatch[0], datePatchSource[0], 'invalid non-empty date patches clone the target task')
 assert.deepEqual(invalidActualPatch, datePatchSource, 'invalid non-empty date patches leave every target value unchanged')
+const planConflictDoesNotBlockActualSource = [
+  { id: 'actual-axis-stage', order: 1, taskName: '概念阶段', nodeKind: 'stage' },
+  { id: 'actual-axis-a', parentId: 'actual-axis-stage', order: 1, taskName: '概念启动', nodeKind: 'fixed-milestone', planEndDate: '2026-05-05', actualEndDate: '2026-05-05' },
+  { id: 'actual-axis-b', parentId: 'actual-axis-stage', order: 2, taskName: 'STR1', nodeKind: 'fixed-milestone', planEndDate: '2026-05-05', actualEndDate: '2026-05-10' },
+]
+const isolatedActualAxisPatch = ganttRules.applyPlanTaskDatePatch(planConflictDoesNotBlockActualSource, {
+  taskId: 'actual-axis-b', patch: { actualEndDate: '2026-05-11' },
+})
+assert.equal(isolatedActualAxisPatch.find(task => task.id === 'actual-axis-b')?.actualEndDate, '2026-05-11', 'an existing planned-axis conflict does not block a valid actual patch')
+assert.deepEqual(planConflictDoesNotBlockActualSource.map(task => task.planEndDate), [undefined, '2026-05-05', '2026-05-05'], 'actual validation never clears or rewrites the conflicting planned axis')
+const invalidActualAxisResult = ganttRules.applyPlanTaskDatePatchResult(planConflictDoesNotBlockActualSource, {
+  taskId: 'actual-axis-b', patch: { actualEndDate: '2026-05-05' },
+})
+assert.deepEqual(invalidActualAxisResult, { ok: false, message: '下一个子节点日期不允许超上一个子节点。' }, 'an actual-axis conflict is rejected with the exact shared order message')
+assert.strictEqual(ganttRules.applyPlanTaskDatePatch(planConflictDoesNotBlockActualSource, {
+  taskId: 'actual-axis-b', patch: { actualEndDate: '2026-05-05' },
+}), planConflictDoesNotBlockActualSource, 'a rejected actual-axis patch returns its original immutable input')
 const invalidDateWithEmptyOtherSide = [{ id: 'invalid-empty', order: 1, taskName: '空端无效日期', actualStartDate: '', actualEndDate: '', actualDays: 7 }]
 assert.deepEqual(ganttRules.applyPlanTaskDatePatch(invalidDateWithEmptyOtherSide, {
   taskId: 'invalid-empty', patch: { actualEndDate: 'not-a-date' },

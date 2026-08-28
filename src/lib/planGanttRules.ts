@@ -1,4 +1,4 @@
-import { validateLevel1ScheduleDates, type Level1PlanTask } from '@/lib/level1PlanRules'
+import { validateLevel1ScheduleDates, type Level1PlanTask, type Level1ScheduleAxis } from '@/lib/level1PlanRules'
 
 export type PlanGanttMode = 'hierarchical' | 'technical-subproject'
 export type PlanGanttNodeType = 'project' | 'milestone' | 'task'
@@ -181,16 +181,6 @@ const areValidDatePair = (startDate: string, endDate: string): boolean => (
   getDateDifference(startDate, endDate) !== null
 )
 
-const acceptGovernedLevel1Candidate = <Task extends Level1PlanTask>(
-  source: readonly Task[],
-  candidate: Task[],
-  target: Task,
-): Task[] => (
-  target.nodeKind && !validateLevel1ScheduleDates(candidate).valid
-    ? source as Task[]
-    : candidate
-)
-
 export type PlanGanttDateChangeResult<Task extends Level1PlanTask> =
   | { ok: true; tasks: Task[] }
   | { ok: false; message: string }
@@ -241,7 +231,7 @@ export const applyPlanGanttDateChangeResult = <Task extends Level1PlanTask>(
   if (!candidate) return { ok: false, message: '日期格式或范围无效，未保存修改' }
   const target = tasks.find(task => task.id === change.taskId)
   if (target?.nodeKind) {
-    const validation = validateLevel1ScheduleDates(candidate)
+    const validation = validateLevel1ScheduleDates(candidate, { axes: ['plan'] })
     if (!validation.valid) {
       return { ok: false, message: validation.violations[0]?.message || '计划日期不符合顺序要求' }
     }
@@ -281,25 +271,66 @@ export const applyPlanTaskDatePatch = <Task extends Level1PlanTask>(
   tasks: readonly Task[],
   input: PlanTaskDatePatch,
 ): Task[] => {
+  const evaluation = evaluatePlanTaskDatePatch(tasks, input)
+  if (evaluation.ok) return evaluation.tasks
+  return evaluation.preserveIdentity ? tasks as Task[] : cloneTasks(tasks)
+}
+
+export type PlanTaskDatePatchResult<Task extends Level1PlanTask> =
+  | { ok: true; tasks: Task[] }
+  | { ok: false; message: string }
+
+type PlanTaskDatePatchEvaluation<Task extends Level1PlanTask> =
+  | { ok: true; tasks: Task[] }
+  | { ok: false; message: string; preserveIdentity: boolean }
+
+const evaluatePlanTaskDatePatch = <Task extends Level1PlanTask>(
+  tasks: readonly Task[],
+  input: PlanTaskDatePatch,
+): PlanTaskDatePatchEvaluation<Task> => {
   const target = tasks.find(task => task.id === input.taskId)
   const patchKeys = dateKeys.filter(key => hasOwnDateKey(input.patch, key))
   if (!target || patchKeys.length === 0 || patchKeys.some(key => {
     const value = input.patch[key]
     return typeof value !== 'string' || (value !== '' && parseUtcDate(value) === null)
-  })) return cloneTasks(tasks)
+  })) return { ok: false, message: '日期格式或范围无效，未保存修改', preserveIdentity: false }
 
   const patched = { ...target, ...input.patch }
   const planChanged = hasOwnDateKey(input.patch, 'planStartDate') || hasOwnDateKey(input.patch, 'planEndDate')
   const actualChanged = hasOwnDateKey(input.patch, 'actualStartDate') || hasOwnDateKey(input.patch, 'actualEndDate')
   const estimatedDays = getPatchedDuration(patched.planStartDate || '', patched.planEndDate || '', target.estimatedDays)
   const actualDays = getPatchedDuration(patched.actualStartDate || '', patched.actualEndDate || '', target.actualDays)
-  if (planChanged && estimatedDays === null) return cloneTasks(tasks)
-  if (actualChanged && actualDays === null) return cloneTasks(tasks)
+  if (planChanged && estimatedDays === null) return { ok: false, message: '日期格式或范围无效，未保存修改', preserveIdentity: false }
+  if (actualChanged && actualDays === null) return { ok: false, message: '日期格式或范围无效，未保存修改', preserveIdentity: false }
   if (planChanged) patched.estimatedDays = estimatedDays
   if (actualChanged) patched.actualDays = actualDays
 
   const candidate = tasks.map(task => task.id === input.taskId ? patched : task)
-  return acceptGovernedLevel1Candidate(tasks, candidate, target)
+  const axes: Level1ScheduleAxis[] = [
+    ...(planChanged ? ['plan' as const] : []),
+    ...(actualChanged ? ['actual' as const] : []),
+  ]
+  if (target.nodeKind) {
+    const validation = validateLevel1ScheduleDates(candidate, { axes })
+    if (!validation.valid) {
+      return {
+        ok: false,
+        message: validation.violations[0]?.message || '计划日期不符合顺序要求',
+        preserveIdentity: true,
+      }
+    }
+  }
+  return { ok: true, tasks: candidate }
+}
+
+export const applyPlanTaskDatePatchResult = <Task extends Level1PlanTask>(
+  tasks: readonly Task[],
+  input: PlanTaskDatePatch,
+): PlanTaskDatePatchResult<Task> => {
+  const evaluation = evaluatePlanTaskDatePatch(tasks, input)
+  return evaluation.ok
+    ? evaluation
+    : { ok: false, message: evaluation.message }
 }
 
 const cloneScheduleValue = (value: unknown): unknown => value instanceof Date ? new Date(value.getTime()) : value
