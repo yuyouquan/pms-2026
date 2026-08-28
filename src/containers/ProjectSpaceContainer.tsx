@@ -520,6 +520,40 @@ export const resolveTosComparisonVersionTasks = <Task, Version extends {
   return []
 }
 
+export const deriveLevel1SurfaceVersionState = <Version extends {
+  id: string
+  versionNo: string
+  status: string
+}>({
+  versions,
+  currentVersionId,
+  canGovern,
+  followedReadOnly,
+  scopeUnavailable,
+}: {
+  versions: readonly Version[]
+  currentVersionId: string
+  canGovern: boolean
+  followedReadOnly: boolean
+  scopeUnavailable: boolean
+}) => {
+  const currentVersionData = versions.find(version => version.id === currentVersionId)
+  const versionNumber = (versionNo: string) => {
+    const match = String(versionNo || '').match(/\d+(?:\.\d+)?/)
+    return match ? Number(match[0]) : Number.NEGATIVE_INFINITY
+  }
+  const latestPublishedVersion = versions
+    .filter(version => version.status === '已发布')
+    .sort((left, right) => versionNumber(right.versionNo) - versionNumber(left.versionNo))[0]
+  const isDraft = currentVersionData?.status === '修订中'
+  return {
+    currentVersionData,
+    isDraft,
+    isLatestPublished: !isDraft && currentVersionId === latestPublishedVersion?.id,
+    canMaintain: canGovern && !followedReadOnly && !scopeUnavailable,
+  }
+}
+
 export const createLevel1FocusScopeToken = ({
   projectId,
   scopeKind,
@@ -1192,7 +1226,7 @@ export default function ProjectSpaceContainer() {
   const allPlanTypes = [...LEVEL2_PLAN_TYPES, ...customTypes]
 
   const getCurrentMarketFollowVersionSource = (versionId: string) => {
-    if (!selectedProject || !isMarketScopedLevel1) return undefined
+    if (!selectedProject || !isWholeMachineProject || !selectedMarketIsConfigured) return undefined
     return marketFollowVersionMeta[getMarketFollowVersionKey(selectedProject.id, selectedMarketTab, versionId)]
   }
   const currentMarketIsFollow = isMarketScopedLevel1 && isLevel1MarketFollowActualScope(
@@ -1280,6 +1314,63 @@ export default function ProjectSpaceContainer() {
           baseCurrentVersion,
         )
       : currentVersion
+  const level1SurfaceFollowReadOnly = isTosTypeScoped
+    && isTosTypeLevel1ReadOnly(tosTypeConfigRows, selectedTosTypeTab, 'level1')
+  const level1SurfaceScopeUnavailable = (isWholeMachineProject && !selectedMarketIsConfigured)
+    || (isTosVersionProject && !selectedTosTypeTab)
+  const {
+    currentVersionData: level1SurfaceCurrentVersionData,
+    isDraft: level1SurfaceIsDraft,
+    isLatestPublished: level1SurfaceIsLatestPublished,
+    canMaintain: level1SurfaceCanMaintain,
+  } = deriveLevel1SurfaceVersionState({
+    versions: level1SurfaceVersions,
+    currentVersionId: level1SurfaceCurrentVersion,
+    canGovern: canGovernLevel1Plan,
+    followedReadOnly: level1SurfaceFollowReadOnly,
+    scopeUnavailable: level1SurfaceScopeUnavailable,
+  })
+  const level1SurfaceMarketIsFollow = isWholeMachineProject
+    && selectedMarketIsConfigured
+    && isLevel1MarketFollowActualScope(
+      isFollowMarket(marketConfigRows, selectedMarketTab),
+      getCurrentMarketFollowVersionSource(level1SurfaceCurrentVersion),
+    )
+  const level1SurfaceLiveTasks = currentTosLevel1Data
+    ? currentTosLevel1Data.level1Tasks
+    : currentMarketData
+      ? currentMarketData.tasks
+      : isWholeMachineProject
+        ? []
+        : tasks
+  const setLevel1SurfaceTasks = (newTasks: any[] | ((previous: any[]) => any[])) => {
+    if (currentTosLevel1Data) {
+      if (level1SurfaceFollowReadOnly) {
+        void message.warning(tosLevel1FollowSourceText)
+        return
+      }
+      updateCurrentTosTypeData(effectiveTosLevel1Type, previous => ({
+        ...previous,
+        level1Tasks: typeof newTasks === 'function' ? newTasks(previous.level1Tasks) : newTasks,
+      }))
+      return
+    }
+    if (currentMarketData) {
+      setMarketPlanData(previous => {
+        const previousEntry = previous[selectedMarketTab] || { level2Tasks: [], createdLevel2Plans: [], tasks: [] }
+        return {
+          ...previous,
+          [selectedMarketTab]: {
+            ...previousEntry,
+            tasks: typeof newTasks === 'function' ? newTasks(previousEntry.tasks || []) : newTasks,
+          },
+        }
+      })
+      return
+    }
+    if (isWholeMachineProject) return
+    setTasks(newTasks)
+  }
   const getLevel1SurfacePublishedSnapshot = (versionId: string) => {
     if (!selectedProject) return undefined
     if (isTosVersionProject && selectedTosTypeTab) {
@@ -1299,7 +1390,7 @@ export default function ProjectSpaceContainer() {
   const getLevel1SurfaceVersionTasks = (version: PlanVersionLike) => {
     const snapshot = getLevel1SurfacePublishedSnapshot(version.id)
     if (snapshot !== undefined) return snapshot as any[]
-    if (version.status === '修订中' && version.id === level1SurfaceCurrentVersion) return effectiveTasks as any[]
+    if (version.status === '修订中' && version.id === level1SurfaceCurrentVersionData?.id) return level1SurfaceLiveTasks as any[]
     return []
   }
   const latestPublishedLevel1Summary = selectLatestPublishedLevel1Summary({
@@ -1312,7 +1403,7 @@ export default function ProjectSpaceContainer() {
     },
   })
   const usesGovernedProjectLevel1History = projectPlanLevel === 'level1'
-    && (isWholeMachineProject || isTosVersionProject)
+    && !isTechnicalProject
 
   useEffect(() => {
     if (!selectedProject || !isMarketScopedLevel1 || !projectLinkedLevel1MockTasks.length) return
@@ -2844,16 +2935,30 @@ export default function ProjectSpaceContainer() {
     field: 'actualStartDate' | 'actualEndDate',
     value: string,
     isLevel2Custom: boolean,
+    useLevel1SurfaceScope = false,
   ) => {
-    if ((machineMarketPlanUnavailable && !isLevel2Custom) || (followedTosLevel1ReadOnly && (!isLevel2Custom || isFollowReadOnlyOverview))) {
-      void message.warning(machineMarketPlanUnavailable ? '请先配置并选择有效市场' : tosLevel1FollowSourceText)
+    const activeScopeUnavailable = useLevel1SurfaceScope
+      ? level1SurfaceScopeUnavailable
+      : machineMarketPlanUnavailable
+    const activeFollowReadOnly = useLevel1SurfaceScope
+      ? level1SurfaceFollowReadOnly
+      : followedTosLevel1ReadOnly
+    if ((activeScopeUnavailable && !isLevel2Custom) || (activeFollowReadOnly && (!isLevel2Custom || isFollowReadOnlyOverview))) {
+      void message.warning(activeScopeUnavailable ? '请先配置并选择有效市场' : tosLevel1FollowSourceText)
       return
     }
     const patch = { [field]: value }
-    const isLevel1MarketTable = !isLevel2Custom && isMarketScopedLevel1
+    const isLevel1MarketTable = !isLevel2Custom
+      && (isMarketScopedLevel1 || (useLevel1SurfaceScope && isWholeMachineProject && selectedMarketIsConfigured))
     const governedProjectLevel1Date = !isLevel2Custom
-      && projectPlanLevel === 'level1'
+      && (useLevel1SurfaceScope || projectPlanLevel === 'level1')
       && (isWholeMachineProject || isTosVersionProject)
+    const activeMarketIsFollow = useLevel1SurfaceScope
+      ? level1SurfaceMarketIsFollow
+      : currentMarketIsFollow
+    const activeVersions = useLevel1SurfaceScope ? level1SurfaceVersions : versions
+    const activeCurrentVersion = useLevel1SurfaceScope ? level1SurfaceCurrentVersion : currentVersion
+    const activeIsLatestPublished = useLevel1SurfaceScope ? level1SurfaceIsLatestPublished : isLatestPublished
     const targetStableId = record.stableId || record.id
     const updatedTasks = governedProjectLevel1Date
       ? applyIncrementalActualFieldPatch(tableTasks, targetStableId, field, value)
@@ -2865,14 +2970,14 @@ export default function ProjectSpaceContainer() {
       void message.error('日期格式或范围无效，未保存修改')
       return
     }
-    const scopedUpdatedTasks = isLevel1MarketTable && currentMarketIsFollow
+    const scopedUpdatedTasks = isLevel1MarketTable && activeMarketIsFollow
       ? markTaskActualTimeDetachedFromMain(updatedTasks, record.id, patch)
       : updatedTasks
-    if (governedProjectLevel1Date && isLatestPublished) {
-      const pairedVersion = versions.find(version => version.status === '修订中')
+    if (governedProjectLevel1Date && activeIsLatestPublished) {
+      const pairedVersion = activeVersions.find(version => version.status === '修订中')
       const getScopedSnapshotKey = (versionId: string) => selectedProject && isTosTypeScoped
         ? getTosTypeSnapshotKey(selectedProject.id, effectiveTosLevel1Type, 'level1', versionId)
-        : selectedProject && isMarketScopedLevel1
+        : selectedProject && isLevel1MarketTable
           ? getProjectMarketSnapshotKey(selectedProject.id, selectedMarketTab, versionId)
           : selectedProject && !isTechnicalProject
             ? getProjectLevel1MockSnapshotKey(selectedProject.id, versionId)
@@ -2895,7 +3000,7 @@ export default function ProjectSpaceContainer() {
                 targetStableId,
                 field,
                 value,
-                currentMarketIsFollow,
+                activeMarketIsFollow,
               ),
             },
           }))
@@ -2904,7 +3009,7 @@ export default function ProjectSpaceContainer() {
         setTasks(previous => applyIncrementalActualFieldPatch(previous, targetStableId, field, value))
       }
       setPublishedSnapshots(previous => {
-        const currentKey = getScopedSnapshotKey(currentVersion)
+        const currentKey = getScopedSnapshotKey(activeCurrentVersion)
         const currentSnapshot = previous[currentKey] || tableTasks
         return {
           ...previous,
@@ -2913,11 +3018,12 @@ export default function ProjectSpaceContainer() {
             targetStableId,
             field,
             value,
-            isLevel1MarketTable && currentMarketIsFollow,
+            isLevel1MarketTable && activeMarketIsFollow,
           ),
         }
       })
-      if (pairedVersion || (isLevel1MarketTable && currentMarketIsFollow)) mergePublishedActualIntoLiveScope()
+      if (pairedVersion || (isLevel1MarketTable && currentMarketIsFollow)
+        || (useLevel1SurfaceScope && isLevel1MarketTable && level1SurfaceMarketIsFollow)) mergePublishedActualIntoLiveScope()
       return
     }
 
@@ -3189,7 +3295,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleExportHorizontalPlan = (_scope: 'current' | 'all') => {
-    const displayVersions = getDisplayPlanVersionsForHorizontalPlan(level1SurfaceVersions, { includeDraft: canMaintainCurrentPlan })
+    const displayVersions = getDisplayPlanVersionsForHorizontalPlan(level1SurfaceVersions, { includeDraft: level1SurfaceCanMaintain })
     const versionProjections = displayVersions.map(version => ({
       version,
       projection: projectLevel1Plan(getLevel1SurfaceVersionTasks(version), { mode: 'standard' }),
@@ -3205,10 +3311,10 @@ export default function ProjectSpaceContainer() {
     const merges: any[] = [{ s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } }]
     let colCursor = 2
     for (const { stage, milestones, colSpan } of stageGroups) { headerRow0.push(stage.taskName); for (let i = 1; i < colSpan; i++) headerRow0.push(null); if (milestones.length > 0) { for (const m of milestones) headerRow1.push(m.taskName) } else headerRow1.push('-'); merges.push({ s: { r: 0, c: colCursor }, e: { r: 0, c: colCursor + colSpan - 1 } }); colCursor += colSpan }
-    const calcCycleDays = (list: any[], sk: string, ek: string) => { const starts = list.map(t => t[sk]).filter(Boolean).map((d: string) => new Date(d).getTime()); const ends = list.map(t => t[ek]).filter(Boolean).map((d: string) => new Date(d).getTime()); if (starts.length === 0 || ends.length === 0) return '-'; const days = Math.ceil((Math.max(...ends) - Math.min(...starts)) / (1000 * 60 * 60 * 24)); return days > 0 ? days : '-' }
+    const calcActualCycleDays = (list: any[]) => { const starts = list.map(t => t.actualStartDate).filter(Boolean).map((d: string) => new Date(d).getTime()); const ends = list.map(t => t.actualEndDate).filter(Boolean).map((d: string) => new Date(d).getTime()); if (starts.length === 0 || ends.length === 0) return '-'; const days = Math.ceil((Math.max(...ends) - Math.min(...starts)) / (1000 * 60 * 60 * 24)); return days > 0 ? days : '-' }
     const dataMatrix: (string | number)[][] = []
     for (const { version, projection } of versionProjections) {
-      const row: (string | number)[] = [version.versionNo, calcCycleDays(projection.rows, 'planStartDate', 'planEndDate')]
+      const row: (string | number)[] = [version.versionNo, sumLevel1EstimatedDays(projection.rows) ?? '-']
       for (const match of resolveLevel1HorizontalVersionCells(allMilestones, projection.rows)) {
         row.push(match?.planEndDate || '-')
       }
@@ -3216,7 +3322,7 @@ export default function ProjectSpaceContainer() {
     }
     const actualProjection = recencyVersionProjections.find(entry => entry.version.status === '已发布')?.projection
     const actualRows = actualProjection?.rows || []
-    const actualRow: (string | number)[] = ['实际', calcCycleDays(actualRows, 'actualStartDate', 'actualEndDate')]
+    const actualRow: (string | number)[] = ['实际', calcActualCycleDays(actualRows)]
     for (const task of resolveLevel1HorizontalVersionCells(allMilestones, actualRows)) {
       actualRow.push(task?.actualEndDate || '-')
     }
@@ -4253,8 +4359,8 @@ export default function ProjectSpaceContainer() {
   const renderHorizontalTable = () => {
     // 基础信息里的横版计划始终展示一级计划版本，不能受用户上次停留的计划层级影响。
     const horizontalVersions = level1SurfaceVersions
-    const horizontalCurrentVersion = level1SurfaceCurrentVersion
-    const displayVersions = getDisplayPlanVersionsForHorizontalPlan(horizontalVersions, { includeDraft: canMaintainCurrentPlan })
+    const horizontalCurrentVersion = level1SurfaceCurrentVersionData?.id || level1SurfaceCurrentVersion
+    const displayVersions = getDisplayPlanVersionsForHorizontalPlan(horizontalVersions, { includeDraft: level1SurfaceCanMaintain })
     const versionProjections = displayVersions.map(version => ({
       version,
       projection: projectLevel1Plan(getLevel1SurfaceVersionTasks(version), { mode: 'standard' }),
@@ -4330,8 +4436,8 @@ export default function ProjectSpaceContainer() {
                   <td style={{ ...cycleTdStyle, background: isLatest ? '#f0f9ff' : '#fff' }}><Tooltip title="所有一级活动的预估工期总和"><span>{devCycle ?? '-'}</span></Tooltip></td>
                   {vMilestones.map((m: any, mi: number) => (
                     <td key={mi} style={tdStyle}>
-                      {m && version.id === horizontalCurrentVersion && isCurrentDraft && canMaintainCurrentPlan
-                        ? <ClickToEditDate align="center" value={m.planEndDate || ''} onChange={(nextValue) => setEffectiveTasks(effectiveTasks.map((task: any) => (task.stableId || task.id) === (m.stableId || m.id) ? { ...task, planEndDate: nextValue } : task))} />
+                      {m && version.id === horizontalCurrentVersion && level1SurfaceIsDraft && level1SurfaceCanMaintain
+                        ? <ClickToEditDate align="center" value={m.planEndDate || ''} onChange={(nextValue) => setLevel1SurfaceTasks(level1SurfaceLiveTasks.map((task: any) => (task.stableId || task.id) === (m.stableId || m.id) ? { ...task, planEndDate: nextValue } : task))} />
                         : m?.planEndDate || '-'}
                     </td>
                   ))}
@@ -4349,8 +4455,8 @@ export default function ProjectSpaceContainer() {
               })()}</span></Tooltip></td>
               {actualMilestones.map((actualTask: any, mi: number) => (
                 <td key={mi} style={{ ...tdStyle, color: '#d48806' }}>
-                  {actualTask && canMaintainCurrentPlan && isLatestPublished
-                    ? <ClickToEditDate align="center" value={actualTask.actualEndDate || ''} onChange={(nextValue) => updateActualDateForTask(effectiveTasks, (tasks) => setEffectiveTasks(tasks), actualTask, 'actualEndDate', nextValue, false)} />
+                  {actualTask && level1SurfaceCanMaintain && level1SurfaceIsLatestPublished
+                    ? <ClickToEditDate align="center" value={actualTask.actualEndDate || ''} onChange={(nextValue) => updateActualDateForTask(actualRows, setLevel1SurfaceTasks, actualTask, 'actualEndDate', nextValue, false, true)} />
                     : actualTask?.actualEndDate || '-'}
                 </td>
               ))}

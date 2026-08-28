@@ -788,6 +788,7 @@ const projectSpaceFollowScope = await loadExportedConstFromSource(projectSpaceSo
 const projectSpaceHorizontalGroups = await loadExportedConstFromSource(projectSpaceSource, 'mergeLevel1HorizontalStageGroups')
 const projectSpaceHorizontalCells = await loadExportedConstFromSource(projectSpaceSource, 'resolveLevel1HorizontalVersionCells')
 const projectSpaceTosComparisonTasks = await loadExportedConstFromSource(projectSpaceSource, 'resolveTosComparisonVersionTasks')
+const projectSpaceLevel1SurfaceState = await loadExportedConstFromSource(projectSpaceSource, 'deriveLevel1SurfaceVersionState')
 const task7BrowserRouting = await loadExportedConstFromSource(browserSource, 'shouldRunTask7FocusedBrowserCase')
 const mergedHorizontalGroups = projectSpaceHorizontalGroups.mergeLevel1HorizontalStageGroups([
   {
@@ -858,6 +859,26 @@ const horizontalActualUiSource = projectSpaceSource.slice(horizontalActualUiStar
 assert.match(horizontalActualUiSource, /const actualMilestones = resolveLevel1HorizontalVersionCells\(allMilestones, actualRows\)/, 'horizontal UI resolves the actual row once from the latest published projection')
 assert.match(horizontalActualUiSource, /actualMilestones\.map\(/, 'horizontal UI renders actual cells from the resolved latest-published list')
 assert.doesNotMatch(horizontalActualUiSource, /actualRows\.find\([\s\S]{0,180}\)\s*\|\|\s*m/, 'horizontal UI never falls back from a missing published actual row to a draft/header task')
+assert.deepEqual(projectSpaceLevel1SurfaceState.deriveLevel1SurfaceVersionState({
+  versions: [
+    { id: 'market-v2', versionNo: 'V2', status: '已发布' },
+    { id: 'market-v3', versionNo: 'V3', status: '已发布' },
+  ],
+  currentVersionId: 'market-v3',
+  canGovern: true,
+  followedReadOnly: false,
+  scopeUnavailable: false,
+}), {
+  currentVersionData: { id: 'market-v3', versionNo: 'V3', status: '已发布' },
+  isDraft: false,
+  isLatestPublished: true,
+  canMaintain: true,
+}, 'basic-information horizontal state is derived only from the scoped L1 version and permission inputs')
+const horizontalUiStateSource = projectSpaceSource.slice(projectSpaceSource.indexOf('const renderHorizontalTable = () =>'), projectSpaceSource.indexOf('// ═══════ renderActionButtons'))
+for (const stateName of ['level1SurfaceIsDraft', 'level1SurfaceIsLatestPublished', 'level1SurfaceCanMaintain', 'setLevel1SurfaceTasks']) {
+  assert.match(horizontalUiStateSource, new RegExp(stateName), `basic-information horizontal UI uses dedicated ${stateName}`)
+}
+assert.doesNotMatch(horizontalUiStateSource, /\bisCurrentDraft\b|\bisLatestPublished\b|\bcanMaintainCurrentPlan\b|\bsetEffectiveTasks\b/, 'basic-information horizontal UI never reads global plan-level version, permission, or task setters')
 const tosLiveV3Draft = [
   { id: '3.1', stableId: 'tos-concept-start', taskName: '概念启动', planEndDate: '2026-03-01' },
   { id: '3.2', stableId: 'tos-draft-only', taskName: '16.1.0.005', planEndDate: '2026-04-01' },

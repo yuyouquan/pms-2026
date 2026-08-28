@@ -880,6 +880,16 @@ assert.equal(
   null,
   'horizontal development cycle stays empty when no estimated duration exists',
 )
+const exportCycleCounterexample = [
+  { estimatedDays: 136, planStartDate: '2026-01-01', planEndDate: '2026-05-17' },
+  { estimatedDays: 136, planStartDate: '2026-05-18', planEndDate: '2026-09-29' },
+]
+assert.equal(rules.sumLevel1EstimatedDays(exportCycleCounterexample), 272, 'horizontal export reuses the page duration sum for the 272-day counterexample')
+assert.equal(
+  Math.ceil((new Date('2026-09-29').getTime() - new Date('2026-01-01').getTime()) / 86_400_000),
+  271,
+  'the removed min/max calendar-span algorithm would incorrectly export 271 for the same rows',
+)
 
 const invalid = rules.validateLevel1MilestoneDates([
   makeTask('p1', null, 0, '阶段1'),
@@ -1245,13 +1255,14 @@ for (const label of ['序号', '变更类型', '阶段/节点', '计划开始', 
   assert.match(compareModalSource, new RegExp(label), `governed history contains ${label}`)
 }
 assert.match(compareModalSource, /governedColumns[\s\S]*renderFlatDaysCell/, 'governed history renders a real zero-day duration as 0天')
-assert.match(projectSpaceSource, /usesGovernedProjectLevel1History[\s\S]{0,180}projectLevel1Plan\(oldTasks as any, \{ mode: 'standard' \}\)\.rows/, 'machine and tOS history projects the old snapshot through the standard tree')
-assert.match(projectSpaceSource, /usesGovernedProjectLevel1History[\s\S]{0,420}projectLevel1Plan\(newTasks as any, \{ mode: 'standard' \}\)\.rows/, 'machine and tOS history projects the new snapshot through the standard tree')
-assert.match(projectSpaceSource, /fieldMode=\{usesGovernedProjectLevel1History \? 'governed' : 'legacy'\}/, 'only machine and tOS level-one history uses governed fields')
+assert.match(projectSpaceSource, /const usesGovernedProjectLevel1History = projectPlanLevel === 'level1'\s*&& !isTechnicalProject/, 'every ordinary non-technical level-one history uses governed fields')
+assert.match(projectSpaceSource, /usesGovernedProjectLevel1History[\s\S]{0,180}projectLevel1Plan\(oldTasks as any, \{ mode: 'standard' \}\)\.rows/, 'ordinary, machine and tOS level-one history project the old snapshot through the standard tree')
+assert.match(projectSpaceSource, /usesGovernedProjectLevel1History[\s\S]{0,420}projectLevel1Plan\(newTasks as any, \{ mode: 'standard' \}\)\.rows/, 'ordinary, machine and tOS level-one history project the new snapshot through the standard tree')
+assert.match(projectSpaceSource, /fieldMode=\{usesGovernedProjectLevel1History \? 'governed' : 'legacy'\}/, 'level-one history uses governed fields while secondary levels retain legacy mode')
 assert.match(technicalModuleSource, /fieldMode=\{tab\?\.templateKind === 'subproject' \? 'technical-subproject' : 'hierarchical-flat'\}/, 'technical comparison selects the matching current-table fields')
 assert.match(projectSpaceSource, /buildProjectListMockPlanTasks\(selectedProject\.id,/, 'project space consumes the same project-scoped mock plan source as the project list')
 assert.match(projectSpaceSource, /planEndDate:\s*task\.planEndDate\s*\|\|\s*''/, 'tOS project initialization preserves project-linked mock plan dates')
-assert.match(projectSpaceSource, /getDisplayPlanVersionsForHorizontalPlan\(horizontalVersions,\s*\{\s*includeDraft:\s*canMaintainCurrentPlan\s*\}\)/, 'horizontal plan exposes drafts to maintainers')
+assert.match(projectSpaceSource, /getDisplayPlanVersionsForHorizontalPlan\(horizontalVersions,\s*\{\s*includeDraft:\s*level1SurfaceCanMaintain\s*\}\)/, 'horizontal plan exposes scoped level-one drafts to maintainers')
 assert.match(projectSpaceSource, /sumLevel1EstimatedDays\(vProjection\.rows\)/, 'horizontal development cycle uses the estimated-duration total')
 assert.match(projectSpaceSource, /versionProjections\s*=\s*displayVersions\.map/, 'horizontal rows project each version from its own source tasks')
 assert.match(projectSpaceSource, /getLevel1SurfaceVersionTasks\(version\)/, 'horizontal rows resolve each version from the current project dimension')
@@ -1284,6 +1295,8 @@ assert.match(horizontalExportSource, /versionProjections/, 'horizontal current/a
 assert.match(horizontalExportSource, /getLevel1SurfaceVersionTasks\(version\)/, 'horizontal export resolves every version from its own scoped snapshot')
 assert.match(horizontalExportSource, /for \(const match of resolveLevel1HorizontalVersionCells\(allMilestones, projection\.rows\)\)/, 'horizontal export version cells resolve from each version projection')
 assert.match(horizontalExportSource, /for \(const task of resolveLevel1HorizontalVersionCells\(allMilestones, actualRows\)\)/, 'horizontal export actual cells resolve from the latest published projection')
+assert.match(horizontalExportSource, /\[version\.versionNo,\s*sumLevel1EstimatedDays\(projection\.rows\)\s*\?\?\s*'-'\]/, 'horizontal export development cycle reuses the same estimated-duration sum as the page')
+assert.doesNotMatch(horizontalExportSource, /calcCycleDays\(projection\.rows,\s*'planStartDate',\s*'planEndDate'\)/, 'horizontal export never derives planned development cycle from calendar min/max')
 assert.doesNotMatch(horizontalExportSource, /versionOffsetIndex|shiftDateStrForExport|projectLevel1Plan\(effectiveTasks/, 'horizontal export never fabricates historical versions from the current live plan')
 const compareHandlerStart = projectSpaceSource.indexOf('const handleComparePlanVersions = () =>')
 const compareHandlerEnd = projectSpaceSource.indexOf('const handleCancelCompare =', compareHandlerStart)

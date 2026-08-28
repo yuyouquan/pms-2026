@@ -254,6 +254,59 @@ const assertHorizontalStageHeader = async (page, stageName, { dynamic }) => {
     assert.equal(stage.tagCount, 1, `${stageName} fixed stage keeps one duration badge`)
   }
 }
+const readHorizontalActualDateCell = async page => page.$eval('[aria-label="一级计划横版"]', table => {
+  const headers = [...table.querySelectorAll('thead tr:nth-child(2) th')]
+    .map(header => header.textContent?.trim() || '')
+  const row = [...table.querySelectorAll('tbody tr')]
+    .find(candidate => candidate.querySelector('td')?.textContent?.trim() === '实际')
+  const cells = [...(row?.querySelectorAll('td') || [])]
+  const cellIndex = cells.findIndex((cell, index) => index >= 2 && /^\d{4}-\d{2}-\d{2}$/.test(cell.textContent?.trim() || ''))
+  if (cellIndex < 2) return null
+  return {
+    name: headers[cellIndex - 2] || '',
+    value: cells[cellIndex].textContent?.trim() || '',
+    editable: Boolean(cells[cellIndex].querySelector(':scope > div')),
+  }
+})
+const readHorizontalVersionCycles = async page => page.$eval('[aria-label="一级计划横版"]', table => Object.fromEntries(
+  [...table.querySelectorAll('tbody tr')]
+    .map(row => [...row.querySelectorAll('td')].map(cell => cell.textContent?.trim() || ''))
+    .filter(cells => /^V\d+/.test(cells[0] || ''))
+    .map(cells => [cells[0], Number(cells[1])]),
+))
+const editHorizontalActualDate = async (page, taskName, nextValue) => {
+  const opened = await page.$eval('[aria-label="一级计划横版"]', (table, name) => {
+    const headers = [...table.querySelectorAll('thead tr:nth-child(2) th')]
+      .map(header => header.textContent?.trim() || '')
+    const columnIndex = headers.findIndex(header => header === name)
+    const row = [...table.querySelectorAll('tbody tr')]
+      .find(candidate => candidate.querySelector('td')?.textContent?.trim() === '实际')
+    const editor = columnIndex >= 0 ? row?.querySelectorAll('td')[columnIndex + 2]?.querySelector(':scope > div') : null
+    if (!(editor instanceof HTMLElement)) return false
+    editor.click()
+    return true
+  }, taskName)
+  if (!opened) throw new Error(`missing basic-information horizontal actual editor for ${taskName}`)
+  await page.waitForSelector('[aria-label="一级计划横版"] tbody .ant-picker input', { timeout: TIMEOUT })
+  const input = await page.$('[aria-label="一级计划横版"] tbody .ant-picker input')
+  const box = await input?.boundingBox()
+  if (!box) throw new Error(`hidden basic-information horizontal actual editor for ${taskName}`)
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { clickCount: 3 })
+  await page.keyboard.down('Control')
+  await page.keyboard.press('A')
+  await page.keyboard.up('Control')
+  await page.keyboard.type(nextValue)
+  await page.keyboard.press('Enter')
+  await page.waitForFunction(({ name, value }) => {
+    const table = document.querySelector('[aria-label="一级计划横版"]')
+    const headers = [...(table?.querySelectorAll('thead tr:nth-child(2) th') || [])]
+      .map(header => header.textContent?.trim() || '')
+    const columnIndex = headers.findIndex(header => header === name)
+    const row = [...(table?.querySelectorAll('tbody tr') || [])]
+      .find(candidate => candidate.querySelector('td')?.textContent?.trim() === '实际')
+    return columnIndex >= 0 && row?.querySelectorAll('td')[columnIndex + 2]?.textContent?.trim() === value
+  }, { timeout: TIMEOUT }, { name: taskName, value: nextValue })
+}
 const downloadPlanWorkbook = async (page, scopeLabel) => {
   const downloadDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'pms-level1-export-'))
   const session = await page.createCDPSession()
@@ -1053,12 +1106,17 @@ try {
       await assertHorizontalStageHeader(page, '概念阶段', { dynamic: false })
       await assertHorizontalStageHeader(page, '上市阶段', { dynamic: true })
       await assertHorizontalStageHeader(page, '生命周期阶段', { dynamic: true })
+      const horizontalVersionCycles = await readHorizontalVersionCycles(page)
       const horizontalCurrentWorkbook = await downloadPlanWorkbook(page, '导出当前视图')
       const horizontalAllWorkbook = await downloadPlanWorkbook(page, '导出全部')
       for (const [scope, workbook] of [['current', horizontalCurrentWorkbook], ['all', horizontalAllWorkbook]]) {
         assert.deepEqual(workbook[0].slice(0, 2), ['版本', '开发周期'], `machine horizontal ${scope} export keeps the version-stage matrix headers`)
         assert.ok(workbook.flat().includes('概念阶段') && workbook.flat().includes('概念启动'), `machine horizontal ${scope} export contains scoped stage and node headers`)
         assert.ok(workbook.slice(2).some(row => /^V\d+/.test(String(row[0]))) && workbook.slice(2).some(row => row[0] === '实际'), `machine horizontal ${scope} export contains version and actual rows`)
+        for (const [versionNo, cycle] of Object.entries(horizontalVersionCycles)) {
+          const exportedVersionRow = workbook.slice(2).find(row => row[0] === versionNo)
+          assert.equal(exportedVersionRow?.[1], cycle, `machine horizontal ${scope} export development cycle matches the page sum for ${versionNo}`)
+        }
       }
     }
     await selectView(page, '竖版表格')
@@ -1330,14 +1388,23 @@ try {
     await enterProject(page, 'X6877-D8400_H991')
     await selectView(page, '竖版表格')
     await chooseVersion(page, 'V3 (已发布)')
-    const summaryBefore = await readTreeSummary(page, table)
+    const initialSummary = await readTreeSummary(page, table)
+    await clickTabContaining(page, '三级计划')
     await clickRoleText(page, 'menuitem', '基础信息')
     await page.waitForSelector('[aria-label="一级计划最新发布摘要"]', { timeout: TIMEOUT })
-    assert.deepEqual(await readLatestPublishedSummary(page), summaryBefore, 'machine basic information reads all four dates from the latest published market snapshot')
+    assert.deepEqual(await readLatestPublishedSummary(page), initialSummary, 'machine basic information reads all four dates from the latest published market snapshot after entering from level three')
+    const horizontalActual = await readHorizontalActualDateCell(page)
+    assert.ok(horizontalActual, 'machine basic-information horizontal table exposes a published actual date')
+    assert.ok(horizontalActual.editable, 'machine basic-information horizontal actual date stays editable after entering from level three')
+    const horizontalActualAfter = addIsoDays(horizontalActual.value, 1)
+    await editHorizontalActualDate(page, horizontalActual.name, horizontalActualAfter)
 
     await clickRoleText(page, 'menuitem', '计划')
+    await clickTabContaining(page, '一级计划')
     await selectView(page, '竖版表格')
     await chooseVersion(page, 'V3 (已发布)')
+    assert.equal(await treeDate(page, table, horizontalActual.name, 'actualEndDate'), horizontalActualAfter, 'basic-information horizontal actual edit writes the scoped L1 published snapshot')
+    const summaryBefore = await readTreeSummary(page, table)
     const actualBoundary = await treeBoundaryTask(page, table, 'actualEndDate', 'max')
     assert.ok(actualBoundary, 'machine latest published snapshot has an editable actual-completion boundary')
     const changedActualEnd = addIsoDays(actualBoundary.value, 1)
