@@ -187,6 +187,7 @@ import {
   canAddLevel1CustomChild,
   canMaintainLevel1Plan,
   canMutateLevel1TaskStructure,
+  deleteLevel1GovernedTask,
   getLevel1StructurePermissions,
   insertLevel1BusinessNode,
   isBusinessStage,
@@ -3931,23 +3932,22 @@ export default function ProjectSpaceContainer() {
         if (!rawTask || !token) return
         const latest = getLatestLevel1MutationContext(token)
         const latestTask = latest?.tasks.find(task => (task.stableId || task.id) === (rawTask.stableId || rawTask.id))
-        const latestParent = latestTask?.parentId ? latest?.tasks.find(task => task.id === latestTask.parentId) : undefined
-        const permissions = latest && latestTask ? getLevel1StructurePermissions({
+        if (!latest || !latestTask) {
+          void message.warning('结构权限或计划范围已变化，请重新操作')
+          return
+        }
+        const result = deleteLevel1GovernedTask(latest.tasks, {
           projectType: latest.project.type,
           isDraft: true,
           isSuperAdmin: latest.isSuperAdmin,
           isSpm: latest.isSpm,
-          task: latestTask,
-          parent: latestParent,
-        }) : null
-        if (!latest || !latestTask || !permissions?.canDelete) {
-          void message.warning('结构权限或计划范围已变化，请重新操作')
+          taskStableId: latestTask.stableId || latestTask.id,
+        })
+        if (!result.ok) {
+          void message.warning(result.message)
           return
         }
-        latest.writeTasks(renumberLevel1Tasks(latest.tasks.filter(task => (
-          (task.stableId || task.id) !== (latestTask.stableId || latestTask.id)
-          && task.parentId !== latestTask.id
-        ))))
+        latest.writeTasks(result.tasks)
         void message.success('已删除节点')
       }
       const renameGovernedTask = (record: any) => {

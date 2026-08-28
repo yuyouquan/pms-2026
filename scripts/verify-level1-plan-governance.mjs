@@ -905,6 +905,61 @@ assert.deepEqual(
   { canAddStage: false, canAddChild: true, canRename: false, canDelete: false, canReorder: false },
   'SPMs cannot rename, delete, or reorder a fixed node even when its parent is a business stage',
 )
+const templateBusinessPeriod = {
+  ...machineInsert.task,
+  stableId: 'machine-template-business-period',
+  source: 'template',
+  nodeKind: 'business-period',
+}
+assert.deepEqual(
+  rules.getLevel1StructurePermissions({
+    projectType: '整机产品项目',
+    isDraft: true,
+    isSuperAdmin: false,
+    isSpm: true,
+    task: templateBusinessPeriod,
+    parent: machineInsert.parent,
+  }),
+  { canAddStage: false, canAddChild: true, canRename: false, canDelete: false, canReorder: false },
+  'SPMs cannot rename, delete, or reorder a template business-period under an allowed business stage',
+)
+assert.deepEqual(
+  rules.getLevel1StructurePermissions({
+    projectType: '整机产品项目',
+    isDraft: true,
+    isSuperAdmin: true,
+    isSpm: false,
+    task: templateBusinessPeriod,
+    parent: machineInsert.parent,
+  }),
+  allowAllStructure,
+  'the template business-period restriction does not reduce global super-administrator structure permissions',
+)
+assert.equal(typeof rules.deleteLevel1GovernedTask, 'function', 'governed deletion is exposed as an executable permission-checked handler helper')
+const templateBusinessTasks = [...machineInsert.tasks, { ...templateBusinessPeriod, id: '4.2', parentId: machineInsert.parent.id, order: 2 }]
+const templateBusinessTasksSnapshot = structuredClone(templateBusinessTasks)
+const deniedTemplateBusinessDelete = rules.deleteLevel1GovernedTask(templateBusinessTasks, {
+  projectType: '整机产品项目',
+  isDraft: true,
+  isSuperAdmin: false,
+  isSpm: true,
+  taskStableId: templateBusinessPeriod.stableId,
+})
+assert.deepEqual(
+  { ok: deniedTemplateBusinessDelete.ok, message: deniedTemplateBusinessDelete.message },
+  { ok: false, message: '没有权限删除该节点' },
+  'the deletion handler rejects an SPM deleting a template business-period',
+)
+assert.deepEqual(templateBusinessTasks, templateBusinessTasksSnapshot, 'a denied deletion handler does not mutate or produce a writable task change')
+const allowedAdminTemplateBusinessDelete = rules.deleteLevel1GovernedTask(templateBusinessTasks, {
+  projectType: '整机产品项目',
+  isDraft: true,
+  isSuperAdmin: true,
+  isSpm: false,
+  taskStableId: templateBusinessPeriod.stableId,
+})
+assert.equal(allowedAdminTemplateBusinessDelete.ok, true, 'global super administrators retain template-node deletion')
+assert.equal(allowedAdminTemplateBusinessDelete.tasks.some(task => task.stableId === templateBusinessPeriod.stableId), false, 'an authorized deletion removes the requested stable node')
 assert.deepEqual(
   rules.getLevel1StructurePermissions({
     projectType: '整机产品项目',
@@ -1564,8 +1619,8 @@ assert.match(
 )
 assert.match(
   projectSpaceSource,
-  /const deleteGovernedTask[\s\S]{0,900}getLatestLevel1MutationContext\(token\)/,
-  'delete confirmation revalidates live plan and permission state before writing',
+  /const deleteGovernedTask[\s\S]{0,900}getLatestLevel1MutationContext\(token\)[\s\S]{0,900}deleteLevel1GovernedTask[\s\S]{0,350}if \(!result\.ok\)[\s\S]{0,350}latest\.writeTasks\(result\.tasks\)/,
+  'delete confirmation revalidates live state and writes only an executable permission-checked helper success',
 )
 assert.match(
   projectSpaceSource,

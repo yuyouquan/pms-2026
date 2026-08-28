@@ -977,7 +977,8 @@ export const getLevel1StructurePermissions = (
   if (!input.isSpm) return denyLevel1StructurePermissions()
 
   const businessParent = isBusinessStage(input.projectType, input.parent)
-  const businessTask = input.task?.nodeKind === 'business-period'
+  const businessTask = input.task?.source === 'custom'
+    && input.task.nodeKind === 'business-period'
     && input.task.parentId === input.parent?.id
   return {
     canAddStage: false,
@@ -985,6 +986,43 @@ export const getLevel1StructurePermissions = (
     canRename: Boolean(businessParent && businessTask),
     canDelete: Boolean(businessParent && businessTask),
     canReorder: Boolean(businessParent && businessTask),
+  }
+}
+
+export interface DeleteLevel1GovernedTaskInput {
+  projectType: string
+  isDraft: boolean
+  isSuperAdmin: boolean
+  isSpm: boolean
+  taskStableId: string
+}
+
+export type DeleteLevel1GovernedTaskResult =
+  | { ok: true; tasks: Level1PlanTask[] }
+  | { ok: false; message: string }
+
+export const deleteLevel1GovernedTask = (
+  tasks: readonly Level1PlanTask[],
+  input: DeleteLevel1GovernedTaskInput,
+): DeleteLevel1GovernedTaskResult => {
+  const task = tasks.find(candidate => (candidate.stableId || candidate.id) === input.taskStableId)
+  if (!task) return { ok: false, message: '未找到需要删除的节点' }
+  const parent = task.parentId ? tasks.find(candidate => candidate.id === task.parentId) : undefined
+  const permissions = getLevel1StructurePermissions({
+    projectType: input.projectType,
+    isDraft: input.isDraft,
+    isSuperAdmin: input.isSuperAdmin,
+    isSpm: input.isSpm,
+    task,
+    parent,
+  })
+  if (!permissions.canDelete) return { ok: false, message: '没有权限删除该节点' }
+  return {
+    ok: true,
+    tasks: renumberLevel1Tasks(tasks.filter(candidate => (
+      (candidate.stableId || candidate.id) !== (task.stableId || task.id)
+      && candidate.parentId !== task.id
+    ))),
   }
 }
 
