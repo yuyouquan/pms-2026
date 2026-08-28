@@ -828,11 +828,18 @@ assert.deepEqual(completedBusinessActual.ok && completedBusinessActual.tasks[0],
   ...emptyBusinessActualSource[0], actualStartDate: '2028-01-04', actualEndDate: '2028-01-08', actualDays: 4,
 }, 'the second actual boundary completes the business interval and derives exclusive duration')
 const datePatchSnapshot = JSON.parse(JSON.stringify(datePatchSource))
-assert.deepEqual(ganttRules.applyPlanTaskDatePatch(datePatchSource, {
+const clearedActualEnd = ganttRules.applyPlanTaskDatePatch(datePatchSource, {
   taskId: 'patch-1', patch: { actualEndDate: '' },
-})[0], {
-  ...datePatchSource[0], actualEndDate: '', actualDays: 4,
-}, 'partial actual date patches apply the entered value while preserving the existing actual duration')
+})
+assert.deepEqual(clearedActualEnd[0], {
+  ...datePatchSource[0], actualEndDate: '', actualDays: null,
+}, 'clearing actual completion clears the stale duration while preserving actual start')
+const clearedActualStart = ganttRules.applyPlanTaskDatePatch(datePatchSource, {
+  taskId: 'patch-1', patch: { actualStartDate: '' },
+})
+assert.deepEqual(clearedActualStart[0], {
+  ...datePatchSource[0], actualStartDate: '', actualDays: null,
+}, 'clearing actual start clears the stale duration while preserving actual completion')
 assert.deepEqual(datePatchSource, datePatchSnapshot, 'partial date patches do not mutate source tasks')
 
 const extendedTaskSource = [{

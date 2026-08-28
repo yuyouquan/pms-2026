@@ -264,9 +264,8 @@ const cloneTasks = <Task extends Level1PlanTask>(tasks: readonly Task[]): Task[]
 const getPatchedDuration = (
   startDate: string,
   endDate: string,
-  currentDuration: number | null | undefined,
-): number | null | undefined => {
-  if (!startDate || !endDate) return currentDuration
+): number | null => {
+  if (!startDate || !endDate) return null
   return getDateDifference(startDate, endDate)
 }
 
@@ -301,8 +300,8 @@ const evaluatePlanTaskDatePatch = <Task extends Level1PlanTask>(
   const patched = { ...target, ...input.patch }
   const planChanged = hasOwnDateKey(input.patch, 'planStartDate') || hasOwnDateKey(input.patch, 'planEndDate')
   const actualChanged = hasOwnDateKey(input.patch, 'actualStartDate') || hasOwnDateKey(input.patch, 'actualEndDate')
-  const estimatedDays = getPatchedDuration(patched.planStartDate || '', patched.planEndDate || '', target.estimatedDays)
-  const actualDays = getPatchedDuration(patched.actualStartDate || '', patched.actualEndDate || '', target.actualDays)
+  const estimatedDays = getPatchedDuration(patched.planStartDate || '', patched.planEndDate || '')
+  const actualDays = getPatchedDuration(patched.actualStartDate || '', patched.actualEndDate || '')
   if (planChanged && patched.planStartDate && patched.planEndDate && estimatedDays === null) {
     return { ok: false, message: '日期格式或范围无效，未保存修改', preserveIdentity: false }
   }
