@@ -1123,6 +1123,7 @@ export default function ProjectSpaceContainer() {
           ...initializedTask,
           planStartDate: task.planStartDate || '',
           planEndDate: task.planEndDate || '',
+          actualStartDate: task.actualStartDate || '',
           actualEndDate: task.actualEndDate || '',
         }
       }),

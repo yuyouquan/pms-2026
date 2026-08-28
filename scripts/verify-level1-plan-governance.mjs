@@ -383,6 +383,7 @@ const tosProjectMock = projectMocks.buildProjectListMockPlanTasks('19', tosUndat
 })
 const tosBusinessMocks = tosProjectMock.filter(task => task.nodeKind === 'business-period')
 assert.deepEqual(tosBusinessMocks.map(task => task.taskName), ['16.3.0.110', '16.3.0.115'], 'tOS project mocks derive both business versions from the real project name')
+assert.equal(tosBusinessMocks.every(task => task.actualStartDate && task.actualEndDate), true, 'tOS project-list business mocks carry both actual boundaries into project-space initialization')
 assert.equal(tosBusinessMocks[0].planEndDate < tosBusinessMocks[1].planStartDate, true, 'tOS planned business periods never overlap')
 assert.equal(tosBusinessMocks[0].actualEndDate < tosBusinessMocks[1].actualStartDate, true, 'tOS actual business periods never overlap')
 const tosProjectMockAgain = projectMocks.buildProjectListMockPlanTasks('19', tosProjectMock, {
@@ -1130,6 +1131,7 @@ tosV8Seed.push({
 })
 
 const capabilityV8Seed = structuredClone(machineV8Seed.filter(task => task.source !== 'custom'))
+const nonMarketSnapshot = [{ id: 'keep', taskName: '非市场快照不变', marker: 'exact' }]
 const persistedV8FiveStageInput = {
   tasks: structuredClone(machineV8Seed),
   configTemplateTasksByType: {
@@ -1144,6 +1146,10 @@ const persistedV8FiveStageInput = {
     'template::tOS版本项目::level1::v8': structuredClone(tosV8Seed),
     'template::能力建设项目::level1::v8': structuredClone(capabilityV8Seed),
     'project::1::OP::level1::v8': structuredClone(machineV8Seed),
+    'project::custom-machine-1::EU::level1::v8': structuredClone(machineV8Seed),
+    'project::custom-machine-1::technical::level1::v8': structuredClone(nonMarketSnapshot),
+    'project::custom-machine-1::EU::level2::v8': structuredClone(nonMarketSnapshot),
+    'project::custom-machine-1::EU::level3::v8': structuredClone(nonMarketSnapshot),
     'project::2::level1::v8': structuredClone(tosV8Seed),
     'project::2::tos-type::Full::level1::v8::snapshot': structuredClone(tosV8Seed),
     'project::5::level1::v8': structuredClone(capabilityV8Seed),
@@ -1161,6 +1167,13 @@ assert.deepEqual(
 assert.equal(migratedV9.marketPlanData.OP.marker, 'market-v8', 'market V8 sibling metadata survives V9 migration')
 assert.equal(migratedV9.tosTypePlanDataByProjectId['2'].Full.marker, 'tos-type-v8', 'tOS type V8 sibling metadata survives V9 migration')
 assert.equal(migratedV9.publishedSnapshots['project::1::OP::level1::v8'].find(task => task.stableId === 'machine-ms-str5').planEndDate, '2033-05-05', 'historical fixed-node dates survive the machine merge')
+const migratedCustomMarketSnapshot = migratedV9.publishedSnapshots['project::custom-machine-1::EU::level1::v8']
+assert.deepEqual(rootNames(migratedCustomMarketSnapshot), ['概念阶段', '计划阶段', '开发验证阶段', '上市阶段', '生命周期阶段'], 'unknown machine projects and later-added markets migrate their V8 level-one snapshots')
+assert.equal(migratedCustomMarketSnapshot.find(task => task.stableId === 'machine-ms-str5').planEndDate, '2033-05-05', 'unknown-project market migration preserves fixed milestone dates')
+assert.equal(migratedCustomMarketSnapshot.find(task => task.stableId === 'custom-machine-validation').planStartDate, '2033-05-06', 'unknown-project market migration preserves custom task data')
+assert.deepEqual(migratedV9.publishedSnapshots['project::custom-machine-1::technical::level1::v8'], nonMarketSnapshot, 'reserved technical scopes never migrate as markets')
+assert.deepEqual(migratedV9.publishedSnapshots['project::custom-machine-1::EU::level2::v8'], nonMarketSnapshot, 'market level-two snapshots never migrate as level one')
+assert.deepEqual(migratedV9.publishedSnapshots['project::custom-machine-1::EU::level3::v8'], nonMarketSnapshot, 'market level-three snapshots never migrate as level one')
 const migratedMachineCustom = migratedV9.tasks.find(task => task.stableId === 'custom-machine-validation')
 assert.equal(migratedV9.tasks.find(task => task.id === migratedMachineCustom.parentId)?.stableId, 'machine-stage-development', 'custom validation children move beneath the merged machine development-validation stage')
 const migratedTosConfig = migratedV9.configTemplateTasksByType['tOS版本项目']
@@ -1376,10 +1389,10 @@ const migratedClearedHistoricalMilestone = migratedV8.publishedSnapshots['projec
 assert.equal(migratedClearedHistoricalMilestone.planEndDate, '', 'an explicitly cleared historical planned date is never filled from mock defaults')
 assert.equal(migratedClearedHistoricalMilestone.actualEndDate, '', 'an explicitly cleared historical actual date is never filled from mock defaults')
 assert.equal(migratedClearedHistoricalMilestone.clearedByUser, true, 'historical snapshot custom fields survive a confirmed pristine migration')
-assert.deepEqual(migratedV8.publishedSnapshots['project::user-created::OP::level1::v3'], plan.TOS_LEVEL1_TASKS, 'unknown project IDs never default to a machine market migration')
+assert.deepEqual(rootNames(migratedV8.publishedSnapshots['project::user-created::OP::level1::v3']), rootNames(plan.MACHINE_LEVEL1_TASKS), 'market-shaped level-one keys migrate as machine scopes even for user-created project IDs')
 assert.deepEqual(rootNames(migratedV8.publishedSnapshots['project::tos-project::tos-type::Full::level1::v3::snapshot']), rootNames(plan.TOS_LEVEL1_TASKS), 'strict tOS type snapshot keys migrate as tOS plans')
 assert.deepEqual(rootNames(migratedV8.publishedSnapshots['project::2::level1::v3']), rootNames(plan.TOS_LEVEL1_TASKS), 'known ordinary project mock snapshots resolve the project type')
-assert.deepEqual(migratedV8.publishedSnapshots['project::2::OP::level1::v3'], plan.TOS_LEVEL1_TASKS, 'a known tOS project cannot be rewritten through a machine-market key')
+assert.deepEqual(rootNames(migratedV8.publishedSnapshots['project::2::OP::level1::v3']), rootNames(plan.MACHINE_LEVEL1_TASKS), 'the explicit market snapshot key shape is authoritative without initial-project metadata')
 assert.deepEqual(migratedV8.publishedSnapshots['project::1::tos-type::Full::level1::v3::snapshot'], plan.MACHINE_LEVEL1_TASKS, 'a known machine project cannot be rewritten through a tOS-type key')
 assert.deepEqual(migratedV8.publishedSnapshots['template::技术项目::tdt::v3'], technicalSnapshot, 'technical template snapshots remain byte-for-data exact')
 assert.deepEqual(migratedV8.publishedSnapshots['template::tOS版本项目::level3::v3'], technicalSnapshot, 'non-level-one template snapshots remain exact')
@@ -1460,6 +1473,8 @@ assert.match(
   'new machine market scopes initialize from the project-linked mock containing MR business periods',
 )
 assert.match(projectSpaceSource, /planEndDate:\s*task\.planEndDate\s*\|\|\s*''/, 'tOS project initialization preserves project-linked mock plan dates')
+assert.match(projectSpaceSource, /actualStartDate:\s*task\.actualStartDate\s*\|\|\s*''/, 'tOS project initialization restores the project-list mock actual start date after clearing execution fields')
+assert.match(projectSpaceSource, /actualEndDate:\s*task\.actualEndDate\s*\|\|\s*''/, 'tOS project initialization restores the project-list mock actual end date after clearing execution fields')
 assert.match(projectSpaceSource, /getDisplayPlanVersionsForHorizontalPlan\(horizontalVersions,\s*\{\s*includeDraft:\s*level1SurfaceCanMaintain\s*\}\)/, 'horizontal plan exposes scoped level-one drafts to maintainers')
 assert.match(projectSpaceSource, /sumLevel1EstimatedDays\(vProjection\.rows\)/, 'horizontal development cycle uses the estimated-duration total')
 assert.match(projectSpaceSource, /versionProjections\s*=\s*displayVersions\.map/, 'horizontal rows project each version from its own source tasks')

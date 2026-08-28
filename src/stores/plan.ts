@@ -553,10 +553,6 @@ const INITIAL_LEVEL1_PROJECT_TYPES_BY_ID = Object.fromEntries(initialProjects.ma
   getProjectTypeFamilyKey(project.type),
 ])) as Record<string, string>
 
-const INITIAL_MACHINE_MARKETS_BY_PROJECT_ID = Object.fromEntries(initialProjects
-  .filter(project => getProjectTypeFamilyKey(project.type) === PROJECT_CATEGORY_MACHINE)
-  .map(project => [String(project.id), new Set(Array.isArray(project.markets) ? project.markets : [])])) as Record<string, Set<string>>
-
 const RESERVED_NON_MARKET_LEVEL1_SCOPES = new Set(['technical', 'tdt', 'subproject', 'tos-type'])
 
 const migratePublishedLevel1Snapshot = (
@@ -585,10 +581,8 @@ const migratePublishedLevel1Snapshot = (
   }
   const marketSnapshotMatch = /^project::([^:]+)::([^:]+)::level1::([^:]+)$/.exec(key)
   if (marketSnapshotMatch) {
-    const [, projectId, market] = marketSnapshotMatch
+    const [, , market] = marketSnapshotMatch
     if (RESERVED_NON_MARKET_LEVEL1_SCOPES.has(market)) return value
-    if (knownProjectType !== PROJECT_CATEGORY_MACHINE) return value
-    if (!INITIAL_MACHINE_MARKETS_BY_PROJECT_ID[projectId]?.has(market)) return value
     return migrateLevel1TasksForProjectType(value, PROJECT_CATEGORY_MACHINE, true)
   }
   const ordinaryProjectMatch = /^project::([^:]+)::level1::[^:]+$/.exec(key)
