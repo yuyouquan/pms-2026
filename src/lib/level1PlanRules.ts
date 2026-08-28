@@ -76,6 +76,12 @@ export interface Level1DateValidationResult {
   byTaskId: Record<string, Partial<Record<Level1DateField, string[]>>>
 }
 
+export type ReorderLevel1BusinessNodesResult =
+  | { ok: true; tasks: Level1PlanTask[] }
+  | { ok: false; message: string }
+
+export const LEVEL1_SCHEDULE_ORDER_ERROR = '下一个子节点日期不允许超上一个子节点。'
+
 const templateTask = (
   id: string,
   parentId: string | null,
@@ -453,7 +459,6 @@ const LEVEL1_DATE_AXES = [
 
 export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): Level1DateValidationResult => {
   const ordered = getOrderedLevel1Tasks(tasks)
-  const usesExplicitNodeModel = ordered.some(task => task.nodeKind !== undefined)
   const parentIds = new Set(ordered.flatMap(task => task.parentId ? [task.parentId] : []))
   const getNodeKind = (task: Level1PlanTask): Level1NodeKind => (
     task.nodeKind || (parentIds.has(task.id) ? 'stage' : 'fixed-milestone')
@@ -505,16 +510,9 @@ export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): L
       if (timestamp === null) return
       if (previous) {
         const previousTimestamp = getValidTime(previous, endField)
-        const violatesOrder = previousTimestamp !== null
-          && (usesExplicitNodeModel ? timestamp < previousTimestamp : timestamp <= previousTimestamp)
+        const violatesOrder = previousTimestamp !== null && timestamp <= previousTimestamp
         if (violatesOrder) {
-          addViolation(
-            task,
-            endField,
-            usesExplicitNodeModel
-              ? `${LEVEL1_DATE_FIELD_LABELS[endField]}不得早于上一节点“${previous.taskName}”`
-              : `${LEVEL1_DATE_FIELD_LABELS[endField]}必须晚于上一节点“${previous.taskName}”的${previous[endField]}`,
-          )
+          addViolation(task, endField, LEVEL1_SCHEDULE_ORDER_ERROR)
         }
       }
       previous = task
@@ -533,7 +531,7 @@ export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): L
   roots.forEach(stage => {
     const businessPeriods = sortByOrder((childrenByParent.get(stage.id) || [])
       .filter(task => getNodeKind(task) === 'business-period'))
-    LEVEL1_DATE_AXES.forEach(({ startField, endField, label }) => {
+    LEVEL1_DATE_AXES.forEach(({ startField, endField }) => {
       let blockingPeriod: Level1PlanTask | null = null
       businessPeriods.forEach(task => {
         const start = getValidTime(task, startField)
@@ -542,7 +540,7 @@ export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): L
         if (blockingPeriod) {
           const blockingEnd = getValidTime(blockingPeriod, endField)
           if (blockingEnd !== null && start <= blockingEnd) {
-            addViolation(task, startField, `${label}时间段不得与上一业务节点“${blockingPeriod.taskName}”重叠`)
+            addViolation(task, startField, LEVEL1_SCHEDULE_ORDER_ERROR)
           }
           if (blockingEnd !== null && end <= blockingEnd) return
         }
@@ -556,11 +554,10 @@ export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): L
     end: number
     startTask: Level1PlanTask
     startField: Level1DateField
-    nodeKind: 'fixed-milestone' | 'business-period'
   }
 
-  LEVEL1_DATE_AXES.forEach(({ startField, endField, label }) => {
-    let blockingStage: { stage: Level1PlanTask; end: number; onlyFixedMilestones: boolean } | null = null
+  LEVEL1_DATE_AXES.forEach(({ startField, endField }) => {
+    let blockingStageEnd: number | null = null
     roots.forEach(stage => {
       const scheduled = sortByOrder(childrenByParent.get(stage.id) || []).flatMap<Level1StageBoundary>(task => {
         const nodeKind = getNodeKind(task)
@@ -568,13 +565,13 @@ export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): L
         if (nodeKind === 'fixed-milestone') {
           return end === null
             ? []
-            : [{ start: end, end, startTask: task, startField: endField, nodeKind }]
+            : [{ start: end, end, startTask: task, startField: endField }]
         }
         if (nodeKind !== 'business-period') return []
         const start = getValidTime(task, startField)
         return start === null || end === null || start > end
           ? []
-          : [{ start, end, startTask: task, startField, nodeKind }]
+          : [{ start, end, startTask: task, startField }]
       })
       const stageStart = scheduled.reduce<Level1StageBoundary | null>((earliest, boundary) => (
         !earliest || boundary.start < earliest.start ? boundary : earliest
@@ -583,22 +580,11 @@ export const validateLevel1ScheduleDates = (tasks: readonly Level1PlanTask[]): L
         latest === null || boundary.end > latest ? boundary.end : latest
       ), null)
       if (!stageStart || stageEnd === null || stageStart.start > stageEnd) return
-      const onlyFixedMilestones = scheduled.every(boundary => boundary.nodeKind === 'fixed-milestone')
-      const equalFixedPointStages = blockingStage
-        && blockingStage.onlyFixedMilestones
-        && onlyFixedMilestones
-        && stageStart.start === blockingStage.end
-      if (blockingStage && stageStart.start <= blockingStage.end && !equalFixedPointStages) {
-        addViolation(
-          stageStart.startTask,
-          stageStart.startField,
-          `${label}阶段时间不得与上一阶段“${blockingStage.stage.taskName}”重叠`,
-        )
+      if (blockingStageEnd !== null && stageStart.start <= blockingStageEnd) {
+        addViolation(stageStart.startTask, stageStart.startField, LEVEL1_SCHEDULE_ORDER_ERROR)
       }
-      if (!blockingStage || stageEnd > blockingStage.end) {
-        blockingStage = { stage, end: stageEnd, onlyFixedMilestones }
-      } else if (stageEnd === blockingStage.end) {
-        blockingStage.onlyFixedMilestones = blockingStage.onlyFixedMilestones && onlyFixedMilestones
+      if (blockingStageEnd === null || stageEnd > blockingStageEnd) {
+        blockingStageEnd = stageEnd
       }
     })
   })
@@ -649,7 +635,7 @@ export const projectLevel1Plan = (
       if (nodeKind === 'fixed-milestone') {
         return endDate ? [{ startDate: '', endDate }] : []
       }
-      if (nodeKind === 'business-period' && getLevel1InclusiveDuration(startDate, endDate) !== null) {
+      if (nodeKind === 'business-period' && getLevel1DateDifference(startDate, endDate) !== null) {
         return [{ startDate, endDate }]
       }
       return []
@@ -661,7 +647,7 @@ export const projectLevel1Plan = (
     return {
       startDate,
       endDate,
-      duration: getLevel1InclusiveDuration(startDate, endDate),
+      duration: getLevel1DateDifference(startDate, endDate),
     }
   }
 
@@ -735,12 +721,12 @@ export const projectLevel1Plan = (
         planStartDate,
         planEndDate,
         estimatedDays: nodeKind === 'business-period'
-          ? getLevel1InclusiveDuration(planStartDate, planEndDate)
+          ? getLevel1DateDifference(planStartDate, planEndDate)
           : null,
         actualStartDate,
         actualEndDate,
         actualDays: nodeKind === 'business-period'
-          ? getLevel1InclusiveDuration(actualStartDate, actualEndDate)
+          ? getLevel1DateDifference(actualStartDate, actualEndDate)
           : null,
         delayStatus: getLevel1DelayStatus(planEndDate, actualEndDate, today),
         manpowerPercent: null,
@@ -851,6 +837,57 @@ const renumberLevel1TaskDisplayFields = (tasks: readonly Level1PlanTask[]): Leve
   roots.forEach((root, rootIndex) => addRoot(root, rootIndex))
   indexed.filter(item => !included.has(item.index)).forEach(item => addRoot(item, numbered.filter(task => !task.parentId).length))
   return numbered
+}
+
+export const reorderLevel1BusinessNodes = (
+  tasks: readonly Level1PlanTask[],
+  activeStableId: string,
+  overStableId: string,
+): ReorderLevel1BusinessNodesResult => {
+  const active = tasks.find(task => (task.stableId || task.id) === activeStableId)
+  const over = tasks.find(task => (task.stableId || task.id) === overStableId)
+  if (!active || !over) {
+    return { ok: false, message: '未找到需要调整顺序的业务节点' }
+  }
+  const isCustomBusinessNode = (task: Level1PlanTask) => (
+    task.source === 'custom' && task.nodeKind === 'business-period' && Boolean(task.parentId)
+  )
+  if (!isCustomBusinessNode(active) || !isCustomBusinessNode(over)) {
+    return { ok: false, message: '只能调整自定义业务节点的顺序' }
+  }
+  if (active.parentId !== over.parentId) {
+    return { ok: false, message: '只能在同一阶段内调整业务节点顺序' }
+  }
+  if (activeStableId === overStableId) {
+    return { ok: true, tasks: tasks.map(task => ({ ...task })) }
+  }
+
+  const siblings = sortByOrder(tasks.filter(task => task.parentId === active.parentId))
+  const activeIndex = siblings.findIndex(task => (task.stableId || task.id) === activeStableId)
+  const overIndex = siblings.findIndex(task => (task.stableId || task.id) === overStableId)
+  if (activeIndex < 0 || overIndex < 0) {
+    return { ok: false, message: '未找到同阶段内需要调整顺序的业务节点' }
+  }
+  const reorderedSiblings = [...siblings]
+  const [moved] = reorderedSiblings.splice(activeIndex, 1)
+  reorderedSiblings.splice(overIndex, 0, moved)
+  const orderByStableId = new Map(reorderedSiblings.map((task, index) => [task.stableId || task.id, index + 1]))
+  const candidate = renumberLevel1TaskDisplayFields(tasks.map(task => ({
+    ...task,
+    order: task.parentId === active.parentId
+      ? orderByStableId.get(task.stableId || task.id) || task.order
+      : task.order,
+  })))
+  const validation = validateLevel1ScheduleDates(candidate)
+  if (!validation.valid) {
+    return {
+      ok: false,
+      message: validation.violations.some(violation => violation.message === LEVEL1_SCHEDULE_ORDER_ERROR)
+        ? LEVEL1_SCHEDULE_ORDER_ERROR
+        : '调整后的节点日期无效，请先修正日期',
+    }
+  }
+  return { ok: true, tasks: candidate }
 }
 
 export const isLaunchStageTask = (task?: Level1PlanTask) => Boolean(

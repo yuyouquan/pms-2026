@@ -407,7 +407,7 @@ export const applyIncrementalActualFieldPatch = <Task extends {
     const start = parseDate(next.actualStartDate)
     const end = parseDate(next.actualEndDate)
     const actualDays = start !== null && end !== null && end >= start
-      ? Math.round((end - start) / 86_400_000) + (task.nodeKind === 'business-period' ? 1 : 0)
+      ? Math.round((end - start) / 86_400_000)
       : null
     return {
       ...next,

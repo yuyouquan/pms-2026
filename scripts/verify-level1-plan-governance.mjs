@@ -956,9 +956,9 @@ const invalid = rules.validateLevel1MilestoneDates([
   makeTask('c', 'p2', 0, 'C', '2026-01-01', '2026-01-03'),
 ])
 assert.equal(invalid.valid, false)
-assert.match(invalid.byTaskId.b.planEndDate[0], /晚于.*A/)
-assert.match(invalid.byTaskId.b.actualEndDate[0], /晚于.*A/)
-assert.match(invalid.byTaskId.c.planEndDate[0], /晚于.*B/)
+assert.equal(invalid.byTaskId.b.planEndDate[0], '下一个子节点日期不允许超上一个子节点。')
+assert.equal(invalid.byTaskId.b.actualEndDate[0], '下一个子节点日期不允许超上一个子节点。')
+assert.equal(invalid.byTaskId.c.planEndDate[0], '下一个子节点日期不允许超上一个子节点。')
 
 const subproject = rules.projectLevel1Plan([
   makeTask('s1', null, 0, '子项目里程碑1', '2026-01-10', '2026-01-11'),
