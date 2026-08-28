@@ -4046,7 +4046,12 @@ export default function ProjectSpaceContainer() {
           void message.warning('结构权限或计划范围已变化，请重新操作')
           return
         }
-        const result = reorderLevel1BusinessNodes(latest.tasks, dialog.activeStableId, dialog.overStableId)
+        const result = reorderLevel1BusinessNodes(
+          latest.tasks,
+          dialog.activeStableId,
+          dialog.overStableId,
+          latest.project.type,
+        )
         if (!result.ok) {
           void message.warning(result.message)
           return

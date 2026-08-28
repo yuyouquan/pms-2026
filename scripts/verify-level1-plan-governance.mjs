@@ -823,15 +823,18 @@ const customAdminStage = {
   source: 'custom',
   nodeKind: 'stage',
 }
+const nonBusinessParent = machineBusinessInput.find(task => task.stableId === 'machine-stage-concept')
 const customAdminOrdinaryChild = {
   ...machineInsert.task,
+  id: '1.99',
   stableId: 'custom-admin-ordinary-child',
+  parentId: nonBusinessParent.id,
   source: 'custom',
-  nodeKind: 'fixed-milestone',
+  nodeKind: 'business-period',
 }
 for (const [label, task, parent] of [
   ['custom stage', customAdminStage, undefined],
-  ['custom non-business child', customAdminOrdinaryChild, machineInsert.parent],
+  ['custom business-period under a non-business stage', customAdminOrdinaryChild, nonBusinessParent],
 ]) {
   assert.deepEqual(
     rules.getLevel1StructurePermissions({
@@ -845,17 +848,21 @@ for (const [label, task, parent] of [
     { canAddStage: true, canAddChild: true, canRename: false, canDelete: true, canReorder: false },
     `super administrators do not receive business rename/reorder actions for a ${label}`,
   )
-  const helperFixture = parent
-    ? machineInsert.tasks.map(candidate => candidate.stableId === machineInsert.task.stableId ? task : candidate)
-    : [...machineInsert.tasks, task]
+  const helperFixture = [...machineInsert.tasks, task]
   const helperSnapshot = structuredClone(helperFixture)
   const renameResult = rules.renameLevel1BusinessNode(helperFixture, {
     projectType: '整机产品项目',
     taskStableId: task.stableId,
     taskName: 'MR99',
   })
-  assert.deepEqual({ ok: renameResult.ok, code: renameResult.code }, { ok: false, code: 'task-not-custom-business' }, `rename handler rejects a ${label}`)
-  const reorderResult = rules.reorderLevel1BusinessNodes(helperFixture, task.stableId, task.stableId)
+  assert.deepEqual(
+    { ok: renameResult.ok, code: renameResult.code },
+    label === 'custom stage'
+      ? { ok: false, code: 'task-not-custom-business' }
+      : { ok: false, code: 'parent-not-business-stage' },
+    `rename handler rejects a ${label}`,
+  )
+  const reorderResult = rules.reorderLevel1BusinessNodes(helperFixture, task.stableId, task.stableId, '整机产品项目')
   assert.equal(reorderResult.ok, false, `reorder handler rejects a ${label}`)
   assert.deepEqual(helperFixture, helperSnapshot, `rejected ${label} business actions do not mutate handler input`)
 }
@@ -1638,6 +1645,8 @@ assert.match(projectSpaceSource, /getLevel1StructurePermissions/, 'all governed 
 assert.match(projectSpaceSource, /insertLevel1BusinessNode/, 'machine and tOS controlled additions use the validated business-node helper')
 assert.match(projectSpaceSource, /renameLevel1BusinessNode/, 'business-node editing uses the validated immutable rename helper')
 assert.match(projectSpaceSource, /reorderLevel1BusinessNodes/, 'business-node dragging uses the validated immutable reorder helper')
+assert.match(projectSpaceSource, /canRenameGovernedTask[\s\S]{0,220}getStructurePermissions\(record\)\.canRename/, 'rename buttons use the centralized parent-aware business permission')
+assert.match(projectSpaceSource, /canReorderGovernedTask[\s\S]{0,220}getStructurePermissions\(record\)\.canReorder/, 'drag handles use the centralized parent-aware business permission')
 for (const tokenField of ['projectId', 'scopeKind', 'scopeValue', 'versionId', 'currentUser', 'parentStableId', 'editMode', 'draft']) {
   assert.match(projectSpaceSource, new RegExp(`${tokenField}[:;,]`), `structure confirmation token binds ${tokenField}`)
 }
@@ -1679,7 +1688,7 @@ assert.match(
 )
 assert.match(
   projectSpaceSource,
-  /const confirmGovernedReorder[\s\S]{0,1600}reorderLevel1BusinessNodes[\s\S]{0,350}latest\.writeTasks\(result\.tasks\)/,
+  /const confirmGovernedReorder[\s\S]{0,1600}reorderLevel1BusinessNodes\([\s\S]{0,240}latest\.project\.type[\s\S]{0,350}latest\.writeTasks\(result\.tasks\)/,
   'drag confirmation revalidates permissions and writes only a successful governed reorder result',
 )
 assert.doesNotMatch(projectSpaceSource, /isFlatGovernedLevel1Table|pms-level1-flat-milestone-table/, 'project space no longer has a special flat eight-column branch')

@@ -843,6 +843,7 @@ export const reorderLevel1BusinessNodes = (
   tasks: readonly Level1PlanTask[],
   activeStableId: string,
   overStableId: string,
+  projectType?: string,
 ): ReorderLevel1BusinessNodesResult => {
   const active = tasks.find(task => (task.stableId || task.id) === activeStableId)
   const over = tasks.find(task => (task.stableId || task.id) === overStableId)
@@ -864,6 +865,9 @@ export const reorderLevel1BusinessNodes = (
   }
   if (parent.parentId || parent.nodeKind !== 'stage') {
     return { ok: false, message: '业务节点父节点必须是一级阶段' }
+  }
+  if (projectType && !isBusinessStage(projectType, parent)) {
+    return { ok: false, message: '只能调整指定业务阶段下的自定义业务节点' }
   }
   if (activeStableId === overStableId) {
     return { ok: true, tasks: tasks.map(task => ({ ...task })) }
@@ -973,26 +977,27 @@ export const getLevel1StructurePermissions = (
   if (!input.isDraft) return denyLevel1StructurePermissions()
   const isCustomBusinessTask = input.task?.source === 'custom'
     && input.task.nodeKind === 'business-period'
+  const businessParent = isBusinessStage(input.projectType, input.parent)
+  const isBusinessActionTask = isCustomBusinessTask
+    && businessParent
+    && input.task?.parentId === input.parent?.id
   if (input.isSuperAdmin) {
     return {
       canAddStage: true,
       canAddChild: true,
-      canRename: Boolean(isCustomBusinessTask),
+      canRename: Boolean(isBusinessActionTask),
       canDelete: true,
-      canReorder: Boolean(isCustomBusinessTask),
+      canReorder: Boolean(isBusinessActionTask),
     }
   }
   if (!input.isSpm) return denyLevel1StructurePermissions()
 
-  const businessParent = isBusinessStage(input.projectType, input.parent)
-  const businessTask = isCustomBusinessTask
-    && input.task?.parentId === input.parent?.id
   return {
     canAddStage: false,
     canAddChild: businessParent,
-    canRename: Boolean(businessParent && businessTask),
-    canDelete: Boolean(businessParent && businessTask),
-    canReorder: Boolean(businessParent && businessTask),
+    canRename: Boolean(isBusinessActionTask),
+    canDelete: Boolean(isBusinessActionTask),
+    canReorder: Boolean(isBusinessActionTask),
   }
 }
 
@@ -1063,6 +1068,7 @@ export type RenameLevel1BusinessNodeFailureCode =
   | 'task-not-custom-business'
   | 'parent-missing'
   | 'parent-not-stage'
+  | 'parent-not-business-stage'
   | 'invalid-name'
   | 'duplicate-name'
 
@@ -1161,6 +1167,9 @@ export const renameLevel1BusinessNode = (
   if (!parent) return { ok: false, code: 'parent-missing', message: '未找到业务节点所属父阶段' }
   if (parent.parentId || parent.nodeKind !== 'stage') {
     return { ok: false, code: 'parent-not-stage', message: '业务节点父节点必须是一级阶段' }
+  }
+  if (!isBusinessStage(input.projectType, parent)) {
+    return { ok: false, code: 'parent-not-business-stage', message: '只能修改指定业务阶段下的自定义业务节点' }
   }
 
   const taskName = input.taskName.trim()
