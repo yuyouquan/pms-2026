@@ -841,6 +841,23 @@ assert.deepEqual(
   ['-', '-', '-'],
   'a missing historical MR4 exposes no date, status, or duration from another version',
 )
+const horizontalActualV3Rows = [
+  { id: '3.1', stableId: 'mr-1', taskName: 'MR1（V3）', actualEndDate: '2026-03-02', status: '已完成', actualDays: 1 },
+]
+const horizontalActualV3Cells = projectSpaceHorizontalCells.resolveLevel1HorizontalVersionCells(horizontalHeaders, horizontalActualV3Rows)
+assert.equal(horizontalActualV3Cells[0], horizontalActualV3Rows[0], 'the horizontal actual row resolves the latest published snapshot by stable identity')
+assert.equal(horizontalActualV3Cells[1], null, 'the V3 actual row keeps a V4-draft-only MR4 cell empty')
+assert.deepEqual(
+  [horizontalActualV3Cells[1]?.actualEndDate || '-', horizontalActualV3Cells[1]?.status || '-', horizontalActualV3Cells[1]?.actualDays ?? '-'],
+  ['-', '-', '-'],
+  'a V4-draft-only MR4 leaks no actual date, status, or duration into the published V3 actual row',
+)
+const horizontalActualUiStart = projectSpaceSource.indexOf("const actualProjection = recencyVersionProjections.find(entry => entry.version.status === '已发布')?.projection", projectSpaceSource.indexOf('const renderHorizontalTable = () =>'))
+const horizontalActualUiEnd = projectSpaceSource.indexOf('// ═══════ renderActionButtons', horizontalActualUiStart)
+const horizontalActualUiSource = projectSpaceSource.slice(horizontalActualUiStart, horizontalActualUiEnd)
+assert.match(horizontalActualUiSource, /const actualMilestones = resolveLevel1HorizontalVersionCells\(allMilestones, actualRows\)/, 'horizontal UI resolves the actual row once from the latest published projection')
+assert.match(horizontalActualUiSource, /actualMilestones\.map\(/, 'horizontal UI renders actual cells from the resolved latest-published list')
+assert.doesNotMatch(horizontalActualUiSource, /actualRows\.find\([\s\S]{0,180}\)\s*\|\|\s*m/, 'horizontal UI never falls back from a missing published actual row to a draft/header task')
 const tosLiveV3Draft = [
   { id: '3.1', stableId: 'tos-concept-start', taskName: '概念启动', planEndDate: '2026-03-01' },
   { id: '3.2', stableId: 'tos-draft-only', taskName: '16.1.0.005', planEndDate: '2026-04-01' },

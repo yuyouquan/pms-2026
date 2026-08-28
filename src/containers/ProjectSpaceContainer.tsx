@@ -4271,6 +4271,7 @@ export default function ProjectSpaceContainer() {
     const allMilestones = stageGroups.flatMap(({ stage, milestones }) => milestones.length > 0 ? milestones : [stage])
     const actualProjection = recencyVersionProjections.find(entry => entry.version.status === '已发布')?.projection
     const actualRows = actualProjection?.rows || []
+    const actualMilestones = resolveLevel1HorizontalVersionCells(allMilestones, actualRows)
     const thStyle: CSSProperties = { background: '#f8fafc', fontWeight: 600, fontSize: 13, color: '#4b5563', padding: '10px 12px', border: '1px solid #e5e7eb', whiteSpace: 'nowrap', textAlign: 'center' }
     const tdStyle: CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'center', whiteSpace: 'nowrap', minWidth: 100, border: '1px solid #e5e7eb' }
     const versionThStyle: CSSProperties = { ...thStyle, position: 'sticky', left: 0, zIndex: 2, minWidth: 80, background: '#f8fafc' }
@@ -4346,15 +4347,11 @@ export default function ProjectSpaceContainer() {
                 const days = Math.ceil((Math.max(...ends) - Math.min(...starts)) / (1000 * 60 * 60 * 24))
                 return days > 0 ? days : '-'
               })()}</span></Tooltip></td>
-              {allMilestones.map((m: any, mi: number) => (
+              {actualMilestones.map((actualTask: any, mi: number) => (
                 <td key={mi} style={{ ...tdStyle, color: '#d48806' }}>
-                  {(() => {
-                    const identity = m.stableId || m.id
-                    const actualTask = actualRows.find(task => (task.stableId || task.id) === identity) || m
-                    return canMaintainCurrentPlan && isLatestPublished
-                      ? <ClickToEditDate align="center" value={actualTask.actualEndDate || ''} onChange={(nextValue) => updateActualDateForTask(effectiveTasks, (tasks) => setEffectiveTasks(tasks), actualTask, 'actualEndDate', nextValue, false)} />
-                      : actualTask.actualEndDate || '-'
-                  })()}
+                  {actualTask && canMaintainCurrentPlan && isLatestPublished
+                    ? <ClickToEditDate align="center" value={actualTask.actualEndDate || ''} onChange={(nextValue) => updateActualDateForTask(effectiveTasks, (tasks) => setEffectiveTasks(tasks), actualTask, 'actualEndDate', nextValue, false)} />
+                    : actualTask?.actualEndDate || '-'}
                 </td>
               ))}
             </tr>
