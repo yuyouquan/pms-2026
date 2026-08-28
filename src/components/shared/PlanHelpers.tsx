@@ -8,7 +8,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { gantt } from 'dhtmlx-gantt'
 import { getGanttScaleConfig, type GanttScaleMode } from '@/lib/ganttScale'
-import { createPlanGanttInteractionController, type PlanGanttTaskDateChange } from '@/lib/planGanttRules'
+import { attachPlanGanttInteractionLifecycle, createPlanGanttInteractionController, type PlanGanttTaskDateChange } from '@/lib/planGanttRules'
 import {
   getCurrentNodeIndex,
   getCurrentNodeLabel,
@@ -80,6 +80,7 @@ export function DHTMLXGantt({
   onCollapsedChange,
   columns = DEFAULT_GANTT_COLUMNS,
   onTaskDateChange,
+  validateTaskDateChange,
   allowLightbox = true,
   allowStandaloneUpdate = true,
 }: {
@@ -91,6 +92,7 @@ export function DHTMLXGantt({
   onCollapsedChange?: (updater: (prev: Set<string>) => Set<string>) => void
   columns?: DHTMLXGanttColumn[]
   onTaskDateChange?: (change: DHTMLXGanttDateChange) => boolean
+  validateTaskDateChange?: (change: DHTMLXGanttDateChange) => boolean
   allowLightbox?: boolean
   allowStandaloneUpdate?: boolean
 }) {
@@ -98,6 +100,7 @@ export function DHTMLXGantt({
   const suppressFeedback = useRef(false)
   const onTaskClickRef = useRef(onTaskClick)
   const onTaskDateChangeRef = useRef(onTaskDateChange)
+  const validateTaskDateChangeRef = useRef(validateTaskDateChange)
 
   useEffect(() => {
     onTaskClickRef.current = onTaskClick
@@ -106,6 +109,10 @@ export function DHTMLXGantt({
   useEffect(() => {
     onTaskDateChangeRef.current = onTaskDateChange
   }, [onTaskDateChange])
+
+  useEffect(() => {
+    validateTaskDateChangeRef.current = validateTaskDateChange
+  }, [validateTaskDateChange])
 
   useEffect(() => {
     if (!ganttContainer.current) return
@@ -180,23 +187,13 @@ export function DHTMLXGantt({
       readOnly,
       allowLightbox,
       allowStandaloneUpdate,
+      getValidateTaskDateChange: () => validateTaskDateChangeRef.current,
       getOnTaskDateChange: () => onTaskDateChangeRef.current,
       formatDate: value => formatDate(value as Date),
       updateTask: task => gantt.updateTask(task.id),
+      refreshTask: task => gantt.refreshTask(task.id),
     })
-    const beforeDragHandler = gantt.attachEvent('onBeforeTaskDrag', (id: string | number) => {
-      return interactionController.beforeDrag(gantt.getTask(id))
-    })
-    const afterDragHandler = gantt.attachEvent('onAfterTaskDrag', (id: string | number) => {
-      interactionController.afterDrag(gantt.getTask(id))
-      return true
-    })
-    const beforeUpdateHandler = gantt.attachEvent('onBeforeTaskUpdate', (id: string | number, task: any) => {
-      return interactionController.beforeUpdate(task || gantt.getTask(id))
-    })
-    const beforeLightboxHandler = gantt.attachEvent('onBeforeLightbox', (id: string | number) => {
-      return interactionController.canOpenLightbox(gantt.getTask(id))
-    })
+    const detachInteractionLifecycle = attachPlanGanttInteractionLifecycle(gantt, interactionController)
 
     const clickHandler = onTaskClickRef.current
       ? gantt.attachEvent('onTaskClick', (id: number) => {
@@ -209,10 +206,7 @@ export function DHTMLXGantt({
     return () => {
       gantt.detachEvent(openHandler)
       gantt.detachEvent(closeHandler)
-      gantt.detachEvent(beforeDragHandler)
-      gantt.detachEvent(afterDragHandler)
-      gantt.detachEvent(beforeUpdateHandler)
-      gantt.detachEvent(beforeLightboxHandler)
+      detachInteractionLifecycle()
       if (clickHandler) gantt.detachEvent(clickHandler)
       interactionController.clear()
       gantt.clearAll()

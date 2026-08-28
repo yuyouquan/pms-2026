@@ -1,4 +1,5 @@
 import { validateLevel1ScheduleDates, type Level1PlanTask, type Level1ScheduleAxis } from '@/lib/level1PlanRules'
+import type { GanttStatic } from 'dhtmlx-gantt'
 
 export type PlanGanttMode = 'hierarchical' | 'technical-subproject'
 export type PlanGanttNodeType = 'project' | 'milestone' | 'task'
@@ -43,9 +44,11 @@ export interface PlanGanttInteractionControllerOptions {
   readOnly: boolean
   allowLightbox?: boolean
   allowStandaloneUpdate?: boolean
+  getValidateTaskDateChange?: () => ((change: PlanGanttTaskDateChange) => boolean) | undefined
   getOnTaskDateChange: () => ((change: PlanGanttTaskDateChange) => boolean | undefined) | undefined
   formatDate: (value: unknown) => string
   updateTask: (task: PlanGanttInteractionTask) => void
+  refreshTask?: (task: PlanGanttInteractionTask) => void
 }
 
 const sortByOrder = <T extends { order: number }>(items: readonly T[]) => (
@@ -339,16 +342,38 @@ export const createPlanGanttInteractionController = ({
   readOnly,
   allowLightbox = true,
   allowStandaloneUpdate = true,
+  getValidateTaskDateChange,
   getOnTaskDateChange,
   formatDate,
   updateTask,
+  refreshTask,
 }: PlanGanttInteractionControllerOptions) => {
   let dragSnapshot: { taskId: string; startDate: unknown; endDate: unknown } | null = null
+  let approvedUpdateTaskId: string | null = null
+  const committedSnapshots = new Map<string, { startDate: unknown; endDate: unknown }>()
   const canEdit = (task: PlanGanttInteractionTask): boolean => !(readOnly || task.readonly || task.type === 'project')
+  const rememberTask = (task: PlanGanttInteractionTask) => {
+    committedSnapshots.set(String(task.id), {
+      startDate: cloneScheduleValue(task.start_date),
+      endDate: cloneScheduleValue(task.end_date),
+    })
+  }
+  const restoreTask = (
+    task: PlanGanttInteractionTask,
+    fallback?: { start_date?: unknown; end_date?: unknown },
+  ) => {
+    const committed = committedSnapshots.get(String(task.id))
+    task.start_date = cloneScheduleValue(committed ? committed.startDate : fallback?.start_date)
+    task.end_date = cloneScheduleValue(committed ? committed.endDate : fallback?.end_date)
+    if (refreshTask) refreshTask(task)
+    else updateTask(task)
+  }
 
   return {
+    rememberTask,
     beforeDrag(task: PlanGanttInteractionTask): boolean {
       dragSnapshot = null
+      approvedUpdateTaskId = null
       if (!canEdit(task)) return false
       dragSnapshot = {
         taskId: String(task.id),
@@ -358,32 +383,82 @@ export const createPlanGanttInteractionController = ({
       return true
     },
     beforeUpdate(task: PlanGanttInteractionTask): boolean {
-      return canEdit(task) && (allowStandaloneUpdate || dragSnapshot?.taskId === String(task.id))
+      if (canEdit(task) && (allowStandaloneUpdate || approvedUpdateTaskId === String(task.id))) {
+        if (allowStandaloneUpdate) rememberTask(task)
+        return true
+      }
+      restoreTask(task)
+      approvedUpdateTaskId = null
+      return false
     },
-    afterDrag(task: PlanGanttInteractionTask): void {
+    beforeTaskChanged(task: PlanGanttInteractionTask, originalTask: PlanGanttInteractionTask): boolean {
       const snapshot = dragSnapshot
-      if (!snapshot || snapshot.taskId !== String(task.id)) return
+      if (!snapshot || snapshot.taskId !== String(task.id) || !canEdit(task)) {
+        restoreTask(task, originalTask)
+        dragSnapshot = null
+        approvedUpdateTaskId = null
+        return false
+      }
       try {
-        const accepted = getOnTaskDateChange()?.({
+        const change = {
           taskId: String(task.id),
           nodeType: task.type === 'milestone' ? 'milestone' : 'task',
           startDate: formatDate(task.start_date),
           endDate: formatDate(task.end_date),
-        })
-        if (accepted === false) {
-          task.start_date = snapshot.startDate
-          task.end_date = snapshot.endDate
-          updateTask(task)
+        } as const
+        if (getValidateTaskDateChange?.()?.(change) === false) {
+          restoreTask(task, originalTask)
+          return false
         }
+        const accepted = getOnTaskDateChange()?.(change)
+        if (accepted === false) {
+          restoreTask(task, originalTask)
+          return false
+        }
+        approvedUpdateTaskId = String(task.id)
+        return true
       } finally {
         dragSnapshot = null
       }
+    },
+    afterDrag(task: PlanGanttInteractionTask): void {
+      if (approvedUpdateTaskId === String(task.id)) rememberTask(task)
+      approvedUpdateTaskId = null
+      dragSnapshot = null
     },
     canOpenLightbox(task: PlanGanttInteractionTask): boolean {
       return allowLightbox && canEdit(task)
     },
     clear(): void {
       dragSnapshot = null
+      approvedUpdateTaskId = null
+      committedSnapshots.clear()
     },
   }
+}
+
+export type PlanGanttInteractionController = ReturnType<typeof createPlanGanttInteractionController>
+
+export type PlanGanttLifecycleHost = Pick<GanttStatic, 'attachEvent' | 'detachEvent' | 'getTask' | 'eachTask'>
+
+export const attachPlanGanttInteractionLifecycle = (
+  host: PlanGanttLifecycleHost,
+  controller: PlanGanttInteractionController,
+): (() => void) => {
+  host.eachTask(task => controller.rememberTask(task))
+  const handlers = [
+    host.attachEvent('onBeforeTaskDrag', (id: string | number) => controller.beforeDrag(host.getTask(id))),
+    host.attachEvent('onBeforeTaskChanged', (id: string | number, _mode: string, originalTask: PlanGanttInteractionTask) => (
+      controller.beforeTaskChanged(host.getTask(id), originalTask)
+    )),
+    host.attachEvent('onAfterTaskDrag', (id: string | number) => {
+      controller.afterDrag(host.getTask(id))
+      return true
+    }),
+    host.attachEvent('onBeforeTaskUpdate', (id: string | number, task: PlanGanttInteractionTask) => (
+      controller.beforeUpdate(task || host.getTask(id))
+    )),
+    host.attachEvent('onBeforeLightbox', (id: string | number) => controller.canOpenLightbox(host.getTask(id))),
+  ]
+  return () => handlers.forEach(handler => host.detachEvent(handler))
 }

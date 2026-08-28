@@ -3765,6 +3765,7 @@ export default function ProjectSpaceContainer() {
       const stableIdByDisplayId = new Map(filteredHierarchy.map((task: any) => [String(task.id), String(task.stableId || task.id)]))
       const displayIdByStableId = new Map(filteredHierarchy.map((task: any) => [String(task.stableId || task.id), String(task.id)]))
       const ganttCollapsedIds = new Set([...collapsedSet].map(stableId => displayIdByStableId.get(stableId) || stableId))
+      let validatedGanttTasks: typeof effectiveTasks | null = null
       return (
         <div className="pms-level1-tree-gantt" style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
           <DHTMLXGantt
@@ -3788,7 +3789,7 @@ export default function ProjectSpaceContainer() {
                 }
               })
             }}
-            onTaskDateChange={change => {
+            validateTaskDateChange={change => {
               const result = applyPlanGanttDateChangeResult(effectiveTasks, {
                 ...change,
                 mode: change.nodeType === 'milestone' ? 'milestone' : 'task',
@@ -3797,7 +3798,13 @@ export default function ProjectSpaceContainer() {
                 void message.error(result.message)
                 return false
               }
-              setEffectiveTasks(result.tasks)
+              validatedGanttTasks = result.tasks
+              return true
+            }}
+            onTaskDateChange={change => {
+              if (!validatedGanttTasks) return false
+              setEffectiveTasks(validatedGanttTasks)
+              validatedGanttTasks = null
               void message.success(change.nodeType === 'milestone' ? '计划完成时间已更新' : '计划时间已更新')
               return true
             }}

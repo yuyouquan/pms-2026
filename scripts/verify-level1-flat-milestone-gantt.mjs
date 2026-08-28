@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -8,6 +9,7 @@ import ts from 'typescript'
 import { loadTypeScriptModule } from './lib/source-contract.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const require = createRequire(import.meta.url)
 
 const loadTypescriptModule = async relativePath => {
   const modulePath = path.join(root, relativePath)
@@ -828,6 +830,7 @@ const extendedTaskPatch = ganttRules.applyPlanTaskDatePatch(extendedTaskSource, 
 assert.equal(extendedTaskPatch[0].defaultRoadmap, true, 'date patches preserve task extension fields')
 
 const ganttHelperSource = fs.readFileSync(path.join(root, 'src/components/shared/PlanHelpers.tsx'), 'utf8')
+const ganttRulesSource = fs.readFileSync(path.join(root, 'src/lib/planGanttRules.ts'), 'utf8')
 const ganttStyles = fs.readFileSync(path.join(root, 'src/styles/globals.css'), 'utf8')
 assert.match(ganttHelperSource, /export interface DHTMLXGanttDateChange/, 'gantt exposes a typed date-change callback contract')
 assert.match(ganttHelperSource, /onTaskDateChange\?: \(change: DHTMLXGanttDateChange\) => boolean/, 'gantt accepts an explicit accept-or-revert callback')
@@ -837,15 +840,14 @@ assert.match(ganttHelperSource, /gantt\.config\.readonly_property = 'readonly'/,
 assert.match(ganttHelperSource, /gantt\.config\.drag_links = false/, 'plan gantt disables dependency-link dragging so milestone hit targets are not covered')
 assert.match(ganttHelperSource, /type: t\.type \|\| \(t\.parentId \? 'task' : 'project'\)/, 'gantt locks legacy root rows when they do not carry an explicit type')
 assert.match(ganttHelperSource, /pms-gantt-\$\{task\.type \|\| 'task'\}/, 'gantt emits a stable class for every task type')
-assert.match(ganttHelperSource, /onBeforeTaskDrag/, 'gantt blocks forbidden drag attempts before they change task dates')
-assert.match(ganttHelperSource, /onAfterTaskDrag/, 'gantt reports accepted task-date drags')
-assert.match(ganttHelperSource, /onBeforeTaskUpdate/, 'gantt blocks readonly or project updates even when an update event bypasses drag')
-assert.match(ganttHelperSource, /onBeforeLightbox/, 'gantt blocks project and readonly task editing in the lightbox')
-assert.match(ganttHelperSource, /gantt\.detachEvent\(beforeDragHandler\)/, 'gantt detaches date-drag guards during cleanup')
-assert.match(ganttHelperSource, /gantt\.detachEvent\(afterDragHandler\)/, 'gantt detaches date-drag callbacks during cleanup')
-assert.match(ganttHelperSource, /gantt\.detachEvent\(beforeUpdateHandler\)/, 'gantt detaches readonly update guards during cleanup')
-assert.match(ganttHelperSource, /gantt\.detachEvent\(beforeLightboxHandler\)/, 'gantt detaches lightbox guards during cleanup')
+assert.match(ganttRulesSource, /onBeforeTaskDrag/, 'gantt blocks forbidden drag attempts before they change task dates')
+assert.match(ganttRulesSource, /onBeforeTaskChanged/, 'gantt validates proposed dates before dhtmlx commits the drag')
+assert.match(ganttRulesSource, /onAfterTaskDrag/, 'gantt records accepted task-date drags')
+assert.match(ganttRulesSource, /onBeforeTaskUpdate/, 'gantt blocks readonly or project updates even when an update event bypasses drag')
+assert.match(ganttRulesSource, /onBeforeLightbox/, 'gantt blocks project and readonly task editing in the lightbox')
+assert.match(ganttRulesSource, /handlers\.forEach\(handler => host\.detachEvent\(handler\)\)/, 'gantt detaches every interaction lifecycle guard during cleanup')
 assert.match(ganttHelperSource, /createPlanGanttInteractionController/, 'gantt delegates drag decisions to the tested pure interaction controller')
+assert.match(ganttHelperSource, /attachPlanGanttInteractionLifecycle/, 'gantt installs the tested real lifecycle event set')
 assert.match(ganttHelperSource, /interactionController\.clear\(\)/, 'gantt clears the controller snapshot during cleanup')
 assert.match(ganttStyles, /\.gantt_task_line\.pms-gantt-milestone\s*\{[^}]*width:\s*14px !important;[^}]*transform:\s*rotate\(45deg\)/s, 'milestones render a 14px diamond hitbox')
 assert.match(ganttStyles, /\.gantt_task_line\.pms-gantt-milestone\s+\.gantt_task_content\s*\{[^}]*display:\s*none/s, 'milestone hitbox does not render task-bar content')
@@ -866,45 +868,44 @@ const interactionController = ganttRules.createPlanGanttInteractionController({
 const rootTask = { id: 1, type: 'project', readonly: false, start_date: new Date('2026-06-01T00:00:00Z'), end_date: new Date('2026-06-02T00:00:00Z') }
 const readonlyTask = { id: 'readonly', type: 'task', readonly: true, start_date: new Date('2026-06-01T00:00:00Z'), end_date: new Date('2026-06-02T00:00:00Z') }
 const editableTask = { id: 'editable', type: 'milestone', readonly: false, start_date: new Date('2026-06-01T00:00:00Z'), end_date: new Date('2026-06-01T00:00:00Z') }
+;[rootTask, readonlyTask, editableTask].forEach(task => interactionController.rememberTask(task))
 assert.equal(interactionController.beforeUpdate(rootTask), false, 'project roots cannot be updated through a non-drag dhtmlx event')
 assert.equal(interactionController.beforeUpdate(readonlyTask), false, 'readonly tasks cannot be updated through a non-drag dhtmlx event')
 assert.equal(interactionController.beforeUpdate(editableTask), false, 'editable leaves cannot bypass the accepted drag path with a standalone update event')
 assert.equal(interactionController.beforeDrag(rootTask), false, 'project roots cannot start a drag')
 assert.equal(interactionController.beforeDrag(readonlyTask), false, 'readonly tasks cannot start a drag')
 assert.equal(interactionController.beforeDrag(editableTask), true, 'editable leaf tasks can start a drag')
-assert.equal(interactionController.beforeUpdate(editableTask), true, 'the active accepted drag may pass the dhtmlx update gate')
+const updatesBeforeRejectedChange = updates.length
 let latestCallbackPayload
 currentDateChangeCallback = change => { latestCallbackPayload = change; return false }
 editableTask.start_date = new Date('2026-06-04T00:00:00Z')
 editableTask.end_date = new Date('2026-06-04T00:00:00Z')
-interactionController.afterDrag(editableTask)
-assert.deepEqual(latestCallbackPayload, { taskId: 'editable', nodeType: 'milestone', startDate: '2026-06-04', endDate: '2026-06-04' }, 'after drag reads the latest callback from its getter and formats controller dates')
+assert.equal(interactionController.beforeTaskChanged(editableTask, { ...editableTask, start_date: new Date('2026-06-01T00:00:00Z'), end_date: new Date('2026-06-01T00:00:00Z') }), false, 'rejected changes stop before dhtmlx commits task updates')
+assert.deepEqual(latestCallbackPayload, { taskId: 'editable', nodeType: 'milestone', startDate: '2026-06-04', endDate: '2026-06-04' }, 'before-change reads the latest callback and formats proposed dates')
 assert.equal(asYmd(editableTask.start_date), '2026-06-01', 'a false callback restores the start snapshot')
 assert.equal(asYmd(editableTask.end_date), '2026-06-01', 'a false callback restores the end snapshot')
-assert.equal(updates.length, 1, 'a false callback updates the restored task exactly once')
+assert.equal(updates.length, updatesBeforeRejectedChange + 1, 'a false callback refreshes the restored task exactly once')
 currentDateChangeCallback = () => true
 assert.equal(interactionController.beforeDrag(editableTask), true, 'a later drag stores a fresh snapshot')
 editableTask.start_date = new Date('2026-06-05T00:00:00Z')
 editableTask.end_date = new Date('2026-06-05T00:00:00Z')
+assert.equal(interactionController.beforeTaskChanged(editableTask, { ...editableTask, start_date: new Date('2026-06-01T00:00:00Z'), end_date: new Date('2026-06-01T00:00:00Z') }), true, 'accepted changes pass before dhtmlx commits task updates')
+assert.equal(interactionController.beforeUpdate(editableTask), true, 'the accepted drag may pass the dhtmlx update gate')
 interactionController.afterDrag(editableTask)
 assert.equal(asYmd(editableTask.start_date), '2026-06-05', 'a true callback keeps dragged dates')
-assert.equal(updates.length, 1, 'a true callback does not issue a restore update')
-assert.equal(interactionController.beforeUpdate(editableTask), false, 'a completed drag cannot authorize later standalone updates')
+assert.equal(updates.length, updatesBeforeRejectedChange + 1, 'a true callback does not issue a restore update')
 currentDateChangeCallback = () => false
 editableTask.start_date = new Date('2026-06-06T00:00:00Z')
-interactionController.afterDrag(editableTask)
-assert.equal(asYmd(editableTask.start_date), '2026-06-06', 'completed drags do not reuse an old snapshot')
-assert.equal(updates.length, 1, 'completed drags do not restore a second time')
+assert.equal(interactionController.beforeUpdate(editableTask), false, 'standalone updates remain blocked after a completed drag')
+assert.equal(asYmd(editableTask.start_date), '2026-06-05', 'blocked standalone updates restore the latest committed snapshot')
+assert.equal(updates.length, updatesBeforeRejectedChange + 2, 'blocked standalone updates refresh the restored task once')
 let bypassCallbackCalls = 0
 currentDateChangeCallback = () => { bypassCallbackCalls += 1; return true }
 interactionController.afterDrag(rootTask)
 assert.equal(bypassCallbackCalls, 0, 'an after-drag event without an accepted before-drag snapshot cannot bypass project readonly')
-assert.equal(interactionController.beforeDrag(editableTask), true, 'a drag before clear records a snapshot')
-editableTask.start_date = new Date('2026-06-07T00:00:00Z')
 interactionController.clear()
 interactionController.afterDrag(editableTask)
-assert.equal(asYmd(editableTask.start_date), '2026-06-07', 'clear prevents stale snapshots from being restored')
-assert.equal(updates.length, 1, 'clear prevents stale restore updates')
+assert.equal(updates.length, updatesBeforeRejectedChange + 2, 'clear prevents stale restore updates')
 assert.equal(interactionController.canOpenLightbox(rootTask), false, 'project roots cannot open the lightbox')
 assert.equal(interactionController.canOpenLightbox(readonlyTask), false, 'readonly tasks cannot open the lightbox')
 assert.equal(interactionController.canOpenLightbox(editableTask), false, 'editable leaves use validated drag or resize instead of the bypass-prone lightbox')
@@ -915,6 +916,94 @@ const globallyReadonlyController = ganttRules.createPlanGanttInteractionControll
 assert.equal(globallyReadonlyController.beforeDrag(editableTask), false, 'global readonly blocks drags')
 assert.equal(globallyReadonlyController.beforeUpdate(editableTask), false, 'global readonly blocks update events')
 assert.equal(globallyReadonlyController.canOpenLightbox(editableTask), false, 'global readonly blocks lightbox editing')
+
+const realGantt = require('dhtmlx-gantt').gantt
+assert.equal(require('dhtmlx-gantt/package.json').version, '9.1.2', 'real lifecycle coverage runs against the repository dhtmlx version')
+realGantt.clearAll()
+const realLifecycleSource = [
+  { id: 'real-stage', order: 1, taskName: '上市阶段', nodeKind: 'stage', planStartDate: '2026-07-01', planEndDate: '2026-07-31' },
+  { id: 'real-period-a', parentId: 'real-stage', order: 1, taskName: 'MR1', nodeKind: 'business-period', planStartDate: '2026-07-01', planEndDate: '2026-07-10' },
+  { id: 'real-period-b', parentId: 'real-stage', order: 2, taskName: 'MR2', nodeKind: 'business-period', planStartDate: '2026-07-11', planEndDate: '2026-07-20' },
+]
+const realProjectedTasks = ganttRules.buildPlanGanttTasks(realLifecycleSource, { mode: 'hierarchical', editable: true })
+realGantt.parse({ data: realProjectedTasks.map(task => ({
+  ...task,
+  text: task.taskName,
+  start_date: task.start_date ? new Date(`${task.start_date}T00:00:00Z`) : null,
+  end_date: task.end_date ? new Date(`${task.end_date}T00:00:00Z`) : null,
+})) })
+let realStoreTasks = realLifecycleSource
+let realStoreCallbackCalls = 0
+let realValidationCalls = 0
+let realPendingTasks = null
+const realController = ganttRules.createPlanGanttInteractionController({
+  readOnly: false,
+  allowLightbox: false,
+  allowStandaloneUpdate: false,
+  getValidateTaskDateChange: () => change => {
+    realValidationCalls += 1
+    const result = ganttRules.applyPlanGanttDateChangeResult(realStoreTasks, { ...change, mode: change.nodeType })
+    if (!result.ok) return false
+    realPendingTasks = result.tasks
+    return true
+  },
+  getOnTaskDateChange: () => () => {
+    realStoreCallbackCalls += 1
+    realStoreTasks = realPendingTasks
+    realPendingTasks = null
+    return true
+  },
+  formatDate: asYmd,
+  updateTask: task => realGantt.updateTask(task.id),
+  refreshTask: task => realGantt.refreshTask(task.id),
+})
+const detachRealLifecycle = ganttRules.attachPlanGanttInteractionLifecycle(realGantt, realController)
+const runRealDragLifecycle = (taskId, startDate, endDate) => {
+  const task = realGantt.getTask(taskId)
+  const original = realGantt.copy(task)
+  if (!realGantt.callEvent('onBeforeTaskDrag', [taskId, 'move', {}])) return false
+  task.start_date = new Date(`${startDate}T00:00:00Z`)
+  task.end_date = new Date(`${endDate}T00:00:00Z`)
+  const accepted = realGantt.callEvent('onBeforeTaskChanged', [taskId, 'move', original, {}])
+  if (accepted) {
+    realGantt.updateTask(taskId)
+    realGantt.callEvent('onAfterTaskDrag', [taskId, 'move', {}])
+  }
+  return accepted
+}
+const dirtyStage = realGantt.getTask('real-stage')
+const originalStageStart = asYmd(dirtyStage.start_date)
+dirtyStage.start_date = new Date('2030-01-01T00:00:00Z')
+assert.equal(realGantt.callEvent('onBeforeTaskUpdate', ['real-stage', dirtyStage]), false, 'real dhtmlx rejects a standalone readonly stage update')
+assert.equal(asYmd(realGantt.getTask('real-stage').start_date), originalStageStart, 'real dhtmlx readonly rejection restores the committed stage date immediately')
+assert.equal(realStoreCallbackCalls, 0, 'readonly and standalone rejection never invokes the store callback')
+const dirtyStandalonePeriod = realGantt.getTask('real-period-b')
+dirtyStandalonePeriod.start_date = new Date('2026-07-09T00:00:00Z')
+assert.equal(realGantt.callEvent('onBeforeTaskUpdate', ['real-period-b', dirtyStandalonePeriod]), false, 'real dhtmlx rejects an editable standalone update outside the accepted drag lifecycle')
+assert.equal(asYmd(realGantt.getTask('real-period-b').start_date), '2026-07-11', 'real dhtmlx standalone rejection restores the committed business date immediately')
+assert.equal(realStoreCallbackCalls, 0, 'editable standalone rejection never invokes the store callback')
+assert.equal(runRealDragLifecycle('real-period-b', '2026-07-10', '2026-07-20'), false, 'real dhtmlx rejects a business-order conflict before task update')
+assert.deepEqual([asYmd(realGantt.getTask('real-period-b').start_date), asYmd(realGantt.getTask('real-period-b').end_date)], ['2026-07-11', '2026-07-20'], 'real dhtmlx restores rejected business dates in getTask')
+assert.equal(realValidationCalls, 1, 'a rejected business drag runs validation exactly once')
+assert.equal(realStoreCallbackCalls, 0, 'a rejected business drag never invokes the store callback')
+assert.equal(realStoreTasks.find(task => task.id === 'real-period-b')?.planStartDate, '2026-07-11', 'rejected real lifecycle drag leaves store input unchanged')
+assert.equal(runRealDragLifecycle('real-period-b', '2026-07-12', '2026-07-22'), true, 'real dhtmlx accepts a valid business drag')
+assert.deepEqual([asYmd(realGantt.getTask('real-period-b').start_date), asYmd(realGantt.getTask('real-period-b').end_date)], ['2026-07-12', '2026-07-22'], 'real dhtmlx keeps accepted business dates')
+assert.equal(realValidationCalls, 2, 'a legal real lifecycle drag runs validation exactly once')
+assert.equal(realStoreCallbackCalls, 1, 'a legal real lifecycle drag invokes the store callback exactly once')
+detachRealLifecycle()
+realGantt.clearAll()
+
+realGantt.parse({ data: [{ id: 'technical-real', text: '技术子项目', type: 'task', readonly: false, start_date: new Date('2026-08-01T00:00:00Z'), end_date: new Date('2026-08-10T00:00:00Z') }] })
+const realTechnicalController = ganttRules.createPlanGanttInteractionController({ readOnly: false, getOnTaskDateChange: () => () => true, formatDate: asYmd, updateTask: task => realGantt.updateTask(task.id), refreshTask: task => realGantt.refreshTask(task.id) })
+const detachRealTechnicalLifecycle = ganttRules.attachPlanGanttInteractionLifecycle(realGantt, realTechnicalController)
+const realTechnicalTask = realGantt.getTask('technical-real')
+realTechnicalTask.start_date = new Date('2026-08-02T00:00:00Z')
+assert.equal(realGantt.callEvent('onBeforeTaskUpdate', ['technical-real', realTechnicalTask]), true, 'real technical gantt keeps default standalone update semantics')
+assert.equal(asYmd(realGantt.getTask('technical-real').start_date), '2026-08-02', 'real technical gantt keeps the default accepted update value')
+assert.equal(realGantt.callEvent('onBeforeLightbox', ['technical-real']), true, 'real technical gantt keeps default lightbox semantics')
+detachRealTechnicalLifecycle()
+realGantt.clearAll()
 
 const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8')
 const projectSpaceSource = read('src/containers/ProjectSpaceContainer.tsx')
