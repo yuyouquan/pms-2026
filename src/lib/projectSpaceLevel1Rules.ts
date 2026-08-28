@@ -3,6 +3,48 @@ import {
   getDisplayPlanVersionsForHorizontalPlan,
   parsePlanVersionNo,
 } from '@/lib/planVersioning'
+import { applyPlanTaskDatePatchResult } from '@/lib/planGanttRules'
+import type { Level1PlanTask } from '@/lib/level1PlanRules'
+
+export interface GovernedLevel1ActualTask extends Level1PlanTask {
+  actualTimeDetachedFromMain?: boolean
+  [key: string]: unknown
+}
+
+export interface GovernedLevel1ActualTarget<Task extends GovernedLevel1ActualTask> {
+  key: string
+  tasks: readonly Task[]
+  detachActualTimeFromMain?: boolean
+}
+
+export type GovernedLevel1ActualTransactionResult<Task extends GovernedLevel1ActualTask> =
+  | { ok: true; targets: Array<{ key: string; tasks: Task[] }> }
+  | { ok: false; message: string }
+
+export const applyGovernedLevel1ActualDateTransaction = <Task extends GovernedLevel1ActualTask>(input: {
+  targets: readonly GovernedLevel1ActualTarget<Task>[]
+  targetStableId: string
+  field: 'actualStartDate' | 'actualEndDate'
+  value: string
+}): GovernedLevel1ActualTransactionResult<Task> => {
+  const validatedTargets: Array<{ key: string; tasks: Task[] }> = []
+  for (const target of input.targets) {
+    const task = target.tasks.find(candidate => (candidate.stableId || candidate.id) === input.targetStableId)
+    if (!task) return { ok: false, message: '未找到需要更新的一级计划节点' }
+    const result = applyPlanTaskDatePatchResult(target.tasks, {
+      taskId: task.id,
+      patch: { [input.field]: input.value },
+    })
+    if (!result.ok) return result
+    const tasks = target.detachActualTimeFromMain
+      ? result.tasks.map(candidate => (candidate.stableId || candidate.id) === input.targetStableId
+          ? { ...candidate, actualTimeDetachedFromMain: true }
+          : candidate)
+      : result.tasks
+    validatedTargets.push({ key: target.key, tasks })
+  }
+  return { ok: true, targets: validatedTargets }
+}
 
 export interface ActualFieldsTask {
   id: string

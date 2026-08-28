@@ -206,6 +206,7 @@ import {
 } from '@/lib/planGanttRules'
 import {
   LEVEL1_TREE_FILTER_FIELDS,
+  applyGovernedLevel1ActualDateTransaction,
   canEditLevel1HorizontalDateCell,
   filterLevel1TreeRows,
   getLevel1MaintainerUsers,
@@ -3059,19 +3060,6 @@ export default function ProjectSpaceContainer() {
       ? selectLevel1HorizontalVersions(level1SurfaceVersions, { surface: 'basic-info' })[0]?.id === options.targetPublishedVersionId
       : useLevel1SurfaceScope ? level1SurfaceIsLatestPublished : isLatestPublished
     const targetStableId = record.stableId || record.id
-    const updatedTasks = governedProjectLevel1Date
-      ? applyIncrementalActualFieldPatch(tableTasks, targetStableId, field, value)
-      : applyPlanTaskDatePatch(tableTasks, {
-          taskId: record.id,
-          patch: { [field]: value },
-        })
-    if (updatedTasks.find(task => task.id === record.id)?.[field] !== value) {
-      void message.error('日期格式或范围无效，未保存修改')
-      return
-    }
-    const scopedUpdatedTasks = isLevel1MarketTable && activeMarketIsFollow
-      ? markTaskActualTimeDetachedFromMain(updatedTasks, record.id, patch)
-      : updatedTasks
     if (governedProjectLevel1Date && activeIsLatestPublished) {
       const pairedVersion = activeVersions.find(version => version.status === '修订中')
       const getScopedSnapshotKey = (versionId: string) => selectedProject && isTosTypeScoped
@@ -3081,11 +3069,42 @@ export default function ProjectSpaceContainer() {
           : selectedProject && !isTechnicalProject
             ? getProjectLevel1MockSnapshotKey(selectedProject.id, versionId)
             : versionId
-      const mergePublishedActualIntoLiveScope = () => {
+      const currentSnapshotKey = getScopedSnapshotKey(activeCurrentVersion)
+      const currentSnapshot = publishedSnapshots[currentSnapshotKey] || tableTasks
+      const shouldMergeLive = Boolean(
+        pairedVersion || (isLevel1MarketTable && currentMarketIsFollow)
+        || (useLevel1SurfaceScope && isLevel1MarketTable && level1SurfaceMarketIsFollow),
+      )
+      const governedActualResult = applyGovernedLevel1ActualDateTransaction({
+        targets: [
+          {
+            key: 'published',
+            tasks: currentSnapshot,
+            detachActualTimeFromMain: isLevel1MarketTable && activeMarketIsFollow,
+          },
+          ...(shouldMergeLive
+            ? [{
+                key: 'paired-draft',
+                tasks: level1SurfaceLiveTasks,
+                detachActualTimeFromMain: isLevel1MarketTable && activeMarketIsFollow,
+              }]
+            : []),
+        ],
+        targetStableId,
+        field,
+        value,
+      })
+      if (!governedActualResult.ok) {
+        void message.error(governedActualResult.message)
+        return
+      }
+      const publishedTarget = governedActualResult.targets.find(target => target.key === 'published')!.tasks
+      const pairedDraftTarget = governedActualResult.targets.find(target => target.key === 'paired-draft')?.tasks
+      const writeValidatedLiveScope = (validatedTasks: any[]) => {
         if (currentTosLevel1Data) {
           updateCurrentTosTypeData(effectiveTosLevel1Type, previous => ({
             ...previous,
-            level1Tasks: applyIncrementalActualFieldPatch(previous.level1Tasks, targetStableId, field, value),
+            level1Tasks: validatedTasks,
           }))
           return
         }
@@ -3094,37 +3113,52 @@ export default function ProjectSpaceContainer() {
             ...previous,
             [selectedMarketTab]: {
               ...(previous[selectedMarketTab] || { level2Tasks: [], createdLevel2Plans: [] }),
-              tasks: applyIncrementalActualFieldPatch(
-                previous[selectedMarketTab]?.tasks || [],
-                targetStableId,
-                field,
-                value,
-                activeMarketIsFollow,
-              ),
+              tasks: validatedTasks,
             },
           }))
           return
         }
-        setTasks(previous => applyIncrementalActualFieldPatch(previous, targetStableId, field, value))
+        setTasks(validatedTasks)
       }
-      setPublishedSnapshots(previous => {
-        const currentKey = getScopedSnapshotKey(activeCurrentVersion)
-        const currentSnapshot = previous[currentKey] || tableTasks
-        return {
-          ...previous,
-          [currentKey]: applyIncrementalActualFieldPatch(
-            currentSnapshot,
-            targetStableId,
-            field,
-            value,
-            isLevel1MarketTable && activeMarketIsFollow,
-          ),
-        }
-      })
-      if (pairedVersion || (isLevel1MarketTable && currentMarketIsFollow)
-        || (useLevel1SurfaceScope && isLevel1MarketTable && level1SurfaceMarketIsFollow)) mergePublishedActualIntoLiveScope()
+      setPublishedSnapshots(previous => ({
+        ...previous,
+        [currentSnapshotKey]: publishedTarget,
+      }))
+      if (pairedDraftTarget) writeValidatedLiveScope(pairedDraftTarget)
       return
     }
+
+    const governedActualResult = governedProjectLevel1Date
+      ? applyGovernedLevel1ActualDateTransaction({
+          targets: [{
+            key: 'current',
+            tasks: tableTasks,
+            detachActualTimeFromMain: isLevel1MarketTable && activeMarketIsFollow,
+          }],
+          targetStableId,
+          field,
+          value,
+        })
+      : null
+    if (governedActualResult && !governedActualResult.ok) {
+      void message.error(governedActualResult.message)
+      return
+    }
+    const updatedTasks = governedActualResult?.ok
+      ? governedActualResult.targets[0].tasks
+      : applyPlanTaskDatePatch(tableTasks, {
+          taskId: record.id,
+          patch: { [field]: value },
+        })
+    if (updatedTasks.find(task => task.id === record.id)?.[field] !== value) {
+      void message.error('日期格式或范围无效，未保存修改')
+      return
+    }
+    const scopedUpdatedTasks = governedActualResult?.ok
+      ? updatedTasks
+      : isLevel1MarketTable && activeMarketIsFollow
+        ? markTaskActualTimeDetachedFromMain(updatedTasks, record.id, patch)
+        : updatedTasks
 
     if (isLevel1MarketTable && selectedMarketTab === primaryMarket) {
       setMarketPlanData((prev: any) => {

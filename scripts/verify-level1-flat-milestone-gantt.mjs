@@ -1290,10 +1290,55 @@ const detachedFollowPatch = projectSpaceActualPatch.applyIncrementalActualFieldP
 assert.deepEqual(detachedFollowPatch[0], {
   ...publishedTasks[1], nodeKind: 'business-period', actualStartDate: '2026-08-01', actualEndDate: '2026-08-12', actualDays: 11, actualTimeDetachedFromMain: true,
 }, 'a follow-market live/snapshot patch recomputes duration and marks the task detached from main actual time')
+const governedActualFixedSource = [
+  { id: 'published-stage', stableId: 'actual-stage', order: 1, taskName: '概念阶段', nodeKind: 'stage' },
+  { id: 'published-a', stableId: 'actual-a', parentId: 'published-stage', order: 1, taskName: '概念启动', nodeKind: 'fixed-milestone', actualEndDate: '2026-08-01' },
+  { id: 'published-b', stableId: 'actual-b', parentId: 'published-stage', order: 2, taskName: 'STR1', nodeKind: 'fixed-milestone', actualEndDate: '2026-08-10' },
+]
+for (const invalidEndDate of ['2026-08-01', '2026-07-31']) {
+  const result = projectSpaceLevel1Rules.applyGovernedLevel1ActualDateTransaction({
+    targets: [{ key: 'published', tasks: governedActualFixedSource }], targetStableId: 'actual-b', field: 'actualEndDate', value: invalidEndDate,
+  })
+  assert.deepEqual(result, { ok: false, message: '下一个子节点日期不允许超上一个子节点。' }, 'fixed actual completion equality or reversal is atomically rejected with the exact order message')
+  assert.equal(governedActualFixedSource[2].actualEndDate, '2026-08-10', 'a rejected fixed actual transaction never mutates its input')
+}
+const governedBusinessActualSource = [
+  { id: 'business-stage-a', stableId: 'business-stage-a', order: 1, taskName: '上市阶段', nodeKind: 'stage' },
+  { id: 'business-a', stableId: 'business-a', parentId: 'business-stage-a', order: 1, taskName: 'MR1', nodeKind: 'business-period', planStartDate: '2026-09-10', planEndDate: '2026-09-01', actualStartDate: '2026-09-01', actualEndDate: '2026-09-10' },
+  { id: 'business-b', stableId: 'business-b', parentId: 'business-stage-a', order: 2, taskName: 'MR2', nodeKind: 'business-period', actualStartDate: '2026-09-11', actualEndDate: '2026-09-20' },
+  { id: 'business-stage-b', stableId: 'business-stage-b', order: 2, taskName: '生命周期阶段', nodeKind: 'stage' },
+  { id: 'business-c', stableId: 'business-c', parentId: 'business-stage-b', order: 1, taskName: 'MR3', nodeKind: 'business-period', actualStartDate: '2026-09-21', actualEndDate: '2026-09-30' },
+]
+assert.equal(projectSpaceLevel1Rules.applyGovernedLevel1ActualDateTransaction({ targets: [{ key: 'published', tasks: governedBusinessActualSource }], targetStableId: 'business-a', field: 'actualStartDate', value: '2026-09-12' }).ok, false, 'business actual start after end is rejected')
+assert.deepEqual(projectSpaceLevel1Rules.applyGovernedLevel1ActualDateTransaction({ targets: [{ key: 'published', tasks: governedBusinessActualSource }], targetStableId: 'business-b', field: 'actualStartDate', value: '2026-09-10' }), { ok: false, message: '下一个子节点日期不允许超上一个子节点。' }, 'same-stage business actual overlap is rejected')
+assert.deepEqual(projectSpaceLevel1Rules.applyGovernedLevel1ActualDateTransaction({ targets: [{ key: 'published', tasks: governedBusinessActualSource }], targetStableId: 'business-c', field: 'actualStartDate', value: '2026-09-20' }), { ok: false, message: '下一个子节点日期不允许超上一个子节点。' }, 'cross-stage business actual overlap is rejected')
+const independentActualResult = projectSpaceLevel1Rules.applyGovernedLevel1ActualDateTransaction({
+  targets: [{ key: 'published', tasks: governedBusinessActualSource }], targetStableId: 'business-b', field: 'actualEndDate', value: '2026-09-19',
+})
+assert.equal(independentActualResult.ok, true, 'an existing planned-axis error does not block a valid actual transaction')
+const conflictingDraft = governedBusinessActualSource.map(task => task.stableId === 'business-a' ? { ...task, actualEndDate: '2026-09-12' } : { ...task })
+const atomicDraftFailure = projectSpaceLevel1Rules.applyGovernedLevel1ActualDateTransaction({
+  targets: [{ key: 'published', tasks: governedBusinessActualSource, detachActualTimeFromMain: true }, { key: 'paired-draft', tasks: conflictingDraft, detachActualTimeFromMain: true }], targetStableId: 'business-b', field: 'actualStartDate', value: '2026-09-11',
+})
+assert.deepEqual(atomicDraftFailure, { ok: false, message: '下一个子节点日期不允许超上一个子节点。' }, 'a paired draft conflict rejects every target atomically')
+assert.equal(governedBusinessActualSource.find(task => task.stableId === 'business-b')?.actualStartDate, '2026-09-11', 'paired draft failure leaves published input unchanged')
+assert.equal(conflictingDraft.find(task => task.stableId === 'business-b')?.actualStartDate, '2026-09-11', 'paired draft failure leaves draft input unchanged')
+assert.equal(governedBusinessActualSource.find(task => task.stableId === 'business-b')?.actualTimeDetachedFromMain, undefined, 'paired draft failure leaves published follow-detach state unchanged')
+assert.equal(conflictingDraft.find(task => task.stableId === 'business-b')?.actualTimeDetachedFromMain, undefined, 'paired draft failure leaves draft follow-detach state unchanged')
+const legalActualTransaction = projectSpaceLevel1Rules.applyGovernedLevel1ActualDateTransaction({
+  targets: [{ key: 'published', tasks: governedBusinessActualSource, detachActualTimeFromMain: true }, { key: 'paired-draft', tasks: governedBusinessActualSource, detachActualTimeFromMain: true }], targetStableId: 'business-b', field: 'actualEndDate', value: '2026-09-19',
+})
+assert.equal(legalActualTransaction.ok, true, 'a legal actual transaction updates every target')
+assert.deepEqual(legalActualTransaction.ok && legalActualTransaction.targets.map(target => [target.key, target.tasks.find(task => task.stableId === 'business-b')?.actualEndDate, target.tasks.find(task => task.stableId === 'business-b')?.actualTimeDetachedFromMain]), [
+  ['published', '2026-09-19', true], ['paired-draft', '2026-09-19', true],
+], 'legal actual transactions synchronize all targets and apply follow detach only after validation')
+assert.equal(governedBusinessActualSource.find(task => task.stableId === 'business-b')?.actualTimeDetachedFromMain, undefined, 'successful follow transaction still leaves source detach state immutable')
 assert.doesNotMatch(projectSpaceSource, /mergeActualFieldsByStableId/, 'project-space published writes never use the legacy two-field merge')
-assert.match(projectSpaceSource, /updateCurrentTosTypeData[\s\S]{0,600}applyIncrementalActualFieldPatch/, 'tOS paired drafts receive the same single-field actual patch')
-assert.match(projectSpaceSource, /setMarketPlanData[\s\S]{0,800}applyIncrementalActualFieldPatch/, 'market paired drafts receive the same single-field actual patch')
+assert.match(projectSpaceSource, /updateCurrentTosTypeData[\s\S]{0,300}level1Tasks:\s*validatedTasks/, 'tOS paired drafts receive the already-validated transaction result')
+assert.match(projectSpaceSource, /setMarketPlanData[\s\S]{0,500}tasks:\s*validatedTasks/, 'market paired drafts receive the already-validated transaction result')
 assert.match(projectSpaceSource, /pairedVersion\s*\|\|\s*\(isLevel1MarketTable\s*&&\s*currentMarketIsFollow\)/, 'a follow-market latest-published edit updates live scope even without a paired draft')
+assert.match(projectSpaceSource, /applyGovernedLevel1ActualDateTransaction/, 'governed actual writes delegate to the atomic shared transaction')
+assert.match(projectSpaceSource, /message\.error\(governedActualResult\.message\)/, 'governed actual write failures surface the shared exact validation message')
 
 const scheduledFocusCallbacks = new Map()
 const cancelledFocusHandles = []
