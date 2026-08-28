@@ -1,4 +1,4 @@
-import { NO_SUBDOMAIN_DOMAINS, SUBDOMAINS_BY_DOMAIN, TECHNICAL_DELIVERABLE_FIELDS, TECHNICAL_STRING_FIELD_KEYS } from '@/constants/technicalProject'
+import { TECHNICAL_DELIVERABLE_FIELDS, TECHNICAL_STRING_FIELD_KEYS } from '@/constants/technicalProject'
 import { projectLevel1Plan, sumLevel1EstimatedDays } from '@/lib/level1PlanRules'
 import { comparePlanVersions } from '@/lib/planVersioning'
 import type {
@@ -221,8 +221,7 @@ export const resolveTechnicalProjectFields = (
   options: { tmgSubdomains?: Record<string, readonly string[]> } = {},
 ) => {
   const tmg = String(input.tmg || '') as TechnicalDomain
-  const fixedSubdomains = SUBDOMAINS_BY_DOMAIN[tmg]
-  const subdomains = fixedSubdomains || options.tmgSubdomains?.[tmg] || []
+  const subdomains = options.tmgSubdomains?.[tmg] || []
   const result: Record<string, unknown> = {
     ...(input.ipm?.projectName ? { projectName: input.ipm.projectName } : {}),
     ...(input.ipm?.category ? { category: input.ipm.category } : {}),
@@ -233,7 +232,7 @@ export const resolveTechnicalProjectFields = (
     technicalLead: String(input.technicalLead || ''),
     responsiblePersons: input.technicalLead?.trim() ? [input.technicalLead.trim()] : [],
   }
-  if (NO_SUBDOMAIN_DOMAINS.includes(tmg)) result.subdomainDisabled = true
+  if (subdomains.length === 1 && subdomains[0] === '无') result.subdomainDisabled = true
   return result
 }
 
@@ -329,9 +328,9 @@ export const synchronizeTechnicalProjectRecord = <T extends Record<string, unkno
 export const validateTechnicalProject = (value: Record<string, unknown>) => {
   if (!String(value.technicalLead || '').trim()) throw new Error('technicalLead')
   if (value.type !== 'tdt' && value.type !== '技术项目前置工作') return true
-  const tmg = String(value.tmg || '') as TechnicalDomain
-  if (!SUBDOMAINS_BY_DOMAIN[tmg]) throw new Error('tmg')
-  if (!SUBDOMAINS_BY_DOMAIN[tmg].includes(String(value.subdomain || ''))) throw new Error('subdomain')
+  const tmg = String(value.tmg || '').trim()
+  if (!tmg) throw new Error('tmg')
+  if (!String(value.subdomain || '').trim()) throw new Error('subdomain')
   if (!/^\d{4}$/.test(String(value.projectYear || ''))) throw new Error('projectYear')
   assertDeliverables(value.deliverables)
   return true

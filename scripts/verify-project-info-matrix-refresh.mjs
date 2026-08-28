@@ -114,16 +114,17 @@ assert.equal(JSON.stringify(keysWhere(tosFields, field => field.requiredOnCreate
 ]), 'tOS create-required fields must match the reference document')
 assert.equal(tosFields.every(field => field.required), true, 'every tOS category field must be overall required')
 assert.equal(tosFields.filter(field => field.group === 'team').every(field => field.inputType === 'people'), true, 'all tOS roles must allow multiple members')
-assert.deepEqual(
-  Array.from(machineFields.find(field => field.key === 'versionType').options),
-  ['Full', 'Slim', 'PAD', 'GO'],
-  'version type options must match revision 259 exactly',
-)
-assert.deepEqual(
-  Array.from(machineFields.find(field => field.key === 'systemType').options),
-  ['32bit', '64bit', '64only'],
-  'system type options must match revision 259 exactly',
-)
+for (const fieldKey of [
+  'developmentMode', 'firstSaleTosVersion', 'softwareProjectLevel', 'versionType',
+  'dimensionUpgradeStrategy', 'systemType', 'kernelVersion', 'productSeries',
+  'currentTosVersion',
+]) {
+  assert.equal(machineFields.find(field => field.key === fieldKey).options, undefined, `${fieldKey} must not retain a second hard-coded option source`)
+}
+assert.equal(machineFields.find(field => field.key === 'chipCode').inputType, 'select', 'chip code is the editable atomic chip mapping entry')
+assert.equal(machineFields.find(field => field.key === 'chipCode').readOnly, undefined, 'chip code is no longer IPM-read-only')
+assert.equal(machineFields.find(field => field.key === 'chipModel').readOnly, true, 'chip model is derived from the selected mapping row')
+assert.equal(machineFields.find(field => field.key === 'chipPlatform').readOnly, true, 'chip platform is derived from the selected mapping row')
 assert.equal(machineFields.find(field => field.key === 'startingRam').readOnly, true, 'starting RAM must be derived and read-only')
 assert.equal(tosFields.find(field => field.key === 'firstLaunchProjectChips').label, '首发项目芯片', 'tOS launch chip label must match revision 259')
 
@@ -182,9 +183,12 @@ assert.equal(aggregates.values.firstLaunchProjectChips, 'D1（M1）,D2（M2）',
 assert.match(schema, /required:\s*boolean/, 'field schema must expose overall required metadata')
 assert.doesNotMatch(projectMocks, /versionType:\s*'Go'/, 'machine project mocks must use the canonical GO version type')
 assert.doesNotMatch(schema, /'tOS15\.0\.1'[\s\S]*'tOS17\.2'/, 'first-sale tOS options must not remain hard-coded in the field schema')
-assert.match(modal, /optionsOverride=\{isMachineProjectType\(projectType\) \? fieldOptionOverrides\?\.\[field\.key\]/, 'machine tOS fields must consume the configured enum option override')
-assert.match(schema, /\['S', 'A', 'B', 'C', 'D'\]/, 'software project levels must include S through D')
-assert.match(schema, /'不维护'[\s\S]*'升3维5'/, 'dimension upgrade strategies must match the reference document')
+assert.match(modal, /useEnumStore\(state\s*=>\s*state\.rowsByType\)/, 'the project form reads the unified enum row registry')
+assert.match(modal, /findProjectCategoryMapping/, 'the project form resolves IPM classification from configured mapping rows')
+assert.doesNotMatch(modal, /mapIpmProjectClassification/, 'the project form does not call the removed hard-coded IPM mapping')
+assert.match(modal, /projectType\s*===\s*PROJECT_CATEGORY_MACHINE[\s\S]*项目二级分类/, 'only whole-machine projects render PMS secondary classification')
+assert.match(modal, /暂无可用配置，请先在配置中心维护/, 'empty configured option sets provide maintenance guidance')
+assert.match(modal, /buildChipOptions|useChipOptions/, 'chip selection consumes atomic chip mapping rows')
 assert.match(schema, /label:\s*'首发项目芯片'/, 'the tOS launch chip label must match the reference document')
 assert.equal(
   [...machineFields, ...tosFields].filter(field => field.group === 'team').every(field => field.inputType === 'people'),
@@ -195,6 +199,8 @@ assert.match(values, /normalizeTeamMembers/, 'legacy and multi-person team value
 
 assert.doesNotMatch(view, /statusConfig\.tagColor/, 'project status must not be repeated beside the title')
 assert.doesNotMatch(view, /healthConfig\.tagColor/, 'health status must not be repeated beside the title')
+assert.match(view, /\['normal', '正常'\][\s\S]*\['warning', '关注', '预警'\][\s\S]*\['risk', '风险'\]/, 'health presentation recognizes legacy and configured known values')
+assert.match(view, /color:\s*'#94a3b8'/, 'unknown configured health snapshots use a neutral presentation')
 assert.match(view, /afterCore/, 'the target project view must support content immediately after the core card')
 assert.match(view, /visibleGroupKeys/, 'the target project view must pass display-group filtering')
 assert.match(sections, /visibleGroupKeys/, 'project-space sections must support caller-selected groups')
@@ -255,5 +261,10 @@ assert.match(projectSpace, /afterCore=\{isWholeMachine \? renderWholeMachinePlan
 assert.match(projectSpace, /const anchorSections = \[[\s\S]*id: 'section-plan', label: '计划信息'/, 'the target project anchor must use the unified plan-information label')
 assert.match(projectSpace, /\{!isTargetProject && renderProjectPlanInfo\(\)\}/, 'only non-target projects may use the lower plan-information section')
 assert.match(projectSpace, /\{!isTargetProject && \(isSoftware \|\| isTech\) && \(/, 'target machine and tOS projects must not render the standalone configuration section')
+
+const projectTypes = read('src/constants/projectTypes.ts')
+assert.doesNotMatch(projectTypes, /IPM_PROJECT_CLASSIFICATION_MAP|mapIpmProjectClassification/, 'project types do not retain a runtime IPM mapping source')
+assert.match(modal, /该 IPM 项目分类尚未配置映射，请联系管理员维护/, 'an unmapped exact IPM category blocks submit with the approved error')
+assert.match(modal, /const projectSecondaryCategory = normalizedProjectType === PROJECT_CATEGORY_MACHINE[\s\S]{0,260}: ''/, 'non-machine submissions normalize old secondary snapshots to empty')
 
 console.log('Project info matrix refresh verification passed.')

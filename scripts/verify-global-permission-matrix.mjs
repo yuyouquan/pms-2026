@@ -15,6 +15,7 @@ const expectedPerms = [
   'configCenter:planEdit',
   'configCenter:planPublish',
   'configCenter:transferEdit',
+  'configCenter:enumEdit',
   'permissionCenter:manageRoles',
 ]
 
@@ -64,6 +65,20 @@ for (const role of ['管理组', '编辑组', '查看组']) {
 
 for (const label of ['项目路标', '配置中心', '计划编辑', '计划发布', '转维编辑', '权限中心', '对角色进行新增、修改、删除、成员添加']) {
   assertIncludes(constantsSource, label, 'global permission table')
+}
+
+assertIncludes(constantsSource, "module: '配置中心'", 'config center permission module')
+assertIncludes(
+  constantsSource,
+  "{ key: 'configCenter:enumEdit', name: '枚举值新增、修改、删除' }",
+  'enum configuration edit permission',
+)
+
+for (const bypassText of [
+  "if (userRoles.some(role => role.name === '管理组')) return true",
+  "if (isGlobalAdmin(userName)) return true",
+]) {
+  assertIncludes(storeSource, bypassText, 'global administrator bypass')
 }
 
 for (const text of [

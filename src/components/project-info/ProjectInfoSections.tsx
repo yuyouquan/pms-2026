@@ -19,7 +19,7 @@ import {
   normalizeTeamMembers,
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
-import { formatTosEnumValue } from '@/lib/tosEnumOptions'
+import { formatTosSnapshot } from '@/lib/enumConsumers'
 
 interface ProjectInfoSectionsProps {
   project: ProjectInfoProject
@@ -52,7 +52,7 @@ const renderNormalValue = (value: ReturnType<typeof getProjectInfoValue>, inputT
     )
   }
   const text = ['firstSaleTosVersion', 'currentTosVersion'].includes(fieldKey)
-    ? formatTosEnumValue(value) || '-'
+    ? formatTosSnapshot(value) || '-'
     : formatProjectInfoValue(value)
   if (inputType === 'link' && text !== '-') {
     const isUrl = /^https?:\/\//i.test(text)

@@ -13,7 +13,6 @@ import {
 import {
   formatRoadmapTosValue,
   normalizeRoadmapTosReference,
-  normalizeTosVersionName,
   PRODUCT_LINES_BY_BRAND,
 } from '@/lib/roadmapValidation'
 import {
@@ -196,6 +195,11 @@ function isStrictCalendarDate(value: string): boolean {
 export function buildRoadmapFilterFieldDefinitions(
   versions: readonly TosVersionConfig[],
   savedTosVersionValues: readonly string[] = [],
+  configurableOptions: Readonly<{
+    startRam?: readonly { label: string; value: string; disabled?: boolean }[]
+    versionType?: readonly { label: string; value: string; disabled?: boolean }[]
+    developMode?: readonly { label: string; value: string; disabled?: boolean }[]
+  }> = {},
 ): FilterFieldDefinition[] {
   const productLines = [...new Set(Object.values(PRODUCT_LINES_BY_BRAND).flat())]
   const selectableVersions = [...versions]
@@ -229,11 +233,11 @@ export function buildRoadmapFilterFieldDefinitions(
     { key: 'displayName', label: '项目名', kind: 'text' },
     { key: 'productType', label: '产品类型', kind: 'enum', options: ['新品', '老品'].map(option) },
     { key: 'platform', label: '平台', kind: 'text' },
-    { key: 'startRam', label: '起步RAM', kind: 'enum', options: ['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB'].map(option) },
-    { key: 'versionType', label: '版本类型', kind: 'enum', options: ['Full', 'Slim', 'Go'].map(option) },
+    { key: 'startRam', label: '起步RAM', kind: 'enum', options: [...(configurableOptions.startRam ?? [])] },
+    { key: 'versionType', label: '版本类型', kind: 'enum', options: [...(configurableOptions.versionType ?? [])] },
     { key: 'str5Date', label: 'STR5时间', kind: 'date' },
     { key: 'launchDate', label: '上市时间', kind: 'date' },
-    { key: 'developMode', label: '开发模式', kind: 'enum', options: ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'].map(option) },
+    { key: 'developMode', label: '开发模式', kind: 'enum', options: [...(configurableOptions.developMode ?? [])] },
     { key: 'remark', label: '备注', kind: 'text' },
   ]
 }
@@ -246,8 +250,10 @@ function normalizeEnumFilterValue(
 ): string | null {
   if (field === 'firstSaleTosVersionId') {
     const normalized = normalizeRoadmapTosReference(rawValue, versions)
-    const parsed = normalizeTosVersionName(normalized)
-    return parsed ? `${parsed.major}.${parsed.minor}` : null
+    return normalized || null
+  }
+  if (field === 'startRam' || field === 'versionType' || field === 'developMode') {
+    return rawValue.trim() || null
   }
   return definition.options?.find(candidate => candidate.value === rawValue)?.value ?? null
 }

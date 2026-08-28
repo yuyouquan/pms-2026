@@ -7,16 +7,17 @@ import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-cont
 const root = projectRoot(import.meta.url)
 const rules = loadTypeScriptModule(root, 'src/lib/technicalProjectRules.ts')
 const constants = loadTypeScriptModule(root, 'src/constants/technicalProject.ts')
+const enumConsumers = loadTypeScriptModule(root, 'src/lib/enumConsumers.ts')
+const enumValues = loadTypeScriptModule(root, 'src/lib/enumValues.ts')
 for (const name of ['resolveTechnicalProjectFields', 'validateTechnicalProject', 'synchronizeTechnicalSubprojects', 'isTechnicalSubprojectConfigured', 'canCreateSubprojectPlanRevision', 'switchDeliverableMode', 'normalizeTechnicalProjectValues', 'synchronizeTechnicalProjectRecord', 'calculateTechnicalProjectStage', 'resolveLatestPublishedTechnicalProjectStage', 'sanitizeTechnicalDeliverableUrl', 'normalizeTechnicalCustomRoles', 'resolveTechnicalChildSelection']) assert.equal(typeof rules[name], 'function', `missing ${name}`)
-assert.deepEqual(constants.SUBDOMAINS_BY_DOMAIN, {
-  基础架构TMG: ['无'], 性能TMG: ['无'], 'DFX TMG': ['无'], 'UX TMG': ['无'],
-  系统应用: ['AIOS', '应用', '图形', '内核', '多媒体'],
-  底软通信: ['器件', '蜂窝', '短距', '功耗'],
-  集成维护: ['三方体验', 'GMS'], 其他: ['安全', 'AIOT'],
-}, 'approved TMG/subdomain mapping must remain exact')
+assert.equal(constants.SUBDOMAINS_BY_DOMAIN, undefined, 'technical constants do not retain a second TMG mapping source')
+assert.equal(constants.TECHNICAL_DOMAINS, undefined, 'technical domains come from live enum rows')
+assert.equal(constants.NO_SUBDOMAIN_DOMAINS, undefined, 'sole-无 behavior comes from live rows')
+const configuredTmgRows = enumValues.createInitialEnumRows()
+assert.deepEqual(enumConsumers.getTmgSubdomainState(configuredTmgRows, '系统应用').options.map(option => option.value), ['AIOS', '应用', '图形', '内核', '多媒体'], '系统应用 exposes the exact five seeded children')
 assert.deepEqual(rules.resolveTechnicalProjectFields({ ipm: { projectName: 'AI项目', category: '系统', secondaryCategory: '应用', technicalTrack: 'AIOS' }, tmg: '系统应用', technicalLead: '李四' }, { tmgSubdomains: { 系统应用: ['AIOS', '应用', '图形', '内核', '多媒体'] } }), { projectName: 'AI项目', category: '系统', secondaryCategory: '应用', technicalTrack: 'AIOS', tmg: '系统应用', subdomains: ['AIOS', '应用', '图形', '内核', '多媒体'], technicalLead: '李四', responsiblePersons: ['李四'] }, 'IPM copies only project fields; lead derives persons and system application maps subdomains')
 for (const tmg of ['基础架构TMG', '性能TMG', 'DFX TMG', 'UX TMG']) {
-  const resolved = rules.resolveTechnicalProjectFields({ tmg, technicalLead: '李四' }, { tmgSubdomains: {} })
+  const resolved = rules.resolveTechnicalProjectFields({ tmg, technicalLead: '李四' }, { tmgSubdomains: { [tmg]: ['无'] } })
   assert.deepEqual(resolved.subdomains, ['无'], `${tmg} has the explicit no-subdomain value`)
   assert.equal(resolved.subdomainDisabled, true, `${tmg} disables subdomain editing`)
 }
@@ -24,7 +25,7 @@ assert.throws(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead:
 assert.doesNotThrow(() => rules.validateTechnicalProject({ type: '技术项目前置工作', technicalLead: '李四', preProjectId: '', tmg: '系统应用', subdomain: 'AIOS', projectYear: '2026' }), 'pre-project remains optional for every technical project')
 assert.doesNotThrow(() => rules.validateTechnicalProject({ type: '整机产品项目', technicalLead: '李四', preProjectId: '' }), 'other project types do not require preProjectId')
 assert.throws(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '李四', tmg: '', subdomain: '' }), /tmg/, 'TMG is required')
-assert.throws(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '李四', tmg: '系统应用', subdomain: '安全' }), /subdomain/, 'subdomain must belong to TMG')
+assert.doesNotThrow(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '李四', tmg: '配置领域', subdomain: '配置子领域', projectYear: '2026' }), 'configured string snapshots are not rejected by a hard-coded closed union')
 assert.throws(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '李四', tmg: '系统应用', subdomain: 'AIOS', projectYear: '26' }), /projectYear/, 'year is four digits')
 assert.doesNotThrow(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '李四', tmg: '系统应用', subdomain: 'AIOS', projectYear: '2026', technicalTeam: { technicalLead: '李四', technicalProjectManager: '', testRepresentative: '', qualityRepresentative: '', productRepresentative: '', standardizationRepresentative: '' } }), 'five non-lead roles stay optional')
 assert.throws(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '李四', tmg: '系统应用', subdomain: 'AIOS', projectYear: '2026', deliverables: { kpi: { kind: 'url', url: 'https://a.example', file: { name: 'a.pdf', size: 1, mimeType: 'application/pdf' } } } }), /deliverable/, 'a deliverable cannot contain URL and file together')
@@ -172,7 +173,7 @@ assert.deepEqual(migrated.subprojects.find(item => item.id === 'legacy')?.config
 localStorage.setItem(technicalStoreModule.TECHNICAL_PROJECT_STORAGE_KEY, JSON.stringify({ state: { subprojects: [{ id: 'rehydrated', parentProjectId: 'tech-r', name: 'Recovered', active: true, ipmOrder: null, configuration: { coreValue: 'invalid', developmentMode: '自研', firstTosVersion: 16, firstMachineProjectId: null } }] }, version: 1 }))
 await liveStore.persist.rehydrate()
 assert.equal(liveStore.getState().subprojects.length, 12, 'persist rehydrate applies skipped-version seed expansion')
-assert.deepEqual(liveStore.getState().subprojects.find(item => item.id === 'rehydrated'), { id: 'rehydrated', parentProjectId: 'tech-r', name: 'Recovered', active: true, ipmOrder: 1, configuration: { coreValue: '', developmentMode: '自研', firstTosVersion: '', firstMachineProjectId: '' } }, 'persist rehydrate sanitizes malformed fields without replacing the stable ID')
+assert.deepEqual(liveStore.getState().subprojects.find(item => item.id === 'rehydrated'), { id: 'rehydrated', parentProjectId: 'tech-r', name: 'Recovered', active: true, ipmOrder: 1, configuration: { coreValue: 'invalid', developmentMode: '自研', firstTosVersion: '', firstMachineProjectId: '' } }, 'persist rehydrate preserves arbitrary string snapshots while sanitizing malformed non-string fields')
 const modal = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 assert.match(modal, /TechnicalProjectCreateFields/, 'project modal renders focused technical fields')
 assert.doesNotMatch(modal, /projectType === ['"]技术项目['"][\s\S]{0,200}name="responsiblePersons"/, 'technical project must not render the generic owner input')
@@ -199,7 +200,7 @@ assert.match(sourcePool, /subprojects:\s*\[/, 'IPM fixture includes derived chil
 const configModal = readSource(root, 'src/components/technical-project/SubprojectConfigModal.tsx')
 assert.match(configModal, /核心价值/, 'configuration modal renders core value')
 assert.match(configModal, /开发模式/, 'configuration modal renders development mode')
-assert.match(configModal, /valuesByType\[['"]tos-2-part['"]\]/, 'first tOS choices come from current two-part enum values')
+assert.match(configModal, /useSingleEnumOptions\(['"]first-sale-tos['"]/, 'first tOS choices come from the shared first-sale rows')
 assert.match(configModal, /showSearch/, 'first machine project is searchable')
 assert.doesNotMatch(configModal, /删除/, 'subproject configuration has no delete action')
 assert.match(configModal, /useOverlayInteraction/, 'subproject modal reuses the shared focus and submission guard')
@@ -465,7 +466,22 @@ assert.ok(configHandlerReachableNodes.some(node => node.getText(technicalInforma
 const configModalMount = liveJsxMounts(technicalInformationReachableNodes, technicalInformationSourceFile, 'SubprojectConfigModal')[0]
 assert.ok(staticJsxAttributeText(jsxAttribute(configModalMount, 'open')).includes('configuringChild'), 'mounted configuration modal consumes the state opened by its button')
 const createFields = readSource(root, 'src/components/technical-project/TechnicalProjectCreateFields.tsx')
-assert.match(createFields, /Input\.TextArea[\s\S]{0,220}onPressEnter=\{event\s*=>\s*event\.stopPropagation\(\)\}/, 'Enter inside project-value textarea cannot bubble into modal submit')
+assert.match(createFields, /useSingleEnumOptions\(['"]core-value['"]/, 'project value consumes the shared core-value configuration')
+assert.match(createFields, /useTmgOptions|getTmgSubdomainState/, 'technical create/edit fields consume live TMG rows')
+assert.match(createFields, /暂无可用配置，请先在配置中心维护/, 'empty TMG child config shows maintenance guidance')
+assert.match(createFields, /if \(!current && autoValue\) form\.setFieldValue\(['"]subdomain['"], autoValue\)/, 'initial hydration auto-fills sole-无 only when the saved subdomain is empty')
+assert.match(createFields, /handleDomainChange[\s\S]{0,500}nextState\.autoValue[\s\S]{0,300}!isLive[\s\S]{0,120}setFieldValue\(['"]subdomain['"], undefined\)/, 'explicit domain changes auto-fill sole-无 or clear an invalid prior child')
+assert.doesNotMatch(createFields, /SUBDOMAINS_BY_DOMAIN|TECHNICAL_DOMAINS|NO_SUBDOMAIN_DOMAINS/, 'technical create/edit fields have no hard-coded TMG source')
+const technicalBasicInfoSource = readSource(root, 'src/components/technical-project/TechnicalProjectBasicInfo.tsx')
+const subprojectConfigSource = readSource(root, 'src/components/technical-project/SubprojectConfigModal.tsx')
+for (const source of [technicalBasicInfoSource, subprojectConfigSource]) {
+  assert.match(source, /first-sale-tos/, 'technical child first tOS consumes the shared first-sale source')
+  assert.match(source, /technical-development-mode/, 'technical child development mode consumes live configuration')
+  assert.match(source, /core-value/, 'technical child core value consumes live configuration')
+  assert.doesNotMatch(source, /TECHNICAL_CORE_VALUES|TECHNICAL_DEVELOPMENT_MODES/, 'technical child UI has no hard-coded option arrays')
+}
+const technicalStoreSource = readSource(root, 'src/stores/technicalProject.ts')
+assert.doesNotMatch(technicalStoreSource, /TECHNICAL_CORE_VALUES|TECHNICAL_DEVELOPMENT_MODES/, 'technical store validates string shape rather than closed option membership')
 const technicalPlan = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
 assert.doesNotMatch(technicalPlan, /显示已停用|showInactive|Switch/, 'technical plan scope tabs also omit inactive subprojects')
 const planViewModeSwitcher = readSource(root, 'src/components/plans/PlanViewModeSwitcher.tsx')

@@ -1,17 +1,14 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Form, Modal, Select, Space, Tag, Typography, message } from 'antd'
+import { Alert, Button, Form, Modal, Select, Skeleton, Space, Tag, Typography, message } from 'antd'
 import { isMachineProjectType } from '@/constants/projectTypes'
+import { useEnumHydration, useSingleEnumOptions } from '@/hooks/useEnumOptions'
 import { isTechnicalSubprojectConfigured } from '@/lib/technicalProjectRules'
-import { useEnumStore } from '@/stores/enums'
 import { useHasPermission } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
-import {
-  TECHNICAL_CORE_VALUES,
-  TECHNICAL_DEVELOPMENT_MODES,
-  useTechnicalProjectStore,
-} from '@/stores/technicalProject'
+import { useEnumStore } from '@/stores/enums'
+import { useTechnicalProjectStore } from '@/stores/technicalProject'
 import type { TechnicalSubproject, TechnicalSubprojectConfiguration } from '@/types/technicalProject'
 import { useOverlayInteraction } from '@/hooks/useOverlayInteraction'
 
@@ -37,9 +34,6 @@ export default function SubprojectConfigModal({
   const [form] = Form.useForm<TechnicalSubprojectConfiguration>()
   const loginUserFromProject = useProjectStore(state => state.currentLoginUser)
   const projects = useProjectStore(state => state.projects)
-  const valuesByType = useEnumStore(state => state.valuesByType)
-  const hasHydrated = useEnumStore(state => state.hasHydrated)
-  const hydrateEnumStore = useEnumStore(state => state.hydrateEnumStore)
   const updateConfiguration = useTechnicalProjectStore(state => state.updateConfiguration)
   const user = currentLoginUser || loginUserFromProject
   const canDo = useHasPermission(user, subproject?.parentProjectId)
@@ -47,10 +41,7 @@ export default function SubprojectConfigModal({
   const [submitting, setSubmitting] = useState(false)
   const submissionSequenceRef = useRef(0)
   const { captureTrigger, restoreTriggerFocus, tryBeginSubmit, releaseSubmission } = useOverlayInteraction()
-
-  useEffect(() => {
-    if (open && !hasHydrated) void hydrateEnumStore()
-  }, [hasHydrated, hydrateEnumStore, open])
+  const { hasHydrated, hydrationError, isReady: enumReady, retryHydration } = useEnumHydration(open)
 
   useEffect(() => {
     if (!open || !subproject) return
@@ -58,16 +49,12 @@ export default function SubprojectConfigModal({
     form.setFieldsValue(subproject.configuration)
   }, [captureTrigger, form, open, returnFocusTo, subproject])
 
-  const tosOptions = useMemo(() => {
-    const current = valuesByType['tos-2-part']
-    const selected = subproject?.configuration?.firstTosVersion || ''
-    return [
-      ...current.map(value => ({ value, label: value })),
-      ...selected && !current.includes(selected)
-        ? [{ value: selected, label: `${selected}（历史值）`, disabled: true }]
-        : [],
-    ]
-  }, [subproject?.configuration?.firstTosVersion, valuesByType])
+  const coreHistory = useMemo(() => subproject?.configuration.coreValue ? [subproject.configuration.coreValue] : [], [subproject?.configuration.coreValue])
+  const developmentHistory = useMemo(() => subproject?.configuration.developmentMode ? [subproject.configuration.developmentMode] : [], [subproject?.configuration.developmentMode])
+  const tosHistory = useMemo(() => subproject?.configuration.firstTosVersion ? [subproject.configuration.firstTosVersion] : [], [subproject?.configuration.firstTosVersion])
+  const coreOptions = useSingleEnumOptions('core-value', coreHistory, open)
+  const developmentOptions = useSingleEnumOptions('technical-development-mode', developmentHistory, open)
+  const tosOptions = useSingleEnumOptions('first-sale-tos', tosHistory, open)
 
   const machineOptions = useMemo(() => projects
     .filter(project => isMachineProjectType(project.type))
@@ -83,6 +70,11 @@ export default function SubprojectConfigModal({
   }
 
   const save = async () => {
+    const enumState = useEnumStore.getState()
+    if (!enumState.hasHydrated || enumState.hydrationError) {
+      message.error(enumState.hydrationError || '枚举配置正在加载，请稍后重试')
+      return
+    }
     if (!subproject || !canEdit) return
     if (!tryBeginSubmit()) return
     const submissionSequence = ++submissionSequenceRef.current
@@ -138,35 +130,46 @@ export default function SubprojectConfigModal({
       )}
       okText="确认"
       cancelText="取消"
-      okButtonProps={{ disabled: !canEdit || submitting }}
+      okButtonProps={{ disabled: !enumReady || !canEdit || submitting }}
       confirmLoading={submitting}
       onOk={() => void save()}
       onCancel={closeWithoutSaving}
       destroyOnHidden
       width={560}
     >
+      {!hasHydrated ? (
+        <Skeleton active paragraph={{ rows: 4 }} />
+      ) : hydrationError ? (
+        <Alert
+          type="error"
+          showIcon
+          title="枚举配置加载失败"
+          description={<span>{hydrationError} 请重试加载，成功后才能继续填写和保存。</span>}
+          action={<Button size="small" onClick={() => void retryHydration()}>重试</Button>}
+        />
+      ) : (<>
       <Text type="secondary">子项目由 IPM 同步，此处仅维护 PMS 内的交付配置。</Text>
       <Form form={form} layout="vertical" requiredMark="optional" style={{ marginTop: 20 }}>
         <Form.Item name="coreValue" label="核心价值" rules={[{ required: true, message: '请选择核心价值' }]}>
           <Select
-            placeholder="请选择"
-            options={TECHNICAL_CORE_VALUES.map(value => ({ value, label: value }))}
+            placeholder={coreOptions.length ? '请选择' : '暂无可用配置，请先在配置中心维护'}
+            options={coreOptions}
             disabled={!canEdit}
           />
         </Form.Item>
         <Form.Item name="developmentMode" label="开发模式" rules={[{ required: true, message: '请选择开发模式' }]}>
           <Select
-            placeholder="请选择"
-            options={TECHNICAL_DEVELOPMENT_MODES.map(value => ({ value, label: value }))}
+            placeholder={developmentOptions.length ? '请选择' : '暂无可用配置，请先在配置中心维护'}
+            options={developmentOptions}
             disabled={!canEdit}
           />
         </Form.Item>
         <Form.Item name="firstTosVersion" label="首导tOS">
           <Select
             allowClear
-            placeholder="请选择两位 tOS 版本"
+            placeholder={tosOptions.length ? '请选择首导 tOS 版本' : '暂无可用配置，请先在配置中心维护'}
             options={tosOptions}
-            disabled={!canEdit || !hasHydrated}
+            disabled={!canEdit}
           />
         </Form.Item>
         <Form.Item name="firstMachineProjectId" label="首导整机产品">
@@ -183,6 +186,7 @@ export default function SubprojectConfigModal({
       {!canEdit && subproject?.active && (
         <Text type="secondary">当前账号无基础信息编辑权限。</Text>
       )}
+      </>)}
     </Modal>
   )
 }

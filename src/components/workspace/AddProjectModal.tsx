@@ -19,9 +19,10 @@ import { deriveProjectResponsiblePersons, deriveProjectTosVersion } from '@/lib/
 import { resolveMachineTosUpdate } from '@/lib/machineTosVersions'
 import { normalizeTargetMarkets } from '@/lib/marketRules'
 import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
-import { normalizeTosEnumReference, resolveCurrentTosEnumValue } from '@/lib/tosEnumOptions'
 import { useActivateProject } from '@/hooks/useActivateProject'
-import { useTosEnumOptions } from '@/hooks/useTosEnumOptions'
+import { useEnumHydration } from '@/hooks/useEnumOptions'
+import { getSingleEnumValues, normalizeTosSnapshot, resolveCurrentTosSnapshot } from '@/lib/enumConsumers'
+import { useEnumStore } from '@/stores/enums'
 import { synchronizeTechnicalProjectRecord } from '@/lib/technicalProjectRules'
 
 interface AddProjectModalProps {
@@ -39,7 +40,9 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
   const { enterProjectSpace, setProjectSpaceModule } = useUiStore()
   const activateProject = useActivateProject()
   const initProjectPermissions = usePermissionStore(state => state.initProjectPermissions)
-  const { currentValues: machineTosValues, options: machineTosOptions } = useTosEnumOptions('tos-3-part')
+  const rowsByType = useEnumStore(state => state.rowsByType)
+  useEnumHydration(open)
+  const machineTosValues = useMemo(() => getSingleEnumValues(rowsByType, 'first-sale-tos'), [rowsByType])
 
   const candidatePool = useMemo<ExternalProjectEntry[]>(() => {
     const existingBids = new Set(projects
@@ -49,6 +52,11 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
   }, [projects])
 
   const handleSubmit = async (payload: ProjectInfoSubmitPayload) => {
+    const enumState = useEnumStore.getState()
+    if (!enumState.hasHydrated || enumState.hydrationError) {
+      message.error(enumState.hydrationError || '枚举配置正在加载，请稍后重试')
+      return false
+    }
     const entry = payload.sourceEntry
     if (!entry) {
       message.error('未找到外部项目条目')
@@ -74,13 +82,12 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
     const selectedMachineTosVersion = machineProductType === '老品'
       ? selectedCurrentTosVersion
       : selectedFirstSaleTosVersion
-    const selectedMachineTosVersionId = resolveCurrentTosEnumValue(
-      'tos-3-part',
+    const selectedMachineTosVersionId = resolveCurrentTosSnapshot(
       selectedMachineTosVersion,
       machineTosValues,
     )
     const firstSaleTosVersionId = machineProductType === '老品'
-      ? normalizeTosEnumReference(selectedFirstSaleTosVersion)
+      ? normalizeTosSnapshot(selectedFirstSaleTosVersion)
       : selectedMachineTosVersionId
     const currentTosVersionId = machineProductType === '老品'
       ? selectedMachineTosVersionId
@@ -93,7 +100,6 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
     const rawVersionType = typeof payload.infoValues.versionType === 'string'
       ? payload.infoValues.versionType
       : extra.versionType ?? ''
-    const normalizedVersionType = rawVersionType.toUpperCase() === 'GO' ? 'Go' : rawVersionType
     const developmentMode = typeof payload.infoValues.developmentMode === 'string'
       ? payload.infoValues.developmentMode
       : extra.developMode ?? ''
@@ -126,7 +132,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       brand: extra.brand ?? undefined,
       planStartDate: extra.planStartDate ?? '',
       planEndDate: extra.planEndDate ?? '',
-      healthStatus: payload.healthStatus as 'normal' | 'warning' | 'risk',
+      healthStatus: payload.healthStatus,
       ...(isMachineProjectType(projectType) ? {
         firstSaleTosVersionId,
         firstSaleTosVersion: firstSaleTosVersionId,
@@ -136,7 +142,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
         platform: extra.platform ?? extra.chipPlatform ?? '',
         productType: machineProductType,
         startRam: extra.startRam ?? (typeof payload.infoValues.startingRam === 'string' ? payload.infoValues.startingRam : ''),
-        versionType: normalizedVersionType,
+        versionType: rawVersionType,
         str5Date: extra.str5Date ?? '',
         launchDate: extra.launchDate ?? (typeof payload.infoValues.launchDate === 'string' ? payload.infoValues.launchDate : ''),
         developMode: developmentMode,
@@ -174,7 +180,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
             ? machineProductType === '新品'
               ? '已存在项目名完全相同的新品项目，无法重复创建'
               : '存在多个项目名完全相同的新品项目，无法创建老品项目'
-            : 'tOS 版本必须是严格的三段数字，例如 14.0.0'
+            : 'tOS 版本不能为空，请从当前配置中选择有效值'
         message.error(reasonMessage)
         return false
       }
@@ -212,12 +218,6 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
       onCancel={onCancel}
       onSubmit={handleSubmit}
       onAfterCreate={handleAfterCreate}
-      fieldOptionOverrides={{
-        firstSaleTosVersion: machineTosOptions,
-        currentTosVersion: machineTosOptions,
-        versionType: ['Full', 'Slim', 'Go'],
-        developmentMode: ['自研', 'ODC', 'ITD-ODC', 'ODM', '纯外研'],
-      }}
     />
   )
 }

@@ -6,9 +6,10 @@ export type RoadmapViewMode = 'table' | 'evolution'
 export type RoadmapProductType = '新品' | '老品'
 export type RoadmapBrand = 'TECNO' | 'Infinix' | 'itel' | '待定' | '其他品牌'
 export type RoadmapAndroidVersion = 'Android 16' | 'Android 17' | 'Android 18'
-export type RoadmapRam = '2GB' | '3GB' | '4GB' | '6GB' | '8GB' | '12GB' | '16GB'
-export type RoadmapVersionType = 'Full' | 'Slim' | 'Go'
-export type RoadmapDevelopMode = '自研' | 'ODC' | 'ITD-ODC' | 'ODM' | '纯外研'
+export type RoadmapRam = string
+/** Project records keep configured and retired values as string snapshots. */
+export type RoadmapVersionType = string
+export type RoadmapDevelopMode = string
 export type RoadmapSortDirection = 'ascend' | 'descend' | null
 export type RoadmapChangeAction = 'create' | 'update' | 'delete'
 export type RoadmapFilterOperator =
@@ -67,8 +68,8 @@ export type PlannedRoadmapProjectInput = Omit<RoadmapProjectFields, 'displayName
 export interface TosVersionConfig {
   id: string
   name: string
-  major: number
-  minor: number
+  major: number | null
+  minor: number | null
   periodStartDate: string
   periodEndDate: string
   targets: string[]
