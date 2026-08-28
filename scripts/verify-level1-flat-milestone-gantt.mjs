@@ -808,6 +808,25 @@ assert.deepEqual(ganttRules.applyPlanTaskDatePatch(invalidDateWithEmptyOtherSide
 assert.deepEqual(ganttRules.applyPlanTaskDatePatch(invalidDateWithEmptyOtherSide, {
   taskId: 'invalid-empty', patch: { actualEndDate: '2026-02-30' },
 }), invalidDateWithEmptyOtherSide, 'calendar-impossible ISO dates are rejected even when their other date is empty')
+const emptyBusinessActualSource = [{
+  id: 'empty-business-actual', order: 1, taskName: 'MR4', nodeKind: 'business-period',
+  actualStartDate: '', actualEndDate: '', actualDays: null,
+}]
+const partialBusinessActualStart = ganttRules.applyPlanTaskDatePatchResult(emptyBusinessActualSource, {
+  taskId: 'empty-business-actual', patch: { actualStartDate: '2028-01-04' },
+})
+assert.equal(partialBusinessActualStart.ok, true, 'a new business period accepts its first actual boundary while the other boundary is empty')
+assert.deepEqual(partialBusinessActualStart.ok && partialBusinessActualStart.tasks[0], {
+  ...emptyBusinessActualSource[0], actualStartDate: '2028-01-04', actualDays: null,
+}, 'the first actual boundary remains persisted with an empty duration')
+const completedBusinessActual = partialBusinessActualStart.ok
+  ? ganttRules.applyPlanTaskDatePatchResult(partialBusinessActualStart.tasks, {
+      taskId: 'empty-business-actual', patch: { actualEndDate: '2028-01-08' },
+    })
+  : partialBusinessActualStart
+assert.deepEqual(completedBusinessActual.ok && completedBusinessActual.tasks[0], {
+  ...emptyBusinessActualSource[0], actualStartDate: '2028-01-04', actualEndDate: '2028-01-08', actualDays: 4,
+}, 'the second actual boundary completes the business interval and derives exclusive duration')
 const datePatchSnapshot = JSON.parse(JSON.stringify(datePatchSource))
 assert.deepEqual(ganttRules.applyPlanTaskDatePatch(datePatchSource, {
   taskId: 'patch-1', patch: { actualEndDate: '' },

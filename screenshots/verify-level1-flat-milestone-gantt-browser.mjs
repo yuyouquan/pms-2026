@@ -1763,6 +1763,10 @@ try {
     const table = '.pms-level1-tree-table'
     await enterProject(page, 'X6877-D8400_H991')
     await selectView(page, '竖版表格')
+    // The persisted demo draft predates project-linked MR mock nodes. Recreate
+    // it from the latest published snapshot so atomic published/draft actual
+    // synchronization exercises two complete, compatible targets.
+    await recreateFormalRevision(page)
     await chooseVersion(page, 'V3 (已发布)')
     const initialSummary = await readTreeSummary(page, table)
     await clickTabContaining(page, '三级计划')
@@ -1886,6 +1890,11 @@ try {
     const deletedTemplateText = await textOf(page, table)
     assert.ok(!deletedTemplateText.includes('概念启动') && !deletedTemplateText.includes('开发验证阶段') && !deletedTemplateText.includes('STR5'), 'super-admin fixed node/stage deletion survives same-context new-page persistence')
     console.log('browser machine super-admin fixed node/stage delete contract passed')
+    // The actual-write transaction intentionally requires every paired draft
+    // target to exist. Finish the destructive-draft scenario before testing
+    // published-to-draft actual synchronization against a fresh complete draft.
+    await recreateFormalRevision(page)
+    await page.waitForFunction(selector => document.querySelector(selector)?.textContent?.includes('概念启动'), { timeout: TIMEOUT }, table)
     await chooseVersion(page, 'V2 (已发布)')
     assert.equal(await page.$('button[aria-label="添加业务节点 上市阶段"]'), null, 'published history has no MR command')
     await selectView(page, '甘特图')
@@ -2015,7 +2024,9 @@ try {
     // the strict cross-stage schedule remains satisfiable throughout Gantt edits.
     for (const [field, value] of [
       ['planStartDate', '2027-06-01'], ['planEndDate', '2027-06-05'],
-      ['actualStartDate', '2027-06-01'], ['actualEndDate', '2027-06-05'],
+      // Actual writes are immediately validated, so extend the existing end
+      // boundary before moving its start boundary forward.
+      ['actualEndDate', '2027-06-05'], ['actualStartDate', '2027-06-01'],
     ]) await editTreeDate(page, table, '16.1.0.115', field, value)
     assert.equal(await page.$('button[aria-label="添加tOS版本"]'), null, 'tOS toolbar no longer exposes the legacy business insertion action')
     await openBusinessInsertion(page, 'tos', '上市迭代阶段')
@@ -2124,8 +2135,8 @@ try {
     assert.equal(await treeDate(page, table, tosMaintenanceName, 'planEndDate'), resizedBusinessEnd, 'tOS maintenance business resize survives same-context new-page persistence')
     console.log(`browser tOS ${tosBusinessName} persisted through 2027-05-05; ${tosMaintenanceName} persisted through ${resizedBusinessEnd}`)
 
-    await editTreeDate(page, table, tosBusinessName, 'actualStartDate', '2027-05-10')
     await editTreeDate(page, table, tosBusinessName, 'actualEndDate', '2027-05-20')
+    await editTreeDate(page, table, tosBusinessName, 'actualStartDate', '2027-05-10')
     assert.equal(await treeActualDays(page, table, tosBusinessName), '10天', 'draft business actual duration is derived as end minus start before publish')
     const publishedVersionNo = (await page.$eval('[aria-label="计划版本"]', control => control.closest('.ant-select')?.textContent || '')).match(/V\d+(?:\.\d+)?/)?.[0]
     assert.ok(publishedVersionNo, 'tOS draft exposes a version number before publish')
@@ -2142,12 +2153,12 @@ try {
     assert.ok(pairedDraftPlanBeforeActualSync.start && pairedDraftPlanBeforeActualSync.end, 'paired tOS draft retains the custom business node planned range')
     assert.ok((await textOf(page, table)).includes(tosBusinessName), 'paired tOS draft retains the custom business node before actual-field synchronization')
     assert.ok((await textOf(page, table)).includes(tosMaintenanceName), 'paired tOS draft retains the maintenance custom business node before actual-field synchronization')
-    await editTreeDate(page, table, tosBusinessName, 'actualEndDate', '2027-06-01')
+    await editTreeDate(page, table, tosBusinessName, 'actualEndDate', '2027-05-30')
     await chooseVersion(page, publishedVersionNo)
     await editPublishedTreeDate(page, table, tosBusinessName, 'actualStartDate', '2027-05-11')
     await chooseVersion(page, pairedDraftVersionNo)
     assert.equal(await treeDate(page, table, tosBusinessName, 'actualStartDate'), '2027-05-11', 'latest-published actual-start syncs only that field into paired tOS draft')
-    assert.equal(await treeDate(page, table, tosBusinessName, 'actualEndDate'), '2027-06-01', 'actual-start sync preserves the paired draft actual completion')
+    assert.equal(await treeDate(page, table, tosBusinessName, 'actualEndDate'), '2027-05-30', 'actual-start sync preserves the paired draft actual completion')
     await editTreeDate(page, table, tosBusinessName, 'actualStartDate', '2027-05-15')
     await chooseVersion(page, publishedVersionNo)
     await editPublishedTreeDate(page, table, tosBusinessName, 'actualEndDate', '2027-05-22')

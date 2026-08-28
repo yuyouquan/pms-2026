@@ -303,8 +303,12 @@ const evaluatePlanTaskDatePatch = <Task extends Level1PlanTask>(
   const actualChanged = hasOwnDateKey(input.patch, 'actualStartDate') || hasOwnDateKey(input.patch, 'actualEndDate')
   const estimatedDays = getPatchedDuration(patched.planStartDate || '', patched.planEndDate || '', target.estimatedDays)
   const actualDays = getPatchedDuration(patched.actualStartDate || '', patched.actualEndDate || '', target.actualDays)
-  if (planChanged && estimatedDays === null) return { ok: false, message: '日期格式或范围无效，未保存修改', preserveIdentity: false }
-  if (actualChanged && actualDays === null) return { ok: false, message: '日期格式或范围无效，未保存修改', preserveIdentity: false }
+  if (planChanged && patched.planStartDate && patched.planEndDate && estimatedDays === null) {
+    return { ok: false, message: '日期格式或范围无效，未保存修改', preserveIdentity: false }
+  }
+  if (actualChanged && patched.actualStartDate && patched.actualEndDate && actualDays === null) {
+    return { ok: false, message: '日期格式或范围无效，未保存修改', preserveIdentity: false }
+  }
   if (planChanged) patched.estimatedDays = estimatedDays
   if (actualChanged) patched.actualDays = actualDays
 
