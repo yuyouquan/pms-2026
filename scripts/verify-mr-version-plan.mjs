@@ -270,7 +270,7 @@ const tosLevel1Tasks = [
   { id: 'maintenance-id', stableId: 'maintenance-stable', parentId: null, taskName: ' 维护阶段 ', order: 2 },
   { id: '上市-id', stableId: '上市-stable', parentId: null, taskName: ' 上市迭代阶段 ', order: 1 },
   { id: 'child-115', parentId: '上市-stable', taskName: ' 16.3.0.115 ', order: 2, planStartDate: new Date('2026-01-02T00:00:00.000Z'), planEndDate: '2026-01-03' },
-  { id: 'child-110', parentId: '上市-id', taskName: '16.3.0.110', order: 1, planStartDate: '2026-01-01', planEndDate: '2026-01-02' },
+  { id: 'child-110', parentId: '上市-id', taskName: '16.3.0.110', order: 1, planStartDate: '', planEndDate: '2026-01-02' },
   { id: 'child-120', parentId: 'maintenance-id', taskName: '16.3.0.120', order: 1, planStartDate: 'invalid', planEndDate: '2026-01-04' },
   { id: 'child-duplicate', parentId: 'maintenance-stable', taskName: '16.3.0.115', order: 2, planStartDate: '2026-01-05', planEndDate: '2026-01-06' },
   { id: 'child-blank', parentId: 'maintenance-id', taskName: '   ', order: 3, planStartDate: '2026-01-06', planEndDate: '2026-01-07' },
@@ -293,6 +293,7 @@ assert.deepEqual(candidates.map(item => [item.value, item.disabled]), [
   ['16.3.0.120', true],
 ])
 assert.equal(candidates[0].reason, '该tOS版本号已添加')
+assert.equal(candidates[0].planStartDate, '')
 assert.equal(candidates[1].planStartDate, '2026-01-02')
 assert.equal(candidates[2].reason, '请先完善一级计划中的计划开始时间和计划完成时间')
 assert.deepEqual(tosLevel1Tasks, candidatesBefore)
