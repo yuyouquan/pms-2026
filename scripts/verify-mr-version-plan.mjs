@@ -10,6 +10,7 @@ const aggregationRules = loadTypeScriptModule(root, 'src/lib/mrAggregationRules.
 const dateRules = loadTypeScriptModule(root, 'src/lib/mrDateRules.ts')
 const adapter = loadTypeScriptModule(root, 'src/lib/mrPlanSourceAdapters.ts')
 const templateCompare = loadTypeScriptModule(root, 'src/lib/mrTemplateCompare.ts')
+const templateConfigPermissions = loadTypeScriptModule(root, 'src/lib/mrTemplateConfigPermissions.ts')
 const configSource = readSource(root, 'src/containers/ConfigContainer.tsx')
 const mrTemplateTableSource = readSource(root, 'src/components/plans/MrTemplateTable.tsx')
 const mrTemplateCompareSource = readSource(root, 'src/lib/mrTemplateCompare.ts')
@@ -21,7 +22,12 @@ assert.match(configSource, /<MrTemplateTable/)
 assert.doesNotMatch(configSource, /<Level3TemplateTable/)
 assert.match(configSource, /rehydrateMrVersionPlanStore\(\)/)
 assert.match(configSource, /useMrVersionPlanStore/)
-assert.match(configSource, /isGlobalAdmin\(currentLoginUser\)/)
+assert.doesNotMatch(configSource, /isGlobalAdmin\(currentLoginUser\)/)
+assert.match(configSource, /useHasGlobalPermission\(currentLoginUser\)/)
+assert.match(configSource, /canEditMrTemplate[\s\S]*configCenter:planEdit/)
+assert.match(configSource, /canPublishMrTemplate[\s\S]*configCenter:planPublish/)
+assert.match(configSource, /canEditMrTemplate\s*&&\s*!draft/)
+assert.match(configSource, /canPublishMrTemplate[\s\S]*publishRevision/)
 assert.match(configSource, /validateMrTemplateForPublish/)
 assert.match(configSource, /errors\.map\(/)
 assert.match(configSource, /templateHistory/)
@@ -38,10 +44,11 @@ assert.match(mrTemplateTableSource, /aria-label=\{`新增子活动-\$\{row\.numb
 assert.match(mrTemplateTableSource, /aria-label=\{`拖动活动-\$\{row\.number\}`\}/)
 assert.match(mrTemplateTableSource, /aria-label=['"]新增一级活动['"]/)
 assert.match(mrTemplateTableSource, /moveMrTemplateActivity/)
+assert.match(mrTemplateTableSource, /removeMrTemplateActivity/)
 assert.match(mrTemplateTableSource, /activeRow\.parentId\s*!==\s*overRow\.parentId/)
 assert.match(mrTemplateTableSource, /normalizeMrTemplateActivities/)
 assert.match(mrTemplateTableSource, /onChange\(/)
-assert.match(mrTemplateTableSource, /source:\s*['"]custom['"]/)
+assert.doesNotMatch(mrTemplateTableSource, /row\.source\s*===\s*['"]custom['"]/)
 assert.doesNotMatch(mrTemplateTableSource, /Level3TemplateTable/)
 assert.match(globalsSource, /\.pms-mr-template-table/)
 assert.match(globalsSource, /\.pms-mr-toolbar/)
@@ -87,6 +94,28 @@ const childB = { id: 'node-b', parentId: parent.id, order: 1, activityName: '子
 const childC = { id: 'node-c', parentId: parentB.id, order: 0, activityName: '子活动C' }
 const grandchild = { id: 'node-a-child', parentId: childA.id, order: 0, activityName: '三级活动' }
 
+assert.deepEqual(templateConfigPermissions.resolveMrTemplateConfigCapabilities(key => key === 'configCenter:planEdit'), {
+  canEdit: true,
+  canPublish: false,
+})
+assert.deepEqual(templateConfigPermissions.resolveMrTemplateConfigCapabilities(key => key === 'configCenter:planPublish'), {
+  canEdit: false,
+  canPublish: true,
+})
+assert.deepEqual(templateConfigPermissions.resolveMrTemplateConfigCapabilities(() => false), {
+  canEdit: false,
+  canPublish: false,
+})
+
+assert.deepEqual(templateRules.removeMrTemplateActivity([parent, childA, childB, parentB, childC], parent.id), [
+  { ...parentB, order: 0 },
+  { ...childC, order: 0 },
+])
+assert.deepEqual(templateRules.removeMrTemplateActivity([parent, childA, childB], childA.id), [
+  { ...parent, order: 0 },
+  { ...childB, order: 0 },
+])
+
 const compareBefore = [parent, childA, parentB, childC]
 const compareAfter = [
   { ...parentB, order: 0 },
@@ -100,6 +129,7 @@ const compareAfterClone = structuredClone(compareAfter)
 assert.deepEqual(templateCompare.compareMrTemplateSnapshots(compareBefore, compareAfter), [
   { activityId: 'stage-b', number: '1', activityName: '第二阶段', changeType: 'reorder', before: '2', after: '1' },
   { activityId: 'node-c', number: '1.1', activityName: '子活动C-改名', changeType: 'rename', before: '子活动C', after: '子活动C-改名' },
+  { activityId: 'node-c', number: '1.1', activityName: '子活动C-改名', changeType: 'reorder', before: '2.1', after: '1.1' },
   { activityId: 'stage-new', number: '2', activityName: '新增阶段', changeType: 'add', before: '-', after: '2' },
   { activityId: 'node-new', number: '2.1', activityName: '新增节点', changeType: 'add', before: '-', after: '2.1' },
   { activityId: 'stage-a', number: '3', activityName: '阶段A', changeType: 'reorder', before: '1', after: '3' },
