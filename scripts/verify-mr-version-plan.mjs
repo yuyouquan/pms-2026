@@ -9,6 +9,7 @@ const planRules = loadTypeScriptModule(root, 'src/lib/mrVersionPlanRules.ts')
 const aggregationRules = loadTypeScriptModule(root, 'src/lib/mrAggregationRules.ts')
 const dateRules = loadTypeScriptModule(root, 'src/lib/mrDateRules.ts')
 const adapter = loadTypeScriptModule(root, 'src/lib/mrPlanSourceAdapters.ts')
+const shanghaiBusinessDate = loadTypeScriptModule(root, 'src/lib/shanghaiBusinessDate.ts')
 const templateCompare = loadTypeScriptModule(root, 'src/lib/mrTemplateCompare.ts')
 const templateConfigPermissions = loadTypeScriptModule(root, 'src/lib/mrTemplateConfigPermissions.ts')
 const templateHistoryRules = loadTypeScriptModule(root, 'src/lib/mrTemplateHistory.ts')
@@ -61,8 +62,42 @@ assert.match(jointPlanSource, /leftName\.localeCompare\(rightName/)
 assert.match(jointPlanSource, /kind === ['"]tos-reference['"][\s\S]*disabled/)
 assert.match(jointPlanSource, /kind === ['"]tos-reference['"][\s\S]*['"]\/['"]/)
 assert.match(jointPlanSource, /useMemo\([\s\S]*sourceInput/)
+assert.match(jointPlanSource, /useShanghaiBusinessDate/)
 assert.match(globalsSource, /\.pms-joint-mr-table/)
 assert.match(globalsSource, /\.pms-joint-mr-table[\s\S]*\.ant-table-cell-fix-left/)
+assert.equal([...jointPlanSource.matchAll(/fixed:\s*['"]left['"]/g)].length, 2)
+assert.equal([...jointPlanSource.matchAll(/fixed:\s*['"]right['"]/g)].length, 1)
+assert.match(globalsSource, /\.pms-joint-mr-table[\s\S]*background:\s*#fff/)
+
+// The business date rolls over without a render, emits once, reschedules once,
+// and releases the active timer on unmount.
+let fakeNow = new Date('2026-08-29T15:59:59.900Z')
+let nextTimerId = 0
+const timers = new Map()
+const emittedBusinessDates = []
+const cancelBusinessDateTicker = shanghaiBusinessDate.createShanghaiBusinessDateTicker(
+  value => emittedBusinessDates.push(value),
+  {
+    now: () => fakeNow,
+    setTimer: (callback, delay) => {
+      const id = ++nextTimerId
+      timers.set(id, { callback, delay })
+      return id
+    },
+    clearTimer: id => timers.delete(id),
+  },
+)
+assert.equal(shanghaiBusinessDate.getShanghaiBusinessDate(fakeNow), '2026-08-29')
+assert.equal(timers.size, 1)
+assert.equal([...timers.values()][0].delay, 125)
+const midnightTimer = [...timers.entries()][0]
+timers.delete(midnightTimer[0])
+fakeNow = new Date('2026-08-29T16:00:00.025Z')
+midnightTimer[1].callback()
+assert.deepEqual(emittedBusinessDates, ['2026-08-30'])
+assert.equal(timers.size, 1)
+cancelBusinessDateTicker()
+assert.equal(timers.size, 0)
 
 assert.match(configSource, /key:\s*['"]mr-version-plan['"][\s\S]*三级计划-MR版本计划/)
 assert.match(configSource, /selectedTemplateType\s*===\s*PROJECT_TYPE_TOS_VERSION/)
