@@ -1835,6 +1835,70 @@
   background: #fff2f0;
 }
 
+/* Shared MR plan tables. Fixed identity cells stay opaque above scrolling date cells. */
+.pms-mr-project-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.pms-mr-project-loading {
+  display: flex;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--pms-text-secondary);
+}
+
+.pms-mr-plan-grid .pms-mr-sticky-version,
+.pms-mr-plan-grid .pms-mr-sticky-identity,
+.pms-mr-plan-grid .ant-table-cell-fix-left,
+.pms-mr-plan-grid .ant-table-cell-fix-left-last {
+  z-index: 4;
+  background: #fff !important;
+}
+
+.pms-mr-plan-grid .ant-table-thead .pms-mr-sticky-version,
+.pms-mr-plan-grid .ant-table-thead .pms-mr-sticky-identity,
+.pms-mr-plan-grid .ant-table-thead .ant-table-cell-fix-left,
+.pms-mr-plan-grid .ant-table-thead .ant-table-cell-fix-left-last {
+  z-index: 6;
+  background: #f7f7fc !important;
+}
+
+.pms-mr-plan-grid .pms-mr-parent-row > td {
+  background: var(--pms-brand-surface) !important;
+  font-weight: 600;
+}
+
+.pms-mr-plan-grid .pms-mr-parent-row > .pms-mr-sticky-version,
+.pms-mr-plan-grid .pms-mr-parent-row > .pms-mr-sticky-identity,
+.pms-mr-plan-grid .pms-mr-parent-row > .ant-table-cell-fix-left,
+.pms-mr-plan-grid .pms-mr-parent-row > .ant-table-cell-fix-left-last {
+  background: var(--pms-brand-surface) !important;
+}
+
+.pms-mr-plan-grid .pms-mr-invalid-cell,
+.pms-mr-plan-grid .pms-mr-invalid-cell:hover {
+  background: #fff2f0 !important;
+  box-shadow: inset 0 0 0 1px #ff4d4f;
+}
+
+.pms-mr-plan-grid .pms-mr-date-with-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pms-mr-plan-grid .pms-mr-date-with-error > .ant-picker { min-width: 142px; }
+.pms-mr-plan-grid .pms-mr-error-icon { flex: 0 0 auto; color: #ff4d4f; cursor: help; }
+.pms-mr-plan-grid .ant-table-cell-fix-left-last::after { box-shadow: 5px 0 10px -7px rgba(46, 43, 80, 0.42) !important; }
+.pms-mr-candidate-reason { color: #9ca3af; font-size: 12px; }
+
 .pms-mr-template-loading {
   display: grid;
   min-height: 220px;

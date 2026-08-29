@@ -47,6 +47,7 @@ import type { Level3Milestone } from '@/types/level3Plan'
 import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
 import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareModal'
 import Level3PlanModule from '@/components/plans/Level3PlanModule'
+import TosMrVersionPlan from '@/components/plans/TosMrVersionPlan'
 import {
   applyPlanWorkspaceFilters,
   buildPlanHorizontalMilestones,
@@ -995,7 +996,7 @@ export default function ProjectSpaceContainer() {
   // ═══════ Derived ═══════
   const isWholeMachineProject = isMachineProjectType(selectedProject?.type)
   const isTosVersionProject = selectedProject?.type === PROJECT_TYPE_TOS_VERSION
-  const supportsLevel3Plan = isWholeMachineProject || isTosVersionProject
+  const supportsLevel3Plan = isWholeMachineProject
   const legacyBuildFields = selectedProject as NonNullable<typeof selectedProject> & {
     buildOption?: string
     buildMarket?: string
@@ -1078,8 +1079,9 @@ export default function ProjectSpaceContainer() {
   useEffect(() => {
     if (projectPlanLevel === 'level1') return
     if (projectPlanLevel === 'level3' && supportsLevel3Plan) return
+    if (projectPlanLevel === 'mr-version-plan' && isTosVersionProject) return
     setProjectPlanLevel('level1')
-  }, [projectPlanLevel, setProjectPlanLevel, supportsLevel3Plan])
+  }, [isTosVersionProject, projectPlanLevel, setProjectPlanLevel, supportsLevel3Plan])
   const canCreateCurrentRevision = canMaintainCurrentPlan && (
     !isMarketScopedLevel1 || canCreateRevisionForMarket(marketConfigRows, selectedMarketTab, scopedPlanLevel)
   )
@@ -5399,16 +5401,23 @@ export default function ProjectSpaceContainer() {
 
   // ═══════ renderProjectPlan ═══════
   const renderProjectPlan = () => {
-    const showMarketControls = isMachineProjectType(selectedProject?.type)
-    const showTosTypeTabs = selectedProject?.type === PROJECT_TYPE_TOS_VERSION && tosTypeConfigRows.length > 0
-    const planTabItems = [
-      { key: 'level1', label: '一级计划' },
-      ...(supportsLevel3Plan ? [{ key: 'level3', label: '三级计划' }] : []),
-    ]
+    const showMarketControls = isMachineProjectType(selectedProject?.type) && projectPlanLevel !== 'mr-version-plan'
+    const showTosTypeTabs = selectedProject?.type === PROJECT_TYPE_TOS_VERSION
+      && projectPlanLevel === 'level1'
+      && tosTypeConfigRows.length > 0
+    const planTabItems = isTosVersionProject
+      ? [
+          { key: 'level1', label: '一级计划' },
+          { key: 'mr-version-plan', label: '三级计划-MR版本计划' },
+        ]
+      : [
+          { key: 'level1', label: '一级计划' },
+          ...(supportsLevel3Plan ? [{ key: 'level3', label: '三级计划' }] : []),
+        ]
     const level3ScopeUnavailable = projectPlanLevel === 'level3' && !level3ScopeAvailable
     const currentPlanScopeUnavailable = projectPlanLevel === 'level1'
       ? machineMarketPlanUnavailable
-      : level3ScopeUnavailable
+      : projectPlanLevel === 'level3' ? level3ScopeUnavailable : false
     const usesSharedPlanWorkspace = projectPlanLevel === 'level1' && !machineMarketPlanUnavailable
     const planWorkspacePrimaryScopeTabs = (
       <>
@@ -5470,6 +5479,7 @@ export default function ProjectSpaceContainer() {
               <Tabs
                 activeKey={projectPlanLevel}
                 onChange={(key) => navigateWithEditGuard(() => {
+                  setIsEditMode(false)
                   if (key === 'level3') setProjectPlanViewMode('table')
                   setProjectPlanLevel(key as string)
                 })}
@@ -5477,7 +5487,7 @@ export default function ProjectSpaceContainer() {
                 items={planTabItems.map(item => ({ ...item, label: <span style={{ fontWeight: 500, padding: '0 4px' }}>{item.label}</span> }))}
               />
             </Col>
-            <Col><Tag color={projectPlanLevel === 'level3' ? 'blue' : 'default'} style={{ fontSize: 11 }}>{planTabItems.find(tab => tab.key === projectPlanLevel)?.label}</Tag></Col>
+            <Col><Tag color={projectPlanLevel === 'level3' || projectPlanLevel === 'mr-version-plan' ? 'blue' : 'default'} style={{ fontSize: 11 }}>{planTabItems.find(tab => tab.key === projectPlanLevel)?.label}</Tag></Col>
           </Row>
         </Card>
       </>
@@ -5606,6 +5616,17 @@ export default function ProjectSpaceContainer() {
             users={ALL_USERS}
             userDepartments={level3UserDepartments}
             milestones={latestPublishedLevel1Milestones}
+          />
+        )}
+        {projectPlanLevel === 'mr-version-plan' && isTosVersionProject && selectedProject && (
+          <TosMrVersionPlan
+            project={selectedProject}
+            currentUser={currentLoginUser}
+            globalAdminUsers={level1GlobalAdmins}
+            tosTypeRows={tosTypeConfigRows}
+            tosTypeVersionsByKey={tosTypeVersionsByKey}
+            publishedSnapshots={publishedSnapshots}
+            fallbackVersions={baseVersions}
           />
         )}
         {projectPlanLevel === 'overview' && renderProjectPlanOverview()}

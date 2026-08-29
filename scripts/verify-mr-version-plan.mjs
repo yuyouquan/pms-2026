@@ -72,7 +72,10 @@ assert.match(projectSpaceSource, /三级计划-MR版本计划/)
 assert.match(projectSpaceSource, /<TosMrVersionPlan/)
 assert.match(projectSpaceSource, /projectPlanLevel\s*===\s*['"]mr-version-plan['"]/)
 assert.match(projectSpaceSource, /showTosTypeTabs[\s\S]*projectPlanLevel\s*===\s*['"]level1['"]/)
-assert.match(projectSpaceSource, /showMarketControls[\s\S]*projectPlanLevel\s*===\s*['"]level1['"]/)
+assert.match(
+  projectSpaceSource,
+  /showMarketControls\s*=\s*isMachineProjectType\([^)]*\)\s*&&\s*projectPlanLevel\s*!==\s*['"]mr-version-plan['"]/,
+)
 assert.match(projectSpaceSource, /navigateWithEditGuard\(\(\)\s*=>\s*\{[\s\S]*setIsEditMode\(false\)[\s\S]*setProjectPlanLevel/)
 
 assert.match(tosMrVersionPlanSource, /新增tOS版本号/)
@@ -101,7 +104,8 @@ assert.match(mrPlanGridSource, /pms-mr-parent-row/)
 assert.match(mrPlanGridSource, /pms-mr-sticky-version/)
 assert.match(mrPlanGridSource, /pms-mr-invalid-cell/)
 assert.match(mrPlanGridSource, /slashDates/)
-assert.match(mrPlanGridSource, /aria-label=\{`\$\{row\.version\}-\$\{activity\.activityName\}-日期`\}/)
+assert.match(mrPlanGridSource, /const ariaLabel\s*=\s*`\$\{row\.version\}-\$\{activity\.activityName\}-日期`/)
+assert.match(mrPlanGridSource, /aria-label=\{ariaLabel\}/)
 assert.match(mrPlanGridSource, /Tooltip/)
 assert.match(mrPlanGridSource, /ExclamationCircleOutlined/)
 assert.match(globalsSource, /\.pms-mr-plan-grid/)
