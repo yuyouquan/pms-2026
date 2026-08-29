@@ -104,7 +104,7 @@ function renderDateCell(
     <span className="pms-mr-date-with-error">
       {content}
       <Tooltip color="red" title={errors.join('；')}>
-        <ExclamationCircleOutlined className="pms-mr-error-icon" aria-label={`${ariaLabel}-错误：${errors.join('；')}`} />
+        <ExclamationCircleOutlined className="pms-mr-error-icon" tabIndex={0} aria-label={`${ariaLabel}-错误：${errors.join('；')}`} />
       </Tooltip>
     </span>
   )
