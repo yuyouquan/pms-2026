@@ -166,26 +166,47 @@ const publishedVersions = (latestId: string) => [
   { id: latestId, versionNo: 'V3', status: '已发布' },
 ]
 const MR_ACCEPTANCE_FIXED_MILESTONE_DATES: Readonly<Record<string, string>> = {
-  '概念启动': '2026-02-01',
-  STR1: '2026-02-15',
-  STR2: '2026-03-01',
-  STR3: '2026-03-15',
-  STR4: '2026-04-01',
-  STR4A: '2026-05-01',
-  STR5: '2026-05-15',
+  'machine-ms-concept-kickoff': '2026-02-01',
+  'machine-ms-str1': '2026-02-15',
+  'machine-ms-str2': '2026-03-01',
+  'machine-ms-str3': '2026-03-15',
+  'machine-ms-str4': '2026-04-01',
+  'machine-ms-str4a': '2026-05-01',
+  'machine-ms-str5': '2026-05-15',
+  'tos-ms-concept-kickoff': '2026-02-01',
+  'tos-ms-str1': '2026-02-15',
+  'tos-ms-str2': '2026-03-01',
+  'tos-ms-str3': '2026-03-15',
+  'tos-ms-str4': '2026-04-01',
+  'tos-ms-str4a': '2026-05-01',
+  'tos-ms-str5': '2026-05-15',
 }
 
-const withAcceptanceMilestoneDates = (tasks: Level1PlanTask[]): Level1PlanTask[] => tasks.map(task => {
-  const completionDate = MR_ACCEPTANCE_FIXED_MILESTONE_DATES[task.taskName]
+const shiftAcceptanceDate = (date: string, days: number) => {
+  if (!date || days === 0) return date
+  const shifted = new Date(`${date}T00:00:00.000Z`)
+  shifted.setUTCDate(shifted.getUTCDate() + days)
+  return shifted.toISOString().slice(0, 10)
+}
+
+const withAcceptanceMilestoneDates = (tasks: Level1PlanTask[], dayOffset = 0): Level1PlanTask[] => tasks.map(task => {
+  const completionDate = MR_ACCEPTANCE_FIXED_MILESTONE_DATES[task.stableId!]
   return completionDate
-    ? { ...task, planEndDate: completionDate, actualEndDate: completionDate }
-    : { ...task }
+    ? {
+        ...task,
+        responsible: '',
+        planEndDate: shiftAcceptanceDate(completionDate, dayOffset),
+        actualEndDate: shiftAcceptanceDate(completionDate, dayOffset),
+      }
+    : { ...task, responsible: '' }
 })
 
-const machineSnapshot = (): Level1PlanTask[] => withAcceptanceMilestoneDates(buildMachineLevel1Tasks(false))
+const machineSnapshot = (dayOffset = 0): Level1PlanTask[] => (
+  withAcceptanceMilestoneDates(buildMachineLevel1Tasks(false), dayOffset)
+)
 
-const tosSnapshot = (): Level1PlanTask[] => {
-  const tasks = withAcceptanceMilestoneDates(buildTosLevel1Tasks(false))
+const tosSnapshot = (dayOffset = 0): Level1PlanTask[] => {
+  const tasks = withAcceptanceMilestoneDates(buildTosLevel1Tasks(false), dayOffset)
   const launchStage = tasks.find(task => task.stableId === 'tos-stage-launch-iteration')!
   const maintenanceStage = tasks.find(task => task.stableId === 'tos-stage-maintenance')!
   const businessNode = (
@@ -204,8 +225,8 @@ const tosSnapshot = (): Level1PlanTask[] => {
     source: 'custom',
     nodeKind: 'business-period',
     predecessor: '',
-    planStartDate,
-    planEndDate,
+    planStartDate: shiftAcceptanceDate(planStartDate, dayOffset),
+    planEndDate: shiftAcceptanceDate(planEndDate, dayOffset),
     estimatedDays: null,
     actualStartDate: '',
     actualEndDate: '',
@@ -231,18 +252,26 @@ export interface MrAcceptancePlanScopeSeed {
 export function createMrAcceptancePlanScopeSeed(): MrAcceptancePlanScopeSeed {
   const machineVersionId = 'mr-acceptance-machine-v1'
   const tosVersionId = 'mr-acceptance-tos-v1'
+  const machineVersions = publishedVersions(machineVersionId)
+  const tosVersions = publishedVersions(tosVersionId)
+  const versionOffset = (versionNo: string) => ({ V1: -14, V2: -7, V3: 0 }[versionNo] || 0)
+  const publishedSnapshots: Record<string, Level1PlanTask[]> = {}
+  for (const projectId of ['1', '3']) {
+    for (const version of machineVersions) {
+      publishedSnapshots[`project::${projectId}::OP::level1::${version.id}`] = machineSnapshot(versionOffset(version.versionNo))
+    }
+  }
+  for (const version of tosVersions) {
+    publishedSnapshots[`project::19::tos-type::Full::level1::${version.id}::snapshot`] = tosSnapshot(versionOffset(version.versionNo))
+  }
   return {
-    publishedSnapshots: {
-      [`project::1::OP::level1::${machineVersionId}`]: machineSnapshot(),
-      [`project::3::OP::level1::${machineVersionId}`]: machineSnapshot(),
-      [`project::19::tos-type::Full::level1::${tosVersionId}::snapshot`]: tosSnapshot(),
-    },
+    publishedSnapshots,
     marketVersionsByKey: {
-      'project::1::OP::level1::versions': publishedVersions(machineVersionId),
-      'project::3::OP::level1::versions': publishedVersions(machineVersionId),
+      'project::1::OP::level1::versions': machineVersions.map(version => ({ ...version })),
+      'project::3::OP::level1::versions': machineVersions.map(version => ({ ...version })),
     },
     tosTypeVersionsByKey: {
-      'project::19::tos-type::Full::level1::versions': publishedVersions(tosVersionId),
+      'project::19::tos-type::Full::level1::versions': tosVersions.map(version => ({ ...version })),
     },
   }
 }
