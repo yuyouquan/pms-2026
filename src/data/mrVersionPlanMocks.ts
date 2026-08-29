@@ -18,9 +18,9 @@ const defaultMrTemplateActivities: MrTemplateActivity[] = [
   { id: 'mr-node-ota-deploy', parentId: 'mr-stage-release', order: 1, activityName: 'OTA开放验证&部署' },
 ]
 
-export const DEFAULT_MR_TEMPLATE_ACTIVITIES: MrTemplateActivity[] = Object.freeze(
+export const DEFAULT_MR_TEMPLATE_ACTIVITIES: readonly Readonly<MrTemplateActivity>[] = Object.freeze(
   defaultMrTemplateActivities.map(activity => Object.freeze(activity)),
-) as unknown as MrTemplateActivity[]
+)
 
 export function createInitialMrTemplateVersions(): MrTemplateVersion[] {
   return [{

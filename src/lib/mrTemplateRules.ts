@@ -137,6 +137,9 @@ export function createMrTemplateRevision(
     .reduce((latest, candidate) => candidate.number > latest.number ? candidate : latest)
 
   const nextNumber = latestPublished.number + 1
+  if (!Number.isSafeInteger(nextNumber)) {
+    throw new Error(`版本号已达到最大安全值：${latestPublished.version.versionNo}`)
+  }
   return [
     ...versions.map(cloneVersion),
     {
