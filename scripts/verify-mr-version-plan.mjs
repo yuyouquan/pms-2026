@@ -123,13 +123,32 @@ const adminCandidates = stopReleaseUiRules.buildStopReleaseCandidates({
 assert.deepEqual(adminCandidates, [{ projectId: 'other', projectName: '其他项目', disabled: false }])
 const missingReferenceCandidates = stopReleaseUiRules.buildStopReleaseCandidates({
   rows: stopUiRows.filter(row => row.kind === 'machine' && row.projectId === 'own'),
-  instances: [stopUiInstance('16.3.0.140'), stopUiInstance('16.3.0.145', '2026-02-30')],
+  instances: [stopUiInstance('16.3.0.140'), stopUiInstance('16.3.0.145')],
   stopRecords: [], permissionsByProjectId: new Map([['own', ownStopPermission]]), metadataByProjectId: stopUiMetadata,
 })
-assert.deepEqual(missingReferenceCandidates, [{
+assert.deepEqual(missingReferenceCandidates, [{ projectId: 'own', projectName: '我的项目', disabled: false }])
+const exactActivityMissingCandidates = stopReleaseUiRules.buildStopReleaseCandidates({
+  rows: stopUiRows.filter(row => row.kind === 'machine' && row.projectId === 'own'),
+  instances: [{ ...stopUiInstance('16.3.0.140'), activities: [{ id: 'p', parentId: null, order: 0, activityName: '需求&修改点' }] }],
+  stopRecords: [], permissionsByProjectId: new Map([['own', ownStopPermission]]), metadataByProjectId: stopUiMetadata,
+})
+assert.deepEqual(exactActivityMissingCandidates, [{
   projectId: 'own', projectName: '我的项目', disabled: true,
   reason: '当前MR版本计划缺少修改点收集开始时间，无法判断停止范围',
 }])
+const malformedReferenceCandidates = stopReleaseUiRules.buildStopReleaseCandidates({
+  rows: stopUiRows.filter(row => row.kind === 'machine' && row.projectId === 'own'),
+  instances: [stopUiInstance('16.3.0.140', '2026-02-30')],
+  stopRecords: [], permissionsByProjectId: new Map([['own', ownStopPermission]]), metadataByProjectId: stopUiMetadata,
+})
+assert.deepEqual(malformedReferenceCandidates, [{
+  projectId: 'own', projectName: '我的项目', disabled: true,
+  reason: '当前MR版本计划缺少修改点收集开始时间，无法判断停止范围',
+}])
+assert.equal(stopReleaseUiRules.resolveStopReleaseButtonReason([], 0), '当前筛选结果没有可停止发版的项目')
+assert.equal(stopReleaseUiRules.resolveStopReleaseButtonReason([], 2), '当前用户没有可停止发版的项目')
+assert.equal(stopReleaseUiRules.resolveStopReleaseButtonReason(exactActivityMissingCandidates, 2), '当前MR版本计划缺少修改点收集开始时间，无法判断停止范围')
+assert.equal(stopReleaseUiRules.resolveStopReleaseButtonReason(missingReferenceCandidates, 2), undefined)
 const historyInput = [
   { id: 'b', projectId: 'gone', projectName: '已删除项目', stopDate: '2026-07-02', operator: '李白', operatedAt: '2026-08-29T01:00:00.000Z' },
   { id: 'a', projectId: 'own', projectName: '我的项目', stopDate: '2026-07-01', operator: '张三', operatedAt: '2026-08-29T02:00:00.000Z' },
@@ -137,11 +156,16 @@ const historyInput = [
 ]
 assert.deepEqual(stopReleaseUiRules.sortStopReleaseHistory(historyInput).map(record => record.id), ['a', 'b', 'c'])
 assert.deepEqual(historyInput.map(record => record.id), ['b', 'a', 'c'])
+assert.equal(stopReleaseUiRules.formatStopReleaseOperatedAt('2026-08-29T08:00:00.000Z'), '2026-08-29 16:00:00')
+assert.equal(stopReleaseUiRules.formatStopReleaseOperatedAt('legacy-time'), 'legacy-time')
+assert.equal(stopReleaseUiRules.formatStopReleaseOperatedAt(''), '-')
 for (const label of ['停止发版项目名称', '停止发版日期', '操作人', '操作时间', '操作项目']) assert.ok(jointPlanSource.includes(label))
 assert.match(jointPlanSource, /stopRelease\(/)
 assert.match(jointPlanSource, /if\s*\(!stopped\)/)
 assert.doesNotMatch(jointPlanSource, /恢复发版|重新发版|删除记录/)
 assert.match(jointPlanSource, /buildStopReleaseCandidates\(\{[\s\S]*?rows:\s*filteredRows/)
+assert.match(jointPlanSource, /resolveStopReleaseButtonReason\(stopCandidates,\s*visibleMachineRowCount\)/)
+assert.match(jointPlanSource, /render:\s*formatStopReleaseOperatedAt/)
 assert.match(jointPlanSource, /useEffect\(\(\)\s*=>\s*\{[\s\S]*?stopProjectId[\s\S]*?stopCandidates\.some[\s\S]*?setStopProjectId\(undefined\)/)
 
 // Joint-space deep links mutate selection only inside the guarded action, set
@@ -953,6 +977,18 @@ assert.notStrictEqual(stopped.stopRecords[0], stopRecord)
 assert.equal(aggregationRules.isPlanExcludedByStopRecord({ plan: reconciled.persistedPlans['machine-c09::16.3.0.150'], tosInstances: [tos150], stopRecords: [stopRecord] }), true)
 assert.equal(aggregationRules.isPlanExcludedByStopRecord({ plan: reconciled.persistedPlans['machine-c09::16.3.0.145'], tosInstances: [tos145], stopRecords: [stopRecord] }), false)
 assert.equal(aggregationRules.isPlanExcludedByStopRecord({ plan: { ...validPlan, tosVersion: '16.3.0.999' }, tosInstances: [makeTosInstance('16.3.0.999', { lock: '2027-01-01' })], stopRecords: [stopRecord] }), false)
+const emptyCollectionInstance = makeTosInstance('16.3.0.150', { collect: '', ota: '2026-08-20' })
+const emptyCollectionStop = aggregationRules.applyStopRelease({
+  persistedPlans: { 'machine-c09::16.3.0.150': { ...validPlan, tosVersion: '16.3.0.150' } },
+  tosInstances: [emptyCollectionInstance], stopRecords: [], record: stopRecord,
+})
+assert.equal(emptyCollectionStop.stopRecords.length, 1)
+assert.ok(emptyCollectionStop.persistedPlans['machine-c09::16.3.0.150'])
+assert.equal(aggregationRules.isPlanExcludedByStopRecord({
+  plan: emptyCollectionStop.persistedPlans['machine-c09::16.3.0.150'],
+  tosInstances: [{ ...emptyCollectionInstance, dates: { ...emptyCollectionInstance.dates, collect: '2026-08-01' } }],
+  stopRecords: emptyCollectionStop.stopRecords,
+}), true)
 const reconciledStopped = aggregationRules.reconcileJointMachinePlans({ ...reconcileInput, stopRecords: [stopRecord] })
 assert.equal(reconciledStopped.persistedPlans['machine-c09::16.3.0.150'], undefined)
 const stoppedInputsBefore = structuredClone({ persistedPlans: reconciled.persistedPlans, tosInstances: [tos140, tos145, tos150], stopRecords: [] })
@@ -1427,6 +1463,18 @@ assert.equal(atomicStore.getState().stopReleaseRecords.at(-1).id, 'stop-store')
 assert.ok(atomicStore.getState().machinePlansByKey['machine-c09::16.3.0.145'])
 assert.equal(atomicStore.getState().machinePlansByKey['machine-c09::16.3.0.150'], undefined)
 assert.ok(atomicStore.getState().marketOverridesByKey['machine-c09::16.3.0.140::TR'])
+
+const emptyCollectionStore = freshStore({
+  machinePlansByKey: { 'machine-c09::16.3.0.150': { ...validPlan, tosVersion: '16.3.0.150' } },
+  tosInstancesByProjectId: { 'tos-project-16.3': [emptyCollectionInstance] },
+})
+assert.equal(emptyCollectionStore.getState().stopRelease(stopAtomicInput, machinePermission), true)
+assert.ok(emptyCollectionStore.getState().machinePlansByKey['machine-c09::16.3.0.150'])
+assert.equal(emptyCollectionStore.getState().updateTosDate(
+  'tos-project-16.3', '16.3.0.150', 'collect', '2026-08-01', '李白', tosManagerPermission,
+), true)
+emptyCollectionStore.getState().reconcileMachinePlans(reconcileInput)
+assert.equal(emptyCollectionStore.getState().machinePlansByKey['machine-c09::16.3.0.150'], undefined)
 
 assert.equal(machineStore.getState().setViewMode(' machine::machine-c09 ', 'horizontal'), undefined)
 assert.equal(machineStore.getState().viewModeByScope['machine::machine-c09'], 'horizontal')
