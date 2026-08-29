@@ -141,6 +141,8 @@ for (const label of ['停止发版项目名称', '停止发版日期', '操作�
 assert.match(jointPlanSource, /stopRelease\(/)
 assert.match(jointPlanSource, /if\s*\(!stopped\)/)
 assert.doesNotMatch(jointPlanSource, /恢复发版|重新发版|删除记录/)
+assert.match(jointPlanSource, /buildStopReleaseCandidates\(\{[\s\S]*?rows:\s*filteredRows/)
+assert.match(jointPlanSource, /useEffect\(\(\)\s*=>\s*\{[\s\S]*?stopProjectId[\s\S]*?stopCandidates\.some[\s\S]*?setStopProjectId\(undefined\)/)
 
 // Joint-space deep links mutate selection only inside the guarded action, set
 // the MR tab and intent together, and clear the transient intent only after an
@@ -155,6 +157,13 @@ assert.match(mrPlanGridSource, /data-mr-tos-version/)
 assert.match(mrPlanGridSource, /tabIndex:\s*-1/)
 assert.match(projectSpaceSource, /mrPlanNavigationIntent[\s\S]*querySelector[\s\S]*scrollIntoView[\s\S]*focus\(\)[\s\S]*consumeMrPlanNavigationIntent/)
 assert.match(projectSpaceSource, /if\s*\(!target\)\s*return/)
+assert.doesNotMatch(projectSpaceSource, /clearMrPlanNavigationIntent/)
+const deepLinkEffectSource = projectSpaceSource.slice(
+  projectSpaceSource.indexOf("mrPlanNavigationIntent.source !== 'joint-mr'"),
+  projectSpaceSource.indexOf('// 进入项目空间「计划」时按权限', projectSpaceSource.indexOf("mrPlanNavigationIntent.source !== 'joint-mr'")),
+)
+assert.ok(deepLinkEffectSource.indexOf('target.scrollIntoView') < deepLinkEffectSource.indexOf('target.focus()'))
+assert.ok(deepLinkEffectSource.indexOf('target.focus()') < deepLinkEffectSource.indexOf('consumeMrPlanNavigationIntent()'))
 
 // The business date rolls over without a render, emits once, reschedules once,
 // and releases the active timer on unmount.
