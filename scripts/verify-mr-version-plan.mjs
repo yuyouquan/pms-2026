@@ -83,9 +83,13 @@ assert.match(tosMrVersionPlanSource, /selectLatestPublishedTosLevel1/)
 assert.match(tosMrVersionPlanSource, /selectTosMrVersionCandidates/)
 assert.match(tosMrVersionPlanSource, /resolveMrPermissions/)
 assert.match(tosMrVersionPlanSource, /validateTosMrInstanceDates/)
+assert.match(tosMrVersionPlanSource, /resolveTosMrInstanceDateAccess/)
 assert.match(tosMrVersionPlanSource, /rehydrateMrVersionPlanStore/)
 assert.match(tosMrVersionPlanSource, /请先在配置中心发布三级计划-MR版本计划模板/)
 assert.match(tosMrVersionPlanSource, /请先完善一级计划中的计划开始时间和计划完成时间/)
+assert.match(tosMrVersionPlanSource, /当前tOS版本在最新发布的一级计划中不存在，无法修改日期/)
+assert.match(tosMrVersionPlanSource, /if\s*\(!access\?\.canEdit\)/)
+assert.match(tosMrVersionPlanSource, /instance\.activities[\s\S]*filter\(activity\s*=>\s*activity\.parentId\s*!==\s*null\)/)
 assert.match(tosMrVersionPlanSource, /tos::\$\{project\.id\}/)
 assert.match(tosMrVersionPlanSource, /vertical/)
 assert.match(tosMrVersionPlanSource, /horizontal/)
@@ -459,6 +463,28 @@ assert.equal(candidates[2].planStartDate, '')
 assert.equal(candidates[2].reason, '请先完善一级计划中的计划开始时间和计划完成时间')
 assert.deepEqual(tosLevel1Tasks, candidatesBefore)
 assert.deepEqual(planRules.selectTosMrVersionCandidates({ ...candidateInput, versions: [{ id: 'v4', versionNo: 'V4', status: '修订中' }] }), [])
+
+const retainedStaleDates = { collect: '2026-01-02', ota: '2026-01-09' }
+const staleDatesBefore = structuredClone(retainedStaleDates)
+assert.deepEqual(planRules.resolveTosMrInstanceDateAccess('016.03.0.110', [
+  { value: '16.3.0.115', label: '16.3.0.115', planStartDate: '2026-01-10', planEndDate: '2026-01-20', disabled: false },
+]), {
+  canEdit: false,
+  reason: '当前tOS版本在最新发布的一级计划中不存在，无法修改日期',
+})
+assert.deepEqual(planRules.resolveTosMrInstanceDateAccess('016.03.0.110', [
+  { value: '16.3.0.110', label: '16.3.0.110', planStartDate: '', planEndDate: '2026-01-20', disabled: true, reason: '该tOS版本号已添加' },
+]), {
+  canEdit: false,
+  reason: '请先完善一级计划中的计划开始时间和计划完成时间',
+})
+assert.deepEqual(planRules.resolveTosMrInstanceDateAccess('016.03.0.110', [
+  { value: '16.3.0.110', label: '16.3.0.110', planStartDate: '2026-01-01', planEndDate: '2026-01-20', disabled: true, reason: '该tOS版本号已添加' },
+]), {
+  canEdit: true,
+  bounds: { planStartDate: '2026-01-01', planEndDate: '2026-01-20' },
+})
+assert.deepEqual(retainedStaleDates, staleDatesBefore)
 
 const latestPublishedSnapshot = [
   { id: 'valid-stage', parentId: null, taskName: '上市迭代阶段', order: 0 },
