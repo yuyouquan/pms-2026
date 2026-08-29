@@ -75,6 +75,7 @@ const browser = await puppeteer.launch({
   protocolTimeout: Math.max(30_000, TIMEOUT * 2),
   args: [
     '--no-sandbox',
+    '--deterministic-mode',
     '--disable-gpu',
     '--disable-lcd-text',
     '--font-render-hinting=none',
