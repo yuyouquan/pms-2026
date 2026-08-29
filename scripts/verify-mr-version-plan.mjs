@@ -487,6 +487,7 @@ assert.equal(aggregationRules.resolveMachineTosProjectKey({ id: 'new', productTy
 assert.equal(aggregationRules.resolveMachineTosProjectKey({ id: 'old', productType: '老品', firstSaleTosVersion: '99.1', currentTosVersion: '16.3.0.145' }), '16.3')
 assert.equal(aggregationRules.resolveMachineTosProjectKey({ id: 'legacy', productType: '升级', currentTosVersion: 'tOS16.3' }), '16.3')
 assert.equal(aggregationRules.resolveMachineTosProjectKey({ id: 'bad', productType: '新品', firstSaleTosVersion: 'tOS16' }), null)
+assert.equal(aggregationRules.resolveMachineTosProjectKey({ id: 'unknown', productType: '技术项目', currentTosVersion: '16.3' }), null)
 
 const level1Source = (str5Date, versionNo = 'V3') => ({
   versions: [{ id: 'v2', versionNo: 'V2', status: '已发布' }, { id: 'draft', versionNo: 'V4', status: '修订中' }, { id: 'latest', versionNo, status: '已发布' }],
@@ -528,7 +529,10 @@ assert.deepEqual({ tosProjects, tosInstances: reconcileInput.tosInstances, machi
 assert.equal(aggregationRules.reconcileJointMachinePlans({ ...reconcileInput, latestPublishedLevel1ByProjectId: { 'machine-c09': level1Source('2026-06-21') }, machineProjects: [machineProjects[0]], persistedPlans: {} }).persistedPlans['machine-c09::16.3.0.140'].tosVersion, '16.3.0.140')
 assert.equal(aggregationRules.reconcileJointMachinePlans({ ...reconcileInput, latestPublishedLevel1ByProjectId: { 'machine-c09': level1Source('2026-07-10') }, machineProjects: [machineProjects[0]], persistedPlans: {} }).persistedPlans['machine-c09::16.3.0.140'].tosVersion, '16.3.0.140')
 // Source-date movement removes no-longer-eligible persisted rows and their dates.
-assert.deepEqual(aggregationRules.reconcileJointMachinePlans({ ...reconcileInput, today: '2026-06-21' }).persistedPlans, {})
+assert.deepEqual(aggregationRules.reconcileJointMachinePlans({
+  ...reconcileInput,
+  latestPublishedLevel1ByProjectId: { ...reconcileInput.latestPublishedLevel1ByProjectId, 'machine-c09': level1Source('2026-08-22') },
+}).persistedPlans, {})
 // A row that remains eligible retains even invalid dates for UI validation.
 assert.equal(aggregationRules.reconcileJointMachinePlans({ ...reconcileInput, persistedPlans: { 'machine-c09::16.3.0.140': { ...validPlan, dates: { transfer: 'malformed' } } } }).persistedPlans['machine-c09::16.3.0.140'].dates.transfer, 'malformed')
 
@@ -547,6 +551,10 @@ assert.equal(reconciledStopped.persistedPlans['machine-c09::16.3.0.150'], undefi
 // Joint and market date validation.
 const machineRow = (projectId, tosVersion, transferType, dates) => ({ projectId, tosProjectId: 'tos-project-16.3', tosVersion, transferType, dates, updatedBy: projectId, updatedAt: NOW })
 const errorsFor = (rows, instances = [tos140, tos145, tos150]) => dateRules.validateJointMachineRows({ tosInstances: instances, machinePlans: rows })
+const immutableValidationRows = [machineRow('immutable', '16.3.0.140', '1', { transfer: 'bad' })]
+const immutableValidationBefore = structuredClone(immutableValidationRows)
+dateRules.validateJointMachineRows({ tosInstances: [tos140], machinePlans: immutableValidationRows })
+assert.deepEqual(immutableValidationRows, immutableValidationBefore)
 assert.deepEqual(errorsFor([machineRow('m1', '16.3.0.140', '1', { collect: '2026-06-23', lock: '2026-06-25' })]).map(error => error.message), [
   '修改点收集开始时间需与tOS项目时间保持一致', '修改点锁定时间需与tOS项目时间保持一致',
 ])
@@ -559,7 +567,7 @@ assert.ok(errorsFor([machineRow('base', '16.3.0.140', '1', { transfer: '2026-06-
 assert.equal(errorsFor([machineRow('base', '16.3.0.140', '1', { transfer: '2026-06-26' }), machineRow('m2', '16.3.0.140', '2', { transfer: '2026-07-03' })]).some(error => error.message.includes('至少1周')), false)
 // Type gaps compare to the greatest existing smaller numeric type (3, not 1).
 assert.ok(errorsFor([machineRow('one', '16.3.0.140', '1', { transfer: '2026-06-26' }), machineRow('three', '16.3.0.140', '3', { transfer: '2026-07-10' }), machineRow('five', '16.3.0.140', '5', { transfer: '2026-07-16' })]).some(error => error.rowKey === 'five::16.3.0.140' && error.message === '版本转测时间需晚于上一个1+N转测类型至少1周'))
-assert.ok(errorsFor([machineRow('m', '16.3.0.140', '2', { transfer: '2026-07-21' })]).some(error => error.message.includes('不能超过下一个tOS版本的测试开始时间')))
+assert.ok(errorsFor([machineRow('m', '16.3.0.140', '2', { transfer: '2026-07-21' })]).some(error => error.message === '版本转测时间需晚于上一个1+N转测类型至少1周'))
 
 const boundedFields = ['测试开始时间', '测试完成时间', '评审时间', '软件归档时间', 'OTA开放验证&部署']
 const idByName = Object.fromEntries(mrActivities.filter(activity => activity.parentId).map(activity => [activity.activityName, activity.id]))
