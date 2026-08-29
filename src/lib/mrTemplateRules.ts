@@ -54,9 +54,13 @@ function reindexActivityBlocks(blocks: readonly MrTemplateActivity[][]): MrTempl
   })))
 }
 
-function getNumericMrTemplateVersion(versionNo: string): number | undefined {
-  const match = /^V(\d+)$/.exec(versionNo)
-  return match ? Number(match[1]) : undefined
+function getNumericMrTemplateVersion(versionNo: string): number {
+  const match = /^V([1-9]\d*)$/.exec(versionNo)
+  const versionNumber = match ? Number(match[1]) : Number.NaN
+  if (!Number.isSafeInteger(versionNumber) || versionNumber <= 0) {
+    throw new Error(`版本号格式无效：${versionNo}`)
+  }
+  return versionNumber
 }
 
 export function normalizeMrTemplateActivities(rows: readonly MrTemplateActivity[]): MrTemplateActivity[] {
@@ -98,6 +102,8 @@ export function numberMrTemplateActivities(
 }
 
 export function validateMrTemplateForPublish(rows: readonly MrTemplateActivity[]): string[] {
+  if (rows.length === 0) return ['模板至少需要一个活动']
+
   const errors = getMrTemplateStructureErrors(rows)
   const activityNames = new Map<string, number>()
 
@@ -125,22 +131,19 @@ export function createMrTemplateRevision(
   if (versions.some(version => version.status === '修订中')) throw new Error('已存在修订版本')
 
   const publishedVersions = versions.filter(version => version.status === '已发布')
-  const latestPublished = publishedVersions.reduce<MrTemplateVersion | undefined>((latest, version) => {
-    const versionNumber = getNumericMrTemplateVersion(version.versionNo)
-    if (versionNumber === undefined) return latest
-    const latestNumber = latest ? getNumericMrTemplateVersion(latest.versionNo) : undefined
-    return latestNumber === undefined || versionNumber > latestNumber ? version : latest
-  }, undefined)
-  if (!latestPublished) throw new Error('不存在已发布版本')
+  if (publishedVersions.length === 0) throw new Error('不存在已发布版本')
+  const latestPublished = publishedVersions
+    .map(version => ({ version, number: getNumericMrTemplateVersion(version.versionNo) }))
+    .reduce((latest, candidate) => candidate.number > latest.number ? candidate : latest)
 
-  const nextNumber = getNumericMrTemplateVersion(latestPublished.versionNo)! + 1
+  const nextNumber = latestPublished.number + 1
   return [
     ...versions.map(cloneVersion),
     {
       id: `mr-template-v${nextNumber}`,
       versionNo: `V${nextNumber}`,
       status: '修订中',
-      activities: cloneMrTemplateSnapshot(latestPublished.activities),
+      activities: cloneMrTemplateSnapshot(latestPublished.version.activities),
       createdBy: actor,
       createdAt: now,
     },
@@ -159,10 +162,16 @@ export function publishMrTemplateRevision(
 
   const errors = validateMrTemplateForPublish(revision.activities)
   if (errors.length > 0) throw new Error(errors.join('；'))
+  const canonicalActivities = normalizeMrTemplateActivities(revision.activities)
   void actor
 
   return versions.map(version => version.id === revisionId
-    ? { ...cloneVersion(version), status: '已发布', publishedAt: now }
+    ? {
+      ...cloneVersion(version),
+      activities: cloneMrTemplateSnapshot(canonicalActivities),
+      status: '已发布',
+      publishedAt: now,
+    }
     : cloneVersion(version))
 }
 

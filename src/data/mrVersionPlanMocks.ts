@@ -1,6 +1,6 @@
 import type { MrTemplateActivity, MrTemplateVersion } from '@/types/mrVersionPlan'
 
-export const DEFAULT_MR_TEMPLATE_ACTIVITIES: MrTemplateActivity[] = [
+const defaultMrTemplateActivities: MrTemplateActivity[] = [
   { id: 'mr-stage-requirements', parentId: null, order: 0, activityName: '需求&修改点' },
   { id: 'mr-node-change-collection', parentId: 'mr-stage-requirements', order: 0, activityName: '修改点收集开始时间' },
   { id: 'mr-node-change-lock', parentId: 'mr-stage-requirements', order: 1, activityName: '修改点锁定时间' },
@@ -17,6 +17,10 @@ export const DEFAULT_MR_TEMPLATE_ACTIVITIES: MrTemplateActivity[] = [
   { id: 'mr-node-archive', parentId: 'mr-stage-release', order: 0, activityName: '软件归档时间' },
   { id: 'mr-node-ota-deploy', parentId: 'mr-stage-release', order: 1, activityName: 'OTA开放验证&部署' },
 ]
+
+export const DEFAULT_MR_TEMPLATE_ACTIVITIES: MrTemplateActivity[] = Object.freeze(
+  defaultMrTemplateActivities.map(activity => Object.freeze(activity)),
+) as unknown as MrTemplateActivity[]
 
 export function createInitialMrTemplateVersions(): MrTemplateVersion[] {
   return [{
