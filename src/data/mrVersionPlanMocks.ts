@@ -8,6 +8,11 @@ import type {
   MrTemplateVersion,
   TosMrVersionInstance,
 } from '@/types/mrVersionPlan'
+import {
+  buildMachineLevel1Tasks,
+  buildTosLevel1Tasks,
+  type Level1PlanTask,
+} from '@/lib/level1PlanRules'
 
 const defaultMrTemplateActivities: MrTemplateActivity[] = [
   { id: 'mr-stage-requirements', parentId: null, order: 0, activityName: '需求&修改点' },
@@ -155,21 +160,69 @@ export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed
   }
 }
 
-const publishedVersion = (id: string) => [{ id, versionNo: 'V1', status: '已发布' }]
-const machineSnapshot = () => [
-  { id: 'machine-stage-validation', stableId: 'machine-stage-validation', parentId: null, order: 0, taskName: '验证阶段' },
-  { id: 'machine-ms-str5', stableId: 'machine-ms-str5', parentId: 'machine-stage-validation', order: 0, taskName: 'STR5', planEndDate: '2026-05-15' },
+const publishedVersions = (latestId: string) => [
+  { id: `${latestId}-history-v1`, versionNo: 'V1', status: '已发布' },
+  { id: `${latestId}-history-v2`, versionNo: 'V2', status: '已发布' },
+  { id: latestId, versionNo: 'V3', status: '已发布' },
 ]
-const tosSnapshot = () => [
-  { id: 'tos-stage-launch-iteration', stableId: 'tos-stage-launch-iteration', parentId: null, order: 0, taskName: '上市迭代阶段' },
-  { id: 'tos-mr-140', stableId: 'tos-mr-140', parentId: 'tos-stage-launch-iteration', order: 0, taskName: '16.3.0.140', planStartDate: '2026-05-16', planEndDate: '2026-06-15' },
-  { id: 'tos-stage-maintenance', stableId: 'tos-stage-maintenance', parentId: null, order: 1, taskName: '维护阶段' },
-  { id: 'tos-mr-145', stableId: 'tos-mr-145', parentId: 'tos-stage-maintenance', order: 0, taskName: '16.3.0.145', planStartDate: '2026-06-16', planEndDate: '2026-07-15' },
-  { id: 'tos-mr-150', stableId: 'tos-mr-150', parentId: 'tos-stage-maintenance', order: 1, taskName: '16.3.0.150', planStartDate: '2026-07-16', planEndDate: '' },
-]
+const MR_ACCEPTANCE_FIXED_MILESTONE_DATES: Readonly<Record<string, string>> = {
+  '概念启动': '2026-02-01',
+  STR1: '2026-02-15',
+  STR2: '2026-03-01',
+  STR3: '2026-03-15',
+  STR4: '2026-04-01',
+  STR4A: '2026-05-01',
+  STR5: '2026-05-15',
+}
+
+const withAcceptanceMilestoneDates = (tasks: Level1PlanTask[]): Level1PlanTask[] => tasks.map(task => {
+  const completionDate = MR_ACCEPTANCE_FIXED_MILESTONE_DATES[task.taskName]
+  return completionDate
+    ? { ...task, planEndDate: completionDate, actualEndDate: completionDate }
+    : { ...task }
+})
+
+const machineSnapshot = (): Level1PlanTask[] => withAcceptanceMilestoneDates(buildMachineLevel1Tasks(false))
+
+const tosSnapshot = (): Level1PlanTask[] => {
+  const tasks = withAcceptanceMilestoneDates(buildTosLevel1Tasks(false))
+  const launchStage = tasks.find(task => task.stableId === 'tos-stage-launch-iteration')!
+  const maintenanceStage = tasks.find(task => task.stableId === 'tos-stage-maintenance')!
+  const businessNode = (
+    id: string,
+    parent: Level1PlanTask,
+    order: number,
+    taskName: string,
+    planStartDate: string,
+    planEndDate: string,
+  ): Level1PlanTask => ({
+    id,
+    stableId: id,
+    parentId: parent.id,
+    order,
+    taskName,
+    source: 'custom',
+    nodeKind: 'business-period',
+    predecessor: '',
+    planStartDate,
+    planEndDate,
+    estimatedDays: null,
+    actualStartDate: '',
+    actualEndDate: '',
+    actualDays: null,
+    status: '未开始',
+    progress: 0,
+  })
+  return [
+    ...tasks,
+    businessNode('tos-mr-140', launchStage, 0, '16.3.0.140', '2026-05-16', '2026-06-15'),
+    businessNode('tos-mr-145', maintenanceStage, 0, '16.3.0.145', '2026-06-16', '2026-07-15'),
+    businessNode('tos-mr-150', maintenanceStage, 1, '16.3.0.150', '2026-07-16', ''),
+  ]
+}
 
 export interface MrAcceptancePlanScopeSeed {
-  publishedSnapshots: Record<string, Array<Record<string, unknown>>>
+  publishedSnapshots: Record<string, Level1PlanTask[]>
   marketVersionsByKey: Record<string, Array<{ id: string; versionNo: string; status: string }>>
   tosTypeVersionsByKey: Record<string, Array<{ id: string; versionNo: string; status: string }>>
 }
@@ -185,11 +238,11 @@ export function createMrAcceptancePlanScopeSeed(): MrAcceptancePlanScopeSeed {
       [`project::19::tos-type::Full::level1::${tosVersionId}::snapshot`]: tosSnapshot(),
     },
     marketVersionsByKey: {
-      'project::1::OP::level1::versions': publishedVersion(machineVersionId),
-      'project::3::OP::level1::versions': publishedVersion(machineVersionId),
+      'project::1::OP::level1::versions': publishedVersions(machineVersionId),
+      'project::3::OP::level1::versions': publishedVersions(machineVersionId),
     },
     tosTypeVersionsByKey: {
-      'project::19::tos-type::Full::level1::versions': publishedVersion(tosVersionId),
+      'project::19::tos-type::Full::level1::versions': publishedVersions(tosVersionId),
     },
   }
 }
