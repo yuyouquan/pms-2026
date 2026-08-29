@@ -150,3 +150,25 @@ assert.deepEqual(
   templateRules.moveMrTemplateActivity(moveFixture, childA.id, childA.id),
   templateRules.normalizeMrTemplateActivities(moveFixture),
 )
+
+const childThird = { id: 'node-third', parentId: parent.id, order: 2, activityName: '子活动C' }
+assert.deepEqual(
+  templateRules.moveMrTemplateActivity([parent, childA, childB, childThird], childA.id, childThird.id)
+    .filter(row => row.parentId === parent.id).map(row => row.activityName),
+  ['子活动B', '子活动C', '子活动A'],
+)
+
+const parentThird = { id: 'stage-c', parentId: null, order: 2, activityName: '第三阶段' }
+const childOfThirdParent = { id: 'node-d', parentId: parentThird.id, order: 0, activityName: '子活动D' }
+assert.deepEqual(
+  templateRules.numberMrTemplateActivities(templateRules.moveMrTemplateActivity(
+    [parent, childA, childB, parentB, childC, parentThird, childOfThirdParent],
+    parent.id,
+    parentThird.id,
+  )).map(row => [row.number, row.id]),
+  [
+    ['1', parentB.id], ['1.1', childC.id],
+    ['2', parentThird.id], ['2.1', childOfThirdParent.id],
+    ['3', parent.id], ['3.1', childA.id], ['3.2', childB.id],
+  ],
+)
