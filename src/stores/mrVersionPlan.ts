@@ -343,6 +343,10 @@ function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right)
 }
 
+function cloneMachinePlans(plans: Readonly<Record<string, JointMachinePlan>>): Record<string, JointMachinePlan> {
+  return Object.fromEntries(Object.entries(plans).map(([key, plan]) => [key, { ...plan, dates: { ...plan.dates } }]))
+}
+
 function hasChildActivity(state: MrVersionPlanState, plan: JointMachinePlan, activityId: string): boolean {
   const version = canonicalizeTosMrVersion(plan.tosVersion)
   if (!version) return false
@@ -511,12 +515,13 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
         persistedPlans: state.machinePlansByKey,
         stopRecords: state.stopReleaseRecords,
       })
+      const machinePlansByKey = cloneMachinePlans(result.persistedPlans)
       const retainedPlanKeys = new Set(Object.keys(result.persistedPlans))
       const marketOverridesByKey = Object.fromEntries(Object.entries(state.marketOverridesByKey)
         .filter(([, override]) => retainedPlanKeys.has(`${override.projectId}::${override.tosVersion}`))
         .map(([key, override]) => [key, { ...override, dates: { ...override.dates } }]))
       if (!sameJson(state.machinePlansByKey, result.persistedPlans) || !sameJson(state.marketOverridesByKey, marketOverridesByKey)) {
-        set({ machinePlansByKey: result.persistedPlans, marketOverridesByKey })
+        set({ machinePlansByKey, marketOverridesByKey })
       }
       return result
     },
