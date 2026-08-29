@@ -1486,6 +1486,11 @@ assert.match(
   /\.ant-modal-mask\s*\{[^}]*background:\s*rgb\(140,\s*140,\s*140\)\s*!important;/s,
   'MR browser evidence CSS must use an opaque modal mask so background SVG alpha does not affect screenshot bytes',
 )
+assert.match(
+  mrBrowserVerifierSource,
+  /\*,\s*\*::before,\s*\*::after\s*\{[^}]*box-shadow:\s*none\s*!important;[^}]*text-shadow:\s*none\s*!important;/s,
+  'MR browser evidence CSS must remove non-functional rasterized shadows while preserving borders, colors, and geometry',
+)
 assert.match(mrBrowserVerifierSource, /document\.fonts\.ready/)
 assert.match(mrBrowserVerifierSource, /data-mr-row-key/)
 assert.match(mrBrowserVerifierSource, /data-mr-date-cell/)
