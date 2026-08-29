@@ -1517,6 +1517,16 @@ assert.deepEqual(
   ['V1', 'V2', 'V3'],
   'MR eligibility seed must retain published tOS plan history for revision and name-rule flows',
 )
+assert.deepEqual(
+  acceptancePlanScopeA.marketVersionsByKey['project::1::OP::level1::versions'].map(version => version.id),
+  ['v1', 'v2', 'v3'],
+  'acceptance history ids must align with the plan compare store defaults instead of leaving a blank comparison target',
+)
+assert.deepEqual(
+  acceptancePlanScopeA.tosTypeVersionsByKey['project::19::tos-type::Full::level1::versions'].map(version => version.id),
+  ['v1', 'v2', 'v3'],
+  'tOS acceptance history uses the same scoped compare-compatible version ids',
+)
 const acceptanceVersionScopes = [
   {
     versions: acceptancePlanScopeA.marketVersionsByKey['project::1::OP::level1::versions'],
