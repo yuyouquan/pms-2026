@@ -355,25 +355,26 @@ assert.deepEqual(planRules.validateTosMrInstanceDates(tosInstance, { planStartDa
 ])
 assert.deepEqual(planRules.validateTosMrInstanceDates({ ...tosInstance, dates: { collect: '', ota: '' } }, { planStartDate: '', planEndDate: '' }), [])
 
-assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '李白', globalAdminUsers: [], tosManagerUsers: ['李白'], machineSpm: '张三', context: 'tos' }), { canView: true, canEditTemplate: false, canEditTos: true, canEditMachine: false, canStopRelease: false, canEditMarket: false })
+assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '李白', globalAdminUsers: [], tosManagerUsers: ['李白'], machineSpm: '张三', context: 'tos' }), { canView: true, canEditTemplate: false, canEditTos: false, canEditMachine: false, canStopRelease: false, canEditMarket: false })
+assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '李白', globalAdminUsers: [], tosManagerUsers: ['李白'], machineSpm: '张三', tosProjectId: 'tos-project-16.3', context: 'tos' }), { canView: true, canEditTemplate: false, canEditTos: true, canEditMachine: false, canStopRelease: false, canEditMarket: false, tosProjectIds: ['tos-project-16.3'] })
 assert.deepEqual(planRules.resolveMrPermissions({ currentUser: ' 管理员 ', globalAdminUsers: ['管理员'], tosManagerUsers: [], machineSpm: '张三', context: 'config' }), { canView: true, canEditTemplate: true, canEditTos: true, canEditMachine: true, canStopRelease: true, canEditMarket: true })
-assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: ['张三'], machineSpm: '张三', context: 'joint-machine' }), { canView: true, canEditTemplate: false, canEditTos: false, canEditMachine: true, canStopRelease: true, canEditMarket: false })
-assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: ['张三'], machineSpm: '张三', context: 'machine-market' }), { canView: true, canEditTemplate: false, canEditTos: false, canEditMachine: false, canStopRelease: false, canEditMarket: true })
+assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: ['张三'], machineSpm: '张三', machineProjectId: 'machine-c09', context: 'joint-machine' }), { canView: true, canEditTemplate: false, canEditTos: false, canEditMachine: true, canStopRelease: true, canEditMarket: false, machineProjectIds: ['machine-c09'] })
+assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: ['张三'], machineSpm: '张三', machineProjectId: 'machine-c09', context: 'machine-market' }), { canView: true, canEditTemplate: false, canEditTos: false, canEditMachine: false, canStopRelease: false, canEditMarket: true, machineProjectIds: ['machine-c09'] })
 assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '普通用户', globalAdminUsers: [], tosManagerUsers: ['普通用户'], machineSpm: '张三', context: 'config' }), { canView: true, canEditTemplate: false, canEditTos: false, canEditMachine: false, canStopRelease: false, canEditMarket: false })
 assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '', globalAdminUsers: [''], tosManagerUsers: [''], machineSpm: '', context: 'tos' }), { canView: false, canEditTemplate: false, canEditTos: false, canEditMachine: false, canStopRelease: false, canEditMarket: false })
 const multiSpmJointPermission = currentUser => planRules.resolveMrPermissions({
-  currentUser, globalAdminUsers: [], tosManagerUsers: [], machineSpm: '旧负责人', machineSpmUsers: [' 李白 ', '张三', '李白'], context: 'joint-machine',
+  currentUser, globalAdminUsers: [], tosManagerUsers: [], machineSpm: '旧负责人', machineSpmUsers: [' 李白 ', '张三', '李白'], machineProjectId: 'machine-c09', context: 'joint-machine',
 })
 assert.equal(multiSpmJointPermission('李白').canEditMachine, true)
 assert.equal(multiSpmJointPermission('张三').canStopRelease, true)
 assert.equal(multiSpmJointPermission('王五').canEditMachine, false)
 const legacyMultiSpmPermission = currentUser => planRules.resolveMrPermissions({
-  currentUser, globalAdminUsers: [], tosManagerUsers: [], machineSpm: '李白,张三', context: 'joint-machine',
+  currentUser, globalAdminUsers: [], tosManagerUsers: [], machineSpm: '李白,张三', machineProjectId: 'machine-c09', context: 'joint-machine',
 })
 assert.equal(legacyMultiSpmPermission('李白').canEditMachine, true)
 assert.equal(legacyMultiSpmPermission('张三').canStopRelease, true)
 assert.equal(legacyMultiSpmPermission('王五').canEditMachine, false)
-assert.equal(planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '张三', machineSpmUsers: [], context: 'machine-market' }).canEditMarket, true)
+assert.equal(planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '张三', machineSpmUsers: [], machineProjectId: 'machine-c09', context: 'machine-market' }).canEditMarket, true)
 
 const publishedTemplate = { id: 'template-v1', versionNo: 'V1', status: '已发布', activities: tosActivities, createdBy: '张三', createdAt: NOW }
 const templateBeforeCreate = JSON.parse(JSON.stringify(publishedTemplate))
@@ -823,9 +824,9 @@ assert.equal(legacyMultiSpmMetadata.spm, '李白,张三,王五')
 const legacyMultiSpmSources = adapter.buildMrAggregationSources({ ...adapterInput, projects: [legacyMultiSpmProject] })
 assert.deepEqual(legacyMultiSpmSources.machineProjects[0].spmUsers, ['李白', '张三', '王五'])
 for (const currentUser of ['李白', '张三', '王五']) {
-  assert.equal(planRules.resolveMrPermissions({ currentUser, globalAdminUsers: [], tosManagerUsers: [], machineSpm: legacyMultiSpmSources.machineProjects[0].spm, machineSpmUsers: legacyMultiSpmSources.machineProjects[0].spmUsers, context: 'joint-machine' }).canEditMachine, true)
+  assert.equal(planRules.resolveMrPermissions({ currentUser, globalAdminUsers: [], tosManagerUsers: [], machineSpm: legacyMultiSpmSources.machineProjects[0].spm, machineSpmUsers: legacyMultiSpmSources.machineProjects[0].spmUsers, machineProjectId: legacyMultiSpmSources.machineProjects[0].id, context: 'joint-machine' }).canEditMachine, true)
 }
-assert.equal(planRules.resolveMrPermissions({ currentUser: '赵六', globalAdminUsers: [], tosManagerUsers: [], machineSpm: legacyMultiSpmSources.machineProjects[0].spm, machineSpmUsers: legacyMultiSpmSources.machineProjects[0].spmUsers, context: 'joint-machine' }).canEditMachine, false)
+assert.equal(planRules.resolveMrPermissions({ currentUser: '赵六', globalAdminUsers: [], tosManagerUsers: [], machineSpm: legacyMultiSpmSources.machineProjects[0].spm, machineSpmUsers: legacyMultiSpmSources.machineProjects[0].spmUsers, machineProjectId: legacyMultiSpmSources.machineProjects[0].id, context: 'joint-machine' }).canEditMachine, false)
 const legacyReferenceSources = adapter.buildMrAggregationSources({
   ...adapterInput,
   projects: [{ ...machineAdapterProject, firstSaleTosVersionId: 'tos-16-3', currentTosVersionId: 'tos-17-1' }],
@@ -877,11 +878,13 @@ assert.deepEqual(noPublishedSources.latestPublishedLevel1ByProjectId, {})
 // Persisted MR store: guarded writes, atomic reconciliation, migration, and hydration.
 const createMemoryStorage = (seed = {}) => {
   const values = new Map(Object.entries(seed))
+  const counts = { get: 0, set: 0, remove: 0 }
   return {
-    getItem: key => values.get(key) ?? null,
-    setItem: (key, value) => { values.set(key, value) },
-    removeItem: key => { values.delete(key) },
+    getItem: key => { counts.get += 1; return values.get(key) ?? null },
+    setItem: (key, value) => { counts.set += 1; values.set(key, value) },
+    removeItem: key => { counts.remove += 1; values.delete(key) },
     dump: () => Object.fromEntries(values),
+    counts,
   }
 }
 const hydrationStorage = createMemoryStorage({ 'pms-level3-plan-store': JSON.stringify({ legacy: true }) })
@@ -889,18 +892,12 @@ globalThis.window = { localStorage: hydrationStorage }
 const mrStore = loadTypeScriptModule(root, 'src/stores/mrVersionPlan.ts')
 assert.equal(mrStore.MR_VERSION_PLAN_STORAGE_KEY, 'pms-mr-version-plan-store')
 assert.equal(mrStore.MR_VERSION_PLAN_STORE_VERSION, 1)
-const allFalsePermission = {
-  canView: true, canEditTemplate: false, canEditTos: false, canEditMachine: false,
-  canStopRelease: false, canEditMarket: false,
-}
-const adminPermission = {
-  canView: true, canEditTemplate: true, canEditTos: true, canEditMachine: true,
-  canStopRelease: true, canEditMarket: true,
-}
-const tosManagerPermission = { ...allFalsePermission, canEditTos: true, tosProjectIds: ['tos-project-16.3'] }
-const machinePermission = { ...allFalsePermission, canEditMachine: true, canStopRelease: true, machineProjectIds: ['machine-c09'] }
-const otherMachinePermission = { ...allFalsePermission, canEditMachine: true, canStopRelease: true, machineProjectIds: ['other-machine'] }
-const marketPermission = { ...allFalsePermission, canEditMarket: true, machineProjectIds: ['machine-c09'] }
+const allFalsePermission = planRules.resolveMrPermissions({ currentUser: '普通用户', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '', context: 'config' })
+const adminPermission = planRules.resolveMrPermissions({ currentUser: '管理员', globalAdminUsers: ['管理员'], tosManagerUsers: [], machineSpm: '', context: 'config' })
+const tosManagerPermission = planRules.resolveMrPermissions({ currentUser: '李白', globalAdminUsers: [], tosManagerUsers: ['李白'], machineSpm: '', tosProjectId: 'tos-project-16.3', context: 'tos' })
+const machinePermission = planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '张三', machineProjectId: 'machine-c09', context: 'joint-machine' })
+const otherMachinePermission = planRules.resolveMrPermissions({ currentUser: '王五', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '王五', machineProjectId: 'other-machine', context: 'joint-machine' })
+const marketPermission = planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '张三', machineProjectId: 'machine-c09', context: 'machine-market' })
 
 const freshStore = (initialState, storage = createMemoryStorage()) => mrStore.createMrVersionPlanStore({
   storage,
@@ -922,10 +919,11 @@ const renamedActivitiesInput = draft.activities.map(activity => activity.id === 
   ? { ...activity, activityName: ' 修改点收集启动时间 ' }
   : { ...activity })
 const renamedActivitiesBefore = structuredClone(renamedActivitiesInput)
-assert.equal(lifecycleStore.getState().updateTemplateActivities(draft.id, renamedActivitiesInput, allFalsePermission), false)
-assert.equal(lifecycleStore.getState().updateTemplateActivities(draft.id, renamedActivitiesInput, adminPermission), true)
+assert.equal(lifecycleStore.getState().updateTemplateActivities(draft.id, renamedActivitiesInput, '王五', allFalsePermission), false)
+assert.equal(lifecycleStore.getState().updateTemplateActivities(draft.id, renamedActivitiesInput, '王五', adminPermission), true)
 assert.deepEqual(renamedActivitiesInput, renamedActivitiesBefore)
 assert.equal(lifecycleStore.getState().templateHistory.at(-1).action, 'rename')
+assert.equal(lifecycleStore.getState().templateHistory.at(-1).actor, '王五')
 assert.equal(lifecycleStore.getState().templateVersions.find(version => version.id === draft.id).activities[1].activityName, '修改点收集启动时间')
 assert.deepEqual(lifecycleStore.getState().publishTemplateRevision(draft.id, '张三', allFalsePermission), { ok: false, errors: ['无权发布模板修订'] })
 assert.deepEqual(lifecycleStore.getState().publishTemplateRevision(draft.id, '张三', adminPermission), { ok: true, errors: [] })
@@ -933,11 +931,13 @@ assert.equal(lifecycleStore.getState().templateHistory.at(-1).action, 'publish')
 assert.equal(lifecycleStore.getState().createTemplateRevision('李白', adminPermission), true)
 draft = lifecycleStore.getState().templateVersions.find(version => version.status === '修订中')
 const historyLengthBeforeCancel = lifecycleStore.getState().templateHistory.length
-assert.equal(lifecycleStore.getState().cancelTemplateRevision(draft.id, adminPermission), true)
+assert.equal(lifecycleStore.getState().cancelTemplateRevision(draft.id, '赵六', adminPermission), true)
 assert.equal(lifecycleStore.getState().templateVersions.some(version => version.id === draft.id), false)
 assert.equal(lifecycleStore.getState().templateHistory.length, historyLengthBeforeCancel + 1)
 assert.equal(lifecycleStore.getState().templateHistory.at(-1).action, 'cancel-revision')
+assert.equal(lifecycleStore.getState().templateHistory.at(-1).actor, '赵六')
 assert.equal(mrStore.partializeMrVersionPlanState(lifecycleStore.getState()).templateHistory.at(-1).action, 'cancel-revision')
+assert.equal(new Set(lifecycleStore.getState().templateHistory.map(item => item.id)).size, lifecycleStore.getState().templateHistory.length)
 
 const tosStore = freshStore()
 const addTosInput = { projectId: 'tos-project-16.3', tosVersion: '16.3.0.140', actor: '李白', now: NOW }
@@ -953,6 +953,8 @@ assert.equal(tosStore.getState().updateTosDate('tos-project-16.3', '16.3.0.140',
 assert.equal(tosStore.getState().updateTosDate('tos-project-16.3', '16.3.0.140', storedTosParent.id, '2026-06-22', '李白', tosManagerPermission), false)
 assert.equal(tosStore.getState().updateTosDate('tos-project-16.3', '16.3.0.140', storedTosChild.id, '2026-02-30', '李白', tosManagerPermission), false)
 assert.equal(tosStore.getState().updateTosDate('other-tos-project', '16.3.0.140', storedTosChild.id, '2026-06-22', '李白', tosManagerPermission), false)
+const adminTosStore = freshStore()
+assert.equal(adminTosStore.getState().addTosVersionInstance({ ...addTosInput, projectId: 'admin-tos-project' }, adminPermission), true)
 
 const machinePlanFixture = {
   'machine-c09::16.3.0.140': { ...validPlan, dates: { transfer: '2026-07-02' } },
@@ -972,15 +974,24 @@ assert.deepEqual(machineStore.getState().machinePlansByKey['machine-c09::16.3.0.
 assert.equal(machineStore.getState().updateMachineDate('machine-c09::16.3.0.140', 'transfer', '2026-07-04', '张三', machinePermission), false)
 assert.equal(machineStore.getState().updateMachineDate('other-machine::16.3.0.140', 'unknown-activity', '2026-07-04', '张三', otherMachinePermission), false)
 assert.equal(machineStore.getState().updateMachineTransferType('other-machine::16.3.0.140', '2', '张三', machinePermission), false)
+assert.equal(machineStore.getState().updateMachineTransferType('machine-c09::16.3.0.140', '2', '张三', machinePermission), true)
+assert.equal(machineStore.getState().updateMachineDate('machine-c09::16.3.0.140', 'transfer', '2026-07-02', '张三', machinePermission), true)
 
 assert.equal(machineStore.getState().updateMarketDate({
   projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'OP', mainMarket: 'OP', activityId: 'transfer', value: '2026-07-01', mainValue: '2026-07-02',
 }, '张三', adminPermission), false)
 assert.equal(machineStore.getState().updateMarketDate({
-  projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'TR', mainMarket: 'OP', activityId: 'transfer', value: '2026-07-01', mainValue: '',
+  projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'TR', mainMarket: 'OP', activityId: 'lock', value: '2026-07-01', mainValue: '2099-01-01',
 }, '张三', marketPermission), false)
+let emptyOverrideNotifications = 0
+const unsubscribeEmptyOverride = machineStore.subscribe(() => { emptyOverrideNotifications += 1 })
 assert.equal(machineStore.getState().updateMarketDate({
-  projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'TR', mainMarket: 'OP', activityId: 'transfer', value: '2026-07-03', mainValue: '2026-07-02',
+  projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'RU', mainMarket: 'OP', activityId: 'transfer', value: '', mainValue: '2099-01-01',
+}, '张三', marketPermission), false)
+unsubscribeEmptyOverride()
+assert.equal(emptyOverrideNotifications, 0)
+assert.equal(machineStore.getState().updateMarketDate({
+  projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'TR', mainMarket: 'OP', activityId: 'transfer', value: '2026-07-03', mainValue: '2099-01-01',
 }, '张三', marketPermission), true)
 assert.equal(machineStore.getState().marketOverridesByKey['machine-c09::16.3.0.140::TR'].dates.transfer, '2026-07-03')
 assert.equal(machineStore.getState().updateMarketDate({
@@ -1013,8 +1024,12 @@ atomicStore.getState().reconcileMachinePlans(reconcileInput)
 unsubscribeReconcile()
 assert.equal(reconcileNotifications, 0)
 const stopAtomicInput = { ...stopRecord, id: 'stop-store', stopDate: '2026-07-12' }
+const emptyStopStore = freshStore({ tosInstancesByProjectId: { 'tos-project-16.3': [tos140, tos145, tos150] } })
+assert.equal(emptyStopStore.getState().stopRelease(stopAtomicInput, machinePermission), false)
 assert.equal(atomicStore.getState().stopRelease(stopAtomicInput, otherMachinePermission), false)
+assert.equal(atomicStore.getState().stopRelease({ ...stopAtomicInput, id: 'stop-other', projectId: 'other-machine', projectName: 'OTHER' }, otherMachinePermission), false)
 assert.equal(atomicStore.getState().stopRelease(stopAtomicInput, machinePermission), true)
+assert.equal(atomicStore.getState().stopRelease(stopAtomicInput, machinePermission), false)
 assert.equal(atomicStore.getState().stopReleaseRecords.at(-1).id, 'stop-store')
 assert.ok(atomicStore.getState().machinePlansByKey['machine-c09::16.3.0.145'])
 assert.equal(atomicStore.getState().machinePlansByKey['machine-c09::16.3.0.150'], undefined)
@@ -1027,12 +1042,19 @@ machineStore.getState().setViewMode('machine::machine-c09', 'bad')
 assert.deepEqual(machineStore.getState().viewModeByScope, { 'machine::machine-c09': 'horizontal' })
 
 const corruptPersisted = {
-  templateVersions: [{
-    ...initialVersions[0],
-    activities: [parent, childA, { ...childB, id: 'orphan', parentId: 'missing' }],
-  }],
-  currentTemplateVersionId: initialVersions[0].id,
-  templateHistory: [{ id: ' ', versionId: 'x', action: 'rename', actor: '', occurredAt: '' }],
+  templateVersions: [
+    { ...initialVersions[0], activities: [parent, childA, { ...childB, id: 'orphan', parentId: 'missing' }] },
+    { ...initialVersions[0], id: 'duplicate-v1' },
+    { ...initialVersions[0], id: 'unsafe-version', versionNo: 'V9007199254740992' },
+    { ...initialVersions[0], id: 'draft-v2', versionNo: 'V2', status: '修订中', publishedAt: undefined, activities: [parent, childA] },
+    { ...initialVersions[0], id: 'draft-v3', versionNo: 'V3', status: '修订中', publishedAt: undefined, activities: [parent, childA] },
+  ],
+  currentTemplateVersionId: 'discarded-current',
+  templateHistory: [
+    { id: 'history-1', versionId: 'draft-v3', action: 'rename', actor: '王五', occurredAt: NOW },
+    { id: 'history-1', versionId: 'draft-v3', action: 'move', actor: '赵六', occurredAt: LATER },
+    { id: ' ', versionId: 'x', action: 'rename', actor: '', occurredAt: '' },
+  ],
   tosInstancesByProjectId: {
     ' ': [tos140],
     'tos-project-16.3': [{ ...tos140, dates: { collect: '2026-02-30', lock: '2026-06-24', 'stage-change': '2026-01-01' } }],
@@ -1040,11 +1062,13 @@ const corruptPersisted = {
   machinePlansByKey: {
     ' ': validPlan,
     'bad-type::16.3.0.140': { ...validPlan, projectId: 'bad-type', transferType: '9' },
-    'machine-c09::16.3.0.140': { ...validPlan, dates: { transfer: '2026-02-30', collect: '2026-06-22' } },
+    'machine-c09::16.3.0.140': { ...validPlan, dates: { transfer: '2026-02-30', collect: '2026-06-22', unknown: '2026-06-23' } },
+    'machine-c09::16.3.0.999': { ...validPlan, tosVersion: '16.3.0.999' },
+    'wrong-tos::16.3.0.140': { ...validPlan, projectId: 'wrong-tos', tosProjectId: 'missing-tos-project' },
   },
   marketOverridesByKey: {
     'machine-c09::16.3.0.140::OP': { projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'OP', mainMarket: 'OP', dates: { collect: '2026-06-22' } },
-    'machine-c09::16.3.0.140::TR': { projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'TR', mainMarket: 'OP', dates: { collect: '2026-06-23', lock: 'bad' } },
+    'machine-c09::16.3.0.140::TR': { projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'TR', mainMarket: 'OP', dates: { collect: '2026-06-23', lock: 'bad', unknown: '2026-06-24' } },
     'missing::16.3.0.140::TR': { projectId: 'missing', tosVersion: '16.3.0.140', market: 'TR', mainMarket: 'OP', dates: { collect: '2026-06-23' } },
   },
   stopReleaseRecords: [{ ...stopRecord }, { ...stopRecord, id: 'bad-stop', stopDate: '2026-02-30' }],
@@ -1053,7 +1077,10 @@ const corruptPersisted = {
 const corruptBefore = structuredClone(corruptPersisted)
 const migrated = mrStore.migrateMrVersionPlanState(corruptPersisted, 0)
 assert.deepEqual(corruptPersisted, corruptBefore)
+assert.deepEqual(migrated.templateVersions.map(version => version.id), [initialVersions[0].id, 'draft-v3'])
+assert.equal(migrated.currentTemplateVersionId, 'draft-v3')
 assert.deepEqual(migrated.templateVersions[0].activities.map(activity => activity.id), [parent.id, childA.id])
+assert.deepEqual(migrated.templateHistory, [{ id: 'history-1', versionId: 'draft-v3', action: 'rename', actor: '王五', occurredAt: NOW }])
 assert.deepEqual(Object.keys(migrated.tosInstancesByProjectId), ['tos-project-16.3'])
 assert.deepEqual(migrated.tosInstancesByProjectId['tos-project-16.3'][0].dates, { lock: '2026-06-24' })
 assert.deepEqual(Object.keys(migrated.machinePlansByKey), ['machine-c09::16.3.0.140'])
@@ -1062,6 +1089,12 @@ assert.deepEqual(Object.keys(migrated.marketOverridesByKey), ['machine-c09::16.3
 assert.deepEqual(migrated.marketOverridesByKey['machine-c09::16.3.0.140::TR'].dates, { collect: '2026-06-23' })
 assert.deepEqual(migrated.stopReleaseRecords, [stopRecord])
 assert.deepEqual(migrated.viewModeByScope, { ok: 'vertical' })
+const recoveredPublished = mrStore.migrateMrVersionPlanState({
+  templateVersions: [{ ...initialVersions[0], id: 'draft-only', versionNo: 'V2', status: '修订中' }],
+  currentTemplateVersionId: 'draft-only',
+}, 0)
+assert.equal(recoveredPublished.templateVersions.length, 1)
+assert.equal(recoveredPublished.templateVersions[0].status, '已发布')
 
 const persistedOnly = mrStore.partializeMrVersionPlanState(machineStore.getState())
 assert.deepEqual(Object.keys(persistedOnly).sort(), [
@@ -1069,7 +1102,25 @@ assert.deepEqual(Object.keys(persistedOnly).sort(), [
   'templateHistory', 'templateVersions', 'tosInstancesByProjectId', 'viewModeByScope',
 ].sort())
 assert.equal(Object.values(persistedOnly).some(value => typeof value === 'function'), false)
+hydrationStorage.setItem(mrStore.MR_VERSION_PLAN_STORAGE_KEY, JSON.stringify({
+  state: { ...mrStore.migrateMrVersionPlanState({}, 0), viewModeByScope: { hydrated: 'horizontal', bad: 'gantt' } },
+  version: mrStore.MR_VERSION_PLAN_STORE_VERSION,
+}))
+const readsBeforeStoreCreation = hydrationStorage.counts.get
 const hydrationStore = mrStore.createMrVersionPlanStore({ storage: hydrationStorage, now: () => NOW })
-hydrationStore.persist.rehydrate()
+assert.equal(hydrationStorage.counts.get, readsBeforeStoreCreation)
+assert.equal(hydrationStore.getState().viewModeByScope.hydrated, undefined)
+assert.notEqual(hydrationStorage.getItem('pms-level3-plan-store'), null)
+await mrStore.rehydrateMrVersionPlanStore(hydrationStore)
+assert.equal(hydrationStore.getState().viewModeByScope.hydrated, 'horizontal')
+assert.equal(hydrationStore.getState().viewModeByScope.bad, undefined)
 assert.equal(hydrationStorage.getItem('pms-level3-plan-store'), null)
 assert.equal(hydrationStore.persist.getOptions().version, 1)
+const throwingStorage = {
+  getItem: () => { throw new Error('storage read failed') },
+  setItem: () => { throw new Error('storage write failed') },
+  removeItem: () => { throw new Error('storage remove failed') },
+}
+globalThis.window = { localStorage: throwingStorage }
+const throwingHydrationStore = mrStore.createMrVersionPlanStore({ storage: throwingStorage, now: () => NOW })
+await assert.doesNotReject(() => mrStore.rehydrateMrVersionPlanStore(throwingHydrationStore))
