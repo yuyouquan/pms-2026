@@ -43,6 +43,70 @@ export interface TosMrVersionInstance {
   updatedAt: string
 }
 
+export interface MrPlanVersionLike {
+  id: string
+  versionNo: string
+  status: string
+}
+
+export interface MrLevel1TaskLike {
+  id?: string
+  stableId?: string
+  parentId?: string | null
+  taskName?: string
+  order?: number
+  planStartDate?: string | Date
+  planEndDate?: string | Date
+}
+
+export interface TosMrCandidateInput {
+  versions: readonly MrPlanVersionLike[]
+  getSnapshot: (versionId: string) => readonly MrLevel1TaskLike[] | undefined
+  usedVersions: readonly string[]
+}
+
+export interface TosMrVersionCandidate {
+  value: string
+  label: string
+  planStartDate: string
+  planEndDate: string
+  disabled: boolean
+  reason?: string
+}
+
+export interface MrTosDateBounds {
+  planStartDate: string
+  planEndDate: string
+}
+
+export interface CreateTosMrVersionInput {
+  projectId: string
+  tosVersion: string
+  templateVersion: MrTemplateVersion
+  actor: string
+  now: string
+}
+
+export interface MrTosVerticalRow extends MrTemplateActivity {
+  number: string
+  depth: 0 | 1
+  date: string
+}
+
+export interface MrLeafColumn {
+  key: string
+  title: string
+  parentName: string
+  activityName: string
+  activityId?: string
+}
+
+export interface MrGroupedColumn {
+  key: string
+  title: string
+  children: MrLeafColumn[]
+}
+
 export interface JointMachinePlan {
   projectId: string
   tosProjectId: string
