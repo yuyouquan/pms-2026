@@ -303,5 +303,21 @@ for (const currentContract of [
 }
 assert.match(browserSource, /setViewport\(\{\s*width:\s*700/, 'browser verification must cover the current narrow todo layout below 760px')
 assert.match(browserSource, /gridColumnStart/, 'browser verification must prove the search filter spans both narrow columns')
+assert.doesNotMatch(browserSource, /OP · 概念启动|plan todo restores/, 'browser verification must not fabricate plan todos after L1 responsibility removal')
+assert.match(browserSource, /await clickTodoSource\(['"]计划待办['"]\)[\s\S]{0,240}await waitForTodoCount\(0\)/, 'browser verification must cover the real empty plan directory')
+assert.doesNotMatch(browserSource, /['"]首销 tOS 版本['"]/, 'project-list browser expectations must use the current matrix label')
+assert.match(browserSource, /['"]首销tOS版本['"]/, 'project-list browser verification must cover the current first-sale tOS label')
+for (const matrixControl of ['项目二级分类快捷筛选', '状态快捷筛选']) {
+  assert.doesNotMatch(browserSource, new RegExp(`assertAbsent\\\\?\\(\\\\?['"]\\[aria-label=\\\\?['"]${matrixControl}`), `browser verification must not reject current project-list control: ${matrixControl}`)
+  assert.match(browserSource, new RegExp(`assertSelector\\\\?\\(\\\\?['"]\\[aria-label=\\\\?['"]${matrixControl}`), `browser verification must cover current project-list control: ${matrixControl}`)
+}
+assert.doesNotMatch(browserSource, /快捷筛选-|apply linked brand quick filter/, 'browser verification must not require removed project-list quick selects')
+assert.doesNotMatch(browserSource, /clickAria\(['"]列设置['"]\)/, 'browser verification must not use the retired column trigger label')
+assert.match(browserSource, /clickAria\(['"]字段配置['"]\)/, 'browser verification must use the current column trigger label')
+assert.doesNotMatch(browserSource, /pms-floating-config-panel\[aria-label=\\?['"]列设置/, 'browser verification must not use the retired column panel label')
+assert.match(browserSource, /pms-floating-config-panel\[aria-label=\\?['"]字段配置/, 'browser verification must assert the current column panel label')
+assert.doesNotMatch(browserSource, /waitForPanelFirstControlFocus/, 'browser verification must not depend on obsolete popup autofocus timing')
+assert.match(browserSource, /clickAria\(['"]筛选字段['"]\)/, 'browser verification must open the filter-field select through its accessible control')
+assert.doesNotMatch(browserSource, /V4 \(修订中\)/, 'workbench browser must not expect a draft absent from the current acceptance seed')
 assert.doesNotMatch(todoCenterSource, /checklist\.map|tmChecklistItems\.map/, 'todo center must not split transfer checklists into rows')
 console.log('todo center contract passed')

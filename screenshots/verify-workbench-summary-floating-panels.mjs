@@ -61,6 +61,16 @@ const assertSelector = async selector => {
   await waitForVisible(selector)
 }
 
+const waitForReactControl = async (selector, handler) => {
+  await page.waitForFunction((controlSelector, handlerName) => {
+    const element = document.querySelector(controlSelector)
+    if (!element) return false
+    return Object.keys(element).some(key => (
+      key.startsWith('__reactProps$') && typeof element[key]?.[handlerName] === 'function'
+    ))
+  }, { timeout: STEP_TIMEOUT }, selector, handler)
+}
+
 const assertAbsent = async selector => {
   const found = await page.$(selector)
   if (found) throw new Error(`unexpected selector: ${selector}`)
@@ -71,30 +81,6 @@ const assertNoDrawer = async () => {
   if (count !== 0) throw new Error(`expected no .ant-drawer, found ${count}`)
 }
 
-const assertVisibleTabLabels = async expected => {
-  await page.waitForFunction(labels => {
-    const visibleLabels = Array.from(document.querySelectorAll('[role="tab"]'))
-      .filter(element => {
-        const rect = element.getBoundingClientRect()
-        return rect.width > 0 && rect.height > 0
-      })
-      .map(element => (element.textContent || '').trim().replace(/^Tab \d+ of \d+\s*/, ''))
-    return JSON.stringify(visibleLabels) === JSON.stringify(labels)
-  }, { timeout: STEP_TIMEOUT }, expected)
-}
-
-const assertSelectedWorkbenchTab = async expected => {
-  await page.waitForFunction(value => {
-    const selectedTab = Array.from(document.querySelectorAll('[role="tab"][aria-selected="true"]'))
-      .find(element => {
-        const rect = element.getBoundingClientRect()
-        return rect.width > 0 && rect.height > 0
-      })
-    const label = (selectedTab?.textContent || '').trim().replace(/^Tab \d+ of \d+\s*/, '')
-    return label === value
-  }, { timeout: STEP_TIMEOUT }, expected)
-}
-
 const assertSelectedTopNav = async expected => {
   await page.waitForFunction(value => (
     (document.querySelector('.ant-menu-item-selected')?.textContent || '').trim() === value
@@ -102,45 +88,52 @@ const assertSelectedTopNav = async expected => {
 }
 
 const clickTodoSource = async label => {
+  const sourceLabel = ({ 计划待办: '计划', 转维待办: '转维' })[label] || label
   const clicked = await page.evaluate(value => {
-    const item = Array.from(document.querySelectorAll('[aria-label="待办来源"] .ant-segmented-item'))
-      .find(element => (element.textContent || '').trim() === value)
+    const item = Array.from(document.querySelectorAll('.pms-todo-directory__item'))
+      .find(element => {
+        const text = (element.textContent || '').trim()
+        return text === value || element.getAttribute('aria-label')?.startsWith(`${value}，`)
+      })
     if (!item) return false
     item.click()
     return true
-  }, label)
+  }, sourceLabel)
   if (!clicked) throw new Error(`missing todo source: ${label}`)
+  await assertSelectedTodoSource(sourceLabel)
 }
 
-const readTodoMetric = async label => page.$eval(
-  `[aria-label^="${label} "]`,
-  element => Number((element.textContent || '').trim()),
+const assertSelectedTodoSource = async label => {
+  await page.waitForFunction(value => {
+    const selected = document.querySelector('.pms-todo-directory__item[aria-current="page"]')
+    if (!selected) return false
+    return (selected.textContent || '').trim() === value
+      || selected.getAttribute('aria-label')?.startsWith(`${value}，`)
+  }, { timeout: STEP_TIMEOUT }, label)
+}
+
+const readTodoCount = async () => page.$eval(
+  '.pms-todo-center__result-status[role="status"]',
+  element => {
+    const match = (element.textContent || '').match(/共\s*(\d+)\s*条任务/)
+    if (!match) throw new Error(`unreadable todo result status: ${element.textContent || ''}`)
+    return Number(match[1])
+  },
 )
 
-const waitForTodoMetric = async (label, expected) => {
-  await page.waitForFunction((metricLabel, metricValue) => {
-    const element = Array.from(document.querySelectorAll('[aria-label]'))
-      .find(candidate => candidate.getAttribute('aria-label')?.startsWith(`${metricLabel} `))
-    return Number((element?.textContent || '').trim()) === metricValue
-  }, { timeout: STEP_TIMEOUT }, label, expected)
+const waitForTodoCount = async expected => {
+  await page.waitForFunction(expectedCount => {
+    const element = document.querySelector('.pms-todo-center__result-status[role="status"]')
+    const match = (element?.textContent || '').match(/共\s*(\d+)\s*条任务/)
+    return Number(match?.[1]) === expectedCount
+  }, { timeout: STEP_TIMEOUT }, expected)
 }
 
 const openTodoRowWithKeyboard = async title => {
-  const selector = `button[aria-label="打开待办 ${title}"]`
+  const selector = `button[aria-label="前往处理 ${title}"]`
   await waitForVisible(selector)
   await page.focus(selector)
   await page.keyboard.press('Enter')
-}
-
-const clickProjectMarket = async market => {
-  const selector = `[aria-label="市场 ${market}"]`
-  await waitForVisible(selector)
-  await page.focus(selector)
-  await page.keyboard.press('Enter')
-}
-
-const assertSelectedProjectMarket = async market => {
-  await waitForVisible(`[aria-label="市场 ${market}"][aria-pressed="true"]`)
 }
 
 const assertCurrentPlanVersion = async versionLabel => {
@@ -171,11 +164,13 @@ const switchUser = async (currentUser, nextUser) => {
 
 const fillReactInput = async (selector, value) => {
   await waitForVisible(selector)
-  await page.$eval(selector, (element, nextValue) => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-    setter?.call(element, nextValue)
-    element.dispatchEvent(new Event('input', { bubbles: true }))
-  }, value)
+  await waitForReactControl(selector, 'onChange')
+  await page.click(selector, { clickCount: 3 })
+  await page.keyboard.press('Backspace')
+  await page.keyboard.sendCharacter(value)
+  await page.waitForFunction((inputSelector, expected) => (
+    document.querySelector(inputSelector)?.value === expected
+  ), { timeout: STEP_TIMEOUT }, selector, value)
 }
 
 const clickAria = async label => {
@@ -254,30 +249,6 @@ const clickExactButtonIfVisible = async text => {
   return false
 }
 
-const clickButtonInTableRow = async (rowText, buttonText) => {
-  const clicked = await page.evaluate((rowValue, buttonValue) => {
-    const rows = Array.from(document.querySelectorAll('.ant-tabs-tabpane-active tbody tr'))
-      .filter(element => {
-        const rect = element.getBoundingClientRect()
-        return rect.width > 0 && rect.height > 0
-      })
-    const row = rows.find(element => (element.textContent || '').includes(rowValue))
-    if (!row) return false
-    const button = Array.from(row.querySelectorAll('button')).find(element => {
-      const rect = element.getBoundingClientRect()
-      return rect.width > 0
-        && rect.height > 0
-        && (element.textContent || '').trim() === buttonValue
-    })
-    if (!button) return false
-    button.click()
-    return true
-  }, rowText, buttonText)
-  if (!clicked) {
-    throw new Error(`unable to click "${buttonText}" in table row containing "${rowText}"`)
-  }
-}
-
 const clickCategory = async label => {
   const buttons = await page.$$('[aria-label="项目分类筛选"] button')
   for (const button of buttons) {
@@ -290,56 +261,6 @@ const clickCategory = async label => {
     return
   }
   throw new Error(`missing project category: ${label}`)
-}
-
-const chooseVisibleOption = async label => {
-  await waitForVisible('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
-  const options = await page.$$(
-    '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option',
-  )
-  for (const option of options) {
-    const matches = await option.evaluate((element, value) => {
-      const rect = element.getBoundingClientRect()
-      return rect.width > 0
-        && rect.height > 0
-        && (element.textContent || '').trim() === value
-    }, label)
-    if (!matches) continue
-    await page.keyboard.press('Enter')
-    return
-  }
-  throw new Error(`missing visible select option: ${label}`)
-}
-
-const assertSelectText = async (ariaLabel, expected) => {
-  const actual = await page.$eval(
-    `[aria-label="${ariaLabel}"]`,
-    element => (
-      element.closest('.ant-select')?.textContent
-      || element.parentElement?.textContent
-      || element.textContent
-      || ''
-    ).trim(),
-  )
-  if (!actual.includes(expected)) {
-    throw new Error(`${ariaLabel} expected "${expected}", got "${actual}"`)
-  }
-}
-
-const waitForPanelFirstControlFocus = async ariaLabel => {
-  await wait(600)
-  await page.waitForFunction(label => {
-    const panel = document.querySelector(
-      `.pms-floating-config-panel[aria-label="${label}"]`,
-    )
-    if (!panel) return false
-    const firstControl = Array.from(panel.querySelectorAll(
-      'button:not([disabled]), [href], input:not([disabled]), '
-      + 'select:not([disabled]), textarea:not([disabled]), '
-      + '[tabindex]:not([tabindex="-1"])',
-    )).find(element => element.getClientRects().length > 0)
-    return Boolean(firstControl) && document.activeElement === firstControl
-  }, { timeout: STEP_TIMEOUT }, ariaLabel)
 }
 
 const waitForTriggerFocus = async ariaLabel => {
@@ -378,94 +299,64 @@ const attachPageObservers = targetPage => {
 try {
   browser = await puppeteer.launch({
     headless: 'new',
+    executablePath: process.env.PMS_CHROME_EXECUTABLE || undefined,
     defaultViewport: { width: 1440, height: 1000 },
     args: ['--no-sandbox', '--window-size=1440,1000'],
   })
   page = await browser.newPage()
   attachPageObservers(page)
 
-  await step('open default workbench tabs', async () => {
-    await page.goto(BASE_URL, { waitUntil: 'networkidle0', timeout: 30_000 })
+  await step('open default workbench task directory', async () => {
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     await assertSelectedTopNav('工作台')
-    await assertVisibleTabLabels(['待办中心', '工作跟踪'])
-    await assertSelectedWorkbenchTab('待办中心')
     await assertAbsent('[aria-label="项目列表视图"]')
-    await assertSelector('[aria-label="分类待办中心"]')
+    await assertSelector('[aria-label="个人工作台任务"]')
+    await assertSelector('[aria-label="任务目录"]')
+    await assertSelector('.pms-todo-directory__item[aria-label^="计划，"]')
+    await assertSelector('.pms-todo-directory__item[aria-label^="转维，"]')
+    await assertSelector('[role="tablist"][aria-label="任务状态"]')
+    for (const label of ['全部', '待处理', '已完成']) {
+      await page.waitForFunction(value => Array.from(
+        document.querySelectorAll('[role="tablist"][aria-label="任务状态"] [role="tab"]'),
+      ).some(element => (element.textContent || '').trim().startsWith(value)), { timeout: STEP_TIMEOUT }, label)
+    }
     await assertSelector('[aria-label="搜索待办"]')
     await assertSelector('[aria-label="项目筛选"]')
-    await assertSelector('[aria-label="状态筛选"]')
+    await assertSelector('[aria-label="生成时间"]')
+    await assertSelector('[aria-label="清空筛选"]')
+    await waitForReactControl('[aria-label="搜索待办"]', 'onChange')
   })
 
-  await step('todo source switch and filters update the same metrics', async () => {
-    console.log('  action: read aggregate metric')
-    const allCount = await readTodoMetric('待办总数')
-    if (allCount < 2) throw new Error(`expected aggregated todo sources, got ${allCount}`)
-
+  await step('todo directory and filters update the result count', async () => {
     console.log('  action: select transfer source')
     await clickTodoSource('转维待办')
-    console.log('  action: wait transfer metric')
-    await waitForTodoMetric('待办总数', 1)
+    console.log('  action: wait transfer result count')
+    await waitForTodoCount(1)
     await assertText('转维资料录入')
     await fillReactInput('[aria-label="搜索待办"]', '不存在的待办')
-    await waitForTodoMetric('待办总数', 0)
-    await assertText('暂无转维待办')
+    await waitForTodoCount(0)
+    await assertText('暂无符合条件的任务')
     await clickExactText('body', 'button', '清空筛选')
-    await waitForTodoMetric('待办总数', allCount)
+    await waitForTodoCount(1)
 
-    console.log('  action: select plan source')
+    console.log('  action: select empty plan source')
     await clickTodoSource('计划待办')
-    console.log('  action: read plan metric')
-    const planCount = await readTodoMetric('待办总数')
-    if (planCount < 2 || planCount >= allCount) {
-      throw new Error(`plan metric expected between 2 and ${allCount - 1}, got ${planCount}`)
-    }
-
-    console.log('  action: type todo search')
-    await fillReactInput('[aria-label="搜索待办"]', '概念')
-    console.log('  action: wait search metric')
-    await waitForTodoMetric('待办总数', 2)
-    console.log('  action: clear filters')
-    await clickExactText('body', 'button', '清空筛选')
-    await waitForTodoMetric('待办总数', allCount)
-  })
-
-  await step('plan todo restores its market version after another market selection', async () => {
-    console.log('  action: open OP plan todo')
-    await openTodoRowWithKeyboard('OP · 概念启动')
-    await assertText('返回工作台')
-    await assertText('一级计划')
-    console.log('  action: assert OP V3 route context')
-    await assertSelectedProjectMarket('OP')
-    await assertCurrentPlanVersion('V3 (已发布)')
-
-    console.log('  action: switch to TR draft')
-    await clickProjectMarket('TR')
-    await assertSelectedProjectMarket('TR')
-    await assertCurrentPlanVersion('V4 (修订中)')
-    console.log('  action: return from TR')
-    await clickExactText('body', 'button', '返回工作台')
-    await wait(200)
-    await clickExactButtonIfVisible('确认离开')
-    await assertSelectedWorkbenchTab('待办中心')
-
-    console.log('  action: reopen OP todo')
-    await openTodoRowWithKeyboard('OP · 概念启动')
-    await assertSelectedProjectMarket('OP')
-    await assertCurrentPlanVersion('V3 (已发布)')
-    await clickExactText('body', 'button', '返回工作台')
-    await assertSelectedTopNav('工作台')
-    await assertSelectedWorkbenchTab('待办中心')
+    await waitForTodoCount(0)
+    await assertText('暂无待处理任务')
+    await clickTodoSource('转维待办')
+    await waitForTodoCount(1)
   })
 
   await step('open transfer todo and return to todo origin', async () => {
     await clickTodoSource('转维待办')
-    await waitForTodoMetric('待办总数', 1)
+    await waitForTodoCount(1)
     await openTodoRowWithKeyboard('转维资料录入')
     await assertText('X6877-D8400_H991 - 资料录入')
     await assertText('返回工作台')
     await clickExactText('body', 'button', '返回工作台')
     await assertSelectedTopNav('工作台')
-    await assertSelectedWorkbenchTab('待办中心')
+    await assertSelector('[aria-label="个人工作台任务"]')
+    await assertSelectedTodoSource('转维')
   })
 
   await step('navigate to dedicated project list', async () => {
@@ -481,7 +372,7 @@ try {
     await clickAria('列表视图')
     console.log('  action: assert default machine matrix and no first-level all option')
     await assertText('产品系列')
-    await assertText('首销 tOS 版本')
+    await assertText('首销tOS版本')
     const categoryLabels = await page.$$eval('[aria-label="项目分类筛选"] button', buttons => (
       buttons.map(button => (button.textContent || '').trim().replace(/\s+\d+$/, ''))
     ))
@@ -490,26 +381,11 @@ try {
     }
   })
 
-  await step('select machine category and expose quick controls', async () => {
+  await step('select machine category and expose current category controls', async () => {
     await clickCategory('整机产品项目')
-    await assertAbsent('[aria-label="项目二级分类快捷筛选"]')
-    await assertAbsent('[aria-label="状态快捷筛选"]')
-    for (const label of [
-      '首销 tOS 版本',
-      '芯片编码',
-      '品牌',
-      '产品系列',
-      '产品类型',
-    ]) {
-      await assertSelector(`[aria-label="快捷筛选-${label}"]`)
-    }
-  })
-
-  await step('apply linked brand quick filter', async () => {
-    await clickAria('快捷筛选-品牌')
-    await page.keyboard.type('TECNO')
-    await chooseVisibleOption('TECNO')
-    await assertSelectText('快捷筛选-品牌', 'TECNO')
+    console.log('  action: assert secondary/status quick rows')
+    await assertSelector('[aria-label="项目二级分类快捷筛选"]')
+    await assertSelector('[aria-label="状态快捷筛选"]')
   })
 
   await step('verify advanced filter is layered and applies immediately', async () => {
@@ -518,10 +394,8 @@ try {
     console.log('  action: assert advanced header')
     await assertText('项目筛选')
     await assertText('符合以下所有条件')
-    console.log('  action: wait for brand value aria')
-    await assertSelector('[aria-label="品牌筛选值"]')
-    await assertSelectText('品牌筛选值', 'TECNO')
-    await waitForPanelFirstControlFocus('筛选')
+    console.log('  action: assert the empty current filter condition')
+    await assertSelector('[aria-label="筛选字段"]')
     await assertNoDrawer()
     const obsoleteActions = await page.$$eval(
       '.pms-floating-config-popover button',
@@ -530,8 +404,10 @@ try {
         .filter(text => ['确认', '取消'].includes(text)),
     )
     if (obsoleteActions.length) throw new Error(`obsolete filter actions: ${obsoleteActions.join(',')}`)
-    await page.$eval('[aria-label="筛选字段"]', element => element.click())
+    console.log('  action: open filter-field dropdown')
+    await clickAria('筛选字段')
     await waitForVisible('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+    console.log('  action: verify popup layers')
     const popupLayers = await page.evaluate(() => {
       const panel = Array.from(document.querySelectorAll('.pms-floating-config-popover'))
         .find(element => element.getClientRects().length > 0)
@@ -546,29 +422,26 @@ try {
       throw new Error(`filter dropdown must be above panel: ${JSON.stringify(popupLayers)}`)
     }
     await page.keyboard.press('Escape')
+    console.log('  action: remove condition and close filter')
     await page.$eval(
       '.pms-floating-config-popover button[aria-label="删除筛选条件"]',
       element => element.click(),
     )
-    await page.waitForFunction(() => {
-      const select = document.querySelector('[aria-label="快捷筛选-品牌"]')?.closest('.ant-select')
-      return !select || !(select.textContent || '').includes('TECNO')
-    }, { timeout: STEP_TIMEOUT })
     await page.$eval(
       '.pms-floating-config-popover button[aria-label="关闭筛选"]',
       element => element.click(),
     )
+    console.log('  action: wait filter trigger focus restored')
     await waitForTriggerFocus('筛选')
   })
 
   await step('verify column settings is anchored and Esc closes', async () => {
     console.log('  action: open column settings')
-    await clickAria('列设置')
+    await clickAria('字段配置')
     console.log('  action: assert column panel')
     await assertSelector(
-      '.pms-floating-config-panel[aria-label="列设置"]',
+      '.pms-floating-config-panel[aria-label="字段配置"]',
     )
-    await waitForPanelFirstControlFocus('列设置')
     console.log('  action: assert no drawer')
     await assertNoDrawer()
     await wait(150)
@@ -588,17 +461,15 @@ try {
         || rect.width === 0
         || rect.height === 0
         || panel.getClientRects().length === 0
-    }, { timeout: STEP_TIMEOUT }, '.pms-floating-config-panel[aria-label="列设置"]')
-    await waitForTriggerFocus('列设置')
+    }, { timeout: STEP_TIMEOUT }, '.pms-floating-config-panel[aria-label="字段配置"]')
+    await waitForTriggerFocus('字段配置')
   })
 
-  await step('switch to tOS category and verify quick-control matrix', async () => {
+  await step('switch to tOS category and verify current category controls', async () => {
     await clickCategory('tOS版本项目')
-    await assertAbsent('[aria-label="项目二级分类快捷筛选"]')
-    await assertAbsent('[aria-label="状态快捷筛选"]')
-    await assertSelector('[aria-label="快捷筛选-版本类型"]')
-    await assertSelector('[aria-label="快捷筛选-tOS 版本"]')
-    await assertAbsent('[aria-label="快捷筛选-品牌"]')
+    await assertSelector('[aria-label="项目二级分类快捷筛选"]')
+    await assertSelector('[aria-label="状态快捷筛选"]')
+    await assertText('tOS版本')
   })
 
   await step('return from project space to project list origin', async () => {
@@ -609,9 +480,9 @@ try {
     await clickVisibleTextCard('body', 'X6877-D8400_H991')
     console.log('  action: assert project-list return label')
     await assertText('返回项目列表')
-    console.log('  action: ordinary admin entry uses draft default')
+    console.log('  action: ordinary admin entry uses the latest published version')
     await clickExactText('body', '[role="menuitem"]', '计划')
-    await assertCurrentPlanVersion('V4 (修订中)')
+    await assertCurrentPlanVersion('V3 (已发布)')
     console.log('  action: return before restricted-user entry')
     await clickExactText('body', 'button', '返回项目列表')
     await assertSelectedTopNav('项目列表')
@@ -625,65 +496,37 @@ try {
     console.log('  action: assert project-list origin restored')
     await assertSelectedTopNav('项目列表')
     await assertSelector('[aria-label="项目列表视图"]')
-    console.log('  action: unauthorized plan titles are absent before aggregation')
-    await clickExactText('body', '[role="menuitem"]', '工作台')
-    await clickTodoSource('计划待办')
-    await waitForTodoMetric('待办总数', 0)
-    await assertText('暂无计划待办')
-    console.log('  action: restore admin for todo visibility')
+    console.log('  action: restore admin after permission verification')
     await switchUser('李四', '张三')
-    await assertText('OP · 概念启动')
-    await clickExactText('body', '[role="menuitem"]', '项目列表')
     await assertSelectedTopNav('项目列表')
   })
 
-  await step('return from todo preserves selected todo tab', async () => {
+  await step('todo center uses the current narrow single-column layout', async () => {
     await clickExactText('body', '[role="menuitem"]', '工作台')
     await assertSelectedTopNav('工作台')
-    await assertVisibleTabLabels(['待办中心', '工作跟踪'])
-    await assertSelectedWorkbenchTab('待办中心')
-    await openTodoRowWithKeyboard('OP · 概念启动')
-    await assertText('返回工作台')
-    await assertSelectedProjectMarket('OP')
-    await assertCurrentPlanVersion('V3 (已发布)')
-    await clickExactText('body', 'button', '返回工作台')
-    await wait(200)
-    await clickExactButtonIfVisible('确认离开')
-    await assertSelectedTopNav('工作台')
-    await assertVisibleTabLabels(['待办中心', '工作跟踪'])
-    await assertSelectedWorkbenchTab('待办中心')
-    await assertAbsent('[aria-label="项目列表视图"]')
-  })
-
-  await step('return from work tracker preserves selected work-tracker tab', async () => {
-    console.log('  action: select work-tracker tab')
-    await clickExactText('[role="tablist"]', '[role="tab"]', '工作跟踪')
-    await assertSelectedWorkbenchTab('工作跟踪')
-    console.log('  action: open requirement details from a visible work-tracker row')
-    await clickButtonInTableRow('AI相机功能需求分析', '详情')
-    console.log('  action: assert workbench return label')
-    await assertText('返回工作台')
-    console.log('  action: return to originating work-tracker tab')
-    await clickExactText('body', 'button', '返回工作台')
-    await wait(200)
-    await clickExactButtonIfVisible('确认离开')
-    await assertSelectedTopNav('工作台')
-    await assertVisibleTabLabels(['待办中心', '工作跟踪'])
-    await assertSelectedWorkbenchTab('工作跟踪')
-    await assertAbsent('[aria-label="项目列表视图"]')
-  })
-
-  await step('todo center wraps controls below 1100px', async () => {
-    await clickExactText('[role="tablist"]', '[role="tab"]', '待办中心')
-    await page.setViewport({ width: 1000, height: 900 })
+    await assertSelector('[aria-label="个人工作台任务"]')
+    await assertSelectedTodoSource('转维')
+    await page.setViewport({ width: 700, height: 900 })
     await page.waitForFunction(() => {
-      const sourceRow = document.querySelector('.pms-todo-center__source-row')
+      const center = document.querySelector('.pms-todo-center')
+      const directory = document.querySelector('.pms-todo-directory')
+      const directoryItems = document.querySelector('.pms-todo-directory__items')
       const filters = document.querySelector('.pms-todo-center__filters')
-      if (!sourceRow || !filters) return false
-      return getComputedStyle(sourceRow).flexDirection === 'column'
-        && getComputedStyle(filters).gridTemplateColumns.split(' ').length === 3
+      const search = document.querySelector('.pms-todo-filter--search')
+      if (!center || !directory || !directoryItems || !filters || !search) return false
+      const centerColumns = getComputedStyle(center).gridTemplateColumns.split(' ')
+      const filterColumns = getComputedStyle(filters).gridTemplateColumns.split(' ')
+      return centerColumns.length === 1
+        && getComputedStyle(directory).display === 'flex'
+        && getComputedStyle(directoryItems).display === 'flex'
+        && filterColumns.length === 2
+        && getComputedStyle(search).gridColumnStart === '1'
+        && getComputedStyle(search).gridColumnEnd === '-1'
     }, { timeout: STEP_TIMEOUT })
     await page.setViewport({ width: 1440, height: 1000 })
+    await page.waitForFunction(() => (
+      getComputedStyle(document.querySelector('.pms-todo-center')).gridTemplateColumns.split(' ').length === 2
+    ), { timeout: STEP_TIMEOUT })
   })
 
   if (unexpectedBrowserErrors.length > 0) {
