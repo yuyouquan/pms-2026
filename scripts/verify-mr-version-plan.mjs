@@ -361,6 +361,13 @@ assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '张三', globalA
 assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: ['张三'], machineSpm: '张三', context: 'machine-market' }), { canView: true, canEditTemplate: false, canEditTos: false, canEditMachine: false, canStopRelease: false, canEditMarket: true })
 assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '普通用户', globalAdminUsers: [], tosManagerUsers: ['普通用户'], machineSpm: '张三', context: 'config' }), { canView: true, canEditTemplate: false, canEditTos: false, canEditMachine: false, canStopRelease: false, canEditMarket: false })
 assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '', globalAdminUsers: [''], tosManagerUsers: [''], machineSpm: '', context: 'tos' }), { canView: false, canEditTemplate: false, canEditTos: false, canEditMachine: false, canStopRelease: false, canEditMarket: false })
+const multiSpmJointPermission = currentUser => planRules.resolveMrPermissions({
+  currentUser, globalAdminUsers: [], tosManagerUsers: [], machineSpm: '旧负责人', machineSpmUsers: [' 李白 ', '张三', '李白'], context: 'joint-machine',
+})
+assert.equal(multiSpmJointPermission('李白').canEditMachine, true)
+assert.equal(multiSpmJointPermission('张三').canStopRelease, true)
+assert.equal(multiSpmJointPermission('王五').canEditMachine, false)
+assert.equal(planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '张三', machineSpmUsers: [], context: 'machine-market' }).canEditMarket, true)
 
 const publishedTemplate = { id: 'template-v1', versionNo: 'V1', status: '已发布', activities: tosActivities, createdBy: '张三', createdAt: NOW }
 const templateBeforeCreate = JSON.parse(JSON.stringify(publishedTemplate))
@@ -777,6 +784,7 @@ assert.deepEqual(adapter.projectMachineMrMetadata(machineAdapterProject, machine
   marketName: 'OP',
   productLine: 'NOTE',
   spm: '李白',
+  spmUsers: ['李白'],
   isMada: '是',
   socPlatform: 'MT6877',
   packageMode: '/',
@@ -800,14 +808,49 @@ assert.deepEqual(aggregationSources.tosProjects, [
   { projectId: 'tos-adapter', tosProjectKey: '16.3', projectName: 'tOS16.3' },
 ])
 assert.deepEqual(aggregationSources.machineProjects, [
-  { id: 'machine-adapter', projectName: 'X6877-D8400_H991', productType: '新品', firstSaleTosVersion: '16.3.0.110', currentTosVersion: '16.3', spm: '李白' },
+  { id: 'machine-adapter', projectName: 'X6877-D8400_H991', productType: '新品', firstSaleTosVersion: '16.3.0.110', currentTosVersion: '16.3', spm: '李白', spmUsers: ['李白'] },
 ])
+const legacyMultiSpmProject = { ...machineAdapterProject, spm: '李白，张三; 李白；王五' }
+const legacyMultiSpmMetadata = adapter.projectMachineMrMetadata(legacyMultiSpmProject, machineMarketRows)
+assert.deepEqual(legacyMultiSpmMetadata.spmUsers, ['李白', '张三', '王五'])
+assert.equal(legacyMultiSpmMetadata.spm, '李白,张三,王五')
+const legacyMultiSpmSources = adapter.buildMrAggregationSources({ ...adapterInput, projects: [legacyMultiSpmProject] })
+assert.deepEqual(legacyMultiSpmSources.machineProjects[0].spmUsers, ['李白', '张三', '王五'])
+for (const currentUser of ['李白', '张三', '王五']) {
+  assert.equal(planRules.resolveMrPermissions({ currentUser, globalAdminUsers: [], tosManagerUsers: [], machineSpm: legacyMultiSpmSources.machineProjects[0].spm, machineSpmUsers: legacyMultiSpmSources.machineProjects[0].spmUsers, context: 'joint-machine' }).canEditMachine, true)
+}
+assert.equal(planRules.resolveMrPermissions({ currentUser: '赵六', globalAdminUsers: [], tosManagerUsers: [], machineSpm: legacyMultiSpmSources.machineProjects[0].spm, machineSpmUsers: legacyMultiSpmSources.machineProjects[0].spmUsers, context: 'joint-machine' }).canEditMachine, false)
 const legacyReferenceSources = adapter.buildMrAggregationSources({
   ...adapterInput,
   projects: [{ ...machineAdapterProject, firstSaleTosVersionId: 'tos-16-3', currentTosVersionId: 'tos-17-1' }],
 })
 assert.equal(legacyReferenceSources.machineProjects[0].firstSaleTosVersion, '16.3')
 assert.equal(legacyReferenceSources.machineProjects[0].currentTosVersion, '17.1')
+
+const namedTosProjects = [
+  { ...tosAdapterProject, id: 'tos-17-1', name: 'tOS17.1', tosVersion: 'tOS16.3' },
+  { ...tosAdapterProject, id: 'tos-16-2', name: 'tOS16.2', tosVersion: 'tOS16.3' },
+  { ...tosAdapterProject, id: 'tos-16-3', name: 'tOS16.3', tosVersion: 'tOS16.3' },
+  { ...tosAdapterProject, id: 'tos-invalid', name: 'HiOS-Launcher', tosVersion: 'tOS16.3' },
+]
+const namedTosSources = adapter.buildMrAggregationSources({
+  ...adapterInput,
+  projects: namedTosProjects,
+  tosTypeConfigsByProjectId: Object.fromEntries(namedTosProjects.map(project => [project.id, tosTypeRows])),
+})
+assert.deepEqual(namedTosSources.tosProjects.map(project => [project.projectId, project.tosProjectKey]), [
+  ['tos-16-2', '16.2'],
+  ['tos-16-3', '16.3'],
+  ['tos-17-1', '17.1'],
+])
+assert.throws(() => adapter.buildMrAggregationSources({
+  ...adapterInput,
+  projects: [
+    { ...tosAdapterProject, id: 'tos-duplicate-a', name: 'tOS16.3' },
+    { ...tosAdapterProject, id: 'tos-duplicate-b', name: 'TOS016.03' },
+  ],
+  tosTypeConfigsByProjectId: { 'tos-duplicate-a': tosTypeRows, 'tos-duplicate-b': tosTypeRows },
+}), /tOS项目版本键重复：16\.3/)
 assert.deepEqual(Object.keys(aggregationSources.latestPublishedLevel1ByProjectId), ['machine-adapter', 'tos-adapter'])
 assert.deepEqual(aggregationSources.machineMetadataByProjectId['machine-adapter'], adapter.projectMachineMrMetadata(machineAdapterProject, machineMarketRows))
 assert.deepEqual(aggregationSources.tosManagerUsersByProjectId, { 'tos-adapter': ['李白', '张三'] })
