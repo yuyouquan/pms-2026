@@ -52,7 +52,7 @@ function parsePublishedVersion(value: string): number | undefined {
 }
 
 function escapedIdentity(parentName: string, activityName = ''): string {
-  return `${parentName.replace(/%/g, '%25').replace(/::/g, '%3A%3A')}::${activityName.replace(/%/g, '%25').replace(/::/g, '%3A%3A')}`
+  return `${encodeURIComponent(parentName)}::${encodeURIComponent(activityName)}`
 }
 
 export function compareTosVersionNumbers(left: string, right: string): number {
@@ -197,14 +197,11 @@ export function buildJointMrColumnSchema(
   instances: readonly TosMrVersionInstance[],
   latestTemplate: readonly MrTemplateActivity[],
 ): MrGroupedColumn[] {
-  const groups = projectTosMrHorizontalColumns(latestTemplate).map(group => ({ ...group, children: group.children.map(child => ({ ...child })) }))
-  const pairs = new Set(groups.flatMap(group => group.children.map(child => `${group.title}\u0000${child.title}`)))
-  const groupsByName = new Map(groups.map(group => [group.title, group]))
-  const sortedInstances = instances.map((instance, index) => ({ instance, index }))
-    .sort((left, right) => compareTosVersionNumbers(left.instance.tosVersion, right.instance.tosVersion) || left.index - right.index)
-
-  sortedInstances.forEach(({ instance }) => {
-    projectTosMrHorizontalColumns(instance.activities).forEach(sourceGroup => {
+  const groups: MrGroupedColumn[] = []
+  const pairs = new Set<string>()
+  const groupsByName = new Map<string, MrGroupedColumn>()
+  const appendColumns = (sourceGroups: readonly MrGroupedColumn[]) => {
+    sourceGroups.forEach(sourceGroup => {
       let targetGroup = groupsByName.get(sourceGroup.title)
       if (!targetGroup) {
         targetGroup = { key: sourceGroup.key, title: sourceGroup.title, children: [] }
@@ -212,12 +209,20 @@ export function buildJointMrColumnSchema(
         groupsByName.set(targetGroup.title, targetGroup)
       }
       sourceGroup.children.forEach(sourceChild => {
-        const pair = `${sourceGroup.title}\u0000${sourceChild.title}`
+        const pair = escapedIdentity(sourceChild.parentName, sourceChild.activityName)
         if (pairs.has(pair)) return
         pairs.add(pair)
         targetGroup!.children.push({ ...sourceChild })
       })
     })
+  }
+
+  appendColumns(projectTosMrHorizontalColumns(latestTemplate))
+  const sortedInstances = instances.map((instance, index) => ({ instance, index }))
+    .sort((left, right) => compareTosVersionNumbers(left.instance.tosVersion, right.instance.tosVersion) || left.index - right.index)
+
+  sortedInstances.forEach(({ instance }) => {
+    appendColumns(projectTosMrHorizontalColumns(instance.activities))
   })
   return groups
 }
