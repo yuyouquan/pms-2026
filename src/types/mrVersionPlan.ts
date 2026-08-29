@@ -26,6 +26,7 @@ export interface MrTemplateChangeLog {
   versionId: string
   action: 'create-revision' | 'add' | 'rename' | 'move' | 'delete' | 'publish' | 'cancel-revision'
   activityId?: string
+  activityName?: string
   before?: string
   after?: string
   actor: string

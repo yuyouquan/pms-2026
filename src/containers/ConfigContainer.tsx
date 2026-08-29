@@ -54,6 +54,7 @@ import { rehydrateMrVersionPlanStore, useMrVersionPlanStore } from '@/stores/mrV
 import { validateMrTemplateForPublish } from '@/lib/mrTemplateRules'
 import { compareMrTemplateSnapshots, type MrTemplateSnapshotDiff } from '@/lib/mrTemplateCompare'
 import { createMrTemplateStorePermission, resolveMrTemplateConfigCapabilities } from '@/lib/mrTemplateConfigPermissions'
+import { resolveMrTemplateHistoryActivityLabel } from '@/lib/mrTemplateHistory'
 import type { MrTemplateChangeLog } from '@/types/mrVersionPlan'
 import dayjs from 'dayjs'
 
@@ -176,7 +177,7 @@ function MrTemplateConfigSurface({ currentLoginUser }: { currentLoginUser: strin
           { title: '操作时间', dataIndex: 'occurredAt', key: 'occurredAt', width: 190 },
           { title: '版本', dataIndex: 'versionId', key: 'versionId', width: 90, render: (value: string) => versionNameById.get(value) ?? value },
           { title: '操作', dataIndex: 'action', key: 'action', width: 110, render: (value: MrTemplateChangeLog['action']) => MR_HISTORY_ACTION_LABELS[value] },
-          { title: '活动', dataIndex: 'activityId', key: 'activityId', render: (value?: string) => value ? activityNameById.get(value) ?? value : '-' },
+          { title: '活动', dataIndex: 'activityId', key: 'activityId', render: (_: string | undefined, log: MrTemplateChangeLog) => resolveMrTemplateHistoryActivityLabel(log, activityNameById) },
           { title: '修改前', dataIndex: 'before', key: 'before', render: (value?: string) => value || '-' },
           { title: '修改后', dataIndex: 'after', key: 'after', render: (value?: string) => value || '-' },
         ]} />

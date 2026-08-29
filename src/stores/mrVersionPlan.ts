@@ -231,6 +231,7 @@ function sanitizeTemplateHistory(value: unknown): MrTemplateChangeLog[] {
     return [{
       id, versionId, action, actor, occurredAt,
       ...(text(candidate.activityId) ? { activityId: text(candidate.activityId) } : {}),
+      ...(text(candidate.activityName) ? { activityName: text(candidate.activityName) } : {}),
       ...(typeof candidate.before === 'string' ? { before: candidate.before } : {}),
       ...(typeof candidate.after === 'string' ? { after: candidate.after } : {}),
     }]
@@ -376,7 +377,10 @@ export function migrateMrVersionPlanState(persistedState: unknown, _fromVersion:
   const safeTemplateVersions = templateVersions.length ? templateVersions : fallback.templateVersions
   const draft = safeTemplateVersions.find(version => version.status === '修订中')
   const latestPublished = safeTemplateVersions.filter(version => version.status === '已发布').at(-1)!
-  const currentTemplateVersionId = draft?.id ?? latestPublished.id
+  const persistedCurrentId = text(persistedState.currentTemplateVersionId)
+  const currentTemplateVersionId = safeTemplateVersions.some(version => version.id === persistedCurrentId)
+    ? persistedCurrentId
+    : draft?.id ?? latestPublished.id
   const tosInstancesByProjectId = sanitizeTosInstances(persistedState.tosInstancesByProjectId)
   const tosChildIds = buildTosChildIds(tosInstancesByProjectId)
   const machinePlansByKey = sanitizeMachinePlans(persistedState.machinePlansByKey, tosChildIds)
@@ -486,14 +490,14 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
         if (sameJson(previous, next)) return true
         const previousById = new Map(previous.map(activity => [activity.id, activity]))
         const nextById = new Map(next.map(activity => [activity.id, activity]))
-        const changes: Array<Pick<MrTemplateChangeLog, 'action' | 'activityId' | 'before' | 'after'>> = []
+        const changes: Array<Pick<MrTemplateChangeLog, 'action' | 'activityId' | 'activityName' | 'before' | 'after'>> = []
         previous.forEach(activity => {
           const replacement = nextById.get(activity.id)
-          if (!replacement) changes.push({ action: 'delete', activityId: activity.id, before: activity.activityName })
-          else if (replacement.activityName !== activity.activityName) changes.push({ action: 'rename', activityId: activity.id, before: activity.activityName, after: replacement.activityName })
-          else if (replacement.order !== activity.order || replacement.parentId !== activity.parentId) changes.push({ action: 'move', activityId: activity.id })
+          if (!replacement) changes.push({ action: 'delete', activityId: activity.id, activityName: activity.activityName, before: activity.activityName })
+          else if (replacement.activityName !== activity.activityName) changes.push({ action: 'rename', activityId: activity.id, activityName: replacement.activityName, before: activity.activityName, after: replacement.activityName })
+          else if (replacement.order !== activity.order || replacement.parentId !== activity.parentId) changes.push({ action: 'move', activityId: activity.id, activityName: replacement.activityName })
         })
-        next.forEach(activity => { if (!previousById.has(activity.id)) changes.push({ action: 'add', activityId: activity.id, after: activity.activityName }) })
+        next.forEach(activity => { if (!previousById.has(activity.id)) changes.push({ action: 'add', activityId: activity.id, activityName: activity.activityName, after: activity.activityName }) })
         const now = clock()
         set(state => {
           const logIds = allocateLogIds(state.templateHistory, changes.length)

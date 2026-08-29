@@ -4,8 +4,8 @@ import { createContext, useContext, type CSSProperties, type HTMLAttributes } fr
 import { Button, Empty, Input, Popconfirm, Space, Table, Tooltip } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { DeleteOutlined, HolderOutlined, PlusOutlined } from '@ant-design/icons'
-import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { moveMrTemplateActivity, normalizeMrTemplateActivities, numberMrTemplateActivities, removeMrTemplateActivity } from '@/lib/mrTemplateRules'
 import type { MrTemplateActivity } from '@/types/mrVersionPlan'
@@ -40,7 +40,10 @@ function SortableRow(props: SortableRowProps) {
 const createId = () => `mr-custom-${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
 
 export default function MrTemplateTable({ activities, editable, onChange }: MrTemplateTableProps) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
   const rows = numberMrTemplateActivities(activities)
   const dragBindings: Record<string, { attributes: Record<string, unknown>; listeners?: Record<string, unknown> }> = {}
 
