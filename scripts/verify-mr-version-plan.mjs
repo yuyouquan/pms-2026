@@ -6,6 +6,8 @@ const templateRules = loadTypeScriptModule(root, 'src/lib/mrTemplateRules.ts')
 const templateMocks = loadTypeScriptModule(root, 'src/data/mrVersionPlanMocks.ts')
 const templateMocksSource = readSource(root, 'src/data/mrVersionPlanMocks.ts')
 const planRules = loadTypeScriptModule(root, 'src/lib/mrVersionPlanRules.ts')
+const aggregationRules = loadTypeScriptModule(root, 'src/lib/mrAggregationRules.ts')
+const dateRules = loadTypeScriptModule(root, 'src/lib/mrDateRules.ts')
 
 assert.doesNotMatch(templateMocksSource, /as unknown as MrTemplateActivity\[\]/)
 assert.match(
@@ -443,3 +445,152 @@ assert.deepEqual(planRules.buildJointMrColumnSchema(outOfOrderInstances, latestD
   ['B', [['Z', logicalKey('B', 'Z')]]],
 ])
 assert.deepEqual({ latestDuplicateActivities, outOfOrderInstances }, dedupeInputBefore)
+
+// Joint aggregation: version intervals, matching, dynamic reconciliation, and stop-release.
+const mrActivities = [
+  { id: 'stage-change', parentId: null, order: 0, activityName: '需求&修改点' },
+  { id: 'collect', parentId: 'stage-change', order: 0, activityName: '修改点收集开始时间' },
+  { id: 'lock', parentId: 'stage-change', order: 1, activityName: '修改点锁定时间' },
+  { id: 'stage-transfer', parentId: null, order: 1, activityName: '入库&自测&转测' },
+  { id: 'mp-deadline', parentId: 'stage-transfer', order: 0, activityName: 'MP入库截止时间' },
+  { id: 'transfer', parentId: 'stage-transfer', order: 1, activityName: '版本转测时间' },
+  { id: 'stage-test', parentId: null, order: 2, activityName: '版本测试' },
+  { id: 'test-start', parentId: 'stage-test', order: 0, activityName: '测试开始时间' },
+  { id: 'test-complete', parentId: 'stage-test', order: 1, activityName: '测试完成时间' },
+  { id: 'stage-review', parentId: null, order: 3, activityName: '版本评审' },
+  { id: 'review', parentId: 'stage-review', order: 0, activityName: '评审时间' },
+  { id: 'stage-release', parentId: null, order: 4, activityName: '版本发布' },
+  { id: 'archive', parentId: 'stage-release', order: 0, activityName: '软件归档时间' },
+  { id: 'ota', parentId: 'stage-release', order: 1, activityName: 'OTA开放验证&部署' },
+]
+const makeTosInstance = (tosVersion, dates, projectId = 'tos-project-16.3') => ({
+  projectId, tosVersion, templateVersionId: 'template-v1', activities: mrActivities,
+  dates, createdBy: '张三', createdAt: NOW, updatedBy: '张三', updatedAt: NOW,
+})
+const tos140 = makeTosInstance('16.3.0.140', {
+  collect: '2026-06-22', lock: '2026-06-24', 'mp-deadline': '2026-06-25', transfer: '2026-06-26',
+  'test-start': '2026-06-29', 'test-complete': '2026-07-03', review: '2026-07-06', archive: '2026-07-08', ota: '2026-07-11',
+})
+const tos145 = makeTosInstance('16.3.0.145', {
+  collect: '2026-07-12', lock: '2026-07-14', 'mp-deadline': '2026-07-15', transfer: '2026-07-16',
+  'test-start': '2026-07-20', 'test-complete': '2026-07-24', review: '2026-07-27', archive: '2026-07-29', ota: '2026-07-31',
+})
+const tos150 = makeTosInstance('16.3.0.150', {
+  collect: '2026-08-01', lock: '2026-08-03', 'mp-deadline': '2026-08-04', transfer: '2026-08-05',
+  'test-start': '2026-08-10', 'test-complete': '2026-08-14', review: '2026-08-17', archive: '2026-08-19', ota: '2026-08-21',
+})
+const intervalBefore = structuredClone(tos140)
+assert.deepEqual(aggregationRules.getTosVersionInterval(tos140), { startDate: '2026-06-22', endDate: '2026-07-11' })
+assert.deepEqual(tos140, intervalBefore)
+assert.equal(aggregationRules.getTosVersionInterval(makeTosInstance('16.3.0.100', { collect: '', lock: 'bad', 'stage-change': '2026-01-01' })), null)
+assert.equal(aggregationRules.resolveMachineTosProjectKey({ id: 'new', productType: '新品', firstSaleTosVersion: ' tOS16.3.0.140 ', currentTosVersion: '99.1' }), '16.3')
+assert.equal(aggregationRules.resolveMachineTosProjectKey({ id: 'old', productType: '老品', firstSaleTosVersion: '99.1', currentTosVersion: '16.3.0.145' }), '16.3')
+assert.equal(aggregationRules.resolveMachineTosProjectKey({ id: 'legacy', productType: '升级', currentTosVersion: 'tOS16.3' }), '16.3')
+assert.equal(aggregationRules.resolveMachineTosProjectKey({ id: 'bad', productType: '新品', firstSaleTosVersion: 'tOS16' }), null)
+
+const level1Source = (str5Date, versionNo = 'V3') => ({
+  versions: [{ id: 'v2', versionNo: 'V2', status: '已发布' }, { id: 'draft', versionNo: 'V4', status: '修订中' }, { id: 'latest', versionNo, status: '已发布' }],
+  getSnapshot: id => id === 'latest' ? [
+    { id: 'phase', parentId: null, taskName: '开发验证阶段', order: 0 },
+    { id: 'str5', parentId: 'phase', taskName: ' STR5 ', order: 0, planEndDate: str5Date },
+  ] : [{ id: 'old-str5', parentId: 'old', taskName: 'STR5', planEndDate: '2025-01-01' }],
+})
+assert.equal(aggregationRules.resolveLatestPublishedStr5Date(level1Source('2026-06-21')), '2026-06-21')
+assert.equal(aggregationRules.resolveLatestPublishedStr5Date(level1Source('2026-02-30')), null)
+assert.equal(aggregationRules.resolveLatestPublishedStr5Date({ versions: [{ id: 'd', versionNo: 'V9', status: '修订中' }], getSnapshot: () => [] }), null)
+
+const tosProjects = [{ projectId: 'tos-project-16.3', tosProjectKey: '16.3', projectName: 'tOS16.3' }]
+const machineProjects = [
+  { id: 'machine-c09', projectName: 'C09', productType: '新品', firstSaleTosVersion: '16.3.0.110', spm: '张三' },
+  { id: 'machine-too-new', projectName: 'NEW', productType: '老品', currentTosVersion: '16.3', spm: '李白' },
+]
+const stalePlan = { projectId: 'stale', tosProjectId: 'tos-project-16.3', tosVersion: '16.3.0.140', transferType: '2', dates: { transfer: '2026-01-01' }, updatedBy: '旧', updatedAt: NOW }
+const validPlan = { projectId: 'machine-c09', tosProjectId: 'tos-project-16.3', tosVersion: '16.3.0.140', transferType: '2', dates: { transfer: '2026-07-02' }, updatedBy: '张三', updatedAt: NOW }
+const reconcileInput = {
+  today: '2026-08-29', tosProjects, tosInstances: [tos150, tos145, tos140], machineProjects,
+  latestPublishedLevel1ByProjectId: { 'machine-c09': level1Source('2026-06-21'), 'machine-too-new': level1Source('2026-08-29') },
+  persistedPlans: { 'stale::16.3.0.140': stalePlan, 'machine-c09::16.3.0.140': validPlan }, stopRecords: [],
+}
+const reconcileBefore = structuredClone({ tosProjects, tosInstances: reconcileInput.tosInstances, machineProjects, persistedPlans: reconcileInput.persistedPlans })
+const reconciled = aggregationRules.reconcileJointMachinePlans(reconcileInput)
+assert.deepEqual(reconciled.rows.map(row => row.key), [
+  'tos-project-16.3::16.3.0.140::reference', 'machine-c09::16.3.0.140',
+  'tos-project-16.3::16.3.0.145::reference', 'machine-c09::16.3.0.145',
+  'tos-project-16.3::16.3.0.150::reference', 'machine-c09::16.3.0.150',
+])
+assert.deepEqual(Object.keys(reconciled.persistedPlans), ['machine-c09::16.3.0.140', 'machine-c09::16.3.0.145', 'machine-c09::16.3.0.150'])
+assert.deepEqual(reconciled.persistedPlans['machine-c09::16.3.0.140'].dates, { transfer: '2026-07-02' })
+assert.deepEqual(reconciled.persistedPlans['machine-c09::16.3.0.145'].transferType, '1')
+assert.deepEqual(reconciled.persistedPlans['machine-c09::16.3.0.145'].dates, {})
+assert.deepEqual({ tosProjects, tosInstances: reconcileInput.tosInstances, machineProjects, persistedPlans: reconcileInput.persistedPlans }, reconcileBefore)
+
+// Inclusive lower and upper interval boundaries both select the matching version.
+assert.equal(aggregationRules.reconcileJointMachinePlans({ ...reconcileInput, latestPublishedLevel1ByProjectId: { 'machine-c09': level1Source('2026-06-21') }, machineProjects: [machineProjects[0]], persistedPlans: {} }).persistedPlans['machine-c09::16.3.0.140'].tosVersion, '16.3.0.140')
+assert.equal(aggregationRules.reconcileJointMachinePlans({ ...reconcileInput, latestPublishedLevel1ByProjectId: { 'machine-c09': level1Source('2026-07-10') }, machineProjects: [machineProjects[0]], persistedPlans: {} }).persistedPlans['machine-c09::16.3.0.140'].tosVersion, '16.3.0.140')
+// Source-date movement removes no-longer-eligible persisted rows and their dates.
+assert.deepEqual(aggregationRules.reconcileJointMachinePlans({ ...reconcileInput, today: '2026-06-21' }).persistedPlans, {})
+// A row that remains eligible retains even invalid dates for UI validation.
+assert.equal(aggregationRules.reconcileJointMachinePlans({ ...reconcileInput, persistedPlans: { 'machine-c09::16.3.0.140': { ...validPlan, dates: { transfer: 'malformed' } } } }).persistedPlans['machine-c09::16.3.0.140'].dates.transfer, 'malformed')
+
+const stopRecord = { id: 'stop-1', projectId: 'machine-c09', projectName: 'C09', stopDate: '2026-07-12', operator: '张三', operatedAt: NOW }
+const stopped = aggregationRules.applyStopRelease({ persistedPlans: reconciled.persistedPlans, tosInstances: [tos140, tos145, tos150], stopRecords: [], record: stopRecord })
+assert.deepEqual(stopped.removedPlanKeys, ['machine-c09::16.3.0.150'])
+assert.deepEqual(Object.keys(stopped.persistedPlans), ['machine-c09::16.3.0.140', 'machine-c09::16.3.0.145'])
+assert.deepEqual(stopped.stopRecords, [stopRecord])
+assert.notStrictEqual(stopped.stopRecords[0], stopRecord)
+assert.equal(aggregationRules.isPlanExcludedByStopRecord({ plan: reconciled.persistedPlans['machine-c09::16.3.0.150'], tosInstances: [tos150], stopRecords: [stopRecord] }), true)
+assert.equal(aggregationRules.isPlanExcludedByStopRecord({ plan: reconciled.persistedPlans['machine-c09::16.3.0.145'], tosInstances: [tos145], stopRecords: [stopRecord] }), false)
+assert.equal(aggregationRules.isPlanExcludedByStopRecord({ plan: { ...validPlan, tosVersion: '16.3.0.999' }, tosInstances: [makeTosInstance('16.3.0.999', { lock: '2027-01-01' })], stopRecords: [stopRecord] }), false)
+const reconciledStopped = aggregationRules.reconcileJointMachinePlans({ ...reconcileInput, stopRecords: [stopRecord] })
+assert.equal(reconciledStopped.persistedPlans['machine-c09::16.3.0.150'], undefined)
+
+// Joint and market date validation.
+const machineRow = (projectId, tosVersion, transferType, dates) => ({ projectId, tosProjectId: 'tos-project-16.3', tosVersion, transferType, dates, updatedBy: projectId, updatedAt: NOW })
+const errorsFor = (rows, instances = [tos140, tos145, tos150]) => dateRules.validateJointMachineRows({ tosInstances: instances, machinePlans: rows })
+assert.deepEqual(errorsFor([machineRow('m1', '16.3.0.140', '1', { collect: '2026-06-23', lock: '2026-06-25' })]).map(error => error.message), [
+  '修改点收集开始时间需与tOS项目时间保持一致', '修改点锁定时间需与tOS项目时间保持一致',
+])
+assert.deepEqual(errorsFor([machineRow('m1', '16.3.0.140', '1', { 'mp-deadline': '2026-06-26' })]).map(error => error.message), ['整机产品项目的MP入库截止时间不得晚于tOS项目时间'])
+assert.deepEqual(errorsFor([machineRow('m1', '16.3.0.140', '1', { transfer: '2026-06-27' })]).map(error => error.message), ['版本转测时间应等于tOS版本转测时间'])
+assert.deepEqual(errorsFor([machineRow('m1', '16.3.0.140', '2', { transfer: '2026-07-02' }), machineRow('m2', '16.3.0.140', '2', { transfer: '2026-07-03' })]).filter(error => error.activityName === '版本转测时间').map(error => error.message), [
+  '同一1+N转测类型的版本转测时间需保持一致', '同一1+N转测类型的版本转测时间需保持一致',
+])
+assert.ok(errorsFor([machineRow('base', '16.3.0.140', '1', { transfer: '2026-06-26' }), machineRow('m2', '16.3.0.140', '2', { transfer: '2026-07-02' })]).some(error => error.message === '版本转测时间需晚于上一个1+N转测类型至少1周'))
+assert.equal(errorsFor([machineRow('base', '16.3.0.140', '1', { transfer: '2026-06-26' }), machineRow('m2', '16.3.0.140', '2', { transfer: '2026-07-03' })]).some(error => error.message.includes('至少1周')), false)
+// Type gaps compare to the greatest existing smaller numeric type (3, not 1).
+assert.ok(errorsFor([machineRow('one', '16.3.0.140', '1', { transfer: '2026-06-26' }), machineRow('three', '16.3.0.140', '3', { transfer: '2026-07-10' }), machineRow('five', '16.3.0.140', '5', { transfer: '2026-07-16' })]).some(error => error.rowKey === 'five::16.3.0.140' && error.message === '版本转测时间需晚于上一个1+N转测类型至少1周'))
+assert.ok(errorsFor([machineRow('m', '16.3.0.140', '2', { transfer: '2026-07-21' })]).some(error => error.message.includes('不能超过下一个tOS版本的测试开始时间')))
+
+const boundedFields = ['测试开始时间', '测试完成时间', '评审时间', '软件归档时间', 'OTA开放验证&部署']
+const idByName = Object.fromEntries(mrActivities.filter(activity => activity.parentId).map(activity => [activity.activityName, activity.id]))
+for (const name of boundedFields) {
+  const id = idByName[name]
+  assert.ok(errorsFor([machineRow('m', '16.3.0.140', '1', { [id]: '2026-01-01' })]).some(error => error.message === `${name}不早于tOS项目时间，可与tOS项目保持一致，且不能超过下一个tOS版本的测试开始时间`))
+  assert.ok(errorsFor([machineRow('m', '16.3.0.140', '1', { [id]: '2026-07-21' })]).some(error => error.message === `${name}不早于tOS项目时间，可与tOS项目保持一致，且不能超过下一个tOS版本的测试开始时间`))
+  const previousDate = '2026-07-01'
+  assert.ok(errorsFor([machineRow('prev', '16.3.0.140', '3', { [id]: previousDate }), machineRow('current', '16.3.0.140', '5', { [id]: '2026-07-07' })]).some(error => error.message === `${name}需晚于上一个1+N转测类型至少1周，且不能超过下一个tOS版本的${name}`))
+}
+// Last tOS version has no next upper bound, while missing references skip comparison.
+assert.deepEqual(errorsFor([machineRow('last', '16.3.0.150', '1', { 'test-start': '2027-01-01' })]).filter(error => error.activityName === '测试开始时间'), [])
+assert.deepEqual(errorsFor([machineRow('missing-ref', '16.3.0.999', '1', { transfer: '2027-01-01' })], [makeTosInstance('16.3.0.999', {})]), [])
+const malformedErrors = errorsFor([machineRow('bad', '16.3.0.140', '1', { transfer: '2026-02-30', review: 'not-a-date' })])
+assert.deepEqual(malformedErrors.map(error => error.message), ['版本转测时间日期格式不正确', '评审时间日期格式不正确'])
+
+const naSource = machineRow('na', '16.3.0.140', 'N/A', { transfer: '2026-01-01' })
+const clearedNa = dateRules.clearDatesForNa(naSource)
+assert.deepEqual(clearedNa.dates, {})
+assert.deepEqual(naSource.dates, { transfer: '2026-01-01' })
+assert.notStrictEqual(clearedNa, naSource)
+assert.deepEqual(dateRules.validateMachineMarketDate({ value: '2026-07-10', mainValue: '', activityId: 'test-start', activityName: '测试开始时间' }), ['主市场对应时间未填写，当前市场不可填写'])
+assert.deepEqual(dateRules.validateMachineMarketDate({ value: '2026-07-12', mainValue: '2026-07-11', activityId: 'test-start', activityName: '测试开始时间' }), ['非主市场时间不得晚于主市场对应时间'])
+assert.deepEqual(dateRules.validateMachineMarketDate({ value: '', mainValue: '2026-07-11', activityId: 'test-start', activityName: '测试开始时间' }), [])
+assert.deepEqual(dateRules.validateMachineMarketDate({ value: 'bad', mainValue: '2026-07-11', activityId: 'test-start', activityName: '测试开始时间' }), ['测试开始时间日期格式不正确'])
+const grouped = dateRules.groupMrErrorsByRow([
+  { rowKey: 'r2', activityId: 'a', activityName: 'A', message: 'E2' },
+  { rowKey: 'r1', activityId: 'b', activityName: 'B', message: 'E1' },
+  { rowKey: 'r2', activityId: 'a', activityName: 'A', message: 'E2' },
+])
+assert.deepEqual(grouped, {
+  r2: [{ rowKey: 'r2', activityId: 'a', activityName: 'A', message: 'E2' }],
+  r1: [{ rowKey: 'r1', activityId: 'b', activityName: 'B', message: 'E1' }],
+})
