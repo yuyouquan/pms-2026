@@ -27,6 +27,7 @@ const jointContainerSource = readSource(root, 'src/containers/JointProjectSpaceC
 const jointPlanSource = readSource(root, 'src/components/joint/JointMrVersionPlan.tsx')
 const stopReleaseUiRules = loadTypeScriptModule(root, 'src/lib/mrStopReleaseUiRules.ts')
 const machineMarketRules = loadTypeScriptModule(root, 'src/lib/mrMachineMarketRules.ts')
+const navigationRules = loadTypeScriptModule(root, 'src/lib/mrNavigationRules.ts')
 const machineMrVersionPlanSource = readSource(root, 'src/components/plans/MachineMrVersionPlan.tsx')
 const NOW = '2026-08-29T08:00:00.000Z'
 
@@ -88,6 +89,29 @@ assert.equal(machineMarketRules.getMachineMarketDate({
   overridesByKey: { 'machine-c09::16.3.0.140::RU': { projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'RU', mainMarket: 'OP', dates: { node: '2026-07-01' } } },
   market: 'RU', mainMarket: 'OP', activityId: 'node',
 }), '2026-07-01')
+const edgeMarketRows = [
+  { id: 'op-space', market: ' OP ', isMain: true, followsMain: false },
+  { id: 'ru-first', market: 'RU', isMain: false, followsMain: false },
+  { id: 'op-duplicate', market: 'OP', isMain: false, followsMain: false },
+  { id: 'blank', market: '   ', isMain: false, followsMain: false },
+  { id: 'ru-duplicate', market: ' RU ', isMain: false, followsMain: false },
+]
+const edgeMarketsBefore = structuredClone(edgeMarketRows)
+assert.deepEqual(machineMarketRules.orderedMachineMarkets(edgeMarketRows), { mainMarket: 'OP', markets: ['OP', 'RU'] })
+assert.deepEqual(edgeMarketRows, edgeMarketsBefore)
+
+assert.equal(navigationRules.resolveMrPlanNavigationAction({
+  intentProjectId: 'machine-a', selectedProjectId: 'machine-b', activeContextMatches: false, targetAvailable: false,
+}), 'clear-stale')
+assert.equal(navigationRules.resolveMrPlanNavigationAction({
+  intentProjectId: 'machine-a', selectedProjectId: 'machine-a', activeContextMatches: true, targetAvailable: false,
+}), 'wait')
+assert.equal(navigationRules.resolveMrPlanNavigationAction({
+  intentProjectId: 'machine-a', selectedProjectId: 'machine-a', activeContextMatches: false, targetAvailable: false,
+}), 'wait')
+assert.equal(navigationRules.resolveMrPlanNavigationAction({
+  intentProjectId: 'machine-a', selectedProjectId: 'machine-a', activeContextMatches: true, targetAvailable: true,
+}), 'focus')
 
 for (const label of ['tOS版本号', '活动序号', '活动名称', '市场项目', '竖版视图', '横版视图']) {
   assert.ok(machineMrVersionPlanSource.includes(label), `machine MR source label: ${label}`)
@@ -103,6 +127,10 @@ assert.match(machineMrVersionPlanSource, /updateMarketDate/)
 assert.match(machineMrVersionPlanSource, /machine::\$\{project\.id\}/)
 assert.match(machineMrVersionPlanSource, /data-mr-tos-version/)
 assert.match(machineMrVersionPlanSource, /data-mr-version/)
+assert.match(machineMrVersionPlanSource, /renderMachineMrErrorTrigger/)
+assert.match(machineMrVersionPlanSource, /tabIndex=\{0\}/)
+assert.match(machineMrVersionPlanSource, /aria-label=\{`\$\{version\.tosVersion\}-\$\{market\}-\$\{activity\.activityName\}-错误：\$\{errors\.join\(['"]；['"]\)\}`\}/)
+assert.match(machineMrVersionPlanSource, /market\s*===\s*mainMarket\s*\|\|\s*!permission\.canEditMarket[\s\S]*renderMachineMrErrorTrigger/)
 assert.match(projectSpaceSource, /isWholeMachineProject[\s\S]*['"]一级计划['"][\s\S]*['"]三级计划-MR版本计划['"]/)
 assert.match(projectSpaceSource, /showMarketControls\s*=\s*isMachineProjectType\([^)]*\)[\s\S]*projectPlanLevel\s*===\s*['"]level1['"]/)
 assert.match(projectSpaceSource, /市场编辑/)
@@ -110,6 +138,8 @@ assert.match(projectSpaceSource, /<MachineMrVersionPlan/)
 assert.match(projectSpaceSource, /data-plan-shared-market-editor/)
 assert.ok(projectSpaceSource.indexOf('{isWholeMachineProject && planLevelTabs}') < projectSpaceSource.indexOf('{showMarketControls && ('))
 assert.match(projectSpaceSource, /document\.activeElement\s*===\s*target[\s\S]*consumeMrPlanNavigationIntent/)
+assert.match(projectSpaceSource, /resolveMrPlanNavigationAction/)
+assert.match(projectSpaceSource, /['"]clear-stale['"][\s\S]*consumeMrPlanNavigationIntent/)
 assert.doesNotMatch(machineMrVersionPlanSource, /templateVersions|DEFAULT_MR_TEMPLATE_ACTIVITIES/)
 
 // Joint project space: navigation, real source aggregation, stable editable grid and validation UI.
