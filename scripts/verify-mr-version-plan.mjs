@@ -8,6 +8,7 @@ const templateMocksSource = readSource(root, 'src/data/mrVersionPlanMocks.ts')
 const planRules = loadTypeScriptModule(root, 'src/lib/mrVersionPlanRules.ts')
 const aggregationRules = loadTypeScriptModule(root, 'src/lib/mrAggregationRules.ts')
 const dateRules = loadTypeScriptModule(root, 'src/lib/mrDateRules.ts')
+const adapter = loadTypeScriptModule(root, 'src/lib/mrPlanSourceAdapters.ts')
 
 assert.doesNotMatch(templateMocksSource, /as unknown as MrTemplateActivity\[\]/)
 assert.match(
@@ -662,3 +663,158 @@ assert.deepEqual(grouped, {
   r2: [{ rowKey: 'r2', activityId: 'a', activityName: 'A', message: 'E2' }],
   r1: [{ rowKey: 'r1', activityId: 'b', activityName: 'B', message: 'E1' }],
 })
+
+// Read-only adapters: select only the latest published L1 source from the effective scope.
+const adapterFallbackVersions = [
+  { id: 'fallback-published', versionNo: 'V1', status: '已发布' },
+]
+const tosAdapterProject = {
+  id: 'tos-adapter', name: 'tOS16.3', type: 'tOS版本项目', status: '在研', progress: 0,
+  leader: '李白', markets: [], androidVersion: '', chipPlatform: '', spm: '', updatedAt: '',
+  productLine: 'tOS', tosVersion: 'tOS16.3', planStartDate: '', planEndDate: '', developCycle: 0,
+  healthStatus: 'normal', versionType: 'Slim', versionTypes: ['Slim', 'Full'],
+  fieldValues: { tosVersionProjectManager: [' 李白 ', '张三', '李白', ''] },
+}
+const tosTypeRows = [
+  { id: 'full', type: 'Full', isMain: true, followsMain: false },
+  { id: 'slim', type: 'Slim', isMain: false, followsMain: true },
+]
+const tosVersionsByKey = {
+  'project::tos-adapter::tos-type::Full::level1::versions': [
+    { id: 'tos-v5-draft', versionNo: 'V5', status: '修订中' },
+    { id: 'tos-v2', versionNo: 'V2', status: '已发布' },
+    { id: 'tos-v4', versionNo: 'V4', status: '已发布' },
+  ],
+  'project::tos-adapter::tos-type::Slim::level1::versions': [
+    { id: 'slim-v99', versionNo: 'V99', status: '已发布' },
+  ],
+}
+const tosPublishedSnapshots = {
+  'project::tos-adapter::tos-type::Full::level1::tos-v2::snapshot': [
+    { id: 'tos-old', taskName: 'STR5', planEndDate: '2025-01-01' },
+  ],
+  'project::tos-adapter::tos-type::Full::level1::tos-v4::snapshot': [
+    { id: 'tos-stage', parentId: null, taskName: '上市迭代阶段', order: 0 },
+    { id: 'tos-node', stableId: 'tos-node-stable', parentId: 'tos-stage', taskName: '16.3.0.140', order: 1, planStartDate: new Date('2026-01-01T16:00:00.000Z'), planEndDate: '2026-01-02T23:30:00-05:00' },
+    { id: 'tos-invalid', parentId: 'tos-stage', taskName: '16.3.0.145', order: 2, planStartDate: '2026-02-30', planEndDate: '2026/03/01' },
+  ],
+}
+const selectedTosSource = adapter.selectLatestPublishedTosLevel1({
+  project: tosAdapterProject,
+  tosTypeRows,
+  tosTypeVersionsByKey,
+  publishedSnapshots: tosPublishedSnapshots,
+  fallbackVersions: adapterFallbackVersions,
+})
+assert.equal(selectedTosSource.versionId, 'tos-v4')
+assert.equal(selectedTosSource.versionNo, 'V4')
+assert.deepEqual(selectedTosSource.tasks.map(task => [task.id, task.stableId, task.planStartDate, task.planEndDate]), [
+  ['tos-stage', undefined, '', ''],
+  ['tos-node', 'tos-node-stable', '2026-01-02', '2026-01-03'],
+  ['tos-invalid', undefined, '', ''],
+])
+assert.deepEqual(selectedTosSource.getSnapshot('tos-v4'), selectedTosSource.tasks)
+assert.notStrictEqual(selectedTosSource.getSnapshot('tos-v4'), selectedTosSource.tasks)
+assert.equal(adapter.selectLatestPublishedTosLevel1({
+  project: tosAdapterProject,
+  tosTypeRows,
+  tosTypeVersionsByKey: {
+    'project::tos-adapter::tos-type::Full::level1::versions': [{ id: 'draft-only', versionNo: 'V9', status: '修订中' }],
+  },
+  publishedSnapshots: tosPublishedSnapshots,
+  fallbackVersions: adapterFallbackVersions,
+}), null)
+
+const machineAdapterProject = {
+  id: 'machine-adapter', name: 'X6877-D8400_H991', type: '整机产品项目', status: '在研', progress: 0,
+  leader: '张三', markets: ['OP', 'RU'], androidVersion: '', chipPlatform: 'MTK', spm: '李白', updatedAt: '',
+  productLine: 'NOTE', tosVersion: 'tOS16.3', planStartDate: '', planEndDate: '', developCycle: 0,
+  healthStatus: 'normal', productType: '新品', firstSaleTosVersion: '16.3.0.110', cpu: 'MT6877',
+}
+const machineMarketRows = [
+  { id: 'ru', market: 'RU', isMain: false, followsMain: false, isMadaControlled: '否' },
+  { id: 'op', market: 'OP', isMain: true, followsMain: false, isMadaControlled: '否' },
+  { id: 'in', market: 'IN', isMain: false, followsMain: false, isMadaControlled: '是' },
+]
+const machineVersionsByKey = {
+  'project::machine-adapter::OP::level1::versions': [
+    { id: 'machine-v4-draft', versionNo: 'V4', status: '修订中' },
+    { id: 'machine-v1', versionNo: 'V1', status: '已发布' },
+    { id: 'machine-v3', versionNo: 'V3', status: '已发布' },
+  ],
+  'project::machine-adapter::RU::level1::versions': [
+    { id: 'ru-v99', versionNo: 'V99', status: '已发布' },
+  ],
+}
+const machinePublishedSnapshots = {
+  'project::machine-adapter::OP::level1::machine-v1': [{ id: 'old', taskName: 'STR5', planEndDate: '2024-01-01' }],
+  'project::machine-adapter::OP::level1::machine-v3': [
+    { id: 'machine-stage', parentId: null, taskName: '开发验证阶段', order: 0 },
+    { id: 'machine-str5', stableId: 'ms-str5', parentId: 'machine-stage', taskName: 'STR5', order: 1, planStartDate: 'bad', planEndDate: '2026-05-15T00:30:00+08:00' },
+  ],
+  'project::machine-adapter::RU::level1::ru-v99': [{ id: 'ru-str5', taskName: 'STR5', planEndDate: '2099-01-01' }],
+}
+const selectedMachineSource = adapter.selectLatestPublishedMachineLevel1({
+  project: machineAdapterProject,
+  marketRows: machineMarketRows,
+  marketVersionsByKey: machineVersionsByKey,
+  publishedSnapshots: machinePublishedSnapshots,
+  fallbackVersions: adapterFallbackVersions,
+})
+assert.equal(selectedMachineSource.versionId, 'machine-v3')
+assert.equal(selectedMachineSource.tasks.find(row => row.taskName === 'STR5').planEndDate, '2026-05-15')
+assert.equal(selectedMachineSource.tasks.find(row => row.taskName === 'STR5').planStartDate, '')
+assert.equal(adapter.selectLatestPublishedMachineLevel1({
+  project: machineAdapterProject,
+  marketRows: machineMarketRows,
+  marketVersionsByKey: { 'project::machine-adapter::OP::level1::versions': [{ id: 'draft', versionNo: 'V8', status: '修订中' }] },
+  publishedSnapshots: machinePublishedSnapshots,
+  fallbackVersions: adapterFallbackVersions,
+}), null)
+
+assert.deepEqual(adapter.projectMachineMrMetadata(machineAdapterProject, machineMarketRows), {
+  projectName: 'X6877-D8400_H991',
+  marketName: 'OP',
+  productLine: 'NOTE',
+  spm: '李白',
+  isMada: '是',
+  socPlatform: 'MT6877',
+  packageMode: '/',
+})
+assert.equal(adapter.projectMachineMrMetadata(machineAdapterProject, machineMarketRows.map(row => ({ ...row, isMadaControlled: '否' }))).isMada, '否')
+assert.deepEqual(adapter.getTosManagerUsers(tosAdapterProject), ['李白', '张三'])
+assert.deepEqual(adapter.getTosManagerUsers({ ...tosAdapterProject, fieldValues: {}, versionFiveRoles: undefined, responsiblePersons: undefined, leader: '' }), [])
+
+const adapterInput = {
+  projects: [machineAdapterProject, tosAdapterProject],
+  marketConfigsByProjectId: { 'machine-adapter': machineMarketRows },
+  tosTypeConfigsByProjectId: { 'tos-adapter': tosTypeRows },
+  marketVersionsByKey: machineVersionsByKey,
+  tosTypeVersionsByKey: tosVersionsByKey,
+  publishedSnapshots: { ...tosPublishedSnapshots, ...machinePublishedSnapshots },
+  fallbackVersions: adapterFallbackVersions,
+}
+const adapterInputBefore = structuredClone(adapterInput)
+const aggregationSources = adapter.buildMrAggregationSources(adapterInput)
+assert.deepEqual(aggregationSources.tosProjects, [
+  { projectId: 'tos-adapter', tosProjectKey: '16.3', projectName: 'tOS16.3' },
+])
+assert.deepEqual(aggregationSources.machineProjects, [
+  { id: 'machine-adapter', projectName: 'X6877-D8400_H991', productType: '新品', firstSaleTosVersion: '16.3.0.110', currentTosVersion: 'tOS16.3', spm: '李白' },
+])
+assert.deepEqual(Object.keys(aggregationSources.latestPublishedLevel1ByProjectId), ['machine-adapter', 'tos-adapter'])
+assert.deepEqual(aggregationSources.machineMetadataByProjectId['machine-adapter'], adapter.projectMachineMrMetadata(machineAdapterProject, machineMarketRows))
+assert.deepEqual(aggregationSources.tosManagerUsersByProjectId, { 'tos-adapter': ['李白', '张三'] })
+assert.deepEqual(adapterInput, adapterInputBefore)
+const rebuiltAggregationSources = adapter.buildMrAggregationSources(adapterInput)
+assert.deepEqual(rebuiltAggregationSources, aggregationSources)
+assert.notStrictEqual(rebuiltAggregationSources.machineProjects[0], aggregationSources.machineProjects[0])
+aggregationSources.latestPublishedLevel1ByProjectId['machine-adapter'].tasks[0].taskName = 'mutated output'
+assert.equal(machinePublishedSnapshots['project::machine-adapter::OP::level1::machine-v3'][0].taskName, '开发验证阶段')
+
+const noPublishedSources = adapter.buildMrAggregationSources({
+  ...adapterInput,
+  tosTypeVersionsByKey: { 'project::tos-adapter::tos-type::Full::level1::versions': [{ id: 'tos-draft', versionNo: 'V8', status: '修订中' }] },
+  marketVersionsByKey: { 'project::machine-adapter::OP::level1::versions': [{ id: 'machine-draft', versionNo: 'V8', status: '修订中' }] },
+})
+assert.deepEqual(noPublishedSources.latestPublishedLevel1ByProjectId, {})
