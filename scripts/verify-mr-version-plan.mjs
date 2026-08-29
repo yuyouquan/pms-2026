@@ -72,6 +72,11 @@ assert.match(
   globalsSource,
   /\.pms-joint-mr-table[\s\S]*\.ant-table-cell-fix-start[\s\S]*position:\s*sticky\s*!important/,
 )
+const jointMrCss = globalsSource.slice(globalsSource.indexOf('/* Joint MR version plan'))
+assert.match(jointMrCss, /\.ant-table-thead[^{}]*\.ant-table-cell\s*\{[^}]*z-index:\s*1[^}]*background:\s*#f7f7ff/)
+assert.match(jointMrCss, /th\.ant-table-cell-fix-start,[\s\S]*th\.ant-table-cell-fix-end\s*\{[^}]*position:\s*sticky\s*!important[^}]*z-index:\s*6[^}]*background:\s*#f7f7ff/)
+assert.match(jointMrCss, /td\.ant-table-cell-fix-start,[\s\S]*td\.ant-table-cell-fix-end\s*\{[^}]*position:\s*sticky\s*!important[^}]*z-index:\s*3[^}]*background:\s*#fff/)
+assert.match(jointMrCss, /\.pms-joint-mr-reference-row\s*>\s*td\.ant-table-cell-fix-start,[\s\S]*\.pms-joint-mr-reference-row\s*>\s*td\.ant-table-cell-fix-end\s*\{[^}]*z-index:\s*3[^}]*background:\s*#fffbe8/)
 
 // The business date rolls over without a render, emits once, reschedules once,
 // and releases the active timer on unmount.
