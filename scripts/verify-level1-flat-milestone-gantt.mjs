@@ -1224,6 +1224,16 @@ assert.match(
   /machine permission selected vertical[\s\S]{0,300}await ensureDraft\(page\)[\s\S]{0,300}await switchUser\(page, '李四'\)/,
   'machine permission acceptance must create its own editable revision instead of weakening the published-only MR seed',
 )
+assert.match(
+  browserSource,
+  /await dragTreeTask\(page, table, 'MR5', 'MR4'\)[\s\S]{0,1600}await clickDialogButton\(page, '确认调整节点顺序？', '取消'\)\s*await waitForDialogToClose\(page, '确认调整节点顺序？'\)[\s\S]{0,300}cancelling reorder leaves the tree unchanged/,
+  'machine reorder cancellation must click the dialog-scoped Cancel button and wait for that dialog to close',
+)
+assert.doesNotMatch(
+  browserSource,
+  /await dragTreeTask\(page, table, 'MR5', 'MR4'\)[\s\S]{0,1600}await page\.keyboard\.press\('Escape'\)[\s\S]{0,300}cancelling reorder leaves the tree unchanged/,
+  'machine reorder cancellation must not depend on whichever element currently owns keyboard focus',
+)
 for (const focusedCase of ['machine-surface', 'machine-summary', 'machine-follow-actual', 'tos-surface']) {
   assert.match(
     browserSource,
