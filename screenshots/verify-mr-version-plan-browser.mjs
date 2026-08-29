@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict'
 import { execSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import puppeteer from 'puppeteer'
 import { waitForApplicationBundles } from './level1-browser-harness.mjs'
@@ -10,7 +11,11 @@ import { waitForApplicationBundles } from './level1-browser-harness.mjs'
 const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const TIMEOUT = Number(process.env.PMS_BROWSER_TIMEOUT || 45_000)
 const FIXED_BROWSER_NOW = '2026-08-30T00:00:00.000+08:00'
-const OUTPUT = path.join(process.cwd(), 'screenshots', 'mr-version-plan')
+const TRACKED_OUTPUT = path.join(process.cwd(), 'screenshots', 'mr-version-plan')
+const UPDATE_TRACKED_SCREENSHOTS = process.env.PMS_UPDATE_SCREENSHOTS === '1'
+const OUTPUT = UPDATE_TRACKED_SCREENSHOTS
+  ? TRACKED_OUTPUT
+  : fs.mkdtempSync(path.join(os.tmpdir(), 'pms-mr-version-plan-'))
 const EXPECTED_SCREENSHOTS = [
   'configuration.png', 'tos-vertical.png', 'tos-horizontal.png', 'joint-valid.png',
   'joint-invalid.png', 'stop-record.png', 'machine-vertical.png', 'machine-horizontal.png',
@@ -22,6 +27,16 @@ const STEP_MARKERS = [
 ]
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 
+const assertTrackedScreenshotsClean = stage => {
+  if (process.env.PMS_ASSERT_SCREENSHOTS_CLEAN !== '1') return
+  try {
+    execSync('git diff --exit-code -- screenshots/mr-version-plan', { stdio: 'inherit' })
+  } catch (error) {
+    throw new Error(`tracked MR screenshots are dirty ${stage}`, { cause: error })
+  }
+}
+
+assertTrackedScreenshotsClean('before browser verification')
 fs.mkdirSync(OUTPUT, { recursive: true })
 for (const file of EXPECTED_SCREENSHOTS) {
   const target = path.join(OUTPUT, file)
@@ -58,16 +73,6 @@ function installDeterministicBrowserEnvironment(fixedNow) {
         transition-delay: 0s !important;
         caret-color: transparent !important;
         scroll-behavior: auto !important;
-        box-shadow: none !important;
-        text-shadow: none !important;
-      }
-      .ant-modal-mask {
-        background: rgb(140, 140, 140) !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-      }
-      .anticon svg {
-        shape-rendering: crispEdges !important;
       }
     `
     document.head.append(style)
@@ -835,9 +840,8 @@ try {
 
   assert.deepEqual(browserErrors, [], `unexpected browser errors:\n${browserErrors.join('\n')}`)
   for (const file of EXPECTED_SCREENSHOTS) assert.ok(fs.statSync(path.join(OUTPUT, file)).size > 1_000, `${file} is current and non-empty`)
-  if (process.env.PMS_ASSERT_SCREENSHOTS_CLEAN === '1') {
-    execSync('git diff --exit-code -- screenshots/mr-version-plan', { stdio: 'inherit' })
-  }
+  assertTrackedScreenshotsClean('after browser verification')
+  if (!UPDATE_TRACKED_SCREENSHOTS) console.log(`MR screenshot evidence: ${OUTPUT}`)
   console.log('PASS MR version plan browser verification')
 } catch (error) {
   console.error(error?.stack || error)
