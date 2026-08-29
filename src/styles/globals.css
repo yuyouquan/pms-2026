@@ -7063,6 +7063,13 @@ body,
   font-size: 17px;
 }
 
+.pms-joint-mr-field-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--pms-text-secondary);
+  font-size: 13px;
+}
+
 .pms-joint-mr-error-icon:focus-visible,
 .pms-joint-mr-project-link:focus-visible {
   outline: 2px solid var(--pms-brand-strong);

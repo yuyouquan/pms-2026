@@ -151,6 +151,7 @@ import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
 import { useEnumStore } from '@/stores/enums'
 import { useLevel3PlanStore } from '@/stores/level3Plan'
+import { useMrVersionPlanStore } from '@/stores/mrVersionPlan'
 import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, INITIAL_LEVEL2_PLAN_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { buildProjectListMockPlanTasks, getProjectLevel1MockSnapshotKey } from '@/data/projectListPlanMocks'
 import { useTransferStore } from '@/stores/transfer'
@@ -779,6 +780,7 @@ export default function ProjectSpaceContainer() {
     setPendingNavigation, setShowLeaveConfirm: setShowLeaveConfirmFn,
     projectSpaceSidebarCollapsed, setProjectSpaceSidebarCollapsed,
     planNavigationIntent, setPlanNavigationIntent,
+    mrPlanNavigationIntent, consumeMrPlanNavigationIntent, clearMrPlanNavigationIntent,
   } = ui
 
   const {
@@ -791,6 +793,12 @@ export default function ProjectSpaceContainer() {
     tosTypeConfigsByProjectId, setTosTypeConfigForProject,
     projectMemberMap, setProjectMember, updateProject, syncTosTeamPermissionMembersGuarded,
   } = proj
+  const mrIntentInstances = useMrVersionPlanStore(state => (
+    selectedProject ? state.tosInstancesByProjectId[selectedProject.id] ?? [] : []
+  ))
+  const mrIntentPlanKeys = useMrVersionPlanStore(state => selectedProject
+    ? Object.keys(state.machinePlansByKey).filter(key => key.startsWith(`${selectedProject.id}::`)).sort().join('|')
+    : '')
   const technicalToday = useMemo(() => new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date()), [])
@@ -2485,6 +2493,31 @@ export default function ProjectSpaceContainer() {
       setIsEditMode(false)
     }
   }, [currentVersion, followedTosLevel1ReadOnly, isCurrentDraft])
+
+  useEffect(() => {
+    if (!mrPlanNavigationIntent || mrPlanNavigationIntent.source !== 'joint-mr') return
+    if (activeModule !== 'projectSpace' || selectedProject?.id !== mrPlanNavigationIntent.projectId) {
+      clearMrPlanNavigationIntent()
+      return
+    }
+    if (projectSpaceModule !== 'plan' || projectPlanLevel !== 'mr-version-plan') return
+    const target = [...document.querySelectorAll<HTMLElement>('[data-mr-tos-version]')]
+      .find(element => element.dataset.mrTosVersion === mrPlanNavigationIntent.mrTosVersion)
+    if (!target) return
+    target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
+    target.focus()
+    consumeMrPlanNavigationIntent()
+  }, [
+    activeModule,
+    clearMrPlanNavigationIntent,
+    consumeMrPlanNavigationIntent,
+    mrIntentInstances,
+    mrIntentPlanKeys,
+    mrPlanNavigationIntent,
+    projectPlanLevel,
+    projectSpaceModule,
+    selectedProject?.id,
+  ])
 
   // 进入项目空间「计划」时按权限+责任人矩阵选择默认版本
   // - 有编辑权 / 是责任人：有修订版 → 默认修订版；无修订版 → 最新已发布

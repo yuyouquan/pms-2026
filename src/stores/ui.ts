@@ -25,6 +25,12 @@ export interface PlanNavigationIntent {
   tosTypeKey?: string
 }
 
+export interface MrPlanNavigationIntent {
+  source: 'joint-mr'
+  projectId: string
+  mrTosVersion: string
+}
+
 export type ProjectSpaceOrigin = {
   module: Exclude<MainModule, 'projectSpace'>
   workbenchTab?: WorkbenchTab
@@ -41,6 +47,7 @@ export interface UiState {
   selectedProjectType: string
   projectSpaceModule: string
   planNavigationIntent: PlanNavigationIntent | null
+  mrPlanNavigationIntent: MrPlanNavigationIntent | null
 
   // Edit guard
   isEditMode: boolean
@@ -67,6 +74,9 @@ export interface UiActions {
   setSelectedProjectType: (v: string) => void
   setProjectSpaceModule: (v: string) => void
   setPlanNavigationIntent: (v: PlanNavigationIntent | null) => void
+  setMrPlanNavigationIntent: (v: MrPlanNavigationIntent) => void
+  consumeMrPlanNavigationIntent: () => MrPlanNavigationIntent | null
+  clearMrPlanNavigationIntent: () => void
 
   setIsEditMode: (v: boolean) => void
   setShowLeaveConfirm: (v: boolean) => void
@@ -96,6 +106,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   selectedProjectType: PROJECT_CATEGORY_MACHINE,
   projectSpaceModule: 'basic',
   planNavigationIntent: null,
+  mrPlanNavigationIntent: null,
 
   // Edit guard
   isEditMode: false,
@@ -125,7 +136,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
       })
       return
     }
-    set({ activeModule: v })
+    set({ activeModule: v, ...(v !== 'projectSpace' ? { mrPlanNavigationIntent: null } : {}) })
   },
   setWorkbenchTab: (v) => set({ workbenchTab: v }),
   enterProjectSpace: (origin) => set({
@@ -144,6 +155,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
       activeModule: module,
       workbenchTab: module === 'workbench' ? (workbenchTab ?? 'todo') : get().workbenchTab,
       projectSpaceOrigin: null,
+      mrPlanNavigationIntent: null,
     })
   },
   setConfigTab: (v) => set({ configTab: v }),
@@ -156,6 +168,13 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   setSelectedProjectType: (v) => set({ selectedProjectType: v }),
   setProjectSpaceModule: (v) => set({ projectSpaceModule: v }),
   setPlanNavigationIntent: (v) => set({ planNavigationIntent: v }),
+  setMrPlanNavigationIntent: (v) => set({ mrPlanNavigationIntent: v }),
+  consumeMrPlanNavigationIntent: () => {
+    const intent = get().mrPlanNavigationIntent
+    if (intent) set({ mrPlanNavigationIntent: null })
+    return intent
+  },
+  clearMrPlanNavigationIntent: () => set({ mrPlanNavigationIntent: null }),
 
   setIsEditMode: (v) => set({ isEditMode: v }),
   setShowLeaveConfirm: (v) => set({ showLeaveConfirm: v }),

@@ -1,5 +1,6 @@
 'use client'
 
+import type { HTMLAttributes } from 'react'
 import { DatePicker, Table, Tooltip } from 'antd'
 import { ExclamationCircleOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -175,6 +176,10 @@ export default function MrPlanGrid({
         scroll={{ x: 'max-content' }}
         locale={{ emptyText }}
         rowClassName={row => row.activity.parentId === null ? 'pms-mr-parent-row' : 'pms-mr-child-row'}
+        onRow={row => ({
+          'data-mr-tos-version': row.logicalRow.version,
+          tabIndex: -1,
+        } as HTMLAttributes<HTMLTableRowElement>)}
       />
     )
   }
@@ -229,6 +234,10 @@ export default function MrPlanGrid({
       pagination={false}
       scroll={{ x: 'max-content' }}
       locale={{ emptyText }}
+      onRow={row => ({
+        'data-mr-tos-version': row.version,
+        tabIndex: -1,
+      } as HTMLAttributes<HTMLTableRowElement>)}
     />
   )
 }
