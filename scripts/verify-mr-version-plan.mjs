@@ -1494,6 +1494,11 @@ assert.deepEqual(
   ],
   'tOS MR candidates must retain their required business ranges, including the deliberately incomplete candidate',
 )
+assert.ok(
+  tosAcceptanceSnapshot.filter(task => /^16\.3\.0\./.test(task.taskName))
+    .every(task => task.role !== 'SPM' && task.responsible !== 'SPM'),
+  'seeded business nodes must not use a role label as a fake notification user identity',
+)
 assert.equal(
   tosAcceptanceSnapshot.find(task => task.taskName === '16.3.0.150').planEndDate,
   '',
