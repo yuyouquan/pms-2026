@@ -524,6 +524,51 @@ assert.deepEqual(reconciled.persistedPlans['machine-c09::16.3.0.140'].dates, { t
 assert.deepEqual(reconciled.persistedPlans['machine-c09::16.3.0.145'].transferType, '1')
 assert.deepEqual(reconciled.persistedPlans['machine-c09::16.3.0.145'].dates, {})
 assert.deepEqual({ tosProjects, tosInstances: reconcileInput.tosInstances, machineProjects, persistedPlans: reconcileInput.persistedPlans }, reconcileBefore)
+const persistedBeforeInvalidToday = structuredClone(reconcileInput.persistedPlans)
+assert.throws(() => aggregationRules.reconcileJointMachinePlans({ ...reconcileInput, today: '2026-02-30' }), /当前日期格式无效/)
+assert.throws(() => aggregationRules.reconcileJointMachinePlans({ ...reconcileInput, today: '2026\/08\/29' }), /当前日期格式无效/)
+assert.deepEqual(reconcileInput.persistedPlans, persistedBeforeInvalidToday)
+
+// Semantic aliases share one canonical identity; the first input instance is the stable winner.
+assert.equal(aggregationRules.canonicalizeTosMrVersion(' 016.03.00.001.0 '), '16.3.0.1')
+assert.equal(aggregationRules.canonicalizeTosMrVersion('16.3.0.1'), '16.3.0.1')
+assert.equal(aggregationRules.canonicalizeTosMrVersion('16.3.1'), null)
+assert.equal(aggregationRules.canonicalizeTosMrVersion('invalid'), null)
+const aliasWinner = makeTosInstance('016.03.00.001.0', { collect: '2026-06-22', ota: '2026-07-11' })
+const aliasDuplicate = makeTosInstance('16.3.0.1', { collect: '2020-01-01', ota: '2020-01-02' })
+const malformedInstance = makeTosInstance('unknown', { collect: '2026-06-22', ota: '2026-07-11' })
+const aliasReconciled = aggregationRules.reconcileJointMachinePlans({
+  ...reconcileInput,
+  tosInstances: [aliasWinner, aliasDuplicate, malformedInstance],
+  machineProjects: [machineProjects[0]],
+  latestPublishedLevel1ByProjectId: { 'machine-c09': level1Source('2026-06-21') },
+  persistedPlans: {
+    'z-alias': { ...validPlan, tosVersion: '16.3.0.1.0', dates: { transfer: '2026-07-02' } },
+    'a-canonical': { ...validPlan, tosVersion: '16.3.0.1', dates: { transfer: 'stable-winner' } },
+  },
+})
+assert.deepEqual(aliasReconciled.rows.map(row => row.key), ['tos-project-16.3::16.3.0.1::reference', 'machine-c09::16.3.0.1'])
+assert.deepEqual(Object.keys(aliasReconciled.persistedPlans), ['machine-c09::16.3.0.1'])
+assert.equal(aliasReconciled.persistedPlans['machine-c09::16.3.0.1'].tosVersion, '16.3.0.1')
+assert.equal(aliasReconciled.persistedPlans['machine-c09::16.3.0.1'].dates.transfer, 'stable-winner')
+assert.equal(aliasReconciled.rows[0].instance.dates.collect, '2026-06-22')
+
+const tos101 = makeTosInstance('16.10.0.1', { collect: '2026-09-01', ota: '2026-09-02' }, 'tos-project-16.10')
+const crossProjectRows = aggregationRules.reconcileJointMachinePlans({
+  today: '2026-08-29',
+  tosProjects: [
+    { projectId: 'tos-project-16.10', tosProjectKey: '16.10', projectName: 'tOS16.10' },
+    { projectId: 'tos-project-16.3-z', tosProjectKey: '16.3', projectName: 'tOS16.3-Z' },
+    { projectId: 'tos-project-16.3-a', tosProjectKey: '16.3', projectName: 'tOS16.3-A' },
+  ],
+  tosInstances: [tos101, { ...makeTosInstance('16.3.0.2', { collect: '2026-01-01', ota: '2026-01-02' }), projectId: 'tos-project-16.3-z' }, { ...makeTosInstance('16.3.0.1', { collect: '2026-01-01', ota: '2026-01-02' }), projectId: 'tos-project-16.3-a' }],
+  machineProjects: [], latestPublishedLevel1ByProjectId: {}, persistedPlans: {}, stopRecords: [],
+}).rows.map(row => row.key)
+assert.deepEqual(crossProjectRows, [
+  'tos-project-16.3-a::16.3.0.1::reference',
+  'tos-project-16.3-z::16.3.0.2::reference',
+  'tos-project-16.10::16.10.0.1::reference',
+])
 
 // Inclusive lower and upper interval boundaries both select the matching version.
 assert.equal(aggregationRules.reconcileJointMachinePlans({ ...reconcileInput, latestPublishedLevel1ByProjectId: { 'machine-c09': level1Source('2026-06-21') }, machineProjects: [machineProjects[0]], persistedPlans: {} }).persistedPlans['machine-c09::16.3.0.140'].tosVersion, '16.3.0.140')
@@ -547,6 +592,16 @@ assert.equal(aggregationRules.isPlanExcludedByStopRecord({ plan: reconciled.pers
 assert.equal(aggregationRules.isPlanExcludedByStopRecord({ plan: { ...validPlan, tosVersion: '16.3.0.999' }, tosInstances: [makeTosInstance('16.3.0.999', { lock: '2027-01-01' })], stopRecords: [stopRecord] }), false)
 const reconciledStopped = aggregationRules.reconcileJointMachinePlans({ ...reconcileInput, stopRecords: [stopRecord] })
 assert.equal(reconciledStopped.persistedPlans['machine-c09::16.3.0.150'], undefined)
+const stoppedInputsBefore = structuredClone({ persistedPlans: reconciled.persistedPlans, tosInstances: [tos140, tos145, tos150], stopRecords: [] })
+assert.throws(() => aggregationRules.applyStopRelease({ persistedPlans: reconciled.persistedPlans, tosInstances: [tos140], stopRecords: [], record: { ...stopRecord, stopDate: '2026-02-30' } }), /停止发版日期格式无效/)
+assert.throws(() => aggregationRules.applyStopRelease({ persistedPlans: reconciled.persistedPlans, tosInstances: [tos140], stopRecords: [], record: { ...stopRecord, projectName: '' } }), /停止发版项目名称不能为空/)
+assert.deepEqual({ persistedPlans: reconciled.persistedPlans, tosInstances: [tos140, tos145, tos150], stopRecords: [] }, stoppedInputsBefore)
+const exactDuplicateStop = aggregationRules.applyStopRelease({ persistedPlans: stopped.persistedPlans, tosInstances: [tos140, tos145, tos150], stopRecords: stopped.stopRecords, record: { ...stopRecord } })
+assert.deepEqual(exactDuplicateStop.stopRecords, [stopRecord])
+assert.throws(() => aggregationRules.applyStopRelease({ persistedPlans: stopped.persistedPlans, tosInstances: [tos140], stopRecords: stopped.stopRecords, record: { ...stopRecord, projectId: 'other' } }), /停止发版记录ID已存在/)
+const secondProjectStop = aggregationRules.applyStopRelease({ persistedPlans: stopped.persistedPlans, tosInstances: [tos140, tos145, tos150], stopRecords: stopped.stopRecords, record: { ...stopRecord, id: 'stop-2', stopDate: '2026-08-01' } })
+assert.deepEqual(secondProjectStop.stopRecords, [stopRecord])
+assert.equal(aggregationRules.isPlanExcludedByStopRecord({ plan: { ...validPlan, tosVersion: '016.03.00.150.0' }, tosInstances: [tos150], stopRecords: [stopRecord] }), true)
 
 // Joint and market date validation.
 const machineRow = (projectId, tosVersion, transferType, dates) => ({ projectId, tosProjectId: 'tos-project-16.3', tosVersion, transferType, dates, updatedBy: projectId, updatedAt: NOW })
@@ -583,6 +638,11 @@ assert.deepEqual(errorsFor([machineRow('last', '16.3.0.150', '1', { 'test-start'
 assert.deepEqual(errorsFor([machineRow('missing-ref', '16.3.0.999', '1', { transfer: '2027-01-01' })], [makeTosInstance('16.3.0.999', {})]), [])
 const malformedErrors = errorsFor([machineRow('bad', '16.3.0.140', '1', { transfer: '2026-02-30', review: 'not-a-date' })])
 assert.deepEqual(malformedErrors.map(error => error.message), ['版本转测时间日期格式不正确', '评审时间日期格式不正确'])
+const aliasValidationErrors = errorsFor([
+  machineRow('alias-a', '016.03.00.140.0', '2', { transfer: '2026-07-02' }),
+  machineRow('alias-b', '16.3.0.140', '2', { transfer: '2026-07-03' }),
+])
+assert.equal(aliasValidationErrors.filter(error => error.message === '同一1+N转测类型的版本转测时间需保持一致').length, 2)
 
 const naSource = machineRow('na', '16.3.0.140', 'N/A', { transfer: '2026-01-01' })
 const clearedNa = dateRules.clearDatesForNa(naSource)
