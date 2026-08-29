@@ -7000,36 +7000,56 @@ body,
   overflow: hidden;
 }
 
-.pms-joint-mr-table .ant-table-cell,
-.pms-joint-mr-table .ant-table-cell-fix-left,
-.pms-joint-mr-table .ant-table-cell-fix-right {
-  background: #fff;
+.pms-joint-mr-table .ant-table-thead .ant-table-cell {
+  z-index: 1;
+  background: #f7f7ff !important;
 }
 
-.pms-joint-mr-table .ant-table-thead .ant-table-cell,
-.pms-joint-mr-table .ant-table-thead .ant-table-cell-fix-left,
-.pms-joint-mr-table .ant-table-thead .ant-table-cell-fix-right {
-  z-index: 4;
-  background: #f7f7ff;
-}
-
-/* The global Ant header treatment is relative; restore fixed identity/error
-   headers only inside the joint MR table. */
+/* The global Ant header treatment is relative. Restore Ant Design 6 start/end
+   cells with opaque, explicit stacking only inside the joint MR table. */
 .pms-joint-mr-table .ant-table-thead > tr > th.ant-table-cell-fix-start,
 .pms-joint-mr-table .ant-table-thead > tr > th.ant-table-cell-fix-end {
   position: sticky !important;
+  z-index: 6;
+  background: #f7f7ff !important;
 }
 
-.pms-joint-mr-table .ant-table-tbody .pms-joint-mr-reference-row > .ant-table-cell,
-.pms-joint-mr-table .ant-table-tbody .pms-joint-mr-reference-row > .ant-table-cell-fix-left,
-.pms-joint-mr-table .ant-table-tbody .pms-joint-mr-reference-row > .ant-table-cell-fix-right {
+/* Ant Design 5 compatibility aliases; Ant Design 6 emits fix-start/fix-end. */
+.pms-joint-mr-table .ant-table-thead > tr > th.ant-table-cell-fix-left,
+.pms-joint-mr-table .ant-table-thead > tr > th.ant-table-cell-fix-right {
+  position: sticky !important;
+  z-index: 6;
+  background: #f7f7ff !important;
+}
+
+.pms-joint-mr-table .ant-table-tbody > tr > td {
+  z-index: 0;
+  background: #fff;
+}
+
+.pms-joint-mr-table .ant-table-tbody > tr > td.ant-table-cell-fix-start,
+.pms-joint-mr-table .ant-table-tbody > tr > td.ant-table-cell-fix-end {
+  position: sticky !important;
+  z-index: 3;
+  background: #fff;
+}
+
+.pms-joint-mr-table .ant-table-tbody > tr > td.ant-table-cell-fix-left,
+.pms-joint-mr-table .ant-table-tbody > tr > td.ant-table-cell-fix-right {
+  position: sticky !important;
+  z-index: 3;
+  background: #fff;
+}
+
+.pms-joint-mr-table .ant-table-tbody .pms-joint-mr-reference-row > td {
   background: #fffbe8;
   font-weight: 600;
 }
 
-.pms-joint-mr-table .ant-table-tbody .ant-table-cell-fix-left,
-.pms-joint-mr-table .ant-table-tbody .ant-table-cell-fix-right {
-  z-index: 2;
+.pms-joint-mr-table .ant-table-tbody .pms-joint-mr-reference-row > td.ant-table-cell-fix-start,
+.pms-joint-mr-table .ant-table-tbody .pms-joint-mr-reference-row > td.ant-table-cell-fix-end {
+  z-index: 3;
+  background: #fffbe8;
 }
 
 .pms-joint-mr-table .pms-mr-invalid-cell {
