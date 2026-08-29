@@ -26,7 +26,85 @@ const pageSource = readSource(root, 'src/app/page.tsx')
 const jointContainerSource = readSource(root, 'src/containers/JointProjectSpaceContainer.tsx')
 const jointPlanSource = readSource(root, 'src/components/joint/JointMrVersionPlan.tsx')
 const stopReleaseUiRules = loadTypeScriptModule(root, 'src/lib/mrStopReleaseUiRules.ts')
+const machineMarketRules = loadTypeScriptModule(root, 'src/lib/mrMachineMarketRules.ts')
+const machineMrVersionPlanSource = readSource(root, 'src/components/plans/MachineMrVersionPlan.tsx')
 const NOW = '2026-08-29T08:00:00.000Z'
+
+// Machine project-space MR projection: only meaningful numeric joint rows
+// project into the market plan, with structure retained from the exact tOS
+// instance snapshot rather than today's template.
+const machineProjectionActivities = [
+  { id: 'stage', parentId: null, order: 0, activityName: '快照阶段' },
+  { id: 'node', parentId: 'stage', order: 0, activityName: '快照节点' },
+]
+const machineProjectionInstance = {
+  projectId: 'tos-project-16.3', tosVersion: '16.3.0.140', templateVersionId: 'template-v7',
+  activities: machineProjectionActivities, dates: { node: '2026-07-01' },
+  createdBy: '管理员', createdAt: NOW, updatedBy: '管理员', updatedAt: NOW,
+}
+const machineProjectionPlan = {
+  projectId: 'machine-c09', tosProjectId: 'tos-project-16.3', tosVersion: '16.3.0.140',
+  transferType: '1', dates: { node: '2026-07-02' }, updatedBy: '张三', updatedAt: NOW,
+}
+assert.equal(machineMarketRules.isEligibleMachineMrPlan(machineProjectionPlan), true)
+assert.equal(machineMarketRules.isEligibleMachineMrPlan({ ...machineProjectionPlan, dates: {} }), false)
+assert.equal(machineMarketRules.isEligibleMachineMrPlan({ ...machineProjectionPlan, transferType: 'N/A' }), false)
+assert.equal(machineMarketRules.isEligibleMachineMrPlan({ ...machineProjectionPlan, transferType: '2', dates: { node: '2026-02-30' } }), false)
+assert.equal(machineMarketRules.isEligibleMachineMrPlan({ ...machineProjectionPlan, transferType: '2', dates: { node: '2026/07/02' } }), false)
+const marketRows = [
+  { id: 'ru', market: 'RU', isMain: false, followsMain: false },
+  { id: 'op', market: 'OP', isMain: true, followsMain: false },
+  { id: 'in', market: 'IN', isMain: false, followsMain: false },
+]
+const machineProjection = machineMarketRules.projectMachineMarketMrVersions({
+  projectId: 'machine-c09',
+  plansByKey: {
+    'machine-c09::16.3.0.140': machineProjectionPlan,
+    'machine-c09::16.3.0.145': { ...machineProjectionPlan, tosVersion: '16.3.0.145', dates: { node: '2026-07-09' } },
+    'other::16.3.0.140': { ...machineProjectionPlan, projectId: 'other' },
+  },
+  instancesByProjectId: { 'tos-project-16.3': [machineProjectionInstance] },
+  marketRows,
+})
+assert.deepEqual(machineProjection.versions.map(version => version.tosVersion), ['16.3.0.140'])
+assert.deepEqual(machineProjection.missingInstanceVersions, ['16.3.0.145'])
+assert.deepEqual(machineProjection.markets, ['OP', 'RU', 'IN'])
+assert.equal(machineProjection.mainMarket, 'OP')
+assert.equal(machineProjection.versions[0].templateVersionId, 'template-v7')
+assert.deepEqual(machineProjection.versions[0].activities, machineProjectionActivities)
+assert.notEqual(machineProjection.versions[0].activities, machineProjectionActivities)
+assert.notEqual(machineProjection.versions[0].activities[0], machineProjectionActivities[0])
+assert.deepEqual(machineProjectionActivities, [
+  { id: 'stage', parentId: null, order: 0, activityName: '快照阶段' },
+  { id: 'node', parentId: 'stage', order: 0, activityName: '快照节点' },
+])
+assert.equal(machineMarketRules.getMachineMarketDate({
+  plan: machineProjectionPlan, overridesByKey: {}, market: 'OP', mainMarket: 'OP', activityId: 'node',
+}), '2026-07-02')
+assert.equal(machineMarketRules.getMachineMarketDate({
+  plan: machineProjectionPlan,
+  overridesByKey: { 'machine-c09::16.3.0.140::RU': { projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'RU', mainMarket: 'OP', dates: { node: '2026-07-01' } } },
+  market: 'RU', mainMarket: 'OP', activityId: 'node',
+}), '2026-07-01')
+
+for (const label of ['tOS版本号', '活动序号', '活动名称', '市场项目', '竖版视图', '横版视图']) {
+  assert.ok(machineMrVersionPlanSource.includes(label), `machine MR source label: ${label}`)
+}
+assert.match(machineMrVersionPlanSource, /getMainMarket/)
+assert.match(machineMrVersionPlanSource, /主市场对应时间未填写，当前市场不可填写/)
+assert.match(machineMrVersionPlanSource, /非主市场时间不得晚于主市场对应时间/)
+assert.match(machineMrVersionPlanSource, /validateMachineMarketDate/)
+assert.match(machineMrVersionPlanSource, /marketOverridesByKey/)
+assert.match(machineMrVersionPlanSource, /resolveMrPermissions/)
+assert.match(machineMrVersionPlanSource, /machineProjectId:\s*project\.id/)
+assert.match(machineMrVersionPlanSource, /updateMarketDate/)
+assert.match(machineMrVersionPlanSource, /machine::\$\{project\.id\}/)
+assert.match(machineMrVersionPlanSource, /data-mr-tos-version/)
+assert.match(machineMrVersionPlanSource, /data-mr-version/)
+assert.match(projectSpaceSource, /isWholeMachineProject[\s\S]*['"]一级计划['"][\s\S]*['"]三级计划-MR版本计划['"]/)
+assert.match(projectSpaceSource, /showMarketControls\s*=\s*isMachineProjectType\([^)]*\)[\s\S]*projectPlanLevel\s*===\s*['"]level1['"]/)
+assert.match(projectSpaceSource, /市场编辑/)
+assert.match(projectSpaceSource, /<MachineMrVersionPlan/)
 
 // Joint project space: navigation, real source aggregation, stable editable grid and validation UI.
 assert.ok(headerSource.indexOf('项目列表') < headerSource.indexOf('联合项目空间'))
