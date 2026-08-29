@@ -140,6 +140,90 @@ export interface MrCellError {
   message: string
 }
 
+export interface MrTosProjectSource {
+  projectId: string
+  tosProjectKey: string
+  projectName: string
+}
+
+export interface MrMachineProjectSource {
+  id: string
+  projectName?: string
+  productType: string
+  firstSaleTosVersion?: string
+  currentTosVersion?: string
+  spm?: string
+}
+
+export interface MrLevel1Source {
+  versions: readonly MrPlanVersionLike[]
+  getSnapshot: (versionId: string) => readonly MrLevel1TaskLike[] | undefined
+}
+
+export interface MrJointReferenceRow {
+  key: string
+  kind: 'tos-reference'
+  projectId: string
+  tosProjectId: string
+  tosVersion: string
+  instance: TosMrVersionInstance
+}
+
+export interface MrJointMachineRow {
+  key: string
+  kind: 'machine'
+  projectId: string
+  tosProjectId: string
+  tosVersion: string
+  plan: JointMachinePlan
+}
+
+export interface ReconcileJointInput {
+  today: string
+  tosProjects: readonly MrTosProjectSource[]
+  tosInstances: readonly TosMrVersionInstance[]
+  machineProjects: readonly MrMachineProjectSource[]
+  latestPublishedLevel1ByProjectId: Readonly<Record<string, MrLevel1Source | undefined>>
+  persistedPlans: Readonly<Record<string, JointMachinePlan>>
+  stopRecords: readonly MrStopReleaseRecord[]
+}
+
+export interface ReconcileJointResult {
+  rows: Array<MrJointReferenceRow | MrJointMachineRow>
+  persistedPlans: Record<string, JointMachinePlan>
+}
+
+export interface StopExclusionInput {
+  plan: JointMachinePlan
+  tosInstances: readonly TosMrVersionInstance[]
+  stopRecords: readonly MrStopReleaseRecord[]
+}
+
+export interface ApplyStopReleaseInput {
+  persistedPlans: Readonly<Record<string, JointMachinePlan>>
+  tosInstances: readonly TosMrVersionInstance[]
+  stopRecords: readonly MrStopReleaseRecord[]
+  record: MrStopReleaseRecord
+}
+
+export interface ApplyStopReleaseResult {
+  persistedPlans: Record<string, JointMachinePlan>
+  stopRecords: MrStopReleaseRecord[]
+  removedPlanKeys: string[]
+}
+
+export interface JointValidationInput {
+  tosInstances: readonly TosMrVersionInstance[]
+  machinePlans: readonly JointMachinePlan[]
+}
+
+export interface MarketDateValidationInput {
+  value: string
+  mainValue: string
+  activityId: string
+  activityName: string
+}
+
 export interface MrPermissionInput {
   context: 'config' | 'tos' | 'joint-machine' | 'machine-market'
   currentUser: string
