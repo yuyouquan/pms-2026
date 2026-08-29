@@ -1,9 +1,16 @@
 import assert from 'node:assert/strict'
-import { loadTypeScriptModule, projectRoot } from './lib/source-contract.mjs'
+import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
 const templateRules = loadTypeScriptModule(root, 'src/lib/mrTemplateRules.ts')
 const templateMocks = loadTypeScriptModule(root, 'src/data/mrVersionPlanMocks.ts')
+const templateMocksSource = readSource(root, 'src/data/mrVersionPlanMocks.ts')
+
+assert.doesNotMatch(templateMocksSource, /as unknown as MrTemplateActivity\[\]/)
+assert.match(
+  templateMocksSource,
+  /export const DEFAULT_MR_TEMPLATE_ACTIVITIES:\s*readonly Readonly<MrTemplateActivity>\[\]\s*=/,
+)
 
 assert.equal(templateRules.DEFAULT_MR_TEMPLATE_ACTIVITIES.length, 15)
 assert.deepEqual(
@@ -117,6 +124,12 @@ assert.throws(
     { ...initialVersions[0], id: 'mr-template-unsafe', versionNo: 'V9007199254740992' },
   ], '张三', NOW),
   /版本号格式无效：V9007199254740992/,
+)
+assert.throws(
+  () => templateRules.createMrTemplateRevision([
+    { ...initialVersions[0], id: 'mr-template-max-safe', versionNo: 'V9007199254740991' },
+  ], '张三', NOW),
+  /版本号已达到最大安全值：V9007199254740991/,
 )
 
 const revisionBeforePublish = JSON.parse(JSON.stringify(revision))
