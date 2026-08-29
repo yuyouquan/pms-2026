@@ -376,7 +376,11 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
         const errors = row.kind === 'machine' && activity
           ? (errorsByRow[row.key] ?? []).filter(error => error.activityId === activity.id)
           : []
-        return { className: errors.length ? 'pms-mr-invalid-cell' : '' }
+        return {
+          className: `pms-joint-mr-date-cell${errors.length ? ' pms-mr-invalid-cell' : ''}`,
+          'data-mr-date-cell': 'true',
+          'data-mr-activity-id': activity?.id ?? '',
+        } as any
       },
       render: (_: unknown, row: JointRow) => {
         const instance = findInstance(tosInstances, row)
@@ -404,7 +408,9 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     ...fixedColumns,
     ...dateColumns,
     {
-      title: '错误提示', key: 'errors', width: 92, fixed: 'right', align: 'center', render: (_, row) => {
+      title: '错误提示', key: 'errors', width: 92, fixed: 'right', align: 'center',
+      onCell: () => ({ 'data-mr-fixed-error-cell': 'true' } as any),
+      render: (_, row) => {
         if (row.kind === 'tos-reference') return '-'
         const messages = dedupeMessages(errorsByRow[row.key] ?? [])
         if (!messages.length) return '-'
@@ -482,6 +488,12 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
         scroll={{ x: 'max-content', y: 620 }}
         locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无MR版本计划" /> }}
         rowClassName={row => row.kind === 'tos-reference' ? 'pms-joint-mr-reference-row' : ''}
+        onRow={row => ({
+          'data-mr-row-key': row.key,
+          'data-mr-row-kind': row.kind,
+          'data-mr-project-id': row.projectId,
+          'data-mr-tos-version': row.tosVersion,
+        } as any)}
       />
       <Modal
         title="停止发版"

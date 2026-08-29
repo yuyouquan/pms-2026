@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict'
+import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import puppeteer from 'puppeteer'
@@ -8,6 +9,7 @@ import { waitForApplicationBundles } from './level1-browser-harness.mjs'
 
 const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const TIMEOUT = Number(process.env.PMS_BROWSER_TIMEOUT || 45_000)
+const FIXED_BROWSER_NOW = '2026-08-30T00:00:00.000+08:00'
 const OUTPUT = path.join(process.cwd(), 'screenshots', 'mr-version-plan')
 const EXPECTED_SCREENSHOTS = [
   'configuration.png', 'tos-vertical.png', 'tos-horizontal.png', 'joint-valid.png',
@@ -21,9 +23,45 @@ const STEP_MARKERS = [
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 fs.mkdirSync(OUTPUT, { recursive: true })
-for (const file of [...EXPECTED_SCREENSHOTS, 'failure.png']) {
+for (const file of EXPECTED_SCREENSHOTS) {
   const target = path.join(OUTPUT, file)
   if (fs.existsSync(target)) fs.unlinkSync(target)
+}
+
+function installDeterministicBrowserEnvironment(fixedNow) {
+  const NativeDate = Date
+  const fixedTimestamp = NativeDate.parse(fixedNow)
+  function FixedDate(...args) {
+    if (!new.target) return new NativeDate(fixedTimestamp).toString()
+    return Reflect.construct(NativeDate, args.length ? args : [fixedTimestamp], new.target)
+  }
+  Object.setPrototypeOf(FixedDate, NativeDate)
+  FixedDate.prototype = NativeDate.prototype
+  FixedDate.now = () => fixedTimestamp
+  FixedDate.parse = NativeDate.parse
+  FixedDate.UTC = NativeDate.UTC
+  globalThis.Date = FixedDate
+  try {
+    window.localStorage.removeItem('pms-mr-version-plan-store')
+    window.localStorage.removeItem('pms-level3-plan-store')
+  } catch {
+    // about:blank has no storage origin; this hook runs again for the app origin.
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    const style = document.createElement('style')
+    style.dataset.mrAcceptanceEvidence = 'true'
+    style.textContent = `
+      *, *::before, *::after {
+        animation-duration: 0.001s !important;
+        animation-delay: 0s !important;
+        transition-duration: 0.001s !important;
+        transition-delay: 0s !important;
+        caret-color: transparent !important;
+        scroll-behavior: auto !important;
+      }
+    `
+    document.head.append(style)
+  }, { once: true })
 }
 
 await waitForApplicationBundles({ baseUrl: BASE_URL, timeoutMs: 60_000, requestTimeoutMs: 30_000 })
@@ -35,27 +73,54 @@ const browser = await puppeteer.launch({
   headless: 'new',
   executablePath: configuredBrowser,
   protocolTimeout: Math.max(30_000, TIMEOUT * 2),
-  args: ['--no-sandbox'],
+  args: [
+    '--no-sandbox',
+    '--disable-gpu',
+    '--disable-lcd-text',
+    '--font-render-hinting=none',
+    '--force-color-profile=srgb',
+    '--force-device-scale-factor=1',
+  ],
 })
 const page = await browser.newPage()
 const cdp = await page.createCDPSession()
 await page.setViewport({ width: 1600, height: 1000 })
 page.setDefaultTimeout(TIMEOUT)
-await page.evaluateOnNewDocument(() => {
-  try {
-    window.localStorage.removeItem('pms-mr-version-plan-store')
-    window.localStorage.removeItem('pms-level3-plan-store')
-  } catch {
-    // about:blank has no storage origin; the hook runs again for the app origin.
-  }
-})
+await page.evaluateOnNewDocument(installDeterministicBrowserEnvironment, FIXED_BROWSER_NOW)
 
 const browserErrors = []
 page.on('pageerror', error => browserErrors.push(`pageerror: ${error.message}`))
 page.on('console', message => { if (message.type() === 'error') browserErrors.push(`console: ${message.text()}`) })
 
 const pass = (step, label) => console.log(`${STEP_MARKERS[step - 1]} ${label}`)
+async function waitForStableEvidence() {
+  await page.evaluate(async () => {
+    await Promise.race([
+      document.fonts.ready,
+      new Promise(resolve => setTimeout(resolve, 3_000)),
+    ])
+  })
+  await page.waitForFunction(() => ![...document.querySelectorAll('.ant-message-notice')].some(node => {
+    const rect = node.getBoundingClientRect()
+    return rect.width > 0 && rect.height > 0 && getComputedStyle(node).visibility !== 'hidden'
+  }), { timeout: 5_000 }).catch(() => {})
+  let previous = ''
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const current = await page.evaluate(() => JSON.stringify({
+      width: document.documentElement.scrollWidth,
+      height: document.documentElement.scrollHeight,
+      body: document.body.getBoundingClientRect().toJSON(),
+      tables: [...document.querySelectorAll('.ant-table-container')].map(node => node.getBoundingClientRect().toJSON()),
+    }))
+    if (current === previous) return
+    previous = current
+    await wait(100)
+  }
+  throw new Error('acceptance evidence layout did not stabilize')
+}
 const screenshot = async name => {
+  assert.ok(EXPECTED_SCREENSHOTS.includes(name), `unexpected screenshot target: ${name}`)
+  await waitForStableEvidence()
   const capture = cdp.send('Page.captureScreenshot', {
     format: 'png',
     fromSurface: true,
@@ -74,6 +139,151 @@ const readMrState = () => page.evaluate(() => {
   const raw = window.localStorage.getItem('pms-mr-version-plan-store')
   return raw ? JSON.parse(raw).state : null
 })
+
+async function assertNaMachineProjection(projectId, tosVersion) {
+  const state = await readMrState()
+  assert.deepEqual(state.machinePlansByKey[`${projectId}::${tosVersion}`].dates, {})
+  const projection = await page.$eval(
+    `tr[data-mr-row-key="${projectId}::${tosVersion}"][data-mr-row-kind="machine"][data-mr-project-id="${projectId}"][data-mr-tos-version="${tosVersion}"]`,
+    row => {
+      const dateCells = [...row.querySelectorAll('[data-mr-date-cell="true"]')]
+      return {
+        rowKey: row.dataset.mrRowKey,
+        cellCount: dateCells.length,
+        values: dateCells.map(cell => cell.textContent?.trim()),
+        editableDateInputs: dateCells.reduce((count, cell) => count + cell.querySelectorAll('input').length, 0),
+      }
+    },
+  )
+  assert.equal(projection.rowKey, `${projectId}::${tosVersion}`)
+  assert.equal(projection.cellCount, 10)
+  assert.deepEqual(projection.values, Array(10).fill('/'))
+  assert.equal(projection.editableDateInputs, 0)
+}
+
+async function assertJointStickyColumns() {
+  const results = []
+  for (const scrollLeft of [1200, 1440]) {
+    await page.$eval('.pms-joint-mr-table .ant-table-body', (body, nextScrollLeft) => { body.scrollLeft = nextScrollLeft }, scrollLeft)
+    await wait(150)
+    results.push(await page.$eval('.pms-joint-mr-table', table => {
+      const visible = element => {
+        const rect = element.getBoundingClientRect()
+        return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== 'hidden'
+      }
+      const owns = (cell, x, y) => {
+        const hit = document.elementFromPoint(x, y)
+        return hit === cell || cell.contains(hit)
+      }
+      const alphaOpaque = cell => {
+        const color = getComputedStyle(cell).backgroundColor
+        const alpha = color.match(/^rgba?\([^,]+,[^,]+,[^,]+(?:,\s*([\d.]+))?\)$/)?.[1]
+        return { color, opaque: alpha === undefined || Number(alpha) === 1 }
+      }
+      const inspectCells = cells => cells.map(cell => {
+        const rect = cell.getBoundingClientRect()
+        return {
+          text: cell.textContent?.trim(),
+          rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width },
+          ownsCenter: owns(cell, rect.left + rect.width / 2, rect.top + rect.height / 2),
+          zIndex: Number(getComputedStyle(cell).zIndex),
+          ...alphaOpaque(cell),
+        }
+      })
+      const headers = [...table.querySelectorAll('thead th.ant-table-cell-fix-start, thead th.ant-table-cell-fix-left')].filter(visible)
+      const rows = [
+        table.querySelector('tr[data-mr-row-kind="tos-reference"][data-mr-tos-version="16.3.0.140"]'),
+        table.querySelector('tr[data-mr-row-kind="machine"][data-mr-project-id="3"][data-mr-tos-version="16.3.0.140"]'),
+      ]
+      return {
+        headers: inspectCells(headers),
+        rows: rows.map(row => {
+          if (!row) return null
+          const fixed = [...row.querySelectorAll('td.ant-table-cell-fix-start, td.ant-table-cell-fix-left')].filter(visible)
+          const error = row.querySelector('td[data-mr-fixed-error-cell="true"]')
+          const dateCells = [...row.querySelectorAll('td[data-mr-date-cell="true"]')].filter(visible)
+          const fixedInfo = inspectCells(fixed)
+          const errorInfo = error ? inspectCells([error])[0] : null
+          const visibleDate = dateCells.map(cell => ({ cell, rect: cell.getBoundingClientRect() }))
+            .find(({ rect }) => rect.left + rect.width / 2 > fixed.at(-1).getBoundingClientRect().right + 4
+              && rect.left + rect.width / 2 < error.getBoundingClientRect().left - 4)
+          const firstRect = fixed[0].getBoundingClientRect()
+          const secondRect = fixed[1].getBoundingClientRect()
+          return {
+            fixed: fixedInfo,
+            error: errorInfo,
+            noOverlap: firstRect.right <= secondRect.left + 0.5,
+            firstOwnsSeam: owns(fixed[0], firstRect.right - 1, firstRect.top + firstRect.height / 2),
+            secondOwnsSeam: owns(fixed[1], secondRect.left + 1, secondRect.top + secondRect.height / 2),
+            dateCenterOwned: Boolean(visibleDate && owns(visibleDate.cell, visibleDate.rect.left + visibleDate.rect.width / 2, visibleDate.rect.top + visibleDate.rect.height / 2)),
+            errorDoesNotCoverDateCenter: Boolean(visibleDate && error && !owns(error, visibleDate.rect.left + visibleDate.rect.width / 2, visibleDate.rect.top + visibleDate.rect.height / 2)),
+          }
+        }),
+      }
+    }))
+  }
+  for (const result of results) {
+    assert.equal(result.headers.length, 2)
+    assert.ok(result.headers.every(cell => cell.opaque && cell.ownsCenter && cell.zIndex === 6))
+    for (const row of result.rows) {
+      assert.ok(row)
+      assert.equal(row.fixed.length, 2)
+      assert.ok(row.fixed.every(cell => cell.opaque && cell.ownsCenter && cell.zIndex === 3))
+      assert.ok(row.error?.opaque && row.error.ownsCenter && row.error.zIndex === 3)
+      assert.ok(result.headers.every(header => header.zIndex > row.fixed[0].zIndex))
+      assert.equal(row.noOverlap, true)
+      assert.equal(row.firstOwnsSeam, true)
+      assert.equal(row.secondOwnsSeam, true)
+      assert.equal(row.dateCenterOwned, true)
+      assert.equal(row.errorDoesNotCoverDateCenter, true)
+    }
+  }
+}
+
+async function snapshotTemplateRevision(versionId) {
+  const state = await readMrState()
+  const version = state.templateVersions.find(item => item.id === versionId)
+  assert.ok(version, `template version exists: ${versionId}`)
+  const domRows = await page.$$eval('tr[data-mr-template-activity-id]', rows => rows.map(row => ({
+    id: row.dataset.mrTemplateActivityId,
+    number: row.dataset.mrTemplateNumber,
+    name: row.querySelector('input[aria-label^="活动名称-"]')?.value || row.children[2]?.textContent?.trim(),
+  })))
+  return { version: structuredClone(version), domRows }
+}
+
+function assertTemplateRevisionMutation({ beforeDelete, afterDelete, beforeDrag, afterDrag, deletedId, deletedName, parentId, retainedChildIds, priorPublished, priorPublishedAfter, finalPublished }) {
+  assert.equal(afterDelete.version.activities.length, beforeDelete.version.activities.length - 1)
+  assert.equal(afterDelete.domRows.length, beforeDelete.domRows.length - 1)
+  assert.ok(beforeDelete.version.activities.some(activity => activity.id === deletedId && activity.activityName === deletedName))
+  assert.equal(afterDelete.version.activities.some(activity => activity.id === deletedId || activity.activityName === deletedName), false)
+  const beforeParent = beforeDrag.version.activities.find(activity => activity.id === parentId)
+  const afterParent = afterDrag.version.activities.find(activity => activity.id === parentId)
+  assert.ok(beforeParent && afterParent)
+  assert.notEqual(afterParent.order, beforeParent.order)
+  assert.deepEqual(
+    afterDrag.version.activities.filter(activity => activity.parentId === parentId).map(activity => activity.id).sort(),
+    [...retainedChildIds].sort(),
+  )
+  const parentDom = afterDrag.domRows.find(row => row.id === parentId)
+  assert.ok(parentDom && /^\d+$/.test(parentDom.number))
+  for (const childId of retainedChildIds) {
+    const childDom = afterDrag.domRows.find(row => row.id === childId)
+    assert.ok(childDom?.number.startsWith(`${parentDom.number}.`))
+  }
+  assert.deepEqual(beforeDelete.version.status, '修订中')
+  assert.deepEqual(priorPublishedAfter, priorPublished)
+  assert.equal(priorPublishedAfter.status, '已发布')
+  if (finalPublished) {
+    assert.equal(finalPublished.activities.some(activity => activity.id === deletedId || activity.activityName === deletedName), false)
+    assert.ok(finalPublished.activities.some(activity => activity.id === parentId && activity.activityName === 'MR验收收尾'))
+    assert.deepEqual(
+      finalPublished.activities.filter(activity => activity.parentId === parentId).map(activity => activity.id).sort(),
+      [...retainedChildIds].sort(),
+    )
+    assert.equal(finalPublished.activities.find(activity => activity.id === parentId)?.order, afterDrag.version.activities.find(activity => activity.id === parentId)?.order)
+  }
+}
 
 async function waitForMainMenu(key) {
   const labels = { workbench: '工作台', projectList: '项目列表', jointProjectSpace: '联合项目空间', config: '配置中心' }
@@ -130,6 +340,75 @@ async function clickButtonStarting(prefix) {
   await wait(450)
 }
 
+let modalCloseSequence = 0
+async function clickTopVisibleModalButton(label) {
+  const token = `mr-acceptance-modal-action-${++modalCloseSequence}`
+  const result = await page.evaluate(({ label, token }) => {
+    const wraps = [...document.querySelectorAll('.ant-modal-wrap')].filter(wrap => {
+      const rect = wrap.getBoundingClientRect()
+      const style = getComputedStyle(wrap)
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none'
+        && style.visibility !== 'hidden'
+    }).map((wrap, domIndex) => ({ wrap, domIndex, zIndex: Number.parseInt(getComputedStyle(wrap).zIndex, 10) || 0 }))
+      .sort((left, right) => left.zIndex - right.zIndex || left.domIndex - right.domIndex)
+    const top = wraps.at(-1)?.wrap
+    const button = [...(top?.querySelectorAll('button') ?? [])].find(node => node.textContent?.replace(/\s/g, '') === label.replace(/\s/g, '') && !node.disabled)
+    if (!button) return {
+      activated: false,
+      wrapCount: wraps.length,
+      topText: top?.textContent,
+      buttons: [...(top?.querySelectorAll('button') ?? [])].map(node => ({ text: node.textContent, disabled: node.disabled })),
+    }
+    top.setAttribute('data-mr-acceptance-modal-token', token)
+    button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }))
+    button.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    button.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+    button.click()
+    return { activated: true }
+  }, { label, token })
+  assert.equal(result.activated, true, `top visible modal button is actionable: ${label}; ${JSON.stringify(result)}`)
+  await page.waitForFunction(token => {
+    const wrap = document.querySelector(`.ant-modal-wrap[data-mr-acceptance-modal-token="${token}"]`)
+    if (!wrap) return true
+    const rect = wrap.getBoundingClientRect()
+    const style = getComputedStyle(wrap)
+    return rect.width === 0 || rect.height === 0 || style.display === 'none' || style.visibility === 'hidden'
+  }, {}, token)
+}
+
+async function closeTopVisibleModal() {
+  const token = `mr-acceptance-modal-${++modalCloseSequence}`
+  const closed = await page.evaluate(token => {
+    const wraps = [...document.querySelectorAll('.ant-modal-wrap')].filter(wrap => {
+      const rect = wrap.getBoundingClientRect()
+      const style = getComputedStyle(wrap)
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none'
+        && style.visibility !== 'hidden'
+    }).map((wrap, domIndex) => ({
+      wrap,
+      domIndex,
+      zIndex: Number.parseInt(getComputedStyle(wrap).zIndex, 10) || 0,
+    })).sort((left, right) => left.zIndex - right.zIndex || left.domIndex - right.domIndex)
+    const top = wraps.at(-1)?.wrap
+    const close = top?.querySelector('.ant-modal-close')
+    if (!top || !close) return false
+    top.setAttribute('data-mr-acceptance-modal-token', token)
+    close.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }))
+    close.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    close.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+    close.click()
+    return true
+  }, token)
+  assert.equal(closed, true, 'top visible modal exposes a close action')
+  await page.waitForFunction(token => {
+    const wrap = document.querySelector(`.ant-modal-wrap[data-mr-acceptance-modal-token="${token}"]`)
+    if (!wrap) return true
+    const rect = wrap.getBoundingClientRect()
+    const style = getComputedStyle(wrap)
+    return rect.width === 0 || rect.height === 0 || style.display === 'none' || style.visibility === 'hidden'
+  }, {}, token)
+}
+
 async function chooseSelect(ariaLabel, option, currentOption) {
   const selector = `[aria-label="${ariaLabel}"]`
   await page.waitForSelector(selector, { visible: true })
@@ -145,7 +424,7 @@ async function chooseSelect(ariaLabel, option, currentOption) {
     return
   }
   const controlId = await page.$eval(selector, node => node.getAttribute('aria-controls'))
-  const optionBox = await page.evaluate(({ option, controlId }) => {
+  const optionActivated = await page.evaluate(({ option, controlId }) => {
     const visible = node => {
       const rect = node.getBoundingClientRect()
       const style = getComputedStyle(node)
@@ -156,13 +435,14 @@ async function chooseSelect(ariaLabel, option, currentOption) {
       || [...document.querySelectorAll('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')].find(visible)
     const item = [...(dropdown?.querySelectorAll('.ant-select-item-option') ?? [])]
       .find(node => visible(node) && node.textContent?.trim().startsWith(option))
-    if (!item) return null
-    const rect = item.getBoundingClientRect()
-    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+    if (!item) return false
+    item.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }))
+    item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    item.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+    item.click()
+    return true
   }, { option, controlId })
-  if (optionBox) {
-    await page.mouse.click(optionBox.x, optionBox.y)
-  } else {
+  if (!optionActivated) {
     await page.click(selector)
     await page.keyboard.type(option)
     await page.keyboard.press('Enter')
@@ -183,63 +463,47 @@ async function fillInput(selector, value) {
 
 async function fillDate(selector, value) {
   await page.waitForSelector(selector, { visible: true })
-  const existingValue = await page.$eval(selector, input => input.value)
-  if (existingValue) {
+  if (await page.$eval(selector, input => Boolean(input.value))) {
+    const picker = await page.$eval(selector, input => {
+      const host = input.closest('.ant-picker')
+      const rect = host?.getBoundingClientRect()
+      return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null
+    })
+    assert.ok(picker, `date picker host exists: ${selector}`)
+    await page.mouse.move(picker.x, picker.y)
+    await wait(100)
+    const clearBox = await page.$eval(selector, input => {
+      const clear = input.closest('.ant-picker')?.querySelector('.ant-picker-clear')
+      if (!clear) return null
+      const rect = clear.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    })
+    assert.ok(clearBox, `date picker clear affordance exists: ${selector}`)
+    await page.mouse.click(clearBox.x, clearBox.y)
+    await page.waitForFunction(selector => document.querySelector(selector)?.value === '', {}, selector)
+  }
+  const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
+  for (let attempt = 0; attempt < 2; attempt += 1) {
     await page.click(selector)
-    await page.waitForSelector('.ant-picker-dropdown:not(.ant-picker-dropdown-hidden)', { visible: true })
-    await wait(300)
-    const controlId = await page.$eval(selector, node => node.getAttribute('aria-controls'))
-    const dateBox = await page.evaluate(({ value, controlId, selector }) => {
-      const inputRect = document.querySelector(selector)?.getBoundingClientRect()
-      const visibleDropdowns = [...document.querySelectorAll('.ant-picker-dropdown:not(.ant-picker-dropdown-hidden)')].filter(node => {
-          const rect = node.getBoundingClientRect()
-          const style = getComputedStyle(node)
-          return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden'
-        })
-      const controlled = controlId ? document.getElementById(controlId)?.closest('.ant-picker-dropdown') : null
-      const dropdown = controlled && visibleDropdowns.includes(controlled)
-        ? controlled
-        : visibleDropdowns.sort((left, right) => {
-          if (!inputRect) return 0
-          const distance = node => {
-            const rect = node.getBoundingClientRect()
-            return Math.abs(rect.left - inputRect.left) + Math.abs(rect.top - inputRect.bottom)
-          }
-          return distance(left) - distance(right)
-        })[0]
-      const cell = [...(dropdown?.querySelectorAll(`td[title="${value}"]`) ?? [])]
-        .find(node => {
-          const rect = node.getBoundingClientRect()
-          return rect.width > 0 && rect.height > 0 && getComputedStyle(node).visibility !== 'hidden'
-        })
-      if (!cell) return null
-      const rect = cell.getBoundingClientRect()
-      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
-    }, { value, controlId, selector })
-    if (dateBox) {
-      await page.mouse.click(dateBox.x, dateBox.y)
-      await wait(450)
-      return
-    }
+    await page.keyboard.down(modifier)
+    await page.keyboard.press('A')
+    await page.keyboard.up(modifier)
+    await page.keyboard.press('Backspace')
+    await page.keyboard.type(value)
+    await page.keyboard.press('Enter')
+    await wait(450)
+    if (await page.$eval(selector, (input, expected) => input.value === expected, value)) return
     await page.keyboard.press('Escape')
   }
-  await page.click(selector)
-  const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
-  await page.keyboard.down(modifier)
-  await page.keyboard.press('A')
-  await page.keyboard.up(modifier)
-  await page.keyboard.press('Backspace')
-  await page.keyboard.type(value)
-  await page.keyboard.press('Enter')
-  await wait(450)
+  throw new Error(`date input did not accept ${value}: ${selector}`)
 }
 
 async function switchUser(user) {
-  let optionBox = null
-  for (let attempt = 0; attempt < 2 && !optionBox; attempt += 1) {
+  let activated = false
+  for (let attempt = 0; attempt < 2 && !activated; attempt += 1) {
     await page.click('button[aria-label="切换当前用户"]')
     await wait(350)
-    optionBox = await page.evaluate(user => {
+    activated = await page.evaluate(user => {
       const name = [...document.querySelectorAll('.pms-user-dropdown .pms-user-menu__name')]
         .find(node => {
           const rect = node.getBoundingClientRect()
@@ -248,13 +512,15 @@ async function switchUser(user) {
             && style.visibility !== 'hidden' && node.textContent?.trim() === user
         })
       const item = name?.closest('[role="menuitem"]')
-      if (!item) return null
-      const rect = item.getBoundingClientRect()
-      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+      if (!item) return false
+      item.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }))
+      item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      item.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+      item.click()
+      return true
     }, user)
   }
-  assert.ok(optionBox, `switch user option exists: ${user}`)
-  await page.mouse.click(optionBox.x, optionBox.y)
+  assert.equal(activated, true, `switch user option exists: ${user}`)
   await page.waitForFunction(user => document.querySelector('button[aria-label="切换当前用户"]')?.getAttribute('data-current-user') === user, {}, user)
   await wait(300)
 }
@@ -297,27 +563,7 @@ try {
   assert.ok(jointRows.findIndex(row => row.text.includes('X6855_H8917')) > 0)
   pass(2, 'tOS reference precedes machine rows and is read-only')
 
-  const stickyCheck = await page.$eval('.pms-joint-mr-table .ant-table-body', body => {
-    body.scrollLeft = 1200
-    const fixed = body.querySelector('tbody tr.ant-table-row td.ant-table-cell-fix-start, tbody tr.ant-table-row td.ant-table-cell-fix-left')
-    if (!fixed) return null
-    const rect = fixed.getBoundingClientRect()
-    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
-    const color = getComputedStyle(fixed).backgroundColor
-    return {
-      ownsHit: hit === fixed || fixed.contains(hit),
-      color,
-      zIndex: getComputedStyle(fixed).zIndex,
-      fixedText: fixed.textContent?.trim(),
-      hitText: hit?.textContent?.trim(),
-      hitClass: hit instanceof HTMLElement ? hit.className : '',
-      rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-    }
-  })
-  if (!stickyCheck?.ownsHit) console.error('sticky diagnostic', stickyCheck)
-  assert.ok(stickyCheck?.ownsHit)
-  assert.doesNotMatch(stickyCheck.color, /rgba\([^)]*,\s*0\)/)
-  assert.notEqual(stickyCheck.zIndex, 'auto')
+  await assertJointStickyColumns()
   pass(3, 'fixed columns remain opaque after horizontal scroll')
   await page.$eval('.pms-joint-mr-table .ant-table-body', body => { body.scrollLeft = 0 })
   await wait(200)
@@ -348,10 +594,10 @@ try {
   await fillDate('input[aria-label="1-16.3.0.145-修改点收集开始时间"]', '2026-06-16')
   assert.equal((await readMrState()).machinePlansByKey['1::16.3.0.145'].dates['mr-node-change-collection'], '2026-06-16')
   await chooseSelect('1-16.3.0.145-1+N版本类型', 'N/A', '1')
-  assert.deepEqual((await readMrState()).machinePlansByKey['1::16.3.0.145'].dates, {})
-  const naRowText = await page.$eval('[aria-label="1-16.3.0.145-1+N版本类型"]', node => node.closest('tr')?.innerText || '')
-  assert.ok(naRowText.includes('N/A'))
+  await assertNaMachineProjection('1', '16.3.0.145')
   await chooseSelect('1-16.3.0.145-1+N版本类型', '1', 'N/A')
+  await fillDate('input[aria-label="1-16.3.0.145-修改点收集开始时间"]', '2026-06-16')
+  assert.equal((await readMrState()).machinePlansByKey['1::16.3.0.145'].dates['mr-node-change-collection'], '2026-06-16')
   pass(7, 'N/A clears dates and displays slashes')
 
   assert.ok(await page.$$eval('.pms-joint-mr-table .pms-mr-invalid-cell', nodes => nodes.length) > 0)
@@ -367,18 +613,22 @@ try {
   await clickVisibleText('停止发版')
   await chooseSelect('停止发版项目名称', 'X6877-D8400_H991')
   await fillDate('input[aria-label="停止发版日期"]', '2026-05-31')
-  await clickVisibleText('确认停止')
-  await wait(500)
+  assert.equal(await page.$eval('input[aria-label="停止发版日期"]', input => input.value), '2026-05-31')
+  await clickTopVisibleModalButton('确认停止')
+  await page.waitForFunction(() => {
+    const raw = window.localStorage.getItem('pms-mr-version-plan-store')
+    return raw && JSON.parse(raw).state.stopReleaseRecords.length === 1
+  })
   const stoppedState = await readMrState()
   assert.ok(stoppedState.machinePlansByKey['1::16.3.0.140'])
+  assert.equal(stoppedState.stopReleaseRecords.at(-1)?.stopDate, '2026-05-31')
   assert.equal(stoppedState.machinePlansByKey['1::16.3.0.145'], undefined)
   assert.equal(stoppedState.stopReleaseRecords.at(-1).projectId, '1')
   await clickVisibleText('停止发版记录')
   await page.waitForSelector('[role="dialog"]', { visible: true })
   assert.match(await page.$eval('[role="dialog"]', node => node.innerText), /X6877-D8400_H991/)
   await screenshot('stop-record.png')
-  await page.keyboard.press('Escape')
-  await page.waitForSelector('[role="dialog"]', { hidden: true })
+  await closeTopVisibleModal()
   await wait(300)
   pass(9, 'stop release removes future rows and records history')
 
@@ -445,19 +695,33 @@ try {
   await clickVisibleText('三级计划-MR版本计划', '[role="tab"],button,span')
   await page.waitForSelector('.pms-mr-template-table', { visible: true })
   await screenshot('configuration.png')
+  const templateStateBefore = await readMrState()
+  const priorPublished = structuredClone(templateStateBefore.templateVersions.find(version => version.status === '已发布'))
+  assert.ok(priorPublished)
   await clickVisibleText('创建修订')
   await page.waitForSelector('button[aria-label="新增一级活动"]', { visible: true })
+  const revisionId = (await readMrState()).currentTemplateVersionId
+  assert.equal((await readMrState()).templateVersions.find(version => version.id === revisionId)?.status, '修订中')
   await page.click('button[aria-label="新增一级活动"]')
   let inputs = await page.$$('input[aria-label^="活动名称-"]')
   const parentAria = await inputs.at(-1).evaluate(node => node.getAttribute('aria-label'))
   await fillInput(`input[aria-label="${parentAria}"]`, '需求&修改点')
   const parentNumber = parentAria.replace('活动名称-', '')
+  const parentId = await page.$eval(`input[aria-label="${parentAria}"]`, input => input.closest('tr')?.dataset.mrTemplateActivityId)
+  assert.ok(parentId)
   await page.click(`button[aria-label="新增子活动-${parentNumber}"]`)
   inputs = await page.$$('input[aria-label^="活动名称-"]')
-  const childAria = await inputs.at(-1).evaluate(node => node.getAttribute('aria-label'))
-  await fillInput(`input[aria-label="${childAria}"]`, '临时子活动')
-  const deleteSelector = `button[aria-label="删除活动-${childAria.replace('活动名称-', '')}"]`
-  const childRow = await page.$(`input[aria-label="${childAria}"]`)
+  const retainedChildAria = await inputs.at(-1).evaluate(node => node.getAttribute('aria-label'))
+  await fillInput(`input[aria-label="${retainedChildAria}"]`, '保留子活动')
+  await page.click(`button[aria-label="新增子活动-${parentNumber}"]`)
+  inputs = await page.$$('input[aria-label^="活动名称-"]')
+  const deletedChildAria = await inputs.at(-1).evaluate(node => node.getAttribute('aria-label'))
+  await fillInput(`input[aria-label="${deletedChildAria}"]`, '临时子活动')
+  const beforeDelete = await snapshotTemplateRevision(revisionId)
+  const deletedActivity = beforeDelete.version.activities.find(activity => activity.parentId === parentId && activity.activityName === '临时子活动')
+  assert.ok(deletedActivity)
+  const deleteSelector = `button[aria-label="删除活动-${deletedChildAria.replace('活动名称-', '')}"]`
+  const childRow = await page.$(`input[aria-label="${deletedChildAria}"]`)
   assert.ok(childRow, 'new child activity remains addressable after rename')
   const rowHandle = await childRow.evaluateHandle(input => input.closest('tr'))
   await rowHandle.asElement().hover()
@@ -468,33 +732,86 @@ try {
   await deleteButton.click()
   const popconfirmSelector = '.ant-popover.ant-popconfirm:not(.ant-popover-hidden)'
   await page.waitForSelector(popconfirmSelector, { visible: true })
-  const confirmBox = await page.$eval(popconfirmSelector, popconfirm => {
+  const deleteConfirmed = await page.$eval(popconfirmSelector, popconfirm => {
     const button = [...popconfirm.querySelectorAll('button')]
       .find(node => node.textContent?.replace(/\s/g, '') === '确定')
-    if (!button) return null
-    const rect = button.getBoundingClientRect()
-    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+    if (!button) return false
+    button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }))
+    button.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    button.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+    button.click()
+    return true
   })
-  assert.ok(confirmBox, 'delete confirmation exposes a confirm action')
-  await page.mouse.click(confirmBox.x, confirmBox.y)
+  assert.equal(deleteConfirmed, true, 'delete confirmation exposes a confirm action')
   await page.waitForSelector(popconfirmSelector, { hidden: true })
-  const drag = await page.$(`button[aria-label="拖动活动-${parentNumber}"]`)
-  assert.ok(drag)
-  await drag.focus()
-  await page.keyboard.press('Space')
-  await page.keyboard.press('ArrowUp')
-  await page.keyboard.press('Space')
+  await page.waitForFunction(deletedId => !document.querySelector(`tr[data-mr-template-activity-id="${deletedId}"]`), {}, deletedActivity.id)
+  const afterDelete = await snapshotTemplateRevision(revisionId)
+  const beforeDrag = await snapshotTemplateRevision(revisionId)
+  const parentNumberBeforeDrag = beforeDrag.domRows.find(row => row.id === parentId)?.number
+  const parentBeforeDrag = beforeDrag.version.activities.find(activity => activity.id === parentId)
+  const previousParent = beforeDrag.version.activities
+    .filter(activity => activity.parentId === null && activity.order < parentBeforeDrag.order)
+    .sort((left, right) => right.order - left.order)[0]
+  assert.ok(previousParent, 'new parent has a previous same-level drop target')
+  const dragGeometry = await page.evaluate(({ parentId, targetId, parentNumber }) => {
+    const handle = document.querySelector(`tr[data-mr-template-activity-id="${parentId}"] button[aria-label="拖动活动-${parentNumber}"]`)
+    const target = document.querySelector(`tr[data-mr-template-activity-id="${targetId}"]`)
+    if (!handle || !target) return null
+    const handleRect = handle.getBoundingClientRect()
+    const targetRect = target.getBoundingClientRect()
+    return {
+      from: { x: handleRect.left + handleRect.width / 2, y: handleRect.top + handleRect.height / 2 },
+      to: { x: targetRect.left + Math.min(targetRect.width / 3, 240), y: targetRect.top + targetRect.height / 2 },
+    }
+  }, { parentId, targetId: previousParent.id, parentNumber: parentNumberBeforeDrag })
+  assert.ok(dragGeometry)
+  await page.mouse.move(dragGeometry.from.x, dragGeometry.from.y)
+  await page.mouse.down()
+  await page.mouse.move(dragGeometry.from.x, dragGeometry.from.y - 12, { steps: 3 })
+  await page.mouse.move(dragGeometry.to.x, dragGeometry.to.y, { steps: 12 })
+  await page.mouse.up()
+  await page.waitForFunction(({ parentId, previousNumber }) => document.querySelector(`tr[data-mr-template-activity-id="${parentId}"]`)?.dataset.mrTemplateNumber !== previousNumber, {}, { parentId, previousNumber: parentNumberBeforeDrag })
+  const afterDrag = await snapshotTemplateRevision(revisionId)
+  const retainedChildIds = afterDelete.version.activities.filter(activity => activity.parentId === parentId).map(activity => activity.id)
+  assert.equal(retainedChildIds.length, 1)
+  const priorPublishedAfterMutation = (await readMrState()).templateVersions.find(version => version.id === priorPublished.id)
+  assertTemplateRevisionMutation({
+    beforeDelete,
+    afterDelete,
+    beforeDrag,
+    afterDrag,
+    deletedId: deletedActivity.id,
+    deletedName: deletedActivity.activityName,
+    parentId,
+    retainedChildIds,
+    priorPublished,
+    priorPublishedAfter: priorPublishedAfterMutation,
+  })
   await clickVisibleText('发布')
   await page.waitForSelector('[role="dialog"]', { visible: true })
   assert.match(await page.$eval('[role="dialog"]', node => node.innerText), /活动名称重复/)
   await page.keyboard.press('Escape')
-  await fillInput(`input[aria-label="活动名称-${parentNumber}"]`, 'MR验收收尾')
+  await page.waitForSelector('[role="dialog"]', { hidden: true })
+  const reorderedParentNumber = afterDrag.domRows.find(row => row.id === parentId)?.number
+  await fillInput(`input[aria-label="活动名称-${reorderedParentNumber}"]`, 'MR验收收尾')
   await clickVisibleText('发布')
   await page.waitForFunction(() => document.body.innerText.includes('V2 (已发布)'))
   const publishedState = await readMrState()
   const published = publishedState.templateVersions.find(version => version.versionNo === 'V2' && version.status === '已发布')
   assert.ok(published)
-  assert.ok(published.activities.some(activity => activity.activityName === 'MR验收收尾'))
+  assertTemplateRevisionMutation({
+    beforeDelete,
+    afterDelete,
+    beforeDrag,
+    afterDrag,
+    deletedId: deletedActivity.id,
+    deletedName: deletedActivity.activityName,
+    parentId,
+    retainedChildIds,
+    priorPublished,
+    priorPublishedAfter: publishedState.templateVersions.find(version => version.id === priorPublished.id),
+    finalPublished: published,
+  })
   assert.equal((await page.$$('input[aria-label^="活动名称-"]')).length, 0)
   pass(14, 'template revision add/delete/reorder/validation/publish')
 
@@ -506,16 +823,13 @@ try {
 
   assert.deepEqual(browserErrors, [], `unexpected browser errors:\n${browserErrors.join('\n')}`)
   for (const file of EXPECTED_SCREENSHOTS) assert.ok(fs.statSync(path.join(OUTPUT, file)).size > 1_000, `${file} is current and non-empty`)
+  if (process.env.PMS_ASSERT_SCREENSHOTS_CLEAN === '1') {
+    execSync('git diff --exit-code -- screenshots/mr-version-plan', { stdio: 'inherit' })
+  }
   console.log('PASS MR version plan browser verification')
 } catch (error) {
   console.error(error?.stack || error)
   if (browserErrors.length) console.error(`browser errors:\n${browserErrors.join('\n')}`)
-  try {
-    await Promise.race([
-      page.screenshot({ path: path.join(OUTPUT, 'failure.png'), fullPage: false }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('failure screenshot timeout')), 5_000)),
-    ])
-  } catch {}
   process.exitCode = 1
 } finally {
   await browser.close()

@@ -139,6 +139,10 @@ export default function MrTemplateTable({ activities, editable, onChange }: MrTe
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无模板活动" /> }}
               components={editable ? { body: { row: SortableRow } } : undefined}
               rowClassName={row => row.parentId === null ? 'pms-mr-template-parent-row' : ''}
+              onRow={row => ({
+                'data-mr-template-activity-id': row.id,
+                'data-mr-template-number': row.number,
+              } as any)}
               scroll={{ x: 770 }}
             />
           </SortableContext>
