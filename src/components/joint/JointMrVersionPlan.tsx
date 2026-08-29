@@ -25,8 +25,9 @@ import { buildMrAggregationSources } from '@/lib/mrPlanSourceAdapters'
 import { reconcileJointMachinePlans } from '@/lib/mrAggregationRules'
 import { groupMrErrorsByRow, validateJointMachineRows } from '@/lib/mrDateRules'
 import {
-  MISSING_COLLECTION_START_REASON,
   buildStopReleaseCandidates,
+  formatStopReleaseOperatedAt,
+  resolveStopReleaseButtonReason,
   sortStopReleaseHistory,
 } from '@/lib/mrStopReleaseUiRules'
 import { createShanghaiBusinessDateTicker, getShanghaiBusinessDate } from '@/lib/shanghaiBusinessDate'
@@ -270,13 +271,8 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
   )
   const stopSelectionValid = !!stopProjectId
     && stopCandidates.some(candidate => candidate.projectId === stopProjectId && !candidate.disabled)
-  const stopButtonReason = enabledStopCandidates.length
-    ? undefined
-    : stopCandidates.length
-      ? MISSING_COLLECTION_START_REASON
-      : projection.rows.some(row => row.kind === 'machine')
-        ? '当前用户没有可停止发版的项目'
-        : '当前没有可停止发版的项目'
+  const visibleMachineRowCount = filteredRows.filter(row => row.kind === 'machine').length
+  const stopButtonReason = resolveStopReleaseButtonReason(stopCandidates, visibleMachineRowCount)
   const historyRows = useMemo(() => sortStopReleaseHistory(stopReleaseRecords), [stopReleaseRecords])
 
   useEffect(() => {
@@ -544,7 +540,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
           pagination={false}
           columns={[
             { title: '操作人', dataIndex: 'operator', key: 'operator' },
-            { title: '操作时间', dataIndex: 'operatedAt', key: 'operatedAt' },
+            { title: '操作时间', dataIndex: 'operatedAt', key: 'operatedAt', render: formatStopReleaseOperatedAt },
             { title: '操作项目', dataIndex: 'projectName', key: 'projectName' },
             { title: '停止发版日期', dataIndex: 'stopDate', key: 'stopDate' },
           ]}

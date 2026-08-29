@@ -33,7 +33,10 @@ function hasCollectionStart(instance: TosMrVersionInstance | undefined): boolean
   const activity = instance?.activities.find(item => (
     item.parentId !== null && item.activityName.trim() === COLLECTION_START
   ))
-  return !!activity && !!normalizeMrBusinessDate(instance?.dates[activity.id])
+  if (!activity) return false
+  const value = instance?.dates[activity.id]
+  if (typeof value !== 'string' || !value.trim()) return true
+  return !!normalizeMrBusinessDate(value)
 }
 
 export function buildStopReleaseCandidates(input: BuildStopReleaseCandidatesInput): StopReleaseCandidate[] {
@@ -70,4 +73,30 @@ export function sortStopReleaseHistory(records: readonly MrStopReleaseRecord[]):
   return records.map(record => ({ ...record })).sort((left, right) => (
     right.operatedAt.localeCompare(left.operatedAt) || left.id.localeCompare(right.id)
   ))
+}
+
+export function resolveStopReleaseButtonReason(
+  candidates: readonly StopReleaseCandidate[],
+  visibleMachineRowCount: number,
+): string | undefined {
+  if (candidates.some(candidate => !candidate.disabled)) return undefined
+  if (candidates.length) return MISSING_COLLECTION_START_REASON
+  return visibleMachineRowCount > 0
+    ? '当前用户没有可停止发版的项目'
+    : '当前筛选结果没有可停止发版的项目'
+}
+
+export function formatStopReleaseOperatedAt(value: unknown): string {
+  const source = typeof value === 'string' ? value.trim() : ''
+  if (!source) return '-'
+  const date = new Date(source)
+  if (Number.isNaN(date.getTime())) return source
+  const parts = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const byType = Object.fromEntries(parts.map(part => [part.type, part.value]))
+  return `${byType.year}-${byType.month}-${byType.day} ${byType.hour}:${byType.minute}:${byType.second}`
 }
