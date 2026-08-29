@@ -2279,18 +2279,26 @@ export default function ProjectSpaceContainer() {
       return
     }
     if (!activeContextMatches) return
-    const target = [...document.querySelectorAll<HTMLElement>('[data-mr-tos-version]')]
-      .find(element => element.dataset.mrTosVersion === mrPlanNavigationIntent.mrTosVersion)
-    const targetAction = resolveMrPlanNavigationAction({
-      intentProjectId: mrPlanNavigationIntent.projectId,
-      selectedProjectId: selectedProject?.id,
-      activeContextMatches,
-      targetAvailable: Boolean(target),
-    })
-    if (targetAction !== 'focus' || !target) return
-    target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
-    target.focus()
-    if (document.activeElement === target) consumeMrPlanNavigationIntent()
+    let focusTimer: number | undefined
+    const focusTarget = (remainingAttempts: number) => {
+      const target = [...document.querySelectorAll<HTMLElement>('[data-mr-tos-version]')]
+        .find(element => element.dataset.mrTosVersion === mrPlanNavigationIntent.mrTosVersion)
+      const targetAction = resolveMrPlanNavigationAction({
+        intentProjectId: mrPlanNavigationIntent.projectId,
+        selectedProjectId: selectedProject?.id,
+        activeContextMatches,
+        targetAvailable: Boolean(target),
+      })
+      if (targetAction !== 'focus' || !target) {
+        if (remainingAttempts > 0) focusTimer = window.setTimeout(() => focusTarget(remainingAttempts - 1), 50)
+        return
+      }
+      target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
+      target.focus()
+      if (document.activeElement === target) consumeMrPlanNavigationIntent()
+    }
+    focusTarget(30)
+    return () => { if (focusTimer) window.clearTimeout(focusTimer) }
   }, [
     activeModule,
     consumeMrPlanNavigationIntent,

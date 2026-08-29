@@ -9,6 +9,7 @@ import {
   getProjectTypeFamilyKey,
 } from '@/constants/projectTypes'
 import { initialProjects } from '@/data/projects'
+import { createMrAcceptancePlanScopeSeed } from '@/data/mrVersionPlanMocks'
 import type { GanttScaleMode } from '@/lib/ganttScale'
 import type { FollowVersionSource, MarketCurrentVersionState, MarketVersionsState } from '@/lib/marketRules'
 import type {
@@ -998,6 +999,8 @@ export interface PlanActions {
   setPredecessorWarning: (v: { visible: boolean; task: any; message: string }) => void
 }
 
+const initialMrAcceptancePlanScope = createMrAcceptancePlanScopeSeed()
+
 export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get) => ({
   // Config-center plan
   planLevel: 'level1',
@@ -1042,7 +1045,10 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
   collapsedNodes: {},
 
   // Published snapshots
-  publishedSnapshots: createInitialTemplatePublishedSnapshots(),
+  publishedSnapshots: {
+    ...createInitialTemplatePublishedSnapshots(),
+    ...initialMrAcceptancePlanScope.publishedSnapshots,
+  },
   configTemplateTasksByType: createInitialConfigTemplateTasks(),
   configTemplateVersionScopes: createInitialConfigTemplateVersionScopes(),
   configTemplateCompareScopes: createInitialConfigTemplateCompareScopes(),
@@ -1061,10 +1067,10 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
     createdLevel2Plans: [...FIXED_LEVEL2_PLANS],
   }])),
   marketFollowVersionMeta: {},
-  marketVersionsByKey: {},
+  marketVersionsByKey: initialMrAcceptancePlanScope.marketVersionsByKey,
   marketCurrentVersionByKey: {},
   tosTypePlanDataByProjectId: {},
-  tosTypeVersionsByKey: {},
+  tosTypeVersionsByKey: initialMrAcceptancePlanScope.tosTypeVersionsByKey,
   tosTypeCurrentVersionByKey: {},
 
   // Editing helpers

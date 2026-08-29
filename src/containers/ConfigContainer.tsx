@@ -72,6 +72,8 @@ const MR_HISTORY_ACTION_LABELS: Record<MrTemplateChangeLog['action'], string> = 
 }
 
 function MrTemplateConfigSurface({ currentLoginUser }: { currentLoginUser: string }) {
+  const [messageApi, messageContextHolder] = message.useMessage()
+  const [modalApi, modalContextHolder] = Modal.useModal()
   const [hydrated, setHydrated] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [compareOpen, setCompareOpen] = useState(false)
@@ -114,26 +116,26 @@ function MrTemplateConfigSurface({ currentLoginUser }: { currentLoginUser: strin
   const chooseVersion = (versionId: string) => useMrVersionPlanStore.setState({ currentTemplateVersionId: versionId })
   const createRevision = () => {
     if (!canEditMrTemplate) return
-    createTemplateRevision(currentLoginUser, mrEditPermission) ? message.success('已创建修订版本') : message.error('创建修订版本失败')
+    createTemplateRevision(currentLoginUser, mrEditPermission) ? messageApi.success('已创建修订版本') : messageApi.error('创建修订版本失败')
   }
   const publishRevision = () => {
     if (!canPublishMrTemplate || selectedVersion.status !== '修订中') return
     const errors = validateMrTemplateForPublish(selectedVersion.activities)
     if (errors.length > 0) {
-      Modal.error({ title: '模板校验未通过', content: <ul className="pms-mr-validation-errors">{errors.map(error => <li key={error}>{error}</li>)}</ul> })
+      modalApi.error({ title: '模板校验未通过', content: <ul className="pms-mr-validation-errors">{errors.map(error => <li key={error}>{error}</li>)}</ul> })
       return
     }
     const result = publishTemplateRevision(selectedVersion.id, currentLoginUser, mrPublishPermission)
-    if (result.ok) message.success('发布成功')
-    else Modal.error({ title: '发布失败', content: <ul>{result.errors.map(error => <li key={error}>{error}</li>)}</ul> })
+    if (result.ok) messageApi.success('发布成功')
+    else modalApi.error({ title: '发布失败', content: <ul>{result.errors.map(error => <li key={error}>{error}</li>)}</ul> })
   }
   const cancelRevision = () => {
     if (!canEditMrTemplate || selectedVersion.status !== '修订中') return
-    Modal.confirm({
+    modalApi.confirm({
       title: '取消修订版本', content: `确认取消 ${selectedVersion.versionNo} 修订版本？`,
       okText: '确认取消', okType: 'danger', cancelText: '保留修订',
       onOk: () => cancelTemplateRevision(selectedVersion.id, currentLoginUser, mrEditPermission)
-        ? message.success('已取消修订') : message.error('取消修订失败'),
+        ? messageApi.success('已取消修订') : messageApi.error('取消修订失败'),
     })
   }
   const openCompare = () => {
@@ -145,6 +147,8 @@ function MrTemplateConfigSurface({ currentLoginUser }: { currentLoginUser: strin
 
   return (
     <>
+      {messageContextHolder}
+      {modalContextHolder}
       <Card className="pms-mr-toolbar" size="small">
         <div className="pms-mr-toolbar__inner">
           <Space wrap>
@@ -166,7 +170,7 @@ function MrTemplateConfigSurface({ currentLoginUser }: { currentLoginUser: strin
       <Card className="pms-solid-surface pms-config-template-content-card" styles={{ body: { padding: 12, height: '100%', overflow: 'auto' } }}>
         <MrTemplateTable activities={selectedVersion.activities.map(activity => ({ ...activity }))} editable={editable}
           onChange={activities => {
-            if (editable && !updateTemplateActivities(selectedVersion.id, activities, currentLoginUser, mrEditPermission)) message.error('模板更新失败')
+            if (editable && !updateTemplateActivities(selectedVersion.id, activities, currentLoginUser, mrEditPermission)) messageApi.error('模板更新失败')
           }} />
       </Card>
       <Modal title="历史修改记录" open={historyOpen} onCancel={() => setHistoryOpen(false)} footer={null} width={980}>
@@ -853,7 +857,7 @@ export default function ConfigContainer() {
                     <Space size={8} align="center">
                       <CalendarOutlined style={{ color: 'var(--pms-brand)', fontSize: 16 }} />
                       <span style={{ fontSize: 16, fontWeight: 600, color: '#111827' }}>{selectedTemplateType}</span>
-                      <Divider type="vertical" style={{ height: 16, margin: '0 4px' }} />
+                      <Divider orientation="vertical" style={{ height: 16, margin: '0 4px' }} />
                       <span style={{ fontSize: 14, color: '#4b5563' }}>计划模板配置</span>
                     </Space>
                     <div style={{ marginTop: 4, fontSize: 12, color: '#9ca3af', paddingLeft: 24 }}>配置和管理项目计划模板</div>
@@ -886,7 +890,7 @@ export default function ConfigContainer() {
               <Card className="pms-toolbar" size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '10px 16px' } }}>
                 <Space wrap size={[8, 8]}>
                   <span style={{ color: '#9ca3af', fontSize: 13, fontWeight: 500 }}>模板类型</span>
-                  <Divider type="vertical" style={{ height: 16, margin: '0 4px' }} />
+                  <Divider orientation="vertical" style={{ height: 16, margin: '0 4px' }} />
                   {allPlanTypes.map(t => {
                     const isCustom = customTypes.includes(t)
                     return (
@@ -923,7 +927,7 @@ export default function ConfigContainer() {
             {!isMrTemplate && <Card className="pms-toolbar pms-config-template-toolbar" size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '10px 16px' } }}>
               <Row justify="space-between" align="middle">
                 <Col>
-                  <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
+                  <Space size={8} separator={<Divider orientation="vertical" style={{ margin: 0 }} />}>
                     <Space size={6}>
                       <span style={{ color: '#9ca3af', fontSize: 13 }}>版本</span>
                       <Select value={currentVersion} onChange={(val) => navigateWithEditGuard(() => { setCurrentVersion(val); setIsEditMode(false) })} style={{ width: 180 }} size="middle">

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
-import { createInitialMrTemplateVersions } from '@/data/mrVersionPlanMocks'
+import { createInitialMrVersionPlanState } from '@/data/mrVersionPlanMocks'
 import {
   cancelMrTemplateRevision,
   cloneMrTemplateSnapshot,
@@ -357,17 +357,7 @@ function sanitizeViewModes(value: unknown): Record<string, MrPlanViewMode> {
 }
 
 function initialMrVersionPlanState(): MrVersionPlanState {
-  const templateVersions = createInitialMrTemplateVersions()
-  return {
-    templateVersions,
-    currentTemplateVersionId: templateVersions[0].id,
-    templateHistory: [],
-    tosInstancesByProjectId: {},
-    machinePlansByKey: {},
-    marketOverridesByKey: {},
-    stopReleaseRecords: [],
-    viewModeByScope: {},
-  }
+  return createInitialMrVersionPlanState()
 }
 
 export function migrateMrVersionPlanState(persistedState: unknown, _fromVersion: number): MrVersionPlanState {

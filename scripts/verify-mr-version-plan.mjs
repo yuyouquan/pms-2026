@@ -29,6 +29,10 @@ const headerSource = readSource(root, 'src/containers/AppShell.tsx')
 const pageSource = readSource(root, 'src/app/page.tsx')
 const jointContainerSource = readSource(root, 'src/containers/JointProjectSpaceContainer.tsx')
 const jointPlanSource = readSource(root, 'src/components/joint/JointMrVersionPlan.tsx')
+assert.doesNotMatch(jointPlanSource, /<Space\s+direction=/, 'MR joint space must not emit Ant Design Space deprecation errors')
+assert.doesNotMatch(configSource, /<Divider\s+type=/, 'MR template configuration must not emit Ant Design Divider deprecation errors')
+assert.doesNotMatch(configSource, /<Space[^>]*\ssplit=/, 'MR template configuration must not emit Ant Design Space deprecation errors')
+assert.match(configSource, /function MrTemplateConfigSurface[\s\S]*message\.useMessage\(\)[\s\S]*Modal\.useModal\(\)/, 'MR template feedback must use scoped Ant Design context APIs')
 const stopReleaseUiRules = loadTypeScriptModule(root, 'src/lib/mrStopReleaseUiRules.ts')
 const machineMarketRules = loadTypeScriptModule(root, 'src/lib/mrMachineMarketRules.ts')
 const navigationRules = loadTypeScriptModule(root, 'src/lib/mrNavigationRules.ts')
@@ -307,6 +311,7 @@ const deepLinkEffectSource = projectSpaceSource.slice(
 )
 assert.ok(deepLinkEffectSource.indexOf('target.scrollIntoView') < deepLinkEffectSource.indexOf('target.focus()'))
 assert.ok(deepLinkEffectSource.indexOf('target.focus()') < deepLinkEffectSource.indexOf('consumeMrPlanNavigationIntent()', deepLinkEffectSource.indexOf('target.focus()')))
+assert.match(deepLinkEffectSource, /remainingAttempts[\s\S]*setTimeout/, 'deep-link focus must retry until the MR table row mounts')
 
 // The business date rolls over without a render, emits once, reschedules once,
 // and releases the active timer on unmount.

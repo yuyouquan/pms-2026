@@ -105,11 +105,17 @@ export default function MrTemplateTable({ activities, editable, onChange }: MrTe
                   <Button type="text" size="small" icon={<PlusOutlined />} aria-label={`新增子活动-${row.number}`} onClick={() => addChild(row.id)} />
                 </Tooltip>
               )}
-              <Popconfirm title="确认删除该活动？" description={row.parentId === null ? '其下所有二级活动也会删除。' : undefined} onConfirm={() => remove(row.id)}>
-                <Tooltip title="删除活动">
+              <Tooltip title="删除活动">
+                <Popconfirm
+                  title="确认删除该活动？"
+                  description={row.parentId === null ? '其下所有二级活动也会删除。' : undefined}
+                  okText="确定"
+                  cancelText="取消"
+                  onConfirm={() => remove(row.id)}
+                >
                   <Button type="text" size="small" danger icon={<DeleteOutlined />} aria-label={`删除活动-${row.number}`} />
-                </Tooltip>
-              </Popconfirm>
+                </Popconfirm>
+              </Tooltip>
             </Space>
           )}
         </div>

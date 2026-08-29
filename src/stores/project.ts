@@ -197,7 +197,9 @@ const initialProjectState = (initialProjects as Project[]).map(migrateProjectHis
 
 const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) => {
   if (isMachineProjectType(project.type) && project.markets?.length) {
-    acc[project.id] = buildMarketRowsFromMarkets(project.markets)
+    acc[project.id] = buildMarketRowsFromMarkets(project.markets).map(row => (
+      project.id === '1' && row.market === 'TR' ? { ...row, isMadaControlled: '是' } : row
+    ))
   }
   return acc
 }, {} as Record<string, MarketConfigRow[]>)

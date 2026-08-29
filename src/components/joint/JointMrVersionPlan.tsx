@@ -497,7 +497,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
         }}
         destroyOnHidden
       >
-        <Space direction="vertical" size={14} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={14} style={{ width: '100%' }}>
           <label>
             <span className="pms-joint-mr-field-label">停止发版项目名称</span>
             <Select
