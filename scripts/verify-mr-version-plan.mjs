@@ -29,8 +29,8 @@ const jointPlanSource = readSource(root, 'src/components/joint/JointMrVersionPla
 // Joint project space: navigation, real source aggregation, stable editable grid and validation UI.
 assert.ok(headerSource.indexOf('项目列表') < headerSource.indexOf('联合项目空间'))
 assert.ok(headerSource.indexOf('联合项目空间') < headerSource.indexOf('tOS路标'))
-assert.match(uiSource, /\| ['"]jointProjectSpace['"]/) 
-assert.match(pageSource, /activeModule === ['"]jointProjectSpace['"]/) 
+assert.match(uiSource, /\| ['"]jointProjectSpace['"]/)
+assert.match(pageSource, /activeModule === ['"]jointProjectSpace['"]/)
 assert.match(jointContainerSource, /tOS&整机MR版本计划/)
 for (const label of ['tOS版本号', '项目名称', '1+N版本类型', '停止发版', '停止发版记录']) {
   assert.ok(jointPlanSource.includes(label))
@@ -45,7 +45,7 @@ assert.match(headerSource, /navigateWithEditGuard\([\s\S]*setTransferView\(null\
 assert.match(jointPlanSource, /rehydrateMrVersionPlanStore/)
 assert.match(jointPlanSource, /buildMrAggregationSources/)
 assert.match(jointPlanSource, /reconcileMachinePlans/)
-assert.match(jointPlanSource, /getShanghaiToday/)
+assert.match(jointPlanSource, /const today = useShanghaiBusinessDate\(\)/)
 assert.match(jointPlanSource, /buildJointMrColumnSchema/)
 assert.match(jointPlanSource, /resolveMrPermissions/)
 assert.match(jointPlanSource, /validateJointMachineRows/)
@@ -68,6 +68,10 @@ assert.match(globalsSource, /\.pms-joint-mr-table[\s\S]*\.ant-table-cell-fix-lef
 assert.equal([...jointPlanSource.matchAll(/fixed:\s*['"]left['"]/g)].length, 2)
 assert.equal([...jointPlanSource.matchAll(/fixed:\s*['"]right['"]/g)].length, 1)
 assert.match(globalsSource, /\.pms-joint-mr-table[\s\S]*background:\s*#fff/)
+assert.match(
+  globalsSource,
+  /\.pms-joint-mr-table[\s\S]*\.ant-table-cell-fix-start[\s\S]*position:\s*sticky\s*!important/,
+)
 
 // The business date rolls over without a render, emits once, reschedules once,
 // and releases the active timer on unmount.

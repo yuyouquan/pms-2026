@@ -7013,6 +7013,13 @@ body,
   background: #f7f7ff;
 }
 
+/* The global Ant header treatment is relative; restore fixed identity/error
+   headers only inside the joint MR table. */
+.pms-joint-mr-table .ant-table-thead > tr > th.ant-table-cell-fix-start,
+.pms-joint-mr-table .ant-table-thead > tr > th.ant-table-cell-fix-end {
+  position: sticky !important;
+}
+
 .pms-joint-mr-table .ant-table-tbody .pms-joint-mr-reference-row > .ant-table-cell,
 .pms-joint-mr-table .ant-table-tbody .pms-joint-mr-reference-row > .ant-table-cell-fix-left,
 .pms-joint-mr-table .ant-table-tbody .pms-joint-mr-reference-row > .ant-table-cell-fix-right {

@@ -6,7 +6,7 @@ import JointMrVersionPlan from '@/components/joint/JointMrVersionPlan'
 export default function JointProjectSpaceContainer() {
   return (
     <section className="pms-joint-space" aria-label="联合项目空间">
-      <Card className="pms-joint-space__card pms-solid-surface" bordered={false}>
+      <Card className="pms-joint-space__card pms-solid-surface" variant="borderless">
         <Tabs
           className="pms-joint-space__tabs"
           activeKey="mr-version-plan"

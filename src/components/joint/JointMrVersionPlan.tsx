@@ -23,6 +23,7 @@ import { rehydrateMrVersionPlanStore, useMrVersionPlanStore } from '@/stores/mrV
 import { buildMrAggregationSources } from '@/lib/mrPlanSourceAdapters'
 import { reconcileJointMachinePlans } from '@/lib/mrAggregationRules'
 import { groupMrErrorsByRow, validateJointMachineRows } from '@/lib/mrDateRules'
+import { createShanghaiBusinessDateTicker, getShanghaiBusinessDate } from '@/lib/shanghaiBusinessDate'
 import {
   buildJointMrColumnSchema,
   compareTosVersionNumbers,
@@ -42,13 +43,6 @@ import type {
 
 export const MR_TRANSFER_OPTIONS: MrTransferType[] = ['N/A', '1', '2', '3', '4', '5', '6', '7', '8']
 
-const SHANGHAI_DATE_FORMATTER = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Asia/Shanghai',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-})
-
 let jointMrHydrationPromise: Promise<void> | null = null
 let jointMrHydrated = false
 
@@ -62,9 +56,10 @@ function hydrateJointMrStoreOnce(): Promise<void> {
   return jointMrHydrationPromise
 }
 
-export function getShanghaiToday(now: Date): string {
-  const parts = new Map(SHANGHAI_DATE_FORMATTER.formatToParts(now).map(part => [part.type, part.value]))
-  return `${parts.get('year')}-${parts.get('month')}-${parts.get('day')}`
+export function useShanghaiBusinessDate(): string {
+  const [businessDate, setBusinessDate] = useState(() => getShanghaiBusinessDate(new Date()))
+  useEffect(() => createShanghaiBusinessDateTicker(setBusinessDate), [])
+  return businessDate
 }
 
 type JointRow = MrJointReferenceRow | MrJointMachineRow
@@ -146,7 +141,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     return () => { active = false }
   }, [])
 
-  const today = getShanghaiToday(new Date())
+  const today = useShanghaiBusinessDate()
   const sourceInput = useMemo(() => ({
     projects,
     marketConfigsByProjectId,
@@ -286,7 +281,6 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
       title,
       key: title,
       width: index === 2 ? 120 : 100,
-      fixed: 'left' as const,
       render: (_: unknown, row: JointRow) => {
         if (row.kind === 'tos-reference') return '/'
         const metadata = sources.machineMetadataByProjectId[row.projectId] ?? fallbackMetadata()
@@ -295,7 +289,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
       },
     })),
     {
-      title: '1+N转测类型', key: 'transferType', width: 130, fixed: 'left', render: (_, row) => {
+      title: '1+N转测类型', key: 'transferType', width: 130, render: (_, row) => {
         if (row.kind === 'tos-reference') return '1'
         const permission = permissionByProjectId.get(row.projectId)
         return (
