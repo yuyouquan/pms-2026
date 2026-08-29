@@ -66,6 +66,7 @@ import {
   type FilterCondition,
 } from '@/lib/filterConditions'
 import { GANTT_SCALE_OPTIONS } from '@/lib/ganttScale'
+import { resolveMrPlanNavigationAction } from '@/lib/mrNavigationRules'
 import { resolveMachineTosUpdate } from '@/lib/machineTosVersions'
 import { resolveVisiblePlanVersion } from '@/lib/todoAggregation'
 import {
@@ -2502,11 +2503,30 @@ export default function ProjectSpaceContainer() {
 
   useEffect(() => {
     if (!mrPlanNavigationIntent || mrPlanNavigationIntent.source !== 'joint-mr') return
-    if (activeModule !== 'projectSpace' || selectedProject?.id !== mrPlanNavigationIntent.projectId) return
-    if (projectSpaceModule !== 'plan' || projectPlanLevel !== 'mr-version-plan') return
+    const activeContextMatches = activeModule === 'projectSpace'
+      && selectedProject?.id === mrPlanNavigationIntent.projectId
+      && projectSpaceModule === 'plan'
+      && projectPlanLevel === 'mr-version-plan'
+    const initialAction = resolveMrPlanNavigationAction({
+      intentProjectId: mrPlanNavigationIntent.projectId,
+      selectedProjectId: selectedProject?.id,
+      activeContextMatches,
+      targetAvailable: false,
+    })
+    if (initialAction === 'clear-stale') {
+      consumeMrPlanNavigationIntent()
+      return
+    }
+    if (!activeContextMatches) return
     const target = [...document.querySelectorAll<HTMLElement>('[data-mr-tos-version]')]
       .find(element => element.dataset.mrTosVersion === mrPlanNavigationIntent.mrTosVersion)
-    if (!target) return
+    const targetAction = resolveMrPlanNavigationAction({
+      intentProjectId: mrPlanNavigationIntent.projectId,
+      selectedProjectId: selectedProject?.id,
+      activeContextMatches,
+      targetAvailable: Boolean(target),
+    })
+    if (targetAction !== 'focus' || !target) return
     target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
     target.focus()
     if (document.activeElement === target) consumeMrPlanNavigationIntent()

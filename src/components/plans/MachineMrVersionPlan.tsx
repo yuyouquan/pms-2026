@@ -59,6 +59,23 @@ export interface MachineMrVersionPlanProps {
   marketRows: MarketConfigRow[]
 }
 
+function renderMachineMrErrorTrigger(
+  version: MrMachineMarketProjection,
+  market: string,
+  activity: MrTemplateActivity,
+  errors: readonly string[],
+) {
+  return (
+    <Tooltip color="red" title={errors.join('；')}>
+      <ExclamationCircleOutlined
+        className="pms-mr-error-icon"
+        tabIndex={0}
+        aria-label={`${version.tosVersion}-${market}-${activity.activityName}-错误：${errors.join('；')}`}
+      />
+    </Tooltip>
+  )
+}
+
 export default function MachineMrVersionPlan({
   project,
   currentUser,
@@ -138,7 +155,12 @@ export default function MachineMrVersionPlan({
     const errors = errorsFor(version, market, activity)
     if (market === mainMarket || !permission.canEditMarket) {
       const content = <span>{value || '-'}</span>
-      return errors.length ? <Tooltip color="red" title={errors.join('；')}>{content}</Tooltip> : content
+      return errors.length ? (
+        <span className="pms-mr-date-with-error">
+          {content}
+          {renderMachineMrErrorTrigger(version, market, activity, errors)}
+        </span>
+      ) : content
     }
     const mainMissing = !mainValue
     const picker = (
@@ -163,13 +185,7 @@ export default function MachineMrVersionPlan({
     return (
       <span className="pms-mr-date-with-error">
         {content}
-        <Tooltip color="red" title={errors.join('；')}>
-          <ExclamationCircleOutlined
-            className="pms-mr-error-icon"
-            tabIndex={0}
-            aria-label={`${version.tosVersion}-${market}-${activity.activityName}-错误：${errors.join('；')}`}
-          />
-        </Tooltip>
+        {renderMachineMrErrorTrigger(version, market, activity, errors)}
       </span>
     )
   }

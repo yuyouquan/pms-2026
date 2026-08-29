@@ -294,14 +294,14 @@ assert.match(jointContainerSource, /onOpenProject=\{handleOpenProject\}/)
 assert.match(mrPlanGridSource, /data-mr-tos-version/)
 assert.match(mrPlanGridSource, /tabIndex:\s*-1/)
 assert.match(projectSpaceSource, /mrPlanNavigationIntent[\s\S]*querySelector[\s\S]*scrollIntoView[\s\S]*focus\(\)[\s\S]*consumeMrPlanNavigationIntent/)
-assert.match(projectSpaceSource, /if\s*\(!target\)\s*return/)
+assert.match(projectSpaceSource, /targetAction\s*!==\s*['"]focus['"]\s*\|\|\s*!target/)
 assert.doesNotMatch(projectSpaceSource, /clearMrPlanNavigationIntent/)
 const deepLinkEffectSource = projectSpaceSource.slice(
   projectSpaceSource.indexOf("mrPlanNavigationIntent.source !== 'joint-mr'"),
   projectSpaceSource.indexOf('// 进入项目空间「计划」时按权限', projectSpaceSource.indexOf("mrPlanNavigationIntent.source !== 'joint-mr'")),
 )
 assert.ok(deepLinkEffectSource.indexOf('target.scrollIntoView') < deepLinkEffectSource.indexOf('target.focus()'))
-assert.ok(deepLinkEffectSource.indexOf('target.focus()') < deepLinkEffectSource.indexOf('consumeMrPlanNavigationIntent()'))
+assert.ok(deepLinkEffectSource.indexOf('target.focus()') < deepLinkEffectSource.indexOf('consumeMrPlanNavigationIntent()', deepLinkEffectSource.indexOf('target.focus()')))
 
 // The business date rolls over without a render, emits once, reschedules once,
 // and releases the active timer on unmount.

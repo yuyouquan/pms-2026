@@ -25,9 +25,17 @@ export function isEligibleMachineMrPlan(plan: JointMachinePlan): boolean {
   return Object.values(plan.dates).some(value => Boolean(canonicalDate(value)))
 }
 
-function orderedMarkets(rows: readonly MarketConfigRow[]): { mainMarket: string; markets: string[] } {
-  const configured = rows.map(row => row.market.trim()).filter(Boolean)
-  const mainMarket = getMainMarket(rows.map(row => ({ ...row })))
+export function orderedMachineMarkets(rows: readonly MarketConfigRow[]): { mainMarket: string; markets: string[] } {
+  const seen = new Set<string>()
+  const configured = rows.reduce<string[]>((markets, row) => {
+    const market = row.market.trim()
+    if (!market || seen.has(market)) return markets
+    seen.add(market)
+    markets.push(market)
+    return markets
+  }, [])
+  const configuredMain = getMainMarket(rows.map(row => ({ ...row, market: row.market.trim() }))).trim()
+  const mainMarket = configuredMain && seen.has(configuredMain) ? configuredMain : configured[0] ?? ''
   if (!mainMarket) return { mainMarket: '', markets: configured }
   return { mainMarket, markets: [mainMarket, ...configured.filter(market => market !== mainMarket)] }
 }
@@ -39,7 +47,7 @@ export function projectMachineMarketMrVersions(input: {
   marketRows: readonly MarketConfigRow[]
 }): MrMachineMarketProjectionResult {
   const projectId = input.projectId.trim()
-  const { mainMarket, markets } = orderedMarkets(input.marketRows)
+  const { mainMarket, markets } = orderedMachineMarkets(input.marketRows)
   const versions: MrMachineMarketProjection[] = []
   const missingInstanceVersions: string[] = []
 
