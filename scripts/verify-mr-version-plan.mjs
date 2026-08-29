@@ -25,6 +25,8 @@ const headerSource = readSource(root, 'src/containers/AppShell.tsx')
 const pageSource = readSource(root, 'src/app/page.tsx')
 const jointContainerSource = readSource(root, 'src/containers/JointProjectSpaceContainer.tsx')
 const jointPlanSource = readSource(root, 'src/components/joint/JointMrVersionPlan.tsx')
+const stopReleaseUiRules = loadTypeScriptModule(root, 'src/lib/mrStopReleaseUiRules.ts')
+const NOW = '2026-08-29T08:00:00.000Z'
 
 // Joint project space: navigation, real source aggregation, stable editable grid and validation UI.
 assert.ok(headerSource.indexOf('项目列表') < headerSource.indexOf('联合项目空间'))
@@ -77,6 +79,82 @@ assert.match(jointMrCss, /\.ant-table-thead[^{}]*\.ant-table-cell\s*\{[^}]*z-ind
 assert.match(jointMrCss, /th\.ant-table-cell-fix-start,[\s\S]*th\.ant-table-cell-fix-end\s*\{[^}]*position:\s*sticky\s*!important[^}]*z-index:\s*6[^}]*background:\s*#f7f7ff/)
 assert.match(jointMrCss, /td\.ant-table-cell-fix-start,[\s\S]*td\.ant-table-cell-fix-end\s*\{[^}]*position:\s*sticky\s*!important[^}]*z-index:\s*3[^}]*background:\s*#fff/)
 assert.match(jointMrCss, /\.pms-joint-mr-reference-row\s*>\s*td\.ant-table-cell-fix-start,[\s\S]*\.pms-joint-mr-reference-row\s*>\s*td\.ant-table-cell-fix-end\s*\{[^}]*z-index:\s*3[^}]*background:\s*#fffbe8/)
+
+// Stop-release UI: only present, unstopped machine projects in the current
+// user's authoritative permission scope are candidates. Missing tOS reference
+// dates remain visible but cannot be submitted.
+const stopUiActivities = [
+  { id: 'p', parentId: null, order: 0, activityName: '需求&修改点' },
+  { id: 'collect', parentId: 'p', order: 0, activityName: '修改点收集开始时间' },
+]
+const stopUiInstance = (version, date) => ({
+  projectId: 'tos-project-16.3', tosVersion: version, templateVersionId: 'tpl',
+  activities: stopUiActivities, dates: date === undefined ? {} : { collect: date },
+  createdBy: '张三', createdAt: NOW, updatedBy: '张三', updatedAt: NOW,
+})
+const stopUiRows = [
+  { key: 'tos-ref', kind: 'tos-reference', projectId: 'tos-project-16.3', tosProjectId: 'tos-project-16.3', tosVersion: '16.3.0.140', instance: stopUiInstance('16.3.0.140', '2026-07-01') },
+  { key: 'own-140', kind: 'machine', projectId: 'own', tosProjectId: 'tos-project-16.3', tosVersion: '16.3.0.140', plan: { projectId: 'own', tosProjectId: 'tos-project-16.3', tosVersion: '16.3.0.140', transferType: '1', dates: {}, updatedBy: '张三', updatedAt: NOW } },
+  { key: 'own-145', kind: 'machine', projectId: 'own', tosProjectId: 'tos-project-16.3', tosVersion: '16.3.0.145', plan: { projectId: 'own', tosProjectId: 'tos-project-16.3', tosVersion: '16.3.0.145', transferType: '1', dates: {}, updatedBy: '张三', updatedAt: NOW } },
+  { key: 'other', kind: 'machine', projectId: 'other', tosProjectId: 'tos-project-16.3', tosVersion: '16.3.0.140', plan: { projectId: 'other', tosProjectId: 'tos-project-16.3', tosVersion: '16.3.0.140', transferType: '1', dates: {}, updatedBy: '李白', updatedAt: NOW } },
+]
+const ownStopPermission = planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '张三', machineProjectId: 'own', context: 'joint-machine' })
+const otherStopPermission = planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '李白', machineProjectId: 'other', context: 'joint-machine' })
+const adminStopPermission = planRules.resolveMrPermissions({ currentUser: '管理员', globalAdminUsers: ['管理员'], tosManagerUsers: [], machineSpm: '', machineProjectId: 'other', context: 'joint-machine' })
+const stopUiMetadata = {
+  own: { projectName: '我的项目', marketName: '/', productLine: '/', spm: '张三', spmUsers: ['张三'], isMada: '否', socPlatform: '/', packageMode: '/' },
+  other: { projectName: '其他项目', marketName: '/', productLine: '/', spm: '李白', spmUsers: ['李白'], isMada: '否', socPlatform: '/', packageMode: '/' },
+}
+const ownCandidates = stopReleaseUiRules.buildStopReleaseCandidates({
+  rows: stopUiRows,
+  instances: [stopUiInstance('16.3.0.140', '2026-07-01'), stopUiInstance('16.3.0.145')],
+  stopRecords: [],
+  permissionsByProjectId: new Map([['own', ownStopPermission], ['other', otherStopPermission]]),
+  metadataByProjectId: stopUiMetadata,
+})
+assert.deepEqual(ownCandidates, [{ projectId: 'own', projectName: '我的项目', disabled: false }])
+const adminCandidates = stopReleaseUiRules.buildStopReleaseCandidates({
+  rows: stopUiRows,
+  instances: [stopUiInstance('16.3.0.140', '2026-07-01'), stopUiInstance('16.3.0.145')],
+  stopRecords: [{ id: 'stopped', projectId: 'own', projectName: '历史项目名', stopDate: '2026-07-01', operator: '管理员', operatedAt: NOW }],
+  permissionsByProjectId: new Map([['own', adminStopPermission], ['other', adminStopPermission]]),
+  metadataByProjectId: stopUiMetadata,
+})
+assert.deepEqual(adminCandidates, [{ projectId: 'other', projectName: '其他项目', disabled: false }])
+const missingReferenceCandidates = stopReleaseUiRules.buildStopReleaseCandidates({
+  rows: stopUiRows.filter(row => row.kind === 'machine' && row.projectId === 'own'),
+  instances: [stopUiInstance('16.3.0.140'), stopUiInstance('16.3.0.145', '2026-02-30')],
+  stopRecords: [], permissionsByProjectId: new Map([['own', ownStopPermission]]), metadataByProjectId: stopUiMetadata,
+})
+assert.deepEqual(missingReferenceCandidates, [{
+  projectId: 'own', projectName: '我的项目', disabled: true,
+  reason: '当前MR版本计划缺少修改点收集开始时间，无法判断停止范围',
+}])
+const historyInput = [
+  { id: 'b', projectId: 'gone', projectName: '已删除项目', stopDate: '2026-07-02', operator: '李白', operatedAt: '2026-08-29T01:00:00.000Z' },
+  { id: 'a', projectId: 'own', projectName: '我的项目', stopDate: '2026-07-01', operator: '张三', operatedAt: '2026-08-29T02:00:00.000Z' },
+  { id: 'c', projectId: 'other', projectName: '其他项目', stopDate: '2026-07-03', operator: '王五', operatedAt: '2026-08-29T01:00:00.000Z' },
+]
+assert.deepEqual(stopReleaseUiRules.sortStopReleaseHistory(historyInput).map(record => record.id), ['a', 'b', 'c'])
+assert.deepEqual(historyInput.map(record => record.id), ['b', 'a', 'c'])
+for (const label of ['停止发版项目名称', '停止发版日期', '操作人', '操作时间', '操作项目']) assert.ok(jointPlanSource.includes(label))
+assert.match(jointPlanSource, /stopRelease\(/)
+assert.match(jointPlanSource, /if\s*\(!stopped\)/)
+assert.doesNotMatch(jointPlanSource, /恢复发版|重新发版|删除记录/)
+
+// Joint-space deep links mutate selection only inside the guarded action, set
+// the MR tab and intent together, and clear the transient intent only after an
+// accessible matching target was focused.
+assert.match(uiSource, /interface MrPlanNavigationIntent[\s\S]*source:\s*['"]joint-mr['"][\s\S]*mrTosVersion:\s*string/)
+assert.match(uiSource, /setMrPlanNavigationIntent/)
+assert.match(uiSource, /consumeMrPlanNavigationIntent/)
+assert.match(uiSource, /clearMrPlanNavigationIntent/)
+assert.match(jointContainerSource, /navigateWithEditGuard\([\s\S]*activateProject\(project\)[\s\S]*setMrPlanNavigationIntent[\s\S]*setProjectPlanLevel\(['"]mr-version-plan['"]\)[\s\S]*enterProjectSpace\(\{\s*module:\s*['"]jointProjectSpace['"]\s*\}\)/)
+assert.match(jointContainerSource, /onOpenProject=\{handleOpenProject\}/)
+assert.match(mrPlanGridSource, /data-mr-tos-version/)
+assert.match(mrPlanGridSource, /tabIndex:\s*-1/)
+assert.match(projectSpaceSource, /mrPlanNavigationIntent[\s\S]*querySelector[\s\S]*scrollIntoView[\s\S]*focus\(\)[\s\S]*consumeMrPlanNavigationIntent/)
+assert.match(projectSpaceSource, /if\s*\(!target\)\s*return/)
 
 // The business date rolls over without a render, emits once, reschedules once,
 // and releases the active timer on unmount.
@@ -235,7 +313,6 @@ assert.deepEqual(
   ],
 )
 
-const NOW = '2026-08-29T08:00:00.000Z'
 const LATER = '2026-08-30T08:00:00.000Z'
 const parent = { id: 'stage-a', parentId: null, order: 0, activityName: '阶段A' }
 const parentB = { id: 'stage-b', parentId: null, order: 1, activityName: '第二阶段' }
