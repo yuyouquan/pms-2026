@@ -1517,6 +1517,52 @@ assert.deepEqual(
   ['V1', 'V2', 'V3'],
   'MR eligibility seed must retain published tOS plan history for revision and name-rule flows',
 )
+const acceptanceVersionScopes = [
+  {
+    versions: acceptancePlanScopeA.marketVersionsByKey['project::1::OP::level1::versions'],
+    snapshotKey: versionId => `project::1::OP::level1::${versionId}`,
+  },
+  {
+    versions: acceptancePlanScopeA.marketVersionsByKey['project::3::OP::level1::versions'],
+    snapshotKey: versionId => `project::3::OP::level1::${versionId}`,
+  },
+  {
+    versions: acceptancePlanScopeA.tosTypeVersionsByKey['project::19::tos-type::Full::level1::versions'],
+    snapshotKey: versionId => `project::19::tos-type::Full::level1::${versionId}::snapshot`,
+  },
+]
+const allAcceptanceSnapshots = []
+for (const scope of acceptanceVersionScopes) {
+  for (const version of scope.versions) {
+    const snapshot = acceptancePlanScopeA.publishedSnapshots[scope.snapshotKey(version.id)]
+    assert.ok(snapshot, `every published acceptance version requires a matching snapshot: ${scope.snapshotKey(version.id)}`)
+    assert.equal(snapshot.filter(task => task.parentId == null).length, 5, 'every published acceptance snapshot preserves the complete five-stage topology')
+    allAcceptanceSnapshots.push(snapshot)
+  }
+}
+assert.equal(new Set(allAcceptanceSnapshots).size, allAcceptanceSnapshots.length, 'published snapshots must not share array references across versions or project scopes')
+assert.equal(
+  new Set(allAcceptanceSnapshots.flat()).size,
+  allAcceptanceSnapshots.reduce((count, snapshot) => count + snapshot.length, 0),
+  'published snapshots must not share task object references across versions or project scopes',
+)
+assert.ok(
+  allAcceptanceSnapshots.flat().every(task => task.responsible !== 'SPM'),
+  'seed snapshots may retain the SPM role but responsible must remain empty instead of using the role label as a user identity',
+)
+assert.equal(
+  machineAcceptanceSnapshot.find(task => task.stableId === 'machine-ms-str5')?.planEndDate,
+  '2026-05-15',
+  'MR eligibility must bind the machine STR5 date through its stable id',
+)
+assert.equal(
+  tosAcceptanceSnapshot.find(task => task.stableId === 'tos-ms-str5')?.planEndDate,
+  '2026-05-15',
+  'tOS MR eligibility must bind STR5 through its stable id',
+)
+assert.match(templateMocksSource, /MR_ACCEPTANCE_FIXED_MILESTONE_DATES[\s\S]*['"]machine-ms-str5['"][\s\S]*['"]tos-ms-str5['"]/, 'acceptance milestone dates must be keyed by project-specific stable ids')
+assert.match(templateMocksSource, /MR_ACCEPTANCE_FIXED_MILESTONE_DATES\[task\.stableId!\]/, 'acceptance date injection must read the immutable stable id')
+assert.doesNotMatch(templateMocksSource, /MR_ACCEPTANCE_FIXED_MILESTONE_DATES\[task\.taskName\]/, 'acceptance dates must not depend on editable display names')
 
 assert.match(mrBrowserVerifierSource, /setViewport\(\{\s*width:\s*1600,\s*height:\s*1000\s*\}\)/)
 assert.match(mrBrowserVerifierSource, /pms-mr-version-plan-store/)
