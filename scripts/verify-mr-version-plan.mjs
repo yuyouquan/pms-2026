@@ -6,6 +6,7 @@ import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-cont
 const root = projectRoot(import.meta.url)
 const templateRules = loadTypeScriptModule(root, 'src/lib/mrTemplateRules.ts')
 const templateMocks = loadTypeScriptModule(root, 'src/data/mrVersionPlanMocks.ts')
+const level1PlanRules = loadTypeScriptModule(root, 'src/lib/level1PlanRules.ts')
 const templateMocksSource = readSource(root, 'src/data/mrVersionPlanMocks.ts')
 const task13PackageJson = JSON.parse(readSource(root, 'package.json'))
 const mrBrowserVerifierSource = readSource(root, 'screenshots/verify-mr-version-plan-browser.mjs')
@@ -1436,19 +1437,69 @@ const acceptancePlanScopeA = templateMocks.createMrAcceptancePlanScopeSeed()
 const acceptancePlanScopeB = templateMocks.createMrAcceptancePlanScopeSeed()
 assert.deepEqual(acceptancePlanScopeA, acceptancePlanScopeB)
 assert.notEqual(acceptancePlanScopeA.publishedSnapshots, acceptancePlanScopeB.publishedSnapshots)
+const machineAcceptanceSnapshot = acceptancePlanScopeA.publishedSnapshots['project::1::OP::level1::mr-acceptance-machine-v1']
+const secondMachineAcceptanceSnapshot = acceptancePlanScopeA.publishedSnapshots['project::3::OP::level1::mr-acceptance-machine-v1']
+const tosAcceptanceSnapshot = acceptancePlanScopeA.publishedSnapshots['project::19::tos-type::Full::level1::mr-acceptance-tos-v1::snapshot']
+const taskTopology = tasks => tasks.map(task => ({
+  stableId: task.stableId,
+  parentStableId: task.parentId == null
+    ? null
+    : tasks.find(candidate => candidate.id === task.parentId)?.stableId,
+  order: task.order,
+  taskName: task.taskName,
+  nodeKind: task.nodeKind,
+}))
 assert.deepEqual(
-  acceptancePlanScopeA.publishedSnapshots['project::19::tos-type::Full::level1::mr-acceptance-tos-v1::snapshot']
-    .filter(task => task.parentId != null).map(task => task.taskName),
+  machineAcceptanceSnapshot.filter(task => task.parentId == null).map(task => task.taskName),
+  ['概念阶段', '计划阶段', '开发验证阶段', '上市阶段', '生命周期阶段'],
+  'MR acceptance seed must preserve all five machine level-one stages',
+)
+assert.deepEqual(
+  taskTopology(machineAcceptanceSnapshot),
+  taskTopology(level1PlanRules.MACHINE_LEVEL1_TEMPLATE_TASKS),
+  'MR acceptance seed must preserve every fixed machine milestone and its parent/order topology',
+)
+assert.deepEqual(
+  taskTopology(secondMachineAcceptanceSnapshot),
+  taskTopology(level1PlanRules.MACHINE_LEVEL1_TEMPLATE_TASKS),
+  'both seeded machine projects must retain the complete level-one topology',
+)
+assert.notEqual(machineAcceptanceSnapshot, secondMachineAcceptanceSnapshot)
+assert.deepEqual(
+  tosAcceptanceSnapshot.filter(task => task.parentId == null).map(task => task.taskName),
+  ['概念阶段', '计划阶段', '开发验证阶段', '上市迭代阶段', '维护阶段'],
+  'MR acceptance seed must preserve all five tOS level-one stages',
+)
+const fixedTosTopology = taskTopology(tosAcceptanceSnapshot.filter(task => !/^16\.3\.0\./.test(task.taskName)))
+assert.deepEqual(
+  fixedTosTopology,
+  taskTopology(level1PlanRules.TOS_LEVEL1_TEMPLATE_TASKS),
+  'MR acceptance seed must preserve every fixed tOS milestone and its parent/order topology',
+)
+assert.deepEqual(
+  tosAcceptanceSnapshot.filter(task => /^16\.3\.0\./.test(task.taskName)).map(task => task.taskName),
   ['16.3.0.140', '16.3.0.145', '16.3.0.150'],
 )
+assert.deepEqual(
+  tosAcceptanceSnapshot.filter(task => /^16\.3\.0\./.test(task.taskName)).map(task => ({
+    taskName: task.taskName,
+    parentName: tosAcceptanceSnapshot.find(parent => parent.id === task.parentId)?.taskName,
+    planStartDate: task.planStartDate,
+    planEndDate: task.planEndDate,
+  })),
+  [
+    { taskName: '16.3.0.140', parentName: '上市迭代阶段', planStartDate: '2026-05-16', planEndDate: '2026-06-15' },
+    { taskName: '16.3.0.145', parentName: '维护阶段', planStartDate: '2026-06-16', planEndDate: '2026-07-15' },
+    { taskName: '16.3.0.150', parentName: '维护阶段', planStartDate: '2026-07-16', planEndDate: '' },
+  ],
+  'tOS MR candidates must retain their required business ranges, including the deliberately incomplete candidate',
+)
 assert.equal(
-  acceptancePlanScopeA.publishedSnapshots['project::19::tos-type::Full::level1::mr-acceptance-tos-v1::snapshot']
-    .find(task => task.taskName === '16.3.0.150').planEndDate,
+  tosAcceptanceSnapshot.find(task => task.taskName === '16.3.0.150').planEndDate,
   '',
 )
 assert.equal(
-  acceptancePlanScopeA.publishedSnapshots['project::1::OP::level1::mr-acceptance-machine-v1']
-    .find(task => task.taskName === 'STR5').planEndDate,
+  machineAcceptanceSnapshot.find(task => task.taskName === 'STR5').planEndDate,
   '2026-05-15',
 )
 
