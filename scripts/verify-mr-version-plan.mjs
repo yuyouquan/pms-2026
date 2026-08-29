@@ -1491,6 +1491,11 @@ assert.match(
   /\*,\s*\*::before,\s*\*::after\s*\{[^}]*box-shadow:\s*none\s*!important;[^}]*text-shadow:\s*none\s*!important;/s,
   'MR browser evidence CSS must remove non-functional rasterized shadows while preserving borders, colors, and geometry',
 )
+assert.match(
+  mrBrowserVerifierSource,
+  /\.anticon\s+svg\s*\{[^}]*shape-rendering:\s*crispEdges\s*!important;/s,
+  'MR browser evidence CSS must keep Ant icons visible while rasterizing their edges deterministically',
+)
 assert.match(mrBrowserVerifierSource, /document\.fonts\.ready/)
 assert.match(mrBrowserVerifierSource, /data-mr-row-key/)
 assert.match(mrBrowserVerifierSource, /data-mr-date-cell/)
