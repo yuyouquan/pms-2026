@@ -1219,6 +1219,11 @@ assert.match(
   /await switchUser\(page, '李四'\)[\s\S]{0,500}view-only user cannot add MR from a business stage/,
   'machine permission acceptance must use a real non-SPM member instead of the seeded project SPM 王五',
 )
+assert.match(
+  browserSource,
+  /machine permission selected vertical[\s\S]{0,300}await ensureDraft\(page\)[\s\S]{0,300}await switchUser\(page, '李四'\)/,
+  'machine permission acceptance must create its own editable revision instead of weakening the published-only MR seed',
+)
 for (const focusedCase of ['machine-surface', 'machine-summary', 'machine-follow-actual', 'tos-surface']) {
   assert.match(
     browserSource,
