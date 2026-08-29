@@ -702,7 +702,7 @@ const tosPublishedSnapshots = {
 const selectedTosSource = adapter.selectLatestPublishedTosLevel1({
   project: tosAdapterProject,
   tosTypeRows,
-  tosTypeVersionsByKey,
+  tosTypeVersionsByKey: tosVersionsByKey,
   publishedSnapshots: tosPublishedSnapshots,
   fallbackVersions: adapterFallbackVersions,
 })
@@ -800,14 +800,20 @@ assert.deepEqual(aggregationSources.tosProjects, [
   { projectId: 'tos-adapter', tosProjectKey: '16.3', projectName: 'tOS16.3' },
 ])
 assert.deepEqual(aggregationSources.machineProjects, [
-  { id: 'machine-adapter', projectName: 'X6877-D8400_H991', productType: '新品', firstSaleTosVersion: '16.3.0.110', currentTosVersion: 'tOS16.3', spm: '李白' },
+  { id: 'machine-adapter', projectName: 'X6877-D8400_H991', productType: '新品', firstSaleTosVersion: '16.3.0.110', currentTosVersion: '16.3', spm: '李白' },
 ])
+const legacyReferenceSources = adapter.buildMrAggregationSources({
+  ...adapterInput,
+  projects: [{ ...machineAdapterProject, firstSaleTosVersionId: 'tos-16-3', currentTosVersionId: 'tos-17-1' }],
+})
+assert.equal(legacyReferenceSources.machineProjects[0].firstSaleTosVersion, '16.3')
+assert.equal(legacyReferenceSources.machineProjects[0].currentTosVersion, '17.1')
 assert.deepEqual(Object.keys(aggregationSources.latestPublishedLevel1ByProjectId), ['machine-adapter', 'tos-adapter'])
 assert.deepEqual(aggregationSources.machineMetadataByProjectId['machine-adapter'], adapter.projectMachineMrMetadata(machineAdapterProject, machineMarketRows))
 assert.deepEqual(aggregationSources.tosManagerUsersByProjectId, { 'tos-adapter': ['李白', '张三'] })
 assert.deepEqual(adapterInput, adapterInputBefore)
 const rebuiltAggregationSources = adapter.buildMrAggregationSources(adapterInput)
-assert.deepEqual(rebuiltAggregationSources, aggregationSources)
+assert.deepEqual(JSON.parse(JSON.stringify(rebuiltAggregationSources)), JSON.parse(JSON.stringify(aggregationSources)))
 assert.notStrictEqual(rebuiltAggregationSources.machineProjects[0], aggregationSources.machineProjects[0])
 aggregationSources.latestPublishedLevel1ByProjectId['machine-adapter'].tasks[0].taskName = 'mutated output'
 assert.equal(machinePublishedSnapshots['project::machine-adapter::OP::level1::machine-v3'][0].taskName, '开发验证阶段')

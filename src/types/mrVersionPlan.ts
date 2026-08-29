@@ -160,6 +160,30 @@ export interface MrLevel1Source {
   getSnapshot: (versionId: string) => readonly MrLevel1TaskLike[] | undefined
 }
 
+export interface MrPublishedLevel1Source extends MrLevel1Source {
+  versionId: string
+  versionNo: string
+  tasks: MrLevel1TaskLike[]
+}
+
+export interface MrMachineMetadata {
+  projectName: string
+  marketName: string
+  productLine: string
+  spm: string
+  isMada: '是' | '否'
+  socPlatform: string
+  packageMode: string
+}
+
+export interface MrAggregationSources {
+  tosProjects: MrTosProjectSource[]
+  machineProjects: MrMachineProjectSource[]
+  latestPublishedLevel1ByProjectId: Record<string, MrPublishedLevel1Source>
+  machineMetadataByProjectId: Record<string, MrMachineMetadata>
+  tosManagerUsersByProjectId: Record<string, string[]>
+}
+
 export interface MrJointReferenceRow {
   key: string
   kind: 'tos-reference'
