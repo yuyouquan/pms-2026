@@ -939,6 +939,19 @@ assert.equal(lifecycleStore.getState().templateHistory.at(-1).actor, '赵六')
 assert.equal(mrStore.partializeMrVersionPlanState(lifecycleStore.getState()).templateHistory.at(-1).action, 'cancel-revision')
 assert.equal(new Set(lifecycleStore.getState().templateHistory.map(item => item.id)).size, lifecycleStore.getState().templateHistory.length)
 
+const collidingIds = ['existing-log', 'batch-log', 'unused-log', 'other-log', 'batch-log']
+const batchLogStore = mrStore.createMrVersionPlanStore({
+  storage: createMemoryStorage(), now: () => NOW, createId: () => collidingIds.shift() ?? 'batch-log',
+})
+assert.equal(batchLogStore.getState().createTemplateRevision('张三', adminPermission), true)
+const batchDraft = batchLogStore.getState().templateVersions.find(version => version.status === '修订中')
+const batchActivities = batchDraft.activities.map((activity, index) => index === 1 || index === 2
+  ? { ...activity, activityName: `${activity.activityName}-批量修改` }
+  : { ...activity })
+assert.equal(batchLogStore.getState().updateTemplateActivities(batchDraft.id, batchActivities, '王五', adminPermission), true)
+assert.equal(batchLogStore.getState().templateHistory.length, 3)
+assert.equal(new Set(batchLogStore.getState().templateHistory.map(item => item.id)).size, 3)
+
 const tosStore = freshStore()
 const addTosInput = { projectId: 'tos-project-16.3', tosVersion: '16.3.0.140', actor: '李白', now: NOW }
 const addTosInputBefore = structuredClone(addTosInput)
@@ -1069,9 +1082,15 @@ const corruptPersisted = {
   marketOverridesByKey: {
     'machine-c09::16.3.0.140::OP': { projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'OP', mainMarket: 'OP', dates: { collect: '2026-06-22' } },
     'machine-c09::16.3.0.140::TR': { projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'TR', mainMarket: 'OP', dates: { collect: '2026-06-23', lock: 'bad', unknown: '2026-06-24' } },
+    'machine-c09::16.3.0.140::RU': { projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'RU', mainMarket: 'OP', dates: { lock: 'bad', unknown: '2026-06-24' } },
     'missing::16.3.0.140::TR': { projectId: 'missing', tosVersion: '16.3.0.140', market: 'TR', mainMarket: 'OP', dates: { collect: '2026-06-23' } },
   },
-  stopReleaseRecords: [{ ...stopRecord }, { ...stopRecord, id: 'bad-stop', stopDate: '2026-02-30' }],
+  stopReleaseRecords: [
+    { ...stopRecord },
+    { ...stopRecord, id: 'duplicate-project', stopDate: '2026-07-20' },
+    { ...stopRecord, projectId: 'other-project', projectName: 'OTHER' },
+    { ...stopRecord, id: 'bad-stop', stopDate: '2026-02-30' },
+  ],
   viewModeByScope: { ok: 'vertical', bad: 'gantt', ' ': 'horizontal' },
 }
 const corruptBefore = structuredClone(corruptPersisted)
@@ -1095,6 +1114,15 @@ const recoveredPublished = mrStore.migrateMrVersionPlanState({
 }, 0)
 assert.equal(recoveredPublished.templateVersions.length, 1)
 assert.equal(recoveredPublished.templateVersions[0].status, '已发布')
+const staleDraftMigration = mrStore.migrateMrVersionPlanState({
+  templateVersions: [
+    { ...initialVersions[0], id: 'published-v3', versionNo: 'V3' },
+    { ...initialVersions[0], id: 'stale-draft-v2', versionNo: 'V2', status: '修订中', publishedAt: undefined },
+  ],
+  currentTemplateVersionId: 'stale-draft-v2',
+}, 0)
+assert.deepEqual(staleDraftMigration.templateVersions.map(version => version.id), ['published-v3'])
+assert.equal(staleDraftMigration.currentTemplateVersionId, 'published-v3')
 
 const persistedOnly = mrStore.partializeMrVersionPlanState(machineStore.getState())
 assert.deepEqual(Object.keys(persistedOnly).sort(), [
@@ -1123,4 +1151,20 @@ const throwingStorage = {
 }
 globalThis.window = { localStorage: throwingStorage }
 const throwingHydrationStore = mrStore.createMrVersionPlanStore({ storage: throwingStorage, now: () => NOW })
+let failingStorageMutationResult
+assert.doesNotThrow(() => { failingStorageMutationResult = throwingHydrationStore.getState().createTemplateRevision('管理员', adminPermission) })
+assert.equal(failingStorageMutationResult, true)
+assert.equal(throwingHydrationStore.getState().templateVersions.some(version => version.status === '修订中'), true)
+assert.doesNotThrow(() => throwingHydrationStore.getState().setViewMode('failure-safe', 'horizontal'))
+assert.equal(throwingHydrationStore.getState().viewModeByScope['failure-safe'], 'horizontal')
 await assert.doesNotReject(() => mrStore.rehydrateMrVersionPlanStore(throwingHydrationStore))
+const rejectingAsyncStorage = {
+  getItem: () => Promise.reject(new Error('async storage read failed')),
+  setItem: () => Promise.reject(new Error('async storage write failed')),
+  removeItem: () => Promise.reject(new Error('async storage remove failed')),
+}
+globalThis.window = { localStorage: rejectingAsyncStorage }
+const asyncFailureStore = mrStore.createMrVersionPlanStore({ storage: rejectingAsyncStorage, now: () => NOW })
+assert.equal(asyncFailureStore.getState().createTemplateRevision('管理员', adminPermission), true)
+assert.equal(asyncFailureStore.getState().templateVersions.some(version => version.status === '修订中'), true)
+await assert.doesNotReject(() => mrStore.rehydrateMrVersionPlanStore(asyncFailureStore))
