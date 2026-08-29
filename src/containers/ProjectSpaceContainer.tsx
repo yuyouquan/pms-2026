@@ -48,6 +48,7 @@ import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
 import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareModal'
 import Level3PlanModule from '@/components/plans/Level3PlanModule'
 import TosMrVersionPlan from '@/components/plans/TosMrVersionPlan'
+import MachineMrVersionPlan from '@/components/plans/MachineMrVersionPlan'
 import {
   applyPlanWorkspaceFilters,
   buildPlanHorizontalMilestones,
@@ -793,9 +794,14 @@ export default function ProjectSpaceContainer() {
     tosTypeConfigsByProjectId, setTosTypeConfigForProject,
     projectMemberMap, setProjectMember, updateProject, syncTosTeamPermissionMembersGuarded,
   } = proj
-  const mrIntentInstances = useMrVersionPlanStore(state => (
-    selectedProject ? state.tosInstancesByProjectId[selectedProject.id] ?? [] : []
-  ))
+  const mrIntentInstances = useMrVersionPlanStore(state => {
+    if (!selectedProject) return []
+    if (isMachineProjectType(selectedProject.type)) {
+      return Object.values(state.tosInstancesByProjectId).flat()
+        .map(instance => `${instance.projectId}::${instance.tosVersion}::${instance.updatedAt}`)
+    }
+    return state.tosInstancesByProjectId[selectedProject.id] ?? []
+  })
   const mrIntentPlanKeys = useMrVersionPlanStore(state => selectedProject
     ? Object.keys(state.machinePlansByKey).filter(key => key.startsWith(`${selectedProject.id}::`)).sort().join('|')
     : '')
@@ -1087,9 +1093,9 @@ export default function ProjectSpaceContainer() {
   useEffect(() => {
     if (projectPlanLevel === 'level1') return
     if (projectPlanLevel === 'level3' && supportsLevel3Plan) return
-    if (projectPlanLevel === 'mr-version-plan' && isTosVersionProject) return
+    if (projectPlanLevel === 'mr-version-plan' && (isTosVersionProject || isWholeMachineProject)) return
     setProjectPlanLevel('level1')
-  }, [isTosVersionProject, projectPlanLevel, setProjectPlanLevel, supportsLevel3Plan])
+  }, [isTosVersionProject, isWholeMachineProject, projectPlanLevel, setProjectPlanLevel, supportsLevel3Plan])
   const canCreateCurrentRevision = canMaintainCurrentPlan && (
     !isMarketScopedLevel1 || canCreateRevisionForMarket(marketConfigRows, selectedMarketTab, scopedPlanLevel)
   )
@@ -2503,7 +2509,7 @@ export default function ProjectSpaceContainer() {
     if (!target) return
     target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
     target.focus()
-    consumeMrPlanNavigationIntent()
+    if (document.activeElement === target) consumeMrPlanNavigationIntent()
   }, [
     activeModule,
     consumeMrPlanNavigationIntent,
@@ -5430,11 +5436,11 @@ export default function ProjectSpaceContainer() {
 
   // ═══════ renderProjectPlan ═══════
   const renderProjectPlan = () => {
-    const showMarketControls = isMachineProjectType(selectedProject?.type) && projectPlanLevel !== 'mr-version-plan'
+    const showMarketControls = isMachineProjectType(selectedProject?.type) && projectPlanLevel === 'level1'
     const showTosTypeTabs = selectedProject?.type === PROJECT_TYPE_TOS_VERSION
       && projectPlanLevel === 'level1'
       && tosTypeConfigRows.length > 0
-    const planTabItems = isTosVersionProject
+    const planTabItems = isTosVersionProject || isWholeMachineProject
       ? [
           { key: 'level1', label: '一级计划' },
           { key: 'mr-version-plan', label: '三级计划-MR版本计划' },
@@ -5448,8 +5454,38 @@ export default function ProjectSpaceContainer() {
       ? machineMarketPlanUnavailable
       : projectPlanLevel === 'level3' ? level3ScopeUnavailable : false
     const usesSharedPlanWorkspace = projectPlanLevel === 'level1' && !machineMarketPlanUnavailable
+    const planLevelTabs = (
+      <Card className="pms-project-plan-level-tabs" size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
+        <Row align="middle" justify="space-between">
+          <Col>
+            <Tabs
+              activeKey={projectPlanLevel}
+              onChange={(key) => navigateWithEditGuard(() => {
+                setIsEditMode(false)
+                if (key === 'level3') setProjectPlanViewMode('table')
+                setProjectPlanLevel(key as string)
+              })}
+              style={{ marginBottom: 0 }}
+              items={planTabItems.map(item => ({ ...item, label: <span style={{ fontWeight: 500, padding: '0 4px' }}>{item.label}</span> }))}
+            />
+          </Col>
+          <Col>
+            {isWholeMachineProject ? (
+              <Tooltip title="编辑市场">
+                <Button data-plan-shared-market-editor size="small" icon={<EditOutlined />} style={{ borderRadius: 6 }} onClick={openMarketEditor}>市场编辑</Button>
+              </Tooltip>
+            ) : (
+              <Tag color={projectPlanLevel === 'level3' || projectPlanLevel === 'mr-version-plan' ? 'blue' : 'default'} style={{ fontSize: 11 }}>
+                {planTabItems.find(tab => tab.key === projectPlanLevel)?.label}
+              </Tag>
+            )}
+          </Col>
+        </Row>
+      </Card>
+    )
     const planWorkspacePrimaryScopeTabs = (
       <>
+        {isWholeMachineProject && planLevelTabs}
         {showTosTypeTabs && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
             <Row align="middle" justify="space-between">
@@ -5478,7 +5514,7 @@ export default function ProjectSpaceContainer() {
         )}
         {showMarketControls && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
-            <Row align="middle" justify="space-between">
+            <Row align="middle">
               <Col>
                 <Space size={4} align="center">
                   <span style={{ fontSize: 13, fontWeight: 500, color: '#9ca3af', marginRight: 8 }}>市场</span>
@@ -5494,31 +5530,10 @@ export default function ProjectSpaceContainer() {
                   ))}
                 </Space>
               </Col>
-              <Col>
-                <Tooltip title="编辑市场">
-                  <Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6 }} onClick={openMarketEditor}>市场编辑</Button>
-                </Tooltip>
-              </Col>
             </Row>
           </Card>
         )}
-        <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
-          <Row align="middle" justify="space-between">
-            <Col>
-              <Tabs
-                activeKey={projectPlanLevel}
-                onChange={(key) => navigateWithEditGuard(() => {
-                  setIsEditMode(false)
-                  if (key === 'level3') setProjectPlanViewMode('table')
-                  setProjectPlanLevel(key as string)
-                })}
-                style={{ marginBottom: 0 }}
-                items={planTabItems.map(item => ({ ...item, label: <span style={{ fontWeight: 500, padding: '0 4px' }}>{item.label}</span> }))}
-              />
-            </Col>
-            <Col><Tag color={projectPlanLevel === 'level3' || projectPlanLevel === 'mr-version-plan' ? 'blue' : 'default'} style={{ fontSize: 11 }}>{planTabItems.find(tab => tab.key === projectPlanLevel)?.label}</Tag></Col>
-          </Row>
-        </Card>
+        {!isWholeMachineProject && planLevelTabs}
       </>
     )
     const planWorkspaceSecondaryScopeTabs = (
@@ -5656,6 +5671,14 @@ export default function ProjectSpaceContainer() {
             tosTypeVersionsByKey={tosTypeVersionsByKey}
             publishedSnapshots={publishedSnapshots}
             fallbackVersions={baseVersions}
+          />
+        )}
+        {projectPlanLevel === 'mr-version-plan' && isWholeMachineProject && selectedProject && (
+          <MachineMrVersionPlan
+            project={selectedProject}
+            currentUser={currentLoginUser}
+            globalAdminUsers={level1GlobalAdmins}
+            marketRows={marketConfigRows}
           />
         )}
         {projectPlanLevel === 'overview' && renderProjectPlanOverview()}

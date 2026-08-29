@@ -143,6 +143,23 @@ export interface MrMarketOverride {
   dates: MrActivityDateMap
 }
 
+export interface MrMachineMarketProjection {
+  key: string
+  projectId: string
+  tosProjectId: string
+  tosVersion: string
+  templateVersionId: string
+  activities: MrTemplateActivity[]
+  plan: JointMachinePlan
+}
+
+export interface MrMachineMarketProjectionResult {
+  mainMarket: string
+  markets: string[]
+  versions: MrMachineMarketProjection[]
+  missingInstanceVersions: string[]
+}
+
 export interface StoreStopReleaseInput extends MrStopReleaseRecord {}
 
 export interface MrCellError {

@@ -74,6 +74,8 @@ assert.equal(machineProjection.versions[0].templateVersionId, 'template-v7')
 assert.deepEqual(machineProjection.versions[0].activities, machineProjectionActivities)
 assert.notEqual(machineProjection.versions[0].activities, machineProjectionActivities)
 assert.notEqual(machineProjection.versions[0].activities[0], machineProjectionActivities[0])
+assert.notEqual(machineProjection.versions[0].plan, machineProjectionPlan)
+assert.notEqual(machineProjection.versions[0].plan.dates, machineProjectionPlan.dates)
 assert.deepEqual(machineProjectionActivities, [
   { id: 'stage', parentId: null, order: 0, activityName: '快照阶段' },
   { id: 'node', parentId: 'stage', order: 0, activityName: '快照节点' },
@@ -105,6 +107,10 @@ assert.match(projectSpaceSource, /isWholeMachineProject[\s\S]*['"]一级计划['
 assert.match(projectSpaceSource, /showMarketControls\s*=\s*isMachineProjectType\([^)]*\)[\s\S]*projectPlanLevel\s*===\s*['"]level1['"]/)
 assert.match(projectSpaceSource, /市场编辑/)
 assert.match(projectSpaceSource, /<MachineMrVersionPlan/)
+assert.match(projectSpaceSource, /data-plan-shared-market-editor/)
+assert.ok(projectSpaceSource.indexOf('{isWholeMachineProject && planLevelTabs}') < projectSpaceSource.indexOf('{showMarketControls && ('))
+assert.match(projectSpaceSource, /document\.activeElement\s*===\s*target[\s\S]*consumeMrPlanNavigationIntent/)
+assert.doesNotMatch(machineMrVersionPlanSource, /templateVersions|DEFAULT_MR_TEMPLATE_ACTIVITIES/)
 
 // Joint project space: navigation, real source aggregation, stable editable grid and validation UI.
 assert.ok(headerSource.indexOf('项目列表') < headerSource.indexOf('联合项目空间'))
@@ -351,7 +357,7 @@ assert.match(projectSpaceSource, /projectPlanLevel\s*===\s*['"]mr-version-plan['
 assert.match(projectSpaceSource, /showTosTypeTabs[\s\S]*projectPlanLevel\s*===\s*['"]level1['"]/)
 assert.match(
   projectSpaceSource,
-  /showMarketControls\s*=\s*isMachineProjectType\([^)]*\)\s*&&\s*projectPlanLevel\s*!==\s*['"]mr-version-plan['"]/,
+  /showMarketControls\s*=\s*isMachineProjectType\([^)]*\)\s*&&\s*projectPlanLevel\s*===\s*['"]level1['"]/,
 )
 assert.match(projectSpaceSource, /navigateWithEditGuard\(\(\)\s*=>\s*\{[\s\S]*setIsEditMode\(false\)[\s\S]*setProjectPlanLevel/)
 
@@ -818,6 +824,12 @@ const multiSpmJointPermission = currentUser => planRules.resolveMrPermissions({
 assert.equal(multiSpmJointPermission('李白').canEditMachine, true)
 assert.equal(multiSpmJointPermission('张三').canStopRelease, true)
 assert.equal(multiSpmJointPermission('王五').canEditMachine, false)
+const multiSpmMarketPermission = currentUser => planRules.resolveMrPermissions({
+  currentUser, globalAdminUsers: [], tosManagerUsers: [], machineSpm: '旧负责人', machineSpmUsers: [' 李白 ', '张三', '李白'], machineProjectId: 'machine-c09', context: 'machine-market',
+})
+assert.equal(multiSpmMarketPermission('李白').canEditMarket, true)
+assert.equal(multiSpmMarketPermission('张三').canEditMarket, true)
+assert.equal(multiSpmMarketPermission('王五').canEditMarket, false)
 const legacyMultiSpmPermission = currentUser => planRules.resolveMrPermissions({
   currentUser, globalAdminUsers: [], tosManagerUsers: [], machineSpm: '李白,张三', machineProjectId: 'machine-c09', context: 'joint-machine',
 })
@@ -1501,6 +1513,13 @@ assert.equal(machineStore.getState().updateMarketDate({
   projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'TR', mainMarket: 'OP', activityId: 'transfer', value: '2026-07-03', mainValue: '2099-01-01',
 }, '张三', marketPermission), true)
 assert.equal(machineStore.getState().marketOverridesByKey['machine-c09::16.3.0.140::TR'].dates.transfer, '2026-07-03')
+assert.equal(machineStore.getState().updateMachineDate('machine-c09::16.3.0.140', 'transfer', '2026-07-01', '张三', machinePermission), true)
+assert.equal(machineStore.getState().marketOverridesByKey['machine-c09::16.3.0.140::TR'].dates.transfer, '2026-07-03')
+assert.deepEqual(dateRules.validateMachineMarketDate({
+  value: machineStore.getState().marketOverridesByKey['machine-c09::16.3.0.140::TR'].dates.transfer,
+  mainValue: machineStore.getState().machinePlansByKey['machine-c09::16.3.0.140'].dates.transfer,
+  activityId: 'transfer', activityName: '版本转测时间',
+}), ['非主市场时间不得晚于主市场对应时间'])
 assert.equal(machineStore.getState().updateMarketDate({
   projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'TR', mainMarket: 'OP', activityId: 'transfer', value: 'bad', mainValue: '2026-07-02',
 }, '张三', marketPermission), false)

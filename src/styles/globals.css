@@ -1911,6 +1911,83 @@
   padding-left: 20px;
 }
 
+/* Machine project MR plan. Keep sticky layers and invalid feedback local. */
+.pms-machine-mr-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.pms-machine-mr-hint {
+  color: var(--pms-text-secondary);
+  font-size: 13px;
+}
+
+.pms-machine-mr-table .ant-table-container {
+  border: 1px solid #e7e7f3;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.pms-machine-mr-table .ant-table-thead > tr > th.ant-table-cell-fix-start,
+.pms-machine-mr-table .ant-table-thead > tr > th.ant-table-cell-fix-left,
+.pms-machine-mr-table .ant-table-thead > tr > th.ant-table-cell-fix-left-last {
+  z-index: 6;
+  background: #f7f7fc !important;
+}
+
+.pms-machine-mr-table .ant-table-tbody > tr > td.ant-table-cell-fix-start,
+.pms-machine-mr-table .ant-table-tbody > tr > td.ant-table-cell-fix-left,
+.pms-machine-mr-table .ant-table-tbody > tr > td.ant-table-cell-fix-left-last {
+  z-index: 3;
+  background: #fff !important;
+}
+
+.pms-machine-mr-table .pms-mr-parent-row > td,
+.pms-machine-mr-table .pms-mr-parent-row > td.ant-table-cell-fix-start,
+.pms-machine-mr-table .pms-mr-parent-row > td.ant-table-cell-fix-left,
+.pms-machine-mr-table .pms-mr-parent-row > td.ant-table-cell-fix-left-last {
+  background: var(--pms-brand-surface) !important;
+  font-weight: 600;
+}
+
+.pms-machine-mr-table .pms-mr-invalid-cell,
+.pms-machine-mr-table .pms-mr-invalid-cell:hover {
+  background: #fff2f0 !important;
+  box-shadow: inset 0 0 0 1px #ff4d4f;
+}
+
+.pms-machine-mr-table .pms-mr-date-with-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pms-machine-mr-table .pms-mr-error-icon {
+  flex: 0 0 auto;
+  color: #ff4d4f;
+  cursor: help;
+}
+
+.pms-machine-mr-table .pms-mr-disabled-date {
+  display: inline-block;
+  width: 100%;
+}
+
+.pms-machine-mr-table tr[data-mr-version]:focus > td {
+  background: #fff7d6 !important;
+  box-shadow: inset 0 2px 0 #faad14, inset 0 -2px 0 #faad14;
+}
+
+@media (max-width: 900px) {
+  .pms-machine-mr-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 @media (max-width: 900px) {
   .pms-mr-toolbar__inner {
     align-items: flex-start;
