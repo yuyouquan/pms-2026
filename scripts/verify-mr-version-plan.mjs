@@ -30,6 +30,7 @@ const jointPlanSource = readSource(root, 'src/components/joint/JointMrVersionPla
 const stopReleaseUiRules = loadTypeScriptModule(root, 'src/lib/mrStopReleaseUiRules.ts')
 const machineMarketRules = loadTypeScriptModule(root, 'src/lib/mrMachineMarketRules.ts')
 const navigationRules = loadTypeScriptModule(root, 'src/lib/mrNavigationRules.ts')
+const templateCompatibility = loadTypeScriptModule(root, 'src/lib/projectTemplateCompatibility.ts')
 const machineMrVersionPlanSource = readSource(root, 'src/components/plans/MachineMrVersionPlan.tsx')
 const NOW = '2026-08-29T08:00:00.000Z'
 
@@ -197,8 +198,8 @@ assert.match(jointMrCss, /td\.ant-table-cell-fix-start,[\s\S]*td\.ant-table-cell
 assert.match(jointMrCss, /\.pms-joint-mr-reference-row\s*>\s*td\.ant-table-cell-fix-start,[\s\S]*\.pms-joint-mr-reference-row\s*>\s*td\.ant-table-cell-fix-end\s*\{[^}]*z-index:\s*3[^}]*background:\s*#fffbe8/)
 
 // Stop-release UI: only present, unstopped machine projects in the current
-// user's authoritative permission scope are candidates. Missing tOS reference
-// dates remain visible but cannot be submitted.
+// user's authoritative permission scope are candidates. A missing exact
+// collection activity disables submission; an existing empty date stays eligible.
 const stopUiActivities = [
   { id: 'p', parentId: null, order: 0, activityName: '需求&修改点' },
   { id: 'collect', parentId: 'p', order: 0, activityName: '修改点收集开始时间' },
@@ -1785,9 +1786,21 @@ for (const retiredSymbol of ['useLevel3PlanStore', 'Level3PlanModule', 'Level3Te
 }
 assert.doesNotMatch(runtimeSource, /(?:getItem|read|import)[^\n]{0,120}pms-level3-plan-store/)
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
-for (const retiredScript of ['verify:level3-plan', 'verify:level3-template', 'verify:level3-template-browser']) {
+for (const retiredScript of ['verify:level3-plan', 'verify:level3-template', 'verify:level3-template-browser', 'verify:machine-tos-version']) {
   assert.equal(packageJson.scripts?.[retiredScript], undefined, `package script retired: ${retiredScript}`)
 }
+assert.equal(packageJson.scripts?.['verify:machine-tos'], 'node scripts/verify-machine-tos-versions.mjs')
+assert.doesNotMatch(globalsSource, /\.pms-level3-/)
+for (const retiredSnapshotKey of [
+  'template::整机产品项目::level3::v3',
+  'project::machine::OP::level3::v1',
+  'project::tos::tos-type::Full::level3::v1::snapshot',
+]) assert.equal(templateCompatibility.isRetiredLevel3SnapshotKey(retiredSnapshotKey), true)
+for (const retainedSnapshotKey of [
+  'project::machine::level3::level1::v1',
+  'project::level3::level1::v1',
+  'template::整机产品项目::level1::level3',
+]) assert.equal(templateCompatibility.isRetiredLevel3SnapshotKey(retainedSnapshotKey), false)
 const mrStoreSource = readSource(root, 'src/stores/mrVersionPlan.ts')
 assert.match(mrStoreSource, /LEGACY_LEVEL3_STORAGE_KEY\s*=\s*['"]pms-level3-plan-store['"]/)
 assert.match(mrStoreSource, /rehydrateMrVersionPlanStore[\s\S]*removeItem\(LEGACY_LEVEL3_STORAGE_KEY\)/)
@@ -1802,6 +1815,11 @@ const legacyPlanFixture = {
     '技术项目::子项目计划': [{ id: 'subproject-stage', taskName: '子项目模板保留' }],
   },
   publishedSnapshots: { 'project::machine::OP::level1::v1': [{ id: 'snapshot-l1', taskName: '快照保留' }] },
+  columnSettingsByView: {
+    'project-level1-table': { order: ['taskName', 'id'], visible: ['taskName'], widths: { taskName: 333 } },
+    'project-technical-table': { order: ['technicalName', 'id'], visible: ['technicalName', 'id'], widths: { technicalName: 275 } },
+    'project-market-table': { order: ['market', 'taskName'], visible: ['market'], widths: { market: 144 } },
+  },
   marketPlanData: { OP: { tasks: [{ id: 'market-l1', taskName: '市场计划保留' }], level2Tasks: [], createdLevel2Plans: [] } },
   marketVersionsByKey: { 'project::machine::OP::level1::versions': [{ id: 'market-v1', versionNo: 'V1', status: '已发布' }] },
   marketCurrentVersionByKey: { 'project::machine::OP::level1::current': 'market-v1' },
@@ -1820,6 +1838,11 @@ const legacyPlanFixture = {
   level3ScopesByKey: { old: { activities: [] } },
   currentLevel3Scope: 'old',
 }
+legacyPlanFixture.publishedSnapshots['template::整机产品项目::level3::v3'] = [{ id: 'retired-template-level3' }]
+legacyPlanFixture.publishedSnapshots['project::machine::OP::level3::v1'] = [{ id: 'retired-market-level3' }]
+legacyPlanFixture.publishedSnapshots['project::tos::tos-type::Full::level3::v1::snapshot'] = [{ id: 'retired-tos-type-level3' }]
+legacyPlanFixture.publishedSnapshots['project::machine::level3::level1::v1'] = [{ id: 'literal-level3-market' }]
+legacyPlanFixture.publishedSnapshots['project::level3::level1::v1'] = [{ id: 'literal-level3-project' }]
 const planStore = loadTypeScriptModule(root, 'src/stores/plan.ts')
 assert.equal(planStore.PLAN_STORE_VERSION, 10)
 const migratedPlanFixture = planStore.migratePlanStoreState(structuredClone(legacyPlanFixture), 9)
@@ -1833,6 +1856,16 @@ assert.deepEqual(migratedPlanFixture.configTemplateTasksByType.整机产品项�
 assert.deepEqual(migratedPlanFixture.configTemplateTasksByType['技术项目::TDT项目计划'], legacyPlanFixture.configTemplateTasksByType['技术项目::TDT项目计划'])
 assert.deepEqual(migratedPlanFixture.configTemplateTasksByType['技术项目::子项目计划'], legacyPlanFixture.configTemplateTasksByType['技术项目::子项目计划'])
 assert.deepEqual(migratedPlanFixture.publishedSnapshots['project::machine::OP::level1::v1'], legacyPlanFixture.publishedSnapshots['project::machine::OP::level1::v1'])
+assert.equal(migratedPlanFixture.publishedSnapshots['template::整机产品项目::level3::v3'], undefined)
+assert.equal(migratedPlanFixture.publishedSnapshots['project::machine::OP::level3::v1'], undefined)
+assert.equal(migratedPlanFixture.publishedSnapshots['project::tos::tos-type::Full::level3::v1::snapshot'], undefined)
+assert.deepEqual(migratedPlanFixture.publishedSnapshots['project::machine::level3::level1::v1'], legacyPlanFixture.publishedSnapshots['project::machine::level3::level1::v1'])
+assert.deepEqual(migratedPlanFixture.publishedSnapshots['project::level3::level1::v1'], legacyPlanFixture.publishedSnapshots['project::level3::level1::v1'])
+assert.deepEqual(migratedPlanFixture.columnSettingsByView['project-level1-table'], legacyPlanFixture.columnSettingsByView['project-level1-table'])
+assert.deepEqual(migratedPlanFixture.columnSettingsByView['project-technical-table'], legacyPlanFixture.columnSettingsByView['project-technical-table'])
+assert.deepEqual(migratedPlanFixture.columnSettingsByView['project-market-table'], legacyPlanFixture.columnSettingsByView['project-market-table'])
+assert.ok(migratedPlanFixture.columnSettingsByView['config-level1-table'])
+assert.ok(migratedPlanFixture.columnSettingsByView['config-level2-table'])
 assert.deepEqual(migratedPlanFixture.marketPlanData.OP, legacyPlanFixture.marketPlanData.OP)
 assert.deepEqual(migratedPlanFixture.marketVersionsByKey, legacyPlanFixture.marketVersionsByKey)
 assert.deepEqual(migratedPlanFixture.marketCurrentVersionByKey, legacyPlanFixture.marketCurrentVersionByKey)
