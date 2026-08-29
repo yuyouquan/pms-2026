@@ -17,6 +17,8 @@ import type {
 const TOS_STAGES = new Set(['上市迭代阶段', '维护阶段'])
 const COLLECT_START = '修改点收集开始时间'
 const OTA_RELEASE = 'OTA开放验证&部署'
+const STALE_TOS_VERSION_REASON = '当前tOS版本在最新发布的一级计划中不存在，无法修改日期'
+const INCOMPLETE_TOS_BOUNDS_REASON = '请先完善一级计划中的计划开始时间和计划完成时间'
 const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
 const EXPLICIT_ISO_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/
 const SHANGHAI_DATE_FORMATTER = new Intl.DateTimeFormat('en-CA', {
@@ -141,6 +143,18 @@ export function selectTosMrVersionCandidates(input: TosMrCandidateInput): TosMrV
   return candidates.map((candidate, index) => ({ candidate, index }))
     .sort((left, right) => compareTosVersionNumbers(left.candidate.value, right.candidate.value) || left.index - right.index)
     .map(({ candidate }) => candidate)
+}
+
+export function resolveTosMrInstanceDateAccess(
+  tosVersion: string,
+  candidates: readonly TosMrVersionCandidate[],
+): { canEdit: false; reason: string } | { canEdit: true; bounds: MrTosDateBounds } {
+  const candidate = candidates.find(item => compareTosVersionNumbers(item.value, tosVersion) === 0)
+  if (!candidate) return { canEdit: false, reason: STALE_TOS_VERSION_REASON }
+  const planStartDate = normalizeMrBusinessDate(candidate.planStartDate)
+  const planEndDate = normalizeMrBusinessDate(candidate.planEndDate)
+  if (!planStartDate || !planEndDate) return { canEdit: false, reason: INCOMPLETE_TOS_BOUNDS_REASON }
+  return { canEdit: true, bounds: { planStartDate, planEndDate } }
 }
 
 export function validateTosMrInstanceDates(instance: TosMrVersionInstance, bounds: MrTosDateBounds): MrCellError[] {

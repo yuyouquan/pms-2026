@@ -10,6 +10,7 @@ import { getTosManagerUsers, selectLatestPublishedTosLevel1 } from '@/lib/mrPlan
 import {
   compareTosVersionNumbers,
   resolveMrPermissions,
+  resolveTosMrInstanceDateAccess,
   selectTosMrVersionCandidates,
   validateTosMrInstanceDates,
 } from '@/lib/mrVersionPlanRules'
@@ -106,22 +107,31 @@ export default function TosMrVersionPlan({
   }), [currentUser, globalAdminUsers, project])
   const scopeKey = `tos::${project.id}`
   const mode: MrPlanViewMode = viewModeByScope[scopeKey] ?? 'vertical'
-  const candidateBounds = useMemo(() => new Map(candidates.map(candidate => [candidate.value, {
-    planStartDate: candidate.planStartDate,
-    planEndDate: candidate.planEndDate,
-  }])), [candidates])
+  const instanceAccessByVersion = useMemo(() => new Map(sortedInstances.map(instance => [
+    instance.tosVersion,
+    resolveTosMrInstanceDateAccess(instance.tosVersion, candidates),
+  ])), [candidates, sortedInstances])
   const cellErrors = useMemo(() => {
     const result: Record<string, string[]> = {}
     sortedInstances.forEach(instance => {
-      const bounds = candidateBounds.get(instance.tosVersion)
-      if (!bounds) return
-      validateTosMrInstanceDates(instance, bounds).forEach(error => {
+      const access = instanceAccessByVersion.get(instance.tosVersion)
+      if (!access?.canEdit) {
+        instance.activities
+          .filter(activity => activity.parentId !== null)
+          .forEach(activity => {
+            result[getMrPlanCellKey(`${instance.projectId}::${instance.tosVersion}`, activity.id)] = [
+              access?.reason ?? '当前tOS版本在最新发布的一级计划中不存在，无法修改日期',
+            ]
+          })
+        return
+      }
+      validateTosMrInstanceDates(instance, access.bounds).forEach(error => {
         const key = getMrPlanCellKey(error.rowKey, error.activityId)
         result[key] = [...(result[key] ?? []), error.message]
       })
     })
     return result
-  }, [candidateBounds, sortedInstances])
+  }, [instanceAccessByVersion, sortedInstances])
   const rows: MrPlanGridRow[] = sortedInstances.map(instance => ({
     key: `${instance.projectId}::${instance.tosVersion}`,
     version: instance.tosVersion,
@@ -147,6 +157,11 @@ export default function TosMrVersionPlan({
   }
 
   const handleDateChange = (row: MrPlanGridRow, activityId: string, value: string) => {
+    const access = instanceAccessByVersion.get(row.version)
+    if (!access?.canEdit) {
+      void messageApi.error(access?.reason ?? '当前tOS版本在最新发布的一级计划中不存在，无法修改日期')
+      return
+    }
     const updated = updateTosDate(project.id, row.version, activityId, value, currentUser, permission)
     if (!updated) {
       void messageApi.error('日期更新失败，请检查权限或日期格式')
@@ -202,7 +217,9 @@ export default function TosMrVersionPlan({
         <MrPlanGrid
           mode={mode}
           logicalRows={rows}
-          editableCell={(_, activity) => permission.canEditTos && activity.parentId !== null}
+          editableCell={(row, activity) => permission.canEditTos
+            && activity.parentId !== null
+            && instanceAccessByVersion.get(row.version)?.canEdit === true}
           cellErrors={cellErrors}
           onDateChange={(row, activity, value) => handleDateChange(row, activity.id, value)}
         />
