@@ -1502,6 +1502,16 @@ assert.equal(
   machineAcceptanceSnapshot.find(task => task.taskName === 'STR5').planEndDate,
   '2026-05-15',
 )
+assert.deepEqual(
+  acceptancePlanScopeA.marketVersionsByKey['project::1::OP::level1::versions'].map(version => version.versionNo),
+  ['V1', 'V2', 'V3'],
+  'MR eligibility seed must retain published machine plan history instead of collapsing the level-one surface to one row',
+)
+assert.deepEqual(
+  acceptancePlanScopeA.tosTypeVersionsByKey['project::19::tos-type::Full::level1::versions'].map(version => version.versionNo),
+  ['V1', 'V2', 'V3'],
+  'MR eligibility seed must retain published tOS plan history for revision and name-rule flows',
+)
 
 assert.match(mrBrowserVerifierSource, /setViewport\(\{\s*width:\s*1600,\s*height:\s*1000\s*\}\)/)
 assert.match(mrBrowserVerifierSource, /pms-mr-version-plan-store/)
