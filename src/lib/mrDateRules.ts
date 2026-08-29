@@ -1,4 +1,5 @@
 import { compareTosVersionNumbers, normalizeMrBusinessDate } from '@/lib/mrVersionPlanRules'
+import { canonicalizeTosMrVersion } from '@/lib/mrAggregationRules'
 import type {
   JointMachinePlan,
   JointValidationInput,
@@ -23,7 +24,7 @@ function trim(value: unknown): string {
 }
 
 function rowKey(row: JointMachinePlan): string {
-  return `${row.projectId}::${row.tosVersion}`
+  return `${row.projectId}::${canonicalizeTosMrVersion(row.tosVersion) ?? row.tosVersion}`
 }
 
 function activityByName(instance: TosMrVersionInstance, name: string) {
@@ -61,15 +62,23 @@ function makeError(row: JointMachinePlan, instance: TosMrVersionInstance, name: 
 }
 
 function nextTosInstance(instances: readonly TosMrVersionInstance[], current: TosMrVersionInstance): TosMrVersionInstance | undefined {
+  const currentVersion = canonicalizeTosMrVersion(current.tosVersion)
+  if (!currentVersion) return undefined
   return instances
-    .filter(instance => instance.projectId === current.projectId && compareTosVersionNumbers(instance.tosVersion, current.tosVersion) > 0)
-    .sort((left, right) => compareTosVersionNumbers(left.tosVersion, right.tosVersion))[0]
+    .map(instance => ({ instance, version: canonicalizeTosMrVersion(instance.tosVersion) }))
+    .filter((item): item is { instance: TosMrVersionInstance; version: string } => (
+      item.instance.projectId === current.projectId && item.version !== null && compareTosVersionNumbers(item.version, currentVersion) > 0
+    ))
+    .sort((left, right) => compareTosVersionNumbers(left.version, right.version))[0]?.instance
 }
 
 function previousTypeRows(rows: readonly JointMachinePlan[], current: JointMachinePlan): JointMachinePlan[] {
   const currentType = numericType(current)
   if (currentType === null || currentType <= 1) return []
-  const candidates = rows.filter(row => row.tosProjectId === current.tosProjectId && row.tosVersion === current.tosVersion)
+  const currentVersion = canonicalizeTosMrVersion(current.tosVersion)
+  const candidates = rows.filter(row => (
+    row.tosProjectId === current.tosProjectId && currentVersion !== null && canonicalizeTosMrVersion(row.tosVersion) === currentVersion
+  ))
     .map(row => ({ row, type: numericType(row) }))
     .filter((item): item is { row: JointMachinePlan; type: number } => item.type !== null && item.type < currentType)
   const greatest = candidates.reduce<number | null>((result, item) => result === null || item.type > result ? item.type : result, null)
@@ -89,7 +98,8 @@ export function validateJointMachineRows(input: JointValidationInput): MrCellErr
 
   rows.forEach(row => {
     if (row.transferType === 'N/A') return
-    const instance = instances.find(item => item.projectId === row.tosProjectId && item.tosVersion === row.tosVersion)
+    const version = canonicalizeTosMrVersion(row.tosVersion)
+    const instance = version ? instances.find(item => item.projectId === row.tosProjectId && canonicalizeTosMrVersion(item.tosVersion) === version) : undefined
     if (!instance) return
     const type = numericType(row)
     if (type === null) return
@@ -164,11 +174,12 @@ export function validateJointMachineRows(input: JointValidationInput): MrCellErr
   const sameTypes = new Map<string, Array<{ row: JointMachinePlan; instance: TosMrVersionInstance; value: string }>>()
   rows.forEach(row => {
     const type = numericType(row)
-    const instance = instances.find(item => item.projectId === row.tosProjectId && item.tosVersion === row.tosVersion)
+    const version = canonicalizeTosMrVersion(row.tosVersion)
+    const instance = version ? instances.find(item => item.projectId === row.tosProjectId && canonicalizeTosMrVersion(item.tosVersion) === version) : undefined
     if (type === null || !instance) return
     const value = normalizeMrBusinessDate(rawMachineDate(row, instance, TRANSFER))
     if (!value) return
-    const key = `${row.tosProjectId}::${row.tosVersion}::${type}`
+    const key = `${row.tosProjectId}::${version}::${type}`
     const group = sameTypes.get(key) ?? []
     group.push({ row, instance, value })
     sameTypes.set(key, group)

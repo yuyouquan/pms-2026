@@ -13,6 +13,8 @@ import type {
 
 const COLLECTION_START = '修改点收集开始时间'
 const VERSION_PATTERN = /^V([1-9]\d*)$/
+const TOS_MR_VERSION_PATTERN = /^(?:tos)?(\d+(?:\.\d+){3,})$/i
+const LEGACY_PRODUCT_TYPES = new Set(['老品', '升级', '切换', '换代'])
 
 function trim(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -21,7 +23,14 @@ function trim(value: unknown): string {
 function numericProjectKey(value: string): string | null {
   const matches = trim(value).match(/\d+/g)
   if (!matches || matches.length < 2) return null
-  return `${Number(matches[0])}.${Number(matches[1])}`
+  const segments = matches.slice(0, 2).map(Number)
+  return segments.every(Number.isSafeInteger) ? segments.join('.') : null
+}
+
+function compareProjectKeys(left: string, right: string): number {
+  const leftParts = left.split('.').map(Number)
+  const rightParts = right.split('.').map(Number)
+  return (leftParts[0] - rightParts[0]) || (leftParts[1] - rightParts[1])
 }
 
 function addCalendarDays(value: string, days: number): string | null {
@@ -46,6 +55,15 @@ function clonePlan(plan: JointMachinePlan): JointMachinePlan {
   return { ...plan, dates: { ...plan.dates } }
 }
 
+function cloneInstance(instance: TosMrVersionInstance, tosVersion: string): TosMrVersionInstance {
+  return {
+    ...instance,
+    tosVersion,
+    activities: instance.activities.map(activity => ({ ...activity })),
+    dates: { ...instance.dates },
+  }
+}
+
 function findActivityDate(instance: TosMrVersionInstance, activityName: string): string {
   const activity = instance.activities.find(row => row.parentId !== null && trim(row.activityName) === activityName)
   return activity ? normalizeMrBusinessDate(instance.dates[activity.id]) : ''
@@ -60,11 +78,20 @@ export function getTosVersionInterval(instance: TosMrVersionInstance): { startDa
   return dates.length ? { startDate: dates[0], endDate: dates[dates.length - 1] } : null
 }
 
+export function canonicalizeTosMrVersion(value: string): string | null {
+  const match = TOS_MR_VERSION_PATTERN.exec(trim(value))
+  if (!match) return null
+  const parts = match[1].split('.').map(Number)
+  if (!parts.every(Number.isSafeInteger)) return null
+  while (parts.length > 4 && parts.at(-1) === 0) parts.pop()
+  return parts.join('.')
+}
+
 export function resolveMachineTosProjectKey(project: MrMachineProjectSource): string | null {
   const productType = trim(project.productType)
   const version = productType === '新品'
     ? project.firstSaleTosVersion
-    : new Set(['老品', '升级', '切换', '换代']).has(productType) ? project.currentTosVersion : undefined
+    : LEGACY_PRODUCT_TYPES.has(productType) ? project.currentTosVersion : undefined
   return numericProjectKey(trim(version))
 }
 
@@ -79,7 +106,11 @@ export function resolveLatestPublishedStr5Date(source: MrLevel1Source): string |
 }
 
 export function isPlanExcludedByStopRecord(input: StopExclusionInput): boolean {
-  const instance = input.tosInstances.find(item => item.projectId === input.plan.tosProjectId && item.tosVersion === input.plan.tosVersion)
+  const planVersion = canonicalizeTosMrVersion(input.plan.tosVersion)
+  if (!planVersion) return false
+  const instance = input.tosInstances.find(item => (
+    item.projectId === input.plan.tosProjectId && canonicalizeTosMrVersion(item.tosVersion) === planVersion
+  ))
   if (!instance) return false
   const referenceDate = findActivityDate(instance, COLLECTION_START)
   if (!referenceDate) return false
@@ -89,8 +120,38 @@ export function isPlanExcludedByStopRecord(input: StopExclusionInput): boolean {
   })
 }
 
+function normalizeStopRecord(record: ApplyStopReleaseInput['record']): ApplyStopReleaseInput['record'] {
+  const id = trim(record.id)
+  const projectId = trim(record.projectId)
+  const projectName = trim(record.projectName)
+  const operator = trim(record.operator)
+  const operatedAt = trim(record.operatedAt)
+  const stopDate = normalizeMrBusinessDate(record.stopDate)
+  if (!id) throw new Error('停止发版记录ID不能为空')
+  if (!projectId) throw new Error('停止发版项目不能为空')
+  if (!projectName) throw new Error('停止发版项目名称不能为空')
+  if (!operator) throw new Error('停止发版操作人不能为空')
+  if (!operatedAt) throw new Error('停止发版操作时间不能为空')
+  if (!stopDate || stopDate !== trim(record.stopDate)) throw new Error('停止发版日期格式无效')
+  return { ...record, id, projectId, projectName, stopDate, operator, operatedAt }
+}
+
+function sameStopRecord(left: ApplyStopReleaseInput['record'], right: ApplyStopReleaseInput['record']): boolean {
+  return left.id === right.id
+    && left.projectId === right.projectId
+    && left.projectName === right.projectName
+    && left.stopDate === right.stopDate
+    && left.operator === right.operator
+    && left.operatedAt === right.operatedAt
+}
+
 export function applyStopRelease(input: ApplyStopReleaseInput): ApplyStopReleaseResult {
-  const stopRecords = [...input.stopRecords.map(record => ({ ...record })), { ...input.record }]
+  const record = normalizeStopRecord(input.record)
+  const existingById = input.stopRecords.find(item => item.id === record.id)
+  if (existingById && !sameStopRecord(existingById, record)) throw new Error('停止发版记录ID已存在')
+  const alreadyStopped = input.stopRecords.some(item => item.projectId === record.projectId)
+  const stopRecords = input.stopRecords.map(item => ({ ...item }))
+  if (!existingById && !alreadyStopped) stopRecords.push(record)
   const persistedPlans: Record<string, JointMachinePlan> = {}
   const removedPlanKeys: string[] = []
   Object.keys(input.persistedPlans).sort().forEach(key => {
@@ -103,15 +164,40 @@ export function applyStopRelease(input: ApplyStopReleaseInput): ApplyStopRelease
 
 export function reconcileJointMachinePlans(input: ReconcileJointInput): ReconcileJointResult {
   const today = normalizeMrBusinessDate(input.today)
+  if (!today || today !== trim(input.today)) throw new Error('当前日期格式无效')
   const persistedPlans: Record<string, JointMachinePlan> = {}
   const eligibleByInstance = new Map<string, JointMachinePlan[]>()
-  const sortedProjects = [...input.tosProjects].sort((left, right) => left.tosProjectKey.localeCompare(right.tosProjectKey) || left.projectId.localeCompare(right.projectId))
+  const sortedProjects = input.tosProjects
+    .map(project => ({ project, key: numericProjectKey(project.tosProjectKey) }))
+    .filter((item): item is { project: ReconcileJointInput['tosProjects'][number]; key: string } => item.key !== null)
+    .sort((left, right) => compareProjectKeys(left.key, right.key) || left.project.projectId.localeCompare(right.project.projectId))
+    .map(item => ({ ...item.project, tosProjectKey: item.key }))
+  const persistedByCanonicalKey = new Map<string, JointMachinePlan>()
+  Object.keys(input.persistedPlans).sort().forEach(sourceKey => {
+    const source = input.persistedPlans[sourceKey]
+    const version = canonicalizeTosMrVersion(source.tosVersion)
+    if (!version) return
+    const key = `${source.projectId}::${version}`
+    if (!persistedByCanonicalKey.has(key)) persistedByCanonicalKey.set(key, { ...clonePlan(source), tosVersion: version })
+  })
+
+  const instancesForProject = (projectId: string) => {
+    const seen = new Set<string>()
+    return input.tosInstances
+      .filter(instance => instance.projectId === projectId)
+      .map((instance, index) => ({ instance, index, version: canonicalizeTosMrVersion(instance.tosVersion) }))
+      .filter((item): item is { instance: TosMrVersionInstance; index: number; version: string } => item.version !== null)
+      .filter(item => {
+        if (seen.has(item.version)) return false
+        seen.add(item.version)
+        return true
+      })
+      .map(item => ({ instance: cloneInstance(item.instance, item.version), index: item.index }))
+      .sort((left, right) => compareTosVersionNumbers(left.instance.tosVersion, right.instance.tosVersion) || left.index - right.index)
+  }
 
   sortedProjects.forEach(tosProject => {
-    const instances = input.tosInstances
-      .filter(instance => instance.projectId === tosProject.projectId)
-      .map((instance, index) => ({ instance, index, interval: getTosVersionInterval(instance) }))
-      .sort((left, right) => compareTosVersionNumbers(left.instance.tosVersion, right.instance.tosVersion) || left.index - right.index)
+    const instances = instancesForProject(tosProject.projectId).map(item => ({ ...item, interval: getTosVersionInterval(item.instance) }))
 
     const machines = input.machineProjects
       .filter(project => resolveMachineTosProjectKey(project) === tosProject.tosProjectKey)
@@ -128,7 +214,7 @@ export function reconcileJointMachinePlans(input: ReconcileJointInput): Reconcil
 
       instances.slice(startIndex).forEach(({ instance }) => {
         const key = `${machine.id}::${instance.tosVersion}`
-        const existing = input.persistedPlans[key]
+        const existing = persistedByCanonicalKey.get(key)
         const plan: JointMachinePlan = existing ? clonePlan(existing) : {
           projectId: machine.id,
           tosProjectId: tosProject.projectId,
@@ -150,10 +236,7 @@ export function reconcileJointMachinePlans(input: ReconcileJointInput): Reconcil
 
   const rows: ReconcileJointResult['rows'] = []
   sortedProjects.forEach(tosProject => {
-    const instances = input.tosInstances
-      .filter(instance => instance.projectId === tosProject.projectId)
-      .map((instance, index) => ({ instance, index }))
-      .sort((left, right) => compareTosVersionNumbers(left.instance.tosVersion, right.instance.tosVersion) || left.index - right.index)
+    const instances = instancesForProject(tosProject.projectId)
     instances.forEach(({ instance }) => {
       rows.push({
         key: `${instance.projectId}::${instance.tosVersion}::reference`, kind: 'tos-reference',
