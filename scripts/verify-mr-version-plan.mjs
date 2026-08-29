@@ -1481,6 +1481,11 @@ assert.match(
   /['"]--disable-features=UseSkiaRenderer['"]/,
   'MR browser acceptance must use the stable legacy software renderer for byte-exact transparent SVG evidence',
 )
+assert.match(
+  mrBrowserVerifierSource,
+  /\.ant-modal-mask\s*\{[^}]*background:\s*rgb\(140,\s*140,\s*140\)\s*!important;/s,
+  'MR browser evidence CSS must use an opaque modal mask so background SVG alpha does not affect screenshot bytes',
+)
 assert.match(mrBrowserVerifierSource, /document\.fonts\.ready/)
 assert.match(mrBrowserVerifierSource, /data-mr-row-key/)
 assert.match(mrBrowserVerifierSource, /data-mr-date-cell/)
