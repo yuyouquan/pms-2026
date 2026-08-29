@@ -117,10 +117,21 @@ async function waitForStableEvidence() {
       new Promise(resolve => setTimeout(resolve, 3_000)),
     ])
   })
-  await page.waitForFunction(() => ![...document.querySelectorAll('.ant-message-notice')].some(node => {
-    const rect = node.getBoundingClientRect()
-    return rect.width > 0 && rect.height > 0 && getComputedStyle(node).visibility !== 'hidden'
-  }), { timeout: 5_000 }).catch(() => {})
+  try {
+    await page.waitForFunction(() => ![...document.querySelectorAll('.ant-message-notice')].some(node => {
+      const rect = node.getBoundingClientRect()
+      return rect.width > 0 && rect.height > 0 && getComputedStyle(node).visibility !== 'hidden'
+    }), { timeout: 5_000 })
+  } catch (error) {
+    const visibleMessages = await page.$$eval('.ant-message-notice', nodes => nodes
+      .filter(node => {
+        const rect = node.getBoundingClientRect()
+        return rect.width > 0 && rect.height > 0 && getComputedStyle(node).visibility !== 'hidden'
+      })
+      .map(node => node.textContent?.trim())
+      .filter(Boolean))
+    throw new Error(`visible Ant messages did not clear before screenshot: ${visibleMessages.join(' | ') || '(no readable text)'}`, { cause: error })
+  }
   let previous = ''
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const current = await page.evaluate(() => JSON.stringify({
