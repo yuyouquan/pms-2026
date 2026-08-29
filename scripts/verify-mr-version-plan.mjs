@@ -1466,6 +1466,11 @@ for (const helper of [
 ]) assert.match(mrBrowserVerifierSource, new RegExp(`(?:async\\s+)?function\\s+${helper}\\b`), `MR browser acceptance requires named helper ${helper}`)
 assert.match(mrBrowserVerifierSource, /FIXED_BROWSER_NOW\s*=\s*['"]2026-08-30T00:00:00\.000\+08:00['"]/)
 assert.match(mrBrowserVerifierSource, /evaluateOnNewDocument\(installDeterministicBrowserEnvironment/)
+assert.match(
+  mrBrowserVerifierSource,
+  /['"]--deterministic-mode['"]/,
+  'MR browser acceptance must run Chrome compositor stages deterministically so backdrop-filter evidence is byte stable',
+)
 assert.match(mrBrowserVerifierSource, /document\.fonts\.ready/)
 assert.match(mrBrowserVerifierSource, /data-mr-row-key/)
 assert.match(mrBrowserVerifierSource, /data-mr-date-cell/)
