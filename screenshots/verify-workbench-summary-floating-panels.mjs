@@ -14,6 +14,7 @@ const ALLOWED_ANTD_DEPRECATIONS = [
   'Warning: [antd: Divider] `type` is deprecated. Please use `orientation` instead.',
   'Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.',
 ]
+const ALLOWED_BROWSER_WARNINGS = []
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 
 const waitForVisible = async selector => {
@@ -61,14 +62,19 @@ const assertSelector = async selector => {
   await waitForVisible(selector)
 }
 
-const waitForReactControl = async (selector, handler) => {
-  await page.waitForFunction((controlSelector, handlerName) => {
+const waitForEditableInput = async selector => {
+  await page.waitForFunction(controlSelector => {
     const element = document.querySelector(controlSelector)
-    if (!element) return false
-    return Object.keys(element).some(key => (
-      key.startsWith('__reactProps$') && typeof element[key]?.[handlerName] === 'function'
-    ))
-  }, { timeout: STEP_TIMEOUT }, selector, handler)
+    if (!(element instanceof HTMLInputElement)) return false
+    const rect = element.getBoundingClientRect()
+    const style = window.getComputedStyle(element)
+    return rect.width > 0
+      && rect.height > 0
+      && style.visibility !== 'hidden'
+      && style.display !== 'none'
+      && !element.disabled
+      && !element.readOnly
+  }, { timeout: STEP_TIMEOUT }, selector)
 }
 
 const assertAbsent = async selector => {
@@ -112,15 +118,6 @@ const assertSelectedTodoSource = async label => {
   }, { timeout: STEP_TIMEOUT }, label)
 }
 
-const readTodoCount = async () => page.$eval(
-  '.pms-todo-center__result-status[role="status"]',
-  element => {
-    const match = (element.textContent || '').match(/共\s*(\d+)\s*条任务/)
-    if (!match) throw new Error(`unreadable todo result status: ${element.textContent || ''}`)
-    return Number(match[1])
-  },
-)
-
 const waitForTodoCount = async expected => {
   await page.waitForFunction(expectedCount => {
     const element = document.querySelector('.pms-todo-center__result-status[role="status"]')
@@ -162,15 +159,26 @@ const switchUser = async (currentUser, nextUser) => {
   console.log(`    switch user: rendered ${nextUser}`)
 }
 
-const fillReactInput = async (selector, value) => {
-  await waitForVisible(selector)
-  await waitForReactControl(selector, 'onChange')
-  await page.click(selector, { clickCount: 3 })
-  await page.keyboard.press('Backspace')
-  await page.keyboard.sendCharacter(value)
-  await page.waitForFunction((inputSelector, expected) => (
-    document.querySelector(inputSelector)?.value === expected
-  ), { timeout: STEP_TIMEOUT }, selector, value)
+const fillReactInput = async (selector, value, expectedTodoCount) => {
+  await waitForEditableInput(selector)
+  let lastError
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await page.click(selector, { clickCount: 3 })
+    await page.keyboard.press('Backspace')
+    await page.keyboard.sendCharacter(value)
+    try {
+      await page.waitForFunction((inputSelector, expectedValue, expectedCount) => {
+        const input = document.querySelector(inputSelector)
+        const status = document.querySelector('.pms-todo-center__result-status[role="status"]')
+        const count = Number((status?.textContent || '').match(/共\s*(\d+)\s*条任务/)?.[1])
+        return input?.value === expectedValue && count === expectedCount
+      }, { timeout: 5_000 }, selector, value, expectedTodoCount)
+      return
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw new Error(`input/result did not settle for ${selector}: ${lastError instanceof Error ? lastError.message : String(lastError)}`)
 }
 
 const clickAria = async label => {
@@ -263,6 +271,42 @@ const clickCategory = async label => {
   throw new Error(`missing project category: ${label}`)
 }
 
+const chooseVisibleOption = async label => {
+  await waitForVisible('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+  const options = await page.$$(
+    '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option',
+  )
+  for (const option of options) {
+    const matches = await option.evaluate((element, value) => {
+      const rect = element.getBoundingClientRect()
+      return rect.width > 0
+        && rect.height > 0
+        && (element.textContent || '').trim() === value
+    }, label)
+    if (!matches) continue
+    await option.click()
+    return
+  }
+  throw new Error(`missing visible select option: ${label}`)
+}
+
+const readProjectRowCount = async () => page.$$eval(
+  '.pms-project-summary-table .ant-table-tbody > tr.ant-table-row',
+  rows => rows.filter(row => {
+    const rect = row.getBoundingClientRect()
+    return rect.width > 0 && rect.height > 0
+  }).length,
+)
+
+const waitForProjectRowCount = async expected => {
+  await page.waitForFunction(expectedCount => Array.from(
+    document.querySelectorAll('.pms-project-summary-table .ant-table-tbody > tr.ant-table-row'),
+  ).filter(row => {
+    const rect = row.getBoundingClientRect()
+    return rect.width > 0 && rect.height > 0
+  }).length === expectedCount, { timeout: STEP_TIMEOUT }, expected)
+}
+
 const waitForTriggerFocus = async ariaLabel => {
   await page.waitForFunction(label => (
     document.activeElement?.matches(`button[aria-label="${label}"]`)
@@ -277,12 +321,22 @@ const attachPageObservers = targetPage => {
     console.error(detail)
   })
   targetPage.on('console', message => {
-    if (message.type() !== 'error') return
-    if (ALLOWED_ANTD_DEPRECATIONS.includes(message.text())) {
+    const type = message.type()
+    if (type === 'error' && ALLOWED_ANTD_DEPRECATIONS.includes(message.text())) {
       console.warn(`[console:${currentStep}] ${message.text()}`)
       return
     }
-    const detail = `[console:${currentStep}] ${message.text()}`
+    if (message.type() === 'warn' && ALLOWED_BROWSER_WARNINGS.includes(message.text())) {
+      console.warn(`[console:${currentStep}] ${message.text()}`)
+      return
+    }
+    if (!['error', 'warn'].includes(type)) return
+    const detail = `[console-${type}:${currentStep}] ${message.text()}`
+    unexpectedBrowserErrors.push(detail)
+    console.error(detail)
+  })
+  targetPage.on('requestfailed', request => {
+    const detail = `[requestfailed:${currentStep}] ${request.failure()?.errorText || 'unknown'} ${request.url()}`
     unexpectedBrowserErrors.push(detail)
     console.error(detail)
   })
@@ -324,7 +378,7 @@ try {
     await assertSelector('[aria-label="项目筛选"]')
     await assertSelector('[aria-label="生成时间"]')
     await assertSelector('[aria-label="清空筛选"]')
-    await waitForReactControl('[aria-label="搜索待办"]', 'onChange')
+    await waitForEditableInput('[aria-label="搜索待办"]')
   })
 
   await step('todo directory and filters update the result count', async () => {
@@ -333,7 +387,7 @@ try {
     console.log('  action: wait transfer result count')
     await waitForTodoCount(1)
     await assertText('转维资料录入')
-    await fillReactInput('[aria-label="搜索待办"]', '不存在的待办')
+    await fillReactInput('[aria-label="搜索待办"]', '不存在的待办', 0)
     await waitForTodoCount(0)
     await assertText('暂无符合条件的任务')
     await clickExactText('body', 'button', '清空筛选')
@@ -389,6 +443,8 @@ try {
   })
 
   await step('verify advanced filter is layered and applies immediately', async () => {
+    const initialRowCount = await readProjectRowCount()
+    if (initialRowCount <= 1) throw new Error(`expected multiple machine rows before filtering, got ${initialRowCount}`)
     console.log('  action: open advanced filter')
     await clickAria('筛选')
     console.log('  action: assert advanced header')
@@ -421,12 +477,29 @@ try {
     if (!(popupLayers.dropdown > popupLayers.panel)) {
       throw new Error(`filter dropdown must be above panel: ${JSON.stringify(popupLayers)}`)
     }
-    await page.keyboard.press('Escape')
+    await chooseVisibleOption('品牌')
+    await assertSelector('[aria-label="品牌筛选值"]')
+    await clickAria('品牌筛选值')
+    await chooseVisibleOption('TECNO')
+    await page.waitForFunction(initialCount => {
+      const rows = Array.from(document.querySelectorAll(
+        '.pms-project-summary-table .ant-table-tbody > tr.ant-table-row',
+      )).filter(row => {
+        const rect = row.getBoundingClientRect()
+        return rect.width > 0 && rect.height > 0
+      })
+      return rows.length > 0 && rows.length < initialCount
+    }, { timeout: STEP_TIMEOUT }, initialRowCount)
+    const filteredRowCount = await readProjectRowCount()
+    if (!(filteredRowCount < initialRowCount)) {
+      throw new Error(`brand filter must narrow ${initialRowCount} rows, got ${filteredRowCount}`)
+    }
     console.log('  action: remove condition and close filter')
     await page.$eval(
       '.pms-floating-config-popover button[aria-label="删除筛选条件"]',
       element => element.click(),
     )
+    await waitForProjectRowCount(initialRowCount)
     await page.$eval(
       '.pms-floating-config-popover button[aria-label="关闭筛选"]',
       element => element.click(),
@@ -537,7 +610,12 @@ try {
   console.error(`FAIL workbench summary floating panels\n${error.stack || error}`)
   process.exitCode = 1
 } finally {
-  await browser?.close().catch(error => {
-    console.error(`[cleanup] ${error instanceof Error ? error.message : String(error)}`)
-  })
+  if (browser) {
+    try {
+      await browser.close()
+    } catch (error) {
+      console.error(`[cleanup] ${error instanceof Error ? error.message : String(error)}`)
+      process.exitCode = 1
+    }
+  }
 }
