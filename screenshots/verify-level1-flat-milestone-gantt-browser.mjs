@@ -1836,9 +1836,10 @@ try {
     console.log('browser machine permission entered project')
     await selectView(page, '竖版表格')
     console.log('browser machine permission selected vertical')
+    await ensureDraft(page)
     const table = '.pms-level1-tree-table'
-    await switchUser(page, '王五')
-    console.log('browser machine permission switched to 王五')
+    await switchUser(page, '李四')
+    console.log('browser machine permission switched to 李四')
     assert.ok(await page.$(table), 'view-only project member can still see the machine tree table')
     assert.ok((await textOf(page, table)).includes('概念启动'), 'view-only project member can see plan rows before permission assertions')
     assert.equal(await page.$('button[aria-label="添加业务节点 上市阶段"]'), null, 'view-only user cannot add MR from a business stage')

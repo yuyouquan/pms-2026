@@ -160,20 +160,20 @@ export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed
   }
 }
 
-const publishedVersions = (latestId: string) => [
-  { id: `${latestId}-history-v1`, versionNo: 'V1', status: '已发布' },
-  { id: `${latestId}-history-v2`, versionNo: 'V2', status: '已发布' },
-  { id: latestId, versionNo: 'V3', status: '已发布' },
+const publishedVersions = () => [
+  { id: 'v1', versionNo: 'V1', status: '已发布' },
+  { id: 'v2', versionNo: 'V2', status: '已发布' },
+  { id: 'v3', versionNo: 'V3', status: '已发布' },
 ]
 const MR_ACCEPTANCE_FIXED_MILESTONE_DATES: Readonly<Record<string, string>> = {
-  'machine-ms-concept-kickoff': '2026-02-01',
+  'machine-ms-concept-kickoff': '2026-01-15',
   'machine-ms-str1': '2026-02-15',
   'machine-ms-str2': '2026-03-01',
   'machine-ms-str3': '2026-03-15',
   'machine-ms-str4': '2026-04-01',
   'machine-ms-str4a': '2026-05-01',
   'machine-ms-str5': '2026-05-15',
-  'tos-ms-concept-kickoff': '2026-02-01',
+  'tos-ms-concept-kickoff': '2026-01-15',
   'tos-ms-str1': '2026-02-15',
   'tos-ms-str2': '2026-03-01',
   'tos-ms-str3': '2026-03-15',
@@ -250,18 +250,16 @@ export interface MrAcceptancePlanScopeSeed {
 
 /** Project-scoped L1 snapshots that make the MR acceptance story eligible. */
 export function createMrAcceptancePlanScopeSeed(): MrAcceptancePlanScopeSeed {
-  const machineVersionId = 'mr-acceptance-machine-v1'
-  const tosVersionId = 'mr-acceptance-tos-v1'
-  const machineVersions = publishedVersions(machineVersionId)
-  const tosVersions = publishedVersions(tosVersionId)
+  const machineVersions = publishedVersions()
+  const tosVersions = publishedVersions()
   const versionOffset = (versionNo: string) => ({ V1: -14, V2: -7, V3: 0 }[versionNo] || 0)
   const publishedSnapshots: Record<string, Level1PlanTask[]> = {}
   for (const projectId of ['1', '3']) {
-    for (const version of machineVersions) {
+    for (const version of machineVersions.filter(candidate => candidate.status === '已发布')) {
       publishedSnapshots[`project::${projectId}::OP::level1::${version.id}`] = machineSnapshot(versionOffset(version.versionNo))
     }
   }
-  for (const version of tosVersions) {
+  for (const version of tosVersions.filter(candidate => candidate.status === '已发布')) {
     publishedSnapshots[`project::19::tos-type::Full::level1::${version.id}::snapshot`] = tosSnapshot(versionOffset(version.versionNo))
   }
   return {

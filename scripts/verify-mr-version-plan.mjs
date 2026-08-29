@@ -1437,9 +1437,9 @@ const acceptancePlanScopeA = templateMocks.createMrAcceptancePlanScopeSeed()
 const acceptancePlanScopeB = templateMocks.createMrAcceptancePlanScopeSeed()
 assert.deepEqual(acceptancePlanScopeA, acceptancePlanScopeB)
 assert.notEqual(acceptancePlanScopeA.publishedSnapshots, acceptancePlanScopeB.publishedSnapshots)
-const machineAcceptanceSnapshot = acceptancePlanScopeA.publishedSnapshots['project::1::OP::level1::mr-acceptance-machine-v1']
-const secondMachineAcceptanceSnapshot = acceptancePlanScopeA.publishedSnapshots['project::3::OP::level1::mr-acceptance-machine-v1']
-const tosAcceptanceSnapshot = acceptancePlanScopeA.publishedSnapshots['project::19::tos-type::Full::level1::mr-acceptance-tos-v1::snapshot']
+const machineAcceptanceSnapshot = acceptancePlanScopeA.publishedSnapshots['project::1::OP::level1::v3']
+const secondMachineAcceptanceSnapshot = acceptancePlanScopeA.publishedSnapshots['project::3::OP::level1::v3']
+const tosAcceptanceSnapshot = acceptancePlanScopeA.publishedSnapshots['project::19::tos-type::Full::level1::v3::snapshot']
 const taskTopology = tasks => tasks.map(task => ({
   stableId: task.stableId,
   parentStableId: task.parentId == null
