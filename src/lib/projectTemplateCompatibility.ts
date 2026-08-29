@@ -17,6 +17,18 @@ export const getTemplateSnapshotKey = (
   planLevel = 'level1',
 ) => `template::${getProjectTypeFamilyKey(projectType)}::${planLevel}::${versionId}`
 
+/**
+ * Matches only historical snapshot grammars where the plan-level segment is
+ * exactly `level3`. Segment-aware matching deliberately preserves project,
+ * market, type, or version identifiers whose business value is `level3`.
+ */
+export const isRetiredLevel3SnapshotKey = (key: string): boolean => (
+  /^template::[^:]+::level3::[^:]+$/.test(key)
+  || /^project::[^:]+::level3::[^:]+$/.test(key)
+  || /^project::[^:]+::[^:]+::level3::[^:]+$/.test(key)
+  || /^project::[^:]+::tos-type::[^:]+::level3::[^:]+::snapshot$/.test(key)
+)
+
 export const getTemplateSnapshotReadKeys = (
   projectType: string,
   versionId: string,

@@ -19,7 +19,7 @@ import type {
 import type { CompareTableRow } from '@/lib/versionCompare'
 import { buildLevel1TasksForProjectType } from '@/lib/level1PlanRules'
 import { pickScopedPlanPersistence } from '@/lib/projectSpaceLevel1Rules'
-import { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
+import { getTemplateSnapshotKey, isRetiredLevel3SnapshotKey } from '@/lib/projectTemplateCompatibility'
 import {
   getDefaultColumnSettings,
   type SortableColumnDefinition,
@@ -635,7 +635,7 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
     }
   })
   const migratedSnapshots = Object.fromEntries(Object.entries(migrated.publishedSnapshots || {})
-    .filter(([key]) => !key.includes('::level3::'))
+    .filter(([key]) => !isRetiredLevel3SnapshotKey(key))
     .map(([key, value]) => [
       key,
       shouldMigrateFiveStageLevel1
@@ -708,6 +708,15 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
     scope,
     storedCompareScopes[scope] || initialCompareScopes[scope],
   ])) as Record<string, ConfigTemplateCompareScope>
+  const columnSettingsByView = { ...(migrated.columnSettingsByView || {}) }
+  const requiredColumnSettings = {
+    'project-level1-table': getDefaultColumnSettings(TABLE_COLUMNS),
+    'config-level1-table': getDefaultColumnSettings(CONFIG_TABLE_COLUMNS),
+    'config-level2-table': getDefaultColumnSettings(CONFIG_TABLE_COLUMNS),
+  }
+  Object.entries(requiredColumnSettings).forEach(([key, value]) => {
+    if (columnSettingsByView[key] === undefined) columnSettingsByView[key] = value
+  })
   return {
     ...migrated,
     tasks: shouldMigrateFiveStageLevel1
@@ -717,12 +726,7 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
     tosTypePlanDataByProjectId: migratedTosTypePlanDataByProjectId,
     publishedSnapshots: migratedSnapshots,
     configTemplateTasksByType: migratedConfigTemplates,
-    columnSettingsByView: {
-      ...(migrated.columnSettingsByView || {}),
-      'project-level1-table': getDefaultColumnSettings(TABLE_COLUMNS),
-      'config-level1-table': getDefaultColumnSettings(CONFIG_TABLE_COLUMNS),
-      'config-level2-table': getDefaultColumnSettings(CONFIG_TABLE_COLUMNS),
-    },
+    columnSettingsByView,
     configTemplateVersionScopes,
     configTemplateCompareScopes,
   } as PlanState

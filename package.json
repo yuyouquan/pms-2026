@@ -27,7 +27,6 @@
     "verify:level1-flat-gantt-browser": "node screenshots/verify-level1-flat-milestone-gantt-browser.mjs",
     "verify:enum-browser": "node screenshots/verify-enum-config-browser.mjs",
     "verify:machine-tos": "node scripts/verify-machine-tos-versions.mjs",
-    "verify:machine-tos-version": "node scripts/verify-machine-tos-versions.mjs",
     "verify:technical-project": "node scripts/verify-technical-project.mjs",
     "verify:technical-plan": "node scripts/verify-technical-plan.mjs",
     "verify:technical-plan-operations": "node scripts/verify-technical-plan-operations.mjs",
