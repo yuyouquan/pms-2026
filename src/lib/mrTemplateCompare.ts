@@ -30,7 +30,6 @@ export function compareMrTemplateSnapshots(
     }
     if (previous.activityName !== row.activityName) {
       diffs.push({ activityId: row.id, number: row.number, activityName: row.activityName, changeType: 'rename', before: previous.activityName, after: row.activityName })
-      return
     }
     if (previous.number !== row.number) {
       diffs.push({ activityId: row.id, number: row.number, activityName: row.activityName, changeType: 'reorder', before: previous.number, after: row.number })

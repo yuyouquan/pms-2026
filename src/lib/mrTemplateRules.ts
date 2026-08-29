@@ -225,3 +225,12 @@ export function moveMrTemplateActivity(
   nextBlocks[parentIndex] = [nextBlocks[parentIndex][0], ...children]
   return normalizeMrTemplateActivities(reindexActivityBlocks(nextBlocks))
 }
+
+export function removeMrTemplateActivity(
+  rows: readonly MrTemplateActivity[],
+  activityId: string,
+): MrTemplateActivity[] {
+  const target = rows.find(row => row.id === activityId)
+  if (!target) return normalizeMrTemplateActivities(rows)
+  return normalizeMrTemplateActivities(rows.filter(row => row.id !== activityId && row.parentId !== activityId))
+}

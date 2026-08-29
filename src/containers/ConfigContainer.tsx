@@ -20,7 +20,7 @@ import { useUiStore } from '@/stores/ui'
 import { usePlanStore, LEVEL2_PLAN_TYPES, VERSION_DATA, getConfigColumnsForView, getDefaultLevel1TasksForProjectType, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
 import { useProjectStore } from '@/stores/project'
-import { isGlobalAdmin, useHasGlobalPermission } from '@/stores/permission'
+import { useHasGlobalPermission } from '@/stores/permission'
 import { TransferConfig } from '@/components/transfer/TransferModule'
 import MrTemplateTable from '@/components/plans/MrTemplateTable'
 import { PROJECT_CATEGORY_TECH, PROJECT_TEMPLATE_TYPES, PROJECT_TYPE_TOS_VERSION, getProjectTypeFamilyKey } from '@/constants/projectTypes'
@@ -53,7 +53,8 @@ import { getLevel3TemplateMilestoneOptions, validateLevel3TemplateForPublish } f
 import { rehydrateMrVersionPlanStore, useMrVersionPlanStore } from '@/stores/mrVersionPlan'
 import { validateMrTemplateForPublish } from '@/lib/mrTemplateRules'
 import { compareMrTemplateSnapshots, type MrTemplateSnapshotDiff } from '@/lib/mrTemplateCompare'
-import type { MrPermissionResult, MrTemplateChangeLog } from '@/types/mrVersionPlan'
+import { createMrTemplateStorePermission, resolveMrTemplateConfigCapabilities } from '@/lib/mrTemplateConfigPermissions'
+import type { MrTemplateChangeLog } from '@/types/mrVersionPlan'
 import dayjs from 'dayjs'
 
 const { Option } = Select
@@ -66,10 +67,6 @@ const PLAN_REVISION_KIND_OPTIONS: Array<{ key: PlanRevisionKind; label: string }
   { key: 'formal', label: '创建正式版本' },
 ]
 
-const MR_ADMIN_PERMISSION: MrPermissionResult = {
-  canView: true, canEditTemplate: true, canEditTos: false, canEditMachine: false,
-  canStopRelease: false, canEditMarket: false,
-}
 const MR_HISTORY_ACTION_LABELS: Record<MrTemplateChangeLog['action'], string> = {
   'create-revision': '创建修订', add: '新增', rename: '修改名称', move: '调整顺序',
   delete: '删除', publish: '发布', 'cancel-revision': '取消修订',
@@ -88,7 +85,12 @@ function MrTemplateConfigSurface({ currentLoginUser }: { currentLoginUser: strin
   const updateTemplateActivities = useMrVersionPlanStore(state => state.updateTemplateActivities)
   const publishTemplateRevision = useMrVersionPlanStore(state => state.publishTemplateRevision)
   const cancelTemplateRevision = useMrVersionPlanStore(state => state.cancelTemplateRevision)
-  const canManageMrTemplate = isGlobalAdmin(currentLoginUser)
+  const hasMrConfigPermission = useHasGlobalPermission(currentLoginUser)
+  const canEditMrTemplate = hasMrConfigPermission('configCenter:planEdit')
+  const canPublishMrTemplate = hasMrConfigPermission('configCenter:planPublish')
+  const mrCapabilities = resolveMrTemplateConfigCapabilities(hasMrConfigPermission)
+  const mrEditPermission = createMrTemplateStorePermission(mrCapabilities.canEdit)
+  const mrPublishPermission = createMrTemplateStorePermission(mrCapabilities.canPublish)
 
   useEffect(() => {
     let active = true
@@ -98,7 +100,7 @@ function MrTemplateConfigSurface({ currentLoginUser }: { currentLoginUser: strin
 
   const selectedVersion = templateVersions.find(version => version.id === currentTemplateVersionId) ?? templateVersions.at(-1)
   const draft = templateVersions.find(version => version.status === '修订中')
-  const editable = Boolean(canManageMrTemplate && selectedVersion?.status === '修订中')
+  const editable = Boolean(canEditMrTemplate && selectedVersion?.status === '修订中')
   const compared = useMemo<MrTemplateSnapshotDiff[]>(() => {
     const from = templateVersions.find(version => version.id === compareFrom)
     const to = templateVersions.find(version => version.id === compareTo)
@@ -112,26 +114,26 @@ function MrTemplateConfigSurface({ currentLoginUser }: { currentLoginUser: strin
 
   const chooseVersion = (versionId: string) => useMrVersionPlanStore.setState({ currentTemplateVersionId: versionId })
   const createRevision = () => {
-    if (!canManageMrTemplate) return
-    createTemplateRevision(currentLoginUser, MR_ADMIN_PERMISSION) ? message.success('已创建修订版本') : message.error('创建修订版本失败')
+    if (!canEditMrTemplate) return
+    createTemplateRevision(currentLoginUser, mrEditPermission) ? message.success('已创建修订版本') : message.error('创建修订版本失败')
   }
   const publishRevision = () => {
-    if (!canManageMrTemplate || selectedVersion.status !== '修订中') return
+    if (!canPublishMrTemplate || selectedVersion.status !== '修订中') return
     const errors = validateMrTemplateForPublish(selectedVersion.activities)
     if (errors.length > 0) {
       Modal.error({ title: '模板校验未通过', content: <ul className="pms-mr-validation-errors">{errors.map(error => <li key={error}>{error}</li>)}</ul> })
       return
     }
-    const result = publishTemplateRevision(selectedVersion.id, currentLoginUser, MR_ADMIN_PERMISSION)
+    const result = publishTemplateRevision(selectedVersion.id, currentLoginUser, mrPublishPermission)
     if (result.ok) message.success('发布成功')
     else Modal.error({ title: '发布失败', content: <ul>{result.errors.map(error => <li key={error}>{error}</li>)}</ul> })
   }
   const cancelRevision = () => {
-    if (!canManageMrTemplate || selectedVersion.status !== '修订中') return
+    if (!canEditMrTemplate || selectedVersion.status !== '修订中') return
     Modal.confirm({
       title: '取消修订版本', content: `确认取消 ${selectedVersion.versionNo} 修订版本？`,
       okText: '确认取消', okType: 'danger', cancelText: '保留修订',
-      onOk: () => cancelTemplateRevision(selectedVersion.id, currentLoginUser, MR_ADMIN_PERMISSION)
+      onOk: () => cancelTemplateRevision(selectedVersion.id, currentLoginUser, mrEditPermission)
         ? message.success('已取消修订') : message.error('取消修订失败'),
     })
   }
@@ -154,8 +156,8 @@ function MrTemplateConfigSurface({ currentLoginUser }: { currentLoginUser: strin
             {editable && <Tag color="green">自动保存</Tag>}
           </Space>
           <Space wrap>
-            {canManageMrTemplate && !draft && <Button type="primary" icon={<PlusOutlined />} onClick={createRevision}>创建修订</Button>}
-            {editable && <Button type="primary" icon={<SaveOutlined />} onClick={publishRevision}>发布</Button>}
+            {canEditMrTemplate && !draft && <Button type="primary" icon={<PlusOutlined />} onClick={createRevision}>创建修订</Button>}
+            {canPublishMrTemplate && selectedVersion.status === '修订中' && <Button type="primary" icon={<SaveOutlined />} onClick={publishRevision}>发布</Button>}
             {editable && <Button danger icon={<StopOutlined />} onClick={cancelRevision}>取消修订</Button>}
             <Button icon={<HistoryOutlined />} onClick={() => setHistoryOpen(true)}>历史修改记录</Button>
             <Button icon={<SearchOutlined />} onClick={openCompare}>历史版本对比</Button>
@@ -165,7 +167,7 @@ function MrTemplateConfigSurface({ currentLoginUser }: { currentLoginUser: strin
       <Card className="pms-solid-surface pms-config-template-content-card" styles={{ body: { padding: 12, height: '100%', overflow: 'auto' } }}>
         <MrTemplateTable activities={selectedVersion.activities.map(activity => ({ ...activity }))} editable={editable}
           onChange={activities => {
-            if (editable && !updateTemplateActivities(selectedVersion.id, activities, currentLoginUser, MR_ADMIN_PERMISSION)) message.error('模板更新失败')
+            if (editable && !updateTemplateActivities(selectedVersion.id, activities, currentLoginUser, mrEditPermission)) message.error('模板更新失败')
           }} />
       </Card>
       <Modal title="历史修改记录" open={historyOpen} onCancel={() => setHistoryOpen(false)} footer={null} width={980}>

@@ -7,7 +7,7 @@ import { DeleteOutlined, HolderOutlined, PlusOutlined } from '@ant-design/icons'
 import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { moveMrTemplateActivity, normalizeMrTemplateActivities, numberMrTemplateActivities } from '@/lib/mrTemplateRules'
+import { moveMrTemplateActivity, normalizeMrTemplateActivities, numberMrTemplateActivities, removeMrTemplateActivity } from '@/lib/mrTemplateRules'
 import type { MrTemplateActivity } from '@/types/mrVersionPlan'
 
 export interface MrTemplateTableProps {
@@ -54,7 +54,7 @@ export default function MrTemplateTable({ activities, editable, onChange }: MrTe
     ...activities,
     { id: createId(), parentId, order: activities.filter(row => row.parentId === parentId).length, activityName: '新增二级活动', source: 'custom' },
   ])
-  const remove = (id: string) => emit(activities.filter(row => row.id !== id && row.parentId !== id))
+  const remove = (id: string) => emit(removeMrTemplateActivity(activities, id))
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!editable || !over || active.id === over.id) return
     const activeRow = activities.find(row => row.id === active.id)
@@ -102,13 +102,11 @@ export default function MrTemplateTable({ activities, editable, onChange }: MrTe
                   <Button type="text" size="small" icon={<PlusOutlined />} aria-label={`新增子活动-${row.number}`} onClick={() => addChild(row.id)} />
                 </Tooltip>
               )}
-              {row.source === 'custom' && (
-                <Popconfirm title="确认删除该活动？" description={row.parentId === null ? '其下所有二级活动也会删除。' : undefined} onConfirm={() => remove(row.id)}>
-                  <Tooltip title="删除活动">
-                    <Button type="text" size="small" danger icon={<DeleteOutlined />} aria-label={`删除活动-${row.number}`} />
-                  </Tooltip>
-                </Popconfirm>
-              )}
+              <Popconfirm title="确认删除该活动？" description={row.parentId === null ? '其下所有二级活动也会删除。' : undefined} onConfirm={() => remove(row.id)}>
+                <Tooltip title="删除活动">
+                  <Button type="text" size="small" danger icon={<DeleteOutlined />} aria-label={`删除活动-${row.number}`} />
+                </Tooltip>
+              </Popconfirm>
             </Space>
           )}
         </div>
