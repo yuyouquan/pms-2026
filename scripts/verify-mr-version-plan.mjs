@@ -81,6 +81,7 @@ assert.deepEqual(normalized.map(row => [row.id, row.order]), [
 ])
 
 const seed = templateRules.DEFAULT_MR_TEMPLATE_ACTIVITIES
+assert.deepEqual(templateRules.validateMrTemplateForPublish([]), ['模板至少需要一个活动'])
 const cloned = templateRules.cloneMrTemplateSnapshot(seed)
 assert.deepEqual(cloned, seed)
 assert.notStrictEqual(cloned, seed)
@@ -103,6 +104,20 @@ const highestVersionRevision = templateRules.createMrTemplateRevision([
 ], '张三', NOW)
 assert.equal(highestVersionRevision.at(-1).versionNo, 'V4')
 assert.notStrictEqual(highestVersionRevision.at(-1).activities, initialVersions[0].activities)
+assert.throws(
+  () => templateRules.createMrTemplateRevision([
+    initialVersions[0],
+    { ...initialVersions[0], id: 'mr-template-latest', versionNo: 'latest' },
+  ], '张三', NOW),
+  /版本号格式无效：latest/,
+)
+assert.throws(
+  () => templateRules.createMrTemplateRevision([
+    initialVersions[0],
+    { ...initialVersions[0], id: 'mr-template-unsafe', versionNo: 'V9007199254740992' },
+  ], '张三', NOW),
+  /版本号格式无效：V9007199254740992/,
+)
 
 const revisionBeforePublish = JSON.parse(JSON.stringify(revision))
 const published = templateRules.publishMrTemplateRevision(revision, revision.at(-1).id, '张三', LATER)
@@ -123,6 +138,58 @@ assert.throws(
   ),
   /活动名称重复：重复/,
 )
+assert.throws(
+  () => templateRules.publishMrTemplateRevision(
+    revision.map(version => version.id === revision.at(-1).id ? { ...version, activities: [] } : version),
+    revision.at(-1).id,
+    '张三',
+    LATER,
+  ),
+  /模板至少需要一个活动/,
+)
+
+const shuffledDraftActivities = [
+  { ...childC, order: 9 },
+  { ...parentB, order: 8 },
+  { ...childB, order: 7 },
+  { ...parent, order: 4 },
+  { ...childA, order: 6 },
+]
+const shuffledRevision = templateRules.createMrTemplateRevision(initialVersions, '张三', NOW)
+const shuffledRevisionWithActivities = shuffledRevision.map(version => version.status === '修订中'
+  ? { ...version, activities: shuffledDraftActivities }
+  : version)
+const shuffledRevisionBeforePublish = JSON.parse(JSON.stringify(shuffledRevisionWithActivities))
+const canonicalPublished = templateRules.publishMrTemplateRevision(
+  shuffledRevisionWithActivities,
+  shuffledRevisionWithActivities.at(-1).id,
+  '张三',
+  LATER,
+)
+assert.deepEqual(canonicalPublished.at(-1).activities.map(row => [row.id, row.order]), [
+  [parent.id, 0], [childA.id, 0], [childB.id, 1], [parentB.id, 1], [childC.id, 0],
+])
+assert.deepEqual(shuffledRevisionWithActivities, shuffledRevisionBeforePublish)
+assert.notStrictEqual(canonicalPublished.at(-1).activities, shuffledRevisionWithActivities.at(-1).activities)
+assert.notStrictEqual(canonicalPublished.at(-1).activities[0], shuffledRevisionWithActivities.at(-1).activities[0])
+assert.notStrictEqual(canonicalPublished[0], shuffledRevisionWithActivities[0])
+assert.notStrictEqual(canonicalPublished[0].activities, shuffledRevisionWithActivities[0].activities)
+assert.notStrictEqual(canonicalPublished[0].activities[0], shuffledRevisionWithActivities[0].activities[0])
+
+assert.equal(Object.isFrozen(seed), true)
+assert.equal(Object.isFrozen(seed[0]), true)
+const originalSeedName = seed[0].activityName
+try {
+  seed[0].activityName = '不应写入'
+} catch {
+  // Frozen ESM bindings throw in strict mode; either path must preserve the seed.
+}
+assert.equal(seed[0].activityName, originalSeedName)
+const postMutationInitialVersions = templateMocks.createInitialMrTemplateVersions()
+const anotherPostMutationInitialVersions = templateMocks.createInitialMrTemplateVersions()
+assert.equal(postMutationInitialVersions[0].activities[0].activityName, originalSeedName)
+assert.notStrictEqual(postMutationInitialVersions[0].activities, anotherPostMutationInitialVersions[0].activities)
+assert.notStrictEqual(postMutationInitialVersions[0].activities[0], anotherPostMutationInitialVersions[0].activities[0])
 
 const moveFixture = [parent, childA, childB, parentB, childC]
 const sourceBeforeMove = JSON.parse(JSON.stringify(moveFixture))
