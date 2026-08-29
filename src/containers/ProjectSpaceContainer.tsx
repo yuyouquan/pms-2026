@@ -41,12 +41,8 @@ import type { MenuProps } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { compareVersionsForTable } from '@/lib/versionCompare'
 import { ensurePublishedComparisonSnapshots, resolveComparisonVersionTasks } from '@/lib/versionComparisonSnapshots'
-import { resolveLevel3DetachedScopeFork, resolveLevel3Scope } from '@/lib/level3PlanRules'
-import { getAddedDimensionValues, materializeLevel3Template } from '@/lib/level3TemplateRules'
-import type { Level3Milestone } from '@/types/level3Plan'
 import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
 import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareModal'
-import Level3PlanModule from '@/components/plans/Level3PlanModule'
 import TosMrVersionPlan from '@/components/plans/TosMrVersionPlan'
 import MachineMrVersionPlan from '@/components/plans/MachineMrVersionPlan'
 import {
@@ -129,7 +125,6 @@ import {
 import {
   buildTosTypeRows,
   createTosTypePlanEntry,
-  deriveDetachedTosTypes,
   ensureTosTypePlanDataForRows,
   getMainTosType,
   getTosTypePlanSourceType,
@@ -141,7 +136,6 @@ import {
   isFollowTosType,
   isTosTypeLevel1ReadOnly,
   normalizeTosTypeRows,
-  planDetachedTosTypeTransitions,
   setTosTypeCurrentVersion,
   setTosTypeVersions,
   type TosPlanType,
@@ -152,7 +146,6 @@ import {
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
 import { useEnumStore } from '@/stores/enums'
-import { useLevel3PlanStore } from '@/stores/level3Plan'
 import { useMrVersionPlanStore } from '@/stores/mrVersionPlan'
 import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, INITIAL_LEVEL2_PLAN_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { buildProjectListMockPlanTasks, getProjectLevel1MockSnapshotKey } from '@/data/projectListPlanMocks'
@@ -236,8 +229,6 @@ import {
   mergeResponsiblePersonsIntoVisibleMembers,
   replaceProjectSystemAdministrators,
 } from '@/lib/projectResponsibility'
-import { getTemplateConfigScopeKey } from '@/lib/technicalPlanRules'
-import type { Level3TemplateActivity } from '@/types/level3Template'
 import { PROJECT_STATUS_CONFIG } from '@/data/projects'
 import {
   TECH_DOMAIN_OPTIONS,
@@ -311,17 +302,6 @@ const PROJECT_SPACE_TECH_STATUS_OPTIONS = [
   ...PROJECT_SPACE_STATUS_OPTIONS,
   { label: '已迁移', value: '已迁移' },
 ]
-// 前端 mock 环境暂无通讯录接口，责任人选中后从同一用户字典自动带出部门。
-const LEVEL3_MOCK_USER_DEPARTMENTS: Record<string, string> = {
-  '张三': '项目管理部',
-  '李白': '项目管理部',
-  '李四': '产品研发部',
-  '王五': '软件开发部',
-  '赵六': '测试管理部',
-  '孙七': '质量保证部',
-  '周八': '系统开发部',
-  '杜甫': '产品规划部',
-}
 const getConfiguredProjectStatusOptions = (
   p: any,
   rowsByType: Parameters<typeof buildEnumOptions>[0],
@@ -767,8 +747,6 @@ export default function ProjectSpaceContainer() {
   const ui = useUiStore()
   const proj = useProjectStore()
   const plan = usePlanStore()
-  const forkFollowScope = useLevel3PlanStore(state => state.forkFollowScope)
-  const initializeScopeFromTemplate = useLevel3PlanStore(state => state.initializeScopeFromTemplate)
   const transfer = useTransferStore()
   const perm = usePermissionStore()
 
@@ -884,7 +862,7 @@ export default function ProjectSpaceContainer() {
     selectedLevel2PlanType, setSelectedLevel2PlanType,
     selectedMilestones, setSelectedMilestones, selectedMRVersion, setSelectedMRVersion,
     columnSettingsByView, setColumnSettingsByView, collapsedNodes, setCollapsedNodes,
-    publishedSnapshots, setPublishedSnapshots, configTemplateTasksByType, configTemplateVersionScopes,
+    publishedSnapshots, setPublishedSnapshots, configTemplateTasksByType,
     compareVersionA, setCompareVersionA, compareVersionB, setCompareVersionB,
     compareResult, setCompareResult,
     marketPlanData, setMarketPlanData,
@@ -1011,7 +989,6 @@ export default function ProjectSpaceContainer() {
   // ═══════ Derived ═══════
   const isWholeMachineProject = isMachineProjectType(selectedProject?.type)
   const isTosVersionProject = selectedProject?.type === PROJECT_TYPE_TOS_VERSION
-  const supportsLevel3Plan = isWholeMachineProject
   const legacyBuildFields = selectedProject as NonNullable<typeof selectedProject> & {
     buildOption?: string
     buildMarket?: string
@@ -1060,26 +1037,6 @@ export default function ProjectSpaceContainer() {
   const effectiveTosLevel1Type = getTosTypePlanSourceType(tosTypeConfigRows, selectedTosTypeTab, 'level1')
   const scopedTosPlanType = scopedPlanLevel === 'level1' ? effectiveTosLevel1Type : selectedTosTypeTab
   const currentTosTypeIsFollow = isTosTypeScoped && isFollowTosType(tosTypeConfigRows, selectedTosTypeTab)
-  const level3SelectedScopeValue = isTosVersionProject ? selectedTosTypeTab : selectedMarketTab
-  const level3MainScopeValue = isTosVersionProject ? primaryTosType : primaryMarket
-  const level3FollowsMain = isTosVersionProject
-    ? isFollowTosType(tosTypeConfigRows, selectedTosTypeTab)
-    : isFollowMarket(marketConfigRows, selectedMarketTab)
-  const level3ScopeResolution = selectedProject && supportsLevel3Plan && level3SelectedScopeValue
-    ? resolveLevel3Scope({
-        projectId: selectedProject.id,
-        kind: isTosVersionProject ? 'tosType' : 'market',
-        value: level3SelectedScopeValue,
-        mainValue: level3MainScopeValue,
-        followsMain: level3FollowsMain,
-      })
-    : null
-  const level3ScopeAvailable = Boolean(
-    level3ScopeResolution
-    && (isTosVersionProject
-      ? tosTypeConfigRows.some(row => row.type === selectedTosTypeTab)
-      : selectedMarketIsConfigured),
-  )
   const followedTosLevel1ReadOnly = isTosTypeScoped
     && scopedPlanLevel === 'level1'
     && isTosTypeLevel1ReadOnly(tosTypeConfigRows, selectedTosTypeTab, 'level1')
@@ -1093,10 +1050,9 @@ export default function ProjectSpaceContainer() {
     : `无${currentPlanPermissionLabel}编辑权限`
   useEffect(() => {
     if (projectPlanLevel === 'level1') return
-    if (projectPlanLevel === 'level3' && supportsLevel3Plan) return
     if (projectPlanLevel === 'mr-version-plan' && (isTosVersionProject || isWholeMachineProject)) return
     setProjectPlanLevel('level1')
-  }, [isTosVersionProject, isWholeMachineProject, projectPlanLevel, setProjectPlanLevel, supportsLevel3Plan])
+  }, [isTosVersionProject, isWholeMachineProject, projectPlanLevel, setProjectPlanLevel])
   const canCreateCurrentRevision = canMaintainCurrentPlan && (
     !isMarketScopedLevel1 || canCreateRevisionForMarket(marketConfigRows, selectedMarketTab, scopedPlanLevel)
   )
@@ -1556,130 +1512,6 @@ export default function ProjectSpaceContainer() {
           setTasks(resolvedTasks)
         }
 
-  const level3AdministratorUsers = useMemo(() => Array.from(new Set([
-    ...(perm.globalRoles.find(role => role.name === '管理组')?.members || []),
-    ...roles.filter(role => role.name === '系统管理员').flatMap(role => role.members),
-  ])), [perm.globalRoles, roles])
-  const level3StructuralAdministratorUsers = useMemo(
-    () => perm.globalRoles.find(role => role.name === '管理组')?.members || [],
-    [perm.globalRoles],
-  )
-  const level3SpmUsers = useMemo(() => String(selectedProject?.spm || '')
-    .split(/[,，、]/)
-    .map(user => user.trim())
-    .filter(Boolean), [selectedProject?.spm])
-  const level3UserDepartments = useMemo(() => {
-    if (!selectedProject) return LEVEL3_MOCK_USER_DEPARTMENTS
-    const projectRecord = selectedProject as typeof selectedProject & {
-      spmDepartment?: string
-      fieldValues?: Record<string, unknown>
-    }
-    const department = String(
-      projectRecord.spmDepartment
-      || projectRecord.fieldValues?.machineSpmDepartment
-      || projectRecord.fieldValues?.spmDepartment
-      || '',
-    ).trim()
-    if (!department) return LEVEL3_MOCK_USER_DEPARTMENTS
-    return {
-      ...LEVEL3_MOCK_USER_DEPARTMENTS,
-      ...Object.fromEntries(level3SpmUsers.map(user => [user, department])),
-    }
-  }, [level3SpmUsers, selectedProject])
-  const latestPublishedLevel1Milestones = useMemo<Level3Milestone[]>(() => {
-    if (!selectedProject || !level3ScopeResolution || !level3ScopeAvailable) return []
-    const sourceValue = level3ScopeResolution.sourceValue
-    const sourceVersions = isTosVersionProject
-      ? getTosTypeVersions(
-          tosTypeVersionsByKey,
-          selectedProject.id,
-          sourceValue,
-          'level1',
-          VERSION_DATA,
-        )
-      : getMarketVersions(
-          marketVersionsByKey,
-          selectedProject.id,
-          sourceValue,
-          baseVersions,
-        )
-    const latestPublished = sourceVersions
-      .filter(version => version.status === '已发布')
-      .sort((left, right) => comparePlanVersions(right, left))[0]
-    if (!latestPublished) return []
-    const snapshotKey = isTosVersionProject
-      ? getTosTypeSnapshotKey(selectedProject.id, sourceValue, 'level1', latestPublished.id)
-      : getProjectMarketSnapshotKey(selectedProject.id, sourceValue, latestPublished.id)
-    const sourceTasks = publishedSnapshots[snapshotKey]
-      || (isTosVersionProject
-        ? tosTypePlanDataByProjectId[selectedProject.id]?.[sourceValue]?.level1Tasks
-          || tosTypeSeedEntry.level1Tasks
-        : marketPlanData[sourceValue]?.tasks)
-      || []
-    return sourceTasks
-      .filter((task: any) => Boolean(task.parentId))
-      .map((task: any) => ({
-        id: String(task.stableId || task.id),
-        name: String(task.taskName || ''),
-        planEndDate: String(task.planEndDate || ''),
-      }))
-      .filter((milestone: Level3Milestone) => milestone.id && milestone.name)
-  }, [
-    baseVersions,
-    isTosVersionProject,
-    level3ScopeAvailable,
-    level3ScopeResolution,
-    marketPlanData,
-    marketVersionsByKey,
-    publishedSnapshots,
-    selectedProject,
-    tosTypePlanDataByProjectId,
-    tosTypeSeedEntry,
-    tosTypeVersionsByKey,
-  ])
-
-  const initializeNewLevel3Dimension = (
-    kind: 'market' | 'tosType',
-    value: string,
-    milestoneTasks: any[],
-  ) => {
-    if (!selectedProject) return 'missing' as const
-    const scope = resolveLevel3Scope({
-      projectId: selectedProject.id,
-      kind,
-      value,
-      mainValue: value,
-      followsMain: false,
-    })
-    const projectType = getProjectTypeFamilyKey(selectedProject.type)
-    const templateScope = configTemplateVersionScopes[getTemplateConfigScopeKey(projectType, 'level3')]
-    const publishedTemplateVersion = templateScope?.versions
-      .filter(version => version.status === '已发布')
-      .sort((left, right) => comparePlanVersions(right, left))[0]
-    if (!publishedTemplateVersion) {
-      initializeScopeFromTemplate(scope.selectedScopeKey, [])
-      return 'missing' as const
-    }
-    const template = getTemplateSnapshotForProjectType(
-      publishedSnapshots,
-      projectType,
-      publishedTemplateVersion.id,
-      'level3',
-    ) as Level3TemplateActivity[] | undefined
-    if (!template) {
-      initializeScopeFromTemplate(scope.selectedScopeKey, [])
-      return 'missing' as const
-    }
-    const milestones: Level3Milestone[] = milestoneTasks
-      .filter(task => Boolean(task.parentId && task.id && task.taskName))
-      .map(task => ({ id: String(task.stableId || task.id), name: String(task.taskName), planEndDate: String(task.planEndDate || '') }))
-    return initializeScopeFromTemplate(scope.selectedScopeKey, materializeLevel3Template(template, {
-      actor: '系统管理员',
-      initializedAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-      projectMilestones: milestones,
-    })) ? 'initialized' as const : 'exists' as const
-  }
-
   const effectiveLevel2PlanTasks = currentTosTypeData
     ? (tosLevel2PublishedSnapshot ?? currentTosTypeData.level2PlanTasks)
     : baseLevel2PlanTasks
@@ -2074,48 +1906,13 @@ export default function ProjectSpaceContainer() {
       return
     }
 
-    const detachedTosTypes = deriveDetachedTosTypes(previousTosTypeRows, normalizedRows)
-
     const nextTypes = normalizedRows.map(row => row.type)
-    const addedTypes = getAddedDimensionValues(previousTosTypeRows.map(row => row.type), nextTypes)
     const mainType = getMainTosType(normalizedRows) as TosPlanType
     const updatedProject = {
       ...selectedProject,
       versionTypes: nextTypes,
       versionType: mainType,
     } as typeof selectedProject
-
-    const detachedTosTypeTransitions = planDetachedTosTypeTransitions(previousTosTypeRows, normalizedRows)
-    const detachedScopeForks = detachedTosTypeTransitions.flatMap(transition => {
-      const fork = resolveLevel3DetachedScopeFork(
-        {
-          projectId: selectedProject.id,
-          kind: 'tosType',
-          value: transition.type,
-          mainValue: previousMainTosType,
-          followsMain: transition.previousRow.followsMain,
-        },
-        {
-          projectId: selectedProject.id,
-          kind: 'tosType',
-          value: transition.type,
-          mainValue: mainType,
-          followsMain: transition.nextRow.followsMain,
-        },
-      )
-      return fork ? [fork] : []
-    })
-    const detachedScopeForkKeys = new Set(
-      detachedScopeForks.map(fork => `${fork.sourceScopeKey}=>${fork.targetScopeKey}`),
-    )
-    if (
-      detachedTosTypeTransitions.length !== detachedTosTypes.length
-      || detachedScopeForks.length !== detachedTosTypeTransitions.length
-      || detachedScopeForkKeys.size !== detachedScopeForks.length
-    ) {
-      void containerMessageApi.error('类型配置保存失败，三级计划脱离范围无效')
-      return
-    }
 
     if (!updateProject(selectedProject.id, updatedProject, currentLoginUser)) {
       void containerMessageApi.error('类型配置保存失败')
@@ -2129,16 +1926,9 @@ export default function ProjectSpaceContainer() {
       normalizedRows,
       tosTypeSeedEntry,
     ))
-    detachedScopeForks.forEach(fork => forkFollowScope(fork.sourceScopeKey, fork.targetScopeKey))
-    const level3InitializationResults = addedTypes.map(type => (
-      initializeNewLevel3Dimension('tosType', type, tosTypeSeedEntry.level1Tasks)
-    ))
     if (!nextTypes.includes(selectedTosTypeTab as TosPlanType)) setSelectedTosTypeTab(mainType || nextTypes[0])
     setShowTosTypeEditor(false)
     void containerMessageApi.success('类型配置已保存')
-    if (level3InitializationResults.includes('missing')) {
-      void containerMessageApi.warning('类型已保存，但暂无已发布的三级计划模板，本次未初始化活动')
-    }
   }
 
   const getCurrentMarketRows = () => (
@@ -2215,7 +2005,6 @@ export default function ProjectSpaceContainer() {
     }
 
     const nextMarkets = normalizedRows.map(row => row.market)
-    const addedMarkets = getAddedDimensionValues(previousRows.map(row => row.market), nextMarkets)
     const mainMarket = nextMainMarket
     const previousFollowMarkets = new Set(
       previousRows
@@ -2296,32 +2085,7 @@ export default function ProjectSpaceContainer() {
       message.error('整机项目的路标必填信息不完整或取值不合法，无法保存')
       return
     }
-    unfollowedMarkets.forEach(market => {
-      const previousRow = previousRows.find(row => row.market === market)
-      const nextRow = normalizedRows.find(row => row.market === market)
-      if (!previousRow || !nextRow) return
-      const fork = resolveLevel3DetachedScopeFork(
-        {
-          projectId: selectedProject.id,
-          kind: 'market',
-          value: market,
-          mainValue: previousMainMarket,
-          followsMain: previousRow.followsMain,
-        },
-        {
-          projectId: selectedProject.id,
-          kind: 'market',
-          value: market,
-          mainValue: nextMainMarket,
-          followsMain: nextRow.followsMain,
-        },
-      )
-      if (fork) forkFollowScope(fork.sourceScopeKey, fork.targetScopeKey)
-    })
     setMarketPlanData(syncedMarketPlanData)
-    const level3InitializationResults = addedMarkets.map(market => (
-      initializeNewLevel3Dimension('market', market, syncedMarketPlanData[market]?.tasks || [])
-    ))
     setSelectedMarketTab(getConfiguredMarketSelection(normalizedRows, selectedMarketTab))
     if (unfollowedMarkets.length > 0) {
       setMarketFollowVersionMeta(prev => removeFollowVersionMetaForMarkets(prev, {
@@ -2366,9 +2130,6 @@ export default function ProjectSpaceContainer() {
       } else {
         message.success('市场配置已保存')
       }
-    }
-    if (level3InitializationResults.includes('missing')) {
-      message.warning('市场已保存，但暂无已发布的三级计划模板，本次未初始化活动')
     }
     setShowMarketEditor(false)
   }
@@ -5467,12 +5228,8 @@ export default function ProjectSpaceContainer() {
         ]
       : [
           { key: 'level1', label: '一级计划' },
-          ...(supportsLevel3Plan ? [{ key: 'level3', label: '三级计划' }] : []),
         ]
-    const level3ScopeUnavailable = projectPlanLevel === 'level3' && !level3ScopeAvailable
-    const currentPlanScopeUnavailable = projectPlanLevel === 'level1'
-      ? machineMarketPlanUnavailable
-      : projectPlanLevel === 'level3' ? level3ScopeUnavailable : false
+    const currentPlanScopeUnavailable = projectPlanLevel === 'level1' && machineMarketPlanUnavailable
     const usesSharedPlanWorkspace = projectPlanLevel === 'level1' && !machineMarketPlanUnavailable
     const planLevelTabs = (
       <Card className="pms-project-plan-level-tabs" size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
@@ -5482,7 +5239,6 @@ export default function ProjectSpaceContainer() {
               activeKey={projectPlanLevel}
               onChange={(key) => navigateWithEditGuard(() => {
                 setIsEditMode(false)
-                if (key === 'level3') setProjectPlanViewMode('table')
                 setProjectPlanLevel(key as string)
               })}
               style={{ marginBottom: 0 }}
@@ -5495,7 +5251,7 @@ export default function ProjectSpaceContainer() {
                 <Button data-plan-shared-market-editor size="small" icon={<EditOutlined />} style={{ borderRadius: 6 }} onClick={openMarketEditor}>市场编辑</Button>
               </Tooltip>
             ) : (
-              <Tag color={projectPlanLevel === 'level3' || projectPlanLevel === 'mr-version-plan' ? 'blue' : 'default'} style={{ fontSize: 11 }}>
+              <Tag color={projectPlanLevel === 'mr-version-plan' ? 'blue' : 'default'} style={{ fontSize: 11 }}>
                 {planTabItems.find(tab => tab.key === projectPlanLevel)?.label}
               </Tag>
             )}
@@ -5647,9 +5403,9 @@ export default function ProjectSpaceContainer() {
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={isTosVersionProject
-                ? '尚未配置有效版本类型，无法查看三级计划'
+                ? '尚未配置有效版本类型，无法查看一级计划'
                 : marketConfigRows.length === 0
-                  ? `尚未配置市场，无法查看${projectPlanLevel === 'level3' ? '三级计划' : '一级计划'}`
+                  ? '尚未配置市场，无法查看一级计划'
                   : '当前市场不属于本项目，请重新选择市场'}
             >
               {isTosVersionProject ? (
@@ -5665,23 +5421,6 @@ export default function ProjectSpaceContainer() {
           <>
         {!usesSharedPlanWorkspace && planWorkspaceSecondaryScopeTabs}
         {!usesSharedPlanWorkspace && planWorkspaceNotices}
-        {projectPlanLevel === 'level3' && level3ScopeResolution && selectedProject && (
-          <Level3PlanModule
-            key={`${level3ScopeResolution.scopeKey}:${level3ScopeResolution.selectedScopeKey}:${level3ScopeResolution.readOnly}`}
-            projectName={selectedProject.name}
-            scopeKey={level3ScopeResolution.scopeKey}
-            selectedScopeKey={level3ScopeResolution.selectedScopeKey}
-            scopeLabel={level3ScopeResolution.selectedValue}
-            readOnly={level3ScopeResolution.readOnly}
-            currentUser={currentLoginUser}
-            administratorUsers={level3AdministratorUsers}
-            structuralAdministratorUsers={level3StructuralAdministratorUsers}
-            spmUsers={level3SpmUsers}
-            users={ALL_USERS}
-            userDepartments={level3UserDepartments}
-            milestones={latestPublishedLevel1Milestones}
-          />
-        )}
         {projectPlanLevel === 'mr-version-plan' && isTosVersionProject && selectedProject && (
           <TosMrVersionPlan
             project={selectedProject}

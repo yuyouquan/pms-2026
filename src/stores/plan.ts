@@ -19,7 +19,6 @@ import type {
 import type { CompareTableRow } from '@/lib/versionCompare'
 import { buildLevel1TasksForProjectType } from '@/lib/level1PlanRules'
 import { pickScopedPlanPersistence } from '@/lib/projectSpaceLevel1Rules'
-import { cloneDefaultLevel3TemplateActivities, resolveTemplateVersionScopeForMigration } from '@/lib/level3TemplateRules'
 import { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 import {
   getDefaultColumnSettings,
@@ -42,11 +41,10 @@ import type {
   ConfigTemplateVersionScope,
   TechnicalTemplateKind,
 } from '@/types/technicalPlan'
-import type { Level3TemplateActivity } from '@/types/level3Template'
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
-export const PLAN_STORE_VERSION = 9
+export const PLAN_STORE_VERSION = 10
 export const PLAN_STORE_STORAGE_KEY = 'pms-plan-store'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -79,8 +77,6 @@ const createInitialConfigTemplateVersionScopes = () => {
     scopes[getTemplateConfigScopeKey(projectType, 'level1')] = createVersionScope()
     scopes[getTemplateConfigScopeKey(projectType, 'level2')] = createVersionScope()
   })
-  scopes[getTemplateConfigScopeKey(PROJECT_CATEGORY_MACHINE, 'level3')] = createVersionScope()
-  scopes[getTemplateConfigScopeKey(PROJECT_CATEGORY_TOS_VERSION, 'level3')] = createVersionScope()
   scopes[getTemplateConfigScopeKey(PROJECT_CATEGORY_TECH, 'tdt')] = createVersionScope()
   scopes[getTemplateConfigScopeKey(PROJECT_CATEGORY_TECH, 'subproject')] = createVersionScope()
   return scopes
@@ -134,15 +130,8 @@ export const createInitialTemplatePublishedSnapshots = (
   snapshots[getTemplateSnapshotKey(PROJECT_CATEGORY_TECH, versionId)] = buildTdtTemplateTasks()
   snapshots[getTemplateSnapshotKey(PROJECT_CATEGORY_TECH, versionId, 'tdt')] = buildTdtTemplateTasks()
   snapshots[getTemplateSnapshotKey(PROJECT_CATEGORY_TECH, versionId, 'subproject')] = buildSubprojectTemplateTasks()
-  snapshots[getTemplateSnapshotKey(PROJECT_CATEGORY_MACHINE, versionId, 'level3')] = cloneDefaultLevel3TemplateActivities()
-  snapshots[getTemplateSnapshotKey(PROJECT_CATEGORY_TOS_VERSION, versionId, 'level3')] = cloneDefaultLevel3TemplateActivities()
   return snapshots
 }
-
-const createInitialLevel3TemplateTasks = (): Record<string, Level3TemplateActivity[]> => ({
-  [PROJECT_CATEGORY_MACHINE]: cloneDefaultLevel3TemplateActivities(),
-  [PROJECT_CATEGORY_TOS_VERSION]: cloneDefaultLevel3TemplateActivities(),
-})
 
 const createInitialConfigTemplateTasks = () => {
   const templates = TEMPLATE_PROJECT_TYPES.reduce((result, projectType) => {
@@ -617,9 +606,15 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
   const numberedMigrated = persistedVersion < 3
     ? migrateTechnicalTemplateNumberingState(legacyMigrated)
     : legacyMigrated
-  const migrated = persistedVersion < 6
+  const migratedWithLegacyLevel3 = persistedVersion < 6
     ? migrateTechnicalSubprojectSeedState(numberedMigrated)
     : numberedMigrated
+  const migrated = { ...migratedWithLegacyLevel3 }
+  ;[
+    'level3' + 'TemplateTasksByType',
+    'level3' + 'ScopesByKey',
+    'current' + 'Level3Scope',
+  ].forEach(key => delete migrated[key])
   const shouldMigrateFiveStageLevel1 = persistedVersion < 9
   const shouldMigrateCapabilityLevel1 = persistedVersion < 8
   const shouldBackfillDemoMarkets = persistedVersion < 7
@@ -639,24 +634,17 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
       migratedConfigTemplates[projectType] = getDefaultLevel1TasksForProjectType(projectType, false)
     }
   })
-  const migratedSnapshots = Object.fromEntries(Object.entries(migrated.publishedSnapshots || {}).map(([key, value]) => [
-    key,
-    shouldMigrateFiveStageLevel1
-      ? migratePublishedLevel1Snapshot(key, value, shouldMigrateCapabilityLevel1)
-      : value,
-  ])) as Record<string, any[]>
+  const migratedSnapshots = Object.fromEntries(Object.entries(migrated.publishedSnapshots || {})
+    .filter(([key]) => !key.includes('::level3::'))
+    .map(([key, value]) => [
+      key,
+      shouldMigrateFiveStageLevel1
+        ? migratePublishedLevel1Snapshot(key, value, shouldMigrateCapabilityLevel1)
+        : value,
+    ])) as Record<string, any[]>
   const initialPublishedSnapshots = createInitialTemplatePublishedSnapshots()
   Object.entries(initialPublishedSnapshots).forEach(([key, value]) => {
     if (migratedSnapshots[key] === undefined) migratedSnapshots[key] = value.map(item => ({ ...item }))
-  })
-  const initialLevel3Templates = createInitialLevel3TemplateTasks()
-  const level3TemplateTasksByType = Object.fromEntries(Object.entries(migrated.level3TemplateTasksByType || {})
-    .filter((entry): entry is [string, Level3TemplateActivity[]] => Array.isArray(entry[1]))
-    .map(([key, items]) => [key, items.map(item => ({ ...item }))])) as Record<string, Level3TemplateActivity[]>
-  Object.entries(initialLevel3Templates).forEach(([projectType, defaults]) => {
-    if (!Array.isArray(level3TemplateTasksByType[projectType])) {
-      level3TemplateTasksByType[projectType] = defaults.map(item => ({ ...item }))
-    }
   })
   const fallbackMarketPlanData = Object.fromEntries(['OP', 'TR', 'RU'].map(market => [market, {
     tasks: getDefaultLevel1TasksForProjectType(PROJECT_CATEGORY_MACHINE, true),
@@ -703,13 +691,23 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
     : {}
   const configTemplateVersionScopes = Object.fromEntries(Object.keys(initialScopes).map(scope => {
     const stored = storedScopes[scope]
-    return [scope, resolveTemplateVersionScopeForMigration(
-      scope,
-      stored && Array.isArray(stored.versions) ? stored : undefined,
-      initialScopes[scope],
-      { versions: legacyVersions, currentVersion: legacyCurrentVersion },
-    )]
+    const validStored = stored
+      && Array.isArray(stored.versions)
+      && stored.versions.some(version => version.id === stored.currentVersion)
+    const source = validStored ? stored : { versions: legacyVersions, currentVersion: legacyCurrentVersion }
+    return [scope, {
+      versions: source.versions.map(version => ({ ...version })),
+      currentVersion: source.currentVersion,
+    }]
   }))
+  const initialCompareScopes = createInitialConfigTemplateCompareScopes()
+  const storedCompareScopes = migrated.configTemplateCompareScopes && typeof migrated.configTemplateCompareScopes === 'object'
+    ? migrated.configTemplateCompareScopes as Record<string, ConfigTemplateCompareScope>
+    : {}
+  const configTemplateCompareScopes = Object.fromEntries(Object.keys(initialCompareScopes).map(scope => [
+    scope,
+    storedCompareScopes[scope] || initialCompareScopes[scope],
+  ])) as Record<string, ConfigTemplateCompareScope>
   return {
     ...migrated,
     tasks: shouldMigrateFiveStageLevel1
@@ -719,7 +717,6 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
     tosTypePlanDataByProjectId: migratedTosTypePlanDataByProjectId,
     publishedSnapshots: migratedSnapshots,
     configTemplateTasksByType: migratedConfigTemplates,
-    level3TemplateTasksByType,
     columnSettingsByView: {
       ...(migrated.columnSettingsByView || {}),
       'project-level1-table': getDefaultColumnSettings(TABLE_COLUMNS),
@@ -727,10 +724,7 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
       'config-level2-table': getDefaultColumnSettings(CONFIG_TABLE_COLUMNS),
     },
     configTemplateVersionScopes,
-    configTemplateCompareScopes: {
-      ...createInitialConfigTemplateCompareScopes(),
-      ...(migrated.configTemplateCompareScopes || {}),
-    },
+    configTemplateCompareScopes,
   } as PlanState
 }
 
@@ -906,7 +900,6 @@ export interface PlanState {
   // Published snapshots
   publishedSnapshots: Record<string, any[]>
   configTemplateTasksByType: Record<string, any[]>
-  level3TemplateTasksByType: Record<string, Level3TemplateActivity[]>
   configTemplateVersionScopes: Record<string, ConfigTemplateVersionScope>
   configTemplateCompareScopes: Record<string, ConfigTemplateCompareScope>
 
@@ -974,10 +967,6 @@ export interface PlanActions {
 
   setPublishedSnapshots: (v: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void
   setConfigTemplateTasksByType: (v: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void
-  setLevel3TemplateTasks: (
-    projectType: string,
-    v: Level3TemplateActivity[] | ((prev: Level3TemplateActivity[]) => Level3TemplateActivity[]),
-  ) => void
   setTechnicalTemplateTasks: (kind: TechnicalTemplateKind, v: any[] | ((prev: any[]) => any[])) => void
   setConfigTemplateVersions: (scope: string, v: ConfigTemplateVersionScope['versions'] | ((prev: ConfigTemplateVersionScope['versions']) => ConfigTemplateVersionScope['versions'])) => void
   setConfigTemplateCurrentVersion: (scope: string, versionId: string) => boolean
@@ -1051,7 +1040,6 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
   // Published snapshots
   publishedSnapshots: createInitialTemplatePublishedSnapshots(),
   configTemplateTasksByType: createInitialConfigTemplateTasks(),
-  level3TemplateTasksByType: createInitialLevel3TemplateTasks(),
   configTemplateVersionScopes: createInitialConfigTemplateVersionScopes(),
   configTemplateCompareScopes: createInitialConfigTemplateCompareScopes(),
 
@@ -1119,16 +1107,6 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
 
   setPublishedSnapshots: (v) => set((s) => ({ publishedSnapshots: typeof v === 'function' ? v(s.publishedSnapshots) : v })),
   setConfigTemplateTasksByType: (v) => set((s) => ({ configTemplateTasksByType: typeof v === 'function' ? v(s.configTemplateTasksByType) : v })),
-  setLevel3TemplateTasks: (projectType, v) => set(state => {
-    const current = (state.level3TemplateTasksByType[projectType] || []).map(item => ({ ...item }))
-    const next = typeof v === 'function' ? v(current) : v
-    return {
-      level3TemplateTasksByType: {
-        ...state.level3TemplateTasksByType,
-        [projectType]: next.map(item => ({ ...item })),
-      },
-    }
-  }),
   setTechnicalTemplateTasks: (kind, v) => {
     const key = TECHNICAL_TEMPLATE_STORAGE_KEYS[kind]
     const current = get().configTemplateTasksByType[key] || []
@@ -1211,7 +1189,6 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
     currentVersion: state.currentVersion,
     publishedSnapshots: state.publishedSnapshots,
     configTemplateTasksByType: state.configTemplateTasksByType,
-    level3TemplateTasksByType: state.level3TemplateTasksByType,
     configTemplateVersionScopes: state.configTemplateVersionScopes,
     configTemplateCompareScopes: state.configTemplateCompareScopes,
     ...pickScopedPlanPersistence(state),

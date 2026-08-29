@@ -53,8 +53,8 @@ const cases = [
 ]
 
 const failures = []
-if (planStoreVersion !== 9) {
-  failures.push(`plan persistence version should be V9: expected 9, got ${planStoreVersion}`)
+if (planStoreVersion !== 10) {
+  failures.push(`plan persistence version should be V10: expected 10, got ${planStoreVersion}`)
 }
 for (const testCase of cases) {
   const actual = getNextPlanRevisionVersionNo(testCase.input, testCase.kind)

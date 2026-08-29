@@ -1374,7 +1374,7 @@ const technicalModuleSource = read('src/components/technical-project/TechnicalPl
 const compareModalSource = read('src/components/plans/PlanVersionCompareModal.tsx')
 const plan = loadTypeScriptModule(root, 'src/stores/plan.ts')
 
-assert.equal(plan.PLAN_STORE_VERSION, 9, 'plan persistence upgrades machine and tOS level-one seeds to V9')
+assert.equal(plan.PLAN_STORE_VERSION, 10, 'plan persistence retires legacy level-three data after the V9 level-one upgrade')
 assert.deepEqual(plan.MACHINE_LEVEL1_TASKS, rules.buildMachineLevel1Tasks(true), 'plan store exports the dated machine seed')
 assert.deepEqual(plan.TOS_LEVEL1_TASKS, rules.buildTosLevel1Tasks(true), 'plan store exports the dated tOS seed')
 assert.deepEqual(plan.MACHINE_LEVEL1_TEMPLATE_TASKS, rules.buildMachineLevel1Tasks(false), 'plan store exports the undated machine template')
@@ -1522,7 +1522,7 @@ assert.equal(migratedCustomMarketSnapshot.find(task => task.stableId === 'machin
 assert.equal(migratedCustomMarketSnapshot.find(task => task.stableId === 'custom-machine-validation').planStartDate, '2033-05-06', 'unknown-project market migration preserves custom task data')
 assert.deepEqual(migratedV9.publishedSnapshots['project::custom-machine-1::technical::level1::v8'], nonMarketSnapshot, 'reserved technical scopes never migrate as markets')
 assert.deepEqual(migratedV9.publishedSnapshots['project::custom-machine-1::EU::level2::v8'], nonMarketSnapshot, 'market level-two snapshots never migrate as level one')
-assert.deepEqual(migratedV9.publishedSnapshots['project::custom-machine-1::EU::level3::v8'], nonMarketSnapshot, 'market level-three snapshots never migrate as level one')
+assert.equal(migratedV9.publishedSnapshots['project::custom-machine-1::EU::level3::v8'], undefined, 'retired market level-three snapshots are removed')
 const migratedMachineCustom = migratedV9.tasks.find(task => task.stableId === 'custom-machine-validation')
 assert.equal(migratedV9.tasks.find(task => task.id === migratedMachineCustom.parentId)?.stableId, 'machine-stage-development', 'custom validation children move beneath the merged machine development-validation stage')
 const migratedTosConfig = migratedV9.configTemplateTasksByType['tOS版本项目']
@@ -1752,7 +1752,7 @@ assert.deepEqual(rootNames(migratedV8.publishedSnapshots['project::2::level1::v3
 assert.deepEqual(rootNames(migratedV8.publishedSnapshots['project::2::OP::level1::v3']), rootNames(plan.MACHINE_LEVEL1_TASKS), 'the explicit market snapshot key shape is authoritative without initial-project metadata')
 assert.deepEqual(migratedV8.publishedSnapshots['project::1::tos-type::Full::level1::v3::snapshot'], plan.MACHINE_LEVEL1_TASKS, 'a known machine project cannot be rewritten through a tOS-type key')
 assert.deepEqual(migratedV8.publishedSnapshots['template::技术项目::tdt::v3'], technicalSnapshot, 'technical template snapshots remain byte-for-data exact')
-assert.deepEqual(migratedV8.publishedSnapshots['template::tOS版本项目::level3::v3'], technicalSnapshot, 'non-level-one template snapshots remain exact')
+assert.equal(migratedV8.publishedSnapshots['template::tOS版本项目::level3::v3'], undefined, 'retired standalone level-three template snapshots are removed')
 assert.deepEqual(migratedV8.publishedSnapshots['project::unknown::level1::v3'], unknownSnapshot, 'unknown ordinary project scopes remain exact')
 assert.deepEqual(migratedV8.publishedSnapshots['project::tos-project::tos-type::Full::level2::v3::snapshot'], technicalSnapshot, 'tOS level-two snapshot keys do not cross into level one')
 assert.deepEqual(migratedV8.publishedSnapshots['project::tos-project::tos-type::Full::level1::v3'], unknownSnapshot, 'near-match tOS snapshot keys remain exact')
@@ -1761,7 +1761,7 @@ assert.deepEqual(plan.migratePlanStoreState(migratedV8, 8), migratedV8, 'the com
 assert.match(configSource, /getDefaultLevel1TasksForProjectType/, 'config center imports the selected-type default helper')
 assert.doesNotMatch(configSource, /LEVEL1_TEMPLATE_TASKS/, 'config center never falls back to the generic machine template')
 assert.match(configSource, /getDefaultLevel1TasksForProjectType\(selectedTemplateType,\s*false\)/, 'config fallbacks resolve the currently selected project type')
-assert.match(configSource, /const clonedTasks = isLevel3Template[\s\S]{0,360}getDefaultLevel1TasksForProjectType\(selectedTemplateType,\s*false\)/, 'new standard revisions clone the currently selected project type')
+assert.match(configSource, /const clonedTasks = isTechnicalTemplate[\s\S]{0,260}getDefaultLevel1TasksForProjectType\(selectedTemplateType,\s*false\)/, 'new standard revisions clone the currently selected project type')
 
 assert.match(planStoreSource, /projectPlanViewMode:\s*'horizontal'/, 'project plans default to horizontal view')
 assert.match(planStoreSource, /CONFIG_TABLE_COLUMNS[\s\S]*序号[\s\S]*任务名称[\s\S]*角色/, 'template configuration keeps sequence, task name, and role')

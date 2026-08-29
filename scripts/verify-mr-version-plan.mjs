@@ -1788,11 +1788,19 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 
 for (const retiredScript of ['verify:level3-plan', 'verify:level3-template', 'verify:level3-template-browser']) {
   assert.equal(packageJson.scripts?.[retiredScript], undefined, `package script retired: ${retiredScript}`)
 }
-assert.match(readSource(root, 'src/stores/mrVersionPlan.ts'), /removeItem\(['"]pms-level3-plan-store['"]\)/)
+const mrStoreSource = readSource(root, 'src/stores/mrVersionPlan.ts')
+assert.match(mrStoreSource, /LEGACY_LEVEL3_STORAGE_KEY\s*=\s*['"]pms-level3-plan-store['"]/)
+assert.match(mrStoreSource, /rehydrateMrVersionPlanStore[\s\S]*removeItem\(LEGACY_LEVEL3_STORAGE_KEY\)/)
 
 const legacyPlanFixture = {
+  versions: [{ id: 'selected-v7', versionNo: 'V7', status: '已发布' }],
+  currentVersion: 'selected-v7',
   tasks: [{ id: 'l1', taskName: '一级任务保留' }],
-  configTemplateTasksByType: { 整机产品项目: [{ id: 'template-l1', taskName: '模板保留' }] },
+  configTemplateTasksByType: {
+    整机产品项目: [{ id: 'template-l1', taskName: '模板保留' }],
+    '技术项目::TDT项目计划': [{ id: 'tdt-stage', taskName: '技术模板保留' }],
+    '技术项目::子项目计划': [{ id: 'subproject-stage', taskName: '子项目模板保留' }],
+  },
   publishedSnapshots: { 'project::machine::OP::level1::v1': [{ id: 'snapshot-l1', taskName: '快照保留' }] },
   marketPlanData: { OP: { tasks: [{ id: 'market-l1', taskName: '市场计划保留' }], level2Tasks: [], createdLevel2Plans: [] } },
   marketVersionsByKey: { 'project::machine::OP::level1::versions': [{ id: 'market-v1', versionNo: 'V1', status: '已发布' }] },
@@ -1800,8 +1808,14 @@ const legacyPlanFixture = {
   tosTypePlanDataByProjectId: { tos: { Full: { level1Tasks: [{ id: 'tos-l1', taskName: 'tOS计划保留' }], level2Tasks: [], createdLevel2Plans: [] } } },
   tosTypeVersionsByKey: { 'project::tos::tos-type::Full::level1::versions': [{ id: 'tos-v1', versionNo: 'V1', status: '已发布' }] },
   tosTypeCurrentVersionByKey: { 'project::tos::tos-type::Full::level1::current': 'tos-v1' },
-  configTemplateVersionScopes: { keep: { versions: [{ id: 'v1', versionNo: 'V1', status: '已发布' }], currentVersion: 'v1' }, legacyLevel3: { versions: [{ id: 'old', versionNo: 'V1', status: '已发布' }], currentVersion: 'old' } },
-  configTemplateCompareScopes: { keep: { versionA: 'v1', versionB: 'v1' }, legacyLevel3: { versionA: 'old', versionB: 'old' } },
+  configTemplateVersionScopes: {
+    'config-template::整机产品项目::level1': { versions: [{ id: 'machine-template-v6', versionNo: 'V6', status: '修订中' }], currentVersion: 'machine-template-v6' },
+    legacyLevel3: { versions: [{ id: 'old', versionNo: 'V1', status: '已发布' }], currentVersion: 'old' },
+  },
+  configTemplateCompareScopes: {
+    'config-template::整机产品项目::level1': { versionA: 'machine-template-v5', versionB: 'machine-template-v6' },
+    legacyLevel3: { versionA: 'old', versionB: 'old' },
+  },
   level3TemplateTasksByType: { 整机产品项目: [{ id: 'old-level3' }] },
   level3ScopesByKey: { old: { activities: [] } },
   currentLevel3Scope: 'old',
@@ -1812,13 +1826,20 @@ const migratedPlanFixture = planStore.migratePlanStoreState(structuredClone(lega
 assert.equal('level3TemplateTasksByType' in migratedPlanFixture, false)
 assert.equal('level3ScopesByKey' in migratedPlanFixture, false)
 assert.equal('currentLevel3Scope' in migratedPlanFixture, false)
+assert.deepEqual(migratedPlanFixture.versions, legacyPlanFixture.versions)
+assert.equal(migratedPlanFixture.currentVersion, legacyPlanFixture.currentVersion)
 assert.deepEqual(migratedPlanFixture.tasks, legacyPlanFixture.tasks)
 assert.deepEqual(migratedPlanFixture.configTemplateTasksByType.整机产品项目, legacyPlanFixture.configTemplateTasksByType.整机产品项目)
+assert.deepEqual(migratedPlanFixture.configTemplateTasksByType['技术项目::TDT项目计划'], legacyPlanFixture.configTemplateTasksByType['技术项目::TDT项目计划'])
+assert.deepEqual(migratedPlanFixture.configTemplateTasksByType['技术项目::子项目计划'], legacyPlanFixture.configTemplateTasksByType['技术项目::子项目计划'])
+assert.deepEqual(migratedPlanFixture.publishedSnapshots['project::machine::OP::level1::v1'], legacyPlanFixture.publishedSnapshots['project::machine::OP::level1::v1'])
 assert.deepEqual(migratedPlanFixture.marketPlanData.OP, legacyPlanFixture.marketPlanData.OP)
 assert.deepEqual(migratedPlanFixture.marketVersionsByKey, legacyPlanFixture.marketVersionsByKey)
 assert.deepEqual(migratedPlanFixture.marketCurrentVersionByKey, legacyPlanFixture.marketCurrentVersionByKey)
 assert.deepEqual(migratedPlanFixture.tosTypePlanDataByProjectId, legacyPlanFixture.tosTypePlanDataByProjectId)
 assert.deepEqual(migratedPlanFixture.tosTypeVersionsByKey, legacyPlanFixture.tosTypeVersionsByKey)
 assert.deepEqual(migratedPlanFixture.tosTypeCurrentVersionByKey, legacyPlanFixture.tosTypeCurrentVersionByKey)
+assert.deepEqual(migratedPlanFixture.configTemplateVersionScopes['config-template::整机产品项目::level1'], legacyPlanFixture.configTemplateVersionScopes['config-template::整机产品项目::level1'])
+assert.deepEqual(migratedPlanFixture.configTemplateCompareScopes['config-template::整机产品项目::level1'], legacyPlanFixture.configTemplateCompareScopes['config-template::整机产品项目::level1'])
 assert.equal('legacyLevel3' in migratedPlanFixture.configTemplateVersionScopes, false)
 assert.equal('legacyLevel3' in migratedPlanFixture.configTemplateCompareScopes, false)

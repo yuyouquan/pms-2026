@@ -48,8 +48,6 @@ import {
   TECHNICAL_TEMPLATE_STORAGE_KEYS,
 } from '@/lib/technicalPlanRules'
 import type { TechnicalTemplateKind } from '@/types/technicalPlan'
-import type { Level3TemplateActivity } from '@/types/level3Template'
-import { getLevel3TemplateMilestoneOptions, validateLevel3TemplateForPublish } from '@/lib/level3TemplateRules'
 import { rehydrateMrVersionPlanStore, useMrVersionPlanStore } from '@/stores/mrVersionPlan'
 import { validateMrTemplateForPublish } from '@/lib/mrTemplateRules'
 import { compareMrTemplateSnapshots, type MrTemplateSnapshotDiff } from '@/lib/mrTemplateCompare'
@@ -225,7 +223,6 @@ export default function ConfigContainer() {
     level2PlanTasks, setLevel2PlanTasks,
     activeLevel2Plan,
     configTemplateTasksByType, setConfigTemplateTasksByType, setTechnicalTemplateTasks,
-    level3TemplateTasksByType, setLevel3TemplateTasks,
     configTemplateVersionScopes, setConfigTemplateVersions, setConfigTemplateCurrentVersion,
     configTemplateCompareScopes, setConfigTemplateCompareVersions,
   } = usePlanStore()
@@ -254,7 +251,6 @@ export default function ConfigContainer() {
   const selectedTemplateType = getProjectTypeFamilyKey(selectedProjectType)
   const isTechnicalTemplate = selectedTemplateType === PROJECT_CATEGORY_TECH
   const isMrTemplate = selectedTemplateType === PROJECT_TYPE_TOS_VERSION && planLevel === 'mr-version-plan'
-  const isLevel3Template = !isTechnicalTemplate && planLevel === 'level3'
   const technicalTemplateKind: TechnicalTemplateKind = planLevel === 'subproject' ? 'subproject' : 'tdt'
   const templatePlanLevel = isTechnicalTemplate ? technicalTemplateKind : planLevel
   const templateVersionScope = getTemplateConfigScopeKey(selectedTemplateType, templatePlanLevel)
@@ -288,25 +284,6 @@ export default function ConfigContainer() {
   const hasDraftVersion = versions.some(v => v.status === '修订中')
   const currentVersionData = versions.find(v => v.id === currentVersion)
   const isCurrentDraft = currentVersionData?.status === '修订中'
-  const level1TemplateVersionScope = configTemplateVersionScopes[
-    getTemplateConfigScopeKey(selectedTemplateType, 'level1')
-  ]
-  const latestPublishedLevel1TemplateVersion = level1TemplateVersionScope?.versions
-    .filter(version => version.status === '已发布')
-    .sort((left, right) => comparePlanVersions(right, left))[0]
-  const level1TemplateSnapshot = latestPublishedLevel1TemplateVersion
-    ? getTemplateSnapshotForProjectType(
-      publishedSnapshots,
-      selectedTemplateType,
-      latestPublishedLevel1TemplateVersion.id,
-      'level1',
-    ) || []
-    : []
-  const level3MilestoneOptions = useMemo(
-    () => getLevel3TemplateMilestoneOptions(level1TemplateSnapshot),
-    [level1TemplateSnapshot],
-  )
-
   const navigateWithEditGuard = (action: () => void) => {
     if (isEditMode && !isCurrentDraft) {
       setPendingNavigation(() => action)
@@ -317,28 +294,11 @@ export default function ConfigContainer() {
   }
 
   const technicalTemplateKey = TECHNICAL_TEMPLATE_STORAGE_KEYS[technicalTemplateKind]
-  const level3DraftKey = `${selectedTemplateType}::${currentVersion}`
-  const selectedLevel3PublishedSnapshot = isLevel3Template && !isCurrentDraft
-    ? getTemplateSnapshotForProjectType(
-      publishedSnapshots,
-      selectedTemplateType,
-      currentVersion,
-      'level3',
-    ) as Level3TemplateActivity[] | undefined
-    : undefined
-  const configTasks = isLevel3Template
-    ? isCurrentDraft
-      ? level3TemplateTasksByType[level3DraftKey] || level3TemplateTasksByType[selectedTemplateType] || []
-      : selectedLevel3PublishedSnapshot || level3TemplateTasksByType[selectedTemplateType] || []
-    : isTechnicalTemplate
+  const configTasks = isTechnicalTemplate
     ? configTemplateTasksByType[technicalTemplateKey] || []
     : getTemplateTasksForProjectType(configTemplateTasksByType, selectedTemplateType)
       || getDefaultLevel1TasksForProjectType(selectedTemplateType, false)
   const setConfigTasks = (next: any[] | ((prev: any[]) => any[])) => {
-    if (isLevel3Template) {
-      setLevel3TemplateTasks(isCurrentDraft ? level3DraftKey : selectedTemplateType, next as Level3TemplateActivity[] | ((prev: Level3TemplateActivity[]) => Level3TemplateActivity[]))
-      return
-    }
     if (isTechnicalTemplate) {
       setTechnicalTemplateTasks(technicalTemplateKind, next)
       return
@@ -404,7 +364,6 @@ export default function ConfigContainer() {
     if (isTechnicalTemplate) return `config::${PROJECT_CATEGORY_TECH}::${technicalTemplateKind}`
     if (planLevel === 'level1') return `config::${selectedProjectType}::level1`
     if (planLevel === 'level2') return `config::${selectedProjectType}::level2::${selectedPlanType}`
-    if (planLevel === 'level3') return `config::${selectedTemplateType}::level3`
     return null
   }
 
@@ -639,16 +598,13 @@ export default function ConfigContainer() {
     }
     const newVersionNo = getNextPlanRevisionVersionNo(versions, revisionKind)
     const newVersionId = getPlanVersionId(newVersionNo)
-    const clonedTasks = isLevel3Template
-      ? configTasks.map(task => ({ ...task }))
-      : isTechnicalTemplate
+    const clonedTasks = isTechnicalTemplate
       ? configTasks.map(task => ({ ...task }))
       : getDefaultLevel1TasksForProjectType(selectedTemplateType, false)
     const newVersion = { id: newVersionId, versionNo: newVersionNo, status: '修订中' }
     setVersions([...versions, newVersion])
-    if (isLevel3Template) setLevel3TemplateTasks(`${selectedTemplateType}::${newVersionId}`, clonedTasks as Level3TemplateActivity[])
     setCurrentVersion(newVersionId)
-    if (!isLevel3Template) setConfigTasks(clonedTasks)
+    setConfigTasks(clonedTasks)
     message.success(`已创建${revisionKind === 'gray' ? '非正式' : '正式'}修订版本 ${newVersionNo}`)
   }
 
@@ -660,13 +616,6 @@ export default function ConfigContainer() {
     if (!canPublishPlanTemplate) {
       message.error('无计划模板发布权限')
       return
-    }
-    if (isLevel3Template) {
-      const errors = validateLevel3TemplateForPublish(configTasks as Level3TemplateActivity[], level3MilestoneOptions)
-      if (errors.length > 0) {
-        message.error(errors[0])
-        return
-      }
     }
     const prevPublished = versions
       .filter(v => v.status === '已发布' && v.id !== currentVersion)
@@ -680,13 +629,13 @@ export default function ConfigContainer() {
     const baselineMap = new Map<string, any>(baselineTasks.map(t => [t.id, t]))
     for (const curr of configTasks) {
       const prev = baselineMap.get(curr.id)
-      const notifyTask = isLevel3Template ? { ...curr, taskName: curr.activityName } : curr
+      const notifyTask = curr
       if (!prev) { changes.push({ kind: 'created', task: notifyTask }); continue }
       const changedFields: string[] = []
       for (const f of NOTIFY_DIFF_FIELDS) {
         if ((prev[f] ?? prev.activityName ?? '') !== (curr[f] ?? curr.activityName ?? '')) changedFields.push(f)
       }
-      if (changedFields.length > 0) changes.push({ kind: 'modified', task: notifyTask, previous: isLevel3Template ? { ...prev, taskName: prev.activityName } : prev, changedFields })
+      if (changedFields.length > 0) changes.push({ kind: 'modified', task: notifyTask, previous: prev, changedFields })
     }
 
     const publishedVersionId = currentVersion
@@ -700,7 +649,6 @@ export default function ConfigContainer() {
         ? { [getTemplateSnapshotKey(selectedProjectType, publishedVersionId)]: JSON.parse(JSON.stringify(snapshot)) }
         : {}),
     }))
-    if (isLevel3Template) setLevel3TemplateTasks(selectedTemplateType, snapshot)
 
     const versionNo = publishedVersion?.versionNo || publishedVersionId
     if (changes.length > 0) {
@@ -830,9 +778,8 @@ export default function ConfigContainer() {
     const compareColumns: any[] = [
       { title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, render: (val: string, row: CompareTableRow) => (<span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? 'var(--pms-brand)' : '#9ca3af' }}>{val}</span>) },
       { title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, render: (val: string) => { const conf: Record<string, { color: string; bg: string }> = { '新增': { color: '#52c41a', bg: '#f6ffed' }, '删除': { color: '#ff4d4f', bg: '#fff2f0' }, '修改': { color: 'var(--pms-brand)', bg: 'var(--pms-brand-surface)' }, '未变更': { color: '#9ca3af', bg: '#fafafa' } }; const c = conf[val]; return c ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: c.color, background: c.bg, border: val === '修改' ? '1px solid var(--pms-brand-border)' : `1px solid ${c.color}20` }}>{val}</span> : null } },
-      { title: isLevel3Template ? '活动名称' : '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, ellipsis: true, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
-      { title: isLevel3Template ? '关键节点' : '角色', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) },
-      ...(isLevel3Template ? [{ title: '同级顺序', dataIndex: 'predecessor', key: 'predecessor', width: 110, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'predecessor', val) }] : []),
+      { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, ellipsis: true, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
+      { title: '角色', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) },
     ]
     return (
       <div style={{ marginTop: 16 }}>
@@ -989,7 +936,7 @@ export default function ConfigContainer() {
                 <Col>
                   <Space size={6}>
                     <Input placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
-                    {!isLevel3Template && <SortableColumnSettings
+                    <SortableColumnSettings
                       open={showColumnModal}
                       trigger={(
                         <Tooltip title="自定义列">
@@ -1001,7 +948,7 @@ export default function ConfigContainer() {
                       defaultValue={getDefaultColumnSettings(currentViewColumns)}
                       onApply={applyColumnSettings}
                       onCancel={() => setShowColumnModal(false)}
-                    />}
+                    />
                     {getScopeKey() !== null && (
                       <>
                         <Tooltip title="全部展开"><Button icon={<PlusSquareOutlined />} style={{ borderRadius: 6 }} onClick={expandAll} /></Tooltip>
@@ -1107,17 +1054,7 @@ export default function ConfigContainer() {
               )
               const oldTasks = getVersionTasks(versionA)
               const newTasks = getVersionTasks(versionB)
-              const toComparableTasks = (tasks: any[]) => isLevel3Template
-                ? tasks.map(task => ({
-                    ...task,
-                    taskName: task.activityName || '',
-                    responsible: task.milestoneName || '',
-                    predecessor: `${task.parentId ? `父活动 ${task.parentId}` : '一级活动'} / 第${Number(task.order || 0) + 1}位`,
-                    status: task.status || '待启动',
-                    progress: task.progress || 0,
-                  }))
-                : tasks
-              const result = compareVersionsForTable(toComparableTasks(oldTasks) as any, toComparableTasks(newTasks) as any)
+              const result = compareVersionsForTable(oldTasks as any, newTasks as any)
               setCompareResult(result as CompareTableRow[])
               setCompareFilterType('all')
               message.success('对比完成')
