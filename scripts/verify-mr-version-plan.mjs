@@ -1456,6 +1456,29 @@ assert.match(mrBrowserVerifierSource, /setViewport\(\{\s*width:\s*1600,\s*height
 assert.match(mrBrowserVerifierSource, /pms-mr-version-plan-store/)
 assert.match(mrBrowserVerifierSource, /pms-level3-plan-store/)
 assert.doesNotMatch(mrBrowserVerifierSource, /localStorage\.clear\s*\(/)
+for (const helper of [
+  'installDeterministicBrowserEnvironment',
+  'waitForStableEvidence',
+  'assertNaMachineProjection',
+  'assertJointStickyColumns',
+  'snapshotTemplateRevision',
+  'assertTemplateRevisionMutation',
+]) assert.match(mrBrowserVerifierSource, new RegExp(`(?:async\\s+)?function\\s+${helper}\\b`), `MR browser acceptance requires named helper ${helper}`)
+assert.match(mrBrowserVerifierSource, /FIXED_BROWSER_NOW\s*=\s*['"]2026-08-30T00:00:00\.000\+08:00['"]/)
+assert.match(mrBrowserVerifierSource, /evaluateOnNewDocument\(installDeterministicBrowserEnvironment/)
+assert.match(mrBrowserVerifierSource, /document\.fonts\.ready/)
+assert.match(mrBrowserVerifierSource, /data-mr-row-key/)
+assert.match(mrBrowserVerifierSource, /data-mr-date-cell/)
+assert.match(mrBrowserVerifierSource, /data-mr-fixed-error-cell/)
+assert.match(mrBrowserVerifierSource, /assert\.deepEqual\([^\n]*dates,\s*\{\}\)/)
+assert.match(mrBrowserVerifierSource, /assert\.equal\([^\n]*editableDateInputs[^\n]*,\s*0\)/)
+assert.match(mrBrowserVerifierSource, /assertTemplateRevisionMutation\([\s\S]*priorPublished/)
+assert.match(mrBrowserVerifierSource, /git\s+diff\s+--exit-code\s+--\s+screenshots\/mr-version-plan/)
+assert.doesNotMatch(mrBrowserVerifierSource, /failure\.png/)
+assert.match(jointPlanSource, /data-mr-row-key/)
+assert.match(jointPlanSource, /data-mr-date-cell/)
+assert.match(jointPlanSource, /data-mr-fixed-error-cell/)
+assert.match(mrTemplateTableSource, /data-mr-template-activity-id/)
 for (let step = 1; step <= 15; step += 1) assert.match(mrBrowserVerifierSource, new RegExp(`STEP ${step} PASS`))
 for (const screenshot of [
   'configuration.png', 'tos-vertical.png', 'tos-horizontal.png', 'joint-valid.png',
