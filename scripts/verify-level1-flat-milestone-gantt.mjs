@@ -1214,6 +1214,11 @@ for (const focusedCase of ['machine-surface', 'machine-summary', 'machine-follow
   assert.equal(task7BrowserRouting.shouldRunTask7FocusedBrowserCase(focusedCase, focusedCase), true, `${focusedCase} remains directly runnable`)
 }
 assert.equal(task7BrowserRouting.shouldRunTask7FocusedBrowserCase('machine-summary', 'tos-surface'), false, 'an exact focused route never selects an unrelated case')
+assert.match(
+  browserSource,
+  /await switchUser\(page, '李四'\)[\s\S]{0,500}view-only user cannot add MR from a business stage/,
+  'machine permission acceptance must use a real non-SPM member instead of the seeded project SPM 王五',
+)
 for (const focusedCase of ['machine-surface', 'machine-summary', 'machine-follow-actual', 'tos-surface']) {
   assert.match(
     browserSource,
