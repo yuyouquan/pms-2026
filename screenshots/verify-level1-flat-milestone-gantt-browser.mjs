@@ -1602,7 +1602,7 @@ try {
       console.log('browser machine SPM focused reorder confirmation passed')
       return
     }
-    await page.keyboard.press('Escape')
+    await clickDialogButton(page, '确认调整节点顺序？', '取消')
     await waitForDialogToClose(page, '确认调整节点顺序？')
     assert.deepEqual(await treeTaskOrder(page, table, ['MR4', 'MR5']), orderBeforeReorder, 'cancelling reorder leaves the tree unchanged')
     page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
