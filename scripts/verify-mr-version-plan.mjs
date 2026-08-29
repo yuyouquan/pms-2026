@@ -298,6 +298,35 @@ assert.equal(candidates[2].reason, '请先完善一级计划中的计划开始�
 assert.deepEqual(tosLevel1Tasks, candidatesBefore)
 assert.deepEqual(planRules.selectTosMrVersionCandidates({ ...candidateInput, versions: [{ id: 'v4', versionNo: 'V4', status: '修订中' }] }), [])
 
+const latestPublishedSnapshot = [
+  { id: 'valid-stage', parentId: null, taskName: '上市迭代阶段', order: 0 },
+  { id: 'valid-child', parentId: 'valid-stage', taskName: '5.0', order: 0, planStartDate: '2026-02-01', planEndDate: '2026-02-02' },
+  { id: 'grandchild', parentId: 'valid-child', taskName: '5.0.1', order: 0, planStartDate: '2026-02-01', planEndDate: '2026-02-02' },
+  { id: 'near-stage', parentId: null, taskName: ' 上市迭代阶段X ', order: 1 },
+  { id: 'near-child', parentId: 'near-stage', taskName: '5.1', order: 0, planStartDate: '2026-02-01', planEndDate: '2026-02-02' },
+]
+const readSnapshots = []
+assert.deepEqual(planRules.selectTosMrVersionCandidates({
+  versions: [
+    { id: 'v3', versionNo: 'V3', status: '已发布' },
+    { id: 'invalid-zero', versionNo: 'V0', status: '已发布' },
+    { id: 'invalid-unsafe', versionNo: 'V9007199254740992', status: '已发布' },
+    { id: 'v5', versionNo: 'V5', status: '已发布' },
+    { id: 'v6', versionNo: 'V6', status: '修订中' },
+  ],
+  getSnapshot: id => {
+    readSnapshots.push(id)
+    return id === 'v5' ? latestPublishedSnapshot : draftTasks
+  },
+  usedVersions: ['5.0'],
+}), [{ value: '5.0', label: '5.0', planStartDate: '2026-02-01', planEndDate: '2026-02-02', disabled: true, reason: '该tOS版本号已添加' }])
+assert.deepEqual(readSnapshots, ['v5'])
+assert.deepEqual(planRules.selectTosMrVersionCandidates({
+  versions: [{ id: 'zero', versionNo: 'V0', status: '已发布' }, { id: 'unsafe', versionNo: 'V9007199254740992', status: '已发布' }],
+  getSnapshot: () => latestPublishedSnapshot,
+  usedVersions: [],
+}), [])
+
 const tosActivities = [
   { id: 'parent', parentId: null, order: 0, activityName: '需求&修改点' },
   { id: 'collect', parentId: 'parent', order: 0, activityName: ' 修改点收集开始时间 ' },
@@ -316,6 +345,7 @@ assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '李白', globalA
 assert.deepEqual(planRules.resolveMrPermissions({ currentUser: ' 管理员 ', globalAdminUsers: ['管理员'], tosManagerUsers: [], machineSpm: '张三', context: 'config' }), { canView: true, canEditTemplate: true, canEditTos: true, canEditMachine: true, canStopRelease: true, canEditMarket: true })
 assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: ['张三'], machineSpm: '张三', context: 'joint-machine' }), { canView: true, canEditTemplate: false, canEditTos: false, canEditMachine: true, canStopRelease: true, canEditMarket: false })
 assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: ['张三'], machineSpm: '张三', context: 'machine-market' }), { canView: true, canEditTemplate: false, canEditTos: false, canEditMachine: false, canStopRelease: false, canEditMarket: true })
+assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '普通用户', globalAdminUsers: [], tosManagerUsers: ['普通用户'], machineSpm: '张三', context: 'config' }), { canView: true, canEditTemplate: false, canEditTos: false, canEditMachine: false, canStopRelease: false, canEditMarket: false })
 assert.deepEqual(planRules.resolveMrPermissions({ currentUser: '', globalAdminUsers: [''], tosManagerUsers: [''], machineSpm: '', context: 'tos' }), { canView: false, canEditTemplate: false, canEditTos: false, canEditMachine: false, canStopRelease: false, canEditMarket: false })
 
 const publishedTemplate = { id: 'template-v1', versionNo: 'V1', status: '已发布', activities: tosActivities, createdBy: '张三', createdAt: NOW }
@@ -326,16 +356,42 @@ assert.notStrictEqual(createdInstance.activities, publishedTemplate.activities)
 assert.notStrictEqual(createdInstance.activities[0], publishedTemplate.activities[0])
 assert.deepEqual(publishedTemplate, templateBeforeCreate)
 assert.throws(() => planRules.createTosMrVersionInstance({ projectId: '', tosVersion: '16.3', templateVersion: publishedTemplate, actor: '张三', now: NOW }))
+assert.throws(() => planRules.createTosMrVersionInstance({ projectId: 'p', tosVersion: ' ', templateVersion: publishedTemplate, actor: '张三', now: NOW }))
+assert.throws(() => planRules.createTosMrVersionInstance({ projectId: 'p', tosVersion: '16.3', templateVersion: publishedTemplate, actor: ' ', now: NOW }))
 assert.throws(() => planRules.createTosMrVersionInstance({ projectId: 'p', tosVersion: '16.3', templateVersion: { ...publishedTemplate, status: '修订中' }, actor: '张三', now: NOW }))
+const gappedTemplate = {
+  ...publishedTemplate,
+  activities: [
+    { id: 'parent-b', parentId: null, order: 5, activityName: 'B' },
+    { id: 'child-b', parentId: 'parent-b', order: 9, activityName: 'B1' },
+    { id: 'parent-a', parentId: null, order: 1, activityName: 'A' },
+    { id: 'child-a2', parentId: 'parent-a', order: 8, activityName: 'A2' },
+    { id: 'child-a1', parentId: 'parent-a', order: 2, activityName: 'A1' },
+  ],
+}
+const gappedBeforeCreate = structuredClone(gappedTemplate)
+assert.deepEqual(planRules.createTosMrVersionInstance({ projectId: 'p', tosVersion: '16.3', templateVersion: gappedTemplate, actor: '张三', now: NOW }).activities.map(row => [row.id, row.order]), [
+  ['parent-a', 0], ['child-a1', 0], ['child-a2', 1], ['parent-b', 1], ['child-b', 0],
+])
+assert.deepEqual(gappedTemplate, gappedBeforeCreate)
 
 assert.deepEqual(planRules.projectTosMrVerticalRows({ ...createdInstance, dates: { collect: '2026-01-01' } }).map(row => [row.number, row.depth, row.date]), [
   ['1', 0, '/'], ['1.1', 1, '2026-01-01'], ['2', 0, '/'], ['2.1', 1, ''], ['2.2', 1, ''],
 ])
 assert.equal(planRules.projectTosMrVerticalRows({ ...createdInstance, dates: { collect: '未规范日期' } })[1].date, '未规范日期')
+const logicalKey = (parentName, activityName = '') => `${encodeURIComponent(parentName)}::${encodeURIComponent(activityName)}`
 assert.deepEqual(planRules.projectTosMrHorizontalColumns(tosActivities).map(group => [group.title, group.children.map(child => [child.title, child.key, child.activityId])]), [
-  ['需求&修改点', [['修改点收集开始时间', '需求&修改点::修改点收集开始时间', 'collect']]],
-  ['版本发布', [['OTA开放验证&部署', '版本发布::OTA开放验证&部署', 'ota'], ['已改名活动', '版本发布::已改名活动', 'renamed']]],
+  ['需求&修改点', [['修改点收集开始时间', logicalKey('需求&修改点', '修改点收集开始时间'), 'collect']]],
+  ['版本发布', [['OTA开放验证&部署', logicalKey('版本发布', 'OTA开放验证&部署'), 'ota'], ['已改名活动', logicalKey('版本发布', '已改名活动'), 'renamed']]],
 ])
+const delimiterActivities = [
+  { id: 'parent-delimited', parentId: null, order: 0, activityName: 'A::B' }, { id: 'child-percent', parentId: 'parent-delimited', order: 0, activityName: 'C%1' },
+  { id: 'parent-plain', parentId: null, order: 1, activityName: 'A' }, { id: 'child-delimited', parentId: 'parent-plain', order: 0, activityName: 'B::C%1' },
+]
+const delimiterColumns = planRules.projectTosMrHorizontalColumns(delimiterActivities)
+assert.deepEqual(delimiterColumns.map(group => group.children[0].key), [logicalKey('A::B', 'C%1'), logicalKey('A', 'B::C%1')])
+assert.notEqual(delimiterColumns[0].children[0].key, delimiterColumns[1].children[0].key)
+assert.deepEqual(planRules.buildJointMrColumnSchema([], delimiterActivities).flatMap(group => group.children.map(child => child.key)), [logicalKey('A::B', 'C%1'), logicalKey('A', 'B::C%1')])
 
 const latestActivities = [
   { id: 'a', parentId: null, order: 0, activityName: 'A' }, { id: 'x', parentId: 'a', order: 0, activityName: 'X' }, { id: 'y', parentId: 'a', order: 1, activityName: 'Y' },
@@ -350,7 +406,29 @@ const jointInstances = [
 ]
 const unionInputBefore = JSON.parse(JSON.stringify({ latestActivities, jointInstances }))
 assert.deepEqual(planRules.buildJointMrColumnSchema(jointInstances, latestActivities).map(group => [group.title, group.children.map(child => [child.title, child.key])]), [
-  ['A', [['X', 'A::X'], ['Y', 'A::Y'], ['X2', 'A::X2']]],
-  ['B', [['Z', 'B::Z']]],
+  ['A', [['X', logicalKey('A', 'X')], ['Y', logicalKey('A', 'Y')], ['X2', logicalKey('A', 'X2')]]],
+  ['B', [['Z', logicalKey('B', 'Z')]]],
 ])
 assert.deepEqual({ latestActivities, jointInstances }, unionInputBefore)
+
+const latestDuplicateActivities = [
+  { id: 'latest-a', parentId: null, order: 0, activityName: ' A ' }, { id: 'latest-x', parentId: 'latest-a', order: 0, activityName: ' X ' },
+  { id: 'latest-a-duplicate', parentId: null, order: 1, activityName: 'A' }, { id: 'latest-x-duplicate', parentId: 'latest-a-duplicate', order: 0, activityName: 'X' },
+]
+const semanticEarlyActivities = [
+  { id: 'early-a', parentId: null, order: 0, activityName: 'A' }, { id: 'early-x', parentId: 'early-a', order: 0, activityName: ' X ' }, { id: 'early-x1', parentId: 'early-a', order: 1, activityName: 'X1' },
+  { id: 'early-b', parentId: null, order: 1, activityName: ' B ' }, { id: 'early-z', parentId: 'early-b', order: 0, activityName: ' Z ' },
+]
+const semanticLateActivities = [
+  { id: 'late-a', parentId: null, order: 0, activityName: 'A' }, { id: 'late-x2', parentId: 'late-a', order: 0, activityName: 'X2' },
+]
+const outOfOrderInstances = [
+  { ...createdInstance, tosVersion: '16.3.0.120', activities: semanticLateActivities },
+  { ...createdInstance, tosVersion: '16.3.0.110', activities: semanticEarlyActivities },
+]
+const dedupeInputBefore = structuredClone({ latestDuplicateActivities, outOfOrderInstances })
+assert.deepEqual(planRules.buildJointMrColumnSchema(outOfOrderInstances, latestDuplicateActivities).map(group => [group.title, group.children.map(child => [child.title, child.key])]), [
+  ['A', [['X', logicalKey('A', 'X')], ['X1', logicalKey('A', 'X1')], ['X2', logicalKey('A', 'X2')]]],
+  ['B', [['Z', logicalKey('B', 'Z')]]],
+])
+assert.deepEqual({ latestDuplicateActivities, outOfOrderInstances }, dedupeInputBefore)
