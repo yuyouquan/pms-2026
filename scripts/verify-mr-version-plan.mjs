@@ -1473,28 +1473,21 @@ assert.match(
 )
 assert.match(
   mrBrowserVerifierSource,
-  /\.ant-modal-mask\s*\{[^}]*backdrop-filter:\s*none\s*!important;[^}]*-webkit-backdrop-filter:\s*none\s*!important;/s,
-  'MR browser evidence CSS must disable modal-mask backdrop blur while leaving the product stylesheet unchanged',
-)
-assert.match(
-  mrBrowserVerifierSource,
   /['"]--disable-features=UseSkiaRenderer['"]/,
   'MR browser acceptance must use the stable legacy software renderer for byte-exact transparent SVG evidence',
 )
+assert.doesNotMatch(mrBrowserVerifierSource, /\.ant-modal-mask\s*\{/, 'MR evidence must preserve the product modal mask visual')
+assert.doesNotMatch(mrBrowserVerifierSource, /box-shadow:\s*none\s*!important/, 'MR evidence must preserve product shadows')
+assert.doesNotMatch(mrBrowserVerifierSource, /shape-rendering:\s*crispEdges/, 'MR evidence must preserve product icon rendering')
 assert.match(
   mrBrowserVerifierSource,
-  /\.ant-modal-mask\s*\{[^}]*background:\s*rgb\(140,\s*140,\s*140\)\s*!important;/s,
-  'MR browser evidence CSS must use an opaque modal mask so background SVG alpha does not affect screenshot bytes',
+  /const\s+UPDATE_TRACKED_SCREENSHOTS\s*=\s*process\.env\.PMS_UPDATE_SCREENSHOTS\s*===\s*['"]1['"]/,
+  'MR browser acceptance must require an explicit opt-in before updating tracked screenshot baselines',
 )
 assert.match(
   mrBrowserVerifierSource,
-  /\*,\s*\*::before,\s*\*::after\s*\{[^}]*box-shadow:\s*none\s*!important;[^}]*text-shadow:\s*none\s*!important;/s,
-  'MR browser evidence CSS must remove non-functional rasterized shadows while preserving borders, colors, and geometry',
-)
-assert.match(
-  mrBrowserVerifierSource,
-  /\.anticon\s+svg\s*\{[^}]*shape-rendering:\s*crispEdges\s*!important;/s,
-  'MR browser evidence CSS must keep Ant icons visible while rasterizing their edges deterministically',
+  /const\s+OUTPUT\s*=\s*UPDATE_TRACKED_SCREENSHOTS\s*\?\s*TRACKED_OUTPUT\s*:\s*fs\.mkdtempSync\(/,
+  'MR browser acceptance must write default-run evidence to an isolated temporary directory',
 )
 assert.match(mrBrowserVerifierSource, /document\.fonts\.ready/)
 assert.match(mrBrowserVerifierSource, /data-mr-row-key/)
