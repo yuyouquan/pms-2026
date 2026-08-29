@@ -159,16 +159,31 @@ function projectValue(project: ProjectItem, key: string) {
   return getProjectInfoValue(project as unknown as ProjectInfoProject, key)
 }
 
+function normalizeUsers(value: unknown): string[] {
+  const source = Array.isArray(value) ? value : typeof value === 'string' ? [value] : []
+  const seen = new Set<string>()
+  return source.flatMap(item => typeof item === 'string' ? item.split(/[,，;；]/) : [])
+    .reduce<string[]>((users, item) => {
+      const user = item.trim()
+      if (!user || seen.has(user)) return users
+      seen.add(user)
+      users.push(user)
+      return users
+    }, [])
+}
+
 export function projectMachineMrMetadata(
   project: ProjectItem,
   marketRows: readonly MarketConfigRow[],
 ): MrMachineMetadata {
   const normalizedRows = normalizeMarketRows([...marketRows])
+  const spmUsers = normalizeUsers(projectValue(project, 'machineSpm'))
   return {
     projectName: project.name.trim(),
     marketName: getMainMarket(normalizedRows),
     productLine: text(projectValue(project, 'productLine')),
-    spm: text(projectValue(project, 'machineSpm')),
+    spm: spmUsers.join(','),
+    spmUsers,
     isMada: normalizedRows.some(row => row.isMadaControlled === '是') ? '是' : '否',
     socPlatform: text(projectValue(project, 'chipModel'))
       || text(projectValue(project, 'platform'))
@@ -193,19 +208,20 @@ export function getTosManagerUsers(project: ProjectItem): string[] {
 }
 
 function getTosProjectKey(project: ProjectItem): string {
-  const value = text(projectValue(project, 'tosVersion')) || project.name
-  const match = value.match(/(?:tos)?\s*(\d+)\.(\d+)/i)
+  const match = project.name.trim().match(/^tos(\d+)\.(\d+)$/i)
   return match ? `${Number(match[1])}.${Number(match[2])}` : ''
 }
 
 function getMachineProjectSource(project: ProjectItem) {
+  const spmUsers = normalizeUsers(projectValue(project, 'machineSpm'))
   return {
     id: project.id,
     projectName: project.name.trim(),
     productType: text(projectValue(project, 'productType')),
     firstSaleTosVersion: normalizeTosSnapshot(projectValue(project, 'firstSaleTosVersion')),
     currentTosVersion: normalizeTosSnapshot(projectValue(project, 'currentTosVersion')),
-    spm: text(projectValue(project, 'machineSpm')),
+    spm: spmUsers.join(','),
+    spmUsers,
   }
 }
 
@@ -219,6 +235,7 @@ export function buildMrAggregationSources(input: MrStoreAdapterInput): MrAggrega
   }
 
   const projects = [...input.projects].sort((left, right) => left.id.localeCompare(right.id, 'zh-CN'))
+  const tosProjectIdsByKey = new Map<string, string>()
   projects.forEach(project => {
     if (project.type === PROJECT_TYPE_TOS_VERSION) {
       const source = selectLatestPublishedTosLevel1({
@@ -230,6 +247,11 @@ export function buildMrAggregationSources(input: MrStoreAdapterInput): MrAggrega
       })
       const tosProjectKey = getTosProjectKey(project)
       if (tosProjectKey) {
+        const existingProjectId = tosProjectIdsByKey.get(tosProjectKey)
+        if (existingProjectId && existingProjectId !== project.id) {
+          throw new Error(`tOS项目版本键重复：${tosProjectKey}`)
+        }
+        tosProjectIdsByKey.set(tosProjectKey, project.id)
         result.tosProjects.push({ projectId: project.id, tosProjectKey, projectName: project.name.trim() })
       }
       if (source) result.latestPublishedLevel1ByProjectId[project.id] = source

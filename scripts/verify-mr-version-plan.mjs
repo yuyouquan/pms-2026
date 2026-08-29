@@ -367,6 +367,12 @@ const multiSpmJointPermission = currentUser => planRules.resolveMrPermissions({
 assert.equal(multiSpmJointPermission('李白').canEditMachine, true)
 assert.equal(multiSpmJointPermission('张三').canStopRelease, true)
 assert.equal(multiSpmJointPermission('王五').canEditMachine, false)
+const legacyMultiSpmPermission = currentUser => planRules.resolveMrPermissions({
+  currentUser, globalAdminUsers: [], tosManagerUsers: [], machineSpm: '李白,张三', context: 'joint-machine',
+})
+assert.equal(legacyMultiSpmPermission('李白').canEditMachine, true)
+assert.equal(legacyMultiSpmPermission('张三').canStopRelease, true)
+assert.equal(legacyMultiSpmPermission('王五').canEditMachine, false)
 assert.equal(planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '张三', machineSpmUsers: [], context: 'machine-market' }).canEditMarket, true)
 
 const publishedTemplate = { id: 'template-v1', versionNo: 'V1', status: '已发布', activities: tosActivities, createdBy: '张三', createdAt: NOW }

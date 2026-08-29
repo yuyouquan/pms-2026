@@ -153,6 +153,7 @@ export interface MrMachineProjectSource {
   firstSaleTosVersion?: string
   currentTosVersion?: string
   spm?: string
+  spmUsers?: string[]
 }
 
 export interface MrLevel1Source {
@@ -171,6 +172,7 @@ export interface MrMachineMetadata {
   marketName: string
   productLine: string
   spm: string
+  spmUsers: string[]
   isMada: '是' | '否'
   socPlatform: string
   packageMode: string
@@ -254,6 +256,7 @@ export interface MrPermissionInput {
   globalAdminUsers: string[]
   tosManagerUsers: string[]
   machineSpm: string
+  machineSpmUsers?: string[]
 }
 
 export interface MrPermissionResult {

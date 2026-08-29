@@ -172,12 +172,18 @@ export function resolveMrPermissions(input: MrPermissionInput): MrPermissionResu
   if (input.globalAdminUsers.some(user => trim(user) === currentUser)) {
     return { canView: true, canEditTemplate: true, canEditTos: true, canEditMachine: true, canStopRelease: true, canEditMarket: true }
   }
+  const configuredMachineSpms = input.machineSpmUsers?.length ? input.machineSpmUsers : [input.machineSpm]
+  const machineSpmUsers = configuredMachineSpms
+    .flatMap(user => trim(user).split(/[,，;；]/))
+    .map(trim)
+    .filter(Boolean)
+  const isMachineSpm = machineSpmUsers.includes(currentUser)
   if (input.context === 'tos' && input.tosManagerUsers.some(user => trim(user) === currentUser)) result.canEditTos = true
-  if (input.context === 'joint-machine' && currentUser === trim(input.machineSpm)) {
+  if (input.context === 'joint-machine' && isMachineSpm) {
     result.canEditMachine = true
     result.canStopRelease = true
   }
-  if (input.context === 'machine-market' && currentUser === trim(input.machineSpm)) result.canEditMarket = true
+  if (input.context === 'machine-market' && isMachineSpm) result.canEditMarket = true
   return result
 }
 
