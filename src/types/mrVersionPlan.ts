@@ -8,6 +8,7 @@ export interface MrTemplateActivity {
   parentId: string | null
   order: number
   activityName: string
+  source?: 'template' | 'custom'
 }
 
 export interface MrTemplateVersion {

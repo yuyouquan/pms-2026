@@ -163,6 +163,7 @@ function sanitizeActivities(value: unknown): MrTemplateActivity[] {
       parentId: candidate.parentId === null ? null : text(candidate.parentId),
       order: Number.isFinite(candidate.order) ? Number(candidate.order) : rows.length,
       activityName,
+      ...(candidate.source === 'custom' || candidate.source === 'template' ? { source: candidate.source } : {}),
     })
   })
   const parentIds = new Set(rows.filter(row => row.parentId === null).map(row => row.id))
