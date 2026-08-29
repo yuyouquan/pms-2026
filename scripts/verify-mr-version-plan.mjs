@@ -108,6 +108,7 @@ assert.match(mrPlanGridSource, /const ariaLabel\s*=\s*`\$\{row\.version\}-\$\{ac
 assert.match(mrPlanGridSource, /aria-label=\{ariaLabel\}/)
 assert.match(mrPlanGridSource, /Tooltip/)
 assert.match(mrPlanGridSource, /ExclamationCircleOutlined/)
+assert.match(mrPlanGridSource, /ExclamationCircleOutlined[\s\S]*tabIndex=\{0\}[\s\S]*aria-label=/)
 assert.match(globalsSource, /\.pms-mr-plan-grid/)
 assert.match(globalsSource, /\.pms-mr-plan-grid[\s\S]*\.pms-mr-sticky-version/)
 assert.match(globalsSource, /\.pms-mr-plan-grid[\s\S]*\.pms-mr-parent-row/)
