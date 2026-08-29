@@ -58,10 +58,16 @@ function installDeterministicBrowserEnvironment(fixedNow) {
         transition-delay: 0s !important;
         caret-color: transparent !important;
         scroll-behavior: auto !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
       }
       .ant-modal-mask {
+        background: rgb(140, 140, 140) !important;
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
+      }
+      .anticon svg {
+        shape-rendering: crispEdges !important;
       }
     `
     document.head.append(style)
@@ -80,6 +86,7 @@ const browser = await puppeteer.launch({
   args: [
     '--no-sandbox',
     '--deterministic-mode',
+    '--disable-features=UseSkiaRenderer',
     '--disable-gpu',
     '--disable-lcd-text',
     '--font-render-hinting=none',
