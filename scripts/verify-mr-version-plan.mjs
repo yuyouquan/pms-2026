@@ -1508,15 +1508,26 @@ assert.equal(
   '2026-05-15',
 )
 assert.deepEqual(
-  acceptancePlanScopeA.marketVersionsByKey['project::1::OP::level1::versions'].map(version => version.versionNo),
+  acceptancePlanScopeA.marketVersionsByKey['project::1::OP::level1::versions'].filter(version => version.status === '已发布').map(version => version.versionNo),
   ['V1', 'V2', 'V3'],
   'MR eligibility seed must retain published machine plan history instead of collapsing the level-one surface to one row',
 )
 assert.deepEqual(
-  acceptancePlanScopeA.tosTypeVersionsByKey['project::19::tos-type::Full::level1::versions'].map(version => version.versionNo),
+  acceptancePlanScopeA.tosTypeVersionsByKey['project::19::tos-type::Full::level1::versions'].filter(version => version.status === '已发布').map(version => version.versionNo),
   ['V1', 'V2', 'V3'],
   'MR eligibility seed must retain published tOS plan history for revision and name-rule flows',
 )
+for (const versions of [
+  acceptancePlanScopeA.marketVersionsByKey['project::1::OP::level1::versions'],
+  acceptancePlanScopeA.marketVersionsByKey['project::3::OP::level1::versions'],
+  acceptancePlanScopeA.tosTypeVersionsByKey['project::19::tos-type::Full::level1::versions'],
+]) {
+  assert.deepEqual(
+    versions.filter(version => version.status === '修订中').map(version => version.versionNo),
+    ['V4'],
+    'acceptance plan scopes retain one editable revision without weakening the three published immutable snapshots',
+  )
+}
 const acceptanceVersionScopes = [
   {
     versions: acceptancePlanScopeA.marketVersionsByKey['project::1::OP::level1::versions'],
@@ -1533,7 +1544,7 @@ const acceptanceVersionScopes = [
 ]
 const allAcceptanceSnapshots = []
 for (const scope of acceptanceVersionScopes) {
-  for (const version of scope.versions) {
+  for (const version of scope.versions.filter(candidate => candidate.status === '已发布')) {
     const snapshot = acceptancePlanScopeA.publishedSnapshots[scope.snapshotKey(version.id)]
     assert.ok(snapshot, `every published acceptance version requires a matching snapshot: ${scope.snapshotKey(version.id)}`)
     assert.equal(snapshot.filter(task => task.parentId == null).length, 5, 'every published acceptance snapshot preserves the complete five-stage topology')
