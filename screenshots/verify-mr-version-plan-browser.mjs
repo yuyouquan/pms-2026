@@ -13,9 +13,7 @@ const TIMEOUT = Number(process.env.PMS_BROWSER_TIMEOUT || 45_000)
 const FIXED_BROWSER_NOW = '2026-08-30T00:00:00.000+08:00'
 const TRACKED_OUTPUT = path.join(process.cwd(), 'screenshots', 'mr-version-plan')
 const UPDATE_TRACKED_SCREENSHOTS = process.env.PMS_UPDATE_SCREENSHOTS === '1'
-const OUTPUT = UPDATE_TRACKED_SCREENSHOTS
-  ? TRACKED_OUTPUT
-  : fs.mkdtempSync(path.join(os.tmpdir(), 'pms-mr-version-plan-'))
+const OUTPUT = fs.mkdtempSync(path.join(os.tmpdir(), 'pms-mr-version-plan-actual-'))
 const EXPECTED_SCREENSHOTS = [
   'configuration.png', 'tos-vertical.png', 'tos-horizontal.png', 'joint-valid.png',
   'joint-invalid.png', 'stop-record.png', 'machine-vertical.png', 'machine-horizontal.png',
@@ -27,6 +25,54 @@ const STEP_MARKERS = [
 ]
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 
+function validateScreenshotEvidence(directory) {
+  const actualFiles = fs.readdirSync(directory, { withFileTypes: true })
+    .filter(entry => entry.isFile())
+    .map(entry => entry.name)
+    .sort()
+  assert.deepEqual(actualFiles, [...EXPECTED_SCREENSHOTS].sort(), 'MR screenshot evidence must contain the exact eight-file allowlist')
+  for (const file of EXPECTED_SCREENSHOTS) {
+    const stat = fs.statSync(path.join(directory, file))
+    assert.ok(stat.isFile() && stat.size > 1_000, `${file} is current and non-empty`)
+  }
+}
+
+function promoteTrackedScreenshotsAtomically(actualDirectory) {
+  validateScreenshotEvidence(actualDirectory)
+  const parent = path.dirname(TRACKED_OUTPUT)
+  const staging = fs.mkdtempSync(path.join(parent, '.mr-version-plan-staging-'))
+  const backup = path.join(parent, `.mr-version-plan-backup-${process.pid}-${Date.now()}`)
+  let targetMoved = false
+  let stagingPromoted = false
+  try {
+    for (const file of EXPECTED_SCREENSHOTS) {
+      fs.copyFileSync(path.join(actualDirectory, file), path.join(staging, file))
+    }
+    validateScreenshotEvidence(staging)
+    if (fs.existsSync(TRACKED_OUTPUT)) {
+      fs.renameSync(TRACKED_OUTPUT, backup)
+      targetMoved = true
+    }
+    fs.renameSync(staging, TRACKED_OUTPUT)
+    stagingPromoted = true
+    validateScreenshotEvidence(TRACKED_OUTPUT)
+    if (targetMoved) fs.rmSync(backup, { recursive: true, force: true })
+  } catch (error) {
+    try {
+      if (stagingPromoted && fs.existsSync(TRACKED_OUTPUT)) fs.renameSync(TRACKED_OUTPUT, staging)
+      if (targetMoved && fs.existsSync(backup)) fs.renameSync(backup, TRACKED_OUTPUT)
+      if (fs.existsSync(staging)) fs.rmSync(staging, { recursive: true, force: true })
+    } catch (rollbackError) {
+      throw new AggregateError([error, rollbackError], 'MR screenshot update failed and baseline rollback also failed')
+    }
+    throw error
+  }
+}
+
+process.once('exit', () => {
+  if (fs.existsSync(OUTPUT) && fs.readdirSync(OUTPUT).length === 0) fs.rmSync(OUTPUT, { recursive: true, force: true })
+})
+
 const assertTrackedScreenshotsClean = stage => {
   if (process.env.PMS_ASSERT_SCREENSHOTS_CLEAN !== '1') return
   try {
@@ -37,11 +83,6 @@ const assertTrackedScreenshotsClean = stage => {
 }
 
 assertTrackedScreenshotsClean('before browser verification')
-fs.mkdirSync(OUTPUT, { recursive: true })
-for (const file of EXPECTED_SCREENSHOTS) {
-  const target = path.join(OUTPUT, file)
-  if (fs.existsSync(target)) fs.unlinkSync(target)
-}
 
 function installDeterministicBrowserEnvironment(fixedNow) {
   const NativeDate = Date
@@ -850,13 +891,18 @@ try {
   pass(15, 'legacy standalone level-three UI and storage are absent')
 
   assert.deepEqual(browserErrors, [], `unexpected browser errors:\n${browserErrors.join('\n')}`)
-  for (const file of EXPECTED_SCREENSHOTS) assert.ok(fs.statSync(path.join(OUTPUT, file)).size > 1_000, `${file} is current and non-empty`)
+  validateScreenshotEvidence(OUTPUT)
+  if (process.env.PMS_FORCE_FAILURE_AFTER_SCREENSHOTS === '1') {
+    throw new Error('controlled MR acceptance failure after screenshot validation')
+  }
+  if (UPDATE_TRACKED_SCREENSHOTS) promoteTrackedScreenshotsAtomically(OUTPUT)
   assertTrackedScreenshotsClean('after browser verification')
-  if (!UPDATE_TRACKED_SCREENSHOTS) console.log(`MR screenshot evidence: ${OUTPUT}`)
+  console.log(`MR screenshot evidence: ${OUTPUT}`)
   console.log('PASS MR version plan browser verification')
 } catch (error) {
   console.error(error?.stack || error)
   if (browserErrors.length) console.error(`browser errors:\n${browserErrors.join('\n')}`)
+  if (fs.existsSync(OUTPUT) && fs.readdirSync(OUTPUT).length > 0) console.error(`MR screenshot evidence preserved after failure: ${OUTPUT}`)
   process.exitCode = 1
 } finally {
   await browser.close()
