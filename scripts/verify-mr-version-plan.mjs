@@ -1486,9 +1486,22 @@ assert.match(
 )
 assert.match(
   mrBrowserVerifierSource,
-  /const\s+OUTPUT\s*=\s*UPDATE_TRACKED_SCREENSHOTS\s*\?\s*TRACKED_OUTPUT\s*:\s*fs\.mkdtempSync\(/,
-  'MR browser acceptance must write default-run evidence to an isolated temporary directory',
+  /const\s+OUTPUT\s*=\s*fs\.mkdtempSync\(/,
+  'MR browser acceptance must write every run to an isolated temporary actual directory',
 )
+assert.match(mrBrowserVerifierSource, /function\s+validateScreenshotEvidence\b/, 'MR browser acceptance must validate the complete screenshot allowlist')
+assert.match(mrBrowserVerifierSource, /function\s+promoteTrackedScreenshotsAtomically\b/, 'MR screenshot updates must use a transactional directory promotion')
+assert.match(mrBrowserVerifierSource, /\.mr-version-plan-staging-/, 'MR screenshot updates must stage beside the tracked directory')
+assert.match(mrBrowserVerifierSource, /fs\.renameSync\(TRACKED_OUTPUT,\s*backup\)/, 'MR screenshot updates must first preserve the complete prior baseline')
+assert.match(mrBrowserVerifierSource, /fs\.renameSync\(staging,\s*TRACKED_OUTPUT\)/, 'MR screenshot updates must atomically promote the complete staged directory')
+assert.match(mrBrowserVerifierSource, /fs\.renameSync\(backup,\s*TRACKED_OUTPUT\)/, 'MR screenshot update failures must roll the prior baseline back')
+const mrBrowserErrorGateIndex = mrBrowserVerifierSource.indexOf('assert.deepEqual(browserErrors')
+const mrBrowserEvidenceGateIndex = mrBrowserVerifierSource.indexOf('validateScreenshotEvidence(OUTPUT)')
+const mrBrowserForcedFailureIndex = mrBrowserVerifierSource.indexOf('PMS_FORCE_FAILURE_AFTER_SCREENSHOTS')
+const mrBrowserPromotionIndex = mrBrowserVerifierSource.indexOf('promoteTrackedScreenshotsAtomically(OUTPUT)')
+assert.ok(mrBrowserErrorGateIndex >= 0 && mrBrowserErrorGateIndex < mrBrowserEvidenceGateIndex, 'browser errors must fail before screenshot promotion')
+assert.ok(mrBrowserEvidenceGateIndex < mrBrowserForcedFailureIndex, 'all eight non-empty screenshots must validate before the controlled failure gate')
+assert.ok(mrBrowserForcedFailureIndex < mrBrowserPromotionIndex, 'a failed acceptance run must occur before and never touch baseline promotion')
 assert.match(mrBrowserVerifierSource, /document\.fonts\.ready/)
 assert.doesNotMatch(
   mrBrowserVerifierSource,
