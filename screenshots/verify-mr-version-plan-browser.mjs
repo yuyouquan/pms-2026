@@ -59,6 +59,10 @@ function installDeterministicBrowserEnvironment(fixedNow) {
         caret-color: transparent !important;
         scroll-behavior: auto !important;
       }
+      .ant-modal-mask {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+      }
     `
     document.head.append(style)
   }, { once: true })
