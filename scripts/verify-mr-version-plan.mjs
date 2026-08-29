@@ -11,6 +11,7 @@ const dateRules = loadTypeScriptModule(root, 'src/lib/mrDateRules.ts')
 const adapter = loadTypeScriptModule(root, 'src/lib/mrPlanSourceAdapters.ts')
 const templateCompare = loadTypeScriptModule(root, 'src/lib/mrTemplateCompare.ts')
 const templateConfigPermissions = loadTypeScriptModule(root, 'src/lib/mrTemplateConfigPermissions.ts')
+const templateHistoryRules = loadTypeScriptModule(root, 'src/lib/mrTemplateHistory.ts')
 const configSource = readSource(root, 'src/containers/ConfigContainer.tsx')
 const mrTemplateTableSource = readSource(root, 'src/components/plans/MrTemplateTable.tsx')
 const mrTemplateCompareSource = readSource(root, 'src/lib/mrTemplateCompare.ts')
@@ -32,6 +33,9 @@ assert.match(configSource, /validateMrTemplateForPublish/)
 assert.match(configSource, /errors\.map\(/)
 assert.match(configSource, /templateHistory/)
 assert.match(configSource, /compareMrTemplateSnapshots/)
+assert.match(configSource, /resolveMrTemplateHistoryActivityLabel/)
+assert.match(configSource, /currentTemplateVersionId/)
+assert.match(configSource, /useMrVersionPlanStore\.setState\(\{\s*currentTemplateVersionId:\s*versionId\s*\}\)/)
 assert.match(configSource, /模板数据加载中/)
 
 for (const title of ['tOS版本号', '活动序号', '活动名称', '日期']) {
@@ -46,6 +50,10 @@ assert.match(mrTemplateTableSource, /aria-label=['"]新增一级活动['"]/)
 assert.match(mrTemplateTableSource, /moveMrTemplateActivity/)
 assert.match(mrTemplateTableSource, /removeMrTemplateActivity/)
 assert.match(mrTemplateTableSource, /activeRow\.parentId\s*!==\s*overRow\.parentId/)
+assert.match(mrTemplateTableSource, /KeyboardSensor/)
+assert.match(mrTemplateTableSource, /sortableKeyboardCoordinates/)
+assert.match(mrTemplateTableSource, /useSensor\(KeyboardSensor,\s*\{\s*coordinateGetter:\s*sortableKeyboardCoordinates\s*\}\)/)
+assert.match(mrTemplateTableSource, /type="button"[\s\S]*aria-label=\{`拖动活动-\$\{row\.number\}`\}/)
 assert.match(mrTemplateTableSource, /normalizeMrTemplateActivities/)
 assert.match(mrTemplateTableSource, /onChange\(/)
 assert.doesNotMatch(mrTemplateTableSource, /row\.source\s*===\s*['"]custom['"]/)
@@ -1029,6 +1037,38 @@ assert.equal(lifecycleStore.getState().templateHistory.at(-1).actor, '赵六')
 assert.equal(mrStore.partializeMrVersionPlanState(lifecycleStore.getState()).templateHistory.at(-1).action, 'cancel-revision')
 assert.equal(new Set(lifecycleStore.getState().templateHistory.map(item => item.id)).size, lifecycleStore.getState().templateHistory.length)
 
+const readableHistoryStore = freshStore()
+assert.equal(readableHistoryStore.getState().createTemplateRevision('张三', adminPermission), true)
+const readableDraft = readableHistoryStore.getState().templateVersions.find(version => version.status === '修订中')
+const readableParentId = 'history-readable-parent'
+assert.equal(readableHistoryStore.getState().updateTemplateActivities(readableDraft.id, [
+  ...readableDraft.activities,
+  { id: readableParentId, parentId: null, order: 99, activityName: '历史活动初始名', source: 'custom' },
+], '张三', adminPermission), true)
+let readableRows = readableHistoryStore.getState().templateVersions.find(version => version.id === readableDraft.id).activities
+assert.equal(readableHistoryStore.getState().updateTemplateActivities(readableDraft.id, readableRows.map(activity => (
+  activity.id === readableParentId ? { ...activity, activityName: '历史活动新名称' } : activity
+)), '张三', adminPermission), true)
+readableRows = readableHistoryStore.getState().templateVersions.find(version => version.id === readableDraft.id).activities
+assert.equal(readableHistoryStore.getState().updateTemplateActivities(readableDraft.id, readableRows.map(activity => (
+  activity.id === readableParentId ? { ...activity, order: -1 } : activity
+)), '张三', adminPermission), true)
+readableRows = readableHistoryStore.getState().templateVersions.find(version => version.id === readableDraft.id).activities
+assert.equal(readableHistoryStore.getState().updateTemplateActivities(readableDraft.id, readableRows.filter(activity => activity.id !== readableParentId), '张三', adminPermission), true)
+assert.equal(readableHistoryStore.getState().cancelTemplateRevision(readableDraft.id, '张三', adminPermission), true)
+const readableHistory = readableHistoryStore.getState().templateHistory
+const readableActivityLogs = readableHistory.filter(log => log.activityId === readableParentId)
+assert.deepEqual(readableActivityLogs.map(log => log.action), ['add', 'rename', 'move', 'delete'])
+assert.deepEqual(readableActivityLogs.map(log => templateHistoryRules.resolveMrTemplateHistoryActivityLabel(log, new Map())), [
+  '历史活动初始名', '历史活动新名称', '历史活动新名称', '历史活动新名称',
+])
+assert.equal(readableActivityLogs.some(log => templateHistoryRules.resolveMrTemplateHistoryActivityLabel(log, new Map()).includes(readableParentId)), false)
+assert.equal(templateHistoryRules.resolveMrTemplateHistoryActivityLabel(readableHistory.at(-1), new Map()), '整个修订版本')
+const readablePersistedHistory = mrStore.partializeMrVersionPlanState(readableHistoryStore.getState()).templateHistory
+assert.deepEqual(readablePersistedHistory.filter(log => log.activityId === readableParentId).map(log => log.activityName), [
+  '历史活动初始名', '历史活动新名称', '历史活动新名称', '历史活动新名称',
+])
+
 const collidingIds = ['existing-log', 'batch-log', 'unused-log', 'other-log', 'batch-log']
 const batchLogStore = mrStore.createMrVersionPlanStore({
   storage: createMemoryStorage(), now: () => NOW, createId: () => collidingIds.shift() ?? 'batch-log',
@@ -1214,6 +1254,26 @@ const staleDraftMigration = mrStore.migrateMrVersionPlanState({
 assert.deepEqual(staleDraftMigration.templateVersions.map(version => version.id), ['published-v3'])
 assert.equal(staleDraftMigration.currentTemplateVersionId, 'published-v3')
 
+const historicalSelectionVersions = [
+  { ...initialVersions[0], id: 'published-v1', versionNo: 'V1' },
+  { ...initialVersions[0], id: 'published-v2', versionNo: 'V2' },
+  { ...initialVersions[0], id: 'draft-v3-selection', versionNo: 'V3', status: '修订中', publishedAt: undefined },
+]
+const historicalSelectionMigration = mrStore.migrateMrVersionPlanState({
+  templateVersions: historicalSelectionVersions,
+  currentTemplateVersionId: 'published-v1',
+}, 0)
+assert.equal(historicalSelectionMigration.currentTemplateVersionId, 'published-v1')
+assert.equal(mrStore.partializeMrVersionPlanState({
+  ...freshStore({ templateVersions: historicalSelectionVersions, currentTemplateVersionId: 'published-v1' }).getState(),
+  currentTemplateVersionId: 'published-v1',
+}).currentTemplateVersionId, 'published-v1')
+const invalidHistoricalSelection = mrStore.migrateMrVersionPlanState({
+  templateVersions: historicalSelectionVersions,
+  currentTemplateVersionId: 'unknown-version',
+}, 0)
+assert.equal(invalidHistoricalSelection.currentTemplateVersionId, 'draft-v3-selection')
+
 const persistedOnly = mrStore.partializeMrVersionPlanState(machineStore.getState())
 assert.deepEqual(Object.keys(persistedOnly).sort(), [
   'currentTemplateVersionId', 'machinePlansByKey', 'marketOverridesByKey', 'stopReleaseRecords',
@@ -1234,6 +1294,14 @@ assert.equal(hydrationStore.getState().viewModeByScope.hydrated, 'horizontal')
 assert.equal(hydrationStore.getState().viewModeByScope.bad, undefined)
 assert.equal(hydrationStorage.getItem('pms-level3-plan-store'), null)
 assert.equal(hydrationStore.persist.getOptions().version, 1)
+const selectedVersionHydrationStorage = createMemoryStorage()
+selectedVersionHydrationStorage.setItem(mrStore.MR_VERSION_PLAN_STORAGE_KEY, JSON.stringify({
+  state: mrStore.migrateMrVersionPlanState({ templateVersions: historicalSelectionVersions, currentTemplateVersionId: 'published-v1' }, 0),
+  version: mrStore.MR_VERSION_PLAN_STORE_VERSION,
+}))
+const selectedVersionHydrationStore = mrStore.createMrVersionPlanStore({ storage: selectedVersionHydrationStorage, now: () => NOW })
+await mrStore.rehydrateMrVersionPlanStore(selectedVersionHydrationStore)
+assert.equal(selectedVersionHydrationStore.getState().currentTemplateVersionId, 'published-v1')
 const throwingStorage = {
   getItem: () => { throw new Error('storage read failed') },
   setItem: () => { throw new Error('storage write failed') },
