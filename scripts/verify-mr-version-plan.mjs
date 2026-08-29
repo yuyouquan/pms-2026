@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
 import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
@@ -1751,3 +1753,72 @@ const asyncFailureStore = mrStore.createMrVersionPlanStore({ storage: rejectingA
 assert.equal(asyncFailureStore.getState().createTemplateRevision('管理员', adminPermission), true)
 assert.equal(asyncFailureStore.getState().templateVersions.some(version => version.status === '修订中'), true)
 await assert.doesNotReject(() => mrStore.rehydrateMrVersionPlanStore(asyncFailureStore))
+
+// Legacy standalone level-three plan retirement: old source, runtime symbols,
+// package commands and persisted plan-store fields must all be gone while the
+// MR store remains the sole guarded owner of legacy-key cleanup.
+const retiredLevel3Paths = [
+  'src/types/level3Plan.ts',
+  'src/types/level3Template.ts',
+  'src/lib/level3PlanRules.ts',
+  'src/lib/level3TemplateRules.ts',
+  'src/stores/level3Plan.ts',
+  'src/components/plans/Level3PlanModule.tsx',
+  'src/components/plans/Level3TemplateTable.tsx',
+  'scripts/verify-level3-plan.mjs',
+  'scripts/verify-level3-template-config.mjs',
+  'screenshots/verify-level3-template-config-browser.mjs',
+]
+retiredLevel3Paths.forEach(relativePath => {
+  assert.equal(fs.existsSync(path.join(root, relativePath)), false, `legacy level3 path retired: ${relativePath}`)
+})
+const collectRuntimeSources = directory => fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+  const absolutePath = path.join(directory, entry.name)
+  if (entry.isDirectory()) return collectRuntimeSources(absolutePath)
+  return /\.(?:ts|tsx)$/.test(entry.name) ? [absolutePath] : []
+})
+const runtimeSource = collectRuntimeSources(path.join(root, 'src'))
+  .map(file => fs.readFileSync(file, 'utf8'))
+  .join('\n')
+for (const retiredSymbol of ['useLevel3PlanStore', 'Level3PlanModule', 'Level3TemplateTable', 'level3TemplateTasksByType']) {
+  assert.doesNotMatch(runtimeSource, new RegExp(`\\b${retiredSymbol}\\b`), `runtime symbol retired: ${retiredSymbol}`)
+}
+assert.doesNotMatch(runtimeSource, /(?:getItem|read|import)[^\n]{0,120}pms-level3-plan-store/)
+const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+for (const retiredScript of ['verify:level3-plan', 'verify:level3-template', 'verify:level3-template-browser']) {
+  assert.equal(packageJson.scripts?.[retiredScript], undefined, `package script retired: ${retiredScript}`)
+}
+assert.match(readSource(root, 'src/stores/mrVersionPlan.ts'), /removeItem\(['"]pms-level3-plan-store['"]\)/)
+
+const legacyPlanFixture = {
+  tasks: [{ id: 'l1', taskName: '一级任务保留' }],
+  configTemplateTasksByType: { 整机产品项目: [{ id: 'template-l1', taskName: '模板保留' }] },
+  publishedSnapshots: { 'project::machine::OP::level1::v1': [{ id: 'snapshot-l1', taskName: '快照保留' }] },
+  marketPlanData: { OP: { tasks: [{ id: 'market-l1', taskName: '市场计划保留' }], level2Tasks: [], createdLevel2Plans: [] } },
+  marketVersionsByKey: { 'project::machine::OP::level1::versions': [{ id: 'market-v1', versionNo: 'V1', status: '已发布' }] },
+  marketCurrentVersionByKey: { 'project::machine::OP::level1::current': 'market-v1' },
+  tosTypePlanDataByProjectId: { tos: { Full: { level1Tasks: [{ id: 'tos-l1', taskName: 'tOS计划保留' }], level2Tasks: [], createdLevel2Plans: [] } } },
+  tosTypeVersionsByKey: { 'project::tos::tos-type::Full::level1::versions': [{ id: 'tos-v1', versionNo: 'V1', status: '已发布' }] },
+  tosTypeCurrentVersionByKey: { 'project::tos::tos-type::Full::level1::current': 'tos-v1' },
+  configTemplateVersionScopes: { keep: { versions: [{ id: 'v1', versionNo: 'V1', status: '已发布' }], currentVersion: 'v1' }, legacyLevel3: { versions: [{ id: 'old', versionNo: 'V1', status: '已发布' }], currentVersion: 'old' } },
+  configTemplateCompareScopes: { keep: { versionA: 'v1', versionB: 'v1' }, legacyLevel3: { versionA: 'old', versionB: 'old' } },
+  level3TemplateTasksByType: { 整机产品项目: [{ id: 'old-level3' }] },
+  level3ScopesByKey: { old: { activities: [] } },
+  currentLevel3Scope: 'old',
+}
+const planStore = loadTypeScriptModule(root, 'src/stores/plan.ts')
+assert.equal(planStore.PLAN_STORE_VERSION, 10)
+const migratedPlanFixture = planStore.migratePlanStoreState(structuredClone(legacyPlanFixture), 9)
+assert.equal('level3TemplateTasksByType' in migratedPlanFixture, false)
+assert.equal('level3ScopesByKey' in migratedPlanFixture, false)
+assert.equal('currentLevel3Scope' in migratedPlanFixture, false)
+assert.deepEqual(migratedPlanFixture.tasks, legacyPlanFixture.tasks)
+assert.deepEqual(migratedPlanFixture.configTemplateTasksByType.整机产品项目, legacyPlanFixture.configTemplateTasksByType.整机产品项目)
+assert.deepEqual(migratedPlanFixture.marketPlanData.OP, legacyPlanFixture.marketPlanData.OP)
+assert.deepEqual(migratedPlanFixture.marketVersionsByKey, legacyPlanFixture.marketVersionsByKey)
+assert.deepEqual(migratedPlanFixture.marketCurrentVersionByKey, legacyPlanFixture.marketCurrentVersionByKey)
+assert.deepEqual(migratedPlanFixture.tosTypePlanDataByProjectId, legacyPlanFixture.tosTypePlanDataByProjectId)
+assert.deepEqual(migratedPlanFixture.tosTypeVersionsByKey, legacyPlanFixture.tosTypeVersionsByKey)
+assert.deepEqual(migratedPlanFixture.tosTypeCurrentVersionByKey, legacyPlanFixture.tosTypeCurrentVersionByKey)
+assert.equal('legacyLevel3' in migratedPlanFixture.configTemplateVersionScopes, false)
+assert.equal('legacyLevel3' in migratedPlanFixture.configTemplateCompareScopes, false)
