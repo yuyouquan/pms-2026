@@ -1005,6 +1005,8 @@ const atomicStore = freshStore({
 const atomicResult = atomicStore.getState().reconcileMachinePlans(reconcileInput)
 assert.deepEqual(Object.keys(atomicResult.persistedPlans), ['machine-c09::16.3.0.140', 'machine-c09::16.3.0.145', 'machine-c09::16.3.0.150'])
 assert.equal(atomicStore.getState().marketOverridesByKey['stale::16.3.0.140::TR'], undefined)
+atomicResult.persistedPlans['machine-c09::16.3.0.140'].dates.transfer = '2026-01-01'
+assert.equal(atomicStore.getState().machinePlansByKey['machine-c09::16.3.0.140'].dates.transfer, '2026-07-02')
 let reconcileNotifications = 0
 const unsubscribeReconcile = atomicStore.subscribe(() => { reconcileNotifications += 1 })
 atomicStore.getState().reconcileMachinePlans(reconcileInput)
