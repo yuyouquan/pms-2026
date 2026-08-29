@@ -197,8 +197,7 @@ export function moveMrTemplateActivity(
     if (activeIndex < 0 || overIndex < 0) return normalized
     const nextBlocks = [...blocks]
     const [activeBlock] = nextBlocks.splice(activeIndex, 1)
-    const nextOverIndex = nextBlocks.findIndex(block => block[0].id === overId)
-    nextBlocks.splice(nextOverIndex, 0, activeBlock)
+    nextBlocks.splice(overIndex, 0, activeBlock)
     return normalizeMrTemplateActivities(reindexActivityBlocks(nextBlocks))
   }
 
@@ -210,8 +209,7 @@ export function moveMrTemplateActivity(
   const overIndex = children.findIndex(row => row.id === overId)
   if (activeIndex < 0 || overIndex < 0) return normalized
   const [activeChild] = children.splice(activeIndex, 1)
-  const nextOverIndex = children.findIndex(row => row.id === overId)
-  children.splice(nextOverIndex, 0, activeChild)
+  children.splice(overIndex, 0, activeChild)
   nextBlocks[parentIndex] = [nextBlocks[parentIndex][0], ...children]
   return normalizeMrTemplateActivities(reindexActivityBlocks(nextBlocks))
 }
