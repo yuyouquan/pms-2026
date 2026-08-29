@@ -52,9 +52,9 @@ export interface MrVersionPlanState {
 
 export interface MrVersionPlanActions {
   createTemplateRevision: (actor: string, permission: MrPermissionResult) => boolean
-  updateTemplateActivities: (versionId: string, updater: MrActivityUpdater, permission: MrPermissionResult) => boolean
+  updateTemplateActivities: (versionId: string, updater: MrActivityUpdater, actor: string, permission: MrPermissionResult) => boolean
   publishTemplateRevision: (versionId: string, actor: string, permission: MrPermissionResult) => { ok: boolean; errors: string[] }
-  cancelTemplateRevision: (versionId: string, permission: MrPermissionResult) => boolean
+  cancelTemplateRevision: (versionId: string, actor: string, permission: MrPermissionResult) => boolean
   addTosVersionInstance: (input: AddTosInstanceInput, permission: MrPermissionResult) => boolean
   updateTosDate: (projectId: string, tosVersion: string, activityId: string, value: string, actor: string, permission: MrPermissionResult) => boolean
   reconcileMachinePlans: (input: ReconcileJointInput) => ReconcileJointResult
@@ -151,9 +151,10 @@ function cloneTemplateVersion(version: MrTemplateVersion): MrTemplateVersion {
 
 function sanitizeTemplateVersions(value: unknown): MrTemplateVersion[] {
   if (!Array.isArray(value)) return []
-  const versions: MrTemplateVersion[] = []
+  const candidates: Array<{ version: MrTemplateVersion; number: number; index: number }> = []
   const ids = new Set<string>()
-  value.forEach(candidate => {
+  const versionNumbers = new Set<number>()
+  value.forEach((candidate, index) => {
     if (!isRecord(candidate)) return
     const id = text(candidate.id)
     const versionNo = text(candidate.versionNo)
@@ -161,18 +162,31 @@ function sanitizeTemplateVersions(value: unknown): MrTemplateVersion[] {
     const createdBy = text(candidate.createdBy)
     const createdAt = text(candidate.createdAt)
     const activities = sanitizeActivities(candidate.activities)
-    if (!id || ids.has(id) || !/^V[1-9]\d*$/.test(versionNo) || !status || !createdBy || !createdAt || activities.length === 0) return
+    const match = /^V([1-9]\d*)$/.exec(versionNo)
+    const versionNumber = match ? Number(match[1]) : Number.NaN
+    if (!id || ids.has(id) || !Number.isSafeInteger(versionNumber) || versionNumber <= 0 || versionNumbers.has(versionNumber) || !status || !createdBy || !createdAt || activities.length === 0) return
     ids.add(id)
-    versions.push({
-      id, versionNo, status, activities, createdBy, createdAt,
-      ...(text(candidate.publishedAt) ? { publishedAt: text(candidate.publishedAt) } : {}),
+    versionNumbers.add(versionNumber)
+    candidates.push({
+      index,
+      number: versionNumber,
+      version: {
+        id, versionNo, status, activities, createdBy, createdAt,
+        ...(text(candidate.publishedAt) ? { publishedAt: text(candidate.publishedAt) } : {}),
+      },
     })
   })
-  return versions
+  const published = candidates.filter(candidate => candidate.version.status === '已发布')
+    .sort((left, right) => left.number - right.number || left.index - right.index)
+  if (published.length === 0) return []
+  const draft = candidates.filter(candidate => candidate.version.status === '修订中')
+    .sort((left, right) => right.number - left.number || left.index - right.index)[0]
+  return [...published.map(candidate => candidate.version), ...(draft ? [draft.version] : [])]
 }
 
 function sanitizeTemplateHistory(value: unknown): MrTemplateChangeLog[] {
   if (!Array.isArray(value)) return []
+  const ids = new Set<string>()
   return value.flatMap(candidate => {
     if (!isRecord(candidate)) return []
     const id = text(candidate.id)
@@ -180,7 +194,8 @@ function sanitizeTemplateHistory(value: unknown): MrTemplateChangeLog[] {
     const action = candidate.action as MrTemplateChangeLog['action']
     const actor = text(candidate.actor)
     const occurredAt = text(candidate.occurredAt)
-    if (!id || !versionId || !TEMPLATE_ACTIONS.has(action) || !actor || !occurredAt) return []
+    if (!id || ids.has(id) || !versionId || !TEMPLATE_ACTIONS.has(action) || !actor || !occurredAt) return []
+    ids.add(id)
     return [{
       id, versionId, action, actor, occurredAt,
       ...(text(candidate.activityId) ? { activityId: text(candidate.activityId) } : {}),
@@ -218,7 +233,20 @@ function sanitizeTosInstances(value: unknown): Record<string, TosMrVersionInstan
   return result
 }
 
-function sanitizeMachinePlans(value: unknown): Record<string, JointMachinePlan> {
+function buildTosChildIds(instancesByProjectId: Readonly<Record<string, TosMrVersionInstance[]>>): Map<string, Set<string>> {
+  const result = new Map<string, Set<string>>()
+  Object.values(instancesByProjectId).flat().forEach(instance => {
+    result.set(`${instance.projectId}::${instance.tosVersion}`, new Set(
+      instance.activities.filter(activity => activity.parentId !== null).map(activity => activity.id),
+    ))
+  })
+  return result
+}
+
+function sanitizeMachinePlans(
+  value: unknown,
+  tosChildIds: ReadonlyMap<string, ReadonlySet<string>>,
+): Record<string, JointMachinePlan> {
   if (!isRecord(value)) return {}
   const result: Record<string, JointMachinePlan> = {}
   Object.keys(value).sort().forEach(sourceKey => {
@@ -230,14 +258,19 @@ function sanitizeMachinePlans(value: unknown): Record<string, JointMachinePlan> 
     const transferType = candidate.transferType as MrTransferType
     const updatedBy = text(candidate.updatedBy)
     const updatedAt = text(candidate.updatedAt)
-    if (!projectId || !tosProjectId || !tosVersion || !TRANSFER_TYPES.has(transferType) || !updatedBy || !updatedAt) return
+    const childIds = tosVersion ? tosChildIds.get(`${tosProjectId}::${tosVersion}`) : undefined
+    if (!projectId || !tosProjectId || !tosVersion || !childIds || !TRANSFER_TYPES.has(transferType) || !updatedBy || !updatedAt) return
     const key = `${projectId}::${tosVersion}`
-    if (!result[key]) result[key] = { projectId, tosProjectId, tosVersion, transferType, dates: transferType === 'N/A' ? {} : sanitizeDates(candidate.dates), updatedBy, updatedAt }
+    if (!result[key]) result[key] = { projectId, tosProjectId, tosVersion, transferType, dates: transferType === 'N/A' ? {} : sanitizeDates(candidate.dates, childIds), updatedBy, updatedAt }
   })
   return result
 }
 
-function sanitizeMarketOverrides(value: unknown, planKeys: ReadonlySet<string>): Record<string, MrMarketOverride> {
+function sanitizeMarketOverrides(
+  value: unknown,
+  plans: Readonly<Record<string, JointMachinePlan>>,
+  tosChildIds: ReadonlyMap<string, ReadonlySet<string>>,
+): Record<string, MrMarketOverride> {
   if (!isRecord(value)) return {}
   const result: Record<string, MrMarketOverride> = {}
   Object.keys(value).sort().forEach(sourceKey => {
@@ -249,8 +282,11 @@ function sanitizeMarketOverrides(value: unknown, planKeys: ReadonlySet<string>):
     const mainMarket = text(candidate.mainMarket)
     if (!projectId || !tosVersion || !market || !mainMarket || market === mainMarket) return
     const planKey = `${projectId}::${tosVersion}`
-    if (!planKeys.has(planKey)) return
-    const dates = sanitizeDates(candidate.dates)
+    const plan = plans[planKey]
+    if (!plan) return
+    const childIds = tosChildIds.get(`${plan.tosProjectId}::${plan.tosVersion}`)
+    if (!childIds) return
+    const dates = sanitizeDates(candidate.dates, childIds)
     result[`${planKey}::${market}`] = { projectId, tosVersion, market, mainMarket, dates }
   })
   return result
@@ -303,17 +339,19 @@ export function migrateMrVersionPlanState(persistedState: unknown, _fromVersion:
   if (!isRecord(persistedState)) return fallback
   const templateVersions = sanitizeTemplateVersions(persistedState.templateVersions)
   const safeTemplateVersions = templateVersions.length ? templateVersions : fallback.templateVersions
-  const versionIds = new Set(safeTemplateVersions.map(version => version.id))
-  const requestedCurrentId = text(persistedState.currentTemplateVersionId)
-  const currentTemplateVersionId = versionIds.has(requestedCurrentId) ? requestedCurrentId : safeTemplateVersions.at(-1)!.id
-  const machinePlansByKey = sanitizeMachinePlans(persistedState.machinePlansByKey)
+  const draft = safeTemplateVersions.find(version => version.status === '修订中')
+  const latestPublished = safeTemplateVersions.filter(version => version.status === '已发布').at(-1)!
+  const currentTemplateVersionId = draft?.id ?? latestPublished.id
+  const tosInstancesByProjectId = sanitizeTosInstances(persistedState.tosInstancesByProjectId)
+  const tosChildIds = buildTosChildIds(tosInstancesByProjectId)
+  const machinePlansByKey = sanitizeMachinePlans(persistedState.machinePlansByKey, tosChildIds)
   return {
     templateVersions: safeTemplateVersions.map(cloneTemplateVersion),
     currentTemplateVersionId,
     templateHistory: sanitizeTemplateHistory(persistedState.templateHistory),
-    tosInstancesByProjectId: sanitizeTosInstances(persistedState.tosInstancesByProjectId),
+    tosInstancesByProjectId,
     machinePlansByKey,
-    marketOverridesByKey: sanitizeMarketOverrides(persistedState.marketOverridesByKey, new Set(Object.keys(machinePlansByKey))),
+    marketOverridesByKey: sanitizeMarketOverrides(persistedState.marketOverridesByKey, machinePlansByKey, tosChildIds),
     stopReleaseRecords: sanitizeStopRecords(persistedState.stopReleaseRecords),
     viewModeByScope: sanitizeViewModes(persistedState.viewModeByScope),
   }
@@ -368,6 +406,17 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
   const clock = options.now ?? (() => new Date().toISOString())
   const idFactory = options.createId ?? (prefix => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`)
   const seeded = migrateMrVersionPlanState({ ...initialMrVersionPlanState(), ...options.initialState }, MR_VERSION_PLAN_STORE_VERSION)
+  const allocateLogIds = (history: readonly MrTemplateChangeLog[], count: number): string[] => {
+    const used = new Set(history.map(item => item.id))
+    return Array.from({ length: count }, () => {
+      const base = text(idFactory('mr-template-log')) || 'mr-template-log'
+      let candidate = base
+      let suffix = 2
+      while (used.has(candidate)) candidate = `${base}-${suffix++}`
+      used.add(candidate)
+      return candidate
+    })
+  }
 
   return persist<MrVersionPlanStore, [], [], MrVersionPlanState>((set, get) => ({
     ...seeded,
@@ -382,7 +431,7 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
           templateVersions: versions,
           currentTemplateVersionId: draft.id,
           templateHistory: [...state.templateHistory, {
-            id: idFactory('mr-template-log'), versionId: draft.id, action: 'create-revision', actor: normalizedActor, occurredAt: now,
+            id: allocateLogIds(state.templateHistory, 1)[0], versionId: draft.id, action: 'create-revision', actor: normalizedActor, occurredAt: now,
           }],
         }))
         return true
@@ -390,8 +439,9 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
         return false
       }
     },
-    updateTemplateActivities: (versionId, updater, permission) => {
-      if (!permission.canEditTemplate) return false
+    updateTemplateActivities: (versionId, updater, actor, permission) => {
+      const normalizedActor = text(actor)
+      if (!permission.canEditTemplate || !normalizedActor) return false
       const draft = get().templateVersions.find(version => version.id === versionId && version.status === '修订中')
       if (!draft) return false
       try {
@@ -412,8 +462,8 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
         const now = clock()
         set(state => ({
           templateVersions: state.templateVersions.map(version => version.id === versionId ? { ...version, activities: cloneMrTemplateSnapshot(next) } : cloneTemplateVersion(version)),
-          templateHistory: [...state.templateHistory, ...changes.map(change => ({
-            id: idFactory('mr-template-log'), versionId, actor: draft.createdBy, occurredAt: now, ...change,
+          templateHistory: [...state.templateHistory, ...changes.map((change, index) => ({
+            id: allocateLogIds(state.templateHistory, changes.length)[index], versionId, actor: normalizedActor, occurredAt: now, ...change,
           }))],
         }))
         return true
@@ -436,7 +486,7 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
           templateVersions: versions,
           currentTemplateVersionId: versionId,
           templateHistory: [...state.templateHistory, {
-            id: idFactory('mr-template-log'), versionId, action: 'publish', actor: normalizedActor, occurredAt: now,
+            id: allocateLogIds(state.templateHistory, 1)[0], versionId, action: 'publish', actor: normalizedActor, occurredAt: now,
           }],
         }))
         return { ok: true, errors: [] }
@@ -444,8 +494,9 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
         return { ok: false, errors: [error instanceof Error ? error.message : '发布失败'] }
       }
     },
-    cancelTemplateRevision: (versionId, permission) => {
-      if (!permission.canEditTemplate) return false
+    cancelTemplateRevision: (versionId, actor, permission) => {
+      const normalizedActor = text(actor)
+      if (!permission.canEditTemplate || !normalizedActor) return false
       const draft = get().templateVersions.find(version => version.id === versionId && version.status === '修订中')
       if (!draft) return false
       try {
@@ -456,7 +507,7 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
           templateVersions: versions,
           currentTemplateVersionId: published?.id ?? '',
           templateHistory: [...state.templateHistory, {
-            id: idFactory('mr-template-log'), versionId, action: 'cancel-revision', actor: draft.createdBy, occurredAt: now,
+            id: allocateLogIds(state.templateHistory, 1)[0], versionId, action: 'cancel-revision', actor: normalizedActor, occurredAt: now,
           }],
         }))
         return true
@@ -556,6 +607,8 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
       const projectId = text(input.projectId)
       if (!projectId || !canAccessProject(permission, permission.canStopRelease, projectId, 'machine')) return false
       const state = get()
+      if (state.stopReleaseRecords.some(record => record.projectId === projectId)) return false
+      if (!Object.values(state.machinePlansByKey).some(plan => plan.projectId === projectId)) return false
       try {
         const result = applyStopRelease({
           persistedPlans: state.machinePlansByKey,
@@ -584,11 +637,12 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
       if (!projectId || !tosVersion || !market || !mainMarket || market === mainMarket || !activityId || !normalizedActor) return false
       if (!canAccessProject(permission, permission.canEditMarket, projectId, 'machine')) return false
       if (input.value !== '' && canonicalDate(input.value) !== input.value) return false
-      if (input.value !== '' && !canonicalDate(input.mainValue)) return false
       const planKey = `${projectId}::${tosVersion}`
       const plan = get().machinePlansByKey[planKey]
       if (!plan || !hasChildActivity(get(), plan, activityId)) return false
+      if (input.value !== '' && !canonicalDate(plan.dates[activityId])) return false
       const key = `${planKey}::${market}`
+      if (input.value === '' && !get().marketOverridesByKey[key]?.dates[activityId]) return false
       set(state => {
         const previous = state.marketOverridesByKey[key]
         const dates = { ...(previous?.dates ?? {}) }
@@ -616,14 +670,12 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
     name: MR_VERSION_PLAN_STORAGE_KEY,
     version: MR_VERSION_PLAN_STORE_VERSION,
     storage: createJSONStorage(() => storage),
+    skipHydration: true,
     migrate: migrateMrVersionPlanState,
     merge: (persistedState, currentState) => persistedState == null
       ? currentState
       : { ...currentState, ...migrateMrVersionPlanState(persistedState, MR_VERSION_PLAN_STORE_VERSION) },
     partialize: partializeMrVersionPlanState,
-    onRehydrateStorage: () => () => {
-      if (typeof window !== 'undefined') window.localStorage.removeItem(LEGACY_LEVEL3_STORAGE_KEY)
-    },
   })
 }
 
@@ -634,3 +686,18 @@ export function createMrVersionPlanStore(options: StoreFactoryOptions = {}) {
 export const useMrVersionPlanStore = create<MrVersionPlanStore>()(createStoreCreator({
   storage: typeof window === 'undefined' ? memoryStorage : browserStorage,
 }))
+
+export async function rehydrateMrVersionPlanStore(
+  store: Pick<ReturnType<typeof createMrVersionPlanStore>, 'persist'> = useMrVersionPlanStore,
+): Promise<void> {
+  try {
+    await store.persist.rehydrate()
+  } catch {
+    // Corrupt or inaccessible browser storage must not block the MR plan surface.
+  }
+  try {
+    if (typeof window !== 'undefined') window.localStorage.removeItem(LEGACY_LEVEL3_STORAGE_KEY)
+  } catch {
+    // Legacy cleanup is best effort when storage is unavailable.
+  }
+}

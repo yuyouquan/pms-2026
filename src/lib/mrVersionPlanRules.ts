@@ -178,12 +178,21 @@ export function resolveMrPermissions(input: MrPermissionInput): MrPermissionResu
     .map(trim)
     .filter(Boolean)
   const isMachineSpm = machineSpmUsers.includes(currentUser)
-  if (input.context === 'tos' && input.tosManagerUsers.some(user => trim(user) === currentUser)) result.canEditTos = true
-  if (input.context === 'joint-machine' && isMachineSpm) {
+  const tosProjectId = trim(input.tosProjectId)
+  const machineProjectId = trim(input.machineProjectId)
+  if (input.context === 'tos' && tosProjectId && input.tosManagerUsers.some(user => trim(user) === currentUser)) {
+    result.canEditTos = true
+    result.tosProjectIds = [tosProjectId]
+  }
+  if (input.context === 'joint-machine' && machineProjectId && isMachineSpm) {
     result.canEditMachine = true
     result.canStopRelease = true
+    result.machineProjectIds = [machineProjectId]
   }
-  if (input.context === 'machine-market' && isMachineSpm) result.canEditMarket = true
+  if (input.context === 'machine-market' && machineProjectId && isMachineSpm) {
+    result.canEditMarket = true
+    result.machineProjectIds = [machineProjectId]
+  }
   return result
 }
 

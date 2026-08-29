@@ -267,6 +267,8 @@ export interface MrPermissionInput {
   tosManagerUsers: string[]
   machineSpm: string
   machineSpmUsers?: string[]
+  tosProjectId?: string
+  machineProjectId?: string
 }
 
 export interface MrPermissionResult {
