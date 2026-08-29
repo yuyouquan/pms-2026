@@ -1490,6 +1490,11 @@ assert.match(
   'MR browser acceptance must write default-run evidence to an isolated temporary directory',
 )
 assert.match(mrBrowserVerifierSource, /document\.fonts\.ready/)
+assert.doesNotMatch(
+  mrBrowserVerifierSource,
+  /\.catch\(\(\)\s*=>\s*\{\}\)/,
+  'MR screenshot stabilization must fail when a visible Ant message does not clear before the timeout',
+)
 assert.match(mrBrowserVerifierSource, /data-mr-row-key/)
 assert.match(mrBrowserVerifierSource, /data-mr-date-cell/)
 assert.match(mrBrowserVerifierSource, /data-mr-fixed-error-cell/)
