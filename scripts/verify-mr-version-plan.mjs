@@ -1476,6 +1476,11 @@ assert.match(
   /\.ant-modal-mask\s*\{[^}]*backdrop-filter:\s*none\s*!important;[^}]*-webkit-backdrop-filter:\s*none\s*!important;/s,
   'MR browser evidence CSS must disable modal-mask backdrop blur while leaving the product stylesheet unchanged',
 )
+assert.match(
+  mrBrowserVerifierSource,
+  /['"]--disable-features=UseSkiaRenderer['"]/,
+  'MR browser acceptance must use the stable legacy software renderer for byte-exact transparent SVG evidence',
+)
 assert.match(mrBrowserVerifierSource, /document\.fonts\.ready/)
 assert.match(mrBrowserVerifierSource, /data-mr-row-key/)
 assert.match(mrBrowserVerifierSource, /data-mr-date-cell/)
