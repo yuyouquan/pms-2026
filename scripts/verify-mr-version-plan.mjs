@@ -7,6 +7,8 @@ const root = projectRoot(import.meta.url)
 const templateRules = loadTypeScriptModule(root, 'src/lib/mrTemplateRules.ts')
 const templateMocks = loadTypeScriptModule(root, 'src/data/mrVersionPlanMocks.ts')
 const templateMocksSource = readSource(root, 'src/data/mrVersionPlanMocks.ts')
+const task13PackageJson = JSON.parse(readSource(root, 'package.json'))
+const mrBrowserVerifierSource = readSource(root, 'screenshots/verify-mr-version-plan-browser.mjs')
 const planRules = loadTypeScriptModule(root, 'src/lib/mrVersionPlanRules.ts')
 const aggregationRules = loadTypeScriptModule(root, 'src/lib/mrAggregationRules.ts')
 const dateRules = loadTypeScriptModule(root, 'src/lib/mrDateRules.ts')
@@ -1398,6 +1400,63 @@ const hydrationStorage = createMemoryStorage({ 'pms-level3-plan-store': JSON.str
 globalThis.window = { localStorage: hydrationStorage }
 const mrStore = loadTypeScriptModule(root, 'src/stores/mrVersionPlan.ts')
 assert.equal(mrStore.MR_VERSION_PLAN_STORAGE_KEY, 'pms-mr-version-plan-store')
+
+// Task 13 acceptance seed and real-browser registration contract.
+assert.equal(task13PackageJson.scripts['verify:mr-version-plan-browser'], 'node screenshots/verify-mr-version-plan-browser.mjs')
+assert.equal(typeof templateMocks.createInitialMrVersionPlanState, 'function')
+assert.equal(typeof templateMocks.createMrAcceptancePlanScopeSeed, 'function')
+const acceptanceStateA = templateMocks.createInitialMrVersionPlanState()
+const acceptanceStateB = templateMocks.createInitialMrVersionPlanState()
+assert.notEqual(acceptanceStateA, acceptanceStateB)
+assert.notEqual(acceptanceStateA.templateVersions, acceptanceStateB.templateVersions)
+assert.notEqual(acceptanceStateA.tosInstancesByProjectId, acceptanceStateB.tosInstancesByProjectId)
+assert.notEqual(acceptanceStateA.machinePlansByKey, acceptanceStateB.machinePlansByKey)
+assert.notEqual(acceptanceStateA.marketOverridesByKey, acceptanceStateB.marketOverridesByKey)
+assert.deepEqual(acceptanceStateA, acceptanceStateB)
+assert.deepEqual(
+  acceptanceStateA.tosInstancesByProjectId['19'].map(instance => instance.tosVersion),
+  ['16.3.0.140', '16.3.0.145'],
+)
+assert.ok(acceptanceStateA.tosInstancesByProjectId['19'].every(instance => (
+  instance.activities.filter(activity => activity.parentId !== null).every(activity => /^\d{4}-\d{2}-\d{2}$/.test(instance.dates[activity.id]))
+)))
+assert.equal(acceptanceStateA.machinePlansByKey['1::16.3.0.140'].transferType, '1')
+assert.equal(acceptanceStateA.machinePlansByKey['3::16.3.0.140'].transferType, '2')
+assert.equal(acceptanceStateA.machinePlansByKey['3::16.3.0.140'].dates['mr-node-mp-intake-deadline'], '2026-05-25')
+assert.equal(acceptanceStateA.marketOverridesByKey['1::16.3.0.140::TR'].dates['mr-node-test-start'], '2026-05-23')
+acceptanceStateA.tosInstancesByProjectId['19'][0].dates['mr-node-test-start'] = '2099-01-01'
+assert.equal(acceptanceStateB.tosInstancesByProjectId['19'][0].dates['mr-node-test-start'], '2026-05-23')
+
+const acceptancePlanScopeA = templateMocks.createMrAcceptancePlanScopeSeed()
+const acceptancePlanScopeB = templateMocks.createMrAcceptancePlanScopeSeed()
+assert.deepEqual(acceptancePlanScopeA, acceptancePlanScopeB)
+assert.notEqual(acceptancePlanScopeA.publishedSnapshots, acceptancePlanScopeB.publishedSnapshots)
+assert.deepEqual(
+  acceptancePlanScopeA.publishedSnapshots['project::19::tos-type::Full::level1::mr-acceptance-tos-v1::snapshot']
+    .filter(task => task.parentId != null).map(task => task.taskName),
+  ['16.3.0.140', '16.3.0.145', '16.3.0.150'],
+)
+assert.equal(
+  acceptancePlanScopeA.publishedSnapshots['project::19::tos-type::Full::level1::mr-acceptance-tos-v1::snapshot']
+    .find(task => task.taskName === '16.3.0.150').planEndDate,
+  '',
+)
+assert.equal(
+  acceptancePlanScopeA.publishedSnapshots['project::1::OP::level1::mr-acceptance-machine-v1']
+    .find(task => task.taskName === 'STR5').planEndDate,
+  '2026-05-15',
+)
+
+assert.match(mrBrowserVerifierSource, /setViewport\(\{\s*width:\s*1600,\s*height:\s*1000\s*\}\)/)
+assert.match(mrBrowserVerifierSource, /pms-mr-version-plan-store/)
+assert.match(mrBrowserVerifierSource, /pms-level3-plan-store/)
+assert.doesNotMatch(mrBrowserVerifierSource, /localStorage\.clear\s*\(/)
+for (let step = 1; step <= 15; step += 1) assert.match(mrBrowserVerifierSource, new RegExp(`STEP ${step} PASS`))
+for (const screenshot of [
+  'configuration.png', 'tos-vertical.png', 'tos-horizontal.png', 'joint-valid.png',
+  'joint-invalid.png', 'stop-record.png', 'machine-vertical.png', 'machine-horizontal.png',
+]) assert.match(mrBrowserVerifierSource, new RegExp(screenshot.replace('.', '\\.')))
+assert.match(mrBrowserVerifierSource, /PASS MR version plan browser verification/)
 assert.equal(mrStore.MR_VERSION_PLAN_STORE_VERSION, 1)
 const allFalsePermission = planRules.resolveMrPermissions({ currentUser: '普通用户', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '', context: 'config' })
 const adminPermission = planRules.resolveMrPermissions({ currentUser: '管理员', globalAdminUsers: ['管理员'], tosManagerUsers: [], machineSpm: '', context: 'config' })

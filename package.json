@@ -31,6 +31,7 @@
     "verify:technical-plan": "node scripts/verify-technical-plan.mjs",
     "verify:technical-plan-operations": "node scripts/verify-technical-plan-operations.mjs",
     "verify:mr-version-plan": "node scripts/verify-mr-version-plan.mjs",
+    "verify:mr-version-plan-browser": "node screenshots/verify-mr-version-plan-browser.mjs",
     "verify:project-list-matrix": "node scripts/verify-project-list-matrix.mjs",
     "verify:project-list-refinement": "node scripts/verify-project-list-refinement.mjs",
     "verify:project-role-sync": "node scripts/verify-project-role-sync.mjs",
