@@ -780,7 +780,7 @@ export default function ProjectSpaceContainer() {
     setPendingNavigation, setShowLeaveConfirm: setShowLeaveConfirmFn,
     projectSpaceSidebarCollapsed, setProjectSpaceSidebarCollapsed,
     planNavigationIntent, setPlanNavigationIntent,
-    mrPlanNavigationIntent, consumeMrPlanNavigationIntent, clearMrPlanNavigationIntent,
+    mrPlanNavigationIntent, consumeMrPlanNavigationIntent,
   } = ui
 
   const {
@@ -2496,10 +2496,7 @@ export default function ProjectSpaceContainer() {
 
   useEffect(() => {
     if (!mrPlanNavigationIntent || mrPlanNavigationIntent.source !== 'joint-mr') return
-    if (activeModule !== 'projectSpace' || selectedProject?.id !== mrPlanNavigationIntent.projectId) {
-      clearMrPlanNavigationIntent()
-      return
-    }
+    if (activeModule !== 'projectSpace' || selectedProject?.id !== mrPlanNavigationIntent.projectId) return
     if (projectSpaceModule !== 'plan' || projectPlanLevel !== 'mr-version-plan') return
     const target = [...document.querySelectorAll<HTMLElement>('[data-mr-tos-version]')]
       .find(element => element.dataset.mrTosVersion === mrPlanNavigationIntent.mrTosVersion)
@@ -2509,7 +2506,6 @@ export default function ProjectSpaceContainer() {
     consumeMrPlanNavigationIntent()
   }, [
     activeModule,
-    clearMrPlanNavigationIntent,
     consumeMrPlanNavigationIntent,
     mrIntentInstances,
     mrIntentPlanKeys,

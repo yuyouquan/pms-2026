@@ -258,16 +258,18 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     }),
   ])), [currentLoginUser, globalAdminUsers, sources.machineProjects])
   const stopCandidates = useMemo(() => buildStopReleaseCandidates({
-    rows: projection.rows,
+    rows: filteredRows,
     instances: tosInstances,
     stopRecords: stopReleaseRecords,
     permissionsByProjectId: permissionByProjectId,
     metadataByProjectId: sources.machineMetadataByProjectId,
-  }), [permissionByProjectId, projection.rows, sources.machineMetadataByProjectId, stopReleaseRecords, tosInstances])
+  }), [filteredRows, permissionByProjectId, sources.machineMetadataByProjectId, stopReleaseRecords, tosInstances])
   const enabledStopCandidates = useMemo(
     () => stopCandidates.filter(candidate => !candidate.disabled),
     [stopCandidates],
   )
+  const stopSelectionValid = !!stopProjectId
+    && stopCandidates.some(candidate => candidate.projectId === stopProjectId && !candidate.disabled)
   const stopButtonReason = enabledStopCandidates.length
     ? undefined
     : stopCandidates.length
@@ -276,6 +278,12 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
         ? '当前用户没有可停止发版的项目'
         : '当前没有可停止发版的项目'
   const historyRows = useMemo(() => sortStopReleaseHistory(stopReleaseRecords), [stopReleaseRecords])
+
+  useEffect(() => {
+    if (!stopProjectId) return
+    if (stopCandidates.some(candidate => candidate.projectId === stopProjectId && !candidate.disabled)) return
+    setStopProjectId(undefined)
+  }, [stopCandidates, stopProjectId])
 
   const handleTransferType = (row: MrJointMachineRow, value: MrTransferType, permission: MrPermissionResult) => {
     const updated = updateMachineTransferType(row.key, value, currentLoginUser, permission)
@@ -484,7 +492,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
         open={stopModalOpen}
         okText="确认停止"
         cancelText="取消"
-        okButtonProps={{ disabled: !stopProjectId || !stopDate }}
+        okButtonProps={{ disabled: !stopSelectionValid || !stopDate }}
         onOk={handleStopRelease}
         onCancel={() => {
           setStopModalOpen(false)
