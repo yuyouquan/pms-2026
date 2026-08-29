@@ -279,5 +279,29 @@ assert.match(todayHookSource, /setTimeout/, 'local today hook schedules the next
 assert.match(todayHookSource, /clearTimeout/, 'local today hook cleans up its midnight timer')
 assert.match(browserSource, /unexpectedBrowserErrors/, 'browser verification must retain unexpected errors')
 assert.match(browserSource, /throw new Error\(`unexpected browser errors/, 'browser verification must fail on unexpected browser errors')
+for (const obsoleteContract of [
+  'assertVisibleTabLabels',
+  'assertSelectedWorkbenchTab',
+  '[aria-label="待办来源"]',
+  'readTodoMetric',
+  'waitForTodoMetric',
+  '分类待办中心',
+  'return from work tracker',
+]) {
+  assert.doesNotMatch(browserSource, new RegExp(obsoleteContract.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `browser verification must remove obsolete workbench contract: ${obsoleteContract}`)
+}
+for (const currentContract of [
+  '[aria-label="个人工作台任务"]',
+  '[aria-label="任务目录"]',
+  '.pms-todo-directory__item',
+  '.pms-todo-center__result-status[role="status"]',
+  '[role="tablist"][aria-label="任务状态"]',
+  '[aria-label="生成时间"]',
+  '[aria-label="清空筛选"]',
+]) {
+  assert.match(browserSource, new RegExp(currentContract.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `browser verification must cover current workbench contract: ${currentContract}`)
+}
+assert.match(browserSource, /setViewport\(\{\s*width:\s*700/, 'browser verification must cover the current narrow todo layout below 760px')
+assert.match(browserSource, /gridColumnStart/, 'browser verification must prove the search filter spans both narrow columns')
 assert.doesNotMatch(todoCenterSource, /checklist\.map|tmChecklistItems\.map/, 'todo center must not split transfer checklists into rows')
 console.log('todo center contract passed')
