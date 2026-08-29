@@ -1560,6 +1560,24 @@ assert.equal(
   '2026-05-15',
   'tOS MR eligibility must bind STR5 through its stable id',
 )
+const assertAcceptanceMilestoneBuffer = (snapshot, stableIds, scopeName) => {
+  const dates = stableIds.map(stableId => snapshot.find(task => task.stableId === stableId)?.planEndDate || '')
+  assert.ok(dates.every(date => /^\d{4}-\d{2}-\d{2}$/.test(date)), `${scopeName} fixed milestone dates must be complete ISO dates`)
+  assert.ok(dates.every((date, index) => index === 0 || date >= dates[index - 1]), `${scopeName} fixed milestone dates must stay non-decreasing`)
+  const conceptStart = Date.parse(`${dates[0]}T00:00:00.000Z`)
+  const str1 = Date.parse(`${dates[1]}T00:00:00.000Z`)
+  assert.ok((str1 - conceptStart) / 86_400_000 >= 21, `${scopeName} concept kickoff requires at least 21 days before STR1 so a legal gantt drag is not rolled back`)
+}
+assertAcceptanceMilestoneBuffer(
+  machineAcceptanceSnapshot,
+  ['machine-ms-concept-kickoff', 'machine-ms-str1', 'machine-ms-str2', 'machine-ms-str3', 'machine-ms-str4', 'machine-ms-str4a', 'machine-ms-str5'],
+  'machine V3',
+)
+assertAcceptanceMilestoneBuffer(
+  tosAcceptanceSnapshot,
+  ['tos-ms-concept-kickoff', 'tos-ms-str1', 'tos-ms-str2', 'tos-ms-str3', 'tos-ms-str4', 'tos-ms-str4a', 'tos-ms-str5'],
+  'tOS V3',
+)
 assert.match(templateMocksSource, /MR_ACCEPTANCE_FIXED_MILESTONE_DATES[\s\S]*['"]machine-ms-str5['"][\s\S]*['"]tos-ms-str5['"]/, 'acceptance milestone dates must be keyed by project-specific stable ids')
 assert.match(templateMocksSource, /MR_ACCEPTANCE_FIXED_MILESTONE_DATES\[task\.stableId!\]/, 'acceptance date injection must read the immutable stable id')
 assert.doesNotMatch(templateMocksSource, /MR_ACCEPTANCE_FIXED_MILESTONE_DATES\[task\.taskName\]/, 'acceptance dates must not depend on editable display names')
