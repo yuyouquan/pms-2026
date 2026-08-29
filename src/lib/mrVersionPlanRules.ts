@@ -17,17 +17,44 @@ import type {
 const TOS_STAGES = new Set(['上市迭代阶段', '维护阶段'])
 const COLLECT_START = '修改点收集开始时间'
 const OTA_RELEASE = 'OTA开放验证&部署'
+const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
+const EXPLICIT_ISO_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/
+const SHANGHAI_DATE_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
 
 function trim(value: string | undefined | null): string {
   return value?.trim() ?? ''
 }
 
-function normalizeDate(value: string | Date | undefined): string {
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? '' : value.toISOString().slice(0, 10)
-  const text = trim(value)
-  if (!text) return ''
+function isValidDateOnly(value: string): boolean {
+  const match = DATE_ONLY_PATTERN.exec(value)
+  if (!match) return false
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(0)
+  date.setUTCHours(0, 0, 0, 0)
+  date.setUTCFullYear(year, month - 1, day)
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+}
+
+function formatShanghaiDate(value: Date): string {
+  const parts = new Map(SHANGHAI_DATE_FORMATTER.formatToParts(value).map(part => [part.type, part.value]))
+  return `${parts.get('year')}-${parts.get('month')}-${parts.get('day')}`
+}
+
+export function normalizeMrBusinessDate(value: unknown): string {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? '' : formatShanghaiDate(value)
+  if (typeof value !== 'string') return ''
+  const text = value.trim()
+  if (isValidDateOnly(text)) return text
+  if (!EXPLICIT_ISO_PATTERN.test(text) || !isValidDateOnly(text.slice(0, 10))) return ''
   const parsed = new Date(text)
-  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10)
+  return Number.isNaN(parsed.getTime()) ? '' : formatShanghaiDate(parsed)
 }
 
 function parseTosVersion(value: string): number[] | undefined {
@@ -97,8 +124,8 @@ export function selectTosMrVersionCandidates(input: TosMrCandidateInput): TosMrV
       const value = trim(child.taskName)
       if (!value || seen.has(value)) return
       seen.add(value)
-      const planStartDate = normalizeDate(child.planStartDate)
-      const planEndDate = normalizeDate(child.planEndDate)
+      const planStartDate = normalizeMrBusinessDate(child.planStartDate)
+      const planEndDate = normalizeMrBusinessDate(child.planEndDate)
       const disabled = used.has(value) || !planStartDate || !planEndDate
       candidates.push({
         value,
@@ -118,14 +145,14 @@ export function selectTosMrVersionCandidates(input: TosMrCandidateInput): TosMrV
 
 export function validateTosMrInstanceDates(instance: TosMrVersionInstance, bounds: MrTosDateBounds): MrCellError[] {
   const rowKey = `${instance.projectId}::${instance.tosVersion}`
-  const startBound = normalizeDate(bounds.planStartDate)
-  const endBound = normalizeDate(bounds.planEndDate)
+  const startBound = normalizeMrBusinessDate(bounds.planStartDate)
+  const endBound = normalizeMrBusinessDate(bounds.planEndDate)
   const errors: MrCellError[] = []
 
   instance.activities.forEach(activity => {
     if (activity.parentId === null) return
     const name = trim(activity.activityName)
-    const date = normalizeDate(instance.dates[activity.id])
+    const date = normalizeMrBusinessDate(instance.dates[activity.id])
     if (!date) return
     if (name === COLLECT_START && startBound && date < startBound) {
       errors.push({ rowKey, activityId: activity.id, activityName: activity.activityName, message: '修改点收集开始时间不能早于一级计划中的计划开始时间' })
