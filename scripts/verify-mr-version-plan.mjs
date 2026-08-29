@@ -3,6 +3,7 @@ import { loadTypeScriptModule, projectRoot } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
 const templateRules = loadTypeScriptModule(root, 'src/lib/mrTemplateRules.ts')
+const templateMocks = loadTypeScriptModule(root, 'src/data/mrVersionPlanMocks.ts')
 
 assert.equal(templateRules.DEFAULT_MR_TEMPLATE_ACTIVITIES.length, 15)
 assert.deepEqual(
@@ -25,4 +26,127 @@ assert.deepEqual(
     ['5.1', '软件归档时间'],
     ['5.2', 'OTA开放验证&部署'],
   ],
+)
+
+const NOW = '2026-08-29T08:00:00.000Z'
+const LATER = '2026-08-30T08:00:00.000Z'
+const parent = { id: 'stage-a', parentId: null, order: 0, activityName: '阶段A' }
+const parentB = { id: 'stage-b', parentId: null, order: 1, activityName: '第二阶段' }
+const childA = { id: 'node-a', parentId: parent.id, order: 0, activityName: '子活动A' }
+const childB = { id: 'node-b', parentId: parent.id, order: 1, activityName: '子活动B' }
+const childC = { id: 'node-c', parentId: parentB.id, order: 0, activityName: '子活动C' }
+const grandchild = { id: 'node-a-child', parentId: childA.id, order: 0, activityName: '三级活动' }
+
+assert.deepEqual(templateRules.validateMrTemplateForPublish([
+  parent,
+  { ...childA, activityName: '节点A' },
+  { ...childB, activityName: ' 节点A ' },
+]), ['活动名称重复：节点A'])
+assert.deepEqual(
+  templateRules.validateMrTemplateForPublish([{ ...parent, activityName: ' ' }]),
+  ['活动名称不能为空'],
+)
+
+assert.throws(
+  () => templateRules.normalizeMrTemplateActivities([parent, childA, grandchild]),
+  /最多支持两级活动/,
+)
+assert.throws(
+  () => templateRules.normalizeMrTemplateActivities([{ ...childA, parentId: 'missing' }]),
+  /父活动不存在/,
+)
+assert.throws(
+  () => templateRules.normalizeMrTemplateActivities([{ ...parent, activityName: ' ' }]),
+  /活动名称不能为空/,
+)
+assert.throws(
+  () => templateRules.normalizeMrTemplateActivities([parent, { ...parent }]),
+  /活动 ID 重复/,
+)
+assert.throws(
+  () => templateRules.normalizeMrTemplateActivities([{ ...parent, id: ' ' }]),
+  /活动 ID 不能为空/,
+)
+
+const normalized = templateRules.normalizeMrTemplateActivities([
+  { ...childB, order: 8 },
+  { ...parentB, order: 4 },
+  { ...childC, order: 3 },
+  { ...parent, order: 7 },
+  { ...childA, order: 9 },
+])
+assert.deepEqual(normalized.map(row => row.id), [parentB.id, childC.id, parent.id, childB.id, childA.id])
+assert.deepEqual(normalized.map(row => [row.id, row.order]), [
+  [parentB.id, 0], [childC.id, 0], [parent.id, 1], [childB.id, 0], [childA.id, 1],
+])
+
+const seed = templateRules.DEFAULT_MR_TEMPLATE_ACTIVITIES
+const cloned = templateRules.cloneMrTemplateSnapshot(seed)
+assert.deepEqual(cloned, seed)
+assert.notStrictEqual(cloned, seed)
+assert.notStrictEqual(cloned[0], seed[0])
+
+const initialVersions = templateMocks.createInitialMrTemplateVersions()
+const nextInitialVersions = templateMocks.createInitialMrTemplateVersions()
+assert.notStrictEqual(initialVersions[0].activities, seed)
+assert.notStrictEqual(initialVersions[0].activities[0], seed[0])
+assert.notStrictEqual(initialVersions[0].activities, nextInitialVersions[0].activities)
+assert.notStrictEqual(initialVersions[0].activities[0], nextInitialVersions[0].activities[0])
+const revision = templateRules.createMrTemplateRevision(initialVersions, '张三', NOW)
+assert.equal(revision.filter(item => item.status === '修订中').length, 1)
+assert.equal(revision.find(item => item.status === '修订中').versionNo, 'V2')
+assert.throws(() => templateRules.createMrTemplateRevision(revision, '张三', NOW), /已存在修订版本/)
+assert.deepEqual(initialVersions, templateMocks.createInitialMrTemplateVersions())
+const highestVersionRevision = templateRules.createMrTemplateRevision([
+  initialVersions[0],
+  { ...initialVersions[0], id: 'mr-template-v3', versionNo: 'V3' },
+], '张三', NOW)
+assert.equal(highestVersionRevision.at(-1).versionNo, 'V4')
+assert.notStrictEqual(highestVersionRevision.at(-1).activities, initialVersions[0].activities)
+
+const revisionBeforePublish = JSON.parse(JSON.stringify(revision))
+const published = templateRules.publishMrTemplateRevision(revision, revision.at(-1).id, '张三', LATER)
+assert.equal(published.at(-1).status, '已发布')
+assert.equal(published.at(-1).publishedAt, LATER)
+assert.deepEqual(revision, revisionBeforePublish)
+assert.equal(templateRules.cancelMrTemplateRevision(revision, revision.at(-1).id).length, 1)
+assert.throws(() => templateRules.cancelMrTemplateRevision(initialVersions, initialVersions[0].id), /仅可取消修订版本/)
+assert.throws(() => templateRules.cancelMrTemplateRevision(revision, 'missing'), /修订版本不存在/)
+assert.throws(
+  () => templateRules.publishMrTemplateRevision(
+    revision.map(version => version.id === revision.at(-1).id
+      ? { ...version, activities: [{ ...version.activities[0], activityName: '重复' }, { ...version.activities[1], activityName: ' 重复 ' }] }
+      : version),
+    revision.at(-1).id,
+    '张三',
+    LATER,
+  ),
+  /活动名称重复：重复/,
+)
+
+const moveFixture = [parent, childA, childB, parentB, childC]
+const sourceBeforeMove = JSON.parse(JSON.stringify(moveFixture))
+const movedChild = templateRules.moveMrTemplateActivity(moveFixture, childB.id, childA.id)
+assert.deepEqual(
+  templateRules.numberMrTemplateActivities(movedChild)
+    .filter(row => row.parentId === parent.id).map(row => row.activityName),
+  ['子活动B', '子活动A'],
+)
+assert.deepEqual(moveFixture, sourceBeforeMove)
+assert.notStrictEqual(movedChild, moveFixture)
+assert.notStrictEqual(movedChild[0], moveFixture[0])
+
+const movedParent = templateRules.moveMrTemplateActivity(moveFixture, parentB.id, parent.id)
+assert.deepEqual(movedParent.map(row => row.id), [parentB.id, childC.id, parent.id, childA.id, childB.id])
+assert.deepEqual(
+  templateRules.moveMrTemplateActivity(moveFixture, childC.id, childA.id),
+  templateRules.normalizeMrTemplateActivities(moveFixture),
+)
+assert.deepEqual(
+  templateRules.moveMrTemplateActivity(moveFixture, 'missing', childA.id),
+  templateRules.normalizeMrTemplateActivities(moveFixture),
+)
+assert.deepEqual(
+  templateRules.moveMrTemplateActivity(moveFixture, childA.id, childA.id),
+  templateRules.normalizeMrTemplateActivities(moveFixture),
 )
