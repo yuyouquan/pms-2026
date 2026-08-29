@@ -94,6 +94,35 @@ const browserStorage: StateStorage = {
   removeItem: name => { if (typeof window !== 'undefined') window.localStorage.removeItem(name) },
 }
 
+function failSafeStorage(storage: StateStorage): StateStorage {
+  return {
+    getItem: name => {
+      try {
+        const result = storage.getItem(name)
+        return result instanceof Promise ? result.catch(() => null) : result
+      } catch {
+        return null
+      }
+    },
+    setItem: (name, value) => {
+      try {
+        const result = storage.setItem(name, value)
+        return result instanceof Promise ? result.catch(() => undefined) : result
+      } catch {
+        return undefined
+      }
+    },
+    removeItem: name => {
+      try {
+        const result = storage.removeItem(name)
+        return result instanceof Promise ? result.catch(() => undefined) : result
+      } catch {
+        return undefined
+      }
+    },
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -179,7 +208,9 @@ function sanitizeTemplateVersions(value: unknown): MrTemplateVersion[] {
   const published = candidates.filter(candidate => candidate.version.status === '已发布')
     .sort((left, right) => left.number - right.number || left.index - right.index)
   if (published.length === 0) return []
+  const latestPublishedNumber = published.at(-1)!.number
   const draft = candidates.filter(candidate => candidate.version.status === '修订中')
+    .filter(candidate => candidate.number > latestPublishedNumber)
     .sort((left, right) => right.number - left.number || left.index - right.index)[0]
   return [...published.map(candidate => candidate.version), ...(draft ? [draft.version] : [])]
 }
@@ -287,6 +318,7 @@ function sanitizeMarketOverrides(
     const childIds = tosChildIds.get(`${plan.tosProjectId}::${plan.tosVersion}`)
     if (!childIds) return
     const dates = sanitizeDates(candidate.dates, childIds)
+    if (Object.keys(dates).length === 0) return
     result[`${planKey}::${market}`] = { projectId, tosVersion, market, mainMarket, dates }
   })
   return result
@@ -295,6 +327,7 @@ function sanitizeMarketOverrides(
 function sanitizeStopRecords(value: unknown): MrStopReleaseRecord[] {
   if (!Array.isArray(value)) return []
   const ids = new Set<string>()
+  const projectIds = new Set<string>()
   return value.flatMap(candidate => {
     if (!isRecord(candidate)) return []
     const id = text(candidate.id)
@@ -303,8 +336,9 @@ function sanitizeStopRecords(value: unknown): MrStopReleaseRecord[] {
     const stopDate = canonicalDate(candidate.stopDate)
     const operator = text(candidate.operator)
     const operatedAt = text(candidate.operatedAt)
-    if (!id || ids.has(id) || !projectId || !projectName || !stopDate || !operator || !operatedAt) return []
+    if (!id || ids.has(id) || !projectId || projectIds.has(projectId) || !projectName || !stopDate || !operator || !operatedAt) return []
     ids.add(id)
+    projectIds.add(projectId)
     return [{ id, projectId, projectName, stopDate, operator, operatedAt }]
   })
 }
@@ -460,12 +494,15 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
         })
         next.forEach(activity => { if (!previousById.has(activity.id)) changes.push({ action: 'add', activityId: activity.id, after: activity.activityName }) })
         const now = clock()
-        set(state => ({
-          templateVersions: state.templateVersions.map(version => version.id === versionId ? { ...version, activities: cloneMrTemplateSnapshot(next) } : cloneTemplateVersion(version)),
-          templateHistory: [...state.templateHistory, ...changes.map((change, index) => ({
-            id: allocateLogIds(state.templateHistory, changes.length)[index], versionId, actor: normalizedActor, occurredAt: now, ...change,
-          }))],
-        }))
+        set(state => {
+          const logIds = allocateLogIds(state.templateHistory, changes.length)
+          return {
+            templateVersions: state.templateVersions.map(version => version.id === versionId ? { ...version, activities: cloneMrTemplateSnapshot(next) } : cloneTemplateVersion(version)),
+            templateHistory: [...state.templateHistory, ...changes.map((change, index) => ({
+              id: logIds[index], versionId, actor: normalizedActor, occurredAt: now, ...change,
+            }))],
+          }
+        })
         return true
       } catch {
         return false
@@ -669,7 +706,7 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
   }), {
     name: MR_VERSION_PLAN_STORAGE_KEY,
     version: MR_VERSION_PLAN_STORE_VERSION,
-    storage: createJSONStorage(() => storage),
+    storage: createJSONStorage(() => failSafeStorage(storage)),
     skipHydration: true,
     migrate: migrateMrVersionPlanState,
     merge: (persistedState, currentState) => persistedState == null
@@ -696,7 +733,7 @@ export async function rehydrateMrVersionPlanStore(
     // Corrupt or inaccessible browser storage must not block the MR plan surface.
   }
   try {
-    if (typeof window !== 'undefined') window.localStorage.removeItem(LEGACY_LEVEL3_STORAGE_KEY)
+    if (typeof window !== 'undefined') await Promise.resolve(window.localStorage.removeItem(LEGACY_LEVEL3_STORAGE_KEY))
   } catch {
     // Legacy cleanup is best effort when storage is unavailable.
   }
