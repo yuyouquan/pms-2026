@@ -87,6 +87,13 @@ export interface CreateTosMrVersionInput {
   now: string
 }
 
+export interface AddTosInstanceInput {
+  projectId: string
+  tosVersion: string
+  actor: string
+  now: string
+}
+
 export interface MrTosVerticalRow extends MrTemplateActivity {
   number: string
   depth: 0 | 1
@@ -130,8 +137,11 @@ export interface MrMarketOverride {
   projectId: string
   tosVersion: string
   market: string
+  mainMarket: string
   dates: MrActivityDateMap
 }
+
+export interface StoreStopReleaseInput extends MrStopReleaseRecord {}
 
 export interface MrCellError {
   rowKey: string
@@ -266,6 +276,10 @@ export interface MrPermissionResult {
   canEditMachine: boolean
   canStopRelease: boolean
   canEditMarket: boolean
+  /** Explicit ownership scope for non-admin tOS managers. */
+  tosProjectIds?: string[]
+  /** Explicit ownership scope for non-admin machine SPMs. */
+  machineProjectIds?: string[]
 }
 
 export type MrActivityUpdater = MrTemplateActivity[] | ((previous: MrTemplateActivity[]) => MrTemplateActivity[])
