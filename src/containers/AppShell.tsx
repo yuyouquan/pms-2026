@@ -101,6 +101,7 @@ export function MainHeader() {
     setIsEditMode, navigateWithEditGuard,
   } = useUiStore()
   const { versions, currentVersion } = usePlanStore()
+  const { setTransferView } = useTransferStore()
   const isCurrentDraft = versions.find(version => version.id === currentVersion)?.status === '修订中'
 
   return (
@@ -121,13 +122,19 @@ export function MainHeader() {
                 mode="horizontal"
                 selectedKeys={[activeModule]}
                 onClick={({ key }) => navigateWithEditGuard(
-                  () => { setIsEditMode(false); setActiveModule(key as MainModule); if (key === 'config') setConfigTab('plan') },
+                  () => {
+                    setTransferView(null)
+                    setIsEditMode(false)
+                    setActiveModule(key as MainModule)
+                    if (key === 'config') setConfigTab('plan')
+                  },
                   isCurrentDraft,
                 )}
                 style={{ background: 'transparent', borderBottom: 'none', fontSize: 14 }}
                 items={[
                   { key: 'workbench', label: '工作台' },
                   { key: 'projectList', label: '项目列表' },
+                  { key: 'jointProjectSpace', label: '联合项目空间' },
                   { key: 'roadmap', label: 'tOS路标' },
                   { key: 'hrPipeline', label: '人力资源管道' },
                   { key: 'config', label: '配置中心' },

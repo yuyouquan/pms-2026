@@ -34,6 +34,12 @@ assert.match(jointContainerSource, /tOS&整机MR版本计划/)
 for (const label of ['tOS版本号', '项目名称', '1+N版本类型', '停止发版', '停止发版记录']) {
   assert.ok(jointPlanSource.includes(label))
 }
+const jointFixedLabels = ['tOS版本号', '项目名称', '市场名', '产品线', 'SPM', '是否MADA', 'SOC平台', '组包方式', '1+N转测类型']
+jointFixedLabels.reduce((previousIndex, label) => {
+  const index = jointPlanSource.indexOf(label, previousIndex + 1)
+  assert.ok(index > previousIndex, `joint fixed column order: ${label}`)
+  return index
+}, -1)
 assert.match(headerSource, /navigateWithEditGuard\([\s\S]*setTransferView\(null\)/)
 assert.match(jointPlanSource, /rehydrateMrVersionPlanStore/)
 assert.match(jointPlanSource, /buildMrAggregationSources/)
@@ -48,9 +54,10 @@ assert.match(jointPlanSource, /aria-label=\{`打开项目-\$\{metadata\.projectN
 assert.match(jointPlanSource, /const MR_TRANSFER_OPTIONS[^;]*['"]N\/A['"][\s\S]*['"]8['"]/)
 assert.match(jointPlanSource, /updateMachineTransferType/)
 assert.match(jointPlanSource, /updateMachineDate/)
-assert.match(jointPlanSource, /machineProjectId:\s*row\.projectId/)
+assert.match(jointPlanSource, /if\s*\(!updated\)/)
+assert.match(jointPlanSource, /machineProjectId:\s*project\.id/)
 assert.match(jointPlanSource, /compareTosVersionNumbers/)
-assert.match(jointPlanSource, /localeCompare\([^)]*projectName/)
+assert.match(jointPlanSource, /leftName\.localeCompare\(rightName/)
 assert.match(jointPlanSource, /kind === ['"]tos-reference['"][\s\S]*disabled/)
 assert.match(jointPlanSource, /kind === ['"]tos-reference['"][\s\S]*['"]\/['"]/)
 assert.match(jointPlanSource, /useMemo\([\s\S]*sourceInput/)

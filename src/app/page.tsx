@@ -13,6 +13,7 @@ import WorkbenchContainer from '@/containers/WorkbenchContainer'
 import ProjectListContainer from '@/containers/ProjectListContainer'
 import ProjectSpaceContainer from '@/containers/ProjectSpaceContainer'
 import ConfigContainer from '@/containers/ConfigContainer'
+import JointProjectSpaceContainer from '@/containers/JointProjectSpaceContainer'
 import { useActivateProject } from '@/hooks/useActivateProject'
 import type { ProjectItem } from '@/types/app'
 
@@ -81,6 +82,9 @@ export default function Home() {
 
               {/* Dedicated project list */}
               {activeModule === 'projectList' && <ProjectListContainer />}
+
+              {/* Cross-project MR aggregation workspace */}
+              {activeModule === 'jointProjectSpace' && <JointProjectSpaceContainer />}
 
               {/* Roadmap */}
               {activeModule === 'roadmap' && (

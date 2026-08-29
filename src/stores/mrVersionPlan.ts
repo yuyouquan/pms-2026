@@ -57,7 +57,7 @@ export interface MrVersionPlanActions {
   cancelTemplateRevision: (versionId: string, actor: string, permission: MrPermissionResult) => boolean
   addTosVersionInstance: (input: AddTosInstanceInput, permission: MrPermissionResult) => boolean
   updateTosDate: (projectId: string, tosVersion: string, activityId: string, value: string, actor: string, permission: MrPermissionResult) => boolean
-  reconcileMachinePlans: (input: ReconcileJointInput) => ReconcileJointResult
+  reconcileMachinePlans: (input: Omit<ReconcileJointInput, 'tosInstances' | 'persistedPlans' | 'stopRecords'>) => ReconcileJointResult
   updateMachineTransferType: (key: string, value: MrTransferType, actor: string, permission: MrPermissionResult) => boolean
   updateMachineDate: (key: string, activityId: string, value: string, actor: string, permission: MrPermissionResult) => boolean
   stopRelease: (input: StoreStopReleaseInput, permission: MrPermissionResult) => boolean

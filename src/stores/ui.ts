@@ -4,6 +4,7 @@ import { PROJECT_CATEGORY_MACHINE } from '@/constants/projectTypes'
 export type MainModule =
   | 'workbench'
   | 'projectList'
+  | 'jointProjectSpace'
   | 'roadmap'
   | 'hrPipeline'
   | 'config'

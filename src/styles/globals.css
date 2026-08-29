@@ -6964,3 +6964,96 @@ body,
 .gantt_task_line.pms-gantt-milestone .gantt_task_content {
   display: none;
 }
+/* Joint MR version plan — all table overrides stay scoped to this surface. */
+.pms-joint-space__card {
+  border-radius: 14px;
+}
+
+.pms-joint-space__card > .ant-card-body {
+  padding: 12px 18px 18px;
+}
+
+.pms-joint-space__tabs > .ant-tabs-nav {
+  margin-bottom: 14px;
+}
+
+.pms-joint-mr-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.pms-joint-mr-loading {
+  display: flex;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #6b7280;
+}
+
+.pms-joint-mr-table .ant-table-container {
+  border: 1px solid #e7e7f3;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.pms-joint-mr-table .ant-table-cell,
+.pms-joint-mr-table .ant-table-cell-fix-left,
+.pms-joint-mr-table .ant-table-cell-fix-right {
+  background: #fff;
+}
+
+.pms-joint-mr-table .ant-table-thead .ant-table-cell,
+.pms-joint-mr-table .ant-table-thead .ant-table-cell-fix-left,
+.pms-joint-mr-table .ant-table-thead .ant-table-cell-fix-right {
+  z-index: 4;
+  background: #f7f7ff;
+}
+
+.pms-joint-mr-table .ant-table-tbody .pms-joint-mr-reference-row > .ant-table-cell,
+.pms-joint-mr-table .ant-table-tbody .pms-joint-mr-reference-row > .ant-table-cell-fix-left,
+.pms-joint-mr-table .ant-table-tbody .pms-joint-mr-reference-row > .ant-table-cell-fix-right {
+  background: #fffbe8;
+  font-weight: 600;
+}
+
+.pms-joint-mr-table .ant-table-tbody .ant-table-cell-fix-left,
+.pms-joint-mr-table .ant-table-tbody .ant-table-cell-fix-right {
+  z-index: 2;
+}
+
+.pms-joint-mr-table .pms-mr-invalid-cell {
+  background: #fff1f0 !important;
+  box-shadow: inset 0 0 0 1px #ff7875;
+}
+
+.pms-joint-mr-error-icon {
+  color: #ff4d4f;
+  cursor: help;
+  font-size: 17px;
+}
+
+.pms-joint-mr-error-icon:focus-visible,
+.pms-joint-mr-project-link:focus-visible {
+  outline: 2px solid var(--pms-brand-strong);
+  outline-offset: 2px;
+}
+
+.pms-joint-mr-project-link {
+  height: auto;
+  max-width: 136px;
+  padding: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .pms-joint-mr-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
