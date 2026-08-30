@@ -236,6 +236,18 @@ async function assertNaMachineProjection(projectId, tosVersion) {
   assert.equal(projection.editableDateInputs, 0)
 }
 
+async function setTosCollectionDateThroughProject(value) {
+  await openProjectFromList('tOS版本项目', 'tOS16.3', '张三,李白')
+  await clickVisibleText('计划')
+  await clickVisibleText('三级计划-MR版本计划', '[role="tab"],button,span')
+  await page.waitForSelector('input[aria-label="16.3.0.140-修改点收集开始时间-日期"]', { visible: true })
+  await fillDate('input[aria-label="16.3.0.140-修改点收集开始时间-日期"]', value)
+  assert.equal((await readMrState()).tosInstancesByProjectId['19'][0].dates['mr-node-change-collection'], value)
+  await clickButtonStarting('返回')
+  await openMainMenu('jointProjectSpace')
+  await page.waitForSelector('.pms-joint-mr-table', { visible: true })
+}
+
 async function assertJointStickyColumns() {
   const results = []
   for (const scrollLeft of [1200, 1440]) {
@@ -275,23 +287,19 @@ async function assertJointStickyColumns() {
         rows: rows.map(row => {
           if (!row) return null
           const fixed = [...row.querySelectorAll('td.ant-table-cell-fix-start, td.ant-table-cell-fix-left')].filter(visible)
-          const error = row.querySelector('td[data-mr-fixed-error-cell="true"]')
           const dateCells = [...row.querySelectorAll('td[data-mr-date-cell="true"]')].filter(visible)
           const fixedInfo = inspectCells(fixed)
-          const errorInfo = error ? inspectCells([error])[0] : null
           const visibleDate = dateCells.map(cell => ({ cell, rect: cell.getBoundingClientRect() }))
             .find(({ rect }) => rect.left + rect.width / 2 > fixed.at(-1).getBoundingClientRect().right + 4
-              && rect.left + rect.width / 2 < error.getBoundingClientRect().left - 4)
+              && rect.left + rect.width / 2 < window.innerWidth - 4)
           const firstRect = fixed[0].getBoundingClientRect()
           const secondRect = fixed[1].getBoundingClientRect()
           return {
             fixed: fixedInfo,
-            error: errorInfo,
             noOverlap: firstRect.right <= secondRect.left + 0.5,
             firstOwnsSeam: owns(fixed[0], firstRect.right - 1, firstRect.top + firstRect.height / 2),
             secondOwnsSeam: owns(fixed[1], secondRect.left + 1, secondRect.top + secondRect.height / 2),
             dateCenterOwned: Boolean(visibleDate && owns(visibleDate.cell, visibleDate.rect.left + visibleDate.rect.width / 2, visibleDate.rect.top + visibleDate.rect.height / 2)),
-            errorDoesNotCoverDateCenter: Boolean(visibleDate && error && !owns(error, visibleDate.rect.left + visibleDate.rect.width / 2, visibleDate.rect.top + visibleDate.rect.height / 2)),
           }
         }),
       }
@@ -304,13 +312,11 @@ async function assertJointStickyColumns() {
       assert.ok(row)
       assert.equal(row.fixed.length, 2)
       assert.ok(row.fixed.every(cell => cell.opaque && cell.ownsCenter && cell.zIndex === 3))
-      assert.ok(row.error?.opaque && row.error.ownsCenter && row.error.zIndex === 3)
       assert.ok(result.headers.every(header => header.zIndex > row.fixed[0].zIndex))
       assert.equal(row.noOverlap, true)
       assert.equal(row.firstOwnsSeam, true)
       assert.equal(row.secondOwnsSeam, true)
       assert.equal(row.dateCenterOwned, true)
-      assert.equal(row.errorDoesNotCoverDateCenter, true)
     }
   }
 }
@@ -629,10 +635,13 @@ try {
   assert.ok(headerOrder.indexOf('联合项目空间') < headerOrder.indexOf('tOS路标'))
   await openMainMenu('jointProjectSpace')
   await page.waitForSelector('.pms-joint-mr-table', { visible: true })
+  assert.equal(await page.$eval('.pms-joint-mr-table', table => table.innerText.includes('错误提示')), false)
+  assert.equal(await page.$('[data-mr-fixed-error-cell]'), null)
   pass(1, 'header order and joint-space entry')
 
-  const jointRows = await page.$$eval('.pms-joint-mr-table tbody tr.ant-table-row', rows => rows.map(row => ({ text: row.innerText, pickerCount: row.querySelectorAll('.ant-picker').length, selectCount: row.querySelectorAll('.ant-select').length })))
-  assert.ok(jointRows[0].text.startsWith('16.3.0.140\ttOS16.3'))
+  const jointRows = await page.$$eval('.pms-joint-mr-table tbody tr.ant-table-row', rows => rows.map(row => ({ kind: row.dataset.mrRowKind, text: row.innerText, pickerCount: row.querySelectorAll('.ant-picker').length, selectCount: row.querySelectorAll('.ant-select').length })))
+  assert.equal(jointRows[0].kind, 'tos-reference')
+  assert.ok(jointRows[0].text.includes('16.3.0.140') && jointRows[0].text.includes('tOS16.3'))
   assert.equal(jointRows[0].pickerCount, 0)
   assert.equal(jointRows[0].selectCount, 0)
   assert.ok(jointRows.findIndex(row => row.text.includes('X6855_H8917')) > 0)
@@ -647,6 +656,7 @@ try {
   const filteredTexts = await page.$$eval('.pms-joint-mr-table tbody tr.ant-table-row', rows => rows.map(row => row.innerText))
   assert.ok(filteredTexts.some(text => text.includes('X6877-D8400_H991')))
   assert.ok(filteredTexts.every(text => text.includes('X6877-D8400_H991')))
+  assert.equal(await page.$('.pms-joint-mr-table .pms-mr-cell-error-icon'), null)
   await screenshot('joint-valid.png')
   await fillInput('input[aria-label="项目名称"]', '')
   pass(4, 'filters reduce visible row set')
@@ -675,15 +685,69 @@ try {
   assert.equal((await readMrState()).machinePlansByKey['1::16.3.0.145'].dates['mr-node-change-collection'], '2026-06-16')
   pass(7, 'N/A clears dates and displays slashes')
 
-  assert.ok(await page.$$eval('.pms-joint-mr-table .pms-mr-invalid-cell', nodes => nodes.length) > 0)
-  const errorIcon = await page.$('.pms-joint-mr-error-icon')
-  assert.ok(errorIcon)
-  await errorIcon.hover()
-  await page.waitForSelector('.ant-tooltip', { visible: true })
-  assert.match(await page.$eval('.ant-tooltip', node => node.innerText), /整机产品项目的MP入库截止时间不得晚于tOS项目时间/)
+  await setTosCollectionDateThroughProject('2026-05-15')
+  const localizedErrors = await page.evaluate(() => {
+    const inspect = (rowSelector, activityId) => {
+      const row = document.querySelector(rowSelector)
+      const cell = row?.querySelector(`[data-mr-date-cell="true"][data-mr-activity-id="${activityId}"]`)
+      const icon = cell?.querySelector('.pms-mr-cell-error-icon')
+      const picker = cell?.querySelector('.ant-picker')
+      const content = cell?.querySelector('.pms-mr-invalid-cell-content > :first-child')
+      const cellStyle = cell ? getComputedStyle(cell) : null
+      const iconRect = icon?.getBoundingClientRect()
+      const contentRect = (picker || content)?.getBoundingClientRect()
+      return {
+        invalid: cell?.classList.contains('pms-mr-invalid-cell') ?? false,
+        iconCount: cell?.querySelectorAll('.pms-mr-cell-error-icon').length ?? 0,
+        inputCount: cell?.querySelectorAll('input').length ?? 0,
+        backgroundColor: cellStyle?.backgroundColor,
+        boxShadow: cellStyle?.boxShadow,
+        iconOnRight: Boolean(iconRect && contentRect && iconRect.left >= contentRect.right),
+        ariaLabel: icon?.getAttribute('aria-label'),
+      }
+    }
+    return {
+      tos: inspect('tr[data-mr-row-kind="tos-reference"][data-mr-project-id="19"][data-mr-tos-version="16.3.0.140"]', 'mr-node-change-collection'),
+      machine: inspect('tr[data-mr-row-kind="machine"][data-mr-project-id="3"][data-mr-tos-version="16.3.0.140"]', 'mr-node-mp-intake-deadline'),
+    }
+  })
+  assert.equal(localizedErrors.tos.invalid, true)
+  assert.equal(localizedErrors.machine.invalid, true)
+  assert.equal(localizedErrors.tos.iconCount, 1)
+  assert.equal(localizedErrors.machine.iconCount, 1)
+  assert.equal(localizedErrors.tos.inputCount, 0)
+  assert.equal(localizedErrors.machine.inputCount, 1)
+  assert.equal(localizedErrors.tos.backgroundColor, localizedErrors.machine.backgroundColor)
+  assert.equal(localizedErrors.tos.boxShadow, localizedErrors.machine.boxShadow)
+  assert.equal(localizedErrors.tos.iconOnRight, true)
+  assert.equal(localizedErrors.machine.iconOnRight, true)
+  assert.match(localizedErrors.tos.ariaLabel, /1条日期错误/)
+  const tosErrorIcon = await page.$('tr[data-mr-row-kind="tos-reference"][data-mr-project-id="19"][data-mr-tos-version="16.3.0.140"] [data-mr-activity-id="mr-node-change-collection"] .pms-mr-cell-error-icon')
+  assert.ok(tosErrorIcon)
+  await tosErrorIcon.hover()
+  await page.waitForFunction(() => [...document.querySelectorAll('.ant-tooltip')].some(node => {
+    const rect = node.getBoundingClientRect()
+    return rect.width > 0 && rect.height > 0 && node.textContent?.includes('修改点收集开始时间不能早于一级计划中的计划开始时间')
+  }))
+  assert.match(await page.$$eval('.ant-tooltip', nodes => nodes
+    .find(node => node.textContent?.includes('修改点收集开始时间不能早于一级计划中的计划开始时间'))?.textContent ?? ''), /修改点收集开始时间不能早于一级计划中的计划开始时间（2026-05-16）/)
+  await page.mouse.move(1, 1)
+  await wait(300)
+  await page.$eval('.pms-joint-mr-table .ant-table-body', body => { body.scrollLeft = 520 })
+  await wait(200)
+  const machineErrorIcon = await page.$('tr[data-mr-row-kind="machine"][data-mr-project-id="3"][data-mr-tos-version="16.3.0.140"] [data-mr-activity-id="mr-node-mp-intake-deadline"] .pms-mr-cell-error-icon')
+  assert.ok(machineErrorIcon)
+  await machineErrorIcon.hover()
+  await page.waitForFunction(() => [...document.querySelectorAll('.ant-tooltip')].some(node => {
+    const rect = node.getBoundingClientRect()
+    return rect.width > 0 && rect.height > 0 && node.textContent?.includes('整机产品项目的MP入库截止时间不得晚于tOS项目时间')
+  }))
+  assert.match(await page.$$eval('.ant-tooltip', nodes => nodes
+    .find(node => node.textContent?.includes('整机产品项目的MP入库截止时间不得晚于tOS项目时间'))?.textContent ?? ''), /整机产品项目的MP入库截止时间不得晚于tOS项目时间（2026-05-20）/)
   assert.equal((await readMrState()).machinePlansByKey['3::16.3.0.140'].dates['mr-node-mp-intake-deadline'], '2026-05-25')
   await screenshot('joint-invalid.png')
-  pass(8, 'invalid canonical date persists with red exact tooltip')
+  await setTosCollectionDateThroughProject('2026-05-16')
+  pass(8, 'tOS and machine errors are localized with red exact tooltips')
 
   await clickVisibleText('停止发版')
   await chooseSelect('停止发版项目名称', 'X6877-D8400_H991')

@@ -1,6 +1,6 @@
 'use client'
 
-import type { HTMLAttributes } from 'react'
+import type { HTMLAttributes, ReactNode } from 'react'
 import { DatePicker, Table, Tooltip } from 'antd'
 import { ExclamationCircleOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -43,6 +43,30 @@ interface VerticalGridRow {
 
 export function getMrPlanCellKey(rowKey: string, activityId: string): string {
   return `${rowKey}::${activityId}`
+}
+
+export interface MrDateCellContentProps {
+  content: ReactNode
+  errors: readonly string[]
+  ariaLabel: string
+}
+
+export function MrDateCellContent({ content, errors, ariaLabel }: MrDateCellContentProps) {
+  const messages = [...new Set(errors.filter(Boolean))]
+  if (!messages.length) return content
+  return (
+    <span className="pms-mr-invalid-cell-content">
+      {content}
+      <Tooltip color="red" title={<div>{messages.map(message => <div key={message}>{message}</div>)}</div>}>
+        <ExclamationCircleOutlined
+          className="pms-mr-cell-error-icon"
+          tabIndex={0}
+          role="img"
+          aria-label={`${ariaLabel}，${messages.length}条日期错误`}
+        />
+      </Tooltip>
+    </span>
+  )
 }
 
 function buildHorizontalSchema(rows: readonly MrPlanGridRow[]): MrGroupedColumn[] {
@@ -100,15 +124,7 @@ function renderDateCell(
         )
       : <span aria-label={ariaLabel}>{value || '-'}</span>
 
-  if (!errors.length) return content
-  return (
-    <span className="pms-mr-date-with-error">
-      {content}
-      <Tooltip color="red" title={errors.join('；')}>
-        <ExclamationCircleOutlined className="pms-mr-error-icon" tabIndex={0} aria-label={`${ariaLabel}-错误：${errors.join('；')}`} />
-      </Tooltip>
-    </span>
-  )
+  return <MrDateCellContent content={content} errors={errors} ariaLabel={ariaLabel} />
 }
 
 export default function MrPlanGrid({

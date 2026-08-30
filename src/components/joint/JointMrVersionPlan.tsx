@@ -15,7 +15,7 @@ import {
   Tooltip,
   message,
 } from 'antd'
-import { ExclamationCircleOutlined, HistoryOutlined, StopOutlined } from '@ant-design/icons'
+import { HistoryOutlined, StopOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
@@ -23,7 +23,7 @@ import { usePermissionStore } from '@/stores/permission'
 import { rehydrateMrVersionPlanStore, useMrVersionPlanStore } from '@/stores/mrVersionPlan'
 import { buildMrAggregationSources } from '@/lib/mrPlanSourceAdapters'
 import { reconcileJointMachinePlans } from '@/lib/mrAggregationRules'
-import { groupMrErrorsByRow, validateJointMachineRows } from '@/lib/mrDateRules'
+import { validateJointMachineRows } from '@/lib/mrDateRules'
 import {
   buildStopReleaseCandidates,
   formatStopReleaseOperatedAt,
@@ -35,7 +35,11 @@ import {
   buildJointMrColumnSchema,
   compareTosVersionNumbers,
   resolveMrPermissions,
+  resolveTosMrInstanceDateAccess,
+  selectTosMrVersionCandidates,
+  validateTosMrInstanceDates,
 } from '@/lib/mrVersionPlanRules'
+import { MrDateCellContent } from '@/components/plans/MrPlanGrid'
 import type {
   MrCellError,
   MrGroupedColumn,
@@ -116,8 +120,14 @@ function display(value: string | undefined): string {
   return value?.trim() || '/'
 }
 
-function dedupeMessages(errors: readonly MrCellError[]): string[] {
-  return [...new Set(errors.map(error => error.message))]
+function buildJointCellErrors(errors: readonly MrCellError[]): Record<string, Record<string, string[]>> {
+  const result: Record<string, Record<string, string[]>> = {}
+  errors.forEach(error => {
+    const row = result[error.rowKey] ?? (result[error.rowKey] = {})
+    const messages = row[error.activityId] ?? (row[error.activityId] = [])
+    if (!messages.includes(error.message)) messages.push(error.message)
+  })
+  return result
 }
 
 export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlanProps) {
@@ -234,9 +244,37 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     () => projection.rows.filter((row): row is MrJointMachineRow => row.kind === 'machine').map(row => row.plan),
     [projection.rows],
   )
-  const errorsByRow = useMemo(
-    () => groupMrErrorsByRow(validateJointMachineRows({ tosInstances, machinePlans: machineRows })),
+  const machineErrors = useMemo(
+    () => validateJointMachineRows({ tosInstances, machinePlans: machineRows }),
     [machineRows, tosInstances],
+  )
+  const tosErrors = useMemo(() => tosInstances.flatMap(instance => {
+    const source = sources.latestPublishedLevel1ByProjectId[instance.projectId]
+    const candidates = source ? selectTosMrVersionCandidates({
+      versions: source.versions,
+      getSnapshot: source.getSnapshot,
+      usedVersions: tosInstances
+        .filter(candidate => candidate.projectId === instance.projectId)
+        .map(candidate => candidate.tosVersion),
+    }) : []
+    const access = resolveTosMrInstanceDateAccess(instance.tosVersion, candidates)
+    const rowKey = `${instance.projectId}::${instance.tosVersion}::reference`
+    if (!access.canEdit) {
+      return instance.activities
+        .filter(activity => activity.parentId !== null)
+        .map(activity => ({
+          rowKey,
+          activityId: activity.id,
+          activityName: activity.activityName,
+          message: access.reason,
+        }))
+    }
+    return validateTosMrInstanceDates(instance, access.bounds)
+      .map(error => ({ ...error, rowKey }))
+  }), [sources.latestPublishedLevel1ByProjectId, tosInstances])
+  const cellErrorsByRow = useMemo(
+    () => buildJointCellErrors([...machineErrors, ...tosErrors]),
+    [machineErrors, tosErrors],
   )
   const schema = useMemo(
     () => buildJointMrColumnSchema(tosInstances, latestPublishedActivities(templateVersions)),
@@ -317,20 +355,27 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
   }
 
   const fixedColumns: ColumnsType<JointRow> = [
-    { title: 'tOS版本号', dataIndex: 'tosVersion', key: 'tosVersion', width: 132, fixed: 'left', render: display },
+    {
+      title: 'tOS版本号', dataIndex: 'tosVersion', key: 'tosVersion', width: 132, fixed: 'left',
+      render: value => <span className="pms-joint-mr-fixed-cell-content">{display(value)}</span>,
+    },
     {
       title: '项目名称', key: 'projectName', width: 150, fixed: 'left', render: (_, row) => {
-        if (row.kind === 'tos-reference') return display(tosProjectNames.get(row.projectId))
+        if (row.kind === 'tos-reference') {
+          return <span className="pms-joint-mr-fixed-cell-content">{display(tosProjectNames.get(row.projectId))}</span>
+        }
         const metadata = sources.machineMetadataByProjectId[row.projectId] ?? fallbackMetadata(row.projectId)
         return (
-          <Button
-            type="link"
-            className="pms-joint-mr-project-link"
-            aria-label={`打开项目-${metadata.projectName}`}
-            onClick={() => handleOpenProject(row, metadata)}
-          >
-            {metadata.projectName}
-          </Button>
+          <span className="pms-joint-mr-fixed-cell-content">
+            <Button
+              type="link"
+              className="pms-joint-mr-project-link"
+              aria-label={`打开项目-${metadata.projectName}`}
+              onClick={() => handleOpenProject(row, metadata)}
+            >
+              {metadata.projectName}
+            </Button>
+          </span>
         )
       },
     },
@@ -369,13 +414,11 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     children: group.children.map(child => ({
       title: child.title,
       key: child.key,
-      width: 150,
+      width: 190,
       onCell: row => {
         const instance = findInstance(tosInstances, row)
         const activity = findActivity(instance, child.parentName, child.activityName)
-        const errors = row.kind === 'machine' && activity
-          ? (errorsByRow[row.key] ?? []).filter(error => error.activityId === activity.id)
-          : []
+        const errors = activity ? cellErrorsByRow[row.key]?.[activity.id] ?? [] : []
         return {
           className: `pms-joint-mr-date-cell${errors.length ? ' pms-mr-invalid-cell' : ''}`,
           'data-mr-date-cell': 'true',
@@ -386,20 +429,36 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
         const instance = findInstance(tosInstances, row)
         const activity = findActivity(instance, child.parentName, child.activityName)
         if (!activity) return '/'
-        if (row.kind === 'tos-reference') return display(instance?.dates[activity.id])
-        if (row.plan.transferType === 'N/A') return '/'
+        const errors = cellErrorsByRow[row.key]?.[activity.id] ?? []
+        const ariaLabel = `${row.projectId}-${row.tosVersion}-${child.activityName}`
+        if (row.kind === 'tos-reference') {
+          return (
+            <MrDateCellContent
+              content={<span aria-label={ariaLabel}>{display(instance?.dates[activity.id])}</span>}
+              errors={errors}
+              ariaLabel={ariaLabel}
+            />
+          )
+        }
+        if (row.plan.transferType === 'N/A') {
+          return <MrDateCellContent content={<span aria-label={ariaLabel}>/</span>} errors={errors} ariaLabel={ariaLabel} />
+        }
         const permission = permissionByProjectId.get(row.projectId)
         const value = row.plan.dates[activity.id] || ''
-        if (!permission?.canEditMachine) return display(value)
-        return (
+        const content = !permission?.canEditMachine
+          ? <span aria-label={ariaLabel}>{display(value)}</span>
+          : (
           <DatePicker
             value={value ? dayjs(value) : null}
             format="YYYY-MM-DD"
             allowClear
-            aria-label={`${row.projectId}-${row.tosVersion}-${child.activityName}`}
+            aria-label={ariaLabel}
             onChange={date => handleDate(row, activity.id, date?.format('YYYY-MM-DD') ?? '', permission)}
+            status={errors.length ? 'error' : undefined}
+            style={{ width: '100%' }}
           />
-        )
+            )
+        return <MrDateCellContent content={content} errors={errors} ariaLabel={ariaLabel} />
       },
     })),
   }))
@@ -407,25 +466,6 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
   const columns: ColumnsType<JointRow> = [
     ...fixedColumns,
     ...dateColumns,
-    {
-      title: '错误提示', key: 'errors', width: 92, fixed: 'right', align: 'center',
-      onCell: () => ({ 'data-mr-fixed-error-cell': 'true' } as any),
-      render: (_, row) => {
-        if (row.kind === 'tos-reference') return '-'
-        const messages = dedupeMessages(errorsByRow[row.key] ?? [])
-        if (!messages.length) return '-'
-        return (
-          <Tooltip title={<div>{messages.map(item => <div key={item}>{item}</div>)}</div>}>
-            <ExclamationCircleOutlined
-              className="pms-joint-mr-error-icon"
-              tabIndex={0}
-              role="img"
-              aria-label={`查看${messages.length}条日期错误`}
-            />
-          </Tooltip>
-        )
-      },
-    },
   ]
 
   if (!hydrated) {
