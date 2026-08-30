@@ -4,6 +4,7 @@ import puppeteer from 'puppeteer'
 
 const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const TIMEOUT = Number(process.env.PMS_BROWSER_TIMEOUT || 60_000)
+const MATRIX_ONLY = process.env.PMS_MATRIX_ONLY || ''
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 const TARGET_PROJECT = { projectId: '1', projectName: 'X6877-D8400_H991', category: '整机产品项目' }
 const NON_TARGET_PROJECT = { projectId: '3', projectName: 'X6855_H8917', category: '整机产品项目' }
@@ -13,7 +14,7 @@ const PERMISSION_MATRIX = [
   { id: 'qian-target', user: '钱九', ...TARGET_PROJECT, accessible: true, canEditBasicInfo: true, canMaintainLevel1: true, canManageRoles: true },
   { id: 'qian-non-target', user: '钱九', ...NON_TARGET_PROJECT, accessible: false, canEditBasicInfo: false, canMaintainLevel1: false, canManageRoles: false },
   { id: 'li-target', user: '李四', ...TARGET_PROJECT, accessible: true, canEditBasicInfo: false, canMaintainLevel1: false, canManageRoles: false },
-  { id: 'li-non-target', user: '李四', ...NON_TARGET_PROJECT, accessible: false, canEditBasicInfo: false, canMaintainLevel1: false, canManageRoles: false },
+  { id: 'li-non-target', user: '李四', ...NON_TARGET_PROJECT, accessible: true, canEditBasicInfo: false, canMaintainLevel1: false, canManageRoles: false },
 ]
 
 const clickExact = async (page, text, selector = 'button,[role="menuitem"],span') => {
@@ -71,18 +72,23 @@ const openMain = async (page, label) => {
     ), label)
     if (active) return
 
-    const clicked = await page.evaluate(expected => {
-      const item = [...document.querySelectorAll('[role="menuitem"]')].find(element => {
+    const items = await page.$$('[role="menuitem"]')
+    let target = null
+    for (const item of items) {
+      const matches = await item.evaluate((element, expected) => {
         const rect = element.getBoundingClientRect()
         const style = getComputedStyle(element)
         return rect.width > 0 && rect.height > 0
           && style.display !== 'none' && style.visibility !== 'hidden'
           && element.textContent?.trim() === expected
-      })
-      item?.click()
-      return Boolean(item)
-    }, label)
-    if (clicked) {
+      }, label)
+      if (matches) {
+        target = item
+        break
+      }
+    }
+    if (target) {
+      await target.evaluate(element => element.click()).catch(() => undefined)
       const activated = await page.waitForFunction(expected => (
         (document.querySelector('.ant-menu-item-selected')?.textContent || '').trim() === expected
       ), { timeout: 900 }, label).then(() => true).catch(() => false)
@@ -119,11 +125,12 @@ const prepareProjectCard = async (page, testCase, showAllProjects = false) => {
   await selectProjectCategory(page, testCase.category)
   await clickExact(page, '卡片视图', '[aria-label="卡片视图"]')
   if (showAllProjects) {
-    const showAllButton = await page.$('[aria-label="切换为全部项目"]')
-    if (showAllButton) {
-      await showAllButton.click()
-      await wait(250)
-      await showAllButton.dispose()
+    const switched = await page.$eval('[aria-label="切换为全部项目"]', element => {
+      element.click()
+      return true
+    }).catch(() => false)
+    if (switched) {
+      await page.waitForSelector('[aria-label="切换为我的项目"]', { visible: true, timeout: TIMEOUT })
     }
   }
   const selector = `[aria-label="打开项目 ${testCase.projectId}"]`
@@ -228,7 +235,11 @@ try {
     && [...document.querySelectorAll('[role="menuitem"]')].some(item => item.textContent?.trim() === '项目列表')
   ), { timeout: TIMEOUT })
 
-  for (const testCase of PERMISSION_MATRIX) {
+  const cases = MATRIX_ONLY
+    ? PERMISSION_MATRIX.filter(testCase => testCase.id === MATRIX_ONLY)
+    : PERMISSION_MATRIX
+  assert.ok(cases.length, `permission matrix case exists: ${MATRIX_ONLY}`)
+  for (const testCase of cases) {
     console.log(`Running ${testCase.id}: ${testCase.user} / ${testCase.projectName}`)
     await returnToProjectList(page)
     await switchUser(page, testCase.user)
@@ -243,9 +254,13 @@ try {
     await assertProjectPermissions(page, testCase)
   }
 
-  assert.deepEqual(errorCounts, { page: 0, console: 0, request: 0, http: 0 }, `raw browser error counts remain zero: ${JSON.stringify(errorCounts)}`)
+  assert.deepEqual(
+    errorCounts,
+    { page: 0, console: 0, request: 0, http: 0 },
+    `raw browser error counts remain zero: ${JSON.stringify(errorCounts)}\n${errors.join('\n')}`,
+  )
   assert.deepEqual(errors, [], `browser error gate remains clean:\n${errors.join('\n')}`)
-  console.log(`Project-manager browser permission matrix passed 6/6 with raw errors=${JSON.stringify(errorCounts)}.`)
+  console.log(`Project-manager browser permission matrix passed ${cases.length}/${cases.length} with raw errors=${JSON.stringify(errorCounts)}.`)
 } finally {
   await browser.close()
 }

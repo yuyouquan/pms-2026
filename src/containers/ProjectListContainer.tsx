@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, type CSSProperties } from 'react'
 import {
-  Row, Col, Button, Card, Empty, Segmented, Pagination, Space, Tooltip, message,
+  App, Row, Col, Button, Card, Empty, Segmented, Pagination, Space, Tooltip,
 } from 'antd'
 import {
   AppstoreOutlined, CalendarOutlined, FullscreenExitOutlined, FullscreenOutlined,
@@ -87,6 +87,7 @@ const WORKSPACE_FILTER_CHIP_STYLE: CSSProperties = {
 }
 
 export default function ProjectListContainer() {
+  const { message: messageApi } = App.useApp()
   const {
     enterProjectSpace, setProjectSpaceModule,
   } = useUiStore()
@@ -176,7 +177,7 @@ export default function ProjectListContainer() {
     rolesByProject,
     isAdminUser,
   )
-  const showProjectAccessDenied = () => message.warning({
+  const showProjectAccessDenied = () => messageApi.warning({
     key: 'project-space-access-denied',
     content: '当前用户未配置该项目空间角色，无法进入项目空间',
   })

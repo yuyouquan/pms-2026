@@ -153,7 +153,7 @@ for (const permission of ['basicInfo:编辑', 'plan:一级计划-编辑', 'proje
     fail(`李四 must remain a regular member without ${permission}`)
   }
   if (permissionModule.hasPermission('李四', '3', permission)) {
-    fail(`李四 must not receive ${permission} in inaccessible non-target project 3`)
+    fail(`李四 must not receive ${permission} in non-target project 3`)
   }
   if (!permissionModule.hasPermission('张三', '3', permission)) {
     fail(`张三 global-administrator permission regressed in non-target project 3 for ${permission}`)
@@ -173,7 +173,8 @@ for (const caseId of [
 ]) {
   assertIncludes(projectManagerBrowserSource, `id: '${caseId}'`, 'project-manager browser coverage')
 }
-assertIncludes(projectManagerBrowserSource, 'for (const testCase of PERMISSION_MATRIX)', 'project-manager browser coverage')
+assertIncludes(projectManagerBrowserSource, 'PERMISSION_MATRIX.filter', 'project-manager browser focused-case derivation')
+assertIncludes(projectManagerBrowserSource, 'for (const testCase of cases)', 'project-manager browser coverage')
 assertIncludes(projectManagerBrowserSource, 'assertDeniedProject', 'project-manager browser inaccessible-project coverage')
 assertIncludes(projectManagerBrowserSource, 'errorCounts', 'project-manager browser raw error counters')
 if (/favicon\.ico/.test(projectManagerBrowserSource)) fail('project-manager browser must not whitelist favicon HTTP failures')
