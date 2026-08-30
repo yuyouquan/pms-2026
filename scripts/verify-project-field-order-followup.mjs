@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
-import { loadTypeScriptModule, projectRoot } from './lib/source-contract.mjs'
+import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
 const schema = loadTypeScriptModule(root, 'src/constants/projectInfoSchema.ts')
@@ -8,6 +8,9 @@ const planSchema = loadTypeScriptModule(root, 'src/constants/projectPlanInfoSche
 const technical = loadTypeScriptModule(root, 'src/constants/technicalProject.ts')
 const preferences = loadTypeScriptModule(root, 'src/lib/projectFieldPreferences.ts')
 const projectInfoValues = loadTypeScriptModule(root, 'src/lib/projectInfoValues.ts')
+const projectInfoRules = loadTypeScriptModule(root, 'src/lib/projectInfoRules.ts')
+const schemaSource = readSource(root, 'src/constants/projectInfoSchema.ts')
+const technicalSource = readSource(root, 'src/constants/technicalProject.ts')
 
 const machineCreateKeys = [
   'firstSaleTosVersion', 'status', 'versionType', 'softwareProjectLevel',
@@ -123,6 +126,11 @@ assert.deepEqual(Array.from(schema.TECHNICAL_PROJECT_SPACE_BASIC_FIELD_KEYS), te
 assert.deepEqual(Array.from(technical.TECHNICAL_TEAM_FIELDS, field => field.key), technicalSpaceTeamKeys)
 assert.deepEqual(Array.from(technical.TECHNICAL_DELIVERABLE_FIELDS, field => field.key), technicalSpaceDeliverableKeys)
 assert.deepEqual(
+  Array.from(schema.TECHNICAL_PROJECT_SPACE_FIELDS, field => field.key),
+  technicalSpaceKeys,
+  'the actual technical project-space projection must follow the approved 28-field order',
+)
+assert.deepEqual(
   [
     ...schema.TECHNICAL_PROJECT_SPACE_CORE_FIELD_KEYS,
     schema.TECHNICAL_PROJECT_SPACE_PLAN_FIELD_KEY,
@@ -193,6 +201,78 @@ assert.equal(technicalSpaceTeamKeys.filter(key => key === 'testRepresentative').
 assert.equal(technicalSpaceKeys.length, 28)
 assert.equal(schema.TECHNICAL_PROJECT_SPACE_FIELDS.every(field => field.defaultVisible), true)
 
+assert.deepEqual(
+  Array.from(projectInfoRules.getProjectInfoCreateFields('整机产品-手机'), field => field.key),
+  machineCreateKeys,
+  'machine create rules must expose the approved create projection',
+)
+assert.deepEqual(
+  Array.from(projectInfoRules.getProjectInfoModalFields('整机产品-手机'), field => field.key),
+  machineCreateKeys,
+  'machine modal rules must expose the create projection, including create-only fields',
+)
+assert.deepEqual(
+  Array.from(projectInfoRules.getProjectInfoCreateFields('技术项目'), field => field.key),
+  technicalCreateKeys,
+  'technical create rules must expose the approved create projection',
+)
+
+const selfResearchMachineSubmit = projectInfoRules.getProjectInfoModalSubmitValues('整机产品-手机', {
+  firstSaleTosVersion: 'tOS17.0',
+  status: '进行中',
+  researchMode: '自研',
+  developmentMode: '自研',
+  isTwoStage: '是',
+})
+assert.equal(selfResearchMachineSubmit.firstSaleTosVersion, 'tOS17.0')
+assert.equal(selfResearchMachineSubmit.status, '进行中')
+assert.equal(selfResearchMachineSubmit.isTwoStage, undefined, 'hidden conditional fields must not be submitted')
+
+const externalResearchMachineSubmit = projectInfoRules.getProjectInfoModalSubmitValues('整机产品-手机', {
+  firstSaleTosVersion: 'tOS17.0',
+  researchMode: '外研',
+  isTwoStage: '是',
+})
+assert.equal(externalResearchMachineSubmit.firstSaleTosVersion, 'tOS17.0')
+assert.equal(externalResearchMachineSubmit.isTwoStage, '是', 'visible conditional fields must be submitted')
+
+const technicalInfoTeamFields = schema.TECHNICAL_PROJECT_INFO_FIELDS.filter(field => field.group === 'team')
+assert.deepEqual(
+  technicalInfoTeamFields.map(field => ({
+    key: field.key,
+    label: field.label,
+    required: field.required,
+    requiredOnCreate: field.requiredOnCreate,
+  })),
+  technical.TECHNICAL_TEAM_FIELDS.map(field => ({
+    ...field,
+    requiredOnCreate: field.required,
+  })),
+  'technical team schema metadata must derive from TECHNICAL_TEAM_FIELDS',
+)
+const technicalInfoDeliverableFields = schema.TECHNICAL_PROJECT_INFO_FIELDS.filter(field => field.group === 'extended')
+assert.deepEqual(
+  technicalInfoDeliverableFields.map(field => ({ key: field.key, label: field.label })),
+  technical.TECHNICAL_DELIVERABLE_FIELDS.map(field => ({ key: field.key, label: field.label })),
+  'technical deliverable schema metadata must derive from TECHNICAL_DELIVERABLE_FIELDS',
+)
+assert.deepEqual(
+  Array.from(technical.TECHNICAL_STRING_FIELD_KEYS).slice(-technical.TECHNICAL_TEAM_FIELDS.length),
+  technical.TECHNICAL_TEAM_FIELDS.map(field => field.key),
+  'technical string team keys must derive from TECHNICAL_TEAM_FIELDS',
+)
+assert.match(
+  schemaSource,
+  /const TECHNICAL_PROJECT_TEAM_INFO_FIELDS = defineFields\(TECHNICAL_TEAM_FIELDS\.map\(/,
+  'technical team schema must use the shared metadata source',
+)
+assert.match(
+  schemaSource,
+  /const TECHNICAL_PROJECT_DELIVERABLE_INFO_FIELDS = defineFields\(TECHNICAL_DELIVERABLE_FIELDS\.map\(/,
+  'technical deliverable schema must use the shared metadata source',
+)
+assert.match(technicalSource, /\.\.\.TECHNICAL_TEAM_FIELDS\.map\(/, 'technical string keys must use the shared team metadata source')
+
 const tosKeySnapshot = [
   'tosVersion', 'firstLaunchProjects', 'firstLaunchProjectChips', 'applicableBrands',
   'applicableProductLines', 'applicableChipPlatforms', 'newProductProjectList',
@@ -206,6 +286,11 @@ const tosKeySnapshot = [
   'tosPreinstallRepresentative', 'tosEcosystemRepresentative',
 ]
 assert.deepEqual(Array.from(schema.TOS_PROJECT_INFO_FIELDS, field => field.key), tosKeySnapshot)
+assert.deepEqual(
+  Array.from(projectInfoRules.getProjectInfoModalFields('tOS版本项目'), field => field.key),
+  tosKeySnapshot.slice(8),
+  'tOS modal rules must continue to exclude read-only basic aggregate fields',
+)
 
 assert.equal(schema.PROJECT_INFO_SCHEMA_VERSION, 3, 'field preference schema version must advance exactly once')
 const reconciled = preferences.reconcileVisibleFieldKeys(schema.MACHINE_PROJECT_SPACE_INFO_FIELDS, {

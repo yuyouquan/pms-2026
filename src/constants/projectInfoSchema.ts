@@ -11,6 +11,7 @@ import {
   TECHNICAL_DELIVERABLE_FIELDS,
   TECHNICAL_TEAM_FIELDS,
 } from '@/constants/technicalProject'
+import type { TechnicalDeliverableKey, TechnicalTeam } from '@/types/technicalProject'
 
 export type ProjectInfoGroupKey = 'basic' | 'extended' | 'team'
 
@@ -236,33 +237,61 @@ export const TECHNICAL_PROJECT_INFO_GROUPS: ProjectInfoGroupDefinition[] = [
   { key: 'extended', label: '交付物' },
 ]
 
-export const TECHNICAL_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineFields([
+const TECHNICAL_PROJECT_BASIC_INFO_FIELDS = defineFields([
   { key: 'technicalTrack', label: '技术赛道', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'tmg', label: 'TMG及技术领域', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'subdomain', label: '子领域', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'projectValue', label: '项目价值', group: 'basic', inputType: 'textarea', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'projectYear', label: '项目年份', group: 'basic', inputType: 'text', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'preProjectId', label: '前置项目', group: 'basic', inputType: 'select', requiredOnCreate: false, defaultVisible: true, hideable: false },
-  { key: 'technicalLead', label: '技术项目负责人', group: 'team', inputType: 'person', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
-  { key: 'technicalProjectManager', label: '技术项目经理', group: 'team', inputType: 'person', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
-  { key: 'testRepresentative', label: '测试代表', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false },
-  { key: 'qualityRepresentative', label: '质量代表', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false },
-  { key: 'productRepresentative', label: '产品代表', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false },
-  { key: 'standardizationRepresentative', label: '标准化代表', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false },
-  { key: 'technicalOther', label: '其他', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false, introducedInSchemaVersion: 3 },
-  { key: 'projectKpi', label: '项目KPI文件', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
-  { key: 'conceptDesign', label: '概设', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
-  { key: 'charterReport', label: 'Charter报告', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
-  { key: 'pdcpReport', label: 'PDCP报告', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
-  { key: 'tdcpReport', label: 'TDCP报告', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
-  { key: 'edcpReport', label: 'EDCP报告', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
 ])
+
+const TECHNICAL_PROJECT_TEAM_INFO_FIELDS = defineFields(TECHNICAL_TEAM_FIELDS.map(field => ({
+  key: field.key,
+  label: field.label,
+  group: 'team' as const,
+  inputType: 'person' as const,
+  required: field.required,
+  requiredOnCreate: field.required,
+  defaultVisible: true,
+  hideable: false,
+  ...(field.key === 'technicalOther' ? { introducedInSchemaVersion: PROJECT_INFO_SCHEMA_VERSION } : {}),
+})))
+
+const TECHNICAL_PROJECT_DELIVERABLE_INFO_FIELDS = defineFields(TECHNICAL_DELIVERABLE_FIELDS.map(field => ({
+  key: field.key,
+  label: field.label,
+  group: 'extended' as const,
+  inputType: 'deliverable' as const,
+  requiredOnCreate: false,
+  defaultVisible: true,
+  hideable: false,
+})))
+
+export const TECHNICAL_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = [
+  ...TECHNICAL_PROJECT_BASIC_INFO_FIELDS,
+  ...TECHNICAL_PROJECT_TEAM_INFO_FIELDS,
+  ...TECHNICAL_PROJECT_DELIVERABLE_INFO_FIELDS,
+]
 
 const TECHNICAL_PROJECT_CREATE_ONLY_FIELDS = defineFields([
   { key: 'secondaryCategory', label: '项目分类', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'projectName', label: '子项目名称', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'status', label: '项目状态', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
 ])
+
+type TechnicalProjectCreateFieldKey =
+  | 'secondaryCategory'
+  | 'technicalTrack'
+  | 'projectName'
+  | 'status'
+  | 'tmg'
+  | 'subdomain'
+  | 'projectValue'
+  | 'projectYear'
+  | 'preProjectId'
+  | keyof TechnicalTeam
+  | TechnicalDeliverableKey
 
 export const TECHNICAL_PROJECT_CREATE_FIELD_KEYS = [
   'secondaryCategory', 'technicalTrack', 'projectName', 'status', 'tmg', 'subdomain',
@@ -271,7 +300,7 @@ export const TECHNICAL_PROJECT_CREATE_FIELD_KEYS = [
   'productRepresentative', 'standardizationRepresentative', 'technicalOther',
   'projectKpi', 'conceptDesign', 'charterReport', 'pdcpReport', 'tdcpReport',
   'edcpReport',
-] as const
+] as const satisfies readonly TechnicalProjectCreateFieldKey[]
 
 export const TECHNICAL_PROJECT_CREATE_FIELDS = pickOrderedFields(
   TECHNICAL_PROJECT_CREATE_FIELD_KEYS,

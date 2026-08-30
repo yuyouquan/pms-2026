@@ -50,11 +50,12 @@ export const deriveProjectTosVersion = (
  * no longer maintained in the create/edit modal. Keeping this as a modal-only
  * projection prevents the UI change from deleting historical aggregate data.
  */
-export const getProjectInfoModalFields = (type: string) => (
-  getProjectInfoFields(type).filter(field => (
+export const getProjectInfoModalFields = (type: string) => {
+  if (isMachineProjectType(type)) return MACHINE_PROJECT_CREATE_FIELDS
+  return getProjectInfoFields(type).filter(field => (
     type !== PROJECT_TYPE_TOS_VERSION || field.group !== 'basic'
   ))
-)
+}
 
 export const getProjectInfoCreateFields = (type: string) => {
   if (isMachineProjectType(type)) return MACHINE_PROJECT_CREATE_FIELDS
@@ -77,14 +78,15 @@ export const getProjectInfoModalGroups = (type: string) => {
 export const getProjectInfoModalSubmitValues = (
   type: string,
   values: ProjectInfoValues,
-): ProjectInfoValues => {
-  const modalFieldKeys = new Set(getProjectInfoModalFields(type).map(field => field.key))
-  return getEffectiveProjectInfoFields(type, values).reduce<ProjectInfoValues>((result, field) => {
-    const value = values[field.key]
-    if (modalFieldKeys.has(field.key) && value !== undefined) result[field.key] = value
-    return result
-  }, {})
-}
+): ProjectInfoValues => (
+  getProjectInfoModalFields(type)
+    .filter(field => !field.visibleWhen || field.visibleWhen(values))
+    .reduce<ProjectInfoValues>((result, field) => {
+      const value = values[field.key]
+      if (value !== undefined) result[field.key] = value
+      return result
+    }, {})
+)
 
 export interface ExternalProjectInfoSource {
   name: string
