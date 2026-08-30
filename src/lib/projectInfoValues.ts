@@ -208,10 +208,26 @@ export const sanitizeInactiveProjectInfoValues = (
   return next
 }
 
-const buildMachineTeamRoles = (values: ProjectInfoValues) => Object.entries(MACHINE_TEAM_KEYS).reduce<Record<string, string[]>>((roles, [key, role]) => {
-  roles[role] = normalizeTeamMembers(values[key])
+const hasOwn = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key)
+
+const buildMachineTeamRoles = (
+  project: ProjectInfoProject,
+  values: ProjectInfoValues,
+) => {
+  const storedRoles = project.fieldValues?.machineTeamRoles
+  const roles = isTeamRoleMap(storedRoles)
+    ? Object.fromEntries(Object.entries(storedRoles).map(([role, members]) => [role, normalizeTeamMembers(members)]))
+    : {}
+
+  Object.entries(MACHINE_TEAM_KEYS).forEach(([key, role]) => {
+    if (!hasOwn(roles, role)) {
+      const existingValue = getProjectInfoValue(project, key)
+      if (existingValue !== undefined) roles[role] = normalizeTeamMembers(existingValue)
+    }
+    if (hasOwn(values, key)) roles[role] = normalizeTeamMembers(values[key])
+  })
   return roles
-}, {})
+}
 
 const buildTosTeamRoles = (values: ProjectInfoValues) => Object.entries(TOS_TEAM_KEYS).reduce<Record<string, string[]>>((roles, [key, role]) => {
   roles[role] = normalizeTeamMembers(values[key])
@@ -226,7 +242,7 @@ export const mergeProjectInfoValues = <T extends ProjectInfoProject>(
   const nextFieldValues: ProjectInfoValues = {
     ...(project.fieldValues || {}),
     ...values,
-    machineTeamRoles: buildMachineTeamRoles(values),
+    machineTeamRoles: buildMachineTeamRoles(project, values),
     tosTeamRoles: buildTosTeamRoles(values),
   }
   if (isMachineProjectType(project.type) && !isExternalMachineDevelopment(values)) {

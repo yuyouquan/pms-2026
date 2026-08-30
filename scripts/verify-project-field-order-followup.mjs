@@ -228,6 +228,13 @@ const mergedMachine = projectInfoValues.mergeProjectInfoValues({
   id: 'machine-new-fields',
   name: 'Machine',
   type: '整机产品-手机',
+  spm: '历史SPM',
+  fieldValues: {
+    machineTeamRoles: {
+      ux: ['历史UX'],
+      developmentRepresentative: ['历史开发代表'],
+    },
+  },
 }, {
   researchMode: '自研',
   machineQualityRepresentative: ['质量甲'],
@@ -237,8 +244,18 @@ assert.deepEqual(mergedMachine.machineQualityRepresentative, ['质量甲'])
 assert.deepEqual(mergedMachine.machineOther, ['协同乙'])
 assert.deepEqual(mergedMachine.fieldValues.machineTeamRoles.qualityRepresentative, ['质量甲'])
 assert.deepEqual(mergedMachine.fieldValues.machineTeamRoles.other, ['协同乙'])
+assert.deepEqual(mergedMachine.fieldValues.machineTeamRoles.ux, ['历史UX'])
+assert.deepEqual(mergedMachine.fieldValues.machineTeamRoles.spm, ['历史SPM'])
+assert.deepEqual(mergedMachine.fieldValues.machineTeamRoles.developmentRepresentative, ['历史开发代表'])
 assert.deepEqual(projectInfoValues.getProjectInfoValue(mergedMachine, 'machineQualityRepresentative'), ['质量甲'])
 assert.deepEqual(projectInfoValues.getProjectInfoValue(mergedMachine, 'machineOther'), ['协同乙'])
+
+const clearedMachineRole = projectInfoValues.mergeProjectInfoValues(mergedMachine, {
+  machineQualityRepresentative: [],
+})
+assert.deepEqual(clearedMachineRole.fieldValues.machineTeamRoles.qualityRepresentative, [])
+assert.deepEqual(clearedMachineRole.fieldValues.machineTeamRoles.ux, ['历史UX'])
+assert.deepEqual(clearedMachineRole.fieldValues.machineTeamRoles.other, ['协同乙'])
 
 const mergedTechnical = projectInfoValues.mergeProjectInfoValues({
   id: 'technical-new-field',
