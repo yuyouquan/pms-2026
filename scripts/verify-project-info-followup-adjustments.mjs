@@ -62,6 +62,9 @@ const rulesModule = evaluateTypeScriptModule(
         getProjectInfoValue: () => undefined,
       }
     }
+    if (id === '@/lib/projectStatus') {
+      return { mapIpmProjectStatus: value => String(value || '') }
+    }
     throw new Error(`Unexpected project-info rules module: ${id}`)
   },
 )
