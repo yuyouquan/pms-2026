@@ -9,14 +9,6 @@ const TIMEOUT = 30_000
 const SCENARIO_FROM = Number.parseInt(process.env.PMS_SCENARIO_FROM || '1', 10)
 const SCENARIO_ONLY = Number.parseInt(process.env.PMS_SCENARIO_ONLY || '0', 10)
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
-const allowedConsoleErrors = [
-  'Warning: [antd: ConfigProvider] `autoInsertSpaceInButton` is deprecated.',
-  'Warning: [antd: Space] `split` is deprecated.',
-  'Warning: [antd: Space] `direction` is deprecated.',
-  'Warning: [antd: Divider] `type` is deprecated.',
-  'Warning: [antd: Drawer] `width` is deprecated.',
-  'Warning: [antd: Descriptions] Sum of column `span` in a line not match `column` of Descriptions.',
-]
 const MACHINE_CREATE_LABELS = [
   '首销tOS版本', '项目状态', '版本类型', '软件项目等级', '是否首发项目', '产品系列',
   '研发模式', '开发模式', '升级策略', '系统类型', 'Kernel版本', '是否大版本升级',
@@ -375,29 +367,45 @@ const configureMachineCreationEnums = async page => {
 }
 
 const selectExternalProject = async (page, bid) => {
-  const input = await formCombo(page, '项目名')
-  await input.focus()
-  await page.keyboard.type(bid)
-  await page.waitForFunction(value => Array.from(document.querySelectorAll('.ant-select-item-option')).some(element => (
-    element.getBoundingClientRect().height > 0 && (element.textContent || '').includes(value)
-  )), {}, bid)
+  await openFormCombo(page, '项目名')
+  const candidateState = await page.evaluate(expectedBid => ({
+    options: Array.from(document.querySelectorAll('.ant-select-item-option'))
+      .filter(element => element.getBoundingClientRect().height > 0)
+      .map(element => (element.textContent || '').trim()),
+    existingBids: (JSON.parse(localStorage.getItem('pms-projects') || '{}')?.state?.projects || [])
+      .map(project => project.sourceBid).filter(Boolean),
+    expectedBid,
+  }), bid)
+  if (!candidateState.options.some(option => option.includes(bid))) {
+    throw new Error(`IPM候选缺少 ${bid}：${JSON.stringify(candidateState)}`)
+  }
   await selectOption(page, bid, { contains: true })
 }
 
-const completeMachineProjectForm = async (page, { bid, versionLabel, version }) => {
+const completeMachineProjectForm = async (page, { bid, version }) => {
   console.log(`    FORM source ${bid}`)
   await selectExternalProject(page, bid)
+  console.log(`    FORM selected source ${bid}`)
   await assertIpmSourceBeforeCreateFields(page)
-  const expectedLabels = MACHINE_CREATE_LABELS.map((label, index) => index === 0 ? versionLabel : label)
-  await assertCreateFieldLabelOrder(page, expectedLabels.filter(label => !MACHINE_CONDITIONAL_LABELS.has(label)))
+  console.log('    FORM source precedes fields')
+  await assertCreateFieldLabelOrder(page, MACHINE_CREATE_LABELS.filter(label => !MACHINE_CONDITIONAL_LABELS.has(label)))
+  await assertNoText(page, '当前tOS版本', '.ant-modal')
   await assertDisabledCreateFields(page, MACHINE_READ_ONLY_FIELD_KEYS)
+  console.log('    FORM fixed machine fields verified')
   console.log('    FORM development')
   await selectFormOption(page, '开发模式', 'ODC')
-  await assertCreateFieldLabelOrder(page, expectedLabels)
+  await assertCreateFieldLabelOrder(page, MACHINE_CREATE_LABELS)
   await selectFormOption(page, '是否二段式', '是')
   await selectFormOption(page, '是否外研Mini版本', '否')
-  console.log(`    FORM ${versionLabel}`)
-  await selectFormOption(page, versionLabel, `tOS${version}`)
+  if (version) {
+    console.log('    FORM 首销tOS版本')
+    await selectFormOption(page, '首销tOS版本', `tOS${version}`)
+  } else {
+    await page.waitForFunction(() => {
+      const item = document.querySelector('.ant-modal [data-project-create-field="firstSaleTosVersion"]')
+      return (item?.textContent || '').includes('tOS14.0.0')
+    })
+  }
   console.log('    FORM first launch')
   await selectFormOption(page, '是否首发项目', '否')
   console.log('    FORM level')
@@ -413,13 +421,21 @@ const completeMachineProjectForm = async (page, { bid, versionLabel, version }) 
   console.log('    FORM complete')
 }
 
-const submitProjectCreate = async page => {
+const submitProjectCreate = async (page, sourceBid) => {
   await clickExact(page, '.ant-modal button', '创建')
   await wait(800)
   const state = await page.evaluate(() => ({
     success: (document.body?.innerText || '').includes('项目创建成功'),
     errors: Array.from(document.querySelectorAll('.ant-form-item-explain-error')).map(element => (element.textContent || '').trim()).filter(Boolean),
+    feedback: Array.from(document.querySelectorAll('.ant-message-notice-content')).map(element => (element.textContent || '').trim()).filter(Boolean),
   }))
+  if (sourceBid) {
+    const persisted = await page.evaluate(bid => {
+      const envelope = JSON.parse(localStorage.getItem('pms-projects') || '{}')
+      return Boolean(envelope?.state?.projects?.some(project => project.sourceBid === bid))
+    }, sourceBid)
+    if (!persisted) throw new Error(`项目 ${sourceBid} 未持久化：${[...state.errors, ...state.feedback].join('；') || '无可见反馈'}`)
+  }
   if (!state.success) throw new Error(`项目创建未成功：${state.errors.join('；') || '未显示校验错误'}`)
   await assertText(page, '项目空间')
 }
@@ -571,10 +587,6 @@ const runScenario = async (name, { storage = {}, viewport = { width: 1440, heigh
   page.on('console', message => {
     if (message.type() !== 'error') return
     errorCounts.consoleRaw += 1
-    if (allowedConsoleErrors.some(prefix => message.text().startsWith(prefix))) {
-      errorCounts.consoleIgnored += 1
-      return
-    }
     errorCounts.console += 1
     const location = message.location()
     errors.push(`console.error: ${message.text()} @ ${location.url || 'unknown'}:${location.lineNumber ?? 0}:${location.columnNumber ?? 0}`)
@@ -595,6 +607,9 @@ const runScenario = async (name, { storage = {}, viewport = { width: 1440, heigh
     }, storage)
     await page.goto(BASE_URL, { waitUntil: 'networkidle0' })
     await exercise(page)
+    if (errorCounts.consoleRaw !== 0 || errorCounts.consoleIgnored !== 0) {
+      throw new Error(`console 门禁必须保持 raw=0 且 ignored=0：${JSON.stringify(errorCounts)}`)
+    }
     if (errors.length) throw new Error(errors.join('\n'))
     results.push(name)
     console.log(`PASS ${name} errors=${JSON.stringify(errorCounts)}`)
@@ -757,14 +772,55 @@ try {
     await clickAria(page, '列表视图')
     await page.waitForFunction(() => {
       const rows = Array.from(document.querySelectorAll('.ant-table-tbody tr[data-row-key]')).filter(element => element.getBoundingClientRect().height > 0)
-      return rows.length > 0 && rows.every(row => (row.textContent || '').includes('Infinix'))
+      const brands = Array.from(document.querySelectorAll('.ant-table-tbody .pms-machine-hierarchy-cell.is-brand'))
+        .filter(cell => cell.getBoundingClientRect().height > 0)
+        .map(cell => (cell.textContent || '').trim()).filter(Boolean)
+      return rows.length > 0 && brands.length > 0 && brands.every(brand => brand === 'Infinix')
     })
     await clickAria(page, '筛选')
+    await page.waitForFunction(() => ['品牌', 'Infinix'].every(expected => (
+      Array.from(document.querySelectorAll('.ant-select')).some(select => (
+        select.getBoundingClientRect().height > 0 && (
+          (select.querySelector('.ant-select-content')?.getAttribute('title') || '').trim() === expected
+          || Array.from(select.querySelectorAll('.ant-select-selection-item')).map(item => (
+            item.getAttribute('title') || item.textContent || ''
+          ).trim()).join(',') === expected
+        )
+      ))
+    )))
+    const mirror = await page.evaluate(() => {
+      const visibleFilterSelect = expected => Array.from(document.querySelectorAll('.ant-select')).find(select => (
+        select.getBoundingClientRect().height > 0 && (
+          (select.querySelector('.ant-select-content')?.getAttribute('title') || '').trim() === expected
+          || Array.from(select.querySelectorAll('.ant-select-selection-item')).map(item => (
+            item.getAttribute('title') || item.textContent || ''
+          ).trim()).join(',') === expected
+        )
+      ))
+      const readControl = select => {
+        const input = select?.querySelector('input')
+        const content = select?.querySelector('.ant-select-content')
+        const selected = Array.from(select?.querySelectorAll('.ant-select-selection-item') || [])
+        return {
+          found: Boolean(select),
+          inputValue: input instanceof HTMLInputElement ? input.value : null,
+          selectorValue: (content?.getAttribute('title') || '').trim(),
+          selectedValue: selected.map(item => (item.getAttribute('title') || item.textContent || '').trim()).join(','),
+        }
+      }
+      return { field: readControl(visibleFilterSelect('品牌')), value: readControl(visibleFilterSelect('Infinix')) }
+    })
+    const mirroredField = [mirror?.field?.inputValue, mirror?.field?.selectedValue, mirror?.field?.selectorValue].filter(Boolean).join('|')
+    const mirroredValue = [mirror?.value?.inputValue, mirror?.value?.selectedValue, mirror?.value?.selectorValue].filter(Boolean).join('|')
+    if (!mirroredField.includes('品牌') || !mirroredValue.includes('Infinix')) {
+      throw new Error(`高级筛选镜像未读取真实输入/选择器值：${JSON.stringify(mirror)}`)
+    }
     await page.waitForFunction(() => {
-      const root = document.querySelector('.pms-floating-config-popover')
-      const field = root?.querySelector('[aria-label="筛选字段"]')?.closest('.ant-select')?.textContent || ''
-      const value = root?.querySelector('[aria-label="品牌筛选值"]')?.closest('.ant-select')?.textContent || ''
-      return field.includes('品牌') && value.includes('Infinix')
+      const rows = Array.from(document.querySelectorAll('.ant-table-tbody tr[data-row-key]')).filter(element => element.getBoundingClientRect().height > 0)
+      const brands = Array.from(document.querySelectorAll('.ant-table-tbody .pms-machine-hierarchy-cell.is-brand'))
+        .filter(cell => cell.getBoundingClientRect().height > 0)
+        .map(cell => (cell.textContent || '').trim()).filter(Boolean)
+      return rows.length > 0 && brands.length > 0 && brands.every(brand => brand === 'Infinix')
     })
     await clickAria(page, '关闭筛选')
 
@@ -826,8 +882,8 @@ try {
     console.log('  STEP save the newly configured enum through a real machine-project form')
     await openMain(page, '项目列表')
     await clickAria(page, '新增项目')
-    await completeMachineProjectForm(page, { bid: 'EXT-001', versionLabel: '首销tOS版本', version: '19.4.3' })
-    await submitProjectCreate(page)
+    await completeMachineProjectForm(page, { bid: 'EXT-001', version: '19.4.3' })
+    await submitProjectCreate(page, 'EXT-001')
 
     console.log('  STEP delete enum through UI and reopen the saved business form')
     console.log('    HIST return list')
@@ -883,14 +939,14 @@ try {
 
     await openMain(page, '项目列表')
     for (const input of [
-      { bid: 'EXT-010', versionLabel: '首销tOS版本', version: '14.0.0' },
-      { bid: 'EXT-011', versionLabel: '当前tOS版本', version: '15.0.0' },
-      { bid: 'EXT-012', versionLabel: '当前tOS版本', version: '17.10.0' },
+      { bid: 'EXT-010', version: '14.0.0' },
+      { bid: 'EXT-011' },
+      { bid: 'EXT-012' },
     ]) {
       console.log(`  STEP create ${input.bid} through project UI`)
       await clickAria(page, '新增项目')
       await completeMachineProjectForm(page, input)
-      await submitProjectCreate(page)
+      await submitProjectCreate(page, input.bid)
       await returnToProjectList(page)
     }
 
@@ -909,7 +965,7 @@ try {
       throw new Error(`第二个老品版本错误：${JSON.stringify(byBid['EXT-012'])}`)
     }
 
-    console.log('  STEP reopen the new X6870 and verify first-sale plus current-tOS edit snapshots')
+    console.log('  STEP reopen the new X6870 and verify the 34-field edit surface plus project-space current tOS')
     await clickAria(page, '卡片视图')
     await clickExact(page, '.ant-pagination-item', '2')
     await clickAria(page, '打开项目 EXT-010')
@@ -921,10 +977,14 @@ try {
       }
       const first = itemFor('首销tOS版本')
       const current = itemFor('当前tOS版本')
-      const currentInput = current?.querySelector('input')
-      return (first?.textContent || '').includes('tOS14.0.0')
-        && (currentInput?.value === 'tOS17.10.0' || (current?.textContent || '').includes('tOS17.10.0'))
+      return (first?.textContent || '').includes('tOS14.0.0') && !current
     })
+    await clickExact(page, '.ant-modal button', '取消')
+    await page.$eval('.pms-project-info-collapse--basic .ant-collapse-header', element => element.click())
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('.pms-project-info-collapse--basic .pms-project-info-display-item')).some(item => (
+      (item.querySelector('.pms-project-info-display-label')?.textContent || '').trim() === '当前tOS版本'
+      && (item.querySelector('.pms-project-info-display-value')?.textContent || '').trim() === 'tOS17.10.0'
+    )))
   })
 
   await runScenario('07 TDT create validation mapping team and deliverables', {}, async page => {
@@ -1034,19 +1094,20 @@ try {
     }
   })
 
-  await runScenario('08 IPM child config inactive and reactivation semantics', {}, async page => {
-    console.log('  STEP put the persisted active IPM child into a real pending-configuration state')
-    await page.waitForFunction(() => Boolean(localStorage.getItem('pms-technical-projects')))
-    const seededPendingChild = await page.evaluate(() => {
-      const envelope = JSON.parse(localStorage.getItem('pms-technical-projects') || '{}')
-      const child = envelope?.state?.subprojects?.find(item => item.id === 'IPM-AI-002')
-      if (!child) return false
-      child.configuration = { coreValue: '', developmentMode: '', firstTosVersion: '', firstMachineProjectId: '' }
-      localStorage.setItem('pms-technical-projects', JSON.stringify(envelope))
-      return true
-    })
-    if (!seededPendingChild) throw new Error('无法准备 IPM 子项目待配置持久态')
-    await page.reload({ waitUntil: 'domcontentloaded' })
+  await runScenario('08 IPM child config inactive and reactivation semantics', {
+    storage: {
+      'pms-technical-projects': JSON.stringify({
+        version: 2,
+        state: {
+          subprojects: [{
+            id: 'IPM-AI-002', parentProjectId: '9', name: '多模态子项目', active: true, ipmOrder: 2,
+            configuration: { coreValue: '', developmentMode: '', firstTosVersion: '', firstMachineProjectId: '' },
+          }],
+        },
+      }),
+    },
+  }, async page => {
+    console.log('  STEP verify the legally seeded active IPM child starts pending configuration')
     await openMain(page, '项目列表')
     await clickButtonPrefix(page, '[aria-label="项目分类筛选"]', '技术项目')
     await clickProjectByName(page, 'AI-Engine-V2')

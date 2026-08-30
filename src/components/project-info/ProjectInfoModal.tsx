@@ -996,13 +996,9 @@ export default function ProjectInfoModal({
   const renderProjectInfoField = (field: ProjectInfoFieldDefinition) => {
     const active = !field.visibleWhen || field.visibleWhen(watchedValues)
     if (!active) return null
-    const renderedField = field.key === 'firstSaleTosVersion' && isLegacyMachine
-      ? { ...field, key: 'currentTosVersion', label: '当前tOS版本', readOnly: false }
-      : field.key === 'firstSaleTosVersion'
-        ? { ...field, readOnly: false }
-      : field.key === 'currentTosVersion'
-        ? { ...field, readOnly: !isLegacyMachine }
-        : field
+    const renderedField = field.key === 'firstSaleTosVersion'
+      ? { ...field, readOnly: false }
+      : field
     const isRequired = !renderedField.readOnly
       && (mode === 'create' ? field.requiredOnCreate : field.required)
     return (

@@ -200,6 +200,7 @@ assert.match(sourcePool, /ipmProjectCategoryName: '技术项目前置工作'/, '
 assert.match(sourcePool, /technicalTrack: 'AIOS'/, 'technical track is supplied by IPM and not manually entered')
 assert.match(sourcePool, /subprojects:\s*\[/, 'IPM fixture includes derived child rows')
 const configModal = readSource(root, 'src/components/technical-project/SubprojectConfigModal.tsx')
+const enumConfig = readSource(root, 'src/components/config/EnumConfig.tsx')
 assert.match(configModal, /核心价值/, 'configuration modal renders core value')
 assert.match(configModal, /开发模式/, 'configuration modal renders development mode')
 assert.match(configModal, /useSingleEnumOptions\(['"]first-sale-tos['"]/, 'first tOS choices come from the shared first-sale rows')
@@ -210,6 +211,13 @@ assert.match(configModal, /if\s*\(!tryBeginSubmit\(\)\)\s*return/, 'subproject c
 assert.match(configModal, /confirmLoading=\{submitting\}/, 'subproject confirm exposes loading feedback')
 assert.match(configModal, /form\.resetFields\(\)[\s\S]*?onCancel\(\)/, 'cancel discards the subproject draft before closing')
 assert.match(configModal, /className="pms-scroll-modal"/, 'long subproject modal scrolls internally')
+assert.match(configModal, /const \{ message \} = App\.useApp\(\)/, 'subproject feedback consumes the persistent App context')
+assert.doesNotMatch(configModal, /\bmessage\s*\} from ['"]antd['"]/, 'subproject feedback must not import the static message API')
+assert.match(enumConfig, /const \{ message, modal \} = App\.useApp\(\)/, 'enum feedback and confirmation consume the persistent App context')
+assert.doesNotMatch(enumConfig, /Modal\.confirm\(/, 'enum deletion must not use the static Modal confirmation API')
+assert.doesNotMatch(enumConfig, /\bmessage\s*\} from ['"]antd['"]/, 'enum feedback must not import the static message API')
+assert.match(enumConfig, /mask=\{\{ closable: !submitting \}\}/, 'enum editor uses the AntD v6 mask closable API')
+assert.doesNotMatch(enumConfig, /maskClosable=/, 'enum editor must not emit the deprecated maskClosable warning')
 
 const validStages = [
   { id: 'phase-1', name: '规划阶段', parentId: null, planStartDate: '2026-01-01', planEndDate: '2026-01-31', order: 1 },
@@ -505,6 +513,9 @@ for (const source of [technicalBasicInfoSource, subprojectConfigSource]) {
 const technicalStoreSource = readSource(root, 'src/stores/technicalProject.ts')
 assert.doesNotMatch(technicalStoreSource, /TECHNICAL_CORE_VALUES|TECHNICAL_DEVELOPMENT_MODES/, 'technical store validates string shape rather than closed option membership')
 const technicalPlan = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
+assert.match(technicalPlan, /const \{ message, modal \} = App\.useApp\(\)/, 'technical-plan feedback consumes the persistent App context')
+assert.doesNotMatch(technicalPlan, /Modal\.confirm\(/, 'technical-plan clone confirmation must use the mounted modal instance')
+assert.doesNotMatch(technicalPlan, /\bmessage\s*\} from ['"]antd['"]/, 'technical-plan feedback must not import the static message API')
 assert.doesNotMatch(technicalPlan, /显示已停用|showInactive|Switch/, 'technical plan scope tabs also omit inactive subprojects')
 assert.doesNotMatch(technicalPlan, /aria-label=["']导入["']/, 'current technical-plan workspace intentionally exposes no import entry')
 assert.doesNotMatch(technicalPlan, /aria-label=["']分享计划["']/, 'current technical-plan workspace intentionally exposes no share entry')

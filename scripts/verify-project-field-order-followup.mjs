@@ -10,10 +10,12 @@ const preferences = loadTypeScriptModule(root, 'src/lib/projectFieldPreferences.
 const projectInfoValues = loadTypeScriptModule(root, 'src/lib/projectInfoValues.ts')
 const projectInfoRules = loadTypeScriptModule(root, 'src/lib/projectInfoRules.ts')
 const technicalProjectRules = loadTypeScriptModule(root, 'src/lib/technicalProjectRules.ts')
+const externalProjectPool = loadTypeScriptModule(root, 'src/data/externalProjectPool.ts')
 const schemaSource = readSource(root, 'src/constants/projectInfoSchema.ts')
 const technicalSource = readSource(root, 'src/constants/technicalProject.ts')
 const modalSource = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 const technicalCreateSource = readSource(root, 'src/components/technical-project/TechnicalProjectCreateFields.tsx')
+const fieldVisibilityPickerSource = readSource(root, 'src/components/project-info/FieldVisibilityPicker.tsx')
 
 const machineCreateKeys = [
   'firstSaleTosVersion', 'status', 'versionType', 'softwareProjectLevel',
@@ -254,6 +256,9 @@ const legacyMachineSubmit = projectInfoRules.getProjectInfoModalSubmitValues('�
 })
 assert.equal(legacyMachineSubmit.firstSaleTosVersion, 'tOS16.0')
 assert.equal(legacyMachineSubmit.currentTosVersion, 'tOS16.3', 'legacy-machine current tOS must be stored')
+assert.equal(externalProjectPool.fetchByBid('EXT-010').tosVersion, 'tOS14.0.0', 'new-machine source carries its real first/current tOS snapshot')
+assert.equal(externalProjectPool.fetchByBid('EXT-011').tosVersion, 'tOS15.0.0', 'first legacy source carries current tOS without requiring a form field')
+assert.equal(externalProjectPool.fetchByBid('EXT-012').tosVersion, 'tOS17.10.0', 'second legacy source carries current tOS without requiring a form field')
 
 const externalResearchMachineSubmit = projectInfoRules.getProjectInfoModalSubmitValues('整机产品-手机', {
   firstSaleTosVersion: 'tOS17.0',
@@ -290,6 +295,16 @@ assert.match(
   'all machine business Form.Items must be rendered directly from the ordered create projection',
 )
 assert.match(modalSource, /data-project-create-field=\{field\.key\}/, 'rendered create fields must expose their source key in the live DOM')
+assert.doesNotMatch(
+  modalSource,
+  /field\.key === 'firstSaleTosVersion' && isLegacyMachine[\s\S]{0,160}key: 'currentTosVersion'/,
+  'legacy machine edit must keep the approved first-sale field instead of rendering current tOS',
+)
+assert.match(
+  modalSource,
+  /field\.key === 'firstSaleTosVersion'\s*\? \{ \.\.\.field, readOnly: false \}/,
+  'the approved first-sale field must remain editable for both new and legacy machines',
+)
 assert.match(
   modalSource,
   /const isRequired = !renderedField\.readOnly[\s\S]{0,160}field\.requiredOnCreate/,
@@ -320,6 +335,8 @@ assert.equal(
   1,
   'the technical renderer must own one generic Form.Item path so team and snapshot fields cannot be duplicated',
 )
+assert.match(fieldVisibilityPickerSource, /mask=\{\{ closable: !confirming \}\}/, 'field visibility Drawer uses the AntD v6 mask closable API')
+assert.doesNotMatch(fieldVisibilityPickerSource, /maskClosable=/, 'field visibility Drawer must not emit the deprecated maskClosable warning')
 
 const technicalInfoTeamFields = schema.TECHNICAL_PROJECT_INFO_FIELDS.filter(field => field.group === 'team')
 assert.deepEqual(

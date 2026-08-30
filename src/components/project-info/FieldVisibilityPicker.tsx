@@ -85,7 +85,7 @@ export default function FieldVisibilityPicker({
         open={open}
         onClose={closeDrawer}
         closable={!confirming}
-        maskClosable={!confirming}
+        mask={{ closable: !confirming }}
         size={420}
         placement="right"
         footer={(

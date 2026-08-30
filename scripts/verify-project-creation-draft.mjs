@@ -233,7 +233,7 @@ assertOrdered(handleSubmitBlock, [
 ], 'submit must capture its session before submit and gate post-clear UI changes')
 const postSubmitBlock = handleSubmitBlock.slice(handleSubmitBlock.indexOf('await onSubmit('))
 assert.doesNotMatch(postSubmitBlock, /startCreateDraftSession/)
-assert.match(postSubmitBlock, /catch\s*{\s*message\.error\('项目草稿清空失败'\)/)
+assert.match(postSubmitBlock, /catch\s*{\s*messageApi\.error\('项目草稿清空失败'\)/, 'draft clear failure must use the mounted App message instance without bypassing the session guard')
 assert.match(postSubmitBlock, /if \(!isCurrentCreateDraftSession\(submitSession\)\) return[\s\S]*if \(!draftClearFailed\) \{[\s\S]*resetCreateForm\(\)[\s\S]*onCancel\(\)/)
 assert.match(handleSubmitBlock, /finally \{[\s\S]*setSubmitting\(false\)/)
 assert.doesNotMatch(addProjectSubmitBlock, /onCancel\(\)/)

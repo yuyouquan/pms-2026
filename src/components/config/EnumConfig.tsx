@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { HTMLAttributes } from 'react'
 import {
+  App,
   Alert,
   Button,
   Card,
@@ -17,7 +18,6 @@ import {
   Tag,
   Tooltip,
   Typography,
-  message,
 } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
@@ -87,6 +87,7 @@ export default function EnumConfig({
   onCollapsedChange,
   currentLoginUser,
 }: EnumConfigProps) {
+  const { message, modal } = App.useApp()
   const rowsByType = useEnumStore(state => state.rowsByType)
   const selectedType = useEnumStore(state => state.selectedType)
   const setSelectedType = useEnumStore(state => state.setSelectedType)
@@ -265,7 +266,7 @@ export default function EnumConfig({
     captureTrigger(trigger)
     const deleteType = selectedType
     const summary = getEnumRowSummary(deleteType, row)
-    Modal.confirm({
+    modal.confirm({
       title: '删除配置值？',
       content: `确认删除“${summary}”吗？删除后无法恢复。`,
       okText: '删除',
@@ -483,7 +484,7 @@ export default function EnumConfig({
       cancelText="取消"
       confirmLoading={submitting}
       closable={!submitting}
-      maskClosable={!submitting}
+      mask={{ closable: !submitting }}
       keyboard={!submitting}
       onOk={submit}
       onCancel={submitting ? undefined : closeModal}

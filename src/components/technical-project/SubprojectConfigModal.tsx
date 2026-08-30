@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Form, Modal, Select, Skeleton, Space, Tag, Typography, message } from 'antd'
+import { Alert, App, Button, Form, Modal, Select, Skeleton, Space, Tag, Typography } from 'antd'
 import { isMachineProjectType } from '@/constants/projectTypes'
 import { useEnumHydration, useSingleEnumOptions } from '@/hooks/useEnumOptions'
 import { isTechnicalSubprojectConfigured } from '@/lib/technicalProjectRules'
@@ -31,6 +31,7 @@ export default function SubprojectConfigModal({
   onSaved,
   returnFocusTo,
 }: SubprojectConfigModalProps) {
+  const { message } = App.useApp()
   const [form] = Form.useForm<TechnicalSubprojectConfiguration>()
   const loginUserFromProject = useProjectStore(state => state.currentLoginUser)
   const projects = useProjectStore(state => state.projects)

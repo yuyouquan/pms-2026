@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
-  Alert, Avatar, Badge, Button, Card, DatePicker, Dropdown, Empty, Input, Modal, Popconfirm, Progress,
-  Row, Select, Space, Table, Tabs, Tag, Tooltip, Typography, message,
+  Alert, App, Avatar, Badge, Button, Card, DatePicker, Dropdown, Empty, Input, Modal, Popconfirm, Progress,
+  Row, Select, Space, Table, Tabs, Tag, Tooltip, Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { MenuProps } from 'antd'
@@ -303,6 +303,7 @@ export default function TechnicalPlanModule({
   projectId, currentLoginUser, canEdit, canPublish, canImport, canExport, canViewTechnicalPlan, canShareTechnicalPlan,
   maxDepthByKind = DEFAULT_MAX_DEPTH,
 }: TechnicalPlanModuleProps) {
+  const { message, modal } = App.useApp()
   const [activeKey, setActiveKey] = useState(`${projectId}:tdt`)
   const [viewMode, setViewMode] = useState<PlanWorkspaceViewMode>('horizontal')
   const [compareOpen, setCompareOpen] = useState(false)
@@ -508,7 +509,7 @@ export default function TechnicalPlanModule({
     const source = [...publishedVersions]
       .sort((left, right) => right.versionNo.localeCompare(left.versionNo, undefined, { numeric: true }))[0]
     if (!source) { message.warning('暂无可克隆的已发布版本'); return }
-    Modal.confirm({
+    modal.confirm({
       title: '确认克隆计划',
       content: `确认将 ${source.versionNo} 的计划信息克隆到当前修订版本？实际开始和实际完成时间不会被克隆。`,
       okText: '确认克隆',
