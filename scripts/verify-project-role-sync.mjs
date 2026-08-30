@@ -13,6 +13,7 @@ const technicalMap = {
   质量代表: 'qualityRepresentative',
   产品代表: 'productRepresentative',
   标准化代表: 'standardizationRepresentative',
+  其他: 'technicalOther',
 }
 const tosMap = {
   版本项目经理: 'tosVersionProjectManager', 规划代表: 'tosPlanningRepresentative', SE: 'tosSe',
@@ -31,10 +32,10 @@ assert.equal(typeof permissionModule.migratePermissionState, 'function', 'permis
 assert.equal(permissionModule.resolvePermissionProjectId('child-1', 'tdt-1'), 'tdt-1', 'a child uses its TDT parent permission set')
 assert.equal(permissionModule.resolvePermissionProjectId('tdt-1'), 'tdt-1')
 
-const initialTechnicalRoles = { 技术项目负责人: ['旧负责人'], 技术项目经理: ['旧经理'], 测试代表: ['旧测试'], 质量代表: ['旧质量'], 产品代表: ['旧产品'], 标准化代表: ['旧标准'], 自定义角色: ['保留成员'] }
+const initialTechnicalRoles = { 技术项目负责人: ['旧负责人'], 技术项目经理: ['旧经理'], 测试代表: ['旧测试'], 质量代表: ['旧质量'], 产品代表: ['旧产品'], 标准化代表: ['旧标准'], 其他: ['旧其他'], 自定义角色: ['保留成员'] }
 assert.deepEqual(projectModule.synchronizeTechnicalRoleMembers(initialTechnicalRoles, {
-  技术项目负责人: ['新负责人'], 技术项目经理: [], 测试代表: ['新测试'], 质量代表: [], 产品代表: ['新产品'], 标准化代表: [],
-}), { 技术项目负责人: ['新负责人'], 技术项目经理: [], 测试代表: ['新测试'], 质量代表: [], 产品代表: ['新产品'], 标准化代表: [], 自定义角色: ['保留成员'] }, 'technical save overwrites six fixed roles and preserves custom roles')
+  技术项目负责人: ['新负责人'], 技术项目经理: [], 测试代表: ['新测试'], 质量代表: [], 产品代表: ['新产品'], 标准化代表: [], 其他: ['新其他'],
+}), { 技术项目负责人: ['新负责人'], 技术项目经理: [], 测试代表: ['新测试'], 质量代表: [], 产品代表: ['新产品'], 标准化代表: [], 其他: ['新其他'], 自定义角色: ['保留成员'] }, 'technical save overwrites all seven fixed roles and preserves custom roles')
 
 let fixture = projectModule.synchronizeTosRoleMembers({}, { source: 'team', members: ['A'], role: '版本项目经理' })
 fixture = projectModule.synchronizeTosRoleMembers(fixture, { source: 'permission', members: ['B'], role: '版本项目经理' })
@@ -51,14 +52,15 @@ assert.equal(typeof permissionStore.getState().ensureProjectPermissions, 'functi
 const technicalProject = {
   id: 'role-tech', name: '角色技术项目', type: '技术项目', secondaryCategory: '技术项目', status: '在研', progress: 0,
   leader: '李四', responsiblePersons: ['李四'], markets: [], androidVersion: '', chipPlatform: '', spm: '', updatedAt: '', productLine: '', tosVersion: '', planStartDate: '', planEndDate: '', developCycle: 0, healthStatus: 'normal',
-  technicalLead: '李四', technicalProjectManager: '王五', testRepresentative: '赵六', qualityRepresentative: '', productRepresentative: '孙七', standardizationRepresentative: '',
+  technicalLead: '李四', technicalProjectManager: '王五', testRepresentative: '赵六', qualityRepresentative: '', productRepresentative: '孙七', standardizationRepresentative: '', technicalOther: '杜甫',
 }
 permissionStore.setState({ rolesByProject: { 'role-tech': [...permissionModule.getFixedProjectRoles(technicalProject), { name: '架构顾问', members: ['张三'], isFixed: false }] } })
 projectStore.setState({ projects: [technicalProject], selectedProject: technicalProject })
 assert.equal(projectStore.getState().syncTechnicalTeamPermissionMembers('role-tech'), true)
 const syncedTechnical = permissionStore.getState().rolesByProject['role-tech']
-assert.deepEqual(syncedTechnical.slice(0, 6).map(role => [role.name, role.members]), [
+assert.deepEqual(syncedTechnical.slice(0, 7).map(role => [role.name, role.members]), [
   ['技术项目负责人', ['李四']], ['技术项目经理', ['王五']], ['测试代表', ['赵六']], ['质量代表', []], ['产品代表', ['孙七']], ['标准化代表', []],
+  ['其他', ['杜甫']],
 ])
 assert.deepEqual(syncedTechnical.at(-1), { name: '架构顾问', members: ['张三'], isFixed: false }, 'custom technical roles remain assignable')
 

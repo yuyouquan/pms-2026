@@ -5,6 +5,13 @@ import ts from 'typescript'
 import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
+const redesignBrowser = readSource(root, 'screenshots/verify-workbench-technical-project-redesign.mjs')
+assert.match(redesignBrowser, /const controlledPopupId = async \(page, input, label\)/, 'browser selects resolve the popup owned by the target combobox')
+assert.match(redesignBrowser, /const selectOption = async \(page, popupId, text/, 'option selection requires an explicit controlled popup')
+assert.doesNotMatch(redesignBrowser, /ant-select-dropdown[\s\S]{0,320}\.at\(-1\)/, 'browser selection never guesses the last visible dropdown')
+assert.match(redesignBrowser, /const FORM_MULTI_SELECT_ATTEMPTS = 3/, 'multi-value form fields use a finite field-level retry budget')
+assert.match(redesignBrowser, /await waitForFormSelectionValues\(page, element, expectedValues\)/, 'multi-value form fields read back every expected chip before continuing')
+assert.match(redesignBrowser, /const prewarmBrowser = async browserInstance/, 'browser verification performs an independent Next health prewarm')
 const rules = loadTypeScriptModule(root, 'src/lib/technicalProjectRules.ts')
 const constants = loadTypeScriptModule(root, 'src/constants/technicalProject.ts')
 const enumConsumers = loadTypeScriptModule(root, 'src/lib/enumConsumers.ts')
