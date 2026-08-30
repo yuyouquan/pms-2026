@@ -173,8 +173,10 @@ assert.equal(level1Rules.getNextTosBusinessVersionName('tOS17.0', [
   { taskName: '17.0.0.110' },
   { taskName: '18.0.0.995' },
   { taskName: '17.0.0.9999' },
-  { taskName: '17.0.0.999' },
 ]), '17.0.0.115', 'tOS business versions continue from the highest same-prefix three-digit suffix')
+assert.equal(level1Rules.getNextTosBusinessVersionName('tOS17.0', [
+  { taskName: '17.0.0.101' },
+]), '17.0.0.106', 'tOS default generation counts any same-prefix three-digit suffix before submit-time validation')
 
 const machineBusinessStage = {
   id: 'machine-launch', stableId: 'machine-stage-launch', order: 1, taskName: '上市阶段', source: 'template', nodeKind: 'stage',

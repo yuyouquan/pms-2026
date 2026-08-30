@@ -288,7 +288,7 @@ export const getNextTosBusinessVersionName = (
   const maximum = tasks.reduce((result, task) => {
     const value = task.taskName.trim()
     const suffix = value.startsWith(prefix) ? value.slice(prefix.length) : ''
-    return /^\d{2}[05]$/.test(suffix) ? Math.max(result, Number(suffix)) : result
+    return /^\d{3}$/.test(suffix) ? Math.max(result, Number(suffix)) : result
   }, 95)
   return `${parsed.prefix}.${String(maximum + 5).padStart(3, '0')}`
 }
