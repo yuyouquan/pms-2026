@@ -153,6 +153,80 @@ assert.deepEqual(level1Renumbered.map(task => [task.id, task.parentId || null, t
 ], 'level1 renumbering assigns 1-based IDs, sibling orders, and rewritten parent IDs without changing stable IDs')
 assert.deepEqual(level1RenumberInput, level1RenumberSnapshot, 'level1 renumbering does not mutate its input')
 
+assert.equal(level1Rules.getNextMachineMrBusinessName([]), 'MR1', 'the first machine business node defaults to MR1')
+assert.equal(level1Rules.getNextMachineMrBusinessName([
+  { taskName: 'MR1' },
+  { taskName: 'MR3' },
+  { taskName: 'STR5' },
+]), 'MR4', 'machine business names continue after the highest valid MR instead of filling gaps')
+for (const name of ['MR1', 'MR2', 'MR10']) {
+  assert.equal(level1Rules.validateMachineMrBusinessName(name).valid, true, `${name} is a valid machine MR business name`)
+}
+for (const name of ['MR0', 'MR01', 'MR001', 'MR-1', 'mr1']) {
+  const validation = level1Rules.validateMachineMrBusinessName(name)
+  assert.equal(validation.valid, false, `${name} is not a valid machine MR business name`)
+  assert.equal(validation.message, '格式：MR+正整数，不允许前导0；示例：MR1、MR2。', `${name} exposes the strict MR naming guidance`)
+}
+assert.equal(level1Rules.getNextTosBusinessVersionName('tOS17.0', []), '17.0.0.100', 'the first tOS business version starts at suffix 100')
+assert.equal(level1Rules.getNextTosBusinessVersionName('tOS17.0', [
+  { taskName: '17.0.0.100' },
+  { taskName: '17.0.0.110' },
+  { taskName: '18.0.0.995' },
+  { taskName: '17.0.0.9999' },
+  { taskName: '17.0.0.999' },
+]), '17.0.0.115', 'tOS business versions continue from the highest same-prefix three-digit suffix')
+
+const machineBusinessStage = {
+  id: 'machine-launch', stableId: 'machine-stage-launch', order: 1, taskName: '上市阶段', source: 'template', nodeKind: 'stage',
+}
+const machineBusinessTasks = [
+  machineBusinessStage,
+  {
+    id: 'machine-launch.1', stableId: 'machine-business-mr1', parentId: 'machine-launch', order: 1,
+    taskName: 'MR1', source: 'custom', nodeKind: 'business-period',
+  },
+]
+for (const taskName of ['MR0', 'MR01']) {
+  const inserted = level1Rules.insertLevel1BusinessNode(machineBusinessTasks, {
+    projectType: '整机产品项目', parentStableId: 'machine-stage-launch', taskName, now: 1,
+  })
+  assert.equal(inserted.ok, false, `machine business insertion rejects ${taskName}`)
+  assert.equal(inserted.code, 'invalid-name', `machine business insertion classifies ${taskName} as an invalid name`)
+  assert.equal(inserted.message, '格式：MR+正整数，不允许前导0；示例：MR1、MR2。', `machine business insertion reuses strict validation for ${taskName}`)
+
+  const renamed = level1Rules.renameLevel1BusinessNode(machineBusinessTasks, {
+    projectType: '整机产品项目', taskStableId: 'machine-business-mr1', taskName,
+  })
+  assert.equal(renamed.ok, false, `machine business rename rejects ${taskName}`)
+  assert.equal(renamed.code, 'invalid-name', `machine business rename classifies ${taskName} as an invalid name`)
+  assert.equal(renamed.message, '格式：MR+正整数，不允许前导0；示例：MR1、MR2。', `machine business rename reuses strict validation for ${taskName}`)
+}
+const duplicateMachineInsert = level1Rules.insertLevel1BusinessNode(machineBusinessTasks, {
+  projectType: '整机产品项目', parentStableId: 'machine-stage-launch', taskName: 'MR1', now: 1,
+})
+assert.equal(duplicateMachineInsert.ok, false, 'machine business insertion preserves the full-plan duplicate-name check')
+assert.equal(duplicateMachineInsert.code, 'duplicate-name', 'machine business insertion reports duplicate names distinctly')
+const duplicateMachineRename = level1Rules.renameLevel1BusinessNode([
+  ...machineBusinessTasks,
+  {
+    id: 'machine-launch.2', stableId: 'machine-business-mr2', parentId: 'machine-launch', order: 2,
+    taskName: 'MR2', source: 'custom', nodeKind: 'business-period',
+  },
+], {
+  projectType: '整机产品项目', taskStableId: 'machine-business-mr2', taskName: 'MR1',
+})
+assert.equal(duplicateMachineRename.ok, false, 'machine business rename preserves the sibling duplicate-name check')
+assert.equal(duplicateMachineRename.code, 'duplicate-name', 'machine business rename reports duplicate names distinctly')
+const invalidTosBusinessInsert = level1Rules.insertLevel1BusinessNode([{
+  id: 'tos-launch', stableId: 'tos-stage-launch-iteration', order: 1,
+  taskName: '上市迭代阶段', source: 'template', nodeKind: 'stage',
+}], {
+  projectType: 'tOS版本项目', projectName: 'tOS17.0', parentStableId: 'tos-stage-launch-iteration',
+  taskName: '17.0.0.101', now: 1,
+})
+assert.equal(invalidTosBusinessInsert.ok, false, 'tOS business insertion still revalidates the submitted version name')
+assert.equal(invalidTosBusinessInsert.code, 'invalid-name', 'tOS business insertion keeps the existing version validation result')
+
 const launchStage = { id: 'launch', stableId: 'stage-launch', order: 2, taskName: '上市阶段', source: 'template' }
 const machineMrTasks = [
   { id: '1', stableId: 'stage-concept', order: 1, taskName: '概念阶段', source: 'template' },
@@ -163,8 +237,8 @@ const machineMrTasks = [
 assert.equal(level1Rules.canAddLevel1CustomChild('整机产品项目', launchStage), false, 'launch-stage additions are reserved for controlled MR insertion')
 const firstMrInsert = level1Rules.insertNextMachineMrMilestone(machineMrTasks)
 assert.equal(firstMrInsert.ok, true, 'a machine launch stage accepts controlled MR insertion')
-assert.equal(firstMrInsert.task.taskName, 'MR4', 'controlled MR insertion starts after MR3 even when only MR1 and MR2 exist')
-assert.deepEqual(firstMrInsert.tasks.filter(task => task.parentId === firstMrInsert.tasks.find(task => task.stableId === 'stage-launch').id).map(task => task.taskName), ['MR2', 'MR4'], 'the inserted MR remains a launch-stage sibling')
+assert.equal(firstMrInsert.task.taskName, 'MR3', 'controlled MR insertion continues after the highest MR across the whole plan')
+assert.deepEqual(firstMrInsert.tasks.filter(task => task.parentId === firstMrInsert.tasks.find(task => task.stableId === 'stage-launch').id).map(task => task.taskName), ['MR2', 'MR3'], 'the inserted MR remains a launch-stage sibling')
 assert.equal(firstMrInsert.task.source, 'custom', 'controlled MR insertion marks the task custom')
 assert.equal(firstMrInsert.task.planStartDate, '', 'controlled MR starts without schedule dates')
 assert.equal(firstMrInsert.task.estimatedDays, null, 'controlled MR has no preset duration')
@@ -176,12 +250,11 @@ assert.equal(level1Rules.canMutateLevel1TaskStructure({ projectType: '整机产�
 assert.equal(level1Rules.canMutateLevel1TaskStructure({ projectType: '整机产品项目', task: firstMrInsert.task, parent: firstMrInsert.tasks.find(task => task.id === firstMrInsert.task.parentId), action: 'delete' }), true, 'controlled MR can be deleted')
 const secondMrInsert = level1Rules.insertNextMachineMrMilestone(firstMrInsert.tasks)
 assert.equal(secondMrInsert.ok, true, 'a second controlled MR can be inserted')
-assert.equal(secondMrInsert.task.taskName, 'MR5', 'controlled MR insertion increments the highest existing MR')
+assert.equal(secondMrInsert.task.taskName, 'MR4', 'controlled MR insertion increments the highest existing MR')
 const repeatedMrInsert = level1Rules.insertNextMachineMrMilestone(secondMrInsert.tasks.filter(task => task.stableId !== secondMrInsert.task.stableId))
 assert.equal(repeatedMrInsert.ok, true, 'deleting a controlled MR permits replacement')
-assert.equal(repeatedMrInsert.task.taskName, 'MR5', 'deleting MR5 makes the next controlled insertion MR5 again')
+assert.equal(repeatedMrInsert.task.taskName, 'MR4', 'deleting MR4 makes the next controlled insertion MR4 again')
 assert.deepEqual(level1Rules.insertNextMachineMrMilestone(machineMrTasks.filter(task => task.stableId !== 'stage-launch')), { ok: false, reason: 'launch-stage-missing' }, 'controlled MR insertion requires a launch stage')
-assert.deepEqual(level1Rules.insertNextMachineMrMilestone([...machineMrTasks, { id: 'other.1', stableId: 'existing-mr4', parentId: '1', order: 2, taskName: 'MR4', source: 'custom' }]), { ok: false, reason: 'duplicate-name' }, 'a computed MR name already used outside the launch stage is rejected')
 const originalDateNow = Date.now
 const originalMathRandom = Math.random
 let machineNonceCalls = 0
@@ -1183,7 +1256,7 @@ assert.doesNotMatch(horizontalUiStateSource, /level1SurfaceIsLatestPublished/, '
 assert.doesNotMatch(horizontalUiStateSource, /\bisCurrentDraft\b|\bisLatestPublished\b|\bcanMaintainCurrentPlan\b|\bsetEffectiveTasks\b/, 'basic-information horizontal UI never reads global plan-level version, permission, or task setters')
 const tosLiveV3Draft = [
   { id: '3.1', stableId: 'tos-concept-start', taskName: '概念启动', planEndDate: '2026-03-01' },
-  { id: '3.2', stableId: 'tos-draft-only', taskName: '16.1.0.005', planEndDate: '2026-04-01' },
+  { id: '3.2', stableId: 'tos-draft-only', taskName: '16.1.0.100', planEndDate: '2026-04-01' },
 ]
 const missingTosV2Tasks = projectSpaceTosComparisonTasks.resolveTosComparisonVersionTasks({
   version: { id: 'tos-v2', status: '已发布' },

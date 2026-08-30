@@ -259,6 +259,40 @@ export const parseTosProjectVersionPrefix = (projectName: string) => {
     : null
 }
 
+export const validateMachineMrBusinessName = (taskName: string) => {
+  const value = taskName.trim()
+  const valid = /^MR[1-9]\d*$/.test(value)
+  return {
+    valid,
+    message: valid ? '' : '格式：MR+正整数，不允许前导0；示例：MR1、MR2。',
+  }
+}
+
+export const getNextMachineMrBusinessName = (
+  tasks: readonly Pick<Level1PlanTask, 'taskName'>[],
+) => {
+  const maximum = tasks.reduce((result, task) => {
+    const match = /^MR([1-9]\d*)$/.exec(task.taskName.trim())
+    return match ? Math.max(result, Number(match[1])) : result
+  }, 0)
+  return `MR${maximum + 1}`
+}
+
+export const getNextTosBusinessVersionName = (
+  projectName: string,
+  tasks: readonly Pick<Level1PlanTask, 'taskName'>[],
+) => {
+  const parsed = parseTosProjectVersionPrefix(projectName)
+  if (!parsed) return ''
+  const prefix = `${parsed.prefix}.`
+  const maximum = tasks.reduce((result, task) => {
+    const value = task.taskName.trim()
+    const suffix = value.startsWith(prefix) ? value.slice(prefix.length) : ''
+    return /^\d{2}[05]$/.test(suffix) ? Math.max(result, Number(suffix)) : result
+  }, 95)
+  return `${parsed.prefix}.${String(maximum + 5).padStart(3, '0')}`
+}
+
 export const validateTosBusinessVersionName = (projectName: string, taskName: string) => {
   const parsed = parseTosProjectVersionPrefix(projectName)
   if (!parsed) return { valid: false, message: '无法从项目名称解析 tOS 版本前缀' }
@@ -1110,20 +1144,16 @@ export const insertLevel1BusinessNode = (
     return { ok: false, code: 'parent-not-business-stage', message: '只能在当前项目类型允许的业务阶段下新增节点' }
   }
 
+  const taskName = input.taskName.trim()
   if (input.projectType === '整机产品项目') {
-    if (!/^MR\d+$/.test(input.taskName)) {
-      return {
-        ok: false,
-        code: 'invalid-name',
-        message: '整机业务节点名称必须为 MR 加数字（例如 MR0、MR01 或 MR1）',
-      }
-    }
+    const validation = validateMachineMrBusinessName(taskName)
+    if (!validation.valid) return { ok: false, code: 'invalid-name', message: validation.message }
   } else {
-    const validation = validateTosBusinessVersionName(input.projectName || '', input.taskName)
+    const validation = validateTosBusinessVersionName(input.projectName || '', taskName)
     if (!validation.valid) return { ok: false, code: 'invalid-name', message: validation.message }
   }
 
-  if (tasks.some(task => task.taskName === input.taskName)) {
+  if (tasks.some(task => task.taskName === taskName)) {
     return { ok: false, code: 'duplicate-name', message: '一级计划中已存在同名业务节点' }
   }
 
@@ -1138,7 +1168,7 @@ export const insertLevel1BusinessNode = (
       stableId,
       parentId: parent.id,
       order: siblingOrder + 1,
-      taskName: input.taskName,
+      taskName,
       source: 'custom',
       nodeKind: 'business-period',
       responsible: '',
@@ -1181,9 +1211,8 @@ export const renameLevel1BusinessNode = (
 
   const taskName = input.taskName.trim()
   if (input.projectType === '整机产品项目') {
-    if (!/^MR\d+$/.test(taskName)) {
-      return { ok: false, code: 'invalid-name', message: '整机业务节点名称必须为 MR 加数字（例如 MR0、MR01 或 MR1）' }
-    }
+    const validation = validateMachineMrBusinessName(taskName)
+    if (!validation.valid) return { ok: false, code: 'invalid-name', message: validation.message }
   } else {
     const validation = validateTosBusinessVersionName(input.projectName || '', taskName)
     if (!validation.valid) return { ok: false, code: 'invalid-name', message: validation.message }
@@ -1205,13 +1234,7 @@ export const insertNextMachineMrMilestone = (
 ): InsertNextMachineMrMilestoneResult => {
   const launchStage = tasks.find(task => !task.parentId && isLaunchStageTask(task))
   if (!launchStage) return { ok: false, reason: 'launch-stage-missing' }
-  const maximumMr = tasks
-    .filter(task => task.parentId === launchStage.id)
-    .reduce((maximum, task) => {
-      const match = /^MR(\d+)$/.exec(task.taskName)
-      return match ? Math.max(maximum, Number(match[1])) : maximum
-    }, 3)
-  const taskName = `MR${maximumMr + 1}`
+  const taskName = getNextMachineMrBusinessName(tasks)
   if (tasks.some(task => task.taskName === taskName)) return { ok: false, reason: 'duplicate-name' }
   const nonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`
   const stableId = createUniqueLevel1StableId(tasks, `custom-mr-${nonce}`)
