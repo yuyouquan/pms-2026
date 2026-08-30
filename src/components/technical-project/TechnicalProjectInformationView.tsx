@@ -6,6 +6,7 @@ import {
   CalendarOutlined,
   EditOutlined,
   FileOutlined,
+  InfoCircleOutlined,
   LinkOutlined,
   ProjectOutlined,
   SettingOutlined,
@@ -16,10 +17,13 @@ import ProjectInformationFrame from '@/components/project-info/ProjectInformatio
 import SubprojectConfigModal from '@/components/technical-project/SubprojectConfigModal'
 import TechnicalPlanSummary from '@/components/technical-project/TechnicalPlanSummary'
 import TechnicalProjectBasicInfo from '@/components/technical-project/TechnicalProjectBasicInfo'
+import {
+  TECHNICAL_PROJECT_SPACE_BASIC_FIELDS,
+  TECHNICAL_PROJECT_SPACE_CORE_FIELDS,
+} from '@/constants/projectInfoSchema'
 import { TECHNICAL_DELIVERABLE_FIELDS, TECHNICAL_TEAM_FIELDS } from '@/constants/technicalProject'
 import {
   isTechnicalSubprojectConfigured,
-  normalizeTechnicalCustomRoles,
   resolveTechnicalInformationModules,
   sanitizeTechnicalDeliverableUrl,
   type TechnicalInformationTab,
@@ -80,7 +84,6 @@ const renderDeliverable = (value: unknown) => {
 export default function TechnicalProjectInformationView({
   project,
   stage,
-  customRoles = [],
   currentLoginUser,
   onEdit,
   canEdit = false,
@@ -133,28 +136,32 @@ export default function TechnicalProjectInformationView({
   const activeLabel = activeChild?.name || 'TDT'
   const machineName = (id: string) => projects.find(item => item.id === id)?.name || id || '-'
 
-  const normalizedCustomRoles = normalizeTechnicalCustomRoles(
-    customRoles,
-    TECHNICAL_TEAM_FIELDS.map(field => field.label),
+  const roles = TECHNICAL_TEAM_FIELDS.map(field => ({
+    name: field.label,
+    members: membersOf(valueOf(project, field.key)),
+  }))
+  const technicalCoreAccentByKey: Record<string, string> = {
+    secondaryCategory: '#14b8a6', technicalTrack: '#0891b2', tmg: '#7c3aed', subdomain: '#2563eb',
+    status: '#f59e0b', projectStage: '#d97706', projectYear: '#059669', projectValue: '#475569',
+    preProjectId: '#0f766e', tdtAndSubprojectName: 'var(--pms-brand-strong)',
+  }
+  const technicalCoreValue = (key: string) => {
+    if (key === 'projectStage') return stage
+    if (key === 'preProjectId') return machineName(displayText(valueOf(project, key)) === '-' ? '' : displayText(valueOf(project, key)))
+    if (key === 'tdtAndSubprojectName') return [project.name, ...visibleChildren.map(child => child.name)].join('、')
+    return displayText(valueOf(project, key))
+  }
+  const coreFields = TECHNICAL_PROJECT_SPACE_CORE_FIELDS.map(field => ({
+    label: field.label,
+    value: technicalCoreValue(field.key),
+    accent: technicalCoreAccentByKey[field.key] || 'var(--pms-brand-strong)',
+    fullWidth: field.key === 'projectValue',
+  }))
+  const technicalBasicValue = (key: string) => (
+    key === 'firstMachineProjectId'
+      ? machineName(displayText(valueOf(project, key)) === '-' ? '' : displayText(valueOf(project, key)))
+      : displayText(valueOf(project, key))
   )
-  const roles = [
-    ...TECHNICAL_TEAM_FIELDS.map(field => ({
-      name: field.label,
-      members: membersOf(valueOf(project, field.key)),
-      fixed: true,
-    })),
-    ...normalizedCustomRoles.map(role => ({ ...role, fixed: false })),
-  ]
-  const coreFields = [
-    { label: '项目名称', value: displayText(project.name), accent: 'var(--pms-brand-strong)' },
-    { label: '项目分类', value: displayText(project.secondaryCategory), accent: '#14b8a6' },
-    { label: '技术赛道', value: displayText(valueOf(project, 'technicalTrack')), accent: '#0891b2' },
-    { label: 'TMG及技术领域', value: displayText(valueOf(project, 'tmg')), accent: '#7c3aed' },
-    { label: '子领域', value: displayText(valueOf(project, 'subdomain')), accent: '#2563eb' },
-    { label: '项目阶段', value: stage, accent: '#d97706' },
-    { label: '项目年份', value: displayText(valueOf(project, 'projectYear')), accent: '#059669' },
-    { label: '项目价值', value: displayText(valueOf(project, 'projectValue')), accent: '#475569', fullWidth: true },
-  ]
   const tabItems = [
     { key: tdtKey, label: 'TDT' },
     ...visibleChildren.map(child => ({
@@ -216,13 +223,28 @@ export default function TechnicalProjectInformationView({
         )}
         informationSections={(
           <div className="pms-project-info-sections" aria-label="技术信息内容">
+            {activeTab.kind === 'tdt' && (
+              <div data-section="technical-basic-information">
+                <CollapsibleInformationSection title="基础信息" icon={<InfoCircleOutlined />} variant="basic" count={TECHNICAL_PROJECT_SPACE_BASIC_FIELDS.length}>
+                  <div className="pms-project-info-display-rows">
+                    <div className="pms-project-info-display-grid pms-project-info-display-grid--technical-basic">
+                      {TECHNICAL_PROJECT_SPACE_BASIC_FIELDS.map(field => (
+                        <div className="pms-project-info-display-item" key={field.key}>
+                          <div className="pms-project-info-display-label">{field.label}</div>
+                          <div className="pms-project-info-display-value">{technicalBasicValue(field.key)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CollapsibleInformationSection>
+              </div>
+            )}
             <CollapsibleInformationSection title="团队信息" icon={<TeamOutlined />} variant="team" count={roles.length}>
               <div className="pms-project-info-team-grid">
                 {roles.map(role => (
                   <div className="pms-project-info-team-role" key={role.name}>
                     <div className="pms-project-info-team-role-name">
                       {role.name}
-                      {!role.fixed && <Tag color="purple" bordered={false}>自定义</Tag>}
                     </div>
                     <div className="pms-project-info-team-members">
                       {role.members.length ? role.members.map(member => (

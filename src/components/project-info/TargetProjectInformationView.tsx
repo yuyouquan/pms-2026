@@ -5,8 +5,9 @@ import { Button, Tooltip } from 'antd'
 import { CalendarOutlined, EditOutlined, ProjectOutlined, SendOutlined, SettingOutlined } from '@ant-design/icons'
 import ProjectInfoSections from '@/components/project-info/ProjectInfoSections'
 import ProjectInformationFrame from '@/components/project-info/ProjectInformationFrame'
-import type { ProjectInfoGroupKey } from '@/constants/projectInfoSchema'
+import { MACHINE_PROJECT_SPACE_CORE_FIELDS, type ProjectInfoGroupKey } from '@/constants/projectInfoSchema'
 import { PROJECT_CATEGORY_MACHINE, isMachineProjectType, resolveProjectClassification } from '@/constants/projectTypes'
+import { formatTosSnapshot } from '@/lib/enumConsumers'
 import { formatProjectInfoValue, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
 
 interface TargetProjectInformationViewProps {
@@ -53,18 +54,27 @@ export default function TargetProjectInformationView({
     : classification.projectCategory
   const status = String(project.status || '-')
   const health = getHealthPresentation(project.healthStatus)
-  const showCancelPauseDate = ['暂停', '已暂停', '已取消'].includes(status)
-  const coreFields = isWholeMachine ? [
-    { label: '项目名称', value: project.name, accent: 'var(--pms-brand-strong)' },
-    { label: '市场名', value: String(project.marketName || '-'), accent: '#8b5cf6' },
-    { label: '品牌', value: String(project.brand || '-'), accent: '#06b6d4' },
-    { label: '产品线', value: String(project.productLine || '-'), accent: '#0ea5e9' },
-    { label: '项目状态', value: status, accent: '#f59e0b' },
-    ...(showCancelPauseDate ? [{ label: '取消暂停时间', value: formatProjectInfoValue(getProjectInfoValue(project, 'cancelPauseDate')), accent: '#f97316' }] : []),
-    { label: '项目分类', value: classificationLabel, accent: '#14b8a6' },
-    { label: '健康状态', value: health.label, accent: health.color },
-    { label: '下一个节点', value: String(project.currentNode || '-'), accent: '#f43f5e' },
-  ] : [
+  const machineAccentByKey: Record<string, string> = {
+    brand: '#06b6d4',
+    productLine: '#0ea5e9',
+    marketName: '#8b5cf6',
+    firstSaleTosVersion: 'var(--pms-brand-strong)',
+    status: '#f59e0b',
+    healthStatus: health.color,
+    currentNode: '#f43f5e',
+  }
+  const machineCoreValue = (key: string) => {
+    if (key === 'healthStatus') return health.label
+    if (key === 'firstSaleTosVersion') return formatTosSnapshot(getProjectInfoValue(project, key)) || '-'
+    return formatProjectInfoValue(getProjectInfoValue(project, key))
+  }
+  const coreFields = isWholeMachine
+    ? MACHINE_PROJECT_SPACE_CORE_FIELDS.map(field => ({
+        label: field.label,
+        value: machineCoreValue(field.key),
+        accent: machineAccentByKey[field.key] || 'var(--pms-brand-strong)',
+      }))
+    : [
     { label: '项目名称', value: project.name, accent: 'var(--pms-brand-strong)' },
     { label: '项目状态', value: status, accent: '#f59e0b' },
     { label: '项目分类', value: classificationLabel, accent: '#14b8a6' },

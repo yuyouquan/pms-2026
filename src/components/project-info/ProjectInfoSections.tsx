@@ -5,8 +5,8 @@ import { Avatar, Collapse, Space, Tag, message } from 'antd'
 import { InfoCircleOutlined, LinkOutlined, TeamOutlined, ToolOutlined } from '@ant-design/icons'
 import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
 import {
-  getFieldsForGroup,
   getProjectInfoGroups,
+  type ProjectInfoFieldDefinition,
   type ProjectInfoGroupDefinition,
   type ProjectInfoGroupKey,
 } from '@/constants/projectInfoSchema'
@@ -20,6 +20,7 @@ import {
   type ProjectInfoProject,
 } from '@/lib/projectInfoValues'
 import { formatPrimaryChipCode, formatTosSnapshot } from '@/lib/enumConsumers'
+import { getProjectInfoSpaceFields } from '@/lib/projectInfoRules'
 
 interface ProjectInfoSectionsProps {
   project: ProjectInfoProject
@@ -70,10 +71,10 @@ function ProjectInfoGroupPanel({
   canConfigure,
 }: ProjectInfoSectionsProps & { group: ProjectInfoGroupDefinition }) {
   const [messageApi, messageContextHolder] = message.useMessage()
-  const fields = useMemo(
-    () => getFieldsForGroup(project.type, group.key),
-    [group.key, project.type],
-  )
+  const fields = useMemo(() => {
+    const spaceFields = getProjectInfoSpaceFields(project.type) as ProjectInfoFieldDefinition[]
+    return spaceFields.filter(field => field.group === group.key)
+  }, [group.key, project.type])
   const { visibleFieldKeys, setVisibleFieldKeys } = useProjectFieldVisibility({
     userId: currentUser,
     projectId: project.id,

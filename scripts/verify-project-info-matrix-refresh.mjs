@@ -168,11 +168,15 @@ const projectInfoRulesModule = evaluateTypeScriptModule(
     if (id === '@/constants/projectTypes') {
       return {
         isMachineProjectType: type => type === '整机产品-手机',
+        PROJECT_CATEGORY_TECH: '技术项目',
         PROJECT_TYPE_TOS_VERSION: 'tOS版本项目',
       }
     }
     if (id === '@/lib/projectInfoValues') {
       return projectInfoValuesModule
+    }
+    if (id === '@/lib/projectStatus') {
+      return { mapIpmProjectStatus: status => status }
     }
     throw new Error(`Unexpected project-info rules module: ${id}`)
   },
@@ -227,6 +231,8 @@ assert.match(view, /color:\s*'#94a3b8'/, 'unknown configured health snapshots us
 assert.match(view, /afterCore/, 'the target project view must support content immediately after the core card')
 assert.match(view, /visibleGroupKeys/, 'the target project view must pass display-group filtering')
 assert.match(sections, /visibleGroupKeys/, 'project-space sections must support caller-selected groups')
+assert.match(view, /MACHINE_PROJECT_SPACE_CORE_FIELDS\.map\(field =>/, 'whole-machine core values must follow the canonical seven-field space projection')
+assert.match(sections, /const spaceFields = getProjectInfoSpaceFields\(project\.type\)[\s\S]{0,120}spaceFields\.filter\(field => field\.group === group\.key\)/, 'information sections must follow the canonical project-space projection')
 assert.doesNotMatch(sections, /Grid\.useBreakpoint|getBalancedRows|displayRows/, 'information sections must not use responsive or balanced dynamic columns')
 assert.match(sections, /pms-project-info-display-grid[\s\S]*visibleFields\.map/, 'information sections must render visible fields in schema order through one grid')
 assert.match(sections, /pms-project-info-team-role/, 'team sections must separate role names from member lists')
@@ -264,7 +270,7 @@ assert.deepEqual(
   'only build fields must be hideable',
 )
 assert.doesNotMatch(plan, /planStartDate|planEndDate|developCycle|isCarrierCustomized/, 'plan grid must not retain removed metrics')
-assert.match(plan, /key:\s*'buildOption'[\s\S]*key:\s*'buildMarket'[\s\S]*key:\s*'googleLaunchDate'[\s\S]*key:\s*'isMadaControlled'[\s\S]*key:\s*'isSimLocked'[\s\S]*key:\s*'isCancelPaused'[\s\S]*key:\s*'cancelPauseDate'/, 'plan display metrics must match schema order')
+assert.match(plan, /PROJECT_PLAN_INFO_FIELDS\.map\(field =>/, 'plan display metrics must be projected in canonical schema order')
 assert.match(plan, /import type \{ MarketYesNoValue \} from '@\/lib\/marketRules'/, 'plan grid must use the market yes-no value type')
 assert.match(plan, /isMadaControlled\?: MarketYesNoValue \| undefined[\s\S]*isSimLocked\?: MarketYesNoValue \| undefined[\s\S]*isCancelPaused\?: MarketYesNoValue \| undefined/, 'plan grid boolean props must use the market yes-no value type')
 assert.match(plan, /const displayBoolean = \(value: MarketYesNoValue \| undefined\)/, 'plan grid boolean display helper must use the market yes-no value type')
@@ -288,6 +294,10 @@ assert.match(projectSpace, /\{!isTargetProject && \(isSoftware \|\| isTech\) && 
 const projectTypes = read('src/constants/projectTypes.ts')
 assert.doesNotMatch(projectTypes, /IPM_PROJECT_CLASSIFICATION_MAP|mapIpmProjectClassification/, 'project types do not retain a runtime IPM mapping source')
 assert.match(modal, /该 IPM 项目分类尚未配置映射，请联系管理员维护/, 'an unmapped exact IPM category blocks submit with the approved error')
-assert.match(modal, /const projectSecondaryCategory = normalizedProjectType === PROJECT_CATEGORY_MACHINE[\s\S]{0,260}: ''/, 'non-machine submissions normalize old secondary snapshots to empty')
+assert.match(
+  modal,
+  /const projectSecondaryCategory = normalizedProjectType === PROJECT_CATEGORY_MACHINE[\s\S]*normalizedProjectType === PROJECT_CATEGORY_TECH[\s\S]*resolveTechnicalProjectSecondaryCategory[\s\S]*: ''/,
+  'technical submissions preserve their IPM category while other non-machine categories normalize secondary snapshots to empty',
+)
 
 console.log('Project info matrix refresh verification passed.')

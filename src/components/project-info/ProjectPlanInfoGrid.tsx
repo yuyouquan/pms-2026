@@ -10,6 +10,7 @@ import {
   PauseCircleOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons'
+import { PROJECT_PLAN_INFO_FIELDS } from '@/constants/projectPlanInfoSchema'
 import { getBalancedRows } from '@/lib/balancedRows'
 import type { MarketYesNoValue } from '@/lib/marketRules'
 
@@ -56,52 +57,43 @@ export default function ProjectPlanInfoGrid({
   isCancelPaused,
   cancelPauseDate,
 }: ProjectPlanInfoGridProps) {
-  const metrics: PlanMetric[] = [
-    {
-      key: 'buildOption',
-      label: '编译选项',
-      value: displayValue(buildOption),
-      icon: <CodeOutlined />,
+  const metricContentByKey: Record<string, Omit<PlanMetric, 'key' | 'label'>> = {
+    isMadaControlled: {
+      value: displayBoolean(isMadaControlled),
+      icon: <SafetyCertificateOutlined />,
     },
-    {
-      key: 'buildMarket',
-      label: '编译市场',
-      value: displayValue(buildMarket),
-      icon: <GlobalOutlined />,
+    isSimLocked: {
+      value: displayBoolean(isSimLocked),
+      icon: <LockOutlined />,
     },
-    {
-      key: 'googleLaunchDate',
-      label: 'Google Launch Date',
+    googleLaunchDate: {
       value: displayValue(googleLaunchDate),
       icon: <CalendarOutlined />,
       tabular: true,
     },
-    {
-      key: 'isMadaControlled',
-      label: '是否MADA管控',
-      value: displayBoolean(isMadaControlled),
-      icon: <SafetyCertificateOutlined />,
-    },
-    {
-      key: 'isSimLocked',
-      label: '是否锁卡',
-      value: displayBoolean(isSimLocked),
-      icon: <LockOutlined />,
-    },
-    {
-      key: 'isCancelPaused',
-      label: '是否取消暂停',
+    isCancelPaused: {
       value: displayBoolean(isCancelPaused),
       icon: <PauseCircleOutlined />,
     },
-    {
-      key: 'cancelPauseDate',
-      label: '取消暂停时间',
+    cancelPauseDate: {
       value: displayValue(isCancelPaused === '是' ? cancelPauseDate : undefined),
       icon: <CalendarOutlined />,
       tabular: true,
     },
-  ].filter(metric => visibleFieldKeys.includes(metric.key))
+    buildOption: {
+      value: displayValue(buildOption),
+      icon: <CodeOutlined />,
+    },
+    buildMarket: {
+      value: displayValue(buildMarket),
+      icon: <GlobalOutlined />,
+    },
+  }
+  const metrics = PROJECT_PLAN_INFO_FIELDS.map(field => ({
+    key: field.key,
+    label: field.label,
+    ...metricContentByKey[field.key],
+  })).filter(metric => visibleFieldKeys.includes(metric.key))
   const metricRows = getBalancedRows(metrics, 5, 2)
 
   return (

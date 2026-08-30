@@ -16,6 +16,10 @@ const technicalSource = readSource(root, 'src/constants/technicalProject.ts')
 const modalSource = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 const technicalCreateSource = readSource(root, 'src/components/technical-project/TechnicalProjectCreateFields.tsx')
 const fieldVisibilityPickerSource = readSource(root, 'src/components/project-info/FieldVisibilityPicker.tsx')
+const targetProjectInformationSource = readSource(root, 'src/components/project-info/TargetProjectInformationView.tsx')
+const projectInfoSectionsSource = readSource(root, 'src/components/project-info/ProjectInfoSections.tsx')
+const projectPlanInfoGridSource = readSource(root, 'src/components/project-info/ProjectPlanInfoGrid.tsx')
+const technicalInformationSource = readSource(root, 'src/components/technical-project/TechnicalProjectInformationView.tsx')
 
 const machineCreateKeys = [
   'firstSaleTosVersion', 'status', 'versionType', 'softwareProjectLevel',
@@ -337,6 +341,51 @@ assert.equal(
 )
 assert.match(fieldVisibilityPickerSource, /mask=\{\{ closable: !confirming \}\}/, 'field visibility Drawer uses the AntD v6 mask closable API')
 assert.doesNotMatch(fieldVisibilityPickerSource, /maskClosable=/, 'field visibility Drawer must not emit the deprecated maskClosable warning')
+assert.match(
+  targetProjectInformationSource,
+  /MACHINE_PROJECT_SPACE_CORE_FIELDS\.map\(field =>/,
+  'the whole-machine core card must render the seven-key space projection instead of a second handwritten order',
+)
+assert.doesNotMatch(
+  targetProjectInformationSource,
+  /const coreFields = isWholeMachine \? \[[\s\S]{0,240}label: '项目名称'|const coreFields = isWholeMachine \? \[[\s\S]{0,520}label: '项目分类'/,
+  'whole-machine project name and category must not consume confirmed core-field positions',
+)
+assert.match(
+  projectPlanInfoGridSource,
+  /PROJECT_PLAN_INFO_FIELDS\.map\(field =>/,
+  'the live plan grid must render the approved seven-field plan projection in schema order',
+)
+assert.match(
+  projectInfoSectionsSource,
+  /const spaceFields = getProjectInfoSpaceFields\(project\.type\)[\s\S]{0,120}spaceFields\.filter\(field => field\.group === group\.key\)/,
+  'project-space information sections must consume the space projection rather than the shared storage definition order',
+)
+assert.match(
+  technicalInformationSource,
+  /TECHNICAL_PROJECT_SPACE_CORE_FIELDS\.map\(field =>/,
+  'the technical core card must render the approved ten-field space projection',
+)
+assert.match(
+  technicalInformationSource,
+  /TECHNICAL_PROJECT_SPACE_BASIC_FIELDS\.map\(field =>/,
+  'the technical TDT basic section must render the approved four-field space projection',
+)
+assert.match(
+  technicalInformationSource,
+  /TECHNICAL_TEAM_FIELDS\.map\(field =>/,
+  'the technical team section must render the seven confirmed fixed roles in shared order',
+)
+assert.match(
+  technicalInformationSource,
+  /TECHNICAL_DELIVERABLE_FIELDS\.map\(field =>/,
+  'the technical deliverable section must render the six confirmed deliverables in shared order',
+)
+assert.doesNotMatch(
+  technicalInformationSource,
+  /\.\.\.normalizedCustomRoles/,
+  'custom permission roles must not expand the strict 28-field technical information projection',
+)
 
 const technicalInfoTeamFields = schema.TECHNICAL_PROJECT_INFO_FIELDS.filter(field => field.group === 'team')
 assert.deepEqual(

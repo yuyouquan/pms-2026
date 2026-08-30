@@ -405,7 +405,8 @@ const inlineBasicInfoMounts = technicalInformationReachableNodes.filter(node => 
   (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node))
   && staticJsxAttributeText(jsxAttribute(node, 'data-section')) === 'technical-basic-information'
 ))
-assert.equal(basicInfoMounts.length + inlineBasicInfoMounts.length, 1, 'technical information has exactly one live basic-information region')
+assert.equal(basicInfoMounts.length, 1, 'subproject tabs keep exactly one live child basic-information region')
+assert.equal(inlineBasicInfoMounts.length, 1, 'the TDT tab owns exactly one projected basic-information region')
 if (basicInfoMounts.length) {
   assert.equal(basicInfoMounts.length, 1, 'technical information mounts one basic-information child')
   assert.equal(importsComponent(technicalInformationSourceFile, 'TechnicalProjectBasicInfo', '@/components/technical-project/TechnicalProjectBasicInfo'), true, 'technical information imports its mounted basic-information child from the canonical module')
@@ -418,35 +419,33 @@ if (basicInfoMounts.length) {
   assert.equal(liveJsxMounts(basicReachableNodes, basicInfoSourceFile, 'CollapsibleInformationSection').length, 1, 'mounted basic information renders its collapsible section')
   assert.ok(basicReachableNodes.some(node => node.getText(basicInfoSourceFile).includes('pms-project-info-display-grid')), 'mounted basic information reuses the whole-machine field grid')
   assert.doesNotMatch(basicInfoSource, /该子任务已停用/, 'inactive-only feedback is removed with the inactive display feature')
-} else {
-  assert.equal(inlineBasicInfoMounts.length, 1, 'inline basic information exposes one live technical-basic-information region')
 }
-const basicInfoMount = basicInfoMounts[0] || inlineBasicInfoMounts[0]
-const subprojectGuard = (() => {
-  let node = basicInfoMount.parent
+const findTabKindGuard = (mount, expectedKind) => {
+  let node = mount.parent
   while (node && node !== activeComponent) {
     if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
       const left = node.left
       if (ts.isBinaryExpression(left) && [ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.EqualsEqualsToken].includes(left.operatorToken.kind)) {
         const pairs = [[left.left, left.right], [left.right, left.left]]
-        if (pairs.some(([field, value]) => field.getText(technicalInformationSourceFile) === 'activeTab.kind' && ts.isStringLiteral(value) && value.text === 'subproject')) return node
+        if (pairs.some(([field, value]) => field.getText(technicalInformationSourceFile) === 'activeTab.kind' && ts.isStringLiteral(value) && value.text === expectedKind)) return node
       }
     }
     node = node.parent
   }
   return undefined
-})()
-assert.ok(subprojectGuard, 'the sole live basic-information mount is structurally guarded by activeTab.kind === subproject')
-for (const title of ['团队信息', '交付物信息']) {
+}
+assert.ok(findTabKindGuard(basicInfoMounts[0], 'subproject'), 'child basic information remains structurally guarded by the subproject tab')
+assert.ok(findTabKindGuard(inlineBasicInfoMounts[0], 'tdt'), 'the 12-15 TDT basic fields are structurally guarded by the TDT tab')
+for (const title of ['基础信息', '团队信息', '交付物信息']) {
   assert.ok(technicalInformationReachableNodes.some(node => (
     (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node))
     && jsxTagName(node, technicalInformationSourceFile) === 'CollapsibleInformationSection'
     && staticJsxAttributeText(jsxAttribute(node, 'title')) === title
   )), `${title} is carried by a live collapsible information section`)
 }
-assert.match(technicalInformationView, /label:\s*'项目名称'[\s\S]*label:\s*'项目分类'[\s\S]*label:\s*'技术赛道'[\s\S]*label:\s*'TMG及技术领域'[\s\S]*label:\s*'子领域'[\s\S]*label:\s*'项目阶段'[\s\S]*label:\s*'项目年份'[\s\S]*label:\s*'项目价值'/, 'technical core fields retain their approved order')
-assert.doesNotMatch(technicalInformationView, /label:\s*'前置项目'/, 'optional predecessor is editable but excluded from the core information block')
-assert.match(technicalInformationView, /label:\s*'项目价值'[^\n]*fullWidth:\s*true/, 'technical project value owns a full-width row')
+assert.match(technicalInformationView, /TECHNICAL_PROJECT_SPACE_CORE_FIELDS\.map\(field =>/, 'technical core fields consume the exact ten-field project-space projection')
+assert.match(technicalInformationView, /TECHNICAL_PROJECT_SPACE_BASIC_FIELDS\.map\(field =>/, 'technical TDT basic fields consume the exact four-field project-space projection')
+assert.doesNotMatch(technicalInformationView, /\.\.\.normalizedCustomRoles/, 'custom permission roles do not expand the strict seven-field technical team projection')
 assert.match(technicalInformationView, /sessionStorage\.getItem\(['"]pms:technical-project-list-target-child['"]\)/, 'technical information consumes workbench child targeting')
 assert.match(technicalInformationView, /const targetChildId[\s\S]{0,360}sessionStorage\.removeItem\(['"]pms:technical-project-list-target-child['"]\)[\s\S]{0,160}if \(!target\) return/, 'technical information consumes the one-shot workbench target even when it does not belong to this project')
 assert.match(technicalInformationView, /aria-label="技术信息分类"/, 'technical information tab classification has a stable accessible label')

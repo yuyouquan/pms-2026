@@ -27,6 +27,31 @@ const TECHNICAL_CREATE_LABELS = [
   '质量代表', '产品代表', '标准化代表', '其他', '项目KPI文件', '概设', 'Charter报告',
   'PDCP报告', 'TDCP报告', 'EDCP报告',
 ]
+const MACHINE_SPACE_CORE_LABELS = [
+  '品牌', '产品线', '市场名', '首销tOS版本', '项目状态', '健康状态', '下一个节点',
+]
+const MACHINE_SPACE_PLAN_LABELS = [
+  '是否MADA管控', '是否锁卡', 'Google Launch Date', '是否取消暂停', '取消暂停时间', '编译选项', '编译市场',
+]
+const MACHINE_SPACE_BASIC_LABELS = [
+  '当前tOS版本', '版本类型', '软件项目等级', '是否首发项目', '产品系列', '研发模式',
+  '开发模式', '升级策略', '系统类型', 'Kernel版本', '是否大版本升级', '机型分类',
+  '禁止生产时间', '保密级别', '项目名', '安卓版本', '主板名', '产品类型',
+]
+const MACHINE_SPACE_EXTENDED_LABELS = [
+  '芯片编码', '芯片型号', '芯片平台', '内存大小', '起步RAM', '是否二段式',
+  '是否外研Mini版本', 'JIRA项目', '基线名称', '整机PD', 'PCBA表', '出货国家表', '关键器件选型表',
+]
+const MACHINE_SPACE_TEAM_LABELS = [
+  'SPM', 'SPP', 'CMO', '软件SE', '质量代表', '开发代表', '测试代表', '其他',
+]
+const TECHNICAL_SPACE_CORE_LABELS = [
+  '项目分类', '技术赛道', 'TMG及技术领域', '子领域', '项目状态', '项目阶段',
+  '项目年份', '项目价值', '前置项目', 'TDT和子项目名称',
+]
+const TECHNICAL_SPACE_BASIC_LABELS = ['核心价值', '开发模式', '首导tOS版本', '首导整机产品项目']
+const TECHNICAL_SPACE_TEAM_LABELS = ['技术项目负责人', '技术项目经理', '测试代表', '质量代表', '产品代表', '标准化代表', '其他']
+const TECHNICAL_SPACE_DELIVERABLE_LABELS = ['项目KPI文件', '概设', 'Charter报告', 'PDCP报告', 'TDCP报告', 'EDCP报告']
 
 let browser
 const results = []
@@ -118,6 +143,83 @@ const assertText = async (page, text, scope = 'body') => {
 const assertNoText = async (page, text, scope = 'body') => {
   const found = await page.$eval(scope, (root, value) => (root.textContent || '').includes(value), text)
   if (found) throw new Error(`不应显示：${text}`)
+}
+
+const assertVisibleLabelOrder = async (page, selector, expectedLabels, scope = 'body') => {
+  const actualLabels = await page.$eval(scope, (root, candidateSelector) => Array.from(root.querySelectorAll(candidateSelector))
+    .filter(element => {
+      const rect = element.getBoundingClientRect()
+      const style = getComputedStyle(element)
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+    })
+    .map(element => (element.textContent || '').replace(/\s+/g, ' ').trim()), selector)
+  if (JSON.stringify(actualLabels) !== JSON.stringify(expectedLabels)) {
+    throw new Error(`可见字段 DOM 顺序错误 ${selector}：${JSON.stringify(actualLabels)}`)
+  }
+  if (new Set(actualLabels).size !== actualLabels.length) throw new Error(`可见字段重复 ${selector}：${JSON.stringify(actualLabels)}`)
+}
+
+const expandInformationSection = async (page, label, scope = 'body') => {
+  const expanded = await page.evaluate((expected, rootSelector) => {
+    const root = document.querySelector(rootSelector)
+    const control = Array.from(root?.querySelectorAll('.ant-collapse-header') || []).find(element => {
+      const rect = element.getBoundingClientRect()
+      return rect.width > 0 && rect.height > 0 && (element.textContent || '').trim().startsWith(expected)
+    })
+    if (!control) return false
+    if (control.getAttribute('aria-expanded') !== 'true') control.click()
+    return true
+  }, label, scope)
+  if (!expanded) throw new Error(`找不到信息折叠区：${scope} ${label}`)
+  await page.waitForFunction((expected, rootSelector) => {
+    const root = document.querySelector(rootSelector)
+    return Array.from(root?.querySelectorAll('.ant-collapse-header') || []).some(element => (
+      (element.textContent || '').trim().startsWith(expected) && element.getAttribute('aria-expanded') === 'true'
+    ))
+  }, { timeout: TIMEOUT }, label, scope)
+}
+
+const openFieldVisibilityPicker = async (page, scope) => {
+  const clicked = await page.evaluate(rootSelector => {
+    const root = document.querySelector(rootSelector)
+    const button = Array.from(root?.querySelectorAll('button') || []).find(element => (
+      element.getBoundingClientRect().height > 0 && (element.textContent || '').trim() === '配置字段'
+    ))
+    button?.click()
+    return Boolean(button)
+  }, scope)
+  if (!clicked) throw new Error(`找不到字段设置入口：${scope}`)
+  await wait(400)
+}
+
+const currentPickerState = async page => page.evaluate(() => {
+  const drawer = Array.from(document.querySelectorAll('.pms-project-info-field-drawer .pms-project-info-picker')).at(-1)
+  if (!drawer) throw new Error('找不到当前可见字段设置')
+  return Array.from(drawer.querySelectorAll('.pms-project-info-picker-row')).map(row => {
+    const label = row.querySelector('.pms-project-info-picker-label')
+    const text = Array.from(label?.childNodes || []).find(node => node.nodeType === Node.TEXT_NODE)?.textContent?.trim() || ''
+    const input = row.querySelector('input[type="checkbox"]')
+    return { label: text, checked: Boolean(input?.checked), disabled: Boolean(input?.disabled) }
+  })
+})
+
+const clickCurrentFieldPickerButton = async (page, label) => {
+  const clicked = await page.evaluate(expected => {
+    const picker = Array.from(document.querySelectorAll('.pms-project-info-field-drawer .pms-project-info-picker')).at(-1)
+    const drawer = picker?.closest('.pms-project-info-field-drawer')
+    const button = Array.from(drawer?.querySelectorAll('button') || []).find(element => (
+      element.getBoundingClientRect().height > 0 && (element.textContent || '').trim() === expected
+    ))
+    button?.click()
+    return Boolean(button)
+  }, label)
+  if (!clicked) throw new Error(`找不到当前字段设置按钮：${label}`)
+  await wait(360)
+}
+
+const closeFieldVisibilityPicker = async page => {
+  await clickCurrentFieldPickerButton(page, '取消')
+  await wait(400)
 }
 
 const assertCreateFieldLabelOrder = async (page, expectedLabels) => {
@@ -1076,6 +1178,92 @@ try {
     await clickAria(page, '卡片视图')
     await clickExact(page, '.ant-pagination-item', '2')
     await clickAria(page, '打开项目 EXT-010')
+
+    console.log('  STEP verify the 53-field project-space order and field-visibility migration through real DOM')
+    await assertVisibleLabelOrder(page, '.pms-project-info-core-label', MACHINE_SPACE_CORE_LABELS, '.pms-project-info-core-card')
+    const frameTitle = await page.$eval('.pms-project-info-core-name', element => (element.textContent || '').trim())
+    if (frameTitle !== 'X6870') throw new Error(`整机项目名必须只保留在 Frame 标题：${frameTitle}`)
+    await assertVisibleLabelOrder(page, '.pms-project-plan-info-label', MACHINE_SPACE_PLAN_LABELS.slice(0, 5), '.pms-project-plan-info-rows')
+    await openFieldVisibilityPicker(page, '.pms-project-plan-info-heading')
+    const planPicker = await currentPickerState(page)
+    if (JSON.stringify(planPicker.map(item => item.label)) !== JSON.stringify(MACHINE_SPACE_PLAN_LABELS)) {
+      throw new Error(`计划字段设置顺序错误：${JSON.stringify(planPicker)}`)
+    }
+    if (planPicker.find(item => item.label === '编译选项')?.checked || planPicker.find(item => item.label === '编译市场')?.checked) {
+      throw new Error(`计划默认隐藏字段状态错误：${JSON.stringify(planPicker)}`)
+    }
+    await closeFieldVisibilityPicker(page)
+
+    for (const [group, labels] of [
+      ['basic', MACHINE_SPACE_BASIC_LABELS],
+      ['extended', MACHINE_SPACE_EXTENDED_LABELS],
+      ['team', MACHINE_SPACE_TEAM_LABELS],
+    ]) {
+      await openFieldVisibilityPicker(page, `.pms-project-info-collapse--${group}`)
+      const picker = await currentPickerState(page)
+      if (JSON.stringify(picker.map(item => item.label)) !== JSON.stringify(labels)) {
+        throw new Error(`${group} 字段设置顺序错误：${JSON.stringify(picker)}`)
+      }
+      for (const deletedLabel of ['目标市场', '上市时间', 'UX']) {
+        if (picker.some(item => item.label === deletedLabel)) throw new Error(`已删除字段仍出现在字段设置：${deletedLabel}`)
+      }
+      if (group === 'basic') {
+        for (const hiddenLabel of ['主板名', '产品类型']) {
+          if (picker.find(item => item.label === hiddenLabel)?.checked) throw new Error(`${hiddenLabel} 必须默认隐藏`)
+        }
+        if (picker.filter(item => item.label === '禁止生产时间').length !== 1 || !picker.find(item => item.label === '禁止生产时间')?.checked) {
+          throw new Error(`禁止生产时间必须仅出现一次且默认显示：${JSON.stringify(picker)}`)
+        }
+      }
+      await closeFieldVisibilityPicker(page)
+    }
+
+    const preferenceKey = await page.evaluate(() => {
+      const envelope = JSON.parse(localStorage.getItem('pms-projects') || '{}')
+      const project = envelope?.state?.projects?.find(item => item.sourceBid === 'EXT-010')
+      if (!project) throw new Error('找不到 EXT-010 偏好作用域')
+      return ['pms:project-field-visibility:v1', '张三', project.id, 'basic'].map(encodeURIComponent).join(':')
+    })
+    await page.evaluate((key, validDefaultLabels) => {
+      const labelToKey = {
+        '当前tOS版本': 'currentTosVersion', '版本类型': 'versionType', '软件项目等级': 'softwareProjectLevel',
+        '是否首发项目': 'isFirstLaunchProject', '产品系列': 'productSeries', '研发模式': 'researchMode',
+        '开发模式': 'developmentMode', '升级策略': 'dimensionUpgradeStrategy', '系统类型': 'systemType',
+        'Kernel版本': 'kernelVersion', '是否大版本升级': 'androidMajorUpgrade', '机型分类': 'modelCategory',
+        '禁止生产时间': 'productionForbiddenDate', '保密级别': 'confidentialityLevel',
+      }
+      const visibleFieldKeys = validDefaultLabels.map(label => labelToKey[label]).filter(Boolean)
+      visibleFieldKeys.push('mainboardName', 'productType', 'targetMarket', 'launchTime', 'UX')
+      localStorage.setItem(key, JSON.stringify({ visibleFieldKeys, schemaVersion: 2, updatedAt: '2026-08-31T00:00:00.000Z' }))
+    }, preferenceKey, MACHINE_SPACE_BASIC_LABELS.slice(0, 14))
+    await page.reload({ waitUntil: 'networkidle0' })
+    await openMain(page, '项目列表')
+    await clickAria(page, '卡片视图')
+    await clickExact(page, '.ant-pagination-item', '2')
+    await clickAria(page, '打开项目 EXT-010')
+    await page.waitForSelector('[aria-label="项目核心字段"]', { visible: true })
+    await expandInformationSection(page, '基础信息', '.pms-project-info-collapse--basic')
+    await assertVisibleLabelOrder(
+      page,
+      '.pms-project-info-display-label',
+      [...MACHINE_SPACE_BASIC_LABELS.slice(0, 14), '主板名', '产品类型'],
+      '.pms-project-info-collapse--basic',
+    )
+    await openFieldVisibilityPicker(page, '.pms-project-info-collapse--basic')
+    const migratedPicker = await currentPickerState(page)
+    for (const preservedLabel of ['主板名', '产品类型']) {
+      if (!migratedPicker.find(item => item.label === preservedLabel)?.checked) throw new Error(`迁移后未保留用户偏好：${preservedLabel}`)
+    }
+    for (const deletedLabel of ['目标市场', '上市时间', 'UX']) {
+      if (migratedPicker.some(item => item.label === deletedLabel)) throw new Error(`迁移后仍暴露删除字段：${deletedLabel}`)
+    }
+    await clickCurrentFieldPickerButton(page, '确定')
+    await wait(400)
+    const migratedPreference = await page.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}'), preferenceKey)
+    if (['targetMarket', 'launchTime', 'UX'].some(key => migratedPreference.visibleFieldKeys?.includes(key))) {
+      throw new Error(`迁移后持久化仍包含删除字段：${JSON.stringify(migratedPreference)}`)
+    }
+
     await clickExact(page, 'button', '编辑')
     await page.waitForFunction(() => {
       const itemFor = label => {
@@ -1425,22 +1613,39 @@ try {
     await clickProjectByName(page, 'AI-Engine-V2')
     await page.waitForSelector('[aria-label="技术项目基础信息"]', { visible: true })
 
-    for (const label of ['项目名称', '项目分类', '技术赛道', 'TMG及技术领域', '子领域', '项目阶段', '项目年份', '项目价值']) {
-      await assertText(page, label, '[aria-label="技术项目基础信息"]')
-    }
-    await assertNoText(page, '前置项目', '[aria-label="技术项目基础信息"]')
+    await assertVisibleLabelOrder(page, '.pms-project-info-core-label', TECHNICAL_SPACE_CORE_LABELS, '[aria-label="技术项目基础信息"]')
+    console.log('    TECH space core 10 verified')
+    const frameTitle = await page.$eval('[aria-label="技术项目基础信息"] .pms-project-info-core-name', element => (element.textContent || '').trim())
+    if (frameTitle !== 'AI-Engine-V2') throw new Error(`技术项目名必须只保留在 Frame 标题：${frameTitle}`)
     await assertText(page, 'TDT', '[aria-label="技术信息分类"]')
     await page.waitForSelector('[aria-label="TDT计划信息内容"]', { visible: true })
-    await assertNoText(page, '核心价值', '[aria-label="技术信息内容"]')
+    await assertCollapsed(page, '基础信息', '[aria-label="技术信息内容"]')
     await assertNoCollapseSection(page, '基础信息', '.technical-information-plan')
     await assertCollapsed(page, '团队信息', '[aria-label="技术信息内容"]')
     await assertCollapsed(page, '交付物信息', '[aria-label="技术信息内容"]')
+    console.log('    TECH space root collapses verified')
+    await expandInformationSection(page, '基础信息', '[aria-label="技术信息内容"]')
+    await assertVisibleLabelOrder(page, '.pms-project-info-display-label', TECHNICAL_SPACE_BASIC_LABELS, '[aria-label="技术信息内容"] .pms-project-info-collapse--basic')
+    console.log('    TECH space basic 4 verified')
+    await expandInformationSection(page, '团队信息', '[aria-label="技术信息内容"]')
+    await assertVisibleLabelOrder(page, '.pms-project-info-team-role-name', TECHNICAL_SPACE_TEAM_LABELS, '[aria-label="技术信息内容"] .pms-project-info-collapse--team')
+    console.log('    TECH space team 7 verified')
+    await expandInformationSection(page, '交付物信息', '[aria-label="技术信息内容"]')
+    await assertVisibleLabelOrder(page, '.technical-deliverable-label', TECHNICAL_SPACE_DELIVERABLE_LABELS, '[aria-label="技术信息内容"] .pms-project-info-collapse--deliverable')
+    console.log('    TECH space deliverables 6 verified')
+    const technicalFieldCount = TECHNICAL_SPACE_CORE_LABELS.length + 1 + TECHNICAL_SPACE_BASIC_LABELS.length
+      + TECHNICAL_SPACE_TEAM_LABELS.length + TECHNICAL_SPACE_DELIVERABLE_LABELS.length
+    if (technicalFieldCount !== 28) throw new Error(`技术项目空间字段数量错误：${technicalFieldCount}`)
 
     await clickExact(page, '[role="tab"]', 'AI推理引擎子项目', '[aria-label="技术信息分类"]')
-    await page.waitForSelector('[aria-label="AI推理引擎子项目计划信息内容"]', { visible: true })
+    console.log('    TECH child tab selected')
+    await page.waitForSelector('[aria-label="AI推理引擎子项目计划信息内容"]')
+    const activeTechnicalTab = await page.$eval('[aria-label="技术信息分类"] [role="tab"][aria-selected="true"]', element => (element.textContent || '').trim())
+    if (!activeTechnicalTab.startsWith('AI推理引擎子项目')) throw new Error(`技术子项目 Tab 未激活：${activeTechnicalTab}`)
     await assertCollapsed(page, '基础信息', '.technical-information-plan')
-    await assertCollapsed(page, '团队信息', '[aria-label="技术信息内容"]')
-    await assertCollapsed(page, '交付物信息', '[aria-label="技术信息内容"]')
+    await assertText(page, '团队信息', '[aria-label="技术信息内容"]')
+    await assertText(page, '交付物信息', '[aria-label="技术信息内容"]')
+    await assertNoCollapseSection(page, '基础信息', '[aria-label="技术信息内容"]')
     await page.evaluate(() => {
       const root = document.querySelector('.technical-information-plan')
       const control = Array.from(root?.querySelectorAll('button,[role="button"]') || [])
@@ -1452,6 +1657,7 @@ try {
     for (const label of ['核心价值', '开发模式', '首导tOS', '首导整机产品']) await assertText(page, label, '[aria-label="AI推理引擎子项目基础信息"]')
     await clickExact(page, '[role="tab"]', 'TDT', '[aria-label="技术信息分类"]')
     await assertNoCollapseSection(page, '基础信息', '.technical-information-plan')
+    await assertCollapsed(page, '基础信息', '[aria-label="技术信息内容"]')
   })
 
   await runScenario('14 technical plan shares the whole-machine workspace', {}, async page => {
