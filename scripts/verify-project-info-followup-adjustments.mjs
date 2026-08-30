@@ -30,10 +30,23 @@ const projectTypes = {
   ].includes(type),
 }
 
+const technicalProjectFields = {
+  TECHNICAL_TEAM_FIELDS: [
+    'technicalLead', 'technicalProjectManager', 'testRepresentative',
+    'qualityRepresentative', 'productRepresentative',
+    'standardizationRepresentative', 'technicalOther',
+  ].map(key => ({ key })),
+  TECHNICAL_DELIVERABLE_FIELDS: [
+    'projectKpi', 'conceptDesign', 'charterReport', 'pdcpReport',
+    'tdcpReport', 'edcpReport',
+  ].map(key => ({ key })),
+}
+
 const schemaModule = evaluateTypeScriptModule(
   'src/constants/projectInfoSchema.ts',
   id => {
     if (id === '@/constants/projectTypes') return projectTypes
+    if (id === '@/constants/technicalProject') return technicalProjectFields
     throw new Error(`Unexpected schema module: ${id}`)
   },
 )

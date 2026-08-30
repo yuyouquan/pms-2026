@@ -47,10 +47,25 @@ const schemaModule = evaluateTypeScriptModule(
         ].includes(type),
       }
     }
+    if (id === '@/constants/technicalProject') {
+      return {
+        TECHNICAL_TEAM_FIELDS: [
+          'technicalLead', 'technicalProjectManager', 'testRepresentative',
+          'qualityRepresentative', 'productRepresentative',
+          'standardizationRepresentative', 'technicalOther',
+        ].map(key => ({ key })),
+        TECHNICAL_DELIVERABLE_FIELDS: [
+          'projectKpi', 'conceptDesign', 'charterReport', 'pdcpReport',
+          'tdcpReport', 'edcpReport',
+        ].map(key => ({ key })),
+      }
+    }
     throw new Error(`Unexpected schema module: ${id}`)
   },
 )
 const machineFields = Array.from(schemaModule.MACHINE_PROJECT_INFO_FIELDS)
+const machineCreateFields = Array.from(schemaModule.MACHINE_PROJECT_CREATE_FIELDS)
+const machineFieldDefinitions = new Map([...machineFields, ...machineCreateFields].map(field => [field.key, field]))
 const tosFields = Array.from(schemaModule.TOS_PROJECT_INFO_FIELDS)
 const keysFor = (fields, group) => fields.filter(field => field.group === group).map(field => field.key)
 const keysWhere = (fields, predicate) => fields.filter(predicate).map(field => field.key)
@@ -72,40 +87,41 @@ assert.match(schema, /export type TargetProjectInfoType\s*=/, 'target project in
 assert.match(schema, /type is TargetProjectInfoType/, 'target project information predicate must narrow to its exact union')
 
 assert.equal(JSON.stringify(keysFor(machineFields, 'basic')), JSON.stringify([
-  'researchMode', 'developmentMode', 'firstSaleTosVersion', 'isFirstLaunchProject',
-  'softwareProjectLevel', 'versionType', 'dimensionUpgradeStrategy', 'projectModel',
-  'mainboardName', 'androidMajorUpgrade', 'productType', 'targetMarkets', 'systemType',
-  'kernelVersion', 'confidentialityLevel', 'androidVersion', 'productSeries',
-  'modelCategory', 'currentTosVersion', 'launchDate', 'productionForbiddenDate',
+  'currentTosVersion', 'versionType', 'softwareProjectLevel', 'isFirstLaunchProject',
+  'productSeries', 'researchMode', 'developmentMode', 'dimensionUpgradeStrategy',
+  'systemType', 'kernelVersion', 'androidMajorUpgrade', 'modelCategory',
+  'productionForbiddenDate', 'confidentialityLevel', 'projectModel', 'androidVersion',
+  'mainboardName', 'productType',
 ]), 'machine basic field order must match the reference document')
 assert.equal(JSON.stringify(keysFor(machineFields, 'extended')), JSON.stringify([
-  'chipCode', 'chipModel', 'chipPlatform', 'memorySize', 'startingRam', 'wholeMachinePd',
-  'pcbaSheet', 'shippingCountrySheet', 'keyComponentsSheet', 'isTwoStage',
-  'isOutsourcedMini', 'baselineName', 'jiraProjects',
+  'chipCode', 'chipModel', 'chipPlatform', 'memorySize', 'startingRam', 'isTwoStage',
+  'isOutsourcedMini', 'jiraProjects', 'baselineName', 'wholeMachinePd', 'pcbaSheet',
+  'shippingCountrySheet', 'keyComponentsSheet',
 ]), 'machine extended field order must match the reference document')
 assert.equal(JSON.stringify(keysFor(machineFields, 'team')), JSON.stringify([
-  'machineSpm', 'machineSpp', 'machineCmo', 'machineSoftwareSe', 'machineUx',
-  'machineDevelopmentRepresentative', 'machineTestRepresentative',
+  'machineSpm', 'machineSpp', 'machineCmo', 'machineSoftwareSe',
+  'machineQualityRepresentative', 'machineDevelopmentRepresentative',
+  'machineTestRepresentative', 'machineOther',
 ]), 'machine team field order must match the reference document')
 assert.equal(JSON.stringify(keysWhere(machineFields, field => field.required)), JSON.stringify([
-  'developmentMode', 'firstSaleTosVersion', 'isFirstLaunchProject', 'softwareProjectLevel',
-  'versionType', 'dimensionUpgradeStrategy', 'systemType', 'kernelVersion', 'productSeries',
-  'currentTosVersion', 'chipModel', 'chipPlatform', 'wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet',
-  'keyComponentsSheet', 'isTwoStage', 'isOutsourcedMini', 'machineSpm',
+  'currentTosVersion', 'versionType', 'softwareProjectLevel', 'isFirstLaunchProject',
+  'productSeries', 'developmentMode', 'systemType', 'kernelVersion', 'chipCode',
+  'chipModel', 'chipPlatform', 'memorySize', 'isTwoStage', 'machineSpm',
 ]), 'machine overall required fields must match the reference document')
 assert.equal(JSON.stringify(keysWhere(machineFields, field => field.requiredOnCreate)), JSON.stringify([
-  'developmentMode', 'firstSaleTosVersion', 'isFirstLaunchProject', 'softwareProjectLevel',
-  'versionType', 'dimensionUpgradeStrategy', 'systemType', 'kernelVersion', 'productSeries',
-  'currentTosVersion', 'chipModel', 'chipPlatform', 'wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet',
-  'keyComponentsSheet', 'isTwoStage', 'isOutsourcedMini',
+  'versionType', 'softwareProjectLevel', 'isFirstLaunchProject', 'productSeries',
+  'developmentMode', 'systemType', 'kernelVersion', 'chipCode', 'memorySize',
+  'isTwoStage', 'machineSpm',
 ]), 'machine create-required fields must match the reference document')
 assert.equal(JSON.stringify(keysWhere(machineFields, field => field.defaultVisible)), JSON.stringify([
-  'researchMode', 'developmentMode', 'firstSaleTosVersion', 'isFirstLaunchProject',
-  'softwareProjectLevel', 'versionType', 'dimensionUpgradeStrategy', 'androidMajorUpgrade',
-  'modelCategory', 'chipCode', 'chipModel', 'chipPlatform', 'memorySize', 'startingRam',
-  'wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet', 'keyComponentsSheet',
-  'machineSpm', 'machineSpp', 'machineCmo', 'machineSoftwareSe', 'machineUx',
-  'machineDevelopmentRepresentative', 'machineTestRepresentative',
+  'currentTosVersion', 'versionType', 'softwareProjectLevel', 'isFirstLaunchProject',
+  'productSeries', 'researchMode', 'developmentMode', 'dimensionUpgradeStrategy',
+  'systemType', 'kernelVersion', 'androidMajorUpgrade', 'modelCategory',
+  'productionForbiddenDate', 'confidentialityLevel', 'chipCode', 'chipModel',
+  'chipPlatform', 'memorySize', 'startingRam', 'isTwoStage', 'isOutsourcedMini',
+  'jiraProjects', 'machineSpm', 'machineSpp', 'machineCmo', 'machineSoftwareSe',
+  'machineQualityRepresentative', 'machineDevelopmentRepresentative',
+  'machineTestRepresentative', 'machineOther',
 ]), 'machine default-visible fields must match the reference document')
 assert.equal(JSON.stringify(keysWhere(tosFields, field => field.requiredOnCreate)), JSON.stringify([
   'firstLaunchProjects', 'firstLaunchProjectChips', 'applicableBrands',
@@ -119,7 +135,7 @@ for (const fieldKey of [
   'dimensionUpgradeStrategy', 'systemType', 'kernelVersion', 'productSeries',
   'currentTosVersion',
 ]) {
-  assert.equal(machineFields.find(field => field.key === fieldKey).options, undefined, `${fieldKey} must not retain a second hard-coded option source`)
+  assert.equal(machineFieldDefinitions.get(fieldKey).options, undefined, `${fieldKey} must not retain a second hard-coded option source`)
 }
 assert.equal(machineFields.find(field => field.key === 'chipCode').inputType, 'select', 'chip code is the editable atomic chip mapping entry')
 assert.equal(machineFields.find(field => field.key === 'chipCode').readOnly, undefined, 'chip code is no longer IPM-read-only')
@@ -140,7 +156,14 @@ const projectInfoRulesModule = evaluateTypeScriptModule(
   'src/lib/projectInfoRules.ts',
   id => {
     if (id === '@/constants/projectInfoSchema') {
-      return { getEffectiveProjectInfoFields: () => [], getProjectInfoFields: () => [] }
+      return {
+        getEffectiveProjectInfoFields: () => [],
+        getProjectInfoFields: () => [],
+        MACHINE_PROJECT_CREATE_FIELDS: [],
+        MACHINE_PROJECT_SPACE_INFO_FIELDS: [],
+        TECHNICAL_PROJECT_CREATE_FIELDS: [],
+        TECHNICAL_PROJECT_SPACE_FIELDS: [],
+      }
     }
     if (id === '@/constants/projectTypes') {
       return {
@@ -227,12 +250,12 @@ assert.match(plan, /visibleFieldKeys/, 'plan information must accept field visib
 assert.match(plan, /getBalancedRows\(metrics, 5, 2\)/, 'plan information must fit visible fields into at most two rows')
 const planSchemaModule = evaluateTypeScriptModule('src/constants/projectPlanInfoSchema.ts')
 assert.deepEqual(Array.from(planSchemaModule.PROJECT_PLAN_INFO_FIELDS, field => field.key), [
-  'buildOption', 'buildMarket', 'googleLaunchDate', 'isMadaControlled',
-  'isSimLocked', 'isCancelPaused', 'cancelPauseDate',
+  'isMadaControlled', 'isSimLocked', 'googleLaunchDate', 'isCancelPaused',
+  'cancelPauseDate', 'buildOption', 'buildMarket',
 ], 'plan fields must keep the refreshed field order')
 assert.deepEqual(
   Array.from(planSchemaModule.PROJECT_PLAN_INFO_FIELDS, field => field.defaultVisible ? field.key : undefined).filter(Boolean),
-  ['googleLaunchDate', 'isMadaControlled', 'isSimLocked', 'isCancelPaused', 'cancelPauseDate'],
+  ['isMadaControlled', 'isSimLocked', 'googleLaunchDate', 'isCancelPaused', 'cancelPauseDate'],
   'only the five fixed plan fields must be visible by default',
 )
 assert.deepEqual(

@@ -48,6 +48,9 @@ const DIRECT_ROOT_KEYS = [
   'keyComponentsSheet',
   'isTwoStage',
   'isOutsourcedMini',
+  'machineQualityRepresentative',
+  'machineOther',
+  'technicalOther',
 ] as const
 
 const TOS_FIVE_ROLE_KEYS: Record<string, keyof VersionFiveRoles> = {
@@ -64,8 +67,10 @@ const MACHINE_TEAM_KEYS: Record<string, string> = {
   machineCmo: 'cmo',
   machineSoftwareSe: 'softwareSe',
   machineUx: 'ux',
+  machineQualityRepresentative: 'qualityRepresentative',
   machineDevelopmentRepresentative: 'developmentRepresentative',
   machineTestRepresentative: 'testRepresentative',
+  machineOther: 'other',
 }
 
 const TOS_TEAM_KEYS: Record<string, string> = {

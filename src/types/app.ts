@@ -112,6 +112,9 @@ export interface ProjectItem {
   qualityRepresentative?: string;
   productRepresentative?: string;
   standardizationRepresentative?: string;
+  technicalOther?: string;
+  machineQualityRepresentative?: string[];
+  machineOther?: string[];
   fieldValues?: ProjectInfoValues;
 }
 

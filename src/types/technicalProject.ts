@@ -7,6 +7,7 @@ export interface TechnicalTeam {
   qualityRepresentative: string
   productRepresentative: string
   standardizationRepresentative: string
+  technicalOther?: string
 }
 
 export interface DeliverableFile {

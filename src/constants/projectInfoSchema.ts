@@ -7,6 +7,10 @@ import {
 } from '@/constants/projectTypes'
 import type { ProjectInfoValues } from '@/types/app'
 import { PROJECT_CATEGORY_TECH } from '@/constants/projectTypes'
+import {
+  TECHNICAL_DELIVERABLE_FIELDS,
+  TECHNICAL_TEAM_FIELDS,
+} from '@/constants/technicalProject'
 
 export type ProjectInfoGroupKey = 'basic' | 'extended' | 'team'
 
@@ -41,6 +45,11 @@ export interface ProjectInfoFieldDefinition {
   introducedInSchemaVersion?: number
 }
 
+export type ProjectSurfaceFieldDefinition = Pick<
+  ProjectInfoFieldDefinition,
+  'key' | 'label' | 'defaultVisible' | 'hideable' | 'introducedInSchemaVersion'
+>
+
 type ProjectInfoFieldConfig = Omit<ProjectInfoFieldDefinition, 'required'> & {
   required?: boolean
 }
@@ -50,7 +59,7 @@ export interface ProjectInfoGroupDefinition {
   label: string
 }
 
-export const PROJECT_INFO_SCHEMA_VERSION = 2
+export const PROJECT_INFO_SCHEMA_VERSION = 3
 export const LEGACY_PROJECT_INFO_SCHEMA_VERSION = 0
 
 const yesNo = ['是', '否'] as const
@@ -80,53 +89,115 @@ export const TOS_PROJECT_INFO_GROUPS: ProjectInfoGroupDefinition[] = [
 ]
 
 export const MACHINE_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineFields([
-  // 基础信息（顺序与字段参考文档保持一致）
+  { key: 'currentTosVersion', label: '当前tOS版本', group: 'basic', inputType: 'select', required: true, requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'versionType', label: '版本类型', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
+  { key: 'softwareProjectLevel', label: '软件项目等级', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
+  { key: 'isFirstLaunchProject', label: '是否首发项目', group: 'basic', inputType: 'boolean', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: yesNo },
+  { key: 'productSeries', label: '产品系列', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'researchMode', label: '研发模式', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'developmentMode', label: '开发模式', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, placeholder: '请选择或输入开发模式' },
-  { key: 'firstSaleTosVersion', label: '首销 tOS 版本', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
-  { key: 'isFirstLaunchProject', label: '是否首发项目', group: 'basic', inputType: 'boolean', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: yesNo },
-  { key: 'softwareProjectLevel', label: '软件项目等级', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
-  { key: 'versionType', label: '版本类型', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
-  { key: 'dimensionUpgradeStrategy', label: '升维策略', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
-  { key: 'projectModel', label: '项目名', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
-  { key: 'mainboardName', label: '主板名', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
+  { key: 'dimensionUpgradeStrategy', label: '升级策略', group: 'basic', inputType: 'select', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'systemType', label: '系统类型', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
+  { key: 'kernelVersion', label: 'Kernel版本', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, placeholder: '请选择或输入 Kernel 版本' },
   { key: 'androidMajorUpgrade', label: '是否大版本升级', group: 'basic', inputType: 'boolean', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true, options: yesNo },
-  { key: 'productType', label: '产品类型', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
-  { key: 'targetMarkets', label: '目标市场', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
-  { key: 'systemType', label: '系统类型', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true },
-  { key: 'kernelVersion', label: 'Kernel 版本', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true, placeholder: '请选择或输入 Kernel 版本' },
-  { key: 'confidentialityLevel', label: '保密级别', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
-  { key: 'androidVersion', label: '安卓版本', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
-  { key: 'productSeries', label: '产品系列', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true },
   { key: 'modelCategory', label: '机型分类', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
-  { key: 'currentTosVersion', label: '当前 tOS 版本', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true },
-  { key: 'launchDate', label: '上市时间', group: 'basic', inputType: 'date', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
-  { key: 'productionForbiddenDate', label: '禁止生产时间', group: 'basic', inputType: 'date', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
+  { key: 'productionForbiddenDate', label: '禁止生产时间', group: 'basic', inputType: 'date', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
+  { key: 'confidentialityLevel', label: '保密级别', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
+  { key: 'projectModel', label: '项目名', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
+  { key: 'androidVersion', label: '安卓版本', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
+  { key: 'mainboardName', label: '主板名', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
+  { key: 'productType', label: '产品类型', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
 
-  // 扩展信息
-  { key: 'chipCode', label: '芯片编码', group: 'extended', inputType: 'select', requiredOnCreate: false, defaultVisible: true, hideable: false },
-  { key: 'chipModel', label: '芯片型号', group: 'extended', inputType: 'text', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, readOnly: true },
-  { key: 'chipPlatform', label: '芯片平台', group: 'extended', inputType: 'text', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, readOnly: true },
-  { key: 'memorySize', label: '内存大小', group: 'extended', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
-  { key: 'startingRam', label: '起步 RAM', group: 'extended', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
-  { key: 'wholeMachinePd', label: '整机 PD', group: 'extended', inputType: 'link', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, placeholder: '请输入链接或 Excel 文件地址' },
-  { key: 'pcbaSheet', label: 'PCBA 表', group: 'extended', inputType: 'link', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, placeholder: '请输入链接或 Excel 文件地址' },
-  { key: 'shippingCountrySheet', label: '出货国家表', group: 'extended', inputType: 'link', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, placeholder: '请输入链接或 Excel 文件地址' },
-  { key: 'keyComponentsSheet', label: '关键器件选型表', group: 'extended', inputType: 'link', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, placeholder: '请输入链接或 Excel 文件地址' },
-  { key: 'isTwoStage', label: '是否二段式', group: 'extended', inputType: 'boolean', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true, options: yesNo, visibleWhen: isExternalMachineDevelopment, conditionalHint: '外研或 ODC 项目时显示' },
-  { key: 'isOutsourcedMini', label: '是否外研 mini 版本', group: 'extended', inputType: 'boolean', required: true, requiredOnCreate: true, defaultVisible: false, hideable: true, options: yesNo, visibleWhen: isExternalMachineDevelopment, conditionalHint: '外研或 ODC 项目时显示' },
+  { key: 'chipCode', label: '芯片编码', group: 'extended', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
+  { key: 'chipModel', label: '芯片型号', group: 'extended', inputType: 'text', required: true, requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
+  { key: 'chipPlatform', label: '芯片平台', group: 'extended', inputType: 'text', required: true, requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
+  { key: 'memorySize', label: '内存大小', group: 'extended', inputType: 'text', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, readOnly: true },
+  { key: 'startingRam', label: '起步RAM', group: 'extended', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
+  { key: 'isTwoStage', label: '是否二段式', group: 'extended', inputType: 'boolean', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: yesNo, visibleWhen: isExternalMachineDevelopment, conditionalHint: '外研或 ODC 项目时显示' },
+  { key: 'isOutsourcedMini', label: '是否外研Mini版本', group: 'extended', inputType: 'boolean', requiredOnCreate: false, defaultVisible: true, hideable: false, options: yesNo, visibleWhen: isExternalMachineDevelopment, conditionalHint: '外研或 ODC 项目时显示' },
+  { key: 'jiraProjects', label: 'JIRA项目', group: 'extended', inputType: 'jira', requiredOnCreate: false, defaultVisible: true, hideable: false },
   { key: 'baselineName', label: '基线名称', group: 'extended', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
-  { key: 'jiraProjects', label: 'JIRA 项目', group: 'extended', inputType: 'jira', requiredOnCreate: false, defaultVisible: false, hideable: true },
+  { key: 'wholeMachinePd', label: '整机PD', group: 'extended', inputType: 'link', requiredOnCreate: false, defaultVisible: false, hideable: true, placeholder: '请输入链接或 Excel 文件地址' },
+  { key: 'pcbaSheet', label: 'PCBA表', group: 'extended', inputType: 'link', requiredOnCreate: false, defaultVisible: false, hideable: true, placeholder: '请输入链接或 Excel 文件地址' },
+  { key: 'shippingCountrySheet', label: '出货国家表', group: 'extended', inputType: 'link', requiredOnCreate: false, defaultVisible: false, hideable: true, placeholder: '请输入链接或 Excel 文件地址' },
+  { key: 'keyComponentsSheet', label: '关键器件选型表', group: 'extended', inputType: 'link', requiredOnCreate: false, defaultVisible: false, hideable: true, placeholder: '请输入链接或 Excel 文件地址' },
 
-  // 团队信息
-  { key: 'machineSpm', label: 'SPM', group: 'team', inputType: 'people', required: true, requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'machineSpm', label: 'SPM', group: 'team', inputType: 'people', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'machineSpp', label: 'SPP', group: 'team', inputType: 'people', requiredOnCreate: false, defaultVisible: true, hideable: false },
   { key: 'machineCmo', label: 'CMO', group: 'team', inputType: 'people', requiredOnCreate: false, defaultVisible: true, hideable: false },
-  { key: 'machineSoftwareSe', label: '软件 SE', group: 'team', inputType: 'people', requiredOnCreate: false, defaultVisible: true, hideable: false },
-  { key: 'machineUx', label: 'UX', group: 'team', inputType: 'people', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'machineSoftwareSe', label: '软件SE', group: 'team', inputType: 'people', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'machineQualityRepresentative', label: '质量代表', group: 'team', inputType: 'people', requiredOnCreate: false, defaultVisible: true, hideable: false, introducedInSchemaVersion: 3 },
   { key: 'machineDevelopmentRepresentative', label: '开发代表', group: 'team', inputType: 'people', requiredOnCreate: false, defaultVisible: true, hideable: false },
   { key: 'machineTestRepresentative', label: '测试代表', group: 'team', inputType: 'people', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'machineOther', label: '其他', group: 'team', inputType: 'people', requiredOnCreate: false, defaultVisible: true, hideable: false, introducedInSchemaVersion: 3 },
 ])
+
+const pickOrderedFields = <T extends { key: string }>(
+  keys: readonly string[],
+  definitions: readonly T[],
+): T[] => {
+  const definitionsByKey = new Map(definitions.map(field => [field.key, field]))
+  return keys.map(key => {
+    const field = definitionsByKey.get(key)
+    if (!field) throw new Error(`Missing project field definition: ${key}`)
+    return field
+  })
+}
+
+const MACHINE_PROJECT_CREATE_ONLY_FIELDS = defineFields([
+  { key: 'firstSaleTosVersion', label: '首销tOS版本', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
+  { key: 'status', label: '项目状态', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
+])
+
+export const MACHINE_PROJECT_CREATE_FIELD_KEYS = [
+  'firstSaleTosVersion', 'status', 'versionType', 'softwareProjectLevel',
+  'isFirstLaunchProject', 'productSeries', 'researchMode', 'developmentMode',
+  'dimensionUpgradeStrategy', 'systemType', 'kernelVersion', 'androidMajorUpgrade',
+  'modelCategory', 'confidentialityLevel', 'chipCode', 'chipModel', 'chipPlatform',
+  'memorySize', 'startingRam', 'isTwoStage', 'isOutsourcedMini', 'wholeMachinePd',
+  'pcbaSheet', 'shippingCountrySheet', 'keyComponentsSheet', 'jiraProjects',
+  'machineSpm', 'machineSpp', 'machineCmo', 'machineSoftwareSe',
+  'machineQualityRepresentative', 'machineDevelopmentRepresentative',
+  'machineTestRepresentative', 'machineOther',
+] as const
+
+export const MACHINE_PROJECT_CREATE_FIELDS = pickOrderedFields(
+  MACHINE_PROJECT_CREATE_FIELD_KEYS,
+  [...MACHINE_PROJECT_CREATE_ONLY_FIELDS, ...MACHINE_PROJECT_INFO_FIELDS],
+)
+
+export const MACHINE_PROJECT_SPACE_CORE_FIELDS: ProjectSurfaceFieldDefinition[] = [
+  { key: 'brand', label: '品牌', defaultVisible: true, hideable: false },
+  { key: 'productLine', label: '产品线', defaultVisible: true, hideable: false },
+  { key: 'marketName', label: '市场名', defaultVisible: true, hideable: false },
+  { key: 'firstSaleTosVersion', label: '首销tOS版本', defaultVisible: true, hideable: false },
+  { key: 'status', label: '项目状态', defaultVisible: true, hideable: false },
+  { key: 'healthStatus', label: '健康状态', defaultVisible: true, hideable: false },
+  { key: 'currentNode', label: '下一个节点', defaultVisible: true, hideable: false },
+]
+
+export const MACHINE_PROJECT_SPACE_CORE_FIELD_KEYS = [
+  'brand', 'productLine', 'marketName', 'firstSaleTosVersion', 'status',
+  'healthStatus', 'currentNode',
+] as const
+
+export const MACHINE_PROJECT_SPACE_INFO_FIELD_KEYS = [
+  'currentTosVersion', 'versionType', 'softwareProjectLevel', 'isFirstLaunchProject',
+  'productSeries', 'researchMode', 'developmentMode', 'dimensionUpgradeStrategy',
+  'systemType', 'kernelVersion', 'androidMajorUpgrade', 'modelCategory',
+  'productionForbiddenDate', 'confidentialityLevel', 'projectModel', 'androidVersion',
+  'mainboardName', 'productType', 'chipCode', 'chipModel', 'chipPlatform',
+  'memorySize', 'startingRam', 'isTwoStage', 'isOutsourcedMini', 'jiraProjects',
+  'baselineName', 'wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet',
+  'keyComponentsSheet', 'machineSpm', 'machineSpp', 'machineCmo',
+  'machineSoftwareSe', 'machineQualityRepresentative',
+  'machineDevelopmentRepresentative', 'machineTestRepresentative', 'machineOther',
+] as const
+
+export const MACHINE_PROJECT_SPACE_INFO_FIELDS = pickOrderedFields(
+  MACHINE_PROJECT_SPACE_INFO_FIELD_KEYS,
+  MACHINE_PROJECT_INFO_FIELDS,
+)
 
 export const TOS_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineFields([
   { key: 'tosVersion', label: 'tOS 版本', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
@@ -169,22 +240,97 @@ export const TECHNICAL_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defin
   { key: 'technicalTrack', label: '技术赛道', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'tmg', label: 'TMG及技术领域', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'subdomain', label: '子领域', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
+  { key: 'projectValue', label: '项目价值', group: 'basic', inputType: 'textarea', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
+  { key: 'projectYear', label: '项目年份', group: 'basic', inputType: 'text', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'preProjectId', label: '前置项目', group: 'basic', inputType: 'select', requiredOnCreate: false, defaultVisible: true, hideable: false },
-  { key: 'projectYear', label: '项目年份', group: 'basic', inputType: 'text', requiredOnCreate: true, defaultVisible: true, hideable: false },
-  { key: 'projectValue', label: '项目价值', group: 'basic', inputType: 'textarea', requiredOnCreate: false, defaultVisible: true, hideable: false },
   { key: 'technicalLead', label: '技术项目负责人', group: 'team', inputType: 'person', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
-  { key: 'technicalProjectManager', label: '技术项目经理', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'technicalProjectManager', label: '技术项目经理', group: 'team', inputType: 'person', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
   { key: 'testRepresentative', label: '测试代表', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false },
   { key: 'qualityRepresentative', label: '质量代表', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false },
   { key: 'productRepresentative', label: '产品代表', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false },
   { key: 'standardizationRepresentative', label: '标准化代表', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'technicalOther', label: '其他', group: 'team', inputType: 'person', requiredOnCreate: false, defaultVisible: true, hideable: false, introducedInSchemaVersion: 3 },
   { key: 'projectKpi', label: '项目KPI文件', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
   { key: 'conceptDesign', label: '概设', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
-  { key: 'charterReport', label: 'charter报告', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
+  { key: 'charterReport', label: 'Charter报告', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
   { key: 'pdcpReport', label: 'PDCP报告', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
   { key: 'tdcpReport', label: 'TDCP报告', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
   { key: 'edcpReport', label: 'EDCP报告', group: 'extended', inputType: 'deliverable', requiredOnCreate: false, defaultVisible: true, hideable: false },
 ])
+
+const TECHNICAL_PROJECT_CREATE_ONLY_FIELDS = defineFields([
+  { key: 'secondaryCategory', label: '项目分类', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
+  { key: 'projectName', label: '子项目名称', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
+  { key: 'status', label: '项目状态', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
+])
+
+export const TECHNICAL_PROJECT_CREATE_FIELD_KEYS = [
+  'secondaryCategory', 'technicalTrack', 'projectName', 'status', 'tmg', 'subdomain',
+  'projectValue', 'projectYear', 'preProjectId', 'technicalLead',
+  'technicalProjectManager', 'testRepresentative', 'qualityRepresentative',
+  'productRepresentative', 'standardizationRepresentative', 'technicalOther',
+  'projectKpi', 'conceptDesign', 'charterReport', 'pdcpReport', 'tdcpReport',
+  'edcpReport',
+] as const
+
+export const TECHNICAL_PROJECT_CREATE_FIELDS = pickOrderedFields(
+  TECHNICAL_PROJECT_CREATE_FIELD_KEYS,
+  [...TECHNICAL_PROJECT_CREATE_ONLY_FIELDS, ...TECHNICAL_PROJECT_INFO_FIELDS],
+)
+
+export const TECHNICAL_PROJECT_SPACE_CORE_FIELDS: ProjectSurfaceFieldDefinition[] = [
+  { key: 'secondaryCategory', label: '项目分类', defaultVisible: true, hideable: false },
+  { key: 'technicalTrack', label: '技术赛道', defaultVisible: true, hideable: false },
+  { key: 'tmg', label: 'TMG及技术领域', defaultVisible: true, hideable: false },
+  { key: 'subdomain', label: '子领域', defaultVisible: true, hideable: false },
+  { key: 'status', label: '项目状态', defaultVisible: true, hideable: false },
+  { key: 'projectStage', label: '项目阶段', defaultVisible: true, hideable: false },
+  { key: 'projectYear', label: '项目年份', defaultVisible: true, hideable: false },
+  { key: 'projectValue', label: '项目价值', defaultVisible: true, hideable: false },
+  { key: 'preProjectId', label: '前置项目', defaultVisible: true, hideable: false },
+  { key: 'tdtAndSubprojectName', label: 'TDT和子项目名称', defaultVisible: true, hideable: false },
+]
+
+export const TECHNICAL_PROJECT_SPACE_CORE_FIELD_KEYS = [
+  'secondaryCategory', 'technicalTrack', 'tmg', 'subdomain', 'status', 'projectStage',
+  'projectYear', 'projectValue', 'preProjectId', 'tdtAndSubprojectName',
+] as const
+
+export const TECHNICAL_PROJECT_SPACE_PLAN_FIELD_KEY = 'technicalPlan' as const
+export const TECHNICAL_PROJECT_SPACE_PLAN_FIELD: ProjectSurfaceFieldDefinition = {
+  key: TECHNICAL_PROJECT_SPACE_PLAN_FIELD_KEY,
+  label: '计划',
+  defaultVisible: true,
+  hideable: false,
+}
+
+export const TECHNICAL_PROJECT_SPACE_BASIC_FIELDS: ProjectSurfaceFieldDefinition[] = [
+  { key: 'coreValue', label: '核心价值', defaultVisible: true, hideable: false },
+  { key: 'developmentMode', label: '开发模式', defaultVisible: true, hideable: false },
+  { key: 'firstTosVersion', label: '首导tOS版本', defaultVisible: true, hideable: false },
+  { key: 'firstMachineProjectId', label: '首导整机产品项目', defaultVisible: true, hideable: false },
+]
+
+export const TECHNICAL_PROJECT_SPACE_BASIC_FIELD_KEYS = [
+  'coreValue', 'developmentMode', 'firstTosVersion', 'firstMachineProjectId',
+] as const
+
+const TECHNICAL_PROJECT_SPACE_TEAM_FIELDS = pickOrderedFields(
+  TECHNICAL_TEAM_FIELDS.map(field => field.key),
+  TECHNICAL_PROJECT_INFO_FIELDS,
+)
+const TECHNICAL_PROJECT_SPACE_DELIVERABLE_FIELDS = pickOrderedFields(
+  TECHNICAL_DELIVERABLE_FIELDS.map(field => field.key),
+  TECHNICAL_PROJECT_INFO_FIELDS,
+)
+
+export const TECHNICAL_PROJECT_SPACE_FIELDS: ProjectSurfaceFieldDefinition[] = [
+  ...TECHNICAL_PROJECT_SPACE_CORE_FIELDS,
+  TECHNICAL_PROJECT_SPACE_PLAN_FIELD,
+  ...TECHNICAL_PROJECT_SPACE_BASIC_FIELDS,
+  ...TECHNICAL_PROJECT_SPACE_TEAM_FIELDS,
+  ...TECHNICAL_PROJECT_SPACE_DELIVERABLE_FIELDS,
+]
 
 export const TARGET_PROJECT_TYPES = [...MACHINE_PROJECT_TYPES, PROJECT_TYPE_TOS_VERSION] as const
 

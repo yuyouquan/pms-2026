@@ -2,6 +2,10 @@ import {
   getEffectiveProjectInfoFields,
   getProjectInfoFields,
   getProjectInfoGroups,
+  MACHINE_PROJECT_CREATE_FIELDS,
+  MACHINE_PROJECT_SPACE_INFO_FIELDS,
+  TECHNICAL_PROJECT_CREATE_FIELDS,
+  TECHNICAL_PROJECT_SPACE_FIELDS,
 } from '@/constants/projectInfoSchema'
 import { isMachineProjectType, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { deriveStartingRam, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
@@ -51,6 +55,18 @@ export const getProjectInfoModalFields = (type: string) => (
     type !== PROJECT_TYPE_TOS_VERSION || field.group !== 'basic'
   ))
 )
+
+export const getProjectInfoCreateFields = (type: string) => {
+  if (isMachineProjectType(type)) return MACHINE_PROJECT_CREATE_FIELDS
+  if (type === PROJECT_CATEGORY_TECH) return TECHNICAL_PROJECT_CREATE_FIELDS
+  return getProjectInfoModalFields(type)
+}
+
+export const getProjectInfoSpaceFields = (type: string) => {
+  if (isMachineProjectType(type)) return MACHINE_PROJECT_SPACE_INFO_FIELDS
+  if (type === PROJECT_CATEGORY_TECH) return TECHNICAL_PROJECT_SPACE_FIELDS
+  return getProjectInfoFields(type)
+}
 
 export const getProjectInfoModalGroups = (type: string) => {
   if (type === PROJECT_CATEGORY_TECH) return []

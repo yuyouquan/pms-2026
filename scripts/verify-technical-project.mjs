@@ -283,8 +283,8 @@ assert.equal(governedSummary.versionRows[0].cycleDays, 30, 'technical informatio
 assert.equal(rules.resolveTechnicalPlanSummary([{ id: 'empty', templateType: 'tdt', status: '已发布', versionNo: 'V1', tasks: [] }]).hasTaskData, false, 'published versions without tasks produce the no-plan-data state')
 assert.equal(rules.resolveTechnicalPlanSummary([{ id: 'draft-only', templateType: 'tdt', status: '修订中', versionNo: 'V9', tasks: validStages }]).latestVersion, undefined, 'draft-only scopes produce the no-published-version state')
 
-assert.deepEqual(constants.TECHNICAL_TEAM_FIELDS.map(field => field.label), ['技术项目负责人', '技术项目经理', '测试代表', '质量代表', '产品代表', '标准化代表'], 'technical information fixed team labels remain exact')
-assert.deepEqual(constants.TECHNICAL_DELIVERABLE_FIELDS.map(field => field.label), ['项目KPI文件', '概设', 'charter报告', 'PDCP报告', 'TDCP报告', 'EDCP报告'], 'technical deliverable labels remain exact')
+assert.deepEqual(constants.TECHNICAL_TEAM_FIELDS.map(field => field.label), ['技术项目负责人', '技术项目经理', '测试代表', '质量代表', '产品代表', '标准化代表', '其他'], 'technical information fixed team labels remain exact')
+assert.deepEqual(constants.TECHNICAL_DELIVERABLE_FIELDS.map(field => field.label), ['项目KPI文件', '概设', 'Charter报告', 'PDCP报告', 'TDCP报告', 'EDCP报告'], 'technical deliverable labels remain exact')
 const technicalInformationViewPath = 'src/components/technical-project/TechnicalProjectInformationView.tsx'
 assert.equal(fs.existsSync(`${root}/${technicalInformationViewPath}`), true, 'technical information uses the shared information-frame component')
 const technicalInformationView = readSource(root, technicalInformationViewPath)
